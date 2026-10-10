@@ -459,8 +459,10 @@ def _copy_to_move(raw: trimesh.Trimesh) -> trimesh.Trimesh:
     Dreieck und Bewegung, am Spiderman 21 MB je Verschieben, bei einem Muster
     je Kopie. Ein Netz gilt als unveränderlich (``geom.mesh``); wer an seinen
     Feldern etwas ändert, kopiert vorher (``repair.wind_consistently``,
-    ``turn_shells_outward``). Farben, Attribute und Metadaten werden kopiert
-    wie bei ``copy()``.
+    ``turn_shells_outward``). Schreibgeschützt ist die geteilte Liste nicht:
+    ``fast_simplification`` (*Dreiecke verringern*) nimmt nur beschreibbare
+    Felder an, auch wenn es nicht hineinschreibt (Review 1 zu RM-698). Farben,
+    Attribute und Metadaten werden kopiert wie bei ``copy()``.
     """
     from copy import deepcopy
 

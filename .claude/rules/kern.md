@@ -127,14 +127,11 @@ Sie ist eine Provenienz-ID (§21.2); Passungen und Operationen hängen an ihr.
 
 ## Was je Aufruf teuer ist, gehört nicht in eine Schleife über Flecken
 
-Die Regel gilt der Bibliothek, nicht dem Verzeichnis, in dem sie auffiel. In
-`app/ui` wird keine Geometrie gerechnet; die Ansicht fragt den Kern.
+In `app/ui` wird keine Geometrie gerechnet; die Ansicht fragt den Kern.
 
 - **`scipy.spatial.ConvexHull`** legt je Aufruf eine Temporärdatei an. Ebene
   Hüllen über GEOS (`MultiPoint(punkte).convex_hull`; für die
-  Schattenprojektion `geom.mesh.planar_outline`, wie `hull_planes`); GEOS gibt
-  bei entartetem Eingang Strecke oder Punkt statt `QhullError`, sein Ring
-  läuft andersherum, eine Ausgleichsrechnung danach summiert anders.
+  Schattenprojektion `geom.mesh.planar_outline`, wie `hull_planes`).
   `geom/mesh.py` und `geom/orient.py` fragen einmal je Körper und behalten
   Qhull.
 - **Kein `np.unique(…, axis=0)` an Kanten oder Ecken in einer Schleife** — es
@@ -300,7 +297,9 @@ Testzugang geht ins echte Netz und fällt in einem fremden Test auf.
 
 `OpContext.scene` ist nur lesend (Regel 3). Zweimal auswerten ist identisch;
 eine geänderte Objektzahl hält die Auswertung an, statt still
-weiterzurechnen.
+weiterzurechnen. **Felder eines Netzes nie an Ort und Stelle schreiben**:
+Ein bewegtes Netz teilt seine Dreiecke mit dem Quellnetz
+(`transform.apply`), ein schlanker Eintrag seine Felder mit der Szene.
 
 **Wo die kurze Kette nur ausgeht, rechnen Fenster, Umbau und Agent weiter;
 eine Vorschau nie** (RM-534, §17.2): Ein Halt mit `BooleanFailedError` aus

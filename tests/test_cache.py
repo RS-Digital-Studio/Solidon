@@ -1122,6 +1122,65 @@ def test_the_report_keeps_its_analysis_after_undo_under_a_tight_bound(profile: P
     )
 
 
+def test_a_reopened_body_of_an_earlier_step_keeps_its_analysis(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Ein gezeigter Körper aus einem früheren Schritt bleibt nach dem Öffnen ganz (Review 1, M1).
+
+    Die Abgabe beim nächsten Plattentreffer machte auch den Eintrag schlank,
+    dessen Körper die Szene noch zeigt: Die nächste Auswertung holte die
+    schlanke Kopie aus dem Speicher, die Szene tauschte den Körper gegen sie,
+    und der Prüfbericht schnitt ihn neu — am Laptop-Riser 18,8 s CPU. Am Ende
+    des Laufs kommt das gezeigte Netz wieder in seinen Eintrag.
+    """
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec, as_mesh_data
+    from app.core.knowledge import print_settings
+    from app.core.knowledge.profiles import analysis_limits
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.slice.findings import analysed, remembered_analysis
+    from app.core.types import Source
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/ball.stl", sha256=""
+    )
+    project.sources["src_1"] = trimesh.exchange.stl.export_stl(
+        trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    )
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 10.0, "depth": 10.0, "height": 10.0})],
+    )
+    sources = ProjectSources(project)
+    warm = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    first = evaluate(project.document, profile, sources=sources, cache=warm)
+    ball, box = list(first.scene.objects)
+    move = OperationDraft(op="translate_object", inputs=(box,), params={"dx": 30.0})
+    history.apply("Verschieben", [move])
+    evaluate(project.document, profile, sources=sources, cache=warm)
+
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    opened = evaluate(project.document, profile, sources=sources, cache=cold)
+    assert cold.statistics.disk_hits >= 2, "Voraussetzung: die Stände kommen von der Platte"
+    shown = opened.scene.objects[ball]
+    settings = print_settings.resolve(profile)
+    wall, angle = analysis_limits(profile, shown)
+    analysed(as_mesh_data(shown.mesh), settings, angle, wall)
+
+    history.apply("Verschieben", [move])
+    after = evaluate(project.document, profile, sources=sources, cache=cold)
+
+    assert after.scene.objects[ball].mesh is shown.mesh
+    assert remembered_analysis(as_mesh_data(shown.mesh), settings, angle, wall) is not None
+
+
 def test_a_reopened_history_keeps_only_its_newest_step_whole(
     profile: Profile, tmp_path: Path
 ) -> None:

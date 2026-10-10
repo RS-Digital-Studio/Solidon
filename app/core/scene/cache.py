@@ -309,6 +309,29 @@ def _release_steps(excess: int) -> int:
     return release_remembered_steps(excess)
 
 
+def _fields_of(mesh: Mesh) -> tuple[int, tuple[int, ...], int, tuple[int, ...]] | None:
+    """Woran eine schlanke Kopie ihr volles Netz erkennt: Lage und Form von Ecken und Dreiecken.
+
+    ``MeshData.lean`` baut ein neues Netz über denselben Feldern; ein bewegtes
+    Netz teilt nur die Dreiecke (``transform``), nie beide.
+    """
+    raw = getattr(mesh, "raw", None)
+    if raw is None:
+        return None
+    import numpy as np
+
+    vertices = np.asarray(raw.vertices)
+    faces = np.asarray(raw.faces)
+    if not len(faces):
+        return None
+    return (
+        vertices.__array_interface__["data"][0],
+        vertices.shape,
+        faces.__array_interface__["data"][0],
+        faces.shape,
+    )
+
+
 def _leaner(result: CachedResult, kept: Collection[int]) -> CachedResult:
     """Der Eintrag mit schlanken Netzen (``MeshData.lean``) außer denen der Szene."""
     objects = []
@@ -570,6 +593,8 @@ class ResultCache:
         self._disk = disk
         self._last_disk_hit: str | None = None
         """Der Schlüssel des letzten Plattentreffers (:meth:`_lean_earlier_disk_hit`)."""
+        self._leaned: dict[int, tuple[int, object]] = {}
+        """Je schlanke Kopie von dort Nummer und Felder ihres Originals (:meth:`trim`)."""
         self._refusals: OrderedDict[str, AppError] = OrderedDict()
         """Das Urteil der vollen Kette über Schritte, an denen sie gescheitert ist (RM-534).
 
@@ -644,9 +669,12 @@ class ResultCache:
         jeder Stand eigene (``_warm_figures``, die Erkennung am geladenen
         Netz): am Spiderman rund 290 MB je Verschieben, beim Öffnen eines
         Verlaufs mit vier Schritten 1,1 GB mehr als derselbe Verlauf im
-        Speicher (RM-698). Der jüngste Treffer bleibt ganz — er ist der
-        gezeigte, und Fenster und Prüfbericht lesen ihn gleich. Gibt die
-        Bytes zurück, die dabei losgelassen werden.
+        Speicher (RM-698). Der jüngste Treffer bleibt ganz. Ein Körper eines
+        früheren Schritts, den die Szene am Ende noch zeigt, bekommt sein volles
+        Netz in :meth:`trim` zurück (:meth:`_restore_shown`); hier ist die Szene
+        noch nicht bekannt. Gibt die Bytes zurück, die dabei losgelassen
+        werden — nur die der Netze: Merkmale bleiben, wie sie sind, und sie zu
+        zählen kostete am Eiffelturm 1,2 s unter dem Schloss (Review 1, G1).
         """
         earlier = self._last_disk_hit
         if earlier is None or earlier == key:
@@ -655,10 +683,17 @@ class ResultCache:
         if entry is None:
             return 0
         loose = [0]
-        held_by(entry, (), set(), loose)
+        seen: set[int] = set()
+        for body in entry.objects:
+            _mesh_bytes(body.mesh, seen, loose)
         leaner = _leaner(entry, ())
         if leaner is entry:
             return 0
+        for full, lean in zip(entry.objects, leaner.objects, strict=True):
+            if lean.mesh is not full.mesh:
+                # Nur Nummer und Felder, keine Halterung: Das volle Netz soll
+                # frei werden können, wenn die Szene es nicht zeigt.
+                self._leaned[id(lean.mesh)] = (id(full.mesh), _fields_of(full.mesh))
         self._entries[earlier] = leaner
         self._held.pop(earlier, None)
         return loose[0]
@@ -787,9 +822,46 @@ class ResultCache:
         """
         from app.core.memory import note_released
 
+        kept = list(keep)
         with self._lock:
-            released = self._trim(list(keep))
+            self._restore_shown(kept)
+            released = self._trim(kept)
         note_released(released)
+
+    def _restore_shown(self, kept: Sequence[Mesh]) -> None:
+        """Nur mit gehaltenem Schloss — gezeigte Netze kommen in ihren Eintrag zurück (RM-698).
+
+        Beim Öffnen gibt ein Eintrag seine Ableitungen ab, sobald der nächste
+        von der Platte kommt (:meth:`_lean_earlier_disk_hit`). Zeigt die Szene
+        danach einen Körper dieses Eintrags — in einer Szene mit mehreren
+        Körpern stammt nicht jeder aus dem letzten Schritt —, hält sie das
+        volle Netz, der Eintrag eine schlanke Kopie derselben Felder. Ohne
+        Rückgabe holte die nächste Auswertung die Kopie, die Szene tauschte den
+        Körper gegen sie, und der Prüfbericht schnitt ihn neu: am Laptop-Riser
+        18,8 s CPU. Zurück kommt nur ein Original, dessen Kopie hier entstand:
+        gleiche Felder allein genügen nicht — ein bemalter Körper legt neue
+        Slots über dieselben Ecken und Dreiecke.
+        """
+        leaned, self._leaned = self._leaned, {}
+        if not leaned:
+            return
+        shown = {id(mesh): mesh for mesh in kept}
+        for key, entry in list(self._entries.items()):
+            objects = []
+            changed = False
+            for body in entry.objects:
+                origin = leaned.get(id(body.mesh))
+                mesh = shown.get(origin[0]) if origin is not None else None
+                # Die Felder dazu, weil eine Nummer nach dem Freigeben
+                # wiederkehren kann.
+                if mesh is None or origin is None or _fields_of(mesh) != origin[1]:
+                    objects.append(body)
+                    continue
+                objects.append(replace(body, mesh=mesh))
+                changed = True
+            if changed:
+                self._entries[key] = replace(entry, objects=tuple(objects))
+                self._held.pop(key, None)
 
     def _trim(self, kept: Sequence[Mesh]) -> int:
         """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`.

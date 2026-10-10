@@ -97,6 +97,10 @@ Tasche aus `_slotted_pocket`).
 > Für eine ebene Hülle nimmt der Kern deshalb GEOS:
 > `MultiPoint(punkte).convex_hull`. Gemessen an 73 Flecken des Korpus: gleiche
 > Umrisse, gleiche Radien, gleiche Rundungsfehler, 1439,6 ms gegen 3,8 ms.
+>
+> Worauf man dabei achtet: GEOS gibt bei entartetem Eingang Strecke oder Punkt
+> statt `QhullError`, sein Ring läuft andersherum, und eine Ausgleichsrechnung
+> danach summiert anders.
 
 ### `np.unique(…, axis=0)`
 
@@ -247,6 +251,18 @@ Ungeschnittenes in der Darstellung ihres Eingangs zurücklegen muss:
 > schon gab.
 
 ## Auswertung
+
+**Felder eines Netzes nie an Ort und Stelle schreiben** (RM-698). `transform.apply`
+kopierte mit `Trimesh.copy()` auch die Dreiecksliste, obwohl eine Bewegung nur
+die Ecken neu setzt: 24 Byte je Dreieck und Bewegung, am Spiderman 21 MB je
+Verschieben. Seitdem teilt ein bewegtes Netz seine Dreiecke mit dem Quellnetz,
+und ein schlanker Cacheeintrag (`MeshData.lean`) teilt Ecken und Dreiecke mit
+dem Netz, das die Szene zeigt. Wer an diesen Feldern etwas ändert, ändert alle
+Netze, die sie teilen; die Reparatur kopiert deshalb vorher
+(`repair.wind_consistently`, `turn_shells_outward`). Statisch und mit
+schreibgeschützter Liste über 26 Testdateien geprüft (Review 1 zu RM-698).
+Als dauernder Wächter taugt der Schreibschutz nicht: `fast_simplification`
+(*Dreiecke verringern*) nimmt nur beschreibbare Felder an, auch ohne hineinzuschreiben.
 
 **Ein Befund über mehrere Körper nennt sie alle.** Fund N1 bei der Behebung
 des Reviews zu `bbd41ff2d`: Zwei sich überschneidende Quader, *Überschneidungen
