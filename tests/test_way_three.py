@@ -488,15 +488,17 @@ def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -
         "decimate_mesh",
         "fit_to_size",
     ], "Dezimieren nach der Reparatur, Kundenmaß und Aufsetzen zuletzt"
-    calls, result, fresh = _resized(project, profile, 180.0)
-    entry = result.scene.objects[generation.object_id]
+    # Die frische Vergleichsrechnung steht im kleinen Fall
+    # (``…reruns_only_the_size``); hier wäre sie eine zweite volle Kette über
+    # dem Dreieckslimit.
+    calls, first, _after, _fresh = _resized(project, profile, 180.0, compare=False)
+    entry = first.scene.objects[generation.object_id]
     assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
     assert entry.mesh.is_watertight
     assert entry.mesh.component_count == 1
     # RM-676 über dem Dreieckslimit: Weder Reparatur noch Dezimieren laufen
     # für eine Maßänderung noch einmal.
     assert dict(calls) == {"fit_to_size": 1}, calls
-    assert _summary(result, generation.object_id) == _summary(fresh, generation.object_id)
 
 
 def test_a_fine_generated_mesh_keeps_resolution_within_the_recognition_budget(
@@ -936,12 +938,13 @@ def _summary(result, object_id: str) -> tuple[object, ...]:
     )
 
 
-def _resized(project: Project, profile: Profile, largest: float):
+def _resized(project: Project, profile: Profile, largest: float, *, compare: bool = True):
     """*Größe ändern* wie am Befund: der Schritt, den ``transform.fitted`` anbietet,
     bekommt ein neues Maß, und der Lauf danach nimmt den Cache des ersten.
 
-    Gibt zurück, welche Operationen dafür gerechnet haben, das Ergebnis und
-    zum Vergleich eine frische Rechnung desselben Dokuments ohne Cache.
+    Gibt zurück, welche Operationen dafür gerechnet haben, das erste Ergebnis,
+    das danach und zum Vergleich eine frische Rechnung desselben Dokuments ohne
+    Cache — mit ``compare=False`` keine, wo die volle Kette teuer ist.
     """
     import dataclasses
     from collections import Counter
@@ -987,16 +990,27 @@ def _resized(project: Project, profile: Profile, largest: float):
     History(document).change_params(step.id, {**dict(step.params), "largest": largest})
     assert len(document.transactions) == transactions + 1, "ein Rückgängig-Schritt"
     after = run(cache, registry)
-    fresh = run(ResultCache(), None)
-    return calls, after, fresh
+    fresh = run(ResultCache(), None) if compare else None
+    return calls, first, after, fresh
+
+
+def _same_result(after, fresh) -> None:
+    """Mit und ohne Cache bitgleich (§11.2, §15.1): Netze, Merkmale, Befunde."""
+    assert _fingerprints(after) == _fingerprints(fresh)
+    assert {key: sorted(entry.features) for key, entry in after.scene.objects.items()} == {
+        key: sorted(entry.features) for key, entry in fresh.scene.objects.items()
+    }
+    for object_id in after.scene.objects:
+        assert _summary(after, object_id) == _summary(fresh, object_id)
 
 
 def test_changing_the_size_of_a_generated_model_reruns_only_the_size(
     project: Project, profile: Profile
 ) -> None:
-    """RM-676: *Größe ändern* am erzeugten Stuhl rechnete Reparatur, Aufsetzen
-    und die Merkmalserkennung am vollen Netz neu — 67 bis 139 s statt der 18 bis
-    22 s, die das angehängte Skalieren in v0.5.1 brauchte.
+    """RM-676: *Größe ändern* am erzeugten Drachen (der „Stuhl“ der
+    Regressionsmessung) rechnete Reparatur, Aufsetzen und die Merkmalserkennung
+    am vollen Netz neu — 67 bis 139 s statt der 18 bis 22 s, die das angehängte
+    Skalieren in v0.5.1 brauchte.
 
     Die Kette repariert jetzt an der Arbeitsgröße und trägt das Kundenmaß als
     eigenen Schritt dahinter; eine Maßänderung rechnet nur ihn. Das Ergebnis ist
@@ -1004,10 +1018,10 @@ def test_changing_the_size_of_a_generated_model_reruns_only_the_size(
     """
     generation = from_text(project, backend(), "eine kleine Figur", seed=7)
 
-    calls, result, fresh = _resized(project, profile, 250.0)
+    calls, _first, result, fresh = _resized(project, profile, 250.0)
 
     assert dict(calls) == {"fit_to_size": 1}, calls
-    assert _summary(result, generation.object_id) == _summary(fresh, generation.object_id)
+    _same_result(result, fresh)
     body = result.scene.objects[generation.object_id]
     assert max(body.mesh.bounds.size) == pytest.approx(250.0, abs=1e-3)
     assert body.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6), "steht auf dem Bett"

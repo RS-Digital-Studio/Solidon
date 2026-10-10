@@ -2067,6 +2067,7 @@ def size_set_by(operations: Sequence[Operation], op_id: OpId) -> OpId | None:
     ]
     return later[-1] if later else None
 
+
 #: Wie :data:`SETTLED_BY`, aber nur für die Fassung eines Befunds, die diese
 #: Handlung anbietet.
 #:

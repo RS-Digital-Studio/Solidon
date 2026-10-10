@@ -108,8 +108,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis](#rm-637) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 09.10.): ja. Baut nach Paket E auf dessen Zweig; Laden mechanischer Teile bleibt sonst drei- bis fünfmal langsamer als v0.4.4 (Rest K-3) |
 | [RM-692 — Funktionale Gruppen werden nach jedem Verschieben neu gerechnet](#rm-692) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: Eiffelturm 3,6 s, Besteckkasten 2,8 s je Verschieben vor dem Bild; Merker in `perceive/features.py`, nach Paket E |
 | [RM-697 — Ein unverändertes Netz wird bei jedem Schritt neu auf die Platte geschrieben](#rm-697) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: jede Filamentzuweisung schreibt das gleiche Netz komprimiert neu (Spiderman 0,8 s); Formatfrage im Plattencache, nach Paket E |
-| [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–63 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py` |
-| [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: `transformed_features` behandelt die Normale nicht als Einheitsvektor; `perceive/matching.py` |
+| [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–73 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py`, löst §21.2 |
+| [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: mitgetragen hat die Normale die Länge \|n\|/f, frisch erkannt \|n\|; `perceive/matching.py` |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -3632,8 +3632,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel.**
   Gefunden in Paket D (paket-d.md, Welle 3): Beim Übernehmen eines erzeugten Modells und beim
   Öffnen läuft eine volle Merkmalserkennung am 1,9-mm-Einheitswürfel, die nie ein Merkmal findet.
-  Kosten: Drache 7–11 s, Stuhl 15–18 s, Bett 48–63 s CPU, in allen Ständen seit v0.5.1.
-  `scene/evaluate.py`.
+  Kosten über alle 19 Profilläufe, Übernehmen und Öffnen (Thread-CPU): Drache 6,9–12,2 s, Stuhl
+  9,7–18,1 s, Bett 28,1–73,4 s, in allen Ständen seit v0.5.1. `scene/evaluate.py`. Der Punkt muss
+  §21.2 („die Erkennung läuft nach jeder Operation“) ausdrücklich lösen; dieselbe Wartezeit trifft
+  [RM-193](#rm-193) (Kosten der Erkennung an Generatorfreiform). Allgemein gefasst — eine
+  Schrittausgabe, die niemand liest und die der nächste Schritt desselben Körpers nicht starr
+  umformt, wird nicht erkannt — spart er am Bett beim Übernehmen zwei von drei vollen Erkennungen.
   **Abnahme:** Die Erkennung läuft nur am Netz, an dem sie gebraucht wird; Merkmale, Befunde und
   Kennungen danach gleich (druckgleich gegen den Stand davor), Erkennungen gezählt, Zeit gemessen;
   Changelog als Behebung (Ursache in v0.5.1).
@@ -3641,10 +3645,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 <a id="rm-753"></a>
 
 - [ ] **RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f.**
-  Gefunden in Paket D: `transformed_features` (`perceive/matching.py`) skaliert die Normale einer
-  gerundeten Seite wie einen Ort, sie ist danach kein Einheitsvektor mehr.
-  **Abnahme:** Test zuerst (Skalierung um 2 und 0,5, Normale bleibt Einheitsvektor, Zuordnung
-  unverändert), Gegenprobe am alten Stand rot.
+  Gefunden in Paket D: Die Normale einer gerundeten Seite ist ein flächengewichtetes Mittel und kein
+  Einheitsvektor (`detect_curved_faces`, maßstabsfrei). `moved_features` (`perceive/matching.py`)
+  multipliziert Normalen mit der invers-transponierten Matrix und normiert nur Einheitsvektoren;
+  nach gleichmäßiger Skalierung um f trägt die mitgeführte Normale deshalb die Länge |n|/f, die
+  frisch erkannte |n|. Gemessen in 15 von 339 Paaren in drei Netzen (`schild-zweifarbig/obj_2`,
+  `ambiguous_sphere_ribbon.stl`, `indeterminate_sphere_cap.stl`), jedes Mal genau |1 − 1/f|. Wirkt
+  über `transformed_features` (`exact`) in der örtlichen Nachmessung.
+  **Abnahme:** Test zuerst (Skalierung um 2 und 0,5: mitgeführte Normale gleich der frisch
+  erkannten, Zuordnung unverändert), Gegenprobe am alten Stand rot.
 
 ## Bedienung und Darstellung
 

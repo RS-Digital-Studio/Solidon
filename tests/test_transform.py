@@ -563,7 +563,16 @@ def test_a_later_fit_to_size_settles_the_earlier_one(profile: Profile) -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["cube_clean.stl", "generated_figure.stl", "post_with_fillet.stl", "broken_open.stl"]
+    "name",
+    [
+        "cube_clean.stl",
+        "generated_figure.stl",
+        "post_with_fillet.stl",
+        "broken_open.stl",
+        # Eine Ecke, die kein Dreieck nennt, 500 mm daneben: ``trimesh`` lässt sie
+        # aus der Hülle, und die Hülle der freien Stelle muss es auch.
+        "lose Ecke",
+    ],
 )
 def test_fit_to_size_lays_a_mesh_down_moving_it_once(
     name: str, profile: Profile, monkeypatch: pytest.MonkeyPatch
@@ -591,7 +600,21 @@ def test_fit_to_size_lays_a_mesh_down_moving_it_once(
     from app.core.scene.cancel import NeverCancelled
     from app.core.types import OpContext, Scene, SceneObject
 
-    mesh = normalise(read_mesh((MESHES / name).read_bytes(), name[-4:]), "mm").mesh
+    if name == "lose Ecke":
+        import trimesh
+
+        from app.core.geom.mesh import MeshData
+
+        solid = cube().raw
+        mesh = MeshData(
+            raw=trimesh.Trimesh(
+                vertices=np.vstack([np.asarray(solid.vertices), [[500.0, 0.0, 0.0]]]),
+                faces=np.asarray(solid.faces),
+                process=False,
+            )
+        )
+    else:
+        mesh = normalise(read_mesh((MESHES / name).read_bytes(), name[-4:]), "mm").mesh
     beside = SceneObject(id="obj_2", name="Daneben", mesh=cube())
     entry = SceneObject(id="obj_1", name="Teil", mesh=mesh)
     scene = Scene(objects={entry.id: entry, beside.id: beside})

@@ -413,8 +413,8 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # **Ein eigener Schritt hinter der Reparatur, weil eine Maßänderung sonst
     # die ganze Kette neu rechnete** (RM-676). Stand das Kundenmaß im
     # Arbeitsschritt, liefen nach *Größe ändern* Reparatur und Erkennung am
-    # vollen Netz noch einmal — am Stuhl mit 660 000 Dreiecken 113 s statt
-    # 29 s, gemessen am 09.10.2026. Die Reparatur bleibt an der Arbeitsgröße,
+    # vollen Netz noch einmal — am Stuhl mit 660 000 Dreiecken 62 bis 67 statt
+    # 28 bis 44 s CPU (RM-676 im Archiv). Die Reparatur bleibt an der Arbeitsgröße,
     # wo ihre Toleranzen das Richtige treffen; eine frische Rechnung im neuen
     # Maß ist dieselbe Kette mit derselben Zahl, also dasselbe Ergebnis.
     #
