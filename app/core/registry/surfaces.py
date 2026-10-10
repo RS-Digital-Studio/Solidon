@@ -290,6 +290,7 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "lines": _("Linien"),
     "triangles": _("Dreiecke"),
     "tree": _("Baum"),
+    "hybrid": _("Hybrid"),
     "everywhere": _("Überall"),
     "build_plate": _("Nur vom Bett"),
     "skirt": _("Skirt"),

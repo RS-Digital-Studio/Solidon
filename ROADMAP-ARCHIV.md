@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)](#rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026) |
+| 2026-10-09 | [RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)](#rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026) |
 | 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
 | 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
 | 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
@@ -27323,6 +27325,104 @@ nach einer Rücknahme bucht wirklich, eine abgewiesene Spule kommt in den Dialog
 zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahmen
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
+
+## RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)
+
+<a id="rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026"></a>
+
+**Befund (09.10.2026):** Unter einer großen flachen Decke blieb die Art des Herstellers,
+bei Elegoo und Bambu also Bäume, unter denen die Decke zwischen den Spitzen durchhängt;
+hohe Bäume brechen mit einer Wand (Recherche Nr. 4, 5).
+
+**Behoben:** Der Rat schlägt unter einem flachen Stück Gitter vor statt Bäumen —
+über „automatisch“ nur, wo es beim Programm Bäume heißt (`handover.tree_styles`), bei
+Cura, wo die Art der ganzen Platte gilt, ausdrücklich —, und Hybrid (`tree_hybrid`), wo
+das Programm es kennt und daneben kleine Stücke auf dem Modell aufsetzen
+(`details_on_model`) oder viele Inseln beginnen; PrusaSlicer und Cura bekommen Gitter.
+Gitter und Baum zweier Körper ergeben Hybrid nur, wo die Art der Platte gilt
+(`style_per_part`), ohne Hybrid Gitter; bei Orca und Prusa nennen Zeile und Feld die Teile
+mit eigenem Wert. Bei Cura gewinnt die flache Decke gegen den Baum eines anderen Körpers,
+ein Wechsel der Art nennt keine Teile, und was Cura gleich druckt („automatisch“ und
+Gitter), schlägt der Dialog nicht vor. Neues Feld *Wände der Bäume* (`support.tree_walls`, Orca
+`tree_support_wall_count`, Creality `tree_support_wall_count_tree`, Cura
+`support_wall_count`; PrusaSlicer nimmt es nicht); ab 100 mm Säulenhöhe vom Boden des
+Körpers (`ModelSupport.tallest_column`) zwei, gefragt mit `printed_style` gegen
+`trees`. ElegooSlicer, OrcaSlicer und Anycubic lesen die Wandzahl unter gefüllten
+organischen Bäumen nicht, unter hohlen schon (`hollow_trees`); der Druckdialog filtert
+den Rat dort (`IGNORED_UNDER_TREES_BY_PROGRAM`, Hinweis am Feld). Durchsicht und
+Nachprüfung: `.claude/.state/drache-2026-10-08/reviews-2026-10-09/review_rm584_teil2*.md`.
+
+**Nachweis (09.10.2026):** Stil je Deckenform in sieben Programmen
+(`output/drache-2026-10-08/stil-rm584*`); Wandzahl am ElegooSlicer an einem 120 mm hohen
+Turm: Hybrid mit zwei Wänden 14 % mehr Stützmaterial, organisch derselbe G-Code. Tests in
+`test_slice_findings.py` (Deckenform, hohe Bäume, Hybrid aus zwei Körpern),
+`test_print_settings.py` (Übergabe je Familie, Filter unter Bäumen, Feldhinweis),
+`test_manufacturer.py`, `test_print_time.py`; Slicertests in `test_real_slicers.py`
+(Wandzahl je Orca-Programm, Hybrid je Objekt, Abstand unter hohlen Bäumen). Messskript
+`.claude/.state/drache-2026-10-08/stil_je_decke.py`. Pilz und Figur auf einer Platte
+(Nachprüfung N1, N2; `slicer_stil.py`, `hut_bander.py` daneben): Cura bekommt
+`support_structure=normal` statt `tree` und trägt den Hut auf senkrechten Säulen gleicher
+Dichte statt auf Ästen; ElegooSlicer gibt dem Pilz `normal(auto)` und der Figur
+`tree(auto)`, wie die Zeile „Stützen · Figur, Pilz mit Gitter“ sagt.
+Offen im Register: der Fuß hoher Bäume.
+Changelog: ja.
+
+## RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)
+
+<a id="rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026"></a>
+<a id="rm-624"></a>
+
+**Befund (09.10.2026, Nachprüfung von RM-622):** Was RM-622 über die Programme sagt —
+organische Bäume runden den Abstand auf die Schichten des Modells, vier Programme drucken
+unter Bäumen keine untere Trennschicht — war mit einer örtlichen Sonde gemessen, und kein
+Test hielt es. Die Messleser kannten `G92 E…` nicht: Unter absoluten Extrusionswerten galt
+nach einem Rücksetzen jede Bahn als Leerfahrt.
+
+**Behoben:** `tests/gcode_contact.support_contact` misst Abstand und Trennschichten im
+G-Code (Raster `CONTACT_CELL`, Kontakt bis `CONTACT_AIR`). Ein eigenes Modul, das nur
+`test_real_slicers.py` importiert: In `tests/helpers.py` wählte `tools/ci_selection.py` für
+jede Änderung daran 39 Fensterdateien und drei Slicerdateien, jetzt nur
+`test_real_slicers.py`. Die Messung zählt Extrusion relativ, absolut und mit `G92` wie der
+Drucker und Bögen (`G2`/`G3`) entlang ihrer Bahn mit nachgeführter Position — Bambu Studio
+und PrusaSlicer schreiben in Baumdrucken zehntausende davon. Die Unterseite rechnet mit der
+Höhe der eigenen Stützbahn (`;HEIGHT:`, Bambu `; LAYER_HEIGHT:`, ohne Angabe der Schritt im
+eigenen Stapel), nicht mit allen Stützebenen des Drucks zusammen. Eine Zelle, in der jenseits
+des Kontakts Modell steht, ist Nachbarschaft, kein Kontakt: Mit eigener Stützschichthöhe
+wechseln sich dort Wand- und Stützebenen ab und maßen −0,24 bis 0,13 mm. `inset` nimmt nur
+Zellen im Inneren der Aufsicht aller Modellbahnen; PrusaSlicers `Skirt/Brim` zählt nicht
+dazu. `test_the_support_contact_arrives_as_solidon_says` schneidet eine Platte über einer
+Säule (PETG, 0,2-mm-Schichten) in ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print,
+Anycubic Slicer Next und PrusaSlicer mit Gitter und Baum, mit Werten fern jedes
+Herstellerprozesses (dort 0,2 mm Abstand, Anycubic 0,1, untere Trennschichten 2, PrusaSlicer
+0): unter Gitter 0,28 mm und drei untere Trennschichten, unter Bäumen 0,44 mm, das sind 2,2
+Schichten und gerundet wie abgeschnitten 0,4. Zugesichert werden oben und unten der Abstand
+(±0,02 mm), mehr als 20 Zellen je Seite und die genaue Zahl unterer Trennschichten nach
+`advise.rounds_to_whole_layers` und `handover.ignored_under_trees`.
+
+**Nachweis (09.10.2026):** zwölf Fälle an den echten Programmen unter Windows grün (12
+passed, Exit 0). Gemessen: unter Gitter oben und unten 0,28 mm, untere Trennschichten in der
+Orca-Familie vier (die geschriebenen drei und ihre Kontaktlage), in PrusaSlicer drei; unter
+Bäumen oben und unten 0,4 mm, unten drei Lagen in ElegooSlicer und OrcaSlicer, keine in den
+übrigen vier; 57 bis 201 Zellen je Seite. Die frühere Begründung, die Unterseite unter Gitter
+sei nicht messbar, war ein Messfehler (Stapel verschiedener Stellen vermischt); an den
+RM-622-G-Codes misst die Unterseite jetzt bei 4 und 6 mm Rand gleich 0,28 mm.
+Synthetische Gegenproben in `test_real_slicers.py`: `G92`, Bögen, Bahnhöhe mit und ohne
+Angabe (die unterste Stützlage mit eigener Höhe wie in den echten G-Codes), Nachbarschaft
+oben und unten, Rand und `Skirt/Brim` als Ring außen um das Dach. Jede der sieben
+verstümmelten Fassungen der Messung (ohne `G92`, ohne Bögen, Bogen als Sehne, ohne
+Bahnhöhe, ohne Nachbarschaft unten, ohne Nachbarschaft oben, `Skirt/Brim` als Modell) und
+die alte aus `c95d542ed` werden dort rot, jede an der Zusicherung ihres Falls. Linux und macOS (Anycubic 2.0.0.5 gegen 2.0.0.3, Laufzeit
+gegen das 120-Minuten-Limit) nimmt die Slicerauswahl beim Push auf main ab, denn die CI läuft
+nur dort (Entscheidung Robert). SuperSlicer fehlt: RM-622 hat es nicht gemessen. Cura
+fehlt, weil es aufrundet und Solidons Tabelle es nicht weiß; das richtet RM-628, und Cura
+kommt mit ihm in den Test. Cura 5.13 an derselben Platte (Sonde, nicht eingecheckt): unter
+Gitter oben genau der geschriebene Abstand (0,28 und 0,44 mm, mit einer Bruchteillage der
+Stütze), unten aufgerundet (0,4 und 0,6); unter Bäumen oben und unten aufgerundet (0,4 und
+0,6). Am Weg des Tests mit `support_contact` nachgemessen: Gitter 0,28 → oben 0,28, unten
+0,40; Baum 0,44 → oben und unten 0,60; je drei untere Lagen.
+`advise.WHOLE_LAYER_GAP_FLAVOURS` und `support_gap_target` nehmen für Cura dagegen ganze
+Schichten zum nächsten Vielfachen an — mit dem heutigen Sollwert wären alle vier
+Abstandszusicherungen rot. Changelog: nein (Test).
 
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
