@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)](#rm-704-teil-mit-zwei-schichten-luft-trägt-jede-baumspitze-eine-trennschicht-10102026) |
 | 2026-10-10 | [RM-754: Mit und ohne Cache derselbe Satz zur freien Stelle (10.10.2026)](#rm-754-mit-und-ohne-cache-derselbe-satz-zur-freien-stelle-10102026) |
 | 2026-10-09 | [RM-638: In Einzelteile aufteilen hilft an jeder Teile-Absage (09.10.2026)](#rm-638-in-einzelteile-aufteilen-hilft-an-jeder-teile-absage-09102026) |
 | 2026-10-09 | [RM-639: In Einzelteile aufteilen behält jedes druckbare Teil (09.10.2026)](#rm-639-in-einzelteile-aufteilen-behält-jedes-druckbare-teil-09102026) |
@@ -47170,6 +47171,49 @@ Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_chec
 `_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
 **Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
 davor rot, jetzt grün. Changelog: nein.
+
+## RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)
+
+<a id="rm-704-teil-mit-zwei-schichten-luft-trägt-jede-baumspitze-eine-trennschicht-10102026"></a>
+
+**Befund (10.10.2026):** Roberts dritter Drache (Centauri Carbon 2, PLA, volle
+Elegoo-Grundlage, 0,4 mm über Baumspitzen nach RM-584) hatte saubere Kopfstacheln, aber eine
+faserige, durchhängende Kieferunterseite; ein Vorderbein brach beim Abnehmen der Stütze. Im
+G-Code (ElegooSlicer, Unterseite x 106–137, y 92–118, z 84–99) trugen gegen den zweiten Druck
+(0,2 mm) die flachen Teile 22 statt 54 %, die schrägen Ränder 26 statt 34 %, und was trug, stand
+0,4 statt 0,2 mm darunter auf nackten Spitzen (Trennschicht 2–5 %). Astabstand, Astwinkel,
+XY-Abstand, Wände, Trennschichtlagen und -abstand und der untere Abstand änderten am Kinn nichts;
+0,2 oben stellte den zweiten Druck her und mit ihm den Kontakt an den Stacheln (94 mm²).
+
+**Behoben:** Wo der Abstand über den Spitzen gilt, Trennschichten gedruckt werden und die
+Orca-Familie schneidet, schlägt der Rat die kleinste Spitze vor, deren Querschnitt
+`minimum_roof_area` übersteigt (`advise.ROOF_TIP_DIAMETER`, 1,13 mm aus `TIP_ROOF_AREA`); dann
+erzwingt das Programm die Trennschicht an jeder Spitze (`force_tip_to_roof`). Neues Feld
+*Baumspitze* (`support.tip_diameter`, `tree_support_tip_diameter`), aus dem Herstellerprofil
+gelesen, unter Gitter inaktiv. Bambu Studio kennt den Schlüssel nicht, Creality Print 7.2 liest
+ihn ohne Wirkung (`NOT_TAKEN_BY_PROGRAM`); PrusaSlicer und Cura sind nicht geschnitten
+(`NOT_TAKEN_BY`).
+
+**Nachweis (10.10.2026):** Matrix am Drachen auf Übergabe 3 (21 Varianten, Bericht
+`.claude/.state/drache-2026-10-08/berichte-2026-10-10/drache3.md`, Werkzeuge
+`output/drache-2026-10-10/matrix/`): Spitze 1,13 mm trägt ein Viertel der Kieferunterseite mit
+Trennschicht, Kontakt Kinn 7,0 → 4,0 mm², Stacheln 3,2 → 1,9 mm², +4 min 54 s, +0,03 g; 1,2 und
+1,4 mm gleich. Kundenweg (`tools/matrix_unit.py`, elegoo:centauri-carbon-2): Der Rat schlägt
+1,13 mm vor, und die Druckdatei trägt sie. Tests: `test_slice_findings.py`
+(`test_the_roof_tip_is_the_smallest_with_a_roof`, `test_tips_with_air_above_carry_a_roof` mit
+Gegenproben, `test_the_tip_field_names_the_roof_tip`), `test_print_settings.py`
+(Begründungslisten, Feld unter Gitter inaktiv), `test_manufacturer.py` (Spitze aus dem
+Herstellerprofil), Slicertest
+`test_real_slicers.py::test_a_roof_tip_puts_an_interface_under_every_cone` (Kegelspitzen:
+OrcaSlicer, ElegooSlicer, Anycubic mit Trennschicht unter jedem Kegel; Bambu druckt dieselbe
+Stütze, Creality andere Äste, aber dieselbe Trennschicht; Stifte gleichen Querschnitts zeigten
+es nicht). **Kosten:** Getragen ist die flache Kieferunterseite kaum mehr (25 statt 22 %, im
+zweiten Druck 54 %); was trägt, liegt auf Trennschicht. Auf dem Modell stehen 49 statt 31
+Stützfüße (14,3 statt 8,5 mm²), neue am Kopf auf 105–112 mm, an Hals und Brust und drei sehr
+kleine an den Vorderbeinen auf etwa 21 mm (Durchsicht `reviews-2026-10-10/review_rm704.md`).
+Offen im Register: Kinn, Kopf und Vorderbeine an Druck 4, Wände an schlanken Gliedern, Prusa
+und Cura.
+Changelog: ja.
 
 ## RM-754: Mit und ohne Cache derselbe Satz zur freien Stelle (10.10.2026)
 

@@ -8646,5 +8646,8 @@
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "«Abrir en la superficie» solo vale sin aberturas elegidas. Introduzca la cara en «Aberturas» y vacíe este campo.",
   "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "«Aplicar» empieza un proyecto nuevo con el modelo.",
   "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abreviado. El informe completo está en la carpeta guardada como «bericht.txt»; adjúntelo, por favor.",
-  "… und {count} weitere.": "… y {count} más."
+  "… und {count} weitere.": "… y {count} más.",
+  "Baumspitze": "Punta del árbol",
+  "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm trägt jede Spitze eine Trennschicht.": "Diámetro de las puntas de los árboles orgánicos. A partir de unos 1,13 mm cada punta lleva una capa de separación.",
+  "Mit Trennschicht löst sich jede Baumspitze leichter.": "Con capa de separación, cada punta del árbol se suelta más fácilmente."
 }

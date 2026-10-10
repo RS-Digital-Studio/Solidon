@@ -690,3 +690,29 @@ Modellen hat der Drache 199, danach eine Baugruppe 49 und ein Schachturm 34;
 die Schwelle steht bei 100.
 Gemessen ist nur PLA (`support_tip_gap`); ohne Wert bleibt der Abstand des
 Materials. Bericht: `output/drache-2026-10-09/rueckstaende/bericht.md`.
+
+**Und jede Spitze mit Trennschicht** (RM-704): Der dritte Drache (0,4 mm oben,
+volle Elegoo-Grundlage) hatte saubere Kopfstacheln, aber eine faserige,
+durchhängende Kieferunterseite. Gemessen im G-Code (ElegooSlicer, Unterseite
+x 106–137, y 92–118, z 84–99): Gegen den zweiten Druck (0,2 mm) trugen die
+flachen Teile 22 statt 54 %, die schrägen Ränder 26 statt 34 %, und was trug,
+stand 0,4 statt 0,2 mm darunter, auf nackten Spitzen (Trennschicht 2–5 %).
+Astabstand, Astwinkel, XY-Abstand, Wände, Trennschichtlagen und -abstand und der
+untere Abstand änderten am Kinn nichts; 0,2 oben stellte den zweiten Druck her
+und mit ihm die Reste an den Stacheln (Kontakt 94 mm²). Eine Spitze, deren
+Querschnitt `minimum_roof_area` übersteigt, erzwingt die Trennschicht an jeder
+Spitze (`force_tip_to_roof`, `TreeSupport3D.cpp:1286`): Mit 1,13 mm (kleinster
+solcher Wert auf Hundertstel) trug ein Viertel der Kieferunterseite eine
+Trennschicht, der Kontakt an Kinn und Stacheln sank weiter (7,0 → 4,0 und
+3,2 → 1,9 mm²), für fünf Minuten und 0,03 g; 1,2 und 1,4 mm wirkten gleich.
+Getragen ist die flache Kieferunterseite damit kaum mehr (25 statt 22 %; im
+zweiten Druck 54 %): Was trägt, liegt auf Trennschicht und haftet weniger an, ob
+das Kinn nicht mehr durchhängt, zeigt erst Druck 4. Die Kosten: 49 statt 31
+Stützfüße auf dem Modell (14,3 statt 8,5 mm²), neue am Kopf auf 105–112 mm, an Hals
+und Brust und drei sehr kleine an den Vorderbeinen auf etwa 21 mm.
+PrusaSlicer und Cura führen eigene Spitzenschlüssel, geschnitten ist dort nichts.
+Das Vorderbein, das im dritten Druck beim Abnehmen brach, hatte nicht mehr Stütze
+als im zweiten (Umfang mit Stütze in 1 mm 2 gegen 3–5 %, keine Auflage), aber zwei
+statt drei Wände; daraus wird kein Rat, solange ein Bruch die einzige Messung ist.
+Mit der breiteren Spitze kämen drei kleine Füße mit zusammen 0,2 mm² dazu.
+Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/drache3.md`.
