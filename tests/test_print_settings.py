@@ -8548,6 +8548,9 @@ def test_a_tree_cura_prints_as_grid_asks_its_gap_with_grid(tmp_path: Path) -> No
         ("tree to grid", 1),
         # „Automatisch“ druckt Cura wie Gitter: nichts neu zu fragen.
         ("auto", 0),
+        # Gitter übernommen, „Gitter → Baum“ abgelehnt: Die Art der Platte steht
+        # vorher fest, gefragt wird gleich mit ihr (Durchsicht der Fixe, N1).
+        ("grid kept", 0),
         # Ist der Rat überholt (``measure_only``), fragt niemand mehr neu.
         ("overtaken", 0),
     ],
@@ -8569,7 +8572,7 @@ def test_cura_asks_again_only_where_the_plate_changes_the_print(
 
     def counted(*args: Any, **kwargs: Any) -> Any:
         # Nur die Regeln des Arbeiters; Zeile und Feld fragen je Teil über den Export.
-        if kwargs.get("plate_style") is not None and sys._getframe(1).f_code.co_name == "rules":
+        if sys._getframe(1).f_code.co_name == "rules":
             calls.append(kwargs["plate_style"])
         return original(*args, **kwargs)
 
@@ -8579,6 +8582,9 @@ def test_cura_asks_again_only_where_the_plate_changes_the_print(
     declined: frozenset[str] = frozenset()
     if case == "auto":
         settings = print_settings.with_path(settings, "support.style", "auto")
+        declined = frozenset({"support.style"})
+    if case == "grid kept":
+        settings = print_settings.with_accepted(settings, "support.style", "grid")
         declined = frozenset({"support.style"})
     mushroom = on_bed(
         brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
@@ -8596,7 +8602,49 @@ def test_cura_asks_again_only_where_the_plate_changes_the_print(
         worker.progressed.connect(lambda index, _total, _name: index == 3 and worker.measure_only())
     worker.work()
 
-    assert len(calls) == asked, calls
+    # Je Körper einmal, dazu die Neufragen; überholt nur die zwei vor dem Halt.
+    first = 2 if case == "overtaken" else len(bodies)
+    assert len(calls) == first + asked, calls
+
+
+@pytest.mark.parametrize("flavour", ["cura", "orca"])
+@pytest.mark.parametrize("declined", [True, False])
+def test_without_supports_on_the_plate_no_contact_rows(flavour: str, declined: bool) -> None:
+    """Lehnt der Kunde „Aus → Gitter“ ab, druckt die Platte ohne Stützen; die
+    Zeilen zu Trennschicht und Abstand änderten nichts und standen trotzdem da
+    (Durchsicht der Fixe zum Nachtrag RM-584). Gegenprobe: übernommen kommen sie."""
+    from app.core.types import SceneObject
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    assert settings.support.style == "none"
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom),)
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    worker = _AdviceWorker(
+        bodies,
+        settings,
+        profile,
+        None,
+        {},
+        (),
+        (),
+        {},
+        flavour=flavour,  # type: ignore[arg-type]
+        declined=frozenset({"support.style"}) if declined else frozenset(),
+    )
+    got: list[list[Any]] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    paths = {entry.path for entry in got[0]}
+
+    assert "support.style" in paths
+    contact = {"support.interface_spacing", "support.interface_layers"}
+    assert (contact & paths) == (set() if declined else contact), paths
 
 
 @pytest.mark.parametrize("earlier", ["tree", None])

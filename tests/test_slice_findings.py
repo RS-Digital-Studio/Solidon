@@ -3067,16 +3067,31 @@ def test_each_part_gets_the_contact_of_its_own_material() -> None:
     body = column_table()
     result = slice_body(body, 0.2)
 
-    def gap(material: str) -> object:
+    def gap(material: str, accepted: dict[str, object] | None) -> object:
         entry = SceneObject(id=material, name=material, mesh=body, material=material)
         advice = writer.part_advice(
-            entry, body, settings, profile, None, {}, result=result, fit_kinds=(), flavour="orca"
+            entry,
+            body,
+            settings,
+            profile,
+            None,
+            {},
+            result=result,
+            fit_kinds=(),
+            flavour="orca",
+            accepted=accepted,
         )
         return {item.path: item.value for item in advice}.get("support.z_gap")
 
+    # Der Kunde hat die Stützen übernommen; ohne sie druckt die Platte keine,
+    # und der Abstand änderte nichts (Durchsicht der Fixe zum Nachtrag RM-584).
+    supported: dict[str, object] = {"support.style": "grid"}
     assert settings.support.z_gap == pytest.approx(0.2)
-    assert gap("pla") is None, "PLA löst sich bei 0,2 mm schon sauber"
-    assert gap("petg") == pytest.approx(0.28), "PETG haftet stärker und braucht mehr Luft"
+    assert gap("pla", supported) is None, "PLA löst sich bei 0,2 mm schon sauber"
+    assert gap("petg", supported) == pytest.approx(0.28), (
+        "PETG haftet stärker und braucht mehr Luft"
+    )
+    assert gap("petg", None) is None, "ohne Stützen kein Abstand"
 
 
 def test_a_cantilever_in_a_narrow_pocket_is_no_channel() -> None:

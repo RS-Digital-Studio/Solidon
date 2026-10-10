@@ -1773,16 +1773,20 @@ def _from_geometry(
             plate_style,
             flavour,
         )
-        advice += _support_contact(
-            settings,
-            profile,
-            need,
-            on_model,
-            flavour,
-            whole_layers,
-            printed,
-            organic,
-        )
+        # Druckt das Teil ohne Stütze — die Zeile zur Art abgelehnt, die Platte
+        # aus —, ändern Abstand und Trennschicht nichts (Review des Nachtrags
+        # RM-584): Nach abgelehntem „Aus → Gitter“ standen sie trotzdem da.
+        if printed != "none":
+            advice += _support_contact(
+                settings,
+                profile,
+                need,
+                on_model,
+                flavour,
+                whole_layers,
+                printed,
+                organic,
+            )
         # Hohe Bäume brechen mit einer Wand (RM-584); gefragt mit derselben
         # Stützart wie der Kontakt, und nur, wo das Programm sie als Baum druckt
         # (``trees``): Hybrid ist bei PrusaSlicer und Cura Gitter, „automatisch“

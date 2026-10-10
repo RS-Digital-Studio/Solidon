@@ -1642,6 +1642,13 @@ class _AdviceWorker(Worker):
         # Baum werden nur dort Hybrid, wo sie der Platte gilt (RM-584).
         if handover.style_per_part(self.flavour, program):
             separate = separate | {"support.style"}
+        # Lehnt der Kunde die Zeile zur Art ab, steht bei Cura die Art der Platte
+        # schon fest: Die Körper fragen gleich mit ihr, ohne Neufrage.
+        known = (
+            self.settings.support.style
+            if self.flavour == "cura" and "support.style" in self.declined
+            else None
+        )
 
         def rules(
             body: SceneObject,
@@ -1771,22 +1778,28 @@ class _AdviceWorker(Worker):
             if not self.rules_wanted:
                 continue
             measured.append((body, mesh, processes, result))
-            ruled.append(rules(body, mesh, processes, result, None))
+            ruled.append(rules(body, mesh, processes, result, known))
         plate_advice = assembled()
         if self.flavour == "cura" and ruled and self.rules_wanted:
             # **Cura druckt unter jedem gestützten Teil die Art der Platte**
             # (``support_structure``): Wird der Baum des Drachen neben der
             # flachen Decke des Pilzes zu Gitter, fragen Abstand, Spitzenluft
             # und Baumwände mit Gitter, wie der Export (Nachtrag RM-584). Neu
-            # gefragt wird nur ein Körper, den Cura damit anders druckt —
+            # gefragt wird nur ein Körper, den Cura damit anders druckt: ohne
+            # Stütze, als Baum oder als Gitter (``trees``, die eine Quelle) —
             # „automatisch“ und Hybrid fragen unter Gitter wie Gitter —, auch
             # einer, dessen Art der Kunde abgelehnt hat (``contact_style``).
             plate_style = advise.printed_style(self.settings, plate_advice, self.declined)
+            printed_trees = trees or frozenset()
+
+            def kind(style: str, wanted: str, plate: str | None) -> object:
+                printed = advise.contact_style(style, wanted, plate, self.flavour)
+                return "none" if printed == "none" else printed in printed_trees
+
             changed = False
             for index, measure in enumerate(measured):
                 if any(
-                    advise.contact_style(style, wanted, plate_style, self.flavour)
-                    != advise.on_the_plate(style, style, self.flavour)
+                    kind(style, wanted, plate_style) != kind(style, wanted, known)
                     for style, wanted in ruled[index].printed
                 ):
                     self.cancelled.raise_if_cancelled()
