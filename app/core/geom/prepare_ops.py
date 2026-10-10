@@ -21187,6 +21187,8 @@ class SplitBodiesParams(BaseParams):
     carry_feature: str = param(
         title=_("Merkmal beisammen halten"),
         default="",
+        # Eine Auswahl wie ``reference_feature``, kein Freitext (Nachprüfung I, N2).
+        kind="feature",
         placement="advanced",
         doc=_(
             "Die Teile, die dieses Merkmal tragen, bleiben ein Objekt, und es behält seinen "
@@ -21315,8 +21317,12 @@ def split_offer(mesh: MeshData, feature: Feature | None = None) -> dict[str, str
 
 
 def split_ways(offer: Mapping[str, str]) -> tuple[Action, ...]:
-    """Die Wege einer Teile-Absage: mit Angebot der Knopf, sonst nur Abbrechen."""
-    return (SPLIT_AND_RETRY, CANCEL) if offer else (CANCEL,)
+    """Die Wege einer Teile-Absage: mit Angebot der Knopf, sonst ein anderes Merkmal.
+
+    Ohne Angebot — über :data:`SPLIT_LIMIT` Teile, Merkmal ohne Flächen — bliebe
+    sonst nur *Abbrechen*, und das ist kein Weg (Regel 17, Nachprüfung I, N3).
+    """
+    return (SPLIT_AND_RETRY, CANCEL) if offer else (CHANGE_SELECTION, CANCEL)
 
 
 def _split_limit() -> int:
@@ -21744,8 +21750,12 @@ def split_bodies(ctx: OpContext) -> OpResult:
                     "oder die Stückzahl legt übrige Teile zusammen.",
                     feature=params.carry_feature,
                 ),
-                values={"feature": params.carry_feature, "object": str(source.name)},
-                suggestions=(CORRECT_INPUT,),
+                values={
+                    "feature": params.carry_feature,
+                    "object": str(source.name),
+                    "field": "carry_feature",
+                },
+                suggestions=(CHANGE_THIS_STEP,),
             )
         )
     if surplus:

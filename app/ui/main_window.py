@@ -27349,7 +27349,11 @@ class MainWindow(QMainWindow):
             return
         params: dict[str, Any] = {"count": count}
         if part_index is not None:
+            # Die Stückzahl zählt die Träger als ein Teil — ohne Mitnahme legte
+            # die Zerlegung überzählige nach Nähe zusammen (Nachprüfung I, N1).
             params["keep_tiny"] = True
+            if feature:
+                params["carry_feature"] = feature
         self.session.apply(
             REGISTRY.get("split_bodies").title,
             [OperationDraft(op="split_bodies", inputs=(object_id,), params=params)],

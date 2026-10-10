@@ -6587,3 +6587,29 @@ def test_a_cross_pin_ending_at_the_bore_wall_leaves_the_bore_free(kernel: str, s
     assert mesh.component_count == 2, "Voraussetzung: Platte und Stift"
     assert hole_is_clear(mesh, feature)
     assert separate_part_reason(mesh, feature, entry.features) is None
+
+
+def test_a_part_refusal_without_an_offer_still_names_a_way(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Über der Höchstzahl der Teile bleibt nicht nur *Abbrechen* (Nachprüfung I, N3).
+
+    Ohne Angebot (mehr Teile, als *Anzahl* erlaubt, oder ein Merkmal ohne
+    Flächen) gibt es keinen Knopf zum Aufteilen; Regel 17 verlangt trotzdem
+    einen Weg: ein anderes Merkmal wählen.
+    """
+    from app.core.geom import prepare_ops
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE
+
+    load_operations()
+    entry = _plate_with_a_second_body("mesh", inside=True)
+    monkeypatch.setattr(prepare_ops, "_split_limit", lambda: 1)
+
+    with pytest.raises(ValidationError) as caught:
+        run_op(
+            "move_feature", entry, profile, at_feature=_bore_in(entry, "hole"), x=5.0, y=0.0, z=5.0
+        )
+
+    assert caught.value.detail is OTHER_PART_IN_THE_BORE
+    assert "count" not in caught.value.values
+    assert [action.id for action in caught.value.suggestions] == ["change_selection", "cancel"]

@@ -197,6 +197,8 @@ MEINT_DEN_SCHRITT: dict[str, str | dict[str, str] | None] = {
     # RM-441: die „hat nichts getan“-Befunde aus dem Review vom 02.10.2026.
     "mesh.already_below_target": "triangles",
     "move_feature.unchanged": "x",
+    # Nachprüfung I: Das Merkmal, das beisammen bleiben sollte, öffnet sein Feld.
+    "split_bodies.not_kept_together": "carry_feature",
     "duplicate_feature.unchanged": "x",
     # RM-546: Um die eigene Achse gedreht meint der Befund die Achse, nach einer
     # vollen Umdrehung den Winkel.
@@ -236,6 +238,7 @@ OPERATION_OF: dict[str, tuple[str, ...]] = {
     "thread.thin_wall": ("resize_feature",),
     "mesh.already_below_target": ("decimate_mesh",),
     "move_feature.unchanged": ("move_feature",),
+    "split_bodies.not_kept_together": ("split_bodies",),
     "duplicate_feature.unchanged": ("duplicate_feature",),
     "rotate_feature.unchanged": ("rotate_feature",),
     "resize_feature.unchanged": ("resize_feature",),

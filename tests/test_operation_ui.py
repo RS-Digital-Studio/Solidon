@@ -8752,3 +8752,67 @@ def test_splitting_at_a_part_refusal_moves_the_feature_on_its_own_part(
         assert len(window.session.last_result.scene.objects) == 1
     finally:
         window.wait_for_workers()
+
+
+def test_splitting_from_a_part_refusal_without_a_halt_keeps_the_carriers_together(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    """Der zweite Weg des Knopfs gibt das Merkmal mit (Nachprüfung I, N1).
+
+    Hält die Kette nicht mehr am Schritt der Absage (älterer Bericht, Vorschau),
+    hängt der Knopf die Zerlegung an. Ihre Stückzahl zählt die Träger der
+    Bohrung als ein Teil; ohne ``carry_feature`` schlug die Zerlegung den Stift
+    der unteren Platte zu, und die obere stand allein. Jetzt bleiben die zwei
+    Platten mit der Bohrung beisammen, und der Stift steht für sich.
+    """
+    import trimesh
+
+    from app.core.errors import AppError
+    from app.core.geom.mesh import as_mesh_data
+
+    parts = []
+    for low in (0.0, 10.0):
+        box = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+        box.apply_translation((0.0, 0.0, low + 5.0))
+        bore = trimesh.creation.cylinder(radius=3.0, height=12.0, sections=64)
+        bore.apply_translation((0.0, 0.0, low + 5.0))
+        parts.append(trimesh.boolean.difference([box, bore]))
+    pin = trimesh.creation.cylinder(radius=1.5, height=16.0, sections=48)
+    pin.apply_translation((0.0, 0.0, 10.0))
+    parts.append(pin)
+    path = tmp_path / "zwei_platten.stl"
+    trimesh.util.concatenate(parts).export(path)
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.open_path(path)
+        assert window.session.wait_for_idle(60_000)
+        body = window.session.last_result.scene.objects["obj_1"]
+        bore_id = next(
+            name
+            for name, feature in body.features.items()
+            if feature.kind == "hole" and abs(float(feature.params["diameter"]) - 6.0) < 0.1
+        )
+
+        window.error_handlers()["split_and_retry"](
+            AppError(
+                "In dieser Bohrung liegt ein getrenntes Teil.",
+                object_id="obj_1",
+                values={"count": "2", "part_index": "0", "feature": bore_id},
+            )
+        )
+        assert window.session.wait_for_idle(60_000)
+
+        after = window.session.last_result
+        assert len(after.scene.objects) == 2
+        codes = {finding.code for finding in after.scene.report.findings}
+        assert "split_bodies.surplus" not in codes, "nichts nach Nähe zugeschlagen"
+        assert "split_bodies.not_kept_together" not in codes
+        carriers = [
+            entry
+            for entry in after.scene.objects.values()
+            if as_mesh_data(entry.mesh).component_count == 2
+        ]
+        assert len(carriers) == 1, "die zwei Platten sind ein Objekt"
+        assert bore_id in carriers[0].features, "mit ihrer Bohrung unter ihrem Namen"
+    finally:
+        window.wait_for_workers()

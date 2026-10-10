@@ -3997,6 +3997,14 @@ def test_a_cavity_without_a_body_is_closed_from_its_dimensions(
     assert left < 0.5, f"im Schlauch der Bohrung steht Material: {left:.3f} mm³"
 
 
+#: Merkmalsfelder, auf die keine Absage mit ``field="at_feature"`` zeigt: Die
+#: Operation wirft keine, und ihr eigener Befund nennt das Feld selbst
+#: (``values["field"]``, ``tests/test_finding_ways.py``). *Merkmal beisammen
+#: halten* an *In Einzelteile aufteilen* (Nachprüfung I, N2) — ``at_feature``
+#: hieße im Kern „das Merkmal, an dem die Handlung rechnet“.
+_OWN_FIELD: frozenset[str] = frozenset({"split_bodies.carry_feature"})
+
+
 def test_every_op_that_refuses_a_feature_carries_the_field_it_points_at() -> None:
     """Der Vorschlag öffnet den Schritt an einem Feld — das muss es geben.
 
@@ -4059,7 +4067,7 @@ def test_every_op_that_refuses_a_feature_carries_the_field_it_points_at() -> Non
             if field.metadata["param"]["kind"] != "feature":
                 continue
             mit_merkmal.append(spec.name)
-            if field.name != "at_feature":
+            if field.name != "at_feature" and f"{spec.name}.{field.name}" not in _OWN_FIELD:
                 falsch_benannt.append(f"{spec.name}.{field.name}")
 
     assert len(mit_merkmal) >= 10, (
