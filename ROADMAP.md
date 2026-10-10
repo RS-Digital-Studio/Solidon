@@ -948,8 +948,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   flachen Unterseite getragen); wenn nicht, bleibt der Abstand oben der Hebel (V18: 0,2 mm mit
   Spitze, dann kommen die Reste an den Kopfstacheln zurück). Dort auch den Kopf auf 105–112 mm
   und die Vorderbeine bei etwa 21 mm ansehen: Mit der breiteren Spitze stehen 49 statt 31
-  Stützfüße auf dem Modell (14,3 statt 8,5 mm²). Das Bein hatte kaum mehr Stütze als im
-  zweiten Druck, aber zwei statt drei Wände; ob schlanke Glieder einen Wandrat brauchen,
+  Stützfüße auf dem Modell (14,3 statt 8,5 mm²). Das Bein hatte im dritten Druck nicht
+  mehr Stütze als im zweiten und keine Auflage, aber zwei statt drei Wände; mit der
+  breiteren Spitze kämen drei kleine Füße mit 0,2 mm² dazu; ob schlanke Glieder einen Wandrat brauchen,
   zeigt Druck 4 und danach ein Korpuslauf über Figuren mit Beinen (nach welle4). Die Spitze
   in PrusaSlicer und Cura schneiden (`support_tree_tip_diameter`, `force_tip_to_roof`)
   und dort übergeben, wenn sie wirkt.

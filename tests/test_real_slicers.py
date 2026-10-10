@@ -562,13 +562,14 @@ def test_a_roof_tip_puts_an_interface_under_every_cone(
     assert plain["support"] and roof["support"], f"{program} stützt die Kegel nicht"
     if slicer_keys.takes("orca", "support.tip_diameter", program=program):
         assert not _cones_without(roof, reach=2.0), (program, _cones_without(roof, reach=2.0))
-        assert len(roof["interface"]) > len(plain["interface"]), program
+        assert not plain["interface"], program
     else:
         # Verglichen ohne Reihenfolge: Bambu legt gleiche Bahnen je Lauf anders an.
         assert sorted(roof["interface"]) == sorted(plain["interface"]), program
         if program == "bambustudio":
-            # Bambu meldet den Schlüssel selbst als übergangen; seine Äste weichen
-            # trotzdem an einzelnen Punkten ab (38 von über 4000 unter den Kegeln).
+            # Bambu meldet den Schlüssel selbst als übergangen. Gleiche Stützbahnen
+            # lassen sich nicht zusichern: Bambu legt die Platte von Lauf zu Lauf an
+            # 19 und 19 Punkten anders an, auch zweimal mit 0,8 mm.
             assert "tree_support_tip_diameter" in caplog.text, program
 
 

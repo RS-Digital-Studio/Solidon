@@ -1230,7 +1230,7 @@ def _support_contact(
                 settings,
                 path="support.tip_diameter",
                 value=ROOF_TIP_DIAMETER,
-                reason=_("Trennschicht auf jeder Baumspitze trägt die Unterseite."),
+                reason=_("Mit Trennschicht löst sich jede Baumspitze leichter."),
             )
         )
     if material.support_interface_cooling and not settings.cooling.support_interface_cooling:

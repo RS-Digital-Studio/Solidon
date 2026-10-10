@@ -711,8 +711,8 @@ das Kinn nicht mehr durchhängt, zeigt erst Druck 4. Die Kosten: 49 statt 31
 Stützfüße auf dem Modell (14,3 statt 8,5 mm²), neue am Kopf auf 105–112 mm, an Hals
 und Brust und drei sehr kleine an den Vorderbeinen auf etwa 21 mm.
 PrusaSlicer und Cura führen eigene Spitzenschlüssel, geschnitten ist dort nichts.
-Das Vorderbein, das beim Abnehmen brach, hatte kaum mehr Stütze als im zweiten
-Druck (Umfang mit Stütze in 1 mm 2 gegen 3–5 %, mit der Spitze 0,2 mm² Auflage),
-aber zwei statt drei Wände; daraus wird kein Rat, solange ein Bruch die einzige
-Messung ist.
+Das Vorderbein, das im dritten Druck beim Abnehmen brach, hatte nicht mehr Stütze
+als im zweiten (Umfang mit Stütze in 1 mm 2 gegen 3–5 %, keine Auflage), aber zwei
+statt drei Wände; daraus wird kein Rat, solange ein Bruch die einzige Messung ist.
+Mit der breiteren Spitze kämen drei kleine Füße mit zusammen 0,2 mm² dazu.
 Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/drache3.md`.
