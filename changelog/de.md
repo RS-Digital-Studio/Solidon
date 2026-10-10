@@ -131,6 +131,7 @@ Nutzen da und sonst nichts.
 - Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
+- Das Filamentlager erkennt eine Buchung aus Solidon 0.5.1 wieder als frühere Buchung und fragt nach, bevor es denselben Druck erneut abbucht.
 
 ### Gewinde, Bohrungen und Normteile
 
@@ -197,6 +198,7 @@ Nutzen da und sonst nichts.
 - Ist ein erzeugtes Modell nur eine dünne Haut um einen Hohlraum, sagt es der Dialog vor dem Übernehmen und der Prüfbericht danach, jeweils mit dem Weg zu einem neuen Versuch.
 - Vor dem Herunterladen nennen *Chat einrichten* und *ComfyUI einrichten*, wie viel Grafikspeicher und Platz ein Modell braucht und ob dieser Rechner das hat.
 - Auf einem Mac schlägt *Chat einrichten* ein lokales Modell vor, das in den gemeinsamen Speicher passt, und sagt, wann ein Schlüssel für ein gehostetes Modell besser ist.
+- Bei einem neu erzeugten Modell rechnet *Größe ändern* nur das neue Maß und wiederholt die Reparatur nicht mehr. Das geht schneller, und Strg+Z nimmt die Änderung sofort zurück.
 
 ## 0.5.3
 

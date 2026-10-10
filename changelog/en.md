@@ -106,6 +106,7 @@ it into `website/version.json`.
 - If a part already compensates in the model, with a hole drilled with *Apply material tolerance* or *Compensate the elephant foot*, Solidon suggests that the slicer does not do it again.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
+- The filament inventory again recognises a booking from Solidon 0.5.1 as an earlier booking and asks before deducting the same print again.
 
 ### Threads, holes and standard parts
 
@@ -172,6 +173,7 @@ it into `website/version.json`.
 - If a generated model is only a thin skin around a cavity, the dialog says so before you take it and the report afterwards, each with the way to a new attempt.
 - Before downloading, *Set up the chat* and *Set up ComfyUI* say how much graphics memory and disk space a model needs and whether this computer has it.
 - On a Mac, *Set up the chat* suggests a local model that fits into the shared memory and says when a key for a hosted model is the better choice.
+- On a newly generated model, *Change size* only recalculates the new size and no longer repeats the repair. It is faster, and Ctrl+Z undoes it at once.
 
 ## 0.5.3
 

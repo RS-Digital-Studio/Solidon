@@ -1091,6 +1091,7 @@
   "Das Maß bleibt auf der eingegebenen Höhe; darunter wird es breiter.": "La medida se mantiene a la altura indicada; por debajo la pieza se ensancha.",
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung beginnt — bei „nach oben“ unten.": "La medida se mantiene donde empieza la pieza en la dirección de desmoldeo; con «hacia arriba», abajo.",
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung endet — bei „nach oben“ oben.": "La medida se mantiene donde termina la pieza en la dirección de desmoldeo; con «hacia arriba», arriba.",
+  "Das Maß des Körpers setzt Schritt {number}. Dieser Wert wirkt nur auf die Schritte dazwischen.": "El tamaño del cuerpo lo fija el paso {number}. Este valor solo afecta a los pasos intermedios.",
   "Das Maß einer Bedingung ist ein Ausdruck als Text.": "La cota de una restricción es una expresión en forma de texto.",
   "Das Merkmal hat dieses Maß schon.": "La característica ya tiene esta medida.",
   "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es verweisen, finden es nicht mehr.": "La característica se ha quitado. Los pasos y ajustes posteriores que se refieran a ella ya no la encontrarán.",

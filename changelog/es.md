@@ -107,6 +107,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una pieza ya compensa en el modelo, con un taladro con *Aplicar compensación del material* o *Compensar la pata de elefante*, Solidon sugiere que el slicer no lo haga otra vez.
 - También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
 - Incluso con el ordenador a plena carga, Solidon indica el motivo real al detener un slicer, en lugar de un tiempo agotado. Un archivo de impresión terminado se aprovecha.
+- El almacén de filamentos vuelve a reconocer un consumo descontado con Solidon 0.5.1 y pregunta antes de descontar otra vez la misma impresión.
 
 ### Roscas, taladros y piezas normalizadas
 
@@ -173,6 +174,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un modelo generado es solo una piel fina alrededor de un hueco, lo dice el diálogo antes de aceptarlo y el informe de comprobación después, con el camino a un nuevo intento.
 - Antes de descargar, *Configurar el chat* y *Configurar ComfyUI* indican cuánta memoria gráfica y espacio necesita un modelo y si este equipo los tiene.
 - En un Mac, *Configurar el chat* propone un modelo local que cabe en la memoria compartida y dice cuándo conviene más una clave para un modelo alojado.
+- En un modelo recién generado, *Cambiar tamaño* solo recalcula la nueva medida y ya no repite la reparación. Es más rápido, y Ctrl+Z deshace el cambio al instante.
 
 ## 0.5.3
 

@@ -213,6 +213,7 @@ from app.core.scene import (
 )
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
+from app.core.scene.evaluate import size_set_by
 from app.core.scene.history import change_for, repair_is_available, step_titles
 from app.core.scene.parameter_usage import bounds_refusal
 from app.core.scene.placement import NORMAL as NORMAL_FIELDS
@@ -22414,6 +22415,17 @@ class MainWindow(QMainWindow):
         dialog.reject()
         self.start_sketch(op_name, text=text, plane=plane, step=op_id, field_name=field_name)
 
+    def _size_set_later(self, op_id: int) -> str:
+        document = self.session.project.document
+        later = size_set_by(document.ops, op_id)
+        if later is None:
+            return ""
+        return tr(
+            "Das Maß des Körpers setzt Schritt {number}. "
+            "Dieser Wert wirkt nur auf die Schritte dazwischen.",
+            number=step_number(document, later),
+        )
+
     def edit_operation(
         self, op_id: int, field: str = "", given: Mapping[str, Any] | None = None
     ) -> None:
@@ -22524,6 +22536,7 @@ class MainWindow(QMainWindow):
             # beim Anlegen.
             offer_naming=offers_naming(spec) and spec.name != "create_container",
             naming_default=self.settings.name_dimensions,
+            note=self._size_set_later(op_id),
         )
         number = step_number(self.session.project.document, op_id)
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {number}")

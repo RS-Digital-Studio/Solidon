@@ -106,6 +106,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma peça já compensa no modelo, com um furo com *Aplicar compensação do material* ou *Compensar o pé de elefante*, o Solidon sugere que o slicer não o faça de novo.
 - Também com impressoras que o PrusaSlicer ou o SuperSlicer não conhecem, ambos calculam o tempo de impressão com as acelerações entregues, e o ficheiro indica o material da bobina.
 - Mesmo com o computador em plena carga, o Solidon indica o motivo real ao parar um slicer, em vez de um tempo esgotado. Um ficheiro de impressão terminado é aproveitado.
+- O armazém de filamentos volta a reconhecer um consumo descontado com o Solidon 0.5.1 e pergunta antes de descontar de novo a mesma impressão.
 
 ### Roscas, furos e peças normalizadas
 
@@ -172,6 +173,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um modelo gerado for só uma pele fina à volta de um vazio, a janela di-lo antes de o aceitar e o relatório de verificação depois, com o caminho para uma nova tentativa.
 - Antes de transferir, *Configurar o chat* e *Configurar o ComfyUI* indicam quanta memória gráfica e espaço um modelo precisa e se este computador os tem.
 - Num Mac, *Configurar o chat* propõe um modelo local que cabe na memória partilhada e diz quando uma chave para um modelo alojado é melhor.
+- Num modelo acabado de gerar, *Alterar tamanho* só recalcula a nova medida e já não repete a reparação. É mais rápido, e Ctrl+Z desfaz a alteração de imediato.
 
 ## 0.5.3
 
