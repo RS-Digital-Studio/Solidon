@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 import itertools
 import logging
+import math
 import re
 import sys
 import threading
@@ -5065,7 +5066,9 @@ def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
     QApplication.processEvents()
     line = diameter.text
     line.setFocus()
-    line.setText("=@bore*100")
+    # Über die Grenze des Feldes selbst, nicht über eine Zahl daneben: Mit
+    # Bohrungen bis zu einem Meter lag ``=@bore*100`` (600 mm) wieder darin.
+    line.setText(f"=@bore*{math.ceil(float(diameter._entry.maximum) / 6.0) + 1}")
     QApplication.processEvents()
     refused_text = line.text()
     refusal = diameter.refusal()

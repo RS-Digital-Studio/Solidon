@@ -828,6 +828,11 @@ def test_a_lattice_of_small_self_supporting_pieces_gets_no_supports() -> None:
     entries = advise.advise(settings, profile, lattice)
 
     assert "support.style" not in paths(entries)
+    # Und der Bericht meldet keine vielen kleinen Überhänge (RM-572): Er fragt
+    # dieselbe Antwort wie der Rat.
+    from app.core.slice.findings import small_overhang_findings
+
+    assert small_overhang_findings("becher", lattice, advise.support_need(lattice)) == []
 
 
 def test_one_ceiling_of_the_same_area_still_gets_supports() -> None:
@@ -835,7 +840,11 @@ def test_one_ceiling_of_the_same_area_still_gets_supports() -> None:
 
     Vorgeschlagen wird „Stützen an", die Art bestimmt das Profil des Slicers
     (Konzept Herstellerprofil, Entscheidung J) — bis zum 27.09.2026 hieß das
-    Gitter, auch über Elegoos und Bambus Baum.
+    Gitter, auch über Elegoos und Bambus Baum. **Unter einer großen flachen
+    Decke wieder Gitter** (RM-584): Zwischen Baumspitzen hängt sie durch. Ohne
+    Programm zählt „automatisch“ vorsichtig als Baum, wie bei Elegoo und Bambu;
+    wo das Programm dafür normale Stütze druckt, bleibt es
+    (``test_grid_over_automatic_only_where_automatic_means_trees``).
     """
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
@@ -844,7 +853,7 @@ def test_one_ceiling_of_the_same_area_still_gets_supports() -> None:
     entries = advise.advise(settings, profile, ceiling)
 
     chosen = next(entry for entry in entries if entry.path == "support.style")
-    assert chosen.value == "auto"
+    assert chosen.value == "grid"
 
 
 # --- Die Leerfahrt gehört dem Drucker -------------------------------------------
@@ -2105,7 +2114,23 @@ def _reason_texts() -> list[tuple[int, str]]:
     auslöst, steht trotzdem im Dialog. Ein Grund ist jedes ``_()`` in
     ``advise.py`` außerhalb eines ``Finding`` und einer ``ValidationError`` —
     deren Sätze gehen in den Prüfbericht, nicht in die Tabelle des Dialogs.
+    Dazu der Satz jedes Ersatzes (``slicer_keys.NOT_OFFERED_BY_PROGRAM``): Er
+    steht als Grund in derselben Tabelle, wo ein Vorschlag die Art wechselt
+    (``slicer_keys.offered``, Review RM-584, M2), Zeile 0.
     """
+    from app.core.export import slicer_keys
+
+    substitutes = {
+        replaced.reason.msgid
+        for paths in slicer_keys.NOT_OFFERED_BY_PROGRAM.values()
+        for choices in paths.values()
+        for replaced in choices.values()
+    }
+    return _advise_reason_texts() + [(0, text) for text in sorted(substitutes)]
+
+
+def _advise_reason_texts() -> list[tuple[int, str]]:
+    """Die Gründe aus ``advise.py`` (:func:`_reason_texts`)."""
     import ast
 
     tree = ast.parse(Path(advise.__file__).read_text(encoding="utf-8"))

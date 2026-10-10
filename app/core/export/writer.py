@@ -1326,10 +1326,11 @@ def part_advice(
     Brim selbst rechnet (:data:`advise.AUTO_BRIM_FLAVOURS`), ``whole_layers``,
     ob seine Platte einen Reinigungsturm trägt (:func:`tower_plates`), ``organic``,
     welche Stützarten das Programm als organische Bäume druckt
-    (:func:`handover.organic_styles`), ``allowances``, was das Modell dieses
-    Teils schon ausgleicht (``scene.fits.allowances_for``, RM-589). Ist die
-    Stützart nicht übernommen, druckt das Teil die der Platte, und Abstand wie
-    Trennschicht fragen mit ihr
+    (:func:`handover.organic_styles`); welche es überhaupt als Bäume druckt,
+    fragt sie selbst (:func:`handover.tree_styles`). ``allowances`` sagt, was
+    das Modell dieses Teils schon ausgleicht (``scene.fits.allowances_for``,
+    RM-589). Ist die Stützart nicht übernommen, druckt das Teil die der
+    Platte, und Abstand wie Trennschicht fragen mit ihr
     (``declined``, :func:`advise.printed_style`).
 
     **Eine Regel kann einen Wert je Teil voraussetzen** (``accepted``, die
@@ -1353,6 +1354,8 @@ def part_advice(
     connectors = advise.connector_diameters([entry])
     processes = handover.slot_processes(entry, settings, profile, setup, slot_profiles)
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    # Welche Arten das Programm als Bäume druckt (RM-584), wie im Druckdialog.
+    trees = handover.tree_styles(setup, profile, program, flavour=flavour)
     inputs = (
         settings,
         processes,
@@ -1364,6 +1367,7 @@ def part_advice(
         whole_layers,
         tuple(sorted(organic)),
         tuple(allowances),
+        None if trees is None else tuple(sorted(trees)),
     )
     cache = getattr(mesh.raw, "_cache", None)
     name = f"solidon_export_advice|{entry.id}"
@@ -1401,6 +1405,7 @@ def part_advice(
                     organic=organic,
                     declined=declined,
                     allowances=allowances,
+                    trees=trees,
                 ),
             )
             for process in (
@@ -1409,7 +1414,7 @@ def part_advice(
                 else handover.slot_processes(entry, current, profile, setup, slot_profiles)
             )
         ]
-        return advise.combine(current, groups)
+        return advise.combine(current, groups, trees=trees)
 
     # Was das Programm seiner Familie nicht kennt, schlägt der Rat nicht vor:
     # SuperSlicer stürzte an der Schrägnaht als Objektwert ab (RM-459). Eine
