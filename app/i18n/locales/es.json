@@ -8639,6 +8639,6 @@
   "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abreviado. El informe completo está en la carpeta guardada como «bericht.txt»; adjúntelo, por favor.",
   "… und {count} weitere.": "… y {count} más.",
   "Baumspitze": "Punta del árbol",
-  "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm bekommt jede Spitze eine Trennschicht und trägt die Unterseite flächig.": "Diámetro de las puntas de los árboles orgánicos. A partir de unos 1,13 mm cada punta recibe una capa de separación y sostiene la cara inferior en toda su superficie.",
+  "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm trägt jede Spitze eine Trennschicht.": "Diámetro de las puntas de los árboles orgánicos. A partir de unos 1,13 mm cada punta lleva una capa de separación.",
   "Trennschicht auf jeder Baumspitze trägt die Unterseite.": "Una capa de separación en cada punta del árbol sostiene la cara inferior."
 }

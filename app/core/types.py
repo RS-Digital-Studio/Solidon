@@ -1403,7 +1403,8 @@ class SupportSettings:
     """Durchmesser der Spitzen organischer Bäume in mm (RM-704). Unter
     ``analysis.TIP_ROOF_AREA`` Querschnitt setzt die Orca-Familie keine
     Trennschicht auf die Spitze; darüber trägt jede Spitze eine. Die Vorgabe
-    ist die der Familie und aller gemessenen Herstellerprofile."""
+    ist die der Familie und der meisten Herstellerprofile; einige führen 1 bis
+    2 mm."""
 
 
 @dataclass(frozen=True, slots=True)

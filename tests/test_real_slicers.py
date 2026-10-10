@@ -284,6 +284,17 @@ def _moves(gcode: Path) -> list[str]:
     ]
 
 
+#: Wo die Kegel unter der Platte hängen, 11 mm auseinander.
+_CONES: tuple[tuple[float, float], ...] = (
+    (-11.0, -11.0),
+    (-11.0, 0.0),
+    (-11.0, 11.0),
+    (11.0, -11.0),
+    (11.0, 0.0),
+    (11.0, 11.0),
+)
+
+
 def _bearded_plate() -> SceneObject:
     """Eine Platte auf einer Säule, darunter sechs Kegel, die mit der Spitze nach
     unten als Inseln unter ``analysis.TIP_ROOF_AREA`` beginnen — die Bartstacheln
@@ -295,14 +306,7 @@ def _bearded_plate() -> SceneObject:
     plate.apply_translation((0.0, 0.0, 21.5))
     upside_down = trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0))
     cones = []
-    for x, y in (
-        (-11.0, -11.0),
-        (-11.0, 0.0),
-        (-11.0, 11.0),
-        (11.0, -11.0),
-        (11.0, 0.0),
-        (11.0, 11.0),
-    ):
+    for x, y in _CONES:
         cone = trimesh.creation.cone(radius=1.0, height=4.0, sections=24)
         cone.apply_transform(upside_down)
         cone.apply_translation((x, y, 20.0))
@@ -371,26 +375,59 @@ def _sliced(
     return _moves(outcome.gcode_path), run.model, outcome.gcode_path
 
 
-#: Eine Höhe in einer Bewegung.
-_Z = re.compile(r"^G[01] [^;\n]*\bZ(-?\d*\.?\d+)")
+#: Die Art einer Bahn: ``;TYPE:`` in der Orca-Familie, ``; FEATURE:`` bei Bambu Studio.
+_KIND = re.compile(r"^;\s*(?:TYPE|FEATURE)\s*:\s*(.+?)\s*$")
+#: Lage einer Bewegung.
+_AXIS = re.compile(r"\b([XYZ])(-?\d*\.?\d+)")
 
 
-def _interface_extrusions(gcode: Path, below: float) -> int:
-    """Wie viele Druckbewegungen der Trennschicht (``;TYPE:Support interface``)
-    unter der Höhe ``below`` liegen — unter den Stiften, nicht unter der Platte."""
-    count = 0
-    interface = False
-    z = 0.0
+def _support_below(gcode: Path, below: float) -> dict[str, list[tuple[float, float, float]]]:
+    """Die Druckbewegungen der Stütze (``support``) und ihrer Trennschicht
+    (``interface``) unter der Höhe ``below``, je Endpunkt ``(x, y, z)`` — unter den
+    Kegeln, nicht unter der Platte —, dazu die des Modells darüber (``model``)."""
+    found: dict[str, list[tuple[float, float, float]]] = {
+        "support": [],
+        "interface": [],
+        "model": [],
+    }
+    kind = ""
+    x = y = z = 0.0
     for line in gcode.read_text(encoding="utf-8", errors="replace").splitlines():
-        if line.startswith(";TYPE:"):
-            interface = line[6:].strip().lower() == "support interface"
+        named = _KIND.match(line)
+        if named:
+            kind = named.group(1).lower()
             continue
-        height = _Z.match(line)
-        if height:
-            z = float(height.group(1))
-        if interface and z < below and _EXTRUSION.match(line):
-            count += 1
-    return count
+        if not line.startswith(("G0 ", "G1 ")):
+            continue
+        values = dict(_AXIS.findall(line.split(";", 1)[0]))
+        x = float(values.get("X", x))
+        y = float(values.get("Y", y))
+        z = float(values.get("Z", z))
+        if not _EXTRUSION.match(line):
+            continue
+        if z >= below:
+            if kind and not kind.startswith(("support", "skirt", "brim", "custom", "prime")):
+                found["model"].append((x, y, z))
+        elif kind.startswith("support"):
+            found["interface" if "interface" in kind else "support"].append((x, y, z))
+    return found
+
+
+def _cones_without(found: dict[str, list[tuple[float, float, float]]], reach: float) -> list:
+    """Die Kegel aus :data:`_CONES`, unter denen keine Trennschicht näher als
+    ``reach`` mm liegt. Die Mitte des Körpers auf dem Bett ist die Mitte der
+    Platte, aus den Modellbahnen darüber."""
+    xs = [point[0] for point in found["model"]]
+    ys = [point[1] for point in found["model"]]
+    middle = ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+    return [
+        (x, y)
+        for x, y in _CONES
+        if not any(
+            math.hypot(px - middle[0] - x, py - middle[1] - y) <= reach
+            for px, py, _pz in found["interface"]
+        )
+    ]
 
 
 @pytest.mark.parametrize(
@@ -400,42 +437,54 @@ def _interface_extrusions(gcode: Path, below: float) -> int:
         for program in ORCA_FAMILY
     ],
 )
-def test_a_roof_tip_puts_an_interface_on_every_tip(
-    program: str, installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_a_roof_tip_puts_an_interface_under_every_cone(
+    program: str,
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Eine Baumspitze über ``analysis.TIP_ROOF_AREA`` Querschnitt erzwingt in der
     Orca-Familie die Trennschicht an jeder Spitze (``force_tip_to_roof``, RM-704):
-    Unter sechs Kegelspitzen mit 0,4 mm Luft druckt ``ROOF_TIP_DIAMETER`` dort mehr
-    Trennschicht als die Spitze von 0,8 mm. Bambu Studio kennt den Schlüssel nicht,
-    und Creality Print liest ihn ohne Wirkung (``slicer_keys.NOT_TAKEN_BY_PROGRAM``);
-    dort schreibt Solidon ihn nicht, und beide drucken gleich."""
+    Unter sechs Kegelspitzen mit 0,4 mm Luft steht mit ``ROOF_TIP_DIAMETER`` unter
+    jedem Kegel eine Trennschicht, mit der Spitze von 0,8 mm keine. Solidon schreibt die
+    Wahl in jedem Programm; Bambu Studio meldet sie als übergangen
+    (``slicer.setting_ignored``), Creality Print liest sie und baut andere Äste;
+    beide drucken dieselbe Trennschicht, und dort kommt kein Rat
+    (``slicer_keys.NOT_TAKEN_BY_PROGRAM``)."""
     from app.core.slice import advise
 
     set_test_license(monkeypatch, active=True)
     printer = PROGRAMS[program]
-    counted = {
-        tip: _interface_extrusions(
-            _sliced(
-                printer,
-                installed_slicer,
-                tmp_path / str(tip),
-                {
-                    "support.style": "tree",
-                    "support.z_gap": 0.4,
-                    "support.interface_layers": 2,
-                    "support.tip_diameter": tip,
-                },
-                body=_bearded_plate(),
-            )[2],
-            # Die Kegel beginnen auf 16 mm, die Platte auf 20 mm.
-            below=19.0,
-        )
-        for tip in (0.8, advise.ROOF_TIP_DIAMETER)
-    }
+
+    def cut(tip: float, folder: str) -> dict[str, list[tuple[float, float, float]]]:
+        gcode = _sliced(
+            printer,
+            installed_slicer,
+            tmp_path / folder,
+            {
+                "support.style": "tree",
+                "support.z_gap": 0.4,
+                "support.interface_layers": 2,
+                "support.tip_diameter": tip,
+            },
+            body=_bearded_plate(),
+        )[2]
+        # Die Kegel beginnen auf 16 mm, die Platte auf 20 mm.
+        return _support_below(gcode, below=19.0)
+
+    roof, plain = cut(advise.ROOF_TIP_DIAMETER, "spitze"), cut(0.8, "vorgabe")
+    assert plain["support"] and roof["support"], f"{program} stützt die Kegel nicht"
     if slicer_keys.takes("orca", "support.tip_diameter", program=program):
-        assert counted[advise.ROOF_TIP_DIAMETER] > counted[0.8], (program, counted)
+        assert not _cones_without(roof, reach=2.0), (program, _cones_without(roof, reach=2.0))
+        assert len(roof["interface"]) > len(plain["interface"]), program
     else:
-        assert counted[advise.ROOF_TIP_DIAMETER] == counted[0.8], (program, counted)
+        # Verglichen ohne Reihenfolge: Bambu legt gleiche Bahnen je Lauf anders an.
+        assert sorted(roof["interface"]) == sorted(plain["interface"]), program
+        if program == "bambustudio":
+            # Bambu meldet den Schlüssel selbst als übergangen; seine Äste weichen
+            # trotzdem an einzelnen Punkten ab (38 von über 4000 unter den Kegeln).
+            assert "tree_support_tip_diameter" in caplog.text, program
 
 
 @pytest.mark.parametrize(

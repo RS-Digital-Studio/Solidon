@@ -705,8 +705,14 @@ Spitze (`force_tip_to_roof`, `TreeSupport3D.cpp:1286`): Mit 1,13 mm (kleinster
 solcher Wert auf Hundertstel) trug ein Viertel der Kieferunterseite eine
 Trennschicht, der Kontakt an Kinn und Stacheln sank weiter (7,0 → 4,0 und
 3,2 → 1,9 mm²), für fünf Minuten und 0,03 g; 1,2 und 1,4 mm wirkten gleich.
+Getragen ist die flache Kieferunterseite damit kaum mehr (25 statt 22 %; im
+zweiten Druck 54 %): Was trägt, liegt auf Trennschicht und haftet weniger an, ob
+das Kinn nicht mehr durchhängt, zeigt erst Druck 4. Die Kosten: 49 statt 31
+Stützfüße auf dem Modell (14,3 statt 8,5 mm²), neue am Kopf auf 105–112 mm, an Hals
+und Brust und drei sehr kleine an den Vorderbeinen auf etwa 21 mm.
 PrusaSlicer und Cura führen eigene Spitzenschlüssel, geschnitten ist dort nichts.
-Das Vorderbein, das beim Abnehmen brach, hatte nicht mehr Stütze als im zweiten
-Druck (Umfang mit Stütze in 1 mm 2 gegen 3–5 %, keine Auflage), aber zwei statt
-drei Wände; daraus wird kein Rat, solange ein Bruch die einzige Messung ist.
+Das Vorderbein, das beim Abnehmen brach, hatte kaum mehr Stütze als im zweiten
+Druck (Umfang mit Stütze in 1 mm 2 gegen 3–5 %, mit der Spitze 0,2 mm² Auflage),
+aber zwei statt drei Wände; daraus wird kein Rat, solange ein Bruch die einzige
+Messung ist.
 Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/drache3.md`.

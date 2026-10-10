@@ -85,7 +85,7 @@ dans `website/version.json`.
 - Sous une grande face inférieure plane, Solidon propose une grille plutôt que des arbres, et l'hybride si des détails fins en ont besoin. Pour les arbres hauts, Solidon propose deux parois.
 - Si une suggestion de la boîte de dialogue d'impression ne vaut que pour certaines pièces, la ligne et le champ nomment aussi celles qui reçoivent avec elle une autre valeur.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
-- Avec plus d'espace sur les pointes fines, Solidon propose une *Pointe d'arbre* plus large. Chaque pointe reçoit une couche d'interface, et les dessous ne s'affaissent pas.
+- Là où Solidon propose plus d'espace au-dessus des supports arborescents, il propose aussi une *Pointe d'arbre* plus large. Chaque pointe porte une couche d'interface, et moins de support reste collé.
 - Si de nombreux petits surplombs ont besoin ensemble de supports, comme un menton à face inférieure inclinée, le rapport indique désormais l'endroit.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.
 - Au-dessus d'un canal, le rapport ne conseille plus un support qu'on ne pourrait plus retirer. Il nomme le canal et une transition sous 45 degrés.

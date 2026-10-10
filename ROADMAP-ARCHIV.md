@@ -46761,8 +46761,16 @@ Trennschicht, Kontakt Kinn 7,0 → 4,0 mm², Stacheln 3,2 → 1,9 mm², +4 min 5
 1,4 mm gleich. Kundenweg (`tools/matrix_unit.py`, elegoo:centauri-carbon-2): Der Rat schlägt
 1,13 mm vor, und die Druckdatei trägt sie. Tests: `test_slice_findings.py`
 (`test_the_roof_tip_is_the_smallest_with_a_roof`, `test_tips_with_air_above_carry_a_roof` mit
-Gegenproben), `test_print_settings.py` (Begründungslisten), Slicertest
-`test_real_slicers.py::test_a_roof_tip_puts_an_interface_on_every_tip` (Kegelspitzen: OrcaSlicer,
-ElegooSlicer, Anycubic mehr Trennschicht, Bambu und Creality gleich; Stifte gleichen
-Querschnitts zeigten es nicht). Offen im Register: Wände an schlanken Gliedern, Prusa und Cura.
+Gegenproben, `test_the_tip_field_names_the_roof_tip`), `test_print_settings.py`
+(Begründungslisten, Feld unter Gitter inaktiv), `test_manufacturer.py` (Spitze aus dem
+Herstellerprofil), Slicertest
+`test_real_slicers.py::test_a_roof_tip_puts_an_interface_under_every_cone` (Kegelspitzen:
+OrcaSlicer, ElegooSlicer, Anycubic mit Trennschicht unter jedem Kegel; Bambu druckt dieselbe
+Stütze, Creality andere Äste, aber dieselbe Trennschicht; Stifte gleichen Querschnitts zeigten
+es nicht). **Kosten:** Getragen ist die flache Kieferunterseite kaum mehr (25 statt 22 %, im
+zweiten Druck 54 %); was trägt, liegt auf Trennschicht. Auf dem Modell stehen 49 statt 31
+Stützfüße (14,3 statt 8,5 mm²), neue am Kopf auf 105–112 mm, an Hals und Brust und drei sehr
+kleine an den Vorderbeinen auf etwa 21 mm (Durchsicht `reviews-2026-10-10/review_rm704.md`).
+Offen im Register: Kinn, Kopf und Vorderbeine an Druck 4, Wände an schlanken Gliedern, Prusa
+und Cura.
 Changelog: ja.

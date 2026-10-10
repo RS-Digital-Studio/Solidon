@@ -10318,8 +10318,11 @@ def test_a_chosen_tree_over_a_hybrid_process_reaches_the_file(
 )
 def test_the_tree_walls_rest_under_a_grid(style: str, inactive: bool) -> None:
     """Unter Gitter druckt kein Baum, das Feld der Baumwände tut nichts (Review
-    RM-584, L3) — gefragt mit der Art, die das Programm druckt."""
-    assert ("support.tree_walls" in print_settings.inactive_paths(style, "skirt")) is inactive
+    RM-584, L3) — gefragt mit der Art, die das Programm druckt. Ebenso die Spitze
+    der Bäume (RM-704)."""
+    inactive_paths = print_settings.inactive_paths(style, "skirt")
+    assert ("support.tree_walls" in inactive_paths) is inactive
+    assert ("support.tip_diameter" in inactive_paths) is inactive
 
 
 def test_the_part_advice_memo_knows_the_tower() -> None:

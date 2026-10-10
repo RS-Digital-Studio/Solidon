@@ -65,7 +65,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt; entschieden (Robert, 06.10.): das Ziel bleibt, ein weiterer Hebel wird gesucht |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Fuß hoher Bäume, Spitzenabstand weiterer Materialien |
-| [RM-704 — Kinn und Bein am dritten Drachendruck](#rm-704) | Geometrie, Erkennung und Druckvorbereitung | Trennschicht auf jeder Baumspitze gebaut (Archiv, RM-704 Teil); offen: Wände an schlanken Gliedern, die beim Abnehmen der Stütze brechen, und die Spitze in PrusaSlicer und Cura |
+| [RM-704 — Kinn und Bein am dritten Drachendruck](#rm-704) | Geometrie, Erkennung und Druckvorbereitung | Trennschicht auf jeder Baumspitze gebaut (Archiv, RM-704 Teil); offen: Kinn, Kopf und Vorderbeine an Druck 4 prüfen, Wände an schlanken Gliedern (nach welle4), die Spitze in PrusaSlicer und Cura |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
 | [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
 | [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
@@ -945,10 +945,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   saubere Kopfstacheln, aber eine faserige, durchhängende Kieferunterseite, und ein
   Vorderbein brach beim Abnehmen der Stütze auf halber Höhe. Erledigt (Archiv, RM-704 Teil):
   Trennschicht auf jeder Baumspitze in der Orca-Familie (`support.tip_diameter`). Offen:
-  Das Bein hatte nicht mehr Stütze als im zweiten Druck, aber zwei statt drei Wände; ob
-  schlanke Glieder einen Wandrat brauchen, zeigt erst ein vierter Druck mit drei Wänden und
-  ein Korpuslauf über Figuren mit Beinen. Die Spitze in PrusaSlicer und Cura schneiden
-  (`support_tree_tip_diameter`, `force_tip_to_roof`) und dort übergeben, wenn sie wirkt.
+  An Druck 4 (Spitze 1,2 mm, drei Wände) prüfen, ob das Kinn trägt (25 % statt 54 % der
+  flachen Unterseite getragen); wenn nicht, bleibt der Abstand oben der Hebel (V18: 0,2 mm mit
+  Spitze, dann kommen die Reste an den Kopfstacheln zurück). Dort auch den Kopf auf 105–112 mm
+  und die Vorderbeine bei etwa 21 mm ansehen: Mit der breiteren Spitze stehen 49 statt 31
+  Stützfüße auf dem Modell (14,3 statt 8,5 mm²). Das Bein hatte kaum mehr Stütze als im
+  zweiten Druck, aber zwei statt drei Wände; ob schlanke Glieder einen Wandrat brauchen,
+  zeigt Druck 4 und danach ein Korpuslauf über Figuren mit Beinen (nach welle4). Die Spitze
+  in PrusaSlicer und Cura schneiden (`support_tree_tip_diameter`, `force_tip_to_roof`)
+  und dort übergeben, wenn sie wirkt.
 
 <a id="rm-585"></a>
 

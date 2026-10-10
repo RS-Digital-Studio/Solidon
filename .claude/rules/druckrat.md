@@ -141,7 +141,8 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   gedruckt werden und die Orca-Familie schneidet, dazu die kleinste Spitze mit
   Trennschicht (`support.tip_diameter` = `ROOF_TIP_DIAMETER`, Querschnitt über
   `TIP_ROOF_AREA`): Sonst hängt die Unterseite 0,4 mm über nackten Spitzen
-  (RM-704); PrusaSlicer und Cura sind nicht gemessen (`NOT_TAKEN_BY`), Bambu
+  (RM-704). Die Spitze geht für die ganze Platte (nicht in `PART_PATHS`, das Größte
+  der Teile), Abstand und Trennschichten je Teil. PrusaSlicer und Cura sind nicht gemessen (`NOT_TAKEN_BY`), Bambu
   kennt den Schlüssel nicht, Creality Print liest ihn ohne Wirkung
   (`NOT_TAKEN_BY_PROGRAM`). Unter einem flachen Stück über
   `OVERHANG_LAYER_WORTH_SUPPORT` eine dichte Trennschicht, sonst eine lockere;

@@ -504,8 +504,8 @@ ORCA: Final[tuple[Row, ...]] = (
     # Gilt nur Bäumen; 0 heißt beim Programm „automatisch“, Bambu -1 (RM-584).
     ("support.tree_walls", "tree_support_wall_count", _integer),
     # Ab ``analysis.TIP_ROOF_AREA`` Querschnitt trägt jede Spitze eine
-    # Trennschicht (``TreeSupport3D.cpp:1286``, RM-704); unter 0,8 bis zur
-    # Stützbahn hebt die Übergabe sie ohnehin (``handover.organic_tree_fitted``).
+    # Trennschicht (``TreeSupport3D.cpp:1286``, RM-704); eine Spitze unter der
+    # Stützbahn hebt die Übergabe ohnehin (``handover.organic_tree_fitted``).
     ("support.tip_diameter", "tree_support_tip_diameter", _number),
     # -1 heißt „wie die übrige Schicht“, die Vorgabe aller gemessenen Profile.
     # Ein Filamentwert in der Orca-Familie (Filamentprofile der Hersteller).

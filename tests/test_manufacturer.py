@@ -3839,6 +3839,26 @@ def test_the_tree_walls_are_read_back(walls: str, read_as: int) -> None:
     assert not foreign
 
 
+@pytest.mark.parametrize(("tip", "read_as"), [("1.2", 1.2), ("0.8", 0.8)])
+def test_the_tip_is_read_back(tip: str, read_as: float) -> None:
+    """Die Spitze organischer Bäume kommt aus dem Herstellerprofil (RM-704): Wer
+    schon 1,2 mm führt, bekommt keinen Rat."""
+    read, foreign = manufacturer._read_process(
+        {"tree_support_tip_diameter": tip}, manufacturer._Context(nozzle=0.4), {}
+    )
+    assert read["support.tip_diameter"] == pytest.approx(read_as)
+    assert not foreign
+
+
+def test_a_tip_of_nothing_stays_foreign() -> None:
+    """Null ist keine Spitze; der Wert bleibt fremd und geht unverändert zurück."""
+    read, foreign = manufacturer._read_process(
+        {"tree_support_tip_diameter": "0"}, manufacturer._Context(nozzle=0.4), {}
+    )
+    assert "support.tip_diameter" not in read
+    assert foreign == {"support.tip_diameter": "0"}
+
+
 @pytest.mark.parametrize(
     ("program", "values", "read_as"),
     [

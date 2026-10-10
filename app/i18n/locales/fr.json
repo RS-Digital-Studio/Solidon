@@ -8639,6 +8639,6 @@
   "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abrégé. Le rapport complet se trouve dans le dossier enregistré sous « bericht.txt » — merci de le joindre.",
   "… und {count} weitere.": "… et {count} de plus.",
   "Baumspitze": "Pointe d'arbre",
-  "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm bekommt jede Spitze eine Trennschicht und trägt die Unterseite flächig.": "Diamètre des pointes des arbres organiques. À partir d'environ 1,13 mm, chaque pointe reçoit une couche d'interface et porte la face inférieure sur toute sa surface.",
+  "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm trägt jede Spitze eine Trennschicht.": "Diamètre des pointes des arbres organiques. À partir d'environ 1,13 mm, chaque pointe porte une couche d'interface.",
   "Trennschicht auf jeder Baumspitze trägt die Unterseite.": "Une couche d'interface sur chaque pointe d'arbre porte la face inférieure."
 }

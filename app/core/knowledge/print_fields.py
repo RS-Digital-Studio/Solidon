@@ -698,8 +698,8 @@ FIELDS: tuple[Field, ...] = (
         step=0.05,
         decimals=2,
         note=_(
-            "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm bekommt jede Spitze "
-            "eine Trennschicht und trägt die Unterseite flächig."
+            "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm trägt jede Spitze eine "
+            "Trennschicht."
         ),
     ),
     Field(
