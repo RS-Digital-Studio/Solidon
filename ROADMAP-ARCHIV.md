@@ -46528,7 +46528,8 @@ Licht Schatten wirft, auch das des Achsenkreuzes, und
 wie mit 1024 (Gegenprobe: mit Schattenwurf und -empfang unterscheiden sich die Bilder). Damit
 bleibt eine Sitzung mit einem Modell dieser Größe bei 273 MB dediziert (vorher 529 MB); kommt
 ein größeres Modell dazu, legt wgpu den Block dort an. Die Blockgröße steuert wgpu-native
-(keine Speicherhinweise in der C-Schnittstelle von wgpu 0.32); weiter unter RM-698, Teil 2.
+(keine Speicherhinweise in der C-Schnittstelle von wgpu 0.32); weiter unter
+[RM-698](ROADMAP.md#rm-698), Teil 2.
 Zwei Fensterläufe mit dem Spiderman brachen ohne Python-Spur ab, am Stand davor wie danach —
 [RM-694](ROADMAP.md#rm-694).
 

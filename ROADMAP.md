@@ -3615,6 +3615,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `a·n + b` laufen in int32 über. Abnahme: Spitze am großen Modell gemessen
   gesenkt, Ergebnisse druckgleich über Korpus und Beispielprojekte, alle
   Gleichheitsverträge aus §11.2 grün. Der 256-MB-Block von wgpu ist Teil (2).
+  Vermerk 10.10.2026 (Paket L2, RM-567, am echten Fenster mit Vulkan auf der RTX 4080): Beim
+  Zurücknehmen auf den Ladestand des Laptop-Ständers legt wgpu-native einen zweiten
+  Speicherblock an — dediziert 273 → 529 MB, Zusage 256 MB mehr, bleibend, in fünf von fünf
+  Läufen und ohne eine GPU-Anlage ab 4 MB in diesem Schritt. Mit den Schattentexturen von einem
+  Texel (RM-567) kommt er erst mit dem nächsten größeren Modell, am Ende einer langen Sitzung
+  steht er gleich. Blockgröße und Behalten steuert wgpu-native; die C-Schnittstelle von wgpu 0.32
+  reicht keine Speicherhinweise durch. Zu prüfen: ob eine neuere wgpu-Fassung `memory_hints`
+  durchreicht oder D3D12 unter Windows weniger hält — eine Entscheidung über den Renderer, die
+  Robert fällt.
 
 <a id="rm-699"></a>
 
