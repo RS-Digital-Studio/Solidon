@@ -242,7 +242,7 @@ Konstanten in Formelgestalt (`_cura_literal`).
 - **Mehrere Platten in eine Datei, wo der Slicer Platten kennt**
   (`knows_plates`): Orca-Familie mit je einem `plate`-Block, Teile
   plattenweise im Raster — `ceil(sqrt(n))` Spalten, Zeilen nach unten, ein
-  Fünftel Bett Luft (`plate_origin`, `SLICER_PLATE_GAP`, aus `PartPlate.cpp`),
+  Fünftel Bett Luft (`plate_origin`, `SLICER_PLATE_GAP`),
   Blöcke nach Rang; *Im Slicer öffnen* gibt eine Datei. PrusaSlicer und Cura
   bekommen je Platte eine Datei, *Slicen* je Platte eine Druckdatei. Solidons Anordnung reist nur mit, wenn sie auf
   **jeder** gewählten Platte hält (`arrangement_holds`).
@@ -279,10 +279,10 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   jeden Prozess „Standard"), liegen `STAGE_PATHS` über dem Standardprozess;
   ein selbst gewählter Prozess ist die Stufe.
 - **Was die Maschine setzt, bleibt beim Hersteller**: Curas Lüfterkurve unten
-  und Schwelle (RM-228, `manufacturer.cura_fan_curve`); Fuß- und Lochausgleich
-  schreibt jeder Satz nur gewählt oder übernommen (`slicer_keys.MAKER_OWNED`,
-  RM-589), der Rat je Teil gilt als übernommen (`handover._applied`), in der
-  Orca-Familie mit Brim-Abstand (`object_keys`).
+  und Schwelle (`manufacturer.cura_fan_curve`); Fuß- und Lochausgleich nur
+  gewählt oder übernommen (`slicer_keys.MAKER_OWNED`), der Rat je Teil gilt
+  als übernommen (`handover._applied`), in der Orca-Familie mit Brim-Abstand
+  (`object_keys`).
 - **Was ohne Partner nicht wirkt, geht mit ihm** (`handover.COUPLED_PATHS`):
   Haftungsart mit den Maßen aller Arten, Lüfter-Obergrenze mit dem unteren
   Ende; eine gewählte Haftungsart bringt ihr Maß mit, wenn es null ist

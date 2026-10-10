@@ -47166,6 +47166,18 @@ kalibriert, bekommt beim Fuß weiter den Vorschlag. N5 die Suche kennt die Wört
 Docstrings, eine Quelle der Lochfeldformen, `play_inside` mit Wächter und Karte,
 Unterlagen, Changelog-Wort.
 
+**Schlussprüfung (`review_rm589_schluss.md`) behoben:** S1 Der Fuß zählte an der Herkunft:
+Ein Turm, den *Ausrichten* hinlegte, ein gewendeter, die obere Hälfte eines waagerechten
+Schnitts und ein Deckel bekamen „Erste Schicht einziehen → 0“ und druckten mit Elefantenfuß.
+Er zählt jetzt nur, wo das eingezogene Band am Bett liegt (`fits._foot_on_the_bed`: Rahmen-Z
+mit Vorzeichen nach oben, Schritt auf der eigenen Linie oder einer reinen Kopie, `COPY_OPS`);
+am OrcaSlicer behält der liegende Turm den Einzug des Slicers (Schicht 1 0,380 mm schmaler als
+die Mitte), der stehende zieht nur im Modell ein (0,480, Objektwert 0). S2 Eine senkrecht
+durch eine gekippte dünne Platte gebohrte Öffnung zählt nicht mehr: Hat der Lochmantel zwei
+Ränder, entscheidet, ob der tiefste Punkt des oberen über dem höchsten des unteren liegt
+(`_closes_between_mouths`, gegen den Schnitt belegt, auch bei geknicktem Rand). S3 Test für
+`measured` im Projektweg (`carry`, Speichern und Öffnen auf einem zweiten Rechner).
+
 **Gemessen nachher:** Mit dem Rat übernommen dieselben Teile ohne doppelten Ausgleich: CC2
 39,10 statt 38,90 mm Bahnbreite in Schicht 1, MK4S 39,10 statt 38,70, Kobra 2 in Anycubic
 Slicer Next 39,10, Cura 39,14; Loch am Kobra 2 6,635 statt 6,675, am KE 6,636 statt 6,686 mm.
