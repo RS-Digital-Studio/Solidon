@@ -332,6 +332,43 @@ def _fields_of(mesh: Mesh) -> tuple[int, tuple[int, ...], int, tuple[int, ...]] 
     )
 
 
+def _same_content(shown: Mesh, lean: Mesh) -> bool:
+    """Ob ``shown`` dasselbe Netz ist wie die schlanke Kopie ``lean``, bis auf die Ableitungen.
+
+    Dieselben Felder (``MeshData.lean`` teilt Ecken und Dreiecke), dieselben
+    Slots und derselbe Hohlraum; am exakten Körper dieselbe Form mit denselben
+    Flächenfilamenten und derselben Vernetzung. Was so gleich ist, darf die
+    Kopie im Eintrag ersetzen, gleich welches Objekt es ist.
+    """
+    if type(shown) is not type(lean):
+        return False
+    from app.core.brep.kernel import Solid
+
+    if isinstance(shown, Solid) and isinstance(lean, Solid):
+        if (
+            shown.shape is not lean.shape
+            or shown.face_slots != lean.face_slots
+            or shown.deflection != lean.deflection
+            or shown.converted_from is not lean.converted_from
+        ):
+            return False
+        shown_mesh, lean_mesh = shown._cache.get("mesh"), lean._cache.get("mesh")
+        if shown_mesh is None or lean_mesh is None:
+            return False
+        return _same_content(shown_mesh, lean_mesh)
+    fields = _fields_of(shown)
+    if fields is None or fields != _fields_of(lean):
+        return False
+    if getattr(shown, "slots", None) != getattr(lean, "slots", None):
+        return False
+    if getattr(shown, "cavity_open", None) != getattr(lean, "cavity_open", None):
+        return False
+    inner, lean_inner = getattr(shown, "cavity", None), getattr(lean, "cavity", None)
+    if inner is None or lean_inner is None:
+        return inner is lean_inner
+    return _same_content(inner, lean_inner)
+
+
 def _leaner(result: CachedResult, kept: Collection[int]) -> CachedResult:
     """Der Eintrag mit schlanken Netzen (``MeshData.lean``) außer denen der Szene."""
     objects = []
@@ -593,8 +630,8 @@ class ResultCache:
         self._disk = disk
         self._last_disk_hit: str | None = None
         """Der Schlüssel des letzten Plattentreffers (:meth:`_lean_earlier_disk_hit`)."""
-        self._leaned: dict[int, tuple[int, object]] = {}
-        """Je schlanke Kopie von dort Nummer und Felder ihres Originals (:meth:`trim`)."""
+        self._leaned: set[int] = set()
+        """Die Nummern der schlanken Kopien von dort, die :meth:`restore_shown` prüft."""
         self._refusals: OrderedDict[str, AppError] = OrderedDict()
         """Das Urteil der vollen Kette über Schritte, an denen sie gescheitert ist (RM-534).
 
@@ -691,9 +728,9 @@ class ResultCache:
             return 0
         for full, lean in zip(entry.objects, leaner.objects, strict=True):
             if lean.mesh is not full.mesh:
-                # Nur Nummer und Felder, keine Halterung: Das volle Netz soll
-                # frei werden können, wenn die Szene es nicht zeigt.
-                self._leaned[id(lean.mesh)] = (id(full.mesh), _fields_of(full.mesh))
+                # Keine Halterung des vollen Netzes: Es soll frei werden
+                # können, wenn die Szene es nicht zeigt.
+                self._leaned.add(id(lean.mesh))
         self._entries[earlier] = leaner
         self._held.pop(earlier, None)
         return loose[0]
@@ -828,6 +865,17 @@ class ResultCache:
             released = self._trim(kept)
         note_released(released)
 
+    def restore_shown(self, keep: Iterable[Mesh]) -> None:
+        """Nur die Rückgabe aus :meth:`trim` — für einen Lauf, der angehalten hat.
+
+        Ein angehaltener Lauf ruft kein ``trim``; ohne Rückgabe blieb ein
+        gezeigter Körper im Cache schlank, und nach Strg+Z war er getauscht und
+        seine Schichtanalyse weg (Nachprüfung zu RM-698, N2).
+        """
+        kept = list(keep)
+        with self._lock:
+            self._restore_shown(kept)
+
     def _restore_shown(self, kept: Sequence[Mesh]) -> None:
         """Nur mit gehaltenem Schloss — gezeigte Netze kommen in ihren Eintrag zurück (RM-698).
 
@@ -838,23 +886,24 @@ class ResultCache:
         volle Netz, der Eintrag eine schlanke Kopie derselben Felder. Ohne
         Rückgabe holte die nächste Auswertung die Kopie, die Szene tauschte den
         Körper gegen sie, und der Prüfbericht schnitt ihn neu: am Laptop-Riser
-        18,8 s CPU. Zurück kommt nur ein Original, dessen Kopie hier entstand:
-        gleiche Felder allein genügen nicht — ein bemalter Körper legt neue
-        Slots über dieselben Ecken und Dreiecke.
+        18,8 s CPU. Zurück kommt nur **gleicher Inhalt** (:func:`_same_content`):
+        dieselben Felder, gleiche Slots, gleicher Hohlraum. Gleiche Felder allein
+        genügen nicht — ein bemalter Körper legt neue Slots über dieselben Ecken
+        und Dreiecke —, und die Nummer des Originals auch nicht: Beim ``trim``
+        ist es oft schon frei, und ein bemaltes Netz kann sie erben (Nachprüfung
+        zu RM-698, N1).
         """
-        leaned, self._leaned = self._leaned, {}
-        if not leaned:
+        leaned, self._leaned = self._leaned, set()
+        if not leaned or not kept:
             return
-        shown = {id(mesh): mesh for mesh in kept}
         for key, entry in list(self._entries.items()):
             objects = []
             changed = False
             for body in entry.objects:
-                origin = leaned.get(id(body.mesh))
-                mesh = shown.get(origin[0]) if origin is not None else None
-                # Die Felder dazu, weil eine Nummer nach dem Freigeben
-                # wiederkehren kann.
-                if mesh is None or origin is None or _fields_of(mesh) != origin[1]:
+                mesh = None
+                if id(body.mesh) in leaned:
+                    mesh = next((shown for shown in kept if _same_content(shown, body.mesh)), None)
+                if mesh is None or mesh is body.mesh:
                     objects.append(body)
                     continue
                 objects.append(replace(body, mesh=mesh))
@@ -1011,6 +1060,9 @@ class ResultCache:
             self._held.clear()
             self._features_held.clear()
             self._refusals.clear()
+            # Die Merker der Abgabe gehören zu den Einträgen (Nachprüfung zu RM-698, N2).
+            self._leaned.clear()
+            self._last_disk_hit = None
             self._cost = 0
 
     @property

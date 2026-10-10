@@ -1841,6 +1841,10 @@ def _evaluate(
         # lässt die Netze älterer Stände wachsen (RM-567). Die Netze der
         # fertigen Szene bleiben, wie sie sind.
         cache.trim(keep=[body.mesh for body in scene.objects.values()])
+    elif cache is not None:
+        # Auch nach einem Halt kommen gezeigte Körper in ihre Einträge zurück
+        # (RM-698): sonst bliebe ein beim Öffnen schlank gewordener Eintrag so.
+        cache.restore_shown(keep=[body.mesh for body in scene.objects.values()])
     progress(1.0, "")
     return EvaluationResult(
         scene=scene,
