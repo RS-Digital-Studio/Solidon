@@ -112,7 +112,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-763 — Die Beule der weichen Mischung nur, wo Flächen unter einem Winkel zusammenlaufen](#rm-763) | Geometrie, Erkennung und Druckvorbereitung | Rest aus Review F zu RM-671: über bündigen Deckeln und Seiten und an gekippten bündigen Flächen wächst das Ergebnis bis ein Viertel des Übergangs hinaus; begrenzt ist nur nach unten |
 | [RM-764 — Der nächste Punkt auf einem Dreieck einmal und plattformgleich](#rm-764) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671: `mesh.on_surface` und `_SurfaceIndex.bound` rechnen über `closest_point` mit `np.dot`, `blend._Surface` plattformgleich; dazu `float32`-Ecken in `lattice.py` |
 | [RM-766 — Das Verschweißen nach dem Kern ist der größte Posten des Angleichens](#rm-766) | Geometrie, Erkennung und Druckvorbereitung | Paket F: `_as_mesh` mit `merge_vertices` kostet an der Kugel aus §31 1,0–1,5 von 3,2–3,4 s |
-| [RM-767 — An CAD-Fächern bleibt das Angleichen splittrig, an unterteilten dauert es Minuten](#rm-767) | Geometrie, Erkennung und Druckvorbereitung | Paket F und Review-Fix F: Besenhalter 89 % Splitter; viermal unterteilte Lochplatte 262 s statt 0,3 s vor RM-671 |
+| [RM-767 — An CAD-Netzen mit Facettenstreifen und Nadelfächern bleibt das Angleichen splittrig](#rm-767) | Geometrie, Erkennung und Druckvorbereitung | Paket F: Besenhalter 89 %, Würfel W6 83 % Splitter; Vorschlag: je Ebene neu vernetzen |
+| [RM-769 — Das Abstandsfeld prüft nicht, ob das nächste Dreieck unter seinen Bewerbern ist](#rm-769) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671 (Rest von M3): an CAD-Nadelfächern bis 0,19 mm zu weit, ein Vorzeichen falsch |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -3771,19 +3772,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 <a id="rm-767"></a>
 
-- [ ] **RM-767 — An CAD-Fächern bleibt das Angleichen splittrig, an unterteilten dauert es Minuten.**
-  Offener Punkt 2 aus Paket F und Fund beim Review-Fix F (RM-671): Facettenstreifen und
-  Nadelfächer lassen sich ohne neue Punkte nicht formtreu aufräumen. In schmalen und sehr feinen
-  Ebenen räumt das Angleichen deshalb nicht auf (`EVEN_NARROW`, `EVEN_FINEST`) und lässt am
-  CAD-Besenhalter aus `F:\3D Dateien` 89 % Splitter. Wo die Ebene breit genug ist, die Fächer aber
-  schon unterteilt waren, räumt es auf und kommt nicht durch: `plate_holes` zweimal unterteilt
-  auf 1 mm 300 927 Tausche in allen 64 Runden, 11,6–14,8 s statt 0,3 s ohne Aufräumen und 0,0 s
-  vor RM-671, danach 30 % Splitter; viermal unterteilt (`mechanical_feature_mesh` aus
-  `test_performance.py`) auf die halbe Kante 262 s statt 0,3 s vor RM-671. Vorschlag: je Ebene neu
-  vernetzen (eingeschränktes Delaunay mit Innenpunkten), bis dahin die Arbeit des Aufräumens an
-  einem Budget begrenzen (§11.3: nie über die Uhr).
-  **Abnahme:** die unterteilten Platten unter dem Budget §31 (3 s) als Leistungsfall, Splitter
-  unter 5 % an Besenhalter und Würfel W6, druckgleich an Korpus und Beispielprojekten.
+- [ ] **RM-767 — An CAD-Netzen mit Facettenstreifen und Nadelfächern bleibt das Angleichen splittrig.**
+  Offener Punkt 2 aus Paket F (RM-671): Facettenstreifen und Nadelfächer lassen sich ohne neue
+  Punkte nicht formtreu aufräumen. In schmalen und sehr feinen Ebenen räumt das Angleichen
+  deshalb nicht auf (`EVEN_NARROW`, `EVEN_FINEST`) und lässt am CAD-Besenhalter aus
+  `F:\3D Dateien` 89 %, am Würfel W6 83 % Splitter. Vorschlag: je Ebene neu vernetzen
+  (eingeschränktes Delaunay mit Innenpunkten).
+  **Abnahme:** Splitter unter 5 % an Besenhalter und Würfel W6, Volumen und Fläche gleich,
+  druckgleich an Korpus und Beispielprojekten.
+
+<a id="rm-769"></a>
+
+- [ ] **RM-769 — Das Abstandsfeld prüft nicht, ob das nächste Dreieck unter seinen Bewerbern ist.**
+  Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (Rest von M3): `blend.distance_field` rechnet den
+  Abstand zu den Dreiecken der acht nächsten Stützpunkte. Fehlt das nächste darunter — an
+  CAD-Netzen mit Nadelfächern —, misst es zu weit: am Besenhalter bis 0,19 mm, 2 913 von 351 120
+  Punkten im Band, eines mit falschem Vorzeichen (das Ebenenfeld davor bis 1,81 mm). Vorschlag:
+  je Zeile prüfen, ob der k-te Stützpunkt weiter liegt als bester Abstand plus größter Abstand
+  Stückmitte–Ecke, sonst mit doppeltem k neu fragen (wie die Bänder in `mesh.on_surface`).
+  **Abnahme:** Test gegen `on_surface` an `plate_holes` (Review 1: 281 Abweichungen im Band) und am
+  Besenhalter, Gegenprobe am Stand davor rot, `cache_version` von `blend_union`, druckgleich an
+  den Beispielprojekten außer *Figur formen*.
 
 ## Bedienung und Darstellung
 
