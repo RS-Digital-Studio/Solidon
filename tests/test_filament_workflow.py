@@ -72,6 +72,8 @@ def test_export_offers_only_successful_3mf(qt_app, tmp_path, monkeypatch, succes
     def write():
         if not success:
             raise FileWriteError("model", detail="locked")
+        # Der Bedarf entsteht im Lesedurchgang vor dem Schreiben, ohne Slicer hier.
+        worker._usage = worker._usage_for(None, None)
         return [tmp_path / "model"], []
 
     def files():
@@ -1071,11 +1073,29 @@ def test_the_export_names_the_print_by_its_stored_inputs(qt_app, tmp_path, monke
         assert inputs.document is not session.project.document, "ein fester Stand"
         assert inputs.bodies() == StoredInputs(session.project.document).bodies()
         assert set(inputs.bodies()) == set(session.last_result.scene.objects)
-        monkeypatch.setattr(worker, "_assembly", lambda: ([tmp_path / "wuerfel.3mf"], []))
+        # Die Grundlage, die die Datei trägt, benennt auch den Druck (Review RM-706, M2).
+        setup = handover.SlicerSetup(tmp_path / "prusa-slicer.exe", "prusa", "MK4S", "0.15mm EIGEN")
+        worker._chosen = main_window._ChosenSetup(key=(), setup=setup)
+        written: list[object] = []
+
+        def write(*_args, **kwargs):
+            written.append(kwargs.get("setup"))
+            return tmp_path / "wuerfel.3mf", []
+
+        monkeypatch.setattr(main_window, "write_assembly", write)
+        named: list[object] = []
+        prepare = main_window.prepare_usage
+
+        def watched(*args, **kwargs):
+            named.append(kwargs.get("base"))
+            return prepare(*args, **kwargs)
+
+        monkeypatch.setattr(main_window, "prepare_usage", watched)
         offered = []
         worker.usageReady.connect(offered.append)
         worker.work()
         assert offered and offered[0].former_fingerprints, "Abdruck aus den Eingängen"
+        assert written and named == written, "dieselbe Grundlage für Datei und Abdruck"
         assert worker.after_check([])._inputs is inputs
     finally:
         monkeypatch.setattr(window, "_may_discard", lambda: True)
@@ -1125,6 +1145,14 @@ def test_plate_outputs_name_the_print_by_its_stored_inputs(qt_app, tmp_path, mon
             path, GcodeMetrics(filament_grams_by_tool=(42.0,))
         ),
     )
+    named: list[object] = []
+    prepare = printing.prepare_usage
+
+    def watched(*args, **kwargs):
+        named.append(kwargs.get("base"))
+        return prepare(*args, **kwargs)
+
+    monkeypatch.setattr(printing, "prepare_usage", watched)
     worker = (
         printing._OpenInSlicerWorker(job)
         if mode == "open"
@@ -1135,3 +1163,5 @@ def test_plate_outputs_name_the_print_by_its_stored_inputs(qt_app, tmp_path, mon
     worker.work()
     assert [one.plate for one in offered] == [0, 1]
     assert all(one.former_fingerprints for one in offered)
+    # Die Grundlage des Slicerlaufs benennt den Druck mit (Review RM-706, M2).
+    assert named and all(base is job.setup for base in named)

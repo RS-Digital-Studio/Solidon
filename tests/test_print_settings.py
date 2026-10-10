@@ -8914,6 +8914,8 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
             _chosen=None,
             cancelled=None,
             _begin_write=lambda: None,
+            # Der Bedarf gehört nicht zu dieser Frage (Review RM-706, M2).
+            _usage_for=lambda *_args: (),
         )
         # Der Lesedurchgang (RM-670) ruft den Rest über die Instanz.
         worker._assembly_in_one_read = lambda: main_window._ExportWorker._assembly_in_one_read(

@@ -2156,6 +2156,7 @@ class _PrepareAndSliceWorker(_SliceWorker):
                 self._job.name,
                 slots_by_plate={run.plate: run.slots for run in runs},
                 inputs=self._job.inputs,
+                base=self._job.setup,
             )
         }
         super().work()
@@ -2272,6 +2273,7 @@ class _OpenInSlicerWorker(Worker):
                     self._job.name,
                     slots_by_plate={plate: run.slots},
                     inputs=self._job.inputs,
+                    base=self._job.setup,
                 )
                 if self._was_cancelled():
                     self._report_receipt(
@@ -2337,6 +2339,7 @@ class _OpenInSlicerWorker(Worker):
                 self._job.name,
                 slots_by_plate=run.slots_by_plate,
                 inputs=self._job.inputs,
+                base=self._job.setup,
             )
             if self._was_cancelled():
                 self._report_receipt(

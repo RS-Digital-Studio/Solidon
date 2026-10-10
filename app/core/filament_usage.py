@@ -21,6 +21,7 @@ from app.core.errors import AppError
 from app.core.export import threemf
 from app.core.export.handover import (
     SLOT_GROUPS,
+    SlicerSetup,
     bind_object_profiles,
     configured_slots,
     override_for,
@@ -468,6 +469,19 @@ def _owned_settings(settings: PrintSettings, slot: MaterialSlot) -> dict[str, ob
     }
 
 
+def _base_choice(base: SlicerSetup | None) -> list[str] | None:
+    """Welche Grundlage der Slicer nimmt — die Wahl, nicht ihr Inhalt (Review RM-706, M2).
+
+    Ein eigener Prozess lässt die Stufe stehen und ändert Schichthöhe, Wände und
+    Tempo; Maschine und Slicerart ebenso. Ihre Namen gehören zum Druck, ihre
+    Werte nicht: Ein Slicer-Update unter denselben Namen benennt keinen anderen
+    Druck. Wo der Slicer liegt, zählt nicht.
+    """
+    if base is None:
+        return None
+    return [base.flavour, base.machine_profile, base.base_process]
+
+
 def _fixed_profile(profile: Profile) -> str:
     """Drucker und Material, wie jeder Schritt sie liest (Review RM-706, S1).
 
@@ -676,12 +690,14 @@ def prepare(
     *,
     slots_by_plate: Mapping[int, Sequence[MaterialSlot]] | None = None,
     inputs: StoredInputs | None = None,
+    base: SlicerSetup | None = None,
 ) -> tuple[UsageRequest, ...]:
     """Liest die tatsächlich ausgegebenen Körper, nie eine spätere Auswahl.
 
     **Der Abdruck** kommt aus ``inputs``, den gespeicherten Eingängen des
     Projekts (RM-706): je Körper :meth:`StoredInputs.bodies`, dazu was an den
-    Einstellungen dem Projekt gehört (:func:`_owned_settings`). Der Abdruck
+    Einstellungen dem Projekt gehört (:func:`_owned_settings`) und die Wahl der
+    Grundlage im Slicer (``base``, :func:`_base_choice`). Der Abdruck
     über die ausgewerteten Netze und die wirksamen Einstellungen (RM-705)
     steht dann in ``former_fingerprints``. Ohne ``inputs`` ist er selbst der
     Abdruck — nur für Mengen ohne Buchung und für Prüfungen ohne Projekt; wer
@@ -859,6 +875,7 @@ def prepare(
                 sorted(owned, key=digest),
                 _fixed_profile(profile),
                 step_materials,
+                _base_choice(base),
             )
             former = (evaluated,)
         legacy_fingerprints = dict.fromkeys(

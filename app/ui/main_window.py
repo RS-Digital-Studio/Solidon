@@ -140,7 +140,7 @@ from app.core.export.writer import (
     write_assembly,
     write_plan,
 )
-from app.core.filament_usage import StoredInputs, with_spool
+from app.core.filament_usage import StoredInputs, UsageRequest, with_spool
 from app.core.filament_usage import prepare as prepare_usage
 from app.core.geom.measure import bounding_box_of, volume_of
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -1835,6 +1835,9 @@ class _ExportWorker(Worker):
         self.renewed: _ChosenSetup | None = None
         """Die Wahl, die dieser Export neu hergeleitet hat, weil sich der Bestand
         seit ``chosen`` geändert hatte (:meth:`_assembly_in_one_read`)."""
+        self._usage: tuple[UsageRequest, ...] = ()
+        """Der Bedarf dieser Datei, gerechnet mit der Grundlage, die sie trägt
+        (:meth:`_usage_for`)."""
 
     def cancel(self) -> bool:
         """Nimmt einen Abbruch nur vor dem gemeinsam geschützten Schreibbeginn an."""
@@ -1895,20 +1898,13 @@ class _ExportWorker(Worker):
             if self._format == "3mf":
                 self._settings = self._profiles_for_selection(self._settings)
                 self._inventory_settings = self._profiles_for_selection(self._inventory_settings)
-            usage = (
-                prepare_usage(
-                    self._objects,
-                    self._inventory_settings,
-                    self._profile,
-                    self._project_name,
-                    inputs=self._inputs,
-                )
-                if self._format == "3mf" and self._inventory_settings is not None
-                else ()
-            )
             plan: ExportPlan | None = None
+            usage: tuple[UsageRequest, ...] = ()
             if self._format == "3mf":
+                # Der Bedarf entsteht im Lesedurchgang der Datei, mit derselben
+                # Grundlage (:meth:`_usage_for`).
                 written, findings = self._assembly()
+                usage = self._usage
             else:
                 self._begin_write()
                 written, findings, plan = self._files()
@@ -1985,6 +1981,30 @@ class _ExportWorker(Worker):
         with slicer_profiles.single_read():
             return self._assembly_in_one_read()
 
+    def _usage_for(
+        self, unstaged: handover.SlicerSetup | None, staged: handover.SlicerSetup | None
+    ) -> tuple[UsageRequest, ...]:
+        """Der Bedarf der Datei, vor dem Schreiben gerechnet.
+
+        Die Wahl der Grundlage benennt den Druck mit (Review RM-706, M2): ein
+        eigener Prozess ist ein anderer Druck. Genommen wird der Prozess, den
+        die Stufe der Buchungswerte wählt — derselbe wie in der Datei, auch
+        wenn sie ohne Druckeinstellungen geschrieben wird.
+        """
+        inventory = self._inventory_settings
+        if inventory is None:
+            return ()
+        if self._settings is None or self._settings.quality != inventory.quality:
+            staged = manufacturer.for_stage(unstaged, self._profile, inventory.quality)
+        return prepare_usage(
+            self._objects,
+            inventory,
+            self._profile,
+            self._project_name,
+            inputs=self._inputs,
+            base=staged,
+        )
+
     def _assembly_in_one_read(self) -> tuple[list[Path], list[Finding]]:
         """Der Export aus :meth:`_assembly`, in dessen Lesedurchgang.
 
@@ -2018,6 +2038,7 @@ class _ExportWorker(Worker):
             found = tools.slicer_program()
             if found is not None:
                 setup = handover.detect(found)
+        unstaged = setup
         settings = self._settings
         if settings is not None:
             # Die Stufe wählt den Prozess des Herstellers (Entscheidung I), für
@@ -2031,6 +2052,7 @@ class _ExportWorker(Worker):
             settings = manufacturer.effective(
                 settings, manufacturer.base_settings(self._profile, settings.quality, setup)
             )
+        self._usage = self._usage_for(unstaged, setup)
         written_path, findings = write_assembly(
             self._objects,
             self._target.parent,

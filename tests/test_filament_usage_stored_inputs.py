@@ -56,7 +56,7 @@ DATA = Path(__file__).parent / "data"
 #: Bildung fest: Ändert sie sich, findet Solidon keine Buchung mehr, die nach
 #: diesem Stand gebucht wurde. Wer sie ändern muss, führt den alten Abdruck als
 #: Vorabdruck mit (``verbrauch.md``).
-PINNED_BOOKING = "444f2d34555d2572adb8fe4fb0edc329"
+PINNED_BOOKING = "3aa49b71e62d0e6815f5ab5c7182f4dd"
 #: Die Buchung im Lager von 0.5.3 (``test_filament_usage_fingerprint_history``).
 BOOKED_053 = "aa373e5e86b4471cf557a31589dc8383"
 
@@ -405,6 +405,37 @@ def test_a_calibrated_material_named_by_a_step_is_another_print(
         ),
     )
     assert request_for(objects, settings, profile, inputs).fingerprint != reference
+
+
+def test_an_own_process_in_the_slicer_is_another_print() -> None:
+    """Review RM-706, M2: Ein eigener Prozess im Slicer (0,15 statt 0,28 mm Schicht)
+    lässt die Stufe stehen und ändert die Grundlage — ein anderer Druck.
+
+    Gezählt wird die *Wahl* der Grundlage (Slicerart, Maschine, Prozess), nicht ihr
+    Inhalt: Ein Slicer-Update mit denselben Profilnamen kippt den Abdruck nicht,
+    und wo der Slicer liegt, ändert nichts am Druck.
+    """
+    objects, settings, profile, inputs = job(build())
+
+    def named(base: handover.SlicerSetup | None) -> str:
+        return usage.prepare(objects, settings, profile, "Probe", inputs=inputs, base=base)[
+            0
+        ].fingerprint
+
+    draft = handover.SlicerSetup(
+        Path("prusa-slicer"), "prusa", "Original Prusa MK4S", "0.28mm DRAFT"
+    )
+    own = replace(draft, base_process="0.15mm SPEED")
+    assert named(draft) != named(own)
+    assert named(draft) != named(replace(draft, machine_profile="Original Prusa MK4"))
+    assert named(draft) != named(replace(draft, flavour="orca"))
+    assert named(draft) != named(None)
+    # Derselbe Slicer an anderem Ort und mit neuen Werten unter denselben Namen.
+    assert named(draft) == named(replace(draft, executable=Path("anderswo/prusa-slicer")))
+    updated = print_settings.with_path(settings, "layers.layer_height", 0.3)
+    assert usage.prepare(objects, updated, profile, "Probe", inputs=inputs, base=draft)[
+        0
+    ].fingerprint == named(draft)
 
 
 def test_another_edge_answer_is_another_print() -> None:
