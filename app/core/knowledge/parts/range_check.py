@@ -26,7 +26,7 @@ from app.core.errors import OperationCancelled, ValidationError
 from app.core.knowledge.parts.ops import PLAY_FIELD
 from app.core.knowledge.parts.registry import FeatureRequirement, PartSpec, WallRequirement
 from app.core.types import BaseParams, CancelToken, PartResult, Profile, ProgressFn
-from app.core.units import EPS_DISPLAY, EPS_GEOM
+from app.core.units import EPS_DISPLAY, EPS_GEOM, PRINT_LIMIT
 from app.i18n import _
 
 
@@ -717,12 +717,17 @@ def check(
 
 
 #: Wie genau ein gespiegelter Baustein sein Vorbild treffen muss: Volumen relativ,
-#: Flächenabstand in Millimetern. Beide Stellungen entstehen aus demselben Netz,
-#: einmal an y = 0 gespiegelt; die Vereinigung danach darf anders triangulieren
-#: (G 1/2: eine Ecke mehr auf einer Kante), nicht anders liegen. Gemessen lagen
-#: die Ecken auf 10⁻¹³ mm übereinander.
+#: Dreiecke für den schnellen Weg und Flächenabstand in Millimetern. Beide
+#: Stellungen entstehen aus demselben Netz, einmal an y = 0 gespiegelt; meist
+#: liegen die Ecken auf 10⁻¹³ mm übereinander. Die Vereinigung danach darf anders
+#: triangulieren (G 1/2: eine Ecke mehr auf einer Kante) und an einer Naht einen
+#: Splitter anders auflösen: Am Bolzen Ø 1000 lag eine Ecke 0,32 µm neben der
+#: gespiegelten Fläche, bei 20-8 NPT 0,019 µm (RM-544, 10.10.2026). Ein falscher
+#: Drehsinn weicht um die Gangtiefe ab; die Druckgrenze trennt beides, und was
+#: darunter abweicht, prüft die andere Stellung selbst (:func:`_mirror_problem`).
 _MIRROR_VOLUME: Final = 1e-6
-_MIRROR_SURFACE: Final = 10.0 * EPS_GEOM
+_MIRROR_TRIANGLES: Final = 10.0 * EPS_GEOM
+_MIRROR_SURFACE: Final = PRINT_LIMIT
 
 
 def _mirror_failure(field: str) -> str:
@@ -759,13 +764,13 @@ def _same_triangles(one: Any, other: Any) -> bool:
 
     def ordered(body: Any) -> Any:
         corners = np.asarray(body.vertices, dtype=np.float64)[np.asarray(body.faces)]
-        keys = np.round(corners / _MIRROR_SURFACE)
+        keys = np.round(corners / _MIRROR_TRIANGLES)
         inner = np.lexsort((keys[:, :, 2], keys[:, :, 1], keys[:, :, 0]), axis=-1)
         corners = np.take_along_axis(corners, inner[:, :, None], axis=1).reshape(-1, 9)
-        rows = np.round(corners / _MIRROR_SURFACE)
+        rows = np.round(corners / _MIRROR_TRIANGLES)
         return corners[np.lexsort(rows.T[::-1])]
 
-    return bool(np.max(np.abs(ordered(one) - ordered(other)), initial=0.0) <= _MIRROR_SURFACE)
+    return bool(np.max(np.abs(ordered(one) - ordered(other)), initial=0.0) <= _MIRROR_TRIANGLES)
 
 
 def _mirror_problem(
@@ -781,9 +786,11 @@ def _mirror_problem(
     Gebaut wird die andere Stellung; ihr Körper muss das Spiegelbild an y = 0
     sein: dasselbe Volumen, jede ihrer Ecken auf der gespiegelten Fläche und
     jede gespiegelte Ecke auf ihrer — die Netze dürfen anders trianguliert sein,
-    die Flächen nicht anders liegen —, und dieselben Merkmale. Was so deckt, ist
-    wasserdicht, wandstark und frei von Selbstdurchdringung genau dann, wenn die
-    geprüfte Stellung es ist.
+    die Flächen höchstens um die Druckgrenze anders liegen —, und dieselben
+    Merkmale. Dreieck für Dreieck gleich ist sie wasserdicht, wandstark und frei
+    von Selbstdurchdringung genau dann, wenn die geprüfte Stellung es ist; anders
+    trianguliert prüft sie Dichtheit, Körperzahl und Selbstdurchdringung selbst,
+    die Wand weicht höchstens um die Druckgrenze ab.
     """
     import numpy as np
 
@@ -807,6 +814,15 @@ def _mirror_problem(
             _closest, distance, _triangle = on_surface(body, points)
             if len(distance) and float(np.max(distance)) > _MIRROR_SURFACE:
                 return _mirror_failure(field)
+        # Unter der Druckgrenze dürfen die Flächen auseinanderliegen; ob die andere
+        # Stellung dicht, ganz und ohne Selbstdurchdringung ist, folgt daraus nicht
+        # mehr, also prüft sie es selbst.
+        if (
+            not turned.is_watertight
+            or turned.component_count != mesh.component_count
+            or has_self_intersections(turned)
+        ):
+            return _mirror_failure(field)
     plain_features = getattr(result, "features", {})
     other_features = getattr(other, "features", {})
     if {name: feature.kind for name, feature in plain_features.items()} != {

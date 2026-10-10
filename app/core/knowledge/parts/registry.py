@@ -901,7 +901,11 @@ def register_part(
 #: ihre Tasche unter der Fläche (``NUT_TRAP_BORES_THROUGH_THE_PART``, RM-631).
 #: Alle übrigen Bausteine bleiben maßgleich; dass eine Bohrung, die nicht durch
 #: das Teil reicht, Sackloch heißt, entscheidet die Operation (``targets:10``).
-LIBRARY_VERSION: Final = "27"
+#: Version 28: Der glatte Schaft des Gewindebolzens bleibt 0,02 mm unter dem
+#: Kamm, und Schaft und Kuppen bekommen die Sehnen des Gewindes
+#: (``ROD_SHANK_UNDER_THE_CREST``, Bereichsnachweis RM-544); alle übrigen
+#: Bausteine bleiben maßgleich.
+LIBRARY_VERSION: Final = "28"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

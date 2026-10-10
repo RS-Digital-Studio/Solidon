@@ -2447,6 +2447,21 @@ THREADED_ROD_ADDED: Final = PartChange(
     ),
 )
 
+ROD_SHANK_UNDER_THE_CREST: Final = PartChange(
+    version="28",
+    date="2026-10-10",
+    reason=(
+        "Die Wand des glatten Schafts fiel mit dem Kamm des Gewindes zusammen; an 1/2- und "
+        "3/4-14 NPT über 150 und 200 mm faltete die Vereinigung eine Schaftfacette, und zwei "
+        "Dreiecke schnitten sich. Schaft und Kuppen hatten 48 Sehnen in jeder Größe, bei "
+        "Ø 1000 lag die Sehnenmitte 1,07 mm innen (Bereichsnachweis RM-544)."
+    ),
+    effect=_(
+        "Schaft und Kuppen sind über Ø 46 mm feiner gerundet, der Schaft 0,02 mm dünner als die "
+        "Gewindespitzen."
+    ),
+)
+
 
 @op_params
 class ThreadedRodParams(BaseParams):
@@ -2588,7 +2603,7 @@ def _rod_reason(raw: BaseParams) -> TranslatableText | str | None:
         "Für hohe Lasten oder häufiges Lösen. Dafür halten Metallschrauben mit Mutternfalle oder "
         "Heat-Set-Buchse besser."
     ),
-    changes=[THREADED_ROD_ADDED],
+    changes=[THREADED_ROD_ADDED, ROD_SHANK_UNDER_THE_CREST],
     feasible=_rod_reason,
     mirrored_by="left_hand",
 )
@@ -2622,6 +2637,7 @@ def threaded_rod(raw: BaseParams) -> PartResult:
     chamfer = _rod_chamfer(params.chamfer, dims)
     length = params.length
     pieces: list[tuple[float, float, bool]] = []
+    segments = _rod_segments(dims, params.play, (params.thread_length or length / 2.0) - chamfer)
     if not params.thread_length and not dims.tapered:
         pieces.append((chamfer, length - 2.0 * chamfer, True))
         body = form_of(_printed_thread(dims, pieces[0][1], False, params.play, bottom=chamfer))
@@ -2651,7 +2667,11 @@ def threaded_rod(raw: BaseParams) -> PartResult:
         if params.thread_length:
             crest = _rod_shank(dims, params.play, reach - chamfer)
             shank = shapes.moved(
-                shapes.cylinder(crest, length - 2.0 * reach + 2.0 * BOOLEAN_OVERLAP),
+                shapes.cylinder(
+                    crest,
+                    length - 2.0 * reach + 2.0 * BOOLEAN_OVERLAP,
+                    segments=segments,
+                ),
                 (0.0, 0.0, reach - BOOLEAN_OVERLAP),
             )
             body = union(lower, shank, upper)
@@ -2661,9 +2681,9 @@ def threaded_rod(raw: BaseParams) -> PartResult:
     tip = inner - 2.0 * chamfer
     rise = chamfer + BOOLEAN_OVERLAP
     body = union(
-        shapes.cone(tip, inner, rise),
+        shapes.cone(tip, inner, rise, segments=segments),
         body,
-        shapes.moved(shapes.cone(inner, tip, rise), (0.0, 0.0, length - rise)),
+        shapes.moved(shapes.cone(inner, tip, rise, segments=segments), (0.0, 0.0, length - rise)),
     )
     features = []
     for index, (bottom, run, tip_at_top) in enumerate(pieces, start=1):
@@ -2688,12 +2708,34 @@ def threaded_rod(raw: BaseParams) -> PartResult:
     return result(body, *features)
 
 
-def _rod_shank(dims: ThreadDims, play: float, run: float) -> float:
-    """Der Durchmesser des glatten Schafts: der Kamm, wo das Gewinde in ihn übergeht.
+def _rod_segments(dims: ThreadDims, play: float, run: float) -> int:
+    """Die Sehnen je Umlauf für Schaft und Kuppen: dieselben wie die des Gewindes.
 
-    Zylindrisch ist das das Nennmaß minus Spiel; kegelig ist das Gewinde dort
-    am weitesten, ``run`` hinter seiner Spitze.
+    Beide bauten mit ``SEGMENTS``. Bis Ø 46 mm ist das die Zahl des Gewindes
+    (``shapes.turn_segments``), darüber lag die Sehnenmitte innen — bei Ø 1000 um
+    1,07 mm statt ``MAX_FACET_SAG``: Gewindekamm und Stirnfläche ragten aus dem
+    Schaft, und an der Naht schnitten sich Splitter (Bereichsnachweis RM-544,
+    10.10.2026). Gemessen am weitesten Kamm, wie ``build.threaded`` es tut — am
+    Kegel ``run`` hinter der Spitze (:func:`_rod_shank`).
+    """
+    widest = dims.nominal - play
+    if dims.tapered:
+        widest = _rod_tip(dims, play) + 2.0 * standards.PIPE_TAPER * run
+    return shapes.turn_segments(widest / 2.0)
+
+
+def _rod_shank(dims: ThreadDims, play: float, run: float) -> float:
+    """Der Durchmesser des glatten Schafts: knapp unter dem Kamm, wo das Gewinde in ihn übergeht.
+
+    Zylindrisch ist der Kamm das Nennmaß minus Spiel; kegelig ist das Gewinde
+    dort am weitesten, ``run`` hinter seiner Spitze. **Der Schaft bleibt um
+    ``BOOLEAN_OVERLAP`` je Seite darunter** (RM-544, Bereichsnachweis 10.10.2026):
+    Auf dem Kamm fiel seine Wand mit dem Kamm des Gewindes zusammen, das in ihn
+    hineinreicht, und die Vereinigung faltete eine Schaftfacette — an 1/2- und
+    3/4-14 NPT über 150 und 200 mm schnitten sich zwei Schaftdreiecke, deren
+    Mitten 0,2 µm verschieden weit von der Achse lagen: Am vernetzten Kegel
+    liegen die Kammpunkte um 10⁻⁴ mm neben der Schaftebene.
     """
     if not dims.tapered:
-        return dims.nominal - play
-    return _rod_tip(dims, play) + 2.0 * standards.PIPE_TAPER * run
+        return dims.nominal - play - 2.0 * BOOLEAN_OVERLAP
+    return _rod_tip(dims, play) + 2.0 * standards.PIPE_TAPER * run - 2.0 * BOOLEAN_OVERLAP

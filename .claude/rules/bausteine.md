@@ -262,7 +262,10 @@ benannte Ausnahmen sind der Drehdeckel (Steigung ab 1 mm, Hals null heißt
 automatisch). `test_every_thread_path_shares_the_same_limits` hält das. Am
 Netz kommen die Sehnen je Umlauf aus
 `shapes.turn_segments` (Drehdeckel: `lid.turn_sections`); eine eigene Zahl
-dafür ist ein Zwilling. Der Netzkern überdeckt den Gang auch in der
+dafür ist ein Zwilling, auch an Schaft und Kuppen daneben
+(`fasteners._rod_segments`: 48 Sehnen lagen bei Ø 1000 um 1 mm innen). Ein
+glatter Schaft bleibt um `BOOLEAN_OVERLAP` unter dem Kamm, statt mit ihm
+zusammenzufallen (sonst faltet die Vereinigung eine Facette). Der Netzkern überdeckt den Gang auch in der
 Sehnenmitte um `BOOLEAN_OVERLAP` (`build._core_segments`), und der Gang läuft
 über ganze Umläufe, bevor der Schnittzylinder kürzt; sonst bleiben ab M12
 Splitter im Gang, und Schraube und Mutter überdecken sich. Wo ein Bau ablehnt,
@@ -291,9 +294,11 @@ gemessen mit `uncertainty`); bleibt mehr als eine, `AMBIGUOUS_THREAD`.
 
 **Ein Spiegelschalter zählt keine Ecken, aber jede Ecke belegt ihn**
 (`PartSpec.mirrored_by`): Der Bereichstest baut an jeder Ecke auch die andere
-Stellung und verlangt das Spiegelbild — Dreieck für Dreieck oder jede Ecke auf
-der gespiegelten Fläche, dazu Volumen und Merkmale. Volumen und Hülle allein
-ließen ein um 180° gedrehtes Rechtsgewinde als Linksgewinde durch.
+Stellung und verlangt das Spiegelbild — Dreieck für Dreieck oder jede Ecke
+höchstens `PRINT_LIMIT` neben der gespiegelten Fläche, dann prüft die andere
+Stellung Dichtheit und Selbstdurchdringung selbst; dazu Volumen und Merkmale.
+Volumen und Hülle allein ließen ein um 180° gedrehtes Rechtsgewinde als
+Linksgewinde durch.
 
 **Eine Schraube endet auch nicht an der Tabelle.** Schraubenloch,
 Mutternfalle, Schraube und Mutter nehmen `CUSTOM_SIZE` mit Nenndurchmesser;

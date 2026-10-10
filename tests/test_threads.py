@@ -843,6 +843,76 @@ def test_the_mirror_check_finds_a_turn_that_keeps_volume_and_hull() -> None:
     assert _mirror_problem_at(ThreadParams, turned, {"size": "M6"}) is not None
 
 
+def _left_with_a_shifted_crest(shift: float) -> object:
+    """Links das Spiegelbild, dessen äußerste Ecke um ``shift`` nach außen gerückt ist."""
+    from app.core.geom.mesh import MeshData
+
+    def build(raw: ThreadParams) -> object:
+        made = printed_thread(ThreadParams(size="M6", length=raw.length, play=raw.play))
+        if not raw.left_hand:
+            return made
+        body = as_mesh_data(made.mesh).raw.copy()
+        points = np.asarray(body.vertices, dtype=np.float64) * np.array([1.0, -1.0, 1.0])
+        radius = np.hypot(points[:, 0], points[:, 1])
+        index = int(np.argmax(radius))
+        points[index, :2] *= (radius[index] + shift) / radius[index]
+        body.vertices = points
+        body.faces = np.ascontiguousarray(np.asarray(body.faces)[:, ::-1])
+        return dataclasses.replace(made, mesh=MeshData.of(body))
+
+    return build
+
+
+@pytest.mark.parametrize(("shift", "passes"), [(0.001, True), (0.01, False)])
+def test_a_mirror_apart_by_less_than_the_print_limit_passes(shift: float, passes: bool) -> None:
+    """Eine Naht, die die Vereinigung links anders auflöst, ist kein falscher Drehsinn.
+
+    Am Bolzen Ø 1000 lag eine Ecke 0,32 µm neben der gespiegelten Fläche, bei 20-8 NPT
+    0,019 µm, und die Schranke von 10⁻⁵ mm nannte beides einen Schalter, der mehr tut
+    als spiegeln (Bereichsnachweis RM-544). Unter der Druckgrenze besteht es, darüber
+    nicht.
+    """
+    from app.core.units import PRINT_LIMIT
+
+    assert (shift < PRINT_LIMIT) is passes
+    problem = _mirror_problem_at(ThreadParams, _left_with_a_shifted_crest(shift), {"size": "M6"})
+    assert (problem is None) is passes, problem
+
+
+def test_a_mirror_apart_under_the_print_limit_checks_itself(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Anders trianguliert folgt Dichtheit und Schnittfreiheit nicht mehr aus der Deckung.
+
+    Die andere Stellung prüft sich dann selbst; eine Selbstdurchdringung dort ist ein Bruch.
+    """
+    from app.core.knowledge.parts import range_check
+
+    asked: list[object] = []
+
+    def crossing(mesh: object, cancelled: object = None) -> bool:
+        asked.append(mesh)
+        return True
+
+    monkeypatch.setattr(range_check, "has_self_intersections", crossing)
+    problem = _mirror_problem_at(ThreadParams, _left_with_a_shifted_crest(0.001), {"size": "M6"})
+    assert problem is not None and len(asked) == 1
+
+
+def test_a_tapered_stud_has_no_shank_facet_folded_into_itself() -> None:
+    """Der Schaft fiel mit dem Kamm des Kegelgewindes zusammen (Bereichsnachweis RM-544).
+
+    Bei 1/2-14 NPT, 150 mm lang mit 65 mm Gewinde je Ende, schnitten sich zwei
+    Schaftdreiecke; am alten Stand rot. Der Schaft bleibt jetzt knapp unter dem Kamm.
+    """
+    from app.core.knowledge.parts.fasteners import ThreadedRodParams, threaded_rod
+    from app.core.knowledge.parts.range_check import has_self_intersections
+
+    params = ThreadedRodParams(size="1/2-14 NPT", length=150.0, thread_length=65.0, play=0.2)
+    body = as_mesh_data(threaded_rod(params).mesh)
+    assert body.is_watertight and not has_self_intersections(body)
+
+
 def test_the_range_check_mirrors_every_corner_not_only_the_default() -> None:
     """Ein Schalter, der nur an einer Ecke mehr tut als spiegeln, fällt an genau dieser auf.
 
