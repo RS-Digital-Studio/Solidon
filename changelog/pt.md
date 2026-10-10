@@ -88,6 +88,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma sugestão do diálogo de impressão só vale para algumas peças, a linha e o campo nomeiam também as peças que recebem com ela outro valor.
 - Com o Cura e suportes em grelha, a distância do suporte segue o material: exata em cima, em camadas inteiras em baixo. Onde o Cura arredonda para cima, o campo mostra o valor impresso.
 - Sob os suportes em árvore do Cura, o Solidon propõe uma camada de separação superior, porque sem ela o Cura deixa uma camada de ar a mais.
+- Com o Cura, o pé do suporte em superfícies inclinadas fica agora em degraus sem camada de separação inferior, e liso com ela, como o Cura prevê.
 - Para PLA, o Solidon propõe mais espaço entre as muitas pontas finas e os suportes em árvore por baixo. Assim ficam menos resíduos das pontas dos suportes.
 - Onde o Solidon propõe mais espaço sobre os suportes em árvore, propõe também uma *Ponta da árvore* mais larga. Cada ponta leva uma camada de separação e fica menos suporte preso às faces inferiores.
 - Se muitas saliências pequenas precisam de suportes juntas, como um queixo com a face inferior inclinada, o relatório indica agora o local.

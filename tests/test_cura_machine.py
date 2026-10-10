@@ -1427,7 +1427,6 @@ _CURA_INTERFACE: tuple[str, ...] = (
     "support_interface_enable",
     "support_roof_enable",
     "support_bottom_enable",
-    "support_interface_height",
     "support_bottom_height",
 )
 
@@ -1474,9 +1473,39 @@ def test_curas_window_switches_the_interface_like_the_console(
         for name, values in window.items():
             for key in _CURA_INTERFACE:
                 assert _window_number(values[key], 0.2) == console[key], (name, key, values[key])
-            assert values["support_roof_height"] == values["support_interface_height"], name
+            # Die obere Höhe erbt in der Konsole von der Elternhöhe; im Fenster
+            # steht sie selbst da, die Elternhöhe nach der dickeren Seite, sonst
+            # warnte Cura bei oben 0 und unten 3 vor 0 mm (Durchsicht, L-1).
             assert values["support_roof_height"] == f"=layer_height * {roof}", name
+            assert (
+                _window_number(values["support_roof_height"], 0.2)
+                == (console["support_interface_height"])
+            ), name
+            assert values["support_interface_height"] == (f"=layer_height * {max(roof, bottom)}"), (
+                name
+            )
     assert console["support_roof_enable"] == ("true" if roof else "false")
+
+
+@pytest.mark.parametrize(("roof", "bottom"), [(2, 0), (0, 3), (2, 2), (0, 0)])
+def test_curas_stair_step_follows_the_bottom_interface(roof: int, bottom: int) -> None:
+    """Die Treppenstufe unter dem Stützfuß rechnet Solidon wie Curas Definition:
+    ``0 if support_bottom_enable else 0.3`` — nach der unteren Trennschicht.
+    Bis zur Durchsicht von RM-628 hing sie an der oberen (L-2): Bei oben 2 und
+    unten 0 stand der Fuß in der Konsole glatt, im Fenster gestuft."""
+    profile = profiles.make_profile("creality-k1-max", "petg")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("support.style", "grid"),
+        ("support.interface_layers", roof),
+        ("support.bottom_interface_layers", bottom),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+
+    console = handover.values_for(settings, profile, "cura")
+
+    assert console["support_bottom_enable"] == ("true" if bottom else "false")
+    assert console["support_bottom_stair_step_height"] == ("0" if bottom else "0.3")
 
 
 def test_each_extruder_profile_gets_the_bottom_gap_of_its_spool(

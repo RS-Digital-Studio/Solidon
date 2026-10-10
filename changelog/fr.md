@@ -89,6 +89,7 @@ dans `website/version.json`.
 - Si une suggestion de la boîte de dialogue d'impression ne vaut que pour certaines pièces, la ligne et le champ nomment aussi celles qui reçoivent avec elle une autre valeur.
 - Avec Cura et des supports en grille, l'espace du support suit le matériau : exact au-dessus, en couches entières au-dessous. Si Cura arrondit vers le haut, le champ indique la valeur imprimée.
 - Sous les supports arborescents de Cura, Solidon propose une couche d'interface supérieure, car sans elle Cura laisse une couche d'air de plus.
+- Avec Cura, le pied du support sur les surfaces inclinées est désormais en escalier sans couche d'interface inférieure, et lisse avec, comme le prévoit Cura.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
 - Où Solidon propose plus d'espace sur les supports arborescents, il propose aussi une *Pointe d'arbre* plus large. Chaque pointe porte une couche d'interface, et les dessous gardent moins de support.
 - Si de nombreux petits surplombs ont besoin ensemble de supports, comme un menton à face inférieure inclinée, le rapport indique désormais l'endroit.

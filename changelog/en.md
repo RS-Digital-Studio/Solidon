@@ -88,6 +88,7 @@ it into `website/version.json`.
 - If a suggestion in the print dialog applies to some parts only, its row and field also name the parts that get a different value with it.
 - With Cura and grid supports, the support gap follows the material: exact on top, in whole layers below. Where Cura rounds up, the field shows the printed value.
 - Under Cura's tree supports, Solidon suggests a top interface layer, because without one Cura leaves an extra layer of air.
+- With Cura, the support foot on sloped surfaces is now stepped when there is no bottom interface layer, and smooth with one, as Cura intends.
 - For PLA, Solidon suggests more clearance from tree supports beneath many fine tips. This leaves less residue from the tree tips there.
 - Where Solidon suggests more clearance above tree supports, it also suggests a wider *Tree tip*. Every tip then carries an interface layer, and less support sticks to undersides.
 - When many small overhangs need supports together, such as a chin with a sloped underside, the check report now names the spot.

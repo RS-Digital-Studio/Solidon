@@ -46816,6 +46816,11 @@ Dialog fragt das Material der Platte wie der Export (`_plate_material` über
 (Vielfaches, Vielfaches plus Rest der Platte) den nächsten im Band: 0,28 auf einer Platte mit
 0,44 wird 0,24 statt 0,20. Exporttest für das Material je Teil durch `write_assembly`. Die
 Regel `dateiformat.md` sagt, dass Solidons eigene Wahl für Cura auch ins Fensterprofil gehört.
+Aus der Durchsicht: Im Fenster steht die Elternhöhe der Trennschicht nach der dickeren Seite
+(oben 0, unten 3 → `=layer_height * 3`; vorher zeigte Cura eine Warnung an 0 mm). Die
+Treppenstufe unter dem Stützfuß folgt der unteren Trennschicht wie Curas Formel
+(`0 if support_bottom_enable else 0.3`); seit `f934a4221` (v0.2.2) hing sie an der oberen.
+Gegenproben je 2 rot.
 
 ## RM-567: Weniger Arbeitsspeicher — Cachegrenze, BLAS-Faden, Renderer am echten Fenster (09.10.2026)
 

@@ -88,6 +88,7 @@ scrive in `website/version.json`.
 - Se un suggerimento della finestra di stampa vale solo per alcuni pezzi, la riga e il campo nominano anche i pezzi che con esso ricevono un altro valore.
 - Con Cura e supporti a griglia, lo spazio del supporto segue il materiale: esatto sopra, in strati interi sotto. Dove Cura arrotonda per eccesso, il campo indica il valore stampato.
 - Sotto i supporti ad albero di Cura, Solidon propone uno strato di interfaccia superiore, perché senza di esso Cura lascia uno strato d'aria in più.
+- Con Cura, il piede del supporto sulle superfici inclinate è ora a gradini senza strato di interfaccia inferiore e liscio con esso, come previsto da Cura.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
 - Dove Solidon propone più spazio sopra i supporti ad albero, propone anche una *Punta dell'albero* più larga. Ogni punta ha uno strato di interfaccia e sulle parti inferiori resta meno supporto.
 - Se molti piccoli sbalzi richiedono insieme supporti, come un mento con la parte inferiore inclinata, il rapporto indica ora il punto.

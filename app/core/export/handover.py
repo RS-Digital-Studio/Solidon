@@ -2053,6 +2053,10 @@ def _cura_interface(settings: PrintSettings, *, window: bool = False) -> dict[st
     }
     if window:
         chosen["support_roof_height"] = tall(layers)
+        # Die Elternhöhe nach der dickeren Seite: Beide Kinder stehen
+        # ausdrücklich da, aber eine eingeschaltete Schnittstelle mit 0 mm
+        # zeigte Cura als Warnung (oben 0, unten 3).
+        chosen["support_interface_height"] = tall(max(layers, bottom))
     return chosen
 
 
@@ -2173,7 +2177,10 @@ def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Pro
 
     written.update(_cura_interface(settings))
     layers = settings.support.interface_layers
-    written["support_bottom_stair_step_height"] = "0" if layers > 0 else f"{_STAIR_STEP:g}"
+    # Curas Formel: ``0 if support_bottom_enable else 0.3`` — nach der unteren
+    # Trennschicht, nicht der oberen.
+    bottom = settings.support.bottom_interface_layers
+    written["support_bottom_stair_step_height"] = "0" if bottom > 0 else f"{_STAIR_STEP:g}"
     written["support_tree_top_rate"] = "30" if layers > 0 else "10"
     written["support_tree_rest_preference"] = (
         "buildplate" if settings.support.placement == "build_plate" else "graceful"
