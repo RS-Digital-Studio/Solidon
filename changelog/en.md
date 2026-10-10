@@ -179,6 +179,8 @@ it into `website/version.json`.
 - If a generated model is only a thin skin around a cavity, the dialog says so before you take it and the report afterwards, each with the way to a new attempt.
 - Before downloading, *Set up the chat* and *Set up ComfyUI* say how much graphics memory and disk space a model needs and whether this computer has it.
 - On a Mac, *Set up the chat* suggests a local model that fits into the shared memory and says when a key for a hosted model is the better choice.
+- If the selected local model is missing or the provider refuses the key, Solidon says so in one sentence and *Set up the chat* leads straight to the fix.
+- Solidon remembers an invalid key until you enter a different one. The chat then goes straight to the local model instead of failing first at every start.
 - On a newly generated model, *Change size* only recalculates the new size and no longer repeats the repair. It is faster, and Ctrl+Z undoes it at once.
 
 ## 0.5.3
