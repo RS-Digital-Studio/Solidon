@@ -8575,14 +8575,30 @@ def _patch_prints_parts(
     widths = np.zeros(len(patches), dtype=np.int64)
     if len(index) and neighbours.shape[1]:
         face_count = max(len(body.faces), 1)
-        own_keys = segment * face_count + index
-        order = np.argsort(own_keys, kind="stable")
-        ranked = own_keys[order]
         around = neighbours[index]
-        wanted = segment[:, None] * face_count + np.maximum(around, 0)
-        spot = np.minimum(np.searchsorted(ranked, wanted), len(ranked) - 1)
-        inside = (around >= 0) & (ranked[spot] == wanted)
-        place = np.where(inside, position[order[spot]], np.where(around >= 0, -1, -2))
+        if len(index) * 8 >= face_count and (
+            int(np.bincount(index, minlength=face_count).max(initial=0)) <= 1
+        ):
+            # **Jedes Dreieck in höchstens einem Fleck** — der Regelfall: Dann
+            # sagt ein Feld über alle Dreiecke Fleck und Lage jedes Nachbarn,
+            # ohne Sortierung (P5, RM-592: am Drachen mit 2,3 Millionen
+            # Dreiecken 0,75 s je Stapel). Dieselben Lagen wie die Suche unten;
+            # für wenige Flecken bleibt die Suche billiger als Felder in Netzgröße.
+            owner = np.full(face_count, -1, dtype=np.int64)
+            owner[index] = segment
+            spot_of = np.zeros(face_count, dtype=np.int64)
+            spot_of[index] = position
+            safe = np.maximum(around, 0)
+            inside = (around >= 0) & (owner[safe] == segment[:, None])
+            place = np.where(inside, spot_of[safe], np.where(around >= 0, -1, -2))
+        else:
+            own_keys = segment * face_count + index
+            order = np.argsort(own_keys, kind="stable")
+            ranked = own_keys[order]
+            wanted = segment[:, None] * face_count + np.maximum(around, 0)
+            spot = np.minimum(np.searchsorted(ranked, wanted), len(ranked) - 1)
+            inside = (around >= 0) & (ranked[spot] == wanted)
+            place = np.where(inside, position[order[spot]], np.where(around >= 0, -1, -2))
         ranking = np.argsort(-place, axis=1, kind="stable")
         ring_rows = np.take_along_axis(place, ranking, axis=1)
         counts = (ring_rows > -2).sum(axis=1)
