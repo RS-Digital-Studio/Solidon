@@ -19,6 +19,7 @@ it into `website/version.json`.
 
 ### Operation and system
 
+- The demo now runs until 30 November 2026. Solidon3D 1.0 is planned for 1 December, and your projects are kept.
 - On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on can install it for free.
 - Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.
 - On the Mac, *Cancel* stops a running answer from the local model at once.
@@ -55,7 +56,7 @@ it into `website/version.json`.
 - Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.
 - Even in a long history, a new step takes hardly longer to calculate than the first.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
-- Resolving overlaps and exporting as 3MF are considerably faster.
+- Repairing and resolving overlaps are up to four times as fast on large models, and exporting as 3MF is considerably faster.
 - The workspace appears faster when opening large 3MF files.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
@@ -81,7 +82,12 @@ it into `website/version.json`.
 - Supports come off more easily and cleanly: the gap follows the material and layer height of each part, even with several materials on one plate. The interface follows the surface above.
 - Where a support stands on the part, Solidon also suggests an interface layer below it so its foot leaves no marks. Under tree supports only with slicers that print it there.
 - Under tree supports and next to a prime tower, Solidon suggests the support gap in whole layers, the way the slicer prints it.
+- Under a large flat underside, Solidon suggests grid instead of tree supports, and hybrid where fine details need support too. For tall tree supports, Solidon suggests two walls.
+- If a suggestion in the print dialog applies to some parts only, its row and field also name the parts that get a different value with it.
 - For PLA, Solidon suggests more clearance from tree supports beneath many fine tips. This leaves less residue from the tree tips there.
+- When many small overhangs need supports together, such as a chin with a sloped underside, the check report now names the spot.
+- A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.
+- Over a channel, the check report no longer recommends a support that could not be removed from it. It names the channel and a transition below 45 degrees.
 - For PETG, Solidon suggests full cooling at the support. It then comes off the part more easily.
 - New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
@@ -89,6 +95,7 @@ it into `website/version.json`.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 - The report calculates faster and needs less memory.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
+- Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
 
 ### Threads, holes and standard parts
 

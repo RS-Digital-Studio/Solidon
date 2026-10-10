@@ -20,7 +20,9 @@ ausdrückliches „nicht pushen“ von Robert hält den Commit lokal — dann f�
 diesen Aufruf `SOLIDON_KEIN_PUSH=1`. Holen und Zusammenführen gehören dazu,
 wenn der Push daran scheitert. Tag, Release und Force-Push sind eigene Aufträge.
 
-Vorher ist das Entwicklungstor nach `.agents/skills/pruefen/SKILL.md` grün. Ein grüner Nachweis über
+Vor einem Merge oder Commit auf main ist das Entwicklungstor nach `.agents/skills/pruefen/SKILL.md` grün; auf
+einem Paket- oder Fixzweig genügen die betroffenen Tests, ruff, format und
+mypy (Entscheidung Robert). Ein grüner Nachweis über
 denselben Stand muss nicht wiederholt werden; was sich seither geändert hat,
 wird geprüft. Ein roter oder abgebrochener Lauf wird mit Ursache gemeldet und
 nicht committet.
@@ -38,20 +40,27 @@ keine weitere Runde (Entscheidung Robert). Mehrere Punkte, die zusammen
 hinausgehen, teilen sich ein Review. Weil `post-commit` pusht, ist das Review
 vor dem Commit das Review vor dem Push.
 
-**Vor dem Merge nach main laufen die betroffenen Fenster- und Slicertests auf
-Linux und macOS** (Entscheidung Robert, `.claude/rules/tests.md`, CI-09):
+**Der Push nach main fährt alle Prüfungen in der CI** (Entscheidung Robert,
+`.claude/rules/tests.md`, CI-09); auf Zweigen und Wegwerfzweigen läuft keine:
 
-1. Die Einheit liegt auf einem eigenen Zweig, gepusht (Handstart braucht
-   einen Stand auf der Gegenstelle). Eine neue oder geänderte Oberfläche
-   bringt ihren Fenstertest mit, eine Änderung an Slicerübergabe, Profilen,
-   Druckerwahl, Druckzeit oder Slicererkennung ihren Test mit
-   `installed_slicer` und `@pytest.mark.slicer(<programm>)`.
-2. `.venv\Scripts\python.exe tools/ci_selection.py --diff origin/main...<zweig>`
-   nennt beide Listen und die zwei `gh workflow run …`-Befehle; mit
-   `--ref <zweig>` starten.
-3. Beide Läufe grün, bevor gemergt wird; ein roter wird behoben, nicht
-   übergangen. Meldet das Werkzeug keinen Fenster- und keinen Slicertest,
-   entfällt der Schritt. Die Laufnummern gehören in den Bericht.
+1. Vor dem Merge belegen Wächter, Simulation und Gegenproben lokal, was ein
+   Workflow tun wird. Eine neue oder geänderte Oberfläche bringt ihren
+   Fenstertest mit, eine Änderung an Slicerübergabe, Profilen, Druckerwahl,
+   Druckzeit oder Slicererkennung ihren Test mit `installed_slicer` und
+   `@pytest.mark.slicer(<programm>)`.
+2. Der Push startet `build.yml` von selbst: Kern und Renderer auf allen vier
+   Plattformen, dazu `selection`, das mit `tools/ci_selection.py` die
+   Fenster- und Slicertests nennt, die der Diff seit dem letzten geprüften
+   main-Lauf berührt (ohne ihn seit dem vorigen Tag), und an
+   `window-selection` und `slicer-selection` gibt. Vorschau vor dem Merge:
+   `tools/ci_selection.py --diff origin/main...<zweig>`. Ein Push nur aus
+   Unterlagen startet keinen Lauf.
+3. Den Lauf mit `gh run watch <lauf-id> --exit-status` verfolgen; ein Rot wird
+   auf main vorwärts behoben, nicht übergangen. Die Laufnummer gehört in den
+   Bericht. Ist das Repository privat, lehnt GitHub den Lauf nach Sekunden ab
+   — kein Befund und kein Nachweis; ein ersetzter oder abgebrochener Lauf ist
+   es auch nicht. Was er bringen sollte, wählt der nächste Lauf mit, der
+   durchkommt; erst dessen Ergebnis gehört in den Bericht.
 
 **Vor dem Merge nach main steht der Kundenpunkt im Changelog** (Entscheidung
 Robert, `.claude/rules/auslieferung.md`): Merkt ein Kunde, was die Einheit

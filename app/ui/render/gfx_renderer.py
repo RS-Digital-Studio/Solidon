@@ -179,6 +179,43 @@ RECYCLE_ITEM_BYTES = 8 * 1024 * 1024
 _STEADY_LIGHT: Any = None
 
 
+#: Die Kantenlänge der Schattentexturen je Licht. pygfx legt je gerichtetem
+#: Licht eine Tiefentextur von 1024 x 1024 an, auch wenn es keinen Schatten
+#: wirft — hier wirft keines (:func:`_directional_light`), und der Shader liest
+#: die Textur nur bei ``cast_shadow`` (pygfx 0.17, ``light_punctual.wgsl``).
+#: Am echten Fenster waren das 24 MB Grafikspeicher für nichts: fünf Lichter
+#: der Ansicht, eines im Achsenkreuz (RM-567). Dass keines Schatten wirft und
+#: das Bild mit einem Texel dasselbe ist wie mit 1024, halten zwei Tests in
+#: ``test_render_contract.py`` fest.
+SHADOW_MAP_SIZE = (1, 1)
+
+_SHADOW_MAPS_SMALL = False
+
+
+def _without_shadow_maps() -> None:
+    """Die Schattentexturen der Lichtzustände auf :data:`SHADOW_MAP_SIZE` setzen, einmal je Prozess.
+
+    pygfx setzt die Größe im Konstruktor fest und legt die Texturen gleich
+    danach an (``LightRenderState._setup_light_resources``); die Größe wird
+    davor ersetzt. Ein Licht, das Schatten werfen soll, bekäme damit eine
+    Textur ohne Auflösung — deshalb wirft hier keines, und ein Test hält das
+    für jedes Licht der Ansicht fest.
+    """
+    global _SHADOW_MAPS_SMALL
+    if _SHADOW_MAPS_SMALL:
+        return
+    from pygfx.renderers.wgpu.engine.renderstate import LightRenderState
+
+    original = LightRenderState._setup_light_resources
+
+    def small(self: Any) -> None:
+        self.shadow_map_size = SHADOW_MAP_SIZE
+        original(self)
+
+    LightRenderState._setup_light_resources = small
+    _SHADOW_MAPS_SMALL = True
+
+
 def _directional_light(colour: str, intensity: float) -> Any:
     """Ein gerichtetes Licht, das je Bild nur seine Richtung schreibt.
 
@@ -195,6 +232,7 @@ def _directional_light(colour: str, intensity: float) -> Any:
     """
     global _STEADY_LIGHT
     if _STEADY_LIGHT is None:
+        _without_shadow_maps()
         import pygfx as gfx
         from pygfx.objects._lights import get_pos_from_camera_parent_or_target
 
