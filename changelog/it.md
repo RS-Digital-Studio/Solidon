@@ -81,7 +81,12 @@ scrive in `website/version.json`.
 - I supporti si staccano più facilmente: lo spazio segue materiale e altezza dello strato di ogni pezzo, anche con più materiali su un piatto. L'interfaccia segue la superficie sopra.
 - Se un supporto poggia sul pezzo, Solidon suggerisce anche uno strato di interfaccia sotto, così il suo piede non lascia segni. Con i supporti ad albero solo negli slicer che lo stampano lì.
 - Con i supporti ad albero e accanto a una torre di spurgo, Solidon propone lo spazio del supporto in strati interi, come lo stampa lo slicer.
+- Sotto un'ampia superficie inferiore piana, Solidon propone la griglia invece degli alberi, e l'ibrido se servono anche dettagli fini. Per gli alberi alti, Solidon propone due pareti.
+- Se un suggerimento della finestra di stampa vale solo per alcuni pezzi, la riga e il campo nominano anche i pezzi che con esso ricevono un altro valore.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
+- Se molti piccoli sbalzi richiedono insieme supporti, come un mento con la parte inferiore inclinata, il rapporto indica ora il punto.
+- Un bordo stretto che si regge da solo non conta più come ponte lungo, nemmeno accanto a un altro sbalzo. Il rapporto non avvisa più lì e Solidon non chiede supporti per questo.
+- Sopra un canale il rapporto non consiglia più un supporto che poi non si potrebbe togliere. Nomina il canale e un raccordo sotto i 45 gradi.
 - Per il PETG Solidon suggerisce il raffreddamento pieno sul supporto. Così si stacca più facilmente dal pezzo.
 - Nuovo nelle impostazioni di stampa: *Strati di interfaccia inferiori*, *Spazio nell'interfaccia* e *Raffreddamento pieno sul supporto*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
@@ -89,6 +94,7 @@ scrive in `website/version.json`.
 - Nella finestra di stampa, stampante, filamenti e qualità restano del tutto visibili anche con il testo ingrandito. Le etichette lunghe vanno a capo.
 - Il rapporto di verifica calcola più velocemente e richiede meno memoria.
 - Su Linux con Flatpak, Solidon ora segnala un arresto anomalo dello slicer come tale, invece di dire solo che non è stato creato alcun file.
+- Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.
 
 ### Filettature, fori e componenti normalizzati
 

@@ -31,6 +31,16 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)](#rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026) |
+| 2026-10-10 | [RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)](#rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026) |
+| 2026-10-09 | [RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)](#rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026) |
+| 2026-10-09 | [RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)](#rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026) |
+| 2026-10-09 | [RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)](#rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026) |
+| 2026-10-09 | [RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)](#rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026) |
+| 2026-10-09 | [RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)](#rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026) |
+| 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
+| 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
+| 2026-10-09 | [RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)](#rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
 | 2026-10-09 | [RM-584 (Teil): Über Baumspitzen rät Solidon zwei Schichten Luft (09.10.2026)](#rm-584-teil-über-baumspitzen-rät-solidon-zwei-schichten-luft-09102026) |
@@ -27320,6 +27330,229 @@ zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahme
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
 
+## RM-627: Ein Rand neben einem anderen Überhang ist keine lange Brücke (09.10.2026)
+
+<a id="rm-627-ein-rand-neben-einem-anderen-überhang-ist-keine-lange-brücke-09102026"></a>
+<a id="rm-627"></a>
+
+**RM-627 — Ein Rand, der sich selbst trägt, zählt als lange Brücke, sobald auf seiner Schicht
+ein anderer Überhang liegt.**
+  Gefunden bei RM-572 (09.10.2026): Kinn über der Brust mit einem Kragen von 2 mm um die Rückwand
+  auf Kinnhöhe. Der Kragen ist ein Rand (`ledges`), vom Kinn auf einer Seite unterbrochen und
+  damit ohne beidseitig getragene Richtung; seine Schicht trägt `bridge_width` 46,2 mm. Rat und
+  Bericht nahmen Ränder nur schichtweise aus (`advise._quiet_layers`: Schichten, deren Stücke
+  alle Ränder oder Kanaldecken sind). Mit einem Kinnstreifen von 4,1 mm² (eigene Spannweite 0)
+  daneben zählte die ganze Schicht: Der Bericht meldete „Hier spannt eine Decke frei“ mit
+  46,2 mm am Kragen, und der Rat verlangte Stützen über den Brückenweg. An einer Wand mit
+  U-förmigem Kragen und einem Sporn von 8,5 mm² an einer Säule daneben (Spannweite 6,1 mm)
+  schaltete allein das Stützen ein — ohne den Sporn nicht.
+  **Stellen:** `advise._may_need_support`, `advise._from_spans`.
+  **Fix:** Die Brückenweite einer Schicht ohne Ränder und Kanaldecken messen, an der freien
+  Fläche, die ein übriges Stück berührt, wie `open_bridge_width`; der Ort der Warnung liegt an
+  dieser Fläche.
+  **Abnahme:** Konsole an einer Wand mit Sporn auf derselben Schicht ohne Stützbedarf und ohne
+  Warnung; eine echte Brücke neben der Konsole bleibt gemeldet, mit ihrer Weite und an ihrem Ort.
+
+**Abschluss:** `analysis.span_beside` misst die längste Brücke einer Schicht ohne die Stücke aus
+`quiet`, an der freien Fläche, die ein übriges Stück berührt (`kept_overhang`, wie bei
+`open_bridge_width`); steht kein Stück der Schicht darin, gilt `bridge_width` unverändert, eine
+Schicht nur aus Rändern spannt 0. `_may_need_support` fragt damit die Kanaldecken und Ränder aus
+`support_need`, `_from_spans` die Ränder; Weite und Ort der Warnung kommen aus derselben Fläche.
+`_quiet_layers` und `SupportNeed.quiet_layers` entfallen; ihr letzter Leser,
+`tools/matrix_unit.support_ways` (Tabelle „Stützbedarf gegen das Urteil des Slicers“), warf danach
+`AttributeError` und zählt die Brücken jetzt mit `span_beside` wie der Stützbedarf (Review). Kinn mit
+Kragen: keine lange Brücke mehr, der Befund über kleine Überhänge bleibt (z 44,55, 119,3 mm²), der
+Rat unverändert (Stützen über den Flächenweg). Wand mit U-Kragen und Sporn: kein Stützbedarf,
+kein Stützvorschlag; Kragen allein wie vorher. Tests
+`test_a_shelf_stays_a_ledge_beside_another_small_overhang` und
+`test_a_real_bridge_beside_a_shelf_is_still_reported_at_the_bridge` (Steg 20 mm, Ort am Steg);
+Gegenproben: Schichtweite statt `span_beside` lässt beide und
+`test_a_shelf_on_one_wall_is_a_ledge_and_no_bridge` rot werden, der Ort ohne die Flächenwahl den
+Brückentest. Kein Slicerlauf: Die Übergabe ändert sich nur, wo der Rat bisher allein wegen eines
+Rands Stützen einschaltete, und kehrt dort zum Herstellerprofil ohne Stützen zurück; dass Ränder
+ohne Stütze drucken, belegt [RM-582](#rm-582). Changelog: ja.
+
+**Review (09.10.2026 nachts), behoben:**
+- *Flanke:* Eine Flanke zwischen etwa 14° und 45° legt je Schicht ein Band frei (über der
+  Brückenzugabe, unter der des Überhangs), das Rand und Sporn zu einer freien Fläche verband; die
+  Konsole maß mit (Wand mit zwei Flanken unter 30°, Sporn 9 mm²: 40,1 statt 6,2 mm, Stützen und
+  Warnung). `analysis._widest_bridge` misst mit `touching` nur die Kerne, die ein übriges Stück
+  berühren (ein Kern liegt ganz in einem Überhangstück); gilt auch für `open_bridge_width`. Der Ort
+  der Warnung liegt an der gemessenen Brücke (`span_spot`).
+- *Kosten:* `span_beside` maß jede Schicht mit Rand bei jedem Bericht neu (Waschschüssel 2,8 s für
+  eine Schicht). Gemerkt je Schnitt, Schicht und Auswahl; nimmt die Auswahl nichts weg, gilt
+  `bridge_width` ohne Messung. Warm Waschschüssel 0,00 statt 2,1–3,3 s, Drache 0,00 statt 0,5 s.
+  `cancelled` reicht bis `span_beside`, und `support_need` gibt ihn der Kanalfrage, die ihn je
+  Schicht, Kreisfrage und Decke fragt (Drache 45°: 446 s ohne Abbruch).
+- *Matrix:* siehe oben, `support_ways`.
+- *Kanaldecke:* Der Bericht riet über einem Tunnel von 20 mm seit v0.5.3 „oder eine Stütze“, wo
+  der Rat keine verlangt. `_from_spans` fragt die Kanaldecken der spannenden Schichten
+  (`channel_pieces`, aus der gemerkten vollen Antwort, sonst eng und nur für Stücke, die weiter als
+  15 mm spannen können, `_may_span`): Spannt die Schicht ohne sie weiter, ist es eine Brücke,
+  gemessen und gezeigt ohne die Kanaldecke (Steg über 20 mm neben dem Tunnel: am Steg); sonst nennt
+  der Befund den Kanal und den Übergang unter 45°, ohne Stütze. Kalt am Drachen 45° 21 statt 3 s
+  (alle Stücke gefragt: 136 s), mit gemerktem Stützbedarf 0,9 statt 0,4 s. Kalt heißt: mehr als
+  acht Körper, ohne Bedarfsfrage. Dort hielt der Merker vier Antworten, jeder weitere Körper mit
+  spannender Schicht verdrängte den Drachen, und jeder Bericht nach einer Auswertung zahlte alles
+  neu (Drache und acht Wedge-Locks: 45° 19,8–20,1 s, 60° 6,8–7,1 s CPU je Bericht), dazu die nie
+  gemerkte enge Randfrage (2,7 s). Behoben (Nachprüfung, L1): Der Merker zählt Schnitte statt
+  Antworten, hält einen je Körper der Szene und vier darüber (`keep_answers` aus
+  `print_findings`), je Schnitt vier Antworten, und verdrängt den am längsten nicht gefragten; die
+  enge Randfrage wird mitgemerkt. Zweiter Bericht 0,0–0,1 s, Befunde gleich; die Antworten selbst
+  belegen 0,03–0,04 MiB, ein Schnitt des Drachen, den der Merker nach einer Änderung noch hält,
+  37–43 MiB.
+- *Beleg im Korpus:* Die Abschlussmessung „An Eiffelturm, Becher, Waschschüssel und Datei-Schnitt
+  ändert sich nichts“ lief auf drei Schnitten mit `detail="support"`, die keine Brückenweite tragen.
+  Nachgeholt mit vollem Schnitt (C2/PLA) über 22 Dateien aus `F:\3D Dateien` und dem
+  Drachenarbeitsplatz, 41 Körper, 7 mit spannender Schicht, 3 davon gemischt: Stützbedarf und
+  Brückenweite an keinem geändert. Der Ort der Warnung wandert am Arbeitsplattenreiniger (23,1 mm,
+  z 0,35) vom Rand (73,6; 51,3) an die gemessene Brücke (0,0; −56,2), am Drachen (15,4 mm) von
+  (41,2; 15,2) nach (39,4; 21,4). Den Kanaltext bekommt die Minigolfbahn `obj_1_Birleştir` (25,1 mm,
+  z 6,35, kein Stützbedarf, die Schicht ganz Kanaldecke) — dort stand bisher „oder eine Stütze
+  hilft“. Der Rat ändert sich auch, wo eine Kanaldecke neben einem kurzen Steg
+  liegt (Tunnel 20 mm, Steg über 12 mm vom Bett: vorher Stützen, jetzt keine — folgerichtig zur
+  Kanalregel); ein Slicerlauf zeigte dort nur den Slicer ohne Stützen.
+
+## RM-572: Der Prüfbericht nennt die Stelle, wo viele kleine Überhänge Stützen verlangen (09.10.2026)
+
+<a id="rm-572-der-prüfbericht-nennt-die-stelle-wo-viele-kleine-überhänge-stützen-verlangen-09102026"></a>
+<a id="rm-572"></a>
+
+**Befund (08.10.2026, Review 3):** Der Überhangbefund meldete nur ein einzelnes Stück über
+100 mm². Verlangte der Rat Stützen über die Summe vieler Streifen oder eine schräge
+Unterseite als Feld (RM-570), schwieg der Bericht — am Kinn mit 18° (Streifen bis 6,4 mm²,
+zusammen 189 mm²) und am Drachen (größtes Stück 23,7 mm², zusammen 1 492 mm²).
+
+**Behoben:** `findings.small_overhang_findings` meldet „Viele kleine Überhänge hängen frei
+und brauchen zusammen Stützen.“ an der Schicht mit der meisten Überhangfläche, an ihrem
+größten Stück, mit *Druckoptimal ausrichten* und *Stützbedarf zeigen*. Gefragt wird nur der
+Flächenweg des Rats (`worth_support(need.patch, need.overhang)`), nicht `need.needed`, und
+Inselstücke, Kanaldecken und Ränder (`ledges`) zählen weder in der Fläche noch beim Ort;
+ohne sie muss der Weg weiter tragen und die Fläche über 100 mm² liegen. Ohne Stützbedarf
+nach dem Rat — der Gitterbecher — kein Befund. Die Antwort des Rats (`advise.support_need`)
+holt `body_findings` nur unter der Bedingung der Lagensuche (höchstens acht Körper,
+Stützraum ab 1 000 mm³) und teilt sie mit ihr.
+
+**Review (09.10.2026, `review_rm572_rm624.md`):** Der erste Stand fragte `need.needed` und
+zählte Inselflächen: Ein Sockel mit schwebendem 12- oder 20-mm-Würfel bekam neben der Insel
+„viele kleine Überhänge“ mit 144 bzw. 400 mm² an derselben Stelle, zwei 20-mm-Brücken von
+je 58 mm² (zusammen 115,8, kein Flächenweg) neben `slice.long_bridge` ebenso. Er stellte
+die Bedarfsfrage außerdem ohne Lagensuche: Von 17 kleinen Modellen eines neu
+(`carcassonne-4x4-grid`, +0,45 s, kein Befund), bei mehr als acht Körpern ein Schachsatz
+mit 3,7–7,0 s je Figur, fünf Figuren 23,9 s, kein Befund. Beides ist behoben, und
+der Ort meidet jetzt auch selbsttragende Ränder.
+
+**Nachweis (09.10.2026):** Profil Centauri Carbon 2/PETG über `print_findings`: Kinn
+(Stützraum 2 739 mm³) Befund bei z 44,55 an der Unterseite, 119,3 mm²; Kiefer (8 889 mm³)
+bei z 47,35, 200,1 mm²; Würfel 12 und 20 mm nur Insel; zwei Brücken nur lange Brücke.
+Drache (`obj3.stl`, 2 948 698 Dreiecke, generic-220/PLA): Stützraum 34 178 mm³, Bedarfsfrage
+wie vorher mit der Lagensuche; Befund unverändert bei z 102,75 (x −4,8, y −4,8), Fläche ohne
+Inselstücke 630,6 statt 663,3 mm². Der Befund selbst kostet dort 0,09 s CPU (vorher 0,06);
+die Feldfrage ohne Inselstücke neu zu stellen kostete 5,4 s, das Feld des Rats gilt weiter,
+wo es eine Decke ist. Tests in `test_print_findings.py`
+(Kinn mit Ort im Grundriss und auf der Unterseite, Kragen von 2 mm auf Kinnhöhe, Würfel,
+Brücken, keine Bedarfsfrage ohne Lagensuche), `test_many_small_overhangs_get_a_finding_with_a_place`
+(Kinn und Kiefer, Ort auf der Unterseite an seiner Höhe),
+`test_a_lattice_of_small_self_supporting_pieces_gets_no_supports` (Gitterbecher). Changelog: ja.
+
+## RM-584 (Teil 2): Unter flachen Decken Gitter oder Hybrid, und hohe Bäume bekommen zwei Wände (09.10.2026)
+
+<a id="rm-584-teil-2-unter-flachen-decken-gitter-oder-hybrid-und-hohe-bäume-bekommen-zwei-wände-09102026"></a>
+
+**Befund (09.10.2026):** Unter einer großen flachen Decke blieb die Art des Herstellers,
+bei Elegoo und Bambu also Bäume, unter denen die Decke zwischen den Spitzen durchhängt;
+hohe Bäume brechen mit einer Wand (Recherche Nr. 4, 5).
+
+**Behoben:** Der Rat schlägt unter einem flachen Stück Gitter vor statt Bäumen —
+über „automatisch“ nur, wo es beim Programm Bäume heißt (`handover.tree_styles`), bei
+Cura, wo die Art der ganzen Platte gilt, ausdrücklich —, und Hybrid (`tree_hybrid`), wo
+das Programm es kennt und daneben kleine Stücke auf dem Modell aufsetzen
+(`details_on_model`) oder viele Inseln beginnen; PrusaSlicer und Cura bekommen Gitter.
+Gitter und Baum zweier Körper ergeben Hybrid nur, wo die Art der Platte gilt
+(`style_per_part`), ohne Hybrid Gitter; bei Orca und Prusa nennen Zeile und Feld die Teile
+mit eigenem Wert. Bei Cura gewinnt die flache Decke gegen den Baum eines anderen Körpers,
+ein Wechsel der Art nennt keine Teile, und was Cura gleich druckt („automatisch“ und
+Gitter), schlägt der Dialog nicht vor. Neues Feld *Wände der Bäume* (`support.tree_walls`, Orca
+`tree_support_wall_count`, Creality `tree_support_wall_count_tree`, Cura
+`support_wall_count`; PrusaSlicer nimmt es nicht); ab 100 mm Säulenhöhe vom Boden des
+Körpers (`ModelSupport.tallest_column`) zwei, gefragt mit `printed_style` gegen
+`trees`. ElegooSlicer, OrcaSlicer und Anycubic lesen die Wandzahl unter gefüllten
+organischen Bäumen nicht, unter hohlen schon (`hollow_trees`); der Druckdialog filtert
+den Rat dort (`IGNORED_UNDER_TREES_BY_PROGRAM`, Hinweis am Feld). Durchsicht und
+Nachprüfung: `.claude/.state/drache-2026-10-08/reviews-2026-10-09/review_rm584_teil2*.md`.
+
+**Nachweis (09.10.2026):** Stil je Deckenform in sieben Programmen
+(`output/drache-2026-10-08/stil-rm584*`); Wandzahl am ElegooSlicer an einem 120 mm hohen
+Turm: Hybrid mit zwei Wänden 14 % mehr Stützmaterial, organisch derselbe G-Code. Tests in
+`test_slice_findings.py` (Deckenform, hohe Bäume, Hybrid aus zwei Körpern),
+`test_print_settings.py` (Übergabe je Familie, Filter unter Bäumen, Feldhinweis),
+`test_manufacturer.py`, `test_print_time.py`; Slicertests in `test_real_slicers.py`
+(Wandzahl je Orca-Programm, Hybrid je Objekt, Abstand unter hohlen Bäumen). Messskript
+`.claude/.state/drache-2026-10-08/stil_je_decke.py`. Pilz und Figur auf einer Platte
+(Nachprüfung N1, N2; `slicer_stil.py`, `hut_bander.py` daneben): Cura bekommt
+`support_structure=normal` statt `tree` und trägt den Hut auf senkrechten Säulen gleicher
+Dichte statt auf Ästen; ElegooSlicer gibt dem Pilz `normal(auto)` und der Figur
+`tree(auto)`, wie die Zeile „Stützen · Figur, Pilz mit Gitter“ sagt.
+Offen im Register: der Fuß hoher Bäume.
+Changelog: ja.
+
+## RM-624: Ein Slicertest hält Kontaktabstand und untere Trennschicht in sechs Programmen (09.10.2026)
+
+<a id="rm-624-ein-slicertest-hält-kontaktabstand-und-untere-trennschicht-in-sechs-programmen-09102026"></a>
+<a id="rm-624"></a>
+
+**Befund (09.10.2026, Nachprüfung von RM-622):** Was RM-622 über die Programme sagt —
+organische Bäume runden den Abstand auf die Schichten des Modells, vier Programme drucken
+unter Bäumen keine untere Trennschicht — war mit einer örtlichen Sonde gemessen, und kein
+Test hielt es. Die Messleser kannten `G92 E…` nicht: Unter absoluten Extrusionswerten galt
+nach einem Rücksetzen jede Bahn als Leerfahrt.
+
+**Behoben:** `tests/gcode_contact.support_contact` misst Abstand und Trennschichten im
+G-Code (Raster `CONTACT_CELL`, Kontakt bis `CONTACT_AIR`). Ein eigenes Modul, das nur
+`test_real_slicers.py` importiert: In `tests/helpers.py` wählte `tools/ci_selection.py` für
+jede Änderung daran 39 Fensterdateien und drei Slicerdateien, jetzt nur
+`test_real_slicers.py`. Die Messung zählt Extrusion relativ, absolut und mit `G92` wie der
+Drucker und Bögen (`G2`/`G3`) entlang ihrer Bahn mit nachgeführter Position — Bambu Studio
+und PrusaSlicer schreiben in Baumdrucken zehntausende davon. Die Unterseite rechnet mit der
+Höhe der eigenen Stützbahn (`;HEIGHT:`, Bambu `; LAYER_HEIGHT:`, ohne Angabe der Schritt im
+eigenen Stapel), nicht mit allen Stützebenen des Drucks zusammen. Eine Zelle, in der jenseits
+des Kontakts Modell steht, ist Nachbarschaft, kein Kontakt: Mit eigener Stützschichthöhe
+wechseln sich dort Wand- und Stützebenen ab und maßen −0,24 bis 0,13 mm. `inset` nimmt nur
+Zellen im Inneren der Aufsicht aller Modellbahnen; PrusaSlicers `Skirt/Brim` zählt nicht
+dazu. `test_the_support_contact_arrives_as_solidon_says` schneidet eine Platte über einer
+Säule (PETG, 0,2-mm-Schichten) in ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print,
+Anycubic Slicer Next und PrusaSlicer mit Gitter und Baum, mit Werten fern jedes
+Herstellerprozesses (dort 0,2 mm Abstand, Anycubic 0,1, untere Trennschichten 2, PrusaSlicer
+0): unter Gitter 0,28 mm und drei untere Trennschichten, unter Bäumen 0,44 mm, das sind 2,2
+Schichten und gerundet wie abgeschnitten 0,4. Zugesichert werden oben und unten der Abstand
+(±0,02 mm), mehr als 20 Zellen je Seite und die genaue Zahl unterer Trennschichten nach
+`advise.rounds_to_whole_layers` und `handover.ignored_under_trees`.
+
+**Nachweis (09.10.2026):** zwölf Fälle an den echten Programmen unter Windows grün (12
+passed, Exit 0). Gemessen: unter Gitter oben und unten 0,28 mm, untere Trennschichten in der
+Orca-Familie vier (die geschriebenen drei und ihre Kontaktlage), in PrusaSlicer drei; unter
+Bäumen oben und unten 0,4 mm, unten drei Lagen in ElegooSlicer und OrcaSlicer, keine in den
+übrigen vier; 57 bis 201 Zellen je Seite. Die frühere Begründung, die Unterseite unter Gitter
+sei nicht messbar, war ein Messfehler (Stapel verschiedener Stellen vermischt); an den
+RM-622-G-Codes misst die Unterseite jetzt bei 4 und 6 mm Rand gleich 0,28 mm.
+Synthetische Gegenproben in `test_real_slicers.py`: `G92`, Bögen, Bahnhöhe mit und ohne
+Angabe (die unterste Stützlage mit eigener Höhe wie in den echten G-Codes), Nachbarschaft
+oben und unten, Rand und `Skirt/Brim` als Ring außen um das Dach. Jede der sieben
+verstümmelten Fassungen der Messung (ohne `G92`, ohne Bögen, Bogen als Sehne, ohne
+Bahnhöhe, ohne Nachbarschaft unten, ohne Nachbarschaft oben, `Skirt/Brim` als Modell) und
+die alte aus `c95d542ed` werden dort rot, jede an der Zusicherung ihres Falls. Linux und macOS (Anycubic 2.0.0.5 gegen 2.0.0.3, Laufzeit
+gegen das 120-Minuten-Limit) nimmt die Slicerauswahl beim Push auf main ab, denn die CI läuft
+nur dort (Entscheidung Robert). SuperSlicer fehlt: RM-622 hat es nicht gemessen. Cura
+fehlt, weil es aufrundet und Solidons Tabelle es nicht weiß; das richtet RM-628, und Cura
+kommt mit ihm in den Test. Cura 5.13 an derselben Platte (Sonde, nicht eingecheckt): unter
+Gitter oben genau der geschriebene Abstand (0,28 und 0,44 mm, mit einer Bruchteillage der
+Stütze), unten aufgerundet (0,4 und 0,6); unter Bäumen oben und unten aufgerundet (0,4 und
+0,6). Am Weg des Tests mit `support_contact` nachgemessen: Gitter 0,28 → oben 0,28, unten
+0,40; Baum 0,44 → oben und unten 0,60; je drei untere Lagen.
+`advise.WHOLE_LAYER_GAP_FLAVOURS` und `support_gap_target` nehmen für Cura dagegen ganze
+Schichten zum nächsten Vielfachen an — mit dem heutigen Sollwert wären alle vier
+Abstandszusicherungen rot. Changelog: nein (Test).
+
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
 **RM-027 — Gewöhnlichen Commit aus veraltetem gemeinsamem Index absichern**
@@ -43880,8 +44113,8 @@ umschlossenen Raum; Zuschlag eine Bahnbreite vor dem Aussparen;
 vorgeschlagen nur, wenn sie Raum sperrt. Aus drei Durchsichten dazu: Ort und Fläche des
 Sperrbefunds aus den gesperrten Säulen, eine Stelle für die Stützbedarfsregel, der
 Sperrraum gemerkt, die Bahnbreite statt einer festen Zahl, die Schätzung fragt den
-Sperrraum. Bekannte Grenze: [RM-571](ROADMAP.md#rm-571). Warum, mit allen verworfenen Wegen:
-`konzepte/begruendungen/regel-schichtanalyse.md`; Sonden und Messwege unter
+Sperrraum. Bekannte Grenze, behoben: [RM-571](#rm-571). Warum, mit allen verworfenen Wegen:
+`konzepte/begruendungen/regel-druckrat.md`; Sonden und Messwege unter
 `.claude/.state/drache-2026-10-08/` (`STAND.md`).
 
 **Nachweis (08.10.2026):** Anteil der Überhangfläche außerhalb der Kanaldecken mit
@@ -43927,7 +44160,7 @@ Streifen in der Aufsicht vereinigt, ohne Kanalstücke, nur wo sie im Mittel brei
 als `OVERHANG_MARGIN`. Dieselbe Feldfrage entscheidet den Stützort
 (`ModelSupport.open_field`: sonst „nur vom Bett“ am Kinn über der Brust) und welche
 Überhänge die Kanalsperre ausspart (RM-566). Wo viele kleine Überhänge Stützen
-verlangen, nennt der Prüfbericht noch keine Stelle: [RM-572](ROADMAP.md#rm-572).
+verlangen, nannte der Prüfbericht noch keine Stelle: [RM-572](#rm-572).
 
 **Nachweis (08.10.2026):** `tests/test_advise.py::test_a_sloped_underside_is_one_field`
 (Kinn, Feld unter der Summe 150, Feld unter 100, Rauschen einer Wand),
@@ -45494,6 +45727,135 @@ und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px st
 Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
 `v0.5.3` den Fehler.
 
+## RM-531 (Teil): Sieben Fenstertests außerhalb von Windows sind auf allen vier Plattformen grün (09.10.2026)
+
+<a id="rm-531-teil-sieben-fenstertests-außerhalb-von-windows-sind-auf-allen-vier-plattformen-grün-09102026"></a>
+
+**Befund (07.10.2026, Sonde 37495714708):** Nach den ersten Plattformfixes blieben sieben
+Testfunktionen außerhalb von Windows rot (U Linux, A macOS ARM, I macOS Intel):
+`test_widget_lifetime[KeyDialog]` (UAI, einer von zehn überlebt),
+`test_a_button_wraps_its_label_instead_of_cutting_it` (UAI, der Knopf bricht nicht um),
+`test_no_element_of_the_bar_is_squeezed` (UAI, Felder 356/364 statt 398/404 px bei 1600 px),
+`test_a_long_setup_failure_stays_in_the_scroll_area` (UAI, kein Rollbalken bei 200 Zeilen),
+`test_the_sketch_area_fits_a_laptop_screen` (AI, 977 statt höchstens 900 px),
+`test_the_left_column_shares_its_height_with_all_four` (AI, inzwischen `…_with_all_three`) und
+`test_chat_setup_follows_late_status_text…` (AI, Schlüsseldialog 105 statt 120 px).
+
+**Stand:** In der Fensterauswahl 37936316061 (welle2 `a9e4d3f64`, 121 Fensterdateien) liefen alle
+sieben auf Windows, Linux, macOS ARM und dem Intel-Mac grün. `test_widget_lifetime.py` (70
+Fälle), `test_selection_operations.py` (35), `test_transform_ui.py` (35), `test_generate_ui.py`
+(104) und `test_dialog_layout.py` (4) endeten je Plattform mit Exit 0; in `test_sketch_editor.py`
+(1 von 289) und `test_ui.py` (1 von 706, Intel-Mac 5) war je nur ein welle2-Fall rot (Escape im
+Skizzenmodus, Messausdruck; Intel dazu Organizer), keiner der sieben, behoben in `6e200fc31`.
+Die Fenstergruppe sammelt in diesen sieben Dateien 1 243 Fälle, dieselbe Zahl wie die Summe der
+Dateiergebnisse im Protokoll; die sieben stehen darin. Welcher der Plattformfixes zwischen dem
+07. und 09.10. welchen Fall behob, ist nicht einzeln zugeordnet. Changelog: nein.
+
+## RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)
+
+<a id="rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026"></a>
+<a id="rm-635"></a>
+
+**Befund (Pakete CI und SK, 09.10.2026):** Im vollen Entwicklungstor wurden sechs Fälle aus
+`tests/test_process.py` (Grenzen 3 bis 5 s) und
+`test_suite_script.py::test_a_portion_that_swallows_tests_is_halved_until_it_runs` (60 s) rot,
+einzeln grün; wiederholt auch `test_kernel_process.py::test_a_job_gives_the_same_bytes_in_the_helper_as_here[voxel]`
+(120 s) und `test_cura_machine.py::test_every_way_out_of_a_mount_closes_its_pipes[point]`.
+
+**Ursache, mit Lastgegenprobe:** Mit 192 rechnenden Prozessen auf 32 Threads braucht ein frischer
+Interpreter bis zu seiner ersten Ausgabe im Mittel 5,5 s statt 0,07 s (über `run_limited` 10,9 s
+statt 0,19 s, Höchstwert 13,3 s), und unter genau dieser Last werden dieselben sechs Fälle aus
+`test_process.py` rot. Die festen Grenzen zählten den Interpreterstart des Kindes mit. Der
+Halbierungstest braucht ruhig 0,87 s und riss dort die 60 s: Git-Bash bildet jeden Teilprozess über
+eine nachgebaute `fork` nach. `voxel` brauchte 81 s statt 1,9 s, weil der Hilfsprozess
+absichtlich eine Klasse tiefer rechnet. Eine abgesenkte Klasse des pytest-Arbeiters ist es nicht:
+Eine Prioritätssonde über `test_kernel_process.py` und `test_kernel_process_lifecycle.py` fand
+keinen Test, der sie zurücklässt. Der Cura-Fall `[point]` hatte dieselbe Ursache (erste Zeile in
+1 s) und war in `90467cefb` schon behoben; unter Last zeigte er eine zweite im Produktcode:
+`process.terminate_process_tree` wartete nach dem harten Beenden fest 0,5 s und warf dann selbst
+`TimeoutExpired`. Ein beendetes Kind mit acht rechnenden Fäden braucht schon ruhig im Median
+0,53 s bis zu seinem Ende, unter Last bis 3,2 s; der Lauf meldete dann einen Zeitablauf statt
+seines Grundes (Abbruch, Zeitgrenze, Ausgabegrenze, oder ein Ergebnis, nach dem der Slicer nicht
+endete). Seit `df8fae688`, also in jeder veröffentlichten Version seit 0.3.0.
+
+**Behoben:** `PROCESS_KILL_SECONDS` (30 s) ist die Grenze für das Ende eines hart beendeten
+Prozesses und für `taskkill`, die Schonfrist davor bleibt 0,5 s; Test zuerst
+(`test_a_killed_process_that_takes_a_moment_to_die_is_waited_for`, beide Zweige, am alten Stand
+rot). In `test_process.py` zählt eine Zeitgrenze, die das Thema ist, ab dem Ereignis
+(`_clock_held_until`: die 0,2 s ab dem lebenden Nachkommen oder dem hängenden Empfänger),
+Nachkommen werden über ihre Prozesskennung als beendet nachgewiesen statt über eine Marke nach
+fester Wartezeit, ein blockierender Empfänger über die Ordnung der Ereignisse; reine
+Hängergrenzen sind `HANG_GUARD` und entscheiden keinen Fall. Wo die Reaktion selbst das Thema
+ist (Ausgabegrenze, Elternende, Abbruch, `linger`), gilt `REACTION` = 10 s ab dem Ereignis — nach
+der Nachprüfung (N-3): Ein Prozesskern, der nur alle 20 s hinsah, blieb ohne sie grün und ist
+jetzt in fünf Fällen rot. `test_suite_script.py` wartet,
+solange Aufrufe, Ausgabe oder Dateien im Arbeitsordner dazukommen (`run_while_moving`, Stille
+120 s, höchstens 500 Aufrufe, Gesamtgrenze 30 min gegen Ausgabe ohne Ende — N-4, Selbsttest am
+alten Stand rot), `test_kernel_process.in_a_worker`, solange dieser Prozess oder ein
+Hilfsprozess Rechenzeit bekommt (Stille 60 s, höchstens 30 min). Dasselbe Muster
+hatten `test_print_settings.py::test_a_slicer_that_says_too_much_is_not_an_error_code` (auch im
+Tor von Paket E rot) und `test_a_slicer_with_endless_output_is_stopped`: 4 s ab dem Start als
+bloße Hängergrenze, jetzt 120 s bei einem Kind, das 240 s schliefe. Regel in
+`.claude/rules/tests.md` („Fremdlast macht auch funktionale Tests rot“).
+
+**Nachweis:** Unter derselben Last, unter der vorher sechs Fälle rot waren: `test_process.py` und
+die fünf Cura-Einhängefälle 29 von 29 grün; in einem zweiten Lauf unter noch schwererer Last
+(Interpreterstart bis 16,6 s) alle Fälle aus `test_process.py`, die 13 Bitgleichheitsfälle
+(`voxel` 64 bis 101 s) und die Cura-Fälle grün, der Halbierungstest grün nach 295 s. Sechs
+Mutationen am Prozesskern (Zeitgrenze ohne Baum, Erfolg ohne Nachkommen, Ausgabegrenze erst am
+Ende, Empfänger im Faden der Uhr, ohne `linger`, `linger` sofort) machen je ihren Fall rot; die
+Wartelogiken selbst haben Gegenproben (stiller Hänger, Aufrufschleife, Rechnung ohne Ende).
+Changelog: ja, unter *Drucken und Übergabe an den Slicer*.
+
+## RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)
+
+<a id="rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026"></a>
+<a id="rm-344"></a>
+
+**Befund (Review seit 0.5.1, E-M1, Commit `6f0be89df`):** Kernmatrix und Versionswächter wählten
+`rendering` ab; von den Rendererfällen ohne Fenster (113 am 09.10.2026) liefen nur die drei aus
+`test_render_factory.py` außerhalb von Windows, die übrigen 110 nur in der Windows-Fenstergruppe.
+Der Vulkan-Wächter prüfte feste Jobnamen, darunter drei ohne Bildtest, und ließ sich von einem
+Kommentar erfüllen. Entschieden (Robert, 06.10.2026): die Rendererfälle auch unter Linux und macOS.
+
+**Behoben:** CI-Gruppe `rendering` in `tools/run_suite_isolated.py` (Rendererfälle ohne Fenster,
+alle Dateien außer den zwei Vertragsdateien, je Datei ein Prozess); mehrere `--ci-group` in einem
+Aufruf teilen sich eine Sammlung, eine rote Gruppe hält die andere nicht an. `window-contracts`
+fährt unter Linux und auf Apple Silicon Verträge und Rendererfälle in einem Aufruf. Der Intel-Mac
+fährt denselben Schritt im eigenen Job `window-contracts-intel`, auf den das Paket nicht wartet:
+Das Intel-Paket ist der längste Paketjob (11,7 min im Lauf 37530876754), eine Prüfzelle davor
+verlängerte den Tag-Lauf um jede Minute Wartezeit auf einen der fünf macOS-Plätze. Stattdessen
+hält er die Releaseakten von Linux, Windows und macOS an, und `sign_release.verify_ci_run` nimmt
+keinen Lauf an, in dem er rot ist. Der Versionswächter `latest` fährt beide Gruppen unter Linux,
+auch nach einem roten Stil-, Typ- oder Kernschritt, und nicht bei `tests_only`. Ein Rendererfall
+mit Fenster (`test_held_frames_arrive_as_one_after_the_release`) läuft weiter nur unter Windows,
+wo die Fenstergruppe läuft ([RM-531](ROADMAP.md#rm-531)). Konzept CI-03 bis CI-05 und §3,
+`.claude/rules/tests.md`, `auslieferung.md`, `/erzeugen` (keine Fenster- oder Slicerauswahl
+während eines Tag-Laufs), Karten und README nachgezogen.
+
+**Nachweis:** `test_every_rendering_case_runs_on_every_platform_in_a_release_job` leitet aus
+Workflow und Markerwahl ab, dass jeder Rendererfall ohne Fenster auf jeder Paketplattform in einem
+Pflichtjob läuft — worauf das Paket wartet oder was jede Releaseakte anhält. Der Sollwert
+„Rendererfall“ steht als Wert im Test, die Markerauswahl kommt aus pytests öffentlicher
+Sammlung, eine Schrittbedingung außerhalb einer Positivliste, `continue-on-error` am Schritt und
+`--plan-only` machen ihn rot. Zehn Gegenproben (Markerwahl zurückgedreht, nur Linux, Intel-Mac auf
+dem falschen Läufer, Intel-Prüfung ohne Wirkung auf die Linux- oder die Mac-Akte, Versionswächter
+ohne Renderer, `if: runner.os == 'Windows'`, `if: false`, `--plan-only`, `continue-on-error`) und
+eine in die andere Richtung; die drei Schrittmutationen und eine um `gizmo` verengte Gruppe
+blieben am vorigen Wächter grün. `test_ci_runner.py` hält den Marker der Gruppe als Wert und den
+Gleichlauf zwischen Sammlung und `pytest -m` je Gruppe. Der Vulkan-Wächter liest die zeichnenden
+Linux-Jobs aus ihren Aufrufen und die Pakete aus den apt-Zeilen, die xcb-Prüfung verlangt die
+vier Linux-Jobs mit `xvfb-run`. Die Simulation läuft je Paar aus Läufersystem und Skript einmal:
+die Wächterfamilie 20 Fälle in 6,9 s statt 20 in 10,9 s am ruhigen Rechner, Zeitgrenze wieder
+60 s. Rendererprobe auf dem Wegwerfzweig `wegwerf/renderer-probe`, Lauf 37894162728, alle grün,
+0 übersprungen außer den drei nativen Fällen von `test_render_factory` auf dem Intel-Mac
+(gewollt): Linux 6:40 min (Renderer 110 Fälle in 54 s), macOS ARM 8:15 min (91 s), Intel-Mac
+11:10 min (74 s), Windows unverändert 9:08 min, `latest` 5:48 min. Nach den Review-Funden, vor
+der Vorgabe ohne CI auf Zweigen: zweite Rendererprobe 37942642659 (window-contracts auf drei
+Läufern, `window-contracts-intel`, `latest`) grün, Slicerauswahl 37942574165 auf drei Läufern
+grün; die Fensterauswahl 37942569808 war nur in Fällen rot, die auf welle2 a9e4d3f64 genauso
+rot sind (Lauf 37936316061). Changelog: nein.
+
 ## RM-593 und RM-594: Auswertung wächst nicht mehr je Schritt, losgelassene Netze werden frei (09.10.2026)
 
 <a id="rm-593-und-rm-594-auswertung-wächst-nicht-mehr-je-schritt-losgelassene-netze-werden-frei-09102026"></a>
@@ -46242,3 +46604,72 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
   Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
+
+<a id="rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026"></a>
+<a id="rm-571"></a>
+
+**Befund (08.10.2026, Review 2 von RM-566):** Die Kanalsperre sparte im umschlossenen Raum
+nichts aus, und umschlossen hieß ein Loch im Schnitt — auch das Innere jedes oben offenen
+Gefäßes. Ein Sims im Becher (Ø 68 mm, Tunnelblock, Sims 14 × 14 mm) lag mit 65 % seines
+Grundrisses im Sperrraum und verlor seine Stütze.
+
+**Behoben:** Gefragt wird die Säule je Scheibe, nicht das Loch: Eine ausgesparte Säule im
+umschlossenen Raum bleibt frei, wenn im runden Saum von zwei Bahnbreiten um ihren Grundriss,
+durch freien Raum verbunden, mindestens eine Bahn breit ein Schacht liegt, der bis über das
+Teil offen ist und einen Kreis von `CHANNEL_WIDTH` fasst, wie in `_narrow`
+(`analysis._open_above`, `_sky_above`, `_sky_window`). Ausgespart wird dann die ganze Säule
+(Entscheidung im Docstring von `_open_above`). Der Sperrraum selbst bleibt unverändert. Aus
+dem Review des Zweigs (09.10.2026): Zuerst genügte eine Bahn breit Himmel, und ein Becher
+mit Deckel und Schlitz ab 0,5 mm galt als offen (4 statt 64 % des Simses im Sperrraum); der
+Saum mit Gehrung reichte an spitzen Ecken bis zehn Bahnbreiten. Warum, mit den verworfenen
+Wegen: `konzepte/begruendungen/regel-druckrat.md`, Abschnitt zur Kanalsperre.
+
+**Nachweis (08./09.10.2026):** Stützbahn unter dem Sims alt → neu in ElegooSlicer 2,41 →
+6,06 m, OrcaSlicer 2,62 → 4,35 m, PrusaSlicer 1,95 → 4,64 m, Cura 2,57 → 4,40 m, der Tunnel
+bleibt frei; der Wasserkanal der Schüssel in allen vier Slicern weiter ohne Stütze; Korpus
+von 243 Körpern unverändert. Mit den Fixen aus dem Review bleibt der Sperrraum von Becher und
+Schüssel in allen fünf Lagen gleich, die Slicerläufe gelten weiter; die 100 Körper des
+Korpus mit Kanalstücken (40 Dateien, 8 mit Sperre) bleiben in Vorschlägen und Sperrvolumen
+gleich. Tests in
+`test_slice_findings.py`: Sims im offenen Becher und Himmel je Scheibe, beide am Stand von
+RM-566 rot; überdachte Säule, dünne Wand und Schlitz in der Kammerdecke als Gegenproben;
+aus dem Review Deckel mit Schlitz 0,5/1/2 mm (mit einer Bahn als Maß rot), Deckel weiter
+offen als ein Kanal, Nase 3 mm vor dem Himmel (mit Gehrung rot); aus der Nachprüfung
+Deckel mit Schlitz 25 mm (mit Kreisradius 5 oder 12 mm rot), dünne Wand mit Schlitz über
+der Säule (mit Himmel statt Schacht rot) und die L-förmige Säule, die im Tunnel frei bleibt
+(nur außerhalb der Enge ausgespart rot). Ebenfalls aus der Nachprüfung: Schichten, die den
+Himmel nicht mehr schneiden, werden übersprungen (Becher 0,64 → 0,28 s CPU, alle Scheiben
+gleich), und der senkrechte Schacht ist als Grenze benannt. Belege:
+`output/konsolidierung-2026-10-07/codex-claude/belege/lauf-a.md`. Changelog: nein (die
+Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).
+
+## RM-750: Ein wartender Klick behält seine Zusage, während die Analysekarte rechnet (10.10.2026)
+
+<a id="rm-750-ein-wartender-klick-behält-seine-zusage-während-die-analysekarte-rechnet-10102026"></a>
+<a id="rm-750"></a>
+
+**RM-750 — Wartete *Fertig* einer Formsitzung auf die Auswertung, verschwand „Wird übernommen,
+sobald die Berechnung fertig ist.“, sobald die Wandprüfung des Zugs ihre Analysekarte rechnete.**
+Gefunden im Review des macOS-Fixes `fix/sculpt-macos` (`review-fix-sculpt.md`, M-2): Die Karte
+steht in `_PROGRESS_PRIORITY` vor der Auswertung, und `_render_progress_state` zeigte die Zusage
+nur, wenn die Auswertung die Zeile trug; der Klick sah verschluckt aus. Jetzt steht die Zusage,
+solange ein Klick wartet und die Auswertung läuft, gleich welcher Lauf die Zeile trägt.
+**Nachweis:** `test_sculpt_session.py::test_a_waiting_click_keeps_its_promise_while_the_map_is_computed`
+am Stand davor rot, jetzt grün; die Formsitzungsdatei 96 grün. Neben Erzeugung und Agent folgt
+der Zusage wie dort der Hinweis oder die Ansage. Changelog: nein (die Zusage kam mit `4c5a52e12`
+am 08.10.2026 und steckt in keinem Tag).
+
+## RM-751: Ein freigegebenes Fenster startet keine Wandprüfung mehr (10.10.2026)
+
+<a id="rm-751-ein-freigegebenes-fenster-startet-keine-wandprüfung-mehr-10102026"></a>
+<a id="rm-751"></a>
+
+**RM-751 — Nach `MainWindow.release` startete der Zeitgeber eines letzten Zugs noch eine
+Wandprüfung, deren Arbeiter niemand mehr abwartete.** Gefunden im selben Review (M-3; in der
+Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_check` und die wartende
+Übergabe der Vorschau (`_sculpt_display`) an und gibt die laufende Prüfung auf,
+`_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
+**Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
+davor rot, jetzt grün. Changelog: nein.

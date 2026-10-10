@@ -1199,8 +1199,10 @@ InfillPattern = Literal["grid", "gyroid", "honeycomb", "cubic", "lines", "triang
 #: Profil des Slicers (Konzept Herstellerprofil, Entscheidung J, 27.09.2026).
 #: Bis dahin hieß „Stützen nötig" immer ``grid`` — und Elegoo wie Bambu, deren
 #: Standardprozess Bäume stützt, bekamen Gitter, auch wer die Stützen erst im
-#: Slicerfenster einschaltete.
-SupportStyle = Literal["none", "auto", "grid", "tree"]
+#: Slicerfenster einschaltete. ``hybrid`` (RM-584) stützt Details mit Bäumen und
+#: große flache Decken mit normaler Stütze — Orcas ``tree_hybrid``; wer das nicht
+#: kennt, bekommt ``grid`` (``slicer_keys.NOT_OFFERED_BY_PROGRAM``).
+SupportStyle = Literal["none", "auto", "grid", "tree", "hybrid"]
 SupportPlacement = Literal["everywhere", "build_plate"]
 SeamPosition = Literal["aligned", "nearest", "random", "rear"]
 
@@ -1391,6 +1393,12 @@ class SupportSettings:
     """Lücke zwischen den Linien der Kontaktschicht in mm (RM-583): dicht unter
     großen flachen Decken, damit die Unterseite nicht durchhängt, offen unter
     kleinen und gewölbten Flächen, wo eine dichte Kontaktschicht festsitzt."""
+    tree_walls: int = 1
+    """Wände der Baumstämme (RM-584). Hohe Bäume brechen mit einer Wand oder
+    kippen; ab etwa 100 mm Stützhöhe tragen zwei (Recherche Nr. 5).
+    PrusaSlicer zählt keine Wände und nimmt das Feld nicht
+    (``slicer_keys.NOT_TAKEN_BY``); seine Doppelwand ab einem Astquerschnitt
+    bleibt beim Hersteller."""
 
 
 @dataclass(frozen=True, slots=True)

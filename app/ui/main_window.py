@@ -4655,11 +4655,19 @@ class MainWindow(QMainWindow):
             self.status_message.setText(self._announcement)
             return
         status = self._progress_states[status_owner]
-        if status_owner == "evaluation" and self._click_after_evaluation is not None:
+        # Die Zusage gilt der Auswertung, auch wenn ein vorrangiger Lauf (die
+        # Analysekarte einer Formsitzung) die Zeile trägt — sonst sah der
+        # wartende Klick verschluckt aus (RM-750).
+        if self._click_after_evaluation is not None and self._progress_states["evaluation"].active:
             # **Die Zusage steht vor dem Lauftext, vom Klick an** (§2.8). Als
             # Hinweis lag sie nur in ``_hint``, und den zeigt die Zeile allein
             # neben Erzeugung und Agent: Der Klick sah weiter verschluckt aus.
-            running = status.text if (status.immediate or self._waiting) else ""
+            # Neben einem Lauf, an dem weitergearbeitet wird, folgt der Zusage
+            # wie dort der Hinweis oder die Ansage, nicht der Lauftext.
+            if status_owner in _WORKED_ALONGSIDE:
+                running = self._hint or (self._announcement if self._spoken.isActive() else "")
+            else:
+                running = status.text if (status.immediate or self._waiting) else ""
             self.status_message.setText(
                 "  ·  ".join(
                     part
@@ -14206,6 +14214,8 @@ class MainWindow(QMainWindow):
         einem echten Modell, und währenddessen formt man weiter. Ein neuer
         Zug stößt eine neue Prüfung an; die Antwort einer älteren verfällt.
         """
+        if self._close_requested:
+            return
         # Erst die wartende Übergabe der Vorschau (RM-576), dann die Prüfung: Die
         # Übergabe schreibt die Warnzeile neu und löschte sonst die Antwort, wo
         # Qt sie nach ihr zustellt (macOS, Linux).
@@ -28919,6 +28929,12 @@ class MainWindow(QMainWindow):
         # Ein wartender Klick hält seinen Rückruf, und der sein Fenster.
         self._click_after_evaluation = None
         self._cancel_sculpt_preview()
+        # Die Wandprüfung eines letzten Zugs startete sonst nach dem Freigeben
+        # noch einen Arbeiter, den niemand mehr abwartet, und die wartende
+        # Übergabe einer Vorschau bestellte noch eine Rechnung (RM-751).
+        self._sculpt_check.stop()
+        self._sculpt_display.stop()
+        self._cancel_sculpt_check()
         if self._rebuild_dialog is not None:
             self._rebuild_dialog.reject()
         self._cancel_pending_question()

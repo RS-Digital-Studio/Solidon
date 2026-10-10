@@ -128,6 +128,13 @@ _SANDBOX_BRIDGE_NAMES: Final = (
 DEFAULT_OUTPUT_LIMIT: Final = 1024 * 1024
 PROCESS_POLL_SECONDS: Final = 0.05
 PROCESS_STOP_SECONDS: Final = 0.5
+#: Wie lange ein hart beendeter Prozess bis zu seinem Ende brauchen darf, und
+#: ``taskkill`` bis zu seinem. Kein Abwarten, sondern die Grenze für ein Ende,
+#: das sicher kommt: ``TerminateProcess`` wirkt erst, wenn jeder Faden des Kindes
+#: eine Zeitscheibe bekommt. Ein Kind mit acht rechnenden Fäden brauchte ruhig im
+#: Median 0,53 s, unter Last bis 3,2 s; mit ``PROCESS_STOP_SECONDS`` warf der Abbau
+#: selbst einen Zeitablauf, und der Lauf meldete ihn statt seines Grundes (RM-635).
+PROCESS_KILL_SECONDS: Final = 30.0
 #: Wie lange ein Prozess nach seinem gemeldeten Ergebnis noch enden darf
 #: (:func:`run_limited`, ``finished``). Bambu Studio endet gemessen eine
 #: Zehntelsekunde nach seiner ``result.json`` — oder gar nicht mehr.
@@ -267,7 +274,7 @@ def _taskkill(process_id: int, *, force: bool) -> None:
             stderr=subprocess.DEVNULL,
             cwd=trusted_cwd(),
             env=trusted_environment(),
-            timeout=PROCESS_STOP_SECONDS,
+            timeout=PROCESS_KILL_SECONDS,
             check=False,
             close_fds=True,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -627,7 +634,7 @@ def terminate_process_tree(
         # Letzter Rückfall für eine Plattform, auf der die Gruppenbeendigung
         # nicht verfügbar war. Der Normalweg oben trifft den ganzen Baum.
         process.kill()
-        process.wait(timeout=grace_seconds)
+        process.wait(timeout=PROCESS_KILL_SECONDS)
 
 
 def _drain(
