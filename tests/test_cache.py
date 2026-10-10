@@ -4345,3 +4345,134 @@ def test_a_moved_body_keeps_its_carried_measures_through_the_disk(tmp_path: Path
     back = restored.objects[0].mesh
     assert features._detection_key(back) == features._detection_key(moved)
     assert back.raw._cache.cache.get(CARRIED_METRICS) == moved.raw._cache.cache.get(CARRIED_METRICS)
+
+
+def test_a_moved_sphere_evaluates_and_reopens_from_the_disk(
+    profile: Profile, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Eine Kugel hat keine Facette; verschoben trägt sie eine leere Facettenliste mit.
+
+    Die Ablage warf daran ``ValueError`` (``reshape(0, -1)``), und ``put`` brach
+    die ganze Auswertung ab, nachdem alles gerechnet war — *Kugel anlegen*, dann
+    *Verschieben* endete mit einem Fehler, das Beispiel *Figur formen* öffnete
+    nicht (H1, Review Paket E). Jetzt rechnet die Auswertung durch, und ein
+    frischer Cache über derselben Platte trifft mit demselben Erkennungsschlüssel.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.geom.transform import CARRIED_METRICS
+    from app.core.perceive import features
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Kugel", [OperationDraft(op="create_sphere", params={})])
+    history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 12.5})],
+    )
+
+    def body(cache: ResultCache) -> SceneObject:
+        result = evaluate(
+            project.document,
+            profile,
+            quality="draft",
+            sources=ProjectSources(project),
+            cache=cache,
+        )
+        assert result.complete
+        return result.scene.objects["obj_1"]
+
+    with caplog.at_level(logging.WARNING, logger="app.core.scene.cache"):
+        first = body(ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path)))
+    assert first.mesh.raw._cache.cache.get("facets") == []
+    assert "facets" in first.mesh.raw._cache.cache.get(CARRIED_METRICS)
+    assert not [record for record in caplog.records if "could not write" in record.getMessage()]
+
+    cold = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path))
+    again = body(cold)
+
+    assert cold.statistics.disk_hits > 0
+    assert repr(again.features) == repr(first.features)
+    assert again.mesh.raw.vertices.tobytes() == first.mesh.raw.vertices.tobytes()
+    assert again.mesh.raw._cache.cache.get("facets") == []
+    assert features._detection_key(again.mesh) == features._detection_key(first.mesh)
+
+
+def test_a_failure_while_storing_never_ends_the_evaluation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Der Cache ist eine Abkürzung: Was beim Ablegen wirft, lässt den Eintrag aus.
+
+    Gegenprobe zu H1 über jeden Fehler, nicht nur den einen bekannten: ``put``
+    und ``save_detection`` geben zurück, der halbe Ordner ist weg, und es steht
+    eine Warnung im Protokoll.
+    """
+    from app.core.perceive.features import StoredDetection
+    from app.core.scene import cache as cache_module
+    from app.core.types import Feature
+
+    def broken(*_args: object) -> None:
+        raise RuntimeError("kaputt")
+
+    monkeypatch.setattr(cache_module, "_carried_to_disk", broken)
+    monkeypatch.setattr(cache_module, "_stored_feature_to_data", broken)
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    feature = make_object("obj_1", triangles=4)
+    hole = Feature(id="hole_1", kind="hole", provenance="detected", params={}, face_indices=(1,))
+
+    with caplog.at_level(logging.WARNING, logger="app.core.scene.cache"):
+        disk.put("broken", CachedResult(objects=(feature,)))
+        disk.save_detection(b"\x03" * 16, StoredDetection({"hole_1": hole}, 0, 0, False))
+
+    assert disk.get("broken") is None
+    assert disk.load_detection(b"\x03" * 16) is None
+    assert not list(tmp_path.rglob("*.json"))
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("could not write cache entry" in message for message in messages)
+    assert any("could not write detection entry" in message for message in messages)
+
+
+def test_carried_measures_of_the_wrong_length_are_dropped(tmp_path: Path) -> None:
+    """Je Name die erwartete Länge, sonst wird der Eintrag verworfen und neu gerechnet.
+
+    Geprüft wurden nur die Normalen; abgeschnittene Flächen, Nachbarpaare oder
+    Facetten kamen ungeprüft an das Netz (G4, Review Paket E).
+    """
+    import io
+
+    import numpy as np
+
+    from app.core.geom.mesh import MeshCodec
+    from app.core.geom.transform import apply
+
+    mesh = _detection_corpus("plate_holes.stl")
+    _ = mesh.raw.face_normals, mesh.raw.area_faces, mesh.raw.facets_area
+    _ = mesh.raw.face_adjacency_angles
+    matrix = np.eye(4)
+    matrix[:3, 3] = (1.0, 2.0, 3.0)
+    moved = apply(mesh, matrix)
+    disk = DiskCache(codec=MeshCodec(), directory=tmp_path)
+    for position, (name, damage) in enumerate(
+        (
+            ("a:area_faces", lambda value: value[:-1]),
+            ("a:face_adjacency_angles", lambda value: value[:-1]),
+            ("a:facets_area", lambda value: value[:-1]),
+            ("d:facets", lambda value: value + 10**9),
+        )
+    ):
+        key = f"entry{position}"
+        disk.put(key, CachedResult(objects=(SceneObject(id="obj_1", name="P", mesh=moved),)))
+        assert disk.get(key) is not None
+        (path,) = (tmp_path / key[:2] / key).glob("*.carried.npz")
+        with np.load(path, allow_pickle=False) as data:
+            arrays = {entry: np.array(data[entry]) for entry in data.files}
+        assert name in arrays
+        arrays[name] = damage(arrays[name])
+        buffer = io.BytesIO()
+        np.savez(buffer, allow_pickle=False, **arrays)
+        path.write_bytes(buffer.getvalue())
+
+        assert disk.get(key) is None, name

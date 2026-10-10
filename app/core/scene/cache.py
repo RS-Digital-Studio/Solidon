@@ -58,6 +58,7 @@ from app.core.types import (
 from app.i18n import TranslatableText
 
 if TYPE_CHECKING:
+    from app.core.geom.mesh import MeshData
     from app.core.perceive.features import StoredDetection
 
 _log = get_logger(__name__)
@@ -1346,19 +1347,25 @@ def _carried_to_disk(folder: Path, position: int, mesh: Mesh) -> dict[str, Any] 
             kinds[name] = "numpy_float"
             arrays[f"a:{name}"] = np.asarray(value)
         elif isinstance(value, list) and all(isinstance(item, np.ndarray) for item in value):
+            ranks = {item.ndim for item in value}
+            if len(ranks) > 1 or 0 in ranks:
+                return None
+            # Die Breite der Formenzeilen steht fest, statt aus der Größe
+            # geschlossen zu werden: Eine leere Liste — die Facetten einer
+            # Kugel, die keine zwei Nachbardreiecke in einer Ebene hat — warf
+            # beim ``reshape(0, -1)`` und brach die ganze Auswertung ab (H1).
+            width = next(iter(ranks)) - 1 if ranks else 0
             kinds[name] = "list"
             arrays[f"o:{name}"] = np.asarray([len(item) for item in value], dtype=np.int64)
             arrays[f"s:{name}"] = np.asarray(
-                [item.shape[1:] for item in value] or [()], dtype=np.int64
-            ).reshape(len(value), -1)
+                [item.shape[1:] for item in value], dtype=np.int64
+            ).reshape(len(value), width)
             arrays[f"d:{name}"] = (
                 np.concatenate([item.reshape(-1) for item in value])
                 if value
                 else np.zeros(0, dtype=np.float64)
             )
-            arrays[f"t:{name}"] = np.asarray(
-                [item.dtype.str for item in value] or ["<f8"], dtype="<U8"
-            )
+            arrays[f"t:{name}"] = np.asarray([item.dtype.str for item in value], dtype="<U8")
         else:
             return None
     file = f"{position}{_CARRIED_SUFFIX}"
@@ -1366,6 +1373,51 @@ def _carried_to_disk(folder: Path, position: int, mesh: Mesh) -> dict[str, Any] 
     np.savez(buffer, allow_pickle=False, **arrays)
     (folder / file).write_bytes(buffer.getvalue())
     return {"file": file, "names": list(names), "kinds": kinds}
+
+
+#: Mitgetragene Maße mit einem Eintrag je Dreieck.
+_CARRIED_PER_FACE: Final = frozenset({"face_normals", "area_faces"})
+
+#: Mitgetragene Maße mit einem Eintrag je Facette; sie sind gleich lang.
+_CARRIED_PER_FACET: Final = frozenset({"facets", "facets_area", "facets_boundary", "facets_normal"})
+
+
+def _check_carried_shapes(values: dict[str, Any], mesh: MeshData) -> None:
+    """Prüft gelesene mitgetragene Maße gegen das Netz, ``ValueError`` bei falscher Form.
+
+    Je Dreieck so lang wie das Netz, je Ecke so lang wie seine Ecken, die
+    Nachbarpaare (``face_adjacency_*``) und die Facettenmaße je unter sich
+    gleich lang, Facetten nur aus Dreiecksnummern des Netzes. Die Paarzahl
+    selbst liest erst ``face_adjacency``, das hier niemand rechnen soll — ein
+    abgeschnittener Eintrag fällt trotzdem auf, weil er die Gruppe trennt.
+    Ohne die Prüfung bekäme die Erkennung falsch lange Felder, statt neu zu
+    rechnen.
+    """
+    import numpy as np
+
+    faces = len(mesh.raw.faces)
+    pairs: set[int] = set()
+    facets: set[int] = set()
+    for name, value in values.items():
+        if name in _CARRIED_PER_FACE:
+            if len(value) != faces:
+                raise ValueError("carried")
+        elif name == "vertex_normals":
+            if len(value) != len(mesh.raw.vertices):
+                raise ValueError("carried")
+        elif name.startswith("face_adjacency_"):
+            pairs.add(len(value))
+        elif name in _CARRIED_PER_FACET:
+            facets.add(len(value))
+    if len(pairs) > 1 or len(facets) > 1:
+        raise ValueError("carried")
+    if values.get("facets"):
+        # Alle Facetten auf einmal; verschieden gestaltete wirft ``concatenate`` selbst.
+        members = np.concatenate(values["facets"])
+        if members.ndim != 1 or members.dtype.kind not in "iu":
+            raise ValueError("carried")
+        if len(members) and (int(members.min()) < 0 or int(members.max()) >= faces):
+            raise ValueError("carried")
 
 
 def _carried_from_disk(folder: Path, record: Any, mesh: Mesh) -> None:
@@ -1419,8 +1471,7 @@ def _carried_from_disk(folder: Path, record: Any, mesh: Mesh) -> None:
                 values[name] = items
             else:
                 raise ValueError("carried")
-    if len(np.asarray(values.get("face_normals", mesh.raw.faces))) != len(mesh.raw.faces):
-        raise ValueError("carried")
+    _check_carried_shapes(values, mesh)
     cache: Any = mesh.raw._cache
     cache.verify()
     cache.update(values)
@@ -1835,7 +1886,13 @@ class DiskCache:
             if not result.reads_quality:
                 payload["reads_quality"] = False
             (folder / "objects.json").write_text(json.dumps(payload), encoding="utf-8")
-        except (OSError, TypeError) as problem:
+        except Exception as problem:
+            # **Ablegen bricht keine Auswertung ab:** Das Ergebnis ist fertig
+            # gerechnet, der Cache nur eine Abkürzung. Eine leere Facettenliste
+            # warf hier ``ValueError`` und nahm jedem verschobenen Körper ohne
+            # ebene Facette sein Ergebnis (H1, Review Paket E); was immer
+            # hier wirft, lässt den Eintrag aus und meldet sich.
+            #
             # ``TypeError`` hatte hier **zwei** Ursachen, und die zweite hat
             # zweimal Tage gekostet, weil sie wie die erste aussah:
             #
@@ -1921,7 +1978,8 @@ class DiskCache:
             spare = folder / f"{_DETECTION_FILE}.{os.getpid()}.{threading.get_ident()}"
             spare.write_text(text, encoding="utf-8")
             spare.replace(folder / _DETECTION_FILE)
-        except (OSError, TypeError, ValueError) as problem:
+        except Exception as problem:
+            # Wie bei :meth:`put`: Ablegen bricht keine Auswertung ab.
             _log.warning("could not write detection entry %s: %s", key.hex(), problem)
             if spare is not None:
                 with suppress(OSError):
