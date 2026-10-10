@@ -26,10 +26,11 @@ import trimesh
 from app.core.errors import ValidationError
 from app.core.geom.intersections import crossing_face_pairs
 from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
-from app.core.geom.mesh_ops import uniform
+from app.core.geom.mesh_ops import edge_lengths, uniform
 from app.core.geom.sculpt import (
     SculptPreview,
     apply_strokes,
+    refine_edge_for,
     stages,
     stroke_at,
     strokes_from_text,
@@ -1963,13 +1964,14 @@ def test_the_brush_version_survives_the_text_and_refuses_the_unknown() -> None:
 def test_a_coarse_mesh_is_refined_for_the_brush_and_then_it_works() -> None:
     """H9 und H2: Am Quader aus zwölf Dreiecken tat ein Zug nichts (bewegt 0 mm,
     ``sculpt.no_effect``). Die Sitzung gleicht auf ``radius / REFINE_TO_EDGE``
-    an; danach trägt derselbe Zug über eine Schichthöhe."""
+    als mittlere Kante an (die längste ist :data:`EVEN_LONGEST`-mal so lang);
+    danach trägt derselbe Zug über eine Schichthöhe."""
     from app.core.geom.sculpt import (
         BRUSH_TO_EDGE,
+        EVEN_LONGEST,
         REFINE_TO_EDGE,
         brush_radius_for,
         median_edge,
-        refine_edge_for,
     )
     from app.core.knowledge import profiles
 
@@ -1977,7 +1979,7 @@ def test_a_coarse_mesh_is_refined_for_the_brush_and_then_it_works() -> None:
     radius = brush_radius_for(box)
     assert radius == 2.0, "ein Zwanzigstel von 51 mm, auf 1-2-5 gerundet"
     edge = refine_edge_for(box, radius, finest=0.05)
-    assert edge == pytest.approx(radius / REFINE_TO_EDGE)
+    assert edge == pytest.approx(radius / REFINE_TO_EDGE * EVEN_LONGEST)
     fine = uniform(box, edge, 0.0)
     assert median_edge(fine) * BRUSH_TO_EDGE <= radius
     assert refine_edge_for(fine, radius, finest=0.05) == 0.0, "fein genug, kein zweites Mal"
@@ -1992,18 +1994,62 @@ def test_a_coarse_mesh_is_refined_for_the_brush_and_then_it_works() -> None:
     assert np.allclose(coarse.raw.vertices, box.raw.vertices), "Gegenprobe: ohne Angleichen nichts"
 
 
-def test_refining_stays_within_its_triangle_budget() -> None:
+def _sculpt_bodies() -> dict[str, MeshData]:
+    """Die Körper aus Review F: Quader, Kugel, Zylinder mit Fächerdeckeln, großer Quader."""
+    return {
+        "box": MeshData.of(trimesh.creation.box(extents=(100.0, 80.0, 60.0))),
+        "ball": MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=40.0)),
+        "cylinder": MeshData.of(trimesh.creation.cylinder(radius=30.0, height=80.0, sections=64)),
+        "big_box": MeshData.of(trimesh.creation.box(extents=(200.0, 200.0, 200.0))),
+    }
+
+
+@pytest.mark.parametrize("name", ["box", "ball", "cylinder", "big_box"])
+def test_refining_stays_within_its_triangle_budget(name: str) -> None:
     """Ein kleiner Pinsel auf einem großen Körper würde Millionen Dreiecke
-    verlangen; die Kante hält :data:`REFINE_MAX_TRIANGLES` ein."""
-    import math
+    verlangen; das angeglichene Netz hält :data:`REFINE_MAX_TRIANGLES` ein.
 
-    from app.core.geom.sculpt import REFINE_MAX_TRIANGLES, REFINE_TO_EDGE, refine_edge_for
+    Gezählt am Netz, das herauskommt, nicht an der Formel (Review F, H1): Seit
+    *Dreiecke angleichen* keine Kante über der verlangten stehen lässt, teilt es
+    die Diagonalen, und die Formel für gleichseitige Dreiecke blieb grün, während
+    das Netz beim kleinsten Pinsel das 1,87- bis 2,03-Fache der Grenze trug.
+    """
+    from app.core.geom.sculpt import EVEN_LONGEST, REFINE_MAX_TRIANGLES, REFINE_TO_EDGE
 
-    big = MeshData.of(trimesh.creation.box(extents=(200, 200, 200)))
-    edge = refine_edge_for(big, 0.5, finest=0.05)
-    estimate = float(big.raw.area) / (math.sqrt(3.0) / 4.0 * edge * edge)
-    assert estimate <= REFINE_MAX_TRIANGLES * 1.0001
-    assert edge > 0.5 / REFINE_TO_EDGE
+    body = _sculpt_bodies()[name]
+    radius = 0.5 if name == "big_box" else 1.0
+    edge = refine_edge_for(body, radius, finest=0.05)
+    assert edge > radius / REFINE_TO_EDGE * EVEN_LONGEST, "die Grenze greift, nicht der Pinsel"
+
+    evened = uniform(body, edge, 0.0)
+
+    assert evened.triangle_count <= REFINE_MAX_TRIANGLES
+    assert evened.triangle_count > REFINE_MAX_TRIANGLES / 2, "und verschenkt nicht die Hälfte"
+
+
+def test_refining_for_a_brush_is_no_denser_than_before_the_edge_promise() -> None:
+    """Review F, H1: Ein Pinsel unterhalb der Grenze bekommt so viele Dreiecke wie bis v0.5.3.
+
+    Bis RM-671 hielt *Dreiecke angleichen* die verlangte Kante als mittlere,
+    Diagonalen blieben länger; seitdem ist sie die längste, und dieselbe Kante
+    gab doppelt so viele Dreiecke (Platte 40 × 40 × 20 auf 1 mm: 15 644 → 30 052)
+    — jeder Zug danach rechnete am doppelten Netz. Die Sitzung verlangt die
+    Kante deshalb um :data:`~app.core.geom.sculpt.EVEN_LONGEST` länger. Soll ist
+    die Zählung eines Durchgangs auf der mittleren Kante, die das Netz bis
+    v0.5.3 traf (0,96-fach am Quader, Review F).
+    """
+    from app.core.geom.mesh_ops import estimated_triangles
+    from app.core.geom.sculpt import BRUSH_TO_EDGE, REFINE_TO_EDGE, median_edge
+
+    plate = MeshData.of(trimesh.creation.box(extents=(40.0, 40.0, 20.0)))
+    radius = 6.0
+    edge = refine_edge_for(plate, radius, finest=0.05)
+
+    evened = uniform(plate, edge, 0.0)
+
+    assert evened.triangle_count <= estimated_triangles(plate, radius / REFINE_TO_EDGE)
+    assert median_edge(evened) * BRUSH_TO_EDGE <= radius, "fein genug für den Pinsel"
+    assert float(edge_lengths(evened).max()) <= edge * (1.0 + 1e-9)
 
 
 def test_the_starting_radius_follows_the_body() -> None:

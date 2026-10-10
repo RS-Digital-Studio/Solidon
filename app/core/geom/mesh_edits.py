@@ -558,13 +558,27 @@ def _level_with(
     Eine Vorprüfung für ``flat`` in :func:`collapse_short`, ohne Ring: ``d`` ist
     ein Nachbar von ``v``, das Dreieck von ``g`` liegt im Ring um ``v``. Liegt
     eines davon schief, scheitert die volle Prüfung in :func:`_keeps_its_faces`
-    ohnehin; dieselben Rechenschritte, also dieselbe Antwort.
+    ohnehin — beide fragen :func:`_in_plane` und :func:`_facing_along`.
     """
     normal = _unit_normals(surface, h // 3)
     offset = surface.vertices[d] - surface.vertices[surface.faces.reshape(-1)[h]]
-    level = np.abs(row_dots(offset, normal)) <= flat
-    level &= row_dots(normal, normal) > 0.0
-    return np.asarray(level & (row_dots(_unit_normals(surface, g // 3), normal) > 0.0))
+    level = _in_plane(offset, normal, flat) & _facing_along(normal, normal)
+    return np.asarray(level & _facing_along(_unit_normals(surface, g // 3), normal))
+
+
+def _in_plane(offset: np.ndarray, normal: np.ndarray, flat: float) -> np.ndarray:
+    """Ob ``offset`` höchstens ``flat`` aus der Ebene mit der Einheitsnormale ``normal`` ragt.
+
+    Die Ebenenfrage beim Zusammenlegen, an einer Ecke (:func:`_level_with`) wie
+    am ganzen Ring (:func:`_keeps_its_faces`, ``normal[:, None, :]``): eine
+    Rechnung, damit die Vorprüfung nie anders antwortet als die volle (Review F).
+    """
+    return np.asarray(np.abs(row_dots(offset, normal)) <= flat)
+
+
+def _facing_along(normals: np.ndarray, normal: np.ndarray) -> np.ndarray:
+    """Ob ``normals`` zur selben Seite zeigen wie ``normal`` — ohne Fläche zeigt keine dorthin."""
+    return np.asarray(row_dots(normals, normal) > 0.0)
 
 
 def _link_holds(surface: Surface, ring_v: np.ndarray, ring_w: np.ndarray) -> np.ndarray:
@@ -646,16 +660,11 @@ def _keeps_its_faces(
         normal = _unit_normals(surface, h // 3)
         others = flat_faces[_next(np.maximum(ring_v, 0))]
         offset = surface.vertices[others] - surface.vertices[v][:, None, :]
-        apart = np.abs(
-            offset[..., 0] * normal[:, None, 0]
-            + offset[..., 1] * normal[:, None, 1]
-            + offset[..., 2] * normal[:, None, 2]
-        )
-        level = np.where(filled, apart <= flat, True).all(axis=1)
-        level &= row_dots(normal, normal) > 0.0
+        level = np.where(filled, _in_plane(offset, normal[:, None, :], flat), True).all(axis=1)
+        level &= _facing_along(normal, normal)
         # Und jedes Dreieck des Rings zeigt dieselbe Seite — auch die zwei, die wegfallen.
         every = np.broadcast_to(np.arange(rows)[:, None], ring_v.shape)[filled]
-        aligned = row_dots(_unit_normals(surface, faces[filled]), normal[every]) > 0.0
+        aligned = _facing_along(_unit_normals(surface, faces[filled]), normal[every])
         np.logical_and.at(level, every, aligned)
         good_flat = level
     else:
@@ -739,13 +748,30 @@ def _coplanar(
     """
     first = np.cross(at_b - at_a, at_c - at_a)
     second = np.cross(at_a - at_b, at_d - at_b)
+    return _level_pair(at_a, at_c, at_d, first, second, flat), first
+
+
+def _level_pair(
+    at_a: np.ndarray,
+    at_c: np.ndarray,
+    at_d: np.ndarray,
+    first: np.ndarray,
+    second: np.ndarray,
+    flat: float,
+) -> np.ndarray:
+    """:func:`_coplanar` mit den Normalen ``first`` von (a, b, c) und ``second`` von (b, a, d).
+
+    Ungekürzt, wie ``np.cross`` sie gibt. Eine Rechnung für den Tausch und für
+    :func:`plane_measures`, das die Normale je Dreieck einmal rechnet: Was eine
+    Ebene ist, entscheidet hier, nicht an zwei Stellen (Review F).
+    """
     tolerance = flat * flat
     beside = row_dots(at_d - at_a, first)
     level = beside * beside <= tolerance * row_dots(first, first)
     beside = row_dots(at_c - at_a, second)
     level &= beside * beside <= tolerance * row_dots(second, second)
     level &= row_dots(first, second) > 0.0
-    return np.asarray(level), first
+    return np.asarray(level)
 
 
 def plane_measures(
@@ -755,7 +781,7 @@ def plane_measures(
 
     Eine Ebene sind die Dreiecke, die über Kanten zusammenhängen und auf
     ``flat`` genau in einer Ebene liegen — dieselbe Frage wie vor einem Tausch
-    (:func:`_coplanar`), nur mit der Normale jedes Dreiecks einmal gerechnet.
+    (:func:`_level_pair`), nur mit der Normale jedes Dreiecks einmal gerechnet.
     Ihre Breite ist zweimal ihre Fläche durch ihren Umfang: Ein Streifen der
     Breite ``b`` hat die Breite ``b``, eine Kreisscheibe ihren Radius. Eine
     Kante mit mehr oder weniger als zwei Dreiecken trennt.
@@ -783,14 +809,8 @@ def plane_measures(
         points[corners[:, 1]] - points[corners[:, 0]], points[corners[:, 2]] - points[corners[:, 0]]
     )
     squared = row_dots(normals, normals)
-    tolerance = flat * flat
     inner = (tails[other] == heads[one]) & (heads[other] == a) & (c != d)
-    at_a, along_first, along_second = points[a], normals[first], normals[second]
-    beside = row_dots(points[d] - at_a, along_first)
-    inner &= beside * beside <= tolerance * squared[first]
-    beside = row_dots(points[c] - at_a, along_second)
-    inner &= beside * beside <= tolerance * squared[second]
-    inner &= row_dots(along_first, along_second) > 0.0
+    inner &= _level_pair(points[a], points[c], points[d], normals[first], normals[second], flat)
     joined_one, joined_other = one[inner], other[inner]
     graph = coo_matrix(
         (np.ones(len(joined_one)), (joined_one // 3, joined_other // 3)), shape=(count, count)

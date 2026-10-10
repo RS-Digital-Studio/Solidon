@@ -221,6 +221,150 @@ def test_an_edge_length_that_cannot_be_reached_says_which_one_can(profile: Profi
     assert float(raised.value.values["reachable"]) > 0.05
 
 
+def test_the_count_ahead_of_evening_is_the_count_that_comes_out(profile: Profile) -> None:
+    """Review F, H1: Die Zahl vorab ist die Zahl danach — im Dialog und vor der Decke.
+
+    Seit *Dreiecke angleichen* keine Kante über der verlangten stehen lässt
+    (RM-671), teilt es auch die Diagonalen, die der Kern im Inneren eines
+    Dreiecks zieht, wie *Kanten verfeinern*. Gezählt wurde vorab weiter ein
+    Durchgang: am Quader 100 × 80 × 60 auf 1 mm 90 113 vorab und 161 644
+    danach. Der Dialog zeigte eine 1,8-fach zu kleine Zahl, und die Decke hielt
+    nur die Schätzung. Jetzt zählt es wie *Kanten verfeinern*, und die Zählung
+    trifft wie dort das 0,73- bis 1,10-Fache
+    (:func:`~app.core.geom.mesh_ops.estimated_triangles`).
+    """
+    box = MeshData.of(trimesh.creation.box(extents=(100.0, 80.0, 60.0)))
+    spec = REGISTRY.get("remesh_uniform")
+    assert spec.expected_triangles is not None
+    ahead = spec.expected_triangles(box, spec.params(edge=1.0))
+
+    after = run("remesh_uniform", object_of(box), profile, edge=1.0).outputs[0].mesh
+
+    assert 0.8 < after.triangle_count / ahead.triangles < 1.25
+
+
+def test_the_ceiling_of_evening_holds_for_the_result_not_only_for_the_estimate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review F, H1: Die Schätzung darf sich irren, die Decke nicht — wie bei *Kanten verfeinern*.
+
+    Gezählt wird nach dem Teilen in der Ebene, bevor das Netz verschweißt wird
+    (``test_missing_ops.py::test_the_ceiling_holds_for_the_result_not_only_for_the_estimate``).
+    """
+    monkeypatch.setattr(mesh_ops, "estimated_triangles", lambda mesh, edge, **_: 0)
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 20_000)
+    plate = corpus("plate_holes.stl")
+
+    with pytest.raises(ValidationError) as raised:
+        mesh_ops.uniform(plate, 1.5, 0.0)
+
+    assert raised.value.values["triangles"] > 20_000
+    assert raised.value.values["reachable"] > 1.5
+    assert raised.value.suggestions
+
+
+def test_evening_a_cad_cylinder_does_not_tidy_strips_and_needle_fans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review F, M2: Am ersten angeschlossenen Stand hing das Angleichen an CAD-Netzen.
+
+    Ein Zylinder aus 1 500 Abschnitten trägt, was ein CAD-Besenhalter trägt:
+    Mantelstreifen von 0,07 mm Breite und Deckel als Nadelfächer. Nach dem
+    Teilen auf 1 mm ist fast jedes Dreieck spitz, und in solchen Ebenen bleibt
+    es spitz, wie man es auch legt (``mesh_ops.EVEN_NARROW``,
+    ``EVEN_FINEST``). Aufgeräumt wurde trotzdem: 1 263 642 aktive Dreiecke an
+    ``surface_of``, 27 Runden Tauschen und alle 64 Runden Zusammenlegen, 202 s
+    unter Last statt 0,7 s. Gezählt wird die Arbeit, nicht die Zeit, damit der
+    Test unter Last nicht wackelt.
+    """
+    from app.core.geom import mesh_edits
+
+    body = MeshData.of(trimesh.creation.cylinder(radius=17.5, height=60.0, sections=1500))
+    active: list[int] = []
+    original = mesh_edits.surface_of
+
+    def counted(
+        vertices: np.ndarray, faces: np.ndarray, wanted: np.ndarray | None = None
+    ) -> object:
+        active.append(len(faces) if wanted is None else int(np.count_nonzero(wanted)))
+        return original(vertices, faces, wanted)
+
+    monkeypatch.setattr(mesh_edits, "surface_of", counted)
+
+    after = mesh_ops.uniform(body, 1.0, 0.0)
+
+    assert sum(active) <= after.triangle_count // 10, f"aufgeräumt an {sum(active)} Dreiecken"
+    assert float(mesh_ops.edge_lengths(after).max()) <= 1.0
+    assert after.volume == pytest.approx(body.volume, rel=1e-12)
+    assert after.is_watertight
+
+
+def test_a_plane_for_tidying_up_is_what_a_flip_calls_one_plane() -> None:
+    """Review F, G1: ``plane_measures`` misst die Ebenen, die ``_coplanar`` Kante um Kante bildet.
+
+    Das Angleichen räumt nur in breiten Ebenen auf, und was eine Ebene ist,
+    fragte ``plane_measures`` neben ``_coplanar`` noch einmal selbst. Hier
+    entstehen die Ebenen aus den Antworten von ``_coplanar`` an jeder inneren
+    Kante eines Gitters, dessen Ecken teils knapp unter, teils über
+    ``EPS_GEOM`` angehoben sind; Breite (zweimal Fläche durch Rand) und
+    mittlere Fläche rechnet der Test selbst.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    from app.core.geom import mesh_edits
+
+    side = 8
+    rng = np.random.default_rng(671)
+    x, y = np.meshgrid(np.arange(side, dtype=float), np.arange(side, dtype=float), indexing="ij")
+    lift = rng.choice([0.0, 0.0, 0.4 * EPS_GEOM, 3.0 * EPS_GEOM, 0.3], size=x.shape)
+    vertices = np.column_stack((x.reshape(-1), y.reshape(-1), lift.reshape(-1)))
+    faces = []
+    for i in range(side - 1):
+        for j in range(side - 1):
+            a, b, c, d = i * side + j, (i + 1) * side + j, (i + 1) * side + j + 1, i * side + j + 1
+            faces += [(a, b, c), (a, c, d)]
+    faces_array = np.asarray(faces, dtype=np.int64)
+
+    halves: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for face, corners in enumerate(faces):
+        for k in range(3):
+            tail, head = corners[k], corners[(k + 1) % 3]
+            halves.setdefault((min(tail, head), max(tail, head)), []).append((face, k))
+    joined, rim = [], []
+    for pair in halves.values():
+        if len(pair) != 2:
+            rim += pair
+            continue
+        (one, k), (other, m) = pair
+        a, b, c = (faces[one][(k + step) % 3] for step in range(3))
+        d = faces[other][(m + 2) % 3]
+        level, _normal = mesh_edits._coplanar(
+            vertices[[a]], vertices[[b]], vertices[[c]], vertices[[d]], EPS_GEOM
+        )
+        if level[0]:
+            joined.append((one, other))
+        else:
+            rim += pair
+    assert joined and len(joined) < len(halves), "Ebenen und Knicke, sonst prüft es nichts"
+    first, second = (np.asarray(side_of, dtype=np.int64) for side_of in zip(*joined, strict=True))
+    graph = coo_matrix((np.ones(len(first)), (first, second)), shape=(len(faces), len(faces)))
+    _count, labels = connected_components(graph, directed=False)
+    corners = vertices[faces_array]
+    cross = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    area = np.sqrt((cross * cross).sum(axis=1)) / 2.0
+    around = np.zeros(len(faces))
+    for face, k in rim:
+        tail, head = faces[face][k], faces[face][(k + 1) % 3]
+        around[labels[face]] += float(np.linalg.norm(vertices[head] - vertices[tail]))
+    total = np.bincount(labels, weights=area)
+
+    breadth, mean = mesh_edits.plane_measures(vertices, faces_array, EPS_GEOM)
+
+    assert breadth == pytest.approx(2.0 * total[labels] / around[labels], rel=1e-12)
+    assert mean == pytest.approx(total[labels] / np.bincount(labels)[labels], rel=1e-12)
+
+
 @pytest.mark.parametrize("way", ["remesh_mesh", "refined"])
 def test_a_refined_body_goes_through_the_layer_analysis(way: str, profile: Profile) -> None:
     """Nach *Kanten verfeinern* rechnet die Schichtanalyse des Prüfberichts weiter.

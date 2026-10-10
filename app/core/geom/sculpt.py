@@ -1140,6 +1140,24 @@ RADIUS_SHARE: Final = 1.0 / 20.0
 #: rechnet und dann keinen Speicher mehr hat.
 REFINE_MAX_TRIANGLES: Final = 600_000
 
+#: Wie viel länger die längste Kante nach *Dreiecke angleichen* ist als die
+#: mittlere (Review F zu RM-671). Seit das Angleichen keine Kante über der
+#: verlangten stehen lässt, teilt es die Diagonale jedes Gitterquadrats, das der
+#: Kern zieht: Die Seiten behalten die verlangte Länge, die halben Diagonalen
+#: haben 1/√2 davon und sind die Mehrheit. Mit der Kante als längster trug das
+#: Netz doppelt so viele Dreiecke wie bis v0.5.3 (Platte 40 x 40 x 20 auf 1 mm:
+#: 15 644 → 30 052), und jeder Zug rechnete daran. Die Sitzung verlangt deshalb
+#: das √2-Fache ihrer mittleren Kante als längste.
+EVEN_LONGEST: Final = math.sqrt(2.0)
+
+#: Wie viel Luft die Kante des Angleichens unter :data:`REFINE_MAX_TRIANGLES`
+#: lässt. Die Zählung trifft das Netz nur auf etwa ein Zehntel: Der Kern teilt
+#: jede Kante in ganze Stücke, und am Quader 200 x 200 x 200 gab eine um ein
+#: halbes Prozent längere Kante neun Prozent mehr Dreiecke (583 404 → 636 168,
+#: Review F). Gemessen wird am Netz, nicht an der Zählung
+#: (``test_sculpt.py::test_refining_stays_within_its_triangle_budget``).
+REFINE_RESERVE: Final = 1.1
+
 
 def brush_radius_for(mesh: MeshData) -> float:
     """Der Pinselradius, mit dem eine Sitzung an diesem Körper beginnt (H8).
@@ -1162,23 +1180,49 @@ def brush_radius_for(mesh: MeshData) -> float:
 def refine_edge_for(
     mesh: MeshData, radius: float, finest: float, edge: float | None = None
 ) -> float:
-    """Auf welche Kantenlänge die Sitzung das Netz für diesen Pinsel angleicht —
+    """Auf welche längste Kante die Sitzung das Netz für diesen Pinsel angleicht —
     oder null, wenn es fein genug ist (H2, H9).
 
-    Zu grob heißt: weniger als :data:`BRUSH_TO_EDGE` Kanten je Radius. Dann
-    :data:`REFINE_TO_EDGE` Kanten je Radius, nicht feiner als ``finest`` (die
-    Untergrenze von *Dreiecke angleichen*) und nicht feiner, als
-    :data:`REFINE_MAX_TRIANGLES` zulassen. ``edge`` ist die mittlere
-    Kantenlänge, wenn sie schon bekannt ist.
+    Zu grob heißt: weniger als :data:`BRUSH_TO_EDGE` mittlere Kanten je Radius.
+    Dann :data:`REFINE_TO_EDGE` mittlere Kanten je Radius, die längste
+    :data:`EVEN_LONGEST`-mal so lang, nicht kürzer als ``finest`` (die
+    Untergrenze von *Dreiecke angleichen*) und nicht kürzer, als
+    :data:`REFINE_MAX_TRIANGLES` zulassen (:func:`_longest_within_budget`).
+    ``edge`` ist die mittlere Kantenlänge, wenn sie schon bekannt ist.
     """
     current = median_edge(mesh) if edge is None else edge
     if current * BRUSH_TO_EDGE <= radius:
         return 0.0
-    area = float(mesh.raw.area)
-    # Ein gleichseitiges Dreieck mit Kante e hat die Fläche √3/4·e².
-    largest = math.sqrt(max(area, 0.0) / (math.sqrt(3.0) / 4.0 * REFINE_MAX_TRIANGLES))
-    wanted = max(finest, radius / REFINE_TO_EDGE, largest)
-    return wanted if wanted < current else 0.0
+    wanted = max(finest, radius / REFINE_TO_EDGE * EVEN_LONGEST, _longest_within_budget(mesh))
+    return wanted if wanted / EVEN_LONGEST < current else 0.0
+
+
+def _longest_within_budget(mesh: MeshData) -> float:
+    """Die kürzeste längste Kante, bei der das Angleichen unter :data:`REFINE_MAX_TRIANGLES` bleibt.
+
+    Gezählt wie *Dreiecke angleichen* vorab zählt
+    (``mesh_ops.estimated_triangles`` mit ``until_short``): die doppelte Fläche
+    in gleichseitigen Dreiecken, dazu je Kante ihre Stücke. Statt aufzurunden
+    zählt jede Kante ein Stück mehr — eine obere Schranke, die ohne die
+    eindeutigen Kanten auskommt: Aus den Halbkanten eines geschlossenen Netzes
+    ist ``Σ (l / e + 1)`` über die Kanten ``H / e + 3F / 2`` mit der Summe ``H``
+    aller Halbkantenlängen. Das sind Fläche und eine Summe über die Dreiecke;
+    die eindeutigen Kanten kosteten an 1,3 Mio. Dreiecken 0,7 s im Fensterfaden.
+    Die Schranke ``2A / (√3/4 · e²) + H / e + F`` gleich der Grenze gesetzt ist
+    eine quadratische Gleichung in ``1 / e``. Ohne die Kanten lag ein Zylinder
+    mit Fächerdeckeln 7 % über der Grenze (Review F). Gleich gesetzt wird mit
+    der Grenze unter :data:`REFINE_RESERVE` Luft.
+    """
+    corners = np.asarray(mesh.raw.triangles, dtype=np.float64)
+    sides = np.roll(corners, -1, axis=1) - corners
+    squared = sides * sides
+    halves = float(np.sqrt(squared[..., 0] + squared[..., 1] + squared[..., 2]).sum())
+    doubled = 2.0 * float(mesh.raw.area) / (math.sqrt(3.0) / 4.0)
+    room = REFINE_MAX_TRIANGLES / REFINE_RESERVE - mesh.triangle_count
+    if doubled <= 0.0 or room <= 0:
+        return math.inf
+    inverse = (math.sqrt(halves * halves + 4.0 * doubled * room) - halves) / (2.0 * doubled)
+    return 1.0 / inverse
 
 
 def stroke_at(

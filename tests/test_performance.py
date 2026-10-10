@@ -1509,6 +1509,33 @@ def test_evening_out_a_mesh_stays_under_three_seconds() -> None:
     assert taken < 3.0
 
 
+def test_evening_out_flat_faces_holds_the_edge_under_three_seconds() -> None:
+    """§31 (neu, Review F): dasselbe Budget für den Fall, in dem die Kantenzusage kostet.
+
+    An der Kugel darüber teilt der Kern jedes Dreieck gleichseitig, auch bei
+    krummem Verhältnis (auf ein 2,3-tel der Kante: kein Dreieck mit zu langer
+    Seite), und das Tauschen und Teilen in der Ebene hat nichts zu tun. An
+    ebenen Flächen zieht der Kern in jedem Gitterquadrat eine Diagonale über
+    der verlangten Länge: am Quader 100 × 80 × 60 auf 0,5 mm 328 824 von
+    341 456 Dreiecken, die ``flip_long`` und ``split_long`` bearbeiten
+    (638 768 danach). Bis RM-671 blieben diese Diagonalen stehen.
+    """
+    import trimesh
+
+    from app.core.geom.mesh_ops import edge_lengths, uniform
+
+    box = MeshData.of(trimesh.creation.box(extents=(100.0, 80.0, 60.0)))
+    evened: list[MeshData] = []
+
+    def verify() -> None:
+        assert float(edge_lengths(evened[0]).max()) <= 0.5 * (1.0 + 1e-9)
+
+    taken = measure(
+        "remesh_uniform_flat", lambda: evened.append(uniform(box, 0.5, 0.0)), verify=verify
+    )
+    assert taken < 3.0
+
+
 def test_blending_two_bodies_stays_under_three_seconds() -> None:
     """§31 (neu): das weiche Verschmelzen auf einem Raster in Arbeitsgröße.
 

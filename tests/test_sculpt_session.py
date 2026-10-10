@@ -123,7 +123,7 @@ def test_a_coarse_body_is_refined_and_sculpted_in_one_transaction(
     Formen als eine Transaktion ab — ohne Knopf, ohne eigenen Verlaufsschritt."""
     import numpy as np
 
-    from app.core.geom.sculpt import REFINE_TO_EDGE, brush_radius_for
+    from app.core.geom.sculpt import EVEN_LONGEST, REFINE_TO_EDGE, brush_radius_for
 
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
@@ -147,7 +147,8 @@ def test_a_coarse_body_is_refined_and_sculpted_in_one_transaction(
 
     ops = window.session.project.document.ops
     assert [entry.op for entry in ops[before:]] == ["remesh_uniform", "sculpt_strokes"]
-    assert ops[before].params["edge"] == pytest.approx(radius / REFINE_TO_EDGE)
+    # Die längste Kante: REFINE_TO_EDGE mittlere je Radius, die längste √2-mal so lang (Review F).
+    assert ops[before].params["edge"] == pytest.approx(radius / REFINE_TO_EDGE * EVEN_LONGEST)
     assert len(window.session.project.document.transactions) == transactions + 1
     after = window.session.last_result.scene.objects[object_id].mesh
     assert float(np.asarray(after.raw.bounds)[1][2]) > float(crown[2]) + 0.1, "der Zug trägt"
