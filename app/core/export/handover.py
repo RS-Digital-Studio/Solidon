@@ -997,6 +997,8 @@ def as_mapping(
     for entry in slicer_keys.TABLES[flavour]:
         if paths is not None and entry.path not in paths:
             continue
+        if entry.path in slicer_keys.MAKER_OWNED and entry.path not in settings.explicit:
+            continue
         if entry.path == "adhesion.raft_gap" and not raft_gap_active(
             settings, flavour, also=native_adhesion_kinds
         ):
@@ -1347,22 +1349,35 @@ def object_keys(
     if native is not None:
         written.update(_speed_roles(native, written, flavour, program=program))
         written.update(_acceleration_roles(native, written, flavour, applied))
+        if flavour == "orca":
+            written.update(tree_over_hybrid(native, applied.support.style, written))
         if flavour == "orca" and profile is not None and "enable_support" in written:
             # Schaltet erst das Teil Stützen ein, prüft der Slicer seine Bäume
             # mit den Werten der Platte (:func:`organic_tree_fitted`).
             written.update(
                 organic_tree_fitted({**native, **written}, profile.printer.nozzle_diameter)
             )
+    foot = brim_foot_offset
+    if (
+        flavour == "orca"
+        and foot is not None
+        and not is_zero(foot)
+        and "elefant_foot_compensation" in written
+    ):
+        # Die Orca-Familie misst den Brim vom unkorrigierten Umriss (RM-318).
+        # Zieht dieses Teil die erste Schicht nicht mehr ein, weil sein Modell
+        # es tut (RM-589), bleibt der Abstand am Fuß nur mit eigenem Wert.
+        foot = float(written["elefant_foot_compensation"])
+        if "brim" in print_settings.adhesion_kinds(applied.adhesion.kind):
+            written["brim_object_gap"] = ""
     if flavour == "orca" and "brim_object_gap" in written:
         requested = any(entry.path == "adhesion.brim_gap" for entry in advice)
         if "brim" not in print_settings.adhesion_kinds(applied.adhesion.kind) or (
-            brim_foot_offset is None and not requested
+            foot is None and not requested
         ):
             written.pop("brim_object_gap")
         else:
-            written.update(
-                manufacturer.part_brim_gap(applied.adhesion.brim_gap, brim_foot_offset, program)
-            )
+            written.update(manufacturer.part_brim_gap(applied.adhesion.brim_gap, foot, program))
     return _with_automatic_prusa_support(written) if flavour == "prusa" else written
 
 
@@ -1518,6 +1533,9 @@ CURA_PER_MESH: Final = frozenset(
         "speed_wall_0",
         "acceleration_wall_0",
         "scarf_joint_seam_length",
+        # Was das Modell schon ausgleicht, gleicht das Netz nicht noch einmal aus (RM-589).
+        "hole_xy_offset",
+        "xy_offset_layer_0",
     }
 )
 
@@ -1652,6 +1670,23 @@ def asked_for_contact(
     return separate, asking
 
 
+def style_per_part(flavour: SlicerFlavour | None, program: str = "") -> bool:
+    """Bekommt jedes Teil seine eigene Stützart, samt Art (RM-584)?
+
+    In der Orca-Familie und bei PrusaSlicer ja, wo das Programm sie je Objekt
+    liest (:func:`_part_paths`). Cura schaltet Stützen je Netz, die Art gilt der
+    Platte (:func:`cura_takes_whole`). Wo sie je Teil geht, führt der
+    Druckdialog Gitter und Baum zweier Körper nicht zu Hybrid zusammen: Die
+    Datei bekäme dafür je Teil Gitter und Baum, und die Zeile zeigte, was nicht
+    gedruckt wird.
+    """
+    if flavour is None:
+        return False
+    if flavour == "cura" and not cura_takes_whole("support.style"):
+        return False
+    return "support.style" in _part_paths(flavour, program)
+
+
 def cura_takes_whole(path: str) -> bool:
     """Ob CuraEngine jeden Schlüssel dieses Pfads je Netz annimmt.
 
@@ -1782,7 +1817,9 @@ def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintS
     changed = settings
     for entry in advice:
         changed = with_path(changed, entry.path, entry.value)
-    return changed
+    # Der Rat dieses Teils ist für das Teil übernommen; so schreibt
+    # :func:`as_mapping` auch, was es sonst dem Slicer lässt (RM-589).
+    return replace(changed, accepted=changed.accepted | {entry.path for entry in advice})
 
 
 def _only_chosen_adhesion(
@@ -2032,7 +2069,7 @@ def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Pro
     tree = settings.support.style == "tree"
     if width:
         # Curas Formel: Der Baum trägt keine Füllung, nur seine Wand
-        # (``support_infill_rate`` 0 beim Baum, ``support_wall_count`` 1).
+        # (``support_infill_rate`` 0 beim Baum, ``support_wall_count``).
         distance = width / density if density > 0.0 and not tree else 0.0
         written["support_line_distance"] = f"{distance:g}"
         # Auf den eben gerechneten Abstand, nicht noch einmal auf die Breite:
@@ -2056,7 +2093,8 @@ def _for_supports(written: dict[str, str], settings: PrintSettings, profile: Pro
         # Die Stütze wächst um eine Bahnbreite plus Curas festen Zuschlag —
         # beim Baum um nichts.
         written["support_offset"] = "0" if tree else f"{width + _SUPPORT_GROWTH:g}"
-        written["support_wall_count"] = "1" if tree else "0"
+        # Beim Baum die Wände der Stämme (RM-584), normale Stütze ohne Wand.
+        written["support_wall_count"] = str(settings.support.tree_walls) if tree else "0"
     # Krümel unter 2 mm² bekommen keine eigene Stütze (Creality in Cura).
     written["minimum_support_area"] = f"{_MINIMUM_SUPPORT_AREA:g}"
 
@@ -2296,15 +2334,69 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
         "nozzle_diameter": f"{printer.nozzle_diameter:g}",
         "bed_shape": corners,
         "max_print_height": f"{height:g}",
-        # **Die Grenzen der Maschine kennt Solidon nicht** (RM-191). Mit der
-        # Vorgabe ``time_estimate_only`` schätzte PrusaSlicer mit seinen
-        # eingebauten 1500 mm/s² — ein Fünftel der Beschleunigung, die die
-        # Datei selbst anfordert —, und die Druckzeit stand doppelt so hoch
-        # wie bei Orca für dieselbe Platte. ``ignore`` schreibt keine Grenzen
-        # in den G-Code (die Firmware behält ihre) und schätzt mit den
-        # Werten, die Solidon verlangt.
-        "machine_limits_usage": "ignore",
     }
+
+
+#: Was PrusaSlicer ohne Drucker seines Bündels aus seinen eingebauten Vorgaben
+#: nähme, obwohl Prusas eigener Bestand es in jedem Prozess anders setzt
+#: (``[print:*common*]`` in ``PrusaResearch.ini``, 2.9). ``extra_perimeters``
+#: legt an schrägen Flächen Wände über Solidons Wandzahl hinaus, die die
+#: Orca-Familie nicht kennt; ``solid_infill_below_area`` füllt jede Fläche
+#: unter 70 mm² voll (RM-191).
+PRUSA_WITHOUT_BUNDLE: Final[Mapping[str, str]] = {
+    "extra_perimeters": "0",
+    "solid_infill_below_area": "0",
+}
+
+#: Die Beschleunigungen, die Solidons Satz bei PrusaSlicer anfordern kann.
+_PRUSA_ACCELERATIONS: Final = (
+    "default_acceleration",
+    "first_layer_acceleration",
+    "travel_acceleration",
+    *slicer_keys.ACCELERATION_ROLES["prusa"],
+)
+
+
+def _prusa_time_estimate(written: Mapping[str, str]) -> dict[str, str]:
+    """Damit PrusaSlicer ohne Bündel die Zeit schätzt, die die Datei fordert (RM-191).
+
+    Die Grenzen der Maschine kennt Solidon nicht, und in die Druckdatei gehen
+    keine (``time_estimate_only``: die Firmware behält ihre). Seine
+    Zeitrechnung aber nimmt sie: Mit ``ignore`` die eingebauten 1500 mm/s²
+    (``GCodeProcessor``, ``MachineEnvelopeConfig``), und als Dialekt
+    ``reprap`` — PrusaSlicers Vorgabe — liest sie überhaupt keine. Deshalb
+    stehen die schnellste angeforderte Beschleunigung und das schnellste
+    Tempo als Grenze da, und der Dialekt ist ``marlin``: Er schreibt wie
+    ``reprap`` ``M204 S`` (am Gewürzregal Byte für Byte derselbe G-Code ohne
+    Kommentare), das Marlin, Klipper und Bambus Firmware verstehen; Marlin 2
+    schriebe ``M204 P`` ohne ``T``, das Klipper übergeht. Gemessen am
+    Centauri Carbon 2 mit zwei Wänden: 334 statt 231 min geschätzt, gegen
+    232 min im ElegooSlicer.
+    """
+    accelerations = [
+        number
+        for key in _PRUSA_ACCELERATIONS
+        if (number := _as_float(written.get(key))) is not None and number > 0.0
+    ]
+    speeds = [
+        number
+        for entry in slicer_keys.TABLES["prusa"]
+        if entry.path.startswith("speed.")
+        and not entry.key.endswith("acceleration")
+        and (number := _as_float(written.get(entry.key))) is not None
+        and number > 0.0
+    ]
+    estimate = {"gcode_flavor": "marlin", "machine_limits_usage": "time_estimate_only"}
+    if accelerations:
+        fastest = f"{max(accelerations):g}"
+        for axis in ("extruding", "travel", "x", "y"):
+            # Zwei Werte: normaler und leiser Modus; geschätzt wird der erste.
+            estimate[f"machine_max_acceleration_{axis}"] = f"{fastest},{fastest}"
+    if speeds:
+        quickest = f"{max(speeds):g}"
+        for axis in ("x", "y"):
+            estimate[f"machine_max_feedrate_{axis}"] = f"{quickest},{quickest}"
+    return estimate
 
 
 def _cura_seam(depth: float, shift: tuple[float, float]) -> dict[str, str]:
@@ -3081,8 +3173,11 @@ def prusa_values(
     liest. Die 3MF behält das binäre Format des Herstellers.
 
     **Ohne Drucker des Bestands** bleibt es bei Solidons vollständigem Satz
-    samt Maschine (:func:`_machine_keys`), und der Filamenttyp geht mit: Ohne
-    ihn ging PETG als PLA hinaus (Prüfbericht Prusa, B11).
+    samt Maschine (:func:`_machine_keys`), Zeitschätzung
+    (:func:`_prusa_time_estimate`) und dem, was Prusas Bündel jedem Prozess
+    mitgibt (:data:`PRUSA_WITHOUT_BUNDLE`). Der Filamenttyp der Spule geht mit
+    (:func:`_spool_filament_type`): Ohne ihn ging PETG als PLA hinaus
+    (Prüfbericht Prusa, B11).
 
     **Beides nur mit Schlüsseln, die das Programm lesen kann**
     (:func:`slicer_keys.for_program`): SuperSlicer stürzte an der Schrägnaht
@@ -3119,7 +3214,9 @@ def _prusa_values(
     if setup is None or chain is None:
         flat = values_for(effective, profile, "prusa", program=program)
         flat.update(_speed_roles({}, flat, "prusa", program=program))
-        flat["filament_type"] = slicer_keys.filament_type(profile.material.id, "prusa")
+        flat.update(PRUSA_WITHOUT_BUNDLE)
+        flat.update(_prusa_time_estimate(flat))
+        flat["filament_type"] = _spool_filament_type(slots[0] if slots else None, profile, "prusa")
         return flat, flat
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
     preserve_native_adhesion = effective.adhesion.kind == "auto" and foundation.has_profile
@@ -3157,7 +3254,9 @@ def _prusa_values(
     if chain.filament:
         document["filament_settings_id"] = chain.filament
     else:
-        document["filament_type"] = slicer_keys.filament_type(profile.material.id, "prusa")
+        document["filament_type"] = _spool_filament_type(
+            slots[0] if slots else None, profile, "prusa"
+        )
     document["printer_settings_id"] = chain.printer
     document["print_settings_id"] = chain.process
     if console:
@@ -3167,6 +3266,21 @@ def _prusa_values(
         if key in document:
             expected[key] = document[key]
     return document, expected
+
+
+def _spool_filament_type(
+    slot: MaterialSlot | None, profile: Profile, flavour: SlicerFlavour
+) -> str:
+    """Die Materialart, unter der eine Spule beim Slicer ankommt.
+
+    Die Art der Spule, ohne Spule oder ohne Art das Material des Projekts, in
+    der Schreibweise der Familie. Die Orca-Familie fragt es je Spule
+    (:func:`_orca_filament`), PrusaSlicer für die erste, die seinen einen Satz
+    fährt (:func:`settings_for_shared_slicer`) — deren Temperaturen und Dichte
+    stehen dann schon darin.
+    """
+    material = slot.material_type if slot is not None and slot.material_type else ""
+    return slicer_keys.filament_type(material or profile.material.id, flavour)
 
 
 #: Der Schalter der Orca-Familie für die eigene Stützschichthöhe (RM-583).
@@ -3292,6 +3406,28 @@ def tower_cause(
 #: ``tree_strong`` planen eigene Stützebenen (``plan_layer_heights``).
 _ORGANIC_ORCA_STYLES: Final = frozenset({"", "default", "organic"})
 
+#: Der Hybridstil der Orca-Familie: Bäume an den Details, normale Stütze unter
+#: großen flachen Decken (RM-584).
+_HYBRID_ORCA_STYLE: Final = "tree_hybrid"
+
+
+def tree_over_hybrid(
+    native: Mapping[str, object], style: str, written: Mapping[str, str]
+) -> dict[str, str]:
+    """Ein gewählter Baum druckt als Baum, auch über einem Hybridprozess (RM-584).
+
+    Solidon schreibt ``support_style`` nur für Hybrid; die übrigen Arten lassen
+    den Stil des Herstellers. Über einem Prozess mit ``tree_hybrid`` liest die
+    Grundlage Hybrid (``manufacturer._support_style``), und wer dort Baum
+    wählte, bekam ohne Stil wieder Hybrid — der Dialog zeigte, was nicht
+    gedruckt wurde (Konzept Herstellerprofil, Entscheidung H). Dann geht
+    ``default`` hinaus, beim Baum organisch (:data:`_ORGANIC_ORCA_STYLES`).
+    Gefragt nur, wo die Stützart geschrieben wird (``support_type``)."""
+    if style != "tree" or "support_type" not in written or "support_style" in written:
+        return {}
+    native_style = str(_printed(native.get("support_style", ""))).strip().casefold()
+    return {"support_style": "default"} if native_style == _HYBRID_ORCA_STYLE else {}
+
 
 def organic_styles(
     setup: SlicerSetup | None,
@@ -3338,10 +3474,62 @@ def organic_styles(
         return frozenset(styles)
     native = _native_process(setup)
     style = str(_printed(native.get("support_style", ""))).strip().casefold()
+    # Über einem Hybridprozess schreibt ein gewählter Baum ``default``
+    # (:func:`tree_over_hybrid`), „automatisch“ bleibt Hybrid.
+    if style == _HYBRID_ORCA_STYLE:
+        return frozenset({"tree"})
     if style not in _ORGANIC_ORCA_STYLES:
         return frozenset()
     kind = str(_printed(native.get("support_type", ""))).strip()
     return frozenset({"tree", "auto"} if kind.startswith("tree") else {"tree"})
+
+
+def tree_styles(
+    setup: SlicerSetup | None,
+    profile: Profile | None = None,
+    program: str = "",
+    *,
+    flavour: SlicerFlavour | None = None,
+) -> frozenset[str] | None:
+    """Welche Stützarten Solidons dieses Programm als Bäume druckt (RM-584) —
+    organisch, schlank, kräftig oder als Hybrid; ``None`` ohne Programm.
+
+    Curas Antwort hängt an keinem Bestand — ``support_structure`` kennt nur
+    ``tree`` und ``normal`` —, sie gilt deshalb auch ohne gefundenes Programm,
+    wenn die Datei für Cura geschrieben wird (``flavour``). Sonst schlug der Rat
+    dort Hybrid vor (Nachprüfung RM-584, N1).
+
+    Der Rat fragt hier, ob „automatisch“ Bäume heißt — nur dann hängt eine
+    große flache Decke darunter zwischen Baumspitzen durch, und Gitter oder
+    Hybrid lohnt —, und ob die Wände der Bäume etwas drucken. Eine Art, die das
+    Programm ersetzt (:data:`slicer_keys.NOT_OFFERED_BY_PROGRAM`), zählt mit
+    ihrem Ersatz: Hybrid ist bei PrusaSlicer und Cura Gitter, SuperSlicer kennt
+    keine Bäume. „Automatisch“ fragt den Herstellerprozess
+    (:func:`manufacturer.auto_prints_trees`, wie das Zeitmodell); Cura schreibt
+    dafür ``normal``, PrusaSlicer ohne Bündel seine Vorgabe ``grid``. Lässt
+    sich der Prozess der Orca-Familie nicht lesen, zählt „automatisch“ als
+    Baum: Ohne Auskunft bleibt der Rat vorsichtig, wie ohne Programm.
+    """
+    if (setup.flavour if setup is not None else flavour) == "cura":
+        return frozenset({"tree"})
+    if setup is None or setup.flavour not in ("orca", "prusa"):
+        return None
+    program = program or slicer_keys.program_of(setup.executable)
+    styles = {
+        style
+        for style in ("tree", "hybrid")
+        if slicer_keys.substitute("support.style", style, program) is None
+    }
+    if setup.flavour == "orca":
+        native = _native_process(setup)
+        if not native or manufacturer.auto_prints_trees(native, "orca"):
+            styles.add("auto")
+    elif setup.flavour == "prusa":
+        style = _prusa_process_style(setup, profile) if profile is not None else ""
+        chosen = style or manufacturer.prusa_defaults(program).get("support_material_style", "")
+        if manufacturer.auto_prints_trees({"support_material_style": chosen}, "prusa"):
+            styles.add("auto")
+    return frozenset(styles)
 
 
 def _prusa_process_style(setup: SlicerSetup, profile: Profile) -> str:
@@ -3355,17 +3543,47 @@ def _prusa_process_style(setup: SlicerSetup, profile: Profile) -> str:
     return str(chain.values.get("support_material_style", "")).strip().casefold()
 
 
-def ignored_under_trees(style: str, organic: Collection[str], program: str) -> frozenset[str]:
+def ignored_under_trees(
+    style: str, organic: Collection[str], program: str, *, hollow: bool = False
+) -> frozenset[str]:
     """Pfade, die dieses Programm unter Bäumen nicht druckt
     (:data:`slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM`) — leer, wo die Stützart
     ``style``, mit der das Teil druckt (:func:`advise.printed_style`), keine
     organischen Bäume sind (``organic``, :func:`organic_styles`). Ein Vorschlag
     darauf änderte nichts am Druck. Druckdialog und Export fragen hier je Körper
-    (RM-622)."""
+    (RM-622). Hohle Bäume (``hollow``, :func:`hollow_trees`) bestehen aus ihren
+    Wänden, und die Wandzahl wirkt (RM-584)."""
     ignored = slicer_keys.IGNORED_UNDER_TREES_BY_PROGRAM.get(program, frozenset())
     if not ignored or style not in organic:
         return frozenset()
-    return ignored
+    return ignored - {"support.tree_walls"} if hollow else ignored
+
+
+#: Die Grundmuster, unter denen die Orca-Familie organische Bäume hohl druckt:
+#: ``default`` heißt beim Baum hohl, ein fehlender Schlüssel ebenso.
+_HOLLOW_TREE_PATTERNS: Final = frozenset({"", "default", "hollow"})
+
+
+def hollow_trees(setup: SlicerSetup | None) -> bool:
+    """Druckt der Herstellerprozess organische Bäume hohl, nur aus Wänden (RM-584)?
+
+    Dann wirkt die Wandzahl auch unter organischen Bäumen. Gemessen am
+    ElegooSlicer an einem Turm von 40 mm mit Insel (09.10.2026): Der Prozess
+    des Neptune 4 (``support_base_pattern`` ``default``) druckte mit zwei
+    Wänden 13 234 statt 12 211 Bewegungen, auch ohne eigene Stützschichthöhe.
+    Derselbe Prozess mit ``rectilinear`` und der des Centauri Carbon 2
+    (``rectilinear``) druckten mit einer und zwei Wänden denselben G-Code.
+    Solidon schreibt das Muster nur für Gitter und Hybrid. Ohne lesbaren
+    Prozess ``False``, wie am Centauri Carbon 2 gemessen.
+
+    **Organisch bleiben sie** (:func:`organic_styles`): Am Neptune 4 druckten
+    0,28 mm Abstand oben bei 0,2 mm Schicht dieselben Bewegungen wie 0,2 mm,
+    0,4 mm andere — der Slicer rundet auf ganze Schichten wie unter gefüllten
+    Bäumen, auch mit eigener Stützschichthöhe.
+    """
+    native = _native_process(setup)
+    pattern = str(_printed(native.get("support_base_pattern", ""))).strip().casefold()
+    return bool(native) and pattern in _HOLLOW_TREE_PATTERNS
 
 
 def support_layers_findings(setup: SlicerSetup | None, free: bool) -> list[Finding]:
@@ -4477,6 +4695,7 @@ def _orca_process(
             # eine fehlende Fußkorrektur seine Rücklesung verhindert.
             own.pop("brim_object_gap")
     document.update(own)
+    document.update(tree_over_hybrid(document, settings.support.style, own))
     if base is not None:
         document.update(_speed_roles(document, own, "orca"))
         document.update(_acceleration_roles(document, own, "orca", settings, foundation))
@@ -4577,11 +4796,7 @@ def _orca_filament(
         "name": f"Solidon {brand or settings.title}",
         "from": "User",
         "instantiation": "true",
-        "filament_type": [
-            slicer_keys.filament_type(slot.material_type, "orca")
-            if slot is not None and slot.material_type
-            else slicer_keys.filament_type(profile.material.id)
-        ],
+        "filament_type": [_spool_filament_type(slot, profile, "orca")],
         "filament_is_support": ["0"],
         # Neutraler Slicerstandard, bis eine Herstellerunterlage ihn ersetzt.
         # Bambu indiziert diese Liste ohne Längenprüfung für jedes Filament;
@@ -4655,7 +4870,7 @@ def _orca_filament(
     # hat einen Typ, aber kein eigenes Herstellerprofil. Ein geerbter
     # ``filament_type`` darf die sichtbare Wahl nicht überschreiben.
     if slot is not None and slot.material_type:
-        document["filament_type"] = [slicer_keys.filament_type(slot.material_type, "orca")]
+        document["filament_type"] = [_spool_filament_type(slot, profile, "orca")]
     # Die Farbe gehört dem Slot, nicht der Einstellung: sie ist der Grund,
     # warum es diesen Slot überhaupt gibt (§20). Ein Schriftzug in Weiß auf
     # schwarzem Gehäuse sind zwei Spulen, und beide bekämen sonst die eine

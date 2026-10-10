@@ -1260,6 +1260,7 @@ _PRINTER_FIELDS_NO_OPERATION_READS: dict[str, str] = {
 _MATERIAL_FIELDS_NO_OPERATION_READS: dict[str, str] = {
     "title": "nur Anzeige; die Kennung steht im Schlüssel",
     "calibrated": "Hinweis im Steckbrief und im Rat, keine Geometrie",
+    "measured": "nur der Druckrat (RM-589), keine Geometrie",
     "technology": "Materialwahl am Drucker, keine Geometrie",
     "support_gap_factor": "Druckrat und Slicerübergabe, keine Geometrie",
     "support_gap_min": "Druckrat und Slicerübergabe, keine Geometrie",
@@ -4094,6 +4095,64 @@ def test_affine_frame_keeps_scaling_reflection_and_an_unknown_origin(exact: bool
     assert np.asarray(moved.frame) == pytest.approx(matrix)
     assert np.linalg.det(np.asarray(moved.frame)[:3, :3]) == pytest.approx(-8.0)
     assert moved_object(dataclasses.replace(body, frame=None), matrix).frame is None
+
+
+def _counted_set(count: int, name: str = "face") -> dict[str, Any]:
+    """Ein Merkmalssatz mit großen und kleinen Behältern und einem geteilten Kleinteil."""
+    from app.core.types import Feature
+
+    shared_axis = (0.0, 0.0, 1.0)
+    found: dict[str, Any] = {}
+    for index in range(count):
+        found[f"{name}_{index}"] = Feature(
+            id=f"{name}_{index}",
+            kind="hole" if index % 2 else "face",
+            provenance="detected",
+            params={"centre": (float(index), 0.0, 0.0), "axis": shared_axis, "diameter": 4.0},
+            face_indices=tuple(range(index * 400, index * 400 + (300 if index % 3 else 7))),
+        )
+    return found
+
+
+@pytest.mark.parametrize("count", [3, 40, 600])
+def test_a_set_of_the_same_features_is_counted_like_a_fresh_walk(count: int) -> None:
+    """Derselbe Rest und dieselben Behälter wie ``held_parts``, ohne die Merkmale zu durchlaufen.
+
+    Ein Schritt, der die Merkmale durchreicht, gibt einen neuen Satz aus
+    denselben Merkmalsobjekten aus (RM-636); gezählt werden darf er wie neu.
+    """
+    from app.core import memory
+    from app.core.scene import cache as cache_module
+
+    first = _counted_set(count)
+    counted: dict[int, Any] = {}
+    cache_module._counted_features(first, counted)
+    second = dict(first)
+    turned = {name: first[name] for name in reversed(list(first))}
+    third = dict(first)
+    third[next(iter(third))] = dataclasses.replace(next(iter(third.values())), kind="slot")
+    walked: list[int] = []
+    real = memory.held_parts
+
+    def watched(*args: Any, **kwargs: Any) -> Any:
+        walked.append(1)
+        return real(*args, **kwargs)
+
+    for fresh in (second, turned, third, {**first, "extra_0": next(iter(first.values()))}):
+        expected = real(fresh)
+        walked.clear()
+        memory.held_parts = watched  # type: ignore[assignment]
+        try:
+            found = cache_module._counted_features(fresh, counted)
+        finally:
+            memory.held_parts = real  # type: ignore[assignment]
+        assert found[0] is fresh
+        assert found[1] == expected[0]
+        assert found[2].keys() == expected[1].keys()
+        for key, (holder, size) in found[2].items():
+            assert holder is expected[1][key][0] and size == expected[1][key][1]
+        if fresh is second and count >= 40:
+            assert not walked, "the same features are not walked again"
 
 
 @pytest.mark.parametrize(

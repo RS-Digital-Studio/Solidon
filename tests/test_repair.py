@@ -1471,6 +1471,80 @@ def test_enabling_intersection_repair_leaves_a_clean_cavity_alone() -> None:
     np.testing.assert_array_equal(result.mesh.raw.faces, body.raw.faces)
 
 
+def _crossing_cubes_with_a_cavity() -> trimesh.Trimesh:
+    """Zwei ineinandersteckende Würfel, im ersten ein Hohlraum (verkehrt gewickelte Schale)."""
+    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second = trimesh.creation.box(
+        extents=(20.0, 20.0, 20.0), transform=trimesh.transformations.translation_matrix((10, 0, 0))
+    )
+    cavity = trimesh.creation.box(
+        extents=(4.0, 4.0, 4.0), transform=trimesh.transformations.translation_matrix((-6, 0, 0))
+    )
+    cavity.invert()
+    return trimesh.util.concatenate([first, second, cavity])
+
+
+def test_the_bounds_of_each_shell_come_from_all_its_triangles_however_they_are_ordered() -> None:
+    """Die Hüllquader je Schale an verschränkten Dreiecken (Review L3, M3).
+
+    Im Korpus liegen die Dreiecke einer Schale oft in mehreren Läufen; ohne
+    Sortierung vor dem Sammeln käme der Hüllquader einer Schale nur aus ihrem
+    letzten Lauf, und das Sieb in ``containers_of`` verlöre Behälter.
+    """
+    from app.core.geom.repair import _Shells
+
+    boxes = [
+        trimesh.creation.box(
+            extents=size, transform=trimesh.transformations.translation_matrix(place)
+        )
+        for size, place in (
+            ((20.0, 20.0, 20.0), (0.0, 0.0, 0.0)),
+            ((6.0, 4.0, 2.0), (30.0, -5.0, 1.0)),
+            ((3.0, 9.0, 5.0), (-25.0, 12.0, -4.0)),
+        )
+    ]
+    joined = trimesh.util.concatenate(boxes)
+    order = np.random.default_rng(6363).permutation(len(joined.faces))
+    body = trimesh.Trimesh(joined.vertices, np.asarray(joined.faces)[order], process=False)
+    shells = _Shells(body)
+    assert len(shells.components) == 3
+    labels = np.empty(len(body.faces), dtype=np.int64)
+    for index, members in enumerate(shells.components):
+        labels[members] = index
+    assert np.count_nonzero(np.diff(labels)) > 6, "Voraussetzung: die Schalen liegen verstreut"
+    triangles = np.asarray(body.triangles)
+    for index, members in enumerate(shells.components):
+        np.testing.assert_array_equal(shells.low[index], triangles[members].min(axis=(0, 1)))
+        np.testing.assert_array_equal(shells.high[index], triangles[members].max(axis=(0, 1)))
+
+
+def test_crossing_parts_with_a_cavity_are_not_offered_for_resolving() -> None:
+    """Angebot und Auflösen fragen dieselbe Volumenfrage je Teil (Review L3, M2).
+
+    Ein Hohlraum ist kein Materialstück, das die Vereinigung aufnehmen könnte:
+    *Überschneidungen auflösen* wird nicht angeboten, nur *In Einzelteile
+    aufteilen*, und das Auflösen selbst lässt den Körper, wie er ist.
+    """
+    from app.core.errors import RESOLVE_INTERSECTIONS, SPLIT_BODIES
+    from app.core.geom.repair import (
+        _intersections_resolvable,
+        parts_can_be_merged,
+        resolve_self_intersections,
+    )
+    from app.core.ingest.loader import normalise
+
+    body = MeshData.of(_crossing_cubes_with_a_cavity())
+    assert body.raw.is_watertight and body.raw.is_winding_consistent, "Voraussetzung"
+    assert _intersections_resolvable(body) == "cavity"
+    assert not parts_can_be_merged(body)
+    assert resolve_self_intersections(body)[1] is False
+    findings = normalise(body, "mm").findings
+    several = next(entry for entry in findings if entry.code == "ingest.multiple_components")
+    assert several.location is not None, "the parts were found crossing"
+    assert list(several.suggestions) == [SPLIT_BODIES]
+    assert RESOLVE_INTERSECTIONS not in several.suggestions
+
+
 def test_intersection_repair_keeps_ambiguous_cavity_shells_and_names_the_limit() -> None:
     """Innenschalen sind kein Materialstück, das separat vereinigt werden darf."""
     crossing, _ = merge_vertices(raw("broken_selfint.stl"))
@@ -4303,7 +4377,9 @@ def test_the_load_step_separates_touching_sheets_under_a_new_cache_version(
     )
 
 
-@pytest.mark.parametrize("case", ["single", "apart", "inside", "cavity", "rattle", "plate"])
+@pytest.mark.parametrize(
+    "case", ["single", "apart", "inside", "cavity", "rattle", "sheet", "plate"]
+)
 def test_whether_parts_can_merge_is_asked_without_copying_a_part(
     case: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -4311,15 +4387,20 @@ def test_whether_parts_can_merge_is_asked_without_copying_a_part(
 
     Je Teil entstand ein eigenes Netz (``submesh``) und rechnete Dichtheit,
     Wicklung und Volumen noch einmal: am Spiderman, zwei Teile, eines mit
-    allen Dreiecken bis auf vier, 449 MB Spitze beim Einlesen (RM-698). Ist
-    der ganze Körper dicht und einheitlich gewickelt, ist es jedes Teil — zwei
-    Dreiecke an einer Kante gehören zum selben Teil. Gefragt wird nur noch
-    das Volumen, an denselben Dreiecken in derselben Folge: Sollwert ist die
-    alte Rechnung über die Kopie, Bit für Bit.
+    allen Dreiecken bis auf vier, 449 MB Spitze beim Einlesen (RM-636, gemessen
+    in RM-698). Ist der ganze Körper dicht und einheitlich gewickelt, ist es
+    jedes Teil. Sollwert ist die alte Rechnung über die Kopie, das Volumen je
+    Teil hier unabhängig vom Kern gerechnet; ``sheet`` ist ein dichtes Teil ohne
+    Volumen (zwei Dreiecke Rücken an Rücken) und hält die Grenze bei null.
     """
     from app.core.geom import repair as repair_module
     from app.core.geom.mesh import face_components, signed_volume
     from app.core.units import EPS_GEOM
+
+    def volume(piece: trimesh.Trimesh) -> float:
+        corners = np.asarray(piece.triangles, dtype=np.float64)
+        corners = corners - corners[0, 0]
+        return math.fsum(float(np.dot(a, np.cross(b, c))) for a, b, c in corners) / 6.0
 
     if case == "plate":
         body, _welded = merge_vertices(raw("plate_holes.stl"))
@@ -4329,6 +4410,13 @@ def test_whether_parts_can_merge_is_asked_without_copying_a_part(
         hollow.invert()
         ball = trimesh.creation.icosphere(subdivisions=2, radius=5.0)
         body = MeshData.of(trimesh.util.concatenate([outer, hollow, ball]))
+    elif case == "sheet":
+        sheet = trimesh.Trimesh(
+            vertices=[[40.0, 0.0, 0.0], [50.0, 0.0, 0.0], [40.0, 10.0, 0.0]],
+            faces=[[0, 1, 2], [0, 2, 1]],
+            process=False,
+        )
+        body = MeshData.of(trimesh.util.concatenate([_box(20.0), sheet]))
     else:
         parts = [_box(20.0)]
         if case == "apart":
@@ -4345,16 +4433,14 @@ def test_whether_parts_can_merge_is_asked_without_copying_a_part(
             return "open"
         if not mesh.raw.is_winding_consistent:
             return "winding"
-        volume = signed_volume(mesh.raw)
-        if abs(volume) <= EPS_GEOM * mesh.area:
+        whole = signed_volume(mesh.raw)
+        if abs(whole) <= EPS_GEOM * mesh.area:
             return "flat"
-        if volume < 0.0:
+        if whole < 0.0:
             return "inverted"
         for faces in face_components(mesh.raw):
             piece = mesh.raw.submesh([faces], append=True, repair=False)
-            if not (
-                piece.is_watertight and piece.is_winding_consistent and signed_volume(piece) > 0.0
-            ):
+            if not (piece.is_watertight and piece.is_winding_consistent and volume(piece) > 0.0):
                 return "cavity"
         return None
 
@@ -4370,5 +4456,5 @@ def test_whether_parts_can_merge_is_asked_without_copying_a_part(
     answer = repair_module._intersections_resolvable(body)
 
     assert answer == expected
-    assert expected == ("cavity" if case in ("cavity", "rattle") else None)
+    assert expected == ("cavity" if case in ("cavity", "rattle", "sheet") else None)
     assert copies == []

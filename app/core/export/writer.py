@@ -1307,6 +1307,7 @@ def part_advice(
     accepted: Mapping[str, object] | None = None,
     whole_layers: bool = False,
     organic: Collection[str] = (),
+    allowances: Sequence[str] = (),
 ) -> list[SettingAdvice]:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G).
 
@@ -1325,8 +1326,11 @@ def part_advice(
     Brim selbst rechnet (:data:`advise.AUTO_BRIM_FLAVOURS`), ``whole_layers``,
     ob seine Platte einen Reinigungsturm trägt (:func:`tower_plates`), ``organic``,
     welche Stützarten das Programm als organische Bäume druckt
-    (:func:`handover.organic_styles`). Ist die Stützart nicht übernommen,
-    druckt das Teil die der Platte, und Abstand wie Trennschicht fragen mit ihr
+    (:func:`handover.organic_styles`); welche es überhaupt als Bäume druckt,
+    fragt sie selbst (:func:`handover.tree_styles`). ``allowances`` sagt, was
+    das Modell dieses Teils schon ausgleicht (``scene.fits.allowances_for``,
+    RM-589). Ist die Stützart nicht übernommen, druckt das Teil die der
+    Platte, und Abstand wie Trennschicht fragen mit ihr
     (``declined``, :func:`advise.printed_style`).
 
     **Eine Regel kann einen Wert je Teil voraussetzen** (``accepted``, die
@@ -1350,6 +1354,8 @@ def part_advice(
     connectors = advise.connector_diameters([entry])
     processes = handover.slot_processes(entry, settings, profile, setup, slot_profiles)
     program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    # Welche Arten das Programm als Bäume druckt (RM-584), wie im Druckdialog.
+    trees = handover.tree_styles(setup, profile, program, flavour=flavour)
     inputs = (
         settings,
         processes,
@@ -1360,6 +1366,8 @@ def part_advice(
         dict(accepted or {}),
         whole_layers,
         tuple(sorted(organic)),
+        tuple(allowances),
+        None if trees is None else tuple(sorted(trees)),
     )
     cache = getattr(mesh.raw, "_cache", None)
     name = f"solidon_export_advice|{entry.id}"
@@ -1396,6 +1404,8 @@ def part_advice(
                     whole_layers=whole_layers,
                     organic=organic,
                     declined=declined,
+                    allowances=allowances,
+                    trees=trees,
                 ),
             )
             for process in (
@@ -1404,7 +1414,7 @@ def part_advice(
                 else handover.slot_processes(entry, current, profile, setup, slot_profiles)
             )
         ]
-        return advise.combine(current, groups)
+        return advise.combine(current, groups, trees=trees)
 
     # Was das Programm seiner Familie nicht kennt, schlägt der Rat nicht vor:
     # SuperSlicer stürzte an der Schrägnaht als Objektwert ab (RM-459). Eine
@@ -1485,7 +1495,7 @@ def _part_values(
     if not wanted:
         return _PartValues({}, [], [], split.plate)
     from app.core.knowledge import profiles as profile_table
-    from app.core.scene.fits import fit_kinds_for
+    from app.core.scene.fits import allowances_for, fit_kinds_for
     from app.core.slice import advise
 
     # Geschnitten wird nur, wenn der Rat je Teil den Schnitt braucht; Passung
@@ -1516,6 +1526,7 @@ def _part_values(
         accepted=split.accepted_per_part(),
         whole_layers=whole_layers,
         organic=organic,
+        allowances=allowances_for(document, entry) if document is not None else (),
     )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -2627,7 +2638,18 @@ def write_assembly(
         applied=False,
     )
     findings += _plate_wide_findings(chosen, asked, split)
-    findings += _lowered_foot_findings([(entry.id, part_values[entry.id].keys) for entry in chosen])
+    # Eine Fußkorrektur aus dem Rat (RM-589) ist kein gesenkter Brim-Bezug.
+    advised_foot = {
+        entry.id
+        for entry in chosen
+        if any(
+            item.path == "layers.elephant_foot"
+            for item in (*part_values[entry.id].applied, *everywhere)
+        )
+    }
+    findings += _lowered_foot_findings(
+        [(entry.id, part_values[entry.id].keys) for entry in chosen if entry.id not in advised_foot]
+    )
     if settings is not None:
         # Was erst auf der Platte auffiele: Haftungsränder, die ineinander
         # laufen, und der Preis zweier Filamente in einem Auftrag — je Teil mit

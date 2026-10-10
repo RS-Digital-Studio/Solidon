@@ -6066,6 +6066,54 @@ def test_a_built_fit_counts_like_an_entered_one(session: Session, qt_app) -> Non
         dialog.deleteLater()
 
 
+def test_only_the_part_that_pulls_in_its_own_foot_gets_the_zero(
+    session: Session, qt_app: QApplication
+) -> None:
+    """RM-589, Review M3: Zwei Platten, nur die erste mit *Elefantenfuß
+    ausgleichen*. Der Dialog liest im Hauptthread, was jedes Modell selbst
+    ausgleicht, und die Zeile *Erste Schicht einziehen* nennt nur diese Platte —
+    dieselbe Auskunft wie der Export je Teil. Gerechnet über den Weg des
+    Dialogs (``_refresh_advice`` → ``_start_advice`` → Arbeiter): Reichte er
+    die Ausgleiche nicht weiter, käme keine Zeile."""
+    from app.core.scene import History, OperationDraft
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    history = History(session.project.document)
+    for x, name in ((-30.0, "Mit Fuß"), (30.0, "Ohne Fuß")):
+        history.apply(
+            name,
+            [
+                OperationDraft(
+                    op="create_box",
+                    params={"width": 30.0, "depth": 30.0, "height": 4.0, "x": x, "name": name},
+                )
+            ],
+        )
+    history.apply(
+        "Fuß", [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})]
+    )
+    session.evaluate_now()
+    dialog = PrintSettingsDialog(session, UiSettings())
+    try:
+        assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+        # Ohne Slicer schreibt der Export wie für die Orca-Familie; so hängt
+        # der Fall nicht an dem, was auf dieser Maschine installiert ist.
+        dialog._slicer_path = None
+        assert dict(dialog._part_allowances()) == {"obj_1": ("foot",), "obj_2": ()}
+        dialog.settings = print_settings.with_choice(dialog.settings, "layers.elephant_foot", 0.15)
+        dialog._refresh_advice()
+        _wait_for_print_advice(dialog, qt_app)
+        rows = [entry for entry in dialog._advice_entries if entry.path == "layers.elephant_foot"]
+    finally:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+
+    assert len(rows) == 1, rows
+    assert rows[0].value == pytest.approx(0.0)
+    assert getattr(rows[0], "parts", ()) == ("Mit Fuß",)
+
+
 @pytest.mark.parametrize("collar,expected", [(0.0, ()), (4.0, ("clearance",))])
 def test_a_declared_lid_condition_also_controls_print_advice(
     session: Session, qt_app: QApplication, collar: float, expected: tuple[str, ...]
@@ -7678,6 +7726,113 @@ def test_the_search_finds_a_setting_by_its_words(qt_app: QApplication, session: 
     assert dialog.search_hits("gibtesnicht") == []
 
 
+#: Wie die Slicer Einzug und Lochausgleich je Sprache nennen — gelesen aus den
+#: Katalogen von OrcaSlicer, Bambu Studio, PrusaSlicer und ElegooSlicer und aus
+#: Curas ``fdmprinter.def.json.po`` (Nachprüfung RM-589, N5).
+SLICER_WORDS: dict[str, dict[str, list[str]]] = {
+    "de": {
+        "layers.elephant_foot": [
+            "Elefantenfußkompensation",
+            "Horizontale Erweiterung erste Schicht",
+            "Elefantenfuß",
+        ],
+        "shell.hole_offset": [
+            "X-Y-Loch-Kompensation",
+            "Horizontalloch-Erweiterung",
+            "Lochkorrektur",
+            "Lochausgleich",
+        ],
+    },
+    "en": {
+        "layers.elephant_foot": [
+            "Elephant foot compensation",
+            "Initial Layer Horizontal Expansion",
+            "first_layer_size_compensation",
+        ],
+        "shell.hole_offset": ["X-Y hole compensation", "Hole Horizontal Expansion"],
+    },
+    "es": {
+        "layers.elephant_foot": [
+            "Compensación de Pata de elefante",
+            "Compensación del pie de elefante",
+            "Compensación del pata de elefante",
+            "Expansión horizontal de la capa inicial",
+        ],
+        "shell.hole_offset": [
+            "Compensación en X-Y de huecos",
+            "Compensación de huecos X-Y",
+            "Expansión horizontal de orificios",
+        ],
+    },
+    "fr": {
+        "layers.elephant_foot": [
+            "Compensation de l'effet patte d'éléphant",
+            "Expansion horizontale de la couche initiale",
+        ],
+        "shell.hole_offset": ["Compensation de trou X-Y", "Expansion horizontale des trous"],
+    },
+    "it": {
+        "layers.elephant_foot": [
+            "Compensazione zampa d'elefante",
+            "Espansione orizzontale dello strato iniziale",
+        ],
+        "shell.hole_offset": [
+            "Compensazione fori X-Y",
+            "Compensazione foro X-Y",
+            "Espansione orizzontale dei fori",
+        ],
+    },
+    "pt": {
+        "layers.elephant_foot": [
+            "Compensação de pé de elefante",
+            "Compensação do pé de elefante",
+            "Compensação do pé do elefante",
+            "Expansão Horizontal da Camada Inicial",
+        ],
+        "shell.hole_offset": [
+            "Compensação de furos XY",
+            "Compensação de furo X",
+            "Compensação XY de furos",
+            "Expansão Horizontal do Furo",
+        ],
+    },
+}
+
+
+@pytest.mark.parametrize("language", sorted(SLICER_WORDS))
+def test_the_search_finds_foot_and_holes_by_the_slicers_words(
+    qt_app: QApplication, session: Session, language: str
+) -> None:
+    """Review RM-589, L3 und nach N5: Jeder Slicer nennt die Einstellung in
+    seiner Sprache anders, der Kalibrierdialog „Lochkorrektur“. Die Zeilen
+    heißen „Erste Schicht einziehen“ und „Löcher weiten“ und waren unter
+    keinem der Wörter der übersetzten Slicer zu finden. Gesucht wird Wort für
+    Wort; die englischen Wörter gelten in jeder Sprache."""
+    from app.core.export.slicer_keys import keys_for
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    before = get_language()
+    terms = {path: list(words) for path, words in SLICER_WORDS[language].items()}
+    terms["layers.elephant_foot"] += ["Elephant foot compensation", "elephant foot"]
+    terms["shell.hole_offset"].append("hole compensation")
+    try:
+        install_language(language)
+        set_language(language)
+        for path, words in terms.items():
+            for word in words:
+                assert path in dialog.search_hits(word), (language, word)
+        assert dialog.search_hits("Compensazione gibtesnicht") == []
+        # SuperSlicer nennt den Einzug unter eigenem Namen (``PROGRAM_KEYS``).
+        assert "first_layer_size_compensation" in keys_for("layers.elephant_foot")
+        assert "hole_size_compensation" in keys_for("shell.hole_offset")
+    finally:
+        install_language(before)
+        set_language(before)
+        dialog.deleteLater()
+
+
 def test_the_search_also_knows_the_name_from_the_slicer(
     qt_app: QApplication, session: Session
 ) -> None:
@@ -8543,6 +8698,9 @@ def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
         print_settings.with_path(base, "adhesion.kind", kind)
         for kind in ("skirt", "brim", "raft", "none")
     ]
+    # Die Wände der Bäume schreibt Cura nur unter Bäumen (RM-584): Ohne diese
+    # Lage stünde ``support.tree_walls`` als nicht übernommen in der Messung.
+    layouts.append(print_settings.with_path(base, "support.style", "tree"))
 
     def other(field: object) -> object:
         """Ein zweiter Wert, der sich vom ersten unterscheidet."""
@@ -9988,6 +10146,10 @@ def test_the_foundation_worker_reuses_the_chosen_setup_and_stops_when_cancelled(
     assert reads == [("machine",), ("process", "filament")], "erst die Maschinen, dann der Rest"
     chosen = first[0][2]
     assert Path(chosen.setup.machine_profile).name == "cc2.json"
+    assert chosen.stock == (executable, "orca"), "die Wahl weiß, wessen Bestand sie befragt hat"
+    assert chosen.signature == slicer_profiles.stock_signature("orca", executable), (
+        "und in welchem Stand (Review RM-670 N2)"
+    )
 
     staged = answers(
         preflight_main._FoundationWorker(("p", "fine", "w"), UiSettings(), profile, "fine", chosen)
@@ -10106,6 +10268,721 @@ def test_the_export_writes_with_the_chosen_setup_without_deriving_it(
 
     with zipfile.ZipFile(paths[0]) as archive:
         assert "Metadata/Slic3r_PE.config" in archive.namelist(), "geschrieben mit der Wahl"
+    assert worker.renewed is None, "nichts neu hergeleitet"
+
+
+def _a_cc2_the_slicer_does_not_know(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path]:
+    """Ein ElegooSlicer, dessen Bestand den Centauri Carbon 2 nicht kennt, mit
+    einem Kontoordner ohne eigene Drucker — der Slicer lief schon einmal.
+    Gibt Programmdatei und Maschinenordner des Kontos zurück."""
+    from app.core import tools
+    from app.core.export import slicer_profiles
+
+    executable = cc2_stock(tmp_path / "programme")
+    known = executable.parent / "resources" / "profiles" / "Elegoo" / "machine" / "ECC2"
+    for file in known.glob("*.json"):
+        file.unlink()
+    account = tmp_path / "konto" / "ElegooSlicer" / "user" / "default"
+    (account / "machine").mkdir(parents=True)
+    monkeypatch.setattr(tools, "slicer_program", lambda: executable)
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda _flavour, _executable: [account])
+    return executable, account / "machine"
+
+
+def _the_customer_creates_the_cc2(machines: Path) -> None:
+    """Der Kunde legt den Drucker im Slicer an, wie Solidon es ihm rät."""
+    from tests.helpers import CC2_MACHINE
+
+    (machines / "Mein CC2.json").write_text(
+        json.dumps(
+            {
+                "type": "machine",
+                "name": CC2_MACHINE,
+                "from": "User",
+                "inherits": "fdm_machine_common",
+                "printer_model": "Elegoo Centauri Carbon 2",
+                "nozzle_diameter": ["0.4"],
+                "default_print_profile": "0.20mm Standard @CC2",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _foundation_choice(profile: Profile) -> Any:
+    """Die Wahl, die der Grundlagenarbeiter dem Fenster meldet."""
+    given: list[tuple[Any, ...]] = []
+    worker = preflight_main._FoundationWorker(
+        ("p", "standard", "w"), UiSettings(), profile, "standard"
+    )
+    worker.done.connect(lambda *args: given.append(args))
+    worker.work()
+    return given[0][2]
+
+
+def test_an_empty_choice_expires_when_the_printer_is_created_in_the_slicer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 N1: Ergab die Vorwahl ``None``, weil der Slicer den Drucker
+    nicht kennt, trug sie keine Signatur und galt für immer. Legte der Kunde
+    den Drucker im Slicer an — der Weg, den Solidon ihm weist —, ging jede
+    Datei weiter ohne Herstellerprozess und -filament hinaus. Jetzt trägt auch
+    die leere Wahl den Stand ihres Bestands, und der Export leitet neu her."""
+    import zipfile
+
+    from app.core.export import slicer_profiles
+
+    executable, machines = _a_cc2_the_slicer_does_not_know(tmp_path, monkeypatch)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    chosen = _foundation_choice(profile)
+    assert chosen.setup is None, "der Slicer kennt den Drucker nicht"
+    assert chosen.stock == (executable, "orca") and chosen.signature is not None
+    assert chosen.current()
+
+    _the_customer_creates_the_cc2(machines)
+    assert not chosen.current(), "ein angelegter Drucker verlangt eine neue Wahl"
+
+    given: list[tuple[Any, ...]] = []
+    staged = preflight_main._FoundationWorker(
+        ("p", "fine", "w"), UiSettings(), profile, "fine", chosen
+    )
+    staged.done.connect(lambda *args: given.append(args))
+    staged.work()
+    assert given[0][2].setup is not None, "auch ein Stufenwechsel leitet dann neu her"
+
+    worker = preflight_main._ExportWorker(
+        [_cube_object()],
+        tmp_path / "neu.3mf",
+        "3mf",
+        profile=profile,
+        sources={},
+        settings=print_settings.resolve(profile),
+        ui_settings=UiSettings(),
+        material="pla",
+        chosen=chosen,
+    )
+    paths, _findings = worker._assembly()
+
+    with zipfile.ZipFile(paths[0]) as archive:
+        values = json.loads(archive.read("Metadata/project_settings.config"))
+    assert values.get("wall_loops") == "2", "der Herstellerprozess, nicht Solidons drei Wände"
+    renewed = worker.renewed
+    assert renewed is not None and renewed.key == chosen.key
+    assert renewed.setup is not None and Path(renewed.setup.machine_profile).name == "Mein CC2.json"
+    assert renewed.signature == slicer_profiles.stock_signature("orca", executable)
+    assert renewed.current()
+
+
+def _family_stock(
+    flavour: str,
+    folder: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    grow: Any = None,
+) -> tuple[Profile, handover.SlicerSetup]:
+    """Ein Bestand je Familie, die die Grundlage unterscheidet, mit der Wahl,
+    die der Export dafür bekommt: Orca (Erbketten und Modelldatei), Prusa
+    (Bündel) und Cura (Definitionen). Die eigenen Profile bleiben leer, und
+    der Bestand ist älter als :data:`slicer_profiles.SETTLE_NS` — sonst
+    merkte ihn niemand. ``grow(flavour, executable)`` füllt ihn vorher auf."""
+    import os
+
+    from app.core.export import slicer_profiles
+    from tests.cura_fakes import cura_installation
+    from tests.helpers import CC2_MACHINE
+
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda *_args: [])
+    if flavour == "orca":
+        executable = cc2_stock(folder)
+        profile = profiles.make_profile("centauri-carbon-2", "pla")
+        setup = handover.SlicerSetup(
+            executable,
+            "orca",
+            machine_profile=CC2_MACHINE,
+            base_process="0.20mm Standard @CC2",
+            base_filament="Elegoo PLA @ECC2",
+        )
+    elif flavour == "prusa":
+        executable = folder / "PrusaSlicer" / "prusa-slicer-console.exe"
+        root = executable.parent / "resources" / "profiles"
+        root.mkdir(parents=True)
+        (root / "PrusaResearch.ini").write_text(_PRUSA_BUNDLE, encoding="utf-8")
+        executable.write_bytes(b"")
+        profile = profiles.make_profile("prusa-mk4s", "pla")
+        setup = handover.SlicerSetup(
+            executable,
+            "prusa",
+            machine_profile="Original Prusa MK4S HF0.4 nozzle",
+            base_process="0.20mm SPEED @MK4S HF0.4",
+            base_filament="Prusament PLA @MK4S HF0.4",
+        )
+    else:
+        executable = cura_installation(folder)
+        # Der eingerichtete Drucker, wie Cura 5.13 ihn ablegt: Erst über ihn
+        # liest die Grundlage Maschinenstapel, Definitionen und Container.
+        own = folder / "config" / "cura" / "5.13"
+        (own / "machine_instances").mkdir(parents=True)
+        (own / "machine_instances" / "Creality+K1+Max.global.cfg").write_text(
+            "[general]\nversion = 5\nname = Creality K1 Max\nid = Creality K1 Max\n\n"
+            "[metadata]\nsetting_version = 27\ntype = machine\n\n"
+            "[containers]\n0 = empty_user_changes\n1 = empty_quality_changes\n"
+            "2 = empty_intent\n3 = empty_quality\n4 = empty_material\n5 = empty_variant\n"
+            "6 = Creality K1 Max_settings\n7 = creality_k1max\n",
+            encoding="utf-8",
+        )
+        (own / "definition_changes").mkdir()
+        (own / "definition_changes" / "Creality+K1+Max_settings.inst.cfg").write_text(
+            "[general]\nversion = 4\nname = Creality K1 Max_settings\n"
+            "definition = creality_k1max\n\n"
+            "[metadata]\ntype = definition_changes\nsetting_version = 27\n\n"
+            "[values]\nmachine_nozzle_size = 0.4\nmachine_width = 300\nmachine_depth = 300\n"
+            "machine_height = 300\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(slicer_profiles, "user_roots", lambda *_args: [own])
+        profile = profiles.make_profile("creality-k1-max", "pla")
+        setup = handover.SlicerSetup(executable, "cura", machine_profile="Creality K1 Max")
+    if grow is not None:
+        grow(flavour, executable)
+    past = 1_767_225_600.0
+    for path in folder.rglob("*"):
+        os.utime(path, (past, past))
+    return profile, setup
+
+
+def _change_family_stock(flavour: str, executable: Path) -> None:
+    """Ein Wert des Bestands aus :func:`_family_stock` ändert sich, wie bei
+    einem Update des Slicers: Die Programmdatei ist neu, und ein Wert der
+    Grundlage ist ein anderer — die Wände des Prozesses, bei Cura das
+    Mindesttempo, aus dem die Druckzeit rechnet."""
+    if flavour == "orca":
+        process = executable.parent / "resources/profiles/Elegoo/process/ECC2/standard.json"
+        document = json.loads(process.read_text(encoding="utf-8"))
+        process.write_text(json.dumps({**document, "wall_loops": "4"}), encoding="utf-8")
+    elif flavour == "prusa":
+        bundle = executable.parent / "resources/profiles/PrusaResearch.ini"
+        text = bundle.read_text(encoding="utf-8")
+        section = "[print:0.20mm SPEED @MK4S HF0.4]\n"
+        bundle.write_text(text.replace(section, section + "perimeters = 4\n"), encoding="utf-8")
+    else:
+        machine = executable.parent / "share/cura/resources/definitions/creality_k1max.def.json"
+        document = json.loads(machine.read_text(encoding="utf-8"))
+        document["overrides"]["cool_min_speed"] = {"default_value": 10}
+        machine.write_text(json.dumps(document), encoding="utf-8")
+    executable.write_bytes(b"neu")
+
+
+def _family_export(
+    profile: Profile,
+    setup: handover.SlicerSetup,
+    target: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[bytes, Any, list[Finding]]:
+    """Ein 3MF-Export über den Arbeiter des Fensters, mit ``setup`` als
+    gemerkter Wahl; zurück kommen die geschriebene Datei, die Grundlage, mit
+    der er zuletzt rechnete, und die Befunde."""
+    from app.core.export import manufacturer
+
+    used: list[Any] = []
+    original = manufacturer.base_settings
+
+    def recorded(*args: Any) -> Any:
+        used.append(original(*args))
+        return used[-1]
+
+    monkeypatch.setattr(manufacturer, "base_settings", recorded)
+    monkeypatch.setattr(preflight_main, "remembered_setup", lambda *_args, **_kwargs: setup)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    worker = preflight_main._ExportWorker(
+        [_cube_object()],
+        target,
+        "3mf",
+        profile=profile,
+        sources={},
+        settings=print_settings.resolve(profile),
+        ui_settings=UiSettings(),
+        material=profile.material.id,
+    )
+    written, findings = worker._assembly()
+    monkeypatch.setattr(manufacturer, "base_settings", original)
+    assert used, "der Export fragt die Grundlage"
+    return written[0].read_bytes(), used[-1], findings
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_a_3mf_export_derives_the_foundation_once(
+    flavour: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Ein 3MF-Export fragt die Grundlage viermal — für die Datei, die
+    Befunde, den Stützfuß und die Projekteinstellungen —, und jedes Mal liefen
+    Erbketten, Variante und die rekursive Suche nach der Modelldatei neu; am
+    ElegooSlicer war allein diese Suche rund die Hälfte der Rechenzeit eines
+    Exports. Im Lesedurchgang des Exports entsteht die Grundlage einmal, und
+    die Modelldatei sucht nur die Orca-Familie — einmal."""
+    from app.core.export import manufacturer, slicer_profiles
+
+    profile, setup = _family_stock(flavour, tmp_path / "programme", monkeypatch)
+    asked: list[object] = []
+    derived: list[object] = []
+    searched: list[object] = []
+    for module, name, calls, argument in (
+        (manufacturer, "base_settings", asked, 2),
+        (manufacturer, "_base_settings", derived, 2),
+        (slicer_profiles, "_machine_model_in", searched, 1),
+    ):
+        original = getattr(module, name)
+
+        def counted(
+            *args: Any, original: Any = original, calls: list[object] = calls, at: int = argument
+        ) -> Any:
+            calls.append(args[at])
+            return original(*args)
+
+        monkeypatch.setattr(module, name, counted)
+
+    _family_export(profile, setup, tmp_path / "modell.3mf", monkeypatch)
+
+    assert len(asked) > 1, "mehrere Fragen je Export — sonst prüfte der Test nichts"
+    assert len(derived) == 1, f"hergeleitet {len(derived)}-mal bei {len(asked)} Fragen"
+    assert searched == (["Elegoo Centauri Carbon 2"] if flavour == "orca" else []), (
+        "die Modelldatei sucht nur die Orca-Familie, und einmal"
+    )
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_the_remembered_stock_writes_the_file_a_fresh_read_writes(
+    flavour: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Gemerkter Bestand, ein Lesedurchgang und die einmal hergeleitete
+    Grundlage sparen Zeit und ändern an der Datei kein Byte, an Grundlage und
+    Befunden nichts. Verglichen wird der erste und der zweite Export mit einem,
+    der ohne jeden Merker liest: nichts beruhigt sich
+    (:data:`slicer_profiles.SETTLE_NS`), kein Lesedurchgang. Die Uhr der
+    ZIP-Einträge steht fest — sie ist die einzige Zeitangabe der Datei.
+
+    Ändert sich danach der Bestand, ändert sich die Grundlage, und bei Orca und
+    Prusa auch die Datei — sonst verglich der Test nichts. Curas Datei trägt
+    beim Export keine Profilwerte; dort zählt die Grundlage."""
+    import zipfile
+
+    profile, setup = _family_stock(flavour, tmp_path / "programme", monkeypatch)
+    monkeypatch.setattr(
+        zipfile, "time", SimpleNamespace(time=lambda: 1_767_225_600.0, localtime=time.localtime)
+    )
+    fresh = _fresh_export(profile, setup, tmp_path / "frisch" / "modell.3mf", monkeypatch)
+
+    first = _family_export(profile, setup, tmp_path / "erster" / "modell.3mf", monkeypatch)
+    second = _family_export(profile, setup, tmp_path / "zweiter" / "modell.3mf", monkeypatch)
+
+    assert first[0] == fresh[0], "der erste Export mit Merker"
+    assert second[0] == fresh[0], "der zweite Export aus dem gemerkten Bestand"
+    assert first[1:] == fresh[1:] and second[1:] == fresh[1:], "Grundlage und Befunde"
+
+    _change_family_stock(flavour, setup.executable)
+    changed = _family_export(profile, setup, tmp_path / "geaendert" / "modell.3mf", monkeypatch)
+    assert changed[1] != fresh[1], "der nächste Export sieht den geänderten Bestand"
+    assert (changed[0] != fresh[0]) == (flavour != "cura"), "die Datei trägt die Änderung"
+
+
+def _orca_account(
+    folder: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Profile, handover.SlicerSetup, Path]:
+    """Der Orca-Bestand aus :func:`_family_stock` mit dem Kontoordner, in dem
+    der Slicer selbst angelegte Profile ablegt, und der Modelldatei in der
+    Installation: Die Wahl ist eine eigene Maschine und ein eigener Prozess,
+    der über eine eigene Zwischenstufe vom Hersteller erbt. Zurück kommt der
+    Kontoordner dazu."""
+    from app.core.export import slicer_profiles
+    from tests.helpers import CC2_MACHINE
+
+    user = folder / "config" / "ElegooSlicer" / "user" / "4711"
+
+    def write(path: Path, document: dict[str, object]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+    def grow(_flavour: str, executable: Path) -> None:
+        write(
+            executable.parent / _INSTALLED_MODEL,
+            {
+                "type": "machine_model",
+                "name": "Elegoo Centauri Carbon 2",
+                "default_bed_type": "Textured PEI Plate",
+            },
+        )
+        write(
+            user / "machine" / "mein.json",
+            {
+                "type": "machine",
+                "name": "Mein CC2",
+                "from": "User",
+                "inherits": CC2_MACHINE,
+                "printer_model": "Elegoo Centauri Carbon 2",
+                "nozzle_diameter": ["0.4"],
+            },
+        )
+        write(
+            user / "process" / "zwischen.json",
+            {
+                "type": "process",
+                "name": "Zwischen",
+                "from": "User",
+                "inherits": "0.20mm Standard @CC2",
+                "sparse_infill_density": "25%",
+            },
+        )
+        write(
+            user / "process" / "mein.json",
+            {"type": "process", "name": "Mein Prozess", "from": "User", "inherits": "Zwischen"},
+        )
+
+    profile, setup = _family_stock("orca", folder, monkeypatch, grow=grow)
+    monkeypatch.setattr(slicer_profiles, "user_roots", lambda *_args: [user])
+    return (
+        profile,
+        replace(setup, machine_profile="Mein CC2", base_process="Mein Prozess"),
+        user,
+    )
+
+
+#: Die Modelldatei in der Installation, von der Programmdatei aus.
+_INSTALLED_MODEL = "resources/profiles/Elegoo/machine/Elegoo Centauri Carbon 2.json"
+
+
+def _own_base_named_like_the_vendors(_executable: Path, user: Path) -> None:
+    """Der Kunde legt einen eigenen Prozess mit dem Namen der Herstellerbasis
+    an — die Zwischenstufe erbt jetzt von ihm."""
+    (user / "process" / "basis.json").write_text(
+        json.dumps(
+            {
+                "type": "process",
+                "name": "0.20mm Standard @CC2",
+                "from": "User",
+                "inherits": "fdm_process_common",
+                "wall_loops": "5",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _own_stage_renamed(_executable: Path, user: Path) -> None:
+    """Der Kunde benennt die Zwischenstufe im Slicer um; die Datei bleibt."""
+    stage = user / "process" / "zwischen.json"
+    document = json.loads(stage.read_text(encoding="utf-8"))
+    stage.write_text(json.dumps({**document, "name": "Zwischen B"}), encoding="utf-8")
+
+
+def _installed_model_replaced(executable: Path, _user: Path) -> None:
+    """Die Modelldatei der Installation nennt eine andere Platte, ohne dass
+    die Programmdatei neu ist."""
+    model = executable.parent / _INSTALLED_MODEL
+    document = json.loads(model.read_text(encoding="utf-8"))
+    model.write_text(
+        json.dumps({**document, "default_bed_type": "High Temp Plate"}), encoding="utf-8"
+    )
+
+
+def _installed_model_moved(executable: Path, _user: Path) -> None:
+    """Die Modelldatei der Installation zieht in einen Unterordner und nennt
+    eine andere Platte; am alten Ort liegt das Modell eines anderen Druckers."""
+    model = executable.parent / _INSTALLED_MODEL
+    document = json.loads(model.read_text(encoding="utf-8"))
+    moved = model.parent / "ECC2" / model.name
+    moved.write_text(
+        json.dumps({**document, "default_bed_type": "Textured Cool Plate"}), encoding="utf-8"
+    )
+    model.write_text(json.dumps({**document, "name": "Elegoo Centauri"}), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        _own_base_named_like_the_vendors,
+        _own_stage_renamed,
+        _installed_model_replaced,
+        _installed_model_moved,
+    ],
+)
+def test_the_remembered_stock_follows_a_change_without_a_new_program(
+    change: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 L1 und L2: Was der Kunde im Kontoordner seines Slicers
+    anlegt oder umbenennt, ändert die Signatur des Bestands, nicht die
+    Programmdatei; der Export danach schreibt dieselbe Datei wie einer, der
+    ohne jeden Merker liest. Die Modelldatei hält nur ihren Ort — ihre Werte
+    liest jeder Durchgang, auch wenn sie sich in der Installation ohne neue
+    Fassung ändert."""
+    import zipfile
+
+    from app.core.export import slicer_profiles
+
+    profile, setup, user = _orca_account(tmp_path / "programme", monkeypatch)
+    monkeypatch.setattr(
+        zipfile, "time", SimpleNamespace(time=lambda: 1_767_225_600.0, localtime=time.localtime)
+    )
+    before = _fresh_export(profile, setup, tmp_path / "vorher" / "modell.3mf", monkeypatch)
+    _family_export(profile, setup, tmp_path / "erster" / "modell.3mf", monkeypatch)
+    held = _family_export(profile, setup, tmp_path / "zweiter" / "modell.3mf", monkeypatch)
+    assert held == before, "der gemerkte Bestand schreibt die frisch gelesene Datei"
+    assert slicer_profiles._derived, "der Merker hält — sonst prüfte der Test nichts"
+    program = setup.executable.stat()
+
+    change(setup.executable, user)
+    remembered = _family_export(profile, setup, tmp_path / "danach" / "modell.3mf", monkeypatch)
+    fresh = _fresh_export(profile, setup, tmp_path / "frisch" / "modell.3mf", monkeypatch)
+
+    assert setup.executable.stat().st_mtime_ns == program.st_mtime_ns, "Programmdatei unberührt"
+    assert fresh[0] != before[0], "die Änderung ändert die Datei — sonst verglich der Test nichts"
+    assert remembered[0] == fresh[0], "der nächste Export schreibt die frisch gelesene Datei"
+    assert remembered[1:] == fresh[1:], "Grundlage und Befunde"
+
+
+def _fresh_export(
+    profile: Profile,
+    setup: handover.SlicerSetup,
+    target: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[bytes, Any, list[Finding]]:
+    """:func:`_family_export` ohne jeden Merker: nichts beruhigt sich
+    (:data:`slicer_profiles.SETTLE_NS`), kein Lesedurchgang, und was vorher
+    gemerkt war, ist vorher und nachher vergessen."""
+    import contextlib
+
+    from app.core.export import slicer_profiles
+
+    slicer_profiles.forget_holdings()
+    with monkeypatch.context() as unremembered:
+        unremembered.setattr(slicer_profiles, "SETTLE_NS", 10**30)
+        unremembered.setattr(slicer_profiles, "single_read", contextlib.nullcontext)
+        fresh = _family_export(profile, setup, target, monkeypatch)
+    slicer_profiles.forget_holdings()
+    return fresh
+
+
+@pytest.mark.parametrize(
+    ("flavour", "listings"),
+    [
+        ("orca", ("_names_in", "_machine_model_in")),
+        ("cura", ("_cura_installed", "_cura_own_containers")),
+    ],
+)
+def test_a_second_3mf_export_lists_no_stock_folder_again(
+    flavour: str,
+    listings: tuple[str, ...],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-670: Namensindizes der Erbketten, die Modelldatei der Orca-Familie und
+    Curas Auflistung der Definitionen und Container sagen nur, welches Profil
+    wo liegt. Je 3MF-Export entstanden sie neu — am ElegooSlicer 0,35 s für
+    die Indizes und 0,18 s für die Modelldatei, an Cura 5.13 1,2 s für die
+    Auflistung. Sie halten jetzt unter der Signatur des Bestands
+    (``slicer_profiles._once_per_stock``): Der zweite Export liest keinen
+    Ordner davon neu. Prusa liest seine Bündel über den eigenen Merker
+    (``_prusa_store``)."""
+    from app.core.export import slicer_profiles
+
+    profile, setup = _family_stock(flavour, tmp_path / "programme", monkeypatch)
+    calls: list[str] = []
+    for name in listings:
+        original = getattr(slicer_profiles, name)
+
+        def counted(*args: Any, original: Any = original, name: str = name, **kwargs: Any) -> Any:
+            calls.append(name)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(slicer_profiles, name, counted)
+
+    _family_export(profile, setup, tmp_path / "erster" / "modell.3mf", monkeypatch)
+    first = list(calls)
+    calls.clear()
+    _family_export(profile, setup, tmp_path / "zweiter" / "modell.3mf", monkeypatch)
+
+    assert first, "der erste Export liest die Ordner — sonst prüfte der Test nichts"
+    assert calls == [], f"der zweite Export liest neu: {calls}"
+
+
+def _grow_family_stock(flavour: str, executable: Path) -> None:
+    """Füllt den Bestand aus :func:`_family_stock` auf die Größe eines echten:
+    rund 13 000 Profile der Orca-Familie in 30 Herstellerordnern (ElegooSlicer
+    1.5.3: 12 000), 30 Prusa-Bündel mit je 400 Abschnitten, bei Cura 600
+    Druckerdefinitionen, 600 Extruder, 2 000 Qualitäten und 400 Materialien."""
+    if flavour == "orca":
+        profiles_root = executable.parent / "resources" / "profiles"
+        for vendor in range(30):
+            root = profiles_root / f"Filler{vendor:02d}"
+            for kind, count in (("machine", 50), ("process", 100), ("filament", 230)):
+                folder = root / kind
+                folder.mkdir(parents=True)
+                common = f"fdm_{kind}_filler{vendor:02d}"
+                (folder / f"{common}.json").write_text(
+                    json.dumps({"type": kind, "name": common}), encoding="utf-8"
+                )
+                for index in range(count):
+                    name = f"Filler{vendor:02d} {kind} {index:03d}"
+                    document: dict[str, object] = {
+                        "type": kind,
+                        "name": name,
+                        "inherits": common,
+                        "instantiation": "true",
+                    }
+                    if kind == "machine":
+                        document["printer_model"] = name
+                        (folder / f"{name}.model.json").write_text(
+                            json.dumps({"type": "machine_model", "name": name}), encoding="utf-8"
+                        )
+                    (folder / f"{name}.json").write_text(json.dumps(document), encoding="utf-8")
+    elif flavour == "prusa":
+        profiles_root = executable.parent / "resources" / "profiles"
+        for vendor in range(30):
+            sections = [f"[vendor]\nname = Filler {vendor:02d}\n"]
+            for index in range(50):
+                sections.append(
+                    f"[printer_model:F{vendor:02d}M{index:03d}]\nname = Filler {vendor:02d} "
+                    f"Model {index:03d}\nvariants = 0.4\n"
+                )
+                sections.append(
+                    f"[printer:Filler {vendor:02d} Model {index:03d}]\n"
+                    f"printer_model = F{vendor:02d}M{index:03d}\nnozzle_diameter = 0.4\n"
+                )
+            for index in range(100):
+                sections.append(f"[print:0.20mm Filler {vendor:02d} {index:03d}]\nperimeters = 2\n")
+            for index in range(200):
+                sections.append(
+                    f"[filament:Filler {vendor:02d} PLA {index:03d}]\nfilament_type = PLA\n"
+                )
+            (profiles_root / f"Filler{vendor:02d}.ini").write_text(
+                "\n".join(sections), encoding="utf-8"
+            )
+    else:
+        resources = executable.parent / "share" / "cura" / "resources"
+        for index in range(600):
+            (resources / "definitions" / f"filler_{index:03d}.def.json").write_text(
+                json.dumps(
+                    {
+                        "version": 2,
+                        "name": f"Filler {index:03d}",
+                        "inherits": "fdmprinter",
+                        "metadata": {"visible": True, "manufacturer": "Filler"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (resources / "extruders" / f"filler_{index:03d}_extruder_0.def.json").write_text(
+                json.dumps({"version": 2, "name": "Extruder 1", "inherits": "fdmextruder"}),
+                encoding="utf-8",
+            )
+        for index in range(2000):
+            folder = resources / "quality" / f"filler_{index % 600:03d}"
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / f"filler_{index:04d}.inst.cfg").write_text(
+                f"[general]\nversion = 4\nname = Fine\ndefinition = filler_{index % 600:03d}\n\n"
+                "[metadata]\nsetting_version = 27\ntype = quality\nquality_type = fine\n\n"
+                "[values]\n",
+                encoding="utf-8",
+            )
+        materials = resources / "materials"
+        materials.mkdir(exist_ok=True)
+        for index in range(400):
+            (materials / f"filler_{index:03d}.xml.fdm_material").write_text(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<fdmmaterial xmlns="http://www.ultimaker.com/material" version="1.3">'
+                "<metadata><name><brand>Filler</brand><material>PLA</material>"
+                f"<color>Farbe {index:03d}</color></name>"
+                f"<GUID>00000000-0000-0000-0000-{index:012d}</GUID><version>1</version>"
+                "</metadata><properties><diameter>1.75</diameter></properties></fdmmaterial>",
+                encoding="utf-8",
+            )
+
+
+@pytest.mark.performance
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_a_second_3mf_export_of_a_large_stock_stays_under_half_a_second(
+    flavour: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Am Bestand eines echten Slicers kostete jeder 3MF-Export das
+    Lesen von rund 1 550 Maschinenprofilen, am ElegooSlicer 1,6 s statt
+    0,36 s für einen Würfel. Der zweite Export derselben Szene liest nur noch
+    die Signatur des gemerkten Bestands und die Erbkette der Wahl: unter einer
+    halben Sekunde CPU-Zeit (Bauplan §31; gemessen am echten Bestand im
+    Register-Archiv). Der erste, der den Bestand liest, steht zum Vergleich in
+    der Meldung. CPU-Zeit statt Wanduhr — an einer belasteten Maschine
+    wartet die Wanduhr auf fremde Prozesse."""
+    profile, setup = _family_stock(
+        flavour, tmp_path / "programme", monkeypatch, grow=_grow_family_stock
+    )
+
+    started = time.process_time()
+    _family_export(profile, setup, tmp_path / "erster" / "modell.3mf", monkeypatch)
+    first = time.process_time() - started
+    started = time.process_time()
+    _family_export(profile, setup, tmp_path / "zweiter" / "modell.3mf", monkeypatch)
+    second = time.process_time() - started
+
+    assert second < 0.5, f"zweiter Export {second:.2f} s CPU, erster {first:.2f} s"
+
+
+def test_the_export_hands_a_renewed_choice_back_to_the_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review RM-670 N2: Der Export leitete nach einer Änderung im Slicer neu
+    her und behielt die Wahl für sich — Zahlenzeile und Prüfbericht rechneten
+    mit der alten, und jeder weitere Export leitete wieder her. Die neue Wahl
+    reist jetzt mit dem Arbeiter zurück, samt Signatur."""
+    from app.core.export import slicer_profiles
+
+    old = handover.SlicerSetup(tmp_path / "slicer.exe", "orca", machine_profile="alt.json")
+    new = handover.SlicerSetup(tmp_path / "slicer.exe", "orca", machine_profile="neu.json")
+    stock = {"now": (("vorher", 0, 0),)}
+    monkeypatch.setattr(slicer_profiles, "stock_signature", lambda *_args: stock["now"])
+    monkeypatch.setattr(
+        preflight_main, "_stock_now", lambda: ((tmp_path / "slicer.exe", "orca"), stock["now"])
+    )
+    asked: list[object] = []
+
+    def derived(*_args: object, **_kwargs: object) -> handover.SlicerSetup:
+        asked.append(True)
+        return new
+
+    monkeypatch.setattr(preflight_main, "remembered_setup", derived)
+    written: list[object] = []
+
+    def write(*_args: object, setup: object, **_kwargs: object) -> tuple[Path, list[object]]:
+        written.append(setup)
+        return tmp_path / "x.3mf", []
+
+    monkeypatch.setattr(preflight_main, "write_assembly", write)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+
+    def export(chosen: Any) -> Any:
+        worker = preflight_main._ExportWorker(
+            [_cube_object()],
+            tmp_path / "x.3mf",
+            "3mf",
+            profile=profile,
+            sources={},
+            settings=None,
+            ui_settings=UiSettings(),
+            material="pla",
+            chosen=chosen,
+        )
+        worker._assembly()
+        return worker
+
+    chosen = preflight_main._ChosenSetup(
+        ("p", "w"), old, (("vorher", 0, 0),), (tmp_path / "slicer.exe", "orca")
+    )
+    assert export(chosen).renewed is None and written == [old] and not asked
+
+    stock["now"] = (("nachher", 0, 0),)
+    worker = export(chosen)
+    assert asked, "ein geänderter Bestand verlangt eine neue Wahl"
+    assert written[-1] == new, "die Datei trägt die neue Wahl"
+    assert worker.renewed == preflight_main._ChosenSetup(
+        ("p", "w"), new, (("nachher", 0, 0),), (tmp_path / "slicer.exe", "orca")
+    )
 
 
 @pytest.mark.parametrize("language", ["en", "es", "fr", "it", "pt"])
@@ -11552,7 +12429,9 @@ def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
     Schichten wie der Export (RM-622): PLA und PETG bei 0,08er Schichten
     bekommen 0,16 mm, die Zeile nennt beide Tische und nicht den Block ohne
     Stütze daneben, und die Datei trägt an jedem Tisch genau den Wert der Zeile.
-    Ebenso unter „automatisch“, wenn das Herstellerprofil mit Bäumen stützt.
+    Ebenso unter „automatisch“, wenn das Herstellerprofil mit Bäumen stützt und
+    der Kunde das Gitter ablehnt, das der Rat seit RM-584 unter den flachen
+    Tischplatten vorschlägt (``declined``); übernommen druckten sie Gitter.
     Frei nennt die Zeile 0,12 am PETG-Tisch, und dieser bekommt ihn. Nach dem
     Übernehmen nennt das Feld dieselben Teile (``accepted_parts``)."""
     import trimesh
@@ -11594,7 +12473,16 @@ def test_beside_a_tower_the_dialog_proposes_the_gap_the_file_gets(
     def worked(current: PrintSettings) -> tuple[list[SettingAdvice], print_dialog._AdviceWorker]:
         found: list[list[SettingAdvice]] = []
         worker = print_dialog._AdviceWorker(
-            objects, current, profile, setup, {}, (), (), {}, flavour="orca"
+            objects,
+            current,
+            profile,
+            setup,
+            {},
+            (),
+            (),
+            {},
+            flavour="orca",
+            declined=frozenset({"support.style"}) if case == "trees" else frozenset(),
         )
         worker.done.connect(lambda entries, _measured: found.append(entries))
         worker.work()

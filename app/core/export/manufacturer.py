@@ -348,6 +348,12 @@ def _number(text: str, _context: _Context) -> object:
     return Foreign(text) if number is None else number
 
 
+def _negated(text: str, _context: _Context) -> object:
+    """Eine Ausdehnung als Einzug (SuperSlicers ``first_layer_size_compensation``)."""
+    number = _float(text)
+    return Foreign(text) if number is None else -number + 0.0
+
+
 def _positive(text: str, _context: _Context) -> object:
     """Eine Zahl über null. Null heißt bei Tempo und Beschleunigung „wie die
     Maschine" — eine Angabe, die Solidon nicht als Zahl führt."""
@@ -360,6 +366,15 @@ def _count(text: str, _context: _Context) -> object:
     if number is None or number < 0.0 or not number.is_integer():
         return Foreign(text)
     return int(number)
+
+
+def _tree_walls(text: str, _context: _Context) -> object:
+    """Die Wände der Baumstämme (RM-584): 0 heißt bei Orca „automatisch“, Bambu
+    schreibt -1 — beides eine Wand, wie der Baum sie ohne Angabe druckt."""
+    number = _float(text)
+    if number is None or not number.is_integer():
+        return Foreign(text)
+    return max(int(number), 1)
 
 
 def _fraction(text: str, _context: _Context) -> object:
@@ -425,6 +440,8 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("layers.first_layer_height", "initial_layer_print_height", _positive),
     ("layers.line_width", "line_width", _width),
     ("layers.first_layer_line_width", "initial_layer_line_width", _width),
+    ("layers.elephant_foot", "elefant_foot_compensation", _number),
+    ("shell.hole_offset", "xy_hole_compensation", _number),
     ("shell.wall_count", "wall_loops", _count),
     ("shell.top_layers", "top_shell_layers", _count),
     ("shell.bottom_layers", "bottom_shell_layers", _count),
@@ -464,6 +481,8 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("support.z_gap", "support_top_z_distance", _number),
     ("support.interface_layers", "support_interface_top_layers", _count),
     ("support.interface_spacing", "support_interface_spacing", _number),
+    ("support.tree_walls", "tree_support_wall_count", _tree_walls),
+    ("support.tip_diameter", "tree_support_tip_diameter", _positive),
     ("adhesion.skirt_loops", "skirt_loops", _count),
     ("adhesion.skirt_distance", "skirt_distance", _number),
     ("adhesion.brim_width", "brim_width", _number),
@@ -486,17 +505,22 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
 #: Für die Zeitgegenprobe (RM-281, 06.10.2026) dazu, was die Ketten offen
 #: lassen und der Konfigurationsblock der Seitenablage zeigt: innere Brücke
 #: 150 % (ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2), ganze senkrechte Schalen
-#: (OrcaSlicer, Bambu Studio 02.08.02.61).
+#: (OrcaSlicer, Bambu Studio 02.08.02.61). Einzug und Lochausgleich setzen alle
+#: fünf auf null, gemessen ohne Prozessprofil (09.10.2026, RM-589): Ein Prozess
+#: ohne die Schlüssel (19 MK3S-Prozesse, Creality Print 21) druckt ohne beides.
 PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
     "elegooslicer": {
         "brim_type": "auto_brim",
+        "elefant_foot_compensation": "0",
         "internal_bridge_speed": "150%",
         "precise_outer_wall": "1",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
+        "xy_hole_compensation": "0",
     },
     "orcaslicer": {
         "brim_type": "auto_brim",
+        "elefant_foot_compensation": "0",
         "ensure_vertical_shell_thickness": "ensure_all",
         "initial_layer_speed": "30",
         "internal_bridge_speed": "150%",
@@ -504,27 +528,38 @@ PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
         "support_object_xy_distance": "0.35",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
+        "xy_hole_compensation": "0",
     },
     "bambustudio": {
         "brim_type": "auto_brim",
+        "elefant_foot_compensation": "0",
         "ensure_vertical_shell_thickness": "enabled",
         "precise_outer_wall": "0",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
+        "xy_hole_compensation": "0",
     },
     "crealityprint": {
         "brim_type": "auto_brim",
+        "elefant_foot_compensation": "0",
         "precise_outer_wall": "0",
+        # Die Wände der Bäume unter Crealitys eigenem Namen
+        # (``slicer_keys.PROGRAM_KEYS``); kein Prozess nennt ihn, der
+        # Konfigurationsblock am K1 Max zeigt 0 (RM-584, 09.10.2026).
+        "tree_support_wall_count_tree": "0",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
+        "xy_hole_compensation": "0",
     },
     "anycubicslicernext": {
         "brim_type": "auto_brim",
+        "elefant_foot_compensation": "0",
         "initial_layer_speed": "30",
         "precise_outer_wall": "1",
         "support_object_xy_distance": "0.35",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
+        "xy_hole_compensation": "0",
     },
 }
 
@@ -675,10 +710,17 @@ def _read_process(
     *,
     program_name: str = "",
 ) -> tuple[dict[str, object], dict[str, str]]:
-    """Die Prozesswerte in Solidons Pfaden, dazu, was sich nicht übersetzen ließ."""
+    """Die Prozesswerte in Solidons Pfaden, dazu, was sich nicht übersetzen ließ.
+
+    Gelesen wird der Schlüssel, den die Übergabe für dieses Programm schreibt
+    (``slicer_keys.native_key``): Creality Print druckt die Wände der Bäume aus
+    ``tree_support_wall_count_tree`` (RM-584), und gegen den gemeinsamen Namen
+    verglichen schlug der Rat vor, was schon galt, oder übersah eine Abweichung.
+    """
     read: dict[str, object] = {}
     foreign: dict[str, str] = {}
-    for path, key, reader in ORCA_PROCESS:
+    for path, common, reader in ORCA_PROCESS:
+        key = slicer_keys.native_key(common, program_name)
         text = _text(values.get(key))
         if text is None:
             text = defaults.get(key)
@@ -910,6 +952,20 @@ ORCA_SUPPORT_INTERFACE_SPEED: Final = 80.0
 ORCA_SUPPORT_CLOSING: Final = 2.0
 
 
+def auto_prints_trees(values: Mapping[str, Any], flavour: str) -> bool:
+    """Stützt dieser Herstellerprozess unter „automatisch“ mit Bäumen (RM-584)?
+
+    In der Orca-Familie heißt es ``support_type`` ``tree(…)``, ob organisch,
+    schlank, kräftig oder hybrid; bei PrusaSlicer ``support_material_style``
+    ``organic``. Die eine Auskunft für Zeitmodell (``Motion.support_tree``) und
+    Rat (``handover.tree_styles``)."""
+    if flavour == "orca":
+        return (_text(values.get("support_type")) or "").startswith("tree")
+    if flavour == "prusa":
+        return (_text(values.get("support_material_style")) or "") == "organic"
+    return False
+
+
 def _orca_support_motion(
     process: Mapping[str, Any], default: float | None, nozzle: float
 ) -> dict[str, Any]:
@@ -934,7 +990,10 @@ def _orca_support_motion(
         "support_interface_density": width / (width + spacing)
         if spacing is not None and spacing >= 0.0
         else None,
-        "support_tree": (_text(process.get("support_type")) or "").startswith("tree"),
+        "support_tree": auto_prints_trees(process, "orca"),
+        # Jedes Programm der Familie kennt ``tree_hybrid``; ein Wächter hält es
+        # gegen ``slicer_keys.NOT_OFFERED_BY_PROGRAM`` (RM-584).
+        "support_hybrid": True,
         # Fest in ``SupportMaterial.cpp`` (``support_closing_radius(2.0)``).
         "support_closing": ORCA_SUPPORT_CLOSING,
         "support_skips_bridges": (_text(process.get("bridge_no_support")) or "0") in ("1", "true"),
@@ -1031,7 +1090,7 @@ def _prusa_support_motion(values: Mapping[str, Any], nozzle: float) -> dict[str,
         "support_interface_density": width / (width + spacing)
         if spacing is not None and spacing >= 0.0
         else None,
-        "support_tree": (_text(values.get("support_material_style")) or "") == "organic",
+        "support_tree": auto_prints_trees(values, "prusa"),
         "support_closing": _float(_text(values.get("support_material_closing_radius")) or ""),
         "support_skips_bridges": (_text(values.get("dont_support_bridges")) or "0")
         in ("1", "true"),
@@ -1119,7 +1178,8 @@ def _support_style(values: Mapping[str, Any]) -> str | None:
         return "none"
     kind = (_text(values.get("support_type")) or "").casefold()
     if kind.startswith("tree"):
-        return "tree"
+        style = (_text(values.get("support_style")) or "").casefold()
+        return "hybrid" if style == "tree_hybrid" else "tree"
     if kind.startswith("normal"):
         return "grid"
     return "auto"
@@ -1373,6 +1433,7 @@ _PRUSA_INFILL_BACK: Final = {prusa: solidon for solidon, prusa in slicer_keys._P
 PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("layers.layer_height", "layer_height", _positive),
     ("layers.first_layer_height", "first_layer_height", _positive),
+    ("layers.elephant_foot", "elefant_foot_compensation", _number),
     ("shell.wall_count", "perimeters", _count),
     ("shell.top_layers", "top_solid_layers", _count),
     ("shell.bottom_layers", "bottom_solid_layers", _count),
@@ -1430,6 +1491,8 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "chamber_temperature": "0",
     "default_acceleration": "0",
     "disable_fan_first_layers": "3",
+    # Gemessen mit ``--save`` aus einem leeren ``--datadir`` (2.9.6, 09.10.2026).
+    "elefant_foot_compensation": "0",
     # Nicht aus ``--save``, sondern aus dem Konfigurationsblock der Seitenablage
     # am MK4S (2.9.6, 06.10.2026): Das Bündel nennt den Schlüssel nicht.
     "ensure_vertical_shell_thickness": "enabled",
@@ -1521,8 +1584,17 @@ def prusa_defaults(program: str) -> Mapping[str, str]:
     Innenwandtempos bei SuperSlicer und 15 mm/s bei PrusaSlicer.
     """
     if program == "superslicer":
+        # Einzug und Lochausgleich unter SuperSlicers Namen, ebenso mit
+        # ``--save`` gemessen (2.5.59.13, 09.10.2026); ``elefant_foot_compensation``
+        # kennt es nicht.
         return {
-            **PRUSA_PROGRAM_DEFAULTS,
+            **{
+                key: value
+                for key, value in PRUSA_PROGRAM_DEFAULTS.items()
+                if key != "elefant_foot_compensation"
+            },
+            "first_layer_size_compensation": "0",
+            "hole_size_compensation": "0",
             "perimeter_generator": "classic",
             "small_perimeter_speed": "50%",
         }
@@ -1642,6 +1714,15 @@ def _read_prusa(
     take("speed.outer_wall_acceleration", _prusa_outer_wall_acceleration(values))
     take("support.style", _prusa_support_style(values))
     take("shell.scarf_seam", _prusa_scarf_seam(values))
+    # SuperSlicer führt Einzug und Lochausgleich unter eigenen Namen, beide
+    # als Materialzugabe, also mit umgekehrtem Vorzeichen
+    # (``slicer_keys.PROGRAM_NEGATED``, RM-589).
+    widened = _prusa_first(values.get("first_layer_size_compensation"))
+    if widened is not None:
+        take("layers.elephant_foot", _negated(widened, context))
+    holes = _prusa_first(values.get("hole_size_compensation"))
+    if holes is not None:
+        take("shell.hole_offset", _negated(holes, context))
     outer_width = _prusa_outer_width(values, context)
     take("support.threshold_angle", _prusa_support_angle(values, read, outer_width))
     take("support.xy_gap", _prusa_support_gap(values, outer_width))
@@ -2287,7 +2368,22 @@ def base_settings(
     das Herstellerprofil, zurückgelesen in Solidons Felder. Sonst ist sie
     Solidons Tabelle (:func:`app.core.knowledge.print_settings.resolve`) —
     und die Übergabe schreibt sie dann vollständig.
+
+    **Im Lesedurchgang einmal** (:func:`slicer_profiles.once_per_read`): Ein
+    3MF-Export fragt viermal — für die Datei, die Befunde, den Stützfuß und
+    die Projekteinstellungen —, und jedes Mal liefen Erbketten, Variante und
+    Modelldatei neu (RM-670).
     """
+    return slicer_profiles.once_per_read(
+        ("base_settings", profile, quality, setup),
+        lambda: _base_settings(profile, quality, setup),
+    )
+
+
+def _base_settings(
+    profile: Profile, quality: QualityPreset, setup: SlicerSetup | None
+) -> Foundation:
+    """:func:`base_settings`, ohne den Lesedurchgang."""
     fallback = cura_fan_curve(settings_table.resolve(profile, quality), profile, setup)
     if setup is not None and setup.flavour == "cura":
         from app.core.slice import advise

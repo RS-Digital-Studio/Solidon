@@ -991,6 +991,11 @@ class MaterialProfile:
     """Relativer Schrumpf, 0.004 = 0,4 %."""
     calibrated: bool = False
     """False heißt: die Werte sind der mitgelieferte Startpunkt, nicht gemessen."""
+    measured: tuple[str, ...] | None = None
+    """Welche Werte die Kalibrierung gemessen hat (``calibration.FIELDS``,
+    sortiert); ``None`` heißt keiner. Ein Kalibrierlauf kann nur das Spiel
+    messen — der Elefantenfuß bleibt dann Startwert, und für ihn gilt der
+    Vorschlag des Druckrats weiter (RM-589, ``advise._from_allowances``)."""
     youngs_modulus: float = 0.0
     """Elastizitätsmodul in MPa; **0 heißt unbekannt**, nicht null.
 
@@ -1199,8 +1204,10 @@ InfillPattern = Literal["grid", "gyroid", "honeycomb", "cubic", "lines", "triang
 #: Profil des Slicers (Konzept Herstellerprofil, Entscheidung J, 27.09.2026).
 #: Bis dahin hieß „Stützen nötig" immer ``grid`` — und Elegoo wie Bambu, deren
 #: Standardprozess Bäume stützt, bekamen Gitter, auch wer die Stützen erst im
-#: Slicerfenster einschaltete.
-SupportStyle = Literal["none", "auto", "grid", "tree"]
+#: Slicerfenster einschaltete. ``hybrid`` (RM-584) stützt Details mit Bäumen und
+#: große flache Decken mit normaler Stütze — Orcas ``tree_hybrid``; wer das nicht
+#: kennt, bekommt ``grid`` (``slicer_keys.NOT_OFFERED_BY_PROGRAM``).
+SupportStyle = Literal["none", "auto", "grid", "tree", "hybrid"]
 SupportPlacement = Literal["everywhere", "build_plate"]
 SeamPosition = Literal["aligned", "nearest", "random", "rear"]
 
@@ -1233,6 +1240,14 @@ class LayerSettings:
     first_layer_height: float = 0.25
     line_width: float = 0.42
     first_layer_line_width: float = 0.45
+    elephant_foot: float = 0.0
+    """Um wie viel der Slicer die erste Schicht je Seite einzieht, gegen den
+    Elefantenfuß (RM-589). Mit Herstellerprofil dessen Wert; ohne ihn null,
+    und Solidons eigener Satz schreibt ihn nur gewählt oder übernommen
+    (``slicer_keys.MAKER_OWNED``), so gilt die Vorgabe des Slicers. Zieht
+    schon das Modell die ersten Schichten ein (*Elefantenfuß ausgleichen*),
+    schlägt der Druckrat null vor — nicht, wenn der Elefantenfuß des
+    Materials gemessen ist (``MaterialProfile.measured``)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1260,6 +1275,12 @@ class ShellSettings:
     ironing: bool = False
     """Bügelt die oberste Fläche nach. Für Sicht- und Gleitflächen; sonst
     kostet es nur Zeit."""
+    hole_offset: float = 0.0
+    """Um wie viel der Slicer Löcher je Seite weitet (RM-589). Herkunft und
+    Schreiben wie bei ``LayerSettings.elephant_foot``. Steht das Spiel schon im
+    Modell — eine senkrechte Bohrung mit Materialzugabe, eine gebaute
+    Passung —, schlägt der Druckrat null vor, sonst gleicht das Loch doppelt
+    aus; nicht, wenn Spiel und Lochkorrektur des Materials gemessen sind."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1391,6 +1412,18 @@ class SupportSettings:
     """Lücke zwischen den Linien der Kontaktschicht in mm (RM-583): dicht unter
     großen flachen Decken, damit die Unterseite nicht durchhängt, offen unter
     kleinen und gewölbten Flächen, wo eine dichte Kontaktschicht festsitzt."""
+    tree_walls: int = 1
+    """Wände der Baumstämme (RM-584). Hohe Bäume brechen mit einer Wand oder
+    kippen; ab etwa 100 mm Stützhöhe tragen zwei (Recherche Nr. 5).
+    PrusaSlicer zählt keine Wände und nimmt das Feld nicht
+    (``slicer_keys.NOT_TAKEN_BY``); seine Doppelwand ab einem Astquerschnitt
+    bleibt beim Hersteller."""
+    tip_diameter: float = 0.8
+    """Durchmesser der Spitzen organischer Bäume in mm (RM-704). Unter
+    ``analysis.TIP_ROOF_AREA`` Querschnitt setzt die Orca-Familie keine
+    Trennschicht auf die Spitze; darüber trägt jede Spitze eine. Die Vorgabe
+    ist die der Familie und der meisten Herstellerprofile; einige führen 1 bis
+    2 mm."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -2868,17 +2901,29 @@ class SketchConstraint:
     value: str = ""
 
 
+#: Die Fassung des Skizzenlösers, mit der eine neue Skizze rechnet (RM-541).
+#:
+#: ``1`` ist der Löser bis Solidon 0.5: ein Lauf in Koordinaten über alle
+#: Punkte, dessen erster Schritt an der Entfernung vom Nullpunkt hing. ``2``
+#: rechnet je zusammenhängendem Teil in Verschiebungen gegen den Ausgang. Eine
+#: Skizze aus einer älteren Projektdatei trägt ``1`` (Migration 49 → 50) und
+#: rechnet wie gespeichert, bis jemand sie im Editor ändert.
+SKETCH_SOLVER: Final = 2
+
+
 @dataclass(frozen=True, slots=True)
 class Sketch:
     """Eine 2D-Skizze auf einer Ebene (§30.1).
 
     ``plane`` ist ``plane:xy``, ``plane:xz``, ``plane:yz`` oder
     ``feature:<object_id>:<feature_id>`` für eine erkannte planare Fläche.
-    Die ältere Schreibweise ``feature:<feature_id>`` bleibt lesbar."""
+    Die ältere Schreibweise ``feature:<feature_id>`` bleibt lesbar.
+    ``solver`` nennt die Fassung des Lösers (:data:`SKETCH_SOLVER`)."""
 
     plane: str
     elements: tuple[SketchElement, ...]
     constraints: tuple[SketchConstraint, ...] = ()
+    solver: int = SKETCH_SOLVER
 
 
 @dataclass(frozen=True, slots=True)

@@ -187,10 +187,9 @@ Millionen-Dreieck-Modell wird bei Bedarf erzeugt, nicht eingecheckt.
 (`cylinder(radius=2.6)` → Ø 5,2), aus dem Korpus (`data/README.md`) oder als
 Formel im Assert (`24000.0 - math.pi * 9.0 * 20.0`). Eine aus einem Lauf
 abgeschriebene Zahl trägt ihre Herleitung als Kommentar — oder sie ist ein
-Determinismusnachweis, und der Test sagt das. Druckgleich (§11.2) weist
-`tests/print_equal.py` nach, über zwei Codestände `tools/check_print_equal.py` —
-kein eigener Vergleich je Paket. Zwei Vernetzungen gegeneinander
-zu halten fängt keinen Fehler, der beide gleich trifft.
+Determinismusnachweis, und der Test sagt das. Druckgleich (§11.2) prüft
+`tests/print_equal.py`, zwei Codestände `tools/check_print_equal.py`. Zwei
+Vernetzungen gegeneinander zu halten fängt keinen Fehler, der beide gleich trifft.
 
 ## Beim Schreiben
 
@@ -208,6 +207,10 @@ reicht dafür selten. Sprache in `tests/`: `AGENTS.md`, „Sprachregelung“.
 - **Eine Arbeiterfrage im Test steht auf einer Freigabe** (`threading.Event`),
   wenn der Test prüft, was vor ihrer Antwort gilt: Auf einem schnellen Läufer
   ist sie sonst schon beantwortet, bevor die nächste Zeile läuft.
+- **Eine Zeile des Prüfberichts greift ein Test erst nach
+  `ui_helpers.wait_for_print_findings`** und liest ihren Befund vor jedem
+  Zustellen: Die Berichtsanalyse liefert nach `wait_for_idle` nach und baut die
+  Liste neu, auf einem langsamen Läufer ist die gehaltene Zeile dann gelöscht.
 
 ## Den Lauf messen, nicht einen Filter darüber
 
