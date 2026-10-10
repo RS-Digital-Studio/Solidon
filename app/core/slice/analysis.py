@@ -1473,7 +1473,16 @@ def _positive_rings(
     positive_direction = np.add.reduceat(x * y[following] - x[following] * y, starts) > 0.0
     negative_indices = np.flatnonzero(~positive_direction)
     if len(negative_indices):
-        positive_parts = [_repaired(outline) for outline in outlines[positive_direction]]
+        # Was ``_repaired`` leer zurückgibt, trägt keine Fläche und bleibt aus
+        # der Vereinigung: Mit einem leeren Glied setzt GEOS im Aufruf
+        # ``create_collection`` selbst auf Intel-Macs das Ungültig-Flag, und
+        # NumPy meldet es als ``RuntimeWarning`` (CI macOS Intel). Wie in
+        # ``organizer/build.py``.
+        positive_parts = [
+            part
+            for outline in outlines[positive_direction]
+            if not (part := _repaired(outline)).is_empty
+        ]
         positive_area = (
             positive_parts[0] if len(positive_parts) == 1 else unary_union(positive_parts)
         )
@@ -5059,9 +5068,9 @@ def _channel_space(
             return skies[number][start]
 
     def slab_of(chunk: list[int]) -> tuple[float, float, ShapelyPolygon] | None:
-        # Eine Scheibe ohne umschlossenen Raum fragt GEOS mit leeren Flächen,
-        # deren Hülle aus NaN besteht; auf Intel-Macs setzt das das
-        # Ungültig-Flag, und NumPy meldete es beim nächsten Shapely-Aufruf als
+        # Eine Scheibe ohne umschlossenen Raum vereinigt eine leere Fläche;
+        # mit einem leeren Glied setzt GEOS im Aufruf ``create_collection``
+        # selbst auf Intel-Macs das Ungültig-Flag, und NumPy meldete es als
         # ``RuntimeWarning: invalid value encountered in create_collection``
         # (CI, macOS Intel). Über das Ergebnis sagt es nichts. Im Faden selbst
         # gesetzt: ``np.errstate`` gilt je Faden, die Arbeiter erben es nicht.

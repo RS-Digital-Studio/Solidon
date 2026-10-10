@@ -1078,11 +1078,11 @@ def test_the_channel_space_stays_inside_the_tunnel() -> None:
 def test_the_channel_space_holds_when_geos_raises_the_invalid_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Auf Intel-Macs setzt GEOS an leeren Flächen (Hülle aus NaN) das
-    Ungültig-Flag, und NumPy meldete es als ``RuntimeWarning`` des nächsten
-    Shapely-Aufrufs: Unter ``-W error`` fiel die Kanalsperre aus, mit ihr Rat
-    und Export (CI macOS Intel auf main ``e734a0b44``). Die Attrappe setzt das
-    Flag auf jeder Plattform, in jeder Scheibe — der Tunnel liegt über
+    """Auf Intel-Macs setzt GEOS im Aufruf ``create_collection`` selbst das
+    Ungültig-Flag, sobald ein Glied leer ist, und NumPy meldete es als
+    ``RuntimeWarning``: Unter ``-W error`` fiel die Kanalsperre aus, mit ihr
+    Rat und Export (CI macOS Intel auf main ``e734a0b44``). Die Attrappe setzt
+    das Flag auf jeder Plattform, in jeder Scheibe — der Tunnel liegt über
     ``PARALLEL_FROM`` Schichten, gefragt wird also in den Arbeitsfäden."""
     import numpy as np
 

@@ -1337,6 +1337,59 @@ def test_the_selection_starts_at_the_last_checked_main_run(tmp_path: Path) -> No
     assert re.search(r"(?m)^      actions: read$", job_block(workflow, "selection"))
 
 
+#: Was die Bash 3.2 des Macs nicht kennt (Bash 4 und neuer).
+BASH_FOUR: Final = re.compile(
+    r"\b(?:mapfile|readarray|coproc)\b"
+    r"|\b(?:declare|local|typeset)\s+-[a-zA-Z]*[Ang]\b"
+    r"|\$\{\w+(?:,,|\^\^)"
+    r"|&>>|\|&"
+    r"|\bshopt\s+-s\s+(?:globstar|lastpipe|inherit_errexit)\b"
+    r"|\[\[\s+-v\b"
+    r"|\$\{\w+@[QEPAa]\}"
+    r"|\bwait\s+-n\b"
+)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "mapfile -d '' -t files < <(git ls-files -z)",
+        "readarray -t lines",
+        "declare -A seen",
+        "local -n target=$1",
+        'echo "${name,,}"',
+        "make |& tee log",
+        "shopt -s globstar",
+        "[[ -v GITHUB_ENV ]]",
+        "wait -n",
+    ],
+)
+def test_the_bash_guard_knows_what_the_mac_lacks(line: str) -> None:
+    """Gegenprobe zum Wächter darunter: Jedes Bash-4-Konstrukt wird erkannt."""
+    assert BASH_FOUR.search(line), line
+
+
+def test_no_shell_step_needs_a_bash_newer_than_the_macs() -> None:
+    """macOS bringt Bash 3.2 mit. ``mapfile -d ''`` im Auswahlschritt war unter
+    Git-Bash 5 und Ubuntu grün und fiel erst auf dem macOS-Läufer, also nach dem
+    Push nach main (CI auf ``e734a0b44``) — auf Zweigen läuft keine CI. Gelesen
+    werden alle Workflows, Hooks und Skripte, die bash fahren; Kommentare
+    zählen nicht."""
+    sources = [
+        *sorted((ROOT / ".github" / "workflows").glob("*.yml")),
+        *sorted((ROOT / ".githooks").iterdir()),
+        *sorted((ROOT / ".claude" / "scripts").glob("*.sh")),
+    ]
+    found = [
+        f"{path.relative_to(ROOT).as_posix()}:{number}: {line.strip()}"
+        for path in sources
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if not line.lstrip().startswith("#") and BASH_FOUR.search(line)
+    ]
+    assert len(sources) > 5, "der Wächter liest Workflows, Hooks und Skripte"
+    assert not found, "\n".join(found)
+
+
 def test_the_selection_step_rejects_the_pushed_diff_alone(tmp_path: Path) -> None:
     """Gegenprobe: Wählt der Schritt wie vorher ab ``github.event.before``, ist er rot."""
     shell = _workflow_shell()
