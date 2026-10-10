@@ -74,7 +74,8 @@ Messwerte, Anlässe und die Begründung der Renderer-Wahl stehen in
   Themenwerte des Viewports (`HEADLIGHT`) sind dafür kalibriert.
   `HEADLIGHT_GAIN` gleicht aus, dass pygfx in linearem Licht schattiert. Ein
   gerichtetes Licht dreht sich nicht je Bild (`_directional_light` schreibt
-  nur die Richtung — hier wirft kein Licht Schatten). Deckende Körper
+  nur die Richtung — hier wirft kein Licht Schatten, also haben pygfx'
+  Schattentexturen ein Texel, `SHADOW_MAP_SIZE`). Deckende Körper
   reflektieren schwach und breit, damit auch schwarzes Filament Form zeigt;
   `SurfaceStyle.specular` überschreibt das, auch mit null. Quelldaten,
   Materialslots und exportierte Farben bleiben.

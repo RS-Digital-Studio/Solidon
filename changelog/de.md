@@ -75,13 +75,15 @@ Nutzen da und sonst nichts.
 - Nach dem Ziehen am Griff einer Vorschau bleibt keine Zahl über der Ansicht stehen. Eine dabei getippte Zahl verschiebt die Vorschau, nicht den gewählten Körper.
 - Nach *Reparieren und erneut versuchen* und verwandten Wegen heißt im Verlauf kein weiterrechnender Schritt mehr „gelöscht“. Hält die Kette erneut an, ist der Schritt markiert.
 - Der Knopf *Filamente* steht jetzt in der Kopfzeile. Er listet die Filamente des Projekts und führt ins Filamentlager.
-- Ein anderes Filament steht sofort im Bild, auch an Bausteinen und STEP-Teilen, und Solidon rechnet dafür nichts neu. Gewählte Körper zeigen ihre Filamentfarbe unter der Markierung.
+- Ein anderes Filament ändert nur die Farbe, auch an Bausteinen und STEP-Teilen. Die Form wird dafür nicht neu berechnet. Gewählte Körper zeigen ihre Filamentfarbe unter der Markierung.
 - Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
 - In den übersetzten Fassungen rollt *Neues Filament* nicht mehr seitwärts, wenn das Fenster kürzer ist als sein Inhalt.
 - Große Modelle laden spürbar schneller und brauchen weniger Arbeitsspeicher, auch mit langem Verlauf und auf Rechnern mit 8 GB.
 - Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
+- An Modellen mit Tausenden Merkmalen sind Verschieben und andere Schritte, die die Form nicht ändern, bis zu doppelt so schnell fertig.
+- Nach dem Wiederöffnen eines Projekts nennt der Prüfbericht weiter, an welche freie Stelle ein eingefügtes Modell kam.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
-- Das Auflösen von Überschneidungen und der Export als 3MF gehen deutlich schneller.
+- Reparieren und das Auflösen von Überschneidungen gehen an großen Modellen bis zu viermal so schnell, der Export als 3MF deutlich schneller.
 - Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
@@ -97,6 +99,7 @@ Nutzen da und sonst nichts.
 - Zur Wahl stehen nur noch Slicer, mit denen Solidon arbeitet, dazu Resin-Slicer wie ChituBox und Lychee. Bambu Studio als AppImage zählt jetzt dazu.
 - Startcode und Bauraum kommen nur noch von genau Ihrem Drucker, nicht von einem anderen Modell derselben Reihe.
 - Der Druckdialog ordnet die Profile des Slicers deutlich schneller zu, beim Öffnen und nach jedem Slicerwechsel.
+- Ein 3MF-Export liest die Profile des Slicers nur noch neu, wenn sich dort etwas geändert hat, und ist damit deutlich schneller.
 - Die geschätzte Druckzeit liegt näher an der des Slicers, bei Teilen mit Stützen deutlich näher.
 - Ob Stützen und Skirt auf dem Bett Platz haben, misst die Prüfung nur noch unter den Überhängen. Teile nahe am Rand bekommen keine grundlose Warnung mehr.
 - Übernommene Vorschläge lassen kaum noch Überhänge ohne Stütze, die eine brauchen. *Kanäle frei halten* sperrt nur noch Raum, aus dem keine Stütze mehr herauskäme.
@@ -152,7 +155,10 @@ Nutzen da und sonst nichts.
 - Liegt neben einer Wand eine Verrundung, sagt *Formschräge anstellen* vor der Rechnung, dass sie im Weg ist, und nennt *Merkmal entfernen* als Ausweg.
 - Schneiden Sie einen Teil des Körpers weg, verschwinden auch Fasen, Gewinde und Mutterntaschen von Bausteinen, die darin lagen.
 - In *Deckel erzeugen* und *Drehdeckel erzeugen* heißt ein leeres Feld für die Höhe der Öffnung „Oberkante“, und 0 ist die Höhe des Betts. Ältere Projekte behalten ihre Öffnung.
-- Eine Winkelbedingung in einer kleinen Skizze wirft die Linien nicht mehr um.
+- Eine Skizze löst auf jedem Rechner und an jeder Stelle gleich, auch beim Ziehen, und eine Winkelbedingung wirft die Linien nicht mehr um. Ältere Projekte rechnen wie gespeichert.
+- Eine Skizze mit vielen getrennten Formen löst schnell, auch mit Hunderten bemaßter Rechtecke oder Kreise.
+- Lässt sich *Krümmungsstetig* beim Zeichnen nicht erfüllen, sagt der Skizzeneditor das nach Sekunden statt nach Minuten.
+- Widersprechen sich zwei Bedingungen, nennt der Skizzeneditor beide, statt eine Linie oder einen Kreis auf einen Punkt schrumpfen zu lassen.
 - Ein Körper entsteht mit drei Klicks: *Zeichnen* oben in der Werkzeugleiste (Strg+Umschalt+E), dann Ecke, Gegenecke, Höhe. Nach außen fügt er an, nach innen schneidet er.
 - Beim Aufziehen lassen sich die Maße tippen. Ein Doppelklick auf den Schritt öffnet seine Maße, und unter *Art* wird daraus ohne neues Zeichnen ein Drehkörper oder ein Lochfeld.
 - Aus dem Skizzeneditor führt *Fertig* zurück in die Ansicht, der nächste Klick setzt die Höhe. Escape legt den Umriss beiseite, Strg+Z holt ihn zurück.

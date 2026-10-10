@@ -784,7 +784,10 @@ class FitToSizeParams(BaseParams):
 
 @register_op(
     name="fit_to_size",
-    cache_version="7",
+    # 6: Mit festgehaltener Stelle steht der Satz zur freien Stelle im Ergebnis (RM-754).
+    # 7: Das Skalieren entfällt nur, wenn kein Punkt um PRINT_LIMIT wandert (RM-676).
+    # 8: beides zusammen.
+    cache_version="8",
     title=_("Auf Maß bringen"),
     category="transform",
     params=FitToSizeParams,
