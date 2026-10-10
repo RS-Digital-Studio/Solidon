@@ -81,7 +81,7 @@ Nutzen da und sonst nichts.
 - Große Modelle laden spürbar schneller und brauchen weniger Arbeitsspeicher, auch mit langem Verlauf und auf Rechnern mit 8 GB.
 - Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
-- Das Auflösen von Überschneidungen und der Export als 3MF gehen deutlich schneller.
+- Reparieren und das Auflösen von Überschneidungen gehen an großen Modellen bis zu viermal so schnell, der Export als 3MF deutlich schneller.
 - Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
@@ -109,6 +109,9 @@ Nutzen da und sonst nichts.
 - Unter einer großen flachen Unterseite schlägt Solidon Gitter statt Bäumen vor, mit Hybrid, wo zugleich feine Details Stütze brauchen. Für hohe Baumstützen schlägt Solidon zwei Wände vor.
 - Gilt ein Vorschlag im Druckdialog nur einzelnen Teilen, nennen Zeile und Feld auch die Teile, die mit ihm einen anderen Wert bekommen.
 - Bei PLA schlägt Solidon für viele feine Spitzen mehr Abstand zu den Baumstützen darunter vor. Dadurch bleiben dort weniger Reste der Baumspitzen.
+- Verlangen viele kleine Überhänge zusammen Stützen, etwa an einem Kinn mit schräger Unterseite, nennt der Prüfbericht jetzt die Stelle.
+- Ein schmaler Rand, der sich selbst trägt, gilt nicht mehr als lange Brücke, auch neben einem anderen Überhang. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.
+- Über einem Kanal rät der Prüfbericht nicht mehr zu einer Stütze, die dort nicht mehr herauskäme. Er nennt den Kanal und den Übergang unter 45 Grad.
 - Für PETG schlägt Solidon volle Kühlung an der Stütze vor. Sie löst sich so leichter vom Teil.
 - Neu in den Druckeinstellungen: *Trennschichten unten*, *Lücke in der Trennschicht* und *Volle Kühlung an der Stütze*.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.

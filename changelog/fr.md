@@ -57,7 +57,7 @@ dans `website/version.json`.
 - Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.
 - Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
 - Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
-- Résoudre les recouvrements et exporter en 3MF va nettement plus vite.
+- Réparer et résoudre les recouvrements va jusqu'à quatre fois plus vite sur les gros modèles, et l'export en 3MF nettement plus vite.
 - L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
 - Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
 - Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
@@ -85,6 +85,9 @@ dans `website/version.json`.
 - Sous une grande face inférieure plane, Solidon propose une grille plutôt que des arbres, et l'hybride si des détails fins en ont besoin. Pour les arbres hauts, Solidon propose deux parois.
 - Si une suggestion de la boîte de dialogue d'impression ne vaut que pour certaines pièces, la ligne et le champ nomment aussi celles qui reçoivent avec elle une autre valeur.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
+- Si de nombreux petits surplombs ont besoin ensemble de supports, comme un menton à face inférieure inclinée, le rapport indique désormais l'endroit.
+- Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.
+- Au-dessus d'un canal, le rapport ne conseille plus un support qu'on ne pourrait plus retirer. Il nomme le canal et une transition sous 45 degrés.
 - Pour le PETG, Solidon propose un refroidissement complet au support. Il se détache ainsi plus facilement de la pièce.
 - Nouveau dans les réglages d'impression : *Couches d'interface en bas*, *Écart dans l'interface* et *Refroidissement complet au support*.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.

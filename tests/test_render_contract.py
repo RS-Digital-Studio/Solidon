@@ -814,3 +814,107 @@ def test_the_hatch_of_an_added_body_shows_on_its_surface(renderer: Renderer) -> 
     near_line = np.abs(flat - want).sum(axis=1) < 90
     assert near_line.mean() > 0.03, f"die Striche sind zu sehen ({near_line.mean():.3f})"
     assert near_line.mean() < 0.7, "und die Fläche bleibt dazwischen zu sehen"
+
+
+def _light_states(view: GfxRenderer) -> set[tuple[int, tuple[int, int]]]:
+    """Je Lichtzustand, mit dem ``view`` zeichnete: Zahl der gerichteten Lichter und
+    Kantenlängen ihrer Schattentextur.
+
+    pygfx hält die Zustände der letzten Bilder am Renderer; die Ansicht und das
+    Achsenkreuz zeichnen über denselben.
+    """
+    found: set[tuple[int, tuple[int, int]]] = set()
+    for drawn in view._renderer._renderstates_per_flush:
+        for combined in drawn:
+            state = combined.light_renderstate
+            if state.dir_lights_count:
+                width, height, _layers = state.directional_lights_shadow_texture.size
+                found.add((int(state.dir_lights_count), (int(width), int(height))))
+    return found
+
+
+def test_no_light_casts_a_shadow_so_the_shadow_maps_stay_one_texel(renderer: Renderer) -> None:
+    """Kein Licht der Ansicht wirft Schatten, also brauchen seine Schattentexturen keine Fläche.
+
+    pygfx legte je gerichtetem Licht 1024 x 1024 Tiefenwerte an, auch ohne
+    Schatten: am echten Fenster 24 MB Grafikspeicher (RM-567). Seit
+    ``SHADOW_MAP_SIZE`` ist es ein Texel je Licht; das Bild ist dasselbe, denn
+    der Shader liest die Textur nur bei ``cast_shadow`` (der Bildvergleich
+    steht im Test danach). Geprüft wird jedes Licht der Anwendung, auch das
+    des Achsenkreuzes in seiner eigenen Szene. Wirft eines doch einmal
+    Schatten, wird dieser Test rot, bevor es mit einem Texel schattiert.
+    """
+    import gc
+
+    import pygfx as gfx
+
+    from app.ui.render import gfx_renderer
+
+    vertices, faces = cube()
+    body = renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle())
+    renderer.set_axes_marker(AxesMarkerStyle())
+    renderer.reset_camera(body.bounds())
+    image = renderer.screenshot()
+    assert image[150, 200].sum() > sum(BACKGROUND_RGB) + 60, "Voraussetzung: beleuchtet gezeichnet"
+    assert isinstance(renderer, GfxRenderer)
+    view = [obj for obj in renderer._scene.iter() if isinstance(obj, gfx.DirectionalLight)]
+    axes = [obj for obj in renderer._axes_scene.iter() if isinstance(obj, gfx.DirectionalLight)]
+    assert len(view) >= 2 and len(axes) == 1, "Voraussetzung: Lichtsatz und Achsenkreuzlicht"
+    # Jedes gerichtete Licht der Anwendung entsteht über _directional_light.
+    steady = [obj for obj in gc.get_objects() if isinstance(obj, gfx_renderer._STEADY_LIGHT)]
+    assert all(any(light is known for known in steady) for light in view + axes), (
+        "jedes Licht der Ansicht und des Achsenkreuzes ist das eigene"
+    )
+    assert not any(light.cast_shadow for light in steady), "kein Licht wirft Schatten"
+    states = _light_states(renderer)
+    assert {count for count, _size in states} == {len(view), len(axes)}, (
+        f"Voraussetzung: Ansicht und Achsenkreuz gezeichnet, {states}"
+    )
+    assert {size for _count, size in states} == {(1, 1)}, "ohne Schatten ein Texel"
+
+
+def test_one_texel_shadow_maps_draw_the_same_image(
+    monkeypatch: pytest.MonkeyPatch, require_graphics_adapter: None
+) -> None:
+    """Mit einem Texel je Schattentextur entsteht dasselbe Bild wie mit 1024 x 1024.
+
+    Der Shader liest die Textur nur für ein Licht mit ``cast_shadow``
+    (pygfx 0.17, ``light_punctual.wgsl``), und keines tut es (Test davor).
+    Gezeichnet wird eine beleuchtete Szene mit Achsenkreuz zweimal, je mit
+    frischen Lichtzuständen: pygfx merkt sie sich je Lichtzahl, und ein noch
+    lebender aus einem anderen Test käme sonst mit seiner Größe zurück.
+    """
+    import weakref
+
+    from pygfx.renderers.wgpu.engine import renderstate
+
+    from app.ui.render import gfx_renderer
+
+    images: list[np.ndarray] = []
+    for size in ((1024, 1024), gfx_renderer.SHADOW_MAP_SIZE):
+        monkeypatch.setattr(gfx_renderer, "SHADOW_MAP_SIZE", size)
+        monkeypatch.setattr(
+            renderstate, "_renderstate_instance_cache", weakref.WeakValueDictionary()
+        )
+        view = make_renderer()
+        try:
+            view.set_background(BACKGROUND)
+            view.add_surface(*plate(0.0), name="floor", style=SurfaceStyle())
+            vertices, faces = cube()
+            view.add_surface(
+                vertices + 10.0, faces, name="body", style=SurfaceStyle(colour="#d08040")
+            )
+            view.set_axes_marker(AxesMarkerStyle())
+            view.set_camera_pose(
+                CameraPose((55.0, -60.0, 50.0), (20.0, 20.0, 0.0), (0.0, 0.0, 1.0))
+            )
+            view.reset_camera((0.0, 40.0, 0.0, 40.0, 0.0, 30.0))
+            images.append(view.screenshot())
+            assert isinstance(view, GfxRenderer)
+            drawn = {drawn_size for _count, drawn_size in _light_states(view)}
+            assert drawn == {size}, f"Voraussetzung: gezeichnet mit {size}, nicht {drawn}"
+        finally:
+            view.close()
+    large, small = images
+    assert large.max() > 100, "Voraussetzung: das Bild ist beleuchtet"
+    assert np.array_equal(large, small), "die Größe der Schattentextur ändert kein Bild"
