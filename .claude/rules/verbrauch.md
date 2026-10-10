@@ -34,7 +34,10 @@ nach einem Update bei jedem Kunden zugleich (RM-705, RM-706).
   die Fassung des Bausteins (`PartSpec.version`, `PartChange`).
 - **Liest ein Schritt neben seinen Eingängen**, gehört die Lesart in
   `_read_beside` wie in `evaluate._with_nested_context` — sonst tragen zwei
-  verschiedene Drucke einen Abdruck.
+  verschiedene Drucke einen Abdruck. Der Wächter
+  `test_every_reading_of_the_cache_key_reaches_the_fingerprint` hält beide
+  über das ganze Register gleich; den Gang über den Stapel teilen sich beide
+  über dieselben Funktionen (`_without_stray_inputs`).
 - **Gespeicherte Antworten zählen als Entscheidung** (`_answers`): Kanten- und
   Merkmalsantworten mit dem Rang des gewählten Kandidaten nach Lage, ohne
   `scope` und Rohkoordinaten — eine gleich beantwortete neue Frage bleibt.

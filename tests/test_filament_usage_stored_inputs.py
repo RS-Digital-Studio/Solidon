@@ -289,6 +289,111 @@ def test_a_step_that_reads_another_body_follows_it() -> None:
     assert two_boxes(20.0, moved=False)["obj_2"] == two_boxes(21.0, moved=False)["obj_2"]
 
 
+def test_every_reading_of_the_cache_key_reaches_the_fingerprint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review RM-706, L2: ``_read_beside`` ist der Zwilling von
+    ``evaluate._with_nested_context`` (``zwillinge.md``, gewollt).
+
+    Für jede registrierte Operation und jede Lesart, die der Cache-Schlüssel
+    neben den Eingängen nimmt, liest der Abdruck dasselbe: eine Quelle als
+    Quelle, ein Projektmaß als Projektmaß, ein Merkmal, eine Skizzenebene und die
+    Szene als alle lebenden Körper. Eine neue Lesart der Auswertung ohne
+    Gegenstück hier macht ihn rot — sonst trügen zwei Drucke einen Abdruck.
+    """
+    from importlib import import_module
+
+    from app.core.registry import REGISTRY
+    from app.core.scene import orphans
+    from app.core.types import FeatureRef
+
+    # Das Modul, nicht die gleichnamige Funktion, die das Paket ausgibt.
+    evaluation = import_module("app.core.scene.evaluate")
+    project = build()
+    profile = profiles.make_profile(project.document.printer, project.document.material)
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    objects = dict(result.scene.objects)
+    hashes = dict(result.object_hashes)
+    feature = min(objects["obj_1"].features)
+    plate = plate_project()
+    sources = ProjectSources(plate)
+    stored = usage.StoredInputs(plate.document, sources)
+    kinds = tuple(evaluation.nested_references())
+
+    def reads(text: str) -> frozenset[str]:
+        return frozenset({"probe"}) if text == "@probe" else frozenset()
+
+    monkeypatch.setattr(
+        evaluation, "nested_references", lambda *, strict=False: dict.fromkeys(kinds, reads)
+    )
+    plane = FeatureRef("obj_1", feature)
+
+    def standing(text: str) -> FeatureRef | None:
+        return plane if text == "plane" else None
+
+    monkeypatch.setattr(evaluation, "feature_ref_of_sketch", standing)
+    monkeypatch.setattr(orphans, "feature_ref_of_sketch", standing)
+
+    def probes(entry: Any) -> list[object]:
+        if entry.kind in evaluation.SOURCE_KINDS:
+            return ["src_1"]
+        if entry.kind == "features":
+            return [[feature]]
+        if entry.kind == "feature" or entry.targets_feature:
+            return [feature]
+        if entry.kind == "sketch":
+            return ["plane", "@probe"]
+        if entry.kind in kinds:
+            return ["@probe"]
+        if entry.reads_scene:
+            return [True]
+        return []
+
+    missed: list[str] = []
+    readings = 0
+    for spec in REGISTRY.all():
+        entries = {entry.name: entry for entry in spec.params.spec()}
+        cases: list[dict[str, Any]] = [{}]
+        cases += [{name: value} for name, entry in entries.items() for value in probes(entry)]
+        for resolved in cases:
+            theirs = evaluation._with_nested_context(
+                spec.params,
+                resolved,
+                {"probe": 1.0},
+                sources,
+                objects,
+                hashes,
+                reads_other_bodies=spec.reads_other_bodies,
+            )
+            mine = usage._read_beside(
+                spec, Operation(id=1, op=spec.name, params=resolved), {"obj_1": "x"}, stored
+            )
+            for key in sorted(set(theirs) - set(resolved)):
+                readings += 1
+                if key.endswith(".solver"):
+                    # Die Fassung des Lösers ist eine Umsetzung, kein Druck.
+                    continue
+                if key == "#scene":
+                    found = "#scene" in mine
+                elif key.startswith("@"):
+                    found = key[1:] in mine.get("@", {})
+                else:
+                    name = key[1:].split(":")[0].split(".")[0]
+                    entry = entries.get(name)
+                    if entry is None:
+                        found = False
+                    elif entry.kind in evaluation.SOURCE_KINDS:
+                        found = f"#{name}" in mine
+                    else:
+                        found = "#scene" in mine
+                if not found:
+                    missed.append(f"{spec.name}: {key} bei {resolved}")
+    assert readings > 20, f"nur {readings} Lesarten gefunden — dann prüft der Wächter nichts"
+    assert not missed, "Lesarten des Cache-Schlüssels ohne Gegenstück im Abdruck:\n" + "\n".join(
+        missed[:10]
+    )
+
+
 def test_a_step_that_only_names_or_checks_keeps_the_body() -> None:
     plain = usage.StoredInputs(build().document).bodies()
     renamed = build(
