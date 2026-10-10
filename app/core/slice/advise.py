@@ -2464,8 +2464,8 @@ def _from_spans(result: SliceResult) -> list[Finding]:
     # Ebenso kein Bogenstreifen, der an einer Seite hängt (:func:`hanging_vaults`,
     # Review RM-585): Seine Brückenweite ist die Diagonale, praktisch die
     # Wandtiefe. Gefragt erst nach den Rändern und nur, wo dann noch eine
-    # Schicht spannt — die Bogenfrage kostet die Schließfrage ihrer Decke.
-    asked = frozenset(name for name in asked if name[0] in spanning)
+    # Schicht spannt — die Bogenfrage kostet die Schließfrage ihrer Decke. Mit
+    # derselben Auswahl wie die Randfrage, deren Antwort gemerkt ist.
     resting = _quiet_layers(result, rims | hanging_vaults(result, asked))
     spanning = [index for index in spanning if index not in resting]
     if not spanning:
