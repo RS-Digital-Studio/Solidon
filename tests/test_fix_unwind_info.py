@@ -466,3 +466,29 @@ def test_the_scan_reads_the_intel_slice_of_a_universal_wheel(tmp_path):
     assert wrong == 4
     assert lines[-1].endswith("STACK_IND 8, richtig 2, falsch 4, schon korrigiert 0, fremd 2")
     assert wheel.read_bytes() == before
+
+
+def test_the_check_reads_the_delivered_app_not_the_collect_folder(tmp_path, monkeypatch):
+    """Auf macOS reist nur die ``.app``; eine dort fehlende Bibliothek ist rot (Nachprüfung G-5).
+
+    Der COLLECT-Ordner daneben trägt dieselbe Bibliothek korrigiert und deckte
+    die Lücke zu, solange ``dist`` als Ganzes geprüft wurde.
+    """
+    monkeypatch.setitem(
+        tool.EXPECTED, "9.9", {"libTKFillet.8.0.1.dylib": 2, "libTKernel.8.0.1.dylib": 2}
+    )
+    corrected = tool.fix_library(_library().data).data
+    assert corrected is not None
+    collect = tmp_path / "Solidon3D" / "_internal" / "OCP" / ".dylibs"
+    collect.mkdir(parents=True)
+    (collect / "libTKFillet.8.0.1.dylib").write_bytes(corrected)
+    (collect / "libTKernel.8.0.1.dylib").write_bytes(corrected)
+    frameworks = tmp_path / "Solidon3D.app" / "Contents" / "Frameworks"
+    frameworks.mkdir(parents=True)
+    (frameworks / "libTKernel.8.0.1.dylib").write_bytes(corrected)
+    root = tool.package_root(tmp_path, platform="darwin")
+    assert root == tmp_path / "Solidon3D.app"
+    with pytest.raises(tool.UnwindError, match=r"libTKFillet.8.0.1.dylib 0 statt 2"):
+        tool.run("9.9", tool.bundle_libraries(root, "9.9"), write=False, codesign=False, check=True)
+    # Über ganz dist geprüft, wäre die Lücke grün gewesen.
+    tool.run("9.9", tool.bundle_libraries(tmp_path, "9.9"), write=False, codesign=False, check=True)

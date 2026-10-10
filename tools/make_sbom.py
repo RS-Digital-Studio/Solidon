@@ -1066,7 +1066,7 @@ def _licence(package: metadata.Distribution) -> list[dict[str, object]]:
     return [{"license": {"name": text}}]
 
 
-def _this_machine() -> str:
+def this_machine() -> str:
     return platform.machine()
 
 
@@ -1188,7 +1188,7 @@ def build_bom(
         environment=environment,
     )
     target = platform or sysconfig.get_platform()
-    machine = machine or _this_machine()
+    machine = machine or this_machine()
     python_version = python_version or (
         f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     )

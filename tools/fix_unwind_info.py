@@ -49,7 +49,7 @@ ausgelieferte Paket die korrigierten Bibliotheken trägt.
 Aufruf::
 
     python tools/fix_unwind_info.py [--codesign] [--dry-run]
-    python tools/fix_unwind_info.py --check --root dist
+    python tools/fix_unwind_info.py --check --package dist
     python tools/fix_unwind_info.py --root <ausgepacktes Rad> --version 8.0.1.1.0
     python tools/fix_unwind_info.py --scan <Rad.whl oder Ordner>
 """
@@ -713,6 +713,18 @@ def libraries_under(root: Path) -> list[Path]:
     return sorted(path for path in root.rglob("*") if path.suffix in {".dylib", ".so"})
 
 
+def package_root(dist: Path, *, platform: str = sys.platform) -> Path:
+    """Das Artefakt, das der Kunde bekommt — auf macOS die .app.
+
+    Der COLLECT-Ordner daneben trägt dieselben Bibliotheken, wird aber nicht
+    ausgeliefert; geprüft wird, was reist. Name und Lage kommen aus derselben
+    Quelle wie die Stückliste (make_sbom.artifact_root).
+    """
+    from tools.make_sbom import artifact_root
+
+    return artifact_root(dist, platform=platform)
+
+
 def bundle_libraries(root: Path, version: str) -> list[Path]:
     """Die OCC-Bibliotheken des Rads unter ``root``, jede Datei einmal.
 
@@ -874,6 +886,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--root", type=Path, help="gebautes Paket oder ausgepacktes Rad statt der Installation"
     )
+    parser.add_argument(
+        "--package",
+        type=Path,
+        metavar="DIST",
+        help="das ausgelieferte Artefakt unter DIST (auf macOS die .app, nicht der COLLECT-Ordner)",
+    )
     parser.add_argument("--version", help="Radversion zu --root (Vorgabe: die installierte)")
     parser.add_argument("--dry-run", action="store_true", help="nur prüfen, nichts schreiben")
     parser.add_argument(
@@ -892,6 +910,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--codesign gibt es nur auf macOS")
     if arguments.codesign and (arguments.check or arguments.dry_run):
         parser.error("--codesign schreibt; mit --check oder --dry-run gibt es nichts zu signieren")
+    if arguments.package is not None:
+        if arguments.root is not None:
+            parser.error("--package und --root schließen einander aus")
+        arguments.root = package_root(arguments.package)
+        if not arguments.root.is_dir():
+            parser.error(f"kein Artefakt unter {arguments.root}")
     if arguments.version is not None and arguments.root is None:
         parser.error("--version gehört zu --root")
     try:

@@ -726,10 +726,11 @@ jobs:
       - name: Abwicklungsinformation im Paket prüfen (Intel-Mac)
         # Der Kundennutzen von RM-768 hängt daran, dass PyInstaller die
         # korrigierten Bibliotheken einpackt; kein späterer Schritt löst eine
-        # OCC-Ausnahme aus. Liest jede Kopie der OCC-Bibliotheken unter `dist`
-        # und wird rot, sobald eine noch einen falschen Eintrag trägt.
+        # OCC-Ausnahme aus. Liest die OCC-Bibliotheken in der ausgelieferten
+        # .app (nicht im COLLECT-Ordner daneben) und wird rot, sobald eine
+        # fehlt oder noch einen falschen Eintrag trägt.
         if: runner.os == 'macOS' && runner.arch == 'X64'
-        run: python tools/fix_unwind_info.py --check --root dist
+        run: python tools/fix_unwind_info.py --check --package dist
 
       - name: Laufzeit-Stückliste gegen CycloneDX 1.6 prüfen
         # Das JSON Schema ist die Referenzimplementierung von CycloneDX. Der

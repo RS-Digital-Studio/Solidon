@@ -4762,6 +4762,6 @@ def test_the_intel_mac_package_is_checked_for_the_corrected_libraries() -> None:
     assert names.index("Bauen") < position < names.index("Unsignierten macOS-App-Eingang packen")
     assert "        if: runner.os == 'macOS' && runner.arch == 'X64'\n" in step
     assert re.search(
-        r"(?m)^        run: python tools/fix_unwind_info\.py --check --root dist$", step
+        r"(?m)^        run: python tools/fix_unwind_info\.py --check --package dist$", step
     )
     assert "fix_unwind_info.py --check" not in workflow.replace(step, "")
