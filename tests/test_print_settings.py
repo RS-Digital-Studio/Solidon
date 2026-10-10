@@ -110,6 +110,7 @@ def _old_spool_dialog_state():
             profile=profiles.make_profile(),
             last_result=SimpleNamespace(scene=scene, stopped_at=None),
             picture=None,
+            base_dir=None,
         ),
         _opened_with=settings,
         _handover_project_id="old-spools",
@@ -1271,6 +1272,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "layers.fine_layer_height": "reist als Höhenkurve in der 3MF (``AS_HEIGHT_PROFILE``).",
         "shell.overhang_reverse": "PrusaSlicer kennt keine Umkehr an Überhängen (2.9.6).",
         "support.tree_walls": "PrusaSlicer zählt keine Baumwände (``NOT_TAKEN_BY``, RM-584).",
         "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
@@ -1279,10 +1281,13 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "layers.fine_layer_height": "reist als Höhenkurve in der 3MF (``AS_HEIGHT_PROFILE``).",
     },
     "cura": {
         "support.block_channels": "reist als eigenes Netz (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als eigenes Netz (``AS_GEOMETRY``).",
+        "layers.fine_layer_height": "nimmt keine Höhenkurve, die Automatik wäre fast überall fein.",
+        "shell.top_thickness": "kennt keine Mindestdicke der Deckschichten, nur die Lagenzahl.",
         "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
@@ -7374,6 +7379,18 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "Trennschicht zu einem Drittel dicht wie bei Creality und Elegoo "
         "(``handover._for_supports``). Diese Messung setzt den Wert ohne Wahl."
     ),
+    ("layers.fine_layer_height", "prusa"): (
+        "Reist als Höhenkurve je Objekt in der 3MF, nicht als Wert "
+        "(``slicer_keys.AS_HEIGHT_PROFILE``); ``test_export`` prüft die Kurve."
+    ),
+    ("layers.fine_layer_height", "orca"): "Wie bei PrusaSlicer — dieselbe Kurve, eigener Name.",
+    ("layers.fine_layer_height", "cura"): (
+        "CuraEngine nimmt keine Höhenkurve; seine Automatik druckte den Drachen fast "
+        "überall fein (RM-586)."
+    ),
+    ("shell.top_thickness", "cura"): (
+        "Cura kennt keine Mindestdicke der Deckschichten, nur die Lagenzahl."
+    ),
     ("shell.overhang_reverse", "prusa"): (
         "PrusaSlicer 2.9.6 kennt keine Umkehr an Überhängen (``--help-fff``); nur die "
         "Orca-Familie dreht die Wand dort je zweite Schicht (RM-587)."
@@ -8940,6 +8957,8 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
             _chosen=None,
             cancelled=None,
             _begin_write=lambda: None,
+            # Der Bedarf gehört nicht zu dieser Frage (Review RM-706, M2).
+            _usage_for=lambda *_args: (),
         )
         # Der Lesedurchgang (RM-670) ruft den Rest über die Instanz.
         worker._assembly_in_one_read = lambda: main_window._ExportWorker._assembly_in_one_read(
@@ -10374,6 +10393,52 @@ def test_the_field_says_what_trees_do_to_it(
 
 
 @pytest.mark.parametrize(
+    ("flavour", "executable", "said"),
+    [
+        ("orca", "elegoo-slicer.exe", True),
+        ("orca", "bambu-studio.exe", True),
+        ("prusa", "prusa-slicer.exe", True),
+        ("prusa", "superslicer.exe", False),
+        ("cura", "CuraEngine.exe", False),
+    ],
+)
+def test_the_fine_layer_field_says_that_trees_print_even_layers(
+    monkeypatch: pytest.MonkeyPatch, flavour: str, executable: str, said: bool
+) -> None:
+    """Unter organischen Bäumen lehnen PrusaSlicer und die Orca-Familie eine
+    Höhenkurve ab, und die Übergabe lässt sie weg (RM-586). Das Feld sagt es,
+    solange feine Schichten gesetzt sind; SuperSlicer druckt statt Bäumen
+    Gitter, und Cura nimmt die Kurve ohnehin nicht."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    trees = print_settings.with_choice(
+        print_settings.resolve(profiles.make_profile()), "support.style", "tree"
+    )
+    fine = print_settings.with_choice(trees, "layers.fine_layer_height", 0.1)
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+    program = slicer_keys.program_of(setup.executable)
+    organic = handover.organic_styles(setup)
+
+    note = slicer_keys.limitation(
+        flavour,  # type: ignore[arg-type]
+        "layers.fine_layer_height",
+        fine,
+        program,
+        organic,
+    )
+    assert (note is not None) is said, note
+    assert (
+        slicer_keys.limitation(
+            flavour,  # type: ignore[arg-type]
+            "layers.fine_layer_height",
+            trees,
+            program,
+            organic,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
     ("style", "executable", "dropped"),
     [
         ("tree", "elegoo-slicer.exe", True),
@@ -10571,3 +10636,69 @@ def test_the_part_advice_memo_knows_the_tower() -> None:
     assert gap(False) == pytest.approx(0.1)
     assert gap(True) == pytest.approx(0.16)
     assert gap(False) == pytest.approx(0.1)
+
+
+def test_a_plate_job_carries_a_snapshot_of_the_stored_inputs(tmp_path: Path) -> None:
+    """Anschluss (RM-706): Jeder Plattenauftrag gibt dem Abdruck die gespeicherten
+    Eingänge mit, als festen Stand — das Fenster rechnet weiter."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    host, objects, _keys = _old_spool_dialog_state()
+    setup = handover.SlicerSetup(tmp_path / "orca.exe", "orca")
+    job = PrintSettingsDialog._plate_job(host, objects, (0, 1), tmp_path, "Altspulen", setup)
+    assert job.inputs is not None
+    document = host.session.project.document
+    assert job.inputs.document is not document
+    assert job.inputs.document.ops == document.ops
+    assert job.inputs.stopped_at is None
+
+
+@pytest.mark.parametrize(
+    ("with_block", "offered"), [(False, True), (True, False)], ids=["allein", "neben Klotz"]
+)
+def test_the_dialog_offers_fine_layers_only_where_the_tower_lets_them_through(
+    monkeypatch: pytest.MonkeyPatch, with_block: bool, offered: bool
+) -> None:
+    """Der Druckdialog fragt, wie der Export, auf welchen Platten der Turm allen
+    Teilen dieselben Schichten abverlangt (Nachprüfung RM-586, N5): Eine
+    zweifarbige Kuppe allein bekommt den Vorschlag feiner Schichten, neben einem
+    Klotz derselben Platte nicht — sonst schlüge der Dialog vor, was der Export
+    mit einem Befund verwirft."""
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {"enable_prime_tower": "1"})
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    sphere = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    floor = trimesh.creation.box(extents=(60.0, 60.0, 30.0))
+    floor.apply_translation((0.0, 0.0, 15.0))
+    dome = trimesh.boolean.intersection([sphere, floor], engine="manifold")
+    white = MaterialSlot(0, "Weiß", (1.0, 1.0, 1.0), material_type="PLA")
+    red = MaterialSlot(1, "Rot", (0.8, 0.1, 0.1), material_type="PLA")
+    slots = tuple(int(z > 10.0) for z in dome.triangles_center[:, 2])
+    bodies: tuple[SceneObject, ...] = (
+        SceneObject(
+            id="kuppe",
+            name="Kuppe",
+            mesh=MeshData(raw=dome, slots=slots),
+            material_slots=[white, red],
+        ),
+    )
+    if with_block:
+        block = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+        block.apply_translation((50.0, 0.0, 5.0))
+        bodies += (
+            SceneObject(id="klotz", name="Klotz", mesh=MeshData(block), material_slots=[white]),
+        )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+    worker = _AdviceWorker(bodies, settings, profile, setup, {}, (), (), {}, flavour="orca")
+    got: list[list] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+
+    assert got, "der Arbeiter kam ohne Rat zurück"
+    assert worker.towers == frozenset({0})
+    assert worker.shared == (frozenset({0}) if with_block else frozenset())
+    paths = {entry.path for entry in got[0]}
+    assert ("layers.fine_layer_height" in paths) is offered

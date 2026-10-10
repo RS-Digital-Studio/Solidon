@@ -271,6 +271,7 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("shell.wall_count", "perimeters", _integer),
     ("shell.top_layers", "top_solid_layers", _integer),
     ("shell.bottom_layers", "bottom_solid_layers", _integer),
+    ("shell.top_thickness", "top_solid_min_thickness", _number_or_silent),
     ("shell.outer_wall_first", "external_perimeters_first", _flag),
     ("shell.seam_position", "seam_position", _plain),
     ("shell.scarf_seam", "scarf_seam_placement", _mapped({"True": "contours"}, "nowhere")),
@@ -438,6 +439,8 @@ ORCA: Final[tuple[Row, ...]] = (
     ("shell.wall_count", "wall_loops", _integer),
     ("shell.top_layers", "top_shell_layers", _integer),
     ("shell.bottom_layers", "bottom_shell_layers", _integer),
+    # Null heißt „Solidon sagt nichts“: Es gilt die Mindestdicke des Profils.
+    ("shell.top_thickness", "top_shell_thickness", _number_or_silent),
     (
         "shell.outer_wall_first",
         "wall_sequence",
@@ -1201,6 +1204,15 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
             # Den Volumenstrom liest CuraEngine nicht; er wirkt nur über die
             # Tempi, die Solidon danach deckelt.
             "filament.max_flow",
+            # Cura kennt keine Mindestdicke, nur ``top_thickness``, aus dem es
+            # die Lagenzahl rechnet, solange keine geschrieben ist. Feine
+            # Schichten, für die der Rat sie vorschlägt, gehen dort nicht.
+            "shell.top_thickness",
+            # Cura nimmt keine Höhenkurve, nur seine Automatik
+            # ``adaptive_layer_height_enabled``. Die richtet sich nach dem
+            # flachsten Dreieck jeder Höhe und druckte den Drachen fast überall
+            # fein, 1 194 statt 650 Schichten (``AdaptiveLayerHeights.cpp``).
+            "layers.fine_layer_height",
         }
     ),
     "other": frozenset(),
@@ -1234,7 +1246,15 @@ CURA_SUPPORT_BLOCKER: Final = "anti_overhang_mesh"
 GEOMETRY_KEYS: Final[dict[str, tuple[str, ...]]] = {
     "support.block_channels": (ORCA_SUPPORT_BLOCKER, CURA_SUPPORT_BLOCKER),
     "support.spare_ledges": (ORCA_SUPPORT_BLOCKER, CURA_SUPPORT_BLOCKER),
+    "layers.fine_layer_height": ("layer_height_profile",),
 }
+
+#: Was als **Höhenkurve** reist (RM-586): PrusaSlicer und die Orca-Familie
+#: lesen ``layers.fine_layer_height`` nicht als Wert, sondern als Kurve je
+#: Objekt in der 3MF (``threemf.PRUSA_LAYER_HEIGHTS_PATH``,
+#: ``ORCA_LAYER_HEIGHTS_PATH``), die die Übergabe aus der Geometrie rechnet
+#: (``writer._layer_heights``). CuraEngine nimmt keine (:data:`NOT_TAKEN_BY`).
+AS_HEIGHT_PROFILE: Final[frozenset[str]] = frozenset({"layers.fine_layer_height"})
 
 
 #: Einstellungen, die ankommen, aber je nach Wert nur angenähert. Dazu
@@ -1352,7 +1372,13 @@ PLATE_ONLY_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
             "speed.outer_wall_acceleration",
         }
     ),
-    "superslicer": frozenset({"speed.acceleration", "speed.outer_wall_acceleration"}),
+    # SuperSlicer zählt die Mindestdicke der Deckschichten in Lagen der normalen
+    # Schicht: Mit feinen Schichten je Teil bewirkt sie dort nichts (Kuppe am
+    # Prusa-Mini: 1,2 mm verlangt, als Objekt- wie als Plattenwert 0,8 gedruckt,
+    # RM-586). Plattenweit bleibt sie die Lagenzahl der normalen Schicht.
+    "superslicer": frozenset(
+        {"speed.acceleration", "speed.outer_wall_acceleration", "shell.top_thickness"}
+    ),
     "bambustudio": frozenset({"speed.acceleration", "speed.outer_wall_acceleration"}),
     # Die regulären Rollenbreiten gehen je Netz, der Erstschichtfaktor nur
     # je Extruder. Unterschiedliche Breiten würden die unabhängige absolute
@@ -1990,6 +2016,19 @@ def limitation(
                 return None
             return _("Unter organischen Bäumen liest dieses Programm die Wandzahl nicht.")
         return _("Unter Baumstützen druckt dieses Programm keine untere Trennschicht.")
+    # Eine Höhenkurve lehnen PrusaSlicer und die Orca-Familie unter organischen
+    # Bäumen ab (``Print::validate``, RM-586); die Übergabe lässt sie weg
+    # (``writer._layer_heights``), das Feld sagt dasselbe.
+    if (
+        trees
+        and settings is not None
+        and path == "layers.fine_layer_height"
+        and settings.layers.fine_layer_height > 0.0
+    ):
+        return _(
+            "Unter Baumstützen druckt der Slicer nur gleiche Schichten. Mit Gitterstützen "
+            "gelten die feinen."
+        )
     return None
 
 

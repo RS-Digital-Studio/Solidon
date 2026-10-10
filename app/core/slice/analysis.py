@@ -35,6 +35,7 @@ from app.core.errors import ValidationError
 from app.core.geom import kernel_process
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
+from app.core.slice import fine_layers
 from app.core.types import CancelToken, LayerInfo, Ring, SliceContour, SliceResult
 from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
 from app.i18n import _
@@ -418,8 +419,24 @@ def slice_body(
             bridge_from=span,
         )
 
-    for z, shape, metrics, contours in zip(
-        heights, sections, measured, section_contours, strict=True
+    # Die flachen Schrägen je Schicht (RM-586), in Bändern um die Schnitte: von
+    # der Unterkante bis zur Mitte zwischen zwei Schnitten, die letzte bis über
+    # die Oberkante. Die Stufe ist sichtbar, wo sie breiter als eine Bahn wird —
+    # die halbe Brückenbreite (zwei Bahnen). Die Orientierungssuche und die
+    # Stützmessung fragen sie nicht.
+    stepped = (
+        fine_layers.stepped_areas(
+            mesh,
+            np.concatenate(([low], (heights[1:] + heights[:-1]) / 2.0, [high + layer_height])),
+            layer_height,
+            span / 2.0,
+            cancelled=cancelled,
+        )
+        if detail == "full"
+        else np.zeros(len(heights))
+    )
+    for z, shape, metrics, contours, steps in zip(
+        heights, sections, measured, section_contours, stepped, strict=True
     ):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -447,6 +464,7 @@ def slice_body(
                 else _to_polygons(metrics.overhang),
                 bridge_width=metrics.bridge_width,
                 taper_length=metrics.taper_length,
+                stepped_area=float(steps),
             )
         )
 
@@ -1473,7 +1491,16 @@ def _positive_rings(
     positive_direction = np.add.reduceat(x * y[following] - x[following] * y, starts) > 0.0
     negative_indices = np.flatnonzero(~positive_direction)
     if len(negative_indices):
-        positive_parts = [_repaired(outline) for outline in outlines[positive_direction]]
+        # Was ``_repaired`` leer zurückgibt, trägt keine Fläche und bleibt aus
+        # der Vereinigung: Mit einem leeren Glied setzt GEOS im Aufruf
+        # ``create_collection`` selbst auf Intel-Macs das Ungültig-Flag, und
+        # NumPy meldet es als ``RuntimeWarning`` (CI macOS Intel). Wie in
+        # ``organizer/build.py``.
+        positive_parts = [
+            part
+            for outline in outlines[positive_direction]
+            if not (part := _repaired(outline)).is_empty
+        ]
         positive_area = (
             positive_parts[0] if len(positive_parts) == 1 else unary_union(positive_parts)
         )
@@ -5059,6 +5086,16 @@ def _channel_space(
             return skies[number][start]
 
     def slab_of(chunk: list[int]) -> tuple[float, float, ShapelyPolygon] | None:
+        # Eine Scheibe ohne umschlossenen Raum vereinigt eine leere Fläche;
+        # mit einem leeren Glied setzt GEOS im Aufruf ``create_collection``
+        # selbst auf Intel-Macs das Ungültig-Flag, und NumPy meldete es als
+        # ``RuntimeWarning: invalid value encountered in create_collection``
+        # (CI, macOS Intel). Über das Ergebnis sagt es nichts. Im Faden selbst
+        # gesetzt: ``np.errstate`` gilt je Faden, die Arbeiter erben es nicht.
+        with np.errstate(invalid="ignore"):
+            return slab(chunk)
+
+    def slab(chunk: list[int]) -> tuple[float, float, ShapelyPolygon] | None:
         z_low, z_high = heights[chunk[0]], heights[chunk[-1]]
         active = (lows <= z_high) & (highs >= z_low)
         if not active.any():
