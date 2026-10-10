@@ -8568,6 +8568,9 @@ def test_a_tree_cura_prints_as_grid_asks_its_gap_with_grid(tmp_path: Path) -> No
         # Gitter übernommen, „Gitter → Baum“ abgelehnt: Die Art der Platte steht
         # vorher fest, gefragt wird gleich mit ihr (Durchsicht der Fixe, N1).
         ("grid kept", 0),
+        # Nichts abgelehnt: Ein Kragarm druckt „automatisch“, die Platte Gitter.
+        # Cura druckt beides gleich, ohne Baum — keine Neufrage (Durchsicht 2, L5).
+        ("auto beside grid", 0),
         # Ist der Rat überholt (``measure_only``), fragt niemand mehr neu.
         ("overtaken", 0),
     ],
@@ -8606,9 +8609,23 @@ def test_cura_asks_again_only_where_the_plate_changes_the_print(
     mushroom = on_bed(
         brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
     )
+    from app.core.slice.analysis import slice_body
+
+    second = _spiky("Stacheln", 70.0)
+    if case == "auto beside grid":
+        settings = print_settings.with_path(settings, "support.style", "auto")
+        arm = on_bed(
+            brick(4.0, 4.0, 12.0, (70.0, 0.0, 6.0)), brick(20.0, 4.0, 2.0, (80.0, 0.0, 13.0))
+        )
+        second = SceneObject(id="obj_arm", name="Kragarm", mesh=arm)
+        own = advise.advise(
+            settings, profile, slice_body(arm, 0.2), flavour="cura", trees=frozenset({"tree"})
+        )
+        assert advise.printed_style(settings, own) == "auto", "der Kragarm druckt „automatisch“"
+        assert any(entry.path.startswith("support.") for entry in own), "und braucht Stütze"
     bodies = (
         SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom),
-        _spiky("Stacheln", 70.0),
+        second,
         _standing_box("Klotz", (10.0, 10.0, 10.0)),
     )
     worker = _AdviceWorker(
@@ -8622,6 +8639,68 @@ def test_cura_asks_again_only_where_the_plate_changes_the_print(
     # Je Körper einmal, dazu die Neufragen; überholt nur die zwei vor dem Halt.
     first = 2 if case == "overtaken" else len(bodies)
     assert len(calls) == first + asked, calls
+
+
+@pytest.mark.parametrize("earlier", ["grid", None])
+def test_a_part_keeps_its_contact_where_its_style_was_accepted_before(
+    tmp_path: Path, earlier: str | None
+) -> None:
+    """Orca-Familie: Der Kunde hat „Aus → Gitter“ übernommen und lehnt jetzt
+    „Gitter → Baum · Stacheln, Pilz mit Gitter“ ab. Die Datei stützt den Pilz
+    weiter mit seinem Gitter; seine Zeilen zur dichten Trennschicht fielen weg,
+    und die Datei schrieb sie nicht mehr (Durchsicht 2 zum Nachtrag RM-584, M2).
+    Gegenprobe: Ohne früher übernommene Stützen druckt die Platte keine."""
+    from app.core.export.writer import write_assembly
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    if earlier is not None:
+        settings = print_settings.with_accepted(settings, "support.style", earlier)
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom), _spiky("Stacheln", 70.0))
+    worker = _AdviceWorker(
+        bodies,
+        settings,
+        profile,
+        None,
+        {},
+        (),
+        (),
+        {},
+        flavour="orca",
+        declined=frozenset({"support.style"}),
+    )
+    got: list[list[Any]] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    rows = {entry.path: entry for entry in got[0]}
+
+    dense = {"support.interface_spacing", "support.interface_layers"}
+    if earlier is None:
+        assert not dense & rows.keys()
+        return
+    assert dense <= rows.keys(), sorted(rows)
+    accepted = settings
+    for path in dense:
+        accepted = print_settings.with_accepted(accepted, path, rows[path].value)
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Platte",
+        profile=profile,
+        settings=accepted,
+        flavour="orca",
+    )
+    values = object_values(written, "Metadata/model_settings.config")
+    assert values["Pilz"].get("support_type") == "normal(auto)"
+    assert values["Pilz"].get("support_interface_top_layers") == str(
+        rows["support.interface_layers"].value
+    )
 
 
 @pytest.mark.parametrize("flavour", ["cura", "orca"])

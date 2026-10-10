@@ -1661,6 +1661,16 @@ class _AdviceWorker(Worker):
             if self.flavour == "cura" and "support.style" in self.declined
             else None
         )
+        # Abgelehnt ist, was der Export nicht übernimmt: Ist ein Pfad schon je
+        # Teil übernommen, bekommt jedes Teil weiter seinen Vorschlag, auch wenn
+        # der Kunde eine neue Zeile dazu ablehnt (``writer.part_advice``,
+        # Durchsicht 2 zum Nachtrag RM-584, M2). Sonst verlor der gestützte Pilz
+        # seine Trennschichtzeilen, und die Datei schrieb sie nicht mehr.
+        declined = self.declined - frozenset(
+            handover.split_for_parts(
+                self.settings, self.profile, self.setup, self.flavour
+            ).accepted_per_part()
+        )
 
         def rules(
             body: SceneObject,
@@ -1684,13 +1694,13 @@ class _AdviceWorker(Worker):
                     flavour=self.flavour,
                     whole_layers=body.plate in self.towers,
                     organic=self.organic,
-                    declined=self.declined,
+                    declined=declined,
                     allowances=self.part_allowances.get(body.id, ()),
                     trees=trees,
                     shared_layers=body.plate in self.shared,
                     plate_style=plate,
                 )
-                style = advise.printed_style(process.settings, entries, self.declined)
+                style = advise.printed_style(process.settings, entries, declined)
                 done.printed.append((style, advise.printed_style(process.settings, entries)))
                 # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
                 # schlägt der Dialog nicht vor — je Körper wie der Export
