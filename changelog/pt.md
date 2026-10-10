@@ -57,6 +57,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Mesmo num histórico longo, um passo novo quase não demora mais a calcular do que o primeiro.
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
 - Resolver sobreposições e exportar em 3MF é bastante mais rápido.
+- Depois de um furo ou de uma característica deslocada, as características de uma peça grande são reconhecidas cerca de um terço mais depressa.
+- Um modelo que abre logo após iniciar o programa fica editável até um quarto mais cedo.
+- Com um slicer, um jogo ou uma renderização a correr ao lado, os cálculos em modelos grandes terminam em segundos em vez de minutos.
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
