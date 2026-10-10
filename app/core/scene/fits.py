@@ -619,9 +619,12 @@ def _band_drawn_in(document: Document, body: SceneObject, operation: Operation) 
     untere muss im oberen liegen, rundum um den halben Betrag ``a`` eingezogen
     — derselbe Schnitt, mit dem der Schritt das Band baut
     (``geom.prepare.compensate_elephant_foot``). Der Betrag kommt aus dem
-    Schritt oder, ohne eigenen, aus dem Material des Körpers. Ein Körper, der
-    über dem Band breiter wird, besteht die Probe auch ohne Band; dort
-    entscheiden Linie und Rahmen.
+    Schritt oder, ohne eigenen, aus dem Material des Körpers oder Projekts.
+    Nennt das Dokument keines, rechnete der Schritt mit dem Material des
+    Profils, das hier fehlt; dann genügt ein Einzug um ``EPS_DISPLAY`` — ein
+    fehlendes Band unterscheidet auch das. Ein Körper, der über dem Band
+    breiter wird, besteht die Probe auch ohne Band; dort entscheiden Linie und
+    Rahmen.
     """
     from app.core.geom.mesh import as_mesh_data
     from app.core.knowledge.profiles import material
@@ -632,11 +635,14 @@ def _band_drawn_in(document: Document, body: SceneObject, operation: Operation) 
     if not isinstance(height, (int, float)) or not height > EPS_GEOM:
         return False
     amount = float(given) if isinstance(given, (int, float)) else 0.0
-    if not amount > EPS_GEOM:
+    named = body.material or document.material
+    if not amount > EPS_GEOM and named:
         try:
-            amount = material(body.material or document.material or "").elephant_foot
+            amount = material(named).elephant_foot
         except AppError:
             return False
+    elif not amount > EPS_GEOM:
+        amount = 2.0 * EPS_DISPLAY
     if not amount > EPS_GEOM:
         return False
     mesh = as_mesh_data(body.mesh)

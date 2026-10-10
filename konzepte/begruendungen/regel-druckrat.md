@@ -742,6 +742,19 @@ Schraubdeckel aus *Behälter mit Deckel* und *Gegenform einlassen*. Eine
 Tasche ohne Achsmerkmal (Rastnasen-Aussparung, Schnappverbinder) zählt nicht —
 im Zweifel bleibt der Ausgleich des Herstellers.
 
+**Der Fuß zählt am Bett, nicht an der Herkunft** (Schlussprüfung S1, Kontrolle
+K1, 10.10.2026). Ein Turm, den *Ausrichten* nach dem Einziehen hinlegte, druckte
+mit dem Rat am OrcaSlicer mit Elefantenfuß (Schicht 1 0,080 statt 0,380 mm
+schmaler als die Mitte); ebenso die obere Hälfte eines waagerechten Schnitts,
+ein Deckel, ein gewendeter Körper und einer, dem *Abschneiden* oder *Abziehen*
+das Band unten nahm. Darum drei Bedingungen: Rahmen-Z nach oben, der Schritt auf
+der eigenen Linie (Teilen und Deckel bauen neu, das Band liegt dort nicht sicher
+unten) und zwei Schnitte am fertigen Körper, die das Band bestätigen. Die zu
+strenge Richtung — der Slicer zieht doppelt ein, die erste Schicht wird etwas
+schmaler — ist die harmlose. Ein Loch zählt nach den Höhen seiner Mantelränder:
+Senkrecht durch eine gekippte 3-mm-Platte gebohrt, maß die Tiefe die Achsspanne
+(16 mm), und keine Schicht umschloss das Loch.
+
 **Solidons eigener Satz schreibt beides nur auf Wahl** (Review S1). Wo kein
 Herstellerprozess darunter liegt — Cura, PrusaSlicer ohne Drucker im Bündel,
 die Orca-Familie ohne lesbaren Prozess, eine 3MF ohne Slicer —, gilt der Wert
