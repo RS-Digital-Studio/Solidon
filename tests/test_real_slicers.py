@@ -16,6 +16,7 @@ Apple Silicon und Intel-Mac, sobald eine Änderung die Übergabe berührt
 
 from __future__ import annotations
 
+import math
 import re
 import subprocess
 import time
@@ -283,15 +284,56 @@ def _moves(gcode: Path) -> list[str]:
     ]
 
 
+def _bearded_plate() -> SceneObject:
+    """Eine Platte auf einer Säule, darunter sechs Kegel, die mit der Spitze nach
+    unten als Inseln unter ``analysis.TIP_ROOF_AREA`` beginnen — die Bartstacheln
+    des Drachen im Kleinen (RM-704). Stifte gleichen Querschnitts zeigen es nicht:
+    Unter ihnen legte ElegooSlicer auch mit 0,8 mm Spitze eine Trennschicht."""
+    column = trimesh.creation.box(extents=(8.0, 8.0, 20.0))
+    column.apply_translation((0.0, 0.0, 10.0))
+    plate = trimesh.creation.box(extents=(30.0, 30.0, 3.0))
+    plate.apply_translation((0.0, 0.0, 21.5))
+    upside_down = trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0))
+    cones = []
+    for x, y in (
+        (-11.0, -11.0),
+        (-11.0, 0.0),
+        (-11.0, 11.0),
+        (11.0, -11.0),
+        (11.0, 0.0),
+        (11.0, 11.0),
+    ):
+        cone = trimesh.creation.cone(radius=1.0, height=4.0, sections=24)
+        cone.apply_transform(upside_down)
+        cone.apply_translation((x, y, 20.0))
+        cones.append(cone)
+    body = trimesh.util.concatenate([column, plate, *cones])
+    return SceneObject("bart", "Bart", MeshData.of(body))
+
+
 def _sliced_tower(
     printer: str,
     program: Path,
     folder: Path,
     chosen: dict[str, object],
     accepted: dict[str, object] | None = None,
+    body: SceneObject | None = None,
 ) -> tuple[list[str], Path]:
-    """Den Turm durch das echte Programm, wie der Druckdialog ihn schickt: Bewegungen
-    der Druckdatei und die geschriebene Platte."""
+    """Den Turm (oder ``body``) durch das echte Programm, wie der Druckdialog ihn
+    schickt: Bewegungen der Druckdatei und die geschriebene Platte."""
+    moves, model, _gcode = _sliced(printer, program, folder, chosen, accepted, body)
+    return moves, model
+
+
+def _sliced(
+    printer: str,
+    program: Path,
+    folder: Path,
+    chosen: dict[str, object],
+    accepted: dict[str, object] | None = None,
+    body: SceneObject | None = None,
+) -> tuple[list[str], Path, Path]:
+    """:func:`_sliced_tower` samt Druckdatei."""
     from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
 
     profile = profiles.make_profile(printer, "pla")
@@ -303,7 +345,7 @@ def _sliced_tower(
     setup = _preselected(handover.detect(program), profile)
     folder.mkdir(parents=True)
     job = _PlateJob(
-        objects=(_tower_with_island(),),
+        objects=(body or _tower_with_island(),),
         plates=(0,),
         folder=folder,
         name="turm",
@@ -326,7 +368,74 @@ def _sliced_tower(
         model_meshes=run.meshes,
         expected_tools=run.used_tools,
     )
-    return _moves(outcome.gcode_path), run.model
+    return _moves(outcome.gcode_path), run.model, outcome.gcode_path
+
+
+#: Eine Höhe in einer Bewegung.
+_Z = re.compile(r"^G[01] [^;\n]*\bZ(-?\d*\.?\d+)")
+
+
+def _interface_extrusions(gcode: Path, below: float) -> int:
+    """Wie viele Druckbewegungen der Trennschicht (``;TYPE:Support interface``)
+    unter der Höhe ``below`` liegen — unter den Stiften, nicht unter der Platte."""
+    count = 0
+    interface = False
+    z = 0.0
+    for line in gcode.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith(";TYPE:"):
+            interface = line[6:].strip().lower() == "support interface"
+            continue
+        height = _Z.match(line)
+        if height:
+            z = float(height.group(1))
+        if interface and z < below and _EXTRUSION.match(line):
+            count += 1
+    return count
+
+
+@pytest.mark.parametrize(
+    "program",
+    [
+        pytest.param(program, marks=pytest.mark.slicer(program), id=program)
+        for program in ORCA_FAMILY
+    ],
+)
+def test_a_roof_tip_puts_an_interface_on_every_tip(
+    program: str, installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Baumspitze über ``analysis.TIP_ROOF_AREA`` Querschnitt erzwingt in der
+    Orca-Familie die Trennschicht an jeder Spitze (``force_tip_to_roof``, RM-704):
+    Unter sechs Kegelspitzen mit 0,4 mm Luft druckt ``ROOF_TIP_DIAMETER`` dort mehr
+    Trennschicht als die Spitze von 0,8 mm. Bambu Studio kennt den Schlüssel nicht,
+    und Creality Print liest ihn ohne Wirkung (``slicer_keys.NOT_TAKEN_BY_PROGRAM``);
+    dort schreibt Solidon ihn nicht, und beide drucken gleich."""
+    from app.core.slice import advise
+
+    set_test_license(monkeypatch, active=True)
+    printer = PROGRAMS[program]
+    counted = {
+        tip: _interface_extrusions(
+            _sliced(
+                printer,
+                installed_slicer,
+                tmp_path / str(tip),
+                {
+                    "support.style": "tree",
+                    "support.z_gap": 0.4,
+                    "support.interface_layers": 2,
+                    "support.tip_diameter": tip,
+                },
+                body=_bearded_plate(),
+            )[2],
+            # Die Kegel beginnen auf 16 mm, die Platte auf 20 mm.
+            below=19.0,
+        )
+        for tip in (0.8, advise.ROOF_TIP_DIAMETER)
+    }
+    if slicer_keys.takes("orca", "support.tip_diameter", program=program):
+        assert counted[advise.ROOF_TIP_DIAMETER] > counted[0.8], (program, counted)
+    else:
+        assert counted[advise.ROOF_TIP_DIAMETER] == counted[0.8], (program, counted)
 
 
 @pytest.mark.parametrize(

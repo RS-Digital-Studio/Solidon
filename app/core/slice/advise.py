@@ -41,6 +41,7 @@ from app.core.slice.analysis import (
     OVERHANG_LAYER_WORTH_SUPPORT,
     OVERHANG_MARGIN,
     SPAN_INTERESTING,
+    TIP_ROOF_AREA,
     ModelSupport,
     _layer_shape,
     channel_pieces,
@@ -977,6 +978,13 @@ DENSE_INTERFACE: Final = (0.2, 3)
 #: 0,5 mm, zwei Lagen).
 OPEN_INTERFACE: Final = (0.5, 2)
 
+#: Die kleinste Spitze organischer Bäume, die eine Trennschicht trägt (RM-704):
+#: Ihr Querschnitt übersteigt :data:`analysis.TIP_ROOF_AREA`, dann erzwingt die
+#: Orca-Familie die Trennschicht an jeder Spitze (``force_tip_to_roof``,
+#: ``TreeSupport3D.cpp:1286``). Auf Hundertstel aufgerundet, wie das Feld zeigt:
+#: 1,13 mm.
+ROOF_TIP_DIAMETER: Final = math.ceil(200.0 * math.sqrt(TIP_ROOF_AREA / math.pi)) / 100.0
+
 #: Untere Trennschichten, wo die Stütze auf dem Modell steht (Recherche Nr. 2).
 #: Ohne sie steht der rohe Stützfuß auf der Fläche und zeichnet sie; das Profil
 #: des MK4S führt 0.
@@ -1194,13 +1202,36 @@ def _support_contact(
         advice.append(
             _advice(settings, path="support.interface_spacing", value=spacing, reason=reason)
         )
+    roofs = settings.support.interface_layers
     if (
         (settings.support.interface_layers < layers)
         if flat
         else (settings.support.interface_layers > layers)
     ):
+        roofs = layers
         advice.append(
             _advice(settings, path="support.interface_layers", value=layers, reason=reason)
+        )
+    # **Mit zwei Schichten Luft braucht jede Spitze ihre Trennschicht** (RM-704).
+    # Am dritten Drachendruck (0,4 mm über Spitzen von 0,8 mm) hing die
+    # Kieferunterseite faserig durch: Nur 2 bis 5 % trugen eine Trennschicht, der
+    # Rest lag 0,4 mm über einzelnen Spitzen. Mit 1,2 mm trugen 25 %, und der
+    # Kontakt an Kinn und Kopfstacheln sank weiter (ElegooSlicer, 10.10.2026).
+    # Nur wo der Abstand über den Spitzen gilt und die Orca-Familie schneidet;
+    # PrusaSlicer und Cura sind nicht gemessen (``slicer_keys.NOT_TAKEN_BY``).
+    if (
+        tips is not None
+        and flavour == "orca"
+        and roofs > 0
+        and settings.support.tip_diameter < ROOF_TIP_DIAMETER - EPS_GEOM
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="support.tip_diameter",
+                value=ROOF_TIP_DIAMETER,
+                reason=_("Trennschicht auf jeder Baumspitze trägt die Unterseite."),
+            )
         )
     if material.support_interface_cooling and not settings.cooling.support_interface_cooling:
         advice.append(

@@ -84,6 +84,7 @@ scrive in `website/version.json`.
 - Sotto un'ampia superficie inferiore piana, Solidon propone la griglia invece degli alberi, e l'ibrido se servono anche dettagli fini. Per gli alberi alti, Solidon propone due pareti.
 - Se un suggerimento della finestra di stampa vale solo per alcuni pezzi, la riga e il campo nominano anche i pezzi che con esso ricevono un altro valore.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
+- Con più spazio sopra le punte sottili, Solidon propone una *Punta dell'albero* più larga. Ogni punta riceve uno strato di interfaccia e le parti inferiori non cedono.
 - Se molti piccoli sbalzi richiedono insieme supporti, come un mento con la parte inferiore inclinata, il rapporto indica ora il punto.
 - Un bordo stretto che si regge da solo non conta più come ponte lungo, nemmeno accanto a un altro sbalzo. Il rapporto non avvisa più lì e Solidon non chiede supporti per questo.
 - Sopra un canale il rapporto non consiglia più un supporto che poi non si potrebbe togliere. Nomina il canale e un raccordo sotto i 45 gradi.

@@ -137,7 +137,13 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Trennschicht** (ab `TIP_ISLANDS` Inseln unter `TIP_ROOF_AREA`, `tip_islands`)
   gilt unter organischen und Curas Bäumen `support_tip_gap` des Materials in
   ganzen Schichten, mindestens `TIP_GAP_LAYERS`, auch über `support_gap_max`
-  (`tip_gap`); ohne gemessenen Wert nicht. Unter einem flachen Stück über
+  (`tip_gap`); ohne gemessenen Wert nicht. Wo er gilt, Trennschichten
+  gedruckt werden und die Orca-Familie schneidet, dazu die kleinste Spitze mit
+  Trennschicht (`support.tip_diameter` = `ROOF_TIP_DIAMETER`, Querschnitt über
+  `TIP_ROOF_AREA`): Sonst hängt die Unterseite 0,4 mm über nackten Spitzen
+  (RM-704); PrusaSlicer und Cura sind nicht gemessen (`NOT_TAKEN_BY`), Bambu
+  kennt den Schlüssel nicht, Creality Print liest ihn ohne Wirkung
+  (`NOT_TAKEN_BY_PROGRAM`). Unter einem flachen Stück über
   `OVERHANG_LAYER_WORTH_SUPPORT` eine dichte Trennschicht, sonst eine lockere;
   steht die Stütze auf dem Modell, auch unten (`BOTTOM_INTERFACE_LAYERS`) —
   nicht, wo das Programm sie unter Bäumen nicht druckt

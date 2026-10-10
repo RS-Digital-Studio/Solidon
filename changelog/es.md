@@ -85,6 +85,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Bajo una cara inferior grande y plana, Solidon propone cuadrícula en lugar de árboles, e híbrido si también hay detalles finos. Para soportes de árbol altos, Solidon propone dos paredes.
 - Si una sugerencia del diálogo de impresión solo vale para algunas piezas, la fila y el campo nombran también las piezas que reciben con ella otro valor.
 - Para PLA, Solidon propone más espacio entre muchas puntas finas y los soportes en árbol situados debajo. Así quedan menos restos de las puntas de los soportes.
+- Junto con más espacio sobre puntas finas, Solidon propone una *Punta del árbol* más ancha. Cada punta lleva una capa de separación y las caras inferiores no se descuelgan.
 - Si muchos voladizos pequeños necesitan soportes juntos, como una barbilla con la cara inferior inclinada, el informe indica ahora el lugar.
 - Un borde estrecho que se sostiene solo ya no cuenta como puente largo, tampoco junto a otro voladizo. El informe ya no avisa ahí, y Solidon no pide soportes por ello.
 - Sobre un canal, el informe ya no aconseja un soporte que luego no se podría sacar. Nombra el canal y una transición de menos de 45 grados.

@@ -26,6 +26,7 @@ from app.core.slice.analysis import (
     OVERHANG_LAYER_WORTH_SUPPORT,
     OVERHANG_WORTH_SUPPORT,
     SPAN_INTERESTING,
+    TIP_ROOF_AREA,
     WIDTH_INTERESTING,
     channel_space,
     largest_sloped_patch,
@@ -2204,6 +2205,59 @@ def test_tips_need_many_islands_trees_and_a_measured_material(case: str) -> None
         assert advise.tip_gap(0.2, material, more, flavour, style, organic) == pytest.approx(0.4), (
             "die Gegenprobe: eine Insel mehr, und der Abstand gilt"
         )
+
+
+def test_the_roof_tip_is_the_smallest_with_a_roof() -> None:
+    """Die Spitze, ab der die Orca-Familie jede Spitze mit Trennschicht deckt
+    (RM-704): Ihr Querschnitt liegt über ``minimum_roof_area`` (1 mm²), eine
+    Hundertstel weniger darunter — 1,13 mm."""
+    tip = advise.ROOF_TIP_DIAMETER
+    assert math.pi * (tip / 2.0) ** 2 > TIP_ROOF_AREA
+    assert math.pi * ((tip - 0.01) / 2.0) ** 2 <= TIP_ROOF_AREA
+    assert tip == pytest.approx(1.13)
+
+
+@pytest.mark.parametrize(
+    ("case", "proposed"),
+    [
+        ("orca", True),
+        ("prusa", False),
+        ("cura", False),
+        ("few", False),
+        ("no roof", False),
+        ("wide tip", False),
+    ],
+)
+def test_tips_with_air_above_carry_a_roof(case: str, proposed: bool) -> None:
+    """Roberts dritter Drache (RM-704): Mit 0,4 mm über Spitzen von 0,8 mm hing
+    die Kieferunterseite faserig durch; 2 bis 5 % trugen eine Trennschicht. Mit
+    1,2 mm trug ein Viertel eine, und der Kontakt an Kinn und Kopfstacheln sank
+    weiter (ElegooSlicer). Wo der Abstand über den Spitzen gilt und die
+    Orca-Familie schneidet, schlägt Solidon die kleinste Spitze mit Trennschicht
+    vor. Gegenproben: PrusaSlicer und Cura (nicht gemessen), wenige Inseln, keine
+    Trennschicht und eine Spitze, die schon trägt."""
+    pins = advise.TIP_ISLANDS - 1 if case == "few" else advise.TIP_ISLANDS
+    values: dict[str, object] = {
+        "layers.layer_height": 0.2,
+        "support.style": "tree",
+        "support.z_gap": 0.2,
+    }
+    if case == "no roof":
+        values["support.interface_layers"] = 0
+    if case == "wide tip":
+        values["support.tip_diameter"] = 1.2
+    flavour = case if case in ("prusa", "cura") else "orca"
+    found = _support_advice(
+        bearded_table(pins),
+        profiles.make_profile("centauri-carbon-2", "pla"),
+        values,
+        flavour=flavour,
+        paths=("support.tip_diameter",),
+        organic=frozenset() if flavour == "cura" else frozenset({"tree"}),
+    )
+    assert found == (
+        {"support.tip_diameter": pytest.approx(advise.ROOF_TIP_DIAMETER)} if proposed else {}
+    )
 
 
 def test_proposed_trees_bring_whole_layers_along() -> None:

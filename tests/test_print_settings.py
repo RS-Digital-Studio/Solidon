@@ -1272,6 +1272,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.tree_walls": "PrusaSlicer zählt keine Baumwände (``NOT_TAKEN_BY``, RM-584).",
+        "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
     },
     "orca": {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
@@ -1281,6 +1282,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
     "cura": {
         "support.block_channels": "reist als eigenes Netz (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als eigenes Netz (``AS_GEOMETRY``).",
+        "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
         "adhesion.kind": "in ``adhesion_type`` enthalten, das die Tabelle schreibt.",
@@ -7295,6 +7297,14 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
     ("support.tree_walls", "prusa"): (
         "PrusaSlicer zählt keine Baumwände: Seine organischen Äste bekommen ab einem "
         "Astquerschnitt eine zweite Wand, ein Maß, das beim Hersteller bleibt (RM-584)."
+    ),
+    ("support.tip_diameter", "prusa"): (
+        "Die Spitze, ab der jede Baumspitze eine Trennschicht trägt, ist nur in der "
+        "Orca-Familie geschnitten; PrusaSlicers Spitze bleibt beim Hersteller (RM-704)."
+    ),
+    ("support.tip_diameter", "cura"): (
+        "Dasselbe für CuraEngine: ``support_tree_tip_diameter`` ist dort nicht "
+        "geschnitten und bleibt beim Hersteller (RM-704)."
     ),
     ("shell.precise_outer_wall", "cura"): (
         "Dasselbe für CuraEngine — dort heißt der nächste Verwandte "

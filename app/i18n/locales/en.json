@@ -8637,5 +8637,8 @@
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "“Open at face” applies only without chosen openings. Enter the face under “Openings” and clear this field.",
   "„Übernehmen“ beginnt mit dem Modell ein neues Projekt.": "“Apply” starts a new project with the model.",
   "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… shortened. The full report is in the saved folder as “bericht.txt” — please attach it.",
-  "… und {count} weitere.": "… and {count} more."
+  "… und {count} weitere.": "… and {count} more.",
+  "Baumspitze": "Tree tip",
+  "Durchmesser der Spitzen organischer Bäume. Ab etwa 1,13 mm bekommt jede Spitze eine Trennschicht und trägt die Unterseite flächig.": "Diameter of the tips of organic trees. From about 1.13 mm every tip gets an interface layer and carries the underside across its area.",
+  "Trennschicht auf jeder Baumspitze trägt die Unterseite.": "An interface layer on every tree tip carries the underside."
 }
