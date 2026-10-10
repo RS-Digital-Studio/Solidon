@@ -198,7 +198,8 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   rechnet nur der Slicer; Solidons eigener Satz stützt
   Brücken wie die Schichtanalyse, und die Gegenprobe fragt den wirksamen Wert,
   nicht den Herstellerprozess. Druckt eine Brücke über `SPAN_INTERESTING`
-  frei (ohne Stützen, ohne Brückenstütze, als Kanaldecke), dicke Bahnen und
+  frei (ohne Stützen, ohne Brückenstütze, als Kanaldecke, solange „nur vom Bett“
+  oder die Kanalsperre den Kanal freihält), dicke Bahnen und
   `BRIDGE_FLOW` über `BRIDGE_FLOW_ENOUGH`; ein Rand spannt nicht, seine Weite
   ist die Kantenlänge. **Zusatzwände nur unter flachen Stücken ohne Stütze, die
   an einer Seite hängen** (`analysis.cantilevers`; hat eine Bahnenrichtung über

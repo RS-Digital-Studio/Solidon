@@ -2623,6 +2623,28 @@ def test_a_channel_ceiling_under_supports_gets_thick_lines() -> None:
     assert advice.get("shell.bridge_flow") == pytest.approx(advise.BRIDGE_FLOW)
 
 
+def test_a_channel_ceiling_is_free_only_while_something_keeps_the_channel_free() -> None:
+    """Nachprüfung RM-587, N4: Hält weder „nur vom Bett“ noch die Kanalsperre den Kanal
+    frei, stützt der Slicer seine Decke (OrcaSlicer am mini-pot: Trennschicht direkt
+    darunter), und über einer Stütze trägt die dünne Brücke. Mit beiden abgewählt
+    keine dicken Bahnen, mit „nur vom Bett“ allein wieder welche."""
+    block = trimesh.creation.box((60.0, 40.0, 40.0))
+    block.apply_translation((0.0, 0.0, 20.0))
+    tunnel = trimesh.creation.box((20.0, 50.0, 20.0))
+    tunnel.apply_translation((0.0, 0.0, 18.0))
+    arm = trimesh.creation.box((40.0, 40.0, 5.0))
+    arm.apply_translation((50.0, 0.0, 37.5))
+    body = trimesh.boolean.union([trimesh.boolean.difference([block, tunnel]), arm])
+
+    both = frozenset({"support.placement", "support.block_channels"})
+    supported = _advice_on(body.copy(), declined=both, support__placement="everywhere")
+    assert supported.get("support.style") not in (None, "none"), "die Vorbedingung: Stützen"
+    assert "shell.thick_bridges" not in supported
+    plate = frozenset({"support.block_channels"})
+    kept = _advice_on(body.copy(), declined=plate, support__placement="everywhere")
+    assert kept.get("shell.thick_bridges") is True, "„nur vom Bett“ hält den Kanal frei"
+
+
 def test_two_bodies_share_the_lower_bridge_flow() -> None:
     """Review RM-587, L1: Weniger Fluss braucht nur die freie Brücke; ein Körper ohne
     Brücke merkt ihn nicht. Zusammengeführt gilt deshalb der kleinere Wert, 0,9."""

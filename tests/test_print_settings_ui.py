@@ -12750,7 +12750,10 @@ def test_declining_the_tree_asks_the_advice_again(
     assert asked[0] != before, "die Abwahl gehört zum Auftrag des Arbeiters"
 
 
-@pytest.mark.parametrize("key", ["support.bridges", "support.spare_ledges"])
+@pytest.mark.parametrize(
+    "key",
+    ["support.bridges", "support.spare_ledges", "support.placement", "support.block_channels"],
+)
 def test_declining_the_bridge_support_asks_the_advice_again(
     dialog: PrintSettingsDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, key: str
 ) -> None:

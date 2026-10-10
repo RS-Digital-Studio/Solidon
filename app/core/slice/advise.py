@@ -1033,8 +1033,17 @@ def rounds_to_whole_layers(
 #: Stützart hängen Abstand und Trennschicht (:func:`printed_style`, RM-622), an
 #: Brückenstütze und freien Rändern dicke Bahnen, Brückenfluss und Zusatzwände
 #: (:func:`_bridges_and_overhangs`, Review RM-587, M4) — abgewählt druckt die
-#: Brücke frei.
-DECIDING_PATHS: Final = frozenset({"support.style", "support.bridges", "support.spare_ledges"})
+#: Brücke frei. Und an Stützort und Kanalsperre, ob eine Kanaldecke frei druckt
+#: (:func:`_channels_kept_free`, Nachprüfung RM-587, N4).
+DECIDING_PATHS: Final = frozenset(
+    {
+        "support.style",
+        "support.bridges",
+        "support.spare_ledges",
+        "support.placement",
+        "support.block_channels",
+    }
+)
 
 
 def printed_style(
@@ -2252,8 +2261,9 @@ def _bridges_and_overhangs(
     spannt sie ohne eigenen Wert frei, auch mit „überall“ (G-Code-Gegenprüfung
     N1, 36-mm-Brücke ohne Stütze). **Dicke Brücken und weniger Fluss**, wo eine
     Brücke über :data:`SPAN_INTERESTING` frei druckt — ohne Stützen, ohne
-    Brückenstütze, oder als Kanaldecke, die Solidon freihält; ein Rand spannt
-    nicht und zählt nicht (``long_spans``). Über
+    Brückenstütze, oder als Kanaldecke, die Solidon freihält
+    (:func:`_channels_kept_free`); ein Rand spannt nicht und zählt nicht
+    (``long_spans``). Über
     einer Stütze trägt die dünne Brücke und sieht besser aus.
 
     **Zusatzwände** unter flachen Überhängen ohne Stütze, die breiter sind als die
@@ -2281,8 +2291,11 @@ def _bridges_and_overhangs(
         and span_beside(result, index, need.ledges) > SPAN_INTERESTING
     ]
     # Laut ist eine Brücke auch ohne die Kanaldecken. Eine Kanaldecke spannt frei,
-    # auch wenn das Teil Stützen hat — Solidon hält den Kanal frei.
-    quiet = need.model.channels | need.ledges
+    # auch wenn das Teil Stützen hat — wenn Solidon den Kanal freihält.
+    channels = (
+        need.model.channels if _channels_kept_free(settings, advice, declined) else frozenset()
+    )
+    quiet = channels | need.ledges
     loud = frozenset(
         index for index in long_spans if span_beside(result, index, quiet) > SPAN_INTERESTING
     )
@@ -2352,6 +2365,29 @@ def _bridges_and_overhangs(
             )
         )
     return found
+
+
+def _channels_kept_free(
+    settings: PrintSettings, advice: Sequence[SettingAdvice], declined: Collection[str]
+) -> bool:
+    """Hält etwas die Kanäle frei — Stützen nur vom Bett oder die Kanalsperre,
+    gesetzt oder vorgeschlagen und nicht abgewählt (Nachprüfung RM-587, N4)?
+
+    Sonst stützt der Slicer die Kanaldecke: OrcaSlicer am mini-pot mit Stützen
+    „überall“ legte direkt unter ihr Trennschicht (198,5 bis 76,7 mm Bahn je
+    Schicht), und über einer Stütze trägt die dünne Brücke."""
+    wanted: tuple[tuple[str, object], ...] = (
+        ("support.placement", "build_plate"),
+        ("support.block_channels", True),
+    )
+    return any(
+        settings_table.read_path(settings, path) == value
+        or (
+            path not in declined
+            and any(entry.path == path and entry.value == value for entry in advice)
+        )
+        for path, value in wanted
+    )
 
 
 def _free_flat_overhang(
