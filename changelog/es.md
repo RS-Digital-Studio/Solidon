@@ -57,7 +57,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los modelos grandes se cargan notablemente más rápido y necesitan menos memoria, también con un historial largo y en equipos con 8 GB.
 - Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
 - Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
-- Resolver solapamientos y exportar a 3MF es bastante más rápido.
+- Reparar y resolver solapamientos es hasta cuatro veces más rápido en modelos grandes, y exportar a 3MF, bastante más rápido.
 - El área de trabajo aparece más rápido al abrir archivos 3MF grandes.
 - Un modelo añadido queda después a la vista, aunque se coloque junto a otro sobre el que se había hecho zoom.
 - En el catálogo de bloques, *Gestionar bloques* aparece abierto mientras aún no haya ningún bloque propio.

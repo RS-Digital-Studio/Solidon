@@ -81,7 +81,7 @@ Nutzen da und sonst nichts.
 - Große Modelle laden spürbar schneller und brauchen weniger Arbeitsspeicher, auch mit langem Verlauf und auf Rechnern mit 8 GB.
 - Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
-- Das Auflösen von Überschneidungen und der Export als 3MF gehen deutlich schneller.
+- Reparieren und das Auflösen von Überschneidungen gehen an großen Modellen bis zu viermal so schnell, der Export als 3MF deutlich schneller.
 - Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
