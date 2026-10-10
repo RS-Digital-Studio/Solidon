@@ -1582,13 +1582,14 @@ def test_the_search_opens_every_profile_file_once(
     """
     expected = sp.find_profiles(slicer, "orca")
     reads: dict[Path, int] = {}
-    original = Path.read_text
+    # Gelesen wird über ``read_text_shared``: ohne Löschsperre unter Windows.
+    original = sp.read_text_shared
 
-    def counted(self: Path, *args: object, **kwargs: object) -> str:
-        reads[self] = reads.get(self, 0) + 1
-        return original(self, *args, **kwargs)  # type: ignore[arg-type]
+    def counted(path: Path, **kwargs: str) -> str:
+        reads[path] = reads.get(path, 0) + 1
+        return original(path, **kwargs)
 
-    monkeypatch.setattr(Path, "read_text", counted)
+    monkeypatch.setattr(sp, "read_text_shared", counted)
     # Gezählt wird ein Lesedurchgang, nicht der gemerkte Bestand (RM-670).
     sp.forget_holdings()
     found = sp.find_profiles(slicer, "orca")
@@ -4436,17 +4437,17 @@ def test_cancel_during_inheritance_stops_reading_the_profile_index(tmp_path, mon
     for index in range(20):
         _write(folder / f"{index:02}.json", {"name": f"Aux {index}"})
     cancelled = CancelSignal()
-    original = Path.read_text
+    original = sp.read_text_shared
     read = []
 
-    def remember(path, *args, **kwargs):
-        result = original(path, *args, **kwargs)
+    def remember(path, **kwargs):
+        result = original(path, **kwargs)
         read.append(path.name)
         if path.name == "00.json":
             cancelled.cancel()
         return result
 
-    monkeypatch.setattr(Path, "read_text", remember)
+    monkeypatch.setattr(sp, "read_text_shared", remember)
     with pytest.raises(OperationCancelled):
         sp.resolve_values(leaf, cancelled=cancelled)
     assert read == ["z-child.json", "00.json"]

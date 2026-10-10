@@ -260,6 +260,50 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
+def read_text_shared(path: Path, *, errors: str = "strict") -> str:
+    """Liest eine UTF-8-Textdatei, ohne ihr Löschen zu sperren.
+
+    Unter Windows hält ``open`` die Datei für die Dauer des Lesens gegen
+    Löschen gesperrt (kein ``FILE_SHARE_DELETE``). Leert ein Aufräumprogramm
+    oder der Kunde den Cache, während ein Arbeiter Curas Definitionen aus der
+    Kopie liest, scheiterte das Löschen mit WinError 32. Mit geteiltem Löschen
+    verschwindet die Datei, und der Lesende behält seinen Griff bis zum Ende.
+    Anderswo genügt ``read_text``: Dort sperrt Lesen nie.
+    """
+    if os.name != "nt":
+        return path.read_text(encoding="utf-8", errors=errors)
+    from ctypes import wintypes
+
+    kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    )
+    kernel32.CreateFileW.restype = wintypes.HANDLE
+    generic_read = 0x80000000
+    share_all = 0x1 | 0x2 | 0x4  # lesen, schreiben, löschen
+    open_existing = 3
+    normal = 0x80
+    handle = kernel32.CreateFileW(
+        str(path), generic_read, share_all, None, open_existing, normal, None
+    )
+    if handle in (None, wintypes.HANDLE(-1).value):
+        code = _windows_ctypes.get_last_error()
+        raise _windows_ctypes.WinError(code, f"{path}")
+    try:
+        descriptor = _windows_msvcrt.open_osfhandle(handle, os.O_RDONLY)
+    except OSError:
+        kernel32.CloseHandle(wintypes.HANDLE(handle))
+        raise
+    with os.fdopen(descriptor, encoding="utf-8", errors=errors) as stream:
+        return stream.read()
+
+
 def lock_file(stream: BinaryIO) -> None:
     """Belegt eine Lebensdauersperre ohne Warten; das Schließen gibt sie frei."""
     stream.seek(0)

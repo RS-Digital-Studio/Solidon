@@ -53,6 +53,7 @@ from app.core.export.slicer_keys import (
 )
 from app.core.knowledge import profiles as knowledge_profiles
 from app.core.log import get_logger
+from app.core.paths import read_text_shared
 from app.core.types import CancelToken, PrinterProfile, QualityPreset
 from app.core.units import EPS_GEOM, MAX_FACET_SAG, circle_point, inscribed_ratio, is_zero
 from app.i18n import _
@@ -648,7 +649,7 @@ def chosen_machine(flavour: SlicerFlavour, executable: Path) -> str:
         if config is None:
             continue
         try:
-            text = config.read_text(encoding="utf-8", errors="replace")
+            text = read_text_shared(config, errors="replace")
             # Die Datei trägt mehr als ein JSON-Dokument hintereinander; das
             # erste ist die Konfiguration, und ``raw_decode`` hört dort auf,
             # wo es endet.
@@ -714,7 +715,7 @@ def _read_prusa_ini(path: Path) -> configparser.ConfigParser | None:
     wie „nichts eingelegt".
     """
     try:
-        text = path.read_text(encoding="utf-8")
+        text = read_text_shared(path)
     except (OSError, UnicodeDecodeError) as problem:
         _log.debug("skipping Prusa file %s: %s", path.name, problem)
         return None
@@ -1175,7 +1176,7 @@ def cura_setting_version(executable: Path) -> int | None:
         return None
     definition = cura_resources(installed) / "definitions" / "fdmprinter.def.json"
     try:
-        loaded = json.loads(definition.read_text(encoding="utf-8"))
+        loaded = json.loads(read_text_shared(definition))
         version = loaded["metadata"]["setting_version"]
     except (OSError, ValueError, KeyError, TypeError) as problem:
         _log.debug("no Cura setting version below %s: %s", installed, problem)
@@ -1297,7 +1298,7 @@ def _cura_quality_definition(machine: Path, definitions: Path) -> str:
         if current is None:
             break
         try:
-            loaded = json.loads(current.read_text(encoding="utf-8"))
+            loaded = json.loads(read_text_shared(current))
         except OSError, ValueError:
             return ""
         metadata = loaded.get("metadata") if isinstance(loaded, dict) else None
@@ -1317,7 +1318,7 @@ def _configuration(path: Path) -> dict[str, Any] | None:
     """Das erste JSON-Dokument einer Slicer-Konfiguration."""
     try:
         document, _end = json.JSONDecoder().raw_decode(
-            path.read_text(encoding="utf-8", errors="replace").lstrip()
+            read_text_shared(path, errors="replace").lstrip()
         )
     except (OSError, ValueError) as problem:
         _log.debug("could not read slicer configuration %s: %s", path.name, problem)
@@ -1397,7 +1398,7 @@ def _named_profile(
             if _kind_of(path, root) != kind:
                 continue
             try:
-                loaded = json.loads(path.read_text(encoding="utf-8"))
+                loaded = json.loads(read_text_shared(path))
             except OSError, ValueError:
                 continue
             if isinstance(loaded, dict) and str(loaded.get("name", path.stem)) == name:
@@ -2205,7 +2206,7 @@ def _read_prusa_printer_models(root: Path) -> tuple[str, ...]:
     found: list[str] = []
     for path in sorted(root.glob("*.ini")):
         try:
-            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            lines = read_text_shared(path, errors="replace").splitlines()
         except OSError as problem:
             _log.debug("skipping Prusa bundle %s: %s", path.name, problem)
             continue
@@ -2400,7 +2401,7 @@ def _load(path: Path, documents: ProfileDocuments | None = None) -> dict[str, An
     if documents is not None and path in documents:
         return documents[path]
     try:
-        loaded = json.loads(path.read_text(encoding="utf-8"))
+        loaded = json.loads(read_text_shared(path))
     except (OSError, ValueError) as problem:
         _log.debug("unreadable profile %s: %s", path.name, problem)
         loaded = None
@@ -2689,7 +2690,7 @@ def _read_cura_machine(path: Path) -> SlicerProfile | None:
     Kette aufzulösen hieße, Cura nachzubauen.
     """
     try:
-        loaded = json.loads(path.read_text(encoding="utf-8"))
+        loaded = json.loads(read_text_shared(path))
     except (OSError, ValueError) as problem:
         _log.debug("skipping Cura definition %s: %s", path.name, problem)
         return None
@@ -3777,7 +3778,7 @@ class _PrusaStore:
                     self.read(path, cancelled=cancelled)
                     continue
                 try:
-                    text = path.read_text(encoding="utf-8", errors="replace")
+                    text = read_text_shared(path, errors="replace")
                 except OSError:
                     continue
                 if heading in text.splitlines():

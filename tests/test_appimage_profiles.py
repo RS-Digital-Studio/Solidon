@@ -241,6 +241,31 @@ def test_a_cleared_cache_is_read_again(tmp_path: Path) -> None:
     assert again is not None and (again / "Acme.json").is_file()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="nur Windows sperrt eine gelesene Datei")
+def test_a_definition_being_read_does_not_stop_the_cache_from_being_cleared(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Leert der Kunde oder ein Aufräumprogramm den Cache, während ein Arbeiter eine
+    Cura-Definition aus der Kopie liest, verschwindet sie trotzdem; der Lesende
+    bekommt seinen Inhalt. Mit ``read_text`` scheiterte das Löschen mit WinError 32
+    (Fenstertest ``test_after_a_cleared_cache_a_new_search_brings_curas_printers_back``,
+    zwei von vier Läufen)."""
+    folder = tmp_path / "cache" / "kopie" / "definitions"
+    folder.mkdir(parents=True)
+    definition = folder / "creality_k1max.def.json"
+    definition.write_text('{"name": "K1 Max"}', encoding="utf-8")
+    real = os.fdopen
+
+    def cleared_while_open(descriptor: int, *args: Any, **kwargs: Any) -> Any:
+        shutil.rmtree(tmp_path / "cache")
+        return real(descriptor, *args, **kwargs)
+
+    monkeypatch.setattr(os, "fdopen", cleared_while_open)
+
+    assert sp._load(definition) == {"name": "K1 Max"}
+    assert not (tmp_path / "cache").exists()
+
+
 def test_the_window_thread_never_waits_for_the_profile_copy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

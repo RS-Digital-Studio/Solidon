@@ -174,3 +174,15 @@ atomare Prüfung ist in der Langkarte von `app/core/knowledge/` beschrieben.
 So kann eine konkurrierende Buchung zwischen Vorschlag und Schreiben keinen
 zusätzlichen Abzug auslösen. Weder Journalformat noch gespeicherte
 Vorgangskennungen ändern sich dafür.
+
+## `paths.read_text_shared`: Lesen ohne Löschsperre
+
+Unter Windows sperrt ein gewöhnlich geöffneter Lesegriff die Datei gegen Löschen
+(kein `FILE_SHARE_DELETE`). Die Druckersuche (`first_run`, `discover_printers`)
+liest Curas Definitionen aus der Kopie im Nutzer-Cache; leerte der Kunde oder ein
+Aufräumprogramm den Cache in diesem Moment, scheiterte das Löschen mit WinError 32
+(Fenstertest `test_after_a_cleared_cache_a_new_search_brings_curas_printers_back`,
+unter Last zeitweise rot, 10.10.2026). `slicer_profiles` und `appimage` lesen ihre
+Dateien deshalb mit geteiltem Löschen: Die Datei verschwindet, der Lesende behält
+seinen Griff bis zum Ende. Belegt mit verlangsamtem Lesen: gewöhnliches Öffnen drei
+von drei Läufen rot, geteiltes drei von drei grün.
