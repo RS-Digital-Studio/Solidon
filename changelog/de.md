@@ -102,7 +102,7 @@ Nutzen da und sonst nichts.
 - Setzen Stützen unter kleinen Überhängen auf dem Modell auf, schlägt Solidon Baumstützen vor. Sie hinterlassen dort weniger Spuren.
 - Bei kleinen Spitzen schlägt Solidon ein niedrigeres *Mindesttempo beim Bremsen* vor, damit sie nicht weich werden. Die Einstellung geht an jeden Slicer.
 - Schmale Ränder, die sich selbst tragen, bleiben mit *Ränder ohne Stütze* frei. Der Druck braucht so deutlich weniger Stütze.
-- Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst. Solidon verlangt für sie keine Stützen mehr, eine weit gespannte flache Decke behält ihre.
+- Rund- und Spitzbögen tragen sich selbst, auch in einer tiefen Mauer, und Solidon verlangt dort keine Stützen mehr. Flache und schwach geneigte Decken behalten ihre.
 - Stützen lösen sich leichter und sauberer: Der Abstand folgt Material und Schichthöhe jedes Teils, auch bei mehreren Materialien auf einer Platte. Die Trennschicht folgt der Fläche darüber.
 - Steht eine Stütze auf dem Teil, schlägt Solidon auch darunter eine Trennschicht vor, damit ihr Fuß keine Spuren hinterlässt. Unter Baumstützen nur bei Slicern, die sie dort drucken.
 - Unter Baumstützen und neben einem Reinigungsturm schlägt Solidon den Stützabstand in ganzen Schichten vor, so wie der Slicer ihn druckt.

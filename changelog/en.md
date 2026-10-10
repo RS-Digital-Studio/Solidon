@@ -77,7 +77,7 @@ it into `website/version.json`.
 - Where supports under small overhangs rest on the model, Solidon suggests tree supports. They leave fewer marks there.
 - For small tips, Solidon suggests a lower *Minimum slowdown speed* so they do not go soft. The setting reaches every slicer.
 - Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
-- Arches that close between their legs hold themselves up. Solidon no longer asks for supports under them, while a wide flat ceiling keeps its supports.
+- Round and pointed arches hold themselves up, even in a thick wall, and Solidon no longer asks for supports there. Flat and gently sloping ceilings keep theirs.
 - Supports come off more easily and cleanly: the gap follows the material and layer height of each part, even with several materials on one plate. The interface follows the surface above.
 - Where a support stands on the part, Solidon also suggests an interface layer below it so its foot leaves no marks. Under tree supports only with slicers that print it there.
 - Under tree supports and next to a prime tower, Solidon suggests the support gap in whole layers, the way the slicer prints it.

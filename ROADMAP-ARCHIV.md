@@ -46256,34 +46256,66 @@ Stützen gedacht („一体无支撑“). Die Decke des Turmbogens hängt über 
 Stücken zusammen, davon 1 188 im Kanal; die übrigen 1 056 zählten als Feld.
 
 **Behoben:** `analysis.vaults` nennt die Streifen von Decken, die sich zwischen ihren
-Auflagen schließen (`_Ceilings.closes`, gefragt an der ganzen Decke samt Kanalstücken): jedes
-Stück unter der obersten Schicht, das nicht weiter als `LEDGE_REACH` über das Material seiner
-eigenen Schicht darunter ragt (`_hangs_on`) und zu `CEILING_SPANNED` zwischen den Auflagen
-liegt (`_Ceilings.spanned`, neu: die Fläche, die spannt). Sie zählen nicht zum Stützbedarf,
-nicht zu dem, was auf dem Modell aufsetzt, und nicht zum Überhangbefund. Die oberste Schicht
-ist die letzte Spanne und zählt mit ihrer Fläche weiter; die Brückenregel gilt für jede
-Schicht, und nach Brücken auf dem Modell wird an den Streifen weiter gefragt
-(`open_pieces`); die Aussparung unter einer Kanalsperre zählt sie mit. Rand- und Bogenfrage
-gehen in einem Durchgang (`_self_carried`), die Antworten der Schließfrage sind je Schichten
-gemerkt (`_closing_answers`), auch für die Kanalfrage.
+Auflagen schließen (`_Ceilings.closes`, gefragt an der ganzen Decke samt Kanalstücken), und
+die sich selbst tragen (`_Ceilings.arch`): jedes Stück unter der obersten Schicht, das zu
+`CEILING_SPANNED` zwischen den Auflagen liegt (`_Ceilings.spanned`) und entweder nicht
+weiter als seine Zugabe und `CANTILEVER_LAYERS` (vier) Schichthöhen über seine eigene
+Schicht darunter kragt, zwischen zwei Auflagen liegt (`_held_twice`) oder zu einem Scheitel
+gehört, dessen Kragarme je als Rand tragen (`LEDGE_REACH`) oder der quer zwischen den
+Flanken nicht weiter als `SPAN_INTERESTING` spannt. Sie zählen nicht zum Stützbedarf, nicht
+zu dem, was auf dem Modell aufsetzt, und nicht zum Überhangbefund. Die oberste Schicht ist
+die letzte Spanne und zählt mit ihrer Fläche weiter. Die an einer Seite hängenden Streifen
+(`hanging_vaults`) sind für die Brückenregel ruhig, in Stützbedarf, Hinweisen und
+`open_pieces` gleich; die gefassten bleiben darunter. In der Kanalfrage zählen die Streifen
+eines Scheitels, der weiter kragt, als er trägt (`_Arch.overhanging`), wie Stücke außerhalb.
+Wer nur Ränder fragt, rechnet keine Bögen (`_self_carried`); Schließ- und Bogenantworten
+sind je Schichten gemerkt (`_closing_answers`), enge Rand- und Bogenantworten derselben
+Auswahl auch.
 
-**Nachweis (09.10.2026):** `tests/test_slice_findings.py::test_an_arch_that_closes_between_its_legs_carries_itself`
-(Rundbogen R 20 mm: keine Stütze, gegen den alten Stand rot mit Feld 130,9 mm²; flache Decke
-von 30 mm mit Ausrundungen: Stütze, letzte Spanne über 15 mm; Konsole mit gewölbter Unterseite:
-kein Bogen, Stütze) und `test_the_arch_question_asks_only_the_named_ceilings`. Zwei Gegenproben
-aus Zwischenständen hielten bestehende Tests: ohne Brückenregel auf den Streifen verlor der
-Steg auf Zwickeln bei 0,08 mm seine Stützen (`test_a_bridge_is_no_channel_because_its_foot_touches_a_wall`),
-ohne `spanned` trug die Haube vor der Tunnelmündung als Bogen
-(`test_a_strip_at_a_channel_mouth_does_not_borrow_the_channel_for_its_field`). Eiffelturm
-(0,2 mm, Startregel): Stützbedarf nein statt ja, Feld 0,5 statt 360,3 mm², Summe 28,3 statt
-388,6 mm², 2 504 Bogenstreifen; CPU-Zeit von `support_need` im Wechsel neu 111,5 und 138,1 s,
-alt 131,4 und 141,0 s (unter Volllast fremder Prozesse), `_model_support` am Sieb aus
-`test_performance` neu 1,14–1,25 s, alt 1,16–1,25 s. Slicer über `tools/matrix_unit.py`:
-ElegooSlicer am Centauri Carbon 2 mit Solidons Vorschlägen 0 statt 216 m Stütze, 4 h 25 min
-und 33,6 g statt 5 h 23 min und 53,0 g; PrusaSlicer am MK4S 0 m. Im G-Code liegt an den
-Bögen keine Bahnmitte weiter als 3,94 mm (Prusa 3,86 mm) vom Querschnitt der Schicht
-darunter, jede solche Bahn mit Halt an beiden Enden; Bahnen mit freiem Ende ragen dort
-höchstens 0,51 mm über die Kante, die Modellbahnen gleichen denen mit Stütze. Korpus
-(`korpus_alle.py`, Centauri Carbon 2, PLA, alter gegen neuen Stand): 241 von 243 Körpern
-gleich in Stützbedarf, Kanälen, Sperre und Vorschlägen; verschieden nur der Eiffelturm und
-seine reparierte Fassung, beide ohne Stützen und nur noch mit Brim.
+**Review (10.10.2026, `review_rm585.md`, Urteil „nicht“) und Behebung:** S1 — mit 3 mm
+Reichweite je Streifen galten Pult-, Sattel-, Flach- und Korbbogendecken als Bogen (im
+ElegooSlicer 12,45 und 27,25 m Stütze weniger, Bahnen bis 1,7 mm mit freiem Ende); jetzt
+die Kragarmfrage oben. Zwilling — ein flacher Bogen auf einer auskragenden Platte galt als
+Kanaldecke und wurde gesperrt; jetzt kein Kanal, Stütze. L1 — Rundbögen in 16 und 20 mm
+tiefen Wänden verlangten Stützen für die Diagonale; jetzt ohne. M2 — gebündelt (eigener
+Grundriss im Fenster abgezogen, Filter in einem Aufruf, Scheitel nur über
+`SPAN_INTERESTING` Diagonale gemessen und vereinfacht). L2 — die Zahl „0,51 mm“ war die der
+längsten Läufe; im G-Code des Turms hängen kurze Wandstücke bis 2,14 mm (Elegoo) und
+1,72 mm (Prusa) mit freiem Ende über die Kante, die einseitigen Scheitelstreifen; „ein
+Durchgang“ für Rand und Bogen galt nur der vollen Frage und ist ersetzt. Die CPU-Zeit von
+`support_need` im ersten Archivtext stammte aus einem Lauf unter Fremdlast; gleicher Kern im
+Wechsel: Eiffelturm 175,1 → 181,2 s (+3,5 %), Drache +0,5 % (Review).
+
+**Nachweis (10.10.2026):** `tests/test_slice_findings.py`:
+`test_a_round_arch_carries_itself_at_any_layer_height_and_angle` (R 20 bei 0,08/0,28 mm und
+60°, in 16 und 20 mm tiefer Wand, R 30 bei 0,2/0,28 mm und 0,08 mm/60°, Spitzbogen, Arkade:
+keine Stütze, ohne die Streifen bleibt nur die letzte Spanne, kein Brückenbefund),
+`test_a_ceiling_that_cantilevers_further_than_it_carries_keeps_its_supports` (Pultdecke,
+Decke unter 2°, Flachbogen 60/8, Satteldecke 40/3, Korbbogen 60/12 über 0,08/0,2/0,28 mm und
+45/55/60°), `test_a_flat_arch_over_the_model_is_no_channel`,
+`test_a_flat_vault_over_an_enclosed_chamber_stays_a_channel`,
+`test_a_round_arch_over_the_model_stays_a_channel`,
+`test_a_channel_with_rounded_corners_stays_a_channel_at_fine_layers`,
+`test_arch_strips_over_the_model_rest_nowhere_and_bridge_where_held_twice`,
+`test_the_report_names_no_arch_strip`, `test_asking_only_for_ledges_does_not_ask_for_arches`.
+Gegenprobe am Stand `d176bc5ca`: 18 der neuen Fälle rot. 20 Mutationen (Grenze je Streifen
+immer wahr, halbiert, anderthalbfach; oberste Schicht mit; ohne Filter und ohne
+Schließfrage; Brückenregel für alle oder keine Bogenstreifen; `open_pieces` mit allen oder
+ohne gefasste; Bericht, „auf dem Modell“ und Stützbedarf ohne Bögen; Scheitel immer, nur als
+Rand, nur als Brücke; Kanal ohne Kragarm; nie gefasst; Bögen mit jeder Randfrage) über
+`test_slice_findings`, `test_advise`, `test_print_findings`: jede mindestens ein Test rot.
+Prüfkörper (`bedarf.py`, 22 Körper × 0,08/0,2/0,28 mm × 45/55/60°): Rund-, Spitzbogen,
+Arkade, Rippe, tiefe Wände 81 von 81 ohne Stütze; Pult-, Sattel-, Flach-, Korbbogen- und
+schwach geneigte Decken 99 von 99 mit. Echte Modelle (0,2 mm, Startregel): Eiffelturm
+Stützbedarf nein, Feld 0,5 mm², dieselben 2 504 Bogenstreifen und Kanäle wie zuvor, keine
+Vorschläge; Waschschüssel Vorschläge und Sperre (230 Säulen) wie vor RM-585, 54 Stücke an
+den Lippen der Schalen sind keine Kanaldecken mehr; Drache Vorschläge wie vor RM-585, die
+Sperre mit 29 statt 70 Säulen (zwei kragende Scheitelstreifen kippen eine Decke aus 475
+Stücken aus dem Kanal). Slicer (`tools/matrix_unit.py`, aufrecht, gepinnt): Pultdecke
+40/3 mit Solidons Vorschlägen im ElegooSlicer 12,45 m und im PrusaSlicer 12,96 m Stütze,
+Flachbogen 60/8 27,25 und 25,81 m — wie vor RM-585; Rundbogen R 20 und Eiffelturm 0 m in
+beiden. CPU-Zeit im Wechsel, je zwei Läufe, gegen den Stand des Reviews: Rand- und Bogenfrage
+Eiffelturm 21,5 → 11,7 s, Drache 13,3 → 14,8 s; nur Ränder 20,4 → 7,2 und 13,4 → 6,8 s;
+Hinweise 17,2 → 8,2 und 5,2 → 6,6 s; Prüfbericht Eiffelturm 80,5 → 54,1 s (vier → ein
+Randlauf). Das Bündeln allein ändert keine Rand- und Bogenmenge (Eiffelturm, Drache
+hashgleich).

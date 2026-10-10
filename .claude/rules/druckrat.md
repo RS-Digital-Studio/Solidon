@@ -90,10 +90,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Feld. **Die Brückenregel gilt für Streifen zwischen zwei Auflagen**, nicht
   für die an einer Seite hängenden (`hanging_vaults`, ihre Brückenweite wäre
   die Diagonale), in Stützbedarf, Bericht und `open_pieces` gleich. Die
-  oberste Schicht zählt mit ihrer Fläche. **Eine Kanaldecke, deren Scheitel
-  weiter kragt, als er sich trägt, ist keine** (`_Arch.overhanging`). Wer
-  nur Ränder fragt, rechnet keine Bögen; Schließ- und Bogenantwort sind je
-  Schichten gemerkt (`_closing_answers`).
+  oberste Schicht zählt mit ihrer Fläche. **In der Kanalfrage zählt ein
+  Scheitel, der weiter kragt, als er sich trägt, wie ein Stück außerhalb**
+  (`_Arch.overhanging`, dieselbe Flächenmehrheit): Unter jedem Bogen ist der
+  Raum am Scheitel schmal. Wer nur Ränder fragt, rechnet keine Bögen;
+  Schließ- und Bogenantwort sind je Schichten gemerkt (`_closing_answers`).
 - **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):
   Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
   `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,

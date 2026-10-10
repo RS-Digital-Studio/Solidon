@@ -3600,9 +3600,9 @@ class _Arch:
     """Davon die, die an einer Seite hängen (:func:`hanging_vaults`)."""
     overhanging: frozenset[tuple[int, int]]
     """Die Streifen eines Scheitels, der weiter kragt, als er sich trägt —
-    leer, wenn es keinen gibt. Dann schließt sich die Decke auch nicht als
-    Kanaldecke (:func:`_model_support`). In einer geschlossenen Kammer kommt
-    das nicht vor: Dort liegt jeder Streifen zwischen Wänden
+    leer, wenn es keinen gibt. Die Kanalfrage zählt sie wie Stücke, die
+    außerhalb hängen (:func:`_model_support`). In einer geschlossenen Kammer
+    kommt das nicht vor: Dort liegt jeder Streifen zwischen Wänden
     (:meth:`_Ceilings._held_twice`)."""
 
 
@@ -4188,9 +4188,9 @@ class _Ceilings:
           fast die ganze Decke.
 
         ``overhanging`` nennt die Streifen eines Scheitels, der weiter kragt,
-        als er sich trägt — dann ist die Decke auch keine Kanaldecke
-        (:func:`_model_support`, der flache Bogen auf einer auskragenden Platte,
-        Review RM-585).
+        als er sich trägt; die Kanalfrage zählt sie wie Stücke, die außerhalb
+        hängen (:func:`_model_support`, der flache Bogen auf einer auskragenden
+        Platte, Review RM-585).
         """
         known = self._closing.arches
         if ceiling not in known:
@@ -4674,10 +4674,22 @@ def _model_support(
         # **Und sie trägt sich, während sie sich schließt** (Review RM-585,
         # :meth:`_Ceilings.arch`): Ein flacher Bogen auf einer auskragenden
         # Platte schließt sich, aber gedruckt kragen seine Schichten weiter,
-        # als sie tragen, und die Sperre nahm ihnen die Stütze.
+        # als sie tragen, und die Sperre nahm ihnen die Stütze. Ein Scheitel,
+        # der weiter kragt, als er sich trägt, zählt deshalb wie ein Stück, das
+        # außerhalb hängt — nach derselben Mehrheit wie oben. Als ganze Decke
+        # abgewiesen, verlor der Drache seine Sperre (70 Säulen) wegen 2 und 8
+        # Scheitelstreifen in Decken mit 475 und 100 Stücken; so bleiben 29.
         whole = frozenset(names[member] for member in ceiling)
         arch = ceilings.arch(whole)
-        if arch is None or arch.overhanging:
+        if arch is None:
+            channels.difference_update(ceiling)
+            continue
+        kragged = math.fsum(
+            areas[owner_of[name]]
+            for name in sorted(arch.overhanging)
+            if name in owner_of and owner_of[name] in channels
+        )
+        if hanging + kragged > inside - kragged:
             channels.difference_update(ceiling)
             continue
         # **Eine Sperre bekommt nur eine Decke, die ohne sich selbst zu

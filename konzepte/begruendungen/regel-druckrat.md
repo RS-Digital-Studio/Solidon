@@ -449,30 +449,52 @@ statt 592, in PrusaSlicer 81 statt 367 und in Cura 104 statt 358 m (gegen
 bekommen 45 von 242 Körpern den Vorschlag, und 7 brauchen keine Stützen mehr:
 Ihr einziger Überhang waren Ränder.
 
-**Bögen tragen sich selbst, ihre letzte Spanne ist eine Brücke (09.10.2026,
-RM-585).** Nach den Rändern verlangte der Rat am Eiffelturm noch Stützen für die
-Bögen unten: Ihre Decke ist in der Aufsicht ein Feld von 360 mm² und reicht
-19 mm über die Beine — als Rand zu weit, als Feld (RM-570) eine Fläche, die
-Stütze lohnt. Doch jeder Streifen hängt nur ein Stück über der Schicht darunter,
-und der Bogen schließt sich zwischen seinen Beinen; ein Kinn tut das nicht, es
-hängt an der Kehle. Gefragt wird die ganze Decke samt Kanalstücken: Der Turmbogen
-hängt über das Gitter mit 2 244 Stücken zusammen, davon 1 188 im Kanal, und nur
-als Ganzes liegt er zwischen den Beinen. Drei Grenzen kamen aus Gegenproben. Die
-oberste Schicht ist die letzte Spanne und zählt mit ihrer Fläche weiter, sonst
-fiele eine flache Decke zwischen zwei Wänden heraus. Die Brückenregel gilt für
-jede Schicht: Der Steg auf Zwickeln aus `test_slice_findings` steigt um 0,25 mm
-über seine Tiefe an, bei 0,08 mm Schichten ist jeder seiner Streifen eine Brücke
-von 25 mm, und als Bogen gefragt verlor er seine Stützen. Und ein Streifen muss
-zwischen den Auflagen liegen (`_Ceilings.spanned`): Die Haube vor einer
-Tunnelmündung hängt an der Tunneldecke, aber vor ihren Wänden. Weil Rand-,
-Bogen- und Kanalfrage dieselbe Decke fragen, sind die Antworten der Schließfrage
-je Schichten gemerkt. Im G-Code (ElegooSlicer am Centauri Carbon 2 und
-PrusaSlicer am MK4S, ohne Stützen) liegt an den Bögen keine Bahnmitte weiter als
-3,94 mm vom Querschnitt der Schicht darunter, jede solche Bahn als Brücke mit
-Halt an beiden Enden; Bahnen mit freiem Ende ragen dort höchstens 0,51 mm über
-die Kante (Überhangwand). Mit Solidons Vorschlägen druckt der ElegooSlicer den
-Turm ohne Stütze in 4 h 25 min mit 33,6 g statt mit 216 m Stütze in 5 h 23 min
-mit 53,0 g.
+**Ein Bogen druckt als zwei Kragarme, seine letzte Spanne ist eine Brücke
+(09./10.10.2026, RM-585).** Nach den Rändern verlangte der Rat am Eiffelturm noch
+Stützen für die Bögen unten: Ihre Decke ist in der Aufsicht ein Feld von 360 mm²
+und reicht 19 mm über die Beine. Der erste Ansatz ließ jeden Streifen einer
+Decke, die sich zwischen ihren Auflagen schließt, bis `LEDGE_REACH` über seine
+Schicht darunter tragen; das Review fand die Prämisse falsch. Gedruckt wird ein
+Bogen Schicht für Schicht als zwei Kragarme, die erst mit der letzten Schicht
+zusammenkommen, und 3 mm je Schicht sind bei 0,2 mm eine Unterseite von 3,8°:
+Pult-, Sattel-, Flach- und Korbbogendecken verloren ihre Stützen (im ElegooSlicer
+12 bis 27 m), ihre Bahnen hingen 1,5 bis 1,7 mm mit freiem Ende neben der Kante.
+
+Keine Millimetergrenze je Streifen trennt die Fälle: Der Scheitelstreifen eines
+Rundbogens von 20 mm Halbmesser kragt bei 0,2 mm 1,46 mm, jeder Streifen einer
+Satteldecke 40/3 nur 1,33 mm. Getrennt werden sie durch zwei Größen. Je Streifen,
+wie weit er über die Zugabe des wirksamen Winkels hinaus kragt, gezählt in
+Schichthöhen (`CANTILEVER_LAYERS` = 4: zwei Bahnen an der Regelschicht, die halb so
+hoch ist wie die Bahn breit) — sonst kragt eine Decke unter 8,5° bei 0,08 mm nur
+0,53 mm je Schicht und ginge durch. Und für die weiter kragenden Streifen, wie
+weit ihr Scheitel reicht: Er trägt sich, wenn jeder Kragarm ein Rand ist
+(`LEDGE_REACH` ab seinem Ansatz) oder wenn der Scheitel samt letzter Spanne quer
+zwischen den Flanken nicht weiter als `SPAN_INTERESTING` spannt — quer gemessen,
+nicht über die Fläche, die an der Wandtiefe hinge. Ein Streifen zwischen zwei
+Auflagen (die Bögen des Turms, ein leicht steigender Tunnel) ist kein Kragarm; ob
+er dort liegt, fragt dieselbe Hülle gehaltener Randstücke wie die Schließfrage.
+Mit Inkreis und Richtungen gefragt, verlor ein leicht steigender Tunnel seine
+Kanaldecke. Über 22 Prüfkörper bei 0,08, 0,2 und 0,28 mm und 45, 55 und 60°
+tragen sich Rund- und Spitzbögen, Arkade, Rippe und Rundbögen in 16 und 20 mm
+tiefen Wänden (81 von 81 Fällen); Pult-, Sattel-, Flach- und Korbbogendecken und
+Decken unter 2 und 5° behalten ihre Stützen (99 von 99). Drei flache Segmente
+20/1,5 nebeneinander tragen sich bei 0,08 und 0,28 mm unter 55 und 60° — ihr
+Scheitel spannt dort unter 15 mm.
+
+Was sich an einer Seite trägt, misst die Brückenregel nicht: Ohne Richtung mit
+Halt an beiden Enden wäre die Brückenweite die Diagonale, praktisch die
+Wandtiefe, und ein Rundbogen in einer 16 mm tiefen Mauer verlangte Stützen für
+eine Decke von 16 mm. Die Streifen zwischen zwei Auflagen bleiben unter der
+Brückenregel. Dieselbe Prämisse trug die Kanalfrage: Unter seinem Scheitel ist
+jeder Bogen schmal, und ein flacher Bogen auf einer auskragenden Platte galt als
+Kanaldecke, die Übergabe sperrte den Raum darunter. Die Streifen eines
+Scheitels, der weiter kragt, als er sich trägt, zählen deshalb in der Kanalfrage
+wie Stücke, die außerhalb hängen, nach derselben Flächenmehrheit. Als ganze
+Decke abgewiesen, verlor der Drache seine Kanalsperre (70 Säulen) wegen zwei und
+acht Scheitelstreifen in Decken mit 475 und 100 Stücken; nach der Mehrheit
+bleiben 29 Säulen, die kleinere Decke bleibt Kanal. In einer
+geschlossenen Kammer kragt kein Scheitel, dort liegt jeder Streifen zwischen
+Wänden.
 
 **Der Stützkontakt folgt dem Material der Spule (09.10.2026, RM-583).** Narben
 und verschweißte Stützen kommen am häufigsten von einem Abstand, der nicht zu
