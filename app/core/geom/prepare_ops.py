@@ -35,7 +35,6 @@ from app.core.errors import (
     SHOW_LOCATION,
     SHOW_LOCATIONS,
     SPLIT_AND_RETRY,
-    SPLIT_BODIES,
     SPLIT_MODEL,
     AppError,
     BooleanFailedError,
@@ -1003,12 +1002,13 @@ def _refuse_if_another_part_changed(ctx: OpContext, result: OpResult) -> None:
     after = as_mesh_data(output.mesh)
     if not _another_part_changed(before, after, features, source.features, ctx.cancelled):
         return
+    offer = split_offer(before, features[0])
     raise ValidationError(
         field="at_feature",
         detail=ANOTHER_PART_IN_THE_WAY,
-        values={"feature": features[0].id, **split_offer(before, features[0])},
+        values={"feature": features[0].id, **offer},
         constraint="not_movable",
-        suggestions=(SPLIT_BODIES, CANCEL),
+        suggestions=split_ways(offer),
     )
 
 
@@ -4167,8 +4167,8 @@ def _refuse_like_the_card(
     ways: tuple[Action, ...] = ()
     offer: dict[str, str] = {}
     if refusal in SEPARATE_PART_REASONS:
-        ways = (SPLIT_BODIES, CANCEL)
         offer = split_offer(as_mesh_data(source.mesh), feature)
+        ways = split_ways(offer)
     elif refusal in (HOLE_IS_NOT_EMPTY, NO_BODY_FROM_FACES, NEEDS_A_PLAIN_BORE, NOT_AT_THE_MOUTH):
         ways = (CHANGE_SELECTION, CANCEL)
     raise ValidationError(
@@ -4212,13 +4212,13 @@ def _refuse_another_part_in_the_bore(
     )
     if reason is None:
         return
-    mesh = as_mesh_data(source.mesh)
+    offer = split_offer(as_mesh_data(source.mesh), feature)
     raise ValidationError(
         field="at_feature",
         detail=reason,
-        values={"feature": feature.id, "kind": feature.kind, **split_offer(mesh, feature)},
+        values={"feature": feature.id, "kind": feature.kind, **offer},
         constraint="not_movable",
-        suggestions=(SPLIT_BODIES, CANCEL),
+        suggestions=split_ways(offer),
     )
 
 
@@ -4980,9 +4980,7 @@ def filled_bore_refusal(mesh: MeshData, feature: Feature) -> ValidationError:
         values={"feature": feature.id, "kind": feature.kind, **offer},
         constraint="not_movable",
         suggestions=(
-            (SPLIT_BODIES, CANCEL)
-            if reason is OTHER_PART_IN_THE_BORE
-            else (CHANGE_SELECTION, CANCEL)
+            split_ways(offer) if reason is OTHER_PART_IN_THE_BORE else (CHANGE_SELECTION, CANCEL)
         ),
     )
 
@@ -5274,6 +5272,7 @@ def _slot_in_separate_carrier(
             float(math.hypot(*radial)) + _bore_number(feature, "diameter") / 2.0
             > diameter / 2.0 + EPS_GEOM
         ):
+            offer = split_offer(body, feature)
             raise ValidationError(
                 field="at_feature",
                 constraint="separate_bore_contents",
@@ -5282,8 +5281,8 @@ def _slot_in_separate_carrier(
                     "alte vollständig umfassen. Teilen Sie den Körper in Einzelteile auf, "
                     "um nur die Bohrung zu verschieben oder schmaler zu machen."
                 ),
-                values={"feature": feature.id, **split_offer(body, feature)},
-                suggestions=(SPLIT_BODIES, CORRECT_INPUT, CANCEL),
+                values={"feature": feature.id, **offer},
+                suggestions=(*split_ways(offer)[:-1], CORRECT_INPUT, CANCEL),
             )
 
     def mapped_features(
@@ -21155,13 +21154,19 @@ class SplitPinnedParams(BaseParams):
     number_b: int = _number_b_param()
 
 
+#: Höchstzahl der Teile einer Zerlegung. Bis Review I waren es 64, ohne Grund im
+#: Verlauf; der Bohrmaschinenhalter hat 69 Teile, und der Knopf an einer
+#: Teile-Absage scheiterte darüber an der Planung.
+SPLIT_LIMIT: Final = 1000
+
+
 @op_params
 class SplitBodiesParams(BaseParams):
     count: int = param(
         title=_("Anzahl"),
         default=2,
         minimum=2,
-        maximum=64,
+        maximum=SPLIT_LIMIT,
         doc=_(
             "In wie viele Objekte aufgeteilt wird. Wie viele Teile der Körper "
             "tatsächlich hat, sagt der Prüfbericht; passt die Zahl nicht, "
@@ -21172,18 +21177,20 @@ class SplitBodiesParams(BaseParams):
         title=_("Splitter behalten"),
         default=False,
         doc=_(
-            "Auch offene Flächenstücke neben geschlossenen Teilen und Bruchstücke behalten, "
-            "die der Drucker nicht abbildet. Aus Scans kommen oft lose Dreiecke."
+            "Auch kleine offene Flächenstücke und Bruchstücke behalten, die der Drucker nicht "
+            "abbildet. Aus Scans kommen oft lose Dreiecke."
         ),
     )
+    # Kein Altmarker, sondern eine Wahl: Der Knopf an einer Teile-Absage setzt
+    # sie, und der Agent braucht sie für denselben Weg (Review I, Hinweis
+    # Agentenweg) — darum sichtbar auf der Rückseite und im Werkzeugschema.
     carry_feature: str = param(
-        title=_("Merkmal, das seinen Namen behält"),
+        title=_("Merkmal beisammen halten"),
         default="",
         placement="advanced",
-        internal=True,
         doc=_(
-            "Das Merkmal, an dem ein Schritt nach der Zerlegung weiterrechnet. Es behält auf "
-            "seinem Teil seinen Namen."
+            "Die Teile, die dieses Merkmal tragen, bleiben ein Objekt, und es behält seinen "
+            "Namen. Leer heißt: jedes Teil einzeln."
         ),
     )
     legacy_tiny_share: bool = param(
@@ -21193,7 +21200,7 @@ class SplitBodiesParams(BaseParams):
         internal=True,
         dropped_on_change=True,
         doc=_(
-            "Verwirft wie Projekte bis Format 49 jedes Teil unter einem Prozent des größten. "
+            "Verwirft wie ältere Projekte jedes Teil unter einem Prozent des größten. "
             "Eine Änderung am Schritt rechnet wie heute."
         ),
     )
@@ -21229,8 +21236,8 @@ def _loose_parts(
     Splitter weg (:func:`_splinters`), und eine Stückzahl, die sie mitzählte,
     ließe die Zerlegung an ihrer eigenen Prüfung scheitern. ``least`` ist das
     kleinste Volumen, das der Drucker hinterlässt
-    (``Profile.smallest_printable_volume``); ``by_share`` rechnet wie Projekte
-    bis Format 49.
+    (``Profile.smallest_printable_volume``); ``by_share`` rechnet wie ältere
+    Projekte.
 
     **Je Teil reisen die Slots seiner Dreiecke mit** (Robert, 11.09.2026:
     „Filamente auch nicht"): Ein Schriftzug, dem *Filament zuweisen* Slot 7
@@ -21247,7 +21254,7 @@ def _loose_parts(
     **Ein Netz nur für ein Teil, das bleibt**: Gemessen und geordnet wird an
     den Dreiecken (:func:`_parts_in_order`), ein Splitter bekommt kein eigenes.
     """
-    ordered = _parts_in_order(mesh, from_origin=by_share)
+    ordered = _parts_in_order(mesh, as_saved=by_share)
     if keep_tiny:
         chosen = ordered
     else:
@@ -21273,59 +21280,92 @@ def _loose_parts(
 
 
 def split_offer(mesh: MeshData, feature: Feature | None = None) -> dict[str, str]:
-    """Was der Knopf *In Einzelteile aufteilen* an einer Teile-Absage braucht (RM-638).
+    """Was der Knopf an einer Teile-Absage braucht (RM-638, Review I M2/G6).
 
-    ``components`` ist die Zahl der Teile, wie die Zerlegung mit *Splitter
-    behalten* sie liefert; ohne sie kehrte ``MainWindow._split_into_bodies_after_error``
-    still zurück, und der Knopf tat nichts. ``part_index`` ist die Stelle des
-    Teils, das ``feature`` trägt, in der Reihenfolge der Zerlegung: Dorthin setzt
-    ``History.split_and_retry`` den angehaltenen Schritt, denn nach der Zerlegung
-    steht an der Kennung des Körpers nur noch sein größtes Teil. Liegen die
-    Flächen des Merkmals auf mehreren Teilen, fehlt ``part_index`` — welches
-    gemeint ist, wäre geraten (Regel 21).
+    Der Knopf ist *In Einzelteile aufteilen und erneut versuchen*
+    (``SPLIT_AND_RETRY``): ``History.split_and_retry`` setzt die Zerlegung vor
+    den angehaltenen Schritt und diesen an das Teil, das ``feature`` trägt.
+    ``count`` ist die Stückzahl der Zerlegung, ``part_index`` die Stelle dieses
+    Teils in ihrer Reihenfolge — nach der Zerlegung steht an der Kennung des
+    Körpers nur noch sein größtes Teil.
+
+    **Die Träger eines Merkmals bleiben beisammen.** Liegt sein Mantel auf
+    mehreren Teilen — eine Bohrung durch zwei aufeinanderliegende Platten —,
+    zählt die Zerlegung sie als ein Objekt (``carry_feature`` legt sie
+    zusammen) und trennt nur, was fremd ist; bis Review I zerlegte sie alle,
+    und der Schritt fand am größten Teil nur eine halbe Bohrung unter fremdem
+    Namen. ``part_index`` ist dann die Stelle des ersten Trägers.
+
+    **Leer heißt: kein Knopf** (:func:`split_ways`) — ohne Flächen des Merkmals
+    wüsste niemand, wohin der Schritt gehört, und über der Höchstzahl von
+    *Anzahl* hielte die Planung an. Ein erzeugtes Innengewinde ohne Flächen
+    zählt mit den Wänden seines Gangs (:func:`_with_walls`).
     """
-    ordered = _parts_in_order(mesh)
-    offer = {"components": str(len(ordered))}
+    if feature is not None:
+        feature = _with_walls(mesh, feature)
     chosen = np.asarray(feature.face_indices if feature is not None else (), dtype=np.int64)
     if not chosen.size or int(chosen.min()) < 0 or int(chosen.max()) >= mesh.triangle_count:
-        return offer
+        return {}
+    ordered = _parts_in_order(mesh)
     holding = np.unique(_owners(mesh.triangle_count, ordered)[chosen])
-    if len(holding) == 1:
-        offer["part_index"] = str(int(holding[0]))
-    return offer
+    count = len(ordered) - len(holding) + 1
+    if count < 2 or count > _split_limit():
+        return {}
+    return {"count": str(count), "part_index": str(int(holding[0]))}
+
+
+def split_ways(offer: Mapping[str, str]) -> tuple[Action, ...]:
+    """Die Wege einer Teile-Absage: mit Angebot der Knopf, sonst nur Abbrechen."""
+    return (SPLIT_AND_RETRY, CANCEL) if offer else (CANCEL,)
+
+
+def _split_limit() -> int:
+    """Die Höchstzahl von *Anzahl* — dieselbe, die die Planung prüft."""
+    return next(int(spec.maximum or 0) for spec in SplitBodiesParams.spec() if spec.name == "count")
 
 
 def _carried_feature(
     source: SceneObject, name: str, groups: Sequence[NDArray[np.int64]], count: int
-) -> tuple[int, Feature] | None:
-    """Das Merkmal ``name`` in den Dreiecken seines Teils — und dessen Stelle in ``groups``.
+) -> tuple[tuple[int, ...], Feature] | None:
+    """Das Merkmal ``name`` in den Dreiecken seiner Träger — und deren Stellen in ``groups``.
 
-    Belegt, nicht geraten: Liegen seine Flächen nicht alle auf genau einem Teil,
-    kommt nichts mit, und der Schritt danach sagt, dass es das Merkmal dort
-    nicht gibt.
+    Ein Träger: Die Dreiecke zählen in seinem Teil. Mehrere (eine Bohrung durch
+    zwei Platten): Sie zählen im Verbund der Träger in ihrer Reihenfolge, den
+    ``split_bodies`` daraus legt. Belegt, nicht geraten: Liegt eine Fläche des
+    Merkmals auf keinem behaltenen Teil, kommt nichts mit. Ein Merkmal ohne
+    eigene Flächen (erzeugtes Innengewinde) findet seine Träger über die Wände
+    seines Gangs und reist ohne Flächen mit, wie es war.
     """
     feature = source.features.get(name)
-    if feature is None or not feature.face_indices:
+    if feature is None:
         return None
-    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    walled = _with_walls(as_mesh_data(source.mesh), feature)
+    if not walled.face_indices:
+        return None
+    chosen = np.asarray(walled.face_indices, dtype=np.int64)
     if int(chosen.min()) < 0 or int(chosen.max()) >= count:
         return None
     owner = np.full(count, -1, dtype=np.int64)
-    position = np.full(count, -1, dtype=np.int64)
     for index, group in enumerate(groups):
         owner[group] = index
-        position[group] = np.arange(len(group), dtype=np.int64)
-    holders = np.unique(owner[chosen])
-    if len(holders) != 1 or holders[0] < 0:
+    holders = tuple(int(value) for value in np.unique(owner[chosen]))
+    if holders[0] < 0:
         return None
-    holder = int(holders[0])
+    position = np.full(count, -1, dtype=np.int64)
+    offset = 0
+    for holder in holders:
+        group = groups[holder]
+        position[group] = np.arange(offset, offset + len(group), dtype=np.int64)
+        offset += len(group)
 
     def remap(indices: Sequence[int]) -> tuple[int, ...] | None:
         picked = np.asarray(indices, dtype=np.int64)
-        if not picked.size or int(picked.max()) >= count or (owner[picked] != holder).any():
+        if not picked.size or int(picked.max()) >= count or (position[picked] < 0).any():
             return None
         return tuple(position[picked].tolist())
 
+    if not feature.face_indices:
+        return holders, feature
     patches = tuple(
         dataclasses.replace(patch, face_indices=faces)
         for patch in feature.surface_patches
@@ -21334,18 +21374,42 @@ def _carried_feature(
     faces = remap(feature.face_indices)
     if faces is None:
         return None
-    return holder, dataclasses.replace(feature, face_indices=faces, surface_patches=patches)
+    return holders, dataclasses.replace(feature, face_indices=faces, surface_patches=patches)
+
+
+def _with_carriers_together(
+    kept: list[LoosePart], groups: list[NDArray[np.int64]], holders: Sequence[int]
+) -> tuple[list[LoosePart], list[NDArray[np.int64]]]:
+    """Legt die Träger eines Merkmals an die Stelle des ersten zu einem Teil zusammen."""
+    if len(holders) < 2:
+        return kept, groups
+    first = holders[0]
+    joined: LoosePart = (
+        cast("Any", trimesh.util.concatenate([kept[index][0] for index in holders])),
+        sum(kept[index][1] for index in holders),
+        tuple(value for index in holders for value in kept[index][2]),
+    )
+    faces = np.concatenate([groups[index] for index in holders])
+    rest = set(holders[1:])
+    merged = [joined if index == first else part for index, part in enumerate(kept)]
+    places = [faces if index == first else group for index, group in enumerate(groups)]
+    return (
+        [part for index, part in enumerate(merged) if index not in rest],
+        [group for index, group in enumerate(places) if index not in rest],
+    )
 
 
 class _LoosePlace(NamedTuple):
-    """Ein loses Teil, bevor es ein Netz bekommt: Volumen, Dreiecke, Mitte."""
+    """Ein loses Teil, bevor es ein Netz bekommt: Volumen, Dreiecke, Mitte —
+    und ob es einen offenen Rand hat (:func:`_open_faces`)."""
 
     volume: float
     faces: NDArray[np.int64]
     centre: tuple[float, float, float]
+    shell: bool
 
 
-def _parts_in_order(mesh: MeshData, *, from_origin: bool = False) -> list[_LoosePlace]:
+def _parts_in_order(mesh: MeshData, *, as_saved: bool = False) -> list[_LoosePlace]:
     """Jedes lose Teil mit seinen Dreiecksnummern, in der Reihenfolge der Zerlegung.
 
     Größte zuerst, gleich große nach ihrer Lage (:data:`_SAME_SIZE`,
@@ -21353,31 +21417,71 @@ def _parts_in_order(mesh: MeshData, *, from_origin: bool = False) -> list[_Loose
     sagt, an welchem Teil ein Merkmal nach der Zerlegung steht
     (:func:`split_offer`).
 
-    **Gemessen an den Dreiecken, nicht an einem Teilnetz**: Volumen und Mitte
-    kommen bitgleich aus den Ecken des Teils (``mesh.triangles_volume``,
-    dieselbe Hülle wie ``Trimesh.bounds`` des Teilnetzes); ``submesh`` baute
-    sonst je Teil ein Netz samt Cache, auch für Splitter und für die Frage der
-    Absage, die gar keines braucht.
+    **Ein geschlossenes Teil wird an seinen Dreiecken gemessen**: kein eigenes
+    Netz, Volumen nahe am Teil (``mesh.triangles_volume``, wie
+    :func:`signed_volume`) und Mitte (dieselbe Hülle wie ``Trimesh.bounds``)
+    bitgleich aus seinen Ecken.
 
-    **Das Volumen ist das nahe am Teil** (:func:`signed_volume`, RM-639):
-    ``Trimesh.volume`` teilte an einem losen flachen Dreieck für den Schwerpunkt
-    durch null. ``from_origin`` nimmt wie bis Format 49 das Integral über den
-    Ursprung (:func:`enclosed_volume`, dieselbe Formel wie ``Trimesh.volume``),
-    denn dort entscheidet es auch an offenen Teilen.
+    **Ein offenes Teil behält die Zahl von vorher**: ``Trimesh.volume`` an seinem
+    Teilnetz (Review I, G1). Ein offenes Volumen ist kein Maß, aber es ordnet
+    die Teile, und die Reihenfolge vergibt die Kennungen: Zwei gleiche Klötze,
+    einem fehlte unten ein Dreieck, tauschten an jedem anderen Integral den
+    Platz. Die Division durch null im Schwerpunkt eines flachen Teils bleibt
+    still. ``as_saved`` rechnet wie ältere Projekte (:func:`_parts_as_saved`).
     """
+    groups = face_components(mesh.raw)
+    if as_saved:
+        return _parts_as_saved(mesh, groups)
     vertices = np.asarray(mesh.raw.vertices, dtype=np.float64)
     faces = np.asarray(mesh.raw.faces, dtype=np.int64)
+    open_faces = _open_faces(mesh)
     found: list[_LoosePlace] = []
-    for group in face_components(mesh.raw):
+    for group in groups:
         indices = np.asarray(group, dtype=np.int64)
         triangles = vertices[faces[indices]]
-        found.append(
-            _LoosePlace(
-                abs(triangles_volume(triangles, near=not from_origin)),
-                indices,
-                _where_it_sits(triangles.reshape(-1, 3)),
+        shell = bool(open_faces[indices].any())
+        if shell:
+            (body,) = cast(
+                "list[Any]", mesh.raw.submesh([indices], only_watertight=False, append=False)
             )
-        )
+            with np.errstate(divide="ignore", invalid="ignore"):
+                volume = abs(float(body.volume))
+        else:
+            volume = abs(triangles_volume(triangles, near=True))
+        found.append(_LoosePlace(volume, indices, _where_it_sits(triangles.reshape(-1, 3)), shell))
+    return _in_order(found)
+
+
+def _parts_as_saved(mesh: MeshData, groups: Sequence[NDArray[Any]]) -> list[_LoosePlace]:
+    """Die Teile, wie Projekte vor RM-639 sie maßen: ``Trimesh.volume`` am Teilnetz.
+
+    Für den Altmarker ``legacy_tiny_share``, der die Ein-Prozent-Regel mit
+    genau diesen Zahlen fragt — das Integral über den Ursprung entscheidet
+    dort auch an offenen Teilen. Die Division durch null im Schwerpunkt eines
+    flachen Teils stört das Volumen nicht und bleibt still, wie damals.
+    """
+    bodies = cast(
+        "list[Any]",
+        mesh.raw.submesh(groups, only_watertight=False, append=False) if groups else [],
+    )
+    open_faces = _open_faces(mesh)
+    found: list[_LoosePlace] = []
+    with np.errstate(divide="ignore", invalid="ignore"):
+        for body, group in zip(bodies, groups, strict=True):
+            indices = np.asarray(group, dtype=np.int64)
+            found.append(
+                _LoosePlace(
+                    abs(float(body.volume)),
+                    indices,
+                    _where_it_sits(np.asarray(body.vertices, dtype=np.float64)),
+                    bool(open_faces[indices].any()),
+                )
+            )
+    return _in_order(found)
+
+
+def _in_order(found: list[_LoosePlace]) -> list[_LoosePlace]:
+    """Größte zuerst, gleich große nach ihrer Lage."""
     largest = max((part.volume for part in found), default=0.0) or 1.0
     found.sort(key=lambda part: (-round(part.volume / largest, _SAME_SIZE), part.centre))
     return found
@@ -21397,46 +21501,48 @@ def _splinters(
     """Welche Teile Splitter sind — je Teil in der Reihenfolge von ``ordered``.
 
     **Gemessen am Drucker und an der Schale, nie am größten Teil** (RM-639,
-    Entscheidung Robert): Bis Format 49 fiel weg, was unter einem Prozent des
-    größten Teils lag. Am Laptop-Ständer (Platte 82 281 mm³) waren das 13 von 22
-    echten Teilen — Stifte, Scheiben, Schraubenköpfe —, und der Weg aus jeder
+    Entscheidung Robert): In älteren Projekten fiel weg, was unter einem Prozent
+    des größten Teils lag. Am Laptop-Ständer (Platte 82 281 mm³) waren das 13 von
+    22 echten Teilen — Stifte, Scheiben, Schraubenköpfe —, und der Weg aus jeder
     Teile-Absage verlor die Teile, an denen der Kunde arbeiten wollte.
 
-    Ein Splitter ist jetzt, was keine Schale schließt, solange ein anderes Teil
-    eine schließt (ein loses Dreieck, ein Kasten ohne Deckel neben dem Körper),
-    oder geschlossen weniger Volumen hat, als der Drucker hinterlässt
-    (``least``, Regel 7). Besteht der Körper nur aus offenen Flächen, sind sie
-    die Teile: eine Zerlegung, die alle verwürfe, sagte „ein Stück“.
+    Ein geschlossenes Teil ist Splitter, wenn es weniger Volumen hat, als der
+    Drucker hinterlässt (``least``, Regel 7). Ein offenes, wenn es auch klein ist
+    — dieselbe Frage wie beim Laden (``repair.open_splinters``): Ein Rohr ohne
+    Deckel neben einem Würfel ist ein Teil, ein loses Dreieck nicht (Review I,
+    M1).
     """
-    volumes = np.asarray([part.volume for part in ordered], dtype=np.float64)
+    volumes = [part.volume for part in ordered]
     if by_share:
-        largest = float(volumes.max()) if len(volumes) else 0.0
-        return [bool(value) for value in volumes < (largest or 1.0) * 0.01]
-    shells = _open_shells(mesh, ordered)
-    closed_somewhere = not bool(shells.all())
-    return [bool(value) for value in np.where(shells, closed_somewhere, volumes < least)]
+        largest = max(volumes, default=0.0) or 1.0
+        return [volume < largest * 0.01 for volume in volumes]
+    from app.core.geom.repair import open_splinters
+
+    shells = [part.shell for part in ordered]
+    small_open = open_splinters(mesh, [part.faces for part in ordered], shells)
+    return [
+        small if shell else volume < least
+        for shell, small, volume in zip(shells, small_open, volumes, strict=True)
+    ]
 
 
-def _open_shells(mesh: MeshData, ordered: Sequence[_LoosePlace]) -> NDArray[np.bool_]:
-    """Ob jedes Teil einen offenen Rand hat — eine Kante, die nur ein Dreieck trägt.
+def _open_faces(mesh: MeshData) -> NDArray[np.bool_]:
+    """Je Dreieck, ob es an einer Kante liegt, die nur ein Dreieck trägt.
 
     Die Ecken zählen nach ihrem Ort (``perceive.features.vertex_rank``), nicht
     nach ihrer Nummer: Eine ungeschweißt geladene STL (*Verschweißen* aus)
-    teilt keine Eckennummer, und jedes ihrer Teile wäre sonst offen. Kanten
-    zwischen zwei Ecken am selben Ort zählen nicht — ein entartetes Dreieck
-    öffnet keinen Körper.
+    teilt keine Eckennummer, und jedes ihrer Teile wäre sonst offen. Ein
+    entartetes Dreieck (zwei Ecken am selben Ort) steht nach
+    :func:`face_components` als eigenes Teil da, ohne Fläche und ohne Volumen —
+    offen oder nicht, es ist ein Splitter (Review I, G2).
     """
     from app.core.perceive.features import vertex_rank
 
     faces = vertex_rank(mesh.raw)[np.asarray(mesh.raw.faces, dtype=np.int64)]
     edges = np.stack((faces, np.roll(faces, -1, axis=1)), axis=2).reshape(-1, 2)
-    proper = edges[:, 0] != edges[:, 1]
-    _unique, inverse, counts = unique_edges(edges[proper], return_inverse=True, return_counts=True)
-    single = np.zeros(len(edges), dtype=bool)
-    single[np.flatnonzero(proper)] = counts[inverse] == 1
-    open_faces = single.reshape(-1, 3).any(axis=1)
-    owner = _owners(len(faces), ordered)
-    return np.bincount(owner[open_faces], minlength=len(ordered)) > 0
+    _unique, inverse, counts = unique_edges(edges, return_inverse=True, return_counts=True)
+    single = np.asarray(counts[inverse] == 1, dtype=bool).reshape(-1, 3)
+    return np.asarray(single.any(axis=1), dtype=bool)
 
 
 #: Ab welcher Stelle zwei Teile als **gleich groß** gelten — relativ zum
@@ -21530,6 +21636,15 @@ def split_bodies(ctx: OpContext) -> OpResult:
         least=ctx.profile.smallest_printable_volume if ctx.profile is not None else EPS_GEOM,
         by_share=params.legacy_tiny_share,
     )
+    # Das Merkmal, an dem ein Schritt weiterrechnet (``carry_feature``, RM-638):
+    # Seine Träger werden ein Teil, bevor gezählt wird (``split_offer``).
+    carried = (
+        _carried_feature(source, params.carry_feature, groups, mesh.triangle_count)
+        if params.carry_feature
+        else None
+    )
+    if carried is not None:
+        kept, groups = _with_carriers_together(kept, groups, carried[0])
 
     # **Genau so viele, wie die Stückzahl sagt.** Der Stapel vergibt die
     # Kennungen der Ausgänge, bevor gerechnet wird (§15.2); eine Operation, die
@@ -21590,11 +21705,8 @@ def split_bodies(ctx: OpContext) -> OpResult:
         ]
 
     # Nur ohne Zusammenlegen: Ein zugeschlagenes Teil verschöbe die Dreiecke.
-    carried = (
-        _carried_feature(source, params.carry_feature, groups, mesh.triangle_count)
-        if params.carry_feature and not surplus
-        else None
-    )
+    if surplus:
+        carried = None
     outputs = []
     for number, (part, _volume, slots) in enumerate(kept, start=1):
         outputs.append(
@@ -21613,13 +21725,29 @@ def split_bodies(ctx: OpContext) -> OpResult:
                 # Teil, und die Zuordnung gibt ihm seinen Namen zurück.
                 features=(
                     {params.carry_feature: carried[1]}
-                    if carried is not None and carried[0] == number - 1
+                    if carried is not None and carried[0][0] == number - 1
                     else {}
                 ),
             )
         )
 
     findings = []
+    if params.carry_feature and carried is None:
+        # Nie still (Regel 17): Wer ein Merkmal beisammen halten wollte und
+        # es nicht bekommt, liest es hier.
+        findings.append(
+            Finding(
+                code="split_bodies.not_kept_together",
+                severity="warning",
+                message=_(
+                    "Das Merkmal {feature} wurde nicht beisammen gehalten: Es fehlt am Körper, "
+                    "oder die Stückzahl legt übrige Teile zusammen.",
+                    feature=params.carry_feature,
+                ),
+                values={"feature": params.carry_feature, "object": str(source.name)},
+                suggestions=(CORRECT_INPUT,),
+            )
+        )
     if surplus:
         findings.append(
             Finding(
@@ -21645,13 +21773,29 @@ def split_bodies(ctx: OpContext) -> OpResult:
             Finding(
                 code="split_bodies.tiny",
                 severity="info",
+                # Einzahl und Mehrzahl als eigene Sätze (Review I, G4): „1 Splitter
+                # wurden verworfen“ stand beim Kunden.
                 message=(
-                    _("{count} Splitter unter einem Prozent wurden verworfen.", count=dropped)
+                    (
+                        _("Ein Splitter unter einem Prozent wurde verworfen.")
+                        if dropped == 1
+                        else _(
+                            "{count} Splitter unter einem Prozent wurden verworfen.",
+                            count=dropped,
+                        )
+                    )
                     if params.legacy_tiny_share
-                    else _(
-                        "{count} Splitter wurden verworfen: offene Flächenstücke oder "
-                        "Bruchstücke, die der Drucker nicht abbildet.",
-                        count=dropped,
+                    else (
+                        _(
+                            "Ein Splitter wurde verworfen: ein kleines offenes Flächenstück "
+                            "oder ein Bruchstück, das der Drucker nicht abbildet."
+                        )
+                        if dropped == 1
+                        else _(
+                            "{count} Splitter wurden verworfen: kleine offene Flächenstücke "
+                            "oder Bruchstücke, die der Drucker nicht abbildet.",
+                            count=dropped,
+                        )
                     )
                 ),
                 # Die Splitter gehörten dem ganzen Körper, nicht seinem größten

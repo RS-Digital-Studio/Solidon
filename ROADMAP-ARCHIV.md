@@ -46921,6 +46921,17 @@ Halt an Schritt 2 mit `components` 22 und `part_index` 15, ein Klick gibt 22 Obj
 rechnet an `obj_16` (537 mm³), `hole_2` steht auf der Sollmitte, Befund `bore.over_the_edge` wie
 in RM-253 (1-mm-Wand); ein Strg+Z stellt `load`, `move_feature` und ein Objekt wieder her.
 
+**Nachtrag Review I (10.10.2026):** Der Knopf heißt jetzt, was er tut — *In Einzelteile
+aufteilen und erneut versuchen* (`SPLIT_AND_RETRY`, ein Handler für Ausrichten und Teile-Absage,
+G6). Liegt der Mantel eines Merkmals auf mehreren Teilen (Bohrung durch zwei Platten mit Stift),
+bleiben seine Träger ein Objekt (`carry_feature`, jetzt sichtbar als *Merkmal beisammen halten*),
+nur das fremde Teil geht ab, und der Schritt versetzt die ganze Bohrung; bis dahin hielt die Kette
+nach dem Klick erneut an (M2, `test_the_part_refusal_way_ends_with_the_feature_moved_on_its_parts`).
+Gewinde ohne Flächen zählen mit den Wänden ihres Gangs. Die Art im Prüfbericht heißt wie in Karte
+und Handbuch („Art: Bohrung“, M3); der Agent liest Stückzahl, Merkmal und Teil der Absage
+(`checks.as_lines`); *Anzahl* reicht bis 1000 statt 64 (der Bohrmaschinenhalter hat 69 Teile),
+darüber bietet die Absage keinen Knopf an.
+
 ## RM-639: In Einzelteile aufteilen behält jedes druckbare Teil (09.10.2026)
 
 <a id="rm-639-in-einzelteile-aufteilen-behält-jedes-druckbare-teil-09102026"></a>
@@ -46946,6 +46957,14 @@ Migration 49 → 50: gespeicherte Schritte bekommen `legacy_tiny_share` und rech
 Volumen und Lage je Teil an den Dreiecken (`mesh.triangles_volume`), ein Netz nur für behaltene
 Teile; an Ständer und Korpus bitgleich zum Stand davor, Ständer CPU-Median 0,30 → 0,22 s, Spitze
 (tracemalloc) 32,0 → 12,6 MB. `Trimesh.volume` teilte an einem losen flachen Dreieck durch null.
+
+**Nachtrag Review I (10.10.2026):** Eine offene Schale ist nur Splitter, wenn sie auch klein
+ist — dieselbe Frage wie beim Laden (`repair.open_splinters`, M1): Ein Rohr ohne Deckel neben
+einem Würfel fiel sonst als größtes Teil weg. Offene Teile behalten das Maß, nach dem sie bis
+dahin geordnet wurden (`Trimesh.volume` am Teilnetz), damit die Kennungen nicht wechseln (G1);
+ältere Projekte rechnen mit genau der alten Zählung (`_parts_as_saved`). Tests für Ecken nach
+Ort, das entartete Dreieck, die Träger der Mitnahme und das alte Integral (G2); Texte ohne
+Formatnummer (G3), Einzahl „Ein Splitter wurde verworfen“ (G4).
 
 ## RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)
 

@@ -2745,7 +2745,7 @@ def test_moving_a_bore_with_a_separate_pin_names_the_other_part(
         run_op("move_feature", entry, profile, at_feature=feature_id, x=5.0, y=0.0, z=0.0)
 
     assert caught.value.detail is OTHER_PART_IN_THE_BORE
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 #: Die sechs Handlungen an einer Bohrung, mit Werten, die an der Platte aus
@@ -2787,10 +2787,10 @@ def test_every_bore_op_names_the_separate_pin(
         run_op(op, entry, profile, at_feature=_bore_in(entry, "hole"), **_BORE_OPS[op])
 
     assert caught.value.detail is OTHER_PART_IN_THE_BORE
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
     # Der Knopf braucht Stückzahl und Teil des Merkmals (RM-638): Ohne
-    # ``components`` kehrte er still zurück; die Platte ist das größte Teil.
-    assert caught.value.values["components"] == "2"
+    # Stückzahl kehrte er still zurück; die Platte ist das größte Teil.
+    assert caught.value.values["count"] == "2"
     assert caught.value.values["part_index"] == "0"
 
 
@@ -2849,11 +2849,11 @@ def test_a_bore_through_two_plates_with_a_pin_names_the_pin(profile: Profile, ke
         with pytest.raises(ValidationError) as caught:
             run_op("move_feature", entry, profile, at_feature=feature.id, x=8.0, y=0.0, z=10.0)
         assert caught.value.detail is OTHER_PART_IN_THE_BORE
-        # Liegt der Mantel auf beiden Platten, nennt die Absage kein Teil (RM-638,
-        # Regel 21): Welches gemeint ist, wäre geraten.
+        # Liegt der Mantel auf beiden Platten, bleiben sie beisammen (Review I,
+        # M2): Die Zerlegung trennt nur den Stift, der Schritt rechnet am Verbund.
         carriers = sum(bool(np.isin(feature.face_indices, group).any()) for group in groups)
-        assert caught.value.values["components"] == "3"
-        assert ("part_index" in caught.value.values) is (carriers == 1)
+        assert caught.value.values["count"] == str(3 - carriers + 1)
+        assert "part_index" in caught.value.values
 
 
 def test_splitting_carries_the_refused_feature_onto_its_part(profile: Profile) -> None:
@@ -2877,7 +2877,9 @@ def test_splitting_carries_the_refused_feature_onto_its_part(profile: Profile) -
         ]
     )
     block.apply_translation((-120.0, 0.0, 10.0))
-    mesh = MeshData.of(trimesh.util.concatenate([plate, block]))
+    # Der Klotz zuerst: Die Platte zählt ihre Dreiecke im Körper dann nicht ab null,
+    # und eine Umrechnung, die vergessen wird, fällt auf.
+    mesh = MeshData.of(trimesh.util.concatenate([block, plate]))
     entry = SceneObject(id="obj_1", name="Teile", mesh=mesh, features=detect(mesh))
     bore = next(
         f
@@ -2885,7 +2887,7 @@ def test_splitting_carries_the_refused_feature_onto_its_part(profile: Profile) -
         if f.kind == "hole" and abs(float(f.params["diameter"]) - 6.0) < 0.1
     )
     offer = split_offer(mesh, bore)
-    assert offer == {"components": "3", "part_index": "1"}, "die Platte ist das zweite Teil"
+    assert offer == {"count": "3", "part_index": "1"}, "die Platte ist das zweite Teil"
 
     result = _split(entry, profile, carry_feature=bore.id)
 
@@ -2895,9 +2897,120 @@ def test_splitting_carries_the_refused_feature_onto_its_part(profile: Profile) -
     corners = np.asarray(as_mesh_data(carriers[0].mesh).raw.triangles)[list(carried.face_indices)]
     expected = np.asarray(mesh.raw.triangles)[list(bore.face_indices)]
     assert np.array_equal(corners, expected), "dieselben Dreiecke, nur im Teil gezählt"
+    # Auch die Träger der Flächen zählen im Teil (Review I, G2): Mit den alten
+    # Nummern zeigte der Träger im Teil auf Dreiecke des ganzen Körpers.
+    assert bore.surface_patches, "Vorbedingung: die Bohrung hat einen Träger"
+    part_triangles = np.asarray(as_mesh_data(carriers[0].mesh).raw.triangles)
+    for patch, original in zip(carried.surface_patches, bore.surface_patches, strict=True):
+        assert np.array_equal(
+            part_triangles[list(patch.face_indices)],
+            np.asarray(mesh.raw.triangles)[list(original.face_indices)],
+        )
 
     plain = _split(entry, profile)
     assert not any(part.features for part in plain.outputs), "ohne Angabe bleibt alles frisch"
+
+
+def _plates_with_a_pin(two: bool) -> bytes:
+    """Eine oder zwei Platten 40 × 20 × 10 übereinander, Bohrung Ø 6 durch alle, darin
+    ein loser Stift Ø 3 × 16 — als STL, wie der Kunde sie lädt."""
+    import trimesh
+
+    parts = []
+    for low in (0.0, 10.0) if two else (0.0,):
+        box = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+        box.apply_translation((0.0, 0.0, low + 5.0))
+        bore = trimesh.creation.cylinder(radius=3.0, height=12.0, sections=64)
+        bore.apply_translation((0.0, 0.0, low + 5.0))
+        parts.append(trimesh.boolean.difference([box, bore]))
+    pin = trimesh.creation.cylinder(radius=1.5, height=16.0, sections=48)
+    pin.apply_translation((0.0, 0.0, 10.0 if two else 5.0))
+    parts.append(pin)
+    return bytes(trimesh.exchange.stl.export_stl(trimesh.util.concatenate(parts)))
+
+
+@pytest.mark.parametrize("two", [True, False], ids=["zwei_platten", "eine_platte"])
+def test_the_part_refusal_way_ends_with_the_feature_moved_on_its_parts(
+    profile: Profile, two: bool
+) -> None:
+    """Der Knopf an der Teile-Absage führt bis zum Ende, auch über zwei Platten (Review I, M2).
+
+    Eine Bohrung durch zwei aufeinanderliegende Platten trägt ihren Mantel auf
+    zwei Teilen. Bis Review I zerlegte der Knopf in drei Objekte und rechnete den
+    Schritt am größten nach — dort hieß die halbe Bohrung anders, und die Kette
+    hielt erneut. Jetzt bleiben die Platten beisammen, nur der Stift geht ab, und
+    der Schritt versetzt die ganze Bohrung; die berührenden Platten vereint er
+    dabei mit Befund, wie jede Merkmalshandlung (RM-386). Derselbe Weg wie das Fenster:
+    ``History.split_and_retry`` mit den Werten der Absage.
+    """
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/platten.stl", sha256=""
+    )
+    project.sources["src_1"] = _plates_with_a_pin(two)
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    loaded = evaluate(project.document, profile, sources=sources)
+    (body,) = loaded.scene.objects.values()
+    bore = next(
+        f
+        for f in body.features.values()
+        if f.kind == "hole" and abs(float(f.params["diameter"]) - 6.0) < 0.1
+    )
+    centre = [float(value) for value in bore.params["centre"]]
+    history.apply(
+        "Merkmal versetzen",
+        [
+            OperationDraft(
+                op="move_feature",
+                inputs=(body.id,),
+                params={
+                    "at_feature": bore.id,
+                    "x": centre[0] + 3.0,
+                    "y": centre[1],
+                    "z": centre[2],
+                },
+            )
+        ],
+    )
+    halted = evaluate(project.document, profile, sources=sources)
+    assert halted.stopped_at is not None
+    (refusal,) = [
+        f
+        for f in halted.scene.report.findings
+        if f.op_id == halted.stopped_at and f.severity == "error"
+    ]
+    assert [action.id for action in refusal.suggestions] == ["split_and_retry", "cancel"]
+    assert refusal.values["count"] == "2", "die Träger der Bohrung zählen als ein Teil"
+
+    history.split_and_retry(
+        halted.stopped_at,
+        body.id,
+        int(refusal.values["count"]),
+        keep_tiny=True,
+        part_index=int(refusal.values["part_index"]),
+        feature=refusal.values["feature"],
+    )
+    after = evaluate(project.document, profile, sources=sources)
+
+    assert after.stopped_at is None, [str(f.message) for f in after.scene.report.findings]
+    assert len(after.scene.objects) == 2
+    moved = project.document.ops[-1]
+    carrier = after.scene.objects[moved.inputs[0]]
+    said = {f.code for f in after.scene.report.findings if f.op_id == moved.id}
+    # Berührende Platten vereint die Handlung vor dem Schnitt und sagt es (RM-386).
+    assert ("boolean.parts_united" in said) is two
+    assert as_mesh_data(carrier.mesh).component_count == 1
+    holes = [f for f in carrier.features.values() if f.kind == "hole"]
+    assert holes and all(
+        float(f.params["centre"][0]) == pytest.approx(centre[0] + 3.0, abs=0.05) for f in holes
+    ), "die ganze Bohrung steht an der neuen Stelle"
 
 
 def _split(entry: SceneObject, profile: Profile, **params: object) -> OpResult:
@@ -2936,7 +3049,10 @@ def _names_the_other_part(entry: SceneObject, feature: Feature, profile: Profile
         with pytest.raises(ValidationError) as caught:
             run_op(op, entry, profile, at_feature=feature.id, **params)
         assert caught.value.detail is OTHER_PART_IN_THE_BORE, op
-        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"], op
+        assert [action.id for action in caught.value.suggestions] == [
+            "split_and_retry",
+            "cancel",
+        ], op
 
 
 @pytest.mark.parametrize("span", [(0.0, 40.0), (-30.0, 10.0), (-25.0, 35.0)])
@@ -3601,7 +3717,7 @@ def test_an_unproved_negative_skin_does_not_release_the_slot(
         with pytest.raises(ValidationError) as caught:
             run_op("slot_hole", entry, profile, at_feature=feature.id, slot_length=12.0)
         assert caught.value.detail is OTHER_PART_IN_THE_BORE
-        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+        assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -3703,7 +3819,7 @@ def test_a_fixed_boss_is_not_a_separate_pin_for_the_slot(
     fused = connection == "fused"
     assert caught.value.detail is (HOLE_IS_NOT_EMPTY if fused else OTHER_PART_IN_THE_BORE)
     assert [action.id for action in caught.value.suggestions] == [
-        "change_selection" if fused else "split_bodies",
+        "change_selection" if fused else "split_and_retry",
         "cancel",
     ]
 
@@ -3795,7 +3911,7 @@ def test_a_buried_plate_is_not_a_separate_body_in_its_bore(
                 slot_length=12.0,
             )
         assert caught.value.detail is OTHER_PART_IN_THE_BORE
-        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+        assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
     assert np.array_equal(mesh.raw.vertices, original.vertices)
     assert np.array_equal(mesh.raw.faces, original.faces)
 
@@ -4162,7 +4278,7 @@ def test_a_slot_cannot_silently_join_its_carrier_to_a_separate_pin(
             slot_length=12.0,
             **params,
         )
-    assert "split_bodies" in {action.id for action in caught.value.suggestions}
+    assert "split_and_retry" in {action.id for action in caught.value.suggestions}
     assert as_mesh_data(entry.mesh).to_bytes() == original
 
 
@@ -5747,7 +5863,7 @@ def test_a_separate_part_in_a_countersink_slot_or_screw_says_so_at_every_row(
     with pytest.raises(ValidationError) as caught:
         run_op(op, entry, profile, at_feature=chosen, **_values_for(op, feature))
     assert caught.value.detail is expected
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -5958,7 +6074,7 @@ def test_a_loose_part_in_any_cavity_says_so_at_every_row(
     with pytest.raises(ValidationError) as caught:
         run_op(op, entry, profile, at_feature=chosen, **values)
     assert caught.value.detail == expected
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -6020,7 +6136,7 @@ def test_turning_a_shaft_half_does_not_swallow_the_loose_ring_in_its_groove(
     with pytest.raises(ValidationError) as caught:
         run_op("rotate_feature", entry, profile, at_feature=upper, axis="x", angle=10.0)
     assert caught.value.detail == prepare_ops.ANOTHER_PART_IN_THE_WAY
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
     turned = run_op("rotate_feature", entry, profile, at_feature=upper, axis="x", angle=1.0)
     after = _parts_of(turned)
@@ -6078,7 +6194,7 @@ def test_the_ball_in_its_socket_stays_a_loose_ball(profile: Profile) -> None:
         with pytest.raises(ValidationError) as caught:
             run_op(op, entry, profile, at_feature=chosen, **values)
         assert caught.value.detail == expected, (op, chosen)
-        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+        assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 def _plate_with_six_bores_and_two_loose_parts() -> SceneObject:
@@ -6376,7 +6492,7 @@ def test_a_long_part_through_any_cavity_says_so_at_every_row(
     with pytest.raises(ValidationError) as caught:
         run_op(op, entry, profile, at_feature=chosen, **values)
     assert caught.value.detail == expected
-    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+    assert [action.id for action in caught.value.suggestions] == ["split_and_retry", "cancel"]
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])

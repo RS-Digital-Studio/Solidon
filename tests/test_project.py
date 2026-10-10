@@ -4928,7 +4928,7 @@ def test_v48_sculpting_and_posing_compute_as_saved(profile) -> None:
 
 
 def test_v49_split_bodies_drops_what_it_dropped_then(profile) -> None:
-    """49 → 50: *In Einzelteile aufteilen* verwirft in einer älteren Datei, was es damals verwarf.
+    """Vor RM-639: *In Einzelteile aufteilen* verwirft in älteren Dateien, was es damals verwarf.
 
     ``split_splinters_v49.p3d`` hat der Stand vor RM-639 geschrieben
     (``0ceb7e9ff``): Platte 100 × 60 × 10, Klotz 20 × 20 × 10 und drei Stifte

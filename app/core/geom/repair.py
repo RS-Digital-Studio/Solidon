@@ -4224,12 +4224,11 @@ def remove_open_splinters(
         return mesh, 0
     open_faces = np.zeros(len(mesh.raw.faces), dtype=bool)
     open_faces[_edge_table(mesh).rows(1) // 3] = True
-    areas = [float(mesh.raw.area_faces[piece].sum()) for piece in pieces]
-    largest = max(areas)
+    shells = [bool(open_faces[piece].any()) for piece in pieces]
     doomed = [
         piece
-        for piece, area in zip(pieces, areas, strict=True)
-        if area < largest * share and bool(open_faces[piece].any())
+        for piece, splinter in zip(pieces, open_splinters(mesh, pieces, shells, share), strict=True)
+        if splinter
     ]
     if not doomed:
         return mesh, 0
@@ -4243,6 +4242,26 @@ def remove_open_splinters(
         else ()
     )
     return MeshData.of(body, slots=slots), len(doomed)
+
+
+def open_splinters(
+    mesh: MeshData,
+    pieces: Sequence[np.ndarray],
+    shells: Sequence[bool],
+    share: float = SMALL_COMPONENT_SHARE,
+) -> list[bool]:
+    """Welche Teile lose offene Splitter sind — je Teil in der Reihenfolge von ``pieces``.
+
+    **Eine Regel für zwei Fragen** (Review I, M1): Das Laden wirft sie fort
+    (:func:`remove_open_splinters`), *In Einzelteile aufteilen* zählt sie nicht als
+    Teil (``prepare_ops._splinters``). Splitter heißt offen **und** klein — unter
+    ``share`` der größten Fläche; ein Blatt darüber ist ein Teil, auch neben
+    geschlossenen, und das größte ist nie einer. ``shells`` sagt je Teil, ob es
+    einen offenen Rand hat; wie offen gezählt wird, entscheidet der Aufrufer.
+    """
+    areas = [float(mesh.raw.area_faces[piece].sum()) for piece in pieces]
+    largest = max(areas, default=0.0)
+    return [area < largest * share and is_open for area, is_open in zip(areas, shells, strict=True)]
 
 
 def small_components(

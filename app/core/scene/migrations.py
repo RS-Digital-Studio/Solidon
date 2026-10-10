@@ -1462,12 +1462,15 @@ def _keep_gestures_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _keep_split_splinters_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
-    """49 → 50: *In Einzelteile aufteilen* verwirft in einer älteren Datei, was es damals verwarf.
+    """Vor RM-639: *In Einzelteile aufteilen* verwirft in älteren Dateien, was es damals verwarf.
 
-    Bis RM-639 fiel ohne *Splitter behalten* jedes Teil unter einem Prozent des
-    größten weg; seither ist ein Splitter, was keine Schale schließt oder kleiner
-    ist, als der Drucker druckt. Ein gespeicherter Schritt fände damit mehr Teile,
-    schlüge die überzähligen seinen Nachbarn zu und rechnete andere Körper. Er
+    Der Schritt trägt keine Nummer im Text, damit er wandern kann (Review I,
+    G3): Seine Nummern stehen allein in :data:`MIGRATIONS` und
+    :data:`FORMAT_VERSION`. Bis RM-639 fiel ohne *Splitter behalten* jedes Teil
+    unter einem Prozent des größten weg; seither ist ein Splitter, was der
+    Drucker nicht abbildet oder als kleine offene Fläche keine Schale schließt.
+    Ein gespeicherter Schritt fände damit mehr Teile, schlüge die überzähligen
+    seinen Nachbarn zu und rechnete andere Körper. Er
     bekommt deshalb ``legacy_tiny_share``, auch in den Fassungen jeder Änderung;
     eine bewusste Änderung des Schritts nimmt den Marker heraus
     (``ParamSpec.dropped_on_change``). Festgehalten an

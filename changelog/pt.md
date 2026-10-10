@@ -144,8 +144,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Como lugar da cópia, *Duplicar característica* propõe uma largura e meia ao lado do original, com uma parede entre ambas e nunca ao longo do seu eixo.
 - Num escareamento, *Rodar característica* propõe o maior ângulo com que continua a sê-lo, e avisa quando uma rotação só repõe a característica sobre si própria.
 - Se uma ação atingisse uma peça separada junto à característica, ou uma característica colocada tocasse outro material só numa linha, o Solidon diz isso em vez de danificar o corpo.
-- Se uma ação sobre uma característica recusa porque uma peça separada atrapalha, *Dividir em peças soltas* no aviso divide o corpo e age na sua peça. Ctrl+Z desfaz ambas.
-- Ao dividir em peças soltas ficam todas as peças imprimíveis, também pinos e anilhas pequenos junto a uma placa grande. Só caem superfícies abertas e migalhas que a impressora não reproduz.
+- Se uma peça separada atrapalha uma ação sobre uma característica, *Dividir em peças soltas e tentar de novo* separa-a e executa a ação. Ctrl+Z desfaz ambas.
+- Ao dividir em peças soltas ficam todas as peças imprimíveis, também pinos e anilhas junto a uma placa grande. Só caem pequenas superfícies abertas e migalhas que a impressora não reproduz.
 
 ### Gerar com IA
 

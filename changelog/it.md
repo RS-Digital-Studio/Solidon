@@ -144,8 +144,8 @@ scrive in `website/version.json`.
 - Come posto della copia, *Duplica caratteristica* propone una larghezza e mezza accanto all'originale, con una parete in mezzo e mai lungo il suo asse.
 - Su una svasatura, *Ruota caratteristica* propone l'angolo più grande con cui resta tale, e avvisa quando una rotazione rimette la caratteristica solo su sé stessa.
 - Se un'azione colpisse un pezzo separato accanto alla caratteristica, o una caratteristica posizionata toccasse altro materiale solo lungo una linea, Solidon lo dice invece di danneggiare il corpo.
-- Se un'azione su una caratteristica rifiuta perché un pezzo separato è d'intralcio, *Dividi in pezzi distinti* sul rilievo divide il corpo e agisce sul suo pezzo. Ctrl+Z annulla entrambe.
-- Dividendo in pezzi distinti resta ogni pezzo stampabile, anche piccoli perni e rondelle accanto a una piastra grande. Cadono solo superfici aperte e briciole che la stampante non riproduce.
+- Se un pezzo separato intralcia un'azione su una caratteristica, *Dividi in pezzi distinti e riprova* lo separa ed esegue l'azione. Ctrl+Z annulla entrambe.
+- Dividendo in pezzi distinti resta ogni pezzo stampabile, anche perni e rondelle accanto a una piastra grande. Cadono solo piccole superfici aperte e briciole che la stampante non riproduce.
 
 ### Generare con l'IA
 

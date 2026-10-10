@@ -817,14 +817,15 @@ def two_components() -> None:
 
 
 def plate_with_loose_parts() -> None:
-    """Eine Baugruppe als ein Netz: viele kleine echte Teile und drei Splitter (RM-639).
+    """Eine Baugruppe als ein Netz: viele kleine echte Teile und zwei Splitter (RM-639).
 
     So kommt ein Ständer aus einem CAD-Export: Die Grundplatte 120 × 80 × 8 mm
     trägt vier Bohrungen Ø 6,4, in jeder steckt ein loser Stift Ø 6 × 14; daneben
     liegen zwei Scheiben Ø 12 × 2 und ein Klotz 10 × 10 × 5. Jedes dieser Teile
-    liegt unter einem Prozent der Platte — und jedes ist druckbar. Dazu drei
-    Splitter: ein loses Dreieck, ein Kasten ohne Deckel (offene Schale) und ein
-    geschlossener Würfel 0,2 mm, kleiner als eine Bahn der Düse.
+    liegt unter einem Prozent der Platte — und jedes ist druckbar. Dazu ein Kasten
+    ohne Deckel (offene Schale, 125 mm², kein Splitter wie beim Laden) und zwei
+    Splitter: ein loses Dreieck und ein geschlossener Würfel 0,2 mm, kleiner als
+    eine Bahn der Düse.
     """
     plate = trimesh.creation.box(extents=(120.0, 80.0, 8.0))
     plate.apply_translation((0.0, 0.0, 4.0))

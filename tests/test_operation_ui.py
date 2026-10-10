@@ -8717,9 +8717,9 @@ def test_splitting_at_a_part_refusal_moves_the_feature_on_its_own_part(
             stopped_at=halted.stopped_at,
             live_objects=halted.scene.objects,
         )
-        assert "split_bodies" in [action.id for action in offered]
+        assert "split_and_retry" in [action.id for action in offered]
 
-        window.error_handlers()["split_bodies"](
+        window.error_handlers()["split_and_retry"](
             as_error(refusal, window.session.displayed_document())
         )
         assert window.session.wait_for_idle(60_000)

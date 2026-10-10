@@ -503,8 +503,8 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
 
 - **Objektzahländerung hält an** (`kern.md`); wer zerlegen will, schlägt es vor,
   das Fenster zerlegt davor (`History.split_and_retry`), wenn jedes Teil passt,
-  nach Teile-Absage am Teil des Merkmals (`split_offer`). Splitter misst der
-  Drucker (`_splinters`, Entscheidung Robert). Reparieren, Verringern,
+  nach Teile-Absage an den Trägern (`split_offer`). Splitter: zu klein zum
+  Drucken, offen wie beim Laden (`_splinters`). Reparieren, Verringern,
   Verfeinern planen atomar neu (`repair_targets()` ohne exakte Ops), mit
   nachgezählter Zahl (`DECIMATE_AND_RETRY`) oder durchgespielter Länge
   (`REMESH_AND_RETRY`), nie geschätzt.
