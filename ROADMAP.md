@@ -100,7 +100,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-690 — Angeboten, aber mit den Vorgaben nicht ausführbar: Textur, Merkmal drehen, Formschräge, Einzelteile, Drehkörper](#rm-690) | Geometrie, Erkennung und Druckvorbereitung | Fünf Handlungen halten mit ihren eigenen Vorgaben an oder werden an Stellen angeboten, wo sie nicht gelten |
 | [RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte](#rm-636) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Paket L3 (Worktree `F:/sl-l3`). Zuordnung, Buchführung und Normalisieren gebaut (10.10.); offen: Gruppen nach dem Verschieben, Prüfbericht neben der Auswertung, Hauptfaden beim Szenenaufbau, Fensterabnahme |
 | [RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu](#rm-695) | Geometrie, Erkennung und Druckvorbereitung | Nach Paket E: Erkennungsergebnis bitgleich im Plattencache ablegen (Format, `cache_version`) |
-| [RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich](#rm-698) | Geometrie, Erkennung und Druckvorbereitung | Speicher am großen Modell messen; Vergleichshelfer für §11.2 bauen; Dreiecksindizes und einfach genau gehaltene Ecken mit Leitplanken prüfen |
+| [RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich](#rm-698) | Geometrie, Erkennung und Druckvorbereitung | Vergleich steht, Bewegen und Öffnen gesenkt; als Nächstes Kantentabelle in int32 mit Überlaufwächter (Entwurf, Variante D), Entscheidung zu C, der wgpu-Block |
 | [RM-699 — Ersteinrichtung nimmt Düsen bis 10 mm an, der Druckdialog bis 2 mm](#rm-699) | Geometrie, Erkennung und Druckvorbereitung | Obergrenze an einer Konstante festmachen und entscheiden, ob große Düsen (Granulat) dazugehören |
 | [RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis](#rm-637) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 09.10.): ja. Baut nach Paket E auf dessen Zweig; Laden mechanischer Teile bleibt sonst drei- bis fünfmal langsamer als v0.4.4 (Rest K-3) |
 | [RM-692 — Funktionale Gruppen werden nach jedem Verschieben neu gerechnet](#rm-692) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: Eiffelturm 3,6 s, Besteckkasten 2,8 s je Verschieben vor dem Bild; Merker in `perceive/features.py`, nach Paket E |
@@ -3626,15 +3626,32 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `a·n + b` laufen in int32 über. Abnahme: Spitze am großen Modell gemessen
   gesenkt, Ergebnisse druckgleich über Korpus und Beispielprojekte, alle
   Gleichheitsverträge aus §11.2 grün. Der 256-MB-Block von wgpu ist Teil (2).
+  **Teil (1) steht:** `tests/print_equal.py` nimmt Ergebnisse als Abbild auf und
+  urteilt (`compare`), `tools/check_print_equal.py` vergleicht zwei Codestände über
+  Beispielprojekte und Modelldateien; je Kriterium ein Gegenfall in
+  `tests/test_print_equal.py`.
+  **Teil (2) läuft:** Ein bewegtes Netz teilt seine Dreiecke mit dem Quellnetz
+  (`3f06a7470`), und ein von der Platte geholter älterer Stand gibt seine
+  Ableitungen ab, sobald der nächste kommt; gezeigte Körper bleiben ganz
+  (Spiderman, vier Verschieben aus dem Plattencache: gehalten 1861 → 465 MB,
+  Spitze 2366 → 1814 MB). Die Teilvolumen beim Einlesen gehören zu
+  [RM-636](#rm-636). **Netzbits nur nach RM-706** (Verbrauchsabdruck aus den
+  Eingängen, andere Sitzung): Jeder Teil, der die Bits eines ausgewerteten Netzes
+  ändert (float32 beim Halten, andere Dreiecksfolge), kommt erst, wenn der
+  Verbrauchsabdruck aus den gespeicherten Eingängen entsteht, und mit Gegenprobe
+  gegen einen alten Abdruck. **Teil (3) als Entwurf:**
+  [`entwurf-schmale-netze-2026-10.md`](konzepte/entwurf-schmale-netze-2026-10.md).
   Vermerk 10.10.2026 (Paket L2, RM-567, am echten Fenster mit Vulkan auf der RTX 4080): Beim
   Zurücknehmen auf den Ladestand des Laptop-Ständers legt wgpu-native einen zweiten
   Speicherblock an — dediziert 273 → 529 MB, Zusage 256 MB mehr, bleibend, in fünf von fünf
   Läufen und ohne eine GPU-Anlage ab 4 MB in diesem Schritt. Mit den Schattentexturen von einem
   Texel (RM-567) kommt er erst mit dem nächsten größeren Modell, am Ende einer langen Sitzung
   steht er gleich. Blockgröße und Behalten steuert wgpu-native; die C-Schnittstelle von wgpu 0.32
-  reicht keine Speicherhinweise durch. Zu prüfen: ob eine neuere wgpu-Fassung `memory_hints`
-  durchreicht oder D3D12 unter Windows weniger hält — eine Entscheidung über den Renderer, die
-  Robert fällt. Schon gesenkt (Teil 2): die Spitze der Selbstschnittsuche an sehr großen Netzen,
+  reicht keine Speicherhinweise durch, und 0.32 ist die neueste Fassung auf PyPI
+  (`WGPUDeviceExtras` trägt nur `tracePath`). In der Sonde ohne Fenster gibt D3D12 freigegebene
+  Blöcke zurück, Vulkan behält 64 MB dediziert und 290 MB Zusage. Zu prüfen: ob eine spätere
+  Fassung `memory_hints` durchreicht oder D3D12 unter Windows weniger hält — eine Entscheidung
+  über den Renderer, die Robert fällt. Schon gesenkt (Teil 2): die Spitze der Selbstschnittsuche an sehr großen Netzen,
   am Mausoleumsdrachen 746 → 622 MB bei gleichem Ergebnis ([RM-568](#rm-568), Vermerk Review 1
   von L2).
 
@@ -3735,8 +3752,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 <a id="rm-758"></a>
 
 - [ ] **RM-758 — Der Plattencache friert übersetzbare Befundwerte ein.**
-  Gefunden im Review 1 zu RM-698 (Sonde `review-sparen-sonden/sonden/probe_cache_equal.py`,
-  Ausgabe `equal_vergleich.txt`): `serialise.finding_to_data` schreibt `values` mit
+  Gefunden im Review 1 zu RM-698: `serialise.finding_to_data` schreibt `values` mit
   `str(value)`, `scene/cache.py` (`_finding_to_cache`) übernimmt das. Im Beispiel
   *passung-nach-materialwechsel* trägt `prepare.material` im Wert `object` frisch einen
   `TranslatableText` („Deckel“), nach dem Wiederöffnen die Zeichenkette. Nach einem
