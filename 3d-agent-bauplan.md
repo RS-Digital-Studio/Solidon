@@ -381,7 +381,7 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Rückfallkette | `solver chain` | Stufen bei gescheiterter Boolescher Op |
 | Passung | `Fit` | benannte Beziehung zweier Features |
 | Profil | `Profile` | Drucker- oder Materialeinstellungen |
-| Druckgrenze | `PRINT_LIMIT` | wie weit Maße und Positionen nach einer Beschleunigung abweichen dürfen; ein Ergebnis, das sie hält, diskret gleich bleibt und kein Netz verschlechtert, ist **druckgleich** (§11.2) |
+| Druckgrenze | `PRINT_LIMIT` | wie weit Maße und Positionen nach einer Beschleunigung abweichen dürfen; ein Ergebnis, das sie hält, diskret gleich bleibt und kein Netz verschlechtert, ist **druckgleich** (§11.2); im Kern nur als Schranke für eine ausgelassene Rechnung (§11.2) |
 | Verfahren | `technology` | wie ein Drucker Material zu einem Körper macht: `fdm` legt Bahnen aus einer Düse, `resin` belichtet Schichten in einem Harzbad (§38) |
 | Saugglocke | `cupping` | ein nach unten offener Hohlraum, der beim Abziehen von der Folie Unterdruck zieht — Resin-Befund der zweiten Stufe (§22.2); geplant, [RM-188](ROADMAP.md#rm-188) P9 |
 | Abflussöffnung | `drain` | die Bohrung, durch die ungehärtetes Harz aus einem ausgehöhlten Körper abläuft (§25); geplant, [RM-188](ROADMAP.md#rm-188) P9 |
@@ -903,8 +903,12 @@ wird nach den Plattformregeln (kein BLAS, kein `einsum` in Wegen zu
 Geometrie). Ändert eine druckgleiche Änderung die Bits eines gespeicherten
 Ergebnisses, steigt `cache_version`, bei gemeinsamem Code
 `CACHE_FORMAT_VERSION`. `PRINT_LIMIT` ist keine Toleranz, mit der der Kern
-rechnet, und die Facettenauflösung `MAX_FACET_SAG` bleibt eine
-Modellentscheidung, keine Ersparnis.
+Maße, Lagen oder Flächen vergleicht, zusammenlegt oder rundet. Er darf damit
+nur eine Rechnung auslassen, deren Ergebnis keinen Punkt um mehr als
+`PRINT_LIMIT` verschöbe — *Auf Maß bringen* legt dann nur; die Schranke
+rechnet die Operation aus der Ausdehnung des Körpers um den Punkt, der stehen
+bleibt, und ihre `cache_version` steigt. Die Facettenauflösung `MAX_FACET_SAG`
+bleibt eine Modellentscheidung, keine Ersparnis.
 
 Numerische Genauigkeit, Erkennungsunsicherheit und Fertigungsspiel sind
 verschiedene Größen. Fertigungstoleranzen kommen aus dem Materialprofil,

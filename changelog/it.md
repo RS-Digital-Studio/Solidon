@@ -168,6 +168,7 @@ scrive in `website/version.json`.
 - Se un modello generato è solo una pelle sottile attorno a una cavità, lo dice la finestra prima di accettarlo e il rapporto di verifica dopo, con la via a un nuovo tentativo.
 - Prima del download, *Configura la chat* e *Configura ComfyUI* dicono quanta memoria grafica e quanto spazio servono a un modello e se questo computer li ha.
 - Su un Mac, *Configura la chat* propone un modello locale che sta nella memoria condivisa e dice quando conviene una chiave per un modello ospitato.
+- Su un modello appena generato, *Cambia dimensione* ricalcola solo la nuova misura e non ripete più la riparazione. È più veloce, e Ctrl+Z annulla subito la modifica.
 
 ## 0.5.3
 
