@@ -65,12 +65,15 @@ class _Body:
 
 
 _HANG_SECONDS = 30.0
-"""Wie lange ein Test auf einen angehaltenen Sendefaden wartet.
+"""Ab wann ein Stillstand in diesen Tests als Hänger gilt.
 
-Ein reiner Hängerschutz: Nach ``stop`` hat jeder Sender dieser Datei nichts
-mehr zu tun, als zu enden, und ``join`` kehrt zurück, sobald er endet. Die
-Grenze kostet nur Zeit, wenn wirklich etwas hängt; ein Läufer, der einen Faden
-ein, zwei Sekunden nicht rechnen lässt, reißt sie nicht.
+Ein reiner Hängerschutz, keine Messung. Er begrenzt das Warten auf einen
+angehaltenen Sendefaden, die Stille eines Gegenübers vor einem späten Byte und
+jedes Zeitlimit je Lesegriff, das nicht selbst geprüft wird. ``join`` kehrt
+zurück, sobald der Faden endet, und ein Sender, den der Test beim Abbruch
+anhält, wartet seine Stille nie aus. Die Grenze kostet also nur Zeit, wenn
+wirklich etwas hängt. Ein Läufer, der einen Faden einige Sekunden nicht
+rechnen lässt (in der CI gemessen: 1,96 s), reißt sie nicht.
 """
 
 
@@ -548,18 +551,18 @@ def test_remote_version_stops_at_its_total_deadline(
 ) -> None:
     """Der Datenkanal endet an der Gesamtfrist, nicht am Zeitlimit seines Sockets.
 
-    Drei Bytes kommen vor der Frist. Danach schweigt der Datenkanal fünf
-    Sekunden, länger als die Frist und kürzer als ein Zeitlimit je Lesegriff,
-    wie es ``retrbinary`` früher hatte (der Socket hier hat gar keines), und
-    schickt erst dann ein spätes Byte. Endet der Lesegriff an der Frist, hält
-    der Test den Sender an, bevor es geht. Behält der Datensocket sein eigenes
-    Zeitlimit, wartet der Lesegriff auf das späte Byte, und erst die Prüfung
-    danach bricht ab.
+    Drei Bytes kommen vor der Frist. Danach schweigt der Datenkanal
+    :data:`_HANG_SECONDS` lang, länger als die Frist (der Socket hier hat gar
+    kein eigenes Zeitlimit, ``retrbinary`` hatte früher dreißig Sekunden je
+    Lesegriff), und schickt erst dann ein spätes Byte. Endet der Lesegriff an
+    der Frist, hält der Test den Sender an, bevor es geht. Behält der
+    Datensocket sein eigenes Zeitlimit, wartet der Lesegriff auf das späte
+    Byte, und erst die Prüfung danach bricht ab.
 
     Beobachtet wird die Marke, nicht die Uhr: Eine Grenze von einer Sekunde ab
     Fadenstart war zugleich zu eng für einen überlasteten Läufer und zu weit
-    für den Fehler, der nach 0,3 s abbrach. Rot wird der Test nur, wenn der
-    Leser fünf Sekunden lang nicht zurückkommt.
+    für den Fehler, der nach 0,3 s abbrach. Sonst wird der Test nur rot, wenn
+    der Leser so lange nicht zurückkommt; die Meldung nennt beide Ursachen.
     """
     receiving, sending = socket.socketpair()
     stop = threading.Event()
@@ -581,7 +584,7 @@ def test_remote_version_stops_at_its_total_deadline(
                 sending.sendall(b"x")
                 if stop.wait(0.015):
                     return
-            if stop.wait(5.0):
+            if stop.wait(_HANG_SECONDS):
                 return
             late_sent.set()
             sending.sendall(b"x")
@@ -601,7 +604,10 @@ def test_remote_version_stops_at_its_total_deadline(
         late = late_sent.is_set()
         thread.join(_HANG_SECONDS)
     assert not thread.is_alive()
-    assert not late, "Das Zeitlimit des Datensockets darf die Gesamtfrist nicht verlängern"
+    assert not late, (
+        "Das Zeitlimit des Datensockets hat die Gesamtfrist verlängert"
+        f" (oder der Leser stand {_HANG_SECONDS:.0f} s lang)"
+    )
 
 
 @pytest.mark.parametrize(
@@ -827,7 +833,9 @@ def test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block(
     Wandzeitfrist von 0,4 s war rot, sobald der Leser direkt nach ihrem Beginn
     so lange stand, denn dann kam vor ihr nichts an, gleich wie gelesen wurde.
     Die Gegenprobe verzögert ``Thread.start`` absichtlich um 250 ms; diese
-    Testvorbereitung darf nicht als verstrichene Netzwerkzeit gelten.
+    Testvorbereitung darf nicht als verstrichene Netzwerkzeit gelten. Mit der
+    Zähluhr und dem Tor in :meth:`_Lockstep.open` gilt das durch die Bauart,
+    der zweite Fall wiederholt den Lauf also nur mit verzögertem Senderstart.
     Gemessen wird, ob der Leser **vor der Frist etwas liefert**: Ein einzelner
     Lesezugriff gibt bereits gelesene Stücke zurück, der gefüllte Block
     dagegen wartet auf den ganzen angekündigten Körper, und die Frist bricht
@@ -1063,10 +1071,11 @@ def test_an_opener_puts_its_headers_under_the_same_deadline(
     ``apply_header_deadline`` läuft derselbe Aufruf nicht etwa in ein späteres
     Zeitlimit, er **gelingt**: Jedes Byte der Kopfzeilen kam einzeln und
     frühestens 20 ms nach dem vorigen (``pace`` von :class:`_Lockstep`),
-    zusammen ein Vielfaches der Frist des ersten Zweigs. Das Zeitlimit von
-    fünf Sekunden steht dabei wirklich am Socket (:func:`_connecting_to`);
-    dass es die Frist auch dann nicht verlängert, wenn das Gegenüber ganz
-    schweigt, prüft
+    zusammen ein Vielfaches der Frist des ersten Zweigs. Das Zeitlimit
+    (:data:`_HANG_SECONDS`) steht dabei wirklich am Socket
+    (:func:`_connecting_to`). Im ersten Zweig entscheidet die Frist, im zweiten
+    ist es nur Hängerschutz. Dass es die Frist auch dann nicht verlängert, wenn
+    das Gegenüber ganz schweigt, prüft
     :func:`test_a_silent_peer_cannot_hold_the_headers_until_the_read_timeout`.
     """
     left, right = _loopback_pair()
@@ -1094,9 +1103,9 @@ def test_an_opener_puts_its_headers_under_the_same_deadline(
         lockstep.open()
         if with_deadline:
             with pytest.raises(ResponseDeadlineError):
-                opener.open(request, timeout=5.0)
+                opener.open(request, timeout=_HANG_SECONDS)
         else:
-            with opener.open(request, timeout=5.0) as answer:
+            with opener.open(request, timeout=_HANG_SECONDS) as answer:
                 assert answer.status == 200
     finally:
         released = lockstep.halt()
@@ -1122,13 +1131,13 @@ def test_a_silent_peer_cannot_hold_the_headers_until_the_read_timeout(
     Kopfzeilen so weit über die Frist hinaus offen. Deshalb setzt
     ``_socket_deadline`` vor jedem Netzgriff die Restfrist am Socket.
 
-    Beobachtet wird eine Marke, nicht die Uhr: Das Gegenüber schweigt fünf
-    Sekunden, länger als die Frist und kürzer als das Zeitlimit, und schickt
-    erst dann ein spätes Byte. Endet der Lesegriff an der Frist, hält der Test
-    den Sender an, bevor es geht. Erbt er das Zeitlimit, wartet er auf das
-    späte Byte, und erst die Prüfung vor dem nächsten Lesegriff bricht ab.
-    Rot wird der Test sonst nur, wenn der Leser fünf Sekunden lang nicht
-    zurückkommt.
+    Beobachtet wird eine Marke, nicht die Uhr: Das Gegenüber schweigt
+    :data:`_HANG_SECONDS` lang, länger als die Frist und halb so lang wie das
+    Zeitlimit am Socket, und schickt erst dann ein spätes Byte. Endet der
+    Lesegriff an der Frist, hält der Test den Sender an, bevor es geht. Erbt
+    er das Zeitlimit, wartet er auf das späte Byte, und erst die Prüfung vor
+    dem nächsten Lesegriff bricht ab. Sonst wird der Test nur rot, wenn der
+    Leser so lange nicht zurückkommt; die Meldung nennt beide Ursachen.
     """
     left, right = _loopback_pair()
     stop = threading.Event()
@@ -1138,7 +1147,7 @@ def test_a_silent_peer_cannot_hold_the_headers_until_the_read_timeout(
     def send() -> None:
         try:
             right.recv(4096)
-            if stop.wait(5.0):
+            if stop.wait(_HANG_SECONDS):
                 return
             late_sent.set()
             right.sendall(b"H")
@@ -1154,14 +1163,17 @@ def test_a_silent_peer_cannot_hold_the_headers_until_the_read_timeout(
     request = urllib.request.Request("http://example.org/version.json")
     try:
         with pytest.raises(ResponseDeadlineError):
-            opener.open(request, timeout=30.0)
+            opener.open(request, timeout=2 * _HANG_SECONDS)
     finally:
         stop.set()
         late = late_sent.is_set()
         left.close()
         writer.join(_HANG_SECONDS)
     assert not writer.is_alive()
-    assert not late, "der Lesegriff wartete über die Frist hinaus auf das Zeitlimit des Sockets"
+    assert not late, (
+        "der Lesegriff wartete über die Frist hinaus auf das Zeitlimit des Sockets"
+        f" (oder der Leser stand {_HANG_SECONDS:.0f} s lang)"
+    )
 
 
 @pytest.mark.parametrize(
