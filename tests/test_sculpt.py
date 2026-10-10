@@ -1776,12 +1776,17 @@ def test_each_gesture_is_its_own_stage_in_brush_two() -> None:
 
 def test_ten_passes_make_a_hill_and_not_a_folded_column(slab: MeshData) -> None:
     """H4: Zehnmal dieselbe Linie in einer Etappe stapelte eine Säule mit Falte
-    (gemessen 148,6° zwischen Nachbardreiecken); je Geste eine Etappe wird ein Hügel."""
+    (gemessen 148,6° zwischen Nachbardreiecken); je Geste eine Etappe wird ein Hügel.
+
+    Seit *Dreiecke angleichen* in der Ebene tauscht und teilt (RM-671), ist die
+    Platte anders geschnitten: gemessen 112,6° für die Säule, 35,2° für den
+    Hügel. Die Gegenprobe trennt beide bei 100°.
+    """
     hill = apply_strokes(slab, _passes(slab, brush=2, strength=5.0))
     one_stage = [_changed(s, gesture=1, cut=False) for s in _passes(slab, 1, 0.5)]
     column = apply_strokes(slab, one_stage)
 
-    assert _largest_fold(slab, column) > 120.0, "Gegenprobe: Fassung 1 in einer Etappe faltet"
+    assert _largest_fold(slab, column) > 100.0, "Gegenprobe: Fassung 1 in einer Etappe faltet"
     assert _largest_fold(slab, hill) < 80.0
     assert not len(crossing_face_pairs(hill.raw.vertices, np.asarray(hill.raw.faces)).first)
     top = float(hill.raw.bounds[1][2]) - 10.0

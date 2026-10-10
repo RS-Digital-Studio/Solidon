@@ -30,8 +30,11 @@ Rückfallkette es tut (§17.3).
 from __future__ import annotations
 
 import dataclasses
+import functools
 import math
-from typing import Final, cast
+import os
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Final, cast
 
 import numpy as np
 
@@ -42,7 +45,15 @@ from app.core.errors import (
     NotManifoldError,
     ValidationError,
 )
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom import mesh_edits
+from app.core.geom.mesh import (
+    MeshData,
+    as_mesh_data,
+    row_dots,
+    stable_normals,
+    stable_vertex_normals,
+    unique_edges,
+)
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.registry.params import ZERO_NONE
@@ -102,42 +113,196 @@ DRAFT_SAMPLES: Final = 250_000
 DRAFT_SURFACE: Final = 100_000
 
 #: Wie viele Rasterpunkte auf einmal gegen den Baum gefragt werden. Groß genug,
-#: dass der Aufruf sich lohnt, klein genug, dass ein Abbruch in einem
-#: Sekundenbruchteil ankommt — gemessen rund 0,3 s je Portion.
+#: dass der Aufruf über alle Kerne sich lohnt — jeder startet seine Fäden neu,
+#: und in Portionen zu 32 768 Punkten kostete das Starten an zwei gekreuzten
+#: Rohren mehr als die Suche —, klein genug für einen Abbruch in einem
+#: Sekundenbruchteil (§15.6).
 FIELD_CHUNK: Final = 400_000
 
+#: Wie viele Rasterpunkte auf einmal gegen ihre Bewerber gerechnet werden: Die
+#: Paare aus Punkt und Dreieck einer Portion belegen so einige zehn Megabyte.
+PAIR_CHUNK: Final = 32_768
 
-def _surface_points(mesh: MeshData, spacing: float) -> tuple[np.ndarray, np.ndarray]:
-    """Die Oberfläche als Punktwolke mit Normalen, dichter als das Raster.
+#: Auf wie vielen Fäden die Paare einer Portion rechnen. NumPy gibt den
+#: Interpreter-Lock in den Feldern frei; mehr Fäden hießen mehr gleichzeitige
+#: Zwischenfelder, nicht mehr Tempo (wie ``orient.PROJECTION_WORKERS``).
+PAIR_WORKERS: Final = 4
 
-    Deterministisch unterteilt, nicht zufällig abgetastet: Ein Startwert wäre
-    hier eine Streuzahl in einer Operation, die ohne auskommt (Regel 9).
+#: Wie viele der nächsten Stützpunkte ihr Dreieck als Bewerber stellen. Der
+#: nächste Punkt der Oberfläche liegt auf einem Dreieck, dessen Stützpunkte
+#: höchstens eine Rasterweite von ihm entfernt sind; unter den acht nächsten
+#: ist eines davon (geprüft gegen :func:`app.core.geom.mesh.on_surface` in
+#: ``test_blend.py``).
+NEAREST_SAMPLES: Final = 8
 
-    Die Wolke muss feiner sein als das Raster, sonst misst der Abstand zum
-    nächsten Punkt etwas anderes als den Abstand zur Fläche — an einem groben
-    Dreieck liegt die Mitte weit von jeder Ecke.
+#: Bis zu welcher Länge, in Rasterweiten, eine Kante aus Marching Cubes eine
+#: Nadel ist und zusammengelegt wird (RM-671).
+#:
+#: Läuft die Fläche dicht an einem Rasterpunkt vorbei, legt Marching Cubes auf
+#: jede Rasterkante daneben eine Ecke: ein Büschel dicht beieinander, mit den
+#: fernen Ecken über Dreiecke von wenigen Grad verbunden. Gemessen an Kugel auf
+#: Zylinder (Raster 1): 11,6 der 11,8 % Splitter sind solche Nadeln, ihre
+#: kürzeste Kante im Median 0,07 Raster. Bis v0.4.2 gab es sie kaum, weil das
+#: Feld zum nächsten Stützpunkt maß und nahe der Fläche nie null wurde (0,014
+#: statt 0,245 % der Rasterpunkte unter 0,05 mm) — um den Preis welliger Wände.
+#: Unter 0,2 Raster zusammengelegt bleiben 1,3 % Splitter, und die Fläche wandert
+#: dabei höchstens 0,09 Raster; 0,1 ließe 5,3 %, 0,3 wandert 0,11.
+NEEDLE: Final = 0.2
 
-    **Dreiecksmitten mit Flächennormalen, nicht Eckpunkte mit gemittelten
-    Normalen.** Eine Eckpunktnormale ist der Mittelwert der angrenzenden
-    Flächen; an der Deckkante eines Zylinders steht sie deshalb 45 Grad
-    schräg, und für einen Punkt senkrecht über der Deckfläche kippt damit das
-    Vorzeichen. Gemessen an einem Zylinder von 30 mm Länge: Die Hülle reichte
-    von -54,9 bis -8,6 statt von -47 bis -17 — acht Millimeter Geometrie an
-    beiden Enden, die es nicht gibt, und ein Volumen vier Prozent zu hoch. Eine
-    Flächennormale gilt für ihre Fläche und für keine andere; über
-    Dreiecksmitten gerechnet trifft dieselbe Hülle auf ein Zehntel genau.
+#: Wie nah an null ein Rasterwert liegen darf, in Rasterweiten; was näher liegt,
+#: gilt als knapp außen (RM-671).
+#:
+#: Ein Wert nahe null legt die Ecke aus Marching Cubes auf den Rasterpunkt, und
+#: zwar für jede Kante dort — in einfacher Genauigkeit auf denselben Ort. Das
+#: Verschweißen kneift die Fläche dann zu Kanten mit vier oder sechs Dreiecken.
+#: Gemessen an der Grundfigur aus Rumpf, Kopf und Armen: im zweiten Schritt elf
+#: Werte unter 1e-9, das Netz danach offen. Ein Tausendstel Raster löst jede
+#: solche Ecke vom Rasterpunkt und verschiebt die Fläche höchstens so weit nach
+#: innen — nie unter das Bett, und unter ``PRINT_LIMIT`` bis zu einem Raster
+#: von 2,5 mm.
+CLEAR_OF_ZERO: Final = 1e-3
+
+
+@dataclasses.dataclass(frozen=True)
+class _Surface:
+    """Ein Eingang, wie das Abstandsfeld ihn befragt — einmal gebaut je Verschmelzung.
+
+    Je Dreieck die Ecken, die Einheitsnormale (null ohne Fläche) und je Seite
+    ``k`` (Ecke ``k`` nach ``k + 1``) das Kreuzprodukt aus Normale und Seite, das ins
+    Dreieck zeigt. Je Kante ihre Ecken (kleinere Nummer zuerst), der Weg von
+    der ersten zur zweiten und die Summe der Normalen ihrer Dreiecke; je Ecke
+    die winkelgewichtete Normale. Dazu die Stützpunkte zum Suchen: die Mitten
+    der auf die Rasterweite geteilten Dreiecke, je mit ihrem Dreieck.
     """
-    vertices, faces = trimesh.remesh.subdivide_to_size(
-        np.asarray(mesh.raw.vertices, dtype=float),
-        np.asarray(mesh.raw.faces, dtype=np.int64),
-        max_edge=spacing,
-    )
-    dense = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-    dense.merge_vertices()
-    return (
-        np.asarray(dense.triangles_center, dtype=float),
-        np.asarray(dense.face_normals, dtype=float),
-    )
+
+    vertices: np.ndarray
+    corners: np.ndarray
+    normals: np.ndarray
+    flat: np.ndarray
+    inward: np.ndarray
+    sides: np.ndarray
+    ends: np.ndarray
+    spans: np.ndarray
+    scales: np.ndarray
+    side_normals: np.ndarray
+    corner_normals: np.ndarray
+    owners: np.ndarray
+    tree: Any
+
+    @classmethod
+    def of(cls, mesh: MeshData, spacing: float) -> _Surface:
+        """Baut die Befragung; die Stützpunkte liegen dichter als das Raster.
+
+        Deterministisch geteilt, nicht zufällig abgetastet: Ein Startwert wäre
+        hier eine Streuzahl in einer Operation, die ohne auskommt (Regel 9).
+        """
+        raw = mesh.raw
+        vertices = np.asarray(raw.vertices, dtype=np.float64)
+        faces = np.asarray(raw.faces, dtype=np.int64)
+        corners = vertices[faces]
+        normals, areas = stable_normals(raw)
+        inward = np.cross(normals[:, None, :], np.roll(corners, -1, axis=1) - corners)
+        directed = np.stack((faces.reshape(-1), np.roll(faces, -1, axis=1).reshape(-1)), axis=1)
+        ends, inverse = unique_edges(directed, return_inverse=True)
+        sides = inverse.reshape(-1, 3)
+        spans = vertices[ends[:, 1]] - vertices[ends[:, 0]]
+        squared = row_dots(spans, spans)
+        scales = np.zeros(len(ends), dtype=np.float64)
+        np.divide(1.0, squared, out=scales, where=squared > 0.0)
+        side_normals = np.zeros((len(ends), 3), dtype=np.float64)
+        np.add.at(side_normals, sides.reshape(-1), np.repeat(normals, 3, axis=0))
+        dense, pieces, owners = trimesh.remesh.subdivide_to_size(
+            vertices, faces, max_edge=spacing, return_index=True
+        )
+        piece_corners = np.asarray(dense, dtype=np.float64)[np.asarray(pieces, dtype=np.int64)]
+        samples = (piece_corners[:, 0] + piece_corners[:, 1] + piece_corners[:, 2]) / 3.0
+        return cls(
+            vertices=vertices,
+            corners=corners,
+            normals=normals,
+            flat=np.asarray(areas > 0.0),
+            inward=inward,
+            sides=sides,
+            ends=ends,
+            spans=spans,
+            scales=scales,
+            side_normals=side_normals,
+            corner_normals=stable_vertex_normals(raw),
+            owners=np.asarray(owners, dtype=np.int64),
+            tree=cKDTree(samples),
+        )
+
+    def signed(self, points: np.ndarray, candidates: np.ndarray) -> np.ndarray:
+        """Der Abstand je Punkt zum nächsten seiner Bewerber, positiv innen.
+
+        ``candidates`` nennt je Punkt Dreiecke, auch doppelt; jedes wird einmal
+        gerechnet. Gewinnt der kleinste Abstand, bei Gleichstand das Dreieck
+        mit der kleineren Nummer — am Ergebnis ändert das nichts, denn zwei
+        Dreiecke, die denselben nächsten Punkt teilen, rechnen ihn über
+        dieselbe Kante oder Ecke in derselben Folge.
+        """
+        ordered = np.sort(candidates, axis=1)
+        fresh = np.ones(ordered.shape, dtype=bool)
+        fresh[:, 1:] = ordered[:, 1:] != ordered[:, :-1]
+        rows, columns = np.nonzero(fresh)
+        squared, inside = self._to_triangles(points[rows], ordered[rows, columns])
+        starts = np.flatnonzero(np.concatenate(([True], rows[1:] != rows[:-1])))
+        best = np.minimum.reduceat(squared, starts)
+        place = np.where(squared == best[rows], np.arange(len(squared)), len(squared))
+        winner = np.minimum.reduceat(place, starts)
+        distance = np.sqrt(best)
+        return np.asarray(np.where(inside[winner], distance, -distance))
+
+    def _to_triangles(self, points: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Quadrierter Abstand je Punkt zu seinem Dreieck, und ob der Punkt innen liegt.
+
+        Fällt der Punkt senkrecht ins Dreieck, ist es der Abstand zur Ebene, und
+        das Vorzeichen sagt die Flächennormale. Sonst liegt der nächste Punkt
+        auf einer Seite: gerechnet je Kante von ihrer kleineren Eckennummer aus,
+        damit beide Nachbardreiecke dieselben Bits liefern, und das Vorzeichen
+        sagt die Normale dessen, was getroffen ist — die Summe beider
+        Flächennormalen an einer Kante, die winkelgewichtete an einer Ecke.
+        Diese Pseudonormalen ordnen jeden Punkt eines geschlossenen Netzes
+        richtig zu (Bærentzen und Aanæs, 2005); eine Flächennormale allein
+        kippt neben einer Kante, und eine gemittelte Eckennormale stand an der
+        Deckkante eines Zylinders 45 Grad schräg und ließ ihn acht Millimeter
+        ins Leere wachsen.
+
+        Nur Grundrechenarten, Kreuzprodukt und Wurzel (``kern.md``): Auf jeder
+        Maschine dieselben Bits.
+        """
+        corners = self.corners[faces]
+        from_first = points - corners[:, 0]
+        plane = row_dots(from_first, self.normals[faces])
+        within = self.flat[faces].copy()
+        within &= row_dots(from_first, self.inward[faces, 0]) >= 0.0
+        within &= row_dots(points - corners[:, 1], self.inward[faces, 1]) >= 0.0
+        within &= row_dots(points - corners[:, 2], self.inward[faces, 2]) >= 0.0
+        nearest = np.full(len(points), np.inf)
+        facing = np.zeros(len(points))
+        for side in range(3):
+            edge = self.sides[faces, side]
+            first = self.ends[edge, 0]
+            second = self.ends[edge, 1]
+            span = self.spans[edge]
+            start = self.vertices[first]
+            along = np.clip(row_dots(points - start, span) * self.scales[edge], 0.0, 1.0)
+            spot = start + along[:, None] * span
+            at_end = along >= 1.0
+            spot[at_end] = self.vertices[second[at_end]]
+            offset = points - spot
+            squared = row_dots(offset, offset)
+            normal = np.where(
+                (along <= 0.0)[:, None],
+                self.corner_normals[first],
+                np.where(at_end[:, None], self.corner_normals[second], self.side_normals[edge]),
+            )
+            closer = squared < nearest
+            nearest = np.where(closer, squared, nearest)
+            facing = np.where(closer, row_dots(offset, normal), facing)
+        squared = np.where(within, plane * plane, nearest)
+        facing = np.where(within, plane, facing)
+        return np.asarray(squared), np.asarray(facing < 0.0)
 
 
 def distance_field(
@@ -150,69 +315,72 @@ def distance_field(
 ) -> np.ndarray:
     """Abstand zur Oberfläche für jeden Rasterpunkt: positiv innen, negativ außen.
 
-    Welche Normale das sein muss, steht in :func:`_surface_points` — die
-    Antwort hat ein Paket gekostet.
+    **Zum nächsten Punkt auf dem Dreieck, nicht zu seiner Ebene** (RM-671).
+    Von v0.4.4 bis v0.5.3 maß das Feld zur Ebene des nächsten Stützpunkts.
+    An einer ebenen Wand ist das exakt — der Anlass, davor maß es zum
+    Stützpunkt selbst, und vor einer Wand fiel der Weg wellig mit der Periode
+    der Wolke aus (Befund Robert, 18.09.2026: 67 koplanare Streifen in einer
+    Wand). Neben einer Kante unterschätzt die Ebene aber und springt, wo der
+    nächste Stützpunkt vom Deckel auf den Mantel wechselt: an einem Zylinder
+    Ø 20 bis 1,9 mm Fehler in vier Millimetern Abstand. Der Abstand zum
+    Dreieck ist an der Wand ebenso exakt und überall stetig. Die Splitter des
+    Verfahrens kamen nicht von dem Sprung — mit dem exakten Feld sind es
+    gleich viele —, sondern aus Marching Cubes selbst (:data:`NEEDLE`).
+    Bewerber sind die Dreiecke der :data:`NEAREST_SAMPLES` nächsten
+    Stützpunkte; gerechnet wird je Paar in :meth:`_Surface.signed`.
 
-    **Das Vorzeichen kommt aus der Normale, nicht aus einem Strahl.** Der
-    naheliegende Weg wäre ``Trimesh.contains``; der lief über ``rtree``, und
-    ein Lauf über 75 000 Rasterpunkte endete in einer Zugriffsverletzung.
-    Seit dem 24.08.2026 ist ``rtree`` ganz aus dem Prozess — heute bräche
-    ``contains`` mit trimeshs ``ExceptionWrapper`` ab, nicht mit einer
-    Korruption. Die Bauart hier bleibt richtig: kein Index, keine Abhängigkeit
-    an einer Stelle, die 75 000 Fragen stellt.
+    **Das Vorzeichen kommt aus der Normale, nicht aus einem Strahl** und
+    nicht aus einem Belegungsgitter: ``Trimesh.contains`` lief über
+    ``rtree``, das nicht mehr im Prozess ist, und ``voxelized().fill()`` misst
+    ab Zellmitte, an einer Kugel mit 25 mm Radius acht Prozent zu viel Volumen.
 
-    **Und nicht aus einem Belegungsgitter.** Der zweite naheliegende Weg,
-    ``voxelized().fill()`` mit einer Distanztransformation darauf, ist billig
-    und um eine halbe Zelle zu groß: Er markiert jede Zelle, die der Körper
-    berührt, und misst danach ab Zellmitte. Gemessen an einer Kugel mit 25 mm
-    Radius sind das acht Prozent zu viel Volumen — bei einem Verfahren, dessen
-    Genauigkeit ohnehin am Raster hängt, ist das der falsche Ort zum Sparen.
-
-    **Gemessen wird der Weg zur Ebene des nächsten Dreiecks, nicht zu seiner
-    Mitte** (Befund Robert, 18.09.2026: „weich verschmelzen, fehlerhaft,
-    abgefranste kanten" und „nach verschmelzen sind seiten auch in schichten
-    zerfallen, eine seite 43 schichten"). Beides war dasselbe: Die
-    Oberflächenwolke ist **diskret**, und der Weg zum nächsten *Punkt* fällt
-    vor einer ebenen Wand je nach Lage des Rasterpunkts ein wenig zu lang aus
-    — wellig, mit der Periode der Wolke. Gemessen an einem Quader von
-    40 auf 30 auf 20 mit einem Turm darauf, Rasterweite 1,0: 0,031 mm
-    Streuung, 2,015 Grad Normalenabweichung, und die linke Wand zerfiel in
-    **67 koplanare Gruppen**. Die Erkennung liest daraus Streifen, der Kunde
-    sieht Schichten, und die Kante dazwischen sieht ausgefranst aus.
-
-    Der Weg zur **Ebene** ist an einer ebenen Wand exakt — dieselbe Wand kam
-    danach mit 0,000 mm Streuung und als **eine** Fläche zurück. An einer
-    gewölbten unterschätzt er um das, was das Rasterverfahren ohnehin rundet:
-    Über zwei Kugeln, einen liegenden und einen stehenden Zylinder gemessen
-    liegt der Volumenunterschied bei 0,006 bis 0,030 Prozent, alle drei
-    geschlossen und einteilig — und die Hüllmaße treffen ihr Sollmaß jetzt
-    genau (40 auf 40 auf 35 statt 40,028 auf 40,03 auf 35,036).
-
-    Das Vorzeichen ändert sich dabei nicht: Es steckte schon in dieser
-    Projektion, sie lieferte bisher nur das Vorzeichen und nicht den Betrag.
+    **In Portionen, damit ein Abbruch ankommt** (§15.6): Ein einziger
+    ``query`` über zehn Millionen Rasterpunkte ist ein nativer Aufruf und
+    kooperativ nicht zu unterbrechen. ``workers=-1`` lastet die Kerne
+    innerhalb einer Portion aus, bei identischem Ergebnis; die Paare einer
+    Portion rechnen auf bis zu :data:`PAIR_WORKERS` Fäden, jede Teilportion in
+    ihren eigenen Abschnitt des Felds — Element für Element dieselbe Rechnung,
+    auf welchem Faden sie läuft.
     """
-    points, normals = _surface_points(mesh, spacing)
-    tree = cKDTree(points)
+    surface = _Surface.of(mesh, spacing)
+    count = min(NEAREST_SAMPLES, len(surface.owners))
     field = np.empty(len(grid), dtype=float)
-    # **In Portionen, damit ein Abbruch ankommt** (§15.6). Ein einziger
-    # ``query`` über zehn Millionen Rasterpunkte ist ein nativer Aufruf und
-    # kooperativ nicht zu unterbrechen: Verschmelzen mit Rasterweite 0,5
-    # rechnete gemessen 9,2 Sekunden, in denen der Abbrechen-Knopf nichts tat.
-    # Die Portionen kosten nichts messbares — ``workers=-1`` lastet die Kerne
-    # innerhalb einer Portion genauso aus.
-    for start in range(0, len(grid), FIELD_CHUNK):
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        block = grid[start : start + FIELD_CHUNK]
-        # Über alle Kerne: bei 356 000 Rasterpunkten sind es 1,5 statt 9,6
-        # Sekunden, bei identischem Ergebnis.
-        _away, index = tree.query(block, workers=-1)
-        outward = np.einsum("ij,ij->i", block - points[index], normals[index])
-        field[start : start + len(block)] = -outward
-        if progress is not None:
-            done = min(start + FIELD_CHUNK, len(grid)) / max(len(grid), 1)
-            progress(done, str(_("Abstandsfeld rechnen")))
+    workers = max(1, min(PAIR_WORKERS, os.cpu_count() or 1))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for start in range(0, len(grid), FIELD_CHUNK):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            block = np.asarray(grid[start : start + FIELD_CHUNK], dtype=np.float64)
+            _away, near = surface.tree.query(block, k=count, workers=-1)
+            candidates = surface.owners[np.asarray(near, dtype=np.int64).reshape(len(block), count)]
+            part = functools.partial(
+                _signed_part,
+                surface,
+                field[start : start + len(block)],
+                block,
+                candidates,
+                cancelled,
+            )
+            list(pool.map(part, range(0, len(block), PAIR_CHUNK)))
+            if progress is not None:
+                done = min(start + FIELD_CHUNK, len(grid)) / max(len(grid), 1)
+                progress(done, str(_("Abstandsfeld rechnen")))
     return field
+
+
+def _signed_part(
+    surface: _Surface,
+    into: np.ndarray,
+    block: np.ndarray,
+    candidates: np.ndarray,
+    cancelled: CancelToken | None,
+    first: int,
+) -> None:
+    """Eine Teilportion von :func:`distance_field` — schreibt nur ihren eigenen Abschnitt."""
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    last = first + PAIR_CHUNK
+    into[first:last] = surface.signed(block[first:last], candidates[first:last])
 
 
 def _share(progress: ProgressFn | None, offset: float) -> ProgressFn | None:
@@ -240,6 +408,81 @@ def _smooth_maximum(first: np.ndarray, second: np.ndarray, radius: float) -> np.
     share = np.clip(0.5 + 0.5 * (first - second) / radius, 0.0, 1.0)
     blended = second * (1.0 - share) + first * share
     return np.asarray(blended + radius * share * (1.0 - share), dtype=float)
+
+
+def _inside_the_hull(points: np.ndarray, first: MeshData, second: MeshData) -> np.ndarray:
+    """Abstand zur Hülle beider Eingänge, positiv innen — exakt an jeder Seite des Quaders.
+
+    **Das Ergebnis endet an der Hülle der Eingänge** (F5, RM-671; Entscheidung
+    Koordinator, 10.10.2026). Wo beide Felder gleich sind, hebt
+    :func:`_smooth_maximum` das Feld um bis zu ein Viertel des Übergangs. An
+    Flächen, die bei beiden Körpern bündig liegen — beide Böden auf dem Bett,
+    beide Deckel, beide Seiten —, wuchs das Ergebnis so über die Eingänge
+    hinaus: an zwei versetzten Quadern 40 x 30 x 10 bis 1,69 mm unter das
+    Bett und 16 575,6 statt 14 400 mm³, obwohl sie keine Kehle haben. Eine Kehle
+    liegt immer innerhalb der Hülle, also schneidet die Hülle nur die Beulen.
+    """
+    low = np.minimum(first.raw.bounds[0], second.raw.bounds[0])
+    high = np.maximum(first.raw.bounds[1], second.raw.bounds[1])
+    return np.asarray(np.minimum((points - low).min(axis=1), (high - points).min(axis=1)))
+
+
+def _in_double(field: np.ndarray, found: np.ndarray) -> np.ndarray:
+    """Die Ecken aus Marching Cubes in doppelter Genauigkeit, in Rasterschritten.
+
+    ``skimage`` rechnet die Lage auf der Rasterkante in einfacher Genauigkeit
+    und gibt ``float32`` zurück — eine Ecke trug so je nach Rasterlage bis zu
+    einige Mikrometer Rundung, und ein Unterschied in der letzten Stelle des
+    Felds kam nie an (Regel 6). Je Ecke ist eine Koordinate gebrochen, die
+    beiden anderen sind ganze Rasterindizes: Die Kante ist damit bekannt, und
+    die Lage darauf folgt aus den beiden Feldwerten wie in Marching Cubes,
+    ``t = f0 / (f0 - f1)``. Fällt eine Ecke auf einen Rasterpunkt, bleibt sie dort.
+    """
+    index = np.asarray(found, dtype=np.float64)
+    base = np.floor(index)
+    fraction = index - base
+    rows = np.arange(len(index))
+    axis = np.argmax(fraction, axis=1)
+    on_point = fraction[rows, axis] <= 0.0
+    low = base.astype(np.int64)
+    high = low.copy()
+    high[rows, axis] += 1
+    high = np.minimum(high, np.asarray(field.shape, dtype=np.int64) - 1)
+    near = field[low[:, 0], low[:, 1], low[:, 2]]
+    far = field[high[:, 0], high[:, 1], high[:, 2]]
+    usable = ~on_point & (np.abs(near - far) > 0.0)
+    share = np.zeros(len(index), dtype=np.float64)
+    np.divide(near, near - far, out=share, where=usable)
+    exact = base.copy()
+    exact[rows, axis] += share
+    return exact
+
+
+def _without_needles(
+    body: trimesh.Trimesh, grid: float, cancelled: CancelToken | None
+) -> trimesh.Trimesh:
+    """Legt die Nadeln aus Marching Cubes zusammen (:data:`NEEDLE`).
+
+    Eine Ecke geht dabei in einer anderen auf, die schon auf der Fläche des
+    Rasterverfahrens liegt; neue Koordinaten entstehen keine, und kein Dreieck
+    klappt um (:func:`app.core.geom.mesh_edits.collapse_short`). Aktiv sind
+    nur die Dreiecke um die kurzen Kanten (:func:`~app.core.geom.mesh_edits.around`).
+    Ein Netz, das die Halbkanten dort nicht tragen (verzweigt oder falsch
+    gewickelt), bleibt, wie es ist.
+    """
+    vertices = np.asarray(body.vertices, dtype=np.float64)
+    faces = np.asarray(body.faces, dtype=np.int64)
+    corners = vertices[faces]
+    sides = np.roll(corners, -1, axis=1) - corners
+    shortest = NEEDLE * grid
+    wanted = (row_dots(sides, sides) < shortest * shortest).any(axis=1)
+    if not wanted.any():
+        return body
+    surface = mesh_edits.surface_of(vertices, faces, mesh_edits.around(faces, wanted))
+    if surface is None or not mesh_edits.collapse_short(surface, shortest, cancelled=cancelled):
+        return body
+    vertices, faces = surface.arrays()
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
 
 
 def _too_fine(wanted: int, grid: float) -> ValidationError:
@@ -330,6 +573,9 @@ def blend_bodies(
         distance_field(second, points, grid, progress=_share(progress, 0.5), cancelled=cancelled),
         radius,
     )
+    merged = np.minimum(merged, _inside_the_hull(points, first, second))
+    clear = CLEAR_OF_ZERO * grid
+    merged = np.where(np.abs(merged) < clear, -clear, merged)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
 
@@ -340,12 +586,12 @@ def blend_bodies(
     field = np.pad(merged.reshape(shape), 1, constant_values=-(margin + grid))
     from skimage import measure
 
-    vertices, faces, _normals, _values = measure.marching_cubes(
-        field, 0.0, spacing=(grid, grid, grid)
-    )
+    found, faces, _normals, _values = measure.marching_cubes(field, 0.0)
     # Die Polsterung verschiebt den Ursprung um einen Schritt je Achse zurück.
-    body = trimesh.Trimesh(vertices=vertices + low - grid, faces=faces, process=True)
+    vertices = low + (_in_double(field, found) - 1.0) * grid
+    body = trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
     body.fix_normals()
+    body = _without_needles(body, grid, cancelled)
     _log.info(
         "blended %d and %d triangles into %d over %d samples",
         first.triangle_count,
@@ -395,7 +641,9 @@ class BlendParams(BaseParams):
     # Ergebnis aus dem Cache trüge sonst weiter die gewellten Wände. 3 seit dem
     # 22.09.2026: Die Filamente beider Körper kommen mit (:func:`_with_filaments`).
     # 4: Auch die Entwurfsplanung prüft die Eingänge vor Bounds und Punktbudget.
-    cache_version="5",
+    # 6: Das Feld misst zum nächsten Punkt auf dem Dreieck, das Ergebnis endet an
+    # der Hülle der Eingänge, und die Ecken stehen in doppelter Genauigkeit (RM-671).
+    cache_version="6",
     title=_("Weich verschmelzen"),
     category="boolean",
     params=BlendParams,

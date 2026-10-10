@@ -1108,6 +1108,19 @@ erfinden — Regel 7, RM-097; eine Seite, die der Kern nicht schneidet, folgt au
 der Volumenbilanz, auch an Körpern mit eingeschlossenen Hohlräumen,
 `_shells_apart`)
 
+Große Vergleichsnetze durchlaufen in `difference.py` zuerst die bestehende
+koplanare Entlastung aus `mesh_ops._exactly_flattened`, mit unveränderten
+Eingängen und denselben Dichtheits- und Volumenprüfungen.
+
+`mesh_edits.py` (RM-671) legt zusammen, tauscht und teilt an einem
+geschlossenen Netz, ohne die Form zu ändern: keine neue Koordinate beim
+Zusammenlegen, getauscht nur in einer Ebene, geteilt in der Mitte einer Kante.
+*Weich verschmelzen* legt damit die Nadeln aus Marching Cubes zusammen,
+*Dreiecke angleichen* hält seine Kantenlänge und tauscht Splitter in der Ebene
+weg. Gearbeitet wird nur an einer Auswahl (`around`, `suspects`): an der Kugel
+aus §31 kostete das Tauschen über das ganze Netz 52 s, an einer Auswahl unter
+einer Sekunde.
+
 `section.clip_triangles` begrenzt lose Markierungsdreiecke an denselben
 Halbräumen wie Körper. Es bleibt eine offene Anzeigefläche ohne zusätzliche
 Kappen; die übergebenen Eckpunkte und der ursprüngliche Körper bleiben erhalten.

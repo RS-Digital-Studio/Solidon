@@ -64,6 +64,11 @@ DELAUNAY_MARGIN: Final = 1e-9
 #: Die Nadeln einer Verschmelzung sind nach zwölf bis zwanzig Runden fort.
 EDIT_ROUNDS: Final = 64
 
+#: Höchstzahl der Durchgänge von :func:`split_long` — eine Absicherung: Nach dem
+#: Teilen im Kern liegen die längsten Kanten beim Doppelten des Verlangten, und
+#: jeder Durchgang halbiert sie.
+SPLIT_PASSES: Final = 32
+
 
 @dataclass
 class Surface:
@@ -134,6 +139,18 @@ def surface_of(
     partner[other] = one
     valence = np.bincount(flat, minlength=width).astype(np.int64)
     return Surface(points, corners, partner, np.ones(count, dtype=bool), chosen, valence)
+
+
+def around(faces: np.ndarray, wanted: np.ndarray) -> np.ndarray:
+    """Die Dreiecke ``wanted`` und jedes, das eine Ecke mit ihnen teilt.
+
+    So viel muss aktiv sein, damit die Ringe ihrer Ecken ganz sind — das
+    Zusammenlegen fragt sie (:func:`collapse_short`).
+    """
+    corners = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+    marked = np.zeros(int(corners.max(initial=-1)) + 1, dtype=bool)
+    marked[corners[np.asarray(wanted, dtype=bool)].reshape(-1)] = True
+    return np.asarray(marked[corners].any(axis=1))
 
 
 def _next(halves: np.ndarray) -> np.ndarray:
@@ -236,27 +253,47 @@ def _candidate_halves(surface: Surface, pending: np.ndarray) -> np.ndarray:
 
 
 def _edges_once(surface: Surface, halves: np.ndarray) -> np.ndarray:
-    """Je Kante eine Halbkante, die kleinere Nummer — auch wenn nur ein Dreieck wartet."""
-    return np.unique(np.minimum(halves, surface.partner[halves]))
+    """Je Kante eine Halbkante, die kleinere Nummer — auch wenn nur ein Dreieck wartet.
+
+    Über eine Markierung je Halbkante, nicht über ``np.unique``: Das rechnete an
+    drei Millionen Kanten drei Sekunden, die Markierung einen Bruchteil davon,
+    in derselben aufsteigenden Folge.
+    """
+    seen = np.zeros(len(surface.partner), dtype=bool)
+    seen[np.minimum(halves, surface.partner[halves])] = True
+    return np.flatnonzero(seen)
 
 
 def _connected(surface: Surface, first: np.ndarray, second: np.ndarray) -> np.ndarray:
     """Ob zwischen ``first[i]`` und ``second[i]`` schon eine Kante liegt — im ganzen Netz.
 
-    Gefragt wird an allen lebenden Dreiecken, die eine der ersten Ecken
-    tragen, nicht nur an der Auswahl: Eine Kante, die es außerhalb schon
-    gibt, gäbe es nach dem Tausch zweimal.
+    Gefragt wird an allen lebenden Dreiecken, nicht nur an der Auswahl: Eine
+    Kante, die es außerhalb schon gibt, gäbe es nach dem Tausch zweimal. Eine
+    solche Kante liegt in einem Dreieck mit einer ersten **und** einer zweiten
+    Ecke; nur diese werden gelesen.
     """
+    return _joined(surface.faces, surface.alive, first, second)
+
+
+def _joined(
+    faces: np.ndarray, alive: np.ndarray | None, first: np.ndarray, second: np.ndarray
+) -> np.ndarray:
+    """:func:`_connected` an Dreiecken als Feld; ``alive`` wählt die lebenden, ``None`` alle."""
     if not len(first):
         return np.zeros(0, dtype=bool)
-    width = len(surface.vertices)
-    marked = np.zeros(width, dtype=bool)
-    marked[first] = True
-    rows = np.flatnonzero(surface.alive & marked[surface.faces].any(axis=1))
-    corners = surface.faces[rows]
+    width = int(faces.max(initial=-1)) + 1
+    starting = np.zeros(width, dtype=bool)
+    starting[first] = True
+    ending = np.zeros(width, dtype=bool)
+    ending[second] = True
+    touching = starting[faces].any(axis=1) & ending[faces].any(axis=1)
+    if alive is not None:
+        touching &= alive
+    rows = np.flatnonzero(touching)
+    corners = faces[rows]
     starts = corners.reshape(-1)
     ends = np.roll(corners, -1, axis=1).reshape(-1)
-    known = np.unique(np.minimum(starts, ends) * width + np.maximum(starts, ends))
+    known = np.sort(np.minimum(starts, ends) * width + np.maximum(starts, ends))
     wanted = np.minimum(first, second) * width + np.maximum(first, second)
     if not len(known):
         return np.zeros(len(wanted), dtype=bool)
@@ -447,22 +484,142 @@ def _apply_collapses(
     np.subtract.at(surface.valence, d, 1)
 
 
+def _flippable(
+    points: np.ndarray, a: np.ndarray, b: np.ndarray, c: np.ndarray, d: np.ndarray, flat: float
+) -> np.ndarray:
+    """Ob (a, b, c) und (b, a, d) ihre Diagonale tauschen dürfen, ohne die Form zu ändern.
+
+    Die vierte Ecke liegt höchstens ``flat`` neben der Ebene des anderen
+    Dreiecks, beide zeigen gleich herum, und das Viereck ist konvex — dann
+    decken (c, a, d) und (d, b, c) genau die alten. Ohne Einheitsnormale: Der
+    Abstand zur Ebene wird quadriert mit dem Quadrat der Normalenlänge
+    verglichen, die Richtungen nur nach ihrem Vorzeichen; ein Dreieck ohne
+    Fläche zeigt nirgendwohin und tauscht nicht.
+    """
+    at_a, at_b, at_c, at_d = points[a], points[b], points[c], points[d]
+    first = np.cross(at_b - at_a, at_c - at_a)
+    second = np.cross(at_a - at_b, at_d - at_b)
+    tolerance = flat * flat
+    valid = c != d
+    beside = row_dots(at_d - at_a, first)
+    valid &= beside * beside <= tolerance * row_dots(first, first)
+    beside = row_dots(at_c - at_a, second)
+    valid &= beside * beside <= tolerance * row_dots(second, second)
+    valid &= row_dots(first, second) > 0.0
+    new_first = np.cross(at_a - at_c, at_d - at_c)
+    new_second = np.cross(at_b - at_d, at_c - at_d)
+    valid &= (row_dots(new_first, first) > 0.0) & (row_dots(new_second, first) > 0.0)
+    return np.asarray(valid)
+
+
+def flip_long(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    longest: float,
+    flat: float,
+    *,
+    suspects: np.ndarray | None = None,
+    cancelled: CancelToken | None = None,
+) -> tuple[np.ndarray, int]:
+    """Tauscht jede Kante über ``longest`` gegen die kürzere Diagonale, wo das die Form hält.
+
+    Zurück kommen die Dreiecke in derselben Folge und wie viele getauscht
+    wurden. Getauscht wird wie in :func:`flip_in_planes` nur in einer Ebene
+    (:func:`_flippable`), und die neue Diagonale ist kürzer als die alte und
+    nicht über ``longest``. ``suspects`` nennt die Dreiecke, die eine zu lange
+    Seite haben können; eine zu lange Kante hat beide unter ihnen.
+
+    **Ohne Halbkanten, als Feldrechnung**: Je Runde werden die zu langen Seiten
+    gepaart, alle geprüft und je Dreieck höchstens ein Tausch genommen, die
+    längste Kante zuerst. An der Kugel aus §31 lagen nach dem Teilen im Kern
+    245 760 solche Kanten im Inneren der geteilten Dreiecke; über die Runden
+    mit Halbkanten kostete ihr Tausch 2,4 s.
+    """
+    points = np.asarray(vertices, dtype=np.float64)
+    corners = np.array(faces, dtype=np.int64, copy=True).reshape(-1, 3)
+    rows = np.flatnonzero(
+        np.ones(len(corners), dtype=bool) if suspects is None else np.asarray(suspects, dtype=bool)
+    )
+    valence = np.bincount(corners.reshape(-1), minlength=len(points)).astype(np.int64)
+    limit = longest * longest
+    width = len(points)
+    done = 0
+    for _round in range(EDIT_ROUNDS):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        heads = np.roll(corners[rows], -1, axis=1)
+        delta = points[heads] - points[corners[rows]]
+        row, side = np.nonzero(row_dots(delta, delta) > limit)
+        if not len(row):
+            break
+        face = rows[row]
+        tail, head = corners[face, side], corners[face, (side + 1) % 3]
+        codes = np.minimum(tail, head) * width + np.maximum(tail, head)
+        order = np.argsort(codes, kind="stable")
+        ordered = codes[order]
+        twin = np.flatnonzero(ordered[1:] == ordered[:-1])
+        alone = (twin == 0) | (ordered[np.maximum(twin - 1, 0)] != ordered[twin])
+        alone &= (twin + 2 >= len(ordered)) | (
+            ordered[np.minimum(twin + 2, len(ordered) - 1)] != ordered[twin]
+        )
+        one, other = order[twin[alone]], order[twin[alone] + 1]
+        f, g = face[one], face[other]
+        a, b = tail[one], head[one]
+        c = corners[f, (side[one] + 2) % 3]
+        d = corners[g, (side[other] + 2) % 3]
+        across = points[c] - points[d]
+        span = points[b] - points[a]
+        reach = row_dots(across, across)
+        length = row_dots(span, span)
+        valid = (tail[other] == b) & (head[other] == a)
+        valid &= _flippable(points, a, b, c, d, flat)
+        valid &= (valence[a] >= 4) & (valence[b] >= 4)
+        valid &= (reach <= limit) & (reach < length)
+        idx = np.flatnonzero(valid)
+        if len(idx):
+            idx = idx[~_joined(corners, None, c[idx], d[idx])]
+        if not len(idx):
+            break
+        rank = _rank(codes[one][idx], -length[idx])
+        best = np.full(len(corners), np.iinfo(np.int64).max, dtype=np.int64)
+        np.minimum.at(best, f[idx], rank)
+        np.minimum.at(best, g[idx], rank)
+        chosen = idx[(best[f[idx]] == rank) & (best[g[idx]] == rank)]
+        # Gefragt wird in der nächsten Runde nur, wo noch eine lange Seite stehen
+        # kann: an einem ungetauschten Dreieck mit langer Seite, und an einem
+        # getauschten, das eine lange Außenseite des Vierecks erbt.
+        long_sides = np.zeros(corners.shape, dtype=bool)
+        long_sides[face, side] = True
+        pending = np.zeros(len(corners), dtype=bool)
+        pending[face] = True
+        first_side, other_side = side[one][chosen], side[other][chosen]
+        f, g = f[chosen], g[chosen]
+        pending[f] = long_sides[f, (first_side + 2) % 3] | long_sides[g, (other_side + 1) % 3]
+        pending[g] = long_sides[g, (other_side + 2) % 3] | long_sides[f, (first_side + 1) % 3]
+        rows = np.flatnonzero(pending)
+        a, b, c, d = a[chosen], b[chosen], c[chosen], d[chosen]
+        corners[f] = np.column_stack((c, a, d))
+        corners[g] = np.column_stack((d, b, c))
+        np.subtract.at(valence, a, 1)
+        np.subtract.at(valence, b, 1)
+        np.add.at(valence, c, 1)
+        np.add.at(valence, d, 1)
+        done += len(chosen)
+    return corners, done
+
+
 def flip_in_planes(
     surface: Surface,
     flat: float,
     *,
     longest: float | None = None,
-    only_long: bool = False,
     cancelled: CancelToken | None = None,
 ) -> int:
-    """Tauscht Diagonalen zweier Dreiecke in einer Ebene; zurück kommt, wie viele.
+    """Tauscht Diagonalen zweier Dreiecke in einer Ebene nach Delaunay; zurück kommt, wie viele.
 
-    Getauscht wird nur, wo die vierte Ecke höchstens ``flat`` neben der Ebene
-    des anderen Dreiecks liegt, beide gleich herum zeigen und das Viereck
-    konvex ist — dann decken die neuen Dreiecke genau die alten. Ohne
-    ``only_long`` nach Delaunay (die Summe der gegenüberliegenden Winkel über
-    180 Grad), mit ``only_long`` jede Kante über ``longest``, deren andere
-    Diagonale kürzer ist. Mit ``longest`` wird keine neue Kante länger.
+    Getauscht wird, wo die Summe der gegenüberliegenden Winkel über 180 Grad
+    liegt und das Viereck es formtreu erlaubt (:func:`_flippable`). Mit
+    ``longest`` wird keine neue Kante länger.
     """
     done = 0
     pending = np.array(surface.active & surface.alive, copy=True)
@@ -481,37 +638,12 @@ def flip_in_planes(
         c = flat_faces[_next(_next(h))]
         d = flat_faces[_next(_next(g))]
         points = surface.vertices
-        side = _lengths(points, a, b)
-        if only_long and longest is not None:
-            keep = side > longest
-            h, g, a, b, c, d, side = (
-                h[keep],
-                g[keep],
-                a[keep],
-                b[keep],
-                c[keep],
-                d[keep],
-                side[keep],
-            )
-        across = _lengths(points, c, d)
-        first = _unit_normals(surface, h // 3)
-        second = _unit_normals(surface, g // 3)
-        valid = c != d
-        valid &= np.abs(row_dots(points[d] - points[a], first)) <= flat
-        valid &= np.abs(row_dots(points[c] - points[a], second)) <= flat
-        valid &= row_dots(first, second) > 0.0
-        new_first = np.cross(points[a] - points[c], points[d] - points[c])
-        new_second = np.cross(points[b] - points[d], points[c] - points[d])
-        valid &= (row_dots(new_first, first) > 0.0) & (row_dots(new_second, first) > 0.0)
+        valid = _flippable(points, a, b, c, d, flat)
         valid &= (surface.valence[a] >= 4) & (surface.valence[b] >= 4)
         if longest is not None:
-            valid &= across <= longest
-        if only_long:
-            valid &= across < side
-            gain = across - side
-        else:
-            gain = _cotangents(points, a, b, c, d)
-            valid &= gain < -DELAUNAY_MARGIN
+            valid &= _lengths(points, c, d) <= longest
+        gain = _cotangents(points, a, b, c, d)
+        valid &= gain < -DELAUNAY_MARGIN
         idx = np.flatnonzero(valid)
         if len(idx):
             idx = idx[~_connected(surface, c[idx], d[idx])]
@@ -590,109 +722,114 @@ def _pair(surface: Surface, one: np.ndarray, other: np.ndarray) -> None:
     surface.partner[other[known]] = one[known]
 
 
-def split_long(surface: Surface, longest: float, *, cancelled: CancelToken | None = None) -> int:
-    """Teilt Kanten über ``longest`` in der Mitte; zurück kommt, wie viele.
+def split_long(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    longest: float,
+    *,
+    suspects: np.ndarray | None = None,
+    cancelled: CancelToken | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Teilt jede Kante über ``longest`` in der Mitte — alle zugleich, bis keine mehr darüber liegt.
 
-    Längste Kante zuerst (Rivara): Geteilt wird eine Kante, die in **beiden**
-    Dreiecken eine längste ist. Die längste des ganzen Netzes ist das immer,
-    also geht es in jeder Runde voran, und die Winkel der Teile werden nicht
-    beliebig spitz. Der neue Punkt ist die Mitte der Kante und liegt damit auf
-    der Oberfläche.
+    Je Durchgang werden die zu langen Kanten markiert und in der Mitte geteilt;
+    beide Dreiecke an der Kante teilen die neue Ecke, und sie liegt auf der
+    Kante, also auf der Oberfläche. Jedes Dreieck zerfällt nach dem Muster
+    seiner markierten Seiten (:func:`_split_by_pattern`). Ohne Runden und ohne
+    Halbkanten: An der Kugel aus §31 (2,46 Mio. Dreiecke nach dem Teilen im
+    Kern) brauchte die Fassung mit Runden je Kante 4,9 s, wo ein Durchgang über
+    die Felder genügt. :data:`SPLIT_PASSES` ist eine Absicherung; jeder
+    Durchgang halbiert die markierten Kanten.
+
+    ``suspects`` nennt die Dreiecke, die zu lang sein können; ohne sind es
+    alle. Gemessen werden im ersten Durchgang nur sie, danach nur die neuen
+    Teile — eine zu lange Kante hat beide Dreiecke unter den Verdächtigen.
+    Zurück kommen Ecken, Dreiecke und je Dreieck seine Nummer im Eingang,
+    ``-1`` für ein geteiltes: Wer über die Dreiecke schon etwas weiß, muss nur
+    an den neuen nachmessen.
     """
-    done = 0
-    pending = np.array(surface.active & surface.alive, copy=True)
-    for _round in range(EDIT_ROUNDS):
+    points = np.asarray(vertices, dtype=np.float64)
+    corners = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
+    origin = np.arange(len(corners), dtype=np.int64)
+    asked = (
+        np.ones(len(corners), dtype=bool)
+        if suspects is None
+        else np.asarray(suspects, dtype=bool).copy()
+    )
+    limit = longest * longest
+    for _pass in range(SPLIT_PASSES):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        halves = _edges_once(surface, _candidate_halves(surface, pending))
-        pending = np.zeros(len(surface.faces), dtype=bool)
-        if not len(halves):
+        rows = np.flatnonzero(asked)
+        heads = np.roll(corners[rows], -1, axis=1)
+        delta = points[heads] - points[corners[rows]]
+        found = row_dots(delta, delta) > limit
+        if not found.any():
             break
-        flat_faces = surface.faces.reshape(-1)
-        points = surface.vertices
-        side = _lengths(points, flat_faces[halves], flat_faces[_next(halves)])
-        long_side = side > longest
-        if not long_side.any():
-            break
-        twins = surface.partner[halves]
-        # Die längste Seite beider Dreiecke jeder Kante, auch des wartenden.
-        faces = np.unique(np.concatenate((halves // 3, twins // 3)))
-        all_sides = _face_halves(faces).reshape(-1)
-        lengths = _lengths(points, flat_faces[all_sides], flat_faces[_next(all_sides)])
-        widest = np.zeros(len(surface.faces), dtype=np.float64)
-        widest[faces] = lengths.reshape(-1, 3).max(axis=1)
-        terminal = long_side & (side >= widest[halves // 3]) & (side >= widest[twins // 3])
-        idx = np.flatnonzero(terminal)
-        if not len(idx):
-            break
-        h = halves[idx]
-        g = twins[idx]
-        groups = np.column_stack(
-            (
-                h // 3,
-                g // 3,
-                surface.partner[_next(h)] // 3,
-                surface.partner[_prev(h)] // 3,
-                surface.partner[_next(g)] // 3,
-                surface.partner[_prev(g)] // 3,
-            )
+        marked = np.zeros(corners.shape, dtype=bool)
+        marked[rows] = found
+        width = len(points)
+        tails, ends = corners[rows][found], heads[found]
+        codes = np.minimum(tails, ends) * width + np.maximum(tails, ends)
+        unique, inverse = np.unique(codes, return_inverse=True)
+        first, second = unique // width, unique % width
+        middles = np.full(corners.shape, -1, dtype=np.int64)
+        middles[marked] = width + np.asarray(inverse, dtype=np.int64).reshape(-1)
+        points = np.concatenate((points, (points[first] + points[second]) / 2.0))
+        unsplit = np.flatnonzero(~marked.any(axis=1))
+        corners = _split_by_pattern(points, corners, middles)
+        origin = np.concatenate(
+            (origin[unsplit], np.full(len(corners) - len(unsplit), -1, dtype=np.int64))
         )
-        groups = np.where(groups >= 0, groups, -1)
-        rank = _rank(h, -side[idx])
-        won = _claimed(surface, groups, np.empty((len(h), 0), dtype=np.int64), rank)
-        waiting = groups[~won]
-        pending[waiting[waiting >= 0]] = True
-        touched = groups[won]
-        pending[touched[touched >= 0]] = True
-        added = _apply_splits(surface, h[won], g[won])
-        pending = np.concatenate((pending, np.ones(added, dtype=bool)))
-        done += int(won.sum())
-    return done
+        asked = np.zeros(len(corners), dtype=bool)
+        asked[len(unsplit) :] = True
+    return points, corners, origin
 
 
-def _apply_splits(surface: Surface, h: np.ndarray, g: np.ndarray) -> int:
-    """Teilt unabhängige Kanten in der Mitte; zurück kommt die Zahl neuer Dreiecke."""
-    count = len(h)
-    if not count:
-        return 0
-    flat_faces = surface.faces.reshape(-1)
-    a = flat_faces[h]
-    b = flat_faces[_next(h)]
-    c = flat_faces[_next(_next(h))]
-    d = flat_faces[_next(_next(g))]
-    bc = surface.partner[_next(h)]
-    ca = surface.partner[_prev(h)]
-    ad = surface.partner[_next(g)]
-    db = surface.partner[_prev(g)]
-    middle = len(surface.vertices) + np.arange(count, dtype=np.int64)
-    halfway = (surface.vertices[a] + surface.vertices[b]) / 2.0
-    surface.vertices = np.concatenate((surface.vertices, halfway))
-    surface.valence = np.concatenate((surface.valence, np.full(count, 4, dtype=np.int64)))
-    np.add.at(surface.valence, c, 1)
-    np.add.at(surface.valence, d, 1)
-    first = h // 3
-    second = g // 3
-    third = len(surface.faces) + np.arange(count, dtype=np.int64)
-    fourth = third + count
-    surface.faces[first] = np.column_stack((a, middle, c))
-    surface.faces[second] = np.column_stack((b, middle, d))
-    surface.faces = np.concatenate(
-        (surface.faces, np.column_stack((middle, b, c)), np.column_stack((middle, a, d)))
-    )
-    surface.partner = np.concatenate((surface.partner, np.full(6 * count, -1, dtype=np.int64)))
-    surface.alive = np.concatenate((surface.alive, np.ones(2 * count, dtype=bool)))
-    surface.active = np.concatenate((surface.active, np.ones(2 * count, dtype=bool)))
-    one, two, three, four = 3 * first, 3 * second, 3 * third, 3 * fourth
-    # (a, m, c): a→m mit (m, a, d)·m→a, m→c mit (m, b, c)·c→m, c→a wie vorher.
-    _pair(surface, one, four)
-    _pair(surface, one + 1, three + 2)
-    _pair(surface, one + 2, ca)
-    # (m, b, c): m→b mit (b, m, d)·b→m, b→c wie vorher.
-    _pair(surface, three, two)
-    _pair(surface, three + 1, bc)
-    # (b, m, d): m→d mit (m, a, d)·d→m, d→b wie vorher.
-    _pair(surface, two + 1, four + 2)
-    _pair(surface, two + 2, db)
-    # (m, a, d): a→d wie vorher.
-    _pair(surface, four + 1, ad)
-    return 2 * count
+def _split_by_pattern(points: np.ndarray, corners: np.ndarray, middles: np.ndarray) -> np.ndarray:
+    """Jedes Dreieck nach seinen geteilten Seiten (``middles`` je Seite, ``-1`` ungeteilt).
+
+    Seite ``k`` läuft von Ecke ``k`` zu ``k + 1``. Eine geteilte Seite halbiert
+    das Dreieck zur Gegenecke; zwei trennen die Ecke zwischen ihnen ab, und das
+    Viereck daneben teilt seine kürzere Diagonale; drei ergeben vier ähnliche
+    Dreiecke. Die Umlaufrichtung bleibt, die ungeteilten Dreiecke stehen vorn.
+    """
+    marked = middles >= 0
+    count = marked.sum(axis=1)
+    pieces = [corners[count == 0]]
+    lone = np.flatnonzero(count == 1)
+    if len(lone):
+        turn = (np.argmax(marked[lone], axis=1)[:, None] + np.arange(3)) % 3
+        a, b, c = np.take_along_axis(corners[lone], turn, axis=1).T
+        middle = np.take_along_axis(middles[lone], turn, axis=1)[:, 0]
+        pieces += [np.column_stack((a, middle, c)), np.column_stack((middle, b, c))]
+    pair = np.flatnonzero(count == 2)
+    if len(pair):
+        # Die ungeteilte Seite wird Seite 2: Die Ecke b liegt zwischen beiden geteilten.
+        turn = ((np.argmin(marked[pair], axis=1) + 1)[:, None] + np.arange(3)) % 3
+        a, b, c = np.take_along_axis(corners[pair], turn, axis=1).T
+        halves = np.take_along_axis(middles[pair], turn, axis=1)
+        near, far = halves[:, 0], halves[:, 1]
+        across = points[far] - points[a]
+        other = points[c] - points[near]
+        from_a = row_dots(across, across) <= row_dots(other, other)
+        pieces += [
+            np.column_stack((near, b, far)),
+            np.where(
+                from_a[:, None], np.column_stack((a, near, far)), np.column_stack((a, near, c))
+            ),
+            np.where(
+                from_a[:, None], np.column_stack((a, far, c)), np.column_stack((near, far, c))
+            ),
+        ]
+    full = np.flatnonzero(count == 3)
+    if len(full):
+        a, b, c = corners[full].T
+        ab, bc, ca = middles[full].T
+        pieces += [
+            np.column_stack((a, ab, ca)),
+            np.column_stack((ab, b, bc)),
+            np.column_stack((ca, bc, c)),
+            np.column_stack((ab, bc, ca)),
+        ]
+    return np.concatenate(pieces)

@@ -172,9 +172,9 @@ für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 `body_overlap`) · `section.py` (§18.2; Schnittkontakte siehe Stolperfallen) ·
 `difference.py` (§18.7; eine
 ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
-`_shells_apart`; große Vergleichsnetze durchlaufen zuerst die bestehende
-koplanare Entlastung aus `mesh_ops._exactly_flattened`, mit unveränderten
-Eingängen und denselben Dichtheits-/Volumenprüfungen) · `mesh_ops.py` · `colour_ops.py` ·
+`_shells_apart`; große Vergleichsnetze zuerst über
+`mesh_ops._exactly_flattened`) · `mesh_ops.py` · `mesh_edits.py` (formtreu
+tauschen, teilen, zusammenlegen) · `colour_ops.py` ·
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
 `label_ops.py` (Schriften in `data/fonts/`, Satz über `glyphs.py`;
 *Auf beiden Seiten* setzt die Rückseite am ersten äußeren Austritt entgegen

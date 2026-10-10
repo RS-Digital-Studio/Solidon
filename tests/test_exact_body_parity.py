@@ -132,7 +132,11 @@ CASES = [
         2,
     ),
     Case("bead_edges", "box", {"radius": 0.8, "edges": "vertical"}, MESH, "greater", 3200.0),
-    Case("blend_union", "overlapping", {"radius": 1.0, "grid": 1.0}, MESH, "greater", 4800.0),
+    # Zwei bündige Quader haben keine Kehle: Der Übergang endet an ihrer Hülle
+    # (RM-671, F5), heraus kommt die Vereinigung 30 x 16 x 10 bis auf die
+    # Rundung des Rasters an den Außenkanten. Bis dahin stand hier „mehr als die
+    # Vereinigung“ — gemessen war die Beule an den bündigen Flächen.
+    Case("blend_union", "overlapping", {"radius": 1.0, "grid": 1.0}, MESH, "hull", 4800.0),
     Case("brep_to_mesh", "box", {"deflection": 0.05}, (("brep", ("mesh",)),), "volume", 3200.0),
     Case("chamfer_edges", "box", {"distance": 1.0, "edges": "vertical"}, KEEP, "volume", 3180.0),
     Case(
@@ -1507,6 +1511,14 @@ def _assert_invariant(
             assert volume < 8000.0
     elif rule == "less":
         assert 0.0 < volume < expected - 0.1
+    elif rule == "hull":
+        # Die Vereinigung, nach innen gerundet um höchstens zwei Prozent, und
+        # nichts über ihre Hülle hinaus.
+        low = np.min([entry.mesh.bounds.minimum for entry in inputs], axis=0)
+        high = np.max([entry.mesh.bounds.maximum for entry in inputs], axis=0)
+        assert expected * 0.98 < volume <= expected + 1e-6
+        assert np.all(np.asarray(first.mesh.bounds.minimum) >= low - 1e-6)
+        assert np.all(np.asarray(first.mesh.bounds.maximum) <= high + 1e-6)
     elif rule == "height":
         assert first.mesh.bounds.size[2] == pytest.approx(expected, abs=0.03)
     elif rule == "size":

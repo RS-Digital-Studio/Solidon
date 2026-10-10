@@ -26,6 +26,8 @@ from app.core.ingest.loader import normalise
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import MaterialSlot, OpContext, OpResult, Profile, Quality, Scene, SceneObject
+from app.core.units import EPS_GEOM
+from tests.triangle_shapes import sliver_share
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -118,8 +120,8 @@ def test_uniform_remeshing_evens_out_more_than_splitting_does(
 
     trimesh 5 teilte selbst gleichmäßig und kam auf **0,555** (14.08.2026),
     der konforme Weg des exakten Kerns seit dem 25.09.2026 auf **0,445**. Der
-    Vorsprung ist damit klein geworden, aber er steht: ``remesh_uniform``
-    liegt bei **0,410**.
+    Vorsprung steht: ``remesh_uniform`` lag bei **0,410**, seit es in der
+    Ebene tauscht und zusammenlegt (RM-671) bei **0,342**.
     """
     plate = corpus("plate_holes.stl")
     before = spread(plate)
@@ -154,19 +156,21 @@ def test_uniform_remeshing_costs_a_fraction_of_the_triangles(profile: Profile) -
     """Warum es eine eigene Operation ist und keine Zeile in ``remesh_mesh``.
 
     Für dieselbe Zielkantenlänge von 1,5 mm braucht ``remesh_mesh`` auf
-    ``plate_holes`` **47 092** Dreiecke, ``remesh_uniform`` **30 648** und mit
-    zugelassenen 0,2 mm Abweichung **16 816** (25.09.2026).
+    ``plate_holes`` **47 092** Dreiecke, ``remesh_uniform`` **27 356** und mit
+    zugelassenen 0,2 mm Abweichung **24 384** (10.10.2026, RM-671).
 
     Hier stand erst Faktor **hundert** (3 260 416 gegen rund 30 000), unter
-    trimesh 5 Faktor 5,2 (160 084). Seit ``remesh_mesh`` konform durch den
-    exakten Kern teilt, ist ohne Abweichung nur noch die Zusage übrig, die
-    beide trennt: ``remesh_mesh`` hält **jede** Kante unter 1,5 mm,
-    ``remesh_uniform`` lässt die Diagonalen einer Gitterzelle bis 2,8 mm
-    stehen — ungefähr gleich lang ist, was es verspricht. Der Grund für die
-    eigene Operation ist die Abweichung: Nur sie räumt die überflüssig
-    feinen Stellen ab, und das kann keine Zeile in einem Werkzeug, das nie
-    einen Punkt verschiebt. Wer sie infrage stellt, misst neu, statt diese
-    Zahlen fortzuschreiben.
+    trimesh 5 Faktor 5,2 (160 084). Bis RM-671 ließ ``remesh_uniform`` die
+    Diagonalen einer Gitterzelle bis 2,8 mm stehen und kam so auf 30 648 und
+    16 816 — mit Abweichung weniger als die Hälfte von ``remesh_mesh``, aber
+    nur, weil Kanten bis 2,99 mm stehen blieben. Seitdem hält es wie
+    ``remesh_mesh`` jede Kante unter 1,5 mm; die Fläche der Platte (rund
+    10 500 mm²) verlangt dafür gut 20 000 Dreiecke, und die Hälfte ist keine
+    Zusage mehr. Es braucht trotzdem weniger als ``remesh_mesh``, weil es in
+    der Ebene tauscht und zusammenlegt. Der Grund für die eigene Operation ist
+    die Abweichung: Nur sie räumt die überflüssig feinen Stellen ab, und das
+    kann keine Zeile in einem Werkzeug, das nie einen Punkt verschiebt. Wer sie
+    infrage stellt, misst neu, statt diese Zahlen fortzuschreiben.
     """
     plate = corpus("plate_holes.stl")
     split = mesh_ops.remesh(plate, 1.5).triangle_count
@@ -175,7 +179,8 @@ def test_uniform_remeshing_costs_a_fraction_of_the_triangles(profile: Profile) -
     cleared = run("remesh_uniform", object_of(plate), profile, edge=1.5, deviation=0.2)
 
     assert evened.triangle_count < split
-    assert cleared.outputs[0].mesh.triangle_count < split / 2
+    assert cleared.outputs[0].mesh.triangle_count < evened.triangle_count
+    assert float(mesh_ops.edge_lengths(cleared.outputs[0].mesh).max()) <= 1.5 * (1.0 + 1e-9)
     assert evened.triangle_count > plate.triangle_count, "feiner wird es trotzdem"
 
 
@@ -294,6 +299,48 @@ def test_both_qualities_deliver_the_edge_length_that_was_asked_for(profile: Prof
     fine = run("remesh_uniform", object_of(plate), profile, "fine", edge=2.0)
 
     assert draft.outputs[0].mesh.triangle_count == fine.outputs[0].mesh.triangle_count
+
+
+#: Die Splitternetze aus dem Korpus und die Kantenlänge, mit der Weg 4 sie angleicht.
+SPLINTERS = {
+    "blend_splinters_sphere_on_cylinder.npz": 1.2,
+    "blend_splinters_figure.npz": 1.5,
+}
+
+
+def splinters(name: str) -> MeshData:
+    """Ein Splitternetz aus dem Korpus, wie *Weich verschmelzen* es von v0.4.4 bis v0.5.3 gab."""
+    stored = np.load(MESHES / name)
+    return MeshData.of(
+        trimesh.Trimesh(stored["vertices"].astype(float), stored["faces"], process=False)
+    )
+
+
+@pytest.mark.parametrize(("name", "edge"), sorted(SPLINTERS.items()))
+def test_evening_a_splintered_body_holds_the_edge_length_and_the_shape(
+    name: str, edge: float, profile: Profile
+) -> None:
+    """RM-671: Ohne Abweichung teilt, tauscht und legt das Angleichen nur formtreu zusammen.
+
+    Bis v0.5.3 vereinfachte der Kern vor dem Teilen mit der Abweichung null: Er
+    faltete jede ebene Fläche zu einem Fächer ohne Längengrenze, und das Teilen
+    danach ließ dessen innere Kanten stehen. An diesen beiden Netzen kamen
+    Kanten bis 2,39 und 3,42 mm bei verlangten 1,2 und 1,5 heraus, und aus
+    11,8 % Splittern wurden 30,6 %. Zugesagt ist (Register RM-671): keine Kante
+    über dem 1,1-Fachen der verlangten, kein größerer Splitteranteil als
+    vorher, Volumen und Fläche wie zuvor, und jede Ecke auf der alten Fläche.
+    """
+    before = splinters(name)
+    assert before.is_watertight and sliver_share(before) > 0.05, "die Vorlage ist splittrig"
+
+    after = run("remesh_uniform", object_of(before), profile, edge=edge).outputs[0].mesh
+
+    assert float(mesh_ops.edge_lengths(after).max()) <= 1.1 * edge
+    assert sliver_share(after) <= sliver_share(before)
+    assert after.volume == pytest.approx(before.volume, rel=1e-9)
+    assert after.area == pytest.approx(before.area, rel=1e-9)
+    assert after.is_watertight and after.component_count == 1
+    assert mesh_ops.deviation(before, after) <= EPS_GEOM
 
 
 # --- unterteilen ----------------------------------------------------------------

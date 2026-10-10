@@ -330,8 +330,11 @@ def _plate() -> Any:
     return boolean("difference", [MeshData.of(plate), MeshData.of(first), MeshData.of(second)]).mesh
 
 
-def _registered(name: str, source: Any, **params: object) -> Any:
-    """Eine Operation über ihren Registereintrag, mit dem Vorgabeprofil."""
+def _registered(name: str, *sources: Any, **params: object) -> Any:
+    """Eine Operation über ihren Registereintrag, mit dem Vorgabeprofil.
+
+    Mehrere Quellen werden mehrere Eingänge in ihrer Folge (*Weich verschmelzen*).
+    """
     from app.core.bootstrap import load_operations
     from app.core.knowledge import profiles
     from app.core.registry import REGISTRY
@@ -339,13 +342,16 @@ def _registered(name: str, source: Any, **params: object) -> Any:
     from app.core.types import OpContext, Scene, SceneObject
 
     load_operations()
-    entry = SceneObject(id="obj_1", name="Platte", mesh=source)
+    entries = [
+        SceneObject(id=f"obj_{index + 1}", name="Platte", mesh=source)
+        for index, source in enumerate(sources)
+    ]
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     spec = REGISTRY.get(name)
     result = spec.fn(
         OpContext(
-            scene=Scene(objects={entry.id: entry}, profile=profile),
-            inputs=[entry],
+            scene=Scene(objects={entry.id: entry for entry in entries}, profile=profile),
+            inputs=entries,
             params=spec.params(**params),
             profile=profile,
             quality="fine",
@@ -795,6 +801,45 @@ def _refined_plate() -> str:
     from app.core.geom.mesh_ops import remesh
 
     return _mesh_print(remesh(_plate(), 3.0))
+
+
+def _evened_plate() -> str:
+    """*Dreiecke angleichen* an der Platte — Tauschen, Zusammenlegen und Teilen in der
+    Ebene entscheiden an Längen und Ebenenabständen (RM-671)."""
+    from app.core.geom.mesh_ops import uniform
+
+    return _mesh_print(uniform(_plate(), 3.0, 0.0))
+
+
+def _blend_field() -> str:
+    """Das Abstandsfeld von *Weich verschmelzen* selbst, vor Marching Cubes.
+
+    Am fertigen Netz allein sähe das Rauschen nichts, solange ``skimage`` die
+    Ecken in einfacher Genauigkeit legte: Ein ULP im Feld kam dort nie an. Bis
+    RM-671 rechnete das Feld über ``np.einsum``.
+    """
+    from app.core.geom.blend import distance_field
+    from app.core.geom.mesh import MeshData
+
+    post = lathe.cylinder(radius=3.5, height=10.0, sections=32)
+    axes = [np.arange(-6.0, 6.0, 0.7) + 0.13 for _axis in range(3)]
+    points = np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, 3)
+    return fingerprint(distance_field(MeshData.of(post), points, 1.0))
+
+
+def _blended_post() -> str:
+    """*Weich verschmelzen* einer Säule auf einer Platte — das Abstandsfeld entscheidet
+    über jede Ecke, die Marching Cubes setzt (RM-671: bis dahin über ``np.einsum``)."""
+    from app.core.deferred import trimesh
+    from app.core.geom.mesh import MeshData
+
+    base = trimesh.creation.box(extents=(16.0, 12.0, 4.0))
+    base.vertices = np.asarray(base.vertices) + np.array([0.0, 0.0, 2.0])
+    post = lathe.cylinder(radius=3.5, height=10.0, sections=32)
+    post.vertices = np.asarray(post.vertices) + np.array([1.25, -0.5, 8.0])
+    return _mesh_print(
+        _registered("blend_union", MeshData.of(base), MeshData.of(post), radius=2.0, grid=1.0)
+    )
 
 
 def _mended_import() -> str:
@@ -1577,6 +1622,8 @@ def _split_seam() -> str:
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
     "bent_lettering": _bent_lettering,
+    "blend_field": _blend_field,
+    "blend_union": _blended_post,
     "bound_surface": _bound_surface,
     "carried_collar": _carried_collar,
     "container_hinge": lambda: _container("hinged"),
@@ -1604,6 +1651,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "prusa_support_angle": _automatic_support_angle,
     "read_lattices": _read_lattices,
     "remesh_mesh": _refined_plate,
+    "remesh_uniform": _evened_plate,
     "resize_chamber": _changed_chamber,
     "resize_closure": _changed_closure,
     "rebuild_box": _rebuilt_box,
