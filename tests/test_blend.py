@@ -310,33 +310,86 @@ def test_the_blend_and_the_evening_after_it_leave_few_slivers(case: str, profile
 
 
 def test_two_boxes_on_the_bed_blend_without_reaching_under_it(profile: Profile) -> None:
-    """F5 / RM-671: Was die Eingänge nicht überragen, überragt auch der Übergang nicht.
+    """F5 / RM-671: Was die Eingänge nach unten nicht überragen, überragt auch der Übergang nicht.
 
     Zwei Quader 40 × 30 × 10 auf dem Bett, der zweite um 8 mm versetzt: Wo
     beide Felder gleich sind, hebt die weiche Mischung das Feld um bis zu ein
-    Viertel des Übergangs. An bündigen Flächen — beide Böden, beide Deckel,
-    beide Seiten — wuchs das Ergebnis so über die Eingänge hinaus, mit dem
-    Ebenenabstand bis 1,69 mm unter das Bett, und der Prüfbericht meldete
-    „Ein Objekt steckt unter dem Druckbett.“. Die Quader haben keine Kehle;
-    alles darüber hinaus war Artefakt (16 575,6 statt 14 400 mm³). Eine Kehle
-    liegt immer innerhalb der Hülle beider Körper, also endet dort auch das
-    Ergebnis (Entscheidung Koordinator, 10.10.2026).
+    Viertel des Übergangs. An den bündigen Böden wuchs das Ergebnis so, mit dem
+    Ebenenabstand, bis 1,69 mm unter das Bett, und der Prüfbericht meldete
+    „Ein Objekt steckt unter dem Druckbett.“. Begrenzt wird nur nach unten,
+    auf die unterste Höhe der Eingänge (Entscheidung Koordinator, Review F):
+    Über den bündigen Deckeln und Seiten bleibt die Beule wie bis v0.5.3,
+    höchstens ein Viertel des Übergangs breit (RM-763).
     """
+    radius = 3.0
     one = trimesh.creation.box(extents=(40.0, 30.0, 10.0))
     one.apply_translation((0.0, 0.0, 5.0))
     two = trimesh.creation.box(extents=(40.0, 30.0, 10.0))
     two.apply_translation((8.0, 0.0, 5.0))
-    low = np.minimum(one.bounds[0], two.bounds[0])
-    high = np.maximum(one.bounds[1], two.bounds[1])
 
-    merged = run(MeshData.of(one), MeshData.of(two), profile, radius=3.0, grid=1.0).outputs[0].mesh
+    merged = run(MeshData.of(one), MeshData.of(two), profile, radius=radius, grid=1.0).outputs[0]
+    body = merged.mesh
 
-    bounds = np.asarray(merged.raw.bounds)
-    assert np.all(bounds[0] >= low - EPS_GEOM), f"unter oder neben der Hülle: {bounds[0]}"
-    assert np.all(bounds[1] <= high + EPS_GEOM), f"über der Hülle: {bounds[1]}"
-    assert merged.volume == pytest.approx(48.0 * 30.0 * 10.0, rel=0.02)
-    codes = {finding.code for finding in check_build_volume([merged], profile)}
+    assert float(body.raw.bounds[0][2]) >= -EPS_GEOM, f"unter dem Bett: {body.raw.bounds[0]}"
+    assert _flat_area(body, 2, 0.0) > 0.9 * 48.0 * 30.0, "der Boden liegt eben auf dem Bett"
+    bulge = radius / 4.0
+    grown = (48.0 + 2.0 * bulge) * (30.0 + 2.0 * bulge) * (10.0 + bulge)
+    assert 0.98 * 48.0 * 30.0 * 10.0 < body.volume <= grown, "die Vereinigung samt Beule"
+    codes = {finding.code for finding in check_build_volume([body], profile)}
     assert "arrange.below_bed" not in codes
+
+
+def _flat_area(mesh: MeshData, axis: int, value: float) -> float:
+    """Die Fläche der Dreiecke, die mit allen drei Ecken in der Ebene ``axis = value`` liegen."""
+    corners = np.asarray(mesh.raw.vertices, dtype=float)[np.asarray(mesh.raw.faces, dtype=np.int64)]
+    on = (np.abs(corners[:, :, axis] - value) < 1e-6).all(axis=1)
+    cross = np.cross(corners[on, 1] - corners[on, 0], corners[on, 2] - corners[on, 0])
+    return float(np.sqrt((cross * cross).sum(axis=1)).sum() / 2.0)
+
+
+@pytest.mark.parametrize("radius", [4.0, 6.0])
+def test_a_round_transition_is_not_cut_flat_at_the_sides_of_the_inputs(
+    radius: float, profile: Profile
+) -> None:
+    """Review F, H2: Die Beule der weichen Mischung bleibt rund, wo kein Bett ist.
+
+    Mit RM-671 endete das Ergebnis zuerst an jeder Seite des Hüllquaders beider
+    Eingänge. Zwei gekreuzte Rohre Ø 20 berühren die Ebenen x = ±10 je entlang
+    einer Linie, und dort entstand eine ebene Fläche mit Knick: 269 mm² im
+    Abnahmefall (Übergang 4), 446 mm² im Leistungsfall aus §31 (Übergang 6).
+    Bis v0.5.3 wölbte sich das Ergebnis dort glatt bis x = ±10,98 und ±11,48
+    hinaus — um bis zu ein Viertel des Übergangs, wo beide Felder gleich sind.
+    """
+    merged = run(rod("z"), rod("y"), profile, radius=radius, grid=1.0).outputs[0].mesh
+
+    flat = _flat_area(merged, 0, -10.0) + _flat_area(merged, 0, 10.0)
+    assert flat == 0.0, f"{flat:.1f} mm² eben auf x = ±10"
+    assert float(merged.raw.bounds[1][0]) > 10.0 + radius / 8.0, "die Beule wölbt sich hinaus"
+    assert float(merged.raw.bounds[0][0]) < -10.0 - radius / 8.0
+
+
+def test_two_stacked_balls_blend_round_and_stay_on_the_bed(profile: Profile) -> None:
+    """Review F, H2: Zwei Kugeln Ø 10 übereinander, die sich berühren — der Hals wird rund.
+
+    Mit Übergang 8 wächst der Hals um die Berührstelle über die Seiten des
+    Hüllquaders (x, y = ±5) hinaus. Auf den ganzen Hüllquader begrenzt, lagen
+    dort 26 mm² eben, bei Übergang 9 schon 107 mm² — gedruckt wie
+    angeschliffen. Nach unten bleibt die Begrenzung: Die untere Kugel steht auf
+    dem Bett, und nichts reicht darunter.
+    """
+    lower = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
+    lower.apply_translation((0.0, 0.0, 5.0))
+    upper = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
+    upper.apply_translation((0.0, 0.0, 15.0))
+
+    merged = run(MeshData.of(lower), MeshData.of(upper), profile, radius=8.0, grid=0.5)
+    body = merged.outputs[0].mesh
+
+    flat = sum(_flat_area(body, axis, side) for axis in (0, 1) for side in (-5.0, 5.0))
+    assert flat == 0.0, f"{flat:.1f} mm² eben an den Seiten"
+    assert float(body.raw.bounds[1][0]) > 5.0, "der Hals wölbt sich über die Kugeln hinaus"
+    assert float(body.raw.bounds[0][2]) >= -EPS_GEOM, "und nicht unter das Bett"
+    assert body.is_watertight and body.component_count == 1
 
 
 def test_a_curved_body_keeps_its_volume_when_blended(profile: Profile) -> None:

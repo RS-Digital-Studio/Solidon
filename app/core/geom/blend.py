@@ -100,7 +100,10 @@ DRAFT_FACTOR: Final = 2.0
 #: ohne dass jemand es sagte. Gemessen am Leistungsfall aus §31 (zwei
 #: gekreuzte Rohre Ø 20, Übergang 6, Raster 1 mm): rund 243 000 Punkte in
 #: 1,5 s — eine Wartezeit, die beim Formen noch trägt. Darüber greift der
-#: Entwurfsfaktor, und der Befund ``blend.draft`` sagt es.
+#: Entwurfsfaktor, und der Befund ``blend.draft`` sagt es. Das Feld zum
+#: nächsten Punkt auf dem Dreieck (RM-671) kostet an diesem Fall das
+#: 1,35-Fache an Rechenzeit (im Wechsel mit dem Ebenenfeld unter Last, 9,1
+#: gegen 6,8 s CPU, Review F); die Grenze bleibt, der Fall hält §31.
 DRAFT_SAMPLES: Final = 250_000
 
 #: Ab wie vielen Dreiecken beider Eingänge die Oberfläche im Budget mitzählt
@@ -109,7 +112,10 @@ DRAFT_SAMPLES: Final = 250_000
 #: Punkten an 81 920 Dreiecken 0,75 s, bei 244 800 Punkten an 327 680
 #: Dreiecken 3,8 s — gegen 0,9 s mit dem Entwurfsfaktor. Bis hierher zählen
 #: nur die Rasterpunkte; darüber wiegt jeder Punkt so viel mehr, wie die
-#: Oberfläche größer ist.
+#: Oberfläche größer ist. Mit dem Feld aus RM-671 kostet derselbe Weg an
+#: 342 225 Punkten neben 82 240 Dreiecken das 1,65-Fache, neben 328 000 das
+#: 1,2-Fache an Rechenzeit (Review F, im Wechsel): Der Punkt wiegt mehr, die
+#: Oberfläche etwas weniger, und die Grenze trennt weiter leichte von schweren.
 DRAFT_SURFACE: Final = 100_000
 
 #: Wie viele Rasterpunkte auf einmal gegen den Baum gefragt werden. Groß genug,
@@ -130,9 +136,13 @@ PAIR_WORKERS: Final = 4
 
 #: Wie viele der nächsten Stützpunkte ihr Dreieck als Bewerber stellen. Der
 #: nächste Punkt der Oberfläche liegt auf einem Dreieck, dessen Stützpunkte
-#: höchstens eine Rasterweite von ihm entfernt sind; unter den acht nächsten
-#: ist eines davon (geprüft gegen :func:`app.core.geom.mesh.on_surface` in
-#: ``test_blend.py``).
+#: höchstens eine Rasterweite von ihm entfernt sind. An gewölbten Körpern und
+#: Wänden ist es unter den acht nächsten (geprüft gegen
+#: :func:`app.core.geom.mesh.on_surface` in ``test_blend.py``), an CAD-Netzen
+#: mit Nadelfächern nicht immer: Dann misst das Feld zum nächsten Bewerber, zu
+#: weit um bis zu 0,19 mm an einem Besenhalter aus dem Download-Korpus (Raster
+#: 1 mm, 2 913 von 351 120 Punkten im Band, einer davon mit falschem
+#: Vorzeichen; Review F). Das Ebenenfeld davor lag dort bis 1,81 mm daneben.
 NEAREST_SAMPLES: Final = 8
 
 #: Bis zu welcher Länge, in Rasterweiten, eine Kante aus Marching Cubes eine
@@ -323,11 +333,14 @@ def distance_field(
     Wand). Neben einer Kante unterschätzt die Ebene aber und springt, wo der
     nächste Stützpunkt vom Deckel auf den Mantel wechselt: an einem Zylinder
     Ø 20 bis 1,9 mm Fehler in vier Millimetern Abstand. Der Abstand zum
-    Dreieck ist an der Wand ebenso exakt und überall stetig. Die Splitter des
-    Verfahrens kamen nicht von dem Sprung — mit dem exakten Feld sind es
-    gleich viele —, sondern aus Marching Cubes selbst (:data:`NEEDLE`).
-    Bewerber sind die Dreiecke der :data:`NEAREST_SAMPLES` nächsten
-    Stützpunkte; gerechnet wird je Paar in :meth:`_Surface.signed`.
+    Dreieck ist an der Wand ebenso exakt und stetig, solange das nächste
+    Dreieck unter den Bewerbern ist: die Dreiecke der :data:`NEAREST_SAMPLES`
+    nächsten Stützpunkte, gerechnet je Paar in :meth:`_Surface.signed`. Fehlt
+    es — an CAD-Netzen mit Nadelfächern —, misst das Feld zum nächsten
+    Bewerber und liegt dort um Zehntelmillimeter zu weit (siehe
+    :data:`NEAREST_SAMPLES`). Die Splitter des Verfahrens kamen nicht von dem
+    Sprung — mit dem neuen Feld sind es gleich viele —, sondern aus Marching
+    Cubes selbst (:data:`NEEDLE`).
 
     **Das Vorzeichen kommt aus der Normale, nicht aus einem Strahl** und
     nicht aus einem Belegungsgitter: ``Trimesh.contains`` lief über
@@ -410,21 +423,26 @@ def _smooth_maximum(first: np.ndarray, second: np.ndarray, radius: float) -> np.
     return np.asarray(blended + radius * share * (1.0 - share), dtype=float)
 
 
-def _inside_the_hull(points: np.ndarray, first: MeshData, second: MeshData) -> np.ndarray:
-    """Abstand zur Hülle beider Eingänge, positiv innen — exakt an jeder Seite des Quaders.
+def _above_the_floor(points: np.ndarray, first: MeshData, second: MeshData) -> np.ndarray:
+    """Abstand zur untersten Höhe beider Eingänge, positiv darüber — exakt, eine Subtraktion.
 
-    **Das Ergebnis endet an der Hülle der Eingänge** (F5, RM-671; Entscheidung
-    Koordinator, 10.10.2026). Wo beide Felder gleich sind, hebt
-    :func:`_smooth_maximum` das Feld um bis zu ein Viertel des Übergangs. An
-    Flächen, die bei beiden Körpern bündig liegen — beide Böden auf dem Bett,
-    beide Deckel, beide Seiten —, wuchs das Ergebnis so über die Eingänge
-    hinaus: an zwei versetzten Quadern 40 x 30 x 10 bis 1,69 mm unter das
-    Bett und 16 575,6 statt 14 400 mm³, obwohl sie keine Kehle haben. Eine Kehle
-    liegt immer innerhalb der Hülle, also schneidet die Hülle nur die Beulen.
+    **Das Ergebnis reicht nicht unter die Eingänge** (F5, RM-671; Entscheidung
+    Koordinator nach Review F). Wo beide Felder gleich sind, hebt
+    :func:`_smooth_maximum` das Feld um bis zu ein Viertel des Übergangs, und an
+    Flächen, die bei beiden Körpern bündig liegen, wächst das Ergebnis so über
+    die Eingänge hinaus. An den Böden zweier versetzter Quader 40 x 30 x 10 auf
+    dem Bett reichte es 1,69 mm darunter, und der Prüfbericht meldete ein
+    Objekt unter dem Druckbett.
+
+    **Nur nach unten.** Begrenzt auf den ganzen Hüllquader wurde jeder runde
+    Übergang flach abgeschnitten, der eine Seite des Quaders überragt: an zwei
+    gekreuzten Rohren Ø 20 mit Übergang 4 lagen 269 mm² eben auf x = ±10, wo
+    sich das Ergebnis bis v0.5.3 glatt um fast einen Millimeter hinauswölbte.
+    Über bündigen Deckeln und Seiten bleibt die Beule deshalb, wie sie war
+    (RM-763).
     """
-    low = np.minimum(first.raw.bounds[0], second.raw.bounds[0])
-    high = np.maximum(first.raw.bounds[1], second.raw.bounds[1])
-    return np.asarray(np.minimum((points - low).min(axis=1), (high - points).min(axis=1)))
+    floor = min(float(first.raw.bounds[0][2]), float(second.raw.bounds[0][2]))
+    return np.asarray(points[:, 2] - floor)
 
 
 def _in_double(field: np.ndarray, found: np.ndarray) -> np.ndarray:
@@ -573,7 +591,7 @@ def blend_bodies(
         distance_field(second, points, grid, progress=_share(progress, 0.5), cancelled=cancelled),
         radius,
     )
-    merged = np.minimum(merged, _inside_the_hull(points, first, second))
+    merged = np.minimum(merged, _above_the_floor(points, first, second))
     clear = CLEAR_OF_ZERO * grid
     merged = np.where(np.abs(merged) < clear, -clear, merged)
     if cancelled is not None:
@@ -643,7 +661,9 @@ class BlendParams(BaseParams):
     # 4: Auch die Entwurfsplanung prüft die Eingänge vor Bounds und Punktbudget.
     # 6: Das Feld misst zum nächsten Punkt auf dem Dreieck, das Ergebnis endet an
     # der Hülle der Eingänge, und die Ecken stehen in doppelter Genauigkeit (RM-671).
-    cache_version="6",
+    # 7: Begrenzt wird nur noch nach unten (Review F); ein Zweigstand mit 6 im
+    # Plattencache trüge sonst die flach geschnittenen Übergänge.
+    cache_version="7",
     title=_("Weich verschmelzen"),
     category="boolean",
     params=BlendParams,
