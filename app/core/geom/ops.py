@@ -752,7 +752,8 @@ class FitToSizeParams(BaseParams):
 
 @register_op(
     name="fit_to_size",
-    cache_version="5",
+    # 6: Mit festgehaltener Stelle steht der Satz zur freien Stelle im Ergebnis (RM-754).
+    cache_version="6",
     title=_("Auf Maß bringen"),
     category="transform",
     params=FitToSizeParams,

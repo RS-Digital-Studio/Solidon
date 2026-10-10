@@ -64,7 +64,7 @@ from tests.helpers import (
     recipe_with_halter,
     two_bores,
 )
-from tests.ui_helpers import MESHES, wait_for_export, wait_until
+from tests.ui_helpers import MESHES, wait_for_export, wait_for_print_findings, wait_until
 from tests.ui_helpers import expire_trial as _expired
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
@@ -11085,19 +11085,19 @@ def test_import_bed_action_keeps_the_import_group_and_ignores_selection(
         [-100.0 + 2.0 * index for index in range(count)]
     )
     window.object_tree.select_object("obj_1")
+    # Erst die Berichtsanalyse ankommen lassen: Sie baut die Liste neu, und
+    # auf dem macOS-Läufer riss sonst die gehaltene Zeile weg.
+    wait_for_print_findings(window)
     listing = window.report.list
     item = next(
         listing.item(row)
         for row in range(listing.count())
         if listing.item(row).data(Qt.ItemDataRole.UserRole).code == "arrange.below_bed"
     )
+    finding = item.data(Qt.ItemDataRole.UserRole)
     listing.setCurrentItem(item)
     QApplication.processEvents()
-    stale = as_error(
-        item.data(Qt.ItemDataRole.UserRole),
-        window.session.project.document,
-        import_group=targets,
-    )
+    stale = as_error(finding, window.session.project.document, import_group=targets)
 
     def no_choice(*_args, **_kwargs):
         raise AssertionError("the import already fixes the complete target group")
