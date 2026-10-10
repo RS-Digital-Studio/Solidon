@@ -8437,6 +8437,7 @@
   "{object}: übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "{object}: saltato — la mesh è troppo grande per questo turno, la mappa di analisi nella finestra ce la fa.",
   "{openings} große Öffnungen bleiben offen.": "{openings} aperture grandi restano aperte.",
   "{parts} Teile liegen ganz in einem anderen. Slicer drucken sie je nach Einstellung hohl oder voll.": "{parts} pezzi si trovano interamente dentro un altro. A seconda delle impostazioni, gli slicer li stampano cavi o pieni.",
+  "{parts} bekommen {value}.": "{parts} ricevono {value}.",
   "{part} bekommt {value}.": "{part} riceve {value}.",
   "{part} mit {value}": "{part} con {value}",
   "{path}, dort unter {group}: {title}": "{path}, poi sotto {group}: {title}",

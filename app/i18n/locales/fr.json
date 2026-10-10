@@ -8437,6 +8437,7 @@
   "{object}: übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "{object} : ignoré — le maillage est trop grand pour ce tour, la carte d'analyse dans la fenêtre y arrive.",
   "{openings} große Öffnungen bleiben offen.": "{openings} grandes ouvertures restent ouvertes.",
   "{parts} Teile liegen ganz in einem anderen. Slicer drucken sie je nach Einstellung hohl oder voll.": "{parts} pièces se trouvent entièrement dans une autre. Selon leurs réglages, les slicers les impriment creuses ou pleines.",
+  "{parts} bekommen {value}.": "{parts} reçoivent {value}.",
   "{part} bekommt {value}.": "{part} reçoit {value}.",
   "{part} mit {value}": "{part} avec {value}",
   "{path}, dort unter {group}: {title}": "{path}, puis sous {group} : {title}",
