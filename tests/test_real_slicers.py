@@ -16,6 +16,7 @@ Apple Silicon und Intel-Mac, sobald eine Änderung die Übergabe berührt
 
 from __future__ import annotations
 
+import math
 import re
 import subprocess
 import time
@@ -138,6 +139,91 @@ def test_a_cube_comes_back_as_a_print_file_with_measured_figures(
     assert metrics.layer_count is not None and metrics.layer_count >= 50, metrics
     assert metrics.print_seconds is not None and metrics.print_seconds > 60, metrics
     assert metrics.filament_mm is not None and metrics.filament_mm > 100, metrics
+
+
+def _commands(path: Path) -> list[str]:
+    """Was der Drucker aus einer Druckdatei ausführt: jede Zeile ohne Kommentar."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    lines = (line.split(";", 1)[0].strip() for line in text.splitlines())
+    return [line for line in lines if line]
+
+
+@pytest.mark.slicer("prusaslicer")
+def test_prusaslicer_estimates_a_printer_without_its_bundle_with_the_requested_acceleration(
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne Drucker seines Bündels schätzt PrusaSlicer, was die Datei fordert (RM-191).
+
+    Den Centauri Carbon 2 führt kein Prusa-Bündel; die Übergabe schreibt
+    Solidons Satz samt Maschine. Bis 0.5.3 schätzte PrusaSlicer dann mit
+    seinen eingebauten 1500 mm/s², gleich was die Datei mit ``M204 S``
+    verlangte. Der Kontrollfall ist derselbe Würfel mit den Schätzwerten von
+    0.5.3 (``machine_limits_usage = ignore``, kein Dialekt): Die Druckbefehle
+    bleiben dieselben, nur die Schätzung sinkt (PrusaSlicer 2.9.6 unter
+    Windows, 09.10.2026: 891 gegen 1008 s). Grenzen gehen keine in die
+    Druckdatei, die Firmware behält ihre, und die Beschleunigung steht als
+    ``M204 S`` darin, das Marlin und Klipper lesen — ``M204 P`` ohne ``T``
+    übergeht Klipper.
+    """
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    set_test_license(monkeypatch, active=True)
+    raw = trimesh.creation.box((20.0, 20.0, 20.0))
+    raw.apply_translation((0.0, 0.0, 10.0))
+    cube = SceneObject("wuerfel", "Würfel", MeshData.of(raw))
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    setup = handover.detect(installed_slicer)
+
+    def sliced(name: str) -> handover.SliceOutcome:
+        folder = tmp_path / name
+        folder.mkdir()
+        job = _PlateJob(
+            objects=(cube,),
+            plates=(0,),
+            folder=folder,
+            name="wuerfel",
+            setup=setup,
+            settings=settings,
+            profile=profile,
+            slot_profiles={},
+        )
+        run = _prepare_plate(job, 0)
+        return handover.slice_model(
+            [run.model],
+            settings,
+            profile,
+            setup,
+            output_dir=folder,
+            timeout=600,
+            keep_arrangement=run.keep_arrangement,
+            slots=run.slots,
+            model_height=run.model_height,
+            model_meshes=run.meshes,
+            expected_tools=run.used_tools,
+        )
+
+    requested = sliced("angefordert")
+    # Ohne Ersatz, falls es die Funktion nicht gibt: Dann schätzen beide Läufe
+    # gleich, und der Vergleich unten wird rot.
+    monkeypatch.setattr(
+        handover,
+        "_prusa_time_estimate",
+        lambda _written: {"machine_limits_usage": "ignore"},
+        raising=False,
+    )
+    built_in = sliced("eingebaut")
+
+    commands = _commands(requested.gcode_path)
+    assert f"M204 S{settings.speed.acceleration:g}" in commands
+    limits = ("M201", "M203", "M205", "M204 P", "M204 T")
+    assert not [line for line in commands if line.startswith(limits)]
+    assert commands == _commands(built_in.gcode_path), "derselbe Druck"
+    assert requested.metrics.print_seconds is not None
+    assert built_in.metrics.print_seconds is not None
+    assert requested.metrics.print_seconds < built_in.metrics.print_seconds
 
 
 @pytest.mark.parametrize(
@@ -283,15 +369,60 @@ def _moves(gcode: Path) -> list[str]:
     ]
 
 
+#: Wo die Kegel unter der Platte hängen, 11 mm auseinander.
+_CONES: tuple[tuple[float, float], ...] = (
+    (-11.0, -11.0),
+    (-11.0, 0.0),
+    (-11.0, 11.0),
+    (11.0, -11.0),
+    (11.0, 0.0),
+    (11.0, 11.0),
+)
+
+
+def _bearded_plate() -> SceneObject:
+    """Eine Platte auf einer Säule, darunter sechs Kegel, die mit der Spitze nach
+    unten als Inseln unter ``analysis.TIP_ROOF_AREA`` beginnen — die Bartstacheln
+    des Drachen im Kleinen (RM-704). Stifte gleichen Querschnitts zeigen es nicht:
+    Unter ihnen legte ElegooSlicer auch mit 0,8 mm Spitze eine Trennschicht."""
+    column = trimesh.creation.box(extents=(8.0, 8.0, 20.0))
+    column.apply_translation((0.0, 0.0, 10.0))
+    plate = trimesh.creation.box(extents=(30.0, 30.0, 3.0))
+    plate.apply_translation((0.0, 0.0, 21.5))
+    upside_down = trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0))
+    cones = []
+    for x, y in _CONES:
+        cone = trimesh.creation.cone(radius=1.0, height=4.0, sections=24)
+        cone.apply_transform(upside_down)
+        cone.apply_translation((x, y, 20.0))
+        cones.append(cone)
+    body = trimesh.util.concatenate([column, plate, *cones])
+    return SceneObject("bart", "Bart", MeshData.of(body))
+
+
 def _sliced_tower(
     printer: str,
     program: Path,
     folder: Path,
     chosen: dict[str, object],
     accepted: dict[str, object] | None = None,
+    body: SceneObject | None = None,
 ) -> tuple[list[str], Path]:
-    """Den Turm durch das echte Programm, wie der Druckdialog ihn schickt: Bewegungen
-    der Druckdatei und die geschriebene Platte."""
+    """Den Turm (oder ``body``) durch das echte Programm, wie der Druckdialog ihn
+    schickt: Bewegungen der Druckdatei und die geschriebene Platte."""
+    moves, model, _gcode = _sliced(printer, program, folder, chosen, accepted, body)
+    return moves, model
+
+
+def _sliced(
+    printer: str,
+    program: Path,
+    folder: Path,
+    chosen: dict[str, object],
+    accepted: dict[str, object] | None = None,
+    body: SceneObject | None = None,
+) -> tuple[list[str], Path, Path]:
+    """:func:`_sliced_tower` samt Druckdatei."""
     from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
 
     profile = profiles.make_profile(printer, "pla")
@@ -303,7 +434,7 @@ def _sliced_tower(
     setup = _preselected(handover.detect(program), profile)
     folder.mkdir(parents=True)
     job = _PlateJob(
-        objects=(_tower_with_island(),),
+        objects=(body or _tower_with_island(),),
         plates=(0,),
         folder=folder,
         name="turm",
@@ -326,7 +457,120 @@ def _sliced_tower(
         model_meshes=run.meshes,
         expected_tools=run.used_tools,
     )
-    return _moves(outcome.gcode_path), run.model
+    return _moves(outcome.gcode_path), run.model, outcome.gcode_path
+
+
+#: Die Art einer Bahn: ``;TYPE:`` in der Orca-Familie, ``; FEATURE:`` bei Bambu Studio.
+_KIND = re.compile(r"^;\s*(?:TYPE|FEATURE)\s*:\s*(.+?)\s*$")
+#: Lage einer Bewegung.
+_AXIS = re.compile(r"\b([XYZ])(-?\d*\.?\d+)")
+
+
+def _support_below(gcode: Path, below: float) -> dict[str, list[tuple[float, float, float]]]:
+    """Die Druckbewegungen der Stütze (``support``) und ihrer Trennschicht
+    (``interface``) unter der Höhe ``below``, je Endpunkt ``(x, y, z)`` — unter den
+    Kegeln, nicht unter der Platte —, dazu die des Modells darüber (``model``)."""
+    found: dict[str, list[tuple[float, float, float]]] = {
+        "support": [],
+        "interface": [],
+        "model": [],
+    }
+    kind = ""
+    x = y = z = 0.0
+    for line in gcode.read_text(encoding="utf-8", errors="replace").splitlines():
+        named = _KIND.match(line)
+        if named:
+            kind = named.group(1).lower()
+            continue
+        if not line.startswith(("G0 ", "G1 ")):
+            continue
+        values = dict(_AXIS.findall(line.split(";", 1)[0]))
+        x = float(values.get("X", x))
+        y = float(values.get("Y", y))
+        z = float(values.get("Z", z))
+        if not _EXTRUSION.match(line):
+            continue
+        if z >= below:
+            if kind and not kind.startswith(("support", "skirt", "brim", "custom", "prime")):
+                found["model"].append((x, y, z))
+        elif kind.startswith("support"):
+            found["interface" if "interface" in kind else "support"].append((x, y, z))
+    return found
+
+
+def _cones_without(found: dict[str, list[tuple[float, float, float]]], reach: float) -> list:
+    """Die Kegel aus :data:`_CONES`, unter denen keine Trennschicht näher als
+    ``reach`` mm liegt. Die Mitte des Körpers auf dem Bett ist die Mitte der
+    Platte, aus den Modellbahnen darüber."""
+    xs = [point[0] for point in found["model"]]
+    ys = [point[1] for point in found["model"]]
+    middle = ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+    return [
+        (x, y)
+        for x, y in _CONES
+        if not any(
+            math.hypot(px - middle[0] - x, py - middle[1] - y) <= reach
+            for px, py, _pz in found["interface"]
+        )
+    ]
+
+
+@pytest.mark.parametrize(
+    "program",
+    [
+        pytest.param(program, marks=pytest.mark.slicer(program), id=program)
+        for program in ORCA_FAMILY
+    ],
+)
+def test_a_roof_tip_puts_an_interface_under_every_cone(
+    program: str,
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Eine Baumspitze über ``analysis.TIP_ROOF_AREA`` Querschnitt erzwingt in der
+    Orca-Familie die Trennschicht an jeder Spitze (``force_tip_to_roof``, RM-704):
+    Unter sechs Kegelspitzen mit 0,4 mm Luft steht mit ``ROOF_TIP_DIAMETER`` unter
+    jedem Kegel eine Trennschicht, mit der Spitze von 0,8 mm keine. Solidon schreibt die
+    Wahl in jedem Programm; Bambu Studio meldet sie als übergangen
+    (``slicer.setting_ignored``), Creality Print liest sie und baut andere Äste;
+    beide drucken dieselbe Trennschicht, und dort kommt kein Rat
+    (``slicer_keys.NOT_TAKEN_BY_PROGRAM``)."""
+    from app.core.slice import advise
+
+    set_test_license(monkeypatch, active=True)
+    printer = PROGRAMS[program]
+
+    def cut(tip: float, folder: str) -> dict[str, list[tuple[float, float, float]]]:
+        gcode = _sliced(
+            printer,
+            installed_slicer,
+            tmp_path / folder,
+            {
+                "support.style": "tree",
+                "support.z_gap": 0.4,
+                "support.interface_layers": 2,
+                "support.tip_diameter": tip,
+            },
+            body=_bearded_plate(),
+        )[2]
+        # Die Kegel beginnen auf 16 mm, die Platte auf 20 mm.
+        return _support_below(gcode, below=19.0)
+
+    roof, plain = cut(advise.ROOF_TIP_DIAMETER, "spitze"), cut(0.8, "vorgabe")
+    assert plain["support"] and roof["support"], f"{program} stützt die Kegel nicht"
+    if slicer_keys.takes("orca", "support.tip_diameter", program=program):
+        assert not _cones_without(roof, reach=2.0), (program, _cones_without(roof, reach=2.0))
+        assert not plain["interface"], program
+    else:
+        # Verglichen ohne Reihenfolge: Bambu legt gleiche Bahnen je Lauf anders an.
+        assert sorted(roof["interface"]) == sorted(plain["interface"]), program
+        if program == "bambustudio":
+            # Bambu meldet den Schlüssel selbst als übergangen. Gleiche Stützbahnen
+            # lassen sich nicht zusichern: Bambu legt die Platte von Lauf zu Lauf an
+            # 19 und 19 Punkten anders an, auch zweimal mit 0,8 mm.
+            assert "tree_support_tip_diameter" in caplog.text, program
 
 
 @pytest.mark.parametrize(
@@ -783,3 +1027,230 @@ def test_the_support_contact_arrives_as_solidon_says(
     else:
         layers = bottom_layers
     assert measured.bottom_interface_layers == layers, f"untere Trennschicht: {measured}"
+
+
+# --- Kein doppelter Ausgleich (RM-589) -------------------------------------------
+
+#: Die Außenwand in den drei Schreibweisen: Orca-Familie, PrusaSlicer, Cura.
+_OUTER_WALL = frozenset({"outer wall", "external perimeter", "wall-outer"})
+_WORD = re.compile(r"([GXYZE])(-?\d*\.?\d+)")
+#: Wo ein Objekt beginnt: Orca-Familie mit Namen oder Kennung (Bambu Studio),
+#: PrusaSlicer über ``M486``, CuraEngine je Netz.
+_OBJECT = re.compile(
+    r"^(?:; printing object (.+?)(?: id:\d+ copy \d+)?$"
+    r"|; start printing object, unique label id: (\d+)"
+    r"|M486 S(\d+)|;MESH:(.+))"
+)
+
+
+def _outer_walls(gcode: str) -> dict[tuple[str, float], list[tuple[float, float]]]:
+    """Die Punkte der Außenwand je Objekt und Schichthöhe — Endpunkte jeder Bahn mit Vorschub.
+
+    Ein Bogen (``G2``/``G3``) endet wie eine Gerade auf seiner Bahn; für den
+    mittleren Abstand zur Lochmitte genügen die Endpunkte. Die Bahnart steht
+    als ``;TYPE:``, bei Bambu Studio als ``; FEATURE:``.
+    """
+    walls: dict[tuple[str, float], list[tuple[float, float]]] = {}
+    x = y = z = e = 0.0
+    relative = False
+    kind = owner = ""
+    for raw in gcode.splitlines():
+        line = raw.strip()
+        found = _OBJECT.match(line)
+        if found:
+            owner = next(group for group in found.groups() if group)
+            continue
+        if line.startswith((";TYPE:", "; FEATURE:")):
+            kind = line.split(":", 1)[1].strip().lower()
+            continue
+        code = line.split(";", 1)[0].strip()
+        if not code:
+            continue
+        head = code.split()[0]
+        if head in ("M82", "M83"):
+            relative = head == "M83"
+            continue
+        words = {key: float(value) for key, value in _WORD.findall(code)}
+        if head == "G92":
+            e = words.get("E", e)
+            continue
+        if head not in ("G0", "G1", "G2", "G3"):
+            continue
+        end = (words.get("X", x), words.get("Y", y), words.get("Z", z))
+        fed = False
+        if "E" in words:
+            fed = words["E"] > 1e-6 if relative else words["E"] > e + 1e-6
+            e = e if relative else words["E"]
+        if fed and head != "G0" and kind in _OUTER_WALL:
+            walls.setdefault((owner, round(end[2], 3)), []).extend([(x, y), (end[0], end[1])])
+        x, y, z = end
+    return walls
+
+
+def _plate_figures(points: list[tuple[float, float]]) -> tuple[float, float]:
+    """Breite der äußeren Bahn und Durchmesser der Lochbahn einer Bohrplatte."""
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    centre = ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+    hole = [
+        math.hypot(px - centre[0], py - centre[1])
+        for px, py in points
+        if math.hypot(px - centre[0], py - centre[1]) < 6.0
+    ]
+    return max(xs) - min(xs), 2.0 * sum(hole) / len(hole)
+
+
+@pytest.mark.parametrize(
+    ("program", "printer"),
+    [
+        pytest.param(program, printer, marks=pytest.mark.slicer(program), id=program)
+        for program, printer in PROGRAMS.items()
+    ],
+)
+def test_a_part_that_compensates_itself_is_not_compensated_again(
+    program: str,
+    printer: str,
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Zwei gleiche Bohrplatten, eine trägt ihren Ausgleich schon im Modell (RM-589).
+
+    Platte A ist mit Materialzugabe gebohrt (Ø 6 + 0,2 mm PETG) und um den
+    Elefantenfuß eingezogen, Platte B gleich weit gebohrt, aber ohne beides.
+    Die Platte des Slicers weitet Löcher um 0,1 mm und zieht die erste Schicht
+    um 0,15 mm ein, je Seite (eigene Wahl). Übernommen stellt der Rat bei A
+    beides auf null, als Objektwert — gemessen im G-Code: Das Loch von A ist
+    0,2 mm enger als das von B, und die erste Schicht von A ist gegenüber der
+    zweiten um 0,3 mm weniger eingezogen als bei B.
+    """
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.fits import allowances_for
+    from app.core.slice import advise
+    from app.core.types import Document
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    set_test_license(monkeypatch, active=True)
+    profile = profiles.make_profile(printer, "petg")
+    document = Document(format_version=1, app_version="0.0.1", printer=printer, material="petg")
+    history = History(document)
+    for x, name in ((-30.0, "A"), (30.0, "B")):
+        history.apply(
+            name,
+            [
+                OperationDraft(
+                    op="create_box",
+                    params={"width": 40.0, "depth": 40.0, "height": 8.0, "x": x, "name": name},
+                )
+            ],
+        )
+    nominal = 6.0 + profile.material.hole_compensation
+    history.apply(
+        "Bohrung A",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "x": -30.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    history.apply(
+        "Bohrung B",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_2",),
+                params={
+                    "diameter": nominal,
+                    "x": 30.0,
+                    "y": 0.0,
+                    "z": 4.0,
+                    "axis": "z",
+                    "compensate": False,
+                },
+            )
+        ],
+    )
+    history.apply(
+        "Fuß A", [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})]
+    )
+    scene = evaluate(document, profile).scene
+    assert allowances_for(document, scene.objects["obj_1"]) == ("holes", "foot")
+    assert allowances_for(document, scene.objects["obj_2"]) == ()
+
+    setup = _preselected(handover.detect(installed_slicer), profile)
+    from app.core.export import manufacturer
+
+    settings = manufacturer.effective(
+        None, manufacturer.base_settings(profile, print_settings.resolve(profile).quality, setup)
+    )
+    settings = print_settings.with_choice(settings, "shell.hole_offset", 0.1)
+    settings = print_settings.with_choice(settings, "layers.elephant_foot", 0.15)
+    offered = [
+        entry
+        for entry in advise.advise(
+            settings, profile, allowances=allowances_for(document, scene.objects["obj_1"])
+        )
+        if entry.path in {"shell.hole_offset", "layers.elephant_foot"}
+        and slicer_keys_takes(setup, entry.path)
+    ]
+    settings = advise.apply(settings, offered)
+    folder = tmp_path / "platte"
+    folder.mkdir()
+    job = _PlateJob(
+        objects=tuple(scene.objects.values()),
+        plates=(0,),
+        folder=folder,
+        name="ausgleich",
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+        scene=scene,
+        document=document,
+    )
+    run = _prepare_plate(job, 0)
+    outcome = handover.slice_model(
+        [run.model],
+        settings,
+        profile,
+        setup,
+        output_dir=folder,
+        timeout=600,
+        keep_arrangement=run.keep_arrangement,
+        slots=run.slots,
+        model_height=run.model_height,
+        model_meshes=run.meshes,
+        expected_tools=run.used_tools,
+    )
+
+    walls = _outer_walls(outcome.gcode_path.read_text(encoding="utf-8", errors="replace"))
+    owners = sorted({owner for owner, _height in walls})
+    assert len(owners) == 2, owners
+    heights = sorted({height for _owner, height in walls})
+    first, second, middle = heights[0], heights[1], heights[len(heights) // 2]
+    # A ist im Modell ab der zweiten Schicht um den Fuß des Materials schmaler.
+    plates = sorted(
+        (tuple(walls[owner, height] for height in (first, second, middle)) for owner in owners),
+        key=lambda layers: _plate_figures(layers[1])[0],
+    )
+    (a_first, a_second, a_middle), (b_first, b_second, b_middle) = plates
+    takes_holes = slicer_keys_takes(setup, "shell.hole_offset")
+    takes_foot = slicer_keys_takes(setup, "layers.elephant_foot")
+    hole_a = _plate_figures(a_middle)[1]
+    hole_b = _plate_figures(b_middle)[1]
+    if takes_holes:
+        assert hole_b - hole_a == pytest.approx(0.2, abs=0.04), (hole_a, hole_b)
+    pulled_a = _plate_figures(a_second)[0] - _plate_figures(a_first)[0]
+    pulled_b = _plate_figures(b_second)[0] - _plate_figures(b_first)[0]
+    if takes_foot:
+        assert pulled_b - pulled_a == pytest.approx(0.3, abs=0.04), (pulled_a, pulled_b)
+    assert takes_holes or takes_foot, program
+
+
+def slicer_keys_takes(setup: handover.SlicerSetup, path: str) -> bool:
+    """Nimmt das Programm dieses Aufbaus den Pfad an (``slicer_keys.takes``)?"""
+    from app.core.export import slicer_keys
+
+    return slicer_keys.takes(setup.flavour, path, program=slicer_keys.program_of(setup.executable))

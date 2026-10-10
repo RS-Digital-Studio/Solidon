@@ -57,7 +57,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-694 — Am echten Fenster endeten zwei Läufe mit dem Spiderman ohne Python-Spur](#rm-694) | Plattformen, Pakete und Grafik | Unter Volllast auf dem i9 gesehen, alter und neuer Stand; auf ruhiger Maschine mit nativem Abbild nachstellen, bevor eine Ursache zugeordnet wird |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z3 (Z2 bis auf die Drehachse durch RM-559). Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
-| [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-c`). Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Mit Herstellerbündel neu gemessen (06.10.): am MK4S ist PrusaSlicer schneller als Orca (218 gegen 345 min, Material gleich); langsamer bleibt PrusaSlicer ohne Bündel am CC2 (407 gegen 232 min, +20 % Material), weil Solidons Satz die Wandzahl nicht setzt (`perimeters = 3`, `extra_perimeters = 1`); nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und `extra_perimeters = 0` setzen, dann prusa:CC2 gegen elegoo:CC2 |
+| [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Restentscheidung offen. Gelöst (09.10., Claude): PrusaSlicer ohne Bündel schätzte mit 1500 mm/s² (`ignore` und Dialekt `reprap`), jetzt `marlin` mit den angeforderten Werten als Grenze, dazu `extra_perimeters`/`solid_infill_below_area = 0` und die Materialart der Spule; Gewürzregal am CC2 407 → 292 min, gegen ElegooSlicer mit denselben Wänden 280 min (+4,5 %, Material −4,2 %), SuperSlicer 527 → 381 min. Offen: Solidons Tabelle druckt „Standard“ mit drei Wänden und vier Bodenschichten, die Standardprozesse von Elegoo, Bambu, Creality und Prusa (MK4S) mit zwei und drei (232 gegen 292 min, 128 gegen 154 g) — Entscheidung, ob die Tabelle dem Standardprozess des Druckers folgt |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31, Robert 06.10.: mechanisch unter 1 s, organisch unter 2 s am Referenzrechner); offen die Messung am neuen Ziel |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); Marke `xfail(linux)` gefallen (acht Linux-Läufe in Folge grün, 06.10.); offen allein das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
@@ -65,16 +65,15 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt; entschieden (Robert, 06.10.): das Ziel bleibt, ein weiterer Hebel wird gesucht |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Fuß hoher Bäume, Spitzenabstand weiterer Materialien |
+| [RM-704 — Kinn und Bein am dritten Drachendruck](#rm-704) | Geometrie, Erkennung und Druckvorbereitung | Trennschicht auf jeder Baumspitze gebaut (Archiv, RM-704 Teil); offen: Kinn, Kopf und Vorderbeine an Druck 4 prüfen, Wände an schlanken Gliedern (nach welle4), die Spitze in PrusaSlicer und Cura |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
 | [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
 | [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
-| [RM-589 — Bohrungen und Stifte passen ohne Nacharbeit](#rm-589) | Geometrie, Erkennung und Druckvorbereitung | Loch- und Elefantenfußausgleich aus dem Spiel des Materialprofils |
 | [RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und eine Insel im umschlossenen Kanalraum verliert ihre Säule](#rm-626) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-571 (09.10.), mit Sonden belegt; nächster Schritt: Inseln behalten ihre Säule (Test an der Kammer), Schätzung messen, Kammer mit Insel in den vier Slicern |
 | [RM-628 — Solidon rechnet mit Curas Aufrunden des Stützabstands](#rm-628) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Zweig `einstellungen/cura-rundung-rm628`). Cura druckt unter Gitter oben 0,28 / unten 0,40, unter Bäumen 0,60 / 0,60 (geschrieben 0,28 bzw. 0,44), Solidon rät PETG unter Gitter 0,2; danach Cura in den Kontakttest von RM-624 |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
-| [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-b`). 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); Zeitschätzung rechnet mit dem, was der Slicer aus dem Profil macht, Stützmenge aus den Säulen der Zeit (07.10., Seitenablage Orca-Familie −18 → −3 bis −12 %, Stützmenge Prusa/Cura 0,94 bis 1,14 der Druckdatei); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitreste: Creality Prints Mindestschichtzeit über Bogensehnen, Auto-Brim, Lückenfüllung, Curas Leerfahrt, Prusa-Stützen auf eigenen Schichthöhen, Baumstützen, Rechenzeit am Reiniger — bis Curas Leerfahrt und die Baumstützen gebaut sind, prüft die Zeitgegenprobe dort mit Grund nicht (`estimate.time_comparison_blocked`, Review P2 Rest Z1), danach die Sperren wieder lösen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
@@ -101,7 +100,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-684 — *Druckoptimal ausrichten* kippt ein Teil, das in keiner stehenden Lage passt, schräg ohne Auflage](#rm-684) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.3.5: zu großes Teil kippt schräg, Stützraum 5 552 → 421 532 mm³ statt Hinweis zum Teilen |
 | [RM-685 — *Druckoptimal ausrichten* behält eine stehende Lage mit dem Satz „braucht keine Stütze“, während die Schichtanalyse Stützraum zählt](#rm-685) | Geometrie, Erkennung und Druckvorbereitung | Regression gegenüber v0.5.0 im Stützraum (gewollt seit v0.5.1): Satz und Kennzahl widersprechen sich |
 | [RM-690 — Angeboten, aber mit den Vorgaben nicht ausführbar: Textur, Merkmal drehen, Formschräge, Einzelteile, Drehkörper](#rm-690) | Geometrie, Erkennung und Druckvorbereitung | Fünf Handlungen halten mit ihren eigenen Vorgaben an oder werden an Stellen angeboten, wo sie nicht gelten |
-| [RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form](#rm-691) | Geometrie, Erkennung und Druckvorbereitung | Ringhalter und Ablage: am Netz glatt, exakt mit Kopf; Hohlraumkette angleichen und beide Kerne geometrisch gegenprüfen |
 | [RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte](#rm-636) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Paket L3 (Worktree `F:/sl-l3`). Zuordnung, Buchführung und Normalisieren gebaut (10.10.); offen: Gruppen nach dem Verschieben, Prüfbericht neben der Auswertung, Hauptfaden beim Szenenaufbau, Fensterabnahme |
 | [RM-695 — Ein gespeichertes Projekt erkennt nach jedem Neustart alle Merkmale neu](#rm-695) | Geometrie, Erkennung und Druckvorbereitung | Nach Paket E: Erkennungsergebnis bitgleich im Plattencache ablegen (Format, `cache_version`) |
 | [RM-698 — Sparen, was der Druck nicht merkt: Speicher großer Modelle und ein gemeinsamer druckgleich-Vergleich](#rm-698) | Geometrie, Erkennung und Druckvorbereitung | Speicher am großen Modell messen; Vergleichshelfer für §11.2 bauen; Dreiecksindizes und einfach genau gehaltene Ecken mit Leitplanken prüfen |
@@ -109,8 +107,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis](#rm-637) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 09.10.): ja. Baut nach Paket E auf dessen Zweig; Laden mechanischer Teile bleibt sonst drei- bis fünfmal langsamer als v0.4.4 (Rest K-3) |
 | [RM-692 — Funktionale Gruppen werden nach jedem Verschieben neu gerechnet](#rm-692) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: Eiffelturm 3,6 s, Besteckkasten 2,8 s je Verschieben vor dem Bild; Merker in `perceive/features.py`, nach Paket E |
 | [RM-697 — Ein unverändertes Netz wird bei jedem Schritt neu auf die Platte geschrieben](#rm-697) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: jede Filamentzuweisung schreibt das gleiche Netz komprimiert neu (Spiderman 0,8 s); Formatfrage im Plattencache, nach Paket E |
-| [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–63 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py` |
-| [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: `transformed_features` behandelt die Normale nicht als Einheitsvektor; `perceive/matching.py` |
+| [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–73 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py`, löst §21.2 |
+| [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: mitgetragen hat die Normale die Länge \|n\|/f, frisch erkannt \|n\|; `perceive/matching.py` |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -143,7 +141,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
-| [RM-676 — *Größe ändern* an einem erzeugten Modell rechnet die ganze Erzeugungskette neu](#rm-676) | KI und Generatoren | In Arbeit: Claude (Worktree `F:/solidon-claude-d`). Regression gegenüber v0.5.1: Stuhl auf 400 mm 18–22 s → 67–139 s, Reparatur und Erkennung laufen für eine Maßänderung neu |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Umgesetzt (07.10.): die offenen Helfer und zwölf Kopien der Fenster-Fixtures an einem Ort, 4508 = 4508 gesammelte Fälle; offen die Abnahme im nächsten Release-Tor (Robert, 06.10.) |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
@@ -937,6 +934,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   ABS messen, und an der Baugruppe mit 49 und dem Schachturm mit 34 Spitzeninseln prüfen,
   ob die Schwelle von 100 sinken kann.
 
+<a id="rm-704"></a>
+
+- [ ] **RM-704 — Kinn und Bein am dritten Drachendruck.**
+  Roberts dritter Drache (CC2, PLA, volle Elegoo-Grundlage, 0,4 mm über Baumspitzen) hatte
+  saubere Kopfstacheln, aber eine faserige, durchhängende Kieferunterseite, und ein
+  Vorderbein brach beim Abnehmen der Stütze auf halber Höhe. Erledigt (Archiv, RM-704 Teil):
+  Trennschicht auf jeder Baumspitze in der Orca-Familie (`support.tip_diameter`). Offen:
+  An Druck 4 (Spitze 1,2 mm, drei Wände) prüfen, ob das Kinn trägt (25 % statt 54 % der
+  flachen Unterseite getragen); wenn nicht, bleibt der Abstand oben der Hebel (V18: 0,2 mm mit
+  Spitze, dann kommen die Reste an den Kopfstacheln zurück). Dort auch den Kopf auf 105–112 mm
+  und die Vorderbeine bei etwa 21 mm ansehen: Mit der breiteren Spitze stehen 49 statt 31
+  Stützfüße auf dem Modell (14,3 statt 8,5 mm²). Das Bein hatte im dritten Druck nicht
+  mehr Stütze als im zweiten und keine Auflage, aber zwei statt drei Wände; mit der
+  breiteren Spitze kämen drei kleine Füße mit 0,2 mm² dazu; ob schlanke Glieder einen Wandrat brauchen,
+  zeigt Druck 4 und danach ein Korpuslauf über Figuren mit Beinen (nach welle4). Die Spitze
+  in PrusaSlicer und Cura schneiden (`support_tree_tip_diameter`, `force_tip_to_roof`)
+  und dort übergeben, wenn sie wirkt.
+
 <a id="rm-585"></a>
 
 - [ ] **RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst.**
@@ -971,14 +986,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Die Naht wählt der Hersteller, gebügelt wird nur bei einer bündigen Passung. Eine Figur
   zeigt die Naht als Linie auf der Schauseite, eine große flache Oberseite ihre Bahnen
   (Recherche Nr. 14, 15). Abnahme: Vorschläge mit Grund in allen Familien.
-
-<a id="rm-589"></a>
-
-- [ ] **RM-589 — Bohrungen und Stifte passen ohne Nacharbeit.**
-  Ausgleich für Bohrungen, Polyholes und Elefantenfuß bleiben beim Hersteller; die Passungen
-  rechnet Solidon über das Spiel im Materialprofil (Recherche Nr. 13). Offen ist, wie beides
-  zusammenwirkt, ohne doppelt auszugleichen. Abnahme: ein Passungsteil aus dem Korpus im
-  Slicer gemessen, mit und ohne Ausgleich.
 
 <a id="rm-626"></a>
 
@@ -1903,6 +1910,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `extra_perimeters = 0` aus der Familie des Druckers setzen, dann prusa:CC2 gegen elegoo:CC2
   neu schneiden.
 
+  **Nachgemessen und behoben (09.10.2026, Claude)**, Gewürzregal, Matrixwerkzeug und
+  Zerlegung Schlüssel für Schlüssel in PrusaSlicer 2.9 (Sonden im Bericht des Laufs). Die
+  Ursache vom 06.10. war falsch zugeordnet: Solidon schreibt die Wandzahl (`perimeters = 3`
+  ist Solidons Stufe „Standard“), und `extra_perimeters = 1` ändert an dieser Platte nichts.
+  Zwei Dinge trugen den Unterschied. **Die Zeitschätzung:** Mit `machine_limits_usage =
+  ignore` nimmt PrusaSlicers `GCodeProcessor` die eingebauten Grenzen (1500 mm/s²), und im
+  Dialekt `reprap` liest er gar keine — die Datei forderte 10 000. Jetzt `gcode_flavor =
+  marlin` (dasselbe `M204 S`, Byte für Byte derselbe G-Code ohne Kommentare) und
+  `time_estimate_only` mit der schnellsten angeforderten Beschleunigung und dem schnellsten
+  Tempo als Grenze; in die Druckdatei gehen keine Grenzen. **Solidons Tabelle:** drei Wände
+  und vier Bodenschichten gegen zwei und drei in Elegoos Standardprozess. Dazu
+  `extra_perimeters` und `solid_infill_below_area` auf null wie in Prusas
+  `[print:*common*]`, und `filament_type` von der Spule (PETG ging als PLA hinaus).
+
+  | Lauf (Standard, ohne Vorschläge) | vorher | nachher |
+  |---|---|---|
+  | prusa : CC2 (ohne Bündel) | 407,2 min, 153,9 g | 292,1 min, 153,7 g |
+  | superslicer : CC2 | 527,0 min, 142,5 g | 380,8 min, 142,5 g |
+  | prusa : Bambu P1S / Creality K1 | 407,2 / 408,0 min | 292,1 / 293,0 min |
+  | elegoo : CC2 mit Bündel | 231,9 min, 127,9 g | unverändert |
+  | elegoo : CC2, Wände/Boden/Muster wie Solidons Tabelle | — | 279,6 min, 160,6 g |
+
+  **Abnahme für dieselbe Platte erreicht:** PrusaSlicer gegen ElegooSlicer mit Solidons
+  Wänden +4,5 % Zeit, −4,2 % Material; mit zwei Wänden in beiden 230,7 gegen 231,9 min. Der
+  Rest bei SuperSlicer (381 min) ist seine Bauweise: ohne Z-Hub 331 min, bei PrusaSlicer
+  kostet derselbe Hub 8 min. Offen ist allein die Tabelle: „Standard“ druckt mit drei Wänden
+  und vier Bodenschichten, die Standardprozesse von Elegoo (CC2), Bambu (P1S), Creality (K1)
+  und Prusas „0.20mm SPEED“ am MK4S mit zwei Wänden und drei Bodenschichten. Ob Solidons
+  Tabelle für Drucker ohne Herstellerprofil dem Standardprozess des Druckers folgt wie
+  schon bei den Tempi (`printers.toml`), wirkt auch auf Cura und ist eine Entscheidung.
+
 <a id="rm-193"></a>
 
 - [~] **RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null
@@ -2301,110 +2339,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
     kleineren Winkel, obwohl er schon kleiner ist, und baut 3° → 5° nur auf die Facetten genau.
     Festgehalten in `test_the_mesh_twin_still_refuses_a_smaller_second_draft`. Zu bauen: Der
     Netzzwilling stellt eine schon angestellte gerundete Ecke wie der exakte Kern absolut an.
-
-<a id="rm-253"></a>
-
-- [~] **RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab.**
-  Gefunden beim Abschluss von RM-246 (26.09.2026) an
-  `F:\3D Dateien\parametric-laptop-riser.stl`, das seitdem geschlossen aus
-  dem Import kommt (21 Teile, `repair.part_inside`) und genau rechnet. Die
-  Sonde der meldenden Sitzung (`.claude/.state/rm-246-laptop-staender-2026-09-25/probe_real.py`,
-  `PROBE_TREE=<baum> python probe_real.py "<datei>" 15`) zeigt an 18 Ketten
-  mit Senkung und sechs einzelnen Durchgängen drei Dinge, die nicht zum
-  Werkzeug passen: *Merkmal drehen* von `hole_11`+`cone_51` um 15° um x trägt
-  1 444,47 mm³ vor den alten Mündungen ab (`hole_1`+`cone_5`: 19,59 mm³, die
-  übrigen null); *Merkmal verdoppeln* 6,3 bis 11,1 mm daneben lässt an jeder
-  geprüften Bohrung das Volumen stehen (`boolean.without_effect`, an
-  `hole_11` dazu `duplicate_feature.no_longer_through`); *Merkmal versetzen*
-  um 1,5 mm meldet an `hole_1`, `hole_3` und `hole_11`
-  `move_feature.no_longer_through`. Zu klären, ob das an den 21
-  ineinandersteckenden Teilen liegt (eine Bohrung durch mehrere Teile, eine
-  Kopie im Hohlraum eines anderen) oder an den Handlungen. Abnahme: Kippen
-  trägt vor den Mündungen nur ab, was das gekippte Werkzeug überstreicht;
-  eine Kopie im Material trägt ab oder sagt, warum nicht; „nicht mehr
-  durchgehend" nur, wo die versetzte Bohrung wirklich endet.
-
-  **Durchsicht v0.5.1 (27.09.2026, bohrung):** Es liegt an den Teilen. Die 21 Teile
-  lassen sich nicht vereinigen: Teil 10 (9 166 Dreiecke) kreuzt sich 1 121-mal selbst,
-  `resolve_self_intersections` lehnt deshalb ab, und eine erzwungene Vereinigung aller
-  Teile gab 136 Teile mit 605 verbleibenden Eigenkreuzungen. Gebaut ist die Auskunft:
-  `boolean.parts_not_united` sagt, dass Teile ineinanderstecken und sich nicht
-  vereinigen ließen, weil sich eine Oberfläche selbst kreuzt, mit *Stelle zeigen*
-  (`ae178de8c`, Test `test_boolean.py::test_parts_that_cannot_be_united_say_so`).
-  Nachgemessen am neuen Stand (`konzepte/nachweise-release-0.5.1/sonden/bohrung/rm253_focus_out.txt`):
-  `hole_11`+`cone_51` um 15° gekippt trägt 32,6 mm³ jenseits der oberen alten Kappe
-  ab, Verdoppeln bleibt ohne Wirkung (jetzt mit Satz), Versetzen meldet weiter
-  `no_longer_through`. Am selben Modell (massbild): 13 von 28 Bohrungen gelten als „In
-  dieser Bohrung steht Material“ (`prepare_ops.hole_is_clear`), und ein Langloch aus
-  *Bohrung 2* (Ø 3,33, 43 mm durch mehrere Wände) wird schon ohne Versatz nicht wieder
-  erkannt — vermutlich dieselbe Ursache, eine Bohrung durch mehrere ineinandersteckende
-  Teile; nicht geprüft. Weg: die Eigenkreuzung innerhalb einer Schale auflösen, dann
-  vereinigen und die drei Handlungen neu messen.
-
-  **Sicherheitskorrektur 01.10.2026:** Scheitert die notwendige Vorvereinigung, hält
-  `boolean()` jetzt mit einem Handlungstext vor jeder Solverstufe an. Zuvor rechnete die
-  Kette mit den unveränderten, ineinanderliegenden Teilen weiter und konnte ein falsches
-  Ergebnis liefern. Die Zuordnungsliste `object_ids` trägt den betroffenen Op-Eingang in
-  den Prüfbericht; die Regression prüft auch, dass *Stellen zeigen* bei einer mehrteiligen
-  Vereinigung am fehlerhaften und nicht am ersten Körper landet. Der Test nutzt eine
-  geschlossene Schale, die sich selbst kreuzt, und einen zweiten überlappenden Körper.
-
-  Am Originalmodell `F:\3D Dateien\parametric-laptop-riser.stl` (8,67 MB) wurde der
-  vollständige Import- und Auswertungsweg erneut geprüft. *Merkmal versetzen* für
-  `hole_11` um 1,5 mm quer zur Achse hält mit `GeometryError`, `object_id=obj_1` und den
-  Handlungen `show_locations` und `cancel` an; es gibt kein unzuverlässiges Ergebnis aus.
-  Der Lauf belegt auch den Kettenzweig, der `_closed_at` umgeht. Eine Regression mit einer
-  erkannten Senkbohrung prüft die Objektkennung an genau dieser Verschlussvereinigung. Der
-  Detailtext empfiehlt die Reparatur im CAD- oder Netzprogramm. Das löst die Eigenkreuzung
-  nicht und führt die ursprünglichen Abnahmeschritte Kippen, Versetzen und Verdoppeln noch
-  nicht erfolgreich aus. RM-253 bleibt daher teilweise offen.
-
-  Die anschließende Diagnose am unveränderten Original bestätigt in der geschlossenen
-  9 166-Dreieck-Schale 1 243 Schnittpaare an 631 Flächen; darunter liegt ein echter
-  Schnitt schon in der STL. Blenders exakter Boolean machte die Kopie nicht wasserdicht.
-  Der 0,2-mm-Voxelremesh schloss sie zwar, verschob die Außenfläche aber bis 0,083878 mm
-  und die Höhe um 0,143410 mm; damit liegt er über `MAX_FACET_SAG = 0,05 mm`. Auch die
-  Kreuzungsfreiheit ließ sich wegen des Zeitlimits nicht belegen. Beide Reparaturkandidaten
-  sind verworfen. `hole_11` und `cone_51` werden lokal noch mit ihren ursprünglichen
-  Maßen erkannt, liegen aber in anderen, unveränderten Schalen. Es wurde weder die Kopie
-  weiterbearbeitet noch am Original eine neue Bearbeitung ausgeführt; die angefragte
-  Reparatur samt Kippen/Versetzen/Verdoppeln ist weiterhin nicht abgenommen.
-
-  **Gezielte Verifikation:** `test_boolean.py`, `test_profile_clamps.py` und
-  `test_finding_actions.py`, `test_errors.py`, `test_translations.py` und
-  `test_language_rules.py`: 1 051 Tests bestanden. Ruff und Formatprüfung der geänderten
-  Booleschen Geometriedatei und ihrer Regressionstests sind grün. Das unabhängige
-  Nachreview bestätigte die bedingte Handlung nach einem behobenen P2-Hinweis; das
-  vollständige Entwicklungstor und die Geometriereparatur stehen weiter aus. Der gezielte
-  Mypy-Aufruf meldete drei Unreachable-Befunde in der parallel geänderten
-  `app/core/perceive/refine.py`; für diesen Stand liegt daher kein grüner Mypy-Nachweis vor.
-  Nachprüfung (Review 02.10., Arbeitsbaum ungesichert): Sicherheitskorrektur unvollständig. `union_objects` und `subtract_objects` halten mit dem richtigen Objekt; `drill_hole` hält ohne `object_id`, auch im Prüfbericht, und ein selbstkreuzender Körper als Werkzeug rechnet weiter still. Belege `verif-E.md`, `sonden\v_e\`.
-  Nachprüfung am Stand `3fd3b1ace` (nach `eab5f4f47`): unvollständig. `drill_hole` hält weiter mit `object_id=None` und `correct_input`/`cancel`, auch im Prüfbericht; ein kaputter Körper als Werkzeug rechnet still (`subtract_objects [gut, kaputt]` → 118,5 mm³ ohne Befund, `boolean.py:412–414`); erfüllt ist nur der Fall mit dem kaputten Körper als erstem Eingang. Der neue generelle Halt kehrt die hier dokumentierte Entscheidung um (RM-382). Belege `review-3fd3b1ace.md`, Sonden `r_rm253_*.txt`.
-
-  **Die beiden Nachprüfungen sind durch [RM-382](ROADMAP-ARCHIV.md#rm-382) erledigt
-  (`6d395169c`, v0.5.2):** `drill_hole` reicht `object_ids` durch, ein Schritt abseits der
-  selbstkreuzenden Schale rechnet mit Warnung, am Treffer hält er mit Kennung, und ein kaputter
-  Szenenkörper als Werkzeug hält (`test_a_crossing_scene_tool_stops_a_difference_with_its_own_id`).
-  **Am Original weiter (Sonde am 06.10.2026, Kopie mit abgefangener Messboolescher):**
-  `hole_1` mit `cone_5` gekippt meldet `rotate_feature.no_longer_through` und `bore.over_the_edge`;
-  `hole_1`/`hole_3` versetzt `move_feature.no_longer_through`; Verdoppeln bleibt an allen vier
-  Bohrungen ohne Wirkung (`boolean.without_effect`, `duplicate_feature.feature_lost`);
-  `hole_2`/`hole_4` gekippt nehmen um 53 bzw. 104 mm³ **zu**; `hole_11` hält am Treffer der
-  kaputten Schale. Die Abtragsmessung „vor den Mündungen“ scheitert, weil die Messdifferenz der
-  Sonde selbst die kaputte Schale trifft — die ursprüngliche Abnahme ist so weder erfüllt noch
-  messbar; die Sonde braucht eine Messung ohne Differenz gegen die kaputte Schale.
-
-  **Stand 06.10.2026 (Claude, mit RM-413):** In 14 der 28 Bohrungen steht ein fremdes Teil;
-  dort sagen Menü und jede Merkmalshandlung jetzt „In dieser Bohrung liegt ein getrenntes Teil“
-  mit *In Einzelteile aufteilen*. Vorher rechneten die Handlungen dort: `hole_3` trägt seinen
-  Mantel auf zwei Platten mit einem Zapfen darin, *Merkmal versetzen* verschmolz die Platten, der
-  Zapfen verschwand im Stopfen, −531 mm³ und zwei Teile weniger ohne Befund. `hole_11` hält am
-  Treffer der kaputten Schale. **Offen** an den freien Bohrungen: Verdoppeln 8 mm quer bleibt ohne
-  Wirkung (`boolean.without_effect`, `feature_lost`), `hole_1` verliert beim Versetzen um 1,5 mm
-  und Kippen um 15° je rund 127 mm³ mit `no_longer_through`, `hole_2`/`hole_4` nehmen 1,4–1,9 mm³
-  zu. Ob das richtig ist, sagt erst ein Sollwert ohne Boolesche gegen die kaputte Schale (je Teil
-  Volumen und Dicke entlang der Achse). Sonden `m2_laptop_bohrungen.py`, `m3_hole3.py` unter
-  `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm253\`.
 
 <a id="rm-247"></a>
 
@@ -3659,19 +3593,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Ø-6-Zylinder abziehen: 11,6 s; eine örtliche Neuerkennung wäre eine Architekturfrage an
   §21.2) bleiben hier offen.
 
-<a id="rm-691"></a>
-- [ ] **RM-691 — Stift am Schlüsselloch der Halter hat je Kern eine andere Form.**
-  Nachprüfung von Paket G, N-4 (09.10.2026): Auf einem Quader 40 × 40 × 12 mm
-  `holder_ring` oder `holder_shelf` bei z = 12 setzen, dann *Stift für Bohrung*
-  an `holder_ring_bore_1/2` beziehungsweise `holder_shelf_bore_1/2` aufrufen.
-  Bei PETG entsteht am Netz ein glatter Stift mit 67,19 mm³, exakt ein Stift
-  mit Kopf mit 90,82 mm³. Beide stehen lose und innerhalb der Trägerhülle;
-  die Kopfform ist verschieden. Der Unterschied besteht schon vor Paket G.
-  Offen: Die gelesene Hohlraumkette beider Kerne vergleichen und den Kopf aus
-  derselben Geometrie ableiten. Abnahme: beide Kerne liefern dieselbe Form
-  bis zur Vernetzungsabweichung, ohne gemeinsames Volumen mit dem Träger und
-  mit dem halben Profilspiel; Regression über beide Halter und beide Bohrungen.
-
 <a id="rm-636"></a>
 - [~] **RM-636 — Jeder Anwendungsfall schnell: Verschieben, Filament, Normalisieren, Auswahlkarte.**
   Robert, 08.10.2026: alle Anwendungsfälle messen und die teuren schneller machen (Paket L3).
@@ -3788,8 +3709,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel.**
   Gefunden in Paket D (paket-d.md, Welle 3): Beim Übernehmen eines erzeugten Modells und beim
   Öffnen läuft eine volle Merkmalserkennung am 1,9-mm-Einheitswürfel, die nie ein Merkmal findet.
-  Kosten: Drache 7–11 s, Stuhl 15–18 s, Bett 48–63 s CPU, in allen Ständen seit v0.5.1.
-  `scene/evaluate.py`.
+  Kosten über alle 19 Profilläufe, Übernehmen und Öffnen (Thread-CPU): Drache 6,9–12,2 s, Stuhl
+  9,7–18,1 s, Bett 28,1–73,4 s, in allen Ständen seit v0.5.1. `scene/evaluate.py`. Der Punkt muss
+  §21.2 („die Erkennung läuft nach jeder Operation“) ausdrücklich lösen; dieselbe Wartezeit trifft
+  [RM-193](#rm-193) (Kosten der Erkennung an Generatorfreiform). Allgemein gefasst — eine
+  Schrittausgabe, die niemand liest und die der nächste Schritt desselben Körpers nicht starr
+  umformt, wird nicht erkannt — spart er am Bett beim Übernehmen zwei von drei vollen Erkennungen.
   **Abnahme:** Die Erkennung läuft nur am Netz, an dem sie gebraucht wird; Merkmale, Befunde und
   Kennungen danach gleich (druckgleich gegen den Stand davor), Erkennungen gezählt, Zeit gemessen;
   Changelog als Behebung (Ursache in v0.5.1).
@@ -3797,10 +3722,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 <a id="rm-753"></a>
 
 - [ ] **RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f.**
-  Gefunden in Paket D: `transformed_features` (`perceive/matching.py`) skaliert die Normale einer
-  gerundeten Seite wie einen Ort, sie ist danach kein Einheitsvektor mehr.
-  **Abnahme:** Test zuerst (Skalierung um 2 und 0,5, Normale bleibt Einheitsvektor, Zuordnung
-  unverändert), Gegenprobe am alten Stand rot.
+  Gefunden in Paket D: Die Normale einer gerundeten Seite ist ein flächengewichtetes Mittel und kein
+  Einheitsvektor (`detect_curved_faces`, maßstabsfrei). `moved_features` (`perceive/matching.py`)
+  multipliziert Normalen mit der invers-transponierten Matrix und normiert nur Einheitsvektoren;
+  nach gleichmäßiger Skalierung um f trägt die mitgeführte Normale deshalb die Länge |n|/f, die
+  frisch erkannte |n|. Gemessen in 15 von 339 Paaren in drei Netzen (`schild-zweifarbig/obj_2`,
+  `ambiguous_sphere_ribbon.stl`, `indeterminate_sphere_cap.stl`), jedes Mal genau |1 − 1/f|. Wirkt
+  über `transformed_features` (`exact`) in der örtlichen Nachmessung.
+  **Abnahme:** Test zuerst (Skalierung um 2 und 0,5: mitgeführte Normale gleich der frisch
+  erkannten, Zuordnung unverändert), Gegenprobe am alten Stand rot.
 
 ## Bedienung und Darstellung
 
@@ -5321,31 +5251,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Sätze an `sculpt_strokes` und `pose_armature` (RM-014). Lokal ist Version 9 gemessen und nicht
   schlechter; gehostet vorher (Version 8) und nachher. Verschlechtert sich die Quote, gehen
   diese Sätze zurück.
-
-<a id="rm-676"></a>
-
-- [ ] **RM-676 — *Größe ändern* an einem erzeugten Modell rechnet die ganze Erzeugungskette neu.**
-  Versionsvergleich 0.5.2 (03.10.2026), Weg 3 (Abschnitt 2). **Regression gegenüber v0.5.1** in der
-  Zeit bis zum Ergebnis; der Weg selbst ist besser (3 statt 5 Klicks, das Modell steht danach auf
-  dem Bett). Erzeugter Stuhl, 325 244 Dreiecke, *Größe ändern* am Befund auf 400 mm: v0.5.1 18–22 s
-  (angehängtes Skalieren), v0.3.5 und v0.4.1 7–8 s, `09d8e9485` 67–79 s, im Wechsel bis 139 s — so
-  lange wie das Übernehmen selbst. *Größe ändern* ändert Schritt 2 der Kette (`fit_to_size` vor
-  `repair`), danach laufen Reparatur, Aufsetzen und zweimal die Merkmalserkennung am vollen Netz
-  neu. Die Reihenfolge „erst Größe, dann Reparatur“ ist begründet (Verschweißtoleranz am
-  Einheitswürfel) und bleibt; teuer ist, dass eine reine Maßänderung die vom Maßstab unabhängige
-  Arbeit wiederholt. Am Stand origin/main unverändert (Kette `load, fit_to_size, repair,
-  place_on_bed`).
-  **Stellen:** `app/core/generate.py:302` (`fit_to_size` vor `repair`), `:339` (Kette),
-  `app/core/geom/ops.py:766` (`fit_to_size`), `app/ui/main_window.py:25524` (*Größe ändern* öffnet
-  den Schritt).
-  **Fix (allgemein):** Die Erzeugungskette normiert auf die Arbeitsgröße, repariert dort und trägt
-  das Kundenmaß als eigenen, billigen Schritt dahinter; oder eine reine Maßänderung skaliert die
-  gemerkten Ergebnisse der Folgeschritte mit, statt sie neu zu rechnen.
-  **Abnahme:** Stuhl und zwei weitere erzeugte Modelle (eines über dem Dreieckslimit mit
-  `decimate_mesh`): *Größe ändern* höchstens so lange wie das angehängte Skalieren in v0.5.1, Volumen
-  und Befunde gleich einer frischen Rechnung im neuen Maß, ein Rückgängig-Schritt, alte Projekte
-  rechnen wie gespeichert. Bauplan §17.1, §31.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\weg3\befunde.md` (Abschnitt 2).
 
 ## Tests und Entwicklungswerkzeuge
 

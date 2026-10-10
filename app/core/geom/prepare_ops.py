@@ -12,7 +12,7 @@ import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextvars import ContextVar
 from functools import lru_cache, wraps
-from typing import TYPE_CHECKING, Any, Final, Literal, cast
+from typing import TYPE_CHECKING, Any, Final, Literal, NamedTuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -35,7 +35,6 @@ from app.core.errors import (
     SHOW_LOCATION,
     SHOW_LOCATIONS,
     SPLIT_AND_RETRY,
-    SPLIT_BODIES,
     SPLIT_MODEL,
     AppError,
     BooleanFailedError,
@@ -67,6 +66,8 @@ from app.core.geom.mesh import (
     signed_volume,
     stable_arctan2,
     stable_normals,
+    triangles_volume,
+    unique_edges,
 )
 from app.core.geom.ops import as_transform
 from app.core.geom.orient import (
@@ -1002,12 +1003,13 @@ def _refuse_if_another_part_changed(ctx: OpContext, result: OpResult) -> None:
     after = as_mesh_data(output.mesh)
     if not _another_part_changed(before, after, features, source.features, ctx.cancelled):
         return
+    offer = split_offer(before, features[0])
     raise ValidationError(
         field="at_feature",
         detail=ANOTHER_PART_IN_THE_WAY,
-        values={"feature": features[0].id},
+        values={"feature": features[0].id, **offer},
         constraint="not_movable",
-        suggestions=(SPLIT_BODIES, CANCEL),
+        suggestions=split_ways(offer),
     )
 
 
@@ -4164,14 +4166,16 @@ def _refuse_like_the_card(
     # Die Wege wie dort, wo die Operation denselben Satz selbst sagt; sonst
     # Eingabe ändern oder abbrechen (``NO_OWN_BODY``, ``CHAIN_NOT_READABLE``).
     ways: tuple[Action, ...] = ()
+    offer: dict[str, str] = {}
     if refusal in SEPARATE_PART_REASONS:
-        ways = (SPLIT_BODIES, CANCEL)
+        offer = split_offer(as_mesh_data(source.mesh), feature)
+        ways = split_ways(offer)
     elif refusal in (HOLE_IS_NOT_EMPTY, NO_BODY_FROM_FACES, NEEDS_A_PLAIN_BORE, NOT_AT_THE_MOUTH):
         ways = (CHANGE_SELECTION, CANCEL)
     raise ValidationError(
         field="at_feature",
         detail=refusal,
-        values={"feature": feature.id, "kind": feature.kind},
+        values={"feature": feature.id, "kind": feature.kind, **offer},
         constraint="not_movable",
         suggestions=ways,
     )
@@ -4209,12 +4213,13 @@ def _refuse_another_part_in_the_bore(
     )
     if reason is None:
         return
+    offer = split_offer(as_mesh_data(source.mesh), feature)
     raise ValidationError(
         field="at_feature",
         detail=reason,
-        values={"feature": feature.id, "kind": feature.kind},
+        values={"feature": feature.id, "kind": feature.kind, **offer},
         constraint="not_movable",
-        suggestions=(SPLIT_BODIES, CANCEL),
+        suggestions=split_ways(offer),
     )
 
 
@@ -4388,8 +4393,10 @@ _SHAPING_HANDLINGS: Final = (
 )
 
 #: Wie weit innerhalb des gemessenen Radius :func:`hole_is_clear` nach
-#: Dreiecksmitten sucht — die eigene Wand liegt auf dem Radius, ein Steg,
-#: eine Nabe oder ein Zapfen deutlich darunter.
+#: Dreiecksmitten sucht, und wie weit innerhalb der eigenen Wand
+#: :func:`_reaching_in` nach dem Stück eines Dreiecks — die eigene Wand liegt
+#: auf dem Radius, ein Steg, eine Nabe oder ein Zapfen deutlich darunter. Ein
+#: Stück eines fremden Teils misst sich gegen den Radius selbst (RM-661).
 _CLEARANCE_MARGIN: Final = 0.02
 
 #: Wie viele Punkte :func:`_without_cavities` entlang der Achse eines fremden
@@ -4398,7 +4405,7 @@ _CLEARANCE_MARGIN: Final = 0.02
 _CAVITY_AXIS_SAMPLES: Final = 9
 
 
-def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
+def hole_is_clear(mesh: MeshData, feature: Feature, *, alone: bool = False) -> bool:
     """Ob der Zylinder dieser Bohrung leer ist — oder ob darin Material steht.
 
     Material im Zylinder hat eine Oberfläche im Zylinder: Gesucht werden
@@ -4412,6 +4419,11 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
     Winkeln durchgelassen (3 719 mm³ Material im Zylinder, gemessen
     15.09.2026); die Dreiecksmitten übersehen keinen Steg, und sie kosten
     eine Rechnung über das Netz statt einer Suche je Punkt.
+
+    **Ein langes Dreieck zählt mit dem Stück, das darin steht** (RM-253,
+    :func:`_reaching_in`): Die Mantelstreifen einer Hülse, die weit aus der
+    Platte ragt, und eines Querstifts haben ihre Mitten außerhalb, und am
+    Laptop-Ständer galten so vier Bohrungen mit einer Spannhülse darin als frei.
 
     Ohne Maße gilt die Bohrung als leer — dann entscheidet der Körper aus
     ihren Flächen.
@@ -4433,6 +4445,11 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
     und Innengewinde messen sich in :func:`_inside_and_radial`. Welches
     Merkmal ein Hohlraum ist, sagt :func:`~app.core.types.is_a_cavity`; ein
     Lufteinschluss hat kein Maß und gilt als leer (:func:`_cavity_scope`).
+
+    ``alone`` sagt, dass das Netz nur die Teile trägt, die die Flächen des
+    Merkmals tragen (:func:`_own_part_bore_clear`): Dann gibt es kein fremdes
+    Teil zu fragen, und die Zählung der Teile entfällt — am Laptop-Ständer
+    kostete sie an diesen Netzen 8 s über alle Merkmale.
     """
     radius, depth = _cavity_size(feature)
     if feature.kind in ("hole", "slot"):
@@ -4448,7 +4465,7 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
         "hole_is_clear",
         mesh.raw,
         feature.face_indices,
-        lambda: _hole_is_clear_read(mesh, feature, radius, depth),
+        lambda: _hole_is_clear_read(mesh, feature, radius, depth, alone=alone),
         extra=(
             feature.kind,
             centre,
@@ -4459,14 +4476,17 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
             float(feature.params.get("length", 0.0) or 0.0),
             # Der Ringdurchmesser eines Torus — sein ``radius`` ist die Röhre.
             float(feature.params.get("diameter", 0.0) or 0.0),
+            alone,
         ),
     )
     return clear
 
 
-def _hole_is_clear_read(mesh: MeshData, feature: Feature, radius: float, depth: float) -> bool:
-    """Der Rumpf von :func:`hole_is_clear` — die Rechnung über die Dreiecksmitten."""
-    return not len(_inside_the_bore(mesh, feature, radius, depth))
+def _hole_is_clear_read(
+    mesh: MeshData, feature: Feature, radius: float, depth: float, *, alone: bool = False
+) -> bool:
+    """Der Rumpf von :func:`hole_is_clear` — die Rechnung über die Dreiecke im Zylinder."""
+    return not len(_inside_the_bore(mesh, feature, radius, depth, alone=alone))
 
 
 def _cavity_size(feature: Feature) -> tuple[float, float]:
@@ -4737,7 +4757,8 @@ def _sticks_in_another_bore(
     1,9 s statt 0,006 s: Jeder Hohlraum las alle Dreiecke des Netzes. Jetzt
     verwirft der Hüllquader jedes Hohlraums (:func:`_cavity_boxes`, einmal je
     Netz), was das eigene Teil nicht erreicht, und gemessen wird nur über die
-    Dreiecke des eigenen Teils in diesem Quader.
+    Dreiecke des eigenen Teils, deren Quader diesen berührt — ein langes Dreieck
+    mit seinem Stück darin (RM-660).
     """
     from app.core.perceive.features import remembered
 
@@ -4855,9 +4876,14 @@ def _sticks_read(
         return None
     groups = face_components(mesh.raw)
     own = np.concatenate([groups[index] for index in own_parts])
-    centres = np.asarray(mesh.raw.triangles_center, dtype=np.float64)[own]
-    low = centres.min(axis=0) - FEATURE_OVERLAP
-    high = centres.max(axis=0) + FEATURE_OVERLAP
+    # Der Quader jedes eigenen Dreiecks, nicht seine Mitte: Ein langes Dreieck steht
+    # mit einem Stück im fremden Hohlraum, während seine Mitte weit draußen liegt
+    # (RM-660, der Stift über 40 mm in einer Platte von 10 mm).
+    corners = np.asarray(mesh.raw.vertices, dtype=np.float64)[np.asarray(mesh.raw.faces)[own]]
+    lowest = corners.min(axis=1)
+    highest = corners.max(axis=1)
+    low = lowest.min(axis=0) - FEATURE_OVERLAP
+    high = highest.max(axis=0) + FEATURE_OVERLAP
     reaching = np.flatnonzero(
         ~np.isin(boxes.parts, np.asarray(own_parts, dtype=np.int64))
         & (boxes.low <= high).all(axis=1)
@@ -4867,26 +4893,32 @@ def _sticks_read(
         if check_cancelled is not None:
             check_cancelled()
         within = (
-            (centres >= boxes.low[index] - FEATURE_OVERLAP)
-            & (centres <= boxes.high[index] + FEATURE_OVERLAP)
+            (highest >= boxes.low[index] - FEATURE_OVERLAP)
+            & (lowest <= boxes.high[index] + FEATURE_OVERLAP)
         ).all(axis=1)
         if not within.any():
             continue
         cavity = boxes.cavities[int(index)]
-        if _cavity_holds(mesh, cavity, own[within]):
+        if _cavity_holds(mesh, cavity, own[within], boxes.labels):
             return cavity.kind
     return None
 
 
-def _cavity_holds(mesh: MeshData, cavity: Feature, triangles: NDArray[np.int64]) -> bool:
-    """Ob eines dieser Dreiecke im Hohlraum ``cavity`` liegt."""
+def _cavity_holds(
+    mesh: MeshData,
+    cavity: Feature,
+    triangles: NDArray[np.int64],
+    labels: NDArray[np.int64] | None = None,
+) -> bool:
+    """Ob eines dieser Dreiecke im Hohlraum ``cavity`` liegt — ``labels`` je Dreieck
+    die Nummer seines Teils, wenn der Aufrufer sie schon hat (:func:`_cavity_boxes`)."""
     if cavity.kind == "void":
         return _void_holds(mesh, cavity, triangles)
     radius, depth = _cavity_size(cavity)
     if radius <= EPS_GEOM or (cavity.kind in ("hole", "slot") and depth <= EPS_GEOM):
         return False
     inside, _radial = _inside_and_radial(
-        mesh, cavity, radius, depth, triangles=triangles, end_planes=False
+        mesh, cavity, radius, depth, triangles=triangles, end_planes=False, labels=labels
     )
     return bool(inside.any())
 
@@ -4916,22 +4948,21 @@ def _own_part_bore_clear(mesh: MeshData, feature: Feature) -> bool:
     own_feature = dataclasses.replace(
         feature, face_indices=tuple(int(value) for value in np.searchsorted(own, chosen))
     )
-    return hole_is_clear(MeshData.of(part), own_feature)
+    return hole_is_clear(MeshData.of(part), own_feature, alone=True)
 
 
 def filled_bore_refusal(mesh: MeshData, feature: Feature) -> ValidationError:
     """Die Absage an einer Bohrung, in deren Zylinder Material steht — mit dem
     Weg, der zum Grund passt (:func:`filled_bore_reason`)."""
     reason = filled_bore_reason(mesh, feature)
+    offer = split_offer(mesh, feature) if reason is OTHER_PART_IN_THE_BORE else {}
     return ValidationError(
         field="at_feature",
         detail=reason,
-        values={"feature": feature.id, "kind": feature.kind},
+        values={"feature": feature.id, "kind": feature.kind, **offer},
         constraint="not_movable",
         suggestions=(
-            (SPLIT_BODIES, CANCEL)
-            if reason is OTHER_PART_IN_THE_BORE
-            else (CHANGE_SELECTION, CANCEL)
+            split_ways(offer) if reason is OTHER_PART_IN_THE_BORE else (CHANGE_SELECTION, CANCEL)
         ),
     )
 
@@ -5223,6 +5254,7 @@ def _slot_in_separate_carrier(
             float(math.hypot(*radial)) + _bore_number(feature, "diameter") / 2.0
             > diameter / 2.0 + EPS_GEOM
         ):
+            offer = split_offer(body, feature)
             raise ValidationError(
                 field="at_feature",
                 constraint="separate_bore_contents",
@@ -5231,7 +5263,8 @@ def _slot_in_separate_carrier(
                     "alte vollständig umfassen. Teilen Sie den Körper in Einzelteile auf, "
                     "um nur die Bohrung zu verschieben oder schmaler zu machen."
                 ),
-                suggestions=(SPLIT_BODIES, CORRECT_INPUT, CANCEL),
+                values={"feature": feature.id, **offer},
+                suggestions=(*split_ways(offer)[:-1], CORRECT_INPUT, CANCEL),
             )
 
     def mapped_features(
@@ -5400,11 +5433,12 @@ def _slot_in_separate_carrier(
 
 
 def _inside_the_bore(
-    mesh: MeshData, feature: Feature, radius: float, depth: float
+    mesh: MeshData, feature: Feature, radius: float, depth: float, *, alone: bool = False
 ) -> NDArray[np.float64]:
     """Der Abstand von der Achse je Dreieck, das im Hohlraum liegt und nicht zu
-    ihm gehört — leer, wo er leer ist (:func:`hole_is_clear`)."""
-    inside, radial = _inside_and_radial(mesh, feature, radius, depth)
+    ihm gehört — leer, wo er leer ist (:func:`hole_is_clear`, ``alone`` wie dort)."""
+    labels = np.zeros(mesh.triangle_count, dtype=np.int64) if alone else None
+    inside, radial = _inside_and_radial(mesh, feature, radius, depth, labels=labels)
     return np.asarray(radial[inside], dtype=np.float64)
 
 
@@ -5423,6 +5457,7 @@ def _inside_and_radial(
     *,
     triangles: NDArray[np.int64] | None = None,
     end_planes: bool = True,
+    labels: NDArray[np.int64] | None = None,
 ) -> tuple[NDArray[np.bool_], NDArray[np.float64]]:
     """Je Dreieck, ob es im Hohlraum liegt, und sein Abstand von dessen Mitte.
 
@@ -5435,6 +5470,21 @@ def _inside_and_radial(
     F1) zählt der Abstand von der Mitte beziehungsweise vom Mittelkreis, im
     Hüllquader der eigenen Flächen — die Pfanne ist nur eine Kappe, die Kehle
     ein Stück der Röhre. Die eigenen Dreiecke liegen nie darin.
+
+    **Ein Dreieck zählt mit dem Stück, das darin steht** (RM-253 an der
+    Bohrung, RM-660 an jedem Hohlraum): Gefragt wird zuerst seine Mitte, dann
+    jedes übrige Dreieck an seinem Stück zwischen den Grenzen
+    (:func:`_reaching_in`) — zwischen den Mündungen, an Pfanne und Kehle im
+    Hüllquader der Flächen. Ein langes Dreieck hat seine Mitte draußen und steht
+    trotzdem darin; sein Abstand ist dann der kleinste dieses Stücks, am Kegel
+    als Anteil der Wand mal dem Halbmesser des Merkmals. **Eigenes Material
+    fragt so nur die Bohrung** über das ganze Netz — ihr Werkzeug nähme es mit
+    (``HOLE_IS_NOT_EMPTY``); jeder andere Hohlraum und jede Teilmenge fragen nur
+    die Dreiecke anderer Teile (:func:`_foreign_triangles`, ``labels`` je Dreieck
+    aus ``_part_labels``, wenn der Aufrufer sie schon hat). An 24 Kehlen des
+    Laptop-Ständers reichten sonst Streifen des eigenen Teils bis 0,955 des
+    Halbmessers in die Röhre, und ein fremdes Teil darin hätte niemand mehr
+    genannt — die Kehle galt dann als gefüllt, nicht als belegt.
 
     ``triangles`` beschränkt die Frage auf diese Dreiecke (die Rückgabe gilt
     dann je Eintrag), ``end_planes=False`` nimmt an der Bohrung die Spanne der
@@ -5452,8 +5502,10 @@ def _inside_and_radial(
     along = transform.along(middles, axis)
     low, high = -depth / 2.0, depth / 2.0
     corners: NDArray[np.float64] | None = None
+    own = np.zeros(0, dtype=np.int64)
     if feature.face_indices:
         chosen = np.asarray(feature.face_indices, dtype=np.int64)
+        own = chosen[(chosen >= 0) & (chosen < len(raw.faces))]
         if chosen.size and int(chosen.max()) < len(raw.faces):
             corners = (
                 np.asarray(raw.vertices, dtype=np.float64)[np.unique(np.asarray(raw.faces)[chosen])]
@@ -5462,8 +5514,11 @@ def _inside_and_radial(
             rim = transform.along(corners, axis)
             low, high = float(rim.min()), float(rim.max())
     slack = FEATURE_OVERLAP
+    bounds: list[tuple[NDArray[np.float64], float]] = []
     if feature.kind in ("sphere", "torus"):
         inside, radial = _round_cavity_inside(feature, middles, along, axis, corners, radius)
+        if corners is not None and len(corners):
+            bounds = _box_bounds(corners, slack)
     else:
         offset = middles - np.outer(along, axis)
         if feature.kind == "slot":
@@ -5477,6 +5532,9 @@ def _inside_and_radial(
             & (along < high - slack)
             & (radial < np.asarray(bound) * (1.0 - _CLEARANCE_MARGIN))
         )
+        # Dieselben Grenzen als Halbräume, relativ zur Mitte: Punkte ``p`` mit
+        # ``n · p ≤ Abstand`` liegen zwischen den Mündungen.
+        bounds = [(axis, high - slack), (-axis, -(low + slack))]
         planes = (
             _bore_end_planes(mesh, feature, {feature.id: feature}, grows=False)
             if feature.kind == "hole" and end_planes
@@ -5484,15 +5542,59 @@ def _inside_and_radial(
         )
         if planes:
             inside = radial < radius * (1.0 - _CLEARANCE_MARGIN)
+            bounds = []
             for plane in planes:
-                inside &= transform.along(world, np.asarray(plane.normal)) < plane.position - slack
-    if feature.face_indices:
-        own = np.asarray(feature.face_indices, dtype=np.int64)
+                normal = np.asarray(plane.normal, dtype=np.float64)
+                inside &= transform.along(world, normal) < plane.position - slack
+                bounds.append((normal, plane.position - slack - units.dot3(normal, centre)))
+    core = _core_of(feature, axis, radius, corners, low, high) if bounds else None
+    if core is not None:
+        whole_bore = feature.kind == "hole" and triangles is None
+        foreign = _foreign_triangles(mesh, own, triangles, labels)
+        asked = None if whole_bore else foreign
+        if whole_bore or (asked is not None and asked.any()):
+            reach = _reaching_in(
+                mesh,
+                centre,
+                axis,
+                bounds,
+                core.radius,
+                own,
+                core=core,
+                triangles=triangles,
+                asked=asked,
+                foreign=foreign,
+            )
+            reaching = ~inside & np.isfinite(reach)
+            inside |= reaching
+            radial = np.where(reaching, reach * core.scale, radial)
+    if len(own):
         if triangles is None:
-            inside[own[own < len(inside)]] = False
+            inside[own] = False
         else:
             inside &= ~np.isin(np.asarray(triangles, dtype=np.int64), own)
     return np.asarray(inside, dtype=np.bool_), np.asarray(radial, dtype=np.float64)
+
+
+def _foreign_triangles(
+    mesh: MeshData,
+    own: NDArray[np.int64],
+    triangles: NDArray[np.int64] | None,
+    labels: NDArray[np.int64] | None,
+) -> NDArray[np.bool_] | None:
+    """Je gefragtes Dreieck, ob es zu einem anderen Teil gehört als denen, die die
+    Flächen des Hohlraums tragen — ``None`` an einem Körper aus einem Teil oder
+    ohne eigene Flächen. Eigen sind alle tragenden Teile, wie in
+    :func:`_own_part_bore_clear` (eine Bohrung durch zwei Platten)."""
+    if not len(own):
+        return None
+    if labels is None:
+        if mesh.component_count < 2:
+            return None
+        labels = _part_labels(mesh)[0]
+    carriers = np.unique(labels[own])
+    asked = labels if triangles is None else labels[np.asarray(triangles, dtype=np.int64)]
+    return np.asarray(~np.isin(asked, carriers), dtype=np.bool_)
 
 
 def _round_cavity_inside(
@@ -5534,17 +5636,9 @@ def _off_the_slot_line(
     der Richtung des Langlochs; ohne Richtung oder Länge bleibt es der Abstand
     von der Achse, wie an einer Bohrung.
     """
-    direction = feature.params.get("direction")
-    length = float(feature.params.get("length", 0.0) or 0.0)
-    half = (length - 2.0 * radius) / 2.0
-    if direction is None or half <= EPS_GEOM:
+    line, half = _slot_line(feature, axis, radius)
+    if line is None:
         return offset
-    line = np.asarray(direction, dtype=np.float64)
-    line = line - axis * float(transform.along(line, axis))
-    size = float(math.hypot(*line))
-    if size <= EPS_GEOM:
-        return offset
-    line /= size
     reach = np.clip(transform.along(offset, line), -half, half)
     return np.asarray(offset - np.outer(reach, line), dtype=np.float64)
 
@@ -5557,17 +5651,756 @@ def _cone_wall_radius(
     high: float,
 ) -> NDArray[np.float64]:
     """Der Halbmesser der Kegelwand auf der Höhe jedes Dreiecks — linear zwischen
-    dem weitesten Punkt seines unteren und seines oberen Rands."""
+    dem weitesten Punkt seines unteren und seines oberen Rands (:func:`_cone_ends`)."""
+    start, end = _cone_ends(corners, axis, low, high)
+    if high - low <= EPS_GEOM:
+        return np.full(len(along), start)
+    share = np.clip((along - low) / (high - low), 0.0, 1.0)
+    return np.asarray(start + (end - start) * share, dtype=np.float64)
+
+
+def _cone_ends(
+    corners: NDArray[np.float64], axis: NDArray[np.float64], low: float, high: float
+) -> tuple[float, float]:
+    """Die Halbmesser der Kegelwand an ihrem unteren und oberen Rand: der weiteste Punkt
+    je Rand, ohne lesbare Ränder beide der weiteste Punkt überhaupt."""
     height = transform.along(corners, axis)
     spread = np.linalg.norm(corners - np.outer(height, axis), axis=1)
     reach = max(FEATURE_OVERLAP, (high - low) * 0.05)
     lower = spread[height <= low + reach]
     upper = spread[height >= high - reach]
     if not len(lower) or not len(upper) or high - low <= EPS_GEOM:
-        return np.full(len(along), float(spread.max()) if len(spread) else 0.0)
-    start, end = float(lower.max()), float(upper.max())
-    share = np.clip((along - low) / (high - low), 0.0, 1.0)
-    return np.asarray(start + (end - start) * share, dtype=np.float64)
+        widest = float(spread.max()) if len(spread) else 0.0
+        return widest, widest
+    return float(lower.max()), float(upper.max())
+
+
+def _reaching_in(
+    mesh: MeshData,
+    centre: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    bounds: Sequence[tuple[NDArray[np.float64], float]],
+    radius: float,
+    own: NDArray[np.int64],
+    *,
+    core: _Core | None = None,
+    triangles: NDArray[np.int64] | None = None,
+    asked: NDArray[np.bool_] | None = None,
+    foreign: NDArray[np.bool_] | None = None,
+) -> NDArray[np.float64]:
+    """Je Dreieck der kleinste Abstand seines Stücks zwischen den Grenzen vom Kern des
+    Hohlraums — ``inf``, wo es nicht diesseits der eigenen Wand liegt.
+
+    **Ein Dreieck steht im Zylinder, wenn ein Stück von ihm darin steht** (RM-253).
+    Am Laptop-Ständer steckt in der Bohrung einer 10,27 mm starken Platte eine
+    geschlitzte Hülse von 43 mm; jedes ihrer Manteldreiecke läuft über die ganze
+    Länge, und alle Mitten lagen 9 bis 23 mm vor der Bohrungsmitte, hinter den
+    Mündungen. Ebenso quert ein Querstift die Bohrung mit Dreiecken, deren Mitten
+    neben ihr liegen. Gemessen wird deshalb das Stück zwischen den Grenzen
+    (``bounds``, Halbräume ``n · p ≤ Abstand`` relativ zu ``centre``), quer zur
+    Achse projiziert: sein kleinster Abstand von ihr, null, wo die Achse
+    hindurchgeht.
+
+    **Die Grenze ist die eigene Wand**, mit derselben Rechnung an ihren eigenen
+    Dreiecken (``own``) gemessen, und davon der Saum aus
+    :data:`_CLEARANCE_MARGIN`: Ein grobes Vieleck liegt mit seinen Seitenmitten
+    innerhalb des Radius, und eine Querbohrung endet auf der Wand, nicht davor.
+    Ohne eigene Dreiecke gilt der Radius (:func:`_own_wall_limit`). Die eigenen
+    Dreiecke selbst stehen nie darin — ihr Stück kommt der Achse höchstens so
+    nahe wie die Wand, die sie bestimmen —, und sie werden nicht gefragt. Ohne
+    Achse gibt es keinen Zylinder und nichts, was hineinreicht — die Absage dafür
+    sagt die Operation (``FEATURE_WITHOUT_AXIS``), nicht diese Frage.
+
+    **Je Hohlraumart ihr Kern** (RM-660, ``core``, :func:`_core_of`): an Bohrung
+    und Innengewinde die Achse, am Langloch das Stück seiner Mittellinie, am Kegel
+    die Achse auf seiner Einheitswand, an der Kugelpfanne die Mitte, an der Kehle
+    der Mittelkreis — gemessen wird in den Einheiten des Kerns (``radius``), und die
+    eigene Wand misst sich genauso (:func:`_own_core_limit`). Ohne ``core`` gilt
+    die Achse. ``triangles`` beschränkt die Frage auf diese Dreiecke, die Rückgabe
+    gilt dann je Eintrag, und die Vorauswahl liest nur ihre Ecken; ``asked``
+    beschränkt sie weiter auf die markierten (:func:`_foreign_triangles`), die
+    übrigen bleiben ``inf``.
+
+    **Ein fremdes Teil misst sich gegen den Halbmesser selbst** (RM-661, ``foreign``
+    je gefragtem Dreieck): Der Saum fängt Rundung an der Wand des eigenen Teils. Ein
+    Stift Ø 5,9 oder Ø 5,98 in einer Bohrung Ø 6 lag mit seinem ganzen Mantel in
+    diesem Saum und galt als Wand — Spiel unter 2 % des Radius, die Enden an den
+    Mündungen oder dahinter, an beiden Kernen. Für Stücke fremder Teile gilt der
+    Halbmesser bis auf die Verschweißweite des Körpers (:func:`units.weld_tolerance`),
+    nicht die gemessene Wand: Ein Stift, der die Bohrung ohne Spiel füllt, liegt bei
+    gleicher Vernetzung genau auf ihr. Zwischen dem Lot auf die Facetten und dem
+    Halbmesser liegt an einem fremden Teil nur Luft der Bohrung oder Material des
+    Trägers, in das es eindringt; der Querstift, der in seiner Querbohrung auf dem
+    Kreis der Bohrung endet, bleibt draußen.
+    """
+    raw = mesh.raw
+    all_faces = np.asarray(raw.faces, dtype=np.int64)
+    chosen = (
+        np.arange(len(all_faces), dtype=np.int64)
+        if triangles is None
+        else np.asarray(triangles, dtype=np.int64)
+    )
+    found = np.full(len(chosen), np.inf, dtype=np.float64)
+    if not len(chosen) or math.hypot(*(float(value) for value in axis)) <= EPS_GEOM:
+        return found
+    if asked is not None:
+        picked = np.flatnonzero(asked)
+        if len(picked):
+            found[picked] = _reaching_in(
+                mesh,
+                centre,
+                axis,
+                bounds,
+                radius,
+                own,
+                core=core,
+                triangles=chosen[picked],
+                foreign=None if foreign is None else foreign[picked],
+            )
+        return found
+    all_points = np.asarray(raw.vertices, dtype=np.float64)
+    if triangles is None or 3 * len(chosen) > len(all_points):
+        # Eine große Teilmenge liest alle Ecken: Ein Gang über die Ecken kostet
+        # weniger als ``np.unique`` über ihre Dreiecke (am Laptop-Ständer 170 000).
+        points = all_points
+        faces = all_faces if triangles is None else all_faces[chosen]
+    else:
+        used, local = np.unique(all_faces[chosen], return_inverse=True)
+        points, faces = all_points[used], local.reshape(len(chosen), 3).astype(np.int64)
+    extent = radius if core is None or core.extent is None else core.extent
+    strangers = foreign is not None and bool(foreign.any())
+    # Fremde Stücke zählen bis an die Wand selbst; die Vorauswahl reicht dann bis
+    # zum Halbmesser, ohne Saum.
+    widest = extent if strangers else extent * (1.0 - _CLEARANCE_MARGIN)
+    scale = 1.0 if core is None else core.scale
+    tolerance = units.weld_tolerance(float(mesh.bounds.diagonal)) / scale
+    # **Die Vorauswahl als Bitmuster je Ecke**: welche Seite jeder Grenze sie
+    # erreicht — quer zur Achse über ``-widest`` und unter ``widest`` in zwei
+    # Richtungen, diesseits jeder Mündung. Ein Dreieck bleibt, wenn seine drei
+    # Ecken zusammen jede Bedingung erfüllen; sonst liegt es ganz jenseits einer
+    # Grenze oder sein Quader quer zur Achse neben dem Quadrat ±``widest``, und
+    # es kommt der Achse zwischen den Mündungen nicht so nah. Ein Durchgang über
+    # die Dreiecke mit einem Byte je Ecke — Reduktionen über eine Achse der
+    # Länge drei kosteten am Laptop-Ständer (173 592 Dreiecke) 60 ms je Bohrung.
+    # Mehr als acht Schranken bekommen ein breiteres Muster; im Byte fand die
+    # Vorauswahl ab fünf Grenzen still nichts mehr (Review RM-253).
+    first = np.cross(axis, (1.0, 0.0, 0.0))
+    if math.hypot(*(float(value) for value in first)) < 0.5:
+        first = np.cross(axis, (0.0, 1.0, 0.0))
+    first /= math.hypot(*(float(value) for value in first))
+    second = np.cross(axis, first)
+    # Je Richtung eine Projektion, je Schranke ein Bit: ``True`` heißt „eine Ecke
+    # darüber“, ``False`` „eine Ecke darunter“. Zwei Mündungen mit
+    # entgegengesetzter Normale teilen sich eine Projektion.
+    checks = _lateral_checks(core, axis, first, second, widest)
+    if len(bounds) == 2 and np.array_equal(bounds[1][0], -bounds[0][0]):
+        checks.append((bounds[0][0], ((bounds[0][1], False), (-bounds[1][1], True))))
+    else:
+        checks += [(normal, ((offset, False),)) for normal, offset in bounds]
+    flags = sum(len(conditions) for _direction, conditions in checks)
+    pattern = np.zeros(len(points), dtype=np.min_scalar_type((1 << flags) - 1))
+    bit = 0
+    for direction, conditions in checks:
+        values = points[:, 0] * direction[0] + points[:, 1] * direction[1]
+        values = values + points[:, 2] * direction[2]
+        shift = units.dot3(direction, centre)
+        for threshold, above in conditions:
+            hit = values > threshold + shift if above else values < threshold + shift
+            pattern |= hit.astype(pattern.dtype) << bit
+            bit += 1
+    reached_by = pattern[faces[:, 0]] | pattern[faces[:, 1]] | pattern[faces[:, 2]]
+    complete = reached_by == (1 << bit) - 1
+    if triangles is None:
+        complete[own] = False
+    elif len(own):
+        # Eine Maske über alle Dreiecke statt ``np.isin``: Das sortiert je Frage
+        # die ganze Teilmenge (am Laptop-Ständer 170 000 Dreiecke je Hohlraum).
+        owned = np.zeros(len(all_faces), dtype=np.bool_)
+        owned[own] = True
+        complete &= ~owned[chosen]
+    candidates = np.flatnonzero(complete)
+    if not len(candidates):
+        return found
+    pieces = _clipped_by(points[faces[candidates]] - centre, bounds)
+    stranger = foreign[candidates] if strangers and foreign is not None else None
+    if core is None or core.shape == "axis":
+        closest = _closest_to_the_axis(*pieces, axis)
+    else:
+        closest = _core_distance(core, *pieces, axis)
+    # Die eigene Wand fragen nur Stücke des eigenen Teils.
+    others = closest if stranger is None else closest[~stranger]
+    if core is None or core.shape == "axis":
+        mine = _own_wall_limit(
+            all_points, all_faces, own, centre, bounds, axis, radius, others, (first, second)
+        )
+    else:
+        mine = _own_core_limit(core, all_points, all_faces, own, centre, bounds, axis, others)
+    limit = np.where(stranger, radius - tolerance, mine) if stranger is not None else mine
+    found[candidates] = np.where(closest < limit, closest, np.inf)
+    return found
+
+
+@dataclasses.dataclass(frozen=True, slots=True, eq=False)
+class _Core:
+    """Wovon aus ein Hohlraum den Abstand eines Stücks misst (RM-660, :func:`_core_of`).
+
+    Bohrung und Innengewinde messen von der Achse, das Langloch vom Stück seiner
+    Mittellinie (``line``, halbe Länge ``half``), der Kegel von der Achse auf seiner
+    Einheitswand (``cone``: unterer und oberer Rand entlang der Achse, Halbmesser
+    dort), die Kugelpfanne von der Mitte, die Kehle vom Mittelkreis (``ring``).
+    """
+
+    shape: Literal["axis", "segment", "cone", "point", "ring"]
+    radius: float
+    """Die Wand in den Einheiten des Abstands — am Kegel 1, sonst Millimeter."""
+    scale: float = 1.0
+    """Millimeter je Einheit — was :func:`_inside_and_radial` als Abstand zurückgibt."""
+    extent: float | None = None
+    """Wie weit der Hohlraum quer zum Kern reicht, in Millimetern, für die Vorauswahl."""
+    line: NDArray[np.float64] | None = None
+    half: float = 0.0
+    cone: tuple[float, float, float, float] | None = None
+    ring: float = 0.0
+
+
+def _core_of(
+    feature: Feature,
+    axis: NDArray[np.float64],
+    radius: float,
+    corners: NDArray[np.float64] | None,
+    low: float,
+    high: float,
+) -> _Core | None:
+    """Der Kern, von dem aus ein Hohlraum ein Stück misst — ``None``, wo er keins misst.
+
+    Dieselben Maße wie die Frage nach den Mitten (:func:`_inside_and_radial`): der
+    Halbmesser aus :func:`_cavity_size`, die Mittellinie aus :func:`_slot_line`, die
+    Ränder des Kegels aus :func:`_cone_ends`, der Mittelkreis aus dem Durchmesser des
+    Rings. Ein Kegel ohne eigene Flächen misst wie ein Zylinder seines Halbmessers,
+    wie die Mitten auch.
+    """
+    if radius <= EPS_GEOM:
+        return None
+    if feature.kind == "slot":
+        line, half = _slot_line(feature, axis, radius)
+        if line is not None:
+            return _Core("segment", radius, line=line, half=half, extent=radius)
+        return _Core("axis", radius)
+    if feature.kind == "cone" and corners is not None and len(corners):
+        start, end = _cone_ends(corners, axis, low, high)
+        if max(start, end) <= EPS_GEOM:
+            return None
+        return _Core(
+            "cone", 1.0, scale=radius, extent=max(start, end), cone=(low, high, start, end)
+        )
+    if feature.kind == "sphere":
+        return _Core("point", radius)
+    if feature.kind == "torus":
+        ring = float(feature.params.get("diameter", 0.0) or 0.0) / 2.0
+        if ring <= EPS_GEOM:
+            return _Core("point", radius)
+        return _Core("ring", radius, ring=ring, extent=radius)
+    return _Core("axis", radius)
+
+
+def _slot_line(
+    feature: Feature, axis: NDArray[np.float64], radius: float
+) -> tuple[NDArray[np.float64] | None, float]:
+    """Richtung und halbe Länge der Mittellinie eines Langlochs, quer zur Achse —
+    ``None``, wo es keine Richtung oder keine Länge über der Breite hat."""
+    direction = feature.params.get("direction")
+    length = float(feature.params.get("length", 0.0) or 0.0)
+    half = (length - 2.0 * radius) / 2.0
+    if direction is None or half <= EPS_GEOM:
+        return None, 0.0
+    line = np.asarray(direction, dtype=np.float64)
+    line = line - axis * float(transform.along(line, axis))
+    size = float(math.hypot(*line))
+    if size <= EPS_GEOM:
+        return None, 0.0
+    return line / size, half
+
+
+def _box_bounds(
+    corners: NDArray[np.float64], slack: float
+) -> list[tuple[NDArray[np.float64], float]]:
+    """Der Hüllquader der eigenen Flächen um ``slack`` geweitet, als sechs Halbräume
+    ``n · p ≤ Abstand`` — dieselbe Grenze wie die Frage nach den Mitten an Pfanne
+    und Kehle (:func:`_round_cavity_inside`)."""
+    low = corners.min(axis=0) - slack
+    high = corners.max(axis=0) + slack
+    bounds: list[tuple[NDArray[np.float64], float]] = []
+    for index in range(3):
+        unit = np.zeros(3, dtype=np.float64)
+        unit[index] = 1.0
+        bounds.append((unit, float(high[index])))
+        bounds.append((-unit, -float(low[index])))
+    return bounds
+
+
+def _lateral_checks(
+    core: _Core | None,
+    axis: NDArray[np.float64],
+    first: NDArray[np.float64],
+    second: NDArray[np.float64],
+    widest: float,
+) -> list[tuple[NDArray[np.float64], tuple[tuple[float, bool], ...]]]:
+    """Die Schranken der Vorauswahl quer zum Kern, je Richtung ``(Schwelle, darüber)``.
+
+    Ein Dreieck bleibt nur, wenn seine Ecken zusammen jede erfüllen: Um Achse und
+    Kegel das Quadrat ±``widest``, am Langloch dazu die halbe Länge entlang seiner
+    Mittellinie, um die Pfanne der Würfel, um die Kehle das Quadrat bis über den
+    Mittelkreis und die Röhre entlang der Achse.
+    """
+    both = ((-widest, True), (widest, False))
+    if core is not None and core.shape == "segment" and core.line is not None:
+        reach = core.half + widest
+        return [(core.line, ((-reach, True), (reach, False))), (np.cross(axis, core.line), both)]
+    if core is not None and core.shape == "point":
+        return [(first, both), (second, both), (axis, both)]
+    if core is not None and core.shape == "ring":
+        reach = core.ring + widest
+        wide = ((-reach, True), (reach, False))
+        return [(first, wide), (second, wide), (axis, both)]
+    return [(first, both), (second, both)]
+
+
+def _core_distance(
+    core: _Core,
+    polygons: NDArray[np.float64],
+    counts: NDArray[np.int64],
+    axis: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Der kleinste Abstand jedes konvexen Vielecks vom Kern, in dessen Einheiten."""
+    if core.shape == "segment" and core.line is not None:
+        return _closest_to_the_segment(polygons, counts, axis, core.line, core.half)
+    if core.shape == "cone" and core.cone is not None:
+        return _closest_to_the_axis(_onto_the_unit_cone(polygons, axis, core.cone), counts, axis)
+    if core.shape == "point":
+        return _closest_to_the_point(polygons, counts)
+    if core.shape == "ring":
+        return _closest_to_the_ring(polygons, counts, axis, core.ring, core.radius)
+    return _closest_to_the_axis(polygons, counts, axis)
+
+
+def _own_core_limit(
+    core: _Core,
+    points: NDArray[np.float64],
+    faces: NDArray[np.int64],
+    own: NDArray[np.int64],
+    centre: NDArray[np.float64],
+    bounds: Sequence[tuple[NDArray[np.float64], float]],
+    axis: NDArray[np.float64],
+    closest: NDArray[np.float64],
+) -> float:
+    """Wie :func:`_own_wall_limit`, für jeden Kern: der Saum unter der eigenen Wand,
+    höchstens unter dem Halbmesser — gemessen nur, wenn ein Stück näher kommt als der
+    Saum unter dem Halbmesser."""
+    widest = core.radius * (1.0 - _CLEARANCE_MARGIN)
+    if not len(own) or not (closest < widest).any():
+        return widest
+    reached = _core_distance(core, *_clipped_by(points[faces[own]] - centre, bounds), axis)
+    reached = reached[np.isfinite(reached)]
+    wall = min(core.radius, float(reached.min())) if len(reached) else core.radius
+    return wall * (1.0 - _CLEARANCE_MARGIN)
+
+
+def _own_wall_limit(
+    points: NDArray[np.float64],
+    faces: NDArray[np.int64],
+    own: NDArray[np.int64],
+    centre: NDArray[np.float64],
+    bounds: Sequence[tuple[NDArray[np.float64], float]],
+    axis: NDArray[np.float64],
+    radius: float,
+    closest: NDArray[np.float64],
+    across: tuple[NDArray[np.float64], NDArray[np.float64]],
+) -> float:
+    """Wie nah ein Stück der Achse kommen muss, um in der Bohrung zu stehen: der
+    Saum aus :data:`_CLEARANCE_MARGIN` unter der eigenen Wand (``own``), höchstens
+    unter dem Radius.
+
+    **Gemessen wird die Wand nur, wo sie entscheidet** (Review RM-253): Jedes
+    eigene Dreieck zu beschneiden kostete an einer Bohrung mit 200 000 eigenen
+    Dreiecken 2,1 s und 268 MB je Frage statt 0,25 s und 77 MB. Kommt kein Stück
+    (``closest``) näher als der Saum unter dem Radius, entscheidet die Wand nichts.
+    Sonst reicht meist eine untere Schranke aus den Quadern der eigenen Dreiecke
+    quer zur Achse (``across``, zwei Richtungen), um ``EPS_GEOM`` gegen Rundung
+    gesenkt; erst ein Stück zwischen ihr und dem Radius verlangt die Wand selbst.
+    Die Antwort bleibt dieselbe.
+    """
+    widest = radius * (1.0 - _CLEARANCE_MARGIN)
+    near = closest < widest
+    if not len(own) or not near.any():
+        return widest
+    corners = points[faces[own]] - centre
+    gaps: list[NDArray[np.float64]] = []
+    for direction in across:
+        values = corners[..., 0] * direction[0] + corners[..., 1] * direction[1]
+        values = values + corners[..., 2] * direction[2]
+        low = np.minimum(np.minimum(values[:, 0], values[:, 1]), values[:, 2])
+        high = np.maximum(np.maximum(values[:, 0], values[:, 1]), values[:, 2])
+        gaps.append(np.maximum(np.maximum(low, -high), 0.0))
+    floor = float(np.sqrt(gaps[0] * gaps[0] + gaps[1] * gaps[1]).min()) - EPS_GEOM
+    sure = min(radius, floor) * (1.0 - _CLEARANCE_MARGIN)
+    if not (near & (closest >= sure)).any():
+        return sure
+    reached = _closest_to_the_axis(*_clipped_by(corners, bounds), axis)
+    reached = reached[np.isfinite(reached)]
+    wall = min(radius, float(reached.min())) if len(reached) else radius
+    return wall * (1.0 - _CLEARANCE_MARGIN)
+
+
+def _clipped_by(
+    triangles: NDArray[np.float64], bounds: Sequence[tuple[NDArray[np.float64], float]]
+) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+    """Jedes Dreieck auf die Halbräume ``n · p ≤ Abstand`` beschnitten — je Zeile ein
+    konvexes Vieleck (Ecken in Folge) und seine Eckenzahl, null, wo nichts bleibt.
+
+    Sutherland-Hodgman je Halbraum, über alle Zeilen zugleich: Jede Kante gibt
+    ihre Anfangsecke, wenn sie drinnen liegt, und ihren Schnittpunkt, wenn sie
+    die Grenze kreuzt. Ein Halbraum macht aus einem konvexen ``k``-Eck höchstens
+    ein ``k+1``-Eck.
+    """
+    polygons = np.asarray(triangles, dtype=np.float64)
+    counts = np.full(len(polygons), 3, dtype=np.int64)
+    rows = np.arange(len(polygons))[:, None]
+    for normal, offset in bounds:
+        width = polygons.shape[1]
+        index = np.arange(width)[None, :]
+        valid = index < counts[:, None]
+        following = np.where(index + 1 < counts[:, None], index + 1, 0)
+        inward = offset - (
+            polygons[..., 0] * normal[0]
+            + polygons[..., 1] * normal[1]
+            + polygons[..., 2] * normal[2]
+        )
+        ahead = inward[rows, following]
+        inner = inward >= 0.0
+        kept = valid & inner
+        crossing = valid & (inner != (ahead >= 0.0))
+        share = inward / np.where(crossing, inward - ahead, 1.0)
+        cut = polygons + share[..., None] * (polygons[rows, following] - polygons)
+        out = np.stack((polygons, cut), axis=2).reshape(len(polygons), 2 * width, 3)
+        mask = np.stack((kept, crossing), axis=2).reshape(len(polygons), 2 * width)
+        order = np.argsort(~mask, axis=1, kind="stable")[:, : width + 1]
+        polygons = np.take_along_axis(out, order[..., None], axis=1)
+        # **Mehr Ecken gibt es nur im Rundungsrauschen** (Review RM-253): Liegt ein
+        # Vieleck in der Grenzebene, wechselt das Vorzeichen reihum, jede Kante
+        # kreuzt, und die Zählung überstieg die Spalten — die nächste Rechnung
+        # griff dahinter. Was bleibt, sind Randpunkte in Folge, konvex wie zuvor.
+        counts = np.minimum(mask.sum(axis=1), width + 1).astype(np.int64)
+    return polygons, counts
+
+
+def _closest_to_the_axis(
+    polygons: NDArray[np.float64], counts: NDArray[np.int64], axis: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Der kleinste Abstand jedes konvexen Vielecks von der Achse durch den Nullpunkt.
+
+    Quer zur Achse projiziert: null, wo die Achse durch das Vieleck geht (alle
+    Kanten drehen gleichsinnig um sie, wie in ``perceive.features._cylinder_band``),
+    sonst der nächste Punkt auf einer Kante; ``inf`` ohne Ecken. Elementweise, ohne
+    BLAS (``kern.md``).
+    """
+    if not len(polygons):
+        return np.zeros(0, dtype=np.float64)
+    width = polygons.shape[1]
+    rows = np.arange(len(polygons))[:, None]
+    index = np.arange(width)[None, :]
+    valid = index < counts[:, None]
+    following = np.where(index + 1 < counts[:, None], index + 1, 0)
+    along = polygons[..., 0] * axis[0] + polygons[..., 1] * axis[1] + polygons[..., 2] * axis[2]
+    lateral = polygons - along[..., None] * axis
+    ahead = lateral[rows, following]
+    edge = ahead - lateral
+    square = edge[..., 0] * edge[..., 0] + edge[..., 1] * edge[..., 1] + edge[..., 2] * edge[..., 2]
+    toward = -(
+        lateral[..., 0] * edge[..., 0]
+        + lateral[..., 1] * edge[..., 1]
+        + lateral[..., 2] * edge[..., 2]
+    )
+    share = np.where(
+        square > 0.0, np.clip(toward / np.where(square > 0.0, square, 1.0), 0.0, 1.0), 0.0
+    )
+    nearest = lateral + share[..., None] * edge
+    distance = np.sqrt(
+        nearest[..., 0] * nearest[..., 0]
+        + nearest[..., 1] * nearest[..., 1]
+        + nearest[..., 2] * nearest[..., 2]
+    )
+    closest = np.where(valid, distance, np.inf).min(axis=1)
+    turned = np.cross(lateral, ahead)
+    turn = np.where(
+        valid,
+        turned[..., 0] * axis[0] + turned[..., 1] * axis[1] + turned[..., 2] * axis[2],
+        0.0,
+    )
+    flat = np.abs(turn.sum(axis=1)) <= EPS_GEOM * EPS_GEOM
+    around = ~flat & (counts >= 3) & (np.all(turn >= 0.0, axis=1) | np.all(turn <= 0.0, axis=1))
+    return np.asarray(np.where(around, 0.0, closest), dtype=np.float64)
+
+
+def _closest_to_the_segment(
+    polygons: NDArray[np.float64],
+    counts: NDArray[np.int64],
+    axis: NDArray[np.float64],
+    line: NDArray[np.float64],
+    half: float,
+) -> NDArray[np.float64]:
+    """Der kleinste Abstand jedes konvexen Vielecks von der Mittellinie eines Langlochs,
+    quer zur Achse — vom Stück ``[-half, half]`` entlang ``line`` durch den Nullpunkt.
+
+    In der Ebene quer zur Achse ist die Mittellinie eine Strecke. Null, wo sie eine
+    Kante kreuzt oder im Vieleck liegt (ihr Anfang dreht gleichsinnig, wie in
+    :func:`_closest_to_the_axis`), sonst der kleinste der Abstände von Ecken zur
+    Strecke und von ihren Enden zu den Kanten. Mit ``half`` null ist es der Abstand
+    von der Achse. Elementweise, ohne BLAS.
+    """
+    if not len(polygons):
+        return np.zeros(0, dtype=np.float64)
+    across = np.cross(axis, line)
+    width = polygons.shape[1]
+    rows = np.arange(len(polygons))[:, None]
+    index = np.arange(width)[None, :]
+    valid = index < counts[:, None]
+    following = np.where(index + 1 < counts[:, None], index + 1, 0)
+    u = polygons[..., 0] * line[0] + polygons[..., 1] * line[1] + polygons[..., 2] * line[2]
+    w = polygons[..., 0] * across[0] + polygons[..., 1] * across[1] + polygons[..., 2] * across[2]
+    u_ahead, w_ahead = u[rows, following], w[rows, following]
+    beyond = np.maximum(np.abs(u) - half, 0.0)
+    corner = np.sqrt(beyond * beyond + w * w)
+    edge_u, edge_w = u_ahead - u, w_ahead - w
+    square = edge_u * edge_u + edge_w * edge_w
+
+    def to_edges(point: float) -> NDArray[np.float64]:
+        toward = (point - u) * edge_u - w * edge_w
+        share = np.where(
+            square > 0.0, np.clip(toward / np.where(square > 0.0, square, 1.0), 0.0, 1.0), 0.0
+        )
+        off_u = u + share * edge_u - point
+        off_w = w + share * edge_w
+        return np.asarray(np.sqrt(off_u * off_u + off_w * off_w), dtype=np.float64)
+
+    ends = np.minimum(to_edges(-half), to_edges(half))
+    closest = np.where(valid, np.minimum(corner, ends), np.inf).min(axis=1)
+    # Eine Kante kreuzt die Gerade der Mittellinie innerhalb der Strecke.
+    sides = (w > 0.0) != (w_ahead > 0.0)
+    step = np.where(sides, w - w_ahead, 1.0)
+    crossing_u = u + np.where(sides, w / step, 0.0) * edge_u
+    crossed = (valid & sides & (np.abs(crossing_u) <= half)).any(axis=1)
+    # Oder der Anfang der Strecke liegt im Vieleck.
+    start_u = u + half
+    turn = np.where(valid, start_u * w_ahead - w * (u_ahead + half), 0.0)
+    flat = np.abs(turn.sum(axis=1)) <= EPS_GEOM * EPS_GEOM
+    around = ~flat & (counts >= 3) & (np.all(turn >= 0.0, axis=1) | np.all(turn <= 0.0, axis=1))
+    return np.asarray(np.where(crossed | around, 0.0, closest), dtype=np.float64)
+
+
+def _closest_to_the_point(
+    polygons: NDArray[np.float64], counts: NDArray[np.int64]
+) -> NDArray[np.float64]:
+    """Der kleinste Abstand jedes konvexen, ebenen Vielecks vom Nullpunkt — der Mitte
+    einer Kugelpfanne.
+
+    Liegt das Lot vom Nullpunkt auf die Ebene des Vielecks darin (jede Kante dreht
+    gleichsinnig um die Normale nach Newell), ist es der Abstand der Ebene, sonst der
+    nächste Punkt auf einer Kante. Elementweise, ohne BLAS.
+    """
+    if not len(polygons):
+        return np.zeros(0, dtype=np.float64)
+    width = polygons.shape[1]
+    rows = np.arange(len(polygons))[:, None]
+    index = np.arange(width)[None, :]
+    valid = index < counts[:, None]
+    following = np.where(index + 1 < counts[:, None], index + 1, 0)
+    ahead = polygons[rows, following]
+    edge = ahead - polygons
+    square = edge[..., 0] * edge[..., 0] + edge[..., 1] * edge[..., 1] + edge[..., 2] * edge[..., 2]
+    toward = -(
+        polygons[..., 0] * edge[..., 0]
+        + polygons[..., 1] * edge[..., 1]
+        + polygons[..., 2] * edge[..., 2]
+    )
+    share = np.where(
+        square > 0.0, np.clip(toward / np.where(square > 0.0, square, 1.0), 0.0, 1.0), 0.0
+    )
+    nearest = polygons + share[..., None] * edge
+    distance = np.sqrt(
+        nearest[..., 0] * nearest[..., 0]
+        + nearest[..., 1] * nearest[..., 1]
+        + nearest[..., 2] * nearest[..., 2]
+    )
+    closest = np.where(valid, distance, np.inf).min(axis=1)
+    normal = np.where(valid[..., None], np.cross(polygons, ahead), 0.0).sum(axis=1)
+    size = np.sqrt(
+        normal[:, 0] * normal[:, 0] + normal[:, 1] * normal[:, 1] + normal[:, 2] * normal[:, 2]
+    )
+    turned = np.cross(edge, -polygons)
+    turn = np.where(
+        valid,
+        turned[..., 0] * normal[:, None, 0]
+        + turned[..., 1] * normal[:, None, 1]
+        + turned[..., 2] * normal[:, None, 2],
+        0.0,
+    )
+    flat = size <= EPS_GEOM * EPS_GEOM
+    around = ~flat & (counts >= 3) & np.all(turn >= 0.0, axis=1)
+    height = np.abs(
+        polygons[:, 0, 0] * normal[:, 0]
+        + polygons[:, 0, 1] * normal[:, 1]
+        + polygons[:, 0, 2] * normal[:, 2]
+    ) / np.where(flat, 1.0, size)
+    return np.asarray(np.where(around, height, closest), dtype=np.float64)
+
+
+#: Wie weit die Sehnen, über die :func:`_closest_to_the_ring` den Mittelkreis einer
+#: Kehle misst, höchstens innerhalb des Kreises liegen dürfen — als Anteil des
+#: Saums an der Röhre (:data:`_CLEARANCE_MARGIN`): Der Fehler der Sehne bleibt ein
+#: Viertel des Saums, um den die Wand ohnehin unscharf ist.
+_RING_CHORD_SHARE: Final = 0.25
+
+#: Höchstens so viele Sehnen je Kreis — bei einem Ring Ø 2000 mit Röhre Ø 1 wären
+#: es sonst über zehntausend Schnitte je Frage.
+_MOST_RING_CHORDS: Final = 1024
+
+
+def _closest_to_the_ring(
+    polygons: NDArray[np.float64],
+    counts: NDArray[np.int64],
+    axis: NDArray[np.float64],
+    ring: float,
+    tube: float,
+) -> NDArray[np.float64]:
+    """Der kleinste Abstand jedes konvexen Vielecks vom Mittelkreis einer Kehle
+    (Halbmesser ``ring`` um ``axis`` durch den Nullpunkt).
+
+    Der Kreis als regelmäßiges Vieleck: Je Sektor zwischen zwei Halbebenen durch die
+    Achse wird das Vieleck beschnitten und sein Abstand von der Sehne gemessen
+    (:func:`_closest_to_the_axis` an ihrer Geraden). Die Sehne liegt höchstens um
+    ``ring · (1 - cos(π/n))`` innerhalb des Kreises; ``n`` ist die kleinste
+    Zweierpotenz ab acht, für die das unter :data:`_RING_CHORD_SHARE` des Saums an
+    der Röhre bleibt (abgeschätzt über ``ring · (π/n)² / 2``), höchstens
+    :data:`_MOST_RING_CHORDS`. Die Ecken kommen aus :func:`units.circle_point`,
+    plattformgleich.
+    """
+    found = np.full(len(polygons), np.inf, dtype=np.float64)
+    if not len(polygons):
+        return found
+    first = np.cross(axis, (1.0, 0.0, 0.0))
+    if math.hypot(*(float(value) for value in first)) < 0.5:
+        first = np.cross(axis, (0.0, 1.0, 0.0))
+    first /= math.hypot(*(float(value) for value in first))
+    second = np.cross(axis, first)
+    allowed = max(_RING_CHORD_SHARE * _CLEARANCE_MARGIN * tube, EPS_GEOM)
+    sections = 8
+    while (
+        sections < _MOST_RING_CHORDS
+        and ring * (math.pi / sections) * (math.pi / sections) / 2.0 > allowed
+    ):
+        sections *= 2
+    corners = [units.circle_point(sections, index) for index in range(sections)]
+    rows, sectors = _ring_sectors(polygons, counts, first, second, sections)
+    if not len(rows):
+        return found
+    order = np.argsort(sectors, kind="stable")
+    rows, sectors = rows[order], sectors[order]
+    bounds = np.flatnonzero(np.diff(sectors)) + 1
+    for chosen, sector in zip(
+        np.split(rows, bounds), sectors[np.concatenate(([0], bounds))], strict=True
+    ):
+        if not len(chosen):
+            continue
+        cos_a, sin_a = corners[int(sector)]
+        cos_b, sin_b = corners[(int(sector) + 1) % sections]
+        start = (first * cos_a + second * sin_a) * ring
+        end = (first * cos_b + second * sin_b) * ring
+        # Der Sektor: auf der Seite von ``end`` der Ebene durch Achse und ``start``,
+        # auf der Seite von ``start`` der Ebene durch Achse und ``end``.
+        pieces, kept = _clipped_by(
+            polygons[chosen], [(-np.cross(axis, start), 0.0), (np.cross(axis, end), 0.0)]
+        )
+        taken = np.flatnonzero(kept > 0)
+        if not len(taken):
+            continue
+        chord = end - start
+        chord = chord / math.hypot(*(float(value) for value in chord))
+        middle = (start + end) / 2.0
+        reached = _closest_to_the_axis(pieces[taken] - middle, kept[taken], chord)
+        found[chosen[taken]] = np.minimum(found[chosen[taken]], reached)
+    return found
+
+
+def _ring_sectors(
+    polygons: NDArray[np.float64],
+    counts: NDArray[np.int64],
+    first: NDArray[np.float64],
+    second: NDArray[np.float64],
+    sections: int,
+) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
+    """Welche Vielecke welche Sektoren um die Achse erreichen — als Paare (Zeile, Sektor).
+
+    **Nur eine Vorauswahl:** Jeden Sektor schneidet :func:`_closest_to_the_ring`
+    exakt aus, und ein Vieleck, das ihn nicht erreicht, bleibt dort leer. Deshalb
+    darf der Winkel der Ecken hier aus :func:`stable_arctan2` kommen, und ein Sektor
+    Rand zu beiden Seiten deckt jede Rundung an einer Sektorgrenze. Ein konvexes
+    Vieleck, das die Achse nicht umschließt, sieht man von ihr aus unter weniger als
+    einer halben Drehung; reicht es so weit oder bis an die Achse, nimmt es jeden
+    Sektor. Eine Rille um eine Welle fragt so je Dreieck ein bis drei Sektoren statt
+    aller.
+    """
+    width = polygons.shape[1]
+    valid = np.arange(width)[None, :] < counts[:, None]
+    x = polygons[..., 0] * first[0] + polygons[..., 1] * first[1] + polygons[..., 2] * first[2]
+    y = polygons[..., 0] * second[0] + polygons[..., 1] * second[1] + polygons[..., 2] * second[2]
+    angle = np.asarray(stable_arctan2(y, x), dtype=np.float64)
+    reference = angle[:, 0]
+    delta = angle - reference[:, None]
+    delta = np.where(delta > math.pi, delta - 2.0 * math.pi, delta)
+    delta = np.where(delta <= -math.pi, delta + 2.0 * math.pi, delta)
+    delta = np.where(valid, delta, 0.0)
+    low, high = delta.min(axis=1), delta.max(axis=1)
+    touching = np.where(valid, x * x + y * y, np.inf).min(axis=1) <= EPS_GEOM * EPS_GEOM
+    whole = touching | (high - low >= math.pi) | (counts < 1)
+    step = 2.0 * math.pi / sections
+    begin = np.floor((reference + low) / step).astype(np.int64) - 1
+    finish = np.floor((reference + high) / step).astype(np.int64) + 1
+    partial = np.flatnonzero(~whole)
+    spans = finish[partial] - begin[partial] + 1
+    rows = np.repeat(partial, spans)
+    offsets = np.arange(int(spans.sum()), dtype=np.int64) - np.repeat(
+        np.cumsum(spans) - spans, spans
+    )
+    sectors = (np.repeat(begin[partial], spans) + offsets) % sections
+    everywhere = np.flatnonzero(whole)
+    rows = np.concatenate((rows, np.repeat(everywhere, sections)))
+    sectors = np.concatenate(
+        (sectors, np.tile(np.arange(sections, dtype=np.int64), len(everywhere)))
+    )
+    return rows.astype(np.int64), sectors.astype(np.int64)
+
+
+def _onto_the_unit_cone(
+    polygons: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    cone: tuple[float, float, float, float],
+) -> NDArray[np.float64]:
+    """Die Ecken quer zur Achse, geteilt durch den Halbmesser der Kegelwand auf ihrer
+    Höhe — auf der Wand eins.
+
+    ``cone`` nennt unteren und oberen Rand entlang der Achse und den Halbmesser dort
+    (:func:`_cone_ends`). Der Halbmesser ist linear in der Höhe, die Teilung eine
+    Zentralprojektion: Sie erhält Geraden, und ein konvexes Vieleck zwischen den
+    Rändern bleibt eins — sein Abstand von der Achse (:func:`_closest_to_the_axis`)
+    ist der Anteil der Wand, bis zu dem es hineinreicht.
+    """
+    low, high, start, end = cone
+    along = polygons[..., 0] * axis[0] + polygons[..., 1] * axis[1] + polygons[..., 2] * axis[2]
+    span = high - low
+    share = np.clip((along - low) / span, 0.0, 1.0) if span > EPS_GEOM else np.zeros_like(along)
+    wall = start + (end - start) * share
+    lateral = polygons - along[..., None] * axis
+    return np.asarray(lateral / np.where(wall > 0.0, wall, 1.0)[..., None], dtype=np.float64)
 
 
 def only_a_rim_inside(mesh: MeshData, feature: Feature) -> bool:
@@ -5675,7 +6508,13 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
     # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
     # (``point_in_shell``, Nachprüfung G, N-4).
-    cache_version="19",
+    # 20: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
+    # (RM-253, mit Paket G zusammengeführt).
+    # 21: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    # 22: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="22",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -6055,7 +6894,13 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
     # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
     # (``point_in_shell``, Nachprüfung G, N-4).
-    cache_version="19",
+    # 20: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
+    # (RM-253, mit Paket G zusammengeführt).
+    # 21: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    # 22: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="22",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -6477,7 +7322,13 @@ class _PatternPlace:
     # 11: ein getrenntes Teil daneben bleibt, wie es war, oder die Handlung
     # sagt ab (RM-596). 12: exakt sagt ein Platz ab, dessen Kopie anderes
     # Material nur auf einer Linie berührt, wie beim Verdoppeln (RM-597, N-3).
-    cache_version="12",
+    # 13: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
+    # (RM-253, mit Paket G zusammengeführt).
+    # 14: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    # 15: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="15",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -7282,7 +8133,13 @@ class RemoveFeatureParams(BaseParams):
     # sagt ab (RM-596).
     # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
     # (``point_in_shell``, Nachprüfung G, N-4).
-    cache_version="22",
+    # 23: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
+    # (RM-253, mit Paket G zusammengeführt).
+    # 24: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    # 25: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="25",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -7524,7 +8381,13 @@ class RotateFeatureParams(BaseParams):
     # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
     # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
     # (``point_in_shell``, Nachprüfung G, N-4).
-    cache_version="16",
+    # 17: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
+    # (RM-253, mit Paket G zusammengeführt).
+    # 18: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    # 19: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="19",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -8969,7 +9832,13 @@ class ResizeFeatureParams(BaseParams):
     # sagt ab (RM-596); exakt sagt eine Berührung auf Linie oder Punkt ab (RM-597).
     # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
     # (``point_in_shell``, Nachprüfung G, N-4).
-    cache_version="25",
+    # 26: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
+    # (RM-253, mit Paket G zusammengeführt).
+    # 27: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    # 28: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="28",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -9825,7 +10694,13 @@ OPEN_BODY_DETAIL: Final = _(
     # sagt ab (RM-596).
     # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
     # (``point_in_shell``, Nachprüfung G, N-4).
-    cache_version="23",
+    # 24: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
+    # (RM-253, mit Paket G zusammengeführt).
+    # 25: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    # 26: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="26",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -10553,7 +11428,13 @@ SLOT_FEATURE_RENAMED: Final = _(
     # Innengewinde, und jede Zeile der Karte gilt ohne Ausnahme (Review G).
     # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
     # (``point_in_shell``, Nachprüfung G, N-4).
-    cache_version="21",
+    # 22: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
+    # (RM-253, mit Paket G zusammengeführt).
+    # 23: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    # 24: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="24",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -19074,7 +19955,13 @@ class PlugParams(BaseParams):
     # sagt ab (RM-596).
     # +1: ein unentscheidbarer Punkt im Lufteinschluss fragt daneben nach
     # (``point_in_shell``, Nachprüfung G, N-4).
-    cache_version="11",
+    # 12: ein Teil, dessen lange Dreiecke durch die Bohrung laufen, steht darin
+    # (RM-253, mit Paket G zusammengeführt).
+    # 13: an jedem Hohlraum steht ein fremdes Teil mit dem Stück seiner Dreiecke darin, nicht nur
+    # mit ihrer Mitte, und am Stift entscheidet der Quader seiner Dreiecke (RM-660).
+    # 14: ein fremdes Teil steht darin, sobald es dem Halbmesser näher kommt als die
+    # Verschweißweite, auch ein eng sitzender Stift (RM-661).
+    cache_version="14",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,
@@ -20374,13 +21261,19 @@ class SplitPinnedParams(BaseParams):
     number_b: int = _number_b_param()
 
 
+#: Höchstzahl der Teile einer Zerlegung. Bis Review I waren es 64, ohne Grund im
+#: Verlauf; der Bohrmaschinenhalter hat 69 Teile, und der Knopf an einer
+#: Teile-Absage scheiterte darüber an der Planung.
+SPLIT_LIMIT: Final = 1000
+
+
 @op_params
 class SplitBodiesParams(BaseParams):
     count: int = param(
         title=_("Anzahl"),
         default=2,
         minimum=2,
-        maximum=64,
+        maximum=SPLIT_LIMIT,
         doc=_(
             "In wie viele Objekte aufgeteilt wird. Wie viele Teile der Körper "
             "tatsächlich hat, sagt der Prüfbericht; passt die Zahl nicht, "
@@ -20391,9 +21284,33 @@ class SplitBodiesParams(BaseParams):
         title=_("Splitter behalten"),
         default=False,
         doc=_(
-            "Auch Bruchstücke unter einem Prozent des größten Teils behalten. "
-            "Aus Scans kommen oft einzelne lose Dreiecke — die will man selten "
-            "als eigenes Modell."
+            "Auch kleine offene Flächenstücke und Bruchstücke behalten, die der Drucker nicht "
+            "abbildet. Aus Scans kommen oft lose Dreiecke."
+        ),
+    )
+    # Kein Altmarker, sondern eine Wahl: Der Knopf an einer Teile-Absage setzt
+    # sie, und der Agent braucht sie für denselben Weg (Review I, Hinweis
+    # Agentenweg) — darum sichtbar auf der Rückseite und im Werkzeugschema.
+    carry_feature: str = param(
+        title=_("Merkmal beisammen halten"),
+        default="",
+        # Eine Auswahl wie ``reference_feature``, kein Freitext (Nachprüfung I, N2).
+        kind="feature",
+        placement="advanced",
+        doc=_(
+            "Die Teile, die dieses Merkmal tragen, bleiben ein Objekt, und es behält seinen "
+            "Namen. Leer heißt: jedes Teil einzeln."
+        ),
+    )
+    legacy_tiny_share: bool = param(
+        title=_("Splitter wie in älteren Projekten"),
+        default=False,
+        placement="advanced",
+        internal=True,
+        dropped_on_change=True,
+        doc=_(
+            "Verwirft wie ältere Projekte jedes Teil unter einem Prozent des größten. "
+            "Eine Änderung am Schritt rechnet wie heute."
         ),
     )
 
@@ -20417,15 +21334,19 @@ def _gap_between(one: Any, other: Any) -> float:
 LoosePart = tuple[Any, float, tuple[int, ...]]
 
 
-def _loose_parts(mesh: MeshData, *, keep_tiny: bool) -> tuple[list[LoosePart], int]:
+def _loose_parts(
+    mesh: MeshData, *, keep_tiny: bool, least: float = EPS_GEOM, by_share: bool = False
+) -> tuple[list[LoosePart], int, list[NDArray[np.int64]]]:
     """Die losen Teile eines Körpers samt Volumen und Slots, größte zuerst —
-    und wie viele Splitter dabei wegfielen.
+    wie viele Splitter dabei wegfielen und je Teil seine Dreiecksnummern im Körper.
 
     Die eine Zählung für *In Einzelteile aufteilen* und für die Absage des
-    Ausrichtens, die diese Zerlegung vorschlägt: Ohne ``keep_tiny`` fällt
-    weg, was unter einem Prozent des größten Teils liegt, und eine Stückzahl,
-    die die Splitter mitzählte, ließe die Zerlegung an ihrer eigenen Prüfung
-    scheitern.
+    Ausrichtens, die diese Zerlegung vorschlägt: Ohne ``keep_tiny`` fallen die
+    Splitter weg (:func:`_splinters`), und eine Stückzahl, die sie mitzählte,
+    ließe die Zerlegung an ihrer eigenen Prüfung scheitern. ``least`` ist das
+    kleinste Volumen, das der Drucker hinterlässt
+    (``Profile.smallest_printable_volume``); ``by_share`` rechnet wie ältere
+    Projekte.
 
     **Je Teil reisen die Slots seiner Dreiecke mit** (Robert, 11.09.2026:
     „Filamente auch nicht"): Ein Schriftzug, dem *Filament zuweisen* Slot 7
@@ -20438,8 +21359,17 @@ def _loose_parts(mesh: MeshData, *, keep_tiny: bool) -> tuple[list[LoosePart], i
     der Prüfbericht mit „besteht aus N Teilen" beantwortet, also auch dieselbe
     Zahl —, und aus den Dreiecksnummern jedes Teils kommt sein Stück der
     Slotliste.
+
+    **Ein Netz nur für ein Teil, das bleibt**: Gemessen und geordnet wird an
+    den Dreiecken (:func:`_parts_in_order`), ein Splitter bekommt kein eigenes.
     """
-    groups = face_components(mesh.raw)
+    ordered = _parts_in_order(mesh, as_saved=by_share)
+    if keep_tiny:
+        chosen = ordered
+    else:
+        gone = _splinters(mesh, ordered, least=least, by_share=by_share)
+        chosen = [part for part, splinter in zip(ordered, gone, strict=True) if not splinter]
+    groups = [part.faces for part in chosen]
     # ``append=False`` gibt eine Liste, ein Netz je Gruppe — der Typ von
     # ``submesh`` kennt beide Formen, der Aufruf hier nur die eine.
     bodies = cast(
@@ -20447,18 +21377,285 @@ def _loose_parts(mesh: MeshData, *, keep_tiny: bool) -> tuple[list[LoosePart], i
         mesh.raw.submesh(groups, only_watertight=False, append=False) if groups else [],
     )
     painted = np.asarray(mesh.slots, dtype=np.int32) if mesh.slots else None
-    found: list[LoosePart] = [
+    kept: list[LoosePart] = [
         (
             body,
-            abs(float(body.volume)),
-            tuple(int(value) for value in painted[group]) if painted is not None else (),
+            part.volume,
+            tuple(painted[part.faces].tolist()) if painted is not None else (),
         )
-        for body, group in zip(bodies, groups, strict=True)
+        for body, part in zip(bodies, chosen, strict=True)
     ]
-    largest = max((volume for _body, volume, _slots in found), default=0.0) or 1.0
-    kept = [entry for entry in found if keep_tiny or entry[1] >= largest * 0.01]
-    kept.sort(key=lambda entry: (-round(entry[1] / largest, _SAME_SIZE), _where_it_sits(entry[0])))
-    return kept, len(found) - len(kept)
+    return kept, len(ordered) - len(kept), groups
+
+
+def split_offer(mesh: MeshData, feature: Feature | None = None) -> dict[str, str]:
+    """Was der Knopf an einer Teile-Absage braucht (RM-638, Review I M2/G6).
+
+    Der Knopf ist *In Einzelteile aufteilen und erneut versuchen*
+    (``SPLIT_AND_RETRY``): ``History.split_and_retry`` setzt die Zerlegung vor
+    den angehaltenen Schritt und diesen an das Teil, das ``feature`` trägt.
+    ``count`` ist die Stückzahl der Zerlegung, ``part_index`` die Stelle dieses
+    Teils in ihrer Reihenfolge — nach der Zerlegung steht an der Kennung des
+    Körpers nur noch sein größtes Teil.
+
+    **Die Träger eines Merkmals bleiben beisammen.** Liegt sein Mantel auf
+    mehreren Teilen — eine Bohrung durch zwei aufeinanderliegende Platten —,
+    zählt die Zerlegung sie als ein Objekt (``carry_feature`` legt sie
+    zusammen) und trennt nur, was fremd ist; bis Review I zerlegte sie alle,
+    und der Schritt fand am größten Teil nur eine halbe Bohrung unter fremdem
+    Namen. ``part_index`` ist dann die Stelle des ersten Trägers.
+
+    **Leer heißt: kein Knopf** (:func:`split_ways`) — ohne Flächen des Merkmals
+    wüsste niemand, wohin der Schritt gehört, und über der Höchstzahl von
+    *Anzahl* hielte die Planung an. Ein erzeugtes Innengewinde ohne Flächen
+    zählt mit den Wänden seines Gangs (:func:`_with_walls`).
+    """
+    if feature is not None:
+        feature = _with_walls(mesh, feature)
+    chosen = np.asarray(feature.face_indices if feature is not None else (), dtype=np.int64)
+    if not chosen.size or int(chosen.min()) < 0 or int(chosen.max()) >= mesh.triangle_count:
+        return {}
+    ordered = _parts_in_order(mesh)
+    holding = np.unique(_owners(mesh.triangle_count, ordered)[chosen])
+    count = len(ordered) - len(holding) + 1
+    if count < 2 or count > _split_limit():
+        return {}
+    return {"count": str(count), "part_index": str(int(holding[0]))}
+
+
+def split_ways(offer: Mapping[str, str]) -> tuple[Action, ...]:
+    """Die Wege einer Teile-Absage: mit Angebot der Knopf, sonst ein anderes Merkmal.
+
+    Ohne Angebot — über :data:`SPLIT_LIMIT` Teile, Merkmal ohne Flächen — bliebe
+    sonst nur *Abbrechen*, und das ist kein Weg (Regel 17, Nachprüfung I, N3).
+    """
+    return (SPLIT_AND_RETRY, CANCEL) if offer else (CHANGE_SELECTION, CANCEL)
+
+
+def _split_limit() -> int:
+    """Die Höchstzahl von *Anzahl* — dieselbe, die die Planung prüft."""
+    return next(int(spec.maximum or 0) for spec in SplitBodiesParams.spec() if spec.name == "count")
+
+
+def _carried_feature(
+    source: SceneObject, name: str, groups: Sequence[NDArray[np.int64]], count: int
+) -> tuple[tuple[int, ...], Feature] | None:
+    """Das Merkmal ``name`` in den Dreiecken seiner Träger — und deren Stellen in ``groups``.
+
+    Ein Träger: Die Dreiecke zählen in seinem Teil. Mehrere (eine Bohrung durch
+    zwei Platten): Sie zählen im Verbund der Träger in ihrer Reihenfolge, den
+    ``split_bodies`` daraus legt. Belegt, nicht geraten: Liegt eine Fläche des
+    Merkmals auf keinem behaltenen Teil, kommt nichts mit. Ein Merkmal ohne
+    eigene Flächen (erzeugtes Innengewinde) findet seine Träger über die Wände
+    seines Gangs und reist ohne Flächen mit, wie es war.
+    """
+    feature = source.features.get(name)
+    if feature is None:
+        return None
+    walled = _with_walls(as_mesh_data(source.mesh), feature)
+    if not walled.face_indices:
+        return None
+    chosen = np.asarray(walled.face_indices, dtype=np.int64)
+    if int(chosen.min()) < 0 or int(chosen.max()) >= count:
+        return None
+    owner = np.full(count, -1, dtype=np.int64)
+    for index, group in enumerate(groups):
+        owner[group] = index
+    holders = tuple(int(value) for value in np.unique(owner[chosen]))
+    if holders[0] < 0:
+        return None
+    position = np.full(count, -1, dtype=np.int64)
+    offset = 0
+    for holder in holders:
+        group = groups[holder]
+        position[group] = np.arange(offset, offset + len(group), dtype=np.int64)
+        offset += len(group)
+
+    def remap(indices: Sequence[int]) -> tuple[int, ...] | None:
+        picked = np.asarray(indices, dtype=np.int64)
+        if not picked.size or int(picked.max()) >= count or (position[picked] < 0).any():
+            return None
+        return tuple(position[picked].tolist())
+
+    if not feature.face_indices:
+        return holders, feature
+    patches = tuple(
+        dataclasses.replace(patch, face_indices=faces)
+        for patch in feature.surface_patches
+        if (faces := remap(patch.face_indices))
+    )
+    faces = remap(feature.face_indices)
+    if faces is None:
+        return None
+    return holders, dataclasses.replace(feature, face_indices=faces, surface_patches=patches)
+
+
+def _with_carriers_together(
+    kept: list[LoosePart], groups: list[NDArray[np.int64]], holders: Sequence[int]
+) -> tuple[list[LoosePart], list[NDArray[np.int64]]]:
+    """Legt die Träger eines Merkmals an die Stelle des ersten zu einem Teil zusammen."""
+    if len(holders) < 2:
+        return kept, groups
+    first = holders[0]
+    joined: LoosePart = (
+        cast("Any", trimesh.util.concatenate([kept[index][0] for index in holders])),
+        sum(kept[index][1] for index in holders),
+        tuple(value for index in holders for value in kept[index][2]),
+    )
+    faces = np.concatenate([groups[index] for index in holders])
+    rest = set(holders[1:])
+    merged = [joined if index == first else part for index, part in enumerate(kept)]
+    places = [faces if index == first else group for index, group in enumerate(groups)]
+    return (
+        [part for index, part in enumerate(merged) if index not in rest],
+        [group for index, group in enumerate(places) if index not in rest],
+    )
+
+
+class _LoosePlace(NamedTuple):
+    """Ein loses Teil, bevor es ein Netz bekommt: Volumen, Dreiecke, Mitte —
+    und ob es einen offenen Rand hat (:func:`_open_faces`)."""
+
+    volume: float
+    faces: NDArray[np.int64]
+    centre: tuple[float, float, float]
+    shell: bool
+
+
+def _parts_in_order(mesh: MeshData, *, as_saved: bool = False) -> list[_LoosePlace]:
+    """Jedes lose Teil mit seinen Dreiecksnummern, in der Reihenfolge der Zerlegung.
+
+    Größte zuerst, gleich große nach ihrer Lage (:data:`_SAME_SIZE`,
+    :func:`_where_it_sits`). Dieselbe Reihenfolge fragt die Teile-Absage, die
+    sagt, an welchem Teil ein Merkmal nach der Zerlegung steht
+    (:func:`split_offer`).
+
+    **Ein geschlossenes Teil wird an seinen Dreiecken gemessen**: kein eigenes
+    Netz, Volumen nahe am Teil (``mesh.triangles_volume``, wie
+    :func:`signed_volume`) und Mitte (dieselbe Hülle wie ``Trimesh.bounds``)
+    bitgleich aus seinen Ecken.
+
+    **Ein offenes Teil behält die Zahl von vorher**: ``Trimesh.volume`` an seinem
+    Teilnetz (Review I, G1). Ein offenes Volumen ist kein Maß, aber es ordnet
+    die Teile, und die Reihenfolge vergibt die Kennungen: Zwei gleiche Klötze,
+    einem fehlte unten ein Dreieck, tauschten an jedem anderen Integral den
+    Platz. Die Division durch null im Schwerpunkt eines flachen Teils bleibt
+    still. ``as_saved`` rechnet wie ältere Projekte (:func:`_parts_as_saved`).
+    """
+    groups = face_components(mesh.raw)
+    if as_saved:
+        return _parts_as_saved(mesh, groups)
+    vertices = np.asarray(mesh.raw.vertices, dtype=np.float64)
+    faces = np.asarray(mesh.raw.faces, dtype=np.int64)
+    open_faces = _open_faces(mesh)
+    found: list[_LoosePlace] = []
+    for group in groups:
+        indices = np.asarray(group, dtype=np.int64)
+        triangles = vertices[faces[indices]]
+        shell = bool(open_faces[indices].any())
+        if shell:
+            (body,) = cast(
+                "list[Any]", mesh.raw.submesh([indices], only_watertight=False, append=False)
+            )
+            with np.errstate(divide="ignore", invalid="ignore"):
+                volume = abs(float(body.volume))
+        else:
+            volume = abs(triangles_volume(triangles, near=True))
+        found.append(_LoosePlace(volume, indices, _where_it_sits(triangles.reshape(-1, 3)), shell))
+    return _in_order(found)
+
+
+def _parts_as_saved(mesh: MeshData, groups: Sequence[NDArray[Any]]) -> list[_LoosePlace]:
+    """Die Teile, wie Projekte vor RM-639 sie maßen: ``Trimesh.volume`` am Teilnetz.
+
+    Für den Altmarker ``legacy_tiny_share``, der die Ein-Prozent-Regel mit
+    genau diesen Zahlen fragt — das Integral über den Ursprung entscheidet
+    dort auch an offenen Teilen. Die Division durch null im Schwerpunkt eines
+    flachen Teils stört das Volumen nicht und bleibt still, wie damals.
+    """
+    bodies = cast(
+        "list[Any]",
+        mesh.raw.submesh(groups, only_watertight=False, append=False) if groups else [],
+    )
+    open_faces = _open_faces(mesh)
+    found: list[_LoosePlace] = []
+    with np.errstate(divide="ignore", invalid="ignore"):
+        for body, group in zip(bodies, groups, strict=True):
+            indices = np.asarray(group, dtype=np.int64)
+            found.append(
+                _LoosePlace(
+                    abs(float(body.volume)),
+                    indices,
+                    _where_it_sits(np.asarray(body.vertices, dtype=np.float64)),
+                    bool(open_faces[indices].any()),
+                )
+            )
+    return _in_order(found)
+
+
+def _in_order(found: list[_LoosePlace]) -> list[_LoosePlace]:
+    """Größte zuerst, gleich große nach ihrer Lage."""
+    largest = max((part.volume for part in found), default=0.0) or 1.0
+    found.sort(key=lambda part: (-round(part.volume / largest, _SAME_SIZE), part.centre))
+    return found
+
+
+def _owners(count: int, parts: Sequence[_LoosePlace]) -> NDArray[np.int64]:
+    """Je Dreieck die Stelle seines Teils in ``parts`` — einmal, statt je Teil zu suchen."""
+    owner = np.full(count, -1, dtype=np.int64)
+    for index, part in enumerate(parts):
+        owner[part.faces] = index
+    return owner
+
+
+def _splinters(
+    mesh: MeshData, ordered: Sequence[_LoosePlace], *, least: float, by_share: bool
+) -> list[bool]:
+    """Welche Teile Splitter sind — je Teil in der Reihenfolge von ``ordered``.
+
+    **Gemessen am Drucker und an der Schale, nie am größten Teil** (RM-639,
+    Entscheidung Robert): In älteren Projekten fiel weg, was unter einem Prozent
+    des größten Teils lag. Am Laptop-Ständer (Platte 82 281 mm³) waren das 13 von
+    22 echten Teilen — Stifte, Scheiben, Schraubenköpfe —, und der Weg aus jeder
+    Teile-Absage verlor die Teile, an denen der Kunde arbeiten wollte.
+
+    Ein geschlossenes Teil ist Splitter, wenn es weniger Volumen hat, als der
+    Drucker hinterlässt (``least``, Regel 7). Ein offenes, wenn es auch klein ist
+    — dieselbe Frage wie beim Laden (``repair.open_splinters``): Ein Rohr ohne
+    Deckel neben einem Würfel ist ein Teil, ein loses Dreieck nicht (Review I,
+    M1).
+    """
+    volumes = [part.volume for part in ordered]
+    if by_share:
+        largest = max(volumes, default=0.0) or 1.0
+        return [volume < largest * 0.01 for volume in volumes]
+    from app.core.geom.repair import open_splinters
+
+    shells = [part.shell for part in ordered]
+    small_open = open_splinters(mesh, [part.faces for part in ordered], shells)
+    return [
+        small if shell else volume < least
+        for shell, small, volume in zip(shells, small_open, volumes, strict=True)
+    ]
+
+
+def _open_faces(mesh: MeshData) -> NDArray[np.bool_]:
+    """Je Dreieck, ob es an einer Kante liegt, die nur ein Dreieck trägt.
+
+    Die Ecken zählen nach ihrem Ort (``perceive.features.vertex_rank``), nicht
+    nach ihrer Nummer: Eine ungeschweißt geladene STL (*Verschweißen* aus)
+    teilt keine Eckennummer, und jedes ihrer Teile wäre sonst offen. Ein
+    entartetes Dreieck (zwei Ecken am selben Ort) steht nach
+    :func:`face_components` als eigenes Teil da, ohne Fläche und ohne Volumen —
+    offen oder nicht, es ist ein Splitter (Review I, G2).
+    """
+    from app.core.perceive.features import vertex_rank
+
+    faces = vertex_rank(mesh.raw)[np.asarray(mesh.raw.faces, dtype=np.int64)]
+    edges = np.stack((faces, np.roll(faces, -1, axis=1)), axis=2).reshape(-1, 2)
+    _unique, inverse, counts = unique_edges(edges, return_inverse=True, return_counts=True)
+    single = np.asarray(counts[inverse] == 1, dtype=bool).reshape(-1, 3)
+    return np.asarray(single.any(axis=1), dtype=bool)
 
 
 #: Ab welcher Stelle zwei Teile als **gleich groß** gelten — relativ zum
@@ -20476,8 +21673,11 @@ def _loose_parts(mesh: MeshData, *, keep_tiny: bool) -> tuple[list[LoosePart], i
 _SAME_SIZE = 9
 
 
-def _where_it_sits(body: Any) -> tuple[float, float, float]:
-    """Die Mitte des Hüllquaders — das Zweitkriterium beim Sortieren.
+def _where_it_sits(corners: NDArray[np.float64]) -> tuple[float, float, float]:
+    """Die Mitte des Hüllquaders der Ecken ``(n, 3)`` — das Zweitkriterium beim Sortieren.
+
+    Dieselbe Rechnung wie ``Trimesh.bounds.mean(axis=0)`` am Teilnetz, das
+    genau diese Ecken trägt.
 
     **Zwei gleich große Teile hatten keine Ordnung** (gemessen am 12.09.2026 an
     *Solidon3D* über acht Schriftgrößen): Die beiden `o` sind gleich groß, und
@@ -20497,7 +21697,9 @@ def _where_it_sits(body: Any) -> tuple[float, float, float]:
     einer zu kleinen Stückzahl einzeln stehen (siehe :data:`_SAME_SIZE` dazu,
     ab wann zwei Volumina als gleich gelten).
     """
-    centre = body.bounds.mean(axis=0)
+    if not len(corners):
+        return (0.0, 0.0, 0.0)
+    centre = np.array([corners.min(axis=0), corners.max(axis=0)]).mean(axis=0)
     return (float(centre[0]), float(centre[1]), float(centre[2]))
 
 
@@ -20516,6 +21718,9 @@ ONE_PIECE: Final = _("Der Körper besteht aus einem Stück. Es gibt nichts aufzu
     produces=VARIABLE,
     produces_from="count",
     requires_body="parts",
+    # 2: Splitter misst der Drucker und die Schale, nicht das größte Teil
+    # (RM-639); ein Teil unter einem Prozent kam als Splitter aus dem Cache.
+    cache_version="2",
     doc=_(
         "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen "
         "besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht "
@@ -20538,7 +21743,21 @@ def split_bodies(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     params = cast(SplitBodiesParams, ctx.params)
     mesh = as_mesh_data(source.mesh)
-    kept, dropped = _loose_parts(mesh, keep_tiny=params.keep_tiny)
+    kept, dropped, groups = _loose_parts(
+        mesh,
+        keep_tiny=params.keep_tiny,
+        least=ctx.profile.smallest_printable_volume if ctx.profile is not None else EPS_GEOM,
+        by_share=params.legacy_tiny_share,
+    )
+    # Das Merkmal, an dem ein Schritt weiterrechnet (``carry_feature``, RM-638):
+    # Seine Träger werden ein Teil, bevor gezählt wird (``split_offer``).
+    carried = (
+        _carried_feature(source, params.carry_feature, groups, mesh.triangle_count)
+        if params.carry_feature
+        else None
+    )
+    if carried is not None:
+        kept, groups = _with_carriers_together(kept, groups, carried[0])
 
     # **Genau so viele, wie die Stückzahl sagt.** Der Stapel vergibt die
     # Kennungen der Ausgänge, bevor gerechnet wird (§15.2); eine Operation, die
@@ -20598,6 +21817,9 @@ def split_bodies(ctx: OpContext) -> OpResult:
             for group in anchors
         ]
 
+    # Nur ohne Zusammenlegen: Ein zugeschlagenes Teil verschöbe die Dreiecke.
+    if surplus:
+        carried = None
     outputs = []
     for number, (part, _volume, slots) in enumerate(kept, start=1):
         outputs.append(
@@ -20611,11 +21833,38 @@ def split_bodies(ctx: OpContext) -> OpResult:
                 # der Trennung zählt jedes Teil eigene. Sie neu zu erkennen ist
                 # Sache der Erkennung, nicht dieser Operation — sie mitzugeben
                 # wäre eine Behauptung über Flächen, die es so nicht mehr gibt.
-                features={},
+                # Außer dem einen, an dem ein Schritt weiterrechnet
+                # (``carry_feature``, RM-638): Es kommt mit seinen Dreiecken im
+                # Teil, und die Zuordnung gibt ihm seinen Namen zurück.
+                features=(
+                    {params.carry_feature: carried[1]}
+                    if carried is not None and carried[0][0] == number - 1
+                    else {}
+                ),
             )
         )
 
     findings = []
+    if params.carry_feature and carried is None:
+        # Nie still (Regel 17): Wer ein Merkmal beisammen halten wollte und
+        # es nicht bekommt, liest es hier.
+        findings.append(
+            Finding(
+                code="split_bodies.not_kept_together",
+                severity="warning",
+                message=_(
+                    "Das Merkmal {feature} wurde nicht beisammen gehalten: Es fehlt am Körper, "
+                    "oder die Stückzahl legt übrige Teile zusammen.",
+                    feature=params.carry_feature,
+                ),
+                values={
+                    "feature": params.carry_feature,
+                    "object": str(source.name),
+                    "field": "carry_feature",
+                },
+                suggestions=(CHANGE_THIS_STEP,),
+            )
+        )
     if surplus:
         findings.append(
             Finding(
@@ -20641,7 +21890,31 @@ def split_bodies(ctx: OpContext) -> OpResult:
             Finding(
                 code="split_bodies.tiny",
                 severity="info",
-                message=_("{count} Splitter unter einem Prozent wurden verworfen.", count=dropped),
+                # Einzahl und Mehrzahl als eigene Sätze (Review I, G4): „1 Splitter
+                # wurden verworfen“ stand beim Kunden.
+                message=(
+                    (
+                        _("Ein Splitter unter einem Prozent wurde verworfen.")
+                        if dropped == 1
+                        else _(
+                            "{count} Splitter unter einem Prozent wurden verworfen.",
+                            count=dropped,
+                        )
+                    )
+                    if params.legacy_tiny_share
+                    else (
+                        _(
+                            "Ein Splitter wurde verworfen: ein kleines offenes Flächenstück "
+                            "oder ein Bruchstück, das der Drucker nicht abbildet."
+                        )
+                        if dropped == 1
+                        else _(
+                            "{count} Splitter wurden verworfen: kleine offene Flächenstücke "
+                            "oder Bruchstücke, die der Drucker nicht abbildet.",
+                            count=dropped,
+                        )
+                    )
+                ),
                 # Die Splitter gehörten dem ganzen Körper, nicht seinem größten
                 # Teil: Der Name des Ausgangs steht in der Zeile, eine Kennung
                 # hat er nach der Zerlegung nicht mehr.
@@ -22167,7 +23440,9 @@ def _the_way_out_of(
     limit = next(
         int(spec.maximum or 0) for spec in SplitBodiesParams.spec() if spec.name == "count"
     )
-    kept, _dropped = _loose_parts(mesh, keep_tiny=False)
+    kept, _dropped, _groups = _loose_parts(
+        mesh, keep_tiny=False, least=ctx.profile.smallest_printable_volume
+    )
     # Ein einziges Teil ist der Körper selbst, und der hat gerade nicht
     # gepasst — die Untergrenze erspart nur, ihn ein zweites Mal zu prüfen.
     each_fits = 2 <= len(kept) <= limit and all(

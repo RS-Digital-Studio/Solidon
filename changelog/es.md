@@ -88,6 +88,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Bajo una cara inferior grande y plana, Solidon propone cuadrícula en lugar de árboles, e híbrido si también hay detalles finos. Para soportes de árbol altos, Solidon propone dos paredes.
 - Si una sugerencia del diálogo de impresión solo vale para algunas piezas, la fila y el campo nombran también las piezas que reciben con ella otro valor.
 - Para PLA, Solidon propone más espacio entre muchas puntas finas y los soportes en árbol situados debajo. Así quedan menos restos de las puntas de los soportes.
+- Donde Solidon propone más espacio sobre soportes en árbol, propone también una *Punta del árbol* más ancha. Cada punta lleva capa de separación y queda menos soporte en las caras inferiores.
 - Si muchos voladizos pequeños necesitan soportes juntos, como una barbilla con la cara inferior inclinada, el informe indica ahora el lugar.
 - Un borde estrecho que se sostiene solo ya no cuenta como puente largo, tampoco junto a otro voladizo. El informe ya no avisa ahí, y Solidon no pide soportes por ello.
 - Sobre un canal, el informe ya no aconseja un soporte que luego no se podría sacar. Nombra el canal y una transición de menos de 45 grados.
@@ -98,6 +99,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.
 - El informe de comprobación calcula más rápido y necesita menos memoria.
 - En Linux con Flatpak, Solidon indica ahora que el slicer se ha bloqueado, en lugar de decir solo que no se creó ningún archivo.
+- Nuevo en los ajustes de impresión: *Contraer la primera capa* y *Ensanchar agujeros*. Mientras no elija otro, vale el valor del slicer.
+- Si una pieza ya compensa en el modelo, con un taladro con *Aplicar compensación del material* o *Compensar la pata de elefante*, Solidon sugiere que el slicer no lo haga otra vez.
+- También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
 - Incluso con el ordenador a plena carga, Solidon indica el motivo real al detener un slicer, en lugar de un tiempo agotado. Un archivo de impresión terminado se aprovecha.
 
 ### Roscas, taladros y piezas normalizadas
@@ -107,7 +111,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tornillos, tuercas y arandelas están disponibles según ISO de M1,6 a M64. Para otros tamaños, *Medida propia* deriva las medidas de los tamaños vecinos y lo indica.
 - Con *Ajustado al taladro*, *Pasador para taladro* construye la contrapieza: una cabeza avellanada enrasada para un avellanado, una rosca exterior del mismo tamaño y paso para una interior.
 - En una rosca interior impresa, la selección ofrece directamente *Pasador para taladro*.
-- Si en un taladro hay una pieza separada, como un pasador, las acciones del taladro lo dicen y ofrecen *Dividir en piezas sueltas*. Antes, el pasador se fundía en silencio con la placa.
+- Si una pieza separada está en una cavidad como un taladro, una ranura, un avellanado o una rosca, aunque esté ajustada o sobresalga mucho, las acciones lo dicen. Hasta ahora se fundía o se cortaba.
 - Nuevo: el *Perno roscado*, una varilla roscada o espárrago sin cabeza, con chaflán en ambos extremos y la misma rosca imprimible que el tornillo y la tuerca.
 - También en taladros de bloques como el agujero para tornillo, el inserto termofijado o el alojamiento de tuerca, *Pasador para taladro* crea el pasador adecuado, y avisa si no están en el cuerpo.
 - Colocado a mano sobre una cara, el alojamiento de tuerca corta su hueco en el material. Hasta ahora el hueco quedaba encima y solo se taladraba el agujero para tornillo.
@@ -115,7 +119,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Colocado desde abajo, el alojamiento de tuerca tiene el hueco bajo la cara y su ranura baja hasta él. Hasta ahora el hueco quedaba medio encima, con el tornillo en la cara.
 - Si el taladro de un bloque no atraviesa la pieza, ahora se llama ciego. Hasta ahora se llamaba pasante.
 - Si la pared es más gruesa de lo indicado en *Pasacables* o *Espiga para manguera*, el paso lo dice y abre el espesor de pared. Hasta ahora el paso acababa en el material sin aviso.
-- Si hay una pieza separada en un avellanado, una ranura, una cuenca, una garganta o una rosca, las acciones lo dicen. Hasta ahora se cortaba o se fundía.
 - Las roscas existen ahora también como roscas de tubo G y R, roscas en pulgadas UNC y UNF y NPT, en la *Rosca imprimible*, en tornillo, tuerca y *Perno roscado*.
 - Toda rosca existe también a izquierdas. Una medida propia admite hilos por pulgada y varias entradas, también en *Crear tornillo* y *Generar tapa roscada*.
 - Qué series de roscas muestran las listas de medidas se elige en los Ajustes, en *Series de roscas en las listas*.
@@ -157,6 +160,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Como lugar de la copia, *Duplicar característica* propone una anchura y media junto al original, con una pared entre ambas y nunca a lo largo de su eje.
 - En un avellanado, *Girar característica* propone el mayor ángulo con el que sigue siéndolo, y avisa cuando un giro solo deja la característica sobre sí misma.
 - Si una acción alcanzara una pieza separada junto a la característica, o una característica colocada tocara otro material solo en una línea, Solidon lo dice en vez de dañar el cuerpo.
+- Si una pieza separada estorba a una acción sobre una característica, *Dividir en piezas sueltas y volver a intentarlo* la separa y ejecuta la acción. Ctrl+Z deshace ambas.
+- Al dividir en piezas sueltas se conserva cada pieza imprimible, también pasadores y arandelas junto a una placa grande. Solo caen superficies abiertas pequeñas y migas que la impresora no reproduce.
 
 ### Generar con IA
 
@@ -170,6 +175,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un modelo generado es solo una piel fina alrededor de un hueco, lo dice el diálogo antes de aceptarlo y el informe de comprobación después, con el camino a un nuevo intento.
 - Antes de descargar, *Configurar el chat* y *Configurar ComfyUI* indican cuánta memoria gráfica y espacio necesita un modelo y si este equipo los tiene.
 - En un Mac, *Configurar el chat* propone un modelo local que cabe en la memoria compartida y dice cuándo conviene más una clave para un modelo alojado.
+- En un modelo recién generado, *Cambiar tamaño* solo recalcula la nueva medida y ya no repite la reparación. Es más rápido, y Ctrl+Z deshace el cambio al instante.
 
 ## 0.5.3
 

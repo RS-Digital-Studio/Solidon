@@ -9647,3 +9647,48 @@ def test_the_hose_barb_body_holds_its_wall_at_the_edges_of_its_range(
     wall = local_wall_thickness(body)
     assert wall is not None
     assert wall >= min(values["wall"], profile.minimum_wall_thickness) - 1e-6
+
+
+def _inner_widths(result: PartResult) -> dict[str, float]:
+    """Durchmesser der Innenmerkmale eines gebauten Bausteins: Bohrungen,
+    Innengewinde und Langlöcher — die Konturen, deren Spiel der Druckrat zählt."""
+    widths: dict[str, float] = {}
+    for name, feature in result.features.items():
+        inner = feature.kind in ("hole", "slot") or (
+            feature.kind == "thread" and feature.params.get("internal") is True
+        )
+        diameter = feature.params.get("diameter")
+        if inner and isinstance(diameter, (int, float)) and not isinstance(diameter, bool):
+            widths[name] = float(diameter)
+    return widths
+
+
+@pytest.mark.parametrize("name", sorted(spec.name for spec in PARTS.all()))
+def test_a_part_whose_opening_grows_with_its_play_declares_play_inside(name: str) -> None:
+    """Nachprüfung RM-589, N8: ``PartSpec.play_inside`` ist ein Vertrag mit dem
+    Druckrat (``scene.fits.allowances_for``). Ein aufgesetzter Baustein, dessen
+    Bohrung oder Innengewinde mit dem Spiel wächst, legt das Spiel innen ab;
+    ohne die Angabe glich der Slicer es still ein zweites Mal aus. Gebaut mit
+    Spiel 0 und 0,4 mm, je Richtungswert, wenn der Baustein einen hat."""
+    spec = PARTS.get(name)
+    fields = {entry.name for entry in spec.params.spec()}
+    if part_ops.PLAY_FIELD not in fields:
+        pytest.skip("ohne Spielfeld")
+    declared = part_ops.cuts_by_parameter(spec.params)
+    choices: list[dict[str, Any]] = [{}]
+    if declared is not None:
+        parameter = declared[0]
+        entry = next(item for item in spec.params.spec() if item.name == parameter)
+        values = tuple(entry.choices) if entry.choices else (True, False)
+        choices = [{parameter: value} for value in values]
+    for chosen in choices:
+        loose = spec.fn(spec.params(**chosen, play=0.0))
+        tight = spec.fn(spec.params(**chosen, play=0.4))
+        before, after = _inner_widths(loose), _inner_widths(tight)
+        grows = sorted(
+            feature
+            for feature in before.keys() & after.keys()
+            if after[feature] > before[feature] + 0.1
+        )
+        if grows and not part_ops.cuts(spec, spec.params(**chosen)):
+            assert spec.play_inside, (name, chosen, grows)

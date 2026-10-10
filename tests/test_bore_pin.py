@@ -1271,3 +1271,70 @@ def test_a_part_that_builds_material_keeps_the_length_of_its_bores(
         assert float(placed.params["depth"]) == pytest.approx(
             float(feature.params["depth"]), abs=TOLERANCE
         ), key
+
+
+# --- RM-691: der Stift an den Schraub- und Schlüssellöchern der Halter, an beiden Kernen gleich --
+
+
+def _holder_pin(
+    kind: str, part: str, mount: str, number: int, profile: Profile
+) -> tuple[SceneObject, Any, SceneObject]:
+    """Quader 30 × 30 × 12, darauf der Halter mit seiner Befestigung, über den Ladeweg der
+    Anwendung ausgewertet — und *Stift für Bohrung* an seinem ``number``-ten Loch."""
+    stem = "bore" if mount == "screws" else "keyhole"
+    placement = {"z": 12.0, "nx": 0.0, "ny": 0.0, "nz": 1.0, "mount": mount}
+    carrier = _box(
+        kind,
+        profile,
+        OperationDraft(op=f"insert_{part}", inputs=("obj_1",), params=placement),
+    )
+    result = run("pin_for_bore", carrier, profile, at_feature=f"{part}_{stem}_{number}")
+    return carrier, result, result.outputs[1]
+
+
+@pytest.mark.parametrize("number", [1, 2])
+@pytest.mark.parametrize("mount", ["screws", "keyhole"])
+@pytest.mark.parametrize("part", ["holder_ring", "holder_shelf"])
+def test_a_holder_bore_gets_the_same_pin_on_both_kernels(
+    profile: Profile, part: str, mount: str, number: int
+) -> None:
+    """RM-691: Am Schraubloch der Halter sollte der Stift je Kern eine andere Form haben —
+    am Netz glatt mit 67,19 mm³, exakt mit Senkkopf und 90,82 mm³.
+
+    Das stimmt nur, wenn der Stift am Halter ohne Auswertung dazwischen bestellt
+    wird: Die Netzoperation des Bausteins gibt seine erklärten Merkmale zurück, die
+    Senkung seines Schraublochs ist keins, und erkannt wird sie erst in der Auswertung
+    (die exakte Operation liest die Flächen gleich mit). Über den Weg der Anwendung —
+    Baustein setzen, auswerten, Stift bestellen — liest jeder Kern die Senkung, und
+    beide bauen den Senkkopf aus ihr. Soll: an Ringhalter und Ablage, an beiden
+    Schraub- und beiden Schlüssellöchern derselbe Stift an beiden Kernen (Hülle auf
+    die Facettenhöhe, Rauminhalt auf ein Prozent), lose im Träger, überall das halbe
+    Spiel entfernt, am Schraubloch mit Senkkopf 90° aus der Senkung der Normteiltabelle.
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.holders import SCREW_SIZE
+    from app.core.knowledge.profiles import for_object
+
+    exact_kernel()
+    built: dict[str, tuple[MeshData, Any, float]] = {}
+    for kind in ("mesh", "brep"):
+        carrier, result, pin = _holder_pin(kind, part, mount, number, profile)
+        assert pin.kind == kind
+        clearance = for_object(profile, carrier).material.clearance
+        _loose(pin, carrier, clearance)
+        built[kind] = (as_mesh_data(pin.mesh), _made(result), clearance)
+    (mesh, mesh_made, clearance), (brep, brep_made, _same) = built["mesh"], built["brep"]
+    assert np.asarray(mesh.bounds.minimum) == pytest.approx(
+        np.asarray(brep.bounds.minimum), abs=TOLERANCE
+    )
+    assert np.asarray(mesh.bounds.maximum) == pytest.approx(
+        np.asarray(brep.bounds.maximum), abs=TOLERANCE
+    )
+    assert float(mesh.volume) == pytest.approx(float(brep.volume), rel=0.01)
+    if mount == "screws":
+        # Senkkopf wie am Schraubenloch: die Senkung der Normteiltabelle, an der
+        # Flanke senkrecht um das halbe Spiel zurück.
+        head = standards.screw(SCREW_SIZE).countersink - clearance * math.sqrt(2.0)
+        for made in (mesh_made, brep_made):
+            assert made.values["countersink_angle_deg"] == pytest.approx(90.0, abs=0.5)
+            assert made.values["head_diameter_mm"] == pytest.approx(head, abs=0.05)

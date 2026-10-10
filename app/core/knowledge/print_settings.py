@@ -690,6 +690,7 @@ SUPPORT_DETAILS: Final = (
     "support.bottom_interface_layers",
     "support.interface_spacing",
     "support.tree_walls",
+    "support.tip_diameter",
     "support.block_channels",
     "support.spare_ledges",
     "cooling.support_interface_cooling",
@@ -717,13 +718,14 @@ def inactive_paths(
     (``handover.effective_adhesion``, RM-432). ``also`` sind weitere Arten, die
     die Übergabe stehen lässt (eine Prusa-Grundlage mit Skirt und Brim).
 
-    Unter Gitter druckt kein Baum, und die Wände der Bäume tun nichts (RM-584).
+    Unter Gitter druckt kein Baum, und Wände und Spitzen der Bäume tun nichts
+    (RM-584, RM-704).
     ``support_style`` ist dafür die Art, die das Programm druckt — Hybrid ist
     bei PrusaSlicer und Cura Gitter (``slicer_keys.substitute``).
     """
     inactive = set(SUPPORT_DETAILS) if support_style == "none" else set()
     if support_style == "grid":
-        inactive.add("support.tree_walls")
+        inactive.update(("support.tree_walls", "support.tip_diameter"))
     active = adhesion_kinds(adhesion_kind) | also
     inactive.update(
         path for kind, paths in ADHESION_PATHS.items() if kind not in active for path in paths

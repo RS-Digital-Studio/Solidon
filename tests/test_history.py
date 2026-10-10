@@ -662,6 +662,38 @@ def test_split_and_retry_puts_the_pieces_where_the_body_stood(history: History) 
     assert history.operations == before, "ein Undo nimmt den ganzen Zug zurück"
 
 
+def test_split_and_retry_moves_the_halted_step_to_the_part_of_its_feature(
+    history: History,
+) -> None:
+    """An einer Teile-Absage rechnet der angehaltene Schritt am Teil seines Merkmals (RM-638).
+
+    Die Absage nennt die Stelle des Teils in der Zerlegung (``part_index``);
+    nach der Zerlegung steht an der Kennung des Körpers nur sein größtes Teil.
+    Der angehaltene Schritt bekommt das genannte Teil, jeder spätere behält
+    seine Eingänge — alles in einem Zug, ein Undo nimmt ihn zurück.
+    """
+    body = create(history)
+    history.apply(_("Versetzen"), [OperationDraft(op="rename_object", inputs=(body,))])
+    failed_id = history.operations[-1].id
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=(body,))])
+    before = history.operations
+
+    transaction = history.split_and_retry(failed_id, body, 3, part_index=2)
+
+    split, moved, renamed = (e for e in history.operations if e.id in transaction.ops)
+    assert split.op == "split_bodies" and len(split.outputs) == 3
+    assert moved.inputs == (split.outputs[2],) and moved.outputs == moved.inputs
+    assert renamed.inputs == (body,), "ein späterer Schritt behält seinen Körper"
+    history.undo()
+    assert history.operations == before
+
+    transaction = history.split_and_retry(failed_id, body, 3, part_index=0)
+    moved = next(
+        e for e in history.operations if e.id in transaction.ops and e.op != "split_bodies"
+    )
+    assert moved.inputs == (body,), "das erste Teil trägt die Kennung des Körpers"
+
+
 def test_recount_and_retry_keeps_the_ids_and_gives_the_scene_the_new_pieces(
     history: History,
 ) -> None:

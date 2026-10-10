@@ -555,6 +555,7 @@ class HolderUParams(BaseParams):
 
 @register_part(
     name="holder_u",
+    play_inside=True,
     title=_("Halter U-Form"),
     group="mounting",
     params=HolderUParams,
@@ -667,6 +668,7 @@ def ring_centre(diameter: float, play: float, wall: float) -> float:
 
 @register_part(
     name="holder_ring",
+    play_inside=True,
     title=_("Halter rund"),
     group="mounting",
     params=HolderRingParams,

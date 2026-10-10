@@ -2727,15 +2727,32 @@ class Session(QObject):
         self._changed()
         return True
 
-    def split_and_retry(self, stopped_at: int, target: str, count: int) -> bool:
+    def split_and_retry(
+        self,
+        stopped_at: int,
+        target: str,
+        count: int,
+        *,
+        keep_tiny: bool = False,
+        part_index: int | None = None,
+        feature: str = "",
+    ) -> bool:
         """Setzt die Zerlegung und den erneuten Versuch als einen Zug vor den Fehler.
 
         Das Gegenstück zu :meth:`repair_and_retry` für einen Körper aus losen
-        Teilen, der als Ganzes nirgends hinpasst; Reihenfolge und Undo gehören
-        auch hier dem Verlauf.
+        Teilen, der als Ganzes nirgends hinpasst oder dessen Teil einer
+        Merkmalshandlung im Weg stand; Reihenfolge und Undo gehören auch hier
+        dem Verlauf (``History.split_and_retry``).
         """
         try:
-            self.history.split_and_retry(stopped_at, target, count)
+            self.history.split_and_retry(
+                stopped_at,
+                target,
+                count,
+                keep_tiny=keep_tiny,
+                part_index=part_index,
+                feature=feature,
+            )
         except AppError as error:
             self.failed.emit(error)
             return False
