@@ -143,22 +143,54 @@ def stepped_areas(
     if count == 0 or mesh.triangle_count == 0:
         return np.zeros(count)
     raw = mesh.raw
-    rising = np.asarray(raw.face_normals)[:, 2]
-    chosen = np.flatnonzero(
-        (rising > math.cos(math.radians(step_slope(layer_height, line))))
-        & (rising <= math.cos(math.radians(FLAT_SLOPE)))
+    vertices = np.asarray(raw.vertices, dtype=np.float64)
+    faces = np.asarray(raw.faces)
+    chosen, areas = _shallow_faces(
+        vertices,
+        faces,
+        math.cos(math.radians(step_slope(layer_height, line))),
+        math.cos(math.radians(FLAT_SLOPE)),
     )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     if not len(chosen):
         return np.zeros(count)
-    corners = np.asarray(raw.vertices)[np.asarray(raw.faces)[chosen]]
-    area = 0.5 * np.linalg.norm(
-        np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]), axis=1
-    )
-    heights = np.sort(corners[:, :, 2], axis=1)
-    del corners
-    return _spread(area, heights, np.asarray(edges, dtype=float), count)
+    heights = np.sort(vertices[faces[chosen], 2], axis=1)
+    return _spread(areas, heights, np.asarray(edges, dtype=float), count)
+
+
+def _shallow_faces(
+    vertices: np.ndarray, faces: np.ndarray, steep: float, flat: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Die aufwärts weisenden Dreiecke, deren Normale mit der Senkrechten einen
+    Kosinus über ``steep`` und höchstens ``flat`` bildet, und ihre Flächen.
+
+    Ohne Normalen für das ganze Netz: Erst die z-Komponente des Kreuzprodukts
+    aus x und y aller Dreiecke, die übrigen nur für die aufwärts weisenden,
+    verglichen im Quadrat statt über eine Wurzel. Am §31-Körper 28 statt 72 ms
+    (``stable_normals``) — der Schnitt selbst hat ein Budget von 300 ms. Nur
+    elementweise Rechnung nach IEEE-754, kein BLAS: Die Auswahl ist auf jeder
+    Maschine dieselbe (RM-187), denn aus ihr wird eine Entscheidung.
+    """
+    x = np.ascontiguousarray(vertices[:, 0])
+    y = np.ascontiguousarray(vertices[:, 1])
+    first, second, third = faces[:, 0], faces[:, 1], faces[:, 2]
+    ux = x[second] - x[first]
+    uy = y[second] - y[first]
+    wx = x[third] - x[first]
+    wy = y[third] - y[first]
+    rise = ux * wy - uy * wx
+    up = np.flatnonzero(rise > 0.0)
+    z = np.ascontiguousarray(vertices[:, 2])
+    uz = z[second[up]] - z[first[up]]
+    wz = z[third[up]] - z[first[up]]
+    cross_x = uy[up] * wz - uz * wy[up]
+    cross_y = uz * wx[up] - ux[up] * wz
+    lift = rise[up]
+    squared = cross_x * cross_x + cross_y * cross_y + lift * lift
+    lifted = lift * lift
+    keep = (lifted > steep * steep * squared) & (lifted <= flat * flat * squared)
+    return up[keep], 0.5 * np.sqrt(squared[keep])
 
 
 def _spread(area: np.ndarray, heights: np.ndarray, edges: np.ndarray, count: int) -> np.ndarray:

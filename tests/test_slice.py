@@ -2895,3 +2895,23 @@ def test_the_fine_height_halves_the_layer_but_not_below_a_quarter_nozzle(
     from app.core.slice import fine_layers
 
     assert fine_layers.fine_height(layer, nozzle) == expected
+
+
+def test_the_shallow_faces_are_those_of_the_stable_normals() -> None:
+    """Die schnelle Auswahl (nur aufwärts weisende Dreiecke, im Quadrat
+    verglichen) wählt an einer Kugel dieselben Dreiecke wie die Normalen aus
+    ``stable_normals`` und gibt ihre Flächen auf die letzte Stelle genau."""
+    from app.core.geom.mesh import stable_normals
+    from app.core.slice import fine_layers
+
+    raw = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    steep = math.cos(math.radians(fine_layers.step_slope(FINE_LAYER, FINE_LINE)))
+    flat = math.cos(math.radians(fine_layers.FLAT_SLOPE))
+    chosen, areas = fine_layers._shallow_faces(
+        np.asarray(raw.vertices, dtype=np.float64), np.asarray(raw.faces), steep, flat
+    )
+    normals, every = stable_normals(raw)
+    expected = np.flatnonzero((normals[:, 2] > steep) & (normals[:, 2] <= flat))
+    assert len(expected) > 100
+    np.testing.assert_array_equal(chosen, expected)
+    np.testing.assert_allclose(areas, every[expected], rtol=1e-12)
