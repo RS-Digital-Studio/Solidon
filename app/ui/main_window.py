@@ -27476,11 +27476,12 @@ class MainWindow(QMainWindow):
         if object_id is None or count < 2:
             return
         # **Mit Splittern**, denn der Befund zählt sie mit: ``_count_components``
-        # nennt jede Zusammenhangskomponente, ``_loose_parts`` ließe ohne
-        # ``keep_tiny`` weg, was unter einem Prozent des größten Teils liegt —
-        # an ``two_components.stl`` sagte der Bericht „mehrere Teile" und die
-        # Zerlegung „ein Stück". Wer hier klickt, bekommt die Teile, die der
-        # Bericht genannt hat; die Splitter nimmt *Kleine Teile entfernen*.
+        # nennt jede Zusammenhangskomponente, die Zerlegung ließe ohne
+        # ``keep_tiny`` Bruchstücke und kleine offene Flächen weg
+        # (``prepare_ops._splinters``) — an ``two_components.stl`` sagte der
+        # Bericht „mehrere Teile" und die Zerlegung „ein Stück". Wer hier
+        # klickt, bekommt die Teile, die der Bericht genannt hat; die Splitter
+        # nimmt *Kleine Teile entfernen*.
         self.session.apply(
             REGISTRY.get("split_bodies").title,
             [
@@ -27515,6 +27516,11 @@ class MainWindow(QMainWindow):
         den Rest neu — derselbe Zug wie bei :meth:`_repair_after_error`
         (§17.1). Hält die Kette nicht mehr dort, bleibt die Zerlegung allein
         als nächster Schritt: Sie ist, was der Kunde angeklickt hat.
+
+        **Auch an einer Teile-Absage** (RM-638, ``prepare_ops.split_offer``): Sie
+        nennt dazu das Teil des Merkmals (``part_index``) und das Merkmal; der
+        Schritt rechnet danach dort, die Träger des Merkmals beisammen. Gezählt
+        hat sie mit Splittern, also zerlegt sie mit *Splitter behalten*.
         """
         object_id = error.object_id
         try:
@@ -27523,13 +27529,32 @@ class MainWindow(QMainWindow):
             return
         if object_id is None or count < 2:
             return
+        try:
+            part_index: int | None = int(str(error.values.get("part_index", "")))
+        except ValueError:
+            part_index = None
+        feature = str(error.values.get("feature", "")) if part_index is not None else ""
         result = self.session.last_result
         if error.op_id is not None and result is not None and result.stopped_at == error.op_id:
-            self.session.split_and_retry(error.op_id, object_id, count)
+            self.session.split_and_retry(
+                error.op_id,
+                object_id,
+                count,
+                keep_tiny=part_index is not None,
+                part_index=part_index,
+                feature=feature,
+            )
             return
+        params: dict[str, Any] = {"count": count}
+        if part_index is not None:
+            # Die Stückzahl zählt die Träger als ein Teil — ohne Mitnahme legte
+            # die Zerlegung überzählige nach Nähe zusammen (Nachprüfung I, N1).
+            params["keep_tiny"] = True
+            if feature:
+                params["carry_feature"] = feature
         self.session.apply(
             REGISTRY.get("split_bodies").title,
-            [OperationDraft(op="split_bodies", inputs=(object_id,), params={"count": count})],
+            [OperationDraft(op="split_bodies", inputs=(object_id,), params=params)],
         )
 
     def _recount_after_error(self, error: AppError) -> None:

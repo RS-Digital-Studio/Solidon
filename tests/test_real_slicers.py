@@ -140,6 +140,91 @@ def test_a_cube_comes_back_as_a_print_file_with_measured_figures(
     assert metrics.filament_mm is not None and metrics.filament_mm > 100, metrics
 
 
+def _commands(path: Path) -> list[str]:
+    """Was der Drucker aus einer Druckdatei ausführt: jede Zeile ohne Kommentar."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    lines = (line.split(";", 1)[0].strip() for line in text.splitlines())
+    return [line for line in lines if line]
+
+
+@pytest.mark.slicer("prusaslicer")
+def test_prusaslicer_estimates_a_printer_without_its_bundle_with_the_requested_acceleration(
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne Drucker seines Bündels schätzt PrusaSlicer, was die Datei fordert (RM-191).
+
+    Den Centauri Carbon 2 führt kein Prusa-Bündel; die Übergabe schreibt
+    Solidons Satz samt Maschine. Bis 0.5.3 schätzte PrusaSlicer dann mit
+    seinen eingebauten 1500 mm/s², gleich was die Datei mit ``M204 S``
+    verlangte. Der Kontrollfall ist derselbe Würfel mit den Schätzwerten von
+    0.5.3 (``machine_limits_usage = ignore``, kein Dialekt): Die Druckbefehle
+    bleiben dieselben, nur die Schätzung sinkt (PrusaSlicer 2.9.6 unter
+    Windows, 09.10.2026: 891 gegen 1008 s). Grenzen gehen keine in die
+    Druckdatei, die Firmware behält ihre, und die Beschleunigung steht als
+    ``M204 S`` darin, das Marlin und Klipper lesen — ``M204 P`` ohne ``T``
+    übergeht Klipper.
+    """
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    set_test_license(monkeypatch, active=True)
+    raw = trimesh.creation.box((20.0, 20.0, 20.0))
+    raw.apply_translation((0.0, 0.0, 10.0))
+    cube = SceneObject("wuerfel", "Würfel", MeshData.of(raw))
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    setup = handover.detect(installed_slicer)
+
+    def sliced(name: str) -> handover.SliceOutcome:
+        folder = tmp_path / name
+        folder.mkdir()
+        job = _PlateJob(
+            objects=(cube,),
+            plates=(0,),
+            folder=folder,
+            name="wuerfel",
+            setup=setup,
+            settings=settings,
+            profile=profile,
+            slot_profiles={},
+        )
+        run = _prepare_plate(job, 0)
+        return handover.slice_model(
+            [run.model],
+            settings,
+            profile,
+            setup,
+            output_dir=folder,
+            timeout=600,
+            keep_arrangement=run.keep_arrangement,
+            slots=run.slots,
+            model_height=run.model_height,
+            model_meshes=run.meshes,
+            expected_tools=run.used_tools,
+        )
+
+    requested = sliced("angefordert")
+    # Ohne Ersatz, falls es die Funktion nicht gibt: Dann schätzen beide Läufe
+    # gleich, und der Vergleich unten wird rot.
+    monkeypatch.setattr(
+        handover,
+        "_prusa_time_estimate",
+        lambda _written: {"machine_limits_usage": "ignore"},
+        raising=False,
+    )
+    built_in = sliced("eingebaut")
+
+    commands = _commands(requested.gcode_path)
+    assert f"M204 S{settings.speed.acceleration:g}" in commands
+    limits = ("M201", "M203", "M205", "M204 P", "M204 T")
+    assert not [line for line in commands if line.startswith(limits)]
+    assert commands == _commands(built_in.gcode_path), "derselbe Druck"
+    assert requested.metrics.print_seconds is not None
+    assert built_in.metrics.print_seconds is not None
+    assert requested.metrics.print_seconds < built_in.metrics.print_seconds
+
+
 @pytest.mark.parametrize(
     "program",
     [pytest.param(program, marks=pytest.mark.slicer(program), id=program) for program in PROGRAMS],

@@ -98,6 +98,7 @@ dans `website/version.json`.
 - Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.
 - Le rapport de contrôle calcule plus vite et demande moins de mémoire.
 - Sous Linux avec Flatpak, Solidon signale désormais un plantage du slicer comme tel, au lieu de dire seulement qu'aucun fichier n'a été créé.
+- Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
 - Même sur un ordinateur entièrement chargé, Solidon indique la vraie raison après l'arrêt d'un slicer, au lieu d'un délai dépassé. Un fichier d'impression terminé est repris.
 
 ### Filetages, perçages et pièces normalisées
@@ -107,7 +108,7 @@ dans `website/version.json`.
 - Vis, écrous et rondelles existent selon ISO de M1,6 à M64. Pour d'autres tailles, *Taille personnalisée* déduit les cotes des tailles voisines et le signale.
 - Avec *Ajustée au perçage*, *Goupille pour perçage* construit la contrepartie : une tête fraisée affleurante pour une fraisure, un filetage extérieur de même taille et même pas pour un intérieur.
 - Sur un filetage intérieur imprimé, la sélection propose directement *Goupille pour perçage*.
-- Si une pièce séparée, comme une goupille, occupe un perçage, ses actions le signalent et proposent *Diviser en pièces distinctes*. Avant, la goupille fusionnait sans bruit avec la plaque.
+- Si une pièce séparée occupe une cavité comme un perçage, un trou oblong, une fraisure ou un filetage, même serrée ou très saillante, les actions le disent. Jusqu'ici elle fusionnait ou était coupée.
 - Nouveau : le *Goujon fileté*, une tige filetée ou un goujon sans tête, chanfreiné aux deux bouts, avec le même filetage imprimable que la vis et l'écrou.
 - Dans les perçages des blocs comme le trou de vis, l'insert à chaud ou le piège à écrou, *Goupille pour perçage* construit aussi la goupille adaptée, et prévient s'ils sont hors du corps.
 - Posé à la main sur une face, le piège à écrou creuse sa poche dans la matière. Jusqu'ici la poche restait au-dessus, et seul le trou de vis était percé.
@@ -115,7 +116,6 @@ dans `website/version.json`.
 - Posé par en dessous, le piège à écrou a sa poche sous la face, et sa fente y descend. Jusqu'ici la poche était à moitié au-dessus, la vis dans la face.
 - Si le perçage d'un bloc ne traverse pas la pièce, il s'appelle désormais borgne. Jusqu'ici il s'appelait traversant.
 - Si la paroi est plus épaisse que celle saisie pour un *Passe-câble* ou un *Embout cannelé*, l'étape le signale et ouvre l'épaisseur de paroi. Jusqu'ici le passage finissait en silence dans la matière.
-- Si une pièce séparée se trouve dans une fraisure, un trou oblong, une cuvette, une gorge ou un filetage, les actions le disent. Jusqu'ici elle était coupée ou fusionnée.
 
 ### Blocs
 
@@ -151,6 +151,8 @@ dans `website/version.json`.
 - Comme emplacement de la copie, *Dupliquer la caractéristique* propose une largeur et demie à côté de l'original, avec une paroi entre les deux et jamais le long de son axe.
 - Sur une fraisure, *Faire pivoter la caractéristique* propose le plus grand angle qui la laisse fraisure, et prévient quand une rotation ne fait que la reposer sur elle-même.
 - Si une action touchait une pièce séparée voisine, ou si une caractéristique posée ne touchait une autre matière que sur une ligne, Solidon le dit au lieu d'abîmer le corps.
+- Si une pièce séparée gêne une action sur une caractéristique, *Diviser en pièces distinctes et réessayer* la sépare et exécute l'action. Ctrl+Z annule les deux.
+- La division en pièces distinctes garde toute pièce imprimable, même goujons et rondelles près d'une grande plaque. Seules tombent petites surfaces ouvertes et miettes non imprimables.
 
 ### Générer avec l'IA
 

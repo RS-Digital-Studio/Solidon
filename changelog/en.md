@@ -97,6 +97,7 @@ it into `website/version.json`.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 - The report calculates faster and needs less memory.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
+- Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
 
 ### Threads, holes and standard parts
@@ -106,7 +107,7 @@ it into `website/version.json`.
 - Screws, nuts and washers are available to ISO from M1.6 to M64. For other sizes, *Custom size* derives the dimensions from the neighbouring sizes and says so.
 - With *To fit the hole*, *Pin for hole* builds the counterpart: a flush countersunk head for a countersink, an external thread of the same size and pitch for an internal thread.
 - On a printed internal thread, the selection offers *Pin for hole* directly.
-- If a separate part such as a pin sits in a hole, the actions on the hole say so and offer *Split into separate parts*. Until now the pin was silently merged with the plate.
+- If a separate part sits in a cavity such as a hole, slot, countersink or thread, even tightly or sticking far out, the actions say so. Until now it was merged or cut off.
 - New is the *Threaded stud*, a headless threaded rod or stud with a chamfer at both ends and the same printable thread as screw and nut.
 - In holes of parts such as the screw hole, the heat-set insert and the nut trap, *Pin for hole* also builds the matching pin. If the hole does not lie in the body, it says so.
 - Placed by hand on a face, the nut trap cuts its pocket into the material. Until now the pocket sat above it, and only the screw hole was drilled.
@@ -114,7 +115,6 @@ it into `website/version.json`.
 - Laid in from below, the nut trap's pocket sits under the face, its slot leading down to it. Until now it sat half above, with the screw in the face.
 - If the hole of a part does not go all the way through, it is now called blind. Until now it was called through.
 - If the wall is thicker than entered for a *Cable gland* or *Hose barb*, the step says so and opens the wall thickness. Until now the passage silently ended in the material.
-- If a separate part sits in a countersink, slot, socket, groove or thread, the actions say so. Until now it was cut off or merged.
 
 ### Parts
 
@@ -150,6 +150,8 @@ it into `website/version.json`.
 - As the spot for the copy, *Duplicate feature* suggests one and a half widths beside the original, with a wall in between and never along its axis.
 - On a countersink, *Turn feature* suggests the largest angle at which it stays one, and says when a turn only lays the feature onto itself.
 - If an action would hit a separate part next to the feature, or a placed feature would touch other material only along a line, Solidon says so instead of damaging the body.
+- If a separate part is in the way of a feature action, *Split into separate parts and try again* separates it and runs the action. Ctrl+Z undoes both.
+- Splitting into separate parts keeps every printable part, including pins and washers next to a large plate. Only small open surfaces and crumbs the printer cannot reproduce are dropped.
 
 ### Generating with AI
 

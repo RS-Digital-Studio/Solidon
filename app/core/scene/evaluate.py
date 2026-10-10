@@ -7315,8 +7315,9 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
     außerhalb des zulässigen Bereichs" für einen Körper, dessen Bauart nicht
     passte. Wer danach sucht, sucht bei den Zahlen.
 
-    Der Titel geht dabei nicht verloren: er steht in ``values`` und damit im
-    Bericht wie im Fehlercontainer.
+    Der Titel geht dabei nicht verloren: er steht in ``values["kind"]`` und
+    damit im Bericht wie im Fehlercontainer — außer der Fehler nennt dort
+    selbst eine Art, etwa die seines Merkmals.
 
     **Nur ein übersetztes Detail** wandert nach vorn, und daran hängt mehr als
     die Sprache: ein ``TranslatableText`` wurde für jemanden geschrieben, eine
@@ -7344,7 +7345,9 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
     detail = error.detail
     message: TranslatableText | str
     if isinstance(detail, TranslatableText):
-        values["kind"] = str(error.title)
+        # Nur wo der Fehler selbst keine Art nennt: Eine Teile-Absage trägt die
+        # Art ihres Merkmals („hole“), und der Titel schrieb sie über (RM-638).
+        values.setdefault("kind", str(error.title))
         message = detail
     else:
         if detail is not None:

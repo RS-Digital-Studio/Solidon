@@ -416,6 +416,13 @@ def test_a_technical_detail_stays_behind_the_readable_sentence(
     assert "Wand" in str(zeile.message), "ein übersetztes Detail sagt mehr als der Titel"
     assert zeile.values["kind"] == "Ein Wert liegt daneben."
 
+    # Nennt der Fehler selbst eine Art, bleibt sie (RM-638): Die Teile-Absage
+    # trägt die ihres Merkmals, und der Titel schrieb „hole“ über.
+    eigene = AppError(
+        _("Ein Wert liegt daneben."), detail=_("Die Wand ist zu dünn."), values={"kind": "hole"}
+    )
+    assert _finding_from(eigene, operation).values["kind"] == "hole"
+
 
 def test_error_places_and_outlines_remain_geometry_in_the_report() -> None:
     """Ein Fehlerort bleibt erreichbar; seine Kontur darf kein Anzeigetext werden."""
