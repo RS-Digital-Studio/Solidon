@@ -209,6 +209,36 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
   als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;
   seine Brim-Regeln aus dem Schnitt behalten das letzte Wort.
+- **Was frei druckt, soll halten** (`advise._bridges_and_overhangs`, RM-587).
+  Verlangt das Teil Stütze und druckt es mit Stützen, heißt es
+  `support.bridges` — PrusaSlicer ohne eigenen Wert und manche Profile
+  (OrcaSlicers Kobra 2) lassen sonst frei, was sie als Brücke lesen, und das
+  rechnet nur der Slicer; Solidons eigener Satz stützt
+  Brücken wie die Schichtanalyse, und die Gegenprobe fragt den wirksamen Wert,
+  nicht den Herstellerprozess. Druckt eine Brücke über `SPAN_INTERESTING`
+  frei (ohne Stützen, ohne Brückenstütze, als Kanaldecke, solange „nur vom Bett“
+  oder die Kanalsperre den Kanal freihält), dicke Bahnen und
+  `BRIDGE_FLOW` über `BRIDGE_FLOW_ENOUGH`; ein Rand spannt nicht, seine Weite
+  ist die Kantenlänge. **Zusatzwände nur unter flachen Stücken ohne Stütze, die
+  an einer Seite hängen** (`analysis.cantilevers`; hat eine Bahnenrichtung über
+  das Stück an beiden Enden Halt — Ring, U —, hängt es nicht) und breiter sind als die
+  Wände — zwischen 45 Grad und der Stützgrenze, an beidseitig gelagerten
+  Brücken und unter Deckeln ändert der Schalter in PrusaSlicer und OrcaSlicer
+  nichts. **Steile Wände dort** bekommen bei `CURLING_MATERIALS` die Umkehr,
+  nur in der Orca-Familie — steil heißt, über die Höhe weiter als eine
+  Bahnbreite über die 45-Grad-Linie hinaus (`analysis.steep_reach`, je Wand
+  über die Schichten verfolgt, je Schicht erst ab Orcas Umkehrschwelle
+  `REVERSE_THRESHOLD_SHARE`); der Streifen am Rand einer Decke und eine Rundung
+  an der Kante sind keine Wand, die Flanke neben einem Überhang schon. Alle fünf gehen **je Teil**
+  (`PART_PATHS`): Jedes Programm, das einen nimmt, wendet ihn je Objekt an
+  (zwei Teile, nur eines mit Wert, in acht Programmen gemessen). Was ein
+  Programm nicht kennt oder nicht umsetzt, steht in `slicer_keys.NOT_TAKEN_BY*`
+  (Cura keinen der fünf, SuperSlicer nur dicke Brücken und Fluss als alte
+  Namen). **Was ein Programm gar nicht kennt** (`UNKNOWN_TO_PROGRAM`), trägt
+  eine Datei ohne bekanntes Programm weder auf der Platte noch je Teil
+  (`unknown_in_file`), und der vollständige Prusa-Satz schreibt solche
+  Schlüssel nur abweichend vom Programmwert (`QUIET_AT_DEFAULT`): SuperSlicers
+  3MF-Leser stürzt ab zwei fremden Schlüsseln ab (RM-459).
 - **Eine runde Außenwand bekommt die Schrägnaht vorgeschlagen**: glatte
   Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, gemessen über Arme
   der Düsenbreite wie im Slicer, ab `advise.SCARF_MIN_LOOP` Umfang) über

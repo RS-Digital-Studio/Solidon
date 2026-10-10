@@ -1271,6 +1271,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "shell.overhang_reverse": "PrusaSlicer kennt keine Umkehr an Überhängen (2.9.6).",
         "support.tree_walls": "PrusaSlicer zählt keine Baumwände (``NOT_TAKEN_BY``, RM-584).",
         "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
     },
@@ -1291,6 +1292,11 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "filament.colour": "wie oben",
         "filament.cost_per_kg": "wie oben",
         "filament.max_flow": "CuraEngine liest den Volumenstrom nicht; Solidon deckelt die Tempi.",
+        "shell.thick_bridges": "CuraEngine kennt keine dicken Brücken (RM-587).",
+        "shell.bridge_flow": "Curas Brückenfluss bezieht sich auf eigene Bahnen (60 %).",
+        "shell.overhang_walls": "CuraEngine kennt keine Zusatzwände an Überhängen.",
+        "shell.overhang_reverse": "CuraEngine kennt keine Umkehr an Überhängen.",
+        "support.bridges": "CuraEngine stützt Brücken immer, ohne Schalter.",
     },
 }
 
@@ -7341,6 +7347,18 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "Trennschicht zu einem Drittel dicht wie bei Creality und Elegoo "
         "(``handover._for_supports``). Diese Messung setzt den Wert ohne Wahl."
     ),
+    ("shell.overhang_reverse", "prusa"): (
+        "PrusaSlicer 2.9.6 kennt keine Umkehr an Überhängen (``--help-fff``); nur die "
+        "Orca-Familie dreht die Wand dort je zweite Schicht (RM-587)."
+    ),
+    ("shell.thick_bridges", "cura"): "CuraEngine kennt keine dicken Brücken (RM-587).",
+    ("shell.bridge_flow", "cura"): (
+        "Curas Brückenfluss (``bridge_skin_material_flow``, 60 %) rechnet auf eigene Bahnen "
+        "und ist kein Anteil wie bei Orca und PrusaSlicer (RM-587)."
+    ),
+    ("shell.overhang_walls", "cura"): "CuraEngine kennt keine Zusatzwände an Überhängen.",
+    ("shell.overhang_reverse", "cura"): "CuraEngine kennt keine Umkehr an Überhängen.",
+    ("support.bridges", "cura"): "CuraEngine stützt Brücken immer, einen Schalter gibt es nicht.",
 }
 
 

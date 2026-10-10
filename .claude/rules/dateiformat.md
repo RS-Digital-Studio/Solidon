@@ -304,7 +304,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   die das Teil verlangt (`PartSplit.accepted_per_part`). CuraEngine nimmt nur
   `CURA_PER_MESH` je Netz: Die Platte behält die Übernahme, ein Teil ohne
   Bedarf bekommt je Netz die Grundlage zurück (`PartSplit.revert`). Was ein
-  Slicer nicht je Teil annimmt, bleibt plattenweit; gefragt wird ohne die
+  Slicer nimmt, aber nicht je Teil, bleibt plattenweit; gefragt wird ohne die
   Übernahme (`PartSplit.base`), und wer sie nur mitbekommt, erfährt es
   (`export.part_setting_unavailable`). `write_assembly` und `slice_model`
   fragen dieselbe Trennung; Haftungsprüfung und Stützsperre fragen den Wert,

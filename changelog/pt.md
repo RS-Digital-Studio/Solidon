@@ -90,18 +90,21 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Sob os suportes em árvore do Cura, o Solidon propõe uma camada de separação superior, porque sem ela o Cura deixa uma camada de ar a mais.
 - Com o Cura, o pé do suporte em superfícies inclinadas fica agora em degraus sem camada de separação inferior, e liso com ela, como o Cura prevê.
 - Para PLA, o Solidon propõe mais espaço entre as muitas pontas finas e os suportes em árvore por baixo. Assim ficam menos resíduos das pontas dos suportes.
+- As pontes longas recebem o suporte que o Solidon prevê, também no PrusaSlicer. Se uma ponte longa ficar sem suporte, o Solidon propõe linhas grossas e um pouco menos de fluxo.
+- As saliências planas sem suporte recebem paredes extra como proposta. Com ABS, ASA e TPU o slicer imprime as saliências íngremes em sentido alternado para que não enrolem.
+- As definições de ponte, as paredes extra e o sentido alternado valem só para a peça que precisa delas. As outras peças da mesma placa imprimem como antes.
+- Sem perfil do fabricante, o PrusaSlicer e o SuperSlicer imprimem agora as pontes finas. Onde uma ponte precisa de linhas grossas e menos fluxo, o Solidon propõe-nas para essa peça.
 - Onde o Solidon propõe mais espaço sobre os suportes em árvore, propõe também uma *Ponta da árvore* mais larga. Cada ponta leva uma camada de separação e fica menos suporte preso às faces inferiores.
 - Se muitas saliências pequenas precisam de suportes juntas, como um queixo com a face inferior inclinada, o relatório indica agora o local.
 - Um rebordo estreito que se sustenta sozinho já não conta como ponte longa, nem junto a outra saliência. O relatório já não avisa aí, e o Solidon não pede suportes por isso.
 - Sobre um canal, o relatório já não aconselha um suporte que depois não se conseguiria tirar. Indica o canal e uma transição abaixo de 45 graus.
-- Para PETG, o Solidon sugere arrefecimento total no suporte. Assim solta-se mais facilmente da peça.
-- Novo nas definições de impressão: *Camadas de separação inferiores*, *Folga na camada de separação* e *Arrefecimento total no suporte*.
+- Para PETG, o Solidon sugere *Arrefecimento total no suporte*. Assim solta-se mais facilmente da peça.
+- Novas definições de impressão: *Camadas de separação inferiores*, *Paredes das árvores* e *Ponta da árvore*, mais *Contrair a primeira camada* e *Alargar furos*, que seguem o slicer se não escolher.
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.
 - Se o slicer recusar filamentos com temperaturas demasiado diferentes numa placa, o Solidon indica agora o motivo e o que fazer, em vez de dizer apenas que não foi criado nenhum ficheiro.
 - No diálogo de impressão, impressora, filamentos e qualidade ficam totalmente visíveis também com letra ampliada. As legendas longas passam para a linha seguinte.
 - O relatório de verificação calcula mais depressa e precisa de menos memória.
 - No Linux com Flatpak, o Solidon indica agora que o slicer encerrou inesperadamente, em vez de dizer apenas que não foi criado nenhum ficheiro.
-- Novo nas definições de impressão: *Contrair a primeira camada* e *Alargar furos*. Enquanto não escolher nada, vale o valor do slicer.
 - Se uma peça já compensa no modelo, com um furo com *Aplicar compensação do material* ou *Compensar o pé de elefante*, o Solidon sugere que o slicer não o faça de novo.
 - Também com impressoras que o PrusaSlicer ou o SuperSlicer não conhecem, ambos calculam o tempo de impressão com as acelerações entregues, e o ficheiro indica o material da bobina.
 - Mesmo com o computador em plena carga, o Solidon indica o motivo real ao parar um slicer, em vez de um tempo esgotado. Um ficheiro de impressão terminado é aproveitado.

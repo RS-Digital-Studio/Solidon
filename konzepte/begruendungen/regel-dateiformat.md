@@ -669,9 +669,9 @@ der Regel.
 ## Wie eine Zuordnung geprüft wird
 
 Einen falschen Schlüsselnamen meldet kein Slicer; deshalb vergleicht Solidon
-selbst. Ein Prusa-Bündelabschnitt wird am Namen erkannt, weil
-`PrusaResearch.ini` über neuntausend Profile trägt (beides aus der Regel
-hierher verschoben).
+selbst (aus der Regel hierher verschoben). Warum ein Prusa-Bündelabschnitt am
+Namen erkannt wird, steht unter „Auf dem Herstellerprofil wird nur die
+Abweichung geschrieben“.
 
 > `verify()` vergleicht sie gegen das Geschriebene: 53 von 53 beim einen, 56
 > von 56 beim anderen. […] **CuraEngine schreibt dort nichts** — null von 47.

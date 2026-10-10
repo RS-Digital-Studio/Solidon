@@ -90,18 +90,21 @@ it into `website/version.json`.
 - Under Cura's tree supports, Solidon suggests a top interface layer, because without one Cura leaves an extra layer of air.
 - With Cura, the support foot on sloped surfaces is now stepped when there is no bottom interface layer, and smooth with one, as Cura intends.
 - For PLA, Solidon suggests more clearance from tree supports beneath many fine tips. This leaves less residue from the tree tips there.
+- Long bridges get the support Solidon plans for them, in PrusaSlicer too. If a long bridge stays without support, Solidon suggests thick lines and slightly less flow.
+- Flat overhangs without support get extra walls suggested. For ABS, ASA and TPU the slicer can print steep overhangs in alternating directions on request, so they do not curl up.
+- Bridge settings, extra walls and the alternating direction apply only to the part that needs them. The other parts on the same plate print as before.
+- Without a manufacturer profile, PrusaSlicer and SuperSlicer now print bridges thin. Where a bridge needs thick lines and less flow, Solidon suggests them for that part.
 - Where Solidon suggests more clearance above tree supports, it also suggests a wider *Tree tip*. Every tip then carries an interface layer, and less support sticks to undersides.
 - When many small overhangs need supports together, such as a chin with a sloped underside, the check report now names the spot.
 - A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.
 - Over a channel, the check report no longer recommends a support that could not be removed from it. It names the channel and a transition below 45 degrees.
-- For PETG, Solidon suggests full cooling at the support. It then comes off the part more easily.
-- New in the print settings: *Interface layers below*, *Interface gap* and *Full cooling at the support*.
+- For PETG, Solidon suggests *Full cooling at the support*. It then comes off the part more easily.
+- New in the print settings: *Interface layers below*, *Tree walls* and *Tree tip*, plus *Pull in first layer* and *Widen holes*, which follow the slicer unless you set them.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
 - The report calculates faster and needs less memory.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
-- New in the print settings: *Pull in first layer* and *Widen holes*. Unless you set them, the slicer's own value applies.
 - If a part already compensates in the model, with a hole drilled with *Apply material tolerance* or *Compensate the elephant foot*, Solidon suggests that the slicer does not do it again.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.

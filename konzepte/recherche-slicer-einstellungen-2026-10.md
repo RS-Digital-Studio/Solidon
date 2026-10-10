@@ -320,6 +320,10 @@ Kobra 2 in Orca; Prusa MK4S bzw. Prusa-Bündel). „Solidon“ bezieht sich auf
   sondern eine Op-Frage (Regel 2).
 - **Solidon:** Cura-Stufen werden aus Bahnbreite/Schichthöhe nachgerechnet
   (`handover._for_overhangs`); sonst Hersteller.
+- **Nachgemessen (RM-587):** Zusatzwände ändern zwischen 45 Grad und der
+  Stützgrenze nichts (PrusaSlicer und OrcaSlicer bitgleich), sie wirken unter
+  einseitig hängenden flachen Überhängen ohne Stütze. Im Band wirkt die Umkehr.
+  Messwerte: `konzepte/begruendungen/regel-druckrat.md`.
 
 ### 3.3 Brücken
 

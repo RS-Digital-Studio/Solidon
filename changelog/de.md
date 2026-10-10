@@ -115,18 +115,21 @@ Nutzen da und sonst nichts.
 - Unter Curas Baumstützen schlägt Solidon eine obere Trennschicht vor, weil Cura ohne sie eine Schicht mehr Luft lässt.
 - Mit Cura steht der Stützfuß auf schrägen Flächen jetzt in Stufen, wenn unten keine Trennschicht liegt, und glatt mit ihr, wie Cura es vorsieht.
 - Bei PLA schlägt Solidon für viele feine Spitzen mehr Abstand zu den Baumstützen darunter vor. Dadurch bleiben dort weniger Reste der Baumspitzen.
+- Lange Brücken bekommen die Stütze, die Solidon vorsieht, auch in PrusaSlicer. Bleibt eine lange Brücke ohne Stütze, schlägt Solidon dicke Bahnen und etwas weniger Fluss vor.
+- Flache Überhänge ohne Stütze bekommen Zusatzwände vorgeschlagen. Bei ABS, ASA und TPU druckt der Slicer steile Überhänge auf Vorschlag in wechselnder Richtung, damit sie sich nicht aufrollen.
+- Brückenwerte, Zusatzwände und die wechselnde Richtung gelten nur für das Teil, das sie braucht. Die anderen Teile derselben Platte drucken unverändert.
+- Ohne Herstellerprofil drucken PrusaSlicer und SuperSlicer Brücken jetzt dünn. Wo eine Brücke dicke Bahnen und weniger Fluss braucht, schlägt Solidon sie für dieses Teil vor.
 - Wo Solidon mehr Abstand über Baumstützen vorschlägt, schlägt es auch eine breitere *Baumspitze* vor. Dann sitzt auf jeder Spitze eine Trennschicht, und an Unterseiten bleibt weniger Stütze hängen.
 - Verlangen viele kleine Überhänge zusammen Stützen, etwa an einem Kinn mit schräger Unterseite, nennt der Prüfbericht jetzt die Stelle.
 - Ein schmaler Rand, der sich selbst trägt, gilt nicht mehr als lange Brücke, auch neben einem anderen Überhang. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.
 - Über einem Kanal rät der Prüfbericht nicht mehr zu einer Stütze, die dort nicht mehr herauskäme. Er nennt den Kanal und den Übergang unter 45 Grad.
-- Für PETG schlägt Solidon volle Kühlung an der Stütze vor. Sie löst sich so leichter vom Teil.
-- Neu in den Druckeinstellungen: *Trennschichten unten*, *Lücke in der Trennschicht* und *Volle Kühlung an der Stütze*.
+- Für PETG schlägt Solidon *Volle Kühlung an der Stütze* vor. Sie löst sich so leichter vom Teil.
+- Neu in den Druckeinstellungen: *Trennschichten unten*, *Wände der Bäume* und *Baumspitze*, dazu *Erste Schicht einziehen* und *Löcher weiten*, die dem Slicer folgen, solange Sie nichts wählen.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
 - Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
 - Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
-- Neu in den Druckeinstellungen: *Erste Schicht einziehen* und *Löcher weiten*. Solange Sie nichts wählen, gilt der Wert des Slicers.
 - Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.

@@ -68,7 +68,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-704 — Kinn und Bein am dritten Drachendruck](#rm-704) | Geometrie, Erkennung und Druckvorbereitung | Trennschicht auf jeder Baumspitze gebaut (Archiv, RM-704 Teil); offen: Kinn, Kopf und Vorderbeine an Druck 4 prüfen, Wände an schlanken Gliedern (nach welle4), die Spitze in PrusaSlicer und Cura |
 | [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
 | [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
-| [RM-587 — Lange Brücken und steile Überhänge drucken sauber](#rm-587) | Geometrie, Erkennung und Druckvorbereitung | Dicke Brücke und Fluss über langen Brücken, Zusatzwände an steilen Überhängen |
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und eine Insel im umschlossenen Kanalraum verliert ihre Säule](#rm-626) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-571 (09.10.), mit Sonden belegt; nächster Schritt: Inseln behalten ihre Säule (Test an der Kammer), Schätzung messen, Kammer mit Insel in den vier Slicern |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
@@ -106,8 +105,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-637 — Die Merkmalserkennung auf mehrere Prozesse verteilen, mit gleichem Ergebnis](#rm-637) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 09.10.): ja. Baut nach Paket E auf dessen Zweig; Laden mechanischer Teile bleibt sonst drei- bis fünfmal langsamer als v0.4.4 (Rest K-3) |
 | [RM-692 — Funktionale Gruppen werden nach jedem Verschieben neu gerechnet](#rm-692) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: Eiffelturm 3,6 s, Besteckkasten 2,8 s je Verschieben vor dem Bild; Merker in `perceive/features.py`, nach Paket E |
 | [RM-697 — Ein unverändertes Netz wird bei jedem Schritt neu auf die Platte geschrieben](#rm-697) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in L3: jede Filamentzuweisung schreibt das gleiche Netz komprimiert neu (Spiderman 0,8 s); Formatfrage im Plattencache, nach Paket E |
+| [RM-756 — Eine Merkmalshandlung an einem Merkmal ohne eigene Flächen schneidet ein getrenntes Teil still an](#rm-756) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in der Nachprüfung von Paket I: an der Tasche einer Mutternfalle 66 mm³ eines getrennten Teils weg, ohne Befund; `_refuse_if_another_part_changed` findet das Teil nur über die Flächen des Merkmals (Lücke im Nachweis von RM-596) |
+| [RM-759 — Den gemerkten Slicerbestand am echten Fenster abnehmen](#rm-759) | Geometrie, Erkennung und Druckvorbereitung | Rest von RM-670: erster und zweiter 3MF-Export mit Orca, PrusaSlicer und Cura, Figur und Beispielprojekt am echten Fenster, beim Release (RM-213) |
 | [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–73 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py`, löst §21.2 |
 | [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: mitgetragen hat die Normale die Länge \|n\|/f, frisch erkannt \|n\|; `perceive/matching.py` |
+| [RM-758 — Der Plattencache friert übersetzbare Befundwerte ein](#rm-758) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review 1 zu RM-698: `serialise.finding_to_data` schreibt `values` mit `str(value)`, nach dem Öffnen nennt ein Befund den Körper in der Sprache des Caches |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -970,15 +972,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `adaptive_layer_height_enabled`; bei feinen Schichten werden Deckschichten unter 0,8 mm
   dünn (Recherche Nr. 9, 10). Abnahme: am Drachen feine Schichten nur an Kuppen und
   Schuppen, Druckzeit genannt, in allen Familien gemessen.
-
-<a id="rm-587"></a>
-
-- [ ] **RM-587 — Lange Brücken und steile Überhänge drucken sauber.**
-  Solidon meldet Brücken ab 15 mm und setzt nur Tempo und Lüfter. Dicke Brücken,
-  Brückenfluss und Zusatzwände an Überhängen zwischen 45° und der Stützgrenze bleiben beim
-  Hersteller, meist aus (Recherche Nr. 11, 12). Abnahme: Vorschläge mit Grund, an einer
-  Brücke und einem Überhang im Slicer gemessen.
-  Vermerk 09.10.2026 (G-Code-Gegenprüfung vom 03.10., N1): PrusaSlicer 2.9.6 mit Solidons eigenem Satz (`generic-220`, jeder Drucker ohne Bündelprofil) stützt eine 36-mm-Brücke bei „Stützen überall“ nicht (0 mm³), weil Solidon `dont_support_bridges` nicht schreibt und die Programmvorgabe 1 bleibt; SuperSlicer, Cura, die Orca-Familie und PrusaSlicer mit Bündel stützen sie, die Schichtanalyse rechnet 901 mm³. Am Stand origin/main liest Solidon den Wert nur aus Herstellerprofilen (`app/core/export/manufacturer.py:917`, `:1013`). Die Brückenstütze als Folge von „Stützen überall/nur vom Bett“ in die Stütztabelle jeder Familie (`dont_support_bridges`, `bridge_no_support`) aufnehmen und die Stützgegenprobe unter Brücken mitmessen. Beleg: `F:\solidon-review-reports\gcode\schluss.md`, `gcode\befunde.md`.
 
 <a id="rm-588"></a>
 
@@ -3180,7 +3173,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Skizzentext, der über `_solve_in_coordinates` wie 0.5.0 bis 0.5.3 rechnet. Der Editor rechnet ab
   der ersten Änderung mit der heutigen Fassung, von der Lage aus, die zu sehen war; das Binden von
   Projektmaßen behält die Fassung. Die Fassung steht im Cache-Schlüssel, die Beispielprojekte
-  tragen Format 50.
+  tragen Format 51.
 
   **Review 1 (09./10.10.2026), behoben:** H-1 (Gelenk im Rundungsabstand folgte dem Zug nicht,
   0,27 mm hinter dem Zeiger), M-1 (unerreichbare Züge biegsamer Formen je Ort bis 4,47 mm, in
@@ -3686,6 +3679,31 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** gleiches Netz wird nicht erneut geschrieben (Inhaltsschlüssel), Auswertung mit und
   ohne Cache gleich, Zeit im Wechsel gemessen.
 
+<a id="rm-756"></a>
+
+- [ ] **RM-756 — Eine Merkmalshandlung an einem Merkmal ohne eigene Flächen schneidet ein getrenntes Teil still an.**
+  Gefunden in der Nachprüfung von Paket I (Welle 3): An der Tasche einer Mutternfalle, einem
+  Merkmal ohne eigene Flächen, nimmt eine Merkmalshandlung einem getrennten Teil 66 mm³ weg,
+  ohne Befund und ohne Absage. `_refuse_if_another_part_changed` (`geom/prepare_ops.py`) sucht
+  das betroffene Teil nur über die Flächen des Merkmals und findet bei einem Merkmal ohne
+  Flächen keines — eine Lücke im Nachweis von [RM-596](ROADMAP-ARCHIV.md#rm-596) (Merkmalshandlungen
+  lassen fremde Teile, wie sie sind). RM-757 war eine zweite Nummer für denselben Fund und entfällt.
+  **Abnahme:** Test zuerst (Mutternfalle neben einem getrennten Teil, Handlung an der Tasche:
+  das fremde Teil bleibt Bit für Bit, oder die Handlung sagt mit Weg ab, Regel 17), an beiden
+  Kernen, Gegenprobe am alten Stand rot.
+
+<a id="rm-759"></a>
+
+- [ ] **RM-759 — Den gemerkten Slicerbestand am echten Fenster abnehmen.**
+  Rest von RM-670 ([Archiv](ROADMAP-ARCHIV.md#rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026)):
+  Der Bestand je Slicer bleibt gemerkt, ein zweiter 3MF-Export liest ihn nicht neu. Belegt ist
+  das im Kern an ElegooSlicer, OrcaSlicer, PrusaSlicer und Cura mit Würfel, Figur, Dose und
+  Halter, am Fenster nur offscreen am Würfel.
+  **Abnahme:** am echten Fenster beim Release ([RM-213](#rm-213)) mit Orca, PrusaSlicer und
+  Cura, je mit der Figur aus Weg 4 und einem Beispielprojekt: Der zweite 3MF-Export liest den
+  Bestand nicht neu, eine Änderung im Slicer sieht der nächste Export, und die Datei gleicht
+  der aus einem ungemerkten Lesen.
+
 <a id="rm-752"></a>
 
 - [ ] **RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel.**
@@ -3713,6 +3731,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   über `transformed_features` (`exact`) in der örtlichen Nachmessung.
   **Abnahme:** Test zuerst (Skalierung um 2 und 0,5: mitgeführte Normale gleich der frisch
   erkannten, Zuordnung unverändert), Gegenprobe am alten Stand rot.
+
+<a id="rm-758"></a>
+
+- [ ] **RM-758 — Der Plattencache friert übersetzbare Befundwerte ein.**
+  Gefunden im Review 1 zu RM-698 (Sonde `review-sparen-sonden/sonden/probe_cache_equal.py`,
+  Ausgabe `equal_vergleich.txt`): `serialise.finding_to_data` schreibt `values` mit
+  `str(value)`, `scene/cache.py` (`_finding_to_cache`) übernimmt das. Im Beispiel
+  *passung-nach-materialwechsel* trägt `prepare.material` im Wert `object` frisch einen
+  `TranslatableText` („Deckel“), nach dem Wiederöffnen die Zeichenkette. Nach einem
+  Sprachwechsel nennt der Befund den Körper in der Sprache, in der der Cache geschrieben wurde.
+  In jedem Stand gleich, nicht durch RM-698 entstanden.
+  **Abnahme:** Test zuerst (Befund mit übersetzbarem Wert durch den Plattencache, nach
+  Sprachwechsel in der neuen Sprache), Auswertung mit und ohne Cache gleich, `cache_version`
+  bzw. `CACHE_FORMAT_VERSION` steigt.
 
 ## Bedienung und Darstellung
 
