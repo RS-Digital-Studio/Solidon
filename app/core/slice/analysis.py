@@ -2162,12 +2162,13 @@ def _shafts_pass(
                 if not _shaft_step(way, blocked, step, z, touching, shade_at(index), slope):
                     answers.update(dict.fromkeys(way.starts, False))
                     continue
-            for joined in ways:
-                if _same_centres(joined.centres, way.centres):
-                    joined.starts.extend(way.starts)
-                    break
-            else:
-                ways.append(way)
+            for piece in _split_by_hole(way, shade):
+                for joined in ways:
+                    if _same_centres(joined.centres, piece.centres):
+                        joined.starts.extend(piece.starts)
+                        break
+                else:
+                    ways.append(piece)
     for start in pending:
         answers[start] = _touching_centres(column, materials[start], line_width) is not None
     for way in ways:
@@ -2188,6 +2189,43 @@ class _ShaftWay:
     pushes: list[tuple[float, float, float]]
     middles: list[tuple[float, float, float]]
     touching: bool
+
+
+def _split_by_hole(way: _ShaftWay, shade: ShapelyPolygon) -> list[_ShaftWay]:
+    """Die Mitten eines Wegs (:func:`_shafts_pass`), nach den Löchern der
+    Schicht getrennt: je Loch ein Weg mit einer Kopie des Verlaufs, sonst der
+    Weg selbst. ``shade`` ist das Material der Schicht, mindestens ``R`` um die
+    Mitten zugeschnitten.
+
+    **Je Loch eine Neigung.** Liegen die Mitten in zwei Löchern, die
+    verschieden wandern — ein Schacht, der sich in zwei Äste teilt, zwei
+    gegenläufig geneigte Schlitze —, wandert ihr gemeinsamer Schwerpunkt kaum
+    (:func:`_hole_middle`), die Ellipse wurde nie gerechnet, und jeder Ast
+    zählte mit seiner waagerechten Weite: Ein Y mit Ästen von 22 mm um ±45°
+    öffnete den geschlossenen Becher (Nachprüfung RM-629). Eine Scheibe ist
+    offen, wenn einer ihrer Wege durchkommt.
+    """
+    parts = _areas_of(way.centres)
+    if len(parts) < 2:
+        return [way]
+    low_x, low_y, high_x, high_y = way.centres.bounds
+    edge = CHANNEL_WIDTH / 2.0
+    free = _areas_of(
+        shapely.box(low_x - edge, low_y - edge, high_x + edge, high_y + edge).difference(shade)
+    )
+    groups = [inside for hole in free if (inside := [p for p in parts if p.intersects(hole)])]
+    if len(groups) < 2:
+        return [way]
+    return [
+        _ShaftWay(
+            cast(ShapelyPolygon, unary_union(group)),
+            list(way.starts),
+            list(way.pushes),
+            list(way.middles),
+            way.touching,
+        )
+        for group in groups
+    ]
 
 
 def _shaft_step(

@@ -1549,6 +1549,38 @@ def test_a_shaft_is_open_where_every_layer_holds_a_channel_circle(
     assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
 
 
+@pytest.mark.parametrize(("width", "open_"), [(22.0, False), (28.0, False), (31.0, True)])
+def test_each_branch_of_a_forked_shaft_counts_with_its_width_across_the_axis(
+    width: float, open_: bool
+) -> None:
+    """Ein Schacht, der sich in zwei Äste teilt, gegenläufig um 45° geneigt,
+    quer zur Achse je ``width`` weit. Lagen die Mitten eines Wegs in beiden
+    Ästen, wanderte ihr gemeinsamer Schwerpunkt nicht, die Ellipse wurde nie
+    gerechnet, und jeder Ast zählte mit seiner waagerechten Weite: 22 und
+    28 mm waren offen (Nachprüfung RM-629, Fund A). Synthetisch: eine Platte
+    von z = 10 bis 30, die Äste wandern je Millimeter Höhe um 1 mm nach außen."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    heights = [0.25 + 0.5 * index for index in range(84)]
+    across = width / math.cos(math.radians(45.0))
+    plate = box(-150.0, -150.0, 150.0, 150.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if not 10.0 <= z <= 30.0:
+            return ShapelyPolygon()
+        shift = z - 10.0
+        right = box(shift, -30.0, shift + across, 30.0)
+        left = box(-shift - across, -30.0, -shift, 30.0)
+        return plate.difference(right.union(left))
+
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    sky = _sky_above(_sky_window(column, LINE), [4], shade_at, len(heights))[4]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
+
+
 @pytest.mark.parametrize(
     ("lean", "gap", "open_"),
     [(0.0, 2.0, False), (0.57, 2.0, False), (2.9, 2.0, False), (0.0, 0.3, True), (2.9, 0.3, True)],
