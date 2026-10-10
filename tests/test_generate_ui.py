@@ -962,13 +962,14 @@ def test_the_session_puts_a_generated_body_on_the_stack(
     # Bildmodell liefert, ist auf einen Einheitswürfel normiert und misst als
     # Millimeter gelesen ein bis zwei. Erst auf Maß bringen, dann bereinigen —
     # andersherum verschweißt die Reparatur bei dieser Größe die halbe Lehne —,
-    # und zuletzt aufsetzen, denn die Reparatur kann unter dem Körper etwas
-    # wegnehmen.
+    # und zuletzt aufs Kundenmaß bringen und dort aufsetzen, denn die Reparatur
+    # kann unter dem Körper etwas wegnehmen, und eine Maßänderung soll nur
+    # diesen Schritt neu rechnen (RM-676).
     assert [entry.op for entry in session.project.document.ops] == [
         "load",
         "fit_to_size",
         "repair",
-        "place_on_bed",
+        "fit_to_size",
     ]
     assert object_id == "obj_1"
     assert session.project.document.sources["src_1"].kind == "generated"
@@ -3243,16 +3244,93 @@ def test_the_fitted_finding_of_a_generation_changes_its_size(
 ) -> None:
     """RM-374, Abnahme am Fenster: Erzeugung → Befund mit *Größe ändern*; der
     Klick öffnet ``fit_to_size`` dieses Körpers mit dem aktuellen Maß, und
-    150 mm dort machen den Körper 150 mm groß — ein normaler Parameter."""
-    import time
+    150 mm dort machen den Körper 150 mm groß — ein normaler Parameter.
 
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QDoubleSpinBox
+    RM-676 am selben Weg: Geöffnet wird der letzte Schritt der Kette, weder
+    Vorschau noch Übernehmen rechnen die Reparatur am neuen Maß, und ein
+    Strg+Z nimmt die Maßänderung zurück. Die Vorschau prüft den Druck fein und
+    darf dafür die Kette davor fein rechnen — an der Arbeitsgröße, wie jede
+    frische Rechnung."""
+    from app.core.registry import REGISTRY
 
     session = window.session
     object_id = session.add_generated(generator.text_to_mesh("eine kleine Figur", seed=3))
     assert session.wait_for_idle()
     window.report.show_result(session.last_result, session.project.document)
+    transactions = len(session.project.document.transactions)
+
+    repair = REGISTRY.get("repair")
+    real = repair.fn
+    repaired_at: list[float] = []
+
+    def measured(ctx: Any) -> Any:
+        repaired_at.append(max(ctx.inputs[0].mesh.bounds.size))
+        return real(ctx)
+
+    object.__setattr__(repair, "fn", measured)
+    try:
+        _change_the_size_at_the_finding(qt_app, window, session)
+    finally:
+        object.__setattr__(repair, "fn", real)
+
+    body = session.last_result.scene.objects[object_id]
+    assert max(body.mesh.bounds.size) == pytest.approx(150.0, abs=1e-3)
+    sizing = session.history.operations[-1]
+    assert sizing.op == "fit_to_size"
+    assert sizing.params["largest"] == pytest.approx(150.0)
+    assert all(edge == pytest.approx(100.0, abs=1e-3) for edge in repaired_at), (
+        "die Maßänderung rechnete die Reparatur am neuen Maß neu",
+        repaired_at,
+    )
+    assert len(session.project.document.transactions) == transactions + 1, "ein Rückgängig-Schritt"
+
+    session.undo()
+    assert session.wait_for_idle()
+    back = session.last_result.scene.objects[object_id]
+    assert max(back.mesh.bounds.size) == pytest.approx(100.0, abs=1e-3)
+
+
+def test_the_working_size_step_says_which_step_sets_the_size(
+    qt_app: QApplication, window: Any, generator: ScriptedMeshBackend
+) -> None:
+    """Review D, M1: Wer im Verlauf den ersten *Auf Maß bringen* einer Erzeugung
+    öffnet, liest, dass ein späterer Schritt das Maß setzt — sonst ändert er die
+    Arbeitsgröße, wartet auf die Reparatur und sieht kein anderes Maß."""
+    session = window.session
+    session.add_generated(generator.text_to_mesh("eine kleine Figur", seed=3))
+    assert session.wait_for_idle()
+    ops = session.project.document.ops
+    working, customer = (entry.id for entry in ops if entry.op == "fit_to_size")
+    number = [entry.id for entry in ops].index(customer) + 1
+
+    window.edit_operation(working)
+    qt_app.processEvents()
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        assert dialog._note.isVisibleTo(dialog), "der Satz steht im Dialog"
+        assert f"Schritt {number}" in dialog._note.text(), dialog._note.text()
+    finally:
+        dialog.reject()
+    qt_app.processEvents()
+
+    window.edit_operation(customer)
+    qt_app.processEvents()
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        assert not dialog._note.isVisibleTo(dialog), "der letzte setzt das Maß selbst"
+    finally:
+        dialog.reject()
+
+
+def _change_the_size_at_the_finding(qt_app: QApplication, window: Any, session: Any) -> None:
+    """Im Bericht den Befund „Auf Maß gebracht“ wählen, *Größe ändern* klicken,
+    150 mm eintragen und übernehmen — der Weg des Kunden."""
+    import time
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QDoubleSpinBox
 
     listing = window.report.list
     item = next(
@@ -3299,11 +3377,6 @@ def test_the_fitted_finding_of_a_generation_changes_its_size(
         if window._op_dialog is dialog:
             dialog.reject()
     assert session.wait_for_idle()
-
-    body = session.last_result.scene.objects[object_id]
-    assert max(body.mesh.bounds.size) == pytest.approx(150.0, abs=1e-3)
-    sizing = next(entry for entry in session.history.operations if entry.op == "fit_to_size")
-    assert sizing.params["largest"] == pytest.approx(150.0)
 
 
 # --- Interne Werte bleiben aus der Meldung (RM-456) ----------------------------

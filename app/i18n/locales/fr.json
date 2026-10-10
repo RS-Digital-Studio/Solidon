@@ -1090,6 +1090,7 @@
   "Das Maß bleibt auf der eingegebenen Höhe; darunter wird es breiter.": "La cote reste à la hauteur saisie ; en dessous, la pièce s'élargit.",
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung beginnt — bei „nach oben“ unten.": "La cote reste là où la pièce commence dans la direction de démoulage — en bas pour « vers le haut ».",
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung endet — bei „nach oben“ oben.": "La cote reste là où la pièce se termine dans la direction de démoulage — en haut pour « vers le haut ».",
+  "Das Maß des Körpers setzt Schritt {number}. Dieser Wert wirkt nur auf die Schritte dazwischen.": "La taille du corps est fixée par l'étape {number}. Cette valeur n'agit que sur les étapes intermédiaires.",
   "Das Maß einer Bedingung ist ein Ausdruck als Text.": "La cote d'une contrainte est une expression sous forme de texte.",
   "Das Merkmal hat dieses Maß schon.": "La caractéristique a déjà cette dimension.",
   "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es verweisen, finden es nicht mehr.": "La caractéristique est supprimée. Les étapes et ajustements ultérieurs qui s'y réfèrent ne la trouveront plus.",

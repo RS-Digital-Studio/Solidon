@@ -1089,6 +1089,7 @@
   "Das Maß bleibt auf der eingegebenen Höhe; darunter wird es breiter.": "The size stays at the height you enter; below it the part gets wider.",
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung beginnt — bei „nach oben“ unten.": "The size stays where the part begins in the pull direction — at the bottom for “upwards”.",
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung endet — bei „nach oben“ oben.": "The size stays where the part ends in the pull direction — at the top for “upwards”.",
+  "Das Maß des Körpers setzt Schritt {number}. Dieser Wert wirkt nur auf die Schritte dazwischen.": "Step {number} sets the size of the body. This value only affects the steps in between.",
   "Das Maß einer Bedingung ist ein Ausdruck als Text.": "The value of a constraint is an expression as text.",
   "Das Merkmal hat dieses Maß schon.": "The feature already has this dimension.",
   "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es verweisen, finden es nicht mehr.": "The feature is removed. Later steps and fits that refer to it will no longer find it.",

@@ -1090,6 +1090,7 @@
   "Das Maß bleibt auf der eingegebenen Höhe; darunter wird es breiter.": "La quota resta all'altezza inserita; al di sotto il pezzo si allarga.",
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung beginnt — bei „nach oben“ unten.": "La quota resta dove il pezzo inizia nella direzione di sformo — in basso con «verso l'alto».",
   "Das Maß bleibt dort, wo das Teil in Entformungsrichtung endet — bei „nach oben“ oben.": "La quota resta dove il pezzo finisce nella direzione di sformo — in alto con «verso l'alto».",
+  "Das Maß des Körpers setzt Schritt {number}. Dieser Wert wirkt nur auf die Schritte dazwischen.": "La dimensione del corpo la fissa il passaggio {number}. Questo valore agisce solo sui passaggi intermedi.",
   "Das Maß einer Bedingung ist ein Ausdruck als Text.": "La quota di un vincolo è un'espressione in forma di testo.",
   "Das Merkmal hat dieses Maß schon.": "La caratteristica ha già questa misura.",
   "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es verweisen, finden es nicht mehr.": "La caratteristica è stata rimossa. I passaggi e gli accoppiamenti successivi che vi fanno riferimento non la troveranno più.",
