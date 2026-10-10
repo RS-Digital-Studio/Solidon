@@ -247,7 +247,9 @@ SEAM_SEEKING: Final = frozenset({"aligned", "nearest"})
 #: (210 Körper aus Roberts Sammlung, 09.10.2026) liegen Drache, Spider-Man, die
 #: Schachfiguren und der Mausoleum-Drache darüber, alles mit Kanten darunter —
 #: Halter, Kästen, Würfel, Schalen. Darüber liegen außer den Figuren nur Körper
-#: ohne Kante für die Naht: Schrauben, ein Ring, gewölbte Minigolfbahnen.
+#: ohne Kante für die Naht: Schrauben, ein Ring, gewölbte Minigolfbahnen, der
+#: Siebhalter (0,93). Und eine Ausnahme mit Kanten (10.10.2026): die
+#: Kumiko-Schale (0,78), ein Gitter aus Stegen unter ``analysis.STRAIGHT_RUN``.
 FIGURE_SHARE: Final = 0.7
 
 #: Ab welcher Fläche die oberste Schicht eine Oberseite ist, deren Bahnen man
