@@ -655,3 +655,34 @@ def test_the_appimage_kernel_is_recognised_despite_its_filled_checksum(tmp_path:
     (tmp_path / "kein.AppImage").write_bytes(b"#!/bin/sh")
     with pytest.raises(RuntimeError, match="ELF"):
         make_sbom.appimage_runtime_sha256(tmp_path / "kein.AppImage")
+
+
+@pytest.mark.parametrize(
+    ("target", "machine", "modified"),
+    [
+        ("macosx-11.0-x86_64", "x86_64", True),
+        ("macosx-10.13-universal2", "x86_64", True),
+        ("macosx-14.0-arm64", "arm64", False),
+        ("win-amd64", "AMD64", False),
+        ("linux-x86_64", "x86_64", False),
+    ],
+)
+def test_the_intel_mac_sbom_names_the_corrected_ocp_libraries(target, machine, modified) -> None:
+    """RM-768: Nur im Intel-Mac-Paket trägt OCP ``pedigree`` mit Werkzeug, Fehler und Meldung."""
+    from tools import fix_unwind_info
+
+    bom = make_sbom.build_bom(platform=target, machine=machine)
+    component = _components(bom)[fix_unwind_info.WHEEL]
+    assert ("pedigree" in component) is modified
+    if modified:
+        pedigree = component["pedigree"]
+        assert pedigree["patches"][0]["type"] == "unofficial"  # type: ignore[index]
+        resolved = pedigree["patches"][0]["resolves"][0]  # type: ignore[index]
+        assert resolved["id"] == "RM-768"
+        assert resolved["references"] == ["https://github.com/CadQuery/ocp-build-system/issues/67"]
+        assert "tools/fix_unwind_info.py" in pedigree["notes"]  # type: ignore[index]
+    assert not any(
+        "pedigree" in other
+        for name, other in _components(bom).items()
+        if name != fix_unwind_info.WHEEL
+    )

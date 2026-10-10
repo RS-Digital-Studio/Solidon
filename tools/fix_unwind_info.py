@@ -41,12 +41,17 @@ Bibliotheken); der Paketbau signiert danach wie bisher. Es kennt genau die
 festgelegte Radversion (:data:`EXPECTED`) und je Bibliothek die Zahl der
 Korrekturen; eine andere Version oder eine andere Zahl hält es an, damit ein
 Versionswechsel die Korrektur neu prüfen lässt — und sie entfällt, sobald ein
-behobenes Rad erscheint (RM-768). Ein zweiter Lauf ändert nichts.
+behobenes Rad erscheint (RM-768, gemeldet als
+https://github.com/CadQuery/ocp-build-system/issues/67). Ein zweiter Lauf
+ändert nichts. Nach dem Paketbau belegt ``--check`` am Bündel, dass das
+ausgelieferte Paket die korrigierten Bibliotheken trägt.
 
 Aufruf::
 
     python tools/fix_unwind_info.py [--codesign] [--dry-run]
+    python tools/fix_unwind_info.py --check --root dist
     python tools/fix_unwind_info.py --root <ausgepacktes Rad> --version 8.0.1.1.0
+    python tools/fix_unwind_info.py --scan <Rad.whl oder Ordner>
 """
 
 from __future__ import annotations
@@ -55,6 +60,7 @@ import argparse
 import struct
 import subprocess
 import sys
+import zipfile
 from bisect import bisect_right
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -102,6 +108,8 @@ EXPECTED: Final[dict[str, dict[str, int]]] = {
 
 #: Mach-O, 64 Bit, little endian; Prozessortyp x86_64.
 MH_MAGIC_64: Final = 0xFEEDFACF
+FAT_MAGIC: Final = 0xCAFEBABE
+FAT_MAGIC_64: Final = 0xCAFEBABF
 CPU_TYPE_X86_64: Final = 0x01000007
 LC_SEGMENT_64: Final = 0x19
 LC_SYMTAB: Final = 0x2
@@ -173,6 +181,29 @@ class Image:
     def code(self, address: int, count: int) -> bytes:
         start = address - self.text_address + self.text_offset
         return bytes(self.data[start : start + count])
+
+
+def x86_64_slice(data: bytes) -> bytes:
+    """Die x86_64-Scheibe einer universellen Datei; eine dünne Datei bleibt, wie sie ist.
+
+    Nur für ``--scan``: Andere Räder (Qt) sind ``universal2``. Das OCP-Rad ist
+    dünn, und die Korrektur schreibt nur dünne Dateien.
+    """
+    if len(data) < 8:
+        return data
+    magic, count = struct.unpack_from(">II", data, 0)
+    if magic not in (FAT_MAGIC, FAT_MAGIC_64):
+        return data
+    width = 20 if magic == FAT_MAGIC else 32
+    for number in range(count):
+        at = 8 + width * number
+        if magic == FAT_MAGIC:
+            cputype, _sub, offset, size, _align = struct.unpack_from(">iiIII", data, at)
+        else:
+            cputype, _sub, offset, size, _align, _reserved = struct.unpack_from(">iiQQII", data, at)
+        if cputype == CPU_TYPE_X86_64:
+            return data[offset : offset + size]
+    return b""
 
 
 def read_image(data: bytes) -> Image | None:
@@ -309,6 +340,8 @@ def read_table(blob: bytes) -> Table:
     lsdas = [struct.unpack_from("<II", blob, at) for at in range(lsda_start, lsda_end, 8)]
     if [start for start, _ in entries] != sorted({start for start, _ in entries}):
         raise UnwindError("Einträge nicht streng aufsteigend")
+    if [start for start, _ in lsdas] != sorted({start for start, _ in lsdas}):
+        raise UnwindError("LSDA-Einträge nicht streng aufsteigend")
     return Table(version, common, personalities, entries, lsdas, index[-1][0], pages)
 
 
@@ -445,12 +478,19 @@ def look_up(blob: bytes, target: int) -> tuple[int, int, int, int | None] | None
         return None
     lsda = None
     if encoding & HAS_LSDA:
-        for at in range(lsda_from, lsda_to, 8):
-            function, offset = struct.unpack_from("<II", blob, at)
+        # Binär wie libunwind: Eine falsch geordnete Liste fände dort nichts.
+        low, high = 0, (lsda_to - lsda_from) // 8
+        while low < high:
+            middle = (low + high) // 2
+            function, offset = struct.unpack_from("<II", blob, lsda_from + 8 * middle)
             if function == start:
                 lsda = offset
                 break
-        else:
+            if function < start:
+                low = middle + 1
+            else:
+                high = middle
+        if lsda is None:
             raise UnwindError(f"Funktion {start:#x} mit LSDA-Bit ohne LSDA-Eintrag")
     return start, end, encoding, lsda
 
@@ -673,20 +713,40 @@ def libraries_under(root: Path) -> list[Path]:
     return sorted(path for path in root.rglob("*") if path.suffix in {".dylib", ".so"})
 
 
+def bundle_libraries(root: Path, version: str) -> list[Path]:
+    """Die OCC-Bibliotheken des Rads unter ``root``, jede Datei einmal.
+
+    Für ein gebautes Paket oder ein ausgepacktes Rad: gezählt werden nur die
+    Bibliotheken aus :data:`EXPECTED` — ein Paket trägt daneben fremde, etwa
+    Pillows ``libavif`` mit demselben Fehler (RM-770). Verknüpfungen auf
+    dieselbe Datei zählen einmal, echte Kopien (Ordner und ``.app``) je für sich.
+    """
+    names = set(EXPECTED.get(version, {}))
+    found: dict[Path, Path] = {}
+    for path in libraries_under(root):
+        if path.name in names and path.is_file():
+            found.setdefault(path.resolve(), path)
+    return sorted(found.values())
+
+
 def run(
-    version: str, libraries: Iterable[Path], *, write: bool, codesign: bool
+    version: str,
+    libraries: Iterable[Path],
+    *,
+    write: bool,
+    codesign: bool,
+    check: bool = False,
 ) -> tuple[list[str], list[Path]]:
-    """Prüft alle Bibliotheken gegen :data:`EXPECTED`, schreibt erst, wenn alles stimmt."""
+    """Prüft alle Bibliotheken gegen :data:`EXPECTED`, schreibt erst, wenn alles stimmt.
+
+    ``check`` schreibt nie und verlangt, dass jede Kopie schon korrigiert ist.
+    """
     expected = EXPECTED.get(version)
     if expected is None:
-        raise UnwindError(
-            f"{WHEEL} {version} ist nicht geprüft (bekannt: {', '.join(EXPECTED)}). "
-            "Neues Rad mit dem Scan aus RM-768 prüfen: Ist der Fehler behoben, entfällt "
-            "die Korrektur, sonst EXPECTED ergänzen."
-        )
+        raise UnwindError(f"{WHEEL} {version} ist nicht geprüft (bekannt: {', '.join(EXPECTED)})")
     lines: list[str] = []
     pending: list[tuple[Path, bytes]] = []
-    seen: dict[str, int] = {}
+    seen: dict[str, list[int]] = {}
     images = 0
     for path in libraries:
         data = path.read_bytes()
@@ -694,10 +754,10 @@ def run(
             continue
         images += 1
         outcome = fix_library(data)
-        seen[path.name] = outcome.corrected + outcome.already
+        seen.setdefault(path.name, []).append(outcome.corrected + outcome.already)
         if outcome.corrected or outcome.already or outcome.foreign:
             lines.append(
-                f"{path.name}: korrigiert {outcome.corrected}, schon korrigiert "
+                f"{path}: korrigiert {outcome.corrected}, schon korrigiert "
                 f"{outcome.already}, fremd {len(outcome.foreign)}"
                 + (" (Tabelle neu gepackt)" if outcome.repacked else "")
             )
@@ -707,17 +767,21 @@ def run(
     if not images:
         raise UnwindError("keine x86_64-Mach-O-Bibliothek gefunden — nur für macOS Intel")
     wrong = {
-        name: (seen.get(name, 0), count)
+        name: (counts, count)
         for name, count in {**dict.fromkeys(seen, 0), **expected}.items()
-        if seen.get(name, 0) != count
+        if (counts := seen.get(name, [0])) and any(value != count for value in counts)
     }
     if wrong:
         detail = ", ".join(
-            f"{name} {got} statt {want}" for name, (got, want) in sorted(wrong.items())
+            f"{name} {'/'.join(map(str, got))} statt {want}"
+            for name, (got, want) in sorted(wrong.items())
         )
         raise UnwindError(f"Korrekturen weichen vom geprüften Rad ab: {detail}")
+    if check and pending:
+        detail = ", ".join(str(path) for path, _data in pending)
+        raise UnwindError(f"{len(pending)} Bibliotheken tragen noch falsche Einträge: {detail}")
     changed: list[Path] = []
-    if write:
+    if write and not check:
         for path, data in pending:
             temporary = path.with_name(path.name + ".unwind-tmp")
             temporary.write_bytes(data)
@@ -727,38 +791,129 @@ def run(
         if codesign:
             for path in changed:
                 subprocess.run(["codesign", "--force", "--sign", "-", str(path)], check=True)
-    total = sum(seen.values())
+    total = sum(sum(counts) for counts in seen.values())
+    written = "geändert" if write else "zu ändern"
+    tail = "alle schon korrigiert" if check else f"{len(pending)} Bibliotheken {written}"
     lines.append(
-        f"{WHEEL} {version}: {total} Einträge richtig, {len(pending)} Bibliotheken "
-        + ("geändert" if write else "zu ändern")
+        f"{WHEEL} {version}: {total} Einträge richtig in {images} Bibliotheken, {tail}"
         + (", ad hoc neu signiert" if write and codesign and changed else "")
     )
     return lines, changed
 
 
+# --- der Scan eines beliebigen Rads -----------------------------------------------------
+
+
+def members(source: Path) -> Iterable[tuple[str, bytes]]:
+    """Name und Bytes jeder nativen Bibliothek in einem Rad (``.whl``) oder Ordner."""
+    if source.is_file():
+        with zipfile.ZipFile(source) as archive:
+            for name in sorted(archive.namelist()):
+                if name.endswith((".dylib", ".so")) or ".framework/Versions/" in name:
+                    yield name, archive.read(name)
+        return
+    for path in libraries_under(source):
+        yield str(path.relative_to(source)), path.read_bytes()
+
+
+def scan(source: Path) -> tuple[list[str], int]:
+    """Zählt je x86_64-Bibliothek die ``STACK_IND``-Einträge nach Urteil; schreibt nie.
+
+    Für jedes Rad, auch eine noch nicht geprüfte OCP-Version (RM-768): ``falsch``
+    sind Einträge mit genau dem Fehler aus diesem Werkzeug. Universelle Dateien
+    werden an ihrer x86_64-Scheibe gelesen.
+    """
+    lines: list[str] = []
+    totals = {"right": 0, "wrong": 0, "fixed": 0, "foreign": 0}
+    for name, data in members(source):
+        image = read_image(x86_64_slice(data))
+        if image is None or "__unwind_info" not in image.sections:
+            continue
+        section = image.sections["__unwind_info"]
+        table = read_table(bytes(image.data[section.offset : section.offset + section.size]))
+        counts = dict.fromkeys(totals, 0)
+        for start, encoding in table.entries:
+            if encoding & MODE_MASK == MODE_STACK_IND:
+                counts[judge(image, start + image.text_address, encoding).kind] += 1
+        for kind, value in counts.items():
+            totals[kind] += value
+        if any(counts.values()):
+            lines.append(
+                f"{name}: STACK_IND {sum(counts.values())}, richtig {counts['right']}, "
+                f"falsch {counts['wrong']}, schon korrigiert {counts['fixed']}, "
+                f"fremd {counts['foreign']}"
+            )
+    lines.append(
+        f"{source.name}: STACK_IND {sum(totals.values())}, richtig {totals['right']}, "
+        f"falsch {totals['wrong']}, schon korrigiert {totals['fixed']}, "
+        f"fremd {totals['foreign']}"
+    )
+    return lines, totals["wrong"]
+
+
+#: Was nach einem Abbruch zu tun ist (Regel 17 sinngemäß).
+WAY_OUT: Final = (
+    "Nichts geschrieben. Das Rad mit `python tools/fix_unwind_info.py --scan <Rad>` "
+    "prüfen (RM-768, " + "https://github.com/CadQuery/ocp-build-system/issues/67): "
+    "Trägt es keinen falschen Eintrag mehr, entfallen Werkzeug, Workflowschritte und "
+    "der Abschnitt der Lizenzbeilage; sonst EXPECTED aus dem Scan nachziehen."
+)
+
+
+#: Was zu tun ist, wenn ein gebautes Paket unkorrigierte Bibliotheken trägt.
+CHECK_WAY_OUT: Final = (
+    "Nichts geschrieben. Das Paket trägt nicht die korrigierten Bibliotheken: Prüfen, ob "
+    "der Schritt „Abwicklungsinformation von OpenCASCADE korrigieren (Intel-Mac)“ direkt "
+    "nach der Installation lief und PyInstaller die Bibliotheken aus diesem Python nahm "
+    "(RM-768)."
+)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=DESCRIPTION)
-    parser.add_argument("--root", type=Path, help="ausgepacktes Rad statt der Installation")
-    parser.add_argument("--version", help="Radversion zu --root")
+    parser.add_argument(
+        "--root", type=Path, help="gebautes Paket oder ausgepacktes Rad statt der Installation"
+    )
+    parser.add_argument("--version", help="Radversion zu --root (Vorgabe: die installierte)")
     parser.add_argument("--dry-run", action="store_true", help="nur prüfen, nichts schreiben")
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help="nichts schreiben; Fehler, solange ein Eintrag noch falsch ist",
+    )
+    parser.add_argument(
         "--codesign", action="store_true", help="geänderte Bibliotheken ad hoc signieren"
+    )
+    parser.add_argument(
+        "--scan", type=Path, metavar="RAD", help="ein Rad oder einen Ordner nur zählen"
     )
     arguments = parser.parse_args(argv)
     if arguments.codesign and sys.platform != "darwin":
         parser.error("--codesign gibt es nur auf macOS")
-    if (arguments.root is None) != (arguments.version is None):
-        parser.error("--root und --version gehören zusammen")
+    if arguments.codesign and (arguments.check or arguments.dry_run):
+        parser.error("--codesign schreibt; mit --check oder --dry-run gibt es nichts zu signieren")
+    if arguments.version is not None and arguments.root is None:
+        parser.error("--version gehört zu --root")
     try:
+        if arguments.scan is not None:
+            lines, _wrong = scan(arguments.scan)
+            print("\n".join(lines))
+            return 0
         if arguments.root is not None:
-            version, libraries = arguments.version, libraries_under(arguments.root)
+            version = arguments.version or installed_wheel()[0]
+            libraries = bundle_libraries(arguments.root, version)
         else:
             version, libraries = installed_wheel()
         lines, _changed = run(
-            version, libraries, write=not arguments.dry_run, codesign=arguments.codesign
+            version,
+            libraries,
+            write=not (arguments.dry_run or arguments.check),
+            codesign=arguments.codesign,
+            check=arguments.check,
         )
     except UnwindError as error:
-        print(f"fix_unwind_info: {error}", file=sys.stderr)
+        way_out = CHECK_WAY_OUT if arguments.check else WAY_OUT
+        print(f"fix_unwind_info: {error}\n{way_out}", file=sys.stderr)
         return 1
     print("\n".join(lines))
     return 0

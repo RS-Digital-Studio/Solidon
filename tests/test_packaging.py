@@ -4741,3 +4741,24 @@ def test_every_intel_mac_job_corrects_the_unwind_info_right_after_installing_occ
             ), f"{path.name}: {name}"
             found.append(f"{path.name}:{name}")
     assert len(found) == 6, found
+
+
+def test_the_intel_mac_package_is_checked_for_the_corrected_libraries() -> None:
+    """RM-768: Direkt nach „Bauen“ belegt der Paketjob am Bündel, dass die Korrektur mitreist.
+
+    Ein später Schritt sähe ein unkorrigiertes Bündel nicht: Start und
+    Hilfsprozess lösen keine OCC-Ausnahme aus. Nur auf macOS x86_64.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    block = job_block(workflow, "package")
+    assert "macos-26-intel" in job_runners(block, TAG_PUSH)
+    steps = re.findall(r"(?ms)^      - .*?(?=^      - |\Z)", block)
+    names = [step.split("\n", 1)[0].removeprefix("      - name: ") for step in steps]
+    position = names.index("Bauen")
+    step = steps[position + 1]
+    assert names[position + 1] == "Abwicklungsinformation im Paket prüfen (Intel-Mac)"
+    assert "        if: runner.os == 'macOS' && runner.arch == 'X64'\n" in step
+    assert re.search(
+        r"(?m)^        run: python tools/fix_unwind_info\.py --check --root dist$", step
+    )
+    assert "fix_unwind_info.py --check" not in workflow.replace(step, "")

@@ -154,9 +154,12 @@ wörtlich; im Paket heißt das zusätzlich:
 - **OCP wird auf macOS Intel nach jeder Installation nachbearbeitet**
   (`tools/fix_unwind_info.py`, RM-768): Das x86_64-Rad kodiert die
   Rahmengröße von Funktionen mit Stapelprobe falsch, und jede OCC-Ausnahme
-  durch sie beendet den Prozess. Ein neues OCP-Rad bekommt zuerst den Scan;
-  ist der Fehler behoben, entfallen Werkzeug, Workflowschritt und Abschnitt der
-  Lizenzbeilage, sonst kommt seine Zählung nach `EXPECTED`.
+  durch sie beendet den Prozess. Nach dem Bau prüft `--check` das Bündel, denn
+  kein späterer Schritt löst eine OCC-Ausnahme aus. Ein neues OCP-Rad bekommt
+  zuerst `--scan`; ist der Fehler behoben (Meldung
+  [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67)), entfallen Werkzeug, Workflowschritte,
+  Abschnitt der Lizenzbeilage und `pedigree` der Stückliste, sonst kommt seine
+  Zählung nach `EXPECTED`.
 - **Die Stückliste kommt aus dem Kundenartefakt**, nicht aus `pip`:
   `tools/make_sbom.py` liest PyInstallers Zielanalyse und das fertige Paket;
   jede native Kundendatei hat einen ausgewiesenen Besitzer, Bauwerkzeuge

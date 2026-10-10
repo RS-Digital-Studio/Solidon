@@ -305,7 +305,7 @@ def test_the_expected_count_writes_and_the_second_run_finds_it_done(tmp_path, mo
     assert changed == [path]
     lines, changed = tool.run("9.9", tool.libraries_under(tmp_path), write=True, codesign=False)
     assert changed == []
-    assert "libTKFillet.8.0.1.dylib: korrigiert 0, schon korrigiert 2, fremd 1" in lines
+    assert f"{path}: korrigiert 0, schon korrigiert 2, fremd 1" in lines
 
 
 def test_an_unchecked_wheel_version_stops(tmp_path):
@@ -323,7 +323,7 @@ def test_a_folder_without_intel_libraries_stops(tmp_path):
 
 
 def test_the_pinned_wheel_is_the_checked_one():
-    """Ein Versionswechsel in ``constraints.txt`` verlangt einen neuen Scan (RM-768)."""
+    """Ein Versionswechsel in ``constraints.txt`` verlangt einen neuen ``--scan`` (RM-768)."""
     text = (ROOT / "constraints.txt").read_text(encoding="utf-8")
     pinned = re.search(rf"(?m)^{re.escape(tool.WHEEL)}==(\S+)$", text)
     assert pinned is not None
@@ -350,3 +350,119 @@ def test_the_lookup_check_rejects_a_table_that_answers_differently():
     table.entries[1] = (start, encoding ^ (1 << 16))
     with pytest.raises(tool.UnwindError, match="Nachschlag"):
         tool.verify(blob, table)
+
+
+def _many_entries(count: int = 3000) -> tool.Table:
+    """Viele Funktionen mit vielen verschiedenen Kodierungen und LSDAs, eine Lücke über 24 Bit."""
+    entries = []
+    lsdas = []
+    start = 0x1000
+    for number in range(count):
+        if number == count // 2:
+            start += 1 << 24  # zwingt eine Seitengrenze über den 24-Bit-Versatz
+        encoding = 0x02000000 | ((number % 250) << 16) | (((number // 250) % 6) << 10)
+        if number % 7 == 0:
+            encoding |= tool.HAS_LSDA
+            lsdas.append((start, 0x9000 + 16 * number))
+        entries.append((start, encoding))
+        start += 0x40
+    common = sorted({encoding for _start, encoding in entries})[:40]
+    return tool.Table(1, common, [0x10], entries, lsdas, start)
+
+
+def test_a_repacked_table_spans_pages_and_answers_every_function():
+    """Seitengrenzen aus 4 KB, 256 Kodierungen und 24-Bit-Versatz; LSDAs über mehrere Seiten."""
+    table = _many_entries()
+    blob = tool.write_table(table, 200_000)
+    pages = struct.unpack_from("<7I", blob, 0)[6] - 1
+    assert pages >= 4
+    tool.verify(blob, table)
+    again = tool.read_table(blob)
+    assert again.entries == table.entries and again.lsdas == table.lsdas
+    assert {kind for kind, _members in again.pages} == {tool.COMPRESSED_PAGE}
+
+
+def test_the_lookup_check_covers_every_entry_and_every_lsda():
+    """Auch ein Eintrag ohne ``STACK_IND`` und eine LSDA müssen stimmen."""
+    table = _many_entries()
+    blob = tool.write_table(table, 200_000)
+    start, encoding = table.entries[1501]
+    assert encoding & tool.MODE_MASK != tool.MODE_STACK_IND
+    table.entries[1501] = (start, encoding ^ (1 << 16))
+    with pytest.raises(tool.UnwindError, match="Nachschlag"):
+        tool.verify(blob, table)
+    table = _many_entries()
+    function, offset = table.lsdas[300]
+    table.lsdas[300] = (function, offset + 4)
+    with pytest.raises(tool.UnwindError, match="Nachschlag"):
+        tool.verify(blob, table)
+
+
+def test_a_regular_and_a_compressed_page_read_and_look_up_across_their_border():
+    """Gemischte Seiten wie im Rad: Das letzte Ende der ersten Seite ist die Basis der zweiten."""
+    first = [(0x1000, 0x02010000), (0x1040, 0x02020000)]
+    second = [(0x2000, 0x02030000 | tool.HAS_LSDA), (0x2080, 0x02010000)]
+    common = [0x02010000]
+    index_at = 28 + 4 * len(common) + 4
+    lsda_at = index_at + 36
+    regular_at = lsda_at + 8
+    regular = struct.pack("<IHH", 2, 8, 2) + b"".join(struct.pack("<II", *row) for row in first)
+    compressed_at = regular_at + len(regular)
+    words = [(1 << 24) | 0, (0 << 24) | 0x80]
+    compressed = struct.pack("<IHHHH", 3, 12, 2, 20, 1) + struct.pack("<2I", *words)
+    compressed += struct.pack("<I", 0x02030000 | tool.HAS_LSDA)
+    blob = struct.pack("<7I", 1, 28, 1, 28 + 4, 1, index_at, 3) + struct.pack(
+        "<II", common[0], 0x10
+    )
+    blob += struct.pack("<III", 0x1000, regular_at, lsda_at)
+    blob += struct.pack("<III", 0x2000, compressed_at, lsda_at)
+    blob += struct.pack("<III", 0x2100, 0, lsda_at + 8)
+    blob += struct.pack("<II", 0x2000, 0x7000) + regular + compressed
+    table = tool.read_table(blob)
+    assert table.entries == first + second
+    assert [kind for kind, _members in table.pages] == [tool.REGULAR_PAGE, tool.COMPRESSED_PAGE]
+    assert tool.look_up(blob, 0x1FFF) == (0x1040, 0x2000, 0x02020000, None)
+    assert tool.look_up(blob, 0x2000) == (0x2000, 0x2080, 0x02030000 | tool.HAS_LSDA, 0x7000)
+    assert tool.look_up(blob, 0x20FF) == (0x2080, 0x2100, 0x02010000, None)
+    tool.verify(blob, table)
+
+
+def test_the_check_writes_nothing_and_fails_until_every_copy_is_corrected(tmp_path, monkeypatch):
+    """``--check`` am gebauten Paket: jede Kopie zählt, fremde Bibliotheken nicht (M-1)."""
+    monkeypatch.setitem(tool.EXPECTED, "9.9", {"libTKFillet.8.0.1.dylib": 2})
+    library = _library()
+    for folder in ("Solidon3D", "Solidon3D.app/Contents/Frameworks"):
+        path = tmp_path / folder / "OCP" / ".dylibs" / "libTKFillet.8.0.1.dylib"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(library.data)
+    (tmp_path / "Solidon3D" / "libavif.16.dylib").write_bytes(library.data)
+    copies = tool.bundle_libraries(tmp_path, "9.9")
+    assert [path.name for path in copies] == ["libTKFillet.8.0.1.dylib"] * 2
+    with pytest.raises(tool.UnwindError, match="tragen noch falsche"):
+        tool.run("9.9", copies, write=True, codesign=False, check=True)
+    assert all(path.read_bytes() == library.data for path in copies)
+    tool.run("9.9", copies[:1], write=True, codesign=False)
+    with pytest.raises(tool.UnwindError, match="tragen noch falsche"):
+        tool.run("9.9", copies, write=False, codesign=False, check=True)
+    tool.run("9.9", copies[1:], write=True, codesign=False)
+    lines, changed = tool.run("9.9", copies, write=True, codesign=False, check=True)
+    assert changed == [] and lines[-1].endswith("alle schon korrigiert")
+
+
+def test_the_scan_reads_the_intel_slice_of_a_universal_wheel(tmp_path):
+    """``--scan`` für jedes Rad: zählt, schreibt nie, liest universelle Dateien an x86_64."""
+    import zipfile
+
+    library = _library().data
+    fat = struct.pack(">II", tool.FAT_MAGIC, 1)
+    fat += struct.pack(">iiIII", tool.CPU_TYPE_X86_64, 3, 4096, len(library), 12)
+    fat = fat.ljust(4096, b"\0") + library
+    wheel = tmp_path / "Fremd-1.0-py3-none-macosx_11_0_universal2.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("Fremd/Qt/lib/Fremd.framework/Versions/A/Fremd", fat)
+        archive.writestr("Fremd/.dylibs/libfremd.dylib", library)
+    before = wheel.read_bytes()
+    lines, wrong = tool.scan(wheel)
+    assert wrong == 4
+    assert lines[-1].endswith("STACK_IND 8, richtig 2, falsch 4, schon korrigiert 0, fremd 2")
+    assert wheel.read_bytes() == before
