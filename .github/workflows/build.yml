@@ -167,6 +167,15 @@ jobs:
         # dieser Lauf denselben Satz installiert wie der letzte grüne.
         run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
 
+      - name: Abwicklungsinformation von OpenCASCADE korrigieren (Intel-Mac)
+        # Das x86_64-Rad kodiert die Rahmengröße jeder Funktion mit
+        # Stapelprobe falsch, und jede OCC-Ausnahme durch einen solchen Rahmen
+        # endete mit einem Bus-Fehler (RM-768). Direkt nach der Installation,
+        # vor Tests und Paketbau; die geänderten Bibliotheken werden ad hoc
+        # neu signiert. Warum und wie: tools/fix_unwind_info.py.
+        if: runner.os == 'macOS' && runner.arch == 'X64'
+        run: python tools/fix_unwind_info.py --codesign
+
       - name: Konturverkettung übersetzen
         # Zur Laufzeit optional, hier aber Pflicht: ohne sie überspringt sich
         # `tests/test_slice_core.py`, und dann prüft niemand mehr, ob der
@@ -337,6 +346,15 @@ jobs:
       - name: Abhängigkeiten
         # Derselbe Satz wie in `window-contracts`.
         run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
+
+      - name: Abwicklungsinformation von OpenCASCADE korrigieren (Intel-Mac)
+        # Das x86_64-Rad kodiert die Rahmengröße jeder Funktion mit
+        # Stapelprobe falsch, und jede OCC-Ausnahme durch einen solchen Rahmen
+        # endete mit einem Bus-Fehler (RM-768). Direkt nach der Installation,
+        # vor Tests und Paketbau; die geänderten Bibliotheken werden ad hoc
+        # neu signiert. Warum und wie: tools/fix_unwind_info.py.
+        if: runner.os == 'macOS' && runner.arch == 'X64'
+        run: python tools/fix_unwind_info.py --codesign
 
       - name: Konturverkettung übersetzen
         run: python tools/build_slice_core.py
@@ -625,6 +643,15 @@ jobs:
           # einpacken als das von heute, ohne dass sich eine Zeile Code ändert
           # — das war die einzige ungepinnte Installationszeile des Workflows.
           python -m pip install -c constraints.txt pyinstaller
+
+      - name: Abwicklungsinformation von OpenCASCADE korrigieren (Intel-Mac)
+        # Das x86_64-Rad kodiert die Rahmengröße jeder Funktion mit
+        # Stapelprobe falsch, und jede OCC-Ausnahme durch einen solchen Rahmen
+        # endete mit einem Bus-Fehler (RM-768). Direkt nach der Installation,
+        # vor Tests und Paketbau; die geänderten Bibliotheken werden ad hoc
+        # neu signiert. Warum und wie: tools/fix_unwind_info.py.
+        if: runner.os == 'macOS' && runner.arch == 'X64'
+        run: python tools/fix_unwind_info.py --codesign
 
       # **Die Beispielprojekte werden hier nicht mehr erzeugt** (03.09.2026).
       # Sie liegen eingecheckt im Repository und tragen in `ASSET-RIGHTS.toml`
@@ -1699,6 +1726,15 @@ jobs:
         # `pyinstaller`: Der Lizenztext des Bootloaders kommt aus dieser
         # Distribution, wie im Paketjob; ohne sie starb die Akte von 0.4.4 hier.
         run: python -m pip install -c constraints.txt -e ".[geom,ui,brep]" pyinstaller
+      - name: Abwicklungsinformation von OpenCASCADE korrigieren (Intel-Mac)
+        # Das x86_64-Rad kodiert die Rahmengröße jeder Funktion mit
+        # Stapelprobe falsch, und jede OCC-Ausnahme durch einen solchen Rahmen
+        # endete mit einem Bus-Fehler (RM-768). Direkt nach der Installation,
+        # vor Tests und Paketbau; die geänderten Bibliotheken werden ad hoc
+        # neu signiert. Warum und wie: tools/fix_unwind_info.py.
+        if: runner.os == 'macOS' && runner.arch == 'X64'
+        run: python tools/fix_unwind_info.py --codesign
+
       - name: Finalen Installer laden
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

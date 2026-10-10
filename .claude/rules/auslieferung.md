@@ -151,6 +151,12 @@ wörtlich; im Paket heißt das zusätzlich:
 - `tools/check_env.py --freeze` übernimmt lokale Versionen in
   `constraints.txt` und erhält nur die in `PLATFORM_PINS` belegten
   Abhängigkeiten anderer Plattformen.
+- **OCP wird auf macOS Intel nach jeder Installation nachbearbeitet**
+  (`tools/fix_unwind_info.py`, RM-768): Das x86_64-Rad kodiert die
+  Rahmengröße von Funktionen mit Stapelprobe falsch, und jede OCC-Ausnahme
+  durch sie beendet den Prozess. Ein neues OCP-Rad bekommt zuerst den Scan;
+  ist der Fehler behoben, entfallen Werkzeug, Workflowschritt und Abschnitt der
+  Lizenzbeilage, sonst kommt seine Zählung nach `EXPECTED`.
 - **Die Stückliste kommt aus dem Kundenartefakt**, nicht aus `pip`:
   `tools/make_sbom.py` liest PyInstallers Zielanalyse und das fertige Paket;
   jede native Kundendatei hat einen ausgewiesenen Besitzer, Bauwerkzeuge
