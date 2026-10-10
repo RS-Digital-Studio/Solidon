@@ -601,10 +601,11 @@ def _boxes_a_hair_apart() -> trimesh.Trimesh:
     bis ``EPS_GEOM`` zusammen: Zwei Flächen, die bis auf Rundung
     aufeinanderliegen, sind der Fall, für den sie da ist. Die Suche muss
     solche Paare liefern — auf der Sweep-Achse über das Ende der Einträge
-    (``_keys``), auf den übrigen über die Reichweite der Seiten
-    (``side_reach``). Die Lücke liegt um ``1 − EPS_GEOM``, und dort beginnt
-    bei den Breiten 0,05, 0,5 und 1 eine Scheibe: Das letzte Dreieck vor der
-    Lücke muss mit seiner Zugabe auch in sie reichen.
+    (``_keys``), auf den übrigen über die Reichweite der Seiten im Fenster
+    eines Blocks (``reaches`` in ``_candidates``). Die Lücke liegt um
+    ``1 − EPS_GEOM``, und dort beginnt bei den Breiten 0,05, 0,5 und 1 eine
+    Scheibe: Das letzte Dreieck vor der Lücke muss mit seiner Zugabe auch in
+    sie reichen.
     """
     side = 1.0 - 1.25 * EPS_GEOM
     gap = 0.5 * EPS_GEOM
@@ -676,7 +677,10 @@ def _sweep_before(
 
     Je Paar über die Dreiecksnummern aus den Hüllquadern gelesen, die Heimat
     der gemeinsamen Hülle je Paar gerechnet — die Vorgabe für die Suche, die
-    dieselben Paare über die Plätze ihrer Einträge bildet.
+    dieselben Paare über die Plätze ihrer Einträge bildet. Einträge und
+    Trennprüfung teilt sie mit der Suche (``_entries``, ``_separated``); deren
+    Zusagen halten die stumpfe Zählung aller Pläne und die Fälle der
+    Trennprüfung, nicht dieser Vergleich.
     """
     low, high = surface.low, surface.high
     entries = intersections._entries(low, high, plan) or intersections._entries(
@@ -865,6 +869,52 @@ def test_the_plan_is_chosen_as_with_ordered_entries() -> None:
     surface = intersections._surface(np.asarray(big.vertices), np.asarray(big.faces))
     assert surface is not None and len(surface.low) > intersections.PLAN_SAMPLE
     assert intersections._plan(surface.low, surface.high) == _plan_before(surface.low, surface.high)
+
+
+def test_surface_and_entries_hold_no_spare_copy_at_their_peak() -> None:
+    """Die Spitze der Suche wächst nicht mit Kopien, die keiner mehr braucht (RM-568).
+
+    An sehr großen Netzen setzen ``_surface`` und ``_entries`` die Spitze der
+    ganzen Selbstschnittsuche: am Mausoleumsdrachen (2,3 Millionen Dreiecke,
+    4,6 Millionen Einträge) 798 MB, als ``_entries`` die ungeordneten Felder
+    neben den geordneten hielt und ``_surface`` alle Kanten auf einmal als
+    Kopie der Ecken rechnete — 622 MB, seit jedes Zwischenfeld geht, sobald es
+    nicht mehr gebraucht wird. Gemessen wird mit ``tracemalloc``, das NumPy
+    mitzählt, an einer Kugel mit dem Plan der Suche, in Feldern zu acht Byte:
+    je Eintrag höchstens acht zugleich (die Einträge selbst, Anfang, Ende,
+    Ordnung und Reichweite brauchen sechs), je Dreieck höchstens 33 (gehalten
+    werden 23 — Ecken, Hülle, Normale, Fläche, Ecknummern und Nummer —, und
+    solange die behaltenen entstehen, liegen Normale, Fläche, längste Kante und
+    Höhe aller Dreiecke daneben: 29). Der Stand davor brauchte 11 je Eintrag
+    und 37 je Dreieck. Die Felder Spielraum fangen fremde Anlagen anderer
+    Fäden während der Messung ab.
+    """
+    import tracemalloc
+
+    ball = trimesh.creation.icosphere(subdivisions=6, radius=20.0)
+    vertices, faces = np.asarray(ball.vertices), np.asarray(ball.faces)
+    tracing = tracemalloc.is_tracing()
+    if not tracing:
+        tracemalloc.start()
+    try:
+        start, _ = tracemalloc.get_traced_memory()
+        tracemalloc.reset_peak()
+        surface = intersections._surface(vertices, faces)
+        _held, surface_peak = tracemalloc.get_traced_memory()
+        assert surface is not None
+        plan = intersections._plan(surface.low, surface.high)
+        base, _ = tracemalloc.get_traced_memory()
+        tracemalloc.reset_peak()
+        entries = intersections._entries(surface.low, surface.high, plan)
+        _held, entries_peak = tracemalloc.get_traced_memory()
+    finally:
+        if not tracing:
+            tracemalloc.stop()
+    assert entries is not None and plan.bins is not None, "Voraussetzung: in Scheiben gesucht"
+    count = len(entries.triangle)
+    assert count > 1.5 * len(faces), "Voraussetzung: Dreiecke liegen in mehreren Scheiben"
+    assert (entries_peak - base) / count <= 8 * 8, (entries_peak - base) / count
+    assert (surface_peak - start) / len(faces) <= 33 * 8, (surface_peak - start) / len(faces)
 
 
 def test_a_long_helix_is_searched_in_slabs() -> None:

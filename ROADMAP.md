@@ -3303,6 +3303,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (RM-637, nach RM-592). Abnahme: Besteckkasten und Laptop-Ständer höchstens 25 % über v0.4.4,
   Merkmale mit Art und Kennung gleich, die größte Maßabweichung gegen den Stand davor und gegen
   v0.5.3 im Nachweis.
+  Vermerk 10.10.2026 (Paket L2, Review 1): **Speicher der Selbstschnittsuche.** Die Blockschleife
+  hält Seitenfelder und Heimatscheibe nur noch für das Fenster vom ersten Eintrag bis zum letzten
+  Partner (im Mittel 1,0- bis 1,4-mal je Eintrag gelesen), `_keys` und `_entries` geben jedes
+  Zwischenfeld frei, sobald es nicht mehr gebraucht wird, und `_surface` rechnet die längste Kante
+  Kante für Kante — dieselben Rechnungen auf denselben Zahlen. Bitgleich über 446 Eingänge
+  (34,7 Mio. Dreiecke aus `tests/data` und `F:\3D Dateien`, roh und normalisiert, dazu
+  Grenzfälle; Paare samt Folge, Ebenengleichheit, Vollständigkeit und geprüfte Dreiecke mit
+  Reparaturbudget, mit 997 und ohne Budget, um aktive Dreiecke, `intersects`) und über alle zwölf
+  Beispielprojekte. Spitze der Suche mit Reparaturbudget (`tracemalloc` samt NumPy, MB) vor L2 /
+  mit L2 / jetzt: Laptop-Ständer 128 / 101 / 90, GLB 160 / 136 / 113, `chufang`-Körper 244 / 238 /
+  191, `dense_1m` 454 / 510 / 409, Mausoleumsdrache 746 / 798 / 622. Am Drachen lag die Spitze
+  beim Bilden der Einträge, wo L2 die ungeordneten Felder neben den geordneten hielt, an
+  `dense_1m` in den Seitenfeldern. `test_surface_and_entries_hold_no_spare_copy_at_their_peak`
+  hält höchstens acht Felder je Eintrag und 33 je Dreieck (L2: 11 und 37). Gleich schnell: im
+  selben Prozess eng im Wechsel, je vier Läufe, CPU-Median L2 → jetzt Laptop-Ständer 11,3 →
+  10,9 s, GLB 4,5 → 4,4 s, `chufang`-Körper 17,4 → 17,2 s, Würfel (250 000 Dreiecke) 28,0 →
+  28,0 s. Gegen v0.5.3 geht Reparieren wie die Op 1,4- bis 4,1-mal so schnell (neun Modelle),
+  das Auflösen von Überschneidungen 3,3- bis 4,6-mal (fünf Körper), mit gleichem Netz und
+  gleichen Befunden.
   Vermerk 09.10.2026 (Versionsvergleich Kern 0.5.2, K-3): Laden mechanischer Teile ist eine **Regression gegenüber v0.4.4**: Besteckkasten (`Modern++Cutlery+Organizer…3mf`, 59 744 Dreiecke) bis bearbeitbar 3,45–3,51 s → 17,97–18,45 s, Laptop-Ständer 6,7–8,0 → 22,5–23,2 s, `dense_1m.stl` 6,6–6,7 → 20,0–20,1 s (am Stand `09d8e9485`, Fenster offscreen, ruhige Maschine). Die Erkennung allein am Besteckkasten 1,13–1,54 → 6,15–8,09 s, davon 6,2 s in 958 Feinanpassungen (`app/core/perceive/features.py:2630` `classify` → `:8351` `_refined_fit` → `app/core/perceive/refine.py:244` `solve`), eingeführt mit `851f913af` (v0.5.0); Gewinn: Maße auf zwei Stellen und Gewinde als Gewinde. Hebel: die Feinanpassung nur für Flecken, die nach der groben Einpassung als Merkmal bleiben. Am Stand origin/main nicht nachgemessen, die Stellen sind unverändert, Paket L ändert sie nicht. Abnahme dafür: Besteckkasten und Laptop-Ständer höchstens 25 % über v0.4.4 bei gleichen Merkmalen und Maßen wie heute, §31. Der zweite Anteil (Schalenfrage je Füllrunde über den Hilfsprozess) steht bei [RM-672](#rm-672). Beleg: `F:\solidon-review-reports\regression-0.5.2\kern\befunde.md` (K-3). Die Ladezeiten „aktuell“ dieser Tabelle enthalten je Probe zwei Fehlstarts des Hilfsprozesses ([RM-693](#rm-693)); über einen Starter gemessen steht der Besteckkasten bei 20–22 s (Vermerk Paket L2 oben).
 
 <a id="rm-670"></a>
@@ -3623,7 +3642,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   steht er gleich. Blockgröße und Behalten steuert wgpu-native; die C-Schnittstelle von wgpu 0.32
   reicht keine Speicherhinweise durch. Zu prüfen: ob eine neuere wgpu-Fassung `memory_hints`
   durchreicht oder D3D12 unter Windows weniger hält — eine Entscheidung über den Renderer, die
-  Robert fällt.
+  Robert fällt. Schon gesenkt (Teil 2): die Spitze der Selbstschnittsuche an sehr großen Netzen,
+  am Mausoleumsdrachen 746 → 622 MB bei gleichem Ergebnis ([RM-568](#rm-568), Vermerk Review 1
+  von L2).
 
 <a id="rm-699"></a>
 

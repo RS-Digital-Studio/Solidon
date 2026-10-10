@@ -133,8 +133,17 @@ def _surface(vertices: np.ndarray, faces: np.ndarray) -> _Surface | None:
     triangles = vertices[faces]
     normal = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
     twice_area = np.linalg.norm(normal, axis=1)
-    edge_lengths = np.linalg.norm(np.roll(triangles, -1, axis=1) - triangles, axis=2)
-    longest = edge_lengths.max(axis=1)
+    # Die längste Kante Kante für Kante — dieselben Differenzen und Normen wie
+    # über ``np.roll`` des ganzen Feldes, ohne zwei Kopien aller Ecken zugleich
+    # (je 72 Byte je Dreieck): An sehr großen Netzen setzte das die Spitze
+    # dieses Abschnitts (RM-568).
+    longest = np.linalg.norm(triangles[:, 1] - triangles[:, 0], axis=1)
+    for corner in (1, 2):
+        np.maximum(
+            longest,
+            np.linalg.norm(triangles[:, (corner + 1) % 3] - triangles[:, corner], axis=1),
+            out=longest,
+        )
     altitude = np.divide(twice_area, longest, out=np.zeros_like(twice_area), where=longest > 0.0)
     kept = np.flatnonzero((longest > EPS_GEOM) & (altitude > EPS_GEOM))
     if len(kept) < 2:
@@ -268,6 +277,12 @@ def _keys(
 
     Ungeordnet, in der Folge der Dreiecke und je Dreieck seiner Scheiben; das
     Ende trägt schon ``EPS_GEOM``. ``None``, wenn der Schlüssel zu groß würde.
+
+    Die Felder je Eintrag sind die größten der Suche (am Mausoleumsdrachen 4,6
+    Millionen Einträge). Deshalb entsteht jedes ohne Zwischenfeld gleicher
+    Länge: die Scheibe als eine Wiederholung plus der Platz, Anfang und Ende
+    am Ort summiert — dieselben Ganzzahlen und dieselben Additionen in
+    derselben Folge wie ``slab * size + (low - base) + EPS_GEOM`` (RM-568).
     """
     count = len(low)
     if plan.bins is None:
@@ -281,29 +296,49 @@ def _keys(
         last = np.floor((high[:, axis] + EPS_GEOM - origin) / plan.width).astype(np.int64)
         span = last - first + 1
         triangle = np.repeat(np.arange(count), span)
-        steps = np.arange(int(span.sum())) - np.repeat(np.cumsum(span) - span, span)
-        slab = np.repeat(first, span) + steps
+        # Die erste Scheibe des Dreiecks und dahinter je Eintrag eine mehr.
+        slab = np.repeat(first - (np.cumsum(span) - span), span)
+        slab += np.arange(len(slab))
+        del first, last, span
     axis = plan.axis
     base = float(low[:, axis].min())
     size = float(high[:, axis].max()) - base + 1.0
     if float(slab.max(initial=0) + 1) * size > _MAX_KEY:
         return None
-    start = slab * size
-    key = start + (low[triangle, axis] - base)
-    end = start + (high[triangle, axis] - base) + EPS_GEOM
+    key = slab * size
+    key += low[triangle, axis] - base
+    end = slab * size
+    end += high[triangle, axis] - base
+    end += EPS_GEOM
     return triangle, slab, key, end, origin
 
 
 def _entries(low: np.ndarray, high: np.ndarray, plan: _Plan) -> _Entries | None:
-    """Die Einträge eines Plans — ``None``, wenn sein Schlüssel zu groß würde."""
+    """Die Einträge eines Plans — ``None``, wenn sein Schlüssel zu groß würde.
+
+    Jedes Zwischenfeld geht, sobald es nicht mehr gebraucht wird, und die Zahl
+    der überdeckten Einträge entsteht am Ort: Gehalten blieben sonst die
+    ungeordneten Felder neben den geordneten, und am Mausoleumsdrachen lag die
+    Spitze der ganzen Suche hier (RM-568).
+    """
     keys = _keys(low, high, plan)
     if keys is None:
         return None
     triangle, slab, key, end, origin = keys
+    del keys
     order = np.argsort(key, kind="stable")
-    triangle, slab, key = triangle[order], slab[order], key[order]
-    reach = np.searchsorted(key, end[order], side="right")
-    counts = np.maximum(reach - np.arange(len(key)) - 1, 0)
+    key = key[order]
+    end = end[order]
+    reach = np.searchsorted(key, end, side="right")
+    del key, end
+    triangle = triangle[order]
+    slab = slab[order]
+    del order
+    # ``max(reach - Platz - 1, 0)``, am Ort gerechnet.
+    counts = reach
+    counts -= np.arange(len(counts))
+    counts -= 1
+    np.maximum(counts, 0, out=counts)
     return _Entries(triangle=triangle, slab=slab, counts=counts, origin=origin)
 
 
@@ -602,11 +637,12 @@ def _candidates(
     overall = float(total[-1]) if len(total) else 0.0
     # Plätze in 32 Bit, solange sie hineinpassen: Die Paarfelder sind die
     # größten der Suche, und halb so breit liest und schreibt sie halb so viel.
-    positions = np.arange(len(counts), dtype=np.int32 if len(counts) < 2**31 else np.int64)
-    # **Je Eintrag, was seine Paare fragen, in der Folge der Einträge**
+    places = np.int32 if len(counts) < 2**31 else np.int64
+    # **Je Block, was seine Paare fragen, in der Folge der Einträge**
     # (RM-568): Die Grenzen der beiden übrigen Achsen und die Heimatscheibe
-    # liegen als zusammenhängende Felder da, und ein Paar liest sie über die
-    # Plätze seiner Einträge statt über die Dreiecksnummern aus den
+    # liegen für die Einträge vom ersten des Blocks bis zum letzten Partner
+    # als zusammenhängende Felder da, und ein Paar liest sie über die Plätze
+    # seiner Einträge in diesem Fenster statt über die Dreiecksnummern aus den
     # Hüllquadern. Der linke Eintrag eines Blocks wiederholt sich, also
     # wiederholt er auch seine Werte, statt sie je Paar zu lesen. Jeder
     # Vergleich bleibt derselbe Ausdruck auf denselben Zahlen. Die Heimat der
@@ -614,15 +650,11 @@ def _candidates(
     # das Größere der Heimaten beider Dreiecke, denn Abziehen, Teilen durch
     # eine positive Breite und Abrunden sind in Gleitkommarechnung monoton.
     # Am Laptop-Ständer bildet der Sweep 51,6 Millionen Paare für 3,6 Millionen
-    # Kandidaten, und das Bilden kostete die Hälfte der Suche.
+    # Kandidaten, und das Bilden kostete die Hälfte der Suche. Für die ganze
+    # Suche gehalten, kosteten die Felder 40 Byte je Eintrag und hoben an
+    # ``dense_1m.stl`` (2,5 Millionen Einträge) die Spitze der Suche über die
+    # von vorher, 509 statt 454 MB; je Fenster sind es meist wenige Megabyte.
     order = entries.triangle
-    side_low = [np.ascontiguousarray(low[order, dimension]) for dimension in others]
-    side_reach = [high[order, dimension] + EPS_GEOM for dimension in others]
-    home = (
-        np.floor((low[order, plan.bins] - entries.origin) / plan.width).astype(np.int64)
-        if plan.bins is not None
-        else None
-    )
     counted = 0.0
     begin = 0
     while begin < len(counts):
@@ -634,27 +666,32 @@ def _candidates(
         before = int(total[begin - 1]) if begin else 0
         end = int(np.searchsorted(total, before + SWEEP_PAIRS, side="right"))
         end = min(max(end, begin + 1), len(counts))
-        block = positions[begin:end]
-        size = counts[begin:end]
+        start, size = begin, counts[begin:end]
         begin = end
         amount = int(size.sum())
         if not amount:
             continue
+        # Plätze im Fenster: der Block vorn, dahinter die Partner bis zum letzten.
+        block = np.arange(end - start, dtype=places)
+        window = order[start : start + int((block + size).max()) + 1]
         left: np.ndarray = np.repeat(block, size)
-        right: np.ndarray = np.arange(amount, dtype=block.dtype) + np.repeat(
-            block + 1 - (np.cumsum(size) - size).astype(block.dtype), size
+        right: np.ndarray = np.arange(amount, dtype=places) + np.repeat(
+            block + 1 - (np.cumsum(size) - size).astype(places), size
         )
         apart = np.zeros(amount, dtype=bool)
-        for lows, reaches in zip(side_low, side_reach, strict=True):
-            apart |= lows[right] > np.repeat(reaches[block], size)
-            apart |= np.repeat(lows[block], size) > reaches[right]
-        if home is not None:
+        for dimension in others:
+            lows = low[window, dimension]
+            reaches = high[window, dimension] + EPS_GEOM
+            apart |= lows[right] > np.repeat(reaches[: end - start], size)
+            apart |= np.repeat(lows[: end - start], size) > reaches[right]
+        if plan.bins is not None:
             # Nur die Scheibe der unteren Ecke der gemeinsamen Hülle zählt.
-            apart |= np.maximum(np.repeat(home[block], size), home[right]) != np.repeat(
-                entries.slab[block], size
+            home = np.floor((low[window, plan.bins] - entries.origin) / plan.width).astype(np.int64)
+            apart |= np.maximum(np.repeat(home[: end - start], size), home[right]) != np.repeat(
+                entries.slab[start:end], size
             )
         near = ~apart
-        left, right = left[near], right[near]
+        left, right = left[near] + start, right[near] + start
         first, second = order[left], order[right]
         open_pairs: np.ndarray | None = None
         cost: np.ndarray | None = None
