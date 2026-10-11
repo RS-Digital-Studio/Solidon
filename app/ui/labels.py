@@ -3246,8 +3246,8 @@ def sale_notice(state: Activation) -> str:
 
     return str(
         tr(
-            "Die Demo endet am {date}. {app} 1.0 ist für den {start} um 10:00 Uhr "
-            "geplant, Ihre Projekte bleiben erhalten. Mehr unter Hilfe → Solidon "
+            "Die Demo endet am {date}. {app} 1.0 erscheint voraussichtlich am {start} "
+            "um 10:00 Uhr, Ihre Projekte bleiben erhalten. Mehr unter Hilfe → Solidon "
             "freischalten …"
         )
     ).format(
