@@ -147,11 +147,10 @@ jobs:
             # (Anycubic, 11.10.2026), lädt curl ohne TLS-Prüfung nach, und die
             # Prüfsumme darunter weist jede andere Datei ab. Nur Code 60
             # (Zertifikat nicht belegbar); jeder andere Fehler bleibt einer.
-            local code=0 host=${1#*://}
-            host=${host%%/*}
+            local code=0
             curl -fL --retry 3 --retry-delay 5 -o "$3" "$1" || code=$?
             if [ "$code" -eq 60 ]; then
-              echo "::warning::Zertifikat von $host nicht belegbar; die Datei weist ihre SHA-256 aus."
+              echo "::warning::TLS-Prüfung für $1 fehlgeschlagen (curl 60); geladen wird ohne sie, echt nur über die SHA-256-Prüfung danach."
               curl -fL --insecure --retry 3 --retry-delay 5 -o "$3" "$1"
             elif [ "$code" -ne 0 ]; then
               return "$code"
