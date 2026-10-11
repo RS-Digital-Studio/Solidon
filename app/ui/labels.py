@@ -1790,6 +1790,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "megabytes": _("Megabyte"),
     "minimum": _("Mindestwert"),
     "minutes": _("Minuten"),
+    "model": _("Modell"),
     "motion": _("Bewegung"),
     "missed": _("Nicht getroffene Züge"),
     "missing": _("Fehlt"),

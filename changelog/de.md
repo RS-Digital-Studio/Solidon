@@ -215,6 +215,8 @@ Nutzen da und sonst nichts.
 - Ist ein erzeugtes Modell nur eine dünne Haut um einen Hohlraum, sagt es der Dialog vor dem Übernehmen und der Prüfbericht danach, jeweils mit dem Weg zu einem neuen Versuch.
 - Vor dem Herunterladen nennen *Chat einrichten* und *ComfyUI einrichten*, wie viel Grafikspeicher und Platz ein Modell braucht und ob dieser Rechner das hat.
 - Auf einem Mac schlägt *Chat einrichten* ein lokales Modell vor, das in den gemeinsamen Speicher passt, und sagt, wann ein Schlüssel für ein gehostetes Modell besser ist.
+- Fehlt das gewählte lokale Modell oder lehnt der Anbieter den Schlüssel ab, sagt Solidon es in einem Satz und führt mit *Chat einrichten* direkt zum Ausweg.
+- Einen ungültigen Schlüssel übergeht Solidon einen Tag lang, bis Sie einen anderen eintragen oder *Noch einmal versuchen* wählen. So lange antwortet ein lokales Modell, wenn eines eingerichtet ist.
 - Bei einem neu erzeugten Modell rechnet *Größe ändern* nur das neue Maß und wiederholt die Reparatur nicht mehr. Das geht schneller, und Strg+Z nimmt die Änderung sofort zurück.
 
 ## 0.5.3

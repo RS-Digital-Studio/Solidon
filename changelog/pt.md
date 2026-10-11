@@ -190,6 +190,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um modelo gerado for só uma pele fina à volta de um vazio, a janela di-lo antes de o aceitar e o relatório de verificação depois, com o caminho para uma nova tentativa.
 - Antes de transferir, *Configurar o chat* e *Configurar o ComfyUI* indicam quanta memória gráfica e espaço um modelo precisa e se este computador os tem.
 - Num Mac, *Configurar o chat* propõe um modelo local que cabe na memória partilhada e diz quando uma chave para um modelo alojado é melhor.
+- Se faltar o modelo local escolhido ou o fornecedor recusar a chave, o Solidon di-lo numa frase e *Configurar o chat* leva diretamente à solução.
+- O Solidon ignora uma chave inválida durante um dia, até introduzir outra ou escolher *Tentar novamente*. Entretanto responde um modelo local, se houver um configurado.
 - Num modelo acabado de gerar, *Alterar tamanho* só recalcula a nova medida e já não repete a reparação. É mais rápido, e Ctrl+Z desfaz a alteração de imediato.
 
 ## 0.5.3
