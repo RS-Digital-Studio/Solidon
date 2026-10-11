@@ -1001,6 +1001,11 @@ NOT_EARLIER_CASES = {
         ((_SLOT, 23.45, "a", "gcode"), (_OTHER_SLOT, 5.0, "c", "gcode")),
         {},
     ),
+    "Ausgabe mit einem Filament mehr": (
+        ((_SLOT, 23.45, "a", "gcode"), (_OTHER_SLOT, 5.0, "c", "gcode")),
+        _SLICED,
+        {},
+    ),
     "anderes Projekt": (_SLICED, _SLICED, {"project": "B"}),
     "ohne Projektnamen": (_SLICED, _SLICED, {"project": "", "booked_project": ""}),
     "ab 0.6.0 gebucht": (_SLICED, _SLICED, {"fingerprint": usage.STORED_MARK + "alt"}),
