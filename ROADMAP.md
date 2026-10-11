@@ -194,6 +194,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-728 — Kopfkopien entziehen sich Patches](#rm-728) | Tests und Entwicklungswerkzeuge | Je Paar prüfen, über das Modul zugreifen oder den Patch umsetzen |
 | [RM-729 — Gegenproben der Oberflächensuche zählen nur Dateien](#rm-729) | Tests und Entwicklungswerkzeuge | Gegenproben verlangen die Definitionsmodule von `MainWindow`, `Viewport` und der Merkmalserkennung |
 | [RM-730 — `tools/matrix_unit.py` läuft in keiner Suite](#rm-730) | Tests und Entwicklungswerkzeuge | Rauchtest, der das Modul importiert und seine Aliaszugriffe auflöst |
+| [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -6140,6 +6141,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-13.
   **Abnahme:** ein Test importiert das Modul und löst seine Aliaszugriffe auf; ein umbenannter
   Name macht ihn rot.
+
+<a id="rm-786"></a>
+
+- [ ] **RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat.**
+  Beim Release 0.6.0 lief die Kernsuite auf allen vier Plattformen zweimal über denselben
+  Commit, im main-Lauf und im Tag-Lauf (`build.yml`, Job `suite` ohne Bedingung). Das kostet am
+  Tag eine halbe bis eine Stunde und Mac-Plätze, ohne etwas Neues zu prüfen. Aus Roberts Frage
+  beim Release 0.6.0 (11.10.2026).
+  **Nächster Schritt:** im Tag-Lauf den grünen main-Lauf zum selben Commit über die GitHub-API
+  suchen (wie `tools/ci_selection.py --checked-base`) und die Suite dann auslassen; die
+  Paketfreigabe zählt den main-Lauf als Nachweis. Gehen Commit und Tag zusammen hinaus, wird der
+  main-Lauf abgebrochen, und die Suite läuft am Tag wie heute.
+  `konzepte/konzept-ci-testlaufzeiten-2026-09.md` und `tests/test_packaging.py` ziehen nach.
+  **Abnahme:** Ein Tag auf einem Commit mit grünem main-Lauf baut Pakete ohne zweite Suite; ohne
+  grünen main-Lauf läuft sie wie heute; Wächter mit Gegenprobe.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 
