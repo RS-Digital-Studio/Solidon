@@ -34,12 +34,15 @@ from app.core.sketch.profile import (
     Profile,
     ProfileSegment,
     _flat_curve,
+    _flipped,
     _joins,
+    _segment,
     arc_sweep,
     crosses_itself,
     ellipse_element_extremes,
     ellipse_frame,
     parameter_sweep,
+    signed_area,
 )
 from app.core.sketch.solver import CURVE_SLOTS, closest_on_spline, solve_sketch
 from app.core.types import (
@@ -488,9 +491,12 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
     ihrer Zeichenrichtung, und an einem Rechteck aus dem Werkzeug R landete
     +2 mm innen.
 
-    **Ein offener Zug hat kein Außen** (:func:`_read_from_the_left`): Er wandert auf
-    die Seite, die oben liegt, wenn man ihn von seinem linken Ende her liest —
-    eine waagerechte Linie nach oben, eine senkrechte nach rechts.
+    **Eine einzelne Kante gehört zu ihrem Umriss** (:func:`_on_a_ring`): Liegt
+    ein offener Zug der Auswahl auf einem geschlossenen Umriss der Zeichnung,
+    gilt dessen Umlaufsinn, und positiv ist auch hier außen. **Erst eine freie
+    Linie hat kein Außen** (:func:`_read_from_the_left`): Sie wandert auf die
+    Seite, die oben liegt, wenn man sie von ihrem linken Ende her liest — eine
+    waagerechte nach oben, eine senkrechte nach rechts.
 
     **Die Ecken werden geschnitten oder verlängert** (:func:`_mitred`), und
     die Kopien sind dort gedeckt wie eine gezeichnete Kette. Vorher lagen vier
@@ -519,8 +525,21 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
     joints: list[tuple[int, int]] = []
     base = len(flat_points(sketch))
     for chain, closed in _line_chains(sketch, lines):
-        links = chain if closed else _read_from_the_left(sketch, chain)
-        kept = _mitred(sketch, links, closed, distance)
+        if closed:
+            links, turn = chain, _turn_of(sketch, chain)
+            if abs(turn) <= EPS_GEOM * EPS_GEOM:
+                raise ValidationError(
+                    "element",
+                    _("Diese Linien umschließen keine Fläche — es gibt kein Innen und kein Außen."),
+                )
+        else:
+            # Eine Kante eines geschlossenen Umrisses gehört zu ihm: Außen ist
+            # sein Außen. Nur eine Linie ohne Umriss nimmt die feste Seite.
+            ring = _on_a_ring(sketch, chain)
+            links, turn = ring if ring is not None else (_read_from_the_left(sketch, chain), 0.0)
+        # Links der Laufrichtung liegt bei einer linksherum laufenden Kette innen.
+        towards = -distance if turn > 0.0 else distance
+        kept = _mitred(sketch, links, closed, towards, distance)
         first = base + 2 * len(copies)
         turned = [links[at][1] for at, _run in kept]
         for at, run in kept:
@@ -584,21 +603,17 @@ def _line_chains(
     ends = {
         (index, side): sketch.elements[index].points[side] for index in lines for side in (0, 1)
     }
-    keys = list(ends)
     partner: dict[tuple[int, int], tuple[int, int]] = {}
-    for at, key in enumerate(keys):
-        for other in keys[at + 1 :]:
-            if other[0] != key[0] and _joins(ends[key], ends[other]):
-                if key in partner or other in partner:
-                    raise ValidationError(
-                        "element",
-                        _(
-                            "Die gewählten Linien verzweigen sich — für Versetzen "
-                            "an jeder Ecke höchstens zwei wählen."
-                        ),
-                    )
-                partner[key] = other
-                partner[other] = key
+    for key, others in _partners(ends).items():
+        if len(others) > 1:
+            raise ValidationError(
+                "element",
+                _(
+                    "Die gewählten Linien verzweigen sich — für Versetzen "
+                    "an jeder Ecke höchstens zwei wählen."
+                ),
+            )
+        partner[key] = others[0]
 
     used: set[int] = set()
 
@@ -623,11 +638,103 @@ def _line_chains(
     return chains
 
 
+def _partners(
+    ends: Mapping[tuple[int, int], Point2],
+) -> dict[tuple[int, int], list[tuple[int, int]]]:
+    """Je Ende ``(Element, Seite)`` die Enden anderer Elemente, die es nach
+    :func:`~app.core.sketch.profile._joins` trifft — in der Folge von ``ends``."""
+    keys = list(ends)
+    found: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for at, key in enumerate(keys):
+        for other in keys[at + 1 :]:
+            if other[0] != key[0] and _joins(ends[key], ends[other]):
+                found.setdefault(key, []).append(other)
+                found.setdefault(other, []).append(key)
+    return found
+
+
+def _ends_of(element: SketchElement) -> tuple[Point2, Point2] | None:
+    """Anfang und Ende eines Elements, das sich zu einer Kette verbindet."""
+    if element.kind == "line":
+        return element.points[0], element.points[1]
+    if element.kind == "arc":
+        return element.points[1], element.points[2]
+    if element.kind == "spline":
+        return element.points[0], element.points[-1]
+    if element.kind == "elliptical_arc":
+        return element.points[3], element.points[4]
+    return None
+
+
+def _turn_of(sketch: Sketch, links: tuple[tuple[int, bool], ...]) -> float:
+    """Der Umlaufsinn einer geschlossenen Kette als vorzeichenbehaftete Fläche
+    (:func:`~app.core.sketch.profile.signed_area`, Bögen exakt)."""
+    segments = []
+    for index, backwards in links:
+        element = sketch.elements[index]
+        segment = _segment(element.kind, element.points)
+        segments.append(_flipped(segment) if backwards else segment)
+    return signed_area(Profile(segments=tuple(segments)))
+
+
+def _ring_through(sketch: Sketch, index: int) -> tuple[tuple[int, bool], ...] | None:
+    """Der geschlossene Umriss der Zeichnung, in dem das Element ``index`` liegt —
+    oder keiner, wenn seine Kette offen bleibt oder sich verzweigt.
+
+    Gekettet wird wie in der Profilbildung, unter Elementen derselben Art
+    (Hilfslinie oder Kante), damit eine Mittellinie an einer Ecke den Umriss
+    nicht verzweigt.
+    """
+    construction = sketch.elements[index].construction
+    ends: dict[tuple[int, int], Point2] = {}
+    for at, element in enumerate(sketch.elements):
+        pair = _ends_of(element)
+        if pair is None or element.construction != construction or _joins(*pair):
+            continue
+        ends[(at, 0)], ends[(at, 1)] = pair
+    partners = _partners(ends)
+    ring: list[tuple[int, bool]] = []
+    at, side = index, 0
+    while len(ring) < len(ends) // 2:
+        ring.append((at, side == 1))
+        following = partners.get((at, 1 - side), [])
+        if len(following) != 1:
+            return None
+        at, side = following[0]
+        if len(partners.get((at, side), [])) != 1:
+            return None
+        if at == index:
+            return tuple(ring) if side == 0 else None
+    return None
+
+
+def _on_a_ring(
+    sketch: Sketch, chain: tuple[tuple[int, bool], ...]
+) -> tuple[tuple[tuple[int, bool], ...], float] | None:
+    """Ein offener Zug der Auswahl auf einem geschlossenen Umriss der Zeichnung:
+    in dessen Laufrichtung gelesen, mit dessen Umlaufsinn."""
+    index, backwards = chain[0]
+    ring = _ring_through(sketch, index)
+    if ring is None:
+        return None
+    turn = _turn_of(sketch, ring)
+    if abs(turn) <= EPS_GEOM * EPS_GEOM:
+        return None
+    if dict(ring)[index] != backwards:
+        chain = tuple((at, not back) for at, back in reversed(chain))
+    return chain, turn
+
+
 def _mitred(
-    sketch: Sketch, links: tuple[tuple[int, bool], ...], closed: bool, distance: float
+    sketch: Sketch,
+    links: tuple[tuple[int, bool], ...],
+    closed: bool,
+    towards: float,
+    distance: float,
 ) -> list[tuple[int, tuple[Point2, Point2]]]:
     """Die Strecken einer versetzten Kette in Laufrichtung, Ecken auf Gehrung —
-    je bleibendem Glied seine Stelle in ``links`` und seine Kopie.
+    je bleibendem Glied seine Stelle in ``links`` und seine Kopie. ``towards``
+    ist der Abstand links der Laufrichtung, ``distance`` der getippte Wert.
 
     Eine Ecke zweier Nachbarn liegt auf beiden versetzten Geraden:
     ``V + s·(n₁ + n₂) / (1 + n₁·n₂)`` mit den Einheitsnormalen links der
@@ -644,18 +751,6 @@ def _mitred(
     Rücklauf offen da oder kreuzt die Kopie sich, gibt es eine Absage.
     """
     runs = [_run_of(sketch, link) for link in links]
-    towards = distance
-    if closed:
-        twice = sum(a[0] * b[1] - b[0] * a[1] for a, b in runs)
-        if abs(twice) / 2.0 <= EPS_GEOM * EPS_GEOM:
-            raise ValidationError(
-                "element",
-                _("Diese Linien umschließen keine Fläche — es gibt kein Innen und kein Außen."),
-            )
-        # Links der Laufrichtung liegt bei einer linksherum laufenden Kette innen.
-        if twice > 0.0:
-            towards = -distance
-
     normals = []
     for (ax, ay), (bx, by) in runs:
         length = math.hypot(bx - ax, by - ay)

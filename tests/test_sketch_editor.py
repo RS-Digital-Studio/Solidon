@@ -1363,6 +1363,20 @@ def test_offsetting_a_drawn_rectangle_keeps_the_outline(qt_app: QApplication) ->
     assert max(x for x, _y in copied) == pytest.approx(42.0)
 
 
+def test_offsetting_one_side_of_a_drawn_rectangle_goes_outwards(qt_app: QApplication) -> None:
+    """Nur die Unterkante gewählt: Sie gehört zum Rechteck und geht mit ihm
+    nach außen, also nach unten — der Tooltip sagt es."""
+    canvas = SketchCanvas()
+    canvas.set_sketch(shapes.rectangle_between((0.0, 0.0), (40.0, 30.0)))
+    canvas.selection = [("line", (0, 1))]
+
+    canvas.offset_selected(2.0)
+
+    assert [y for _x, y in canvas.points()[8:]] == pytest.approx([-2.0, -2.0])
+    panel = SketchPanel()
+    assert "Kanten" in panel.offset_distance.toolTip()
+
+
 @pytest.mark.parametrize("action", ["offset", "mirror"])
 def test_offset_and_mirror_start_from_the_solved_drawing(qt_app: QApplication, action: str) -> None:
     """Nach einem geänderten Maß steht das Rechteck dort, wo der Löser es

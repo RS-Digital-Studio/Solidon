@@ -170,8 +170,9 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   undichten Körper trotzdem als `mesh.not_watertight` (`ops._created`).
 - **Versetzen nimmt die Seite aus der Kette, nie aus der Zeichenrichtung**
   (`edit.offset`): Ein geschlossener Zug der Auswahl geht positiv nach außen
-  wie der Kreis, ein offener nach oben, ein senkrechter nach rechts — die Seite,
-  die der Tooltip nennt. Ecken auf Gehrung und gedeckt (`_mitred`); eine Linie,
+  wie der Kreis, eine einzelne Kante mit ihrem Umriss (`_on_a_ring`), erst eine
+  freie Linie nach oben, eine senkrechte nach rechts — die Seite, die der
+  Tooltip nennt. Ecken auf Gehrung und gedeckt (`_mitred`); eine Linie,
   die der Abstand aufzehrt, fällt weg, die früheste zuerst (`_vanishing`), eine
   zugelaufene Kerbe mit beiden Wänden — Kleinstkanten eingelesener Umrisse. Ein
   offenes Ende, das wegfiele, eine Kreuzung oder ein Rest ohne Fläche ist eine

@@ -778,6 +778,69 @@ def test_an_open_chain_keeps_its_corner(backwards: bool) -> None:
     assert len([c for c in moved.constraints if c.kind == "coincident"]) == 1
 
 
+def slot(radius: float = 5.0, length: float = 20.0) -> Sketch:
+    """Ein Langloch linksherum: Unterkante, rechter Bogen, Oberkante, linker Bogen."""
+    return Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, -radius), (length, -radius))),
+            SketchElement(kind="arc", points=((length, 0.0), (length, -radius), (length, radius))),
+            SketchElement(kind="line", points=((length, radius), (0.0, radius))),
+            SketchElement(kind="arc", points=((0.0, 0.0), (0.0, radius), (0.0, -radius))),
+        ),
+    )
+
+
+@pytest.mark.parametrize("clockwise", [False, True], ids=["ccw", "cw"])
+@pytest.mark.parametrize("distance", [2.0, -2.0], ids=["outwards", "inwards"])
+def test_a_single_edge_of_an_outline_follows_the_outline(clockwise: bool, distance: float) -> None:
+    """Die Unterkante eines Rechtecks allein gewählt: Sie gehört zum Umriss,
+    +2 mm schiebt sie nach unten, nicht nach oben wie eine freie Linie —
+    gleich wie herum der Umriss gezeichnet ist."""
+    sketch = loop_of(RECTANGLE, clockwise=clockwise)
+    bottom = next(
+        at for at, element in enumerate(sketch.elements) if {y for _x, y in element.points} == {0.0}
+    )
+
+    moved = edit.offset(sketch, (bottom,), distance)
+
+    assert copied_corners(sketch, moved) == [(0.0, -distance), (40.0, -distance)]
+
+
+def test_two_edges_of_an_outline_keep_their_corner_outside() -> None:
+    """Unterkante und rechte Seite: beide nach außen, die Ecke auf Gehrung bei (42, −2)."""
+    sketch = loop_of(RECTANGLE)
+
+    moved = edit.offset(sketch, (0, 1), 2.0)
+
+    assert copied_corners(sketch, moved) == [(0.0, -2.0), (42.0, -2.0), (42.0, 30.0)]
+
+
+def test_an_edge_of_a_slot_follows_the_slot() -> None:
+    """Die Unterkante eines Langlochs: Der Umriss schließt sich über die Bögen,
+    außen ist unten."""
+    sketch = slot()
+
+    moved = edit.offset(sketch, (0,), 2.0)
+
+    assert copied_corners(sketch, moved) == [(0.0, -7.0), (20.0, -7.0)]
+
+
+def test_a_line_beside_an_outline_keeps_the_rule_of_a_free_line() -> None:
+    """Eine Linie, die keinen Umriss mit schließt, wandert weiter nach oben."""
+    sketch = replace(
+        loop_of(RECTANGLE),
+        elements=(
+            *loop_of(RECTANGLE).elements,
+            SketchElement(kind="line", points=((50.0, 0.0), (60.0, 0.0))),
+        ),
+    )
+
+    moved = edit.offset(sketch, (4,), 2.0)
+
+    assert copied_corners(sketch, moved) == [(50.0, 2.0), (60.0, 2.0)]
+
+
 def test_a_circle_beside_an_outline_grows_with_it() -> None:
     """Kreis und Umriss in einer Auswahl: beide nach außen."""
     sketch = replace(

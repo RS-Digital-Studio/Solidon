@@ -6575,10 +6575,11 @@ class SketchPanel(QWidget):
         self.offset_distance.set_range_mm(-1000.0, 1000.0)
         self.offset_distance.set_value_mm(2.0)
         # Die Seite legt ``edit.offset`` fest; der Satz nennt sie für beide
-        # Fälle, denn eine offene Linie hat kein Innen (N1).
+        # Fälle, denn eine freie Linie hat kein Innen (N1). Eine einzelne Kante
+        # eines Umrisses gehört zu ihm und geht mit ihm nach außen.
         offset_note = tr(
-            "Um wie viel versetzt wird. Positiv ist bei einem geschlossenen Umriss und "
-            "beim Kreis außen, bei einer offenen Linie oben, bei einer senkrechten rechts."
+            "Um wie viel versetzt wird. Positiv ist außen an Kreis, Umriss und jeder "
+            "seiner Kanten, oben an einer freien Linie, rechts an einer senkrechten."
         )
         self.offset_distance.setToolTip(offset_note)
         # Beim Vorleser derselbe Satz wie im Tooltip (Regel 18). Wofür das

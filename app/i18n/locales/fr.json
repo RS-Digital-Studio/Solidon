@@ -7063,7 +7063,7 @@
   "Um wie viel die Einlage insgesamt enger ist als das Profil, damit sie es federnd klemmt; null nimmt den Wert aus dem Materialprofil.": "De combien la garniture est au total plus étroite que le profilé, pour qu'elle le serre élastiquement ; zéro prend la valeur du profil de matériau.",
   "Um wie viel die Füllung gedreht liegt. Bahnen längs der Belastung tragen mehr als querlaufende — bei einem Teil, das in eine bekannte Richtung belastet wird, lohnt das Drehen.": "De combien le remplissage est tourné. Les lignes qui suivent la charge portent plus que celles en travers — sur une pièce chargée dans une direction connue, la rotation vaut la peine.",
   "Um wie viel verschoben wird, nicht wohin. Positiv geht nach rechts.": "De combien on déplace, pas jusqu'où. Le positif va vers la droite.",
-  "Um wie viel versetzt wird. Positiv ist bei einem geschlossenen Umriss und beim Kreis außen, bei einer offenen Linie oben, bei einer senkrechten rechts.": "De combien on décale. Le positif va vers l'extérieur pour un contour fermé et un cercle, vers le haut pour une ligne ouverte et vers la droite pour une verticale.",
+  "Um wie viel versetzt wird. Positiv ist außen an Kreis, Umriss und jeder seiner Kanten, oben an einer freien Linie, rechts an einer senkrechten.": "De combien on décale. Le positif va vers l'extérieur pour un cercle, un contour et chacun de ses côtés, vers le haut pour une ligne libre et vers la droite pour une verticale.",
   "Umfang des Bausteins": "Étendue du bloc",
   "Umfang: {count} von {total} Körpern des eingefrorenen Auftrags.": "Portée : {count} corps sur {total} dans l'instantané de la tâche.",
   "Umgekehrt herum": "Dans l'autre sens",

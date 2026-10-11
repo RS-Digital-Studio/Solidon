@@ -7063,7 +7063,7 @@
   "Um wie viel die Einlage insgesamt enger ist als das Profil, damit sie es federnd klemmt; null nimmt den Wert aus dem Materialprofil.": "Quanto o inserto é, no total, mais estreito do que o perfil, para que o aperte de forma elástica; zero usa o valor do perfil de material.",
   "Um wie viel die Füllung gedreht liegt. Bahnen längs der Belastung tragen mehr als querlaufende — bei einem Teil, das in eine bekannte Richtung belastet wird, lohnt das Drehen.": "Quanto o preenchimento está rodado. As linhas que seguem a carga suportam mais do que as transversais — numa peça carregada numa direção conhecida, rodar compensa.",
   "Um wie viel verschoben wird, nicht wohin. Positiv geht nach rechts.": "Em quanto se desloca, não para onde. Positivo vai para a direita.",
-  "Um wie viel versetzt wird. Positiv ist bei einem geschlossenen Umriss und beim Kreis außen, bei einer offenen Linie oben, bei einer senkrechten rechts.": "Em quanto se afasta. Positivo é para fora num contorno fechado e num círculo, para cima numa linha aberta e para a direita numa vertical.",
+  "Um wie viel versetzt wird. Positiv ist außen an Kreis, Umriss und jeder seiner Kanten, oben an einer freien Linie, rechts an einer senkrechten.": "Em quanto se afasta. Positivo é para fora num círculo, num contorno e em cada um dos seus lados, para cima numa linha livre e para a direita numa vertical.",
   "Umfang des Bausteins": "Âmbito do bloco",
   "Umfang: {count} von {total} Körpern des eingefrorenen Auftrags.": "Âmbito: {count} de {total} corpos no trabalho registado para a transferência.",
   "Umgekehrt herum": "Ao contrário",
