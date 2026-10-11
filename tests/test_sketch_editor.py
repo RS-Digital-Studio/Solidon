@@ -1347,6 +1347,51 @@ def test_offsetting_the_selection_adds_a_copy(qt_app: QApplication) -> None:
     assert len(canvas.sketch.elements) == 3, "die Vorlage bleibt, die Kopie kommt dazu"
 
 
+def test_offsetting_a_drawn_rectangle_keeps_the_outline(qt_app: QApplication) -> None:
+    """N1: Werkzeug R, ganze Kontur, +2 mm — die Kopie liegt außen, und die
+    Zeichnung bleibt ein Umriss, den *Fertig* übernimmt. Bis 0.6.0 lagen vier
+    gekreuzte Linien innen, und der Zustand hieß „Noch offen“."""
+    canvas = SketchCanvas()
+    canvas.set_sketch(shapes.rectangle_between((0.0, 0.0), (40.0, 30.0)))
+    canvas.selection = [("line", (2 * at, 2 * at + 1)) for at in range(4)]
+
+    canvas.offset_selected(2.0)
+
+    assert canvas.outline, "ein Rahmen, kein Gewirr"
+    copied = canvas.points()[8:]
+    assert min(x for x, _y in copied) == pytest.approx(-2.0)
+    assert max(x for x, _y in copied) == pytest.approx(42.0)
+
+
+@pytest.mark.parametrize("action", ["offset", "mirror"])
+def test_offset_and_mirror_start_from_the_solved_drawing(qt_app: QApplication, action: str) -> None:
+    """Nach einem geänderten Maß steht das Rechteck dort, wo der Löser es
+    hinlegt, nicht wo es gezeichnet wurde. Versetzt und gespiegelt wird, was
+    zu sehen ist — vorher kam die Kopie vom gezeichneten Stand."""
+    drawn = shapes.rectangle_between((0.0, 0.0), (40.0, 30.0))
+    wider = tuple(
+        replace(entry, value="50")
+        if entry.kind == "distance" and entry.targets == (0, 1)
+        else entry
+        for entry in drawn.constraints
+    )
+    canvas = SketchCanvas()
+    canvas.set_sketch(replace(drawn, constraints=wider))
+    assert max(x for x, _y in canvas.points()) == pytest.approx(50.0), "der Löser legt 50 mm"
+    canvas.selection = [("line", (2 * at, 2 * at + 1)) for at in range(4)]
+
+    if action == "offset":
+        canvas.offset_selected(2.0)
+        expected = (-2.0, 52.0)
+    else:
+        canvas.mirror_selected("y")
+        expected = (-50.0, 0.0)
+
+    copied = canvas.points()[8:]
+    assert min(x for x, _y in copied) == pytest.approx(expected[0])
+    assert max(x for x, _y in copied) == pytest.approx(expected[1])
+
+
 def test_mirroring_the_selection_adds_a_copy(qt_app: QApplication) -> None:
     canvas = _cross_canvas()
     canvas.selection = [("line", (0, 1))]

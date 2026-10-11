@@ -264,7 +264,8 @@ möglich.
 
 * **`_drag_solve` schreibt die ganze Lösung zurück** — die gespeicherte
   Zeichnung ist stets die gelöste, ein `fixed`-Anker wandert nie; `-0.0` wird
-  null.
+  null. Ein geändertes Maß schreibt nichts zurück: Handlungen auf der Auswahl
+  rechnen deshalb an `_solved_sketch()`, sonst stand die Kopie am alten Ort.
 * **Fest heißt fest, auch gegen die Hand**; getippte Koordinaten (`edit_point`)
   setzen erst den Anker (`_anchor`).
 * **Die Mitte eines Kreises oder Bogens nimmt den Rand mit** (`move_point`),

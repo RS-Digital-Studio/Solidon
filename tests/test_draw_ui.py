@@ -535,6 +535,34 @@ def test_an_open_outline_does_not_reach_the_height(window: MainWindow) -> None:
     assert window.session.history.operations == ()
 
 
+def test_an_offset_outline_reaches_the_height(window: MainWindow) -> None:
+    """N1: Rechteck, ganze Kontur versetzt, *Fertig* — ein Rahmen mit 10 mm Höhe.
+
+    Bis 0.6.0 lagen die Kopien innen und gekreuzt; *Fertig* hielt mit „Erst
+    einen geschlossenen Umriss zeichnen.“ an, und das Fenster blieb im Editor.
+    Soll von Hand: (44 · 34 − 40 · 30) · 10 = 2960 mm³.
+    """
+    window.start_sketch("")
+    panel = window._sketch_panel
+    assert panel is not None
+    panel.canvas.set_sketch(shapes.rectangle_between((0.0, 0.0), (40.0, 30.0)))
+    panel.canvas.selection = [("line", (2 * at, 2 * at + 1)) for at in range(4)]
+    panel.canvas.selectionChanged.emit()
+    assert panel.offset_button.isEnabled(), "die Auswahl gibt den Knopf frei"
+    panel.offset_distance.set_value_mm(2.0)
+    panel.offset_button.click()
+    assert len(panel.canvas.sketch.elements) == 8, "die Kopie ist da"
+    window.sketch_finish_button.click()
+    assert window._sketch_panel is None and window.drawing(), window._announcement
+    flow = window.draw_flow()
+    flow.lift = Lift(10.0)
+    assert flow.settle()
+    assert window.session.wait_for_idle(60_000)
+    assert [entry.op for entry in window.session.history.operations] == ["sketch_extrude"]
+    body = next(iter(window.session.last_result.scene.objects.values()))
+    assert body.mesh.volume == pytest.approx((44.0 * 34.0 - 40.0 * 30.0) * 10.0, rel=1e-9)
+
+
 def test_a_figure_generator_gets_a_new_plate_and_the_video_its_dialog(
     qt_app: QApplication, window: MainWindow
 ) -> None:

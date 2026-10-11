@@ -2551,17 +2551,19 @@ class SketchCanvas(QWidget):
 
     def offset_selected(self, distance: float) -> None:
         """Legt eine versetzte Kopie der gewählten Elemente daneben."""
-        self._change_selected(lambda indices: edit.offset(self.sketch, indices, distance))
+        self._change_selected(lambda indices: edit.offset(self._solved_sketch(), indices, distance))
 
     def mirror_selected(self, axis: str) -> None:
         """Spiegelt die gewählten Elemente an einer der beiden Achsen."""
-        self._change_selected(lambda indices: edit.mirror(self.sketch, indices, axis))
+        self._change_selected(lambda indices: edit.mirror(self._solved_sketch(), indices, axis))
 
     def _change_selected(self, run: Any) -> None:
         """Der gemeinsame Weg für Versetzen und Spiegeln.
 
         Beide arbeiten auf der Auswahl, beide melden ihren Fehler in die
-        Statuszeile, und beide sind ein Schritt für das Rückgängig.
+        Statuszeile, und beide sind ein Schritt für das Rückgängig. Beide
+        gehen von der gelösten Zeichnung aus (:meth:`_solved_sketch`): Nach
+        einem geänderten Maß stand die Kopie sonst am gezeichneten Stand.
         """
         indices = tuple(sorted({_located(self.sketch, entry[1][0])[0] for entry in self.selection}))
         if not indices:
@@ -6572,7 +6574,12 @@ class SketchPanel(QWidget):
         self.offset_distance = LengthSpin(self)
         self.offset_distance.set_range_mm(-1000.0, 1000.0)
         self.offset_distance.set_value_mm(2.0)
-        offset_note = tr("Um wie viel versetzt wird. Negativ ist nach innen.")
+        # Die Seite legt ``edit.offset`` fest; der Satz nennt sie für beide
+        # Fälle, denn eine offene Linie hat kein Innen (N1).
+        offset_note = tr(
+            "Um wie viel versetzt wird. Positiv ist bei einem geschlossenen Umriss und "
+            "beim Kreis außen, bei einer offenen Linie oben, bei einer senkrechten rechts."
+        )
         self.offset_distance.setToolTip(offset_note)
         # Beim Vorleser derselbe Satz wie im Tooltip (Regel 18). Wofür das
         # Feld ist, war ohne Hover nicht zu erkennen (Robert, 26.08.2026);

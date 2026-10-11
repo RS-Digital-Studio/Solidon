@@ -194,6 +194,7 @@ Nutzen da und sonst nichts.
 - Eine Skizze mit vielen getrennten Formen löst schnell, auch mit Hunderten bemaßter Rechtecke oder Kreise.
 - Lässt sich *Krümmungsstetig* beim Zeichnen nicht erfüllen, sagt der Skizzeneditor das nach Sekunden statt nach Minuten.
 - Widersprechen sich zwei Bedingungen, nennt der Skizzeneditor beide, statt eine Linie oder einen Kreis auf einen Punkt schrumpfen zu lassen.
+- Im Skizzeneditor legt *Versetzen* einen geschlossenen Umriss bei positivem Abstand nach außen und schließt seine Ecken, gleich wie herum er gezeichnet ist. Version 0.5.3 setzte ihn oft nach innen.
 - Ein Körper entsteht mit drei Klicks: *Zeichnen* oben in der Werkzeugleiste (Strg+Umschalt+E), dann Ecke, Gegenecke, Höhe. Nach außen fügt er an, nach innen schneidet er.
 - Beim Aufziehen lassen sich die Maße tippen. Ein Doppelklick auf den Schritt öffnet seine Maße, und unter *Art* wird daraus ohne neues Zeichnen ein Drehkörper oder ein Lochfeld.
 - Aus dem Skizzeneditor führt *Fertig* zurück in die Ansicht, der nächste Klick setzt die Höhe. Escape legt den Umriss beiseite, Strg+Z holt ihn zurück.
