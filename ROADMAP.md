@@ -1,11 +1,11 @@
 # ROADMAP — Arbeitsliste
 
 Der ursprüngliche Bauplan-Abgleich vom 08.09.2026 und seine Fortschreibungen stehen im
-[Archiv](ROADMAP-ARCHIV.md). Der Veröffentlichungsstand ist **0.5.3**, veröffentlicht
-am **06.10.2026** (`website/version.json`, `d5a485a7a`). Der Tag `v0.5.3` zeigt auf
-`34e1b3364`; der [Taglauf 37409338027](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37409338027)
-ist im zweiten Versuch abgeschlossen, rot nur im meldenden Versionswächter (RM-350); das
-Windows-Setup kommt aus dem Installerlauf 37418052743 und ist lokal signiert. Die Website
+[Archiv](ROADMAP-ARCHIV.md). Der Veröffentlichungsstand ist **0.6.0**, veröffentlicht
+am **11.10.2026** (`website/version.json`). Der Tag `v0.6.0` zeigt auf `ed27f155c`; der
+[Taglauf 38170638968](https://github.com/RS-Digital-Studio/Solidon/actions/runs/38170638968)
+ist grün, rot nur im meldenden Versionswächter (ICN001 der neuesten ruff, behoben); das
+Windows-Setup kommt aus dem Installerlauf 38175499836 und ist lokal signiert. Die Website
 bietet Windows-Setup, Linux-AppImage, Linux-Flatpak und die beiden Mac-Pakete an. Die offenen Aufgaben darunter führen ihre verbleibende
 Arbeit oder Abnahme; ein veröffentlichter Build ersetzt keinen Feldnachweis.
 
@@ -23,14 +23,14 @@ stehen mit Nachweis im Archiv.
 
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
-Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.0**, ein
-0.5.4 gibt es nicht (Entscheidung Robert, `tools/bump_version.py --minor`).
-**Als Nächstes:** die Kundenblocker nach
-0.5.3 — das signierte Paket startet auf echten Intel-Macs nicht (RM-104; Ursache eingegrenzt,
-am Kundengerät von Hand gegengeprobt, Signierschritt korrigiert, kommt mit dem nächsten Tag),
-Cura unter Linux (RM-521, gebaut, Abnahme beim Kunden mit dem nächsten Paket) — und die mit
-0.5.3 fällige Antwort an den Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis
-15.10. (RM-092), Verkaufskandidat bis 25.11., Demo ab 0.6.0 bis 30.11., Start am 01.12.2026 um 10:00 Uhr (RM-061).
+Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.1**.
+**Als Nächstes:** 0.6.1 mit auffindbaren Booleschen Operationen und ohne Befehlspalette,
+danach der Funktionsdurchgang durch die Oberfläche und das Programm Codestruktur
+([RM-722](#rm-722), Konzepte in `konzepte/`); bis zum 25.11. gehen die Kundenpakete des
+Funktionsdurchgangs vor die Komponenten von `MainWindow`. Mit 0.6.0 beim Kunden abzunehmen:
+der Start auf echten Intel-Macs (RM-104) und Cura unter Linux (RM-521); offen bleibt die
+Antwort an den Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis 15.10. (RM-092),
+Verkaufskandidat bis 25.11., Demo bis 30.11., Start am 01.12.2026 um 10:00 Uhr (RM-061).
 Daneben bleiben die Mac-/Linux-Nachweise und die CRA-Betriebsvorbereitung offen — deren Frist
 ist am 11.09.2026 **abgelaufen**, die Meldepflicht aus Art. 14 gilt seither (RM-091).
 Eine zurückgestellte
