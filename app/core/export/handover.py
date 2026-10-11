@@ -1542,6 +1542,7 @@ CURA_PER_MESH: Final = frozenset(
         "infill_sparse_density",
         "line_width",
         "ironing_enabled",
+        "ironing_only_highest_layer",
         "inset_direction",
         "wall_line_count",
         "speed_wall_0",

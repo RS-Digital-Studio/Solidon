@@ -396,8 +396,11 @@ _BAMBU_IDS = re.compile(r"^; model label id: ([\d,]+)")
 _BAMBU_OBJECT = re.compile(r"^; start printing object, unique label id: (\d+)")
 
 
-def _bridge_lines_per_object(text: str, names: tuple[str, ...]) -> dict[str, tuple[float, float]]:
-    """Länge und Förderung der äußeren Brückenbahnen je Körper, in mm.
+def _bridge_lines_per_object(
+    text: str, names: tuple[str, ...], kinds: tuple[str, ...] = ("Bridge", "Bridge infill")
+) -> dict[str, tuple[float, float]]:
+    """Länge und Förderung der Bahnen einer Art je Körper, in mm — ohne Angabe
+    der äußeren Brückenbahnen.
 
     Bambu Studio nennt keine Namen, sondern Kennungen in der Ladefolge der Körper;
     die erste gehört dem ersten Körper der Platte."""
@@ -409,7 +412,7 @@ def _bridge_lines_per_object(text: str, names: tuple[str, ...]) -> dict[str, tup
     x = y = 0.0
     for line in text.splitlines():
         if line.startswith((";TYPE:", "; TYPE:", "; FEATURE:")):
-            inside = line.split(":", 1)[1].strip() in ("Bridge", "Bridge infill")
+            inside = line.split(":", 1)[1].strip() in kinds
             continue
         orca = _ORCA_OBJECT.match(line)
         prusa = _PRUSA_OBJECT.match(line)
@@ -529,6 +532,101 @@ def test_the_bridge_flow_of_one_part_stays_with_that_part(
     assert left_feed / left < 0.85 * right_feed / right, (
         f"{program}: links {left_feed / left:.4f}, rechts {right_feed / right:.4f} mm je mm"
     )
+
+
+@pytest.mark.parametrize(
+    "program",
+    [
+        pytest.param(program, marks=pytest.mark.slicer(program), id=program)
+        for program in (
+            "prusaslicer",
+            "orcaslicer",
+            "elegooslicer",
+            "crealityprint",
+            "anycubicslicernext",
+            "bambustudio",
+        )
+    ],
+)
+def test_ironing_the_topmost_face_stays_with_that_part(
+    program: str, installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die oberste Fläche bügelt nur das Teil, dessen Rat es verlangt (RM-588):
+    zwei gleiche Platten 30 × 30 × 6 mm, nur die linke bekommt „oberste Fläche
+    bügeln“ als Objektwert. Das Programm bügelt ihre Oberseite und lässt die
+    rechte, wie die Platte sie druckt. Gemessen in acht Programmen samt Cura und
+    SuperSlicer (``konzepte/begruendungen/regel-druckrat.md``)."""
+    from app.core.export import writer
+    from app.core.types import PrintSettings, SettingAdvice
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+    from tests.helpers import object_values
+
+    set_test_license(monkeypatch, active=True)
+    profile = profiles.make_profile(PROGRAMS[program], "pla")
+    settings = print_settings.resolve(profile)
+    assert settings.shell.ironing == "none"
+    settings = print_settings.with_accepted(settings, "shell.ironing", "topmost")
+    setup = _preselected(handover.detect(installed_slicer), profile)
+
+    def asks(
+        entry: SceneObject, _mesh: object, base: PrintSettings, *_args: object, **_kwargs: object
+    ) -> list[SettingAdvice]:
+        if entry.id != "links":
+            return []
+        was = print_settings.read_path(base, "shell.ironing")
+        return [SettingAdvice("shell.ironing", "topmost", was, "Probe")]
+
+    monkeypatch.setattr(writer, "part_advice", asks)
+
+    def plate(x: float) -> trimesh.Trimesh:
+        body = trimesh.creation.box(extents=(30.0, 30.0, 6.0))
+        body.apply_translation((x, 0.0, 3.0))
+        return body
+
+    objects = tuple(
+        SceneObject(name, name, MeshData.of(plate(x)))
+        for name, x in (("links", -34.0), ("rechts", 34.0))
+    )
+    folder = tmp_path / "platte"
+    folder.mkdir()
+    job = _PlateJob(
+        objects=objects,
+        plates=(0,),
+        folder=folder,
+        name="buegeln",
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+    )
+    run = _prepare_plate(job, 0)
+    member = (
+        "Metadata/Slic3r_PE_model.config"
+        if setup.flavour == "prusa"
+        else "Metadata/model_settings.config"
+    )
+    written = object_values(run.model, member)
+    assert written["links"]["ironing_type"] == "topmost"
+    assert "ironing_type" not in written["rechts"], "das rechte Teil bügelt nicht"
+    outcome = handover.slice_model(
+        [run.model],
+        settings,
+        profile,
+        setup,
+        output_dir=folder,
+        timeout=900,
+        keep_arrangement=run.keep_arrangement,
+        slots=run.slots,
+        model_height=run.model_height,
+        model_meshes=run.meshes,
+        expected_tools=run.used_tools,
+    )
+    text = outcome.gcode_path.read_text(encoding="utf-8", errors="replace")
+    lines = _bridge_lines_per_object(text, ("links", "rechts"), kinds=("Ironing",))
+    (left, _), (right, _) = lines["links"], lines["rechts"]
+    # Bahn neben Bahn im Abstand 0,1 mm über 30 mal 30 mm sind rund 9 m.
+    assert left > 5000.0, f"{program}: Bügelbahn je Körper {lines}"
+    assert right == 0.0, f"{program}: Bügelbahn je Körper {lines}"
 
 
 def _superslicer_bridges(text: str) -> dict[str, tuple[float, float]]:
@@ -664,7 +762,11 @@ def _funnel(angle: float, bottom: float = 6.0, height: float = 20.0) -> trimesh.
 
 
 def _outer_wall_turns(text: str) -> list[bool]:
-    """Je Schicht der Drehsinn der Außenwand (Vorzeichen der umfahrenen Fläche)."""
+    """Je Schicht der Drehsinn der Außenwand (Vorzeichen der umfahrenen Fläche).
+
+    Orcas ``arc_fitting`` legt kleine runde Wände als Bögen (``G2``/``G3``); ein
+    Bogen umfährt seine Sehne und das Kreissegment daneben. Ohne die Bögen hing
+    das Vorzeichen davon ab, wo die Naht lag (RM-588: Naht hinten am Trichter)."""
     turns: list[bool] = []
     area = 0.0
     inside = False
@@ -676,12 +778,20 @@ def _outer_wall_turns(text: str) -> list[bool]:
             area = 0.0
         elif line.startswith(";TYPE:"):
             inside = line[6:].strip() == "Outer wall"
-        elif line.startswith(("G1 ", "G0 ")):
+        elif line.startswith(("G1 ", "G0 ", "G2 ", "G3 ")):
             words = {word[0]: word[1:] for word in line.split(";")[0].split()[1:]}
             nx = float(words["X"]) if "X" in words else x
             ny = float(words["Y"]) if "Y" in words else y
             if inside and "E" in words and float(words["E"]) > 0.0:
                 area += x * ny - nx * y
+                if line.startswith(("G2 ", "G3 ")):
+                    cx, cy = x + float(words.get("I", 0.0)), y + float(words.get("J", 0.0))
+                    turn = math.atan2(ny - cy, nx - cx) - math.atan2(y - cy, x - cx)
+                    clockwise = line.startswith("G2 ")
+                    # Gleicher Anfang und gleiches Ende ist ein ganzer Kreis.
+                    sweep = ((-turn if clockwise else turn) % math.tau) or math.tau
+                    sweep = -sweep if clockwise else sweep
+                    area += ((x - cx) ** 2 + (y - cy) ** 2) * (sweep - math.sin(sweep))
             x, y = nx, ny
     return turns
 
