@@ -197,6 +197,7 @@ scrive in `website/version.json`.
 - Una lunghezza digitata con lo strumento Linea crea esattamente una linea. Finora, lasciando il campo della quota se ne aggiungeva una seconda, di ritorno verso il puntatore.
 - Un clic che l'aggancio alla griglia porta esattamente su un punto esistente aggancia quel punto. Finora il contorno sembrava chiuso senza essere collegato.
 - Un doppio clic con lo strumento Linea termina la sequenza di linee. Finora creava una linea di lunghezza zero.
+- Invio nel campo della quota del dialogo *Disegna schizzo* imposta la quota e lascia aperto il dialogo. Finora applicava il disegno e lo chiudeva.
 
 ### Generare con l'IA
 

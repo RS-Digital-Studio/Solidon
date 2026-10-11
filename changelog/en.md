@@ -195,8 +195,9 @@ it into `website/version.json`.
 - The *Load STEP* and *Extrude a drawing* dialogs only offer files they can read. If the project has none, they point to the *Choose a file …* button.
 - A chain of lines in a sketch ends as soon as it closes a loop. Until now a new segment hung on the pointer, and the first Esc seemed to do nothing.
 - A length typed with the line tool creates exactly one line. Until now leaving the dimension field added a second one, back towards the pointer.
-- A click that grid snapping places exactly on an existing point now catches that point. Until now the contour looked closed without being connected.
+- A click that grid snapping places exactly on an existing point catches that point. Until now the contour looked closed without being connected.
 - A double-click with the line tool ends the chain of lines. Until now it created a line of zero length.
+- Enter in the dimension field of the *Draw sketch* dialog sets the dimension and keeps the dialog open. Until now it applied the drawing and closed it.
 
 ### Generating with AI
 

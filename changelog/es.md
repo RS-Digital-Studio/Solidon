@@ -198,6 +198,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una longitud tecleada con la herramienta Línea crea exactamente una línea. Hasta ahora, al salir del campo de cota se añadía una segunda, de vuelta hacia el puntero.
 - Un clic que el ajuste a la cuadrícula coloca justo sobre un punto existente engancha ese punto. Hasta ahora el contorno parecía cerrado sin estar unido.
 - Un doble clic con la herramienta Línea termina el trazo de líneas. Hasta ahora creaba una línea de longitud cero.
+- Intro en el campo de cota del diálogo *Dibujar un boceto* fija la cota y deja el diálogo abierto. Hasta ahora aplicaba el dibujo y lo cerraba.
 
 ### Generar con IA
 

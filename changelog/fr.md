@@ -198,6 +198,7 @@ dans `website/version.json`.
 - Une longueur tapée avec l'outil Ligne crée exactement une ligne. Jusqu'ici, quitter le champ de cote en ajoutait une seconde, revenant vers le pointeur.
 - Un clic que l'accrochage à la grille pose exactement sur un point existant accroche ce point. Jusqu'ici, le contour semblait fermé sans être relié.
 - Un double-clic avec l'outil Ligne termine la suite de lignes. Jusqu'ici, il créait une ligne de longueur nulle.
+- Entrée dans le champ de cote du dialogue *Dessiner une esquisse* fixe la cote et laisse le dialogue ouvert. Jusqu'ici, elle appliquait le dessin et le fermait.
 
 ### Générer avec l'IA
 

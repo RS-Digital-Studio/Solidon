@@ -197,6 +197,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um comprimento escrito com a ferramenta Linha cria exatamente uma linha. Até agora, ao sair do campo da cota juntava-se uma segunda, de volta ao ponteiro.
 - Um clique que a captura à grelha coloca exatamente sobre um ponto existente apanha esse ponto. Até agora o contorno parecia fechado sem estar ligado.
 - Um duplo clique com a ferramenta Linha termina a sequência de linhas. Até agora criava uma linha de comprimento zero.
+- Enter no campo da cota do diálogo *Desenhar esboço* define a cota e deixa o diálogo aberto. Até agora aplicava o desenho e fechava-o.
 
 ### Gerar com IA
 

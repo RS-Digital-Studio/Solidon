@@ -109,17 +109,20 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
   gezeichnet ist, hängt `status_text` „Esc wechselt zum Auswählen und Ziehen."
   an.
 * **Ein Linienzug endet, wenn er eine Schleife schließt** (`_closes_a_loop`
-  fragt die Zeichnung: Linien, Bögen und Deckungen verbinden; getippte Seiten
-  und Strg+Z zählen mit); sonst hinge ein neuer Strich am Zeiger, und das
-  erste Esc nähme nur ihn. Klick und getipptes Maß führen den Zug über
-  `_go_on_with_the_chain`. Ein zweiter Klick auf den offenen Anfang beendet den
-  Zug statt eine Linie der Länge null anzulegen.
-* **Die Eingabetaste setzt das Maß im Feld, getippt oder angezeigt**
-  (`returnPressed`); der Fokusverlust nur eine getippte, noch nicht genommene
-  Eingabe (`SketchPanel._measure_typed`, einen Ereignisschritt später, denn
-  `editingFinished` kommt vor `returnPressed`).
+  fragt die Zeichnung: Deckungen und die Enden jeder offenen Kurve aus
+  `edit._spots`; getippte Seiten und Strg+Z zählen mit); sonst hinge ein neuer
+  Strich am Zeiger, und das erste Esc nähme nur ihn. Klick und getipptes Maß
+  führen den Zug über `_go_on_with_the_chain`. Den Doppelklick entscheidet
+  `double_click_on_plane` (beendet den Zug); `place` lehnt nur eine Linie der
+  Länge null ab (`EPS_DISPLAY`, nicht die Fangweite).
+* **Die Eingabetaste eines Maßfelds setzt im Ereignisfilter des Panels und
+  endet dort** — getippt oder angezeigt; sonst drückte sie im Dialog *Skizze
+  zeichnen* danach dessen Hauptknopf. Der Fokusverlust setzt nur eine getippte,
+  noch nicht genommene Eingabe, am `FocusOut` erkannt und sofort, weil ein
+  Klick ins Bild zuerst den Fokus nimmt und dann drückt (kein Zeitgeber).
 * **Ein Rasterpunkt auf einem vorhandenen Punkt fängt diesen**
-  (`_placement_target`, Toleranz `EPS_DISPLAY`) — sonst entsteht keine Deckung.
+  (`_placement_target`, Toleranz `EPS_DISPLAY`), nur bei Werkzeugen, die einen
+  Punkt setzen — Auswählen, Verrunden und Fase treffen, was unter dem Zeiger liegt.
 * **Wo der Zeiger steht, steht in der Zeile** (`pointer_target`,
   `SketchPanel._show_pointer`) — der Ort, an dem ein Klick landet, nicht die
   rohe Lage. Genaue Zahlen gibt das Kontextmenü am Punkt (`edit_point`, mit
