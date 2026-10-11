@@ -1195,11 +1195,15 @@ def refine_edge_for(
     oder null, wenn es fein genug ist (H2, H9).
 
     Zu grob heißt: weniger als :data:`BRUSH_TO_EDGE` mittlere Kanten je Radius.
-    Dann :data:`REFINE_TO_EDGE` mittlere Kanten je Radius, die längste
-    :data:`EVEN_LONGEST`-mal so lang, nicht kürzer als ``finest`` (die
-    Untergrenze von *Dreiecke angleichen*) und nicht kürzer, als
+    Verlangt wird dann als längste Kante das :data:`EVEN_LONGEST`-Fache von
+    ``radius / REFINE_TO_EDGE``, nicht kürzer als ``finest`` (die Untergrenze
+    von *Dreiecke angleichen*) und nicht kürzer, als
     :data:`REFINE_MAX_TRIANGLES` zulassen (:func:`_longest_within_budget`).
-    ``edge`` ist die mittlere Kantenlänge, wenn sie schon bekannt ist.
+    Das ist eine Vorhersage, die an Gitterflächen trifft; an Kugeln lag die
+    mittlere Kante damit beim 1,05- bis 1,18-Fachen, an Zylinderfacetten beim
+    0,82-Fachen (Nachprüfung N1). Geeicht wird am Netz, das herauskommt
+    (:func:`evened_for_brush`). ``edge`` ist die mittlere Kantenlänge, wenn sie
+    schon bekannt ist.
     """
     current = median_edge(mesh) if edge is None else edge
     if current * BRUSH_TO_EDGE <= radius:
