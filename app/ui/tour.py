@@ -21,7 +21,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QKeyEvent, QMouseEvent, QPixmap
+from PySide6.QtGui import QKeyEvent, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -100,6 +100,12 @@ class StepLabel(QLabel):
         super().resizeEvent(event)
         self._show()
 
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 — Qt-Name
+        """Eine neue Schrift kürzt neu — gleich, ob sie von hier oder vom Stilblatt kommt."""
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.FontChange:
+            self._show()
+
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
         # Den Druck annehmen: Ein ``QLabel`` reicht ihn sonst an die Eltern
         # weiter, und das Loslassen kommt nicht sicher bei ihm an.
@@ -129,11 +135,17 @@ class StepLabel(QLabel):
             return
         # Gekürzt wird auf die Fläche innerhalb des Rahmens: Der Fokusrahmen
         # (``QLabel#tourStepText`` in ``style.py``) liegt innen am Rand.
-        super().setText(
-            self.fontMetrics().elidedText(
-                self._full, Qt.TextElideMode.ElideRight, self.contentsRect().width()
-            )
-        )
+        metrics = self.fontMetrics()
+        room = self.contentsRect().width()
+        limit = room
+        shown = metrics.elidedText(self._full, Qt.TextElideMode.ElideRight, limit)
+        # ``elidedText`` misst den Anfang im ganzen Satz; vor der Auslassung
+        # rückt die Schrift anders zusammen („V…“ statt „Vo“). Unter Linux stand
+        # die Zeile so einen Punkt über ihrem Platz — dann eben enger kürzen.
+        while limit > 0 and metrics.horizontalAdvance(shown) > room:
+            limit -= 1
+            shown = metrics.elidedText(self._full, Qt.TextElideMode.ElideRight, limit)
+        super().setText(shown)
 
 
 class _StepScroller(ContentScroller):
@@ -522,9 +534,6 @@ class TourPanel(QWidget):
         if tour is None:
             return
         for index, (marker, text) in enumerate(self._rows):
-            body = QFont(text.font())
-            body.setBold(index == self._current)
-            text.setFont(body)
             # Kommende Schritte sind grau über das Stilblatt (``tourState``),
             # nicht gesperrt: Eine gesperrte Zeile nähme weder Klick noch
             # Tastatur an und ließe sich nie aufklappen (Review U1, Fund 5).
@@ -539,7 +548,6 @@ class TourPanel(QWidget):
             # ganzen Satz aus der Beschreibung.
             is_current = index == self._current
             unfolded = is_current or index in self._unfolded
-            text.set_wrapped(unfolded)
             text.setToolTip("")
             text.setAccessibleDescription("" if unfolded else text.full_text())
             text.setCursor(
@@ -577,6 +585,13 @@ class TourPanel(QWidget):
                 for widget in (host, text):
                     style.unpolish(widget)
                     style.polish(widget)
+            # **Halbfett macht das Stilblatt** (``tourState="current"``), nicht
+            # ``setFont``: Jedes Polieren setzt die Schrift zurück, die das
+            # Stilblatt beim vorigen vorfand. So stand ein erledigter Schritt
+            # halbfett da, gekürzt aber mit der normalen Schrift, und die Zeile
+            # ragte über ihren Platz (Linux und macOS: 257 Punkte Text in 228).
+            # Die neue Schrift kürzt die Zeile selbst neu (``StepLabel.changeEvent``).
+            text.set_wrapped(unfolded)
         self._point_at_current()
         # Rollt die Liste, steht der aktuelle Schritt im Bild — erst nach dem
         # Legen, vorher kennt der Rollbereich seine neue Höhe nicht.
