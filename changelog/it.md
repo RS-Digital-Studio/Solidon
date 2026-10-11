@@ -160,6 +160,7 @@ scrive in `website/version.json`.
 - Un blocco per una faccia o un foro viene calcolato solo quando ha il suo punto nella vista. Fino ad allora la finestra non si può applicare e dice che cosa manca.
 - Se la faccia cambia mentre la finestra di un blocco è aperta, il punto scelto resta finché vale ancora sulla nuova forma. Altrimenti il blocco ne cerca uno nuovo e lo segnala.
 - Una finestra di blocco aperta mentre il passo precedente sta ancora calcolando posiziona il blocco da sola appena arriva il risultato, e fino ad allora non si può applicare.
+- Un blocco posizionato nella vista si sposta con un clic in un altro punto anche dopo un inserimento nella finestra.
 - Nell'esempio *Blocchi — dadi, inserti, cavi* il cavo entra dal basso attraverso il fondo, e lo scarico di trazione sta dentro il contenitore. Finora pendeva sotto il piano di stampa.
 
 ### Modificare e disegnare

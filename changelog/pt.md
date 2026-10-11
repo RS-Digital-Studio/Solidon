@@ -160,6 +160,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um bloco para uma face ou um furo só é calculado quando tem o seu lugar na vista. Até lá a caixa de diálogo não pode ser aplicada e diz o que falta.
 - Se a face mudar com a caixa de diálogo de um bloco aberta, o lugar escolhido mantém-se enquanto continuar válido na nova forma. Caso contrário, o bloco procura um novo e indica-o.
 - Uma caixa de diálogo de bloco aberta enquanto o passo anterior ainda calcula coloca o bloco sozinha assim que o resultado chega, e até lá não pode ser aplicada.
+- Um bloco colocado na vista pode ser levado com um clique para outro lugar também depois de uma entrada na caixa de diálogo.
 - No exemplo *Blocos — porcas, buchas, cabos*, o cabo entra por baixo através do fundo, e o alívio de tração fica dentro da caixa. Até agora ficava pendurado abaixo da mesa de impressão.
 
 ### Editar e esboçar

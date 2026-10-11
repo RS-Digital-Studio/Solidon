@@ -117,6 +117,14 @@ _MOVES_A_FEATURE: Final = frozenset(
 )
 
 
+def _edge_distances(fields: Mapping[str, str], values: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Die beiden Kantenabstände einer Flächenplatzierung, wie sie in ``values`` stehen."""
+    return tuple(
+        values.get(fields[name]) if name in fields else None
+        for name in ("surface_distance_1", "surface_distance_2")
+    )
+
+
 def _mouth_outline_on_surface(
     outline: Sequence[tuple[float, float]],
     point: Vec3,
@@ -1655,6 +1663,8 @@ class PlacementFlow(QObject):
         """Ob die Stelle neu gesetzt wurde, weil die alte nicht mehr auf der Fläche lag."""
         self._known_project = self.session.project
         """Das Projekt beim letzten ``projectChanged`` — ein anderes ist immer eine neue Form."""
+        self._bound_distances: tuple[Any, ...] = ()
+        """Die Kantenabstände, an denen die Stelle zuletzt saß (:func:`_edge_distances`)."""
         #: Ob die Tiefenstufe läuft — Stufe 2 der Platzierung. Der Klick legt
         #: die Stelle fest, danach zieht die Maus die Tiefe (Robert,
         #: 09.09.2026: „wenn wir klicken wollen wir die bohrung von der
@@ -2417,6 +2427,7 @@ class PlacementFlow(QObject):
         ):
             self._frozen = False
             self._seated_by_default = False
+            self._renewed = False
             self._commit_pending = False
             self._accept_pending = False
             self._pending = None
@@ -2989,6 +3000,8 @@ class PlacementFlow(QObject):
             # um (siehe :attr:`_seated_by_default`) — und ab hier hat jemand
             # geklickt.
             self._seated_by_default = False
+            if confirm:
+                self._drop_the_renewal()
             self._pending = event.x, event.y, confirm
             self._commit_pending = confirm
             self._serial += 1
@@ -3189,7 +3202,14 @@ class PlacementFlow(QObject):
             self._binding_cancel.cancel()
         self._binding_cancel = token
         self._seat_waits = stamp
-        self._seated_at_feature = True
+        # **Am Merkmal steht die Stelle nur, wo ein Merkmal oder ein alter
+        # Schritt sie trägt.** Für ein neues Teil stand hier ``True``, und
+        # danach nahm ``pointer`` keinen Klick mehr — nach jeder Wertänderung
+        # im Dialog und nach dem Neusetzen (RM-774), obwohl der Balken
+        # „Klick: umsetzen“ anbot.
+        self._seated_at_feature = (
+            self._change_op is not None or self._source_feature()[1] is not None
+        )
         refusal: list[str] = []
 
         def compute() -> placement.SurfaceBinding:
@@ -3238,6 +3258,10 @@ class PlacementFlow(QObject):
             self._own_mouth = None
             self._seated_by_default = True
             self._distance_valid = True
+            self._show_the_bound_point(bound.placed.point)
+            self._bound_distances = _edge_distances(
+                placement_fields(spec.params), self.dialog.values()
+            )
             self._settle()
 
         def failed(_detail: Any) -> None:
@@ -3267,6 +3291,30 @@ class PlacementFlow(QObject):
                 guarded = on_the_copy(source.mesh, guarded)
         self.session.placement_async(guarded, ready, failed, failed)
         return True
+
+    def _show_the_bound_point(self, point: Any) -> None:
+        """x/y/z einer neu gesetzten Stelle nach der Bindung auch im Dialog zeigen.
+
+        Die Bindung rechnet die Stelle aus Flächenbezug und Kantenabständen;
+        ein Kantenabstand auf der Rückseite verschob sie, x/y/z daneben
+        blieben aber auf dem alten Wert (Review G1). Nur beim Setzen: Ein
+        geänderter Schritt und ein vorhandenes Merkmal behalten ihre
+        Felder, dort können Ausdrücke stehen.
+        """
+        if self._change_op is not None or self._source_feature()[1] is not None:
+            return
+        fields = placement_fields(self.spec_of().params)
+        axes = [fields.get(axis, axis) for axis in ("x", "y", "z")]
+        entered = self.dialog.values()
+        if not all(axis in entered for axis in axes):
+            return
+        self._updating = True
+        try:
+            self.dialog.take_placement(
+                {axis: float(point[index]) for index, axis in enumerate(axes)}
+            )
+        finally:
+            self._updating = False
 
     def _begin_at_bore_step(self) -> None:
         """Die ursprüngliche Bohrstelle ausschließlich am historischen Eingang ablesen."""
@@ -3724,6 +3772,7 @@ class PlacementFlow(QObject):
                 # neuen Normalen gilt der Rahmen von heute, der Marker fällt.
                 values["measured_frame"] = False
             self.dialog.take_placement(values)
+            self._bound_distances = _edge_distances(fields, self.dialog.values())
             refresh_tool = measured_drill and (
                 not keeps_old_frame or bool(self._tool_context.position_dependent_axis)
             )
@@ -3905,6 +3954,11 @@ class PlacementFlow(QObject):
             if self.active:
                 fields = placement_fields(self.spec_of().params)
                 if self.dialog.values().get(fields["surface_anchor"]):
+                    entered = _edge_distances(fields, self.dialog.values())
+                    if self._renewed and entered != self._bound_distances:
+                        # Ein anderer Kantenabstand setzt die Stelle selbst
+                        # (Review G1): Der Hinweis gilt nicht mehr.
+                        self._drop_the_renewal()
                     self._serial += 1
                     self._position_edited = False
                     self._surface = None
@@ -5099,12 +5153,30 @@ class PlacementFlow(QObject):
         self.start()
 
     def _say(self, text: str) -> None:
-        """Den Satz im Balken setzen — nach einer neu gesetzten Stelle mit diesem Hinweis davor."""
+        """Den Satz im Balken setzen — nach einer neu gesetzten Stelle mit diesem Hinweis davor.
+
+        Nur, solange die Stelle die neu gesetzte ist: Setzt der Kunde selbst
+        eine — Klick, Griff, Maßfeld —, gilt der Hinweis nicht mehr.
+        """
+        if self._position_edited:
+            self._renewed = False
         if self._renewed:
             text = " ".join(
                 (str(tr("Die Fläche hat sich geändert. Die Stelle ist neu gesetzt.")), str(text))
             )
         self._note.setText(text)
+
+    def _drop_the_renewal(self) -> None:
+        """Der Kunde wählt selbst: Der Hinweis auf die neu gesetzte Stelle geht, sofort.
+
+        Nicht erst mit dem nächsten Satz im Balken — nach einem Klick ins
+        Leere oder während die Stelle neu gebunden wird, käme keiner.
+        """
+        if not self._renewed:
+            return
+        self._renewed = False
+        hint = str(tr("Die Fläche hat sich geändert. Die Stelle ist neu gesetzt.")) + " "
+        self._note.setText(self._note.text().removeprefix(hint))
 
     def _forget_the_place(self) -> None:
         """Stelle, Richtung und Flächenbezug im Dialog auf ihre Vorgaben."""
