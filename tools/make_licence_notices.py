@@ -423,7 +423,15 @@ def render_notices(components: tuple[ComponentNotice, ...]) -> str:
             f"| {component.name} | {component.version} | `{component.expression}` | {source} |"
         )
     lines.extend(
-        ["", library_replacement_notes(), "", "## Vollständige Hinweise und Lizenztexte", ""]
+        [
+            "",
+            library_replacement_notes(),
+            "",
+            library_modification_notes(),
+            "",
+            "## Vollständige Hinweise und Lizenztexte",
+            "",
+        ]
     )
     for component in components:
         lines.extend(
@@ -523,6 +531,46 @@ Offizielle Anleitungen:
 Die passenden Quellstände, Lizenztexte und weitere Hinweise zu Ihrem konkreten
 Paket erhalten Sie auch unter {SUPPORT_ADDRESS}. Ein Austausch ist kein Nachweis,
 dass eine beliebige geänderte Bibliothek mit dieser Anwendung kompatibel ist."""
+
+
+def library_modification_notes() -> str:
+    """Welche LGPL-Bibliotheken das Paket geändert mitliefert, was geändert ist und womit (RM-768).
+
+    Die Liste kommt aus dem Werkzeug selbst (:data:`tools.fix_unwind_info.EXPECTED`),
+    damit Beilage und Korrektur nicht auseinanderlaufen.
+    """
+    from tools.fix_unwind_info import CHANGED_ON, EXPECTED, WHEEL
+
+    blocks = []
+    for version, libraries in EXPECTED.items():
+        names = ", ".join(f"`{name}`" for name in sorted(libraries))
+        blocks.append(
+            f"`{WHEEL}` {version}, {sum(libraries.values())} Einträge in "
+            f"{len(libraries)} Bibliotheken: {names}."
+        )
+    listed = "\n\n".join(blocks)
+    return f"""## Geänderte Bibliotheken
+
+Nur das Paket für macOS mit Intel-Prozessor (x86_64) enthält geänderte
+OpenCASCADE-Bibliotheken; die Pakete für Windows, Linux und macOS mit
+Apple-Prozessor enthalten sie unverändert. Geändert am {CHANGED_ON}:
+
+{listed}
+
+Geändert ist in jeder dieser Dateien nur die Abwicklungstabelle
+`__unwind_info`. Bei jeder Funktion mit Stapelprobe zeigt ihr Eintrag für die
+Rahmengröße jetzt auf den Wert im Code statt ein oder zwei Byte daneben;
+Maschinencode, Daten, Symbole und Schnittstellen sind unverändert. Ohne die
+Änderung beendete jede Ausnahme von OpenCASCADE, die eine dieser Funktionen
+verlässt, die Anwendung. Die Änderung nimmt das Werkzeug
+`tools/fix_unwind_info.py` im Quelltext von {APP_NAME} vor; Sie erhalten es mit
+den übrigen Quellständen unter {SUPPORT_ADDRESS}. Danach sind die Dateien neu
+signiert.
+
+Die geänderten Bibliotheken stehen weiter unter
+`LGPL-2.1-only WITH OCCT-exception-1.0`. Sie bleiben dynamisch gebunden und
+lassen sich wie oben beschrieben durch die unveränderten Dateien aus dem Rad
+oder durch eigene Bauten ersetzen."""
 
 
 def render_manifest(components: tuple[ComponentNotice, ...]) -> str:

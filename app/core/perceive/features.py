@@ -13379,7 +13379,9 @@ def _face_roles(
     import shapely
     from shapely.geometry import MultiPoint
 
-    normals = np.asarray([body.face_normals[facet[0]] for facet, _a, _c in entries], dtype=float)
+    # Dieselbe Normale, die :func:`_face_candidates` meldet.
+    stable = stable_normals(body)[0]
+    normals = np.asarray([stable[facet[0]] + 0.0 for facet, _a, _c in entries], dtype=float)
     centres = np.asarray([centre for _f, _a, centre in entries], dtype=float)
     shell = _shell_of_each_face(body)
     entry_shells = np.asarray([shell[int(facet[0])] for facet, _a, _c in entries])
