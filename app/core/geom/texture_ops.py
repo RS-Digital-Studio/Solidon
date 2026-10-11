@@ -20,6 +20,7 @@ Rechnung, nur die Frage an der richtigen Stelle.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any, Final, cast
 
@@ -615,6 +616,38 @@ def printable_pitch(
             break
         candidate += PITCH_STEP
     return round(candidate, 6)
+
+
+def rectangle_fits_face(
+    mesh: MeshData,
+    faces: Sequence[int],
+    position: Vec3,
+    normal: Vec3,
+    angle: float,
+    width: float,
+    height: float,
+) -> bool:
+    """Ob ein flaches Musterfeld ``width`` mal ``height`` um ``position`` in die Fläche passt.
+
+    Gemessen in denselben Achsen, in denen :func:`texture_tool` das Rechteck
+    legt (``label_ops.placement_matrix``), an der Ausdehnung der Flächen-
+    dreiecke. Für die Vorbelegung des Dialogs: Passt das Rechteck nicht, nimmt
+    er die ganze Fläche — passt es, bleibt das kleine Feld, denn die ganze
+    Fläche einer 200-mm-Platte rechnet Minuten statt unter einer Sekunde.
+    """
+    from app.core.geom.label_ops import placement_matrix
+
+    if not len(faces):
+        return False
+    body = mesh.raw
+    corners = np.unique(np.asarray(body.faces, dtype=np.int64)[np.asarray(faces, dtype=np.int64)])
+    points = np.asarray(body.vertices, dtype=float)[corners]
+    matrix = placement_matrix((0.0, 0.0, 0.0), 0.0, position, normal, angle)
+    inverse = np.linalg.inv(matrix)
+    local = points @ inverse[:3, :3].T + inverse[:3, 3]
+    low, high = local[:, :2].min(axis=0), local[:, :2].max(axis=0)
+    half = np.asarray((width / 2.0, height / 2.0))
+    return bool(np.all(low <= -half + EPS_GEOM) and np.all(high >= half - EPS_GEOM))
 
 
 # --- die Operation (Bauplan §25, Kategorie „Oberfläche") -------------------------
@@ -1619,7 +1652,8 @@ def apply_texture(ctx: OpContext) -> OpResult:
     nothing = without_effect(body_mesh, outcome.mesh, kind, ctx.profile)
     if nothing is not None:
         findings.append(nothing)
-    apart = _fell_apart(body_mesh, outcome.mesh, params.mode, wrapped=params.wrap == "cylinder")
+    wrapped = params.coverage == "rectangle" and params.wrap == "cylinder"
+    apart = _fell_apart(body_mesh, outcome.mesh, params.mode, wrapped=wrapped)
     if apart is not None:
         findings.append(apart)
     # Vor der Verzweigung gelesen: Die Drehung wirkt überall außer um einen

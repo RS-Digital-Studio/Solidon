@@ -161,8 +161,8 @@ scrive in `website/version.json`.
 ### Modificare e disegnare
 
 - Con *Sposta caratteristica* il materiale della caratteristica si sposta così com'è e il punto di prima viene riempito in modo pulito. Dove non si può, la selezione lo dice subito.
-- Il motivo *Nido d’ape* nella finestra si chiama come nel manuale, prima c’era Esagono. Anche le aperture esagonali di *Taglia un campo di fori*.
-- Su una faccia scelta, *Applica texture* si apre con tutta la faccia e un passo che il tuo ugello stampa. Se l’area del motivo sporge dal bordo, la finestra lo dice e indica la soluzione.
+- Il motivo *Nido d’ape* nella finestra si chiama come nel manuale. Prima la finestra diceva Esagono. Così si chiamano anche le aperture esagonali di *Taglia un campo di fori*.
+- La finestra *Applica texture* si apre con un’area del motivo che sta sulla faccia scelta e un passo che il tuo ugello stampa. Se un’area sporge dal bordo, la finestra lo dice e indica la soluzione.
 - Su cordoni e gole, la selezione offre solo ciò che l'operazione sa davvero fare.
 - Se accanto a una parete c'è un raccordo, *Applica l'angolo di sformo* dice prima del calcolo che è d'intralcio e indica *Rimuovi caratteristica* come via d'uscita.
 - Quando tagli via una parte di un corpo, spariscono anche smussi, filettature e sedi per dadi dei blocchi che vi si trovavano.

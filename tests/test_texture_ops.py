@@ -1045,6 +1045,20 @@ def test_a_flat_pattern_beyond_its_face_says_so() -> None:
     assert flat.suggestions, "ein Fehler trägt einen Handlungsvorschlag (Regel 17)"
 
 
+def test_a_flat_field_wider_than_the_plate_names_its_size() -> None:
+    """Über die Operation: ein Rechteck größer als die 40 × 30-Platte (Review G3).
+
+    Hält die Verdrahtung in ``apply_texture`` — mit ``wrapped=True`` käme dort
+    der Satz vom Wickelzylinder, den es bei *Flach* nicht gibt.
+    """
+    result = _run(
+        pattern="rib", pitch=4.0, width=60.0, height=50.0, x=0.0, y=0.0, z=3.0, mode="raised"
+    )
+    apart = next(f for f in result.findings if f.code == "texture.fell_apart")  # type: ignore[attr-defined]
+    assert "Breite und Höhe" in str(apart.message)
+    assert "Wickelzylinder" not in str(apart.message)
+
+
 @pytest.mark.parametrize("pattern", texture_ops.PATTERNS)
 def test_the_printable_pitch_passes_the_printability_check(pattern: str) -> None:
     """Die Vorbelegung des Dialogs besteht die Prüfung, die sonst ablehnt.
