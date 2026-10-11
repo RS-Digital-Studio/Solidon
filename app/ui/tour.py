@@ -135,11 +135,17 @@ class StepLabel(QLabel):
             return
         # Gekürzt wird auf die Fläche innerhalb des Rahmens: Der Fokusrahmen
         # (``QLabel#tourStepText`` in ``style.py``) liegt innen am Rand.
-        super().setText(
-            self.fontMetrics().elidedText(
-                self._full, Qt.TextElideMode.ElideRight, self.contentsRect().width()
-            )
-        )
+        metrics = self.fontMetrics()
+        room = self.contentsRect().width()
+        limit = room
+        shown = metrics.elidedText(self._full, Qt.TextElideMode.ElideRight, limit)
+        # ``elidedText`` misst den Anfang im ganzen Satz; vor der Auslassung
+        # rückt die Schrift anders zusammen („V…“ statt „Vo“). Unter Linux stand
+        # die Zeile so einen Punkt über ihrem Platz — dann eben enger kürzen.
+        while limit > 0 and metrics.horizontalAdvance(shown) > room:
+            limit -= 1
+            shown = metrics.elidedText(self._full, Qt.TextElideMode.ElideRight, limit)
+        super().setText(shown)
 
 
 class _StepScroller(ContentScroller):
