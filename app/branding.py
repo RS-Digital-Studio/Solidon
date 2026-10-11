@@ -108,7 +108,7 @@ PART_FILE_MIME_TYPE: Final = "application/vnd.solidon.part+json"
 #: `pyproject.toml` mit — die Zahl steht an beiden Orten. Vergessen kann man es nicht mehr:
 #: `test_the_version_is_the_same_in_both_places_that_carry_it` hält sie
 #: zusammen.
-APP_VERSION: Final = "0.5.3"
+APP_VERSION: Final = "0.6.0"
 
 #: Die älteste macOS-Version, auf der die mitgelieferten Qt-Räder laufen
 #: (PySide6 6.12: ``macosx_14_0``). Plist, Installer und Startseiten nennen
