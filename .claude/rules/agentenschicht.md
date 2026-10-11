@@ -231,22 +231,29 @@ ausführen.
 
 Ohne Schlüssel sind die Agentenfunktionen ausgegraut, und die Anwendung bleibt
 voll nutzbar: ein Hinweis an der Chatleiste, kein Werbebanner, kein
-wiederholtes Nachfragen.
-
-- **Eine Ablehnung der Gegenstelle ist ein Satz, kein Antwortkörper**
-  (`llm.refusal`): Der Status wählt den Satz und den Ausweg *Chat einrichten*,
-  ihr eigener Text steht unter „Grund“. Fehlendes Ollama-Modell und
-  abgelehnter Schlüssel haben eigene Fehler (`ModelNotInstalled`,
-  `KeyRefused`) — sonst stand beim Kunden rohes JSON.
-- **Ein ungültiger Schlüssel (401) bleibt abgelehnt**, auch nach dem Neustart,
-  bis ein anderer dasteht oder er neu eingetragen wird (Fingerabdruck in
-  `discover`, nie der Schlüssel); 403 gilt nur bis zum Neustart.
-- **Ein abgewiesener Zug hält nichts warm**: Endet er mit
-  `BackendUnavailable`, ohne dass das Modell je antwortete, hat er nichts
-  geladen, und das Beenden entlädt nichts. Dasselbe für Slicer und Mesh-Erzeugung — fehlt das
+wiederholtes Nachfragen. Dasselbe für Slicer und Mesh-Erzeugung — fehlt das
 Programm, sagt die betroffene Funktion das in einem Satz mit Hinweis auf die
 Einstellung. Die Mesh-Schnittstelle kennt nur `text_to_mesh` und
 `image_to_mesh`: kein Nutzercode, keine Dateipfade, kein Zustand.
+
+- **Eine Ablehnung der Gegenstelle ist ein Satz, kein Antwortkörper**
+  (`llm.refusal`): Der Status wählt Satz und Ausweg, ihr eigener Text steht
+  ohne JSON unter „Grund“. Fehlendes Ollama-Modell und abgelehnter Schlüssel
+  haben eigene Fehler (`ModelNotInstalled`, `KeyRefused`), der gehostete Weg
+  eigene Sätze (feste Adresse, festes Modell). Jeder Schlüsselfehler führt in
+  *Chat einrichten*, nie zu den zusätzlichen Programmen.
+- **Das Protokoll trägt die Fakten**: `str(BackendUnavailable)` hängt Anbieter,
+  Status, Modell und Grund an — der Kunde liest den Satz, das Protokoll, was
+  geschah.
+- **Ein ungültiger Schlüssel (401) wird einen Tag lang übergangen**
+  (`keys.REFUSAL_HOLDS_SECONDS`), auch über den Neustart; gemerkt ist der
+  gesendete Schlüssel als HMAC mit Salz je Installation in einer eigenen Datei,
+  leise, und ein Schreibfehler daran bleibt Buchhaltung. „Noch einmal
+  versuchen“ (Dialog und Fehlermeldung) und jedes Eintragen heben ihn auf;
+  403 gilt nur bis zum Neustart.
+- **Ein abgewiesener Zug hält nichts warm**: Hat das Modell dem Backend nie
+  geantwortet (`OllamaBackend.answered`) und endet der Zug mit
+  `BackendUnavailable`, ist nichts geladen, und das Beenden entlädt nichts.
 
 ## Suite
 

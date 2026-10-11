@@ -11737,6 +11737,11 @@ class MainWindow(QMainWindow):
         self.session.set_agent_backend(None)
         self._refresh_chat_availability(probe_local=True)
 
+    def _try_chat_key_again(self) -> None:
+        llm.accept_again("anthropic")
+        self.session.set_agent_backend(None)
+        self._refresh_chat_availability()
+
     def _refresh_chat_availability(self, probe_local: bool = False) -> None:
         """Der eine Ort, an dem der Chat-Zustand gelesen wird.
 
@@ -27148,6 +27153,7 @@ class MainWindow(QMainWindow):
             # dafür benutzte — der Knopf log also seinen Namen.
             "open_settings": lambda _error: self.action_settings(),
             "set_up_chat": lambda _error: self.action_llm_key(),
+            "try_key_again": lambda _error: self._try_chat_key_again(),
             # Die Wege am Verlauf selbst (P7): einschalten, ausschalten, den
             # Deckel mit seinem Hohlraum zusammen ausschalten, das Einfügen
             # beenden — alle rücknehmbar, alle ohne Nachfrage (Regel 19).

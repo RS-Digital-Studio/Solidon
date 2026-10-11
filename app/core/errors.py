@@ -263,6 +263,9 @@ INSTALL_MISSING = Action("install", _("Zusätzliche Programme …"), primary=Tru
 #: der Chatleiste. Nicht ``INSTALL_MISSING``: Ein fehlendes Modell oder ein
 #: abgelehnter Schlüssel ist kein fehlendes Programm.
 SET_UP_CHAT = Action("set_up_chat", _("Chat einrichten …"), primary=True)
+#: Einen als ungültig gemerkten Schlüssel sofort wieder anbieten — ohne ihn neu
+#: einzufügen, was mit einem Schlüssel aus der Umgebung gar nicht geht.
+TRY_KEY_AGAIN = Action("try_key_again", _("Noch einmal versuchen"))
 #: Der Ausweg, wenn der Slicer nicht kann oder nicht da ist: Solidon schreibt
 #: die Datei, geslict wird von Hand. Sechsmal in der Übergabe gebaut, und
 #: einmal davon als „Nur exportieren." — derselbe Knopf mit einer zweiten

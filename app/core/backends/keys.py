@@ -12,7 +12,13 @@ welches von beiden sie gefunden hat, statt einen Schlüsselbund vorzutäuschen.
 
 from __future__ import annotations
 
-from typing import Any
+import hashlib
+import hmac
+import json
+import secrets
+import time
+from pathlib import Path
+from typing import Any, Final
 
 from app.branding import ENVIRONMENT_PREFIX
 from app.core.keyring_backend import find_backend_once
@@ -220,3 +226,106 @@ def source(account: str) -> str:
     ):
         return "environment"
     return "none"
+
+
+# --- ein als ungültig abgelehnter Schlüssel --------------------------------------
+
+#: Wie lange ein Schlüssel übergangen wird, den der Anbieter als ungültig
+#: abgelehnt hat (401).
+#:
+#: Ohne Merker scheiterte bei jedem Start der erste Chatzug am selben Schlüssel
+#: (S-20261010-e5014c, dreimal an einem Abend). Ohne Ablauf aber wäre die
+#: Sperre endgültig, und ob ein 401 heilt, entscheidet der Anbieter: ein
+#: wieder freigeschalteter Schlüssel, eine Störung der Anmeldung, eine
+#: Zwischenstelle, die 401 schickt. Ein Tag hält den Chat für die Sitzungen
+#: eines Abends frei vom selben Fehler und gibt dem Schlüssel am nächsten Tag
+#: von selbst eine neue Chance (Entscheidung Koordinator, Review agentlog M2).
+#: Früher geht es über „Noch einmal versuchen“ oder einen anderen Schlüssel.
+REFUSAL_HOLDS_SECONDS: Final = 24 * 3600.0
+
+#: Wo der Merker liegt — im Nutzerordner (§38), getrennt von den gemerkten
+#: Programmen, deren Schreiben protokolliert wird und die Programmsuche leert.
+REFUSALS_FILE: Final = "refused_keys.json"
+
+
+def _refusals_path() -> Path:
+    from app.core.paths import user_config_dir
+
+    return user_config_dir() / REFUSALS_FILE
+
+
+def _load_refusals() -> dict[str, Any]:
+    path = _refusals_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, ValueError) as problem:
+        _log.warning("could not read %s, ignoring it: %s", REFUSALS_FILE, problem)
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _store_refusals(data: dict[str, Any]) -> None:
+    from app.core.paths import ensure_dir
+
+    path = _refusals_path()
+    ensure_dir(path.parent)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _fingerprint(key: str, salt: str) -> str:
+    """HMAC-SHA256 mit einem Salz je Installation — wiedererkennbar, nicht
+    zurückzurechnen, auch nicht für einen kurzen Schlüssel über ein Wörterbuch."""
+    return hmac.new(bytes.fromhex(salt), key.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def mark_refused(account: str, key: str, now: float | None = None) -> None:
+    """Merken, dass der Anbieter genau diesen Schlüssel abgelehnt hat.
+
+    **Buchhaltung, kein Vorgang:** Ein Schreibfehler am Merker wird
+    protokolliert und verschluckt — sonst machte ein schreibgeschützter
+    Nutzerordner aus dem 401 einen Programmfehler statt eines Satzes mit Ausweg.
+    """
+    data = _load_refusals()
+    salt = str(data.get("salt") or "")
+    if len(salt) != 32:
+        salt = secrets.token_hex(16)
+    data["salt"] = salt
+    data[account] = {
+        "mark": _fingerprint(key, salt),
+        "at": time.time() if now is None else now,
+    }
+    try:
+        _store_refusals(data)
+    except OSError as problem:
+        _log.warning("could not remember the refused %s key: %s", account, problem)
+        return
+    _log.info("%s key marked as refused", account)
+
+
+def refused(account: str, key: str, now: float | None = None) -> bool:
+    """Ob genau dieser Schlüssel als ungültig gemerkt ist und die Frist noch läuft."""
+    data = _load_refusals()
+    entry = data.get(account)
+    salt = data.get("salt")
+    if not isinstance(entry, dict) or not isinstance(salt, str) or len(salt) != 32:
+        return False
+    at = entry.get("at")
+    if not isinstance(at, int | float) or isinstance(at, bool):
+        return False
+    elapsed = (time.time() if now is None else now) - float(at)
+    if not 0.0 <= elapsed < REFUSAL_HOLDS_SECONDS:
+        return False
+    return hmac.compare_digest(str(entry.get("mark", "")), _fingerprint(key, salt))
+
+
+def clear_refusal(account: str) -> None:
+    """Den Merker aufheben — beim Eintragen eines Schlüssels und über „Noch
+    einmal versuchen“. Ein Schreibfehler bleibt Buchhaltung (:func:`mark_refused`)."""
+    data = _load_refusals()
+    if account not in data:
+        return
+    del data[account]
+    try:
+        _store_refusals(data)
+    except OSError as problem:
+        _log.warning("could not clear the refused %s key: %s", account, problem)

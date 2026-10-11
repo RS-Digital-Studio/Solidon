@@ -2038,9 +2038,58 @@ def test_the_chat_setup_says_why_the_stored_key_is_passed_over(
     monkeypatch.setattr(keys, "read", lambda account: "sk-ant-ungueltig")
     assert "abgelehnt" not in _what_answers()
 
-    llm.reject("anthropic", lasting=True)
+    llm.reject("anthropic", lasting=True, key="sk-ant-ungueltig")
 
     assert "abgelehnt" in _what_answers()
+    assert "Noch einmal versuchen" in _what_answers(), "der Satz nennt den Rückweg"
+
+
+def test_the_chat_setup_offers_to_try_a_refused_key_again(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review M2: Aus dem gemerkten 401 führte im Programm kein Weg, ohne den
+    Schlüsseltext neu einzufügen — mit einem Schlüssel aus der Umgebung gar
+    keiner. Der Knopf steht da, sobald der Merker gefunden ist, und hebt ihn auf."""
+    from app.core.backends import keys
+    from app.ui import dialogs as module
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "sk-ant-aus-der-umgebung")
+    llm.reject("anthropic", lasting=True, key="sk-ant-aus-der-umgebung")
+    monkeypatch.setattr(module.KeyDialog, "look", lambda self: None)
+    dialog = module.KeyDialog()
+
+    dialog._show_state(module.ChatState("", None, (), key_refused=llm.key_refused("anthropic")))
+    assert not dialog.try_again_button.isHidden()
+
+    dialog.try_again_button.click()
+
+    assert not llm.key_refused("anthropic")
+    assert dialog.try_again_button.isHidden()
+
+
+def test_the_refused_key_message_can_try_the_key_again(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review M2: Derselbe Rückweg steht an der Fehlermeldung — und weckt den Chat."""
+    from app.core.backends import keys
+    from app.core.errors import TRY_KEY_AGAIN
+    from app.ui.dialogs import offered_actions
+
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "sk-ant-aus-der-umgebung")
+    llm.reject("anthropic", lasting=True, key="sk-ant-aus-der-umgebung")
+    looked: list[bool] = []
+    monkeypatch.setattr(
+        window, "_refresh_chat_availability", lambda probe_local=False: looked.append(True)
+    )
+    problem = llm.KeyRefused(401, "anthropic")
+    handlers = window.error_handlers()
+
+    assert TRY_KEY_AGAIN in offered_actions(problem, handlers)
+    handlers[TRY_KEY_AGAIN.id](problem)
+
+    assert not llm.key_refused("anthropic")
+    assert looked == [True]
 
 
 def test_the_chat_dialog_is_there_before_the_answers_are(

@@ -1089,6 +1089,8 @@ class ChatState:
     """Der Satz darüber, was gerade antwortet."""
     service: tools.ToolState | None
     installed: tuple[str, ...]
+    key_refused: bool = False
+    """Ob der hinterlegte Schlüssel als ungültig gemerkt ist (``llm.key_refused``)."""
 
 
 class _Look(Worker):
@@ -1107,6 +1109,7 @@ class _Look(Worker):
                 answers=_what_answers(),
                 service=tools.state_of(tool) if tool is not None else None,
                 installed=llm.installed_models(),
+                key_refused=llm.key_refused("anthropic"),
             )
         )
 
@@ -1166,11 +1169,13 @@ def _what_answers() -> str:
     """
     # Ein als ungültig abgelehnter Schlüssel bleibt es bis zum nächsten
     # Eintragen (``llm.key_refused``) — hier steht, warum der Chat ihn übergeht.
-    refused = (
-        f"{tr('Der Anbieter hat ihn als ungültig abgelehnt.')} "
-        if llm.key_refused("anthropic")
-        else ""
-    )
+    refused = ""
+    if llm.key_refused("anthropic"):
+        sentence = tr(
+            "Der Anbieter hat ihn als ungültig abgelehnt. Solidon übergeht ihn einen Tag lang, "
+            "„Noch einmal versuchen“ bietet ihn sofort wieder an."
+        )
+        refused = f"{sentence} "
     backend = llm.first_available()
     if backend is None:
         return refused + tr("Der Chat ist damit abgeschaltet — es antwortet gerade nichts.")
@@ -1507,6 +1512,13 @@ class KeyDialog(QDialog):
             self._set_key_status(self._key_status_error, role="warning")
         self._show_service(found.service)
         self._fill_models(found.installed)
+        self.try_again_button.setVisible(found.key_refused)
+
+    def _try_key_again(self) -> None:
+        """Den gemerkten Schlüssel wieder anbieten und neu nachsehen."""
+        llm.accept_again(self.account)
+        self.try_again_button.setVisible(False)
+        self.look()
 
     def _cloud_model_section(self) -> QWidget:
         """Der gehostete Weg, klar vom lokalen Modell getrennt.
@@ -1560,6 +1572,14 @@ class KeyDialog(QDialog):
         self.forget_button.setEnabled(self._key_source == "keychain")
         self.forget_button.setToolTip(forget_reason)
         self.forget_button.setAccessibleDescription(forget_reason)
+        # Der Rückweg aus einem gemerkten 401 ohne den Schlüsseltext — auch für
+        # einen Schlüssel aus der Umgebung (Review agentlog M2). Sichtbar erst,
+        # wenn die Erhebung den Merker findet (:meth:`_show_state`).
+        self.try_again_button = forget_actions.addButton(
+            tr("Noch einmal versuchen"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.try_again_button.setVisible(False)
+        self.try_again_button.clicked.connect(self._try_key_again)
         form.addRow(forget_actions)
         # **Eine Abschnittsform in allen Dialogen** (RM-518): die flache
         # Überschrift wie in Druckeinstellungen und Einstellungen, kein Rahmen.
