@@ -1310,6 +1310,7 @@ def part_advice(
     shared_layers: bool = False,
     organic: Collection[str] = (),
     allowances: Sequence[str] = (),
+    plate_style: str | None = None,
 ) -> list[SettingAdvice]:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G).
 
@@ -1333,7 +1334,8 @@ def part_advice(
     das Modell dieses Teils schon ausgleicht (``scene.fits.allowances_for``,
     RM-589). Ist die Stützart nicht übernommen, druckt das Teil die der
     Platte, und Abstand wie Trennschicht fragen mit ihr
-    (``declined``, :func:`advise.printed_style`).
+    (``declined``, :func:`advise.printed_style`). Bei Cura gilt die Art der
+    Platte (``plate_style``) jedem gestützten Teil (:func:`advise.on_the_plate`).
 
     **Eine Regel kann einen Wert je Teil voraussetzen** (``accepted``, die
     übernommenen Werte je Teil aus :meth:`handover.PartSplit.accepted_per_part`):
@@ -1371,6 +1373,7 @@ def part_advice(
         tuple(sorted(organic)),
         tuple(allowances),
         None if trees is None else tuple(sorted(trees)),
+        plate_style,
     )
     cache = getattr(mesh.raw, "_cache", None)
     name = f"solidon_export_advice|{entry.id}"
@@ -1412,6 +1415,7 @@ def part_advice(
                     declined=declined,
                     allowances=allowances,
                     trees=trees,
+                    plate_style=plate_style,
                 ),
             )
             for process in (
@@ -1535,6 +1539,7 @@ def _part_values(
         shared_layers=shared_layers,
         organic=organic,
         allowances=allowances_for(document, entry) if document is not None else (),
+        plate_style=split.plate.support.style,
     )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -1628,9 +1633,7 @@ def _values_for(
         if item.path == "support.style":
             # Ein/aus geht je Netz. Ein eingeschaltetes Netz bekommt die
             # Stützart der Platte; „aus“ bleibt auch unter Bäumen aus.
-            if item.value == "none":
-                return item
-            actual = "tree" if split.plate.support.style == "tree" else "grid"
+            actual = advise.on_the_plate(str(item.value), split.plate.support.style, "cura")
             return replace(item, value=actual)
         return replace(item, value=read_path(split.plate, item.path))
 

@@ -84,7 +84,7 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
 - **Zwei Wände für hohe Bäume** (`support.tree_walls`): ab `TALL_TREE_HEIGHT`
   Säulenhöhe (`ModelSupport.tallest_column`: bis zum Boden des Körpers oder zur
   letzten Auflage, ohne Ränder und Kanaldecken), gefragt mit `printed_style` gegen
-  `trees`. Die Orca-Familie liest die Wandzahl unter gefüllten organischen
+  `trees`, bei Cura mit der Art der Platte (`on_the_plate`). Die Orca-Familie liest die Wandzahl unter gefüllten organischen
   Bäumen nicht (`IGNORED_UNDER_TREES_BY_PROGRAM`), unter hohlen schon
   (`handover.hollow_trees`); Bambu Studio und Creality Print lesen sie überall,
   Creality als `tree_support_wall_count_tree` (`PROGRAM_KEYS`). Der Druckdialog
@@ -183,7 +183,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   der das Teil druckt (`printed_style`: der Vorschlag, außer der Kunde lehnt
   ihn ab, `declined` — im Dialog abgewählt, dann fragt er neu, im Export nicht
   übernommen; `handover.organic_styles`, ohne Programm die Familie; Rat,
-  Feldsatz und Export fragen dieselbe Auskunft) —, das Vielfache innerhalb der
+  Feldsatz und Export fragen dieselbe Auskunft; bei Cura gilt die Art der
+  Platte, `on_the_plate`, und jeder Aufrufer des Rats je Teil gibt
+  `plate_style` mit, sonst kommt 0,4 mm Spitzenluft über Gitter zurück) —, das Vielfache innerhalb der
   Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
   zwei Schichten liegt (`in_whole_layers`) — welches Vielfache, sagt das
   Material, nicht die Rundungsart; einen eigenen solchen Wert nennt der Export
