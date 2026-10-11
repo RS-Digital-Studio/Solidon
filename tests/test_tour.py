@@ -699,6 +699,41 @@ def test_every_tour_line_stays_inside_the_card(qt_app: object, example_id: str) 
         session.release()
 
 
+def test_a_folded_step_fits_where_the_font_kerns_before_the_ellipsis(qt_app: object) -> None:
+    """``elidedText`` misst den Anfang im ganzen Satz, gezeichnet wird er vor „…“.
+
+    Rückt die Schrift vor der Auslassung anders zusammen („V…“ statt „Vo“),
+    ist die gekürzte Zeile einen Punkt breiter als ihr Platz (Ubuntu-CI:
+    369 in 368). Unter DejaVu geschieht das in wenigen Lagen; eine Kette von
+    Unterschneidungspaaren über viele Breiten trifft sie ohne einen
+    bestimmten Tourtext. Mit der Ersatzschrift unter Windows offscreen gibt
+    es keine Unterschneidung — dort ist der Test nur grün, unter Linux misst er.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.tour import StepLabel
+
+    _in_the_customers_style()
+    full = "1. " + " ".join(["To Ta Te Vo Va Ve Wo We Yo Av AT"] * 8)
+    label = StepLabel(full)
+    label.setObjectName("tourStepText")
+    label.set_wrapped(False)
+    label.show()
+    over: list[str] = []
+    try:
+        for width in range(40, 400):
+            label.resize(width, 40)
+            QApplication.processEvents()
+            room = label.contentsRect().width()
+            advance = label.fontMetrics().horizontalAdvance(label.text())
+            if advance > room:
+                over.append(f"{width}: {advance}/{room} {label.text()[-6:]!r}")
+    finally:
+        label.close()
+        label.deleteLater()
+    assert not over, f"{len(over)} Breiten über dem Platz, erste: {over[:3]}"
+
+
 def test_a_folded_step_is_cut_inside_its_frame_and_not_earlier(qt_app: object) -> None:
     """Gekürzt wird auf die Fläche im Rahmen — bei jeder Breite, nicht bei vier.
 

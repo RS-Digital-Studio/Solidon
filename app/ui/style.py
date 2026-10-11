@@ -1074,10 +1074,9 @@ def menu_heading(menu: QMenu, title: str) -> QWidgetAction:
 
     label = QLabel(title, menu)
     label.setObjectName(MENU_HEADING)
+    # Halbfett setzt das Stilblatt (``QLabel#menuHeading``): Ein ``setFont`` hier
+    # nahm die Nebentextregel beim Polieren wieder zurück.
     set_level(label, "caption")
-    font = label.font()
-    font.setWeight(QFont.Weight.DemiBold)
-    label.setFont(font)
 
     action = QWidgetAction(menu)
     action.setDefaultWidget(label)
@@ -2044,6 +2043,7 @@ QMenu::separator {{ height: 1px; background: {line}; margin: {TIGHT}px {NORMAL}p
    Leise wie Nebentext und halbfett, damit sie benennt statt mitzureden. */
 QLabel#{MENU_HEADING} {{
     color: {muted};
+    font-weight: 600;
     background: transparent;
     padding: {TIGHT}px {NORMAL}px 0 {NORMAL}px;
 }}
