@@ -114,8 +114,11 @@ Scheitert die Vorfrage oder das Vereinigen, bleibt der Eingang, wie er war.
 **Nach jeder gelungenen Stufe bekommt das Ergebnis die Darstellung seiner
 Eingänge zurück** (`attributes.in_source_layout`, RM-261): Jedes Dreieck, das
 der Kern bitgleich übernommen hat, beginnt an der Ecke seines Vorbilds, und
-die übernommenen Ecken stehen in der Reihenfolge des Eingangs. Dreiecksfolge
-und Koordinaten bleiben die des Kerns. `prepare_ops._without_scars`, das den
+die übernommenen Ecken stehen in der Reihenfolge des Eingangs. Die Plätze der
+Dreiecke und die Koordinaten bleiben die des Kerns; die übernommenen Dreiecke
+besetzen ihre Plätze in der Folge ihres Eingangs (RM-592: der Kern legt
+Unberührtes auch untereinander um). Hat der Schritt nichts geändert, kommt der
+Eingang selbst zurück, und die Erkennung trifft ihren Cache. `prepare_ops._without_scars`, das den
 Kern ein zweites Mal rechnen lässt, legt ebenso zurück. Warum, steht in
 `operationen.md`.
 
@@ -1278,9 +1281,9 @@ sagt Grenzen und Strecke über seine eigenen Ecken (`_thread_corners`,
 `_thread_bounds`) — der Fit über Dreiecksmitten liegt radial innerhalb der
 Kammecken und axial neben der Stange —, und sein Kern bleibt um den Überlapp
 unter dem gemessenen Fuß. Ist das Gewinde der ganze Körper, nimmt die Hülle
-alles, und das neue Gewinde ist danach allein der Körper. Linksgängig
-(belegt, `types.thread_is_left_handed`), mehrgängig und ohne Strecke sind
-Absagen mit Vorschlag. Versetzt, gedreht oder verdoppelt wird nicht das
+alles, und das neue Gewinde ist danach allein der Körper. Profil,
+Gangzahl, belegter Drehsinn und Kegel bleiben beim Neuschneiden
+(`_thread_kind`, RM-544); ohne Strecke ist es eine Absage mit Vorschlag. Versetzt, gedreht oder verdoppelt wird nicht das
 Gewinde, sondern der Körper oder die Bohrung.
 
 **Filament nehmen Wulst, Kehle und Gewinde seit P2.6 wie eine Fläche an**

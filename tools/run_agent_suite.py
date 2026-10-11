@@ -30,6 +30,7 @@ from app.core.backends.llm import (
     AnthropicBackend,
     LLMBackend,
     Message,
+    ModelNotInstalled,
     OllamaBackend,
     first_available,
 )
@@ -232,14 +233,17 @@ def why_unreachable(backend: LLMBackend) -> tuple[str, ...]:
     try:
         backend.complete([Message(role="user", content="ping")], max_output_tokens=1)
     except Exception as problem:  # jede Art von Fehlschlag zählt hier gleich
-        detail = str(problem)
-        if "not found" in detail and backend.id == "ollama":
+        # Am Fehler erkannt, nicht an seinem Text: Seit der Satz für den
+        # Kunden kein Antwortkörper mehr ist, stand dort kein „not found“
+        # (Review agentlog G6).
+        if isinstance(problem, ModelNotInstalled):
+            model = str(problem.values.get("model") or backend.model)
             return (
-                f"Das Modell '{backend.model}' ist nicht installiert.",
-                f"    ollama pull {backend.model}",
+                f"Das Modell '{model}' ist nicht installiert.",
+                f"    ollama pull {model}",
                 "Oder ein anderes wählen: --model <name>.",
             )
-        return (f"Das Sprachmodell antwortet nicht: {detail[:160]}",)
+        return (f"Das Sprachmodell antwortet nicht: {str(problem)[:160]}",)
     return ()
 
 

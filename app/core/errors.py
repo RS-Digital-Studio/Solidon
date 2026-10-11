@@ -259,6 +259,13 @@ OPEN_SETTINGS = Action("open_settings", _("Einstellungen öffnen"), primary=True
 #: wurde jedes Mal die Liste der externen Programme.
 #: Der Knopf trägt jetzt den Namen des Menüeintrags, unter dem er landet.
 INSTALL_MISSING = Action("install", _("Zusätzliche Programme …"), primary=True)
+#: Der Weg zu Schlüssel und lokalem Modell — derselbe Dialog wie der Knopf an
+#: der Chatleiste. Nicht ``INSTALL_MISSING``: Ein fehlendes Modell oder ein
+#: abgelehnter Schlüssel ist kein fehlendes Programm.
+SET_UP_CHAT = Action("set_up_chat", _("Chat einrichten …"), primary=True)
+#: Einen als ungültig gemerkten Schlüssel sofort wieder anbieten — ohne ihn neu
+#: einzufügen, was mit einem Schlüssel aus der Umgebung gar nicht geht.
+TRY_KEY_AGAIN = Action("try_key_again", _("Noch einmal versuchen"))
 #: Der Ausweg, wenn der Slicer nicht kann oder nicht da ist: Solidon schreibt
 #: die Datei, geslict wird von Hand. Sechsmal in der Übergabe gebaut, und
 #: einmal davon als „Nur exportieren." — derselbe Knopf mit einer zweiten
@@ -468,8 +475,14 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         "torus_tube",
         # Die Gangtiefe einer Steigung muss unter dem Radius bleiben (P2.6).
         "thread_pitch",
-        # Eine Steigung unter ``units.FINEST_PITCH`` baut kein Gewinde (RM-532).
+        # Eine Steigung unter ``units.FINEST_PITCH`` baut kein Gewinde (RM-532),
+        # eine über ``units.COARSEST_PITCH`` auch nicht (RM-544).
         "finest_pitch",
+        "coarsest_pitch",
+        # Groß, fein und lang zugleich übersteigt das Netzbudget eines Gewindes,
+        # und ein kegeliges Innengewinde wird über seine Länge zu eng (RM-544).
+        "too_fine_for_its_size",
+        "taper_too_deep",
         # Ein geändertes Gewinde muss in seiner Wand bleiben (RM-184).
         "thread_wall",
         # Ein Deckelscharnier muss auf seine Seite passen und unter den Rand

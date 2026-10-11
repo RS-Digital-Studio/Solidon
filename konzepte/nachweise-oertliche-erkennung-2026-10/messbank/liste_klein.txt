@@ -1,0 +1,219 @@
+beispiel:aushoehlen-und-teilen
+beispiel:dose-mit-deckel
+beispiel:drucker-kalibrieren
+beispiel:gehaeuse-mit-bausteinen
+beispiel:passung-nach-materialwechsel
+beispiel:schild-zweifarbig
+beispiel:skizze-mit-massen
+beispiel:weg1-halterung-anpassen
+beispiel:weg2-halter-konstruieren
+beispiel:weg3-generiert-aufbereiten
+beispiel:weg4-figur-formen
+beispiel:zu-gross-automatisch-teilen
+F:/sl-e/tests/data/meshes/broken_open.stl
+F:/sl-e/tests/data/meshes/bracket_inch.stl
+F:/sl-e/tests/data/meshes/cube_clean.stl
+F:/sl-e/tests/data/meshes/plate_cm.stl
+F:/sl-e/tests/data/meshes/degenerate.stl
+F:/sl-e/tests/data/meshes/dovetail_vertex_plane.ply
+F:/sl-e/tests/data/meshes/colored.3mf
+F:/sl-e/tests/data/meshes/bridge_two_end_supports.ply
+F:/sl-e/tests/data/meshes/broken_selfint.stl
+F:/sl-e/tests/data/meshes/indeterminate_sphere_cap.stl
+F:/sl-e/tests/data/meshes/two_components.stl
+F:/3D Dateien/mushroom.stl
+F:/sl-e/tests/data/meshes/shallow_sphere_cap_icosphere.stl
+F:/sl-e/tests/data/meshes/oversized.stl
+F:/3D Dateien/3D Drucker/16_CC2-Auffangrinne/Auffangwanne.stl
+F:/sl-e/tests/data/meshes/island_tower.stl
+F:/3D Dateien/3D Drucker/16_CC2-Auffangrinne/Klemm-Pruefstueck.stl
+F:/sl-e/tests/data/meshes/ambiguous_sphere_ribbon.stl
+F:/3D Dateien/3D Drucker/16_CC2-Auffangrinne/Auffangrinne.3mf
+F:/sl-e/tests/data/meshes/block_with_rounded_edge.stl
+F:/sl-e/tests/data/meshes/partially_open.stl
+F:/sl-e/tests/data/meshes/plate_coarse_slots.stl
+F:/3D Dateien/3D Drucker/16_CC2-Auffangrinne/Rinnensegment-1.stl
+F:/sl-e/tests/data/meshes/shallow_sphere_cap_uv.stl
+F:/3D Dateien/3D Drucker/16_CC2-Auffangrinne/Rinnensegment-2.stl
+F:/3D Dateien/3D Drucker/16_CC2-Auffangrinne/Naht-Adapter.stl
+F:/3D Dateien/3D Drucker/06_Glasdeckel_ThreeSixty/Versuch 1/Deckel_Eckig_3_Stift.stl
+F:/3D Dateien/3D Drucker/08_Gewuerzregal_Strebergarten/Gewuerzset_Regal.3mf
+F:/sl-e/tests/data/meshes/plate_countersunk_blind.stl
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/STL/organizer_Fuss_2von5.stl
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/STL/organizer_Fuss_Kopie_1_3von5.stl
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/STL/organizer_Fuss_Kopie_2_4von5.stl
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/STL/organizer_Fuss_Kopie_3_5von5.stl
+F:/sl-e/tests/data/meshes/plate_countersunk.stl
+F:/3D Dateien/3D Drucker/10_Gartentor-Schloss-Adapter/STL/Torschloss_Adapter_KappenTest.stl
+F:/sl-e/tests/data/meshes/plate_holes_twin.stl
+F:/sl-e/tests/data/meshes/openscad_ascii.stl
+F:/3D Dateien/grenuttags_hallare_modell_40x47.stl
+F:/3D Dateien/peg.stl
+F:/3D Dateien/3D Drucker/14_WC-Schild_Bitte-im-Sitzen/Bitte_im_Sitzen.3mf
+F:/sl-e/tests/data/meshes/open_cylinder_clip.stl
+F:/sl-e/tests/data/meshes/plate_chamfer_and_taper.stl
+F:/3D Dateien/3D Drucker/16_CC2-Auffangrinne/Naht-zusammengesetzt.stl
+F:/3D Dateien/3D Drucker/08_Gewuerzregal_Strebergarten/gewuerzregal_wandhalterung_6.stl
+F:/3D Dateien/mamiya-645-1000s-yao-ping.3mf
+F:/3D Dateien/3D Drucker/16_CC2-Auffangrinne/Auffangrinne-Platte.stl
+F:/3D Dateien/3D Drucker/01_Pool-Wasserfall/Wasserfall_4_TPU-Liner.stl
+F:/3D Dateien/3D Drucker/16_CC2-Auffangrinne/Platte-Adapter-und-Wanne.stl
+F:/sl-e/tests/data/meshes/sphere_socket.stl
+F:/sl-e/tests/data/meshes/clean_figure.stl
+F:/sl-e/tests/data/meshes/plate_holes.stl
+F:/3D Dateien/3D Drucker/10_Gartentor-Schloss-Adapter/STL/Torschloss_Adapter.stl
+F:/sl-e/tests/data/meshes/plate_chamfered_mouths.stl
+F:/3D Dateien/grenuttags_hallare_modell_41x47_curved.stl
+F:/sl-e/tests/data/meshes/open_cylinder_clip_cap_nodes.stl
+F:/3D Dateien/3D Drucker/09_Pflanzen-Staenderset/STL/07_winkelstrebe_arm_2x.stl
+F:/3D Dateien/bottom-single.stl
+F:/3D Dateien/3D Drucker/09_Pflanzen-Staenderset/STL/05_rankenclip.stl
+F:/sl-e/tests/data/meshes/near_sphere_ellipsoid.stl
+F:/3D Dateien/3D Drucker/09_Pflanzen-Staenderset/STL/04_bodenanker_erdspiess.stl
+F:/3D Dateien/3D Drucker/08_Gewuerzregal_Strebergarten/Gewuerzset_Behaelter.3mf
+F:/3D Dateien/3D Drucker/06_Glasdeckel_ThreeSixty/Versuch 1/Deckel_Eckig_2_Deckel.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_1_Cylinder.stl
+F:/sl-e/tests/data/meshes/dense_cylinder.stl
+F:/3D Dateien/bottom-double.stl
+F:/3D Dateien/Modulares+Sieb/Sieb.stl
+F:/3D Dateien/3D Drucker/06_Glasdeckel_ThreeSixty/Versuch 1/Deckel_Eckig_einfach.stl
+F:/3D Dateien/3D Drucker/01_Pool-Wasserfall/Wasserfall_2_Deckel.stl
+F:/3D Dateien/2x1-tray.stl
+F:/3D Dateien/screwdriver-holder-hex.stl
+F:/3D Dateien/3D Drucker/09_Pflanzen-Staenderset/STL/06_verstell_klemmschelle.stl
+F:/3D Dateien/1x1-bin.stl
+F:/3D Dateien/3D Drucker/07_Pool-Filterball-Einsatz/Poolfilter.3mf
+F:/3D Dateien/3D Drucker/09_Pflanzen-Staenderset/STL/02_t_verbinder.stl
+F:/3D Dateien/Wedge-Lock (Base).stl
+F:/sl-e/tests/data/meshes/torus_ring.stl
+F:/3D Dateien/3D Drucker/07_Pool-Filterball-Einsatz/kartuschen_deckel.stl
+F:/3D Dateien/3D Drucker/08_Gewuerzregal_Strebergarten/Gewuerzset_Deckel_vorher.3mf
+F:/3D Dateien/3D Drucker/08_Gewuerzregal_Strebergarten/Gewuerzset_Deckel.3mf
+F:/3D Dateien/kumiko_elongated-hexagon_desk-organizer_w150-typeb.stl
+F:/3D Dateien/3D Drucker/09_Pflanzen-Staenderset/STL/01_eckverbinder_3weg.stl
+F:/3D Dateien/3D Drucker/09_Pflanzen-Staenderset/STL/03_kreuzverbinder.stl
+F:/sl-e/tests/data/meshes/post_with_fillet.stl
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/Besteckkorb_PETG-PRO-Grau.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/Handle.stl
+F:/3D Dateien/3D Drucker/02_Getraenkehalter/2_Mast.stl
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/Sparsam_120mm/Besteckkorb_120mm_2Waende_PETG-PRO-Grau.3mf
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/Sparsam_120mm/Besteckkorb_120mm_PETG-PRO-Grau.3mf
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_12_Cylinder_A_A.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_17_Cylinder_A_A.stl
+F:/3D Dateien/3D Drucker/01_Pool-Wasserfall/Wasserfall_.3mf
+F:/3D Dateien/ma-mi-ya-m645yao-ping-zui-xin-she-ji.3mf
+F:/3D Dateien/3D Drucker/01_Pool-Wasserfall/Wasserfall_3_Tuelle.stl
+F:/3D Dateien/Wedge-Lock (Top) (1).stl
+F:/3D Dateien/3D Drucker/08_Gewuerzregal_Strebergarten/deckel_scheibe.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_material.3mf
+F:/sl-e/tests/data/meshes/generated_figure.stl
+F:/3D Dateien/pegboard-goot-ceramic-screwdrivers-v3.3mf
+F:/3D Dateien/3D Drucker/06_Glasdeckel_ThreeSixty/Versuch 1/Deckel_Rund_2_Deckel.stl
+F:/3D Dateien/3D Drucker/06_Glasdeckel_ThreeSixty/Versuch 1/Deckel_Eckig_1_Ring.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_11_Cylinder_B.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_8_Cylinder_B.stl
+F:/3D Dateien/3D Drucker/01_Pool-Wasserfall/Wasserfall_1_Koerper.stl
+F:/3D Dateien/pegboard-pb3041-v4.3mf
+F:/3D Dateien/3D Drucker/07_Pool-Filterball-Einsatz/Versuch 1/Filterball_2_Deckel.stl
+F:/3D Dateien/3D Drucker/02_Getraenkehalter/Getraenkehalter_Pool_ThreeSixty.stl
+F:/3D Dateien/top-single.stl
+F:/3D Dateien/宠物便便器.3mf
+F:/3D Dateien/top-double.stl
+F:/3D Dateien/Wedge-Lock (Set).stl
+F:/3D Dateien/3D Drucker/06_Glasdeckel_ThreeSixty/Versuch 1/Deckel_Rund_einfach.stl
+F:/3D Dateien/3D Drucker/08_Gewuerzregal_Strebergarten/Versuch 1/Gewürz.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/RS_v2/Screen-Cover_RS_v2_Buchstaben-weiss.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/Screen-Cover_RS_Buchstaben_weiss.stl
+F:/3D Dateien/insert-top-triple (1).stl
+F:/3D Dateien/3D Drucker/02_Getraenkehalter/3_Schirm.stl
+F:/3D Dateien/pegboard-gs-100-v2 (1).3mf
+F:/3D Dateien/3D Drucker/07_Pool-Filterball-Einsatz/kartuschen_kaefig.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_14_Cylinder_A_B.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_2_Cylinder_A_B.stl
+F:/3D Dateien/bromyde_press.3mf
+F:/3D Dateien/3D Drucker/02_Getraenkehalter/1_Halter.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Taschentuchbox_material.3mf
+F:/3D Dateien/pegboard-10inch-crimper-v5.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Nozzle_Box.3mf
+F:/3D Dateien/3D Drucker/08_Gewuerzregal_Strebergarten/gewuerzbehaelter_body.stl
+F:/3D Dateien/Blessed+Family+–+Heart+Script+Decor.3mf
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/Modular/Besteckkorb_Modular.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/rasenrotor_alle_1.3mf
+F:/3D Dateien/3D Drucker/15_CC2-Werkzeugbox/CC2-Werkzeugbox_Druckbereit.3mf
+F:/3D Dateien/3D Drucker/06_Glasdeckel_ThreeSixty/Versuch 1/Deckel_Rund_1_Ring.stl
+F:/3D Dateien/3D Drucker/08_Gewuerzregal_Strebergarten/deckel_basis.stl
+F:/3D Dateien/drill-holder.3mf
+F:/3D Dateien/large-screwdriver-holder-with-honeycomb-pattern.stl
+F:/3D Dateien/Modulares+Sieb/Ring.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/Screen-Cover_RS.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/RS_v2/Screen-Cover_RS_v3.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/RS_v2/Screen-Cover_RS_v2.3mf
+F:/3D Dateien/mini-pot-cover-x1.stl
+F:/3D Dateien/CC2工具收纳盒E.3mf
+F:/3D Dateien/Filament+storage+system/Rack system for Filament.3mf
+F:/3D Dateien/3D Drucker/08_Gewuerzregal_Strebergarten/Versuch 1/deckel_dreh.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/Cover.stl
+F:/3D Dateien/desk-organizer-v3_desk-organizer-v3_body1.stl
+F:/3D Dateien/3D Drucker/07_Pool-Filterball-Einsatz/Versuch 1/Filterball.3mf
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/Vorlage/Modern_Cutlery_Organizer_mit_Teiler.3mf
+F:/3D Dateien/3D Drucker/06_Glasdeckel_ThreeSixty/Versuch 2/deckel_rund.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Scraper_with_Magnets_material.3mf
+F:/3D Dateien/Modulares+Sieb/Siebhalter.stl
+F:/3D Dateien/Scraper+with+Magnets+-+Elegoo.3mf
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/STL/organizer_Besteckkorb_1von5.stl
+F:/3D Dateien/3D Drucker/13_Besteckkorb_Abtropfkorb/Sparsam_120mm/STL/sparsam_Besteckkorb_1von5.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/elegoo_grease_tool_material.3mf
+F:/3D Dateien/carcassonne-4x4-grid-with-holes-on-bottom.stl
+F:/3D Dateien/mini-pot-x1 (1).stl
+F:/3D Dateien/the-over-engineered-backpack-wall-mount-v2.stl
+F:/3D Dateien/hirnmod_scura_workshop_furnier.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Toilettenpapierhalter_mit_Geheimfach.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/Screen-Cover_RS_Basis.stl
+F:/3D Dateien/Side kit rest 3  Ø36 (1).stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/RS_v2/Screen-Cover_RS_v2_Deckel-schwarz.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Clippy_Filament-Clip_x10.3mf
+F:/3D Dateien/Siebhalter+X1C.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/Screen-Cover_RS.stl
+F:/3D Dateien/Elegoo_erster_Druck.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Flaschenhalter_4er_material.3mf
+F:/3D Dateien/elegoo_grease_tool.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Screen-Cover_Elegoo-CC2_STL/Screen-Cover_Elegoo-CC2.stl
+F:/3D Dateien/peruvian-style-ocarina (1).stl
+F:/3D Dateien/3D Drucker/07_Pool-Filterball-Einsatz/Versuch 1/Filterball_1_Korpus.stl
+F:/3D Dateien/3D Drucker/06_Glasdeckel_ThreeSixty/Versuch 2/deckel_eckig.stl
+F:/3D Dateien/the-over-engineered-backpack-wall-mount-v2.3mf
+F:/3D Dateien/Schwammablage+DM24+BS.3mf
+F:/3D Dateien/pista+biglie.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Pool-Fountain_Nozzle_horizontal.3mf
+F:/3D Dateien/kumiko_elongated-hexagon_shell_w150.stl
+F:/3D Dateien/image_00001_.glb
+F:/3D Dateien/dice_w6_16mm_v00.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Gaehnende-Katze_Figur_material.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/CC2_Ultimate_Scraper_material.3mf
+F:/3D Dateien/countercleaner.3mf
+F:/3D Dateien/tree_no_tray_stl.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Retro-Maus_im_Pullover_material.3mf
+F:/3D Dateien/tree_with_tray_stl.stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Cat_Toys_V2.3mf
+F:/3D Dateien/3D Drucker/04_Community-Modelle/BowlingGame.3mf
+F:/3D Dateien/3D Drucker/Puppenhaus/moebel/schrank.glb
+F:/3D Dateien/3D Drucker/Puppenhaus/moebel/stuhl.glb
+F:/3D Dateien/dice_w6_16mm_v00 (1).stl
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Cat_Phone_Stand_Kawaii_material.3mf
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_5_ship sails 3d model.stl_8.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_9_ship sails 3d model.stl_8.stl
+F:/3D Dateien/3D Drucker/Puppenhaus/moebel/tisch.glb
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_13_Assembly_B.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_6_Assembly_B.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_7_Assembly_B.stl
+F:/3D Dateien/埃菲尔铁塔（高18cm+、22cm、28cm）、一体无支撑/埃菲尔铁塔18cm.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_10_ship sails 3d model.stl_1_B.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_16_ship sails 3d model.stl_1_B.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_3_ship sails 3d model.stl_1_B.stl
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_4_ship sails 3d model.stl_1_B.stl
+F:/3D Dateien/3D Drucker/Puppenhaus/moebel/bett.glb
+F:/3D Dateien/3D Drucker/04_Community-Modelle/Desk-Gangster_Katze_material.3mf
+F:/3D Dateien/Wizard+Tower+Staunton+Elegoo.3mf
+F:/3D Dateien/pirate+ship+with+sails_stls/obj_15_Assembly.stl
+F:/3D Dateien/chufang.3mf
+F:/3D Dateien/meshy_ai_wooden-marble-game-board_1789261431_generate-1 (1).stl

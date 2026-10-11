@@ -85,8 +85,10 @@ natives Fenster, liegt über jedem gemalten Geschwister und zeigt bis zu ihrem
 ersten Bild alte Pixel.
 **Gelesen ist nicht gezeigt:** Bereitet der Ansichtsarbeiter das erste Bild
 vor (`Viewport.preparing_an_empty_view`), bleibt er mit „Das Modell wird
-angezeigt …“ stehen, bis `sceneApplied` oder `sceneFailed` kommt
-(`loading.veil_reason`); ohne laufende Auswertung ohne Linie und *Abbrechen*.
+angezeigt …“ stehen, bis `sceneApplied`, `sceneFailed` oder
+`preparationEnded` kommt (`loading.veil_reason`) — der Arbeiter kann auslaufen,
+ohne dass ein Körper im Bild steht; ohne laufende Auswertung ohne Linie und
+*Abbrechen*.
 
 ### Vor der Auswertung: `waiting()` und der Einleseplan
 

@@ -70,6 +70,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Erkennt die Gruppenerkennung Kammer, Nut, Kanal, Gewinde, Verschluss, Scharnier, Schrift und Aufnahme samt Gegenproben und Korpus, und ändert *Kammer ändern* eine Kammer als Ganzes? Ändert *Verschluss ändern* Spiel und Drehweg aller Stellungen genau um ihren Umriss? | `test_functional_groups.py` · `test_chamber_ops.py` · `test_closure_ops.py` (Rohr mit L-Wegen, Plattendeckel als STL, Bausteinaufnahme); Baum und Merkmalfenster in `test_feature_panel.py`; der Kasten dazu ist `helpers.walled_bin` |
 | Findet die Bindungshilfe feste Zahlen, die zu Projektmaßen passen, wählt sie nur Sicheres vor, und folgt das gebundene Puppenhaus seinen Maßen? Zählt der Plattenwähler die Körper, und rahmt die Plattenwahl einmal? | `test_parameter_binding.py` · `test_parameter_binding_ui.py`; Platten in `test_plates.py`; das Puppenhaus ist `helpers.dollhouse_document` |
 | Liest der exakte Körper dieselben Muster wie sein STL-Zwilling? | `test_exact_patterns.py` — STEP und binäre STL derselben Konstruktion über den echten Einleseweg |
+| Erkennungsarbeiter bitgleich, abbrechbar? | `test_perceive_workers.py` |
 | Ersetzt eine örtlich erkannte Textur die alten Einzelzellen auch nach Import, Speichern und Undo? | `test_local_detection.py` — echte Bereichssuche, reservierte Zellkennungen, leerer Cache und Plattencache; alte Zellbezüge halten mit Rückweg an |
 | Bleibt der exakte Körper bei Merkmalshandlungen exakt — Volumen, Kennungen, STEP-Umlauf? | `test_exact_feature_ops.py` |
 | Wulst und Kehle · Gewinde ändern und verschließen · Filament an Ringen und Gewinden, jeweils in beiden Kernen | `test_torus_feature_ops.py` · `test_thread_feature_ops.py` · `test_filament_on_rings_and_threads.py` |
@@ -77,7 +78,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Baut *Stift für Bohrung* das Gegenstück zu Senkung, Ansenkung und Gewinde — Kopf, Gewinde, Abstand, beide Kerne, Absagen, alte Projektdatei? | `test_bore_pin.py` |
 | Abläufe aus dem Dateiaudit (RM-184): Fügeweg gedreht und kombiniert (Bajonett der Quelle) · Prüfausschnitt einer Passung · Schrift auf Bogen, um eine Rundung und als bündige Einlage · Gegenformeinsatz, beide Kerne | `test_join_motion.py` · `test_fit_test_piece.py` · `test_label_layout.py` · `test_counter_form.py` |
 | Entstehen Grundkörper ohne Kernwahl-Haken im richtigen Kern, und wechselt der Verlauf einen Schritt? | `test_kernel_switch.py` |
-| Baut jeder mitgelieferte Baustein am exakten Träger exakt? Merkmalszusagen und Determinismus? Randprüfung abbrechbar? | `test_exact_parts.py` · `test_parts.py` (zwei unabhängige Bauten) · `test_parts_review_regressions.py` |
+| Baut jeder Baustein am exakten Träger exakt? Merkmale, Determinismus, gebündelter Gang? Randprüfung abbrechbar? | `test_exact_parts.py` · `test_parts.py` (zwei unabhängige Bauten) · `test_parts_review_regressions.py` · `test_bundled_shapes.py` |
 | Liest der exakte Kern ein importiertes Gewinde ohne Erzeugerwissen? | `test_thread_import.py`, Basiskörper in `data/threads/` |
 | Verrunden, Fase, Wulst, Rundung zurücknehmen · Fläche versetzen, Formschräge — an beiden Kernen, bleiben Rundungsgruppen am exakten Kern geschlossen und bleibt eine geänderte Rundung über den Folgeschritt dieselbe? | `test_brep.py` · `test_mesh_edges.py` · `test_mesh_faces.py` |
 | Lassen Merkmalshandlungen den Körper ohne Narben und alte Dreiecksnummern? | `test_feature_moves_keep_shape.py` |
@@ -106,7 +107,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? Halten harte Regeln am Quelltext — kein `eval`, keine Ja/Nein-Frage, kein `==` mit Unendlich? | `test_hard_rules.py` |
 | Kommt ein Backslash in einem Pfad als Backslash an? | `test_source_escapes.py` |
 | Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen und mit dem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte und nachgestellte Hilfsprozesse, die Fälle einzeln in `konzepte/begruendungen/karte-tests.md`; das gebaute Paket startet `tools/check_frozen_helper.py` im Paketjob, geprüft in `test_packaging.py` |
-| Endet ein rechnender Helfer mit seinem hart beendeten Elternprozess, und hat er nach normalem Start niedrigere OS-Priorität? | `test_kernel_process_lifecycle.py` — Windows-Jobobjekt, gehaltene Griffe, echte OS-Abfrage; negative Kontrollen treffen dasselbe Assert; ohne Fenster oder Leistungsmarken |
+| Endet ein rechnender Helfer mit seinem hart beendeten Elternprozess, und hat er nach normalem Start niedrigere OS-Priorität? | `test_kernel_process_lifecycle.py` |
 
 ## Helfer
 

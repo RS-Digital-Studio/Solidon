@@ -1391,7 +1391,7 @@ def _known_key(
     gespeichert; seine Bytes gehen über :func:`_fed`.
     """
     digest = hashlib.blake2b(digest_size=20)
-    digest.update(detection._mesh_key(mesh))
+    digest.update(detection._detection_key(mesh))
     _fed(digest, [(name, features[name]) for name in sorted(features)])
     _fed(
         digest,

@@ -118,7 +118,12 @@ def crash_detail(error: BaseException, summary: str = "") -> str:
     """
     report = exception_report(error)
     heading = redact_user_paths(redact(summary)) if summary else ""
-    return "\n".join(filter(None, (heading, report.detail, report.traceback)))
+    detail = report.detail
+    if report.traceback == f"{type(error).__name__}: {detail}":
+        # Ohne Stapel und ohne Ursache ist der Stapeltext nur Art und Satz —
+        # der Satz stünde sonst zweimal untereinander.
+        detail = ""
+    return "\n".join(filter(None, (heading, detail, report.traceback)))
 
 
 #: Die Bibliotheken, deren Fassung ein Bericht nennt. Reihenfolge wie im Text.

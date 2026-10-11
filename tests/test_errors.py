@@ -394,11 +394,14 @@ _NOT_A_RANGE = frozenset(
         # Der Arbeitsspeicher beim Neuvernetzen (mesh_ops._out_of_memory): Die
         # Kantenlänge liegt im Schema, nur dieser Rechner schafft sie nicht.
         "memory",
-        # Die Gestalt eines Gewindes (P2.5-Rest): Ein kegeliges oder
-        # mehrgängiges Gewinde bekommt kein Gegenstück aus der Bibliothek, und
-        # Ändern oder Entfernen setzen keine Zylinder an einen Kegel. Das ist
-        # eine Eigenschaft des gewählten Merkmals, keine Zahl in einem Feld.
-        "thread_shape", "tapered",
+        # Die Gestalt eines Gewindes: Ein kegeliges Gewinde ohne Tabellengröße
+        # bekommt kein Gegenstück aus der Bibliothek. Das ist eine Eigenschaft
+        # des gewählten Merkmals, keine Zahl in einem Feld. Passt es zu Größen
+        # zweier Reihen, ist die Rückfrage eine Wahl, keine Spanne.
+        "thread_shape", "ambiguous_thread",
+        # Ein kegeliges Innengewinde, das zur Mündung hin enger wird, nimmt keinen
+        # Stift mit Gewinde auf — die Lage des Kegels, keine Zahl.
+        "narrow_mouth_thread",
         # Schrift und Schnitt einer Beschriftung: eine Familie, die dieser
         # Rechner nicht hat, und ein Schnitt, den es in dieser Familie nicht
         # gibt. Beides sind Einträge in zwei kurzen Listen — es gibt kein Feld,
@@ -506,9 +509,9 @@ _NOT_A_RANGE = frozenset(
         "no_shapes", "no_size", "no_sources", "no_split", "no_split_target", "no_triangles",
         "not_a_face", "not_a_hole", "not_a_mesh", "not_a_number", "not_an_archive",
         "not_a_project", "private_destination",
-        "left_handed", "not_a_twin", "not_a_drawing", "not_movable", "not_outline", "not_step",
+        "not_a_twin", "not_a_drawing", "not_movable", "not_outline", "not_step",
         "not_upright",
-        "one_body", "multi_start", "not_a_thread", "needs_exact",
+        "one_body", "not_a_thread", "needs_exact",
         # Ein Gewinde außerhalb dessen, was ein Bausteingewinde baut, und eine
         # Achse, die keine der drei ist: ein Merkmal und eine Größe außerhalb
         # einer Liste, keine Spanne im Feld.
@@ -911,3 +914,69 @@ def test_no_internal_error_speaks_to_the_customer() -> None:
         "ein InternalError mit übersetztem Text ist ein Bedienfall in der falschen "
         f"Klasse: {offenders}"
     )
+
+
+def test_no_window_turns_a_cancel_into_an_error() -> None:
+    """Ein Abbruch ist kein Fehler — auch nicht auf dem Weg ins Fenster.
+
+    ``_AgentWorker`` machte aus ``OperationCancelled`` ein nacktes ``AppError``.
+    Dessen einziger Vorschlag ist ``CANCEL``, und den löst das Fenster nicht
+    ein: ``offered_actions`` fiel auf *Fehlerbericht erstellen* zurück, und ein
+    Kunde schickte sein eigenes *Abbrechen* als Programmfehler
+    (S-20261010-e5014c). Die Klassenprüfung oben sah es nicht, denn formal trug
+    der Fehler einen Vorschlag.
+    """
+    quelle = Path(errors.__file__).resolve().parents[1] / "ui"
+    fehlerklassen = {"AppError", "InternalError", "UserError", "ValidationError"}
+    offenders: list[str] = []
+    geprueft = 0
+    for datei in sorted(quelle.rglob("*.py")):
+        baum = ast.parse(datei.read_text(encoding="utf-8"))
+        for knoten in ast.walk(baum):
+            if not isinstance(knoten, ast.ExceptHandler) or knoten.type is None:
+                continue
+            gefangen = knoten.type.elts if isinstance(knoten.type, ast.Tuple) else [knoten.type]
+            namen = {getattr(art, "id", None) or getattr(art, "attr", None) for art in gefangen}
+            if "OperationCancelled" not in namen:
+                continue
+            geprueft += 1
+            for innen in (teil for zeile in knoten.body for teil in ast.walk(zeile)):
+                if not isinstance(innen, ast.Call):
+                    continue
+                name = getattr(innen.func, "id", None) or getattr(innen.func, "attr", None)
+                if name in fehlerklassen:
+                    offenders.append(f"{datei.relative_to(quelle)}:{innen.lineno}")
+
+    assert geprueft > 20, f"nur {geprueft} Abbruchzweige gefunden — die Suche greift nicht mehr"
+    assert not offenders, f"ein Abbruch wird hier zum Fehler: {offenders}"
+
+
+@pytest.mark.parametrize("error_class", all_error_classes(), ids=lambda cls: cls.__name__)
+def test_only_a_programming_error_falls_back_to_the_bug_report(
+    error_class: type[AppError],
+) -> None:
+    """Den Fehlerbericht als Rückfall bekommt nur der ``InternalError`` (RM-771).
+
+    Ohne einlösbaren Vorschlag bot ``offered_actions`` jedem Fehler
+    *Fehlerbericht erstellen* als Hauptknopf an — einem Bedien- oder
+    Geometriefehler ebenso wie einem abgebrochenen Vorschlag
+    (S-20261010-e5014c). Der Kunde schickte dann einen Absturzbericht für
+    etwas, das kein Absturz war. Ein Fehler, der den Bericht selbst vorschlägt,
+    behält ihn.
+    """
+    from app.core.errors import REPORT_ERROR
+    from app.ui.dialogs import offered_actions
+
+    def nothing(_error: AppError) -> None:
+        return None
+
+    handlers = {"show_details": nothing, "report_error": nothing}
+    problem = error_class()
+    offered = {action.id for action in offered_actions(problem, handlers)}
+
+    if isinstance(problem, InternalError) or REPORT_ERROR in problem.suggestions:
+        assert REPORT_ERROR.id in offered
+    else:
+        assert REPORT_ERROR.id not in offered, (
+            f"{error_class.__name__} ist kein Programmfehler und bekommt doch den Fehlerbericht"
+        )
