@@ -55,12 +55,12 @@ geht über `ctx.ask` (Regel 21).
 
 Regeln 6, 7 und 9 gelten wörtlich; die Griffe sind `units.is_close`/`is_zero`
 statt `==`, `auto:<material>` und `ctx.seed` mit `deterministic=False` — ohne
-beides ist eine randomisierte Prozedur falsch, auch wenn sie funktioniert.
+beides ist eine Zufallsprozedur falsch, auch wenn sie funktioniert.
 
 Text, den der Kern **fertig** ausliefert (eine Frage über `ctx.ask`), schreibt
 Zahlen wie die Oberfläche: `format_decimal` bzw. `decimal_separator()` und
-Längen in `app.i18n.display_unit()` — sonst liest der Kunde „177.80 mm“ in
-einem auf Zoll gestellten deutschen Fenster (`unit_question`).
+Längen in `app.i18n.display_unit()` — sonst steht „177.80 mm“ in
+einem deutschen Fenster in Zoll (`unit_question`).
 
 Eine Zahl als **Platzhalterwert** eines Satzes (`_("… unter {largest}", largest=…)`)
 geht als `format_length`/`format_volume`/`format_area` (sie liefern eine
@@ -81,9 +81,9 @@ entscheidet, rechnet ohne Wege, deren letzte Stelle an der Plattform hängt:
 - `trimesh`s `apply_translation` rechnet exakt, sieht für das Rauschen aber
   wie ein Matrixprodukt aus — in Wegen unter dem Rauschtest `mesh.shift_body`;
 - keine Winkel- und Exponentialfunktion aus NumPy oder `math` (Winkel über
-  `units.exact_cos`/`exact_sin`, viele auf einmal über
-  `mesh.periodic_sin_cos`), keine Potenz `**` auf Gleitkommazahlen (`x * x`,
-  `math.sqrt`);
+  `units.exact_cos`/`exact_sin`, gebündelt bitgleich `exact_cos_sin_array`,
+  sonst `mesh.periodic_sin_cos`), keine Potenz `**` auf Gleitkommazahlen
+  (`x * x`, `math.sqrt`);
 - Zufall nur aus Rohbits (`Generator.random`, `integers`), nie `normal` oder
   andere Verteilungen über `exp`/`log`;
 - keine Summe, deren Folge an der Zahl der Arbeiter hängt: Schichten und

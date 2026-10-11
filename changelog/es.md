@@ -135,6 +135,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Colocado desde abajo, el alojamiento de tuerca tiene el hueco bajo la cara y su ranura baja hasta él. Hasta ahora el hueco quedaba medio encima, con el tornillo en la cara.
 - Si el taladro de un bloque no atraviesa la pieza, ahora se llama ciego. Hasta ahora se llamaba pasante.
 - Si la pared es más gruesa de lo indicado en *Pasacables* o *Espiga para manguera*, el paso lo dice y abre el espesor de pared. Hasta ahora el paso acababa en el material sin aviso.
+- Las roscas existen ahora también como roscas de tubo G y R, roscas en pulgadas UNC y UNF y NPT, en la *Rosca imprimible*, en tornillo, tuerca y *Perno roscado*.
+- Toda rosca existe también a izquierdas. Una medida propia admite hilos por pulgada y varias entradas, también en *Crear tornillo* y *Generar tapa roscada*.
+- Qué series de roscas muestran las listas de medidas se elige en los Ajustes, en *Series de roscas en las listas*.
+- La contraparte y el *Pasador para taladro* sirven también para roscas en pulgadas, de tubo, a izquierdas, de varias entradas y cónicas. Si una rosca medida encaja en dos series, Solidon pregunta.
+- Las roscas a izquierdas, de varias entradas y cónicas se editan con *Cambiar característica* y *Quitar característica* y conservan sentido, entradas y conicidad.
+- Solidon reconoce una rosca de varias entradas en una malla importada como una sola rosca con sus entradas. Hasta ahora aparecían varias roscas con un paso demasiado grande.
 
 ### Bloques
 

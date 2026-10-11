@@ -134,6 +134,12 @@ scrive in `website/version.json`.
 - Inserita da sotto, la sede per dado ha la tasca sotto la faccia e la fessura scende fino a essa. Finora la tasca stava per metà sopra, con la vite nella faccia.
 - Se il foro di un blocco non attraversa il pezzo, ora si chiama cieco. Finora si chiamava passante.
 - Se la parete è più spessa di quanto indicato per «Passacavo» o «Portagomma», il passaggio lo dice e apre lo spessore di parete. Finora il foro finiva in silenzio nel materiale.
+- Le filettature esistono ora anche come filettature gas G e R, filettature in pollici UNC e UNF e NPT, nella *Filettatura stampabile*, su vite, dado e *Perno filettato*.
+- Ogni filettatura esiste anche sinistrorsa. Una misura personalizzata accetta filetti per pollice e più principi, anche in *Crea vite* e *Crea coperchio a vite*.
+- Quali serie di filettature mostrano gli elenchi delle misure si sceglie nelle Impostazioni, in *Serie di filettature negli elenchi*.
+- Controparte e *Perno per foro* vanno bene anche per filettature in pollici, gas, sinistre, a più principi e coniche. Se una filettatura misurata corrisponde a due serie, Solidon chiede.
+- Le filettature sinistre, a più principi e coniche si modificano con *Cambia caratteristica* e *Rimuovi caratteristica* e mantengono senso, principi e conicità.
+- Solidon riconosce una filettatura a più principi in una mesh importata come una sola filettatura con i suoi principi. Finora ne mostrava diverse con passo troppo grande.
 
 ### Blocchi
 

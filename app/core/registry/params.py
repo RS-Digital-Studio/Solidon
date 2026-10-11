@@ -134,6 +134,7 @@ def param(
     internal: bool = False,
     dropped_on_change: bool | tuple[str, ...] = False,
     zero_text: TranslatableText | str | None = None,
+    least: float | None = None,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
     an einer Stelle.
@@ -168,6 +169,9 @@ def param(
     ``zero_text`` nennt, was die Null eines Zahlenfelds bedeutet
     („automatisch“, „ohne“), an einem ``optional``-Feld, was leer bedeutet
     („Oberkante“) — siehe :attr:`app.core.types.ParamSpec.zero_text`.
+
+    ``least`` ist der kleinste Wert außer der Null an einem Feld, dessen Null
+    etwas anderes heißt — siehe :attr:`app.core.types.ParamSpec.least`.
     """
     metadata = {
         _METADATA_KEY: {
@@ -191,6 +195,7 @@ def param(
             "internal": internal,
             "dropped_on_change": dropped_on_change,
             "zero_text": zero_text,
+            "least": least,
         }
     }
     if default is MISSING:
@@ -290,6 +295,7 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 # ``get``: Deklarationen außerhalb von :func:`param` — ein
                 # Rezept baut seine Metadaten selbst — kennen den Schlüssel nicht.
                 zero_text=metadata.get("zero_text"),
+                least=metadata.get("least"),
             )
         )
     data_class.__param_spec__ = tuple(specs)  # type: ignore[attr-defined]
@@ -484,6 +490,16 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
                 # Mit der Einheit des Feldes (RM-359 F7): „Mindestwert: 0,1“
                 # ohne mm ließ offen, ob Millimeter oder Zoll gemeint sind.
                 values={"minimum": spec.minimum, **({"unit": spec.unit} if spec.unit else {})},
+            )
+        if spec.least is not None and number != 0 and is_less(float(number), spec.least, EPS_GEOM):
+            # Die Null heißt hier etwas (``zero_text``), Werte zwischen ihr und
+            # ``least`` nicht (Review GEW, M4: 0,5 Gänge je Zoll sind 50,8 mm).
+            raise ValidationError(
+                field=spec.name,
+                detail=_("Der Wert liegt unter dem zulässigen Mindestwert."),
+                value=value,
+                constraint="minimum",
+                values={"minimum": spec.least, **({"unit": spec.unit} if spec.unit else {})},
             )
         if spec.maximum is not None and is_greater(float(number), spec.maximum, EPS_GEOM):
             raise ValidationError(

@@ -78,7 +78,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Baut *Stift für Bohrung* das Gegenstück zu Senkung, Ansenkung und Gewinde — Kopf, Gewinde, Abstand, beide Kerne, Absagen, alte Projektdatei? | `test_bore_pin.py` |
 | Abläufe aus dem Dateiaudit (RM-184): Fügeweg gedreht und kombiniert (Bajonett der Quelle) · Prüfausschnitt einer Passung · Schrift auf Bogen, um eine Rundung und als bündige Einlage · Gegenformeinsatz, beide Kerne | `test_join_motion.py` · `test_fit_test_piece.py` · `test_label_layout.py` · `test_counter_form.py` |
 | Entstehen Grundkörper ohne Kernwahl-Haken im richtigen Kern, und wechselt der Verlauf einen Schritt? | `test_kernel_switch.py` |
-| Baut jeder mitgelieferte Baustein am exakten Träger exakt? Merkmalszusagen und Determinismus? Randprüfung abbrechbar? | `test_exact_parts.py` · `test_parts.py` (zwei unabhängige Bauten) · `test_parts_review_regressions.py` |
+| Baut jeder Baustein am exakten Träger exakt? Merkmale, Determinismus, gebündelter Gang? Randprüfung abbrechbar? | `test_exact_parts.py` · `test_parts.py` (zwei unabhängige Bauten) · `test_parts_review_regressions.py` · `test_bundled_shapes.py` |
 | Liest der exakte Kern ein importiertes Gewinde ohne Erzeugerwissen? | `test_thread_import.py`, Basiskörper in `data/threads/` |
 | Verrunden, Fase, Wulst, Rundung zurücknehmen · Fläche versetzen, Formschräge — an beiden Kernen, bleiben Rundungsgruppen am exakten Kern geschlossen und bleibt eine geänderte Rundung über den Folgeschritt dieselbe? | `test_brep.py` · `test_mesh_edges.py` · `test_mesh_faces.py` |
 | Lassen Merkmalshandlungen den Körper ohne Narben und alte Dreiecksnummern? | `test_feature_moves_keep_shape.py` |

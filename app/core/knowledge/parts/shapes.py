@@ -15,6 +15,7 @@ Kern und braucht seine Zeile.
 
 from __future__ import annotations
 
+import functools
 import math
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -28,7 +29,15 @@ from app.core.errors import InternalError
 from app.core.geom import lathe, transform
 from app.core.geom.mesh import MeshData
 from app.core.types import Finding, Point2, Vec3
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, exact_cos, exact_sin
+from app.core.units import (
+    EPS_GEOM,
+    MAX_FACET_SAG,
+    exact_cos,
+    exact_cos_degrees,
+    exact_cos_sin_array,
+    exact_sin_degrees,
+    exact_tan_degrees,
+)
 
 if TYPE_CHECKING:
     from app.core.brep.kernel import Solid
@@ -124,6 +133,133 @@ RIDGE_START = 0.25
 #: rechnet das ab, sonst durchbricht der Gang die Wand dahinter.
 RIDGE_END = 0.8
 
+#: Die Gangprofile der Gewindeformen (RM-544; welche Reihe welches baut, sagt
+#: ``standards.THREAD_PROFILE_OF``). ``flat`` ist das druckbar abgeflachte Profil
+#: von :func:`ridge_profile`, das die metrischen und die Unified-Gewinde tragen;
+#: ``whitworth`` das gerundete 55°-Profil von G und R nach ISO 228-1 und ISO 7-1;
+#: ``npt`` das 60°-Profil mit flachem Kamm nach ASME B1.20.1. Die zwei
+#: Rohrgewindeprofile sind die der Norm, weil ein Rohrgewinde fast immer in ein
+#: Metallteil greift — eine Armatur, einen Hahn —, eine gedruckte Schraube selten.
+ThreadProfile = Literal["flat", "whitworth", "npt"]
+THREAD_PROFILES: tuple[ThreadProfile, ...] = ("flat", "whitworth", "npt")
+
+#: Der halbe Flankenwinkel des Whitworth-Profils in Grad: 55° zwischen den Flanken.
+#: Gerechnet wird mit ``units.exact_*_degrees``, nicht mit ``math``: Der Umriss
+#: ist Geometrie und muss auf jeder Maschine derselbe sein (``kern.md``, Review
+#: GEW M1 — ``math.sin`` irrte unter Windows bei 58,75° um ein halbes ULP).
+WHITWORTH_HALF_ANGLE = 27.5
+
+#: Die Höhe des spitzen 55°-Dreiecks als Anteil der Steigung, H = P / (2 · tan 27,5°).
+_WHITWORTH_HEIGHT = 1.0 / (2.0 * exact_tan_degrees(WHITWORTH_HALF_ANGLE))
+
+#: Die Gangtiefe des Whitworth-Profils als Anteil der Steigung: zwei Drittel der
+#: Höhe des spitzen 55°-Dreiecks. ISO 228-1 nennt h = 0,640327 P; dieselbe Zahl
+#: kommt hier aus dem Winkel.
+WHITWORTH_DEPTH = 2.0 / 3.0 * _WHITWORTH_HEIGHT
+
+#: Der Halbmesser von Kamm- und Grundbogen als Anteil der Steigung, r = 0,137329 P
+#: (ISO 228-1): tangential an die Flanken, H/6 vom Kamm des spitzen Dreiecks.
+_WHITWORTH_SINE = exact_sin_degrees(WHITWORTH_HALF_ANGLE)
+WHITWORTH_RADIUS = _WHITWORTH_HEIGHT / 6.0 * _WHITWORTH_SINE / (1.0 - _WHITWORTH_SINE)
+
+#: Die Bögen des Whitworth-Umrisses in Grad, je (Mitte axial, Mitte radial in
+#: Gangtiefen ab dem Fuß, erster Winkel, letzter Winkel, Sehnen): Grundbogen,
+#: Kammbogen, Grundbogen. Die längste Sehne überspannt 31,25°.
+_WHITWORTH_ARCS = (
+    (0.0, False, -80.0, -27.5, 2),
+    (0.5, True, 152.5, 27.5, 4),
+    (1.0, False, -152.5, -100.0, 2),
+)
+
+#: Die Gangtiefe des NPT-Profils als Anteil der Steigung (ASME B1.20.1: h = 0,8 P).
+NPT_DEPTH = 0.8
+
+#: Die Gangtiefe je Profil als Anteil der Steigung.
+DEPTH_SHARE: dict[ThreadProfile, float] = {
+    "flat": RIDGE_SHARE,
+    "whitworth": WHITWORTH_DEPTH,
+    "npt": NPT_DEPTH,
+}
+
+
+def ridge_depth(pitch: float, profile: ThreadProfile = "flat") -> float:
+    """Wie tief der Gang dieses Profils ist: der Anteil :data:`DEPTH_SHARE` der Steigung."""
+    return pitch * DEPTH_SHARE[profile]
+
+
+def whitworth_splits(pitch: float) -> int:
+    """In wie viele Teile jede Sehne der Whitworth-Bögen bei dieser Steigung zerfällt.
+
+    Eine Sehne weicht in ihrer Mitte um r · (1 - cos(halber Bogenwinkel)) vom
+    Bogen ab, bei der längsten (31,25°) um 0,0051 · P. Bis 9,8 mm Steigung —
+    jede G- und R-Größe — liegt das unter ``units.MAX_FACET_SAG``, und eine
+    Sehne bleibt eine; darüber, beim eigenen Maß in Whitworth-Form bis zur
+    gröbsten Steigung, wird jede so oft geteilt, wie die Regel verlangt, die
+    über die Sehnen jedes Bogens am Netz entscheidet (Review GEW, G1).
+    """
+    radius = WHITWORTH_RADIUS * pitch
+    longest = max(abs(last - first) / chords for _a, _c, first, last, chords in _WHITWORTH_ARCS)
+    splits = 1
+    while radius * (1.0 - exact_cos_degrees(longest / (2.0 * splits))) > MAX_FACET_SAG:
+        splits += 1
+    return splits
+
+
+@functools.lru_cache(maxsize=64)
+def _whitworth_outline(splits: int = 1) -> tuple[tuple[float, float], ...]:
+    """Das gerundete 55°-Profil eines Gangs, axial und radial in Steigungen.
+
+    Kamm und Grund sind Kreisbögen mit :data:`WHITWORTH_RADIUS`, tangential an
+    die Flanken (ISO 228-1), als Sehnen, deren jede ``splits`` Teile hat
+    (:func:`whitworth_splits`). Der Gang beginnt und endet ein Stück neben der
+    tiefsten Stelle des Grundbogens, wo dieser weniger als 0,003 P über dem
+    Grund liegt: Zwischen zwei Umläufen bleibt so ein schmaler Grundstreifen
+    (``helical_thread`` und der Netzbau verlangen ihn), und der Gang setzt auf
+    dem Kern auf. Winkel über ``units``, nie über ``math`` (``kern.md``).
+    """
+    radius = WHITWORTH_RADIUS
+    points: list[tuple[float, float]] = []
+    for axial, crest, first, last, chords in _WHITWORTH_ARCS:
+        rise = WHITWORTH_DEPTH - radius if crest else radius
+        count = chords * splits
+        for index in range(count + 1):
+            angle = first + (last - first) * index / count
+            points.append(
+                (
+                    axial + radius * exact_cos_degrees(angle),
+                    rise + radius * exact_sin_degrees(angle),
+                )
+            )
+    start = points[0][0]
+    shifted = [(axial - start, rise) for axial, rise in points]
+    shifted[0] = (0.0, 0.0)
+    shifted[-1] = (shifted[-1][0], 0.0)
+    return tuple(shifted)
+
+
+def _npt_outline() -> tuple[tuple[float, float], ...]:
+    """Das 60°-Profil mit flachem Kamm und Grund, axial und radial in Steigungen.
+
+    Die Flanken stehen 30° gegen die Senkrechte zur Achse und steigen über
+    ``NPT_DEPTH``; Kamm und Grund sind gleich breite Flächen, zusammen das, was
+    vom spitzen Dreieck (H = 0,866·P) über der Gangtiefe fehlt.
+    """
+    flank = NPT_DEPTH * exact_tan_degrees(30.0)
+    flat = (1.0 - 2.0 * flank) / 2.0
+    return ((0.0, 0.0), (flank, NPT_DEPTH), (flank + flat, NPT_DEPTH), (2.0 * flank + flat, 0.0))
+
+
+#: Das NPT-Profil als Umriss in Steigungen (axial, radial), einmal gerechnet.
+_NPT_OUTLINE = _npt_outline()
+
+
+def _outline(profile: ThreadProfile, pitch: float) -> tuple[tuple[float, float], ...]:
+    """Der Umriss eines Profils außer ``flat`` bei dieser Steigung."""
+    if profile == "npt":
+        return _NPT_OUTLINE
+    return _whitworth_outline(whitworth_splits(pitch))
+
+
 #: Zusatztiefe einer Aufnahme über das hinaus, was in ihr steckt — damit zwei
 #: Hälften auf ihrer Naht schließen und nicht auf dem Ende des Verbinders.
 #:
@@ -196,8 +332,10 @@ def rounded_box(width: float, depth: float, height: float, radius: float) -> For
         count += 1
     vertices: list[tuple[float, float]] = []
     for quadrant, (cx, cy) in enumerate(rounded_corners(width, depth, radius)):
-        for angle in np.linspace(quadrant * math.pi / 2, (quadrant + 1) * math.pi / 2, count + 1):
-            point = (cx + radius * exact_cos(angle), cy + radius * exact_sin(angle))
+        cos, sin = exact_cos_sin_array(
+            np.linspace(quadrant * math.pi / 2, (quadrant + 1) * math.pi / 2, count + 1)
+        )
+        for point in zip((cx + radius * cos).tolist(), (cy + radius * sin).tolist(), strict=True):
             if not vertices or math.dist(point, vertices[-1]) > EPS_GEOM:
                 vertices.append(point)
     built = manifold3d.CrossSection([vertices]).extrude(height).to_mesh64()
@@ -461,29 +599,38 @@ def rounded_dovetail(diameter: float, length: float) -> Form:
 
 
 def ridge_profile(
-    diameter: float, pitch: float, *, depth: float | None = None, internal: bool = False
+    diameter: float,
+    pitch: float,
+    *,
+    depth: float | None = None,
+    internal: bool = False,
+    profile: ThreadProfile = "flat",
 ) -> tuple[Point2, ...]:
     """Das Gangprofil eines Umlaufs, radial und axial — die eine Quelle für beide Kerne.
 
-    Vier Punkte: Fuß bei null, Kammbeginn bei ``RIDGE_START``, Kammende bei
-    ``RIDGE_SHARE``, Fuß bei ``RIDGE_END`` — alles Anteile der Steigung, die
-    Tiefe ``RIDGE_SHARE`` Steigungen. Außen liegt der Fuß eine Tiefe unter dem
-    Durchmesser und der Kamm auf ihm; innen ist der Durchmesser die Bohrung,
-    der Fuß liegt auf ihr und der Kamm eine Tiefe weiter außen. Der Netzweg
-    (:func:`thread_body`) legt die Punkte je Ring an, der exakte
-    (``exact.threaded``) führt sie entlang der Helix.
+    ``flat``, vier Punkte: Fuß bei null, Kammbeginn bei ``RIDGE_START``, Kammende
+    bei ``RIDGE_SHARE``, Fuß bei ``RIDGE_END`` — alles Anteile der Steigung, die
+    Tiefe ``RIDGE_SHARE`` Steigungen. ``whitworth`` und ``npt`` folgen ihrem
+    Umriss (:func:`_outline`) mit der Tiefe aus :data:`DEPTH_SHARE`. Außen liegt
+    der Fuß eine Tiefe unter dem Durchmesser und der Kamm auf ihm; innen ist der
+    Durchmesser die Bohrung, der Fuß liegt auf ihr und der Kamm eine Tiefe
+    weiter außen. Der Netzweg (:func:`thread_body`) legt die Punkte je Ring an,
+    der exakte (``exact.threaded``) führt sie entlang der Helix.
     """
     if depth is None:
-        depth = pitch * RIDGE_SHARE
+        depth = ridge_depth(pitch, profile)
     radius = diameter / 2.0
     root = radius if internal else radius - depth
     crest = radius + depth if internal else radius
-    return (
-        (root, 0.0),
-        (crest, pitch * RIDGE_START),
-        (crest, pitch * RIDGE_SHARE),
-        (root, pitch * RIDGE_END),
-    )
+    if profile == "flat":
+        return (
+            (root, 0.0),
+            (crest, pitch * RIDGE_START),
+            (crest, pitch * RIDGE_SHARE),
+            (root, pitch * RIDGE_END),
+        )
+    scale = depth / DEPTH_SHARE[profile]
+    return tuple((root + rise * scale, axial * pitch) for axial, rise in _outline(profile, pitch))
 
 
 def turn_segments(radius: float) -> int:
@@ -513,14 +660,27 @@ def thread_body(
     depth: float | None = None,
     segments: int = SEGMENTS,
     internal: bool = False,
+    profile: ThreadProfile = "flat",
+    starts: int = 1,
+    left: bool = False,
+    taper: float = 0.0,
+    reference: float = 0.0,
 ) -> Form:
     """Ein druckbares Gewinde als helikaler Gang — oder, invertiert, ein
     Gewindeloch.
 
-    Kein ISO-Profil: ein Drucker kann es nicht auflösen, und etwas anderes zu
-    behaupten wäre die Art Genauigkeit, die Vertrauen kostet (§39). Gebaut wird
-    die Form, die Drucker wirklich benutzen — ein dreieckiger Gang mit
-    abgeflachtem Kamm, den die Düse ohnehin rundet.
+    Im Profil ``flat`` kein ISO-Profil: ein Drucker kann es nicht auflösen, und
+    etwas anderes zu behaupten wäre die Art Genauigkeit, die Vertrauen kostet
+    (§39). Gebaut wird die Form, die Drucker wirklich benutzen — ein dreieckiger
+    Gang mit abgeflachtem Kamm, den die Düse ohnehin rundet. Die Rohrgewinde
+    tragen ihr Normprofil (:data:`ThreadProfile`).
+
+    ``starts`` Gänge teilen sich den Vorschub ``starts · pitch``, jeder um eine
+    Steigung über dem vorigen; ``left`` spiegelt den Gang an der Ebene durch die
+    Achse und den Winkel null, die Lage der Gänge dort bleibt. ``taper`` ist der
+    Zuwachs des Halbmessers je Millimeter Höhe (ein kegeliges Rohrgewinde), und
+    ``diameter`` gilt auf der Höhe ``reference``. ``height`` ist der Weg je Gang;
+    ein mehrgängiger Körper reicht um ``(starts - 1) · pitch`` darüber hinaus.
 
     Das Netz wird von Hand vernäht statt gesweept, denn ein Sweep lässt die
     Enden offen, und ein Baustein, der nicht wasserdicht ist, ist kein
@@ -531,45 +691,98 @@ def thread_body(
         # Gang als ein genähter Körper (``build.threaded``), weil ihre
         # Vereinigung dort der unzuverlässigste Schritt wäre (P2.7, B1).
         raise InternalError(detail="the exact kernel builds core and ridge as one body")
-    steps = max(round(height / pitch), 1) * segments
-    profile = ridge_profile(diameter, pitch, depth=depth, internal=internal)
+    lead = starts * pitch
+    steps = max(round(height / lead), 1) * segments
+    outline = ridge_profile(diameter, pitch, depth=depth, internal=internal, profile=profile)
+    radial = np.array([point[0] for point in outline])
+    axial = np.array([point[1] for point in outline])
+    per_ring = len(outline)
+    ring_count = steps + 1
 
-    angles = np.linspace(0.0, 2.0 * math.pi * height / pitch, steps + 1)
-    heights = np.linspace(0.0, height, steps + 1)
+    # **Gebündelt, Bit für Bit wie Ring für Ring** (RM-544): Jede Ecke ist
+    # ``Richtung · Radius + oben · Höhe`` in genau dieser Folge der Rechenschritte,
+    # nur für alle Stationen zugleich; die Winkel kommen aus
+    # ``exact_cos_sin_array``, die Bits aus ``exact_cos``/``exact_sin``.
+    # ``tests/test_threads.py`` hält das Netz gegen den alten Weg fest.
+    cos, sin = exact_cos_sin_array(np.linspace(0.0, 2.0 * math.pi * height / lead, steps + 1))
+    direction = np.stack([cos, sin, np.zeros_like(cos)], axis=1)[:, np.newaxis, :]
+    del cos, sin
+    up = np.array([0.0, 0.0, 1.0])
+    side = _ridge_sides(ring_count, per_ring)
+    vertex_blocks: list[np.ndarray] = []
+    face_blocks: list[np.ndarray] = []
+    for course in range(starts):
+        offset = sum(len(points) for points in vertex_blocks)
+        levels = (np.linspace(0.0, height, steps + 1) + course * pitch)[:, np.newaxis] + axial
+        reach = radial + taper * (levels - reference) if taper else radial[np.newaxis, :]
+        points = (direction * reach[:, :, np.newaxis] + up * levels[:, :, np.newaxis]).reshape(
+            -1, 3
+        )
+        del levels, reach
+        start_ring = [offset + corner for corner in range(per_ring)]
+        last = offset + (ring_count - 1) * per_ring
+        end_ring = [last + corner for corner in range(per_ring)]
+        if per_ring == 4:
+            caps = _cap(start_ring, flip=True) + _cap(end_ring, flip=False)
+        else:
+            # Die Stirnflächen eines Profils mit mehr als vier Punkten sind ein
+            # Fächer um ihre Mitte; das Profil ist von dort aus ganz zu sehen.
+            centres = offset + ring_count * per_ring
+            caps = _fan(start_ring, centres, flip=True) + _fan(end_ring, centres + 1, flip=False)
+            first_ring = points[:per_ring]
+            last_ring = points[-per_ring:]
+            points = np.vstack([points, first_ring.mean(axis=0), last_ring.mean(axis=0)])
+        vertex_blocks.append(points)
+        face_blocks += [side + offset, np.array(caps, dtype=np.int64)]
+    del direction, side
 
-    rings = []
-    for angle, level in zip(angles, heights, strict=True):
-        direction = np.array([exact_cos(angle), exact_sin(angle), 0.0])
-        up = np.array([0.0, 0.0, 1.0])
-        rings.append([direction * radial + up * (level + axial) for radial, axial in profile])
-
-    vertices = np.array([point for ring in rings for point in ring], dtype=float)
-    faces: list[list[int]] = []
-    per_ring = 4
-    for index in range(len(rings) - 1):
-        base = index * per_ring
-        following = base + per_ring
-        for corner in range(per_ring):
-            first = base + corner
-            second = base + (corner + 1) % per_ring
-            third = following + (corner + 1) % per_ring
-            fourth = following + corner
-            faces.append([first, second, third])
-            faces.append([first, third, fourth])
-
-    faces.extend(_cap(list(range(per_ring)), flip=True))
-    last = (len(rings) - 1) * per_ring
-    faces.extend(_cap([last + corner for corner in range(per_ring)], flip=False))
-
-    body = trimesh.Trimesh(vertices=vertices, faces=np.array(faces, dtype=np.int64), process=True)
-    trimesh.repair.fix_normals(body)
+    vertices = np.vstack(vertex_blocks) if len(vertex_blocks) > 1 else vertex_blocks[0]
+    faces = np.vstack(face_blocks)
+    del vertex_blocks, face_blocks
+    if left:
+        # Gespiegelt an der Ebene y = 0: Die Gänge bei Winkel null bleiben, wo
+        # sie sind, und ihr Drehsinn kehrt sich um. Die Spiegelung dreht auch
+        # jedes Dreieck um, deshalb die umgekehrte Eckenfolge.
+        vertices = vertices * np.array([1.0, -1.0, 1.0])
+        faces = np.ascontiguousarray(faces[:, ::-1])
+    body = trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
+    trimesh.repair.fix_normals(body, multibody=starts > 1)
     return MeshData.of(body)
+
+
+def _ridge_sides(ring_count: int, per_ring: int) -> np.ndarray:
+    """Die Mantelfläche des Gangs: je Ring und Profilecke zwei Dreiecke zum nächsten Ring.
+
+    Reihenfolge wie Ring für Ring: Ring, dann Ecke, dann die zwei Dreiecke
+    ``(erste, zweite, dritte)`` und ``(erste, dritte, vierte)``.
+    """
+    corner = np.arange(per_ring, dtype=np.int64)
+    following = (corner + 1) % per_ring
+    base = np.arange(ring_count - 1, dtype=np.int64)[:, np.newaxis] * per_ring
+    first = base + corner
+    second = base + following
+    third = base + per_ring + following
+    fourth = base + per_ring + corner
+    pairs = np.stack(
+        [np.stack([first, second, third], axis=-1), np.stack([first, third, fourth], axis=-1)],
+        axis=2,
+    )
+    return pairs.reshape(-1, 3)
 
 
 def _cap(indices: list[int], flip: bool) -> list[list[int]]:
     """Schließt einen Vierpunkt-Ring mit zwei Dreiecken."""
     first, second, third, fourth = indices
     faces = [[first, second, third], [first, third, fourth]]
+    return [list(reversed(face)) for face in faces] if flip else faces
+
+
+def _fan(indices: list[int], centre: int, flip: bool) -> list[list[int]]:
+    """Schließt einen Ring mit einem Fächer um seine Mitte, gedreht wie :func:`_cap`."""
+    faces = [
+        [centre, indices[corner], indices[(corner + 1) % len(indices)]]
+        for corner in range(len(indices))
+    ]
     return [list(reversed(face)) for face in faces] if flip else faces
 
 
