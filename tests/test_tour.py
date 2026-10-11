@@ -541,6 +541,125 @@ def test_only_the_current_tour_step_is_expanded(qt_app: object) -> None:
     session.release()
 
 
+def test_every_tour_line_stays_inside_the_card(qt_app: object) -> None:
+    """Kein Tourtext wird seitlich beschnitten, auch nicht nach dem Verkleinern.
+
+    Eine gekürzte Schrittzeile verlangte als Mindestbreite ihren schon
+    gekürzten Text und schrumpfte nie wieder: Die Liste wurde breiter als ihr
+    Rollbereich, rechts fehlte der Rest, und das Nachrollen zum aktuellen
+    Schritt schob den Anfang links hinaus. Der aktuelle Schritt stand dann
+    einzeilig, weil er so breit war (Robert, 0.6.0). Dazu rückte der
+    Fokusrahmen den Text um ein halbes „x“ ein, das die Kürzung nicht kannte.
+
+    Offscreen gibt es keine echte Schrift; geprüft werden Lage, Umbruch und
+    Metrik, nicht Bildpunkte.
+    """
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtWidgets import QApplication, QLabel, QWidget
+
+    from app.ui.session import Session
+    from app.ui.tour import StepLabel, TourPanel
+
+    example = examples.EXAMPLES[0]
+    project, history = _opened(example.id)
+    session = Session()
+    session.project = project
+    session.history = history
+    tour = tour_for(example.id)
+    assert tour is not None
+    panel = TourPanel(session)
+    # Der Rahmen aus ``style.py``: Er gibt dem Label eine Rahmenbreite, und damit
+    # rückt Qt den Text von sich aus ein.
+    panel.setStyleSheet("QLabel#tourStepText { border: 2px solid transparent; }")
+
+    def settle() -> None:
+        for _ in range(8):
+            QApplication.processEvents()
+
+    def check(width: int) -> None:
+        viewport = panel._scroll.viewport()
+        assert panel._scroll.horizontalScrollBar().maximum() == 0, (
+            f"bei {width}: die Liste ist breiter als ihr Rollbereich "
+            f"({panel._scroll.widget().width()} > {viewport.width()})"
+        )
+        lines: list[tuple[str, QLabel, QWidget]] = [
+            ("Titel", panel.title, panel),
+            ("Einleitung", panel.intro, panel),
+            ("Fortschritt", panel.progress, panel),
+            ("Schluss", panel.closing, panel),
+        ]
+        for at, (_marker, text) in enumerate(panel._rows):
+            lines.append((f"Schritt {at + 1}", text, viewport))
+        for name, label, clip in lines:
+            if not label.isVisible():
+                continue
+            box = QRect(label.mapTo(clip, QPoint(0, 0)), label.size())
+            assert clip.rect().left() <= box.left() and box.right() <= clip.rect().right(), (
+                f"bei {width}: {name} liegt bei {box.left()}..{box.right()}, "
+                f"sichtbar ist 0..{clip.rect().right()}"
+            )
+            metrics = label.fontMetrics()
+            if label.wordWrap():
+                assert label.heightForWidth(label.width()) <= label.height(), (
+                    f"bei {width}: {name} ist niedriger als sein Umbruch"
+                )
+                continue
+            indent = label.indent()
+            if indent < 0 and label.frameWidth() > 0:
+                indent = metrics.horizontalAdvance("x") // 2
+            room = label.contentsRect().width() - max(indent, 0)
+            shown = label.text()
+            assert metrics.horizontalAdvance(shown) <= room, (
+                f"bei {width}: {name} ist breiter als sein Platz: {shown!r}"
+            )
+            if isinstance(label, StepLabel) and shown != label.full_text():
+                assert shown.endswith("…"), f"bei {width}: {name} endet ohne Auslassung"
+                assert label.full_text().startswith(shown[:-1]), (
+                    f"bei {width}: {name} ist vorn beschnitten: {shown!r}"
+                )
+
+        if panel.current_index >= len(panel._rows):
+            return
+        current = panel._rows[panel.current_index][1]
+        assert current.wordWrap(), "der aktuelle Schritt bricht um"
+        metrics = current.fontMetrics()
+        if metrics.horizontalAdvance(current.full_text()) > current.contentsRect().width():
+            assert current.height() >= 2 * metrics.lineSpacing(), (
+                f"bei {width}: der aktuelle Schritt passt auf keine Zeile und steht doch auf einer"
+            )
+
+    try:
+        panel.resize(560, 700)
+        panel.show()
+        panel.start(example, tour)
+        settle()
+        # Erst breit, dann schmaler: Eine Zeile, die beim Kürzen ihre Breite
+        # festhielte, wüchse nur noch.
+        for width in (560, 420, 320, 260):
+            panel.resize(width, 700)
+            settle()
+            check(width)
+        panel.advance()
+        settle()
+        check(260)
+        # Ein aufgeklappter erledigter Schritt bricht um wie der aktuelle.
+        panel._toggle(0)
+        settle()
+        assert panel._rows[0][1].wordWrap()
+        check(260)
+        panel._toggle(0)
+        settle()
+        while panel.current_index < len(tour.steps):
+            panel.advance()
+        settle()
+        check(260)
+        assert panel.closing.isVisible() and panel.closing.wordWrap()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        session.release()
+
+
 def test_a_step_taller_than_the_card_shows_its_beginning(
     qt_app: object, monkeypatch: pytest.MonkeyPatch
 ) -> None:

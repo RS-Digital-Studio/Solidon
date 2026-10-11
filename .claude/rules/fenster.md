@@ -96,7 +96,9 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   ab; Erkennungswerte passen zu `make_examples.py`. Schritte messen ihre Höhe
   (`ContentScroller`), ohne Tooltip, aufklappbar per Klick und Taste (RM-553);
   einen Reiter derselben Karte rahmt die Tour (`point_at`), statt ihn zu holen
-  (RM-573).
+  (RM-573). Eine gekürzte Zeile verlangt keine Textbreite und keinen Einzug
+  (`StepLabel.minimumSizeHint`, `setIndent(0)`): Sonst wird die Liste breiter
+  als ihr Rollbereich, und der Text steht vorn und hinten beschnitten.
 
 ## Rückfragen
 

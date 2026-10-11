@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QKeyEvent, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -63,6 +63,10 @@ class StepLabel(QLabel):
     def __init__(self, text: str, parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
         self._full = text
+        # Mit Rahmen rückt ein ``QLabel`` seinen Text von sich aus um ein
+        # halbes „x“ ein, und die Kürzung wüsste davon nichts: Bei 150 %
+        # verlor die Auslassung so ihren letzten Punkt („..“).
+        self.setIndent(0)
 
     def setText(self, text: str) -> None:  # noqa: N802 — Qt-Name
         self._full = text
@@ -75,6 +79,22 @@ class StepLabel(QLabel):
     def set_wrapped(self, wrapped: bool) -> None:
         self.setWordWrap(wrapped)
         self._show()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Einzeilig ist die Zeile so schmal, wie die Auslassung es erlaubt.
+
+        Ein ``QLabel`` ohne Umbruch verlangt die Breite seines Texts — hier des
+        schon gekürzten. Die Zeile kürzte auf ihre Breite und verlangte danach
+        genau diese Breite: Sie wuchs mit, schrumpfte nie wieder, und die Liste
+        wurde breiter als ihr Rollbereich. Der schnitt rechts ab, und das
+        Nachrollen zum aktuellen Schritt schob den Anfang links hinaus — auch
+        der aktuelle Schritt stand dann auf einer Zeile, weil er so breit war.
+        """
+        hint = super().minimumSizeHint()
+        if self.wordWrap():
+            return hint
+        frame = self.width() - self.contentsRect().width()
+        return QSize(self.fontMetrics().horizontalAdvance("…") + frame, hint.height())
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         super().resizeEvent(event)
@@ -107,8 +127,12 @@ class StepLabel(QLabel):
         if self.wordWrap():
             super().setText(self._full)
             return
+        # Gekürzt wird auf die Fläche innerhalb des Rahmens: Der Fokusrahmen
+        # (``tourStepText``) nimmt je Seite zwei Punkte.
         super().setText(
-            self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, self.width())
+            self.fontMetrics().elidedText(
+                self._full, Qt.TextElideMode.ElideRight, self.contentsRect().width()
+            )
         )
 
 
