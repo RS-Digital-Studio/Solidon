@@ -87,6 +87,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El tiempo de impresión estimado se acerca más al del slicer, mucho más en piezas con soportes.
 - La comprobación de si los soportes y el skirt caben en la cama mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
 - Las sugerencias aceptadas ya casi no dejan sin soporte voladizos que lo necesitan. *Mantener libres los canales* solo bloquea el espacio del que ya no se podría sacar un soporte.
+- Con *Mantener libres los canales*, los soportes de cuadrícula ya no entran en las bocas de los canales bloqueados. En la versión 0.5.3 entraban algo más de un milímetro.
 - Donde los soportes bajo voladizos pequeños se apoyan en el modelo, Solidon sugiere soportes en árbol. Allí dejan menos marcas.
 - En puntas pequeñas, Solidon sugiere una *Velocidad mínima al frenar* más baja para que no se ablanden. El ajuste llega a cualquier slicer.
 - Los bordes estrechos que se sostienen solos quedan libres con *Bordes sin soporte*. Así la impresión necesita bastante menos soporte.
