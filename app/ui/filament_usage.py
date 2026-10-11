@@ -113,12 +113,26 @@ def _source(line: UsageLine) -> str:
 def _previous(
     request: UsageRequest, snapshot: filaments.InventorySnapshot | None = None
 ) -> list[filaments.InventoryBooking]:
-    """Ein Fingerabdruck kann nach ausdrücklichen Wiederholungen mehrere Vorgänge haben."""
+    """Ein Fingerabdruck kann nach ausdrücklichen Wiederholungen mehrere Vorgänge haben.
+
+    Gezählt wird jeder Abdruck desselben Drucks, auch der vor RM-706
+    (``UsageRequest.identities``)."""
     return [
         booking
         for booking in (snapshot or filaments.read_snapshot()).bookings()
-        if booking.fingerprint == request.fingerprint and not booking.reversed_at
+        if booking.fingerprint in request.identities and not booking.reversed_at
     ]
+
+
+def _booking_fingerprint(request: UsageRequest, booking: filaments.InventoryBooking | None) -> str:
+    """Ein bestehender Vorgang behält seinen Abdruck, ein neuer bekommt den heutigen.
+
+    Ein Vorgang aus 0.6.0 trägt den Abdruck über die Netze; ``book`` lehnt
+    einen anderen für dieselbe Vorgangskennung als Konflikt ab (RM-706).
+    """
+    if booking is not None and booking.fingerprint in request.identities:
+        return booking.fingerprint
+    return request.fingerprint
 
 
 def _legacy_bookings(
@@ -128,7 +142,7 @@ def _legacy_bookings(
     if not request.legacy_fingerprints:
         return ()
     bookings = snapshot.bookings()
-    if any(booking.fingerprint == request.fingerprint for booking in bookings):
+    if any(booking.fingerprint in request.identities for booking in bookings):
         return ()
     return tuple(
         booking for booking in bookings if booking.fingerprint in request.legacy_fingerprints
@@ -868,7 +882,7 @@ class UsageDialog(QDialog):
             partial(
                 filaments.book,
                 self.operation.currentData() or self._new_operation_id,
-                self.request.fingerprint,
+                _booking_fingerprint(self.request, existing),
                 self._positions(),
                 project_name=self.request.project_name,
                 allow_unverified_stock=self.allow_unverified.isChecked(),
@@ -952,7 +966,7 @@ def _reversed_count(request: UsageRequest) -> int:
     return sum(
         1
         for booking in filaments.read_snapshot().bookings()
-        if booking.fingerprint == request.fingerprint and booking.reversed_at
+        if booking.fingerprint in request.identities and booking.reversed_at
     )
 
 
@@ -1009,14 +1023,14 @@ def _auto_book(request: UsageRequest) -> filaments.InventoryBooking | None:
             request.fingerprint,
             *([reversed_before] if reversed_before else []),
         ),
-        request.fingerprint,
+        _booking_fingerprint(request, existing[0] if existing else None),
         positions,
         project_name=request.project_name,
         expected_history={
             fingerprint: tuple(
                 booking for booking in snapshot.bookings() if booking.fingerprint == fingerprint
             )
-            for fingerprint in (request.fingerprint, *request.legacy_fingerprints)
+            for fingerprint in (*request.identities, *request.legacy_fingerprints)
             if fingerprint
         },
     )
@@ -1108,9 +1122,10 @@ class UsageNotice(QWidget):
         self._sync_review()
 
     def _completed(self, result: object) -> None:
-        self._active = ""
+        # Die Ausgabe heißt hier nach ihrem Angebot, nicht nach dem Vorgang: Ein
+        # Vorgang aus 0.6.0 trägt seinen älteren Abdruck (RM-706).
+        key, self._active = self._active, ""
         if result is not None and not cast(filaments.InventoryBooking, result).reversed_at:
-            key = cast(filaments.InventoryBooking, result).fingerprint
             self._booked.add(key)
             self._declined.discard(key)
             self.changed.emit()

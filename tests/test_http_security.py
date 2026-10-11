@@ -64,6 +64,19 @@ class _Body:
         self.timeouts.append(seconds)
 
 
+_HANG_SECONDS = 30.0
+"""Ab wann ein Stillstand in diesen Tests als Hänger gilt.
+
+Ein reiner Hängerschutz, keine Messung. Er begrenzt das Warten auf einen
+angehaltenen Sendefaden, die Stille eines Gegenübers vor einem späten Byte und
+jedes Zeitlimit je Lesegriff, das nicht selbst geprüft wird. ``join`` kehrt
+zurück, sobald der Faden endet, und ein Sender, den der Test beim Abbruch
+anhält, wartet seine Stille nie aus. Die Grenze kostet also nur Zeit, wenn
+wirklich etwas hängt. Ein Läufer, der einen Faden einige Sekunden nicht
+rechnen lässt (in der CI gemessen: 1,96 s), reißt sie nicht.
+"""
+
+
 def test_limited_reader_accepts_the_boundary_and_rejects_one_more_byte() -> None:
     clock = _Clock()
     assert (
@@ -536,8 +549,24 @@ def test_remote_version_stops_at_its_transfer_limit() -> None:
 def test_remote_version_stops_at_its_total_deadline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Der Datenkanal endet an der Gesamtfrist, nicht am Zeitlimit seines Sockets.
+
+    Drei Bytes kommen vor der Frist. Danach schweigt der Datenkanal
+    :data:`_HANG_SECONDS` lang, länger als die Frist (der Socket hier hat gar
+    kein eigenes Zeitlimit, ``retrbinary`` hatte früher dreißig Sekunden je
+    Lesegriff), und schickt erst dann ein spätes Byte. Endet der Lesegriff an
+    der Frist, hält der Test den Sender an, bevor es geht. Behält der
+    Datensocket sein eigenes Zeitlimit, wartet der Lesegriff auf das späte
+    Byte, und erst die Prüfung danach bricht ab.
+
+    Beobachtet wird die Marke, nicht die Uhr: Eine Grenze von einer Sekunde ab
+    Fadenstart war zugleich zu eng für einen überlasteten Läufer und zu weit
+    für den Fehler, der nach 0,3 s abbrach. Sonst wird der Test nur rot, wenn
+    der Leser so lange nicht zurückkommt; die Meldung nennt beide Ursachen.
+    """
     receiving, sending = socket.socketpair()
-    finished = threading.Event()
+    stop = threading.Event()
+    late_sent = threading.Event()
 
     class SlowFtp:
         timeout = 30.0
@@ -553,33 +582,32 @@ def test_remote_version_stops_at_its_total_deadline(
         try:
             for _part in range(3):
                 sending.sendall(b"x")
-                time.sleep(0.015)
-            # Der letzte Block kommt noch vor der Gesamtfrist. Danach bleibt
-            # der Datenkanal länger still als die Frist, aber deutlich kürzer
-            # als der normale 30-s-Sockettimeout. Genau dort lief retrbinary
-            # zuvor bis zum alten Einzeltimeout weiter.
-            time.sleep(0.25)
+                if stop.wait(0.015):
+                    return
+            if stop.wait(_HANG_SECONDS):
+                return
+            late_sent.set()
             sending.sendall(b"x")
         except OSError:
             pass
         finally:
             sending.close()
-            finished.set()
 
     monkeypatch.setattr(upload_website, "PUBLIC_TIMEOUT_SECONDS", 0.08)
     thread = threading.Thread(target=trickle, daemon=True)
-    started = time.monotonic()
     thread.start()
-
-    with pytest.raises(ResponseDeadlineError):
-        upload_website.remote_version(SlowFtp(), "httpdocs")  # type: ignore[arg-type]
-
-    elapsed = time.monotonic() - started
-    # Großzügig gegen Fremdlast (bis zu vier Sitzungen auf einer Maschine);
-    # die Aussage bleibt: die kurze Gesamtfrist zählt, nicht der 30-s-Datentimeout.
-    assert elapsed < 1.0, "Der alte 30-s-Datentimeout darf die Gesamtfrist nicht verlängern"
-    thread.join(timeout=1)
-    assert finished.is_set()
+    try:
+        with pytest.raises(ResponseDeadlineError):
+            upload_website.remote_version(SlowFtp(), "httpdocs")  # type: ignore[arg-type]
+    finally:
+        stop.set()
+        late = late_sent.is_set()
+        thread.join(_HANG_SECONDS)
+    assert not thread.is_alive()
+    assert not late, (
+        "Das Zeitlimit des Datensockets hat die Gesamtfrist verlängert"
+        f" (oder der Leser stand {_HANG_SECONDS:.0f} s lang)"
+    )
 
 
 @pytest.mark.parametrize(
@@ -715,6 +743,80 @@ def test_the_read_timeout_caps_a_single_read_below_the_total_deadline() -> None:
     assert body.timeouts and all(seconds == pytest.approx(60.0) for seconds in body.timeouts)
 
 
+class _Lockstep:
+    """Ein Gegenüber, das je Lesegriff des Lesers ein Byte schickt, und erst ab der Frist.
+
+    Ein Sender nach eigener Uhr zählt Fadenzeiten mit. Steht nur der Leser,
+    sammeln sich die Bytes, und ein einziger Lesegriff holt danach eine ganze
+    Zeile: rot, obwohl die Frist gilt. Tröpfelt der Sender schon, bevor die
+    Frist entsteht, zählen Bytes mit, die vor ihr lagen. Hier geht das nächste
+    Byte erst, wenn der Leser wieder an seinem Socket liest, frühestens
+    ``pace`` Sekunden danach und erst nach :meth:`open`.
+
+    Wie viele Bytes bis zum Abbruch gehen, hängt damit nur daran, wie viele
+    Lesegriffe die Frist zulässt. Ein Stillstand, gleich welches Fadens, senkt
+    die Zahl und hebt sie nie. ``_socket_deadline`` prüft die Frist **vor** dem
+    Lesegriff, den es umhüllt; nach dem Abbruch fragt also niemand mehr nach.
+    :attr:`sent` wächst vor dem Senden und ist deshalb eine obere Schranke
+    dessen, was der Leser haben kann. :meth:`clock` zählt die Lesegriffe
+    selbst, als Uhr für eine Frist, die gar nicht an der Wanduhr hängt.
+    """
+
+    def __init__(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        reader: socket.socket,
+        writer: socket.socket,
+        *,
+        pace: float = 0.02,
+    ) -> None:
+        self.pace = pace
+        self._writer = writer
+        self._reads = 0
+        self._opened = threading.Event()
+        self._demand = threading.Event()
+        self._stop = threading.Event()
+        self.sent: list[int] = []
+        original = socket.SocketIO.readinto
+
+        def asking(stream: socket.SocketIO, buffer: Any) -> int | None:
+            if vars(stream).get("_sock") is reader:
+                self._reads += 1
+                self._demand.set()
+            return original(stream, buffer)
+
+        monkeypatch.setattr(socket.SocketIO, "readinto", asking)
+
+    def clock(self) -> float:
+        """Die Zahl der bisherigen Lesegriffe am Leser, als ``timer`` einer Frist."""
+        return float(self._reads)
+
+    def open(self) -> None:
+        """Ab hier wird gesendet; ein Lesegriff von vorher gilt nicht."""
+        self._demand.clear()
+        self._opened.set()
+
+    def trickle(self, payload: bytes) -> None:
+        """Schickt ``payload`` byteweise im Gleichschritt mit dem Leser (im Sendefaden)."""
+        if not self._opened.wait(_HANG_SECONDS):
+            return
+        for value in payload:
+            while not self._demand.wait(0.05):
+                if self._stop.is_set():
+                    return
+            self._demand.clear()
+            if self._stop.wait(self.pace):
+                return
+            self.sent.append(value)
+            self._writer.sendall(bytes([value]))
+
+    def halt(self) -> int:
+        """Hält den Sender an und nennt, wie viele Bytes er bis dahin freigegeben hat."""
+        self._stop.set()
+        self._opened.set()
+        return len(self.sent)
+
+
 @pytest.mark.parametrize("delay_writer_start", [False, True])
 def test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block(
     monkeypatch: pytest.MonkeyPatch, delay_writer_start: bool
@@ -725,13 +827,19 @@ def test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block(
     Gesamtfrist von 150 ms so bis zum letzten angekündigten Byte offen. Ein
     prozesslokales Socketpaar, kein Netz.
 
-    Ein Byte liegt bereit; die übrigen 79 kommen im Abstand von 10 ms. Der
-    Schreiber wartet auf ein Tor, damit seine Einrichtung vor der Lesefrist
-    abgeschlossen ist. Die Gegenprobe verzögert ``Thread.start`` absichtlich
-    um 250 ms. Diese Testvorbereitung darf nicht als verstrichene Netzwerkzeit
-    gelten. Gemessen wird, ob der Leser **vor der Frist etwas liefert**: Ein
-    einzelner Lesezugriff gibt bereits gelesene Stücke zurück, der gefüllte
-    Block dagegen wartet auf den ganzen angekündigten Körper.
+    Ein Byte liegt bereit; die übrigen 79 kommen im Gleichschritt mit dem Leser
+    (:class:`_Lockstep`), je Lesegriff eines und erst ab der Frist. Die Frist
+    läuft auf einer Uhr, die Lesegriffe zählt, und lässt zwanzig davon zu: Eine
+    Wandzeitfrist von 0,4 s war rot, sobald der Leser direkt nach ihrem Beginn
+    so lange stand, denn dann kam vor ihr nichts an, gleich wie gelesen wurde.
+    Die Gegenprobe verzögert ``Thread.start`` absichtlich um 250 ms; diese
+    Testvorbereitung darf nicht als verstrichene Netzwerkzeit gelten. Mit der
+    Zähluhr und dem Tor in :meth:`_Lockstep.open` gilt das durch die Bauart,
+    der zweite Fall wiederholt den Lauf also nur mit verzögertem Senderstart.
+    Gemessen wird, ob der Leser **vor der Frist etwas liefert**: Ein einzelner
+    Lesezugriff gibt bereits gelesene Stücke zurück, der gefüllte Block
+    dagegen wartet auf den ganzen angekündigten Körper, und die Frist bricht
+    ihn ab, bevor er etwas liefert.
     Der Sender taugt nicht als Maß — auf Windows nimmt der Kern Sendungen an
     ein geschlossenes Gegenüber still an —, und auch nicht, was der Abbruch
     verschluckt: Das zuletzt gelesene Stück wird in beiden Fassungen nicht mehr
@@ -742,18 +850,15 @@ def test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block(
     from app.core.http import iter_limited
 
     left, right = socket.socketpair()
+    lockstep = _Lockstep(monkeypatch, left, right, pace=0.0)
     total = 80
-    release_writer = threading.Event()
+    reads_allowed = 20
     writer_ready = threading.Event()
 
     def trickle() -> None:
         try:
             writer_ready.set()
-            if not release_writer.wait(timeout=5.0):
-                return
-            for _index in range(total - 1):
-                time.sleep(0.01)
-                right.sendall(b"x")
+            lockstep.trickle(b"x" * (total - 1))
         except OSError:
             pass
         finally:
@@ -775,36 +880,47 @@ def test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block(
     start_delay = time.monotonic() - start_requested
     if delay_writer_start:
         assert start_delay >= 0.25, "die Gegenprobe muss die Thread-Einrichtung verschieben"
-    assert writer_ready.wait(timeout=1.0), "der Schreiber muss vor der Lesefrist bereit sein"
+    assert writer_ready.wait(_HANG_SECONDS), "der Schreiber muss vor der Lesefrist bereit sein"
 
     response = http.client.HTTPResponse(left, method="GET")
-    response.begin()
-    deadline = deadline_after(0.4)
     received = bytearray()
     try:
-        release_writer.set()
+        response.begin()
+        deadline = deadline_after(reads_allowed, timer=lockstep.clock)
+        lockstep.open()
         with pytest.raises(ResponseDeadlineError):
-            for chunk in iter_limited(response, limit=100, deadline=deadline):
+            for chunk in iter_limited(response, limit=100, deadline=deadline, timer=lockstep.clock):
                 received.extend(chunk)
     finally:
-        release_writer.set()
+        lockstep.halt()
         response.close()
         left.close()
         right.close()
-        if writer.ident is not None:
-            writer.join(timeout=5.0)
+        writer.join(_HANG_SECONDS)
+    assert not writer.is_alive()
 
     assert received, "vor der Frist kam nichts an — der Leser wartete auf den ganzen Block"
     assert len(received) < total, "und die Frist galt, nicht der angekündigte Block"
 
 
 @pytest.mark.parametrize("part", ["extension", "trailer"])
-def test_chunk_metadata_cannot_restart_the_network_deadline(part: str) -> None:
-    """Auch gültige HTTP-Metadaten dürfen die absolute Frist nicht umgehen."""
+def test_chunk_metadata_cannot_restart_the_network_deadline(
+    monkeypatch: pytest.MonkeyPatch, part: str
+) -> None:
+    """Auch gültige HTTP-Metadaten dürfen die absolute Frist nicht umgehen.
+
+    Gezählt, nicht gemessen: Auf einem überlasteten Intel-Mac-Läufer riss eine
+    Wandzeitgrenze (1,96 s statt 1 s), obwohl ``_socket_deadline`` jeden
+    Lesegriff begrenzt. Ob dort beide Fäden standen oder nur der Leser, zeigt
+    die Zahl nicht; der Gleichschritt (:class:`_Lockstep`) trägt beide Fälle.
+    Die langsame Zeile kommt erst ab der Frist und je Lesegriff ein Byte.
+    Verlängerte die Metadatenzeile die Frist, käme der Abbruch erst nach ihrem
+    Zeilenende.
+    """
     import http.client
 
     left, right = socket.socketpair()
-    stop = threading.Event()
+    lockstep = _Lockstep(monkeypatch, left, right)
     prefix = b"" if part == "extension" else b"1\r\nx\r\n0\r\n"
     slow = (
         b"1;extension=abcdefghijklmnopqrst\r\nx\r\n0\r\n\r\n"
@@ -815,10 +931,7 @@ def test_chunk_metadata_cannot_restart_the_network_deadline(part: str) -> None:
     def send() -> None:
         try:
             right.sendall(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" + prefix)
-            for value in slow:
-                if stop.wait(0.02):
-                    break
-                right.sendall(bytes([value]))
+            lockstep.trickle(slow)
         except OSError:
             pass
         finally:
@@ -827,21 +940,20 @@ def test_chunk_metadata_cannot_restart_the_network_deadline(part: str) -> None:
     writer = threading.Thread(target=send, daemon=True)
     writer.start()
     response = http.client.HTTPResponse(left)
-    response.begin()
-    started = time.monotonic()
     try:
+        response.begin()
+        deadline = deadline_after(0.08)
+        lockstep.open()
         with pytest.raises(ResponseDeadlineError):
-            read_limited(response, limit=100, deadline=deadline_after(0.08))
-        elapsed = time.monotonic() - started
-        # Großzügig gegen Fremdlast; die Aussage bleibt: die Frist von 0,08 s
-        # zählt, nicht das Tempo des Senders.
-        assert elapsed < 1.0, "Metadaten haben die Gesamtfrist bis zum Zeilenende verlängert"
+            read_limited(response, limit=100, deadline=deadline)
     finally:
-        stop.set()
+        released = lockstep.halt()
         response.close()
         left.close()
-        writer.join(timeout=1.0)
+        writer.join(_HANG_SECONDS)
     assert not writer.is_alive()
+    line_end = slow.index(b"\r\n") + 2
+    assert released < line_end, "Metadaten haben die Gesamtfrist bis zum Zeilenende verlängert"
 
 
 def _loopback_pair() -> tuple[socket.socket, socket.socket]:
@@ -869,33 +981,53 @@ def _loopback_pair() -> tuple[socket.socket, socket.socket]:
     return near, far
 
 
+def _connecting_to(sock: socket.socket) -> Callable[..., socket.socket]:
+    """Ein ``socket.create_connection``, das ``sock`` liefert, samt Zeitlimit des Aufrufers.
+
+    Wie das echte: ``http.client`` reicht das Zeitlimit des Öffners nur hier
+    durch, und nur hier kommt es an den Socket. Eine Attrappe, die es
+    verwirft, ließe den Socket ohne Zeitlimit warten, und ein Test über das
+    Zeitlimit prüfte etwas, das es gar nicht gab.
+    """
+
+    def connect(_address: object, timeout: float, *_rest: object) -> socket.socket:
+        sock.settimeout(timeout)
+        return sock
+
+    return connect
+
+
 @pytest.mark.parametrize("part", ["status", "headers"])
 def test_initial_http_lines_share_the_absolute_deadline(
     monkeypatch: pytest.MonkeyPatch, part: str
 ) -> None:
-    """Die Frist beginnt vor dem ersten Antwortbyte, nicht erst am Inhalt."""
+    """Die Frist beginnt vor dem ersten Antwortbyte, nicht erst am Inhalt.
+
+    Gezählt, nicht gemessen, wie bei den Chunk-Metadaten: Das Gegenüber
+    schickt die langsame Zeile im Gleichschritt mit dem Leser
+    (:class:`_Lockstep`) und beginnt erst nach der Anfrage, also nach der
+    Frist. Hielte die Frist erst nach dem Kopfblock, käme der Abbruch erst nach
+    dem Zeilenende; hielte sie gar nicht, scheitert schon ``pytest.raises``.
+    """
     from app.core import http
 
     left, right = _loopback_pair()
-    stop = threading.Event()
+    lockstep = _Lockstep(monkeypatch, left, right)
     monkeypatch.setattr(http, "resolve_public_addresses", lambda *_args, **_kwargs: ("8.8.8.8",))
     monkeypatch.setattr(http, "verify_public_peer", lambda *_args: None)
-    monkeypatch.setattr(socket, "create_connection", lambda *_args, **_kwargs: left)
+    monkeypatch.setattr(socket, "create_connection", _connecting_to(left))
+    payload = (
+        b"HTTP/1.1 200 Long Reason Phrase\r\nContent-Length: 0\r\n\r\n"
+        if part == "status"
+        else b"X-Header: abcdefghijklmnopqrst\r\nContent-Length: 0\r\n\r\n"
+    )
 
     def send() -> None:
         try:
             right.recv(4096)
             if part == "headers":
                 right.sendall(b"HTTP/1.1 200 OK\r\n")
-            payload = (
-                b"HTTP/1.1 200 Long Reason Phrase\r\nContent-Length: 0\r\n\r\n"
-                if part == "status"
-                else b"X-Header: abcdefghijklmnopqrst\r\nContent-Length: 0\r\n\r\n"
-            )
-            for value in payload:
-                if stop.wait(0.02):
-                    break
-                right.sendall(bytes([value]))
+            lockstep.trickle(payload)
         except OSError:
             pass
         finally:
@@ -903,16 +1035,19 @@ def test_initial_http_lines_share_the_absolute_deadline(
 
     writer = threading.Thread(target=send, daemon=True)
     writer.start()
-    started = time.monotonic()
     try:
+        lockstep.open()
         with pytest.raises(ResponseDeadlineError):
             http.open_public_url("http://example.org/model", deadline=deadline_after(0.08))
-        assert time.monotonic() - started < 0.30
     finally:
-        stop.set()
+        released = lockstep.halt()
         left.close()
-        writer.join(timeout=1.0)
+        writer.join(_HANG_SECONDS)
     assert not writer.is_alive()
+    line_end = payload.index(b"\r\n") + 2
+    assert released < line_end, (
+        "die langsame Antwortzeile hat die Gesamtfrist bis zu ihrem Ende verlängert"
+    )
 
 
 @pytest.mark.parametrize("with_deadline", [True, False])
@@ -927,32 +1062,32 @@ def test_an_opener_puts_its_headers_under_the_same_deadline(
     beliebig lange offen — und die Frist, die der Aufrufer daneben gebildet
     hat, greift erst am Rumpf.
 
-    **Der zweite Parameterwert ist die Gegenprobe, und sie fiel deutlicher aus
-    als erwartet.** Ohne ``apply_header_deadline`` läuft derselbe Aufruf nicht
-    etwa in ein späteres Zeitlimit — er **gelingt**: Statuszeile und Kopfzeilen
-    brauchen eine volle Sekunde, das Zeitlimit steht auf zweihundert
-    Millisekunden, und die Antwort kommt trotzdem mit 200 zurück. Weil jede
-    einzelne Leseoperation innerhalb dieser Frist bleibt, ist das Zeitlimit
-    nie verletzt. Genau darum ist es keine Gesamtfrist.
+    Gezählt, nicht gemessen: Die Kopfzeile kommt im Gleichschritt mit dem
+    Leser (:class:`_Lockstep`) und erst nach der Anfrage, also nach der Frist.
+    Hielte die Frist erst nach dem Kopfblock, käme der Abbruch erst nach dem
+    Zeilenende.
 
-    **Warum zweihundert und nicht fünfzig:** Die Gegenstelle schickt ein Byte
-    alle zwanzig Millisekunden. Bei fünfzig blieben je Lesevorgang dreißig
-    Millisekunden Reserve — dreiundfünfzigmal hintereinander, und unter einer
-    zweiten Testsuite daneben reißt eine davon. Der Test wäre dann rot aus
-    einem Grund, der mit der Sache nichts zu tun hat.
+    **Der zweite Parameterwert ist die Gegenprobe.** Ohne
+    ``apply_header_deadline`` läuft derselbe Aufruf nicht etwa in ein späteres
+    Zeitlimit, er **gelingt**: Jedes Byte der Kopfzeilen kam einzeln und
+    frühestens 20 ms nach dem vorigen (``pace`` von :class:`_Lockstep`),
+    zusammen ein Vielfaches der Frist des ersten Zweigs. Das Zeitlimit
+    (:data:`_HANG_SECONDS`) steht dabei wirklich am Socket
+    (:func:`_connecting_to`). Im ersten Zweig entscheidet die Frist, im zweiten
+    ist es nur Hängerschutz. Dass es die Frist auch dann nicht verlängert, wenn
+    das Gegenüber ganz schweigt, prüft
+    :func:`test_a_silent_peer_cannot_hold_the_headers_until_the_read_timeout`.
     """
     left, right = _loopback_pair()
-    stop = threading.Event()
-    monkeypatch.setattr(socket, "create_connection", lambda *_args, **_kwargs: left)
+    lockstep = _Lockstep(monkeypatch, left, right)
+    monkeypatch.setattr(socket, "create_connection", _connecting_to(left))
+    payload = b"X-Header: abcdefghijklmnopqrst\r\nContent-Length: 0\r\n\r\n"
 
     def send() -> None:
         try:
             right.recv(4096)
             right.sendall(b"HTTP/1.1 200 OK\r\n")
-            for value in b"X-Header: abcdefghijklmnopqrst\r\nContent-Length: 0\r\n\r\n":
-                if stop.wait(0.02):
-                    break
-                right.sendall(bytes([value]))
+            lockstep.trickle(payload)
         except OSError:
             pass
         finally:
@@ -964,23 +1099,81 @@ def test_an_opener_puts_its_headers_under_the_same_deadline(
     if with_deadline:
         apply_header_deadline(opener, deadline_after(0.08))
     request = urllib.request.Request("http://example.org/version.json")
-    started = time.monotonic()
     try:
+        lockstep.open()
         if with_deadline:
             with pytest.raises(ResponseDeadlineError):
-                opener.open(request, timeout=5.0)
-            assert time.monotonic() - started < 0.30
+                opener.open(request, timeout=_HANG_SECONDS)
         else:
-            with opener.open(request, timeout=0.2) as answer:
+            with opener.open(request, timeout=_HANG_SECONDS) as answer:
                 assert answer.status == 200
-            # Eine Sekunde für die Kopfzeilen, zweihundert Millisekunden
-            # Zeitlimit, und die Antwort kommt durch: Es gilt je Leseoperation.
-            assert time.monotonic() - started > 0.30
+    finally:
+        released = lockstep.halt()
+        left.close()
+        writer.join(_HANG_SECONDS)
+    assert not writer.is_alive()
+    if with_deadline:
+        line_end = payload.index(b"\r\n") + 2
+        assert released < line_end, "die Kopfzeile hat die Gesamtfrist bis zu ihrem Ende verlängert"
+    else:
+        assert released == len(payload), "ohne Frist kam die Antwort erst nach der letzten Zeile"
+
+
+def test_a_silent_peer_cannot_hold_the_headers_until_the_read_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Jeder Lesegriff unter der Kopfzeilenfrist wartet höchstens die Restfrist.
+
+    Die Frist vor dem Lesegriff zu prüfen genügt nicht: Ein Lesegriff, der bei
+    offener Frist beginnt, wartet sonst so lange, wie der Socket es erlaubt.
+    Am Öffner ist das sein Zeitlimit je Leseoperation, im Betrieb dreißig
+    Sekunden, und ein Gegenüber, das nach der Anfrage schweigt, hielte die
+    Kopfzeilen so weit über die Frist hinaus offen. Deshalb setzt
+    ``_socket_deadline`` vor jedem Netzgriff die Restfrist am Socket.
+
+    Beobachtet wird eine Marke, nicht die Uhr: Das Gegenüber schweigt
+    :data:`_HANG_SECONDS` lang, länger als die Frist und halb so lang wie das
+    Zeitlimit am Socket, und schickt erst dann ein spätes Byte. Endet der
+    Lesegriff an der Frist, hält der Test den Sender an, bevor es geht. Erbt
+    er das Zeitlimit, wartet er auf das späte Byte, und erst die Prüfung vor
+    dem nächsten Lesegriff bricht ab. Sonst wird der Test nur rot, wenn der
+    Leser so lange nicht zurückkommt; die Meldung nennt beide Ursachen.
+    """
+    left, right = _loopback_pair()
+    stop = threading.Event()
+    late_sent = threading.Event()
+    monkeypatch.setattr(socket, "create_connection", _connecting_to(left))
+
+    def send() -> None:
+        try:
+            right.recv(4096)
+            if stop.wait(_HANG_SECONDS):
+                return
+            late_sent.set()
+            right.sendall(b"H")
+        except OSError:
+            pass
+        finally:
+            right.close()
+
+    writer = threading.Thread(target=send, daemon=True)
+    writer.start()
+    opener = urllib.request.build_opener(RejectRedirects())
+    apply_header_deadline(opener, deadline_after(0.08))
+    request = urllib.request.Request("http://example.org/version.json")
+    try:
+        with pytest.raises(ResponseDeadlineError):
+            opener.open(request, timeout=2 * _HANG_SECONDS)
     finally:
         stop.set()
+        late = late_sent.is_set()
         left.close()
-        writer.join(timeout=1.0)
+        writer.join(_HANG_SECONDS)
     assert not writer.is_alive()
+    assert not late, (
+        "der Lesegriff wartete über die Frist hinaus auf das Zeitlimit des Sockets"
+        f" (oder der Leser stand {_HANG_SECONDS:.0f} s lang)"
+    )
 
 
 @pytest.mark.parametrize(
