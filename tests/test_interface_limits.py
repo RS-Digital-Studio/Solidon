@@ -904,6 +904,23 @@ def test_the_shortcut_list_names_the_key_of_the_function_search(window: MainWind
     assert (tr("Funktion suchen"), expected) in rows
 
 
+def test_the_shortcut_list_names_every_row_once(window: MainWindow) -> None:
+    """Jede Zeile der Kürzelübersicht steht einmal.
+
+    Die Werkzeuge der oberen Leiste (*Formen*, *Skelett*, *Zeichnen*) kamen am
+    08.10.2026 aus zwei Sitzungen zugleich in die Übersicht — zwei Schleifen
+    über dieselbe Leiste, und weil die Leiste „Werkzeuge“ heißt, stand jede
+    Zeile zweimal gleich da.
+    """
+    from collections import Counter
+
+    from app.ui.shortcuts_window import entries
+
+    found = entries(window.menuBar(), window)
+    twice = sorted(row for row, count in Counter(found).items() if count > 1)
+    assert not twice, f"doppelt in der Kürzelübersicht: {twice}"
+
+
 # --- die zweite Kürzelbelegung (Konzept P15 §7 Etappe 8, E7) --------------------
 
 

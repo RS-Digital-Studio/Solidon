@@ -122,8 +122,11 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
             found.append((strip_title(), _plain(str(tool.title)), _native(tool.shortcut)))
     toolbar = getattr(window, "toolbar", None)
     if toolbar is not None:
-        # Die Werkzeuge der oberen Leiste (*Formen*, *Skelett*) stehen in
-        # keinem Menü und tragen ihr Kürzel selbst (RM-561).
+        # Die Werkzeuge der oberen Leiste (*Formen*, *Skelett*, *Zeichnen*)
+        # stehen in keinem Menü und tragen ihr Kürzel selbst (RM-561) — ohne
+        # diese Zeilen fände man Strg+Umschalt+E nur im Tooltip. **Eine
+        # Schleife:** Zwei, die am selben Tag entstanden, nannten jede Zeile
+        # zweimal.
         heading = _plain(toolbar.windowTitle())
         for action in toolbar.actions():
             if not action.shortcut().isEmpty():
@@ -137,13 +140,6 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
     search = getattr(window, "search_action", None)
     if isinstance(search, QAction) and not search.shortcut().isEmpty():
         found.append((tr("Fenster"), _plain(search.text()), _native(search.shortcut().toString())))
-    # **Und die Werkzeuge der oberen Leiste** (RM-561): je eines ein Kürzel,
-    # an keinem Menüeintrag — sonst fände man Strg+Umschalt+E nur im Tooltip.
-    toolbar = getattr(window, "toolbar", None)
-    for action in toolbar.actions() if toolbar is not None else ():
-        sequence = action.shortcut()
-        if not sequence.isEmpty():
-            found.append((tr("Werkzeuge"), _plain(action.text()), _native(sequence.toString())))
     found.extend(_drawing_keys())
     return found
 
