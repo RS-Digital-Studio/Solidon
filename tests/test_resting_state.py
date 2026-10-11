@@ -294,6 +294,12 @@ def test_at_rest_only_one_element_carries_the_accent(
         # test_reading_a_model_leaves_the_report_in_front``); gemessen wird
         # der Reiter *Auswahl*, wie ihn der Kunde mit einem Klick öffnet.
         assert window.report.isVisible(), "nach dem Einlesen steht der Bericht vorn"
+        # So sieht ihn der Kunde zuerst: Der Katalogknopf liegt hinter dem
+        # Reiter, und nichts leuchtet (*An den Slicer übergeben …* ist halbfett,
+        # nicht farbig).
+        assert accent_elements(window, theme) == [], (
+            "mit dem Bericht vorn trägt nichts die Akzentfarbe"
+        )
         window.right.setCurrentWidget(window.feature_dock)
         _settle(window, 20)
         assert catalog.isVisible(), "ohne Auswahl steht Bausteinkatalog … im Reiter Auswahl"

@@ -359,7 +359,8 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 "viewport",
             ),
             # **Unten der Knopf, nicht die Klappe**: An einer Fläche steht über
-            # der Liste die Abschnittsklappe *Bausteine* (Deckel, Dichtnut); der
+            # der Liste die Abschnittsklappe *Bausteine* (*Deckel erzeugen*,
+            # *Drehdeckel erzeugen*); der
             # Knopf zum Katalog heißt deshalb wie im Menü *Bausteinkatalog …*.
             step(
                 _("Rechts unter *Auswahl*: Klicken Sie unten auf *Bausteinkatalog …*."),
@@ -715,8 +716,8 @@ GUIDES: Final[tuple[Guide, ...]] = (
             # erst über *Neues Projekt* (Prüfung am Fenster, 11.10.2026).
             step(
                 _(
-                    "Oben in der Werkzeugleiste: Klicken Sie auf *Zeichnen*. "
-                    "Vom Startbildschirm aus erst auf *Neues Projekt*."
+                    "Vom Startbildschirm aus klicken Sie zuerst auf *Neues Projekt*, "
+                    "dann oben in der Werkzeugleiste auf *Zeichnen*."
                 ),
                 "toolbar.draw",
             ),

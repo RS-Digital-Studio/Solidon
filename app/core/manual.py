@@ -254,8 +254,8 @@ def _where_to_start_page() -> Page:
                 "Filamentlager als eigene Spulen. Auf dem Startbildschirm führen vier Touren "
                 "durch Modellanpassung, Konstruktion, erzeugte Modelle und freies Formen. "
                 "Solange die Szene leer ist, zeigt der Arbeitsbereich die Einstiege: Quader, "
-                "Zylinder, *Zeichnen*, *Bausteine* und mit KI-Zugang *Im Chat beschreiben*; "
-                "eine Datei ziehen Sie einfach hinein."
+                "Zylinder, *Zeichnen*, *Bausteinkatalog …* und mit KI-Zugang "
+                "*Im Chat beschreiben*; eine Datei ziehen Sie einfach hinein."
             )
         ),
         "![](figure:start-screen)",
@@ -1205,7 +1205,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Schritt für Schritt zeigt es [Ein Modell prüfen und "
             "drucken](manual:print-a-model). Beim ersten Mal steht davor der Hinweis "
             "*Druckeinstellungen und Verantwortung*. Er sagt, woher die Werte kommen, und "
-            "*Verstanden* führt zum Dialog.\n"
+            "*Verstanden* führt zum Dialog. Der Haken *Werte mitgeben*, dort und im "
+            "Druckdialog, entscheidet, ob 3MF-Datei und Übergabe Solidons Druckwerte "
+            "mitnehmen oder der Slicer seine eigenen nimmt.\n"
             "\n"
             "**Oben fragt der Dialog in der Folge, in der eins vom anderen abhängt:** Slicer, "
             "Drucker, Düse, Platte, Filamente und Qualität. Den Drucker ändern Sie auch in der "

@@ -939,14 +939,15 @@ def test_a_button_wraps_its_label_instead_of_cutting_it(qt_app: QApplication) ->
     rechnet die Prüfbreiten daraus aus, statt eine Bildpunktzahl zu behaupten.
 
     **Der Umbruch wird am Knopf erzwungen, nicht über die Kartenbreite.** Die
-    Karte wird nie schmaler als ihr breitestes ungebrochenes Element
-    (*Passende Bausteine …*). Unter Windows offscreen ist die Ersatzschrift so
-    breit, dass der Titel dort trotzdem nicht passte; unter Linux und macOS
-    rechnet offscreen mit der echten Schrift, und dort passt er in die
-    schmalste Karte — ein Umbruch wäre falsch. Zugesichert wird deshalb auf
-    jeder Plattform dasselbe: An der schmalsten Karte ist keine Zeile
-    beschnitten, und auf einen Platz, der nur das längste Wort fasst, bricht
-    der Titel vollständig in zwei Zeilen um.
+    Karte wird nie schmaler als ihr breitestes ungebrochenes Element (der
+    Katalogknopf, *Bausteinkatalog …* oder *Passende Bausteine …*). Unter
+    Windows offscreen ist die Ersatzschrift so breit, dass der Titel dort
+    trotzdem nicht passte; unter Linux und macOS rechnet offscreen mit der
+    echten Schrift, und dort passt er in die schmalste Karte — ein Umbruch
+    wäre falsch. Zugesichert wird deshalb auf jeder Plattform dasselbe: An
+    der schmalsten Karte ist keine Zeile beschnitten, und auf einen Platz,
+    der nur das längste Wort fasst, bricht der Titel vollständig in zwei
+    Zeilen um.
     """
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
@@ -1154,7 +1155,7 @@ def test_the_groups_follow_the_menu_bar_in_every_language(qt_app: QApplication) 
 def test_a_hole_offers_the_matching_parts(qt_app: QApplication) -> None:
     """RM-506 (Robert, 05.10.2026): An einer Bohrung *Passende Bausteine …*.
 
-    Derselbe Knopf wie *Bausteine*, aber er öffnet den Katalog gefiltert auf
+    Derselbe Knopf wie *Bausteinkatalog …*, aber er öffnet den Katalog gefiltert auf
     das, was dort ansetzt; an einer Kante steht er weiter nicht.
     """
     from app.i18n import tr

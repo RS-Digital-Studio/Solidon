@@ -3557,12 +3557,48 @@ def test_reading_a_model_leaves_the_report_in_front(window: MainWindow) -> None:
     QApplication.processEvents()
 
     assert window.object_tree.selected() is None, "nach dem Einlesen ist nichts gewählt"
-    assert all(value is None for value in seen), f"keine Zwischenauswahl: {seen}"
+    # Je Auswertung eine leere Meldung (Bild vor der Erkennung, dann das
+    # Ergebnis), nie eine Zwischenauswahl — und nicht keine: An ihr hängt die
+    # Schichtansicht ohne Auswahl (Review Handbuch A, M1).
+    assert seen and set(seen) == {None}, f"leere Meldungen, keine Zwischenauswahl: {seen}"
     assert not window.feature_dock.is_current(), "der Prüfbericht bleibt vorn"
     first = window.object_tree.tree.topLevelItem(0)
     assert first is not None and window.object_tree.tree.currentItem() is first, (
         "die Tastatur hat weiter ihren Anfang in der ersten Zeile"
     )
+
+
+def test_the_layer_view_without_a_selection_survives_a_recalculation(window: MainWindow) -> None:
+    """Ein Körper, nichts gewählt, *Schichten* offen: Nach dem Neurechnen steht die Schicht wieder.
+
+    ``_show_scene`` räumt die Schicht bei jeder Auswertung ab; zurück kommt sie
+    über die leere Meldung des Baums (``ObjectTree._restore``) und
+    ``MainWindow._on_layer_changed``. Meldete der Baum ohne Auswahl gar nichts,
+    stand der Regler nach einer Maßänderung oder Strg+Z auf null (Review
+    Handbuch A, M1).
+    """
+
+    def _wait_for_slice(window: MainWindow) -> None:
+        worker = window._slice_worker
+        if worker is not None:
+            assert worker.wait(20_000), "die Schichtanalyse muss fertig werden"
+        QApplication.processEvents()
+
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+    assert window.object_tree.selected() is None, "der Fall heißt: ohne Auswahl"
+    window.tools.activate("layers")
+    _wait_for_slice(window)
+    assert window.layer_bar.slider.maximum() > 0, "ohne diesen Ausgang prüft der Test nichts"
+
+    window.session.evaluate_async()
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+    _wait_for_slice(window)
+
+    assert window.layer_bar.slider.maximum() > 0, "der Regler hat nach dem Neurechnen Schichten"
+    assert window.viewport._layer is not None, "und die Schicht steht wieder im Bild"
 
 
 def _close_the_feature_window(window: MainWindow) -> None:
@@ -3965,7 +4001,7 @@ def test_a_face_offers_the_catalogue_from_the_panel(
     """Der Katalog aus der Fläche heraus — derselbe wie aus dem Objektbaum.
 
     Ein zweiter Weg dorthin, kein zweiter Katalog: Beide Signale hängen am
-    selben Empfänger. **An der Fläche trägt ihn der Hauptknopf *Bausteine* der
+    selben Empfänger. **An der Fläche trägt ihn der Hauptknopf *Bausteinkatalog …* der
     Karte** (RM-510): Ein zweiter Knopf mit demselben Ziel im Merkmalfenster
     darüber wäre eine Frage ohne Antwort; dort steht das Zeichnen.
     """
@@ -19311,7 +19347,7 @@ def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) ->
 
     **Der Weg ist seit dem 11.09.2026 der Hauptknopf rechts**, nicht mehr eine
     Zeile im Kontextmenü: Das trägt keine Operationen mehr, und der Knopf
-    *Bausteine* steht in Akzentfarbe unter der Karte der Handlungen — an
+    *Bausteinkatalog …* steht in Akzentfarbe unter der Karte der Handlungen — an
     Körper und Fläche, ein Klick.
     """
     from PySide6.QtWidgets import QMenu

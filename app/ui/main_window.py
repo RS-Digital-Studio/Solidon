@@ -18866,7 +18866,7 @@ class MainWindow(QMainWindow):
         """Ein Erzeugerschritt wählt seinen neuen Körper (RM-356).
 
         Nach *Quader anlegen* war nichts gewählt: Das Auswahlfenster bot
-        *Bausteine*, und im Katalog standen alle Flächenbausteine gesperrt mit
+        nur den Katalogknopf, und im Katalog standen alle Flächenbausteine gesperrt mit
         „Wählen Sie zuerst ein Objekt im Objektbaum.“ — obwohl es genau einen
         Körper gab. Gemerkt werden die Ausgaben der neuen Schritte, deren
         Operation nichts verbraucht; ein Schritt über die ganze Szene

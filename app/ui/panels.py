@@ -2764,7 +2764,6 @@ class ObjectTree(QWidget):
             # **Nie still zum Körper** (RM-537): Gewählt war ein Merkmal, und
             # nach der Entf-Taste wäre sonst der ganze Körper fort.
             self._restore((), None)
-            self._on_selection()
         else:
             self._restore(selected, selected_feature)
         self.lost_selection = tuple(
@@ -2928,6 +2927,12 @@ class ObjectTree(QWidget):
             first = self.tree.topLevelItem(0)
             if first is not None and self.tree.currentItem() is None:
                 self.tree.setCurrentItem(first, 0, QItemSelectionModel.SelectionFlag.NoUpdate)
+            # **Gemeldet wird trotzdem, einmal und leer** (``show_scene``): An
+            # der Meldung hängen Empfänger, die nach jeder Auswertung neu
+            # rechnen, etwa die Schichtansicht ohne Auswahl
+            # (``MainWindow._on_layer_changed``). Ohne sie stand der Regler nach
+            # einer Maßänderung auf null (Review Handbuch A, M1).
+            self._on_selection()
             return
         wanted = set(objects)
         self._order = list(objects)
