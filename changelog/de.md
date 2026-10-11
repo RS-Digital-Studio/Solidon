@@ -182,7 +182,7 @@ Nutzen da und sonst nichts.
 - Beim Spiegeln liegt die Ebene dort, wo der Körper sich selbst gleicht, auch wenn ein Teil weit zur Seite ragt.
 - Formen folgt der Maus flüssig, und auch ein Schritt mit hunderten Pinselzügen ist schnell gerechnet.
 - Mit *Weich verschmelzen* entsteht ein gleichmäßiges Netz mit kaum noch schmalen Splittern. Ein Teil auf dem Druckbett reicht nicht mehr darunter.
-- Mit *Dreiecke angleichen* ist keine Kante länger als verlangt, und auf ebenen Flächen bleiben weniger schmale Splitter stehen. Die Form ändert sich dabei nicht.
+- Mit *Dreiecke angleichen* ist keine Kante länger als verlangt, die Form bleibt gleich. Bei gleicher Kante entstehen oft fast doppelt so viele Dreiecke; eine längere Kante hält die alte Dichte.
 - Im *Skelett* setzt jeder Klick nach dem ersten einen Knochen, Enter beendet die Kette, Ziehen an einem Gelenk beugt, und *Fertig* legt alles ohne Dialog ab.
 - Ein Skelett beugt nur, was an seinen Knochen hängt, der Rest des Körpers bleibt stehen. Ältere Projekte rechnen wie gespeichert.
 - Mit Strg oder Umschalt wählen Sie mehrere Kanten und verrunden oder fasen sie in einem Schritt. Ein Klick auf eine Ecke wählt alle Kanten, die dort zusammenlaufen.

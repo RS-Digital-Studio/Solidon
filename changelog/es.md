@@ -158,7 +158,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al reflejar, el plano queda donde el cuerpo coincide consigo mismo, aunque una parte sobresalga mucho hacia un lado.
 - Modelar sigue al ratón con fluidez, y hasta un paso con cientos de trazos de pincel se calcula rápido.
 - Con *Fusionar suavemente* la malla sale uniforme, casi sin astillas finas. Una pieza sobre la placa de impresión ya no queda por debajo.
-- Con *Igualar los triángulos* ninguna arista supera la longitud indicada y en las superficies planas quedan menos astillas finas. La forma no cambia.
+- Con *Igualar los triángulos* ninguna arista supera la longitud indicada y la forma no cambia. La misma arista da a menudo casi el doble de triángulos; una más larga mantiene la densidad anterior.
 - En *Esqueleto*, cada clic después del primero pone un hueso, Intro termina la cadena, arrastrar una articulación la dobla y *Terminado* lo guarda todo sin diálogo.
 - Un esqueleto solo dobla lo que cuelga de sus huesos, y el resto del cuerpo se queda quieto. Los proyectos anteriores se calculan como se guardaron.
 - Con Ctrl o Mayús selecciona varias aristas y las redondea o achaflana en un solo paso. Un clic en una esquina selecciona todas las aristas que se juntan allí.

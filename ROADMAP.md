@@ -3729,7 +3729,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-763 — Die Beule der weichen Mischung nur, wo Flächen unter einem Winkel zusammenlaufen.**
   Rest aus Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (H2 b, N1): *Weich verschmelzen* hebt das
   Feld, wo beide Felder gleich sind, um bis zu ein Viertel des Übergangs. Seit Review F ist nur
-  nach unten begrenzt (`blend._above_the_floor`); über bündigen Deckeln und Seiten bleibt die Beule
+  nach unten begrenzt, auf die Bettebene oder die unterste Höhe der Eingänge, wenn sie darunter
+  reichen (`blend._above_the_floor`, Nachprüfung N2); über bündigen Deckeln und Seiten bleibt die Beule
   wie bis v0.5.3, und zwei um 30° gekippte bündige Quader 40 × 30 × 10 reichten (mit der Begrenzung
   auf den Hüllquader gemessen) 0,75 mm über ihre Deckel- und unter ihre Bodenebene, 15 883 statt
   14 400 mm³. Vorschlag: den Anteil der Beule aus dem Winkel zwischen den Richtungen zum nächsten
@@ -3764,10 +3765,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-767 — An CAD-Netzen mit Facettenstreifen und Nadelfächern bleibt das Angleichen splittrig.**
   Offener Punkt 2 aus Paket F (RM-671): Facettenstreifen und Nadelfächer lassen sich ohne neue
-  Punkte nicht formtreu aufräumen. In schmalen und sehr feinen Ebenen räumt das Angleichen
-  deshalb nicht auf (`EVEN_NARROW`, `EVEN_FINEST`) und lässt am CAD-Besenhalter aus
-  `F:\3D Dateien` 89 %, am Würfel W6 83 % Splitter. Vorschlag: je Ebene neu vernetzen
-  (eingeschränktes Delaunay mit Innenpunkten).
+  Punkte nicht formtreu aufräumen. Seit dem Umbau nach Review F räumt das Angleichen gar nicht
+  mehr auf, es teilt nach dem Kern nur, was zu lang ist: Tauschen in der Ebene und Zusammenlegen
+  änderten an den Abnahmefällen von RM-671 kaum etwas und kosteten an CAD-Netzen das Drei- bis
+  Fünffache der Zeit. Am CAD-Besenhalter aus `F:\3D Dateien` blieben schon mit dem Aufräumen
+  89 %, am Würfel W6 83 % Splitter. Vorschlag: je Ebene neu vernetzen (eingeschränktes Delaunay
+  mit Innenpunkten), in der Laufzeit des Teilens.
   **Abnahme:** Splitter unter 5 % an Besenhalter und Würfel W6, Volumen und Fläche gleich,
   druckgleich an Korpus und Beispielprojekten.
 
@@ -3777,9 +3780,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (Rest von M3): `blend.distance_field` rechnet den
   Abstand zu den Dreiecken der acht nächsten Stützpunkte. Fehlt das nächste darunter — an
   CAD-Netzen mit Nadelfächern —, misst es zu weit: am Besenhalter bis 0,19 mm, 2 913 von 351 120
-  Punkten im Band, eines mit falschem Vorzeichen (das Ebenenfeld davor bis 1,81 mm). Vorschlag:
-  je Zeile prüfen, ob der k-te Stützpunkt weiter liegt als bester Abstand plus größter Abstand
-  Stückmitte–Ecke, sonst mit doppeltem k neu fragen (wie die Bänder in `mesh.on_surface`).
+  Punkten im Band, eines mit falschem Vorzeichen (das Ebenenfeld davor bis 1,81 mm). Die Prüfung
+  je Zeile, ob der k-te Stützpunkt weiter liegt als bester Abstand plus größter Abstand
+  Stückmitte–Ecke, sonst mit doppeltem k neu fragen (wie die Bänder in `mesh.on_surface`),
+  kostete im Umbau von Paket F an den gekreuzten Rohren aus §31 25,4 statt 1,1 s, obwohl das
+  Feld seither nur im Band genau rechnet: Weiter von der Fläche braucht der Nachweis über
+  Stützpunkte immer mehr von ihnen. Vorschlag: die Bewerber über Stücke statt über Stützpunkte
+  (ein Baum über die Hüllkugeln der Stücke), nur für die Zeilen im Band.
   **Abnahme:** Test gegen `on_surface` an `plate_holes` (Review 1: 281 Abweichungen im Band) und am
   Besenhalter, Gegenprobe am Stand davor rot, `cache_version` von `blend_union`, druckgleich an
   den Beispielprojekten außer *Figur formen*.
