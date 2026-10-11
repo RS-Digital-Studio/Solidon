@@ -90,6 +90,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Onde os suportes sob pequenas saliências assentam no modelo, o Solidon sugere suportes em árvore. Aí deixam menos marcas.
 - Em pontas pequenas, o Solidon sugere uma *Velocidade mínima ao abrandar* mais baixa para que não amoleçam. A definição chega a qualquer slicer.
 - Os rebordos estreitos que se sustentam sozinhos ficam livres com *Rebordos sem suporte*. Assim a impressão precisa de bem menos suporte.
+- Os arcos de volta perfeita e ogivais sustentam-se sozinhos, e o Solidon deixa de pedir suportes aí. Os tetos quase planos mantêm os seus.
 - Os suportes saem com mais facilidade: a distância segue o material e a altura de camada de cada peça, também com vários materiais numa placa. A camada de separação segue a superfície acima.
 - Se um suporte assenta na peça, o Solidon sugere também uma camada de separação por baixo, para que o seu pé não deixe marcas. Com suportes em árvore, só nos slicers que a imprimem aí.
 - Com suportes em árvore e junto a uma torre de purga, o Solidon propõe a distância do suporte em camadas inteiras, tal como o slicer a imprime.

@@ -91,6 +91,7 @@ dans `website/version.json`.
 - Là où les supports sous de petits surplombs reposent sur le modèle, Solidon propose des supports arborescents. Ils y laissent moins de traces.
 - Pour les petites pointes, Solidon propose une *Vitesse minimale de ralentissement* plus basse afin qu'elles ne ramollissent pas. Le réglage parvient à chaque slicer.
 - Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
+- Les arcs en plein cintre et brisés se portent seuls, et Solidon n'y demande plus de supports. Les plafonds presque plats gardent les leurs.
 - Les supports se retirent plus facilement : l'espace suit le matériau et la hauteur de couche de chaque pièce, même avec plusieurs matériaux sur un plateau. L'interface suit la surface au-dessus.
 - Quand un support repose sur la pièce, Solidon propose aussi une couche d'interface en dessous pour que son pied ne laisse pas de traces. Sous les supports arborescents, si le slicer l'y imprime.
 - Sous les supports arborescents et à côté d'une tour de purge, Solidon propose l'espace du support en couches entières, comme le slicer l'imprime.

@@ -50,6 +50,7 @@ from app.core.slice.analysis import (
     channel_pieces,
     channel_space,
     free_form_share,
+    hanging_vaults,
     island_layers,
     kept_overhang,
     largest_overhang_patch,
@@ -69,6 +70,7 @@ from app.core.slice.analysis import (
     thinnest_spot,
     tip_islands,
     total_overhang,
+    vaults,
     worth_support,
 )
 from app.core.types import (
@@ -926,12 +928,12 @@ class SupportNeed:
     """Höhen, auf denen eine Kontur in der Luft beginnt."""
     model: ModelSupport
     overhang: float
-    """Überhang in mm² ohne Kanaldecken und Ränder."""
+    """Überhang in mm² ohne Kanaldecken, Ränder und Bogenstreifen."""
     patch: float
     """Das größte Feld in mm²: das größte Stück oder eine schräge Decke als Feld,
-    ohne Kanaldecken und Ränder."""
+    ohne Kanaldecken, Ränder und Bogenstreifen."""
     piece: float = 0.0
-    """Das größte einzelne Stück in mm², ohne Kanaldecken und Ränder — über
+    """Das größte einzelne Stück in mm², ohne Kanaldecken, Ränder und Bogenstreifen — über
     ``OVERHANG_LAYER_WORTH_SUPPORT`` eine flache Decke."""
     tips: int = 0
     """Inseln, deren Baumspitze keine Trennschicht bekommt (:func:`tip_islands`)."""
@@ -986,8 +988,14 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # dieselbe Antwort aus dem Merker liest. Beide sind abbrechbar; die
     # Kanalfrage kostete am Drachen (45°) 446 s CPU ohne Abbruch.
     edges = ledges(result, cancelled=cancelled) if asked else frozenset()
+    # **Und kein Bogenstreifen, der sich selbst trägt** (RM-585,
+    # :func:`vaults`): Am Eiffelturm verlangten die Bögen unten als Feld von
+    # 360 mm² Stützen. Ihre Streifen zählen nicht zur Fläche. Eine Pult-,
+    # Sattel- oder Flachbogendecke kragt Schicht für Schicht weiter, als sie
+    # trägt, und bleibt ein Feld.
+    arches = vaults(result, cancelled=cancelled) if asked else frozenset()
     model = model_support(result, cancelled=cancelled) if asked else ModelSupport()
-    quiet = model.channels | edges
+    quiet = model.channels | edges | arches
     overhang = total_overhang(result, without=quiet)
     piece = largest_overhang_patch(result, without=quiet)
     patch = _largest_field(result, overhang, piece, without=quiet)
@@ -1014,8 +1022,16 @@ def support_need(result: SliceResult, *, cancelled: CancelToken | None = None) -
     # darin dieselbe Decke wie beim Deckel. Gefragt wird deshalb das größte
     # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
     # Stege fängt die Brückenregel darunter weiter ab.
+    #
+    # **Die Brückenregel gilt für Bogenstreifen zwischen zwei Auflagen**, nicht
+    # für die, die an einer Seite hängen (:func:`hanging_vaults`): Ihre
+    # Brückenweite ist die Diagonale, und ein Rundbogen in einer 16 mm tiefen
+    # Wand verlangte Stützen für eine Decke von 16 mm (Review RM-585). Ob sie
+    # sich tragen, hat die Bogenfrage schon beantwortet.
+    hanging = hanging_vaults(result, cancelled=cancelled) if asked else frozenset()
+    bridging = model.channels | edges | hanging
     return SupportNeed(
-        needed=_may_need_support(result, islands, overhang, patch, quiet, cancelled),
+        needed=_may_need_support(result, islands, overhang, patch, bridging, cancelled),
         islands=islands,
         model=model,
         overhang=overhang,
@@ -3412,6 +3428,19 @@ def _from_spans(result: SliceResult, cancelled: CancelToken | None = None) -> li
     edges = ledges(result, asked, cancelled=cancelled)
     widths = {index: span_beside(result, index, edges, cancelled=cancelled) for index in spanning}
     spanning = [index for index in spanning if widths[index] > SPAN_INTERESTING]
+    if spanning:
+        # Ebenso kein Bogenstreifen, der an einer Seite hängt (:func:`hanging_vaults`,
+        # Review RM-585): Seine Brückenweite ist die Diagonale, praktisch die
+        # Wandtiefe, und ein Rundbogen in einer 16 mm tiefen Wand meldete eine
+        # Decke von 16 mm. Gefragt erst nach den Rändern und nur, wo dann noch
+        # eine Schicht spannt — die Bogenfrage kostet die Schließfrage ihrer
+        # Decke —, mit derselben Auswahl wie die Randfrage, deren Antwort gemerkt
+        # ist.
+        edges = edges | hanging_vaults(result, asked, cancelled=cancelled)
+        widths = {
+            index: span_beside(result, index, edges, cancelled=cancelled) for index in spanning
+        }
+        spanning = [index for index in spanning if widths[index] > SPAN_INTERESTING]
     if not spanning:
         return []
     # **Über einem Kanal hilft keine Stütze** (Review zu RM-627). Der Rat

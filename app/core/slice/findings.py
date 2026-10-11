@@ -44,6 +44,7 @@ from app.core.slice.analysis import (
     model_support,
     slice_body,
     total_overhang,
+    vaults,
     worth_support,
 )
 from app.core.types import (
@@ -424,8 +425,10 @@ def overhang_findings(
     # Einschränkung: Am Eiffelturm ist das größte freie Stück der Kranz der
     # obersten Plattform, 2,6 mm breit. Beide Fragen mit Abbruch; die
     # Kanalfrage stellt dieselbe enge Randfrage noch einmal, sie ist billig.
+    # Und kein Streifen eines Bogens, der sich zwischen seinen Beinen schließt
+    # (:func:`vaults`, RM-585), aus demselben Durchgang.
     asked = frozenset(entry[1] for entry in candidates)
-    edges = ledges(result, asked, cancelled=cancelled)
+    edges = ledges(result, asked, cancelled=cancelled) | vaults(result, asked, cancelled=cancelled)
     quiet = model_support(result, only=asked, cancelled=cancelled).channels | edges
     kept = [entry for entry in candidates if entry[1] not in quiet]
     if not kept:

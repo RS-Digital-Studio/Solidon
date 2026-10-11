@@ -44,6 +44,10 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   (`analysis.model_support`): Fasst der Raum **unter** ihr keinen Kreis von
   `CHANNEL_WIDTH` und liegt ihr Grundriss zwischen seinen Auflagen, gehalten
   nur von Material daneben (`_Ceilings.closes`), schließt sie sich selbst.
+  Die oberste Schicht der Decke hält bis zur doppelten Zugabe
+  (`_Ceilings._anchored`): Den Spalt zur hohen Wand schließt die nächste
+  Schicht von beiden Seiten; mit einer Zugabe hing die Antwort am
+  Schichtraster, für jede Schicht verdoppelt schlossen sich falsche Decken.
   Gefragt wird die ganze Decke (Flächenmehrheit). Außen auf dem Modell zählt
   `worth_support`, auch als `open_field`. Wer das anfasst, misst Schüssel und
   Drache. Der Brückenbefund rät über einer Kanaldecke zum Übergang, nicht zur
@@ -128,6 +132,45 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   fragt mit `only`. `support.spare_ledges` sperrt ihre
   Überhangfläche (`ledge_space`) und spart aus, was Stütze braucht;
   vorgeschlagen nur mit Stützen.
+- **Ein Bogen druckt als zwei Kragarme, seine letzte Spanne ist eine
+  Brücke** (`analysis.vaults`, `_Ceilings.arch`): Schließt sich eine Decke
+  zwischen ihren Auflagen (`_Ceilings.closes`, die ganze Decke samt
+  Kanalstücken), trägt sich ein Streifen unter der obersten Schicht, der zu
+  `CEILING_SPANNED` zwischen den Auflagen liegt (keine Haube vor einer
+  Mündung), **als Kragarm, solange seine Außenbahn höchstens eine
+  Bahnbreite neben der Schicht darunter liegt** (`_cantilever`: anderthalb
+  Bahnbreiten, höchstens Zugabe und eine Bahn; die Bahn aus `bridge_from`
+  des Schnitts, nie in Schichthöhen umgerechnet); weiter Kragendes ist eine
+  Brücke längs der freien Kante und trägt sich nur kurz, bis
+  `SPAN_INTERESTING`, gemessen entlang der losen Kante — an einem Bogen der
+  Lauf, nicht die Sehne (`_runs_free`, `_runs_loose`) —, und nur bis Zugabe
+  plus zwei Bahnen und `CANTILEVER_LAYERS` Schichthöhen; bis gut 0,2 mm
+  deckeln die Schichthöhen. Keine Breite in Millimetern trennt eine
+  Satteldecke unter 8,5° bei 0,08 mm vom Rundbogen R 30 bei 0,2 mm. Läuft
+  sie weiter, gehört sie zum Scheitel: Ab 0,2 mm behalten Pultdecke unter 12°
+  und Haut unter 15° in 20 mm Tiefe ihre Stütze, ein Rundbogen in einer Wand
+  über 15 mm Tiefe auch; bei 0,08 und 0,12 mm trägt sich eine Decke ab gut 11°
+  als Kragarm, auch in tiefer Wand. Ein Streifen zwischen
+  zwei Auflagen (`_held_twice`) trägt sich, wenn sein Teil jenseits des
+  Kragarms selbst zwischen Auflagen liegt (sonst fasst ein einseitiger
+  Streifen mit seinen Enden die eigene Hülle), seine lose Kante nicht weiter
+  als `SPAN_INTERESTING` läuft, außer eine Bahnenrichtung hat über ihm an
+  beiden Enden Halt (`_anchored_span`; die Hülle eines gebogenen Rands ist
+  sein Kreissegment: Halbkuppel, Nische) und kein Punkt weiter als
+  `SPAN_INTERESTING / 2` vom Material darunter liegt — weiter ist er eine
+  Brücke, kein Bogen und kein Scheitel (Kumiko-Gitter, Tunneldecke). Ein
+  Scheitel trägt sich als Rand (`LEDGE_REACH` je Kragarm) oder als Brücke
+  zwischen den Flanken (`SPAN_INTERESTING`, quer gemessen). Bogenstreifen
+  zählen nicht zur Fläche, nicht zu „auf dem Modell“ und nicht zum
+  Überhangbefund; keine Sperre. **Die Brückenregel gilt für Streifen zwischen
+  zwei Auflagen**, nicht für die an einer Seite hängenden (`hanging_vaults`,
+  ihre Brückenweite wäre die Diagonale), in Stützbedarf, Bericht und
+  `open_pieces` gleich. Die oberste Schicht zählt mit ihrer Fläche. **In der
+  Kanalfrage wird ein Scheitel, der weiter kragt, als er sich trägt, samt
+  seiner letzten Spanne ausgespart** (`_Arch.overhanging`, `spared`), die
+  Decke bleibt Kanal — nach Mehrheit gezählt, kippte eine von zwei
+  gespiegelten Taschen. Wer nur Ränder fragt, rechnet keine Bögen; Schließ-
+  und Bogenantwort sind je Schichten gemerkt (`_closing_answers`).
 - **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):
   Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
   `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,

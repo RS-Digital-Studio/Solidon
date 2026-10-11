@@ -66,6 +66,7 @@ entfernt hat.
 | 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
 | 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
 | 2026-10-09 | [RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)](#rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026) |
+| 2026-10-09 | [RM-585: Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst (09.10.2026)](#rm-585-bögen-die-sich-zwischen-ihren-beinen-schließen-tragen-sich-selbst-09102026) |
 | 2026-10-09 | [RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)](#rm-628-solidon-rechnet-mit-curas-aufrunden-des-stützabstands-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
@@ -44525,7 +44526,7 @@ in der Randfrage ab. Der neue Schalter „Ränder ohne Stütze“ (`support.spar
 Vorschlag nur mit Stützen) sperrt ihre Überhangfläche in der Übergabe (`ledge_space`,
 gemerkt) und spart aus, was Stütze braucht; eigener Befund `export.ledge_blocker` über die
 gesperrten Ränder, und die Plattengegenprobe kennt die Sperre. Die Bögen unten bleiben
-gestützt: [RM-585](ROADMAP.md#rm-585).
+gestützt: [RM-585](#rm-585).
 
 **Nachweis (08.10.2026, Endstand):** Eiffelturm mit Solidons Vorschlägen: ElegooSlicer 216 statt 869 m Stütze, OrcaSlicer 163 statt 592, PrusaSlicer 81 statt 367, Cura 104 statt 358 (gegen „Stützen automatisch“); der
 Rest steht unter den Bögen. Drache: von den Überhängen, die Stütze brauchen (ohne Kanaldecken und Ränder, `gcode_stuetzen.py`, `needed_share`), sind gestützt: ElegooSlicer 99,8 %, OrcaSlicer 99,6 %, PrusaSlicer 100 %, Cura 96,5 %. Tests in `test_slice_findings.py`,
@@ -46743,6 +46744,140 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
   Belege: `F:\solidon-review-reports\verif-09d8e9485.md` (Abschnitt 3).
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-585: Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst (09.10.2026)
+
+<a id="rm-585-bögen-die-sich-zwischen-ihren-beinen-schließen-tragen-sich-selbst-09102026"></a>
+<a id="rm-585"></a>
+
+**Befund (Eiffelturm, 08.10.2026, nach RM-582):** Solidon verlangte Stützen für die Bögen unten
+(Feld 360 mm², 19 mm Reichweite über die Beine). Mit seinen Vorschlägen stellte der
+ElegooSlicer dort 216 m Stütze hin, der PrusaSlicer 81 m (Stand RM-582). Der Turm ist ohne
+Stützen gedacht („一体无支撑“). Die Decke des Turmbogens hängt über das Gitter mit 2 244
+Stücken zusammen, davon 1 188 im Kanal; die übrigen 1 056 zählten als Feld.
+
+**Behoben:** `analysis.vaults` nennt die Streifen von Decken, die sich zwischen ihren
+Auflagen schließen (`_Ceilings.closes`, gefragt an der ganzen Decke samt Kanalstücken), und
+die sich selbst tragen (`_Ceilings.arch`): jedes Stück unter der obersten Schicht, das zu
+`CEILING_SPANNED` zwischen den Auflagen liegt (`_Ceilings.spanned`) und entweder als
+Kragarm trägt — seine Außenbahn liegt höchstens eine Bahnbreite neben der Schicht darunter
+(`_cantilever`, Bahnbreite aus `bridge_from`) — oder als kurze Brücke längs der freien Kante
+(bis `SPAN_INTERESTING`, bis Zugabe plus zwei Bahnen und `CANTILEVER_LAYERS` Schichthöhen),
+zwischen zwei Auflagen liegt (`_held_twice`, bis `SPAN_INTERESTING`/2 vom Material) oder zu
+einem Scheitel gehört, dessen Kragarme je als Rand tragen (`LEDGE_REACH`) oder der quer zwischen den
+Flanken nicht weiter als `SPAN_INTERESTING` spannt. Sie zählen nicht zum Stützbedarf, nicht
+zu dem, was auf dem Modell aufsetzt, und nicht zum Überhangbefund. Die oberste Schicht ist
+die letzte Spanne und zählt mit ihrer Fläche weiter. Die an einer Seite hängenden Streifen
+(`hanging_vaults`) sind für die Brückenregel ruhig, in Stützbedarf, Hinweisen und
+`open_pieces` gleich; die gefassten bleiben darunter. In der Kanalfrage wird ein Scheitel, der
+weiter kragt, als er trägt, samt letzter Spanne ausgespart (`_Arch.overhanging`); die Decke
+bleibt Kanal.
+Wer nur Ränder fragt, rechnet keine Bögen (`_self_carried`); Schließ- und Bogenantworten
+sind je Schichten gemerkt (`_closing_answers`), enge Rand- und Bogenantworten derselben
+Auswahl auch.
+
+**Review (10.10.2026, `review_rm585.md`, Urteil „nicht“) und Behebung:** S1 — mit 3 mm
+Reichweite je Streifen galten Pult-, Sattel-, Flach- und Korbbogendecken als Bogen (im
+ElegooSlicer 12,45 und 27,25 m Stütze weniger, Bahnen bis 1,7 mm mit freiem Ende); jetzt
+die Kragarmfrage oben. Zwilling — ein flacher Bogen auf einer auskragenden Platte galt als
+Kanaldecke und wurde gesperrt; jetzt kein Kanal, Stütze. L1 — Rundbögen in 16 und 20 mm
+tiefen Wänden verlangten Stützen für die Diagonale; jetzt ohne. M2 — gebündelt (eigener
+Grundriss im Fenster abgezogen, Filter in einem Aufruf, Scheitel nur über
+`SPAN_INTERESTING` Diagonale gemessen und vereinfacht). L2 — die Zahl „0,51 mm“ war die der
+längsten Läufe; im G-Code des Turms hängen kurze Wandstücke bis 2,14 mm (Elegoo) und
+1,72 mm (Prusa) mit freiem Ende über die Kante, die einseitigen Scheitelstreifen; „ein
+Durchgang“ für Rand und Bogen galt nur der vollen Frage und ist ersetzt. Die CPU-Zeit von
+`support_need` im ersten Archivtext stammte aus einem Lauf unter Fremdlast; gleicher Kern im
+Wechsel: Eiffelturm 175,1 → 181,2 s (+3,5 %), Drache +0,5 % (Review).
+
+**Nachweis (10.10.2026):** `tests/test_slice_findings.py`:
+`test_a_round_arch_carries_itself_at_any_layer_height_and_angle` (R 20 bei 0,08/0,28 mm und
+60°, in 16 und 20 mm tiefer Wand, R 30 bei 0,2/0,28 mm und 0,08 mm/60°, Spitzbogen, Arkade:
+keine Stütze, ohne die Streifen bleibt nur die letzte Spanne, kein Brückenbefund),
+`test_a_ceiling_that_cantilevers_further_than_it_carries_keeps_its_supports` (Pultdecke,
+Decke unter 2°, Flachbogen 60/8, Satteldecke 40/3, Korbbogen 60/12 über 0,08/0,2/0,28 mm und
+45/55/60°), `test_a_flat_arch_over_the_model_spares_its_crown`,
+`test_a_flat_vault_over_an_enclosed_chamber_stays_a_channel`,
+`test_a_round_arch_over_the_model_stays_a_channel`,
+`test_a_channel_with_rounded_corners_stays_a_channel_at_fine_layers`,
+`test_arch_strips_over_the_model_rest_nowhere_and_bridge_where_held_twice`,
+`test_the_report_names_no_arch_strip`, `test_asking_only_for_ledges_does_not_ask_for_arches`.
+Gegenprobe am Stand `d176bc5ca`: 18 der neuen Fälle rot. 20 Mutationen (Grenze je Streifen
+immer wahr, halbiert, anderthalbfach; oberste Schicht mit; ohne Filter und ohne
+Schließfrage; Brückenregel für alle oder keine Bogenstreifen; `open_pieces` mit allen oder
+ohne gefasste; Bericht, „auf dem Modell“ und Stützbedarf ohne Bögen; Scheitel immer, nur als
+Rand, nur als Brücke; Kanal ohne Kragarm; nie gefasst; Bögen mit jeder Randfrage) über
+`test_slice_findings`, `test_advise`, `test_print_findings`: jede mindestens ein Test rot.
+Prüfkörper (`bedarf.py`, 22 Körper × 0,08/0,2/0,28 mm × 45/55/60°): Rund-, Spitzbogen,
+Arkade, Rippe, tiefe Wände 81 von 81 ohne Stütze; Pult-, Sattel-, Flach-, Korbbogen- und
+schwach geneigte Decken 99 von 99 mit. Echte Modelle (0,2 mm, Startregel): Eiffelturm
+Stützbedarf nein, Feld 0,5 mm², dieselben 2 504 Bogenstreifen und Kanäle wie zuvor, keine
+Vorschläge; Waschschüssel Vorschläge und Sperre (230 Säulen) wie vor RM-585, 54 Stücke an
+den Lippen der Schalen sind keine Kanaldecken mehr; Drache Vorschläge wie vor RM-585, die
+Sperre mit 29 statt 70 Säulen (zwei kragende Scheitelstreifen kippen eine Decke aus 475
+Stücken aus dem Kanal). Slicer (`tools/matrix_unit.py`, aufrecht, gepinnt): Pultdecke
+40/3 mit Solidons Vorschlägen im ElegooSlicer 12,45 m und im PrusaSlicer 12,96 m Stütze,
+Flachbogen 60/8 27,25 und 25,81 m — wie vor RM-585; Rundbogen R 20 und Eiffelturm 0 m in
+beiden. CPU-Zeit im Wechsel, je zwei Läufe, gegen den Stand des Reviews: Rand- und Bogenfrage
+Eiffelturm 21,5 → 11,7 s, Drache 13,3 → 14,8 s; nur Ränder 20,4 → 7,2 und 13,4 → 6,8 s;
+Hinweise 17,2 → 8,2 und 5,2 → 6,6 s; Prüfbericht Eiffelturm 80,5 → 54,1 s (vier → ein
+Randlauf). Das Bündeln allein ändert keine Rand- und Bogenmenge (Eiffelturm, Drache
+hashgleich).
+
+**Nachprüfung (10.10.2026, `review_rm585_nach.md`, Urteil „nicht“) und Behebung:** N1 — ein
+Streifen „zwischen zwei Auflagen“ zählte ohne Spannweite; die Kumiko-Schale aus dem Korpus
+verlor am generischen Drucker (45°) ihre Stütze, ihre Gitterplatte spannt 81 mm. Jetzt trägt
+er sich nur bis `SPAN_INTERESTING`/2 vom Material darunter; weiter ist er eine Brücke, kein
+Scheitel (über einem Kanal Kanaldecke wie eine Tunneldecke). N2 — die Grenze Zugabe plus
+vier Schichthöhen entwarnte Decken zwischen 11,3° und gut 17°; in 20 mm tiefen Wänden und
+Häuten liefen Außenbahnen 0,54 bis 0,73 mm neben der Kante 20 mm frei. Jetzt die Bahnbreite
+(oben) und lange freie Läufe zum Scheitel; ein einseitiger Streifen gilt nur als gefasst,
+wenn sein Teil jenseits des Kragarms selbst zwischen Auflagen liegt (41 von 42 Streifen der
+Pultdecke unter 12° bei 60° kamen sonst so durch). Vier Schichthöhen bleiben als Grenze
+feiner Schichten: Ohne sie galten Satteldecke 8,5° bei 0,08 und 0,12 mm, Pultdecke 4,3° und
+Flachbögen bei 0,08 mm als Bogen; keine Breite in Millimetern trennt sie vom Rundbogen R 30
+bei 0,2 mm. Rundbögen in Wänden über 15 mm Tiefe bekommen bei 0,2 mm ihre Stütze zurück
+(wie vor RM-585, L1 zurückgenommen); bei 0,08 und 0,12 mm tragen sich tiefe Decken ab gut
+11° als Kragarm. N3 — der Kanal-Zwilling entschied je Decke nach Fläche; jetzt
+wird nur der kragende Scheitel samt letzter Spanne ausgespart. N5–N7 — Docstrings, eine
+Halt-Rechnung für Schließfrage und Scheitel (`_anchored`), `hanging` vor `arches` gesetzt.
+N4 — ob eine Decke sich schließt, hing am Schichtraster (Pultdecke 13° bei 0,2 mm/60° mit
+Stütze, 12° und 15° ohne): An der obersten Schicht der Decke gilt der Spalt zur hohen Wand
+bis zur doppelten Zugabe als Halt (`_anchored`), die nächste Schicht schließt ihn von beiden
+Seiten. Für jede Schicht verdoppelt, verlor „Side kit rest 3“ am Centauri ihre Stütze
+(G-Code: Bahnen 10 mm frei); deshalb nur oben.
+
+**Nachweis der Nachprüfung (10.10.2026):** `test_a_cantilever_that_runs_free_along_a_deep_wall_keeps_its_supports`
+(Pultdecke 12° in 20 mm Wand bei 0,2 mm/45° und 60°, 15° bei 60°, Haut 15° bei 45° und 60°,
+Rundbogen R 20 in 16 und 20 mm Wand; mit zwei Bahnen des Centauri, 0,84 mm),
+`test_a_lattice_plate_between_two_walls_is_no_arch`, `test_a_flat_arch_over_the_model_spares_its_crown`,
+`test_a_mirrored_pocket_gets_the_same_blocker`, `test_a_steeper_ceiling_never_needs_more_support`
+(Pultreihe 11 bis 30° in 8 und 20 mm Wand). Gegenprobe am Stand `acc6283d5`: alle zehn
+Fälle rot; die Neigungsreihe vor N4 in drei von fünf Einstellungen rot. Sieben Mutationen (ohne Spannweitengrenze, ohne Zwei-Seiten-Halt, lange Läufe
+tragen, Kragarm ohne Bahnbreite, Scheitel bleibt Kanal, Scheitel ohne letzte Spanne, kurze
+Brücken ohne Deckel): je 1 bis 13 Fälle rot. Prüfkörper (`probe.py`, 41 Fälle je Bahnbreite
+1,0 und 0,84 mm): Rund-, Spitzbogen, Arkade, R 30, R 35 ohne Stütze; S1-Körper mit; Pultdecke
+und Haut unter 12 bis 15° in 20 mm Tiefe mit (15° bei 60° nur mit 0,84 mm; mit dem runden
+Millimeter ohne Profil 0,746 gegen 0,75 mm, frei). Eiffelturm 0,2 mm/45° und 60° ohne Stütze
+(Feld 0,5 bzw. 10,9 mm², 2 504 bzw. 392 Bogenstreifen); Kumiko-Schale bei 45° Stützen nötig
+(Feld 3 632 mm²). Drache 45° (`sonde_kanalraum.py`): Kanalstücke 1 836 / 1 795 / 1 827,
+gesperrte Säulen 70 / 29 / 61, Sperrraum 8 227 / 4 819 / 7 594 mm³ (welle3 / Stand der
+Nachprüfung / jetzt); bei 60° in allen drei ohne Sperrsäule.
+
+**Zweite Nachprüfung (11.10.2026, `review_rm585_nach2.md`) und Behebung:** Z1 — ein
+gekrümmter Streifen, der an einer Seite hängt, galt als „zwischen zwei Auflagen“: Die Hülle
+seines gebogenen Rands ist das Kreissegment, in dem er liegt, und `_runs_free` maß die Sehne
+statt des Laufs. Eine flache Halbkuppel (Nische R 12, 2 mm Stich) bekam am Centauri bei
+0,2 mm keine Stütze mehr (vorher 12,9 m), im G-Code hingen Bahnen bis 2,5 mm neben der
+Schicht darunter. Jetzt wird die lose Kante des freien Teils entlang gemessen
+(`_runs_loose`), in `_runs_free` und `_held_twice`; gefasst bleibt ein solcher Teil nur
+mit einer Bahnenrichtung, die an beiden Enden Halt hat (`_anchored_span`, die Brücke
+zwischen zwei Beinen). Z2 — Regel, Begründung, Archiv und
+Changelog nennen die Schichthöhe: Tiefe Decken und Bögen behalten ihre Stütze ab 0,2 mm, bei
+0,08 und 0,12 mm trägt sich eine Decke ab gut 11° als Kragarm; die kurze Brücke deckeln bis
+gut 0,2 mm die Schichthöhen. Z3 — der Teil jenseits des Kragarms wird einmal hergeleitet
+(`_beyond`), druckgleich. Nachweis: `test_a_flat_half_dome_keeps_its_supports` (Nische R 10
+bei 45° und 60°, R 12 bei 60°), am Stand vor Z1 drei von drei rot.
 
 ## RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)
 

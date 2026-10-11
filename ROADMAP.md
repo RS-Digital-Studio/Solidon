@@ -70,7 +70,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Fuß hoher Bäume, Spitzenabstand weiterer Materialien |
 | [RM-704 — Kinn und Bein am dritten Drachendruck](#rm-704) | Geometrie, Erkennung und Druckvorbereitung | Trennschicht auf jeder Baumspitze gebaut (Archiv, RM-704 Teil); offen: Kinn, Kopf und Vorderbeine an Druck 4 prüfen, Wände an schlanken Gliedern (nach welle4), die Spitze in PrusaSlicer und Cura |
-| [RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst](#rm-585) | Geometrie, Erkennung und Druckvorbereitung | Schließfrage für weite Bögen, Brückenregel für die letzte Spanne |
 | [RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und eine Insel im umschlossenen Kanalraum verliert ihre Säule](#rm-626) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-571 (09.10.), mit Sonden belegt; nächster Schritt: Inseln behalten ihre Säule (Test an der Kammer), Schätzung messen, Kammer mit Insel in den vier Slicern |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
@@ -131,6 +130,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-703 — Probedruck: Curas Baum gegen normale Stütze unter einem flachen Hut](#rm-703) | Geometrie, Erkennung und Druckvorbereitung | Probedruck (Robert) |
 | [RM-702 — Cura-Drucker mit eigenem Lochausgleich bekommen keinen Rat](#rm-702) | Geometrie, Erkennung und Druckvorbereitung | Wert aus der Definitionskette lesen wie `manufacturer.cura_fan_curve` |
 | [RM-700 — Schichtanalyse und Kanalfrage brauchen an großen Figuren Minuten](#rm-700) | Geometrie, Erkennung und Druckvorbereitung | Schnitt je Säule auf ihre Hüllbox zuschneiden (bitgleich gemessen), Merker nach Körperzahl; nach RM-626 |
+| [RM-721 — Eine kleine flache Halbkuppel verliert bei 0,28 mm ihre Stütze](#rm-721) | Geometrie, Erkennung und Druckvorbereitung | Nachweis im Entwurfsprofil (0,28 mm) im G-Code; lose Kante kürzer als `SPAN_INTERESTING` |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -1053,16 +1053,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   zeigt Druck 4 und danach ein Korpuslauf über Figuren mit Beinen (nach welle4). Die Spitze
   in PrusaSlicer und Cura schneiden (`support_tree_tip_diameter`, `force_tip_to_roof`)
   und dort übergeben, wenn sie wirkt.
-
-<a id="rm-585"></a>
-
-- [ ] **RM-585 — Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst.**
-  Am Eiffelturm verlangt Solidon Stützen für die Bögen unten (Feld 360 mm², 19 mm
-  Reichweite): `_Ceilings.closes` lehnt die Gruppe ab, weil sie über das Gitter 1 056 Stücke
-  umfasst, und weite Räume gelten nie als Kanal. Ein Bogen trägt sich wie ein Gewölbe; nur
-  seine letzte Spanne ist eine Brücke. Abnahme: der Eiffelturm braucht keine Stützen, eine
-  flache Decke zwischen zwei Wänden weiter (Brückenregel), im Slicer geprüft.
-
 
 <a id="rm-626"></a>
 
@@ -4057,6 +4047,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   neben einem Sperrkörper ist in keinem Programm gemessen. Aus dem Tunnel-Fix (11.10.2026).
   **Abnahme:** Deckel in SuperSlicer gestützt oder als Befund benannt; Hybrid gemessen.
 
+<a id="rm-721"></a>
+
+- [ ] **RM-721 — Eine kleine flache Halbkuppel verliert bei 0,28 mm ihre Stütze.**
+  Nach RM-585 bekommt die Halbkuppel-Nische R 8 mit Stich 1,3 mm bei 0,28 mm Schicht und 60°
+  keine Stütze mehr, welle4 gab ihr welche. Die lose Kante ihres obersten Rings ist kürzer als
+  `SPAN_INTERESTING`, deshalb fasst die Hülle seines Bogens ihn noch; nach Rechnung kragt der
+  Ring 1,3 bis 1,8 mm bei einer Grenze von 1,33 mm. Nur in der Analyse belegt, nicht im
+  G-Code. Aus der gezielten Nachprüfung von RM-585 (11.10.2026).
+  **Abnahme:** Slicerlauf im Entwurfsprofil; hängt der Ring frei, bekommt er Stütze, ohne dass
+  Eiffelturm, Bögen und Arkade ihre Entwarnung verlieren.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -5020,7 +5021,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
-
 
 <a id="rm-559"></a>
 

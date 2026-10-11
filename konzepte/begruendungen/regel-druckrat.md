@@ -658,6 +658,104 @@ statt 592, in PrusaSlicer 81 statt 367 und in Cura 104 statt 358 m (gegen
 bekommen 45 von 242 Körpern den Vorschlag, und 7 brauchen keine Stützen mehr:
 Ihr einziger Überhang waren Ränder.
 
+**Ein Bogen druckt als zwei Kragarme, seine letzte Spanne ist eine Brücke
+(09./10.10.2026, RM-585).** Nach den Rändern verlangte der Rat am Eiffelturm noch
+Stützen für die Bögen unten: Ihre Decke ist in der Aufsicht ein Feld von 360 mm²
+und reicht 19 mm über die Beine. Der erste Ansatz ließ jeden Streifen einer
+Decke, die sich zwischen ihren Auflagen schließt, bis `LEDGE_REACH` über seine
+Schicht darunter tragen; das Review fand die Prämisse falsch. Gedruckt wird ein
+Bogen Schicht für Schicht als zwei Kragarme, die erst mit der letzten Schicht
+zusammenkommen, und 3 mm je Schicht sind bei 0,2 mm eine Unterseite von 3,8°:
+Pult-, Sattel-, Flach- und Korbbogendecken verloren ihre Stützen (im ElegooSlicer
+12 bis 27 m), ihre Bahnen hingen 1,5 bis 1,7 mm mit freiem Ende neben der Kante.
+
+Was ein Kragarm trägt, misst die Bahnbreite aus dem Schnitt (`bridge_from`, zwei
+Bahnen), nicht eine Zahl von Schichthöhen: Ein Streifen trägt sich, solange seine
+Außenbahn höchstens eine Bahnbreite neben der Schicht darunter liegt
+(`_Ceilings._cantilever`). Die erste Fassung erlaubte Zugabe plus vier Schichthöhen;
+damit galt jede schließende Decke steiler als 11,3° (45°) bzw. 9,9° (60°) als Bogen,
+und die Nachprüfung fand im ElegooSlicer an einer Pultdecke unter 12° Außenbahnen
+0,73 mm neben der Kante, in einer 20 mm tiefen Wand oder Haut je Schicht 20 mm frei;
+mit Stützen im Profil riet Solidon, sie abzuschalten. Am Rundbogen von 20 mm
+Halbmesser liegt die weiteste Außenbahn 0,41 mm neben der Kante, eine Bahnbreite.
+
+Was weiter kragt, druckt als Brücke längs der freien Kante, an ihren Enden gefasst.
+Kurz, bis `SPAN_INTERESTING`, trägt sie sich (`_runs_free`) — so die Flanken unter dem
+Scheitel eines Rundbogens von 30 mm Halbmesser in einer 8 mm tiefen Wand, die bei
+0,2 mm 0,57 mm über die Zugabe kragen; läuft sie weiter, gehört der Streifen zum
+Scheitel. Gemessen wird der Lauf entlang der losen Kante: An einer flachen Halbkuppel
+ist der freie Teil ein Halbring, dessen Rechteck nur die Sehne misst, und die Hülle
+seines gebogenen Rands ist das Kreissegment, in dem er liegt — die Nische R 12 mit 2 mm
+Stich galt so als gefasst und bekam am Centauri keine Stütze, im G-Code hingen Bahnen
+bis 2,5 mm neben der Schicht darunter (zweite Nachprüfung, Z1). Eine Brücke zwischen
+zwei Beinen, deren Streifen leicht steigen, hat auch eine lange lose Kante, aber eine
+Bahnenrichtung mit Halt an beiden Enden; sie bleibt gefasst, und die Brückenregel
+verlangt für ihre 25 mm Stützen. Damit behalten
+Pultdecken unter 12° bis 15° und Häute unter 15° in 20 mm
+Tiefe ihre Stütze, bei 0,2 mm unter 45° und 60° (mit der Bahnbreite des Centauri,
+0,84 mm für zwei Bahnen; mit dem runden Millimeter ohne Profil liegt die Haut unter
+15° bei 60° genau an der Grenze, 0,746 gegen 0,75 mm, und bleibt frei), und ein
+Rundbogen in einer Wand tiefer als 15 mm bekommt sie bei 0,2 mm zurück — wie vor
+RM-585. Bei 0,08 und 0,12 mm tragen sich dieselben Decken ab gut 11° als Kragarm:
+Ihre Außenbahn liegt weniger als eine Bahn neben der Schicht darunter. Eine
+Pultdecke unter 12° in einer 8 mm tiefen Wand bleibt frei: Ihre Bahnen laufen 8,5 mm
+und sind an beiden Enden gefasst. Ob das druckt, sagt nur ein Druck.
+
+Eine Grenze in Schichthöhen bleibt, für feine Schichten: Die kurze Brücke ist
+höchstens zwei Bahnen und `CANTILEVER_LAYERS` (vier) Schichthöhen breiter als die
+Zugabe, und der Kragarm nie breiter als vier Schichthöhen. Ohne sie galten eine
+Satteldecke unter 8,5° bei 0,08 mm (0,45 mm je Schicht über die Zugabe, weniger als
+eine Bahn) und bei 0,12 mm unter 55°, die Pultdecke unter 4,3° bei 0,08 mm und
+Flachbögen bei 0,08 mm als Bogen (Messreihe `rm585b`, sechs Fassungen). Keine Breite
+in Millimetern trennt diese Decken vom Rundbogen R 30 bei 0,2 mm, der mehr kragt und
+sich tragen muss; was sie trennt, ist die Schichthöhe. Für den Kragarm entscheidet ab
+0,2 mm die Bahnbreite; die kurze Brücke deckeln bis gut 0,2 mm die vier Schichthöhen
+(0,8 mm über die Zugabe gegen zwei Bahnen von 0,84 mm) — die Pultdecke unter 12° in
+einer 8 mm tiefen Wand bleibt deshalb frei.
+
+Für die weiter kragenden Streifen bleibt die Frage, wie weit ihr Scheitel reicht: Er
+trägt sich, wenn jeder Kragarm ein Rand ist (`LEDGE_REACH` ab seinem Ansatz) oder
+wenn der Scheitel samt letzter Spanne quer zwischen den Flanken nicht weiter als
+`SPAN_INTERESTING` spannt — quer gemessen, nicht über die Fläche, die an der Wandtiefe
+hinge. Ein Streifen zwischen zwei Auflagen (die Bögen des Turms, ein leicht
+steigender Tunnel) ist kein Kragarm; ob er dort liegt, fragt dieselbe Hülle
+gehaltener Randstücke wie die Schließfrage, und zwar für den Teil jenseits des
+Kragarms: Ein schmaler Streifen, der an einer Seite hängt, fasste sonst mit den
+Stummeln an seinen Enden die eigene Hülle (an der Pultdecke unter 12° bei 60° 41 von
+42 Streifen). Und er trägt sich nur, wenn kein Punkt weiter als eine halbe meldbare
+Brücke vom Material darunter liegt: Die Kumiko-Schale aus dem Korpus beginnt ihre
+Gitterplatte als ein Stück von 3 587 mm² zwischen zwei Seitenwänden, 40,6 mm vom
+Material entfernt, die Brückenregel ihrer Schicht maß nur die Stäbe, und am
+generischen Drucker verlor sie ihre Stütze (im G-Code 82 mm lange Bahnen in der
+Luft). Ein solcher Streifen ist eine Brücke, kein Scheitel — über einem Kanal bleibt
+er Kanaldecke wie die Decke eines Tunnels.
+
+Ob eine Decke sich schließt, hing am Schichtraster: Eine Pultdecke unter 13° brauchte bei
+0,2 mm/60° Stützen, unter 12° und 15° nicht. Ihr oberster Streifen endete 0,58 mm vor der
+hohen Wand, mehr als eine Zugabe; die nächste Schicht wuchs von beiden Seiten über den Spalt,
+ohne ein Überhangstück zu bilden, und die Schließfrage fand den zweiten Halt nicht. Gehalten
+ist deshalb an der obersten Schicht der Decke, was bis zur doppelten Zugabe neben ihr liegt
+(`_Ceilings._anchored`). Für jede Schicht verdoppelt, schlossen sich im Korpus Decken, die
+keine sind: Die Ablage „Side kit rest 3“ verlor am Centauri ihre Stütze, und im G-Code ohne
+Stütze hängen dort Bahnen 10 mm mit freiem Ende. Eine Pultreihe von 11 bis 30° in 8 und
+20 mm tiefer Wand antwortet bei 0,08 bis 0,28 mm und 45 bis 60° monoton; Prüfkörper und
+Eiffelturm behalten ihre Antwort, am Drachen gelten bei 45° 2 085 statt 1 827 Stücke als
+Kanal, die Sperre bleibt bei 61 Säulen und 7 594 mm³.
+
+Was sich an einer Seite trägt, misst die Brückenregel nicht: Ohne Richtung mit
+Halt an beiden Enden wäre die Brückenweite die Diagonale, praktisch die
+Wandtiefe. Die Streifen zwischen zwei Auflagen bleiben unter der Brückenregel.
+Dieselbe Prämisse trug die Kanalfrage: Unter seinem Scheitel ist jeder Bogen
+schmal, und ein flacher Bogen auf einer auskragenden Platte galt als Kanaldecke,
+die Übergabe sperrte den Raum darunter. Der Scheitel, der weiter kragt, als er
+sich trägt, wird deshalb samt seiner letzten Spanne aus der Sperre ausgespart wie
+ein Stück, das selbst Stütze braucht; die Decke bleibt Kanal. Als ganze Decke
+abgewiesen, verlor der Drache seine Kanalsperre (70 Säulen); nach einer
+Flächenmehrheit kippte bei 45° die linke Flügeltasche wegen 25,6 mm² Scheitel, die
+gespiegelte rechte behielt ihren Scheitel unter der Sperre (29 Säulen). Ausgespart
+bleiben 61 Säulen. In einer geschlossenen Kammer kragt kein Scheitel, dort liegt
+jeder Streifen zwischen Wänden.
+
 **Der Stützkontakt folgt dem Material der Spule (09.10.2026, RM-583).** Narben
 und verschweißte Stützen kommen am häufigsten von einem Abstand, der nicht zu
 Schicht und Material passt, von fehlenden Trennschichten, wo die Stütze auf dem
