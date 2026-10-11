@@ -3793,11 +3793,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Punkte nicht formtreu aufräumen. Seit dem Umbau nach Review F räumt das Angleichen gar nicht
   mehr auf, es teilt nach dem Kern nur, was zu lang ist: Tauschen in der Ebene und Zusammenlegen
   änderten an den Abnahmefällen von RM-671 kaum etwas und kosteten an CAD-Netzen das Drei- bis
-  Fünffache der Zeit. Am CAD-Besenhalter aus `F:\3D Dateien` blieben schon mit dem Aufräumen
-  89 %, am Würfel W6 83 % Splitter. Vorschlag: je Ebene neu vernetzen (eingeschränktes Delaunay
-  mit Innenpunkten), in der Laufzeit des Teilens.
-  **Abnahme:** Splitter unter 5 % an Besenhalter und Würfel W6, Volumen und Fläche gleich,
-  druckgleich an Korpus und Beispielprojekten.
+  Fünffache der Zeit. Am CAD-Besenhalter aus `F:\3D Dateien` bleiben 89,6 %, am Würfel W6
+  83,0 % Splitter (mit dem Aufräumen 89,4 und 83,4), an `plate_holes` auf 1,5 mm 44,4 % (mit dem
+  Aufräumen 1,6, v0.5.3 58,9). Vorschlag: je Ebene neu vernetzen (eingeschränktes Delaunay mit
+  Innenpunkten), in der Laufzeit des Teilens.
+  **Abnahme:** Splitter unter 5 % an Besenhalter, Würfel W6 und `plate_holes`, Volumen und Fläche
+  gleich, Zeit höchstens das 1,25-Fache des Teilens allein, druckgleich an Korpus und
+  Beispielprojekten.
 
 <a id="rm-769"></a>
 
