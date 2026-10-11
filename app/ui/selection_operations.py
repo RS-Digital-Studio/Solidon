@@ -1603,9 +1603,18 @@ class SelectionOperationsPanel(QWidget):
         ausgeblendet hat. Ohne Argument gilt der zuletzt eingegebene Suchtext;
         so kann ein Stufenwechsel dieselbe Rechnung anstoßen wie eine
         Eingabe.
+
+        **Bei Suchtext ruht die Karte:** Sie ist verdeckt, und ihre Gruppen
+        nachzurechnen kostete jeden Tastendruck. Das Leeren des Felds läuft
+        hierher und rechnet sie für die Auswahl von dann.
         """
         if query is not None:
             self._query = query
+        wanted = self._query.strip()
+        if wanted:
+            self._show_hits(wanted)
+            self._wrap_labels()
+            return
         found = 0
         for title, (section, toggle, buttons) in self._groups.items():
             shown = 0
@@ -1626,11 +1635,7 @@ class SelectionOperationsPanel(QWidget):
                 # Gerechnet wird an der Stufe, nicht am Bestand.
                 toggle.setChecked(shown <= OPEN_UP_TO)
             found += shown
-        wanted = self._query.strip()
-        if wanted:
-            self._show_hits(wanted)
-        else:
-            self._say_there_is_nothing(found)
+        self._say_there_is_nothing(found)
         # Welche Knöpfe dastehen, hat sich gerade geändert — und ob ihre
         # Beschriftung in die Spalte passt, ist eine Frage je Knopf.
         self._arrange_groups()

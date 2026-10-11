@@ -689,17 +689,32 @@ def test_the_summary_says_what_is_chosen_not_how_many(qt_app: QApplication) -> N
     assert panel.summary.text() == "1 Objekt gewählt"
 
 
-def test_search_filters_existing_buttons_and_a_click_carries_the_register_entry(
+def _card(panel: SelectionOperationsPanel) -> tuple[set[str], dict[str, bool], dict[str, bool]]:
+    """Was die ruhende Karte zeigt: Knöpfe, aufgeklappte und stehende Gruppen."""
+    return (
+        {name for name, button in panel._buttons.items() if not button.isHidden()},
+        {title: toggle.isChecked() for title, (_section, toggle, _b) in panel._groups.items()},
+        {title: not section.isHidden() for title, (section, _t, _b) in panel._groups.items()},
+    )
+
+
+def test_the_card_rests_while_searching_and_comes_back_at_the_new_level(
     qt_app: QApplication,
 ) -> None:
-    """Suche und Klick bleiben am vorhandenen Registereintrag."""
+    """Bei Suchtext ruht die Karte; nach dem Leeren steht sie für die Auswahl von jetzt.
+
+    Seit RM-735 tritt sie bei Suchtext hinter die Trefferliste zurück, und
+    ``_filter`` rechnet ihre Gruppen dann nicht nach — das spart jeden
+    Tastendruck. Ändert sich die Auswahl während der Suche, muss das Leeren des
+    Felds die Karte der neuen Stufe zeigen, als wäre nie gesucht worden. Ein
+    Klick auf einen ihrer Knöpfe trägt den Registereintrag.
+    """
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
     panel.set_context(2, _availability(2))
     # **Aus den sichtbaren**, seit die Sichtbarkeit der Auswahlstufe folgt
     # (Konzept C): Ohne diese Bedingung fiel die Wahl auf eine
-    # Merkmalshandlung, die an zwei gewählten Körpern gar nicht dasteht — und
-    # der Test hätte einen Knopf gesucht, den die Suche nicht zeigen kann.
+    # Merkmalshandlung, die an zwei gewählten Körpern gar nicht dasteht.
     extra = next(
         button
         for name, button in panel._buttons.items()
@@ -707,18 +722,23 @@ def test_search_filters_existing_buttons_and_a_click_carries_the_register_entry(
     )
     received = []
     panel.operationRequested.connect(received.append)
-
-    panel.search.setText(extra.text())
-    QApplication.processEvents()
-    assert not extra.isHidden()
-    assert any(
-        button.isHidden()
-        for name, button in panel._buttons.items()
-        if name not in panel._quick_buttons
-    )
-
     extra.click()
     assert [entry.name for entry in received] == [str(extra.property("operationName"))]
+    at_two = _card(panel)
+
+    panel.search.setText(str(extra.property("operationTitle") or extra.text()))
+    qt_app.processEvents()
+    assert str(extra.property("operationName")) in _hit_names(panel)
+    assert panel.scroller.isHidden() and not panel.hits.isHidden()
+
+    panel.set_context(1, _availability(1), feature_kind="face")
+    panel.search.clear()
+    qt_app.processEvents()
+    fresh = SelectionOperationsPanel(REGISTRY.all())
+    fresh.set_context(1, _availability(1), feature_kind="face")
+    assert _card(fresh) != at_two, "sonst prüft der Stufenwechsel nichts"
+    assert _card(panel) == _card(fresh)
+    assert not panel.scroller.isHidden() and panel.hits.isHidden()
 
 
 def test_every_action_row_keeps_a_keyboard_sized_height(qt_app: QApplication) -> None:
