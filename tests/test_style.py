@@ -761,6 +761,33 @@ def test_a_cached_pixmap_is_dropped_when_the_theme_turns(qt_app: object) -> None
     assert _corner_colours(panel._mark("done")) != before
 
 
+def test_a_menu_heading_is_semibold_as_the_stylesheet_promises(qt_app: object) -> None:
+    """Die Kategorie-Überschrift ist leise wie Nebentext und halbfett.
+
+    Das Halbfett kam über ``setFont`` nach ``set_level("caption")``, und die
+    Nebentextregel nahm es beim Polieren wieder zurück — wie beim Tourschritt.
+    Jetzt trägt es die Regel ``QLabel#menuHeading`` im Stilblatt.
+    """
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QLabel, QMenu
+
+    from app.ui.style import menu_heading
+    from app.ui.theme import apply_theme
+
+    application = QApplication.instance()
+    assert isinstance(application, QApplication)
+    apply_theme(application, "dark")  # type: ignore[arg-type]
+    menu = QMenu()
+    try:
+        label = menu_heading(menu, "Formen").defaultWidget()
+        assert isinstance(label, QLabel)
+        label.ensurePolished()
+        weight = label.font().weight()
+        assert weight.value >= QFont.Weight.DemiBold.value, f"Gewicht {weight.name}"
+    finally:
+        menu.deleteLater()
+
+
 def test_a_step_that_does_not_fit_ends_in_an_ellipsis(qt_app: object) -> None:
     """„…Transaktionen: Bode" liest sich nicht wie eine Kürzung, sondern wie
     ein Fehler."""

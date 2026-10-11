@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.branding import APP_NAME, APP_VERSION
 from app.core import changes
 from app.i18n import SOURCE_LANGUAGE
+from app.i18n.catalog import available_languages
 from tools import sign_release
 from tools.make_changelog import write_pages as write_changelog_pages
 
@@ -370,9 +371,14 @@ def refuse_wrong_delivery(paths: list[Path]) -> None:
 
 
 def read_packages(paths: list[Path]) -> list[Package]:
-    """Alle Eingänge prüfen, dann kopieren, messen und nach Plattform ordnen."""
+    """Alle Eingänge prüfen, messen und nach Plattform ordnen — ohne zu kopieren.
+
+    Kopiert wird erst in :func:`store_packages`, wenn :func:`main` auch Seiten
+    und Versionsdatei fertig gerechnet hat: Ein Halt dort ließe sonst Pakete
+    unter ``dl/`` liegen, auf die keine Seite zeigt.
+    """
     refuse_wrong_delivery(paths)
-    prepared: list[tuple[Path, str]] = []
+    found: list[Package] = []
     seen: set[str] = set()
     signtool: Path | None = None
     for path in paths:
@@ -394,26 +400,8 @@ def read_packages(paths: list[Path]) -> list[Package]:
                     "tools/sign_release.py samt Zeitstempel signieren; "
                     "danach den Download-Lauf erneut starten."
                 ) from exc
-        prepared.append((path, kind))
-
-    STORE.mkdir(parents=True, exist_ok=True)
-    found: list[Package] = []
-    for path, kind in prepared:
-        target = STORE / path.name
-        # Verglichen wird der Inhalt, nicht die Größe: Ein neu gebautes Paket
-        # derselben Länge blieb liegen, und die Prüfsumme darunter belegte das
-        # alte — der Kasten nannte einen Hash, der zum beauftragten Paket nie
-        # gehört hat (Gesamtreview 05.09.2026, B-15). Kopiert wird daneben und
-        # atomar eingewechselt; eine halbe Kopie liegt nie unter dem Namen.
         digest = _sha256(path)
-        if not (target.exists() and _sha256(target) == digest):
-            partial = target.with_name(target.name + ".part")
-            shutil.copy2(path, partial)
-            partial.replace(target)
-            if _sha256(target) != digest:
-                raise SystemExit(f"{target} stimmt nach dem Kopieren nicht mit {path} überein.")
-
-        package = Package(kind, path.name, target.stat().st_size, digest)
+        package = Package(kind, path.name, path.stat().st_size, digest)
         found.append(package)
         print(f"  {kind:8s} {path.name}  {package.size}  {digest[:16]}…")
 
@@ -422,6 +410,28 @@ def read_packages(paths: list[Path]) -> list[Package]:
     # des Knopfes beim Preis — deshalb steht Windows in PLATFORMS vorn.
     order = [kind for kind, _, _ in PLATFORMS]
     return sorted(found, key=lambda package: order.index(package.kind))
+
+
+def store_packages(paths: list[Path], packages: list[Package]) -> None:
+    """Legt die gelesenen Pakete unter ``dl/`` ab, jedes mit der gemessenen Prüfsumme."""
+    if not paths:
+        return
+    digests = {package.name: package.hash_ for package in packages}
+    STORE.mkdir(parents=True, exist_ok=True)
+    for path in paths:
+        target = STORE / path.name
+        # Verglichen wird der Inhalt, nicht die Größe: Ein neu gebautes Paket
+        # derselben Länge blieb liegen, und die Prüfsumme darunter belegte das
+        # alte — der Kasten nannte einen Hash, der zum beauftragten Paket nie
+        # gehört hat (Gesamtreview 05.09.2026, B-15). Kopiert wird daneben und
+        # atomar eingewechselt; eine halbe Kopie liegt nie unter dem Namen.
+        digest = digests[path.name]
+        if not (target.exists() and _sha256(target) == digest):
+            partial = target.with_name(target.name + ".part")
+            shutil.copy2(path, partial)
+            partial.replace(target)
+            if _sha256(target) != digest:
+                raise SystemExit(f"{target} stimmt nach dem Kopieren nicht mit {path} überein.")
 
 
 #: Der Pfeil nach unten, der auf jedem Ladeknopf steht.
@@ -637,23 +647,30 @@ def write_size_span(text: str, packages: list[Package], page: str) -> str:
     return text.replace(row.group(1), fresh, 1)
 
 
-def write_pages(packages: list[Package]) -> None:
+def render_pages(packages: list[Package]) -> dict[str, str]:
+    """Die sechs Startseiten mit neuem Kasten, gerechnet und nicht geschrieben."""
     pattern = re.compile(
         r'(<div class="dateien" data-files data-release-show hidden>)(.*?)(</div>)', re.DOTALL
     )
+    rendered: dict[str, str] = {}
     for page in PAGES:
-        p = WEBSITE / page
-        text = p.read_text(encoding="utf-8")
+        text = (WEBSITE / page).read_text(encoding="utf-8")
         language = page.split("/")[0] if "/" in page else "de"
         updated, count = pattern.subn(
             lambda m, s=language: m.group(1) + links(packages, s) + m.group(3), text, count=1
         )
         if count != 1:
             raise SystemExit(f"{page}: der Dateikasten fehlt oder sieht anders aus.")
-        updated = write_size_span(updated, packages, page)
+        rendered[page] = write_size_span(updated, packages, page)
+    return rendered
+
+
+def write_pages(rendered: dict[str, str]) -> None:
+    """Schreibt die Seiten aus :func:`render_pages`."""
+    for page, text in rendered.items():
         # ``newline=""``: der ganze Baum steht auf ``\n``, und hochgeladen wird
         # der Arbeitsbaum — siehe `stamp_assets.stamp_page`.
-        p.write_text(updated, encoding="utf-8", newline="")
+        (WEBSITE / page).write_text(text, encoding="utf-8", newline="")
         print(f"  {page}")
 
 
@@ -854,6 +871,66 @@ def grouped_for(version: str) -> dict[str, list[dict[str, object]]]:
     return found
 
 
+def lead_of_blocks(blocks: list[dict[str, object]]) -> changes.Group | None:
+    """Der Vorspann einer Sprache aus :func:`grouped_for`, nach ``changes.lead_of``."""
+    read: list[changes.Group] = []
+    for block in blocks:
+        points = block.get("points")
+        read.append(
+            changes.Group(
+                title=str(block.get("title") or ""),
+                points=tuple(str(point) for point in points) if isinstance(points, list) else (),
+            )
+        )
+    return changes.lead_of(tuple(read))
+
+
+def refuse_lead_without_a_note_in_every_language(
+    data: dict[str, object], grouped: dict[str, list[dict[str, object]]]
+) -> None:
+    """Hält an, wenn der Abschnitt einen Vorspann hat und ein Hinweis ihn nicht trägt.
+
+    Die Meldung für jeden Nutzer steht als Vorspann im Changelog und am Anfang
+    des Hinweistexts, in allen Sprachen (``auslieferung.md``). Fehlt einer
+    Sprache ihr Eintrag in ``notes_by_language``, liest ihr Kunde den deutschen
+    Hinweis (``updates.Release.note``), und :func:`drop_lead_said_in_the_note`
+    findet darin seinen eigenen Vorspann nicht wieder: Der bleibt in der
+    Liste, und die Meldung steht zweimal da, einmal deutsch. Sagt der eigene
+    Hinweis etwas anderes (``changes.repeats``), bleibt der Vorspann ebenso in
+    der Liste, und ältere Fassungen heben die Meldung nicht hervor.
+    """
+    leads = {
+        language: lead
+        for language, blocks in grouped.items()
+        if (lead := lead_of_blocks(blocks)) is not None
+    }
+    if not leads:
+        return
+    by_language = data.get("notes_by_language")
+    notes: dict[str, object] = by_language if isinstance(by_language, dict) else {}
+    missing: list[str] = []
+    silent: list[str] = []
+    for language in available_languages():
+        note = notes.get(language)
+        if not isinstance(note, str) or not note.strip():
+            missing.append(language)
+        elif language in leads and not changes.repeats(note, leads[language]):
+            silent.append(language)
+    problems = []
+    if missing:
+        problems.append(f"keinen Hinweis für {', '.join(missing)}")
+    if silent:
+        problems.append(f"für {', '.join(silent)} einen Hinweis ohne den Vorspann")
+    if problems:
+        raise SystemExit(
+            f"Der Abschnitt ## {APP_VERSION} im Changelog beginnt mit einem Vorspann, "
+            f"aber {VERSION_FILE.name} hat unter 'notes_by_language' "
+            f"{' und '.join(problems)}. Dort liest der Kunde die Meldung zweimal oder "
+            "nicht hervorgehoben. Den Vorspann aus changelog/<sprache>.md je Sprache an "
+            "den Anfang ihres Hinweises unter 'notes_by_language' schreiben."
+        )
+
+
 def drop_lead_said_in_the_note(
     data: dict[str, object],
     flat: dict[str, list[str]],
@@ -881,18 +958,7 @@ def drop_lead_said_in_the_note(
     fallback = data.get("notes")
     dropped: list[str] = []
     for language, blocks in grouped.items():
-        read: list[changes.Group] = []
-        for block in blocks:
-            points = block.get("points")
-            read.append(
-                changes.Group(
-                    title=str(block.get("title") or ""),
-                    points=tuple(str(point) for point in points)
-                    if isinstance(points, list)
-                    else (),
-                )
-            )
-        lead = changes.lead_of(tuple(read))
+        lead = lead_of_blocks(blocks)
         if lead is None:
             continue
         note = notes.get(language) or notes.get(SOURCE_LANGUAGE) or fallback
@@ -952,8 +1018,12 @@ def cap_groups(blocks: list[dict[str, object]], kept: int) -> list[dict[str, obj
     return capped
 
 
-def write_version(packages: list[Package]) -> None:
-    """Trägt Version und Pakete in ``website/version.json`` ein.
+def version_content(packages: list[Package]) -> str:
+    """Der neue Inhalt von ``website/version.json`` mit Version und Paketen.
+
+    Hier fällt jeder Halt der Versionsdatei, und zwar bevor :func:`main` etwas
+    kopiert oder schreibt; :func:`write_version` schreibt nur noch, was hier
+    gerechnet wurde.
 
     Von Hand gepflegt wäre das eine Prüfsumme an einer zweiten Stelle, und die
     zweite Stelle ist immer die, die driftet. Gerechnet sind sie hier ohnehin
@@ -1032,6 +1102,7 @@ def write_version(packages: list[Package]) -> None:
         # **Vor der Kappung eingehängt**, damit sie beide Sichten sieht: Sie
         # misst die geschriebene Datei, und die trägt dann auch die Gruppen.
         grouped = grouped_for(APP_VERSION)
+        refuse_lead_without_a_note_in_every_language(data, grouped)
         # Vor Zählung und Kappung: Der weggenommene Vorspann ist kein
         # fehlender Punkt, sonst verwiese das Fenster für nichts auf die Website.
         dropped = drop_lead_said_in_the_note(data, changes, grouped)
@@ -1064,14 +1135,20 @@ def write_version(packages: list[Package]) -> None:
     # wäre schlimmer als weglassen — eine Datei mit einer Unterschrift, die
     # nicht trägt, sieht unterschrieben aus.
     data.pop("signature", None)
-    VERSION_FILE.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline=""
-    )
+    return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+
+
+def write_version(content: str) -> None:
+    """Schreibt den Inhalt aus :func:`version_content` und sagt, was darin steht."""
+    VERSION_FILE.write_text(content, encoding="utf-8", newline="")
     print(
         "  version.json: ohne Unterschrift geschrieben — vor dem Hochladen:\n"
         "    python tools/sign_version.py --private <datei>"
     )
 
+    data = json.loads(content)
+    entries = data.get("packages") or {}
+    changes = data.get("changes") or {}
     if entries:
         print(f"  version.json: {APP_VERSION}, {len(entries)} startbare(s) Paket(e)")
         if changes:
@@ -1093,23 +1170,23 @@ def main() -> int:
     parser.add_argument("packages", nargs="*", type=Path, help="die fertigen Installationsdateien")
     args = parser.parse_args()
 
-    if not args.packages:
-        print("Kein Paket angegeben — der Kasten wird geleert.")
-        write_pages([])
-        write_version([])
-        changelog_pages = write_changelog_pages()
-        print(f"Changelog: {len(changelog_pages)} Sprachversionen aus derselben Quelle erzeugt.\n")
-        print("\nDie Seite bittet wieder um Nachricht.")
-        return 0
-
-    print("Pakete:")
+    print("Pakete:" if args.packages else "Kein Paket angegeben — der Kasten wird geleert.")
+    # **Erst alles rechnen, woran der Lauf anhalten kann, dann schreiben.**
+    # Kopierte er vorher, ließe ein Halt der Versionsdatei Pakete unter dl/ und
+    # einen Kasten, der auf sie zeigt, neben der alten version.json zurück.
     packages = read_packages(args.packages)
+    pages = render_pages(packages)
+    version = version_content(packages)
+    store_packages(args.packages, packages)
     print("\nSeiten:")
-    write_pages(packages)
+    write_pages(pages)
     print("\nVersionsdatei:")
-    write_version(packages)
+    write_version(version)
     changelog_pages = write_changelog_pages()
     print(f"Changelog: {len(changelog_pages)} Sprachversionen aus derselben Quelle erzeugt.\n")
+    if not packages:
+        print("\nDie Seite bittet wieder um Nachricht.")
+        return 0
     print(
         f"\nFertig. {len(packages)} Paket(e) unter website/dl/, eingetragen in "
         f"{len(PAGES)} Sprachversionen.\nZum Termin schaltet die Seite von "

@@ -78,7 +78,7 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-en.webp?v=116fc2a9"><img src="../bilder/beleg-fenster-en.webp?v=116fc2a9" width="2560" height="1369" fetchpriority="high"
+            <a href="../bilder/beleg-fenster-en.webp?v=df1d9c54"><img src="../bilder/beleg-fenster-en.webp?v=df1d9c54" width="2560" height="1369" fetchpriority="high"
                  alt="The Solidon3D main window with a two-colour sign: objects, parameters and history on the left, the sign large in the middle with its year selected, and on the right the report with one warning and the Selection panel with the actions for the selected letters."></a>
           </div>
         </div>
@@ -140,7 +140,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-merkmal-en.webp?v=aeb30fb4"><img src="../bilder/beleg-merkmal-en.webp?v=aeb30fb4" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-merkmal-en.webp?v=b094e180"><img src="../bilder/beleg-merkmal-en.webp?v=b094e180" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="An imported bracket with five recognised holes; hole 4 is selected. In the view its distances to the edges and the “Change bore” group with diameter, position and depth; on the right in the Selection panel the line “Probably fits M5”, then Move feature, Pull into a slot, Turn feature, Duplicate feature, Remove feature, Countersink and Fill a bore."></a>
           </div>
           <figcaption>A clicked hole: its dimensions in the view, its actions on the right in the Selection panel.</figcaption>
@@ -230,7 +230,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-skizze-en.webp?v=9293f5be"><img src="../bilder/beleg-skizze-en.webp?v=9293f5be" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-skizze-en.webp?v=0f1be65b"><img src="../bilder/beleg-skizze-en.webp?v=0f1be65b" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Sketch mode in the main window: the drawing happens in the view, on a face of the holder from Path 2 — a dimensioned 50 × 30 mm rectangle with a circle inside, the holder with its two screw holes faint behind it; at the bottom the bar with the drawing tools, the sketch plane and the buttons Done and Discard, and on the right the Constraints tab."></a>
           </div>
           <figcaption>You draw in the view — on the face you clicked.</figcaption>
@@ -282,7 +282,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="building-blocks" data-operations="create_bayonet create_channel_joint create_detent_disc create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_rod_connector create_room_floor create_room_pane create_room_wall insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
+      <div class="showcase" id="building-blocks" data-operations="create_barrel_hinge create_bayonet create_cable_clip create_channel_joint create_detent_disc create_dowel create_foot create_gusset create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_living_hinge create_printed_nut create_printed_screw create_rib create_rod_connector create_room_floor create_room_pane create_room_wall create_threaded_rod create_wall_mount insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_threaded_rod insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Building blocks</span>
           <h3>Insert a nut trap with editable dimensions</h3>
@@ -299,17 +299,23 @@
           <p class="note">Every block has a range check at specified parameter
           combinations: <b>closed mesh, minimum wall thickness, no
           self-intersection.</b></p>
-          <p>If you pick a block before choosing a spot, Solidon3D previews it
-          on the largest upward-facing surface. You can choose another spot.
-          Without a model, the catalogue explains why placement is unavailable
-          and offers a way to create the first body.</p>
+          <p>Building blocks that are a part on their own are created as a
+          body of their own on a free spot of the build plate when you choose
+          no spot, even in an empty project. These include the screw, printed
+          nut, dowel pin, barrel and living hinge, rib, corner gusset, foot,
+          wall mount and cable clip. The threaded stud is a headless threaded
+          rod or stud with the same printable thread as screw and nut.</p>
+          <p>Other blocks are previewed on the largest upward-facing surface
+          when no spot is chosen, instead of at the origin. You can choose
+          another spot. Without a model, the catalogue explains why they
+          cannot be inserted and offers a way to create the first body.</p>
           <p>The object tree shows what a building block brought with it:
           its features appear as their own entries underneath, and the node
           offers to change exactly that step.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-bausteine-en.webp?v=d173f582"><img src="../bilder/beleg-bausteine-en.webp?v=d173f582" width="1560" height="1144" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-bausteine-en.webp?v=af6e00fa"><img src="../bilder/beleg-bausteine-en.webp?v=af6e00fa" width="1560" height="1144" loading="lazy" decoding="async"
                  alt="The Parts catalogue, opened over the window: the groups Fasteners, Mechanics and Mounting with heat-set insert, nut trap, printed nut, screw, printable thread, screw hole with countersink, barrel hinge, ball bearing, dowel pin and bore, hinge eye, latch, living hinge, snap connectors, foot, keyhole hanger, magnet pocket, pegboard hook, profile clamp liner and shell and wall mount, each with a preview and its dimensions. At the bottom the buttons Insert and Save selection as a part."></a>
           </div>
           <figcaption>The catalogue — every preview is rendered, not drawn.</figcaption>
@@ -336,7 +342,7 @@
         </div>
         <figure class="shot upright">
           <div class="stage">
-            <a href="../bilder/beleg-eigener-baustein-en.webp?v=1cb5a841"><img src="../bilder/beleg-eigener-baustein-en.webp?v=1cb5a841" width="564" height="700" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-eigener-baustein-en.webp?v=6ea6b524"><img src="../bilder/beleg-eigener-baustein-en.webp?v=6ea6b524" width="564" height="700" loading="lazy" decoding="async"
                  alt="The “Save selection as a part” dialog, opened from the catalogue: name, group, description, licence and author at the top, then for each dimension — here width and depth — label, unit, smallest and largest value, default and place in the dialog, then the places that can be clicked later with their names in the recipe; at the bottom “Range test: 8 combinations” and the Create part button."></a>
           </div>
           <figcaption>The dialog asks five things — and computes the whole range before it saves.</figcaption>
@@ -363,8 +369,8 @@
         </div>
         <figure class="shot">
           <picture>
-            <source srcset="../handbuch/en/textures-dark.svg?v=2e7fca72" media="(prefers-color-scheme: dark)">
-            <img class="figure" src="../handbuch/en/textures.svg?v=9d201d0a" width="454" height="274" loading="lazy" decoding="async"
+            <source srcset="../handbuch/en/textures-dark.svg?v=26b90f3c" media="(prefers-color-scheme: dark)">
+            <img class="figure" src="../handbuch/en/textures.svg?v=ca5e7815" width="454" height="274" loading="lazy" decoding="async"
                  alt="Eight pattern tiles in two rows: rib as parallel stripes, wave as wavy stripes, straight and diamond knurl as slanted stripes and diamonds respectively, honeycomb as hexagons, dimples as a grid of dots, Voronoi as irregular cells and noise as scattered patches.">
           </picture>
           <figcaption>The very outlines that get printed — the preview is computed, not drawn by hand.</figcaption>
@@ -383,7 +389,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-bericht-en.webp?v=319d90fa"><img src="../bilder/beleg-bericht-en.webp?v=319d90fa" width="2093" height="1308" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-bericht-en.webp?v=84f3d5fd"><img src="../bilder/beleg-bericht-en.webp?v=84f3d5fd" width="2093" height="1308" loading="lazy" decoding="async"
                  alt="A box with a lid, large in the view, and its report on the right: 0 errors, 2 warnings, 6 notes. The warnings say that the fit is tighter than intended and that a face of the lid overhangs freely and needs supports; below them notes on hollowing, the lid and the material."></a>
           </div>
           <figcaption>The inspection report for a can with a lid.</figcaption>
@@ -446,7 +452,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/schritt-druck-en.webp?v=11fac2a9"><img src="../bilder/schritt-druck-en.webp?v=11fac2a9" width="1426" height="891" loading="lazy" decoding="async"
+            <a href="../bilder/schritt-druck-en.webp?v=db58e6c0"><img src="../bilder/schritt-druck-en.webp?v=db58e6c0" width="1426" height="891" loading="lazy" decoding="async"
                  alt="The print settings over an imported figure: quality, printer, nozzle and filament, then infill density and supports. Under “What this part asks for” Solidon3D suggests a brim and a longer minimum time per layer; at the bottom the buttons Slice and Open in slicer."></a>
           </div>
           <figcaption>What this part asks for is in the dialog with its reason — what is ticked gets applied.</figcaption>
@@ -546,7 +552,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-filamentlager-en.webp?v=7091c31c"><img src="../bilder/beleg-filamentlager-en.webp?v=7091c31c" width="1051" height="701" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-filamentlager-en.webp?v=a93e79b5"><img src="../bilder/beleg-filamentlager-en.webp?v=a93e79b5" width="1051" height="701" loading="lazy" decoding="async"
                  alt="The filament inventory, grouped by storage location: six spools on the shelves “Bench shelf” and “Dry box”, each with a drawn spool, material type, remaining grams and location — one spool in three colours, one marked “Low filament”; above them the Leave inventory button and the search field."></a>
           </div>
           <figcaption>The shelf, grouped by storage location: the remaining
@@ -564,13 +570,13 @@
           value from the material profile rather than disappearing into the
           model as a constant. The two or three values you actually change
           are up front — the rest lives under “More settings”.</p>
-          <p class="note">178 operations, all built the same way:
+          <p class="note">190 operations, all built the same way:
           <b>menu, command line and chat read the same
           declaration.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/beleg-dialog-en.webp?v=af58fd41"><img src="../bilder/beleg-dialog-en.webp?v=af58fd41" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="../bilder/beleg-dialog-en.webp?v=b1f7f706"><img src="../bilder/beleg-dialog-en.webp?v=b1f7f706" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="The main window with the sign selected and, top right, the “Drill a bore” dialog: diameter and position X, Y and Z, each with an fx button, the Slot checkbox and the collapsed “More settings”; at the bottom of the view the bar saying that a click on the model sets the spot."></a>
           </div>
           <figcaption>An operation dialog — the two or three values you
@@ -683,7 +689,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="../bilder/schritt-start-en.webp?v=4bf4038f"><img src="../bilder/schritt-start-en.webp?v=4bf4038f" width="1472" height="920" loading="lazy" decoding="async"
+            <a href="../bilder/schritt-start-en.webp?v=e7bfb55a"><img src="../bilder/schritt-start-en.webp?v=e7bfb55a" width="1472" height="920" loading="lazy" decoding="async"
                  alt="The start screen: the drop area for models and projects, the buttons New project, Open model, Open project and Manual, the filament inventory with six spools, then four guided tours — one per path — with preview pictures, plus Give feedback and Support Solidon voluntarily, and the collapsed section “What else can it do?”."></a>
           </div>
           <figcaption>Four of the twelve examples introduce the main ways; further projects demonstrate

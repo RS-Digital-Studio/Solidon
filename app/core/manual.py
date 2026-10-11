@@ -1876,7 +1876,11 @@ def profiles_text() -> str:
     kommt dieser Wert?*
     """
     from app.core.knowledge import standards
-    from app.core.knowledge.profiles import material_profiles, printer_profiles
+    from app.core.knowledge.profiles import (
+        material_profiles,
+        printer_profiles,
+        shown_printer_title,
+    )
     from app.i18n import format_decimal as decimal
 
     lines: list[str] = []
@@ -1934,7 +1938,7 @@ def profiles_text() -> str:
         wall = printer.minimum_wall if printer.is_resin else 2.0 * printer.extrusion_width
         detail = printer.pixel_size if printer.is_resin else printer.nozzle_diameter
         lines.append(
-            f"| {printer.title} | {technology} | {x:.0f} × {y:.0f} × {z:.0f} "
+            f"| {shown_printer_title(printer)} | {technology} | {x:.0f} × {y:.0f} × {z:.0f} "
             f"| {decimal(printer.layer_height, 2)} | {decimal(detail, 2)} "
             f"| {decimal(wall, 2)} | {enclosed} |"
         )

@@ -170,7 +170,7 @@ def test_a_note_written_for_an_older_release_is_not_accepted() -> None:
     """Der Hinweistext driftete zwei Veröffentlichungen weit (Robert, 12.09.2026).
 
     Er ist das einzige Feld der ``version.json``, das ein Mensch schreibt und
-    das ``write_version`` deshalb ausdrücklich in Ruhe lässt — und genau das
+    das ``make_download`` deshalb ausdrücklich in Ruhe lässt — und genau das
     hat ihn von 0.3.0 bis 0.4.0 mitreisen lassen, samt der Behauptung „Das
     bisher größte Update" und einer Neuerung aus der Fassung davor. Was ihn
     hält, ist ``notes_version``: Steht er auf einer anderen Fassung als die
@@ -185,7 +185,7 @@ def test_a_note_written_for_an_older_release_is_not_accepted() -> None:
     # Versäumnis: Sie ist unterschrieben, und die Unterschrift deckt jedes Feld
     # außer sich selbst. Eingetragen wird es mit dem Satz der nächsten Fassung,
     # und dann wird neu unterschrieben (``tools/sign_version.py``). Bis dahin
-    # hält ``write_version`` den Bau an, statt den alten Satz mitzunehmen.
+    # hält ``make_download`` den Bau an, statt den alten Satz mitzunehmen.
     _validate_remote_version(dict(payload, notes_version=payload["version"]))
 
     stale = dict(payload, notes_version="0.3.0")
@@ -194,29 +194,70 @@ def test_a_note_written_for_an_older_release_is_not_accepted() -> None:
     assert "notes_version" in str(caught.value)
 
 
+@pytest.mark.parametrize("problem", ["former_release", "missing_language"])
 def test_the_download_build_stops_at_a_note_from_a_former_release(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, problem: str
 ) -> None:
     """Der Riegel gehört an den Anfang des Baus, nicht ans Ende der Kette.
 
     Die Prüfung beim Hochladen fängt es auch — aber dann liegen die Pakete
-    schon gebaut da und der Kasten der Seite ist geschrieben.
-    ``write_version`` hält an, solange der Satz für eine ältere Fassung
-    geschrieben ist, und sagt, was zu tun ist (Regel 17).
+    schon gebaut da. ``make_download`` hält an, solange der Hinweis für eine
+    ältere Fassung geschrieben ist oder einer Sprache fehlt, und sagt, was zu
+    tun ist (Regel 17). Angehalten wird, bevor der Lauf ein Paket nach
+    ``dl/`` kopiert, einen Kasten schreibt oder die Versionsdatei anfasst.
     """
-    from tools import make_download
+    from app.core import changes
+    from tests.helpers import release_version_file
+    from tools import make_download, sign_release
 
-    target = tmp_path / "version.json"
-    payload = json.loads((upload.LOCAL_ROOT / "version.json").read_text(encoding="utf-8"))
-    target.write_text(json.dumps(dict(payload, notes_version="0.3.0")), encoding="utf-8")
-    monkeypatch.setattr(make_download, "VERSION_FILE", target)
+    notes = tmp_path / "changelog"
+    notes.mkdir()
+    for language, lead in (("de", "Die Demo läuft länger."), ("en", "The demo runs longer.")):
+        (notes / f"{language}.md").write_text(
+            f"## {make_download.APP_VERSION}\n\n- {lead}\n\n### Zeichnen\n\n- Gezeichnet.\n",
+            encoding="utf-8",
+        )
+    changes.forget_cache()
+    monkeypatch.setattr(changes, "folder", lambda: notes)
+    monkeypatch.setattr(make_download, "CHANGELOG", notes)
+    sources = _download_inputs(tmp_path)
+    website = tmp_path / "website"
+    for page in make_download.PAGES:
+        target = website / page
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((make_download.WEBSITE / page).read_bytes())
+    version_file = release_version_file(website / "version.json")
+    payload = json.loads(version_file.read_text(encoding="utf-8"))
+    if problem == "former_release":
+        payload["notes_version"] = "0.3.0"
+    else:
+        del payload["notes_by_language"]["it"]
+    version_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    before = {path: path.read_bytes() for path in website.rglob("*") if path.is_file()}
+    monkeypatch.setattr(make_download, "WEBSITE", website)
+    monkeypatch.setattr(make_download, "STORE", website / "dl")
+    monkeypatch.setattr(make_download, "VERSION_FILE", version_file)
+    monkeypatch.setattr(sign_release, "find_signtool", lambda: tmp_path / "signtool.exe")
+    monkeypatch.setattr(
+        sign_release, "_run", lambda command, **_: subprocess.CompletedProcess(command, 0)
+    )
+    monkeypatch.setattr(sys, "argv", ["make_download.py", *(str(path) for path in sources)])
 
-    with pytest.raises(SystemExit) as stopped:
-        make_download.write_version([])
+    try:
+        with pytest.raises(SystemExit) as stopped:
+            make_download.main()
+    finally:
+        changes.forget_cache()
 
     said = str(stopped.value)
-    assert "0.3.0" in said and make_download.APP_VERSION in said
-    assert "notes_version" in said, "ohne den Feldnamen sucht der Leser"
+    if problem == "former_release":
+        assert "0.3.0" in said and make_download.APP_VERSION in said
+        assert "notes_version" in said, "ohne den Feldnamen sucht der Leser"
+    else:
+        assert "keinen Hinweis für it" in said and "notes_by_language" in said, said
+    after = {path: path.read_bytes() for path in website.rglob("*") if path.is_file()}
+    assert after == before, "Startseiten und Versionsdatei bleiben bytegleich"
+    assert not (website / "dl").exists(), "kein Paket liegt unter dl/"
 
 
 # --- make_download ---------------------------------------------------------------
@@ -242,6 +283,7 @@ def test_the_download_store_takes_the_new_bytes_even_at_the_same_size(
     monkeypatch.setattr(sign_release, "find_signtool", lambda: pytest.fail("kein Windows-Paket"))
 
     packages = make_download.read_packages([source])
+    make_download.store_packages([source], packages)
 
     assert (store / source.name).read_bytes() == b"NEW_CONTENT"
     assert packages[0].hash_ == hashlib.sha256(b"NEW_CONTENT").hexdigest()
@@ -352,6 +394,7 @@ def test_the_download_store_accepts_verified_windows_packages(
     monkeypatch.setattr(sign_release, "_run", run_verify)
 
     packages = make_download.read_packages(sources)
+    make_download.store_packages(sources, packages)
 
     assert checked == [sources[-1]]
     assert {package.name for package in packages} == {source.name for source in sources}
@@ -359,21 +402,24 @@ def test_the_download_store_accepts_verified_windows_packages(
 
 
 def test_withdrawing_downloads_needs_no_windows_signing_tool(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Der vorhandene leere Aufruf zieht das Angebot auch ohne Windows-Werkzeuge zurück."""
+    from tests.helpers import release_version_file
     from tools import make_download, sign_release
 
     written: list[str] = []
 
-    def pages(packages: list[make_download.Package]) -> None:
-        assert packages == []
+    def pages(rendered: dict[str, str]) -> None:
+        assert set(rendered) == set(make_download.PAGES)
         written.append("pages")
 
-    def version(packages: list[make_download.Package]) -> None:
-        assert packages == []
+    def version(content: str) -> None:
+        assert "packages" not in json.loads(content)
         written.append("version")
 
+    version_file = release_version_file(tmp_path / "version.json")
+    monkeypatch.setattr(make_download, "VERSION_FILE", version_file)
     monkeypatch.setattr(sys, "argv", ["make_download.py"])
     monkeypatch.setattr(make_download, "write_pages", pages)
     monkeypatch.setattr(make_download, "write_version", version)

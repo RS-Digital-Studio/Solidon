@@ -439,6 +439,7 @@ entfernt hat.
 | 2026-09-09 | [RM-027 entfällt mit dem privaten Index (09.09.2026)](#rm-027-entfällt-mit-dem-privaten-index-09092026) |
 | 2026-09-08 | [Filamentlager — Review und vollständiger Anschluss (08.09.2026)](#filamentlager--review-und-vollständiger-anschluss-08092026) |
 | 2026-09-08 | [Bauplan v12 — vollständiger Abgleich (08.09.2026)](#bauplan-v12--vollständiger-abgleich-08092026) |
+| 2026-10-11 | [RM-782: Die Lochfeld-Öffnung bleibt Wabe, auch im Quadratraster (11.10.2026)](#rm-782-die-lochfeld-öffnung-bleibt-wabe-auch-im-quadratraster-11102026) |
 | ohne Datum | [Gegen echte Modelle geprüft](#gegen-echte-modelle-geprüft) |
 | ohne Datum | [Referenzkorpus und Passungen vervollständigt](#referenzkorpus-und-passungen-vervollständigt) |
 | ohne Datum | [Durchsicht nach P12 — was noch offen ist](#durchsicht-nach-p12--was-noch-offen-ist) |
@@ -48436,3 +48437,22 @@ oder ein alter Schritt die Stelle trägt; vorher nahm die Platzierung nach dem N
 jeder Eingabe im Dialog keinen Klick mehr (M1, Tests `test_a_click_is_taken_after_*`). Ein
 Kantenabstand auf der Rückseite nimmt den Hinweis weg, und x/y/z zeigen die gebundene Stelle
 (G1, `test_an_edge_distance_after_the_renewal_is_an_own_choice`).
+
+## RM-782: Die Lochfeld-Öffnung bleibt Wabe, auch im Quadratraster (11.10.2026)
+
+<a id="rm-782-die-lochfeld-öffnung-bleibt-wabe-auch-im-quadratraster-11102026"></a>
+<a id="rm-782"></a>
+
+**RM-782 — Sechseckige Öffnungen im Quadratraster heißen Wabe.**
+  Seit 0.6.0 heißt das Texturmuster wie die Abbildung *Wabe* (doppelter Schlüssel `hexagon`
+  in `surfaces._CHOICE_NAMES`, Handbuchprüfung C). Dieselbe Liste benennt die Öffnungsform von
+  *Lochfeld schneiden*; mit der Anordnung *Raster* entstehen dort Sechsecke im Quadratraster,
+  keine Wabe. Aus dem Review der Handbuchprüfung C (Welle 5, 11.10.2026).
+  **Nächster Schritt:** der Öffnungsform einen eigenen Schlüssel geben (`hexagon_hole` o. ä.),
+  Migration `vN→vN+1` für gespeicherte Lochfelder, Anzeigename *Sechseck*.
+  **Abnahme:** Textur heißt *Wabe*, die Lochfeld-Öffnung *Sechseck*; ein Projekt aus 0.6.0 öffnet
+  mit unveränderter Geometrie; Test gegen die Beispieldatei der alten Version.
+
+**Entfallen (11.10.2026, Entscheidung Robert):** Die Öffnungsform von *Lochfeld schneiden*
+heißt weiter *Wabe*, auch mit der Anordnung *Raster*. Ein eigener Schlüssel und die Migration
+gespeicherter Lochfelder entfallen.

@@ -3249,6 +3249,60 @@ def test_a_dialog_built_after_a_language_change_speaks_that_language(
         set_language(vorher)
 
 
+def test_the_generic_printer_speaks_the_customers_language_after_every_fill(
+    qt_app: QApplication, session: Session
+) -> None:
+    """„Allgemeiner FDM-Drucker 220 mm“ stand in fünf Sprachen deutsch.
+
+    Der Titel kommt aus ``printers.toml`` und wurde nirgends übersetzt — in
+    der Druckerwahl, der Kopfzeile und den Sätzen zum Slicerprofil nicht. Die
+    Handbuchbilder überklebten ihn, und weil der Dialog seine Liste nach der
+    Slicersuche neu füllt, stand er dort zuletzt doch wieder deutsch.
+
+    Jeder Weg, der die Liste füllt, nennt ihn deshalb übersetzt: die erste
+    Füllung beim Bau, die nach der Slicersuche und eine weitere, wie sie ein
+    Slicer- oder Druckerwechsel auslöst — dazu Erststart und Kopfzeile, die
+    dieselbe Beschriftung lesen.
+    """
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+    from app.ui.first_run import add_printer_choices
+    from app.ui.labels import printer_title
+
+    vorher = get_language()
+    try:
+        install_language("fr")
+        set_language("fr")
+        drucker = session.profile.printer
+        assert drucker.id == profiles.DEFAULT_PRINTER
+        deutsch = str(drucker.title)
+        franzoesisch = tr(deutsch)
+        assert franzoesisch != deutsch, "der Katalog kam nicht an"
+
+        gebaut = PrintSettingsDialog(session, UiSettings())
+        try:
+            assert gebaut.printer_choice.currentText() == franzoesisch, "erste Füllung"
+            assert gebaut.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+            assert gebaut.printer_choice.currentText() == franzoesisch, "nach der Slicersuche"
+            gebaut._fill_printer_choice()
+            assert gebaut.printer_choice.currentText() == franzoesisch, "nach dem Neufüllen"
+            eintraege = [
+                gebaut.printer_choice.itemText(index)
+                for index in range(gebaut.printer_choice.count())
+            ]
+            assert deutsch not in eintraege
+        finally:
+            gebaut.release()
+            gebaut.close()
+
+        erststart = QComboBox()
+        add_printer_choices(erststart, {drucker.id: drucker})
+        assert erststart.itemText(erststart.findData(drucker.id)) == franzoesisch
+        assert printer_title(drucker) == franzoesisch
+    finally:
+        set_language(vorher)
+
+
 def test_a_freshly_built_colour_row_carries_both(dialog: PrintSettingsDialog) -> None:
     """Am gebauten Dialog rettet ``_load_into_editors`` den Tooltip.
 

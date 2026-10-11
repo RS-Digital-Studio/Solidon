@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import re
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -146,18 +147,21 @@ def test_a_public_version_missing_from_history_stops_with_the_next_action(
 
 
 def test_the_release_run_always_rebuilds_the_pages(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Eine Veröffentlichung kennt keinen vergessbaren Changelog-Schritt."""
+    from tests.helpers import release_version_file
     from tools import make_download
 
     calls = []
+    version_file = release_version_file(tmp_path / "version.json")
+    monkeypatch.setattr(make_download, "VERSION_FILE", version_file)
     monkeypatch.setattr(sys, "argv", ["make_download.py"])
     monkeypatch.setattr(
         make_download, "write_changelog_pages", lambda: calls.append("changelog") or ()
     )
-    monkeypatch.setattr(make_download, "write_pages", lambda _packages: calls.append("pages"))
-    monkeypatch.setattr(make_download, "write_version", lambda _packages: calls.append("version"))
+    monkeypatch.setattr(make_download, "write_pages", lambda _pages: calls.append("pages"))
+    monkeypatch.setattr(make_download, "write_version", lambda _content: calls.append("version"))
 
     assert make_download.main() == 0
     assert calls == ["pages", "version", "changelog"], (
@@ -166,29 +170,31 @@ def test_the_release_run_always_rebuilds_the_pages(
 
 
 def test_a_release_with_packages_builds_the_badge_after_version_json(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Auch der echte Paketzweig erzeugt den Verlauf aus dem neuen Stand."""
+    from tests.helpers import release_version_file
     from tools import make_download
 
     calls = []
-    package = object()
-    monkeypatch.setattr(sys, "argv", ["make_download.py", "solidon-setup.exe"])
+    package = make_download.Package("windows", "Solidon3D-Setup.exe", 1, "0" * 64)
+    version_file = release_version_file(tmp_path / "version.json")
+    monkeypatch.setattr(make_download, "VERSION_FILE", version_file)
+    monkeypatch.setattr(sys, "argv", ["make_download.py", "Solidon3D-Setup.exe"])
     monkeypatch.setattr(make_download, "read_packages", lambda _paths: [package])
     monkeypatch.setattr(
-        make_download, "write_pages", lambda packages: calls.append(("pages", packages))
+        make_download, "store_packages", lambda _paths, packages: calls.append("store")
     )
+    monkeypatch.setattr(make_download, "write_pages", lambda _pages: calls.append("pages"))
+    monkeypatch.setattr(make_download, "write_version", lambda _content: calls.append("version"))
     monkeypatch.setattr(
-        make_download, "write_version", lambda packages: calls.append(("version", packages))
-    )
-    monkeypatch.setattr(
-        make_download,
-        "write_changelog_pages",
-        lambda: calls.append(("changelog", None)) or (),
+        make_download, "write_changelog_pages", lambda: calls.append("changelog") or ()
     )
 
     assert make_download.main() == 0
-    assert [name for name, _value in calls] == ["pages", "version", "changelog"]
+    assert calls == ["store", "pages", "version", "changelog"], (
+        "erst die Pakete, dann der Kasten, der auf sie zeigt, dann die Versionsdatei"
+    )
 
 
 LEAD_FILE = """## 9.9.9

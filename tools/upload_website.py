@@ -502,7 +502,7 @@ def _validate_remote_version(value: object) -> dict[str, Any]:
         text(note, f"notes_by_language.{language}", maximum=800)
 
     # **Für welche Fassung der Satz geschrieben wurde.** Er ist das einzige
-    # Feld, das ein Mensch schreibt und das ``write_version`` deshalb
+    # Feld, das ein Mensch schreibt und das ``make_download`` deshalb
     # ausdrücklich in Ruhe lässt — und genau darum reiste er von 0.3.0 bis
     # 0.4.0 unverändert mit, samt der Behauptung, dies sei „das bisher größte
     # Update". Steht er auf einer anderen Fassung als die Datei, gehört er zu

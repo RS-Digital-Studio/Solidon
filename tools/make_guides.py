@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -1408,6 +1409,12 @@ def story_undo_a_step(run: GuideRun) -> None:
     # nennt die Nachfrage die Bohrung, die mit ihm verschwände.
     body = _new_box(run, (60.0, 40.0, 10.0))
     _face_spot(run, body)
+    # Die Auswahlseite kommt nur bei einem Wechsel der Auswahl nach vorn; eine
+    # frühere Geschichte hatte dieselbe Oberseite eines gleichnamigen Quaders
+    # gewählt und den Prüfbericht vorn gelassen. Im ganzen Lauf fehlte damit
+    # *Bohrung setzen*, allein lief die Geschichte durch.
+    run.window.right.setCurrentWidget(run.window.feature_dock)
+    run.settle(10)
     guide_targets.widget_for(run.window, "operation:drill_hole").click()
     run.settle(40)
     _open_dialog(run, "Bohrung setzen")
@@ -1612,10 +1619,19 @@ def story_draw_and_pull(run: GuideRun) -> None:
     run.settle(40)
     run.capture(3)
     flow.place()
-    flow.lift_to(10.0)
+    # Die Höhe rastet auf das Raster der Ansicht, und dessen Schritt hängt am
+    # Maßstab: Nach dem Einpassen war er größer als 10 mm, die Höhe rastete
+    # auf null, und der dritte Klick baute nichts. Gezogen wird deshalb auf
+    # das nächste Vielfache des Rasters ab 10 mm, wie es der Zeiger täte.
+    draft = flow.draft
+    if draft is None or draft.surface is None:
+        raise SystemExit("Das Aufziehen hat nach dem zweiten Klick keine Grundfläche")
+    grid = flow._step(draft.surface.frame)
+    flow.lift_to(math.ceil(10.0 / grid) * grid if grid > 0.0 else 10.0)
     run.settle(40)
     run.capture(4)
-    flow.settle()
+    if not flow.settle():
+        raise SystemExit("Der dritte Klick des Aufziehens hat keinen Körper gebaut")
     web.until_quiet(run.app, run.session, "Aufziehen")
     run.window.object_tree.select_object(None)
     run.window.right.setCurrentWidget(run.window.report)

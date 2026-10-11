@@ -36,7 +36,7 @@ from app.core.registry.registry import CATEGORIES, REGISTRY
 from app.i18n import tr
 from app.i18n.catalog import available_languages
 from app.ui.manual_window import ManualWindow
-from tools.make_figures import SAMPLE_OBJECT, SAMPLE_PRINTER, figure_sketch
+from tools.make_figures import SAMPLE_OBJECT, figure_sketch
 
 #: Die erzeugten Handbuchseiten der Website. Sie sind eingecheckt, weil sie
 #: hochgeladen werden — und veralten, sobald jemand am Handbuchtext dreht,
@@ -2280,9 +2280,10 @@ def test_an_operation_with_a_limit_says_when_not_to_use_it() -> None:
 def test_the_staged_texts_of_the_figures_cover_every_language() -> None:
     """Die gestellten Texte der Aufnahmen gibt es in jeder Sprache.
 
-    Zwei gestellte Werte in ``tools/make_figures.py`` sind keine normalen
-    Oberflächentexte: Körpername im Operationsdialog und Druckername in den
-    Druckeinstellungen. (Die gestellten Befunde des Prüfberichts waren bis zum
+    Ein gestellter Wert in ``tools/make_figures.py`` ist kein normaler
+    Oberflächentext: der Körpername im Operationsdialog. (Der Druckername war
+    bis 0.6.0 der zweite; seither übersetzt ihn die Anwendung selbst,
+    ``profiles.shown_printer_title``. Die gestellten Befunde des Prüfberichts waren bis zum
     02.09.2026 der dritte; seither zeigt das Bild die echten Befunde des
     Passungsbeispiels, und die kommen aus dem Katalog.) Fehlt eine Sprache, fällt ein
     Bild still auf Deutsch zurück — und das sieht man dem Erzeugerlauf nicht an,
@@ -2298,12 +2299,8 @@ def test_the_staged_texts_of_the_figures_cover_every_language() -> None:
     assert not sorted(languages - set(SAMPLE_OBJECT)), (
         f"ohne Körpernamen: {sorted(languages - set(SAMPLE_OBJECT))}"
     )
-    assert not sorted(languages - set(SAMPLE_PRINTER)), (
-        f"ohne Druckernamen: {sorted(languages - set(SAMPLE_PRINTER))}"
-    )
     for language in languages:
         assert SAMPLE_OBJECT[language].strip(), language
-        assert SAMPLE_PRINTER[language].strip(), language
 
 
 def test_the_start_screen_button_opens_the_chapter_it_names(qt_app: object) -> None:

@@ -78,7 +78,7 @@
         <div class="shot">
           <div class="stage">
             <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="bilder/beleg-fenster.webp?v=2e6d7fb9"><img src="bilder/beleg-fenster.webp?v=2e6d7fb9" width="2560" height="1369" fetchpriority="high"
+            <a href="bilder/beleg-fenster.webp?v=be8fec18"><img src="bilder/beleg-fenster.webp?v=be8fec18" width="2560" height="1369" fetchpriority="high"
                  alt="Das Hauptfenster von Solidon3D mit einem zweifarbigen Schild: links Objekte, Parameter und Verlauf, in der Mitte groß das Schild, dessen Jahreszahl gewählt ist, rechts der Prüfbericht mit einer Warnung und das Fenster „Auswahl“ mit den Handlungen für die gewählten Lettern."></a>
           </div>
         </div>
@@ -144,7 +144,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-merkmal.webp?v=4b71d51a"><img src="bilder/beleg-merkmal.webp?v=4b71d51a" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="bilder/beleg-merkmal.webp?v=d282b1fb"><img src="bilder/beleg-merkmal.webp?v=d282b1fb" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Eine eingelesene Halterung mit fünf erkannten Bohrungen; Bohrung 4 ist gewählt. Im Bild stehen ihre Abstände zu den Kanten und die Gruppe „Bohrung ändern“ mit Durchmesser, Ort und Tiefe; rechts im Fenster „Auswahl“ der Satz „Passt vermutlich zu M5“ und darunter Merkmal verschieben, Zum Langloch ziehen, Merkmal drehen, Merkmal verdoppeln, Merkmal entfernen, Senken und Bohrung verschließen."></a>
           </div>
           <figcaption>Eine angeklickte Bohrung: ihre Maße im Bild, ihre Handlungen rechts in der Auswahl.</figcaption>
@@ -239,7 +239,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-skizze.webp?v=c375bf18"><img src="bilder/beleg-skizze.webp?v=c375bf18" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="bilder/beleg-skizze.webp?v=3a863cb5"><img src="bilder/beleg-skizze.webp?v=3a863cb5" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Der Skizzenmodus im Hauptfenster: Gezeichnet wird in der Ansicht auf einer Fläche des Halters aus Weg 2, ein bemaßtes Rechteck von 50 × 30 mm mit einem Kreis darin, dahinter blass der Halter mit seinen zwei Schraubenlöchern; unten die Leiste mit den Zeichenwerkzeugen, der Zeichenebene und den Knöpfen Fertig und Verwerfen, rechts der Reiter „Bedingungen“."></a>
           </div>
           <figcaption>Gezeichnet wird in der Ansicht — auf der Fläche, die man angeklickt hat.</figcaption>
@@ -292,7 +292,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="bausteine" data-operations="create_bayonet create_channel_joint create_detent_disc create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_rod_connector create_room_floor create_room_pane create_room_wall insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
+      <div class="showcase" id="bausteine" data-operations="create_barrel_hinge create_bayonet create_cable_clip create_channel_joint create_detent_disc create_dowel create_foot create_gusset create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_living_hinge create_printed_nut create_printed_screw create_rib create_rod_connector create_room_floor create_room_pane create_room_wall create_threaded_rod create_wall_mount insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_threaded_rod insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Bausteine</span>
           <h3>Mutternfalle mit veränderbaren Maßen einsetzen</h3>
@@ -309,18 +309,25 @@
           <p class="note">Jeder Baustein hat einen Bereichsnachweis an festgelegten
           Parameterkombinationen: <b>geschlossenes Netz, Mindestwandstärke,
           keine Selbstdurchdringung.</b></p>
-          <p>Wählst du vor dem Einsetzen keine Stelle, setzt Solidon3D den
-          Baustein zur Vorschau auf die größte nach oben zeigende Fläche,
-          statt an den Nullpunkt. Du kannst eine andere Stelle wählen.
-          Ohne Modell erklärt der Katalog, warum das Einsetzen gesperrt ist,
-          und bietet den Weg zum ersten Körper an.</p>
+          <p>Bausteine, die für sich ein Teil sind, entstehen ohne gewählte
+          Stelle als eigener Körper auf einer freien Stelle der Druckplatte,
+          auch im leeren Projekt. Dazu gehören etwa Schraube, gedruckte
+          Mutter, Passstift, Bolzen- und Filmscharnier, Rippe, Eckwinkel,
+          Standfuß, Wandhalter und Kabelclip. Der Gewindebolzen ist eine
+          Gewindestange oder Stiftschraube ohne Kopf, mit demselben
+          druckbaren Gewinde wie Schraube und Mutter.</p>
+          <p>Andere Bausteine setzt Solidon3D ohne gewählte Stelle zur
+          Vorschau auf die größte nach oben zeigende Fläche, statt an den
+          Nullpunkt. Du kannst eine andere Stelle wählen. Ohne Modell erklärt
+          der Katalog, warum ihr Einsetzen gesperrt ist, und bietet den Weg
+          zum ersten Körper an.</p>
           <p>Der Objektbaum zeigt, was ein Baustein mitbringt: seine
           Merkmale stehen als eigene Einträge darunter, und der Knoten bietet
           an, genau diesen Schritt zu ändern.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-bausteine.webp?v=7dbb889c"><img src="bilder/beleg-bausteine.webp?v=7dbb889c" width="1560" height="1144" loading="lazy" decoding="async"
+            <a href="bilder/beleg-bausteine.webp?v=7664b16b"><img src="bilder/beleg-bausteine.webp?v=7664b16b" width="1560" height="1144" loading="lazy" decoding="async"
                  alt="Der Bausteinkatalog, über dem Fenster geöffnet: die Gruppen Verbindungen, Mechanik und Befestigung mit Heat-Set-Einpressbuchse, Mutternfalle, gedruckter Mutter, Schraube, Gewinde, Schraubenloch mit Senkung, Scharnieren, Rastnase, Schnappverbindungen, Standfuß, Schlüsselloch-Aufhängung, Magnettasche, Lochwand-Einhänger, Profilklemmen und Wandhalter, jeder mit Vorschau und seinen Maßen. Unten die Knöpfe Einfügen und Auswahl als Baustein speichern."></a>
           </div>
           <figcaption>Der Katalog — jedes Vorschaubild ist gerendert, nicht gezeichnet.</figcaption>
@@ -349,7 +356,7 @@
         </div>
         <figure class="shot upright">
           <div class="stage">
-            <a href="bilder/beleg-eigener-baustein.webp?v=40fed2c7"><img src="bilder/beleg-eigener-baustein.webp?v=40fed2c7" width="547" height="700" loading="lazy" decoding="async"
+            <a href="bilder/beleg-eigener-baustein.webp?v=f676d084"><img src="bilder/beleg-eigener-baustein.webp?v=f676d084" width="547" height="700" loading="lazy" decoding="async"
                  alt="Der Dialog „Auswahl als Baustein speichern“, geöffnet aus dem Katalog: oben Name, Gruppe, Beschreibung, Lizenz und Autor, darunter für jedes Maß — hier Breite und Tiefe — Beschriftung, Einheit, kleinster und größter Wert, Vorgabe und Platz im Dialog, dann die Stellen, die man später anklicken kann, mit ihrem Namen im Rezept; unten „Bereichstest: 8 Kombinationen“ und der Knopf „Baustein anlegen“."></a>
           </div>
           <figcaption>Der Dialog fragt fünf Dinge — und rechnet den Maßbereich durch, bevor er speichert.</figcaption>
@@ -377,8 +384,8 @@
         </div>
         <figure class="shot">
           <picture>
-            <source srcset="handbuch/de/textures-dark.svg?v=b1c0579f" media="(prefers-color-scheme: dark)">
-            <img class="figure" src="handbuch/de/textures.svg?v=4ec2d212" width="454" height="274" loading="lazy" decoding="async"
+            <source srcset="handbuch/de/textures-dark.svg?v=d853c04c" media="(prefers-color-scheme: dark)">
+            <img class="figure" src="handbuch/de/textures.svg?v=41daceb1" width="454" height="274" loading="lazy" decoding="async"
                  alt="Acht Musterkacheln in zwei Reihen: Rippe als parallele Streifen, Welle als wellige Streifen, Rändel gerade und gekreuzt als schräge Streifen beziehungsweise Rauten, Wabe als Sechsecke, Noppen als Punktraster, Voronoi als unregelmäßige Zellen und Rauschen als verstreute Flecken.">
           </picture>
           <figcaption>Dieselben Umrisse, die danach gedruckt werden — die Vorschau ist gerechnet, nicht gemalt.</figcaption>
@@ -398,7 +405,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-bericht.webp?v=8b0f4ae9"><img src="bilder/beleg-bericht.webp?v=8b0f4ae9" width="2093" height="1308" loading="lazy" decoding="async"
+            <a href="bilder/beleg-bericht.webp?v=d022d848"><img src="bilder/beleg-bericht.webp?v=d022d848" width="2093" height="1308" loading="lazy" decoding="async"
                  alt="Eine Dose mit Deckel groß in der Ansicht, rechts ihr Prüfbericht: 0 Fehler, 2 Warnungen, 6 Hinweise. Die Warnungen sagen, dass die Passung enger sitzt als vorgesehen und dass eine Fläche des Deckels frei überhängt und Stützen braucht; darunter Hinweise zu Aushöhlen, Deckel und Material."></a>
           </div>
           <figcaption>Der Prüfbericht einer Dose mit Deckel.</figcaption>
@@ -462,7 +469,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/schritt-druck.webp?v=6c2f35d5"><img src="bilder/schritt-druck.webp?v=6c2f35d5" width="1426" height="891" loading="lazy" decoding="async"
+            <a href="bilder/schritt-druck.webp?v=2f8ad7f6"><img src="bilder/schritt-druck.webp?v=2f8ad7f6" width="1426" height="891" loading="lazy" decoding="async"
                  alt="Die Druckeinstellungen über einer eingelesenen Figur: Qualität, Drucker, Düse und Filament, darunter Fülldichte und Stützen. Unter „Was dieses Teil verlangt“ schlägt Solidon3D einen Brim und eine längere Mindestzeit je Schicht vor; unten die Knöpfe Slicen und Im Slicer öffnen."></a>
           </div>
           <figcaption>Was dieses Teil verlangt, steht mit Grund im Dialog — übernommen wird, was angehakt ist.</figcaption>
@@ -563,7 +570,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-filamentlager.webp?v=4d598502"><img src="bilder/beleg-filamentlager.webp?v=4d598502" width="1051" height="701" loading="lazy" decoding="async"
+            <a href="bilder/beleg-filamentlager.webp?v=db021933"><img src="bilder/beleg-filamentlager.webp?v=db021933" width="1051" height="701" loading="lazy" decoding="async"
                  alt="Das Filamentlager, nach Lagerort gruppiert: sechs Spulen auf den Brettern „Regal Werkstatt“ und „Trockenbox“, jede mit gezeichneter Spule, Materialart, Restmenge in Gramm und Lagerort — eine Spule mit drei Farben, eine mit dem Vermerk „Wenig Filament“; darüber der Knopf „Lager verlassen“ und das Suchfeld."></a>
           </div>
           <figcaption>Das Regal, nach Lagerort gruppiert: Die Restmenge steht
@@ -581,13 +588,13 @@
           ihren Wert aus dem Materialprofil, statt als Konstante im Modell zu
           verschwinden. Vorne stehen die Werte, die man wirklich ändert —
           der Rest liegt unter „Weitere Einstellungen“.</p>
-          <p class="note">178 Operationen, alle nach demselben Muster:
+          <p class="note">190 Operationen, alle nach demselben Muster:
           <b>Menü, Kommandozeile und Chat sehen dieselbe
           Deklaration.</b></p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/beleg-dialog.webp?v=47f413e1"><img src="bilder/beleg-dialog.webp?v=47f413e1" width="2560" height="1369" loading="lazy" decoding="async"
+            <a href="bilder/beleg-dialog.webp?v=1c45e41e"><img src="bilder/beleg-dialog.webp?v=1c45e41e" width="2560" height="1369" loading="lazy" decoding="async"
                  alt="Das Hauptfenster mit dem gewählten Schild und rechts oben dem Dialog „Bohrung setzen“: Durchmesser und Position X, Y und Z mit je einem fx-Knopf, das Kästchen Langloch und der zugeklappte Bereich „Weitere Einstellungen“; unten im Bild die Leiste mit dem Hinweis, dass ein Klick ins Modell die Stelle setzt."></a>
           </div>
           <figcaption>Der Dialog einer Operation — vorne die zwei bis drei
@@ -705,7 +712,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <a href="bilder/schritt-start.webp?v=f135a220"><img src="bilder/schritt-start.webp?v=f135a220" width="1472" height="920" loading="lazy" decoding="async"
+            <a href="bilder/schritt-start.webp?v=61f38d25"><img src="bilder/schritt-start.webp?v=61f38d25" width="1472" height="920" loading="lazy" decoding="async"
                  alt="Der Startbildschirm: das Ablagefeld für Modelle und Projekte, die Knöpfe Neues Projekt, Modell öffnen, Projekt öffnen und Handbuch, das Filamentlager mit sechs Spulen, darunter vier geführte Touren — je eine pro Weg — mit Vorschaubild, dazu Feedback geben und Solidon freiwillig unterstützen und der zugeklappte Abschnitt „Was kann das noch?“."></a>
           </div>
           <figcaption>Vier der zwölf Beispiele führen die Hauptwege vor; weitere

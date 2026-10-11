@@ -570,3 +570,36 @@ def test_a_shipped_printer_is_never_carried(tmp_path: Path, two_computers) -> No
     path = _project_on("centauri-carbon-2", tmp_path / "centauri.p3d")
 
     assert "carried_profiles" not in project_data(path)
+
+
+def test_the_generic_printers_are_named_in_the_customers_language() -> None:
+    """Die allgemeinen Drucker hießen in jeder Sprache deutsch.
+
+    ``printers.toml`` führt ihren Titel deutsch, und so bleibt er für
+    Slicerzuordnung und Projektdatei. Gezeigt wird er über
+    ``shown_printer_title``, deren Tabelle jeden mitgelieferten Drucker ohne
+    Hersteller kennen muss; ein selbst gewählter Titel auf derselben Kennung
+    und ein Herstellername bleiben, wie sie sind.
+    """
+    from app.i18n import get_language, set_language, source_text
+    from app.i18n.catalog import install_language
+
+    shipped = profiles._read_table(profiles._DATA_DIR / "printers.toml")
+    generic = {key: table["title"] for key, table in shipped.items() if not table.get("vendor")}
+    assert generic, "kein allgemeiner Drucker im Bestand"
+    assert set(generic) == set(profiles._GENERIC_PRINTER_TITLES)
+
+    before = get_language()
+    try:
+        install_language("fr")
+        set_language("fr")
+        for key, title in generic.items():
+            shown = profiles.shown_printer_title(profiles.printer(key))
+            assert source_text(shown) == title, key
+            assert str(shown) != title, f"{key} steht im französischen Fenster deutsch"
+        own = replace(profiles.printer(profiles.DEFAULT_PRINTER), title="Werkstatt")
+        assert profiles.shown_printer_title(own) == "Werkstatt"
+        branded = profiles.printer("centauri-carbon-2")
+        assert profiles.shown_printer_title(branded) == branded.title
+    finally:
+        set_language(before)

@@ -580,6 +580,12 @@ def _assert_tour_lines_fit(panel: TourPanel, where: str) -> None:
     ]
     for at, (_marker, text) in enumerate(panel._rows):
         lines.append((f"Schritt {at + 1}", text, viewport))
+        # Halbfett ist nur der aktuelle: Das Stilblatt setzte beim Polieren die
+        # Schrift von vorher zurück, und gekürzt war mit einer anderen.
+        assert text.font().bold() == (at == panel.current_index), (
+            f"{where}: Schritt {at + 1} ist {'' if text.font().bold() else 'nicht '}halbfett, "
+            f"aktuell ist Schritt {panel.current_index + 1}"
+        )
     for name, label, clip in lines:
         if not label.isVisible():
             continue
@@ -693,6 +699,41 @@ def test_every_tour_line_stays_inside_the_card(qt_app: object, example_id: str) 
         session.release()
 
 
+def test_a_folded_step_fits_where_the_font_kerns_before_the_ellipsis(qt_app: object) -> None:
+    """``elidedText`` misst den Anfang im ganzen Satz, gezeichnet wird er vor „…“.
+
+    Rückt die Schrift vor der Auslassung anders zusammen („V…“ statt „Vo“),
+    ist die gekürzte Zeile einen Punkt breiter als ihr Platz (Ubuntu-CI:
+    369 in 368). Unter DejaVu geschieht das in wenigen Lagen; eine Kette von
+    Unterschneidungspaaren über viele Breiten trifft sie ohne einen
+    bestimmten Tourtext. Mit der Ersatzschrift unter Windows offscreen gibt
+    es keine Unterschneidung — dort ist der Test nur grün, unter Linux misst er.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.tour import StepLabel
+
+    _in_the_customers_style()
+    full = "1. " + " ".join(["To Ta Te Vo Va Ve Wo We Yo Av AT"] * 8)
+    label = StepLabel(full)
+    label.setObjectName("tourStepText")
+    label.set_wrapped(False)
+    label.show()
+    over: list[str] = []
+    try:
+        for width in range(40, 400):
+            label.resize(width, 40)
+            QApplication.processEvents()
+            room = label.contentsRect().width()
+            advance = label.fontMetrics().horizontalAdvance(label.text())
+            if advance > room:
+                over.append(f"{width}: {advance}/{room} {label.text()[-6:]!r}")
+    finally:
+        label.close()
+        label.deleteLater()
+    assert not over, f"{len(over)} Breiten über dem Platz, erste: {over[:3]}"
+
+
 def test_a_folded_step_is_cut_inside_its_frame_and_not_earlier(qt_app: object) -> None:
     """Gekürzt wird auf die Fläche im Rahmen — bei jeder Breite, nicht bei vier.
 
@@ -702,6 +743,7 @@ def test_a_folded_step_is_cut_inside_its_frame_and_not_earlier(qt_app: object) -
     wird in beide Richtungen: nicht breiter als der Platz, aber auch nicht
     viel früher gekürzt als nötig.
     """
+    from PySide6.QtGui import QFont
     from PySide6.QtWidgets import QApplication
 
     from app.ui.tour import StepLabel
@@ -731,6 +773,15 @@ def test_a_folded_step_is_cut_inside_its_frame_and_not_earlier(qt_app: object) -
             assert advance > room - slack, (
                 f"bei {width}: zu früh gekürzt, {shown!r} lässt {room - advance} Punkte frei"
             )
+        # Eine neue Schrift — vom Stilblatt oder von hier — kürzt neu.
+        bigger = QFont(label.font())
+        bigger.setPixelSize(2 * label.fontMetrics().height())
+        label.setFont(bigger)
+        QApplication.processEvents()
+        shown = label.text()
+        advance = label.fontMetrics().horizontalAdvance(shown)
+        room = label.contentsRect().width()
+        assert advance <= room, f"nach dem Schriftwechsel: {advance} Punkte Text in {room} Punkten"
     finally:
         label.close()
         label.deleteLater()
