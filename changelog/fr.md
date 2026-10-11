@@ -157,6 +157,7 @@ dans `website/version.json`.
 - Un bloc destiné à une face ou à un trou n'est calculé qu'une fois placé dans la vue. D'ici là, la boîte de dialogue ne peut pas être appliquée et indique ce qui manque.
 - Si la face change alors que la boîte de dialogue d'un bloc est ouverte, l'emplacement choisi reste tant qu'il convient à la nouvelle forme. Sinon, le bloc en cherche un nouveau et le signale.
 - Une boîte de dialogue de bloc ouverte pendant que l'étape précédente calcule encore place le bloc d'elle-même dès que le résultat est là, et ne peut pas être appliquée avant.
+- Un bloc placé dans la vue se déplace aussi d'un clic vers un autre endroit après une saisie dans la boîte de dialogue.
 
 ### Modifier et esquisser
 

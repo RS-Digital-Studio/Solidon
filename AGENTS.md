@@ -24,7 +24,9 @@ aktiviert. Ohne KI bleibt nur der Chat aus.
 Wo die Suite eine Regel hält, ist ein Verstoß ein roter Lauf, keine
 Geschmacksfrage. Über den ganzen Baum wachen Tests bei 1, 3, 4, 9–13, 15–20
 und 22; bei 2, 6, 7, 14 und 21 prüfen sie die Stellen, an denen die Regel
-greift. 5 und 8 sind Urteilsfragen ohne mechanische Prüfung — sie hält die
+greift. Bei 5 hält ein Test den Codeblock aus §9 und den Code gleich
+(`test_plan_references`: Dataclasses, `OpFn`, `solve_sketch`); ob der
+Vertrag zuerst stand, bleibt wie 8 eine Urteilsfrage — sie hält die
 Durchsicht (`/regelcheck`, Agent `solidon3d-review`).
 
 **Aufbau**
@@ -302,6 +304,7 @@ Welche Datei welche Art trägt, steht in `tests/CLAUDE.md`.
 | Hauptwege | die vier Wege aus Bauplan §2.2 Ende zu Ende |
 | Anschluss | was nur an einer Stelle eingelöst wird, wird an dieser Stelle geprüft — nicht „der Cache kann es", sondern „die Anwendung tut es" |
 | Doku-Karte | jedes Verzeichnis mit Code trägt eine `CLAUDE.md`, jeder §-Verweis darin trifft |
+| Verträge | Codeblock aus Bauplan §9 gegen den Code: Felder, Typen, Vorgaben, Schalter, Signaturen |
 | Agenten-Suite | 39 Referenzanfragen |
 
 ---
