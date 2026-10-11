@@ -21,6 +21,7 @@ from __future__ import annotations
 import base64
 import http.client
 import json
+import re
 import socket
 import threading
 import urllib.error
@@ -38,8 +39,11 @@ from app.core.backends.resources import keep_warm, local_ai_slot
 from app.core.discover import PROBE_SECONDS, UNUSABLE_ADDRESS, is_local_address, opener_for
 from app.core.errors import (
     CANCEL,
+    CHECK_UPDATES,
     OPEN_SETTINGS,
     RETRY,
+    SET_UP_CHAT,
+    TRY_KEY_AGAIN,
     AppError,
     ExternalToolError,
     OperationCancelled,
@@ -413,12 +417,11 @@ def post_json(
     except urllib.error.HTTPError as error:
         try:
             raw = read_limited(error, limit=MAX_ERROR_BYTES, deadline=deadline)
-            detail = redact_external(raw.decode("utf-8", errors="replace"))
         except ResponseDeadlineError, ResponseTooLargeError, ValueError:
-            detail = ""
+            raw = b""
         finally:
             error.close()
-        raise BackendUnavailable(status=error.code, detail=detail) from error
+        raise refusal(error.code, raw) from error
     except urllib.error.URLError as error:
         raise BackendUnavailable(detail=redact_external(error.reason)) from error
     except TimeoutError as error:
@@ -557,14 +560,15 @@ def post_json_local_cancelable(
                 headers={"Content-Type": "application/json", **headers},
             )
             with connection.getresponse() as response:
-                raw = read_limited(response, limit=MAX_RESPONSE_BYTES, deadline=deadline)
                 if response.status >= 400:
-                    raise BackendUnavailable(
-                        status=response.status,
-                        # Fremder Text, also redigiert und gedeckelt — er steht
-                        # gleich in einer Meldung und im Protokoll (§33.2).
-                        detail=redact_external(raw.decode("utf-8", errors="replace"), limit=500),
-                    )
+                    # Ein Fehlerkörper mit derselben Grenze wie in
+                    # :func:`post_json` — nicht mit der einer Antwort.
+                    try:
+                        raw = read_limited(response, limit=MAX_ERROR_BYTES, deadline=deadline)
+                    except ResponseTooLargeError:
+                        raw = b""
+                    raise refusal(response.status, raw)
+                raw = read_limited(response, limit=MAX_RESPONSE_BYTES, deadline=deadline)
                 answers.append(_as_object(raw, url))
         except TimeoutError as error:
             errors.append(BackendTooSlow(seconds=LOCAL_TIMEOUT_SECONDS))
@@ -651,6 +655,7 @@ class BackendUnavailable(ExternalToolError):
         status: int | None = None,
         detail: TranslatableText | str = "",
         provider: str = "",
+        reason: str = "",
     ) -> None:
         # **Der Anbieter gehört in die Meldung, und zwar aus einem gemessenen
         # Grund.** Ein Kunde richtete am 24.08.2026 sein lokales Ollama ein und
@@ -669,7 +674,227 @@ class BackendUnavailable(ExternalToolError):
             values["status"] = str(status)
         if provider:
             values["provider"] = provider
+        # Was die Gegenstelle selbst dazu sagt — ihr Satz, nicht ihr JSON
+        # (:func:`refusal`). Er steht unter „Grund" und nicht im Detail: Das
+        # Detail ist der übersetzte Satz, was jetzt hilft.
+        if reason:
+            values["reason"] = reason
         super().__init__(detail=detail or None, values=values)
+
+    def __str__(self) -> str:
+        """Titel und Satz **und die Fakten** — für Protokoll und Bericht.
+
+        Der Kunde liest Titel und Satz im Dialog, das Protokoll liest diese
+        Zeile (``session._on_failed``). Aus genau ihr wurde
+        S-20261010-e5014c ausgewertet; ohne Status, Modell und den Satz der
+        Gegenstelle bliebe dort nur „Die Gegenstelle hat abgelehnt“ (Review
+        agentlog M1). ``reason`` ist schon redigiert und gedeckelt.
+        """
+        facts = [
+            f"{name}={self.values[name]}"
+            for name in ("provider", "status", "model")
+            if self.values.get(name)
+        ]
+        if self.values.get("reason"):
+            facts.append(f"reason={self.values['reason']!r}")
+        base = super().__str__()
+        return f"{base} [{' '.join(facts)}]" if facts else base
+
+
+#: Was hilft, je nachdem, womit die Gegenstelle abgelehnt hat. Bis zum
+#: 11.10.2026 stand an dieser Stelle ihr Antwortkörper — beim Kunden
+#: ``{"error":"model 'qwen3:14b' not found"}`` und Anthropics Fehlerobjekt samt
+#: ``request_id`` unter „Das Sprachmodell hat nicht geantwortet."
+#: (S-20261010-e5014c). Gegen Regel 17 und kein Satz, den jemand liest.
+_CHECK_SETUP: Final = _(
+    "Die Gegenstelle hat die Anfrage abgelehnt. Prüfen Sie Adresse und Modell unter "
+    "„Chat einrichten …“."
+)
+#: Der gehostete Weg hat feste Adresse und festes Modell — dort lässt sich nur
+#: der Schlüssel ändern (Review agentlog G8).
+_HOSTED_REFUSED: Final = _(
+    "Der Anbieter hat die Anfrage abgelehnt. Prüfen Sie Ihr Konto beim Anbieter und den "
+    "Schlüssel unter „Chat einrichten …“."
+)
+#: Ein 404 vom gehosteten Anbieter heißt: Dieses Modell gibt es dort nicht
+#: mehr. Die Hilfe ist eine Version von Solidon, die ein aktuelles nennt.
+_HOSTED_MODEL_GONE: Final = _(
+    "Der Anbieter bietet das Modell dieser Version nicht mehr an. Eine neuere Version von "
+    "Solidon nutzt ein aktuelles."
+)
+_NOT_THERE: Final = _(
+    "Unter dieser Adresse gibt es das Modell oder den Dienst nicht. Prüfen Sie Adresse und "
+    "Modell unter „Chat einrichten …“."
+)
+_TOO_MANY: Final = _(
+    "Der Anbieter nimmt gerade keine weiteren Anfragen an. Versuchen Sie es in ein paar "
+    "Minuten noch einmal."
+)
+_PROVIDER_TROUBLE: Final = _(
+    "Beim Anbieter ist gerade ein Fehler aufgetreten, oder er ist ausgelastet. Versuchen Sie "
+    "es in ein paar Minuten noch einmal."
+)
+
+
+def _refusal_detail(status: int) -> TranslatableText:
+    """Der Satz zu einem abgelehnten Aufruf: was jetzt hilft (Regel 17)."""
+    if status == 404:
+        return _NOT_THERE
+    if status == 429:
+        return _TOO_MANY
+    if status >= 500:
+        return _PROVIDER_TROUBLE
+    return _CHECK_SETUP
+
+
+def said_by(raw: bytes) -> str:
+    """Was die Gegenstelle in ihrer Ablehnung **sagt** — ihr Satz, nicht ihr JSON.
+
+    Ollama schickt ``{"error": "…"}``, Anthropic und OpenAI-kompatible Dienste
+    ``{"error": {"message": "…"}}``. Was kein JSON ist — eine HTML-Seite
+    eines Proxys —, bleibt als Text stehen: Sein Anfang ist dann die Auskunft.
+    Fremder Text, also redigiert und gedeckelt (§33.2).
+    """
+    text = raw.decode("utf-8", errors="replace").strip()
+    if text.startswith("<"):
+        # Eine HTML-Seite: ihr Titel ist die Auskunft, das Markup keine.
+        title = re.search(r"<title[^>]*>(.*?)</title>", text, re.IGNORECASE | re.DOTALL)
+        text = " ".join(title.group(1).split()) if title else ""
+    elif text.startswith(("{", "[")):
+        try:
+            loaded = load_json(text, max_bytes=MAX_ERROR_BYTES)
+        except ValueError:
+            loaded = None
+        if isinstance(loaded, list):
+            loaded = next((entry for entry in loaded if isinstance(entry, dict)), None)
+        text = _message_of(loaded) if isinstance(loaded, dict) else ""
+    return redact_external(text, limit=REASON_CHARS)
+
+
+def _message_of(loaded: dict[str, Any]) -> str:
+    """Der Satz in einem Fehlerobjekt: ``error`` als Text oder ``error.message``."""
+    found = loaded.get("error", loaded.get("message", ""))
+    if isinstance(found, dict):
+        found = found.get("message", "")
+    return found if isinstance(found, str) else ""
+
+
+#: Wie viel vom Satz der Gegenstelle mitgeht — genug für eine Fehlerzeile.
+REASON_CHARS: Final = 200
+
+
+def refusal(status: int, raw: bytes = b"") -> BackendUnavailable:
+    """Eine abgelehnte Anfrage als Fehler mit Satz und Ausweg.
+
+    Die Backends machen aus den zwei häufigen Lagen eigene Fehler mit eigenem
+    Titel (:class:`ModelNotInstalled`, :class:`KeyRefused`); alles andere
+    bekommt hier den Satz zu seinem Status.
+    """
+    error = BackendUnavailable(status=status, detail=_refusal_detail(status), reason=said_by(raw))
+    # Ausgelastet oder gestört heilt mit der Zeit, nicht im Einrichtungsdialog.
+    error.suggestions = (RETRY, CANCEL) if _passing(status) else (SET_UP_CHAT, CANCEL)
+    return error
+
+
+def _passing(status: int) -> bool:
+    """Ausgelastet oder gestört heilt mit der Zeit, nicht im Einrichtungsdialog."""
+    return status == 429 or status >= 500
+
+
+def _with_model(error: BackendUnavailable, model: str) -> BackendUnavailable:
+    """Welches Modell gefragt wurde — für Dialog und Protokoll (Review agentlog M1)."""
+    values = error.values
+    if model:
+        values.setdefault("model", model)
+    return error
+
+
+def _to_chat_setup(error: BackendUnavailable) -> BackendUnavailable:
+    """Ein Schlüsselfehler führt in „Chat einrichten …“, nicht zu den
+    zusätzlichen Programmen, die ``ExternalToolError`` sonst vorschlägt."""
+    error.suggestions = (SET_UP_CHAT, CANCEL)
+    return error
+
+
+def _hosted_refusal(error: BackendUnavailable) -> BackendUnavailable | None:
+    """Der Satz einer Ablehnung des gehosteten Anbieters — ``None``, wo der
+    allgemeine stimmt (keine Antwort, ausgelastet, gestört)."""
+    status = error.status
+    if status is None or _passing(status):
+        return None
+    reason = str(error.values.get("reason", ""))
+    if status == 404:
+        gone = BackendUnavailable(
+            status=status, detail=_HOSTED_MODEL_GONE, provider=error.provider, reason=reason
+        )
+        gone.suggestions = (CHECK_UPDATES, CANCEL)
+        return gone
+    return _to_chat_setup(
+        BackendUnavailable(
+            status=status, detail=_HOSTED_REFUSED, provider=error.provider, reason=reason
+        )
+    )
+
+
+class ModelNotInstalled(BackendUnavailable):
+    """Ollama läuft, das gewählte Modell aber liegt dort nicht.
+
+    Der häufigste Fall bei einem Chat, der nach einem abgelehnten Schlüssel
+    auf das lokale Modell wechselt: Die Vorgabe ist :data:`DEFAULT_OLLAMA_MODEL`,
+    geholt wurde aber ein anderes oder keines. Der Ausweg liegt im Dialog, der
+    Modelle herunterlädt und die geholten zur Wahl stellt.
+    """
+
+    default_title = _("Das gewählte Modell ist bei Ollama nicht installiert.")
+
+    def __init__(self, model: str = "", reason: str = "") -> None:
+        super().__init__(
+            status=404,
+            detail=_(
+                "Unter „Chat einrichten …“ laden Sie es herunter oder wählen ein Modell, das "
+                "schon installiert ist."
+            ),
+            provider="ollama",
+            reason=reason,
+        )
+        values = self.values
+        if model:
+            values["model"] = model
+        self.suggestions = (SET_UP_CHAT, CANCEL)
+
+
+#: Der Status, mit dem ein Anbieter sagt: *diesen Schlüssel gibt es nicht*.
+UNKNOWN_KEY: Final = 401
+
+
+class KeyRefused(BackendUnavailable):
+    """Der Anbieter hat den hinterlegten Schlüssel abgelehnt (401) oder ihm das
+    Modell verweigert (403). Beides ändert ein zweiter Versuch nicht."""
+
+    default_title = _("Der Anbieter hat den Schlüssel abgelehnt.")
+
+    def __init__(
+        self, status: int = UNKNOWN_KEY, provider: str = "anthropic", reason: str = ""
+    ) -> None:
+        detail = (
+            _(
+                "Der Anbieter kennt diesen Schlüssel nicht. Tragen Sie unter „Chat einrichten …“ "
+                "einen gültigen ein. Einen Tag lang übergeht Solidon ihn, so lange antwortet ein "
+                "lokales Modell, wenn eines eingerichtet ist."
+            )
+            if status == UNKNOWN_KEY
+            else _(
+                "Der Schlüssel gilt, hat aber keinen Zugriff auf dieses Modell. Prüfen Sie Ihr "
+                "Konto beim Anbieter, oder tragen Sie unter „Chat einrichten …“ einen anderen "
+                "Schlüssel ein."
+            )
+        )
+        super().__init__(status=status, detail=detail, provider=provider, reason=reason)
+        # Ein gemerkter 401 hat einen Rückweg ohne den Schlüsseltext (Review
+        # agentlog M2) — wichtig für einen Schlüssel aus der Umgebung.
+        self.suggestions = (
+            (SET_UP_CHAT, TRY_KEY_AGAIN, CANCEL) if status == UNKNOWN_KEY else (SET_UP_CHAT, CANCEL)
+        )
 
 
 class BackendAnswerUnreadable(ExternalToolError):
@@ -935,8 +1160,11 @@ class AnthropicBackend:
     @property
     def available(self) -> bool:
         """Ein Schlüssel liegt vor — und die Gegenseite hat ihn nicht schon
-        abgelehnt (:data:`_rejected`)."""
-        return self.id not in _rejected and keys.read(self.id) is not None
+        abgelehnt (:data:`_rejected`, :func:`key_refused`)."""
+        if self.id in _rejected:
+            return False
+        key = keys.read(self.id)
+        return key is not None and not keys.refused(self.id, key)
 
     @property
     def supports_images(self) -> bool:
@@ -952,7 +1180,9 @@ class AnthropicBackend:
     ) -> Reply:
         key = keys.read(self.id)
         if key is None:
-            raise BackendUnavailable(detail="no key stored", provider=self.id)
+            raise _to_chat_setup(
+                BackendUnavailable(detail=_("Es ist kein Schlüssel hinterlegt."), provider=self.id)
+            )
         # **Auch ein schon gespeicherter Schlüssel wird geprüft.** Seit dem
         # 24.08.2026 lehnt :func:`keys.store` ab, was keiner sein kann — im
         # Schlüsselbund derer, die vorher gespeichert haben, liegt es trotzdem.
@@ -961,7 +1191,7 @@ class AnthropicBackend:
         problem = keys.unusable(key)
         if problem is not None:
             reject(self.id)
-            raise BackendUnavailable(detail=str(problem), provider=self.id)
+            raise _to_chat_setup(BackendUnavailable(detail=problem, provider=self.id))
 
         limit = self.max_tokens
         if max_output_tokens is not None:
@@ -1002,8 +1232,17 @@ class AnthropicBackend:
             if error.status in AUTH_REFUSED:
                 # Ab hier gilt dieser Zugang als nicht verfügbar, und der Chat
                 # nimmt den nächsten — statt bei jedem Zug denselben abgelehnten
-                # Schlüssel erneut zu schicken.
-                reject(self.id)
+                # Schlüssel erneut zu schicken. Ein ungültiger (401) bleibt es
+                # auch über den Neustart hinaus, bis ein anderer dasteht.
+                reject(self.id, lasting=error.status == UNKNOWN_KEY, key=key)
+                refused = KeyRefused(
+                    error.status, self.id, reason=str(error.values.get("reason", ""))
+                )
+                raise _with_model(refused, self.model) from error
+            hosted = _hosted_refusal(error)
+            if hosted is not None:
+                raise _with_model(hosted, self.model) from error
+            _with_model(error, self.model)
             raise
         return _from_anthropic(answer)
 
@@ -1413,6 +1652,11 @@ class OllamaBackend:
     #: Kundenzug, und die trägt kein Chat.
     on_gpu: bool | None = None
 
+    #: Ob das Modell diesem Backend schon einmal geantwortet hat. Erst dann
+    #: kann es geladen sein — ``on_gpu`` taugt dafür nicht, es bleibt ``None``
+    #: bei einer Antwort ohne Zähler (Review agentlog G4).
+    answered: bool = False
+
     @property
     def id(self) -> str:
         return "ollama"
@@ -1476,10 +1720,20 @@ class OllamaBackend:
         """
         address = ollama_endpoint(self.url)
         with local_ai_slot(address, cancelled, progress, holder=self.holder):
+            loaded = True
             try:
                 yield
+            except BackendUnavailable:
+                # Abgewiesen oder niemanden erreicht, und nie eine Antwort:
+                # Geladen hat dieser Zug nichts. Warm gehalten versuchte das
+                # Beenden sonst ein Modell zu entladen, das Ollama gar nicht
+                # hat (S-20261010-e5014c, ``qwen3:14b`` nach dem Wechsel).
+                loaded = self.answered
+                raise
             finally:
-                if self.on_gpu is False or not is_local_address(address):
+                if not loaded:
+                    pass
+                elif self.on_gpu is False or not is_local_address(address):
                     self.release()
                 else:
                     keep_warm(self.holder, self.release)
@@ -1500,6 +1754,12 @@ class OllamaBackend:
                 post_json(address, {}, payload, timeout=OLLAMA_RELEASE_SECONDS)
             else:
                 self.transport(address, {}, payload)
+        except BackendUnavailable as error:
+            if error.status == 404:
+                # Ollama kennt das Modell nicht — dann ist auch keines geladen.
+                _log.info("ollama model %s is not installed, nothing to unload", self.model)
+                return
+            _log.warning("Ollama-Modell %s konnte nicht entladen werden", self.model)
         except AppError, OSError, ValueError:
             # Freigabe ist Aufräumen. Ein fertiger Vorschlag bleibt gültig,
             # selbst wenn ein gerade beendetes Ollama dabei nicht mehr antwortet.
@@ -1602,7 +1862,14 @@ class OllamaBackend:
             # ist die Antwort auf „welches Modell denn?".
             error.provider = error.provider or self.id
             error.values.setdefault("provider", self.id)
+            reason = str(error.values.get("reason", ""))
+            # Ollamas 404 auf ``/api/chat`` nennt das fehlende Modell beim
+            # Namen; ein 404 ohne ihn ist eine falsche Adresse.
+            if error.status == 404 and self.model in reason:
+                raise ModelNotInstalled(self.model, reason=reason) from error
+            _with_model(error, self.model)
             raise
+        self.answered = True
         self.on_gpu = _ran_on_gpu(answer)
         reply = _from_ollama(answer, self.model)
         length = request_length(payload)
@@ -2776,19 +3043,43 @@ AUTH_REFUSED: Final = (401, 403)
 #: gilt mit jedem beliebigen Text als verfügbar und scheitert dann bei jedem
 #: Zug. Ein Kunde hat am 24.08.2026 drei Stunden dagegen gearbeitet.
 #:
-#: Der Merker lebt nur in dieser Sitzung und wird nicht gespeichert: Ein
-#: abgelehnter Schlüssel kann beim Anbieter wieder gültig werden, und ein
-#: neuer hebt ihn ohnehin auf (:func:`keys.store` ruft :func:`accept_again`).
+#: Der Merker lebt nur in dieser Sitzung: Ein Schlüssel ohne Recht auf das
+#: Modell (403) kann beim Anbieter wieder gültig werden, und ein neuer hebt ihn
+#: ohnehin auf (:func:`keys.store` ruft :func:`accept_again`). Einen
+#: **ungültigen** (401) merkt :func:`reject` zusätzlich über den Neustart
+#: hinaus, einen Tag lang (``keys.mark_refused``, ``keys.REFUSAL_HOLDS_SECONDS``).
 _rejected: set[str] = set()
 
 
-def reject(backend_id: str) -> None:
-    """Merken, dass dieser Zugang abgelehnt wurde."""
+def key_refused(backend_id: str) -> bool:
+    """Ob der Anbieter genau den hinterlegten Schlüssel als ungültig abgelehnt
+    hat und die Frist noch läuft."""
+    key = keys.read(backend_id)
+    return key is not None and keys.refused(backend_id, key)
+
+
+def reject(backend_id: str, *, lasting: bool = False, key: str | None = None) -> None:
+    """Merken, dass dieser Zugang abgelehnt wurde — mit ``lasting`` auch über
+    den Neustart hinaus.
+
+    ``key`` ist der **gesendete** Schlüssel: Wer während der abgelehnten
+    Anfrage einen neuen einträgt, hätte sonst den neuen gesperrt.
+    """
     _rejected.add(backend_id)
+    if lasting and key:
+        keys.mark_refused(backend_id, key)
 
 
 def accept_again(backend_id: str = "") -> None:
-    """Die Ablehnung zurücknehmen — ohne Namen für alle."""
+    """Die Ablehnung zurücknehmen — ohne Namen für alle. Auch der Merker über
+    den Neustart geht: Das ist „Noch einmal versuchen“, und es geht auch für
+    einen Schlüssel aus der Umgebung, den kein Dialog neu einträgt."""
+    # Ohne Namen nur, was diese Sitzung abgelehnt oder gemerkt hat: Die Suite
+    # ruft das nach jedem Test, auch unter einem vorgetäuschten POSIX, wo schon
+    # der Pfad zur Datei nicht gebaut werden kann.
+    accounts = (backend_id,) if backend_id else (*_rejected, *keys.marked_here())
+    for account in dict.fromkeys(accounts):
+        keys.clear_refusal(account)
     if backend_id:
         _rejected.discard(backend_id)
     else:

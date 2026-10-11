@@ -263,9 +263,9 @@ Ein Gewinde wird geändert (`build.threaded`) oder verschlossen, je Kern mit
 denselben Werkzeugen; die Enden fragen die Nachbarschaft (`_thread_span`: hinter
 Material um `BOOLEAN_OVERLAP` früher, in der Luft außen hinaus, innen nicht).
 Das neue wird an seiner Stelle belegt; innen nennt das Merkmal den Grund-Ø der
-Gänge (`_tool_diameter`), am Netz misst es sich an seinen Ecken. Sperren darf
-nur ein belegtes Linksgewinde (`types.thread_is_left_handed`); linksgängig,
-mehrgängig, Steigung ohne Kern und Gewinde ohne Strecke sind Absagen mit
+Gänge (`_tool_diameter`), am Netz misst es sich an seinen Ecken. Profil,
+Gangzahl, belegter Drehsinn und Kegel bleiben (`_thread_kind`), am Kegel mit
+Kegelstümpfen. Steigung ohne Kern und Gewinde ohne Strecke sind Absagen mit
 Vorschlag. Das neue Maß fragt seine Wand (`_thread_wall`): Durchbruch sagt ab,
 eine dünner gewordene unter der Mindestwand meldet `thread.thin_wall`.
 

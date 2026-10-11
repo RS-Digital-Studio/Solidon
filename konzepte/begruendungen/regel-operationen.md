@@ -1243,11 +1243,13 @@ wurde aus einer M6-Mutter beim Ändern der Steigung eine mit Bohrung Ø 6
 Ecken** (`_thread_corners`): Der Fit über Dreiecksmitten liegt radial
 innerhalb der Kammecken und axial neben der Stange; auf den gemessenen Kamm
 gesetzt blieben 51 Splitter, auf die gemessene Mitte eine Scheibe. Es
-sperrt nur ein **belegtes** Linksgewinde (`types.thread_is_left_handed`:
-gesetzt, nativ gelesen oder am Netz an den Kanten gemessen — nicht die
-Schätzung des Spektrums, `fit`), und ein mehrgängiges sagt ab, statt still
-eingängig zu werden. Linksgängig, mehrgängig, eine Steigung ohne Kern und ein Gewinde
-ohne Strecke sind Absagen mit Vorschlag. Und ein Feld, das nur eine
+Seit RM-544 wird ein Linksgewinde links und ein mehrgängiges mit seiner
+Gangzahl neu geschnitten, statt abzusagen; als links zählt nur ein **belegtes**
+(`types.thread_is_left_handed`: gesetzt, nativ gelesen oder am Netz an den
+Kanten gemessen — nicht die Schätzung des Spektrums, `fit`). Ein kegeliges
+bekommt Kegelstümpfe statt Zylinder, die ein Ende abtrügen und am anderen den
+Gang ließen, und ein Whitworth-Gewinde behält sein Profil. Eine Steigung ohne
+Kern und ein Gewinde ohne Strecke sind Absagen mit Vorschlag. Und ein Feld, das nur eine
 Merkmalsart trägt — Rohrdicke, Steigung — steht nur an ihr
 (`actions._carried_by`): „Steigung 0 mm“ an einem Zapfen ist eine Frage
 ohne Gegenstand.

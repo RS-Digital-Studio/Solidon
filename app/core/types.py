@@ -542,6 +542,52 @@ def thread_is_tapered(feature: Feature) -> bool:
     return isinstance(taper, int | float) and not isinstance(taper, bool) and taper != 0.0
 
 
+def thread_at_gauge(feature: Feature) -> tuple[float, float] | None:
+    """Gebautes Maß und Nennmaß eines kegeligen Gewindes in seiner Bezugsebene — oder ``None``.
+
+    **Die eine Stelle, die sagt, in welcher Ebene ein Kegelmaß gilt** (Review GEW,
+    H1). Ein kegeliges Gewinde nennt ``diameter`` und ``nominal`` in der Mitte
+    seiner Strecke, wie der exakte Leser; ein Paar trifft sich aber in der
+    Bezugsebene, und die Mitten zweier gefügter Hälften liegen auf
+    verschiedenen Höhen. Ein Gewinde aus der Bibliothek nennt deshalb auch
+    ``gauge_nominal``, das Nennmaß seiner Größe in der Bezugsebene; das gebaute
+    Maß dort liegt um dasselbe neben ``diameter`` wie das Nennmaß neben
+    ``nominal``, denn beide wachsen mit demselben Kegel. Ein gemessenes oder
+    gemessenes Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
+    Passung und Gegenstück raten sie nicht.
+
+    **Ein geändertes Gewinde behält sie** (Nachprüfung GEW, N2): *Merkmal
+    ändern* setzt das neue Maß in der Mitte bei gleichem Kegel und gleicher
+    Strecke, also liegt die Bezugsebene um dasselbe Stück daneben wie zuvor.
+    Es nennt dann ``gauge_offset``, gebautes Maß in der Bezugsebene minus Maß in
+    der Mitte, und ist gebaut, wie es dasteht: Nennmaß gleich gebautem Maß.
+    """
+    if not thread_is_tapered(feature):
+        return None
+    offset = feature.params.get("gauge_offset")
+    diameter = feature.params.get("diameter")
+    if (
+        isinstance(offset, int | float)
+        and not isinstance(offset, bool)
+        and isinstance(diameter, int | float)
+        and not isinstance(diameter, bool)
+        and math.isfinite(offset)
+        and math.isfinite(diameter)
+    ):
+        built = float(diameter) + float(offset)
+        return built, built
+    numbers: list[float] = []
+    for name in ("diameter", "nominal", "gauge_nominal"):
+        value = feature.params.get(name)
+        if not isinstance(value, int | float) or isinstance(value, bool):
+            return None
+        if not math.isfinite(value):
+            return None
+        numbers.append(float(value))
+    diameter, nominal, gauge = numbers
+    return diameter + (gauge - nominal), gauge
+
+
 def is_a_cavity(feature: Feature) -> bool:
     """Ist dieses Merkmal ein Hohlraum oder Materie?
 
@@ -2209,6 +2255,16 @@ class ParamSpec:
     Namen hieße er „wie gemessen“. Die Höhe der Öffnung eines Deckels ist eine
     Welthöhe, in der die Null eine Zahl ist wie jede andere; leer heißt dort
     „Oberkante“."""
+    least: float | None = None
+    """Der kleinste Wert außer der Null an einem Feld, dessen Null etwas anderes heißt.
+
+    **Für Felder mit** :attr:`zero_text` **und Mindestwert 0, deren Zahlen erst
+    ab einer Grenze tragen** (Review GEW, M4): Null Gänge je Zoll nimmt die
+    Reihe, 0,5 Gänge je Zoll wären 50,8 mm Steigung, gröber als
+    ``units.COARSEST_PITCH``. Die Prüfung lehnt Werte zwischen null und
+    ``least`` ab, und der Bereichsnachweis fährt ``least`` als eigene Ecke
+    (``range_check._corner_values``) — an der Null allein sähe er das grobe
+    Ende nie."""
 
 
 @runtime_checkable

@@ -62,6 +62,8 @@ it into `website/version.json`.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
 - Repairing and resolving overlaps are up to four times as fast on large models, and exporting as 3MF is considerably faster.
 - The workspace appears faster when opening large 3MF files.
+- The notice *Displaying the model …* disappears as soon as the view is ready and no longer stays over the model.
+- Messages about inputs and shapes no longer offer an error report. It is only offered where Solidon itself made a mistake.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
 - After a hole or a moved feature, the features of a large technical part are recognised about a third faster.
@@ -137,6 +139,12 @@ it into `website/version.json`.
 - Laid in from below, the nut trap's pocket sits under the face, its slot leading down to it. Until now it sat half above, with the screw in the face.
 - If the hole of a part does not go all the way through, it is now called blind. Until now it was called through.
 - If the wall is thicker than entered for a *Cable gland* or *Hose barb*, the step says so and opens the wall thickness. Until now the passage silently ended in the material.
+- Threads now also come as pipe threads G and R, inch threads UNC and UNF and as NPT, in the *Printable thread*, on screw, nut and *Threaded stud*.
+- Every thread is also available left-handed. A custom size takes threads per inch and several starts, also in *Create screw* and *Create screw lid*.
+- Which thread series the size lists show is set in the settings under *Thread series in the lists*.
+- Counterpart and *Pin for hole* also fit inch, pipe, left-hand, multi-start and tapered threads. If a measured thread fits two series, Solidon asks.
+- Left-hand, multi-start and tapered threads can be edited with *Change feature* and *Remove feature* and keep their hand, starts and taper.
+- Solidon recognises a multi-start thread in an imported mesh as one thread with its number of starts. Until now it showed several threads with too coarse a pitch.
 
 ### Parts
 
@@ -182,11 +190,15 @@ it into `website/version.json`.
 - Thin walls, for example on a vase, arrive closed and with thickness.
 - The assistant replies in the language you write in.
 - With a local model the assistant has as much room as with a hosted one and handles tasks of up to twelve steps.
+- If you cancel a proposal from the assistant, the status bar confirms it instead of reporting a program error.
+- If you open another project while a proposal is running, Solidon discards the proposal and puts your request back in the chat.
 - Generated models arrive closed more often. Where faces only touch, Solidon separates them, and it smooths small folds in the surface instead of reporting a self-intersection.
 - If an attempt already fell apart while generating, the dialog says so before you take it and offers *One more attempt*.
 - If a generated model is only a thin skin around a cavity, the dialog says so before you take it and the report afterwards, each with the way to a new attempt.
 - Before downloading, *Set up the chat* and *Set up ComfyUI* say how much graphics memory and disk space a model needs and whether this computer has it.
 - On a Mac, *Set up the chat* suggests a local model that fits into the shared memory and says when a key for a hosted model is the better choice.
+- If the selected local model is missing or the provider refuses the key, Solidon says so in one sentence and *Set up the chat* leads straight to the fix.
+- Solidon passes over an invalid key for a day, until you enter a different one or choose *Try again*. Until then a local model answers, if one is set up.
 - On a newly generated model, *Change size* only recalculates the new size and no longer repeats the repair. It is faster, and Ctrl+Z undoes it at once.
 
 ## 0.5.3

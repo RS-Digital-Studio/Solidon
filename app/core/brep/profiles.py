@@ -46,7 +46,14 @@ from app.core.sketch.profile import (
     spline_controls,
 )
 from app.core.types import CancelToken, PlaneFrame, Point2, Vec3
-from app.core.units import EPS_GEOM, THREAD_MIN_CORE_SHARE, is_close, is_zero
+from app.core.units import (
+    EPS_GEOM,
+    THREAD_MIN_CORE_SHARE,
+    exact_cos,
+    exact_sin,
+    is_close,
+    is_zero,
+)
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -1094,7 +1101,14 @@ def thread_ridge(major: float, pitch: float) -> tuple[Point2, ...]:
 
 
 def threaded_rod(
-    major: float, pitch: float, length: float, *, cancelled: CancelToken | None = None
+    major: float,
+    pitch: float,
+    length: float,
+    *,
+    cancelled: CancelToken | None = None,
+    whitworth: bool = False,
+    starts: int = 1,
+    left: bool = False,
 ) -> Solid:
     """Ein Bolzen mit exaktem Außengewinde: Kern und Gang als **ein** genähter Körper.
 
@@ -1115,14 +1129,20 @@ def threaded_rod(
     doch nicht geschlossen ist, bleibt (:func:`_checked_rod`). Ein langer
     Bolzen hat Hunderte Flächen; ``cancelled`` wird je Umlauf, vor und nach
     jedem nativen Schritt gefragt.
+
+    Zoll- und Rohrgewinde (RM-544): ``whitworth`` legt das gerundete 55°-Profil
+    nach ISO 228-1 statt des ISO-nahen 60°-Profils, ``starts`` Gänge teilen sich
+    den Vorschub, und ``left`` spiegelt den fertigen Bolzen an der Ebene y = 0 —
+    die Gänge bei Winkel null bleiben, wo sie sind.
     """
     require()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
     from OCP.gp import gp_Pnt
 
     from app.core.brep import edit
+    from app.core.knowledge.parts.shapes import WHITWORTH_DEPTH, ridge_profile
 
-    ridge = _THREAD_DEPTH_SHARE * pitch
+    ridge = (WHITWORTH_DEPTH if whitworth else _THREAD_DEPTH_SHARE) * pitch
     core_radius = major / 2.0 - ridge
     if core_radius <= major / 2.0 * _THREAD_MIN_CORE_SHARE:
         raise ValidationError(
@@ -1140,9 +1160,16 @@ def threaded_rod(
             constraint="too_short",
         )
 
-    turns = math.ceil(length / pitch) + 2
-    profile = thread_ridge(major, pitch)
-    whole = helical_thread(core_radius, pitch, turns, profile, start=-pitch, cancelled=cancelled)
+    lead = max(1, starts) * pitch
+    turns = math.ceil(length / lead) + 2
+    profile = (
+        ridge_profile(major, pitch, profile="whitworth")
+        if whitworth
+        else thread_ridge(major, pitch)
+    )
+    whole = helical_thread(
+        core_radius, pitch, turns, profile, start=-lead, starts=max(1, starts), cancelled=cancelled
+    )
     # **Auf Länge mit einem Quader, nicht mit einem Zylinder.** Der Mantel
     # eines Schnittzylinders umhüllt jede Gangfläche, und die Boolesche prüfte
     # jede davon gegen ihn: 1,4 s am M3 x 0,5 x 60. Die Seiten eines Quaders
@@ -1176,6 +1203,16 @@ def threaded_rod(
     # Ein Zwanzigstel der Steigung ist die Grenze, unterhalb derer die Flanke
     # in Dreiecken aufgeht; feiner als nötig wird nicht vernetzt, denn jede
     # Halbierung vervierfacht die Dreiecke.
+    if left:
+        rod = edit.transformed(
+            rod,
+            (
+                (1.0, 0.0, 0.0, 0.0),
+                (0.0, -1.0, 0.0, 0.0),
+                (0.0, 0.0, 1.0, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+            ),
+        )
     return _finely_meshed(rod, min(DEFLECTION, pitch / 20.0))
 
 
@@ -1238,7 +1275,9 @@ def helical_thread(
     ``starts`` Gänge teilen sich einen Umlauf: Der Vorschub ist
     ``starts * pitch``, und jeder Gang sitzt um eine Teilung über dem vorigen
     — dieselben Flächenarten, nur mehr davon je Umlauf. ``taper`` ist der
-    halbe Kegelwinkel im Bogenmaß (ein kegeliges Rohrgewinde): Jeder
+    halbe Kegelwinkel im Bogenmaß (ein kegeliges Rohrgewinde), negativ für einen
+    Kegel, der nach oben enger wird (das Außengewinde, das an seiner Spitze
+    endet, RM-544): Jeder
     Profilpunkt läuft dann auf einem Kegel statt einem Zylinder, sein Radius
     wächst je Millimeter Höhe um ``tan(taper)``, und die Radien in ``ridge``
     gelten auf der Höhe ``start``. Die Regelflächen zwischen zwei Helices
@@ -1275,17 +1314,20 @@ def helical_thread(
         and ridge[-1][1] < pitch
     ):
         raise InternalError(detail="the ridge must start and end on the root radius")
-    if not (math.isfinite(taper) and 0.0 <= taper < math.pi / 4.0):
-        raise InternalError(detail="the half angle of a tapered thread must lie below 45 degrees")
+    if not (math.isfinite(taper) and abs(taper) < math.pi / 4.0):
+        raise InternalError(
+            detail="the half angle of a tapered thread must lie within 45 degrees of the axis"
+        )
     lead = starts * pitch
-    slope = math.tan(taper)
+    # Plattformgleich (`kern.md`): Kosinus und Sinus aus `units`, nicht aus `math`.
+    slope = exact_sin(taper) / exact_cos(taper)
     # Eine Trägerfläche je Profilpunkt — nach seinem Index, nicht nach dem
     # Radius: Ein Fließkommawert taugt nicht als Schlüssel (Regel 6). Ohne
     # Kegel ist der Parameter längs der Fläche die Höhe, mit Kegel die
     # Mantellinie ab der Höhe ``start``.
-    stretch = 1.0 / math.cos(taper)
+    stretch = 1.0 / exact_cos(taper)
     surfaces: list[Any]
-    if taper > 0.0:
+    if taper:
         frame = gp_Ax3(gp_Pnt(0.0, 0.0, start), gp_Dir(0.0, 0.0, 1.0))
         surfaces = [Geom_ConicalSurface(frame, taper, radial) for radial, _axial in ridge]
     else:
@@ -1293,13 +1335,13 @@ def helical_thread(
 
     def along(height: float) -> float:
         """Wo die Höhe ``height`` auf der Trägerfläche liegt."""
-        return (height - start) * stretch if taper > 0.0 else height
+        return (height - start) * stretch if taper else height
 
     def radius(radial: float, height: float) -> float:
         """Der Radius eines Profilpunkts auf der Höhe ``height``."""
         return radial + (height - start) * slope
 
-    rise = lead * stretch if taper > 0.0 else lead
+    rise = lead * stretch if taper else lead
 
     def helix(point: int, origin: float) -> Any:
         """Ein Umlauf auf der Fläche des Profilpunkts, ab Winkel null auf Höhe ``origin``."""

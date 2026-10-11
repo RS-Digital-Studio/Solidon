@@ -62,6 +62,8 @@ scrive in `website/version.json`.
 - Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
 - Riparare e risolvere le sovrapposizioni è fino a quattro volte più veloce sui modelli grandi, ed esportare in 3MF è molto più veloce.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
+- L'avviso *Visualizzazione del modello …* scompare appena la vista è pronta e non resta più sopra il modello.
+- I messaggi su valori e forme non offrono più una segnalazione di errore. Compare solo quando l'errore è di Solidon.
 - Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
 - Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo tecnico grande vengono riconosciute circa un terzo più velocemente.
@@ -137,6 +139,12 @@ scrive in `website/version.json`.
 - Inserita da sotto, la sede per dado ha la tasca sotto la faccia e la fessura scende fino a essa. Finora la tasca stava per metà sopra, con la vite nella faccia.
 - Se il foro di un blocco non attraversa il pezzo, ora si chiama cieco. Finora si chiamava passante.
 - Se la parete è più spessa di quanto indicato per «Passacavo» o «Portagomma», il passaggio lo dice e apre lo spessore di parete. Finora il foro finiva in silenzio nel materiale.
+- Le filettature esistono ora anche come filettature gas G e R, filettature in pollici UNC e UNF e NPT, nella *Filettatura stampabile*, su vite, dado e *Perno filettato*.
+- Ogni filettatura esiste anche sinistrorsa. Una misura personalizzata accetta filetti per pollice e più principi, anche in *Crea vite* e *Crea coperchio a vite*.
+- Quali serie di filettature mostrano gli elenchi delle misure si sceglie nelle Impostazioni, in *Serie di filettature negli elenchi*.
+- Controparte e *Perno per foro* vanno bene anche per filettature in pollici, gas, sinistre, a più principi e coniche. Se una filettatura misurata corrisponde a due serie, Solidon chiede.
+- Le filettature sinistre, a più principi e coniche si modificano con *Cambia caratteristica* e *Rimuovi caratteristica* e mantengono senso, principi e conicità.
+- Solidon riconosce una filettatura a più principi in una mesh importata come una sola filettatura con i suoi principi. Finora ne mostrava diverse con passo troppo grande.
 
 ### Blocchi
 
@@ -182,11 +190,15 @@ scrive in `website/version.json`.
 - Le pareti sottili, per esempio di un vaso, arrivano chiuse e con uno spessore.
 - L'assistente risponde nella lingua in cui scrivi.
 - Con un modello locale l'assistente ha tanto spazio quanto con uno ospitato e porta a termine compiti fino a dodici passaggi.
+- Se annulli una proposta dell'assistente, la barra di stato lo conferma invece di segnalare un errore del programma.
+- Se apri un altro progetto durante una proposta, Solidon la scarta e rimette la tua richiesta nella chat.
 - I modelli generati arrivano chiusi più spesso. Dove le facce si toccano soltanto, Solidon le separa e leviga le piccole pieghe della superficie invece di segnalare un'autointersezione.
 - Se un tentativo si è già sfaldato durante la generazione, la finestra lo dice prima di accettarlo e offre *Un altro tentativo*.
 - Se un modello generato è solo una pelle sottile attorno a una cavità, lo dice la finestra prima di accettarlo e il rapporto di verifica dopo, con la via a un nuovo tentativo.
 - Prima del download, *Configura la chat* e *Configura ComfyUI* dicono quanta memoria grafica e quanto spazio servono a un modello e se questo computer li ha.
 - Su un Mac, *Configura la chat* propone un modello locale che sta nella memoria condivisa e dice quando conviene una chiave per un modello ospitato.
+- Se manca il modello locale scelto o il fornitore rifiuta la chiave, Solidon lo dice in una frase e *Configura la chat* porta subito alla soluzione.
+- Solidon salta una chiave non valida per un giorno, finché non ne inserisci un'altra o scegli *Riprova*. Nel frattempo risponde un modello locale, se ne è configurato uno.
 - Su un modello appena generato, *Cambia dimensione* ricalcola solo la nuova misura e non ripete più la riparazione. È più veloce, e Ctrl+Z annulla subito la modifica.
 
 ## 0.5.3
