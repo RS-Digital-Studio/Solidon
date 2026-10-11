@@ -128,7 +128,7 @@ class StepLabel(QLabel):
             super().setText(self._full)
             return
         # Gekürzt wird auf die Fläche innerhalb des Rahmens: Der Fokusrahmen
-        # (``tourStepText``) nimmt je Seite zwei Punkte.
+        # (``QLabel#tourStepText`` in ``style.py``) liegt innen am Rand.
         super().setText(
             self.fontMetrics().elidedText(
                 self._full, Qt.TextElideMode.ElideRight, self.contentsRect().width()
