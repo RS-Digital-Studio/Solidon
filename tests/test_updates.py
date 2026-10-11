@@ -286,6 +286,45 @@ def test_the_lead_travels_through_the_version_file(
     assert release.points("de")[0] == "Die Demo läuft länger.", "legacy readers see it first"
 
 
+@pytest.mark.parametrize("note", ["Die Demo läuft länger.", "", "Neu sind Gewinde."])
+def test_a_lead_the_note_already_says_leaves_the_version_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, note: str
+) -> None:
+    """Alte Fassungen zeigen den Vorspann als ersten Punkt — neben dem Hinweis doppelt.
+
+    Sagt der Hinweistext dasselbe, nimmt ``make_download`` den Vorspann aus
+    beiden Sichten der Versionsdatei; ohne Hinweis oder mit einem anderen
+    bleibt er (Entscheidung Koordinator 0.6.0).
+    """
+    from app.core import changes
+    from tools import make_download
+
+    (tmp_path / "de.md").write_text(
+        "## 9.9.9\n\n- Die Demo läuft länger.\n\n### Zeichnen\n\n- Gezeichnet.\n",
+        encoding="utf-8",
+    )
+    changes.forget_cache()
+    monkeypatch.setattr(changes, "folder", lambda: tmp_path)
+    monkeypatch.setattr(make_download, "CHANGELOG", tmp_path)
+    try:
+        flat = make_download.changes_for("9.9.9")
+        grouped = make_download.grouped_for("9.9.9")
+    finally:
+        changes.forget_cache()
+    data: dict[str, Any] = {"version": "9.9.9", "notes_by_language": {"de": note}}
+
+    dropped = make_download.drop_lead_said_in_the_note(data, flat, grouped)
+    data.update(changes=flat, groups=grouped)
+    release = updates.check(fetch=answering(data))
+
+    assert release is not None
+    said = note == "Die Demo läuft länger."
+    assert dropped == (["de"] if said else [])
+    assert (changes.lead_of(release.grouped("de")) is None) == said
+    assert ("Die Demo läuft länger." in release.points("de")) == (not said)
+    assert release.points("de")[-1] == "Gezeichnet."
+
+
 def test_a_flat_version_file_has_no_lead() -> None:
     """Gegenprobe: Ohne ``groups`` wird aus der flachen Liste kein Vorspann."""
     from app.core import changes

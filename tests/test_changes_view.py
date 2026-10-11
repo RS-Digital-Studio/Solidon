@@ -319,9 +319,9 @@ def test_choosing_a_version_replaces_the_visible_entry(qt_app: object) -> None:
     # Ein Sollwert, den der Prüfling liefert, prüft nichts. Der Bestand hatte
     # „Thema" fest eingetragen und war grün, solange die letzte gezeigte
     # Fassung zufällig genau eine Gruppe trug.
-    topics = "Thema" if len(entries[last].groups) == 1 else "Themen"
+    topics = "Thema" if len(entries[last].topics) == 1 else "Themen"
     assert dialog.summary.text() == (
-        f"{len(entries[last].points)} Neuerungen · {len(entries[last].groups)} {topics}"
+        f"{len(entries[last].points)} Neuerungen · {len(entries[last].topics)} {topics}"
     )
 
 

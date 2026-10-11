@@ -512,6 +512,9 @@ def test_the_note_and_the_lead_stand_highlighted_above_the_list(
     assert DEMO not in dialog.changes.text(), "the lead must not stand twice"
     assert "Zeichnen" in dialog.changes.text()
     assert shown_text(dialog).count(DEMO) == 1
+    assert dialog.notes.text().index(DEMO) < dialog.notes.text().index("Zweiter Bau der Demo."), (
+        "the message for everyone comes first — behind a long note it would not stand out"
+    )
 
 
 def test_without_a_note_the_lead_takes_its_place(
@@ -565,3 +568,35 @@ def test_the_note_from_the_server_stays_text() -> None:
     assert "<img" not in text and "&lt;img" in text
     assert "Zeile<br>zwei" in text
     assert announcement_html("", None) == ""
+
+
+def test_a_lead_from_the_server_stays_text() -> None:
+    """Derselbe Schutz für den Vorspann: Er kommt über ``lead_html`` in den Kasten."""
+    from app.core.changes import Group
+    from app.ui.update_dialog import announcement_html
+
+    text = announcement_html(
+        "",
+        Group(
+            "",
+            ('<img src="https://fremd.test/x.png"><a href="https://fremd.test">x</a><b>fett</b>',),
+        ),
+    )
+
+    assert "<img" not in text and "&lt;img" in text
+    assert "<a " not in text and "&lt;a " in text
+    assert "<b>" not in text and "&lt;b&gt;" in text
+
+
+def test_of_two_texts_saying_the_same_the_longer_stays_without_markup() -> None:
+    """Gemessen ohne Auszeichnung wie ``changes.repeats``: Sternchen zählen nicht."""
+    from app.core.changes import Group
+    from app.ui.update_dialog import announcement_html
+
+    text = announcement_html(
+        "Die Demo läuft bis zum 30. November. Ja",
+        Group("", ("Die Demo läuft bis zum **30. November**.",)),
+    )
+
+    assert "Ja" in text, "the fuller note was dropped"
+    assert "<strong>" not in text, "the shorter lead must not stand as well"

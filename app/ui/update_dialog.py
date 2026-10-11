@@ -55,11 +55,13 @@ def announcement_html(note: str, lead: Group | None) -> str:
 
     Beide gelten jedem, der aktualisiert, und keinem Gebiet — deshalb stehen
     sie zusammen über der Liste statt der Vorspann als erster Punkt darin
-    (Entscheidung Robert: die Demo-Verlängerung groß ankündigen). Fehlt der
-    Hinweis, steht der Vorspann allein oben.
+    (Entscheidung Robert: die Demo-Verlängerung groß ankündigen). Der
+    Vorspann steht vorn: Hinter einem langen Hinweis fiele er nicht mehr auf.
+    Fehlt der Hinweis, steht der Vorspann allein oben.
 
     **Sagen beide dasselbe, steht es einmal da** (:func:`changes.repeats`),
-    und zwar der längere der beiden: Der kürzere ist im anderen enthalten.
+    und zwar der längere der beiden, gemessen wie dort ohne Auszeichnung: Der
+    kürzere ist im anderen enthalten.
 
     Der Hinweis kommt vom Server und bleibt Klartext: maskiert, Zeilenwechsel
     als Umbruch, kein Verweis und kein Bild. Die Punkte des Vorspanns laufen
@@ -67,20 +69,20 @@ def announcement_html(note: str, lead: Group | None) -> str:
     """
     shown_note = note.strip()
     if lead is not None and shown_note and changes.repeats(shown_note, lead):
-        if len(" ".join(lead.points)) > len(shown_note):
+        if len(changes.plain(" ".join(lead.points))) > len(changes.plain(shown_note)):
             shown_note = ""
         else:
             lead = None
     parts: list[str] = []
-    if shown_note:
-        parts.append(
-            '<p style="margin:0">' + html.escape(shown_note).replace("\n", "<br>") + "</p>"
-        )
     if lead is not None:
+        parts.append(lead_html(lead.points))
+    if shown_note:
         if parts:
             # Ein Absatz Luft zwischen beiden, sonst läsen sie sich als ein Satz.
             parts.append('<p style="margin:0">&nbsp;</p>')
-        parts.append(lead_html(lead.points))
+        parts.append(
+            '<p style="margin:0">' + html.escape(shown_note).replace("\n", "<br>") + "</p>"
+        )
     return "".join(parts)
 
 

@@ -124,7 +124,7 @@ def without_lead(groups: tuple[Group, ...]) -> tuple[Group, ...]:
 _MARKS: Final = re.compile(r"[*`]+")
 
 
-def _plain(text: str) -> str:
+def plain(text: str) -> str:
     """Ein Satz für den Vergleich: ohne Auszeichnung, Leerraum und Großschreibung."""
     return " ".join(_MARKS.sub("", text).split()).casefold()
 
@@ -136,8 +136,8 @@ def repeats(note: str, lead: Group) -> bool:
     untereinander steht, liest sich wie ein Fehler. Dasselbe heißt: Einer der
     beiden enthält den anderen ganz — der kürzere ist dann überflüssig.
     """
-    said = _plain(note)
-    lead_text = _plain(" ".join(lead.points))
+    said = plain(note)
+    lead_text = plain(" ".join(lead.points))
     if not said or not lead_text:
         return False
     return said in lead_text or lead_text in said

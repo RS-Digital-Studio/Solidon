@@ -130,9 +130,9 @@ def groups_html(groups: tuple[changes.Group, ...]) -> str:
     wären zwei Gelegenheiten, auseinanderzulaufen; genau daran ist die
     Menütiefe schon einmal gescheitert.
 
-    Eine Gruppe ohne Titel liest sich wie bisher: eine Liste ohne Überschrift.
-    Das ist der Vorspann eines Abschnitts, der Stand vor 0.2.0 — und der
-    Rückfall, wenn eine Versionsdatei gar keine Gruppen mitbringt.
+    Eine Gruppe ohne Titel liest sich als Liste ohne Überschrift: der Stand
+    vor 0.2.0 und der Rückfall einer Versionsdatei ohne Gruppen. Einen
+    Vorspann (``changes.lead_of``) nehmen die Aufrufer vorher heraus.
     """
     blocks: list[str] = []
     # Die Punkte kommen aus einer Datei, nicht durch ``tr``: Ihre Kürzel
