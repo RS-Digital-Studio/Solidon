@@ -10,22 +10,26 @@ Ed25519-Umsetzung, ein Konzeptpapier bei der Skelettsitzung) und sind hier
 ausgenommen, weil sie ihr Dokument nennen. Zwei blieben übrig, und die stehen
 unten in `BEKANNT_OFFEN`.
 
-Dazu hält diese Datei die **Kernverträge aus §9** am Code: Jede Klasse, die §9
-als Dataclass zeigt, hat in `app/core/types.py` dieselben Felder in derselben
-Folge, mit denselben Typen, Vorgaben und Dekoratorschaltern. Der Auszug lässt
-Importe und Methoden weg, keine Felder — ein Feld, das nur der Code trägt,
-steht mit Grund in `CODE_ONLY`.
+Dazu hält diese Datei den **Codeblock aus §9** am Code: Jede Dataclass dort hat
+in `app/core/types.py` dieselben Felder in derselben Folge, mit denselben
+Typen, Vorgaben und Schaltern von `@dataclass` und `field()`; Typaliase und
+Funktionssignaturen gleichen ihrem Gegenstück im Code. Der Auszug lässt Importe
+und Methoden weg, keine Felder — ein Feld, das nur der Code trägt, steht mit
+Grund in `CODE_ONLY`. Eine Anweisung im Block, die der Test nicht liest, ist rot.
 """
 
 from __future__ import annotations
 
 import ast
 import dataclasses
+import inspect
 import re
 from collections import defaultdict
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, NamedTuple
+
+import pytest
 
 from app.core import types as contracts
 
@@ -149,14 +153,26 @@ def test_the_check_would_catch_a_broken_reference() -> None:
     assert "999.7" not in BEKANNT_OFFEN
 
 
-# --- Die Kernverträge aus §9 gegen app/core/types.py -------------------------
+# --- Die Verträge aus §9 gegen den Code --------------------------------------
 
 #: Die Überschriften, zwischen denen §9 steht.
 CONTRACTS_FROM = "## 9. "
 CONTRACTS_TO = "## 10. "
 
-#: Die Dekoratorschalter, die §9 zeigen darf, mit der Vorgabe von ``@dataclass``.
-FLAG_DEFAULTS: dict[str, bool] = {"frozen": False, "eq": True, "slots": False}
+#: Wo Typaliase und Dataclasses aus §9 stehen, und wo jede Funktion.
+TYPES_HOME = "app/core/types.py"
+FUNCTION_HOMES: dict[str, str] = {"solve_sketch": "app/core/sketch/solver.py"}
+
+#: Die Schalter von ``@dataclass`` mit ihren Vorgaben, aus der Signatur gelesen
+#: — so kommt ein neuer Schalter einer späteren Python-Fassung von selbst dazu.
+CLASS_FLAGS: dict[str, object] = {
+    name: parameter.default
+    for name, parameter in inspect.signature(dataclasses.dataclass).parameters.items()
+    if parameter.kind is inspect.Parameter.KEYWORD_ONLY
+}
+
+#: Die Schalter von ``field()``, die ein Feld trägt; ``kw_only`` erbt die Klasse.
+FIELD_FLAGS: dict[str, object] = {"init": True, "repr": True, "hash": None, "compare": True}
 
 #: Felder, die der Code trägt und §9 bewusst nicht zeigt — je mit Grund.
 #:
@@ -177,21 +193,43 @@ class PlanField(NamedTuple):
     name: str
     annotation: str
     default: str | None
+    flags: dict[str, object]
 
 
 class PlanContract(NamedTuple):
     """Eine Dataclass aus §9: Dekoratorschalter und Felder in ihrer Folge."""
 
-    flags: dict[str, bool]
+    flags: dict[str, object]
     fields: tuple[PlanField, ...]
 
 
-def contract_source() -> str:
-    """Die Python-Blöcke aus §9 als ein Quelltext."""
+class PlanContracts(NamedTuple):
+    """Alles, was der Codeblock aus §9 festlegt, nach Art getrennt."""
+
+    classes: dict[str, PlanContract]
+    aliases: dict[str, str]
+    functions: dict[str, str]
+
+
+def contract_section() -> str:
+    """Der Text von §9 bis zur nächsten Hauptüberschrift."""
     text = PLAN.read_text(encoding="utf-8")
     start = text.index("\n" + CONTRACTS_FROM)
-    end = text.index("\n" + CONTRACTS_TO, start)
-    return "\n".join(re.findall(r"```python\n(.*?)```", text[start:end], flags=re.DOTALL))
+    return text[start : text.index("\n" + CONTRACTS_TO, start)]
+
+
+def contract_source(section: str) -> str:
+    """Die Python-Blöcke aus §9 als ein Quelltext."""
+    return "\n".join(re.findall(r"```python\n(.*?)```", section, flags=re.DOTALL))
+
+
+def shown_names(section: str) -> list[str]:
+    """Jede Klasse und Funktion, die §9 zeigt — gezählt am Text, nicht am Parser.
+
+    Die zweite Zählung fängt, was der Parser nicht sieht: einen Block mit
+    anderem Zaun, eine Klasse in Prosa, einen Namen zweimal.
+    """
+    return re.findall(r"^(?:class|def) (\w+)", section, flags=re.MULTILINE)
 
 
 def _normal(annotation: str) -> str:
@@ -199,45 +237,112 @@ def _normal(annotation: str) -> str:
     return ast.unparse(ast.parse(annotation, mode="eval"))
 
 
-def _dataclass_flags(node: ast.ClassDef) -> dict[str, bool] | None:
-    """Die Schalter des ``@dataclass``-Dekorators; ``None``, wenn er fehlt."""
-    for decorator in node.decorator_list:
-        call = decorator if isinstance(decorator, ast.Call) else None
-        target = call.func if call is not None else decorator
-        if not (isinstance(target, ast.Name) and target.id == "dataclass"):
-            continue
-        flags = dict(FLAG_DEFAULTS)
-        for keyword in call.keywords if call is not None else ():
-            assert keyword.arg in flags and isinstance(keyword.value, ast.Constant), (
-                f"{node.name}: @dataclass({ast.unparse(keyword)}) vergleicht dieser Test "
-                "noch nicht — FLAG_DEFAULTS ergänzen"
-            )
-            flags[keyword.arg] = bool(keyword.value.value)
-        return flags
-    return None
+def _names(node: ast.expr, name: str) -> bool:
+    """``name`` oder ``dataclasses.name``."""
+    if isinstance(node, ast.Name):
+        return node.id == name
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == name
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "dataclasses"
+    )
 
 
-def plan_contracts() -> dict[str, PlanContract]:
-    """Jede Klasse, die §9 als Dataclass zeigt."""
-    found: dict[str, PlanContract] = {}
-    for node in ast.parse(contract_source()).body:
-        if not isinstance(node, ast.ClassDef):
-            continue
-        flags = _dataclass_flags(node)
-        if flags is None:
-            continue
-        found[node.name] = PlanContract(
-            flags,
-            tuple(
-                PlanField(
-                    item.target.id,
-                    _normal(ast.unparse(item.annotation)),
-                    None if item.value is None else ast.unparse(item.value),
-                )
-                for item in node.body
-                if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
-            ),
+def _flags(call: ast.Call | None, defaults: Mapping[str, object], where: str) -> dict[str, object]:
+    """Die Schalter eines Aufrufs über ihren Vorgaben; ein fremder Schalter ist rot."""
+    flags = dict(defaults)
+    for keyword in call.keywords if call is not None else ():
+        assert keyword.arg in flags and isinstance(keyword.value, ast.Constant), (
+            f"{where}: {ast.unparse(keyword)} vergleicht dieser Test noch nicht"
         )
+        flags[keyword.arg] = keyword.value.value
+    return flags
+
+
+def _plan_class(node: ast.ClassDef) -> PlanContract:
+    decorators = [
+        decorator
+        for decorator in node.decorator_list
+        if _names(decorator.func if isinstance(decorator, ast.Call) else decorator, "dataclass")
+    ]
+    assert decorators, f"{node.name}: steht in §9 ohne @dataclass, und so liest der Test sie nicht"
+    call = decorators[0] if isinstance(decorators[0], ast.Call) else None
+    class_flags = _flags(call, CLASS_FLAGS, f"{node.name}: @dataclass")
+
+    fields: list[PlanField] = []
+    for item in node.body:
+        assert isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name), (
+            f"{node.name}: §9 zeigt nur Felder, nicht {ast.unparse(item).splitlines()[0]}"
+        )
+        name = item.target.id
+        default = None if item.value is None else ast.unparse(item.value)
+        flags: dict[str, object] = {**FIELD_FLAGS, "kw_only": class_flags["kw_only"]}
+        if isinstance(item.value, ast.Call) and _names(item.value.func, "field"):
+            options = ast.Call(item.value.func, [], [])
+            default = None
+            for keyword in item.value.keywords:
+                if keyword.arg == "default":
+                    default = ast.unparse(keyword.value)
+                elif keyword.arg == "default_factory":
+                    default = f"field(default_factory={ast.unparse(keyword.value)})"
+                else:
+                    options.keywords.append(keyword)
+            flags = _flags(options, flags, f"{node.name}.{name}: field()")
+        fields.append(PlanField(name, _normal(ast.unparse(item.annotation)), default, flags))
+    return PlanContract(class_flags, tuple(fields))
+
+
+def _signature(node: ast.FunctionDef) -> str:
+    returns = "" if node.returns is None else f" -> {ast.unparse(node.returns)}"
+    return f"({ast.unparse(node.args)}){returns}"
+
+
+def read_contracts(source: str) -> PlanContracts:
+    """Jede Anweisung des Codeblocks aus §9 — was der Test nicht liest, ist rot."""
+    found = PlanContracts({}, {}, {})
+    seen: set[str] = set()
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.ClassDef | ast.FunctionDef):
+            name = node.name
+        elif (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            name = node.targets[0].id
+        else:
+            raise AssertionError(
+                f"§9: {ast.unparse(node).splitlines()[0]} liest dieser Test nicht — "
+                "lesen oder aus dem Vertrag nehmen"
+            )
+        assert name not in seen, f"{name} steht zweimal in §9"
+        seen.add(name)
+        if isinstance(node, ast.ClassDef):
+            found.classes[name] = _plan_class(node)
+        elif isinstance(node, ast.FunctionDef):
+            found.functions[name] = _signature(node)
+        elif isinstance(node, ast.Assign):
+            found.aliases[name] = ast.unparse(node.value)
+    return found
+
+
+def plan_contracts() -> PlanContracts:
+    return read_contracts(contract_source(contract_section()))
+
+
+def _module_definitions(path: str) -> dict[str, str]:
+    """Typaliase und Funktionssignaturen einer Datei, als Quelltext wie in §9."""
+    found: dict[str, str] = {}
+    for node in ast.parse((ROOT / path).read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.FunctionDef):
+            found[node.name] = _signature(node)
+        elif (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            found[node.targets[0].id] = ast.unparse(node.value)
     return found
 
 
@@ -251,68 +356,103 @@ def _code_default(item: dataclasses.Field[Any]) -> str | None:
     return None
 
 
-def contract_differences(plan: Mapping[str, PlanContract]) -> list[str]:
-    """Jede Abweichung zwischen §9 und ``app/core/types.py``, je mit Klasse und Feld."""
+def _class_differences(name: str, contract: PlanContract) -> list[str]:
+    cls = getattr(contracts, name, None)
+    if not isinstance(cls, type) or not dataclasses.is_dataclass(cls):
+        return [f"{name}: in §9 eine Dataclass, in {TYPES_HOME} nicht"]
     found: list[str] = []
-    for name, contract in sorted(plan.items()):
-        cls = getattr(contracts, name, None)
-        if not isinstance(cls, type) or not dataclasses.is_dataclass(cls):
-            found.append(f"{name}: in §9 eine Dataclass, in app/core/types.py nicht")
+    params = cls.__dataclass_params__  # type: ignore[attr-defined]
+    for flag, value in contract.flags.items():
+        if getattr(params, flag) != value:
+            found.append(
+                f"{name}: @dataclass {flag} in §9 {value}, im Code {getattr(params, flag)}"
+            )
+
+    code = {item.name: item for item in dataclasses.fields(cls)}
+    listed = {item.name: item for item in contract.fields}
+    for field_name in code:
+        if field_name not in listed and (name, field_name) not in CODE_ONLY:
+            found.append(f"{name}.{field_name}: im Code, fehlt in §9")
+    for field_name, shown in listed.items():
+        if field_name not in code:
+            found.append(f"{name}.{field_name}: in §9, fehlt im Code")
             continue
-        params = cls.__dataclass_params__  # type: ignore[attr-defined]
-        code_flags = {
-            "frozen": params.frozen,
-            "eq": params.eq,
-            "slots": "__slots__" in cls.__dict__,
-        }
-        for flag, value in contract.flags.items():
-            if code_flags[flag] != value:
-                found.append(f"{name}: @dataclass {flag} in §9 {value}, im Code {code_flags[flag]}")
-
-        code = {item.name: item for item in dataclasses.fields(cls)}
-        listed = {item.name: item for item in contract.fields}
-        for field_name in code:
-            if field_name not in listed and (name, field_name) not in CODE_ONLY:
-                found.append(f"{name}.{field_name}: im Code, fehlt in §9")
-        for field_name, shown in listed.items():
-            if field_name not in code:
-                found.append(f"{name}.{field_name}: in §9, fehlt im Code")
-                continue
-            actual = code[field_name]
-            annotation = _normal(actual.type if isinstance(actual.type, str) else repr(actual.type))
-            if shown.annotation != annotation:
+        actual = code[field_name]
+        if not isinstance(actual.type, str):
+            found.append(
+                f"{name}.{field_name}: Typ im Code kein Quelltext ({actual.type!r}) — "
+                f"fehlt in {TYPES_HOME} `from __future__ import annotations`?"
+            )
+        elif shown.annotation != (annotation := _normal(actual.type)):
+            found.append(f"{name}.{field_name}: Typ in §9 {shown.annotation}, im Code {annotation}")
+        default = _code_default(actual)
+        if shown.default != default:
+            found.append(
+                f"{name}.{field_name}: Vorgabe in §9 {shown.default or 'keine'}, "
+                f"im Code {default or 'keine'}"
+            )
+        for flag, value in shown.flags.items():
+            if getattr(actual, flag) != value:
                 found.append(
-                    f"{name}.{field_name}: Typ in §9 {shown.annotation}, im Code {annotation}"
-                )
-            default = _code_default(actual)
-            if shown.default != default:
-                found.append(
-                    f"{name}.{field_name}: Vorgabe in §9 {shown.default or 'keine'}, "
-                    f"im Code {default or 'keine'}"
+                    f"{name}.{field_name}: field {flag} in §9 {value}, "
+                    f"im Code {getattr(actual, flag)}"
                 )
 
-        plan_order = [field_name for field_name in listed if field_name in code]
-        code_order = [field_name for field_name in code if field_name in listed]
-        if plan_order != code_order:
-            found.append(f"{name}: Feldfolge in §9 {plan_order}, im Code {code_order}")
+    plan_order = [field_name for field_name in listed if field_name in code]
+    code_order = [field_name for field_name in code if field_name in listed]
+    if plan_order != code_order:
+        found.append(f"{name}: Feldfolge in §9 {plan_order}, im Code {code_order}")
+    return found
+
+
+def contract_differences(plan: PlanContracts) -> list[str]:
+    """Jede Abweichung zwischen §9 und dem Code, je mit Klasse und Feld oder Name."""
+    found: list[str] = []
+    for name, contract in sorted(plan.classes.items()):
+        found += _class_differences(name, contract)
+
+    homes = dict.fromkeys(plan.aliases, TYPES_HOME) | {
+        name: FUNCTION_HOMES.get(name, "") for name in plan.functions
+    }
+    for name, shown in sorted(plan.aliases.items() | plan.functions.items()):
+        if not homes[name]:
+            found.append(f"{name}: §9 zeigt die Funktion, FUNCTION_HOMES kennt ihre Datei nicht")
+            continue
+        actual = _module_definitions(homes[name]).get(name)
+        if actual is None:
+            found.append(f"{name}: in §9, fehlt in {homes[name]}")
+        elif actual != shown:
+            found.append(f"{name}: in §9 {shown}, in {homes[name]} {actual}")
     return found
 
 
 def test_the_plan_shows_the_core_contracts() -> None:
-    """Ohne diese Zusicherung verglich alles darunter eine leere Menge."""
-    plan = plan_contracts()
+    """Ohne diese Zusicherung verglich alles darunter eine leere Menge.
 
-    assert len(plan) >= 12, f"nur {len(plan)} Dataclasses in §9 — das Muster greift nicht"
+    Gezählt wird zweimal: am Text jede Zeile ``class``/``def`` und im Parser,
+    was er liest. Weichen beide ab, hat der Parser etwas übersehen.
+    """
+    section = contract_section()
+    plan = read_contracts(contract_source(section))
+    shown = shown_names(section)
+
+    read = sorted([*plan.classes, *plan.functions])
+    assert shown, "keine Klasse und keine Funktion in §9 — das Muster greift nicht"
+    assert sorted(shown) == read, (
+        "§9 zeigt andere Klassen und Funktionen, als der Test liest:\n"
+        f"  im Text   {sorted(shown)}\n  gelesen   {read}"
+    )
     for expected in ("Feature", "SceneObject", "OpContext", "OpResult", "LayerInfo", "Sketch"):
-        assert expected in plan, f"§9 sollte {expected} zeigen"
-        assert plan[expected].fields, f"§9 zeigt {expected} ohne Felder — das Muster greift nicht"
+        assert expected in plan.classes, f"§9 sollte {expected} zeigen"
+        assert plan.classes[expected].fields, f"§9 zeigt {expected} ohne Felder"
+    assert "OpFn" in plan.aliases and "solve_sketch" in plan.functions
 
 
 def test_every_contract_in_the_plan_matches_the_code() -> None:
     differences = contract_differences(plan_contracts())
 
     assert not differences, (
-        "Bauplan §9 und app/core/types.py weichen ab — den Vertrag in §9 nachziehen "
+        "Bauplan §9 und der Code weichen ab — den Vertrag in §9 nachziehen "
         "(Bauplanänderung mit Ansage) oder den Code zurück auf den Vertrag:\n"
         + "\n".join(f"  {line}" for line in differences)
     )
@@ -320,7 +460,7 @@ def test_every_contract_in_the_plan_matches_the_code() -> None:
 
 def test_the_code_only_fields_are_still_code_only() -> None:
     """Wer ein Feld in §9 aufnimmt oder streicht, streicht es auch hier."""
-    plan = plan_contracts()
+    plan = plan_contracts().classes
 
     stale = []
     for (name, field_name), reason in sorted(CODE_ONLY.items()):
@@ -336,18 +476,18 @@ def test_the_code_only_fields_are_still_code_only() -> None:
 def test_the_contract_check_would_catch_a_drift() -> None:
     """Gegenprobe: Jede Art Abweichung an einer echten Klasse wird gemeldet."""
     plan = plan_contracts()
-    layer = plan["LayerInfo"]
+    layer = plan.classes["LayerInfo"]
     last = layer.fields[-1]
     first = layer.fields[0]
     with_default = next(item for item in layer.fields if item.default is not None)
 
-    def drifted(fields: tuple[PlanField, ...], **flags: bool) -> list[str]:
+    def drifted(fields: tuple[PlanField, ...], **flags: object) -> list[str]:
         changed = PlanContract({**layer.flags, **flags}, fields)
-        return contract_differences({**plan, "LayerInfo": changed})
+        return contract_differences(plan._replace(classes={**plan.classes, "LayerInfo": changed}))
 
     assert contract_differences(plan) == []
     assert drifted(layer.fields[:-1]) == [f"LayerInfo.{last.name}: im Code, fehlt in §9"]
-    assert drifted((*layer.fields, PlanField("invented", "float", None))) == [
+    assert drifted((*layer.fields, PlanField("invented", "float", None, first.flags))) == [
         "LayerInfo.invented: in §9, fehlt im Code"
     ]
     assert drifted(
@@ -359,7 +499,47 @@ def test_the_contract_check_would_catch_a_drift() -> None:
         f"LayerInfo.{first.name}: Typ in §9 int, im Code {first.annotation}"
     ]
     assert drifted(tuple(reversed(layer.fields)))[0].startswith("LayerInfo: Feldfolge")
-    assert drifted(layer.fields, frozen=not layer.flags["frozen"]) == [
-        f"LayerInfo: @dataclass frozen in §9 {not layer.flags['frozen']}, "
-        f"im Code {layer.flags['frozen']}"
+    for flag in ("frozen", "kw_only", "order"):
+        assert drifted(layer.fields, **{flag: not layer.flags[flag]}) == [
+            f"LayerInfo: @dataclass {flag} in §9 {not layer.flags[flag]}, "
+            f"im Code {layer.flags[flag]}"
+        ]
+    for flag in ("compare", "init"):
+        hidden = first._replace(flags={**first.flags, flag: False})
+        assert drifted((hidden, *layer.fields[1:])) == [
+            f"LayerInfo.{first.name}: field {flag} in §9 False, im Code True"
+        ]
+    changed = contract_differences(plan._replace(functions={"solve_sketch": "(sketch: Sketch)"}))
+    assert len(changed) == 1
+    assert changed[0].startswith(
+        "solve_sketch: in §9 (sketch: Sketch), in app/core/sketch/solver.py (sketch: Sketch, "
+    )
+    assert contract_differences(plan._replace(aliases={"OpFn": "Callable[[], None]"})) == [
+        "OpFn: in §9 Callable[[], None], in app/core/types.py Callable[[OpContext], OpResult]"
     ]
+
+
+def test_the_parser_leaves_nothing_in_the_plan_unread() -> None:
+    """Gegenprobe: Was der Parser nicht liest, verschwindet nicht, sondern ist rot."""
+    section = contract_section()
+    source = contract_source(section)
+    plain = "@dataclass(frozen=True, slots=True)\nclass Sketch:"
+    assert plain in source
+
+    spelled = read_contracts(source.replace(plain, "@dataclasses." + plain[1:]))
+    assert spelled.classes["Sketch"] == read_contracts(source).classes["Sketch"]
+
+    for addition, message in (
+        ("class Unread:\n    x: int\n", "Unread: steht in §9 ohne @dataclass"),
+        ("@dataclass\nclass LayerInfo:\n    z: float\n", "LayerInfo steht zweimal"),
+        ("def solve_sketch() -> None: ...\n", "solve_sketch steht zweimal"),
+        ("import os\n", "import os liest dieser Test nicht"),
+        ("@dataclass(weird=1)\nclass Odd:\n    x: int\n", "weird=1 vergleicht"),
+        ("@dataclass\nclass Odd:\n    x: int = field(doc='x')\n", "doc='x' vergleicht"),
+    ):
+        with pytest.raises(AssertionError, match=re.escape(message)):
+            read_contracts(source + "\n\n" + addition)
+
+    fenced = section.replace("```python", "```py")
+    assert read_contracts(contract_source(fenced)).classes == {}
+    assert shown_names(fenced) == shown_names(section) != []
