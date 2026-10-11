@@ -24,7 +24,8 @@ aktiviert. Ohne KI bleibt nur der Chat aus.
 Wo die Suite eine Regel hält, ist ein Verstoß ein roter Lauf, keine
 Geschmacksfrage. Über den ganzen Baum wachen Tests bei 1, 3, 4, 9–13, 15–20
 und 22; bei 2, 6, 7, 14 und 21 prüfen sie die Stellen, an denen die Regel
-greift. 5 und 8 sind Urteilsfragen ohne mechanische Prüfung — sie hält die
+greift. Bei 5 hält ein Test §9 und Code gleich (`test_plan_references`); ob
+der Vertrag zuerst stand, bleibt wie 8 eine Urteilsfrage — sie hält die
 Durchsicht (`/regelcheck`, Agent `solidon3d-review`).
 
 **Aufbau**
