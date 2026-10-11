@@ -423,12 +423,39 @@ def test_a_circle_cannot_be_offset_into_nothing() -> None:
         edit.offset(sketch, (0,), -5.0)
 
 
-def test_offsetting_an_arc_is_refused_rather_than_guessed() -> None:
-    """Der Versatz eines Bogens ist keine Verschiebung, sondern eine neue
-    Kurve — und eine falsche wäre schlimmer als keine."""
+def test_a_free_arc_moves_concentrically() -> None:
+    """Ein freier Viertelbogen R5: Er bleibt um seine Mitte, von links gelesen
+    liegt oben außen — +2 mm ergeben R7 an denselben Winkeln."""
     sketch = Sketch(
         plane="plane:xy",
         elements=(SketchElement(kind="arc", points=((0.0, 0.0), (5.0, 0.0), (0.0, 5.0))),),
+    )
+
+    centre, start, end = edit.offset(sketch, (0,), 2.0).elements[1].points
+
+    assert centre == (0.0, 0.0)
+    assert flat((start, end)) == pytest.approx([7.0, 0.0, 0.0, 7.0])
+
+
+def test_a_full_arc_grows_like_a_circle() -> None:
+    """Ein Bogen, dessen Enden aufeinander liegen, ist ein Kreis: +2 mm nach außen."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="arc", points=((1.0, 1.0), (6.0, 1.0), (6.0, 1.0))),),
+    )
+
+    copy = edit.offset(sketch, (0,), 2.0).elements[1]
+
+    assert copy.kind == "arc"
+    assert flat(copy.points) == pytest.approx([1.0, 1.0, 8.0, 1.0, 8.0, 1.0])
+
+
+def test_offsetting_a_curve_is_refused_rather_than_guessed() -> None:
+    """Der Versatz einer Kurve ist keine Verschiebung, sondern eine neue
+    Form — und eine falsche wäre schlimmer als keine."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="spline", points=((0.0, 0.0), (5.0, 3.0), (10.0, 0.0))),),
     )
 
     with pytest.raises(ValidationError):
@@ -814,6 +841,118 @@ def test_two_edges_of_an_outline_keep_their_corner_outside() -> None:
     moved = edit.offset(sketch, (0, 1), 2.0)
 
     assert copied_corners(sketch, moved) == [(0.0, -2.0), (42.0, -2.0), (42.0, 30.0)]
+
+
+def loop_area(elements: tuple[SketchElement, ...]) -> float:
+    """Die Fläche einer geschlossenen Kette aus Strecken und Bögen — über die
+    Verkettung der Profilbildung, die dabei auch prüft, dass sie schließt."""
+    from app.core.sketch.profile import Profile, _one_loop, _segment, signed_area
+
+    loop = _one_loop([_segment(element.kind, element.points) for element in elements])
+    return abs(signed_area(Profile(segments=loop)))
+
+
+@pytest.mark.parametrize("clockwise", [False, True], ids=["ccw", "cw"])
+@pytest.mark.parametrize("distance", [2.0, -2.0], ids=["outwards", "inwards"])
+def test_a_slot_keeps_its_round_ends(clockwise: bool, distance: float) -> None:
+    """Ein Langloch R5, 20 mm zwischen den Mitten, ganz gewählt: Die Bögen
+    wandern konzentrisch und schließen tangential an die Linien an.
+    Soll von Hand: 20 · 2(5 + d) + π(5 + d)²."""
+    sketch = slot()
+    if clockwise:
+        sketch = replace(
+            sketch,
+            elements=tuple(
+                replace(element, points=element.points[::-1]) if element.kind == "line" else element
+                for element in sketch.elements
+            ),
+        )
+
+    moved = edit.offset(sketch, (0, 1, 2, 3), distance)
+
+    fresh = moved.elements[4:]
+    radius = 5.0 + distance
+    arcs = [element for element in fresh if element.kind == "arc"]
+    assert len(fresh) == 4 and len(arcs) == 2
+    assert sorted(arc.points[0] for arc in arcs) == [(0.0, 0.0), (20.0, 0.0)]
+    for arc in arcs:
+        centre, start, end = arc.points
+        assert [math.dist(centre, start), math.dist(centre, end)] == pytest.approx([radius] * 2)
+    assert loop_area(fresh) == pytest.approx(20.0 * 2.0 * radius + math.pi * radius * radius)
+
+
+@pytest.mark.parametrize("distance", [-5.0, -6.0])
+def test_a_slot_offset_past_its_radius_is_refused(distance: float) -> None:
+    """−5 mm an R5: Die Bögen hätten keinen Radius mehr, die Linien liefen
+    aufeinander — es bliebe nichts."""
+    with pytest.raises(ValidationError):
+        edit.offset(slot(), (0, 1, 2, 3), distance)
+
+
+ROUNDED = (
+    SketchElement(kind="line", points=((0.0, 0.0), (40.0, 0.0))),
+    SketchElement(kind="line", points=((40.0, 0.0), (40.0, 29.0))),
+    SketchElement(kind="arc", points=((39.0, 29.0), (40.0, 29.0), (39.0, 30.0))),
+    SketchElement(kind="line", points=((39.0, 30.0), (0.0, 30.0))),
+    SketchElement(kind="line", points=((0.0, 30.0), (0.0, 0.0))),
+)
+
+
+def test_a_rounding_grows_with_its_outline() -> None:
+    """Rechteck 40 × 30 mit Verrundung R1, +2 mm: R3 um dieselbe Mitte.
+    Soll von Hand: 44 · 34 − 3² + π·3²/4 = 1487 + 2,25π."""
+    sketch = Sketch(plane="plane:xy", elements=ROUNDED)
+
+    moved = edit.offset(sketch, tuple(range(5)), 2.0)
+
+    fresh = moved.elements[5:]
+    (arc,) = [element for element in fresh if element.kind == "arc"]
+    assert arc.points[0] == (39.0, 29.0)
+    assert math.dist(arc.points[0], arc.points[1]) == pytest.approx(3.0)
+    assert loop_area(fresh) == pytest.approx(1487.0 + 2.25 * math.pi)
+
+
+def test_a_rounding_smaller_than_the_offset_drops_out() -> None:
+    """Dieselbe Verrundung R1, −2 mm: Ihr Radius fiele unter null, sie fällt
+    weg wie eine aufgezehrte Linie, die Ecke wird scharf bei (38, 28)."""
+    sketch = Sketch(plane="plane:xy", elements=ROUNDED)
+
+    moved = edit.offset(sketch, tuple(range(5)), -2.0)
+
+    fresh = moved.elements[5:]
+    assert [element.kind for element in fresh] == ["line"] * 4
+    assert copied_corners(sketch, moved) == [(2.0, 2.0), (2.0, 28.0), (38.0, 2.0), (38.0, 28.0)]
+    assert loop_area(fresh) == pytest.approx(36.0 * 26.0)
+
+
+HALF_DISC = (
+    SketchElement(kind="line", points=((-5.0, 0.0), (5.0, 0.0))),
+    SketchElement(kind="arc", points=((0.0, 0.0), (5.0, 0.0), (-5.0, 0.0))),
+)
+
+
+@pytest.mark.parametrize(
+    ("distance", "radius", "chord"),
+    [(1.0, 6.0, -1.0), (-1.0, 4.0, 1.0)],
+    ids=["outwards", "inwards"],
+)
+def test_a_half_disc_meets_its_line_where_the_circle_cuts_it(
+    distance: float, radius: float, chord: float
+) -> None:
+    """Ein Halbkreis R5 über seinem Durchmesser: An der Ecke treffen sich die
+    versetzte Linie und der versetzte Kreis. Soll von Hand: Ecken bei
+    x = ±√(R² − h²), Fläche des Kreisabschnitts über der Sehne y = h,
+    R²·acos(h/R) − h·√(R² − h²)."""
+    sketch = Sketch(plane="plane:xy", elements=HALF_DISC)
+
+    moved = edit.offset(sketch, (0, 1), distance)
+
+    fresh = moved.elements[2:]
+    half = math.sqrt(radius * radius - chord * chord)
+    (line,) = [element for element in fresh if element.kind == "line"]
+    assert sorted(flat(line.points)) == pytest.approx(sorted([-half, chord, half, chord]))
+    expected = radius * radius * math.acos(chord / radius) - chord * half
+    assert loop_area(fresh) == pytest.approx(expected)
 
 
 def test_an_edge_of_a_slot_follows_the_slot() -> None:

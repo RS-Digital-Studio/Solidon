@@ -7211,7 +7211,7 @@
   "Verschoben — die Schritte danach sind neu gerechnet.": "Déplacée — les étapes suivantes ont été recalculées.",
   "Verschoben: {step}": "Déplacée : {step}",
   "Versetzen": "Décaler",
-  "Versetzen arbeitet an Linien und Kreisen — ein Bogen wird dabei eine neue Kurve.": "Décaler travaille sur des lignes et des cercles — un arc y deviendrait une nouvelle courbe.",
+  "Versetzen arbeitet an Linien, Bögen und Kreisen — eine Kurve oder Ellipse wäre versetzt eine neue Form.": "Décaler travaille sur des lignes, des arcs et des cercles — une courbe ou une ellipse décalée serait une nouvelle forme.",
   "Versetzt ein erkanntes Merkmal an eine andere Stelle: Bohrung, Langloch, Zapfen, Senkung, Verjüngung, Kuppel, Pfanne, Wulst, Kehle oder Lufteinschluss.": "Déplace une caractéristique reconnue à un autre endroit : perçage, trou oblong, tenon, fraisure, conicité, dôme, cuvette, bourrelet, gorge ou poche d'air.",
   "Versetzte Reihen": "Rangées décalées",
   "Version": "Version",

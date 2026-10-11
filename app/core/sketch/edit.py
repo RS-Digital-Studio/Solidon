@@ -33,6 +33,7 @@ from app.core.sketch.profile import (
     _JOIN_TOL,
     Profile,
     ProfileSegment,
+    _arc_midpoint,
     _flat_curve,
     _flipped,
     _joins,
@@ -54,7 +55,7 @@ from app.core.types import (
     SketchElement,
     Vec3,
 )
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, PLANE_PARALLEL
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, PLANE_PARALLEL, exact_atan2
 from app.i18n import _
 
 #: Wie nah zwei Punkte sein müssen, um als derselbe zu gelten. Keine Toleranz
@@ -505,8 +506,11 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
     bekommt keine Kopie; kreuzte die Kopie sich selbst oder bliebe nichts,
     gibt es eine Absage statt einer umgestülpten Kopie.
 
-    Bögen und Splines bleiben außen vor: ihr Versatz ist keine Verschiebung,
-    sondern eine neue Kurve, und eine falsche wäre schlimmer als keine.
+    **Ein Bogen wandert konzentrisch**, sein Radius um den Abstand nach
+    derselben Seitenregel, und schließt an seine Nachbarn an: Ein Langloch
+    behält seine runden Enden. Kurven (Splines) und Ellipsen bleiben außen
+    vor: ihr Versatz ist keine Verschiebung, sondern eine neue Form, und eine
+    falsche wäre schlimmer als keine.
     """
     if abs(distance) < EPS_SKETCH:
         raise ValidationError(
@@ -515,16 +519,12 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
             value=distance,
         )
 
-    lines = [
-        index
-        for index in sorted(set(indices))
-        if sketch.elements[index].kind == "line"
-        and math.dist(*sketch.elements[index].points[:2]) > _JOIN_TOL
-    ]
+    chosen = sorted(set(indices))
+    members = [index for index in chosen if _chainable(sketch.elements[index])]
     copies: list[SketchElement] = []
     joints: list[tuple[int, int]] = []
-    base = len(flat_points(sketch))
-    for chain, closed in _line_chains(sketch, lines):
+    flat = len(flat_points(sketch))
+    for chain, closed in _line_chains(sketch, members):
         if closed:
             links, turn = chain, _turn_of(sketch, chain)
             if abs(turn) <= EPS_GEOM * EPS_GEOM:
@@ -539,47 +539,66 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
             links, turn = ring if ring is not None else (_read_from_the_left(sketch, chain), 0.0)
         # Links der Laufrichtung liegt bei einer linksherum laufenden Kette innen.
         towards = -distance if turn > 0.0 else distance
-        kept = _mitred(sketch, links, closed, towards, distance)
-        first = base + 2 * len(copies)
-        turned = [links[at][1] for at, _run in kept]
-        for at, run in kept:
-            index, backwards = links[at]
-            copies.append(
-                SketchElement(
-                    kind="line",
-                    points=run[::-1] if backwards else run,
-                    construction=sketch.elements[index].construction,
-                )
-            )
         # Je Kopie: wo sie in Laufrichtung beginnt und endet, als flacher Punkt.
-        heads = [first + 2 * at + (1 if backwards else 0) for at, backwards in enumerate(turned)]
-        tails = [first + 2 * at + (0 if backwards else 1) for at, backwards in enumerate(turned)]
+        heads: list[int] = []
+        tails: list[int] = []
+        for at, (start, end) in _mitred(sketch, links, closed, towards, distance):
+            index, backwards = links[at]
+            element = sketch.elements[index]
+            run = (end, start) if backwards else (start, end)
+            # Ein Bogen behält seine Mitte; Anfang und Ende folgen ihr (Punkte 1 und 2).
+            points = (element.points[0], *run) if element.kind == "arc" else run
+            first, last = flat + len(points) - 2, flat + len(points) - 1
+            copies.append(
+                SketchElement(kind=element.kind, points=points, construction=element.construction)
+            )
+            heads.append(last if backwards else first)
+            tails.append(first if backwards else last)
+            flat += len(points)
         joints.extend(zip(tails[:-1], heads[1:], strict=True))
         if closed:
             joints.append((tails[-1], heads[0]))
-    for index in sorted(set(indices)):
+    for index in chosen:
         element = sketch.elements[index]
-        if element.kind == "circle":
+        whole = element.kind == "arc" and _joins(element.points[1], element.points[2])
+        if element.kind == "circle" or whole:
             centre, edge = element.points[0], element.points[1]
-            radius = math.hypot(edge[0] - centre[0], edge[1] - centre[1]) + distance
-            if radius <= EPS_SKETCH:
+            before = math.hypot(edge[0] - centre[0], edge[1] - centre[1])
+            radius = before + distance
+            if radius <= EPS_SKETCH or before <= EPS_SKETCH:
                 raise ValidationError(
                     "distance",
                     _("Der Kreis würde dabei kleiner als nichts — weniger nach innen versetzen."),
                     value=distance,
                 )
+            # Ein voller Bogen bleibt ein Bogen, an denselben Winkeln.
+            rim: tuple[Point2, ...] = (
+                tuple(
+                    (
+                        centre[0] + (x - centre[0]) * radius / before,
+                        centre[1] + (y - centre[1]) * radius / before,
+                    )
+                    for x, y in element.points[1:]
+                )
+                if whole
+                else ((centre[0] + radius, centre[1]),)
+            )
             copies.append(
                 SketchElement(
-                    kind="circle",
-                    points=(centre, (centre[0] + radius, centre[1])),
+                    kind=element.kind,
+                    points=(centre, *rim),
                     construction=element.construction,
                 )
             )
+            flat += 1 + len(rim)
 
     if not copies:
         raise ValidationError(
             "element",
-            _("Versetzen arbeitet an Linien und Kreisen — ein Bogen wird dabei eine neue Kurve."),
+            _(
+                "Versetzen arbeitet an Linien, Bögen und Kreisen — eine Kurve oder "
+                "Ellipse wäre versetzt eine neue Form."
+            ),
         )
     held = tuple(SketchConstraint("coincident", pair) for pair in joints)
     return replace(
@@ -589,20 +608,33 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
     )
 
 
+def _chainable(element: SketchElement) -> bool:
+    """Ob ein Element als Glied einer Kette versetzt wird: eine Strecke mit
+    Länge oder ein Bogen, der nicht voll umläuft (der gilt wie ein Kreis)."""
+    if element.kind == "line":
+        return math.dist(element.points[0], element.points[1]) > _JOIN_TOL
+    if element.kind == "arc":
+        centre, start, end = element.points
+        return math.dist(centre, start) > EPS_SKETCH and not _joins(start, end)
+    return False
+
+
 def _line_chains(
     sketch: Sketch, lines: list[int]
 ) -> list[tuple[tuple[tuple[int, bool], ...], bool]]:
-    """Die gewählten Linien als Ketten: je Glied das Element und ob die Kette
-    es rückwärts durchläuft, dazu ob sie sich schließt.
+    """Die gewählten Linien und Bögen als Ketten: je Glied das Element und ob
+    die Kette es rückwärts durchläuft, dazu ob sie sich schließt.
 
     Verbunden ist, was sich nach :func:`~app.core.sketch.profile._joins`
     trifft — dieselbe Frage, mit der die Profilbildung ihre Ringe schließt;
     eine Kette, die hier zu ist, ist es dort auch. Treffen sich an einem
     Punkt mehr als zwei Enden, gibt es keine Laufrichtung und kein Außen.
     """
-    ends = {
-        (index, side): sketch.elements[index].points[side] for index in lines for side in (0, 1)
-    }
+    ends: dict[tuple[int, int], Point2] = {}
+    for index in lines:
+        pair = _ends_of(sketch.elements[index])
+        assert pair is not None
+        ends[(index, 0)], ends[(index, 1)] = pair
     partner: dict[tuple[int, int], tuple[int, int]] = {}
     for key, others in _partners(ends).items():
         if len(others) > 1:
@@ -725,6 +757,56 @@ def _on_a_ring(
     return chain, turn
 
 
+@dataclass(frozen=True, slots=True)
+class _Link:
+    """Ein Glied einer Kette in Laufrichtung: eine Strecke oder ein Bogen.
+
+    Ein Bogen läuft linksherum (``turn`` +1, wie gespeichert) oder rechtsherum
+    (``turn`` -1, rückwärts gelesen); ``sweep`` ist seine Weite in
+    Laufrichtung. Versetzt um ``s`` links der Laufrichtung bleibt er
+    konzentrisch, mit dem Radius ``radius - turn·s``.
+    """
+
+    start: Point2
+    end: Point2
+    centre: Point2 | None = None
+    radius: float = 0.0
+    turn: float = 0.0
+    sweep: float = 0.0
+
+    def normal(self, point: Point2) -> Point2:
+        """Die Einheitsnormale links der Laufrichtung an ``point``."""
+        if self.centre is None:
+            (ax, ay), (bx, by) = self.start, self.end
+            length = math.hypot(bx - ax, by - ay)
+            return (-(by - ay) / length, (bx - ax) / length)
+        # Linksherum gelaufen liegt links die Mitte.
+        (cx, cy), (px, py) = self.centre, point
+        return (self.turn * (cx - px) / self.radius, self.turn * (cy - py) / self.radius)
+
+    def radius_at(self, shift: float) -> float:
+        """Der Radius des Bogens im Abstand ``shift``."""
+        return self.radius - self.turn * shift
+
+
+def _link_of(sketch: Sketch, link: tuple[int, bool]) -> _Link:
+    """Das Glied ``link`` der Zeichnung in Laufrichtung der Kette."""
+    index, backwards = link
+    element = sketch.elements[index]
+    start, end = _run_of(sketch, link)
+    if element.kind != "arc":
+        return _Link(start, end)
+    centre = element.points[0]
+    return _Link(
+        start,
+        end,
+        centre=centre,
+        radius=math.dist(centre, element.points[1]),
+        turn=-1.0 if backwards else 1.0,
+        sweep=arc_sweep(centre, element.points[1], element.points[2]),
+    )
+
+
 def _mitred(
     sketch: Sketch,
     links: tuple[tuple[int, bool], ...],
@@ -732,70 +814,83 @@ def _mitred(
     towards: float,
     distance: float,
 ) -> list[tuple[int, tuple[Point2, Point2]]]:
-    """Die Strecken einer versetzten Kette in Laufrichtung, Ecken auf Gehrung —
-    je bleibendem Glied seine Stelle in ``links`` und seine Kopie. ``towards``
-    ist der Abstand links der Laufrichtung, ``distance`` der getippte Wert.
+    """Die Glieder einer versetzten Kette in Laufrichtung, Ecken auf Gehrung —
+    je bleibendem Glied seine Stelle in ``links`` und Anfang und Ende seiner
+    Kopie. ``towards`` ist der Abstand links der Laufrichtung, ``distance``
+    der getippte Wert.
 
-    Eine Ecke zweier Nachbarn liegt auf beiden versetzten Geraden:
+    Eine Ecke zweier Strecken liegt auf beiden versetzten Geraden:
     ``V + s·(n₁ + n₂) / (1 + n₁·n₂)`` mit den Einheitsnormalen links der
     Laufrichtung — anders als der Schnitt zweier Geraden auch bei fast
     geraden Ecken gut gestellt, und nur Produkte und eine Wurzel
-    (`kern.md`, „Dieselbe Datei, dasselbe Teil“).
+    (`kern.md`, „Dieselbe Datei, dasselbe Teil“). **Ein Bogen wandert
+    konzentrisch**; an einem tangentialen Übergang (Langloch, Verrundung)
+    ist das derselbe Punkt, an einem Knick der Schnitt der versetzten Kurven,
+    der der Gehrung am nächsten liegt (:func:`_meeting`).
 
-    **Eine Linie, die der Versatz aufzehrt, fällt weg** (:func:`_vanishing`),
-    die früheste zuerst, und ihre Nachbarn treffen sich direkt — so geht es
-    an einer Fase von 0,01 mm oder an den Kleinstkanten eines eingelesenen
-    Umrisses weiter, wo jede Gehrung eine Kante umstülpte. Laufen danach zwei
-    Wände gegeneinander, ist eine Kerbe zugelaufen, und beide fallen mit
-    (``pinched``). Kann ein Ende eines offenen Zugs nicht bleiben, steht ein
-    Rücklauf offen da oder kreuzt die Kopie sich, gibt es eine Absage.
+    **Ein Glied, das der Versatz aufzehrt, fällt weg** (:func:`_vanishing`),
+    die früheste zuerst, und seine Nachbarn treffen sich direkt — so geht es
+    an einer Fase von 0,01 mm, an den Kleinstkanten eines eingelesenen
+    Umrisses und an einer Verrundung, kleiner als der Abstand nach innen,
+    weiter. Ein Bogen, dessen Radius auf null fiele, ist ebenso weg. Laufen
+    danach zwei Wände gegeneinander, ist eine Kerbe zugelaufen, und beide
+    fallen mit (``pinched``). Kann ein Ende eines offenen Zugs nicht bleiben,
+    steht ein Rücklauf offen da oder kreuzt die Kopie sich, gibt es eine Absage.
     """
-    runs = [_run_of(sketch, link) for link in links]
-    normals = []
-    for (ax, ay), (bx, by) in runs:
-        length = math.hypot(bx - ax, by - ay)
-        normals.append((-(by - ay) / length, (bx - ax) / length))
-    count = len(runs)
+    chain = [_link_of(sketch, link) for link in links]
+    count = len(chain)
 
     def corner(before: int, after: int, shift: float) -> Point2:
         """Wo sich zwei Glieder im Abstand ``shift`` treffen, die jetzt Nachbarn sind."""
-        (nx, ny), (mx, my) = normals[before], normals[after]
+        one, other = chain[before], chain[after]
+        (nx, ny), (mx, my) = one.normal(one.end), other.normal(other.start)
         bend = 1.0 + nx * mx + ny * my
         if bend <= EPS_SKETCH:
             # Die Kette läuft auf sich selbst zurück: Die Gehrung läge im Unendlichen.
             raise _too_far(distance)
+        adjacent = after == (before + 1) % count
         cross = nx * my - ny * mx
-        if after != (before + 1) % count and abs(cross) > EPS_SKETCH:
+        if one.centre is None and other.centre is None and not adjacent and abs(cross) > EPS_SKETCH:
             # Nachbarn erst nach einer weggefallenen Linie: der Schnitt ihrer
             # versetzten Geraden, ``p·n = a·n + s`` für beide.
-            (ax, ay), (bx, by) = runs[before][0], runs[after][0]
+            (ax, ay), (bx, by) = one.start, other.start
             first = ax * nx + ay * ny + shift
             second = bx * mx + by * my + shift
             return ((first * my - second * ny) / cross, (nx * second - mx * first) / cross)
-        vx = (runs[before][1][0] + runs[after][0][0]) / 2.0
-        vy = (runs[before][1][1] + runs[after][0][1]) / 2.0
-        return (vx + shift * (nx + mx) / bend, vy + shift * (ny + my) / bend)
+        vx = (one.end[0] + other.start[0]) / 2.0
+        vy = (one.end[1] + other.start[1]) / 2.0
+        mitre = (vx + shift * (nx + mx) / bend, vy + shift * (ny + my) / bend)
+        if (one.centre is None and other.centre is None) or (adjacent and bend >= 2.0 - EPS_SKETCH):
+            return mitre
+        meeting = _meeting(one, other, shift, mitre)
+        if meeting is None:
+            raise _too_far(distance)
+        return meeting
 
     def copies(alive: list[int], shift: float) -> list[tuple[Point2, Point2]]:
-        """Die Kopien der lebenden Glieder im Abstand ``shift``."""
+        """Anfang und Ende der Kopien der lebenden Glieder im Abstand ``shift``."""
         corners = [corner(alive[at], alive[at + 1], shift) for at in range(len(alive) - 1)]
         if closed:
             corners.append(corner(alive[-1], alive[0], shift))
             return list(zip([corners[-1], *corners[:-1]], corners, strict=True))
-        (ax, ay), (bx, by) = runs[alive[0]][0], runs[alive[-1]][1]
-        (nx, ny), (mx, my) = normals[alive[0]], normals[alive[-1]]
-        starts = [(ax + shift * nx, ay + shift * ny), *corners]
-        return list(zip(starts, [*corners, (bx + shift * mx, by + shift * my)], strict=True))
+        first, last = chain[alive[0]], chain[alive[-1]]
+        (nx, ny), (mx, my) = first.normal(first.start), last.normal(last.end)
+        starts = [(first.start[0] + shift * nx, first.start[1] + shift * ny), *corners]
+        ends = [*corners, (last.end[0] + shift * mx, last.end[1] + shift * my)]
+        return list(zip(starts, ends, strict=True))
 
     def pinched(alive: list[int]) -> int | None:
         """Wo zwei neue Nachbarn gegeneinander laufen und die Kerbe zwischen
         ihnen sich bei diesem Abstand geschlossen hat."""
         for at in range(len(alive) if closed else len(alive) - 1):
             before, after = alive[at], alive[(at + 1) % len(alive)]
-            (nx, ny), (mx, my) = normals[before], normals[after]
+            one, other = chain[before], chain[after]
+            if one.centre is not None or other.centre is not None:
+                continue
+            (nx, ny), (mx, my) = one.normal(one.end), other.normal(other.start)
             if after == (before + 1) % count or 1.0 + nx * mx + ny * my > EPS_SKETCH:
                 continue
-            (ax, ay), (bx, by) = runs[before][0], runs[after][0]
+            (ax, ay), (bx, by) = one.start, other.start
             # Die Breite der Kerbe zwischen den versetzten Geraden, gemessen in
             # die Richtung, in die die Wände wandern: ``p·n = a·n + s`` je Wand.
             sides = (ax * nx + ay * ny + towards) + (bx * mx + by * my + towards)
@@ -805,13 +900,26 @@ def _mitred(
 
     alive = list(range(count))
     while True:
+        # Ein Bogen ohne Radius trägt keine Ecke mehr: Er fällt zuerst.
+        shrunk = [at for at, link in enumerate(alive) if _no_radius(chain[link], towards)]
         closing = pinched(alive)
-        if closing is not None:
+        if shrunk:
+            gone_pair = shrunk[:1]
+        elif closing is not None:
             # Eine Kerbe, schmaler als der doppelte Abstand, ist zu: Ihre Wände fallen mit.
             gone_pair = [closing, (closing + 1) % len(alive)]
         else:
             shifted = copies(alive, towards)
-            gone = _vanishing([runs[edge] for edge in alive], copies(alive, 0.0), shifted)
+            gone = _vanishing(
+                [
+                    _extent(chain[link], copy, 0.0)
+                    for link, copy in zip(alive, copies(alive, 0.0), strict=True)
+                ],
+                [
+                    _extent(chain[link], copy, towards)
+                    for link, copy in zip(alive, shifted, strict=True)
+                ],
+            )
             if gone is None:
                 break
             gone_pair = [gone]
@@ -820,38 +928,134 @@ def _mitred(
             raise _too_far(distance)
         for at in sorted(gone_pair, reverse=True):
             del alive[at]
-        if len(alive) < (3 if closed else 1):
+        if len(alive) < (3 if closed else 1) and not (closed and _round(chain, alive)):
             raise _too_far(distance)
-    if crosses_itself(Profile(segments=tuple(ProfileSegment("line", c, d) for c, d in shifted))):
+    outline = tuple(
+        ProfileSegment("line", c, d)
+        if chain[link].centre is None
+        else ProfileSegment("arc", c, d, via=_midway(chain[link], c, d))
+        for link, (c, d) in zip(alive, shifted, strict=True)
+    )
+    if crosses_itself(Profile(segments=outline)):
         raise _too_far(distance)
     return list(zip(alive, shifted, strict=True))
 
 
-def _vanishing(
-    runs: list[tuple[Point2, Point2]],
-    before: list[tuple[Point2, Point2]],
-    after: list[tuple[Point2, Point2]],
-) -> int | None:
-    """Welche Linie der Versatz als erste aufzehrt — oder keine.
+def _no_radius(link: _Link, shift: float) -> bool:
+    """Ob ein Bogen im Abstand ``shift`` keinen Radius mehr hat."""
+    return link.centre is not None and link.radius_at(shift) <= _JOIN_TOL
+
+
+def _round(chain: list[_Link], alive: list[int]) -> bool:
+    """Ob die Reste eines Rings nur Bögen sind — zwei Halbkreise tragen sich selbst."""
+    return len(alive) == 2 and all(chain[link].centre is not None for link in alive)
+
+
+def _extent(link: _Link, copy: tuple[Point2, Point2], shift: float) -> float:
+    """Wie lang die Kopie eines Glieds entlang ihres Vorbilds ist — negativ, wenn
+    sie gegen es zeigt. Ein Bogen misst seine Weite in Laufrichtung, von den
+    Enden des Vorbilds aus gezählt, mal dem Radius im Abstand ``shift``."""
+    (cx, cy), (dx, dy) = copy
+    if link.centre is None:
+        (ax, ay), (bx, by) = link.start, link.end
+        return ((bx - ax) * (dx - cx) + (by - ay) * (dy - cy)) / math.hypot(bx - ax, by - ay)
+    radius = link.radius_at(shift)
+    if radius <= 0.0:
+        return -1.0
+    lead = _angle_between(link.centre, link.start, (cx, cy)) * link.turn
+    trail = _angle_between(link.centre, link.end, (dx, dy)) * link.turn
+    return radius * (link.sweep - lead + trail)
+
+
+def _angle_between(centre: Point2, first: Point2, second: Point2) -> float:
+    """Der Winkel von ``first`` nach ``second`` um ``centre``, linksherum positiv,
+    in ``(-π, π]`` — über ``exact_atan2``, plattformgleich."""
+    ax, ay = first[0] - centre[0], first[1] - centre[1]
+    bx, by = second[0] - centre[0], second[1] - centre[1]
+    return exact_atan2(ax * by - ay * bx, ax * bx + ay * by)
+
+
+def _midway(link: _Link, start: Point2, end: Point2) -> Point2:
+    """Ein Punkt der Bogenkopie zwischen ``start`` und ``end`` (für die Kreuzungsprüfung)."""
+    assert link.centre is not None
+    if link.turn > 0.0:
+        return _arc_midpoint(link.centre, start, end)
+    return _arc_midpoint(link.centre, end, start)
+
+
+def _meeting(one: _Link, other: _Link, shift: float, near: Point2) -> Point2 | None:
+    """Der Schnitt zweier versetzter Glieder, der ``near`` am nächsten liegt —
+    Gerade mit Kreis oder Kreis mit Kreis; ``None``, wenn sie sich nicht treffen."""
+    if one.centre is None or other.centre is None:
+        line, arc = (one, other) if one.centre is None else (other, one)
+        assert arc.centre is not None
+        (nx, ny) = line.normal(line.start)
+        (ax, ay), (bx, by) = line.start, line.end
+        length = math.hypot(bx - ax, by - ay)
+        found = _line_meets_circle(
+            (ax + shift * nx, ay + shift * ny),
+            ((bx - ax) / length, (by - ay) / length),
+            arc.centre,
+            arc.radius_at(shift),
+        )
+    else:
+        assert one.centre is not None and other.centre is not None
+        found = _circles_meet(
+            one.centre, one.radius_at(shift), other.centre, other.radius_at(shift)
+        )
+    if not found:
+        return None
+    return min(found, key=lambda point: math.dist(point, near))
+
+
+def _line_meets_circle(
+    point: Point2, direction: Point2, centre: Point2, radius: float
+) -> list[Point2]:
+    """Wo die Gerade durch ``point`` mit Einheitsrichtung ``direction`` den Kreis
+    trifft. Verfehlt sie ihn um höchstens ``_JOIN_TOL``, berührt sie ihn."""
+    (px, py), (ux, uy) = point, direction
+    wx, wy = px - centre[0], py - centre[1]
+    along = wx * ux + wy * uy
+    reach = abs(wx * uy - wy * ux)
+    if reach - radius > _JOIN_TOL:
+        return []
+    root = math.sqrt(max(0.0, radius * radius - reach * reach))
+    return [(px + (t - along) * ux, py + (t - along) * uy) for t in (-root, root)]
+
+
+def _circles_meet(
+    first: Point2, first_radius: float, second: Point2, second_radius: float
+) -> list[Point2]:
+    """Wo sich zwei Kreise treffen. Verfehlen sie sich um höchstens
+    ``_JOIN_TOL``, berühren sie sich."""
+    dx, dy = second[0] - first[0], second[1] - first[1]
+    gap = math.hypot(dx, dy)
+    if gap <= EPS_SKETCH:
+        return []
+    if max(gap - first_radius - second_radius, abs(first_radius - second_radius) - gap) > _JOIN_TOL:
+        return []
+    along = (first_radius * first_radius - second_radius * second_radius + gap * gap) / (2.0 * gap)
+    height = math.sqrt(max(0.0, first_radius * first_radius - along * along))
+    bx, by = first[0] + along * dx / gap, first[1] + along * dy / gap
+    return [
+        (bx - height * dy / gap, by + height * dx / gap),
+        (bx + height * dy / gap, by - height * dx / gap),
+    ]
+
+
+def _vanishing(before: list[float], after: list[float]) -> int | None:
+    """Welches Glied der Versatz als erstes aufzehrt — oder keines.
 
     Weg ist eine Kopie, die gegen ihr Vorbild zeigt oder höchstens
-    ``_JOIN_TOL`` lang ist. Ihre Länge entlang des Vorbilds ändert sich
-    linear mit dem Abstand; die früheste ist die, deren Länge nach dem
-    kleinsten Bruchteil des Wegs von ``before`` (Abstand null) nach ``after``
-    auf null fällt. Bei Gleichstand die erste in Laufrichtung.
+    ``_JOIN_TOL`` lang ist (:func:`_extent`, ``before`` beim Abstand null,
+    ``after`` beim getippten). Die Länge ändert sich mit dem Abstand; das
+    früheste ist das, dessen Länge nach dem kleinsten Bruchteil des Wegs auf
+    null fällt. Bei Gleichstand das erste in Laufrichtung.
     """
-
-    def along(run: tuple[Point2, Point2], copy: tuple[Point2, Point2]) -> float:
-        (ax, ay), (bx, by) = run
-        (cx, cy), (dx, dy) = copy
-        return ((bx - ax) * (dx - cx) + (by - ay) * (dy - cy)) / math.hypot(bx - ax, by - ay)
-
     earliest: tuple[float, int] | None = None
-    for at, run in enumerate(runs):
-        last = along(run, after[at])
+    for at, (first, last) in enumerate(zip(before, after, strict=True)):
         if last > _JOIN_TOL:
             continue
-        first = along(run, before[at])
         share = first / (first - last) if first > last and first > 0.0 else 0.0
         if earliest is None or share < earliest[0]:
             earliest = (share, at)
@@ -861,7 +1065,9 @@ def _vanishing(
 def _run_of(sketch: Sketch, link: tuple[int, bool]) -> tuple[Point2, Point2]:
     """Anfang und Ende eines Glieds in Laufrichtung der Kette."""
     index, backwards = link
-    start, end = sketch.elements[index].points[0], sketch.elements[index].points[1]
+    ends = _ends_of(sketch.elements[index])
+    assert ends is not None
+    start, end = ends
     return (end, start) if backwards else (start, end)
 
 

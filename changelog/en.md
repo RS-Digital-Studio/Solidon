@@ -169,7 +169,8 @@ it into `website/version.json`.
 - A sketch with many separate shapes solves quickly, even with hundreds of dimensioned rectangles or circles.
 - If *Curvature continuous* cannot be met while you draw, the sketch editor says so within seconds instead of minutes.
 - If two constraints contradict each other, the sketch editor names both instead of shrinking a line or circle to a point.
-- In the sketch editor, *Offset* moves a closed outline outwards for a positive distance and joins its corners, whichever way it was drawn. Version 0.5.3 often put it inside.
+- In the sketch editor, *Offset* moves a closed outline and each of its sides outwards for a positive distance and joins the corners, however it was drawn. Version 0.5.3 often put them inside.
+- Arcs now move with *Offset* too, around the same centre: a slot keeps its round ends and a fillet its shape.
 - A body takes three clicks: *Draw* in the top toolbar (Ctrl+Shift+E), then corner, opposite corner, height. Outwards it joins on, inwards it cuts.
 - While pulling up, you can type the dimensions. A double-click on the step opens its dimensions, and under *Kind* it becomes a revolved body or a hole pattern without redrawing.
 - From the sketch editor, *Done* leads back into the view, and the next click sets the height. Escape lays the outline aside, Ctrl+Z brings it back.

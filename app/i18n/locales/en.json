@@ -7211,7 +7211,7 @@
   "Verschoben — die Schritte danach sind neu gerechnet.": "Moved — the steps after it have been recomputed.",
   "Verschoben: {step}": "Moved: {step}",
   "Versetzen": "Offset",
-  "Versetzen arbeitet an Linien und Kreisen — ein Bogen wird dabei eine neue Kurve.": "Offset works on lines and circles — an arc would become a new curve.",
+  "Versetzen arbeitet an Linien, Bögen und Kreisen — eine Kurve oder Ellipse wäre versetzt eine neue Form.": "Offset works on lines, arcs and circles — an offset curve or ellipse would be a new shape.",
   "Versetzt ein erkanntes Merkmal an eine andere Stelle: Bohrung, Langloch, Zapfen, Senkung, Verjüngung, Kuppel, Pfanne, Wulst, Kehle oder Lufteinschluss.": "Moves a recognised feature to another place: hole, slot, peg, countersink, taper, dome, socket, bead, groove or air pocket.",
   "Versetzte Reihen": "Staggered rows",
   "Version": "Version",

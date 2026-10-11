@@ -563,6 +563,50 @@ def test_an_offset_outline_reaches_the_height(window: MainWindow) -> None:
     assert body.mesh.volume == pytest.approx((44.0 * 34.0 - 40.0 * 30.0) * 10.0, rel=1e-9)
 
 
+def test_an_offset_slot_reaches_the_height_with_round_ends(window: MainWindow) -> None:
+    """Ein Langloch R5 × 20 ganz versetzt, *Fertig*, 10 mm: ein Rahmen mit
+    runden Enden. Soll von Hand: ((20 · 14 + 49π) − (20 · 10 + 25π)) · 10."""
+    from app.core.types import Sketch, SketchElement
+
+    window.start_sketch("")
+    panel = window._sketch_panel
+    assert panel is not None
+    panel.canvas.set_sketch(
+        Sketch(
+            "plane:xy",
+            (
+                SketchElement("line", ((0.0, -5.0), (20.0, -5.0))),
+                SketchElement("arc", ((20.0, 0.0), (20.0, -5.0), (20.0, 5.0))),
+                SketchElement("line", ((20.0, 5.0), (0.0, 5.0))),
+                SketchElement("arc", ((0.0, 0.0), (0.0, 5.0), (0.0, -5.0))),
+            ),
+        )
+    )
+    panel.canvas.selection = [
+        ("line", (0, 1)),
+        ("arc", (2, 3, 4)),
+        ("line", (5, 6)),
+        ("arc", (7, 8, 9)),
+    ]
+    panel.canvas.selectionChanged.emit()
+    panel.offset_distance.set_value_mm(2.0)
+    panel.offset_button.click()
+    assert [element.kind for element in panel.canvas.sketch.elements[4:]] == [
+        "line",
+        "arc",
+        "line",
+        "arc",
+    ]
+    window.sketch_finish_button.click()
+    assert window._sketch_panel is None and window.drawing(), window._announcement
+    flow = window.draw_flow()
+    flow.lift = Lift(10.0)
+    assert flow.settle()
+    assert window.session.wait_for_idle(60_000)
+    body = next(iter(window.session.last_result.scene.objects.values()))
+    assert body.mesh.volume == pytest.approx((80.0 + 24.0 * math.pi) * 10.0, rel=5e-3)
+
+
 def test_a_figure_generator_gets_a_new_plate_and_the_video_its_dialog(
     qt_app: QApplication, window: MainWindow
 ) -> None:

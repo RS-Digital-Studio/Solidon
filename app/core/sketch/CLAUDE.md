@@ -172,11 +172,13 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   (`edit.offset`): Ein geschlossener Zug der Auswahl geht positiv nach außen
   wie der Kreis, eine einzelne Kante mit ihrem Umriss (`_on_a_ring`), erst eine
   freie Linie nach oben, eine senkrechte nach rechts — die Seite, die der
-  Tooltip nennt. Ecken auf Gehrung und gedeckt (`_mitred`); eine Linie,
-  die der Abstand aufzehrt, fällt weg, die früheste zuerst (`_vanishing`), eine
-  zugelaufene Kerbe mit beiden Wänden — Kleinstkanten eingelesener Umrisse. Ein
-  offenes Ende, das wegfiele, eine Kreuzung oder ein Rest ohne Fläche ist eine
-  Absage.
+  Tooltip nennt. Ein Bogen wandert konzentrisch (`_Link.radius_at`). Ecken auf
+  Gehrung und gedeckt (`_mitred`), am Knick mit einem Bogen der nächste Schnitt
+  der versetzten Kurven (`_meeting`); ein Glied, das der Abstand aufzehrt oder
+  dessen Radius auf null fiele, fällt weg, das früheste zuerst (`_vanishing`),
+  eine zugelaufene Kerbe mit beiden Wänden — Kleinstkanten eingelesener Umrisse.
+  Ein offenes Ende, das wegfiele, eine Kreuzung oder ein Rest ohne Fläche ist
+  eine Absage.
 - **Strecken bleibt am Bezugspunkt und in seiner Richtung** (`edit.stretched`):
   um den Punkt der Hülle, der dem Nullpunkt am nächsten liegt
   (`_anchor_of`), nur die getippte Achse. Runde Elemente oder eine Bedingung
