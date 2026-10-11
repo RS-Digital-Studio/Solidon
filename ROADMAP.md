@@ -55,6 +55,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
 | [RM-682 — Die mitgelieferten Schriften fehlen in Lizenzbeilage, Über-Dialog und SBOM](#rm-682) | Plattformen, Pakete und Grafik | Nachprüfung RM-471 09.10.: für DejaVu formal Regression gegenüber v0.5.1; Schriftsippen als eigene Komponenten aus einer Quelle |
 | [RM-694 — Am echten Fenster endeten zwei Läufe mit dem Spiderman ohne Python-Spur](#rm-694) | Plattformen, Pakete und Grafik | Unter Volllast auf dem i9 gesehen, alter und neuer Stand; auf ruhiger Maschine mit nativem Abbild nachstellen, bevor eine Ursache zugeordnet wird |
+| [RM-770 — Weitere x86_64-Räder tragen denselben Fehler, in C-Bibliotheken](#rm-770) | Plattformen, Pakete und Grafik | Pillow `libavif` und FFmpeg aus PySide6_Addons; ohne C++-Ausnahmen ohne Wirkung, offen ob sie im Paket liegen |
+| [RM-768 — Die Abwicklungstabelle im Intel-Mac-Rad von OCP ist falsch kodiert](#rm-768) | Plattformen, Pakete und Grafik | Seit 0.6.0 korrigiert `tools/fix_unwind_info.py` sie nach jeder Installation und prüft das Paket; gemeldet als [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67), die Korrektur entfällt mit einem behobenen Rad |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z3 (Z2 bis auf die Drehachse durch RM-559). Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Restentscheidung offen. Gelöst (09.10., Claude): PrusaSlicer ohne Bündel schätzte mit 1500 mm/s² (`ignore` und Dialekt `reprap`), jetzt `marlin` mit den angeforderten Werten als Grenze, dazu `extra_perimeters`/`solid_infill_below_area = 0` und die Materialart der Spule; Gewürzregal am CC2 407 → 292 min, gegen ElegooSlicer mit denselben Wänden 280 min (+4,5 %, Material −4,2 %), SuperSlicer 527 → 381 min. Offen: Solidons Tabelle druckt „Standard“ mit drei Wänden und vier Bodenschichten, die Standardprozesse von Elegoo, Bambu, Creality und Prusa (MK4S) mit zwei und drei (232 gegen 292 min, 128 gegen 154 g) — Entscheidung, ob die Tabelle dem Standardprozess des Druckers folgt |
@@ -917,6 +919,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Belege: `output/konsolidierung-2026-10-07/paket-l2.md` (RM-567, „Beobachtung, nicht
   zugeordnet“); die Sonde `paket-l2/probe_window_real.py` mit `run_main.py` und
   `memdrive_gpu.py` liegt nur auf dem i9.
+
+<a id="rm-768"></a>
+
+- [ ] **RM-768 — Die Abwicklungstabelle im Intel-Mac-Rad von OCP ist falsch kodiert.**
+  Das x86_64-Rad von `cadquery-ocp-novtk` (7.9.3.1.1 bis 8.0.1.1.0) kodiert in jeder Funktion
+  mit Stapelprobe die Stelle der Rahmengröße in `__unwind_info` ein oder zwei Byte zu weit
+  (8.0.1.1.0: 309 von 874 `STACK_IND`-Einträgen in 20 Bibliotheken). Jede OCC-Ausnahme durch
+  einen solchen Rahmen endete auf Intel-Macs mit einem Bus-Fehler, etwa eine Verrundung, die an
+  einer Ecke scheitert. Die Ursache liegt im Bau des Rads (`CadQuery/ocp-build-system` baut
+  OCCT mit `BUILD_OPT_PROFILE=Production`, also `-fomit-frame-pointer`). Seit 0.6.0 korrigiert
+  `tools/fix_unwind_info.py` die Tabelle auf macOS x86_64 nach jeder Installation (CI und
+  Paket, Regel in `auslieferung.md`); nach dem Bau prüft `--check` das Bündel. Offengelegt in
+  `THIRD-PARTY-NOTICES.md` und in der Stückliste (`pedigree`). Belegt auf dem Intel-Runner: ohne
+  Korrektur fünf Abstürze, mit ihr grün (Lauf 38083944884).
+  **Offen:** Antwort auf die Meldung [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67). Jeder Versionswechsel
+  von OCP hält `test_the_pinned_wheel_is_the_checked_one` an; dann das neue Rad mit
+  `python tools/fix_unwind_info.py --scan <Rad>` zählen.
+  **Abnahme:** Ein OCP-Rad zeigt im Scan keinen falschen Eintrag mehr. Dann entfallen Werkzeug,
+  Workflowschritte, Abschnitt der Lizenzbeilage, `pedigree` der Stückliste und die Notiz in
+  `licences.toml`.
+
+<a id="rm-770"></a>
+
+- [ ] **RM-770 — Weitere x86_64-Räder tragen denselben Fehler, in C-Bibliotheken.**
+  Der Scan (`tools/fix_unwind_info.py --scan`) findet denselben falschen `STACK_IND`-Versatz
+  außerhalb von OCP nur in C-Code: Pillow 12.3.0 `PIL/.dylibs/libavif.16.4.2.dylib` (8 von 8
+  Stapelproben-Einträgen) und in PySide6_Addons 6.12.0 FFmpeg (`libavcodec` 657, `libavformat`
+  75, `libavutil` 4). Durch C-Rahmen läuft keine C++-Ausnahme; falsch werden nur Stapelspuren
+  in Absturzberichten. Ohne einen einzigen `STACK_IND`-Eintrag sind PySide6_Essentials (219
+  Bibliotheken, Qt mit Rahmenzeiger), shiboken6, wgpu-native 0.32.0, manifold3d, shapely
+  (GEOS), numpy, scipy, scikit-image, uharfbuzz, xxhash, hidapi, fast_simplification, vhacdx.
+  **Nächster Schritt:** an der Paket-SBOM nachsehen, ob `libavif` und FFmpeg überhaupt im
+  Intel-Paket liegen; wenn ja, den Fehler den Projekten melden (Pillow, Qt for Python).
+  **Abnahme:** Die Bibliotheken liegen nicht im Paket, oder ihre Räder sind gemeldet; bei
+  jedem Bibliothekslauf (RM-467) zählt der Scan alle nativen x86_64-Räder.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 

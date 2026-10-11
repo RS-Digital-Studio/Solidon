@@ -615,29 +615,40 @@ def test_another_edge_answer_is_another_print() -> None:
     Die Antwort steht in ``Operation.matches`` und wählt die Geometrie des
     Verbrauchers (``scene.edge_binding``) — zwei Netze, also zwei Drucke.
     """
+    from app.core.knowledge import profiles
     from app.core.scene import History, evaluate
-    from tests import test_edge_binding as edge
+    from tests.helpers import (
+        COLLIDING_EDGE_KEY,
+        EdgeChooser,
+        edge_document,
+        edge_pair,
+        edge_registry,
+        left_box,
+        right_box,
+    )
 
     def answered(pick: Any) -> tuple[Any, Any]:
-        body, kind = edge._body("mesh")
-        registry = edge._registry(body, kind)
-        document = edge._document(edge.COLLIDING_KEY)
-        chooser = edge._EdgeChooser(pick)
+        body, kind = edge_pair("mesh")
+        registry = edge_registry(body, kind)
+        document = edge_document(COLLIDING_EDGE_KEY)
+        chooser = EdgeChooser(pick)
         first = evaluate(
             document,
-            edge._profile(),
+            profiles.make_profile("centauri-carbon-2", "petg"),
             registry=registry,
             ask=chooser,
             question_context=chooser.context,
         )
         assert first.complete, first.scene.report.findings
         History(document).record_matches(first.matches)
-        return document, evaluate(document, edge._profile(), registry=registry)
+        return document, evaluate(
+            document, profiles.make_profile("centauri-carbon-2", "petg"), registry=registry
+        )
 
-    right_document, right = answered(edge._right_box)
-    left_document, left = answered(edge._left_box)
+    right_document, right = answered(right_box)
+    left_document, left = answered(left_box)
     assert right_document.ops[1].params == left_document.ops[1].params
-    profile = edge._profile()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = replace(print_settings.resolve(profile), inventory_project_id="rm706-kanten")
     fingerprints = [
         usage.prepare(

@@ -4694,3 +4694,74 @@ def test_the_slicer_selection_prepares_qt_like_the_window_selection() -> None:
 
     missing = packages(_WINDOW_SELECTION) - packages(_SLICER_SELECTION)
     assert not missing, f"in slicer-auswahl.yml fehlt: {sorted(missing)}"
+
+
+_UNWIND_STEP: Final = "Abwicklungsinformation von OpenCASCADE korrigieren (Intel-Mac)"
+
+
+def test_every_intel_mac_job_corrects_the_unwind_info_right_after_installing_occ() -> None:
+    """RM-768: Auf dem Intel-Mac kommt die Korrektur direkt hinter die Installation.
+
+    Jeder Job, der auf ``macos-26-intel`` laufen kann und OpenCASCADE
+    installiert (Extra ``brep``), führt als nächsten Schritt
+    ``tools/fix_unwind_info.py --codesign`` aus, beschränkt auf macOS x86_64 —
+    vor Tests, Paketbau und damit vor der Developer-ID-Signatur der späteren
+    Jobs. Kein anderer Job trägt den Schritt.
+    """
+    found = []
+    for path in sorted(WORKFLOW.parent.glob("*.yml")):
+        workflow = path.read_text(encoding="utf-8")
+        for name in job_names(workflow):
+            block = job_block(workflow, name)
+            steps = re.findall(r"(?ms)^      - .*?(?=^      - |\Z)", block)
+            fixes = [
+                n
+                for n, step in enumerate(steps)
+                if step.startswith(f"      - name: {_UNWIND_STEP}\n")
+            ]
+            if "\n    uses: " in block:
+                assert not fixes, name
+                continue
+            runners = {
+                label for context in (MAIN_PUSH, TAG_PUSH) for label in job_runners(block, context)
+            }
+            installs = [
+                n
+                for n, step in enumerate(steps)
+                if re.search(r'pip install [^\n]*-e "\.\[[^\]]*\bbrep\b', step)
+            ]
+            if "macos-26-intel" not in runners or not installs:
+                assert not fixes, f"{path.name}: {name} trägt den Intel-Schritt ohne Intel-Läufer"
+                continue
+            assert fixes == [installs[-1] + 1], f"{path.name}: {name}"
+            step = steps[fixes[0]]
+            assert "        if: runner.os == 'macOS' && runner.arch == 'X64'\n" in step
+            assert re.search(
+                r"(?m)^        run: python tools/fix_unwind_info\.py --codesign$", step
+            ), f"{path.name}: {name}"
+            found.append(f"{path.name}:{name}")
+    assert len(found) == 6, found
+
+
+def test_the_intel_mac_package_is_checked_for_the_corrected_libraries() -> None:
+    """RM-768: Am gebauten Bündel belegt der Paketjob, dass die Korrektur mitreist.
+
+    Start und Hilfsprozess lösen keine OCC-Ausnahme aus und sähen ein
+    unkorrigiertes Bündel nicht. Der Schritt folgt den beiden Starts (die
+    direkt hinter „Bauen“ stehen müssen) und kommt vor dem Packen des
+    App-Eingangs, also vor jeder Signatur. Nur auf macOS x86_64.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    block = job_block(workflow, "package")
+    assert "macos-26-intel" in job_runners(block, TAG_PUSH)
+    steps = re.findall(r"(?ms)^      - .*?(?=^      - |\Z)", block)
+    names = [step.split("\n", 1)[0].removeprefix("      - name: ") for step in steps]
+    position = names.index("Anwendung im Paket starten")
+    step = steps[position + 1]
+    assert names[position + 1] == "Abwicklungsinformation im Paket prüfen (Intel-Mac)"
+    assert names.index("Bauen") < position < names.index("Unsignierten macOS-App-Eingang packen")
+    assert "        if: runner.os == 'macOS' && runner.arch == 'X64'\n" in step
+    assert re.search(
+        r"(?m)^        run: python tools/fix_unwind_info\.py --check --package dist$", step
+    )
+    assert "fix_unwind_info.py --check" not in workflow.replace(step, "")

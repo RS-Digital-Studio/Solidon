@@ -121,6 +121,29 @@ Die passenden Quellstände, Lizenztexte und weitere Hinweise zu Ihrem konkreten
 Paket erhalten Sie auch unter support@solidon3d.de. Ein Austausch ist kein Nachweis,
 dass eine beliebige geänderte Bibliothek mit dieser Anwendung kompatibel ist.
 
+## Geänderte Bibliotheken
+
+Nur das Paket für macOS mit Intel-Prozessor (x86_64) enthält geänderte
+OpenCASCADE-Bibliotheken; die Pakete für Windows, Linux und macOS mit
+Apple-Prozessor enthalten sie unverändert. Geändert am 10.10.2026:
+
+`cadquery-ocp-novtk` 8.0.1.1.0, 309 Einträge in 20 Bibliotheken: `libTKBO.8.0.1.dylib`, `libTKBRep.8.0.1.dylib`, `libTKBool.8.0.1.dylib`, `libTKDEGLTF.8.0.1.dylib`, `libTKDESTEP.8.0.1.dylib`, `libTKDESTL.8.0.1.dylib`, `libTKDEVRML.8.0.1.dylib`, `libTKFeat.8.0.1.dylib`, `libTKFillet.8.0.1.dylib`, `libTKG3d.8.0.1.dylib`, `libTKGeomAlgo.8.0.1.dylib`, `libTKGeomBase.8.0.1.dylib`, `libTKHLR.8.0.1.dylib`, `libTKMath.8.0.1.dylib`, `libTKOffset.8.0.1.dylib`, `libTKOpenGl.8.0.1.dylib`, `libTKService.8.0.1.dylib`, `libTKShHealing.8.0.1.dylib`, `libTKTopAlgo.8.0.1.dylib`, `libTKernel.8.0.1.dylib`.
+
+Geändert ist in jeder dieser Dateien nur die Abwicklungstabelle
+`__unwind_info`. Bei jeder Funktion mit Stapelprobe zeigt ihr Eintrag für die
+Rahmengröße jetzt auf den Wert im Code statt ein oder zwei Byte daneben;
+Maschinencode, Daten, Symbole und Schnittstellen sind unverändert. Ohne die
+Änderung beendete jede Ausnahme von OpenCASCADE, die eine dieser Funktionen
+verlässt, die Anwendung. Die Änderung nimmt das Werkzeug
+`tools/fix_unwind_info.py` im Quelltext von Solidon3D vor; Sie erhalten es mit
+den übrigen Quellständen unter support@solidon3d.de. Danach sind die Dateien neu
+signiert.
+
+Die geänderten Bibliotheken stehen weiter unter
+`LGPL-2.1-only WITH OCCT-exception-1.0`. Sie bleiben dynamisch gebunden und
+lassen sich wie oben beschrieben durch die unveränderten Dateien aus dem Rad
+oder durch eigene Bauten ersetzen.
+
 ## Vollständige Hinweise und Lizenztexte
 
 ### cadquery-ocp-novtk 8.0.1.1.0
