@@ -6814,6 +6814,94 @@ def test_a_chain_that_closes_on_its_start_is_finished(qt_app: QApplication) -> N
         panel.deleteLater()
 
 
+def test_a_chain_with_a_typed_first_side_closes_on_its_start(qt_app: QApplication) -> None:
+    """Erste Seite getippt, Schlussklick auf den Anfang: Der Zug ist fertig (Review M1).
+
+    ``place_measured`` führte den Zug weiter, ohne dass ``place`` davon wusste,
+    und der Schlussklick legte wieder einen neuen Strich an den Zeiger. Mit
+    dem Schließen geht auch das Maßfeld aus dem Bild (Review M2).
+    """
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        panel.choose_tool("line")
+        canvas.set_snapping(True, 1.0)
+        canvas.place_on_plane((0.0, 0.0))
+        canvas.hover_on_plane((39.5, 0.4))
+        canvas.place_measured(40.0)
+        for point in ((40.0, 30.0), (0.0, 30.0)):
+            canvas.place_on_plane(point)
+        canvas.hover_on_plane((0.2, 0.3))
+        assert not all(widget.isHidden() for widget in canvas._measure_widgets()), (
+            "vor dem Schlussklick steht das Maßfeld am Zeiger — sonst prüft der Test nichts"
+        )
+        canvas.place_on_plane((0.0, 0.0))
+
+        assert len(canvas.sketch.elements) == 4
+        assert not canvas._pending_world, "kein neuer Strich hängt am Zeiger"
+        assert all(widget.isHidden() for widget in canvas._measure_widgets()), (
+            "das Maßfeld geht mit dem Zug"
+        )
+        assert panel.drop_tool(), "das erste Esc hat etwas zu tun"
+        assert canvas.tool == "select"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_chain_closes_on_its_start_after_an_undo(qt_app: QApplication) -> None:
+    """Nach Strg+Z mitten im Zug schließt er trotzdem auf seinem Anfang (Review G1).
+
+    Das Rückgängig nimmt die letzte Linie und den laufenden Zug; wer am
+    verbliebenen Ende weiterzeichnet, beginnt einen neuen. Ob er schließt,
+    entscheidet die Zeichnung, nicht der Merkzettel des alten Zugs.
+    """
+    canvas = SketchCanvas()
+    canvas.set_tool("line")
+    canvas.set_snapping(True, 1.0)
+    for point in ((0.0, 0.0), (40.0, 0.0), (40.0, 30.0), (10.0, 30.0)):
+        canvas.place_on_plane(point)
+    canvas.undo()
+    assert len(canvas.sketch.elements) == 2
+    for point in ((40.0, 30.0), (0.0, 30.0), (0.0, 0.0)):
+        canvas.place_on_plane(point)
+
+    assert len(canvas.sketch.elements) == 4
+    assert not canvas._pending_world, "der Zug ist fertig"
+
+
+def test_a_typed_length_draws_one_line_even_when_the_field_loses_focus(
+    qt_app: QApplication,
+) -> None:
+    """Eine getippte Länge legt eine Linie an, nicht zwei (Review 0.6.0; schon in 0.5.3).
+
+    Qt meldet ``editingFinished`` bei der Eingabetaste und noch einmal beim
+    Verlust des Fokus. Der zweite Aufruf legte an das getippte Ende eine
+    zweite Linie derselben Länge, zurück zum Zeiger.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QFocusEvent
+    from PySide6.QtTest import QTest
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        panel.choose_tool("line")
+        canvas.set_snapping(False)
+        canvas.place_on_plane((0.0, 0.0))
+        canvas.hover_on_plane((29.5, 1.2))
+        canvas.measure_field.selectAll()
+        QTest.keyClicks(canvas.measure_field, "30")
+        QTest.keyClick(canvas.measure_field, Qt.Key.Key_Return)
+        assert len(canvas.sketch.elements) == 1, "die Eingabetaste setzt die Linie"
+        QApplication.sendEvent(
+            canvas.measure_field,
+            QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.MouseFocusReason),
+        )
+        assert len(canvas.sketch.elements) == 1, "der Fokusverlust setzt keine zweite"
+    finally:
+        panel.deleteLater()
+
+
 def test_a_typed_length_snaps_to_the_axis_and_continues_the_chain(
     qt_app: QApplication,
 ) -> None:

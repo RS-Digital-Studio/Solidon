@@ -71,7 +71,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un modelo que abre justo después de iniciar el programa se puede editar hasta una cuarta parte antes.
 - Con un slicer, un juego o un renderizado en marcha, los cálculos en modelos grandes terminan en segundos en lugar de minutos.
 - Un proyecto guardado con un modelo grande se abre tras un reinicio en uno o dos segundos en lugar de medio minuto: las características reconocidas se conservan.
-- Arrastrar el tirador de un taladro o de una cara trae al frente la pestaña *Selección*, también durante un recorrido. Hasta ahora su *Aplicar* quedaba oculto detrás del recorrido.
+- Arrastrar el tirador de una cara deja la distancia preparada en *Desplazar cara*, en la pestaña *Selección*, y trae la pestaña al frente, también durante un recorrido. Solo *Aplicar* crea el paso.
 
 ### Imprimir y entregar al slicer
 
@@ -194,6 +194,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un relieve solo se calcula cuando hay una imagen elegida. Hasta entonces el diálogo señala el botón *Elegir una imagen …*.
 - Los diálogos *Cargar STEP* y *Extruir un dibujo* solo ofrecen archivos que pueden leer. Si el proyecto no tiene ninguno, señalan el botón *Elegir un archivo …*.
 - Un trazo de líneas en el boceto termina en cuanto se cierra sobre su inicio. Hasta ahora quedaba un tramo nuevo en el puntero, y el primer Esc parecía no hacer nada.
+- Una longitud tecleada con la herramienta Línea crea exactamente una línea. Hasta ahora, al salir del campo de cota se añadía una segunda, de vuelta hacia el puntero.
 
 ### Generar con IA
 

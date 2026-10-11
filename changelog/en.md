@@ -70,7 +70,7 @@ it into `website/version.json`.
 - A model you open right after starting the program is ready to edit up to a quarter sooner.
 - With a slicer, a game or a render running alongside, calculations on large models finish in seconds instead of minutes.
 - A saved project with a large model now opens in a second or two after a restart instead of half a minute: the recognised features are kept.
-- Dragging the handle of a hole or face brings the *Selection* tab to the front, even during a tour. Until now its *Apply* stayed hidden behind the tour.
+- Dragging the face handle puts the distance into *Offset face* on the *Selection* tab and brings the tab to the front, even during a tour. Only *Apply* creates the step.
 
 ### Printing and slicer handover
 
@@ -193,6 +193,7 @@ it into `website/version.json`.
 - A relief only computes once an image is chosen. Until then the dialog points to the *Choose an image …* button.
 - The *Load STEP* and *Extrude a drawing* dialogs only offer files they can read. If the project has none, they point to the *Choose a file …* button.
 - A chain of lines in a sketch ends as soon as it closes on its start. Until now a new segment hung on the pointer, and the first Esc seemed to do nothing.
+- A length typed with the line tool creates exactly one line. Until now leaving the dimension field added a second one, back towards the pointer.
 
 ### Generating with AI
 

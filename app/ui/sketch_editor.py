@@ -947,10 +947,6 @@ class SketchCanvas(QWidget):
         #: Ein abgelehnter Klick, der nichts sagt, sieht aus wie ein
         #: verschluckter (Regel 17).
         self._arc_was_flat = False
-        self._chain_from: int | None = None
-        """Der Punkt, an dem :meth:`place` einen Linienzug weiterführt."""
-        self._chain_starts: frozenset[int] = frozenset()
-        """Die Punkte am Anfang des laufenden Linienzugs — dort schließt er."""
         self.selection: list[tuple[str, tuple[int, ...]]] = []
         """Die Auswahl in Klickreihenfolge: („point", (i,)) oder ein Element
         mit seinen flachen Punktindizes — „A parallel B" ist nicht „B
@@ -3501,19 +3497,7 @@ class SketchCanvas(QWidget):
         # nächste Zug an einer Ecke das eben gezeichnete Rechteck aus Linien
         # zum Parallelogramm. Fusion setzt sie beim Zeichnen ebenso.
         aligned = _axis_constraint(begin, points[0], points[1]) if self.tool == "line" else None
-        # **Schließt der Zug auf seinem Anfang, ist er fertig** (Handbuchprüfung
-        # 0.6.0, N2). Er lief weiter, mit einem neuen Strich am Zeiger, und das
-        # erste Esc nahm nur diesen weg — während die Zeile schon „Esc wechselt
-        # zum Auswählen“ sagte. Der Anfang ist der erste Punkt der ersten Linie
-        # und, wenn dieser Klick gefangen hat, der Punkt darunter.
-        continues = bool(self._pending) and self._pending[0] == self._chain_from
-        starts = (
-            self._chain_starts
-            if continues
-            else frozenset({begin, *(index for index in self._pending[:1] if index >= 0)})
-        )
-        end_snap = self._pending[1] if len(self._pending) > 1 else -1
-        closes = self.tool == "line" and end_snap >= 0 and end_snap in starts
+        closes = self.tool == "line" and self._closes_a_loop(self._pending)
         kept = self._pending_world[-1]
         self._pending.clear()
         self._pending_world.clear()
@@ -3528,17 +3512,60 @@ class SketchCanvas(QWidget):
                 ),
             )
         )
-        if self.tool == "line" and not closes:
-            # Ein Linienzug: das Ende ist der Anfang der nächsten — mit
-            # Deckung auf den eben gesetzten Punkt.
-            self._pending.append(begin + 1)
-            self._pending_world.append(kept)
-            self._chain_from = begin + 1
-            self._chain_starts = starts
-        elif closes:
-            self._chain_from = None
+        if self.tool == "line":
+            self._go_on_with_the_chain(begin, kept, closes=closes)
+
+    def _closes_a_loop(self, clicked: Sequence[int]) -> bool:
+        """Ob die Linie aus diesen Klicks einen Zug auf seinen Anfang schließt.
+
+        **Gefragt wird die Zeichnung, nicht ein Merkzettel** (Handbuchprüfung
+        0.6.0, N2 und Review G1). Der Endklick fängt einen Punkt, der über
+        Linien und Deckungen schon mit dem Anfangspunkt verbunden ist: Dann
+        schließt die Linie eine Schleife. So zählt es gleich, ob die Seiten
+        geklickt oder getippt waren und ob dazwischen ein Strg+Z lag.
+        """
+        if len(clicked) < 2 or clicked[0] < 0 or clicked[1] < 0:
+            return False
+        parent = list(range(len(edit.flat_points(self.sketch))))
+
+        def root(index: int) -> int:
+            while parent[index] != index:
+                parent[index] = parent[parent[index]]
+                index = parent[index]
+            return index
+
+        def join(first: int, second: int) -> None:
+            if 0 <= first < len(parent) and 0 <= second < len(parent):
+                parent[root(first)] = root(second)
+
+        for element, offset in zip(self.sketch.elements, edit.offsets_of(self.sketch), strict=True):
+            if element.kind == "line" and not element.construction:
+                join(offset, offset + 1)
+        for constraint in self.sketch.constraints:
+            if constraint.kind == "coincident" and len(constraint.targets) == 2:
+                join(constraint.targets[0], constraint.targets[1])
+        start, end = clicked[0], clicked[1]
+        if not (0 <= start < len(parent) and 0 <= end < len(parent)):
+            return False
+        return root(start) == root(end)
+
+    def _go_on_with_the_chain(self, begin: int, end: tuple[float, float], *, closes: bool) -> None:
+        """Nach einer Linie: weiterzeichnen am Ende — oder fertig, wenn sie schloss.
+
+        Ein Linienzug hängt die nächste Linie an das Ende der letzten, mit
+        Deckung auf den eben gesetzten Punkt. **Schließt er auf seinem Anfang,
+        ist er fertig** (Handbuchprüfung 0.6.0, N2): Vorher hing sofort ein
+        neuer Strich am Zeiger, und das erste Esc nahm nur ihn weg, während die
+        Zeile schon „Esc wechselt zum Auswählen“ sagte. Das Maßfeld geht mit
+        (Review M2), sonst stünde die alte Zahl weiter im Bild.
+        """
+        if closes:
+            self._reset_measure_entry()
             self.statusChanged.emit(self.status_text())
             self.update()
+            return
+        self._pending.append(begin + 1)
+        self._pending_world.append(end)
 
     def _place_measure_field(self, value: float) -> None:
         """Das Maßfeld an den Zeiger legen — oder wegnehmen, wenn es nichts misst.
@@ -3924,9 +3951,9 @@ class SketchCanvas(QWidget):
         # Der Linienzug geht weiter, wie nach einem Klick: Das getippte Ende
         # ist der Anfang der nächsten Linie. Vorher endete der Zug hier, und
         # wer einen Umriss aus getippten Maßen zog, fing nach jeder Zahl neu an.
+        # Ein getipptes Ende fängt keinen Punkt und schließt deshalb nie.
         if self.tool == "line":
-            self._pending.append(begin + 1)
-            self._pending_world.append(second)
+            self._go_on_with_the_chain(begin, second, closes=False)
         self.measuringChanged.emit(0.0)
 
     def place_second_measured(self, value: float) -> None:
@@ -6678,6 +6705,9 @@ class SketchPanel(QWidget):
         # Zeiger. Was hier bleibt, ist die Verbindung zum Setzen — das
         # Abschließen ist eine Sache des Panels, weil der Solverlauf danach
         # kommt.
+        self._measure_typed = False
+        """Ob im Maßfeld seit dem letzten Setzen getippt wurde (siehe :meth:`_place_measured`)."""
+        self.canvas.measure_field.lineEdit().textEdited.connect(self._note_measure_typed)
         self.canvas.measure_field.editingFinished.connect(self._place_measured)
         self.canvas.second_measure_field.editingFinished.connect(self._place_second_measured)
         QWidget.setTabOrder(
@@ -7634,6 +7664,10 @@ class SketchPanel(QWidget):
         if len(points) == 1:
             self.canvas.edit_point(points[0])
 
+    def _note_measure_typed(self, _text: str) -> None:
+        """Eine Eingabe im Maßfeld wartet darauf, gesetzt zu werden."""
+        self._measure_typed = True
+
     def _place_measured(self) -> None:
         """Das eingetippte Maß an die Bedingung legen, die darauf wartet.
 
@@ -7641,7 +7675,18 @@ class SketchPanel(QWidget):
         bleibt hier, weil danach der Solverlauf und die Liste der Bedingungen
         nachziehen — beides Sachen des Panels.
         """
-        self.canvas.place_measured(self.canvas.measure_field.value_mm())
+        field = self.canvas.measure_field
+        # **Ein Maß wird einmal gesetzt** (Review 0.6.0; schon in 0.5.3). Qt
+        # meldet ``editingFinished`` bei der Eingabetaste und noch einmal,
+        # wenn das Feld danach den Fokus verliert; der zweite Aufruf legte an
+        # das getippte Ende eine zweite Linie derselben Länge, zurück zum
+        # Zeiger. Gezählt wird nur eine getippte Eingabe, die noch nicht
+        # genommen ist. Das Merkmal ``isModified`` hilft nicht: Das Drehfeld
+        # schreibt seinen Text vor der Meldung neu und löscht es dabei.
+        if not self._measure_typed:
+            return
+        self._measure_typed = False
+        self.canvas.place_measured(field.value_mm())
 
     def _place_second_measured(self) -> None:
         """Die Höhe beendet das Rechteck nach der verriegelten Breite."""
