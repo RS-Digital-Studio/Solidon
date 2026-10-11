@@ -5198,6 +5198,47 @@ def test_prusaslicer_gets_the_blocker_as_a_range_of_the_mesh(
     assert [part.mesh.triangle_count for part in read_back] == [triangles]
 
 
+@pytest.mark.parametrize(
+    ("flavour", "member", "key"),
+    [
+        ("orca", "Metadata/model_settings.config", "support_style"),
+        ("prusa", "Metadata/Slic3r_PE_model.config", "support_material_style"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("style", "blocked", "snug"),
+    [("grid", True, True), ("grid", False, False), ("tree", True, False)],
+)
+def test_grid_support_beside_a_blocker_hugs_the_overhang(
+    tmp_path: Path,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    member: str,
+    key: str,
+    style: str,
+    blocked: bool,
+    snug: bool,
+) -> None:
+    """Die Sperre nimmt in der Orca-Familie und in PrusaSlicer nur die
+    Überhangfläche in ihr aus; im Gitterstil liegt jede Säule auf einem Raster
+    und wird danach nur am Modell zugeschnitten. Am Becher mit Deckel liefen die
+    Säulen unter dem Deckel so 1,1 mm in die Mündungen des gesperrten Tunnels
+    (ElegooSlicer: 1,08 m, mit ``snug`` 0,01 m). Ein Teil mit Sperre bekommt
+    deshalb ``snug``; ohne Sperre und unter Bäumen bleibt der Stil des
+    Herstellers."""
+    entry = scene_object(mesh=tunnel_block())
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", style)
+    settings = print_settings.with_path(settings, "support.block_channels", blocked)
+
+    written, findings = write_assembly(
+        [entry], tmp_path, project_name="t", profile=profile, settings=settings, flavour=flavour
+    )
+
+    assert ("export.support_blocker" in {finding.code for finding in findings}) is blocked
+    [values] = object_values(written, member).values()
+    assert values.get(key) == ("snug" if snug else None)
+
+
 @pytest.mark.parametrize("flavour", ["orca", "cura"])
 def test_only_the_part_that_is_supported_gets_a_blocker(
     tmp_path: Path, profile: Profile, flavour: SlicerFlavour

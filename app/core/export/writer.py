@@ -2849,6 +2849,7 @@ def write_assembly(
     # Je Teil mit dessen Einstellungen: Stützt nur ein Teil, sperrt auch nur
     # dieses seine Kanäle und Ränder (Entscheidung G).
     blockers: dict[str, MeshData | None] = {}
+    snug: dict[str, dict[str, str]] = {}
     if for_slicer:
         for entry in chosen:
             own_settings = part_values[entry.id].effective
@@ -2862,13 +2863,21 @@ def write_assembly(
                 entry, exported[entry.id], own_settings, profile, cancelled
             )
             findings += noted
+            if blockers[entry.id] is not None:
+                from app.core.export import handover
+
+                # Die Sperre hält nur, wo die Stütze am Überhang anliegt
+                # (:func:`handover.snug_beside_blocker`).
+                snug[entry.id] = handover.snug_beside_blocker(
+                    setup, profile, own_settings.support.style, flavour, program
+                )
     findings += height_findings
     parts = [
         threemf.AssemblyPart(
             mesh=exported[entry.id],
             name=source_text(entry.name),
             slots=threemf.slots_for_object(entry),
-            settings=part_values[entry.id].keys,
+            settings=part_values[entry.id].keys | snug.get(entry.id, {}),
             support_blocker=blockers.get(entry.id),
             layer_heights=heights.get(entry.id, ()),
             # Die Platte reist mit. Ohne Einschränkung auf eine gehen alle in

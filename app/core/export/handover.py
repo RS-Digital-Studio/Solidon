@@ -3596,6 +3596,55 @@ _ORGANIC_ORCA_STYLES: Final = frozenset({"", "default", "organic"})
 #: großen flachen Decken (RM-584).
 _HYBRID_ORCA_STYLE: Final = "tree_hybrid"
 
+#: Stile, unter denen die Orca-Familie und PrusaSlicer normale Stütze auf ein
+#: Raster legen (``SupportGridPattern``); ``default`` heißt bei normaler Stütze
+#: Gitter, ein fehlender Schlüssel ebenso.
+_RASTER_STYLES: Final = frozenset({"", "default", "grid"})
+
+
+def snug_beside_blocker(
+    setup: SlicerSetup | None,
+    profile: Profile,
+    style: str,
+    flavour: SlicerFlavour,
+    program: str = "",
+) -> dict[str, str]:
+    """Normale Stütze neben einer Stützsperre liegt am Überhang an, nicht auf dem Raster.
+
+    Die Sperre der Orca-Familie und von PrusaSlicer nimmt nur die
+    Überhangfläche in ihr aus. Unter dem Gitterstil legen beide jede Säule auf
+    ein Raster und schneiden sie danach nur am Modell zu: Am Becher mit Deckel
+    und gesperrtem Tunnel (ElegooSlicer, Centauri Carbon 2) liefen die Säulen
+    unter dem Deckel 1,1 mm in beide Mündungen, 1,08 m Bahn von der Sohle bis
+    zur Decke, mit ``snug`` 0,01 m bei derselben Abdeckung des Simses daneben
+    (98,5 und 98,8 %). Ein Teil mit Sperre, das normale Stütze im Rasterstil
+    druckt, bekommt deshalb ``snug`` — dieselbe Stütze, dicht am Umriss.
+    ``style`` ist die Art, mit der das Teil druckt; „automatisch“ fragt den
+    Herstellerprozess, ohne lesbaren Prozess gilt der Gitterstil."""
+    program = program or (slicer_keys.program_of(setup.executable) if setup else "")
+    replaced = slicer_keys.substitute("support.style", style, program)
+    if replaced is not None:
+        style = str(replaced.value)
+    if flavour == "orca":
+        native = _native_process(setup)
+        if style == "auto":
+            kind = str(_printed(native.get("support_type", ""))).strip()
+            if not kind.startswith("normal"):
+                return {}
+        elif style != "grid":
+            return {}
+        native_style = str(_printed(native.get("support_style", ""))).strip().casefold()
+        return {"support_style": "snug"} if native_style in _RASTER_STYLES else {}
+    if flavour != "prusa" or style not in ("auto", "grid"):
+        return {}
+    if style == "auto":
+        chosen = (_prusa_process_style(setup, profile) if setup is not None else "") or str(
+            manufacturer.prusa_defaults(program).get("support_material_style", "")
+        )
+        if chosen.strip().casefold() not in _RASTER_STYLES:
+            return {}
+    return {"support_material_style": "snug"}
+
 
 def tree_over_hybrid(
     native: Mapping[str, object], style: str, written: Mapping[str, str]
