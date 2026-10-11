@@ -396,9 +396,16 @@ class AgentSession:
         activation.require(activation.CHAT)
         resource_session = getattr(self.backend, "resource_session", None)
         if not callable(resource_session):
-            return self._propose(request)
-        with resource_session(self.cancelled, progress=lambda text: self._progress(0, text)):
-            return self._propose(request)
+            proposal = self._propose(request)
+        else:
+            with resource_session(self.cancelled, progress=lambda text: self._progress(0, text)):
+                proposal = self._propose(request)
+        # Erst ein Zug, der seinen Vorschlag samt Sätzen abliefert, hat sie
+        # zugestellt; ein gescheiterter lässt sie dem nächsten (Regel 21).
+        said = getattr(self.backend, "notices_said", None)
+        if proposal.notices and callable(said):
+            said()
+        return proposal
 
     def _propose(self, request: str) -> Proposal:
         """Führt den Zug innerhalb einer gegebenenfalls belegten Ressourcenspur aus."""

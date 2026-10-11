@@ -208,6 +208,9 @@ def conversation(entries: Sequence[ChatEntry], document: Document) -> list[Messa
             )
         )
     for entry in list(entries)[-HISTORY_LIMIT:]:
+        if entry.notice:
+            # Ein Satz der Anwendung an den Kunden, nicht des Modells.
+            continue
         discarded = entry.discarded or (
             entry.transaction_id is not None and entry.transaction_id not in active
         )

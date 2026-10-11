@@ -242,10 +242,13 @@ Einstellung. Die Mesh-Schnittstelle kennt nur `text_to_mesh` und
   haben eigene Fehler (`ModelNotInstalled`, `KeyRefused`), der gehostete Weg
   eigene Sätze (feste Adresse, festes Modell). Jeder Schlüsselfehler führt in
   *Chat einrichten*, nie zu den zusätzlichen Programmen.
-- **Fehlt die Vorgabe, antwortet ein empfohlenes Modell, das da ist**
-  (`OllamaBackend._stand_in`, Entscheidung Robert): nur ohne eigene Wahl,
-  einmal nach dem 404, mit Satz im Chat (`Reply.notices`) und gemerkt, damit
-  *Chat einrichten* dasselbe nennt. Ein gewähltes Modell wird nie ersetzt.
+- **Fehlt die Vorgabe, antwortet im Chat ein empfohlenes Modell, das da ist**
+  (`OllamaBackend._stand_in`, Entscheidung Robert): nur im Chatweg
+  (`stand_in`, `first_available`) — wer ein Modell nennt, prüft genau dieses —,
+  ohne eigene Wahl, einmal nach dem 404, nach der Grafik wie die Vorgabe. Der
+  Satz (`Reply.notices`) steht als Hinweis im Chat und nie im Auftrag
+  (`ChatEntry.notice`); gemerkt wird erst nach der Zustellung
+  (`notices_said`). Ein gewähltes Modell wird nie ersetzt.
 - **Das Protokoll trägt die Fakten**: `str(BackendUnavailable)` hängt Anbieter,
   Status, Modell und Grund an — der Kunde liest den Satz, das Protokoll, was
   geschah.

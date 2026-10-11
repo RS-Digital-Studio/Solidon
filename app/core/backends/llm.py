@@ -290,8 +290,10 @@ class Reply:
     notices: tuple[str, ...] = ()
     """Was der Kunde zu diesem Schritt wissen muss, ohne dass etwas
     fehlschlug — etwa, dass ein anderes Modell antwortet als die fehlende
-    Vorgabe (:meth:`OllamaBackend._stand_in`). Die Sitzung stellt es einmal
-    vor die Antwort im Chat (Regel 21: nicht still)."""
+    Vorgabe (:meth:`OllamaBackend._stand_in`). Jede Antwort trägt den Satz,
+    bis die Sitzung ihn zugestellt hat (:meth:`OllamaBackend.notices_said`);
+    die Sitzung stellt ihn einmal vor die Antwort im Chat (Regel 21: nicht
+    still)."""
 
     @property
     def budget_input_tokens(self) -> int:
@@ -848,9 +850,10 @@ class ModelNotInstalled(BackendUnavailable):
     geholt wurde aber ein anderes oder keines. Der Ausweg liegt im Dialog, der
     Modelle herunterlädt und die geholten zur Wahl stellt.
 
-    Ist nichts gewählt und liegt ein empfohlenes Modell da, kommt es gar nicht
-    so weit: Dann antwortet dieses, mit einem Satz im Chat
-    (``OllamaBackend._stand_in``).
+    Im Chat kommt es gar nicht so weit, wenn nichts gewählt ist und ein
+    empfohlenes Modell da liegt: Dann antwortet dieses, mit einem Satz dazu
+    (``OllamaBackend._stand_in``). Wer ein Modell ausdrücklich nennt, bekommt
+    diesen Fehler.
     """
 
     default_title = _("Das gewählte Modell ist bei Ollama nicht installiert.")
@@ -1626,8 +1629,9 @@ def default_ollama_model() -> str:
     Die Karte bestimmt dort nur den Satz. Ein Kunde ohne gemerktes Modell, der
     qwen3:14b geholt hat, fände nach einem Wechsel ein nicht installiertes vor.
 
-    **Fehlt die Vorgabe bei Ollama**, antwortet das erste empfohlene, das dort
-    liegt, und wird gemerkt (``OllamaBackend._stand_in``).
+    **Fehlt die Vorgabe bei Ollama**, antwortet im Chat ein empfohlenes, das
+    dort liegt, und wird gemerkt, sobald der Kunde es gelesen hat
+    (``OllamaBackend._stand_in``).
     """
     if not _machine.this_machine().apple_silicon:
         return DEFAULT_OLLAMA_MODEL
@@ -1657,6 +1661,15 @@ class OllamaBackend:
     #: (:meth:`_stand_in`), nie beim Bauen: Das geschieht auch im
     #: Einstellungsdialog.
     fetch: Fetch | None = None
+    #: Ob für die fehlende Vorgabe ein empfohlenes Modell einspringen darf
+    #: (:meth:`_stand_in`). **Nur der Chat** setzt es (:func:`first_available`):
+    #: Wer ein bestimmtes Modell nennt — „Werkzeuge prüfen“, die Messwerkzeuge —,
+    #: prüft genau dieses (§27) und bekommt sonst :class:`ModelNotInstalled`.
+    stand_in: bool = False
+    #: Die Sätze, die der Kunde noch nicht gelesen hat. Erst
+    #: :meth:`notices_said` merkt das Ersatzmodell: Scheitert der Zug nach dem
+    #: Wechsel, trägt der nächste den Satz wieder (Regel 21).
+    pending_notices: list[str] = field(default_factory=list)
 
     #: Ob der letzte Zug auf einer Grafikkarte lief — ``None``, solange keiner
     #: gelaufen ist.
@@ -1845,20 +1858,40 @@ class OllamaBackend:
     def _stand_in(self) -> str | None:
         """Welches empfohlene Modell für die fehlende Vorgabe antwortet — oder keines.
 
-        Nur, wenn der Kunde nichts gewählt hat und die Vorgabe fehlt
-        (S-20261010-e5014c, Entscheidung Robert): dann das erste aus
-        :data:`RECOMMENDATION_ORDER`, das bei dieser Adresse liegt. Ein
-        gewähltes Modell wird nie ersetzt, ein nicht empfohlenes nie genommen
-        — beides bleibt :class:`ModelNotInstalled`.
+        Nur im Chat (:attr:`stand_in`), wenn der Kunde nichts gewählt hat und
+        die Vorgabe fehlt (S-20261010-e5014c, Entscheidung Robert): ein
+        empfohlenes Modell, das bei dieser Adresse liegt. Ein gewähltes Modell
+        wird nie ersetzt, ein nicht empfohlenes nie genommen — beides bleibt
+        :class:`ModelNotInstalled`.
+
+        **Welches, entscheidet die Grafik wie bei der Vorgabe** (RM-564):
+        Rechnet Ollama hier und ist die Grafik bekannt, das erste aus
+        :data:`RECOMMENDATION_ORDER`, das ganz hineinpasst, sonst das
+        kleinste — nie das größte. Ohne bekannte Grafik das erste.
         """
         from app.core import discover
 
+        if not self.stand_in:
+            return None
         if discover.remembered(OLLAMA_MODEL_SETTING) or self.model != default_ollama_model():
             return None
         there = set(installed_models(self.url, self.fetch or _get_json))
-        return next(
-            (name for name in RECOMMENDATION_ORDER if name != self.model and name in there), None
-        )
+        candidates = [name for name in RECOMMENDATION_ORDER if name != self.model and name in there]
+        if not candidates:
+            return None
+        budget = _machine.this_machine().graphics_gb if ollama_runs_here(self.url) else None
+        if budget is None:
+            return candidates[0]
+        fitting = [name for name in candidates if OLLAMA_MEMORY_GB[name] <= budget]
+        return fitting[0] if fitting else min(candidates, key=OLLAMA_MEMORY_GB.__getitem__)
+
+    def notices_said(self) -> None:
+        """Die Sätze haben den Kunden erreicht — jetzt erst wird das
+        Ersatzmodell gemerkt, damit „Chat einrichten …“ es nennt (Regel 21)."""
+        if not self.pending_notices:
+            return
+        self.pending_notices.clear()
+        remember_ollama_model(self.model)
 
     def _complete(
         self,
@@ -1907,7 +1940,6 @@ class OllamaBackend:
                 for entry in tools
             ]
 
-        notices: tuple[str, ...] = ()
         try:
             answer = self._send(payload, cancelled)
         except BackendUnavailable as error:
@@ -1929,23 +1961,22 @@ class OllamaBackend:
                 _with_model(again, stand_in)
                 raise
             _log.info("ollama model %s is not installed, %s answers instead", self.model, stand_in)
-            notices = (
+            self.pending_notices.append(
                 tr(
                     "„{missing}“ ist bei Ollama nicht installiert, deshalb antwortet "
                     "„{model}“. Ein anderes Modell wählen Sie unter „Chat einrichten …“.",
                     missing=self.model,
                     model=stand_in,
-                ),
+                )
             )
-            # Gemerkt, damit „Chat einrichten …“ das Modell nennt, das
-            # antwortet — und der nächste Zug nicht wieder erst scheitert.
+            # Dieses Backend bleibt beim Ersatz; gemerkt wird er erst, wenn der
+            # Satz zugestellt ist (:meth:`notices_said`).
             self.model = stand_in
-            remember_ollama_model(stand_in)
         self.answered = True
         self.on_gpu = _ran_on_gpu(answer)
         reply = _from_ollama(answer, self.model)
-        if notices:
-            reply = replace(reply, notices=notices)
+        if self.pending_notices:
+            reply = replace(reply, notices=tuple(self.pending_notices))
         length = request_length(payload)
         if prompt_was_cut(reply.input_tokens, length, OLLAMA_CONTEXT_TOKENS):
             raise BackendPromptTruncated(
@@ -3174,5 +3205,9 @@ def first_available() -> LLMBackend | None:
     Chat (§27)."""
     for backend in backends():
         if backend.available:
+            if isinstance(backend, OllamaBackend):
+                # Nur der Chat lässt für die fehlende Vorgabe ein empfohlenes
+                # Modell einspringen (``OllamaBackend.stand_in``).
+                backend.stand_in = True
             return backend
     return None
