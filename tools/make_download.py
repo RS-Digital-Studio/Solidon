@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.branding import APP_NAME, APP_VERSION
 from app.core import changes
 from app.i18n import SOURCE_LANGUAGE
+from app.i18n.catalog import available_languages
 from tools import sign_release
 from tools.make_changelog import write_pages as write_changelog_pages
 
@@ -854,6 +855,66 @@ def grouped_for(version: str) -> dict[str, list[dict[str, object]]]:
     return found
 
 
+def lead_of_blocks(blocks: list[dict[str, object]]) -> changes.Group | None:
+    """Der Vorspann einer Sprache aus :func:`grouped_for`, nach ``changes.lead_of``."""
+    read: list[changes.Group] = []
+    for block in blocks:
+        points = block.get("points")
+        read.append(
+            changes.Group(
+                title=str(block.get("title") or ""),
+                points=tuple(str(point) for point in points) if isinstance(points, list) else (),
+            )
+        )
+    return changes.lead_of(tuple(read))
+
+
+def refuse_lead_without_a_note_in_every_language(
+    data: dict[str, object], grouped: dict[str, list[dict[str, object]]]
+) -> None:
+    """Hält an, wenn der Abschnitt einen Vorspann hat und ein Hinweis ihn nicht trägt.
+
+    Die Meldung für jeden Nutzer steht als Vorspann im Changelog und am Anfang
+    des Hinweistexts, in allen Sprachen (``auslieferung.md``). Fehlt einer
+    Sprache ihr Eintrag in ``notes_by_language``, liest ihr Kunde den deutschen
+    Hinweis (``updates.Release.note``), und :func:`drop_lead_said_in_the_note`
+    findet darin seinen eigenen Vorspann nicht wieder: Der bleibt in der
+    Liste, und die Meldung steht zweimal da, einmal deutsch. Sagt der eigene
+    Hinweis etwas anderes (``changes.repeats``), bleibt der Vorspann ebenso in
+    der Liste, und ältere Fassungen heben die Meldung nicht hervor.
+    """
+    leads = {
+        language: lead
+        for language, blocks in grouped.items()
+        if (lead := lead_of_blocks(blocks)) is not None
+    }
+    if not leads:
+        return
+    by_language = data.get("notes_by_language")
+    notes: dict[str, object] = by_language if isinstance(by_language, dict) else {}
+    missing: list[str] = []
+    silent: list[str] = []
+    for language in available_languages():
+        note = notes.get(language)
+        if not isinstance(note, str) or not note.strip():
+            missing.append(language)
+        elif language in leads and not changes.repeats(note, leads[language]):
+            silent.append(language)
+    problems = []
+    if missing:
+        problems.append(f"keinen Hinweis für {', '.join(missing)}")
+    if silent:
+        problems.append(f"für {', '.join(silent)} einen Hinweis ohne den Vorspann")
+    if problems:
+        raise SystemExit(
+            f"Der Abschnitt ## {APP_VERSION} im Changelog beginnt mit einem Vorspann, "
+            f"aber {VERSION_FILE.name} hat unter 'notes_by_language' "
+            f"{' und '.join(problems)}. Dort liest der Kunde die Meldung zweimal oder "
+            "nicht hervorgehoben. Den Vorspann aus changelog/<sprache>.md je Sprache an "
+            "den Anfang ihres Hinweises unter 'notes_by_language' schreiben."
+        )
+
+
 def drop_lead_said_in_the_note(
     data: dict[str, object],
     flat: dict[str, list[str]],
@@ -881,18 +942,7 @@ def drop_lead_said_in_the_note(
     fallback = data.get("notes")
     dropped: list[str] = []
     for language, blocks in grouped.items():
-        read: list[changes.Group] = []
-        for block in blocks:
-            points = block.get("points")
-            read.append(
-                changes.Group(
-                    title=str(block.get("title") or ""),
-                    points=tuple(str(point) for point in points)
-                    if isinstance(points, list)
-                    else (),
-                )
-            )
-        lead = changes.lead_of(tuple(read))
+        lead = lead_of_blocks(blocks)
         if lead is None:
             continue
         note = notes.get(language) or notes.get(SOURCE_LANGUAGE) or fallback
@@ -1032,6 +1082,7 @@ def write_version(packages: list[Package]) -> None:
         # **Vor der Kappung eingehängt**, damit sie beide Sichten sieht: Sie
         # misst die geschriebene Datei, und die trägt dann auch die Gruppen.
         grouped = grouped_for(APP_VERSION)
+        refuse_lead_without_a_note_in_every_language(data, grouped)
         # Vor Zählung und Kappung: Der weggenommene Vorspann ist kein
         # fehlender Punkt, sonst verwiese das Fenster für nichts auf die Website.
         dropped = drop_lead_said_in_the_note(data, changes, grouped)

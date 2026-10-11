@@ -1712,10 +1712,22 @@ def test_a_written_package_is_one_the_application_would_take(
     """
     import tools.make_download as make_download
     from app.core import updates
+    from app.i18n.catalog import available_languages
 
     version_file = tmp_path / "version.json"
+    # Ein Hinweis in jeder Sprache, wie ihn die echte Datei trägt: Beginnt der
+    # Abschnitt von ``APP_VERSION`` mit einem Vorspann, hielte ``write_version``
+    # sonst vor dem Paketeintrag an, den dieser Test sucht.
     version_file.write_text(
-        json.dumps({"url": "https://solidon3d.de", "notes": "Neue Fassung"}, ensure_ascii=False)
+        json.dumps(
+            {
+                "url": "https://solidon3d.de",
+                "notes": "Neue Fassung",
+                "notes_version": make_download.APP_VERSION,
+                "notes_by_language": dict.fromkeys(available_languages(), "Neue Fassung"),
+            },
+            ensure_ascii=False,
+        )
         + "\n",
         encoding="utf-8",
     )

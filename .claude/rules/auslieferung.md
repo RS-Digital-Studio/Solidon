@@ -138,7 +138,9 @@ Nutzer steht als Vorspann im Changelog und am Anfang des Hinweistexts
 Das Update-Fenster sehen Kunden mit dem Code der Version davor, und hervorgehoben
 erreicht sie die Meldung nur über den Hinweis. Wiederholt der Hinweis einer
 Sprache den Vorspann (`changes.repeats`), nimmt `make_download` ihn dort aus der
-Liste der Versionsdatei, sonst stünde er doppelt da.
+Liste der Versionsdatei, sonst stünde er doppelt da. Fehlt einer Sprache ihr
+Hinweis oder wiederholt er den Vorspann nicht, hält `write_version` an: Sie
+fiele auf den deutschen zurück oder behielte den Vorspann in der Liste.
 
 **Ein Punkt spricht allgemein** (Entscheidung Robert): von dem, was der Kunde
 an seinem eigenen Modell merkt — nicht von Teilen oder Namen der Prüfmodelle,
