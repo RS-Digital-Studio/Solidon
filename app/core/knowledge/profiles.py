@@ -44,7 +44,7 @@ from app.core.types import (
     Tolerance,
 )
 from app.core.units import is_zero
-from app.i18n import _, sort_key
+from app.i18n import TranslatableText, _, sort_key
 
 _log = get_logger(__name__)
 
@@ -68,6 +68,17 @@ DEFAULT_RESIN_MATERIAL: Final = "resin"
 RESIN_LAYER_HEIGHT: Final = 0.05
 RESIN_PIXEL_SIZE: Final = 0.05
 RESIN_MINIMUM_WALL: Final = 0.4
+
+#: Die mitgelieferten Drucker ohne Hersteller tragen einen Gattungsnamen, und
+#: der gehört in die Sprache des Kunden. ``printers.toml`` führt ihn deutsch,
+#: weil Slicerzuordnung, Projektdatei und Werte den festen Titel lesen; ein
+#: Mensch liest ihn über :func:`shown_printer_title`. Dass beide gleich
+#: bleiben, prüft ``tests/test_profiles.py``.
+_GENERIC_PRINTER_TITLES: Final = {
+    "generic-220": _("Allgemeiner FDM-Drucker 220 mm"),
+    "generic-resin-130": _("Allgemeiner Resin-Drucker 130 mm"),
+    "generic-resin-220": _("Allgemeiner Resin-Drucker 220 mm"),
+}
 
 _DATA_DIR: Final = Path(__file__).parent / "data"
 
@@ -608,7 +619,8 @@ def carried_findings(printer_id: str, material_id: str = "") -> tuple[Finding, .
         # **Der Satz nennt den Drucker, mit dem gerechnet wird** — der
         # allgemeine desselben Verfahrens (:func:`_standard_printer_for`).
         # „Standarddrucker" ließ offen, welcher Bauraum gerade gilt.
-        general = printer(_standard_printer_for(material_id)).title
+        fallback = printer(_standard_printer_for(material_id))
+        general = fallback.title
         return (
             Finding(
                 code="profile.printer_missing",
@@ -616,7 +628,7 @@ def carried_findings(printer_id: str, material_id: str = "") -> tuple[Finding, .
                 message=_(
                     "Den Drucker dieses Projekts gibt es hier nicht. Gerechnet wird mit "
                     "„{printer}“, bis Sie einen wählen.",
-                    printer=general,
+                    printer=shown_printer_title(fallback),
                 ),
                 values={"printer": printer_id, "fallback_printer": general},
                 suggestions=(CHOOSE_PRINTER,),
@@ -645,6 +657,20 @@ def printer_profiles() -> Mapping[str, PrinterProfile]:
         _printers = _load_printers()
         _log.info("loaded %d printer profiles", len(_printers))
     return _printers
+
+
+def shown_printer_title(printer: PrinterProfile) -> TranslatableText | str:
+    """Der Name eines Druckers, wie ihn ein Mensch liest.
+
+    Ein mitgelieferter allgemeiner Drucker kommt übersetzt zurück, jeder
+    andere unter seinem Titel: Ein Herstellername ist ein Eigenname, und wer
+    die Kennung eines allgemeinen Druckers mit eigenem Titel belegt, hat ihn
+    selbst benannt. Zum Vergleichen und Zuordnen bleibt ``printer.title``.
+    """
+    generic = _GENERIC_PRINTER_TITLES.get(printer.id)
+    if generic is not None and generic == printer.title:
+        return generic
+    return printer.title
 
 
 #: Unter diesem Schlüssel steht in der eigenen ``printers.toml``, aus welchem

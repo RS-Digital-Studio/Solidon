@@ -80,6 +80,12 @@ an `printer_for`/`chosen_printer` (RM-600); ohne gewinnt der längere Titel,
 also der übernommene, und Maschinenliste, Vorwahl und Maschinenseite verlieren
 die passende Düsenvariante.
 
+**Gezeigt wird ein Drucker über `labels.printer_title`, in Meldungen über
+`profiles.shown_printer_title`, nie über `printer.title`**: Die allgemeinen
+Drucker stehen in `printers.toml` deutsch und kommen nur so übersetzt in Liste,
+Kopfzeile und Satz. `printer.title` bleibt für Zuordnung, Projektdatei und
+`values`.
+
 **Hinter dem Druckernamen folgt nur die Düse** (`_names_the_printer`): „Kobra 2
 Max“ ist nicht der Kobra 2, „K1 SE“ nicht der K1 — sonst bekäme der kleinere
 Drucker Startcode und Bauraum des größeren. Eine High-Flow-Düse („HF0.4

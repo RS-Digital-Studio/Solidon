@@ -33,6 +33,7 @@ from app.core import discover
 from app.core.activation import Activation
 from app.core.export.slicer_profiles import model_name
 from app.core.geom.mesh import MeshData, face_components
+from app.core.knowledge.profiles import shown_printer_title
 from app.core.perceive.actions import measure_explanation, measure_qualifier
 from app.core.perceive.groups import FunctionalGroup, GroupMeasure
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
@@ -3173,8 +3174,11 @@ def printer_title(printer: PrinterProfile) -> str:
     Wechsel dort stünde im Namen noch die alte. Gekürzt wird nur ein Profil mit
     Hersteller — ein selbst benannter Drucker heißt, wie der Kunde ihn nannte.
     """
-    title = str(printer.title)
-    return model_name(title) if printer.vendor.strip() else title
+    if not printer.vendor.strip():
+        # Ein allgemeiner Drucker in der Sprache des Kunden, wie in jeder
+        # Liste, die hier fragt (:func:`shown_printer_title`).
+        return str(shown_printer_title(printer))
+    return model_name(str(printer.title))
 
 
 def deadline_date(state: Activation) -> str:

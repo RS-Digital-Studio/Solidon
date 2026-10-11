@@ -305,7 +305,8 @@ def command_profiles(args: argparse.Namespace) -> int:
     print(tr("Drucker"))
     for identifier, printer in sorted(profiles.printer_profiles().items()):
         width, depth, height = printer.build_volume
-        print(f"  {identifier:<24} {printer.title:<28} {width:.0f} x {depth:.0f} x {height:.0f} mm")
+        title = str(profiles.shown_printer_title(printer))
+        print(f"  {identifier:<24} {title:<28} {width:.0f} x {depth:.0f} x {height:.0f} mm")
     print(tr("Material"))
     for identifier, material in sorted(profiles.material_profiles().items()):
         state = (
