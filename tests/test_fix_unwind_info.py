@@ -9,8 +9,11 @@ Seite. Plattformunabhängig — gelesen und geschrieben werden nur Bytes.
 
 from __future__ import annotations
 
+import os
 import re
 import struct
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -492,3 +495,27 @@ def test_the_check_reads_the_delivered_app_not_the_collect_folder(tmp_path, monk
         tool.run("9.9", tool.bundle_libraries(root, "9.9"), write=False, codesign=False, check=True)
     # Über ganz dist geprüft, wäre die Lücke grün gewesen.
     tool.run("9.9", tool.bundle_libraries(tmp_path, "9.9"), write=False, codesign=False, check=True)
+
+
+def test_the_package_check_runs_as_the_ci_starts_it(tmp_path: Path) -> None:
+    """``--check --package`` läuft als Skript, so wie der Paketjob es startet.
+
+    Der Paketjob ruft ``python tools/fix_unwind_info.py --check --package
+    dist`` aus der Wurzel, ohne sie im ``PYTHONPATH``; im Suchpfad steht dann
+    nur ``tools/``. ``package_root`` holt ``tools.make_sbom`` erst beim Aufruf,
+    und das fehlte im Tag-Lauf zu 0.6.0 (``ModuleNotFoundError``). Der Fall
+    läuft nur am Tag, deshalb hält ihn dieser Test. Ein leeres ``dist`` endet
+    mit der Meldung des Werkzeugs, nicht mit einem Importfehler.
+    """
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    finished = subprocess.run(
+        [sys.executable, "tools/fix_unwind_info.py", "--check", "--package", str(tmp_path)],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert "ModuleNotFoundError" not in finished.stderr, finished.stderr
+    assert finished.returncode == 2, finished.stderr
+    assert "kein Artefakt unter" in finished.stderr, finished.stderr

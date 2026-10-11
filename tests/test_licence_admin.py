@@ -6,6 +6,7 @@ import csv
 import json
 import os
 import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -603,3 +604,27 @@ def test_a_foreign_principal_that_could_take_the_token_is_refused(
         licence_admin.read_token(token_file)
 
     assert "offen für S-1-1-0" in str(refused.value.__cause__)
+
+
+def test_the_tool_starts_as_its_docstring_says() -> None:
+    """``python tools/licence_admin.py`` startet, wie Docstring und
+    ``website/README.md`` es nennen.
+
+    Als Skript steht nur ``tools/`` im Suchpfad, und der Kopf holt
+    ``tools.licence_archive``; ohne die Wurzel im Suchpfad endete schon
+    ``--help`` mit ``ModuleNotFoundError`` — derselbe Fehler, an dem der
+    Tag-Lauf zu 0.6.0 bei ``fix_unwind_info.py`` hielt.
+    """
+    root = Path(__file__).resolve().parent.parent
+    environment = {name: value for name, value in os.environ.items() if name != "PYTHONPATH"}
+    finished = subprocess.run(
+        [sys.executable, "tools/licence_admin.py", "--help"],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert "ModuleNotFoundError" not in finished.stderr, finished.stderr
+    assert finished.returncode == 0, finished.stderr
+    assert "--archive" in finished.stdout
