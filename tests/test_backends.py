@@ -2745,6 +2745,9 @@ def test_the_mark_is_quiet_and_never_the_key(
     saved = json.loads(keys._refusals_path().read_text(encoding="utf-8"))
     mark = saved["anthropic"]["mark"]
     assert len(saved["salt"]) == 32 and len(mark) == 64
+    # Der positive Anker: Ohne ihn bestünde der Verbotstest auch, wenn gar
+    # nichts mitgeschnitten würde.
+    assert "anthropic key marked as refused" in caplog.text, caplog.text
     assert mark not in caplog.text and "sk-ant-geheim" not in caplog.text
     assert "sk-ant-geheim" not in keys._refusals_path().read_text(encoding="utf-8")
     assert not any("rejected" in name for name in discover._load())
@@ -2760,6 +2763,7 @@ def test_a_mark_that_cannot_be_written_keeps_the_refusal_a_sentence(
     def refuse_to_write(_data: dict[str, Any]) -> None:
         raise PermissionError("schreibgeschützt")
 
+    before = keys._load_refusals()
     monkeypatch.setattr(keys, "_store_refusals", refuse_to_write)
     monkeypatch.setattr(keys, "read", lambda account: "sk-ant-ungueltig")
 
@@ -2769,7 +2773,76 @@ def test_a_mark_that_cannot_be_written_keeps_the_refusal_a_sentence(
     with pytest.raises(llm.KeyRefused):
         AnthropicBackend(transport=refuse).complete([Message(role="user", content="x")])
     assert AnthropicBackend().available is False, "der Sitzungsmerker trägt weiter"
-    llm.accept_again("anthropic")  # auch das Aufheben verschluckt den Fehler
+    assert keys._load_refusals() == before, "geschrieben wurde wirklich nichts"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        llm.BackendAnswerUnreadable(url="http://127.0.0.1:11434/api/chat", excerpt="<html>"),
+        llm.BackendPromptTruncated(counted=1026, expected=2049, window=2048),
+        llm.BackendContextShifted(counted=32800, window=32768),
+    ],
+    ids=["unreadable", "prompt_cut", "context_shifted"],
+)
+def test_every_chat_error_leads_to_the_chat_setup(error: AppError) -> None:
+    """Nachtrag aus dem Abbruch-Paket: Drei Sprachmodell-Fehler boten
+    *Einstellungen öffnen* an und nannten im Satz die Einstellungen — Adresse
+    und Modell liegen aber hinter *Chat einrichten …*."""
+    from app.core.errors import SET_UP_CHAT
+
+    assert error.suggestions[0] == SET_UP_CHAT, error.suggestions
+    assert "Einstellungen" not in str(error.detail)
+    assert "„Chat einrichten …“" in str(error.detail)
+
+
+def test_a_mark_that_cannot_be_cleared_is_logged_not_raised(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Review G3, Gegenrichtung (Nachprüfung N3): Das Aufheben erreicht den
+    Schreibweg nur, wenn ein Eintrag da ist — also erst merken, dann das
+    Schreiben sperren."""
+    import logging
+
+    keys.mark_refused("anthropic", "sk-ant-x")
+    assert keys.refused("anthropic", "sk-ant-x")
+
+    def refuse_to_write(_data: dict[str, Any]) -> None:
+        raise PermissionError("schreibgeschützt")
+
+    monkeypatch.setattr(keys, "_store_refusals", refuse_to_write)
+    with caplog.at_level(logging.WARNING):
+        llm.accept_again("anthropic")
+
+    assert "could not clear the refused anthropic key" in caplog.text, caplog.text
+    assert "anthropic" not in llm._rejected
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"mark": "ä" * 64, "at": 1.0},
+        {"mark": "0" * 64, "at": 10**400},
+        {"mark": 7, "at": 1.0},
+        {"mark": "0" * 64, "at": "gestern"},
+    ],
+    ids=["non_ascii_mark", "huge_time", "mark_no_text", "time_no_number"],
+)
+def test_a_hand_damaged_entry_counts_as_not_refused(
+    monkeypatch: pytest.MonkeyPatch, entry: dict[str, Any]
+) -> None:
+    """Nachprüfung N2: Eine von Hand beschädigte Datei ließ ``available`` mit
+    ``TypeError`` (``compare_digest`` und Nicht-ASCII) oder ``OverflowError``
+    (riesige Zeitzahl) werfen — ein Programmfehler beim bloßen Nachsehen."""
+    path = keys._refusals_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"salt": "ab" * 16, "anthropic": entry}, ensure_ascii=False), encoding="utf-8"
+    )
+    monkeypatch.setattr(keys, "read", lambda account: "sk-ant-x")
+
+    assert keys.refused("anthropic", "sk-ant-x", now=2.0) is False
+    assert AnthropicBackend().available is True
 
 
 # --- Vier Wege zu Ollama, und drei fingen den Pfad nicht --------------------------
