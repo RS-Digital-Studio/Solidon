@@ -1066,6 +1066,51 @@ def _licence(package: metadata.Distribution) -> list[dict[str, object]]:
     return [{"license": {"name": text}}]
 
 
+def this_machine() -> str:
+    return platform.machine()
+
+
+def modified_pedigree(name: str, version: str, target: str, machine: str) -> dict[str, Any] | None:
+    """Die Herkunft einer Komponente, die das Paket geändert mitliefert (CycloneDX pedigree).
+
+    Heute genau eine: die OCC-Bibliotheken von cadquery-ocp-novtk auf macOS
+    x86_64, deren Abwicklungstabelle tools/fix_unwind_info.py korrigiert
+    (RM-768). Dieselbe Quelle wie der Abschnitt „Geänderte Bibliotheken“ der
+    Lizenzbeilage.
+    """
+    from tools.fix_unwind_info import CHANGED_ON, EXPECTED, WHEEL
+
+    if canonicalize_name(name) != WHEEL or version not in EXPECTED:
+        return None
+    if not target.startswith("macosx") or machine != "x86_64":
+        return None
+    libraries = EXPECTED[version]
+    return {
+        "patches": [
+            {
+                "type": "unofficial",
+                "resolves": [
+                    {
+                        "type": "defect",
+                        "id": "RM-768",
+                        "name": "Wrong compact unwind offset after a stack probe",
+                        "description": (
+                            f"{sum(libraries.values())} UNWIND_X86_64_MODE_STACK_IND entries "
+                            f"in {len(libraries)} libraries point past the frame size; "
+                            "C++ exceptions through these frames crash with SIGBUS."
+                        ),
+                        "references": ["https://github.com/CadQuery/ocp-build-system/issues/67"],
+                    }
+                ],
+            }
+        ],
+        "notes": (
+            f"__unwind_info corrected by tools/fix_unwind_info.py on {CHANGED_ON}; "
+            "machine code, data, symbols and interfaces unchanged: " + ", ".join(sorted(libraries))
+        ),
+    }
+
+
 def _native_component(
     definition: NativeComponent,
     owner: metadata.Distribution,
@@ -1127,6 +1172,7 @@ def build_bom(
     included_distributions: Iterable[str] | None = None,
     customer_artifact: Path | None = None,
     python_version: str | None = None,
+    machine: str | None = None,
 ) -> dict[str, Any]:
     """Baut eine deterministische CycloneDX-1.6-Stückliste.
 
@@ -1142,6 +1188,7 @@ def build_bom(
         environment=environment,
     )
     target = platform or sysconfig.get_platform()
+    machine = machine or this_machine()
     python_version = python_version or (
         f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     )
@@ -1166,16 +1213,18 @@ def build_bom(
         package = graph.distributions[name]
         shown = str(package.metadata.get("Name", name))
         reference = refs[name]
-        components.append(
-            {
-                "type": "library",
-                "bom-ref": reference,
-                "name": shown,
-                "version": package.version,
-                "purl": reference,
-                "licenses": _licence(package),
-            }
-        )
+        component: dict[str, Any] = {
+            "type": "library",
+            "bom-ref": reference,
+            "name": shown,
+            "version": package.version,
+            "purl": reference,
+            "licenses": _licence(package),
+        }
+        pedigree = modified_pedigree(name, package.version, target, machine)
+        if pedigree is not None:
+            component["pedigree"] = pedigree
+        components.append(component)
 
     native_refs: dict[str, str] = {}
     for definition in NATIVE_COMPONENTS:
