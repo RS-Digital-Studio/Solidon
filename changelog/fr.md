@@ -71,6 +71,7 @@ dans `website/version.json`.
 - Un modèle ouvert juste après le démarrage du programme est modifiable jusqu'à un quart plus tôt.
 - Avec un slicer, un jeu ou un rendu en cours à côté, les calculs sur de grands modèles aboutissent en secondes au lieu de minutes.
 - Un projet enregistré avec un grand modèle s'ouvre après un redémarrage en une ou deux secondes au lieu d'une demi-minute : les caractéristiques reconnues sont conservées.
+- Un glisser sur la poignée d'un perçage ou d'une face amène l'onglet *Sélection* au premier plan, même pendant une visite guidée. Jusqu'ici, son *Appliquer* restait caché derrière la visite.
 
 ### Imprimer et transmettre au slicer
 
@@ -192,6 +193,7 @@ dans `website/version.json`.
 - La division en pièces distinctes garde toute pièce imprimable, même goujons et rondelles près d'une grande plaque. Seules tombent petites surfaces ouvertes et miettes non imprimables.
 - Un relief n'est calculé qu'une fois une image choisie. D'ici là, la boîte de dialogue indique le bouton *Choisir une image …*.
 - Les boîtes de dialogue *Charger un STEP* et *Extruder un dessin* ne proposent que les fichiers qu'elles savent lire. Si le projet n'en contient aucun, elles indiquent le bouton *Choisir un fichier …*.
+- Une suite de lignes dans l'esquisse s'arrête dès qu'elle se referme sur son début. Jusqu'ici, un nouveau segment restait accroché au pointeur, et le premier Échap semblait sans effet.
 
 ### Générer avec l'IA
 

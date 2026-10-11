@@ -947,13 +947,21 @@ class _SelectionPage(QWidget):
         """Ob der Reiter vorn ist."""
         return self._tabs.page_is_visible(self)
 
-    def reveal(self) -> None:
+    def reveal(self, *, for_a_gesture: bool = False) -> None:
         """Holt den Reiter nach vorn, es sei denn, der Kunde hat ihn verlassen.
 
         Auch nicht aus einem Weg des Prüfberichts heraus (:meth:`held`) und
         nicht über eine laufende Tour, die vorn steht.
+
+        **Ein Zug im Bild, der Werte in eine Handlung legt, holt ihn immer**
+        (``for_a_gesture``, Handbuchprüfung 0.6.0, N3): Sein Ergebnis wartet
+        dort auf *Übernehmen*. Hinter der Tour oder dem verlassenen Reiter
+        stand der Knopf unsichtbar, und der Zug am Flächengriff schien nichts
+        zu tun. Eine bloße Auswahl lässt die Tour weiter vorn.
         """
-        if not self._workspace_visible or self.dismissed or self._held:
+        if not self._workspace_visible or self._held:
+            return
+        if self.dismissed and not for_a_gesture:
             return
         if self._tabs.is_detached(self):
             # Die sichtbaren Felder werden passiv erneuert. Eine neue Auswahl
@@ -965,11 +973,13 @@ class _SelectionPage(QWidget):
             return
         tour = self._tour
         if (
-            tour is not None
+            not for_a_gesture
+            and tour is not None
             and self._tabs.currentWidget() is tour
             and getattr(tour, "active", False)
         ):
             return
+        self.dismissed = False
         self._tabs.setCurrentWidget(self)
 
     def leave(self) -> None:
@@ -3589,6 +3599,9 @@ class MainWindow(QMainWindow):
         in ``_show_start_screen`` beschreibt genau diesen Zustand als behoben."""
         self.feature_panel.valuesChanged.connect(self._on_feature_values_changed)
         self.feature_panel.handlingArmed.connect(self._on_handling_armed)
+        self.feature_panel.valuesTaken.connect(
+            weak_slot(self, lambda view: view.feature_dock.reveal(for_a_gesture=True))
+        )
         self.feature_panel.preview_check = self._feature_preview_can_apply
         self.feature_panel.preview_defer = weak_slot(self, MainWindow._defer_feature_apply)
         self.feature_panel.operationRequestedForEach.connect(self._apply_to_each_feature)

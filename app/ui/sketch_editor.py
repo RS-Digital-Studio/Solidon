@@ -947,6 +947,10 @@ class SketchCanvas(QWidget):
         #: Ein abgelehnter Klick, der nichts sagt, sieht aus wie ein
         #: verschluckter (Regel 17).
         self._arc_was_flat = False
+        self._chain_from: int | None = None
+        """Der Punkt, an dem :meth:`place` einen Linienzug weiterführt."""
+        self._chain_starts: frozenset[int] = frozenset()
+        """Die Punkte am Anfang des laufenden Linienzugs — dort schließt er."""
         self.selection: list[tuple[str, tuple[int, ...]]] = []
         """Die Auswahl in Klickreihenfolge: („point", (i,)) oder ein Element
         mit seinen flachen Punktindizes — „A parallel B" ist nicht „B
@@ -3497,6 +3501,19 @@ class SketchCanvas(QWidget):
         # nächste Zug an einer Ecke das eben gezeichnete Rechteck aus Linien
         # zum Parallelogramm. Fusion setzt sie beim Zeichnen ebenso.
         aligned = _axis_constraint(begin, points[0], points[1]) if self.tool == "line" else None
+        # **Schließt der Zug auf seinem Anfang, ist er fertig** (Handbuchprüfung
+        # 0.6.0, N2). Er lief weiter, mit einem neuen Strich am Zeiger, und das
+        # erste Esc nahm nur diesen weg — während die Zeile schon „Esc wechselt
+        # zum Auswählen“ sagte. Der Anfang ist der erste Punkt der ersten Linie
+        # und, wenn dieser Klick gefangen hat, der Punkt darunter.
+        continues = bool(self._pending) and self._pending[0] == self._chain_from
+        starts = (
+            self._chain_starts
+            if continues
+            else frozenset({begin, *(index for index in self._pending[:1] if index >= 0)})
+        )
+        end_snap = self._pending[1] if len(self._pending) > 1 else -1
+        closes = self.tool == "line" and end_snap >= 0 and end_snap in starts
         kept = self._pending_world[-1]
         self._pending.clear()
         self._pending_world.clear()
@@ -3511,11 +3528,17 @@ class SketchCanvas(QWidget):
                 ),
             )
         )
-        if self.tool == "line":
+        if self.tool == "line" and not closes:
             # Ein Linienzug: das Ende ist der Anfang der nächsten — mit
             # Deckung auf den eben gesetzten Punkt.
             self._pending.append(begin + 1)
             self._pending_world.append(kept)
+            self._chain_from = begin + 1
+            self._chain_starts = starts
+        elif closes:
+            self._chain_from = None
+            self.statusChanged.emit(self.status_text())
+            self.update()
 
     def _place_measure_field(self, value: float) -> None:
         """Das Maßfeld an den Zeiger legen — oder wegnehmen, wenn es nichts misst.

@@ -90,7 +90,7 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
 * **Linie, Kreis und Bogen zeigen ihre Vorschau am Zeiger**, bis der Klick sie
   festmacht.
 * **Gefangen wird auf das Raster, ein vorhandener Punkt schlägt es** — sonst
-  risse der Fang die Deckung auf. Der Haken „Am Raster fangen" steht an der
+  risse der Fang die Deckung auf. Der Haken *Rasterfang* steht an der
   Ebenenzeile, an ist die Vorgabe; derselbe Fang gilt beim Ziehen eines
   Punktes.
 * **Was ein Klick tut, entscheidet die Methode, die auch ein Test ruft**
@@ -108,6 +108,8 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
   (`drawing_hint`), auch dass Esc den Linienzug beendet. Sobald etwas
   gezeichnet ist, hängt `status_text` „Esc wechselt zum Auswählen und Ziehen."
   an.
+* **Ein Linienzug endet, wenn er auf seinem Anfang schließt** (`_chain_starts`);
+  sonst hinge ein neuer Strich am Zeiger, und das erste Esc nähme nur ihn.
 * **Wo der Zeiger steht, steht in der Zeile** (`pointer_target`,
   `SketchPanel._show_pointer`) — der Ort, an dem ein Klick landet, nicht die
   rohe Lage. Genaue Zahlen gibt das Kontextmenü am Punkt (`edit_point`, mit

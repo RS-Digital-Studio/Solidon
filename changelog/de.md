@@ -95,6 +95,7 @@ Nutzen da und sonst nichts.
 - Ein Modell, das Sie gleich nach dem Programmstart öffnen, ist bis zu ein Viertel schneller bearbeitbar.
 - Läuft nebenher ein Slicer, ein Spiel oder ein Rendering, kommen Rechnungen an großen Modellen in Sekunden statt in Minuten zurück.
 - Ein gespeichertes Projekt mit einem großen Modell ist nach einem Neustart in ein, zwei Sekunden offen statt nach einer halben Minute: Die erkannten Merkmale bleiben gemerkt.
+- Ein Zug am Griff einer Bohrung oder Fläche holt den Reiter *Auswahl* nach vorn, auch während einer Tour. Bisher blieb sein *Übernehmen* hinter der Tour verborgen.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -216,6 +217,7 @@ Nutzen da und sonst nichts.
 - Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch Stifte und Scheiben neben einer großen Platte. Wegfallen nur kleine offene Flächen und Krümel, die der Drucker nicht abbildet.
 - Ein Relief rechnet erst, wenn ein Bild gewählt ist. Bis dahin nennt der Dialog den Knopf *Bild wählen …*.
 - Die Dialoge *STEP laden* und *Zeichnung hochziehen* bieten nur Dateien an, die sie lesen können. Liegt keine im Projekt, nennen sie den Knopf *Datei wählen …*.
+- Ein Linienzug in der Skizze endet, sobald er auf seinem Anfang schließt. Bisher hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
 
 ### Erzeugen mit KI
 

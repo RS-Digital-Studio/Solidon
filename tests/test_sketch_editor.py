@@ -6782,6 +6782,38 @@ def test_a_line_that_lies_exactly_level_stays_level(qt_app: QApplication) -> Non
     assert kinds.count("coincident") == 2, "der Linienzug hängt zusammen"
 
 
+def test_a_chain_that_closes_on_its_start_is_finished(qt_app: QApplication) -> None:
+    """Ein Linienzug, der auf seinem Anfang schließt, ist fertig (Handbuchprüfung 0.6.0, N2).
+
+    Er lief weiter, mit einem neuen Strich am Zeiger, und das erste Esc nahm
+    nur diesen weg, während die Zeile schon „Esc wechselt zum Auswählen“ sagte.
+    Ein Klick auf einen anderen vorhandenen Punkt führt den Zug dagegen weiter.
+    """
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        panel.choose_tool("line")
+        canvas.set_snapping(True, 1.0)
+        for point in ((0.0, 0.0), (40.0, 0.0), (40.0, 30.0), (0.0, 30.0), (0.0, 0.0)):
+            canvas.place_on_plane(point)
+
+        assert len(canvas.sketch.elements) == 4
+        kinds = [entry.kind for entry in canvas.sketch.constraints]
+        assert kinds.count("coincident") == 4, "der Zug schließt auf seinem Anfang"
+        assert not canvas._pending_world, "kein neuer Strich hängt am Zeiger"
+        assert "Esc wechselt zum Auswählen" in canvas.status_text()
+
+        assert panel.drop_tool(), "das erste Esc hat etwas zu tun"
+        assert canvas.tool == "select", "und zwar das, was die Zeile sagt"
+
+        panel.choose_tool("line")
+        canvas.place_on_plane((60.0, 0.0))
+        canvas.place_on_plane((40.0, 30.0))
+        assert len(canvas._pending_world) == 1, "ein fremder Punkt führt den Zug weiter"
+    finally:
+        panel.deleteLater()
+
+
 def test_a_typed_length_snaps_to_the_axis_and_continues_the_chain(
     qt_app: QApplication,
 ) -> None:

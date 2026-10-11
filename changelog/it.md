@@ -70,6 +70,7 @@ scrive in `website/version.json`.
 - Un modello aperto subito dopo l'avvio del programma è modificabile fino a un quarto prima.
 - Con uno slicer, un gioco o un rendering in esecuzione, i calcoli sui modelli grandi terminano in secondi anziché in minuti.
 - Un progetto salvato con un modello grande si apre dopo un riavvio in uno o due secondi invece di mezzo minuto: le caratteristiche riconosciute restano memorizzate.
+- Trascinare la maniglia di un foro o di una faccia porta in primo piano la scheda *Selezione*, anche durante un tour. Finora il suo *Applica* restava nascosto dietro il tour.
 
 ### Stampare e passare allo slicer
 
@@ -191,6 +192,7 @@ scrive in `website/version.json`.
 - Dividendo in pezzi distinti resta ogni pezzo stampabile, anche perni e rondelle accanto a una piastra grande. Cadono solo piccole superfici aperte e briciole che la stampante non riproduce.
 - Un rilievo viene calcolato solo quando è scelta un'immagine. Fino ad allora la finestra indica il pulsante *Scegli un'immagine …*.
 - Le finestre *Carica STEP* e *Estrudi un disegno* offrono solo file che sanno leggere. Se il progetto non ne ha, indicano il pulsante *Scegli un file …*.
+- Una sequenza di linee nello schizzo finisce appena si chiude sul suo inizio. Finora un nuovo tratto restava attaccato al puntatore, e il primo Esc sembrava non fare nulla.
 
 ### Generare con l'IA
 
