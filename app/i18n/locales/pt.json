@@ -1151,6 +1151,7 @@
   "Das Muster läuft um einen Zylinder, der breiter ist als der Körper, und steht über dessen Rand hinaus.": "O padrão envolve um cilindro mais largo do que o corpo e sobressai da sua borda.",
   "Das Muster steht.": "O padrão está pronto.",
   "Das Muster wird mit dem neuen Maß gesetzt …": "A redesenhar o padrão com a nova medida …",
+  "Das Musterfeld ragt über die Fläche hinaus: {loose} Stücke hängen daneben in der Luft und würden einzeln gedruckt. Verkleinern Sie Breite und Höhe, oder wählen Sie unter Bereich die gesamte Fläche.": "A área do padrão ultrapassa a face: {loose} pedaços ficam ao lado no ar e seriam impressos soltos. Reduza a largura e a altura, ou escolha a face inteira em Área.",
   "Das Namensschema lässt sich nicht lesen; eine Klammer steht falsch.": "O esquema de nomes não se consegue ler; uma chaveta está mal posta.",
   "Das Namensschema nennt einen Platzhalter, den es nicht gibt.": "O esquema de nomes menciona um marcador que não existe.",
   "Das Netz hat jetzt über hundertmal so viele Dreiecke, und alles danach rechnet entsprechend länger.": "A malha tem agora mais de cem vezes mais triângulos, e tudo o que vem a seguir demora proporcionalmente mais.",

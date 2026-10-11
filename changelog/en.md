@@ -162,6 +162,7 @@ it into `website/version.json`.
 
 - With *Move feature*, the feature's material travels along as it is and the old spot is filled cleanly. Where that is not possible, the selection says so straight away.
 - The texture pattern *Honeycomb* has the same name in the dialog as in the manual, where it said Hexagon. The hexagonal openings of *Cut a hole pattern* are *Honeycomb* too.
+- At a selected face, *Apply texture* opens with the whole face and a pitch your nozzle can print. If a pattern area extends past the edge, the dialog says so and how to fix it.
 - On beads and grooves, the selection offers only what the operation can actually do.
 - If a fillet sits next to a wall, *Apply draft angle* says before calculating that it is in the way and names *Remove feature* as the way out.
 - When you cut away part of a body, chamfers, threads and nut pockets of parts that lay inside it go too.

@@ -1151,6 +1151,7 @@
   "Das Muster läuft um einen Zylinder, der breiter ist als der Körper, und steht über dessen Rand hinaus.": "Il motivo avvolge un cilindro più largo del corpo e sporge oltre il suo bordo.",
   "Das Muster steht.": "Il motivo è pronto.",
   "Das Muster wird mit dem neuen Maß gesetzt …": "Ridisegno del motivo con la nuova misura …",
+  "Das Musterfeld ragt über die Fläche hinaus: {loose} Stücke hängen daneben in der Luft und würden einzeln gedruckt. Verkleinern Sie Breite und Höhe, oder wählen Sie unter Bereich die gesamte Fläche.": "L'area del motivo sporge dalla faccia: {loose} pezzi restano accanto nel vuoto e verrebbero stampati da soli. Riduci larghezza e altezza, oppure scegli l'intera faccia in Area.",
   "Das Namensschema lässt sich nicht lesen; eine Klammer steht falsch.": "Lo schema dei nomi non si può leggere; una parentesi è fuori posto.",
   "Das Namensschema nennt einen Platzhalter, den es nicht gibt.": "Lo schema dei nomi cita un segnaposto che non esiste.",
   "Das Netz hat jetzt über hundertmal so viele Dreiecke, und alles danach rechnet entsprechend länger.": "La mesh ha ora oltre cento volte più triangoli, e tutto ciò che segue richiede proporzionalmente più tempo.",

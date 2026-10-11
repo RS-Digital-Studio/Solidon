@@ -1151,6 +1151,7 @@
   "Das Muster läuft um einen Zylinder, der breiter ist als der Körper, und steht über dessen Rand hinaus.": "Le motif s'enroule autour d'un cylindre plus large que le corps et dépasse de son bord.",
   "Das Muster steht.": "Le motif est en place.",
   "Das Muster wird mit dem neuen Maß gesetzt …": "Retraçage du motif à sa nouvelle dimension …",
+  "Das Musterfeld ragt über die Fläche hinaus: {loose} Stücke hängen daneben in der Luft und würden einzeln gedruckt. Verkleinern Sie Breite und Höhe, oder wählen Sie unter Bereich die gesamte Fläche.": "La zone du motif dépasse de la face : {loose} morceaux pendent à côté dans le vide et seraient imprimés séparément. Réduisez la largeur et la hauteur, ou choisissez la face entière sous Zone.",
   "Das Namensschema lässt sich nicht lesen; eine Klammer steht falsch.": "Le schéma de nommage est illisible ; une accolade est mal placée.",
   "Das Namensschema nennt einen Platzhalter, den es nicht gibt.": "Le schéma de nommage cite un espace réservé qui n'existe pas.",
   "Das Netz hat jetzt über hundertmal so viele Dreiecke, und alles danach rechnet entsprechend länger.": "Le maillage compte maintenant plus de cent fois plus de triangles, et tout ce qui suit prend d'autant plus de temps.",

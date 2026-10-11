@@ -1151,6 +1151,7 @@
   "Das Muster läuft um einen Zylinder, der breiter ist als der Körper, und steht über dessen Rand hinaus.": "The pattern wraps around a cylinder wider than the body and stands out past its edge.",
   "Das Muster steht.": "The pattern is in place.",
   "Das Muster wird mit dem neuen Maß gesetzt …": "Rebuilding the pattern with the new dimensions …",
+  "Das Musterfeld ragt über die Fläche hinaus: {loose} Stücke hängen daneben in der Luft und würden einzeln gedruckt. Verkleinern Sie Breite und Höhe, oder wählen Sie unter Bereich die gesamte Fläche.": "The pattern area extends beyond the face: {loose} pieces hang in the air next to it and would print separately. Make width and height smaller, or choose the entire face under Area.",
   "Das Namensschema lässt sich nicht lesen; eine Klammer steht falsch.": "The naming scheme cannot be read; a brace is misplaced.",
   "Das Namensschema nennt einen Platzhalter, den es nicht gibt.": "The naming scheme names a placeholder that does not exist.",
   "Das Netz hat jetzt über hundertmal so viele Dreiecke, und alles danach rechnet entsprechend länger.": "The mesh now has over a hundred times as many triangles, and everything after it takes correspondingly longer.",

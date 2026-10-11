@@ -163,6 +163,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Con *Mover característica*, el material de la característica viaja tal como está y el sitio anterior se rellena limpiamente. Donde no es posible, la selección lo dice de entrada.
 - El patrón de textura *Panal* se llama en el diálogo como en el manual, antes ponía Hexágono. Las aberturas hexagonales de *Cortar patrón de orificios* también son *Panal*.
+- En una cara elegida, *Aplicar textura* se abre con toda la cara y un paso que su boquilla imprime. Si la zona del patrón sobresale del borde, el diálogo lo dice y cómo arreglarlo.
 - En cordones y gargantas, la selección solo ofrece lo que la operación puede hacer de verdad.
 - Si junto a una pared hay un redondeo, *Aplicar ángulo de desmoldeo* avisa antes de calcular de que estorba y propone *Quitar característica* como salida.
 - Al recortar una parte de un cuerpo, desaparecen también los chaflanes, roscas y alojamientos de tuerca de los bloques que había en ella.

@@ -1023,6 +1023,47 @@ def test_an_engraved_pattern_may_divide_the_body() -> None:
     )
 
 
+def test_a_flat_pattern_beyond_its_face_says_so() -> None:
+    """Flach aufgebracht nennt der Zerfall den Rand der Fläche, nicht den Wickelzylinder.
+
+    Ein Rechteck 40 × 30 mm auf einer 20-mm-Fläche ließ Rippen neben dem
+    Körper in der Luft; der Satz schickte den Kunden zum Durchmesser eines
+    Wickelzylinders, den es bei *Flach* nicht gibt.
+    """
+    from types import SimpleNamespace
+
+    from app.core.geom.texture_ops import _fell_apart
+
+    vorher = SimpleNamespace(component_count=1)
+    nachher = SimpleNamespace(component_count=5)
+    flat = _fell_apart(vorher, nachher, "raised", wrapped=False)
+    around = _fell_apart(vorher, nachher, "raised", wrapped=True)
+    assert flat is not None and around is not None
+    assert "Breite und Höhe" in str(flat.message) and "4" in str(flat.message)
+    assert "Wickelzylinder" not in str(flat.message)
+    assert "Wickelzylinder" in str(around.message)
+    assert flat.suggestions, "ein Fehler trägt einen Handlungsvorschlag (Regel 17)"
+
+
+@pytest.mark.parametrize("pattern", texture_ops.PATTERNS)
+def test_the_printable_pitch_passes_the_printability_check(pattern: str) -> None:
+    """Die Vorbelegung des Dialogs besteht die Prüfung, die sonst ablehnt.
+
+    *Rändel gekreuzt* bei 2 mm lehnte die Prüfung an der 0,4-mm-Düse ab, und
+    der Dialog öffnete damit. :func:`printable_pitch` hebt auf die kleinste
+    Teilung, die durchgeht — und keinen Schritt mehr.
+    """
+    start = 0.5
+    pitch = texture_ops.printable_pitch(pattern, start, NOZZLE)
+    texture_ops.check_printable(pattern, pitch, 0.6, NOZZLE)
+    if pitch > start:
+        with pytest.raises(ValidationError):
+            texture_ops.check_printable(pattern, pitch - texture_ops.PITCH_STEP - 1e-6, 0.6, NOZZLE)
+    assert texture_ops.printable_pitch(pattern, 10.0, NOZZLE) == 10.0, (
+        "eine Teilung, die druckt, bleibt"
+    )
+
+
 def test_a_wrap_wider_than_the_body_is_reported() -> None:
     """**Die stille Lage, an der die Galerie-Dose hing** (30.08.2026).
 

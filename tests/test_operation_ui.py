@@ -2696,6 +2696,34 @@ def test_whole_face_dialog_releases_its_grip_block_on_rectangle_and_cancel(
     assert not window.viewport._feature_gizmo_blocked
 
 
+def test_texture_at_a_face_opens_with_values_it_accepts(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An einer gewählten Fläche öffnet *Textur aufbringen* druckbar (Regel 17).
+
+    Mit den Schemavorgaben — Rechteck 40 × 30 mm, *Rändel gekreuzt* bei
+    2 mm — lehnte der Dialog sich an der 0,4-mm-Düse selbst ab, und auf einer
+    kleineren Fläche ragte das Rechteck über den Rand.
+    """
+    from app.core.geom import texture_ops
+    from app.core.scene.placement import top_face
+
+    object_id = select(window)
+    face = top_face(window.session.last_result.scene.objects[object_id].features)
+    assert face is not None
+    window._on_feature_picked(face.id)
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    window.run_operation(REGISTRY.get("apply_texture"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    values = dialog.values()
+    dialog.reject()
+    assert values["coverage"] == "whole_face", "an einer Fläche die ganze Fläche"
+    assert values["face"] == face.id
+    printer = window.session.evaluation_profile.printer
+    texture_ops.check_printable(values["pattern"], values["pitch"], values["depth"], printer)
+
+
 def test_the_description_is_as_tall_as_its_text(qt_app: QApplication) -> None:
     """Der Satz über den Feldern stand vertikal zentriert in 189 Pixeln.
 

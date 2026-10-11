@@ -42,7 +42,7 @@ from app.core.types import (
     Vec3,
 )
 from app.core.units import DEGREE_UNIT, EPS_GEOM, format_length, is_close
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -585,6 +585,38 @@ def check_printable(
         )
 
 
+#: In welchen Schritten :func:`printable_pitch` die Teilung anhebt, in mm: eine
+#: Zahl, die man im Dialog liest und tippt, keine Toleranz.
+PITCH_STEP: Final = 0.1
+
+
+def printable_pitch(
+    pattern: str, pitch: float, printer: PrinterProfile, *, cell: float | None = None
+) -> float:
+    """Die kleinste Teilung ab ``pitch``, bei der :func:`check_printable` nichts einwendet.
+
+    Für die Vorbelegung des Dialogs: Er öffnete mit *Rändel gekreuzt* bei 2 mm,
+    und an der 0,4-mm-Düse lehnte dieselbe Prüfung das sofort ab. Gerechnet
+    wird mit derselben schmalsten Struktur wie dort, aufgerundet auf
+    :data:`PITCH_STEP`, damit die Zahl im Feld lesbar bleibt.
+    """
+    detail = printer.smallest_detail
+    candidate = pitch
+    narrowest = narrowest_structure(pattern, candidate, cell)
+    if narrowest >= detail or is_close(narrowest, detail):
+        return pitch
+    candidate = pitch * detail / max(narrowest, EPS_GEOM)
+    candidate = math.ceil(candidate / PITCH_STEP - 1e-9) * PITCH_STEP
+    # Nicht jedes Muster wächst genau mit der Teilung (die Zelle kann fest
+    # sein): nachprüfen und notfalls weiter anheben, endlich begrenzt.
+    for _step in range(1000):
+        narrowest = narrowest_structure(pattern, candidate, cell)
+        if narrowest >= detail or is_close(narrowest, detail):
+            break
+        candidate += PITCH_STEP
+    return round(candidate, 6)
+
+
 # --- die Operation (Bauplan §25, Kategorie „Oberfläche") -------------------------
 
 
@@ -756,7 +788,7 @@ class TextureParams(BaseParams):
     )
 
 
-def _fell_apart(before: Any, after: Any, mode: str) -> Finding | None:
+def _fell_apart(before: Any, after: Any, mode: str, *, wrapped: bool = True) -> Finding | None:
     """Ist der Körper unter dem Muster in Stücke zerfallen? (Regel 17)
 
     **Der Fall, den die Durchmesserprüfung nicht sieht.** Läuft das Muster um
@@ -776,20 +808,35 @@ def _fell_apart(before: Any, after: Any, mode: str) -> Finding | None:
 
     Nur bei **erhabenem** Muster: Ein vertieftes schneidet, und Schneiden darf
     teilen — bei manchen Mustern ist das der Zweck.
+
+    **Auf einer ebenen Fläche ist der Grund ein anderer** (``wrapped=False``):
+    Ein Musterfeld, größer als die Fläche, ragt über ihren Rand hinaus, und die
+    Rippen daneben hängen in der Luft. Der Satz vom Wickelzylinder schickte
+    den Kunden dort zu einem Feld, das es bei *Flach* nicht gibt.
     """
     from app.core.geom.boolean import fell_apart
+
+    def message(loose: int) -> TranslatableText:
+        if wrapped:
+            return _(
+                "Das Muster hängt nicht am Körper: Es liegt in {loose} losen Stücken "
+                "daneben und würde einzeln gedruckt. Meist ist der Durchmesser des "
+                "Wickelzylinders veraltet — klicken Sie die Zylinderfläche neu an.",
+                loose=loose,
+            )
+        return _(
+            "Das Musterfeld ragt über die Fläche hinaus: {loose} Stücke hängen daneben "
+            "in der Luft und würden einzeln gedruckt. Verkleinern Sie Breite und Höhe, "
+            "oder wählen Sie unter Bereich die gesamte Fläche.",
+            loose=loose,
+        )
 
     return fell_apart(
         before,
         after,
         applies=mode == "raised",
         code="texture.fell_apart",
-        message=lambda loose: _(
-            "Das Muster hängt nicht am Körper: Es liegt in {loose} losen Stücken "
-            "daneben und würde einzeln gedruckt. Meist ist der Durchmesser des "
-            "Wickelzylinders veraltet — klicken Sie die Zylinderfläche neu an.",
-            loose=loose,
-        ),
+        message=message,
     )
 
 
@@ -1572,7 +1619,7 @@ def apply_texture(ctx: OpContext) -> OpResult:
     nothing = without_effect(body_mesh, outcome.mesh, kind, ctx.profile)
     if nothing is not None:
         findings.append(nothing)
-    apart = _fell_apart(body_mesh, outcome.mesh, params.mode)
+    apart = _fell_apart(body_mesh, outcome.mesh, params.mode, wrapped=params.wrap == "cylinder")
     if apart is not None:
         findings.append(apart)
     # Vor der Verzweigung gelesen: Die Drehung wirkt überall außer um einen

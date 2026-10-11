@@ -187,6 +187,7 @@ Nutzen da und sonst nichts.
 
 - Verschieben Sie ein Merkmal, reist sein Material mit, wie es ist, und die alte Stelle wird sauber gefüllt. Wo das nicht geht, sagt es die Auswahl gleich.
 - Das Texturmuster *Wabe* heißt im Dialog wie im Handbuch, bisher stand dort Sechseck. Auch die sechseckigen Öffnungen von *Lochfeld schneiden* heißen *Wabe*.
+- An einer gewählten Fläche öffnet *Textur aufbringen* mit der ganzen Fläche und einer Teilung, die Ihre Düse druckt. Ragt ein Musterfeld über den Rand, sagt der Dialog das samt Ausweg.
 - An Wulst und Kehle bietet die Auswahl nur noch an, was die Operation auch ausführt.
 - Liegt neben einer Wand eine Verrundung, sagt *Formschräge anstellen* vor der Rechnung, dass sie im Weg ist, und nennt *Merkmal entfernen* als Ausweg.
 - Schneiden Sie einen Teil des Körpers weg, verschwinden auch Fasen, Gewinde und Mutterntaschen von Bausteinen, die darin lagen.

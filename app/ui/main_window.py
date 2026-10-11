@@ -21815,6 +21815,7 @@ class MainWindow(QMainWindow):
         values.update(self._plane_through(spec, chosen[0] if chosen else None, values))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
         values.update(self._edges_from_view(spec, chosen[0] if chosen else None))
+        values.update(self._texture_that_prints(spec, values))
         # **Zwei gewählte Teile einer Passung** (RM-184): Das Prüfstück sitzt
         # dort, wo sie sich am nächsten kommen — die Oberseite des ersten
         # träfe beim Deckel die Öffnung und beim Zapfen nur ihn.
@@ -23511,7 +23512,6 @@ class MainWindow(QMainWindow):
             ]
             if any(finding.converts_exact_body for finding in findings):
                 approval.required = True
-            incomplete = any(finding.severity == "error" for finding in findings)
             # Ein **erschienener** Körper hat keinen Nachherkörper: Er ist selbst
             # sein ``added``, und ``result`` bleibt leer — kein Loch in der
             # Vorschau (gemessen am 21.09.2026: ein im Vorschlag erzeugter und
@@ -23528,7 +23528,15 @@ class MainWindow(QMainWindow):
                 )
                 for identifier, entry in getattr(difference, "entries", {}).items()
             )
-            if incomplete or missing_result:
+            # **Der Fehler sagt selbst, was fehlt** (Regel 17): Ein Muster, das
+            # über die Fläche hinausragt, sperrte den Knopf mit „Die Vorschau ist
+            # unvollständig.“, während der Befund daneben Grund und Ausweg kannte.
+            # Er steht jetzt bei den Eingaben, samt Knopf, wo der Dialog ihn einlöst.
+            error = next((finding for finding in findings if finding.severity == "error"), None)
+            if error is not None:
+                approval.problem = str(error.message)
+                self._preview_refused(approval, error)
+            elif missing_result:
                 approval.problem = tr(
                     "Die Vorschau ist unvollständig. Ändern Sie die Werte "
                     "oder öffnen Sie die Bearbeitung erneut."
@@ -24806,6 +24814,34 @@ class MainWindow(QMainWindow):
             if longest > 0.0:
                 values["edge"] = _within(fields["edge"], longest / EDGE_SHARE)
         return values
+
+    def _texture_that_prints(
+        self, spec: OperationSpec, values: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """*Textur aufbringen* öffnet mit Werten, die es selbst annimmt.
+
+        Mit den Vorgaben des Schemas — Rechteck 40 mal 30 mm, *Rändel gekreuzt*
+        bei 2 mm — lehnte der Dialog sich an der 0,4-mm-Düse selbst ab, und auf
+        einer kleineren Fläche ragte das Rechteck über den Rand. An einer
+        gewählten Fläche nimmt er deshalb die ganze Fläche, und die Teilung
+        wächst auf die kleinste, die diese Düse druckt
+        (:func:`texture_ops.printable_pitch`). Beides sind gewöhnliche
+        Parameterwerte, im Dialog sichtbar und änderbar (Regel 2).
+        """
+        if spec.name != "apply_texture":
+            return {}
+        from app.core.geom.texture_ops import printable_pitch
+
+        defaults = {entry.name: entry.default for entry in spec.params.spec()}
+        fitted: dict[str, Any] = {}
+        if values.get("face"):
+            fitted["coverage"] = "whole_face"
+        pattern = str(values.get("pattern") or defaults.get("pattern") or "")
+        pitch = values.get("pitch", defaults.get("pitch"))
+        if pattern and isinstance(pitch, int | float):
+            printer = self.session.evaluation_profile.printer
+            fitted["pitch"] = printable_pitch(pattern, float(pitch), printer)
+        return fitted
 
     def _from_selection(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
         """Was das angeklickte Merkmal darüber sagt, wohin diese Operation

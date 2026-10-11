@@ -163,6 +163,7 @@ dans `website/version.json`.
 
 - Avec *Déplacer la caractéristique*, sa matière suit telle quelle et l'ancien emplacement est comblé proprement. Là où c'est impossible, la sélection le dit d'emblée.
 - Le motif *Nid d’abeille* porte dans le dialogue le nom du manuel, au lieu d’Hexagone. Les ouvertures hexagonales de *Découper un réseau de trous* aussi.
+- Sur une face choisie, *Appliquer une texture* s’ouvre avec toute la face et un pas que votre buse imprime. Si la zone du motif dépasse le bord, le dialogue le dit avec la solution.
 - Sur un bourrelet ou une gorge, la sélection ne propose plus que ce que l'opération sait faire.
 - Si un congé borde une paroi, *Appliquer une dépouille* indique avant le calcul qu'il gêne et propose *Supprimer la caractéristique* comme issue.
 - Quand vous découpez une partie d'un corps, les chanfreins, filetages et logements d'écrou des blocs qui s'y trouvaient disparaissent aussi.

@@ -1151,6 +1151,7 @@
   "Das Muster läuft um einen Zylinder, der breiter ist als der Körper, und steht über dessen Rand hinaus.": "El patrón envuelve un cilindro más ancho que el cuerpo y sobresale de su borde.",
   "Das Muster steht.": "El patrón está listo.",
   "Das Muster wird mit dem neuen Maß gesetzt …": "Trazando el patrón con la nueva medida …",
+  "Das Musterfeld ragt über die Fläche hinaus: {loose} Stücke hängen daneben in der Luft und würden einzeln gedruckt. Verkleinern Sie Breite und Höhe, oder wählen Sie unter Bereich die gesamte Fläche.": "La zona del patrón sobresale de la cara: {loose} trozos quedan al lado en el aire y se imprimirían sueltos. Reduzca el ancho y el alto, o elija toda la cara en Zona.",
   "Das Namensschema lässt sich nicht lesen; eine Klammer steht falsch.": "El esquema de nombres no se puede leer; una llave está mal puesta.",
   "Das Namensschema nennt einen Platzhalter, den es nicht gibt.": "El esquema de nombres menciona un marcador que no existe.",
   "Das Netz hat jetzt über hundertmal so viele Dreiecke, und alles danach rechnet entsprechend länger.": "La malla tiene ahora más de cien veces más triángulos, y todo lo que sigue tarda proporcionalmente más.",
