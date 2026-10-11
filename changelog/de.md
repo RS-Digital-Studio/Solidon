@@ -71,6 +71,7 @@ Nutzen da und sonst nichts.
 - Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.
 - Die Karte der Tour ist so hoch wie ihre Schritte. Ein Schritt klappt per Klick oder Leertaste auf, und keine Sprechblase liegt mehr über der Ansicht.
 - Zeigt ein Tourschritt auf den Prüfbericht, bleibt die Tour sichtbar. Der Reiter ist gerahmt, und der Schritt sagt, welchen Reiter Sie öffnen.
+- Die Tour schneidet keinen Text mehr am Rand ab, auch nicht nach dem Verkleinern des Fensters. Der aktuelle Schritt steht auf so vielen Zeilen, wie er braucht.
 - Ein Klick auf das i neben einer Handlung im Reiter *Auswahl* öffnet das Handbuch an der Stelle, die sie erklärt.
 - Jedes Maß eines Bausteins lässt sich über fx an ein Projektmaß binden, auch wenn noch kein Ausdruck darin steht.
 - Nach dem Ziehen am Griff einer Vorschau bleibt keine Zahl über der Ansicht stehen. Eine dabei getippte Zahl verschiebt die Vorschau, nicht den gewählten Körper.
@@ -218,8 +219,11 @@ Nutzen da und sonst nichts.
 - Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch Stifte und Scheiben neben einer großen Platte. Wegfallen nur kleine offene Flächen und Krümel, die der Drucker nicht abbildet.
 - Ein Relief rechnet erst, wenn ein Bild gewählt ist. Bis dahin nennt der Dialog den Knopf *Bild wählen …*.
 - Die Dialoge *STEP laden* und *Zeichnung hochziehen* bieten nur Dateien an, die sie lesen können. Liegt keine im Projekt, nennen sie den Knopf *Datei wählen …*.
-- Ein Linienzug in der Skizze endet, sobald er auf seinem Anfang schließt. Bisher hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
+- Ein Linienzug in der Skizze endet, sobald er eine Schleife schließt. Bisher hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
 - Eine im Linienwerkzeug getippte Länge legt genau eine Linie an. Bisher kam beim Verlassen des Maßfelds eine zweite dazu, zurück zum Zeiger.
+- Ein Klick, den der Rasterfang genau auf einen vorhandenen Punkt legt, fängt diesen Punkt. Bisher sah die Kontur geschlossen aus, ohne verbunden zu sein.
+- Ein Doppelklick im Linienwerkzeug beendet den Linienzug. Bisher legte er eine Linie der Länge null an.
+- Die Eingabetaste im Maßfeld des Dialogs *Skizze zeichnen* setzt das Maß und lässt den Dialog offen. Bisher übernahm sie die Zeichnung und schloss ihn.
 - Viele runde Wände kleiner Schrift, etwa die eines „O“ oder „D“ per *Text aufbringen*, stehen jetzt auch auf einem großen Körper im Objektbaum als *Gerundete Seite*.
 
 ### Erzeugen mit KI

@@ -47,6 +47,7 @@ dans `website/version.json`.
 - Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.
 - La carte de la visite guidée a la hauteur de ses étapes. Une étape se déplie d'un clic ou avec la barre d'espace, et aucune bulle ne couvre plus la vue.
 - Quand une étape de la visite guidée renvoie au rapport de contrôle, la visite reste visible. L'onglet est encadré et l'étape dit lequel ouvrir.
+- La visite guidée ne coupe plus le texte au bord, même après avoir réduit la fenêtre. L'étape en cours prend autant de lignes qu'il lui faut.
 - Un clic sur le i à côté d'une action de l'onglet *Sélection* ouvre le manuel à l'endroit qui l'explique.
 - Chaque cote d'un bloc peut être liée à une cote du projet avec fx, même si elle ne porte encore aucune expression.
 - Après avoir tiré la poignée d'un aperçu, aucun nombre ne reste au-dessus de la vue. Un nombre saisi pendant le geste déplace l'aperçu, pas le corps sélectionné.
@@ -194,8 +195,11 @@ dans `website/version.json`.
 - La division en pièces distinctes garde toute pièce imprimable, même goujons et rondelles près d'une grande plaque. Seules tombent petites surfaces ouvertes et miettes non imprimables.
 - Un relief n'est calculé qu'une fois une image choisie. D'ici là, la boîte de dialogue indique le bouton *Choisir une image …*.
 - Les boîtes de dialogue *Charger un STEP* et *Extruder un dessin* ne proposent que les fichiers qu'elles savent lire. Si le projet n'en contient aucun, elles indiquent le bouton *Choisir un fichier …*.
-- Une suite de lignes dans l'esquisse s'arrête dès qu'elle se referme sur son début. Jusqu'ici, un nouveau segment restait accroché au pointeur, et le premier Échap semblait sans effet.
+- Une suite de lignes dans l'esquisse s'arrête dès qu'elle ferme une boucle. Jusqu'ici, un nouveau segment restait accroché au pointeur, et le premier Échap semblait sans effet.
 - Une longueur tapée avec l'outil Ligne crée exactement une ligne. Jusqu'ici, quitter le champ de cote en ajoutait une seconde, revenant vers le pointeur.
+- Un clic que l'accrochage à la grille pose exactement sur un point existant accroche ce point. Jusqu'ici, le contour semblait fermé sans être relié.
+- Un double-clic avec l'outil Ligne termine la suite de lignes. Jusqu'ici, il créait une ligne de longueur nulle.
+- Entrée dans le champ de cote du dialogue *Dessiner une esquisse* fixe la cote et laisse le dialogue ouvert. Jusqu'ici, elle appliquait le dessin et le fermait.
 - Beaucoup de parois rondes d'un petit texte, comme celles d'un « O » ou d'un « D » posé avec *Appliquer du texte*, figurent aussi sur un grand corps comme *Face courbe*.
 
 ### Générer avec l'IA

@@ -46,6 +46,7 @@ it into `website/version.json`.
 - The error report attaches a crash log only when Solidon actually crashed.
 - The tour card is as tall as its steps. A step unfolds with a click or the space bar, and no tooltip bubble covers the view any more.
 - When a tour step points at the report, the tour stays visible. The tab is framed, and the step tells you which tab to open.
+- The tour no longer cuts text off at the edge, even after the window gets smaller. The current step takes as many lines as it needs.
 - Clicking the i next to an action in the *Selection* tab opens the manual where that action is explained.
 - Every dimension of a part can be bound to a project dimension with fx, even before it holds an expression.
 - After dragging the handle of a preview, no number stays above the view. A number typed during the drag moves the preview, not the selected body.
@@ -193,8 +194,11 @@ it into `website/version.json`.
 - Splitting into separate parts keeps every printable part, including pins and washers next to a large plate. Only small open surfaces and crumbs the printer cannot reproduce are dropped.
 - A relief only computes once an image is chosen. Until then the dialog points to the *Choose an image …* button.
 - The *Load STEP* and *Extrude a drawing* dialogs only offer files they can read. If the project has none, they point to the *Choose a file …* button.
-- A chain of lines in a sketch ends as soon as it closes on its start. Until now a new segment hung on the pointer, and the first Esc seemed to do nothing.
+- A chain of lines in a sketch ends as soon as it closes a loop. Until now a new segment hung on the pointer, and the first Esc seemed to do nothing.
 - A length typed with the line tool creates exactly one line. Until now leaving the dimension field added a second one, back towards the pointer.
+- A click that grid snapping places exactly on an existing point catches that point. Until now the contour looked closed without being connected.
+- A double-click with the line tool ends the chain of lines. Until now it created a line of zero length.
+- Enter in the dimension field of the *Draw sketch* dialog sets the dimension and keeps the dialog open. Until now it applied the drawing and closed it.
 - Many round walls of small lettering, such as those of an “O” or “D” added with *Put text on*, now appear as *Curved face* in the object tree on a large body too.
 
 ### Generating with AI

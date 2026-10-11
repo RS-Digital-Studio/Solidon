@@ -47,6 +47,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El informe de errores adjunta un registro de fallo solo cuando Solidon se ha cerrado de verdad por un fallo.
 - La tarjeta del recorrido es tan alta como sus pasos. Un paso se despliega con un clic o la barra espaciadora, y ninguna burbuja tapa ya la vista.
 - Si un paso del recorrido señala el informe de comprobación, el recorrido sigue a la vista. La pestaña queda enmarcada y el paso dice cuál abrir.
+- El recorrido ya no corta el texto en el borde, tampoco al reducir la ventana. El paso actual ocupa las líneas que necesita.
 - Un clic en la i junto a una acción de la pestaña *Selección* abre el manual donde se explica esa acción.
 - Cada cota de un bloque se puede vincular con fx a una cota del proyecto, aunque todavía no tenga ninguna expresión.
 - Tras arrastrar el tirador de una vista previa, ya no queda ningún número sobre la vista. Un número tecleado al arrastrar mueve la vista previa, no el cuerpo elegido.
@@ -194,8 +195,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al dividir en piezas sueltas se conserva cada pieza imprimible, también pasadores y arandelas junto a una placa grande. Solo caen superficies abiertas pequeñas y migas que la impresora no reproduce.
 - Un relieve solo se calcula cuando hay una imagen elegida. Hasta entonces el diálogo señala el botón *Elegir una imagen …*.
 - Los diálogos *Cargar STEP* y *Extruir un dibujo* solo ofrecen archivos que pueden leer. Si el proyecto no tiene ninguno, señalan el botón *Elegir un archivo …*.
-- Un trazo de líneas en el boceto termina en cuanto se cierra sobre su inicio. Hasta ahora quedaba un tramo nuevo en el puntero, y el primer Esc parecía no hacer nada.
+- Un trazo de líneas en el boceto termina en cuanto cierra un bucle. Hasta ahora quedaba un tramo nuevo en el puntero, y el primer Esc parecía no hacer nada.
 - Una longitud tecleada con la herramienta Línea crea exactamente una línea. Hasta ahora, al salir del campo de cota se añadía una segunda, de vuelta hacia el puntero.
+- Un clic que el ajuste a la cuadrícula coloca justo sobre un punto existente engancha ese punto. Hasta ahora el contorno parecía cerrado sin estar unido.
+- Un doble clic con la herramienta Línea termina el trazo de líneas. Hasta ahora creaba una línea de longitud cero.
+- Intro en el campo de cota del diálogo *Dibujar un boceto* fija la cota y deja el diálogo abierto. Hasta ahora aplicaba el dibujo y lo cerraba.
 - Muchas paredes redondas de un texto pequeño, como las de una «O» o una «D» con *Aplicar texto*, aparecen ahora como *Cara curva* en el árbol de objetos también en un cuerpo grande.
 
 ### Generar con IA

@@ -46,6 +46,7 @@ scrive in `website/version.json`.
 - La segnalazione di errore allega un registro di arresto anomalo solo dopo un vero arresto anomalo di Solidon.
 - La scheda del tour è alta quanto i suoi passi. Un passo si apre con un clic o con la barra spaziatrice, e nessun fumetto copre più la vista.
 - Quando un passo del tour indica il rapporto di verifica, il tour resta visibile. La linguetta è incorniciata e il passo dice quale aprire.
+- Il tour non taglia più il testo sul bordo, nemmeno dopo aver rimpicciolito la finestra. Il passo attuale occupa tutte le righe che servono.
 - Un clic sulla i accanto a un'azione nella linguetta *Selezione* apre il manuale nel punto in cui è spiegata.
 - Ogni quota di un blocco si può legare con fx a una quota del progetto, anche se non contiene ancora un'espressione.
 - Dopo aver trascinato la maniglia di un'anteprima, nessun numero resta sopra la vista. Un numero digitato durante il trascinamento sposta l'anteprima, non il corpo scelto.
@@ -193,8 +194,11 @@ scrive in `website/version.json`.
 - Dividendo in pezzi distinti resta ogni pezzo stampabile, anche perni e rondelle accanto a una piastra grande. Cadono solo piccole superfici aperte e briciole che la stampante non riproduce.
 - Un rilievo viene calcolato solo quando è scelta un'immagine. Fino ad allora la finestra indica il pulsante *Scegli un'immagine …*.
 - Le finestre *Carica STEP* e *Estrudi un disegno* offrono solo file che sanno leggere. Se il progetto non ne ha, indicano il pulsante *Scegli un file …*.
-- Una sequenza di linee nello schizzo finisce appena si chiude sul suo inizio. Finora un nuovo tratto restava attaccato al puntatore, e il primo Esc sembrava non fare nulla.
+- Una sequenza di linee nello schizzo finisce appena chiude un anello. Finora un nuovo tratto restava attaccato al puntatore, e il primo Esc sembrava non fare nulla.
 - Una lunghezza digitata con lo strumento Linea crea esattamente una linea. Finora, lasciando il campo della quota se ne aggiungeva una seconda, di ritorno verso il puntatore.
+- Un clic che l'aggancio alla griglia porta esattamente su un punto esistente aggancia quel punto. Finora il contorno sembrava chiuso senza essere collegato.
+- Un doppio clic con lo strumento Linea termina la sequenza di linee. Finora creava una linea di lunghezza zero.
+- Invio nel campo della quota del dialogo *Disegna schizzo* imposta la quota e lascia aperto il dialogo. Finora applicava il disegno e lo chiudeva.
 - Molte pareti tonde di un testo piccolo, come quelle di una «O» o di una «D» con *Applica testo*, compaiono ora anche su un corpo grande come *Faccia curva* nell'albero degli oggetti.
 
 ### Generare con l'IA
