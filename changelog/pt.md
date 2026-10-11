@@ -45,7 +45,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - Cada função tem o mesmo nome em todo o lado. A ferramenta *Dividir* oferece *Dividir por um plano*, *Dividir ao longo de uma linha desenhada* e *Dividir em peças soltas*.
 - No corpo selecionado, *Dividir automaticamente …* está agora em *Preparar*.
-- Na janela em repouso só *Blocos* se destaca a cor. O vermelho fica para os botões que descartam ou apagam, e as perguntas abrem com o foco em *Cancelar*.
+- Enquanto não houver nada pendente, só *Blocos* se destaca a cor. O vermelho fica para os botões que descartam ou apagam, e as perguntas abrem com o foco em *Cancelar*.
 - No modo de desenho, o separador *Seleção* fica oculto. A lista de restrições mostra as dos pontos e linhas selecionados, mais qualquer conflito.
 - No cartão de parâmetros, uma medida só mostra «Não utilizado» quando é o caso. O botão diz quantos números fixos se podem associar a medidas.
 - O cartão da visita guiada tem a altura dos seus passos. Um passo abre-se com um clique ou com a barra de espaços, e nenhum balão tapa mais a vista.
@@ -106,7 +106,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com o Cura, o pé do suporte em superfícies inclinadas fica agora em degraus sem camada de separação inferior, e liso com ela, como o Cura prevê.
 - Para PLA, o Solidon propõe mais espaço entre as muitas pontas finas e os suportes em árvore por baixo. Assim ficam menos resíduos das pontas dos suportes.
 - As pontes longas recebem o suporte que o Solidon prevê, também no PrusaSlicer. Se uma ponte longa ficar sem suporte, o Solidon propõe linhas grossas e um pouco menos de fluxo.
-- As saliências planas sem suporte recebem paredes extra como proposta. Com ABS, ASA e TPU o slicer imprime as saliências íngremes em sentido alternado para que não enrolem.
+- As saliências planas sem suporte recebem paredes extra como proposta. Com ABS, ASA e TPU, por sugestão, o slicer imprime as saliências íngremes em sentido alternado para que não enrolem.
 - As definições de ponte, as paredes extra e o sentido alternado valem só para a peça que precisa delas. As outras peças da mesma placa imprimem como antes.
 - Sem perfil do fabricante, o PrusaSlicer e o SuperSlicer imprimem agora as pontes finas. Onde uma ponte precisa de linhas grossas e menos fluxo, o Solidon propõe-nas para essa peça.
 - Onde o Solidon propõe mais espaço sobre os suportes em árvore, propõe também uma *Ponta da árvore* mais larga. Cada ponta leva uma camada de separação e fica menos suporte preso às faces inferiores.
@@ -205,7 +205,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O assistente responde na língua em que escreve.
 - Com um modelo local, o assistente tem tanto espaço como com um alojado e cumpre tarefas até doze passos.
 - Se cancelar uma proposta do assistente, a barra de estado confirma-o em vez de comunicar um erro do programa.
-- Se abrir outro projeto durante uma proposta, Solidon descarta-a e devolve o pedido ao chat.
+- Se abrir outro projeto durante uma proposta, o Solidon descarta-a e devolve o pedido ao chat.
 - Os modelos gerados chegam fechados com mais frequência. Onde as faces só se tocam, o Solidon separa-as e alisa pequenas dobras da superfície em vez de avisar de uma autointerseção.
 - Se uma tentativa já se desfez ao gerar, a janela di-lo antes de a aceitar e oferece *Mais uma tentativa*.
 - Se um modelo gerado for só uma pele fina à volta de um vazio, a janela di-lo antes de o aceitar e o relatório de verificação depois, com o caminho para uma nova tentativa.

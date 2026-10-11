@@ -45,7 +45,7 @@ scrive in `website/version.json`.
 - Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Ogni funzione ha lo stesso nome ovunque. Lo strumento *Dividi* offre *Dividi lungo un piano*, *Dividi lungo una linea tracciata* e *Dividi in pezzi distinti*.
 - Sul corpo selezionato, *Dividi automaticamente …* si trova ora sotto *Prepara*.
-- Nella finestra a riposo solo *Blocchi* risalta a colori. Il rosso resta ai pulsanti che scartano o eliminano, e le domande si aprono con il focus su *Annulla*.
+- Finché non c'è nulla in sospeso, solo *Blocchi* risalta a colori. Il rosso resta ai pulsanti che scartano o eliminano, e le domande si aprono con il focus su *Annulla*.
 - In modalità disegno la linguetta *Selezione* è nascosta. L'elenco dei vincoli mostra quelli dei punti e delle linee selezionati, più ogni conflitto.
 - Nella scheda dei parametri, una misura mostra «Non utilizzato» solo quando è così. Il pulsante dice quanti numeri fissi si possono collegare alle misure.
 - La scheda del tour è alta quanto i suoi passi. Un passo si apre con un clic o con la barra spaziatrice, e nessun fumetto copre più la vista.
@@ -106,7 +106,7 @@ scrive in `website/version.json`.
 - Con Cura, il piede del supporto sulle superfici inclinate è ora a gradini senza strato di interfaccia inferiore e liscio con esso, come previsto da Cura.
 - Per il PLA, Solidon propone più spazio tra le numerose punte sottili e i supporti ad albero sottostanti. In questo modo restano meno residui delle punte dei supporti.
 - I ponti lunghi ricevono il supporto previsto da Solidon, anche in PrusaSlicer. Se un ponte lungo resta senza supporto, Solidon propone linee spesse e un po' meno flusso.
-- Agli sbalzi piatti senza supporto Solidon propone pareti extra. Con ABS, ASA e TPU lo slicer stampa gli sbalzi ripidi in senso alternato, così non si arricciano.
+- Agli sbalzi piatti senza supporto Solidon propone pareti extra. Con ABS, ASA e TPU, su suggerimento, lo slicer stampa gli sbalzi ripidi in senso alternato, così non si arricciano.
 - Le impostazioni dei ponti, le pareti extra e il senso alternato valgono solo per il pezzo che ne ha bisogno. Gli altri pezzi dello stesso piatto si stampano come prima.
 - Senza profilo del produttore, PrusaSlicer e SuperSlicer stampano ora i ponti sottili. Dove un ponte ha bisogno di linee spesse e meno flusso, Solidon le propone per quel pezzo.
 - Dove Solidon propone più spazio sopra i supporti ad albero, propone anche una *Punta dell'albero* più larga. Ogni punta ha uno strato di interfaccia e sulle parti inferiori resta meno supporto.
