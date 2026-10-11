@@ -132,6 +132,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Desde esta versión, un consumo descontado sigue unido a su impresión aunque una actualización calcule más rápido o cambie el perfil del fabricante en el slicer. Antes contaba como nueva.
 - Donde cúpulas planas y pendientes mostrarían escalones, Solidon sugiere capas finas solo allí. La sugerencia indica cuánto más tarda entonces la pieza.
 - Con una impresora de resina, el diálogo de impresión muestra solo impresora, material, placas y programa. La versión 0.5.3 mostraba también perfiles y existencias de filamento.
+- Tras pasar de una impresora de resina a una de filamento, el proyecto vuelve a imprimir con el ancho de línea de la boquilla. La versión 0.5.3 conservaba el píxel de 0,05 mm.
 
 ### Roscas, taladros y piezas normalizadas
 

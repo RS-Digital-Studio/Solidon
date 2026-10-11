@@ -156,6 +156,7 @@ Nutzen da und sonst nichts.
 - Ab dieser Version bleibt eine Buchung ihrem Druck zugeordnet, auch wenn ein Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
 - Wo flache Kuppen und Schrägen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger das Teil dann druckt.
 - Mit einem Resin-Drucker zeigt der Druckdialog nur noch Drucker, Material, Platten und das Programm. Version 0.5.3 zeigte dort auch Filamentprofile und den Filamentbestand.
+- Nach dem Wechsel von einem Resin- auf einen Filamentdrucker druckt das Projekt wieder mit der Bahnbreite der Düse. Version 0.5.3 behielt den Bildpunkt von 0,05 mm, auch in gespeicherten Projekten.
 
 ### Gewinde, Bohrungen und Normteile
 
