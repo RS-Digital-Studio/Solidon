@@ -29,6 +29,7 @@ it into `website/version.json`.
 - Solidon remembers the layout. The windows stay within reach even when a screen is disconnected.
 - Del also works while the *Selection* tab has focus, and it removes several marked bodies in one step. When the key does nothing, the status bar gives the reason.
 - Right-clicking bodies offers *Remove object* and, for several, *Unite*. *Hollow out* is also available on a selected face, which becomes the opening.
+- Dragging the face handle puts the distance into *Offset face* on the *Selection* tab and brings the tab to the front, even during a tour. Only *Apply* creates the step.
 - The *Filaments* button now sits in the header. It lists the project's filaments and leads to the filament inventory.
 - A different filament only changes the colour, on parts and STEP bodies too. The shape is not recalculated for it. Selected bodies show their filament colour beneath the highlight.
 - In the *Selection* tab, the filament field assigns only on a click or Enter. Arrow keys and typing just browse, and the mouse wheel scrolls the tab.
@@ -173,6 +174,8 @@ it into `website/version.json`.
 - A sketch with many separate shapes solves quickly, even with hundreds of dimensioned rectangles or circles.
 - If *Curvature continuous* cannot be met while you draw, the sketch editor says so within seconds instead of minutes.
 - If two constraints contradict each other, the sketch editor names both instead of shrinking a line or circle to a point.
+- A chain of lines in a sketch ends as soon as it closes on its start. Until now a new segment hung on the pointer, and the first Esc seemed to do nothing.
+- A length typed with the line tool creates exactly one line. Until now leaving the dimension field added a second one, back towards the pointer.
 - A body takes three clicks: *Draw* in the top toolbar (Ctrl+Shift+E), then corner, opposite corner, height. Outwards it joins on, inwards it cuts.
 - While pulling up, you can type the dimensions. A double-click on the step opens its dimensions, and under *Kind* it becomes a revolved body or a hole pattern without redrawing.
 - From the sketch editor, *Done* leads back into the view, and the next click sets the height. Escape lays the outline aside, Ctrl+Z brings it back.
@@ -212,6 +215,7 @@ it into `website/version.json`.
 - Before downloading, *Set up the chat* and *Set up ComfyUI* say how much graphics memory and disk space a model needs and whether this computer has it.
 - On a Mac, *Set up the chat* suggests a local model that fits into the shared memory and says when a key for a hosted model is the better choice.
 - If the selected local model is missing or the provider refuses the key, Solidon says so in one sentence and *Set up the chat* leads straight to the fix.
+- If you have not chosen a local model and the default one is missing, another recommended model that is already installed answers. The chat says which, and *Set up the chat* shows it.
 - Solidon passes over an invalid key for a day, until you enter a different one or choose *Try again*. Until then a local model answers, if one is set up.
 - On a newly generated model, *Change size* only recalculates the new size and no longer repeats the repair. It is faster, and Ctrl+Z undoes it at once.
 

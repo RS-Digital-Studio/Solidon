@@ -396,9 +396,17 @@ class AgentSession:
         activation.require(activation.CHAT)
         resource_session = getattr(self.backend, "resource_session", None)
         if not callable(resource_session):
-            return self._propose(request)
-        with resource_session(self.cancelled, progress=lambda text: self._progress(0, text)):
-            return self._propose(request)
+            proposal = self._propose(request)
+        else:
+            with resource_session(self.cancelled, progress=lambda text: self._progress(0, text)):
+                proposal = self._propose(request)
+        # Zugestellt sind die Sätze erst, wenn sie im Chat stehen
+        # (``agent_apply.record``). Ein gescheiterter, verworfener oder
+        # ersetzter Zug lässt sie dem nächsten (Regel 21).
+        said = getattr(self.backend, "notices_said", None)
+        if proposal.notices and callable(said):
+            proposal.delivered = said
+        return proposal
 
     def _propose(self, request: str) -> Proposal:
         """Führt den Zug innerhalb einer gegebenenfalls belegten Ressourcenspur aus."""
@@ -472,6 +480,12 @@ class AgentSession:
                     max_output_tokens=remaining,
                 )
             proposal.steps += 1
+            # Was das Backend dazu sagt — etwa ein Ersatzmodell —, einmal je
+            # Zug, und die Herkunft nennt das Modell, das wirklich antwortete.
+            for notice in reply.notices:
+                if notice not in proposal.notices:
+                    proposal.notices.append(notice)
+                    proposal.origin = self._origin(active)
             # Alle Zahlen kommen aus der Antwort und nicht aus einer eigenen
             # Schätzung — aber es sind zwei Auskünfte und nicht eine.
             # ``Reply.input_tokens`` zählt seit dem 25.08.2026 auch die

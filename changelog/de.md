@@ -54,6 +54,7 @@ Nutzen da und sonst nichts.
 - Solidon merkt sich die Anordnung. Auch wenn ein Bildschirm fehlt, bleiben die Fenster erreichbar.
 - Entf wirkt auch, wenn der Reiter *Auswahl* den Fokus hat, und entfernt mehrere markierte Körper in einem Schritt. Tut die Taste nichts, nennt die Statuszeile den Grund.
 - Der Rechtsklick an Körpern bietet *Objekt entfernen* und bei mehreren *Vereinigen*. *Aushöhlen* steht auch an einer gewählten Fläche, sie wird die Öffnung.
+- Ein Zug am Flächengriff legt den Weg unter *Fläche versetzen* im Reiter *Auswahl* bereit und holt den Reiter nach vorn, auch während einer Tour. Erst *Übernehmen* legt den Schritt an.
 - Der Knopf *Filamente* steht jetzt in der Kopfzeile. Er listet die Filamente des Projekts und führt ins Filamentlager.
 - Ein anderes Filament ändert nur die Farbe, auch an Bausteinen und STEP-Teilen. Die Form wird dafür nicht neu berechnet. Gewählte Körper zeigen ihre Filamentfarbe unter der Markierung.
 - Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
@@ -198,6 +199,8 @@ Nutzen da und sonst nichts.
 - Eine Skizze mit vielen getrennten Formen löst schnell, auch mit Hunderten bemaßter Rechtecke oder Kreise.
 - Lässt sich *Krümmungsstetig* beim Zeichnen nicht erfüllen, sagt der Skizzeneditor das nach Sekunden statt nach Minuten.
 - Widersprechen sich zwei Bedingungen, nennt der Skizzeneditor beide, statt eine Linie oder einen Kreis auf einen Punkt schrumpfen zu lassen.
+- Ein Linienzug in der Skizze endet, sobald er auf seinem Anfang schließt. Bisher hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
+- Eine im Linienwerkzeug getippte Länge legt genau eine Linie an. Bisher kam beim Verlassen des Maßfelds eine zweite dazu, zurück zum Zeiger.
 - Ein Körper entsteht mit drei Klicks: *Zeichnen* oben in der Werkzeugleiste (Strg+Umschalt+E), dann Ecke, Gegenecke, Höhe. Nach außen fügt er an, nach innen schneidet er.
 - Beim Aufziehen lassen sich die Maße tippen. Ein Doppelklick auf den Schritt öffnet seine Maße, und unter *Art* wird daraus ohne neues Zeichnen ein Drehkörper oder ein Lochfeld.
 - Aus dem Skizzeneditor führt *Fertig* zurück in die Ansicht, der nächste Klick setzt die Höhe. Escape legt den Umriss beiseite, Strg+Z holt ihn zurück.
@@ -237,6 +240,7 @@ Nutzen da und sonst nichts.
 - Vor dem Herunterladen nennen *Chat einrichten* und *ComfyUI einrichten*, wie viel Grafikspeicher und Platz ein Modell braucht und ob dieser Rechner das hat.
 - Auf einem Mac schlägt *Chat einrichten* ein lokales Modell vor, das in den gemeinsamen Speicher passt, und sagt, wann ein Schlüssel für ein gehostetes Modell besser ist.
 - Fehlt das gewählte lokale Modell oder lehnt der Anbieter den Schlüssel ab, sagt Solidon es in einem Satz und führt mit *Chat einrichten* direkt zum Ausweg.
+- Haben Sie kein lokales Modell gewählt und fehlt das vorgegebene, antwortet ein anderes empfohlenes, das schon installiert ist. Der Chat sagt, welches, und *Chat einrichten* zeigt es an.
 - Einen ungültigen Schlüssel übergeht Solidon einen Tag lang, bis Sie einen anderen eintragen oder *Noch einmal versuchen* wählen. So lange antwortet ein lokales Modell, wenn eines eingerichtet ist.
 - Bei einem neu erzeugten Modell rechnet *Größe ändern* nur das neue Maß und wiederholt die Reparatur nicht mehr. Das geht schneller, und Strg+Z nimmt die Änderung sofort zurück.
 

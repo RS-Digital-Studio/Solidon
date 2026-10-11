@@ -63,6 +63,8 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   *Prüfbericht*, Exportprüfung, Slicen, G-Code).
 - Eine neue Auswahl holt den Reiter Auswahl; Verlassen gilt bis zum Wechsel.
   Nicht aus dem Bericht (`_SelectionPage.held`), nicht über eine Tour.
+  Ein Zug im Bild, der Werte in eine Handlung legt (`FeaturePanel.valuesTaken`),
+  holt ihn immer: Sein *Übernehmen* steht dort.
 - `MainWindow.announce` ergänzt die Statuszeile um eine passive Overlayquittung:
   kein Fokus, keine Klicks, kein RichText; mindestens acht Sekunden, lange
   Texte länger. Neue Quittung ersetzt alte, Fortschritt überschreibt sie nicht.

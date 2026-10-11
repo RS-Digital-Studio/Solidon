@@ -30,6 +30,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Solidon recuerda la disposición. Las ventanas siguen al alcance aunque se desconecte una pantalla.
 - Supr también funciona cuando la pestaña *Selección* tiene el foco, y quita varios cuerpos marcados en un solo paso. Si la tecla no hace nada, la barra de estado dice por qué.
 - El clic derecho en los cuerpos ofrece *Quitar objeto* y, con varios, *Unir*. *Vaciar* también está en una cara seleccionada, que pasa a ser la abertura.
+- Arrastrar el tirador de una cara deja la distancia preparada en *Desplazar cara*, en la pestaña *Selección*, y trae la pestaña al frente, también durante un recorrido. Solo *Aplicar* crea el paso.
 - El botón *Filamentos* está ahora en la cabecera. Muestra los filamentos del proyecto y lleva al inventario de filamentos.
 - Otro filamento solo cambia el color, también en bloques y cuerpos STEP. La forma no se recalcula por ello. Los cuerpos seleccionados muestran su color de filamento bajo el resaltado.
 - En la pestaña *Selección*, el campo de filamento solo asigna con un clic o Intro. Las flechas y la escritura solo recorren la lista, y la rueda del ratón desplaza la pestaña.
@@ -174,6 +175,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un boceto con muchas formas separadas se resuelve rápido, incluso con cientos de rectángulos o círculos acotados.
 - Si *Curvatura continua* no puede cumplirse al dibujar, el editor de bocetos lo indica en segundos y no en minutos.
 - Si dos restricciones se contradicen, el editor de bocetos nombra ambas en lugar de reducir una línea o un círculo a un punto.
+- Un trazo de líneas en el boceto termina en cuanto se cierra sobre su inicio. Hasta ahora quedaba un tramo nuevo en el puntero, y el primer Esc parecía no hacer nada.
+- Una longitud tecleada con la herramienta Línea crea exactamente una línea. Hasta ahora, al salir del campo de cota se añadía una segunda, de vuelta hacia el puntero.
 - Un cuerpo se levanta con tres clics: *Dibujar* en la barra superior (Ctrl+Mayús+E), luego esquina, esquina opuesta, altura. Hacia fuera se une, hacia dentro recorta.
 - Al levantar se pueden escribir las medidas. Un doble clic en el paso abre sus medidas, y en *Tipo* se convierte en un sólido de revolución o un patrón de orificios sin volver a dibujar.
 - Desde el editor de bocetos, *Terminado* vuelve a la vista y el siguiente clic pone la altura. Escape aparta el contorno, Ctrl+Z lo recupera.
@@ -213,6 +216,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Antes de descargar, *Configurar el chat* y *Configurar ComfyUI* indican cuánta memoria gráfica y espacio necesita un modelo y si este equipo los tiene.
 - En un Mac, *Configurar el chat* propone un modelo local que cabe en la memoria compartida y dice cuándo conviene más una clave para un modelo alojado.
 - Si falta el modelo local elegido o el proveedor rechaza la clave, Solidon lo dice en una frase y *Configurar el chat* lleva directamente a la solución.
+- Si no ha elegido un modelo local y falta el predeterminado, responde otro recomendado que ya esté instalado. El chat dice cuál, y *Configurar el chat* lo muestra.
 - Solidon omite una clave no válida durante un día, hasta que introduzca otra o elija *Volver a intentarlo*. Mientras tanto responde un modelo local, si hay uno configurado.
 - En un modelo recién generado, *Cambiar tamaño* solo recalcula la nueva medida y ya no repite la reparación. Es más rápido, y Ctrl+Z deshace el cambio al instante.
 

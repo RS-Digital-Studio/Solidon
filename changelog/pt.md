@@ -29,6 +29,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O Solidon guarda a disposição. As janelas continuam acessíveis mesmo quando um ecrã é desligado.
 - Delete também funciona quando o separador *Seleção* tem o foco, e remove vários corpos marcados num só passo. Se a tecla não fizer nada, a barra de estado diz porquê.
 - O clique direito nos corpos oferece *Remover objeto* e, com vários, *Unir*. *Esvaziar* está também numa face selecionada, que passa a ser a abertura.
+- Arrastar o manípulo de uma face deixa o percurso preparado em *Deslocar a face*, no separador *Seleção*, e traz o separador para a frente, também durante uma visita guiada. Só *Aplicar* cria o passo.
 - O botão *Filamentos* está agora no cabeçalho. Lista os filamentos do projeto e leva ao inventário de filamentos.
 - Outro filamento muda apenas a cor, também em blocos e corpos STEP. A forma não é recalculada. Os corpos selecionados mostram a cor do filamento sob o realce.
 - No separador *Seleção*, o campo de filamento só atribui com um clique ou Enter. As setas e a escrita apenas percorrem a lista, e a roda do rato desloca o separador.
@@ -173,6 +174,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um esboço com muitas formas separadas resolve-se depressa, mesmo com centenas de retângulos ou círculos cotados.
 - Se *Curvatura contínua* não puder ser cumprida ao desenhar, o editor de esboços indica-o em segundos e não em minutos.
 - Se duas restrições se contradizem, o editor de esboços nomeia ambas em vez de reduzir uma linha ou um círculo a um ponto.
+- Uma sequência de linhas no esboço termina assim que fecha no seu início. Até agora ficava um novo troço preso ao ponteiro, e o primeiro Esc parecia não fazer nada.
+- Um comprimento escrito com a ferramenta Linha cria exatamente uma linha. Até agora, ao sair do campo da cota juntava-se uma segunda, de volta ao ponteiro.
 - Um corpo levanta-se com três cliques: *Desenhar* na barra superior (Ctrl+Shift+E), depois canto, canto oposto, altura. Para fora une-se, para dentro recorta.
 - Ao levantar, as medidas podem ser escritas. Um duplo clique no passo abre as suas medidas, e em *Tipo* passa a sólido de revolução ou padrão de furos sem desenhar de novo.
 - No editor de esboços, *Concluído* leva de volta à vista e o clique seguinte põe a altura. Escape põe o contorno de lado, Ctrl+Z trá-lo de volta.
@@ -212,6 +215,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Antes de transferir, *Configurar o chat* e *Configurar o ComfyUI* indicam quanta memória gráfica e espaço um modelo precisa e se este computador os tem.
 - Num Mac, *Configurar o chat* propõe um modelo local que cabe na memória partilhada e diz quando uma chave para um modelo alojado é melhor.
 - Se faltar o modelo local escolhido ou o fornecedor recusar a chave, o Solidon di-lo numa frase e *Configurar o chat* leva diretamente à solução.
+- Se não escolheu um modelo local e faltar o predefinido, responde outro recomendado que já esteja instalado. O chat diz qual, e *Configurar o chat* mostra-o.
 - O Solidon ignora uma chave inválida durante um dia, até introduzir outra ou escolher *Tentar novamente*. Entretanto responde um modelo local, se houver um configurado.
 - Num modelo acabado de gerar, *Alterar tamanho* só recalcula a nova medida e já não repete a reparação. É mais rápido, e Ctrl+Z desfaz a alteração de imediato.
 

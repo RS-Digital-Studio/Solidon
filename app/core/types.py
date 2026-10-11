@@ -2644,6 +2644,18 @@ class ChatEntry:
     discarded: bool = False
     """Ausdrücklich verworfen, bevor eine Transaktion übernommen wurde."""
 
+    @property
+    def notice(self) -> bool:
+        """Ein Satz der Anwendung, kein Wort des Modells (:data:`NOTICE_ID_PREFIX`)."""
+        return self.id.startswith(NOTICE_ID_PREFIX)
+
+
+#: Woran ein Hinweis der Anwendung im Gespräch zu erkennen ist — etwa, dass
+#: ein Ersatzmodell antwortet. Er steht im Chat, geht aber nie als Beitrag des
+#: Modells in einen späteren Auftrag (``agent.context.conversation``). Die
+#: Kennung trägt es, damit die Projektdatei keinen neuen Schlüssel braucht.
+NOTICE_ID_PREFIX: Final = "notice-"
+
 
 @dataclass(frozen=True, slots=True)
 class SourceOrigin:

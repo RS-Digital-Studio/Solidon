@@ -30,6 +30,7 @@ dans `website/version.json`.
 - Solidon mémorise la disposition. Les fenêtres restent accessibles même si un écran est débranché.
 - Suppr agit aussi quand l'onglet *Sélection* a le focus, et retire plusieurs corps marqués en une seule étape. Si la touche ne fait rien, la barre d'état en donne la raison.
 - Le clic droit sur les corps propose *Retirer l'objet* et, pour plusieurs, *Réunir*. *Évidement* figure aussi sur une face sélectionnée, qui devient l'ouverture.
+- Un glisser sur la poignée d'une face prépare la distance dans *Décaler la face* et amène l'onglet *Sélection* au premier plan, même pendant une visite guidée. Seul *Appliquer* crée l'étape.
 - Le bouton *Filaments* se trouve désormais dans l'en-tête. Il liste les filaments du projet et mène au stock de filament.
 - Un autre filament ne change que la couleur, aussi sur les blocs et les corps STEP. La forme n'est pas recalculée. Les corps sélectionnés montrent leur couleur de filament sous la surbrillance.
 - Dans l'onglet *Sélection*, le champ du filament n'attribue qu'au clic ou avec Entrée. Les flèches et la saisie ne font que parcourir la liste, et la molette fait défiler l'onglet.
@@ -174,6 +175,8 @@ dans `website/version.json`.
 - Une esquisse avec de nombreuses formes séparées se résout vite, même avec des centaines de rectangles ou de cercles cotés.
 - Si *Courbure continue* ne peut pas être respectée pendant que vous dessinez, l'éditeur d'esquisse le signale en quelques secondes au lieu de plusieurs minutes.
 - Si deux contraintes se contredisent, l'éditeur d'esquisse les nomme toutes les deux au lieu de réduire une ligne ou un cercle à un point.
+- Une suite de lignes dans l'esquisse s'arrête dès qu'elle se referme sur son début. Jusqu'ici, un nouveau segment restait accroché au pointeur, et le premier Échap semblait sans effet.
+- Une longueur tapée avec l'outil Ligne crée exactement une ligne. Jusqu'ici, quitter le champ de cote en ajoutait une seconde, revenant vers le pointeur.
 - Un corps se tire en trois clics : *Dessiner* dans la barre du haut (Ctrl+Maj+E), puis coin, coin opposé, hauteur. Vers l'extérieur il se joint, vers l'intérieur il découpe.
 - Pendant le tirage, les dimensions se saisissent au clavier. Un double-clic sur l'étape ouvre ses dimensions, et sous *Type* elle devient un corps de révolution ou un réseau de trous.
 - Depuis l'éditeur d'esquisse, *Terminé* ramène dans la vue, et le clic suivant pose la hauteur. Échap met le contour de côté, Ctrl+Z le rappelle.
@@ -213,6 +216,7 @@ dans `website/version.json`.
 - Avant le téléchargement, *Configurer le chat* et *Configurer ComfyUI* indiquent la mémoire graphique et la place qu'un modèle demande, et si cet ordinateur les a.
 - Sur un Mac, *Configurer le chat* propose un modèle local qui tient dans la mémoire partagée et dit quand une clé pour un modèle hébergé vaut mieux.
 - S'il manque le modèle local choisi ou si le fournisseur refuse la clé, Solidon le dit en une phrase et *Configurer le chat* mène directement à la solution.
+- Si vous n'avez pas choisi de modèle local et que celui par défaut manque, un autre modèle recommandé déjà installé répond. Le chat dit lequel, et *Configurer le chat* l'affiche.
 - Solidon ignore une clé non valide pendant un jour, jusqu'à ce que vous en saisissiez une autre ou choisissiez *Réessayer*. Entre-temps, un modèle local répond s'il y en a un.
 - Sur un modèle nouvellement généré, *Modifier la taille* ne recalcule que la nouvelle taille et ne refait plus la réparation. C'est plus rapide, et Ctrl+Z annule aussitôt la modification.
 

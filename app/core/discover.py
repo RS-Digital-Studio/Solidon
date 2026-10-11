@@ -59,6 +59,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import urllib.request
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
@@ -69,6 +70,7 @@ from uuid import uuid4
 
 from app.branding import APP_NAME
 from app.core import errors
+from app.core import paths as _paths
 from app.core.http import RejectRedirects
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_cache_dir, user_config_dir
@@ -169,22 +171,42 @@ def _choices_path() -> Path:
     return user_config_dir() / CHOICES_FILE
 
 
+#: Hält Lesen, Ändern und Schreiben der gemerkten Wahl zusammen. Gemerkt wird
+#: auch aus dem Agentenfaden (das Ersatzmodell des Chats), gelesen zugleich im
+#: Hauptfaden — ohne Sperre läse einer die halb geschriebene Datei als leer,
+#: oder ein Schreiber verlöre die Änderung des anderen.
+_CHOICES_LOCK: Final = threading.RLock()
+
+
 def _load() -> dict[str, str]:
     path = _choices_path()
-    if not path.is_file():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as problem:
-        _log.warning("could not read %s, ignoring it: %s", CHOICES_FILE, problem)
-        return {}
+    with _CHOICES_LOCK:
+        if not path.is_file():
+            return {}
+        try:
+            # Geteilt gelesen: Ein Leser hält den Austausch nicht auf.
+            data = json.loads(_paths.read_text_shared(path))
+        except (OSError, ValueError) as problem:
+            _log.warning("could not read %s, ignoring it: %s", CHOICES_FILE, problem)
+            return {}
     return {str(key): str(value) for key, value in data.items()} if isinstance(data, dict) else {}
 
 
 def _store(entries: dict[str, str]) -> None:
+    """Über eine Datei daneben und :func:`~app.core.paths.replace_file` — ein
+    Leser sieht die alte Fassung oder die neue, nie eine gekürzte, und ein
+    offener Griff eines anderen Prozesses hält den Austausch unter Windows
+    nicht auf."""
     path = _choices_path()
     ensure_dir(path.parent)
-    path.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+    scratch = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
+    try:
+        scratch.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+        # Über das Modul: Eine Importzeile, die ``user_cache_dir`` allein nennt,
+        # hielte der Cache-Wächter für eine Nutzung der Wurzel (``test_cache``).
+        _paths.replace_file(scratch, path)
+    finally:
+        scratch.unlink(missing_ok=True)
 
 
 def remembered(tool_id: str) -> str:
@@ -194,12 +216,13 @@ def remembered(tool_id: str) -> str:
 
 def remember(tool_id: str, value: str) -> None:
     """Einen Pfad oder eine Adresse merken. Ein leerer Wert vergisst sie wieder."""
-    entries = _load()
-    if value:
-        entries[tool_id] = value
-    else:
-        entries.pop(tool_id, None)
-    _store(entries)
+    with _CHOICES_LOCK:
+        entries = _load()
+        if value:
+            entries[tool_id] = value
+        else:
+            entries.pop(tool_id, None)
+        _store(entries)
     forget_cache()
     _log.info("external tool %s set to %r", tool_id, value)
 
@@ -271,17 +294,18 @@ def remembered_address(tool_id: str) -> str:
 
 def _remember_typed(tool_id: str, kind: str, value: str) -> None:
     """Eine Seite eines Dienstes ändern, ohne die andere zu verlieren."""
-    entries = _load()
-    key = _typed_key(tool_id, kind)
-    if value:
-        entries[key] = value
-    else:
-        entries.pop(key, None)
-        legacy = entries.get(tool_id, "")
-        is_address = "://" in legacy
-        if (kind == "address") == is_address:
-            entries.pop(tool_id, None)
-    _store(entries)
+    with _CHOICES_LOCK:
+        entries = _load()
+        key = _typed_key(tool_id, kind)
+        if value:
+            entries[key] = value
+        else:
+            entries.pop(key, None)
+            legacy = entries.get(tool_id, "")
+            is_address = "://" in legacy
+            if (kind == "address") == is_address:
+                entries.pop(tool_id, None)
+        _store(entries)
     forget_cache()
     _log.info("external tool %s %s set to %r", tool_id, kind, value)
 
@@ -293,32 +317,34 @@ def remember_path(tool_id: str, value: str) -> None:
 
 def remember_address(tool_id: str, value: str) -> None:
     """Eine Netzadresse speichern und als aktiven Dienstweg auswählen."""
-    entries = _load()
-    address_key = _typed_key(tool_id, "address")
-    mode_key = _typed_key(tool_id, "address_mode")
-    if value:
-        entries[address_key] = value
-        entries[mode_key] = "remote"
-    else:
-        entries.pop(address_key, None)
-        entries.pop(mode_key, None)
-        legacy = entries.get(tool_id, "")
-        if "://" in legacy:
-            entries.pop(tool_id, None)
-    _store(entries)
+    with _CHOICES_LOCK:
+        entries = _load()
+        address_key = _typed_key(tool_id, "address")
+        mode_key = _typed_key(tool_id, "address_mode")
+        if value:
+            entries[address_key] = value
+            entries[mode_key] = "remote"
+        else:
+            entries.pop(address_key, None)
+            entries.pop(mode_key, None)
+            legacy = entries.get(tool_id, "")
+            if "://" in legacy:
+                entries.pop(tool_id, None)
+        _store(entries)
     forget_cache()
     _log.info("external tool %s address set to %r", tool_id, value)
 
 
 def use_local_address(tool_id: str) -> None:
     """Den lokalen Vorgabedienst aktivieren, ohne die Netzadresse zu vergessen."""
-    entries = _load()
-    mode_key = _typed_key(tool_id, "address_mode")
-    if _remote_address(entries, tool_id):
-        entries[mode_key] = "local"
-    else:
-        entries.pop(mode_key, None)
-    _store(entries)
+    with _CHOICES_LOCK:
+        entries = _load()
+        mode_key = _typed_key(tool_id, "address_mode")
+        if _remote_address(entries, tool_id):
+            entries[mode_key] = "local"
+        else:
+            entries.pop(mode_key, None)
+        _store(entries)
     _log.info("external tool %s switched to its local address", tool_id)
 
 

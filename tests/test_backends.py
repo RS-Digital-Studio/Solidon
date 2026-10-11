@@ -2461,6 +2461,205 @@ def test_a_model_ollama_does_not_have_is_named_with_the_way_to_get_it(cancelable
     assert "not found" in logged and "{" not in logged, logged
 
 
+class _Ollama:
+    """Ein Ollama mit einer festen Modellliste: ``/api/chat`` antwortet mit dem
+    404, den Ollama für ein nicht geholtes Modell schickt, ``/api/tags`` nennt
+    die geholten."""
+
+    def __init__(self, *installed: str, answering: tuple[str, ...] | None = None) -> None:
+        self.installed = installed
+        #: Wer wirklich antwortet — sonst jedes installierte.
+        self.answering = installed if answering is None else answering
+        self.asked: list[str] = []
+        self.listed = 0
+
+    def __call__(
+        self, url: str, headers: dict[str, str], payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        model = str(payload["model"])
+        self.asked.append(model)
+        if model not in self.answering:
+            raise llm.refusal(404, b'{"error":"model \'' + model.encode() + b"' not found\"}")
+        return {
+            "model": model,
+            "done_reason": "stop",
+            "prompt_eval_count": 90,
+            "eval_count": 12,
+            "message": {"role": "assistant", "content": f"Hier antwortet {model}."},
+        }
+
+    def tags(self, url: str) -> dict[str, Any]:
+        assert url.endswith("/api/tags"), url
+        self.listed += 1
+        return {"models": [{"name": name} for name in self.installed]}
+
+
+def _chat_backend(ollama: _Ollama) -> OllamaBackend:
+    """Das Backend des Chats — nur dort darf ein Ersatz einspringen."""
+    return OllamaBackend(
+        url="http://127.0.0.1:11434", transport=ollama, fetch=ollama.tags, stand_in=True
+    )
+
+
+def _ask(ollama: _Ollama) -> Reply:
+    return _chat_backend(ollama).complete([Message(role="user", content="Hallo")])
+
+
+def test_a_missing_default_gives_way_to_an_installed_recommended_model() -> None:
+    """S-20261010-e5014c: Ollama lief, ``qwen3:14b`` (die Vorgabe) fehlte, und
+    jeder Chat endete mit dem Fehler. Hat der Kunde nichts gewählt und liegt
+    ein empfohlenes Modell da, antwortet dieses — mit einem Satz dazu, und
+    gemerkt, sobald der Satz zugestellt ist, damit „Chat einrichten …“ dasselbe
+    Modell nennt."""
+    llm.remember_ollama_model("")
+    ollama = _Ollama("qwen2.5:14b", "qwen3.5:9b", "gpt-oss:20b")
+    try:
+        backend = _chat_backend(ollama)
+        reply = backend.complete([Message(role="user", content="Hallo")])
+
+        assert reply.text == "Hier antwortet qwen3.5:9b.", "das erste empfohlene, das da ist"
+        assert ollama.asked == ["qwen3:14b", "qwen3.5:9b"]
+        assert len(reply.notices) == 1, reply.notices
+        notice = reply.notices[0]
+        assert "qwen3:14b" in notice and "qwen3.5:9b" in notice, notice
+        assert "Chat einrichten" in notice, "der Weg zu einer anderen Wahl"
+        assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL, "noch nicht gelesen"
+
+        backend.notices_said()
+        assert llm.configured_ollama_model() == "qwen3.5:9b", "Dialog und Chat nennen dasselbe"
+
+        ollama.asked.clear()
+        again = _ask(ollama)
+        assert ollama.asked == ["qwen3.5:9b"] and not again.notices, "einmal, nicht je Zug"
+    finally:
+        llm.remember_ollama_model("")
+
+
+def test_a_remembered_model_is_never_replaced() -> None:
+    """Wer selbst gewählt hat, bekommt kein anderes Modell untergeschoben."""
+    llm.remember_ollama_model("qwen3:14b")
+    ollama = _Ollama("qwen3.5:9b")
+    try:
+        with pytest.raises(llm.ModelNotInstalled) as raised:
+            _ask(ollama)
+        assert raised.value.values["model"] == "qwen3:14b"
+        assert ollama.asked == ["qwen3:14b"] and ollama.listed == 0
+        assert llm.configured_ollama_model() == "qwen3:14b"
+    finally:
+        llm.remember_ollama_model("")
+
+
+def test_only_a_recommended_model_stands_in() -> None:
+    """Ein installiertes, aber nicht empfohlenes Modell wird nicht genommen."""
+    llm.remember_ollama_model("")
+    ollama = _Ollama("qwen2.5:14b", "llama3.1:8b")
+    with pytest.raises(llm.ModelNotInstalled) as raised:
+        _ask(ollama)
+
+    assert raised.value.values["model"] == "qwen3:14b"
+    assert ollama.asked == ["qwen3:14b"]
+    assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL, "nichts gemerkt"
+
+
+def test_a_stand_in_that_is_missing_too_is_tried_once() -> None:
+    """Nennt Ollama ein Modell, das es dann doch nicht hat: ein Versuch, dann
+    der Fehler zum gewählten Modell — keine Schleife, nichts gemerkt."""
+    llm.remember_ollama_model("")
+    ollama = _Ollama("qwen3.5:9b", "gpt-oss:20b", answering=())
+    with pytest.raises(llm.ModelNotInstalled) as raised:
+        _ask(ollama)
+
+    assert raised.value.values["model"] == "qwen3:14b"
+    assert ollama.asked == ["qwen3:14b", "qwen3.5:9b"] and ollama.listed == 1
+    assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
+
+
+def test_a_failing_remember_keeps_the_notice_and_the_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nachprüfung G1: Unter Windows kann das Ersetzen der gemerkten Wahl
+    scheitern, solange ein anderer Griff die Datei hält. Merken ist
+    Buchhaltung — ein fertiger Zug geht daran nicht verloren, der Satz bleibt
+    anstehen."""
+    llm.remember_ollama_model("")
+    backend = _chat_backend(_Ollama("qwen3.5:9b"))
+    backend.complete([Message(role="user", content="Hallo")])
+
+    def refuse(_model: str) -> None:
+        raise PermissionError(13, "Zugriff verweigert")
+
+    monkeypatch.setattr(llm, "remember_ollama_model", refuse)
+    backend.notices_said()
+
+    assert len(backend.pending_notices) == 1, "der Satz steht weiter an"
+    assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
+
+
+def test_a_named_model_is_checked_as_named() -> None:
+    """Review spät M2: „Werkzeuge prüfen“ meldete für das fehlende qwen3:14b
+    „brauchbar“, weil qwen3.5:9b antwortete, und merkte es still. Wer ein
+    Modell nennt, prüft genau dieses (§27)."""
+    llm.remember_ollama_model("")
+    ollama = _Ollama("qwen3.5:9b")
+
+    usable = llm.ollama_tool_check("qwen3:14b", url="http://127.0.0.1:11434", transport=ollama)
+
+    assert usable is None, "keine Antwort vom genannten Modell"
+    assert ollama.asked == ["qwen3:14b"] and ollama.listed == 0
+    assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
+    with pytest.raises(llm.ModelNotInstalled):
+        OllamaBackend(url="http://127.0.0.1:11434", transport=ollama, fetch=ollama.tags).complete(
+            [Message(role="user", content="Hallo")]
+        )
+
+
+def test_only_the_chat_lets_a_stand_in_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Chat bekommt sein Backend aus ``first_available`` — nur dort springt
+    ein Ersatz ein."""
+    monkeypatch.setattr(OllamaBackend, "available", property(lambda self: True))
+    # Die Suite schaltet die echte Liste ab (``conftest``); hier nur das lokale.
+    monkeypatch.setattr(llm, "backends", lambda: (OllamaBackend(),))
+
+    chosen = first_available()
+
+    assert isinstance(chosen, OllamaBackend) and chosen.stand_in
+    assert not OllamaBackend().stand_in
+
+
+def test_a_stand_in_on_a_mac_fits_the_graphics(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review spät G1: Auf einem Mac mit 16 GB ist die Vorgabe qwen3.5:9b. Fehlt
+    sie, sprang qwen3:14b ein, das nicht in die Grafik passt (RM-564). Passt
+    keines, ist es das kleinste installierte, nie das größte."""
+    monkeypatch.setattr(machine, "this_machine", lambda: _mac(16.0))
+    llm.remember_ollama_model("")
+    assert llm.default_ollama_model() == "qwen3.5:9b"
+
+    reply = _ask(_Ollama("qwen3:14b", "gpt-oss:20b"))
+
+    assert reply.model == "gpt-oss:20b", "das kleinste, weil keines ganz hineinpasst"
+
+
+def test_warm_and_release_use_the_name_that_answered() -> None:
+    """Review spät G4: Nach dem Wechsel hält und entlädt das Backend das
+    Ersatzmodell — der Name vor dem Wechsel brachte das Entladen eines Modells
+    zurück, das Ollama gar nicht hat (S-20261010-e5014c)."""
+    from app.core.backends import resources
+
+    llm.remember_ollama_model("")
+    ollama = _Ollama("qwen3.5:9b")
+    backend = _chat_backend(ollama)
+    try:
+        with backend.resource_session(None):
+            backend.complete([Message(role="user", content="Hallo")])
+        assert resources.warm_holders() == (backend.holder,)
+        assert backend.holder.endswith(":qwen3.5:9b"), backend.holder
+        ollama.asked.clear()
+        resources.release_warm()
+        assert ollama.asked == ["qwen3.5:9b"], "entladen wird, was geladen ist"
+    finally:
+        resources.release_warm()
+
+
 def test_a_refused_key_says_to_check_the_key_not_json(monkeypatch: pytest.MonkeyPatch) -> None:
     """Dasselbe Protokoll, der andere Zugang: Unter dem Titel stand Anthropics
     Fehlerobjekt samt ``request_id``. Der Satz sagt jetzt, was geschehen ist und

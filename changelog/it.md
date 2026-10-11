@@ -29,6 +29,7 @@ scrive in `website/version.json`.
 - Solidon ricorda la disposizione. Le finestre restano raggiungibili anche quando uno schermo viene scollegato.
 - Canc funziona anche quando la linguetta *Selezione* ha il focus, e rimuove più corpi contrassegnati in un solo passaggio. Se il tasto non fa nulla, la barra di stato ne dice il motivo.
 - Il clic destro sui corpi offre *Rimuovi oggetto* e, con più corpi, *Unisci*. *Svuota* c'è anche su una faccia selezionata, che diventa l'apertura.
+- Trascinare la maniglia di una faccia prepara la distanza in *Scosta la faccia*, nella scheda *Selezione*, e porta la scheda in primo piano, anche durante un tour. Solo *Applica* crea il passaggio.
 - Il pulsante *Filamenti* sta ora nell'intestazione. Elenca i filamenti del progetto e porta al magazzino filamenti.
 - Un altro filamento cambia solo il colore, anche su blocchi e corpi STEP. La forma non viene ricalcolata. I corpi selezionati mostrano il colore del filamento sotto l'evidenziazione.
 - Nella linguetta *Selezione*, il campo del filamento assegna solo con un clic o Invio. Le frecce e la digitazione scorrono soltanto l'elenco, e la rotellina scorre la linguetta.
@@ -173,6 +174,8 @@ scrive in `website/version.json`.
 - Uno schizzo con molte forme separate si risolve rapidamente, anche con centinaia di rettangoli o cerchi quotati.
 - Se *Curvatura continua* non si può rispettare mentre disegni, l'editor di schizzi lo segnala in pochi secondi invece che in minuti.
 - Se due vincoli si contraddicono, l'editor di schizzi li nomina entrambi invece di ridurre una linea o un cerchio a un punto.
+- Una sequenza di linee nello schizzo finisce appena si chiude sul suo inizio. Finora un nuovo tratto restava attaccato al puntatore, e il primo Esc sembrava non fare nulla.
+- Una lunghezza digitata con lo strumento Linea crea esattamente una linea. Finora, lasciando il campo della quota se ne aggiungeva una seconda, di ritorno verso il puntatore.
 - Un corpo si tira su con tre clic: *Disegna* nella barra in alto (Ctrl+Maiusc+E), poi angolo, angolo opposto, altezza. Verso l'esterno si unisce, verso l'interno ritaglia.
 - Mentre si tira su, le misure si possono digitare. Un doppio clic sul passaggio apre le sue misure, e alla voce *Tipo* diventa un solido di rivoluzione o un campo di fori.
 - Dall'editor di schizzi, *Fatto* riporta nella vista e il clic successivo mette l'altezza. Esc mette da parte il contorno, Ctrl+Z lo riporta.
@@ -212,6 +215,7 @@ scrive in `website/version.json`.
 - Prima del download, *Configura la chat* e *Configura ComfyUI* dicono quanta memoria grafica e quanto spazio servono a un modello e se questo computer li ha.
 - Su un Mac, *Configura la chat* propone un modello locale che sta nella memoria condivisa e dice quando conviene una chiave per un modello ospitato.
 - Se manca il modello locale scelto o il fornitore rifiuta la chiave, Solidon lo dice in una frase e *Configura la chat* porta subito alla soluzione.
+- Se non hai scelto un modello locale e manca quello predefinito, risponde un altro modello consigliato già installato. La chat dice quale, e *Configura la chat* lo mostra.
 - Solidon salta una chiave non valida per un giorno, finché non ne inserisci un'altra o scegli *Riprova*. Nel frattempo risponde un modello locale, se ne è configurato uno.
 - Su un modello appena generato, *Cambia dimensione* ricalcola solo la nuova misura e non ripete più la riparazione. È più veloce, e Ctrl+Z annulla subito la modifica.
 
