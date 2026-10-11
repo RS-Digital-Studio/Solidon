@@ -518,6 +518,16 @@ def _as_saved(path: str, value: object) -> object:
     return value
 
 
+def _saved_data(settings: PrintSettings) -> dict[str, Any]:
+    """Die Einstellungen als Daten, das Bügeln so, wie Format 51 es trug (RM-588)."""
+    data = print_settings_to_data(settings)
+    data["shell"]["ironing"] = _as_saved("shell.ironing", data["shell"]["ironing"])
+    data["plate_choices"] = {
+        path: _as_saved(path, value) for path, value in data["plate_choices"].items()
+    }
+    return data
+
+
 def _owned_settings(settings: PrintSettings, slot: MaterialSlot) -> dict[str, object]:
     """Was an den Einstellungen dieser Spule dem Projekt gehört (Review RM-705, N3).
 
@@ -904,11 +914,7 @@ def prepare(
             slot = effective_slots[key]
             mine = settings_for_slot(settings, profile, slot)
             density, diameter = _material_properties(mine, slot)
-            values = print_settings_to_data(mine)
-            values["shell"]["ironing"] = _as_saved("shell.ironing", values["shell"]["ironing"])
-            values["plate_choices"] = {
-                path: _as_saved(path, value) for path, value in values["plate_choices"].items()
-            }
+            values = _saved_data(mine)
             # Die aufgelösten Werte stehen bereits in ``mine`` und ``slot``.
             # Unbenutzte Profil-/Wertelisten sowie eine andere Werkzeugnummer
             # dürfen aus 3MF und anschließendem Slicen keine zwei Drucke machen.
