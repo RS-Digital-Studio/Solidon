@@ -2565,7 +2565,7 @@
   "Die vollständige Merkmalserkennung wurde für dieses große Modell ausgelassen. „Alle Merkmale erkennen“ holt sie nach; einzelne Merkmale erkennen Sie auch an einer Stelle.": "La reconnaissance complète des caractéristiques a été ignorée pour ce grand modèle. « Reconnaître toutes les caractéristiques » la rattrape ; vous pouvez aussi détecter des caractéristiques à un endroit.",
   "Die vollständige bearbeitete Form stimmt überein.": "La forme modifiée complète correspond.",
   "Die vorhandene Filamentmenge ohne das Gewicht der leeren Spule.": "La quantité de filament disponible, sans le poids de la bobine vide.",
-  "Die vorherige Berechnung wurde nicht rechtzeitig beendet. Die neue Berechnung wurde deshalb nicht gestartet.": "Le calcul précédent ne s'est pas terminé à temps. Le nouveau calcul n'a donc pas été lancé.",
+  "Die vorherige Berechnung endete nicht rechtzeitig. Versuchen Sie es gleich noch einmal, und senden Sie einen Fehlerbericht, wenn es so bleibt.": "Le calcul précédent ne s'est pas terminé à temps. Réessayez dans un instant, et envoyez un rapport d'erreur si cela persiste.",
   "Die wechselnde Wandstärke zeichnet sich sonst außen ab.": "Sinon, l'épaisseur variable de la paroi se voit à l'extérieur.",
   "Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt.": "Les réglages d'impression effectifs de cette sortie sont inconnus.",
   "Die zu slicende Datei ist nicht da.": "Le fichier à trancher est introuvable.",

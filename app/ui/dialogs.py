@@ -3319,9 +3319,9 @@ def offered_actions(
 
     Angeboten wird, wofür es einen Handler gibt. Bleibt nichts übrig — weder
     ein Knopf noch ein Rat zum Lesen —, tritt der Fehlerbericht nur für einen
-    ``InternalError`` ein. Ein anderer Fehler ohne Weg ist ein Fehler im
-    Kern, nicht im Fenster: ``tests/test_action_effects.py`` verlangt für jede
-    Handlung des Kerns einen Handler oder einen benannten Grund (Regel 17).
+    ``InternalError`` ein. Bei jedem anderen steht der Weg dann im Detail, und
+    der Ausgang heißt *Schließen*; ``tests/test_action_effects.py`` verlangt
+    für jede Handlung des Kerns einen Handler oder einen benannten Grund.
 
     **Und wofür der Fehler mitbringt, was der Handler braucht.** *Eingabe
     korrigieren* öffnet den Schritt, dessen Werte nicht gingen — ohne
@@ -3345,9 +3345,8 @@ def offered_actions(
     # **Nur ein Programmfehler fällt auf den Fehlerbericht zurück** (RM-771).
     # Jeder andere Fehler ohne einlösbaren Vorschlag bekam ihn als Hauptknopf,
     # und ein Kunde schickte sein eigenes *Abbrechen* als Absturzbericht
-    # (S-20261010-e5014c). Dann bleibt das neutrale Schließen
-    # (:func:`show_error`); dass kein Fehler ohne Weg gebaut wird, hält
-    # ``tests/test_action_effects.py``.
+    # (S-20261010-e5014c). Dann steht der Weg im Detail, und der Ausgang heißt
+    # *Schließen* (:func:`show_error`).
     return []
 
 

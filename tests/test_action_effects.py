@@ -90,7 +90,9 @@ WIRED_ELSEWHERE: dict[str, str] = {
     "reload": "filament_inventory.py",
     "restore_backup": "filament_inventory.py",
     "set_aside_file": "filament_inventory.py",
-    # Am konkreten Bausteinfehler mit den gelesenen Bytes (Katalog).
+    # Am konkreten Bausteinfehler mit den gelesenen Bytes (Katalog). ``choose``
+    # bieten auch ``AmbiguityError`` und zwei Geometrieschritte an; dort fragt der
+    # Kern vorher über ``ctx.ask``, und im Dialog bleibt es Rat zum Lesen.
     "choose": "main_window.py",
     "use_suggested_name": "main_window.py",
 }

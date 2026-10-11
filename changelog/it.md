@@ -177,8 +177,8 @@ scrive in `website/version.json`.
 - Le pareti sottili, per esempio di un vaso, arrivano chiuse e con uno spessore.
 - L'assistente risponde nella lingua in cui scrivi.
 - Con un modello locale l'assistente ha tanto spazio quanto con uno ospitato e porta a termine compiti fino a dodici passaggi.
-- Se annulla una proposta dell'assistente, la barra di stato lo conferma invece di segnalare un errore del programma.
-- Se apre un altro progetto durante una proposta, Solidon la scarta e rimette la richiesta nella chat.
+- Se annulli una proposta dell'assistente, la barra di stato lo conferma invece di segnalare un errore del programma.
+- Se apri un altro progetto durante una proposta, Solidon la scarta e rimette la tua richiesta nella chat.
 - I modelli generati arrivano chiusi più spesso. Dove le facce si toccano soltanto, Solidon le separa e leviga le piccole pieghe della superficie invece di segnalare un'autointersezione.
 - Se un tentativo si è già sfaldato durante la generazione, la finestra lo dice prima di accettarlo e offre *Un altro tentativo*.
 - Se un modello generato è solo una pelle sottile attorno a una cavità, lo dice la finestra prima di accettarlo e il rapporto di verifica dopo, con la via a un nuovo tentativo.

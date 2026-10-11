@@ -46,8 +46,9 @@ from app.core.errors import (
     CANCEL,
     CANCEL_SPLIT,
     CHOOSE_ANOTHER_FILE,
-    OPEN_SETTINGS,
+    REPORT_ERROR,
     RETRY,
+    SET_UP_CHAT,
     SHOW_HISTORY,
     STOP_INSERTING,
     AppError,
@@ -856,7 +857,7 @@ def _no_chat_access() -> AppError:
     """Ohne Modell kein Zug — mit dem Weg zum Zugang, nicht nur *Abbrechen* (Regel 17)."""
     return AppError(
         tr("Für den Chat fehlt der Zugang zu einem Sprachmodell."),
-        suggestions=(OPEN_SETTINGS, CANCEL),
+        suggestions=(SET_UP_CHAT, CANCEL),
     )
 
 
@@ -888,6 +889,10 @@ class _AgentWorker(Worker):
 
     def work(self) -> None:
         session = self._session
+        # Eine Rückfrage des Zugs trägt das Projekt, auf dem er rechnet: Nach
+        # einem Wechsel stünde sie sonst samt Kandidaten über dem neuen
+        # (``question_is_current``), wie Auswertung und Vorschau auch.
+        session._pending.project_generation = self.generation
         try:
             preview = session.run_proposal(self.request, self._backend, snapshot=self._snapshot)
         except OperationCancelled:
@@ -900,6 +905,8 @@ class _AgentWorker(Worker):
             self.failedWith.emit(error)
         else:
             self.finishedWith.emit(preview)
+        finally:
+            session._pending.project_generation = None
 
     def release_finished_references(self) -> None:
         """Sitzung und Stand nach dem zugestellten Agentenzug lösen."""
@@ -5548,13 +5555,16 @@ class Session(QObject):
             self.cancel_signal.cancel()
             self.questionInvalidated.emit()
             if not worker.wait(SYNC_EVALUATION_END_WAIT_MS):
+                # Ein Lauf, der auf seinen Abbruch nicht endet, ist ein
+                # Programmzustand: Seit RM-771 fällt nur ein ``InternalError``
+                # von selbst auf den Bericht zurück, hier steht er ausdrücklich.
                 raise UserError(
                     title=_("Die neue Berechnung kann noch nicht starten."),
                     detail=_(
-                        "Die vorherige Berechnung wurde nicht rechtzeitig beendet. "
-                        "Die neue Berechnung wurde deshalb nicht gestartet."
+                        "Die vorherige Berechnung endete nicht rechtzeitig. Versuchen Sie es "
+                        "gleich noch einmal, und senden Sie einen Fehlerbericht, wenn es so bleibt."
                     ),
-                    suggestions=(CANCEL,),
+                    suggestions=(REPORT_ERROR, CANCEL),
                 )
         self.cancel_signal.reset()
         self._evaluation_settings = self._current_effective_settings()

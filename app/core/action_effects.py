@@ -82,6 +82,7 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
     "open_in_browser": NOTHING,
     "install": NOTHING,
     "open_settings": NOTHING,
+    "set_up_chat": NOTHING,
     "check_profile": NOTHING,
     "choose_slicer": NOTHING,
     "export_only": NOTHING,

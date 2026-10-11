@@ -2565,7 +2565,7 @@
   "Die vollständige Merkmalserkennung wurde für dieses große Modell ausgelassen. „Alle Merkmale erkennen“ holt sie nach; einzelne Merkmale erkennen Sie auch an einer Stelle.": "Full feature recognition was skipped for this large model. “Recognise all features” runs it now; you can also detect individual features at a spot.",
   "Die vollständige bearbeitete Form stimmt überein.": "The complete shape being edited matches.",
   "Die vorhandene Filamentmenge ohne das Gewicht der leeren Spule.": "The amount of filament available, excluding the weight of the empty spool.",
-  "Die vorherige Berechnung wurde nicht rechtzeitig beendet. Die neue Berechnung wurde deshalb nicht gestartet.": "The previous calculation did not finish in time. The new calculation was therefore not started.",
+  "Die vorherige Berechnung endete nicht rechtzeitig. Versuchen Sie es gleich noch einmal, und senden Sie einen Fehlerbericht, wenn es so bleibt.": "The previous calculation did not finish in time. Try again in a moment, and send an error report if it stays that way.",
   "Die wechselnde Wandstärke zeichnet sich sonst außen ab.": "Otherwise the changing wall thickness shows on the outside.",
   "Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt.": "The effective print settings for this output are unknown.",
   "Die zu slicende Datei ist nicht da.": "The file to be sliced is missing.",

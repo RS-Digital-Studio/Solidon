@@ -253,6 +253,9 @@ ADOPT_PRINTER = Action("adopt_printer", _("In meine Drucker übernehmen"), prima
 #: mit (``knowledge.parts.check.saved_states``); ein Strg+Z führt zurück.
 KEEP_SAVED_PARTS = Action("keep_saved_parts", _("Gespeicherten Stand verwenden"))
 OPEN_SETTINGS = Action("open_settings", _("Einstellungen öffnen"), primary=True)
+#: Der Zugang zum Sprachmodell liegt nicht in den Einstellungen, sondern hinter
+#: *Chat einrichten …* — derselbe Name wie im Menü.
+SET_UP_CHAT = Action("set_up_chat", _("Chat einrichten …"), primary=True)
 #: Der Weg zu den zusätzlichen Programmen — wo sie liegen, und ein Knopf, der
 #: sie holt. Nicht ``OPEN_SETTINGS``: Ein fehlender Slicer und ein stilles
 #: ComfyUI wurden beide mit „Einstellungen öffnen" beantwortet, und geöffnet

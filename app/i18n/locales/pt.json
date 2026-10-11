@@ -2565,7 +2565,7 @@
   "Die vollständige Merkmalserkennung wurde für dieses große Modell ausgelassen. „Alle Merkmale erkennen“ holt sie nach; einzelne Merkmale erkennen Sie auch an einer Stelle.": "O reconhecimento completo de características foi omitido para este modelo grande. «Reconhecer todas as características» recupera-o; também pode reconhecer características individuais num local concreto.",
   "Die vollständige bearbeitete Form stimmt überein.": "A forma completa a editar corresponde.",
   "Die vorhandene Filamentmenge ohne das Gewicht der leeren Spule.": "A quantidade de filamento disponível, sem o peso da bobina vazia.",
-  "Die vorherige Berechnung wurde nicht rechtzeitig beendet. Die neue Berechnung wurde deshalb nicht gestartet.": "O cálculo anterior não terminou a tempo. Por isso, o novo cálculo não foi iniciado.",
+  "Die vorherige Berechnung endete nicht rechtzeitig. Versuchen Sie es gleich noch einmal, und senden Sie einen Fehlerbericht, wenn es so bleibt.": "O cálculo anterior não terminou a tempo. Tente de novo dentro de momentos e envie um relatório de erro se continuar assim.",
   "Die wechselnde Wandstärke zeichnet sich sonst außen ab.": "Caso contrário, a espessura variável da parede vê-se por fora.",
   "Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt.": "As definições de impressão efetivas desta saída são desconhecidas.",
   "Die zu slicende Datei ist nicht da.": "O ficheiro a fatiar não está lá.",

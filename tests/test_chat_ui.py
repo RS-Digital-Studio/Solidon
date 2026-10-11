@@ -1506,7 +1506,7 @@ def test_a_cancelled_turn_leaves_the_worker_as_no_error() -> None:
         raise OperationCancelled
 
     worker = _AgentWorker(
-        cast(Any, SimpleNamespace(run_proposal=stopped)),
+        cast(Any, SimpleNamespace(run_proposal=stopped, _pending=SimpleNamespace())),
         "eine Bohrung",
         cast(Any, None),
         cast(Any, None),
@@ -1535,22 +1535,97 @@ def test_a_proposal_for_the_previous_project_is_not_shown() -> None:
     from app.ui.session import AGENT_PROJECT_CHANGED
 
     session = Session()
-    worker = SimpleNamespace(generation=session._project_generation, stop_reason="", request="x")
-    session._agent = cast(Any, worker)
-    session.start_new()
-    assert worker.stop_reason == AGENT_PROJECT_CHANGED, "der Projektwechsel hält den Zug an"
-    shown: list[object] = []
-    ended: list[tuple[str, str]] = []
-    session.proposalReady.connect(shown.append)
-    session.agentCancelled.connect(lambda reason, request: ended.append((reason, request)))
+    # Ohne Ereignisschleife käme die Auswertung des neuen Projekts nie an; hier
+    # zählt nur der Wechsel selbst.
+    session.evaluate_async = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    try:
+        worker = SimpleNamespace(
+            generation=session._project_generation, stop_reason="", request="x"
+        )
+        session._agent = cast(Any, worker)
+        session.start_new()
+        assert worker.stop_reason == AGENT_PROJECT_CHANGED, "der Projektwechsel hält den Zug an"
+        shown: list[object] = []
+        ended: list[tuple[str, str]] = []
+        session.proposalReady.connect(shown.append)
+        session.agentCancelled.connect(lambda reason, request: ended.append((reason, request)))
 
-    session._on_agent_proposal(
-        ProposalPreview(proposal=Proposal(request="x")), finished=cast(Any, worker)
+        session._on_agent_proposal(
+            ProposalPreview(proposal=Proposal(request="x")), finished=cast(Any, worker)
+        )
+
+        assert not shown, "der Vorschlag galt dem vorigen Projekt"
+        assert ended == [(AGENT_PROJECT_CHANGED, "x")]
+        assert not session.busy, "kein Lauf bleibt hinter dem Test zurück"
+    finally:
+        session._agent = None
+        session.release()
+
+
+def test_without_model_access_the_error_leads_to_the_chat_setup() -> None:
+    """*Einstellungen öffnen* führte in einen Dialog ohne Modellzugang (Review abbruch, G7)."""
+    from unittest.mock import MagicMock
+
+    from app.ui.session import _no_chat_access
+
+    window = MagicMock()
+    window._write_failure = None
+    handlers = MainWindow.error_handlers(window)
+    error = _no_chat_access()
+
+    assert error.suggestions[0].id == "set_up_chat"
+    handlers["set_up_chat"](error)
+    window.action_llm_key.assert_called_once_with()
+
+
+def test_a_question_of_the_previous_project_is_not_asked() -> None:
+    """Die Rückfrage eines Zugs gilt dem Projekt, auf dem er rechnet (Review abbruch, M1).
+
+    ``_AgentWorker`` stempelte seinen Faden nicht; ``ask_from_worker`` nahm
+    deshalb den Stempel zum Zeitpunkt der Frage, und nach einem Wechsel stand
+    die Frage des alten Zugs samt Kandidaten über dem neuen Projekt. Der
+    Wechsel wird hier im Zug selbst gestellt, das Fenster antwortet sofort —
+    gefragt werden darf gar nicht.
+    """
+    from typing import Any, cast
+
+    from app.ui.session import AskRequest, _AgentWorker
+
+    session = Session()
+    asked: list[str] = []
+
+    def answer(request: AskRequest) -> None:
+        asked.append(request.question)
+        request.answer = request.choices[0]
+        request.answered.set()
+
+    def changing_project(*_args: object, **_kwargs: object) -> object:
+        session._project_generation += 1
+        return session.ask_from_worker("Welche Bohrung meinen Sie?", ["oben", "unten"])
+
+    session.askRequested.connect(answer)
+    session.run_proposal = changing_project  # type: ignore[method-assign]
+    worker = _AgentWorker(
+        session,
+        "eine Bohrung",
+        cast(Any, None),
+        cast(Any, None),
+        generation=session._project_generation,
     )
-
-    assert not shown, "der Vorschlag galt dem vorigen Projekt"
-    assert ended == [(AGENT_PROJECT_CHANGED, "x")]
-    session._agent = None
+    finished: list[object] = []
+    cancelled: list[str] = []
+    worker.finishedWith.connect(finished.append)
+    worker.cancelledWith.connect(cancelled.append)
+    try:
+        worker.work()
+        assert not asked, f"die Frage des alten Zugs erschien: {asked}"
+        assert not finished
+        assert cancelled == ["eine Bohrung"]
+        assert getattr(session._pending, "project_generation", None) is None, (
+            "der Faden trägt danach keinen Stempel mehr"
+        )
+    finally:
+        session.release()
 
 
 def test_only_a_stop_from_elsewhere_hands_the_request_back() -> None:
@@ -1644,6 +1719,7 @@ def test_a_new_project_stops_the_turn_and_hands_the_request_back(
     window.chat._send()
     assert started.wait(30), "der Zug fragt das Modell"
     window.session.start_new()
+    assert window.session.agent_cancel.is_cancelled, "der Wechsel hält den Zug sofort an"
     assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
 
