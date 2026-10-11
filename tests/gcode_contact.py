@@ -9,9 +9,11 @@ Linux und macOS mit.
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import math
 import re
 import statistics
+from collections.abc import Iterator
 
 from app.core.slice.gcode import _arc_center, _arc_sweep
 
@@ -125,6 +127,103 @@ def _inside(key: Cell, footprint: set[Cell], reach: int) -> bool:
     )
 
 
+@dataclasses.dataclass(frozen=True)
+class _Path:
+    """Eine Bahn mit Vorschub: Art (``model``, ``support``, ``interface``), Ebene,
+    Bahnhöhe, wie der Slicer sie schreibt, und Punkte entlang der Bahn."""
+
+    kind: str
+    z: float
+    height: float | None
+    points: list[tuple[float, float]]
+
+
+def _paths(text: str) -> Iterator[_Path]:
+    """Die Bahnen mit Vorschub eines G-Codes, ohne Schürze, Rand und Turm.
+
+    **Extrusion wird gezählt, wie der Drucker sie fährt**: relativ (``M83``) ist
+    jeder positive ``E``-Wert Material, absolut (``M82``) jeder Anstieg — und
+    ``G92 E…`` setzt den Zähler zurück. Bögen (``G2``/``G3``) zählen wie Geraden
+    und führen die Position nach (:func:`_samples`)."""
+    x = y = z = e = 0.0
+    height: float | None = None
+    kind: str | None = None
+    relative_e = False
+    for line in text.splitlines():
+        typed = _TYPED.match(line)
+        if typed:
+            kind = _kind(typed.group(1))
+            continue
+        tall = _HEIGHT.match(line)
+        if tall:
+            height = float(tall.group(1))
+            continue
+        command = line.split(";", 1)[0].strip()
+        if not command:
+            continue
+        word = command.split(maxsplit=1)[0].upper()
+        if word == "M83":
+            relative_e = True
+            continue
+        if word == "M82":
+            relative_e = False
+            continue
+        values = {key: float(number) for key, number in _NUMBER.findall(command)}
+        if word == "G92":
+            e = values.get("E", e)
+            continue
+        code = _MOVES.get(word)
+        if code is None:
+            continue
+        new_x, new_y = values.get("X", x), values.get("Y", y)
+        z = values.get("Z", z)
+        extruded = "E" in values and (values["E"] > 0.0 if relative_e else values["E"] > e)
+        if "E" in values and not relative_e:
+            e = values["E"]
+        if extruded and kind is not None:
+            yield _Path(kind, z, height, _samples(code, (x, y), (new_x, new_y), values))
+        x, y = new_x, new_y
+
+
+def support_in_box(
+    text: str,
+    centre: tuple[float, float],
+    low: tuple[float, float, float],
+    high: tuple[float, float, float],
+) -> tuple[float, float]:
+    """Stützbahn in einem Quader und im ganzen Druck, in mm (RM-566, Kanalsperre).
+
+    Der Quader steht im Rahmen des Körpers, dessen Aufsicht um ``centre``
+    liegt; die Lage auf dem Bett kommt aus der Mitte aller Modellbahnen. Gezählt
+    werden Stücke zwischen zwei Punkten einer Stützbahn, deren Mitte im Quader
+    liegt, auf der Höhe ihrer Unterkante (Ebene minus Bahnhöhe, ohne Angabe 0,1 mm).
+    Ein Programm, das das Teil beim Anordnen dreht, misst hier nichts Sinnvolles."""
+    paths = list(_paths(text))
+    model = [point for path in paths if path.kind == "model" for point in path.points]
+    if not model:
+        return 0.0, 0.0
+    xs, ys = [point[0] for point in model], [point[1] for point in model]
+    dx = (min(xs) + max(xs)) / 2.0 - centre[0]
+    dy = (min(ys) + max(ys)) / 2.0 - centre[1]
+    inside = total = 0.0
+    for path in paths:
+        if path.kind not in _CARRIED:
+            continue
+        bottom = path.z - (path.height if path.height is not None else 0.1)
+        for (ax, ay), (bx, by) in itertools.pairwise(path.points):
+            length = math.hypot(bx - ax, by - ay)
+            total += length
+            mx, my = (ax + bx) / 2.0 - dx, (ay + by) / 2.0 - dy
+            if (
+                low[0] < mx < high[0]
+                and low[1] < my < high[1]
+                and low[2] <= bottom + 1e-6
+                and path.z <= high[2] + 1e-6
+            ):
+                inside += length
+    return inside, total
+
+
 def support_contact(text: str, inset: float = 0.0) -> SupportContact:
     """Abstand und Trennschichten zwischen Stütze und Modell in einem G-Code (RM-624).
 
@@ -162,53 +261,17 @@ def support_contact(text: str, inset: float = 0.0) -> SupportContact:
     cells: dict[Cell, dict[float, set[str]]] = {}
     #: Je Zelle und Ebene die größte Höhe einer Stützbahn: die tiefste Unterkante.
     carried_height: dict[tuple[Cell, float], float] = {}
-    x = y = z = e = 0.0
-    height: float | None = None
-    kind: str | None = None
-    relative_e = False
     model_levels: set[float] = set()
-    for line in text.splitlines():
-        typed = _TYPED.match(line)
-        if typed:
-            kind = _kind(typed.group(1))
-            continue
-        tall = _HEIGHT.match(line)
-        if tall:
-            height = float(tall.group(1))
-            continue
-        command = line.split(";", 1)[0].strip()
-        if not command:
-            continue
-        word = command.split(maxsplit=1)[0].upper()
-        if word == "M83":
-            relative_e = True
-            continue
-        if word == "M82":
-            relative_e = False
-            continue
-        values = {key: float(number) for key, number in _NUMBER.findall(command)}
-        if word == "G92":
-            e = values.get("E", e)
-            continue
-        code = _MOVES.get(word)
-        if code is None:
-            continue
-        new_x, new_y = values.get("X", x), values.get("Y", y)
-        z = values.get("Z", z)
-        extruded = "E" in values and (values["E"] > 0.0 if relative_e else values["E"] > e)
-        if "E" in values and not relative_e:
-            e = values["E"]
-        if extruded and kind is not None:
-            level = round(z, 3)
-            if kind == "model":
-                model_levels.add(level)
-            for px, py in _samples(code, (x, y), (new_x, new_y), values):
-                key = (int(px // CONTACT_CELL), int(py // CONTACT_CELL))
-                cells.setdefault(key, {}).setdefault(level, set()).add(kind)
-                if kind in _CARRIED and height is not None:
-                    slot = (key, level)
-                    carried_height[slot] = max(carried_height.get(slot, 0.0), height)
-        x, y = new_x, new_y
+    for path in _paths(text):
+        level = round(path.z, 3)
+        if path.kind == "model":
+            model_levels.add(level)
+        for px, py in path.points:
+            key = (int(px // CONTACT_CELL), int(py // CONTACT_CELL))
+            cells.setdefault(key, {}).setdefault(level, set()).add(path.kind)
+            if path.kind in _CARRIED and path.height is not None:
+                slot = (key, level)
+                carried_height[slot] = max(carried_height.get(slot, 0.0), path.height)
     # Die Schichthöhe des Modells aus seinen Ebenen, nicht aus der Bahnhöhe:
     # Brücken schreiben PrusaSlicer und Bambu Studio mit der Bahnhöhe 0,4, auch
     # über der Stütze, und deren Unterkante läge eine Schicht zu tief.
