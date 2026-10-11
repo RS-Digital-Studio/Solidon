@@ -112,7 +112,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-758 — Der Plattencache friert übersetzbare Befundwerte ein](#rm-758) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review 1 zu RM-698: `serialise.finding_to_data` schreibt `values` mit `str(value)`, nach dem Öffnen nennt ein Befund den Körper in der Sprache des Caches |
 | [RM-763 — Die Beule der weichen Mischung nur, wo Flächen unter einem Winkel zusammenlaufen](#rm-763) | Geometrie, Erkennung und Druckvorbereitung | Rest aus Review F zu RM-671: über bündigen Deckeln und Seiten und an gekippten bündigen Flächen wächst das Ergebnis bis ein Viertel des Übergangs hinaus; begrenzt ist nur nach unten |
 | [RM-764 — Der nächste Punkt auf einem Dreieck einmal und plattformgleich](#rm-764) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671: `mesh.on_surface` und `_SurfaceIndex.bound` rechnen über `closest_point` mit `np.dot`, `blend._Surface` plattformgleich; dazu `float32`-Ecken in `lattice.py` |
-| [RM-766 — Das Verschweißen nach dem Kern ist der größte Posten des Angleichens](#rm-766) | Geometrie, Erkennung und Druckvorbereitung | Paket F: `_as_mesh` mit `merge_vertices` kostet an der Kugel aus §31 1,0–1,5 von 3,2–3,4 s |
 | [RM-767 — An CAD-Netzen mit Facettenstreifen und Nadelfächern bleibt das Angleichen splittrig](#rm-767) | Geometrie, Erkennung und Druckvorbereitung | Paket F: Besenhalter 89 %, Würfel W6 83 % Splitter; Vorschlag: je Ebene neu vernetzen |
 | [RM-769 — Das Abstandsfeld prüft nicht, ob das nächste Dreieck unter seinen Bewerbern ist](#rm-769) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671 (Rest von M3): an CAD-Nadelfächern bis 0,19 mm zu weit, ein Vorzeichen falsch |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
@@ -3786,17 +3785,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Ecken aus Marching Cubes in `float32` (blind für ULP-Rauschen wie `blend.py` vor `_in_double`).
   **Abnahme:** eine Rechnung für beide, die Wege in `tests/test_platform_identity.py` (`_WAYS`),
   druckgleich gegen den Stand davor an Korpus und Beispielprojekten.
-
-<a id="rm-766"></a>
-
-- [ ] **RM-766 — Das Verschweißen nach dem Kern ist der größte Posten des Angleichens.**
-  Offener Punkt 1 aus Paket F (RM-671): An der Kugel aus §31 (2,46 Mio. Dreiecke) kostet
-  `mesh_ops._as_mesh` mit `trimesh.merge_vertices` 1,0–1,5 der 3,2–3,4 s von *Dreiecke
-  angleichen* (unter Last); *Fläche unterteilen* und jeder Weg über `_as_mesh` zahlen dasselbe.
-  Der Kern gibt ein per Index dichtes Netz heraus, verschweißt wird für den seltenen Fall
-  geteilter Ecken.
-  **Abnahme:** dieselben Netze (Ecken, Dreiecke, Dichtheit) an Korpus und Beispielprojekten, Zeit
-  im Wechsel mit CPU-Zeit an den §31-Fällen.
 
 <a id="rm-767"></a>
 

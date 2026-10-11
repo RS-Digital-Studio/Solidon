@@ -47581,67 +47581,127 @@ bündigen Flächen wuchs das Ergebnis über die Eingänge hinaus, mit dem Ebenen
 unter das Bett.
 
 **Behoben.** `blend.distance_field` misst zum nächsten Punkt auf dem Dreieck, das Vorzeichen aus
-Pseudonormalen, ohne `einsum`; das Feld reicht nicht unter die unterste Höhe der Eingänge
-(`_above_the_floor`, Entscheidung Koordinator nach Review F — die Begrenzung auf alle Seiten des
-Hüllquaders schnitt runde Übergänge flach ab, an gekreuzten Rohren 269 mm² auf x = ±10), Werte
-nahe null gelten als knapp außen (`CLEAR_OF_ZERO`), die Ecken stehen in doppelter Genauigkeit
-(`_in_double`, `skimage` gibt `float32`), und Nadeln unter 0,2 Raster werden zusammengelegt
-(`NEEDLE`). Das Feld ist exakt, solange das nächste Dreieck unter den Bewerbern der acht nächsten
-Stützpunkte ist; an CAD-Netzen mit Nadelfächern fehlt es manchmal (Besenhalter: bis 0,19 mm,
-eines von 351 120 Vorzeichen falsch, das Ebenenfeld lag dort bis 1,81 mm daneben). `mesh_ops.uniform` vereinfacht ohne Abweichung nicht
-mehr, tauscht zu lange Kanten in der Ebene (`mesh_edits.flip_long`), teilt den Rest
-(`split_long`) und räumt um spitze Dreiecke in der Ebene auf: nach Delaunay tauschen, die
-kürzeste Seite einer Nadel zusammenlegen, wo das die spitzen Dreiecke weniger macht. Aufgeräumt
-wird nur in Ebenen, die breiter sind als tan 15° / 2 der Kante und nicht feiner als verlangt
-(`mesh_edits.plane_measures`, `EVEN_NARROW`, `EVEN_FINEST`); je Runde wird gewählt, bis kein
-Schritt mehr frei ist, in einer über das Netz gestreuten Folge (`_claimed`, `_scattered`). Neues
-Modul `app/core/geom/mesh_edits.py`; `cache_version` 7 und 2.
+Pseudonormalen, ohne `einsum` — genau aber nur im Band, aus dem Marching Cubes und die weiche
+Mischung lesen (Raster plus Übergang plus Viertelübergang). Weiter draußen trägt jeder
+Rasterpunkt nur sein Vorzeichen, vom Band her über Gruppen benachbarter Punkte
+(`scipy.ndimage.label`); das Netz ist bitgleich zur vollen Rechnung, am §31-Fall rechnen 191 706
+statt 486 798 Zeilen genau. Das Feld reicht nicht unter das Bett, oder nicht unter die unterste
+Höhe der Eingänge, wenn sie schon darunter reichen (`_above_the_floor`, Entscheidungen
+Koordinator nach Review F und Nachprüfung N2 — die Begrenzung auf alle Seiten des Hüllquaders
+schnitt runde Übergänge flach ab, an gekreuzten Rohren 269 mm² auf x = ±10, die auf die unterste
+Eingangshöhe zwei schwebende Kugeln 74,5 mm² eben). Werte nahe null gelten als knapp außen
+(`CLEAR_OF_ZERO`), die Ecken stehen in doppelter Genauigkeit (`_in_double`, `skimage` gibt
+`float32`), und Nadeln unter 0,2 Raster werden zusammengelegt (`NEEDLE`). Das Feld ist exakt,
+solange das nächste Dreieck unter den Bewerbern der acht nächsten Stützpunkte ist; an CAD-Netzen
+mit Nadelfächern fehlt es manchmal (Besenhalter: bis 0,19 mm, eines von 351 120 Vorzeichen falsch,
+das Ebenenfeld lag dort bis 1,81 mm daneben; RM-769). `mesh_ops.uniform` vereinfacht ohne
+Abweichung nicht mehr und teilt nach dem Kern jede Kante, die dieser im Inneren eines Dreiecks
+zu lang gezogen hat, in der Mitte (`mesh_edits.split_long`, die Seiten ab 65 536 Dreiecken auf
+Fäden gemessen); verschweißt wird nur, wo `merge_vertices` etwas ändern würde (RM-766). Neues
+Modul `app/core/geom/mesh_edits.py`; `cache_version` 8 und 3.
 
 **Review F.** Mit der Kantenzusage teilt das Angleichen die Diagonalen der Gitterzellen und trägt
 bei gleicher Kante bis doppelt so viele Dreiecke. Es zählt vorab deshalb wie *Kanten verfeinern*
 (`_uniform_ahead`, am Quader 100 × 80 × 60 auf 1 mm 176 946 statt 90 113 bei 161 644 Ergebnis),
-die Decke gilt dem Netz nach dem Kern und nach dem Teilen (`_below_the_ceiling`). Das
-Angleichen beim Formen verlangt seine Kante als längste, das √2-Fache der mittleren
-(`sculpt.EVEN_LONGEST`), und hält die Dreiecksgrenze über eine Schranke der Zählung mit Luft
-(`_longest_within_budget`, `REFINE_RESERVE`): Quader, Kugel, Zylinder und großer Quader 0,60
-bis 0,97 der Grenze statt 1,87 bis 2,03, jeder Fall mit höchstens so vielen Dreiecken wie vor
-RM-671 (Platte 40 × 40 × 20 mit Pinsel 6: 14 972 statt 15 644). Der Hänger an CAD-Netzen steht
-als Test (Zylinder mit 1 500 Abschnitten, gezählt an `surface_of`: am ersten angeschlossenen
-Stand 1 263 642 aktive Dreiecke und 202 s, jetzt keines und 0,7 s). Zwillinge in
-`mesh_edits.py` zusammengelegt (`_level_pair`, `_in_plane`, `_facing_along`).
+die Decke gilt dem Netz nach dem Kern und nach dem Teilen (`_below_the_ceiling`). Das Formen
+verlangt als längste Kante das √2-Fache seiner mittleren (`sculpt.EVEN_LONGEST`), höchstens so
+fein, wie eine Schranke der Zählung unter `REFINE_MAX_TRIANGLES` zulässt
+(`_longest_within_budget`, mit `ESTIMATE_RESERVE`; im Fensterfaden einmal je Netz, über der
+Grenze gar nicht, Nachprüfung N5). Das ist eine Vorhersage, die an Gitterflächen trifft; an
+Kugeln lag die mittlere Kante damit beim 1,05- bis 1,18-Fachen des Solls, an Zylinderfacetten
+beim 0,82-Fachen mit bis zu 33 % mehr Dreiecken als vor RM-671, an dichten Eingängen nutzte es
+0,29 bis 0,59 der Grenze (Nachprüfung N1). `sculpt.evened_for_brush` eicht deshalb am Ergebnis und
+gleicht höchstens einmal nach: feiner, wenn die mittlere Kante über dem 1,05-Fachen des Solls
+liegt und Platz ist (`EVEN_COARSER`; bestimmt die Grenze, nur bei mindestens einem Viertel mehr
+Dreiecken), gröber, wenn das Netz mehr als ein Viertel dichter ist als am Soll (`EVEN_DENSER`,
+die Schwelle aus §31), gröber auf die gezählte Dichte über der Grenze. Der Kern teilt eine Kante
+in `floor(l / e) + 1` Stücke; feiner wird es erst unter der Stücklänge der mittleren Kante des
+Eingangs.
 
-**Echte Modelle.** Am ersten angeschlossenen Stand hing das Angleichen an CAD-Netzen aus
-`F:\3D Dateien` über zehn Minuten: An einem Besenhalter (Zylinderfacetten 0,01 bis 0,08 mm
-breit) und einem Würfel (Nadelfächer zu den Augen) waren nach dem Teilen 95 % der Dreiecke
-spitz; Delaunay tauschte in 293 Runden eine Million Kanten und ließ 93,8 % spitz, das
-Zusammenlegen nahm je Runde 2 % der gültigen Schritte. Daraus die Ebenenregeln und die Wahl bis
-zur Sättigung.
+**Umbau nach Review F** (Entscheidung Koordinator, dann Robert: F ganz in 0.6.0, ohne neuen
+Bremser). Bis dahin tauschte das Angleichen zu lange Kanten in der Ebene, räumte um spitze
+Dreiecke auf und zählte dafür Ebenenmaße. Am ersten angeschlossenen Stand hing es an CAD-Netzen
+aus `F:\3D Dateien` über zehn Minuten (Delaunay tauschte in 293 Runden eine Million Kanten und
+ließ 93,8 % spitz); mit Ebenenregeln und Wahl bis zur Sättigung kostete es das Drei- bis
+Fünffache der Zeit vor RM-671, an einer viermal unterteilten Lochplatte 262 s. An den
+Abnahmefällen tat das Aufräumen fast nichts (2 bis 22 Tausche, kein Zusammenlegen); es ist
+entfernt, `plate_holes` auf 1,5 mm trägt ohne es 44 statt 1,6 % Splitter (v0.5.3: 58,9 %,
+RM-767). Ein zweiter `refine_to_length`-Durchgang im Kern statt des Teilens kostete am Wedge-Lock
+0,9 statt 0,085 s und hielt die Kante nicht. Eine Prüfung je Zeile, ob das nächste Dreieck unter
+den Bewerbern ist, kostete am §31-Fall 25,4 statt 1,1 s (RM-769, nicht gebaut).
+
+**Messlatte des Koordinators** (Wand und CPU, je Runde ein Prozess je Stand im Wechsel gegen den
+Stand vor RM-671, Kern im Prozess, Median der Verhältnisse aus zehn Runden, unter Fremdlast von
+100 %; Formen mit der Kante der Sitzung und geeicht, Pinsel 1 mm):
+
+| Fall | Maß | Wand | CPU |
+|---|---|---|---|
+| Wedge-Lock, Formen | absolut | 1,15 | 0,90 |
+| Seitenablage, Formen | absolut | 0,68 | 0,67 |
+| Seitenablage, Kante 1 mm (1,93-mal so viele Dreiecke) | je Dreieck | 0,98 | 1,14 |
+| Quader 100 × 80 × 60, 0,5 mm (2,08-mal) | je Dreieck | 0,96 | 0,74 |
+| Lochplatte viermal geteilt, halbe Kante (7,1-mal, 2,33 s) | je Dreieck | 0,55 | 1,06 |
+| §31-Kugel, halbe Kante (2,41 s) | absolut | 0,92 | 0,94 |
+| §31-Rohre, *Weich verschmelzen* | absolut | 1,07 | 1,23 |
 
 **Messung** (fein, Splitter = Winkel unter 10°, vorher → nachher): Kugel auf Zylinder 11,81 →
-1,34 % nach dem Verschmelzen, 30,59 → 0,98 % nach dem Angleichen auf 1,2 mm, längste Kante
+1,34 % nach dem Verschmelzen, 30,59 → 0,57 % nach dem Angleichen auf 1,2 mm, längste Kante
 2,389 → 1,200 mm; *Figur formen* 6,27 → 0,41 % und 17,78 → 0,32 %, 3,102 → 1,499 mm (verlangt
-1,5); zwei kreuzende Zylinder 10,85 → 0,71 % und 28,26 → 0,58 %, 2,664 → 1,200 mm, rund bis
+1,5); zwei kreuzende Zylinder 10,85 → 0,71 % und 28,26 → 0,55 %, 2,664 → 1,200 mm, rund bis
 x = ±10,978 wie bis v0.5.3; zwei Quader auf dem Bett z −1,69 bis 11,44 → 0 bis 10,75 mm,
-16 575,6 → 15 671,9 mm³ (Vereinigung 14 400, die Beule über Deckel und Seiten bleibt, RM-763).
-Angleichen ohne Abweichung lässt Volumen und Fläche gleich, auch an den Splitternetzen aus W4-3
-(11,81 → 7,79 % und 7,18 → 4,30 %). `plate_holes` auf 1,5 mm: 58,9 → 1,6 % Splitter, längste Kante
-2,784 → 1,500 mm. Die drei CAD-Netze (Kante 1,0, 0,5 und 1,0 mm): längste Kante 2,19 → 1,00,
-1,05 → 0,50 und 6,16 → 1,00 mm, Volumen und Fläche gleich, Splitter 93,7 → 89,4, 84,9 → 83,4 und
-6,0 → 0,9 %; Zeit 3,2 → 6,3 s, 2,1 → 3,0 s und 1,0 → 4,7 s, im Wechsel unter Fremdlast gemessen —
-die Seitenablage hat für die gehaltene Kante 1,8-mal so viele Dreiecke. Druckgleich: Alle
-Beispielprojekte außer *Figur formen*, das beide Schritte enthält, sind in Volumen, Fläche, Hülle,
-Dreiecken, Merkmalen und Befunden bitgleich.
+16 575,6 → 15 671,9 mm³ (Vereinigung 14 400, die Beule über Deckel und Seiten bleibt, RM-763);
+zwei schwebende Kugeln bei z = 20 unter dem Hals rund. Angleichen ohne Abweichung lässt Volumen
+und Fläche gleich, auch an den Splitternetzen aus W4-3 (11,81 → 7,79 % und 7,18 → 4,30 %).
+`plate_holes` auf 1,5 mm: 58,9 → 44,4 % Splitter, längste Kante 2,784 → 1,500 mm. Die drei
+CAD-Netze (Kante 1,0, 0,5 und 1,0 mm): längste Kante 2,19 → 1,00, 1,05 → 0,50 und 6,16 → 1,00 mm,
+Volumen und Fläche gleich, Splitter 93,7 → 89,6, 84,9 → 83,0 und 6,0 → 4,3 %, Dreiecke 971 234 →
+1 038 046, 490 738 → 491 558 und 296 524 → 573 394. Formen an 29 Körpern und Pinseln
+(Nachprüfung N1): unter der Grenze höchstens 1,18-mal so viele Dreiecke wie vor RM-671 und die
+mittlere Kante beim 0,89- bis 1,05-Fachen des Solls (0,79 an einer Kugel, an der das nächste
+ganze Stück je Kante zu grob wäre); wo die Grenze greift, 0,55 bis 0,98 von ihr (vor RM-671 1,06
+bis 2,19, vorhergesagt 0,29 bis 0,82). Druckgleich (§11.2) gegen welle4 ohne F (`a72079433`):
+11 von 12 Beispielprojekten bitgleich, *Figur formen* mit beiden Schritten gewollt anders
+(879,4845 µm); gegen v0.5.3 bringt F nur *Figur formen* dazu.
 
 **Nachweis:** `test_blend.py` (exakter Abstand gegen `mesh.on_surface`, die drei Abnahmefälle,
-zwei Quader auf dem Bett, runde Übergänge an Rohren und gestapelten Kugeln ohne ebene Flecken),
+zwei Quader auf dem Bett, runde Übergänge an Rohren, gestapelten und schwebenden Kugeln ohne
+ebene Flecken, das Band bitgleich zum vollen Feld und an weniger als der Hälfte der Punkte genau),
 `test_subdivision.py` (die Splitternetze `meshes/blend_splinters_*.npz`, Zählung vorab, Decke am
-Ergebnis, CAD-Zylinder, Ebenen wie beim Tausch), `test_sculpt.py` (Dreiecksgrenze am Netz, nicht
-dichter als vor RM-671), `test_platform_identity.py` (`blend_field`, `blend_union`,
-`remesh_uniform`; dazu ein, vier und rückwärts abgeschlossene Fäden bitgleich), §31-Fall
-`remesh_uniform_flat`; die neuen Fälle am Stand davor rot, jetzt grün. Die Leistungsmarken
-`blend_union` und `remesh_uniform` sind verworfen: Das genaue Feld und die Kantenzusage kosten
-an den §31-Fällen im Wechsel 1,2- bis 1,65-mal so viel Rechenzeit. Changelog: ja, 0.6.0 (die Ursache `2006fc7d1` steckt in v0.4.4
-bis v0.5.3).
+Ergebnis, die Arbeit des Angleichens gezählt, die Prüfung vor dem Verschweißen gegen
+`merge_vertices`), `test_sculpt.py` (Dreiecksgrenze am Netz, geeicht an Kugel, Zylinder und
+dichter Figur, die Schranke einmal je Netz), `test_platform_identity.py` (`blend_field`,
+`blend_union`, `remesh_uniform`; ein, vier und rückwärts abgeschlossene Fäden bitgleich),
+§31-Fall `remesh_uniform_flat`; die neuen Fälle am Stand davor rot, jetzt grün. Die
+Leistungsmarken `blend_union` und `remesh_uniform` sind verworfen: Sie maßen vor RM-671 Wege,
+die die Kante nicht hielten, bei fester Kante mit halb so vielen Dreiecken; an ihre Stelle tritt
+die Messlatte oben. Changelog: ja, 0.6.0 (die Ursache `2006fc7d1` steckt in v0.4.4 bis v0.5.3).
+
+## RM-766: Das Angleichen verschweißt nur, wo es etwas zu verschweißen gibt (11.10.2026)
+
+<a id="rm-766-das-angleichen-verschweißt-nur-wo-es-etwas-zu-verschweißen-gibt-11102026"></a>
+<a id="rm-766"></a>
+
+**Befund** (Paket F, offener Punkt 1 zu RM-671): An der Kugel aus §31 (2,46 Mio. Dreiecke)
+kostete `mesh_ops._as_mesh` mit `trimesh.merge_vertices` 1,0 bis 1,5 der 3,2 bis 3,4 s von
+*Dreiecke angleichen*, am Quader 100 × 80 × 60 auf 0,5 mm 0,16 s von 0,51 s; *Fläche
+unterteilen* und jeder Weg über `_as_mesh` zahlten dasselbe. Der Kern gibt ein per Index
+dichtes Netz heraus.
+
+**Behoben.** `_needs_welding` fragt vorher, ob `merge_vertices` etwas ändern würde: jede Ecke
+benutzt, dann je Zeile ein Streuwert der wie in `trimesh` gerundeten Zahlen, sortiert; gleicher
+Streuwert sagt vorsichtshalber ja. Übernommen wird das Verschweißte wie bisher nur mit weniger
+Ecken, das Netz bleibt also bitgleich. Die erste Fassung im Umbau von RM-671 mischte die Zahlen
+mit je einer Konstante und kollidierte an den Gittern des Kerns bei 17 % (Quader) bis 39 %
+(Kugel) der Ecken — sie sagte immer ja und sparte nichts; seither mischt SplitMix64 jede Zahl ganz
+durch (`_mixed`), an denselben Netzen ohne Kollision. Am Quader kostet `_as_mesh` 0,03 statt
+0,22 s.
+
+**Nachweis:** `test_subdivision.py::test_the_check_before_welding_says_what_merge_vertices_would_do`
+(gegen `merge_vertices` selbst, dazu Kugel und ein Gitter aus dem Kern, an denen der erste
+Streuwert ja sagte), Druckgleich der Beispielprojekte gegen welle4 `a72079433` (11 von 12
+bitgleich, *Figur formen* aus RM-671 gewollt anders), §31-Kugel im Wechsel mit dem Stand vor
+RM-671 bei Wand 0,92 und CPU 0,94 des Stands davor (Median der Paare aus zehn Runden, 2,41 s).
+Changelog: nein (mit RM-671 in 0.6.0, ungelandet).
 
 ## RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)
 
