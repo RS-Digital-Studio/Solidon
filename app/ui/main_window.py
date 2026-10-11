@@ -403,7 +403,14 @@ from app.ui.render.api import PointerEvent
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
-from app.ui.session import SHORT_CHAIN_PREVIEW, AskRequest, Session, TriangleCounts
+from app.ui.session import (
+    AGENT_STOPPED,
+    SHORT_CHAIN_PREVIEW,
+    AskRequest,
+    Session,
+    TriangleCounts,
+    agent_stop_sentence,
+)
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
 from app.ui.shortcut_schemes import (
@@ -4391,6 +4398,7 @@ class MainWindow(QMainWindow):
         # mit ihm (oder seinem Scheitern) weicht der Schleier.
         self.viewport.sceneApplied.connect(self._veil_after_the_picture)
         self.viewport.sceneFailed.connect(self._veil_after_the_picture)
+        self.viewport.preparationEnded.connect(self._veil_after_the_picture)
 
         self.start_screen = StartScreen(self)
         self.start_screen.newRequested.connect(self.start_empty)
@@ -7333,6 +7341,7 @@ class MainWindow(QMainWindow):
         self.session.backendChanged.connect(self._refresh_chat_availability)
         self.session.proposalReady.connect(self._on_proposal)
         self.session.agentBusyChanged.connect(self._on_agent_busy)
+        self.session.agentCancelled.connect(self._on_agent_cancelled)
         self.session.agentProgress.connect(self._on_agent_progress)
         self.session.splitBusyChanged.connect(self._on_split_busy)
         self.session.splitProgressChanged.connect(self._on_split_progress)
@@ -18354,6 +18363,17 @@ class MainWindow(QMainWindow):
             return
         self._set_progress_state("agent", active=False)
         self._update_waiting_state()
+
+    def _on_agent_cancelled(self, reason: str, request: str) -> None:
+        """Ein Zug ohne Vorschlag ist kein Fehler (§2.7, Regel 17).
+
+        Wer selbst angehalten hat, liest eine Quittung. Kam der Abbruch von
+        woanders (``session.agent_stop_sentence``), steht die Anfrage wieder
+        im Chat — ein eigener Text im Feld bleibt.
+        """
+        if reason != AGENT_STOPPED and request and not self.chat.input.toPlainText().strip():
+            self.chat.restore_request(request)
+        self.announce(agent_stop_sentence(reason))
 
     def _on_agent_progress(self, step: int, label: str) -> None:
         """Was der Zug gerade tut, statt nur dass er läuft (§2.8).

@@ -62,6 +62,8 @@ scrive in `website/version.json`.
 - Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
 - Riparare e risolvere le sovrapposizioni è fino a quattro volte più veloce sui modelli grandi, ed esportare in 3MF è molto più veloce.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
+- L'avviso *Visualizzazione del modello …* scompare appena la vista è pronta e non resta più sopra il modello.
+- I messaggi su valori e forme non offrono più una segnalazione di errore. Compare solo quando l'errore è di Solidon.
 - Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
 - Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo tecnico grande vengono riconosciute circa un terzo più velocemente.
@@ -185,6 +187,8 @@ scrive in `website/version.json`.
 - Le pareti sottili, per esempio di un vaso, arrivano chiuse e con uno spessore.
 - L'assistente risponde nella lingua in cui scrivi.
 - Con un modello locale l'assistente ha tanto spazio quanto con uno ospitato e porta a termine compiti fino a dodici passaggi.
+- Se annulli una proposta dell'assistente, la barra di stato lo conferma invece di segnalare un errore del programma.
+- Se apri un altro progetto durante una proposta, Solidon la scarta e rimette la tua richiesta nella chat.
 - I modelli generati arrivano chiusi più spesso. Dove le facce si toccano soltanto, Solidon le separa e leviga le piccole pieghe della superficie invece di segnalare un'autointersezione.
 - Se un tentativo si è già sfaldato durante la generazione, la finestra lo dice prima di accettarlo e offre *Un altro tentativo*.
 - Se un modello generato è solo una pelle sottile attorno a una cavità, lo dice la finestra prima di accettarlo e il rapporto di verifica dopo, con la via a un nuovo tentativo.

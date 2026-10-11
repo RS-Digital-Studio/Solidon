@@ -63,6 +63,8 @@ dans `website/version.json`.
 - Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
 - Réparer et résoudre les recouvrements va jusqu'à quatre fois plus vite sur les gros modèles, et l'export en 3MF nettement plus vite.
 - L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
+- L'indication *Affichage du modèle …* disparaît dès que la vue est prête et ne reste plus au-dessus du modèle.
+- Les messages sur les saisies et les formes ne proposent plus de rapport d'erreur. Il n'apparaît que lorsque l'erreur vient de Solidon.
 - Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
 - Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
 - Après un perçage ou une caractéristique déplacée, les caractéristiques d'une grande pièce technique sont reconnues environ un tiers plus vite.
@@ -186,6 +188,8 @@ dans `website/version.json`.
 - Les parois minces, par exemple d'un vase, arrivent fermées et avec une épaisseur.
 - L'assistant répond dans la langue dans laquelle vous écrivez.
 - Avec un modèle local, l'assistant dispose d'autant de place qu'avec un modèle hébergé et mène des tâches jusqu'à douze étapes.
+- Si vous annulez une proposition de l'assistant, la barre d'état le confirme au lieu de signaler une erreur du programme.
+- Si vous ouvrez un autre projet pendant une proposition, Solidon l'écarte et remet votre demande dans le chat.
 - Les modèles générés arrivent plus souvent fermés. Là où des faces se touchent seulement, Solidon les sépare, et il lisse les petits plis de la surface au lieu de signaler une auto-intersection.
 - Si un essai s'est déjà défait pendant la génération, la boîte de dialogue le dit avant de l'accepter et propose *Encore un essai*.
 - Si un modèle généré n'est qu'une fine peau autour d'une cavité, la boîte de dialogue le dit avant de l'accepter et le rapport de contrôle ensuite, avec la voie vers un nouvel essai.

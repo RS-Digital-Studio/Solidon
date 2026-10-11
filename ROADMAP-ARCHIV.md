@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-11 | [RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)](#rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026) |
 | 2026-10-10 | [RM-695: Ein gespeichertes Projekt öffnet nach einem Neustart ohne neue Erkennung (10.10.2026)](#rm-695-ein-gespeichertes-projekt-öffnet-nach-einem-neustart-ohne-neue-erkennung-10102026) |
 | 2026-10-10 | [RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)](#rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026) |
 | 2026-10-10 | [RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)](#rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026) |
@@ -47919,3 +47920,29 @@ Schicht ab R 9,6 immer, unter R 8,3 nie; Changelog „flache Kuppen und Schräge
 „cuadrícula“. **Nachprüfung (`review_rm586_nach.md`):** N1 it nennt die Zeit, N2 die
 gemessene Grenze, N3 Test über mehrere Blöcke, N4 Unterlagen, N5 Test des Druckdialogs.
 Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586b.md`.
+
+## RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)
+
+<a id="rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026"></a>
+<a id="rm-771"></a>
+
+**RM-771 — Jeder Fehler ohne einlösbaren Vorschlag bekam *Fehlerbericht erstellen* als
+Hauptknopf.** Gefunden am Kundenbericht S-20261010-e5014c (0.5.3): Ein abgebrochener
+Agentenzug kam als nacktes `AppError` mit nur `CANCEL`, `dialogs.offered_actions` fiel auf
+*Einzelheiten* und den Fehlerbericht zurück, und der Kunde schickte sein eigenes *Abbrechen*
+als Programmfehler. Dasselbe traf jeden Bedien- oder Geometriefehler, dessen Vorschläge das
+Fenster nicht einlöst (am bloßen Klassenstand: `AppError`, `GenerationFailed`).
+**Behoben (Paket abbruch, Zweig `fix/vorschlag-abbruch`):** Den Rückfall auf den Bericht hat
+nur noch ein `InternalError`; ein Fehler, der den Bericht selbst vorschlägt, behält ihn. Bleibt
+weder Knopf noch Rat, heißt der Ausgang *Schließen*. Ein Wächter liest
+`MainWindow.error_handlers` ohne Fenster und verlangt für jede Kennung aus
+`action_effects.SIDE_EFFECTS` einen Handler oder einen Eintrag mit Grund
+(`WIRED_ELSEWHERE`: örtliche Erkennung, Filamentlager, Katalog; `NOT_A_BUTTON`: Schließen,
+Knöpfe des Rückmeldedialogs, ein Slicerschritt und 27 Ratsätze zum Lesen). Ausnahmen, die
+einen Handler bekommen oder die der Kern nicht mehr anbietet, machen ihn rot.
+**Nachweis:** `test_errors.py::test_only_a_programming_error_falls_back_to_the_bug_report`
+über alle Fehlerklassen, am Stand davor rot (`AppError`, `GenerationFailed`), jetzt grün;
+`test_action_effects.py::test_every_action_of_the_core_is_wired_in_the_window_or_named`,
+Gegenprobe: ohne den Handler `export_only` rot. Changelog 0.6.0: eigener Punkt unter
+*Bedienung und System*. Die 27 Ratsätze stehen als Text im Dialog; sie als Knöpfe einzulösen
+(etwa `open_sketch`, die `sketch.*`-Wege) ist als neuer Punkt beim Koordinator gemeldet.

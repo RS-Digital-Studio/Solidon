@@ -79,6 +79,7 @@ from app.core.errors import (
     Action,
     AppError,
     InstallationDamaged,
+    InternalError,
 )
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
@@ -3344,9 +3345,10 @@ def offered_actions(
     schon im Kopf von ``tests/test_ui.py``.
 
     Angeboten wird, wofür es einen Handler gibt. Bleibt nichts übrig — weder
-    ein Knopf noch ein Rat zum Lesen —, tritt der Fehlerbericht ein: sonst
-    stünde am Ende ein Fenster mit „Abbrechen", und das ist „fehlgeschlagen"
-    mit mehr Worten (Regel 17).
+    ein Knopf noch ein Rat zum Lesen —, tritt der Fehlerbericht nur für einen
+    ``InternalError`` ein. Bei jedem anderen steht der Weg dann im Detail, und
+    der Ausgang heißt *Schließen*; ``tests/test_action_effects.py`` verlangt
+    für jede Handlung des Kerns einen Handler oder einen benannten Grund.
 
     **Und wofür der Fehler mitbringt, was der Handler braucht.** *Eingabe
     korrigieren* öffnet den Schritt, dessen Werte nicht gingen — ohne
@@ -3365,7 +3367,14 @@ def offered_actions(
         # lauteste Antwort auf einen Bedienfehler. Er gehört dem
         # ``InternalError`` (errors.py), nicht einer fehlenden Auswahl.
         return [entry for entry in (SHOW_DETAILS,) if entry.id in handlers]
-    return [entry for entry in (SHOW_DETAILS, REPORT_ERROR) if entry.id in handlers]
+    if isinstance(error, InternalError):
+        return [entry for entry in (SHOW_DETAILS, REPORT_ERROR) if entry.id in handlers]
+    # **Nur ein Programmfehler fällt auf den Fehlerbericht zurück** (RM-771).
+    # Jeder andere Fehler ohne einlösbaren Vorschlag bekam ihn als Hauptknopf,
+    # und ein Kunde schickte sein eigenes *Abbrechen* als Absturzbericht
+    # (S-20261010-e5014c). Dann steht der Weg im Detail, und der Ausgang heißt
+    # *Schließen* (:func:`show_error`).
+    return []
 
 
 def unhandled_advice(
@@ -3566,8 +3575,9 @@ def show_error(
     Regel 17 war damit optisch erfüllt und funktional hohl.
 
     Angeboten wird nur, wofür es einen Handler gibt (§2.7). Lieber ein Knopf
-    weniger als einer, der nichts tut. Damit nie nur „Abbrechen" übrig bleibt,
-    kommt der Fehlerbericht dazu — er geht immer.
+    weniger als einer, der nichts tut. Den Fehlerbericht als Rückfall bekommt
+    nur ein ``InternalError`` (RM-771); bleibt sonst nichts, heißt der
+    Ausgang *Schließen*.
     """
     known = dict(handlers if handlers is not None else handlers_of(parent))
     offered = offered_actions(error, known)
@@ -3618,6 +3628,8 @@ def show_error(
     if not offered:
         abbrechen.setAutoDefault(False)
         abbrechen.setDefault(False)
+        # Ohne Handlung gibt es nichts abzubrechen — das Fenster schließt nur.
+        abbrechen.setText(tr("Schließen"))
 
     box.exec()
     chosen = buttons.get(box.clickedButton())

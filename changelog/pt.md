@@ -62,6 +62,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
 - Reparar e resolver sobreposições é até quatro vezes mais rápido em modelos grandes, e exportar em 3MF é bastante mais rápido.
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.
+- O aviso *A mostrar o modelo …* desaparece assim que a vista está pronta e já não fica por cima do modelo.
+- As mensagens sobre valores e formas já não oferecem um relatório de erro. Só aparece quando o erro é do próprio Solidon.
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
 - Depois de um furo ou de uma característica deslocada, as características de uma peça técnica grande são reconhecidas cerca de um terço mais depressa.
@@ -185,6 +187,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As paredes finas, por exemplo de um vaso, chegam fechadas e com espessura.
 - O assistente responde na língua em que escreve.
 - Com um modelo local, o assistente tem tanto espaço como com um alojado e cumpre tarefas até doze passos.
+- Se cancelar uma proposta do assistente, a barra de estado confirma-o em vez de comunicar um erro do programa.
+- Se abrir outro projeto durante uma proposta, Solidon descarta-a e devolve o pedido ao chat.
 - Os modelos gerados chegam fechados com mais frequência. Onde as faces só se tocam, o Solidon separa-as e alisa pequenas dobras da superfície em vez de avisar de uma autointerseção.
 - Se uma tentativa já se desfez ao gerar, a janela di-lo antes de a aceitar e oferece *Mais uma tentativa*.
 - Se um modelo gerado for só uma pele fina à volta de um vazio, a janela di-lo antes de o aceitar e o relatório de verificação depois, com o caminho para uma nova tentativa.
