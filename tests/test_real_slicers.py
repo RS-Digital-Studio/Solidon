@@ -1610,15 +1610,23 @@ def test_the_support_contact_arrives_as_solidon_says(
 _TUNNEL = ((-4.0, -8.0, 2.0), (4.0, 8.0, 14.0))
 _BEFORE_THE_MOUTH = ((-4.0, 9.0, 2.0), (4.0, 20.0, 14.0))
 
-#: Programme, die das Teil an seinem Platz schneiden. Creality Print ordnet über
-#: die Konsole selbst an und drehte den Becher um 145°; dort gemessen mit der
-#: Drehung (0,94 m im Tunnel mit Gitter, 0,01 m mit ``snug``).
+#: Programme, die das Teil an seinem Platz schneiden, mit ihrem Drucker. Creality
+#: Print ordnet über die Konsole selbst an und drehte den Becher um 145°; dort
+#: gemessen mit der Drehung (0,94 m im Tunnel mit Gitter, 0,01 m mit ``snug``).
+#: Der Prusa XL führt in OrcaSlicer einen Baumstil (``organic``), den Gitter
+#: dort als Gitter druckt (Review rvtun, Fund 1).
 _BLOCKER_PROGRAMS = (
-    "elegooslicer",
-    "orcaslicer",
-    "bambustudio",
-    "anycubicslicernext",
-    "prusaslicer",
+    *(
+        (program, PROGRAMS[program])
+        for program in (
+            "elegooslicer",
+            "orcaslicer",
+            "bambustudio",
+            "anycubicslicernext",
+            "prusaslicer",
+        )
+    ),
+    ("orcaslicer", "prusa-xl"),
 )
 
 
@@ -1650,14 +1658,18 @@ def _brick(
 
 
 @pytest.mark.parametrize(
-    "program",
+    ("program", "printer"),
     [
-        pytest.param(program, marks=pytest.mark.slicer(program), id=program)
-        for program in _BLOCKER_PROGRAMS
+        pytest.param(program, printer, marks=pytest.mark.slicer(program), id=f"{program}-{printer}")
+        for program, printer in _BLOCKER_PROGRAMS
     ],
 )
 def test_grid_support_stays_out_of_a_blocked_channel(
-    program: str, installed_slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    program: str,
+    printer: str,
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Gitter neben der Kanalsperre bleibt aus dem Kanal (``handover.snug_beside_blocker``).
 
@@ -1671,7 +1683,7 @@ def test_grid_support_stays_out_of_a_blocked_channel(
 
     set_test_license(monkeypatch, active=True)
     body = SceneObject("tunnel", "Tunnel", _roofed_tunnel())
-    profile = profiles.make_profile(PROGRAMS[program], "pla")
+    profile = profiles.make_profile(printer, "pla")
     settings = print_settings.resolve(profile)
     for path, value in (
         ("support.style", "grid"),
