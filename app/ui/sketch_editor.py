@@ -3051,13 +3051,13 @@ class SketchCanvas(QWidget):
         return best[1]
 
     def _curve_ends(self) -> frozenset[int]:
-        """Die Punkte, an denen eine offene Kurve endet (``edit._spots``)."""
+        """Die Punkte, an denen eine offene Kurve endet (``edit.element_spots``)."""
         return frozenset(
             spot
             for element, offset in zip(
                 self.sketch.elements, edit.offsets_of(self.sketch), strict=True
             )
-            for spot in edit._spots(element, offset, ends_only=True)
+            for spot in edit.element_spots(element, offset, ends_only=True)
         )
 
     def _hit_element(self, position: QPointF) -> tuple[str, tuple[int, ...]] | None:
@@ -3617,9 +3617,9 @@ class SketchCanvas(QWidget):
             if element.construction:
                 continue
             # Welche Punkte die Enden einer Kurve sind, weiß der Kern
-            # (``edit._spots``): Linie, Bogen, Ellipsenbogen und Spline
+            # (``edit.element_spots``): Linie, Bogen, Ellipsenbogen und Spline
             # verbinden ihre beiden Enden (Review G1, Zwilling zu G-N2).
-            ends = edit._spots(element, offset, ends_only=True)
+            ends = edit.element_spots(element, offset, ends_only=True)
             if len(ends) == 2:
                 join(*ends)
         for constraint in self.sketch.constraints:

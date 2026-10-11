@@ -1684,7 +1684,7 @@ def with_plan(sketch: Sketch, plan: CurvePlan) -> Sketch:
     return replace(sketch, elements=elements, constraints=(*sketch.constraints, *plan.constraints))
 
 
-def _spots(element: SketchElement, begin: int, *, ends_only: bool) -> tuple[int, ...]:
+def element_spots(element: SketchElement, begin: int, *, ends_only: bool) -> tuple[int, ...]:
     """Die eigenen Punkte einer Kurve, an denen ein Übergang sitzen kann.
 
     Ihre Enden — beim Spline auch jeder Punkt, durch den er läuft, außer für
@@ -1751,8 +1751,8 @@ def _joint(
     """
     offsets = offsets_of(sketch)
     one, other = sketch.elements[first], sketch.elements[second]
-    one_spots = _spots(one, offsets[first], ends_only=ends_only)
-    other_spots = _spots(other, offsets[second], ends_only=ends_only)
+    one_spots = element_spots(one, offsets[first], ends_only=ends_only)
+    other_spots = element_spots(other, offsets[second], ends_only=ends_only)
     pairs = [(a, b) for a in one_spots for b in other_spots]
     for a, b in pairs:
         if _linked(sketch, a, b):

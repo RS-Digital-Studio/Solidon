@@ -109,7 +109,7 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
   gezeichnet ist, hängt `status_text` „Esc wechselt zum Auswählen und Ziehen."
   an.
 * **Ein Linienzug endet, wenn er eine Schleife schließt** (`_closes_a_loop`:
-  Deckungen und Kurvenenden aus `edit._spots`), sonst hinge ein Strich am
+  Deckungen und Kurvenenden aus `edit.element_spots`), sonst hinge ein Strich am
   Zeiger. Klick und getipptes Maß gehen über `_go_on_with_the_chain`. Den
   Doppelklick nimmt im Linienwerkzeug immer `double_click_on_plane`; `place`
   lehnt nur Länge null ab (`EPS_DISPLAY`). Gleich nahe Punkte: das Kurvenende.
