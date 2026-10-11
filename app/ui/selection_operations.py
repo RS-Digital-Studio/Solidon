@@ -450,6 +450,11 @@ DETAIL_LINES: Final = 3
 #: Wie viele Treffer die Liste zeigt, bevor sie in sich rollt.
 HITS_SHOWN: Final = 12
 
+#: Wie viele gemessene Umbrüche der Zeilenzeichner behält: alle Zeilen der
+#: Suche in einigen Breiten, und mehr wird es auch nach vielen Größenwechseln
+#: nicht.
+MEASURED_KEPT: Final = 2048
+
 
 class _HitRows(QStyledItemDelegate):
     """Zeichnet je Treffer den Titel links, das Kürzel **rechtsbündig** in einer
@@ -466,6 +471,7 @@ class _HitRows(QStyledItemDelegate):
     def __init__(self, view: QListWidget) -> None:
         super().__init__(view)
         self._view = view
+        self._measured: dict[tuple[int, str, str], int] = {}
 
     def _parts(self, index: QModelIndex | QPersistentModelIndex) -> tuple[str, str, str]:
         """Titel, Kürzel und zweite Zeile aus dem unveränderten Modelltext."""
@@ -485,6 +491,22 @@ class _HitRows(QStyledItemDelegate):
         )
         return min(DETAIL_LINES, max(1, math.ceil(bound.height() / line)))
 
+    def _lines_of(self, width: int, detail: str, plain: QStyleOptionViewItem) -> int:
+        """:meth:`_detail_lines`, gemerkt je Breite, Schrift und Text.
+
+        Qt fragt die Höhe einer Zeile je Tastendruck mehrmals ab — Wunschhöhe
+        der Liste, Layout, Rollbereich, gemessen rund zehnmal je Zeile —, und
+        das Umbrechen ist das Teure daran.
+        """
+        key = (width, plain.font.key(), detail)
+        lines = self._measured.get(key)
+        if lines is None:
+            if len(self._measured) >= MEASURED_KEPT:
+                self._measured.clear()
+            lines = self._detail_lines(width, detail, plain.fontMetrics)
+            self._measured[key] = lines
+        return lines
+
     @override
     def sizeHint(
         self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex
@@ -494,7 +516,7 @@ class _HitRows(QStyledItemDelegate):
         _title, _shortcut, detail = self._parts(index)
         line = plain.fontMetrics.height()
         width = self._view.viewport().width() - NORMAL - SHORTCUT_MARGIN
-        lines = 1 + self._detail_lines(width, detail, plain.fontMetrics)
+        lines = 1 + self._lines_of(width, detail, plain)
         # Die Liste gibt die Breite vor, der Text darf sie nicht aufziehen.
         return QSize(0, lines * line + (lines - 1) * TIGHT + 2 * TIGHT)
 
@@ -552,7 +574,7 @@ class _HitRows(QStyledItemDelegate):
                 int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
                 metrics.elidedText(shortcut, Qt.TextElideMode.ElideRight, shortcut_width),
             )
-        lines = self._detail_lines(area.width(), detail, metrics)
+        lines = self._lines_of(area.width(), detail, plain)
         if lines:
             painter.drawText(
                 QRect(area.left(), area.top() + line + TIGHT, area.width(), lines * line),
