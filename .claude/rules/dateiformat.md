@@ -44,8 +44,7 @@ welcher (§24.5, §32).
   `project._validate_suppression_schema` weist Beschädigtes und unbekannte
   Umbauarten ab.
 - **Gleich heißt inhaltsgleich, nicht bytegleich**: Verglichen wird
-  `project.content_digest`, nie der Dateihash (Deflate-Bytes unterscheiden
-  sich je Plattform, der ZIP-Kopf nennt kein System: `CONTAINER_SYSTEM`).
+  `project.content_digest`, nie der Dateihash (`CONTAINER_SYSTEM`).
   Eingecheckte Beispiel- und Belegdateien werden nicht neu geschrieben — ihr
   Hash ist ihr Beleg.
 - **Was zum Teil gehört, steht im Dokument, was zum Rechner gehört, in den
@@ -227,7 +226,8 @@ Konstanten in Formelgestalt (`_cura_literal`).
   Netz mit `anti_overhang_mesh=true` (`slicer_keys.takes_mesh_settings`),
   Curas Fenster als Komponente mit `cura:anti_overhang_mesh`. Geprüft an der
   Modellbahn, nicht an der Stütze; nur in die direkte Übergabe, nie in eine
-  gespeicherte 3MF.
+  gespeicherte 3MF. Gitter am Teil mit Sperre geht als `snug`
+  (`handover.snug_beside_blocker`).
 - **Feine Schichten reisen als Höhenkurve je Teil** (`writer._layer_heights`);
   nicht unter organischen Bäumen, am Turm neben anderen Teilen, für Cura.
 - **CuraEngine bekommt kein 3MF, Curas Fenster schon** (`cura`): Für die

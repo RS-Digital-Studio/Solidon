@@ -86,6 +86,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O tempo de impressão estimado está mais perto do do slicer, muito mais perto em peças com suportes.
 - A verificação do espaço para suportes e skirt na mesa mede agora só sob as saliências. As peças junto ao rebordo já não recebem um aviso sem razão.
 - As sugestões aceites quase já não deixam sem suporte as saliências que precisam dele. *Manter os canais livres* só bloqueia o espaço de onde um suporte já não se conseguiria retirar.
+- Com *Manter os canais livres*, os suportes em grelha já não entram nas bocas dos canais bloqueados. Na versão 0.5.3 entravam pouco mais de um milímetro.
 - Onde os suportes sob pequenas saliências assentam no modelo, o Solidon sugere suportes em árvore. Aí deixam menos marcas.
 - Em pontas pequenas, o Solidon sugere uma *Velocidade mínima ao abrandar* mais baixa para que não amoleçam. A definição chega a qualquer slicer.
 - Os rebordos estreitos que se sustentam sozinhos ficam livres com *Rebordos sem suporte*. Assim a impressão precisa de bem menos suporte.

@@ -86,6 +86,7 @@ scrive in `website/version.json`.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
 - Il controllo che supporti e skirt stiano sul piano ora misura solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
 - I suggerimenti accettati non lasciano quasi più senza supporto gli sbalzi che ne hanno bisogno. *Tenere liberi i canali* blocca solo lo spazio da cui un supporto non si potrebbe più togliere.
+- Con *Tenere liberi i canali*, i supporti a griglia non entrano più nelle bocche dei canali bloccati. Nella versione 0.5.3 vi arrivavano per poco più di un millimetro.
 - Dove i supporti sotto piccoli sbalzi poggiano sul modello, Solidon suggerisce supporti ad albero. Lì lasciano meno segni.
 - Sulle punte piccole Solidon suggerisce una *Velocità minima di rallentamento* più bassa, così non si ammorbidiscono. L'impostazione arriva a ogni slicer.
 - I bordi stretti che si reggono da soli restano liberi con *Bordi senza supporto*. La stampa richiede così molto meno supporto.
