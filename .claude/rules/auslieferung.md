@@ -198,7 +198,10 @@ auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
   Installation kennt nur die Schlüssel ihrer Version und verwirft den Rest still.
 - Neue Actions nur mit vollständiger 40-stelliger Commit-ID.
 - Downloads im Workflow nur von einer unveränderlichen Veröffentlichung und
-  nach Prüfsummenprüfung.
+  nach Prüfsummenprüfung. Echt ist ein Download über seine festgenagelte
+  SHA-256, nicht über TLS: Einen Rückfall ohne TLS-Prüfung gibt es nur in
+  `fetch()` der Slicerauswahl, nur bei curl-Code 60, nie ohne Prüfsumme danach
+  und nie mit Zugangsdaten im Aufruf (Wächter in `test_supply_chain.py`).
 - Vor einem Signierschlüssel läuft kein Repositorycode; die Lizenzprüfung
   (`make_licence_notices --release-check`) läuft **nach** der Signatur und
   ungeschützt, und `sign_release.py` schreibt die Evidenz danach neu — der
