@@ -97,6 +97,19 @@ _PICK_IN_MODEL: Final = "pick"
 #: Der Eintrag „Ohne Mitte“ an der Mitte: zurück zu den zwei Kantenmaßen.
 _NO_CENTRE: Final = "no-centre"
 
+#: Was eine neue Stelle an der Form misst, auf der sie gesetzt wurde — dazu die
+#: Richtung (``normal_fields``). Ändert sich die Form, gilt nichts davon mehr
+#: (:meth:`PlacementFlow._forget_the_place`, RM-774).
+_MEASURED_PLACE: Final = (
+    "x",
+    "y",
+    "z",
+    "surface_target",
+    "surface_anchor",
+    "surface_distance_1",
+    "surface_distance_2",
+)
+
 
 def _mouth_outline_on_surface(
     outline: Sequence[tuple[float, float]],
@@ -1622,6 +1635,8 @@ class PlacementFlow(QObject):
         self._updating = False
         self._redraw_held = False
         """Ob :meth:`start` den Aufbau für sein eigenes ``redraw`` zurückhält."""
+        self._seek_again = False
+        """Ob die Platzierung mit dem nächsten Ergebnis neu beginnt (RM-774)."""
         #: Ob die Tiefenstufe läuft — Stufe 2 der Platzierung. Der Klick legt
         #: die Stelle fest, danach zieht die Maus die Tiefe (Robert,
         #: 09.09.2026: „wenn wir klicken wollen wir die bohrung von der
@@ -4974,8 +4989,50 @@ class PlacementFlow(QObject):
             return
         # Eine fremde Operation oder Undo entwertet die alte Oberfläche.
         if self.active:
-            self.back()
+            self._back_from_a_changed_shape()
         self.refresh_available()
+        if self._seek_again and not self.active and self.session.result_current:
+            self._seek_again = False
+            self.start()
+
+    def _back_from_a_changed_shape(self) -> None:
+        """Zurücktreten, und eine neue Stelle vergisst, was auf der alten Form gemessen war.
+
+        RM-774: Der Kunde öffnete das nächste Schraubenloch, solange das vorige
+        noch rechnete. Es saß auf dem alten Bild, und genau dort kam das vorige
+        an. Der Fluss trat zurück, der Dialog behielt Punkt und Flächenbezug,
+        und die Vorschau band sie an die neue Form: „Dieser Punkt liegt
+        außerhalb der gewählten Fläche“, sechsmal im Protokoll. Eine Stelle,
+        die auf einer Form gemessen wurde, die es nicht mehr gibt, ist geraten
+        (Regel 21). Deshalb verliert der Dialog sie, bevor er rechnet, und mit
+        dem neuen Ergebnis beginnt die Platzierung von vorn: Ein Baustein sitzt
+        wieder von selbst, eine Bohrung wartet auf den Klick. Nur beim Setzen;
+        ein geänderter Schritt bindet seinen Bezug wie zuvor. Und nicht beim
+        eigenen Übernehmen: Dann ist der Dialog schon zu, und seine Werte sind
+        der Schritt.
+        """
+        fresh = (
+            self._change_op is None
+            and not isinstance(self.dialog, QuietHost)
+            and self._surface is not None
+            and self.dialog.isVisible()
+        )
+        if fresh:
+            self._forget_the_place()
+        self.back()
+        self._seek_again = fresh
+
+    def _forget_the_place(self) -> None:
+        """Stelle, Richtung und Flächenbezug im Dialog auf ihre Vorgaben."""
+        spec = self.spec_of()
+        fields = placement_fields(spec.params)
+        wanted = {
+            *(fields[name] for name in _MEASURED_PLACE if name in fields),
+            *normal_fields(spec.params),
+        }
+        self.dialog.take_placement(
+            {entry.name: entry.default for entry in spec.params.spec() if entry.name in wanted}
+        )
 
     def _scene_applied(self) -> None:
         """Erst der tatsächlich gezeichnete Eingang erlaubt ein neues Ziel."""
@@ -5001,7 +5058,7 @@ class PlacementFlow(QObject):
         self._prepared_mesh = None
         self._patch_faces = frozenset()
         if self.active:
-            self.back()
+            self._back_from_a_changed_shape()
         self.refresh_available()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802

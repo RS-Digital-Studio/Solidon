@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -3410,6 +3411,81 @@ def test_a_part_without_a_place_is_neither_computed_nor_applied(
             assert not stopped, stopped
         assert [entry.op for entry in window.session.history.operations] == [
             "load",
+            "insert_screw_hole",
+        ]
+        result = window.session.last_result
+        assert result is not None and result.stopped_at is None
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_seat_measured_on_a_shape_that_changed_is_found_again(
+    qt_app: QApplication, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ändert sich der Körper unter einer offenen Platzierung, sitzt der Baustein neu.
+
+    RM-774, Kundenprotokoll zu 0.5.3: sechsmal „op.insert_screw_hole.
+    ValidationError: … Dieser Punkt liegt außerhalb der gewählten Fläche“, je
+    eine Sekunde nach der Auswertung des vorigen Schraubenlochs. Der Kunde
+    öffnete das nächste, solange das vorige noch rechnete; es saß auf dem alten
+    Bild, und dort, wo die Stelle lag, kam dann das vorige Loch an. Der Fluss
+    trat zurück, der Dialog behielt den alten Flächenbezug, und die Vorschau
+    band ihn an die neue Form — sie hielt an, *Übernehmen* blieb grau.
+
+    Nachgestellt: Dialog öffnen und sitzen lassen, dann ein Schraubenloch
+    knapp neben die Stelle setzen. Jetzt vergisst die Platzierung die Stelle,
+    die auf der alten Form gemessen war, und sucht sie an der neuen.
+    """
+    import logging
+    import time
+
+    from app.core.scene.history import OperationDraft
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, _entry = _a_selected_plate(window, face_normal=(0.0, 0.0, 1.0))
+        dialog, flow = _a_part_placement(window, "insert_screw_hole")
+        seated = dict(dialog.values())
+        assert (seated["x"], seated["y"]) == pytest.approx((0.0, 0.0), abs=0.05)
+        assert flow._seated_by_default
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger="app.core.scene.evaluate"):
+            window.session.apply(
+                "Schraubenloch",
+                [
+                    OperationDraft(
+                        op="insert_screw_hole",
+                        inputs=(object_id,),
+                        params={"x": 1.5, "y": 0.0, "z": 8.0, "nz": 1.0},
+                    )
+                ],
+            )
+            assert window.session.wait_for_idle(60_000)
+            for _ in range(300):
+                QApplication.processEvents()
+                assert window.session.wait_for_idle(60_000)
+                if flow.active and flow._surface is not None and flow._tool is not None:
+                    break
+                time.sleep(0.02)
+            for _ in range(40):
+                QApplication.processEvents()
+            assert window.session.wait_for_idle(60_000)
+            stopped = [r.getMessage() for r in caplog.records if "stopped" in r.getMessage()]
+            assert not stopped, stopped
+        assert flow.active and flow._surface is not None, "die Platzierung sitzt wieder"
+        moved = dialog.values()
+        assert math.dist((moved["x"], moved["y"]), (1.5, 0.0)) > 3.0, "nicht im eben gesetzten Loch"
+        assert dialog.can_accept()
+        dialog.accept()
+        for _ in range(40):
+            QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+        assert [entry.op for entry in window.session.history.operations] == [
+            "load",
+            "insert_screw_hole",
             "insert_screw_hole",
         ]
         result = window.session.last_result

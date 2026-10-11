@@ -343,6 +343,12 @@ und stellt die gemessenen Werte wieder her (`_drag_kind` bleibt `"slot"`).
   sitzt, rechnet nichts**: ohne Merkmal, Flächenbezug und Position keine
   Vorschau und kein Übernehmen (`OperationDialog.place_missing` fragt
   `parts.ops.place_missing`, dieselbe Frage, an der `_anchor` anhält; RM-773).
+* **Ändert sich die Form unter einer neuen Platzierung, gilt ihre Stelle nicht
+  mehr**: Vor dem Zurücktreten setzt der Fluss Stelle, Richtung und
+  Flächenbezug im Dialog auf die Vorgaben und beginnt mit dem neuen Ergebnis von
+  vorn (`_back_from_a_changed_shape`, RM-774) — sonst band die Vorschau den
+  alten Punkt an die neue Form. Nicht beim Ändern eines Schritts und nicht beim
+  eigenen Übernehmen (Dialog schon zu).
 
 ## Was am Griff steht, ist ASCII — und sonst nichts
 
