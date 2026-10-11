@@ -128,9 +128,8 @@ Nutzen da und sonst nichts.
 - Für PETG schlägt Solidon *Volle Kühlung an der Stütze* vor. Sie löst sich so leichter vom Teil.
 - An Figuren schlägt Solidon die Naht hinten vor, damit keine Linie über die Vorderseite läuft. Für eine große flache Oberseite schlägt es Bügeln vor.
 - Die geschätzte Druckzeit rechnet das Bügeln jetzt mit.
-- Neu in den Druckeinstellungen: *Trennschichten unten*, *Wände der Bäume* und *Baumspitze*.
+- Neu in den Druckeinstellungen: *Trennschichten unten*, *Wände der Bäume* und *Baumspitze*, dazu *Erste Schicht einziehen* und *Löcher weiten*, die dem Slicer folgen, solange Sie nichts wählen.
 - Bei *Oberfläche bügeln* wählen Sie jetzt zwischen *Oberste Fläche* und *Alle Oberseiten*.
-- Ebenfalls neu sind *Erste Schicht einziehen* und *Löcher weiten*. Beide folgen dem Slicer, solange Sie nichts wählen.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.

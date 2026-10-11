@@ -104,9 +104,8 @@ dans `website/version.json`.
 - Pour le PETG, Solidon propose *Refroidissement complet au support*. Il se détache ainsi plus facilement de la pièce.
 - Sur les figurines, Solidon propose la couture à l'arrière, sans ligne devant. Pour une grande face supérieure plane, il propose le repassage.
 - Le temps d'impression estimé tient désormais compte du repassage.
-- Nouveaux réglages : *Couches d'interface en bas*, *Parois des arbres* et *Pointe d'arbre*.
+- Nouveaux réglages : *Couches d'interface en bas*, *Parois des arbres* et *Pointe d'arbre*, plus *Resserrer la première couche* et *Élargir les trous*, qui suivent le slicer à défaut de votre choix.
 - Pour *Repasser la surface*, vous choisissez désormais entre *Face la plus haute* et *Toutes les faces supérieures*.
-- Également nouveaux : *Resserrer la première couche* et *Élargir les trous*. Ils suivent le slicer à défaut de votre choix.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
 - Si le slicer refuse des filaments aux températures trop différentes sur un plateau, Solidon en donne désormais la raison et l'issue, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.

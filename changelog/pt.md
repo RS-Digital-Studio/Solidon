@@ -103,9 +103,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Para PETG, o Solidon sugere *Arrefecimento total no suporte*. Assim solta-se mais facilmente da peça.
 - Em figuras, o Solidon propõe a costura atrás, sem linha à frente. Para uma face superior grande e plana propõe engomar.
 - O tempo de impressão estimado inclui agora o engomar.
-- Novas definições de impressão: *Camadas de separação inferiores*, *Paredes das árvores* e *Ponta da árvore*.
+- Novas definições de impressão: *Camadas de separação inferiores*, *Paredes das árvores* e *Ponta da árvore*, mais *Contrair a primeira camada* e *Alargar furos*, que seguem o slicer se não escolher.
 - Em *Engomar a superfície* escolhe agora entre *Face mais alta* e *Todas as faces superiores*.
-- Também novas: *Contrair a primeira camada* e *Alargar furos*. Ambas seguem o slicer se não escolher.
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.
 - Se o slicer recusar filamentos com temperaturas demasiado diferentes numa placa, o Solidon indica agora o motivo e o que fazer, em vez de dizer apenas que não foi criado nenhum ficheiro.
 - No diálogo de impressão, impressora, filamentos e qualidade ficam totalmente visíveis também com letra ampliada. As legendas longas passam para a linha seguinte.
