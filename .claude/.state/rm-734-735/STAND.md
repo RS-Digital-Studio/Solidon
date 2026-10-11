@@ -4,6 +4,17 @@ Neueste Zeile oben. Worktree dieser Sitzung: `F:\sl-suche`. Agentenberichte
 (bedienlogik, oberflaechentexte) liegen örtlich unter
 `F:\3D Druck\output\review\rm-734-735-2026-10-11\`.
 
+- 12.10.2026, 00:10: **RM-735 auf dem Zweig fertig**, gepusht in fünf Commits
+  (`ea1caaf24` RM-735, `7d2cee276` Kurzwort, `cce701ed1` Umbruchmerker,
+  `e87dea577` Kürzelübersicht, `023c9c703` ruhende Karte). Messung C4 und
+  Funde: `leistung-tastendruck.md`, Abschnitt „Funde unterwegs“ in `plan.md`,
+  Sonden unter `sonden/`. Tor vom 11.10. rot nur durch die Maschine (vier
+  Arbeiter mit Zugriffsverletzung; sieben der acht gefallenen gepinnt grün)
+  und einen echten Fund (`test_orient.py`, Kategorie), behoben; die zwei
+  ungesammelten Dateien gepinnt grün. ruff, format, mypy (377) grün.
+  Wartet auf „main steht“; danach die Schritte am Ende von `AUFTRAG.md`, mit
+  vollem Tor nach dem Merge von origin/main. Abbauen danach: Worktree
+  `F:\sl-vorher` (Messbaum am Stand `d2f8d4916`).
 - 11.10.2026, spät: **RM-734 fertig** — dazu der Hinweis im Auswahlpanel bei
   einem gewählten Körper und einem zweiten in der Szene (Ablauf bedienlogik A1–A8).
   Als Nächstes RM-735 nach dem Bericht von bedienlogik (Entscheidungen B1–B6,

@@ -184,3 +184,13 @@ Suchfeld des Auswahlpanels.
 **Das Suchfeld steht auch ohne Auswahl** (Punkt 1 oben). Das hebt die frühere
 Entscheidung „ohne Auswahl kein Suchfeld“ auf; `grenzen.md` (Abschnitt
 Auswahlpanel und Suche) wird mit RM-735 entsprechend neu gefasst.
+
+## Funde unterwegs
+
+| Fund | Art | Schwere | Beleg | Stand |
+|---|---|---|---|---|
+| Ein Wort unter vier Zeichen ohne genauen Treffer fand in der Stammrunde **alle** 273 Zeilen, ohne Lockerungszeile; Return startete die vorgewählte | Fehler, aus der Palette übernommen | mittel | `tests/test_search.py::test_a_short_word_that_matches_nothing_finds_nothing` („qqq“, „qj“, „xq“), vorher rot | behoben, `registry.search.stems_in` |
+| Die Kürzelübersicht nannte *Formen*, *Skelett* und *Zeichnen* zweimal — zwei Schleifen über die obere Leiste aus zwei Sitzungen vom 08.10. | Zwilling | leicht | `tests/test_interface_limits.py::test_the_shortcut_list_names_every_row_once`, vorher rot | behoben, eine Schleife |
+| Die Trefferliste brach jede zweite Zeile je Tastendruck rund zehnmal neu um | Leistung | leicht | Profil und Messung C4 (`nachweise-palette-2026-10/leistung-tastendruck.md`): Höchstwert 31,5 → 22,7 ms | behoben, Merker im Zeilenzeichner |
+| Bei Suchtext rechnete `_filter` die verdeckte Karte je Tastendruck mit | Leistung | leicht | gepaarte Messung an `_filter`, 720 Paare: Median −0,42 ms, schneller in 394/720 | behoben, früher Ausstieg; `test_the_card_rests_while_searching_and_comes_back_at_the_new_level` |
+| `test_orient.py` erwartete für *Druckoptimal ausrichten* noch die Kategorie `transform` | Test zog nicht mit | leicht | Tor vom 11.10., gepinnt nachgestellt | behoben im RM-735-Commit |
