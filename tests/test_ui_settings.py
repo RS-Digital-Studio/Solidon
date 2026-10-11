@@ -654,8 +654,8 @@ def test_the_remembered_sections_travel_in_the_settings_file(tmp_path, monkeypat
 
 
 @pytest.mark.parametrize("option", ["shortcuts", "remote", "remote_port", "language"])
-def test_a_setting_from_the_palette_opens_its_row(qt_app, monkeypatch, option) -> None:
-    """Die Palette führt zu jeder Zeile, auch hinter „Weitere Einstellungen" (RM-491)."""
+def test_a_setting_from_the_search_opens_its_row(qt_app, monkeypatch, option) -> None:
+    """Die Suche führt zu jeder Zeile, auch hinter „Weitere Einstellungen" (RM-491)."""
     from PySide6.QtWidgets import QToolButton
 
     from app.ui import settings_dialog as module
@@ -683,8 +683,8 @@ def test_a_setting_from_the_palette_opens_its_row(qt_app, monkeypatch, option) -
         dialog.deleteLater()
 
 
-def test_the_palette_offers_every_visible_setting_under_its_row_name() -> None:
-    """Eine Quelle für Formular und Palette; die 3D-Maus erst, wenn sie da ist."""
+def test_the_search_offers_every_visible_setting_under_its_row_name() -> None:
+    """Eine Quelle für Formular und Suche; die 3D-Maus erst, wenn sie da ist."""
     from app.ui.settings import UiSettings
     from app.ui.settings_dialog import SPACEMOUSE_OPTIONS, option_titles, searchable_options
 

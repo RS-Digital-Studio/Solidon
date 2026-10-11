@@ -132,7 +132,7 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
   Aufrufort): Befund 20 Wörter und zwei Sätze, Fehlerdetail 25/2,
   Bausteinänderung 20/1, Vorbehalt 20/2, erster Satz einer `doc` 15,
   Parameter-`doc` und Kurzhilfe 25/2, Ansage, Leertext und Tourschritt 20,
-  Druckrat-Grund 60 Zeichen. Menü, Statuszeile, Palette und Dialogkopf zeigen
+  Druckrat-Grund 60 Zeichen. Menü, Statuszeile, Suchtreffer und Dialogkopf zeigen
   nur den ersten Satz; geschnitten wird überall mit `surfaces.sentences`.
 - **Nicht nach einem Sprachmodell klingen** (Entscheidung Robert; Kunden
   schreiben Robert persönlich). Die sieben Merkmale: nummerierte Listen, wo
@@ -368,7 +368,7 @@ den Wiederwahlen, nur ohne eigene Handlung seit dem letzten aktuellen Bild.
 - Differenzansicht Blau/Orange, nicht Rot/Grün; Analysekarten mit
   wahrnehmungsgleicher Palette (Viridis-Art), kein Regenbogen — der erzeugt
   Kanten, wo keine sind.
-- Alles über die Befehlspalette erreichbar, Kürzel daneben; Undo und Redo
+- Alles über das Suchfeld der Karte erreichbar, Kürzel daneben; Undo und Redo
   überall, auch im Chat. HiDPI, skalierbare Schrift, Kontrast in hellem und
   dunklem Thema, Anzeigeeinheit Millimeter oder Zoll.
 

@@ -325,7 +325,7 @@ class DrawFlow(QObject):
     def start(self, shape: str = "", *, intent: str = "") -> None:
         """Das Werkzeug öffnen — Phase 0, die gewählte Form bleibt vom letzten Mal.
 
-        ``intent`` ist die gewählte Art aus Menü oder Palette: Tasche und
+        ``intent`` ist die gewählte Art aus Menü oder Suche: Tasche und
         Anfügen nehmen nur die Fläche eines Körpers an, und bei der Tasche ist
         eine getippte Zahl die Tiefe (M4, N1, Regel 21).
         """

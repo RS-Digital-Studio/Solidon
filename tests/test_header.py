@@ -414,7 +414,7 @@ def test_the_search_gives_way_to_the_header_and_keeps_its_name(
     window.header.show_project("Halter.p3d*", result, "mm")
     window.header.show_profile(window.session.profile, result)
     search = window.function_search
-    keys = window._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+    keys = window.search_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
     assert keys, "ohne Kürzel prüft der Tooltip nur den Namen"
 
     window.resize(800, 720)

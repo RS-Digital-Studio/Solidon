@@ -2621,7 +2621,7 @@ class Session(QObject):
         ändert das andere Teil mit — dieselbe Steigung, der Durchmesser, den
         die Passung verlangt (``counterpart.coupled_thread_drafts``). Vorschau
         und Übernehmen fragen hier, damit das Bild zeigt, was übernommen wird,
-        und jeder Weg dorthin (Merkmalfenster, Dialog, Palette, Karte) dasselbe
+        und jeder Weg dorthin (Merkmalfenster, Dialog, Suche, Karte) dasselbe
         tut; die Kommandozeile fragt dieselbe Kernfunktion. Gefragt wird am
         gezeigten Stand: Mit Einfügemarke gibt es dort keine Passungen
         (:meth:`displayed_document`) und nichts zu koppeln.

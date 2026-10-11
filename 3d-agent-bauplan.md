@@ -227,8 +227,9 @@ darüber. Leere oder zugeklappte Bereiche geben ihren Platz frei.
 
 ### 2.6 Entdeckbarkeit
 
-- **Befehlspalette** über eine Taste: alles aus dem Register per Suche
-  erreichbar, mit Kürzel daneben — so lernt man die Kürzel nebenbei.
+- **Suchfeld im Auswahlpanel**, immer sichtbar und über eine Taste erreichbar:
+  alles aus dem Register und jeder Fensterbefehl per Name, mit Kürzel daneben —
+  so lernt man die Kürzel nebenbei.
 - **Auswahl am Merkmal**: Klick auf eine Bohrung bietet genau die Ops
   an, die auf Bohrungen anwendbar sind — rechts im Reiter *Auswahl*, der nach
   dem Klick vorn bleibt, nicht in einem Menü, das zufällt. Der kürzeste Weg
@@ -816,7 +817,7 @@ def resize_hole(ctx: OpContext) -> OpResult: ...
 |---|---|
 | Menüeintrag und Dialog | `title`, `category`, Parameterschema |
 | Auswahlfenster am Merkmal | `applies_to` |
-| Befehlspalette und Kürzel | `title`, `doc`, `shortcut` |
+| Suche und Kürzel | `title`, `doc`, `shortcut` |
 | Kommandozeilen-Befehl | `name`, Parameterschema |
 | Tool-Schema für den Agenten | `name`, `doc`, JSON-Schema aus `params` |
 | Doku-Abschnitt | alles zusammen |
@@ -1510,9 +1511,10 @@ sie hätte in Rot/Grün die für Farbfehlsichtigkeit schlechteste Kombination.
 
 ### 19.2 Tastatur
 Jede Op kann ein Kürzel führen; der Konsistenztest lehnt Dubletten ab. Die
-**Befehlspalette** ist der Universalzugang. Der Viewport ist mit der Tastatur
-navigierbar (Achsansichten, Zoom, Auswahl durchblättern). Undo und Redo gelten
-überall, auch im Chat.
+**Suche** im Auswahlpanel ist mit der Ansicht der Universalzugang; *Funktion
+suchen* oder Strg+Umschalt+P setzt den Cursor hinein. Der Viewport ist mit
+der Tastatur navigierbar (Achsansichten, Zoom, Auswahl durchblättern). Undo
+und Redo gelten überall, auch im Chat.
 
 ### 19.3 Anzeige
 HiDPI-tauglich, skalierbare Schriftgröße, ausreichender Kontrast in hellem und
@@ -3470,7 +3472,7 @@ geforderte Modell-, Feld-, Signier- oder Rechtsabnahme.
 (Grundfenster, Viewport, Objektbaum, Parameterleiste, Verlauf), `tests/data`
 
 *Fertig, wenn:* `core` ohne Qt importierbar · Sprachregelungstest grün · zwei
-Ops im Register, sichtbar in Menü, Palette, Auswahlfenster, CLI und Tool-Schema ·
+Ops im Register, sichtbar in Menü, Suche, Auswahlfenster, CLI und Tool-Schema ·
 Projekt speichern und laden erhält den Stack bitgleich · zweimalige Auswertung
 liefert identische Geometrie · Undo/Redo über zehn Transaktionen · Import in
 mm, Zoll und cm mit Einheitenrückfrage · Parameteränderung rechnet nur den

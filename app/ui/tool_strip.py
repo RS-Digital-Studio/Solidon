@@ -438,7 +438,7 @@ class ToolStrip(QWidget):
         return self._active
 
     def close_tool(self) -> None:
-        """Was gerade offen ist, schließen. Für Escape und die Befehlspalette."""
+        """Was gerade offen ist, schließen. Für Escape und die Suche."""
         self.activate(None)
 
     def tool_titles(self) -> dict[str, str]:
@@ -461,5 +461,5 @@ class ToolStrip(QWidget):
 
 
 def strip_title() -> str:
-    """Was in der Befehlspalette über den Werkzeugen steht."""
+    """Was in der Suche und der Kürzelübersicht über den Werkzeugen steht."""
     return tr("Ansicht")

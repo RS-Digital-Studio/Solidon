@@ -2107,7 +2107,7 @@ class CardGrip(QToolButton):
     Entscheidung Robert, 06.10.2026, nach dem Fragebogen zu 0.5.3 („Bewegliche
     Menüs?“): Die Karten links und rechts lassen sich innerhalb des Fensters
     verschieben und rasten an den Rändern ein; ein eigenes Fenster werden sie
-    nicht — dort fehlten Strg+Z, Entf und die Palette, und ein Kind über der
+    nicht — dort fehlten Strg+Z, Entf und Strg+Umschalt+P, und ein Kind über der
     Grafikfläche, das umzieht, macht seine Vorfahren nativ (Soll-Ablauf in
     ``konzepte/konzept-verschiebbare-karten-2026-10.md``).
 

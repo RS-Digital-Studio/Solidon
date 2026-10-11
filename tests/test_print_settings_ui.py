@@ -7890,7 +7890,7 @@ def test_the_search_finds_a_setting_by_its_words(qt_app: QApplication, session: 
     gemessen: „Überhänge" steht in drei note-Sätzen und in keinem einzigen
     Titel. Wer das Wort kennt, sucht danach — und fände ohne den Satz nichts.
 
-    Gefaltet wie in der Befehlspalette, damit „aushoehlen" und „Aushöhlen"
+    Gefaltet wie in der Suche, damit „aushoehlen" und „Aushöhlen"
     dasselbe finden.
     """
     dialog = PrintSettingsDialog(session, UiSettings())

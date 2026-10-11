@@ -174,12 +174,12 @@ def test_source_snapshot_does_not_read_later_embedded_payload(local_window, qt_a
     assert len(project.document.ops) == 1
 
 
-def test_palette_click_and_escape_share_the_local_flow(local_window, qt_app, monkeypatch):
+def test_a_search_choice_and_escape_share_the_local_flow(local_window, qt_app, monkeypatch):
     window = local_window
     window.object_tree.tree.clearSelection()
     window._update_actions()
-    assert window._palette_availability("detect_region") == (True, "")
-    window.launch_operation(REGISTRY.get("detect_region"))
+    assert window._operation_availability("detect_region") == (True, "")
+    window._run_search_choice("detect_region")
     flow = window.local_features()
     assert flow.armed
     monkeypatch.setattr(window.viewport, "placement_hit", lambda x, y: surface_hit(window))
@@ -238,14 +238,14 @@ def test_local_search_requires_a_visible_mesh_on_the_current_plate(local_window)
     window = local_window
     window.viewport.set_hidden(frozenset({"obj_1"}))
     window._update_actions()
-    assert not window._palette_availability("detect_region")[0]
+    assert not window._operation_availability("detect_region")[0]
     window.viewport.set_hidden(frozenset())
     window.viewport.set_plate(1)
     window._update_actions()
-    assert not window._palette_availability("detect_region")[0]
+    assert not window._operation_availability("detect_region")[0]
     window.viewport.set_plate(-1)
     window._update_actions()
-    assert window._palette_availability("detect_region") == (True, "")
+    assert window._operation_availability("detect_region") == (True, "")
 
 
 def test_context_action_uses_the_clicked_original_instead_of_old_selection(

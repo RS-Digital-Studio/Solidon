@@ -23,6 +23,7 @@ from app.ui.selection_operations import (
     body_operations,
     feature_operations,
     quick_names,
+    scene_creators,
 )
 from app.ui.style import NORMAL, TARGET_SIZE
 
@@ -42,20 +43,25 @@ def _availability(selected: int):
 
 
 def test_part_selection_leaves_its_actions_to_the_part_fields(qt_app: QApplication) -> None:
-    """Am Baustein stehen keine Flächenhandlungen seiner Einzelmerkmale."""
+    """Am Baustein stehen keine Flächenhandlungen seiner Einzelmerkmale — aber
+    das Suchfeld steht, wie an jeder Auswahl (RM-735, Entscheidung Robert
+    11.10.2026). Bis dahin war die Karte dort ganz verborgen."""
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
     panel.set_context(1, _availability(1), feature_kind="face", part_selected=True)
-    assert panel.isHidden()
+    assert not panel.isHidden() and not panel.search.isHidden(), "das Feld steht"
+    assert not any(panel._fits_the_level(name) for name in panel._buttons), "keine Handlung"
+    assert not panel._nothing.isHidden(), "der Satz sagt, wo die Handlungen stehen"
+    assert panel.catalog_button.isHidden()
     panel.set_context(1, _availability(1), feature_kind="face")
-    assert not panel.isHidden()
+    assert any(panel._fits_the_level(name) for name in panel._buttons)
 
 
 def test_a_part_thread_keeps_only_the_pin_in_the_card(qt_app: QApplication) -> None:
     """Am Innengewinde eines Bausteins steht genau *Stift für Bohrung* (RM-536, Robert 07.10.2026).
 
-    Am Außengewinde nimmt ``not_offered_at`` den Stift weg, und mit ihm bleibt
-    die Karte verborgen.
+    Am Außengewinde nimmt ``not_offered_at`` den Stift weg, und mit ihm steht in
+    der Karte keine Handlung mehr — nur noch das Suchfeld (RM-735).
     """
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
@@ -69,7 +75,8 @@ def test_a_part_thread_keeps_only_the_pin_in_the_card(qt_app: QApplication) -> N
         part_selected=True,
         left_out=frozenset({"pin_for_bore"}),
     )
-    assert panel.isHidden()
+    assert not any(panel._fits_the_level(name) for name in panel._buttons)
+    assert not panel.search.isHidden()
     panel.set_context(1, _availability(1), feature_kind="thread")
     assert not panel.isHidden() and panel._only is None, "ohne Baustein gilt die Karte ganz"
 
@@ -100,10 +107,15 @@ def test_the_panel_is_the_registry_without_the_parts_catalogue(qt_app: QApplicat
     zum 07.09.2026 filterte das Panel jedes ``applies_to`` heraus, und eine
     angeklickte Fläche bot darin nichts an. Draußen bleibt allein der
     Bausteinkatalog: Ein räumliches Teil als Textzeile ist die schlechtere
-    Darstellung, und der Knopf daneben führt hin.
+    Darstellung, und der Knopf daneben führt hin. Die Erzeuger stehen seit
+    RM-735 auf der Stufe ohne Auswahl (:func:`scene_creators`).
     """
     load_operations()
-    specs = body_operations(REGISTRY.all()) + feature_operations(REGISTRY.all())
+    specs = (
+        body_operations(REGISTRY.all())
+        + feature_operations(REGISTRY.all())
+        + scene_creators(REGISTRY.all())
+    )
     panel = SelectionOperationsPanel(REGISTRY.all())
 
     assert {spec.name for spec in specs} == set(panel._buttons)
@@ -312,16 +324,24 @@ def test_the_panel_leaves_out_what_the_feature_does_not_offer(qt_app: QApplicati
     assert "countersink_hole" in front()
 
 
+def _hit_names(panel: SelectionOperationsPanel) -> list[str]:
+    """Die Namen der Treffer in ihrer Reihenfolge — ohne die Kopfzeile der Lockerung."""
+    names = [
+        panel.hits.item(row).data(Qt.ItemDataRole.UserRole) for row in range(panel.hits.count())
+    ]
+    return [name for name in names if isinstance(name, str)]
+
+
 def test_the_search_finds_customer_words_and_names_what_another_choice_needs(
     qt_app: QApplication,
 ) -> None:
     """„löschen“ findet *Objekt entfernen*, „verschmelzen“ nennt, was *Vereinigen* braucht.
 
     Fragebogen zu 0.5.3: Ein Anfänger fand weder das Löschen noch das
-    Vereinigen. Die Suche der Karte verglich nur Titel und Gruppe; sie rechnet
-    jetzt wie die Palette (``found_in_rounds``). Und ein Treffer, der an
-    dieser Auswahl nicht geht, ist kein „Kein Treffer“: Der Satz nennt seinen
-    Sperrgrund — im Fenster der, der sagt, wie das zweite Objekt dazukommt.
+    Vereinigen. Die Suche der Karte rechnet wie die Befehlspalette, die sie seit
+    RM-735 ersetzt. Ein Treffer, der an dieser Auswahl nicht geht, steht mit
+    seinem Sperrgrund da und ist nicht wählbar — im Fenster der Satz, der sagt,
+    wie das zweite Objekt dazukommt. Ohne Treffer führt ein Knopf ins Handbuch.
     """
     from app.i18n import tr
 
@@ -330,59 +350,65 @@ def test_the_search_finds_customer_words_and_names_what_another_choice_needs(
     panel.set_context(1, _availability(1))
 
     panel.search.setText("löschen")
-    assert not panel._buttons["delete_object"].isHidden(), "Kundenwort ohne Titeltreffer"
-    assert panel._nothing.isHidden()
+    assert _hit_names(panel)[0] == "delete_object", "Kundenwort ohne Titeltreffer"
+    assert panel._nothing.isHidden() and panel.scroller.isHidden(), "die Treffer statt der Karte"
 
     panel.search.setText("verschmelzen")
-    assert not panel._nothing.isHidden()
-    assert panel._nothing.text() == tr(
-        "{name}: {value}",
-        name=str(REGISTRY.get("union_objects").title),
-        value="Dafür müssen 2 Körper ausgewählt sein.",
-    )
-    assert not panel._everywhere.isHidden(), "der Weg in alle Funktionen bleibt"
+    assert _hit_names(panel)[0] == "union_objects"
+    row = panel.hits.item(panel.hits.currentRow())
+    assert row.data(Qt.ItemDataRole.UserRole) == "union_objects", "vorgewählt"
+    assert not row.flags() & Qt.ItemFlag.ItemIsEnabled, "gesperrt, nicht wählbar"
+    assert "Dafür müssen 2 Körper ausgewählt sein." in row.text(), "der Grund steht in der Zeile"
 
     panel.search.setText("xyzzy")
     assert panel._nothing.text() == tr("Kein Treffer — versuchen Sie ein anderes Wort.")
+    assert not panel._manual.isHidden(), "der Weg ins Handbuch"
+    asked: list[str] = []
+    panel.manualRequested.connect(asked.append)
+    panel._manual.click()
+    assert asked == ["xyzzy"], "mit demselben Wort"
 
     panel.search.setText("")
+    assert panel.hits.isHidden() and not panel.scroller.isHidden(), "ohne Text die Karte"
     panel.set_context(2, _availability(2))
     panel.search.setText("verschmelzen")
-    assert panel._nothing.isHidden(), "bei zwei Körpern ist *Vereinigen* oben ein Treffer"
+    row = panel.hits.item(panel.hits.currentRow())
+    assert row.flags() & Qt.ItemFlag.ItemIsEnabled, "bei zwei Körpern geht *Vereinigen*"
 
 
-def test_a_locked_window_action_is_named_without_its_menu_ellipsis(
-    qt_app: QApplication,
-) -> None:
-    """Der Satz zu einer gesperrten Fensterhandlung nennt ihren Namen, nicht die Menüzeile.
+def test_a_locked_window_command_stands_with_its_reason(qt_app: QApplication) -> None:
+    """Die Befehle des Fensters stehen in derselben Suche, gesperrte mit ihrem Grund.
 
-    *Automatisch teilen* hat keinen Registereintrag; Titel und Grund kommen
-    von der Aktion des Fensters (:meth:`SelectionOperationsPanel.add_window_action`).
-    Ihre Beschriftung trägt die Auslassung des Menüs — vor dem Doppelpunkt
-    stand sie als „Automatisch teilen …: …“ im Satz.
+    Sie kommen vom Fenster (:meth:`SelectionOperationsPanel.set_search_sources`),
+    mit Freigabe und Grund aus derselben Aktion, die auch das Menü ausgraut.
+    Return auf einer gesperrten Zeile läuft an die Wache des Fensters weiter,
+    die den Grund in die Statuszeile setzt; Text und Fokus bleiben.
     """
-    from PySide6.QtGui import QAction
-
-    from app.i18n import tr
+    from app.core.registry import SearchEntry
 
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
-    action = QAction(tr("Automatisch teilen …"), panel)
     reason = "Das Teil passt schon auf das Bett."
-    action.setToolTip(reason)
-    action.setEnabled(False)
-    assert panel.add_window_action("auto_split", "prepare", action)
-    # Alles andere gesperrt und ohne Grund: Getroffen wird die Handlung über
-    # ihre Gruppe, und nur sie hat einen Satz.
-    panel.set_context(1, lambda name: (False, ""))
-
-    panel.search.setText(tr("Vorbereiten"))
-    assert panel._buttons["auto_split"].isHidden(), "gesperrt steht der Knopf nicht da"
-    assert not panel._nothing.isHidden()
-    assert panel._nothing.text() == tr(
-        "{name}: {value}", name=tr("Automatisch teilen …").removesuffix(" …"), value=reason
+    command = SearchEntry(
+        name="edit.auto_split",
+        title="Automatisch teilen …",
+        doc="",
+        category="edit",
+        available=False,
+        reason=reason,
     )
-    assert "…" not in panel._nothing.text()
+    panel.set_search_sources(lambda: [command], lambda _name, declared: declared, frozenset())
+    panel.set_context(1, _availability(1))
+    chosen: list[str] = []
+    panel.searchChosen.connect(chosen.append)
+
+    panel.search.setText("automatisch teilen")
+    assert _hit_names(panel)[0] == "edit.auto_split"
+    row = panel.hits.item(panel.hits.currentRow())
+    assert reason in row.text() and not row.flags() & Qt.ItemFlag.ItemIsEnabled
+    panel._choose_item(row)
+    assert chosen == ["edit.auto_split"], "die Wache des Fensters sagt den Grund"
+    assert panel.search.text() == "automatisch teilen", "Text und Fokus bleiben"
 
 
 def test_selection_changes_update_in_place_and_explain_disabled_actions(
@@ -419,23 +445,21 @@ def test_selection_changes_update_in_place_and_explain_disabled_actions(
         assert button.focusPolicy() != Qt.FocusPolicy.NoFocus
 
     # **Ohne Auswahl bleibt die Karte stehen: für die Bausteine** (Entscheidung
-    # Robert, 18.09.2026) **und für die Handlungen, die alle Körper nehmen**
-    # (Robert, 27.09.2026), davon aber nur ``SCENE_ACTIONS_IN_THE_CARD``
-    # (RM-506): Anordnen und Überschneidungen stehen in der Palette. Bis zum
-    # 18.09. verschwand die Karte ganz, und damit der einzige sichtbare Zugang
-    # zum Katalog.
-    from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD
-
+    # Robert, 18.09.2026), **für die Handlungen, die alle Körper nehmen**
+    # (Robert, 27.09.2026), seit RM-735 alle drei, **und für die Erzeuger**, die
+    # bis dahin nur im Menü standen — mit dem Suchfeld über alles (Entscheidung
+    # Robert, 11.10.2026).
     panel.set_context(0, _availability(0))
     QApplication.processEvents()
     assert not panel.isHidden()
-    assert not panel.search.isVisible(), "ohne Auswahl gibt es nichts zu durchsuchen"
+    assert panel.search.isVisible(), "das Suchfeld steht immer"
     assert panel.catalog_button.isVisible(), "der Weg zu den Bausteinen bleibt"
     for_all = {spec.name for spec in body_operations(REGISTRY.all()) if spec.takes_whole_scene}
-    in_the_card = for_all & SCENE_ACTIONS_IN_THE_CARD
-    assert in_the_card, "ohne Handlung für alle prüft der Test nichts"
+    assert {"orient_for_print", "arrange_bed", "check_collisions"} <= for_all
+    creators = {spec.name for spec in scene_creators(REGISTRY.all())}
+    assert {"create_brep_cone", "create_label", "load_step"} <= creators
     shown = {name for name, button in panel._buttons.items() if button.isVisible()}
-    assert shown == in_the_card, shown
+    assert shown == for_all | creators, shown
 
 
 def test_quick_actions_reflow_when_the_selection_column_narrows(qt_app: QApplication) -> None:
@@ -474,7 +498,7 @@ def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplic
     Konzept „Ein Ort für die Auswahl", C — zwei Sorten Nichtverfügbarkeit, und
     nur eine verschwindet. *Auf dem Bett anordnen*, *Objekt duplizieren* und
     *Objekt umbenennen* standen an einer gewählten Fläche bedienbar da, weil
-    ``_palette_availability`` die Körperauswahl fragt und ein gewähltes
+    ``_operation_availability`` die Körperauswahl fragt und ein gewähltes
     Merkmal immer einen Körper unter sich hat. Von 102 Registereinträgen
     betraf das 38.
     """
@@ -549,17 +573,14 @@ def test_actions_for_all_bodies_stand_without_a_selection_and_not_at_one(
     Am gewählten Körper sagte *Druckoptimal ausrichten*, es gelte diesem
     Körper — und richtete jeden aus.
 
-    **Und von den dreien steht nur eine** (Robert, 05.10.2026: „Eigentlich
-    reicht hier druckoptimal ausrichten“): Anordnen und Überschneidungen
-    prüfen bleiben über Menü und Befehlspalette erreichbar.
+    **Alle drei stehen da** (RM-735): *Auf dem Bett anordnen* gab es bis dahin
+    nur per Kürzel, *Überschneidungen prüfen* nur in der Befehlspalette, die
+    mit RM-735 gefallen ist. Daneben die Erzeuger (:func:`scene_creators`).
     """
-    from app.i18n import tr
-    from app.ui.selection_operations import SCENE_ACTIONS_IN_THE_CARD
-
     load_operations()
     every = {spec.name for spec in body_operations(REGISTRY.all()) if spec.takes_whole_scene}
-    assert every > SCENE_ACTIONS_IN_THE_CARD, "die Karte zeigt eine Auswahl der Szenenhandlungen"
-    for_all = set(SCENE_ACTIONS_IN_THE_CARD)
+    assert {"orient_for_print", "arrange_bed", "check_collisions"} <= every
+    creators = {spec.name for spec in scene_creators(REGISTRY.all())}
     panel = SelectionOperationsPanel(REGISTRY.all())
     panel.resize(320, 520)
     panel.show()
@@ -569,27 +590,29 @@ def test_actions_for_all_bodies_stand_without_a_selection_and_not_at_one(
         return {name for name, button in panel._buttons.items() if button.isVisible()}
 
     panel.set_context(0, _availability(0))
-    assert shown() == for_all
+    assert shown() == every | creators
     assert panel.chosen_level() == "scene"
-    assert panel._nothing.isVisible() and panel._nothing.text() == tr("Gilt für alle Körper.")
-    assert not panel.search.isVisible(), "eine Handlung sucht niemand"
+    assert panel._nothing.isHidden(), "die Gruppenköpfe sagen, was dasteht"
+    assert panel.search.isVisible(), "das Suchfeld steht immer"
 
     panel.set_context(1, _availability(1))
-    assert not shown() & every, "am gewählten Körper steht keine Handlung für alle"
+    assert not shown() & (every | creators), "am gewählten Körper steht keine Handlung für alle"
     panel.set_context(1, _availability(1), feature_kind="face")
-    assert not shown() & every, "an einer Fläche auch nicht"
+    assert not shown() & (every | creators), "an einer Fläche auch nicht"
 
-    # Ein Suchtext von der letzten Auswahl filtert ohne Auswahl nichts weg:
-    # Das Feld ist dann verborgen, und niemand sähe, warum etwas fehlt.
+    # Ein Suchtext bleibt über den Stufenwechsel stehen und sucht weiter —
+    # das Feld ist sichtbar, man sieht, warum die Karte zurücktritt.
     panel.set_context(1, _availability(1))
     panel.search.setText("wortdasnichtvorkommt")
     panel.set_context(0, _availability(0))
-    assert shown() == for_all
+    assert panel.scroller.isHidden() and not panel._manual.isHidden()
+    panel.search.setText("")
+    assert shown() == every | creators
 
-    # In einer leeren Szene ist nichts freigegeben — dann steht der Satz da.
-    panel.set_context(0, lambda _name: (False, "Die Szene ist leer."))
+    # Ist alles gesperrt, nennt der Satz den Grund, statt Handlungen zuzusagen.
+    panel.set_context(0, lambda _name: (False, "Die Lizenz ist abgelaufen."))
     assert not shown()
-    assert "Bausteine gehen auch so" in panel._nothing.text()
+    assert panel._nothing.text() == "Die Lizenz ist abgelaufen."
 
 
 def test_only_the_actions_of_that_kind_of_feature_stay(qt_app: QApplication) -> None:
@@ -736,7 +759,8 @@ def test_every_group_folds_and_a_search_hit_unfolds_it(qt_app: QApplication) -> 
     11.09.2026: „monoton und dadurch unübersichtlich"). Jetzt trägt jede
     Gruppe die Kopfzeile der linken Spalte: ein Umschalter mit Linie darunter.
     Wer sucht, soll den Treffer sehen, auch wenn er die Gruppe vorher
-    zugeklappt hatte.
+    zugeklappt hatte — seit RM-735 in der Trefferliste, die bei Suchtext an die
+    Stelle der Gruppen tritt.
     """
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
@@ -762,13 +786,12 @@ def test_every_group_folds_and_a_search_hit_unfolds_it(qt_app: QApplication) -> 
         folded[title] = shown
 
     # Zugeklappt lassen — und nach einem Knopf daraus suchen.
-    title, shown = next(iter(folded.items()))
-    toggle = panel._groups[title][1]
+    _title, shown = next(iter(folded.items()))
     wanted = shown[0]
     panel.search.setText(str(wanted.property("operationTitle") or wanted.text()))
     qt_app.processEvents()
-    assert toggle.isChecked(), f"ein Treffer öffnet {title}"
-    assert wanted.isVisibleTo(panel), "und der Treffer steht da"
+    assert panel.hits.isVisibleTo(panel) and not panel.scroller.isVisibleTo(panel)
+    assert str(wanted.property("operationName")) in _hit_names(panel), "der Treffer steht da"
 
 
 def test_a_group_over_the_menu_limit_starts_folded_unless_opened_by_hand(
@@ -1051,25 +1074,39 @@ def test_a_chosen_edge_leaves_the_body_operations_out(qt_app: QApplication) -> N
     QApplication.processEvents()
 
     assert not any(button.isVisible() for button in panel._buttons.values())
-    assert not panel.search.isVisible(), "und kein Feld, das zum Suchen einlädt"
+    assert panel.search.isVisible(), "das Suchfeld sucht auch hier über alles"
     assert "bei den Maßen" in panel._nothing.text()
     assert not panel.catalog_button.isVisible(), "ein Baustein sitzt nicht auf einer Kante"
 
 
-def test_the_search_field_goes_with_the_list_it_searches(qt_app: QApplication) -> None:
-    """Kein Suchfeld über einer Liste, die leer ist und leer bleibt.
+@pytest.mark.parametrize(
+    ("selected", "kind"),
+    [(0, ""), (1, ""), (2, ""), (1, "edge"), (1, "slot"), (1, "fillet"), (1, "hole")],
+)
+def test_the_search_field_stands_at_every_level(
+    qt_app: QApplication, selected: int, kind: str
+) -> None:
+    """Das Suchfeld steht immer — ohne Auswahl, an jedem Merkmal, an einer Kante.
 
-    **Befund Robert, 18.09.2026:** „weitere Optionen durchsuchen steht da,
-    wenn es keine Operationen für die Auswahl gibt". Wer **sucht** und nichts
-    findet, behält es — dort ist das Feld die Ursache und der Weg zurück.
+    Entscheidung Robert, 11.10.2026 (RM-735): Es ersetzt die Befehlspalette und
+    sucht über alles, also auch dort, wo die Karte selbst nichts anbietet. Das
+    hebt die frühere Entscheidung auf, nach der es mit einer leeren Liste
+    verschwand (Befund Robert, 18.09.2026: „weitere Optionen durchsuchen steht
+    da, wenn es keine Operationen für die Auswahl gibt") — damals versprach es
+    nur die Handlungen dieser Auswahl. Und es findet von dort aus auch, was an
+    einer anderen Stufe steht.
     """
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
     panel.show()
 
-    panel.set_context(1, _availability(1), feature_kind="")
+    panel.set_context(selected, _availability(selected), feature_kind=kind)
     QApplication.processEvents()
     assert panel.search.isVisible()
+
+    panel.search.setText("Quader")
+    QApplication.processEvents()
+    assert "create_brep_box" in _hit_names(panel) or "create_box" in _hit_names(panel)
 
     panel.search.setText("wortdasnichtvorkommt")
     QApplication.processEvents()
@@ -1182,26 +1219,59 @@ def test_a_hole_offers_the_matching_parts(qt_app: QApplication) -> None:
     assert opened == [True] and asked == ["hole"], "an der Fläche der ganze Katalog"
 
 
-def test_no_hit_offers_to_search_every_function(qt_app: QApplication) -> None:
-    """RM-506: Ohne Treffer führt ein Knopf in die Befehlspalette, mit demselben Wort.
+def test_the_search_reaches_every_function_and_its_keys_belong_to_it(
+    qt_app: QApplication,
+) -> None:
+    """Die Suche kennt jede Operation jeder Stufe, und Escape, Return und die
+    Pfeiltasten gehören dem Feld (RM-735).
 
-    Die Suche der Karte kennt nur, was zur Auswahl passt; wer „gewinde“ an
-    einem Körper sucht, fand nichts, obwohl es das gibt.
+    Bis dahin kannte die Karte nur, was zur Auswahl passt: Wer „gewinde“ an
+    einem Körper suchte, fand nichts, obwohl es das gibt, und kam erst über
+    *In allen Funktionen suchen* in die Befehlspalette. **Escape** war eine
+    Fensteraktion und hob an einem Merkmal die Auswahl auf; jetzt leert es das
+    Feld und gibt danach den Fokus ab. **Return** führt den vorgewählten
+    Treffer aus — vorher Feld leer und Fokus in die Ansicht, damit Strg+Z den
+    Schritt zurücknimmt und nicht das Tippen.
     """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QKeyEvent
+
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
     panel.show()
-    wanted: list[str] = []
-    panel.paletteRequested.connect(wanted.append)
     panel.set_context(1, _availability(1))
-    panel.search.setText("wortdasnichtvorkommt")
-    QApplication.processEvents()
-    assert panel._everywhere.isVisible(), "kein Treffer: der Weg in alle Funktionen"
-    panel._everywhere.click()
-    assert wanted == ["wortdasnichtvorkommt"]
-    panel.search.setText("")
-    QApplication.processEvents()
-    assert not panel._everywhere.isVisible(), "mit Treffern steht er nicht"
+    chosen: list[str] = []
+    left: list[bool] = []
+    panel.searchChosen.connect(chosen.append)
+    panel.searchLeft.connect(lambda: left.append(True))
+
+    def press(key: Qt.Key) -> bool:
+        override = QKeyEvent(QEvent.Type.ShortcutOverride, key, Qt.KeyboardModifier.NoModifier)
+        assert panel.eventFilter(panel.search, override), f"{key} gehört dem Feld"
+        assert override.isAccepted(), "und das Fenster bekommt die Taste nicht"
+        event = QKeyEvent(QEvent.Type.KeyPress, key, Qt.KeyboardModifier.NoModifier)
+        return panel.eventFilter(panel.search, event)
+
+    panel.search.setText("gewinde")
+    names = _hit_names(panel)
+    assert any(name in catalogue_operations() for name in names), "auch die Bausteine"
+
+    panel.search.setText("duplizieren")
+    assert _hit_names(panel)[0] == "duplicate_object"
+    first = panel.hits.currentRow()
+    press(Qt.Key.Key_Down)
+    assert panel.hits.currentRow() in (first, first + 1), "die Pfeiltaste bewegt die Wahl"
+    press(Qt.Key.Key_Up)
+    assert panel.hits.currentRow() == first
+    assert press(Qt.Key.Key_Return)
+    assert chosen == ["duplicate_object"], "Return führt den vorgewählten aus"
+    assert panel.search.text() == "" and left == [True], "Feld leer, Fokus in die Ansicht"
+
+    panel.search.setText("drehen")
+    press(Qt.Key.Key_Escape)
+    assert panel.search.text() == "" and left == [True], "Escape leert erst das Feld"
+    press(Qt.Key.Key_Escape)
+    assert left == [True, True], "und gibt dann den Fokus ab"
 
 
 def test_the_list_stands_in_two_columns_where_every_title_fits(qt_app: QApplication) -> None:
@@ -1400,6 +1470,13 @@ def test_the_window_offers_the_second_body_only_where_there_is_one(qt_app: QAppl
         window.object_tree.select_object(first)
         window._update_actions()
         assert window.selection_operations.pairing_hint.isHidden(), "ein Körper allein"
+        # **Und der Grund sagt, was fehlt** (Befund F4, bedienlogik 11.10.2026):
+        # Mit einem Körper in der Szene schickte er zum Dazuwählen eines
+        # zweiten, den es nicht gibt. Jetzt nennt er den Weg zu einem zweiten.
+        usable, reason = window._operation_availability("union_objects")
+        assert not usable
+        assert str(REGISTRY.get("duplicate_object").title) in reason, reason
+        assert "Klick" not in reason, "kein Dazuwählen, wo nichts dazuzuwählen ist"
 
         window.run_remote("create_box", {"width": 10.0, "depth": 10.0, "height": 10.0})
         assert window.session.wait_for_idle(60_000)

@@ -36,7 +36,6 @@ from app.ui.ai_disclosure import AiDisclosureDialog, AiDisclosureTarget, LocalPr
 from app.ui.catalog import PartCatalog
 from app.ui.changes_dialog import ChangesDialog
 from app.ui.comfy_dialog import ComfySetupDialog
-from app.ui.command_palette import CommandPalette
 from app.ui.dialogs import (
     AboutDialog,
     ActivationDialog,
@@ -258,9 +257,6 @@ BUILDERS: dict[str, Callable[[Session], QDialog]] = {
     # dass je etwas geprüft worden wäre. Gesperrt ist er genau dann, wenn der
     # Kunde den letzten Haken wegnimmt.
     "BodyChoiceDialog": lambda _session: _empty_body_choice(),
-    # **Mit leerer Liste, wie beim Filamentdialog:** Eine Befehlspalette ohne
-    # Einträge ist der Zustand, in dem ein Suchfeld nichts findet.
-    "CommandPalette": lambda _session: CommandPalette(),
     # **Ohne Erzeuger, und das ist der häufigste Fall.** Wer kein ComfyUI
     # eingerichtet hat, bekommt diesen Dialog mit gesperrtem Hauptknopf — genau
     # die Lage, in der ein Grund gebraucht wird.
@@ -558,7 +554,7 @@ def test_the_menu_guard_finds_what_it_looks_for(qt_app: QApplication) -> None:
 def test_the_missing_objects_sentence_counts_and_names_the_mac_key() -> None:
     """Der Satz nennt die Zahl, die die Operation braucht — und am Mac ⌘ statt Strg.
 
-    Seit Menüeintrag, Palette und Kartensuche ihn mit ``needed_inputs`` rufen,
+    Seit Menüeintrag und die Suche der Karte ihn mit ``needed_inputs`` rufen,
     sagte *Einlagen für neues Profil* (vier Eingänge) „braucht zwei Objekte“. Und
     „Umschalt oder Strg und Klick“ schickte am Mac auf eine Taste, die dort
     nichts dazunimmt: Die Mehrfachauswahl liegt auf ⌘.

@@ -135,7 +135,7 @@ bleibt und keine Entlüftung gewünscht ist, sonst der Netzweg mit Befund;
 gewählte Öffnungsflächen rechnet seit P6.3 der exakte Kern selbst,
 `brep.profiles.shell_open_at`);
 die fünf Grundkörper entstehen exakt, wo der Kern da ist, ihr Netz-Zwilling
-ist versteckt und über die Befehlspalette erreichbar. Der Haken ist aus beiden
+ist versteckt und über die Suche erreichbar. Der Haken ist aus beiden
 Dialogen verschwunden; der Kernwechsel eines gespeicherten Schritts steht im
 Kontextmenü des Verlaufs (`History.change_kernel`, `oberflaeche.md`). Dieselbe
 Weiche, ohne Zwilling, tragen *Text aufbringen*, *Dichtung erzeugen*, *Deckel

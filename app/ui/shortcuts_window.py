@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Final
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -98,7 +98,7 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
     jetzt an derselben Stelle.
 
     Was kein Kürzel hat, steht nicht darin: eine Kürzelübersicht mit leeren
-    Zeilen ist eine Liste aller Befehle, und die ist die Befehlspalette.
+    Zeilen ist eine Liste aller Befehle, und die findet *Funktion suchen*.
     """
     found: list[tuple[str, str, str]] = []
     if menu_bar is not None:
@@ -132,6 +132,11 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
                 )
     for sequence, title in WINDOW_KEYS:
         found.append((tr("Fenster"), str(title), _native(sequence)))
+    # *Funktion suchen* hängt seit RM-735 an keiner Menüzeile mehr; Name und
+    # Taste kommen von der Aktion, damit eine andere Belegung mitgeht.
+    search = getattr(window, "search_action", None)
+    if isinstance(search, QAction) and not search.shortcut().isEmpty():
+        found.append((tr("Fenster"), _plain(search.text()), _native(search.shortcut().toString())))
     # **Und die Werkzeuge der oberen Leiste** (RM-561): je eines ein Kürzel,
     # an keinem Menüeintrag — sonst fände man Strg+Umschalt+E nur im Tooltip.
     toolbar = getattr(window, "toolbar", None)
@@ -239,7 +244,6 @@ class ShortcutsWindow(QDialog):
         self,
         menu_bar: QMenuBar | None,
         parent: QWidget | None = None,
-        palette_key: str = "",
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Tastenkürzel"))
@@ -284,14 +288,10 @@ class ShortcutsWindow(QDialog):
         self._before_search: list[bool] | None = None
         self.tree.resizeColumnToContents(0)
 
-        # Das Kürzel kommt von der Aktion selbst. Hier stand „Strg+G", und das
-        # öffnet „Modell erzeugen" — eine Übersicht über Tastenkürzel, die ein
-        # falsches nennt, ist schlimmer als keine.
-        note = QLabel(
-            tr("Die Menüs und Werkzeugleisten zeigen weitere Bedienwege.")
-            + (f" — {palette_key}" if palette_key else ""),
-            self,
-        )
+        # Hier stand die Taste der Befehlspalette, einmal falsch („Strg+G“
+        # öffnet *Modell erzeugen*). *Funktion suchen* steht seit RM-735 als
+        # Zeile in der Liste, mit der Taste aus seiner Aktion.
+        note = QLabel(tr("Die Menüs und Werkzeugleisten zeigen weitere Bedienwege."), self)
         note.setWordWrap(True)
 
         # Eine Suche ohne Treffer sagt es, statt eine leere Liste hinzustellen

@@ -15,9 +15,9 @@ from app.core.registry import (
     documentation,
     menu_tree,
     op_params,
-    palette_entries,
     param,
     register_op,
+    search_entries,
     tool_schemas,
 )
 from app.core.types import BaseParams, OpContext, OpResult
@@ -335,13 +335,13 @@ def test_every_operation_reaches_every_surface(registry: Registry) -> None:
     names = {spec.name for spec in registry.all()}
 
     in_menu = {spec.name for section in menu_tree(registry) for spec in section.entries}
-    in_palette = {entry.name for entry in palette_entries(registry)}
+    in_search = {entry.name for entry in search_entries(registry)}
     in_cli = {command.name for command in cli_commands(registry)}
     in_tools = {schema["name"] for schema in tool_schemas(registry)}
     text = documentation(registry)
 
     assert in_menu == names
-    assert in_palette == names
+    assert in_search == names
     assert in_cli == names
     assert in_tools == names
     for name in names:
@@ -620,24 +620,21 @@ def test_actions_for_every_body_name_where_they_stand_without_a_selection() -> N
     """RM-506: Der Ort einer Handlung für alle Körper nennt „ohne Auswahl“.
 
     Der Weg nannte „bei gewähltem Körper“ — genau dort stehen sie seit dem
-    27.09.2026 nicht. Was die Karte ohne Auswahl nicht zeigt (Robert,
-    05.10.2026: „Eigentlich reicht hier druckoptimal ausrichten“), steht in der
-    Befehlspalette, und so heißt sein Ort.
+    27.09.2026 nicht. Seit RM-735 stehen alle drei in der Karte ohne
+    Auswahl; die Befehlspalette, in der zwei von ihnen allein standen, ist
+    gefallen.
     """
     from app.core.bootstrap import load_operations
     from app.core.registry import REGISTRY, menu_path
-    from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD
 
     load_operations()
-    for spec in REGISTRY.all():
-        if not spec.takes_whole_scene:
-            continue
+    every = [spec for spec in REGISTRY.all() if spec.takes_whole_scene]
+    assert len(every) >= 3, "Ausrichten, Anordnen, Überschneidungen"
+    for spec in every:
         where = menu_path(spec)
         assert "bei gewähltem Körper" not in where, f"{spec.name}: {where}"
-        if spec.name in SCENE_ACTIONS_IN_THE_CARD:
-            assert "ohne Auswahl" in where, f"{spec.name}: {where}"
-        else:
-            assert "Befehlspalette" in where, f"{spec.name}: {where}"
+        assert "ohne Auswahl" in where, f"{spec.name}: {where}"
+        assert "Befehlspalette" not in where, f"{spec.name}: {where}"
 
 
 def test_repair_stands_at_the_body_too() -> None:
@@ -660,7 +657,7 @@ def test_an_action_on_body_and_feature_names_both_places(name: str) -> None:
     """``also_on_body``: Ort und „Gilt für“ nennen den Körper vor dem Merkmal.
 
     *Aushöhlen* kam an die Fläche dazu, und der Ort lautete danach nur noch
-    „bei gewähltem Merkmal: Fläche, Gerundete Seite“ — Palette, Agent und
+    „bei gewähltem Merkmal: Fläche, Gerundete Seite“ — Suche, Agent und
     Handbuch verloren die Hauptstelle oben am gewählten Körper.
     """
     from app.core.bootstrap import load_operations

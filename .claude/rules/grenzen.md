@@ -1,12 +1,11 @@
 ---
-description: "Die Oberfläche wächst nicht mit — die gezählten Grenzen, was wo steht (Menüleiste, Karte der Handlungen, Kontextmenü, Palette), Zwillinge und Kernwechsel, Sperrgründe vor dem Dialog, Kürzel, Sortierung und Suche; wer eine Zahl erhöht, begründet es"
+description: "Die Oberfläche wächst nicht mit — die gezählten Grenzen, was wo steht (Menüleiste, Karte der Handlungen, Kontextmenü, Suche), Zwillinge und Kernwechsel, Sperrgründe vor dem Dialog, Kürzel, Sortierung und Suche; wer eine Zahl erhöht, begründet es"
 paths:
   - "app/core/registry/**/*.py"
   - "app/ui/main_window.py"
   - "app/ui/panels.py"
   - "app/ui/op_dialog.py"
   - "app/ui/tool_strip.py"
-  - "app/ui/command_palette.py"
   - "app/ui/shortcut_schemes.py"
   - "app/ui/catalog.py"
   - "app/ui/selection_operations.py"
@@ -32,7 +31,7 @@ Die Zahlen hält `tests/test_interface_limits.py`, die Breitengrenze
 | Felder auf der Vorderseite eines Operationsdialogs, gezählt, was zugleich dasteht (Felder anderer Varianten stehen nicht da) | ≤ 4, bei mindestens 90 % der Operationen ≤ 3 (Bauplan §2.4, Entscheidung Robert) |
 | Wörter über dem ersten Feld (Platzierungssatz, erster Satz der Beschreibung, Überschrift „Wann nicht?“) | ≤ 25, übersetzt ≤ 35 |
 | Breite des Skizzenbereichs, der Werkzeug- und der Bedingungszeile | je ≤ 900 Bildpunkte |
-| Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben im Dialog ihres Partners, erreichbar über Palette und Verlauf |
+| Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben im Dialog ihres Partners, erreichbar über Suche und Verlauf |
 
 Wer eine Zahl erhöhen will, tut es mit Absicht und begründet es im Commit. Der
 achte Platz der Werkzeugzeile ist keine Einladung: Eine Funktion, die eine
@@ -49,8 +48,8 @@ gefalteten, getrennt durch einen nackten Trennstrich.
 - **Was einer Auswahl gilt, steht rechts in der Karte der Handlungen — und nur
   dort** (Entscheidung Robert): `PANEL_CATEGORIES` (`registry.py`),
   `in_the_menu_bar`, und `_build_menus` legt dafür kein Menü an. Die Aktionen
-  entstehen trotzdem am Fenster (Kürzel, Palette über `_op_actions` und das
-  Feld *Funktion suchen …* oben, Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum,
+  entstehen trotzdem am Fenster (Kürzel und Suche über `_op_actions`,
+  Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum,
   Ansicht und Reiter *Auswahl*** (`_scope_shortcut`), sonst läge Entf über *Schritt löschen*, und
   zwei Aktionen auf einer Taste führt Qt beide nicht aus. Text- und Zahlenfelder
   behalten Entf. Sperren Halt oder Lizenz das Entfernen, sagt die Taste den
@@ -72,7 +71,7 @@ gefalteten, getrennt durch einen nackten Trennstrich.
   *Erzeugen → Bausteine*
   (`test_a_chosen_part_reaches_the_catalogue_in_one_click`).
 - **Der Katalog führt aus seiner Sperre hinaus:** Bei genau einem Körper gilt
-  ein Baustein ihm, auch ohne Auswahl, wie die Palette (`MainWindow._lone_body`); in der leeren
+  ein Baustein ihm, auch ohne Auswahl, wie die Suche (`MainWindow._lone_body`); in der leeren
   Szene stehen unter dem Satz die Wege, die er nennt (`PartCatalog.offer_ways`:
   *Quader anlegen*, *Modell einfügen …*). Ein modaler Katalog, der „wählen Sie
   im Objektbaum“ sagt, ist eine Sackgasse (RM-356).
@@ -83,9 +82,9 @@ gefalteten, getrennt durch einen nackten Trennstrich.
   dasselbe Menü.
 - **Der Wegweiser nennt den Ort:** `menu_path` schreibt „Handlungen rechts
   (bei gewähltem Körper) → Vereinigen“, „(bei gewähltem Merkmal: Fläche)“,
-  bei `also_on_body` „(bei gewähltem Körper oder Merkmal: …)“, „(ohne
-  Auswahl)“ oder „Befehlspalette“, sonst den Menüweg; Werkzeugbeschreibungen
-  und Palettenzeilen nennen ihn mit „Ort:“, Handbuch und Tour dieselben Orte
+  bei `also_on_body` „(bei gewähltem Körper oder Merkmal: …)“ oder „(ohne
+  Auswahl)“, sonst den Menüweg; Werkzeugbeschreibungen und der Hinweis eines
+  Suchtreffers nennen ihn mit „Ort:“, Handbuch und Tour dieselben Orte
   (`test_every_menu_path_in_the_texts_exists_in_the_menu_bar`).
 - **`HANDLE_INSTEAD`** (`panels.py`): An der Bohrung ist der Griff die Zeile
   *Zum Langloch ziehen* (der Doppelklick im Baum startet die erste passende
@@ -102,7 +101,7 @@ bekommt:
 | Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen“: drei Klicks, die Richtung wählt die Art), Menü *Erzeugen*, Karte der Handlungen; Grundkörper tragen vorn *Maße als Parameter anlegen* (§13) |
 | Weg 3 — generieren | Chat, Generierungsdialog, Einladung der leeren Szene |
 | Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — am gewählten oder einzigen Körper, sonst sagen sie es vorher) |
-| keiner der vier | Untermenü und Befehlspalette, sonst nichts |
+| keiner der vier | Untermenü oder Liste der Karte und die Suche, sonst nichts |
 
 ## Die Karte der Handlungen
 
@@ -154,20 +153,22 @@ Robert).
   an der Verrundung keiner (Entscheidung Robert). Er heißt wie der Menüeintrag,
   denn *Bausteine* ist schon die Abschnittsklappe darüber. **Ohne Auswahl bleibt er**,
   von der Operationsliste nur das Folgende.
-- **Handlungen für alle Körper (`takes_whole_scene`) stehen nur ohne Auswahl**
-  (Entscheidung Robert), in der Karte davon nur `SCENE_ACTIONS_IN_THE_CARD`
-  (`surfaces.py`), die übrigen in der Palette.
-  Darüber steht „Gilt für alle Körper.", ohne Suchfeld; ein
-  Suchtext von der letzten Auswahl filtert dort nichts weg
-  (`SelectionOperationsPanel._without_a_selection`).
-- **Die Suche der Karte rechnet wie die Palette** (`found_in_rounds`); ein
-  Treffer, der an der Auswahl nicht geht, nennt seinen Sperrgrund statt „Kein
-  Treffer“.
-- **Eine Karte ohne Liste lädt nicht zum Suchen ein:** Das Suchfeld verschwindet
-  mit der Liste, ein Satz nennt, wo die Handlungen stehen; wer sucht und nichts
-  findet, behält es, mit *In allen Funktionen suchen* (Palette, dasselbe Wort).
-  Beide Leeren setzt eine Stelle
-  (`SelectionOperationsPanel._only_this_sentence`).
+- **Ohne Auswahl stehen alle Handlungen für alle Körper (`takes_whole_scene`)
+  und die Erzeuger (`scene_creators`), nur dort** (Entscheidung Robert).
+- **An einem gewählten Körper nennt eine Zeile den Weg zu den Booleschen**
+  (RM-734, `_say_how_to_pair`): Text mit Taste, kein grauer Knopf — ein Klick
+  müsste den zweiten Körper raten.
+- **Das Suchfeld steht immer und ist die eine Suche** (Entscheidung Robert,
+  11.10.2026): jede Operation jeder Stufe und jeder Fensterbefehl
+  (`_search_rows`). Bei Suchtext tritt die Karte zurück, die Hauptaktionen
+  bleiben (das Feld springt sonst); ein gesperrter Treffer nennt seinen Grund.
+  Ohne Treffer steht *Im Handbuch suchen*, bei leerer Liste ein Satz
+  (`_say_there_is_nothing`).
+- **Die Tasten gehören dem Feld** (`_search_key`): Return startet den
+  vorgewählten Treffer, Escape leert das Feld, dann geht der Fokus an die
+  Ansicht wie nach jedem Start — sonst höbe die Fensteraktion die Auswahl auf.
+  *Funktion suchen* und Strg+Umschalt+P setzen den Cursor hinein
+  (`action_function_search`).
 - **Was der Filament-Schnellwähler trägt, steht nicht auch in der Liste**
   (`PICKER_HANDLES`), und in der leeren Karte tritt er beiseite
   (`MainWindow._update_actions`; das Lager steht in Kopfzeile und Menü). **Wer
@@ -189,7 +190,7 @@ sie lädt mit Operationsdialog, Merkmalfenster und Parameterschema.
   Wiederöffnen bleiben die gespeicherten Rollen stehen.
 - **Auch ein Sammeleintrag beginnt am gemeinsamen Einstieg**
   (`MainWindow.launch_operation`): *Zeichnen …* öffnet unmittelbar
-  die Zeichnung, wie Palette und Kürzel.
+  die Zeichnung, wie Suche und Kürzel.
 
 ## Zwillinge: eine Handlung, zwei Rechenkerne
 
@@ -207,20 +208,20 @@ Eintrag, sondern die Variantengruppe ihres Erzeugers
 **einen** Eintrag; `menu_twins()` sagt, welcher ihn trägt, auch für den
 Menüort des Agenten (§2.6). Der Zwilling heißt **genau** wie sein Partner
 (`create_brep_box` „Quader anlegen“, `drill_brep_hole` „Bohrung setzen“):
-Der Kunde sucht das Substantiv, die Palette sortiert nach Titel, und ein Wort
+Der Kunde sucht das Substantiv, die Suche ordnet nach Titel, und ein Wort
 davor läse sich wie eine Qualitätsstufe. Wo der versteckte steht, sagt
-`TWIN_WAYS` („über die Befehlspalette“ bzw. „im selben Dialog — der Körper
-entscheidet“); im Menü steht er nicht (`hidden_from_the_menu`), und weggelassen
+`TWIN_WAYS` („über das Kontextmenü des Verlaufsschritts“ bzw. „im selben Dialog
+— der Körper entscheidet“); im Menü steht er nicht (`hidden_from_the_menu`), und weggelassen
 wird er nur, wenn sein Partner angeboten wird. **Was die beiden trennt, ist der
-erste Satz ihres `doc`** — die Palette zeigt ihn unter dem gleichen Titel, beim
+erste Satz ihres `doc`** — die Trefferliste zeigt ihn unter dem gleichen Titel, beim
 exakten Erzeuger mit dem Vorteil („mit echten Kanten“).
-`tests/test_ui.py::test_twins_differ_in_the_sentence_the_palette_shows` prüft
+`tests/test_ui.py::test_twins_differ_in_the_sentence_the_search_shows` prüft
 jedes Paar in jeder Sprache ohne Fenster.
 
 **Es gibt keinen Kernwahl-Haken** (Entscheidung Robert; CAD-Konzept Abschnitt
 10.1): Ein Grundkörper entsteht exakt, wo der exakte Kern da ist
 (`registry.menu_twins()`, faul, denn die Antwort lädt OpenCASCADE; der
-Netz-Zwilling steht in der Befehlspalette, der Agent liest an ihm „Zweite
+Netz-Zwilling steht in der Suche, der Agent liest an ihm „Zweite
 Wahl“). *Bohrung setzen* und *Aushöhlen* fragen die Körperart ihres Eingangs
 (`operationen.md`, „Den Kern wählt der Körper, nicht der Kunde“;
 `hollow_object`: oben offen bleibt exakt, eine Entlüftung zählt dort nicht,
@@ -359,11 +360,12 @@ der drei Listen und liest `app/ui` nach einer vierten ohne Filter.
 
 ## Sortiert wird nach dem Titel, gesucht in der Sprache des Kunden
 
-**Was zur Auswahl passt, steht vorn:** `applies_to` ordnet Kontextmenü und
-Befehlspalette (`palette_entries(for_feature=...)`) — eine Reihenfolge, keine
-Auswahl; eine Palette, die aussortiert, wäre eine Betriebsart. **Sortiert wird
-nach dem Titel, überall mit `i18n.sort_key`** (Menüleiste über `by_category`,
-Palette, Kontextmenü, Karte) — nicht nach `Registry.all()`, nicht mit `str` oder
+**Was zur Auswahl passt, steht vorn:** `applies_to` ordnet das Kontextmenü;
+die Suche stellt bei gleicher Güte vorn, was die Karte an dieser Auswahl zeigt,
+dann das übrige Freigegebene, zuletzt das Gesperrte (`_search_rows`) — eine
+Reihenfolge, keine Auswahl; eine Suche, die aussortiert, wäre eine Betriebsart.
+**Sortiert wird nach dem Titel, überall mit `i18n.sort_key`** (Menüleiste über
+`by_category`, Suche, Kontextmenü, Karte) — nicht nach `Registry.all()`, nicht mit `str` oder
 `casefold`: „ä“ zählt wie „a“ (DIN 5007-1). Die **Suchfaltung**
 `registry.search.fold` ist etwas anderes („ä“ → „ae“ für „aushoehlen“);
 der Kommentar an jeder Tabelle sagt, welche sie ist.
@@ -375,14 +377,15 @@ eine Liste, die still weniger prüft, sähe aus wie eine genaue. Die Kundenwört
 stehen je Sprache im Katalog (`registry.search.CUSTOMER_WORDS`, Kontext
 „Suchwörter“): Ein Titeltreffer mitten im Wort zählt nach ihnen, die Wörter
 einer Anfrage stehen in **einer** Wendung, und die ungenauen Stufen
-(`LOOSE_RANK`) werten wie der Agent (`rank_entries`).
+(`LOOSE_RANK`) werten wie der Agent (`rank_entries`). Rangfolge und
+Vorauswahl: `registry.search.ranked`, `first_choice`.
 
-**Die Kundenwörter gehören der Palette, nicht dem Agenten:** Er wertet nur
+**Die Kundenwörter gehören der Suche, nicht dem Agenten:** Er wertet nur
 `SYNONYMS` (`rank_operations`, `customer_words=False`); ihm eines zu geben
 ändert sein Angebot — Suite vorher und nachher (`agentenschicht.md`). Ein neues
 Kundenwort steht in allen Sprachen, ist kein Füllwort und meint über einen
 kurzen Stamm kein anderes Wort
-(`test_every_customer_word_belongs_to_a_row_of_the_palette` hält die Schlüssel
+(`test_every_customer_word_belongs_to_a_row_of_the_search` hält die Schlüssel
 am Register und an den Fensterbefehlen).
 
 **Dieselben Kundenwörter führen durch das Handbuch** (`core/manual_search.py`):

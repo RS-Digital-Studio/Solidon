@@ -122,9 +122,9 @@ DIFF_LABELS = {
 def option_titles() -> dict[str, str]:
     """Jede Einzeloption des Dialogs mit ihrem Namen, in der Folge des Formulars.
 
-    **Eine Quelle für Formular und Befehlspalette** (RM-491): Seit die Hälfte
+    **Eine Quelle für Formular und Suche** (RM-491): Seit die Hälfte
     hinter „Weitere Einstellungen" liegt, findet man Tastenbelegung und
-    Fernsteuerung über die Palette — unter genau dem Namen, den die Zeile
+    Fernsteuerung über *Funktion suchen* — unter genau dem Namen, den die Zeile
     trägt. Die Schlüssel sind die Attributnamen der Felder
     (:meth:`SettingsDialog.show_option`).
     """
@@ -162,9 +162,9 @@ _GATES = {
 
 
 def searchable_options(settings: UiSettings) -> dict[str, str]:
-    """Was die Befehlspalette aus diesem Dialog anbietet — nur sichtbare Zeilen.
+    """Was die Suche aus diesem Dialog anbietet — nur sichtbare Zeilen.
 
-    „Richtung umkehren" allein sagt in der Palette nicht, wessen Richtung;
+    „Richtung umkehren" allein sagt in der Suche nicht, wessen Richtung;
     dort steht die 3D-Maus davor.
     """
     titles = option_titles()
@@ -549,7 +549,7 @@ class SettingsDialog(QDialog):
             QTimer.singleShot(0, self, self._reach_the_shown_option)
 
     def show_option(self, key: str) -> None:
-        """Öffnet den Dialog bei einer Zeile — der Weg aus der Befehlspalette.
+        """Öffnet den Dialog bei einer Zeile — der Weg aus der Suche.
 
         Liegt sie hinter „Weitere Einstellungen", klappt der Bereich auf; das
         Feld bekommt den Fokus und wird nach dem Anzeigen ins Bild gerollt.

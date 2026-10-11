@@ -51,7 +51,7 @@ Je Schritt, in der Reihenfolge, in der der Nutzer ihn erlebt: was er sieht,
 was er tut, was daraufhin passiert. Dazu ausdrücklich:
 
 - **Einstieg:** Wo findet er die Funktion — Auswahlfenster am Merkmal, Katalog,
-  Befehlspalette, Chat? Eine Funktion, die man nicht findet, gibt es nicht.
+  Suchfeld der Karte, Chat? Eine Funktion, die man nicht findet, gibt es nicht.
 - **Vorgaben:** Was steht beim Öffnen schon richtig da, was steht hinten?
 - **Fehlerfälle:** alle, die realistisch eintreten, jeder als Vorschlag mit
   anklickbarer Handlung. Ein Ablauf ohne Fehlerfälle ist halb entworfen.

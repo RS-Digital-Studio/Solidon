@@ -717,7 +717,7 @@ MUSTER_DATEI = Path(__file__).resolve().parent / "data" / "text_patterns.json"
 
 #: Je Sprache, wie viele Übersetzungen ein Semikolon tragen, das ihre deutsche
 #: Quelle nicht hat. Die Zahl darf nur sinken (Review P2 N5).
-UEBERSETZT_BESTAND: dict[str, int] = {"en": 86, "es": 186, "fr": 93, "it": 57, "pt": 109}
+UEBERSETZT_BESTAND: dict[str, int] = {"en": 86, "es": 185, "fr": 93, "it": 57, "pt": 109}
 
 UEBERSETZT_DATEI = Path(__file__).resolve().parent / "data" / "translated_semicolons.json"
 

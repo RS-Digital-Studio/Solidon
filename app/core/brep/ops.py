@@ -1,7 +1,7 @@
 """B-Rep-Operationen (Bauplan §30, §25, §10).
 
 Angemeldet wie jede andere Operation, damit sie von einer Stelle aus Menü,
-Palette, Kommandozeile und Agent erreichen (§10). Anders ist nur eines: ohne
+Suche, Kommandozeile und Agent erreichen (§10). Anders ist nur eines: ohne
 den Kern laufen sie nicht — und sie sagen das mit einem Satz, nicht mit einer
 Importspur (§36).
 
