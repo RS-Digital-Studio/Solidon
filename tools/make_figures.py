@@ -43,7 +43,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from app.core import figures
 from app.core.bootstrap import load_operations
@@ -807,11 +807,6 @@ def take_all(app: QApplication, language: str) -> None:
         print_dialog = prepared(
             PrintSettingsDialog(session, window.settings), DIALOG, fit_height=True
         )
-        current_printer = print_dialog.printer_choice.currentIndex()
-        if current_printer >= 0:
-            print_dialog.printer_choice.setItemText(
-                current_printer, SAMPLE_PRINTER.get(language, SAMPLE_PRINTER["de"])
-            )
         # Die Slicersuche läuft seit dem 13.09.2026 im Arbeiter, und die
         # Profilsuche folgt ihr; ein Bild mit „Die Slicer werden gesucht …"
         # oder „wird durchgesehen …" zeigte einen Moment, keinen Zustand. Und
@@ -825,6 +820,16 @@ def take_all(app: QApplication, language: str) -> None:
             if not print_dialog._profiles_pending:
                 break
             settle(app, 2)
+        # Erst nach der Slicersuche: Sie füllt die Druckerliste neu
+        # (``_fill_printer_choice``), und ein vorher gesetzter Beispielname
+        # stand danach wieder deutsch im Bild, auch im Satz zum Slicerprofil.
+        sample = SAMPLE_PRINTER.get(language, SAMPLE_PRINTER["de"])
+        current_printer = print_dialog.printer_choice.currentIndex()
+        if current_printer >= 0:
+            print_dialog.printer_choice.setItemText(current_printer, sample)
+        for label in print_dialog.findChildren(QLabel):
+            if SAMPLE_PRINTER["de"] in label.text():
+                label.setText(label.text().replace(SAMPLE_PRINTER["de"], sample))
         settle(app)
         shoot(print_dialog, "print-settings", language)
         print_dialog.release()
