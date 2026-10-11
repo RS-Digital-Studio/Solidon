@@ -194,8 +194,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al dividir en piezas sueltas se conserva cada pieza imprimible, también pasadores y arandelas junto a una placa grande. Solo caen superficies abiertas pequeñas y migas que la impresora no reproduce.
 - Un relieve solo se calcula cuando hay una imagen elegida. Hasta entonces el diálogo señala el botón *Elegir una imagen …*.
 - Los diálogos *Cargar STEP* y *Extruir un dibujo* solo ofrecen archivos que pueden leer. Si el proyecto no tiene ninguno, señalan el botón *Elegir un archivo …*.
-- Un trazo de líneas en el boceto termina en cuanto se cierra sobre su inicio. Hasta ahora quedaba un tramo nuevo en el puntero, y el primer Esc parecía no hacer nada.
+- Un trazo de líneas en el boceto termina en cuanto cierra un bucle. Hasta ahora quedaba un tramo nuevo en el puntero, y el primer Esc parecía no hacer nada.
 - Una longitud tecleada con la herramienta Línea crea exactamente una línea. Hasta ahora, al salir del campo de cota se añadía una segunda, de vuelta hacia el puntero.
+- Un clic que el ajuste a la cuadrícula coloca justo sobre un punto existente engancha ese punto. Hasta ahora el contorno parecía cerrado sin estar unido.
+- Un doble clic con la herramienta Línea termina el trazo de líneas. Hasta ahora creaba una línea de longitud cero.
 
 ### Generar con IA
 

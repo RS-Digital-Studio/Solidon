@@ -11,6 +11,7 @@ das Zeichnen.
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 from pathlib import Path
 
@@ -6897,9 +6898,115 @@ def test_a_typed_length_draws_one_line_even_when_the_field_loses_focus(
             canvas.measure_field,
             QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.MouseFocusReason),
         )
+        for _ in range(5):
+            QApplication.processEvents()
         assert len(canvas.sketch.elements) == 1, "der Fokusverlust setzt keine zweite"
     finally:
         panel.deleteLater()
+
+
+def test_enter_takes_the_shown_length_and_leaving_takes_a_typed_one(
+    qt_app: QApplication,
+) -> None:
+    """Die Eingabetaste setzt auch den angezeigten Wert; der Fokusverlust nur einen getippten.
+
+    Wer das Maßfeld per Klick oder Tab erreicht und die Zahl am Zeiger mit der
+    Eingabetaste nimmt, meint sie (Review 0.6.0, G-N3). Wer tippt und dann
+    woandershin klickt, meint die getippte Zahl.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QFocusEvent
+    from PySide6.QtTest import QTest
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        panel.choose_tool("line")
+        canvas.set_snapping(False)
+        canvas.place_on_plane((0.0, 0.0))
+        canvas.hover_on_plane((25.0, 0.2))
+        QTest.keyClick(canvas.measure_field, Qt.Key.Key_Return)
+        for _ in range(5):
+            QApplication.processEvents()
+        assert len(canvas.sketch.elements) == 1, (
+            "die Eingabetaste ohne Ziffer setzt die Zahl am Zeiger"
+        )
+
+        canvas.hover_on_plane((25.0, 20.0))
+        canvas.measure_field.selectAll()
+        QTest.keyClicks(canvas.measure_field, "15")
+        QApplication.sendEvent(
+            canvas.measure_field,
+            QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.MouseFocusReason),
+        )
+        for _ in range(5):
+            QApplication.processEvents()
+        assert len(canvas.sketch.elements) == 2, "getippt und verlassen setzt die getippte Zahl"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_contour_of_an_arc_and_lines_closes_the_chain(qt_app: QApplication) -> None:
+    """Ein Bogen verbindet seinen Anfang mit seinem Ende (Review 0.6.0, G-N2).
+
+    Sonst schloss eine Kontur aus Bogen und Linien den Linienzug nie, und am
+    Zeiger hing nach dem letzten Klick ein neuer Strich.
+    """
+    canvas = SketchCanvas()
+    canvas.set_snapping(True, 1.0)
+    canvas.set_tool("line")
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.place_on_plane((40.0, 0.0))
+    canvas.set_tool("arc")
+    for point in ((40.0, 0.0), (40.0, 30.0), (52.0, 15.0)):
+        canvas.place_on_plane(point)
+    assert [element.kind for element in canvas.sketch.elements] == ["line", "arc"]
+    canvas.set_tool("line")
+    for point in ((40.0, 30.0), (0.0, 30.0), (0.0, 0.0)):
+        canvas.place_on_plane(point)
+
+    assert len(canvas.sketch.elements) == 4
+    assert not canvas._pending_world, "die Kontur ist zu, der Zug fertig"
+
+
+def test_a_grid_point_on_an_existing_point_catches_it(qt_app: QApplication) -> None:
+    """Fällt der Rasterfang genau auf einen Punkt, fängt der Klick ihn (Review 0.6.0).
+
+    Die Rasterweite ist größer als die Fangweite: Der Klick landete auf der
+    Ecke, ohne eine Deckung zu bekommen, und die Kontur war nur scheinbar zu.
+    """
+    canvas = SketchCanvas()
+    canvas.set_snapping(True, 10.0)
+    canvas.set_tool("line")
+    for point in ((0.0, 0.0), (40.0, 0.0), (40.0, 30.0), (0.0, 30.0)):
+        canvas.place_on_plane(point)
+    reach = 8.0 / canvas._snap_scale()
+    assert math.hypot(3.0, 2.0) > reach, "der Klick liegt außerhalb der Fangweite"
+    canvas.place_on_plane((3.0, 2.0))
+
+    kinds = [entry.kind for entry in canvas.sketch.constraints]
+    assert kinds.count("coincident") == 4, "die Ecke bekommt ihre Deckung"
+    assert not canvas._pending_world, "und der Zug ist zu"
+
+
+def test_a_double_click_with_the_line_tool_draws_no_zero_line(qt_app: QApplication) -> None:
+    """Zwei Klicks an derselben Stelle legen keine Linie der Länge null an (Review 0.6.0).
+
+    Der zweite Klick beendet den Zug wie ein Doppelklick im CAD.
+    """
+    canvas = SketchCanvas()
+    canvas.set_snapping(True, 1.0)
+    canvas.set_tool("line")
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.place_on_plane((0.0, 0.0))
+    assert not canvas.sketch.elements, "am Anfang keine Linie"
+    assert not canvas._pending_world
+
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.place_on_plane((40.0, 0.0))
+    canvas.place_on_plane((40.0, 0.0))
+    assert len(canvas.sketch.elements) == 1, "am Ende des Zugs keine zweite"
+    assert not canvas._pending_world, "der Doppelklick beendet den Zug"
 
 
 def test_a_typed_length_snaps_to_the_axis_and_continues_the_chain(

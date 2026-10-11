@@ -193,8 +193,10 @@ it into `website/version.json`.
 - Splitting into separate parts keeps every printable part, including pins and washers next to a large plate. Only small open surfaces and crumbs the printer cannot reproduce are dropped.
 - A relief only computes once an image is chosen. Until then the dialog points to the *Choose an image …* button.
 - The *Load STEP* and *Extrude a drawing* dialogs only offer files they can read. If the project has none, they point to the *Choose a file …* button.
-- A chain of lines in a sketch ends as soon as it closes on its start. Until now a new segment hung on the pointer, and the first Esc seemed to do nothing.
+- A chain of lines in a sketch ends as soon as it closes a loop. Until now a new segment hung on the pointer, and the first Esc seemed to do nothing.
 - A length typed with the line tool creates exactly one line. Until now leaving the dimension field added a second one, back towards the pointer.
+- A click that grid snapping places exactly on an existing point now catches that point. Until now the contour looked closed without being connected.
+- A double-click with the line tool ends the chain of lines. Until now it created a line of zero length.
 
 ### Generating with AI
 
