@@ -179,6 +179,10 @@ scrive in `website/version.json`.
 - Uno schizzo con molte forme separate si risolve rapidamente, anche con centinaia di rettangoli o cerchi quotati.
 - Se *Curvatura continua* non si può rispettare mentre disegni, l'editor di schizzi lo segnala in pochi secondi invece che in minuti.
 - Se due vincoli si contraddicono, l'editor di schizzi li nomina entrambi invece di ridurre una linea o un cerchio a un punto.
+- Nell'editor di schizzi, *Sposta parallelamente* porta un contorno chiuso e ogni suo lato verso l'esterno se positivo e unisce gli angoli, in qualunque verso. Nella 0.5.3 finivano spesso dentro.
+- Ora anche gli archi seguono *Sposta parallelamente*, attorno allo stesso centro: un'asola conserva le estremità tonde e un raccordo la sua forma.
+- Dopo aver cambiato una quota, *Rifila*, *Prolunga*, *Sposta parallelamente* e *Specchia* agiscono sulla posizione visibile. La 0.5.3 usava lo stato disegnato prima.
+- I contorni grandi fatti di molte linee, come un contorno della faccia ripreso, si modificano nell'editor di schizzi senza attese.
 - Un corpo si tira su con tre clic: *Disegna* nella barra in alto (Ctrl+Maiusc+E), poi angolo, angolo opposto, altezza. Verso l'esterno si unisce, verso l'interno ritaglia.
 - Mentre si tira su, le misure si possono digitare. Un doppio clic sul passaggio apre le sue misure, e alla voce *Tipo* diventa un solido di rivoluzione o un campo di fori.
 - Dall'editor di schizzi, *Fatto* riporta nella vista e il clic successivo mette l'altezza. Esc mette da parte il contorno, Ctrl+Z lo riporta.

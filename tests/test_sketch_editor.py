@@ -1349,6 +1349,99 @@ def test_offsetting_the_selection_adds_a_copy(qt_app: QApplication) -> None:
     assert len(canvas.sketch.elements) == 3, "die Vorlage bleibt, die Kopie kommt dazu"
 
 
+def test_offsetting_a_drawn_rectangle_keeps_the_outline(qt_app: QApplication) -> None:
+    """N1: Werkzeug R, ganze Kontur, +2 mm — die Kopie liegt außen, und die
+    Zeichnung bleibt ein Umriss, den *Fertig* übernimmt. Bis 0.6.0 lagen vier
+    gekreuzte Linien innen, und der Zustand hieß „Noch offen“."""
+    canvas = SketchCanvas()
+    canvas.set_sketch(shapes.rectangle_between((0.0, 0.0), (40.0, 30.0)))
+    canvas.selection = [("line", (2 * at, 2 * at + 1)) for at in range(4)]
+
+    canvas.offset_selected(2.0)
+
+    assert canvas.outline, "ein Rahmen, kein Gewirr"
+    copied = canvas.points()[8:]
+    assert min(x for x, _y in copied) == pytest.approx(-2.0)
+    assert max(x for x, _y in copied) == pytest.approx(42.0)
+
+
+def test_offsetting_one_side_of_a_drawn_rectangle_goes_outwards(qt_app: QApplication) -> None:
+    """Nur die Unterkante gewählt: Sie gehört zum Rechteck und geht mit ihm
+    nach außen, also nach unten — der Tooltip sagt es."""
+    canvas = SketchCanvas()
+    canvas.set_sketch(shapes.rectangle_between((0.0, 0.0), (40.0, 30.0)))
+    canvas.selection = [("line", (0, 1))]
+
+    canvas.offset_selected(2.0)
+
+    assert [y for _x, y in canvas.points()[8:]] == pytest.approx([-2.0, -2.0])
+    panel = SketchPanel()
+    assert "Kanten" in panel.offset_distance.toolTip()
+
+
+@pytest.mark.parametrize("tool", ["trim", "extend"])
+def test_trim_and_extend_start_from_the_solved_drawing(qt_app: QApplication, tool: str) -> None:
+    """Dieselbe Frage wie bei Versetzen und Spiegeln (Review M2): Nach dem Maß
+    40 → 50 liegt die Unterkante bei 0…50. Trimmen bei x = 47,5 schneidet an
+    der Senkrechten x = 45, Verlängern läuft von 50 bis zur Senkrechten x = 60 —
+    vorher rechneten beide an der gezeichneten Kante 0…40."""
+    drawn = shapes.rectangle_between((0.0, 0.0), (40.0, 30.0))
+    wider = tuple(
+        replace(entry, value="50")
+        if entry.kind == "distance" and entry.targets == (0, 1)
+        else entry
+        for entry in drawn.constraints
+    )
+    walls = (
+        SketchElement("line", ((45.0, -10.0), (45.0, 10.0))),
+        SketchElement("line", ((60.0, -10.0), (60.0, 10.0))),
+    )
+    canvas = SketchCanvas()
+    canvas.set_sketch(replace(drawn, elements=(*drawn.elements, *walls), constraints=wider))
+    assert max(x for x, _y in canvas.points()[:8]) == pytest.approx(50.0), "der Löser legt 50 mm"
+    canvas.set_tool(tool)
+
+    canvas.cut_or_grow(canvas._to_screen(47.5 if tool == "trim" else 49.0, 0.0))
+
+    bottom = [
+        element
+        for element in canvas.sketch.elements
+        if element.kind == "line" and all(abs(y) < 1e-6 for _x, y in element.points)
+    ]
+    assert max(x for element in bottom for x, _y in element.points) == pytest.approx(
+        45.0 if tool == "trim" else 60.0
+    )
+
+
+@pytest.mark.parametrize("action", ["offset", "mirror"])
+def test_offset_and_mirror_start_from_the_solved_drawing(qt_app: QApplication, action: str) -> None:
+    """Nach einem geänderten Maß steht das Rechteck dort, wo der Löser es
+    hinlegt, nicht wo es gezeichnet wurde. Versetzt und gespiegelt wird, was
+    zu sehen ist — vorher kam die Kopie vom gezeichneten Stand."""
+    drawn = shapes.rectangle_between((0.0, 0.0), (40.0, 30.0))
+    wider = tuple(
+        replace(entry, value="50")
+        if entry.kind == "distance" and entry.targets == (0, 1)
+        else entry
+        for entry in drawn.constraints
+    )
+    canvas = SketchCanvas()
+    canvas.set_sketch(replace(drawn, constraints=wider))
+    assert max(x for x, _y in canvas.points()) == pytest.approx(50.0), "der Löser legt 50 mm"
+    canvas.selection = [("line", (2 * at, 2 * at + 1)) for at in range(4)]
+
+    if action == "offset":
+        canvas.offset_selected(2.0)
+        expected = (-2.0, 52.0)
+    else:
+        canvas.mirror_selected("y")
+        expected = (-50.0, 0.0)
+
+    copied = canvas.points()[8:]
+    assert min(x for x, _y in copied) == pytest.approx(expected[0])
+    assert max(x for x, _y in copied) == pytest.approx(expected[1])
+
+
 def test_mirroring_the_selection_adds_a_copy(qt_app: QApplication) -> None:
     canvas = _cross_canvas()
     canvas.selection = [("line", (0, 1))]

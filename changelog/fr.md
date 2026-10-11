@@ -180,6 +180,10 @@ dans `website/version.json`.
 - Une esquisse avec de nombreuses formes séparées se résout vite, même avec des centaines de rectangles ou de cercles cotés.
 - Si *Courbure continue* ne peut pas être respectée pendant que vous dessinez, l'éditeur d'esquisse le signale en quelques secondes au lieu de plusieurs minutes.
 - Si deux contraintes se contredisent, l'éditeur d'esquisse les nomme toutes les deux au lieu de réduire une ligne ou un cercle à un point.
+- Dans l'éditeur d'esquisse, *Décaler* porte un contour fermé et chaque côté vers l'extérieur à distance positive et raccorde les coins, dans les deux sens. La version 0.5.3 les mettait souvent dedans.
+- Les arcs suivent désormais aussi *Décaler*, autour du même centre : un trou oblong garde ses bouts arrondis et un congé sa forme.
+- Après un changement de cote, *Ajuster*, *Prolonger*, *Décaler* et *Mettre en miroir* agissent sur la position visible. La version 0.5.3 prenait l'état dessiné avant.
+- Les grands contours faits de nombreuses lignes, comme un contour de face repris, se modifient dans l'éditeur d'esquisse sans attente.
 - Un corps se tire en trois clics : *Dessiner* dans la barre du haut (Ctrl+Maj+E), puis coin, coin opposé, hauteur. Vers l'extérieur il se joint, vers l'intérieur il découpe.
 - Pendant le tirage, les dimensions se saisissent au clavier. Un double-clic sur l'étape ouvre ses dimensions, et sous *Type* elle devient un corps de révolution ou un réseau de trous.
 - Depuis l'éditeur d'esquisse, *Terminé* ramène dans la vue, et le clic suivant pose la hauteur. Échap met le contour de côté, Ctrl+Z le rappelle.
