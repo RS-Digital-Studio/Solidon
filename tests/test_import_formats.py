@@ -505,3 +505,24 @@ def test_an_stl_is_read_without_a_scene_and_without_leftovers(name: str) -> None
     assert np.array_equal(found.face_normals, expected.face_normals)
     assert set(found.face_attributes) == set(expected.face_attributes)
     assert leftovers < 20, f"{leftovers} objects of a scene were left behind"
+
+
+def test_each_loading_step_reads_the_files_the_plan_gives_it() -> None:
+    """``plan.reads`` sagt dem Quellenfeld, welche Dateien eine Ladeoperation liest.
+
+    Dieselbe Aufteilung wie ``import_plan``: STEP an *STEP laden*, SVG und DXF
+    an *Zeichnung hochziehen*, Netze an *Modell laden*; andere Operationen
+    nehmen jede Quelle.
+    """
+    from app.core.ingest.plan import reads
+
+    for suffix in READABLE_SUFFIXES:
+        assert reads("load", f"sources/teil{suffix}")
+        assert not reads("load_step", f"sources/teil{suffix}")
+    for suffix in OUTLINE_SUFFIXES:
+        assert reads("load_outline", f"sources/plan{suffix.upper()}")
+        assert not reads("load", f"sources/plan{suffix}")
+    assert reads("load_step", "sources/teil.STEP")
+    assert reads("load_step", "sources/teil.stp")
+    assert not reads("load_outline", "sources/teil.step")
+    assert reads("sculpt", "sources/irgendwas.bin")

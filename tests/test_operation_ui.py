@@ -2850,6 +2850,37 @@ def test_a_relief_without_an_image_waits_for_one(
     assert result is not None and result.stopped_at is None
 
 
+@pytest.mark.parametrize("name", ["load_step", "load_outline"])
+def test_a_loading_dialog_offers_only_files_it_can_read(
+    window: MainWindow, name: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """*STEP laden* und *Zeichnung hochziehen* belegen ihr Feld nicht mit der STL des Projekts.
+
+    Zwilling zu RM-775: Das Quellenfeld bot jede Projektquelle an und wählte
+    die erste vor, die Vorschau hielt mit „Diese Datei ist keine STEP-Datei.“
+    an. Jetzt bleibt das Feld leer, nichts rechnet, und *Übernehmen* nennt den
+    Knopf, der die Datei holt.
+    """
+    import logging
+    import time
+
+    assert window.session.project.document.sources, "die Platte ist eine Quelle"
+    with caplog.at_level(logging.WARNING, logger="app.core.scene.evaluate"):
+        window.run_operation(REGISTRY.get(name))
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == name
+        for _ in range(60):
+            QApplication.processEvents()
+            assert window.session.wait_for_idle(60_000)
+            time.sleep(0.005)
+        stopped = [r.getMessage() for r in caplog.records if "stopped" in r.getMessage()]
+        assert not stopped, stopped
+    assert not dialog.values().get("source")
+    assert not dialog._accept_button.isEnabled()
+    assert dialog._accept_button.toolTip() == "Quelle: Datei wählen …"
+    dialog.reject()
+
+
 def test_a_deferred_picker_keeps_the_field_until_its_answer(window: MainWindow) -> None:
     """Der Feldknopf verarbeitet eine nachgereichte Wahl ohne Eventloop im Dialog."""
 

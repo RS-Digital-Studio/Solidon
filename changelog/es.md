@@ -170,6 +170,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una pieza separada estorba a una acción sobre una característica, *Dividir en piezas sueltas y volver a intentarlo* la separa y ejecuta la acción. Ctrl+Z deshace ambas.
 - Al dividir en piezas sueltas se conserva cada pieza imprimible, también pasadores y arandelas junto a una placa grande. Solo caen superficies abiertas pequeñas y migas que la impresora no reproduce.
 - Un relieve solo se calcula cuando hay una imagen elegida. Hasta entonces el diálogo señala el botón *Elegir una imagen …*.
+- Los diálogos *Cargar STEP* y *Extruir un dibujo* solo ofrecen archivos que pueden leer. Si el proyecto no tiene ninguno, señalan el botón *Elegir un archivo …*.
 
 ### Generar con IA
 

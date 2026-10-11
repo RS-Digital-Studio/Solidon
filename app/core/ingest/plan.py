@@ -58,6 +58,26 @@ MODEL_SUFFIXES: Final = tuple(
     dict.fromkeys((*READABLE_SUFFIXES, *brep_step.SUFFIXES, *OUTLINE_SUFFIXES))
 )
 
+#: Welche Endungen jede Ladeoperation liest — dieselbe Aufteilung, nach der
+#: :func:`import_plan` eine Datei einer Operation zuordnet.
+_READ_BY: Final[dict[str, tuple[str, ...]]] = {
+    "load": READABLE_SUFFIXES,
+    "load_step": brep_step.SUFFIXES,
+    "load_outline": OUTLINE_SUFFIXES,
+}
+
+
+def reads(operation: str, path: str) -> bool:
+    """Ob ``operation`` die Quelldatei unter ``path`` lesen kann.
+
+    Das Quellenfeld einer Ladeoperation bietet nur solche an (RM-775,
+    Zwillinge): *STEP laden* belegte sein Feld mit der STL des Projekts, und
+    die Vorschau hielt mit „Diese Datei ist keine STEP-Datei.“ an. Für alle
+    anderen Operationen gilt jede Quelle.
+    """
+    suffixes = _READ_BY.get(operation)
+    return suffixes is None or Path(path).suffix.lower() in suffixes
+
 
 @dataclass(frozen=True, slots=True)
 class BodyChoice:

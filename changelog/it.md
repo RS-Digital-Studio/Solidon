@@ -169,6 +169,7 @@ scrive in `website/version.json`.
 - Se un pezzo separato intralcia un'azione su una caratteristica, *Dividi in pezzi distinti e riprova* lo separa ed esegue l'azione. Ctrl+Z annulla entrambe.
 - Dividendo in pezzi distinti resta ogni pezzo stampabile, anche perni e rondelle accanto a una piastra grande. Cadono solo piccole superfici aperte e briciole che la stampante non riproduce.
 - Un rilievo viene calcolato solo quando è scelta un'immagine. Fino ad allora la finestra indica il pulsante *Scegli un'immagine …*.
+- Le finestre *Carica STEP* e *Estrudi un disegno* offrono solo file che sanno leggere. Se il progetto non ne ha, indicano il pulsante *Scegli un file …*.
 
 ### Generare con l'IA
 

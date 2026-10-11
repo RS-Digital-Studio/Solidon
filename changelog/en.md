@@ -169,6 +169,7 @@ it into `website/version.json`.
 - If a separate part is in the way of a feature action, *Split into separate parts and try again* separates it and runs the action. Ctrl+Z undoes both.
 - Splitting into separate parts keeps every printable part, including pins and washers next to a large plate. Only small open surfaces and crumbs the printer cannot reproduce are dropped.
 - A relief only computes once an image is chosen. Until then the dialog points to the *Choose an image …* button.
+- The *Load STEP* and *Extrude a drawing* dialogs only offer files they can read. If the project has none, they point to the *Choose a file …* button.
 
 ### Generating with AI
 

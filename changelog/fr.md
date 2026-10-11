@@ -170,6 +170,7 @@ dans `website/version.json`.
 - Si une pièce séparée gêne une action sur une caractéristique, *Diviser en pièces distinctes et réessayer* la sépare et exécute l'action. Ctrl+Z annule les deux.
 - La division en pièces distinctes garde toute pièce imprimable, même goujons et rondelles près d'une grande plaque. Seules tombent petites surfaces ouvertes et miettes non imprimables.
 - Un relief n'est calculé qu'une fois une image choisie. D'ici là, la boîte de dialogue indique le bouton *Choisir une image …*.
+- Les boîtes de dialogue *Charger un STEP* et *Extruder un dessin* ne proposent que les fichiers qu'elles savent lire. Si le projet n'en contient aucun, elles indiquent le bouton *Choisir un fichier …*.
 
 ### Générer avec l'IA
 

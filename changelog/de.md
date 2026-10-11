@@ -194,6 +194,7 @@ Nutzen da und sonst nichts.
 - Steht einer Merkmalshandlung ein getrenntes Teil im Weg, trennt *In Einzelteile aufteilen und erneut versuchen* es ab und führt die Handlung aus. Strg+Z nimmt beides zurück.
 - Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch Stifte und Scheiben neben einer großen Platte. Wegfallen nur kleine offene Flächen und Krümel, die der Drucker nicht abbildet.
 - Ein Relief rechnet erst, wenn ein Bild gewählt ist. Bis dahin nennt der Dialog den Knopf *Bild wählen …*.
+- Die Dialoge *STEP laden* und *Zeichnung hochziehen* bieten nur Dateien an, die sie lesen können. Liegt keine im Projekt, nennen sie den Knopf *Datei wählen …*.
 
 ### Erzeugen mit KI
 
