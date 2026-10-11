@@ -317,6 +317,24 @@ Die Messung zur Stützsperre:
 > (Abschnitt 1.5): 18 476 Stützbewegungen wurden 0, die Modellbahn blieb bis
 > auf zwei Bewegungen gleich.
 
+> **Gitter neben einer Sperre liegt am Überhang an** (`snug`, 11.10.2026). Die
+> Sperre der Orca-Familie und von PrusaSlicer nimmt nur die Überhangfläche in
+> ihr aus. Im Gitterstil legen beide jede Säule auf ein Raster
+> (`SupportGridPattern`) und schneiden sie danach nur am Modell zu; am Becher
+> mit Deckel und gesperrtem Tunnel liefen die Säulen unter dem Deckel 1,1 mm
+> in beide Mündungen, von der Sohle bis zur Decke (ElegooSlicer 1,08 m, Bambu
+> Studio 0,97, Creality Print 0,94, OrcaSlicer 0,70, PrusaSlicer mit Gitter
+> 0,95). Mit `snug` waren es je 0,01 m, der Deckel blieb ganz gestützt.
+> Gefragt wird, was das Teil druckt: Gitter, oder „automatisch“ über einem
+> Herstellerprozess mit normaler Stütze. Außer `snug` druckt die Orca-Familie
+> jeden Stil des Herstellers unter normaler Stütze als Gitter, auch einen
+> Baumstil (Prusa XL in OrcaSlicer: 1,14 m im Tunnel, bis das Teil auch dort
+> `snug` bekam). Was die Sperre deckt, bleibt mit `snug` wirklich frei: Deckt
+> sie einen Überhang, der Stütze braucht, fällt die Gitterstütze weg, die dort
+> über die Sperre hinaus zufällig mitstützte (Sims im Becher ohne RM-629:
+> Abdeckung 46 → 39 %). Sonst ist es dieselbe normale Stütze; der Befund
+> `export.snug_support` sagt, warum die Datei `snug` statt Gitter trägt.
+
 Warum Cura kein 3MF bekommt:
 
 > `CuraEngine` liest kein 3MF (die 3MF-Seite sitzt in Curas Fenster, nicht in

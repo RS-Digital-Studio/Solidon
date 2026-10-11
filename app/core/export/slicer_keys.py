@@ -182,6 +182,11 @@ def _only(table: dict[str, str]) -> Callable[[object], str]:
     return convert
 
 
+#: Was gebügelt wird, in der Sprache von PrusaSlicer und der Orca-Familie
+#: (``ironing_type``, RM-588). Ohne Bügeln nennt PrusaSlicer keine Art.
+_IRONING_TYPES: Final[dict[str, str]] = {"topmost": "topmost", "top_surfaces": "top"}
+
+
 def _support_on(value: object) -> str:
     return "0" if str(value) == "none" else "1"
 
@@ -282,7 +287,10 @@ PRUSA: Final[tuple[Row, ...]] = (
     # PrusaSlicer kennt keine gesonderte „genaue Außenwand" — dort heißt die
     # Sache Kompensation der Bahnbreite und ist immer an. Kein Eintrag ist
     # hier richtiger als eine Zuordnung auf etwas Ähnliches.
-    ("shell.ironing", "ironing", _flag),
+    # Bügeln ist ein Schalter und eine Art (RM-588): „topmost“ nur die oberste
+    # Fläche, „top“ jede Oberseite. Ohne Bügeln schweigt die Art.
+    ("shell.ironing", "ironing", _mapped({"none": "0"}, "1")),
+    ("shell.ironing", "ironing_type", _only(_IRONING_TYPES)),
     # Brücken und flache Überhänge ohne Stütze (RM-587). PrusaSlicer legt Brücken
     # ohne eigenen Wert dick (``thick_bridges = 1``); die Umkehr an Überhängen
     # kennt es nicht.
@@ -459,9 +467,10 @@ ORCA: Final[tuple[Row, ...]] = (
     ("shell.scarf_seam", "override_filament_scarf_seam_setting", _only({"True": "1"})),
     ("shell.wall_generator", "wall_generator", _plain),
     ("shell.precise_outer_wall", "precise_outer_wall", _flag),
-    # Orca kennt vier Stufen des Bügelns; Solidon entscheidet nur, **ob** —
-    # wie stark und mit welchem Abstand weiß der Slicer besser.
-    ("shell.ironing", "ironing_type", _mapped({"True": "top"}, "no ironing")),
+    # Orca kennt vier Stufen des Bügelns; Solidon wählt keine, die oberste
+    # Fläche („topmost“, die Schicht, über der keine mehr liegt) oder jede
+    # Oberseite („top“). Wie stark und mit welchem Abstand weiß der Slicer besser.
+    ("shell.ironing", "ironing_type", _mapped(_IRONING_TYPES, "no ironing")),
     # Brücken und Überhänge (RM-587); ``thick_internal_bridges`` bleibt beim
     # Hersteller, der Rat meint die Brücke an der Außenseite.
     ("shell.thick_bridges", "thick_bridges", _flag),
@@ -637,7 +646,8 @@ CURA: Final[tuple[Row, ...]] = (
         "scarf_joint_seam_length",
         _mapped({"True": f"{SCARF_LENGTH:g}"}, "0"),
     ),
-    ("shell.ironing", "ironing_enabled", _boolean),
+    ("shell.ironing", "ironing_enabled", _mapped({"none": "false"}, "true")),
+    ("shell.ironing", "ironing_only_highest_layer", _mapped({"topmost": "true"}, "false")),
     # CuraEngine hat keinen umschaltbaren Wandgenerator und keine gesonderte
     # genaue Außenwand: es rechnet ohnehin mit variabler Bahnbreite. Was es
     # nicht kennt, bekommt keinen Eintrag — eine Zuordnung auf das

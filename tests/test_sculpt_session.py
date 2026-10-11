@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from app.core.geom.sculpt import strokes_from_text
+from app.core.geom.sculpt import EVEN_LONGEST, REFINE_TO_EDGE, strokes_from_text
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from tests.ui_helpers import session as session
@@ -99,7 +99,9 @@ def test_exact_sculpt_requires_the_latest_strokes_and_symmetry_before_finishing(
     assert window.sculpting() and len(window.session.project.document.ops) == before
     assert "geraden Teilstücken" in window.viewport._preview_note
     refine, prepared = latest.order.drafts
-    assert refine.op == "remesh_uniform" and refine.params["edge"] == pytest.approx(1.0)
+    # Pinsel 6 mm: mittlere Kante 6 / REFINE_TO_EDGE, die längste √2-mal so lang (Review F).
+    wanted = 6.0 / REFINE_TO_EDGE * EVEN_LONGEST
+    assert refine.op == "remesh_uniform" and refine.params["edge"] == pytest.approx(wanted)
     assert len(strokes_from_text(prepared.params["strokes"])) == 2
     assert prepared.params["symmetry"] == "x"
     window.sculpt_bar.done.click()
@@ -123,7 +125,7 @@ def test_a_coarse_body_is_refined_and_sculpted_in_one_transaction(
     Formen als eine Transaktion ab — ohne Knopf, ohne eigenen Verlaufsschritt."""
     import numpy as np
 
-    from app.core.geom.sculpt import REFINE_TO_EDGE, brush_radius_for
+    from app.core.geom.sculpt import brush_radius_for
 
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
@@ -147,7 +149,8 @@ def test_a_coarse_body_is_refined_and_sculpted_in_one_transaction(
 
     ops = window.session.project.document.ops
     assert [entry.op for entry in ops[before:]] == ["remesh_uniform", "sculpt_strokes"]
-    assert ops[before].params["edge"] == pytest.approx(radius / REFINE_TO_EDGE)
+    # Die längste Kante: REFINE_TO_EDGE mittlere je Radius, die längste √2-mal so lang (Review F).
+    assert ops[before].params["edge"] == pytest.approx(radius / REFINE_TO_EDGE * EVEN_LONGEST)
     assert len(window.session.project.document.transactions) == transactions + 1
     after = window.session.last_result.scene.objects[object_id].mesh
     assert float(np.asarray(after.raw.bounds)[1][2]) > float(crown[2]) + 0.1, "der Zug trägt"

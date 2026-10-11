@@ -4003,6 +4003,42 @@ def test_prusas_bottom_contact_layers_are_read_back() -> None:
     assert manufacturer._read_prusa(spacing, context)[0]["support.interface_spacing"] == 0.0
 
 
+@pytest.mark.parametrize(
+    ("kind", "ironing"),
+    [("no ironing", "none"), ("top", "top_surfaces"), ("topmost", "topmost")],
+)
+def test_ironing_the_topmost_surface_is_read_back(kind: str, ironing: str) -> None:
+    """RM-588: „topmost“ bügelt nur die oberste Fläche — in der Orca-Familie ein
+    Wert von ``ironing_type``, bei Prusa derselbe neben ``ironing = 1``. Ein
+    Profil, das so bügelt, steht in Solidon als „oberste Fläche“, nicht als
+    „alle Oberseiten“; ohne Art liest Prusa seine Vorgabe „top“."""
+    context = manufacturer._Context(nozzle=0.4)
+    read, foreign = manufacturer._read_process({"ironing_type": kind}, context, {})
+    assert read["shell.ironing"] == ironing
+    assert not foreign
+
+    prusa = {"ironing": "0" if kind == "no ironing" else "1"}
+    if kind != "no ironing":
+        prusa["ironing_type"] = kind
+    read = manufacturer._read_prusa(prusa, context)[0]
+    assert read["shell.ironing"] == ironing
+    if kind == "top":
+        assert manufacturer._read_prusa({"ironing": "1"}, context)[0]["shell.ironing"] == ironing
+
+
+def test_ironing_every_solid_layer_stays_a_manufacturer_value() -> None:
+    """„solid“ bügelt jede Vollschicht; Solidon hat dafür keinen Namen. Beide
+    Familien zeigen den Herstellerwert und deuten ihn nicht um (Review RM-588, L3)."""
+    context = manufacturer._Context(nozzle=0.4)
+    read, foreign = manufacturer._read_process({"ironing_type": "solid"}, context, {})
+    assert "shell.ironing" not in read
+    assert foreign["shell.ironing"] == "solid"
+
+    read, foreign = manufacturer._read_prusa({"ironing": "1", "ironing_type": "solid"}, context)
+    assert "shell.ironing" not in read
+    assert foreign["shell.ironing"] == "solid"
+
+
 def test_bridges_and_overhangs_are_read_back_from_both_families() -> None:
     """RM-587: Brückenstütze, dicke Brücken, Brückenfluss, Zusatzwände und Umkehr
     kommen aus dem Herstellerprofil. Die Schalter, die Brücken frei lassen, heißen

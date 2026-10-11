@@ -86,6 +86,7 @@ it into `website/version.json`.
 - The estimated print time is closer to the slicer's, much closer for parts with supports.
 - Whether supports and skirt fit on the bed is now measured only under the overhangs. Parts near the edge no longer get a needless warning.
 - Accepted suggestions hardly leave any overhang that needs support without it. *Keep channels clear* now only blocks space a support could never be removed from.
+- With *Keep channels clear*, grid supports no longer run into the mouths of blocked channels. In version 0.5.3 they reached about a millimetre inside.
 - Where supports under small overhangs rest on the model, Solidon suggests tree supports. They leave fewer marks there.
 - For small tips, Solidon suggests a lower *Minimum slowdown speed* so they do not go soft. The setting reaches every slicer.
 - Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
@@ -108,7 +109,10 @@ it into `website/version.json`.
 - A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.
 - Over a channel, the check report no longer recommends a support that could not be removed from it. It names the channel and a transition below 45 degrees.
 - For PETG, Solidon suggests *Full cooling at the support*. It then comes off the part more easily.
-- New in the print settings: *Interface layers below*, *Tree walls* and *Tree tip*, plus *Pull in first layer* and *Widen holes*, which follow the slicer unless you set them.
+- On figures, Solidon suggests the seam at the back, so no line runs down the front. For a large flat top it suggests ironing.
+- The estimated print time now includes ironing.
+- New in the print settings: *Fine layers*, *Minimum top thickness*, *Interface layers below*, *Tree walls*, *Tree tip*, *Pull in first layer* and *Widen holes*.
+- For *Iron the surface* you now choose between *Topmost face* and *All top surfaces*.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
@@ -117,10 +121,9 @@ it into `website/version.json`.
 - If a part already compensates in the model, with a hole drilled with *Apply material tolerance* or *Compensate the elephant foot*, Solidon suggests that the slicer does not do it again.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
-- The filament inventory again recognises a booking from Solidon 0.5.1 as an earlier booking and asks before deducting the same print again.
+- The filament inventory offers a booking from Solidon 0.5 of the same project with the same filaments for review and asks before deducting the same print again.
 - From this version on, a booking stays with its print, even when an update calculates faster or the manufacturer profile in the slicer changes. Previously, such a print counted as new.
 - Where shallow domes and slopes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the part then takes to print.
-- New in the print settings: *Fine layers* and *Minimum top thickness*, so top surfaces over fine layers stay closed.
 
 ### Threads, holes and standard parts
 
@@ -170,6 +173,9 @@ it into `website/version.json`.
 - The brush fits the size of the body. If the mesh is too coarse for it, *Sculpt* evens out the triangles on the first stroke, and one Ctrl+Z undoes both.
 - When mirroring, the plane lies where the body matches itself, even when one part sticks far out to the side.
 - Sculpting follows the mouse smoothly, and even a step with hundreds of brush strokes is calculated quickly.
+- With *Blend together*, the mesh comes out even, with hardly any thin slivers. A part on the print bed no longer reaches below it.
+- A body with an enclosed cavity keeps it with *Blend together*. Since version 0.1.1 the cavity became a second body, and the step reported unconnected parts.
+- With *Even out the triangles*, no edge is longer than the length you set, and the shape stays the same. The same edge often gives nearly twice as many triangles; a longer one keeps the old density.
 - In *Armature*, every click after the first sets a bone, Enter ends the chain, dragging a joint bends it, and *Done* saves everything without a dialog.
 - An armature bends only what hangs on its bones, and the rest of the body stays put. Older projects calculate as saved.
 - With Ctrl or Shift you select several edges and fillet or chamfer them in one step. A click on a corner selects all edges that meet there.

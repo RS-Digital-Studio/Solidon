@@ -150,6 +150,7 @@ from app.core.geom.sculpt import (
     SYMMETRY_BITS,
     SculptPreview,
     brush_radius_for,
+    evened_for_brush,
     median_edge,
     mirror_plane,
     refine_edge_for,
@@ -1199,8 +1200,6 @@ class _SculptPreviewWorker(Worker):
         self.cancel = CancelSignal()
 
     def work(self) -> None:
-        from app.core.geom.mesh_ops import uniform
-
         base, preview, refined, refined_edge = self.mesh, self.preview, None, 0.0
         if self.refine is not None:
             source, radius, finest = self.refine
@@ -1208,8 +1207,13 @@ class _SculptPreviewWorker(Worker):
             if refined_edge:
                 values = _refinement_params(refined_edge)
                 try:
-                    refined = uniform(
-                        source, values["edge"], values["deviation"], cancelled=self.cancel
+                    refined_edge, refined = evened_for_brush(
+                        source,
+                        values["edge"],
+                        values["deviation"],
+                        radius=radius,
+                        finest=finest,
+                        cancelled=self.cancel,
                     )
                 except AppError:
                     # Ein offenes Netz lässt sich nicht angleichen. Geformt wird

@@ -86,6 +86,7 @@ scrive in `website/version.json`.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
 - Il controllo che supporti e skirt stiano sul piano ora misura solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
 - I suggerimenti accettati non lasciano quasi più senza supporto gli sbalzi che ne hanno bisogno. *Tenere liberi i canali* blocca solo lo spazio da cui un supporto non si potrebbe più togliere.
+- Con *Tenere liberi i canali*, i supporti a griglia non entrano più nelle bocche dei canali bloccati. Nella versione 0.5.3 vi arrivavano per poco più di un millimetro.
 - Dove i supporti sotto piccoli sbalzi poggiano sul modello, Solidon suggerisce supporti ad albero. Lì lasciano meno segni.
 - Sulle punte piccole Solidon suggerisce una *Velocità minima di rallentamento* più bassa, così non si ammorbidiscono. L'impostazione arriva a ogni slicer.
 - I bordi stretti che si reggono da soli restano liberi con *Bordi senza supporto*. La stampa richiede così molto meno supporto.
@@ -108,7 +109,10 @@ scrive in `website/version.json`.
 - Un bordo stretto che si regge da solo non conta più come ponte lungo, nemmeno accanto a un altro sbalzo. Il rapporto non avvisa più lì e Solidon non chiede supporti per questo.
 - Sopra un canale il rapporto non consiglia più un supporto che poi non si potrebbe togliere. Nomina il canale e un raccordo sotto i 45 gradi.
 - Per il PETG Solidon suggerisce *Raffreddamento pieno sul supporto*. Così si stacca più facilmente dal pezzo.
-- Nuove impostazioni di stampa: *Strati di interfaccia inferiori*, *Pareti degli alberi* e *Punta dell'albero*, più *Restringi il primo strato* e *Allarga i fori*, che seguono lo slicer se non scegli.
+- Sulle figure Solidon propone la cucitura dietro, senza linea davanti. Per una grande faccia superiore piana propone la stiratura.
+- Il tempo di stampa stimato ora include la stiratura.
+- Nuove impostazioni di stampa: *Strati fini*, *Spessore minimo superiore*, *Strati di interfaccia inferiori*, *Pareti degli alberi*, *Punta dell'albero*, *Restringi il primo strato* e *Allarga i fori*.
+- In *Stira la superficie* ora scegli tra *Faccia più alta* e *Tutte le facce superiori*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
 - Se lo slicer rifiuta filamenti con temperature troppo diverse su un piatto, Solidon ora indica il motivo e la via d'uscita, invece di dire solo che non è stato creato alcun file.
 - Nella finestra di stampa, stampante, filamenti e qualità restano del tutto visibili anche con il testo ingrandito. Le etichette lunghe vanno a capo.
@@ -117,10 +121,9 @@ scrive in `website/version.json`.
 - Se un pezzo compensa già nel modello, con un foro con *Considera la tolleranza del materiale* o *Compensa il piede d'elefante*, Solidon propone che lo slicer non lo faccia di nuovo.
 - Anche con stampanti che PrusaSlicer o SuperSlicer non conoscono, entrambi stimano il tempo di stampa con le accelerazioni trasmesse, e il file indica il materiale della bobina.
 - Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.
-- Il magazzino filamenti riconosce di nuovo un consumo scaricato con Solidon 0.5.1 e chiede prima di scaricare di nuovo la stessa stampa.
+- Il magazzino filamenti propone da verificare una registrazione di Solidon 0.5 dello stesso progetto con gli stessi filamenti e chiede prima di scaricare di nuovo.
 - Da questa versione un consumo scaricato resta legato alla sua stampa, anche se un aggiornamento calcola più in fretta o cambia il profilo del produttore nello slicer. Prima contava come nuova.
 - Dove cupole piatte e pendenze mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa del pezzo.
-- Novità nelle impostazioni di stampa: *Strati fini* e *Spessore minimo superiore*, perché le superfici superiori sopra strati fini restino chiuse.
 
 ### Filettature, fori e componenti normalizzati
 
@@ -170,6 +173,9 @@ scrive in `website/version.json`.
 - Il pennello si adatta alle dimensioni del corpo. Se la mesh è troppo grossolana, *Modella* uniforma i triangoli al primo tratto, e un Ctrl+Z annulla entrambe le cose.
 - Nello specchiare il piano sta dove il corpo corrisponde a sé stesso, anche quando una parte sporge molto di lato.
 - Modellare segue il mouse in modo fluido, e anche un passaggio con centinaia di tratti di pennello si calcola in fretta.
+- Con *Fondi dolcemente* la mesh è uniforme, quasi senza schegge sottili. Un pezzo sul piano di stampa non scende più al di sotto.
+- Un corpo con una cavità chiusa la mantiene con *Fondi dolcemente*. Dalla versione 0.1.1 la cavità diventava un secondo corpo e il passo segnalava parti non collegate.
+- Con *Uniforma i triangoli* nessuno spigolo supera la lunghezza impostata e la forma non cambia. Lo stesso spigolo dà spesso quasi il doppio dei triangoli; uno più lungo mantiene la densità di prima.
 - In *Scheletro* ogni clic dopo il primo crea un osso, Invio chiude la catena, trascinare un'articolazione la piega e *Fatto* salva tutto senza dialogo.
 - Uno scheletro piega solo ciò che è legato alle sue ossa, il resto del corpo resta fermo. I progetti precedenti si calcolano come salvati.
 - Con Ctrl o Maiusc selezioni più spigoli e li raccordi o smussi in un solo passaggio. Un clic su un angolo seleziona tutti gli spigoli che vi si incontrano.

@@ -1,0 +1,52 @@
+{
+  "format_version": 1,
+  "inventory_identifier": "f77b2380b1ab4c848a0d69ccd6300d8d",
+  "spools": [
+    {
+      "name": "PLA Rot",
+      "colour": "#d02020",
+      "material_type": "PLA",
+      "slicer_profile": "",
+      "identifier": "2f40b94031604408b2241bd94d4ec4c4",
+      "diameter_mm": null,
+      "spool_grams": null,
+      "remaining_grams": 476.55,
+      "location": "",
+      "opened_on": "",
+      "bought_on": "",
+      "price": null,
+      "currency": "",
+      "note": "",
+      "archived": false,
+      "revision": 2,
+      "stock_revision": 1,
+      "extra_colours": []
+    }
+  ],
+  "stock_counts": {
+    "2f40b94031604408b2241bd94d4ec4c4": 500.0
+  },
+  "bookings": [
+    {
+      "operation_id": "rm706-altbuchung-053",
+      "fingerprint": "b6af97b116a3d3a692fd8a83cd1f9518",
+      "positions": [
+        {
+          "spool_identifier": "2f40b94031604408b2241bd94d4ec4c4",
+          "grams": 23.45,
+          "source": "gcode",
+          "note": "",
+          "position_identifier": "",
+          "stock_revision": 1,
+          "filament_key": "c1580aa727845088a3cdb905add85b02"
+        }
+      ],
+      "created_at": "2026-10-11T03:38:03.369189+00:00",
+      "updated_at": "2026-10-11T03:38:03.369189+00:00",
+      "project_name": "weg2-halter-konstruieren",
+      "reversed_at": "",
+      "corrections": [],
+      "preserved_counts": []
+    }
+  ]
+}

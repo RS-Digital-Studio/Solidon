@@ -111,6 +111,7 @@ Nutzen da und sonst nichts.
 - Die geschätzte Druckzeit liegt näher an der des Slicers, bei Teilen mit Stützen deutlich näher.
 - Ob Stützen und Skirt auf dem Bett Platz haben, misst die Prüfung nur noch unter den Überhängen. Teile nahe am Rand bekommen keine grundlose Warnung mehr.
 - Übernommene Vorschläge lassen kaum noch Überhänge ohne Stütze, die eine brauchen. *Kanäle frei halten* sperrt nur noch Raum, aus dem keine Stütze mehr herauskäme.
+- Gitterstützen laufen mit *Kanäle frei halten* nicht mehr in die Mündungen gesperrter Kanäle. In Version 0.5.3 reichten sie dort gut einen Millimeter hinein.
 - Setzen Stützen unter kleinen Überhängen auf dem Modell auf, schlägt Solidon Baumstützen vor. Sie hinterlassen dort weniger Spuren.
 - Bei kleinen Spitzen schlägt Solidon ein niedrigeres *Mindesttempo beim Bremsen* vor, damit sie nicht weich werden. Die Einstellung geht an jeden Slicer.
 - Schmale Ränder, die sich selbst tragen, bleiben mit *Ränder ohne Stütze* frei. Der Druck braucht so deutlich weniger Stütze.
@@ -133,7 +134,10 @@ Nutzen da und sonst nichts.
 - Ein schmaler Rand, der sich selbst trägt, gilt nicht mehr als lange Brücke, auch neben einem anderen Überhang. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.
 - Über einem Kanal rät der Prüfbericht nicht mehr zu einer Stütze, die dort nicht mehr herauskäme. Er nennt den Kanal und den Übergang unter 45 Grad.
 - Für PETG schlägt Solidon *Volle Kühlung an der Stütze* vor. Sie löst sich so leichter vom Teil.
-- Neu in den Druckeinstellungen: *Trennschichten unten*, *Wände der Bäume* und *Baumspitze*, dazu *Erste Schicht einziehen* und *Löcher weiten*, die dem Slicer folgen, solange Sie nichts wählen.
+- An Figuren schlägt Solidon die Naht hinten vor, damit keine Linie über die Vorderseite läuft. Für eine große flache Oberseite schlägt es Bügeln vor.
+- Die geschätzte Druckzeit rechnet das Bügeln jetzt mit.
+- Neu in den Druckeinstellungen: *Feine Schichten*, *Deckschichten mindestens*, *Trennschichten unten*, *Wände der Bäume*, *Baumspitze*, *Erste Schicht einziehen* und *Löcher weiten*.
+- Bei *Oberfläche bügeln* wählen Sie jetzt zwischen *Oberste Fläche* und *Alle Oberseiten*.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
@@ -142,10 +146,9 @@ Nutzen da und sonst nichts.
 - Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
-- Das Filamentlager erkennt eine Buchung aus Solidon 0.5.1 wieder als frühere Buchung und fragt nach, bevor es denselben Druck erneut abbucht.
+- Eine Buchung aus Solidon 0.5 desselben Projekts mit denselben Filamenten bietet das Filamentlager zur Prüfung an und fragt nach, bevor es denselben Druck erneut abbucht.
 - Ab dieser Version bleibt eine Buchung ihrem Druck zugeordnet, auch wenn ein Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
 - Wo flache Kuppen und Schrägen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger das Teil dann druckt.
-- Neu in den Druckeinstellungen: *Feine Schichten* und *Deckschichten mindestens*, damit Oberseiten über feinen Schichten dicht bleiben.
 
 ### Gewinde, Bohrungen und Normteile
 
@@ -195,6 +198,9 @@ Nutzen da und sonst nichts.
 - Der Pinsel passt zur Größe des Körpers. Ist das Netz für ihn zu grob, gleicht *Formen* die Dreiecke beim ersten Zug selbst an, und ein Strg+Z nimmt beides zurück.
 - Beim Spiegeln liegt die Ebene dort, wo der Körper sich selbst gleicht, auch wenn ein Teil weit zur Seite ragt.
 - Formen folgt der Maus flüssig, und auch ein Schritt mit hunderten Pinselzügen ist schnell gerechnet.
+- Mit *Weich verschmelzen* entsteht ein gleichmäßiges Netz mit kaum noch schmalen Splittern. Ein Teil auf dem Druckbett reicht nicht mehr darunter.
+- Ein Körper mit eingeschlossenem Hohlraum behält ihn beim *Weich verschmelzen*. Seit Version 0.1.1 wurde der Hohlraum zu einem zweiten Körper, und der Schritt meldete unverbundene Teile.
+- Mit *Dreiecke angleichen* ist keine Kante länger als verlangt, die Form bleibt gleich. Bei gleicher Kante entstehen oft fast doppelt so viele Dreiecke; eine längere Kante hält die alte Dichte.
 - Im *Skelett* setzt jeder Klick nach dem ersten einen Knochen, Enter beendet die Kette, Ziehen an einem Gelenk beugt, und *Fertig* legt alles ohne Dialog ab.
 - Ein Skelett beugt nur, was an seinen Knochen hängt, der Rest des Körpers bleibt stehen. Ältere Projekte rechnen wie gespeichert.
 - Mit Strg oder Umschalt wählen Sie mehrere Kanten und verrunden oder fasen sie in einem Schritt. Ein Klick auf eine Ecke wählt alle Kanten, die dort zusammenlaufen.

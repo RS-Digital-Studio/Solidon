@@ -552,8 +552,8 @@ def thread_at_gauge(feature: Feature) -> tuple[float, float] | None:
     verschiedenen Höhen. Ein Gewinde aus der Bibliothek nennt deshalb auch
     ``gauge_nominal``, das Nennmaß seiner Größe in der Bezugsebene; das gebaute
     Maß dort liegt um dasselbe neben ``diameter`` wie das Nennmaß neben
-    ``nominal``, denn beide wachsen mit demselben Kegel. Ein gemessenes oder
-    gemessenes Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
+    ``nominal``, denn beide wachsen mit demselben Kegel. Ein am Netz gemessenes
+    Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
     Passung und Gegenstück raten sie nicht.
 
     **Ein geändertes Gewinde behält sie** (Nachprüfung GEW, N2): *Merkmal
@@ -1257,6 +1257,10 @@ SupportStyle = Literal["none", "auto", "grid", "tree", "hybrid"]
 SupportPlacement = Literal["everywhere", "build_plate"]
 SeamPosition = Literal["aligned", "nearest", "random", "rear"]
 
+#: Was gebügelt wird (RM-588): nichts, die oberste Fläche des Teils oder jede
+#: Oberseite. Die Slicer kennen es als eine Wahl (Orca ``ironing_type``).
+Ironing = Literal["none", "topmost", "top_surfaces"]
+
 #: Wie die Wandbahnen erzeugt werden. ``classic`` legt feste Linienbreiten und
 #: füllt, was dazwischen übrig bleibt, mit Lückenfüllung; ``arachne`` verteilt
 #: die vorhandene Breite auf so viele Bahnen, wie hineinpassen. Der Unterschied
@@ -1332,9 +1336,11 @@ class ShellSettings:
     """Rechnet die Außenwand auf das Sollmaß statt auf die Bahnmitte. Kostet
     etwas Zeit und ist überall dort richtig, wo ein Maß eingehalten werden
     muss — also bei Passungen."""
-    ironing: bool = False
-    """Bügelt die oberste Fläche nach. Für Sicht- und Gleitflächen; sonst
-    kostet es nur Zeit."""
+    ironing: Ironing = "none"
+    """Welche Oberseiten der Slicer ein zweites Mal glättet (RM-588, Format 52):
+    keine, nur die oberste Fläche des Teils — den Deckel einer Box, die
+    Schauseite eines Schilds — oder jede Oberseite, auch die Gleitfläche einer
+    Passung darunter. Bis Format 51 ein Schalter; ``True`` war jede Oberseite."""
     thick_bridges: bool = False
     """Legt Brücken als runde Bahnen in Düsenbreite statt flach in Schichthöhe
     (RM-587). Sie tragen über eine lange freie Spanne, sehen unten aber rauer
@@ -2911,6 +2917,11 @@ class SliceResult:
     mit denen geschnitten wurde. Auch ein Schnitt ohne Brückenweiten
     (``detail="support"``) trägt sie, denn die Randfrage braucht sie dort, wo die
     Übergabe ihre Sperre baut. ``None`` bei einem Ergebnis aus Kennzahlen."""
+    overhang_angle: float | None = None
+    """Mit welchem Stützwinkel geschnitten wurde, in Grad von der Senkrechten —
+    der wirksame des Druckers, nicht die Startregel. So steil darf ein Schacht
+    der Kanalsperre ausweichen (RM-629). ``None`` bei einem Ergebnis aus
+    Kennzahlen."""
 
 
 # --- Skizzen (§30.1) -----------------------------------------------------------

@@ -87,6 +87,7 @@ dans `website/version.json`.
 - La durée d'impression estimée est plus proche de celle du slicer, nettement plus pour les pièces avec supports.
 - La place des supports et du skirt sur le plateau se mesure désormais sous les seuls surplombs. Les pièces près du bord ne reçoivent plus d'avertissement injustifié.
 - Les suggestions acceptées ne laissent presque plus sans support les surplombs qui en ont besoin. *Garder les canaux libres* ne bloque plus que l'espace d'où un support ne pourrait plus être retiré.
+- Avec *Garder les canaux libres*, les supports en grille n'entrent plus dans l'embouchure des canaux bloqués. En version 0.5.3, ils y pénétraient d'un bon millimètre.
 - Là où les supports sous de petits surplombs reposent sur le modèle, Solidon propose des supports arborescents. Ils y laissent moins de traces.
 - Pour les petites pointes, Solidon propose une *Vitesse minimale de ralentissement* plus basse afin qu'elles ne ramollissent pas. Le réglage parvient à chaque slicer.
 - Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
@@ -109,7 +110,10 @@ dans `website/version.json`.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.
 - Au-dessus d'un canal, le rapport ne conseille plus un support qu'on ne pourrait plus retirer. Il nomme le canal et une transition sous 45 degrés.
 - Pour le PETG, Solidon propose *Refroidissement complet au support*. Il se détache ainsi plus facilement de la pièce.
-- Nouveaux réglages : *Couches d'interface en bas*, *Parois des arbres* et *Pointe d'arbre*, plus *Resserrer la première couche* et *Élargir les trous*, qui suivent le slicer à défaut de votre choix.
+- Sur les figurines, Solidon propose la couture à l'arrière, sans ligne devant. Pour une grande face supérieure plane, il propose le repassage.
+- Le temps d'impression estimé tient désormais compte du repassage.
+- Nouveaux réglages : *Couches fines*, *Épaisseur minimale du dessus*, *Couches d'interface en bas*, *Parois des arbres*, *Pointe d'arbre*, *Resserrer la première couche* et *Élargir les trous*.
+- Pour *Repasser la surface*, vous choisissez désormais entre *Face la plus haute* et *Toutes les faces supérieures*.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
 - Si le slicer refuse des filaments aux températures trop différentes sur un plateau, Solidon en donne désormais la raison et l'issue, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.
@@ -118,10 +122,9 @@ dans `website/version.json`.
 - Si une pièce compense déjà dans le modèle, avec un trou percé avec *Tenir compte de la tolérance du matériau* ou *Compenser le pied d'éléphant*, Solidon propose que le slicer ne le refasse pas.
 - Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
 - Même sur un ordinateur entièrement chargé, Solidon indique la vraie raison après l'arrêt d'un slicer, au lieu d'un délai dépassé. Un fichier d'impression terminé est repris.
-- Le stock de filament reconnaît de nouveau une consommation décomptée avec Solidon 0.5.1 et demande avant de décompter à nouveau la même impression.
+- Le stock de filament soumet à vérification une consommation enregistrée avec Solidon 0.5 pour le même projet et les mêmes filaments, et demande avant de décompter à nouveau.
 - Désormais, une consommation décomptée reste liée à son impression, même si une mise à jour calcule plus vite ou si le slicer change le profil du fabricant. Avant, l'impression comptait comme nouvelle.
 - Là où des dômes plats et des pentes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression de la pièce s'allonge.
-- Nouveau dans les réglages d'impression : *Couches fines* et *Épaisseur minimale du dessus*, pour que les dessus sur des couches fines restent fermés.
 
 ### Filetages, perçages et pièces normalisées
 
@@ -171,6 +174,9 @@ dans `website/version.json`.
 - Le pinceau s'adapte à la taille du corps. Si le maillage est trop grossier, *Sculpter* uniformise les triangles au premier trait, et un Ctrl+Z annule les deux.
 - En miroir, le plan passe là où le corps se correspond, même si une partie dépasse loin sur le côté.
 - Sculpter suit la souris avec fluidité, et même une étape de centaines de coups de pinceau se calcule vite.
+- Avec *Fusionner en douceur*, le maillage est régulier, presque sans éclats fins. Une pièce posée sur le plateau d'impression ne passe plus en dessous.
+- Un corps avec une cavité fermée la garde avec *Fusionner en douceur*. Depuis la version 0.1.1, la cavité devenait un second corps et l'étape signalait des pièces non reliées.
+- Avec *Uniformiser les triangles*, aucune arête ne dépasse la longueur voulue, sans changer la forme. La même arête donne souvent près du double de triangles ; une plus longue garde la densité d'avant.
 - Dans *Squelette*, chaque clic après le premier pose un os, Entrée termine la chaîne, glisser une articulation la plie, et *Terminé* enregistre tout sans dialogue.
 - Un squelette ne plie que ce qui tient à ses os, le reste du corps ne bouge pas. Les anciens projets se calculent comme enregistrés.
 - Avec Ctrl ou Maj, vous sélectionnez plusieurs arêtes et leur appliquez un congé ou un chanfrein en une étape. Un clic sur un coin sélectionne toutes les arêtes qui s'y rejoignent.

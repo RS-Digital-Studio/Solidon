@@ -87,6 +87,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El tiempo de impresión estimado se acerca más al del slicer, mucho más en piezas con soportes.
 - La comprobación de si los soportes y el skirt caben en la cama mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
 - Las sugerencias aceptadas ya casi no dejan sin soporte voladizos que lo necesitan. *Mantener libres los canales* solo bloquea el espacio del que ya no se podría sacar un soporte.
+- Con *Mantener libres los canales*, los soportes de cuadrícula ya no entran en las bocas de los canales bloqueados. En la versión 0.5.3 entraban algo más de un milímetro.
 - Donde los soportes bajo voladizos pequeños se apoyan en el modelo, Solidon sugiere soportes en árbol. Allí dejan menos marcas.
 - En puntas pequeñas, Solidon sugiere una *Velocidad mínima al frenar* más baja para que no se ablanden. El ajuste llega a cualquier slicer.
 - Los bordes estrechos que se sostienen solos quedan libres con *Bordes sin soporte*. Así la impresión necesita bastante menos soporte.
@@ -109,7 +110,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un borde estrecho que se sostiene solo ya no cuenta como puente largo, tampoco junto a otro voladizo. El informe ya no avisa ahí, y Solidon no pide soportes por ello.
 - Sobre un canal, el informe ya no aconseja un soporte que luego no se podría sacar. Nombra el canal y una transición de menos de 45 grados.
 - Para PETG, Solidon sugiere *Refrigeración total en el soporte*. Así se suelta más fácil de la pieza.
-- Nuevos ajustes de impresión: *Capas de separación inferiores*, *Paredes de los árboles* y *Punta del árbol*, más *Contraer la primera capa* y *Ensanchar agujeros*, que siguen al slicer si no elige.
+- En figuras, Solidon propone la costura detrás, sin línea por delante. Para una cara superior grande y plana propone planchar.
+- El tiempo de impresión estimado incluye ahora el planchado.
+- Nuevos ajustes de impresión: *Capas finas*, *Grosor mínimo superior*, *Capas de separación inferiores*, *Paredes de los árboles*, *Punta del árbol*, *Contraer la primera capa* y *Ensanchar agujeros*.
+- En *Planchar la superficie* ahora elige entre *Cara más alta* y *Todas las caras superiores*.
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
 - En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.
@@ -118,10 +122,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una pieza ya compensa en el modelo, con un taladro con *Aplicar compensación del material* o *Compensar la pata de elefante*, Solidon sugiere que el slicer no lo haga otra vez.
 - También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
 - Incluso con el ordenador a plena carga, Solidon indica el motivo real al detener un slicer, en lugar de un tiempo agotado. Un archivo de impresión terminado se aprovecha.
-- El almacén de filamentos vuelve a reconocer un consumo descontado con Solidon 0.5.1 y pregunta antes de descontar otra vez la misma impresión.
+- El almacén de filamentos muestra para revisar un registro de Solidon 0.5 del mismo proyecto con los mismos filamentos y pregunta antes de descontar otra vez.
 - Desde esta versión, un consumo descontado sigue unido a su impresión aunque una actualización calcule más rápido o cambie el perfil del fabricante en el slicer. Antes contaba como nueva.
 - Donde cúpulas planas y pendientes mostrarían escalones, Solidon sugiere capas finas solo allí. La sugerencia indica cuánto más tarda entonces la pieza.
-- Nuevo en los ajustes de impresión: *Capas finas* y *Grosor mínimo superior*, para que las caras superiores sobre capas finas queden cerradas.
 
 ### Roscas, taladros y piezas normalizadas
 
@@ -171,6 +174,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El pincel se ajusta al tamaño del cuerpo. Si la malla es demasiado gruesa, *Modelar* iguala los triángulos en el primer trazo, y un Ctrl+Z deshace ambas cosas.
 - Al reflejar, el plano queda donde el cuerpo coincide consigo mismo, aunque una parte sobresalga mucho hacia un lado.
 - Modelar sigue al ratón con fluidez, y hasta un paso con cientos de trazos de pincel se calcula rápido.
+- Con *Fusionar suavemente* la malla sale uniforme, casi sin astillas finas. Una pieza sobre la placa de impresión ya no queda por debajo.
+- Un cuerpo con una cavidad cerrada la conserva con *Fusionar suavemente*. Desde la versión 0.1.1 la cavidad se convertía en un segundo cuerpo y el paso avisaba de piezas sin unir.
+- Con *Igualar los triángulos* ninguna arista supera la longitud indicada y la forma no cambia. La misma arista da a menudo casi el doble de triángulos; una más larga mantiene la densidad anterior.
 - En *Esqueleto*, cada clic después del primero pone un hueso, Intro termina la cadena, arrastrar una articulación la dobla y *Terminado* lo guarda todo sin diálogo.
 - Un esqueleto solo dobla lo que cuelga de sus huesos, y el resto del cuerpo se queda quieto. Los proyectos anteriores se calculan como se guardaron.
 - Con Ctrl o Mayús selecciona varias aristas y las redondea o achaflana en un solo paso. Un clic en una esquina selecciona todas las aristas que se juntan allí.

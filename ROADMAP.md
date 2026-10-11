@@ -58,6 +58,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-770 — Weitere x86_64-Räder tragen denselben Fehler, in C-Bibliotheken](#rm-770) | Plattformen, Pakete und Grafik | Pillow `libavif` und FFmpeg aus PySide6_Addons; ohne C++-Ausnahmen ohne Wirkung, offen ob sie im Paket liegen |
 | [RM-768 — Die Abwicklungstabelle im Intel-Mac-Rad von OCP ist falsch kodiert](#rm-768) | Plattformen, Pakete und Grafik | Seit 0.6.0 korrigiert `tools/fix_unwind_info.py` sie nach jeder Installation und prüft das Paket; gemeldet als [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67), die Korrektur entfällt mit einem behobenen Rad |
 | [RM-777 — Schwalbenschwanz, Sechskant und Stiftkopf rechnen mit den Winkeln der Plattform](#rm-777) | Plattformen, Pakete und Grafik | Umstellen auf `units.exact_*`, druckgleich gegen Beispiele und Korpus, danach Bereichsnachweis aller 50 (`shapes.py` und `exact.py` stehen in jedem Abdruck) |
+| [RM-714 — Die Untergrenze von shapely passt nicht zum Kern](#rm-714) | Plattformen, Pakete und Grafik | Untergrenze in `pyproject.toml` auf 2.1 heben |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z3 (Z2 bis auf die Drehachse durch RM-559). Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Restentscheidung offen. Gelöst (09.10., Claude): PrusaSlicer ohne Bündel schätzte mit 1500 mm/s² (`ignore` und Dialekt `reprap`), jetzt `marlin` mit den angeforderten Werten als Grenze, dazu `extra_perimeters`/`solid_infill_below_area = 0` und die Materialart der Spule; Gewürzregal am CC2 407 → 292 min, gegen ElegooSlicer mit denselben Wänden 280 min (+4,5 %, Material −4,2 %), SuperSlicer 527 → 381 min. Offen: Solidons Tabelle druckt „Standard“ mit drei Wänden und vier Bodenschichten, die Standardprozesse von Elegoo, Bambu, Creality und Prusa (MK4S) mit zwei und drei (232 gegen 292 min, 128 gegen 154 g) — Entscheidung, ob die Tabelle dem Standardprozess des Druckers folgt |
@@ -69,7 +70,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Fuß hoher Bäume, Spitzenabstand weiterer Materialien |
 | [RM-704 — Kinn und Bein am dritten Drachendruck](#rm-704) | Geometrie, Erkennung und Druckvorbereitung | Trennschicht auf jeder Baumspitze gebaut (Archiv, RM-704 Teil); offen: Kinn, Kopf und Vorderbeine an Druck 4 prüfen, Wände an schlanken Gliedern (nach welle4), die Spitze in PrusaSlicer und Cura |
-| [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und eine Insel im umschlossenen Kanalraum verliert ihre Säule](#rm-626) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-571 (09.10.), mit Sonden belegt; nächster Schritt: Inseln behalten ihre Säule (Test an der Kammer), Schätzung messen, Kammer mit Insel in den vier Slicern |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
@@ -94,7 +94,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); Kandidatensuche der Selbstschnitte (Paket L2, K-1 erfüllt); offen: Laden mechanischer Teile (K-3; mit druckgleich nach §11.2 sind Löserbudget und früheres Freiformurteil zulässig, die Verteilung auf mehrere Prozesse folgt als RM-637), Formen und Skelett, örtliche Neuerkennung (RM-592) |
 | [RM-592 — Nach einem Schritt erkennt die Auswertung fast so lange wie beim Laden](#rm-592) | Geometrie, Erkennung und Druckvorbereitung | Gebaut (Paket E): A1, A2, A5, A6 erfüllt, A3 lokal grün; offen A3 auf den übrigen Plattformen mit der CI beim Weg nach main; A4 an Ständer, Eiffelturm und Spiderman verfehlt, weiter in RM-761 |
 | [RM-761 — Nach einem Schritt rechnen Langlöcher, Bohrungsdurchgang, Wendeln und Facettenurteil noch am ganzen Körper](#rm-761) | Geometrie, Erkennung und Druckvorbereitung | Konzept für die große Fassung von P5 (Klebstufen über die Körpergrenze), dann Bau mit A1 und A4 aus RM-592 |
-| [RM-671 — *Weich verschmelzen* liefert ein splittriges Netz, und *Dreiecke angleichen* hält die Kantenlänge nicht](#rm-671) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-f`). Regression seit v0.4.4: Splitter unter 10° 2,9 → 11,8 %, nach dem Angleichen 30 % und doppelte Kantenlänge |
 | [RM-672 — Laden gleich nach dem Start dauert doppelt so lang, und unter Fremdlast hungert der Hilfsprozess das Laden aus](#rm-672) | Geometrie, Erkennung und Druckvorbereitung | Gebaut (Paket E): Rucksack sofort 10,2 → 7,6 s, unter Fremdlast 16,5 → 9,0 s, 3MF 39,9 → 33,3 s; offen STEP sofort (wartet auf die Importe des Vorwärmens), *Dreiecke angleichen* an der Figur aus Weg 4, der Bibliothekseinfluss und das Vorauslesen des Slicerbestands (c) |
 | [RM-673 — Eine Bohrung mit neuer Richtung: die Kerne schneiden verschieden, der exakte warnt falsch, und das Verdoppeln hat keinen Test](#rm-673) | Geometrie, Erkennung und Druckvorbereitung | Netz dreht starr und meldet `no_longer_through`, exakt bohrt durch und meldet `mouth_covered` |
 | [RM-675 — SVG-Zeichnungen: gerundete Rechtecke mischen ihre Ringe, die Verschachtelung weicht ab, ein roher Fehler, und die Lage ist gespiegelt](#rm-675) | Geometrie, Erkennung und Druckvorbereitung | Regression seit `71b7ba0a8`: `<rect rx>` bildet ungültige Ringe; dazu deckungsgleiche Ringe, roher `ValueError` und spiegelverkehrte Schrift |
@@ -112,6 +111,26 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–73 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py`, löst §21.2 |
 | [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: mitgetragen hat die Normale die Länge \|n\|/f, frisch erkannt \|n\|; `perceive/matching.py` |
 | [RM-758 — Der Plattencache friert übersetzbare Befundwerte ein](#rm-758) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review 1 zu RM-698: `serialise.finding_to_data` schreibt `values` mit `str(value)`, nach dem Öffnen nennt ein Befund den Körper in der Sprache des Caches |
+| [RM-763 — Die Beule der weichen Mischung nur, wo Flächen unter einem Winkel zusammenlaufen](#rm-763) | Geometrie, Erkennung und Druckvorbereitung | Rest aus Review F zu RM-671: über bündigen Deckeln und Seiten und an gekippten bündigen Flächen wächst das Ergebnis bis ein Viertel des Übergangs hinaus; begrenzt ist nur nach unten |
+| [RM-764 — Der nächste Punkt auf einem Dreieck einmal und plattformgleich](#rm-764) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671: `mesh.on_surface` und `_SurfaceIndex.bound` rechnen über `closest_point` mit `np.dot`, `blend._Surface` plattformgleich; dazu `float32`-Ecken in `lattice.py` |
+| [RM-767 — An CAD-Netzen mit Facettenstreifen und Nadelfächern bleibt das Angleichen splittrig](#rm-767) | Geometrie, Erkennung und Druckvorbereitung | Paket F: Besenhalter 89 %, Würfel W6 83 % Splitter; Vorschlag: je Ebene neu vernetzen |
+| [RM-769 — Das Abstandsfeld prüft nicht, ob das nächste Dreieck unter seinen Bewerbern ist](#rm-769) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671 (Rest von M3): an CAD-Nadelfächern bis 0,19 mm zu weit, ein Vorzeichen falsch |
+| [RM-778 — Kleine Teile entfernen schließt auch bewusst offene Öffnungen](#rm-778) | Geometrie, Erkennung und Druckvorbereitung | Nachstellen am Kundenweg, dann Öffnungen mit Absicht von Löchern im Netz trennen |
+| [RM-780 — *Weich verschmelzen* warnt „unverbunden“, wenn ein Eingang schon aus zwei Körpern besteht](#rm-780) | Geometrie, Erkennung und Druckvorbereitung | Review Blend (G2), vorbestehend: `blend.still_apart` vergleicht mit einem Körper statt mit den Körpern der Eingänge |
+| [RM-781 — Ein Eingang mit falsch gewickeltem Hohlraum wird beim Verschmelzen zur Kugel in einem neuen Hohlraum](#rm-781) | Geometrie, Erkennung und Druckvorbereitung | Review Blend (G3), vorbestehend: `blend._grid` hält die mehrdeutige Lage nicht an (Regel 21) |
+| [RM-718 — SuperSlicer stützt den Deckel eines gesperrten Bechers nicht](#rm-718) | Geometrie, Erkennung und Druckvorbereitung | Ursache in SuperSlicer eingrenzen; Hybridstütze neben einem Sperrkörper messen |
+| [RM-717 — Probedruck: flache Decken, die nach RM-585 ohne Stütze bleiben](#rm-717) | Geometrie, Erkennung und Druckvorbereitung | Probedruck (Robert) |
+| [RM-716 — Die Druckzeitschätzung braucht an echten Modellen bis zu zwei Minuten](#rm-716) | Geometrie, Erkennung und Druckvorbereitung | Messung und Bündelung (Leistung, mit RM-281) |
+| [RM-715 — Der Bügelrat nennt nicht, wie viel länger der Druck dauert](#rm-715) | Geometrie, Erkennung und Druckvorbereitung | Bewegungsdaten des Slicerprofils im Rat |
+| [RM-713 — Die Schachtfrage kostet am Zickzack fast doppelt so viel](#rm-713) | Geometrie, Erkennung und Druckvorbereitung | Druckgleiche Beschleunigung der Ellipsenprüfung |
+| [RM-712 — Ein Schacht mit scharfem Knick oder enger Wendel bleibt gesperrt](#rm-712) | Geometrie, Erkennung und Druckvorbereitung | Kreis folgt der Achse statt der hinteren Wand |
+| [RM-710 — Am XL 2T meldet Solidon fälschlich, weitere Farben würden nicht gedruckt](#rm-710) | Geometrie, Erkennung und Druckvorbereitung | Befund an die tatsächliche Wirkung anpassen |
+| [RM-709 — Der G-Code-Leser zählt die Lagen von Bambu Studio nicht](#rm-709) | Geometrie, Erkennung und Druckvorbereitung | Lagenmarke von Bambu Studio in `slice/gcode.py` lesen |
+| [RM-708 — Kleine Kuppen bekommen keine feinen Schichten](#rm-708) | Geometrie, Erkennung und Druckvorbereitung | Scheitel ohne Rampe einseitig messen; Messung am Drachen, an Augen und Knöpfen |
+| [RM-703 — Probedruck: Curas Baum gegen normale Stütze unter einem flachen Hut](#rm-703) | Geometrie, Erkennung und Druckvorbereitung | Probedruck (Robert) |
+| [RM-702 — Cura-Drucker mit eigenem Lochausgleich bekommen keinen Rat](#rm-702) | Geometrie, Erkennung und Druckvorbereitung | Wert aus der Definitionskette lesen wie `manufacturer.cura_fan_curve` |
+| [RM-700 — Schichtanalyse und Kanalfrage brauchen an großen Figuren Minuten](#rm-700) | Geometrie, Erkennung und Druckvorbereitung | Schnitt je Säule auf ihre Hüllbox zuschneiden (bitgleich gemessen), Merker nach Körperzahl; nach RM-626 |
+| [RM-721 — Eine kleine flache Halbkuppel verliert bei 0,28 mm ihre Stütze](#rm-721) | Geometrie, Erkennung und Druckvorbereitung | Nachweis im Entwurfsprofil (0,28 mm) im G-Code; lose Kante kürzer als `SPAN_INTERESTING` |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -140,10 +159,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-689 — Übernehmen ist frei, obwohl Text, Datei oder Bild fehlen; danach hält die Kette an](#rm-689) | Bedienung und Darstellung | Leerer Text oder fehlende Quelle: Übernehmen frei, angehaltener Schritt im Verlauf statt Sperre mit Grund |
 | [RM-658 — Ein Abschnitt, der sich selbst öffnet, merkt sich das als Wahl des Kunden](#rm-658) | Bedienung und Darstellung | Gefunden im Review von RM-680: `open_section` schreibt den Merker; ein Fix in `panels.open_section` deckt Katalog, Filamentangaben und Einstellungen |
 | [RM-696 — Der Prüfbericht des vorigen Stands rechnet neben der neuen Auswertung weiter](#rm-696) | Bedienung und Darstellung | Gemessen in L3: am Eiffelturm 37 s CPU in 19,8 s Wand beim Verschieben, beide teilen den GIL; ein neuer Stand sollte den alten Bericht abbrechen |
+| [RM-776 — Ratsätze in Fehlerdialogen sind nur Text, wo ein Knopf ginge](#rm-776) | Bedienung und Darstellung | Zuerst `open_sketch` und die `sketch.*`-Wege als Knöpfe, die den Schritt öffnen |
+| [RM-711 — Eine Zeile zur Stützart schlägt in Orca vor, was die Datei schon tut](#rm-711) | Bedienung und Darstellung | Zeilen zu je Teil übernommenen Pfaden nur, wo Übernehmen die Datei ändert (wie `_cura_prints_alike`) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
+| [RM-772 — Die gemeinsame Spur der lokalen KI kennt ein wartendes ComfyUI nicht](#rm-772) | KI und Generatoren | `local_ai_slot` auch für ein ComfyUI mit geladenem Modell, das gerade nicht rechnet |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Umgesetzt (07.10.): die offenen Helfer und zwölf Kopien der Fenster-Fixtures an einem Ort, 4508 = 4508 gesammelte Fälle; offen die Abnahme im nächsten Release-Tor (Robert, 06.10.) |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
@@ -155,6 +177,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-688 — Der Test zu Curas Mindesttempo prüft das Mindesttempo nicht mehr](#rm-688) | Tests und Entwicklungswerkzeuge | Seit `9416f41ef` steht dort nur `assert motion is not None`; Attrappe und Vorgabe sind beide 10 |
 | [RM-693 — Der Versionsvergleich misst beim Laden gescheiterte Starts des Hilfsprozesses mit](#rm-693) | Tests und Entwicklungswerkzeuge | `messung.py` des Vergleichs 0.5.2 ohne `__main__`-Schutz; Sonden über einen Starter fahren, die Ladezahlen „aktuell“ von K-3 neu messen |
 | [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
+| [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
+| [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -172,12 +196,14 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-242 — Testphase der Vollversion nachreichen](#rm-242) | Veröffentlichung, Betrieb und Vertrieb | Robert 25.09.2026: 1.0 startet ohne Testphase, sie kommt später — Januar (Unentschlossene noch zu 69 €) oder Februar 2027 mit dem Preissprung. Offen: Termin, ob frühere Demo-Geräte sie bekommen (heute T15: nein), Release mit gesetztem `TRIAL_FROM` |
 | [RM-575 — Handbuchabbildungen für den Filamentknopf in der Kopfzeile](#rm-575) | Veröffentlichung, Betrieb und Vertrieb | Wartet auf den Release: `figure:window`, Kopfzeile und `website/handbuch.html` zeigen noch die Filamentgruppe links (RM-556) |
 | [RM-634 — Release-Schlüsselpaar wechseln](#rm-634) | Veröffentlichung, Betrieb und Vertrieb | Robert entscheidet, ob und wann; Ablauf in `Signierung/README.md`, Voraussetzung RM-528 erfüllt |
+| [RM-765 — Die Handbuchseiten tragen die neuen Absätze erst nach dem Erzeugen](#rm-765) | Veröffentlichung, Betrieb und Vertrieb | Vor dem Tag 0.6.0 `tools/make_manual.py` fahren; danach ist `test_wording::…generated_page` grün |
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Am ausgelieferten 0.5.3 gemessen: Start, Fokus und Eingabe gehen, Fcitx nur über IBus; Abhilfe gebaut (Fcitx in der Umgebung, nur `XMODIFIERS=@im=ibus` oder `QT_IM_MODULE=wayland` unter `xcb` → `ibus`; Fcitx außerhalb des Flatpak über das IBus-Portal), offen der Nachweis im nächsten Paket für Flatpak, AppImage und Archiv, auch für die zwei IBus-Fälle |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Lader-Weg und Rückfall gebaut, am Runner mit Flatpak und AppImage, draußen und im Sandkasten belegt (Lauf 37528397381); offen: Abnahme beim Kunden mit dem nächsten Paket (Ubuntu 24.04, Solidon als Flatpak) |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Text für 0.5.3 liegt in Roberts Ablage bereit, Behebung am ausgelieferten Paket belegt (RM-064); Robert schickt, dann Versand eintragen |
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`): Entf im Reiter *Auswahl*, Felder behalten die Taste, bei Halt oder Sperre der Grund mit dem Titel aus `_removal_entry`; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an der Fläche, verschiebbare Karten](#rm-538) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`), drei Durchsichten; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
+| [RM-720 — Ein Projekt mit Buchung aus 0.5 fragt bei jeder neuen Variante](#rm-720) | Filamentlager | Antwort des Kunden je Altbuchung merken |
 
 ## Filamentlager
 
@@ -187,6 +213,17 @@ und rücknehmbare Verbrauchsbuchungen sind angeschlossen; „Erste Schritte“ f
 begründet Abwahl, Herstellerprofile und Buchungskorrekturen.
 
 [Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
+
+<a id="rm-720"></a>
+
+- [ ] **RM-720 — Ein Projekt mit Buchung aus 0.5 fragt bei jeder neuen Variante.**
+  Ohne Abdrucktreffer kommt jede Buchung aus Solidon 0.5 desselben Projekts mit denselben
+  Filamenten zur Prüfung, auch nach einer Buchung in 0.6 und im Modus *Ohne Rückfrage
+  buchen* — nie ein stiller Doppelabzug, aber eine Rückfrage je Variante. Ein umbenanntes
+  Projekt zieht weiter doppelt ab. Aus der Nachprüfung der Altbuchungen nach Paket E
+  (11.10.2026).
+  **Abnahme:** Die Antwort je Altbuchung wird gemerkt, ohne den unveränderten Altstand still
+  zu buchen; Test mit einer echten 0.5.3-Buchung.
 
 ## P0 — Skelett
 
@@ -974,6 +1011,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   sich ändern, Bereichsnachweis 50 von 50, der Plattformwächter rot mit `math.cos` an diesen
   Stellen.
 
+<a id="rm-714"></a>
+
+- [ ] **RM-714 — Die Untergrenze von shapely passt nicht zum Kern.**
+  `pyproject.toml` verlangt shapely ≥ 2.0, der Kern ruft aber
+  `make_valid(..., method="structure", keep_collapsed=False)` (seit 2.1) und
+  `shapely.dwithin`. `constraints.txt` pinnt 2.2.0, die CI ist also sicher, eine Installation
+  gegen 2.0 nicht. Aus dem Review von RM-629 (10.10.2026).
+  **Abnahme:** Untergrenze 2.1, `tools/check_env.py` grün.
+
 ## Geometrie, Erkennung und Druckvorbereitung
 
 <a id="rm-584"></a>
@@ -1007,13 +1053,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   zeigt Druck 4 und danach ein Korpuslauf über Figuren mit Beinen (nach welle4). Die Spitze
   in PrusaSlicer und Cura schneiden (`support_tree_tip_diameter`, `force_tip_to_roof`)
   und dort übergeben, wenn sie wirkt.
-
-<a id="rm-588"></a>
-
-- [ ] **RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt.**
-  Die Naht wählt der Hersteller, gebügelt wird nur bei einer bündigen Passung. Eine Figur
-  zeigt die Naht als Linie auf der Schauseite, eine große flache Oberseite ihre Bahnen
-  (Recherche Nr. 14, 15). Abnahme: Vorschläge mit Grund in allen Familien.
 
 <a id="rm-626"></a>
 
@@ -3348,38 +3387,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   gleichen Befunden.
   Vermerk 09.10.2026 (Versionsvergleich Kern 0.5.2, K-3): Laden mechanischer Teile ist eine **Regression gegenüber v0.4.4**: Besteckkasten (`Modern++Cutlery+Organizer…3mf`, 59 744 Dreiecke) bis bearbeitbar 3,45–3,51 s → 17,97–18,45 s, Laptop-Ständer 6,7–8,0 → 22,5–23,2 s, `dense_1m.stl` 6,6–6,7 → 20,0–20,1 s (am Stand `09d8e9485`, Fenster offscreen, ruhige Maschine). Die Erkennung allein am Besteckkasten 1,13–1,54 → 6,15–8,09 s, davon 6,2 s in 958 Feinanpassungen (`app/core/perceive/features.py:2630` `classify` → `:8351` `_refined_fit` → `app/core/perceive/refine.py:244` `solve`), eingeführt mit `851f913af` (v0.5.0); Gewinn: Maße auf zwei Stellen und Gewinde als Gewinde. Hebel: die Feinanpassung nur für Flecken, die nach der groben Einpassung als Merkmal bleiben. Am Stand origin/main nicht nachgemessen, die Stellen sind unverändert, Paket L ändert sie nicht. Abnahme dafür: Besteckkasten und Laptop-Ständer höchstens 25 % über v0.4.4 bei gleichen Merkmalen und Maßen wie heute, §31. Der zweite Anteil (Schalenfrage je Füllrunde über den Hilfsprozess) steht bei [RM-672](#rm-672). Beleg: `F:\solidon-review-reports\regression-0.5.2\kern\befunde.md` (K-3). Die Ladezeiten „aktuell“ dieser Tabelle enthalten je Probe zwei Fehlstarts des Hilfsprozesses ([RM-693](#rm-693)); über einen Starter gemessen steht der Besteckkasten bei 20–22 s (Vermerk Paket L2 oben).
 
-<a id="rm-671"></a>
-
-- [ ] **RM-671 — *Weich verschmelzen* liefert ein splittriges Netz, und *Dreiecke angleichen* hält die Kantenlänge nicht.**
-  Versionsvergleich 0.5.2 (03.10.2026), Weg 4 (W4-3). **Regression gegenüber v0.4.2**, eingeführt
-  mit `2006fc7d1` („Weich verschmelzen maß zum nächsten Punkt statt zur nächsten Ebene“).
-  Verschmelzung Kugel auf Zylinder (je ≈ 7 628 Dreiecke): Anteil mit Mindestwinkel unter 10°
-  2,9 % (v0.1.1–v0.4.2) → 12,3 % (v0.4.4) → 11,8 % (v0.5.1, `09d8e9485`); Beispiel *Figur formen*
-  3,9 % → 7,2 %. Danach *Dreiecke angleichen* 1,2 mm: 2,2 % → 30,6 %, längste Kante 1,20 → 2,39 mm,
-  doppelt so lang wie verlangt. Exportierte Figur 10 296 → 14 746 Dreiecke, Median-Mindestwinkel
-  35,5° → 21,6°. `uniform` selbst ist in allen Ständen gleich, anders ist sein Eingang: Das Feld
-  misst zur Ebene des nächsten Oberflächenpunkts und springt an gewölbten Übergängen, wo der
-  nächste Punkt die Seite wechselt; Marching Cubes macht daraus Splitter, und das Angleichen mit
-  Abweichung 0 teilt nur. Seit v0.5.x zeigt das Fenster die feine Verschmelzung, der Kunde arbeitet
-  direkt darauf (Pinsel wirkt ungleichmäßig, Folgeschritte langsamer). Das Feld ist am Stand
-  origin/main unverändert: `blend.py` änderte sich seit 02.10. nur in Texten und im
-  Entwurfsbudget des Fensters (`b3c6c7a96`), nicht in `distance_field`.
-  **Stellen:** `app/core/geom/blend.py:143` (`distance_field`), `:210–211` (Feld `-outward`,
-  Ebenenabstand), `:343` (`marching_cubes`), `:414` (`blend_union`), `app/core/geom/mesh_ops.py:1443`
-  (`uniform`: bei Abweichung 0 kein Zusammenlegen, kein Kantentausch).
-  **Fix (allgemein):** Abstand zum nächsten Punkt auf dem Dreieck statt zu seiner Ebene (an ebenen
-  Wänden ebenso exakt, an Kanten stetig). Im Angleichen bei Abweichung 0 nur formtreue Schritte:
-  Kanten tauschen, wo beide Dreiecke in einer Ebene liegen, und nur innerhalb einer Ebene
-  zusammenlegen; die Obergrenze der Kantenlänge hält das Teilen ein.
-  **Abnahme:** Geometrietest an Kugel auf Zylinder, Beispiel *Figur formen* und zwei sich kreuzenden
-  Zylindern: Anteil unter 10° nach `blend_union` höchstens 3 % wie v0.4.2, nach `remesh_uniform`
-  unter 5 % bei längster Kante höchstens 1,1 × verlangt; bei Abweichung 0 bleiben Volumen und
-  Fläche unverändert (Zusage in `app/core/geom/mesh_ops.py:2013–2022` und `:1458–1459`); die ebene
-  Wand aus dem Anlass von `2006fc7d1` bleibt exakt. Bauplan §25, §31, P16.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\weg4\befunde.md` (W4-3), Netze in
-  `weg4\netze\`, Sonde `weg4\sonde_uniform.py`.
-  Vermerk 09.10.2026 (Funktionsliste 0.5.2, F5, so schon in v0.5.1): *Weich verschmelzen* zweier Quader auf dem Bett meldet „Ein Objekt steckt unter dem Druckbett.“ (`arrange.below_bed`), weil das Raster unter z = 0 rundet. Mit dem Umbau des Felds das Ergebnis auf die Unterkante der Eingänge setzen oder den Befund für Überstand unter einer Rastergröße nicht melden; Abnahme an zwei Quadern, Kugel auf Zylinder und dem Beispiel *Figur formen*. Beleg: `F:\solidon-review-reports\funktionsliste\befunde.md` (F5).
-
 <a id="rm-672"></a>
 
 - [ ] **RM-672 — Laden gleich nach dem Start dauert doppelt so lang, und unter Fremdlast hungert der Hilfsprozess das Laden aus.**
@@ -3833,6 +3840,223 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Test zuerst (Befund mit übersetzbarem Wert durch den Plattencache, nach
   Sprachwechsel in der neuen Sprache), Auswertung mit und ohne Cache gleich, `cache_version`
   bzw. `CACHE_FORMAT_VERSION` steigt.
+
+<a id="rm-763"></a>
+
+- [ ] **RM-763 — Die Beule der weichen Mischung nur, wo Flächen unter einem Winkel zusammenlaufen.**
+  Rest aus Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (H2 b, N1): *Weich verschmelzen* hebt das
+  Feld, wo beide Felder gleich sind, um bis zu ein Viertel des Übergangs. Seit Review F ist nur
+  nach unten begrenzt, auf die Bettebene oder die unterste Höhe der Eingänge, wenn sie darunter
+  reichen (`blend._above_the_floor`, Nachprüfung N2); über bündigen Deckeln und Seiten bleibt die Beule
+  wie bis v0.5.3, und zwei um 30° gekippte bündige Quader 40 × 30 × 10 reichten (mit der Begrenzung
+  auf den Hüllquader gemessen) 0,75 mm über ihre Deckel- und unter ihre Bodenebene, 15 883 statt
+  14 400 mm³. Vorschlag: den Anteil der Beule aus dem Winkel zwischen den Richtungen zum nächsten
+  Punkt beider Körper (`_Surface._to_triangles` rechnet sie schon).
+  **Abnahme:** Test zuerst (gekippte bündige Quader ohne Überstand, gekreuzte Rohre ohne Fläche
+  auf x = ±10, zwei berührende Kugeln ohne flache Flecken), Gegenprobe am Stand davor rot,
+  `cache_version` von `blend_union`, druckgleich an den Beispielprojekten außer *Figur formen*.
+
+<a id="rm-764"></a>
+
+- [ ] **RM-764 — Der nächste Punkt auf einem Dreieck einmal und plattformgleich.**
+  Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (G2, N2) und offener Plattformpunkt aus Paket F:
+  Der nächste Punkt auf einem Dreieck wird zweimal hergeleitet — `blend._Surface._to_triangles`
+  mit Grundrechenarten und Pseudonormalen, `mesh.on_surface` und `_SurfaceIndex.bound` über
+  `trimesh.triangles.closest_point` mit `np.dot` (BLAS, `kern.md`). Dazu legt `lattice.py` die
+  Ecken aus Marching Cubes in `float32` (blind für ULP-Rauschen wie `blend.py` vor `_in_double`).
+  **Abnahme:** eine Rechnung für beide, die Wege in `tests/test_platform_identity.py` (`_WAYS`),
+  druckgleich gegen den Stand davor an Korpus und Beispielprojekten.
+
+<a id="rm-767"></a>
+
+- [ ] **RM-767 — An CAD-Netzen mit Facettenstreifen und Nadelfächern bleibt das Angleichen splittrig.**
+  Offener Punkt 2 aus Paket F (RM-671): Facettenstreifen und Nadelfächer lassen sich ohne neue
+  Punkte nicht formtreu aufräumen. Seit dem Umbau nach Review F räumt das Angleichen gar nicht
+  mehr auf, es teilt nach dem Kern nur, was zu lang ist: Tauschen in der Ebene und Zusammenlegen
+  änderten an den Abnahmefällen von RM-671 kaum etwas und kosteten an CAD-Netzen das Drei- bis
+  Fünffache der Zeit. Am CAD-Besenhalter aus `F:\3D Dateien` bleiben 89,6 %, am Würfel W6
+  83,0 % Splitter (mit dem Aufräumen 89,4 und 83,4), an `plate_holes` auf 1,5 mm 44,4 % (mit dem
+  Aufräumen 1,6, v0.5.3 58,9). Vorschlag: je Ebene neu vernetzen (eingeschränktes Delaunay mit
+  Innenpunkten), in der Laufzeit des Teilens.
+  **Abnahme:** Splitter unter 5 % an Besenhalter, Würfel W6 und `plate_holes`, Volumen und Fläche
+  gleich, Zeit höchstens das 1,25-Fache des Teilens allein, druckgleich an Korpus und
+  Beispielprojekten.
+
+<a id="rm-769"></a>
+
+- [ ] **RM-769 — Das Abstandsfeld prüft nicht, ob das nächste Dreieck unter seinen Bewerbern ist.**
+  Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (Rest von M3): `blend.distance_field` rechnet den
+  Abstand zu den Dreiecken der acht nächsten Stützpunkte. Fehlt das nächste darunter — an
+  CAD-Netzen mit Nadelfächern —, misst es zu weit: am Besenhalter bis 0,19 mm, 2 913 von 351 120
+  Punkten im Band, eines mit falschem Vorzeichen (das Ebenenfeld davor bis 1,81 mm). Die Prüfung
+  je Zeile, ob der k-te Stützpunkt weiter liegt als bester Abstand plus größter Abstand
+  Stückmitte–Ecke, sonst mit doppeltem k neu fragen (wie die Bänder in `mesh.on_surface`),
+  kostete im Umbau von Paket F an den gekreuzten Rohren aus §31 25,4 statt 1,1 s, obwohl das
+  Feld seither nur im Band genau rechnet: Weiter von der Fläche braucht der Nachweis über
+  Stützpunkte immer mehr von ihnen. Vorschlag: die Bewerber über Stücke statt über Stützpunkte
+  (ein Baum über die Hüllkugeln der Stücke), nur für die Zeilen im Band.
+  **Abnahme:** Test gegen `on_surface` an `plate_holes` (Review 1: 281 Abweichungen im Band) und am
+  Besenhalter, Gegenprobe am Stand davor rot, `cache_version` von `blend_union`, druckgleich an
+  den Beispielprojekten außer *Figur formen*.
+
+<a id="rm-778"></a>
+
+- [ ] **RM-778 — Kleine Teile entfernen schließt auch bewusst offene Öffnungen.**
+  *Kleine Teile entfernen* schließt neben losen Splittern auch Öffnungen, die der Kunde
+  ausdrücklich offen gelassen hat. Nebenbefund des Reviews zum Paket Abbruch (Welle 4),
+  nicht im Paket nachgestellt.
+  **Nächster Schritt:** Fall mit einer offen gelassenen Öffnung (etwa *Aushöhlen* mit
+  Entlüftung) bauen, Ursache im Reparaturweg finden.
+  **Abnahme:** Eine bewusst offene Öffnung bleibt offen, lose Teile verschwinden weiter; Test
+  gegen den Korpus.
+
+<a id="rm-780"></a>
+
+- [ ] **RM-780 — *Weich verschmelzen* warnt „unverbunden“, wenn ein Eingang schon aus zwei Körpern besteht.**
+  Review Blend (G2), vorbestehend: `blend.still_apart` meldet, sobald das Ergebnis mehr als einen
+  Körper trägt (seit dem Hohlraum-Fix zählen Hohlräume nicht mit, `blend._bodies_in`). Bringt ein
+  Eingang schon zwei Körper mit — eine Kugel als Insel im Hohlraum, zwei Teile in einem Objekt —,
+  steht „Die Körper liegen weiter auseinander, als der Übergang breit ist“, obwohl beide Eingänge
+  verbunden sind (Sonde `insel_im_hohlraum`: `components = 2`). Vorschlag: melden, wenn das
+  Ergebnis mehr Körper trägt als beide Eingänge zusammen weniger einem.
+  **Abnahme:** Test Hohlkugel mit Insel und Kugel daneben ohne Warnung, zwei getrennte Kugeln
+  weiter mit Warnung, Gegenprobe am Stand davor rot.
+
+<a id="rm-781"></a>
+
+- [ ] **RM-781 — Ein Eingang mit falsch gewickeltem Hohlraum wird beim Verschmelzen zur Kugel in einem neuen Hohlraum.**
+  Review Blend (G3), vorbestehend: Eine positive Schale im Material einer positiven hält
+  `blend._grid` nicht an. Das Feld liest die innere Schale als Material, und an der Mittelfläche
+  entsteht ein neuer Hohlraum (Sonde `hohlraum_falsch_gewickelt`: Kugel in einem Hohlraum vom
+  Radius etwa 16, Schalen +35 281 / −17 106 / +7 192 mm³, dazu `still_apart`); bis zum
+  Hohlraum-Fix kamen drei einander durchdringende Schalen. Keines fragt (Regel 21), obwohl
+  `repair.turn_shells_outward` dieselbe Lage mehrdeutig nennt (`parts_inside_parts`). Am selben
+  Ort wird ein ganz verkehrt gewickelter Eingang zwar abgewiesen, aber unter „Das Modell ist an
+  mehreren Stellen offen“, obwohl er geschlossen ist.
+  **Abnahme:** Test mit falsch gewickeltem Hohlraum hält mit Rückfrage und Handlungsvorschlag an,
+  der ganz verkehrt gewickelte Eingang bekommt den passenden Titel, Gegenprobe am Stand davor rot,
+  druckgleich an den Beispielprojekten.
+
+<a id="rm-700"></a>
+
+- [ ] **RM-700 — Schichtanalyse und Kanalfrage brauchen an großen Figuren Minuten.**
+  `support_need` kostet am Eiffelturm 171–182 s, am Drachen 463–474 s CPU, vor allem im
+  Säulenabstieg von `_model_support` (`_material_cross` je Stück, 17 099 Aufrufe). Die
+  Kanalfrage rechnet je Säule Clipper-Differenzen gegen die ganze Schicht (Drache: 18 von
+  22 s für ein Stück); den Schnitt je Säule auf ihre Hüllbox zuzuschneiden war bitgleich und
+  brachte am Drachen bei 45° 18,1 → 8,2 s. Der gemeinsame Merker hält `_ANSWERS_KEPT = 4`
+  Antworten, im kalten Fall mit mehr als acht Körpern zu wenig. Aus den Reviews von RM-585
+  und RM-627 (10.10.2026).
+  **Abnahme:** CPU-Zeit an Drache und Eiffelturm mindestens halbiert, Antworten bitgleich,
+  Merkerkapazität nach Körperzahl.
+
+<a id="rm-702"></a>
+
+- [ ] **RM-702 — Cura-Drucker mit eigenem Lochausgleich bekommen keinen Rat.**
+  75 Cura-Definitionen außerhalb von Solidons Druckerliste setzen `xy_offset_layer_0` oder
+  `hole_xy_offset`; der Druckdialog zeigt 0 und rät nichts. Gefunden bei RM-589
+  (10.10.2026).
+  **Abnahme:** Der Dialog zeigt den Wert der Kette, der Rat zum Lochausgleich rechnet mit
+  ihm; Test an einer Definition mit eigenem Ausgleich.
+
+<a id="rm-703"></a>
+
+- [ ] **RM-703 — Probedruck: Curas Baum gegen normale Stütze unter einem flachen Hut.**
+  Unter Cura wird ein Baum neben einer flachen Decke zur normalen Stütze der Platte
+  (Nachtrag RM-584). Ob der Baum dort sauberer löst, sagt nur ein Druck: Pilz mit flachem
+  Hut, einmal Baum, einmal Gitter, 0,2 mm, CC2 mit Cura.
+  **Abnahme:** Fotos und Bewertung beider Unterseiten; danach steht fest, ob die
+  Zusammenführung so bleibt.
+
+<a id="rm-708"></a>
+
+- [ ] **RM-708 — Kleine Kuppen bekommen keine feinen Schichten.**
+  Die Herleitung (`fine_layers.stepped_area_worth`) nennt bei 0,2 mm Schicht Kuppen ab
+  R 4,1 mm; wirksam sind sie ab R 9,6 mm immer, unter R 8,3 nie, dazwischen je nach Raster,
+  weil ein Bereich einen Übergang lang sein muss und die Fläche über ihn gemittelt wird. Über
+  die Mindestlänge allein käme man auf R 6,5, und die Auswahl am Drachen änderte sich. Aus
+  Review und Nachprüfung von RM-586 (11.10.2026).
+  **Abnahme:** Kuppen ab der hergeleiteten Grenze fein, die Auswahl am Drachen begründet.
+
+<a id="rm-709"></a>
+
+- [ ] **RM-709 — Der G-Code-Leser zählt die Lagen von Bambu Studio nicht.**
+  Für Bambu Studio liefert der Leser keine Lagenzahl; der Slicertest der feinen Schichten
+  zählt dort ersatzweise die Höhen mit Vorschub. Aus dem Review von RM-586 (F3).
+  **Abnahme:** Lagenzahl aus der Bambu-Datei, der Slicertest liest sie wie bei den übrigen
+  Programmen.
+
+<a id="rm-710"></a>
+
+- [ ] **RM-710 — Am XL 2T meldet Solidon fälschlich, weitere Farben würden nicht gedruckt.**
+  `slicer.overrides_unreachable` erscheint am Prusa XL 2T mit zwei Spulen; der G-Code druckt
+  das zweite Teil aber mit T1 und baut den Turm. Wahr ist nur, dass die zweite Spule mit den
+  Filamentwerten der ersten druckt. Seit v0.2.1, gefunden in der Nachprüfung von RM-586
+  (11.10.2026).
+  **Abnahme:** Der Befund nennt, was wirklich nicht ankommt; Test am XL 2T.
+
+<a id="rm-712"></a>
+
+- [ ] **RM-712 — Ein Schacht mit scharfem Knick oder enger Wendel bleibt gesperrt.**
+  Die Schachtfrage (RM-629) schiebt den Kanalkreis an der hinteren Wand entlang und prüft
+  quer zur Achse mit einer geraden Ellipse. Scharfe Knicke, Lippen und enge oder gekrümmte
+  Wendeln bleiben deshalb gesperrt — die sichere Seite: Die Säule bekommt dort keine Stütze,
+  obwohl sie herauskäme. Aus Review und Nachprüfung von RM-629 (10./11.10.2026).
+  **Abnahme:** Knick 30° Ø 34, Lippe 1 mm zur hinteren Wand und Wendel r 5 und r 8 offen,
+  kein neuer falsch offener Fall.
+
+<a id="rm-713"></a>
+
+- [ ] **RM-713 — Die Schachtfrage kostet am Zickzack fast doppelt so viel.**
+  Mit der Ellipse quer zur Achse steigt die CPU-Zeit am Zickzack-Becher von 0,50 auf 0,88 s
+  bei 0,5 mm und um 0,94 s bei 0,2 mm; Becher, Drache und Schüssel bleiben gleich. Eine
+  druckgleiche Beschleunigung ist nicht gefunden. Aus der Nachprüfung von RM-629
+  (11.10.2026).
+  **Abnahme:** Zickzack wieder unter 0,6 s bei gleichen Antworten.
+
+<a id="rm-715"></a>
+
+- [ ] **RM-715 — Der Bügelrat nennt nicht, wie viel länger der Druck dauert.**
+  Feine Schichten nennen ihren Zeitanteil, der Bügelrat (RM-588) nicht: Der Rat kennt die
+  Bewegungsdaten des Profils nicht. Solidons Bügelzeit trifft den Slicer auf 1,00–1,04.
+  **Abnahme:** Grund mit Zeitanteil in allen Sprachen, unter der Tabellenbreite des
+  Druckdialogs.
+
+<a id="rm-716"></a>
+
+- [ ] **RM-716 — Die Druckzeitschätzung braucht an echten Modellen bis zu zwei Minuten.**
+  Die Schätzung kostet an echten Modellen 17–124 s CPU, unabhängig vom Bügeln. Gemessen beim
+  Bau von RM-588 (10.10.2026).
+  **Abnahme:** CPU-Zeit an Drache und Spider-Man mindestens halbiert, Schätzung
+  druckgleich.
+
+<a id="rm-717"></a>
+
+- [ ] **RM-717 — Probedruck: flache Decken, die nach RM-585 ohne Stütze bleiben.**
+  Pultdecken 12° und 15° in 8 mm tiefer Wand bleiben ohne Stütze (Läufe 8,5 mm, beidseitig
+  gefasst), ebenso eine Satteldecke bei 0,08 mm Schicht. Ob sie sauber drucken, sagt nur ein
+  Druck (0,2 und 0,08 mm, CC2, PLA).
+  **Abnahme:** Fotos der Unterseiten; hängt eine durch, wird die Grenze in
+  `analysis._carries` enger.
+
+<a id="rm-718"></a>
+
+- [ ] **RM-718 — SuperSlicer stützt den Deckel eines gesperrten Bechers nicht.**
+  Mit Solidons Sperrkörper lässt SuperSlicer den Deckel des Prüfbechers ganz ohne Stütze
+  (0 %), vor und nach dem Tunnel-Fix; alle übrigen Programme stützen ihn zu 100 %. Hybrid
+  neben einem Sperrkörper ist in keinem Programm gemessen. Aus dem Tunnel-Fix (11.10.2026).
+  **Abnahme:** Deckel in SuperSlicer gestützt oder als Befund benannt; Hybrid gemessen.
+
+<a id="rm-721"></a>
+
+- [ ] **RM-721 — Eine kleine flache Halbkuppel verliert bei 0,28 mm ihre Stütze.**
+  Nach RM-585 bekommt die Halbkuppel-Nische R 8 mit Stich 1,3 mm bei 0,28 mm Schicht und 60°
+  keine Stütze mehr, welle4 gab ihr welche. Die lose Kante ihres obersten Rings ist kürzer als
+  `SPAN_INTERESTING`, deshalb fasst die Hülle seines Bogens ihn noch; nach Rechnung kragt der
+  Ring 1,3 bis 1,8 mm bei einer Grenze von 1,33 mm. Nur in der Analyse belegt, nicht im
+  G-Code. Aus der gezielten Nachprüfung von RM-585 (11.10.2026).
+  **Abnahme:** Slicerlauf im Entwurfsprofil; hängt der Ring frei, bekommt er Stütze, ohne dass
+  Eiffelturm, Bögen und Arkade ihre Entwarnung verlieren.
 
 ## Bedienung und Darstellung
 
@@ -4798,7 +5022,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
 
-
 <a id="rm-559"></a>
 
 - [~] **RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als
@@ -5133,6 +5356,26 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Ein neuer Auswertungsauftrag hält den Bericht des alten Stands an (oder er gibt den
   GIL her), der Bericht des neuen Stands kommt gleich; Zeit bis zum Bild im Wechsel gemessen.
 
+<a id="rm-776"></a>
+
+- [ ] **RM-776 — Ratsätze in Fehlerdialogen sind nur Text, wo ein Knopf ginge.**
+  27 Kennungen aus `action_effects.SIDE_EFFECTS` erscheinen im Fehlerdialog nur als Satz
+  (Wächter in `tests/test_action_effects.py`, RM-771). Einige könnten den Schritt öffnen wie
+  *Eine andere Ebene wählen*. Gefunden im Paket Abbruch (Welle 4).
+  **Nächster Schritt:** `open_sketch` und die `sketch.*`-Wege je mit Handler und Test, der
+  belegt, dass der Knopf tut, was sein Satz in `SIDE_EFFECTS` verspricht.
+  **Abnahme:** Jeder Ratsatz, der auf einen Schritt zeigt, ist ein Knopf, oder steht mit Grund in
+  der Ausnahmeliste des Wächters.
+
+<a id="rm-711"></a>
+
+- [ ] **RM-711 — Eine Zeile zur Stützart schlägt in Orca vor, was die Datei schon tut.**
+  Ist die Stützart je Teil schon übernommen, gibt der Export jedem Teil seinen eigenen
+  Vorschlag; die Zeile „Gitter → Baum · Stacheln“ schlägt dann vor, was die Datei schon
+  schreibt, und ihre Ablehnung bewirkt nichts. Gefunden in der Durchsicht des
+  RM-584-Nachtrags (11.10.2026).
+  **Abnahme:** keine Zeile ohne Wirkung; Test an Pilz und Drache unter Orca.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -5353,6 +5596,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Sätze an `sculpt_strokes` und `pose_armature` (RM-014). Lokal ist Version 9 gemessen und nicht
   schlechter; gehostet vorher (Version 8) und nachher. Verschlechtert sich die Quote, gehen
   diese Sätze zurück.
+
+<a id="rm-772"></a>
+
+- [ ] **RM-772 — Die gemeinsame Spur der lokalen KI kennt ein wartendes ComfyUI nicht.**
+  `local_ai_slot` regelt nur laufende Rechnungen. Ein ComfyUI, das daneben mit geladenem Modell
+  wartet, hält Grafikspeicher, den ein lokales Sprachmodell braucht; im Kundenprotokoll zum
+  Vorgang S-20261010-e5014c liefen beide zugleich. Gefunden im Paket Abbruch (Welle 4).
+  **Nächster Schritt:** messen, wie viel Grafikspeicher ein wartendes ComfyUI hält und ob ein
+  Zug des Sprachmodells daran scheitert; dann ComfyUI vor dem Laden des Sprachmodells entladen
+  oder den Kunden fragen.
+  **Abnahme:** Sprachmodell und Bilderzeugung nacheinander auf einer Karte mit 8 GB, ohne
+  Speicherfehler und ohne Wartezeit über dem Laden eines Modells.
 
 ## Tests und Entwicklungswerkzeuge
 
@@ -5683,6 +5938,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Ursache belegt, Test deterministisch (zwanzig Läufe einzeln und unter Last grün),
   eine Gegenprobe stellt die Lage nach.
 
+<a id="rm-779"></a>
+
+- [ ] **RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot.**
+  `tests/test_ai_disclosure.py::test_a_notice_taller_than_the_screen_comes_to_rest` ist allein
+  grün und rot, wenn er nach `test_dialog_layout`, `test_style`, `test_widget_lifetime` und
+  `test_locked_says_why` läuft; am Stand vor dem Paket Agentlog ebenso. Gefunden im Paket
+  Agentlog (Welle 4).
+  **Nächster Schritt:** Reihenfolge halbieren, bis ein Vorgänger allein ihn rot macht; dessen
+  Rest (Stylesheet, Bildschirmgeometrie, offenes Fenster) im Abbau räumen.
+  **Abnahme:** Der Test ist in jeder Reihenfolge grün; ein Wächter hält den gefundenen Rest.
+
+<a id="rm-719"></a>
+
+- [ ] **RM-719 — Ein Fenstertest wackelt mit vier Arbeitern.**
+  `test_print_advice_remembers_measured_layers_across_dialogs` war im Fensterlauf mit `-n 4`
+  einmal rot, einzeln dreimal grün; nicht durch RM-588 verursacht. Aus dem Review von
+  RM-588 (11.10.2026).
+  **Abnahme:** zwanzig Läufe mit `-n 4` grün.
+
 ## Veröffentlichung, Betrieb und Vertrieb
 
 <a id="rm-002"></a>
@@ -5980,6 +6254,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** neuer öffentlicher Schlüssel mit Besitzprobe in einer veröffentlichten Version,
   nach der Wartezeit damit unterschrieben, der alte in der Version danach entfernt. Bauplan
   §37.2.
+
+<a id="rm-765"></a>
+
+- [ ] **RM-765 — Die Handbuchseiten tragen die neuen Absätze erst nach dem Erzeugen.**
+  `tests/test_wording.py::test_every_manual_paragraph_reaches_the_generated_page` ist auf welle4
+  in allen sechs Sprachen rot: Die Absätze `sketch`, `resin` und `models` fehlen auf der
+  erzeugten Handbuchseite. Der Test trägt den Marker `rendered` und läuft nur im Release-Tor
+  (Entscheidung Robert: Handbuch nur beim Erstellen der Pakete). Gemeldet in Review 1 von F und
+  im Integrationsreview der Welle 4.
+  **Nächster Schritt:** beim Release `tools/make_manual.py`, danach `tools/stamp_assets.py`
+  (Weg in `/erzeugen`).
+  **Abnahme:** `pytest -m rendered tests/test_wording.py` grün am Releasestand.
 
 ## Kundenrückmeldungen
 
