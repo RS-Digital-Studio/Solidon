@@ -1,0 +1,36 @@
+A1 am zusammengeführten Stand 284abbcdf (Paket E + welle4 ac244486b mit fix/intel-mac Fund 2), Teilmenge des Prüfers: 47 Fälle, folge.py --pruefen, zwei Prozesse
+
+--- ohne Plattencache ---
+Fälle 47, Zustände 188, getragen 32, verglichen 155
+nicht getragen und anders als die Kopie: 0
+wieder geöffnet über die Platte: 0, anders als in der Sitzung: 0
+nicht vollständig ausgewertet: 0
+Halte: 3
+    ('beispiel:drucker-kalibrieren', 'ValueError: attempt to get argmax of an empty sequence')
+    ('beispiel:passung-nach-materialwechsel', 'ValueError: attempt to get argmax of an empty sequence')
+    ('beispiel:dose-mit-deckel', 'ValueError: attempt to get argmax of an empty sequence')
+je Schritt: {'0_geladen': 56, '1_bohren_1': 10, '1_bohren_2': 10, '1_bohren_3': 10, '2_versetzen': 10, '3_aufweiten': 9, '4_entfernen': 9, '5_quader': 16, '6_zapfen': 16, '7_abschneiden': 16, '8_verschieben': 16, '9_bohren': 10, 'ende': 47, 'halt': 3}
+Schlusszeilen: {'fertig': 47}
+
+--- mit Plattencache (--platte), danach wieder geöffnet (10_wieder) ---
+Fälle 47, Zustände 244, getragen 46, verglichen 196
+nicht getragen und anders als die Kopie: 0
+wieder geöffnet über die Platte: 56, anders als in der Sitzung: 0
+nicht vollständig ausgewertet: 0
+Halte: 3
+    ('beispiel:drucker-kalibrieren', 'ValueError: attempt to get argmax of an empty sequence')
+    ('beispiel:passung-nach-materialwechsel', 'ValueError: attempt to get argmax of an empty sequence')
+    ('beispiel:dose-mit-deckel', 'ValueError: attempt to get argmax of an empty sequence')
+je Schritt: {'0_geladen': 56, '1_bohren_1': 10, '1_bohren_2': 10, '1_bohren_3': 10, '2_versetzen': 10, '3_aufweiten': 9, '4_entfernen': 9, '5_quader': 16, '6_zapfen': 16, '7_abschneiden': 16, '8_verschieben': 16, '9_bohren': 10, '10_wieder': 56, 'ende': 47, 'halt': 3}
+Schlusszeilen: {'fertig': 47}
+
+--- vergleich.py: mit Plattencache gegen ohne ---
+Zustände in beiden Läufen: 188
+davon anders: 0  {}
+nur mit: 56, nur ohne: 0
+je Schritt: {'0_geladen': 56, '1_bohren_1': 10, '1_bohren_2': 10, '1_bohren_3': 10, '2_versetzen': 10, '3_aufweiten': 9, '4_entfernen': 9, '5_quader': 16, '6_zapfen': 16, '7_abschneiden': 16, '8_verschieben': 16, '9_bohren': 10}
+fernes Merkmal lebt: 108 von 108
+Zuordnungen mit/ohne: 1074/705, Fragen 0/0
+Fälle: 47, mit anderer Zahl der Zuordnungen oder Fragen: 18
+Fallende (mit): {'fertig': 47}
+CPU Erkennung nach den Schritten mit/ohne: 19.9/14.2 s

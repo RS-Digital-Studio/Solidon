@@ -765,6 +765,29 @@ def test_a_crash_report_names_the_place_without_the_user_folder() -> None:
     assert "raise FileNotFoundError" not in detail, "keine Quellzeilen"
 
 
+def test_an_error_that_never_flew_has_no_empty_stack() -> None:
+    """Ohne Stapel kein Stapelkopf, und der Satz steht einmal da.
+
+    Im Kundenbericht S-20261010-e5014c stand unter dem Satz
+    „Traceback (most recent call last):“ und darunter sofort die Art — ein
+    Kopf ohne Rahmen liest sich wie ein abgeschnittener Bericht.
+    """
+    from app.core import log
+    from app.core.errors import AppError
+
+    problem = AppError("Der Vorschlag wurde abgebrochen.")
+    assert problem.__traceback__ is None
+
+    assert "Traceback" not in log.exception_text(problem)
+    detail = report_module.crash_detail(problem)
+    assert "Traceback" not in detail, detail
+    assert detail.count("Der Vorschlag wurde abgebrochen.") == 1, detail
+    assert "AppError" in detail, "die Art bleibt lesbar"
+
+    with_summary = report_module.crash_detail(problem, summary="Im Chat")
+    assert with_summary.splitlines()[0] == "Im Chat"
+
+
 def _child_environment(tmp_path: Path) -> dict[str, str]:
     """Die Umgebung eines Kindprozesses mit vollständig getrenntem Nutzerprofil."""
     import os

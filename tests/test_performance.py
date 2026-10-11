@@ -559,6 +559,33 @@ def test_feature_detection_on_two_hundred_thousand_triangles() -> None:
     assert taken < 10.0, "the target is one second; ten catches an order of magnitude"
 
 
+def test_feature_detection_after_a_bore_elsewhere() -> None:
+    """Die warme Marke neben der kalten (RM-592, Konzept §6): erkennen nach einem Schritt.
+
+    Nach *Übernehmen* erkennt die Auswertung den ganzen Körper neu (§21.1); was
+    sich nicht geändert hat, antwortet aus dem Gedächtnis über die Körpergrenze.
+    Gemessen wird die Erkennung nach einer Bohrung Ø 6 mitten in der Platte, fern
+    der vier Bohrungen — nach der kalten Erkennung desselben Körpers im selben
+    Prozess, wie im Fenster. Die Marke hält fest, was das Gedächtnis spart; die
+    Gleichheit Bit für Bit belegt die Messbank
+    (``konzepte/nachweise-oertliche-erkennung-2026-10/messbank/``).
+    """
+    import trimesh
+
+    from app.core.geom.boolean import boolean
+
+    mesh = mechanical_feature_mesh()
+    forget_cache()
+    detect(mesh)
+    tool = trimesh.creation.cylinder(radius=3.0, height=20.0, sections=48)
+    bored = boolean("difference", [mesh, MeshData.of(tool)]).mesh
+    found: list[dict[Any, Any]] = []
+    taken = measure("detect_after_a_bore_204k", lambda: found.append(detect(bored)))
+
+    assert sum(feature.kind == "hole" for feature in found[0].values()) == 5
+    assert taken < 10.0, "a step must not cost more than an order of magnitude over the target"
+
+
 def pocketed_plate(count: int) -> MeshData:
     """Eine Platte mit ``count`` rechteckigen Taschen, jede mit vier Eckrundungen.
 

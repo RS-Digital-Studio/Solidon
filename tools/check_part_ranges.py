@@ -16,15 +16,19 @@ den heutigen Stand jedes Bausteins, ohne selbst zu rechnen.
     python tools/check_part_ranges.py --check         # nur vergleichen, nichts rechnen
     python tools/check_part_ranges.py --jobs 8        # Prozesse (Vorgabe: bis zu vier)
 
-Jeder Baustein läuft in einem eigenen Prozess, wie ein Kunde ihn nie sähe: Der
-Bereichstest sammelt native Netze, und ein Prozess je Baustein gibt sie mit
-seinem Ende zurück. Der Lauf schreibt die Nutzerverzeichnisse in einen
+Jeder Baustein läuft in eigenen Prozessen, wie ein Kunde ihn nie sähe: Der
+Bereichstest sammelt native Netze, und ein Prozess gibt sie mit seinem Ende
+zurück. Ein Baustein mit mehr als ``SHARD_CORNERS`` Ecken wird in Ausschnitte
+geteilt, die nebeneinander laufen (``range_check.check`` mit ``window``); der
+Nachweis zählt sie zusammen. Seit den Zoll- und Rohrgewinden (RM-544) hat der
+Gewindebolzen 2592 Ecken, am Stück Stunden. Der Lauf schreibt die Nutzerverzeichnisse in einen
 Temp-Ordner um (§38) — eigene Bausteine des Entwicklers laden so nicht mit.
 
 Exit-Code 0, wenn jeder gefahrene Baustein bestanden hat (bei ``--check``:
 wenn der Nachweis zu jedem Baustein passt); 1 sonst. Die Datei wird auch bei
 Fehlschlägen geschrieben — ein gebrochener Baustein steht dann als gebrochen
-darin, und der Katalog warnt.
+darin, und der Katalog warnt. Geschrieben wird nach jedem fertigen Baustein; ein
+abgebrochener Lauf behält so das Fertige, und der nächste fährt nur den Rest.
 """
 
 from __future__ import annotations
@@ -43,6 +47,9 @@ from typing import Any, Final
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 
+#: Wie viele Ecken ein Prozess höchstens am Stück fährt.
+SHARD_CORNERS: Final = 96
+
 
 def _this_tree() -> None:
     """``app`` aus dem Baum dieses Werkzeugs, nicht aus der Editierinstallation.
@@ -58,12 +65,22 @@ def _this_tree() -> None:
 
 @contextmanager
 def _isolate(parent: Path | None = None) -> Iterator[Path]:
-    """Eigene Profile vor dem Import setzen und nach Erfolg oder Fehler wieder entfernen (§38)."""
+    """Eigene Profile vor dem Import setzen und nach Erfolg oder Fehler wieder entfernen (§38).
+
+    **Ein Aufräumer im Temp-Verzeichnis beendet keinen Lauf** (RM-544, 10.10.2026):
+    Nach vier Stunden war das Elternprofil fort, jeder neue Arbeiter starb mit
+    ``FileNotFoundError`` und der Lauf mit ihm. Der Arbeiter legt es neu an, und
+    das Aufräumen übersteht einen schon verschwundenen Ordner.
+    """
     _this_tree()
     from app.core.paths import PROFILE_VARIABLES
 
     before = {variable: os.environ.get(variable) for variable in PROFILE_VARIABLES}
-    with tempfile.TemporaryDirectory(prefix="solidon-part-ranges-", dir=parent) as isolated:
+    if parent is not None:
+        parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="solidon-part-ranges-", dir=parent, ignore_cleanup_errors=True
+    ) as isolated:
         try:
             for variable in PROFILE_VARIABLES:
                 os.environ[variable] = isolated
@@ -85,8 +102,10 @@ def _registry() -> Any:
     return builtin.load()
 
 
-def _run_one(name: str, temporary: Path | None = None) -> dict[str, Any]:
-    """Ein Baustein, ein Prozess: den Bereichstest fahren und das Ergebnis melden."""
+def _run_one(
+    name: str, temporary: Path | None = None, window: tuple[int, int] | None = None
+) -> dict[str, Any]:
+    """Ein Ausschnitt eines Bausteins, ein Prozess: den Bereichstest fahren und melden."""
     with _isolate(temporary):
         registry = _registry()
         from app.core.knowledge.parts import range_check, range_proof
@@ -94,18 +113,70 @@ def _run_one(name: str, temporary: Path | None = None) -> dict[str, Any]:
         spec = registry.get(name)
         profile = range_proof.reference_profile()
         started = time.perf_counter()
-        report = range_check.check_part(spec, profile)
+        report = range_check.check_part(spec, profile, window=window)
         return {
             "name": name,
             "version": spec.version,
             "fingerprint": range_proof.fingerprint(spec, profile),
-            "corners": range_check.corner_count(spec.params),
+            "corners": range_check.part_corner_count(spec),
             "checked": report.checked,
             "excluded": len(report.excluded),
             "failures": [(dict(failure.values), failure.reason) for failure in report.failures],
             "passed": report.passed,
             "seconds": time.perf_counter() - started,
         }
+
+
+def _windows(corners: int) -> list[tuple[int, int] | None]:
+    """Die Ausschnitte eines Bausteins: am Stück bis ``SHARD_CORNERS``, sonst geteilt."""
+    if corners <= SHARD_CORNERS:
+        return [None]
+    return [(start, start + SHARD_CORNERS) for start in range(0, corners, SHARD_CORNERS)]
+
+
+def _merged(pieces: list[dict[str, Any]]) -> dict[str, Any]:
+    """Die Ausschnitte eines Bausteins als ein Ergebnis — bestanden nur, wenn alle Ecken liefen."""
+    first = pieces[0]
+    checked = sum(int(piece["checked"]) for piece in pieces)
+    failures = [failure for piece in pieces for failure in piece["failures"]]
+    return {
+        **first,
+        "checked": checked,
+        "excluded": sum(int(piece["excluded"]) for piece in pieces),
+        "failures": failures,
+        "passed": checked == int(first["corners"]) and checked > 0 and not failures,
+        "seconds": sum(float(piece["seconds"]) for piece in pieces),
+    }
+
+
+def _written(
+    results: dict[str, dict[str, Any]],
+    proofs: dict[str, Any],
+    shipped: dict[str, Any],
+    profile: Any,
+) -> Path:
+    """Schreibt den Nachweis mit allen bisher fertigen Bausteinen und gibt die Datei zurück."""
+    from app.core.knowledge.parts import range_proof
+
+    today = datetime.datetime.now(datetime.UTC).date().isoformat()
+    entries = {name: entry for name, entry in proofs.items() if name in shipped}
+    for name, outcome in results.items():
+        entries[name] = range_proof.ProofEntry(
+            name=name,
+            version=str(outcome["version"]),
+            fingerprint=str(outcome["fingerprint"]),
+            corners=int(outcome["corners"]),
+            checked=int(outcome["checked"]),
+            excluded=int(outcome["excluded"]),
+            failures=len(outcome["failures"]),
+            passed=bool(outcome["passed"]),
+            date=today,
+        )
+    target = range_proof.PROOF_FILE
+    temporary = target.with_suffix(".toml.tmp")
+    temporary.write_text(range_proof.render(entries, profile), encoding="utf-8", newline="\n")
+    temporary.replace(target)
+    return Path(target)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -150,17 +221,40 @@ def _run(args: argparse.Namespace, profile_root: Path) -> int:
         print("Der Nachweis passt zu jedem Baustein; nichts zu fahren.")
         return 0
 
-    jobs = max(1, min(args.jobs, len(wanted)))
+    from app.core.knowledge.parts.range_check import part_corner_count
+
+    counts = {name: part_corner_count(shipped[name]) for name in wanted}
+    # **Die teuren Ausschnitte zuerst**: große Bausteine vor kleinen, und je Baustein die
+    # hinteren Ausschnitte vor den vorderen — dort stehen eigenes Maß und Höchstmaße,
+    # am Gewinde Ø 1000 mit 101,6 Gängen je Zoll über 200 mm, Minuten je Ecke. Am
+    # Ende der Warteschlange hielten sie den ganzen Lauf auf; das Ergebnis ist dasselbe.
+    tasks = [
+        (name, window)
+        for name in sorted(wanted, key=lambda entry: -counts[entry])
+        for window in reversed(_windows(counts[name]))
+    ]
+    jobs = max(1, min(args.jobs, len(tasks)))
     parts = "Baustein" if len(wanted) == 1 else "Bausteine"
     processes = "Prozess" if jobs == 1 else "Prozessen"
-    print(f"Fahre {len(wanted)} {parts} mit {jobs} {processes}: {', '.join(wanted)}")
+    print(
+        f"Fahre {len(wanted)} {parts} in {len(tasks)} Ausschnitten mit {jobs} {processes}: "
+        f"{', '.join(wanted)}"
+    )
     results: dict[str, dict[str, Any]] = {}
+    pending: dict[str, list[dict[str, Any]]] = {name: [] for name in wanted}
+    expected = {name: sum(1 for task in tasks if task[0] == name) for name in wanted}
     with ProcessPoolExecutor(max_workers=jobs, max_tasks_per_child=1) as pool:
         # Der Elternlauf besitzt auch die Arbeiterprofile und räumt sie nach
         # einem nativen Prozessabbruch, bei dem kein finally mehr laufen kann.
-        futures = {pool.submit(_run_one, name, profile_root): name for name in wanted}
+        futures = {
+            pool.submit(_run_one, name, profile_root, window): name for name, window in tasks
+        }
         for future in as_completed(futures):
-            outcome = future.result()
+            piece = future.result()
+            pending[piece["name"]].append(piece)
+            if len(pending[piece["name"]]) < expected[piece["name"]]:
+                continue
+            outcome = _merged(pending[piece["name"]])
             results[outcome["name"]] = outcome
             verdict = "bestanden" if outcome["passed"] else "GEBROCHEN"
             print(
@@ -171,25 +265,12 @@ def _run(args: argparse.Namespace, profile_root: Path) -> int:
             )
             for values, reason in outcome["failures"][:10]:
                 print(f"      {values}: {reason}")
+            # Nach jedem fertigen Baustein geschrieben: Bricht der Lauf später ab
+            # — ein Arbeiter stirbt nativ, jemand beendet die Prozesse —, bleibt
+            # das Fertige nachgewiesen, und der nächste Lauf fährt nur den Rest.
+            _written(results, proofs, shipped, profile)
 
-    today = datetime.datetime.now(datetime.UTC).date().isoformat()
-    entries = {name: entry for name, entry in proofs.items() if name in shipped}
-    for name, outcome in results.items():
-        entries[name] = range_proof.ProofEntry(
-            name=name,
-            version=str(outcome["version"]),
-            fingerprint=str(outcome["fingerprint"]),
-            corners=int(outcome["corners"]),
-            checked=int(outcome["checked"]),
-            excluded=int(outcome["excluded"]),
-            failures=len(outcome["failures"]),
-            passed=bool(outcome["passed"]),
-            date=today,
-        )
-    target = range_proof.PROOF_FILE
-    temporary = target.with_suffix(".toml.tmp")
-    temporary.write_text(range_proof.render(entries, profile), encoding="utf-8", newline="\n")
-    temporary.replace(target)
+    target = _written(results, proofs, shipped, profile)
     broken = sorted(name for name, outcome in results.items() if not outcome["passed"])
     print(f"Nachweis geschrieben: {target.relative_to(ROOT).as_posix()}")
     if broken:

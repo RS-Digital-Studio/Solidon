@@ -282,6 +282,26 @@ def place_text(face: str, point: Sequence[float]) -> str:
     return tr("{face} · {point}", face=face, point=numbers) if face else numbers
 
 
+def shown_choices(choices: Sequence[Any], start: Any) -> tuple[Any, ...]:
+    """Die Auswahl ohne die Gewindegrößen ausgeblendeter Reihen (RM-544).
+
+    Nur an einer Liste, die Zoll- oder Rohrgewinde führt — das Schraubenloch mit
+    seinen metrischen Größen bleibt, wie es ist. Der gewählte Wert bleibt immer
+    stehen: Ein Schritt mit einer ausgeblendeten Größe zeigt sie weiter.
+    """
+    from app.core.knowledge import standards
+
+    families = [standards.thread_family(str(choice)) for choice in choices]
+    if not any(family not in (None, "metric") for family in families):
+        return tuple(choices)
+    shown = set(standards.shown_thread_families())
+    return tuple(
+        choice
+        for choice, family in zip(choices, families, strict=True)
+        if family is None or family in shown or choice == start
+    )
+
+
 class ValueField(QWidget):
     """Ein Zahlenfeld, das auch einen Parameterausdruck tragen kann (§13).
 
@@ -3937,7 +3957,7 @@ class OperationDialog(QDialog):
             # Normteiltabelle daneben. Was schon ein Name ist — „M4", „PLA" —
             # bleibt unverändert.
             combo = QComboBox(self)
-            for choice in entry.choices:
+            for choice in shown_choices(entry.choices, start):
                 combo.addItem(choice_label(str(choice)), choice)
             # **Der Name sagt, wie der Wert heißt — nicht, was er tut.**
             # „Würfelgitter" benennt ``cubic`` und erklärt es nicht, und wo

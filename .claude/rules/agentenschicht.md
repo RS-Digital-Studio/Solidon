@@ -236,6 +236,25 @@ Programm, sagt die betroffene Funktion das in einem Satz mit Hinweis auf die
 Einstellung. Die Mesh-Schnittstelle kennt nur `text_to_mesh` und
 `image_to_mesh`: kein Nutzercode, keine Dateipfade, kein Zustand.
 
+- **Eine Ablehnung der Gegenstelle ist ein Satz, kein Antwortkörper**
+  (`llm.refusal`): Der Status wählt Satz und Ausweg, ihr eigener Text steht
+  ohne JSON unter „Grund“. Fehlendes Ollama-Modell und abgelehnter Schlüssel
+  haben eigene Fehler (`ModelNotInstalled`, `KeyRefused`), der gehostete Weg
+  eigene Sätze (feste Adresse, festes Modell). Jeder Schlüsselfehler führt in
+  *Chat einrichten*, nie zu den zusätzlichen Programmen.
+- **Das Protokoll trägt die Fakten**: `str(BackendUnavailable)` hängt Anbieter,
+  Status, Modell und Grund an — der Kunde liest den Satz, das Protokoll, was
+  geschah.
+- **Ein ungültiger Schlüssel (401) wird einen Tag lang übergangen**
+  (`keys.REFUSAL_HOLDS_SECONDS`), auch über den Neustart; gemerkt ist der
+  gesendete Schlüssel als HMAC mit Salz je Installation in einer eigenen Datei,
+  leise, und ein Schreibfehler daran bleibt Buchhaltung. „Noch einmal
+  versuchen“ (Dialog und Fehlermeldung) und jedes Eintragen heben ihn auf;
+  403 gilt nur bis zum Neustart.
+- **Ein abgewiesener Zug hält nichts warm**: Hat das Modell dem Backend nie
+  geantwortet (`OllamaBackend.answered`) und endet der Zug mit
+  `BackendUnavailable`, ist nichts geladen, und das Beenden entlädt nichts.
+
 ## Suite
 
 `tools/run_agent_suite.py` ist **kein Testlauf** — er kostet Geld und braucht

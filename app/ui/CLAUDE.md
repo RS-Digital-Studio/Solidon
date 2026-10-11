@@ -84,7 +84,8 @@ und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
   Bericht; Export und `_PlateJob` tragen Szene und Dokument (§29).
 - **Agent** — `ChatPanel` → `ensure_ai_disclosure` → `Session.propose_async`
   (auf einem `_Snapshot` wie die Vorschau); ein Vorschlag ist eine
-  Transaktion (Regel 16).
+  Transaktion (Regel 16). Ein Abbruch kommt als `agentCancelled`, nie als
+  `failed`; ein Projektwechsel hält den Zug an.
 - **Prüfbericht** — nach jeder Auswertung `print_findings_flow` im Arbeiter →
   `ReportPanel`; Handlungen aus `handlers_of`.
 

@@ -2286,6 +2286,53 @@ def test_a_pin_with_a_cove_is_a_pin_and_a_ring_on_both_kernels(cove: float) -> N
         assert ring.params["recess"] is True
 
 
+def test_a_tilted_ring_points_the_same_way_on_both_kernels() -> None:
+    """Ein schräg liegender Ring trägt an beiden Kernen dieselbe Achse (G6, Review Paket E).
+
+    Die Einpassung am Netz richtet die Ringachse nach (1, √2, √3) aus, der
+    exakte Kern gab sie nach der größten Komponente aus. Um x um 228 Grad
+    gedreht liegt die Achse bei (0; 0,74; −0,67): Dort nannten die zwei
+    Regeln entgegengesetzte Richtungen, und mit ihr Fläche und Merkmal.
+    """
+    exact_kernel()
+    import math
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    angle = math.radians(228.0)
+    cos, sin = math.cos(angle), math.sin(angle)
+    matrix = (
+        (1.0, 0.0, 0.0, 0.0),
+        (0.0, cos, -sin, 0.0),
+        (0.0, sin, cos, 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+    solid = edit.transformed(_pin_with_a_cove(3.0), matrix)
+    exact = features_of(solid)
+    found = detect(as_mesh_data(solid))
+    ((native_ring, twin_ring),) = [
+        (left, right)
+        for left in exact.values()
+        if left.kind == "torus"
+        for right in found.values()
+        if right.kind == "torus"
+    ]
+    # Die Drehung bringt +z nach (0; -sin; cos) = (0; 0,74; -0,67); die Ringregel
+    # dreht sie um, weil ihr Skalarprodukt mit (1, √2, √3) negativ ist.
+    expected = (0.0, sin, -cos)
+    for ring in (native_ring, twin_ring):
+        axis = ring.params["axis"]
+        assert sum(a * b for a, b in zip(axis, expected, strict=True)) == pytest.approx(
+            1.0, abs=1e-6
+        )
+    (patch,) = native_ring.surface_patches
+    assert sum(a * b for a, b in zip(patch.params["axis"], expected, strict=True)) == pytest.approx(
+        1.0, abs=1e-6
+    )
+
+
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
 def test_a_corner_round_refuses_on_both_kernels_with_the_sentence_of_the_panel(
     kind: str, profile: Profile

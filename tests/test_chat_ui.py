@@ -7,6 +7,7 @@ Entscheidung, und hält sich das Ganze heraus, wenn es kein Modell gibt.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -1485,6 +1486,249 @@ def qt_app_process(window: MainWindow) -> None:
         time.sleep(0.01)
 
 
+# --- ein Zug ohne Vorschlag (Kundenbericht S-20261010-e5014c) ---------------------
+
+
+def test_a_cancelled_turn_leaves_the_worker_as_no_error() -> None:
+    """Ein Abbruch kommt als ``cancelledWith`` heraus, nie als ``failedWith``.
+
+    Ein nacktes ``AppError`` daraus fiel im Fehlerdialog auf *Fehlerbericht
+    erstellen* zurück — der Kunde schickte sein eigenes *Abbrechen* als
+    Programmfehler.
+    """
+    from types import SimpleNamespace
+    from typing import Any, cast
+
+    from app.core.errors import OperationCancelled
+    from app.ui.session import _AgentWorker
+
+    def stopped(*_args: object, **_kwargs: object) -> object:
+        raise OperationCancelled
+
+    worker = _AgentWorker(
+        cast(Any, SimpleNamespace(run_proposal=stopped, _pending=SimpleNamespace())),
+        "eine Bohrung",
+        cast(Any, None),
+        cast(Any, None),
+    )
+    failed: list[object] = []
+    cancelled: list[str] = []
+    worker.failedWith.connect(failed.append)
+    worker.cancelledWith.connect(cancelled.append)
+
+    worker.work()
+
+    assert not failed, failed
+    assert cancelled == ["eine Bohrung"]
+
+
+def test_a_proposal_for_the_previous_project_is_not_shown() -> None:
+    """Fertig vor dem Abbruch des Projektwechsels heißt nicht gültig.
+
+    Der Zug rechnete auf dem vorigen Dokument; ohne Stempelvergleich zeigte
+    das Fenster seinen Vorschlag über dem neuen und übernähme ihn dort.
+    """
+    from types import SimpleNamespace
+    from typing import Any, cast
+
+    from app.core.agent.proposal import Proposal
+    from app.ui.session import AGENT_PROJECT_CHANGED
+
+    session = Session()
+    # Ohne Ereignisschleife käme die Auswertung des neuen Projekts nie an; hier
+    # zählt nur der Wechsel selbst.
+    session.evaluate_async = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    try:
+        worker = SimpleNamespace(
+            generation=session._project_generation, stop_reason="", request="x"
+        )
+        session._agent = cast(Any, worker)
+        session.start_new()
+        assert worker.stop_reason == AGENT_PROJECT_CHANGED, "der Projektwechsel hält den Zug an"
+        shown: list[object] = []
+        ended: list[tuple[str, str]] = []
+        session.proposalReady.connect(shown.append)
+        session.agentCancelled.connect(lambda reason, request: ended.append((reason, request)))
+
+        session._on_agent_proposal(
+            ProposalPreview(proposal=Proposal(request="x")), finished=cast(Any, worker)
+        )
+
+        assert not shown, "der Vorschlag galt dem vorigen Projekt"
+        assert ended == [(AGENT_PROJECT_CHANGED, "x")]
+        assert not session.busy, "kein Lauf bleibt hinter dem Test zurück"
+    finally:
+        session._agent = None
+        session.release()
+
+
+def test_without_model_access_the_error_leads_to_the_chat_setup() -> None:
+    """*Einstellungen öffnen* führte in einen Dialog ohne Modellzugang (Review abbruch, G7)."""
+    from unittest.mock import MagicMock
+
+    from app.ui.session import _no_chat_access
+
+    window = MagicMock()
+    window._write_failure = None
+    handlers = MainWindow.error_handlers(window)
+    error = _no_chat_access()
+
+    assert error.suggestions[0].id == "set_up_chat"
+    handlers["set_up_chat"](error)
+    window.action_llm_key.assert_called_once_with()
+
+
+def test_a_question_of_the_previous_project_is_not_asked() -> None:
+    """Die Rückfrage eines Zugs gilt dem Projekt, auf dem er rechnet (Review abbruch, M1).
+
+    ``_AgentWorker`` stempelte seinen Faden nicht; ``ask_from_worker`` nahm
+    deshalb den Stempel zum Zeitpunkt der Frage, und nach einem Wechsel stand
+    die Frage des alten Zugs samt Kandidaten über dem neuen Projekt. Der
+    Wechsel wird hier im Zug selbst gestellt, das Fenster antwortet sofort —
+    gefragt werden darf gar nicht.
+    """
+    from typing import Any, cast
+
+    from app.ui.session import AskRequest, _AgentWorker
+
+    session = Session()
+    asked: list[str] = []
+
+    def answer(request: AskRequest) -> None:
+        asked.append(request.question)
+        request.answer = request.choices[0]
+        request.answered.set()
+
+    def changing_project(*_args: object, **_kwargs: object) -> object:
+        session._project_generation += 1
+        return session.ask_from_worker("Welche Bohrung meinen Sie?", ["oben", "unten"])
+
+    session.askRequested.connect(answer)
+    session.run_proposal = changing_project  # type: ignore[method-assign]
+    worker = _AgentWorker(
+        session,
+        "eine Bohrung",
+        cast(Any, None),
+        cast(Any, None),
+        generation=session._project_generation,
+    )
+    finished: list[object] = []
+    cancelled: list[str] = []
+    worker.finishedWith.connect(finished.append)
+    worker.cancelledWith.connect(cancelled.append)
+    try:
+        worker.work()
+        assert not asked, f"die Frage des alten Zugs erschien: {asked}"
+        assert not finished
+        assert cancelled == ["eine Bohrung"]
+        assert getattr(session._pending, "project_generation", None) is None, (
+            "der Faden trägt danach keinen Stempel mehr"
+        )
+    finally:
+        session.release()
+
+
+def test_only_a_stop_from_elsewhere_hands_the_request_back() -> None:
+    """Die Quittung nach eigenem *Abbrechen* verspricht nichts; die übrigen nennen *Senden*."""
+    from app.i18n import tr
+    from app.ui.session import (
+        AGENT_INTERRUPTED,
+        AGENT_PROJECT_CHANGED,
+        AGENT_STOPPED,
+        agent_stop_sentence,
+    )
+
+    send = str(tr("Senden"))
+    assert send not in agent_stop_sentence(AGENT_STOPPED)
+    for reason in (AGENT_PROJECT_CHANGED, AGENT_INTERRUPTED):
+        assert send in agent_stop_sentence(reason), reason
+    assert agent_stop_sentence(AGENT_PROJECT_CHANGED) != agent_stop_sentence(AGENT_INTERRUPTED)
+
+
+def _turn_waiting_for_cancel(window: MainWindow) -> threading.Event:
+    """Ein Modell, das rechnet, bis der Zug angehalten ist — wie Ollama im
+    Kundenbericht, das achteinhalb Minuten rechnete.
+
+    Wie ``llm._ollama_request`` endet die Anfrage mit ``OperationCancelled``;
+    das Ereignis meldet, dass gefragt wurde.
+    """
+    import time
+
+    from app.core.errors import OperationCancelled
+
+    started = threading.Event()
+
+    def waiting(_messages: object) -> Reply:
+        started.set()
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            if window.session.agent_cancel.is_cancelled:
+                raise OperationCancelled
+            time.sleep(0.01)
+        return Reply(text="zu spät")
+
+    window.session.set_agent_backend(ScriptedBackend(answers=[waiting]))
+    return started
+
+
+def test_stopping_the_turn_shows_no_error_and_no_report(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Abbrechen* am Agenten ist eine Handlung des Nutzers, kein Programmfehler.
+
+    Nachgestellt aus S-20261010-e5014c: Der Zug wartet auf das Modell, der
+    Nutzer bricht ab. Bis 0.5.3 stand danach „Das hat so nicht funktioniert“
+    mit *Fehlerbericht erstellen* als Hauptknopf.
+    """
+    from app.ui.session import AGENT_STOPPED, agent_stop_sentence
+
+    shown: list[object] = []
+    reported: list[object] = []
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+    )
+    monkeypatch.setattr(window, "report_error", lambda error, *args: reported.append(error))
+    started = _turn_waiting_for_cancel(window)
+
+    window.chat.input.setPlainText("Bohr ein Loch")
+    window.chat._send()
+    assert started.wait(30), "der Zug fragt das Modell"
+    assert window._progress_owner == "agent"
+    window.cancel_button.click()
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+
+    assert not shown and not reported, (shown, reported)
+    assert window._announcement == agent_stop_sentence(AGENT_STOPPED)
+    assert not window.chat.busy
+
+
+def test_a_new_project_stops_the_turn_and_hands_the_request_back(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Projektwechsel ist kein Fehler und kein stilles Verschwinden der Anfrage."""
+    from app.ui.session import AGENT_PROJECT_CHANGED, agent_stop_sentence
+
+    shown: list[object] = []
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+    )
+    started = _turn_waiting_for_cancel(window)
+
+    window.chat.input.setPlainText("Bohr ein Loch")
+    window.chat._send()
+    assert started.wait(30), "der Zug fragt das Modell"
+    window.session.start_new()
+    assert window.session.agent_cancel.is_cancelled, "der Wechsel hält den Zug sofort an"
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+
+    assert not shown, shown
+    assert window._proposal is None
+    assert window.chat.input.toPlainText() == "Bohr ein Loch"
+    assert window._announcement == agent_stop_sentence(AGENT_PROJECT_CHANGED)
+
+
 # --- ein Bild als Eingabe (Konzept P15 §7 Etappe 8, E8) -------------------------
 
 
@@ -1997,6 +2241,99 @@ def test_the_chat_wakes_up_even_when_the_dialog_was_cancelled(
     window.action_llm_key()
 
     assert looked == [True], "nach dem Dialog wird in jedem Fall nachgesehen"
+
+
+@pytest.mark.parametrize("refused", ["model", "key"])
+def test_a_refused_chat_turn_leads_to_the_chat_setup(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, refused: str
+) -> None:
+    """S-20261010-e5014c: Unter dem fehlenden Modell und dem abgelehnten
+    Schlüssel stand als Hauptknopf „Zusätzliche Programme …" — der Dialog, der
+    Ollama installiert, das längst lief. Der Ausweg liegt unter „Chat
+    einrichten …", und der Knopf öffnet genau diesen Dialog.
+    """
+    from app.core.errors import SET_UP_CHAT
+    from app.ui.dialogs import offered_actions
+
+    problem = (
+        llm.ModelNotInstalled("qwen3:14b", reason="model 'qwen3:14b' not found")
+        if refused == "model"
+        else llm.KeyRefused(401, "anthropic", reason="invalid x-api-key")
+    )
+    opened: list[bool] = []
+    monkeypatch.setattr(window, "action_llm_key", lambda: opened.append(True))
+    handlers = window.error_handlers()
+
+    offered = offered_actions(problem, handlers)
+
+    assert offered[0] == SET_UP_CHAT, [action.id for action in offered]
+    handlers[offered[0].id](problem)
+    assert opened == [True]
+
+
+def test_the_chat_setup_says_why_the_stored_key_is_passed_over(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein als ungültig abgelehnter Schlüssel wird übergangen, bis ein anderer
+    dasteht — der Dialog, in dem man ihn ändert, sagt es."""
+    from app.core.backends import keys
+    from app.ui.dialogs import _what_answers
+
+    monkeypatch.setattr(keys, "read", lambda account: "sk-ant-ungueltig")
+    assert "abgelehnt" not in _what_answers()
+
+    llm.reject("anthropic", lasting=True, key="sk-ant-ungueltig")
+
+    assert "abgelehnt" in _what_answers()
+    assert "Noch einmal versuchen" in _what_answers(), "der Satz nennt den Rückweg"
+
+
+def test_the_chat_setup_offers_to_try_a_refused_key_again(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review M2: Aus dem gemerkten 401 führte im Programm kein Weg, ohne den
+    Schlüsseltext neu einzufügen — mit einem Schlüssel aus der Umgebung gar
+    keiner. Der Knopf steht da, sobald der Merker gefunden ist, und hebt ihn auf."""
+    from app.core.backends import keys
+    from app.ui import dialogs as module
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "sk-ant-aus-der-umgebung")
+    llm.reject("anthropic", lasting=True, key="sk-ant-aus-der-umgebung")
+    monkeypatch.setattr(module.KeyDialog, "look", lambda self: None)
+    dialog = module.KeyDialog()
+
+    dialog._show_state(module.ChatState("", None, (), key_refused=llm.key_refused("anthropic")))
+    assert not dialog.try_again_button.isHidden()
+
+    dialog.try_again_button.click()
+
+    assert not llm.key_refused("anthropic")
+    assert dialog.try_again_button.isHidden()
+
+
+def test_the_refused_key_message_can_try_the_key_again(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review M2: Derselbe Rückweg steht an der Fehlermeldung — und weckt den Chat."""
+    from app.core.backends import keys
+    from app.core.errors import TRY_KEY_AGAIN
+    from app.ui.dialogs import offered_actions
+
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "sk-ant-aus-der-umgebung")
+    llm.reject("anthropic", lasting=True, key="sk-ant-aus-der-umgebung")
+    looked: list[bool] = []
+    monkeypatch.setattr(
+        window, "_refresh_chat_availability", lambda probe_local=False: looked.append(True)
+    )
+    problem = llm.KeyRefused(401, "anthropic")
+    handlers = window.error_handlers()
+
+    assert TRY_KEY_AGAIN in offered_actions(problem, handlers)
+    handlers[TRY_KEY_AGAIN.id](problem)
+
+    assert not llm.key_refused("anthropic")
+    assert looked == [True]
 
 
 def test_the_chat_dialog_is_there_before_the_answers_are(

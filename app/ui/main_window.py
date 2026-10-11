@@ -404,7 +404,14 @@ from app.ui.render.api import PointerEvent
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
-from app.ui.session import SHORT_CHAIN_PREVIEW, AskRequest, Session, TriangleCounts
+from app.ui.session import (
+    AGENT_STOPPED,
+    SHORT_CHAIN_PREVIEW,
+    AskRequest,
+    Session,
+    TriangleCounts,
+    agent_stop_sentence,
+)
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
 from app.ui.shortcut_schemes import (
@@ -4395,6 +4402,7 @@ class MainWindow(QMainWindow):
         # mit ihm (oder seinem Scheitern) weicht der Schleier.
         self.viewport.sceneApplied.connect(self._veil_after_the_picture)
         self.viewport.sceneFailed.connect(self._veil_after_the_picture)
+        self.viewport.preparationEnded.connect(self._veil_after_the_picture)
 
         self.start_screen = StartScreen(self)
         self.start_screen.newRequested.connect(self.start_empty)
@@ -7337,6 +7345,7 @@ class MainWindow(QMainWindow):
         self.session.backendChanged.connect(self._refresh_chat_availability)
         self.session.proposalReady.connect(self._on_proposal)
         self.session.agentBusyChanged.connect(self._on_agent_busy)
+        self.session.agentCancelled.connect(self._on_agent_cancelled)
         self.session.agentProgress.connect(self._on_agent_progress)
         self.session.splitBusyChanged.connect(self._on_split_busy)
         self.session.splitProgressChanged.connect(self._on_split_progress)
@@ -11558,7 +11567,7 @@ class MainWindow(QMainWindow):
         der nächsten Änderung auseinander, und der Kunde liest sie hier
         nacheinander.
         """
-        from app.core.counterpart import drafts_for
+        from app.core.counterpart import AMBIGUOUS_THREAD, drafts_for
         from app.ui.counterpart_dialog import CounterpartDialog
 
         chosen = self._counterpart_targets()
@@ -11582,13 +11591,31 @@ class MainWindow(QMainWindow):
         thread = self._thread_among((first_object, first_feature), (second_object, second_feature))
         if thread is not None:
             (thread_object, thread_feature), (other_object, other_feature) = thread
-            try:
-                applied = self.session.create_thread_counterpart(
-                    thread_feature, thread_object, other_object, {"at_feature": other_feature}
-                )
-            except AppError as error:
-                show_error(error, self)
-                return
+            size: str | None = None
+            while True:
+                try:
+                    applied = self.session.create_thread_counterpart(
+                        thread_feature,
+                        thread_object,
+                        other_object,
+                        {"at_feature": other_feature},
+                        size=size,
+                    )
+                    break
+                except AppError as error:
+                    # Passt das Gewinde zu Größen zweier Reihen, fragt der Kern
+                    # zurück (RM-544, Regel 21) — hier die Frage, dann derselbe Weg.
+                    choices = [str(entry) for entry in error.values.get("choices", ())]
+                    asked = getattr(error, "constraint", None) == AMBIGUOUS_THREAD
+                    if not asked or size is not None or not choices:
+                        show_error(error, self)
+                        return
+                    picked, accepted = QInputDialog.getItem(
+                        self, tr("Gegenstück zum Gewinde"), str(error.detail), choices, 0, False
+                    )
+                    if not accepted:
+                        return
+                    size = str(picked)
             for finding in applied.findings:
                 self.announce(str(finding.message))
             return
@@ -11740,6 +11767,11 @@ class MainWindow(QMainWindow):
         KeyDialog(parent=self, settings=self.settings).exec()
         self.session.set_agent_backend(None)
         self._refresh_chat_availability(probe_local=True)
+
+    def _try_chat_key_again(self) -> None:
+        llm.accept_again("anthropic")
+        self.session.set_agent_backend(None)
+        self._refresh_chat_availability()
 
     def _refresh_chat_availability(self, probe_local: bool = False) -> None:
         """Der eine Ort, an dem der Chat-Zustand gelesen wird.
@@ -11950,6 +11982,9 @@ class MainWindow(QMainWindow):
 
     def _apply_settings(self) -> None:
         """Trägt die Einstellungen dorthin, wo sie wirken."""
+        from app.core.knowledge import standards
+
+        standards.set_shown_thread_families(self.settings.thread_families)
         application = QApplication.instance()
         if application is not None:
             apply_theme(application, self.settings.theme)  # type: ignore[arg-type]
@@ -18332,6 +18367,17 @@ class MainWindow(QMainWindow):
             return
         self._set_progress_state("agent", active=False)
         self._update_waiting_state()
+
+    def _on_agent_cancelled(self, reason: str, request: str) -> None:
+        """Ein Zug ohne Vorschlag ist kein Fehler (§2.7, Regel 17).
+
+        Wer selbst angehalten hat, liest eine Quittung. Kam der Abbruch von
+        woanders (``session.agent_stop_sentence``), steht die Anfrage wieder
+        im Chat — ein eigener Text im Feld bleibt.
+        """
+        if reason != AGENT_STOPPED and request and not self.chat.input.toPlainText().strip():
+            self.chat.restore_request(request)
+        self.announce(agent_stop_sentence(reason))
 
     def _on_agent_progress(self, step: int, label: str) -> None:
         """Was der Zug gerade tut, statt nur dass er läuft (§2.8).
@@ -27151,6 +27197,8 @@ class MainWindow(QMainWindow):
             # öffnete er die Liste der externen Programme, weil der Kern ihn
             # dafür benutzte — der Knopf log also seinen Namen.
             "open_settings": lambda _error: self.action_settings(),
+            "set_up_chat": lambda _error: self.action_llm_key(),
+            "try_key_again": lambda _error: self._try_chat_key_again(),
             # Die Wege am Verlauf selbst (P7): einschalten, ausschalten, den
             # Deckel mit seinem Hohlraum zusammen ausschalten, das Einfügen
             # beenden — alle rücknehmbar, alle ohne Nachfrage (Regel 19).

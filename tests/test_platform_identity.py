@@ -1387,12 +1387,31 @@ def _thread_ridge() -> str:
 
     Seine Ringe drehen über ``units.exact_cos``/``exact_sin`` (``27c7a29e9``);
     gefragt ist, ob der ganze Gang daran hängt — Teilung, Profil und Naht
-    eingeschlossen.
+    eingeschlossen. Dazu ein Whitworth- und ein NPT-Gang (RM-544) und ihre Umrisse
+    frisch gerechnet, ungeteilt und geteilt: Die Umrisse liegen sonst in einem Merker
+    und als Modulwert vor, und das Rauschen erreichte sie nie (Review GEW, M1 —
+    ``math.sin`` irrte unter Windows bei 58,75° um ein halbes ULP).
     """
+    from app.core.knowledge.parts import shapes
     from app.core.knowledge.parts.shapes import thread_body
 
+    outlines = (
+        shapes._whitworth_outline.__wrapped__(1),
+        shapes._whitworth_outline.__wrapped__(3),
+        shapes._npt_outline(),
+    )
     return "|".join(
-        _mesh_print(thread_body(8.0, 1.25, 6.0, internal=internal)) for internal in (False, True)
+        (
+            *(
+                _mesh_print(thread_body(8.0, 1.25, 6.0, internal=internal))
+                for internal in (False, True)
+            ),
+            *(
+                _mesh_print(thread_body(13.157, 25.4 / 19.0, 4.0, profile=profile))
+                for profile in ("whitworth", "npt")
+            ),
+            repr([point for outline in outlines for point in outline]),
+        )
     )
 
 
@@ -1802,6 +1821,46 @@ def test_a_threaded_way_gives_the_same_bits_on_one_thread_and_on_many(
 
     assert shared == alone, f"{way} rechnet auf vier Fäden anders als auf einem"
     assert backwards == alone, f"{way} hängt an der Reihenfolge, in der die Fäden enden"
+
+
+def _thread_profile_constants(module: Any) -> list[object]:
+    """Die beim Import gerechneten Zahlen der Gangprofile und der ungeteilte Umriss."""
+    return [
+        module._WHITWORTH_HEIGHT,
+        module._WHITWORTH_SINE,
+        module.WHITWORTH_DEPTH,
+        module.WHITWORTH_RADIUS,
+        module._NPT_OUTLINE,
+        module._whitworth_outline(1),
+    ]
+
+
+def test_the_thread_profiles_do_not_hang_on_the_machine_when_imported() -> None:
+    """Nachprüfung GEW, N3: Die Konstanten der Gangprofile entstehen beim Import.
+
+    Dorthin kam das Rauschen des Wegs ``thread_ridge`` nie: Ein ``math.tan`` in
+    ``WHITWORTH_DEPTH`` bliebe grün, denn der Umriss rechnet mit dem, was der
+    Import schon festgelegt hat. Hier wird ``shapes`` unter dem Rauschen frisch
+    geladen, als eigenes Modul neben dem geladenen.
+    """
+    import importlib.util
+
+    from app.core.knowledge.parts import shapes
+
+    def fresh() -> Any:
+        spec = importlib.util.spec_from_file_location("_shapes_fresh", shapes.__file__)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    quiet = _thread_profile_constants(fresh())
+    assert quiet == _thread_profile_constants(shapes), "frisch geladen wie beim Import"
+    # Jedes Muster bewegt etwa die Hälfte der Werte; acht Muster treffen jeden.
+    for pattern in range(8):
+        with platform_noise(pattern):
+            noisy = _thread_profile_constants(fresh())
+        assert noisy == quiet, f"die Gangprofile hängen an der Plattform (Muster {pattern})"
 
 
 def _forget_what_the_perception_remembers() -> None:

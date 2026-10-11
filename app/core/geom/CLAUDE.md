@@ -57,9 +57,9 @@ dessen Docstring nennt Rundungsgrenzen/Ursprung. Nicht Vereinbares bleibt.
 `_meets_the_shells` prüft Werkzeugtreffer an selbstkreuzenden Schalen
 (`repair.self_crossing_shells`).
 
-`attributes.in_source_layout`/`prepare_ops._without_scars` erhalten nach jeder
-Stufe bitgleich übernommene Dreiecksecken und deren Eingangsfolge;
-Dreiecksfolge/Koordinaten bleiben beim Kern. Regel/Messfall:
+`attributes.in_source_layout`/`prepare_ops._without_scars` legen nach jeder
+Stufe bitgleich Übernommenes in Ecken- und Dreiecksfolge des Eingangs, ohne
+Wirkung den Eingang selbst. Regel/Messfall:
 `operationen.md`, „Boolesches geht durch die Rückfallkette“.
 
 - **Native Stufen** übergeben `Mesh64` und lesen Status und Volumen vor der

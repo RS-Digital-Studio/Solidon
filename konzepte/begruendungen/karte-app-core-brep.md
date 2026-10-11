@@ -589,10 +589,10 @@ Zylinders ein, `measure_winding(tapered=True)` misst den Radius an der
 Kegelfläche, und Kamm, Fuß und Nenndurchmesser gelten in der Mitte der
 Gewindelänge. `ThreadReading.taper` ist der halbe Kegelwinkel mit Vorzeichen
 (die weite Seite in Achsrichtung positiv), das Merkmal trägt ihn als
-`taper` in Grad. Ändern, Entfernen (`prepare_ops._thread_frame`) und das
-Gegenstück aus der Bibliothek (`counterpart`) sagen an einem kegeligen —
-und das Gegenstück auch an einem mehrgängigen — Gewinde mit Grund ab, statt
-es mit Zylindern zu ersetzen. **Und die Punktfolge eines Zugs beginnt an
+`taper` in Grad. Ändern und Entfernen (`prepare_ops._thread_kind`) setzen
+an einem kegeligen Gewinde Kegelstümpfe an, das Gegenstück nimmt seine
+kegelige Tabellengröße und ein mehrgängiges ein eigenes Maß mit derselben
+Gangzahl (RM-544). **Und die Punktfolge eines Zugs beginnt an
 seinem freien Ende** (`_ordered_points`): Die Sortierung über die übrigen
 Stücke fragte während `list.sort` eine leere Liste, und ein zweigängiges
 Innengewinde galt deshalb nicht als Gewinde.
