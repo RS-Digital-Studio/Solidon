@@ -2064,6 +2064,36 @@ def test_refining_for_a_brush_is_no_denser_than_before_the_edge_promise() -> Non
     assert float(edge_lengths(evened).max()) <= edge * (1.0 + 1e-9)
 
 
+def test_the_budget_edge_reads_the_triangles_once_and_not_where_the_answer_is_clear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nachprüfung N5: Der Fensterfaden fragt :func:`refine_edge_for` je Zugpunkt
+    und je Radiusänderung, und die Halbkantensumme kostete an 1,3 Mio. Dreiecken
+    0,12–0,20 s je Frage. Sie rechnet einmal je Netz — und gar nicht, wenn das
+    Netz schon über der Grenze liegt und die Antwort ohnehin „nicht angleichen“
+    ist."""
+    from app.core.geom import sculpt
+
+    summed: list[int] = []
+    real = sculpt._summed_half_edges
+
+    def counted(mesh: MeshData) -> float:
+        summed.append(mesh.triangle_count)
+        return real(mesh)
+
+    monkeypatch.setattr(sculpt, "_summed_half_edges", counted)
+    ball = MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=40.0))
+    first = refine_edge_for(ball, 1.0, finest=0.05)
+    assert first > 0.0, "die Grenze entscheidet die Kante"
+    assert refine_edge_for(ball, 1.0, finest=0.05) == first
+    assert summed == [ball.triangle_count], "einmal je Netz"
+
+    monkeypatch.setattr(sculpt, "REFINE_MAX_TRIANGLES", ball.triangle_count)
+    full = MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=40.0))
+    assert refine_edge_for(full, 1.0, finest=0.05) == 0.0
+    assert summed == [ball.triangle_count], "über der Grenze kein Blick auf die Dreiecke"
+
+
 def test_the_starting_radius_follows_the_body() -> None:
     """H8: 6 mm fest waren am Korpus 0,059 bis 0,173 der Diagonale; aus der
     Körpergröße bleibt es um ein Zwanzigstel — die Rundung auf 1-2-5 lässt

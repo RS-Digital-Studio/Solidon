@@ -1221,34 +1221,70 @@ def _longest_within_budget(mesh: MeshData) -> float:
 
     Gezählt wie *Dreiecke angleichen* vorab zählt
     (``mesh_ops.estimated_triangles`` mit ``until_short``): die doppelte Fläche
-    in gleichseitigen Dreiecken, dazu je Kante ihre Stücke. Statt aufzurunden
-    zählt jede Kante ein Stück mehr — eine obere Schranke, die ohne die
-    eindeutigen Kanten auskommt: Aus den Halbkanten eines geschlossenen Netzes
-    ist ``Σ (l / e + 1)`` über die Kanten ``H / e + 3F / 2`` mit der Summe ``H``
-    aller Halbkantenlängen. Das sind Fläche und eine Summe über die Dreiecke;
-    die eindeutigen Kanten kosteten an 1,3 Mio. Dreiecken 0,7 s im Fensterfaden.
-    Die Schranke ``2A / (√3/4 · e²) + H / e + F`` gleich der Grenze gesetzt ist
-    eine quadratische Gleichung in ``1 / e``. Ohne die Kanten lag ein Zylinder
-    mit Fächerdeckeln 7 % über der Grenze (Review F).
+    in gleichseitigen Dreiecken, dazu ``2 · Σ Stücke - 2F`` über die Kanten.
+    Statt aufzurunden zählt jede Kante ein Stück mehr — eine obere Schranke,
+    die ohne die eindeutigen Kanten auskommt: In einem geschlossenen Netz ist
+    ``Σ (l / e + 1)`` über die Kanten ``H / (2e) + 3F / 2`` mit der Summe ``H``
+    aller Halbkantenlängen, die Zählung also ``H / e + F``. Das sind Fläche und
+    eine Summe über die Dreiecke; die eindeutigen Kanten kosteten an 1,3 Mio.
+    Dreiecken 0,7 s im Fensterfaden. Die Schranke
+    ``2A / (√3/4 · e²) + H / e + F`` gleich der Grenze gesetzt ist eine
+    quadratische Gleichung in ``1 / e``. Ohne die Kanten lag ein Zylinder mit
+    Fächerdeckeln 7 % über der Grenze (Review F).
 
     Gleich gesetzt wird mit der Grenze unter der Luft, die jeder Vorschlag
     einer Kante über einer Schätzung lässt (``mesh_ops.ESTIMATE_RESERVE``):
     Der Kern teilt in ganzen Stücken, und am Quader 200 x 200 x 200 gab eine um
     ein halbes Prozent längere Kante neun Prozent mehr Dreiecke. Gemessen wird
     am Netz (``test_sculpt.py::test_refining_stays_within_its_triangle_budget``).
+
+    Der Fensterfaden fragt das je Zugpunkt und je Radiusänderung
+    (Nachprüfung N5). Liegt das Netz schon über der Grenze, ist die Antwort
+    ohne einen Blick auf die Dreiecke klar; sonst rechnet die Halbkantensumme
+    einmal je Netz (:func:`_half_edge_length`).
     """
     from app.core.geom.mesh_ops import ESTIMATE_RESERVE
 
-    corners = np.asarray(mesh.raw.triangles, dtype=np.float64)
-    sides = np.roll(corners, -1, axis=1) - corners
-    squared = sides * sides
-    halves = float(np.sqrt(squared[..., 0] + squared[..., 1] + squared[..., 2]).sum())
-    doubled = 2.0 * float(mesh.raw.area) / (math.sqrt(3.0) / 4.0)
     room = REFINE_MAX_TRIANGLES / ESTIMATE_RESERVE - mesh.triangle_count
-    if doubled <= 0.0 or room <= 0:
+    if room <= 0:
         return math.inf
+    doubled = 2.0 * float(mesh.raw.area) / (math.sqrt(3.0) / 4.0)
+    if doubled <= 0.0:
+        return math.inf
+    halves = _half_edge_length(mesh)
     inverse = (math.sqrt(halves * halves + 4.0 * doubled * room) - halves) / (2.0 * doubled)
     return 1.0 / inverse
+
+
+#: Unter welchem Schlüssel ein Netz die Summe seiner Halbkantenlängen merkt.
+_HALF_EDGES_KEY: Final = "solidon_half_edge_length"
+
+
+def _half_edge_length(mesh: MeshData) -> float:
+    """Die Summe aller Halbkantenlängen — einmal je Netz (Nachprüfung N5).
+
+    Je Aufruf kostete sie an 1,3 Mio. Dreiecken 0,12 bis 0,20 s im Fensterfaden,
+    je Zugpunkt. Sie liegt im Cache des Netzes, der mit dessen Geometrie
+    verfällt; die Ecken je Dreieck entstehen dafür nur kurz und bleiben nicht
+    im Cache liegen wie ``raw.triangles``.
+    """
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is not None:
+        cache.verify()
+        if _HALF_EDGES_KEY in cache:
+            return float(cache[_HALF_EDGES_KEY])
+    total = _summed_half_edges(mesh)
+    if cache is not None:
+        cache[_HALF_EDGES_KEY] = total
+    return total
+
+
+def _summed_half_edges(mesh: MeshData) -> float:
+    """Die Rechnung hinter :func:`_half_edge_length`, ohne Merken."""
+    corners = np.asarray(mesh.raw.vertices, dtype=np.float64)[np.asarray(mesh.raw.faces)]
+    sides = np.roll(corners, -1, axis=1) - corners
+    squared = sides * sides
+    return float(np.sqrt(squared[..., 0] + squared[..., 1] + squared[..., 2]).sum())
 
 
 def stroke_at(
