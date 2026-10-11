@@ -108,12 +108,21 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
   (`drawing_hint`), auch dass Esc den Linienzug beendet. Sobald etwas
   gezeichnet ist, hängt `status_text` „Esc wechselt zum Auswählen und Ziehen."
   an.
-* **Ein Linienzug endet, wenn er auf seinem Anfang schließt** (`_closes_a_loop`
-  fragt die Zeichnung, nicht einen Merkzettel — getippte Seiten und Strg+Z
-  zählen mit); sonst hinge ein neuer Strich am Zeiger, und das erste Esc nähme
-  nur ihn. Klick und getipptes Maß führen den Zug über `_go_on_with_the_chain`.
-* **Ein getipptes Maß wird einmal gesetzt** (`SketchPanel._measure_typed`):
-  `editingFinished` kommt bei der Eingabetaste und noch einmal beim Fokusverlust.
+* **Ein Linienzug endet, wenn er eine Schleife schließt** (`_closes_a_loop`
+  fragt die Zeichnung: Deckungen und die Enden jeder offenen Kurve aus
+  `edit._spots`; getippte Seiten und Strg+Z zählen mit); sonst hinge ein neuer
+  Strich am Zeiger, und das erste Esc nähme nur ihn. Klick und getipptes Maß
+  führen den Zug über `_go_on_with_the_chain`. Den Doppelklick entscheidet
+  `double_click_on_plane` (beendet den Zug); `place` lehnt nur eine Linie der
+  Länge null ab (`EPS_DISPLAY`, nicht die Fangweite).
+* **Die Eingabetaste eines Maßfelds setzt im Ereignisfilter des Panels und
+  endet dort** — getippt oder angezeigt; sonst drückte sie im Dialog *Skizze
+  zeichnen* danach dessen Hauptknopf. Der Fokusverlust setzt nur eine getippte,
+  noch nicht genommene Eingabe, am `FocusOut` erkannt und sofort, weil ein
+  Klick ins Bild zuerst den Fokus nimmt und dann drückt (kein Zeitgeber).
+* **Ein Rasterpunkt auf einem vorhandenen Punkt fängt diesen**
+  (`_placement_target`, Toleranz `EPS_DISPLAY`), nur bei Werkzeugen, die einen
+  Punkt setzen — Auswählen, Verrunden und Fase treffen, was unter dem Zeiger liegt.
 * **Wo der Zeiger steht, steht in der Zeile** (`pointer_target`,
   `SketchPanel._show_pointer`) — der Ort, an dem ein Klick landet, nicht die
   rohe Lage. Genaue Zahlen gibt das Kontextmenü am Punkt (`edit_point`, mit

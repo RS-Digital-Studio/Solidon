@@ -194,8 +194,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao dividir em peças soltas ficam todas as peças imprimíveis, também pinos e anilhas junto a uma placa grande. Só caem pequenas superfícies abertas e migalhas que a impressora não reproduz.
 - Um relevo só é calculado depois de escolhida uma imagem. Até lá a caixa de diálogo indica o botão *Escolher imagem …*.
 - As caixas de diálogo *Carregar STEP* e *Extrudir um desenho* só oferecem ficheiros que conseguem ler. Se o projeto não tiver nenhum, indicam o botão *Escolher ficheiro …*.
-- Uma sequência de linhas no esboço termina assim que fecha no seu início. Até agora ficava um novo troço preso ao ponteiro, e o primeiro Esc parecia não fazer nada.
+- Uma sequência de linhas no esboço termina assim que fecha um ciclo. Até agora ficava um novo troço preso ao ponteiro, e o primeiro Esc parecia não fazer nada.
 - Um comprimento escrito com a ferramenta Linha cria exatamente uma linha. Até agora, ao sair do campo da cota juntava-se uma segunda, de volta ao ponteiro.
+- Um clique que a captura à grelha coloca exatamente sobre um ponto existente apanha esse ponto. Até agora o contorno parecia fechado sem estar ligado.
+- Um duplo clique com a ferramenta Linha termina a sequência de linhas. Até agora criava uma linha de comprimento zero.
+- Enter no campo da cota do diálogo *Desenhar esboço* define a cota e deixa o diálogo aberto. Até agora aplicava o desenho e fechava-o.
 
 ### Gerar com IA
 

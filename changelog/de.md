@@ -219,8 +219,11 @@ Nutzen da und sonst nichts.
 - Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch Stifte und Scheiben neben einer großen Platte. Wegfallen nur kleine offene Flächen und Krümel, die der Drucker nicht abbildet.
 - Ein Relief rechnet erst, wenn ein Bild gewählt ist. Bis dahin nennt der Dialog den Knopf *Bild wählen …*.
 - Die Dialoge *STEP laden* und *Zeichnung hochziehen* bieten nur Dateien an, die sie lesen können. Liegt keine im Projekt, nennen sie den Knopf *Datei wählen …*.
-- Ein Linienzug in der Skizze endet, sobald er auf seinem Anfang schließt. Bisher hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
+- Ein Linienzug in der Skizze endet, sobald er eine Schleife schließt. Bisher hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
 - Eine im Linienwerkzeug getippte Länge legt genau eine Linie an. Bisher kam beim Verlassen des Maßfelds eine zweite dazu, zurück zum Zeiger.
+- Ein Klick, den der Rasterfang genau auf einen vorhandenen Punkt legt, fängt diesen Punkt. Bisher sah die Kontur geschlossen aus, ohne verbunden zu sein.
+- Ein Doppelklick im Linienwerkzeug beendet den Linienzug. Bisher legte er eine Linie der Länge null an.
+- Die Eingabetaste im Maßfeld des Dialogs *Skizze zeichnen* setzt das Maß und lässt den Dialog offen. Bisher übernahm sie die Zeichnung und schloss ihn.
 
 ### Erzeugen mit KI
 

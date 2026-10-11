@@ -195,8 +195,11 @@ dans `website/version.json`.
 - La division en pièces distinctes garde toute pièce imprimable, même goujons et rondelles près d'une grande plaque. Seules tombent petites surfaces ouvertes et miettes non imprimables.
 - Un relief n'est calculé qu'une fois une image choisie. D'ici là, la boîte de dialogue indique le bouton *Choisir une image …*.
 - Les boîtes de dialogue *Charger un STEP* et *Extruder un dessin* ne proposent que les fichiers qu'elles savent lire. Si le projet n'en contient aucun, elles indiquent le bouton *Choisir un fichier …*.
-- Une suite de lignes dans l'esquisse s'arrête dès qu'elle se referme sur son début. Jusqu'ici, un nouveau segment restait accroché au pointeur, et le premier Échap semblait sans effet.
+- Une suite de lignes dans l'esquisse s'arrête dès qu'elle ferme une boucle. Jusqu'ici, un nouveau segment restait accroché au pointeur, et le premier Échap semblait sans effet.
 - Une longueur tapée avec l'outil Ligne crée exactement une ligne. Jusqu'ici, quitter le champ de cote en ajoutait une seconde, revenant vers le pointeur.
+- Un clic que l'accrochage à la grille pose exactement sur un point existant accroche ce point. Jusqu'ici, le contour semblait fermé sans être relié.
+- Un double-clic avec l'outil Ligne termine la suite de lignes. Jusqu'ici, il créait une ligne de longueur nulle.
+- Entrée dans le champ de cote du dialogue *Dessiner une esquisse* fixe la cote et laisse le dialogue ouvert. Jusqu'ici, elle appliquait le dessin et le fermait.
 
 ### Générer avec l'IA
 
