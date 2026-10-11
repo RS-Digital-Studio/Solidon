@@ -272,6 +272,28 @@ def _store_refusals(data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+#: Konten, deren Merker diese Sitzung geschrieben hat — für ``llm.accept_again``
+#: ohne Namen, das sonst bei jedem Aufruf die Datei läse.
+_marked: set[str] = set()
+
+
+def marked_here() -> frozenset[str]:
+    """Welche Konten diese Sitzung als abgelehnt gemerkt hat."""
+    return frozenset(_marked)
+
+
+def _salt_of(data: dict[str, Any]) -> str:
+    """Das Salz der Datei — oder leer, wenn es keines oder ein beschädigtes ist."""
+    salt = data.get("salt")
+    if not isinstance(salt, str) or len(salt) != 32:
+        return ""
+    try:
+        bytes.fromhex(salt)
+    except ValueError:
+        return ""
+    return salt
+
+
 def _fingerprint(key: str, salt: str) -> str:
     """HMAC-SHA256 mit einem Salz je Installation — wiedererkennbar, nicht
     zurückzurechnen, auch nicht für einen kurzen Schlüssel über ein Wörterbuch."""
@@ -286,9 +308,7 @@ def mark_refused(account: str, key: str, now: float | None = None) -> None:
     Nutzerordner aus dem 401 einen Programmfehler statt eines Satzes mit Ausweg.
     """
     data = _load_refusals()
-    salt = str(data.get("salt") or "")
-    if len(salt) != 32:
-        salt = secrets.token_hex(16)
+    salt = _salt_of(data) or secrets.token_hex(16)
     data["salt"] = salt
     data[account] = {
         "mark": _fingerprint(key, salt),
@@ -299,6 +319,7 @@ def mark_refused(account: str, key: str, now: float | None = None) -> None:
     except OSError as problem:
         _log.warning("could not remember the refused %s key: %s", account, problem)
         return
+    _marked.add(account)
     _log.info("%s key marked as refused", account)
 
 
@@ -306,8 +327,8 @@ def refused(account: str, key: str, now: float | None = None) -> bool:
     """Ob genau dieser Schlüssel als ungültig gemerkt ist und die Frist noch läuft."""
     data = _load_refusals()
     entry = data.get(account)
-    salt = data.get("salt")
-    if not isinstance(entry, dict) or not isinstance(salt, str) or len(salt) != 32:
+    salt = _salt_of(data)
+    if not isinstance(entry, dict) or not salt:
         return False
     at = entry.get("at")
     if not isinstance(at, int | float) or isinstance(at, bool):
@@ -321,6 +342,7 @@ def refused(account: str, key: str, now: float | None = None) -> bool:
 def clear_refusal(account: str) -> None:
     """Den Merker aufheben — beim Eintragen eines Schlüssels und über „Noch
     einmal versuchen“. Ein Schreibfehler bleibt Buchhaltung (:func:`mark_refused`)."""
+    _marked.discard(account)
     data = _load_refusals()
     if account not in data:
         return

@@ -2697,6 +2697,17 @@ def test_a_remembered_refusal_runs_out_after_a_day() -> None:
     assert keys.REFUSAL_HOLDS_SECONDS == 24 * 3600.0
 
 
+def test_a_damaged_mark_file_is_no_refusal_and_no_crash() -> None:
+    """Ein beschädigtes Salz darf ``available`` nicht zum Programmfehler machen."""
+    path = keys._refusals_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"salt": "zz" * 16, "anthropic": {"mark": "x", "at": 1.0}}))
+
+    assert not keys.refused("anthropic", "sk-ant-x", now=2.0)
+    keys.mark_refused("anthropic", "sk-ant-x", now=2.0)
+    assert keys.refused("anthropic", "sk-ant-x", now=3.0), "ein neues Salz ersetzt das kaputte"
+
+
 def test_the_refusal_marks_the_key_that_was_sent(monkeypatch: pytest.MonkeyPatch) -> None:
     """Review G1: Wer während der abgelehnten Anfrage einen neuen Schlüssel
     einträgt, darf nicht den neuen gesperrt bekommen."""

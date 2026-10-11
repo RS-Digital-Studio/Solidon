@@ -3074,7 +3074,11 @@ def accept_again(backend_id: str = "") -> None:
     """Die Ablehnung zurücknehmen — ohne Namen für alle. Auch der Merker über
     den Neustart geht: Das ist „Noch einmal versuchen“, und es geht auch für
     einen Schlüssel aus der Umgebung, den kein Dialog neu einträgt."""
-    for account in (backend_id,) if backend_id else ("anthropic", *_rejected):
+    # Ohne Namen nur, was diese Sitzung abgelehnt oder gemerkt hat: Die Suite
+    # ruft das nach jedem Test, auch unter einem vorgetäuschten POSIX, wo schon
+    # der Pfad zur Datei nicht gebaut werden kann.
+    accounts = (backend_id,) if backend_id else (*_rejected, *keys.marked_here())
+    for account in dict.fromkeys(accounts):
         keys.clear_refusal(account)
     if backend_id:
         _rejected.discard(backend_id)
