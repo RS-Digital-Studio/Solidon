@@ -12,6 +12,7 @@ import math
 from dataclasses import replace
 from typing import Final
 
+import numpy as np
 import pytest
 import trimesh
 from shapely.geometry import Point, box
@@ -1238,7 +1239,11 @@ def cup_lid(opening: trimesh.Trimesh) -> trimesh.Trimesh:
 
 def ledge_share_blocked(body: MeshData) -> float:
     """Welcher Anteil des Simses unter ihm im Sperrraum liegt."""
-    result = slice_body(body, 0.5)
+    return ledge_share_of(slice_body(body, 0.5))
+
+
+def ledge_share_of(result: SliceResult) -> float:
+    """:func:`ledge_share_blocked` an einem schon geschnittenen Becher."""
     model = model_support(result)
     under = [region for low, _high, region in channel_space(result, model, LINE) if low < 15.0]
     assert model.channel_columns and len(under) > 5, "die Sperre reicht bis unter den Sims"
@@ -1324,6 +1329,433 @@ def test_a_lid_open_wider_than_a_channel_opens_the_cup(opening: float) -> None:
     lid = cup_lid(brick(opening, 80.0, 5.0, (-opening / 2.0, 0.0, 61.5)))
 
     assert ledge_share_blocked(cup_with_a_ledge(lid)) < 0.05
+
+
+def shaft_lid(
+    path: list[tuple[float, float]],
+    diameters: list[float],
+    *,
+    radius: float = 40.0,
+    keep: trimesh.Trimesh | None = None,
+) -> trimesh.Trimesh:
+    """Ein Deckel auf dem Becher aus :func:`cup_with_a_ledge`, von seinem Rand in
+    z = 60 bis zum letzten Punkt von ``path`` hoch, durchbohrt von einem runden
+    Schacht entlang ``path`` (Punkte x, z in der Ebene y = 0), je Strecke mit
+    ihrem Durchmesser, an den Knicken mit einer Kugel gerundet. Unten und oben
+    reicht er um seinen Durchmesser über den Deckel hinaus — bis 63° weit genug,
+    dass sein Ende den Deckel nicht anschneidet; mit 10 mm ließ es ab 40° oben
+    vorn eine Lippe stehen. ``keep`` bleibt im Schacht stehen."""
+    top = path[-1][1]
+    lid = trimesh.creation.cylinder(radius=radius, height=top - 60.0, sections=96)
+    lid.apply_translation((0.0, 0.0, (60.0 + top) / 2.0))
+    points = [np.array([x, 0.0, z]) for x, z in path]
+    cuts = []
+    for number, (start, end, diameter) in enumerate(
+        zip(points[:-1], points[1:], diameters, strict=True)
+    ):
+        axis = (end - start) / np.linalg.norm(end - start)
+        low = start - diameter * axis if number == 0 else start
+        high = end + diameter * axis if number == len(diameters) - 1 else end
+        cuts.append(
+            trimesh.creation.cylinder(radius=diameter / 2.0, sections=128, segment=[low, high])
+        )
+        if number:
+            joint = trimesh.creation.icosphere(subdivisions=3, radius=diameters[number - 1] / 2.0)
+            joint.apply_translation(start)
+            cuts.append(joint)
+    shaft = trimesh.boolean.union(cuts)
+    if keep is not None:
+        shaft = trimesh.boolean.difference([shaft, keep])
+    return trimesh.boolean.difference([lid, shaft])
+
+
+def tilted_shaft(
+    tilt: float,
+    diameter: float = 34.0,
+    keep: trimesh.Trimesh | None = None,
+    height: float = 20.0,
+    radius: float = 40.0,
+) -> trimesh.Trimesh:
+    """Ein Deckel von ``height`` mm und ``radius`` mm mit einem Loch, um ``tilt``
+    Grad geneigt — positiv nach oben zum Sims hin. Unten reicht es 2 mm über die
+    Kante des Simses; senkrecht schaut man nur ``d / cos θ - H · tan θ`` weit
+    hindurch."""
+    theta = math.radians(tilt)
+    start = 2.0 - diameter / 2.0 / math.cos(theta)
+    path = [(start, 60.0), (start + height * math.tan(theta), 60.0 + height)]
+    return shaft_lid(path, [diameter], keep=keep, radius=radius)
+
+
+@pytest.mark.parametrize(
+    ("tilt", "angle", "open_"),
+    [(44.0, None, True), (50.0, None, False), (44.0, 40.0, False), (50.0, 55.0, True)],
+)
+def test_a_shaft_steeper_than_the_support_angle_keeps_the_cup_closed(
+    tilt: float, angle: float | None, open_: bool
+) -> None:
+    """Ein Kreis weicht je Schicht höchstens so steil aus, wie der Drucker ohne
+    Stütze überhängt — mit dem Stützwinkel, mit dem geschnitten wurde, nicht
+    mit der Startregel (Review RM-629, Funde 2 und 4). Ein Deckel von 60 mm
+    mit einem Loch Ø 34 mm: senkrecht schaut man nirgends hindurch. Bei 45°
+    ist es um 44° offen und um 50° zu; ein Drucker, der nur 40° ohne Stütze
+    schafft, sperrt schon 44°, einer mit 55° öffnet 50°. Offen liegen 4 bis
+    5 % des Simses im Sperrraum (mit 55° etwas mehr Saum), zu über 60 %."""
+    body = cup_with_a_ledge(tilted_shaft(tilt, height=60.0, radius=75.0))
+    result = slice_body(body, 0.5, overhang_angle=angle)
+
+    share = ledge_share_of(result)
+    assert share < 0.1 if open_ else share > 0.5
+
+
+@pytest.mark.parametrize("tilt", [20.0, 30.0, 40.0, -30.0])
+def test_a_tilted_shaft_as_wide_as_a_channel_opens_the_cup(tilt: float) -> None:
+    """Ein schräger Schacht zählt mit seiner Weite quer zur Achse, nicht mit
+    seiner senkrechten Durchsicht: Schicht für Schicht schiebt sich der Kreis
+    von ``CHANNEL_WIDTH`` durch ihn hindurch. Ein Loch Ø 34 mm in einem Deckel
+    von 20 mm sieht bei 20° senkrecht 28,9 mm, bei 30° 27,7 mm; nach der
+    senkrechten Schnittmenge gefragt, lag der Sims darunter zu 64 % im Sperrraum
+    und druckte ohne Stütze (Nachprüfung RM-571, RM-629). Bei 40° hat die
+    Ellipse des schrägen Wegs (:func:`_oval_centres`) noch Platz."""
+    assert ledge_share_blocked(cup_with_a_ledge(tilted_shaft(tilt))) < 0.05
+
+
+def test_a_shaft_bent_upright_stays_open() -> None:
+    """Ein Loch Ø 34 mm, erst 20 mm um 40° geneigt, dann gerundet 20 mm
+    senkrecht. Über dem Knick schiebt die Wand die Kreise noch einige
+    Millimeter schräg zur Achse; nach diesem Schub allein geschätzt, passte die
+    Ellipse eines 40°-Wegs nicht in den senkrechten Teil, und der Schacht blieb
+    zu. Das Wandern der Mitte des Lochs zeigt die Achse (``SHAFT_SLOPE_TURN``)."""
+    theta = math.radians(40.0)
+    start = 2.0 - 17.0 / math.cos(theta)
+    bend = start + 20.0 * math.tan(theta)
+    lid = shaft_lid([(start, 60.0), (bend, 80.0), (bend, 100.0)], [34.0, 34.0])
+
+    assert ledge_share_blocked(cup_with_a_ledge(lid)) < 0.05
+
+
+def tilted_slit(tilt: float, width: float) -> trimesh.Trimesh:
+    """Ein Deckel von 20 mm mit einem Schlitz, quer zu seiner Achse ``width``
+    weit und 60 mm lang, um ``tilt`` Grad zum Sims hin geneigt. Unten reicht er
+    2 mm über die Kante des Simses."""
+    theta = math.radians(tilt)
+    start = 2.0 - width / math.cos(theta) / 2.0
+    end = start + 20.0 * math.tan(theta)
+    slab = trimesh.creation.box(extents=(width, 60.0, 60.0))
+    slab.apply_transform(trimesh.transformations.rotation_matrix(theta, (0.0, 1.0, 0.0)))
+    slab.apply_translation(((start + end) / 2.0, 0.0, 70.0))
+    lid = trimesh.creation.cylinder(radius=max(40.0, abs(end) + 25.0), height=20.0, sections=96)
+    lid.apply_translation((0.0, 0.0, 70.0))
+    return trimesh.boolean.difference([lid, slab])
+
+
+@pytest.mark.parametrize(
+    ("tilt", "width", "open_"),
+    [(45.0, 22.0, False), (40.0, 24.0, False), (30.0, 27.0, False), (45.0, 31.0, True)],
+)
+def test_a_tilted_slit_counts_with_its_width_across_the_axis(
+    tilt: float, width: float, open_: bool
+) -> None:
+    """Ein schräger Schlitz ist quer zu seiner Achse ``width`` weit,
+    waagerecht geschnitten aber ``width / cos θ`` — bei 45° und 22 mm 31,1 mm.
+    Nach dem waagerechten Schnitt gefragt, zählte er als Kanal, obwohl keine
+    Stütze durch ihn herauskommt (Review RM-629, Fund 6). Ein geschobener Kreis
+    braucht Platz für die Ellipse seines schrägen Wegs; ab 30 mm quer zur
+    Achse hat er ihn."""
+    share = ledge_share_blocked(cup_with_a_ledge(tilted_slit(tilt, width)))
+
+    assert share < 0.05 if open_ else share > 0.5
+
+
+def test_a_tilted_shaft_narrower_than_a_channel_keeps_the_cup_closed() -> None:
+    """Die Gegenprobe zum schrägen Schacht: Ø 28 mm ist quer zur Achse enger als
+    ein Kanal, und daran ändert die Neigung nichts."""
+    assert ledge_share_blocked(cup_with_a_ledge(tilted_shaft(20.0, 28.0))) > 0.5
+
+
+def zigzag_shaft(second: float) -> trimesh.Trimesh:
+    """Ein Deckel von 110 mm mit einem Schacht im Zickzack: Ø 34 mm um 40° zum
+    Sims hin geneigt, nach 55 mm Höhe um 40° zurück, die zweite Strecke mit
+    ``second`` mm. Unten reicht er 2 mm über die Kante des Simses. Die Strecke
+    versetzt ihn weiter, als er waagerecht weit ist — senkrecht schaut man
+    nirgends hindurch."""
+    theta = math.radians(40.0)
+    width = 34.0 / math.cos(theta)
+    start = 2.0 - width / 2.0
+    shift = 55.0 * math.tan(theta)
+    assert shift > width, "senkrecht nirgends durchschaubar"
+    path = [(start, 60.0), (start + shift, 115.0), (start, 170.0)]
+    return shaft_lid(path, [34.0, second], radius=52.0)
+
+
+@pytest.mark.parametrize(("second", "open_"), [(34.0, True), (28.0, False)])
+def test_a_zigzag_shaft_counts_as_open_where_a_channel_passes(second: float, open_: bool) -> None:
+    """Der Kreis folgt dem Schacht auch durch einen Knick, solange keine Wand
+    flacher ist als die Überhanggrenze. Ein Zickzack, durch den man senkrecht
+    nirgends hindurchschaut, ist offen, wenn er überall so weit ist wie ein
+    Kanal; wird er irgendwo enger, bleibt der Sims gesperrt."""
+    share = ledge_share_blocked(cup_with_a_ledge(zigzag_shaft(second)))
+
+    assert share < 0.05 if open_ else share > 0.5
+
+
+@pytest.mark.parametrize(("width", "open_"), [(29.5, False), (31.0, True)])
+def test_a_shaft_narrower_than_a_channel_in_a_single_layer_stays_closed(
+    width: float, open_: bool
+) -> None:
+    """Gefragt wird jede Schicht: Eine Platte von 0,4 mm im schrägen Schacht
+    (Ø 34 mm, 20°), die ihn quer zur Neigung auf ``width`` verengt, liegt beim
+    Schnitt mit 0,5 mm in genau einer Schicht. Enger als ein Kanal, schließt
+    sie den Schacht; weiter, bleibt er offen."""
+    plate = brick(100.0, 100.0, 0.4, (0.0, 0.0, 70.2))
+    keep = trimesh.boolean.difference([plate, brick(100.0, width, 1.0, (0.0, 0.0, 70.2))])
+    result = slice_body(cup_with_a_ledge(tilted_shaft(20.0, keep=keep)), 0.5)
+
+    assert sum(70.0 <= layer.z <= 70.4 for layer in result.layers) == 1
+    share = ledge_share_of(result)
+    assert share < 0.05 if open_ else share > 0.5
+
+
+@pytest.mark.parametrize(("narrowest", "open_"), [(None, True), (29.9, False), (30.1, True)])
+def test_a_shaft_is_open_where_every_layer_holds_a_channel_circle(
+    narrowest: float | None, open_: bool
+) -> None:
+    """Die Grenze des Schachts liegt bei ``CHANNEL_WIDTH`` wie die der Enge
+    (:func:`_narrow`), auch in einer einzigen Schicht. Synthetisch: eine Platte
+    von 20 mm, darin ein Loch Ø 34 mm, das je Millimeter Höhe um tan 20° zur
+    Seite wandert — senkrecht schaut man nur 26,7 mm hindurch. In der Schicht
+    z = 20,25 ist es quer zur Neigung auf ``narrowest`` verengt. Die Toleranz
+    von 0,1 mm deckt die Vereinfachungen (``WIDTH_SIMPLIFY`` und die Lücke des
+    Kreisvielecks, je unter 0,02 mm); die Grenze selbst liegt zwischen 30,01 und
+    30,03 mm, gerade wie schräg."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    heights = [0.25 + 0.5 * index for index in range(80)]
+    slope = math.tan(math.radians(20.0))
+    plate = box(-80.0, -80.0, 80.0, 80.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if not 10.0 <= z <= 30.0:
+            return ShapelyPolygon()
+        hole = Point(slope * (z - 10.0), 0.0).buffer(17.0, quad_segs=64)
+        if narrowest is not None and math.isclose(z, 20.25):
+            hole = hole.intersection(box(-80.0, -narrowest / 2.0, 80.0, narrowest / 2.0))
+        return plate.difference(hole)
+
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    sky = _sky_above(_sky_window(column, LINE), [4], shade_at, len(heights))[4]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
+
+
+@pytest.mark.parametrize(("width", "open_"), [(22.0, False), (28.0, False), (31.0, True)])
+def test_each_branch_of_a_forked_shaft_counts_with_its_width_across_the_axis(
+    width: float, open_: bool
+) -> None:
+    """Ein Schacht, der sich in zwei Äste teilt, gegenläufig um 45° geneigt,
+    quer zur Achse je ``width`` weit. Lagen die Mitten eines Wegs in beiden
+    Ästen, wanderte ihr gemeinsamer Schwerpunkt nicht, die Ellipse wurde nie
+    gerechnet, und jeder Ast zählte mit seiner waagerechten Weite: 22 und
+    28 mm waren offen (Nachprüfung RM-629, Fund A). Synthetisch: eine Platte
+    von z = 10 bis 30, die Äste wandern je Millimeter Höhe um 1 mm nach außen."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    heights = [0.25 + 0.5 * index for index in range(84)]
+    across = width / math.cos(math.radians(45.0))
+    plate = box(-150.0, -150.0, 150.0, 150.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if not 10.0 <= z <= 30.0:
+            return ShapelyPolygon()
+        shift = z - 10.0
+        right = box(shift, -30.0, shift + across, 30.0)
+        left = box(-shift - across, -30.0, -shift, 30.0)
+        return plate.difference(right.union(left))
+
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    sky = _sky_above(_sky_window(column, LINE), [4], shade_at, len(heights))[4]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
+
+
+@pytest.mark.parametrize(
+    ("width", "layer", "open_"), [(29.0, 0.5, False), (29.0, 0.2, False), (31.0, 0.5, True)]
+)
+def test_a_slit_tilted_aslant_to_its_narrow_side_counts_with_its_width_across_the_axis(
+    width: float, layer: float, open_: bool
+) -> None:
+    """Ein Schlitz mit runden Enden, quer zur Achse ``width`` weit und 60 mm
+    lang, um 45° in x geneigt; seine schmale Seite liegt 45° gegen die
+    Neigungsrichtung. Die Wand schiebt dann flacher, als die Mitte wandert;
+    kam die Neigung aus dem Schub und die Richtung aus der Mitte, war die
+    Ellipse quer zur Wand zu schmal, und 29 mm waren offen (Nachprüfung
+    RM-629, Fund B). Synthetisch: eine Platte von z = 10 bis 30."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    tilt, turn = math.radians(45.0), math.radians(45.0)
+    # Schmale Achse u, lange Achse v, Achse a — erst um ``turn`` gedreht,
+    # dann um die y-Achse geneigt.
+    narrow = np.array([math.cos(turn), math.sin(turn), 0.0])
+    long_ = np.array([-math.sin(turn), math.cos(turn), 0.0])
+    lean = np.array(
+        [
+            [math.cos(tilt), 0.0, math.sin(tilt)],
+            [0.0, 1.0, 0.0],
+            [-math.sin(tilt), 0.0, math.cos(tilt)],
+        ]
+    )
+    narrow, long_, axis = lean @ narrow, lean @ long_, lean @ np.array([0.0, 0.0, 1.0])
+    half, straight = width / 2.0, 30.0 - width / 2.0
+    ends = [
+        (half * math.cos(t), (straight if t < math.pi else -straight) + half * math.sin(t))
+        for t in (math.pi * k / 64 for k in range(129))
+    ]
+    profile = np.array(ends)
+    heights = [layer / 2.0 + layer * index for index in range(math.ceil(42.0 / layer))]
+    start = next(index for index, z in enumerate(heights) if z > 2.0)
+    plate = box(-150.0, -150.0, 150.0, 150.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if not 10.0 <= z <= 30.0:
+            return ShapelyPolygon()
+        centre = np.array([0.0, 0.0, 10.0]) + (z - 10.0) / axis[2] * axis
+        points = centre + profile[:, :1] * narrow + profile[:, 1:] * long_
+        flat = points + ((z - points[:, 2]) / axis[2])[:, None] * axis
+        return plate.difference(ShapelyPolygon(flat[:, :2]))
+
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    sky = _sky_above(_sky_window(column, LINE), [start], shade_at, len(heights))[start]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    found = _shafts_pass(column, {start: ShapelyPolygon()}, shade_at, heights, LINE)
+    assert found == {start: open_}
+
+
+@pytest.mark.parametrize(
+    ("lean", "gap", "open_"),
+    [(0.0, 2.0, False), (0.57, 2.0, False), (2.9, 2.0, False), (0.0, 0.3, True), (2.9, 0.3, True)],
+)
+def test_a_leaning_wall_moves_a_circle_only_as_far_as_it_pushes(
+    lean: float, gap: float, open_: bool
+) -> None:
+    """Ein Kreis weicht nur so weit aus, wie die Wand ihn schiebt. Synthetisch:
+    eine Kammer von z = 2 bis 30, darüber ein Dach von 3 mm mit einer weiten
+    Öffnung, deren freie Mitten ``gap`` mm neben den Kreisen der Säule liegen;
+    die Wand bei -y hängt um ``lean`` Grad über und schiebt die Kreise in +y,
+    die Öffnung liegt in +x. Weitete sich jeder getroffene Kreis um den vollen
+    Schritt, wanderten die Enden des Streifens an der Wand entlang: Mit 0,57°
+    (0,005 mm je Schicht) lag die Öffnung 2 mm daneben offen, mit 2,9° 10 mm
+    (Review RM-629). 0,3 mm daneben öffnet schon der senkrechte Himmel die
+    Kammer nicht, wohl aber ein Schritt an der Dachkante."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    heights = [0.25 + 0.5 * index for index in range(90)]
+    slope = math.tan(math.radians(lean))
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    # Die Mitten der Startkreise reichen bis x = 2 + Saum von zwei Bahnen, um
+    # eine halbe Bahn eingerückt, und um den Radius weniger eine halbe Bahn
+    # zurück (``_touching_centres``); die Öffnung beginnt einen Radius davor.
+    reach = 2.0 + LINE + 15.0
+    edge = reach + gap - 15.0
+    outer = box(-120.0, -120.0, 120.0, 120.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if z < 2.0:
+            return ShapelyPolygon()
+        if z < 30.0:
+            return outer.difference(box(-25.0, -25.0 + slope * (z - 2.0), 90.0, 25.0))
+        if z < 33.0:
+            return outer.difference(box(edge, -30.0, edge + 40.0, 30.0))
+        return ShapelyPolygon()
+
+    sky = _sky_above(_sky_window(column, LINE), [4], shade_at, len(heights))[4]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
+
+
+def stepped_shaft(offset: float) -> trimesh.Trimesh:
+    """Ein Deckel von 30 mm auf dem Becher, durchbohrt von zwei senkrechten
+    Löchern Ø 34 mm übereinander: das untere bis z = 75, 2 mm über die Kante
+    des Simses, das obere darüber um ``offset`` zum Sims hin versetzt. An der
+    Stufe überlappen sie nur ``34 - offset`` weit."""
+    lid = trimesh.creation.cylinder(radius=40.0, height=30.0, sections=96)
+    lid.apply_translation((0.0, 0.0, 75.0))
+    lower = trimesh.creation.cylinder(radius=17.0, height=25.0, sections=128)
+    lower.apply_translation((-15.0, 0.0, 62.5))
+    upper = trimesh.creation.cylinder(radius=17.0, height=25.0, sections=128)
+    upper.apply_translation((offset - 15.0, 0.0, 87.5))
+    return trimesh.boolean.difference([lid, trimesh.boolean.union([lower, upper])])
+
+
+def test_a_step_narrower_than_a_channel_keeps_the_shaft_closed() -> None:
+    """Ein Kreis weicht je Schicht nur so weit aus, wie eine Wand ohne Stütze
+    überhängt (``SHAFT_DRIFT``). Zwei Löcher Ø 34 mm, um 6 mm versetzt,
+    überlappen an ihrer Stufe 28 mm — da passt kein Kreis von 30 mm durch,
+    auch nicht in Schritten: Der Kreis müsste an der Stufe 2 mm auf einmal
+    springen. Am Becher sperrt schon die Decke des Simses (auch bei 3 mm
+    Versatz, Review RM-629); die Stufe selbst misst
+    :func:`test_a_step_is_open_where_a_channel_circle_passes`."""
+    assert ledge_share_blocked(cup_with_a_ledge(stepped_shaft(6.0))) > 0.5
+
+
+def test_two_slabs_on_different_ways_keep_their_own_answers() -> None:
+    """Zwei Scheiben einer Säule gehen nur dann einen gemeinsamen Weg, wenn ihre
+    Kreise dieselben sind (:func:`_same_centres`). Synthetisch: Die untere
+    Scheibe beginnt bei z = 1,25; ein Block bis y = 0 von z = 3 bis 5 nimmt
+    ihr die Kreise auf der Seite -y. Die obere beginnt bei z = 5,25 darüber
+    mit allen Kreisen. Der Deckel von z = 20 bis 23 ist nur auf der Seite -y
+    offen: Die obere kommt hinaus, die untere nicht (Review RM-629, Fund 4)."""
+    from app.core.slice.analysis import _shafts_pass
+
+    heights = [0.25 + 0.5 * index for index in range(60)]
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    outer = box(-120.0, -120.0, 120.0, 120.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if 3.0 <= z < 5.0:
+            return box(-60.0, -60.0, 60.0, 0.0)
+        if 20.0 <= z < 23.0:
+            return outer.difference(box(-60.0, -60.0, 60.0, 3.0))
+        return ShapelyPolygon()
+
+    lower, upper = 2, 10
+    materials = {lower: ShapelyPolygon(), upper: ShapelyPolygon()}
+
+    assert _shafts_pass(column, materials, shade_at, heights, LINE) == {
+        lower: False,
+        upper: True,
+    }
+
+
+@pytest.mark.parametrize(("offset", "open_"), [(3.0, True), (6.0, False)])
+def test_a_step_is_open_where_a_channel_circle_passes(offset: float, open_: bool) -> None:
+    """Die Stufe selbst, ohne den Sims des Bechers: zwei senkrechte Löcher Ø 34 mm
+    übereinander, das obere um ``offset`` versetzt. Bei 3 mm passt ein Kreis
+    von ``CHANNEL_WIDTH`` senkrecht durch beide (die Mitten überlappen), bei 6 mm
+    müsste er 2 mm auf einmal ausweichen, mehr als einen Schritt (Review RM-629,
+    Fund 4: am Becher sperrte schon die Decke des Simses)."""
+    from app.core.slice.analysis import _shafts_pass
+
+    heights = [0.25 + 0.5 * index for index in range(90)]
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    plate = box(-80.0, -80.0, 80.0, 80.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if 10.0 <= z < 25.0:
+            return plate.difference(Point(0.0, 0.0).buffer(17.0, quad_segs=64))
+        if 25.0 <= z < 40.0:
+            return plate.difference(Point(offset, 0.0).buffer(17.0, quad_segs=64))
+        return ShapelyPolygon()
+
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
 
 
 def test_open_sky_is_asked_two_line_widths_around_a_column_even_at_a_tip() -> None:

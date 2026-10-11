@@ -552,8 +552,8 @@ def thread_at_gauge(feature: Feature) -> tuple[float, float] | None:
     verschiedenen Höhen. Ein Gewinde aus der Bibliothek nennt deshalb auch
     ``gauge_nominal``, das Nennmaß seiner Größe in der Bezugsebene; das gebaute
     Maß dort liegt um dasselbe neben ``diameter`` wie das Nennmaß neben
-    ``nominal``, denn beide wachsen mit demselben Kegel. Ein gemessenes oder
-    gemessenes Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
+    ``nominal``, denn beide wachsen mit demselben Kegel. Ein am Netz gemessenes
+    Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
     Passung und Gegenstück raten sie nicht.
 
     **Ein geändertes Gewinde behält sie** (Nachprüfung GEW, N2): *Merkmal
@@ -2917,6 +2917,11 @@ class SliceResult:
     mit denen geschnitten wurde. Auch ein Schnitt ohne Brückenweiten
     (``detail="support"``) trägt sie, denn die Randfrage braucht sie dort, wo die
     Übergabe ihre Sperre baut. ``None`` bei einem Ergebnis aus Kennzahlen."""
+    overhang_angle: float | None = None
+    """Mit welchem Stützwinkel geschnitten wurde, in Grad von der Senkrechten —
+    der wirksame des Druckers, nicht die Startregel. So steil darf ein Schacht
+    der Kanalsperre ausweichen (RM-629). ``None`` bei einem Ergebnis aus
+    Kennzahlen."""
 
 
 # --- Skizzen (§30.1) -----------------------------------------------------------

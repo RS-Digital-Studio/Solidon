@@ -115,6 +115,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-764 — Der nächste Punkt auf einem Dreieck einmal und plattformgleich](#rm-764) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671: `mesh.on_surface` und `_SurfaceIndex.bound` rechnen über `closest_point` mit `np.dot`, `blend._Surface` plattformgleich; dazu `float32`-Ecken in `lattice.py` |
 | [RM-767 — An CAD-Netzen mit Facettenstreifen und Nadelfächern bleibt das Angleichen splittrig](#rm-767) | Geometrie, Erkennung und Druckvorbereitung | Paket F: Besenhalter 89 %, Würfel W6 83 % Splitter; Vorschlag: je Ebene neu vernetzen |
 | [RM-769 — Das Abstandsfeld prüft nicht, ob das nächste Dreieck unter seinen Bewerbern ist](#rm-769) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671 (Rest von M3): an CAD-Nadelfächern bis 0,19 mm zu weit, ein Vorzeichen falsch |
+| [RM-778 — Kleine Teile entfernen schließt auch bewusst offene Öffnungen](#rm-778) | Geometrie, Erkennung und Druckvorbereitung | Nachstellen am Kundenweg, dann Öffnungen mit Absicht von Löchern im Netz trennen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -143,10 +144,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-689 — Übernehmen ist frei, obwohl Text, Datei oder Bild fehlen; danach hält die Kette an](#rm-689) | Bedienung und Darstellung | Leerer Text oder fehlende Quelle: Übernehmen frei, angehaltener Schritt im Verlauf statt Sperre mit Grund |
 | [RM-658 — Ein Abschnitt, der sich selbst öffnet, merkt sich das als Wahl des Kunden](#rm-658) | Bedienung und Darstellung | Gefunden im Review von RM-680: `open_section` schreibt den Merker; ein Fix in `panels.open_section` deckt Katalog, Filamentangaben und Einstellungen |
 | [RM-696 — Der Prüfbericht des vorigen Stands rechnet neben der neuen Auswertung weiter](#rm-696) | Bedienung und Darstellung | Gemessen in L3: am Eiffelturm 37 s CPU in 19,8 s Wand beim Verschieben, beide teilen den GIL; ein neuer Stand sollte den alten Bericht abbrechen |
+| [RM-776 — Ratsätze in Fehlerdialogen sind nur Text, wo ein Knopf ginge](#rm-776) | Bedienung und Darstellung | Zuerst `open_sketch` und die `sketch.*`-Wege als Knöpfe, die den Schritt öffnen |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
+| [RM-772 — Die gemeinsame Spur der lokalen KI kennt ein wartendes ComfyUI nicht](#rm-772) | KI und Generatoren | `local_ai_slot` auch für ein ComfyUI mit geladenem Modell, das gerade nicht rechnet |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Umgesetzt (07.10.): die offenen Helfer und zwölf Kopien der Fenster-Fixtures an einem Ort, 4508 = 4508 gesammelte Fälle; offen die Abnahme im nächsten Release-Tor (Robert, 06.10.) |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
@@ -158,6 +161,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-688 — Der Test zu Curas Mindesttempo prüft das Mindesttempo nicht mehr](#rm-688) | Tests und Entwicklungswerkzeuge | Seit `9416f41ef` steht dort nur `assert motion is not None`; Attrappe und Vorgabe sind beide 10 |
 | [RM-693 — Der Versionsvergleich misst beim Laden gescheiterte Starts des Hilfsprozesses mit](#rm-693) | Tests und Entwicklungswerkzeuge | `messung.py` des Vergleichs 0.5.2 ohne `__main__`-Schutz; Sonden über einen Starter fahren, die Ladezahlen „aktuell“ von K-3 neu messen |
 | [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
+| [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -175,6 +179,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-242 — Testphase der Vollversion nachreichen](#rm-242) | Veröffentlichung, Betrieb und Vertrieb | Robert 25.09.2026: 1.0 startet ohne Testphase, sie kommt später — Januar (Unentschlossene noch zu 69 €) oder Februar 2027 mit dem Preissprung. Offen: Termin, ob frühere Demo-Geräte sie bekommen (heute T15: nein), Release mit gesetztem `TRIAL_FROM` |
 | [RM-575 — Handbuchabbildungen für den Filamentknopf in der Kopfzeile](#rm-575) | Veröffentlichung, Betrieb und Vertrieb | Wartet auf den Release: `figure:window`, Kopfzeile und `website/handbuch.html` zeigen noch die Filamentgruppe links (RM-556) |
 | [RM-634 — Release-Schlüsselpaar wechseln](#rm-634) | Veröffentlichung, Betrieb und Vertrieb | Robert entscheidet, ob und wann; Ablauf in `Signierung/README.md`, Voraussetzung RM-528 erfüllt |
+| [RM-765 — Die Handbuchseiten tragen die neuen Absätze erst nach dem Erzeugen](#rm-765) | Veröffentlichung, Betrieb und Vertrieb | Vor dem Tag 0.6.0 `tools/make_manual.py` fahren; danach ist `test_wording::…generated_page` grün |
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Am ausgelieferten 0.5.3 gemessen: Start, Fokus und Eingabe gehen, Fcitx nur über IBus; Abhilfe gebaut (Fcitx in der Umgebung, nur `XMODIFIERS=@im=ibus` oder `QT_IM_MODULE=wayland` unter `xcb` → `ibus`; Fcitx außerhalb des Flatpak über das IBus-Portal), offen der Nachweis im nächsten Paket für Flatpak, AppImage und Archiv, auch für die zwei IBus-Fälle |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Lader-Weg und Rückfall gebaut, am Runner mit Flatpak und AppImage, draußen und im Sandkasten belegt (Lauf 37528397381); offen: Abnahme beim Kunden mit dem nächsten Paket (Ubuntu 24.04, Solidon als Flatpak) |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Text für 0.5.3 liegt in Roberts Ablage bereit, Behebung am ausgelieferten Paket belegt (RM-064); Robert schickt, dann Versand eintragen |
@@ -3866,6 +3871,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Besenhalter, Gegenprobe am Stand davor rot, `cache_version` von `blend_union`, druckgleich an
   den Beispielprojekten außer *Figur formen*.
 
+<a id="rm-778"></a>
+
+- [ ] **RM-778 — Kleine Teile entfernen schließt auch bewusst offene Öffnungen.**
+  *Kleine Teile entfernen* schließt neben losen Splittern auch Öffnungen, die der Kunde
+  ausdrücklich offen gelassen hat. Nebenbefund des Reviews zum Paket Abbruch (Welle 4),
+  nicht im Paket nachgestellt.
+  **Nächster Schritt:** Fall mit einer offen gelassenen Öffnung (etwa *Aushöhlen* mit
+  Entlüftung) bauen, Ursache im Reparaturweg finden.
+  **Abnahme:** Eine bewusst offene Öffnung bleibt offen, lose Teile verschwinden weiter; Test
+  gegen den Korpus.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -5165,6 +5181,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Ein neuer Auswertungsauftrag hält den Bericht des alten Stands an (oder er gibt den
   GIL her), der Bericht des neuen Stands kommt gleich; Zeit bis zum Bild im Wechsel gemessen.
 
+<a id="rm-776"></a>
+
+- [ ] **RM-776 — Ratsätze in Fehlerdialogen sind nur Text, wo ein Knopf ginge.**
+  27 Kennungen aus `action_effects.SIDE_EFFECTS` erscheinen im Fehlerdialog nur als Satz
+  (Wächter in `tests/test_action_effects.py`, RM-771). Einige könnten den Schritt öffnen wie
+  *Eine andere Ebene wählen*. Gefunden im Paket Abbruch (Welle 4).
+  **Nächster Schritt:** `open_sketch` und die `sketch.*`-Wege je mit Handler und Test, der
+  belegt, dass der Knopf tut, was sein Satz in `SIDE_EFFECTS` verspricht.
+  **Abnahme:** Jeder Ratsatz, der auf einen Schritt zeigt, ist ein Knopf, oder steht mit Grund in
+  der Ausnahmeliste des Wächters.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -5385,6 +5412,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Sätze an `sculpt_strokes` und `pose_armature` (RM-014). Lokal ist Version 9 gemessen und nicht
   schlechter; gehostet vorher (Version 8) und nachher. Verschlechtert sich die Quote, gehen
   diese Sätze zurück.
+
+<a id="rm-772"></a>
+
+- [ ] **RM-772 — Die gemeinsame Spur der lokalen KI kennt ein wartendes ComfyUI nicht.**
+  `local_ai_slot` regelt nur laufende Rechnungen. Ein ComfyUI, das daneben mit geladenem Modell
+  wartet, hält Grafikspeicher, den ein lokales Sprachmodell braucht; im Kundenprotokoll zum
+  Vorgang S-20261010-e5014c liefen beide zugleich. Gefunden im Paket Abbruch (Welle 4).
+  **Nächster Schritt:** messen, wie viel Grafikspeicher ein wartendes ComfyUI hält und ob ein
+  Zug des Sprachmodells daran scheitert; dann ComfyUI vor dem Laden des Sprachmodells entladen
+  oder den Kunden fragen.
+  **Abnahme:** Sprachmodell und Bilderzeugung nacheinander auf einer Karte mit 8 GB, ohne
+  Speicherfehler und ohne Wartezeit über dem Laden eines Modells.
 
 ## Tests und Entwicklungswerkzeuge
 
@@ -5715,6 +5754,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Ursache belegt, Test deterministisch (zwanzig Läufe einzeln und unter Last grün),
   eine Gegenprobe stellt die Lage nach.
 
+<a id="rm-779"></a>
+
+- [ ] **RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot.**
+  `tests/test_ai_disclosure.py::test_a_notice_taller_than_the_screen_comes_to_rest` ist allein
+  grün und rot, wenn er nach `test_dialog_layout`, `test_style`, `test_widget_lifetime` und
+  `test_locked_says_why` läuft; am Stand vor dem Paket Agentlog ebenso. Gefunden im Paket
+  Agentlog (Welle 4).
+  **Nächster Schritt:** Reihenfolge halbieren, bis ein Vorgänger allein ihn rot macht; dessen
+  Rest (Stylesheet, Bildschirmgeometrie, offenes Fenster) im Abbau räumen.
+  **Abnahme:** Der Test ist in jeder Reihenfolge grün; ein Wächter hält den gefundenen Rest.
+
 ## Veröffentlichung, Betrieb und Vertrieb
 
 <a id="rm-002"></a>
@@ -6012,6 +6062,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** neuer öffentlicher Schlüssel mit Besitzprobe in einer veröffentlichten Version,
   nach der Wartezeit damit unterschrieben, der alte in der Version danach entfernt. Bauplan
   §37.2.
+
+<a id="rm-765"></a>
+
+- [ ] **RM-765 — Die Handbuchseiten tragen die neuen Absätze erst nach dem Erzeugen.**
+  `tests/test_wording.py::test_every_manual_paragraph_reaches_the_generated_page` ist auf welle4
+  in allen sechs Sprachen rot: Die Absätze `sketch`, `resin` und `models` fehlen auf der
+  erzeugten Handbuchseite. Der Test trägt den Marker `rendered` und läuft nur im Release-Tor
+  (Entscheidung Robert: Handbuch nur beim Erstellen der Pakete). Gemeldet in Review 1 von F und
+  im Integrationsreview der Welle 4.
+  **Nächster Schritt:** beim Release `tools/make_manual.py`, danach `tools/stamp_assets.py`
+  (Weg in `/erzeugen`).
+  **Abnahme:** `pytest -m rendered tests/test_wording.py` grün am Releasestand.
 
 ## Kundenrückmeldungen
 
