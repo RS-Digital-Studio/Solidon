@@ -153,7 +153,8 @@ it into `website/version.json`.
 - With *Save selection as a part*, the selected body comes with exactly the steps that build it. If a second body would come along, the dialog says so before saving.
 - Wall mounts, pipe clamps, profile clamps and holders take every screw from M3 to M64. If a size does not fit the other dimensions, the part says what to change.
 - A part for a face or hole is only computed once it has its spot in the view. Until then the dialog cannot be applied and says what is missing.
-- If the face under an open part dialog changes, for instance because the previous screw hole has just finished, the part finds its spot on the new shape.
+- If the face under an open part dialog changes, the chosen spot stays as long as it still fits the new shape. Otherwise the part finds a new one and says so.
+- A part dialog that opens while the previous step is still computing places the part by itself as soon as the result is there, and cannot be applied until then.
 
 ### Editing and sketching
 

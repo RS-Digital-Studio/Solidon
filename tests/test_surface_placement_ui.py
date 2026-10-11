@@ -3476,6 +3476,10 @@ def test_a_seat_measured_on_a_shape_that_changed_is_found_again(
             stopped = [r.getMessage() for r in caplog.records if "stopped" in r.getMessage()]
             assert not stopped, stopped
         assert flow.active and flow._surface is not None, "die Platzierung sitzt wieder"
+        from app.i18n import tr
+
+        renewed = str(tr("Die Fläche hat sich geändert. Die Stelle ist neu gesetzt."))
+        assert renewed in flow._note.text(), "und der Balken sagt, dass sie neu sitzt"
         moved = dialog.values()
         assert math.dist((moved["x"], moved["y"]), (1.5, 0.0)) > 3.0, "nicht im eben gesetzten Loch"
         assert dialog.can_accept()
@@ -3483,6 +3487,228 @@ def test_a_seat_measured_on_a_shape_that_changed_is_found_again(
         for _ in range(40):
             QApplication.processEvents()
         assert window.session.wait_for_idle(60_000)
+        assert [entry.op for entry in window.session.history.operations] == [
+            "load",
+            "insert_screw_hole",
+            "insert_screw_hole",
+        ]
+        result = window.session.last_result
+        assert result is not None and result.stopped_at is None
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def _settle_window(window, rounds: int = 80) -> None:
+    """Ereignisse und Arbeiter laufen lassen, bis beide still sind."""
+    import time
+
+    for _ in range(rounds):
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+        time.sleep(0.005)
+
+
+def test_saving_keeps_the_place_of_an_open_part_placement(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    """Strg+S bei offenem Schraubenloch ändert die Form nicht — und die Stelle bleibt.
+
+    Review zu RM-774 (H1): Die Platzierung vergaß ihre Stelle bei jedem
+    ``projectChanged``, auch beim Speichern. Danach waren Stelle und Anker weg,
+    der Fluss stand, und *Übernehmen* war grau. Speichern sendet das Signal,
+    erklärt das Ergebnis aber nicht für veraltet; nur eine Formänderung tut das.
+    """
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_plate(window, face_normal=(0.0, 0.0, 1.0))
+        dialog, flow = _a_part_placement(window, "insert_screw_hole")
+        before = dict(dialog.values())
+        assert before.get("surface_anchor"), "die Stelle hängt an der Fläche"
+        window.session.save_project(tmp_path / "platte.p3d")
+        _settle_window(window)
+        after = dialog.values()
+        for name in ("x", "y", "z", "surface_anchor", "nx", "ny", "nz"):
+            assert after.get(name) == before.get(name), name
+        assert flow.active and flow._surface is not None, "die Platzierung sitzt weiter"
+        assert not flow._seek_again
+        assert dialog.can_accept()
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+@pytest.mark.parametrize("change", ["save", "drill"])
+def test_the_target_of_a_moved_feature_survives_an_unrelated_change(
+    qt_app: QApplication, tmp_path: Path, change: str
+) -> None:
+    """*Merkmal verschieben*: x/y/z sind das Ziel des Kunden und bleiben, was er eintrug.
+
+    Review zu RM-774 (H1): Nach Strg+S stand das Ziel auf (0, 0, 0), *Übernehmen*
+    war frei, und die Bohrung landete bei (0, 0, 2). Nach einer Bohrung an
+    anderer Stelle desselben Körpers stand die heutige Lage der Bohrung im
+    Ziel, und der Schritt verschob nichts.
+    """
+    import time
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        window.end_quiet_placement()
+        _settle_window(window, 20)
+        window.run_operation(REGISTRY.get("move_feature"))
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == "move_feature"
+        flow = dialog.placement_flow
+        assert flow is not None
+        for _ in range(300):
+            QApplication.processEvents()
+            assert window.session.wait_for_idle(60_000)
+            if flow._surface is not None:
+                break
+            time.sleep(0.02)
+        _settle_window(window, 20)
+        start = dict(dialog.values())
+        target = (float(start["x"]) + 10.0, float(start["y"]), float(start["z"]))
+        dialog.take_placement({"x": target[0]})
+        _settle_window(window, 20)
+        if change == "save":
+            window.session.save_project(tmp_path / "platte.p3d")
+        else:
+            window.session.apply(
+                "Bohrung",
+                [
+                    OperationDraft(
+                        op="drill_hole",
+                        inputs=(object_id,),
+                        params={"x": 20.0, "y": 8.0, "z": 4.0, "nz": 1.0},
+                    )
+                ],
+            )
+        _settle_window(window, 100)
+        values = dialog.values()
+        assert tuple(float(values[name]) for name in ("x", "y", "z")) == pytest.approx(
+            target, abs=1e-6
+        ), "das eingetragene Ziel bleibt"
+        assert dialog.can_accept()
+        dialog.accept()
+        _settle_window(window, 100)
+        last = window.session.project.document.ops[-1]
+        assert last.op == "move_feature"
+        assert (last.params["x"], last.params["y"], last.params["z"]) == pytest.approx(
+            target, abs=1e-6
+        )
+        result = window.session.last_result
+        assert result is not None and result.stopped_at is None
+        centre = result.scene.objects[object_id].features[hole].params["centre"]
+        assert (float(centre[0]), float(centre[1])) == pytest.approx(target[:2], abs=0.05), (
+            "die Bohrung sitzt am Ziel, nicht am Nullpunkt"
+        )
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_place_that_still_holds_on_the_changed_shape_stays(qt_app: QApplication) -> None:
+    """Ändert sich die Form fern der Stelle, bleibt die Stelle — ohne Hinweis.
+
+    Review zu RM-774 (M1): Nach jeder Formänderung sprang ein Baustein auf die
+    Vorgabestelle, auch wenn die gewählte auf der neuen Form noch hielt. Jetzt
+    bindet die Platzierung sie zuerst an die neue Form; nur wenn das scheitert,
+    setzt sie neu und sagt es (siehe den Test darüber).
+    """
+    window = _window_with_a_renderer()
+    try:
+        object_id, _entry = _a_selected_plate(window, face_normal=(0.0, 0.0, 1.0))
+        dialog, flow = _a_part_placement(window, "insert_screw_hole")
+        before = dict(dialog.values())
+        window.session.apply(
+            "Bohrung",
+            [
+                OperationDraft(
+                    op="drill_hole",
+                    inputs=(object_id,),
+                    params={"x": 20.0, "y": 8.0, "z": 8.0, "nz": 1.0, "diameter": 3.0},
+                )
+            ],
+        )
+        _settle_window(window, 150)
+        assert flow.active and flow._surface is not None, "die Platzierung sitzt wieder"
+        after = dialog.values()
+        assert (after["x"], after["y"], after["z"]) == pytest.approx(
+            (before["x"], before["y"], before["z"]), abs=1e-6
+        ), "die Stelle bleibt, wo sie war"
+        from app.i18n import tr
+
+        renewed = str(tr("Die Fläche hat sich geändert. Die Stelle ist neu gesetzt."))
+        assert renewed not in flow._note.text()
+        assert dialog.can_accept()
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_part_opened_while_the_last_step_computes_seats_itself_afterwards(
+    qt_app: QApplication, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Das nächste Schraubenloch öffnen, solange das vorige rechnet — wie der Kunde.
+
+    Review zu RM-774 (M2): Ein Dialog, der öffnete, solange der vorige Schritt
+    noch rechnete, ging nie von selbst in die Platzierung. Nichts stand im
+    Bild, *Übernehmen* war frei, und jedes neue Loch landete genau auf dem
+    vorigen. Jetzt wartet der Dialog gesperrt auf das Ergebnis und setzt sich
+    dann selbst — neben das vorige Loch.
+    """
+    import logging
+    import time
+
+    from app.ui.op_dialog import placement_hint
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_plate(window, face_normal=(0.0, 0.0, 1.0))
+        with caplog.at_level(logging.WARNING, logger="app.core.scene.evaluate"):
+            dialog, _flow = _a_part_placement(window, "insert_screw_hole")
+            first = dialog.values()
+            first_seat = (float(first["x"]), float(first["y"]))
+            dialog.accept()
+            QApplication.processEvents()
+            assert not window.session.result_current, "das vorige rechnet noch"
+            window.run_operation(REGISTRY.get("insert_screw_hole"))
+            for _ in range(5):
+                QApplication.processEvents()
+            dialog = window._op_dialog
+            assert dialog is not None and dialog.spec.name == "insert_screw_hole"
+            flow = dialog.placement_flow
+            assert flow is not None
+            if not window.session.result_current:
+                assert not dialog.can_accept(), "ohne Stelle auf der neuen Form nichts übernehmen"
+                assert dialog._accept_button.toolTip() == placement_hint()
+            for _ in range(300):
+                QApplication.processEvents()
+                assert window.session.wait_for_idle(60_000)
+                if flow.active and flow._surface is not None and flow._tool is not None:
+                    break
+                time.sleep(0.02)
+            _settle_window(window, 40)
+            assert flow.active and flow._surface is not None, "die Platzierung setzt sich selbst"
+            second = dialog.values()
+            assert math.dist((float(second["x"]), float(second["y"])), first_seat) > 3.0, (
+                "nicht in das vorige Loch"
+            )
+            assert dialog.can_accept()
+            dialog.accept()
+            _settle_window(window, 100)
+            stopped = [r.getMessage() for r in caplog.records if "stopped" in r.getMessage()]
+            assert not stopped, stopped
         assert [entry.op for entry in window.session.history.operations] == [
             "load",
             "insert_screw_hole",

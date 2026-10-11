@@ -154,7 +154,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con *Guardar la selección como bloque* se guarda el cuerpo seleccionado con exactamente los pasos que lo construyen. Si viniera un segundo cuerpo, el diálogo lo indica antes.
 - Soportes de pared, abrazaderas de tubo y de perfil y soportes admiten cualquier tornillo de M3 a M64. Si un tamaño no encaja con las demás medidas, el bloque indica qué cambiar.
 - Un bloque para una cara o un agujero solo se calcula cuando tiene su sitio en la vista. Hasta entonces el diálogo no se puede aplicar e indica lo que falta.
-- Si la cara cambia con el diálogo de un bloque abierto, por ejemplo porque el agujero para tornillo anterior acaba de terminar, el bloque busca su sitio en la nueva forma.
+- Si la cara cambia con el diálogo de un bloque abierto, el sitio elegido se mantiene mientras siga valiendo en la nueva forma. Si no, el bloque busca uno nuevo y lo indica.
+- Un diálogo de bloque que se abre mientras el paso anterior aún calcula coloca el bloque por sí solo en cuanto llega el resultado, y hasta entonces no se puede aplicar.
 
 ### Editar y dibujar
 

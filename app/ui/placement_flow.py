@@ -110,6 +110,12 @@ _MEASURED_PLACE: Final = (
     "surface_distance_2",
 )
 
+#: Operationen, die ein vorhandenes Merkmal bewegen oder ändern: Sie sitzen auf
+#: ihm, und x/y/z sind das Ziel des Kunden, keine gemessene Stelle.
+_MOVES_A_FEATURE: Final = frozenset(
+    {"move_feature", "duplicate_feature", "slot_hole", "resize_hole"}
+)
+
 
 def _mouth_outline_on_surface(
     outline: Sequence[tuple[float, float]],
@@ -216,6 +222,8 @@ class PlacementHost(Protocol):
     def isVisible(self) -> bool: ...  # noqa: N802 — Qt-Name
 
     def show_placement_hint(self, on: bool, *, paused: bool = False) -> None: ...
+
+    def hold_place(self, held: bool) -> None: ...
 
 
 class QuietHost(QObject):
@@ -406,6 +414,10 @@ class QuietHost(QObject):
 
     def show_placement_hint(self, on: bool, *, paused: bool = False) -> None:
         """Kein Fenster, kein Satz — die Werte stehen rechts im Merkmalfenster."""
+        return None
+
+    def hold_place(self, held: bool) -> None:
+        """Nichts anzuhalten: Der stille Träger setzt nie neu (``_may_seek_again``)."""
         return None
 
 
@@ -1637,6 +1649,12 @@ class PlacementFlow(QObject):
         """Ob :meth:`start` den Aufbau für sein eigenes ``redraw`` zurückhält."""
         self._seek_again = False
         """Ob die Platzierung mit dem nächsten Ergebnis neu beginnt (RM-774)."""
+        self._rebinding = False
+        """Ob :meth:`start` eine gesetzte Stelle an einer neuen Form bindet (RM-774)."""
+        self._renewed = False
+        """Ob die Stelle neu gesetzt wurde, weil die alte nicht mehr auf der Fläche lag."""
+        self._known_project = self.session.project
+        """Das Projekt beim letzten ``projectChanged`` — ein anderes ist immer eine neue Form."""
         #: Ob die Tiefenstufe läuft — Stufe 2 der Platzierung. Der Klick legt
         #: die Stelle fest, danach zieht die Maus die Tiefe (Robert,
         #: 09.09.2026: „wenn wir klicken wollen wir die bohrung von der
@@ -1784,7 +1802,15 @@ class PlacementFlow(QObject):
         # gewählt, und wer den Durchmesser nachbessert, will kein Fadenkreuz.
         # Und nicht sofort, sondern eine Runde später: Der Dialog ist hier
         # noch nicht gezeigt, und ``start`` versteckt ihn.
-        if starts_by_itself(self.spec_of()) and self._change_op is None and self.can_place():
+        #
+        # **Und auch, solange der vorige Schritt noch rechnet** (Review M2 zu
+        # RM-774): Dann wartet :meth:`start` auf sein Ergebnis, statt den
+        # Selbststart still ausfallen zu lassen.
+        if (
+            starts_by_itself(self.spec_of())
+            and self._change_op is None
+            and (self.can_place() or not self.session.result_current)
+        ):
             QTimer.singleShot(0, self._start_if_still_possible)
 
     def _watch(self, widget: QObject) -> None:
@@ -2221,7 +2247,21 @@ class PlacementFlow(QObject):
 
     def start(self) -> None:
         self.refresh_available()
-        if self._disposed or not self.can_place():
+        if self._disposed:
+            return
+        if not self.can_place():
+            if (
+                self._supported
+                and not self.session.result_current
+                and self._may_seek_again()
+                and self.dialog.isVisible()
+            ):
+                # Der vorige Schritt rechnet noch: Mit seinem Ergebnis beginnt
+                # die Platzierung, und bis dahin rechnet und übernimmt der
+                # Dialog nichts. Sonst setzte *Übernehmen* das nächste Loch
+                # über ``at_feature`` genau auf das vorige (Review M2).
+                self._seek_again = True
+                self.dialog.hold_place(True)
             return
         self.active = True
         self.viewport.clear_placement_resume(self._resume)
@@ -2253,7 +2293,7 @@ class PlacementFlow(QObject):
         # neu zielen.
         self.window._clear_preview()
         self.viewport.set_placement_pointer(self.pointer)
-        self._note.setText(tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück"))
+        self._say(tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück"))
         self._show_bar()
         self._accept.setEnabled(False)
         self.viewport.setFocus(Qt.FocusReason.OtherFocusReason)
@@ -2271,6 +2311,7 @@ class PlacementFlow(QObject):
             try:
                 self._request_tool(at_once=True)
                 if not self._begin_bound_surface():
+                    self._rebinding = False
                     self._begin_at_feature()
             finally:
                 self._redraw_held = False
@@ -2381,7 +2422,7 @@ class PlacementFlow(QObject):
             self._pending = None
             self._serial += 1
             self._accept.setText(tr("Weiter zur Tiefe") if self.deepens() else tr("Übernehmen"))
-            self._note.setText(tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück"))
+            self._say(tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück"))
             self.redraw()
             return
         self.back()
@@ -2465,6 +2506,8 @@ class PlacementFlow(QObject):
             self._binding_cancel.cancel()
             self._binding_cancel = None
         self.active = False
+        self._rebinding = False
+        self._renewed = False
         self._release_frames()
         self.viewport.clear_placement_resume(self._resume)
         self._resume_press = None
@@ -3106,7 +3149,7 @@ class PlacementFlow(QObject):
                     if previous_object != object_id:
                         self._request_tool()
                     self._set_values()
-                    self._note.setText(
+                    self._say(
                         tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück")
                         if self._surface.planar
                         else tr(
@@ -3182,6 +3225,10 @@ class PlacementFlow(QObject):
             if source is None or bound.placed is None or bound.prepared is None:
                 failed(None)
                 return
+            # Die Stelle hält auch auf der neuen Form: Sie bleibt, wo der Kunde
+            # sie gesetzt hat (RM-774).
+            self._rebinding = False
+            self.dialog.hold_place(False)
             self._prepared, self._surface = bound.prepared, bound.placed
             self._had_binding = True
             self._object_id = source.id
@@ -3196,6 +3243,9 @@ class PlacementFlow(QObject):
         def failed(_detail: Any) -> None:
             if current():
                 self._seat_waits = None
+                if self._rebinding:
+                    self._renew_the_place()
+                    return
                 if isinstance(_detail, AppError):
                     refusal[:] = [refusal_sentence(_detail)]
                 self._invalid(
@@ -3521,7 +3571,7 @@ class PlacementFlow(QObject):
         self._settle()
         # Der Satz sagt, was hier anders ist als nach einem Klick: Der
         # Griff verschiebt, der Klick setzt um — und übernimmt nicht.
-        self._note.setText(
+        self._say(
             tr(
                 "Sitzt in der Bohrung · Griff: verschieben · Klick: umsetzen · "
                 "Übernehmen: ausführen · Esc: zurück"
@@ -3699,12 +3749,7 @@ class PlacementFlow(QObject):
         # einem Loch, das es schon gibt, führt dessen Mitte in x, y, z und
         # bekommt damit dieselbe Platzierung wie *Bohrung setzen* — mit
         # Maßfeldern zu Kanten und Mitten, und einer Änderung, die wirkt.
-        if self.spec_of().name not in {
-            "move_feature",
-            "duplicate_feature",
-            "slot_hole",
-            "resize_hole",
-        }:
+        if self.spec_of().name not in _MOVES_A_FEATURE:
             chosen = result.scene.objects.get(self._object_id)
             return chosen or (candidates[0] if len(candidates) == 1 else None), None
         feature_id = self.dialog.values().get("at_feature")
@@ -4356,7 +4401,7 @@ class PlacementFlow(QObject):
         self._surface = changed
         self._position_edited = True
         self._set_values()
-        self._note.setText(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
+        self._say(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
         self.redraw()
 
     def _centre_changed(self, _value: float) -> None:
@@ -4386,7 +4431,7 @@ class PlacementFlow(QObject):
         self._surface = changed
         self._position_edited = True
         self._set_values()
-        self._note.setText(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
+        self._say(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
         self.redraw()
 
     def move_to(self, point: Vec3, *, on_plane_only: bool = False) -> bool:
@@ -4436,7 +4481,7 @@ class PlacementFlow(QObject):
         self._surface = changed
         self._position_edited = True
         self._set_values()
-        self._note.setText(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
+        self._say(tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten."))
         self.redraw()
         return True
 
@@ -4459,7 +4504,7 @@ class PlacementFlow(QObject):
         self._pending = None
         self._serial += 1
         self._accept.setText(tr("Weiter zur Tiefe") if self.deepens() else tr("Übernehmen"))
-        self._note.setText(
+        self._say(
             tr("Maße einstellen · Übernehmen: weiter zur Tiefe · Esc: zurück")
             if self.deepens()
             else tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten.")
@@ -4993,34 +5038,73 @@ class PlacementFlow(QObject):
         self.refresh_available()
         if self._seek_again and not self.active and self.session.result_current:
             self._seek_again = False
+            if not self.dialog.isVisible():
+                return
+            # Erst die gesetzte Stelle an der neuen Form binden; nur wenn sie
+            # dort nicht mehr hält, setzt :meth:`_renew_the_place` sie neu.
+            self._rebinding = True
             self.start()
+            if not self.active:
+                self._rebinding = False
+
+    def _may_seek_again(self) -> bool:
+        """Ob die Platzierung mit dem nächsten Ergebnis von selbst neu beginnt.
+
+        Nur beim Setzen im offenen Dialog: Ein geänderter Schritt bindet seinen
+        Bezug wie zuvor, der stille Träger hat kein Fenster, und beim eigenen
+        Übernehmen ist der Dialog schon zu. Und nicht, wo x/y/z das **Ziel**
+        eines vorhandenen Merkmals sind (:data:`_MOVES_A_FEATURE`) — dort
+        setzte ein Neustart das Merkmal an seine heutige Lage zurück, und die
+        Eingabe des Kunden wäre still weg.
+        """
+        return (
+            self._change_op is None
+            and not isinstance(self.dialog, QuietHost)
+            and self.dialog.isVisible()
+            and self.spec_of().name not in _MOVES_A_FEATURE
+        )
 
     def _back_from_a_changed_shape(self) -> None:
-        """Zurücktreten, und eine neue Stelle vergisst, was auf der alten Form gemessen war.
+        """Zurücktreten und mit dem nächsten Ergebnis die Stelle neu binden.
 
         RM-774: Der Kunde öffnete das nächste Schraubenloch, solange das vorige
         noch rechnete. Es saß auf dem alten Bild, und genau dort kam das vorige
-        an. Der Fluss trat zurück, der Dialog behielt Punkt und Flächenbezug,
-        und die Vorschau band sie an die neue Form: „Dieser Punkt liegt
-        außerhalb der gewählten Fläche“, sechsmal im Protokoll. Eine Stelle,
-        die auf einer Form gemessen wurde, die es nicht mehr gibt, ist geraten
-        (Regel 21). Deshalb verliert der Dialog sie, bevor er rechnet, und mit
-        dem neuen Ergebnis beginnt die Platzierung von vorn: Ein Baustein sitzt
-        wieder von selbst, eine Bohrung wartet auf den Klick. Nur beim Setzen;
-        ein geänderter Schritt bindet seinen Bezug wie zuvor. Und nicht beim
-        eigenen Übernehmen: Dann ist der Dialog schon zu, und seine Werte sind
-        der Schritt.
+        an. Der Fluss trat zurück, und die Vorschau band den alten Punkt an die
+        neue Form: „Dieser Punkt liegt außerhalb der gewählten Fläche“,
+        sechsmal im Protokoll. Jetzt halten Vorschau und *Übernehmen* an, bis
+        die Platzierung mit dem neuen Ergebnis von vorn beginnt
+        (:meth:`_scene_changed`). Sie bindet die gesetzte Stelle über
+        ``placement.bind_surface`` an die neue Form — dieselbe Prüfung, an der
+        die Vorschau anhielt. Hält sie, bleibt sie, wo der Kunde sie gesetzt
+        hat; nur sonst setzt :meth:`_renew_the_place` sie neu und sagt es.
         """
-        fresh = (
-            self._change_op is None
-            and not isinstance(self.dialog, QuietHost)
-            and self._surface is not None
-            and self.dialog.isVisible()
-        )
-        if fresh:
-            self._forget_the_place()
+        seek = self._may_seek_again()
+        if seek:
+            self.dialog.hold_place(True)
         self.back()
-        self._seek_again = fresh
+        self._seek_again = seek
+
+    def _renew_the_place(self) -> None:
+        """Die alte Stelle hält auf der neuen Form nicht: neu setzen und es sagen.
+
+        Eine Stelle, die auf einer Form gemessen wurde, die es so nicht mehr
+        gibt, ist geraten (Regel 21). Ein Baustein sitzt danach wieder von
+        selbst, eine Bohrung wartet auf den Klick; bis dahin bleiben Vorschau
+        und *Übernehmen* gesperrt und nennen, was fehlt.
+        """
+        self._forget_the_place()
+        self.dialog.hold_place(True)
+        self.back()
+        self._renewed = True
+        self.start()
+
+    def _say(self, text: str) -> None:
+        """Den Satz im Balken setzen — nach einer neu gesetzten Stelle mit diesem Hinweis davor."""
+        if self._renewed:
+            text = " ".join(
+                (str(tr("Die Fläche hat sich geändert. Die Stelle ist neu gesetzt.")), str(text))
+            )
+        self._note.setText(text)
 
     def _forget_the_place(self) -> None:
         """Stelle, Richtung und Flächenbezug im Dialog auf ihre Vorgaben."""
@@ -5037,7 +5121,7 @@ class PlacementFlow(QObject):
     def _scene_applied(self) -> None:
         """Erst der tatsächlich gezeichnete Eingang erlaubt ein neues Ziel."""
         if self.active and self._display_ready():
-            self._note.setText(tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück"))
+            self._say(tr("Klicken: platzieren · Abstand ändern: Maßfeld · Esc: zurück"))
             if self._change_op is None or self._showing_input:
                 self._next_surface()
             self.redraw()
@@ -5052,6 +5136,15 @@ class PlacementFlow(QObject):
             and self.session.project.document is self._committing_document
         ):
             self._deferred_document_change = True
+            return
+        same_project = self.session.project is self._known_project
+        self._known_project = self.session.project
+        if same_project and self.session.result_current:
+            # Speichern, Druckeinstellungen, Schutz: Die Form bleibt, und mit
+            # ihr Stelle, Ziel und Bezug. Jede Änderung an der Form erklärt das
+            # Ergebnis vorher für veraltet (``Session._changed``); ein neues
+            # oder geöffnetes Projekt ersetzt ``session.project``.
+            self.refresh_available()
             return
         self._prepared = None
         self._own_mouth = None

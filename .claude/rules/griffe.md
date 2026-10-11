@@ -343,12 +343,18 @@ und stellt die gemessenen Werte wieder her (`_drag_kind` bleibt `"slot"`).
   sitzt, rechnet nichts**: ohne Merkmal, Flächenbezug und Position keine
   Vorschau und kein Übernehmen (`OperationDialog.place_missing` fragt
   `parts.ops.place_missing`, dieselbe Frage, an der `_anchor` anhält; RM-773).
-* **Ändert sich die Form unter einer neuen Platzierung, gilt ihre Stelle nicht
-  mehr**: Vor dem Zurücktreten setzt der Fluss Stelle, Richtung und
-  Flächenbezug im Dialog auf die Vorgaben und beginnt mit dem neuen Ergebnis von
-  vorn (`_back_from_a_changed_shape`, RM-774) — sonst band die Vorschau den
-  alten Punkt an die neue Form. Nicht beim Ändern eines Schritts und nicht beim
-  eigenen Übernehmen (Dialog schon zu).
+* **Ändert sich die Form unter einer neuen Platzierung, wird die Stelle neu
+  gebunden, nicht vergessen** (RM-774): Nur ein veraltetes Ergebnis zählt als
+  Formänderung — `projectChanged` kommt auch beim Speichern, und dort bleibt
+  alles stehen. Bis zum neuen Ergebnis halten Vorschau und *Übernehmen* an
+  (`OperationDialog.hold_place`), sonst bände die Vorschau den alten Punkt an
+  die neue Form. Mit dem Ergebnis bindet `start` die Stelle über
+  `placement.bind_surface`; erst wenn das scheitert, setzt `_renew_the_place`
+  sie neu und sagt es im Balken. Nicht beim Ändern eines Schritts, nicht beim
+  eigenen Übernehmen (Dialog schon zu) und nicht, wo x/y/z das Ziel eines
+  vorhandenen Merkmals sind (`_MOVES_A_FEATURE`): Dort ist die Eingabe des
+  Kunden kein Messwert und wird nie zurückgesetzt. Derselbe Weg gilt für einen
+  Dialog, der öffnet, während der vorige Schritt noch rechnet.
 
 ## Was am Griff steht, ist ASCII — und sonst nichts
 

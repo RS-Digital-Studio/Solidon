@@ -153,7 +153,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com *Guardar a seleção como bloco*, o corpo selecionado vem com exatamente os passos que o constroem. Se viesse um segundo corpo, o diálogo diz isso antes de guardar.
 - Suportes de parede, abraçadeiras de tubo e de perfil e suportes aceitam qualquer parafuso de M3 a M64. Se um tamanho não combina com as outras medidas, o bloco diz o que mudar.
 - Um bloco para uma face ou um furo só é calculado quando tem o seu lugar na vista. Até lá a caixa de diálogo não pode ser aplicada e diz o que falta.
-- Se a face mudar com a caixa de diálogo de um bloco aberta, por exemplo porque o furo de parafuso anterior acabou de ficar pronto, o bloco procura o seu lugar na nova forma.
+- Se a face mudar com a caixa de diálogo de um bloco aberta, o lugar escolhido mantém-se enquanto continuar válido na nova forma. Caso contrário, o bloco procura um novo e indica-o.
+- Uma caixa de diálogo de bloco aberta enquanto o passo anterior ainda calcula coloca o bloco sozinha assim que o resultado chega, e até lá não pode ser aplicada.
 
 ### Editar e esboçar
 

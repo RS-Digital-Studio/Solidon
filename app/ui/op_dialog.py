@@ -2324,6 +2324,8 @@ class OperationDialog(QDialog):
         # solche Stelle führt, steht er allein wie bisher.
         self._place = place_fields(spec)
         self._place_known = self._place is not None and any(name in given for name in self._place)
+        self._place_held = False
+        """Ob die Stelle auf einer neuen Form erst noch gesetzt wird (:meth:`hold_place`)."""
         self._aligned = False
         """Ob die Beschriftungskante schon steht — vorher richtet die Stelle nichts neu aus."""
         self._place_row = QWidget(self)
@@ -2882,6 +2884,8 @@ class OperationDialog(QDialog):
         der die Auswertung sonst anhält. Solange sie gilt, rechnet keine
         Vorschau, und *Übernehmen* nennt den Weg: die Stelle im Bild.
         """
+        if self._place_held:
+            return True
         if not self._seeks_a_place():
             return False
         from app.core.knowledge.parts.ops import place_missing
@@ -4327,10 +4331,33 @@ class OperationDialog(QDialog):
                 return editor.take_point(point)
         return None
 
+    def hold_place(self, held: bool) -> None:
+        """Vorschau und *Übernehmen* anhalten, bis die Platzierung die Stelle neu setzt.
+
+        Gerufen vom :class:`~app.ui.placement_flow.PlacementFlow`, wenn die
+        Form unter einer gesetzten Stelle wechselt oder der Dialog öffnet,
+        während der vorige Schritt noch rechnet (RM-774). Bis dahin
+        ist die Stelle im Dialog auf einer anderen Form gemessen; gerechnet
+        oder übernommen würde sie geraten (Regel 21). Der Knopf sagt
+        derweil, was fehlt: „Stelle im Bild anklicken.“ Die nächste Stelle
+        aus dem Bild (:meth:`take_placement`) hebt die Sperre auf.
+        """
+        if self._place_held == held:
+            return
+        self._place_held = held
+        self.valuesChanged.emit()
+
     def take_placement(self, values: Mapping[str, Any]) -> None:
         """Übernimmt eine vollständige Raumlage ohne gerundete Zwischenwerte."""
         if self._place is not None and any(name in values for name in self._place):
             self._place_known = True
+        # Eine Stelle, die die Platzierung jetzt einträgt, ist auf der heutigen
+        # Form gemessen — auch bei einem Erzeuger, der keine Lesezeile führt.
+        from app.core.knowledge.parts.ops import placement_fields
+
+        placed = placement_fields(self.spec.params)
+        if any(placed.get(axis, axis) in values for axis in ("x", "y", "z")):
+            self._place_held = False
         with QSignalBlocker(self):
             for name, value in values.items():
                 editor = self._editors.get(name)
