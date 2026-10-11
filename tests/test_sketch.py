@@ -3899,6 +3899,25 @@ def test_the_box_phase_holds_for_ellipses_and_curves(
     if not exact:
         monkeypatch.setattr(kernel, "available", lambda: False)
     loops = _loops_with_ellipses_and_curves(20261011, 150)
+    # Der Fall aus der Sonde des Reviews: zweite Achse um 0,3 rad schief
+    # gespeichert, eine Gerade knapp unter dem Scheitel schneidet die Kurve.
+    for skew in (0.0, 0.05, 0.3):
+        second = (6.0 * math.cos(math.pi / 2 + skew), 6.0 * math.sin(math.pi / 2 + skew))
+        at = [(20.0 * math.cos(t), 6.0 * math.sin(t)) for t in (0.2, math.pi - 0.2, math.pi / 2)]
+        arc = ProfileSegment(
+            "ellipse", at[0], at[1], via=at[2], ellipse=((0.0, 0.0), (20.0, 0.0), second)
+        )
+        top = 0.98 * 6.0
+        loops.append(
+            Profile(
+                segments=(
+                    arc,
+                    ProfileSegment("line", arc.end, (0.0, top)),
+                    ProfileSegment("line", (0.0, top), (20.0, top)),
+                    ProfileSegment("line", (20.0, top), arc.start),
+                )
+            )
+        )
 
     with_boxes = [profile.crosses_itself(loop) for loop in loops]
     monkeypatch.setattr(
