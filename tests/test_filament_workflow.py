@@ -1052,6 +1052,7 @@ def test_the_export_names_the_print_by_its_stored_inputs(qt_app, tmp_path, monke
     from app.core.filament_usage import StoredInputs
     from app.core.scene.history import OperationDraft
     from app.ui.session import Session
+    from tests.ui_helpers import wait_until
 
     session = Session()
     assert session.apply("Würfel", [OperationDraft("create_box", params={})])
@@ -1061,12 +1062,9 @@ def test_the_export_names_the_print_by_its_stored_inputs(qt_app, tmp_path, monke
     monkeypatch.setattr(window, "_run_export", workers.append)
     try:
         window._start_export(tmp_path / "wuerfel.3mf", "3mf")
-        for _attempt in range(200):
-            if workers:
-                break
-            session.wait_for_idle(100)
-            QApplication.processEvents()
+        wait_until(qt_app, lambda: bool(workers))
         assert workers, "der Export kam nicht zum Schreiben"
+        assert session.wait_for_idle(60_000)
         worker = workers[0]
         inputs = worker._inputs
         assert inputs is not None
