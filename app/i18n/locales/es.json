@@ -4674,6 +4674,7 @@
   "In wie viele Objekte aufgeteilt wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht; passt die Zahl nicht, nennt diese Operation die richtige.": "En cuántos objetos se divide. Cuántas piezas tiene realmente el cuerpo lo dice el informe de comprobación; si la cifra no encaja, esta operación indica la correcta.",
   "In wie viele Stellen der Weg geteilt wird. Mehr findet engere Stellen, kostet aber je Schritt einen Schnitt durch beide Körper.": "En cuántas posiciones se divide el recorrido. Más encuentra puntos más ajustados, pero cuesta una intersección de ambos cuerpos por paso.",
   "In „{name}“ hält die Kanalsperre Stützen aus schmalen Kanälen fern. Im Slicer prüfen, ob die Decken dort ohne halten.": "En «{name}» el bloqueo de canales mantiene los soportes fuera de los canales estrechos. Compruebe en el slicer si los techos aguantan sin ellos.",
+  "In „{name}“ liegt die Gitterstütze neben der Sperre eng am Überhang an, damit sie nicht in gesperrte Stellen reicht.": "En «{name}», el soporte de cuadrícula junto al bloqueo se ciñe al voladizo para no entrar en las zonas bloqueadas.",
   "In „{name}“ sperrt die Übergabe Stützen unter Rändern, die sich selbst tragen. Im Slicer prüfen, ob sie sauber werden.": "En «{name}», la transferencia bloquea los soportes bajo bordes que se sostienen solos. Compruebe en el slicer que salen limpios.",
   "Infrage kommen: {list}.": "Posibles: {list}.",
   "Inhalt": "Índice",

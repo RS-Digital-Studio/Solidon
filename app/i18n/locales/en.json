@@ -4674,6 +4674,7 @@
   "In wie viele Objekte aufgeteilt wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht; passt die Zahl nicht, nennt diese Operation die richtige.": "How many objects it is split into. How many parts the body actually has is in the report; if the number does not fit, this operation names the right one.",
   "In wie viele Stellen der Weg geteilt wird. Mehr findet engere Stellen, kostet aber je Schritt einen Schnitt durch beide Körper.": "How many positions the path is divided into. More finds tighter spots but costs one intersection of both bodies per step.",
   "In „{name}“ hält die Kanalsperre Stützen aus schmalen Kanälen fern. Im Slicer prüfen, ob die Decken dort ohne halten.": "In “{name}” the channel blocker keeps supports out of narrow channels. Check in the slicer whether the ceilings there hold without them.",
+  "In „{name}“ liegt die Gitterstütze neben der Sperre eng am Überhang an, damit sie nicht in gesperrte Stellen reicht.": "In “{name}”, grid support next to the blocker hugs the overhang so it does not reach into blocked areas.",
   "In „{name}“ sperrt die Übergabe Stützen unter Rändern, die sich selbst tragen. Im Slicer prüfen, ob sie sauber werden.": "In “{name}”, the handover blocks support under rims that hold up on their own. Check in the slicer that they come out clean.",
   "Infrage kommen: {list}.": "Possible: {list}.",
   "Inhalt": "Contents",

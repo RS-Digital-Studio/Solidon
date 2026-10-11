@@ -1995,6 +1995,16 @@ def _support_outline(
     )
 
 
+def _may_block(settings: PrintSettings) -> bool:
+    """Bekommt ein Teil mit diesen Einstellungen eine Sperre, wenn es Raum dafür hat?
+
+    Nur mit Stützen und mit übernommenem Vorschlag zu Kanälen oder Rändern
+    (Entscheidung Robert, 26.09.2026; Entscheidung G)."""
+    return settings.support.style != "none" and (
+        settings.support.block_channels or settings.support.spare_ledges
+    )
+
+
 def _support_blocker(
     entry: SceneObject,
     mesh: MeshData,
@@ -2621,6 +2631,18 @@ def write_assembly(
             )
             for entry in chosen
         }
+        # Die Sperre hält nur, wo normale Stütze am Überhang anliegt
+        # (:func:`handover.snug_beside_blocker`); gefragt wird der
+        # Herstellerprozess, deshalb hier im selben Lesedurchgang.
+        hugging = {
+            entry.id: handover.snug_beside_blocker(
+                setup, profile, own.support.style, flavour, program
+            )
+            for entry in chosen
+            if for_slicer
+            and (own := part_values[entry.id].effective) is not None
+            and _may_block(own)
+        }
     asked = {key: values.asked for key, values in part_values.items()}
     # **Was kein Teil für sich verlangt, gilt allen** (:func:`_unserved`) —
     # als Objektwert an jedem Teil, und der Bericht sagt es. „Kein Teil" heißt
@@ -2853,23 +2875,26 @@ def write_assembly(
     if for_slicer:
         for entry in chosen:
             own_settings = part_values[entry.id].effective
-            if (
-                own_settings is None
-                or own_settings.support.style == "none"
-                or not (own_settings.support.block_channels or own_settings.support.spare_ledges)
-            ):
+            if own_settings is None or not _may_block(own_settings):
                 continue
             blockers[entry.id], noted = _support_blocker(
                 entry, exported[entry.id], own_settings, profile, cancelled
             )
             findings += noted
-            if blockers[entry.id] is not None:
-                from app.core.export import handover
-
-                # Die Sperre hält nur, wo die Stütze am Überhang anliegt
-                # (:func:`handover.snug_beside_blocker`).
-                snug[entry.id] = handover.snug_beside_blocker(
-                    setup, profile, own_settings.support.style, flavour, program
+            if blockers[entry.id] is not None and hugging.get(entry.id):
+                snug[entry.id] = hugging[entry.id]
+                findings.append(
+                    Finding(
+                        code="export.snug_support",
+                        severity="info",
+                        message=_(
+                            "In „{name}“ liegt die Gitterstütze neben der Sperre eng am "
+                            "Überhang an, damit sie nicht in gesperrte Stellen reicht.",
+                            name=source_text(entry.name),
+                        ),
+                        values={"name": source_text(entry.name)},
+                        object_id=entry.id,
+                    )
                 )
     findings += height_findings
     parts = [

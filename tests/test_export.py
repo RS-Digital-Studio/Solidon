@@ -5225,7 +5225,8 @@ def test_grid_support_beside_a_blocker_hugs_the_overhang(
     Säulen unter dem Deckel so 1,1 mm in die Mündungen des gesperrten Tunnels
     (ElegooSlicer: 1,08 m, mit ``snug`` 0,01 m). Ein Teil mit Sperre bekommt
     deshalb ``snug``; ohne Sperre und unter Bäumen bleibt der Stil des
-    Herstellers."""
+    Herstellers. Der Druckdialog zeigt weiter „Gitter“ — ein Befund sagt, warum
+    die Datei ``snug`` trägt (Review rvtun, Fund 5)."""
     entry = scene_object(mesh=tunnel_block())
     settings = print_settings.with_path(print_settings.resolve(profile), "support.style", style)
     settings = print_settings.with_path(settings, "support.block_channels", blocked)
@@ -5237,6 +5238,8 @@ def test_grid_support_beside_a_blocker_hugs_the_overhang(
     assert ("export.support_blocker" in {finding.code for finding in findings}) is blocked
     [values] = object_values(written, member).values()
     assert values.get(key) == ("snug" if snug else None)
+    said = [finding for finding in findings if finding.code == "export.snug_support"]
+    assert [finding.object_id for finding in said] == ([entry.id] if snug else [])
 
 
 @pytest.mark.parametrize("flavour", ["orca", "cura"])
