@@ -156,6 +156,7 @@ it into `website/version.json`.
 - A part for a face or hole is only computed once it has its spot in the view. Until then the dialog cannot be applied and says what is missing.
 - If the face under an open part dialog changes, the chosen spot stays as long as it still fits the new shape. Otherwise the part finds a new one and says so.
 - A part dialog that opens while the previous step is still computing places the part by itself as soon as the result is there, and cannot be applied until then.
+- A part sitting in the view can still be moved to another spot with a click after an entry in the dialog.
 
 ### Editing and sketching
 

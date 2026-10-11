@@ -48430,3 +48430,8 @@ Test zum Dialog, der während der Rechnung öffnet, hält die Auswertung über e
 und prüft die Sperre damit unabhängig vom Takt (N2). Der Stand-in in
 `test_placement_dimensions.py` schreibt die Sätze im Balken mit und verlangt nach der Erholung
 „Position festgelegt …“ (N3).
+Aus dem Review dazu: `_begin_bound_surface` setzt `_seated_at_feature` nur noch, wo ein Merkmal
+oder ein alter Schritt die Stelle trägt; vorher nahm die Platzierung nach dem Neusetzen und nach
+jeder Eingabe im Dialog keinen Klick mehr (M1, Tests `test_a_click_is_taken_after_*`). Ein
+Kantenabstand auf der Rückseite nimmt den Hinweis weg, und x/y/z zeigen die gebundene Stelle
+(G1, `test_an_edge_distance_after_the_renewal_is_an_own_choice`).

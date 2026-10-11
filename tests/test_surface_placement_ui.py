@@ -3751,6 +3751,107 @@ def test_a_part_opened_while_the_last_step_computes_seats_itself_afterwards(
         window.release()
 
 
+def _a_renewed_part_placement(window):
+    """Schraubenloch sitzt, dann landet ein anderes genau daneben: Die Stelle wird neu gesetzt."""
+    object_id, _entry = _a_selected_plate(window, face_normal=(0.0, 0.0, 1.0))
+    dialog, flow = _a_part_placement(window, "insert_screw_hole")
+    window.session.apply(
+        "Schraubenloch",
+        [
+            OperationDraft(
+                op="insert_screw_hole",
+                inputs=(object_id,),
+                params={"x": 1.5, "y": 0.0, "z": 8.0, "nz": 1.0},
+            )
+        ],
+    )
+    _settle_window(window, 150)
+    from app.i18n import tr
+
+    renewed = str(tr("Die Fläche hat sich geändert. Die Stelle ist neu gesetzt."))
+    assert flow.active and flow._surface is not None, "die Platzierung sitzt wieder"
+    assert renewed in flow._note.text()
+    return dialog, flow, renewed
+
+
+def test_a_click_is_taken_after_the_place_was_renewed(qt_app: QApplication) -> None:
+    """Nach dem Neusetzen setzt ein Klick um, wie der Balken es anbietet — und der Hinweis geht.
+
+    Review zum Nachtrag (M1): Die Bindung setzte ``_seated_at_feature`` auch
+    für ein neues Teil, und ``pointer`` nahm danach keine Geste mehr. Der Balken
+    sagte „Klick: umsetzen“, der Klick tat still nichts.
+    """
+    window = _window_with_a_renderer()
+    try:
+        _dialog, flow, renewed = _a_renewed_part_placement(window)
+        assert flow.pointer(PointerEvent("press", 450, 300, button="left"))
+        assert flow.pointer(PointerEvent("release", 450, 300, button="left")), "der Klick zählt"
+        QApplication.processEvents()
+        assert renewed not in flow._note.text(), "die eigene Wahl nimmt den Hinweis weg"
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_click_is_taken_after_a_value_changed_in_the_dialog(qt_app: QApplication) -> None:
+    """Eine Eingabe im Dialog bindet die Stelle neu — danach setzt ein Klick weiterhin um.
+
+    Review zum Nachtrag (älter, seit dem Bindeweg): Nach jeder Wertänderung lief
+    ``_begin_bound_surface`` und setzte ``_seated_at_feature``; der Baustein
+    ließ sich danach nicht mehr per Klick umsetzen.
+    """
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_plate(window, face_normal=(0.0, 0.0, 1.0))
+        dialog, flow = _a_part_placement(window, "insert_screw_hole")
+        dialog.valuesChanged.emit()
+        _settle_window(window, 100)
+        assert flow.active
+        assert flow.pointer(PointerEvent("press", 450, 300, button="left"))
+        assert flow.pointer(PointerEvent("release", 450, 300, button="left")), "der Klick zählt"
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_an_edge_distance_after_the_renewal_is_an_own_choice(qt_app: QApplication) -> None:
+    """Ein Kantenabstand auf der Rückseite setzt die Stelle: Hinweis weg, x/y folgen.
+
+    Review zum Nachtrag (G1): Der Abstand verschob die Stelle im Bild um 2 mm,
+    der Balken sagte weiter „Die Stelle ist neu gesetzt“, und x/y im Dialog
+    blieben auf dem alten Wert.
+    """
+    from app.core.knowledge.parts.ops import placement_fields
+
+    window = _window_with_a_renderer()
+    try:
+        dialog, flow, renewed = _a_renewed_part_placement(window)
+        name = placement_fields(dialog.spec.params)["surface_distance_1"]
+        before = dict(dialog.values())
+        dialog.take_placement({name: float(before[name]) + 2.0})
+        _settle_window(window, 150)
+        assert flow._surface is not None, "die Stelle ist wieder gebunden"
+        assert renewed not in flow._note.text(), "der Kantenabstand ist eine eigene Wahl"
+        after = dialog.values()
+        point = flow._surface.point
+        assert (after["x"], after["y"], after["z"]) == pytest.approx(
+            (float(point[0]), float(point[1]), float(point[2])), abs=1e-6
+        ), "x/y/z im Dialog zeigen die gebundene Stelle"
+        assert math.dist((after["x"], after["y"]), (before["x"], before["y"])) == pytest.approx(
+            2.0, abs=0.01
+        ), "die Stelle ist um den Abstand gewandert"
+        assert dialog.can_accept()
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_a_part_for_a_hole_sits_in_the_chosen_hole(qt_app: QApplication) -> None:
     """Eine gewählte Bohrung, ein Baustein für Bohrungen — er sitzt darin.
 
