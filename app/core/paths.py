@@ -261,7 +261,6 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
-@functools.cache
 def windows_file_api() -> Any:
     """Die drei Windows-Dateiaufrufe mit zeigerbreiten Signaturen.
 
@@ -370,6 +369,7 @@ def replace_file(source: Path, target: Path) -> None:
     source.replace(target)
 
 
+@functools.cache
 def _shared_kernel() -> Any:
     """``kernel32`` mit den Prototypen für geteiltes Lesen, einmal je Prozess.
 
