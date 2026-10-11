@@ -40,7 +40,6 @@ from app.core.discover import PROBE_SECONDS, UNUSABLE_ADDRESS, is_local_address,
 from app.core.errors import (
     CANCEL,
     CHECK_UPDATES,
-    OPEN_SETTINGS,
     RETRY,
     SET_UP_CHAT,
     TRY_KEY_AGAIN,
@@ -935,11 +934,11 @@ class BackendAnswerUnreadable(ExternalToolError):
                 "Unter dieser Adresse hat etwas geantwortet, aber nicht in der "
                 "Sprache, die ein Sprachmodell spricht — meist steckt ein Proxy "
                 "oder ein anderer Dienst dahinter. Der Anfang der Antwort steht "
-                "daneben. Prüfen Sie die Adresse in den Einstellungen, oder "
-                "wählen Sie ein anderes Modell."
+                "daneben. Prüfen Sie die Adresse unter „Chat einrichten …“, oder "
+                "wählen Sie dort ein anderes Modell."
             ),
             values=values,
-            suggestions=(OPEN_SETTINGS, RETRY, CANCEL),
+            suggestions=(SET_UP_CHAT, RETRY, CANCEL),
         )
 
 
@@ -989,11 +988,11 @@ class BackendPromptTruncated(ExternalToolError):
                 "Das lokale Modell hat den Auftrag nicht ganz bekommen: Was über "
                 "die Länge hinausgeht, die es fasst, schneidet Ollama still ab, und "
                 "die Antwort beruht dann auf einem halben Auftrag. Ein kürzerer "
-                "Chatverlauf hilft, sonst ein Modell, das längere Aufträge fasst, "
-                "oder ein gehostetes."
+                "Chatverlauf hilft, sonst unter „Chat einrichten …“ ein Modell, das "
+                "längere Aufträge fasst, oder ein gehostetes."
             ),
             values=values,
-            suggestions=(OPEN_SETTINGS, CANCEL),
+            suggestions=(SET_UP_CHAT, CANCEL),
         )
 
 
@@ -1032,12 +1031,12 @@ class BackendContextShifted(ExternalToolError):
                 "Auftrag und Antwort zusammen waren länger, als das lokale Modell "
                 "fasst. Ollama verwirft dann während der Antwort die Mitte des "
                 "Auftrags und rechnet mit dem Rest weiter — die Antwort beruht auf "
-                "einem Auftrag, den es so nicht mehr gab. Wählen Sie in den "
-                "Einstellungen ein Modell, das längere Aufträge fasst, oder ein "
+                "einem Auftrag, den es so nicht mehr gab. Wählen Sie unter „Chat "
+                "einrichten …“ ein Modell, das längere Aufträge fasst, oder ein "
                 "gehostetes."
             ),
             values=values,
-            suggestions=(OPEN_SETTINGS, CANCEL),
+            suggestions=(SET_UP_CHAT, CANCEL),
         )
 
 

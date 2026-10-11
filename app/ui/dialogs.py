@@ -1173,7 +1173,7 @@ def _what_answers() -> str:
     refused = ""
     if llm.key_refused("anthropic"):
         sentence = tr(
-            "Der Anbieter hat ihn als ungültig abgelehnt. Solidon übergeht ihn einen Tag lang, "
+            "Der Anbieter hat ihn als ungültig abgelehnt. Solidon übergeht ihn einen Tag lang. "
             "„Noch einmal versuchen“ bietet ihn sofort wieder an."
         )
         refused = f"{sentence} "
