@@ -58,7 +58,7 @@ DATA = Path(__file__).parent / "data"
 #: Bildung fest: Ändert sie sich, findet Solidon keine Buchung mehr, die nach
 #: diesem Stand gebucht wurde. Wer sie ändern muss, führt den alten Abdruck als
 #: Vorabdruck mit (``verbrauch.md``).
-PINNED_BOOKING = "3aa49b71e62d0e6815f5ab5c7182f4dd"
+PINNED_BOOKING = "si1-3aa49b71e62d0e6815f5ab5c7182f4dd"
 #: Die Buchung im Lager von 0.5.3 (``test_filament_usage_fingerprint_history``).
 BOOKED_053 = "aa373e5e86b4471cf557a31589dc8383"
 
@@ -875,8 +875,8 @@ def test_a_053_booking_whose_triangles_moved_is_offered_not_booked_again(
 ) -> None:
     """Integrationsreview welle4, M1: Paket E ordnet die Dreiecke dieses Körpers um,
     der Vorabdruck trifft die Buchung aus 0.5.3 nicht mehr. Ohne Treffer buchte
-    *Ohne Rückfrage buchen* denselben Druck ein zweites Mal. Eine Buchung desselben
-    Projekts mit denselben Spulen und Mengen kommt jetzt zur Prüfung — nie still."""
+    *Ohne Rückfrage buchen* denselben Druck ein zweites Mal. Eine Buchung aus 0.5
+    desselben Projekts mit denselben Filamenten kommt jetzt zur Prüfung — nie still."""
     from app.core.errors import ValidationError
 
     request, spool = _weg2_after_e(tmp_path)
@@ -891,14 +891,11 @@ def test_a_053_booking_whose_triangles_moved_is_offered_not_booked_again(
     assert len(filaments.read_snapshot().bookings()) == 1
 
 
-@pytest.mark.parametrize("other", ["grams", "project"])
-def test_another_amount_or_project_is_a_new_print(tmp_path: Path, other: str) -> None:
-    """Gegenprobe: Andere Menge oder anderes Projekt ist keine frühere Buchung — der
-    Druck wird wie bisher von selbst gebucht."""
-    if other == "grams":
-        request, spool = _weg2_after_e(tmp_path, grams=WEG2_GRAMS + 0.5)
-    else:
-        request, spool = _weg2_after_e(tmp_path, project_name="Anderes Projekt")
+@pytest.mark.parametrize("other", ["project"])
+def test_another_project_is_a_new_print(tmp_path: Path, other: str) -> None:
+    """Gegenprobe: Ein anderes Projekt ist keine frühere Buchung — der Druck wird wie
+    bisher von selbst gebucht."""
+    request, spool = _weg2_after_e(tmp_path, project_name="Anderes Projekt")
     assert ui._legacy_bookings(request, filaments.read_snapshot()) == ()
     booked = ui._auto_book(request)
     assert booked is not None and booked.operation_id != WEG2_OPERATION
@@ -909,46 +906,52 @@ def test_another_amount_or_project_is_a_new_print(tmp_path: Path, other: str) ->
 #: Die beiden Hinweise der Rückfrage, wie der Kunde sie liest.
 ACTIVE_TEXT = str(
     tr(
-        "Für dieses Projekt gibt es eine frühere Buchung mit denselben Spulen und "
-        "Mengen. Prüfen Sie, ob dies ein weiterer Druck ist."
+        "Für dieses Projekt gibt es eine Buchung aus Solidon 0.5 mit denselben "
+        "Filamenten. Prüfen Sie, ob dies ein weiterer Druck ist."
     )
 )
 REVERSED_TEXT = str(
     tr(
-        "Für dieses Projekt gibt es eine frühere, zurückgenommene Buchung mit "
-        "denselben Spulen und Mengen. Prüfen Sie, ob dies ein weiterer Druck ist."
+        "Für dieses Projekt gibt es eine zurückgenommene Buchung aus Solidon 0.5 "
+        "mit denselben Filamenten. Prüfen Sie, ob dies ein weiterer Druck ist."
     )
 )
 _SLOT = MaterialSlot(0, "PLA Rot", (0.8, 0.1, 0.1), material_type="PLA")
 _OTHER_SLOT = MaterialSlot(1, "PETG Blau", (0.1, 0.1, 0.8), material_type="PETG")
+_Line = tuple[MaterialSlot, float | None, str, str]
 
 
 def _offer(
-    lines: tuple[tuple[MaterialSlot, float | None, str], ...],
-    positions: tuple[tuple[MaterialSlot, float, str], ...],
+    lines: tuple[_Line, ...],
+    positions: tuple[tuple[MaterialSlot, float, str, str], ...],
     *,
     project: str = "Halter",
     booked_project: str = "Halter",
     reversed_at: str = "",
+    fingerprint: str = "alter-abdruck",
 ) -> tuple[usage.UsageRequest, filaments.InventoryBooking]:
-    """Eine Ausgabe und eine frühere Buchung ohne Abdrucktreffer, Zeile für Zeile."""
+    """Eine Ausgabe und eine frühere Buchung ohne Abdrucktreffer, Zeile für Zeile:
+    Spulenwerk, Menge, Spule, Quelle."""
     request = usage.UsageRequest(
-        "neuer-abdruck",
+        usage.STORED_MARK + "neu",
         project,
         0,
-        tuple(usage.UsageLine(slot, grams, spool, source="gcode") for slot, grams, spool in lines),
+        tuple(
+            usage.UsageLine(slot, grams, spool, source=source)  # type: ignore[arg-type]
+            for slot, grams, spool, source in lines
+        ),
     )
     booking = filaments.InventoryBooking(
         "frueher",
-        "alter-abdruck",
+        fingerprint,
         tuple(
             filaments.BookingPosition(
                 spool,
                 grams,
-                "gcode",
+                source,  # type: ignore[arg-type]
                 filament_key=ui._line_key(usage.UsageLine(slot, grams, spool)),
             )
-            for slot, grams, spool in positions
+            for slot, grams, spool, source in positions
         ),
         "2026-10-01T00:00:00+00:00",
         "2026-10-01T00:00:00+00:00",
@@ -958,57 +961,101 @@ def _offer(
     return request, booking
 
 
-SAME_AMOUNT_CASES = {
-    "gleich": (((_SLOT, 23.45, "a"),), ((_SLOT, 23.45, "a"),), {}, True),
-    "Zeile ohne Spule": (((_SLOT, 23.45, ""),), ((_SLOT, 23.45, "a"),), {}, True),
-    "andere Spule": (((_SLOT, 23.45, "a"),), ((_SLOT, 23.45, "b"),), {}, False),
-    "aufgeteilt auf zwei Positionen": (
-        ((_SLOT, 11.0, ""), (_SLOT, 11.0, "")),
-        ((_SLOT, 11.0, "a"), (_SLOT, 11.0, "b")),
-        {},
-        False,
+_SLICED = ((_SLOT, 23.45, "a", "gcode"),)
+#: Die Wege aus dem Review Altbuchung (M2), auf denen eine Buchung aus 0.5 bisher ein
+#: zweites Mal abgezogen wurde — jeder kommt jetzt zur Prüfung.
+EARLIER_PRINT_WAYS = {
+    "V1 gleiche Ausgabe": (_SLICED, ((_SLOT, 23.45, "a", "gcode"),)),
+    "V2 G-Code gebucht, jetzt Schätzung": (
+        ((_SLOT, 9.81, "a", "internal"),),
+        ((_SLOT, 23.45, "a", "gcode"),),
     ),
-    "mehr Positionen als Zeilen": (
-        ((_SLOT, 23.45, "a"),),
-        ((_SLOT, 23.45, "a"), (_OTHER_SLOT, 5.0, "c")),
-        {},
-        False,
+    "V3 andere Spule": (_SLICED, ((_SLOT, 23.45, "b", "gcode"),)),
+    "V5 Slicer-Update weniger": (((_SLOT, 23.40, "a", "gcode"),), ((_SLOT, 23.45, "a", "gcode"),)),
+    "V5 Slicer-Update mehr": (((_SLOT, 23.50, "a", "gcode"),), ((_SLOT, 23.45, "a", "gcode"),)),
+    "V7 auf zwei Spulen aufgeteilt": (
+        _SLICED,
+        ((_SLOT, 11.0, "a", "gcode"), (_SLOT, 12.45, "b", "gcode")),
     ),
-    "Menge unbekannt": (((_SLOT, None, "a"),), ((_SLOT, 23.45, "a"),), {}, False),
-    "Abstand 0,049 g": (((_SLOT, 23.499, "a"),), ((_SLOT, 23.45, "a"),), {}, True),
-    "Abstand 0,05 g": (((_SLOT, 23.5, "a"),), ((_SLOT, 23.45, "a"),), {}, False),
-    "Abstand 0,3 g": (((_SLOT, 23.75, "a"),), ((_SLOT, 23.45, "a"),), {}, False),
-    "anderes Projekt": (((_SLOT, 23.45, "a"),), ((_SLOT, 23.45, "a"),), {"project": "B"}, False),
-    "ohne Projektnamen": (
-        ((_SLOT, 23.45, "a"),),
-        ((_SLOT, 23.45, "a"),),
-        {"project": "", "booked_project": ""},
-        False,
-    ),
+    "V10 Schätzung gebucht, jetzt G-Code": (_SLICED, ((_SLOT, 9.81, "a", "internal"),)),
+    "V11 von Hand gebucht": (_SLICED, ((_SLOT, 25.0, "a", "manual"),)),
+    "Menge unbekannt": (((_SLOT, None, "a", "gcode"),), ((_SLOT, 23.45, "a", "gcode"),)),
 }
 
 
-@pytest.mark.parametrize("case", sorted(SAME_AMOUNT_CASES))
-def test_each_condition_of_an_earlier_booking_counts(case: str) -> None:
-    """Review Altbuchung, L1: jede Bedingung von ``_same_amounts`` einzeln — Projekt, je
-    Druckfilament genau eine Position, dieselbe Spule, eine bekannte Menge höchstens
-    0,05 g entfernt (die halbe Anzeigestufe des Lagers)."""
-    lines, positions, names, expected = SAME_AMOUNT_CASES[case]
+@pytest.mark.parametrize("way", sorted(EARLIER_PRINT_WAYS))
+def test_a_05_booking_of_the_same_filaments_is_offered_on_every_way(way: str) -> None:
+    """Review Altbuchung, M2: Die Menge entscheidet nicht, ob eine Buchung aus 0.5
+    derselbe Druck ist — Schätzung, G-Code, Hand, Slicer-Update, Spulenwechsel und
+    Aufteilung sind mehrdeutig. Jeder Weg kommt zur Prüfung, keiner bucht still."""
+    lines, positions = EARLIER_PRINT_WAYS[way]
+    request, booking = _offer(lines, positions)
+    snapshot = SimpleNamespace(bookings=lambda: (booking,))
+    assert ui._legacy_bookings(request, snapshot) == (booking,)
+
+
+NOT_EARLIER_CASES = {
+    "andere Filamente": (_SLICED, ((_OTHER_SLOT, 23.45, "a", "gcode"),), {}),
+    "ein Filament mehr": (
+        _SLICED,
+        ((_SLOT, 23.45, "a", "gcode"), (_OTHER_SLOT, 5.0, "c", "gcode")),
+        {},
+    ),
+    "Ausgabe mit einem Filament mehr": (
+        ((_SLOT, 23.45, "a", "gcode"), (_OTHER_SLOT, 5.0, "c", "gcode")),
+        _SLICED,
+        {},
+    ),
+    "anderes Projekt": (_SLICED, _SLICED, {"project": "B"}),
+    "ohne Projektnamen": (_SLICED, _SLICED, {"project": "", "booked_project": ""}),
+    "ab 0.6.0 gebucht": (_SLICED, _SLICED, {"fingerprint": usage.STORED_MARK + "alt"}),
+}
+
+
+@pytest.mark.parametrize("case", sorted(NOT_EARLIER_CASES))
+def test_other_filaments_projects_and_marked_bookings_are_no_candidates(case: str) -> None:
+    """Gegenprobe: andere Filamente, ein anderes oder kein Projekt — und jede Buchung ab
+    0.6.0, deren Abdruck das Zeichen der gespeicherten Eingänge trägt
+    (Review Altbuchung, M1): Dort ist ein anderer Abdruck ein anderer Druck."""
+    lines, positions, names = NOT_EARLIER_CASES[case]
     request, booking = _offer(lines, positions, **names)
-    assert ui._same_amounts(request, booking) is expected
+    assert ui._earlier_print(request, booking) is False
 
 
 @pytest.mark.parametrize("reversed_at", ["", "2026-10-02T00:00:00+00:00"])
 def test_an_earlier_booking_is_offered_with_its_own_sentence(reversed_at: str) -> None:
-    """L1: auch eine zurückgenommene Buchung kommt zur Prüfung, mit ihrem eigenen Satz."""
-    request, booking = _offer(
-        ((_SLOT, 23.45, "a"),), ((_SLOT, 23.45, "a"),), reversed_at=reversed_at
-    )
+    """Auch eine zurückgenommene Buchung aus 0.5 kommt zur Prüfung, mit ihrem eigenen Satz."""
+    request, booking = _offer(_SLICED, _SLICED, reversed_at=reversed_at)
     snapshot = SimpleNamespace(bookings=lambda: (booking,))
     offered = ui._legacy_bookings(request, snapshot)
     assert offered == (booking,)
     expected = REVERSED_TEXT if reversed_at else ACTIVE_TEXT
     assert ui._legacy_booking_text(offered, request) == expected
+
+
+def test_every_fingerprint_from_stored_inputs_carries_the_mark() -> None:
+    """Das Zeichen trennt Buchungen ab 0.6.0 von denen aus 0.5; der Vorabdruck trägt es nie."""
+    objects, settings, profile, inputs = job(build())
+    request = request_for(objects, settings, profile, inputs)
+    assert usage.from_stored_inputs(request.fingerprint)
+    assert not any(usage.from_stored_inputs(one) for one in request.former_fingerprints)
+    assert not usage.from_stored_inputs(
+        usage.prepare(objects, settings, profile, "P")[0].fingerprint
+    )
+
+
+def test_an_iteration_in_060_books_without_asking(stock: Any) -> None:
+    """Review Altbuchung, M1: In 0.6.0 gebucht, dann eine Bohrung verschoben — anderer
+    Abdruck, gleiche Menge. Das ist ein anderer Druck und bucht ohne Rückfrage wie welle4."""
+    entry, request, _position = stock
+    first = replace(
+        request, fingerprint=usage.STORED_MARK + "bohrung-links", former_fingerprints=()
+    )
+    second = replace(first, fingerprint=usage.STORED_MARK + "bohrung-rechts")
+    assert ui._auto_book(first) is not None
+    booked = ui._auto_book(second)
+    assert booked is not None and booked.fingerprint == second.fingerprint
+    assert filaments.get(entry.identifier).remaining_grams == pytest.approx(500 - 2 * 42)
 
 
 def test_a_creator_with_stray_inputs_keeps_them_like_the_evaluation() -> None:

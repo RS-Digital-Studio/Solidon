@@ -154,6 +154,17 @@ _LEGACY_SHAPES: Final = (
 #: (Regel ``verbrauch.md``).
 STORED_INPUTS: Final = "stored-inputs-1"
 
+#: Steht vor jedem Abdruck aus gespeicherten Eingängen, lesbar im Lager: Eine
+#: Buchung ohne dieses Zeichen stammt aus 0.5 und hängt an Netzbits, die eine
+#: druckgleiche Beschleunigung umordnet (Review Altbuchung, M1). Das Lager
+#: verlangt vom Abdruck nur einen nichtleeren Text; ein Formatschritt entfällt.
+STORED_MARK: Final = "si1-"
+
+
+def from_stored_inputs(fingerprint: str) -> bool:
+    """Wurde dieser Abdruck aus gespeicherten Eingängen gebildet (ab 0.6.0)?"""
+    return fingerprint.startswith(STORED_MARK)
+
 
 @dataclass(frozen=True, slots=True)
 class StoredInputs:
@@ -982,7 +993,7 @@ def prepare(
         if stored_bodies is None:
             fingerprint = evaluated
         else:
-            fingerprint = digest(
+            fingerprint = STORED_MARK + digest(
                 STORED_INPUTS,
                 settings.inventory_project_id,
                 plate,

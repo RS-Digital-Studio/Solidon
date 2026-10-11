@@ -6,7 +6,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Final, cast, override
+from typing import cast, override
 from uuid import uuid4
 
 from PySide6.QtCore import QObject, QSignalBlocker, Qt, QTimer, Signal
@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 
 from app.core.errors import Action, AppError, ValidationError
 from app.core.export.threemf import slot_identity
-from app.core.filament_usage import UsageLine, UsageRequest, costs_for
+from app.core.filament_usage import UsageLine, UsageRequest, costs_for, from_stored_inputs
 from app.core.knowledge import filaments
 from app.core.scene.hashing import digest
 from app.i18n import source_text, tr
@@ -135,18 +135,13 @@ def _booking_fingerprint(request: UsageRequest, booking: filaments.InventoryBook
     return request.fingerprint
 
 
-#: Mengen, die weniger als 0,05 g auseinanderliegen, gelten als gleich: die halbe
-#: Anzeigestufe des Lagers (``filament_inventory``, ``{grams:.1f}``).
-SAME_SHOWN_GRAMS: Final = 0.05
-
-
 def _legacy_bookings(
     request: UsageRequest, snapshot: filaments.InventorySnapshot
 ) -> tuple[filaments.InventoryBooking, ...]:
     """Unsichere Altvorgänge nur melden, solange kein exakter Vorgang bekannt ist.
 
     Zwei Arten: ein Altabdruck (``legacy_fingerprints``, 0.5.1) und eine Buchung
-    desselben Projekts mit denselben Spulen und Mengen (:func:`_same_amounts`).
+    aus 0.5 desselben Projekts mit denselben Filamenten (:func:`_earlier_print`).
     Beide sind Kandidaten, nie Gleichheit: Sie werden zur Prüfung angeboten und
     buchen nie still (Regel 21).
     """
@@ -156,37 +151,34 @@ def _legacy_bookings(
     return tuple(
         booking
         for booking in bookings
-        if booking.fingerprint in request.legacy_fingerprints or _same_amounts(request, booking)
+        if booking.fingerprint in request.legacy_fingerprints or _earlier_print(request, booking)
     )
 
 
-def _same_amounts(request: UsageRequest, booking: filaments.InventoryBooking) -> bool:
-    """Eine Buchung desselben Projekts mit denselben Spulen und Mengen
-    (Integrationsreview welle4, M1).
+def _earlier_print(request: UsageRequest, booking: filaments.InventoryBooking) -> bool:
+    """Eine Buchung aus 0.5, die derselbe Druck sein kann (Integrationsreview welle4, M1;
+    Review Altbuchung, M1 und M2).
 
-    Buchungen aus 0.5.2 und 0.5.3 hängen am Vorabdruck über die Netzbits, und
-    eine druckgleiche Beschleunigung, die Dreiecke umordnet, trifft ihn nicht
-    mehr. Ohne Treffer buchte *Ohne Rückfrage buchen* denselben Druck ein zweites
-    Mal. Gleich heißt: derselbe Projektname, je Druckfilament genau eine Position
-    mit seiner Identität, dieselbe Spule, wo eine gebunden ist, und eine Menge
-    weniger als 0,05 g entfernt. Eine unbekannte Menge ist kein Beleg. Das gilt für
-    jede frühere Buchung ohne Abdrucktreffer, auch eine aus dieser Version.
+    Buchungen aus 0.5 hängen am Vorabdruck über die Netzbits, und eine druckgleiche
+    Beschleunigung, die Dreiecke umordnet, trifft ihn nicht mehr. Ohne Treffer buchte
+    *Ohne Rückfrage buchen* denselben Druck ein zweites Mal. Ein Kandidat ist deshalb
+    jede Buchung ohne das Zeichen der gespeicherten Eingänge
+    (``filament_usage.from_stored_inputs``) aus demselben Projekt mit denselben
+    Druckfilamenten. Die Menge entscheidet es nicht: Sie kommt aus Schätzung, G-Code
+    oder Hand, ein Slicer-Update verschiebt sie, eine Spule kann gewechselt oder die
+    Menge aufgeteilt sein — jeder dieser Wege ist mehrdeutig und wird gefragt, nie
+    geraten. Eine Buchung ab 0.6.0 trägt das Zeichen; ein anderer Abdruck ist dort
+    ein anderer Druck und bucht ohne Rückfrage.
     """
+    if from_stored_inputs(booking.fingerprint):
+        return False
     if not booking.project_name or booking.project_name != request.project_name:
         return False
-    if not request.lines or len(booking.positions) != len(request.lines):
+    if not request.lines or not booking.positions:
         return False
-    for line in request.lines:
-        key = _line_key(line)
-        found = [position for position in booking.positions if position.filament_key == key]
-        if len(found) != 1 or line.grams is None:
-            return False
-        position = found[0]
-        if line.spool_identifier and position.spool_identifier != line.spool_identifier:
-            return False
-        if abs(position.grams - line.grams) >= SAME_SHOWN_GRAMS:
-            return False
-    return True
+    return {_line_key(line) for line in request.lines} == {
+        position.filament_key for position in booking.positions
+    }
 
 
 def _legacy_booking_text(
@@ -199,14 +191,14 @@ def _legacy_booking_text(
         if all(booking.reversed_at for booking in bookings):
             return str(
                 tr(
-                    "Für dieses Projekt gibt es eine frühere, zurückgenommene Buchung mit "
-                    "denselben Spulen und Mengen. Prüfen Sie, ob dies ein weiterer Druck ist."
+                    "Für dieses Projekt gibt es eine zurückgenommene Buchung aus Solidon 0.5 "
+                    "mit denselben Filamenten. Prüfen Sie, ob dies ein weiterer Druck ist."
                 )
             )
         return str(
             tr(
-                "Für dieses Projekt gibt es eine frühere Buchung mit denselben Spulen und "
-                "Mengen. Prüfen Sie, ob dies ein weiterer Druck ist."
+                "Für dieses Projekt gibt es eine Buchung aus Solidon 0.5 mit denselben "
+                "Filamenten. Prüfen Sie, ob dies ein weiterer Druck ist."
             )
         )
     if all(booking.reversed_at for booking in bookings):

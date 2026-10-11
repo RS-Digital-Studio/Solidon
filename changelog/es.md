@@ -121,7 +121,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una pieza ya compensa en el modelo, con un taladro con *Aplicar compensación del material* o *Compensar la pata de elefante*, Solidon sugiere que el slicer no lo haga otra vez.
 - También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
 - Incluso con el ordenador a plena carga, Solidon indica el motivo real al detener un slicer, en lugar de un tiempo agotado. Un archivo de impresión terminado se aprovecha.
-- El almacén de filamentos muestra para revisar cada registro anterior del mismo proyecto con iguales bobinas y cantidades, también con *Registrar sin preguntar*, en vez de descontar otra vez.
+- El almacén de filamentos muestra para revisar un registro de Solidon 0.5 del mismo proyecto con los mismos filamentos y pregunta antes de descontar otra vez.
 - Desde esta versión, un consumo descontado sigue unido a su impresión aunque una actualización calcule más rápido o cambie el perfil del fabricante en el slicer. Antes contaba como nueva.
 - Donde cúpulas planas y pendientes mostrarían escalones, Solidon sugiere capas finas solo allí. La sugerencia indica cuánto más tarda entonces la pieza.
 
