@@ -7334,11 +7334,12 @@ def test_lettering_is_read_like_its_original_after_refining_and_a_bore(edge: flo
     assert refined_units(refined.raw) is not None, "die Bohrung hat den Ursprung verloren"
     expected, found = _read_as_shapes(before), _read_as_shapes(after)
     kinds = [kind for kind, _value in expected]
-    # Drei gerundete Seiten: die zwei großen Bögen und der Innenbogen des R,
-    # 33 mm² unter einem Prozent der Haut, aber ringsum scharf an Schrift und
-    # Platte gestoßen (``curved_sides_standing``).
-    assert kinds.count("curved_face") == 3 and kinds.count("fillet") == 1 and "hole" in kinds, (
-        "der Basisstand liest drei gerundete Seiten, eine Verrundung und die Bohrung"
+    # Fünf gerundete Seiten: die zwei großen Bögen und drei Wände unter einem
+    # Prozent der Haut (43 mm²), deren Nähte alle scharf an ebene Facetten
+    # stoßen — der Innenbogen des R mit 33 mm² unter ihnen
+    # (``curved_sides_standing``).
+    assert kinds.count("curved_face") == 5 and kinds.count("fillet") == 1 and "hole" in kinds, (
+        "der Basisstand liest fünf gerundete Seiten, eine Verrundung und die Bohrung"
     )
     assert [kind for kind, _value in found] == kinds
     assert [value for _kind, value in found] == pytest.approx(

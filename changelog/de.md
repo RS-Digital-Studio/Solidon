@@ -220,7 +220,7 @@ Nutzen da und sonst nichts.
 - Die Dialoge *STEP laden* und *Zeichnung hochziehen* bieten nur Dateien an, die sie lesen können. Liegt keine im Projekt, nennen sie den Knopf *Datei wählen …*.
 - Ein Linienzug in der Skizze endet, sobald er auf seinem Anfang schließt. Bisher hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
 - Eine im Linienwerkzeug getippte Länge legt genau eine Linie an. Bisher kam beim Verlassen des Maßfelds eine zweite dazu, zurück zum Zeiger.
-- Die runden Wände kleiner Schrift, etwa eines „O“ per *Text aufbringen*, stehen im Objektbaum als *Gerundete Seite*. Auf einem großen Körper fehlten sie dort bisher.
+- Viele runde Wände kleiner Schrift, etwa die eines „O“ oder „D“ per *Text aufbringen*, stehen jetzt auch auf einem großen Körper im Objektbaum als *Gerundete Seite*.
 
 ### Erzeugen mit KI
 

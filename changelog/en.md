@@ -195,7 +195,7 @@ it into `website/version.json`.
 - The *Load STEP* and *Extrude a drawing* dialogs only offer files they can read. If the project has none, they point to the *Choose a file …* button.
 - A chain of lines in a sketch ends as soon as it closes on its start. Until now a new segment hung on the pointer, and the first Esc seemed to do nothing.
 - A length typed with the line tool creates exactly one line. Until now leaving the dimension field added a second one, back towards the pointer.
-- The round walls of small lettering, such as an “O” added with *Put text on*, appear in the object tree as *Curved face*. On a large body they were missing there until now.
+- Many round walls of small lettering, such as those of an “O” or “D” added with *Put text on*, now appear as *Curved face* in the object tree on a large body too.
 
 ### Generating with AI
 

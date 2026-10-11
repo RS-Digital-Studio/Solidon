@@ -1035,9 +1035,10 @@ def _could_be_complete(
     """Ob eines der Merkmale des Ausschnitts die Prüfung am ganzen Körper bestehen könnte.
 
     Die notwendigen Bedingungen aus ``is_complete`` in :func:`_recognise_region`,
-    an denselben Zahlen und ohne den ganzen Körper zu fragen: Eine gerundete
+    an denselben Zahlen und ohne die Erkennung am ganzen Körper: Eine gerundete
     Seite muss als Seite des ganzen Körpers gelten
-    (``detection.curved_sides_standing``), jedes andere
+    (``detection.curved_sides_standing`` — eine Flächensumme, und nur unter dem
+    Anteil eine Bitmaske über die Nähte des Flecks), jedes andere
     Merkmal außer einer Fläche muss ganz im Suchradius liegen
     (:func:`_inside_radius`, in ``bounded``). Eine Fläche besteht die Frage
     immer — ob sie abgeschnitten ist und eine Ebene nach der Regel des ganzen

@@ -2012,6 +2012,162 @@ def test_a_rounded_side_is_measured_against_the_whole_body() -> None:
     ), sorted((feature.kind, len(feature.face_indices)) for feature in found.features.values())
 
 
+def _bump_on_a_plate(bump: Any) -> MeshData:
+    """Eine Erhebung auf einer Platte 100 × 100 × 4, fein unterteilt wie ein echtes Netz."""
+    import manifold3d as m3
+
+    plate = m3.Manifold.cube((100.0, 100.0, 4.0)).translate((-50.0, -50.0, 0.0))
+    solid = (plate + bump.translate((0.0, 0.0, 4.0))).to_mesh()
+    fine = trimesh.Trimesh(
+        np.asarray(solid.vert_properties)[:, :3], np.asarray(solid.tri_verts)
+    ).subdivide_to_size(max_edge=3.0)
+    mesh = MeshData.of(fine)
+    assert mesh.raw.is_watertight
+    return mesh
+
+
+def _lens_bump() -> Any:
+    """Eine Linse aus zwei Ellipsenbögen, 3 mm hoch — zwei Wände stoßen an den Spitzen scharf."""
+    import manifold3d as m3
+
+    reach = 10.0 * math.sqrt(1.0 - (3.0 / 5.0) ** 2)
+
+    def height(x: float) -> float:
+        return 5.0 * math.sqrt(max(0.0, 1.0 - (x / 10.0) ** 2)) - 3.0
+
+    upper = [(float(x), height(float(x))) for x in np.linspace(reach, -reach, 49)]
+    lower = [(float(x), -height(float(x))) for x in np.linspace(-reach, reach, 49)][1:-1]
+    return m3.Manifold.extrude(m3.CrossSection([upper + lower]), 3.0)
+
+
+def _chamfered_bump() -> Any:
+    """Ein ovaler Knopf 12 × 6, 2 mm Wand und 0,8 mm Fase oben."""
+    import manifold3d as m3
+
+    ellipse = m3.CrossSection.circle(1.0, 96).scale((6.0, 3.0))
+    base = m3.Manifold.extrude(ellipse, 2.0)
+    top = m3.Manifold.extrude(ellipse.offset(-0.8, m3.JoinType.Round), 0.8).translate((0, 0, 2.0))
+    return m3.Manifold.batch_hull([base, top])
+
+
+def _softly_rounded_bump() -> Any:
+    """Derselbe Knopf, die Oberkante weich mit R 1 verrundet — keine Naht scharf."""
+    import manifold3d as m3
+
+    ellipse = m3.CrossSection.circle(1.0, 96).scale((6.0, 3.0))
+    layers = [m3.Manifold.extrude(ellipse, 2.0)]
+    for step in range(0, 91, 10):
+        angle = math.radians(step)
+        inset = 1.0 - math.cos(angle)
+        shape = ellipse.offset(-inset, m3.JoinType.Round) if inset > 1e-9 else ellipse
+        layers.append(m3.Manifold.extrude(shape, 0.01).translate((0.0, 0.0, 2.0 + math.sin(angle))))
+    return m3.Manifold.batch_hull(layers)
+
+
+def _full_and_local_sides(
+    mesh: MeshData, pick: Any, before_local: Any = None
+) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
+    """Die gerundeten Seiten der Vollerkennung und der örtlichen an einer Wand der Erhebung."""
+    from app.core.perceive import features as detection
+    from app.core.perceive import local
+
+    def sides(found: Any) -> list[tuple[int, float]]:
+        return sorted(
+            (len(feature.face_indices), round(float(feature.params["area"]), 9))
+            for feature in found.values()
+            if feature.kind == "curved_face"
+        )
+
+    detection.forget_cache()
+    full = detection.detect(mesh)
+    stitched = detection._one_body(mesh)
+    centres = np.asarray(stitched.raw.triangles_center)
+    normals = np.asarray(stitched.raw.face_normals)
+    candidates = np.flatnonzero(pick(centres, normals))
+    seed = int(candidates[len(candidates) // 2])
+    if before_local is not None:
+        before_local()
+    found = local.detect_local(
+        stitched, tuple(centres[seed]), normal=tuple(normals[seed]), radius=12.0, seed_faces=(seed,)
+    )
+    return sides(full), sides(found.features)
+
+
+@pytest.mark.parametrize(
+    ("bump", "pick", "count"),
+    [
+        (
+            _lens_bump,
+            lambda c, n: (
+                (np.abs(n[:, 2]) < 0.1)
+                & (c[:, 2] > 4.0)
+                & (c[:, 1] > 0.5)
+                & (np.abs(c[:, 0]) < 3.0)
+            ),
+            2,
+        ),
+        (
+            _chamfered_bump,
+            lambda c, n: (
+                (np.abs(n[:, 2]) < 0.1)
+                & (c[:, 2] > 4.0)
+                & (c[:, 2] < 6.0)
+                & (np.abs(c[:, 0]) < 7.0)
+            ),
+            2,
+        ),
+    ],
+    ids=["lens", "chamfer"],
+)
+def test_sharply_bounded_sides_are_the_same_alone_and_together(
+    bump: Any, pick: Any, count: int
+) -> None:
+    """Zwei gerundete Wände, die scharf aneinanderstoßen, sind örtlich wie voll Seiten.
+
+    Die Vollerkennung fragt alle Flecken zugleich, die örtliche einen. Hing
+    die Antwort am anderen Fleck hinter der Naht, nannte die örtliche an der
+    Linse und am ovalen Knopf mit Fase zwei Seiten, die volle keine
+    (Review zu ``curved_sides_standing``). Beide unter einem Hundertstel der
+    Haut (217 mm²), jede Naht scharf an eine ebene Facette oder die andere Wand.
+    """
+    full, alone = _full_and_local_sides(_bump_on_a_plate(bump()), pick)
+
+    assert len(full) == count, full
+    assert alone == full
+
+
+def test_a_softly_rounded_side_under_the_share_is_no_side_alone_either(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Gegenrichtung zum Schaber (25.09.2026): weich angeschlossen gilt der Anteil.
+
+    Die Wand des Knopfs geht über eine Rundung R 1 in seine Deckfläche über,
+    keine Naht ist scharf. Unter einem Hundertstel der Haut ist sie keine Seite —
+    am Ausschnitt so wenig wie am ganzen Körper. Der Ausschnitt muss den Fleck
+    dabei gefunden und gefragt haben, sonst prüfte der Test nichts.
+    """
+    from app.core.perceive import features as detection
+
+    asked: list[bool] = []
+    original = detection.curved_sides_standing
+
+    def spy(body: Any, patches: Any) -> list[bool]:
+        answers = original(body, patches)
+        asked.extend(answers)
+        return answers
+
+    full, alone = _full_and_local_sides(
+        _bump_on_a_plate(_softly_rounded_bump()),
+        lambda c, n: (
+            (np.abs(n[:, 2]) < 0.1) & (c[:, 2] > 4.0) & (c[:, 2] < 5.5) & (np.abs(c[:, 0]) < 7.0)
+        ),
+        before_local=lambda: monkeypatch.setattr(detection, "curved_sides_standing", spy),
+    )
+
+    assert full == [] and alone == []
+    assert False in asked, "der Ausschnitt fand keinen gerundeten Fleck, den er verwarf"
+
+
 def test_a_search_region_is_never_welded_again(monkeypatch: pytest.MonkeyPatch) -> None:
     """Der Ausschnitt stammt aus dem verschweißten Körper und bleibt, wie er ist.
 
