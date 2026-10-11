@@ -15,12 +15,18 @@ gefragt wurde — nicht mehr, nicht weniger.
 
 from __future__ import annotations
 
+import dataclasses
+import itertools
+import math
+
 import numpy as np
 import pytest
 
+from app.core.errors import ValidationError
 from app.core.geom.mesh import Mesh, as_mesh_data
 from app.core.knowledge.parts.fasteners import ThreadParams, printed_thread
 from app.core.knowledge.parts.shapes import RIDGE_SHARE
+from app.core.registry.params import validate
 
 #: Wo die Radien gemessen werden: innerhalb der Gewindelänge, abseits der
 #: Endkappen, die auf der Achse sitzen und einen Radius von null meldeten.
@@ -268,6 +274,56 @@ def test_every_thread_path_shares_the_same_limits() -> None:
     smallest = standards.screw(standards.screw_sizes()[0]).nominal
     assert smallest == SMALLEST_THREAD
 
+    # Gänge je Zoll (Review GEW, M4): Null ist die Reihe der Form, darüber dieselben
+    # Grenzen in Zoll — *Schraube erstellen* und Drehdeckel nahmen 0,5 an (50,8 mm).
+    inch = 25.4
+    for params, finest in (
+        (PartThreadParams, FINEST_PITCH),
+        (ThreadedRodParams, FINEST_PITCH),
+        (ExactThreadParams, FINEST_PITCH),
+        (ScrewLidParams, 1.0),
+    ):
+        entry = next(item for item in params.spec() if item.name == "tpi")
+        assert entry.minimum == 0.0 and entry.zero_text is not None, params
+        assert entry.least == pytest.approx(inch / COARSEST_PITCH), params
+        assert entry.maximum == pytest.approx(inch / finest), params
+        with pytest.raises(ValidationError) as caught:
+            validate(params, {"form": "unified", "tpi": 0.5})
+        assert caught.value.constraint == "minimum", params
+        assert caught.value.values["minimum"] == pytest.approx(inch / COARSEST_PITCH)
+        validate(params, {"form": "unified", "tpi": 0.0})
+        validate(params, {"form": "unified", "tpi": inch / COARSEST_PITCH})
+
+
+def test_one_conversion_from_threads_per_inch_serves_every_path() -> None:
+    """Review GEW, M4: Gänge je Zoll werden an einer Stelle zu Millimetern.
+
+    Drei Wege rechneten es selbst, und der Drehdeckel kappte still auf 1 mm. Jetzt
+    rufen Baustein, *Schraube erstellen* und Drehdeckel ``standards.form_pitch``;
+    der Drehdeckel nimmt bei null die Reihe und höchstens seine feinste Steigung,
+    wie sein Feldtext sagt.
+    """
+    from app.core.brep.ops import ThreadParams as ExactThreadParams
+    from app.core.brep.ops import _exact_pitch
+    from app.core.geom.lid import ScrewLidParams, lid_thread
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.fasteners import thread_dims
+
+    assert standards.form_pitch("metric", 0.0, 10.0) is None
+    assert standards.form_pitch("whitworth", 0.0, 20.955) == pytest.approx(25.4 / 14.0)
+    assert standards.form_pitch("unified", 0.0, 6.35) == pytest.approx(25.4 / 20.0)
+    assert standards.form_pitch("unified", 1.27, 6.35) == pytest.approx(20.0)
+    for form, tpi, diameter in (("whitworth", 0.0, 20.955), ("unified", 1.27, 30.0)):
+        expected = standards.form_pitch(form, tpi, diameter)
+        assert thread_dims("custom_size", diameter, form=form, tpi=tpi).pitch == expected
+        exact = validate(ExactThreadParams, {"diameter": diameter, "form": form, "tpi": tpi})
+        assert _exact_pitch(exact) == expected
+        lid = validate(ScrewLidParams, {"form": form, "tpi": tpi})
+        assert lid_thread(lid, diameter)[0] == expected
+    # G1/8 hat 28 Gänge je Zoll, 0,907 mm — der Drehdeckel greift ab 1 mm.
+    lid = validate(ScrewLidParams, {"form": "whitworth", "tpi": 0.0})
+    assert lid_thread(lid, 9.728)[0] == 1.0
+
 
 def test_a_threaded_rod_builds_at_its_shortest_length() -> None:
     """Review G-a: Die Mindestlänge des Bolzens baute nie.
@@ -465,6 +521,7 @@ def test_no_preselected_custom_thread_is_a_standard_size() -> None:
         CUSTOM_SIZE,
         _gripped_up_to,
         size_for_thread,
+        thread_dims,
         thread_measure,
     )
 
@@ -477,7 +534,7 @@ def test_no_preselected_custom_thread_is_a_standard_size() -> None:
         size = chosen.get("size")
         if size is not None and size != CUSTOM_SIZE:
             sized += 1
-            if bore > _gripped_up_to(standards.screw(size)):
+            if bore > _gripped_up_to(thread_dims(size)):
                 loose.append((bore, size))
             continue
         if size is None:
@@ -504,3 +561,665 @@ def test_a_custom_thread_at_a_bore_ends_at_the_shared_limits(bore: float, found:
     from app.core.knowledge.parts.fasteners import custom_thread_for
 
     assert (custom_thread_for(bore) is not None) is found
+
+
+# --- Zoll- und Rohrgewinde (RM-544) -----------------------------------------------
+
+
+def _common_volume(first: object, second: object) -> float:
+    """Das gemeinsame Volumen zweier Körper — am Netz über die Kette, exakt über OCCT."""
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+
+    if isinstance(first, MeshData):
+        return float(
+            boolean("intersection", [first, second], allow_empty=True).mesh.volume  # type: ignore[list-item]
+        )
+    from app.core.brep import edit
+
+    return float(edit.boolean("intersection", [first, second]).volume)
+
+
+def _nut_and_bolt(
+    values: dict[str, object],
+    *,
+    bolt_length: float,
+    nut_length: float,
+    shift: float,
+    kernel: str = "mesh",
+    play: float = 0.2,
+) -> tuple[float, float, float]:
+    """Mutter aus dem Innengewinde und der Bolzen darin — gemeinsames Volumen in und außer Phase.
+
+    Das Werkzeug des Innengewindes liegt unter seiner Mündung bei null und schneidet
+    eine Mutter aus einem Zylinder; der Bolzen rückt um ``shift`` hinein. Beide Gänge
+    beginnen an ihrem unteren Ende bei Winkel null, also liegen sie in Phase, wo
+    ``shift`` und ``-nut_length`` um ganze Steigungen auseinander liegen. Zurück:
+    Überdeckung in Phase, Überdeckung eine halbe Steigung daneben, Fläche der Mutter
+    als Maßstab der Toleranz.
+    """
+    from app.core.knowledge.parts import shapes
+    from app.core.knowledge.parts.build import subtract
+    from app.core.knowledge.parts.fasteners import thread_of
+
+    dims = thread_of(ThreadParams(**values))  # type: ignore[arg-type]
+    with shapes.building(kernel):  # type: ignore[arg-type]
+        bolt = printed_thread(
+            ThreadParams(**values, length=bolt_length, internal=False, play=play)  # type: ignore[arg-type]
+        ).mesh
+        tool = printed_thread(
+            ThreadParams(**values, length=nut_length, internal=True, play=play)  # type: ignore[arg-type]
+        ).mesh
+        block = shapes.moved(shapes.cylinder(dims.nominal + 12.0, nut_length), (0, 0, -nut_length))
+        nut = subtract(block, tool)
+        inside = _common_volume(nut, shapes.moved(bolt, (0.0, 0.0, shift)))
+        beside = _common_volume(nut, shapes.moved(bolt, (0.0, 0.0, shift + dims.pitch / 2.0)))
+    area = float(as_mesh_data(nut).raw.area) if kernel == "mesh" else 0.0
+    return inside, beside, area
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_g_half_inch_pair_interlocks_at_both_kernels(kernel: str) -> None:
+    """Abnahme RM-544: Innen- und Außengewinde G 1/2 greifen, am Netz und exakt.
+
+    In Phase überdecken sie sich nicht — der Bolzen dreht durch die Mutter —, und
+    eine halbe Steigung daneben stecken die Gänge ineinander: Sie greifen, statt
+    aneinander vorbeizurutschen.
+    """
+    from app.core.units import EPS_GEOM
+
+    if kernel == "brep":
+        from tests.helpers import exact_kernel
+
+        exact_kernel()
+    pitch = 25.4 / 14.0
+    length = 6.0 * pitch
+    inside, beside, area = _nut_and_bolt(
+        {"size": "G1/2"}, bolt_length=length, nut_length=length, shift=-length, kernel=kernel
+    )
+    tolerance = EPS_GEOM * area if kernel == "mesh" else 1e-6
+    assert inside <= tolerance, f"G 1/2 überdeckt sich in Phase um {inside} mm³"
+    assert beside > 10.0, f"eine halbe Steigung daneben nur {beside} mm³ — die Gänge greifen nicht"
+
+
+def test_the_whitworth_profile_has_the_measures_of_iso_228() -> None:
+    """Abnahme RM-544: G 1/2 nach ISO 228-1 — Kern, Flanken, Kamm.
+
+    Außen ohne Spiel liegt der Kamm auf d = 20,955, der Grund auf d1 = 18,631; auf
+    dem Flankendurchmesser d2 = 19,793 ist der Gang eine halbe Steigung breit, die
+    Flanken stehen 55° zueinander, und der Kamm ist ein Bogen mit r = 0,137329·P.
+    Die Sollwerte sind die der Norm als Zahl, nicht aus ``standards`` gelesen.
+    """
+    from app.core.knowledge.parts.shapes import ridge_profile
+
+    pitch = 25.4 / 14.0
+    outline = ridge_profile(20.955, pitch, profile="whitworth")
+    radii = [radial for radial, _axial in outline]
+    assert 2.0 * max(radii) == pytest.approx(20.955, abs=0.001)
+    assert 2.0 * min(radii) == pytest.approx(18.631, abs=0.001)
+    # Breite auf dem Flankendurchmesser: die zwei Flanken dort geschnitten.
+    pitch_radius = 19.793 / 2.0
+    crossings = []
+    for (r_a, z_a), (r_b, z_b) in itertools.pairwise(outline):
+        if (r_a - pitch_radius) * (r_b - pitch_radius) < 0.0:
+            crossings.append(z_a + (pitch_radius - r_a) * (z_b - z_a) / (r_b - r_a))
+    assert len(crossings) == 2
+    assert crossings[1] - crossings[0] == pytest.approx(pitch / 2.0, abs=0.002)
+    # Die Flanken: die längste Strecke je Seite steht 27,5° gegen die Senkrechte.
+    segments = list(itertools.pairwise(outline))
+    longest = sorted(segments, key=lambda s: -math.dist(s[0], s[1]))[:2]
+    for (r_a, z_a), (r_b, z_b) in longest:
+        assert math.degrees(math.atan2(abs(z_b - z_a), abs(r_b - r_a))) == pytest.approx(
+            27.5, abs=0.01
+        )
+    # Der Kamm: der Kreis durch drei Kammpunkte hat r = 0,137329·P.
+    top = sorted(outline, key=lambda point: -point[0])[:3]
+    (x1, y1), (x2, y2), (x3, y3) = ((z, r) for r, z in top)
+    d = 2.0 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
+    ux = (
+        (x1**2 + y1**2) * (y2 - y3) + (x2**2 + y2**2) * (y3 - y1) + (x3**2 + y3**2) * (y1 - y2)
+    ) / d
+    uy = (
+        (x1**2 + y1**2) * (x3 - x2) + (x2**2 + y2**2) * (x1 - x3) + (x3**2 + y3**2) * (x2 - x1)
+    ) / d
+    assert math.hypot(x1 - ux, y1 - uy) == pytest.approx(0.137329 * pitch, rel=0.01)
+
+
+def test_a_built_g_half_inch_thread_keeps_its_core_measures() -> None:
+    """Gebaut statt gezeichnet: Kamm und Grund des Bolzens G 1/2 ohne Spiel am Netz."""
+    male, female = _part_pair_radii("G1/2")
+    assert 2.0 * male[1] == pytest.approx(20.955, abs=0.01)
+    assert 2.0 * male[0] == pytest.approx(18.631, abs=0.02)
+    # Das Werkzeug der Mutter beginnt am Grund und reicht bis zum Nennmaß.
+    assert 2.0 * female[0] == pytest.approx(18.631, abs=0.05)
+    assert 2.0 * female[1] == pytest.approx(20.955, abs=0.01)
+
+
+def _part_pair_radii(size: str) -> tuple[tuple[float, float], tuple[float, float]]:
+    male = printed_thread(ThreadParams(size=size, length=12.0, internal=False, play=0.0))
+    female = printed_thread(ThreadParams(size=size, length=12.0, internal=True, play=0.0))
+    return radii(male.mesh), radii(female.mesh)
+
+
+def test_unc_quarter_twenty_meets_asme_b1_1() -> None:
+    """Abnahme RM-544: 1/4-20 UNC gegen ASME B1.1.
+
+    Nennmaß 0,2500 Zoll, 20 Gänge je Zoll; das Grundprofil ist das metrische, und
+    das gedruckte Profil ist es auch: Kamm auf dem Nennmaß, der Grund mit 1,1·P
+    unter ihm und damit unter dem Kerndurchmesser der Mutter D1 = D − 1,082532·P
+    = 0,1959 Zoll — eine Metallmutter stößt mit ihren Kämmen nicht auf.
+    """
+    from app.core.knowledge import standards
+
+    entry = standards.thread_size("1/4-20 UNC")
+    assert entry.nominal == pytest.approx(0.25 * 25.4)
+    assert entry.pitch == pytest.approx(25.4 / 20.0)
+    assert entry.profile == "flat"
+    core, crest = _part_pair_radii("1/4-20 UNC")[0]
+    assert 2.0 * crest == pytest.approx(6.35, abs=0.01)
+    assert 2.0 * core < 0.1959 * 25.4
+    # Der Netzkern reicht um ``BOOLEAN_OVERLAP`` über den Grund (``build.threaded``).
+    assert 2.0 * core == pytest.approx(6.35 - 1.1 * 1.27, abs=0.025)
+    # Basisflankendurchmesser E = D - 0,649519·P = 0,2175 Zoll (ASME B1.1, Tabelle 2A).
+    assert pytest.approx(0.2175, abs=0.0001) == (0.25 - 0.649519 / 20.0)
+
+
+@pytest.mark.parametrize("size", ["R1/2", "1/2-14 NPT"])
+def test_a_tapered_pipe_pair_meets_at_its_gauge_plane(size: str) -> None:
+    """Stufe 2: Ein kegeliges Außengewinde trifft das Innengewinde in der Bezugsebene.
+
+    Außen liegt die Bezugsebene ``gauge`` vor der Spitze, innen an der Mündung.
+    Der Bolzen steht auf seiner Fläche mit der Spitze nach oben; umgedreht und von
+    Hand eingeschraubt, bis seine Bezugsebene in der Mündung liegt, steckt er
+    ``gauge`` tief. Gedreht um die Achse — dieselbe Lage der Gänge wie beim
+    Schrauben — gibt es eine Stellung ohne Überdeckung, und in einer anderen
+    stecken die Gänge ineinander: Das Paar greift über die ganze Einschraubtiefe.
+    """
+    from app.core.geom.boolean import boolean
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts import shapes
+    from app.core.knowledge.parts.build import subtract
+    from app.core.units import EPS_GEOM
+
+    entry = standards.thread_size(size)
+    bolt_length, nut_length = 12.0, 14.0
+    bolt = printed_thread(
+        ThreadParams(size=size, length=bolt_length, internal=False, play=0.2)
+    ).mesh
+    tool = printed_thread(ThreadParams(size=size, length=nut_length, internal=True, play=0.2)).mesh
+    block = shapes.moved(shapes.cylinder(entry.nominal + 12.0, nut_length), (0, 0, -nut_length))
+    nut = subtract(block, tool)
+    # Umgedreht liegt die Bezugsebene bei -(Länge - gauge); in die Mündung gerückt.
+    flipped = shapes.moved(
+        shapes.turned(bolt, 180.0, (1.0, 0.0, 0.0)), (0.0, 0.0, bolt_length - entry.gauge)
+    )
+    common = [
+        boolean(
+            "intersection",
+            [nut, shapes.turned(flipped, float(angle), (0.0, 0.0, 1.0))],  # type: ignore[list-item]
+            allow_empty=True,
+        ).mesh.volume
+        for angle in range(0, 360, 10)
+    ]
+    area = float(as_mesh_data(nut).raw.area)
+    assert min(common) <= EPS_GEOM * area, f"{size}: keine Stellung ohne Überdeckung, {common}"
+    assert max(common) > 5.0, f"{size}: die Gänge greifen nicht ineinander, {common}"
+
+
+def test_a_tapered_thread_narrows_towards_its_tip_and_its_mouth_is_widest() -> None:
+    """R 1/2: außen zur Spitze enger, innen zur Tiefe — 1:16 auf den Durchmesser."""
+    from app.core.knowledge.parts.fasteners import printed_thread as build
+
+    male = as_mesh_data(build(ThreadParams(size="R1/2", length=16.0, play=0.0)).mesh)
+    points = np.asarray(male.raw.vertices)
+    radial = np.hypot(points[:, 0], points[:, 1])
+    low = radial[points[:, 2] < 2.0].max()
+    high = radial[points[:, 2] > 14.0].max()
+    assert low - high == pytest.approx(14.0 / 32.0, abs=0.06), "außen 1:16 enger nach oben"
+    hole = as_mesh_data(build(ThreadParams(size="R1/2", length=16.0, play=0.0, internal=True)).mesh)
+    points = np.asarray(hole.raw.vertices)
+    radial = np.hypot(points[:, 0], points[:, 1])
+    mouth = radial[points[:, 2] > -2.0].max()
+    deep = radial[points[:, 2] < -14.0].max()
+    assert mouth > deep, "innen an der Mündung am weitesten"
+    assert 2.0 * mouth == pytest.approx(20.955, abs=0.05), "an der Mündung das Nennmaß"
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"size": "M10", "left_hand": True},
+        {"size": "G1/2", "left_hand": True},
+        {"size": "custom_size", "diameter": 24.0, "pitch": 2.0, "starts": 3},
+        {"size": "custom_size", "diameter": 30.0, "form": "whitworth", "tpi": 11.0},
+        {"size": "custom_size", "diameter": 30.0, "form": "unified", "tpi": 12.0, "starts": 2},
+    ],
+    ids=["M10-links", "G-links", "dreigaengig", "whitworth-eigen", "unified-zweigaengig"],
+)
+def test_left_hand_multi_start_and_own_inch_pairs_interlock(values: dict[str, object]) -> None:
+    """Stufe 2 und das eigene Maß in Zoll: jedes Paar greift wie das metrische."""
+    from app.core.knowledge.parts.fasteners import thread_of
+    from app.core.units import EPS_GEOM
+
+    pitch = thread_of(ThreadParams(**values)).pitch  # type: ignore[arg-type]
+    length = 6.0 * pitch
+    inside, beside, area = _nut_and_bolt(
+        values, bolt_length=length, nut_length=length, shift=-length
+    )
+    assert inside <= EPS_GEOM * area, f"{values}: in Phase {inside} mm³"
+    assert beside > 1.0, f"{values}: eine halbe Steigung daneben nur {beside} mm³"
+
+
+def test_a_left_hand_bolt_does_not_fit_a_right_hand_nut() -> None:
+    """Gegenprobe zum Linksgewinde: Es ist wirklich gespiegelt, nicht nur benannt."""
+    from app.core.geom.boolean import boolean
+    from app.core.knowledge.parts import shapes
+    from app.core.knowledge.parts.build import subtract
+
+    length = 6.0 * 1.5
+    bolt = printed_thread(
+        ThreadParams(size="M10", length=length, internal=False, play=0.2, left_hand=True)
+    ).mesh
+    tool = printed_thread(ThreadParams(size="M10", length=length, internal=True, play=0.2)).mesh
+    block = shapes.moved(shapes.cylinder(22.0, length), (0.0, 0.0, -length))
+    nut = subtract(block, tool)
+    placed = shapes.moved(bolt, (0.0, 0.0, -length))
+    common = boolean("intersection", [nut, placed], allow_empty=True).mesh  # type: ignore[list-item]
+    assert common.volume > 5.0, "ein Linksbolzen ginge glatt in eine Rechtsmutter"
+
+
+def _mirror_problem_at(spec_params: object, build: object, values: dict[str, object]) -> object:
+    """Die Spiegelprüfung einer Ecke, wie der Bereichstest sie fährt (``range_check``)."""
+    from app.core.knowledge.parts.range_check import _mirror_problem
+
+    made = build(spec_params(**values))  # type: ignore[operator]
+    return _mirror_problem(
+        spec_params,  # type: ignore[arg-type]
+        build,
+        values,
+        "left_hand",
+        made,
+        as_mesh_data(made.mesh),
+    )
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"size": "M6"},
+        {"size": "G1/2", "length": 30.0},
+        {"size": "R1/2", "length": 20.0, "internal": True},
+        {"size": "1/4-20 UNC"},
+    ],
+    ids=["M6", "G1/2", "R1/2-innen", "UNC"],
+)
+def test_a_left_hand_thread_is_the_mirror_of_the_right_hand_one(values: dict[str, object]) -> None:
+    """Was ``mirrored_by`` dem Bereichstest verspricht, am Baustein gemessen — je Ecke.
+
+    G 1/2 trianguliert gespiegelt mit einer Ecke mehr; die Flächen liegen trotzdem
+    aufeinander, und genau das prüft der Vergleich.
+    """
+    from app.core.knowledge.parts import PARTS
+
+    for name in ("printed_thread", "printed_screw", "printed_nut", "threaded_rod"):
+        assert PARTS.get(name).mirrored_by == "left_hand"
+    spec = PARTS.get("printed_thread")
+    assert _mirror_problem_at(spec.params, spec.fn, {**values, "play": 0.2}) is None
+
+
+def test_the_mirror_check_finds_a_switch_that_does_more_than_mirror() -> None:
+    """Gegenprobe zur Spiegelprüfung: Ein Schalter, der das Maß ändert, fällt auf."""
+
+    def wrong(raw: ThreadParams) -> object:
+        return printed_thread(
+            ThreadParams(size="M8" if raw.left_hand else "M6", length=raw.length, play=raw.play)
+        )
+
+    assert _mirror_problem_at(ThreadParams, wrong, {"size": "M6"}) is not None
+
+
+def test_the_mirror_check_finds_a_turn_that_keeps_volume_and_hull() -> None:
+    """Gegenprobe: Ein um 180° gedrehtes Rechtsgewinde hat Volumen und Hülle des Spiegelbilds.
+
+    Die Prüfung vor RM-544 verglich nur diese zwei Zahlen und hätte es als
+    Linksgewinde durchgelassen; der Flächenvergleich sieht den falschen Drehsinn.
+    """
+    from app.core.knowledge.parts import shapes
+
+    def turned(raw: ThreadParams) -> object:
+        made = printed_thread(ThreadParams(size="M6", length=raw.length, play=raw.play))
+        if not raw.left_hand:
+            return made
+        return dataclasses.replace(made, mesh=shapes.turned(made.mesh, 180.0, (0.0, 0.0, 1.0)))
+
+    assert _mirror_problem_at(ThreadParams, turned, {"size": "M6"}) is not None
+
+
+def _left_with_a_shifted_crest(shift: float) -> object:
+    """Links das Spiegelbild, dessen äußerste Ecke um ``shift`` nach außen gerückt ist."""
+    from app.core.geom.mesh import MeshData
+
+    def build(raw: ThreadParams) -> object:
+        made = printed_thread(ThreadParams(size="M6", length=raw.length, play=raw.play))
+        if not raw.left_hand:
+            return made
+        body = as_mesh_data(made.mesh).raw.copy()
+        points = np.asarray(body.vertices, dtype=np.float64) * np.array([1.0, -1.0, 1.0])
+        radius = np.hypot(points[:, 0], points[:, 1])
+        index = int(np.argmax(radius))
+        points[index, :2] *= (radius[index] + shift) / radius[index]
+        body.vertices = points
+        body.faces = np.ascontiguousarray(np.asarray(body.faces)[:, ::-1])
+        return dataclasses.replace(made, mesh=MeshData.of(body))
+
+    return build
+
+
+@pytest.mark.parametrize(("shift", "passes"), [(0.001, True), (0.01, False)])
+def test_a_mirror_apart_by_less_than_the_print_limit_passes(shift: float, passes: bool) -> None:
+    """Eine Naht, die die Vereinigung links anders auflöst, ist kein falscher Drehsinn.
+
+    Am Bolzen Ø 1000 lag eine Ecke 0,32 µm neben der gespiegelten Fläche, bei 20-8 NPT
+    0,019 µm, und die Schranke von 10⁻⁵ mm nannte beides einen Schalter, der mehr tut
+    als spiegeln (Bereichsnachweis RM-544). Unter der Druckgrenze besteht es, darüber
+    nicht.
+    """
+    from app.core.units import PRINT_LIMIT
+
+    assert (shift < PRINT_LIMIT) is passes
+    problem = _mirror_problem_at(ThreadParams, _left_with_a_shifted_crest(shift), {"size": "M6"})
+    assert (problem is None) is passes, problem
+
+
+def test_a_mirror_apart_under_the_print_limit_checks_itself(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Anders trianguliert folgt Dichtheit und Schnittfreiheit nicht mehr aus der Deckung.
+
+    Die andere Stellung prüft sich dann selbst; eine Selbstdurchdringung dort ist ein Bruch.
+    """
+    from app.core.knowledge.parts import range_check
+
+    asked: list[object] = []
+
+    def crossing(mesh: object, cancelled: object = None) -> bool:
+        asked.append(mesh)
+        return True
+
+    monkeypatch.setattr(range_check, "has_self_intersections", crossing)
+    problem = _mirror_problem_at(ThreadParams, _left_with_a_shifted_crest(0.001), {"size": "M6"})
+    assert problem is not None and len(asked) == 1
+
+
+def test_a_tapered_stud_has_no_shank_facet_folded_into_itself() -> None:
+    """Der Schaft fiel mit dem Kamm des Kegelgewindes zusammen (Bereichsnachweis RM-544).
+
+    Bei 1/2-14 NPT, 150 mm lang mit 65 mm Gewinde je Ende, schnitten sich zwei
+    Schaftdreiecke; am alten Stand rot. Der Schaft bleibt jetzt knapp unter dem Kamm.
+    """
+    from app.core.knowledge.parts.fasteners import ThreadedRodParams, threaded_rod
+    from app.core.knowledge.parts.range_check import has_self_intersections
+
+    params = ThreadedRodParams(size="1/2-14 NPT", length=150.0, thread_length=65.0, play=0.2)
+    body = as_mesh_data(threaded_rod(params).mesh)
+    assert body.is_watertight and not has_self_intersections(body)
+
+
+def test_the_range_check_mirrors_every_corner_not_only_the_default() -> None:
+    """Ein Schalter, der nur an einer Ecke mehr tut als spiegeln, fällt an genau dieser auf.
+
+    Vorher baute der Bereichstest die andere Stellung nur an der Vorgabe des
+    Bausteins; eine Ecke am Rand des Bereichs blieb ungeprüft.
+    """
+    from app.core.knowledge.parts import range_check
+    from app.core.knowledge.profiles import make_profile
+    from app.core.registry import op_params, param
+    from app.core.types import BaseParams
+    from app.i18n import _
+
+    @op_params
+    class SmallParams(BaseParams):
+        length: float = param(title=_("Länge"), default=6.0, unit="mm", minimum=6.0, maximum=10.0)
+        left_hand: bool = param(title=_("Linksgewinde"), default=False)
+
+    def sometimes(raw: SmallParams) -> object:
+        size = "M8" if raw.left_hand and raw.length > 9.0 else "M6"
+        return printed_thread(
+            ThreadParams(size=size, length=raw.length, left_hand=raw.left_hand, play=0.2)
+        )
+
+    report = range_check.check(
+        SmallParams,
+        sometimes,
+        make_profile(),
+        wall=range_check.WallRequirement.not_applicable("Gegenprobe der Spiegelprüfung."),
+        mirrored_by="left_hand",
+    )
+    assert report.checked == 2
+    broken = [failure.values for failure in report.failures]
+    assert broken == [{"length": 10.0, "left_hand": False}]
+
+
+def test_a_pipe_bore_is_recognised_as_its_pipe_thread() -> None:
+    """Erkennung RM-544: Die Bohrung eines Rohrs mit 18,7 mm ist das Kernloch eines G 1/2.
+
+    Metrisch passt dort nur ein eigenes Maß; die Normgröße ist vorgewählt, und der
+    Satz über dem Dialog nennt das metrische Maß daneben. Wer die Reihe G
+    ausblendet, bekommt sie nicht vorgeschlagen.
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE, size_for_thread, thread_advice
+
+    assert size_for_thread(18.7) == {"size": "G1/2", "internal": True}
+    said = str(thread_advice(18.7))
+    assert "G1/2" in said and "metrisch nur ein eigenes" in said, said
+    before = standards.shown_thread_families()
+    try:
+        standards.set_shown_thread_families(("metric", "UNC", "UNF"))
+        assert size_for_thread(18.7)["size"] == CUSTOM_SIZE
+        assert "G1/2" not in str(thread_advice(18.7))
+    finally:
+        standards.set_shown_thread_families(before)
+
+
+def test_a_bore_between_two_series_names_both_and_preselects_metric() -> None:
+    """Regel 21 an der Bohrung: Passen Größen zweier Reihen, nennt der Satz beide.
+
+    Eine M16 an ihrem gedruckten Gangfuß ist zugleich das Kernloch einer 5/8-11 UNC;
+    vorgewählt bleibt die metrische Größe, wie vor RM-544, und die andere steht im Satz.
+    """
+    from app.core.knowledge.parts.fasteners import size_for_thread, thread_advice
+
+    bore = 16.0 - 1.1 * 2.0 + 0.05
+    chosen = size_for_thread(bore)
+    said = str(thread_advice(bore))
+    assert chosen["size"] == "M16"
+    assert "M16" in said and "UNC" in said and "vorgewählt ist M16" in said, said
+
+
+def test_only_metric_shown_keeps_the_old_preselection() -> None:
+    """Mit metrisch allein in den Listen wählt die Bohrung wie vor RM-544."""
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE, size_for_thread
+
+    before = standards.shown_thread_families()
+    try:
+        standards.set_shown_thread_families(("metric",))
+        assert size_for_thread(6.5)["size"] == CUSTOM_SIZE
+        assert size_for_thread(5.0)["size"] == "M6"
+    finally:
+        standards.set_shown_thread_families(before)
+
+
+def test_an_empty_choice_of_series_shows_them_all() -> None:
+    """Ohne Reihe gäbe es kein Gewinde; eine leere oder unbekannte Wahl zeigt alle."""
+    from app.core.knowledge import standards
+
+    before = standards.shown_thread_families()
+    try:
+        standards.set_shown_thread_families(())
+        assert standards.shown_thread_families() == standards.THREAD_FAMILIES
+        standards.set_shown_thread_families(("G", "Unsinn"))
+        assert standards.shown_thread_families() == ("G",)
+    finally:
+        standards.set_shown_thread_families(before)
+
+
+def test_a_thread_both_large_and_fine_is_refused_before_it_builds() -> None:
+    """Groß, fein und lang zugleich wird das Netz unberechenbar groß — die Absage mit Weg.
+
+    Seit den Gängen je Zoll ist das feine Ende eine Ecke des Bereichs: Ø 1000 mit
+    101,6 Gängen je Zoll über 200 mm wären 192 000 Stationen ohne Abbruch.
+    """
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts.fasteners import _thread_reason
+
+    values = ThreadParams(
+        size="custom_size", diameter=1000.0, form="whitworth", tpi=101.6, length=200.0
+    )
+    assert _thread_reason(values) is not None
+    with pytest.raises(ValidationError) as caught:
+        printed_thread(values)
+    assert caught.value.constraint == "too_fine_for_its_size"
+    assert caught.value.field == "length"
+    # Dieselbe Größe mit den Gängen ihrer Reihe baut, und bis 72 mm auch so fein.
+    assert _thread_reason(ThreadParams(size="custom_size", diameter=1000.0, length=200.0)) is None
+    assert (
+        _thread_reason(
+            ThreadParams(
+                size="custom_size", diameter=1000.0, form="whitworth", tpi=101.6, length=72.0
+            )
+        )
+        is None
+    )
+
+
+def test_the_mesh_budget_takes_no_flat_thread_away() -> None:
+    """Was vor RM-544 baute, baut weiter: Ø 1000 metrisch mit der feinsten Steigung über 200 mm.
+
+    Das Netzbudget kam mit dem Whitworth-Profil und seinen elf Punkten je Station.
+    In seiner ersten Fassung (2 hoch 16 Stationen) lehnte es auch flache Gewinde ab,
+    die vorher gebaut wurden — Ø 100 unter 0,3 mm Steigung über 200 mm. Das Budget
+    ist jetzt das größte flache Gewinde, das es gab.
+    """
+    from app.core.knowledge.parts.fasteners import (
+        LONGEST_PRINTED_THREAD,
+        PrintedScrewParams,
+        ThreadedRodParams,
+        _fastener_reason,
+        _rod_reason,
+        _thread_reason,
+    )
+    from app.core.units import FINEST_PITCH, LARGEST_THREAD
+
+    widest = {"size": "custom_size", "diameter": LARGEST_THREAD, "pitch": FINEST_PITCH}
+    longest = LONGEST_PRINTED_THREAD
+    assert _thread_reason(ThreadParams(**widest, length=longest)) is None
+    assert _thread_reason(ThreadParams(**widest, length=longest, internal=True)) is None
+    assert _fastener_reason(PrintedScrewParams(**widest, length=longest)) is None
+    assert _rod_reason(ThreadedRodParams(**widest, length=longest)) is None
+    # Unified hat dasselbe flache Profil: 101,6 Gänge je Zoll sind 0,25 mm.
+    assert (
+        _thread_reason(
+            ThreadParams(
+                size="custom_size",
+                diameter=LARGEST_THREAD,
+                form="unified",
+                tpi=101.6,
+                length=longest,
+            )
+        )
+        is None
+    )
+
+
+def test_a_deep_tapered_internal_thread_is_refused_at_its_length() -> None:
+    """R 1/16 innen über 200 mm würde in der Tiefe enger als jeder Kern: Absage an der Länge."""
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as caught:
+        printed_thread(ThreadParams(size="R1/16", length=200.0, internal=True))
+    assert caught.value.field == "length"
+    assert caught.value.constraint == "taper_too_deep"
+
+
+def test_a_tapered_thread_without_the_exact_kernel_says_so(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review GEW, G4: Ohne exakten Kern verzog der Netzweg einen Zylinder zum Kegel.
+
+    Sein eigener Kommentar sagte, dass das an R 1/4 × 150 mm die Stirnflächen
+    faltet; wer aus einem Quellklon ohne Extra baute, bekam still ein Netz mit
+    Selbstdurchdringung. Jetzt nennt die Absage des Kerns den Weg, ein
+    zylindrisches Gewinde baut weiter am Netz.
+    """
+    from app.core.brep import kernel
+
+    monkeypatch.setattr(kernel, "available", lambda: False)
+    with pytest.raises(kernel.BRepUnavailable) as caught:
+        printed_thread(ThreadParams(size="R1/4", length=12.0))
+    assert caught.value.suggestions
+    assert as_mesh_data(printed_thread(ThreadParams(size="G1/4", length=12.0)).mesh).is_watertight
+
+
+def test_an_own_inch_thread_at_a_bore_takes_the_series_of_its_form() -> None:
+    """Das eigene Maß in Whitworth- oder Unified-Form, dessen Kernloch die Bohrung ist."""
+    from app.core.knowledge.parts.fasteners import custom_thread_for
+    from app.core.knowledge.parts.shapes import NPT_DEPTH, RIDGE_SHARE, WHITWORTH_DEPTH
+
+    nominal, pitch = custom_thread_for(40.0, "whitworth")  # type: ignore[misc]
+    assert pitch == pytest.approx(25.4 / 11.0), "die Reihe G hat ab G 1 elf Gänge je Zoll"
+    assert nominal - 2.0 * WHITWORTH_DEPTH * pitch == pytest.approx(40.0)
+    nominal, pitch = custom_thread_for(40.0, "unified")  # type: ignore[misc]
+    assert pitch == pytest.approx(25.4 / 5.0), "die Reihe UNC hat bei Ø 44,45 fünf Gänge je Zoll"
+    assert nominal - 2.0 * RIDGE_SHARE * pitch == pytest.approx(40.0)
+    assert pytest.approx(0.640327, abs=1e-6) == WHITWORTH_DEPTH
+    assert pytest.approx(0.8) == NPT_DEPTH
+
+
+@pytest.mark.parametrize(
+    ("values", "pitch", "handedness"),
+    [
+        ({"diameter": 20.955, "form": "whitworth", "tpi": 14.0}, 25.4 / 14.0, "right"),
+        ({"diameter": 6.35, "form": "unified", "tpi": 0.0}, 25.4 / 20.0, "right"),
+        ({"diameter": 10.0, "pitch": 1.5, "starts": 2, "left_hand": True}, 1.5, "left"),
+    ],
+    ids=["whitworth", "unc-automatisch", "zweigaengig-links"],
+)
+def test_create_screw_takes_inch_forms_starts_and_left_hand(
+    values: dict[str, object], pitch: float, handedness: str
+) -> None:
+    """*Schraube erstellen* (RM-544): Gänge je Zoll, Whitworth-Profil, Gangzahl, Linksgewinde.
+
+    Null Gänge je Zoll nimmt die Reihe der Gewindeform — Ø 6,35 Unified ist 1/4-20 UNC.
+    Der Körper ist geschlossen, und das Merkmal nennt, was gebaut ist.
+    """
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    load_operations()
+    spec = REGISTRY.get("thread_exact")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={}),
+            inputs=[],
+            params=spec.params(length=10.0, **values),
+            profile=None,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    (body,) = result.outputs
+    assert body.mesh.is_closed and body.mesh.solid_count == 1
+    (thread,) = [entry for entry in body.features.values() if entry.kind == "thread"]
+    assert thread.params["pitch"] == pytest.approx(pitch)
+    assert thread.params["handedness"] == handedness
+    assert int(thread.params.get("starts", 1)) == int(values.get("starts", 1))  # type: ignore[call-overload]

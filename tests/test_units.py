@@ -457,6 +457,78 @@ def test_exact_cos_and_sin_agree_with_the_library() -> None:
         assert abs(exact_sin(angle) - math.sin(angle)) < 1e-15, f"sin bei {angle}"
 
 
+def _angles_of_every_kind() -> list[float]:
+    """Winkel, wie ein Gewinde sie stellt, dazu Zufall, Achsnähe, Vorzeichen und Rand."""
+    import random
+
+    rng = random.Random(544)
+    stations = 801 * 48
+    turns = 2.0 * math.pi * 801
+    angles = [turns * index / stations for index in range(0, stations + 1, 7)]
+    angles += [rng.uniform(0.0, 6000.0) for _ in range(4000)]
+    angles += [rng.uniform(-50.0, 50.0) for _ in range(2000)]
+    # Nahe einer Achse ist ein Wert winzig und die Rundung am engsten.
+    near = [index * math.pi / 2.0 for index in range(-8, 4000, 37)]
+    angles += near + [math.nextafter(angle, math.inf) for angle in near]
+    # Null, winzig und sehr groß: der Rückfall über die Reihe.
+    angles += [0.0, -0.0, 1e-300, 5e-324, 1e7, -1e7, 3e9]
+    return angles
+
+
+def test_many_angles_at_once_are_the_bits_of_one_at_a_time() -> None:
+    """``exact_cos_sin_array`` gibt Bit für Bit, was ``exact_cos``/``exact_sin`` geben.
+
+    Der Gang eines Gewindes (``shapes.thread_body``) rechnet damit alle Stationen
+    auf einmal; sein Netz darf sich dadurch um kein Bit ändern.
+    """
+    import numpy as np
+
+    from app.core.units import exact_cos, exact_cos_sin_array, exact_sin
+
+    angles = _angles_of_every_kind()
+    cos, sin = exact_cos_sin_array(np.array(angles))
+    expected_cos = np.array([exact_cos(angle) for angle in angles])
+    expected_sin = np.array([exact_sin(angle) for angle in angles])
+    assert cos.dtype == np.float64 and sin.dtype == np.float64
+    differing = np.flatnonzero(
+        (cos.view(np.int64) != expected_cos.view(np.int64))
+        | (sin.view(np.int64) != expected_sin.view(np.int64))
+    )
+    assert differing.size == 0, [angles[index] for index in differing[:5]]
+
+
+def test_the_series_answers_only_where_the_rounding_is_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gezählt, nicht gemessen: Die Reihe rechnet nur, wo die Schranke die Mitte berührt.
+
+    Gegenprobe zum Rückfall: Mit einer Schranke, die jede Rundung unsicher nennt,
+    rechnet jeder Winkel über die Reihe — und die Bits bleiben dieselben.
+    """
+    import numpy as np
+
+    from app.core import units
+
+    original = units._exact_pair
+    asked: list[float] = []
+
+    def counted(angle: float) -> tuple[float, float]:
+        asked.append(angle)
+        return original(angle)
+
+    angles = np.linspace(0.0, 2.0 * math.pi * 200, 200 * 96 + 1)
+    fast = units.exact_cos_sin_array(angles)
+    monkeypatch.setattr(units, "_exact_pair", counted)
+    units.exact_cos_sin_array(angles)
+    # Null fragt immer die Reihe; sonst nur Winkel, deren Wert an einer Mitte liegt.
+    assert 1 <= len(asked) <= angles.size // 1000, len(asked)
+    asked.clear()
+    monkeypatch.setattr(units, "_ROUNDING_DOUBT", 1.0)
+    slow = units.exact_cos_sin_array(angles)
+    assert len(asked) == angles.size
+    assert fast[0].tobytes() == slow[0].tobytes() and fast[1].tobytes() == slow[1].tobytes()
+
+
 def test_the_exact_arctangent_agrees_with_the_library_and_hits_its_marks() -> None:
     """Der Arkustangens rechnet über die Reihe und nicht mit ``math.atan``
     (RM-187): PrusaSlicers automatische Stützschwelle entscheidet in der

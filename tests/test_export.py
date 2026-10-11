@@ -4669,7 +4669,7 @@ def test_the_importable_profile_keeps_surface_and_ironing_at_the_surface_speed(
     settings = print_settings.resolve(profile)
     settings = replace(
         settings,
-        shell=replace(settings.shell, top_layers=top_layers, ironing=True),
+        shell=replace(settings.shell, top_layers=top_layers, ironing="top_surfaces"),
         speed=replace(settings.speed, infill=73.0, top_surface=30.0),
     )
     model = tmp_path / "pilz.stl"
@@ -5196,6 +5196,50 @@ def test_prusaslicer_gets_the_blocker_as_a_range_of_the_mesh(
     assert '<metadata name="slic3rpe:Version3mf">1</metadata>' in model
     read_back = threemf_reader.read_objects(written.read_bytes(), [])
     assert [part.mesh.triangle_count for part in read_back] == [triangles]
+
+
+@pytest.mark.parametrize(
+    ("flavour", "member", "key"),
+    [
+        ("orca", "Metadata/model_settings.config", "support_style"),
+        ("prusa", "Metadata/Slic3r_PE_model.config", "support_material_style"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("style", "blocked", "snug"),
+    [("grid", True, True), ("grid", False, False), ("tree", True, False)],
+)
+def test_grid_support_beside_a_blocker_hugs_the_overhang(
+    tmp_path: Path,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    member: str,
+    key: str,
+    style: str,
+    blocked: bool,
+    snug: bool,
+) -> None:
+    """Die Sperre nimmt in der Orca-Familie und in PrusaSlicer nur die
+    Überhangfläche in ihr aus; im Gitterstil liegt jede Säule auf einem Raster
+    und wird danach nur am Modell zugeschnitten. Am Becher mit Deckel liefen die
+    Säulen unter dem Deckel so 1,1 mm in die Mündungen des gesperrten Tunnels
+    (ElegooSlicer: 1,08 m, mit ``snug`` 0,01 m). Ein Teil mit Sperre bekommt
+    deshalb ``snug``; ohne Sperre und unter Bäumen bleibt der Stil des
+    Herstellers. Der Druckdialog zeigt weiter „Gitter“ — ein Befund sagt, warum
+    die Datei ``snug`` trägt (Review rvtun, Fund 5)."""
+    entry = scene_object(mesh=tunnel_block())
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", style)
+    settings = print_settings.with_path(settings, "support.block_channels", blocked)
+
+    written, findings = write_assembly(
+        [entry], tmp_path, project_name="t", profile=profile, settings=settings, flavour=flavour
+    )
+
+    assert ("export.support_blocker" in {finding.code for finding in findings}) is blocked
+    [values] = object_values(written, member).values()
+    assert values.get(key) == ("snug" if snug else None)
+    said = [finding for finding in findings if finding.code == "export.snug_support"]
+    assert [finding.object_id for finding in said] == ([entry.id] if snug else [])
 
 
 @pytest.mark.parametrize("flavour", ["orca", "cura"])

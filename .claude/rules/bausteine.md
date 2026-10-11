@@ -262,7 +262,10 @@ benannte Ausnahmen sind der Drehdeckel (Steigung ab 1 mm, Hals null heißt
 automatisch). `test_every_thread_path_shares_the_same_limits` hält das. Am
 Netz kommen die Sehnen je Umlauf aus
 `shapes.turn_segments` (Drehdeckel: `lid.turn_sections`); eine eigene Zahl
-dafür ist ein Zwilling. Der Netzkern überdeckt den Gang auch in der
+dafür ist ein Zwilling, auch an Schaft und Kuppen daneben
+(`fasteners._rod_segments`: 48 Sehnen lagen bei Ø 1000 um 1 mm innen). Ein
+glatter Schaft bleibt um `BOOLEAN_OVERLAP` unter dem Kamm, statt mit ihm
+zusammenzufallen (sonst faltet die Vereinigung eine Facette). Der Netzkern überdeckt den Gang auch in der
 Sehnenmitte um `BOOLEAN_OVERLAP` (`build._core_segments`), und der Gang läuft
 über ganze Umläufe, bevor der Schnittzylinder kürzt; sonst bleiben ab M12
 Splitter im Gang, und Schraube und Mutter überdecken sich. Wo ein Bau ablehnt,
@@ -276,6 +279,40 @@ Befunde können zugleich gelten, und ihr Knopf öffnet das Feld, das das Maß
 trägt. Am Endstand misst die Auswertung die Wand wie um jede Bohrung
 (`relations._measured` liest `length`, `is_a_cavity` liest `internal`; ein
 Außengewinde zählt mit seinem Kern, nicht mit der Spitze des Gangs).
+
+**Zoll, Rohr, links, mehrgängig und kegelig sind dasselbe Gewinde** (RM-544):
+Profil, Gangzahl, Drehsinn und Kegel reisen von der Tabelle (`thread_dims`)
+über `build.threaded` bis ins Merkmal, und jeder Weg, der ein Gewinde liest —
+Gegenstück, Stift, *Merkmal ändern*, *Entfernen* —, behält sie, statt
+abzusagen oder still rechts und eingängig zu schneiden. Das Netzbudget
+`MOST_THREAD_POINTS` ist das größte flache Gewinde, das es vorher gab: Es
+nimmt keinem metrischen, Unified- oder NPT-Gewinde etwas und begrenzt nur das
+Whitworth-Profil mit seinen elf Punkten je Station (ab 9,9 mm Steigung mehr,
+`shapes.whitworth_splits`: auch seine Bögen halten `MAX_FACET_SAG`). **Gefragt wird, wo die
+Messung nicht trennt**: Passt ein Gewinde zu Größen zweier Reihen, entscheidet
+seine eigene Genauigkeit (`counterpart._told_apart` — erzeugt genau,
+gemessen mit `uncertainty`); bleibt mehr als eine, `AMBIGUOUS_THREAD`. Die
+gezeigten Reihen der Einstellung reicht nur ein Ablauf der Oberfläche durch
+(`families`), der die Größe speichert; eine Op sucht unter allen und fragt.
+Gänge je Zoll werden nur in `standards.form_pitch` zu Millimetern, und ihr
+Feld trägt die gröbste Steigung als `least` (Null heißt die Reihe).
+
+**Ein Kegel misst in seiner Bezugsebene**: Das Merkmal nennt Maß und Nennmaß
+in der Mitte und dazu `gauge_nominal`, nach *Merkmal ändern* `gauge_offset`;
+Gegenstück, Passung und Kopplung rechnen über `types.thread_at_gauge`. Ohne bekannte Bezugsebene sucht das
+Gegenstück über die halbe Länge, und die Passung sagt „nicht messbar“, statt
+Mitte gegen Mitte zu vergleichen. Am Netz baut `build.threaded` den Kegel
+genäht und vernetzt — plattformgleich nur so weit wie die Tessellierung von
+OCCT —, ohne exakten Kern sagt er ab; `exact.py` und `brep/profiles.py`
+stehen deshalb im Abdruck jedes Bausteins.
+
+**Ein Spiegelschalter zählt keine Ecken, aber jede Ecke belegt ihn**
+(`PartSpec.mirrored_by`): Der Bereichstest baut an jeder Ecke auch die andere
+Stellung und verlangt das Spiegelbild — Dreieck für Dreieck oder jede Ecke
+höchstens `PRINT_LIMIT` neben der gespiegelten Fläche, dann prüft die andere
+Stellung Dichtheit und Selbstdurchdringung selbst; dazu Volumen und Merkmale.
+Volumen und Hülle allein ließen ein um 180° gedrehtes Rechtsgewinde als
+Linksgewinde durch.
 
 **Eine Schraube endet auch nicht an der Tabelle.** Schraubenloch,
 Mutternfalle, Schraube und Mutter nehmen `CUSTOM_SIZE` mit Nenndurchmesser;

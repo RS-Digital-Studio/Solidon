@@ -127,6 +127,9 @@ class ClearFilamentParams(BaseParams):
 
 @register_op(
     name="clear_filament",
+    # 2: Ein erzeugtes Gewinde nimmt Profil und Kegel aus dem Merkmal, am Kegel bis zum
+    # weiten Ende (Nachprüfung GEW, N1).
+    cache_version="2",
     title=_("Filament entfernen"),
     category="colour",
     params=ClearFilamentParams,

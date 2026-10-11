@@ -2065,7 +2065,8 @@ def test_a_boolean_keeps_the_layout_of_every_triangle_it_did_not_cut() -> None:
     Reihenfolge der Ecken; nach der ersten Booleschen las sie deshalb jeden
     Fleck mit anderen letzten Stellen. Der Eingang hier ist absichtlich
     durcheinander nummeriert und gedreht — so, wie ihn der Kern nie liefern
-    würde. Die Dreiecksfolge und die Geometrie bleiben die des Kerns.
+    würde. Die Plätze und die Geometrie bleiben die des Kerns; die übernommenen
+    Dreiecke besetzen ihre Plätze in der Folge des Eingangs (RM-592).
     """
     from app.core.geom import attributes
     from app.core.geom.boolean import _run_stage
@@ -2085,15 +2086,18 @@ def test_a_boolean_keeps_the_layout_of_every_triangle_it_did_not_cut() -> None:
     cut = boolean("difference", [source, tool]).mesh
     kernel = _run_stage("difference", [source, tool], "direct", None)
     assert kernel is not None
-    # Dieselben Dreiecke in derselben Folge und dieselben Orte: umgelegt, nicht umgebaut.
+    # Dieselben Dreiecke und dieselben Orte: umgelegt, nicht umgebaut.
     assert cut.triangle_count == kernel.triangle_count
-    assert np.array_equal(
-        np.sort(np.asarray(cut.raw.triangles).reshape(-1, 9), axis=1),
-        np.sort(np.asarray(kernel.raw.triangles).reshape(-1, 9), axis=1),
-    )
+
+    def rows(mesh: MeshData) -> np.ndarray:
+        flat = np.sort(np.asarray(mesh.raw.triangles).reshape(-1, 9), axis=1)
+        return flat[np.lexsort(flat.T[::-1])]
+
+    assert np.array_equal(rows(cut), rows(kernel))
     match = attributes._same_triangles(source.raw, cut.raw)
     kept = np.flatnonzero(match >= 0)
     assert 0 < len(kept) < cut.triangle_count, "ein Teil übernommen, der Schnitt neu"
+    assert np.all(np.diff(match[kept]) > 0), "die übernommenen Dreiecke folgen dem Eingang"
     # Jedes übernommene Dreieck beginnt an derselben Ecke wie sein Vorbild ...
     assert np.array_equal(
         np.asarray(cut.raw.triangles)[kept], np.asarray(source.raw.triangles)[match[kept]]
@@ -2110,3 +2114,89 @@ def test_a_boolean_keeps_the_layout_of_every_triangle_it_did_not_cut() -> None:
     # Der Kern selbst tat es nicht — sonst prüfte der Test nichts.
     rotated = np.asarray(kernel.raw.triangles)[kept]
     assert not np.array_equal(rotated, np.asarray(source.raw.triangles)[match[kept]])
+
+
+@pytest.mark.parametrize(
+    ("kind", "tool"),
+    [
+        ("difference", box(6.0, (40.0, 0.0, 0.0))),
+        ("union", box(4.0, (0.0, 0.0, 0.0))),
+    ],
+    ids=["a_tool_beside_the_body", "a_body_inside_the_material"],
+)
+def test_a_boolean_without_effect_gives_back_its_input(kind: str, tool: MeshData) -> None:
+    """Liegt jedes Ergebnisdreieck bitgleich in einem Eingang, kommt dieser zurück (RM-592).
+
+    Der Kern legt auch an einem unberührten Körper seine eigene Dreiecksfolge an,
+    und ``in_source_layout`` behält sie bewusst — an ihr hängen sonst die Nummern.
+    Ändert der Schritt aber nichts, ist die Folge des Kerns nur eine andere
+    Darstellung desselben Körpers: Der Merkmalscache traf nie, und die Erkennung
+    rechnete am Laptop-Ständer 12,6 s für einen Zylinder, der ihn nicht berührt.
+    Zurück kommt der Eingang Bit für Bit, Ecken und Dreiecke in seiner Folge — ein
+    eigenes Netz, denn das Ergebnis bekommt danach seinen eigenen Ursprung und
+    seine Slots.
+    """
+    from app.core.geom.boolean import _run_stage
+    from app.core.geom.mesh_ops import remesh
+    from app.core.perceive import features
+
+    refined = remesh(box(20.0, (0.0, 0.0, 0.0)), 2.0).raw
+    rng = np.random.default_rng(592)
+    order = rng.permutation(len(refined.faces))
+    source = MeshData.of(
+        trimesh.Trimesh(
+            np.asarray(refined.vertices), np.asarray(refined.faces)[order], process=False
+        )
+    )
+    kernel = _run_stage(kind, [source, tool], "direct", None)
+    assert kernel is not None
+    # Der Kern selbst gibt eine andere Folge zurück — sonst prüfte der Test nichts.
+    assert not np.array_equal(np.asarray(kernel.raw.faces), np.asarray(source.raw.faces))
+
+    result = boolean(kind, [source, tool]).mesh
+    assert result.raw is not source.raw, "ein eigenes Netz, der Eingang bleibt unberührt"
+    assert np.asarray(result.raw.vertices).tobytes() == np.asarray(source.raw.vertices).tobytes()
+    assert np.array_equal(np.asarray(result.raw.faces), np.asarray(source.raw.faces))
+    features.forget_cache()
+    found = features.detect(source)
+    assert features.known_detection(result) == found, "der Merkmalscache trifft"
+
+
+def test_untouched_triangles_keep_the_order_of_their_input() -> None:
+    """Was der Schnitt nicht berührt, steht in der Folge seines Eingangs (RM-592).
+
+    ``manifold3d`` legt unberührte Dreiecke um, auch untereinander. Die
+    tangentiale Trennung der Erkennung beginnt eine Naht am Dreieck mit der
+    kleineren Nummer und summiert ihre Bänder in Nummernfolge — am
+    Laptop-Ständer lasen nach einer Bohrung 245 von 1 574 Trennungen ihren
+    Fleck deshalb in anderer Folge und verfehlten das Gedächtnis. Die
+    übernommenen Dreiecke besetzen dieselben Plätze wie beim Kern, in der
+    Folge ihres Eingangs; neue bleiben, wo der Kern sie hinlegte.
+    """
+    from app.core.geom import attributes
+    from app.core.geom.boolean import _run_stage
+    from app.core.geom.mesh_ops import remesh
+
+    refined = remesh(box(20.0, (0.0, 0.0, 0.0)), 2.0).raw
+    order = np.random.default_rng(592).permutation(len(refined.faces))
+    source = MeshData.of(
+        trimesh.Trimesh(
+            np.asarray(refined.vertices), np.asarray(refined.faces)[order], process=False
+        )
+    )
+    tool = MeshData.of(trimesh.creation.cylinder(radius=3.0, height=40.0, sections=32))
+    kernel = _run_stage("difference", [source, tool], "direct", None)
+    assert kernel is not None
+    by_kernel = attributes._same_triangles(source.raw, kernel.raw)
+    assert not np.all(np.diff(by_kernel[by_kernel >= 0]) > 0), "der Kern legt Unberührtes um"
+
+    cut = boolean("difference", [source, tool]).mesh
+    match = attributes._same_triangles(source.raw, cut.raw)
+    kept = np.flatnonzero(match >= 0)
+    assert 0 < len(kept) < cut.triangle_count
+    assert np.all(np.diff(match[kept]) > 0), "die übernommenen Dreiecke folgen dem Eingang"
+    assert np.array_equal(kept, np.flatnonzero(by_kernel >= 0)), "auf den Plätzen des Kerns"
+    fresh = np.flatnonzero(match < 0)
+    assert np.array_equal(
+        np.asarray(cut.raw.triangles)[fresh], np.asarray(kernel.raw.triangles)[fresh]
+    ), "neue Dreiecke bleiben, wo der Kern sie hinlegte"

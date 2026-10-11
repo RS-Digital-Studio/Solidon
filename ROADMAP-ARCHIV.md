@@ -32,6 +32,10 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-10 | [RM-629: Ein schräger Schacht über einer Säule zählt, wenn der Kanalkreis Schicht für Schicht hindurchpasst (10.10.2026)](#rm-629-ein-schräger-schacht-über-einer-säule-zählt-wenn-der-kanalkreis-schicht-für-schicht-hindurchpasst-10102026) |
+| 2026-10-10 | [RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)](#rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026) |
+| 2026-10-11 | [RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)](#rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026) |
+| 2026-10-10 | [RM-695: Ein gespeichertes Projekt öffnet nach einem Neustart ohne neue Erkennung (10.10.2026)](#rm-695-ein-gespeichertes-projekt-öffnet-nach-einem-neustart-ohne-neue-erkennung-10102026) |
+| 2026-10-10 | [RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)](#rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026) |
 | 2026-10-10 | [RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)](#rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026) |
 | 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
 | 2026-10-10 | [RM-706: Der Abdruck einer Buchung hängt an den gespeicherten Eingängen (10.10.2026)](#rm-706-der-abdruck-einer-buchung-hängt-an-den-gespeicherten-eingängen-10102026) |
@@ -27350,6 +27354,33 @@ zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahme
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
 
+## RM-695: Ein gespeichertes Projekt öffnet nach einem Neustart ohne neue Erkennung (10.10.2026)
+
+<a id="rm-695-ein-gespeichertes-projekt-öffnet-nach-einem-neustart-ohne-neue-erkennung-10102026"></a>
+
+**Ausgangslage (Paket L3, 09.10.2026):** Der Plattencache hielt Netze, aber keine Erkennung;
+jedes Öffnen nach einem Neustart rechnete sie ganz neu — Eiffelturm 57 s, davon `detect` 47 s,
+Spiderman 45 s, Laptop-Ständer 19 s, Besteckkasten 16 s `detect`.
+
+**Gebaut (Paket E, `5159f1deb`, `a4a5e717e`, Review 1 `abbf4694d`):** Die Erkennung liegt je
+Netzabdruck auf der Platte (`DiskCache.save_detection`/`load_detection`), geschrieben erst mit
+dem vollständigen Lauf (§15.6) und atomar über `os.replace`; Merkmale typgenau (Tupel bleiben
+Tupel — vorher trugen sieben Beispielprojekte nach dem Wiederöffnen andere Werte); die
+mitgetragenen Maße bewegter Netze reisen mit (`<n>.carried.npz`), auch eine leere
+Facettenliste; ein Fehler beim Ablegen lässt den Eintrag aus und bricht keine Auswertung ab.
+Cache-Format 59.
+
+**Nachweis (10.10.2026, Kernweg mit Plattencache, drei Läufe im Wechsel, Vorrang, CPU):**
+Öffnen eines gespeicherten Projekts im frischen Prozess Eiffelturm 29,7 → 1,39 s, Ständer
+12,3 → 0,89 s, Spiderman 19,9 → 1,88 s, Kumiko 0,88 → 0,59 s, ohne Erkennungslauf; je Modell
+ein Abdruck über beide Bäume und alle Läufe, gleich dem ersten Öffnen
+(`konzepte/nachweise-oertliche-erkennung-2026-10/ergebnisse/rm695_wieder_5159f1deb_2026-10-10.jsonl`).
+Alle zwölf Beispielprojekte öffnen zweimal mit Plattencache mit gleichen Objekthashes
+(`tests/test_examples.py::test_every_example_reopens_from_the_disk_cache_without_a_miss`).
+Tests in `tests/test_cache.py`: typgenau Bit für Bit, veralteter Eintrag verworfen und neu
+erkannt, beschädigte Einträge verworfen, verschobene Kugel über die Platte, Fehler beim
+Ablegen. Bauplan §21.2, §31.
+
 ## RM-670: Ein zweiter 3MF-Export liest den Slicerbestand nicht neu (10.10.2026)
 
 <a id="rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026"></a>
@@ -47624,6 +47655,34 @@ Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_chec
 **Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
 davor rot, jetzt grün. Changelog: nein.
 
+## RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)
+
+<a id="rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026"></a>
+<a id="rm-544"></a>
+
+**RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg.** Anlass ist
+  derselbe Kundenvorschlag wie bei RM-532 (S-20261006-c66299, Innengewinde in einem Rohr); Rohre
+  tragen meist Whitworth-Rohrgewinde. Solidon kennt nur metrische Gewinde nach ISO 261/262 und
+  sagt bei links-, mehrgängigen und kegeligen ab. **Entschieden (Robert, 06.10.2026):** „alle“ —
+  neben metrisch in jedem Maß auch G (zylindrisches Rohrgewinde, ISO 228-1, 55°-Flanken, Gänge je
+  Zoll) sowie UNC und UNF (60°, Gänge je Zoll). **Umfang:** Tabelle der Nennmaße und Gänge je
+  Zoll mit Herkunft (`standards.toml`, Version erhöhen), das Flankenprofil als Parameter der
+  Gewindeform (55° gerundet / 60°), *Eigenes Maß* auch in Zoll (Gänge je Zoll statt Steigung),
+  dieselben Wege wie RM-532: Druckbares Gewinde, Bohrung mit Gewinde, Gegenstück
+  (`counterpart.thread_values_for`), *Schraube erstellen*, *Drehdeckel erzeugen*, Stift für
+  Bohrung (RM-536), Erkennung einer gemessenen Bohrung als Zoll- oder Rohrgewinde mit Rückfrage
+  bei Mehrdeutigkeit (Regel 21). **Einstellung (Robert, 06.10.2026):** In den Einstellungen
+  wählt der Kunde, welche Gewindearten in den Auswahllisten stehen (metrisch, G, UNC, UNF,
+  später die zweite Stufe), Vorgabe alle. Die Wahl ist Darstellung, kein Dokumentzustand: Ein
+  Schritt, der eine ausgeblendete Art trägt, zeigt und rechnet sie weiter, und die Erkennung
+  schlägt nur eingeblendete Arten vor. Zweite Stufe, weil „alle“ auch die heutigen Absagen meint:
+  kegelige Rohrgewinde (R nach ISO 7-1, NPT), Linksgewinde und mehrgängige Gewinde.
+  **Abnahme:** Paar G 1/2 innen und außen greift an beiden Kernen, Kernmaße gegen ISO 228-1,
+  UNC 1/4-20 gegen ASME B1.1; Bereichsnachweis, Tor, Texte in sechs Sprachen, Handbuchabsatz;
+  die zweite Stufe mit eigener Abnahme.
+
+**Abschluss:** Beide Stufen fertig (Zweig `paket/gew-zollgewinde`, Bericht `output/konsolidierung-2026-10-07/paket-gew.md`). Normteiltabelle 14 mit 146 Gewindegrößen (27 metrisch, dazu G 24, R 15, UNC 33, UNF 23, NPT 24 bis 24 Zoll), gegen zweite Quellen in 540 Vergleichen geprüft; Gangprofile `flat`, `whitworth` (ISO 228-1) und `npt`; Gangzahl, Linksgang und Kegel 1:16 in jedem Gewindeweg: Druckbares Gewinde, Schraube, Mutter, Gewindebolzen, Gegenstück (Rückfrage, wo die Messung zwei Reihen nicht trennt), Stift für Bohrung, Drehdeckel, *Schraube erstellen*, *Merkmal ändern* und *Entfernen*; der Netzleser erkennt mehrgängige Gewinde; Einstellung der gezeigten Reihen. Abnahme: G 1/2 greift am Netz und exakt, Kernmaße gegen ISO 228-1, 1/4-20 UNC gegen ASME B1.1, R 1/2 und NPT 1/2 greifen in der Bezugsebene. Der Gang rechnet gebündelt, Bit für Bit wie zuvor (`units.exact_cos_sin_array`, Gang Ø 1000 × 0,25 × 50 von 6,0 auf 1,2 s CPU). Der Nachweis fand am Gewindebolzen drei Fehler (Schaft auf dem Kamm, 48 Sehnen an Schaft und Kuppen in jeder Größe, Spiegelschranke unter einem Mikrometer), behoben mit Bibliotheksversion 28. Review 1 behoben (Kegel in der Bezugsebene über `types.thread_at_gauge`, Reihen als Argument statt Einstellung in der Auswertung, Umrisse plattformgleich, eine Umrechnung Gänge je Zoll mit `ParamSpec.least`). **Bereichsnachweis (11.10.2026, Stand `dd6858d17`, Dichtungen nach welle4 `a72079433`):** 50 von 50 Bausteinen bestanden, 21 832 Ecken, kein Bruch; Gewinde 1 424, Schraube 1 424, Mutter 356, Bolzen 2 848 Ecken, jede auch in der gespiegelten Stellung, dazu die gröbste Zollsteigung; `--check` 50 von 50.
+
 ## RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)
 
 <a id="rm-704-teil-mit-zwei-schichten-luft-trägt-jede-baumspitze-eine-trennschicht-10102026"></a>
@@ -47928,3 +47987,85 @@ Schicht ab R 9,6 immer, unter R 8,3 nie; Changelog „flache Kuppen und Schräge
 „cuadrícula“. **Nachprüfung (`review_rm586_nach.md`):** N1 it nennt die Zeit, N2 die
 gemessene Grenze, N3 Test über mehrere Blöcke, N4 Unterlagen, N5 Test des Druckdialogs.
 Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586b.md`.
+
+## RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)
+
+<a id="rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026"></a>
+<a id="rm-588"></a>
+
+**RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt.**
+  Die Naht wählte der Hersteller, gebügelt wurde nur bei einer bündigen Passung. Eine Figur
+  zeigt die Naht als Linie auf der Schauseite, eine große flache Oberseite ihre Bahnen
+  (Recherche Nr. 14, 15). Abnahme: Vorschläge mit Grund in allen Familien.
+
+**Abschluss:** Zwei Regeln im Rat, beide je Teil (`advise.PART_PATHS`). *Naht hinten*
+(`shell.seam_position = rear`, Grund „Die Naht zöge sonst eine Linie über die Schauseite.“)
+für Körper ab 10 mm Höhe, deren Außenkontur zu mindestens 70 % frei geformt ist
+(`analysis.free_form_share`, je Schnitt gemerkt), wo der Slicer die Naht selbst sucht. *Oberfläche
+bügeln: Oberste Fläche* (`shell.ironing = topmost`, Grund „Bügeln glättet die große
+Oberseite und kostet Druckzeit.“) für eine letzte Schicht ab 400 mm² und der Hälfte des
+größten Querschnitts, nicht neben einer bündigen Passung. Übergabe: Orca-Familie
+`seam_position = back`, `ironing_type = topmost`; PrusaSlicer und SuperSlicer `rear`,
+`ironing = 1` mit `ironing_type = topmost`; Cura `z_seam_type = back`,
+`ironing_enabled` mit `ironing_only_highest_layer`; „alle Oberseiten“ (bündige Passung)
+ist `top`. Rücklesen aus den Herstellerketten samt Bügeltempo und
+-abstand (`Motion`), Druckzeit mit Bügelzug über die ganze Oberseite, um eine halbe Düse
+eingezogen.
+
+Belegt mit Herstellerprofil, Standard, PLA, Kerne gepinnt, in allen acht Programmen
+(ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next, PrusaSlicer,
+SuperSlicer, Cura). Je Teil: zwei Kegelstümpfe, nur einer mit Rat — dort Naht in 100 % der
+Schichten hinten und Bügelbahn nur in der obersten Schicht, am anderen keine. Figuren, Anteil
+der Außenschleifen mit Naht im hintersten Fünftel, Profil → Rat: Spider-Man 32–43 % → 90–99 % in den Programmen der Orca-Familie und
+bei Prusa, in Cura 62 → 77 %, vorn je 14–41 % → 0–3 %; Drache in ElegooSlicer 21 → 89 %,
+PrusaSlicer 2 → 100 % (vorher 76 % vorn), Cura 59 → 93 %. Bügeln am
+Pilz: der Slicer bügelt nur die oberste Schicht; Bügelzeit +29 bis +68 % der Druckzeit je
+Programm, Solidons Schätzung trifft sie auf 0 bis 1 %; am Besenhalter mit schmaler Oberseite (+4 bis +16 %) auf 0,99 bis 1,04. Der Befund
+unterwegs (Schätzung bügelte nur innerhalb der Wände, am Besenhalter 0,62 der Bügelzeit) ist
+behoben. Tests in `test_advise.py`, `test_print_time.py`, `test_print_settings.py`,
+`test_manufacturer.py`, `test_slicer_part_settings.py`, Slicertest
+`test_ironing_the_topmost_face_stays_with_that_part` (6 von 6 grün); der RM-587-Test der
+Wandrichtung liest jetzt Orcas Bögen mit. Messwerte und Begründung in
+`konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-naht`).
+
+**Format 52 (Entscheidung Koordinator, 11.10.2026):** *Oberfläche bügeln* ist eine Wahl
+(`shell.ironing`: `none`, `topmost`, `top_surfaces`) statt zweier Schalter mit Vorrangregel;
+die Slicer kennen es selbst als eine Wahl, und der Reiter *Wände* blieb so unter seiner
+Grenze (16 → 15 Felder, `test_every_group_holds_one_subject`). Migration 51 → 52: an wird
+`top_surfaces`, aus `none`, im Satz und in `plate_choices`; die Einordnung 35 → 36 liest den
+Schalter vorher so um, sonst wäre jedes „aus“ eine eigene Wahl. Beispieldatei
+`ironing_v51.p3d` (von welle4 geschrieben), `example_v52.p3d`, Beispielprojekte neu.
+`shell.ironing_topmost` gab es nur auf diesem Zweig (kein Tag, kein anderer Zweig). Der
+Abdruck einer Buchung kippt nicht: Er trägt das Bügeln weiter als Schalter
+(`filament_usage._as_saved`); an sieben Projekten, von 0.5.3 und von welle4 geschrieben,
+darunter Bügeln als Wahl, als Vorschlag und aus, gibt der Stand mit Format 52 denselben
+Abdruck (7 von 7), ohne die Umrechnung keinen (0 von 7). Im Slicer, Sockel 30 × 30 × 10 mit
+Würfel 10 × 10 × 10: „oberste Fläche“ bügelt in allen acht Programmen nur z 20, „alle
+Oberseiten“ z 10 und 20 (Orca-Familie 594–614 gegen 5 732–5 789 mm Bahn, Anycubic, Prusa
+und SuperSlicer 912–922 gegen 8 644–8 706 mm, Cura 863 gegen 8 297 mm).
+
+## RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)
+
+<a id="rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026"></a>
+<a id="rm-771"></a>
+
+**RM-771 — Jeder Fehler ohne einlösbaren Vorschlag bekam *Fehlerbericht erstellen* als
+Hauptknopf.** Gefunden am Kundenbericht S-20261010-e5014c (0.5.3): Ein abgebrochener
+Agentenzug kam als nacktes `AppError` mit nur `CANCEL`, `dialogs.offered_actions` fiel auf
+*Einzelheiten* und den Fehlerbericht zurück, und der Kunde schickte sein eigenes *Abbrechen*
+als Programmfehler. Dasselbe traf jeden Bedien- oder Geometriefehler, dessen Vorschläge das
+Fenster nicht einlöst (am bloßen Klassenstand: `AppError`, `GenerationFailed`).
+**Behoben (Paket abbruch, Zweig `fix/vorschlag-abbruch`):** Den Rückfall auf den Bericht hat
+nur noch ein `InternalError`; ein Fehler, der den Bericht selbst vorschlägt, behält ihn. Bleibt
+weder Knopf noch Rat, heißt der Ausgang *Schließen*. Ein Wächter liest
+`MainWindow.error_handlers` ohne Fenster und verlangt für jede Kennung aus
+`action_effects.SIDE_EFFECTS` einen Handler oder einen Eintrag mit Grund
+(`WIRED_ELSEWHERE`: örtliche Erkennung, Filamentlager, Katalog; `NOT_A_BUTTON`: Schließen,
+Knöpfe des Rückmeldedialogs, ein Slicerschritt und 27 Ratsätze zum Lesen). Ausnahmen, die
+einen Handler bekommen oder die der Kern nicht mehr anbietet, machen ihn rot.
+**Nachweis:** `test_errors.py::test_only_a_programming_error_falls_back_to_the_bug_report`
+über alle Fehlerklassen, am Stand davor rot (`AppError`, `GenerationFailed`), jetzt grün;
+`test_action_effects.py::test_every_action_of_the_core_is_wired_in_the_window_or_named`,
+Gegenprobe: ohne den Handler `export_only` rot. Changelog 0.6.0: eigener Punkt unter
+*Bedienung und System*. Die 27 Ratsätze stehen als Text im Dialog; sie als Knöpfe einzulösen
+(etwa `open_sketch`, die `sketch.*`-Wege) ist als neuer Punkt beim Koordinator gemeldet.

@@ -46,3 +46,30 @@ def _noting(name: str, job: Callable[..., Any], mark: Path) -> Callable[..., Any
                 file.write(json.dumps({"job": name, "loaded": loaded}) + "\n")
 
     return noted
+
+
+def serve_and_note_preparations(connection: Any) -> None:
+    """``kernel_jobs.serve``, dazu je Vorbereitung, ob sie ``trimesh.graph`` erst geladen hat.
+
+    Für das Vorwärmen (RM-672): Nach der Rechnung ``warm`` lädt die
+    Vorbereitung der ersten Zusammenhangsfrage nichts mehr nach.
+    """
+    from app.core.geom import kernel_jobs
+
+    mark = Path(os.environ[LOADED_MARK])
+    for name, prepare in list(kernel_jobs.PREPARATIONS.items()):
+        kernel_jobs.PREPARATIONS[name] = _preparing(name, prepare, mark)
+    kernel_jobs.serve(connection)
+
+
+def _preparing(name: str, prepare: Callable[[], object], mark: Path) -> Callable[[], object]:
+    def noted() -> object:
+        before = "trimesh.graph" in sys.modules
+        try:
+            return prepare()
+        finally:
+            loaded = not before and "trimesh.graph" in sys.modules
+            with mark.open("a", encoding="utf-8") as file:
+                file.write(json.dumps({"prepare": name, "graph_loaded": loaded}) + "\n")
+
+    return noted

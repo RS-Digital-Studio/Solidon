@@ -16038,6 +16038,67 @@ def test_the_veil_waits_for_the_first_picture_of_a_large_model(
     assert not window.veil.showing, "mit dem Bild weicht die Anzeige"
 
 
+def test_the_veil_goes_when_the_view_stops_preparing_without_a_picture(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Jeder Ausgang der Vorbereitung beendet „Das Modell wird angezeigt …“.
+
+    Kundenbericht S-20261010-e5014c: zwei Körper im Baum, die Ansicht nur
+    Schleier. Der Schleier fragte allein bei ``sceneApplied`` und
+    ``sceneFailed`` neu; hinterließ die Übernahme kein Körperbild, galt bei
+    ``sceneApplied`` der Arbeiter noch als laufend, und als er auslief, fragte
+    niemand mehr. Offscreen ist das der gewöhnliche Fall: Ohne Renderer
+    übernimmt ``_apply_scene`` nichts. Der Arbeiter ist echt, nur gestellt.
+    """
+    from threading import Event
+
+    from app.core.scene import OperationDraft
+    from app.ui import viewport as module
+
+    session = window.session
+    session.history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 20.0, "height": 30.0})],
+    )
+    result = session.run_evaluation()
+    entered, release = Event(), Event()
+    original = module._SceneMeshWorker.work
+
+    def held(worker: Any) -> None:
+        entered.set()
+        assert release.wait(10)
+        original(worker)
+
+    monkeypatch.setattr(module._SceneMeshWorker, "work", held)
+    monkeypatch.setattr(
+        window.viewport,
+        "_scene_tasks",
+        lambda scene: (
+            [(key, entry.mesh, None) for key, entry in scene.scene.objects.items()],
+            None,
+            None,
+        ),
+    )
+    worker = None
+    try:
+        window._show_scene(result)
+        worker = window.viewport._scene_worker
+        assert worker is not None and entered.wait(5)
+        window._update_veil(False)
+        assert window.veil.showing
+        assert window.veil._headline == str(tr("Das Modell wird angezeigt …"))
+        release.set()
+        assert worker.wait(10000)
+        for _round in range(5):
+            qt_app.processEvents()
+        assert not window.viewport.preparing_an_empty_view()
+        assert not window.veil.showing, "ohne Vorbereitung kein Schleier"
+    finally:
+        release.set()
+        if worker is not None:
+            worker.wait(10000)
+
+
 def test_the_veil_hides_the_native_view_while_it_stands(window: MainWindow) -> None:
     """Verborgen, nicht nur verdeckt (§2.8).
 

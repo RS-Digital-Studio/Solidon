@@ -11,12 +11,12 @@ außer dem Chat benutzbar. Einzuhalten ist `.claude/rules/agentenschicht.md`
 
 | Datei | Rolle |
 |---|---|
-| `llm.py` | Das Sprachmodell hinter dem Agenten — gehostet oder lokal (Ollama); `OLLAMA_CONTEXT_TOKENS`, `OLLAMA_ANSWER_TOKENS`, `prompt_was_cut`, `PROMPT_TOKENS`/`PROMPT_TOOL_COUNT` |
+| `llm.py` | Das Sprachmodell hinter dem Agenten — gehostet oder lokal (Ollama); `OLLAMA_CONTEXT_TOKENS`, `OLLAMA_ANSWER_TOKENS`, `prompt_was_cut`, `PROMPT_TOKENS`/`PROMPT_TOOL_COUNT`; Ablehnungen als Satz (`refusal`, `ModelNotInstalled`, `KeyRefused`, `key_refused`) |
 | `mesh.py` | Mesh-Erzeugung für Weg 3, lokal oder gehostet (Säule B) |
 | `resources.py` | Gemeinsame Schwerlastspur für lokale KI auf derselben Grafikkarte (`local_ai_slot`, `keep_warm`) |
 | `machine.py` | Was dieser Rechner mitbringt: Apple Silicon und Arbeitsspeicher über das System (`this_machine`, ohne Prozess), eine NVIDIA-Karte über `nvidia-smi` im Arbeiter (`probe_card`), `Machine.graphics_gb` |
 | `needs.py` | Die eine Quelle für Voraussetzungen vor dem Laden: was ein Modell bzw. Weg 3 braucht, ob dieser Rechner es hat, und der Ausweg (`chat_needs`, `graphics_verdict`, `chat_disk_need`, `pull_space_problem`, `generator_needs`, `duration_text`) |
-| `keys.py` | Wo der eigene Schlüssel des Nutzers liegt |
+| `keys.py` | Wo der eigene Schlüssel des Nutzers liegt; der Merker eines abgelehnten (`mark_refused`, `refused`, `clear_refusal`, `REFUSAL_HOLDS_SECONDS`) |
 | `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36): Fassung prüfen (`check_version`), Modelldateien laden (`ModelFile`: Repo, Revision, Byte, SHA-256, Zielordner, Rolle) — TRELLIS.2 und BiRefNet für den Bildweg, auf Wunsch FLUX.2 [klein] 4B für den Textweg —, Reste der TripoSG-Einrichtung räumen (`remove_legacy`) |
 | `data/text_to_image.json`, `data/image_to_mesh.json` | Die ComfyUI-Abläufe: Bild aus Text und Netz aus Bild; der Weg aus Text fährt beide nacheinander (`mesh.WORKFLOW_STAGES`), nur aus eingebauten Knoten (ab ComfyUI 0.35); geprüft gegen `tests/data/comfyui/object_info.json`, erzeugt mit `tools/comfy_node_info.py` |
 

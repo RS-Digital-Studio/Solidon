@@ -1180,7 +1180,7 @@ def test_a_flush_fit_asks_for_ironing() -> None:
     Bahnen. Bisher war das ein Schalter im Dialog, den man kennen musste.
     """
     profile = profiles.make_profile()
-    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", False)
+    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", "none")
 
     paths = [entry.path for entry in advise.advise(settings, profile, fit_kinds=("flush",))]
 
@@ -1192,7 +1192,7 @@ def test_a_sliding_fit_does_not_ask_for_ironing() -> None:
     einer Fläche, die nichts berührt — die Art zählt, nicht nur das Ob.
     """
     profile = profiles.make_profile()
-    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", False)
+    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", "none")
 
     for kind in ("clearance", "press", "thread"):
         paths = [entry.path for entry in advise.advise(settings, profile, fit_kinds=(kind,))]
@@ -1404,6 +1404,7 @@ def _other_value(settings: print_settings.PrintSettings, path: str) -> object:
         return current + 3.0
     choices = {
         "shell.seam_position": "rear",
+        "shell.ironing": "topmost",
         "shell.wall_generator": "classic",
         "infill.pattern": "gyroid",
         "support.style": "tree",
@@ -5254,11 +5255,44 @@ def test_ironing_is_off_until_something_asks_for_it() -> None:
     denen etwas gleitet."""
     settings = print_settings.resolve(profiles.make_profile())
 
-    assert settings.shell.ironing is False
+    assert settings.shell.ironing == "none"
     assert handover.as_mapping(settings, "orca")["ironing_type"] == "no ironing"
+    prusa = handover.as_mapping(settings, "prusa")
+    assert prusa["ironing"] == "0" and "ironing_type" not in prusa
+    assert handover.as_mapping(settings, "cura")["ironing_enabled"] == "false"
 
-    ironed = print_settings.with_path(settings, "shell.ironing", True)
+    ironed = print_settings.with_path(settings, "shell.ironing", "top_surfaces")
     assert handover.as_mapping(ironed, "orca")["ironing_type"] == "top"
+
+
+def test_ironing_the_topmost_surface_reaches_every_family() -> None:
+    """RM-588: „Oberste Fläche“ heißt in der Orca-Familie und bei Prusa
+    ``ironing_type = topmost`` — dort mit eingeschaltetem ``ironing`` —, bei Cura
+    ``ironing_only_highest_layer``; „alle Oberseiten“ ist ``top`` und bei Cura
+    dasselbe ohne die oberste allein."""
+    settings = print_settings.resolve(profiles.make_profile())
+    topmost = print_settings.with_path(settings, "shell.ironing", "topmost")
+
+    assert handover.as_mapping(topmost, "orca")["ironing_type"] == "topmost"
+    prusa = handover.as_mapping(topmost, "prusa")
+    assert (prusa["ironing"], prusa["ironing_type"]) == ("1", "topmost")
+    cura = handover.as_mapping(topmost, "cura")
+    assert (cura["ironing_enabled"], cura["ironing_only_highest_layer"]) == ("true", "true")
+
+    every = print_settings.with_path(topmost, "shell.ironing", "top_surfaces")
+    assert handover.as_mapping(every, "orca")["ironing_type"] == "top"
+    prusa = handover.as_mapping(every, "prusa")
+    assert (prusa["ironing"], prusa["ironing_type"]) == ("1", "top")
+    cura = handover.as_mapping(every, "cura")
+    assert (cura["ironing_enabled"], cura["ironing_only_highest_layer"]) == ("true", "false")
+
+    # Nur der übernommene Pfad geht über das Herstellerprofil.
+    paths = frozenset({"shell.ironing"})
+    assert handover.as_mapping(topmost, "orca", paths) == {"ironing_type": "topmost"}
+    assert handover.as_mapping(topmost, "prusa", paths) == {
+        "ironing": "1",
+        "ironing_type": "topmost",
+    }
 
 
 def test_a_part_on_little_ground_asks_for_a_brim_on_its_own() -> None:
@@ -10417,6 +10451,77 @@ def test_prusaslicer_prints_automatic_supports_as_trees_where_its_process_does(
     setup = handover.SlicerSetup(executable=Path("prusa-slicer.exe"), flavour="prusa")
 
     assert handover.organic_styles(setup, profiles.make_profile()) == frozenset(organic)
+
+
+#: Herstellerprozesse der Orca-Familie: normale Stütze im Gitterstil, Bäume, ein
+#: Baumstil unter Bäumen (Prusa XL, ``process_common_xl``) und schon ``snug``.
+_NORMAL = {"support_type": "normal(auto)", "support_style": "default"}
+_TREES = {"support_type": "tree(auto)", "support_style": "default"}
+_ORGANIC_TREES = {"support_type": "tree(auto)", "support_style": "organic"}
+_NORMAL_SNUG = {"support_type": "normal(auto)", "support_style": "snug"}
+
+
+@pytest.mark.parametrize(
+    ("executable", "flavour", "native", "chain", "style", "snug"),
+    [
+        # Orca-Familie: Gitter schreibt normale Stütze, der Stil bleibt beim
+        # Hersteller — außer ``snug`` druckt jeder als Gitter, auch ein Baumstil.
+        ("elegoo-slicer.exe", "orca", _TREES, None, "grid", True),
+        ("orca-slicer.exe", "orca", _ORGANIC_TREES, None, "grid", True),
+        ("orca-slicer.exe", "orca", {}, None, "grid", True),
+        ("orca-slicer.exe", "orca", _NORMAL_SNUG, None, "grid", False),
+        # „Automatisch“ ist, was der Herstellerprozess druckt.
+        ("orca-slicer.exe", "orca", _NORMAL, None, "auto", True),
+        ("orca-slicer.exe", "orca", _NORMAL_SNUG, None, "auto", False),
+        ("elegoo-slicer.exe", "orca", _TREES, None, "auto", False),
+        ("orca-slicer.exe", "orca", {}, None, "auto", False),
+        ("orca-slicer.exe", "orca", _NORMAL, None, "tree", False),
+        ("orca-slicer.exe", "orca", _NORMAL, None, "hybrid", False),
+        ("orca-slicer.exe", "orca", _NORMAL, None, "none", False),
+        # PrusaSlicer: Gitter, Hybrid als Ersatz Gitter, „automatisch“ nach der Kette.
+        ("prusa-slicer.exe", "prusa", {}, "organic", "grid", True),
+        ("prusa-slicer.exe", "prusa", {}, None, "hybrid", True),
+        ("prusa-slicer.exe", "prusa", {}, "grid", "auto", True),
+        ("prusa-slicer.exe", "prusa", {}, None, "auto", True),
+        ("prusa-slicer.exe", "prusa", {}, "organic", "auto", False),
+        ("prusa-slicer.exe", "prusa", {}, "snug", "auto", False),
+        ("prusa-slicer.exe", "prusa", {}, None, "tree", False),
+        # SuperSlicer kennt keine Bäume: Ersatz Gitter.
+        ("superslicer.exe", "prusa", {}, None, "tree", True),
+        ("CuraEngine.exe", "cura", {}, None, "grid", False),
+    ],
+)
+def test_normal_support_beside_a_blocker_goes_out_snug(
+    monkeypatch: pytest.MonkeyPatch,
+    executable: str,
+    flavour: str,
+    native: dict[str, str],
+    chain: str | None,
+    style: str,
+    snug: bool,
+) -> None:
+    """Wer neben einer Sperre normale Stütze druckt, bekommt ``snug``
+    (``handover.snug_beside_blocker``): Im Gitterstil liefen die Säulen unter dem
+    Deckel des Bechers 1,1 mm in die Mündungen des gesperrten Tunnels. OrcaSlicer
+    mit Prusa XL (Baumstil ``organic`` im Prozess) druckte Solidons Gitter als
+    Gitter und bekam zuerst kein ``snug`` (Review rvtun, Fund 1: 1,14 m im
+    Tunnel)."""
+    from app.core.export import manufacturer
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    monkeypatch.setattr(
+        manufacturer,
+        "prusa_chain",
+        lambda *_args: (
+            None if chain is None else SimpleNamespace(values={"support_material_style": chain})
+        ),
+    )
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+    key = "support_style" if flavour == "orca" else "support_material_style"
+
+    written = handover.snug_beside_blocker(setup, profiles.make_profile(), style, flavour)  # type: ignore[arg-type]
+
+    assert written == ({key: "snug"} if snug else {})
 
 
 @pytest.mark.parametrize(

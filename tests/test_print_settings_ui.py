@@ -8056,12 +8056,13 @@ def test_the_search_lifts_the_hit_instead_of_hiding_the_rest(
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.tabs_toggle is not None and not dialog.tabs_toggle.isChecked()
 
-    # „Bügeln" liegt hinter der Klappe und trifft genau eine Zeile — an einem
-    # Begriff mit acht Treffern (etwa „Bett", das in fünf note-Sätzen steht)
-    # prüfte der Test die Reihenfolge statt das Heben.
-    assert dialog.search_hits("Bügeln") == ["shell.ironing"]
+    # „Oberfläche bügeln" liegt hinter der Klappe und trifft genau eine Zeile —
+    # an einem Begriff mit acht Treffern (etwa „Bett", das in fünf note-Sätzen
+    # steht) prüfte der Test die Reihenfolge statt das Heben. „Bügeln" allein
+    # trifft seit RM-588 auch „Oberste Fläche bügeln“.
+    assert dialog.search_hits("Oberfläche bügeln") == ["shell.ironing"]
 
-    dialog.jump_to("Bügeln")
+    dialog.jump_to("Oberfläche bügeln")
     qt_app.processEvents()
 
     assert dialog.tabs_toggle.isChecked(), "die Tiefe klappt auf, wenn der Treffer dort liegt"
@@ -10048,6 +10049,9 @@ def test_secondary_filament_advice_is_visible_but_not_applicable_in_prusa(qt_app
     # Ohne Mindestzeit je Schicht, damit der kleine Würfel einen Rat für seine
     # Spule bekommt (``advise`` schlägt sie nur vor, wo keine gilt).
     settings = print_settings.with_choice(settings, "cooling.minimum_layer_time", 0.0)
+    # Die 40 mal 40 mm des großen Würfels sind eine große flache Oberseite; ohne
+    # eigene Wahl stünde „oberste Fläche bügeln“ (RM-588) als übertragbar daneben.
+    settings = print_settings.with_choice(settings, "shell.ironing", "topmost")
     dialog = _print_advice_dialog(qt_app, [large, small], settings=settings)
     dialog._slicer_path = Path("PrusaSlicer.exe")
     dialog._refresh_advice()

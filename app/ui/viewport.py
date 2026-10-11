@@ -4978,6 +4978,9 @@ class Viewport(QWidget):
     """Die Ansichtsaufbereitung brach ab; die letzte gültige Ansicht bleibt."""
     sceneApplied = Signal()
     """Die neue Szene ist übernommen; abhängige Regler können ihre Grenzen lesen."""
+    preparationEnded = Signal()
+    """Der Ansichtsarbeiter ist ausgelaufen — :meth:`preparing_an_empty_view`
+    hat sich geändert, auch ohne ``sceneApplied`` oder ``sceneFailed``."""
     differenceApplied = Signal(object)
     """Diese vollständige Vorschau wurde aufbereitet und dem Renderer übergeben."""
     differenceFailed = Signal(object, str)
@@ -7191,11 +7194,20 @@ class Viewport(QWidget):
             self.sceneFailed.emit(detail)
 
     def _scene_worker_done(self, worker: _SceneMeshWorker) -> None:
-        """Den ausgelaufenen Aufbereiter identitätssicher loslassen."""
+        """Den ausgelaufenen Aufbereiter identitätssicher loslassen.
 
-        if self._scene_worker is worker:
+        **Und sagen, dass nichts mehr vorbereitet wird.** Die Ladeanzeige
+        fragt nur bei Signalen neu; lief der Arbeiter aus, nachdem seine
+        Übernahme kein Körperbild hinterließ, blieb „Das Modell wird angezeigt
+        …“ bis zum nächsten Lauf stehen (S-20261010-e5014c).
+        """
+
+        current = self._scene_worker is worker
+        if current:
             self._scene_worker = None
         self._scene_leash.hold_until_done(worker)
+        if current:
+            self.preparationEnded.emit()
 
     def wait_for_workers(self, timeout_ms: int = 2000) -> bool:
         """Die Ansichtsaufbereitung vor dem Fensterabbau auslaufen lassen."""

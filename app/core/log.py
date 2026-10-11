@@ -222,7 +222,10 @@ def exception_text(error: BaseException, traceback: TracebackType | None = None)
         if previous is not None:
             append(previous, previous.__traceback__, depth + 1)
             add("---")
-        add("Traceback (most recent call last):")
+        # Eine Ausnahme, die nie geworfen wurde, hat keinen Stapel — der Kopf
+        # allein sähe aus wie ein abgeschnittener (S-20261010-e5014c).
+        if stack is not None:
+            add("Traceback (most recent call last):")
         count = 0
         while stack is not None and count < 100 and remaining > 0:
             code = stack.tb_frame.f_code

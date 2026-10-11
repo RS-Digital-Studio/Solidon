@@ -5016,3 +5016,81 @@ def test_v49_split_bodies_drops_what_it_dropped_then(profile) -> None:
     (changed,) = [entry for entry in project.document.ops if entry.op == "split_bodies"]
     assert "legacy_tiny_share" not in changed.params, "eine Änderung rechnet wie heute"
     assert len(bodies()) == 3, "mit dem Marker fände die Zerlegung nur zwei Teile"
+
+
+def test_v51_ironing_switch_becomes_the_same_choice() -> None:
+    """RM-588: Bis Format 51 war *Oberfläche bügeln* ein Schalter, an hieß jede Oberseite.
+
+    ``ironing_v51.p3d`` hat welle4 (``1e4dec783``) geschrieben: Centauri Carbon
+    2, PLA, vier Wände als eigene Wahl, Bügeln als übernommener Vorschlag je
+    Teil (an) und die Platte darunter aus (``plate_choices``). Nach der
+    Migration ist an „alle Oberseiten“ und aus „none“, die Herkunft bleibt, und
+    die Übergabe und die Druckzeit rechnen wie damals: jede Oberseite gebügelt.
+    """
+    import trimesh
+
+    from app.core.export import handover
+    from app.core.geom.mesh import MeshData
+    from app.core.slice import print_time
+    from app.core.slice.analysis import slice_body
+
+    path = Path(__file__).parent / "data" / "projects" / "ironing_v51.p3d"
+    stored = project_data(path)
+    assert stored["format_version"] == 51
+    assert stored["print_settings"]["shell"]["ironing"] is True
+    assert stored["print_settings"]["plate_choices"] == {"shell.ironing": False}
+
+    settings = load(path).document.print_settings
+    assert settings is not None
+    assert settings.shell.ironing == "top_surfaces"
+    assert settings.plate_choices == (("shell.ironing", "none"),)
+    assert (settings.chosen, settings.accepted) == ({"shell.wall_count"}, {"shell.ironing"})
+
+    plate = print_settings.with_path(settings, "shell.ironing", "none")
+    assert handover.as_mapping(settings, "orca")["ironing_type"] == "top"
+    assert handover.as_mapping(plate, "orca")["ironing_type"] == "no ironing"
+    prusa = handover.as_mapping(settings, "prusa")
+    assert (prusa["ironing"], prusa["ironing_type"]) == ("1", "top")
+
+    base = trimesh.creation.box(extents=(30.0, 30.0, 10.0))
+    base.apply_translation((0.0, 0.0, 5.0))
+    block = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    block.apply_translation((0.0, 0.0, 15.0))
+    stepped = trimesh.boolean.union([base, block], engine="manifold")
+    result = slice_body(MeshData.of(stepped), 0.2, first_layer_height=0.2, support_volume=False)
+    motion = print_time.Motion(nozzle=0.4, ironing_speed=10.0, ironing_spacing=0.1)
+
+    def seconds(chosen: Any) -> float:
+        return print_time.plate_seconds([(result, chosen)], motion)
+
+    topmost = print_settings.with_path(settings, "shell.ironing", "topmost")
+    assert seconds(settings) - seconds(topmost) > 0.5 * (29.6**2 - 10.0**2) / 0.1 / 10.0, (
+        "jede Oberseite, auch der Ring des Sockels"
+    )
+    assert seconds(plate) < seconds(topmost)
+
+
+def test_the_ironing_step_leaves_everything_else_alone() -> None:
+    """Der Schritt 51 → 52 ändert nur einen Schalter; ohne Druckeinstellungen oder
+    mit einer schon gewählten Art bleibt die Datei. Ein fremder Wert einer
+    beschädigten Datei wird „none“, sonst schrieben die Familien Verschiedenes
+    (Review RM-588, L5)."""
+    base = {"format_version": 51, "scene": {}, "ops": [], "transactions": []}
+    assert migrate(deepcopy(base))["format_version"] == FORMAT_VERSION
+    for value, expected in (
+        (True, "top_surfaces"),
+        (False, "none"),
+        ("topmost", "topmost"),
+        ("solid", "none"),
+        (2, "none"),
+    ):
+        data = {
+            **deepcopy(base),
+            "print_settings": {
+                "shell": {"ironing": value},
+                "plate_choices": {"shell.ironing": value},
+            },
+        }
+        stored = migrate(data)["print_settings"]
+        assert stored["shell"]["ironing"] == expected
+        assert stored["plate_choices"]["shell.ironing"] == expected

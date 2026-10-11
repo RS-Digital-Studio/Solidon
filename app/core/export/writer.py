@@ -1995,6 +1995,16 @@ def _support_outline(
     )
 
 
+def _may_block(settings: PrintSettings) -> bool:
+    """Bekommt ein Teil mit diesen Einstellungen eine Sperre, wenn es Raum dafür hat?
+
+    Nur mit Stützen und mit übernommenem Vorschlag zu Kanälen oder Rändern
+    (Entscheidung Robert, 26.09.2026; Entscheidung G)."""
+    return settings.support.style != "none" and (
+        settings.support.block_channels or settings.support.spare_ledges
+    )
+
+
 def _support_blocker(
     entry: SceneObject,
     mesh: MeshData,
@@ -2621,6 +2631,17 @@ def write_assembly(
             )
             for entry in chosen
         }
+        # Die Sperre hält nur, wo normale Stütze am Überhang anliegt
+        # (:func:`handover.snug_beside_blocker`); gefragt wird der
+        # Herstellerprozess, deshalb hier im selben Lesedurchgang.
+        hugging = {
+            entry.id: handover.snug_beside_blocker(
+                setup, profile, effective.support.style, flavour, program
+            )
+            for entry in chosen
+            for effective in (part_values[entry.id].effective,)
+            if for_slicer and effective is not None and _may_block(effective)
+        }
     asked = {key: values.asked for key, values in part_values.items()}
     # **Was kein Teil für sich verlangt, gilt allen** (:func:`_unserved`) —
     # als Objektwert an jedem Teil, und der Bericht sagt es. „Kein Teil" heißt
@@ -2849,26 +2870,38 @@ def write_assembly(
     # Je Teil mit dessen Einstellungen: Stützt nur ein Teil, sperrt auch nur
     # dieses seine Kanäle und Ränder (Entscheidung G).
     blockers: dict[str, MeshData | None] = {}
+    snug: dict[str, dict[str, str]] = {}
     if for_slicer:
         for entry in chosen:
             own_settings = part_values[entry.id].effective
-            if (
-                own_settings is None
-                or own_settings.support.style == "none"
-                or not (own_settings.support.block_channels or own_settings.support.spare_ledges)
-            ):
+            if own_settings is None or not _may_block(own_settings):
                 continue
             blockers[entry.id], noted = _support_blocker(
                 entry, exported[entry.id], own_settings, profile, cancelled
             )
             findings += noted
+            if blockers[entry.id] is not None and hugging.get(entry.id):
+                snug[entry.id] = hugging[entry.id]
+                findings.append(
+                    Finding(
+                        code="export.snug_support",
+                        severity="info",
+                        message=_(
+                            "In „{name}“ liegt die Gitterstütze neben der Sperre eng am "
+                            "Überhang an, damit sie nicht in gesperrte Stellen reicht.",
+                            name=source_text(entry.name),
+                        ),
+                        values={"name": source_text(entry.name)},
+                        object_id=entry.id,
+                    )
+                )
     findings += height_findings
     parts = [
         threemf.AssemblyPart(
             mesh=exported[entry.id],
             name=source_text(entry.name),
             slots=threemf.slots_for_object(entry),
-            settings=part_values[entry.id].keys,
+            settings=part_values[entry.id].keys | snug.get(entry.id, {}),
             support_blocker=blockers.get(entry.id),
             layer_heights=heights.get(entry.id, ()),
             # Die Platte reist mit. Ohne Einschränkung auf eine gehen alle in
