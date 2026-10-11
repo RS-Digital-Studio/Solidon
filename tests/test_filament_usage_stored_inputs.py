@@ -922,12 +922,6 @@ ACTIVE_TEXT = str(
         "Filamenten. Prüfen Sie, ob dies ein weiterer Druck ist."
     )
 )
-REVERSED_TEXT = str(
-    tr(
-        "Für dieses Projekt gibt es eine zurückgenommene Buchung aus Solidon 0.5 "
-        "mit denselben Filamenten. Prüfen Sie, ob dies ein weiterer Druck ist."
-    )
-)
 _SLOT = MaterialSlot(0, "PLA Rot", (0.8, 0.1, 0.1), material_type="PLA")
 _OTHER_SLOT = MaterialSlot(1, "PETG Blau", (0.1, 0.1, 0.8), material_type="PETG")
 _Line = tuple[MaterialSlot, float | None, str, str]
@@ -1034,15 +1028,73 @@ def test_other_filaments_projects_and_marked_bookings_are_no_candidates(case: st
     assert ui._earlier_print(request, booking) is False
 
 
-@pytest.mark.parametrize("reversed_at", ["", "2026-10-02T00:00:00+00:00"])
-def test_an_earlier_booking_is_offered_with_its_own_sentence(reversed_at: str) -> None:
-    """Auch eine zurückgenommene Buchung aus 0.5 kommt zur Prüfung, mit ihrem eigenen Satz."""
-    request, booking = _offer(_SLICED, _SLICED, reversed_at=reversed_at)
+def test_an_earlier_booking_is_offered_with_its_sentence() -> None:
+    """Eine Buchung aus 0.5 kommt zur Prüfung, mit dem Satz, den der Kunde liest."""
+    request, booking = _offer(_SLICED, _SLICED)
     snapshot = SimpleNamespace(bookings=lambda: (booking,))
     offered = ui._legacy_bookings(request, snapshot)
     assert offered == (booking,)
-    expected = REVERSED_TEXT if reversed_at else ACTIVE_TEXT
-    assert ui._legacy_booking_text(offered, request) == expected
+    assert ui._legacy_booking_text(offered, request) == ACTIVE_TEXT
+
+
+def _with_060(
+    reversed_at: str = "", lines: tuple[_Line, ...] = _SLICED
+) -> filaments.InventoryBooking:
+    """Eine Buchung ab 0.6.0 desselben Projekts: Der Kunde hat einmal geantwortet."""
+    _request, booking = _offer(
+        lines,
+        tuple((slot, grams or 1.0, spool, source) for slot, grams, spool, source in lines),
+        fingerprint=usage.STORED_MARK + "erste-variante",
+        reversed_at=reversed_at,
+    )
+    return booking
+
+
+ANSWERED_CASES = {
+    "0.5 und eine Buchung ab 0.6.0": ((False, ""), _with_060, False),
+    "0.5 allein": ((False, ""), None, True),
+    "0.5 zurückgenommen": ((True, ""), None, False),
+    "Buchung ab 0.6.0 zurückgenommen": (
+        (False, ""),
+        lambda: _with_060(reversed_at="2026-10-12T00:00:00+00:00"),
+        True,
+    ),
+    "Buchung ab 0.6.0 mit anderen Filamenten": (
+        (False, ""),
+        lambda: _with_060(lines=((_OTHER_SLOT, 5.0, "c", "gcode"),)),
+        True,
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(ANSWERED_CASES))
+def test_an_answered_question_is_not_asked_again(case: str) -> None:
+    """Integrationsreview welle4, T2-M1: Hat das Projekt mit denselben Druckfilamenten
+    schon eine gültige Buchung ab 0.6.0, ist die Frage beantwortet — die nächste Variante
+    ist ein neuer Druck. Eine zurückgenommene Buchung aus 0.5 zieht nichts mehr ab und
+    ist kein Kandidat."""
+    (old_reversed, _unused), make_060, offered = ANSWERED_CASES[case]
+    request, old = _offer(
+        _SLICED, _SLICED, reversed_at="2026-10-02T00:00:00+00:00" if old_reversed else ""
+    )
+    bookings = (old,) if make_060 is None else (old, make_060())
+    snapshot = SimpleNamespace(bookings=lambda: bookings)
+    assert (ui._legacy_bookings(request, snapshot) == (old,)) is offered
+
+
+def test_after_one_answer_the_next_variant_books_itself(stock: Any) -> None:
+    """T2-M1 am Buchungsweg: Buchung aus 0.5, dann eine Ausgabe in 0.6.0 bestätigt —
+    die nächste Variante bucht ohne Rückfrage."""
+    entry, request, position = stock
+    filaments.book("aus-053", "alter-abdruck-053", [position], project_name=request.project_name)
+    first = replace(request, fingerprint=usage.STORED_MARK + "variante-1", former_fingerprints=())
+    second = replace(first, fingerprint=usage.STORED_MARK + "variante-2")
+    assert ui._legacy_bookings(first, filaments.read_snapshot())
+    filaments.book("bestaetigt", first.fingerprint, [position], project_name=request.project_name)
+    assert ui._legacy_bookings(second, filaments.read_snapshot()) == ()
+    booked = ui._auto_book(second)
+    assert booked is not None and booked.fingerprint == second.fingerprint
+    assert filaments.get(entry.identifier).remaining_grams == pytest.approx(500 - 3 * 42)
 
 
 def test_every_fingerprint_from_stored_inputs_carries_the_mark() -> None:

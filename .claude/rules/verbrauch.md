@@ -77,9 +77,11 @@ nach einem Update bei jedem Kunden zugleich (RM-705, RM-706).
   hängt an Netzbits, die eine druckgleiche Beschleunigung umordnet (Paket E).
   Eine Buchung mit Zeichen ist nie Kandidat: Dort ist ein anderer Abdruck ein
   anderer Druck. Wer die Bildung ändert, behält das Zeichen.
-- **Bei einem Projekt mit Buchung aus 0.5 kommt jede neue Variante zur
-  Prüfung**, auch nach einer Buchung in 0.6: lieber Rückfragen als ein stiller
-  Doppelabzug. Die Antwort je Altbuchung merken trägt RM-720.
+- **Die Frage nach einer Buchung aus 0.5 gilt, bis sie beantwortet ist**
+  (`ui._answered`): Trägt das Projekt mit denselben Druckfilamenten eine
+  gültige Buchung ab 0.6.0, bucht die nächste Variante selbst; dieselbe
+  Ausgabe trifft jene über ihren Abdruck. Eine zurückgenommene Buchung aus 0.5
+  ist kein Kandidat.
 - **Sollwerte von außen**: Ein Vor- oder Altabdruck im Test kommt aus einer
   Codekopie des Tags (`git archive`), nie aus dem neuen Code; der Kundenweg
   liest Projekt und Lager, die das alte Programm selbst schrieb

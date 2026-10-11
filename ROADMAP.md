@@ -204,7 +204,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`): Entf im Reiter *Auswahl*, Felder behalten die Taste, bei Halt oder Sperre der Grund mit dem Titel aus `_removal_entry`; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an der Fläche, verschiebbare Karten](#rm-538) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`), drei Durchsichten; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
-| [RM-720 — Ein Projekt mit Buchung aus 0.5 fragt bei jeder neuen Variante](#rm-720) | Filamentlager | Antwort des Kunden je Altbuchung merken |
+| [RM-720 — Ein umbenanntes Projekt findet seine Buchung aus 0.5 nicht](#rm-720) | Filamentlager | Buchung aus 0.5 auch unter neuem Projektnamen zur Prüfung bringen, ohne fremde Projekte anzubieten |
 
 ## Filamentlager
 
@@ -217,14 +217,14 @@ begründet Abwahl, Herstellerprofile und Buchungskorrekturen.
 
 <a id="rm-720"></a>
 
-- [ ] **RM-720 — Ein Projekt mit Buchung aus 0.5 fragt bei jeder neuen Variante.**
-  Ohne Abdrucktreffer kommt jede Buchung aus Solidon 0.5 desselben Projekts mit denselben
-  Filamenten zur Prüfung, auch nach einer Buchung in 0.6 und im Modus *Ohne Rückfrage
-  buchen* — nie ein stiller Doppelabzug, aber eine Rückfrage je Variante. Ein umbenanntes
-  Projekt zieht weiter doppelt ab. Aus der Nachprüfung der Altbuchungen nach Paket E
-  (11.10.2026).
-  **Abnahme:** Die Antwort je Altbuchung wird gemerkt, ohne den unveränderten Altstand still
-  zu buchen; Test mit einer echten 0.5.3-Buchung.
+- [ ] **RM-720 — Ein umbenanntes Projekt findet seine Buchung aus 0.5 nicht.**
+  Ohne Abdrucktreffer kommt eine Buchung aus Solidon 0.5 desselben Projekts mit denselben
+  Filamenten zur Prüfung, bis eine Buchung ab 0.6.0 die Frage beantwortet (T2-M1). Die
+  Buchung kennt nur den Projektnamen: Wer das Projekt umbenennt oder unter neuem Namen
+  speichert, bekommt keine Rückfrage, und *Ohne Rückfrage buchen* zieht denselben Druck ein
+  zweites Mal ab. Aus der Nachprüfung der Altbuchungen nach Paket E (11.10.2026).
+  **Abnahme:** Eine Buchung aus 0.5 kommt auch nach dem Umbenennen zur Prüfung, ohne dass
+  Buchungen fremder Projekte angeboten werden; Test mit einer echten 0.5.3-Buchung.
 
 ## P0 — Skelett
 

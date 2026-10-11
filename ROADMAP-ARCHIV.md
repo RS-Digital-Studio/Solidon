@@ -48208,9 +48208,10 @@ Aufteilung (Review Altbuchung, M2: Schätzung gegen G-Code, Slicer-Update, Spule
 Aufteilung, Handbuchung). Abdrücke ab 0.6.0 tragen das Zeichen `si1-` (`STORED_MARK`, ohne
 Formatschritt, RM-706 war nicht ausgeliefert) und sind nie Kandidat: Eine geänderte Variante mit
 gleicher Menge bucht ohne Rückfrage (M1). **Grenze:** Ein umbenanntes oder unter neuem Namen
-gespeichertes Projekt findet seine Buchung aus 0.5 nicht — die Buchung kennt nur den Namen. Bei
-einem Projekt mit Buchung aus 0.5 kommt jede neue Variante zur Prüfung, auch nach einer Buchung in
-0.6 (Entscheidung Koordinator, sichere Seite; die Antwort merken: RM-720).
+gespeichertes Projekt findet seine Buchung aus 0.5 nicht — die Buchung kennt nur den Namen. Die
+Frage gilt, bis sie beantwortet ist: Trägt das Projekt mit denselben Druckfilamenten eine gültige
+Buchung ab 0.6.0, bucht die nächste Variante selbst; eine zurückgenommene Buchung aus 0.5 ist kein
+Kandidat (Integrationsreview welle4, T2-M1). Offen bleibt das umbenannte Projekt ([RM-720](ROADMAP.md#rm-720)).
 Projekt und Lager schrieb 0.5.3 ohne
 Slicerlauf (23,45 g mit der Quelle G-Code gesetzt), die Spule steht im Test an der Bedarfszeile. Nachweis: Projekt
 und Lager, die 0.5.3 selbst schrieb (*Halter konstruieren*, `usage_booking_weg2_v053*`), am Stand
