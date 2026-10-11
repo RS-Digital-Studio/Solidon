@@ -5520,15 +5520,25 @@ def _free_form_share(result: SliceResult) -> float:
 
 
 def _outline_measures(outlines: Sequence[np.ndarray]) -> np.ndarray:
-    """Fläche, Umfang und Hüllbox der Umrisse einer Schicht (:func:`free_form_share`)."""
-    area = 0.0
-    length = 0.0
-    for ring in outlines:
-        x, y = ring[:, 0], ring[:, 1]
-        area += 0.5 * abs(float(np.dot(x[:-1], y[1:]) - np.dot(x[1:], y[:-1])))
-        length += float(np.hypot(np.diff(x), np.diff(y)).sum())
+    """Fläche, Umfang und Hüllbox der Umrisse einer Schicht (:func:`free_form_share`).
+
+    Als Feldrechnung über alle Umrisse zugleich: Kreuzprodukt und Schrittlänge
+    je Kante der aneinandergehängten Punkte, die Kante vom letzten Punkt eines
+    Umrisses zum ersten des nächsten fällt weg, die Fläche je Umriss
+    (``np.add.reduceat``) ohne Vorzeichen. Je Umriss in Python gerechnet waren
+    das an der Kumiko-Schale vier Fünftel der Messung (Review RM-588, L4).
+    """
     stacked = np.concatenate(outlines)
-    return np.array([area, length, *stacked.min(axis=0), *stacked.max(axis=0)])
+    sizes = np.fromiter((len(ring) for ring in outlines), dtype=np.int64, count=len(outlines))
+    starts = np.cumsum(sizes) - sizes
+    x, y = stacked[:, 0], stacked[:, 1]
+    cross = x[:-1] * y[1:] - x[1:] * y[:-1]
+    steps = np.hypot(np.diff(x), np.diff(y))
+    seams = starts[1:] - 1
+    cross[seams] = 0.0
+    steps[seams] = 0.0
+    area = 0.5 * float(np.abs(np.add.reduceat(cross, starts)).sum())
+    return np.array([area, float(steps.sum()), *stacked.min(axis=0), *stacked.max(axis=0)])
 
 
 def _same_measures(mine: np.ndarray, theirs: np.ndarray) -> bool:
