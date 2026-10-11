@@ -41,7 +41,7 @@ scrive in `website/version.json`.
 - Ogni funzione ha lo stesso nome ovunque. Lo strumento *Dividi* offre *Dividi lungo un piano*, *Dividi lungo una linea tracciata* e *Dividi in pezzi distinti*.
 - Sul corpo selezionato, *Dividi automaticamente …* si trova ora sotto *Prepara*.
 - Nella finestra a riposo solo *Catalogo dei blocchi …* risalta a colori. Il rosso resta ai pulsanti che scartano o eliminano, e le domande si aprono con il focus su *Annulla*.
-- Il catalogo si chiama *Catalogo dei blocchi …* nel menu, nella linguetta *Selezione* e nel progetto vuoto. *Blocchi* è solo il gruppo con *Crea coperchio* e *Crea coperchio a vite*.
+- Il catalogo si chiama ovunque *Catalogo dei blocchi …*. Nella linguetta *Selezione*, *Blocchi* è solo il gruppo con *Crea coperchio* e *Crea coperchio a vite*.
 - In modalità disegno la linguetta *Selezione* è nascosta. L'elenco dei vincoli mostra quelli dei punti e delle linee selezionati, più ogni conflitto.
 - Nella scheda dei parametri, una misura mostra «Non utilizzato» solo quando è così. Il pulsante dice quanti numeri fissi si possono collegare alle misure.
 - La segnalazione di errore allega un registro di arresto anomalo solo dopo un vero arresto anomalo di Solidon.

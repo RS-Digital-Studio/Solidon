@@ -66,7 +66,7 @@ Nutzen da und sonst nichts.
 - Jede Funktion heißt überall gleich. Das Werkzeug *Teilen* bietet *An Ebene teilen*, *An gezeichneter Linie teilen* und *In Einzelteile aufteilen*.
 - Am gewählten Körper steht *Automatisch teilen …* jetzt unter *Vorbereiten*.
 - Im ruhenden Fenster ist nur *Bausteinkatalog …* farbig hervorgehoben. Rot tragen nur Knöpfe, die etwas verwerfen oder löschen, und Rückfragen öffnen mit dem Fokus auf *Abbrechen*.
-- Der Katalog heißt überall *Bausteinkatalog …*, im Menü, im Reiter *Auswahl* und im leeren Projekt. *Bausteine* heißt nur noch die Gruppe mit *Deckel erzeugen* und *Drehdeckel erzeugen*.
+- Der Katalog heißt überall *Bausteinkatalog …*. Im Reiter *Auswahl* heißt *Bausteine* nur noch die Gruppe mit *Deckel erzeugen* und *Drehdeckel erzeugen*.
 - Im Zeichenmodus ist der Reiter *Auswahl* ausgeblendet. Die Liste der Bedingungen zeigt die der gewählten Punkte und Linien und jeden Widerspruch.
 - In der Parameterkarte steht unter einem Maß nur noch „Nicht verwendet“, wo das zutrifft. Wie viele feste Zahlen sich an Maße binden lassen, sagt der Knopf.
 - Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.

@@ -41,7 +41,7 @@ it into `website/version.json`.
 - Every function has the same name everywhere. The *Split* tool offers *Split at a plane*, *Split along a drawn line* and *Split into separate parts*.
 - On the selected body, *Split automatically …* now sits under *Prepare*.
 - In the resting window only *Part catalogue …* is highlighted in colour. Red is kept for buttons that discard or delete, and confirmations open with the focus on *Cancel*.
-- The catalogue is called *Part catalogue …* everywhere: in the menu, the *Selection* tab and the empty project. *Parts* is only the group with *Create lid* and *Create screw lid*.
+- The catalogue is called *Part catalogue …* everywhere. In the *Selection* tab, *Parts* is only the group with *Create lid* and *Create screw lid*.
 - In sketch mode the *Selection* tab is hidden. The list of constraints shows those of the selected points and lines, plus any conflict.
 - In the parameter card, a dimension shows “Not used” only where that is true. The button says how many fixed numbers can be bound to dimensions.
 - The error report attaches a crash log only when Solidon actually crashed.

@@ -41,7 +41,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Cada função tem o mesmo nome em todo o lado. A ferramenta *Dividir* oferece *Dividir por um plano*, *Dividir ao longo de uma linha desenhada* e *Dividir em peças soltas*.
 - No corpo selecionado, *Dividir automaticamente …* está agora em *Preparar*.
 - Na janela em repouso só *Catálogo de blocos …* se destaca a cor. O vermelho fica para os botões que descartam ou apagam, e as perguntas abrem com o foco em *Cancelar*.
-- O catálogo chama-se *Catálogo de blocos …* no menu, no separador *Seleção* e no projeto vazio. *Blocos* é só o grupo com *Criar tampa* e *Criar tampa de rosca*.
+- O catálogo chama-se em todo o lado *Catálogo de blocos …*. No separador *Seleção*, *Blocos* é só o grupo com *Criar tampa* e *Criar tampa de rosca*.
 - No modo de desenho, o separador *Seleção* fica oculto. A lista de restrições mostra as dos pontos e linhas selecionados, mais qualquer conflito.
 - No cartão de parâmetros, uma medida só mostra «Não utilizado» quando é o caso. O botão diz quantos números fixos se podem associar a medidas.
 - O relatório de erro só anexa um registo de falha quando o Solidon falhou mesmo.
