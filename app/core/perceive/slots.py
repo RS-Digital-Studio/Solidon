@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Any, Final, NamedTuple
 import numpy as np
 
 from app.core import units
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, stable_normals
 from app.core.perceive.surfaces import PATCH_BLOCK, clipped_patches, planar_patch
 from app.core.types import Feature, FeatureId, MeasureSource, SurfacePatch, Vec3
 from app.core.units import EPS_GEOM, positive_axis, weld_tolerance
@@ -1229,7 +1229,8 @@ def _flank_surfaces(
             continue
         first = int(chosen[np.argmax(np.asarray(body.area_faces)[chosen])])
         origin = np.asarray(body.triangles_center[first])
-        normal = np.asarray(body.face_normals[first])
+        # Dieselbe Quelle wie die erkannten ebenen Flächen (features._face_candidates).
+        normal = stable_normals(body)[0][first] + 0.0
         planar: list[int] = []
         for start in range(0, len(chosen), PATCH_BLOCK):
             if check_cancelled is not None:
@@ -1242,7 +1243,7 @@ def _flank_surfaces(
             mesh,
             planar,
             _point(body.triangles_center[first]),
-            _point(body.face_normals[first]),
+            _point(normal),
             check_cancelled=check_cancelled,
         )
         if part is not None:
