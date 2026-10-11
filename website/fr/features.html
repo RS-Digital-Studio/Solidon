@@ -286,14 +286,14 @@
         </figure>
       </div>
 
-      <div class="showcase" id="building-blocks" data-operations="create_bayonet create_channel_joint create_detent_disc create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_rod_connector create_room_floor create_room_pane create_room_wall insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
+      <div class="showcase" id="building-blocks" data-operations="create_barrel_hinge create_bayonet create_cable_clip create_channel_joint create_detent_disc create_dowel create_foot create_gusset create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_living_hinge create_printed_nut create_printed_screw create_rib create_rod_connector create_room_floor create_room_pane create_room_wall create_threaded_rod create_wall_mount insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_threaded_rod insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Blocs</span>
           <h3>Un piège à écrou prêt à dimensionner</h3>
           <p>La face cliquée compte&nbsp;: un bloc se pose là où vous avez
-          pointé dans le modèle — chaque opération sur une face coûtait
-          auparavant deux clics. Le catalogue à droite connaît désormais aussi support mural, nervure, languette et rainure,
-          ergot d'encliquetage, clip d'encliquetage et charnière-film.</p>
+          pointé dans le modèle. Le catalogue contient aussi support mural,
+          nervure, languette et rainure, ergot d'encliquetage, clip
+          d'encliquetage et charnière-film.</p>
 <p>Également au catalogue&nbsp;: Fermeture à baïonnette, Disque rotatif cranté, Patte percée, Manchon d'emboîtement et raccord de tiges, Raccord de goulotte, des supports en quatre formes et, pour le modélisme, Mur de pièce, Plancher de pièce et Vitre.</p>
           <p>Des blocs testés en six groupes — trou de vis avec fraisure,
           piège à écrou, insert à chaud, filetage, goupille, œil de
@@ -302,9 +302,19 @@
           gousset et pied. Les cotes viennent d'une table de pièces
           normalisées, pas de l'intuition.</p>
           <p class="note">Chaque bloc est testé aux combinaisons de ses valeurs limites : <b>maillage fermé, épaisseur de paroi minimale et absence d’auto-intersection.</b></p>
-          <p>Qui choisit un bloc avant de pointer un endroit se voit
-          interrogé par Solidon3D, plutôt que de le voir posé à l'origine. Le
-          catalogue lui-même s'ouvre aussi sans modèle chargé — pour insérer un bloc, créez d’abord un solide ou importez un modèle avec les boutons du catalogue.</p>
+          <p>Si vous ne choisissez aucun endroit, les blocs qui forment une
+          pièce à eux seuls se créent comme corps à part sur un endroit libre
+          du plateau d'impression, même dans un projet vide. C'est le cas
+          notamment de la vis, de l'écrou imprimé, de la goupille, de la
+          charnière à axe et de la charnière-film, de la nervure, du gousset
+          d'angle, du pied, du support mural et du clip de câble. Le goujon
+          fileté est une tige filetée ou une vis sans tête, avec le même
+          filetage imprimable que la vis et l'écrou.</p>
+          <p>Les autres blocs apparaissent, si vous ne choisissez aucun
+          endroit, en aperçu sur la plus grande face tournée vers le haut,
+          plutôt qu'à l'origine. Vous pouvez choisir un autre endroit. Sans
+          modèle, le catalogue explique pourquoi l'insertion est bloquée et
+          propose le chemin vers le premier corps.</p>
           <p>L'arbre des objets montre ce qu'apporte un bloc&nbsp;: ses
           caractéristiques figurent en entrées propres en dessous, et le
           nœud propose de modifier exactement cette étape.</p>
@@ -567,7 +577,7 @@
           de disparaître dans le modèle comme constantes. Devant, les deux ou
           trois valeurs qu'on change vraiment — le reste vit sous
           «&nbsp;Autres réglages&nbsp;».</p>
-          <p class="note">178 opérations, toutes sur le même modèle&nbsp;:
+          <p class="note">190 opérations, toutes sur le même modèle&nbsp;:
           <b>menu, ligne de commande et chat lisent la même
           déclaration.</b></p>
         </div>

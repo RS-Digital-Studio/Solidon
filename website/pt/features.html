@@ -283,14 +283,14 @@
         </figure>
       </div>
 
-      <div class="showcase" id="building-blocks" data-operations="create_bayonet create_channel_joint create_detent_disc create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_rod_connector create_room_floor create_room_pane create_room_wall insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
+      <div class="showcase" id="building-blocks" data-operations="create_barrel_hinge create_bayonet create_cable_clip create_channel_joint create_detent_disc create_dowel create_foot create_gusset create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_living_hinge create_printed_nut create_printed_screw create_rib create_rod_connector create_room_floor create_room_pane create_room_wall create_threaded_rod create_wall_mount insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_threaded_rod insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Blocos</span>
           <h3>Um alojamento de porca pronto a dimensionar</h3>
           <p>A face em que clica é que conta: um bloco aparece onde apontou
-          no modelo — antes, cada operação numa face custava dois cliques. O catálogo à direita conhece agora também suporte de
-          parede, nervura, lingueta e ranhura, lingueta de encaixe, ligação
-          de encaixe e dobradiça de filme.</p>
+          no modelo. No catálogo estão também suporte de parede, nervura,
+          lingueta e ranhura, lingueta de encaixe, ligação de encaixe e
+          dobradiça de filme.</p>
 <p>Também no catálogo: Fecho de baioneta, Disco giratório com retenção, Patilha com furo, Manga de encaixe e conector de varetas, Junta de calha, suportes em quatro formas e, para maquetes, Parede da divisão, Piso da divisão e Vidro da janela.</p>
           <p>Blocos verificados em seis grupos — furo de parafuso com
           escareamento, alojamento de porca, bucha de inserção a quente,
@@ -300,9 +300,19 @@
           As medidas vêm de uma tabela de peças normalizadas, não do
           palpite.</p>
           <p class="note">Cada bloco é verificado nas combinações dos seus valores limite: <b>malha fechada, espessura mínima de parede e ausência de autointerseções.</b></p>
-          <p>Quem escolher um bloco antes de apontar um sítio é interrogado
-          pelo Solidon3D, em vez de o ver colocado na origem. O catálogo
-          também se abre sem nenhum modelo carregado — para inserir um bloco, crie primeiro um sólido ou importe um modelo com os botões do catálogo.</p>
+          <p>Se não escolher nenhum sítio, os blocos que são uma peça por si
+          só surgem como corpo próprio num sítio livre da placa de impressão,
+          também num projeto vazio. Entre eles estão o parafuso, a porca
+          impressa, o pino de posicionamento, a dobradiça de pino e a de
+          filme, a nervura, o esquadro de canto, o pé, o suporte de parede e o
+          clipe de cabo. O perno roscado é uma barra roscada ou um
+          prisioneiro sem cabeça, com a mesma rosca imprimível do parafuso e
+          da porca.</p>
+          <p>Os outros blocos, se não escolher nenhum sítio, aparecem em
+          pré-visualização na maior face virada para cima, em vez de na
+          origem. Pode escolher outro sítio. Sem modelo, o catálogo explica
+          porque não se podem inserir e mostra o caminho até ao primeiro
+          corpo.</p>
           <p>A árvore de objetos mostra o que um bloco traz consigo: as suas
           características aparecem como entradas próprias por baixo dele, e
           o nó propõe alterar exatamente esse passo.</p>
@@ -562,7 +572,7 @@
           buscar o seu valor ao perfil de material, em vez de desaparecerem
           no modelo como constantes. À frente estão os dois ou três valores
           que se muda de facto — o resto vive em «Mais definições».</p>
-          <p class="note">178 operações, todas com o mesmo padrão:
+          <p class="note">190 operações, todas com o mesmo padrão:
           <b>menu, linha de comandos e chat veem a mesma
           declaração.</b></p>
         </div>

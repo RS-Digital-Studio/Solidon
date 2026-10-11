@@ -285,15 +285,14 @@
         </figure>
       </div>
 
-      <div class="showcase" id="building-blocks" data-operations="create_bayonet create_channel_joint create_detent_disc create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_rod_connector create_room_floor create_room_pane create_room_wall insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
+      <div class="showcase" id="building-blocks" data-operations="create_barrel_hinge create_bayonet create_cable_clip create_channel_joint create_detent_disc create_dowel create_foot create_gusset create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_living_hinge create_printed_nut create_printed_screw create_rib create_rod_connector create_room_floor create_room_pane create_room_wall create_threaded_rod create_wall_mount insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_threaded_rod insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Blocchi</span>
           <h3>Una sede per dado pronta da dimensionare</h3>
           <p>La faccia cliccata conta: un blocco si posa dove hai indicato
-          nel modello — prima ogni operazione su una faccia costava due
-          clic. Il catalogo a destra conosce ora anche supporto a
-          parete, nervatura, linguetta e scanalatura, dente di scatto,
-          aggancio a scatto e cerniera a film.</p>
+          nel modello. Nel catalogo ci sono anche supporto a parete,
+          nervatura, linguetta e scanalatura, dente di scatto, aggancio a
+          scatto e cerniera a film.</p>
 <p>Nel catalogo anche: Chiusura a baionetta, Disco girevole a scatti, Aletta con foro, Manicotto a innesto e raccordo per aste, Giunto di canale, supporti in quattro forme e, per il modellismo, Parete della stanza, Pavimento della stanza e Vetro della finestra.</p>
           <p>Blocchi verificati in sei gruppi — foro per vite con svasatura,
           sede per dado, inserto a caldo, filettatura, spina, occhiello di
@@ -302,9 +301,18 @@
           squadretta e piede. Le quote vengono da una tabella dei componenti
           normalizzati, non dall'istinto.</p>
           <p class="note">Ogni blocco è verificato alle combinazioni dei suoi valori limite: <b>mesh chiusa, spessore minimo di parete e assenza di autointersezioni.</b></p>
-          <p>Chi sceglie un blocco prima di indicare un punto viene
-          interpellato da Solidon3D, invece di vederlo piazzato all'origine.
-          Anche il catalogo si apre senza un modello caricato — per inserire un blocco, crea prima un solido o importa un modello con i pulsanti del catalogo.</p>
+          <p>Se non scegli un punto, i blocchi che sono un pezzo a sé nascono
+          come corpo separato in un punto libero del piatto di stampa, anche
+          in un progetto vuoto. Tra questi ci sono vite, dado stampato, spina,
+          cerniera a perno e cerniera a film, nervatura, fazzoletto d'angolo,
+          piedino, supporto a parete e clip per cavo. Il perno filettato è
+          un'asta filettata o una vite senza testa, con la stessa filettatura
+          stampabile di vite e dado.</p>
+          <p>Gli altri blocchi, se non scegli un punto, compaiono in anteprima
+          sulla faccia più grande rivolta verso l'alto, invece che
+          all'origine. Puoi scegliere un altro punto. Senza modello, il
+          catalogo spiega perché non si possono inserire e ti porta al primo
+          corpo.</p>
           <p>L'albero degli oggetti mostra cosa porta con sé un blocco: le
           sue caratteristiche compaiono come voci proprie sotto di esso, e il
           nodo propone di modificare esattamente quel passo.</p>
@@ -565,7 +573,7 @@
           loro valore dal profilo del materiale, invece di sparire nel
           modello come costante. Davanti stanno i due o tre valori che si
           cambiano davvero — il resto vive sotto «Altre impostazioni».</p>
-          <p class="note">178 operazioni, tutte sullo stesso schema:
+          <p class="note">190 operazioni, tutte sullo stesso schema:
           <b>menu, riga di comando e chat leggono la
           stessa dichiarazione.</b></p>
         </div>

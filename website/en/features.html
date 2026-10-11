@@ -282,7 +282,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="building-blocks" data-operations="create_bayonet create_channel_joint create_detent_disc create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_rod_connector create_room_floor create_room_pane create_room_wall insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
+      <div class="showcase" id="building-blocks" data-operations="create_barrel_hinge create_bayonet create_cable_clip create_channel_joint create_detent_disc create_dowel create_foot create_gusset create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_living_hinge create_printed_nut create_printed_screw create_rib create_rod_connector create_room_floor create_room_pane create_room_wall create_threaded_rod create_wall_mount insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_threaded_rod insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Building blocks</span>
           <h3>Insert a nut trap with editable dimensions</h3>
@@ -299,10 +299,16 @@
           <p class="note">Every block has a range check at specified parameter
           combinations: <b>closed mesh, minimum wall thickness, no
           self-intersection.</b></p>
-          <p>If you pick a block before choosing a spot, Solidon3D previews it
-          on the largest upward-facing surface. You can choose another spot.
-          Without a model, the catalogue explains why placement is unavailable
-          and offers a way to create the first body.</p>
+          <p>Building blocks that are a part on their own are created as a
+          body of their own on a free spot of the build plate when you choose
+          no spot, even in an empty project. These include the screw, printed
+          nut, dowel pin, barrel and living hinge, rib, corner gusset, foot,
+          wall mount and cable clip. The threaded stud is a headless threaded
+          rod or stud with the same printable thread as screw and nut.</p>
+          <p>Other blocks are previewed on the largest upward-facing surface
+          when no spot is chosen, instead of at the origin. You can choose
+          another spot. Without a model, the catalogue explains why they
+          cannot be inserted and offers a way to create the first body.</p>
           <p>The object tree shows what a building block brought with it:
           its features appear as their own entries underneath, and the node
           offers to change exactly that step.</p>
@@ -564,7 +570,7 @@
           value from the material profile rather than disappearing into the
           model as a constant. The two or three values you actually change
           are up front — the rest lives under “More settings”.</p>
-          <p class="note">178 operations, all built the same way:
+          <p class="note">190 operations, all built the same way:
           <b>menu, command line and chat read the same
           declaration.</b></p>
         </div>

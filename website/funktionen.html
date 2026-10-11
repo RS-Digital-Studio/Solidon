@@ -292,7 +292,7 @@
         </figure>
       </div>
 
-      <div class="showcase" id="bausteine" data-operations="create_bayonet create_channel_joint create_detent_disc create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_rod_connector create_room_floor create_room_pane create_room_wall insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_wall_ladder insert_wall_mount">
+      <div class="showcase" id="bausteine" data-operations="create_barrel_hinge create_bayonet create_cable_clip create_channel_joint create_detent_disc create_dowel create_foot create_gusset create_holder_fork create_holder_ring create_holder_shelf create_holder_u create_living_hinge create_printed_nut create_printed_screw create_rib create_rod_connector create_room_floor create_room_pane create_room_wall create_threaded_rod create_wall_mount insert_barrel_hinge insert_bayonet insert_bearing_seat insert_cable_clip insert_cable_gland insert_channel_joint insert_detent_disc insert_dowel insert_fit_ladder insert_foot insert_gusset insert_heatset_m4 insert_hinge_eye insert_holder_fork insert_holder_ring insert_holder_shelf insert_holder_u insert_keyhole insert_latch insert_living_hinge insert_lug insert_magnet_pocket insert_nut_trap insert_overhang_fan insert_pegboard_hook insert_printed_nut insert_printed_screw insert_printed_thread insert_profile_tongue insert_rib insert_rod_connector insert_room_floor insert_room_pane insert_room_wall insert_screw_hole insert_snap_connector insert_snap_fit insert_threaded_rod insert_wall_ladder insert_wall_mount">
         <div>
           <span class="kicker">Bausteine</span>
           <h3>Mutternfalle mit veränderbaren Maßen einsetzen</h3>
@@ -309,11 +309,18 @@
           <p class="note">Jeder Baustein hat einen Bereichsnachweis an festgelegten
           Parameterkombinationen: <b>geschlossenes Netz, Mindestwandstärke,
           keine Selbstdurchdringung.</b></p>
-          <p>Wählst du vor dem Einsetzen keine Stelle, setzt Solidon3D den
-          Baustein zur Vorschau auf die größte nach oben zeigende Fläche,
-          statt an den Nullpunkt. Du kannst eine andere Stelle wählen.
-          Ohne Modell erklärt der Katalog, warum das Einsetzen gesperrt ist,
-          und bietet den Weg zum ersten Körper an.</p>
+          <p>Bausteine, die für sich ein Teil sind, entstehen ohne gewählte
+          Stelle als eigener Körper auf einer freien Stelle der Druckplatte,
+          auch im leeren Projekt. Dazu gehören etwa Schraube, gedruckte
+          Mutter, Passstift, Bolzen- und Filmscharnier, Rippe, Eckwinkel,
+          Standfuß, Wandhalter und Kabelclip. Der Gewindebolzen ist eine
+          Gewindestange oder Stiftschraube ohne Kopf, mit demselben
+          druckbaren Gewinde wie Schraube und Mutter.</p>
+          <p>Andere Bausteine setzt Solidon3D ohne gewählte Stelle zur
+          Vorschau auf die größte nach oben zeigende Fläche, statt an den
+          Nullpunkt. Du kannst eine andere Stelle wählen. Ohne Modell erklärt
+          der Katalog, warum ihr Einsetzen gesperrt ist, und bietet den Weg
+          zum ersten Körper an.</p>
           <p>Der Objektbaum zeigt, was ein Baustein mitbringt: seine
           Merkmale stehen als eigene Einträge darunter, und der Knoten bietet
           an, genau diesen Schritt zu ändern.</p>
@@ -581,7 +588,7 @@
           ihren Wert aus dem Materialprofil, statt als Konstante im Modell zu
           verschwinden. Vorne stehen die Werte, die man wirklich ändert —
           der Rest liegt unter „Weitere Einstellungen“.</p>
-          <p class="note">178 Operationen, alle nach demselben Muster:
+          <p class="note">190 Operationen, alle nach demselben Muster:
           <b>Menü, Kommandozeile und Chat sehen dieselbe
           Deklaration.</b></p>
         </div>
