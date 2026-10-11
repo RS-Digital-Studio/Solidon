@@ -3539,6 +3539,32 @@ def test_the_selection_tab_starts_behind_and_comes_forward_on_a_selection(
     assert window.feature_dock.is_current(), "und beim Merkmal darin bleibt er vorn"
 
 
+def test_reading_a_model_leaves_the_report_in_front(window: MainWindow) -> None:
+    """Nach dem Einlesen steht der Prüfbericht vorn, nicht *Auswahl*.
+
+    Die Anleitungen sagen nach dem Einlesen „Rechts im *Prüfbericht* steht …“.
+    Der Baum gab der ersten Zeile beim Aufbau die Tastaturmarke über ein
+    ``setCurrentItem``, das sie für einen Augenblick wählte; diese
+    Zwischenauswahl holte den Reiter *Auswahl* nach vorn, obwohl danach nichts
+    gewählt war (Handbuchprüfung am Fenster, 11.10.2026).
+    """
+    assert not window.feature_dock.is_current(), "beim Start steht der Bericht vorn"
+    seen: list[object] = []
+    window.object_tree.selectionChanged.connect(seen.append)
+
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+
+    assert window.object_tree.selected() is None, "nach dem Einlesen ist nichts gewählt"
+    assert all(value is None for value in seen), f"keine Zwischenauswahl: {seen}"
+    assert not window.feature_dock.is_current(), "der Prüfbericht bleibt vorn"
+    first = window.object_tree.tree.topLevelItem(0)
+    assert first is not None and window.object_tree.tree.currentItem() is first, (
+        "die Tastatur hat weiter ihren Anfang in der ersten Zeile"
+    )
+
+
 def _close_the_feature_window(window: MainWindow) -> None:
     """Den Reiter *Auswahl* verlassen wie mit einem Klick auf *Prüfbericht*."""
     window.right.setCurrentWidget(window.report)

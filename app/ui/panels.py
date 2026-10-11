@@ -2919,10 +2919,15 @@ class ObjectTree(QWidget):
             # hat einen Anfang. Ohne sie stand ``currentItem()`` auf nichts,
             # und wer per Tabulator in den Baum kam, bewegte mit den
             # Pfeiltasten gar nichts.
+            # **Ohne Auswahl, auch nicht für einen Augenblick:** Ein
+            # ``setCurrentItem`` ohne ``NoUpdate`` wählte die Zeile erst und
+            # nahm sie danach zurück. Die Zwischenmeldung holte nach jedem
+            # Einlesen den Reiter *Auswahl* nach vorn, und der Prüfbericht, den
+            # die Anleitungen dort nennen, stand dahinter (Handbuchprüfung
+            # 11.10.2026).
             first = self.tree.topLevelItem(0)
             if first is not None and self.tree.currentItem() is None:
-                self.tree.setCurrentItem(first)
-                first.setSelected(False)
+                self.tree.setCurrentItem(first, 0, QItemSelectionModel.SelectionFlag.NoUpdate)
             return
         wanted = set(objects)
         self._order = list(objects)
