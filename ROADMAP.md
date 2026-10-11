@@ -129,6 +129,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-708 — Kleine Kuppen bekommen keine feinen Schichten](#rm-708) | Geometrie, Erkennung und Druckvorbereitung | Scheitel ohne Rampe einseitig messen; Messung am Drachen, an Augen und Knöpfen |
 | [RM-703 — Probedruck: Curas Baum gegen normale Stütze unter einem flachen Hut](#rm-703) | Geometrie, Erkennung und Druckvorbereitung | Probedruck (Robert) |
 | [RM-702 — Cura-Drucker mit eigenem Lochausgleich bekommen keinen Rat](#rm-702) | Geometrie, Erkennung und Druckvorbereitung | Wert aus der Definitionskette lesen wie `manufacturer.cura_fan_curve` |
+| [RM-701 — Die Brückenweite stimmt bei geschlossenen Ringen nicht](#rm-701) | Geometrie, Erkennung und Druckvorbereitung | Weite über geschlossene Ringe neu fassen; Wand mit Flanke und Steg, Rohr mit ausgestellter Wand und Sporn als Testkörper |
 | [RM-700 — Schichtanalyse und Kanalfrage brauchen an großen Figuren Minuten](#rm-700) | Geometrie, Erkennung und Druckvorbereitung | Schnitt je Säule auf ihre Hüllbox zuschneiden (bitgleich gemessen), Merker nach Körperzahl; nach RM-626 |
 | [RM-721 — Eine kleine flache Halbkuppel verliert bei 0,28 mm ihre Stütze](#rm-721) | Geometrie, Erkennung und Druckvorbereitung | Nachweis im Entwurfsprofil (0,28 mm) im G-Code; lose Kante kürzer als `SPAN_INTERESTING` |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
@@ -3949,6 +3950,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   und RM-627 (10.10.2026).
   **Abnahme:** CPU-Zeit an Drache und Eiffelturm mindestens halbiert, Antworten bitgleich,
   Merkerkapazität nach Körperzahl.
+
+<a id="rm-701"></a>
+
+- [ ] **RM-701 — Die Brückenweite stimmt bei geschlossenen Ringen nicht.**
+  Die Schichtanalyse (`app/core/slice/analysis.py`, Brückenweite) misst über geschlossene
+  Ringe falsch, seit v0.3.0: Eine Wand mit Flanke ringsum und einem Steg von 20 mm ergibt die
+  Weite 0 und keine Stütze; ein Rohr mit ausgestellter Wand und Sporn ergibt 39,3 mm und eine
+  Stütze, die es nicht braucht. Seit RM-587 zieht die falsche Weite am Rohr zusätzlich dicke
+  Brückenbahnen, 0,9 Fluss und am Kobra 2 die Brückenstütze nach sich. Aus der Nachprüfung von
+  RM-627 (10.10.2026).
+  **Abnahme:** Beide Körper als Test mit der Weite, die ein Slicer an ihnen druckt (Steg 20 mm
+  mit Stütze, Rohr ohne); die übrigen Brückenkörper des Korpus unverändert.
 
 <a id="rm-702"></a>
 
