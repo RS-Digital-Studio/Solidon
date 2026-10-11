@@ -46,6 +46,7 @@ it into `website/version.json`.
 - The error report attaches a crash log only when Solidon actually crashed.
 - The tour card is as tall as its steps. A step unfolds with a click or the space bar, and no tooltip bubble covers the view any more.
 - When a tour step points at the report, the tour stays visible. The tab is framed, and the step tells you which tab to open.
+- The tour no longer cuts text off at the edge, even after the window gets smaller. The current step takes as many lines as it needs.
 - Clicking the i next to an action in the *Selection* tab opens the manual where that action is explained.
 - Every dimension of a part can be bound to a project dimension with fx, even before it holds an expression.
 - After dragging the handle of a preview, no number stays above the view. A number typed during the drag moves the preview, not the selected body.

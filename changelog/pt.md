@@ -46,6 +46,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O relatório de erro só anexa um registo de falha quando o Solidon falhou mesmo.
 - O cartão da visita guiada tem a altura dos seus passos. Um passo abre-se com um clique ou com a barra de espaços, e nenhum balão tapa mais a vista.
 - Quando um passo da visita guiada aponta para o relatório de verificação, a visita continua visível. O separador fica emoldurado e o passo diz qual abrir.
+- A visita guiada já não corta o texto na margem, mesmo depois de reduzir a janela. O passo atual ocupa as linhas de que precisa.
 - Um clique no i junto a uma ação do separador *Seleção* abre o manual onde essa ação é explicada.
 - Cada cota de um bloco pode ser ligada com fx a uma cota do projeto, mesmo antes de ter uma expressão.
 - Depois de arrastar a pega de uma pré-visualização, nenhum número fica sobre a vista. Um número escrito durante o arrasto move a pré-visualização, não o corpo escolhido.

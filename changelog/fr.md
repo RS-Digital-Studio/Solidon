@@ -47,6 +47,7 @@ dans `website/version.json`.
 - Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.
 - La carte de la visite guidée a la hauteur de ses étapes. Une étape se déplie d'un clic ou avec la barre d'espace, et aucune bulle ne couvre plus la vue.
 - Quand une étape de la visite guidée renvoie au rapport de contrôle, la visite reste visible. L'onglet est encadré et l'étape dit lequel ouvrir.
+- La visite guidée ne coupe plus le texte au bord, même après avoir réduit la fenêtre. L'étape en cours prend autant de lignes qu'il lui faut.
 - Un clic sur le i à côté d'une action de l'onglet *Sélection* ouvre le manuel à l'endroit qui l'explique.
 - Chaque cote d'un bloc peut être liée à une cote du projet avec fx, même si elle ne porte encore aucune expression.
 - Après avoir tiré la poignée d'un aperçu, aucun nombre ne reste au-dessus de la vue. Un nombre saisi pendant le geste déplace l'aperçu, pas le corps sélectionné.
