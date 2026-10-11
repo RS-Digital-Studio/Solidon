@@ -2052,6 +2052,7 @@
   "Die Fläche hat ihre Farbe. Gedruckt wird wie in [Ein Modell prüfen und drucken](manual:print-a-model).": "La face a sa couleur. L'impression se fait comme dans [Vérifier et imprimer un modèle](manual:print-a-model).",
   "Die Fläche hat sich dabei kaum verschoben.": "La surface ne s'est presque pas déplacée.",
   "Die Fläche hat sich dabei spürbar verschoben — Passungen neu prüfen.": "La surface s'est nettement déplacée — vérifier de nouveau les ajustements.",
+  "Die Fläche hat sich geändert. Die Stelle ist neu gesetzt.": "La surface a changé. L'emplacement a été redéfini.",
   "Die Fläche oder das Volumen lässt sich an dieser exakten Form nicht zuverlässig bestimmen. Verkleinern Sie die Änderung oder wählen Sie eine andere Ausgangsform.": "Impossible de déterminer de manière fiable l'aire ou le volume de cette forme exacte. Réduisez la modification ou choisissez une autre forme de départ.",
   "Die Fläche wurde gefärbt.": "La face a été colorée.",
   "Die Fläche wurde nicht gefunden — vielleicht hat ein früherer Schritt sie verändert. Wählen Sie sie neu, oder färben Sie das ganze Teil.": "La face n'a pas été trouvée — une étape précédente l'a peut-être modifiée. Choisissez-la à nouveau, ou colorez la pièce entière.",

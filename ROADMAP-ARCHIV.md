@@ -35,6 +35,7 @@ entfernt hat.
 | 2026-10-11 | [RM-766: Das Angleichen verschweißt nur, wo es etwas zu verschweißen gibt (11.10.2026)](#rm-766-das-angleichen-verschweißt-nur-wo-es-etwas-zu-verschweißen-gibt-11102026) |
 | 2026-10-10 | [RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)](#rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026) |
 | 2026-10-11 | [RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)](#rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026) |
+| 2026-10-11 | [RM-773, RM-774, RM-775: Platzierung und Quellen warten auf die Wahl des Kunden (11.10.2026)](#rm-773-rm-774-rm-775-platzierung-und-quellen-warten-auf-die-wahl-des-kunden-11102026) |
 | 2026-10-10 | [RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz, das nicht unter das Bett reicht, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)](#rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-das-nicht-unter-das-bett-reicht-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026) |
 | 2026-10-10 | [RM-695: Ein gespeichertes Projekt öffnet nach einem Neustart ohne neue Erkennung (10.10.2026)](#rm-695-ein-gespeichertes-projekt-öffnet-nach-einem-neustart-ohne-neue-erkennung-10102026) |
 | 2026-10-10 | [RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)](#rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026) |
@@ -48371,3 +48372,55 @@ einen Handler bekommen oder die der Kern nicht mehr anbietet, machen ihn rot.
 Gegenprobe: ohne den Handler `export_only` rot. Changelog 0.6.0: eigener Punkt unter
 *Bedienung und System*. Die 27 Ratsätze stehen als Text im Dialog; sie als Knöpfe einzulösen
 (etwa `open_sketch`, die `sketch.*`-Wege) ist als neuer Punkt beim Koordinator gemeldet.
+
+## RM-773, RM-774, RM-775: Platzierung und Quellen warten auf die Wahl des Kunden (11.10.2026)
+
+<a id="rm-773-rm-774-rm-775-platzierung-und-quellen-warten-auf-die-wahl-des-kunden-11102026"></a>
+<a id="rm-773"></a>
+<a id="rm-774"></a>
+<a id="rm-775"></a>
+
+Gefunden am Kundenprotokoll S-20261010 (0.5.3); alle drei Warnungen waren **Vorschauen**, keine
+Schritte (`evaluation stopped at op N` nennt auch die Kennung des Entwurfs). Zweig
+`fix/schraubenloch-setzen`.
+
+**RM-773 — Schraubenloch ohne Stelle.** Die Vorschau beim Öffnen rechnete mit x = y = z = 0
+ohne Merkmal, bevor der Arbeiter die Fläche gefunden hatte, und *Übernehmen* stand frei.
+**Behoben:** `parts.ops.place_missing` stellt die Frage, an der `_anchor` anhält;
+`OperationDialog.place_missing` sperrt Vorschau und *Übernehmen* mit „Stelle im Bild
+anklicken.“ **Nachweis:** `test_surface_placement_ui.py::test_a_part_without_a_place_is_neither_computed_nor_applied`
+(am Stand davor rot), `test_parts.py::test_the_dialog_asks_the_same_question_about_a_missing_place`.
+
+**RM-774 — „Dieser Punkt liegt außerhalb der gewählten Fläche“ nach dem vorigen
+Schraubenloch.** Der Kunde öffnete das nächste, solange das vorige rechnete; der Fluss trat
+zurück, und die Vorschau band den alten Punkt an die neue Form. **Behoben in zwei Schritten.**
+Der erste vergaß die Stelle bei jedem `projectChanged`, auch beim Speichern, und ließ bei
+Flächenoperationen ohne Baustein den Nullpunkt übernehmbar (Review: *Merkmal verschieben*
+legte nach Strg+S die Bohrung bei (0, 0, 2) ab). Der zweite: `_document_changed` tritt nur
+zurück, wenn das Ergebnis veraltet ist (jede Formänderung erklärt es vorher dafür,
+`Session._changed`); bis zum neuen Ergebnis halten Vorschau und *Übernehmen* an
+(`OperationDialog.hold_place`). Mit dem Ergebnis bindet `start` die gesetzte Stelle über
+`placement.bind_surface` an die neue Form; hält sie, bleibt sie, sonst setzt
+`_renew_the_place` sie neu, und der Balken sagt „Die Fläche hat sich geändert. Die Stelle ist
+neu gesetzt.“ Wo x/y/z das Ziel eines vorhandenen Merkmals sind (`_MOVES_A_FEATURE`), startet
+nichts neu. Ein Dialog, der öffnet, während der vorige Schritt rechnet, wartet gesperrt und
+setzt sich mit dem Ergebnis selbst (vorher fünf Löcher genau übereinander, an jedem Stand).
+**Nachweis** (Fenstertests in `test_surface_placement_ui.py`, am Stand davor je rot):
+`test_saving_keeps_the_place_of_an_open_part_placement`,
+`test_the_target_of_a_moved_feature_survives_an_unrelated_change[save|drill]`,
+`test_a_place_that_still_holds_on_the_changed_shape_stays`,
+`test_a_part_opened_while_the_last_step_computes_seats_itself_afterwards`,
+`test_a_seat_measured_on_a_shape_that_changed_is_found_again` (mit dem Hinweis im Balken).
+
+**RM-775 — „Diese Quelle gibt es im Projekt nicht.“ am Relief.** Die Vorschau beim Öffnen las
+die leere Quelle. **Behoben:** `OperationDialog.source_missing` nennt den Knopf („Bild: Bild
+wählen …“) und rechnet nicht; *STEP laden* und *Zeichnung laden* bieten nur Dateien an, die
+sie lesen (`ingest.plan.reads`). **Nachweis:** `test_operation_ui.py::test_a_relief_without_an_image_waits_for_one`,
+`test_operation_ui.py::test_a_loading_dialog_offers_only_files_it_can_read[load_step|load_outline]`
+(am Stand davor rot), `test_import_formats.py::test_each_loading_step_reads_the_files_the_plan_gives_it`.
+
+**Nachgezogen aus dem Review:** `plan.reads` und `import_plan` teilen `_loader_of`, und der
+Test vergleicht je Endung aus `MODEL_SUFFIXES` mit der Operation, die `import_plan` wählt (G1).
+`test_parts.py::test_the_core_halts_exactly_where_the_dialog_says_a_place_is_missing` prüft
+für jeden Baustein an Fläche oder Bohrung, dass `_anchor` genau dort anhält, wo
+`place_missing` es sagt; der Flächenbezug allein ist die ausgewiesene Ausnahme (G2).

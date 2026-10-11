@@ -153,6 +153,9 @@ it into `website/version.json`.
 - Your own parts are created as a body of their own in the same way and do not attach to a body already in the project.
 - With *Save selection as a part*, the selected body comes with exactly the steps that build it. If a second body would come along, the dialog says so before saving.
 - Wall mounts, pipe clamps, profile clamps and holders take every screw from M3 to M64. If a size does not fit the other dimensions, the part says what to change.
+- A part for a face or hole is only computed once it has its spot in the view. Until then the dialog cannot be applied and says what is missing.
+- If the face under an open part dialog changes, the chosen spot stays as long as it still fits the new shape. Otherwise the part finds a new one and says so.
+- A part dialog that opens while the previous step is still computing places the part by itself as soon as the result is there, and cannot be applied until then.
 
 ### Editing and sketching
 
@@ -186,6 +189,8 @@ it into `website/version.json`.
 - If an action would hit a separate part next to the feature, or a placed feature would touch other material only along a line, Solidon says so instead of damaging the body.
 - If a separate part is in the way of a feature action, *Split into separate parts and try again* separates it and runs the action. Ctrl+Z undoes both.
 - Splitting into separate parts keeps every printable part, including pins and washers next to a large plate. Only small open surfaces and crumbs the printer cannot reproduce are dropped.
+- A relief only computes once an image is chosen. Until then the dialog points to the *Choose an image …* button.
+- The *Load STEP* and *Extrude a drawing* dialogs only offer files they can read. If the project has none, they point to the *Choose a file …* button.
 
 ### Generating with AI
 

@@ -22036,7 +22036,7 @@ class MainWindow(QMainWindow):
                 self._object_names(),
                 self,
                 values=values,
-                sources=self._source_names(),
+                sources=self._source_names(spec.name),
                 parameter_values=self._parameter_values(),
                 # **Auch hier die Merkmale**, nicht nur beim Korrigieren einer
                 # bestehenden Operation. Ohne sie baut der Dialog seine
@@ -22594,7 +22594,7 @@ class MainWindow(QMainWindow):
             values={**entry.params, **(given or {})},
             promote_values=False,
             front_fields=front,
-            sources=self._source_names(),
+            sources=self._source_names(spec.name),
             parameter_values=self._parameter_values(),
             # Dieselbe Verengung wie beim Anlegen: Wer einen Schritt im Verlauf
             # korrigiert, soll dort dieselbe Auswahl vorfinden wie beim ersten
@@ -23773,6 +23773,11 @@ class MainWindow(QMainWindow):
             flow = dialog.placement_flow
             if flow is not None and flow.active and approval.required is False:
                 return
+            if dialog.place_missing() or dialog.source_missing():
+                # Ohne Stelle oder Bild rechnet nichts: Die Auswertung hielte
+                # sicher an, und das Band zeigte die Absage, bevor jemand
+                # gewählt hat (RM-773, RM-775).
+                return
             self._request_order_preview(approval)
 
         def changed(*_ignored: Any) -> None:
@@ -24293,11 +24298,14 @@ class MainWindow(QMainWindow):
             return {}
         return {object_id: str(entry.name) for object_id, entry in result.scene.objects.items()}
 
-    def _source_names(self) -> dict[str, str]:
-        """Kennung auf Dateiname, für die Quellenwähler (§16.3)."""
+    def _source_names(self, operation: str = "") -> dict[str, str]:
+        """Kennung auf Dateiname, für die Quellenwähler (§16.3) — nur, was operation liest."""
+        from app.core.ingest.plan import reads
+
         return {
             source_id: Path(source.path).name or source_id
             for source_id, source in self.session.project.document.sources.items()
+            if reads(operation, source.path)
         }
 
     def _image_names(self) -> dict[str, str]:
