@@ -648,6 +648,7 @@ class LayerInfo:
     overhangs: tuple[SliceContour, ...] = ()
     bridge_width: float = 0.0
     taper_length: float = 0.0
+    stepped_area: float = 0.0  # Stufenfläche der Schicht, mm²; dort lohnen feine Schichten
 
 
 @dataclass(frozen=True, slots=True)

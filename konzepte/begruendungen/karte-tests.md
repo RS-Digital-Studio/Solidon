@@ -211,7 +211,9 @@ Prüfkörper und Wächter, die mehrere Testdateien lesen, stehen in
 _privat` beim zufällig ersten Nutzer. Geteilte Fixtures stehen ebenso einmal —
 `project` in `helpers.py`, `window` und `session` in `ui_helpers.py` — und
 werden mit `from … import name as name` eingebunden; eine Datei, die eine
-vorbereitete Sitzung braucht, überschreibt nur `session`.
+vorbereitete Sitzung braucht, überschreibt nur `session`. Aus `conftest`
+importiert kein Test: pytest lädt es als Plugin, und ein zweiter Import führte
+es noch einmal aus.
 
 ## Stolperfallen
 
