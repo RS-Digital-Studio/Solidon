@@ -3189,3 +3189,35 @@ def test_the_cpu_probe_result_fits_its_real_wrapped_text_on_a_640_by_720_screen(
     natural = expanded_width(dialog._scroll)
     assert dialog._scroll.horizontalScrollBar().maximum() <= max(0, natural - dialog.width())
     assert buttons is not None and dialog.contentsRect().contains(buttons.geometry().bottomRight())
+
+
+def test_a_notice_does_not_look_like_an_answer_of_the_model(qt_app: QApplication) -> None:
+    """Review spät G3: Der Satz zum Ersatzmodell stand mit „* “ wie eine
+    Antwort des Modells da. Er trägt ein eigenes Zeichen, kursiv und mit
+    Kurzhilfe (Regel 18: nicht nur Farbe) — und der wartende Vorschlag nennt
+    ihn vor der Entscheidung (Regel 21)."""
+    from app.core.agent.proposal import Proposal
+    from app.core.types import NOTICE_ID_PREFIX
+    from app.ui.chat import NOTICE_MARKER, ROLE_MARKER
+
+    notice = "„qwen3:14b“ ist bei Ollama nicht installiert, deshalb antwortet „qwen3.5:9b“."
+    document = new_project().document
+    document.chat.extend(
+        [
+            ChatEntry(id="c1", role="user", text="Hallo"),
+            ChatEntry(id=f"{NOTICE_ID_PREFIX}c2", role="agent", text=notice),
+            ChatEntry(id="c3", role="agent", text="Guten Tag."),
+        ]
+    )
+    panel = ChatPanel()
+    panel.show_document(document)
+
+    said, answer = panel.turns.item(1), panel.turns.item(2)
+    assert ROLE_MARKER["agent"] != NOTICE_MARKER
+    assert said.text() == f"{NOTICE_MARKER} {notice}"
+    assert said.font().italic() and not answer.font().italic()
+    assert said.toolTip() == "Hinweis von Solidon"
+    assert answer.text().startswith(ROLE_MARKER["agent"])
+
+    waiting = Proposal(request="Hallo", notices=[notice])
+    assert notice in describe(ProposalPreview(proposal=waiting))

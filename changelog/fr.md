@@ -209,6 +209,7 @@ dans `website/version.json`.
 - Avant le téléchargement, *Configurer le chat* et *Configurer ComfyUI* indiquent la mémoire graphique et la place qu'un modèle demande, et si cet ordinateur les a.
 - Sur un Mac, *Configurer le chat* propose un modèle local qui tient dans la mémoire partagée et dit quand une clé pour un modèle hébergé vaut mieux.
 - S'il manque le modèle local choisi ou si le fournisseur refuse la clé, Solidon le dit en une phrase et *Configurer le chat* mène directement à la solution.
+- S'il manque le modèle local par défaut, un autre modèle recommandé déjà installé répond. Le chat dit lequel, et *Configurer le chat* l'affiche.
 - Solidon ignore une clé non valide pendant un jour, jusqu'à ce que vous en saisissiez une autre ou choisissiez *Réessayer*. Entre-temps, un modèle local répond s'il y en a un.
 - Sur un modèle nouvellement généré, *Modifier la taille* ne recalcule que la nouvelle taille et ne refait plus la réparation. C'est plus rapide, et Ctrl+Z annule aussitôt la modification.
 
