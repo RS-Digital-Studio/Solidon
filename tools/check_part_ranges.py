@@ -34,7 +34,7 @@ abgebrochener Lauf behält so das Fertige, und der nächste fährt nur den Rest.
 from __future__ import annotations
 
 import argparse
-import datetime
+import datetime as dt
 import os
 import sys
 import tempfile
@@ -158,7 +158,7 @@ def _written(
     """Schreibt den Nachweis mit allen bisher fertigen Bausteinen und gibt die Datei zurück."""
     from app.core.knowledge.parts import range_proof
 
-    today = datetime.datetime.now(datetime.UTC).date().isoformat()
+    today = dt.datetime.now(dt.UTC).date().isoformat()
     entries = {name: entry for name, entry in proofs.items() if name in shipped}
     for name, outcome in results.items():
         entries[name] = range_proof.ProofEntry(

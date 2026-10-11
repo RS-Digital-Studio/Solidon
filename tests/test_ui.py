@@ -17894,7 +17894,7 @@ def test_the_theme_stands_before_anything_is_shown(
     gefärbt, steht das Thema früh genug — und der Abschiedsdialog, das einzige
     Fenster dieses Starts, ist mit gedeckt.
     """
-    import datetime
+    import datetime as dt
 
     from app.core.activation import Activation
     from app.ui import app as app_module
@@ -17919,7 +17919,7 @@ def test_the_theme_stands_before_anything_is_shown(
 
     # Eine Demo, deren Stichtag herum ist: ``main`` kehrt mit 1 zurück, bevor
     # ein Fenster gebaut wird. Was bis dahin gesetzt ist, ist früh genug.
-    gone = Activation(licence=None, days_left=0, deadline=datetime.date(2000, 1, 1))
+    gone = Activation(licence=None, days_left=0, deadline=dt.date(2000, 1, 1))
     assert gone.over, "sonst läuft der Test durch den ganzen Start"
     monkeypatch.setattr(app_module.activation, "state", lambda: gone)
     monkeypatch.setattr(app_module, "load_settings", lambda: UiSettings(theme="dark"))
@@ -17948,13 +17948,13 @@ def test_the_program_start_configures_https_before_reading_the_licence(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Der mitgelieferte CA-Satz muss vor jedem möglichen Netzkontakt gelten."""
-    import datetime
+    import datetime as dt
 
     from app.core.activation import Activation
     from app.ui import app as app_module
 
     order: list[str] = []
-    gone = Activation(licence=None, days_left=0, deadline=datetime.date(2000, 1, 1))
+    gone = Activation(licence=None, days_left=0, deadline=dt.date(2000, 1, 1))
     monkeypatch.setattr(
         app_module.network,
         "configure_certificates",
@@ -17976,7 +17976,7 @@ def test_the_marketing_video_follows_demo_trial_and_sale_configuration(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Die nächste Aufnahme darf nie das Angebot des vorigen Baus versprechen."""
-    import datetime
+    import datetime as dt
 
     from tools import make_video
 
@@ -17985,11 +17985,11 @@ def test_the_marketing_video_follows_demo_trial_and_sale_configuration(
     sale = " ".join(make_video.offer_copy("de"))
     assert "14" not in sale and "Demo" not in sale
 
-    monkeypatch.setattr(make_video.activation_store, "TRIAL_FROM", datetime.date(2027, 2, 1))
+    monkeypatch.setattr(make_video.activation_store, "TRIAL_FROM", dt.date(2027, 2, 1))
     trial = " ".join(make_video.offer_copy("de"))
     assert f"{make_video.activation_store.TRIAL_DAYS} Tage" in trial
 
-    monkeypatch.setattr(make_video.activation_store, "DEMO_UNTIL", datetime.date(2026, 10, 30))
+    monkeypatch.setattr(make_video.activation_store, "DEMO_UNTIL", dt.date(2026, 10, 30))
     demo = " ".join(make_video.offer_copy("en"))
     assert "30 October 2026" in demo and "days" not in demo
 
