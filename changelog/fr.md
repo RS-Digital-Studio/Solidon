@@ -18,78 +18,86 @@ dans `website/version.json`.
 
 ## 0.6.0
 
+- La démo fonctionne désormais jusqu'au 30 novembre 2026. Solidon3D 1.0 est prévu pour le 1er décembre, et vos projets sont conservés.
+
 ### Utilisation et système
 
-- La démo fonctionne désormais jusqu'au 30 novembre 2026. Solidon3D 1.0 est prévu pour le 1er décembre, et vos projets sont conservés.
-- Sur Mac, Solidon demande désormais macOS 14 ou plus récent. Tout Mac à partir de 2018 peut l'installer gratuitement.
+- Sur Mac, Solidon demande désormais macOS 14 ou plus récent. Tout Mac à partir de 2018 reçoit macOS 14 gratuitement.
 - Solidon démarre désormais sur les Mac Intel sous macOS 26. La version 0.5.3 y restait bloquée au démarrage.
 - Sur les Mac Intel, Solidon signale désormais qu'un congé ou un chanfrein sur un corps exact ne peut pas être construit. La version 0.5.3 se fermait à ce moment-là.
-- Sur Mac, *Annuler* interrompt aussitôt une réponse en cours du modèle local.
-- Sur Mac, Retour ouvre l'entrée sélectionnée sur l'écran d'accueil, dans *Rechercher une fonction* et dans le rapport de contrôle.
-- Sous Linux, la saisie par Fcitx5 et IBus arrive désormais dans le champ de texte, aussi dans le Flatpak et l'AppImage.
-- La désinstallation sous Windows ne laisse plus d'entrées d'association de fichiers dans le registre.
-- Suppr agit aussi quand l'onglet *Sélection* a le focus, et retire plusieurs corps marqués en une seule étape. Si la touche ne fait rien, la barre d'état en donne la raison.
-- Le clic droit sur les corps propose *Retirer l'objet* et, pour plusieurs, *Réunir*. *Évidement* figure aussi sur une face sélectionnée, qui devient l'ouverture.
 - Les panneaux de gauche et de droite se déplacent par leur poignée, s'ancrent à un bord ou flottent librement. *Vue → Panneaux à leur place* les remet en place.
 - Les panneaux se placent aussi en bas à gauche, en bas à droite et le long du bord inférieur.
 - Les onglets se réordonnent et se détachent dans des fenêtres, aussi sur un second écran. Fermer la fenêtre ou *Revenir dans Solidon* ramène son contenu.
 - Solidon mémorise la disposition. Les fenêtres restent accessibles même si un écran est débranché.
+- Suppr agit aussi quand l'onglet *Sélection* a le focus, et retire plusieurs corps marqués en une seule étape. Si la touche ne fait rien, la barre d'état en donne la raison.
+- Le clic droit sur les corps propose *Retirer l'objet* et, pour plusieurs, *Réunir*. *Évidement* figure aussi sur une face sélectionnée, qui devient l'ouverture.
+- Un glisser sur la poignée d'une face prépare la distance dans *Décaler la face* et amène l'onglet *Sélection* au premier plan, même pendant une visite guidée. Seul *Appliquer* crée l'étape.
+- Le bouton *Filaments* se trouve désormais dans l'en-tête. Il liste les filaments du projet et mène au stock de filament.
+- Un autre filament ne change que la couleur, aussi sur les blocs et les corps STEP. La forme n'est pas recalculée. Les corps sélectionnés montrent leur couleur de filament sous la surbrillance.
+- Dans l'onglet *Sélection*, le champ du filament n'attribue qu'au clic ou avec Entrée. Les flèches et la saisie ne font que parcourir la liste, et la molette fait défiler l'onglet.
+- En espagnol, français, italien et portugais, *Nouveau filament* ne défile plus de côté quand la fenêtre est moins haute que son contenu.
 - Pendant un nouveau calcul, le rapport de contrôle indique *Nouveau calcul en cours …* et garde les lignes précédentes comme état antérieur. Avant, d'anciennes erreurs semblaient encore valables.
+- Après la lecture d'un modèle, le rapport de contrôle reste au premier plan à droite. En version 0.5.3, l'onglet *Sélection* passait devant alors que rien n'était sélectionné.
 - Si le calcul rapide échoue à une étape, Solidon la recalcule à fond dans la même passe au lieu de s'arrêter.
 - Un constat indiquant qu'une étape n'a rien changé ouvre cette étape sur le champ concerné.
 - Une fois un corps retiré, le rapport n'en parle plus, et l'historique montre quelles étapes ne laissent plus rien.
 - Un perçage sélectionné ne retombe plus en silence sur son corps après un nouveau calcul. Avant, Suppr pouvait alors retirer tout le corps.
+- Après la réouverture d'un projet, le rapport de contrôle indique toujours à quel emplacement libre un modèle inséré a été placé.
+- L'indication *Affichage du modèle …* disparaît dès que la vue est prête et ne reste plus au-dessus du modèle.
+- Les messages sur les saisies et les formes ne proposent plus de rapport d'erreur. Il n'apparaît que lorsque l'erreur vient de Solidon.
+- Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.
+- Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
 - Chaque fonction porte le même nom partout. L'outil *Diviser* propose *Diviser selon un plan*, *Diviser le long d'une ligne tracée* et *Diviser en pièces distinctes*.
 - Sur le corps sélectionné, *Diviser automatiquement …* se trouve désormais sous *Préparer*.
-- Dans la fenêtre au repos, seul *Catalogue de blocs …* ressort en couleur. Le rouge est réservé aux boutons qui rejettent ou suppriment, et les questions s'ouvrent avec le focus sur *Annuler*.
+- Tant que rien n'est en attente, seul *Catalogue de blocs …* ressort en couleur. Le rouge est réservé aux boutons qui rejettent ou suppriment, et les questions s'ouvrent avec le focus sur *Annuler*.
 - Le catalogue s'appelle partout *Catalogue de blocs …*. Dans l'onglet *Sélection*, *Blocs* n'est plus que le groupe avec *Créer un couvercle* et *Créer un couvercle vissé*.
 - En mode dessin, l'onglet *Sélection* est masqué. La liste des contraintes montre celles des points et lignes sélectionnés, ainsi que chaque conflit.
 - Dans la carte des paramètres, une cote n'affiche « Non utilisé » que si c'est le cas. Le bouton indique combien de nombres fixes peuvent être liés à des cotes.
-- Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.
 - La carte de la visite guidée a la hauteur de ses étapes. Une étape se déplie d'un clic ou avec la barre d'espace, et aucune bulle ne couvre plus la vue.
 - Quand une étape de la visite guidée renvoie au rapport de contrôle, la visite reste visible. L'onglet est encadré et l'étape dit lequel ouvrir.
 - La visite guidée ne coupe plus le texte au bord, même après avoir réduit la fenêtre. L'étape en cours prend autant de lignes qu'il lui faut.
-- Après la lecture d'un modèle, le rapport de contrôle reste au premier plan à droite. Jusqu'ici, l'onglet *Sélection* passait devant alors que rien n'était sélectionné.
 - Un clic sur le i à côté d'une action de l'onglet *Sélection* ouvre le manuel à l'endroit qui l'explique.
 - Chaque cote d'un bloc peut être liée à une cote du projet avec fx, même si elle ne porte encore aucune expression.
 - Après avoir tiré la poignée d'un aperçu, aucun nombre ne reste au-dessus de la vue. Un nombre saisi pendant le geste déplace l'aperçu, pas le corps sélectionné.
 - Après *Réparer et réessayer* et les chemins voisins, l'historique n'appelle plus « supprimée » une étape qui continue de calculer. Si la chaîne s'arrête de nouveau, l'étape est marquée.
-- Le bouton *Filaments* se trouve désormais dans l'en-tête. Il liste les filaments du projet et mène au stock de filament.
-- Un autre filament ne change que la couleur, aussi sur les blocs et les corps STEP. La forme n'est pas recalculée. Les corps sélectionnés montrent leur couleur de filament sous la surbrillance.
-- Dans l'onglet *Sélection*, le champ du filament n'attribue qu'au clic ou avec Entrée. Les flèches et la saisie ne font que parcourir la liste, et la molette fait défiler l'onglet.
-- Dans les versions traduites, *Nouveau filament* ne défile plus de côté quand la fenêtre est moins haute que son contenu.
+- Si vous cliquez sur *Appliquer* pendant que Solidon calcule encore, l'étape est créée dès la fin du calcul, et la barre d'état le dit. En version 0.5.3, le clic se perdait.
+- Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
+- Les étapes qu'un autre programme crée par la commande à distance apparaissent dans l'historique comme « Commande à distance » au lieu de « Agent ».
+- Sur Mac, *Annuler* interrompt aussitôt une réponse en cours du modèle local.
+- Sur Mac, Retour ouvre l'entrée sélectionnée sur l'écran d'accueil, dans *Rechercher une fonction* et dans le rapport de contrôle.
+- Sous Linux, la saisie par Fcitx5 et IBus arrive désormais dans le champ de texte, aussi dans le Flatpak et l'AppImage.
+- La désinstallation sous Windows ne laisse plus d'entrées d'association de fichiers dans le registre.
+
+### Plus rapide et plus économe
+
+- Un projet enregistré avec un grand modèle s'ouvre après un redémarrage en une ou deux secondes au lieu d'une demi-minute : les caractéristiques reconnues sont conservées.
 - Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.
 - Un projet enregistré avec de nombreuses étapes sur un grand modèle s’ouvre avec beaucoup moins de mémoire.
-- Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
-- Sur les modèles à plusieurs milliers de caractéristiques, le déplacement et les autres étapes qui ne changent pas la forme se terminent jusqu'à deux fois plus vite.
-- Après la réouverture d'un projet, le rapport de contrôle indique toujours à quel emplacement libre un modèle inséré a été placé.
-- Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
-- Réparer et résoudre les recouvrements va jusqu'à quatre fois plus vite sur les gros modèles, et l'export en 3MF nettement plus vite.
-- L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
-- L'indication *Affichage du modèle …* disparaît dès que la vue est prête et ne reste plus au-dessus du modèle.
-- Les messages sur les saisies et les formes ne proposent plus de rapport d'erreur. Il n'apparaît que lorsque l'erreur vient de Solidon.
-- Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
-- Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
-- Après un perçage ou une caractéristique déplacée, les caractéristiques d'une grande pièce technique sont reconnues environ un tiers plus vite.
 - Un modèle ouvert juste après le démarrage du programme est modifiable jusqu'à un quart plus tôt.
 - Avec un slicer, un jeu ou un rendu en cours à côté, les calculs sur de grands modèles aboutissent en secondes au lieu de minutes.
-- Un projet enregistré avec un grand modèle s'ouvre après un redémarrage en une ou deux secondes au lieu d'une demi-minute : les caractéristiques reconnues sont conservées.
-- Un glisser sur la poignée d'une face prépare la distance dans *Décaler la face* et amène l'onglet *Sélection* au premier plan, même pendant une visite guidée. Seul *Appliquer* crée l'étape.
-- Les étapes qu'un autre programme crée par la commande à distance apparaissent dans l'historique avec « Commande à distance » au lieu de « Agent », et la fiche du chat aussi.
+- Réparer et résoudre les recouvrements va jusqu'à quatre fois plus vite sur les gros modèles.
+- L’export en 3MF va nettement plus vite et ne relit les profils du slicer que si quelque chose y a changé.
+- La boîte de dialogue d'impression attribue les profils du slicer bien plus vite, à l'ouverture et après chaque changement de slicer.
+- Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
+- Les grands contours faits de nombreuses lignes, comme un contour de face repris, se modifient bien plus vite dans l'éditeur d'esquisse.
+- Sur les modèles à plusieurs milliers de caractéristiques, le déplacement et les autres étapes qui ne changent pas la forme se terminent jusqu'à deux fois plus vite.
+- Après un perçage ou une caractéristique déplacée, les caractéristiques d'une grande pièce technique sont reconnues environ un tiers plus vite.
+- Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
+- L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
+- Le rapport de contrôle calcule plus vite et demande moins de mémoire.
 
 ### Imprimer et transmettre au slicer
 
-- Sous Linux, Solidon crée désormais aussi le fichier d'impression avec Cura en Flatpak ou en AppImage.
-- Sous Linux, les imprimantes d'OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print en AppImage sont proposées tout de suite, même si le slicer n'a jamais été ouvert.
 - La boîte de dialogue d'impression propose les imprimantes du slicer choisi, comme *Premiers pas* et *Réglages*. Une imprimante reprise ainsi reste liée à son slicer.
 - Dans la boîte de dialogue d'impression, le slicer se change comme dans *Premiers pas*, aussi via *Choisir le programme …* pour un slicer que Solidon ne trouve pas seul.
 - Une imprimante de la liste de Solidon et la même issue du slicer sont un seul appareil. La boîte de dialogue choisit le profil à la bonne buse, et le fichier contient le code de démarrage.
 - Sans profil du slicer mémorisé, l'export et la fenêtre principale prennent ce que la boîte d'impression propose pour l'imprimante, machine et processus du fabricant compris.
 - Seuls les slicers avec lesquels Solidon fonctionne sont proposés, plus les slicers pour résine comme ChituBox et Lychee. Bambu Studio en AppImage en fait désormais partie.
+- Avec une imprimante résine, le dialogue d'impression ne montre plus qu'imprimante, matériau, plateaux et programme. La version 0.5.3 y affichait aussi profils et stock de filament.
+- Après le passage d'une imprimante résine à une imprimante à filament, le projet imprime de nouveau avec la largeur de ligne de la buse. La version 0.5.3 gardait le pixel de 0,05 mm.
 - Le code de démarrage et le volume d'impression viennent uniquement de votre imprimante, pas d'un autre modèle de la même gamme.
-- La boîte de dialogue d'impression attribue les profils du slicer bien plus vite, à l'ouverture et après chaque changement de slicer.
-- L’export 3MF ne relit les profils du slicer que si quelque chose y a changé, et va nettement plus vite.
-- Un modèle de nom saisi à l’export est mémorisé, même si vous passez d’abord de 3MF à un autre format dans la boîte de dialogue des fichiers.
+- Sous Linux, Solidon crée désormais aussi le fichier d'impression avec Cura en Flatpak ou en AppImage.
+- Sous Linux, les imprimantes d'OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print en AppImage sont proposées tout de suite, même si le slicer n'a jamais été ouvert.
 - La durée d'impression estimée est plus proche de celle du slicer, nettement plus pour les pièces avec supports.
 - La place des supports et du skirt sur le plateau se mesure désormais sous les seuls surplombs. Les pièces près du bord ne reçoivent plus d'avertissement injustifié.
 - Les suggestions acceptées ne laissent presque plus sans support les surplombs qui en ont besoin. *Garder les canaux libres* ne bloque plus que l'espace d'où un support ne pourrait plus être retiré.
@@ -108,11 +116,11 @@ dans `website/version.json`.
 - Avec Cura, le pied du support sur les surfaces inclinées est désormais en escalier sans couche d'interface inférieure, et lisse avec, comme le prévoit Cura.
 - Pour le PLA, Solidon propose davantage d'espace entre les nombreuses pointes fines et les supports arborescents en dessous. Cela laisse moins de résidus des pointes des supports.
 - Les longs ponts reçoivent le support prévu par Solidon, dans PrusaSlicer aussi. Si un long pont reste sans support, Solidon propose des lignes épaisses et un peu moins de débit.
-- Les surplombs plats sans support se voient proposer des parois supplémentaires. Avec l'ABS, l'ASA et le TPU, le slicer imprime les surplombs raides en sens alterné pour qu'ils ne se recourbent pas.
+- Les surplombs plats sans support se voient proposer des parois supplémentaires. Pour l'ABS, l'ASA et le TPU, Solidon propose d'imprimer les surplombs raides en sens alterné, sans qu'ils se recourbent.
 - Les réglages de pont, les parois supplémentaires et le sens alterné ne valent que pour la pièce qui en a besoin. Les autres pièces du plateau s'impriment comme avant.
 - Sans profil du fabricant, PrusaSlicer et SuperSlicer impriment désormais les ponts fins. Là où un pont a besoin de lignes épaisses et de moins de débit, Solidon les propose pour cette pièce.
 - Où Solidon propose plus d'espace sur les supports arborescents, il propose aussi une *Pointe d'arbre* plus large. Chaque pointe porte une couche d'interface, et les dessous gardent moins de support.
-- Si de nombreux petits surplombs ont besoin ensemble de supports, comme un menton à face inférieure inclinée, le rapport indique désormais l'endroit.
+- Si de nombreux petits surplombs ont besoin ensemble de supports, comme sur une face inférieure inclinée, le rapport indique désormais l'endroit.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.
 - Au-dessus d'un canal, le rapport ne conseille plus un support qu'on ne pourrait plus retirer. Il nomme le canal et une transition sous 45 degrés.
 - Pour le PETG, Solidon propose *Refroidissement complet au support*. Il se détache ainsi plus facilement de la pièce.
@@ -123,7 +131,6 @@ dans `website/version.json`.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
 - Si le slicer refuse des filaments aux températures trop différentes sur un plateau, Solidon en donne désormais la raison et l'issue, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.
-- Le rapport de contrôle calcule plus vite et demande moins de mémoire.
 - Sous Linux avec Flatpak, Solidon signale désormais un plantage du slicer comme tel, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Si une pièce compense déjà dans le modèle, avec un trou percé avec *Tenir compte de la tolérance du matériau* ou *Compenser le pied d'éléphant*, Solidon propose que le slicer ne le refasse pas.
 - Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
@@ -131,8 +138,7 @@ dans `website/version.json`.
 - Le stock de filament soumet à vérification une consommation enregistrée avec Solidon 0.5 pour le même projet et les mêmes filaments, et demande avant de décompter à nouveau.
 - Désormais, une consommation décomptée reste liée à son impression, même si une mise à jour calcule plus vite ou si le slicer change le profil du fabricant. Avant, l'impression comptait comme nouvelle.
 - Là où des dômes plats et des pentes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression de la pièce s'allonge.
-- Avec une imprimante résine, le dialogue d'impression ne montre plus qu'imprimante, matériau, plateaux et programme. La version 0.5.3 y affichait aussi profils et stock de filament.
-- Après le passage d'une imprimante résine à une imprimante à filament, le projet imprime de nouveau avec la largeur de ligne de la buse. La version 0.5.3 gardait le pixel de 0,05 mm.
+- Un modèle de nom saisi à l’export est mémorisé, même si vous passez d’abord de 3MF à un autre format dans la boîte de dialogue des fichiers.
 
 ### Filetages, perçages et pièces normalisées
 
@@ -148,11 +154,11 @@ dans `website/version.json`.
 - Le trou de vis du piège à écrou traverse exactement la pièce, même épaisse. Jusqu'ici il s'arrêtait 10 mm sous la poche ou perçait le côté opposé au-delà d'un interstice.
 - Posé par en dessous, le piège à écrou a sa poche sous la face, et sa fente y descend. Jusqu'ici la poche était à moitié au-dessus, la vis dans la face.
 - Si le perçage d'un bloc ne traverse pas la pièce, il s'appelle désormais borgne. Jusqu'ici il s'appelait traversant.
-- Si la paroi est plus épaisse que celle saisie pour un *Passe-câble* ou un *Embout cannelé*, l'étape le signale et ouvre l'épaisseur de paroi. Jusqu'ici le passage finissait en silence dans la matière.
+- Si la paroi dépasse l'épaisseur saisie pour *Passe-câble avec décharge de traction* ou *Embout cannelé*, l'étape le signale et ouvre l'épaisseur. Avant, le passage finissait dans la matière.
 - Les filetages existent désormais aussi en filetages de tuyauterie G et R, en filetages en pouces UNC et UNF et en NPT, dans le *Filetage imprimable*, sur vis, écrou et *Goujon fileté*.
 - Chaque filetage existe aussi à gauche. Une taille personnalisée accepte des filets par pouce et plusieurs filets, aussi dans *Créer une vis* et *Créer un couvercle vissé*.
 - Les séries de filetages que montrent les listes de tailles se choisissent dans les Réglages, sous *Séries de filetages dans les listes*.
-- La contrepartie et la *Goupille pour perçage* vont aussi aux filetages en pouces, de tuyauterie, à gauche, à plusieurs filets et coniques. Entre deux séries, Solidon demande laquelle.
+- La contrepartie et la *Goupille pour perçage* vont aussi aux filetages en pouces, de tuyauterie, à gauche, à plusieurs filets et coniques. Si un filetage mesuré va à deux séries, Solidon demande.
 - Les filetages à gauche, à plusieurs filets et coniques se modifient avec *Modifier la caractéristique* et *Supprimer la caractéristique* et gardent sens, filets et conicité.
 - Solidon reconnaît un filetage à plusieurs filets dans un maillage importé comme un seul filetage avec son nombre de filets. Jusqu'ici, il en montrait plusieurs au pas trop grand.
 
@@ -165,14 +171,12 @@ dans `website/version.json`.
 - Un bloc destiné à une face ou à un trou n'est calculé qu'une fois placé dans la vue. D'ici là, la boîte de dialogue ne peut pas être appliquée et indique ce qui manque.
 - Si la face change alors que la boîte de dialogue d'un bloc est ouverte, l'emplacement choisi reste tant qu'il convient à la nouvelle forme. Sinon, le bloc en cherche un nouveau et le signale.
 - Une boîte de dialogue de bloc ouverte pendant que l'étape précédente calcule encore place le bloc d'elle-même dès que le résultat est là, et ne peut pas être appliquée avant.
-- Un bloc placé dans la vue se déplace aussi d'un clic vers un autre endroit après une saisie dans la boîte de dialogue.
 - Si le catalogue contient déjà un bloc de ce nom quand vous ajoutez un fichier de bloc, Solidon demande s'il faut l'ajouter comme entrée à part. La version 0.5.3 affichait un message d'erreur.
+- Dans l'exemple *Blocs — écrous, inserts, câbles*, le câble entre par le dessous à travers le fond, et la décharge de traction est dans le boîtier. En version 0.5.3, elle pendait sous le plateau.
 
 ### Modifier et esquisser
 
 - Avec *Déplacer la caractéristique*, sa matière suit telle quelle et l'ancien emplacement est comblé proprement. Là où c'est impossible, la sélection le dit d'emblée.
-- Le motif *Nid d’abeille* porte dans le dialogue le nom du manuel. Le dialogue disait Hexagone. Les ouvertures hexagonales de *Découper un réseau de trous* s’appellent aussi ainsi.
-- Le dialogue *Appliquer une texture* s’ouvre avec une zone de motif qui tient sur la face choisie et un pas que votre buse imprime. Si une zone dépasse le bord, le dialogue le dit avec la solution.
 - Sur un bourrelet ou une gorge, la sélection ne propose plus que ce que l'opération sait faire.
 - Si un congé borde une paroi, *Appliquer une dépouille* indique avant le calcul qu'il gêne et propose *Supprimer la caractéristique* comme issue.
 - Quand vous découpez une partie d'un corps, les chanfreins, filetages et logements d'écrou des blocs qui s'y trouvaient disparaissent aussi.
@@ -181,15 +185,19 @@ dans `website/version.json`.
 - Une esquisse avec de nombreuses formes séparées se résout vite, même avec des centaines de rectangles ou de cercles cotés.
 - Si *Courbure continue* ne peut pas être respectée pendant que vous dessinez, l'éditeur d'esquisse le signale en quelques secondes au lieu de plusieurs minutes.
 - Si deux contraintes se contredisent, l'éditeur d'esquisse les nomme toutes les deux au lieu de réduire une ligne ou un cercle à un point.
+- Une suite de lignes dans l'esquisse s'arrête dès qu'elle ferme une boucle. En version 0.5.3, un nouveau segment restait accroché au pointeur, et le premier Échap semblait sans effet.
+- Une longueur tapée avec l'outil Ligne crée exactement une ligne. En version 0.5.3, quitter le champ de cote en ajoutait une seconde, revenant vers le pointeur.
 - Dans l'éditeur d'esquisse, *Décaler* porte un contour fermé et chaque côté vers l'extérieur à distance positive et raccorde les coins, dans les deux sens. La version 0.5.3 les mettait souvent dedans.
 - Les arcs suivent désormais aussi *Décaler*, autour du même centre : un trou oblong garde ses bouts arrondis et un congé sa forme.
 - Après un changement de cote, *Ajuster*, *Prolonger*, *Décaler* et *Mettre en miroir* agissent sur la position visible. La version 0.5.3 prenait l'état dessiné avant.
-- Les grands contours faits de nombreuses lignes, comme un contour de face repris, se modifient dans l'éditeur d'esquisse sans attente.
+- Un clic que l'accrochage à la grille pose exactement sur un point existant accroche ce point. En version 0.5.3, le contour semblait fermé sans être relié.
+- Un double-clic avec l'outil Ligne termine la suite de lignes. En version 0.5.3, il créait une ligne de longueur nulle.
+- Entrée dans le champ de cote du dialogue *Dessiner une esquisse* fixe la cote et laisse le dialogue ouvert. En version 0.5.3, elle appliquait le dessin et le fermait.
 - Un corps se tire en trois clics : *Dessiner* dans la barre du haut (Ctrl+Maj+E), puis coin, coin opposé, hauteur. Vers l'extérieur il se joint, vers l'intérieur il découpe.
 - Pendant le tirage, les dimensions se saisissent au clavier. Un double-clic sur l'étape ouvre ses dimensions, et sous *Type* elle devient un corps de révolution ou un réseau de trous.
 - Depuis l'éditeur d'esquisse, *Terminé* ramène dans la vue, et le clic suivant pose la hauteur. Échap met le contour de côté, Ctrl+Z le rappelle.
 - Si une nouvelle étape ne peut pas être calculée, le brouillon reste dans la vue, et *Réparer et réessayer* la calcule sans nouveau clic.
-- Pour sculpter, il y a quatre outils, chacun avec son bouton et son raccourci. L'intensité est un niveau de 1 à 10, et repasser au même endroit n'empile plus de matière.
+- Pour *Sculpter*, il y a quatre outils, chacun avec son bouton et son raccourci. L'intensité est un niveau de 1 à 10, et repasser au même endroit n'empile plus de matière.
 - Le pinceau s'adapte à la taille du corps. Si le maillage est trop grossier, *Sculpter* uniformise les triangles au premier trait, et un Ctrl+Z annule les deux.
 - En miroir, le plan passe là où le corps se correspond, même si une partie dépasse loin sur le côté.
 - Sculpter suit la souris avec fluidité, et même une étape de centaines de coups de pinceau se calcule vite.
@@ -200,6 +208,7 @@ dans `website/version.json`.
 - Un squelette ne plie que ce qui tient à ses os, le reste du corps ne bouge pas. Les anciens projets se calculent comme enregistrés.
 - Avec Ctrl ou Maj, vous sélectionnez plusieurs arêtes et leur appliquez un congé ou un chanfrein en une étape. Un clic sur un coin sélectionne toutes les arêtes qui s'y rejoignent.
 - Sur un corps exact, la mise en évidence d'une arête montre aussi les arêtes tangentes voisines que *Congé* et *Ajouter un chanfrein* traitent avec elle.
+- Bien des parois rondes d'un petit texte, comme celles d'un « O » ou « D » posé avec *Appliquer du texte*, figurent aussi sur un grand corps dans l'arbre des objets comme *Face courbe*.
 - Ce que la sélection propose sur une caractéristique, l'opération l'exécute avec exactement ces valeurs. Ce qui est grisé, elle le dit dans les mêmes termes, aussi par chat et en ligne de commande.
 - Comme emplacement de la copie, *Dupliquer la caractéristique* propose une largeur et demie à côté de l'original, avec une paroi entre les deux et jamais le long de son axe.
 - Sur une fraisure, *Faire pivoter la caractéristique* propose le plus grand angle qui la laisse fraisure, et prévient quand une rotation ne fait que la reposer sur elle-même.
@@ -207,13 +216,9 @@ dans `website/version.json`.
 - Si une pièce séparée gêne une action sur une caractéristique, *Diviser en pièces distinctes et réessayer* la sépare et exécute l'action. Ctrl+Z annule les deux.
 - La division en pièces distinctes garde toute pièce imprimable, même goujons et rondelles près d'une grande plaque. Seules tombent petites surfaces ouvertes et miettes non imprimables.
 - Un relief n'est calculé qu'une fois une image choisie. D'ici là, la boîte de dialogue indique le bouton *Choisir une image …*.
+- Le dialogue *Appliquer une texture* s’ouvre avec une zone de motif qui tient sur la face choisie et un pas que votre buse imprime. Si une zone dépasse le bord, le dialogue le dit avec la solution.
+- Le motif de texture hexagonal s’appelle désormais *Nid d'abeille* dans le dialogue, comme dans le manuel. La version 0.5.3 l’appelait Hexagone.
 - Les boîtes de dialogue *Charger un STEP* et *Extruder un dessin* ne proposent que les fichiers qu'elles savent lire. Si le projet n'en contient aucun, elles indiquent le bouton *Choisir un fichier …*.
-- Une suite de lignes dans l'esquisse s'arrête dès qu'elle ferme une boucle. Jusqu'ici, un nouveau segment restait accroché au pointeur, et le premier Échap semblait sans effet.
-- Une longueur tapée avec l'outil Ligne crée exactement une ligne. Jusqu'ici, quitter le champ de cote en ajoutait une seconde, revenant vers le pointeur.
-- Un clic que l'accrochage à la grille pose exactement sur un point existant accroche ce point. Jusqu'ici, le contour semblait fermé sans être relié.
-- Un double-clic avec l'outil Ligne termine la suite de lignes. Jusqu'ici, il créait une ligne de longueur nulle.
-- Entrée dans le champ de cote du dialogue *Dessiner une esquisse* fixe la cote et laisse le dialogue ouvert. Jusqu'ici, elle appliquait le dessin et le fermait.
-- Bien des parois rondes d'un petit texte, comme celles d'un « O » ou « D » posé avec *Appliquer du texte*, figurent aussi sur un grand corps dans l'arbre des objets comme *Face courbe*.
 
 ### Générer avec l'IA
 
@@ -230,7 +235,7 @@ dans `website/version.json`.
 - Avant le téléchargement, *Configurer le chat* et *Configurer ComfyUI* indiquent la mémoire graphique et la place qu'un modèle demande, et si cet ordinateur les a.
 - Sur un Mac, *Configurer le chat* propose un modèle local qui tient dans la mémoire partagée et dit quand une clé pour un modèle hébergé vaut mieux.
 - S'il manque le modèle local choisi ou si le fournisseur refuse la clé, Solidon le dit en une phrase et *Configurer le chat* mène directement à la solution.
-- S'il manque le modèle local par défaut, un autre modèle recommandé déjà installé répond. Le chat dit lequel, et *Configurer le chat* l'affiche.
+- Si vous n'avez pas choisi de modèle local et que celui par défaut manque, un autre modèle recommandé déjà installé répond. Le chat dit lequel, et *Configurer le chat* l'affiche.
 - Solidon ignore une clé non valide pendant un jour, jusqu'à ce que vous en saisissiez une autre ou choisissiez *Réessayer*. Entre-temps, un modèle local répond s'il y en a un.
 - Sur un modèle nouvellement généré, *Modifier la taille* ne recalcule que la nouvelle taille et ne refait plus la réparation. C'est plus rapide, et Ctrl+Z annule aussitôt la modification.
 
