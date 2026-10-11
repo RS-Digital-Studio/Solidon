@@ -317,6 +317,19 @@ def test_choice_names_are_shared_and_measurements_keep_the_ui_formatter() -> Non
         labels.set_display_unit(previous)
 
 
+def test_a_texture_pattern_has_the_name_of_its_figure() -> None:
+    """Dialog, Abbildung und Handbuch nennen jedes Muster gleich.
+
+    „hexagon“ stand zweimal in der Namensliste, und der spätere Eintrag
+    („Sechseck“) überschrieb still die „Wabe“ der Abbildung.
+    """
+    from app.core import figures
+    from app.core.registry import surfaces
+
+    for key, name in figures.TEXTURE_NAMES.items():
+        assert surfaces.choice_label(key) == str(name), key
+
+
 def test_every_operation_reaches_every_surface(registry: Registry) -> None:
     """Die Tabelle aus §10: eine Deklaration, sechs Ausgaben."""
     names = {spec.name for spec in registry.all()}

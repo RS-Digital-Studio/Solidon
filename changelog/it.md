@@ -161,6 +161,7 @@ scrive in `website/version.json`.
 ### Modificare e disegnare
 
 - Con *Sposta caratteristica* il materiale della caratteristica si sposta così com'è e il punto di prima viene riempito in modo pulito. Dove non si può, la selezione lo dice subito.
+- Il motivo *Nido d’ape* nella finestra si chiama come nel manuale, prima c’era Esagono. Anche le aperture esagonali di *Taglia un campo di fori*.
 - Su cordoni e gole, la selezione offre solo ciò che l'operazione sa davvero fare.
 - Se accanto a una parete c'è un raccordo, *Applica l'angolo di sformo* dice prima del calcolo che è d'intralcio e indica *Rimuovi caratteristica* come via d'uscita.
 - Quando tagli via una parte di un corpo, spariscono anche smussi, filettature e sedi per dadi dei blocchi che vi si trovavano.

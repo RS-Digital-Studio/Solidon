@@ -161,6 +161,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Editar e esboçar
 
 - Com *Mover característica*, o material da característica vai tal como está e o lugar antigo fica bem preenchido. Onde não for possível, a seleção di-lo logo.
+- O padrão *Favo de mel* tem no diálogo o nome do manual, antes dizia Hexágono. As aberturas hexagonais de *Cortar padrão de furos* também.
 - Em cordões e gargantas, a seleção só oferece o que a operação consegue fazer.
 - Se houver um arredondamento junto a uma parede, *Aplicar o ângulo de saída* diz antes do cálculo que está a atrapalhar e indica *Remover característica* como saída.
 - Ao cortar uma parte de um corpo, desaparecem também chanfros, roscas e alojamentos de porcas dos blocos que lá estavam.
