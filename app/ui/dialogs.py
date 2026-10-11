@@ -3160,8 +3160,8 @@ def expired_demo_text(state: activation.Activation, now: datetime | None = None)
                 date=deadline_date(state)
             ),
             tr(
-                "{app} 1.0 ist für den {start} um 10:00 Uhr deutscher Zeit geplant; "
-                "am Tag davor bereite ich die Verkaufsversion vor."
+                "{app} 1.0 erscheint voraussichtlich am {start} um 10:00 Uhr deutscher "
+                "Zeit. Am Tag davor bereite ich die Verkaufsversion vor."
             ).format(app=APP_NAME, start=calendar_date(PLANNED_SALE_START.date())),
             tr(
                 "Ihre gespeicherten Projekte bleiben erhalten. Auf {url} finden Sie den "
