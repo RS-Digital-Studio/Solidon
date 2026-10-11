@@ -160,6 +160,8 @@ Kastens abgleichen. Bei einem beauftragten Website-Release:
    `make_download.py`: `notes_by_language` in `website/version.json` ist das
    einzige Feld, das ein Mensch schreibt und das `make_download.py` stehen
    lässt — ohne neuen Text reist der alte Satz in die nächste Version.
+   Er steht in jeder Sprache, und hat der Changelog-Abschnitt einen Vorspann,
+   beginnt er mit ihm; sonst hält `make_download.py` an (`auslieferung.md`).
    `notes_version` nennt die Version, für die er geschrieben ist. Solange
    `version` noch den veröffentlichten Stand trägt, weist die Prüfung der
    Versionsdatei ein neueres `notes_version` ab; `make_download.py` hält an,

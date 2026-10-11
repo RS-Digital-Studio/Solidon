@@ -325,6 +325,101 @@ def test_a_lead_the_note_already_says_leaves_the_version_file(
     assert release.points("de")[-1] == "Gezeichnet."
 
 
+ALL_SIX = ("de", "en", "es", "fr", "it", "pt")
+
+
+@pytest.mark.parametrize(
+    ("changed", "with_lead", "said"),
+    [
+        ({}, True, None),
+        ({"en": None}, True, "keinen Hinweis für en."),
+        ({"es": None}, True, "keinen Hinweis für es."),
+        (dict.fromkeys(ALL_SIX), True, f"keinen Hinweis für {', '.join(ALL_SIX)}."),
+        ({"en": "  "}, True, "keinen Hinweis für en."),
+        ({"en": "Threads are new."}, True, "für en einen Hinweis ohne den Vorspann."),
+        ({"es": None, "en": "Threads are new."}, True, "es und für en einen Hinweis ohne"),
+        ({"en": None}, False, None),
+    ],
+    ids=[
+        "complete",
+        "en-missing",
+        "es-missing",
+        "all-missing",
+        "en-blank",
+        "en-other",
+        "both",
+        "no-lead",
+    ],
+)
+def test_a_lead_needs_its_note_in_every_language(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changed: dict[str, str | None],
+    with_lead: bool,
+    said: str | None,
+) -> None:
+    """N-G2: Ohne eigenen Hinweis läse eine Sprache die Meldung zweimal, einmal deutsch.
+
+    Der Leser fällt auf den deutschen Hinweis zurück, der englische Vorspann
+    wiederholt ihn nicht wörtlich und bleibt in der Liste. Sagt der eigene
+    Hinweis etwas anderes, bleibt der Vorspann ebenso stehen. ``write_version``
+    hält in beiden Fällen an, bevor es schreibt, und nennt jede Sprache samt
+    dem Feld, in das sie gehört (Regel 17). Ohne Vorspann gibt es nichts zu
+    wiederholen, und eine fehlende Sprache fällt wie bisher zurück.
+    """
+    from app.core import changes
+    from app.i18n.catalog import available_languages
+    from tools import make_download
+
+    assert available_languages() == ALL_SIX, "the cases name the six languages"
+    leads = {"de": "Die Demo läuft länger.", "en": "The demo runs longer."}
+    for language, lead in leads.items():
+        opening = f"- {lead}\n\n" if with_lead else ""
+        (tmp_path / f"{language}.md").write_text(
+            f"## 9.9.9\n\n{opening}### Zeichnen\n\n- Gezeichnet.\n", encoding="utf-8"
+        )
+    notes: dict[str, str | None] = {
+        language: leads.get(language, "Neu.") for language in available_languages()
+    }
+    notes.update(changed)
+    notes = {language: note for language, note in notes.items() if note is not None}
+    version_file = tmp_path / "version.json"
+    before = json.dumps(
+        {
+            "url": "https://solidon3d.de",
+            "notes": "Die Demo läuft länger.",
+            "notes_version": "9.9.9",
+            "notes_by_language": notes,
+        },
+        ensure_ascii=False,
+    )
+    version_file.write_text(before, encoding="utf-8")
+    changes.forget_cache()
+    monkeypatch.setattr(changes, "folder", lambda: tmp_path)
+    monkeypatch.setattr(make_download, "CHANGELOG", tmp_path)
+    monkeypatch.setattr(make_download, "APP_VERSION", "9.9.9")
+    monkeypatch.setattr(make_download, "VERSION_FILE", version_file)
+    try:
+        if said is not None:
+            with pytest.raises(SystemExit) as stopped:
+                make_download.write_version([])
+        else:
+            make_download.write_version([])
+    finally:
+        changes.forget_cache()
+
+    if said is not None:
+        message = str(stopped.value)
+        assert said in message, message
+        assert "notes_by_language" in message and "changelog/<sprache>.md" in message, message
+        assert version_file.read_text(encoding="utf-8") == before, "nothing is written"
+        return
+    written = json.loads(version_file.read_text(encoding="utf-8"))
+    assert written["changes"] == {"de": ["Gezeichnet."], "en": ["Gezeichnet."]}, (
+        "no language keeps a lead in the list: either its note says it, or there is none"
+    )
+
+
 def test_a_flat_version_file_has_no_lead() -> None:
     """Gegenprobe: Ohne ``groups`` wird aus der flachen Liste kein Vorspann."""
     from app.core import changes
