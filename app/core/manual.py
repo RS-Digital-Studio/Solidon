@@ -2239,21 +2239,21 @@ def models_text() -> str:
             "",
             f"| {_('Wofür')} | {_('Modell')} | {_('Lizenz')} | {_('Größe')} | {_('Woher')} |",
             "|---|---|---|---|---|",
-            "| {wofuer} | TRELLIS.2-4B, DINOv3 | MIT, {dino} | {groesse} | {woher} |".format(
-                wofuer=_("Aus einem Bild einen Körper"),
+            "| {purpose} | TRELLIS.2-4B, DINOv3 | MIT, {dino} | {size} | {source} |".format(
+                purpose=_("Aus einem Bild einen Körper"),
                 dino=_("DINOv3-Lizenz von Meta"),
-                groesse=f"{decimal(comfy_setup.SHAPE_GIGABYTES, 1)} GB",
-                woher=_("richtet Solidon ein"),
+                size=f"{decimal(comfy_setup.SHAPE_GIGABYTES, 1)} GB",
+                source=_("richtet Solidon ein"),
             ),
-            "| {wofuer} | BiRefNet | MIT | {groesse} | {woher} |".format(
-                wofuer=_("Das Objekt freistellen"),
-                groesse=f"{comfy_setup.BACKGROUND_MEGABYTES} MB",
-                woher=_("richtet Solidon ein"),
+            "| {purpose} | BiRefNet | MIT | {size} | {source} |".format(
+                purpose=_("Das Objekt freistellen"),
+                size=f"{comfy_setup.BACKGROUND_MEGABYTES} MB",
+                source=_("richtet Solidon ein"),
             ),
-            "| {wofuer} | FLUX.2 [klein] 4B, Qwen3-4B | Apache-2.0 | {groesse} | {woher} |".format(
-                wofuer=_("Aus Text erst ein Bild"),
-                groesse=f"{decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1)} GB",
-                woher=_("richtet Solidon ein, auf Wunsch"),
+            "| {purpose} | FLUX.2 [klein] 4B, Qwen3-4B | Apache-2.0 | {size} | {source} |".format(
+                purpose=_("Aus Text erst ein Bild"),
+                size=f"{decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1)} GB",
+                source=_("richtet Solidon ein, auf Wunsch"),
             ),
             "",
             str(

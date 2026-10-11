@@ -1302,6 +1302,1016 @@ def test_the_circle_fit_reads_python_numbers_and_answers_bit_for_bit() -> None:
         assert found[1] == expected[1]
 
 
+# --- Ein Gedächtnis je Fleck (RM-592) ----------------------------------------------
+#
+# Über RM-261 hinaus antworten die Lesung (G1) und die tangentiale Trennung (G3)
+# über die Körpergrenze, geschlüsselt nach dem Fleckabdruck: Ecken, welche Ecken
+# dieselben sind, Folge, erster Nachbarring, Ursprung und — für die Trennung —
+# die Folge der inneren Nähte, dazu die Körperzahlen, die eine Frage liest.
+
+
+def _counted(monkeypatch: pytest.MonkeyPatch, name: str) -> list[int]:
+    """Zählt die Aufrufe einer Rechnung der Erkennung."""
+    runs = [0]
+    original = getattr(features_module, name)
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        runs[0] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(features_module, name, counted)
+    return runs
+
+
+def _without_memory(mesh: MeshData) -> dict[str, Any]:
+    """Dieselbe Erkennung an einer Kopie, ohne Merkmalscache und ohne jedes Gedächtnis."""
+    copy = MeshData.of(
+        trimesh.Trimesh(
+            np.array(mesh.raw.vertices, dtype=np.float64),
+            np.array(mesh.raw.faces, dtype=np.int64),
+            process=False,
+        )
+    )
+    forget_cache()
+    before = features_module.remember_across_bodies(False)
+    try:
+        return detect(copy)
+    finally:
+        features_module.remember_across_bodies(before)
+
+
+def _same_bits(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """Dieselben Merkmale Bit für Bit, samt Dreiecken und Namen."""
+    return {name: (_every_bit(f), sorted(f.face_indices)) for name, f in left.items()} == {
+        name: (_every_bit(f), sorted(f.face_indices)) for name, f in right.items()
+    }
+
+
+@pytest.mark.parametrize("name", [*_ROUNDS_AND_A_FAR_SPOT, "plate_chamfered_mouths.stl"])
+def test_the_next_body_reads_and_splits_only_what_changed(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """Nach zwei Bohrungen lesen und trennen nur geänderte Flecken — Bit für Bit wie ohne.
+
+    Die Teilmenge der Messbank in der Suite (Konzept §10, A3): je Schritt die
+    Erkennung mit Gedächtnis gegen dieselbe Erkennung an einer Kopie ohne jedes
+    Gedächtnis. Gezählt werden Lesungen (``_read_surface_support``) und
+    tangentiale Trennungen (``_tangential_pieces_read``): Der Nachfolger
+    rechnet weniger als die Kopie, sonst träfe das Gedächtnis nie.
+    """
+    reads = _counted(monkeypatch, "_read_surface_support")
+    splits = _counted(monkeypatch, "_tangential_pieces_read")
+    total = [0, 0]
+    mesh = plate(name)
+    forget_cache()
+    current = mesh
+    found = detect(mesh)
+    for _step in range(2):
+        current = _bored_far_away(current, found)
+        reads[0] = splits[0] = 0
+        found = detect(current)
+        remembered = reads[0] + splits[0]
+        reads[0] = splits[0] = 0
+        fresh = _without_memory(current)
+        assert _same_bits(found, fresh), name
+        assert remembered <= reads[0] + splits[0], (name, remembered, reads[0] + splits[0])
+        total[0] += remembered
+        total[1] += reads[0] + splits[0]
+        forget_cache()
+        found = detect(current)
+    if name != "sphere_socket.stl":
+        # Am Kugelsockel trifft die Bohrung jeden gekrümmten Fleck.
+        assert total[0] < total[1], (name, total)
+
+
+def _rounded_box() -> MeshData:
+    """Ein Quader mit gerundeten Kanten und Ecken als ein tangentialer Verbund (RM-226)."""
+    import manifold3d
+
+    spheres = [
+        manifold3d.Manifold.sphere(3.0, 32).translate((sx * 12.0, sy * 8.0, sz * 5.0))
+        for sx in (-1, 1)
+        for sy in (-1, 1)
+        for sz in (-1, 1)
+    ]
+    out = manifold3d.Manifold.batch_hull(spheres).to_mesh()
+    return MeshData.of(
+        trimesh.Trimesh(np.asarray(out.vert_properties)[:, :3], np.asarray(out.tri_verts))
+    )
+
+
+def _a_split_target(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, list[int]]:
+    """Körper und Ziel, an dem die tangentiale Trennung Stücke und Rückfragen liefert."""
+    seen: list[tuple[Any, list[int]]] = []
+    original = features_module._tangential_pieces_read
+
+    def watched(body: Any, mesh: Any, patch: Any, check_cancelled: Any = None) -> Any:
+        pieces = original(body, mesh, patch, check_cancelled)
+        if pieces:
+            seen.append((body, list(patch)))
+        return pieces
+
+    monkeypatch.setattr(features_module, "_tangential_pieces_read", watched)
+    forget_cache()
+    detect(_rounded_box())
+    monkeypatch.setattr(features_module, "_tangential_pieces_read", original)
+    assert seen, "der gerundete Quader wird tangential getrennt"
+    return seen[0]
+
+
+def _twin(body: Any, *, far_triangle: bool = False) -> Any:
+    """Dieselben Ecken und Dreiecke; mit ``far_triangle`` ein kleiner Tetraeder weit weg dazu.
+
+    Geschlossen und außen umlaufend, damit nur die Diagonale sich ändert und nicht
+    auch, ob das Netz dicht ist (:func:`_twin_open_inside`).
+    """
+    vertices = np.array(body.vertices, dtype=np.float64)
+    faces = np.array(body.faces, dtype=np.int64)
+    if far_triangle:
+        start = len(vertices)
+        corners = [[500.0, 0.0, 0.0], [501.0, 0.0, 0.0], [500.0, 1.0, 0.0], [500.0, 0.0, 1.0]]
+        vertices = np.vstack((vertices, corners))
+        faces = np.vstack(
+            (faces, start + np.array([[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]], dtype=np.int64))
+        )
+    return trimesh.Trimesh(vertices, faces, process=False)
+
+
+def test_a_split_comes_from_memory_only_with_the_same_body_numbers_and_hull_answers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die tangentiale Trennung trifft am Zwilling — nicht bei anderer Diagonale oder Hülle.
+
+    Treffer: derselbe Fleck an einem neuen Körper rechnet nicht und gibt
+    dieselben Stücke. Fehlgriff: Eine andere Körperdiagonale (ein loses
+    Dreieck weit weg) rechnet neu, und unter der Gegenprobe ohne die Diagonale
+    im Schlüssel träfe sie. Fällt eine Rückfrage an die Hülle anders aus,
+    rechnet die Trennung ebenfalls neu.
+    """
+    body, patch = _a_split_target(monkeypatch)
+    splits = _counted(monkeypatch, "_tangential_pieces_read")
+    forget_cache()
+    first = features_module._tangential_pieces(body, MeshData(raw=body), patch)
+    assert splits[0] == 1 and first
+    twin = _twin(body)
+    assert features_module._tangential_pieces(twin, MeshData(raw=twin), patch) == first
+    assert splits[0] == 1, "derselbe Fleck an einem neuen Körper rechnet nicht"
+
+    wider = _twin(body, far_triangle=True)
+    assert features_module._tangential_pieces(wider, MeshData(raw=wider), patch) == first
+    assert splits[0] == 2, "eine andere Diagonale rechnet neu"
+    monkeypatch.setattr(features_module, "_LEFT_OUT", {"diagonal"})
+    forget_cache()
+    features_module._tangential_pieces(body, MeshData(raw=body), patch)
+    wider = _twin(body, far_triangle=True)
+    features_module._tangential_pieces(wider, MeshData(raw=wider), patch)
+    assert splits[0] == 3, "ohne die Diagonale im Schlüssel träfe der andere Körper"
+    monkeypatch.setattr(features_module, "_LEFT_OUT", set())
+
+    forget_cache()
+    features_module._tangential_pieces(body, MeshData(raw=body), patch)
+    shipped = features_module._cylinder_fits
+    monkeypatch.setattr(features_module, "_cylinder_fits", lambda *args: not shipped(*args))
+    twin = _twin(body)
+    features_module._tangential_pieces(twin, MeshData(raw=twin), patch)
+    assert splits[0] == 5, "eine andere Antwort der Hülle rechnet neu"
+
+
+def test_a_changed_ring_or_body_number_reads_the_patch_again() -> None:
+    """Die Lesung trifft am Zwilling — nicht bei anderem Nachbarring oder Körperzahl.
+
+    Ein drittes Dreieck an einer Randkante des Flecks nimmt ihm dort den
+    Nachbarn: Der Ring ändert sich, Ecken und Folge nicht. Ein loses Dreieck
+    im Inneren macht das Netz undicht. Beides verfehlt das Gedächtnis; ohne den
+    Teil im Schlüssel (Gegenprobe) träfe es.
+    """
+    mesh = features_module._one_body(_rounded_box())
+    body = mesh.raw
+    found = detect(mesh)
+    fillet = next(feature for feature in found.values() if feature.kind == "fillet")
+    patch = sorted(fillet.face_indices)
+    forget_cache()
+    assert isinstance(features_module._support_handle(body, patch), features_module._SurfaceSupport)
+    twin = _twin(body)
+    assert isinstance(features_module._support_handle(twin, patch), features_module._SupportPrint)
+
+    neighbours, _rows = features_module._neighbour_index(body)
+    inside = set(patch)
+    triangle, outside = next(
+        (index, int(other))
+        for index in patch
+        for other in neighbours[index]
+        if other >= 0 and int(other) not in inside
+    )
+    shared = sorted(set(body.faces[triangle].tolist()) & set(body.faces[outside].tolist()))
+    vertices = np.vstack((np.asarray(body.vertices), [[0.0, 0.0, 999.0]]))
+    faces = np.vstack((np.asarray(body.faces), [[shared[0], shared[1], len(vertices) - 1]]))
+    crowded = trimesh.Trimesh(vertices, faces, process=False)
+    assert features_module._patch_print(crowded, patch) != features_module._patch_print(body, patch)
+    left_out = features_module._LEFT_OUT
+    left_out.add("ring")
+    try:
+        same = features_module._print_of(
+            features_module._patch_print_parts(crowded, patch)
+        ) == features_module._print_of(features_module._patch_print_parts(body, patch))
+    finally:
+        left_out.discard("ring")
+    assert same, "ohne den Ring gälte das dritte Dreieck nicht"
+
+    wider = _twin_open_inside(body)
+    assert not wider.is_watertight
+    assert isinstance(
+        features_module._support_handle(wider, patch), features_module._SurfaceSupport
+    )
+
+
+def _fillet_patch() -> tuple[Any, list[int]]:
+    """Der gerundete Quader und eine seiner Verrundungen als Fleck."""
+    mesh = features_module._one_body(_rounded_box())
+    found = detect(mesh)
+    fillet = next(feature for feature in found.values() if feature.kind == "fillet")
+    return mesh.raw, sorted(fillet.face_indices)
+
+
+def _lent_reading(body: Any, twin: Any, patch: list[int], part: str) -> tuple[bytes, bytes, bytes]:
+    """Abdruck der Lesung am Zwilling mit vollem Schlüssel, ohne ``part`` und frisch gelesen."""
+    forget_cache()
+    features_module._support_handle(body, patch)
+    full = features_module._support_handle(twin, patch)
+    forget_cache()
+    left_out = features_module._LEFT_OUT
+    left_out.add(part)
+    try:
+        features_module._support_handle(body, patch)
+        blind = features_module._support_handle(twin, patch)
+    finally:
+        left_out.discard(part)
+    own = features_module._read_surface_support(twin, list(patch), None)
+    assert full is not None and blind is not None and own is not None
+    return full.digest, blind.digest, own.digest
+
+
+def test_carried_normals_are_part_of_the_reading_key() -> None:
+    """Gegenprobe für ``normals``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    Eine starre Bewegung trägt Normalen mit, die in der letzten Stelle von den
+    gerechneten abweichen (``geom.transform._carry_cache``). Nachgebildet an
+    einem Zwilling mit denselben Ecken, dessen Normalen im Fleck um eine
+    Einheit der letzten Stelle versetzt sind: Mit vollem Schlüssel liest er
+    selbst; ohne ``normals`` bekäme er die Lesung des Originals.
+    """
+    body, patch = _fillet_patch()
+    twin = trimesh.Trimesh(np.array(body.vertices), np.array(body.faces), process=False)
+    normals = np.array(twin.face_normals, dtype=np.float64)
+    normals[patch] = np.nextafter(normals[patch], np.inf)
+    twin._cache.verify()
+    twin._cache["face_normals"] = normals
+    twin._cache.id_set()
+    full, blind, own = _lent_reading(body, twin, patch, "normals")
+    assert full == own, "mit vollem Schlüssel liest der Zwilling selbst"
+    assert blind != own, "ohne normalen gälte die Lesung des Originals"
+
+
+def test_the_corner_numbers_are_part_of_the_reading_key() -> None:
+    """Gegenprobe für ``corner_numbers``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    Derselbe Körper mit umnummerierten Ecken: Mit vollem Schlüssel liest der
+    Zwilling selbst; ohne ``corner_numbers`` bekäme er die Lesung des
+    Originals, und die ordnet ihre Punkte anders. ``consistent`` lässt sich nicht
+    belegen: Die Lesung wählt an ihm nur zwischen dem schnellen Weg über die
+    Bogenzahl und dem Einzelweg, und wo die beiden auseinandergehen könnten,
+    ändert sich der Ring im Abdruck schon (ein Fremdkörper mit verdrehtem
+    Umlauf liest gleich).
+    """
+    body, patch = _fillet_patch()
+    vertices = np.array(body.vertices, dtype=np.float64)
+    faces = np.array(body.faces, dtype=np.int64)
+    order = np.random.default_rng(592).permutation(len(vertices))
+    back = np.empty_like(order)
+    back[order] = np.arange(len(order))
+    twin = trimesh.Trimesh(vertices[order], back[faces], process=False)
+    full, blind, own = _lent_reading(body, twin, patch, "corner_numbers")
+    assert full == own, "mit vollem Schlüssel liest der Zwilling selbst"
+    assert blind != own, "ohne eckennummern gälte die Lesung des Originals"
+
+
+def test_coincident_corners_anywhere_are_part_of_the_reading_key() -> None:
+    """Gegenprobe für ``coincident``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    Trägt ein Körper irgendwo deckungsgleiche Ecken, ordnet die Lesung ihre
+    Punkte nach den Koordinaten statt nach den Nummern (``vertex_rank``).
+    Nachgestellt mit zwei geschlossenen Tetraedern weit weg, die sich in einer
+    Ecke berühren: Fleck, Ring, Dichtheit und Umlauf bleiben, die Lesung
+    nicht; ohne ``coincident`` bekäme der Zwilling die des Originals.
+    """
+    body, patch = _fillet_patch()
+    start = len(body.vertices)
+    corners = [
+        [500.0, 0.0, 0.0],
+        [501.0, 0.0, 0.0],
+        [500.0, 1.0, 0.0],
+        [500.0, 0.0, 1.0],
+        [500.0, 0.0, 0.0],
+        [499.0, 0.0, 0.0],
+        [500.0, -1.0, 0.0],
+        [500.0, 0.0, -1.0],
+    ]
+    pair = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3], [4, 6, 5], [4, 5, 7], [4, 7, 6], [5, 6, 7]]
+    twin = trimesh.Trimesh(
+        np.vstack((np.asarray(body.vertices), corners)),
+        np.vstack((np.asarray(body.faces), start + np.asarray(pair, dtype=np.int64))),
+        process=False,
+    )
+    assert twin.is_watertight and twin.is_winding_consistent
+    assert features_module._coincident_vertices(twin)
+    assert not features_module._coincident_vertices(body)
+    full, blind, own = _lent_reading(body, twin, patch, "coincident")
+    assert full == own, "mit vollem Schlüssel liest der Zwilling selbst"
+    assert blind != own, "ohne deckungsgleich gälte die Lesung des Originals"
+
+
+def _lent_split(body: Any, twin: Any, patch: list[int], part: str) -> tuple[Any, Any, Any]:
+    """Tangentiale Trennung am Zwilling mit vollem Schlüssel, ohne ``part`` und frisch gerechnet."""
+    forget_cache()
+    features_module._tangential_pieces(body, MeshData(raw=body), patch)
+    full = features_module._tangential_pieces(twin, MeshData(raw=twin), patch)
+    forget_cache()
+    left_out = features_module._LEFT_OUT
+    left_out.add(part)
+    try:
+        features_module._tangential_pieces(body, MeshData(raw=body), patch)
+        blind = features_module._tangential_pieces(twin, MeshData(raw=twin), patch)
+    finally:
+        left_out.discard(part)
+    forget_cache()
+    own = features_module._tangential_pieces_read(twin, MeshData(raw=twin), patch, None)
+    return full, blind, own
+
+
+def test_the_origin_of_refined_triangles_is_part_of_the_split_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gegenprobe für ``origin``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    Nach *Kanten verfeinern* zählen die Stücke eines Dreiecks als eines
+    (``geom.mesh.refined_units``), und die Trennung misst ihre Stücke an
+    dieser Zahl. Ein Zwilling mit denselben Ecken, dessen Dreiecke je vier
+    einen Ursprung haben, trennt anders; ohne ``origin`` im Schlüssel bekäme
+    er die Stücke des Originals.
+    """
+    from app.core.geom.mesh import remember_refined_units
+
+    body, patch = _a_split_target(monkeypatch)
+    twin = _twin(body)
+    remember_refined_units(twin, np.arange(len(body.faces), dtype=np.int64) // 4)
+    full, blind, own = _lent_split(body, twin, patch, "origin")
+    assert full == own, "mit vollem Schlüssel trennt der Zwilling selbst"
+    assert blind != own, "ohne ursprung gälten die Stücke des Originals"
+
+
+def test_the_held_seam_angles_are_part_of_the_split_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gegenprobe für ``angles``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    Die Trennung liest die Knickwinkel, wie der Körper sie hält — nach einer
+    starren Bewegung die mitgetragenen (``geom.transform._carry_cache``). Ein
+    Zwilling, der flache Nähte hält, trennt nichts; ohne ``angles`` im
+    Schlüssel bekäme er die Stücke des Originals.
+    """
+    body, patch = _a_split_target(monkeypatch)
+    twin = _twin(body)
+    twin._cache.verify()
+    twin._cache["face_adjacency_angles"] = np.zeros(len(body.face_adjacency), dtype=np.float64)
+    twin._cache.id_set()
+    full, blind, own = _lent_split(body, twin, patch, "angles")
+    assert full == own, "mit vollem Schlüssel trennt der Zwilling selbst"
+    assert blind != own, "ohne winkel gälten die Stücke des Originals"
+
+
+def test_the_state_of_the_round_is_part_of_the_classify_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gegenprobe für ``round``, den die Messbank nicht trifft (A1, Konzept §10).
+
+    ``classify`` fragt keinen Kegel, wo ein deckungsgleicher Fleck schon keinen
+    hatte (``no_cone_here``). Nachgestellt mit einer Kennzahl, die jeden Fleck
+    für deckungsgleich hält: Der Körper merkt Antworten ohne Kegellauf. Ein
+    Zwilling mit der echten Kennzahl rechnet sie mit vollem Schlüssel selbst
+    und erkennt wie frisch; ohne ``round`` bekäme er die Antworten ohne Kegel.
+    """
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+
+    path = Path(__file__).parent / "data" / "meshes" / "plate_chamfered_mouths.stl"
+    body = features_module._one_body(normalise(read_mesh(path.read_bytes(), ".stl"), "mm").mesh).raw
+
+    def twin() -> MeshData:
+        return MeshData(raw=trimesh.Trimesh(body.vertices.copy(), body.faces.copy(), process=False))
+
+    forget_cache()
+    own = detect(twin())
+    shipped = features_module._rigid_key
+    seen = {}
+    for left in (set(), {"round"}):
+        forget_cache()
+        monkeypatch.setattr(features_module, "_rigid_key", lambda _body, _patch: ("alle",))
+        monkeypatch.setattr(features_module, "_LEFT_OUT", set(left))
+        detect(twin())
+        monkeypatch.setattr(features_module, "_rigid_key", shipped)
+        features_module._FEATURE_CACHE.clear()
+        seen[bool(left)] = detect(twin())
+        monkeypatch.setattr(features_module, "_LEFT_OUT", set())
+    assert seen[False] == own, "mit vollem Schlüssel erkennt der Zwilling wie frisch"
+    assert seen[True] != own, "ohne runde gälten die Antworten ohne Kegellauf"
+
+
+def test_a_patch_too_large_to_be_worth_it_is_read_without_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Fleck über ``REMEMBERED_PATCH_SHARE`` des Körpers und ``REMEMBERED_PATCH_FACES``
+    Dreiecken merkt nichts über die Körpergrenze — er liest wie ohne Gedächtnis.
+
+    Die Haut einer Freiform ist oft ein Fleck; jeder Schritt trifft sie, und
+    ihr Abdruck kostete kalt am Spiderman und am Drachen ein Zehntel der
+    Erkennung (A5).
+    """
+    body, patch = _fillet_patch()
+    monkeypatch.setattr(features_module, "REMEMBERED_PATCH_FACES", 0)
+    monkeypatch.setattr(features_module, "REMEMBERED_PATCH_SHARE", 0.0)
+    forget_cache()
+    features_module._support_handle(body, patch)
+    twin = _twin(body)
+    assert isinstance(features_module._support_handle(twin, patch), features_module._SurfaceSupport)
+    assert not features_module._BY_GEOMETRY.get("support_digest")
+    monkeypatch.setattr(features_module, "REMEMBERED_PATCH_SHARE", 1.0)
+    forget_cache()
+    features_module._support_handle(body, patch)
+    assert isinstance(features_module._support_handle(twin, patch), features_module._SupportPrint)
+
+
+def test_a_cancelled_question_leaves_nothing_in_the_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Abbruch mitten in Lesung oder Trennung legt nichts über die Körpergrenze ab."""
+    from app.core.errors import OperationCancelled
+
+    body, patch = _a_split_target(monkeypatch)
+    forget_cache()
+    calls = [0]
+
+    def cancel_later() -> None:
+        calls[0] += 1
+        if calls[0] > 3:
+            raise OperationCancelled()
+
+    with pytest.raises(OperationCancelled):
+        features_module._tangential_pieces(body, MeshData(raw=body), patch, cancel_later)
+    held = features_module._BY_GEOMETRY
+    assert not held.get("tangential_pieces"), "keine halbe Trennung"
+    calls[0] = 0
+    with pytest.raises(OperationCancelled):
+        features_module._support_handle(body, patch, cancel_later)
+    assert not held.get("support_digest"), "kein Abdruck ohne vollständige Lesung"
+
+
+def test_forgetting_and_the_test_hook_leave_no_answer_across_bodies() -> None:
+    """``forget_cache`` leert jede Ablage über die Körpergrenze, der Testhaken füllt keine.
+
+    Die Rauschproben der Plattformgleichheit verlassen sich darauf
+    (``test_platform_identity.py``): Träfe der verrauschte Lauf die Antworten
+    des ruhigen, wäre die Probe blind (Konzept §8, R8).
+    """
+    forget_cache()
+    detect(_rounded_box())
+    held = features_module._BY_GEOMETRY
+    assert held.get("support_digest") and held.get("tangential_pieces")
+    forget_cache()
+    assert not any(held.values())
+    before = features_module.remember_across_bodies(False)
+    try:
+        detect(_rounded_box())
+    finally:
+        features_module.remember_across_bodies(before)
+    assert not any(held.values()), "abgeschaltet liest und schreibt das Gedächtnis nichts"
+
+
+def test_the_tangential_split_does_not_follow_the_triangle_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dieselben Keime, Kreise und Stücke Bit für Bit, wie die Datei die Dreiecke auch ordnet.
+
+    Die tangentiale Trennung las ihre Bänder und Keime in der Folge der
+    Dreiecksnummern: Der erste Kreis eines Keims (:func:`_seed_circle`)
+    summierte seine Ecken deshalb je nach Datei in anderer Folge, und an den
+    Schwellen der Trennung entscheidet die letzte Stelle (RM-210). Jetzt
+    folgen Bänder und Keime der Ordnung des Körpers (:func:`in_body_order`),
+    gleich lange Nähte der Folge ihrer Kanten. Am Stand davor wichen die Kreise
+    an jedem gemischten Zwilling ab.
+    """
+    import manifold3d
+
+    spheres = [
+        manifold3d.Manifold.sphere(3.0, 48).translate((sx * 12.0, sy * 8.0, sz * 5.0))
+        for sx in (-1, 1)
+        for sy in (-1, 1)
+        for sz in (-1, 1)
+    ]
+    out = manifold3d.Manifold.batch_hull(spheres).to_mesh()
+    body = features_module._one_body(
+        MeshData.of(
+            trimesh.Trimesh(np.asarray(out.vert_properties)[:, :3], np.asarray(out.tri_verts))
+        )
+    ).raw
+    seen: list[list[int]] = []
+    shipped_split = features_module._tangential_pieces_read
+
+    def watched(found: Any, mesh: Any, patch: Any, check_cancelled: Any = None) -> Any:
+        pieces = shipped_split(found, mesh, patch, check_cancelled)
+        if pieces and found is body:
+            seen.append(list(patch))
+        return pieces
+
+    monkeypatch.setattr(features_module, "_tangential_pieces_read", watched)
+    forget_cache()
+    detect(MeshData(raw=body))
+    monkeypatch.setattr(features_module, "_tangential_pieces_read", shipped_split)
+    assert seen, "der gerundete Quader wird tangential getrennt"
+    patch = seen[0]
+
+    def run(mesh: Any, target: list[int], original: np.ndarray) -> tuple[list[Any], list[Any]]:
+        """Keime, Kreise, Achsen und Stücke in den Dreiecksnummern von ``body``, Bit für Bit."""
+        asked: list[Any] = []
+
+        def exact(values: Any) -> bytes:
+            return np.asarray(values, dtype=np.float64).tobytes()
+
+        shipped_seed = features_module._band_seed
+        shipped_circle = features_module._seed_circle
+        shipped_axis = features_module._sharpened_axis
+
+        def band_seed(*args: Any) -> Any:
+            seed, axis = shipped_seed(*args)
+            asked.append(("Keim", [int(original[index]) for index in seed], exact(axis)))
+            return seed, axis
+
+        def seed_circle(*args: Any) -> Any:
+            circle = shipped_circle(*args)
+            asked.append(("Kreis", None if circle is None else exact([*circle[0], circle[1]])))
+            return circle
+
+        def sharpened_axis(*args: Any) -> Any:
+            found = shipped_axis(*args)
+            asked.append(
+                ("Achse", None if found is None else exact([*found[0], *found[1], *found[2:]]))
+            )
+            return found
+
+        monkeypatch.setattr(features_module, "_band_seed", band_seed)
+        monkeypatch.setattr(features_module, "_seed_circle", seed_circle)
+        monkeypatch.setattr(features_module, "_sharpened_axis", sharpened_axis)
+        forget_cache()
+        try:
+            pieces = features_module._tangential_cylinders(mesh, MeshData(raw=mesh), target)
+        finally:
+            monkeypatch.setattr(features_module, "_band_seed", shipped_seed)
+            monkeypatch.setattr(features_module, "_seed_circle", shipped_circle)
+            monkeypatch.setattr(features_module, "_sharpened_axis", shipped_axis)
+        return asked, [[int(original[index]) for index in piece] for piece in pieces]
+
+    faces = np.asarray(body.faces)
+    asked, pieces = run(body, patch, np.arange(len(faces)))
+    assert len(pieces) > 1 and any(entry[0] == "Kreis" for entry in asked)
+    for trial in range(3):
+        shuffle = np.random.default_rng(210 + trial).permutation(len(faces))
+        back = np.empty(len(faces), dtype=np.int64)
+        back[shuffle] = np.arange(len(faces))
+        other = trimesh.Trimesh(np.asarray(body.vertices), faces[shuffle], process=False)
+        other_asked, other_pieces = run(other, sorted(int(back[i]) for i in patch), shuffle)
+        assert other_asked == asked, f"Umordnung {trial}: andere Keime, Kreise oder Achsen"
+        assert other_pieces == pieces, f"Umordnung {trial}: andere Stücke"
+
+
+def test_a_moved_body_does_not_lend_its_carried_reading_to_a_fresh_twin() -> None:
+    """Normalen und Flächen, die eine Bewegung mitträgt, stehen im Fleckabdruck.
+
+    Eine starre Bewegung gibt dem bewegten Netz Normalen und Flächeninhalte des
+    Quellnetzes mit (``geom.transform._carry_cache``); sie folgen dann nicht Bit
+    für Bit seinen Ecken. Ein frisch gebautes Netz mit denselben Ecken liest
+    dieselben Flecken mit eigenen Flächen. Ohne diese Felder im Abdruck gab das
+    Gedächtnis der frischen Lesung den Abdruck der mitgetragenen, und die
+    Einpassungen kamen aus einer anderen Lesung (Messbank A1, Paket E: 449 von
+    2 282 Zuständen anders).
+    """
+    from app.core.geom.transform import apply as moved
+
+    shift = np.eye(4)
+    shift[:3, 3] = (0.123456789, -7.654321, 31.41592653)
+    source = features_module._one_body(_rounded_box())
+    # Was das Quellnetz schon weiß, trägt die Bewegung mit.
+    assert len(source.raw.area_faces) and len(source.raw.face_normals)
+    carried = moved(source, shift).raw
+    fresh = trimesh.Trimesh(np.array(carried.vertices), np.array(carried.faces), process=False)
+    forget_cache()
+    patches = features_module._connected_patches(carried, list(range(len(carried.faces))))
+    assert patches
+    differs = 0
+    for patch in patches:
+        held = features_module._support_handle(carried, patch)
+        if held is None:
+            continue
+        answer = features_module._support_handle(fresh, patch)
+        own = features_module._read_surface_support(fresh, list(patch), None)
+        assert own is not None and answer is not None
+        assert answer.digest == own.digest, "die Lesung des frischen Netzes, nicht die getragene"
+        differs += held.digest != own.digest
+    assert differs, "die Bewegung trägt Flächen mit, die nicht den Ecken folgen"
+
+
+def test_a_moved_body_does_not_lend_its_whole_detection_to_a_fresh_twin() -> None:
+    """Dasselbe für die ganze Erkennung: Der Netzabdruck kennt mitgetragene Maße.
+
+    Der Merkmalscache las nur Ecken und Dreiecke (``_mesh_key``), jetzt dazu die
+    mitgetragenen Maße (``_detection_key``). Ein frisch gebautes Netz mit
+    denselben Bits wie ein bewegtes bekam deshalb dessen Erkennung aus dem
+    Cache — gerechnet mit gedrehten Normalen und übernommenen Flächen, also in
+    den letzten Stellen anders als seine eigene. Gefunden an der Messbank: Die
+    Lochplatte nach dem Beispiel *Halterung anpassen* (dort auf das Bett
+    gesetzt) trug Mitten wie ``4.0`` statt ``3.9999999999999996`` und eine
+    Normale ``-0.0`` — je nachdem, was die Sitzung vorher geöffnet hatte.
+    """
+    from app.core.geom.transform import apply as carrying_move
+    from app.core.scene.cache import feature_to_data
+
+    def printed(found: dict[str, Any]) -> list[Any]:
+        return [[name, feature_to_data(found[name])] for name in sorted(found)]
+
+    source = plate()
+    turn = trimesh.transformations.rotation_matrix(math.pi / 2, [1.0, 0.0, 0.0])
+    detect(source)
+    carried = carrying_move(source, turn)
+    fresh = MeshData.of(
+        trimesh.Trimesh(np.array(carried.raw.vertices), np.array(carried.raw.faces), process=False)
+    )
+    forget_cache()
+    alone = printed(detect(fresh))
+    forget_cache()
+    detect(carried)
+    after = printed(
+        detect(
+            MeshData.of(
+                trimesh.Trimesh(
+                    np.array(carried.raw.vertices), np.array(carried.raw.faces), process=False
+                )
+            )
+        )
+    )
+    assert after == alone, "der frische Zwilling bekam die Erkennung des bewegten"
+
+
+def test_a_patch_known_only_by_its_print_is_read_inside_its_round() -> None:
+    """Im Stapel steht für einen bekannten Fleck nur der Abdruck — gelesen wird trotzdem.
+
+    Am Stand von P2 fragte die Lesung des Abdrucks den Stapel, und der Stapel
+    gab denselben Abdruck zurück: ``RecursionError``, und an der Messbank hielt
+    jede Auswertung beim Vereinigen an (``post_with_fillet``, Torus, Figur).
+    """
+    raw = _rounded_box().raw
+    body = trimesh.Trimesh(np.array(raw.vertices), np.array(raw.faces), process=False)
+    patches = [
+        patch
+        for patch in features_module._connected_patches(body, list(range(len(body.faces))))
+        if features_module._face_count(body, patch) >= features_module.MIN_PATCH_FACES
+    ]
+    forget_cache()
+    for patch in patches:
+        features_module._support_handle(body, patch)
+    twin = _twin(body)
+    handles = {}
+    for patch in patches:
+        handle = features_module._support_handle(twin, patch)
+        assert isinstance(handle, features_module._SupportPrint)
+        handles[features_module._patch_key(patch)] = handle
+    # Der Stapel hält nur die Abdrücke, ungelesen — wie für einen Fleck, dessen
+    # Kegel und Ring schon über die Körpergrenze beantwortet sind.
+    token = features_module._SCREENED.set(features_module._Screened(twin, {}, handles, {}))
+    try:
+        for patch in patches:
+            read = features_module._surface_support(twin, patch)
+            assert read is not None
+            assert read.digest == handles[features_module._patch_key(patch)].digest
+    finally:
+        features_module._SCREENED.reset(token)
+
+
+def _single_patch_parts(body: Any, patch: list[int], seams: bool) -> list[tuple[str, bytes]]:
+    """Der Fleckabdruck Fleck für Fleck, wie er vor der Stapelfassung gerechnet wurde."""
+    index = np.asarray(patch, dtype=np.int64)
+    faces = np.asarray(body.faces, dtype=np.int64)[index]
+    corners = np.asarray(body.vertices, dtype=np.float64)[faces]
+    _used, local = np.unique(faces.ravel(), return_inverse=True)
+    order = np.argsort(index, kind="stable")
+    parts = [
+        ("corners", np.ascontiguousarray(corners).tobytes()),
+        ("corner_numbers", np.asarray(local, dtype=np.int64).tobytes()),
+    ]
+    neighbours, pair_rows = features_module._neighbour_index(body)
+    ranked = index[order]
+    around = neighbours[index]
+    spot = np.minimum(np.searchsorted(ranked, np.maximum(around, 0)), len(index) - 1)
+    inside = (around >= 0) & (ranked[spot] == around)
+    place = np.where(inside, order[spot], np.where(around >= 0, -1, -2))
+    ranking = np.argsort(-place, axis=1, kind="stable")
+    place = np.take_along_axis(place, ranking, axis=1)
+    width = int((place > -2).sum(axis=1).max())
+    parts.append(("ring", np.ascontiguousarray(place[:, :width]).tobytes()))
+    if seams:
+        angles = np.asarray(body.face_adjacency_angles, dtype=np.float64)[
+            np.maximum(pair_rows[index], 0)
+        ]
+        angles = np.take_along_axis(np.where(inside, angles, 0.0), ranking, axis=1)
+        parts.append(("angles", np.ascontiguousarray(angles[:, :width]).tobytes()))
+    parts.append(("normals", np.asarray(body.face_normals, dtype=np.float64)[index].tobytes()))
+    parts.append(("areas", np.asarray(body.area_faces, dtype=np.float64)[index].tobytes()))
+    units = features_module.refined_units(body)
+    if units is not None:
+        own_units = units[index]
+        kept = own_units >= 0
+        pattern = np.full(len(index), -1, dtype=np.int64)
+        if kept.any():
+            pattern[kept] = np.unique(own_units[kept], return_inverse=True)[1]
+        parts.append(("origin", pattern.tobytes()))
+    return parts
+
+
+@pytest.mark.parametrize("refined", [False, True])
+def test_the_patch_prints_of_a_round_are_those_of_each_patch(refined: bool) -> None:
+    """Die Abdrücke einer ganzen Runde in einem Zug sind Byte für Byte die einzelnen.
+
+    Gemischt: große und kleine Flecken, ein Fleck in verdrehter Folge, zwei, die
+    sich Dreiecke teilen, mit und ohne Nahtwinkel, mit und ohne Ursprung vor
+    *Kanten verfeinern*.
+    """
+    from app.core.geom.mesh import remember_refined_units
+
+    raw = _rounded_box().raw
+    body = trimesh.Trimesh(np.array(raw.vertices), np.array(raw.faces), process=False)
+    if refined:
+        remember_refined_units(body, np.arange(len(body.faces), dtype=np.int64) // 3)
+    rng = np.random.default_rng(592)
+    count = len(body.faces)
+    patches = [
+        list(range(300)),
+        sorted(rng.choice(count, 40, replace=False).tolist()),
+        rng.permutation(np.arange(200, 260)).tolist(),
+        list(range(250, 400)),
+        [5],
+        list(range(count)),
+    ]
+    for seams in (False, True):
+        together = features_module._patch_prints_parts(body, patches, seams=seams)
+        for patch, parts in zip(patches, together, strict=True):
+            assert parts == _single_patch_parts(body, patch, seams)
+
+
+def test_the_hull_says_no_without_the_rectangle_and_says_what_it_would_say(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Zylinder weit über dem Körper bekommt sein Nein, ohne dass das Rechteck rechnet.
+
+    Die Schranke aus dem achsparallelen Rahmen der Projektion verneint, was das
+    kleinste Rechteck ohnehin verneinen würde; dazwischen rechnet es weiter.
+    Für jeden Radius kommt dieselbe Antwort wie mit Rechteck allein.
+    """
+    rng = np.random.default_rng(592)
+    points = rng.random((4000, 3)) * np.array([80.0, 30.0, 12.0])
+    mesh = MeshData.of(trimesh.convex.convex_hull(points))
+    axes = [(0.0, 0.0, 1.0), (0.6, 0.0, 0.8), (0.3, 0.4, np.sqrt(0.75))]
+    counted = [0]
+    shipped = features_module._rectangle_across
+
+    def rectangle(*args: Any) -> float:
+        counted[0] += 1
+        return float(shipped(*args))
+
+    monkeypatch.setattr(features_module, "_rectangle_across", rectangle)
+    forget_cache()
+    for axis in axes:
+        assert not features_module._cylinder_fits(mesh, axis, 500.0)
+    assert counted[0] == 0, "ein Zylinder Ø 1000 an einem Körper von 88 mm braucht kein Rechteck"
+
+    radii = np.linspace(1.0, 120.0, 240)
+    with_bound = [[features_module._cylinder_fits(mesh, axis, r) for r in radii] for axis in axes]
+    monkeypatch.setattr(features_module, "_ACROSS_BOUND", np.inf)
+    forget_cache()
+    alone = [[features_module._cylinder_fits(mesh, axis, r) for r in radii] for axis in axes]
+    assert with_bound == alone
+    assert any(not answer for row in alone for answer in row) and any(
+        answer for row in alone for answer in row
+    )
+
+
+# --- G2: die Einpassungsrunden je Fleck (RM-592, P3) ------------------------------
+
+
+def _fitted_print(fitted: Any) -> list[Any]:
+    """Was ``_fitted`` hergibt, Bit für Bit: je Liste Fit und Dreiecke."""
+    return [
+        [(repr(entry[0]), sorted(int(index) for index in entry[1])) for entry in part]
+        if isinstance(part, list)
+        else repr(part)
+        for part in fitted
+    ]
+
+
+def _classified_hits(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Zählt Treffer und Ablagen von ``classify`` über die Körpergrenze."""
+    counts = [0, 0]
+    shipped_known = features_module._known_across
+    shipped_keep = features_module._keep_across
+
+    def known(name: str, body: Any, key: bytes) -> Any:
+        value = shipped_known(name, body, key)
+        if name == "classified" and value is not features_module._UNKNOWN:
+            counts[0] += 1
+        return value
+
+    def keep(name: str, body: Any, key: bytes, value: Any) -> None:
+        if name == "classified":
+            counts[1] += 1
+        shipped_keep(name, body, key, value)
+
+    monkeypatch.setattr(features_module, "_known_across", known)
+    monkeypatch.setattr(features_module, "_keep_across", keep)
+    return counts
+
+
+def _fresh_fitted(mesh: MeshData) -> list[Any]:
+    """Dieselbe Einpassung ohne jedes Gedächtnis."""
+    forget_cache()
+    before = features_module.remember_across_bodies(False)
+    try:
+        return _fitted_print(features_module._fitted(mesh))
+    finally:
+        features_module.remember_across_bodies(before)
+
+
+@pytest.mark.parametrize("name", ["post_with_fillet.stl", "plate_chamfered_mouths.stl"])
+def test_the_rounds_answer_each_patch_from_memory_like_the_calculation(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """Am Zwilling antwortet ``classify`` aus dem Gedächtnis — mit Bit für Bit denselben Formen."""
+    mesh = features_module._one_body(plate(name))
+    counts = _classified_hits(monkeypatch)
+    forget_cache()
+    features_module._fitted(mesh)
+    assert counts == [0, counts[1]] and counts[1] > 0
+    twin = MeshData(raw=_twin(mesh.raw))
+    remembered = _fitted_print(features_module._fitted(twin))
+    assert counts[0] > 0, "derselbe Fleck an einem neuen Körper rechnet nicht"
+    assert remembered == _fresh_fitted(twin)
+
+
+def test_a_round_answer_needs_the_same_hull_and_the_same_body_numbers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine andere Antwort der Hülle oder eine andere Diagonale rechnet die Runde neu.
+
+    Jeder Teil des Schlüssels einzeln: Ohne die Diagonale im Schlüssel träfe
+    der Körper mit dem losen Dreieck weit weg; ohne die Rückfrage träfe der
+    Zwilling, dessen Hülle anders antwortet. Beides gibt dann andere Formen als
+    die Rechnung.
+    """
+    mesh = features_module._one_body(plate("plate_chamfered_mouths.stl"))
+    counts = _classified_hits(monkeypatch)
+    forget_cache()
+    features_module._fitted(mesh)
+    wider = MeshData(raw=_twin(mesh.raw, far_triangle=True))
+    hits = counts[0]
+    features_module._fitted(wider)
+    assert counts[0] == hits, "eine andere Diagonale rechnet neu"
+
+    forget_cache()
+    features_module._fitted(mesh)
+    shipped = features_module._cylinder_fits
+    monkeypatch.setattr(features_module, "_cylinder_fits", lambda *args: not shipped(*args))
+    twin = MeshData(raw=_twin(mesh.raw))
+    asked_before = counts[1]
+    changed = _fitted_print(features_module._fitted(twin))
+    assert counts[1] > asked_before, "eine andere Antwort der Hülle rechnet neu"
+    assert changed == _fresh_fitted(twin)
+
+    # Die Gegenproben: ohne den Teil im Schlüssel träfe das Gedächtnis.
+    monkeypatch.setattr(features_module, "_cylinder_fits", shipped)
+    monkeypatch.setattr(features_module, "_LEFT_OUT", {"diagonal"})
+    forget_cache()
+    features_module._fitted(mesh)
+    hits = counts[0]
+    features_module._fitted(MeshData(raw=_twin(mesh.raw, far_triangle=True)))
+    assert counts[0] > hits, "ohne die Diagonale träfe der Körper mit dem fernen Dreieck"
+    monkeypatch.setattr(features_module, "_LEFT_OUT", {"hull_query"})
+    forget_cache()
+    features_module._fitted(mesh)
+    monkeypatch.setattr(features_module, "_cylinder_fits", lambda *args: not shipped(*args))
+    twin = MeshData(raw=_twin(mesh.raw))
+    blind = _fitted_print(features_module._fitted(twin))
+    assert blind != _fresh_fitted(twin), "ohne die Rückfrage gälte die alte Hülle"
+
+
+def _twin_open_inside(body: Any) -> Any:
+    """Dieselben Ecken und Dreiecke, dazu ein loses Dreieck mitten im Körper.
+
+    Die Diagonale bleibt, jeder Fleckabdruck auch — nur ist das Netz nicht mehr dicht.
+    """
+    vertices = np.array(body.vertices, dtype=np.float64)
+    faces = np.array(body.faces, dtype=np.int64)
+    middle = (vertices.min(axis=0) + vertices.max(axis=0)) / 2.0
+    start = len(vertices)
+    loose = middle + np.array([[0.0, 0.0, 0.0], [0.01, 0.0, 0.0], [0.0, 0.01, 0.0]])
+    return trimesh.Trimesh(
+        np.vstack((vertices, loose)),
+        np.vstack((faces, [[start, start + 1, start + 2]])),
+        process=False,
+    )
+
+
+def test_a_round_answer_needs_the_same_closedness_as_its_reading(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``classify`` liest die Stützpunkte so, wie dicht, umlauf und deckungsgleich es verlangen.
+
+    Die Lesung eines Flecks hängt daran, ob das Netz dicht und gleich umlaufend
+    ist und deckungsgleiche Ecken trägt (:func:`_support_handle`); der Schlüssel
+    von ``classify`` trug nur die Diagonale. Am Schwesterkörper derselben Diagonale
+    mit einem Loch im Netz kamen so die Fits des dichten Körpers zurück — an der
+    Messbank (A1, ``宠物便便器.3mf`` nach *Merkmal versetzen*) in der letzten
+    Stelle anders als die Rechnung.
+    """
+    mesh = features_module._one_body(plate("plate_chamfered_mouths.stl"))
+    counts = _classified_hits(monkeypatch)
+    forget_cache()
+    features_module._fitted(mesh)
+    hits = counts[0]
+    opened = MeshData(raw=_twin_open_inside(mesh.raw))
+    assert not opened.raw.is_watertight and mesh.raw.is_watertight
+    features_module._fitted(opened)
+    assert counts[0] == hits, "ein anderes ``closed`` rechnet die Runde neu"
+    # Gegenprobe: ohne ``closed`` im Schlüssel träfe das Gedächtnis.
+    monkeypatch.setattr(features_module, "_LEFT_OUT", {"closed"})
+    forget_cache()
+    features_module._fitted(mesh)
+    hits = counts[0]
+    features_module._fitted(MeshData(raw=_twin_open_inside(mesh.raw)))
+    assert counts[0] > hits, "ohne ``closed`` träfe der Körper mit dem Loch im Netz"
+
+
+def test_a_cancelled_round_leaves_no_answer_for_its_patch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Abbruch mitten in ``classify`` legt für diesen Fleck nichts ab."""
+    from app.core.errors import OperationCancelled
+
+    mesh = features_module._one_body(plate("post_with_fillet.stl"))
+    counts = _classified_hits(monkeypatch)
+    forget_cache()
+
+    def cancelled(*_args: Any, **_kwargs: Any) -> Any:
+        raise OperationCancelled()
+
+    monkeypatch.setattr(features_module, "fit_sphere", cancelled)
+    monkeypatch.setattr(features_module, "fit_cone", cancelled)
+    with pytest.raises(OperationCancelled):
+        features_module._fitted(mesh)
+    held = features_module._BY_GEOMETRY.get("classified") or {}
+    assert len(held) == counts[1], "abgelegt nur, was vor dem Abbruch fertig war"
+    assert all(entry is not None for entry in held.values())
+
+
+@pytest.mark.parametrize("name", ["plate_chamfered_mouths.stl", "plate_countersunk.stl"])
+def test_the_stack_judges_each_patch_as_it_would_alone(name: str) -> None:
+    """Das Urteil des Stapels über einen Fleck hängt nicht daran, wer mit ihm im Stapel steht.
+
+    Sonst trüge eine gemerkte Antwort von ``classify`` das Urteil einer anderen
+    Runde an einen neuen Körper (Konzept R2). Je Fleck allein und alle zusammen:
+    dieselben Pläne, dieselben Urteile.
+    """
+    mesh = features_module._one_body(plate(name))
+    body = mesh.raw
+    curved = features_module._all_but(len(body.faces), features_module._large_facet_faces(body))
+    patches = [
+        patch
+        for patch in features_module._connected_patches(body, curved)
+        if features_module._face_count(body, patch) >= features_module.MIN_PATCH_FACES
+    ]
+    assert len(patches) > 1
+    forget_cache()
+    together = features_module._screened_fits(body, patches, shapes=None).fits
+    assert together
+    alone: dict[Any, Any] = {}
+    for patch in patches:
+        forget_cache()
+        alone.update(features_module._screened_fits(body, [patch], shapes=None).fits)
+    assert {key: verdict for key, (_plan, verdict) in together.items()} == {
+        key: verdict for key, (_plan, verdict) in alone.items()
+    }
+
+
 def _sharpened_axis_before(
     points: np.ndarray, axis: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, float, float] | None:

@@ -1,0 +1,36 @@
+A1 nach Review 1 (Stand 585088950, Teilmenge des Prüfers: 47 Fälle aus Beispielen und tests/data, folge.py --pruefen, zwei Prozesse)
+
+--- ohne Plattencache ---
+Fälle 47, Zustände 188, getragen 32, verglichen 155
+nicht getragen und anders als die Kopie: 0
+wieder geöffnet über die Platte: 0, anders als in der Sitzung: 0
+nicht vollständig ausgewertet: 0
+Halte: 3
+    ('beispiel:drucker-kalibrieren', 'ValueError: attempt to get argmax of an empty sequence')
+    ('beispiel:passung-nach-materialwechsel', 'ValueError: attempt to get argmax of an empty sequence')
+    ('beispiel:dose-mit-deckel', 'ValueError: attempt to get argmax of an empty sequence')
+je Schritt: {'0_geladen': 56, '1_bohren_1': 10, '1_bohren_2': 10, '1_bohren_3': 10, '2_versetzen': 10, '3_aufweiten': 9, '4_entfernen': 9, '5_quader': 16, '6_zapfen': 16, '7_abschneiden': 16, '8_verschieben': 16, '9_bohren': 10, 'ende': 47, 'halt': 3}
+Schlusszeilen: {'fertig': 47}
+
+--- mit Plattencache (--platte), danach wieder geöffnet (10_wieder) ---
+Fälle 47, Zustände 244, getragen 46, verglichen 196
+nicht getragen und anders als die Kopie: 0
+wieder geöffnet über die Platte: 56, anders als in der Sitzung: 0
+nicht vollständig ausgewertet: 0
+Halte: 3
+    ('beispiel:drucker-kalibrieren', 'ValueError: attempt to get argmax of an empty sequence')
+    ('beispiel:passung-nach-materialwechsel', 'ValueError: attempt to get argmax of an empty sequence')
+    ('beispiel:dose-mit-deckel', 'ValueError: attempt to get argmax of an empty sequence')
+je Schritt: {'0_geladen': 56, '1_bohren_1': 10, '1_bohren_2': 10, '1_bohren_3': 10, '2_versetzen': 10, '3_aufweiten': 9, '4_entfernen': 9, '5_quader': 16, '6_zapfen': 16, '7_abschneiden': 16, '8_verschieben': 16, '9_bohren': 10, '10_wieder': 56, 'ende': 47, 'halt': 3}
+Schlusszeilen: {'fertig': 47}
+
+--- Gegenprobe: Stand davor (18f5f287a), --platte, beispiel:weg4-figur-formen ---
+Fälle 1, Zustände 0, getragen 0, verglichen 0
+nicht getragen und anders als die Kopie: 0
+wieder geöffnet über die Platte: 0, anders als in der Sitzung: 0
+nicht vollständig ausgewertet: 0
+Halte: 0
+je Schritt: {'ende': 1}
+Schlusszeilen: {'ValueError: cannot reshape array of size 0 into shape (0,new': 1}
+
+Die drei Halte (argmax einer leeren Auswahl) liegen in der Messbank selbst (folge.py), wie im Lauf des Prüfers.

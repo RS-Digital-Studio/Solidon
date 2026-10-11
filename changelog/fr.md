@@ -65,6 +65,10 @@ dans `website/version.json`.
 - L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
 - Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
 - Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
+- Après un perçage ou une caractéristique déplacée, les caractéristiques d'une grande pièce technique sont reconnues environ un tiers plus vite.
+- Un modèle ouvert juste après le démarrage du programme est modifiable jusqu'à un quart plus tôt.
+- Avec un slicer, un jeu ou un rendu en cours à côté, les calculs sur de grands modèles aboutissent en secondes au lieu de minutes.
+- Un projet enregistré avec un grand modèle s'ouvre après un redémarrage en une ou deux secondes au lieu d'une demi-minute : les caractéristiques reconnues sont conservées.
 
 ### Imprimer et transmettre au slicer
 

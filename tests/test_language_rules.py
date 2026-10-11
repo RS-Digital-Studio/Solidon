@@ -79,6 +79,8 @@ GERMAN_WORDS = frozenset(
         "rahmen",
         "toleranz",
         "ecken",
+        "dicht",
+        "diagonale",
         "lebende",
         "titel",
         "versteckt",
@@ -165,6 +167,10 @@ GERMAN_WORDS = frozenset(
 #: dort).
 GERMAN_STEMS = (
     "knoten",
+    "deckungsgleich",
+    "umlauf",
+    "wofuer",
+    "woher",
     "allein",
     "aenderung",
     "befehl",
@@ -290,6 +296,10 @@ def identifiers_of(tree: ast.AST) -> list[tuple[str, int]]:
             found.append((node.attr, node.lineno))
         elif isinstance(node, ast.alias) and node.asname:
             found.append((node.asname, node.lineno))
+        elif isinstance(node, ast.keyword) and node.arg:
+            # Ein Schlüsselwort an der Aufrufstelle ist ein Bezeichner wie ein
+            # Parameter — ``_body_numbers(dicht=…)`` lief an ``**numbers`` vorbei.
+            found.append((node.arg, node.lineno))
     return found
 
 
