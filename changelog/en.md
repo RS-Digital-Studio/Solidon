@@ -17,9 +17,10 @@ it into `website/version.json`.
 
 ## 0.6.0
 
+- The demo now runs until 30 November 2026. Solidon3D 1.0 is expected on 1 December, and your projects are kept.
+
 ### Operation and system
 
-- The demo now runs until 30 November 2026. Solidon3D 1.0 is planned for 1 December, and your projects are kept.
 - On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on gets macOS 14 for free.
 - Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.
 - On Intel Macs, Solidon now reports when a fillet or chamfer on an exact body cannot be built. Version 0.5.3 quit at that point.

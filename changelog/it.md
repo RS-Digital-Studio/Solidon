@@ -17,9 +17,10 @@ scrive in `website/version.json`.
 
 ## 0.6.0
 
+- La demo ora funziona fino al 30 novembre 2026. Solidon3D 1.0 dovrebbe uscire il 1º dicembre e i tuoi progetti restano.
+
 ### Uso e sistema
 
-- La demo ora funziona fino al 30 novembre 2026. Solidon3D 1.0 è prevista per il 1º dicembre e i tuoi progetti restano.
 - Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi riceve macOS 14 gratuitamente.
 - Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.
 - Sui Mac Intel, Solidon ora segnala quando un raccordo o uno smusso su un corpo esatto non si può costruire. La versione 0.5.3 si chiudeva in quel momento.
