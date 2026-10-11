@@ -40,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.branding import APP_NAME, APP_VERSION
 from app.core import changes
+from app.i18n import SOURCE_LANGUAGE
 from tools import sign_release
 from tools.make_changelog import write_pages as write_changelog_pages
 
@@ -827,8 +828,8 @@ def grouped_for(version: str) -> dict[str, list[dict[str, object]]]:
     """Dieselben Punkte wie :func:`changes_for`, nur gegliedert.
 
     Je Sprache eine Liste von ``{"title", "points"}``. Ein leerer Titel ist
-    erlaubt und heißt „Vorspann" — so lesen sich die Abschnitte vor 0.2.0 und
-    alles, was vor der ersten Überschrift steht.
+    erlaubt: vor benannten Gruppen ist er der Vorspann (``changes.lead_of``),
+    allein der Abschnitt vor 0.2.0.
 
     **Beide Sichten stehen in der Datei, und das ist kein Versehen.** Die
     flache Liste unter ``changes`` ist das Einzige, was eine ausgelieferte
@@ -851,6 +852,58 @@ def grouped_for(version: str) -> dict[str, list[dict[str, object]]]:
         if blocks:
             found[file.stem] = blocks
     return found
+
+
+def drop_lead_said_in_the_note(
+    data: dict[str, object],
+    flat: dict[str, list[str]],
+    grouped: dict[str, list[dict[str, object]]],
+) -> list[str]:
+    """Nimmt den Vorspann einer Sprache aus der Versionsdatei, wenn ihr Hinweis ihn sagt.
+
+    **Für die ausgelieferten Fassungen, nicht für die neue** (Entscheidung
+    Koordinator 0.6.0): Das Update-Fenster einer Version sehen Kunden mit dem
+    Code der Version davor. Der kennt keinen Vorspann und zeigt ihn als ersten
+    Punkt der Liste; hervorgehoben kommt die Meldung bei ihm nur über den
+    Hinweistext an. Steht sie in beiden, liest er sie zweimal untereinander.
+    Neue Fassungen verlieren nichts: Sie heben den Hinweis ebenso hervor, und
+    *Hilfe → Neuerungen* liest den Changelog-Ordner, nicht diese Datei.
+
+    Der Hinweis je Sprache folgt dem Rückfall des Lesers
+    (``updates.Release.note``): eigene Sprache, sonst Quellsprache, sonst
+    ``notes``. Ob er dasselbe sagt, entscheidet :func:`changes.repeats` — die
+    Regel, nach der auch das Fenster nur einen der beiden zeigt.
+
+    Gibt die Sprachen zurück, aus denen der Vorspann genommen wurde.
+    """
+    by_language = data.get("notes_by_language")
+    notes: dict[str, object] = by_language if isinstance(by_language, dict) else {}
+    fallback = data.get("notes")
+    dropped: list[str] = []
+    for language, blocks in grouped.items():
+        read: list[changes.Group] = []
+        for block in blocks:
+            points = block.get("points")
+            read.append(
+                changes.Group(
+                    title=str(block.get("title") or ""),
+                    points=tuple(str(point) for point in points)
+                    if isinstance(points, list)
+                    else (),
+                )
+            )
+        lead = changes.lead_of(tuple(read))
+        if lead is None:
+            continue
+        note = notes.get(language) or notes.get(SOURCE_LANGUAGE) or fallback
+        if not isinstance(note, str) or not changes.repeats(note, lead):
+            continue
+        grouped[language] = blocks[1:]
+        listed = flat.get(language)
+        if listed and tuple(listed[: len(lead.points)]) == lead.points:
+            flat[language] = listed[len(lead.points) :]
+        dropped.append(language)
+    return dropped
 
 
 def cap_groups(blocks: list[dict[str, object]], kept: int) -> list[dict[str, object]]:
@@ -979,6 +1032,14 @@ def write_version(packages: list[Package]) -> None:
         # **Vor der Kappung eingehängt**, damit sie beide Sichten sieht: Sie
         # misst die geschriebene Datei, und die trägt dann auch die Gruppen.
         grouped = grouped_for(APP_VERSION)
+        # Vor Zählung und Kappung: Der weggenommene Vorspann ist kein
+        # fehlender Punkt, sonst verwiese das Fenster für nichts auf die Website.
+        dropped = drop_lead_said_in_the_note(data, changes, grouped)
+        if dropped:
+            print(
+                "  version.json: Vorspann steht im Hinweistext und fehlt deshalb in der "
+                f"Liste: {', '.join(dropped)}"
+            )
         if grouped:
             data["groups"] = grouped
         else:

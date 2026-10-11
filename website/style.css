@@ -1732,6 +1732,25 @@ section > .wrap > p.sub + p.sub {
   font-weight: 700;
 }
 
+/* Der Vorspann einer Version gilt jedem Leser und keinem Gebiet: volle
+   Breite über dem Raster, größer und halbfett, mit Akzentkante. Kante als
+   Form und Schrift tragen es auch ohne Farbwahrnehmung (Regel 18). */
+.release-lead {
+  margin: clamp(1rem, 3vw, 2rem) clamp(1rem, 3vw, 2rem) 0;
+  padding: 1rem 1.25rem;
+  border-left: 5px solid var(--accent);
+  border-radius: var(--r-lg);
+  background: var(--accent-soft);
+  color: var(--fg);
+  font-size: var(--t-lg);
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.release-lead p { margin: 0; max-width: 68ch; }
+
+.release-lead p + p { margin-top: 0.5rem; }
+
 .release-groups {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
