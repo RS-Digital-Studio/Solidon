@@ -22,6 +22,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A demo funciona agora até 30 de novembro de 2026. O Solidon3D 1.0 está previsto para 1 de dezembro e os seus projetos mantêm-se.
 - No Mac, o Solidon precisa agora do macOS 14 ou mais recente. Qualquer Mac a partir de 2018 pode instalá-lo gratuitamente.
 - O Solidon arranca agora nos Mac Intel com macOS 26. A versão 0.5.3 ficava aí bloqueada no arranque.
+- Nos Mac Intel, o Solidon indica agora quando um arredondamento ou um chanfro num corpo exato não pode ser construído. A versão 0.5.3 fechava-se nesse momento.
 - No Mac, *Cancelar* interrompe de imediato uma resposta em curso do modelo local.
 - No Mac, Return abre a entrada selecionada no ecrã inicial, em *Pesquisar função* e no relatório de verificação.
 - No Linux, a escrita com Fcitx5 e IBus chega agora ao campo de texto também no Flatpak e no AppImage.
