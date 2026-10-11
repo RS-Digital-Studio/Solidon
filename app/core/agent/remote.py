@@ -62,6 +62,13 @@ HOST: Final = "127.0.0.1"
 #: Voreingestellter Port. Über 1024, damit kein erhöhtes Recht nötig ist.
 DEFAULT_PORT: Final = 8787
 
+#: Was im Herkunftsvermerk einer ferngesteuerten Transaktion als Modell
+#: steht. „user" und „agent" sind die einzigen Urheber, die das Format
+#: kennt (§26.4); ein dritter kostete eine Migration. Fenster und Verlauf
+#: lesen denselben Wert: das eine schreibt ihn, der andere nennt danach
+#: „Fernsteuerung" statt „Agent".
+ORIGIN_MODEL: Final = "mcp"
+
 #: Derselbe Deckel wie am HTTP-Rumpf; direkte Aufrufer umgehen den Server nicht.
 MAX_REQUEST_BYTES: Final = 1 << 20
 

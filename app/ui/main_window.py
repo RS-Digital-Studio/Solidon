@@ -86,6 +86,7 @@ from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
+from app.core.agent.remote import ORIGIN_MODEL as REMOTE_ORIGIN
 from app.core.agent.remote import Deferred as RemoteDeferred
 from app.core.agent.session import (
     MAX_STEPS,
@@ -2631,12 +2632,6 @@ DRAWN_OPERATIONS: frozenset[str] = frozenset({PULL_OP, JOIN_OP, POCKET_OP})
 #: der Druckschale, weil jede ebene Fläche jedes Körpers kam (Befund B4).
 MOST_PLANE_FACES = 8
 
-
-#: Was im Herkunftsvermerk einer ferngesteuerten Transaktion als Modell
-#: steht. „user" und „agent" sind die einzigen Urheber, die das Format
-#: kennt (§26.4); ein dritter kostete eine Migration, und für die Frage
-#: „habe ich das getan?" reicht dieser Vermerk.
-REMOTE_ORIGIN = "mcp"
 
 #: Wie lange ein Fernaufruf auf die Auswertung wartet. Länger als im
 #: Fenster: dort sieht jemand den Fortschritt, am anderen Ende der Leitung
