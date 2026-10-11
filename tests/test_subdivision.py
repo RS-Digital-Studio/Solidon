@@ -13,7 +13,9 @@ Abweichung, und seit dem 25.09.2026 nur noch sie.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -26,6 +28,8 @@ from app.core.ingest.loader import normalise
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import MaterialSlot, OpContext, OpResult, Profile, Quality, Scene, SceneObject
+from app.core.units import EPS_GEOM
+from tests.helpers import sliver_share
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -117,9 +121,10 @@ def test_uniform_remeshing_evens_out_more_than_splitting_does(
     identisch. Die Operation machte das Netz feiner, nicht gleichmäßiger.
 
     trimesh 5 teilte selbst gleichmäßig und kam auf **0,555** (14.08.2026),
-    der konforme Weg des exakten Kerns seit dem 25.09.2026 auf **0,445**. Der
-    Vorsprung ist damit klein geworden, aber er steht: ``remesh_uniform``
-    liegt bei **0,410**.
+    der konforme Weg des exakten Kerns seit dem 25.09.2026 auf **0,445**.
+    ``remesh_uniform`` lag bei **0,410**; seit es keine Kante über der
+    verlangten stehen lässt und nach dem Kern nur teilt (RM-671, Review-Fix F),
+    bei **0,441** — knapp vorn, mit Abweichung (0,2 mm) bei **0,325**.
     """
     plate = corpus("plate_holes.stl")
     before = spread(plate)
@@ -154,16 +159,21 @@ def test_uniform_remeshing_costs_a_fraction_of_the_triangles(profile: Profile) -
     """Warum es eine eigene Operation ist und keine Zeile in ``remesh_mesh``.
 
     Für dieselbe Zielkantenlänge von 1,5 mm braucht ``remesh_mesh`` auf
-    ``plate_holes`` **47 092** Dreiecke, ``remesh_uniform`` **30 648** und mit
-    zugelassenen 0,2 mm Abweichung **16 816** (25.09.2026).
+    ``plate_holes`` **47 092** Dreiecke, ``remesh_uniform`` **46 480** und mit
+    zugelassenen 0,2 mm Abweichung **29 362** (11.10.2026, Review-Fix F zu
+    RM-671).
 
     Hier stand erst Faktor **hundert** (3 260 416 gegen rund 30 000), unter
-    trimesh 5 Faktor 5,2 (160 084). Seit ``remesh_mesh`` konform durch den
-    exakten Kern teilt, ist ohne Abweichung nur noch die Zusage übrig, die
-    beide trennt: ``remesh_mesh`` hält **jede** Kante unter 1,5 mm,
-    ``remesh_uniform`` lässt die Diagonalen einer Gitterzelle bis 2,8 mm
-    stehen — ungefähr gleich lang ist, was es verspricht. Der Grund für die
-    eigene Operation ist die Abweichung: Nur sie räumt die überflüssig
+    trimesh 5 Faktor 5,2 (160 084). Bis RM-671 ließ ``remesh_uniform`` die
+    Diagonalen einer Gitterzelle bis 2,8 mm stehen und kam so auf 30 648 und
+    16 816 — mit Abweichung weniger als die Hälfte von ``remesh_mesh``, aber
+    nur, weil Kanten bis 2,99 mm stehen blieben. Seitdem hält es wie
+    ``remesh_mesh`` jede Kante unter 1,5 mm; die Fläche der Platte (rund
+    10 500 mm²) verlangt dafür gut 20 000 Dreiecke, und die Hälfte ist keine
+    Zusage mehr. Ohne Abweichung liegt es seither knapp unter ``remesh_mesh``
+    (mit Tauschen und Zusammenlegen in der Ebene waren es 28 566, das kostete
+    an CAD-Netzen aber das Drei- bis Fünffache der Zeit, RM-767). Der Grund für
+    die eigene Operation ist die Abweichung: Nur sie räumt die überflüssig
     feinen Stellen ab, und das kann keine Zeile in einem Werkzeug, das nie
     einen Punkt verschiebt. Wer sie infrage stellt, misst neu, statt diese
     Zahlen fortzuschreiben.
@@ -175,7 +185,8 @@ def test_uniform_remeshing_costs_a_fraction_of_the_triangles(profile: Profile) -
     cleared = run("remesh_uniform", object_of(plate), profile, edge=1.5, deviation=0.2)
 
     assert evened.triangle_count < split
-    assert cleared.outputs[0].mesh.triangle_count < split / 2
+    assert cleared.outputs[0].mesh.triangle_count < evened.triangle_count
+    assert float(mesh_ops.edge_lengths(cleared.outputs[0].mesh).max()) <= 1.5 * (1.0 + 1e-9)
     assert evened.triangle_count > plate.triangle_count, "feiner wird es trotzdem"
 
 
@@ -214,6 +225,171 @@ def test_an_edge_length_that_cannot_be_reached_says_which_one_can(profile: Profi
 
     assert raised.value.suggestions
     assert float(raised.value.values["reachable"]) > 0.05
+
+
+def test_the_count_ahead_of_evening_is_the_count_that_comes_out(profile: Profile) -> None:
+    """Review F, H1: Die Zahl vorab ist die Zahl danach — im Dialog und vor der Decke.
+
+    Seit *Dreiecke angleichen* keine Kante über der verlangten stehen lässt
+    (RM-671), teilt es auch die Diagonalen, die der Kern im Inneren eines
+    Dreiecks zieht, wie *Kanten verfeinern*. Gezählt wurde vorab weiter ein
+    Durchgang: am Quader 100 × 80 × 60 auf 1 mm 90 113 vorab und 161 644
+    danach. Der Dialog zeigte eine 1,8-fach zu kleine Zahl, und die Decke hielt
+    nur die Schätzung. Jetzt zählt es wie *Kanten verfeinern*, und die Zählung
+    trifft wie dort das 0,73- bis 1,10-Fache
+    (:func:`~app.core.geom.mesh_ops.estimated_triangles`).
+    """
+    box = MeshData.of(trimesh.creation.box(extents=(100.0, 80.0, 60.0)))
+    spec = REGISTRY.get("remesh_uniform")
+    assert spec.expected_triangles is not None
+    ahead = spec.expected_triangles(box, spec.params(edge=1.0))
+
+    after = run("remesh_uniform", object_of(box), profile, edge=1.0).outputs[0].mesh
+
+    assert 0.8 < after.triangle_count / ahead.triangles < 1.25
+
+
+def test_the_ceiling_of_evening_holds_for_the_result_not_only_for_the_estimate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review F, H1: Die Schätzung darf sich irren, die Decke nicht — wie bei *Kanten verfeinern*.
+
+    Gezählt wird nach dem Teilen in der Ebene, bevor das Netz verschweißt wird
+    (``test_missing_ops.py::test_the_ceiling_holds_for_the_result_not_only_for_the_estimate``).
+    """
+    monkeypatch.setattr(mesh_ops, "estimated_triangles", lambda mesh, edge, **_: 0)
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 20_000)
+    plate = corpus("plate_holes.stl")
+
+    with pytest.raises(ValidationError) as raised:
+        mesh_ops.uniform(plate, 1.5, 0.0)
+
+    assert raised.value.values["triangles"] > 20_000
+    assert raised.value.values["reachable"] > 1.5
+    assert raised.value.suggestions
+
+
+def test_the_check_before_welding_says_what_merge_vertices_would_do() -> None:
+    """Paket F, Umbau: ``_as_mesh`` verschweißt nur, wenn ``merge_vertices`` etwas ändern würde.
+
+    ``merge_vertices`` rundet die Ecken auf ``tol.merge``, legt gleich gerundete
+    zusammen und wirft unbenutzte weg; an einem Netz aus dem Kern ändert es
+    fast nie etwas und kostete am Quader 100 × 80 × 60 auf 0,5 mm doch 0,25 s.
+    Die Vorprüfung muss dieselbe Antwort geben: hier gegen ``merge_vertices``
+    selbst gehalten, an einem sauberen Netz, einer doppelten, einer bis auf
+    Rundung gleichen, einer knapp verschiedenen und einer unbenutzten Ecke —
+    und an Gittern, wie der Kern sie zieht: Dort kollidierte der erste
+    Streuwert so oft, dass die Prüfung immer ja sagte und nichts sparte.
+    """
+    box = trimesh.creation.box(extents=(4.0, 3.0, 2.0))
+    vertices = np.asarray(box.vertices, dtype=np.float64)
+    faces = np.asarray(box.faces, dtype=np.int64)
+    doubled = np.concatenate((vertices, vertices[:1]))
+    redirected = faces.copy()
+    redirected[0, 0] = len(vertices)
+    ball = trimesh.creation.icosphere(subdivisions=4, radius=20.0)
+    grid = mesh_ops.refined(MeshData.of(trimesh.creation.box(extents=(20.0, 16.0, 12.0))), 0.5).raw
+    cases = {
+        "Kugel": (np.asarray(ball.vertices), np.asarray(ball.faces, dtype=np.int64)),
+        "Gitter aus dem Kern": (np.asarray(grid.vertices), np.asarray(grid.faces, dtype=np.int64)),
+        "sauber": (vertices, faces),
+        "doppelt": (doubled, redirected),
+        "gerundet gleich": (
+            np.concatenate((vertices, vertices[:1] + 1e-10)),
+            redirected,
+        ),
+        "knapp verschieden": (
+            np.concatenate((vertices, vertices[:1] + 1e-6)),
+            redirected,
+        ),
+        "unbenutzt": (doubled, faces),
+    }
+    expected = {}
+    for name, (points, corners) in cases.items():
+        body = trimesh.Trimesh(vertices=points, faces=corners, process=False)
+        merged = body.copy()
+        merged.merge_vertices()
+        expected[name] = len(merged.vertices) < len(body.vertices)
+        assert mesh_ops._needs_welding(points, corners) == expected[name], name
+    assert expected == {
+        "Kugel": False,
+        "Gitter aus dem Kern": False,
+        "sauber": False,
+        "doppelt": True,
+        "gerundet gleich": True,
+        "knapp verschieden": False,
+        "unbenutzt": True,
+    }, "die Fälle decken beide Antworten ab"
+
+
+def _subdivided_plate(times: int) -> MeshData:
+    """``plate_holes`` ``times``-mal geviertelt — die CAD-Fächer, nur feiner, wie in §31."""
+    raw = corpus("plate_holes.stl").raw
+    for _step in range(times):
+        vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+        raw = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    return MeshData.of(raw)
+
+
+#: Die Fälle des Arbeitstests: Körper und verlangte Kante.
+EVENING_WORK: dict[str, Callable[[], tuple[MeshData, float]]] = {
+    "cad_cylinder": lambda: (
+        MeshData.of(trimesh.creation.cylinder(radius=17.5, height=60.0, sections=1500)),
+        1.0,
+    ),
+    "subdivided_plate": lambda: (_subdivided_plate(2), 1.0),
+}
+
+
+@pytest.mark.parametrize("case", sorted(EVENING_WORK))
+def test_evening_measures_each_triangle_about_once_and_tidies_nothing(
+    case: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review-Fix F: Die Arbeit des Angleichens ist ein Durchgang über das Netz — gezählt.
+
+    Bis dahin räumte das Angleichen nach dem Teilen in der Ebene auf. Am ersten
+    angeschlossenen Stand hing es an einem Zylinder aus 1 500 Abschnitten (wie
+    ein CAD-Besenhalter: Mantelstreifen, Nadelfächer im Deckel) mit 1 263 642
+    aktiven Dreiecken an ``surface_of``, 27 Runden Tauschen und allen 64 Runden
+    Zusammenlegen, 202 s; an ``plate_holes``, zweimal geviertelt, fragte es in
+    64 Runden 7,35 Mio. Halbkanten und tauschte 300 927-mal, 11,6 bis 14,8 s.
+    Jetzt teilt es nur, was zu lang ist: Der erste Durchgang misst jedes
+    Dreieck aus dem Kern, ein zweiter nur, was danach noch zu lang sein kann
+    (``mesh_edits.split_long``). Gezählt werden gemessene Dreiecke und
+    Durchgänge und ob irgendwo aufgeräumt wird — lastunabhängig.
+    """
+    import inspect
+
+    from app.core.geom import mesh_edits
+
+    body, edge = EVENING_WORK[case]()
+    measured: list[int] = []
+    tidied: list[int] = []
+    split, surface = mesh_edits.split_long, mesh_edits.surface_of
+    counts_itself = "measured" in inspect.signature(split).parameters
+
+    def counted_split(*args: Any, **kwargs: Any) -> Any:
+        if counts_itself:
+            kwargs["measured"] = measured
+        return split(*args, **kwargs)
+
+    def counted_surface(
+        vertices: np.ndarray, faces: np.ndarray, wanted: np.ndarray | None = None
+    ) -> object:
+        tidied.append(len(faces) if wanted is None else int(np.count_nonzero(wanted)))
+        return surface(vertices, faces, wanted)
+
+    monkeypatch.setattr(mesh_edits, "split_long", counted_split)
+    monkeypatch.setattr(mesh_edits, "surface_of", counted_surface)
+
+    after = mesh_ops.uniform(body, edge, 0.0)
+
+    assert not tidied, f"aufgeräumt an {sum(tidied)} Dreiecken"
+    assert counts_itself and 1 <= len(measured) <= 3, f"Durchgänge: {measured}"
+    assert sum(measured) <= after.triangle_count, f"gemessen {sum(measured)}"
+    assert float(mesh_ops.edge_lengths(after).max()) <= edge * (1.0 + 1e-9)
+    assert after.volume == pytest.approx(body.volume, rel=1e-12)
+    assert after.is_watertight
 
 
 @pytest.mark.parametrize("way", ["remesh_mesh", "refined"])
@@ -294,6 +470,48 @@ def test_both_qualities_deliver_the_edge_length_that_was_asked_for(profile: Prof
     fine = run("remesh_uniform", object_of(plate), profile, "fine", edge=2.0)
 
     assert draft.outputs[0].mesh.triangle_count == fine.outputs[0].mesh.triangle_count
+
+
+#: Die Splitternetze aus dem Korpus und die Kantenlänge, mit der Weg 4 sie angleicht.
+SPLINTERS = {
+    "blend_splinters_sphere_on_cylinder.npz": 1.2,
+    "blend_splinters_figure.npz": 1.5,
+}
+
+
+def splinters(name: str) -> MeshData:
+    """Ein Splitternetz aus dem Korpus, wie *Weich verschmelzen* es von v0.4.4 bis v0.5.3 gab."""
+    stored = np.load(MESHES / name)
+    return MeshData.of(
+        trimesh.Trimesh(stored["vertices"].astype(float), stored["faces"], process=False)
+    )
+
+
+@pytest.mark.parametrize(("name", "edge"), sorted(SPLINTERS.items()))
+def test_evening_a_splintered_body_holds_the_edge_length_and_the_shape(
+    name: str, edge: float, profile: Profile
+) -> None:
+    """RM-671: Ohne Abweichung teilt, tauscht und legt das Angleichen nur formtreu zusammen.
+
+    Bis v0.5.3 vereinfachte der Kern vor dem Teilen mit der Abweichung null: Er
+    faltete jede ebene Fläche zu einem Fächer ohne Längengrenze, und das Teilen
+    danach ließ dessen innere Kanten stehen. An diesen beiden Netzen kamen
+    Kanten bis 2,39 und 3,42 mm bei verlangten 1,2 und 1,5 heraus, und aus
+    11,8 % Splittern wurden 30,6 %. Zugesagt ist (Register RM-671): keine Kante
+    über dem 1,1-Fachen der verlangten, kein größerer Splitteranteil als
+    vorher, Volumen und Fläche wie zuvor, und jede Ecke auf der alten Fläche.
+    """
+    before = splinters(name)
+    assert before.is_watertight and sliver_share(before) > 0.05, "die Vorlage ist splittrig"
+
+    after = run("remesh_uniform", object_of(before), profile, edge=edge).outputs[0].mesh
+
+    assert float(mesh_ops.edge_lengths(after).max()) <= 1.1 * edge
+    assert sliver_share(after) <= sliver_share(before)
+    assert after.volume == pytest.approx(before.volume, rel=1e-9)
+    assert after.area == pytest.approx(before.area, rel=1e-9)
+    assert after.is_watertight and after.component_count == 1
+    assert mesh_ops.deviation(before, after) <= EPS_GEOM
 
 
 # --- unterteilen ----------------------------------------------------------------

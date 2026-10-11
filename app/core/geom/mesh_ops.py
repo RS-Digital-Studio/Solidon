@@ -37,7 +37,7 @@ from app.core.errors import (
     NotManifoldError,
     ValidationError,
 )
-from app.core.geom import kernel_process
+from app.core.geom import kernel_process, mesh_edits
 from app.core.geom.attributes import transfer
 from app.core.geom.mesh import (
     MeshData,
@@ -751,13 +751,16 @@ def estimated_triangles(mesh: MeshData, edge: float, *, until_short: bool = Fals
     geteilt werden muss, obwohl sie kaum Fläche tragen. Mit beiden Anteilen
     lag die Schätzung an zehn Modellen aus ``F:\\3D Dateien`` beim 1,0- bis
     1,24-Fachen des ersten Durchgangs (25.09.2026) — das ist die Zahl für
-    *Dreiecke angleichen* und *Fläche unterteilen*, die einmal teilen.
+    *Fläche unterteilen*, das einmal teilt.
 
-    ``until_short`` zählt für *Kanten verfeinern*, das teilt, bis keine Kante
-    mehr zu lang ist (:func:`_split_conforming`): Die weiteren Durchgänge
-    teilen die Diagonalen der Gitterzellen noch einmal, und der Anteil der
-    Fläche zählt doppelt. So traf die Zahl an denselben Modellen und an
-    ``plate_holes`` das 0,73- bis 1,10-Fache des Ergebnisses.
+    ``until_short`` zählt für *Kanten verfeinern* und *Dreiecke angleichen*,
+    die teilen, bis keine Kante mehr zu lang ist (:func:`_split_conforming`,
+    ``mesh_edits.split_long``): Die weiteren Durchgänge teilen die Diagonalen
+    der Gitterzellen noch einmal, und der Anteil der Fläche zählt doppelt. So
+    traf die Zahl an denselben Modellen und an ``plate_holes`` das 0,73- bis
+    1,10-Fache des Ergebnisses von *Kanten verfeinern*; beim Angleichen am
+    Quader 100 x 80 x 60 und an einer CAD-Seitenablage das 1,09- und 1,06-Fache
+    (Review F, RM-671).
 
     Gebraucht wird sie **vor** dem ersten Schnitt. Ohne die Schätzung lief die
     Operation erst minutenlang und scheiterte dann — der teure Weg wurde
@@ -912,8 +915,8 @@ def _too_fine(
     *Dreiecke verringern und erneut versuchen* steht nur da, wo es trägt
     (:func:`_thinning`): nachgezählt am verringerten Netz, mit der Zahl in
     ``values["decimate_to"]``. ``until_short`` sagt, wie der Schritt danach
-    zählt — *Kanten verfeinern* teilt, bis keine Kante mehr zu lang ist,
-    *Dreiecke angleichen* und *Fläche unterteilen* teilen einmal
+    zählt — *Kanten verfeinern* und *Dreiecke angleichen* teilen, bis keine
+    Kante mehr zu lang ist, *Fläche unterteilen* teilt einmal
     (:func:`estimated_triangles`).
     """
     reachable = _reachable_edge(count, edge, would_be, reserve)
@@ -1113,9 +1116,9 @@ def _on_demand_ahead(mesh: MeshData, edge: float) -> int:
 
 
 def _evenly_ahead(mesh: MeshData, edge: float) -> int:
-    """Die Vorabzählung von *Dreiecke angleichen* und *Fläche unterteilen* — oder ihre Absage.
+    """Die Vorabzählung von *Fläche unterteilen* — oder seine Absage.
 
-    Beide teilen einmal (``until_short=False``), die Absage nennt deshalb eine
+    Es teilt einmal (``until_short=False``), die Absage nennt deshalb eine
     Länge und eine Verringerung, die für einen Durchgang zählen.
     """
     wanted = estimated_triangles(mesh, edge)
@@ -1124,6 +1127,18 @@ def _evenly_ahead(mesh: MeshData, edge: float) -> int:
             mesh, edge, wanted, _conforming_count(mesh, until_short=False), until_short=False
         )
     return wanted
+
+
+def _uniform_ahead(mesh: MeshData, edge: float) -> int:
+    """Die Vorabzählung von *Dreiecke angleichen* — oder seine Absage.
+
+    Es teilt, bis keine Kante mehr zu lang ist (``mesh_edits.split_long``), und
+    zählt deshalb wie *Kanten verfeinern* (``until_short=True``). Bis Review F
+    zählte es einen Durchgang und lag am Quader 100 x 80 x 60 um das 1,8-Fache
+    zu tief; die Decke hielt nur die Schätzung, und der Dialog nannte die
+    kleinere Zahl.
+    """
+    return _conforming_ahead(mesh, edge)
 
 
 def expected_remesh(mesh: MeshData, params: Any) -> TriangleEstimate:
@@ -1151,11 +1166,19 @@ def expected_remesh(mesh: MeshData, params: Any) -> TriangleEstimate:
 
 
 def expected_evened(mesh: MeshData, params: Any) -> TriangleEstimate:
-    """Die Vorabzählung von *Dreiecke angleichen* und *Fläche unterteilen*.
+    """Die Vorabzählung von *Fläche unterteilen*.
 
     Dieselbe wie in der Operation (:func:`_evenly_ahead`), samt Absage.
     """
     return TriangleEstimate(_evenly_ahead(mesh, float(params.edge)))
+
+
+def expected_uniform(mesh: MeshData, params: Any) -> TriangleEstimate:
+    """Die Vorabzählung von *Dreiecke angleichen*.
+
+    Dieselbe wie in der Operation (:func:`_uniform_ahead`), samt Absage.
+    """
+    return TriangleEstimate(_uniform_ahead(mesh, float(params.edge)))
 
 
 def expected_decimated(mesh: MeshData, params: Any) -> TriangleEstimate:
@@ -1400,13 +1423,56 @@ def _as_mesh(mesh: MeshData, arrays: dict[str, np.ndarray]) -> MeshData:
     ``boolean._tidied`` für die Ausgabe der Booleschen Operationen.
     """
     body = trimesh.Trimesh(vertices=arrays["vertices"], faces=arrays["faces"], process=False)
-    welded = body.copy()
-    welded.merge_vertices()
-    if len(welded.vertices) < len(body.vertices) and (
-        welded.is_watertight or not body.is_watertight
-    ):
-        body = welded
+    if _needs_welding(np.asarray(arrays["vertices"]), np.asarray(arrays["faces"])):
+        welded = body.copy()
+        welded.merge_vertices()
+        if len(welded.vertices) < len(body.vertices) and (
+            welded.is_watertight or not body.is_watertight
+        ):
+            body = welded
     return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
+
+
+def _needs_welding(vertices: np.ndarray, faces: np.ndarray) -> bool:
+    """Ob ``merge_vertices`` an diesem Netz etwas ändern würde — gleiche Antwort, weniger Zeit.
+
+    ``trimesh`` rundet die Ecken auf ``tol.merge`` (als Ganzzahl
+    ``(v · 10^d).round()``), legt gleich gerundete zusammen und wirft
+    unbenutzte weg. Ein Netz aus dem Kern hat weder das eine noch das andere,
+    außer wo sich zwei Schalen berühren; trotzdem kostete das Verschweißen an
+    einem Quader mit 709 760 Dreiecken 0,16 bis 0,25 s, mehr als das Teilen
+    davor (Review-Fix F). Gefragt wird hier dasselbe: benutzt jede Ecke, dann
+    je Zeile ein Streuwert der gerundeten Zahlen, sortiert. Gleicher Streuwert
+    sagt vorsichtshalber ja — dann verschweißt ``merge_vertices`` selbst, und
+    ``_as_mesh`` übernimmt das Ergebnis nur, wenn es Ecken weniger hat.
+
+    Der Streuwert mischt jede Zahl ganz durch (:func:`_mixed`), bevor die
+    nächste dazukommt. Die Zahlen mit je einer Konstante malgenommen und
+    verknüpft, kollidierten an den Gittern des Kerns bei 17 % (Quader) bis
+    39 % (Kugel) der Ecken, und die Prüfung sagte immer ja.
+    Ganzzahlig und elementweise, also auf jeder Maschine dieselbe Antwort.
+    """
+    if not len(vertices):
+        return False
+    used = np.zeros(len(vertices), dtype=bool)
+    used[np.asarray(faces, dtype=np.int64).reshape(-1)] = True
+    if not used.all():
+        return True
+    digits = trimesh.util.decimal_to_digits(trimesh.constants.tol.merge)
+    rounded = (np.asarray(vertices, dtype=np.float64) * (10**digits)).round().astype(np.int64)
+    columns = rounded.astype(np.uint64)
+    spread = _mixed(columns[:, 0])
+    spread = _mixed(spread ^ columns[:, 1])
+    spread = _mixed(spread ^ columns[:, 2])
+    ordered = np.sort(spread)
+    return bool((ordered[1:] == ordered[:-1]).any())
+
+
+def _mixed(values: np.ndarray) -> np.ndarray:
+    """Die Schlussmischung von SplitMix64: umkehrbar, und jedes Bit wirkt auf alle."""
+    values = (values ^ (values >> np.uint64(30))) * np.uint64(0xBF58476D1CE4E5B9)
+    values = (values ^ (values >> np.uint64(27))) * np.uint64(0x94D049BB133111EB)
+    return np.asarray(values ^ (values >> np.uint64(31)))
 
 
 def refined(mesh: MeshData, edge: float) -> MeshData:
@@ -1449,16 +1515,35 @@ def uniform(
     allein lässt das Verhältnis zwischen längster und kürzester Kante, wie es
     war (Streuung 2,22 vorher wie nachher). Es macht das Netz feiner, nicht
     gleichmäßiger — und zahlt dafür 3 260 416 Dreiecke, weil es die winzigen
-    Bohrungsfacetten mitzerteilt. Hier sind es rund 30 000 für dieselbe
-    Zielkantenlänge.
+    Bohrungsfacetten mitzerteilt. Der Kern teilt hier jedes Dreieck aus
+    seinen Seiten heraus gleichmäßig.
 
-    Zwei Schritte, und der erste ist der, den ``remesh`` nicht hat:
-    ``simplify`` räumt die überflüssig feinen Stellen ab, und zwar in einer
-    zugesagten Schranke — kein Punkt der Oberfläche wandert weiter als
-    ``deviation``. Erst danach wird geteilt. Mit ``deviation = 0`` fällt der
-    erste Schritt aus und die Form bleibt exakt.
+    Der erste Schritt ist der, den ``remesh`` nicht hat: ``simplify`` räumt
+    die überflüssig feinen Stellen ab, und zwar in einer zugesagten Schranke —
+    kein Punkt der Oberfläche wandert weiter als ``deviation``. Dann teilt der
+    Kern auf ``edge``, und :func:`~app.core.geom.mesh_edits.split_long` teilt
+    jede Kante, die er im Inneren eines Dreiecks länger gezogen hat, in der
+    Mitte: keine Kante länger als verlangt.
+
+    **Mit ``deviation = 0`` bleibt die Form exakt** (RM-671): kein
+    ``simplify``, das ebene Flächen zu Fächern ohne Längengrenze faltete —
+    an Netzen aus *Weich verschmelzen* blieben so Kanten bis zum Doppelten der
+    verlangten stehen, und aus 11,8 % Splittern wurden 30,6.
+
+    **Nach dem Kern nur ein Durchgang über die Felder** (Review-Fix F). Bis
+    dahin tauschte das Angleichen zu lange Kanten erst in der Ebene und räumte
+    um spitze Dreiecke auf; an den Abnahmefällen von RM-671 änderte das kaum
+    etwas (2 bis 22 Tausche, kein Zusammenlegen), an CAD-Netzen mit Fächern
+    kostete es das Drei- bis Fünffache der Zeit vor RM-671 und an einer
+    viermal unterteilten Lochplatte 262 s. Ein zweiter Durchgang im Kern statt
+    in NumPy kostete das Vierfache des Teilens (``refine_to_length`` am
+    Wedge-Lock 0,9 s gegen 0,085 s) und hielt die Kante trotzdem nicht.
+
+    **Die Decke gilt dem Ergebnis, nicht der Schätzung**, wie bei
+    :func:`remesh`: Gezählt wird vorab (:func:`_uniform_ahead`), nach dem Kern
+    und nach dem Teilen, bevor verschweißt wird.
     """
-    expected = _evenly_ahead(mesh, edge)
+    expected = _uniform_ahead(mesh, edge)
     try:
         arrays, reported = kernel_process.run(
             "simplify_and_refine",
@@ -1469,13 +1554,27 @@ def uniform(
         )
         if reported["empty"]:
             raise _not_a_solid(mesh)
+        _below_the_ceiling(mesh, edge, len(arrays["faces"]))
+        vertices, faces, _origin = mesh_edits.split_long(
+            np.asarray(arrays["vertices"], dtype=np.float64),
+            np.asarray(arrays["faces"], dtype=np.int64),
+            edge,
+            cancelled=cancelled,
+        )
+        _below_the_ceiling(mesh, edge, len(faces))
         # Das Verschweißen danach gehört dazu: An acht Millionen Dreiecken geht
         # auch dort der Speicher aus.
-        evened = _as_mesh(mesh, arrays)
+        evened = _as_mesh(mesh, {"vertices": vertices, "faces": faces})
     except MemoryError as error:
-        raise _out_of_memory(mesh, edge, until_short=False) from error
+        raise _out_of_memory(mesh, edge) from error
     _log.info("evened %d to %d triangles", mesh.triangle_count, evened.triangle_count)
     return evened
+
+
+def _below_the_ceiling(mesh: MeshData, edge: float, triangles: int) -> None:
+    """Sagt ab, wenn das Angleichen über :data:`MAX_REMESH_TRIANGLES` kam — samt Länge, die geht."""
+    if triangles > MAX_REMESH_TRIANGLES:
+        raise _too_fine(mesh, edge, triangles, _conforming_count(mesh, until_short=True))
 
 
 def subdivided(
@@ -2039,8 +2138,14 @@ class UniformParams(BaseParams):
         "Zum bloßen Verfeinern, denn hier verschwinden auch Dreiecke. Dafür gibt es „Kanten "
         "verfeinern“."
     ),
+    # 2: Ohne Abweichung kein ``simplify`` mehr; geteilt wird, bis keine Kante
+    # länger ist als verlangt (RM-671). Dasselbe Projekt ergibt ein anderes Netz.
+    # 3: Nach dem Kern nur noch Teilen, kein Tauschen und Zusammenlegen in der
+    # Ebene (Review-Fix F); ein Zweigstand mit 2 im Plattencache trüge die
+    # aufgeräumten Netze.
+    cache_version="3",
     retriangulates=True,
-    expected_triangles=expected_evened,
+    expected_triangles=expected_uniform,
 )
 def remesh_uniform(ctx: OpContext) -> OpResult:
     """Gleichmäßige Dreiecke, damit ein Pinsel überall gleich wirkt.
@@ -2126,7 +2231,7 @@ class SubdivideParams(BaseParams):
         "Wo es auf ein Maß ankommt, denn die Rundung wird aus vorhandenen Dreiecken gerechnet. "
         "Dafür gehört sie in die Skizze."
     ),
-    # Zählt vorab wie das Angleichen, verändert aber die Form mit Absicht: Die
+    # Zählt vorab einen Durchgang, verändert aber die Form mit Absicht: Die
     # Vorschau zeigt die Rundung als Differenz, nicht bloß das neue Netz.
     expected_triangles=expected_evened,
 )

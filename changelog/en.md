@@ -173,6 +173,8 @@ it into `website/version.json`.
 - The brush fits the size of the body. If the mesh is too coarse for it, *Sculpt* evens out the triangles on the first stroke, and one Ctrl+Z undoes both.
 - When mirroring, the plane lies where the body matches itself, even when one part sticks far out to the side.
 - Sculpting follows the mouse smoothly, and even a step with hundreds of brush strokes is calculated quickly.
+- With *Blend together*, the mesh comes out even, with hardly any thin slivers. A part on the print bed no longer reaches below it.
+- With *Even out the triangles*, no edge is longer than the length you set, and the shape stays the same. The same edge often gives nearly twice as many triangles; a longer one keeps the old density.
 - In *Armature*, every click after the first sets a bone, Enter ends the chain, dragging a joint bends it, and *Done* saves everything without a dialog.
 - An armature bends only what hangs on its bones, and the rest of the body stays put. Older projects calculate as saved.
 - With Ctrl or Shift you select several edges and fillet or chamfer them in one step. A click on a corner selects all edges that meet there.

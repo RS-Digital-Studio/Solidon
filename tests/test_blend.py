@@ -13,15 +13,21 @@ und der Abstand dazwischen ist die Zahl, die zählt.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 import trimesh
 
 from app.core.errors import NotManifoldError, ValidationError
-from app.core.geom.mesh import MeshData
+from app.core.geom import blend, mesh_ops
+from app.core.geom.mesh import MeshData, on_surface
+from app.core.geom.prepare import check_build_volume
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, OpResult, Profile, Quality, Scene, SceneObject
+from app.core.units import EPS_GEOM
+from tests.helpers import sliver_share
 
 
 def rod(along: str = "z") -> MeshData:
@@ -219,6 +225,250 @@ def test_a_flat_wall_comes_back_flat(profile: Profile) -> None:
     chosen = {int(index) for index in wall}
     on_the_wall = [group for group in body.facets if chosen & {int(index) for index in group}]
     assert len(on_the_wall) == 1, f"eine Wand ist eine Fläche, gefunden: {len(on_the_wall)}"
+
+
+def test_the_field_is_the_exact_distance_with_the_sign_of_the_side(profile: Profile) -> None:
+    """RM-671: Das Feld misst zum nächsten Punkt **auf** dem Dreieck, nicht zu seiner Ebene.
+
+    Von v0.4.4 bis v0.5.3 maß es zur Ebene des nächsten Stützpunkts. An einer
+    ebenen Wand ist das exakt, neben einer Kante nicht: Bei diesen Punkten lag
+    es bis 1,9 mm daneben, und der Wert sprang, wo der nächste Stützpunkt vom
+    Deckel auf den Mantel wechselte. Der Sollwert kommt hier von außen: der
+    Abstand aus :func:`app.core.geom.mesh.on_surface` (exakt über
+    ``trimesh.triangles``), das Vorzeichen aus den Ebenen des konvexen Körpers —
+    innen liegt, was hinter jeder Fläche liegt. Die Punkte reichen vier
+    Millimeter über den Körper hinaus, also bis in den Bereich, in dem ein
+    Übergang von drei Millimetern seine Werte liest.
+    """
+    body = rod("z")
+    axes = [np.arange(-14.0, 14.0, 1.3), np.arange(-14.0, 14.0, 1.3), np.arange(-34.0, 34.0, 1.3)]
+    points = np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, 3) + 0.17
+
+    field = blend.distance_field(body, points, 1.0)
+
+    _spots, distance, _triangles = on_surface(body.raw, points)
+    assert float(np.abs(np.abs(field) - distance).max()) <= 1e-9, "der Betrag ist der Abstand"
+    corners = np.asarray(body.raw.triangles, dtype=float)
+    normals = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    behind = ((points[:, None, :] - corners[None, :, 0]) * normals[None]).sum(axis=2) < 0.0
+    inside = behind.all(axis=1)
+    clear = distance > 1e-6
+    assert inside.any() and (~inside).any(), "die Punkte liegen auf beiden Seiten"
+    assert np.array_equal(field[clear] > 0.0, inside[clear]), "innen positiv, außen negativ"
+
+
+def _sphere_on_cylinder() -> tuple[MeshData, MeshData]:
+    """Kugel Ø 16 auf Zylinder Ø 20 × 30, die Mitte 3 mm unter dem Deckel — Weg 4, Teil B."""
+    cylinder = trimesh.creation.cylinder(radius=10.0, height=30.0, sections=48)
+    cylinder.apply_translation((0.0, 0.0, 15.0))
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=8.0)
+    ball.apply_translation((0.0, 0.0, 27.0))
+    return MeshData.of(cylinder), MeshData.of(ball)
+
+
+def _crossing_rods() -> tuple[MeshData, MeshData]:
+    return rod("z"), rod("y")
+
+
+def _figure() -> tuple[MeshData, MeshData]:
+    """Rumpf 24 × 14 × 40 und Kopf Ø 18 bei z = 45 — die Körper des Beispiels *Figur formen*."""
+    trunk = trimesh.creation.box(extents=(24.0, 14.0, 40.0))
+    trunk.apply_translation((0.0, 0.0, 20.0))
+    head = trimesh.creation.icosphere(subdivisions=2, radius=9.0)
+    head.apply_translation((0.0, 0.0, 45.0))
+    return MeshData.of(trunk), MeshData.of(head)
+
+
+#: Die drei Abnahmefälle aus RM-671: Körper, Übergang, Raster, Kante des Angleichens.
+EVEN_CASES: dict[str, tuple[Callable[[], tuple[MeshData, MeshData]], float, float, float]] = {
+    "crossing_rods": (_crossing_rods, 4.0, 1.0, 1.2),
+    "figure": (_figure, 4.0, 1.2, 1.5),
+    "sphere_on_cylinder": (_sphere_on_cylinder, 3.0, 1.0, 1.2),
+}
+
+
+@pytest.mark.parametrize("case", sorted(EVEN_CASES))
+def test_the_blend_and_the_evening_after_it_leave_few_slivers(case: str, profile: Profile) -> None:
+    """RM-671: Höchstens 3 % Splitter nach dem Verschmelzen, unter 5 % nach dem Angleichen.
+
+    Die Zahlen sind die Abnahme aus dem Register: so wenige Splitter wie bis
+    v0.4.2 (2,9 % an Kugel auf Zylinder), und das Angleichen macht daraus
+    keine neuen und hält seine Kantenlänge bis zum 1,1-Fachen. Gemessen bis
+    v0.5.3 an diesen Fällen: 11,8, 10,9 und 6,3 % nach dem Verschmelzen, 30,6,
+    28,3 und 17,8 % mit Kanten bis zum Doppelten nach dem Angleichen.
+    """
+    build, radius, grid, edge = EVEN_CASES[case]
+    first, second = build()
+
+    merged = run(first, second, profile, radius=radius, grid=grid).outputs[0].mesh
+    evened = mesh_ops.uniform(merged, edge, 0.0)
+
+    assert merged.is_watertight and merged.component_count == 1
+    assert sliver_share(merged) <= 0.03, f"nach dem Verschmelzen {sliver_share(merged):.1%}"
+    assert sliver_share(evened) < 0.05, f"nach dem Angleichen {sliver_share(evened):.1%}"
+    assert float(mesh_ops.edge_lengths(evened).max()) <= 1.1 * edge
+
+
+def test_two_boxes_on_the_bed_blend_without_reaching_under_it(profile: Profile) -> None:
+    """F5 / RM-671: Was die Eingänge nach unten nicht überragen, überragt auch der Übergang nicht.
+
+    Zwei Quader 40 × 30 × 10 auf dem Bett, der zweite um 8 mm versetzt: Wo
+    beide Felder gleich sind, hebt die weiche Mischung das Feld um bis zu ein
+    Viertel des Übergangs. An den bündigen Böden wuchs das Ergebnis so, mit dem
+    Ebenenabstand, bis 1,69 mm unter das Bett, und der Prüfbericht meldete
+    „Ein Objekt steckt unter dem Druckbett.“. Begrenzt wird nur nach unten,
+    auf die unterste Höhe der Eingänge (Entscheidung Koordinator, Review F):
+    Über den bündigen Deckeln und Seiten bleibt die Beule wie bis v0.5.3,
+    höchstens ein Viertel des Übergangs breit (RM-763).
+    """
+    radius = 3.0
+    one = trimesh.creation.box(extents=(40.0, 30.0, 10.0))
+    one.apply_translation((0.0, 0.0, 5.0))
+    two = trimesh.creation.box(extents=(40.0, 30.0, 10.0))
+    two.apply_translation((8.0, 0.0, 5.0))
+
+    merged = run(MeshData.of(one), MeshData.of(two), profile, radius=radius, grid=1.0).outputs[0]
+    body = merged.mesh
+
+    assert float(body.raw.bounds[0][2]) >= -EPS_GEOM, f"unter dem Bett: {body.raw.bounds[0]}"
+    assert _flat_area(body, 2, 0.0) > 0.9 * 48.0 * 30.0, "der Boden liegt eben auf dem Bett"
+    bulge = radius / 4.0
+    grown = (48.0 + 2.0 * bulge) * (30.0 + 2.0 * bulge) * (10.0 + bulge)
+    assert 0.98 * 48.0 * 30.0 * 10.0 < body.volume <= grown, "die Vereinigung samt Beule"
+    codes = {finding.code for finding in check_build_volume([body], profile)}
+    assert "arrange.below_bed" not in codes
+
+
+def _flat_area(mesh: MeshData, axis: int, value: float) -> float:
+    """Die Fläche der Dreiecke, die mit allen drei Ecken in der Ebene ``axis = value`` liegen."""
+    corners = np.asarray(mesh.raw.vertices, dtype=float)[np.asarray(mesh.raw.faces, dtype=np.int64)]
+    on = (np.abs(corners[:, :, axis] - value) < 1e-6).all(axis=1)
+    cross = np.cross(corners[on, 1] - corners[on, 0], corners[on, 2] - corners[on, 0])
+    return float(np.sqrt((cross * cross).sum(axis=1)).sum() / 2.0)
+
+
+@pytest.mark.parametrize("radius", [4.0, 6.0])
+def test_a_round_transition_is_not_cut_flat_at_the_sides_of_the_inputs(
+    radius: float, profile: Profile
+) -> None:
+    """Review F, H2: Die Beule der weichen Mischung bleibt rund, wo kein Bett ist.
+
+    Mit RM-671 endete das Ergebnis zuerst an jeder Seite des Hüllquaders beider
+    Eingänge. Zwei gekreuzte Rohre Ø 20 berühren die Ebenen x = ±10 je entlang
+    einer Linie, und dort entstand eine ebene Fläche mit Knick: 269 mm² im
+    Abnahmefall (Übergang 4), 446 mm² im Leistungsfall aus §31 (Übergang 6).
+    Bis v0.5.3 wölbte sich das Ergebnis dort glatt bis x = ±10,98 und ±11,48
+    hinaus — um bis zu ein Viertel des Übergangs, wo beide Felder gleich sind.
+    """
+    merged = run(rod("z"), rod("y"), profile, radius=radius, grid=1.0).outputs[0].mesh
+
+    flat = _flat_area(merged, 0, -10.0) + _flat_area(merged, 0, 10.0)
+    assert flat == 0.0, f"{flat:.1f} mm² eben auf x = ±10"
+    assert float(merged.raw.bounds[1][0]) > 10.0 + radius / 8.0, "die Beule wölbt sich hinaus"
+    assert float(merged.raw.bounds[0][0]) < -10.0 - radius / 8.0
+
+
+def test_two_stacked_balls_blend_round_and_stay_on_the_bed(profile: Profile) -> None:
+    """Review F, H2: Zwei Kugeln Ø 10 übereinander, die sich berühren — der Hals wird rund.
+
+    Mit Übergang 8 wächst der Hals um die Berührstelle über die Seiten des
+    Hüllquaders (x, y = ±5) hinaus. Auf den ganzen Hüllquader begrenzt, lagen
+    dort 26 mm² eben, bei Übergang 9 schon 107 mm² — gedruckt wie
+    angeschliffen. Nach unten bleibt die Begrenzung: Die untere Kugel steht auf
+    dem Bett, und nichts reicht darunter.
+    """
+    lower = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
+    lower.apply_translation((0.0, 0.0, 5.0))
+    upper = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
+    upper.apply_translation((0.0, 0.0, 15.0))
+
+    merged = run(MeshData.of(lower), MeshData.of(upper), profile, radius=8.0, grid=0.5)
+    body = merged.outputs[0].mesh
+
+    flat = sum(_flat_area(body, axis, side) for axis in (0, 1) for side in (-5.0, 5.0))
+    assert flat == 0.0, f"{flat:.1f} mm² eben an den Seiten"
+    assert float(body.raw.bounds[1][0]) > 5.0, "der Hals wölbt sich über die Kugeln hinaus"
+    assert float(body.raw.bounds[0][2]) >= -EPS_GEOM, "und nicht unter das Bett"
+    assert body.is_watertight and body.component_count == 1
+
+
+def test_two_floating_balls_blend_round_below_as_well(profile: Profile) -> None:
+    """Nachprüfung F, N2: Begrenzt wird an der Bettebene, nicht an der untersten Höhe der Eingänge.
+
+    Zwei Kugeln Ø 10, die sich bei z = 20 berühren, schweben über dem Bett.
+    Begrenzt an ihrer untersten Höhe (z = 15) wurde der Hals unten flach,
+    74,5 mm² bei Übergang 12 — oben blieb er rund. Die Grenze ist das Bett;
+    der Übergang darf über ihm nach unten wachsen, solange er es nicht
+    erreicht.
+    """
+    left = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
+    left.apply_translation((-5.0, 0.0, 20.0))
+    right = trimesh.creation.icosphere(subdivisions=4, radius=5.0)
+    right.apply_translation((5.0, 0.0, 20.0))
+
+    body = run(MeshData.of(left), MeshData.of(right), profile, radius=12.0, grid=0.5)
+    merged = body.outputs[0].mesh
+
+    assert _flat_area(merged, 2, 15.0) == 0.0, "unten nicht flach"
+    assert float(merged.raw.bounds[0][2]) < 15.0, "der Hals wölbt sich unter die Kugeln"
+    assert float(merged.raw.bounds[0][2]) > 0.0, "und erreicht das Bett nicht"
+
+
+def _crossing_grid(radius: float, grid: float) -> tuple[np.ndarray, tuple[int, ...]]:
+    """Das Raster, auf dem :func:`blend.blend_bodies` die gekreuzten Rohre rechnet."""
+    low, shape = blend._grid(rod("z"), rod("y"), radius, grid)
+    axes = [low[axis] + np.arange(shape[axis]) * grid for axis in range(3)]
+    return np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, 3), shape
+
+
+def test_the_banded_field_gives_the_same_body_as_the_full_one(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review-Fix F: Genau nur im Band — und das Netz ist Bit für Bit dasselbe.
+
+    Marching Cubes liest Werte nur an Rasterkanten mit Vorzeichenwechsel; ein
+    Feld weiter als Raster plus Übergang plus Viertelübergang von der Fläche
+    braucht dafür nur sein Vorzeichen. Gegenprobe ist die volle Rechnung an
+    jedem Rasterpunkt: Das Netz aus Marching Cubes muss gleich sein, und an
+    jedem Punkt, an dem das verschmolzene Feld nahe null liegt, der Wert.
+    """
+    full_field = blend.distance_field
+
+    def everywhere(*args: object, **kwargs: object) -> np.ndarray:
+        kwargs.pop("shape", None)
+        kwargs.pop("beyond", None)
+        return full_field(*args, **kwargs)  # type: ignore[arg-type]
+
+    banded = blend.blend_bodies(rod("z"), rod("y"), 4.0, 1.0)
+    monkeypatch.setattr(blend, "distance_field", everywhere)
+    full = blend.blend_bodies(rod("z"), rod("y"), 4.0, 1.0)
+
+    assert np.array_equal(np.asarray(banded.raw.vertices), np.asarray(full.raw.vertices))
+    assert np.array_equal(np.asarray(banded.raw.faces), np.asarray(full.raw.faces))
+
+
+def test_the_banded_field_computes_only_near_the_surface(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review-Fix F: Gezählt wird, wie viele Rasterpunkte genau gerechnet werden.
+
+    Bis dahin rechnete das Feld jeden Punkt gegen acht Bewerber; am §31-Fall
+    (gekreuzte Rohre, Übergang 6, Raster 1) kostete es so das 1,35-Fache des
+    Ebenenfelds vor RM-671 an CPU-Zeit. Im Band liegt nur ein Teil des
+    Rasters: Beide Felder des Falls rechnen 191 706 von 486 798 Zeilen genau.
+    """
+    points, shape = _crossing_grid(6.0, 1.0)
+    asked: list[int] = []
+    signed = blend._Surface.signed
+
+    def counted(self: blend._Surface, where: np.ndarray, candidates: np.ndarray) -> np.ndarray:
+        asked.append(len(where))
+        return signed(self, where, candidates)
+
+    monkeypatch.setattr(blend._Surface, "signed", counted)
+
+    field = blend.distance_field(rod("z"), points, 1.0, shape=shape, beyond=1.0 + 6.0 * 1.25)
+
+    assert len(field) == len(points)
+    assert sum(asked) < 0.5 * len(points), f"{sum(asked)} von {len(points)} genau gerechnet"
 
 
 def test_a_curved_body_keeps_its_volume_when_blended(profile: Profile) -> None:
