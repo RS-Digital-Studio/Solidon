@@ -2026,11 +2026,84 @@ def test_refining_stays_within_its_triangle_budget(name: str) -> None:
     edge = refine_edge_for(body, radius, finest=0.05)
     assert edge > radius / REFINE_TO_EDGE * EVEN_LONGEST, "die Grenze greift, nicht der Pinsel"
 
-    used, evened = evened_for_brush(body, edge, 0.0)
+    used, evened = evened_for_brush(body, edge, 0.0, radius=radius, finest=0.05)
 
     assert evened.triangle_count <= REFINE_MAX_TRIANGLES
-    assert evened.triangle_count > REFINE_MAX_TRIANGLES / 2, "und verschenkt nicht die Hälfte"
+    assert evened.triangle_count >= _USED_AT_LEAST, "und verschenkt nicht, was ein Gang noch gibt"
     assert float(edge_lengths(evened).max()) <= used * (1.0 + 1e-9), "mit der Kante im Verlauf"
+
+
+#: Wie viel der Grenze ein geeichtes Angleichen mindestens nutzt, wo sie die
+#: Kante bestimmt: Ein zweiter Gang folgt, solange er :data:`EVEN_DENSER`-mal
+#: so viele Dreiecke verspricht, gezählt gegen die Grenze unter der Luft jedes
+#: Vorschlags (Nachprüfung N1).
+def _used_at_least() -> float:
+    from app.core.geom.mesh_ops import ESTIMATE_RESERVE
+    from app.core.geom.sculpt import EVEN_DENSER, REFINE_MAX_TRIANGLES
+
+    return REFINE_MAX_TRIANGLES / ESTIMATE_RESERVE / EVEN_DENSER
+
+
+_USED_AT_LEAST = _used_at_least()
+
+
+def _splinter_figure_subdivided() -> MeshData:
+    """Die Splitterfigur aus *Weich verschmelzen*, dreifach groß und zweimal unterteilt —
+    ein Eingang, der schon dicht ist (92 416 Dreiecke, mittlere Kante 0,9 mm)."""
+    stored = np.load(Path(__file__).parent / "data" / "meshes" / "blend_splinters_figure.npz")
+    body = trimesh.Trimesh(stored["vertices"].astype(float) * 3.0, stored["faces"], process=False)
+    return MeshData.of(body.subdivide().subdivide())
+
+
+@pytest.mark.parametrize(
+    ("name", "radius"),
+    [("ball", 2.0), ("cylinder", 2.0), ("splinter_figure", 1.0)],
+)
+def test_refining_for_a_brush_is_calibrated_on_the_mesh_that_comes_out(
+    name: str, radius: float
+) -> None:
+    """Nachprüfung N1: Die Kante für den Pinsel war auf ebene Gitter geeicht.
+
+    An der Kugel teilt der Kern gleichseitig, die mittlere Kante lag beim
+    1,09-Fachen des Solls; am Zylinder mit schmalen Facetten beim 0,82-Fachen,
+    mit 33 % mehr Dreiecken als vor RM-671; an der schon dichten Figur nutzte
+    das Angleichen 0,29 der Grenze. Jetzt zählt die Sitzung das Netz und
+    gleicht einmal nach: unter der Grenze die mittlere Kante höchstens
+    :data:`EVEN_COARSER`-mal das Soll und höchstens :data:`EVEN_DENSER`-mal so
+    viele Dreiecke wie ein Durchgang des Kerns auf dem Soll (so glich die
+    Sitzung bis RM-671 an); wo die Grenze die Kante bestimmt, nie darüber und
+    nicht weniger, als ein weiterer Gang verspräche.
+    """
+    from app.core.geom.mesh_ops import refined
+    from app.core.geom.sculpt import (
+        EVEN_COARSER,
+        EVEN_DENSER,
+        REFINE_MAX_TRIANGLES,
+        REFINE_TO_EDGE,
+        evened_for_brush,
+        median_edge,
+    )
+
+    body = {
+        "ball": lambda: MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=20.0)),
+        "cylinder": lambda: MeshData.of(
+            trimesh.creation.cylinder(radius=10.0, height=30.0, sections=64)
+        ),
+        "splinter_figure": _splinter_figure_subdivided,
+    }[name]()
+    wanted = radius / REFINE_TO_EDGE
+    edge = refine_edge_for(body, radius, finest=0.05)
+
+    used, evened = evened_for_brush(body, edge, 0.0, radius=radius, finest=0.05)
+
+    assert evened.triangle_count <= REFINE_MAX_TRIANGLES
+    assert float(edge_lengths(evened).max()) <= used * (1.0 + 1e-9), "mit der Kante im Verlauf"
+    if name == "splinter_figure":
+        assert evened.triangle_count >= _USED_AT_LEAST, "die Grenze genutzt"
+        return
+    assert median_edge(evened) <= wanted * EVEN_COARSER, "fein genug für den Pinsel"
+    before = refined(body, wanted).triangle_count
+    assert evened.triangle_count <= EVEN_DENSER * before, "nicht dichter als bis RM-671"
 
 
 #: Die Regressionsschwelle aus Bauplan §31: ein Viertel mehr gilt als Rückschritt.

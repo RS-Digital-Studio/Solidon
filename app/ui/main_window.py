@@ -1201,7 +1201,12 @@ class _SculptPreviewWorker(Worker):
                 values = _refinement_params(refined_edge)
                 try:
                     refined_edge, refined = evened_for_brush(
-                        source, values["edge"], values["deviation"], cancelled=self.cancel
+                        source,
+                        values["edge"],
+                        values["deviation"],
+                        radius=radius,
+                        finest=finest,
+                        cancelled=self.cancel,
                     )
                 except AppError:
                     # Ein offenes Netz lässt sich nicht angleichen. Geformt wird
