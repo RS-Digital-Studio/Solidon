@@ -33,8 +33,10 @@ ohne Erkennungscache nach (``kopie_gleich``) — die Zeiten zählen dann nicht.
 Mit ``--weglassen`` ist das die Gegenprobe, ohne den ganzen Korpus zu fahren.
 ``--platte ORDNER`` rechnet mit Plattencache wie das Fenster (je Fall ein Unterordner) und
 öffnet nach der Folge wie nach einem Neustart neu (Schritt ``10_wieder``, ohne Gedächtnis im
-Speicher, frischer Cache über derselben Platte); ``wieder_gleich`` vergleicht die Erkennung
-jedes Körpers mit seinem letzten Zustand in der Sitzung (RM-695, Review 1 H1).
+Speicher, frischer Cache über derselben Platte); ``wieder_gleich`` vergleicht Namen,
+``object_hash`` und die Erkennung jedes Körpers mit seinem letzten Zustand in der Sitzung
+(RM-695, Review 1 H1). Kommt ein Körper ganz von der Platte, läuft keine Erkennung, und es
+gibt keine rohe zum Vergleich (``wieder_ohne_erkennung``) — dann zählen Namen und Hash.
 """
 
 from __future__ import annotations
@@ -403,10 +405,17 @@ class Case:
         line["getragen"] = feats.MOVED_FROM_KEY in mesh.raw._cache
         if CHECK and raw is not None:
             line["kopie_gleich"] = detection_print(fresh_detection(mesh)) == line["erkennung"]
+        seen = (line["namen"], line["object_hash"])
         if step == "10_wieder":
-            line["wieder_gleich"] = self.last.get(objekt) == line["erkennung"]
+            earlier = self.last.get(objekt)
+            line["wieder_ohne_erkennung"] = raw is None
+            line["wieder_gleich"] = (
+                earlier is not None
+                and earlier[1] == seen
+                and (raw is None or earlier[0] == line["erkennung"])
+            )
         else:
-            self.last[objekt] = line["erkennung"]
+            self.last[objekt] = (line["erkennung"], seen)
         self.write(line)
         if UNTIL_DIFFERENT and line.get("kopie_gleich") is False and not line["getragen"]:
             self.write({"fall": self.name, "schritt": "ende", "warum": "anders", "objekt": objekt})
