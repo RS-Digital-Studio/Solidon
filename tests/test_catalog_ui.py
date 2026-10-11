@@ -1253,10 +1253,11 @@ def test_the_application_path_rejects_an_unreferenced_executable_payload(
         window.close()
 
 
-def test_a_name_collision_uses_the_free_name_from_the_error_action(
+def test_a_name_collision_asks_and_uses_the_free_name(
     qt_app: QApplication, tmp_path, monkeypatch
 ) -> None:
-    """Der Hauptknopf der Kollision wiederholt exakt dieselben Bytes mit Namen."""
+    """Eine Kollision ist eine Frage, kein Fehler (Regel 21, Handbuch „Bausteindateien
+    austauschen“): Ja wiederholt exakt dieselben Bytes unter dem freien Namen."""
     from PySide6.QtWidgets import QFileDialog
 
     from app.core.knowledge.parts import PARTS
@@ -1293,17 +1294,16 @@ def test_a_name_collision_uses_the_free_name_from_the_error_action(
 
     from app.ui import main_window as _mw
 
-    chosen_actions: list[str] = []
+    asked: list[tuple[str, str]] = []
+    errors: list[object] = []
 
-    def choose_suggestion(problem, parent=None, handlers=None):
-        ids = {action.id for action in problem.suggestions}
-        if "use_suggested_name" in ids:
-            assert handlers is not None
-            chosen_actions.append("use_suggested_name")
-            handlers["use_suggested_name"](problem)
+    def answer_yes(name: str, suggested: str, parent=None) -> bool:
+        asked.append((name, suggested))
+        return True
 
     monkeypatch.setattr(PartFileIO, "install_file", counted_install)
-    monkeypatch.setattr(_mw, "show_error", choose_suggestion)
+    monkeypatch.setattr(_mw, "ask_free_part_name", answer_yes)
+    monkeypatch.setattr(_mw, "show_error", lambda problem, *_a, **_k: errors.append(problem))
     monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
     monkeypatch.setattr(
         QFileDialog,
@@ -1322,7 +1322,8 @@ def test_a_name_collision_uses_the_free_name_from_the_error_action(
         wait_until(lambda: bool(suggested) and PARTS.has(suggested), "der freie Name kam nicht an")
 
         assert attempted_names == [None, suggested]
-        assert chosen_actions == ["use_suggested_name"]
+        assert asked == [(name, suggested)]
+        assert errors == [], "die Kollision kommt als Frage, nicht als Fehlermeldung"
         assert suggested != name
         assert source.read_bytes(), "der vorhandene Baustein darf nicht ersetzt werden"
         catalog.release()

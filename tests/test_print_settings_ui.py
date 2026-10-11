@@ -11210,6 +11210,40 @@ def test_a_resin_printer_reduces_the_dialog_to_what_applies_and_a_switch_brings_
         dialog.deleteLater()
 
 
+def test_a_resin_printer_keeps_the_slicer_profiles_away_after_the_profile_search(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, session: Session
+) -> None:
+    """Handbuch, Seite Resin: Der Dialog zeigt nur Drucker, Material, Platten und
+    das Programm — auch nachdem die Profilsuche eines Orca-Slicers geantwortet hat.
+
+    Am Fenster stand mit ElegooSlicer der aufgeklappte Kasten *Profile des
+    Slicers* mit FDM-Druckerprofilen und die Zeile „Dieser Slicer braucht ein
+    Druckerprofil“, denn die Suche machte ihn nach ``_reduce_for_resin`` wieder
+    sichtbar. *Im Slicer öffnen* braucht keine Profile.
+    """
+    monkeypatch.setattr(print_dialog.slicer_profiles, "find_profiles", lambda *_a, **_k: [])
+    session.start_new(profiles.DEFAULT_RESIN_PRINTER, profiles.DEFAULT_RESIN_MATERIAL)
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    try:
+        dialog._slicer_path = Path("C:/Programme/ElegooSlicer/elegoo-slicer.exe")
+        dialog._start_profile_search()
+        dialog._leash.wait_all(5000)
+        for _ in range(5):
+            qt_app.processEvents()
+        assert not dialog._profiles_pending, "die Profilsuche hat geantwortet"
+        assert dialog.slicer_box.isHidden()
+        assert dialog._profile_gap() == ""
+        assert dialog._machine_missing_line() not in dialog.state.text()
+
+        dialog.printer_choice.setCurrentIndex(dialog.printer_choice.findData("centauri-carbon-2"))
+        assert not session.profile.printer.is_resin
+        assert not dialog.slicer_box.isHidden(), "am Filamentdrucker kommt der Kasten zurück"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
 @pytest.mark.parametrize("field", ["nozzle", "nozzle_count"])
 def test_a_printer_that_cannot_be_saved_says_so_and_shows_what_holds(
     monkeypatch: pytest.MonkeyPatch, dialog: PrintSettingsDialog, field: str

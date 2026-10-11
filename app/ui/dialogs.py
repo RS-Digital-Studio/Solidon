@@ -4341,6 +4341,33 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
     return "close" if box.clickedButton() is close else "back"
 
 
+def ask_free_part_name(name: str, suggested: str, parent: QWidget | None = None) -> bool:
+    """Gleichnamige Bausteindatei: unter dem freien Namen übernehmen? (Regel 21)
+
+    Ein Name, den es im Katalog schon gibt, ist kein Fehler, sondern eine
+    Frage mit genau einer Antwort und dem Rückweg. Bis hierher kam sie als
+    „Das hat so nicht funktioniert — Die Eingabe war so nicht verwendbar“,
+    obwohl nichts schiefgegangen war. Der vorhandene Baustein bleibt in jedem
+    Fall; ``True`` heißt, der neue kommt unter ``suggested``.
+    """
+    dialog = AskDialog(
+        tr(
+            "Im Katalog liegt schon ein Baustein „{name}“. Er bleibt, wie er ist. "
+            "Soll der neue „{suggested}“ heißen?",
+            name=name,
+            suggested=suggested,
+        ),
+        [suggested],
+        parent,
+        labels={suggested: tr("Als „{suggested}“ übernehmen", suggested=suggested)},
+        as_buttons=True,
+    )
+    try:
+        return dialog.exec() == QDialog.DialogCode.Accepted
+    finally:
+        dialog.deleteLater()
+
+
 def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | None = None) -> bool:
     """Die eine Frage, die sich zu stellen lohnt: mehr als einen Schritt
     wegzuwerfen (§15.4).

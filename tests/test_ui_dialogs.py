@@ -742,3 +742,39 @@ def test_a_hidden_row_in_front_does_not_widen_the_column(qt_app: QApplication) -
         assert hidden.maximumWidth() == max(shown.minimumWidth(), hidden.minimumSizeHint().width())
     finally:
         holder.deleteLater()
+
+
+@pytest.mark.parametrize("answer", ["take", "cancel"])
+def test_the_free_part_name_is_asked_with_the_name_and_cancel(
+    qt_app: QApplication, answer: str
+) -> None:
+    """Gleichnamige Bausteindatei: eine Rückfrage mit dem freien Namen und
+    *Abbrechen*, kein Fehlerdialog (Handbuch „Bausteindateien austauschen“)."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QLabel, QPushButton
+
+    from app.ui.dialogs import AskDialog, ask_free_part_name
+
+    seen: dict[str, object] = {}
+
+    def respond() -> None:
+        dialog = qt_app.activeModalWidget()
+        if not isinstance(dialog, AskDialog):
+            QTimer.singleShot(50, respond)
+            return
+        seen["text"] = " ".join(label.text() for label in dialog.findChildren(QLabel))
+        shown = [b for b in dialog.findChildren(QPushButton) if b.isVisibleTo(dialog)]
+        seen["buttons"] = [b.text() for b in shown]
+        if answer == "take":
+            next(b for b in shown if "pruefwuerfel_imported" in b.text()).click()
+        else:
+            box = dialog.findChild(QDialogButtonBox)
+            box.button(QDialogButtonBox.StandardButton.Cancel).click()
+
+    QTimer.singleShot(50, respond)
+    taken = ask_free_part_name("pruefwuerfel", "pruefwuerfel_imported")
+
+    assert taken is (answer == "take")
+    assert "pruefwuerfel" in str(seen["text"]) and "pruefwuerfel_imported" in str(seen["text"])
+    assert "Das hat so nicht funktioniert" not in str(seen["text"])
+    assert len(seen["buttons"]) == 2, seen["buttons"]

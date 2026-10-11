@@ -472,8 +472,9 @@ VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
             "machen — hochziehen, um eine Achse drehen, an einem Bogen "
             "entlangführen, zwischen zwei Größen überblenden — oder mit "
             "denselben Werkzeugen aus einem vorhandenen Körper schneiden: als "
-            "Tasche, Ringnut, Kanal oder Übergang. Die Art steht im Dialog, "
-            "die Grundform ist für alle dieselbe."
+            "Tasche, Ringnut, Kanal oder Übergang. Es beginnt mit dem Aufziehen "
+            "in der Ansicht, die übrigen Arten wählen Sie danach im Dialog des "
+            "Schritts unter „Art“."
         ),
         choice=_("Art"),
         # **``sketch_pocket`` gehört dazu, seit dem 03.09.2026.** Der

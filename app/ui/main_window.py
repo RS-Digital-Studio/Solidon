@@ -287,6 +287,7 @@ from app.ui.dialogs import (
     KeyDialog,
     ParameterDialog,
     StepValuesDialog,
+    ask_free_part_name,
     confirm_discard,
     confirm_export,
     confirm_generation_loss,
@@ -10924,6 +10925,19 @@ class MainWindow(QMainWindow):
         if not isValid(catalog):
             # Ohne Katalog gibt es die zwei Auswege nicht mehr, die ihn brauchen.
             show_error(problem, self, handlers)
+            return
+        suggested = problem.values.get("suggested_name")
+        if (
+            payload is not None
+            and getattr(problem, "constraint", "") == "exists"
+            and isinstance(suggested, str)
+            and suggested
+        ):
+            # **Ein vorhandener Name ist eine Frage, kein Fehler** (Regel 21):
+            # Ihrer bleibt, der neue kommt auf Wunsch unter dem freien Namen.
+            existing = str(problem.values.get("recipe", ""))
+            if ask_free_part_name(existing, suggested, catalog):
+                self._use_suggested_part_name(catalog, payload, problem)
             return
         handlers["choose"] = lambda _error: self._adopt_part(catalog)
         if payload is not None:

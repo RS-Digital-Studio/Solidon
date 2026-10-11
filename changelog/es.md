@@ -125,6 +125,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El almacén de filamentos muestra para revisar un registro de Solidon 0.5 del mismo proyecto con los mismos filamentos y pregunta antes de descontar otra vez.
 - Desde esta versión, un consumo descontado sigue unido a su impresión aunque una actualización calcule más rápido o cambie el perfil del fabricante en el slicer. Antes contaba como nueva.
 - Donde cúpulas planas y pendientes mostrarían escalones, Solidon sugiere capas finas solo allí. La sugerencia indica cuánto más tarda entonces la pieza.
+- Con una impresora de resina, el diálogo de impresión muestra ahora solo impresora, material, placas y el programa. La versión 0.5.3 ofrecía allí también perfiles para impresoras de filamento.
 
 ### Roscas, taladros y piezas normalizadas
 
@@ -157,6 +158,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un bloque para una cara o un agujero solo se calcula cuando tiene su sitio en la vista. Hasta entonces el diálogo no se puede aplicar e indica lo que falta.
 - Si la cara cambia con el diálogo de un bloque abierto, el sitio elegido se mantiene mientras siga valiendo en la nueva forma. Si no, el bloque busca uno nuevo y lo indica.
 - Un diálogo de bloque que se abre mientras el paso anterior aún calcula coloca el bloque por sí solo en cuanto llega el resultado, y hasta entonces no se puede aplicar.
+- Si al añadir un archivo de bloque ya hay en el catálogo un bloque con ese nombre, Solidon pregunta si el nuevo entra con un nombre libre. La versión 0.5.3 mostraba un mensaje de error.
 
 ### Editar y dibujar
 

@@ -3559,6 +3559,7 @@ class PrintSettingsDialog(QDialog):
             return
         for widget in self._fdm_only_widgets():
             widget.show()
+        self.slicer_box.setVisible(self._slicer_box_wanted)
         self.nozzle.setVisible(
             self.nozzle_choice.currentIndex() >= 0 and self.nozzle_choice.currentData() is None
         )
@@ -3613,6 +3614,7 @@ class PrintSettingsDialog(QDialog):
         """
         for widget in self._fdm_only_widgets():
             widget.hide()
+        self.slicer_box.hide()
         # Harz ist kein Filament — dieselbe Zeile, das Wort des Verfahrens.
         self.filament_label.setText(tr("Material"))
         self.material_link.setText(tr("Material …"))
@@ -4963,6 +4965,7 @@ class PrintSettingsDialog(QDialog):
             open_now=False,
             contents=tr("Druckerprofil, Prozessprofil, Filamentprofil und Druckplatte"),
         )
+        self._slicer_box_wanted = True
         self.slicer_toggle = _toggle_of(self.slicer_box)
         if self.slicer_toggle is not None:
             self.slicer_toggle.toggled.connect(self._unfold_slicer)
@@ -5101,6 +5104,21 @@ class PrintSettingsDialog(QDialog):
         box.setDetailedText(written or tr("Der Slicer hat nichts geschrieben."))
         box.exec()
 
+    def _show_slicer_box(self, wanted: bool) -> None:
+        """Den Kasten *Profile des Slicers* zeigen oder verbergen — nie an Harz.
+
+        Die Profilsuche entscheidet, ob es etwas zu wählen gibt, und meldet
+        sich nach dem Aufbau nach. An einem Resin-Drucker gibt es nichts zu
+        wählen: Der Weg ist *Im Slicer öffnen*, und der braucht keine Profile
+        (``_reduce_for_resin``). Stand der Kasten hier selbst, holte jede
+        nachgereichte Antwort FDM-Druckerprofile und „Dieser Slicer braucht
+        ein Druckerprofil“ zurück in den Resin-Dialog. Der Wunsch wird
+        gemerkt, damit ein Wechsel zurück auf einen Filamentdrucker ihn
+        wiederherstellt.
+        """
+        self._slicer_box_wanted = wanted
+        self.slicer_box.setVisible(wanted and not self.session.profile.printer.is_resin)
+
     def _open_slicer_section(self, *, intent: ContentFitIntent = "explicit") -> None:
         """Macht die Profilauswahl sichtbar; Profilantworten bleiben passiv.
 
@@ -5235,7 +5253,7 @@ class PrintSettingsDialog(QDialog):
         # Lauf hat bei einem Kunden ohne gemerkten Slicer keinen. Ohne diese
         # Zeile bliebe die Profilbox danach versteckt, obwohl ein Slicer
         # gefunden wurde.
-        self.slicer_box.setVisible(found is not None)
+        self._show_slicer_box(found is not None)
         if found is None:
             self._show_slicer_state()
             return
@@ -5243,7 +5261,7 @@ class PrintSettingsDialog(QDialog):
         if flavour == "other":
             # Kein Bestand, den Solidon lesen könnte — und keine Box, die
             # das behauptete.
-            self.slicer_box.setVisible(False)
+            self._show_slicer_box(False)
             self._show_slicer_state()
             return
         # PrusaSlicer bekommt seit Stufe C des Konzepts Herstellerprofil dieselbe
@@ -5263,7 +5281,7 @@ class PrintSettingsDialog(QDialog):
             # (:meth:`_foundation_line`). Kann Solidon den aktiven Cura-Drucker
             # nicht lesen, erscheint der Kasten mit genau diesem Satz.
             self.profile_note.setText("")
-            self.slicer_box.setVisible(False)
+            self._show_slicer_box(False)
             known = dict(profiles.printer_profiles())
             known[self.session.profile.printer.id] = self.session.profile.printer
             cura_worker = _CuraPrinterWorker(found, known)
@@ -5347,7 +5365,7 @@ class PrintSettingsDialog(QDialog):
                     "Druckereinstellung in Cura oder wählen Sie oben einen passenden Drucker."
                 )
             )
-            self.slicer_box.setVisible(True)
+            self._show_slicer_box(True)
             self._open_slicer_section(intent="passive")
         self._offer_the_slicers_printer(self._cura_printer_id)
         self._show_slicer_state()
@@ -5371,7 +5389,7 @@ class PrintSettingsDialog(QDialog):
                 "Druckereinstellung in Cura oder wählen Sie oben einen passenden Drucker."
             )
         )
-        self.slicer_box.setVisible(True)
+        self._show_slicer_box(True)
         self._open_slicer_section(intent="passive")
         self._offer_the_slicers_printer("")
         self._show_slicer_state()
@@ -6840,7 +6858,7 @@ class PrintSettingsDialog(QDialog):
         Auswahl. Das gilt auch für PrusaSlicer: Wer vor der Antwort slicte,
         bekäme sonst Solidons Satz statt des Bündels, je nach Zeitpunkt.
         """
-        if not self._needs_profiles:
+        if not self._needs_profiles or self.session.profile.printer.is_resin:
             return ""
         if self._profiles_pending:
             return str(tr("Der Profilbestand wird durchgesehen …"))
@@ -6968,6 +6986,8 @@ class PrintSettingsDialog(QDialog):
         dass Solidons Werte gelten (RM-431). Gesperrt wird nur noch ein Eintrag,
         der keine Wahl ist, aber einen Wert trüge — ihn bekäme sonst der Slicer.
         """
+        if self.session.profile.printer.is_resin:
+            return ""
         gap = self._profile_gap()
         if gap:
             return gap

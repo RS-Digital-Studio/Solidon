@@ -149,6 +149,7 @@ Nutzen da und sonst nichts.
 - Eine Buchung aus Solidon 0.5 desselben Projekts mit denselben Filamenten bietet das Filamentlager zur Prüfung an und fragt nach, bevor es denselben Druck erneut abbucht.
 - Ab dieser Version bleibt eine Buchung ihrem Druck zugeordnet, auch wenn ein Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
 - Wo flache Kuppen und Schrägen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger das Teil dann druckt.
+- Mit einem Resin-Drucker zeigt der Druckdialog nur noch Drucker, Material, Platten und das Programm. Version 0.5.3 bot dort auch Profile für Filamentdrucker an.
 
 ### Gewinde, Bohrungen und Normteile
 
@@ -181,6 +182,7 @@ Nutzen da und sonst nichts.
 - Ein Baustein für Fläche oder Bohrung rechnet erst, wenn er seine Stelle im Bild hat. Bis dahin lässt sich der Dialog nicht übernehmen und sagt, was fehlt.
 - Ändert sich die Fläche unter einem offenen Bausteindialog, bleibt die gewählte Stelle, solange sie auf der neuen Form noch hält. Sonst sucht der Baustein eine neue und sagt es.
 - Ein Bausteindialog, der öffnet, während der vorige Schritt noch rechnet, setzt den Baustein selbst, sobald das Ergebnis da ist, und lässt sich bis dahin nicht übernehmen.
+- Liegt beim Hinzufügen einer Bausteindatei schon ein Baustein dieses Namens im Katalog, fragt Solidon, ob der neue unter einem freien Namen kommt. Version 0.5.3 zeigte dafür eine Fehlermeldung.
 
 ### Bearbeiten und Zeichnen
 
