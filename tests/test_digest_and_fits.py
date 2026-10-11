@@ -1887,3 +1887,21 @@ def test_the_digest_measures_each_sleeve_feature_only_once(
             assert "6.00 mm" in line or "6,00 mm" in line
             assert line.endswith(f"zu {other}_{index + 1}")
     assert calls <= len(features), f"{calls} measurements for {len(features)} features"
+
+
+def test_the_digest_reads_a_resin_remnant_as_the_line_of_the_nozzle(profile: Profile) -> None:
+    """Review fix/druck-rest: Ein Projekt, das nach Harz → FDM die Pixelgröße als
+    Bahn gespeichert hat, steht im Steckbrief mit der Bahn seiner Düse — nicht
+    „3 Wände × 0.05 mm“. Derselbe Leser wie Analyse, Bettrand und Übergabe."""
+    from app.core.knowledge import print_settings, profiles
+
+    resin = profiles.make_profile(profiles.DEFAULT_RESIN_PRINTER, profiles.DEFAULT_RESIN_MATERIAL)
+    document = Document(format_version=1, app_version="0.0.1")
+    document.print_settings = print_settings.resolve(resin)
+
+    text = digest(plate_scene(profile), document)
+
+    line = next(entry for entry in text.splitlines() if entry.startswith("Druckeinstellungen"))
+    width = profile.printer.extrusion_width
+    assert f"× {width:g} mm" in line, line
+    assert "× 0.05 mm" not in line, line

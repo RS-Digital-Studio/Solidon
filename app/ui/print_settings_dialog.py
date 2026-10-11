@@ -365,7 +365,7 @@ def settings_for_export(
         quality = print_settings.DEFAULT_QUALITY
     return (
         # Ein gespeicherter Rest von Harz geht nicht an einen FDM-Slicer.
-        print_settings.native_line_widths(stored, profile.printer)
+        print_settings.stored(stored, profile.printer)
         if stored is not None
         else print_settings.resolve(profile, cast(QualityPreset, quality))
     )

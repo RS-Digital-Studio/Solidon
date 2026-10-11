@@ -808,7 +808,7 @@ def test_a_question_reads_a_foreign_title_literally(qt_app: QApplication) -> Non
     assert question[1] == Qt.TextFormat.PlainText
 
 
-@pytest.mark.parametrize("which", ["discard", "unsaved"])
+@pytest.mark.parametrize("which", ["discard", "unsaved", "despite"])
 def test_a_confirmation_reads_names_literally(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, which: str
 ) -> None:
@@ -835,8 +835,14 @@ def test_a_confirmation_reads_names_literally(
     monkeypatch.setattr(QMessageBox, "exec", lambda _box: int(QMessageBox.StandardButton.Cancel))
     if which == "discard":
         dialogs.confirm_discard(2, [marked])
-    else:
+    elif which == "unsaved":
         dialogs.confirm_unsaved(marked)
+    else:
+        # Export und Übergabe fragen hier; ein Befund nennt Körpernamen aus der Datei.
+        from app.core.types import Finding
+
+        finding = Finding(code="probe", severity="warning", message=marked)
+        dialogs.confirm_export([finding])
 
     shown = [entry for entry in seen if "Alles weg" in entry[0]]
     assert shown, seen

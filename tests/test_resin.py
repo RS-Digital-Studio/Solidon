@@ -373,9 +373,12 @@ def test_a_resin_line_width_never_becomes_the_base_of_a_filament_printer(
     assert exported is not None
     assert exported.layers.line_width == pytest.approx(native.layers.line_width)
 
-    # Eine eigene Wahl bleibt, auch eine schmale.
-    chosen = replace(
-        print_settings.with_path(left_over, "layers.line_width", 0.2),
-        chosen=left_over.chosen | {"layers.line_width"},
-    )
-    assert print_settings.native_line_widths(chosen, fdm.printer).layers.line_width == 0.2
+    # Eine eigene Wahl und ein übernommener Vorschlag bleiben, auch unter der
+    # Schwelle von einer halben Düse.
+    narrow = fdm.printer.nozzle_diameter * print_settings.FOREIGN_LINE_SHARE * 0.75
+    narrowed = print_settings.with_path(left_over, "layers.line_width", narrow)
+    chosen = replace(narrowed, chosen=left_over.chosen | {"layers.line_width"})
+    accepted = replace(narrowed, accepted=left_over.accepted | {"layers.line_width"})
+    for decided in (chosen, accepted):
+        kept = print_settings.native_line_widths(decided, fdm.printer)
+        assert kept.layers.line_width == pytest.approx(narrow)

@@ -572,6 +572,19 @@ def native_line_widths(settings: PrintSettings, printer: PrinterProfile) -> Prin
     return result
 
 
+def stored(settings: PrintSettings | None, printer: PrinterProfile | None) -> PrintSettings | None:
+    """Die gespeicherten Einstellungen eines Projekts, so wie jeder Leser sie sieht.
+
+    Eine Stelle für alle, die ``document.print_settings`` lesen statt es zu
+    schreiben: Steckbrief, Analyse, Bettrand, Prüfung vor der Übergabe. Las
+    einer davon roh, nannte der Steckbrief nach Harz → FDM „3 Wände mal 0,05
+    mm“, und Zeit, Material und Rat rechneten damit (Review fix/druck-rest).
+    """
+    if settings is None or printer is None:
+        return settings
+    return native_line_widths(settings, printer)
+
+
 def with_path(settings: PrintSettings, path: str, value: Any) -> PrintSettings:
     """Einen Wert über seinen Punktpfad setzen — als neue Einstellung.
 

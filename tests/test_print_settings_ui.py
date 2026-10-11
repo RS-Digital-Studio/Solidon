@@ -11245,6 +11245,10 @@ def test_a_resin_printer_keeps_the_slicer_profiles_away_after_the_profile_search
         dialog._slicer_path = Path("C:/Programme/UltiMaker Cura 5.13.0/UltiMaker-Cura.exe")
         dialog._show_foundation_note()
         assert not dialog.foundation_note.isVisibleTo(dialog), dialog.foundation_note.text()
+        # Zurück auf den Orca-Slicer ohne Profilbestand: Dort liefert beim
+        # Druckerwechsel keine Profilsuche nach (``_refill_slicer_profiles``
+        # kehrt früh zurück), das Angebot muss der Wechsel selbst zurückholen.
+        dialog._slicer_path = Path("C:/Programme/ElegooSlicer/elegoo-slicer.exe")
         dialog._offer_the_slicers_printer("centauri-carbon-2")
         assert not dialog.adopt_printer.isVisibleTo(dialog), dialog.adopt_printer.text()
         assert not dialog.material_link.isVisibleTo(dialog), "an Harz gibt es keine Filamentliste"
@@ -11262,8 +11266,7 @@ def test_a_resin_printer_keeps_the_slicer_profiles_away_after_the_profile_search
         assert session.profile.printer.extrusion_width > 0.3
         # Kein grauer Speichern-Knopf ohne Datei; das Angebot des Slicers kommt zurück.
         assert dialog.save_button.isHidden()
-        # Am Filamentdrucker gilt das Angebot wieder (an Harz hält es zurück).
-        dialog._offer_the_slicers_printer("centauri-carbon-2")
+        # Am Filamentdrucker gilt das Angebot wieder, ohne neue Anfrage.
         assert dialog.adopt_printer.isVisibleTo(dialog), "der Rückweg des Angebots"
         assert not dialog.slicer_box.isHidden(), "am Filamentdrucker kommt der Kasten zurück"
         assert dialog.material_link.isVisibleTo(dialog)
