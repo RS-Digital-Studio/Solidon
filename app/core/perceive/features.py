@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
-from typing import Any, Final, NamedTuple, cast
+from typing import Any, Final, NamedTuple, Protocol, cast
 
 import numpy as np
 
@@ -42,13 +42,15 @@ from app.core.geom.mesh import (
     python_values,
     refined_units,
     refined_units_key,
+    remember_refined_units,
+    row_dots,
     stable_normals,
     triple_products,
     unique_edges,
 )
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
-from app.core.perceive import refine
+from app.core.perceive import grouped, parallel, refine
 from app.core.perceive.helix import Helix, _facet_of_face, find_helices
 from app.core.perceive.patterns import patterns_instead_of_cells
 from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
@@ -56,6 +58,7 @@ from app.core.perceive.surfaces import clipped_patches, planar_patch
 from app.core.types import Feature, FeatureId, MeasureSource, SurfacePatch, Vec3, is_a_cavity
 from app.core.units import (
     EPS_GEOM,
+    RING_AXIS_TOWARD,
     TANGENT_TO_THE_ARC,
     UPRIGHT_TO_AXIS,
     positive_axis,
@@ -166,6 +169,17 @@ PARALLEL_FACE_COSINE: Final = 0.99
 #: Wie viele parallele Kandidatenflächen :func:`_face_roles` je Block prüft,
 #: bevor es beim ersten Treffer aufhört — ein Arbeitsstück, keine Toleranz.
 FACE_ROLE_BLOCK: Final = 64
+
+#: Um wie viel weiter :func:`_face_roles` den Vorrat des blockweisen Wegs zieht
+#: als :data:`PARALLEL_FACE_COSINE`: gerundete Richtungen gegen die eigene
+#: Normale jeder Facette, die dann entscheidet. Ein Arbeitsstück, keine Toleranz
+#: — es spart nur die Facetten, die keine Antwort ändern können.
+PARALLEL_POOL_MARGIN: Final = 1e-4
+
+#: Wie nah ein Wert der Masken von :func:`_parallel_candidates` an seiner
+#: Schwelle liegen darf, bevor die Rechnung über alle Facetten entscheidet — eine
+#: Rechengrenze für die letzten Stellen eines Skalarprodukts, keine Toleranz.
+PARALLEL_POOL_GUARD: Final = 1e-8
 
 #: Kleinster Durchmesser der automatischen geometrischen Einpassung.
 #:
@@ -1233,6 +1247,48 @@ def _mesh_key(mesh: MeshData) -> bytes:
     return hashlib.blake2b(key + units, digest_size=16).digest()
 
 
+def _detection_key(mesh: MeshData) -> bytes:
+    """Unter welchem Abdruck die Erkennung eines Netzes gemerkt wird (RM-592).
+
+    :func:`_mesh_key` sagt, ob zwei Netze dieselbe Geometrie sind — dafür
+    gelten Ecken und Dreiecke, und unter ihm reisen Bewegungs- und
+    Teilungsvermerke über die Platte. Die Erkennung liest aber mehr: Gedrehte
+    Normalen, übernommene Flächeninhalte, Facetten und Nahtwinkel, die eine
+    starre Bewegung vom Quellnetz mitträgt (``geom.transform._carry_cache``),
+    weichen in den letzten Stellen von dem ab, was ``trimesh`` aus denselben
+    Ecken rechnet. Unter dem Netzabdruck allein bekam ein frisch gebautes Netz
+    die Erkennung eines bewegten Zwillings, und dieselbe Datei trug je nach
+    Vorgeschichte der Sitzung zwei Merkmalsstände (Messbank A1: die Lochplatte
+    nach dem Beispiel *Halterung anpassen*). Ein Netz ohne mitgetragene Maße
+    behält seinen Netzabdruck; einmal je Netz gerechnet wie dieser.
+    """
+    from app.core.geom.transform import CARRIED_METRICS
+
+    key = _mesh_key(mesh)
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is None:
+        return key
+    names = cache.cache.get(CARRIED_METRICS)
+    if not names:
+        return key
+    known = cache.cache.get("solidon_detection_key")
+    if known is not None:
+        return bytes(known)
+    hasher = hashlib.blake2b(key, digest_size=16)
+    for name in names:
+        value = cache.cache.get(name)
+        hasher.update(name.encode("ascii"))
+        parts = value if isinstance(value, list) else [value]
+        for part in parts:
+            data = np.ascontiguousarray(np.asarray(part))
+            hasher.update(data.dtype.str.encode("ascii"))
+            hasher.update(np.asarray(data.shape, dtype=np.int64).tobytes())
+            hasher.update(data.tobytes())
+    detection_key = hasher.digest()
+    cache["solidon_detection_key"] = detection_key
+    return detection_key
+
+
 def forget_cache() -> None:
     """Vergisst die gemerkten Erkennungen — für Tests und Messungen."""
     with _CACHE_LOCK:
@@ -1403,6 +1459,7 @@ def detect(
     *,
     check_cancelled: Callable[[], None] | None = None,
     progress: Callable[[float], None] | None = None,
+    store: DetectionStore | None = None,
 ) -> dict[FeatureId, Feature]:
     """Alles, was dieses Modul erkennen kann, mit stabilen Namen.
 
@@ -1415,6 +1472,10 @@ def detect(
 
     ``progress`` erfährt den erledigten Anteil, von null bis eins und nur
     wachsend (:class:`_Share`); eine Antwort aus dem Merker meldet nichts.
+
+    ``store`` ist die Ablage hinter dem Merker (:class:`DetectionStore`, RM-695):
+    Was der Merker nicht kennt, wird dort gesucht, und ein vollständiger
+    Durchgang wird auch dort abgelegt.
     """
     # **Einmal suchen, zweimal lesen** — hier, und nicht in den beiden
     # Aufrufern. Der Docstring von :func:`_cylinders` beschreibt genau das seit
@@ -1437,10 +1498,10 @@ def detect(
     # Merkmale haben. Der Grund und die Zahlen stehen bei :data:`_FEATURE_CACHE`.
     if check_cancelled is not None:
         check_cancelled()
-    key = _mesh_key(mesh)
+    key = _detection_key(mesh)
     if check_cancelled is not None:
         check_cancelled()
-    known = _cached_detection(key)
+    known = _cached_detection(key, store)
     if known is not None:
         # Eine Kopie, weil der Aufrufer sein Ergebnis behalten darf. Die
         # ``Feature``-Objekte selbst sind unveränderlich (``frozen=True``) und
@@ -1449,6 +1510,24 @@ def detect(
 
     share = _Share(progress)
     mesh = _one_body(mesh)
+    # Arbeiter rechnen nur in diesem Durchgang mit (RM-637), und danach lassen
+    # sie den Körper los.
+    allowed = _WORKERS_ALLOWED.set(True)
+    try:
+        return _detected(mesh, key, share, check_cancelled, store)
+    finally:
+        _WORKERS_ALLOWED.reset(allowed)
+        parallel.release()
+
+
+def _detected(
+    mesh: MeshData,
+    key: bytes,
+    share: _Share,
+    check_cancelled: Callable[[], None] | None,
+    store: DetectionStore | None,
+) -> dict[FeatureId, Feature]:
+    """Der volle Durchgang von :func:`detect` an einem Körper, der kein Merker-Treffer war."""
     if check_cancelled is not None:
         check_cancelled()
     # Die Etappen und ihr gemessener Anteil (Median über fünf große Netze):
@@ -1623,29 +1702,74 @@ def detect(
         " (skin)" if fitted.freeform_skin else "",
     )
     _remember(key, found, left_out, unreadable, freeform)
+    if store is not None:
+        store.save_detection(key, StoredDetection(found, left_out, unreadable, freeform))
     share.reach(1.0)
     return dict(found)
 
 
-def known_detection(mesh: MeshData) -> dict[FeatureId, Feature] | None:
+@dataclass(frozen=True, slots=True)
+class StoredDetection:
+    """Eine vollständige Erkennung mit ihren drei Nebenauskünften, wie sie abgelegt wird."""
+
+    found: dict[FeatureId, Feature]
+    left_out: int
+    """Die weggelassenen Rundformen (:func:`freeform_dropped`)."""
+    unreadable: int
+    """Die Schalenzahl, wenn die Einschlüsse unlesbar waren (:func:`unreadable_void_shells`)."""
+    freeform: bool
+    """Das Freiformurteil (:func:`recognised_as_freeform`)."""
+
+
+class DetectionStore(Protocol):
+    """Eine Ablage für Erkennungen über den Prozess hinaus (RM-695: der Plattencache).
+
+    Der Schlüssel ist :func:`_detection_key` des Netzes; unter ihm liefert
+    ``load_detection`` Bit für Bit, was ``save_detection`` bekam, oder ``None``.
+    Ein Eintrag, den die Ablage nicht sicher lesen kann, ist ``None`` — dann
+    erkennt :func:`detect` neu und legt das Ergebnis wieder ab.
+    """
+
+    def load_detection(self, key: bytes) -> StoredDetection | None: ...
+
+    def save_detection(self, key: bytes, detection: StoredDetection) -> None: ...
+
+
+def known_detection(
+    mesh: MeshData, store: DetectionStore | None = None
+) -> dict[FeatureId, Feature] | None:
     """Die gemerkte Erkennung dieses Netzes — oder ``None``, ohne zu rechnen.
 
     Für Aufrufer, die eine Antwort nehmen, wenn sie dasteht, und sonst ohne
     auskommen: die Live-Vorschau eines Dialogs zeigt Geometrie, keine
     Merkmale, und eine Erkennung von einer Sekunde je getippter Zahl wäre
     dort eine Sekunde für nichts (``scene.evaluate``, ``detect_features``).
+    Mit ``store`` zählt auch, was dort abgelegt ist.
     """
-    known = _cached_detection(_mesh_key(mesh))
+    known = _cached_detection(_detection_key(mesh), store)
     return None if known is None else dict(known)
 
 
-def _cached_detection(key: bytes) -> dict[FeatureId, Feature] | None:
-    """Die gemerkte Erkennung unter diesem Abdruck, nach vorn gerückt — in einem Schritt."""
+def _cached_detection(
+    key: bytes, store: DetectionStore | None = None
+) -> dict[FeatureId, Feature] | None:
+    """Die gemerkte Erkennung unter diesem Abdruck, nach vorn gerückt — in einem Schritt.
+
+    Kennt der Merker sie nicht, fragt er ``store`` und merkt sich, was dort
+    liegt, samt den Nebenauskünften: Nach einem Neustart rechnete jedes
+    Öffnen die ganze Erkennung neu, am Eiffelturm 47 von 57 s (RM-695).
+    """
     with _CACHE_LOCK:
         known = _FEATURE_CACHE.get(key)
         if known is not None:
             _FEATURE_CACHE.move_to_end(key)
-        return known
+        if known is not None or store is None:
+            return known
+    stored = store.load_detection(key)
+    if stored is None:
+        return None
+    _remember(key, stored.found, stored.left_out, stored.unreadable, stored.freeform)
+    return stored.found
 
 
 def _remember(
@@ -1771,7 +1895,7 @@ def carry_detection(
 
     if check_cancelled is not None:
         check_cancelled()
-    source_key = _mesh_key(source)
+    source_key = _detection_key(source)
     with _CACHE_LOCK:
         known = _FEATURE_CACHE.get(source_key)
     if known is None:
@@ -1780,7 +1904,7 @@ def carry_detection(
         return False
     if check_cancelled is not None:
         check_cancelled()
-    moved_key = _mesh_key(moved)
+    moved_key = _detection_key(moved)
     if _cached_detection(moved_key) is not None:
         return True
     carried = transformed_features(known, transform, mesh=moved, check_cancelled=check_cancelled)
@@ -2086,12 +2210,12 @@ def carry_refined_detection(
     """
     if check_cancelled is not None:
         check_cancelled()
-    source_key = _mesh_key(source)
+    source_key = _detection_key(source)
     with _CACHE_LOCK:
         known = _FEATURE_CACHE.get(source_key)
     if known is None or any(feature.kind == "edge_loop" for feature in known.values()):
         return False
-    refined_key = _mesh_key(refined)
+    refined_key = _detection_key(refined)
     if _cached_detection(refined_key) is not None:
         return True
     carried = refined_features(known, origin, len(source.raw.faces))
@@ -2460,7 +2584,7 @@ def freeform_dropped(mesh: MeshData) -> int:
     verdrängt hat. Die Auswertung fragt unmittelbar nach ``detect`` und trifft
     damit immer den frischen Eintrag.
     """
-    return _FREEFORM_DROPPED.get(_mesh_key(mesh), 0)
+    return _FREEFORM_DROPPED.get(_detection_key(mesh), 0)
 
 
 def recognised_as_freeform(mesh: MeshData) -> bool:
@@ -2472,7 +2596,7 @@ def recognised_as_freeform(mesh: MeshData) -> bool:
     Haut ohne eingepasste Splitter hat nichts weggelassen und ist trotzdem
     eine Freiform, auf der keine Rundformen geführt werden.
     """
-    return _FREEFORM.get(_mesh_key(mesh), False)
+    return _FREEFORM.get(_detection_key(mesh), False)
 
 
 def unreadable_void_shells(mesh: MeshData) -> int:
@@ -2484,7 +2608,7 @@ def unreadable_void_shells(mesh: MeshData) -> int:
     :func:`freeform_dropped` und macht daraus einen Befund: Ein Einschluss,
     der fehlt, weil ein Schalenpaar nicht lesbar war, verschwindet sonst still.
     """
-    return _UNREADABLE_VOIDS.get(_mesh_key(mesh), 0)
+    return _UNREADABLE_VOIDS.get(_detection_key(mesh), 0)
 
 
 # --- Bohrungen -------------------------------------------------------------------
@@ -2538,6 +2662,535 @@ class Fitted(NamedTuple):
 def _cylinders(mesh: MeshData) -> Cylinders:
     """Nur die Zylinder, für jeden, der die übrigen Formen nicht braucht."""
     return _fitted(mesh).cylinders
+
+
+class _Round(NamedTuple):
+    """Eine Einpassungsrunde: ``classify`` und die Listen, in die sie einträgt (RM-637)."""
+
+    classify: Callable[[list[int]], bool]
+    answered: Callable[[list[int]], bool]
+    found: Cylinders
+    cones: Cones
+    spheres: Spheres
+    tori: _TorusCandidates
+    no_cone_here: set[tuple[Any, ...]]
+
+
+def _round(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    check_cancelled: Callable[[], None] | None,
+    *,
+    ahead: Mapping[bytes, Any] | None = None,
+) -> _Round:
+    """Die Frage je Fleck, welche Form auf ihn passt, mit den Listen ihrer Antworten.
+
+    Aus :func:`_fitted` gehoben, damit ein Arbeiter dieselbe Frage mit demselben
+    Code stellt (:func:`classified_ahead`, RM-637). ``ahead`` sind Antworten, die
+    Arbeiter vorab gerechnet haben — unter dem Schlüssel, unter dem ``classify``
+    sie sonst im Gedächtnis sucht.
+    """
+    found: Cylinders = []
+    cones: Cones = []
+    spheres: Spheres = []
+    tori = _TorusCandidates(len(body.faces))
+    #: Kennzahlen von Flecken, an denen der Kegel nichts hergab. Wer
+    #: deckungsgleich zu einem davon ist, bekommt dieselbe leere Antwort,
+    #: ohne dass der Löser noch einmal hundert Auswertungen dafür braucht
+    #: (:func:`_rigid_key`).
+    no_cone_here: set[tuple[Any, ...]] = set()
+
+    def classify_read(patch: list[int]) -> bool:
+        """Die erste Form, die auf diesen Fleck passt — oder keine (gerechnet)."""
+        ball: SphereFit | None = None
+        # Ein bis zur Geometriegenauigkeit belegter Zylinder braucht keinen
+        # konkurrierenden Kegellauf. Bei einer nur angenäherten Zylinderhaut
+        # wird der Kegel weiterhin gefragt: Eine kurze, flache Verjüngung
+        # kann innerhalb der Wandtoleranz auch auf einen Zylinder passen.
+        fit = fit_cylinder(body, patch, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        cylinder = fit if fit is not None and fit.good and _fits_in_the_body(mesh, fit) else None
+        if cylinder is not None and _cylinder_precludes_a_cone(body, cylinder, patch):
+            found.append((cylinder, patch))
+            return True
+        #
+        # **Ein Muster fragt dieselbe Frage hundertfach.** Die Streben eines
+        # Gitters sind deckungsgleich, und ein Kegelwinkel ändert sich unter
+        # einer starren Bewegung nicht: Wo der Kegel schon an einem
+        # deckungsgleichen Fleck nichts hergab, gibt er auch hier nichts her.
+        # Geteilt wird nur dieses Nein — ein gefundener Kegel wird weiterhin
+        # einzeln gerechnet, denn seine Achse und seine Spitze liegen woanders.
+        # An der Kumiko-Schale sind 1 325 der 1 990 Kegelfits Wiederholungen
+        # und kosten 7,71 der 21,66 Sekunden (22.09.2026).
+        shape = _rigid_key(body, patch)
+        if shape is not None and shape in no_cone_here:
+            cone = None
+        else:
+            cone = fit_cone(body, patch, check_cancelled=check_cancelled)
+            if cone is None and shape is not None:
+                no_cone_here.add(shape)
+        if check_cancelled is not None:
+            check_cancelled()
+        if (
+            cone is not None
+            and cone.half_angle >= CONE_MIN_ANGLE
+            and cone.good
+            and _cone_is_recognisable(body, cone, patch, check_cancelled=check_cancelled)
+        ):
+            ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
+            if check_cancelled is not None:
+                check_cancelled()
+            if not _a_ball_fits_far_better(cone, ball):
+                # Beide vollständigen Nachweise lesen dieselbe Originalhaut.
+                # Ein zusätzlicher Freiheitsgrad verdrängt den Zylinder nur,
+                # wenn der Kegel diese Haut mindestens ebenso genau trifft.
+                if (
+                    cylinder is not None
+                    and cylinder.fit_error is not None
+                    and cone.fit_error is not None
+                    and cylinder.fit_error < cone.fit_error
+                ):
+                    found.append((cylinder, patch))
+                else:
+                    cones.append((cone, patch))
+                return True
+        if cylinder is not None:
+            found.append((cylinder, patch))
+            return True
+        # **Erst hier, und das ist die halbe Antwort auf §41.** Kugel und Torus
+        # werden gefragt, nachdem Zylinder und Kegel abgelehnt haben — nicht
+        # daneben. Eine Senkung passt auf eine Kugel besser, als man denkt
+        # (Rückstand 0,054), und ein `hole_1`, das plötzlich `sphere_1` hieße,
+        # wäre für jede Bohrungs-Operation unsichtbar. Die andere Hälfte der
+        # Antwort ist ``ROUND_TOLERANCE``.
+        if ball is None:
+            ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        if ball is not None and ball.good:
+            spheres.append((ball, patch))
+            if _sphere_is_recognisable(body, ball, patch, check_cancelled=check_cancelled):
+                return True
+        ring = fit_torus(body, patch, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        if ring is not None and ring.good:
+            tori.append((ring, patch))
+            # Ein algebraisch passender Ring ist erst mit passenden Normalen
+            # ein Treffer. Sonst muss die Nachtrennung seine Zylinderwand
+            # noch finden können. Der Kandidat bleibt für die Freiformauskunft.
+            return _torus_is_recognisable(body, ring, patch, check_cancelled=check_cancelled)
+        # Ein nur algebraisch passender, örtlich unbestimmter Kandidat
+        # bleibt Diagnose. Er darf die Suche nach belegten Teilflächen
+        # (etwa einer Bohrung mit Rastnasen) nicht als Treffer beenden.
+        return False
+
+    extents = np.asarray(body.extents, dtype=float)
+    diagonal = math.sqrt(float((extents * extents).sum()))
+    closed = bool(body.is_watertight)
+    consistent = bool(body.is_winding_consistent)
+
+    #: Die Schlüssel dieser Runde je Fleck und Zustand: ``answered`` und
+    #: ``classify`` fragen denselben Fleck, und der Weg über den Merker des
+    #: Abdrucks kostete am Eiffelturm 1,6 s für 6 685 Schlüssel.
+    keys: dict[tuple[tuple[int, ...], bool], bytes] = {}
+
+    def key_of(patch: list[int], known_shape: bool) -> bytes:
+        """Unter welchem Schlüssel ``classify`` die Antwort an diesem Fleck merkt.
+
+        Die Körperzahlen der Lesung gehören dazu (:func:`_support_handle`): Ohne
+        sie gab ein Körper mit Loch im Netz die Fits des dichten zurück, in der
+        letzten Stelle anders (Messbank A1, P5).
+        """
+        name = (tuple(patch), known_shape)
+        known = keys.get(name)
+        if known is None:
+            known = keys[name] = key_read(patch, known_shape)
+        return known
+
+    def key_read(patch: list[int], known_shape: bool) -> bytes:
+        """Der Schlüssel von :func:`key_of`, gerechnet."""
+        return hashlib.blake2b(
+            _patch_print(body, patch)
+            + _body_numbers(
+                diagonal=diagonal,
+                closed=closed,
+                consistent=consistent,
+                coincident=_coincident_vertices(body),
+            )
+            + _exact_bytes(("round" in _LEFT_OUT or known_shape, _classify_settings())),
+            digest_size=16,
+        ).digest()
+
+    def answered(patch: list[int]) -> bool:
+        """Ob ``classify`` diesen Fleck vermutlich ohne Rechnung beantwortet.
+
+        Gefragt mit dem Zustand der Runde ohne deckungsgleichen Vorgänger — so
+        steht es für die meisten Flecken im Gedächtnis. Ein solcher Fleck kommt
+        nicht in den Stapel (:func:`_screened_fits`): Der plante Kegel- und
+        Ringläufe, die der Treffer nie stellt, am Ständer nach einer Bohrung
+        1,4 s. Liegt die Vermutung daneben, rechnet ``classify`` ohne das
+        Nein des Stapels — dieselbe Antwort, nur langsamer.
+        """
+        if not _ACROSS_BODIES[0] or not _worth_remembering(body, patch):
+            return False
+        key = key_of(patch, False)
+        if ahead and key in ahead:
+            return True
+        with _MEMORY_LOCK:
+            return key in _BY_GEOMETRY.get(_CLASSIFIED, ())
+
+    def classify(patch: list[int]) -> bool:
+        """Die erste Form, die auf diesen Fleck passt — oder keine.
+
+        **Auch aus dem Gedächtnis eines früheren Körpers** (RM-592, G2): Was
+        :func:`classify_read` liest, steht im Fleckabdruck (Lesung, Normalen,
+        Ursprung), in der Diagonale, aus der die Toleranzen der Einpassungen
+        kommen, und im Zustand der Runde — ob ein deckungsgleicher Fleck schon
+        keinen Kegel hatte (``no_cone_here``). Die Hülle des Körpers fragt ein
+        Treffer neu (:data:`_HULL_QUESTIONS`). Gemerkt werden Antwort, Fits und
+        ob der Fleck ``no_cone_here`` ergänzte; ein Treffer trägt sie in die
+        Listen dieser Runde ein wie die Rechnung.
+        """
+        if check_cancelled is not None:
+            check_cancelled()
+        if _face_count(body, patch) < MIN_PATCH_FACES:
+            return False
+        if not _ACROSS_BODIES[0] or not _worth_remembering(body, patch):
+            return classify_read(patch)
+        shape = _rigid_key(body, patch)
+        known_shape = shape is not None and shape in no_cone_here
+        key = key_of(patch, known_shape)
+        known = _known_across(_CLASSIFIED, body, key)
+        if known is _UNKNOWN and ahead:
+            # Vorab gerechnet von einem Arbeiter (RM-637, :mod:`parallel`): dieselbe
+            # Frage unter demselben Schlüssel, an einer Kopie des Körpers.
+            known = ahead.get(key, _UNKNOWN)
+            if known is not _UNKNOWN:
+                _keep_across(_CLASSIFIED, body, key, known)
+                parallel.count("used")
+        if known is not _UNKNOWN:
+            answer, cylinders, kegel, balls, rings, added, asked = known
+            if "hull_query" in _LEFT_OUT or all(
+                _cylinder_fits(mesh, axis, radius) == fits for axis, radius, fits in asked
+            ):
+                found.extend((fit, patch) for fit in cylinders)
+                cones.extend((fit, patch) for fit in kegel)
+                spheres.extend((fit, patch) for fit in balls)
+                for ring in rings:
+                    tori.append((ring, patch))
+                if added and shape is not None:
+                    no_cone_here.add(shape)
+                return bool(answer)
+        marks = (len(found), len(cones), len(spheres), len(tori.entries))
+        questions: list[tuple[tuple[float, ...], float, bool]] = []
+        asking = _HULL_QUESTIONS.set(questions)
+        try:
+            answer = classify_read(patch)
+        finally:
+            _HULL_QUESTIONS.reset(asking)
+        added = not known_shape and shape is not None and shape in no_cone_here
+        _keep_across(
+            _CLASSIFIED,
+            body,
+            key,
+            (
+                answer,
+                tuple(fit for fit, _patch in found[marks[0] :]),
+                tuple(fit for fit, _patch in cones[marks[1] :]),
+                tuple(fit for fit, _patch in spheres[marks[2] :]),
+                tuple(fit for fit, _patch in tori.entries[marks[3] :]),
+                added,
+                tuple(questions),
+            ),
+        )
+        return answer
+
+    return _Round(classify, answered, found, cones, spheres, tori, no_cone_here)
+
+
+def _asked_by_workers(
+    body: trimesh.Trimesh,
+    kind: str,
+    items: Sequence[Any],
+    weights: Sequence[float],
+    shapes: set[tuple[Any, ...]],
+    check_cancelled: Callable[[], None] | None,
+    share: _Share,
+    *,
+    skin: bool = False,
+) -> dict[str, dict[Any, Any]]:
+    """Antworten, die eine Runde von :func:`_fitted` gleich der Reihe nach fragt — vorab
+    von Arbeitern gerechnet (RM-637, :mod:`parallel`).
+
+    ``kind`` ist ``"classify"`` (``items`` sind Flecken) oder ``"pieces"``
+    (``items`` sind ungelöste Flecken mit ihren Stücken: deren ``classify`` und
+    die tangentiale Trennung dahinter, :func:`_pieces_ahead`). Jeder Arbeiter
+    bekommt eine Kopie des Körpers samt den Normalen, Flächen, Nahtwinkeln und
+    Ursprüngen, die er hält, und einen zusammenhängenden Teil in der Folge der
+    Runde. Zurück kommen je Frage die Antworten unter ihrem Schlüssel; die Runde
+    findet sie dort, was fehlt, rechnet sie selbst.
+    """
+    if not _ACROSS_BODIES[0] or not items:
+        return {}
+    whole = [item[0] for item in items] if kind == "pieces" else items
+    if not all(_worth_remembering(body, list(patch)) for patch in whole):
+        # Eine Haut über der Gedächtnisgrenze (eine Figur, ein Scan): Sie kostet
+        # hier das meiste, und an ihr hilft kein Arbeiter — ihre Antwort käme
+        # nicht zurück. Die übrigen Flecken rechnet der Stapel hier billig, und
+        # jeder Arbeiter baute den großen Körper umsonst auf (Drache: 8 s Warten
+        # für dieselbe Rechenzeit im Prozess).
+        return {}
+    if sum(weights) < parallel.least_weight():
+        # Eine kleine Runde rechnet hier schneller, als der Weg zu den Arbeitern
+        # kostet (Würfel, Besteckkasten: langsamer mit Arbeitern).
+        return {}
+    if not _WORKERS_ALLOWED.get():
+        return {}
+    count = parallel.worthwhile(len(body.faces), len(items))
+    if count <= 0:
+        return {}
+    token = _detection_key(MeshData(raw=body))
+    if not parallel.prepared(token):
+        # Erst hier, wo eine Runde sie braucht: Arbeiter, die beim Start jeder
+        # großen Erkennung anliefen, bremsten Besteckkasten, Besenhalter und
+        # Drachen, an denen keine Runde etwas fragt (gemessen im Wechsel).
+        parallel.warm(count)
+        if not parallel.prepare(_worker_arrays(body), token):
+            return {}
+    # Ausgewogene Fächer, die schwersten zuerst verteilt, je Fächer in der Folge
+    # der Runde: Ein zusammenhängender Teil hielt am Drachen die Runde 23 s auf
+    # (die großen Flecken alle bei einem Arbeiter), ein Fleck je Aufgabe ließ
+    # den Stapel leer — jeder Lauf ging an den echten Löser.
+    # Je Fächer genug Flecken für den Stapel (``refine.MIN_BATCH``): darunter
+    # ginge jeder Kegel- und Ringlauf an den echten Löser. Die Stückrunde lebt
+    # von der tangentialen Trennung, nicht vom Stapel.
+    least = 1 if kind == "pieces" else refine.MIN_BATCH
+    parts = parallel.bins(weights, parallel.chunk_count(len(items), count, least))
+    held = frozenset(shapes)
+    tasks = [
+        parallel.Task(kind, tuple(items[index] for index in part), held, skin, token)
+        for part in parts
+    ]
+    ahead: dict[str, dict[Any, Any]] = {_CLASSIFIED: {}, _TANGENTIAL: {}}
+    for answers in parallel.run(
+        lambda: _worker_arrays(body),
+        tasks,
+        most=count,
+        check_cancelled=check_cancelled,
+        progress=share.reach,
+    ):
+        for name, found in (answers or {}).items():
+            ahead.setdefault(name, {}).update(found)
+    # Jede Antwort über die Körpergrenze auch ins Gedächtnis: Fits, Lesungen und
+    # Nachweise, die die Runde und der nächste Schritt dort suchen.
+    for name, found in ahead.items():
+        if name != _SPLIT_TARGETS and found:
+            _keep_all_across(name, body, found)
+    share.reach(1.0)
+    return ahead
+
+
+def _keep_all_across(name: str, body: trimesh.Trimesh, found: Mapping[bytes, Any]) -> None:
+    """Viele fertige Antworten über die Körpergrenze ablegen (:func:`_keep_across`)."""
+    for key, value in found.items():
+        _keep_across(name, body, key, value)
+
+
+#: Was ein Körper an Maßen halten kann, aus denen ein Abdruck entsteht
+#: (:func:`_patch_print_parts`) — ob gerechnet oder mitgetragen.
+_HELD_MEASURES: Final = ("face_normals", "area_faces", "face_adjacency_angles")
+
+
+def _worker_arrays(body: trimesh.Trimesh) -> dict[str, np.ndarray]:
+    """Was ein Arbeiter vom Körper bekommt: Ecken, Dreiecke und was der Körper an
+    Normalen, Flächen, Nahtwinkeln und Ursprüngen schon hält.
+
+    Was er nicht hält, rechnet der Arbeiter aus denselben Ecken und Dreiecken
+    selbst, Bit für Bit wie hier — rechnete der Prozess es nur zum Schicken, zahlte
+    er dafür, auch wenn keine Runde die Arbeiter fragt (am Spiderman die
+    Nahtwinkel von 1,3 Mio. Kanten). Mitgetragene Maße einer starren Bewegung
+    (``geom.transform._carry_cache``) hält er immer; sie reisen mit.
+    """
+    arrays = {
+        "vertices": np.ascontiguousarray(body.vertices, dtype=np.float64),
+        "faces": np.ascontiguousarray(body.faces, dtype=np.int64),
+    }
+    cache = body._cache
+    cache.verify()
+    for name in _HELD_MEASURES:
+        held = cache.cache.get(name)
+        if held is not None:
+            arrays[name] = np.ascontiguousarray(held, dtype=np.float64)
+    units = refined_units(body)
+    if units is not None:
+        arrays["units"] = np.asarray(units, dtype=np.int64)
+    return arrays
+
+
+#: Ob eine Runde gerade Arbeiter fragen darf: nur im Durchgang von :func:`detect`,
+#: der sie danach loslässt (RM-637) — nicht in einer Frage der örtlichen
+#: Nachmessung oder des Kantenwegs, die dieselben Runden ruft.
+_WORKERS_ALLOWED: ContextVar[bool] = ContextVar("solidon_workers_allowed", default=False)
+
+
+#: Der Körper, an dem dieser Prozess als Arbeiter zuletzt gefragt wurde — nur im
+#: Arbeiter (:func:`answered_ahead`): Abdruck, Körper, Netz und die schon
+#: zurückgegebenen Schlüssel. Die zweite Runde derselben Erkennung baut ihn nicht
+#: neu und findet die Antworten der ersten im Gedächtnis.
+_WORKER_BODY: list[Any] = [None]
+
+
+def answered_ahead(
+    read: Callable[[], Mapping[str, np.ndarray]], task: Any
+) -> dict[str, dict[Any, Any]]:
+    """Die Seite des Arbeiters (RM-637): eine Runde von :func:`_fitted` für einen Teil.
+
+    Der Körper entsteht aus den Feldern des Aufrufers, mit den Normalen,
+    Flächen, Nahtwinkeln und Ursprüngen, die er hält — dieselben Abdrücke, also
+    dieselben Schlüssel. Kommt ein anderer Körper, vergisst der Arbeiter den
+    alten samt allem Gemerkten (:func:`forget_cache`). Zurück gehen die
+    Antworten von ``classify`` und der tangentialen Trennung, die er seit der
+    letzten Aufgabe neu gerechnet hat.
+    """
+    _token, body, mesh, sent = held_body(read, task.token)
+    splits: dict[tuple[int, ...], list[list[int]]] = {}
+    state = _round(body, mesh, None)
+    state.no_cone_here.update(task.shapes)
+    with body._cache:
+        if task.kind == "classify":
+            patches = [list(patch) for patch in task.items]
+            _patch_prints(body, patches)
+            with _screening(body, patches, shapes=state.no_cone_here):
+                for patch in patches:
+                    state.classify(patch)
+        elif task.kind == "surfaces":
+            patches = [list(patch) for patch in task.items]
+            with _screening(body, patches):
+                for patch in patches:
+                    _round_surface(body, mesh, patch)
+        else:
+            # Der Stapel fragt die Stücke wie in der Runde selbst (``piece_screening``).
+            stacked = [
+                list(piece) for _patch, pieces in task.items if len(pieces) > 1 for piece in pieces
+            ]
+            with _screening(body, stacked, shapes=state.no_cone_here):
+                for patch, pieces in task.items:
+                    _pieces_ahead(
+                        state,
+                        body,
+                        mesh,
+                        list(patch),
+                        [list(piece) for piece in pieces],
+                        task.skin,
+                        splits,
+                    )
+    answers: dict[str, dict[Any, Any]] = {}
+    with _MEMORY_LOCK:
+        for name, held_answers in _BY_GEOMETRY.items():
+            fresh = {key: value for key, value in held_answers.items() if (name, key) not in sent}
+            sent.update((name, key) for key in fresh)
+            answers[name] = fresh
+    answers[_SPLIT_TARGETS] = splits
+    return answers
+
+
+#: Unter welchem Namen ein Arbeiter seine tangentialen Trennungen je Ziel
+#: zurückgibt — am selben Körper dieselbe Antwort, auch wo das Gedächtnis über
+#: die Körpergrenze nichts merkt (:func:`_tangential_pieces`, ``beyond``).
+_SPLIT_TARGETS: Final = "split_targets"
+
+
+def held_body(
+    read: Callable[[], Mapping[str, np.ndarray]], token: bytes
+) -> tuple[bytes, trimesh.Trimesh, MeshData, set[tuple[str, bytes]]]:
+    """Der Körper dieses Arbeiters — gebaut aus den Feldern des Aufrufers oder gehalten.
+
+    Gebaut wird er bei der ersten Aufgabe an ihm, nicht schon beim Vorbereiten:
+    Acht Arbeiter, die eine Freiformhaut von 886 000 Dreiecken aufbauen, an der
+    keine Runde etwas fragt, bremsten die Erkennung im Prozess. Ein anderer
+    Abdruck lässt den alten Körper samt allem Gemerkten los (:func:`forget_cache`).
+    """
+    held = _WORKER_BODY[0]
+    if held is not None and held[0] == token:
+        return held  # type: ignore[no-any-return]
+    _WORKER_BODY[0] = None
+    forget_cache()
+    arrays = read()
+    body = trimesh.Trimesh(arrays["vertices"], arrays["faces"], process=False)
+    units = arrays.get("units")
+    if units is not None:
+        remember_refined_units(body, units)
+    body._cache.verify()
+    for name in _HELD_MEASURES:
+        if name in arrays:
+            body._cache[name] = np.asarray(arrays[name], dtype=np.float64)
+    body._cache.id_set()
+    held = (token, body, MeshData(raw=body), set())
+    _WORKER_BODY[0] = held
+    return held
+
+
+def warm_worker() -> None:
+    """Ein frischer Arbeiter lädt, was die Runden brauchen, bevor die erste Aufgabe kommt.
+
+    Die Bibliotheken der Erkennung kommen erst beim ersten Rechenschritt
+    (``app.core.deferred``); im Arbeiter bezahlte das die erste Aufgabe, und die
+    Runde wartete darauf. Eine Erkennung an einem kleinen Zylinder lädt sie alle
+    (RM-637).
+    """
+    detect(MeshData(raw=trimesh.creation.cylinder(radius=5.0, height=10.0, sections=48)))
+    forget_cache()
+
+
+def forget_worker_body() -> None:
+    """Der Arbeiter lässt Körper und Gemerktes los, wenn die Erkennung fertig ist (RM-637)."""
+    _WORKER_BODY[0] = None
+    forget_cache()
+
+
+def _pieces_ahead(
+    state: _Round,
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    patch: list[int],
+    pieces: list[list[int]],
+    skin: bool,
+    splits: dict[tuple[int, ...], list[list[int]]],
+) -> None:
+    """Was die Stückrunde von :func:`_fitted` an einem ungelösten Fleck fragt, im Gedächtnis.
+
+    Die Stücke eines geteilten Flecks, dann die sechste Runde (``divided``): die
+    tangentiale Trennung der Reste oder des ganzen Flecks und ``classify`` an
+    ihren Stücken und gezogenen Ketten. Ob die dritte bis fünfte Runde den Fleck
+    vorher schon erklären, weiß der Arbeiter nicht — er fragt die sechste auf
+    Vorrat; was die Runde nicht braucht, bleibt ungelesen.
+    """
+    split_apart = len(pieces) > 1
+    classified = [state.classify(piece) for piece in pieces] if split_apart else []
+    if skin:
+        return
+    if split_apart and any(classified):
+        targets = [piece for piece, known in zip(pieces, classified, strict=True) if not known]
+    else:
+        targets = [patch]
+    for target in targets:
+        split = _tangential_pieces(body, mesh, target)
+        splits[tuple(target)] = split
+        if not split:
+            continue
+        marks = len(state.found)
+        for piece in split:
+            state.classify(piece)
+        here = {id(piece): fit for fit, piece in state.found[marks:]}
+        for chain in _drawn_chains(
+            _touching_pieces(body, split), [here.get(id(piece)) for piece in split]
+        ):
+            (joined,) = in_body_order(
+                body, [[index for number in chain for index in split[number]]]
+            )
+            state.classify(joined)
 
 
 def _fitted(
@@ -2606,10 +3259,6 @@ def _fitted(
         if not curved:
             return Fitted([], [], [], [], [], [], [])
 
-        found: Cylinders = []
-        cones: Cones = []
-        spheres: Spheres = []
-        tori = _TorusCandidates(len(body.faces))
         stadiums: Stadiums = []
         flat: list[tuple[int, ...]] = []
         areas = np.asarray(body.area_faces, dtype=float)
@@ -2622,103 +3271,14 @@ def _fitted(
         #: an ihnen fragt :func:`_between_corners_of`, ob ein Nachbarfleck
         #: dazugehört (RM-254).
         wandering = np.zeros(len(body.faces), dtype=bool)
-        #: Kennzahlen von Flecken, an denen der Kegel nichts hergab. Wer
-        #: deckungsgleich zu einem davon ist, bekommt dieselbe leere Antwort,
-        #: ohne dass der Löser noch einmal hundert Auswertungen dafür braucht
-        #: (:func:`_rigid_key`).
-        no_cone_here: set[tuple[Any, ...]] = set()
 
-        def classify(patch: list[int]) -> bool:
-            """Die erste Form, die auf diesen Fleck passt — oder keine."""
-            if check_cancelled is not None:
-                check_cancelled()
-            if _face_count(body, patch) < MIN_PATCH_FACES:
-                return False
-            ball: SphereFit | None = None
-            # Ein bis zur Geometriegenauigkeit belegter Zylinder braucht keinen
-            # konkurrierenden Kegellauf. Bei einer nur angenäherten Zylinderhaut
-            # wird der Kegel weiterhin gefragt: Eine kurze, flache Verjüngung
-            # kann innerhalb der Wandtoleranz auch auf einen Zylinder passen.
-            fit = fit_cylinder(body, patch, check_cancelled=check_cancelled)
-            if check_cancelled is not None:
-                check_cancelled()
-            cylinder = (
-                fit if fit is not None and fit.good and _fits_in_the_body(mesh, fit) else None
-            )
-            if cylinder is not None and _cylinder_precludes_a_cone(body, cylinder, patch):
-                found.append((cylinder, patch))
-                return True
-            #
-            # **Ein Muster fragt dieselbe Frage hundertfach.** Die Streben eines
-            # Gitters sind deckungsgleich, und ein Kegelwinkel ändert sich unter
-            # einer starren Bewegung nicht: Wo der Kegel schon an einem
-            # deckungsgleichen Fleck nichts hergab, gibt er auch hier nichts her.
-            # Geteilt wird nur dieses Nein — ein gefundener Kegel wird weiterhin
-            # einzeln gerechnet, denn seine Achse und seine Spitze liegen woanders.
-            # An der Kumiko-Schale sind 1 325 der 1 990 Kegelfits Wiederholungen
-            # und kosten 7,71 der 21,66 Sekunden (22.09.2026).
-            shape = _rigid_key(body, patch)
-            if shape is not None and shape in no_cone_here:
-                cone = None
-            else:
-                cone = fit_cone(body, patch, check_cancelled=check_cancelled)
-                if cone is None and shape is not None:
-                    no_cone_here.add(shape)
-            if check_cancelled is not None:
-                check_cancelled()
-            if (
-                cone is not None
-                and cone.half_angle >= CONE_MIN_ANGLE
-                and cone.good
-                and _cone_is_recognisable(body, cone, patch, check_cancelled=check_cancelled)
-            ):
-                ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
-                if check_cancelled is not None:
-                    check_cancelled()
-                if not _a_ball_fits_far_better(cone, ball):
-                    # Beide vollständigen Nachweise lesen dieselbe Originalhaut.
-                    # Ein zusätzlicher Freiheitsgrad verdrängt den Zylinder nur,
-                    # wenn der Kegel diese Haut mindestens ebenso genau trifft.
-                    if (
-                        cylinder is not None
-                        and cylinder.fit_error is not None
-                        and cone.fit_error is not None
-                        and cylinder.fit_error < cone.fit_error
-                    ):
-                        found.append((cylinder, patch))
-                    else:
-                        cones.append((cone, patch))
-                    return True
-            if cylinder is not None:
-                found.append((cylinder, patch))
-                return True
-            # **Erst hier, und das ist die halbe Antwort auf §41.** Kugel und Torus
-            # werden gefragt, nachdem Zylinder und Kegel abgelehnt haben — nicht
-            # daneben. Eine Senkung passt auf eine Kugel besser, als man denkt
-            # (Rückstand 0,054), und ein `hole_1`, das plötzlich `sphere_1` hieße,
-            # wäre für jede Bohrungs-Operation unsichtbar. Die andere Hälfte der
-            # Antwort ist ``ROUND_TOLERANCE``.
-            if ball is None:
-                ball = fit_sphere(body, patch, check_cancelled=check_cancelled)
-            if check_cancelled is not None:
-                check_cancelled()
-            if ball is not None and ball.good:
-                spheres.append((ball, patch))
-                if _sphere_is_recognisable(body, ball, patch, check_cancelled=check_cancelled):
-                    return True
-            ring = fit_torus(body, patch, check_cancelled=check_cancelled)
-            if check_cancelled is not None:
-                check_cancelled()
-            if ring is not None and ring.good:
-                tori.append((ring, patch))
-                # Ein algebraisch passender Ring ist erst mit passenden Normalen
-                # ein Treffer. Sonst muss die Nachtrennung seine Zylinderwand
-                # noch finden können. Der Kandidat bleibt für die Freiformauskunft.
-                return _torus_is_recognisable(body, ring, patch, check_cancelled=check_cancelled)
-            # Ein nur algebraisch passender, örtlich unbestimmter Kandidat
-            # bleibt Diagnose. Er darf die Suche nach belegten Teilflächen
-            # (etwa einer Bohrung mit Rastnasen) nicht als Treffer beenden.
-            return False
+        ahead: dict[bytes, Any] = {}
+        ahead_split: dict[bytes, Any] = {}
+        split_targets: dict[tuple[int, ...], list[list[int]]] = {}
+        state = _round(body, mesh, check_cancelled, ahead=ahead)
+        found, cones, spheres, tori = state.found, state.cones, state.spheres, state.tori
+        no_cone_here = state.no_cone_here
+        classify = state.classify
 
         # **Nach Größe gefragt, nicht nach der Lage** (RM-210): Die Folge der
         # Flecken entscheidet, welcher von zwei deckungsgleichen zuerst seinen
@@ -2746,14 +3306,35 @@ def _fitted(
         fitting = [patch for patch in patches if _face_count(body, patch) >= MIN_PATCH_FACES]
         whole_weight = sum(_fit_weight(patch) for patch in fitting)
         weighed = 0.0
+        # Die Abdrücke aller Flecken in einem Zug: Arbeiter, Gedächtnis und
+        # Stapel fragen nach ihnen.
+        _patch_prints(body, fitting)
+        # **Arbeiter rechnen vor, was ``classify`` gleich der Reihe nach fragt**
+        # (RM-637): dieselben Fragen unter demselben Schlüssel, an Kopien des
+        # Körpers. Die Runde läuft danach unverändert und findet sie dort.
+        workers = parallel.worthwhile(len(body.faces), len(fitting)) > 0
+        if workers:
+            unanswered = [patch for patch in fitting if not state.answered(patch)]
+            asked = _asked_by_workers(
+                body,
+                "classify",
+                unanswered,
+                [_fit_weight(patch) for patch in unanswered],
+                no_cone_here,
+                check_cancelled,
+                whole.part(0.0, AHEAD_SHARE),
+            )
+            ahead.update(asked.get(_CLASSIFIED, {}))
+            whole = whole.part(AHEAD_SHARE, 1.0)
+        looping = whole.part(SCREEN_SHARE, 1.0)
         # **Erst der Stapel, dann die Flecken der Reihe nach** (RM-209): Er sagt
         # für alle zugleich, welcher Kegel- und Ringlauf sicher vergeblich
         # wäre; ``classify`` fragt danach wie immer, und nur diese Läufe
-        # entfallen (:func:`_screened_fits`).
-        looping = whole.part(SCREEN_SHARE, 1.0)
+        # entfallen (:func:`_screened_fits`). Was das Gedächtnis schon
+        # beantwortet, kommt nicht hinein (``_Round.answered``).
         with _screening(
             body,
-            fitting,
+            [patch for patch in fitting if not state.answered(patch)],
             shapes=no_cone_here,
             check_cancelled=check_cancelled,
             share=whole.part(0.0, SCREEN_SHARE),
@@ -2858,7 +3439,9 @@ def _fitted(
             Ringkandidaten des Ziels und, war das Ziel der ganze Fleck, die
             seiner Nachtrennungsstücke ``inside``.
             """
-            pieces = _tangential_pieces(body, mesh, target, check_cancelled)
+            pieces = _tangential_pieces(
+                body, mesh, target, check_cancelled, ahead=ahead_split, done=split_targets
+            )
             if not pieces:
                 return []
             marks = (len(found), len(cones), len(spheres))
@@ -2918,6 +3501,19 @@ def _fitted(
             patch_index: _in_size_order(body, curvature_splits[patch_index])
             for patch_index in unresolved
         }
+        if not freeform_skin:
+            # Ungeteilte Flecken fragt die sechste Runde als Ganzes: ihre
+            # Abdrücke samt Nahtwinkeln in einem Zug (:func:`_tangential_pieces`).
+            _patch_prints(
+                body,
+                [
+                    patches[patch_index]
+                    for patch_index in unresolved
+                    if len(ordered_pieces[patch_index]) <= 1
+                    and _face_count(body, patches[patch_index]) >= 2 * MIN_PATCH_FACES
+                ],
+                seams=True,
+            )
         # Der Stapel fragt die Stücke, die ``classify`` gleich der Reihe nach
         # fragt: die Stücke jedes geteilten Flecks, auf einer Haut nur die von
         # Gewicht (RM-209, wie in der ersten Runde).
@@ -2928,9 +3524,43 @@ def _fitted(
             for piece in pieces
             if heavy(piece) or not freeform_skin
         ]
+        _patch_prints(body, asked_pieces)
+        if workers and unresolved:
+            # Die Stücke jedes ungelösten Flecks und die sechste Runde dahinter
+            # bei den Arbeitern (RM-637, :func:`_pieces_ahead`).
+            units = [
+                (
+                    tuple(patches[patch_index]),
+                    tuple(
+                        tuple(piece)
+                        for piece in ordered_pieces[patch_index]
+                        if len(ordered_pieces[patch_index]) <= 1
+                        or heavy(piece)
+                        or not freeform_skin
+                    ),
+                )
+                for patch_index in unresolved
+            ]
+            asked = _asked_by_workers(
+                body,
+                "pieces",
+                units,
+                [
+                    _fit_weight(list(patch)) + sum(map(_fit_weight, pieces))
+                    for patch, pieces in units
+                ],
+                no_cone_here,
+                check_cancelled,
+                by_piece.part(0.0, AHEAD_SHARE),
+                skin=freeform_skin,
+            )
+            ahead.update(asked.get(_CLASSIFIED, {}))
+            ahead_split.update(asked.get(_TANGENTIAL, {}))
+            split_targets.update(asked.get(_SPLIT_TARGETS, {}))
+            by_piece = by_piece.part(AHEAD_SHARE, 1.0)
         piece_screening = _screening(
             body,
-            asked_pieces,
+            [piece for piece in asked_pieces if not state.answered(piece)],
             shapes=no_cone_here,
             check_cancelled=check_cancelled,
             share=by_piece.part(0.0, SCREEN_SHARE),
@@ -3219,6 +3849,31 @@ def cylinder_fits_in_the_body(mesh: MeshData, axis: Sequence[float], radius: flo
     Vernetzung** (``brep.features._oversized_rounds_dropped``, RM-226). Ohne
     sie hieß ein Bogen R 382 über 6 Grad auf einem 40 mm breiten Quader exakt
     „Verrundung R 382“ und am Netzzwilling „gekrümmte Fläche“.
+
+    **Wer die Antwort in eine Frage über die Körpergrenze einrechnet, merkt
+    sie sich als Rückfrage** (:func:`_tangential_pieces`, RM-592): Die Hülle
+    gehört dem ganzen Körper und steht nicht im Schlüssel; die gemerkte Antwort
+    gilt nur, wenn jede Rückfrage am neuen Körper gleich ausfällt.
+    """
+    answer = _cylinder_fits(mesh, axis, radius)
+    asked = _HULL_QUESTIONS.get()
+    if asked is not None:
+        asked.append((tuple(float(value) for value in axis), float(radius), answer))
+    return answer
+
+
+#: Die Rückfragen an die Hülle, die eine Rechnung über die Körpergrenze stellt
+#: (:func:`cylinder_fits_in_the_body`) — nur während dieser Rechnung gesetzt.
+_HULL_QUESTIONS: ContextVar[list[tuple[tuple[float, ...], float, bool]] | None] = ContextVar(
+    "solidon_hull_questions", default=None
+)
+
+
+def _cylinder_fits(mesh: MeshData, axis: Sequence[float], radius: float) -> bool:
+    """Die Rechnung von :func:`cylinder_fits_in_the_body`.
+
+    Das Rechteck über alle Ecken merkt sich der Körper je Achse — sonst
+    kostete die Rückfrage einer gemerkten Antwort so viel wie die Frage.
     """
     direction = np.asarray(axis, dtype=float)
     if float(np.max(np.abs(direction))) <= EPS_GEOM:
@@ -3236,10 +3891,62 @@ def cylinder_fits_in_the_body(mesh: MeshData, axis: Sequence[float], radius: flo
     distance = np.linalg.norm(flat[:, None, :] - flat[None, :, :], axis=2)
     if radius * 2.0 <= float(distance.max()) + EPS_GEOM:
         return True
+    # **Ein sicheres Nein ohne Rechteck.** Jede Seite des kleinsten Rechtecks ist
+    # die Ausdehnung der Projektion in einer Richtung, also höchstens ihr
+    # Durchmesser, und der höchstens die Diagonale des achsparallelen Rahmens
+    # in ``first``/``second``: Die Rechteckdiagonale bleibt unter √2 mal dieser
+    # Diagonale. Die Schranke mit 1,5 hält Abstand zu jeder Rundung, das Nein
+    # ist also dasselbe wie mit Rechteck (``kern.md``, sicheres Nein mit Abstand)
+    # — am Eiffelturm verneint sie alle fünf Rechteckfragen einer Erkennung,
+    # jede 0,18 s über 157 000 Ecken (RM-592).
+    span: tuple[float, float] = remembered(
+        "projected_span",
+        mesh.raw,
+        [],
+        lambda: _projected_span(vertices, extreme[0], first, second),
+        extra=direction.tobytes(),
+    )
+    if radius * 2.0 > _ACROSS_BOUND * math.hypot(*span) + EPS_GEOM:
+        return False
 
+    across: float = remembered(
+        "rectangle_across",
+        mesh.raw,
+        [],
+        lambda: _rectangle_across(vertices, extreme[0], first, second, float(distance.max())),
+        extra=direction.tobytes(),
+    )
+    return radius * 2.0 <= across + EPS_GEOM
+
+
+#: Wie weit die Rechteckdiagonale von :func:`_cylinder_fits` höchstens über der
+#: Diagonale des achsparallelen Rahmens der Projektion liegt — √2 mit Abstand.
+_ACROSS_BOUND: Final = 1.5
+
+
+def _projected_span(
+    vertices: np.ndarray, anchor: np.ndarray, first: np.ndarray, second: np.ndarray
+) -> tuple[float, float]:
+    """Breite und Höhe der quer projizierten Ecken entlang ``first`` und ``second``."""
+    relative = vertices - anchor
+    along_first = (relative * first).sum(axis=1)
+    along_second = (relative * second).sum(axis=1)
+    return (
+        float(along_first.max() - along_first.min()),
+        float(along_second.max() - along_second.min()),
+    )
+
+
+def _rectangle_across(
+    vertices: np.ndarray, anchor: np.ndarray, first: np.ndarray, second: np.ndarray, reach: float
+) -> float:
+    """Die Diagonale des kleinsten Rechtecks um die quer projizierte Hülle (:func:`_cylinder_fits`).
+
+    Gerechnet wie dort, damit die gemerkte Antwort je Achse dieselbe ist.
+    """
     from shapely import multipoints
 
-    relative = vertices - extreme[0]
+    relative = vertices - anchor
     flat = np.column_stack((relative @ first, relative @ second))
     # **GEOS setzt an entarteten Punktmengen Gleitkomma-Merker** — doppelte
     # oder auf einer Linie liegende Ecken, wie sie jeder Quader liefert. numpy
@@ -3255,8 +3962,8 @@ def cylinder_fits_in_the_body(mesh: MeshData, axis: Sequence[float], radius: flo
     else:
         across = float(rectangle.length)
     if not np.isfinite(across):
-        across = float(distance.max())
-    return radius * 2.0 <= across + EPS_GEOM
+        across = reach
+    return across
 
 
 #: Ein Dreieck, das mehr Ringkandidaten trägt, als die Karte Plätze hat.
@@ -3489,13 +4196,27 @@ def _merged_cylinders(
         radii[index] = fit.radius
         inward[index] = fit.inward
 
+    # **Dasselbe Paar einmal** (P5, RM-592): Die zweite Runde fragt jede
+    # Gruppe gegen jede spätere, bis sich nichts mehr ändert, und stellt
+    # dabei dieselben Paare immer wieder — am Eiffelturm 6 104 Fragen an 941
+    # verschiedene Paare. Die Antwort hängt nur an den zwei Fits und Flecken
+    # dieses Körpers; ein Treffer gibt eine Kopie der Flecken zurück.
+    asked: dict[tuple[Any, ...], tuple[CylinderFit, list[int]] | None] = {}
+
+    def join(
+        new: tuple[CylinderFit, list[int]], known: tuple[CylinderFit, list[int]]
+    ) -> tuple[CylinderFit, list[int]] | None:
+        key = (new[0], tuple(new[1]), known[0], tuple(known[1]))
+        if key not in asked:
+            asked[key] = _joined_cylinders(body, mesh, new, known, check_cancelled=check_cancelled)
+        answer = asked[key]
+        return None if answer is None else (answer[0], list(answer[1]))
+
     for fit, patch in found:
         if check_cancelled is not None:
             check_cancelled()
         for index in alike(fit, np.arange(len(merged))).tolist():
-            joined = _joined_cylinders(
-                body, mesh, (fit, patch), merged[index], check_cancelled=check_cancelled
-            )
+            joined = join((fit, patch), merged[index])
             if joined is not None:
                 merged[index] = joined
                 remember(index, joined[0])
@@ -3516,9 +4237,7 @@ def _merged_cylinders(
     return _joined_until_stable(
         merged,
         lambda index, later: alike(merged[index][0], later),
-        lambda new, known: _joined_cylinders(
-            body, mesh, new, known, check_cancelled=check_cancelled
-        ),
+        join,
         remember,
         check_cancelled,
     )
@@ -3661,8 +4380,28 @@ def _lies_on_the_cylinder(
     Zylinder, bezogen auf die Sehnenhöhe der Polygonnäherung dieses Flecks —
     und mit derselben Grenze (:data:`CYLINDER_SPREAD`). Eine Wand, die den
     Vertrag des Fits erfüllt, ohne dass er für sie gerechnet wurde, ist
-    dieselbe Wand.
+    dieselbe Wand. Einmal je Fleck und Fit (P5, RM-592): Die Zusammenlegung
+    fragt dasselbe Paar in jeder Runde wieder.
     """
+    result: bool = remembered(
+        "lies_on_the_cylinder",
+        body,
+        patch,
+        lambda: _lies_on_the_cylinder_read(body, fit, patch, check_cancelled=check_cancelled),
+        extra=fit,
+        check_cancelled=check_cancelled,
+    )
+    return result
+
+
+def _lies_on_the_cylinder_read(
+    body: trimesh.Trimesh,
+    fit: CylinderFit,
+    patch: list[int],
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
+    """Der Rumpf von :func:`_lies_on_the_cylinder`."""
     axis = np.asarray(fit.axis, dtype=float)
     points = np.asarray(body.vertices)[np.unique(np.asarray(body.faces)[patch])]
     relative = points - np.asarray(fit.centre, dtype=float)
@@ -4237,14 +4976,14 @@ def _sphere_is_recognisable_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Der Rumpf von :func:`_sphere_is_recognisable` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return False
     result: bool = _by_geometry(
         "_sphere_is_recognisable",
         body,
         support,
-        lambda: _sphere_is_recognisable_measured(body, fit, patch, support, check_cancelled),
+        lambda: _sphere_is_recognisable_measured(body, fit, patch, support.read(), check_cancelled),
         fit,
     )
     return result
@@ -5669,25 +6408,25 @@ def _facets_standing_apart_read(
     """Der Rumpf von :func:`_facets_standing_apart` — die Antwort merkt sich die Hülle."""
     if not facets or not len(body.face_adjacency):
         return set()
+    # Je Dreieck seine Facette und die ausgeschlossenen Facetten als Felder,
+    # nicht als Schleife und Menge (P5, RM-592): Facetten teilen kein Dreieck.
+    members, facet_of, sizes, touches_curved = _facet_table(facets, len(body.faces), curved)
     owner = np.full(len(body.faces), -1, dtype=np.int64)
-    for number, facet in enumerate(facets):
-        owner[np.asarray(facet, dtype=np.int64)] = number
+    owner[members] = facet_of
     pairs = np.asarray(body.face_adjacency, dtype=np.int64)
     angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
     first, second = owner[pairs[:, 0]], owner[pairs[:, 1]]
     boundary = first != second
     soft = boundary & ((angles < CURVATURE_LIMIT) | (first < 0) | (second < 0))
-    disqualified = {int(index) for index in first[soft]} | {int(index) for index in second[soft]}
-    disqualified.discard(-1)
+    disqualified = np.unique(np.concatenate((first[soft], second[soft])))
+    disqualified = disqualified[disqualified >= 0]
     counted = np.zeros(len(facets), dtype=np.int64)
     inner = first == second
     np.add.at(counted, first[inner & (first >= 0)], 2)
     np.add.at(counted, first[boundary & (first >= 0)], 1)
     np.add.at(counted, second[boundary & (second >= 0)], 1)
-    _members, _owner, sizes, touches_curved = _facet_table(facets, len(body.faces), curved)
     eligible = (counted == 3 * sizes) & ~touches_curved
-    if disqualified:
-        eligible[np.fromiter(disqualified, dtype=np.int64, count=len(disqualified))] = False
+    eligible[disqualified] = False
     apart: set[int] = set()
     for number in np.flatnonzero(eligible).tolist():
         if _a_sliver(body, [int(index) for index in facets[number]]):
@@ -6323,11 +7062,25 @@ def _large_facet_faces_read(
     ]
     # Der Mantelnachweis fragt je Fleck Kegel und Ring; welcher Lauf sicher
     # vergeblich wäre, sagt der Stapel vorher für alle (RM-209).
+    asked_patches = [patch for patch, asked in zip(patches, proven, strict=True) if asked]
+    if parallel.worthwhile(len(body.faces), len(asked_patches)):
+        # Die Mantelnachweise bei den Arbeitern (RM-637): Ihre Fits und Nachweise
+        # liegen danach im Gedächtnis, der Nachweis hier liest sie dort.
+        _asked_by_workers(
+            body,
+            "surfaces",
+            asked_patches,
+            [_fit_weight(patch) for patch in asked_patches],
+            set(),
+            check_cancelled,
+            proofs.part(0.0, AHEAD_SHARE),
+        )
+        proofs = proofs.part(AHEAD_SHARE, 1.0)
     screening = proofs.part(0.0, SCREEN_SHARE)
     proofs = proofs.part(SCREEN_SHARE, 1.0)
     with _screening(
         body,
-        [patch for patch, asked in zip(patches, proven, strict=True) if asked],
+        asked_patches,
         check_cancelled=check_cancelled,
         share=screening,
     ):
@@ -6886,7 +7639,7 @@ def _fit_cylinder_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> CylinderFit | None:
     """Der Rumpf von :func:`fit_cylinder` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return None
     tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
@@ -6894,7 +7647,7 @@ def _fit_cylinder_read(
         "fit_cylinder",
         body,
         support,
-        lambda: _fit_cylinder_measured(body, patch, support, tolerance, check_cancelled),
+        lambda: _fit_cylinder_measured(body, patch, support.read(), tolerance, check_cancelled),
         tolerance,
     )
     return result
@@ -7260,6 +8013,10 @@ class _SurfaceSupport(NamedTuple):
     directions: np.ndarray
     digest: bytes = b""
 
+    def read(self) -> _SurfaceSupport:
+        """Die Lesung selbst — sie ist es schon (Gegenstück zu :meth:`_SupportPrint.read`)."""
+        return self
+
 
 def _one_vertex_fan(
     points: np.ndarray,
@@ -7503,6 +8260,11 @@ SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
         "has_own_body",
         "moved_twin",
         "voids",
+        "patch_print",
+        "rectangle_across",
+        "projected_span",
+        "axial_span",
+        "lies_on_the_cylinder",
     }
 )
 
@@ -7792,6 +8554,44 @@ def remembered(
     return value
 
 
+#: Ab welchem Anteil der Dreiecke seines Körpers ein Fleck nichts über die
+#: Körpergrenze merkt (P5, RM-592). Ein so großer Fleck — die Haut einer
+#: Freiform ist oft einer — trifft fast jeder Schritt, und sein Abdruck kostete
+#: kalt am Spiderman und am Drachen rund ein Zehntel der Erkennung (A5). Ein
+#: Arbeitsstück, keine Toleranz: Ein Fleck darüber rechnet wie ohne Gedächtnis.
+#: Gilt erst ab :data:`REMEMBERED_PATCH_FACES` Dreiecken — ein kleiner Körper aus
+#: wenigen Flecken kostet keinen spürbaren Abdruck.
+REMEMBERED_PATCH_SHARE: Final = 0.25
+REMEMBERED_PATCH_FACES: Final = 50_000
+
+
+def _worth_remembering(body: trimesh.Trimesh, patch: Sequence[int]) -> bool:
+    """Ob sich ein Fleck über die Körpergrenze merken lohnt (:data:`REMEMBERED_PATCH_SHARE`)."""
+    return len(patch) <= REMEMBERED_PATCH_FACES or (
+        len(patch) <= REMEMBERED_PATCH_SHARE * len(body.faces)
+    )
+
+
+def _remembered_already(
+    name: str, body: trimesh.Trimesh, patch: Sequence[int], extra: Any = None
+) -> bool:
+    """Ob :func:`remembered` diese Frage an diesen Fleck schon beantwortet hat — ohne zu rechnen."""
+    with _MEMORY_LOCK:
+        memory = _MEMORIES.get(id(body))
+        if memory is None or memory.ref() is not body:
+            return False
+    owner = memory.lineage if name in SHARED_ANSWERS else None
+    key = (
+        memory.token if owner is None else owner.token,
+        _patch_digest(memory, patch),
+        extra,
+        ROUND_FIT_EVALUATIONS,
+    )
+    with _MEMORY_LOCK:
+        answers = _SUPPORT_CACHE.get(name)
+        return answers is not None and key in answers
+
+
 def _known_answer(name: str, body: trimesh.Trimesh) -> Any:
     """Die gemerkte Antwort auf eine Frage an den ganzen Körper — oder ``None``, ohne zu rechnen.
 
@@ -7855,6 +8655,15 @@ GEOMETRY_KEYED_ANSWERS: Final[frozenset[str]] = frozenset(
     }
 )
 
+#: Die Fragen, die über die Körpergrenze unter dem Fleckabdruck antworten
+#: (RM-592, :func:`_patch_print`): der Abdruck der Stützpunktlesung und die
+#: tangentiale Trennung. Was eine davon vom Körper liest, steht an ihrer Stelle
+#: (:func:`_support_handle`, :func:`_tangential_pieces`); ihre Antwort ist ein
+#: Abdruck oder Lagen im Fleck, nie eine Dreiecksnummer.
+PRINT_KEYED_ANSWERS: Final[frozenset[str]] = frozenset(
+    {"support_digest", "tangential_pieces", "classified"}
+)
+
 #: Die Antworten über die Körpergrenze, je Frage unter ihrem Inhaltsschlüssel.
 #: Dieselbe Grenze wie jede kleine Frage (:data:`CACHE_LIMIT_PER_QUESTION`),
 #: und dieselbe Lebensdauer wie :func:`remembered`: Eine Antwort gehört den
@@ -7869,7 +8678,7 @@ _GEOMETRY_HOLDERS: dict[tuple[str, bytes], int] = {}
 def _by_geometry(
     name: str,
     body: trimesh.Trimesh,
-    support: _SurfaceSupport,
+    support: _SurfaceSupport | _SupportPrint,
     compute: Callable[[], Any],
     *read: Any,
 ) -> Any:
@@ -7884,9 +8693,21 @@ def _by_geometry(
     Normale unterscheidet, sind zwei Fragen. Was :data:`GEOMETRY_KEYED_ANSWERS`
     für eine Frage verlangt, steht dort. Gerechnet wird außerhalb des
     Schlosses, wie in :func:`remembered`. ``body`` bestimmt nur, wer die
-    Antwort mithält (:attr:`_Lineage.geometric`).
+    Antwort mithält (:attr:`_Lineage.geometric`). ``support`` darf ein
+    Fleckabdruck sein (:class:`_SupportPrint`): Der Schlüssel braucht nur den
+    Abdruck der Lesung, die Rechnung liest sie erst, wenn sie rechnet.
     """
-    key = _geometry_key(support, *read)
+    if not _ACROSS_BODIES[0]:
+        return compute()
+    return _across(name, body, _geometry_key(support, *read), compute)
+
+
+def _across(name: str, body: trimesh.Trimesh, key: bytes, compute: Callable[[], Any]) -> Any:
+    """Die Ablage über die Körpergrenze unter einem fertigen Schlüssel (:func:`_by_geometry`).
+
+    Gerechnet wird außerhalb des Schlosses; ein Abbruch in ``compute`` legt
+    nichts ab. ``body`` hält die Antwort mit (:attr:`_Lineage.geometric`).
+    """
     with _MEMORY_LOCK:
         lineage = _memory_of(body).lineage
         answers = _BY_GEOMETRY.setdefault(name, OrderedDict())
@@ -7895,17 +8716,55 @@ def _by_geometry(
             _held_geometric(lineage, name, key)
             return answers[key]
     value = compute()
+    _keep_across(name, body, key, value)
+    return value
+
+
+def _keep_across(name: str, body: trimesh.Trimesh, key: bytes, value: Any) -> None:
+    """Eine fertige Antwort über die Körpergrenze ablegen, gehalten von ``body``."""
     with _MEMORY_LOCK:
+        lineage = _memory_of(body).lineage
         answers = _BY_GEOMETRY.setdefault(name, OrderedDict())
         answers[key] = value
         answers.move_to_end(key)
         _held_geometric(lineage, name, key)
         while len(answers) > CACHE_LIMIT_PER_QUESTION:
             answers.popitem(last=False)
-    return value
 
 
-def _geometry_key(support: _SurfaceSupport, *read: Any) -> bytes:
+def _known_across(name: str, body: trimesh.Trimesh, key: bytes) -> Any:
+    """Die abgelegte Antwort über die Körpergrenze — oder :data:`_UNKNOWN`, ohne zu rechnen."""
+    if not _ACROSS_BODIES[0]:
+        return _UNKNOWN
+    with _MEMORY_LOCK:
+        answers = _BY_GEOMETRY.get(name)
+        if answers is None or key not in answers:
+            return _UNKNOWN
+        answers.move_to_end(key)
+        _held_geometric(_memory_of(body).lineage, name, key)
+        return answers[key]
+
+
+#: Ob Fragen über die Körpergrenze antworten (RM-261, RM-592). Abschalten kann
+#: es nur der Testhaken :func:`remember_across_bodies` — für Messbank und Suite,
+#: kein Schalter für Kunden (Konzept §9.4).
+_ACROSS_BODIES: list[bool] = [True]
+
+
+def remember_across_bodies(enabled: bool) -> bool:
+    """Testhaken: das Gedächtnis über die Körpergrenze an- oder abschalten.
+
+    Abgeschaltet rechnet jede Frage an jedem Körper neu, wie die Vollerkennung
+    ohne Merker — die Gegenseite, gegen die Messbank und Suite Bit für Bit
+    vergleichen. Zurück kommt der vorige Zustand.
+    """
+    with _MEMORY_LOCK:
+        before = _ACROSS_BODIES[0]
+        _ACROSS_BODIES[0] = bool(enabled)
+    return before
+
+
+def _geometry_key(support: _SurfaceSupport | _SupportPrint, *read: Any) -> bytes:
     """Der Schlüssel von :func:`_by_geometry`: Lesung, was die Frage sonst liest, Löserbudgets."""
     return hashlib.blake2b(
         support.digest + _exact_bytes((read, ROUND_FIT_EVALUATIONS, FIT_SOLVER_POINTS)),
@@ -7913,8 +8772,10 @@ def _geometry_key(support: _SurfaceSupport, *read: Any) -> bytes:
     ).digest()
 
 
-def _answered_by_geometry(name: str, support: _SurfaceSupport, *read: Any) -> bool:
+def _answered_by_geometry(name: str, support: _SurfaceSupport | _SupportPrint, *read: Any) -> bool:
     """Ob :func:`_by_geometry` diese Frage an dieser Lesung schon beantwortet hat, ohne Rechnung."""
+    if not _ACROSS_BODIES[0]:
+        return False
     key = _geometry_key(support, *read)
     with _MEMORY_LOCK:
         answers = _BY_GEOMETRY.get(name)
@@ -7998,8 +8859,23 @@ def _surface_support(
     screened = _SCREENED.get()
     if screened is not None and screened.body is body:
         known = screened.supports.get(_patch_key(patch))
-        if known is not None:
+        if isinstance(known, _SurfaceSupport):
             return known
+    return _remembered_support(body, patch, check_cancelled)
+
+
+def _remembered_support(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> _SurfaceSupport | None:
+    """Die Lesung aus dem Merker des Körpers oder gerechnet — ohne den Stapel zu fragen.
+
+    :class:`_SupportPrint` liest hier: Der Stapel hält für denselben Fleck
+    womöglich genau diesen Abdruck, und ihn nach der Lesung zu fragen, fragte
+    den Abdruck nach sich selbst (am Stand von P2 ein ``RecursionError`` beim
+    Vereinigen, Messbank A1).
+    """
     support: _SurfaceSupport | None = remembered(
         "support",
         body,
@@ -8008,6 +8884,322 @@ def _surface_support(
         check_cancelled=check_cancelled,
     )
     return support
+
+
+class _SupportPrint:
+    """Eine Stützpunktlesung, von der nur ihr Abdruck feststeht (RM-592, Konzept §5.2, G1).
+
+    Hat ein früherer Körper denselben Fleck gelesen — derselbe Fleckabdruck
+    (:func:`_patch_print`) und dieselben Körperzahlen —, ist die Lesung Bit für
+    Bit dieselbe, also auch ihr Abdruck (``digest``). Der reicht als Schlüssel
+    jeder Frage über die Körpergrenze (:func:`_by_geometry`); die Felder liest
+    erst, wer wirklich rechnet (:meth:`read`), und dann einmal.
+    """
+
+    __slots__ = ("_body", "_check_cancelled", "_patch", "_support", "digest")
+
+    def __init__(
+        self,
+        body: trimesh.Trimesh,
+        patch: list[int],
+        digest: bytes,
+        check_cancelled: Callable[[], None] | None,
+    ) -> None:
+        self._body = body
+        self._patch = patch
+        self.digest = digest
+        self._check_cancelled = check_cancelled
+        self._support: _SurfaceSupport | None = None
+
+    def read(self) -> _SurfaceSupport:
+        """Die Lesung selbst — am selben Körper aus seinem Merker (:func:`_surface_support`)."""
+        if self._support is None:
+            support = _remembered_support(self._body, self._patch, self._check_cancelled)
+            if support is None:
+                from app.core.errors import InternalError
+
+                raise InternalError(detail="a remembered surface reading vanished")
+            self._support = support
+        return self._support
+
+
+#: Unter diesem Namen hält :func:`_across` je Fleckabdruck und Körperzahlen den
+#: Abdruck der Lesung — ``None``, wo die Lesung nichts ergab.
+_SUPPORT_DIGEST: Final = "support_digest"
+
+
+def _support_handle(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    check_cancelled: Callable[[], None] | None = None,
+) -> _SurfaceSupport | _SupportPrint | None:
+    """Die Lesung eines Flecks für eine Frage über die Körpergrenze — gelesen nur, wenn nötig.
+
+    Dieselbe Antwort wie :func:`_surface_support`, nur kann sie ein Abdruck
+    sein (:class:`_SupportPrint`): Kennt das Gedächtnis den Fleckabdruck samt
+    Körperzahlen schon, steht der Abdruck der Lesung fest, ohne sie zu rechnen —
+    am Spiderman die Hälfte der Erkennung nach einem Schritt. ``None`` heißt
+    wie dort: keine Lesung.
+
+    **Was die Lesung vom Körper liest** (:func:`_read_surface_support`): die
+    Ecken, Normalen und Flächen der Dreiecke des Flecks, welche Ecken dieselben
+    sind und ihre Folge, die Kantennachbarn im Fleck (:func:`_fan_arcs`), den
+    Ursprung je Dreieck (:func:`_face_count`), ob das Netz dicht und gleich
+    umlaufend ist und ob es deckungsgleiche Ecken trägt — und deren Rang folgt
+    allein den Koordinaten (:func:`vertex_rank`). Normalen und Flächen rechnet
+    trimesh aus den Ecken; der Abdruck trägt die Ecken. Das sind
+    :func:`_patch_print` und die drei Körperzahlen hier.
+    """
+    if check_cancelled is not None:
+        check_cancelled()
+    if _face_count(body, patch) < MIN_PATCH_FACES:
+        return None
+    screened = _SCREENED.get()
+    if screened is not None and screened.body is body:
+        known = screened.supports.get(_patch_key(patch))
+        if known is not None:
+            return known
+    if not _ACROSS_BODIES[0] or not _worth_remembering(body, patch):
+        return _surface_support(body, patch, check_cancelled)
+    key = hashlib.blake2b(
+        _patch_print(body, patch)
+        + _body_numbers(
+            closed=bool(body.is_watertight),
+            consistent=bool(body.is_winding_consistent),
+            coincident=_coincident_vertices(body),
+        ),
+        digest_size=16,
+    ).digest()
+    digest = _known_across(_SUPPORT_DIGEST, body, key)
+    if digest is None:
+        return None
+    if digest is not _UNKNOWN:
+        return _SupportPrint(body, patch, digest, check_cancelled)
+    support = _surface_support(body, patch, check_cancelled)
+    _keep_across(_SUPPORT_DIGEST, body, key, None if support is None else support.digest)
+    return support
+
+
+#: Die Teile des Fleckabdrucks (Konzept §5.2), je mit seinem Namen. Die
+#: Messbank lässt für ihre Gegenprobe einen davon weg (``folge.py --weglassen``).
+PATCH_PRINT_PARTS: Final = (
+    "corners",
+    "corner_numbers",
+    "ring",
+    "origin",
+    "normals",
+    "areas",
+    "angles",
+)
+
+#: Die Körperzahlen, die eine Frage liest und die der Aufrufer mitgibt (Konzept 5.2).
+BODY_NUMBERS: Final = ("closed", "consistent", "coincident", "diagonal")
+
+
+def _body_numbers(**numbers: Any) -> bytes:
+    """Körperzahlen für einen Schlüssel, Bit für Bit und mit ihrem Namen."""
+    return _exact_bytes(
+        tuple((name, numbers[name]) for name in sorted(numbers) if name not in _LEFT_OUT)
+    )
+
+
+def _patch_print(body: trimesh.Trimesh, patch: Sequence[int], *, seams: bool = False) -> bytes:
+    """Der Fleckabdruck (Konzept §5.2), einmal je Körper und Fleck gerechnet.
+
+    Ändert sich ein Dreieck im Fleck oder in seinem ersten Nachbarring, ändert
+    sich der Abdruck, und jede Frage an diesen Fleck rechnet. ``seams`` nimmt
+    die Winkel der inneren Nähte dazu (:func:`_tangential_pieces`).
+    """
+    printed: bytes = remembered(
+        "patch_print",
+        body,
+        patch,
+        lambda: _print_of(_patch_print_parts(body, patch, seams=seams)),
+        extra=seams,
+    )
+    return printed
+
+
+def _print_of(parts: Sequence[tuple[str, bytes]]) -> bytes:
+    """Die Teile eines Fleckabdrucks als sechzehn Bytes, jedes mit Namen und Länge."""
+    digest = hashlib.blake2b(digest_size=16)
+    for name, data in parts:
+        digest.update(name.encode("ascii"))
+        digest.update(len(data).to_bytes(8, "little"))
+        digest.update(data)
+    return digest.digest()
+
+
+def _patch_print_parts(
+    body: trimesh.Trimesh, patch: Sequence[int], *, seams: bool = False
+) -> list[tuple[str, bytes]]:
+    """Was eine Frage an einen Fleck vom Körper liest, als Bytes ohne Arithmetik.
+
+    1. ``corners``: die Ecken seiner Dreiecke in Fleckfolge und Eckenfolge;
+    2. ``corner_numbers``: welche Ecken dieselben sind, nummeriert in der Folge
+       ihrer Nummern im Körper (``np.unique``, wie die Lesung sie ordnet) —
+       darüber auch, welche Kanten zwei Dreiecke teilen und in welcher Folge
+       die Kanten des Flecks stehen (``face_adjacency`` ordnet nach Ecken);
+    3. ``ring``: je Dreieck seine Kantennachbarn — die Lage im Fleck, sonst
+       „außen“; eine Kante ohne Nachbarn (offen oder mit drei Dreiecken) trägt
+       keinen;
+    4. ``origin``: welche Dreiecke vor *Kanten verfeinern* eines waren;
+    5. ``normals`` und ``areas``: Normale und Inhalt jedes Dreiecks, wie der
+       Körper sie hält — eine starre Bewegung trägt beide vom Quellnetz mit
+       (``geom.transform._carry_cache``), sie folgen dann nicht Bit für Bit
+       den Ecken;
+    6. mit ``seams``: ``angles``, der Knickwinkel jeder Naht zu einem Nachbarn
+       im Fleck, in der Folge des Rings — ebenso mitgetragen.
+
+    Nicht darin steht die Folge der Dreiecksnummern: Lesung und Trennung lesen
+    den Fleck in seiner Folge und in der Ordnung des Körpers, nie nach Nummern
+    (:func:`_tangential_cylinders`, RM-210).
+    """
+    (parts,) = _patch_prints_parts(body, [patch], seams=seams)
+    return parts
+
+
+def _patch_prints(
+    body: trimesh.Trimesh, patches: Sequence[Sequence[int]], *, seams: bool = False
+) -> None:
+    """Die Fleckabdrücke vieler Flecken in einem Zug — abgelegt, wo :func:`_patch_print` liest.
+
+    Je Fleck einzeln gerechnet, kostete der Abdruck am Eiffelturm nach einer
+    Bohrung 1,1 s für 6 111 Flecken, mehr als die Lesungen, die er erspart:
+    ein Dutzend kleine numpy-Aufrufe je Fleck. Dieselben Bytes wie einzeln
+    (:func:`_patch_print_parts` ruft diese Rechnung mit einem Fleck).
+    """
+    if not _ACROSS_BODIES[0]:
+        return
+    # Was eine frühere Runde schon abgedrückt hat, nicht noch einmal (P5): Die
+    # Runden fragen dieselben ganzen Flecken mehrfach, und am Drachen kostete
+    # jeder Stapel kalt anderthalb Sekunden.
+    chosen = [
+        patch
+        for patch in patches
+        if len(patch)
+        and _worth_remembering(body, patch)
+        and not _remembered_already("patch_print", body, patch, seams)
+    ]
+    if not chosen:
+        return
+    for patch, parts in zip(chosen, _patch_prints_parts(body, chosen, seams=seams), strict=True):
+        remembered("patch_print", body, patch, _given(_print_of(parts)), extra=seams)
+
+
+def _given(value: bytes) -> Callable[[], bytes]:
+    """Eine schon gerechnete Antwort als Rechnung für :func:`remembered`."""
+    return lambda: value
+
+
+def _patch_prints_parts(
+    body: trimesh.Trimesh, patches: Sequence[Sequence[int]], *, seams: bool = False
+) -> list[list[tuple[str, bytes]]]:
+    """Die Teile der Fleckabdrücke (:func:`_patch_print_parts`) für viele Flecken zugleich.
+
+    Gerechnet über alle Flecken aneinandergehängt, je Fleck nur geschnitten:
+    welche Ecken dieselben sind und die Lage der Nachbarn im Fleck über einen
+    Schlüssel aus Fleck und Nummer, sortiert einmal für alle.
+    """
+    sizes = np.fromiter((len(patch) for patch in patches), dtype=np.int64, count=len(patches))
+    index = np.fromiter(
+        itertools.chain.from_iterable(patches), dtype=np.int64, count=int(sizes.sum())
+    )
+    starts = np.r_[0, np.cumsum(sizes)]
+    segment = np.repeat(np.arange(len(patches), dtype=np.int64), sizes)
+    position = np.arange(len(index), dtype=np.int64) - starts[segment]
+    faces = np.asarray(body.faces, dtype=np.int64)[index]
+    corners = np.asarray(body.vertices, dtype=np.float64)[faces]
+    # Welche Ecken dieselben sind, je Fleck in der Folge ihrer Nummern — der
+    # Schlüssel Fleck·Ecken+Ecke sortiert erst nach Fleck, dann nach Ecke.
+    vertex_count = max(len(body.vertices), 1)
+    corner_keys = np.repeat(segment, 3) * vertex_count + faces.ravel()
+    _distinct, corner_rank = np.unique(corner_keys, return_inverse=True)
+    corner_rank = np.asarray(corner_rank, dtype=np.int64).ravel()
+    first_rank = np.full(len(patches), np.iinfo(np.int64).max, dtype=np.int64)
+    np.minimum.at(first_rank, np.repeat(segment, 3), corner_rank)
+    local = corner_rank - np.repeat(first_rank[segment], 3)
+    normals = np.asarray(body.face_normals, dtype=np.float64)[index]
+    areas = np.asarray(body.area_faces, dtype=np.float64)[index]
+    neighbours, pair_rows = _neighbour_index(body)
+    ring_rows: np.ndarray | None = None
+    angle_rows: np.ndarray | None = None
+    widths = np.zeros(len(patches), dtype=np.int64)
+    if len(index) and neighbours.shape[1]:
+        face_count = max(len(body.faces), 1)
+        around = neighbours[index]
+        if len(index) * 8 >= face_count and (
+            int(np.bincount(index, minlength=face_count).max(initial=0)) <= 1
+        ):
+            # **Jedes Dreieck in höchstens einem Fleck** — der Regelfall: Dann
+            # sagt ein Feld über alle Dreiecke Fleck und Lage jedes Nachbarn,
+            # ohne Sortierung (P5, RM-592: am Drachen mit 2,3 Millionen
+            # Dreiecken 0,75 s je Stapel). Dieselben Lagen wie die Suche unten;
+            # für wenige Flecken bleibt die Suche billiger als Felder in Netzgröße.
+            owner = np.full(face_count, -1, dtype=np.int64)
+            owner[index] = segment
+            spot_of = np.zeros(face_count, dtype=np.int64)
+            spot_of[index] = position
+            safe = np.maximum(around, 0)
+            inside = (around >= 0) & (owner[safe] == segment[:, None])
+            place = np.where(inside, spot_of[safe], np.where(around >= 0, -1, -2))
+        else:
+            own_keys = segment * face_count + index
+            order = np.argsort(own_keys, kind="stable")
+            ranked = own_keys[order]
+            wanted = segment[:, None] * face_count + np.maximum(around, 0)
+            spot = np.minimum(np.searchsorted(ranked, wanted), len(ranked) - 1)
+            inside = (around >= 0) & (ranked[spot] == wanted)
+            place = np.where(inside, position[order[spot]], np.where(around >= 0, -1, -2))
+        ranking = np.argsort(-place, axis=1, kind="stable")
+        ring_rows = np.take_along_axis(place, ranking, axis=1)
+        counts = (ring_rows > -2).sum(axis=1)
+        widths = np.maximum.reduceat(counts, starts[:-1]) if len(counts) else widths
+        if seams:
+            angles = np.asarray(body.face_adjacency_angles, dtype=np.float64)[
+                np.maximum(pair_rows[index], 0)
+            ]
+            angle_rows = np.take_along_axis(np.where(inside, angles, 0.0), ranking, axis=1)
+    units = refined_units(body)
+    pattern: np.ndarray | None = None
+    if units is not None:
+        own_units = np.asarray(units, dtype=np.int64)[index]
+        kept = own_units >= 0
+        pattern = np.full(len(index), -1, dtype=np.int64)
+        if kept.any():
+            unit_count = int(own_units.max()) + 1
+            unit_keys = segment[kept] * unit_count + own_units[kept]
+            _units, unit_rank = np.unique(unit_keys, return_inverse=True)
+            unit_rank = np.asarray(unit_rank, dtype=np.int64).ravel()
+            first_unit = np.full(len(patches), np.iinfo(np.int64).max, dtype=np.int64)
+            np.minimum.at(first_unit, segment[kept], unit_rank)
+            pattern[kept] = unit_rank - first_unit[segment[kept]]
+    result: list[list[tuple[str, bytes]]] = []
+    for number in range(len(patches)):
+        low, high = int(starts[number]), int(starts[number + 1])
+        parts = [
+            ("corners", np.ascontiguousarray(corners[low:high]).tobytes()),
+            ("corner_numbers", np.ascontiguousarray(local[3 * low : 3 * high]).tobytes()),
+        ]
+        if ring_rows is not None and high > low:
+            width = int(widths[number])
+            parts.append(("ring", np.ascontiguousarray(ring_rows[low:high, :width]).tobytes()))
+            if angle_rows is not None:
+                parts.append(
+                    ("angles", np.ascontiguousarray(angle_rows[low:high, :width]).tobytes())
+                )
+        else:
+            parts.append(("ring", b""))
+        parts.append(("normals", np.ascontiguousarray(normals[low:high]).tobytes()))
+        parts.append(("areas", np.ascontiguousarray(areas[low:high]).tobytes()))
+        if pattern is not None:
+            parts.append(("origin", np.ascontiguousarray(pattern[low:high]).tobytes()))
+        result.append([(name, data) for name, data in parts if name not in _LEFT_OUT])
+    return result
+
+
+#: Die Teile, die die Gegenprobe der Messbank weglässt — im Betrieb immer leer.
+_LEFT_OUT: set[str] = set()
 
 
 def _coincident_vertices(body: trimesh.Trimesh) -> bool:
@@ -8520,12 +9712,13 @@ class _Screened:
     beim Kegel dazu die Linientoleranz), ``supports`` und ``shapes`` nach dem
     Abdruck der Dreiecksliste (:func:`_patch_key`) — für ``body`` und nur für
     ihn. Die Lesungen hält der Stapel ohnehin, solange die Runde läuft: Jeder
-    Plan trägt die seine.
+    Plan trägt die seine. Wo das Gedächtnis jede Frage an einen Fleck schon
+    beantwortet hat, steht statt der Lesung nur ihr Abdruck (:class:`_SupportPrint`).
     """
 
     body: trimesh.Trimesh
     fits: dict[tuple[Any, ...], tuple[Any, bool]]
-    supports: dict[bytes, _SurfaceSupport]
+    supports: dict[bytes, _SurfaceSupport | _SupportPrint]
     shapes: dict[bytes, tuple[Any, ...] | None]
 
 
@@ -8543,6 +9736,11 @@ def _patch_key(patch: Sequence[int]) -> bytes:
 #: Welcher Anteil einer Runde am Balken auf den Stapel entfällt. Gemessen am
 #: Meshy-Murmelbrett und an der Kumiko-Schale — nur fürs Anzeigen, keine Toleranz.
 SCREEN_SHARE: Final = 0.2
+
+#: Welcher Anteil einer Runde am Balken auf die Arbeiter entfällt, wenn sie
+#: vorrechnen (RM-637): Danach findet die Runde fast jede Antwort im
+#: Gedächtnis. Nur fürs Anzeigen.
+AHEAD_SHARE: Final = 0.8
 
 
 def _screened_fits(
@@ -8580,17 +9778,19 @@ def _screened_fits(
     planning = share.part(0.0, 0.5)
     solving = share.part(0.5, 1.0)
     entries: dict[tuple[Any, ...], tuple[Any, bool]] = {}
-    supports: dict[bytes, _SurfaceSupport] = {}
+    supports: dict[bytes, _SurfaceSupport | _SupportPrint] = {}
     rigid: dict[bytes, tuple[Any, ...] | None] = {}
     asked: list[tuple[tuple[Any, ...], refine.Problem]] = []
     seen = None if shapes is None else set(shapes)
     total_weight = sum(_fit_weight(patch) for patch in patches)
     planned = 0.0
+    # Die Abdrücke aller Flecken der Runde in einem Zug (:func:`_support_handle`).
+    _patch_prints(body, [patch for patch in patches if _face_count(body, patch) >= MIN_PATCH_FACES])
     for patch in patches:
         weight = _fit_weight(patch)
         if check_cancelled is not None:
             check_cancelled()
-        support = _surface_support(body, patch, check_cancelled)
+        support = _support_handle(body, patch, check_cancelled)
         if support is not None and seen is not None:
             # Die Klassifikation fragt zuerst den vollständigen Zylindernachweis.
             # Für einen belegten Zylinder wird daher auch kein konkurrierender
@@ -8619,13 +9819,13 @@ def _screened_fits(
                     seen.add(shape)
                 key: tuple[Any, ...] = ("fit_cone", support.digest, tolerance)
                 if key not in entries and not _answered_by_geometry("fit_cone", support, tolerance):
-                    cone = _cone_plan(support, tolerance, check_cancelled)
+                    cone = _cone_plan(support.read(), tolerance, check_cancelled)
                     entries[key] = (cone, False)
                     if cone is not None:
                         asked.append((key, cone.problem()))
             key = ("fit_torus", support.digest)
             if key not in entries and not _answered_by_geometry("fit_torus", support):
-                ring = _torus_plan(support)
+                ring = _torus_plan(support.read())
                 entries[key] = (ring, False)
                 if ring is not None:
                     asked.append((key, ring.problem()))
@@ -8710,7 +9910,7 @@ def _fit_cone_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> ConeFit | None:
     """Der Rumpf von :func:`fit_cone` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return None
     # Eine gerade Naht zweier Mantelfacetten ist nur dann eine zusätzliche
@@ -8721,7 +9921,7 @@ def _fit_cone_read(
         "fit_cone",
         body,
         support,
-        lambda: _fit_cone_measured(support, line_tolerance, check_cancelled),
+        lambda: _fit_cone_measured(support.read(), line_tolerance, check_cancelled),
         line_tolerance,
     )
     return result
@@ -9113,11 +10313,11 @@ def _fit_sphere_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> SphereFit | None:
     """Der Rumpf von :func:`fit_sphere` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return None
     result: SphereFit | None = _by_geometry(
-        "fit_sphere", body, support, lambda: _fit_sphere_measured(support, check_cancelled)
+        "fit_sphere", body, support, lambda: _fit_sphere_measured(support.read(), check_cancelled)
     )
     return result
 
@@ -9204,11 +10404,11 @@ def _fit_torus_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> TorusFit | None:
     """Der Rumpf von :func:`fit_torus` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return None
     result: TorusFit | None = _by_geometry(
-        "fit_torus", body, support, lambda: _fit_torus_measured(support, check_cancelled)
+        "fit_torus", body, support, lambda: _fit_torus_measured(support.read(), check_cancelled)
     )
     return result
 
@@ -9357,6 +10557,7 @@ def _torus_from_plan(
     mid = _tube_centres(centre, axis, local_centres, ring)
     agreement = np.einsum("ij,ij->i", support.normals, local_centres - mid)
     world_centre = origin + centre * scale
+    axis = _ring_axis(axis)
     return TorusFit(
         axis=(float(axis[0]), float(axis[1]), float(axis[2])),
         centre=(float(world_centre[0]), float(world_centre[1]), float(world_centre[2])),
@@ -9366,6 +10567,28 @@ def _torus_from_plan(
         recess=float(agreement @ support.areas) < 0.0,
         fit_error=float(np.abs(residual(fitted)).max()) * scale,
     )
+
+
+#: Wohin eine Ringachse zeigt (:func:`_ring_axis`), dieselbe Richtung wie am
+#: exakten Kern (``units.ring_axis``).
+_RING_AXIS_TOWARD: Final = RING_AXIS_TOWARD
+
+
+def _ring_axis(axis: np.ndarray) -> np.ndarray:
+    """Die Achse eines Torus in kanonischer Richtung — ein Ring hat kein Oben.
+
+    Die Einpassung gab das Vorzeichen zurück, das die letzten Stellen ergaben:
+    An ``torus_ring.stl`` kippte die Achse, wenn die Datei ihre Dreiecke
+    anders ordnete oder ihre Ecken im Umlauf verdrehte (RM-210, Messbank
+    Paket E). Gezeigt wird dorthin, wo das Skalarprodukt mit
+    :data:`_RING_AXIS_TOWARD` positiv ist.
+    """
+    toward = (
+        axis[0] * _RING_AXIS_TOWARD[0]
+        + axis[1] * _RING_AXIS_TOWARD[1]
+        + axis[2] * _RING_AXIS_TOWARD[2]
+    )
+    return -axis if float(toward) < 0.0 else axis
 
 
 def fit_torus_samples(
@@ -9423,6 +10646,7 @@ def fit_torus_samples(
     # beim Zylinder, nur um einen Ring herum gestellt.
     mid = _tube_centres(centre, axis, centres, ring_radius)
     towards = np.einsum("ij,ij->i", normals, centres - mid)
+    axis = _ring_axis(axis)
     return TorusFit(
         axis=(float(axis[0]), float(axis[1]), float(axis[2])),
         centre=(float(centre[0]), float(centre[1]), float(centre[2])),
@@ -9476,7 +10700,7 @@ def _torus_is_recognisable_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Der Rumpf von :func:`_torus_is_recognisable` — die Antwort merkt sich die Hülle."""
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return False
     weld = weld_tolerance(float(np.linalg.norm(body.extents)))
@@ -9484,7 +10708,9 @@ def _torus_is_recognisable_read(
         "_torus_is_recognisable",
         body,
         support,
-        lambda: _torus_is_recognisable_measured(body, fit, patch, support, weld, check_cancelled),
+        lambda: _torus_is_recognisable_measured(
+            body, fit, patch, support.read(), weld, check_cancelled
+        ),
         fit,
         weld,
     )
@@ -9622,7 +10848,7 @@ def _cone_is_recognisable_read(
     Ohne Lesung ist kein Kegel belegt (:func:`_cone_vertices_are_consistent`
     fragt sie zuletzt und sagt dann nein).
     """
-    support = _surface_support(body, patch, check_cancelled)
+    support = _support_handle(body, patch, check_cancelled)
     if support is None:
         return False
     tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
@@ -9794,7 +11020,23 @@ def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
 
 
 def _axial_span(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> tuple[float, float]:
-    """Von wo bis wo ein Fleck entlang einer Achse reicht."""
+    """Von wo bis wo ein Fleck entlang einer Achse reicht.
+
+    Einmal je Fleck und Achse (P5, RM-592): Die Zusammenlegung fragt dieselben
+    Flecken je Paar und Runde — am Eiffelturm 12 200 Mal für wenige hundert.
+    """
+    result: tuple[float, float] = remembered(
+        "axial_span",
+        body,
+        patch,
+        lambda: _axial_span_read(body, patch, axis),
+        extra=tuple(float(value) for value in axis),
+    )
+    return result
+
+
+def _axial_span_read(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> tuple[float, float]:
+    """Der Rumpf von :func:`_axial_span`."""
     points = np.asarray(body.vertices, dtype=float)[np.unique(np.asarray(body.faces)[patch])]
     along = points @ np.asarray(axis, dtype=float)
     return float(along.min()), float(along.max())
@@ -10585,20 +11827,28 @@ def facet_middles(
 
     Wo ein Dreieck allein steht — auf einer Kugel etwa —, ist die Flächenmitte
     sein Schwerpunkt, und es ändert sich nichts.
+
+    **Alle Facetten in einem Zug** (:mod:`grouped`, P5 RM-592): Je Facette eine
+    Schleifenrunde kostete am Eiffelturm eine Sekunde, am Drachen drei. Die
+    Summen bleiben Bit für Bit die der Facette allein, denn an ihrer letzten
+    Stelle hängen Radien und Trennungen.
     """
     middles = np.asarray(body.triangles_center, dtype=float).copy()
     areas = np.asarray(body.area_faces, dtype=float)
-    for number, facet in enumerate(body.facets):
-        # Je Facette eine Schleifenrunde, am Drachen 3 s am Stück: geprüft wird
-        # blockweise. Die Summe je Facette bleibt dieselbe — an ihrer letzten
-        # Stelle hängen Radien und Trennungen.
-        if check_cancelled is not None and number % FIT_SCAN_BLOCK == 0:
-            check_cancelled()
-        members = np.asarray(facet)
-        weight = areas[members].sum()
-        if weight <= EPS_GEOM:
-            continue
-        middles[members] = (middles[members] * areas[members][:, None]).sum(axis=0) / weight
+    facets = body.facets
+    if not len(facets):
+        return middles
+    if check_cancelled is not None:
+        check_cancelled()
+    sizes = np.fromiter((len(facet) for facet in facets), dtype=np.int64, count=len(facets))
+    members = np.concatenate([np.asarray(facet, dtype=np.int64) for facet in facets])
+    starts = np.concatenate(([0], np.cumsum(sizes)[:-1]))
+    own = areas[members]
+    weights = grouped.group_sums(own, starts, sizes)
+    sums = grouped.group_row_sums(middles[members] * own[:, None], starts, sizes)
+    kept = weights > EPS_GEOM
+    chosen = np.repeat(kept, sizes)
+    middles[members[chosen]] = np.repeat(sums[kept] / weights[kept][:, None], sizes[kept], axis=0)
     return middles
 
 
@@ -11096,6 +12346,143 @@ def _tangential_pieces(
     mesh: MeshData,
     patch: Sequence[int],
     check_cancelled: Callable[[], None] | None = None,
+    *,
+    ahead: Mapping[bytes, Any] | None = None,
+    done: Mapping[tuple[int, ...], list[list[int]]] | None = None,
+) -> list[list[int]]:
+    """Die tangentiale Trennung eines Ziels — auch aus dem Gedächtnis eines früheren Körpers.
+
+    **Gemerkt über die Körpergrenze** (RM-592, Konzept §5.4, G3): Nach einem
+    Schritt fragt die sechste Runde dieselben unberührten Ziele noch einmal —
+    am Eiffelturm 8,4 s der Erkennung. Geschlüsselt nach dem Fleckabdruck
+    (:func:`_patch_print`), der Körperdiagonale, aus der die Rechnung
+    Verschweißtoleranz und Größengrenze nimmt, und den Schwellen der Trennung
+    (:func:`_tangential_settings`). Die Stücke stehen als Lagen im Ziel, wie
+    der Aufrufer es reicht, nie als Dreiecksnummern.
+
+    Die Hülle des Körpers steht nicht im Schlüssel: Was die Rechnung
+    :func:`cylinder_fits_in_the_body` fragte, wird am neuen Körper noch einmal
+    gefragt, und nur wenn jede Antwort gleich ausfällt, gilt die gemerkte.
+    Liest die Rechnung über den Ring hinaus — schließt :func:`_without_notches`
+    eine Kerbe mit Dreiecken außerhalb —, wird nichts gemerkt.
+    """
+    if done:
+        # Ein Arbeiter hat dieses Ziel an einer Kopie desselben Körpers schon
+        # getrennt (RM-637, :func:`_pieces_ahead`): dieselbe Rechnung, dieselbe Antwort.
+        split = done.get(tuple(patch))
+        if split is not None:
+            parallel.count("used")
+            return [list(piece) for piece in split]
+    if (
+        not _ACROSS_BODIES[0]
+        or _face_count(body, patch) < 2 * MIN_PATCH_FACES
+        or not _worth_remembering(body, patch)
+    ):
+        # Ein kleines Ziel trennt :func:`_tangential_cylinders` gar nicht erst;
+        # sein Abdruck kostete mehr als die Antwort.
+        return _tangential_pieces_read(body, mesh, patch, check_cancelled)
+    extents = np.asarray(body.extents, dtype=float)
+    diagonal = math.sqrt(float((extents * extents).sum()))
+    key = hashlib.blake2b(
+        _patch_print(body, patch, seams=True)
+        + _body_numbers(diagonal=diagonal)
+        + _exact_bytes(_tangential_settings()),
+        digest_size=16,
+    ).digest()
+    given = np.asarray(list(patch), dtype=np.int64)
+    known = _known_across(_TANGENTIAL, body, key)
+    if known is _UNKNOWN and ahead:
+        # Vorab gerechnet von einem Arbeiter (RM-637, :func:`_pieces_ahead`).
+        known = ahead.get(key, _UNKNOWN)
+        if known is not _UNKNOWN:
+            _keep_across(_TANGENTIAL, body, key, known)
+            parallel.count("used")
+    if known is not _UNKNOWN:
+        places, asked = known
+        if "hull_query" in _LEFT_OUT or all(
+            _cylinder_fits(mesh, axis, radius) == answer for axis, radius, answer in asked
+        ):
+            return [given[place].tolist() for place in places]
+    questions: list[tuple[tuple[float, ...], float, bool]] = []
+    beyond: list[bool] = []
+    asking = _HULL_QUESTIONS.set(questions)
+    reading = _BEYOND.set(beyond)
+    try:
+        pieces = _tangential_pieces_read(body, mesh, patch, check_cancelled)
+    finally:
+        _HULL_QUESTIONS.reset(asking)
+        _BEYOND.reset(reading)
+    if beyond or len(np.unique(given)) != len(given):
+        return pieces
+    order = np.argsort(given, kind="stable")
+    ranked = given[order]
+    places = []
+    for piece in pieces:
+        wanted = np.asarray(piece, dtype=np.int64)
+        spot = np.minimum(np.searchsorted(ranked, wanted), len(ranked) - 1)
+        if not np.array_equal(ranked[spot], wanted):
+            # Ein Stück außerhalb des Ziels hat keine Lage im Fleck.
+            return pieces
+        places.append(order[spot].astype(np.int32))
+    _keep_across(_TANGENTIAL, body, key, (tuple(places), tuple(questions)))
+    return pieces
+
+
+#: Unter diesem Namen hält :func:`_across` die tangentialen Trennungen.
+_TANGENTIAL: Final = "tangential_pieces"
+
+#: Unter diesem Namen hält :func:`_across` den Ausgang von ``classify`` je Fleck
+#: (:func:`_fitted`, RM-592 G2).
+_CLASSIFIED: Final = "classified"
+
+
+def _classify_settings() -> tuple[Any, ...]:
+    """Die Schwellen, die ``classify`` liest — im Schlüssel, weil Tests sie drehen."""
+    return (
+        MIN_PATCH_FACES,
+        CONE_MIN_ANGLE,
+        ROUND_WALL_TOLERANCE,
+        ROUND_FIT_EVALUATIONS,
+        FIT_SOLVER_POINTS,
+        EPS_GEOM,
+        EPS_ANGLE,
+        MIN_ROUND_ARC,
+    )
+
+
+#: Ob eine Rechnung über die Körpergrenze über den ersten Nachbarring hinaus
+#: liest (:func:`_without_notches`) — dann merkt sie sich nichts.
+_BEYOND: ContextVar[list[bool] | None] = ContextVar("solidon_reads_beyond", default=None)
+
+
+def _tangential_settings() -> tuple[Any, ...]:
+    """Die Schwellen, die die tangentiale Trennung liest — im Schlüssel, weil Tests sie drehen."""
+    return (
+        MIN_PATCH_FACES,
+        MIN_ROUND_ARC,
+        UPRIGHT_TO_AXIS,
+        FLAT_ANGLE,
+        CURVATURE_LIMIT,
+        ROUND_WALL_TOLERANCE,
+        TANGENTIAL_MIN_LENGTH,
+        TANGENTIAL_FIRST_SEEDS,
+        TANGENTIAL_FUTILE_SEEDS,
+        EPS_GEOM,
+        EPS_ANGLE,
+        MIN_SURFACE_WIDTH,
+        MIN_CYLINDER_DIAMETER,
+        NOTCH_AT_MOST,
+        _SEED_REACH,
+        _SHARPEN_STEPS,
+        _SHARPEN_TILT,
+    )
+
+
+def _tangential_pieces_read(
+    body: trimesh.Trimesh,
+    mesh: MeshData,
+    patch: Sequence[int],
+    check_cancelled: Callable[[], None] | None = None,
 ) -> list[list[int]]:
     """Die Stücke eines tangentialen Verbunds aus Rundungen (RM-226) — oder nichts.
 
@@ -11121,6 +12508,11 @@ def _tangential_pieces(
     Schrift, 20 468 Dreiecke) 320 Flecken mit zusammen 3,3 s für keinen
     Zylinder.
     """
+    if _face_count(body, patch) < 2 * MIN_PATCH_FACES:
+        # Dieselbe Antwort wie unten (:func:`_tangential_cylinders` trennt so
+        # wenig nicht), ohne vorher das Prisma zu fragen — am Eiffelturm 2 800
+        # kleine Ziele je Erkennung (RM-592).
+        return []
     if _prism_axis(body, patch) is not None:
         return []
     cylinders = _tangential_cylinders(body, mesh, patch, check_cancelled)
@@ -11129,11 +12521,7 @@ def _tangential_pieces(
     taken = np.zeros(len(body.faces), dtype=bool)
     for piece in cylinders:
         taken[np.asarray(piece, dtype=np.intp)] = True
-    rest = [
-        int(index)
-        for index in np.unique(np.asarray(list(patch), dtype=np.intp))
-        if not taken[index]
-    ]
+    rest = [index for index in dict.fromkeys(int(index) for index in patch) if not taken[index]]
     remainder = _connected_patches(body, rest, check_cancelled) if rest else []
     return in_body_order(body, [*cylinders, *remainder])
 
@@ -11328,8 +12716,7 @@ def _tangential_cylinders(
     member[indices] = True
     # Die Nähte des Flecks über den Nachbarindex des Körpers, nicht über alle
     # Paare des Netzes: Ein Durchgang über ``face_adjacency`` je Fleck wäre bei
-    # vielen Flecken ein Ganznetz-Durchlauf je Fleck. Jede Naht einmal, von
-    # ihrem Dreieck mit der kleineren Nummer aus gesehen.
+    # vielen Flecken ein Ganznetz-Durchlauf je Fleck. Jede Naht einmal.
     neighbours, rows = _neighbour_index(body)
     if not neighbours.shape[1]:
         return []
@@ -11342,7 +12729,19 @@ def _tangential_cylinders(
     if not bends.any():
         return []
     bending = rows_of_seams[bends]
-    sides = np.column_stack((own[inner][bends], beside[inner][bends]))
+    # **Die Ordnung des Körpers, nicht die der Datei** (RM-210, RM-592): Keime,
+    # Bänder und Stücke folgen dem Platz ihrer Dreiecke in :func:`in_body_order`,
+    # und jede Naht wird von ihrem Dreieck mit dem kleineren Platz aus gesehen.
+    # Nach der Dreiecksnummer summierten die Kreise der Keime in anderer Folge,
+    # sobald die Datei anders ordnete — andere letzte Stellen an den Schwellen
+    # der Trennung, und ein Gedächtnis je Fleck müsste die Folge mitschlüsseln.
+    # Deckungsgleiche Dreiecke ordnet :func:`in_body_order` nach ihrer Folge im
+    # Fleck, nicht nach ihrer Nummer.
+    place = np.zeros(count, dtype=np.int64)
+    in_order = in_body_order(body, [list(dict.fromkeys(int(index) for index in patch))])[0]
+    place[np.asarray(in_order, dtype=np.intp)] = np.arange(len(in_order))
+    pairs = np.column_stack((own[inner][bends], beside[inner][bends]))
+    sides = np.where((place[pairs[:, 0]] > place[pairs[:, 1]])[:, None], pairs[:, ::-1], pairs)
     vertices = np.asarray(body.vertices, dtype=float)
     faces = np.asarray(body.faces, dtype=np.intp)
     normals = np.asarray(body.face_normals, dtype=float)
@@ -11364,6 +12763,10 @@ def _tangential_cylinders(
     seams = np.asarray(body.face_adjacency_edges, dtype=np.intp)[bending]
     along_seam = vertices[seams[:, 1]] - vertices[seams[:, 0]]
     seam_lengths = np.sqrt((along_seam * along_seam).sum(axis=1))
+    # Gleich lange Nähte in der Folge ihrer Kanten, und die folgt den
+    # Eckennummern — wie die Nummern gleich großer Flächen (:func:`_largest_first`)
+    # nicht der Dreiecksfolge und nicht der Lage, also keine Wahl nach der
+    # Ordnung des Körpers (``kern.md``).
     order = np.lexsort((bending, -seam_lengths))
     order = order[carries_a_band[order]]
     extents = np.asarray(body.extents, dtype=float)
@@ -11408,9 +12811,10 @@ def _tangential_cylinders(
                 break
             front = around[accept(around)]
             taken.append(front)
+        merged = np.concatenate(taken)
         # ``tolist`` gibt dieselben Python-Zahlen wie ``int`` je Eintrag, ohne
         # die Schleife über ein ganzes Band (RM-568).
-        found: list[int] = np.sort(np.concatenate(taken)).tolist()
+        found: list[int] = merged[np.argsort(place[merged], kind="stable")].tolist()
         return found
 
     def upright_to(axis: np.ndarray) -> Callable[[np.ndarray], np.ndarray]:
@@ -12566,7 +13970,27 @@ def _connected_patches(
         lambda: _connected_patches_read(body, faces, check_cancelled),
         check_cancelled=check_cancelled,
     )
+    beyond = _BEYOND.get()
+    if beyond is not None and getattr(result, "beyond", False):
+        beyond.append(True)
     return result
+
+
+class _Patches(list[list[int]]):
+    """Flecken, die wissen, ob ihre Bildung über die gegebenen Dreiecke hinaus las.
+
+    ``beyond``: :func:`_without_notches` hat an einem fransigen Rand nach
+    freien Dreiecken gesucht — auch solchen außerhalb. Eine Rechnung über die
+    Körpergrenze, die solche Flecken bildet, merkt sich nichts (:data:`_BEYOND`);
+    die Angabe reist mit der gemerkten Antwort, damit auch ein Treffer im
+    Merker des Körpers sie sagt.
+    """
+
+    __slots__ = ("beyond",)
+
+    def __init__(self, patches: Iterable[list[int]], beyond: bool) -> None:
+        super().__init__(patches)
+        self.beyond = beyond
 
 
 def _connected_patches_read(
@@ -12628,7 +14052,7 @@ def _connected_patches_read(
     if check_cancelled is not None:
         check_cancelled()
     if not len(adjacency):
-        return in_body_order(body, [[index] for index in faces])
+        return _Patches(in_body_order(body, [[index] for index in faces]), beyond=False)
     if local is not None:
         # Der Zusammenhang in eigener, aufsteigender Nummerierung: Die Suche
         # legt sonst einen Graphen über alle Dreiecke des Netzes an. Die
@@ -12645,10 +14069,11 @@ def _connected_patches_read(
         )
     if check_cancelled is not None:
         check_cancelled()
-    closed = _without_notches(body, [group.tolist() for group in groups])
+    looked: list[bool] = []
+    closed = _without_notches(body, [group.tolist() for group in groups], looked=looked)
     if check_cancelled is not None:
         check_cancelled()
-    return in_body_order(body, closed)
+    return _Patches(in_body_order(body, closed), beyond=bool(looked))
 
 
 def in_body_order(body: trimesh.Trimesh, groups: Sequence[Sequence[int]]) -> list[list[int]]:
@@ -12955,7 +14380,11 @@ NOTCH_AT_MOST: Final = 2
 
 
 def _without_notches(
-    body: trimesh.Trimesh, patches: list[list[int]], *, belongs: np.ndarray | None = None
+    body: trimesh.Trimesh,
+    patches: list[list[int]],
+    *,
+    belongs: np.ndarray | None = None,
+    looked: list[bool] | None = None,
 ) -> list[list[int]]:
     """Fransige Ränder schließen, solange die Menge dafür frei, klein und eindeutig ist.
 
@@ -12970,9 +14399,12 @@ def _without_notches(
     übergebenen Flecken; wer nur einen Fleck kennt (:func:`planar_facet`),
     reicht die Dreiecke aller Flecken als Maske herein.
     """
-    taken: set[int] = (
-        set() if belongs is not None else {index for patch in patches for index in patch}
-    )
+    # Belegt als Maske, nicht als Menge (P5, RM-592): Die Menge aller
+    # Dreiecke aller Flecken entstand je Aufruf neu — am Eiffelturm elfmal über
+    # 313 000 Dreiecke.
+    taken = np.zeros(len(body.faces), dtype=bool)
+    if belongs is None and patches:
+        taken[np.fromiter(itertools.chain.from_iterable(patches), dtype=np.int64)] = True
     healed: list[list[int]] = []
     for patch in patches:
         # **Nur Flecken, die überhaupt eingepasst werden** (Leistung, gemessen
@@ -12988,16 +14420,19 @@ def _without_notches(
         if rim is None or not rim.frayed:
             healed.append(patch)
             continue
+        if looked is not None:
+            # Gesucht wird auch außerhalb der gegebenen Dreiecke (RM-592).
+            looked.append(True)
         candidates = sorted(
             face
             for face in _candidates_at(body, patch, rim.frayed)
-            if face not in taken and (belongs is None or not belongs[face])
+            if not taken[face] and (belongs is None or not belongs[face])
         )
         closing = _closing_set(body, rim, candidates)
         if closing is None:
             healed.append(patch)
             continue
-        taken.update(closing)
+        taken[list(closing)] = True
         healed.append([*patch, *closing])
     return healed
 
@@ -13377,11 +14812,13 @@ def _face_roles(
     # Öffnung nach oben freie Sicht besteht. Eine seitlich versetzte Lippe
     # oder ein zweiter Körper belegt dagegen keine Innenlage.
     import shapely
-    from shapely.geometry import MultiPoint
 
-    # Dieselbe Normale, die :func:`_face_candidates` meldet.
+    # Dieselbe Normale wie das Merkmal (:func:`_face_candidates`): Die Suche
+    # unten findet die Fläche über ihre gerundete Normale, und aus trimeshs
+    # Kehrwert konnte die Rundung auf die andere Seite fallen als aus
+    # ``stable_normals``.
     stable = stable_normals(body)[0]
-    normals = np.asarray([stable[facet[0]] + 0.0 for facet, _a, _c in entries], dtype=float)
+    normals = stable[np.fromiter((facet[0] for facet, _a, _c in entries), dtype=np.int64)] + 0.0
     centres = np.asarray([centre for _f, _a, centre in entries], dtype=float)
     shell = _shell_of_each_face(body)
     entry_shells = np.asarray([shell[int(facet[0])] for facet, _a, _c in entries])
@@ -13398,25 +14835,58 @@ def _face_roles(
     basis_u = basis_u / np.linalg.norm(basis_u, axis=1)[:, None]
     basis_v = np.cross(normals, basis_u)
     # Je Kandidatenfläche ihre Kontur in der eigenen Ebene — einmal gebildet,
-    # für jede Fläche, die sie fragt.
-    outlines: dict[int, Any] = {}
+    # für jede Fläche, die sie fragt. Ein Feld statt eines Wörterbuchs: Der
+    # blockweise Weg unten fragte am Eiffelturm 375 000 Konturen einzeln ab.
+    #
+    # **Gebündelt wird nur, was keine Zahl ändert** (P5, RM-592): Die Ecken
+    # jeder Kontur rechnen wie bisher je Fläche (``corners @ basis``, eine
+    # BLAS-Zeile hängt an ihrer Lage im Feld); gebündelt sind die Geometrien
+    # (``shapely.multipoints`` statt ``MultiPoint`` je Kontur, am Eiffelturm
+    # 1,1 s Python-Hülle), die Fragen an den Baum und die Masken. Ein Punkt auf
+    # dem Rand einer Kontur ist an CAD-Netzen die Regel; eine andere letzte
+    # Stelle seiner Lage kippte dort am Eiffelturm drei Innenlagen.
+    outlines = np.full(len(entries), None, dtype=object)
 
-    def outline_of(other: int) -> Any:
-        if other not in outlines:
-            corners = vertices[np.unique(faces[entries[other][0]])] - centres[other]
-            footprint = MultiPoint(
-                np.column_stack((corners @ basis_u[other], corners @ basis_v[other]))
+    def hulls(points: list[np.ndarray]) -> np.ndarray:
+        """Konvexe Hüllen mehrerer Punktwolken in einem Zug — wie ``MultiPoint(p).convex_hull``."""
+        sizes = np.fromiter((len(cloud) for cloud in points), dtype=np.int64, count=len(points))
+        made = shapely.multipoints(
+            np.concatenate(points), indices=np.repeat(np.arange(len(points)), sizes)
+        )
+        return np.asarray(shapely.convex_hull(made), dtype=object)
+
+    def footprint(corners: np.ndarray, other: int) -> np.ndarray:
+        """Ecken, schon um die Mitte von ``other`` versetzt, in dessen Ebene."""
+        return np.column_stack((corners @ basis_u[other], corners @ basis_v[other]))
+
+    def outlines_of(others: np.ndarray) -> np.ndarray:
+        """Die Konturen dieser Kandidaten, fehlende in einem Zug gebildet."""
+        missing = np.unique(others[[outlines[int(other)] is None for other in others]])
+        if len(missing):
+            made = hulls(
+                [
+                    footprint(
+                        vertices[np.unique(faces[entries[int(other)][0]])] - centres[int(other)],
+                        int(other),
+                    )
+                    for other in missing
+                ]
             )
-            outlines[other] = footprint.convex_hull
-        return outlines[other]
+            for other, hull in zip(missing.tolist(), made, strict=True):
+                outlines[other] = hull
+        return np.asarray(outlines[others], dtype=object)
 
     def covers_face(feature: Feature, other: int) -> bool:
         """Ein Schriftzug über der Mitte umschließt nicht die ganze Außenwand."""
         corners = vertices[np.unique(faces[list(feature.face_indices)])] - centres[other]
-        footprint = MultiPoint(
-            np.column_stack((corners @ basis_u[other], corners @ basis_v[other]))
-        ).convex_hull
-        return bool(outline_of(other).covers(footprint))
+        outline = shapely.convex_hull(shapely.multipoints(footprint(corners, other)))
+        return bool(shapely.covers(outlines_of(np.asarray([other]))[0], outline))
+
+    def covers_faces(feature: Feature, others: np.ndarray) -> np.ndarray:
+        """:func:`covers_face` für mehrere Kandidaten — dieselben Ecken je Kandidat, ein Zug."""
+        points = vertices[np.unique(faces[list(feature.face_indices)])]
+        made = hulls([footprint(points - centres[int(other)], int(other)) for other in others])
+        return np.asarray(shapely.covers(outlines_of(others), made), dtype=bool)
 
     # **Gleichgerichtete Flächen fragen einen Baum, nicht jede Fläche jede.**
     # Ein Kreuzrändel mit 6 645 Rauten trägt 32 140 Wände in vier Richtungen;
@@ -13444,49 +14914,85 @@ def _face_roles(
             # Eine Basis für alle — die des ersten Mitglieds. Nahe der
             # Hilfsvektorgrenze wählten zwei fast gleiche Normalen sonst zwei
             # verschiedene Basen, und der Punkt läge in der falschen Kontur.
-            along, across = basis_u[members[0]], basis_v[members[0]]
-            hulls = []
-            for other in members:
-                corners = vertices[np.unique(faces[entries[int(other)][0]])]
-                hulls.append(
-                    MultiPoint(np.column_stack((corners @ along, corners @ across))).convex_hull
-                )
-            trees[key] = (shapely.STRtree(hulls), members)
+            axis = int(members[0])
+            made = hulls(
+                [
+                    footprint(vertices[np.unique(faces[entries[int(other)][0]])], axis)
+                    for other in members
+                ]
+            )
+            trees[key] = (shapely.STRtree(made), members)
         return trees[key]
 
     # Welche anderen Richtungen einer Richtung noch nahe genug sind — eine
     # Frage je Richtungspaar, nicht je Fläche: Vier Wandrichtungen und zwei
     # Deckel sind sechs, die Flächen sind 32 000.
     unit_normals = unique_keys / np.maximum(np.linalg.norm(unique_keys, axis=1), EPS_GEOM)[:, None]
-    near = (unit_normals @ unit_normals.T > PARALLEL_FACE_COSINE) & ~np.eye(
-        len(unique_keys), dtype=bool
-    )
-    roles: dict[FeatureId, bool] = {}
-    for feature in features:
+    cosines = unit_normals @ unit_normals.T
+    alone = ~np.eye(len(unique_keys), dtype=bool)
+    near = (cosines > PARALLEL_FACE_COSINE) & alone
+    # Der Vorrat des blockweisen Wegs, mit Abstand gezogen: Was nicht darin
+    # liegt, steht so weit ab, dass keine letzte Stelle es nahe genug bringt.
+    nearby = (cosines > PARALLEL_FACE_COSINE - PARALLEL_POOL_MARGIN) & alone
+    pools: dict[int, np.ndarray] = {}
+
+    def pool_of(key: int) -> np.ndarray:
+        if key not in pools:
+            pools[key] = np.flatnonzero(nearby[key][key_of])
+        return pools[key]
+
+    count = len(features)
+    feature_normals = [np.asarray(feature.params["normal"], dtype=float) for feature in features]
+    feature_centres = [np.asarray(feature.params["centre"], dtype=float) for feature in features]
+    own_shells = [shell[feature.face_indices[0]] for feature in features]
+    own_keys = [key_index.get(tuple(np.round(normal, 6).tolist())) for normal in feature_normals]
+    inner = [False] * count
+
+    # **Die Fragen an den Baum gebündelt**: je Richtung alle Flächenmitten in
+    # einer Anfrage. Gerechnet wird die Lage jeder Mitte wie bisher je Fläche;
+    # Schale, Lage und ``covers_face`` fragen je Treffer bis zum ersten, der
+    # trägt — dieselbe Antwort, denn sie ist ein „gibt es“.
+    by_key: dict[int, list[int]] = {}
+    for number, own_key in enumerate(own_keys):
+        if own_key is not None:
+            by_key.setdefault(own_key, []).append(number)
+    for key, asking in by_key.items():
         if check_cancelled is not None:
             check_cancelled()
-        normal = np.asarray(feature.params["normal"], dtype=float)
-        centre = np.asarray(feature.params["centre"], dtype=float)
-        own_shell = shell[feature.face_indices[0]]
-        inner = False
-        own_key = key_index.get(tuple(np.round(normal, 6).tolist()))
-        if own_key is not None:
-            tree, members = tree_of(own_key)
-            axis = members[0]
-            flat = [[float(centre @ basis_u[axis]), float(centre @ basis_v[axis])]]
-            point = shapely.points(flat)[0]
-            # ``covered_by``: der Punkt, den eine Kontur des Baums deckt — das
-            # Prädikat gilt vom Anfragepunkt aus, nicht von der Kontur.
-            for other in members[tree.query(point, predicate="covered_by")]:
-                if (
-                    entry_shells[other] == own_shell
-                    and float((centres[other] - centre) @ normal) > EPS_GEOM
-                    and covers_face(feature, int(other))
-                    and (eligible is None or eligible(entries[int(other)][0]))
-                ):
-                    inner = True
-                    break
-        if inner:
+        tree, members = tree_of(key)
+        axis = int(members[0])
+        flat = np.asarray(
+            [
+                [
+                    float(feature_centres[number] @ basis_u[axis]),
+                    float(feature_centres[number] @ basis_v[axis]),
+                ]
+                for number in asking
+            ],
+            dtype=float,
+        )
+        # ``covered_by``: der Punkt, den eine Kontur des Baums deckt — das
+        # Prädikat gilt vom Anfragepunkt aus, nicht von der Kontur.
+        which, hit = tree.query(shapely.points(flat), predicate="covered_by")
+        for position, other in zip(which.tolist(), members[hit].tolist(), strict=True):
+            number = asking[position]
+            if inner[number]:
+                continue
+            centre, normal = feature_centres[number], feature_normals[number]
+            if (
+                entry_shells[other] == own_shells[number]
+                and float((centres[other] - centre) @ normal) > EPS_GEOM
+                and covers_face(features[number], other)
+                and (eligible is None or eligible(entries[other][0]))
+            ):
+                inner[number] = True
+
+    roles: dict[FeatureId, bool] = {}
+    for number, feature in enumerate(features):
+        if check_cancelled is not None:
+            check_cancelled()
+        own_key = own_keys[number]
+        if inner[number]:
             roles[feature.id] = True
             continue
         if own_key is not None and not near[own_key].any():
@@ -13494,15 +15000,24 @@ def _face_roles(
             # und keine Maske über alle Flächen für eine leere Antwort.
             roles[feature.id] = False
             continue
-        same_shell = entry_shells == own_shell
-        above = (centres - centre) @ normal > EPS_GEOM
-        alike = normals @ normal > PARALLEL_FACE_COSINE
-        candidates = np.flatnonzero(same_shell & alike & above & (key_of != own_key))
+        normal, centre = feature_normals[number], feature_centres[number]
+        candidates = _parallel_candidates(
+            normals,
+            centres,
+            entry_shells,
+            key_of,
+            normal,
+            centre,
+            own_shells[number],
+            own_key,
+            None if own_key is None else pool_of(own_key),
+        )
         # **Blockweise, nicht ein Punkt und ein ``covers`` je Kandidat** —
         # und wie bisher nur bis zum ersten Treffer: Am Kumiko-Gitter mit
         # 7 295 Flächen hat jede Fläche rund 200 parallele Kandidaten, und
         # ein Punkt je Kandidat kostete 5,5 s im Hauptweg der
         # Flächenerkennung (gemessen am 21.09.2026).
+        found = False
         for start in range(0, len(candidates), FACE_ROLE_BLOCK):
             block = candidates[start : start + FACE_ROLE_BLOCK]
             offsets = centre - centres[block]
@@ -13512,19 +15027,64 @@ def _face_roles(
                     np.einsum("ij,ij->i", offsets, basis_v[block]),
                 )
             )
-            covered = shapely.covers(
-                np.asarray([outline_of(int(other)) for other in block], dtype=object),
-                shapely.points(coordinates),
-            )
-            if any(
-                covers_face(feature, int(other))
-                and (eligible is None or eligible(entries[int(other)][0]))
-                for other in block[np.asarray(covered, dtype=bool)]
-            ):
-                inner = True
+            covered = shapely.covers(outlines_of(block), shapely.points(coordinates))
+            hits = block[np.asarray(covered, dtype=bool)]
+            if eligible is None and len(hits) > 1:
+                # Alle Treffer eines Blocks in einem Zug: dieselben Konturen,
+                # dieselbe Frage, ein „gibt es“ über alle.
+                found = bool(covers_faces(feature, hits).any())
+            else:
+                found = any(
+                    covers_face(feature, int(other))
+                    and (eligible is None or eligible(entries[int(other)][0]))
+                    for other in hits
+                )
+            if found:
                 break
-        roles[feature.id] = inner
+        roles[feature.id] = found
     return roles
+
+
+def _parallel_candidates(
+    normals: np.ndarray,
+    centres: np.ndarray,
+    entry_shells: np.ndarray,
+    key_of: np.ndarray,
+    normal: np.ndarray,
+    centre: np.ndarray,
+    own_shell: Any,
+    own_key: int | None,
+    pool: np.ndarray | None,
+) -> np.ndarray:
+    """Die fast gleichgerichteten Flächen derselben Schale über ``centre`` — wie über alle gefragt.
+
+    Die Masken liefen je Fläche über alle Facetten des Körpers (``normals @
+    normal``), am Eiffelturm 4 600 Mal über 6 000. Gefragt wird jetzt der
+    Vorrat der nahen Richtungen (``pool``), Zeile für Zeile ohne BLAS — und
+    wo ein Wert näher als :data:`PARALLEL_POOL_GUARD` an einer Schwelle liegt,
+    entscheidet die Rechnung von früher über alle Facetten. Dort könnte die
+    letzte Stelle der BLAS-Zeile anders ausfallen; sonst nirgends, denn die
+    Rundungsfehler eines Skalarprodukts dreier Zahlen liegen Größenordnungen
+    darunter. Dieselben Kandidaten in derselben Folge.
+    """
+    if pool is not None:
+        cosine = row_dots(normals[pool], np.broadcast_to(normal, (len(pool), 3)))
+        height = row_dots(centres[pool] - centre, np.broadcast_to(normal, (len(pool), 3)))
+        if not (
+            bool((np.abs(cosine - PARALLEL_FACE_COSINE) <= PARALLEL_POOL_GUARD).any())
+            or bool((np.abs(height - EPS_GEOM) <= PARALLEL_POOL_GUARD).any())
+        ):
+            chosen: np.ndarray = pool[
+                (entry_shells[pool] == own_shell)
+                & (cosine > PARALLEL_FACE_COSINE)
+                & (height > EPS_GEOM)
+                & (key_of[pool] != own_key)
+            ]
+            return chosen
+    same_shell = entry_shells == own_shell
+    above = (centres - centre) @ normal > EPS_GEOM
+    alike = normals @ normal > PARALLEL_FACE_COSINE
+    return np.flatnonzero(same_shell & alike & above & (key_of != own_key))
 
 
 def detect_curved_faces(

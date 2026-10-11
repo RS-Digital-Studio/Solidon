@@ -89,6 +89,10 @@ Nutzen da und sonst nichts.
 - Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
+- Nach einer Bohrung oder einem versetzten Merkmal sind die Merkmale eines großen technischen Teils rund ein Drittel schneller wieder erkannt.
+- Ein Modell, das Sie gleich nach dem Programmstart öffnen, ist bis zu ein Viertel schneller bearbeitbar.
+- Läuft nebenher ein Slicer, ein Spiel oder ein Rendering, kommen Rechnungen an großen Modellen in Sekunden statt in Minuten zurück.
+- Ein gespeichertes Projekt mit einem großen Modell ist nach einem Neustart in ein, zwei Sekunden offen statt nach einer halben Minute: Die erkannten Merkmale bleiben gemerkt.
 
 ### Drucken und Übergabe an den Slicer
 
