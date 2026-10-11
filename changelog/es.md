@@ -37,7 +37,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la pestaña *Selección*, el campo de filamento solo asigna con un clic o Intro. Las flechas y la escritura solo recorren la lista, y la rueda del ratón desplaza la pestaña.
 - En español, francés, italiano y portugués, *Filamento nuevo* ya no se desplaza de lado cuando la ventana es más baja que su contenido.
 - Mientras recalcula, el informe de comprobación dice *Recalculando …* y muestra las líneas anteriores como estado previo. Antes, los errores viejos parecían seguir vigentes.
-- Tras leer un modelo, a la derecha queda delante el informe de comprobación. Hasta ahora pasaba delante la pestaña *Selección* aunque no hubiera nada seleccionado.
+- Tras leer un modelo, a la derecha queda delante el informe de comprobación. En la versión 0.5.3 pasaba delante la pestaña *Selección* aunque no hubiera nada seleccionado.
 - Si el cálculo rápido falla en un paso, Solidon lo calcula a fondo en la misma pasada en lugar de detenerse.
 - Un hallazgo que dice que un paso no tuvo efecto abre ese paso en el campo correspondiente.
 - Al quitar un cuerpo, el informe deja de hablar de él, y el historial muestra qué pasos ya no dejan nada.
@@ -60,7 +60,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Cada cota de un bloque se puede vincular con fx a una cota del proyecto, aunque todavía no tenga ninguna expresión.
 - Tras arrastrar el tirador de una vista previa, ya no queda ningún número sobre la vista. Un número tecleado al arrastrar mueve la vista previa, no el cuerpo elegido.
 - Tras *Reparar y volver a intentarlo* y caminos parecidos, el historial ya no llama «eliminado» a un paso que sigue calculando. Si la cadena vuelve a parar, el paso queda marcado.
-- Si pulsa *Aplicar* mientras Solidon aún calcula, el paso se crea en cuanto termina el cálculo, y la barra de estado lo indica. Hasta ahora el clic se perdía.
+- Si pulsa *Aplicar* mientras Solidon aún calcula, el paso se crea en cuanto termina el cálculo, y la barra de estado lo indica. En la versión 0.5.3 el clic se perdía.
 - En el catálogo de bloques, *Gestionar bloques* aparece abierto mientras aún no haya ningún bloque propio.
 - Los pasos que otro programa crea mediante el control remoto aparecen en el historial como «Control remoto» en lugar de «Agente».
 - En el Mac, *Cancelar* detiene al instante una respuesta en curso del modelo local.
@@ -79,7 +79,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Exportar a 3MF es bastante más rápido y solo vuelve a leer los perfiles del slicer si algo cambió allí.
 - El diálogo de impresión asigna los perfiles del slicer mucho más rápido, al abrirse y tras cada cambio de slicer.
 - Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
-- Los contornos grandes de muchas líneas, como un contorno de cara adoptado, se editan en el editor de bocetos sin esperas.
+- Los contornos grandes de muchas líneas, como un contorno de cara adoptado, se editan mucho más rápido en el editor de bocetos.
 - En modelos con miles de características, mover y otros pasos que no cambian la forma terminan hasta el doble de rápido.
 - Tras un taladro o una característica desplazada, las características de una pieza técnica grande se reconocen alrededor de un tercio más rápido.
 - Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
@@ -171,7 +171,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si la cara cambia con el diálogo de un bloque abierto, el sitio elegido se mantiene mientras siga valiendo en la nueva forma. Si no, el bloque busca uno nuevo y lo indica.
 - Un diálogo de bloque que se abre mientras el paso anterior aún calcula coloca el bloque por sí solo en cuanto llega el resultado, y hasta entonces no se puede aplicar.
 - Si al añadir un archivo de bloque ya hay en el catálogo un bloque con ese nombre, Solidon pregunta si el nuevo se añade como entrada propia. La versión 0.5.3 mostraba un mensaje de error.
-- En el ejemplo *Bloques — tuercas, insertos, cables*, el cable entra desde abajo por el fondo, y el alivio de tensión queda dentro de la carcasa. Hasta ahora colgaba bajo la placa de impresión.
+- En el ejemplo *Bloques — tuercas, insertos, cables*, el cable entra desde abajo por el fondo, y el alivio de tensión queda dentro de la carcasa. En la versión 0.5.3 colgaba bajo la placa de impresión.
 
 ### Editar y dibujar
 
@@ -184,14 +184,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un boceto con muchas formas separadas se resuelve rápido, incluso con cientos de rectángulos o círculos acotados.
 - Si *Curvatura continua* no puede cumplirse al dibujar, el editor de bocetos lo indica en segundos y no en minutos.
 - Si dos restricciones se contradicen, el editor de bocetos nombra ambas en lugar de reducir una línea o un círculo a un punto.
-- Un trazo de líneas en el boceto termina en cuanto cierra un bucle. Hasta ahora quedaba un tramo nuevo en el puntero, y el primer Esc parecía no hacer nada.
-- Una longitud tecleada con la herramienta Línea crea exactamente una línea. Hasta ahora, al salir del campo de cota se añadía una segunda, de vuelta hacia el puntero.
+- Un trazo de líneas en el boceto termina en cuanto cierra un bucle. En la versión 0.5.3 quedaba un tramo nuevo en el puntero, y el primer Esc parecía no hacer nada.
+- Una longitud tecleada con la herramienta Línea crea exactamente una línea. En la versión 0.5.3, al salir del campo de cota se añadía una segunda, de vuelta hacia el puntero.
 - En el editor de bocetos, *Desplazar* lleva un contorno cerrado y cada lado hacia fuera con distancia positiva y une las esquinas, en cualquier sentido. La versión 0.5.3 solía ponerlos dentro.
 - Los arcos también se desplazan ahora con *Desplazar*, alrededor del mismo centro: una ranura conserva sus extremos redondos y un redondeo su forma.
 - Tras cambiar una cota, *Recortar*, *Prolongar*, *Desplazar* y *Reflejar* actúan sobre la posición visible. La versión 0.5.3 usaba el estado dibujado antes.
-- Un clic que el ajuste a la cuadrícula coloca justo sobre un punto existente engancha ese punto. Hasta ahora el contorno parecía cerrado sin estar unido.
-- Un doble clic con la herramienta Línea termina el trazo de líneas. Hasta ahora creaba una línea de longitud cero.
-- Intro en el campo de cota del diálogo *Dibujar un boceto* fija la cota y deja el diálogo abierto. Hasta ahora aplicaba el dibujo y lo cerraba.
+- Un clic que el ajuste a la cuadrícula coloca justo sobre un punto existente engancha ese punto. En la versión 0.5.3 el contorno parecía cerrado sin estar unido.
+- Un doble clic con la herramienta Línea termina el trazo de líneas. En la versión 0.5.3 creaba una línea de longitud cero.
+- Intro en el campo de cota del diálogo *Dibujar un boceto* fija la cota y deja el diálogo abierto. En la versión 0.5.3 aplicaba el dibujo y lo cerraba.
 - Un cuerpo se levanta con tres clics: *Dibujar* en la barra superior (Ctrl+Mayús+E), luego esquina, esquina opuesta, altura. Hacia fuera se une, hacia dentro recorta.
 - Al levantar se pueden escribir las medidas. Un doble clic en el paso abre sus medidas, y en *Tipo* se convierte en un sólido de revolución o un patrón de orificios sin volver a dibujar.
 - Desde el editor de bocetos, *Terminado* vuelve a la vista y el siguiente clic pone la altura. Escape aparta el contorno, Ctrl+Z lo recupera.
@@ -216,7 +216,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al dividir en piezas sueltas se conserva cada pieza imprimible, también pasadores y arandelas junto a una placa grande. Solo caen superficies abiertas pequeñas y migas que la impresora no reproduce.
 - Un relieve solo se calcula cuando hay una imagen elegida. Hasta entonces el diálogo señala el botón *Elegir una imagen …*.
 - El diálogo *Aplicar textura* se abre con una zona de patrón que cabe en la cara elegida y un paso que su boquilla imprime. Si una zona sobresale del borde, el diálogo lo dice y cómo arreglarlo.
-- En el diálogo, el patrón de textura y las aberturas hexagonales de *Cortar patrón de orificios* se llaman ahora *Panal*, como en el manual. Antes ponía Hexágono.
+- El patrón de textura hexagonal se llama ahora *Panal* en el diálogo, como en el manual. La versión 0.5.3 lo llamaba Hexágono.
 - Los diálogos *Cargar STEP* y *Extruir un dibujo* solo ofrecen archivos que pueden leer. Si el proyecto no tiene ninguno, señalan el botón *Elegir un archivo …*.
 
 ### Generar con IA

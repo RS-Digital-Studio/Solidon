@@ -36,7 +36,7 @@ scrive in `website/version.json`.
 - Nella linguetta *Selezione*, il campo del filamento assegna solo con un clic o Invio. Le frecce e la digitazione scorrono soltanto l'elenco, e la rotellina scorre la linguetta.
 - In spagnolo, francese, italiano e portoghese, *Nuovo filamento* non scorre più di lato quando la finestra è più bassa del suo contenuto.
 - Durante il ricalcolo, il rapporto di verifica dice *Ricalcolo in corso …* e mostra le righe di prima come stato precedente. Finora i vecchi errori sembravano ancora validi.
-- Dopo aver letto un modello, a destra resta in primo piano il rapporto di verifica. Finora passava davanti la linguetta *Selezione* anche se non era selezionato nulla.
+- Dopo aver letto un modello, a destra resta in primo piano il rapporto di verifica. Nella versione 0.5.3 passava davanti la linguetta *Selezione* anche se non era selezionato nulla.
 - Se il calcolo rapido fallisce in un passaggio, Solidon lo ricalcola a fondo nella stessa esecuzione invece di fermarsi.
 - Un rilievo che dice che un passaggio non ha avuto effetto apre quel passaggio sul campo giusto.
 - Dopo la rimozione di un corpo, il rapporto non ne parla più, e la cronologia mostra quali passaggi non lasciano più nulla.
@@ -59,7 +59,7 @@ scrive in `website/version.json`.
 - Ogni quota di un blocco si può legare con fx a una quota del progetto, anche se non contiene ancora un'espressione.
 - Dopo aver trascinato la maniglia di un'anteprima, nessun numero resta sopra la vista. Un numero digitato durante il trascinamento sposta l'anteprima, non il corpo scelto.
 - Dopo *Ripara e riprova* e percorsi simili, la cronologia non chiama più «eliminato» un passaggio che continua a calcolare. Se la catena si ferma di nuovo, il passaggio è segnato.
-- Se fai clic su *Applica* mentre Solidon sta ancora calcolando, il passaggio nasce appena il calcolo è finito, e la barra di stato lo dice. Finora il clic andava perso.
+- Se fai clic su *Applica* mentre Solidon sta ancora calcolando, il passaggio nasce appena il calcolo è finito, e la barra di stato lo dice. Nella versione 0.5.3 il clic andava perso.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
 - I passaggi che un altro programma crea con il controllo remoto compaiono nella cronologia come «Controllo remoto» invece di «Agente».
 - Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
@@ -78,7 +78,7 @@ scrive in `website/version.json`.
 - L’esportazione in 3MF è molto più veloce e rilegge i profili dello slicer solo se lì è cambiato qualcosa.
 - La finestra di stampa assegna i profili dello slicer molto più in fretta, all'apertura e dopo ogni cambio di slicer.
 - Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
-- I contorni grandi fatti di molte linee, come un contorno della faccia ripreso, si modificano nell'editor di schizzi senza attese.
+- I contorni grandi fatti di molte linee, come un contorno della faccia ripreso, si modificano molto più in fretta nell'editor di schizzi.
 - Sui modelli con migliaia di caratteristiche, lo spostamento e gli altri passaggi che non cambiano la forma finiscono fino a due volte più in fretta.
 - Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo tecnico grande vengono riconosciute circa un terzo più velocemente.
 - Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
@@ -170,7 +170,7 @@ scrive in `website/version.json`.
 - Se la faccia cambia mentre la finestra di un blocco è aperta, il punto scelto resta finché vale ancora sulla nuova forma. Altrimenti il blocco ne cerca uno nuovo e lo segnala.
 - Una finestra di blocco aperta mentre il passo precedente sta ancora calcolando posiziona il blocco da sola appena arriva il risultato, e fino ad allora non si può applicare.
 - Se aggiungendo un file di blocco nel catalogo c'è già un blocco con quel nome, Solidon chiede se il nuovo va aggiunto come voce a sé. La versione 0.5.3 mostrava un messaggio di errore.
-- Nell'esempio *Blocchi — dadi, inserti, cavi* il cavo entra dal basso attraverso il fondo, e lo scarico di trazione sta dentro il contenitore. Finora pendeva sotto il piano di stampa.
+- Nell'esempio *Blocchi — dadi, inserti, cavi* il cavo entra dal basso attraverso il fondo, e lo scarico di trazione sta dentro il contenitore. Nella versione 0.5.3 pendeva sotto il piano di stampa.
 
 ### Modificare e disegnare
 
@@ -183,14 +183,14 @@ scrive in `website/version.json`.
 - Uno schizzo con molte forme separate si risolve rapidamente, anche con centinaia di rettangoli o cerchi quotati.
 - Se *Curvatura continua* non si può rispettare mentre disegni, l'editor di schizzi lo segnala in pochi secondi invece che in minuti.
 - Se due vincoli si contraddicono, l'editor di schizzi li nomina entrambi invece di ridurre una linea o un cerchio a un punto.
-- Una sequenza di linee nello schizzo finisce appena chiude un anello. Finora un nuovo tratto restava attaccato al puntatore, e il primo Esc sembrava non fare nulla.
-- Una lunghezza digitata con lo strumento Linea crea esattamente una linea. Finora, lasciando il campo della quota se ne aggiungeva una seconda, di ritorno verso il puntatore.
+- Una sequenza di linee nello schizzo finisce appena chiude un anello. Nella versione 0.5.3 un nuovo tratto restava attaccato al puntatore, e il primo Esc sembrava non fare nulla.
+- Una lunghezza digitata con lo strumento Linea crea esattamente una linea. Nella versione 0.5.3, lasciando il campo della quota se ne aggiungeva una seconda, di ritorno verso il puntatore.
 - Nell'editor di schizzi, *Sposta parallelamente* porta un contorno chiuso e ogni suo lato verso l'esterno se positivo e unisce gli angoli, in qualunque verso. Nella 0.5.3 finivano spesso dentro.
 - Ora anche gli archi seguono *Sposta parallelamente*, attorno allo stesso centro: un'asola conserva le estremità tonde e un raccordo la sua forma.
 - Dopo aver cambiato una quota, *Rifila*, *Prolunga*, *Sposta parallelamente* e *Specchia* agiscono sulla posizione visibile. La 0.5.3 usava lo stato disegnato prima.
-- Un clic che l'aggancio alla griglia porta esattamente su un punto esistente aggancia quel punto. Finora il contorno sembrava chiuso senza essere collegato.
-- Un doppio clic con lo strumento Linea termina la sequenza di linee. Finora creava una linea di lunghezza zero.
-- Invio nel campo della quota del dialogo *Disegna schizzo* imposta la quota e lascia aperto il dialogo. Finora applicava il disegno e lo chiudeva.
+- Un clic che l'aggancio alla griglia porta esattamente su un punto esistente aggancia quel punto. Nella versione 0.5.3 il contorno sembrava chiuso senza essere collegato.
+- Un doppio clic con lo strumento Linea termina la sequenza di linee. Nella versione 0.5.3 creava una linea di lunghezza zero.
+- Invio nel campo della quota del dialogo *Disegna schizzo* imposta la quota e lascia aperto il dialogo. Nella versione 0.5.3 applicava il disegno e lo chiudeva.
 - Un corpo si tira su con tre clic: *Disegna* nella barra in alto (Ctrl+Maiusc+E), poi angolo, angolo opposto, altezza. Verso l'esterno si unisce, verso l'interno ritaglia.
 - Mentre si tira su, le misure si possono digitare. Un doppio clic sul passaggio apre le sue misure, e alla voce *Tipo* diventa un solido di rivoluzione o un campo di fori.
 - Dall'editor di schizzi, *Fatto* riporta nella vista e il clic successivo mette l'altezza. Esc mette da parte il contorno, Ctrl+Z lo riporta.
@@ -215,7 +215,7 @@ scrive in `website/version.json`.
 - Dividendo in pezzi distinti resta ogni pezzo stampabile, anche perni e rondelle accanto a una piastra grande. Cadono solo piccole superfici aperte e briciole che la stampante non riproduce.
 - Un rilievo viene calcolato solo quando è scelta un'immagine. Fino ad allora la finestra indica il pulsante *Scegli un'immagine …*.
 - La finestra *Applica texture* si apre con un’area del motivo che sta sulla faccia scelta e un passo che il tuo ugello stampa. Se un’area sporge dal bordo, la finestra lo dice e indica la soluzione.
-- Nella finestra, il motivo della texture e le aperture esagonali di *Taglia un campo di fori* si chiamano ora *Nido d'ape*, come nel manuale. Prima c'era scritto Esagono.
+- Il motivo esagonale della texture si chiama ora *Nido d'ape* nella finestra, come nel manuale. La versione 0.5.3 lo chiamava Esagono.
 - Le finestre *Carica STEP* e *Estrudi un disegno* offrono solo file che sanno leggere. Se il progetto non ne ha, indicano il pulsante *Scegli un file …*.
 
 ### Generare con l'IA

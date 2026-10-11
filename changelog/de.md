@@ -61,7 +61,7 @@ Nutzen da und sonst nichts.
 - Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
 - Auf Spanisch, Französisch, Italienisch und Portugiesisch rollt *Neues Filament* nicht mehr seitwärts, wenn das Fenster kürzer ist als sein Inhalt.
 - Während neu gerechnet wird, sagt der Prüfbericht *Wird neu berechnet …* und zeigt die bisherigen Zeilen als vorigen Stand. Bisher sahen alte Fehler dabei aus, als gälten sie noch.
-- Nach dem Einlesen eines Modells steht rechts der Prüfbericht vorn. Bisher sprang der Reiter *Auswahl* nach vorn, obwohl nichts gewählt war.
+- Nach dem Einlesen eines Modells steht rechts der Prüfbericht vorn. In Version 0.5.3 sprang der Reiter *Auswahl* nach vorn, obwohl nichts gewählt war.
 - Scheitert die schnelle Rechnung an einem Schritt, rechnet Solidon ihn im selben Lauf gründlich nach, statt anzuhalten.
 - Sagt ein Befund, dass ein Schritt nichts bewirkt hat, öffnet er diesen Schritt mit dem passenden Feld.
 - Entfernen Sie einen Körper, spricht der Prüfbericht nicht mehr über ihn, und der Verlauf zeigt, welche Schritte danach nichts mehr hinterlassen.
@@ -84,7 +84,7 @@ Nutzen da und sonst nichts.
 - Jedes Maß eines Bausteins lässt sich über fx an ein Projektmaß binden, auch wenn noch kein Ausdruck darin steht.
 - Nach dem Ziehen am Griff einer Vorschau bleibt keine Zahl über der Ansicht stehen. Eine dabei getippte Zahl verschiebt die Vorschau, nicht den gewählten Körper.
 - Nach *Reparieren und erneut versuchen* und verwandten Wegen heißt im Verlauf kein weiterrechnender Schritt mehr „gelöscht“. Hält die Kette erneut an, ist der Schritt markiert.
-- Klicken Sie *Übernehmen*, während Solidon noch rechnet, entsteht der Schritt, sobald die Berechnung fertig ist, und die Statuszeile sagt das. Bisher ging der Klick verloren.
+- Klicken Sie *Übernehmen*, während Solidon noch rechnet, entsteht der Schritt, sobald die Berechnung fertig ist, und die Statuszeile sagt das. In Version 0.5.3 ging der Klick verloren.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
 - Schritte, die ein anderes Programm über die Fernsteuerung anlegt, stehen im Verlauf als „Fernsteuerung“ statt „Agent“.
 - Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
@@ -103,7 +103,7 @@ Nutzen da und sonst nichts.
 - Der Export als 3MF ist deutlich schneller und liest die Profile des Slicers nur noch neu, wenn sich dort etwas geändert hat.
 - Der Druckdialog ordnet die Profile des Slicers deutlich schneller zu, beim Öffnen und nach jedem Slicerwechsel.
 - Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
-- Große Umrisse aus vielen Linien, etwa eine übernommene Flächenkontur, lassen sich im Skizzeneditor ohne Wartezeit bearbeiten.
+- Große Umrisse aus vielen Linien, etwa eine übernommene Flächenkontur, lassen sich im Skizzeneditor deutlich schneller bearbeiten.
 - An Modellen mit Tausenden Merkmalen sind Verschieben und andere Schritte, die die Form nicht ändern, bis zu doppelt so schnell fertig.
 - Nach einer Bohrung oder einem versetzten Merkmal sind die Merkmale eines großen technischen Teils rund ein Drittel schneller wieder erkannt.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
@@ -195,7 +195,7 @@ Nutzen da und sonst nichts.
 - Ändert sich die Fläche unter einem offenen Bausteindialog, bleibt die gewählte Stelle, solange sie auf der neuen Form noch hält. Sonst sucht der Baustein eine neue und sagt es.
 - Ein Bausteindialog, der öffnet, während der vorige Schritt noch rechnet, setzt den Baustein selbst, sobald das Ergebnis da ist, und lässt sich bis dahin nicht übernehmen.
 - Liegt beim Hinzufügen einer Bausteindatei schon ein Baustein dieses Namens im Katalog, fragt Solidon, ob der neue als eigener Eintrag dazukommt. Version 0.5.3 zeigte dafür eine Fehlermeldung.
-- Im Beispiel *Bausteine — Muttern, Buchsen, Kabel* kommt das Kabel von unten durch den Boden, und die Zugentlastung sitzt im Gehäuse. Bisher hing sie unter dem Druckbett.
+- Im Beispiel *Bausteine — Muttern, Buchsen, Kabel* kommt das Kabel von unten durch den Boden, und die Zugentlastung sitzt im Gehäuse. In Version 0.5.3 hing sie unter dem Druckbett.
 
 ### Bearbeiten und Zeichnen
 
@@ -208,14 +208,14 @@ Nutzen da und sonst nichts.
 - Eine Skizze mit vielen getrennten Formen löst schnell, auch mit Hunderten bemaßter Rechtecke oder Kreise.
 - Lässt sich *Krümmungsstetig* beim Zeichnen nicht erfüllen, sagt der Skizzeneditor das nach Sekunden statt nach Minuten.
 - Widersprechen sich zwei Bedingungen, nennt der Skizzeneditor beide, statt eine Linie oder einen Kreis auf einen Punkt schrumpfen zu lassen.
-- Ein Linienzug in der Skizze endet, sobald er eine Schleife schließt. Bisher hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
-- Eine im Linienwerkzeug getippte Länge legt genau eine Linie an. Bisher kam beim Verlassen des Maßfelds eine zweite dazu, zurück zum Zeiger.
+- Ein Linienzug in der Skizze endet, sobald er eine Schleife schließt. In Version 0.5.3 hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
+- Eine im Linienwerkzeug getippte Länge legt genau eine Linie an. In Version 0.5.3 kam beim Verlassen des Maßfelds eine zweite dazu, zurück zum Zeiger.
 - Im Skizzeneditor legt *Versetzen* einen geschlossenen Umriss und jede seiner Kanten positiv nach außen und schließt die Ecken, gleich wie herum gezeichnet. Version 0.5.3 setzte sie oft nach innen.
 - Beim *Versetzen* wandern auch Bögen mit, um dieselbe Mitte: Ein Langloch behält seine runden Enden, eine Verrundung ihre Form.
 - Nach einem geänderten Maß wirken *Trimmen*, *Verlängern*, *Versetzen* und *Spiegeln* im Skizzeneditor an der Lage, die zu sehen ist. Version 0.5.3 nahm den zuvor gezeichneten Stand.
-- Ein Klick, den der Rasterfang genau auf einen vorhandenen Punkt legt, fängt diesen Punkt. Bisher sah die Kontur geschlossen aus, ohne verbunden zu sein.
-- Ein Doppelklick im Linienwerkzeug beendet den Linienzug. Bisher legte er eine Linie der Länge null an.
-- Die Eingabetaste im Maßfeld des Dialogs *Skizze zeichnen* setzt das Maß und lässt den Dialog offen. Bisher übernahm sie die Zeichnung und schloss ihn.
+- Ein Klick, den der Rasterfang genau auf einen vorhandenen Punkt legt, fängt diesen Punkt. In Version 0.5.3 sah die Kontur geschlossen aus, ohne verbunden zu sein.
+- Ein Doppelklick im Linienwerkzeug beendet den Linienzug. In Version 0.5.3 legte er eine Linie der Länge null an.
+- Die Eingabetaste im Maßfeld des Dialogs *Skizze zeichnen* setzt das Maß und lässt den Dialog offen. In Version 0.5.3 übernahm sie die Zeichnung und schloss ihn.
 - Ein Körper entsteht mit drei Klicks: *Zeichnen* oben in der Werkzeugleiste (Strg+Umschalt+E), dann Ecke, Gegenecke, Höhe. Nach außen fügt er an, nach innen schneidet er.
 - Beim Aufziehen lassen sich die Maße tippen. Ein Doppelklick auf den Schritt öffnet seine Maße, und unter *Art* wird daraus ohne neues Zeichnen ein Drehkörper oder ein Lochfeld.
 - Aus dem Skizzeneditor führt *Fertig* zurück in die Ansicht, der nächste Klick setzt die Höhe. Escape legt den Umriss beiseite, Strg+Z holt ihn zurück.
@@ -240,7 +240,7 @@ Nutzen da und sonst nichts.
 - Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch Stifte und Scheiben neben einer großen Platte. Wegfallen nur kleine offene Flächen und Krümel, die der Drucker nicht abbildet.
 - Ein Relief rechnet erst, wenn ein Bild gewählt ist. Bis dahin nennt der Dialog den Knopf *Bild wählen …*.
 - Die Funktion *Textur aufbringen* öffnet mit einem Musterfeld, das auf die gewählte Fläche passt, und einer Teilung, die Ihre Düse druckt. Ragt ein Feld über den Rand, sagt der Dialog das samt Ausweg.
-- Im Dialog heißen das Texturmuster und die sechseckigen Öffnungen von *Lochfeld schneiden* jetzt *Wabe*, wie im Handbuch. Bisher stand dort Sechseck.
+- Das sechseckige Texturmuster heißt im Dialog jetzt *Wabe*, wie im Handbuch. Version 0.5.3 nannte es Sechseck.
 - Die Dialoge *STEP laden* und *Zeichnung hochziehen* bieten nur Dateien an, die sie lesen können. Liegt keine im Projekt, nennen sie den Knopf *Datei wählen …*.
 
 ### Erzeugen mit KI
