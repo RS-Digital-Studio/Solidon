@@ -1136,6 +1136,61 @@ def _support_columns() -> str:
     ) + repr((sorted(place.channels), place.island_on_model))
 
 
+def _shaft_through_slanted_holes() -> str:
+    """Die Schachtfrage der Kanalsperre (RM-629) durch schräge Schlitze und ein
+    Y, aus ganzzahligen Steigungen (3 : 4) wie aus CAD. Die Ellipse des schrägen
+    Wegs hing an ``math.cos(math.atan(…))`` und einem Matrixprodukt; gezählt
+    werden die Mitten jedes Wegs nach jeder Schicht, nicht nur die Antwort."""
+    from shapely.geometry import Polygon, box
+
+    from app.core.slice import analysis
+
+    heights = [0.25 + 0.5 * index for index in range(84)]
+    plate = box(-150.0, -150.0, 150.0, 150.0)
+    column = box(-2.0, -2.0, 2.0, 2.0)
+
+    def slit(width: float, both: bool) -> Callable[[int], Any]:
+        def shade_at(index: int) -> Any:
+            z = heights[index]
+            if not 10.0 <= z <= 30.0:
+                return Polygon()
+            shift = 0.75 * (z - 10.0)
+            hole = box(shift - 4.0, -30.0, shift - 4.0 + width, 30.0)
+            if both:
+                hole = hole.union(box(-shift + 4.0 - width, -30.0, -shift + 4.0, 30.0))
+            return plate.difference(hole)
+
+        return shade_at
+
+    seen: list[float] = []
+    real_step, real_oval = analysis._shaft_step, analysis._oval_centres
+
+    def noted(shape: Any) -> None:
+        seen.extend(float(value) for value in np.asarray(shape.bounds))
+        seen.append(float(shape.area))
+
+    def step(way: Any, *args: Any) -> bool:
+        kept = real_step(way, *args)
+        noted(way.centres)
+        return kept
+
+    def oval(*args: Any) -> Any:
+        found = real_oval(*args)
+        noted(found)
+        return found
+
+    analysis._shaft_step, analysis._oval_centres = step, oval
+    try:
+        answers = [
+            analysis._shafts_pass(column, {4: Polygon()}, slit(width, both), heights, 0.42, 1.0)
+            for width, both in ((35.0, False), (38.5, False), (40.0, True))
+        ]
+    finally:
+        analysis._shaft_step, analysis._oval_centres = real_step, real_oval
+    assert seen, "die Probe muss Kreise schieben"
+    return fingerprint(seen) + repr(answers)
+
+
 def _fine_layers_on_wedges() -> str:
     """Feine Schichten an Keilen genau auf der Stufengrenze (RM-586, Review F7):
     Steigung 1:2 bei 0,2 mm Schicht und 0,4 mm Bahn, 1:3 bei 0,2 und 0,6 — aus
@@ -1700,6 +1755,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "face_textures": _face_textures,
     "fill_band": _bore_wall_band,
     "fine_layers": _fine_layers_on_wedges,
+    "shaft_question": _shaft_through_slanted_holes,
     "hinged_lid": _hinged_lid,
     "fill_bridged": _top_with_holes,
     "fit_pieces": _fit_pieces,
