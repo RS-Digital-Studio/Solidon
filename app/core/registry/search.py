@@ -273,7 +273,19 @@ CUSTOMER_WORDS: Final[dict[str, TranslatableText]] = {
     "repair": _(
         "kaputt; defekt; Fehler beheben; Löcher im Modell; reparieren", context="Suchwörter"
     ),
-    "union_objects": _("zusammensetzen", context="Suchwörter"),
+    # **Der Fachbegriff aus dem CAD** (RM-734): Wer aus Fusion kommt, tippt
+    # „boolesch“ und fand nichts; das Menü meidet das Wort bewusst
+    # (*Verbinden und Abziehen*). Alle drei tragen dieselben vier Wendungen,
+    # dazu die Wörter aus OpenSCAD und Fusion, die in jeder Sprache gelten:
+    # „union“ traf sonst nur den Namen, gleichauf mit *Weich verschmelzen*,
+    # und „difference“ zuerst die Einstellung *Differenzansicht*.
+    "union_objects": _(
+        "zusammensetzen; boolesch; Boolesche Operation; Boolean; kombinieren; union",
+        context="Suchwörter",
+    ),
+    "intersect_objects": _(
+        "boolesch; Boolesche Operation; Boolean; kombinieren", context="Suchwörter"
+    ),
     "place_on_bed": _("hinlegen; flach hinlegen", context="Suchwörter"),
     "file.open": _("Datei öffnen; Projekt öffnen; laden", context="Suchwörter"),
     "file.save": _("speichern; sichern", context="Suchwörter"),
@@ -308,7 +320,11 @@ CUSTOMER_WORDS: Final[dict[str, TranslatableText]] = {
     "insert_foot": _("Füße; Fuß; Standfüße; Gummifuß", context="Suchwörter"),
     # Die übrigen vier mit deutschen Wörtern in :data:`SYNONYMS` — sonst
     # hätten nur sie in fünf Sprachen keine.
-    "subtract_objects": _("herausschneiden; Form ausschneiden", context="Suchwörter"),
+    "subtract_objects": _(
+        "herausschneiden; Form ausschneiden; boolesch; Boolesche Operation; Boolean; "
+        "kombinieren; subtrahieren; Differenz; difference",
+        context="Suchwörter",
+    ),
     "pattern": _("Reihe; mehrere Kopien; vervielfältigen", context="Suchwörter"),
     "paint_slot": _("bemalen; Fläche anmalen", context="Suchwörter"),
     "load": _READ_IN,

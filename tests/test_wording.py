@@ -547,20 +547,21 @@ def test_no_customer_text_uses_a_designer_word() -> None:
     """
     englisch = json.loads(Path("app/i18n/locales/en.json").read_text(encoding="utf-8"))
     assert len(englisch) > 500, f"nur {len(englisch)} Katalogschlüssel — dann prüft das nichts"
+    gelesen = {key: text for key, text in englisch.items() if key not in suchwoerter()}
 
     def erlaubt(schluessel: str, ausnahmen: dict[str, str]) -> bool:
         return any(schluessel.startswith(anfang) for anfang in ausnahmen)
 
     deutsch = sorted(
         f"{KONSTRUKTEURSWORT.findall(key)}: {key[:100]}"
-        for key in englisch
+        for key in gelesen
         if KONSTRUKTEURSWORT.search(key) and not erlaubt(key, DARF_KONSTRUKTEURSWORT)
     )
     assert not deutsch, "Konstrukteurswort im deutschen Text:\n" + "\n".join(deutsch)
 
     uebersetzt = sorted(
         f"{DESIGNER_WORD.findall(text)}: {key[:60]} -> {text[:80]}"
-        for key, text in englisch.items()
+        for key, text in gelesen.items()
         if DESIGNER_WORD.search(text) and not erlaubt(key, DARF_DESIGNER_WORD)
     )
     assert not uebersetzt, "Konstrukteurswort in der englischen Übersetzung:\n" + "\n".join(
@@ -710,19 +711,37 @@ SATZMUSTER: dict[str, re.Pattern[str]] = {
 #: Überarbeitung; sie zu erhöhen ist eine Entscheidung, kein Nachtrag. Mit
 #: Review P2 N5 stieg sie einmal, weil der Wächter seitdem jeden Katalogtext
 #: liest und nicht nur die nach Aufrufort eingeordneten.
-MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Semikolon": 371, "Nur-Formel": 11}
+MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Semikolon": 329, "Nur-Formel": 11}
 
 MUSTER_DATEI = Path(__file__).resolve().parent / "data" / "text_patterns.json"
 
 #: Je Sprache, wie viele Übersetzungen ein Semikolon tragen, das ihre deutsche
 #: Quelle nicht hat. Die Zahl darf nur sinken (Review P2 N5).
-UEBERSETZT_BESTAND: dict[str, int] = {"en": 87, "es": 188, "fr": 95, "it": 59, "pt": 110}
+UEBERSETZT_BESTAND: dict[str, int] = {"en": 86, "es": 186, "fr": 93, "it": 57, "pt": 109}
 
 UEBERSETZT_DATEI = Path(__file__).resolve().parent / "data" / "translated_semicolons.json"
 
 
+def suchwoerter() -> frozenset[str]:
+    """Die Katalogschlüssel der Kundenwörter (``registry.search.CUSTOMER_WORDS``).
+
+    **Eine Wortliste, kein Kundentext:** Der Kunde liest sie nie, er tippt sie,
+    und die Suche trennt ihre Wendungen am Semikolon. Ein Fachwort darin ist
+    Absicht — „boolesch“ tippt, wer aus einem CAD kommt, und fand bis RM-734
+    nichts. Bis dahin standen diese Listen im eingefrorenen Bestand der
+    Musterwächter, mit jedem neuen Kundenwort ein Eintrag mehr.
+    """
+    from app.core.registry.search import CUSTOMER_WORDS
+
+    return frozenset(
+        f"{text.context}\x04{text.msgid}" if text.context else text.msgid
+        for text in CUSTOMER_WORDS.values()
+    )
+
+
 def kundentexte() -> set[str]:
-    """Jeder deutsche Kundentext — die Schlüssel der Sprachkataloge.
+    """Jeder deutsche Kundentext — die Schlüssel der Sprachkataloge ohne die
+    Kundenwörter der Suche (:func:`suchwoerter`).
 
     Bis Review P2 N5 las der Musterwächter nur, was ``test_text_length`` nach
     Aufrufort einordnet. Ein ``return _(…)`` außerhalb einer ``*empty*``-Funktion
@@ -736,18 +755,19 @@ def kundentexte() -> set[str]:
     for language in available_languages():
         if language != "de":
             found |= set(read_catalog(language))
-    return found
+    return found - suchwoerter()
 
 
 def uebersetzte_semikolons() -> dict[str, list[str]]:
-    """Je Sprache die Quelltexte ohne Semikolon, deren Übersetzung eines trägt, sortiert."""
+    """Je Sprache die Quelltexte ohne Semikolon, deren Übersetzung eines trägt, sortiert —
+    ohne die Kundenwörter der Suche, deren Trennzeichen das Semikolon ist."""
     from app.i18n.catalog import read_catalog
 
     return {
         language: sorted(
             source
             for source, text in read_catalog(language).items()
-            if ";" in text and ";" not in source
+            if ";" in text and ";" not in source and source not in suchwoerter()
         )
         for language in available_languages()
         if language != "de"

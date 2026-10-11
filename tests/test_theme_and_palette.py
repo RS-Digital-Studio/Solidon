@@ -911,6 +911,15 @@ WORDS_BY_LANGUAGE: tuple[tuple[str, str, str], ...] = (
     ("de", "Würfel", "create_brep_box"),
     ("de", "Loch machen", "drill_hole"),
     ("de", "flicken", "repair"),
+    ("de", "subtrahieren", "subtract_objects"),
+    ("de", "Differenz", "subtract_objects"),
+    ("de", "difference", "subtract_objects"),
+    ("de", "union", "union_objects"),
+    ("es", "diferencia", "subtract_objects"),
+    ("fr", "différence", "subtract_objects"),
+    ("it", "differenza", "subtract_objects"),
+    ("pt", "diferença", "subtract_objects"),
+    ("pt", "union", "union_objects"),
     ("en", "copy", "duplicate_object"),
     ("en", "make hole bigger", "resize_hole"),
     ("en", "move hole", "move_feature"),
@@ -965,6 +974,73 @@ def test_a_word_inside_a_title_does_not_beat_the_word_that_means_it() -> None:
     )
     ausrichten = next(e for e in palette_entries(REGISTRY) if e.name == "orient_for_print")
     assert rank(ausrichten, "Stützen") < rank(spende, "Stützen")
+
+
+#: Der Fachbegriff, den ein Umsteiger aus einem CAD-Programm tippt, je Sprache
+#: (RM-734). Fragebogen zu 0.5.3: „Boolesche Operationen wären toll“ — es gab
+#: sie, aber „boolesch“, „Boolean“ und „kombinieren“ fanden nichts, und
+#: „Boolesche Operation“ zeigte *Fläche versetzen*.
+BOOLEAN_WORDS: tuple[tuple[str, str], ...] = (
+    ("de", "boolesch"),
+    ("de", "Boolesche Operation"),
+    ("de", "Boolean"),
+    ("de", "kombinieren"),
+    ("en", "boolean"),
+    ("en", "Boolean operation"),
+    ("es", "booleano"),
+    ("fr", "booléen"),
+    ("it", "operazione booleana"),
+    ("pt", "booleano"),
+)
+
+_BOOLEANS: frozenset[str] = frozenset({"union_objects", "subtract_objects", "intersect_objects"})
+
+
+@pytest.mark.parametrize(("language", "word"), BOOLEAN_WORDS)
+def test_the_technical_word_finds_the_three_boolean_operations(language: str, word: str) -> None:
+    """Vorn stehen die drei Booleschen, keine andere Operation davor."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry.surfaces import palette_entries
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.command_palette import found_in_rounds, rank
+
+    load_operations()
+    install_language(language)
+    set_language(language)
+    found, loosened = found_in_rounds(palette_entries(REGISTRY), word)
+    assert not loosened, f"„{word}“ ({language}) passt nur auf einzelne Wörter"
+    vorn = {str(entry.name) for entry in sorted(found, key=lambda e: rank(e, word))[:3]}
+    assert vorn == _BOOLEANS, f"„{word}“ ({language}) zeigt vorn {sorted(vorn)}"
+
+
+@pytest.mark.parametrize(
+    ("language", "word", "meant", "row", "title"),
+    [
+        ("de", "Differenz", "subtract_objects", "settings.diff_palette", "Differenzansicht"),
+        ("en", "difference", "subtract_objects", "settings.diff_palette", "Differenzansicht"),
+    ],
+)
+def test_a_customer_word_said_exactly_beats_a_longer_word_in_a_title(
+    language: str, word: str, meant: str, row: str, title: str
+) -> None:
+    """Wer „Differenz“ tippt, meint das Abziehen, nicht die Einstellung
+    *Differenzansicht*, und wer „difference“ tippt, nicht *Difference view*.
+    Das Kundenwort ist eine Zuordnung, das Wort im Titel der anderen Zeile ein
+    Zufall (RM-734)."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry.surfaces import PaletteEntry, palette_entries
+    from app.i18n import set_language, tr
+    from app.i18n.catalog import install_language
+    from app.ui.command_palette import rank
+
+    load_operations()
+    install_language(language)
+    set_language(language)
+    gemeint = next(e for e in palette_entries(REGISTRY) if e.name == meant)
+    shown = tr("{name}: {value}", name=tr("Einstellungen"), value=tr(title))
+    zeile = PaletteEntry(name=row, title=shown, doc="", category="settings")
+    assert rank(gemeint, word) < rank(zeile, word), f"„{word}“ ({language}) zeigt {shown} zuerst"
 
 
 def test_every_customer_word_belongs_to_a_row_of_the_palette() -> None:

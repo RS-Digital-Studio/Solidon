@@ -124,11 +124,16 @@ def rank(entry: PaletteEntry, query: str) -> int:
     # wirkungslos, sobald das Wort auch im Titel steht.
     if at_title_start and in_phrase:
         return 0
-    if at_title_start:
-        return 1
-    if all(part in name for part in parts):
-        return 2
+    # **Genau gesagt vor jedem Titelwort einer anderen Zeile** (RM-734):
+    # „Differenz“ ist ein Kundenwort des *Abziehens* und der Anfang der
+    # Einstellung *Differenzansicht*, „difference“ ein Wort von *Settings:
+    # Difference view*. Das Kundenwort ist eine Zuordnung, der Titel der
+    # anderen Zeile ein Zufall.
     if said_exactly:
+        return 1
+    if at_title_start:
+        return 2
+    if all(part in name for part in parts):
         return 3
     if in_phrase:
         return 4
