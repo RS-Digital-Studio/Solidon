@@ -173,6 +173,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao espelhar, o plano fica onde o corpo coincide consigo próprio, mesmo quando uma parte sobressai muito para o lado.
 - Modelar acompanha o rato com fluidez, e até um passo com centenas de traços de pincel é calculado depressa.
 - Com *Fundir suavemente* a malha fica uniforme, quase sem lascas finas. Uma peça na mesa de impressão já não passa para baixo dela.
+- Um corpo com uma cavidade fechada mantém-na com *Fundir suavemente*. Desde a versão 0.1.1 a cavidade passava a ser um segundo corpo e o passo assinalava peças não ligadas.
 - Com *Uniformizar os triângulos* nenhuma aresta passa do comprimento definido e a forma não muda. A mesma aresta dá muitas vezes quase o dobro de triângulos; uma mais longa mantém a densidade antiga.
 - Em *Esqueleto*, cada clique depois do primeiro coloca um osso, Enter termina a cadeia, arrastar uma articulação dobra-a e *Concluído* guarda tudo sem diálogo.
 - Um esqueleto só dobra o que está preso aos seus ossos, e o resto do corpo fica parado. Os projetos anteriores calculam-se como foram guardados.
