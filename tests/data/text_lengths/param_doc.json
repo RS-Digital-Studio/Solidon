@@ -1,7 +1,6 @@
 [
   "Abstand von Steg zu Steg. Die Stege sind halb so breit; liegen sie unter der Düse, wird das Muster nicht gedruckt und die Operation sagt es, statt es zu versuchen.",
   "Auf welcher Höhe der Kanal beginnt. Leer heißt: an der Oberseite des Körpers, wenn er nach unten läuft, an der Unterseite, wenn er nach oben läuft.",
-  "Aus einer Grundform oder einer gezeichneten Skizze einen Körper machen — hochziehen, um eine Achse drehen, an einem Bogen entlangführen, zwischen zwei Größen überblenden — oder mit denselben Werkzeugen aus einem vorhandenen Körper schneiden: als Tasche, Ringnut, Kanal oder Übergang. Die Art steht im Dialog, die Grundform ist für alle dieselbe.",
   "Automatisch teilen trägt ein, in wie viele Stücke es teilt. Ab drei heißen sie „1 von 3“, „2 von 3“ …; null heißt: A und B.",
   "Außen umgreift eine Hülse beide Segmente und lässt den Kanal unverändert. Innen liegt eine Einlage auf beiden Böden; sie braucht keinen Platz neben der Rinne, verengt den Kanal aber um ihre Wand.",
   "Bei einer Reihe ihre Richtung, beim Kreis seine Achse, beim Spiegeln die Senkrechte der Ebene. Null in allen drei Feldern heißt: Reihe längs X, Kreis um Z, gespiegelt an der YZ-Ebene.",

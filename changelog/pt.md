@@ -74,6 +74,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Com um slicer, um jogo ou uma renderização a correr ao lado, os cálculos em modelos grandes terminam em segundos em vez de minutos.
 - Um projeto guardado com um modelo grande abre após um reinício em um ou dois segundos em vez de meio minuto: as características reconhecidas ficam guardadas.
 - Arrastar o manípulo de uma face deixa o percurso preparado em *Deslocar a face*, no separador *Seleção*, e traz o separador para a frente, também durante uma visita guiada. Só *Aplicar* cria o passo.
+- Os passos que outro programa cria pelo comando à distância aparecem no histórico com «Comando à distância» em vez de «Agente», e a ficha do chat diz o mesmo.
 
 ### Imprimir e entregar ao slicer
 
@@ -128,6 +129,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O armazém de filamentos apresenta para verificar um registo do Solidon 0.5 do mesmo projeto com os mesmos filamentos e pergunta antes de descontar de novo.
 - A partir desta versão, um consumo descontado fica ligado à sua impressão, mesmo que uma atualização calcule mais depressa ou o perfil do fabricante mude no slicer. Antes contava como nova.
 - Onde cúpulas planas e rampas mostrariam degraus, o Solidon sugere camadas finas só aí. A sugestão indica quanto mais tempo a peça demora a imprimir.
+- Com uma impressora de resina, o diálogo de impressão mostra só impressora, material, placas e programa. A versão 0.5.3 mostrava também perfis e stock de filamento.
 
 ### Roscas, furos e peças normalizadas
 
@@ -161,6 +163,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se a face mudar com a caixa de diálogo de um bloco aberta, o lugar escolhido mantém-se enquanto continuar válido na nova forma. Caso contrário, o bloco procura um novo e indica-o.
 - Uma caixa de diálogo de bloco aberta enquanto o passo anterior ainda calcula coloca o bloco sozinha assim que o resultado chega, e até lá não pode ser aplicada.
 - Um bloco colocado na vista pode ser levado com um clique para outro lugar também depois de uma entrada na caixa de diálogo.
+- Se, ao adicionar um ficheiro de bloco, o catálogo já tiver um bloco com esse nome, o Solidon pergunta se o novo deve ser adicionado como entrada própria. A versão 0.5.3 mostrava uma mensagem de erro.
 
 ### Editar e esboçar
 

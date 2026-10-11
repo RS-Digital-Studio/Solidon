@@ -86,6 +86,7 @@ from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
+from app.core.agent.remote import ORIGIN_MODEL as REMOTE_ORIGIN
 from app.core.agent.remote import Deferred as RemoteDeferred
 from app.core.agent.session import (
     MAX_STEPS,
@@ -286,6 +287,7 @@ from app.ui.dialogs import (
     KeyDialog,
     ParameterDialog,
     StepValuesDialog,
+    ask_free_part_name,
     confirm_discard,
     confirm_export,
     confirm_generation_loss,
@@ -2641,12 +2643,6 @@ DRAWN_OPERATIONS: frozenset[str] = frozenset({PULL_OP, JOIN_OP, POCKET_OP})
 #: der Druckschale, weil jede ebene Fläche jedes Körpers kam (Befund B4).
 MOST_PLANE_FACES = 8
 
-
-#: Was im Herkunftsvermerk einer ferngesteuerten Transaktion als Modell
-#: steht. „user" und „agent" sind die einzigen Urheber, die das Format
-#: kennt (§26.4); ein dritter kostete eine Migration, und für die Frage
-#: „habe ich das getan?" reicht dieser Vermerk.
-REMOTE_ORIGIN = "mcp"
 
 #: Wie lange ein Fernaufruf auf die Auswertung wartet. Länger als im
 #: Fenster: dort sieht jemand den Fortschritt, am anderen Ende der Leitung
@@ -10942,6 +10938,28 @@ class MainWindow(QMainWindow):
         if not isValid(catalog):
             # Ohne Katalog gibt es die zwei Auswege nicht mehr, die ihn brauchen.
             show_error(problem, self, handlers)
+            return
+        suggested = problem.values.get("suggested_name")
+        from app.core.knowledge.parts.registry import PARTS
+
+        key = str(problem.values.get("recipe", ""))
+        if (
+            payload is not None
+            and getattr(problem, "constraint", "") == "exists"
+            and isinstance(suggested, str)
+            and suggested
+            # Nur ein Katalogeintrag hat einen Titel, den die Frage nennen
+            # kann. Trifft der Name eine Operation oder eine liegengebliebene
+            # Datei, gibt es keinen Baustein „im Katalog“ — dort bleibt die
+            # Meldung mit *Freien Namen verwenden*.
+            and PARTS.has(key)
+        ):
+            # **Ein vorhandener Name ist eine Frage, kein Fehler** (Regel 21):
+            # Ihrer bleibt, der neue kommt auf Wunsch als eigener Eintrag.
+            existing = str(PARTS.get(key).title)
+            title = str(problem.values.get("title", "") or existing)
+            if ask_free_part_name(existing, title, suggested, catalog):
+                self._use_suggested_part_name(catalog, payload, problem)
             return
         handlers["choose"] = lambda _error: self._adopt_part(catalog)
         if payload is not None:

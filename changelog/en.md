@@ -74,6 +74,7 @@ it into `website/version.json`.
 - With a slicer, a game or a render running alongside, calculations on large models finish in seconds instead of minutes.
 - A saved project with a large model now opens in a second or two after a restart instead of half a minute: the recognised features are kept.
 - Dragging the face handle puts the distance into *Offset face* on the *Selection* tab and brings the tab to the front, even during a tour. Only *Apply* creates the step.
+- Steps that another program creates through remote control appear in the history with “Remote control” instead of “Agent”, and the chat's summary says the same.
 
 ### Printing and slicer handover
 
@@ -128,6 +129,7 @@ it into `website/version.json`.
 - The filament inventory offers a booking from Solidon 0.5 of the same project with the same filaments for review and asks before deducting the same print again.
 - From this version on, a booking stays with its print, even when an update calculates faster or the manufacturer profile in the slicer changes. Previously, such a print counted as new.
 - Where shallow domes and slopes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the part then takes to print.
+- With a resin printer, the print dialog now shows only printer, material, plates and the program. Version 0.5.3 also showed filament profiles and stock there.
 
 ### Threads, holes and standard parts
 
@@ -161,6 +163,7 @@ it into `website/version.json`.
 - If the face under an open part dialog changes, the chosen spot stays as long as it still fits the new shape. Otherwise the part finds a new one and says so.
 - A part dialog that opens while the previous step is still computing places the part by itself as soon as the result is there, and cannot be applied until then.
 - A part sitting in the view can still be moved to another spot with a click after an entry in the dialog.
+- If the catalogue already has a part of the same name when you add a part file, Solidon asks whether the new one should be added as an entry of its own. Version 0.5.3 showed an error message instead.
 
 ### Editing and sketching
 

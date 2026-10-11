@@ -75,6 +75,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con un slicer, un juego o un renderizado en marcha, los cálculos en modelos grandes terminan en segundos en lugar de minutos.
 - Un proyecto guardado con un modelo grande se abre tras un reinicio en uno o dos segundos en lugar de medio minuto: las características reconocidas se conservan.
 - Arrastrar el tirador de una cara deja la distancia preparada en *Desplazar cara*, en la pestaña *Selección*, y trae la pestaña al frente, también durante un recorrido. Solo *Aplicar* crea el paso.
+- Los pasos que otro programa crea mediante el control remoto aparecen en el historial con «Control remoto» en lugar de «Agente», y la ficha del chat dice lo mismo.
 
 ### Imprimir y entregar al slicer
 
@@ -129,6 +130,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El almacén de filamentos muestra para revisar un registro de Solidon 0.5 del mismo proyecto con los mismos filamentos y pregunta antes de descontar otra vez.
 - Desde esta versión, un consumo descontado sigue unido a su impresión aunque una actualización calcule más rápido o cambie el perfil del fabricante en el slicer. Antes contaba como nueva.
 - Donde cúpulas planas y pendientes mostrarían escalones, Solidon sugiere capas finas solo allí. La sugerencia indica cuánto más tarda entonces la pieza.
+- Con una impresora de resina, el diálogo de impresión muestra solo impresora, material, placas y programa. La versión 0.5.3 mostraba también perfiles y existencias de filamento.
 
 ### Roscas, taladros y piezas normalizadas
 
@@ -162,6 +164,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si la cara cambia con el diálogo de un bloque abierto, el sitio elegido se mantiene mientras siga valiendo en la nueva forma. Si no, el bloque busca uno nuevo y lo indica.
 - Un diálogo de bloque que se abre mientras el paso anterior aún calcula coloca el bloque por sí solo en cuanto llega el resultado, y hasta entonces no se puede aplicar.
 - Un bloque colocado en la vista se puede mover con un clic a otro sitio también después de una entrada en el diálogo.
+- Si al añadir un archivo de bloque ya hay en el catálogo un bloque con ese nombre, Solidon pregunta si el nuevo se añade como entrada propia. La versión 0.5.3 mostraba un mensaje de error.
 
 ### Editar y dibujar
 

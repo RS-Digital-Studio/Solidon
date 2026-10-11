@@ -250,6 +250,10 @@ class AskDialog(QDialog):
         """Je Antwort ein Knopf, wenn die Frage zwei oder drei Handlungen anbietet."""
 
         prompt = QLabel(question, self)
+        # **Klartext, nie Auszeichnung** (§32): Eine Frage nennt Namen aus
+        # Projekt- und Bausteindateien, und ein fremder Titel wie
+        # ``<span style="font-size:40pt">…`` setzte sich sonst als HTML.
+        prompt.setTextFormat(Qt.TextFormat.PlainText)
         prompt.setWordWrap(True)
         self._preparing = QLabel(
             tr("Die Kandidaten werden in der Ansicht vorbereitet. Danach können Sie auswählen."),
@@ -4339,6 +4343,37 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
     box.setEscapeButton(back)
     box.exec()
     return "close" if box.clickedButton() is close else "back"
+
+
+def ask_free_part_name(
+    existing: str, title: str, suggested: str, parent: QWidget | None = None
+) -> bool:
+    """Gleichnamige Bausteindatei: als eigenen Eintrag übernehmen? (Regel 21)
+
+    Ein Name, den es im Katalog schon gibt, ist kein Fehler, sondern eine
+    Frage mit genau einer Antwort und dem Rückweg. Bis hierher kam sie als
+    „Das hat so nicht funktioniert — Die Eingabe war so nicht verwendbar“,
+    obwohl nichts schiefgegangen war. Genannt werden die Titel, wie der
+    Katalog sie zeigt — ``existing`` für den vorhandenen, ``title`` für den
+    neuen; der freie Schlüssel ``suggested`` bleibt die Antwort darunter und
+    erscheint nirgends. ``True`` heißt, der neue kommt unter ``suggested``.
+    """
+    dialog = AskDialog(
+        tr(
+            "Im Katalog liegt schon ein Baustein „{existing}“. Er bleibt, wie er ist. "
+            "Soll der neue „{title}“ als eigener Eintrag dazukommen?",
+            existing=existing,
+            title=title,
+        ),
+        [suggested],
+        parent,
+        labels={suggested: tr("Als eigenen Eintrag übernehmen")},
+        as_buttons=True,
+    )
+    try:
+        return dialog.exec() == QDialog.DialogCode.Accepted
+    finally:
+        dialog.deleteLater()
 
 
 def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | None = None) -> bool:

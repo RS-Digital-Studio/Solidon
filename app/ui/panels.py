@@ -165,10 +165,12 @@ from app.core.types import (
     MaterialSlot,
     ObjectId,
     OpId,
+    Origin,
     Parameter,
     SceneObject,
     Transaction,
     measure_status,
+    origin_word,
     replanned_steps,
     step_numbers,
 )
@@ -4861,6 +4863,17 @@ class _HistoryList(QListWidget):
         super().mouseDoubleClickEvent(event)
 
 
+def origin_mark(origin: Origin) -> str:
+    """Der Vermerk hinter einer Verlaufszeile, die nicht vom Nutzer kam (§26.4).
+
+    Nur was abweicht, wird ausgeschrieben. Ein Fernaufruf heißt dort
+    „Fernsteuerung“ und nicht „Agent“ wie ein Vorschlag des Chats: Wer beides
+    benutzt, sieht so, welches Programm den Schritt angelegt hat.
+    """
+    word = origin_word(origin)
+    return f"  ({word})" if word is not None else ""
+
+
 class HistoryPanel(QWidget):
     """Transaktionen, neueste zuletzt. Die Einheit des Undo (§15.5).
 
@@ -5225,7 +5238,7 @@ class HistoryPanel(QWidget):
             # überall, und was überall steht, liest niemand mehr. Dieselbe
             # Überlegung wie beim Material im Steckbrief: genannt wird, was
             # nicht die Regel ist.
-            by = f"  ({tr('Agent')})" if transaction.origin.by == "agent" else ""
+            by = origin_mark(transaction.origin)
             # **Die Nummer steht an jeder Zeile, die genau einen Schritt
             # vertritt** — bisher trugen sie nur die Kinder einer
             # mehrschrittigen Transaktion, und damit war sie eine Auszeichnung
@@ -5442,7 +5455,7 @@ class HistoryPanel(QWidget):
         und den Satz dazu wie jede andere (§15.3) — gerade nach „… und erneut
         versuchen“ sucht der Kunde diese Stelle (Review U1, Fund 2).
         """
-        by = f"  ({tr('Agent')})" if transaction.origin.by == "agent" else ""
+        by = origin_mark(transaction.origin)
         header = QListWidgetItem(f"{transaction.title}{by}")
         header.setForeground(QColor(UNDONE_COLOUR))
         header.setToolTip(

@@ -75,6 +75,7 @@ dans `website/version.json`.
 - Avec un slicer, un jeu ou un rendu en cours à côté, les calculs sur de grands modèles aboutissent en secondes au lieu de minutes.
 - Un projet enregistré avec un grand modèle s'ouvre après un redémarrage en une ou deux secondes au lieu d'une demi-minute : les caractéristiques reconnues sont conservées.
 - Un glisser sur la poignée d'une face prépare la distance dans *Décaler la face* et amène l'onglet *Sélection* au premier plan, même pendant une visite guidée. Seul *Appliquer* crée l'étape.
+- Les étapes qu'un autre programme crée par la commande à distance apparaissent dans l'historique avec « Commande à distance » au lieu de « Agent », et la fiche du chat aussi.
 
 ### Imprimer et transmettre au slicer
 
@@ -129,6 +130,7 @@ dans `website/version.json`.
 - Le stock de filament soumet à vérification une consommation enregistrée avec Solidon 0.5 pour le même projet et les mêmes filaments, et demande avant de décompter à nouveau.
 - Désormais, une consommation décomptée reste liée à son impression, même si une mise à jour calcule plus vite ou si le slicer change le profil du fabricant. Avant, l'impression comptait comme nouvelle.
 - Là où des dômes plats et des pentes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression de la pièce s'allonge.
+- Avec une imprimante résine, le dialogue d'impression ne montre plus qu'imprimante, matériau, plateaux et programme. La version 0.5.3 y affichait aussi profils et stock de filament.
 
 ### Filetages, perçages et pièces normalisées
 
@@ -162,6 +164,7 @@ dans `website/version.json`.
 - Si la face change alors que la boîte de dialogue d'un bloc est ouverte, l'emplacement choisi reste tant qu'il convient à la nouvelle forme. Sinon, le bloc en cherche un nouveau et le signale.
 - Une boîte de dialogue de bloc ouverte pendant que l'étape précédente calcule encore place le bloc d'elle-même dès que le résultat est là, et ne peut pas être appliquée avant.
 - Un bloc placé dans la vue se déplace aussi d'un clic vers un autre endroit après une saisie dans la boîte de dialogue.
+- Si le catalogue contient déjà un bloc de ce nom quand vous ajoutez un fichier de bloc, Solidon demande s'il faut l'ajouter comme entrée à part. La version 0.5.3 affichait un message d'erreur.
 
 ### Modifier et esquisser
 

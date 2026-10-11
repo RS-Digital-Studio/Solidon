@@ -1903,6 +1903,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "supported": _("Unterstützt"),
     "target": _("Ziel"),
     "text": _("Text"),
+    # ``parts.recipe``: der Titel, unter dem ein Baustein im Katalog steht.
+    "title": _("Name"),
     "to": _("Nach"),
     "tolerance": _("Toleranz"),
     "transaction": _("Transaktion"),

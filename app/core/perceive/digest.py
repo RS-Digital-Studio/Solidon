@@ -28,6 +28,7 @@ from app.core.types import (
     Scene,
     SceneObject,
     measure_status,
+    origin_word,
     replanned_steps,
     step_numbers,
 )
@@ -1122,7 +1123,8 @@ def _stack_lines(document: Document, steps: Mapping[int, int]) -> list[str]:
             for entry in transaction.ops
             if entry in operations or entry not in superseded
         )
-        by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
+        word = origin_word(transaction.origin)
+        by = str(word) if word is not None else tr("Nutzer")
         # Der Titel einer Transaktion ist ein Name aus der Projektdatei wie
         # jeder andere — und einer, den der Agent selbst vorgeschlagen haben
         # kann (§32).

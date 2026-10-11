@@ -411,11 +411,17 @@ def test_the_digest_summarises_the_stack(profile: Profile) -> None:
     document.transactions.append(
         Transaction(id="t2", title="Teilen", ops=(3,), origin=Origin(by="agent"))
     )
+    # Ein Fernaufruf heißt im Steckbrief wie im Verlauf (``types.origin_word``):
+    # Der Chat soll einen Schritt aus einem anderen Programm nicht für seinen halten.
+    document.transactions.append(
+        Transaction(id="t3", title="Quader", ops=(4,), origin=Origin(by="agent", model="mcp"))
+    )
 
     text = digest(plate_scene(profile), document)
 
     assert 't1 "Import und Reparatur"' in text
-    assert "Nutzer" in text and "Agent" in text
+    assert "Nutzer" in text and "Agent)" in text
+    assert "Fernsteuerung)" in text.split('"Quader"')[1]
 
 
 def test_the_stack_carries_the_values_of_its_ops(profile: Profile) -> None:
