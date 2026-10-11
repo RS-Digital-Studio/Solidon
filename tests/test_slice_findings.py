@@ -4765,6 +4765,41 @@ def test_a_lattice_plate_between_two_walls_is_no_arch() -> None:
     assert advise.support_need(result).needed
 
 
+def niche(radius: float, rise: float) -> MeshData:
+    """Eine Nische, vorn offen: halber Zylinder bis 30 mm Höhe, darüber eine flache
+    Halbkuppel (Kugelkappe mit Sehne ``2·radius`` und Stich ``rise``)."""
+    sphere = (radius * radius + rise * rise) / (2.0 * rise)
+    centre = 30.0 + rise - sphere
+    profile = [(0.0, -30.0), (radius, -30.0), (radius, 30.0)]
+    for step in range(1, 41):
+        r = radius * (1.0 - step / 40.0)
+        profile.append((r, centre + math.sqrt(max(sphere * sphere - r * r, 0.0))))
+    cutter = trimesh.creation.revolve(np.asarray(profile), sections=128)
+    width, depth = 2.0 * radius + 16.0, radius + 4.0
+    block = brick(width, depth, 45.0, (0.0, depth / 2.0, 22.5))
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([block, cutter])))
+
+
+@pytest.mark.parametrize(
+    ("radius", "rise", "angle"),
+    [
+        pytest.param(10.0, 1.7, 45.0, id="r10-45"),
+        pytest.param(10.0, 1.7, 60.0, id="r10-60"),
+        pytest.param(12.0, 2.0, 60.0, id="r12-60"),
+    ],
+)
+def test_a_flat_half_dome_keeps_its_supports(radius: float, rise: float, angle: float) -> None:
+    """Ein gekrümmter Streifen, der an einer Seite hängt, liegt nicht zwischen zwei
+    Auflagen (Nachprüfung RM-585, Z1): Die Hülle seines gebogenen Rands ist das
+    Kreissegment, in dem er liegt, und ein Halbring unter einer flachen Halbkuppel
+    galt als gefasst. Am Centauri bekam die Nische R 12 mit 2 mm Stich bei 0,2 mm
+    keine Stütze mehr (vorher 12,9 m), im G-Code hingen Bahnen bis 2,5 mm neben der
+    Schicht darunter. Gemessen wird die freie Kante entlang, nicht ihre Sehne."""
+    result = slice_body(niche(radius, rise), 0.2, overhang_angle=angle, bridge_from=TWO_LINES)
+
+    assert advise.support_need(result).needed
+
+
 def slab_between_posts() -> MeshData:
     """Eine Platte 12 auf 10 mm kragt aus einer Wand, an ihrem Ende steigt eine Lippe
     unter 20° an; zwei Pfosten stehen 0,5 mm neben ihren Längsseiten, berühren sie aber

@@ -4081,7 +4081,11 @@ LEDGE_SPILL: Final = 0.05
 #: Breite in Millimetern trennt sie vom Rundbogen von 30 mm Halbmesser, dessen
 #: Flanken unter dem Scheitel bei 0,2 mm 0,57 mm über die Zugabe kragen und
 #: sich tragen müssen. Vier Schichthöhen sind zwei Bahnen an der Regelschicht,
-#: der halben Bahnbreite; bei 0,2 mm und darüber entscheidet die Bahnbreite.
+#: der halben Bahnbreite. Den Kragarm entscheidet ab 0,2 mm die Bahnbreite;
+#: die kurze Brücke deckeln bis gut 0,2 mm die vier Schichthöhen (bei 0,2 mm
+#: 0,8 mm über die Zugabe gegen zwei Bahnen von 0,84 mm). Bei 0,08 und 0,12 mm
+#: trägt sich eine Decke ab gut 11° Schicht für Schicht als Kragarm, auch in
+#: einer tiefen Wand: Ihre Außenbahn liegt weniger als eine Bahn daneben.
 CANTILEVER_LAYERS: Final = 4.0
 
 
@@ -4399,6 +4403,14 @@ def _hangs_on(piece: ShapelyPolygon, below: Any, reach: float) -> bool:
     if near.is_empty:
         return False
     return bool(piece.difference(near.buffer(reach)).area <= LEDGE_SPILL * piece.area)
+
+
+def _runs_loose(part: ShapelyPolygon, held: Any) -> bool:
+    """Läuft ein Stück seiner Randlinie außerhalb von ``held`` am Stück weiter als
+    :data:`SPAN_INTERESTING`? Die lose Kante eines freien Teils, entlang gemessen —
+    an einem Bogen der Lauf, nicht die Sehne (Nachprüfung RM-585, Z1)."""
+    loose = part.boundary.difference(held)
+    return any(line.length > SPAN_INTERESTING for line in _merged_lines(loose))
 
 
 def ledge_space(
@@ -4921,10 +4933,15 @@ class _Ceilings:
         """Läuft der freie Teil des Stücks (:meth:`_beyond`) länger als
         :data:`SPAN_INTERESTING`?
 
-        Gemessen an der langen Seite seines kleinsten umschriebenen Rechtecks.
+        Gemessen entlang seiner losen Kante und an der langen Seite seines
+        kleinsten umschriebenen Rechtecks. Die Kante zuerst (Nachprüfung RM-585,
+        Z1): An einem gekrümmten Streifen — einem Halbring unter einer flachen
+        Halbkuppel — misst das Rechteck die Sehne, nicht den Lauf.
         """
-        free = self._beyond(member)[0]
+        free, _near, held = self._beyond(member)
         for part in _areas_of(free):
+            if _runs_loose(part, held):
+                return True
             rectangle = part.minimum_rotated_rectangle
             if rectangle.geom_type != "Polygon":
                 continue
@@ -4953,7 +4970,12 @@ class _Ceilings:
         zwischen seinen Auflagen** (Nachprüfung RM-585, N2): Ein schmaler
         Streifen, der an einer Seite hängt, fasste mit den Stummeln an seinen
         Enden seine eigene Hülle — an einer Pultdecke unter 12° bei 60° galten so
-        41 von 42 Streifen als gefasst.
+        41 von 42 Streifen als gefasst. **Und seine freie Kante läuft nicht weiter
+        als** :data:`SPAN_INTERESTING` (Z1): Die Hülle eines gebogenen Rands ist
+        das Kreissegment, in dem er liegt — ein Halbring unter einer flachen
+        Halbkuppel galt als gefasst, und im G-Code hingen Bahnen bis 2,5 mm neben
+        der Schicht darunter. Ein Ring unter einer flachen Kuppel, weiter als
+        knapp 5 mm, ist damit auch nicht mehr gefasst; er gehört zum Scheitel.
         Wie weit ein gefasster Streifen spannt, fragt :meth:`arch` danach.
         """
         gap = self._gap(member)
@@ -4983,7 +5005,7 @@ class _Ceilings:
             if part.area <= LEDGE_SPILL * shape.area:
                 continue
             answer = self._spans(part, held, seam)
-            if answer is None or not answer[0]:
+            if answer is None or not answer[0] or _runs_loose(part, held):
                 return False
         return True
 
