@@ -553,11 +553,29 @@ def thread_at_gauge(feature: Feature) -> tuple[float, float] | None:
     ``gauge_nominal``, das Nennmaß seiner Größe in der Bezugsebene; das gebaute
     Maß dort liegt um dasselbe neben ``diameter`` wie das Nennmaß neben
     ``nominal``, denn beide wachsen mit demselben Kegel. Ein gemessenes oder
-    geändertes Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
+    gemessenes Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
     Passung und Gegenstück raten sie nicht.
+
+    **Ein geändertes Gewinde behält sie** (Nachprüfung GEW, N2): *Merkmal
+    ändern* setzt das neue Maß in der Mitte bei gleichem Kegel und gleicher
+    Strecke, also liegt die Bezugsebene um dasselbe Stück daneben wie zuvor.
+    Es nennt dann ``gauge_offset``, gebautes Maß in der Bezugsebene minus Maß in
+    der Mitte, und ist gebaut, wie es dasteht: Nennmaß gleich gebautem Maß.
     """
     if not thread_is_tapered(feature):
         return None
+    offset = feature.params.get("gauge_offset")
+    diameter = feature.params.get("diameter")
+    if (
+        isinstance(offset, int | float)
+        and not isinstance(offset, bool)
+        and isinstance(diameter, int | float)
+        and not isinstance(diameter, bool)
+        and math.isfinite(offset)
+        and math.isfinite(diameter)
+    ):
+        built = float(diameter) + float(offset)
+        return built, built
     numbers: list[float] = []
     for name in ("diameter", "nominal", "gauge_nominal"):
         value = feature.params.get(name)

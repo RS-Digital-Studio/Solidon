@@ -175,6 +175,7 @@ from app.core.types import (
     Transform,
     Vec3,
     is_a_cavity,
+    thread_at_gauge,
     thread_is_left_handed,
     thread_is_tapered,
     vec3_or_none,
@@ -9840,7 +9841,8 @@ class ResizeFeatureParams(BaseParams):
     # Verschweißweite, auch ein eng sitzender Stift (RM-661).
     # 29: Das geänderte Gewinde behält Profil, Gangzahl, Drehsinn und Kegel und nennt
     # Vorschub und Drehsinn als Parameter (RM-544, Review GEW G6).
-    cache_version="29",
+    # 30: Ein geänderter Kegel behält seine Bezugsebene (``gauge_offset``, Nachprüfung GEW N2).
+    cache_version="30",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -19150,6 +19152,11 @@ def _resize_thread(
     }
     if thread.starts > 1:
         kept["starts"] = thread.starts
+    # Die Bezugsebene eines Kegels bleibt, wo sie war: gleicher Kegel, gleiche
+    # Strecke, neues Maß in der Mitte (``types.thread_at_gauge``, Nachprüfung GEW N2).
+    gauge = thread_at_gauge(feature)
+    if gauge is not None:
+        kept["gauge_offset"] = gauge[0] - float(feature.params.get("diameter", 0.0))
     changed = dataclasses.replace(
         feature,
         params={
@@ -19182,6 +19189,7 @@ def _resize_thread(
                 "length",
                 *(("starts",) if thread.starts > 1 else ()),
                 *(("taper",) if thread.slope else ()),
+                *(("gauge_offset",) if "gauge_offset" in kept else ()),
             ),
             "parameter",
         ),

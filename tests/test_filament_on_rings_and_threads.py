@@ -99,6 +99,45 @@ def test_a_generated_thread_colours_its_flanks_but_not_its_seat(
     assert top and all(as_mesh_data(output.mesh).slots[index] == 0 for index in top)
 
 
+@pytest.mark.parametrize(
+    ("size", "internal"),
+    [("R1/2", False), ("R1/2", True), ("1/2-14 NPT", False), ("G1/2", False), ("M12", False)],
+)
+def test_a_pipe_or_tapered_thread_colours_every_turn(size: str, internal: bool) -> None:
+    """Nachprüfung GEW, N1: Am Kegel blieb am weiten Ende ein Ring ungefärbt.
+
+    Die Hülle nahm den Kamm des flachen Profils in der Mitte; Whitworth und NPT
+    sind tiefer, und am Kegel wächst der Kamm zum weiten Ende. R1/2 außen über
+    30 mm ließ 2 687 von 16 504 Gangdreiecken aus, NPT 1/2 818 von 6 524. Soll
+    sind alle Dreiecke bis zum gebauten Kamm, ohne die Deckel quer zur Achse.
+    """
+    from app.core.knowledge.parts import fasteners
+    from app.core.registry.params import validate
+
+    made = fasteners.printed_thread(
+        validate(fasteners.ThreadParams, {"size": size, "internal": internal, "length": 30.0})
+    )
+    mesh = as_mesh_data(made.mesh)
+    feature = made.features["thread_1"]
+    chosen = set(feature_triangles(mesh, feature))
+    vertices = np.asarray(mesh.raw.vertices, dtype=float)
+    centres = np.asarray(mesh.raw.triangles_center, dtype=float)
+    normals = np.asarray(mesh.raw.face_normals, dtype=float)
+    centre = np.asarray(feature.params["centre"], dtype=float)
+    reach = float(np.sqrt(vertices[:, 0] ** 2 + vertices[:, 1] ** 2).max())
+    radial = np.sqrt((centres[:, 0] - centre[0]) ** 2 + (centres[:, 1] - centre[1]) ** 2)
+    expected = set(
+        np.flatnonzero(
+            (np.abs(centres[:, 2] - centre[2]) <= 15.0 + 1e-6)
+            & (radial <= reach + 1e-6)
+            & (np.abs(normals[:, 2]) < 1.0 - 1e-6)
+        ).tolist()
+    )
+    assert expected - chosen == set(), f"{len(expected - chosen)} Gangdreiecke fehlen"
+    # Und kein Dreieck außerhalb der gebauten Hülle.
+    assert chosen <= expected
+
+
 def test_a_tapped_hole_colours_its_thread_but_not_the_plate_faces(
     kind: str, profile: Profile
 ) -> None:

@@ -88,7 +88,7 @@ def _gauge_diameter(feature: Feature) -> float | None:
     Ein kegeliges Gewinde nennt sein Maß in der Mitte seiner Strecke, und im
     gefügten Paar liegen die Mitten der zwei Hälften nicht auf einer Höhe —
     verglichen, maß ein frisches R 1/4 mit 12 mm „0,12 statt 0,50 mm“. Wo die
-    Bezugsebene nicht bekannt ist (gemessen, geändert), gibt es kein Maß
+    Bezugsebene nicht bekannt ist (gemessen, skaliert), gibt es kein Maß
     (``types.thread_at_gauge``); ein zylindrisches Gewinde, etwa Rp unter R,
     hat seins auf ganzer Länge.
     """

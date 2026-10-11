@@ -865,15 +865,21 @@ def coupled_thread_drafts(
         inner = bool(feature.params.get("internal", False))
         partner = diameter - wanted if inner else diameter + wanted
         if thread_is_tapered(feature) or thread_is_tapered(other):
-            # **Am Kegel geht das Gegenstück um dasselbe Stück mit** (Review GEW,
-            # H1): Beide Maße gelten in der Mitte ihrer Strecke, und die zwei
-            # Mitten liegen im gefügten Paar nicht auf einer Höhe. Um dasselbe
-            # Stück geändert, bleibt das Spiel in jeder Ebene, wie es war.
-            partner = (
-                float(other.params.get("diameter", 0.0))
-                + diameter
-                - float(feature.params.get("diameter", 0.0))
-            )
+            # **Am Kegel trifft sich das Paar in der Bezugsebene** (Review GEW, H1,
+            # Nachprüfung N2): Beide Maße gelten in der Mitte ihrer Strecke, und die
+            # zwei Mitten liegen im gefügten Paar nicht auf einer Höhe. Sind beide
+            # Bezugsebenen bekannt, steht das Gegenstück dort um das verlangte Spiel
+            # daneben; sonst geht es um dasselbe Stück mit, und das Spiel bleibt.
+            own_gauge, other_gauge = thread_at_gauge(feature), thread_at_gauge(other)
+            own_at = float(feature.params.get("diameter", 0.0))
+            other_at = float(other.params.get("diameter", 0.0))
+            if own_gauge is not None and other_gauge is not None:
+                meeting = diameter + own_gauge[0] - own_at
+                partner = (meeting - wanted if inner else meeting + wanted) - (
+                    other_gauge[0] - other_at
+                )
+            else:
+                partner = other_at + diameter - own_at
         if is_close(partner, float(other.params.get("diameter", 0.0))) and is_close(
             pitch, float(other.params.get("pitch", 0.0))
         ):

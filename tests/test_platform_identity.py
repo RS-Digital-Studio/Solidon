@@ -1716,6 +1716,46 @@ def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None
     assert noisy == quiet, f"{way} hängt an einer plattformabhängigen Rechnung"
 
 
+def _thread_profile_constants(module: Any) -> list[object]:
+    """Die beim Import gerechneten Zahlen der Gangprofile und der ungeteilte Umriss."""
+    return [
+        module._WHITWORTH_HEIGHT,
+        module._WHITWORTH_SINE,
+        module.WHITWORTH_DEPTH,
+        module.WHITWORTH_RADIUS,
+        module._NPT_OUTLINE,
+        module._whitworth_outline(1),
+    ]
+
+
+def test_the_thread_profiles_do_not_hang_on_the_machine_when_imported() -> None:
+    """Nachprüfung GEW, N3: Die Konstanten der Gangprofile entstehen beim Import.
+
+    Dorthin kam das Rauschen des Wegs ``thread_ridge`` nie: Ein ``math.tan`` in
+    ``WHITWORTH_DEPTH`` bliebe grün, denn der Umriss rechnet mit dem, was der
+    Import schon festgelegt hat. Hier wird ``shapes`` unter dem Rauschen frisch
+    geladen, als eigenes Modul neben dem geladenen.
+    """
+    import importlib.util
+
+    from app.core.knowledge.parts import shapes
+
+    def fresh() -> Any:
+        spec = importlib.util.spec_from_file_location("_shapes_fresh", shapes.__file__)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    quiet = _thread_profile_constants(fresh())
+    assert quiet == _thread_profile_constants(shapes), "frisch geladen wie beim Import"
+    # Jedes Muster bewegt etwa die Hälfte der Werte; acht Muster treffen jeden.
+    for pattern in range(8):
+        with platform_noise(pattern):
+            noisy = _thread_profile_constants(fresh())
+        assert noisy == quiet, f"die Gangprofile hängen an der Plattform (Muster {pattern})"
+
+
 def _forget_what_the_perception_remembers() -> None:
     """Die prozessweiten Merker der Erkennung leeren — Merkmale und Nachmessungen."""
     from app.core.perceive.features import forget_cache

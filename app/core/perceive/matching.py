@@ -1929,8 +1929,10 @@ def _transformed_features(
             # (``fits._thread_wanted``).
             params.pop("nominal", None)
             params.pop("gauge_nominal", None)
+            params.pop("gauge_offset", None)
             sources.pop("nominal", None)
             sources.pop("gauge_nominal", None)
+            sources.pop("gauge_offset", None)
         if uniform:
             for key in lengths:
                 if key in params:

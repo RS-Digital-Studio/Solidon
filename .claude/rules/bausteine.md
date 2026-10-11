@@ -298,8 +298,8 @@ Gänge je Zoll werden nur in `standards.form_pitch` zu Millimetern, und ihr
 Feld trägt die gröbste Steigung als `least` (Null heißt die Reihe).
 
 **Ein Kegel misst in seiner Bezugsebene**: Das Merkmal nennt Maß und Nennmaß
-in der Mitte und dazu `gauge_nominal`; Gegenstück, Passung und Kopplung
-rechnen über `types.thread_at_gauge`. Ohne bekannte Bezugsebene sucht das
+in der Mitte und dazu `gauge_nominal`, nach *Merkmal ändern* `gauge_offset`;
+Gegenstück, Passung und Kopplung rechnen über `types.thread_at_gauge`. Ohne bekannte Bezugsebene sucht das
 Gegenstück über die halbe Länge, und die Passung sagt „nicht messbar“, statt
 Mitte gegen Mitte zu vergleichen. Am Netz baut `build.threaded` den Kegel
 genäht und vernetzt — plattformgleich nur so weit wie die Tessellierung von
