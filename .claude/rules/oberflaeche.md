@@ -250,6 +250,12 @@ selbst wenn der Dialog keinen zusätzlichen Handlungsknopf ausführen kann.
 Die nächste Vorschau räumt den alten Satz ab; das Vorschauband bleibt die
 Rückmeldung im Bild.
 
+**Ohne Pflichtwahl keine Vorschau:** Fehlt ein Bild, eine Datei
+(`OperationDialog.source_missing`) oder die Stelle eines Bausteins
+(`place_missing`), rechnet der Dialog nicht — die Auswertung hielte sicher an
+und das Band nennte eine Absage, bevor jemand gewählt hat —, und *Übernehmen*
+nennt den Knopf oder „Stelle im Bild anklicken.“ (RM-773, RM-775).
+
 Eine fehlgeschlagene oder unvollständige Rechnung sperrt auch ohne Bildpflicht
 das Übernehmen und verwirft einen bereits wartenden Klick. Neue Werte brauchen
 eine neue Freigabe. Nur eine ausdrücklich gemeldete Rückfrage darf ohne Ergebnis

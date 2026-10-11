@@ -193,6 +193,7 @@ Nutzen da und sonst nichts.
 - Träfe eine Handlung ein getrenntes Teil neben dem Merkmal oder berührte ein gesetztes Merkmal anderes Material nur auf einer Linie, sagt Solidon das, statt den Körper zu beschädigen.
 - Steht einer Merkmalshandlung ein getrenntes Teil im Weg, trennt *In Einzelteile aufteilen und erneut versuchen* es ab und führt die Handlung aus. Strg+Z nimmt beides zurück.
 - Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch Stifte und Scheiben neben einer großen Platte. Wegfallen nur kleine offene Flächen und Krümel, die der Drucker nicht abbildet.
+- Ein Relief rechnet erst, wenn ein Bild gewählt ist. Bis dahin nennt der Dialog den Knopf *Bild wählen …*.
 
 ### Erzeugen mit KI
 

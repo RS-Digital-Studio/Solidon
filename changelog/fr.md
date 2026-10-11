@@ -169,6 +169,7 @@ dans `website/version.json`.
 - Si une action touchait une pièce séparée voisine, ou si une caractéristique posée ne touchait une autre matière que sur une ligne, Solidon le dit au lieu d'abîmer le corps.
 - Si une pièce séparée gêne une action sur une caractéristique, *Diviser en pièces distinctes et réessayer* la sépare et exécute l'action. Ctrl+Z annule les deux.
 - La division en pièces distinctes garde toute pièce imprimable, même goujons et rondelles près d'une grande plaque. Seules tombent petites surfaces ouvertes et miettes non imprimables.
+- Un relief n'est calculé qu'une fois une image choisie. D'ici là, la boîte de dialogue indique le bouton *Choisir une image …*.
 
 ### Générer avec l'IA
 

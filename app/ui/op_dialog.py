@@ -233,6 +233,11 @@ def accept_text(spec: OperationSpec) -> str:
     return str(spec.title)
 
 
+#: Feldarten, deren Wert eine Projektquelle nennt, die erst gewählt werden muss
+#: (:meth:`OperationDialog.source_missing`).
+_CHOSEN_SOURCES: Final = ("image", "source")
+
+
 def placement_hint() -> str:
     """Was der Dialog sagt, solange im Bild gezielt wird — seine erste Zeile."""
     return tr("Stelle im Bild anklicken.")
@@ -2508,6 +2513,7 @@ class OperationDialog(QDialog):
                 (entry.kind == "material" and entry.required)
                 or (entry.targets_feature and entry.required)
                 or (entry.kind == "sketch" and (entry.required or entry.depends_on is not None))
+                or (entry.kind in _CHOSEN_SOURCES and entry.required)
                 for entry in self.spec.params.spec()
             )
         ):
@@ -2585,6 +2591,7 @@ class OperationDialog(QDialog):
             self._hidden_expression_open.setAccessibleDescription("")
         missing_sketch = self._missing_sketch()
         missing_material = self._missing_material()
+        missing_source = self.source_missing()
         # Und ein Pflicht-Ziel ohne Eintrag (Bedienweg-Durchsicht 14.09.2026):
         # *An Merkmal ausrichten* am einzigen Körper hat keinen zweiten, dessen
         # Merkmal es anpeilen könnte — die Liste ist leer, und „Übernehmen"
@@ -2614,6 +2621,7 @@ class OperationDialog(QDialog):
             or no_count
             or missing_sketch
             or missing_material
+            or missing_source
             or (self._target_reason() if no_target else "")
             or (tr("Wählen Sie eine ebene Fläche für das Muster.") if no_texture_face else "")
             or (placement_hint() if no_place else "")
@@ -2628,6 +2636,7 @@ class OperationDialog(QDialog):
             or bool(no_count)
             or bool(missing_sketch)
             or bool(missing_material)
+            or bool(missing_source)
             or no_target
             or no_texture_face
             or no_place
@@ -2744,6 +2753,7 @@ class OperationDialog(QDialog):
             self._target_missing()
             or self._missing_sketch()
             or self._missing_material()
+            or self.source_missing()
             or self._texture_face_missing()
             or self.place_missing()
             or self._blocked_reason is not None
@@ -2760,7 +2770,11 @@ class OperationDialog(QDialog):
         if not self.can_accept():
             # Ohne Stelle gibt es keine Vorschau, auf die ein Klick warten
             # könnte (RM-773).
-            if self.preview_defer is not None and not self.place_missing():
+            if (
+                self.preview_defer is not None
+                and not self.place_missing()
+                and not self.source_missing()
+            ):
                 self.preview_defer()
             return
         super().accept()
@@ -2808,6 +2822,31 @@ class OperationDialog(QDialog):
                 continue
             if not values.get(entry.name):
                 return tr("{name}: {value}", name=entry.title, value=tr("Materialprofil wählen …"))
+        return ""
+
+    def source_missing(self) -> str:
+        """Ein Pflichtfeld für Bild oder Datei ohne Wahl — und der Knopf, der es füllt (RM-775).
+
+        Kundenprotokoll zu 0.5.3: „op.displace_image.ValidationError: Diese
+        Quelle gibt es im Projekt nicht.“ Das Bild war noch gar nicht gewählt:
+        Die Vorschau lief beim Öffnen von *Relief auflegen* mit leerer Quelle,
+        und der Kern meldete eine Kennung, die es nicht gibt. Solange der Satz
+        hier steht, rechnet keine Vorschau, und *Übernehmen* nennt den Knopf.
+        """
+        schema = self.spec.params.spec()
+        wanted = [
+            entry
+            for entry in schema
+            if entry.kind in _CHOSEN_SOURCES and entry.required and not entry.internal
+        ]
+        if not wanted:
+            return ""
+        values = self.values()
+        for entry in wanted:
+            if inactive_dependency(entry, schema, values) is not None or values.get(entry.name):
+                continue
+            choose = tr("Bild wählen …") if entry.kind == "image" else tr("Datei wählen …")
+            return tr("{name}: {value}", name=entry.title, value=choose)
         return ""
 
     def _seeks_a_place(self) -> bool:

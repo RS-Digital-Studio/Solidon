@@ -168,6 +168,7 @@ it into `website/version.json`.
 - If an action would hit a separate part next to the feature, or a placed feature would touch other material only along a line, Solidon says so instead of damaging the body.
 - If a separate part is in the way of a feature action, *Split into separate parts and try again* separates it and runs the action. Ctrl+Z undoes both.
 - Splitting into separate parts keeps every printable part, including pins and washers next to a large plate. Only small open surfaces and crumbs the printer cannot reproduce are dropped.
+- A relief only computes once an image is chosen. Until then the dialog points to the *Choose an image …* button.
 
 ### Generating with AI
 

@@ -23723,10 +23723,10 @@ class MainWindow(QMainWindow):
             flow = dialog.placement_flow
             if flow is not None and flow.active and approval.required is False:
                 return
-            if dialog.place_missing():
-                # Ein Baustein ohne Stelle rechnet nicht: Die Auswertung hielte
-                # sicher an, und das Band zeigte die Absage, bevor die
-                # Platzierung ihre Stelle gefunden hat (RM-773).
+            if dialog.place_missing() or dialog.source_missing():
+                # Ohne Stelle oder Bild rechnet nichts: Die Auswertung hielte
+                # sicher an, und das Band zeigte die Absage, bevor jemand
+                # gewählt hat (RM-773, RM-775).
                 return
             self._request_order_preview(approval)
 

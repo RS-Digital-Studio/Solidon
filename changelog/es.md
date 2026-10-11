@@ -169,6 +169,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una acción alcanzara una pieza separada junto a la característica, o una característica colocada tocara otro material solo en una línea, Solidon lo dice en vez de dañar el cuerpo.
 - Si una pieza separada estorba a una acción sobre una característica, *Dividir en piezas sueltas y volver a intentarlo* la separa y ejecuta la acción. Ctrl+Z deshace ambas.
 - Al dividir en piezas sueltas se conserva cada pieza imprimible, también pasadores y arandelas junto a una placa grande. Solo caen superficies abiertas pequeñas y migas que la impresora no reproduce.
+- Un relieve solo se calcula cuando hay una imagen elegida. Hasta entonces el diálogo señala el botón *Elegir una imagen …*.
 
 ### Generar con IA
 

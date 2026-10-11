@@ -168,6 +168,7 @@ scrive in `website/version.json`.
 - Se un'azione colpisse un pezzo separato accanto alla caratteristica, o una caratteristica posizionata toccasse altro materiale solo lungo una linea, Solidon lo dice invece di danneggiare il corpo.
 - Se un pezzo separato intralcia un'azione su una caratteristica, *Dividi in pezzi distinti e riprova* lo separa ed esegue l'azione. Ctrl+Z annulla entrambe.
 - Dividendo in pezzi distinti resta ogni pezzo stampabile, anche perni e rondelle accanto a una piastra grande. Cadono solo piccole superfici aperte e briciole che la stampante non riproduce.
+- Un rilievo viene calcolato solo quando è scelta un'immagine. Fino ad allora la finestra indica il pulsante *Scegli un'immagine …*.
 
 ### Generare con l'IA
 
