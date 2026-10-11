@@ -4677,6 +4677,7 @@
   "In wie viele Objekte aufgeteilt wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht; passt die Zahl nicht, nennt diese Operation die richtige.": "In quanti oggetti si divide. Quanti pezzi ha davvero il corpo lo dice il rapporto di verifica; se il numero non torna, questa operazione indica quello giusto.",
   "In wie viele Stellen der Weg geteilt wird. Mehr findet engere Stellen, kostet aber je Schritt einen Schnitt durch beide Körper.": "In quante posizioni viene diviso il percorso. Un numero maggiore trova punti più stretti, ma costa un'intersezione di entrambi i corpi per passo.",
   "In „{name}“ hält die Kanalsperre Stützen aus schmalen Kanälen fern. Im Slicer prüfen, ob die Decken dort ohne halten.": "In «{name}» il blocco dei canali tiene i supporti fuori dai canali stretti. Verifica nello slicer se lì i soffitti reggono senza.",
+  "In „{name}“ liegt die Gitterstütze neben der Sperre eng am Überhang an, damit sie nicht in gesperrte Stellen reicht.": "In «{name}» il supporto a griglia accanto al blocco aderisce allo sbalzo, così non entra nelle zone bloccate.",
   "In „{name}“ sperrt die Übergabe Stützen unter Rändern, die sich selbst tragen. Im Slicer prüfen, ob sie sauber werden.": "In «{name}» il trasferimento blocca i supporti sotto i bordi che si reggono da soli. Controlla nello slicer che escano puliti.",
   "Infrage kommen: {list}.": "Possibili: {list}.",
   "Inhalt": "Indice",

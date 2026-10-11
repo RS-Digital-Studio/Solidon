@@ -36,7 +36,7 @@ from app.core.slice.analysis import slice_body
 from app.core.slice.gcode import DEVIATION_LIMIT
 from app.core.types import Profile, SceneObject
 from app.core.units import format_length
-from tests.gcode_contact import support_contact
+from tests.gcode_contact import support_contact, support_in_box
 from tests.helpers import set_test_license
 
 #: Je Programm ein Drucker, den sein Hersteller selbst führt — so läuft der
@@ -1711,6 +1711,133 @@ def test_the_support_contact_arrives_as_solidon_says(
     else:
         layers = bottom_layers
     assert measured.bottom_interface_layers == layers, f"untere Trennschicht: {measured}"
+
+
+# --- Gitter neben der Kanalsperre ------------------------------------------------
+
+#: Der gesperrte Tunnel des Prüfkörpers (:func:`_roofed_tunnel`) und der Raum vor
+#: einer seiner Mündungen, je unterer und oberer Eckpunkt im Rahmen des Körpers.
+_TUNNEL = ((-4.0, -8.0, 2.0), (4.0, 8.0, 14.0))
+_BEFORE_THE_MOUTH = ((-4.0, 9.0, 2.0), (4.0, 20.0, 14.0))
+
+#: Programme, die das Teil an seinem Platz schneiden, mit ihrem Drucker. Creality
+#: Print ordnet über die Konsole selbst an und drehte den Becher um 145°; dort
+#: gemessen mit der Drehung (0,94 m im Tunnel mit Gitter, 0,01 m mit ``snug``).
+#: Der Prusa XL führt in OrcaSlicer einen Baumstil (``organic``), den Gitter
+#: dort als Gitter druckt (Review rvtun, Fund 1).
+_BLOCKER_PROGRAMS = (
+    *(
+        (program, PROGRAMS[program])
+        for program in (
+            "elegooslicer",
+            "orcaslicer",
+            "bambustudio",
+            "anycubicslicernext",
+            "prusaslicer",
+        )
+    ),
+    ("orcaslicer", "prusa-xl"),
+)
+
+
+def _roofed_tunnel() -> MeshData:
+    """Ein Block mit einem Tunnel von 8 mm quer hindurch, auf einer Bodenplatte und
+    unter einem Dach, das ringsum 20 mm übersteht.
+
+    Das Dach braucht Stütze bis auf die Bodenplatte, auch vor den Mündungen; die
+    Tunneldecke ist ein Kanal über Modellmaterial, und die Sperre hält ihn frei."""
+    parts = [
+        trimesh.boolean.difference(
+            [
+                _brick((24.0, 16.0, 28.0), (0.0, 0.0, 16.0)),
+                _brick((8.0, 30.0, 12.0), (0.0, 0.0, 8.0)),
+            ]
+        ),
+        _brick((64.0, 56.0, 2.0), (0.0, 0.0, 1.0)),
+        _brick((64.0, 56.0, 2.0), (0.0, 0.0, 31.0)),
+    ]
+    return MeshData.of(trimesh.boolean.union(parts))
+
+
+def _brick(
+    extents: tuple[float, float, float], centre: tuple[float, float, float]
+) -> trimesh.Trimesh:
+    brick = trimesh.creation.box(extents)
+    brick.apply_translation(centre)
+    return brick
+
+
+@pytest.mark.parametrize(
+    ("program", "printer"),
+    [
+        pytest.param(program, printer, marks=pytest.mark.slicer(program), id=f"{program}-{printer}")
+        for program, printer in _BLOCKER_PROGRAMS
+    ],
+)
+def test_grid_support_stays_out_of_a_blocked_channel(
+    program: str,
+    printer: str,
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gitter neben der Kanalsperre bleibt aus dem Kanal (``handover.snug_beside_blocker``).
+
+    Die Sperre der Orca-Familie und von PrusaSlicer nimmt nur die Überhangfläche
+    in ihr aus. Im Gitterstil legen beide jede Säule auf ein Raster und schneiden
+    sie danach nur am Modell zu: Am Becher mit Deckel liefen die Säulen unter dem
+    Deckel 1,1 mm in die Mündungen des gesperrten Tunnels, von der Sohle bis zur
+    Decke (ElegooSlicer 1,08 m). Mit ``snug`` bleibt der Tunnel frei, und vor der
+    Mündung steht die Stütze des Dachs weiter."""
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    set_test_license(monkeypatch, active=True)
+    body = SceneObject("tunnel", "Tunnel", _roofed_tunnel())
+    profile = profiles.make_profile(printer, "pla")
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("support.style", "grid"),
+        ("support.placement", "everywhere"),
+        ("support.block_channels", True),
+    ):
+        settings = print_settings.with_choice(settings, path, value)
+    setup = _preselected(handover.detect(installed_slicer), profile)
+    folder = tmp_path / "platte"
+    folder.mkdir()
+    job = _PlateJob(
+        objects=(body,),
+        plates=(0,),
+        folder=folder,
+        name="tunnel",
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+    )
+    run = _prepare_plate(job, 0)
+    assert "export.support_blocker" in {finding.code for finding in run.findings}, (
+        "der Tunnel ist gesperrt"
+    )
+    outcome = handover.slice_model(
+        [run.model],
+        settings,
+        profile,
+        setup,
+        output_dir=folder,
+        timeout=600,
+        keep_arrangement=run.keep_arrangement,
+        slots=run.slots,
+        model_height=run.model_height,
+        model_meshes=run.meshes,
+        expected_tools=run.used_tools,
+    )
+    text = outcome.gcode_path.read_text(encoding="utf-8", errors="replace")
+
+    in_tunnel, total = support_in_box(text, (0.0, 0.0), *_TUNNEL)
+    before, _total = support_in_box(text, (0.0, 0.0), *_BEFORE_THE_MOUTH)
+    # Ohne Stütze vor der Mündung bliebe der Tunnel auch ohne Sperre frei.
+    assert before > 1000.0, f"vor der Mündung {before:.0f} mm Stütze, gesamt {total:.0f} mm"
+    assert in_tunnel < 50.0, f"{in_tunnel:.0f} mm Stütze im gesperrten Tunnel"
 
 
 # --- Kein doppelter Ausgleich (RM-589) -------------------------------------------
