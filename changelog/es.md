@@ -111,7 +111,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Para PETG, Solidon sugiere *Refrigeración total en el soporte*. Así se suelta más fácil de la pieza.
 - En figuras, Solidon propone la costura detrás, sin línea por delante. Para una cara superior grande y plana propone planchar.
 - El tiempo de impresión estimado incluye ahora el planchado.
-- Nuevos ajustes de impresión: *Capas de separación inferiores*, *Paredes de los árboles* y *Punta del árbol*, más *Contraer la primera capa* y *Ensanchar agujeros*, que siguen al slicer si no elige.
+- Nuevos ajustes de impresión: *Capas finas*, *Grosor mínimo superior*, *Capas de separación inferiores*, *Paredes de los árboles*, *Punta del árbol*, *Contraer la primera capa* y *Ensanchar agujeros*.
 - En *Planchar la superficie* ahora elige entre *Cara más alta* y *Todas las caras superiores*.
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
@@ -121,10 +121,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si una pieza ya compensa en el modelo, con un taladro con *Aplicar compensación del material* o *Compensar la pata de elefante*, Solidon sugiere que el slicer no lo haga otra vez.
 - También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
 - Incluso con el ordenador a plena carga, Solidon indica el motivo real al detener un slicer, en lugar de un tiempo agotado. Un archivo de impresión terminado se aprovecha.
-- El almacén de filamentos vuelve a reconocer un consumo descontado con Solidon 0.5.1 y pregunta antes de descontar otra vez la misma impresión.
+- El almacén de filamentos muestra un consumo de Solidon 0.5 con el mismo proyecto, bobinas y cantidades como registro anterior y pregunta antes de descontar otra vez.
 - Desde esta versión, un consumo descontado sigue unido a su impresión aunque una actualización calcule más rápido o cambie el perfil del fabricante en el slicer. Antes contaba como nueva.
 - Donde cúpulas planas y pendientes mostrarían escalones, Solidon sugiere capas finas solo allí. La sugerencia indica cuánto más tarda entonces la pieza.
-- Nuevo en los ajustes de impresión: *Capas finas* y *Grosor mínimo superior*, para que las caras superiores sobre capas finas queden cerradas.
 
 ### Roscas, taladros y piezas normalizadas
 

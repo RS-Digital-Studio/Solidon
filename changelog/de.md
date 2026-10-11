@@ -135,7 +135,7 @@ Nutzen da und sonst nichts.
 - Für PETG schlägt Solidon *Volle Kühlung an der Stütze* vor. Sie löst sich so leichter vom Teil.
 - An Figuren schlägt Solidon die Naht hinten vor, damit keine Linie über die Vorderseite läuft. Für eine große flache Oberseite schlägt es Bügeln vor.
 - Die geschätzte Druckzeit rechnet das Bügeln jetzt mit.
-- Neu in den Druckeinstellungen: *Trennschichten unten*, *Wände der Bäume* und *Baumspitze*, dazu *Erste Schicht einziehen* und *Löcher weiten*, die dem Slicer folgen, solange Sie nichts wählen.
+- Neu in den Druckeinstellungen: *Feine Schichten*, *Deckschichten mindestens*, *Trennschichten unten*, *Wände der Bäume*, *Baumspitze*, *Erste Schicht einziehen* und *Löcher weiten*.
 - Bei *Oberfläche bügeln* wählen Sie jetzt zwischen *Oberste Fläche* und *Alle Oberseiten*.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
@@ -145,10 +145,9 @@ Nutzen da und sonst nichts.
 - Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
-- Das Filamentlager erkennt eine Buchung aus Solidon 0.5.1 wieder als frühere Buchung und fragt nach, bevor es denselben Druck erneut abbucht.
+- Eine Buchung aus Solidon 0.5 mit gleichem Projekt, gleichen Spulen und Mengen bietet das Filamentlager als frühere Buchung an und fragt nach, bevor es denselben Druck erneut abbucht.
 - Ab dieser Version bleibt eine Buchung ihrem Druck zugeordnet, auch wenn ein Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
 - Wo flache Kuppen und Schrägen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger das Teil dann druckt.
-- Neu in den Druckeinstellungen: *Feine Schichten* und *Deckschichten mindestens*, damit Oberseiten über feinen Schichten dicht bleiben.
 
 ### Gewinde, Bohrungen und Normteile
 

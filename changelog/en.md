@@ -110,7 +110,7 @@ it into `website/version.json`.
 - For PETG, Solidon suggests *Full cooling at the support*. It then comes off the part more easily.
 - On figures, Solidon suggests the seam at the back, so no line runs down the front. For a large flat top it suggests ironing.
 - The estimated print time now includes ironing.
-- New in the print settings: *Interface layers below*, *Tree walls* and *Tree tip*, plus *Pull in first layer* and *Widen holes*, which follow the slicer unless you set them.
+- New in the print settings: *Fine layers*, *Minimum top thickness*, *Interface layers below*, *Tree walls*, *Tree tip*, *Pull in first layer* and *Widen holes*.
 - For *Iron the surface* you now choose between *Topmost face* and *All top surfaces*.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
@@ -120,10 +120,9 @@ it into `website/version.json`.
 - If a part already compensates in the model, with a hole drilled with *Apply material tolerance* or *Compensate the elephant foot*, Solidon suggests that the slicer does not do it again.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
-- The filament inventory again recognises a booking from Solidon 0.5.1 as an earlier booking and asks before deducting the same print again.
+- The filament inventory offers a booking from Solidon 0.5 with the same project, spools and amounts as an earlier booking and asks before deducting the same print again.
 - From this version on, a booking stays with its print, even when an update calculates faster or the manufacturer profile in the slicer changes. Previously, such a print counted as new.
 - Where shallow domes and slopes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the part then takes to print.
-- New in the print settings: *Fine layers* and *Minimum top thickness*, so top surfaces over fine layers stay closed.
 
 ### Threads, holes and standard parts
 

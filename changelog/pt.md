@@ -110,7 +110,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Para PETG, o Solidon sugere *Arrefecimento total no suporte*. Assim solta-se mais facilmente da peça.
 - Em figuras, o Solidon propõe a costura atrás, sem linha à frente. Para uma face superior grande e plana propõe engomar.
 - O tempo de impressão estimado inclui agora o engomar.
-- Novas definições de impressão: *Camadas de separação inferiores*, *Paredes das árvores* e *Ponta da árvore*, mais *Contrair a primeira camada* e *Alargar furos*, que seguem o slicer se não escolher.
+- Novas definições: *Camadas finas*, *Espessura mínima superior*, *Camadas de separação inferiores*, *Paredes das árvores*, *Ponta da árvore*, *Contrair a primeira camada* e *Alargar furos*.
 - Em *Engomar a superfície* escolhe agora entre *Face mais alta* e *Todas as faces superiores*.
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.
 - Se o slicer recusar filamentos com temperaturas demasiado diferentes numa placa, o Solidon indica agora o motivo e o que fazer, em vez de dizer apenas que não foi criado nenhum ficheiro.
@@ -120,10 +120,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma peça já compensa no modelo, com um furo com *Aplicar compensação do material* ou *Compensar o pé de elefante*, o Solidon sugere que o slicer não o faça de novo.
 - Também com impressoras que o PrusaSlicer ou o SuperSlicer não conhecem, ambos calculam o tempo de impressão com as acelerações entregues, e o ficheiro indica o material da bobina.
 - Mesmo com o computador em plena carga, o Solidon indica o motivo real ao parar um slicer, em vez de um tempo esgotado. Um ficheiro de impressão terminado é aproveitado.
-- O armazém de filamentos volta a reconhecer um consumo descontado com o Solidon 0.5.1 e pergunta antes de descontar de novo a mesma impressão.
+- O armazém de filamentos apresenta um consumo do Solidon 0.5 com o mesmo projeto, bobinas e quantidades como registo anterior e pergunta antes de descontar de novo.
 - A partir desta versão, um consumo descontado fica ligado à sua impressão, mesmo que uma atualização calcule mais depressa ou o perfil do fabricante mude no slicer. Antes contava como nova.
 - Onde cúpulas planas e rampas mostrariam degraus, o Solidon sugere camadas finas só aí. A sugestão indica quanto mais tempo a peça demora a imprimir.
-- Novo nas definições de impressão: *Camadas finas* e *Espessura mínima superior*, para que as faces superiores sobre camadas finas fiquem fechadas.
 
 ### Roscas, furos e peças normalizadas
 
