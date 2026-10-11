@@ -87,6 +87,8 @@ Nutzen da und sonst nichts.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
 - Reparieren und das Auflösen von Überschneidungen gehen an großen Modellen bis zu viermal so schnell, der Export als 3MF deutlich schneller.
 - Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
+- Die Anzeige *Das Modell wird angezeigt …* verschwindet, sobald die Ansicht fertig ist, und bleibt nicht mehr über dem Modell stehen.
+- Meldungen zu Eingaben und Formen bieten keinen Fehlerbericht mehr an. Den gibt es nur noch, wo Solidon selbst einen Fehler gemacht hat.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
 - Nach einer Bohrung oder einem versetzten Merkmal sind die Merkmale eines großen technischen Teils rund ein Drittel schneller wieder erkannt.
@@ -159,6 +161,12 @@ Nutzen da und sonst nichts.
 - Von unten eingelegt liegt die Tasche der Mutternfalle unter der Fläche, ihr Schlitz führt hinab. Bisher saß sie halb darüber, die Schraube in der Fläche.
 - Reicht die Bohrung eines Bausteins nicht durch das Teil, heißt sie jetzt Sackloch. Bisher hieß sie Durchgang.
 - Ist die Wand dicker als bei *Kabeldurchführung* oder *Schlauchtülle* eingetragen, sagt der Schritt es und öffnet die Wandstärke. Bisher endete der Durchgang still im Material.
+- Gewinde gibt es jetzt auch als Rohrgewinde G und R, als Zollgewinde UNC und UNF und als NPT, im *Druckbaren Gewinde*, an Schraube, Mutter und *Gewindebolzen*.
+- Jedes Gewinde gibt es auch links. Ein eigenes Maß nimmt Gänge je Zoll und mehrere Gänge, auch bei *Schraube erstellen* und *Drehdeckel erzeugen*.
+- Welche Gewindereihen die Größenlisten zeigen, stellen Sie in den Einstellungen unter *Gewindereihen in den Auswahllisten* ein.
+- Gegenstück und *Stift für Bohrung* passen auch zu Zoll-, Rohr-, Links-, mehrgängigen und kegeligen Gewinden. Passt ein gemessenes Gewinde zu zwei Reihen, fragt Solidon nach.
+- Links-, mehrgängige und kegelige Gewinde lassen sich mit *Merkmal ändern* und *Merkmal entfernen* bearbeiten und behalten dabei Drehsinn, Gangzahl und Kegel.
+- Ein mehrgängiges Gewinde in einem eingelesenen Netz erkennt Solidon als ein Gewinde mit seiner Gangzahl. Bisher standen dort mehrere Gewinde mit zu großer Steigung.
 
 ### Bausteine
 
@@ -204,11 +212,15 @@ Nutzen da und sonst nichts.
 - Dünne Wände, etwa an einer Vase, kommen geschlossen und mit Dicke an.
 - Der Assistent antwortet in der Sprache, in der Sie schreiben.
 - Mit lokalem Modell hat der Assistent so viel Raum wie mit einem gehosteten und schafft Aufträge mit bis zu zwölf Schritten.
+- Brechen Sie einen Vorschlag des Assistenten ab, bestätigt die Statuszeile das, statt einen Programmfehler zu melden.
+- Öffnen Sie während eines Vorschlags ein anderes Projekt, verwirft Solidon den Vorschlag und legt Ihre Anfrage zurück in den Chat.
 - Erzeugte Modelle kommen öfter geschlossen an. Wo sich Flächen nur berühren, trennt Solidon sie, und kleine Falten der Oberfläche glättet es, statt eine Selbstkreuzung zu melden.
 - Ist ein Versuch schon beim Erzeugen zerfallen, sagt der Dialog es vor dem Übernehmen und bietet *Noch ein Versuch* an.
 - Ist ein erzeugtes Modell nur eine dünne Haut um einen Hohlraum, sagt es der Dialog vor dem Übernehmen und der Prüfbericht danach, jeweils mit dem Weg zu einem neuen Versuch.
 - Vor dem Herunterladen nennen *Chat einrichten* und *ComfyUI einrichten*, wie viel Grafikspeicher und Platz ein Modell braucht und ob dieser Rechner das hat.
 - Auf einem Mac schlägt *Chat einrichten* ein lokales Modell vor, das in den gemeinsamen Speicher passt, und sagt, wann ein Schlüssel für ein gehostetes Modell besser ist.
+- Fehlt das gewählte lokale Modell oder lehnt der Anbieter den Schlüssel ab, sagt Solidon es in einem Satz und führt mit *Chat einrichten* direkt zum Ausweg.
+- Einen ungültigen Schlüssel übergeht Solidon einen Tag lang, bis Sie einen anderen eintragen oder *Noch einmal versuchen* wählen. So lange antwortet ein lokales Modell, wenn eines eingerichtet ist.
 - Bei einem neu erzeugten Modell rechnet *Größe ändern* nur das neue Maß und wiederholt die Reparatur nicht mehr. Das geht schneller, und Strg+Z nimmt die Änderung sofort zurück.
 
 ## 0.5.3

@@ -207,6 +207,77 @@ def test_changing_a_paired_thread_changes_its_counterpart_in_the_same_step(
     assert len(document.ops) == steps, "ein Strg+Z nimmt beide Schritte"
 
 
+def test_changing_a_paired_tapered_thread_keeps_a_measurable_fit(profile: Profile) -> None:
+    """Nachprüfung GEW, N2: Nach *Merkmal ändern* an einem R-Paar sagte die Passung „nicht messbar“.
+
+    Beide Hälften verloren mit dem Nennmaß auch die Bezugsebene, obwohl der
+    Kegel derselbe bleibt und das neue Maß in der Mitte gilt. Sie behalten sie
+    jetzt als Abstand der Bezugsebene vom Maß in der Mitte (``gauge_offset``),
+    und die Kopplung setzt das Gegenstück dort, wo sich das Paar trifft.
+    """
+    from app.core.types import thread_at_gauge
+
+    document = new_project("centauri-carbon-2", "petg").document
+    cache = ResultCache()
+    plate = {"width": 40.0, "depth": 30.0, "height": 20.0}
+    History(document).apply(
+        "Zwei Platten",
+        [
+            OperationDraft(op="create_box", params=plate),
+            OperationDraft(op="create_box", params=plate),
+        ],
+    )
+    History(document).apply(
+        "Daneben", [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 60.0})]
+    )
+    History(document).apply(
+        "R 1/4 in der ersten Platte",
+        [
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"size": "R1/4", "length": 12.0, "internal": True, "z": 20.0},
+            )
+        ],
+    )
+    scene = evaluate(document, profile, cache=cache).scene
+    (feature,) = [
+        item
+        for item in scene.objects["obj_1"].features.values()
+        if item.kind == "thread" and item.provenance == "generated"
+    ]
+    applied = apply_thread_counterpart(
+        document, feature, "obj_1", "obj_2", {"x": 60.0, "y": 0.0, "z": 20.0}
+    )
+    attach_thread_fit(document, applied, feature, evaluate(document, profile, cache=cache).scene)
+    (fit,) = active_fits(document)
+    before = evaluate(document, profile, cache=cache)
+    wanted, _names = target(before.scene, fit, profile, as_stated=True)
+    partner = fit.b if fit.a.object_id == "obj_1" else fit.a
+
+    own = OperationDraft(
+        op="resize_feature",
+        inputs=("obj_1",),
+        params={
+            "at_feature": feature.id,
+            "diameter": float(feature.params["diameter"]) + 0.2,
+            "pitch": float(feature.params["pitch"]),
+        },
+    )
+    coupled = coupled_thread_drafts(document, before.scene, profile, "obj_1", dict(own.params))
+    assert len(coupled) == 1
+    History(document).apply("Gewinde ändern", [own, *coupled])
+    after = evaluate(document, profile, cache=cache)
+    assert after.stopped_at is None
+    inner = after.scene.objects["obj_1"].features[feature.id]
+    outer = after.scene.objects[partner.object_id].features[partner.feature_id]
+    inner_gauge, outer_gauge = thread_at_gauge(inner), thread_at_gauge(outer)
+    assert inner_gauge is not None and outer_gauge is not None, "die Bezugsebene bleibt bekannt"
+    assert inner_gauge[0] - outer_gauge[0] == pytest.approx(wanted, abs=1e-6)
+    codes = [item.code for item in check(after.scene, profile, document=document)]
+    assert not [code for code in codes if code.startswith("fit.")], codes
+
+
 def test_every_way_through_the_window_carries_the_counterpart_in_preview_and_step() -> None:
     """Merkmalfenster, Dialog, Palette und Karte enden alle in ``Session.apply`` und
     ``Session.preview_async`` — dort, nicht an jedem Einstieg, wird gekoppelt.

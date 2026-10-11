@@ -1034,11 +1034,16 @@ def self_naming_sizes() -> frozenset[str]:
 
     Dasselbe gilt für die Rohrreihe der Rohrschelle (RM-398): „22" ist der
     Außendurchmesser in Millimetern und die Handelsbezeichnung des Rohrs —
-    in jeder Sprache dieselbe Zahl.
+    in jeder Sprache dieselbe Zahl. Und für die Zoll- und Rohrgewinde (RM-544):
+    „G1/2“ und „1/4-20 UNC“ sind Normbezeichnungen wie „M4“.
     """
     from app.core.knowledge import standards
 
-    return frozenset(standards.profile_sizes()) | frozenset(standards.pipe_sizes())
+    return (
+        frozenset(standards.profile_sizes())
+        | frozenset(standards.pipe_sizes())
+        | frozenset(standards.load().threads)
+    )
 
 
 def self_naming_fonts() -> frozenset[str]:

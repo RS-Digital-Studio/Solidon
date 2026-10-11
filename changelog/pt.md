@@ -62,6 +62,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
 - Reparar e resolver sobreposições é até quatro vezes mais rápido em modelos grandes, e exportar em 3MF é bastante mais rápido.
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.
+- O aviso *A mostrar o modelo …* desaparece assim que a vista está pronta e já não fica por cima do modelo.
+- As mensagens sobre valores e formas já não oferecem um relatório de erro. Só aparece quando o erro é do próprio Solidon.
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
 - Depois de um furo ou de uma característica deslocada, as características de uma peça técnica grande são reconhecidas cerca de um terço mais depressa.
@@ -134,6 +136,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Colocado por baixo, o alojamento de porca tem a bolsa sob a face e a ranhura desce até ela. Até agora a bolsa ficava meio por cima, com o parafuso na face.
 - Se o furo de um bloco não atravessa a peça, chama-se agora cego. Até agora chamava-se passante.
 - Se a parede for mais espessa do que o indicado em *Passa-cabos* ou *Espigão para mangueira*, o passo diz isso e abre a espessura de parede. Até agora a passagem acabava sem aviso no material.
+- As roscas existem agora também como roscas de tubo G e R, roscas em polegadas UNC e UNF e NPT, na *Rosca imprimível*, em parafuso, porca e *Perno roscado*.
+- Todas as roscas também existem como rosca esquerda. Uma medida própria aceita fios por polegada e várias entradas, também em *Criar parafuso* e *Criar tampa de rosca*.
+- Que séries de roscas as listas de medidas mostram escolhe-se nas Definições, em *Séries de roscas nas listas*.
+- A contraparte e o *Pino para furo* servem também para roscas em polegadas, de tubo, esquerdas, de várias entradas e cónicas. Se uma rosca medida corresponder a duas séries, o Solidon pergunta.
+- As roscas esquerdas, de várias entradas e cónicas editam-se com *Alterar característica* e *Remover característica* e mantêm sentido, entradas e conicidade.
+- O Solidon reconhece uma rosca de várias entradas numa malha importada como uma só rosca com as suas entradas. Até agora apareciam várias roscas com passo demasiado grande.
 
 ### Blocos
 
@@ -179,11 +187,15 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As paredes finas, por exemplo de um vaso, chegam fechadas e com espessura.
 - O assistente responde na língua em que escreve.
 - Com um modelo local, o assistente tem tanto espaço como com um alojado e cumpre tarefas até doze passos.
+- Se cancelar uma proposta do assistente, a barra de estado confirma-o em vez de comunicar um erro do programa.
+- Se abrir outro projeto durante uma proposta, Solidon descarta-a e devolve o pedido ao chat.
 - Os modelos gerados chegam fechados com mais frequência. Onde as faces só se tocam, o Solidon separa-as e alisa pequenas dobras da superfície em vez de avisar de uma autointerseção.
 - Se uma tentativa já se desfez ao gerar, a janela di-lo antes de a aceitar e oferece *Mais uma tentativa*.
 - Se um modelo gerado for só uma pele fina à volta de um vazio, a janela di-lo antes de o aceitar e o relatório de verificação depois, com o caminho para uma nova tentativa.
 - Antes de transferir, *Configurar o chat* e *Configurar o ComfyUI* indicam quanta memória gráfica e espaço um modelo precisa e se este computador os tem.
 - Num Mac, *Configurar o chat* propõe um modelo local que cabe na memória partilhada e diz quando uma chave para um modelo alojado é melhor.
+- Se faltar o modelo local escolhido ou o fornecedor recusar a chave, o Solidon di-lo numa frase e *Configurar o chat* leva diretamente à solução.
+- O Solidon ignora uma chave inválida durante um dia, até introduzir outra ou escolher *Tentar novamente*. Entretanto responde um modelo local, se houver um configurado.
 - Num modelo acabado de gerar, *Alterar tamanho* só recalcula a nova medida e já não repete a reparação. É mais rápido, e Ctrl+Z desfaz a alteração de imediato.
 
 ## 0.5.3

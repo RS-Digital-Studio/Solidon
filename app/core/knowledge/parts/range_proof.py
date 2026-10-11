@@ -65,19 +65,25 @@ _APP: Final = Path(__file__).resolve().parents[3]
 _PARTS: Final = Path(__file__).resolve().parent
 
 #: Die gemeinsamen Formen und die Prüfung — für jeden Baustein im Abdruck.
+#: ``exact.py`` und ``brep/profiles.py`` gehören dazu, weil ``build.threaded`` am
+#: Netz jedes kegelige Gewinde genäht baut und vernetzt (RM-544): Für R und NPT
+#: ist das der Netzweg, den der Nachweis fährt (Review GEW, M3).
 _SHARED: Final = (
     _PARTS / "shapes.py",
     _PARTS / "build.py",
+    _PARTS / "exact.py",
     _PARTS / "section.py",
     _PARTS / "range_check.py",
+    _APP / "core" / "brep" / "profiles.py",
     _APP / "core" / "geom" / "intersections.py",
     _APP / "core" / "knowledge" / "standards.py",
     _APP / "core" / "knowledge" / "data" / "standards.toml",
 )
 
 #: Module, die gelesen, aber nicht in den Abdruck genommen werden: der
-#: Netzkern (siehe oben), die exakten Zwillinge — der Bereichstest rechnet am
-#: Netz — und die Registerbuchhaltung, die keine Form trägt.
+#: Netzkern (siehe oben), die exakten Zwillinge als Einbindung eines Bausteins —
+#: der Bereichstest rechnet am Netz; wo der Netzweg selbst durch sie geht, stehen
+#: sie in :data:`_SHARED` — und die Registerbuchhaltung, die keine Form trägt.
 _NOT_SHAPE: Final = frozenset(
     {
         "app.core.geom.boolean",
@@ -178,6 +184,7 @@ def _declaration(spec: PartSpec) -> dict[str, object]:
             for entry in spec.feature_requirements
         ],
         "feasible": spec.feasible is not None,
+        "mirrored_by": spec.mirrored_by,
         "params": [
             [
                 entry.name,
@@ -185,6 +192,8 @@ def _declaration(spec: PartSpec) -> dict[str, object]:
                 repr(entry.minimum),
                 repr(entry.maximum),
                 repr(entry.default),
+                # ``least`` ist eine Ecke (``range_check._corner_values``).
+                repr(entry.least),
                 list(entry.choices or ()),
             ]
             for entry in spec.params.spec()
@@ -274,7 +283,7 @@ def status(
     nicht hielt; ``stale`` ein Lauf zu einem früheren Stand; ``missing`` gar
     keiner. Ohne Profil gilt das Bezugsprofil, mit dem das Werkzeug fährt.
     """
-    from app.core.knowledge.parts.range_check import corner_count
+    from app.core.knowledge.parts.range_check import part_corner_count
 
     entry = (proofs if proofs is not None else load()).get(spec.name)
     if entry is None:
@@ -282,7 +291,7 @@ def status(
     current = fingerprint(spec, profile if profile is not None else reference_profile())
     if current is not None and entry.fingerprint != current:
         return "stale"
-    corners = corner_count(spec.params)
+    corners = part_corner_count(spec)
     if current is None and (entry.version != spec.version or entry.corners != corners):
         return "stale"
     if not entry.passed or entry.failures or entry.checked != corners:
