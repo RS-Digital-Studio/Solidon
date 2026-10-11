@@ -1294,11 +1294,11 @@ def test_a_name_collision_asks_and_uses_the_free_name(
 
     from app.ui import main_window as _mw
 
-    asked: list[tuple[str, str]] = []
+    asked: list[tuple[str, str, str]] = []
     errors: list[object] = []
 
-    def answer_yes(name: str, suggested: str, parent=None) -> bool:
-        asked.append((name, suggested))
+    def answer_yes(existing: str, title: str, suggested: str, parent=None) -> bool:
+        asked.append((existing, title, suggested))
         return True
 
     monkeypatch.setattr(PartFileIO, "install_file", counted_install)
@@ -1322,7 +1322,9 @@ def test_a_name_collision_asks_and_uses_the_free_name(
         wait_until(lambda: bool(suggested) and PARTS.has(suggested), "der freie Name kam nicht an")
 
         assert attempted_names == [None, suggested]
-        assert asked == [(name, suggested)]
+        # Der Kunde liest Titel, wie der Katalog sie zeigt; der freie Schlüssel
+        # bleibt die Antwort darunter.
+        assert asked == [(existing.title, existing.title, suggested)]
         assert errors == [], "die Kollision kommt als Frage, nicht als Fehlermeldung"
         assert suggested != name
         assert source.read_bytes(), "der vorhandene Baustein darf nicht ersetzt werden"

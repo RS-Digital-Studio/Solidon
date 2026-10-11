@@ -1288,12 +1288,22 @@ def _reserved_name_error(name: str) -> ValidationError:
     )
 
 
-def _existing_recipe_error(name: str, filename: str, *, suggested: str = "") -> ValidationError:
-    """Der gemeinsame, handlungsfähige Befund für eine Namenskollision."""
+def _existing_recipe_error(
+    name: str, filename: str, *, suggested: str = "", title: str = ""
+) -> ValidationError:
+    """Der gemeinsame, handlungsfähige Befund für eine Namenskollision.
+
+    ``title`` ist der Name, unter dem der neue Baustein im Katalog stünde: Der
+    Vorschlag ``suggested`` ist ein Schlüssel wie ``werkbankhalter_imported``,
+    den der Kunde nie zu sehen bekommt; fragen darf die Oberfläche nur mit dem
+    Titel.
+    """
 
     values = {"recipe": name, "file": filename}
     if suggested:
         values["suggested_name"] = suggested
+    if title:
+        values["title"] = title
     suggestions = (USE_SUGGESTED_NAME, CANCEL) if suggested else (CORRECT_INPUT, CANCEL)
     return ValidationError(
         field="title",
@@ -1804,6 +1814,7 @@ def install(
                 recipe.name,
                 f"{recipe.name}.json",
                 suggested=suggested,
+                title=recipe.title,
             )
         prepared = _prepare_binding(
             recipe,

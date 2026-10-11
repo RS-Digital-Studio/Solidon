@@ -11418,6 +11418,52 @@ def test_every_setting_field_carries_its_name_and_its_unit_once(
         spool.deleteLater()
 
 
+def test_a_resin_printer_shows_no_filament_stock_line(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, session: Session
+) -> None:
+    """Harz hat keine Spulen: Die Bestandszeile des Filamentlagers bleibt weg.
+
+    Am Resin-Dialog stand „Ohne Filamentzuweisung: Einzelbedarf erst nach dem
+    Slicen bekannt.“ — eine Zuweisung, die es dort nicht gibt, und ein Slicen,
+    das der Dialog dort nicht anbietet. Gegenprobe: Am Filamentdrucker steht
+    dieselbe Zeile weiter.
+    """
+    from types import SimpleNamespace
+
+    from app.ui import print_settings_dialog as module
+
+    line = "Ohne Filamentzuweisung: Einzelbedarf erst nach dem Slicen bekannt."
+    monkeypatch.setattr(module._StockWorker, "work", lambda worker: worker.done.emit(line))
+    session.start_new(profiles.DEFAULT_RESIN_PRINTER, profiles.DEFAULT_RESIN_MATERIAL)
+    monkeypatch.setattr(session, "last_result", _shown_result(SimpleNamespace(objects={})))
+    dialog = PrintSettingsDialog(session, UiSettings())
+    try:
+
+        def settled() -> str:
+            """Bestandsprüfung anstoßen und warten, bis sie still ist (höchstens 5 s)."""
+            dialog._stock_revision += 1
+            dialog._refresh_stock()
+            end = time.monotonic() + 5.0
+            while time.monotonic() < end:
+                if dialog._stock_worker is not None:
+                    dialog._stock_worker.wait(100)
+                qt_app.processEvents()
+                if dialog.stock_notice.text():
+                    break
+                time.sleep(0.02)
+            return dialog.stock_notice.text()
+
+        assert session.profile.printer.is_resin
+        assert settled() == ""
+        assert dialog.stock_notice.isHidden()
+
+        dialog.printer_choice.setCurrentIndex(dialog.printer_choice.findData("centauri-carbon-2"))
+        assert settled() == line, "am Filamentdrucker gilt die Zeile weiter"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
 def test_a_crashed_stock_check_reads_as_lines_not_as_title_colon_detail(
     dialog: PrintSettingsDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

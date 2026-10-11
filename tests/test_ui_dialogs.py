@@ -748,8 +748,9 @@ def test_a_hidden_row_in_front_does_not_widen_the_column(qt_app: QApplication) -
 def test_the_free_part_name_is_asked_with_the_name_and_cancel(
     qt_app: QApplication, answer: str
 ) -> None:
-    """Gleichnamige Bausteindatei: eine Rückfrage mit dem freien Namen und
-    *Abbrechen*, kein Fehlerdialog (Handbuch „Bausteindateien austauschen“)."""
+    """Gleichnamige Bausteindatei: eine Rückfrage mit den Katalogtiteln und
+    *Abbrechen*, kein Fehlerdialog (Handbuch „Bausteindateien austauschen“).
+    Der freie Schlüssel ist die Antwort, zu lesen ist er nirgends."""
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QLabel, QPushButton
 
@@ -766,15 +767,16 @@ def test_the_free_part_name_is_asked_with_the_name_and_cancel(
         shown = [b for b in dialog.findChildren(QPushButton) if b.isVisibleTo(dialog)]
         seen["buttons"] = [b.text() for b in shown]
         if answer == "take":
-            next(b for b in shown if "pruefwuerfel_imported" in b.text()).click()
+            next(b for b in shown if b.text() == "Als eigenen Eintrag übernehmen").click()
         else:
             box = dialog.findChild(QDialogButtonBox)
             box.button(QDialogButtonBox.StandardButton.Cancel).click()
 
     QTimer.singleShot(50, respond)
-    taken = ask_free_part_name("pruefwuerfel", "pruefwuerfel_imported")
+    taken = ask_free_part_name("Prüfwürfel", "Prüfwürfel groß", "pruefwuerfel_imported")
 
     assert taken is (answer == "take")
-    assert "pruefwuerfel" in str(seen["text"]) and "pruefwuerfel_imported" in str(seen["text"])
+    assert "„Prüfwürfel“" in str(seen["text"]) and "„Prüfwürfel groß“" in str(seen["text"])
+    assert "pruefwuerfel" not in str(seen["text"]) + str(seen["buttons"])
     assert "Das hat so nicht funktioniert" not in str(seen["text"])
     assert len(seen["buttons"]) == 2, seen["buttons"]

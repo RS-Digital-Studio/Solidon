@@ -124,7 +124,7 @@ it into `website/version.json`.
 - The filament inventory offers a booking from Solidon 0.5 of the same project with the same filaments for review and asks before deducting the same print again.
 - From this version on, a booking stays with its print, even when an update calculates faster or the manufacturer profile in the slicer changes. Previously, such a print counted as new.
 - Where shallow domes and slopes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the part then takes to print.
-- With a resin printer, the print dialog now shows only printer, material, plates and the program. Version 0.5.3 also offered profiles for filament printers there.
+- With a resin printer, the print dialog now shows only printer, material, plates and the program. Version 0.5.3 also showed filament profiles and stock there.
 
 ### Threads, holes and standard parts
 

@@ -124,7 +124,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O armazém de filamentos apresenta para verificar um registo do Solidon 0.5 do mesmo projeto com os mesmos filamentos e pergunta antes de descontar de novo.
 - A partir desta versão, um consumo descontado fica ligado à sua impressão, mesmo que uma atualização calcule mais depressa ou o perfil do fabricante mude no slicer. Antes contava como nova.
 - Onde cúpulas planas e rampas mostrariam degraus, o Solidon sugere camadas finas só aí. A sugestão indica quanto mais tempo a peça demora a imprimir.
-- Com uma impressora de resina, o diálogo de impressão mostra agora só impressora, material, placas e o programa. A versão 0.5.3 oferecia lá também perfis para impressoras de filamento.
+- Com uma impressora de resina, o diálogo de impressão mostra só impressora, material, placas e programa. A versão 0.5.3 mostrava também perfis e stock de filamento.
 
 ### Roscas, furos e peças normalizadas
 

@@ -124,7 +124,7 @@ scrive in `website/version.json`.
 - Il magazzino filamenti propone da verificare una registrazione di Solidon 0.5 dello stesso progetto con gli stessi filamenti e chiede prima di scaricare di nuovo.
 - Da questa versione un consumo scaricato resta legato alla sua stampa, anche se un aggiornamento calcola più in fretta o cambia il profilo del produttore nello slicer. Prima contava come nuova.
 - Dove cupole piatte e pendenze mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa del pezzo.
-- Con una stampante a resina il dialogo di stampa mostra ora solo stampante, materiale, piatti e programma. La versione 0.5.3 vi offriva anche profili per stampanti a filamento.
+- Con una stampante a resina il dialogo di stampa mostra solo stampante, materiale, piatti e programma. La versione 0.5.3 mostrava anche profili e scorte di filamento.
 
 ### Filettature, fori e componenti normalizzati
 

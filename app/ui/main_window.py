@@ -10935,8 +10935,12 @@ class MainWindow(QMainWindow):
         ):
             # **Ein vorhandener Name ist eine Frage, kein Fehler** (Regel 21):
             # Ihrer bleibt, der neue kommt auf Wunsch unter dem freien Namen.
-            existing = str(problem.values.get("recipe", ""))
-            if ask_free_part_name(existing, suggested, catalog):
+            from app.core.knowledge.parts.registry import PARTS
+
+            key = str(problem.values.get("recipe", ""))
+            existing = str(PARTS.get(key).title) if PARTS.has(key) else key
+            title = str(problem.values.get("title", "") or existing)
+            if ask_free_part_name(existing, title, suggested, catalog):
                 self._use_suggested_part_name(catalog, payload, problem)
             return
         handlers["choose"] = lambda _error: self._adopt_part(catalog)

@@ -8219,6 +8219,17 @@ class PrintSettingsDialog(QDialog):
         if self._stock_worker is not None and self._stock_worker.isRunning():
             self._stock_timer.start()
             return
+        if self.session.profile.printer.is_resin:
+            # **Harz hat keine Spulen.** Das Lager und seine Buchung führen
+            # Filament; an einem Resin-Drucker stand hier „Ohne
+            # Filamentzuweisung: Einzelbedarf erst nach dem Slicen bekannt.“ —
+            # eine Zuweisung, die es dort nicht gibt, und ein Slicen, das der
+            # Dialog dort nicht anbietet. Eine laufende Antwort fällt über die
+            # Revision weg.
+            self._stock_revision += 1
+            self.stock_notice.setText("")
+            self.stock_notice.hide()
+            return
         result = self.session.last_result
         if result is None:
             return

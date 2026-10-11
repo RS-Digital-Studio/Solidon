@@ -350,6 +350,8 @@ def test_install_treats_an_existing_operation_as_a_name_collision(
         )
 
     assert raised.value.values["suggested_name"] == "pruefwuerfel_imported"
+    # Gefragt wird mit dem Titel, den der Katalog zeigt, nie mit dem Schlüssel.
+    assert raised.value.values["title"] == part.title
     assert registry.get(operation_name) is existing_operation
     assert not existing_parts.has(part.name)
     assert not (tmp_path / f"{part.name}.json").exists()

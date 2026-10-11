@@ -149,7 +149,7 @@ Nutzen da und sonst nichts.
 - Eine Buchung aus Solidon 0.5 desselben Projekts mit denselben Filamenten bietet das Filamentlager zur Prüfung an und fragt nach, bevor es denselben Druck erneut abbucht.
 - Ab dieser Version bleibt eine Buchung ihrem Druck zugeordnet, auch wenn ein Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
 - Wo flache Kuppen und Schrägen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger das Teil dann druckt.
-- Mit einem Resin-Drucker zeigt der Druckdialog nur noch Drucker, Material, Platten und das Programm. Version 0.5.3 bot dort auch Profile für Filamentdrucker an.
+- Mit einem Resin-Drucker zeigt der Druckdialog nur noch Drucker, Material, Platten und das Programm. Version 0.5.3 zeigte dort auch Filamentprofile und den Filamentbestand.
 
 ### Gewinde, Bohrungen und Normteile
 

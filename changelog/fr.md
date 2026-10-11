@@ -125,7 +125,7 @@ dans `website/version.json`.
 - Le stock de filament soumet à vérification une consommation enregistrée avec Solidon 0.5 pour le même projet et les mêmes filaments, et demande avant de décompter à nouveau.
 - Désormais, une consommation décomptée reste liée à son impression, même si une mise à jour calcule plus vite ou si le slicer change le profil du fabricant. Avant, l'impression comptait comme nouvelle.
 - Là où des dômes plats et des pentes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression de la pièce s'allonge.
-- Avec une imprimante résine, le dialogue d'impression ne montre plus qu'imprimante, matériau, plateaux et programme. La version 0.5.3 y proposait aussi des profils pour imprimantes à filament.
+- Avec une imprimante résine, le dialogue d'impression ne montre plus qu'imprimante, matériau, plateaux et programme. La version 0.5.3 y affichait aussi profils et stock de filament.
 
 ### Filetages, perçages et pièces normalisées
 
