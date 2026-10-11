@@ -47996,6 +47996,16 @@ Register und eine Maßänderung eines Bausteins ändern den Abdruck. Buchungen a
 stehen nur unter dem Vorabdruck und kippen weiter mit Netzbits, Grundlage und Slicer-Updates
 (Cura Fein und Entwurf seit RM-583, siehe [RM-705](#rm-705)).
 
+**Nachtrag 11.10.2026 (Integrationsreview welle4, M1):** Paket E ordnet die Dreiecke von 17 der 21
+Beispielkörper druckgleich um; der Vorabdruck traf danach nur noch 2 von 13 Buchungen aus 0.5.3, und
+*Ohne Rückfrage buchen* hätte die übrigen ein zweites Mal abgezogen. Ordnungsfrei rechnen hilft
+nicht: Die gespeicherten Abdrücke von 0.5.3 hängen an dessen Folge. Ohne Treffer kommt deshalb eine
+Buchung desselben Projekts mit denselben Spulen und Mengen (Menge gleich, wie das Lager sie zeigt)
+als frühere Buchung zur Prüfung und wird nie still gebucht (`ui._same_amounts`). Nachweis: Projekt
+und Lager, die 0.5.3 selbst schrieb (*Halter konstruieren*, `usage_booking_weg2_v053*`), am Stand
+davor rot, danach grün; an den zwölf Beispielen vorher 2 erkannt und 11 ohne Rückfrage, nachher 2
+erkannt und 11 zur Prüfung.
+
 ## RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)
 
 <a id="rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026"></a>

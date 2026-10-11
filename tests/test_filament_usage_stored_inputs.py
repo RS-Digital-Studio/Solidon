@@ -821,6 +821,86 @@ def test_an_old_booking_is_kept_under_its_own_fingerprint(tmp_path: Path) -> Non
     assert again == previous
 
 
+#: Die Buchung, die 0.5.3 für *Halter konstruieren* nach einem Slicerlauf schrieb
+#: (``usage_booking_weg2_v053_inventory.json``): Vorgang, Menge und Bestand danach.
+WEG2_OPERATION = "rm706-altbuchung-053"
+WEG2_GRAMS = 23.45
+WEG2_LEFT = 476.55
+
+
+def _weg2_after_e(
+    tmp_path: Path, *, grams: float = WEG2_GRAMS, project_name: str = "weg2-halter-konstruieren"
+) -> tuple[usage.UsageRequest, str]:
+    """Dasselbe Projekt aus 0.5.3 nach dem Update noch einmal gesliced, wie die Anwendung."""
+    target = filaments.catalogue_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(DATA / "usage_booking_weg2_v053_inventory.json", target)
+    project_file = tmp_path / "weg2-halter-konstruieren.p3d"
+    shutil.copyfile(DATA / "projects/usage_booking_weg2_v053.p3d", project_file)
+    project = load(project_file)
+    document = project.document
+    chosen = {
+        key: value
+        for key, value in (("printer_id", document.printer), ("material_id", document.material))
+        if value
+    }
+    profile = profiles.make_profile(**chosen)
+    stored = document.print_settings or print_settings.resolve(profile)
+    settings = manufacturer.effective(
+        stored, manufacturer.base_settings(profile, stored.quality, None)
+    )
+    sources = ProjectSources(project)
+    result = evaluate(document, profile, sources=sources)
+    request = usage.prepare(
+        list(result.scene.objects.values()),
+        settings,
+        profile,
+        project_name,
+        inputs=usage.StoredInputs(document, sources, result.stopped_at),
+    )[0]
+    (booked,) = filaments.read_snapshot().bookings()
+    (position,) = booked.positions
+    (line,) = request.lines
+    sliced = replace(line, grams=grams, source="gcode", spool_identifier=position.spool_identifier)
+    return replace(request, lines=(sliced,)), position.spool_identifier
+
+
+def test_a_053_booking_whose_triangles_moved_is_offered_not_booked_again(
+    tmp_path: Path,
+) -> None:
+    """Integrationsreview welle4, M1: Paket E ordnet die Dreiecke dieses Körpers um,
+    der Vorabdruck trifft die Buchung aus 0.5.3 nicht mehr. Ohne Treffer buchte
+    *Ohne Rückfrage buchen* denselben Druck ein zweites Mal. Eine Buchung desselben
+    Projekts mit denselben Spulen und Mengen kommt jetzt zur Prüfung — nie still."""
+    from app.core.errors import ValidationError
+
+    request, spool = _weg2_after_e(tmp_path)
+    snapshot = filaments.read_snapshot()
+    assert ui._previous(request, snapshot) == [], "der Vorabdruck trifft hier nicht mehr"
+    offered = ui._legacy_bookings(request, snapshot)
+    assert [one.operation_id for one in offered] == [WEG2_OPERATION]
+    assert "denselben Spulen und Mengen" in ui._legacy_booking_text(offered, request)
+    with pytest.raises(ValidationError):
+        ui._auto_book(request)
+    assert filaments.get(spool).remaining_grams == pytest.approx(WEG2_LEFT)
+    assert len(filaments.read_snapshot().bookings()) == 1
+
+
+@pytest.mark.parametrize("other", ["grams", "project"])
+def test_another_amount_or_project_is_a_new_print(tmp_path: Path, other: str) -> None:
+    """Gegenprobe: Andere Menge oder anderes Projekt ist keine frühere Buchung — der
+    Druck wird wie bisher von selbst gebucht."""
+    if other == "grams":
+        request, spool = _weg2_after_e(tmp_path, grams=WEG2_GRAMS + 0.5)
+    else:
+        request, spool = _weg2_after_e(tmp_path, project_name="Anderes Projekt")
+    assert ui._legacy_bookings(request, filaments.read_snapshot()) == ()
+    booked = ui._auto_book(request)
+    assert booked is not None and booked.operation_id != WEG2_OPERATION
+    left = WEG2_LEFT - request.lines[0].grams
+    assert filaments.get(spool).remaining_grams == pytest.approx(left)
+
+
 def test_a_creator_with_stray_inputs_keeps_them_like_the_evaluation() -> None:
     """Review RM-706, L1: Ein Erzeuger mit Eingängen (Dateien vor dem 07.09.2026)
     verbraucht sie nicht — die Auswertung lässt den genannten Körper stehen

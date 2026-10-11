@@ -6,7 +6,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import cast, override
+from typing import Final, cast, override
 from uuid import uuid4
 
 from PySide6.QtCore import QObject, QSignalBlocker, Qt, QTimer, Signal
@@ -135,24 +135,79 @@ def _booking_fingerprint(request: UsageRequest, booking: filaments.InventoryBook
     return request.fingerprint
 
 
+#: Mengen, die das Lager mit einer Nachkommastelle gleich zeigt, gelten als gleich:
+#: die halbe Anzeigestufe (``filament_inventory``, ``{grams:.1f}``).
+SAME_SHOWN_GRAMS: Final = 0.05
+
+
 def _legacy_bookings(
     request: UsageRequest, snapshot: filaments.InventorySnapshot
 ) -> tuple[filaments.InventoryBooking, ...]:
-    """Unsichere Altvorgänge nur melden, solange kein exakter Vorgang bekannt ist."""
-    if not request.legacy_fingerprints:
-        return ()
+    """Unsichere Altvorgänge nur melden, solange kein exakter Vorgang bekannt ist.
+
+    Zwei Arten: ein Altabdruck (``legacy_fingerprints``, 0.5.1) und eine Buchung
+    desselben Projekts mit denselben Spulen und Mengen (:func:`_same_amounts`).
+    Beide sind Kandidaten, nie Gleichheit: Sie werden zur Prüfung angeboten und
+    buchen nie still (Regel 21).
+    """
     bookings = snapshot.bookings()
     if any(booking.fingerprint in request.identities for booking in bookings):
         return ()
     return tuple(
-        booking for booking in bookings if booking.fingerprint in request.legacy_fingerprints
+        booking
+        for booking in bookings
+        if booking.fingerprint in request.legacy_fingerprints or _same_amounts(request, booking)
     )
 
 
-def _legacy_booking_text(bookings: tuple[filaments.InventoryBooking, ...]) -> str:
+def _same_amounts(request: UsageRequest, booking: filaments.InventoryBooking) -> bool:
+    """Eine Buchung desselben Projekts mit denselben Spulen und Mengen
+    (Integrationsreview welle4, M1).
+
+    Buchungen aus 0.5.2 und 0.5.3 hängen am Vorabdruck über die Netzbits, und
+    eine druckgleiche Beschleunigung, die Dreiecke umordnet, trifft ihn nicht
+    mehr. Ohne Treffer buchte *Ohne Rückfrage buchen* denselben Druck ein zweites
+    Mal. Gleich heißt: derselbe Projektname, je Druckfilament genau eine Position
+    mit seiner Identität, dieselbe Spule, wo eine gebunden ist, und eine Menge,
+    die das Lager gleich zeigt. Eine unbekannte Menge ist kein Beleg.
+    """
+    if not booking.project_name or booking.project_name != request.project_name:
+        return False
+    if not request.lines or len(booking.positions) != len(request.lines):
+        return False
+    for line in request.lines:
+        key = _line_key(line)
+        found = [position for position in booking.positions if position.filament_key == key]
+        if len(found) != 1 or line.grams is None:
+            return False
+        position = found[0]
+        if line.spool_identifier and position.spool_identifier != line.spool_identifier:
+            return False
+        if abs(position.grams - line.grams) >= SAME_SHOWN_GRAMS:
+            return False
+    return True
+
+
+def _legacy_booking_text(
+    bookings: tuple[filaments.InventoryBooking, ...], request: UsageRequest
+) -> str:
     """Eine Rücknahme nicht als noch abgezogenen Bestand ausgeben."""
     if not bookings:
         return ""
+    if not any(booking.fingerprint in request.legacy_fingerprints for booking in bookings):
+        if all(booking.reversed_at for booking in bookings):
+            return str(
+                tr(
+                    "Für dieses Projekt gibt es eine frühere, zurückgenommene Buchung mit "
+                    "denselben Spulen und Mengen. Prüfen Sie, ob dies ein weiterer Druck ist."
+                )
+            )
+        return str(
+            tr(
+                "Für dieses Projekt gibt es eine frühere Buchung mit denselben Spulen und "
+                "Mengen. Prüfen Sie, ob dies ein weiterer Druck ist."
+            )
+        )
     if all(booking.reversed_at for booking in bookings):
         return str(
             tr(
@@ -484,7 +539,7 @@ class UsageDialog(QDialog):
         self._entries = {entry.identifier: entry for entry in snapshot.entries}
         self._bookings = {booking.operation_id: booking for booking in snapshot.bookings}
         self._legacy_bookings = snapshot.legacy_bookings
-        self.legacy_notice.setText(_legacy_booking_text(self._legacy_bookings))
+        self.legacy_notice.setText(_legacy_booking_text(self._legacy_bookings, self.request))
         self.legacy_notice.setVisible(bool(self._legacy_bookings))
         selected = self.operation.currentData()
         with QSignalBlocker(self.operation):
@@ -978,7 +1033,7 @@ def _auto_book(request: UsageRequest) -> filaments.InventoryBooking | None:
         raise ValidationError(
             constraint="legacy_adhesion_gaps",
             title=tr("Frühere Filamentbuchung prüfen"),
-            detail=_legacy_booking_text(possible),
+            detail=_legacy_booking_text(possible, request),
             suggestions=(Action("correct_input", tr("Buchung prüfen …"), primary=True),),
         )
     existing = _previous(request, snapshot)
