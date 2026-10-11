@@ -330,8 +330,11 @@ def _plate() -> Any:
     return boolean("difference", [MeshData.of(plate), MeshData.of(first), MeshData.of(second)]).mesh
 
 
-def _registered(name: str, source: Any, **params: object) -> Any:
-    """Eine Operation über ihren Registereintrag, mit dem Vorgabeprofil."""
+def _registered(name: str, *sources: Any, **params: object) -> Any:
+    """Eine Operation über ihren Registereintrag, mit dem Vorgabeprofil.
+
+    Mehrere Quellen werden mehrere Eingänge in ihrer Folge (*Weich verschmelzen*).
+    """
     from app.core.bootstrap import load_operations
     from app.core.knowledge import profiles
     from app.core.registry import REGISTRY
@@ -339,13 +342,16 @@ def _registered(name: str, source: Any, **params: object) -> Any:
     from app.core.types import OpContext, Scene, SceneObject
 
     load_operations()
-    entry = SceneObject(id="obj_1", name="Platte", mesh=source)
+    entries = [
+        SceneObject(id=f"obj_{index + 1}", name="Platte", mesh=source)
+        for index, source in enumerate(sources)
+    ]
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     spec = REGISTRY.get(name)
     result = spec.fn(
         OpContext(
-            scene=Scene(objects={entry.id: entry}, profile=profile),
-            inputs=[entry],
+            scene=Scene(objects={entry.id: entry for entry in entries}, profile=profile),
+            inputs=entries,
             params=spec.params(**params),
             profile=profile,
             quality="fine",
@@ -797,6 +803,45 @@ def _refined_plate() -> str:
     return _mesh_print(remesh(_plate(), 3.0))
 
 
+def _evened_plate() -> str:
+    """*Dreiecke angleichen* an der Platte — das Teilen nach dem Kern entscheidet an
+    Längen, gemessen auf mehreren Fäden (RM-671)."""
+    from app.core.geom.mesh_ops import uniform
+
+    return _mesh_print(uniform(_plate(), 3.0, 0.0))
+
+
+def _blend_field() -> str:
+    """Das Abstandsfeld von *Weich verschmelzen* selbst, vor Marching Cubes.
+
+    Am fertigen Netz allein sähe das Rauschen nichts, solange ``skimage`` die
+    Ecken in einfacher Genauigkeit legte: Ein ULP im Feld kam dort nie an. Bis
+    RM-671 rechnete das Feld über ``np.einsum``.
+    """
+    from app.core.geom.blend import distance_field
+    from app.core.geom.mesh import MeshData
+
+    post = lathe.cylinder(radius=3.5, height=10.0, sections=32)
+    axes = [np.arange(-6.0, 6.0, 0.7) + 0.13 for _axis in range(3)]
+    points = np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, 3)
+    return fingerprint(distance_field(MeshData.of(post), points, 1.0))
+
+
+def _blended_post() -> str:
+    """*Weich verschmelzen* einer Säule auf einer Platte — das Abstandsfeld entscheidet
+    über jede Ecke, die Marching Cubes setzt (RM-671: bis dahin über ``np.einsum``)."""
+    from app.core.deferred import trimesh
+    from app.core.geom.mesh import MeshData
+
+    base = trimesh.creation.box(extents=(16.0, 12.0, 4.0))
+    base.vertices = np.asarray(base.vertices) + np.array([0.0, 0.0, 2.0])
+    post = lathe.cylinder(radius=3.5, height=10.0, sections=32)
+    post.vertices = np.asarray(post.vertices) + np.array([1.25, -0.5, 8.0])
+    return _mesh_print(
+        _registered("blend_union", MeshData.of(base), MeshData.of(post), radius=2.0, grid=1.0)
+    )
+
+
 def _mended_import() -> str:
     """Der Import eines Netzes mit Löchern — Ränder werden geohrt und geschlossen."""
     from app.core.geom.mesh import MeshData
@@ -1091,6 +1136,61 @@ def _support_columns() -> str:
     ) + repr((sorted(place.channels), place.island_on_model))
 
 
+def _shaft_through_slanted_holes() -> str:
+    """Die Schachtfrage der Kanalsperre (RM-629) durch schräge Schlitze und ein
+    Y, aus ganzzahligen Steigungen (3 : 4) wie aus CAD. Die Ellipse des schrägen
+    Wegs hing an ``math.cos(math.atan(…))`` und einem Matrixprodukt; gezählt
+    werden die Mitten jedes Wegs nach jeder Schicht, nicht nur die Antwort."""
+    from shapely.geometry import Polygon, box
+
+    from app.core.slice import analysis
+
+    heights = [0.25 + 0.5 * index for index in range(84)]
+    plate = box(-150.0, -150.0, 150.0, 150.0)
+    column = box(-2.0, -2.0, 2.0, 2.0)
+
+    def slit(width: float, both: bool) -> Callable[[int], Any]:
+        def shade_at(index: int) -> Any:
+            z = heights[index]
+            if not 10.0 <= z <= 30.0:
+                return Polygon()
+            shift = 0.75 * (z - 10.0)
+            hole = box(shift - 4.0, -30.0, shift - 4.0 + width, 30.0)
+            if both:
+                hole = hole.union(box(-shift + 4.0 - width, -30.0, -shift + 4.0, 30.0))
+            return plate.difference(hole)
+
+        return shade_at
+
+    seen: list[float] = []
+    real_step, real_oval = analysis._shaft_step, analysis._oval_centres
+
+    def noted(shape: Any) -> None:
+        seen.extend(float(value) for value in np.asarray(shape.bounds))
+        seen.append(float(shape.area))
+
+    def step(way: Any, *args: Any) -> bool:
+        kept = real_step(way, *args)
+        noted(way.centres)
+        return kept
+
+    def oval(*args: Any) -> Any:
+        found = real_oval(*args)
+        noted(found)
+        return found
+
+    analysis._shaft_step, analysis._oval_centres = step, oval
+    try:
+        answers = [
+            analysis._shafts_pass(column, {4: Polygon()}, slit(width, both), heights, 0.42, 1.0)
+            for width, both in ((35.0, False), (38.5, False), (40.0, True))
+        ]
+    finally:
+        analysis._shaft_step, analysis._oval_centres = real_step, real_oval
+    assert seen, "die Probe muss Kreise schieben"
+    return fingerprint(seen) + repr(answers)
+
+
 def _fine_layers_on_wedges() -> str:
     """Feine Schichten an Keilen genau auf der Stufengrenze (RM-586, Review F7):
     Steigung 1:2 bei 0,2 mm Schicht und 0,4 mm Bahn, 1:3 bei 0,2 und 0,6 — aus
@@ -1342,12 +1442,31 @@ def _thread_ridge() -> str:
 
     Seine Ringe drehen über ``units.exact_cos``/``exact_sin`` (``27c7a29e9``);
     gefragt ist, ob der ganze Gang daran hängt — Teilung, Profil und Naht
-    eingeschlossen.
+    eingeschlossen. Dazu ein Whitworth- und ein NPT-Gang (RM-544) und ihre Umrisse
+    frisch gerechnet, ungeteilt und geteilt: Die Umrisse liegen sonst in einem Merker
+    und als Modulwert vor, und das Rauschen erreichte sie nie (Review GEW, M1 —
+    ``math.sin`` irrte unter Windows bei 58,75° um ein halbes ULP).
     """
+    from app.core.knowledge.parts import shapes
     from app.core.knowledge.parts.shapes import thread_body
 
+    outlines = (
+        shapes._whitworth_outline.__wrapped__(1),
+        shapes._whitworth_outline.__wrapped__(3),
+        shapes._npt_outline(),
+    )
     return "|".join(
-        _mesh_print(thread_body(8.0, 1.25, 6.0, internal=internal)) for internal in (False, True)
+        (
+            *(
+                _mesh_print(thread_body(8.0, 1.25, 6.0, internal=internal))
+                for internal in (False, True)
+            ),
+            *(
+                _mesh_print(thread_body(13.157, 25.4 / 19.0, 4.0, profile=profile))
+                for profile in ("whitworth", "npt")
+            ),
+            repr([point for outline in outlines for point in outline]),
+        )
     )
 
 
@@ -1620,6 +1739,8 @@ def _split_seam() -> str:
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
     "bent_lettering": _bent_lettering,
+    "blend_field": _blend_field,
+    "blend_union": _blended_post,
     "bound_surface": _bound_surface,
     "carried_collar": _carried_collar,
     "container_hinge": lambda: _container("hinged"),
@@ -1634,6 +1755,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "face_textures": _face_textures,
     "fill_band": _bore_wall_band,
     "fine_layers": _fine_layers_on_wedges,
+    "shaft_question": _shaft_through_slanted_holes,
     "hinged_lid": _hinged_lid,
     "fill_bridged": _top_with_holes,
     "fit_pieces": _fit_pieces,
@@ -1648,6 +1770,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "prusa_support_angle": _automatic_support_angle,
     "read_lattices": _read_lattices,
     "remesh_mesh": _refined_plate,
+    "remesh_uniform": _evened_plate,
     "resize_chamber": _changed_chamber,
     "resize_closure": _changed_closure,
     "rebuild_box": _rebuilt_box,
@@ -1695,6 +1818,105 @@ def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None
         noisy = _WAYS[way]()
 
     assert noisy == quiet, f"{way} hängt an einer plattformabhängigen Rechnung"
+
+
+#: Die Wege, die auf mehreren Fäden rechnen: Modul, Zahl der Fäden, Portionsgröße.
+_THREADED: dict[str, tuple[str, str, str]] = {
+    "blend_field": ("app.core.geom.blend", "PAIR_WORKERS", "PAIR_CHUNK"),
+    "blend_union": ("app.core.geom.blend", "PAIR_WORKERS", "PAIR_CHUNK"),
+    "remesh_uniform": ("app.core.geom.mesh_edits", "MEASURE_WORKERS", "MEASURE_CHUNK"),
+}
+
+
+class _Backwards:
+    """Ein Ausführer, der die Portionen von der letzten zur ersten rechnet.
+
+    Echte Fäden enden in einer Reihenfolge, die kein Lauf wiederholt; dieser
+    endet in der, die am weitesten von der gewohnten entfernt liegt.
+    """
+
+    def __init__(self, max_workers: int) -> None:
+        self.max_workers = max_workers
+
+    def __enter__(self) -> _Backwards:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def map(self, function: Callable[[Any], Any], items: Any) -> list[Any]:
+        listed = list(items)
+        done = {index: function(listed[index]) for index in reversed(range(len(listed)))}
+        return [done[index] for index in range(len(listed))]
+
+
+@pytest.mark.parametrize("way", sorted(_THREADED))
+def test_a_threaded_way_gives_the_same_bits_on_one_thread_and_on_many(
+    way: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Faden, vier Fäden, rückwärts abgeschlossen — derselbe Fingerabdruck.
+
+    Das Abstandsfeld von *Weich verschmelzen* rechnet in Portionen auf mehreren
+    Fäden (RM-671).
+    Zugesagt ist, dass jede Portion nur ihren eigenen Abschnitt schreibt und
+    Element für Element dasselbe rechnet; dann hängt das Ergebnis weder an der
+    Zahl der Fäden noch daran, welcher zuerst fertig wird. Die Portionen sind
+    hier klein und gehen nicht auf, damit es viele gibt und eine kurze am Ende.
+    """
+    import importlib
+
+    module_name, workers, chunk = _THREADED[way]
+    module = importlib.import_module(module_name)
+    monkeypatch.setattr(module, chunk, 97)
+    monkeypatch.setattr(module, workers, 1)
+    alone = _WAYS[way]()
+    monkeypatch.setattr(module, workers, 4)
+    shared = _WAYS[way]()
+    monkeypatch.setattr(module, "ThreadPoolExecutor", _Backwards)
+    backwards = _WAYS[way]()
+
+    assert shared == alone, f"{way} rechnet auf vier Fäden anders als auf einem"
+    assert backwards == alone, f"{way} hängt an der Reihenfolge, in der die Fäden enden"
+
+
+def _thread_profile_constants(module: Any) -> list[object]:
+    """Die beim Import gerechneten Zahlen der Gangprofile und der ungeteilte Umriss."""
+    return [
+        module._WHITWORTH_HEIGHT,
+        module._WHITWORTH_SINE,
+        module.WHITWORTH_DEPTH,
+        module.WHITWORTH_RADIUS,
+        module._NPT_OUTLINE,
+        module._whitworth_outline(1),
+    ]
+
+
+def test_the_thread_profiles_do_not_hang_on_the_machine_when_imported() -> None:
+    """Nachprüfung GEW, N3: Die Konstanten der Gangprofile entstehen beim Import.
+
+    Dorthin kam das Rauschen des Wegs ``thread_ridge`` nie: Ein ``math.tan`` in
+    ``WHITWORTH_DEPTH`` bliebe grün, denn der Umriss rechnet mit dem, was der
+    Import schon festgelegt hat. Hier wird ``shapes`` unter dem Rauschen frisch
+    geladen, als eigenes Modul neben dem geladenen.
+    """
+    import importlib.util
+
+    from app.core.knowledge.parts import shapes
+
+    def fresh() -> Any:
+        spec = importlib.util.spec_from_file_location("_shapes_fresh", shapes.__file__)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    quiet = _thread_profile_constants(fresh())
+    assert quiet == _thread_profile_constants(shapes), "frisch geladen wie beim Import"
+    # Jedes Muster bewegt etwa die Hälfte der Werte; acht Muster treffen jeden.
+    for pattern in range(8):
+        with platform_noise(pattern):
+            noisy = _thread_profile_constants(fresh())
+        assert noisy == quiet, f"die Gangprofile hängen an der Plattform (Muster {pattern})"
 
 
 def _forget_what_the_perception_remembers() -> None:

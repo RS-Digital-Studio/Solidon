@@ -78,6 +78,11 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "corner_110": _("Ecke rechts hinten unten"),
     "corner_111": _("Ecke rechts hinten oben"),
     "whole_face": _("Gesamte Fläche"),
+    # Die Gewindeformen eines eigenen Maßes (RM-544). Die Größen selbst — G1/2,
+    # 1/4-20 UNC — sind Bezeichnungen und stehen in jeder Sprache gleich.
+    "metric": _("Metrisch"),
+    "whitworth": _("Whitworth 55°"),
+    "unified": _("Unified"),
     "keep": _("Nur Bohrungsdurchmesser"),
     # Die Kette einer Magnettasche trägt statt der Senkung eine Verengung, und
     # die geht mit (RM-271) — der Name nennt, was mitgehen kann.
@@ -274,6 +279,9 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # eine von ihnen das falsche Wort. (``TranslatableText`` kennt ein
     # ``context``-Feld, aber der Extraktor liest es nicht; siehe ROADMAP.)
     "rear": _("Auf der Rückseite"),
+    # Was gebügelt wird (RM-588), so wie die Slicer es nennen.
+    "topmost": _("Oberste Fläche"),
+    "top_surfaces": _("Alle Oberseiten"),
     "classic": _("Klassisch"),
     # Eigennamen wie „Gyroid": so heißt der Algorithmus, in jedem Slicer und in
     # jeder Sprache. Dasselbe gilt für die drei Haftarten — im Dialog heißen die

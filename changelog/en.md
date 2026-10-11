@@ -62,6 +62,8 @@ it into `website/version.json`.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
 - Repairing and resolving overlaps are up to four times as fast on large models, and exporting as 3MF is considerably faster.
 - The workspace appears faster when opening large 3MF files.
+- The notice *Displaying the model …* disappears as soon as the view is ready and no longer stays over the model.
+- Messages about inputs and shapes no longer offer an error report. It is only offered where Solidon itself made a mistake.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
 - After a hole or a moved feature, the features of a large technical part are recognised about a third faster.
@@ -84,6 +86,7 @@ it into `website/version.json`.
 - The estimated print time is closer to the slicer's, much closer for parts with supports.
 - Whether supports and skirt fit on the bed is now measured only under the overhangs. Parts near the edge no longer get a needless warning.
 - Accepted suggestions hardly leave any overhang that needs support without it. *Keep channels clear* now only blocks space a support could never be removed from.
+- With *Keep channels clear*, grid supports no longer run into the mouths of blocked channels. In version 0.5.3 they reached about a millimetre inside.
 - Where supports under small overhangs rest on the model, Solidon suggests tree supports. They leave fewer marks there.
 - For small tips, Solidon suggests a lower *Minimum slowdown speed* so they do not go soft. The setting reaches every slicer.
 - Narrow rims that hold up on their own stay free of support with *No support under rims*. Prints need noticeably less support that way.
@@ -105,7 +108,10 @@ it into `website/version.json`.
 - A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.
 - Over a channel, the check report no longer recommends a support that could not be removed from it. It names the channel and a transition below 45 degrees.
 - For PETG, Solidon suggests *Full cooling at the support*. It then comes off the part more easily.
-- New in the print settings: *Interface layers below*, *Tree walls* and *Tree tip*, plus *Pull in first layer* and *Widen holes*, which follow the slicer unless you set them.
+- On figures, Solidon suggests the seam at the back, so no line runs down the front. For a large flat top it suggests ironing.
+- The estimated print time now includes ironing.
+- New in the print settings: *Fine layers*, *Minimum top thickness*, *Interface layers below*, *Tree walls*, *Tree tip*, *Pull in first layer* and *Widen holes*.
+- For *Iron the surface* you now choose between *Topmost face* and *All top surfaces*.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
@@ -114,10 +120,9 @@ it into `website/version.json`.
 - If a part already compensates in the model, with a hole drilled with *Apply material tolerance* or *Compensate the elephant foot*, Solidon suggests that the slicer does not do it again.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
-- The filament inventory again recognises a booking from Solidon 0.5.1 as an earlier booking and asks before deducting the same print again.
+- The filament inventory offers a booking from Solidon 0.5 of the same project with the same filaments for review and asks before deducting the same print again.
 - From this version on, a booking stays with its print, even when an update calculates faster or the manufacturer profile in the slicer changes. Previously, such a print counted as new.
 - Where shallow domes and slopes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the part then takes to print.
-- New in the print settings: *Fine layers* and *Minimum top thickness*, so top surfaces over fine layers stay closed.
 
 ### Threads, holes and standard parts
 
@@ -134,6 +139,12 @@ it into `website/version.json`.
 - Laid in from below, the nut trap's pocket sits under the face, its slot leading down to it. Until now it sat half above, with the screw in the face.
 - If the hole of a part does not go all the way through, it is now called blind. Until now it was called through.
 - If the wall is thicker than entered for a *Cable gland* or *Hose barb*, the step says so and opens the wall thickness. Until now the passage silently ended in the material.
+- Threads now also come as pipe threads G and R, inch threads UNC and UNF and as NPT, in the *Printable thread*, on screw, nut and *Threaded stud*.
+- Every thread is also available left-handed. A custom size takes threads per inch and several starts, also in *Create screw* and *Create screw lid*.
+- Which thread series the size lists show is set in the settings under *Thread series in the lists*.
+- Counterpart and *Pin for hole* also fit inch, pipe, left-hand, multi-start and tapered threads. If a measured thread fits two series, Solidon asks.
+- Left-hand, multi-start and tapered threads can be edited with *Change feature* and *Remove feature* and keep their hand, starts and taper.
+- Solidon recognises a multi-start thread in an imported mesh as one thread with its number of starts. Until now it showed several threads with too coarse a pitch.
 
 ### Parts
 
@@ -163,6 +174,9 @@ it into `website/version.json`.
 - The brush fits the size of the body. If the mesh is too coarse for it, *Sculpt* evens out the triangles on the first stroke, and one Ctrl+Z undoes both.
 - When mirroring, the plane lies where the body matches itself, even when one part sticks far out to the side.
 - Sculpting follows the mouse smoothly, and even a step with hundreds of brush strokes is calculated quickly.
+- With *Blend together*, the mesh comes out even, with hardly any thin slivers. A part on the print bed no longer reaches below it.
+- A body with an enclosed cavity keeps it with *Blend together*. Since version 0.1.1 the cavity became a second body, and the step reported unconnected parts.
+- With *Even out the triangles*, no edge is longer than the length you set, and the shape stays the same. The same edge often gives nearly twice as many triangles; a longer one keeps the old density.
 - In *Armature*, every click after the first sets a bone, Enter ends the chain, dragging a joint bends it, and *Done* saves everything without a dialog.
 - An armature bends only what hangs on its bones, and the rest of the body stays put. Older projects calculate as saved.
 - With Ctrl or Shift you select several edges and fillet or chamfer them in one step. A click on a corner selects all edges that meet there.
@@ -183,11 +197,15 @@ it into `website/version.json`.
 - Thin walls, for example on a vase, arrive closed and with thickness.
 - The assistant replies in the language you write in.
 - With a local model the assistant has as much room as with a hosted one and handles tasks of up to twelve steps.
+- If you cancel a proposal from the assistant, the status bar confirms it instead of reporting a program error.
+- If you open another project while a proposal is running, Solidon discards the proposal and puts your request back in the chat.
 - Generated models arrive closed more often. Where faces only touch, Solidon separates them, and it smooths small folds in the surface instead of reporting a self-intersection.
 - If an attempt already fell apart while generating, the dialog says so before you take it and offers *One more attempt*.
 - If a generated model is only a thin skin around a cavity, the dialog says so before you take it and the report afterwards, each with the way to a new attempt.
 - Before downloading, *Set up the chat* and *Set up ComfyUI* say how much graphics memory and disk space a model needs and whether this computer has it.
 - On a Mac, *Set up the chat* suggests a local model that fits into the shared memory and says when a key for a hosted model is the better choice.
+- If the selected local model is missing or the provider refuses the key, Solidon says so in one sentence and *Set up the chat* leads straight to the fix.
+- Solidon passes over an invalid key for a day, until you enter a different one or choose *Try again*. Until then a local model answers, if one is set up.
 - On a newly generated model, *Change size* only recalculates the new size and no longer repeats the repair. It is faster, and Ctrl+Z undoes it at once.
 
 ## 0.5.3

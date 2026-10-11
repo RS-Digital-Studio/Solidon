@@ -79,6 +79,7 @@ from app.core.errors import (
     Action,
     AppError,
     InstallationDamaged,
+    InternalError,
 )
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
@@ -1089,6 +1090,8 @@ class ChatState:
     """Der Satz darüber, was gerade antwortet."""
     service: tools.ToolState | None
     installed: tuple[str, ...]
+    key_refused: bool = False
+    """Ob der hinterlegte Schlüssel als ungültig gemerkt ist (``llm.key_refused``)."""
 
 
 class _Look(Worker):
@@ -1107,6 +1110,7 @@ class _Look(Worker):
                 answers=_what_answers(),
                 service=tools.state_of(tool) if tool is not None else None,
                 installed=llm.installed_models(),
+                key_refused=llm.key_refused("anthropic"),
             )
         )
 
@@ -1164,12 +1168,21 @@ def _what_answers() -> str:
     Eine Modulfunktion, weil der Arbeiter sie braucht: ``first_available``
     fragt ein Backend, und das ist ein HTTP-Aufruf.
     """
+    # Ein als ungültig abgelehnter Schlüssel bleibt es bis zum nächsten
+    # Eintragen (``llm.key_refused``) — hier steht, warum der Chat ihn übergeht.
+    refused = ""
+    if llm.key_refused("anthropic"):
+        sentence = tr(
+            "Der Anbieter hat ihn als ungültig abgelehnt. Solidon übergeht ihn einen Tag lang. "
+            "„Noch einmal versuchen“ bietet ihn sofort wieder an."
+        )
+        refused = f"{sentence} "
     backend = llm.first_available()
     if backend is None:
-        return tr("Der Chat ist damit abgeschaltet — es antwortet gerade nichts.")
+        return refused + tr("Der Chat ist damit abgeschaltet — es antwortet gerade nichts.")
     if backend.id == "ollama":
-        return tr("Der Chat läuft trotzdem: über das lokale Modell.")
-    return tr("Der Chat läuft darüber.")
+        return refused + tr("Der Chat läuft trotzdem: über das lokale Modell.")
+    return refused + tr("Der Chat läuft darüber.")
 
 
 class KeyDialog(QDialog):
@@ -1500,6 +1513,13 @@ class KeyDialog(QDialog):
             self._set_key_status(self._key_status_error, role="warning")
         self._show_service(found.service)
         self._fill_models(found.installed)
+        self.try_again_button.setVisible(found.key_refused)
+
+    def _try_key_again(self) -> None:
+        """Den gemerkten Schlüssel wieder anbieten und neu nachsehen."""
+        llm.accept_again(self.account)
+        self.try_again_button.setVisible(False)
+        self.look()
 
     def _cloud_model_section(self) -> QWidget:
         """Der gehostete Weg, klar vom lokalen Modell getrennt.
@@ -1553,6 +1573,14 @@ class KeyDialog(QDialog):
         self.forget_button.setEnabled(self._key_source == "keychain")
         self.forget_button.setToolTip(forget_reason)
         self.forget_button.setAccessibleDescription(forget_reason)
+        # Der Rückweg aus einem gemerkten 401 ohne den Schlüsseltext — auch für
+        # einen Schlüssel aus der Umgebung (Review agentlog M2). Sichtbar erst,
+        # wenn die Erhebung den Merker findet (:meth:`_show_state`).
+        self.try_again_button = forget_actions.addButton(
+            tr("Noch einmal versuchen"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.try_again_button.setVisible(False)
+        self.try_again_button.clicked.connect(self._try_key_again)
         form.addRow(forget_actions)
         # **Eine Abschnittsform in allen Dialogen** (RM-518): die flache
         # Überschrift wie in Druckeinstellungen und Einstellungen, kein Rahmen.
@@ -3317,9 +3345,10 @@ def offered_actions(
     schon im Kopf von ``tests/test_ui.py``.
 
     Angeboten wird, wofür es einen Handler gibt. Bleibt nichts übrig — weder
-    ein Knopf noch ein Rat zum Lesen —, tritt der Fehlerbericht ein: sonst
-    stünde am Ende ein Fenster mit „Abbrechen", und das ist „fehlgeschlagen"
-    mit mehr Worten (Regel 17).
+    ein Knopf noch ein Rat zum Lesen —, tritt der Fehlerbericht nur für einen
+    ``InternalError`` ein. Bei jedem anderen steht der Weg dann im Detail, und
+    der Ausgang heißt *Schließen*; ``tests/test_action_effects.py`` verlangt
+    für jede Handlung des Kerns einen Handler oder einen benannten Grund.
 
     **Und wofür der Fehler mitbringt, was der Handler braucht.** *Eingabe
     korrigieren* öffnet den Schritt, dessen Werte nicht gingen — ohne
@@ -3338,7 +3367,14 @@ def offered_actions(
         # lauteste Antwort auf einen Bedienfehler. Er gehört dem
         # ``InternalError`` (errors.py), nicht einer fehlenden Auswahl.
         return [entry for entry in (SHOW_DETAILS,) if entry.id in handlers]
-    return [entry for entry in (SHOW_DETAILS, REPORT_ERROR) if entry.id in handlers]
+    if isinstance(error, InternalError):
+        return [entry for entry in (SHOW_DETAILS, REPORT_ERROR) if entry.id in handlers]
+    # **Nur ein Programmfehler fällt auf den Fehlerbericht zurück** (RM-771).
+    # Jeder andere Fehler ohne einlösbaren Vorschlag bekam ihn als Hauptknopf,
+    # und ein Kunde schickte sein eigenes *Abbrechen* als Absturzbericht
+    # (S-20261010-e5014c). Dann steht der Weg im Detail, und der Ausgang heißt
+    # *Schließen* (:func:`show_error`).
+    return []
 
 
 def unhandled_advice(
@@ -3539,8 +3575,9 @@ def show_error(
     Regel 17 war damit optisch erfüllt und funktional hohl.
 
     Angeboten wird nur, wofür es einen Handler gibt (§2.7). Lieber ein Knopf
-    weniger als einer, der nichts tut. Damit nie nur „Abbrechen" übrig bleibt,
-    kommt der Fehlerbericht dazu — er geht immer.
+    weniger als einer, der nichts tut. Den Fehlerbericht als Rückfall bekommt
+    nur ein ``InternalError`` (RM-771); bleibt sonst nichts, heißt der
+    Ausgang *Schließen*.
     """
     known = dict(handlers if handlers is not None else handlers_of(parent))
     offered = offered_actions(error, known)
@@ -3591,6 +3628,8 @@ def show_error(
     if not offered:
         abbrechen.setAutoDefault(False)
         abbrechen.setDefault(False)
+        # Ohne Handlung gibt es nichts abzubrechen — das Fenster schließt nur.
+        abbrechen.setText(tr("Schließen"))
 
     box.exec()
     chosen = buttons.get(box.clickedButton())

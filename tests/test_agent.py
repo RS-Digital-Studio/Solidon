@@ -2990,6 +2990,52 @@ def test_malformed_operation_fields_keep_the_existing_proposal_and_allow_correct
     assert "objects" in response or any(key in response for key in arguments if key != "objects")
 
 
+@pytest.mark.parametrize(
+    ("operation", "arguments", "reason"),
+    [
+        ("insert_screw_hole", {"objects": ["obj_1"]}, "Fläche oder eine Bohrung"),
+        (
+            "displace_image",
+            {"objects": ["obj_1"], "source": "src_gibt_es_nicht"},
+            "Quelle gibt es im Projekt nicht",
+        ),
+    ],
+    ids=["screw_hole_without_place", "relief_without_source"],
+)
+def test_a_step_that_halts_the_chain_goes_back_to_the_model_not_into_the_proposal(
+    project: Project, profile: Profile, operation: str, arguments: dict[str, Any], reason: str
+) -> None:
+    """Kundenprotokoll S-20261010-e5014c, Frage 3: Kamen ``insert_screw_hole``
+    ohne Stelle und ``displace_image`` ohne Quelle vom Agenten?
+
+    Nein — beide Absagen stehen dort vor dem ersten Agentenzug, und kein Zug
+    endete mit einem Vorschlag. Dieser Test hält fest, warum sie es auch nicht
+    gekonnt hätten (§15.2, §26.5): Ein Schritt, der die Kette anhält, wird in
+    der Arbeitskopie zurückgenommen, sein Grund geht als Werkzeugantwort ans
+    Modell, und in den Vorschlag kommt er nicht.
+    """
+    backend = ScriptedBackend(
+        answers=[
+            Reply(tool_calls=(ToolCall(id="1", name=operation, arguments=dict(arguments)),)),
+            Reply(text="Wohin genau?"),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+    before = list(project.document.ops)
+
+    proposal = agent.propose("Mach das mal")
+
+    assert proposal.drafts == [], "ein anhaltender Schritt wird nie Teil des Vorschlags"
+    answer = next(entry for entry in backend.seen[-1] if entry.tool_call_id == "1")
+    assert reason in answer.content, answer.content
+    assert project.document.ops == before, "das Dokument bleibt unberührt"
+
+
 def test_malformed_objects_cannot_become_an_unrequested_default_creation(profile: Profile) -> None:
     """Ein falscher leerer Wert ist keine Erlaubnis, einen Vorgabekörper zu erzeugen."""
     project = new_project("centauri-carbon-2", "petg")

@@ -69,7 +69,17 @@ nach einem Update bei jedem Kunden zugleich (RM-705, RM-706).
   Vorabdruck — nie still ersetzen.
 - **Altabdrücke sind Kandidaten, keine Gleichheit** (`legacy_fingerprints`,
   `_LEGACY_SHAPES`): Sie melden eine frühere Buchung zur Prüfung und buchen
-  nie still. So wiedererkannt wird 0.5.1; 0.5.0 bleibt unerkannt.
+  nie still. Über einen Altabdruck wiedererkannt wird 0.5.1, 0.5.0 nicht.
+- **Abdrücke ab 0.6.0 tragen ein Zeichen** (`STORED_MARK`): Ohne Treffer ist
+  eine Buchung **ohne** Zeichen (0.5) desselben Projekts mit denselben
+  Druckfilamenten ein Kandidat wie ein Altabdruck (`ui._earlier_print`) —
+  gleich welche Menge, Quelle, Spule oder Aufteilung, denn ihr Vorabdruck
+  hängt an Netzbits, die eine druckgleiche Beschleunigung umordnet (Paket E).
+  Eine Buchung mit Zeichen ist nie Kandidat: Dort ist ein anderer Abdruck ein
+  anderer Druck. Wer die Bildung ändert, behält das Zeichen.
+- **Bei einem Projekt mit Buchung aus 0.5 kommt jede neue Variante zur
+  Prüfung**, auch nach einer Buchung in 0.6: lieber Rückfragen als ein stiller
+  Doppelabzug. Die Antwort je Altbuchung merken trägt RM-720.
 - **Sollwerte von außen**: Ein Vor- oder Altabdruck im Test kommt aus einer
   Codekopie des Tags (`git archive`), nie aus dem neuen Code; der Kundenweg
   liest Projekt und Lager, die das alte Programm selbst schrieb

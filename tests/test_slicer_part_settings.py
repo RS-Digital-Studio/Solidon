@@ -624,7 +624,11 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 # (``bruecken_je_teil.py``): Wirkung nur am Teil mit dem Wert (Brückenstütze in
 # OrcaSlicer 0 gegen 17 912 mm), Messwerte ebenfalls in der Begründung; Cura nimmt
 # keinen, SuperSlicer dicke Brücken und Fluss (Review RM-587, M3). Den Brückenfluss
-# hält ``test_real_slicers.py`` im echten Programm je Teil. Die
+# hält ``test_real_slicers.py`` im echten Programm je Teil. Naht hinten und Bügeln
+# der obersten Fläche (RM-588) belegen zwei Kegelstümpfe, einer mit Objektwerten,
+# in denselben acht Programmen (Messwerte in der Begründung): Naht hinten und
+# Bügelbahn nur in der obersten Schicht des einen, der andere ohne; das Bügeln je
+# Teil hält ``test_real_slicers.py`` in sechs Programmen. Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
 # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis. Lochausgleich
 # und Einzug der ersten Schicht (RM-589) belegt eine Platte mit zwei gleichen
@@ -644,6 +648,7 @@ MEASURED_PART_PATHS = frozenset(
         "shell.outer_wall_first",
         "shell.precise_outer_wall",
         "shell.scarf_seam",
+        "shell.seam_position",
         "shell.top_thickness",
         "shell.wall_count",
         "shell.wall_generator",

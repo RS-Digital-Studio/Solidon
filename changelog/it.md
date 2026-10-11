@@ -62,6 +62,8 @@ scrive in `website/version.json`.
 - Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
 - Riparare e risolvere le sovrapposizioni è fino a quattro volte più veloce sui modelli grandi, ed esportare in 3MF è molto più veloce.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
+- L'avviso *Visualizzazione del modello …* scompare appena la vista è pronta e non resta più sopra il modello.
+- I messaggi su valori e forme non offrono più una segnalazione di errore. Compare solo quando l'errore è di Solidon.
 - Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
 - Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo tecnico grande vengono riconosciute circa un terzo più velocemente.
@@ -84,6 +86,7 @@ scrive in `website/version.json`.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
 - Il controllo che supporti e skirt stiano sul piano ora misura solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
 - I suggerimenti accettati non lasciano quasi più senza supporto gli sbalzi che ne hanno bisogno. *Tenere liberi i canali* blocca solo lo spazio da cui un supporto non si potrebbe più togliere.
+- Con *Tenere liberi i canali*, i supporti a griglia non entrano più nelle bocche dei canali bloccati. Nella versione 0.5.3 vi arrivavano per poco più di un millimetro.
 - Dove i supporti sotto piccoli sbalzi poggiano sul modello, Solidon suggerisce supporti ad albero. Lì lasciano meno segni.
 - Sulle punte piccole Solidon suggerisce una *Velocità minima di rallentamento* più bassa, così non si ammorbidiscono. L'impostazione arriva a ogni slicer.
 - I bordi stretti che si reggono da soli restano liberi con *Bordi senza supporto*. La stampa richiede così molto meno supporto.
@@ -105,7 +108,10 @@ scrive in `website/version.json`.
 - Un bordo stretto che si regge da solo non conta più come ponte lungo, nemmeno accanto a un altro sbalzo. Il rapporto non avvisa più lì e Solidon non chiede supporti per questo.
 - Sopra un canale il rapporto non consiglia più un supporto che poi non si potrebbe togliere. Nomina il canale e un raccordo sotto i 45 gradi.
 - Per il PETG Solidon suggerisce *Raffreddamento pieno sul supporto*. Così si stacca più facilmente dal pezzo.
-- Nuove impostazioni di stampa: *Strati di interfaccia inferiori*, *Pareti degli alberi* e *Punta dell'albero*, più *Restringi il primo strato* e *Allarga i fori*, che seguono lo slicer se non scegli.
+- Sulle figure Solidon propone la cucitura dietro, senza linea davanti. Per una grande faccia superiore piana propone la stiratura.
+- Il tempo di stampa stimato ora include la stiratura.
+- Nuove impostazioni di stampa: *Strati fini*, *Spessore minimo superiore*, *Strati di interfaccia inferiori*, *Pareti degli alberi*, *Punta dell'albero*, *Restringi il primo strato* e *Allarga i fori*.
+- In *Stira la superficie* ora scegli tra *Faccia più alta* e *Tutte le facce superiori*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
 - Se lo slicer rifiuta filamenti con temperature troppo diverse su un piatto, Solidon ora indica il motivo e la via d'uscita, invece di dire solo che non è stato creato alcun file.
 - Nella finestra di stampa, stampante, filamenti e qualità restano del tutto visibili anche con il testo ingrandito. Le etichette lunghe vanno a capo.
@@ -114,10 +120,9 @@ scrive in `website/version.json`.
 - Se un pezzo compensa già nel modello, con un foro con *Considera la tolleranza del materiale* o *Compensa il piede d'elefante*, Solidon propone che lo slicer non lo faccia di nuovo.
 - Anche con stampanti che PrusaSlicer o SuperSlicer non conoscono, entrambi stimano il tempo di stampa con le accelerazioni trasmesse, e il file indica il materiale della bobina.
 - Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.
-- Il magazzino filamenti riconosce di nuovo un consumo scaricato con Solidon 0.5.1 e chiede prima di scaricare di nuovo la stessa stampa.
+- Il magazzino filamenti propone da verificare una registrazione di Solidon 0.5 dello stesso progetto con gli stessi filamenti e chiede prima di scaricare di nuovo.
 - Da questa versione un consumo scaricato resta legato alla sua stampa, anche se un aggiornamento calcola più in fretta o cambia il profilo del produttore nello slicer. Prima contava come nuova.
 - Dove cupole piatte e pendenze mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa del pezzo.
-- Novità nelle impostazioni di stampa: *Strati fini* e *Spessore minimo superiore*, perché le superfici superiori sopra strati fini restino chiuse.
 
 ### Filettature, fori e componenti normalizzati
 
@@ -134,6 +139,12 @@ scrive in `website/version.json`.
 - Inserita da sotto, la sede per dado ha la tasca sotto la faccia e la fessura scende fino a essa. Finora la tasca stava per metà sopra, con la vite nella faccia.
 - Se il foro di un blocco non attraversa il pezzo, ora si chiama cieco. Finora si chiamava passante.
 - Se la parete è più spessa di quanto indicato per «Passacavo» o «Portagomma», il passaggio lo dice e apre lo spessore di parete. Finora il foro finiva in silenzio nel materiale.
+- Le filettature esistono ora anche come filettature gas G e R, filettature in pollici UNC e UNF e NPT, nella *Filettatura stampabile*, su vite, dado e *Perno filettato*.
+- Ogni filettatura esiste anche sinistrorsa. Una misura personalizzata accetta filetti per pollice e più principi, anche in *Crea vite* e *Crea coperchio a vite*.
+- Quali serie di filettature mostrano gli elenchi delle misure si sceglie nelle Impostazioni, in *Serie di filettature negli elenchi*.
+- Controparte e *Perno per foro* vanno bene anche per filettature in pollici, gas, sinistre, a più principi e coniche. Se una filettatura misurata corrisponde a due serie, Solidon chiede.
+- Le filettature sinistre, a più principi e coniche si modificano con *Cambia caratteristica* e *Rimuovi caratteristica* e mantengono senso, principi e conicità.
+- Solidon riconosce una filettatura a più principi in una mesh importata come una sola filettatura con i suoi principi. Finora ne mostrava diverse con passo troppo grande.
 
 ### Blocchi
 
@@ -163,6 +174,9 @@ scrive in `website/version.json`.
 - Il pennello si adatta alle dimensioni del corpo. Se la mesh è troppo grossolana, *Modella* uniforma i triangoli al primo tratto, e un Ctrl+Z annulla entrambe le cose.
 - Nello specchiare il piano sta dove il corpo corrisponde a sé stesso, anche quando una parte sporge molto di lato.
 - Modellare segue il mouse in modo fluido, e anche un passaggio con centinaia di tratti di pennello si calcola in fretta.
+- Con *Fondi dolcemente* la mesh è uniforme, quasi senza schegge sottili. Un pezzo sul piano di stampa non scende più al di sotto.
+- Un corpo con una cavità chiusa la mantiene con *Fondi dolcemente*. Dalla versione 0.1.1 la cavità diventava un secondo corpo e il passo segnalava parti non collegate.
+- Con *Uniforma i triangoli* nessuno spigolo supera la lunghezza impostata e la forma non cambia. Lo stesso spigolo dà spesso quasi il doppio dei triangoli; uno più lungo mantiene la densità di prima.
 - In *Scheletro* ogni clic dopo il primo crea un osso, Invio chiude la catena, trascinare un'articolazione la piega e *Fatto* salva tutto senza dialogo.
 - Uno scheletro piega solo ciò che è legato alle sue ossa, il resto del corpo resta fermo. I progetti precedenti si calcolano come salvati.
 - Con Ctrl o Maiusc selezioni più spigoli e li raccordi o smussi in un solo passaggio. Un clic su un angolo seleziona tutti gli spigoli che vi si incontrano.
@@ -183,11 +197,15 @@ scrive in `website/version.json`.
 - Le pareti sottili, per esempio di un vaso, arrivano chiuse e con uno spessore.
 - L'assistente risponde nella lingua in cui scrivi.
 - Con un modello locale l'assistente ha tanto spazio quanto con uno ospitato e porta a termine compiti fino a dodici passaggi.
+- Se annulli una proposta dell'assistente, la barra di stato lo conferma invece di segnalare un errore del programma.
+- Se apri un altro progetto durante una proposta, Solidon la scarta e rimette la tua richiesta nella chat.
 - I modelli generati arrivano chiusi più spesso. Dove le facce si toccano soltanto, Solidon le separa e leviga le piccole pieghe della superficie invece di segnalare un'autointersezione.
 - Se un tentativo si è già sfaldato durante la generazione, la finestra lo dice prima di accettarlo e offre *Un altro tentativo*.
 - Se un modello generato è solo una pelle sottile attorno a una cavità, lo dice la finestra prima di accettarlo e il rapporto di verifica dopo, con la via a un nuovo tentativo.
 - Prima del download, *Configura la chat* e *Configura ComfyUI* dicono quanta memoria grafica e quanto spazio servono a un modello e se questo computer li ha.
 - Su un Mac, *Configura la chat* propone un modello locale che sta nella memoria condivisa e dice quando conviene una chiave per un modello ospitato.
+- Se manca il modello locale scelto o il fornitore rifiuta la chiave, Solidon lo dice in una frase e *Configura la chat* porta subito alla soluzione.
+- Solidon salta una chiave non valida per un giorno, finché non ne inserisci un'altra o scegli *Riprova*. Nel frattempo risponde un modello locale, se ne è configurato uno.
 - Su un modello appena generato, *Cambia dimensione* ricalcola solo la nuova misura e non ripete più la riparazione. È più veloce, e Ctrl+Z annulla subito la modifica.
 
 ## 0.5.3

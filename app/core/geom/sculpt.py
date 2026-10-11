@@ -1140,6 +1140,35 @@ RADIUS_SHARE: Final = 1.0 / 20.0
 #: rechnet und dann keinen Speicher mehr hat.
 REFINE_MAX_TRIANGLES: Final = 600_000
 
+#: Wie viel länger die längste Kante nach *Dreiecke angleichen* ist als die
+#: mittlere (Review F zu RM-671). Seit das Angleichen keine Kante über der
+#: verlangten stehen lässt, teilt es die Diagonale jedes Gitterquadrats, das der
+#: Kern zieht: Die Seiten behalten die verlangte Länge, die halben Diagonalen
+#: haben 1/√2 davon und sind die Mehrheit. Mit der Kante als längster trug das
+#: Netz doppelt so viele Dreiecke wie bis v0.5.3 (Platte 40 x 40 x 20 auf 1 mm:
+#: 15 644 → 30 052), und jeder Zug rechnete daran. Die Sitzung verlangt deshalb
+#: das √2-Fache ihrer mittleren Kante als längste.
+EVEN_LONGEST: Final = math.sqrt(2.0)
+
+#: Wie weit die mittlere Kante nach dem Angleichen über ``radius /
+#: REFINE_TO_EDGE`` liegen darf, bevor die Sitzung ein zweites Mal und feiner
+#: angleicht (:func:`evened_for_brush`, Nachprüfung N1). An Kugeln teilt der
+#: Kern gleichseitig und lässt keine Diagonale stehen, die das Angleichen
+#: teilte — mit :data:`EVEN_LONGEST` lag die mittlere Kante dort beim 1,05- bis
+#: 1,18-Fachen. Ein Zwanzigstel darüber bleibt der Pinsel bei der Abweichung,
+#: für die :data:`REFINE_TO_EDGE` steht.
+EVEN_COARSER: Final = 1.05
+
+#: Wie viel dichter als bei mittlerer Kante ``radius / REFINE_TO_EDGE`` ein
+#: Netz sein darf, bevor die Sitzung ein zweites Mal und gröber angleicht —
+#: die Regressionsschwelle aus Bauplan §31, denn jeder Zug rechnet an jedem
+#: Dreieck im Pinsel. Dreiecke wachsen mit dem Kehrwert des Quadrats der
+#: mittleren Kante. An Zylindern mit schmalen Facetten teilt das Angleichen
+#: die Rechtecke, die der Kern zieht, und lag beim 0,82-Fachen (Nachprüfung N1).
+#: Dieselbe Schwelle sagt, wann ein zweiter Durchgang lohnt, wo die Grenze die
+#: Kante bestimmt: wenn er mindestens so viel mehr Dreiecke verspricht.
+EVEN_DENSER: Final = 1.25
+
 
 def brush_radius_for(mesh: MeshData) -> float:
     """Der Pinselradius, mit dem eine Sitzung an diesem Körper beginnt (H8).
@@ -1162,23 +1191,184 @@ def brush_radius_for(mesh: MeshData) -> float:
 def refine_edge_for(
     mesh: MeshData, radius: float, finest: float, edge: float | None = None
 ) -> float:
-    """Auf welche Kantenlänge die Sitzung das Netz für diesen Pinsel angleicht —
+    """Auf welche längste Kante die Sitzung das Netz für diesen Pinsel angleicht —
     oder null, wenn es fein genug ist (H2, H9).
 
-    Zu grob heißt: weniger als :data:`BRUSH_TO_EDGE` Kanten je Radius. Dann
-    :data:`REFINE_TO_EDGE` Kanten je Radius, nicht feiner als ``finest`` (die
-    Untergrenze von *Dreiecke angleichen*) und nicht feiner, als
-    :data:`REFINE_MAX_TRIANGLES` zulassen. ``edge`` ist die mittlere
-    Kantenlänge, wenn sie schon bekannt ist.
+    Zu grob heißt: weniger als :data:`BRUSH_TO_EDGE` mittlere Kanten je Radius.
+    Verlangt wird dann als längste Kante das :data:`EVEN_LONGEST`-Fache von
+    ``radius / REFINE_TO_EDGE``, nicht kürzer als ``finest`` (die Untergrenze
+    von *Dreiecke angleichen*) und nicht kürzer, als
+    :data:`REFINE_MAX_TRIANGLES` zulassen (:func:`_longest_within_budget`).
+    Das ist eine Vorhersage, die an Gitterflächen trifft; an Kugeln lag die
+    mittlere Kante damit beim 1,05- bis 1,18-Fachen, an Zylinderfacetten beim
+    0,82-Fachen (Nachprüfung N1). Geeicht wird am Netz, das herauskommt
+    (:func:`evened_for_brush`). ``edge`` ist die mittlere Kantenlänge, wenn sie
+    schon bekannt ist.
     """
     current = median_edge(mesh) if edge is None else edge
     if current * BRUSH_TO_EDGE <= radius:
         return 0.0
-    area = float(mesh.raw.area)
-    # Ein gleichseitiges Dreieck mit Kante e hat die Fläche √3/4·e².
-    largest = math.sqrt(max(area, 0.0) / (math.sqrt(3.0) / 4.0 * REFINE_MAX_TRIANGLES))
-    wanted = max(finest, radius / REFINE_TO_EDGE, largest)
-    return wanted if wanted < current else 0.0
+    wanted = max(finest, radius / REFINE_TO_EDGE * EVEN_LONGEST, _longest_within_budget(mesh))
+    return wanted if wanted / EVEN_LONGEST < current else 0.0
+
+
+def evened_for_brush(
+    source: MeshData,
+    edge: float,
+    deviation: float,
+    *,
+    radius: float,
+    finest: float = 0.0,
+    cancelled: CancelToken | None = None,
+) -> tuple[float, MeshData]:
+    """*Dreiecke angleichen* für den Pinsel — geeicht am Netz, das herauskommt.
+
+    Die Kante aus :func:`refine_edge_for` ist eine Vorhersage. Sie trifft an
+    Gitterflächen die mittlere Kante ``radius / REFINE_TO_EDGE``
+    (:data:`EVEN_LONGEST`); an Kugeln teilt der Kern aber gleichseitig, an
+    schmalen Zylinderfacetten in Rechtecke, und die Grenze überschätzte an
+    gewölbten und schon dichten Netzen die Dreiecke um das 1,5- bis 3-Fache
+    (Nachprüfung N1). Deshalb zählt dieser Lauf das Ergebnis und gleicht
+    höchstens einmal nach, immer am Eingang:
+
+    - Über :data:`REFINE_MAX_TRIANGLES` gröber, mit der Kante, die die
+      gezählte Dichte unter die Grenze bringt (Dreiecke wachsen mit dem
+      Kehrwert des Quadrats der Kante), mit derselben Luft wie jeder Vorschlag
+      einer Kante (``mesh_ops.ESTIMATE_RESERVE``). Der Kern teilt in ganzen
+      Stücken, am Quader 200 x 200 x 200 trug das Netz so bis 720 000.
+    - Liegt die mittlere Kante über dem :data:`EVEN_COARSER`-Fachen des Solls
+      und ist unter der Grenze Platz, feiner — so weit, wie Soll oder Grenze
+      es zulassen, was zuerst greift; bestimmt die Grenze, nur, wenn es
+      mindestens :data:`EVEN_DENSER`-mal so viele Dreiecke verspricht. Der
+      Kern teilt eine Kante der Länge ``l`` in ``floor(l / e) + 1`` Stücke,
+      die mittlere Kante des Eingangs bekommt also erst ein Stück mehr, wenn
+      ``e`` unter ihre Stücklänge fällt; an der Kugel r 20 änderte das bloße
+      Verhältnis zum Soll nichts. Kommt das Netz über die Grenze, gilt das
+      erste.
+    - Trägt das Netz mehr als das :data:`EVEN_DENSER`-Fache der Dreiecke am
+      Soll, gröber; wird die mittlere Kante dabei zu lang, gilt das erste.
+
+    Gemessen an 29 Körpern und Pinseln (Nachprüfung N1): unter der Grenze
+    eine mittlere Kante vom 0,89- bis 1,05-Fachen des Solls — 0,79 an einer
+    Kugel, an der das nächste ganze Stück je Kante zu grob wäre — und
+    höchstens 1,18-mal so viele Dreiecke wie vor RM-671; wo die Grenze
+    greift, 0,55 bis 0,98 von ihr, denn an Kugeln aus dem Ikosaeder springt
+    die Zahl mit dem nächsten ganzen Stück auf das Vierfache.
+
+    ``finest`` ist die Untergrenze von *Dreiecke angleichen*. Zurück kommen
+    die Kante, mit der angeglichen ist — sie steht im Verlauf —, und das Netz.
+    """
+    from app.core.geom.mesh_ops import ESTIMATE_RESERVE, uniform
+
+    evened = uniform(source, edge, deviation, cancelled=cancelled)
+    count = evened.triangle_count
+    if count > REFINE_MAX_TRIANGLES:
+        edge *= math.sqrt(count / REFINE_MAX_TRIANGLES * ESTIMATE_RESERVE)
+        return edge, uniform(source, edge, deviation, cancelled=cancelled)
+    wanted = radius / REFINE_TO_EDGE
+    median = median_edge(evened)
+    if median <= 0.0:
+        return edge, evened
+    within = edge * math.sqrt(count * ESTIMATE_RESERVE / REFINE_MAX_TRIANGLES)
+    finer = median > wanted * EVEN_COARSER and within < edge
+    if finer:
+        # Die mittlere Kante des Eingangs zerfiel in ``floor(l / edge) + 1``
+        # Stücke; erst unterhalb ihrer Stücklänge bekommt sie eins mehr.
+        current = median_edge(source)
+        step = current / (math.floor(current / edge) + 1) * _JUST_BELOW
+        again = max(min(edge * wanted / median, step), finest)
+        if within >= again:
+            if within * within * EVEN_DENSER > edge * edge:
+                return edge, evened
+            again = within
+        if again >= edge:
+            return edge, evened
+    elif median * median * EVEN_DENSER < wanted * wanted:
+        again = edge * wanted / median
+    else:
+        return edge, evened
+    second = uniform(source, again, deviation, cancelled=cancelled)
+    if second.triangle_count > REFINE_MAX_TRIANGLES:
+        return edge, evened
+    if not finer and median_edge(second) > wanted * EVEN_COARSER:
+        return edge, evened
+    return again, second
+
+
+#: Knapp unter einer Länge — damit der Kern an einer Kante, die genau auf
+#: diese Länge fiel, trotz Rundung ein Stück mehr zieht.
+_JUST_BELOW: Final = 1.0 - 1e-9
+
+
+def _longest_within_budget(mesh: MeshData) -> float:
+    """Die kürzeste längste Kante, bei der das Angleichen unter :data:`REFINE_MAX_TRIANGLES` bleibt.
+
+    Gezählt wie *Dreiecke angleichen* vorab zählt
+    (``mesh_ops.estimated_triangles`` mit ``until_short``): die doppelte Fläche
+    in gleichseitigen Dreiecken, dazu ``2 · Σ Stücke - 2F`` über die Kanten.
+    Statt aufzurunden zählt jede Kante ein Stück mehr — eine obere Schranke,
+    die ohne die eindeutigen Kanten auskommt: In einem geschlossenen Netz ist
+    ``Σ (l / e + 1)`` über die Kanten ``H / (2e) + 3F / 2`` mit der Summe ``H``
+    aller Halbkantenlängen, die Zählung also ``H / e + F``. Das sind Fläche und
+    eine Summe über die Dreiecke; die eindeutigen Kanten kosteten an 1,3 Mio.
+    Dreiecken 0,7 s im Fensterfaden. Die Schranke
+    ``2A / (√3/4 · e²) + H / e + F`` gleich der Grenze gesetzt ist eine
+    quadratische Gleichung in ``1 / e``. Ohne die Kanten lag ein Zylinder mit
+    Fächerdeckeln 7 % über der Grenze (Review F).
+
+    Gleich gesetzt wird mit der Grenze unter der Luft, die jeder Vorschlag
+    einer Kante über einer Schätzung lässt (``mesh_ops.ESTIMATE_RESERVE``):
+    Der Kern teilt in ganzen Stücken, und am Quader 200 x 200 x 200 gab eine um
+    ein halbes Prozent längere Kante neun Prozent mehr Dreiecke. Gemessen wird
+    am Netz (``test_sculpt.py::test_refining_stays_within_its_triangle_budget``).
+
+    Der Fensterfaden fragt das je Zugpunkt und je Radiusänderung
+    (Nachprüfung N5). Liegt das Netz schon über der Grenze, ist die Antwort
+    ohne einen Blick auf die Dreiecke klar; sonst rechnet die Halbkantensumme
+    einmal je Netz (:func:`_half_edge_length`).
+    """
+    from app.core.geom.mesh_ops import ESTIMATE_RESERVE
+
+    room = REFINE_MAX_TRIANGLES / ESTIMATE_RESERVE - mesh.triangle_count
+    if room <= 0:
+        return math.inf
+    doubled = 2.0 * float(mesh.raw.area) / (math.sqrt(3.0) / 4.0)
+    if doubled <= 0.0:
+        return math.inf
+    halves = _half_edge_length(mesh)
+    inverse = (math.sqrt(halves * halves + 4.0 * doubled * room) - halves) / (2.0 * doubled)
+    return 1.0 / inverse
+
+
+#: Unter welchem Schlüssel ein Netz die Summe seiner Halbkantenlängen merkt.
+_HALF_EDGES_KEY: Final = "solidon_half_edge_length"
+
+
+def _half_edge_length(mesh: MeshData) -> float:
+    """Die Summe aller Halbkantenlängen — einmal je Netz (Nachprüfung N5).
+
+    Je Aufruf kostete sie an 1,3 Mio. Dreiecken 0,12 bis 0,20 s im Fensterfaden,
+    je Zugpunkt. Sie liegt im Cache des Netzes, der mit dessen Geometrie
+    verfällt; die Ecken je Dreieck entstehen dafür nur kurz und bleiben nicht
+    im Cache liegen wie ``raw.triangles``.
+    """
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is not None:
+        cache.verify()
+        if _HALF_EDGES_KEY in cache:
+            return float(cache[_HALF_EDGES_KEY])
+    total = _summed_half_edges(mesh)
+    if cache is not None:
+        cache[_HALF_EDGES_KEY] = total
+    return total
+
+
+def _summed_half_edges(mesh: MeshData) -> float:
+    """Die Rechnung hinter :func:`_half_edge_length`, ohne Merken."""
+    corners = np.asarray(mesh.raw.vertices, dtype=np.float64)[np.asarray(mesh.raw.faces)]
+    sides = np.roll(corners, -1, axis=1) - corners
+    squared = sides * sides
+    return float(np.sqrt(squared[..., 0] + squared[..., 1] + squared[..., 2]).sum())
 
 
 def stroke_at(

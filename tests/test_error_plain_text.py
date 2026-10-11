@@ -20,7 +20,9 @@ def test_show_error_passes_user_names_as_explicit_plain_text(monkeypatch, error_
         def __new__(cls, *args):
             calls["format"] = dialogs.Qt.TextFormat.AutoText
             button = SimpleNamespace(
-                setAutoDefault=lambda value: None, setDefault=lambda value: None
+                setAutoDefault=lambda value: None,
+                setDefault=lambda value: None,
+                setText=lambda value: calls.__setitem__("exit", value),
             )
             return SimpleNamespace(
                 setTextFormat=lambda value: calls.__setitem__("format", value),
@@ -43,3 +45,5 @@ def test_show_error_passes_user_names_as_explicit_plain_text(monkeypatch, error_
     assert calls["text"] == title
     assert calls["detail"] == detail
     assert calls["format"] == dialogs.Qt.TextFormat.PlainText
+    # Ohne Handlung gibt es nichts abzubrechen (RM-771): Der Ausgang heißt *Schließen*.
+    assert calls["exit"] == dialogs.tr("Schließen")

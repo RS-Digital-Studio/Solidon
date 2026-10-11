@@ -95,6 +95,11 @@
      "hilbertcurve",
      "archimedeanchords",
      "octagramspiral"
+    ],
+    "ironing_type": [
+     "top",
+     "topmost",
+     "solid"
     ]
    }
   },
@@ -193,6 +198,11 @@
      "octagramspiral",
      "sawtooth",
      "smooth"
+    ],
+    "ironing_type": [
+     "top",
+     "topmost",
+     "solid"
     ]
    }
   },

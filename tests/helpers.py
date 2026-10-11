@@ -37,7 +37,7 @@ from contextlib import contextmanager
 from datetime import date
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
@@ -1677,18 +1677,27 @@ def primitive_operation(
     )
 
 
-def thread_volume(diameter: float, pitch: float, length: float, *, internal: bool) -> float:
-    """Analytisches Volumen eines Bausteingewindes nach Pappus."""
+def thread_volume(
+    diameter: float, pitch: float, length: float, *, internal: bool, profile: str = "flat"
+) -> float:
+    """Analytisches Volumen eines Bausteingewindes nach Pappus.
+
+    Die Gangzahl ändert es nicht: Mehrere Gänge teilen sich den Vorschub, und
+    im Längsschnitt folgt Gang auf Gang im Abstand der Steigung wie bei einem.
+    """
     from itertools import pairwise
 
     from app.core.knowledge.parts import shapes
 
-    profile = list(shapes.ridge_profile(diameter, pitch, internal=internal))
-    root = profile[0][0]
-    corners = [*profile, profile[0]]
+    corners = shapes.ridge_profile(
+        diameter, pitch, internal=internal, profile=cast(shapes.ThreadProfile, profile)
+    )
+    profile_points = list(corners)
+    root = profile_points[0][0]
+    closed = [*profile_points, profile_points[0]]
     area = 0.0
     moment = 0.0
-    for (r_a, z_a), (r_b, z_b) in pairwise(corners):
+    for (r_a, z_a), (r_b, z_b) in pairwise(closed):
         cross = r_a * z_b - r_b * z_a
         area += cross
         moment += (r_a + r_b) * cross
@@ -2351,3 +2360,32 @@ def right_box(target: EdgeTarget) -> bool:
 
 def left_box(target: EdgeTarget) -> bool:
     return target.middle[0] < EDGE_PAIR_GAP / 2.0
+
+
+#: Unter welchem Winkel ein Dreieck ein Splitter ist, in Grad (:func:`sliver_share`).
+SLIVER_DEGREES = 10.0
+
+
+def sliver_share(mesh: MeshData) -> float:
+    """Der Anteil der Splitter — gemessen wie im Versionsvergleich von Weg 4 (RM-671).
+
+    Ein **Splitter** ist ein Dreieck mit einem Winkel unter :data:`SLIVER_DEGREES`.
+    Auf Splittern wirkt ein Pinsel ungleichmäßig, und jeder Folgeschritt rechnet
+    an Dreiecken, die keine Fläche tragen. Gemessen wird über die Kosinusse der
+    drei Ecken, ohne Winkelfunktion: Ein Winkel liegt unter zehn Grad, wenn sein
+    Kosinus über dem von zehn Grad liegt. Ein Dreieck mit einer Kante der Länge
+    null zählt als Splitter.
+    """
+    corners = np.asarray(mesh.raw.vertices, dtype=float)[np.asarray(mesh.raw.faces, dtype=np.int64)]
+    if not len(corners):
+        return 0.0
+    limit = math.cos(math.radians(SLIVER_DEGREES))
+    widest = np.full(len(corners), -1.0)
+    for corner in range(3):
+        one = corners[:, (corner + 1) % 3] - corners[:, corner]
+        two = corners[:, (corner + 2) % 3] - corners[:, corner]
+        lengths = np.sqrt((one * one).sum(axis=1) * (two * two).sum(axis=1))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            cosine = np.where(lengths > 0.0, (one * two).sum(axis=1) / lengths, 1.0)
+        widest = np.maximum(widest, cosine)
+    return float((widest > limit).mean())

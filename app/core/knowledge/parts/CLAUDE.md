@@ -26,11 +26,11 @@ Die Spiegelungsentscheidung für abtragende Bausteine liegt in
 | `builtin.py` | Lädt die Gruppen einmal (`bootstrap.load_operations()` ruft `builtin.load()`); der Paketimport registriert nichts |
 | `ops.py` | **Jeder Baustein wird zusätzlich eine Operation** (§24.1, §10) |
 | `build.py` | Gemeinsamer Boden: Vereinigen, Abziehen, Schneiden, `threaded`, Verbund, `form_of` — je Kern |
-| `shapes.py` | Kleine Formen; `building`/`building_exact` wählen den Kern, `mesh_only` benennt Netzstellen; `rounded_box` (Sehnen nach `MAX_FACET_SAG`, exakt vier Viertelkreise, Eckmitten aus `rounded_corners`) |
+| `shapes.py` | Kleine Formen; `building`/`building_exact` wählen den Kern, `mesh_only` benennt Netzstellen; `rounded_box` (Sehnen nach `MAX_FACET_SAG`, exakt vier Viertelkreise, Eckmitten aus `rounded_corners`); Gangprofile, Whitworth-Bögen nach `whitworth_splits` |
 | `section.py` | Querschnitte mit zwei Auswertern: `manifold3d.CrossSection` fürs Netz und die Prüfungen, eine ebene exakte Fläche für die Geometrie |
 | `exact.py` | Die exakten Zwillinge aus `shapes`/`build`: `Solid` mit demselben Rahmen, Vereinigung mit Körperzahlprüfung und Stufenleiter auf Kopien |
 | `range_check.py` | Der Bereichstest in der Anwendung: Selbstdurchdringung über `geom.intersections`, Wandstärke über `geom.mesh.ray_hits_batch`, ohne VTK |
-| `range_proof.py` | Der Bereichsnachweis: Abdruck je Baustein gegen `data/part_ranges.toml` (`tools/check_part_ranges.py`) |
+| `range_proof.py` | Der Bereichsnachweis: Abdruck je Baustein gegen `data/part_ranges.toml` (`tools/check_part_ranges.py`); `_SHARED` samt Kegelweg `exact.py`, `brep/profiles.py` |
 | `preview.py` | Vorschaubilder — gerendert, nicht von Hand gepflegt |
 | `through.py` | Bohrungen durch den ganzen Träger (`reaches_through`): ihr Zylinder für `ops._reaching_through` und ihre Fortsetzung in Vorschau, Platzierungsgeist und SCAD mit der Anzeigelänge `SHOWN_REACH` |
 | `scad.py` | Export als OpenSCAD-Quelltext; schreibt, führt nichts aus |
@@ -60,8 +60,9 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 ## Stolperfallen
 
 - `shapes.cylinder`, `box` und `moved` verschieben über `transform.moved`;
-  `rounded_box` und `thread_body` verwenden die exakten Winkelfunktionen.
-  Auch reine Verschiebungen über `trimesh` können BLAS aufrufen. Die
+  `rounded_box` und `thread_body` rechnen gebündelt über Felder, die Winkel
+  aus `units.exact_cos_sin_array`; ihr Netz bleibt Bit für Bit das der alten
+  Schleife (`tests/test_bundled_shapes.py`). Auch reine Verschiebungen über `trimesh` können BLAS aufrufen. Die
   Sehnenzahl der Ecke wird am tatsächlichen Pfeilmaß geprüft.
 
 ### Merkmale und Maße
@@ -97,10 +98,19 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   Bohrung und Länge. Der Netzkern eines Gewindes überdeckt den Gang auch in
   der Sehnenmitte (`build._core_segments`), der Gang läuft über ganze Umläufe;
   ein Langloch hat Sehnen nach `MAX_FACET_SAG` (`shapes.slot_segments`).
-- **`build.thread`** beschreibt rechtsgängig (`handedness="right"`, Winkel und
-  Höhe wachsen gemeinsam); Innenwerkzeug, Schraube, Mutter ändern den Drehsinn
-  nie, Spiegelungen führen ihn nach, ein Importgewinde bekommt keine Vorgabe;
-  in `measure_sources` steht er als `parameter`.
+- **`build.thread`** beschreibt Drehsinn, Gangzahl und Kegel (`handedness`,
+  `starts`/`lead`, `taper` als halber Kegelwinkel), wie der exakte Leser sie
+  nennt; Innenwerkzeug, Schraube, Mutter behalten den Drehsinn ihres Bausteins,
+  Spiegelungen führen ihn nach, ein Importgewinde bekommt keine Vorgabe; in
+  `measure_sources` steht er als `parameter`.
+- **Zoll- und Rohrgewinde** (RM-544): `standards.toml` führt sie als Tabellenart
+  `threads` (G, R, UNC, UNF, NPT), `standards.thread_size` gibt jeder Bezeichnung
+  Nennmaß, Steigung, Profil und Kegel. `fasteners.thread_dims` ist die eine
+  Stelle vom Baustein zu `ThreadDims`; `_printed_thread` legt die Bezugsebene
+  eines Kegels, `shapes.ridge_profile` kennt `flat`, `whitworth` und `npt`.
+  Ein Kegel entsteht am Netz genäht und vernetzt (`build.threaded`). Das
+  Netzbudget ist `MOST_THREAD_POINTS` (`thread_points`), `left_hand` der
+  Spiegelschalter (`PartSpec.mirrored_by`).
 - **Ein Baustein gibt seinem Wirt dessen Merkmale ohne die alten Dreiecke
   zurück** (`ops._merged_features`); ohne Partner in der neuen Erkennung steht
   ein Merkmal ohne Dreiecke im Baum, nie mit falschen.

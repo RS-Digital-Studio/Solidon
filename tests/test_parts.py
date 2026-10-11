@@ -101,7 +101,8 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
     """
     from app.core.knowledge.parts.range_check import corner_limit
 
-    return core_corners(spec.params, corner_limit(spec.source))
+    pinned = (spec.mirrored_by,) if spec.mirrored_by else ()
+    return core_corners(spec.params, corner_limit(spec.source), pinned)
 
 
 def required_defaults(spec: PartSpec) -> dict[str, Any]:
@@ -134,6 +135,7 @@ def test_registered_range_check_uses_every_declared_requirement(profile: Profile
         joined_by_host=True,
         bodies=2,
         feasible=lambda values: values["size"] != "M2",
+        mirrored_by="lead_in",
     )
     progress = mock.Mock()
     cancelled = CancelSignal()
@@ -153,7 +155,40 @@ def test_registered_range_check_uses_every_declared_requirement(profile: Profile
         features=spec.feature_requirements,
         feasible=spec.feasible,
         limit=range_check.LIBRARY_MAX_CORNERS,
+        mirrored_by="lead_in",
+        window=None,
     )
+
+
+def test_a_mirrored_exclusion_reports_any_break_at_its_corner() -> None:
+    """Review GEW, G4: Eine Ausschlussecke, deren andere Stellung anders bricht, ist ein Befund.
+
+    ``_mirror_excluded`` fing nur ``ValidationError``; jede andere Ausnahme der
+    anderen Stellung beendete den ganzen Nachweis, statt an der Ecke zu stehen
+    wie in ``_mirror_problem``.
+    """
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts.range_check import _mirror_excluded
+
+    @dataclasses.dataclass
+    class Values:
+        left: bool = False
+
+    def refuses(_values: Values) -> None:
+        raise ValidationError("left", "nicht baubar")
+
+    def breaks(values: Values) -> None:
+        if values.left:
+            raise RuntimeError("die andere Stellung bricht")
+        raise ValidationError("left", "nicht baubar")
+
+    def builds(values: Values) -> None:
+        if not values.left:
+            raise ValidationError("left", "nicht baubar")
+
+    assert _mirror_excluded(Values, refuses, {"left": False}, "left") is None
+    assert _mirror_excluded(Values, breaks, {"left": False}, "left") == "die andere Stellung bricht"
+    assert "left" in str(_mirror_excluded(Values, builds, {"left": False}, "left"))
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:
@@ -318,7 +353,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_16814_cartesian_boundaries() -> None:
+def test_the_library_really_has_21832_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -349,9 +384,36 @@ def test_the_library_really_has_16814_cartesian_boundaries() -> None:
     7936 mehr: Wandhalter bis M64 (512 → 832), Rohrschelle bis M64 (512 →
     3072), Klemmschale bis M64 (512 → 768), die Halter mit wählbarer Schraube
     (U und Ablage 320 → 1920, rund und Gabel 160 → 960).
+    Seit dem 09.10.2026 (RM-544) 4746 mehr: Gewinde, Schraube, Mutter und Bolzen
+    nehmen 146 Größen aus sechs Reihen und ein eigenes Maß in drei Gewindeformen
+    mit Gangzahl — Gewinde und Schraube je 1360, Mutter 340, Bolzen 2720. Das
+    Linksgewinde zählt keine Ecken: Jede Ecke baut auch die gespiegelte Stellung
+    und belegt, dass sie nur spiegelt (``PartSpec.mirrored_by``). Seit dem
+    10.10.2026 (Review GEW, M4) 272 mehr: Die Gänge je Zoll haben neben der Null
+    (die Reihe) eine Ecke an der gröbsten Steigung (``ParamSpec.least``) —
+    Gewinde und Schraube je 1424, Mutter 356, Bolzen 2848.
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 16814
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 21832
+
+
+def test_a_field_whose_zero_means_something_gets_a_corner_at_its_least_value() -> None:
+    """Review GEW, M4: Null Gänge je Zoll ist die Reihe — das grobe Ende lag an keiner Ecke.
+
+    Der Nachweis fuhr ``tpi`` bei 0 und 101,6; gültig ist es ab 1,27 (20 mm
+    Steigung), und dort hat das eigene Maß in Whitworth- und Unified-Form seine
+    größte Gangtiefe. ``least`` ist diese Grenze, und sie ist eine Ecke.
+    """
+    from app.core.knowledge.parts.fasteners import LEAST_TPI, MOST_TPI, ThreadParams
+    from app.core.knowledge.parts.range_check import _corner_values
+
+    assert dict(_corner_values(ThreadParams))["tpi"] == [0.0, LEAST_TPI, MOST_TPI]
+    pitches = {
+        round(25.4 / values["tpi"], 6)
+        for values in corners(PARTS.get("printed_thread"))
+        if values.get("tpi")
+    }
+    assert pitches == {20.0, 0.25}
 
 
 def test_the_library_checks_up_to_4096_corners_and_an_own_part_512() -> None:
@@ -4824,9 +4886,13 @@ def test_an_external_thread_turns_into_the_internal_thread_of_the_same_size(
     ("bore", "size", "nominal"), [(60.0, "M64", 64.0), (70.0, "custom_size", 76.6)]
 )
 def test_a_pipe_of_sixty_takes_an_internal_thread_and_its_bolt_turns_through(
-    profile: Profile, bore: float, size: str, nominal: float
+    profile: Profile, bore: float, size: str, nominal: float, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Der Kundenvorschlag S-20261006-c66299: ein Innengewinde in einem Rohr mit 60 mm.
+
+    Mit den metrischen Gewinden allein in den Listen (RM-544): Sind alle Reihen
+    gezeigt, trifft die 70-mm-Bohrung das Kernloch der 3-4 UNC, und die
+    Normgröße geht dem eigenen Maß vor.
 
     Das Rohr mit 8 mm Wand bekommt das Gewinde, das ``size_for_thread`` an
     seiner Bohrung vorwählt: in 60 mm seit Tabellenversion 13 die Normgröße
@@ -4840,6 +4906,7 @@ def test_a_pipe_of_sixty_takes_an_internal_thread_and_its_bolt_turns_through(
     from app.core.knowledge.parts.fasteners import size_for_thread, thread_measure
     from app.core.units import EPS_GEOM
 
+    monkeypatch.setattr(standards, "_shown_families", ("metric",))
     chosen = size_for_thread(bore)
     assert chosen["size"] == size
     assert thread_measure(
@@ -8051,6 +8118,27 @@ def test_every_shipped_part_carries_a_current_range_proof() -> None:
         + " ".join(sorted(wrong))
     )
     assert set(proofs) == set(states), "Einträge ohne Baustein im Nachweis"
+
+
+def test_the_proof_of_a_thread_part_follows_its_tapered_mesh_path() -> None:
+    """Review GEW, M3: Kegelige Gewinde baut der Netzweg genäht und vernetzt.
+
+    ``build.threaded`` geht für R und NPT durch ``exact.threaded`` und
+    ``brep.profiles.helical_thread``; der Abdruck nahm ``exact`` aus und folgte
+    ``brep`` nicht, und eine Änderung dort ließ den Nachweis „passend“. Dazu
+    gehört ``least`` eines Felds in die Erklärung: Es ist eine Ecke.
+    """
+    from app.core.knowledge.parts import range_proof
+    from app.core.knowledge.parts.fasteners import LEAST_TPI
+
+    spec = PARTS.get("printed_thread")
+    sources = {path.as_posix() for path in range_proof._sources(spec) or ()}
+    assert any(path.endswith("app/core/knowledge/parts/exact.py") for path in sources)
+    assert any(path.endswith("app/core/brep/profiles.py") for path in sources)
+    declared = range_proof._declaration(spec)["params"]
+    assert isinstance(declared, list)
+    (tpi,) = [entry for entry in declared if entry[0] == "tpi"]
+    assert repr(LEAST_TPI) in tpi
 
 
 @pytest.mark.parametrize("size", ["M2", "M8"])

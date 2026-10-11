@@ -31,7 +31,13 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-629: Ein schräger Schacht über einer Säule zählt, wenn der Kanalkreis Schicht für Schicht hindurchpasst (10.10.2026)](#rm-629-ein-schräger-schacht-über-einer-säule-zählt-wenn-der-kanalkreis-schicht-für-schicht-hindurchpasst-10102026) |
+| 2026-10-11 | [RM-766: Das Angleichen verschweißt nur, wo es etwas zu verschweißen gibt (11.10.2026)](#rm-766-das-angleichen-verschweißt-nur-wo-es-etwas-zu-verschweißen-gibt-11102026) |
+| 2026-10-10 | [RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)](#rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026) |
+| 2026-10-11 | [RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)](#rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026) |
+| 2026-10-10 | [RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz, das nicht unter das Bett reicht, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)](#rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-das-nicht-unter-das-bett-reicht-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026) |
 | 2026-10-10 | [RM-695: Ein gespeichertes Projekt öffnet nach einem Neustart ohne neue Erkennung (10.10.2026)](#rm-695-ein-gespeichertes-projekt-öffnet-nach-einem-neustart-ohne-neue-erkennung-10102026) |
+| 2026-10-10 | [RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)](#rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026) |
 | 2026-10-10 | [RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)](#rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026) |
 | 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
 | 2026-10-10 | [RM-706: Der Abdruck einer Buchung hängt an den gespeicherten Eingängen (10.10.2026)](#rm-706-der-abdruck-einer-buchung-hängt-an-den-gespeicherten-eingängen-10102026) |
@@ -47527,6 +47533,71 @@ gleich), und der senkrechte Schacht ist als Grenze benannt. Belege:
 `output/konsolidierung-2026-10-07/codex-claude/belege/lauf-a.md`. Changelog: nein (die
 Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).
 
+## RM-629: Ein schräger Schacht über einer Säule zählt, wenn der Kanalkreis Schicht für Schicht hindurchpasst (10.10.2026)
+
+<a id="rm-629-ein-schräger-schacht-über-einer-säule-zählt-wenn-der-kanalkreis-schicht-für-schicht-hindurchpasst-10102026"></a>
+<a id="rm-629"></a>
+
+**Befund (Nachprüfung RM-571, 09.10.2026):** Ob eine Säule im umschlossenen Raum von oben
+erreichbar ist, fragte `_open_above` nur senkrecht. Ein schräges Loch der Weite 2R in einem
+Deckel der Dicke H zählte mit 2R / cos θ − H · tan θ: Am Becher mit Deckel und Loch Ø 34 mm um
+20° lag der Sims zu 64 statt 4 % im Sperrraum und druckte ohne Stütze. Ein Zickzackschacht brach
+die Rechnung mit einer `TopologyException` ab.
+
+**Behoben:** Ist senkrecht kein Schacht offen, schiebt `_shafts_pass` einen Kreis von
+`CHANNEL_WIDTH` Schicht für Schicht durch den Schacht, je Säule einmal für alle Scheiben: Ein
+freier Kreis bleibt, wo er ist, einer, den Material trifft, weicht so weit aus, wie die Wand ihn
+schiebt (`SHAFT_PUSH_SPARE`), höchstens um Schichthöhe · Tangens des Stützwinkels, mit dem
+geschnitten wurde (`SliceResult.overhang_angle`, ohne ihn `SHAFT_DRIFT`). Wer geschoben wird,
+braucht Platz für die Ellipse seines schrägen Wegs (`_oval_centres`, R / cos θ in
+Schubrichtung, R quer dazu; θ die flachere Schätzung aus Schub der Wand und Wandern der Mitte
+des Lochs). Dass freie Kreise nicht wandern, hält die Entscheidung „offen über der Säule“ aus
+RM-571 (`test_open_sky_is_asked_at_each_slab`). `_clipped` repariert ungültige Zuschnitte.
+Warum, mit den Grenzen (Unterkante eines Dachs je Schichthöhe; der Kreis folgt der hinteren
+Wand, nicht der Achse: scharfe Knicke, Lippen, enge Wendeln, enger schräger Kegel bleiben zu wie
+vorher): `konzepte/begruendungen/regel-druckrat.md`, Abschnitt zur Kanalsperre.
+
+**Review RM-629 (10.10.2026), behoben:** Ein getroffener Kreis weitete sich um den vollen Schritt
+in jede Richtung und kroch an einer leicht überhängenden Wand unter ein Dach (0,57° → 2 mm,
+2,9° → 10 mm seitwärts); ein schräger Schlitz zählte mit seiner waagerechten Weite (45° 22 mm
+offen); die Ausweichweite war die Startregel statt des Stützwinkels des Druckers. Die ersten
+beiden öffneten, was vor RM-629 zu war; beide sind wieder zu, und die Ausweichweite folgt dem
+Profil. **Nachprüfung (11.10.2026), behoben:** Ein Y oder gegenläufige Schlitze (Äste 22–28 mm
+um 45°) blieben offen, weil der gemeinsame Schwerpunkt zweier Löcher nicht wanderte — jetzt je
+Loch ein Weg (`_split_by_hole`); ein Schlitz schräg zu seiner schmalen Seite war bis 29 mm offen
+— Richtung und Neigung jetzt aus derselben Schätzung. Dabei schließen sicher: Wendel r 5 Ø 31
+bei 0,5 mm und r 8 Ø 34 (Ganghöhe 40), wie vor RM-629. Tests: Y 22/28 zu, 31 offen; Schlitz
+schräg 29 zu, 31 offen. `SliceResult.overhang_angle` steht in Bauplan §9.
+
+**Nachweis (10.10.2026):** Becher mit Deckel, Sims im Sperrraum vorher → nachher: Loch Ø 34 mm
+um 10°, 20°, 30°, 40°, −30° 64 → 4 %, Ø 30,2 mm um 20° 64 → 4 %, Ø 28 mm 64 → 64 %; Zickzack
+Ø 34 mm offen (vorher Abbruch), mit Ø 28 mm zu. Tests in `test_slice_findings.py`: Neigung 20°,
+30°, −30° und Zickzack (am Stand `219360698` rot), Engstelle in genau einer Schicht (29,5 zu,
+31 offen), Grenze synthetisch auch in einer Schicht (29,9 zu, 30,1 offen), Stufe mit 28 mm
+Überlappung (zu). Nach dem Review dazu: Kammer mit überhängender Wand (0,57° und 2,9°, Öffnung
+2 mm daneben zu, 0,3 mm offen), schräge Schlitze (45° 22, 40° 24, 30° 27 mm zu, 45° 31 offen),
+Ø 34 um 40° offen, Deckel 60 mm mit Stützwinkel (44° offen / 50° zu bei 45°, 44° zu bei 40°,
+50° offen bei 55°), Stufe synthetisch (3 mm offen, 6 mm zu), getrennte Wege zweier Scheiben,
+gerundeter Knick 40° in die Senkrechte offen. Mutanten am fertigen Stand (47 Tests der Auswahl):
+freie Kreise wandern (6 rot), Drift 10 (4), Winkel doppelt (2), Startregel statt Winkel (2),
+voller Schritt statt Schub (2), ohne Ellipse (3), Ellipse ohne Abstand (10), nur Schub statt
+Achse (1), alle Wege zusammen (1), Zuschnitt ohne Reparatur (3), Saum ohne Säule (2) werden
+gefangen; nicht gefangen: `SHAFT_DRIFT` 1,5 und 2 (nur noch Rückfall ohne Winkel im Schnitt),
+Treffer immer (nur Leistung), Reste leben, oberste Scheibe offen (Randfälle). Im Slicer (Ø 34 mm um 20°, Vorschläge
+übernommen), Stützbahn unter dem Sims vorher → nachher (ohne Sperre): ElegooSlicer CC2 3,60 →
+7,49 m (6,33), OrcaSlicer Kobra 2 2,65 → 4,37 m (4,37), PrusaSlicer MK4S 1,78 → 3,83 m
+(3,81), Cura SV06 7,72 → 17,29 m (16,91); Tunnel 0,0 m wie vorher. Gegenprobe Ø 28 mm in
+ElegooSlicer und Cura vorher = nachher (2,69 und 7,69 m, Sperre bleibt). Becher, Drache 50 und
+130 %, Schüssel in Dateilage 55° und 60° und Eiffelturm: Scheiben gleich, CPU-Zeit des
+Sperrraums gleich (Becher 0,34 s, Drache 130 % 6,9 s); dort und an der Schüssel in Drucklage
+50° (186 704 mm³ wie vorher) fragt keine Säule nach dem Schacht;
+Drache im Druckrat (`sonde_rat.py`, CC2) gleich. Nach dem Review: alle Becherfälle des Prüfers
+(67 bei 0,5 mm, 45 bei 0,2 mm) wie mit dem ersten Fix allein, die Schlitze zu; Becher, Drache 50
+%, Schüssel 50° Scheiben gleich und CPU gleich (Becher 0,27 / 0,25 s), Ellipse am Deckel mit 20°
+0,36 → 0,42 s, am Zickzack 0,50 → 0,88 s. Changelog: nein (die Sperre im umschlossenen Raum kam
+mit RM-566/RM-571 im selben 0.6.0-Zyklus, `git tag --contains` leer; der 0.6.0-Punkt zu *Kanäle
+frei halten* beschreibt die Eigenschaft).
+
 ## RM-676: *Größe ändern* an einem erzeugten Modell rechnet nur das Maß (10.10.2026)
 
 <a id="rm-676-größe-ändern-an-einem-erzeugten-modell-rechnet-nur-das-maß-10102026"></a>
@@ -47585,6 +47656,178 @@ Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_chec
 `_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
 **Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
 davor rot, jetzt grün. Changelog: nein.
+
+## RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz, das nicht unter das Bett reicht, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)
+
+<a id="rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-das-nicht-unter-das-bett-reicht-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026"></a>
+<a id="rm-671"></a>
+
+**RM-671 — *Weich verschmelzen* lieferte ein splittriges Netz, und *Dreiecke angleichen* hielt
+die Kantenlänge nicht** (Versionsvergleich 0.5.2, Weg 4, W4-3; dazu F5 der Funktionsliste 0.5.2).
+
+**Ursache, gegen das Register korrigiert.** Das Register nannte den Sprung des Ebenenabstands
+(`2006fc7d1`) als Quelle der Splitter. Mit dem exakten Feld bleiben es an Kugel auf Zylinder
+dieselben 11,81 %: Die Splitter sind zu 98 % Nadeln, die Marching Cubes legt, wo die Fläche dicht
+an einem Rasterpunkt vorbeiläuft (kürzeste Kante im Median 0,07 Raster). Bis v0.4.2 gab es sie
+kaum, weil das Feld zum nächsten Stützpunkt maß und nahe der Fläche nie null wurde (0,014 statt
+0,245 % der Rasterpunkte unter 0,05 mm; das alte Feld nachgebaut: 2,89 %), um den Preis welliger
+Wände. Der Ebenenabstand lag dafür neben Kanten bis 1,9 mm daneben und rechnete über
+`np.einsum` (Plattformregel). Das Angleichen faltete mit `simplify(0)` ebene Flächen zu Fächern
+ohne Längengrenze, und `refine_to_length` ließ deren innere Kanten bis zum Doppelten stehen. F5:
+Die weiche Mischung hebt das Feld, wo beide gleich sind, um bis zu ein Viertel des Übergangs; an
+bündigen Flächen wuchs das Ergebnis über die Eingänge hinaus, mit dem Ebenenfehler bis 1,69 mm
+unter das Bett.
+
+**Behoben.** `blend.distance_field` misst zum nächsten Punkt auf dem Dreieck, das Vorzeichen aus
+Pseudonormalen, ohne `einsum` — genau aber nur im Band, aus dem Marching Cubes und die weiche
+Mischung lesen (Raster plus Übergang plus Viertelübergang). Weiter draußen trägt jeder
+Rasterpunkt nur sein Vorzeichen, vom Band her über Gruppen benachbarter Punkte
+(`scipy.ndimage.label`); das Netz ist bitgleich zur vollen Rechnung, am §31-Fall rechnen 191 706
+statt 486 798 Zeilen genau. Das Feld reicht nicht unter das Bett, oder nicht unter die unterste
+Höhe der Eingänge, wenn sie schon darunter reichen (`_above_the_floor`, Entscheidungen
+Koordinator nach Review F und Nachprüfung N2 — die Begrenzung auf alle Seiten des Hüllquaders
+schnitt runde Übergänge flach ab, an gekreuzten Rohren 269 mm² auf x = ±10, die auf die unterste
+Eingangshöhe zwei schwebende Kugeln 74,5 mm² eben). Werte nahe null gelten als knapp außen
+(`CLEAR_OF_ZERO`), die Ecken stehen in doppelter Genauigkeit (`_in_double`, `skimage` gibt
+`float32`), und Nadeln unter 0,2 Raster werden zusammengelegt (`NEEDLE`). Das Feld ist exakt,
+solange das nächste Dreieck unter den Bewerbern der acht nächsten Stützpunkte ist; an CAD-Netzen
+mit Nadelfächern fehlt es manchmal (Besenhalter: bis 0,19 mm, eines von 351 120 Vorzeichen falsch,
+das Ebenenfeld lag dort bis 1,81 mm daneben; RM-769). `mesh_ops.uniform` vereinfacht ohne
+Abweichung nicht mehr und teilt nach dem Kern jede Kante, die dieser im Inneren eines Dreiecks
+zu lang gezogen hat, in der Mitte (`mesh_edits.split_long`, die Seiten ab 65 536 Dreiecken auf
+Fäden gemessen); verschweißt wird nur, wo `merge_vertices` etwas ändern würde (RM-766). Neues
+Modul `app/core/geom/mesh_edits.py`; `cache_version` 8 und 3.
+
+**Review F.** Mit der Kantenzusage teilt das Angleichen die Diagonalen der Gitterzellen und trägt
+bei gleicher Kante bis doppelt so viele Dreiecke. Es zählt vorab deshalb wie *Kanten verfeinern*
+(`_uniform_ahead`, am Quader 100 × 80 × 60 auf 1 mm 176 946 statt 90 113 bei 161 644 Ergebnis),
+die Decke gilt dem Netz nach dem Kern und nach dem Teilen (`_below_the_ceiling`). Das Formen
+verlangt als längste Kante das √2-Fache seiner mittleren (`sculpt.EVEN_LONGEST`), höchstens so
+fein, wie eine Schranke der Zählung unter `REFINE_MAX_TRIANGLES` zulässt
+(`_longest_within_budget`, mit `ESTIMATE_RESERVE`; im Fensterfaden einmal je Netz, über der
+Grenze gar nicht, Nachprüfung N5). Das ist eine Vorhersage, die an Gitterflächen trifft; an
+Kugeln lag die mittlere Kante damit beim 1,05- bis 1,18-Fachen des Solls, an Zylinderfacetten
+beim 0,82-Fachen mit bis zu 33 % mehr Dreiecken als vor RM-671, an dichten Eingängen nutzte es
+0,29 bis 0,59 der Grenze (Nachprüfung N1). `sculpt.evened_for_brush` eicht deshalb am Ergebnis und
+gleicht höchstens einmal nach: feiner, wenn die mittlere Kante über dem 1,05-Fachen des Solls
+liegt und Platz ist (`EVEN_COARSER`; bestimmt die Grenze, nur bei mindestens einem Viertel mehr
+Dreiecken), gröber, wenn das Netz mehr als ein Viertel dichter ist als am Soll (`EVEN_DENSER`,
+die Schwelle aus §31), gröber auf die gezählte Dichte über der Grenze. Der Kern teilt eine Kante
+in `floor(l / e) + 1` Stücke; feiner wird es erst unter der Stücklänge der mittleren Kante des
+Eingangs.
+
+**Umbau nach Review F** (Entscheidung Koordinator, dann Robert: F ganz in 0.6.0, ohne neuen
+Bremser). Bis dahin tauschte das Angleichen zu lange Kanten in der Ebene, räumte um spitze
+Dreiecke auf und zählte dafür Ebenenmaße. Am ersten angeschlossenen Stand hing es an CAD-Netzen
+aus `F:\3D Dateien` über zehn Minuten (Delaunay tauschte in 293 Runden eine Million Kanten und
+ließ 93,8 % spitz); mit Ebenenregeln und Wahl bis zur Sättigung kostete es das Drei- bis
+Fünffache der Zeit vor RM-671, an einer viermal unterteilten Lochplatte 262 s. An den
+Abnahmefällen tat das Aufräumen fast nichts (2 bis 22 Tausche, kein Zusammenlegen); es ist
+entfernt, `plate_holes` auf 1,5 mm trägt ohne es 44 statt 1,6 % Splitter (v0.5.3: 58,9 %,
+RM-767). Ein zweiter `refine_to_length`-Durchgang im Kern statt des Teilens kostete am Wedge-Lock
+0,9 statt 0,085 s und hielt die Kante nicht. Eine Prüfung je Zeile, ob das nächste Dreieck unter
+den Bewerbern ist, kostete am §31-Fall 25,4 statt 1,1 s (RM-769, nicht gebaut).
+
+**Messlatte des Koordinators** (Wand und CPU, je Runde ein Prozess je Stand im Wechsel gegen den
+Stand vor RM-671, Kern im Prozess, Median der Verhältnisse aus zehn Runden, unter Fremdlast von
+100 %; Formen mit der Kante der Sitzung und geeicht, Pinsel 1 mm):
+
+| Fall | Maß | Wand | CPU |
+|---|---|---|---|
+| Wedge-Lock, Formen | absolut | 1,15 | 0,90 |
+| Seitenablage, Formen | absolut | 0,68 | 0,67 |
+| Seitenablage, Kante 1 mm (1,93-mal so viele Dreiecke) | je Dreieck | 0,98 | 1,14 |
+| Quader 100 × 80 × 60, 0,5 mm (2,08-mal) | je Dreieck | 0,96 | 0,74 |
+| Lochplatte viermal geteilt, halbe Kante (7,1-mal, 2,33 s) | je Dreieck | 0,55 | 1,06 |
+| §31-Kugel, halbe Kante (2,41 s) | absolut | 0,92 | 0,94 |
+| §31-Rohre, *Weich verschmelzen* | absolut | 1,07 | 1,23 |
+
+**Messung** (fein, Splitter = Winkel unter 10°, vorher → nachher): Kugel auf Zylinder 11,81 →
+1,34 % nach dem Verschmelzen, 30,59 → 0,57 % nach dem Angleichen auf 1,2 mm, längste Kante
+2,389 → 1,200 mm; *Figur formen* 6,27 → 0,41 % und 17,78 → 0,32 %, 3,102 → 1,499 mm (verlangt
+1,5); zwei kreuzende Zylinder 10,85 → 0,71 % und 28,26 → 0,55 %, 2,664 → 1,200 mm, rund bis
+x = ±10,978 wie bis v0.5.3; zwei Quader auf dem Bett z −1,69 bis 11,44 → 0 bis 10,75 mm,
+16 575,6 → 15 671,9 mm³ (Vereinigung 14 400, die Beule über Deckel und Seiten bleibt, RM-763);
+zwei schwebende Kugeln bei z = 20 unter dem Hals rund. Angleichen ohne Abweichung lässt Volumen
+und Fläche gleich, auch an den Splitternetzen aus W4-3 (11,81 → 7,79 % und 7,18 → 4,30 %).
+`plate_holes` auf 1,5 mm: 58,9 → 44,4 % Splitter, längste Kante 2,784 → 1,500 mm. Die drei
+CAD-Netze (Kante 1,0, 0,5 und 1,0 mm): längste Kante 2,19 → 1,00, 1,05 → 0,50 und 6,16 → 1,00 mm,
+Volumen und Fläche gleich, Splitter 93,7 → 89,6, 84,9 → 83,0 und 6,0 → 4,3 %, Dreiecke 971 234 →
+1 038 046, 490 738 → 491 558 und 296 524 → 573 394. Formen an 29 Körpern und Pinseln
+(Nachprüfung N1): unter der Grenze höchstens 1,18-mal so viele Dreiecke wie vor RM-671 und die
+mittlere Kante beim 0,89- bis 1,05-Fachen des Solls (0,79 an einer Kugel, an der das nächste
+ganze Stück je Kante zu grob wäre); wo die Grenze greift, 0,55 bis 0,98 von ihr (vor RM-671 1,06
+bis 2,19, vorhergesagt 0,29 bis 0,82). Druckgleich (§11.2) gegen welle4 ohne F (`a72079433`):
+11 von 12 Beispielprojekten bitgleich, *Figur formen* mit beiden Schritten gewollt anders
+(879,4845 µm); gegen v0.5.3 bringt F nur *Figur formen* dazu.
+
+**Nachweis:** `test_blend.py` (exakter Abstand gegen `mesh.on_surface`, die drei Abnahmefälle,
+zwei Quader auf dem Bett, runde Übergänge an Rohren, gestapelten und schwebenden Kugeln ohne
+ebene Flecken, das Band bitgleich zum vollen Feld und an weniger als der Hälfte der Punkte genau),
+`test_subdivision.py` (die Splitternetze `meshes/blend_splinters_*.npz`, Zählung vorab, Decke am
+Ergebnis, die Arbeit des Angleichens gezählt, die Prüfung vor dem Verschweißen gegen
+`merge_vertices`), `test_sculpt.py` (Dreiecksgrenze am Netz, geeicht an Kugel, Zylinder und
+dichter Figur, die Schranke einmal je Netz), `test_platform_identity.py` (`blend_field`,
+`blend_union`, `remesh_uniform`; ein, vier und rückwärts abgeschlossene Fäden bitgleich),
+§31-Fall `remesh_uniform_flat`; die neuen Fälle am Stand davor rot, jetzt grün. Die
+Leistungsmarken `blend_union` und `remesh_uniform` sind verworfen: Sie maßen vor RM-671 Wege,
+die die Kante nicht hielten, bei fester Kante mit halb so vielen Dreiecken; an ihre Stelle tritt
+die Messlatte oben. Changelog: ja, 0.6.0 (die Ursache `2006fc7d1` steckt in v0.4.4 bis v0.5.3).
+
+## RM-766: Das Angleichen verschweißt nur, wo es etwas zu verschweißen gibt (11.10.2026)
+
+<a id="rm-766-das-angleichen-verschweißt-nur-wo-es-etwas-zu-verschweißen-gibt-11102026"></a>
+<a id="rm-766"></a>
+
+**Befund** (Paket F, offener Punkt 1 zu RM-671): An der Kugel aus §31 (2,46 Mio. Dreiecke)
+kostete `mesh_ops._as_mesh` mit `trimesh.merge_vertices` 1,0 bis 1,5 der 3,2 bis 3,4 s von
+*Dreiecke angleichen*, am Quader 100 × 80 × 60 auf 0,5 mm 0,16 s von 0,51 s; *Fläche
+unterteilen* und jeder Weg über `_as_mesh` zahlten dasselbe. Der Kern gibt ein per Index
+dichtes Netz heraus.
+
+**Behoben.** `_needs_welding` fragt vorher, ob `merge_vertices` etwas ändern würde: jede Ecke
+benutzt, dann je Zeile ein Streuwert der wie in `trimesh` gerundeten Zahlen, sortiert; gleicher
+Streuwert sagt vorsichtshalber ja. Übernommen wird das Verschweißte wie bisher nur mit weniger
+Ecken, das Netz bleibt also bitgleich. Die erste Fassung im Umbau von RM-671 mischte die Zahlen
+mit je einer Konstante und kollidierte an den Gittern des Kerns bei 17 % (Quader) bis 39 %
+(Kugel) der Ecken — sie sagte immer ja und sparte nichts; seither mischt SplitMix64 jede Zahl ganz
+durch (`_mixed`), an denselben Netzen ohne Kollision. Am Quader kostet `_as_mesh` 0,03 statt
+0,22 s.
+
+**Nachweis:** `test_subdivision.py::test_the_check_before_welding_says_what_merge_vertices_would_do`
+(gegen `merge_vertices` selbst, dazu Kugel und ein Gitter aus dem Kern, an denen der erste
+Streuwert ja sagte), Druckgleich der Beispielprojekte gegen welle4 `a72079433` (11 von 12
+bitgleich, *Figur formen* aus RM-671 gewollt anders), §31-Kugel im Wechsel mit dem Stand vor
+RM-671 bei Wand 0,92 und CPU 0,94 des Stands davor (Median der Paare aus zehn Runden, 2,41 s).
+Changelog: nein (mit RM-671 in 0.6.0, ungelandet).
+
+## RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)
+
+<a id="rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026"></a>
+<a id="rm-544"></a>
+
+**RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg.** Anlass ist
+  derselbe Kundenvorschlag wie bei RM-532 (S-20261006-c66299, Innengewinde in einem Rohr); Rohre
+  tragen meist Whitworth-Rohrgewinde. Solidon kennt nur metrische Gewinde nach ISO 261/262 und
+  sagt bei links-, mehrgängigen und kegeligen ab. **Entschieden (Robert, 06.10.2026):** „alle“ —
+  neben metrisch in jedem Maß auch G (zylindrisches Rohrgewinde, ISO 228-1, 55°-Flanken, Gänge je
+  Zoll) sowie UNC und UNF (60°, Gänge je Zoll). **Umfang:** Tabelle der Nennmaße und Gänge je
+  Zoll mit Herkunft (`standards.toml`, Version erhöhen), das Flankenprofil als Parameter der
+  Gewindeform (55° gerundet / 60°), *Eigenes Maß* auch in Zoll (Gänge je Zoll statt Steigung),
+  dieselben Wege wie RM-532: Druckbares Gewinde, Bohrung mit Gewinde, Gegenstück
+  (`counterpart.thread_values_for`), *Schraube erstellen*, *Drehdeckel erzeugen*, Stift für
+  Bohrung (RM-536), Erkennung einer gemessenen Bohrung als Zoll- oder Rohrgewinde mit Rückfrage
+  bei Mehrdeutigkeit (Regel 21). **Einstellung (Robert, 06.10.2026):** In den Einstellungen
+  wählt der Kunde, welche Gewindearten in den Auswahllisten stehen (metrisch, G, UNC, UNF,
+  später die zweite Stufe), Vorgabe alle. Die Wahl ist Darstellung, kein Dokumentzustand: Ein
+  Schritt, der eine ausgeblendete Art trägt, zeigt und rechnet sie weiter, und die Erkennung
+  schlägt nur eingeblendete Arten vor. Zweite Stufe, weil „alle“ auch die heutigen Absagen meint:
+  kegelige Rohrgewinde (R nach ISO 7-1, NPT), Linksgewinde und mehrgängige Gewinde.
+  **Abnahme:** Paar G 1/2 innen und außen greift an beiden Kernen, Kernmaße gegen ISO 228-1,
+  UNC 1/4-20 gegen ASME B1.1; Bereichsnachweis, Tor, Texte in sechs Sprachen, Handbuchabsatz;
+  die zweite Stufe mit eigener Abnahme.
+
+**Abschluss:** Beide Stufen fertig (Zweig `paket/gew-zollgewinde`, Bericht `output/konsolidierung-2026-10-07/paket-gew.md`). Normteiltabelle 14 mit 146 Gewindegrößen (27 metrisch, dazu G 24, R 15, UNC 33, UNF 23, NPT 24 bis 24 Zoll), gegen zweite Quellen in 540 Vergleichen geprüft; Gangprofile `flat`, `whitworth` (ISO 228-1) und `npt`; Gangzahl, Linksgang und Kegel 1:16 in jedem Gewindeweg: Druckbares Gewinde, Schraube, Mutter, Gewindebolzen, Gegenstück (Rückfrage, wo die Messung zwei Reihen nicht trennt), Stift für Bohrung, Drehdeckel, *Schraube erstellen*, *Merkmal ändern* und *Entfernen*; der Netzleser erkennt mehrgängige Gewinde; Einstellung der gezeigten Reihen. Abnahme: G 1/2 greift am Netz und exakt, Kernmaße gegen ISO 228-1, 1/4-20 UNC gegen ASME B1.1, R 1/2 und NPT 1/2 greifen in der Bezugsebene. Der Gang rechnet gebündelt, Bit für Bit wie zuvor (`units.exact_cos_sin_array`, Gang Ø 1000 × 0,25 × 50 von 6,0 auf 1,2 s CPU). Der Nachweis fand am Gewindebolzen drei Fehler (Schaft auf dem Kamm, 48 Sehnen an Schaft und Kuppen in jeder Größe, Spiegelschranke unter einem Mikrometer), behoben mit Bibliotheksversion 28. Review 1 behoben (Kegel in der Bezugsebene über `types.thread_at_gauge`, Reihen als Argument statt Einstellung in der Auswertung, Umrisse plattformgleich, eine Umrechnung Gänge je Zoll mit `ParamSpec.least`). **Bereichsnachweis (11.10.2026, Stand `dd6858d17`, Dichtungen nach welle4 `a72079433`):** 50 von 50 Bausteinen bestanden, 21 832 Ecken, kein Bruch; Gewinde 1 424, Schraube 1 424, Mutter 356, Bolzen 2 848 Ecken, jede auch in der gespiegelten Stellung, dazu die gröbste Zollsteigung; `--check` 50 von 50.
 
 ## RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)
 
@@ -47819,6 +48062,26 @@ Register und eine Maßänderung eines Bausteins ändern den Abdruck. Buchungen a
 stehen nur unter dem Vorabdruck und kippen weiter mit Netzbits, Grundlage und Slicer-Updates
 (Cura Fein und Entwurf seit RM-583, siehe [RM-705](#rm-705)).
 
+**Nachtrag 11.10.2026 (Integrationsreview welle4, M1):** Paket E ordnet die Dreiecke von 17 der 21
+Beispielkörper druckgleich um; der Vorabdruck traf danach nur noch 3 von 13 Buchungen aus 0.5.3, mit
+Paket F (*Figur formen*) 2 von 13, und *Ohne Rückfrage buchen* hätte die übrigen ein zweites Mal
+abgezogen. Ordnungsfrei rechnen hilft
+nicht: Die gespeicherten Abdrücke von 0.5.3 hängen an dessen Folge. Ohne Treffer kommt deshalb eine
+Buchung aus 0.5 desselben Projekts mit denselben Druckfilamenten als frühere Buchung zur Prüfung
+und wird nie still gebucht (`ui._earlier_print`), gleich welche Menge, Quelle, Spule oder
+Aufteilung (Review Altbuchung, M2: Schätzung gegen G-Code, Slicer-Update, Spulenwechsel,
+Aufteilung, Handbuchung). Abdrücke ab 0.6.0 tragen das Zeichen `si1-` (`STORED_MARK`, ohne
+Formatschritt, RM-706 war nicht ausgeliefert) und sind nie Kandidat: Eine geänderte Variante mit
+gleicher Menge bucht ohne Rückfrage (M1). **Grenze:** Ein umbenanntes oder unter neuem Namen
+gespeichertes Projekt findet seine Buchung aus 0.5 nicht — die Buchung kennt nur den Namen. Bei
+einem Projekt mit Buchung aus 0.5 kommt jede neue Variante zur Prüfung, auch nach einer Buchung in
+0.6 (Entscheidung Koordinator, sichere Seite; die Antwort merken: RM-720).
+Projekt und Lager schrieb 0.5.3 ohne
+Slicerlauf (23,45 g mit der Quelle G-Code gesetzt), die Spule steht im Test an der Bedarfszeile. Nachweis: Projekt
+und Lager, die 0.5.3 selbst schrieb (*Halter konstruieren*, `usage_booking_weg2_v053*`), am Stand
+davor rot, danach grün; an den zwölf Beispielen vorher 2 erkannt und 11 ohne Rückfrage, nachher 2
+erkannt und 11 zur Prüfung.
+
 ## RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)
 
 <a id="rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026"></a>
@@ -47890,3 +48153,85 @@ Schicht ab R 9,6 immer, unter R 8,3 nie; Changelog „flache Kuppen und Schräge
 „cuadrícula“. **Nachprüfung (`review_rm586_nach.md`):** N1 it nennt die Zeit, N2 die
 gemessene Grenze, N3 Test über mehrere Blöcke, N4 Unterlagen, N5 Test des Druckdialogs.
 Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586b.md`.
+
+## RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)
+
+<a id="rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026"></a>
+<a id="rm-588"></a>
+
+**RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt.**
+  Die Naht wählte der Hersteller, gebügelt wurde nur bei einer bündigen Passung. Eine Figur
+  zeigt die Naht als Linie auf der Schauseite, eine große flache Oberseite ihre Bahnen
+  (Recherche Nr. 14, 15). Abnahme: Vorschläge mit Grund in allen Familien.
+
+**Abschluss:** Zwei Regeln im Rat, beide je Teil (`advise.PART_PATHS`). *Naht hinten*
+(`shell.seam_position = rear`, Grund „Die Naht zöge sonst eine Linie über die Schauseite.“)
+für Körper ab 10 mm Höhe, deren Außenkontur zu mindestens 70 % frei geformt ist
+(`analysis.free_form_share`, je Schnitt gemerkt), wo der Slicer die Naht selbst sucht. *Oberfläche
+bügeln: Oberste Fläche* (`shell.ironing = topmost`, Grund „Bügeln glättet die große
+Oberseite und kostet Druckzeit.“) für eine letzte Schicht ab 400 mm² und der Hälfte des
+größten Querschnitts, nicht neben einer bündigen Passung. Übergabe: Orca-Familie
+`seam_position = back`, `ironing_type = topmost`; PrusaSlicer und SuperSlicer `rear`,
+`ironing = 1` mit `ironing_type = topmost`; Cura `z_seam_type = back`,
+`ironing_enabled` mit `ironing_only_highest_layer`; „alle Oberseiten“ (bündige Passung)
+ist `top`. Rücklesen aus den Herstellerketten samt Bügeltempo und
+-abstand (`Motion`), Druckzeit mit Bügelzug über die ganze Oberseite, um eine halbe Düse
+eingezogen.
+
+Belegt mit Herstellerprofil, Standard, PLA, Kerne gepinnt, in allen acht Programmen
+(ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next, PrusaSlicer,
+SuperSlicer, Cura). Je Teil: zwei Kegelstümpfe, nur einer mit Rat — dort Naht in 100 % der
+Schichten hinten und Bügelbahn nur in der obersten Schicht, am anderen keine. Figuren, Anteil
+der Außenschleifen mit Naht im hintersten Fünftel, Profil → Rat: Spider-Man 32–43 % → 90–99 % in den Programmen der Orca-Familie und
+bei Prusa, in Cura 62 → 77 %, vorn je 14–41 % → 0–3 %; Drache in ElegooSlicer 21 → 89 %,
+PrusaSlicer 2 → 100 % (vorher 76 % vorn), Cura 59 → 93 %. Bügeln am
+Pilz: der Slicer bügelt nur die oberste Schicht; Bügelzeit +29 bis +68 % der Druckzeit je
+Programm, Solidons Schätzung trifft sie auf 0 bis 1 %; am Besenhalter mit schmaler Oberseite (+4 bis +16 %) auf 0,99 bis 1,04. Der Befund
+unterwegs (Schätzung bügelte nur innerhalb der Wände, am Besenhalter 0,62 der Bügelzeit) ist
+behoben. Tests in `test_advise.py`, `test_print_time.py`, `test_print_settings.py`,
+`test_manufacturer.py`, `test_slicer_part_settings.py`, Slicertest
+`test_ironing_the_topmost_face_stays_with_that_part` (6 von 6 grün); der RM-587-Test der
+Wandrichtung liest jetzt Orcas Bögen mit. Messwerte und Begründung in
+`konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-naht`).
+
+**Format 52 (Entscheidung Koordinator, 11.10.2026):** *Oberfläche bügeln* ist eine Wahl
+(`shell.ironing`: `none`, `topmost`, `top_surfaces`) statt zweier Schalter mit Vorrangregel;
+die Slicer kennen es selbst als eine Wahl, und der Reiter *Wände* blieb so unter seiner
+Grenze (16 → 15 Felder, `test_every_group_holds_one_subject`). Migration 51 → 52: an wird
+`top_surfaces`, aus `none`, im Satz und in `plate_choices`; die Einordnung 35 → 36 liest den
+Schalter vorher so um, sonst wäre jedes „aus“ eine eigene Wahl. Beispieldatei
+`ironing_v51.p3d` (von welle4 geschrieben), `example_v52.p3d`, Beispielprojekte neu.
+`shell.ironing_topmost` gab es nur auf diesem Zweig (kein Tag, kein anderer Zweig). Der
+Abdruck einer Buchung kippt nicht: Er trägt das Bügeln weiter als Schalter
+(`filament_usage._as_saved`); an sieben Projekten, von 0.5.3 und von welle4 geschrieben,
+darunter Bügeln als Wahl, als Vorschlag und aus, gibt der Stand mit Format 52 denselben
+Abdruck (7 von 7), ohne die Umrechnung keinen (0 von 7). Im Slicer, Sockel 30 × 30 × 10 mit
+Würfel 10 × 10 × 10: „oberste Fläche“ bügelt in allen acht Programmen nur z 20, „alle
+Oberseiten“ z 10 und 20 (Orca-Familie 594–614 gegen 5 732–5 789 mm Bahn, Anycubic, Prusa
+und SuperSlicer 912–922 gegen 8 644–8 706 mm, Cura 863 gegen 8 297 mm).
+
+## RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)
+
+<a id="rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026"></a>
+<a id="rm-771"></a>
+
+**RM-771 — Jeder Fehler ohne einlösbaren Vorschlag bekam *Fehlerbericht erstellen* als
+Hauptknopf.** Gefunden am Kundenbericht S-20261010-e5014c (0.5.3): Ein abgebrochener
+Agentenzug kam als nacktes `AppError` mit nur `CANCEL`, `dialogs.offered_actions` fiel auf
+*Einzelheiten* und den Fehlerbericht zurück, und der Kunde schickte sein eigenes *Abbrechen*
+als Programmfehler. Dasselbe traf jeden Bedien- oder Geometriefehler, dessen Vorschläge das
+Fenster nicht einlöst (am bloßen Klassenstand: `AppError`, `GenerationFailed`).
+**Behoben (Paket abbruch, Zweig `fix/vorschlag-abbruch`):** Den Rückfall auf den Bericht hat
+nur noch ein `InternalError`; ein Fehler, der den Bericht selbst vorschlägt, behält ihn. Bleibt
+weder Knopf noch Rat, heißt der Ausgang *Schließen*. Ein Wächter liest
+`MainWindow.error_handlers` ohne Fenster und verlangt für jede Kennung aus
+`action_effects.SIDE_EFFECTS` einen Handler oder einen Eintrag mit Grund
+(`WIRED_ELSEWHERE`: örtliche Erkennung, Filamentlager, Katalog; `NOT_A_BUTTON`: Schließen,
+Knöpfe des Rückmeldedialogs, ein Slicerschritt und 27 Ratsätze zum Lesen). Ausnahmen, die
+einen Handler bekommen oder die der Kern nicht mehr anbietet, machen ihn rot.
+**Nachweis:** `test_errors.py::test_only_a_programming_error_falls_back_to_the_bug_report`
+über alle Fehlerklassen, am Stand davor rot (`AppError`, `GenerationFailed`), jetzt grün;
+`test_action_effects.py::test_every_action_of_the_core_is_wired_in_the_window_or_named`,
+Gegenprobe: ohne den Handler `export_only` rot. Changelog 0.6.0: eigener Punkt unter
+*Bedienung und System*. Die 27 Ratsätze stehen als Text im Dialog; sie als Knöpfe einzulösen
+(etwa `open_sketch`, die `sketch.*`-Wege) ist als neuer Punkt beim Koordinator gemeldet.

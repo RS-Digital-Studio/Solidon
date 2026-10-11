@@ -78,7 +78,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Baut *Stift für Bohrung* das Gegenstück zu Senkung, Ansenkung und Gewinde — Kopf, Gewinde, Abstand, beide Kerne, Absagen, alte Projektdatei? | `test_bore_pin.py` |
 | Abläufe aus dem Dateiaudit (RM-184): Fügeweg gedreht und kombiniert (Bajonett der Quelle) · Prüfausschnitt einer Passung · Schrift auf Bogen, um eine Rundung und als bündige Einlage · Gegenformeinsatz, beide Kerne | `test_join_motion.py` · `test_fit_test_piece.py` · `test_label_layout.py` · `test_counter_form.py` |
 | Entstehen Grundkörper ohne Kernwahl-Haken im richtigen Kern, und wechselt der Verlauf einen Schritt? | `test_kernel_switch.py` |
-| Baut jeder mitgelieferte Baustein am exakten Träger exakt? Merkmalszusagen und Determinismus? Randprüfung abbrechbar? | `test_exact_parts.py` · `test_parts.py` (zwei unabhängige Bauten) · `test_parts_review_regressions.py` |
+| Baut jeder Baustein am exakten Träger exakt? Merkmale, Determinismus, gebündelter Gang? Randprüfung abbrechbar? | `test_exact_parts.py` · `test_parts.py` (zwei unabhängige Bauten) · `test_parts_review_regressions.py` · `test_bundled_shapes.py` |
 | Liest der exakte Kern ein importiertes Gewinde ohne Erzeugerwissen? | `test_thread_import.py`, Basiskörper in `data/threads/` |
 | Verrunden, Fase, Wulst, Rundung zurücknehmen · Fläche versetzen, Formschräge — an beiden Kernen, bleiben Rundungsgruppen am exakten Kern geschlossen und bleibt eine geänderte Rundung über den Folgeschritt dieselbe? | `test_brep.py` · `test_mesh_edges.py` · `test_mesh_faces.py` |
 | Lassen Merkmalshandlungen den Körper ohne Narben und alte Dreiecksnummern? | `test_feature_moves_keep_shape.py` |
@@ -119,7 +119,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | `cura_fakes.py` | Nachgebaute Cura 5.13 (`cura_installation`), ihr AppDir, Flatpak-Starter und AppImage als Abbild des AppDir mit nachgestelltem Einhängen für den Lauf — für `test_cura_machine.py` und die Cura-Fälle des Druckdialogs |
 | `squashfs_fakes.py` | AppImages vom Typ 2 nach dem SquashFS-4.0-Aufbau (`appimage_file`, `tree_of`, `Link`) — für `test_appimage_profiles.py` und `cura_fakes.py` |
 | `print_equal.py` | Druckgleich (§11.2): `shot`, `save`/`load`, `compare`; zwei Codestände: `tools/check_print_equal.py` |
-| `gcode_contact.py` | Stützkontakt im G-Code (`support_contact`): Abstand und Trennschichten oben und unten je Rasterzelle — nur für `test_real_slicers.py` |
+| `gcode_contact.py` | Stützkontakt im G-Code (`support_contact`): Abstand und Trennschichten je Rasterzelle; `support_in_box`: Stütze im Quader — nur für `test_real_slicers.py` |
 | `render_fakes.py` | Renderer-Doppel der Ansichtstests: schreibt Aktoren, Stile, Beschriftungen und Kamera mit, statt zu zeichnen — wer das Bild misst, nimmt den echten Renderer ohne Fenster |
 | `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel (`REAL_PUBLIC_KEYS`) samt Abdruck des ersten und Besitzproben (`KEY_PROOFS`) prüfen `test_the_published_version_file_is_signed` und `test_the_shipped_release_keys_are_proven` |
 | `workflow_helpers.py` | Grenzt Jobs und Schritte der Workflows ab, ohne allgemeiner YAML-Parser zu sein |
