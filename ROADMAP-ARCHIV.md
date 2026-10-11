@@ -46802,8 +46802,9 @@ wenn sein Teil jenseits des Kragarms selbst zwischen Auflagen liegt (41 von 42 S
 Pultdecke unter 12° bei 60° kamen sonst so durch). Vier Schichthöhen bleiben als Grenze
 feiner Schichten: Ohne sie galten Satteldecke 8,5° bei 0,08 und 0,12 mm, Pultdecke 4,3° und
 Flachbögen bei 0,08 mm als Bogen; keine Breite in Millimetern trennt sie vom Rundbogen R 30
-bei 0,2 mm. Rundbögen in Wänden über 15 mm Tiefe bekommen ihre Stütze zurück (wie vor
-RM-585, L1 zurückgenommen). N3 — der Kanal-Zwilling entschied je Decke nach Fläche; jetzt
+bei 0,2 mm. Rundbögen in Wänden über 15 mm Tiefe bekommen bei 0,2 mm ihre Stütze zurück
+(wie vor RM-585, L1 zurückgenommen); bei 0,08 und 0,12 mm tragen sich tiefe Decken ab gut
+11° als Kragarm. N3 — der Kanal-Zwilling entschied je Decke nach Fläche; jetzt
 wird nur der kragende Scheitel samt letzter Spanne ausgespart. N5–N7 — Docstrings, eine
 Halt-Rechnung für Schließfrage und Scheitel (`_anchored`), `hanging` vor `arches` gesetzt.
 N4 — ob eine Decke sich schließt, hing am Schichtraster (Pultdecke 13° bei 0,2 mm/60° mit
@@ -46828,6 +46829,21 @@ Millimeter ohne Profil 0,746 gegen 0,75 mm, frei). Eiffelturm 0,2 mm/45° und 60
 (Feld 3 632 mm²). Drache 45° (`sonde_kanalraum.py`): Kanalstücke 1 836 / 1 795 / 1 827,
 gesperrte Säulen 70 / 29 / 61, Sperrraum 8 227 / 4 819 / 7 594 mm³ (welle3 / Stand der
 Nachprüfung / jetzt); bei 60° in allen drei ohne Sperrsäule.
+
+**Zweite Nachprüfung (11.10.2026, `review_rm585_nach2.md`) und Behebung:** Z1 — ein
+gekrümmter Streifen, der an einer Seite hängt, galt als „zwischen zwei Auflagen“: Die Hülle
+seines gebogenen Rands ist das Kreissegment, in dem er liegt, und `_runs_free` maß die Sehne
+statt des Laufs. Eine flache Halbkuppel (Nische R 12, 2 mm Stich) bekam am Centauri bei
+0,2 mm keine Stütze mehr (vorher 12,9 m), im G-Code hingen Bahnen bis 2,5 mm neben der
+Schicht darunter. Jetzt wird die lose Kante des freien Teils entlang gemessen
+(`_runs_loose`), in `_runs_free` und `_held_twice`; gefasst bleibt ein solcher Teil nur
+mit einer Bahnenrichtung, die an beiden Enden Halt hat (`_anchored_span`, die Brücke
+zwischen zwei Beinen). Z2 — Regel, Begründung, Archiv und
+Changelog nennen die Schichthöhe: Tiefe Decken und Bögen behalten ihre Stütze ab 0,2 mm, bei
+0,08 und 0,12 mm trägt sich eine Decke ab gut 11° als Kragarm; die kurze Brücke deckeln bis
+gut 0,2 mm die Schichthöhen. Z3 — der Teil jenseits des Kragarms wird einmal hergeleitet
+(`_beyond`), druckgleich. Nachweis: `test_a_flat_half_dome_keeps_its_supports` (Nische R 10
+bei 45° und 60°, R 12 bei 60°), am Stand vor Z1 drei von drei rot.
 
 ## RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)
 

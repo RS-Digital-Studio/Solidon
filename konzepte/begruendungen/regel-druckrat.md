@@ -607,11 +607,21 @@ Was weiter kragt, druckt als Brücke längs der freien Kante, an ihren Enden gef
 Kurz, bis `SPAN_INTERESTING`, trägt sie sich (`_runs_free`) — so die Flanken unter dem
 Scheitel eines Rundbogens von 30 mm Halbmesser in einer 8 mm tiefen Wand, die bei
 0,2 mm 0,57 mm über die Zugabe kragen; läuft sie weiter, gehört der Streifen zum
-Scheitel. Damit behalten Pultdecken unter 12° bis 15° und Häute unter 15° in 20 mm
+Scheitel. Gemessen wird der Lauf entlang der losen Kante: An einer flachen Halbkuppel
+ist der freie Teil ein Halbring, dessen Rechteck nur die Sehne misst, und die Hülle
+seines gebogenen Rands ist das Kreissegment, in dem er liegt — die Nische R 12 mit 2 mm
+Stich galt so als gefasst und bekam am Centauri keine Stütze, im G-Code hingen Bahnen
+bis 2,5 mm neben der Schicht darunter (zweite Nachprüfung, Z1). Eine Brücke zwischen
+zwei Beinen, deren Streifen leicht steigen, hat auch eine lange lose Kante, aber eine
+Bahnenrichtung mit Halt an beiden Enden; sie bleibt gefasst, und die Brückenregel
+verlangt für ihre 25 mm Stützen. Damit behalten
+Pultdecken unter 12° bis 15° und Häute unter 15° in 20 mm
 Tiefe ihre Stütze, bei 0,2 mm unter 45° und 60° (mit der Bahnbreite des Centauri,
 0,84 mm für zwei Bahnen; mit dem runden Millimeter ohne Profil liegt die Haut unter
 15° bei 60° genau an der Grenze, 0,746 gegen 0,75 mm, und bleibt frei), und ein
-Rundbogen in einer Wand tiefer als 15 mm bekommt sie zurück — wie vor RM-585. Eine
+Rundbogen in einer Wand tiefer als 15 mm bekommt sie bei 0,2 mm zurück — wie vor
+RM-585. Bei 0,08 und 0,12 mm tragen sich dieselben Decken ab gut 11° als Kragarm:
+Ihre Außenbahn liegt weniger als eine Bahn neben der Schicht darunter. Eine
 Pultdecke unter 12° in einer 8 mm tiefen Wand bleibt frei: Ihre Bahnen laufen 8,5 mm
 und sind an beiden Enden gefasst. Ob das druckt, sagt nur ein Druck.
 
@@ -622,8 +632,10 @@ Satteldecke unter 8,5° bei 0,08 mm (0,45 mm je Schicht über die Zugabe, wenige
 eine Bahn) und bei 0,12 mm unter 55°, die Pultdecke unter 4,3° bei 0,08 mm und
 Flachbögen bei 0,08 mm als Bogen (Messreihe `rm585b`, sechs Fassungen). Keine Breite
 in Millimetern trennt diese Decken vom Rundbogen R 30 bei 0,2 mm, der mehr kragt und
-sich tragen muss; was sie trennt, ist die Schichthöhe. Bei 0,2 mm und darüber
-entscheidet die Bahnbreite.
+sich tragen muss; was sie trennt, ist die Schichthöhe. Für den Kragarm entscheidet ab
+0,2 mm die Bahnbreite; die kurze Brücke deckeln bis gut 0,2 mm die vier Schichthöhen
+(0,8 mm über die Zugabe gegen zwei Bahnen von 0,84 mm) — die Pultdecke unter 12° in
+einer 8 mm tiefen Wand bleibt deshalb frei.
 
 Für die weiter kragenden Streifen bleibt die Frage, wie weit ihr Scheitel reicht: Er
 trägt sich, wenn jeder Kragarm ein Rand ist (`LEDGE_REACH` ab seinem Ansatz) oder

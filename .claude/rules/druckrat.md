@@ -134,15 +134,21 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Bahnbreiten, höchstens Zugabe und eine Bahn; die Bahn aus `bridge_from`
   des Schnitts, nie in Schichthöhen umgerechnet); weiter Kragendes ist eine
   Brücke längs der freien Kante und trägt sich nur kurz, bis
-  `SPAN_INTERESTING` (`_runs_free`), und nur bis Zugabe plus zwei Bahnen und
-  `CANTILEVER_LAYERS` Schichthöhen — die Grenze feiner Schichten: Keine
-  Breite in Millimetern trennt eine Satteldecke unter 8,5° bei 0,08 mm vom
-  Rundbogen R 30 bei 0,2 mm. Läuft sie weiter, gehört sie zum Scheitel:
-  Pultdecke unter 12° und Haut unter 15° in 20 mm Tiefe behalten ihre Stütze,
-  ein Rundbogen in einer Wand über 15 mm Tiefe auch. Ein Streifen zwischen
+  `SPAN_INTERESTING`, gemessen entlang der losen Kante — an einem Bogen der
+  Lauf, nicht die Sehne (`_runs_free`, `_runs_loose`) —, und nur bis Zugabe
+  plus zwei Bahnen und `CANTILEVER_LAYERS` Schichthöhen; bis gut 0,2 mm
+  deckeln die Schichthöhen. Keine Breite in Millimetern trennt eine
+  Satteldecke unter 8,5° bei 0,08 mm vom Rundbogen R 30 bei 0,2 mm. Läuft
+  sie weiter, gehört sie zum Scheitel: Ab 0,2 mm behalten Pultdecke unter 12°
+  und Haut unter 15° in 20 mm Tiefe ihre Stütze, ein Rundbogen in einer Wand
+  über 15 mm Tiefe auch; bei 0,08 und 0,12 mm trägt sich eine Decke ab gut 11°
+  als Kragarm, auch in tiefer Wand. Ein Streifen zwischen
   zwei Auflagen (`_held_twice`) trägt sich, wenn sein Teil jenseits des
   Kragarms selbst zwischen Auflagen liegt (sonst fasst ein einseitiger
-  Streifen mit seinen Enden die eigene Hülle) und kein Punkt weiter als
+  Streifen mit seinen Enden die eigene Hülle), seine lose Kante nicht weiter
+  als `SPAN_INTERESTING` läuft, außer eine Bahnenrichtung hat über ihm an
+  beiden Enden Halt (`_anchored_span`; die Hülle eines gebogenen Rands ist
+  sein Kreissegment: Halbkuppel, Nische) und kein Punkt weiter als
   `SPAN_INTERESTING / 2` vom Material darunter liegt — weiter ist er eine
   Brücke, kein Bogen und kein Scheitel (Kumiko-Gitter, Tunneldecke). Ein
   Scheitel trägt sich als Rand (`LEDGE_REACH` je Kragarm) oder als Brücke
