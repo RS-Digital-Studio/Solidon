@@ -40,13 +40,15 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um furo selecionado já não volta em silêncio ao seu corpo depois de recalcular. Até agora, o Delete podia então remover o corpo inteiro.
 - Cada função tem o mesmo nome em todo o lado. A ferramenta *Dividir* oferece *Dividir por um plano*, *Dividir ao longo de uma linha desenhada* e *Dividir em peças soltas*.
 - No corpo selecionado, *Dividir automaticamente …* está agora em *Preparar*.
-- Na janela em repouso só *Blocos* se destaca a cor. O vermelho fica para os botões que descartam ou apagam, e as perguntas abrem com o foco em *Cancelar*.
+- Na janela em repouso só *Catálogo de blocos …* se destaca a cor. O vermelho fica para os botões que descartam ou apagam, e as perguntas abrem com o foco em *Cancelar*.
+- O catálogo chama-se em todo o lado *Catálogo de blocos …*. No separador *Seleção*, *Blocos* é só o grupo com *Criar tampa* e *Criar tampa de rosca*.
 - No modo de desenho, o separador *Seleção* fica oculto. A lista de restrições mostra as dos pontos e linhas selecionados, mais qualquer conflito.
 - No cartão de parâmetros, uma medida só mostra «Não utilizado» quando é o caso. O botão diz quantos números fixos se podem associar a medidas.
 - O relatório de erro só anexa um registo de falha quando o Solidon falhou mesmo.
 - O cartão da visita guiada tem a altura dos seus passos. Um passo abre-se com um clique ou com a barra de espaços, e nenhum balão tapa mais a vista.
 - Quando um passo da visita guiada aponta para o relatório de verificação, a visita continua visível. O separador fica emoldurado e o passo diz qual abrir.
 - A visita guiada já não corta o texto na margem, mesmo depois de reduzir a janela. O passo atual ocupa as linhas de que precisa.
+- Depois de ler um modelo, à direita fica à frente o relatório de verificação. Até agora o separador *Seleção* passava para a frente, embora nada estivesse selecionado.
 - Um clique no i junto a uma ação do separador *Seleção* abre o manual onde essa ação é explicada.
 - Cada cota de um bloco pode ser ligada com fx a uma cota do projeto, mesmo antes de ter uma expressão.
 - Depois de arrastar a pega de uma pré-visualização, nenhum número fica sobre a vista. Um número escrito durante o arrasto move a pré-visualização, não o corpo escolhido.

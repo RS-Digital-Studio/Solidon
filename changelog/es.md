@@ -41,13 +41,15 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un taladro seleccionado ya no vuelve en silencio a su cuerpo tras recalcular. Antes, Supr podía quitar entonces el cuerpo entero.
 - Cada función se llama igual en todas partes. La herramienta *Dividir* ofrece *Dividir por un plano*, *Dividir por una línea dibujada* y *Dividir en piezas sueltas*.
 - En el cuerpo seleccionado, *Dividir automáticamente …* está ahora en *Preparar*.
-- En la ventana en reposo solo *Bloques* destaca en color. El rojo queda para los botones que descartan o borran, y las preguntas se abren con el foco en *Cancelar*.
+- En la ventana en reposo solo *Catálogo de bloques …* destaca en color. El rojo queda para los botones que descartan o borran, y las preguntas se abren con el foco en *Cancelar*.
+- El catálogo se llama *Catálogo de bloques …* en todas partes. En la pestaña *Selección*, *Bloques* es solo el grupo con *Generar tapa* y *Generar tapa roscada*.
 - En el modo de dibujo, la pestaña *Selección* se oculta. La lista de restricciones muestra las de los puntos y líneas seleccionados, además de cualquier conflicto.
 - En la tarjeta de parámetros, una medida solo muestra «Sin utilizar» cuando es así. El botón dice cuántos números fijos se pueden vincular a medidas.
 - El informe de errores adjunta un registro de fallo solo cuando Solidon se ha cerrado de verdad por un fallo.
 - La tarjeta del recorrido es tan alta como sus pasos. Un paso se despliega con un clic o la barra espaciadora, y ninguna burbuja tapa ya la vista.
 - Si un paso del recorrido señala el informe de comprobación, el recorrido sigue a la vista. La pestaña queda enmarcada y el paso dice cuál abrir.
 - El recorrido ya no corta el texto en el borde, tampoco al reducir la ventana. El paso actual ocupa las líneas que necesita.
+- Tras leer un modelo, a la derecha queda delante el informe de comprobación. Hasta ahora pasaba delante la pestaña *Selección* aunque no hubiera nada seleccionado.
 - Un clic en la i junto a una acción de la pestaña *Selección* abre el manual donde se explica esa acción.
 - Cada cota de un bloque se puede vincular con fx a una cota del proyecto, aunque todavía no tenga ninguna expresión.
 - Tras arrastrar el tirador de una vista previa, ya no queda ningún número sobre la vista. Un número tecleado al arrastrar mueve la vista previa, no el cuerpo elegido.

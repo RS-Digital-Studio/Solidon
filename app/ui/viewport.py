@@ -3368,7 +3368,7 @@ class EmptySceneInvitation(QFrame):
     Nach *Neues Projekt* zeigte die Ansicht nur den Bauraum, und die Wege
     zum ersten Körper lagen in Menüs, Werkzeugzeile und einem Katalog, der
     ohne Körper gesperrt war. Hier stehen sie ruhig über dem Bild: zwei
-    Grundkörper aus dem Register, *Zeichnen*, *Bausteine* und — mit
+    Grundkörper aus dem Register, *Zeichnen*, *Bausteinkatalog …* und — mit
     KI-Zugang — *Im Chat beschreiben*, dazu der Hinweis auf das Hineinziehen
     einer Datei. Nichts Modales: Die Einladung verschwindet mit dem ersten
     Körper und kommt bei jeder leeren Szene wieder (neues Projekt, alles
@@ -3410,7 +3410,7 @@ class EmptySceneInvitation(QFrame):
                 entries.append((name, str(REGISTRY.get(name).title)))
         entries += [
             ("draw", tr("Zeichnen")),
-            ("parts", tr("Bausteine")),
+            ("parts", tr("Bausteinkatalog …")),
         ]
         # **Die zweite Zeile bringt ein Modell mit, statt eines zu bauen**
         # (RM-506): Weg 1 und Weg 3 aus §2.2 standen hier nur als Satz über das

@@ -368,7 +368,7 @@ class PartCatalog(QDialog):
 
     def __init__(self, parent: QWidget | None = None, *, feature_kind: str | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Bausteine"))
+        self.setWindowTitle(tr("Bausteinkatalog"))
         self.resize(*catalog_size())
 
         self.search = QLineEdit(self)

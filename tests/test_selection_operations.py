@@ -448,10 +448,18 @@ def test_quick_actions_reflow_when_the_selection_column_narrows(qt_app: QApplica
     QApplication.processEvents()
     first, second = (panel._quick_buttons[name] for name in QUICK_BODY[:2])
     assert first.y() == second.y()
-    panel.resize(216, 500)
+    # Schmal, aber nicht schmaler als der ungebrochene *Bausteinkatalog …*
+    # darunter: Er setzt die Mindestbreite der Karte mit Absicht
+    # (``test_a_button_wraps_its_label_instead_of_cutting_it``); geprüft wird
+    # hier, dass die Zweierspalte nichts dazulegt.
+    margins = panel.layout().contentsMargins()
+    narrow = max(
+        216, panel.catalog_button.minimumSizeHint().width() + margins.left() + margins.right()
+    )
+    panel.resize(narrow, 500)
     QApplication.processEvents()
     assert first.y() < second.y()
-    assert panel.width() == 216
+    assert panel.width() == narrow
     for name in QUICK_BODY:
         control = panel._quick_buttons[name]
         assert control.x() + control.width() <= panel.width()
@@ -706,7 +714,7 @@ def test_every_action_row_keeps_a_keyboard_sized_height(qt_app: QApplication) ->
 
 
 def test_the_catalog_button_is_the_main_button_of_the_panel(qt_app: QApplication) -> None:
-    """*Bausteine* ist ein Hauptknopf: Akzentfarbe **und** halbfett (Regel 18).
+    """*Bausteinkatalog …* ist ein Hauptknopf: Akzentfarbe **und** halbfett (Regel 18).
 
     Er stand als grauer Werkzeugknopf unter der Liste und ging zwischen den
     Handlungen unter (Robert, 11.09.2026: „damit er auch auffällt"). Die Farbe
@@ -931,14 +939,15 @@ def test_a_button_wraps_its_label_instead_of_cutting_it(qt_app: QApplication) ->
     rechnet die Prüfbreiten daraus aus, statt eine Bildpunktzahl zu behaupten.
 
     **Der Umbruch wird am Knopf erzwungen, nicht über die Kartenbreite.** Die
-    Karte wird nie schmaler als ihr breitestes ungebrochenes Element
-    (*Passende Bausteine …*). Unter Windows offscreen ist die Ersatzschrift so
-    breit, dass der Titel dort trotzdem nicht passte; unter Linux und macOS
-    rechnet offscreen mit der echten Schrift, und dort passt er in die
-    schmalste Karte — ein Umbruch wäre falsch. Zugesichert wird deshalb auf
-    jeder Plattform dasselbe: An der schmalsten Karte ist keine Zeile
-    beschnitten, und auf einen Platz, der nur das längste Wort fasst, bricht
-    der Titel vollständig in zwei Zeilen um.
+    Karte wird nie schmaler als ihr breitestes ungebrochenes Element (der
+    Katalogknopf, *Bausteinkatalog …* oder *Passende Bausteine …*). Unter
+    Windows offscreen ist die Ersatzschrift so breit, dass der Titel dort
+    trotzdem nicht passte; unter Linux und macOS rechnet offscreen mit der
+    echten Schrift, und dort passt er in die schmalste Karte — ein Umbruch
+    wäre falsch. Zugesichert wird deshalb auf jeder Plattform dasselbe: An
+    der schmalsten Karte ist keine Zeile beschnitten, und auf einen Platz,
+    der nur das längste Wort fasst, bricht der Titel vollständig in zwei
+    Zeilen um.
     """
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
@@ -1146,7 +1155,7 @@ def test_the_groups_follow_the_menu_bar_in_every_language(qt_app: QApplication) 
 def test_a_hole_offers_the_matching_parts(qt_app: QApplication) -> None:
     """RM-506 (Robert, 05.10.2026): An einer Bohrung *Passende Bausteine …*.
 
-    Derselbe Knopf wie *Bausteine*, aber er öffnet den Katalog gefiltert auf
+    Derselbe Knopf wie *Bausteinkatalog …*, aber er öffnet den Katalog gefiltert auf
     das, was dort ansetzt; an einer Kante steht er weiter nicht.
     """
     from app.i18n import tr
@@ -1168,7 +1177,7 @@ def test_a_hole_offers_the_matching_parts(qt_app: QApplication) -> None:
 
     panel.set_context(1, _availability(1), feature_kind="face")
     QApplication.processEvents()
-    assert panel.catalog_button.text() == tr("Bausteine")
+    assert panel.catalog_button.text() == tr("Bausteinkatalog …")
     panel.catalog_button.click()
     assert opened == [True] and asked == ["hole"], "an der Fläche der ganze Katalog"
 

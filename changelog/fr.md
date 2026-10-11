@@ -41,13 +41,15 @@ dans `website/version.json`.
 - Un perçage sélectionné ne retombe plus en silence sur son corps après un nouveau calcul. Avant, Suppr pouvait alors retirer tout le corps.
 - Chaque fonction porte le même nom partout. L'outil *Diviser* propose *Diviser selon un plan*, *Diviser le long d'une ligne tracée* et *Diviser en pièces distinctes*.
 - Sur le corps sélectionné, *Diviser automatiquement …* se trouve désormais sous *Préparer*.
-- Dans la fenêtre au repos, seul *Blocs* ressort en couleur. Le rouge est réservé aux boutons qui rejettent ou suppriment, et les questions s'ouvrent avec le focus sur *Annuler*.
+- Dans la fenêtre au repos, seul *Catalogue de blocs …* ressort en couleur. Le rouge est réservé aux boutons qui rejettent ou suppriment, et les questions s'ouvrent avec le focus sur *Annuler*.
+- Le catalogue s'appelle partout *Catalogue de blocs …*. Dans l'onglet *Sélection*, *Blocs* n'est plus que le groupe avec *Créer un couvercle* et *Créer un couvercle vissé*.
 - En mode dessin, l'onglet *Sélection* est masqué. La liste des contraintes montre celles des points et lignes sélectionnés, ainsi que chaque conflit.
 - Dans la carte des paramètres, une cote n'affiche « Non utilisé » que si c'est le cas. Le bouton indique combien de nombres fixes peuvent être liés à des cotes.
 - Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.
 - La carte de la visite guidée a la hauteur de ses étapes. Une étape se déplie d'un clic ou avec la barre d'espace, et aucune bulle ne couvre plus la vue.
 - Quand une étape de la visite guidée renvoie au rapport de contrôle, la visite reste visible. L'onglet est encadré et l'étape dit lequel ouvrir.
 - La visite guidée ne coupe plus le texte au bord, même après avoir réduit la fenêtre. L'étape en cours prend autant de lignes qu'il lui faut.
+- Après la lecture d'un modèle, le rapport de contrôle reste au premier plan à droite. Jusqu'ici, l'onglet *Sélection* passait devant alors que rien n'était sélectionné.
 - Un clic sur le i à côté d'une action de l'onglet *Sélection* ouvre le manuel à l'endroit qui l'explique.
 - Chaque cote d'un bloc peut être liée à une cote du projet avec fx, même si elle ne porte encore aucune expression.
 - Après avoir tiré la poignée d'un aperçu, aucun nombre ne reste au-dessus de la vue. Un nombre saisi pendant le geste déplace l'aperçu, pas le corps sélectionné.

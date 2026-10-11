@@ -2764,7 +2764,6 @@ class ObjectTree(QWidget):
             # **Nie still zum Körper** (RM-537): Gewählt war ein Merkmal, und
             # nach der Entf-Taste wäre sonst der ganze Körper fort.
             self._restore((), None)
-            self._on_selection()
         else:
             self._restore(selected, selected_feature)
         self.lost_selection = tuple(
@@ -2919,10 +2918,21 @@ class ObjectTree(QWidget):
             # hat einen Anfang. Ohne sie stand ``currentItem()`` auf nichts,
             # und wer per Tabulator in den Baum kam, bewegte mit den
             # Pfeiltasten gar nichts.
+            # **Ohne Auswahl, auch nicht für einen Augenblick:** Ein
+            # ``setCurrentItem`` ohne ``NoUpdate`` wählte die Zeile erst und
+            # nahm sie danach zurück. Die Zwischenmeldung holte nach jedem
+            # Einlesen den Reiter *Auswahl* nach vorn, und der Prüfbericht, den
+            # die Anleitungen dort nennen, stand dahinter (Handbuchprüfung
+            # 11.10.2026).
             first = self.tree.topLevelItem(0)
             if first is not None and self.tree.currentItem() is None:
-                self.tree.setCurrentItem(first)
-                first.setSelected(False)
+                self.tree.setCurrentItem(first, 0, QItemSelectionModel.SelectionFlag.NoUpdate)
+            # **Gemeldet wird trotzdem, einmal und leer** (``show_scene``): An
+            # der Meldung hängen Empfänger, die nach jeder Auswertung neu
+            # rechnen, etwa die Schichtansicht ohne Auswahl
+            # (``MainWindow._on_layer_changed``). Ohne sie stand der Regler nach
+            # einer Maßänderung auf null (Review Handbuch A, M1).
+            self._on_selection()
             return
         wanted = set(objects)
         self._order = list(objects)
@@ -6726,7 +6736,7 @@ class ReportPanel(QWidget):
     def _emphasise_slicer(self, ready: bool) -> None:
         """Bietet der Bericht nichts mehr an, steht der Weg zum Slicer halbfett da.
 
-        **Ohne Akzentfläche:** Im Ruhezustand trägt nur *Bausteine* den Akzent
+        **Ohne Akzentfläche:** Im Ruhezustand trägt nur *Bausteinkatalog …* den Akzent
         (Entscheidung Robert, ``test_resting_state.py``). Als Hauptknopf leuchtete
         dieser Knopf neben ihm, sobald ein Modell übergabebereit war — zwei
         Signale, keines davon mehr eines. Dass nichts mehr aussteht, sagt die
@@ -9607,7 +9617,7 @@ class FeaturePanel(QWidget):
         # und Untermenü. Ein Panel aus vier grauen Zeilen ist eine Sackgasse
         # mit Begründung; eine Sackgasse bleibt es trotzdem.
         # **Nicht an einer Fläche**: Dort steht unter diesem Fenster der Knopf
-        # *Bausteine* zum selben Katalog, und zwei Knöpfe mit einem Ziel sind
+        # *Bausteinkatalog …* zum selben Katalog, und zwei Knöpfe mit einem Ziel sind
         # eine Frage ohne Antwort (RM-510).
         if not any(action.op for action in actions) and feature.kind != "face":
             catalog = QPushButton(tr("Baustein einsetzen …"), self)

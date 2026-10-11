@@ -318,7 +318,7 @@ TOURS: Final[tuple[Tour, ...]] = (
                 shows="tree",
                 text=_(
                     "Setzen Sie einen Baustein: den Halter im Objektbaum anklicken, dann rechts "
-                    "unter Auswahl auf „Bausteine“."
+                    "unter Auswahl auf „Bausteinkatalog …“."
                 ),
                 done=_parts_inserted(4),
             ),

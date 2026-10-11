@@ -40,13 +40,15 @@ it into `website/version.json`.
 - A selected hole no longer falls back silently to its body after recalculation. Until now, Del could then remove the whole body.
 - Every function has the same name everywhere. The *Split* tool offers *Split at a plane*, *Split along a drawn line* and *Split into separate parts*.
 - On the selected body, *Split automatically …* now sits under *Prepare*.
-- In the resting window only *Parts* is highlighted in colour. Red is kept for buttons that discard or delete, and confirmations open with the focus on *Cancel*.
+- In the resting window only *Part catalogue …* is highlighted in colour. Red is kept for buttons that discard or delete, and confirmations open with the focus on *Cancel*.
+- The catalogue is called *Part catalogue …* everywhere. In the *Selection* tab, *Parts* is only the group with *Create lid* and *Create screw lid*.
 - In sketch mode the *Selection* tab is hidden. The list of constraints shows those of the selected points and lines, plus any conflict.
 - In the parameter card, a dimension shows “Not used” only where that is true. The button says how many fixed numbers can be bound to dimensions.
 - The error report attaches a crash log only when Solidon actually crashed.
 - The tour card is as tall as its steps. A step unfolds with a click or the space bar, and no tooltip bubble covers the view any more.
 - When a tour step points at the report, the tour stays visible. The tab is framed, and the step tells you which tab to open.
 - The tour no longer cuts text off at the edge, even after the window gets smaller. The current step takes as many lines as it needs.
+- After a model is read in, the report is in front on the right. Until now the *Selection* tab jumped forward although nothing was selected.
 - Clicking the i next to an action in the *Selection* tab opens the manual where that action is explained.
 - Every dimension of a part can be bound to a project dimension with fx, even before it holds an expression.
 - After dragging the handle of a preview, no number stays above the view. A number typed during the drag moves the preview, not the selected body.

@@ -684,7 +684,9 @@ class SelectionOperationsPanel(QWidget):
         # setzt seine ``min-height`` beim Polieren erneut, und aus 44 Punkten
         # würden 26 (siehe :func:`make_large_target`) — ohne Stylesheet gilt
         # umgekehrt nur die Mindesthöhe am Widget.
-        self.catalog_button = make_large_target(make_primary(QPushButton(tr("Bausteine"), self)))
+        self.catalog_button = make_large_target(
+            make_primary(QPushButton(tr("Bausteinkatalog …"), self))
+        )
         self.catalog_button.setIcon(icon("category.parts", self.catalog_button))
         self.catalog_button.setMinimumHeight(TARGET_SIZE)
         self.catalog_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -1147,7 +1149,7 @@ class SelectionOperationsPanel(QWidget):
         # Stelle, ein Knopf, der Katalog auf das gefiltert, was dort ansetzt.
         self._catalog_kind = feature_kind if feature_kind in MATCHING_PARTS_AT else ""
         self.catalog_button.setText(
-            tr("Passende Bausteine …") if self._catalog_kind else tr("Bausteine")
+            tr("Passende Bausteine …") if self._catalog_kind else tr("Bausteinkatalog …")
         )
         self.catalog_button.setVisible(
             self._only is None and (feature_kind in ("", "face") or bool(self._catalog_kind))
@@ -1361,7 +1363,7 @@ class SelectionOperationsPanel(QWidget):
         self.summary.setText(tr("Nichts gewählt"))
         self.summary.setVisible(True)
         self._catalog_kind = ""
-        self.catalog_button.setText(tr("Bausteine"))
+        self.catalog_button.setText(tr("Bausteinkatalog …"))
         self.catalog_button.setVisible(True)
         self._take_availability(availability)
         self._filter()

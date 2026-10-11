@@ -40,13 +40,15 @@ scrive in `website/version.json`.
 - Un foro selezionato non ricade più in silenzio sul suo corpo dopo il ricalcolo. Finora Canc poteva poi rimuovere l'intero corpo.
 - Ogni funzione ha lo stesso nome ovunque. Lo strumento *Dividi* offre *Dividi lungo un piano*, *Dividi lungo una linea tracciata* e *Dividi in pezzi distinti*.
 - Sul corpo selezionato, *Dividi automaticamente …* si trova ora sotto *Prepara*.
-- Nella finestra a riposo solo *Blocchi* risalta a colori. Il rosso resta ai pulsanti che scartano o eliminano, e le domande si aprono con il focus su *Annulla*.
+- Nella finestra a riposo solo *Catalogo dei blocchi …* risalta a colori. Il rosso resta ai pulsanti che scartano o eliminano, e le domande si aprono con il focus su *Annulla*.
+- Il catalogo si chiama ovunque *Catalogo dei blocchi …*. Nella linguetta *Selezione*, *Blocchi* è solo il gruppo con *Crea coperchio* e *Crea coperchio a vite*.
 - In modalità disegno la linguetta *Selezione* è nascosta. L'elenco dei vincoli mostra quelli dei punti e delle linee selezionati, più ogni conflitto.
 - Nella scheda dei parametri, una misura mostra «Non utilizzato» solo quando è così. Il pulsante dice quanti numeri fissi si possono collegare alle misure.
 - La segnalazione di errore allega un registro di arresto anomalo solo dopo un vero arresto anomalo di Solidon.
 - La scheda del tour è alta quanto i suoi passi. Un passo si apre con un clic o con la barra spaziatrice, e nessun fumetto copre più la vista.
 - Quando un passo del tour indica il rapporto di verifica, il tour resta visibile. La linguetta è incorniciata e il passo dice quale aprire.
 - Il tour non taglia più il testo sul bordo, nemmeno dopo aver rimpicciolito la finestra. Il passo attuale occupa tutte le righe che servono.
+- Dopo aver letto un modello, a destra resta in primo piano il rapporto di verifica. Finora passava davanti la linguetta *Selezione* anche se non era selezionato nulla.
 - Un clic sulla i accanto a un'azione nella linguetta *Selezione* apre il manuale nel punto in cui è spiegata.
 - Ogni quota di un blocco si può legare con fx a una quota del progetto, anche se non contiene ancora un'espressione.
 - Dopo aver trascinato la maniglia di un'anteprima, nessun numero resta sopra la vista. Un numero digitato durante il trascinamento sposta l'anteprima, non il corpo scelto.

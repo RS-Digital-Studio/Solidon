@@ -56,7 +56,7 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # „An den Slicer übergeben …" im Prüfbericht — der letzte Meter, wenn
         # nichts mehr zu beanstanden ist
         "report.slicer",
-        # „Bausteine" unten im Auswahlfenster: der Katalog, von der gewählten
+        # *Bausteinkatalog …* unten im Auswahlfenster: der Katalog, von der gewählten
         # Fläche aus, ohne Umweg über das Menü
         "selection.parts",
         # „Filament und Druck“ unter der Liste der Auswahl und der Filamentwähler
@@ -358,7 +358,14 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 ),
                 "viewport",
             ),
-            step(_("Rechts unter *Auswahl*: Klicken Sie auf *Bausteine*."), "selection.parts"),
+            # **Unten der Knopf, nicht die Klappe**: An einer Fläche steht über
+            # der Liste die Abschnittsklappe *Bausteine* (*Deckel erzeugen*,
+            # *Drehdeckel erzeugen*); der
+            # Knopf zum Katalog heißt deshalb wie im Menü *Bausteinkatalog …*.
+            step(
+                _("Rechts unter *Auswahl*: Klicken Sie unten auf *Bausteinkatalog …*."),
+                "selection.parts",
+            ),
             # Ein Doppelklick fügt ein. Mit „Einfügen" im selben Bild wurde der
             # Ausschnitt der ganze Katalog, und die Kachel war nicht mehr zu
             # lesen (Probelauf 27.09.2026).
@@ -419,8 +426,10 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 _("Öffnen Sie oben *Erzeugen → Bausteine → Deckel erzeugen*."),
                 "operation:create_lid",
             ),
+            # *Deckel erzeugen* ist eine Operation und kein Baustein aus dem
+            # Katalog: Ihr Hauptknopf heißt wie sie, nicht *Einsetzen*.
             step(
-                _("Das Spiel zur Dose kommt aus dem Material. Klicken Sie auf *Einsetzen*."),
+                _("Das Spiel zur Dose kommt aus dem Material. Klicken Sie auf *Deckel erzeugen*."),
                 "dialog.accept",
             ),
             # Ausrichten gilt allen Körpern und steht deshalb, wenn nichts
@@ -472,7 +481,15 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 _("Solidon teilt das Teil und setzt Stifte, damit die Stücke zusammenpassen."),
                 "viewport",
             ),
-            step(_("Klicken Sie im *Prüfbericht* auf *Auf dem Bett anordnen*."), "report.action"),
+            # Der Knopf steht erst unter seinem Befund; ohne gewählten Befund
+            # zeigt der Bericht andere Handlungen (Prüfung am Fenster, 11.10.2026).
+            step(
+                _(
+                    "Klicken Sie im *Prüfbericht* auf den Befund, dass die Hälften "
+                    "aneinanderliegen, dann auf *Auf dem Bett anordnen*."
+                ),
+                "report.action",
+            ),
             step(
                 _(
                     "Die Stücke liegen nebeneinander. Prüfen und drucken Sie sie wie in [Ein "
@@ -627,7 +644,16 @@ GUIDES: Final[tuple[Guide, ...]] = (
         ),
         steps=(
             step(_("Klicken Sie auf das Teil. Es ist jetzt gewählt."), "viewport"),
-            step(_("Rechts unter *Auswahl*: Klappen Sie *Ändern* auf."), "section:shaping"),
+            # Ob *Ändern* offen steht, hängt an der Zahl seiner Einträge
+            # (``selection_operations.OPEN_UP_TO``); am Netz stand es offen, und
+            # „klappen Sie auf“ hätte es zugeklappt (Prüfung am Fenster, 11.10.2026).
+            step(
+                _(
+                    "Rechts unter *Auswahl* steht der Abschnitt *Ändern*. "
+                    "Ist er zugeklappt, klappen Sie ihn auf."
+                ),
+                "section:shaping",
+            ),
             step(_("Klicken Sie auf *Verrunden*."), "operation:fillet_edges"),
             step(
                 _("Tragen Sie den *Radius* ein und wählen Sie unter *Kanten*, welche rund werden."),
@@ -686,7 +712,15 @@ GUIDES: Final[tuple[Guide, ...]] = (
         title=_("Einen Körper aufziehen"),
         summary=_("Mit drei Klicks ein eigenes Teil auf das Bett stellen."),
         steps=(
-            step(_("Oben in der Werkzeugleiste: Klicken Sie auf *Zeichnen*."), "toolbar.draw"),
+            # Der Startbildschirm hat keine Werkzeugleiste; von dort geht es
+            # erst über *Neues Projekt* (Prüfung am Fenster, 11.10.2026).
+            step(
+                _(
+                    "Vom Startbildschirm aus klicken Sie zuerst auf *Neues Projekt*, "
+                    "dann oben in der Werkzeugleiste auf *Zeichnen*."
+                ),
+                "toolbar.draw",
+            ),
             step(_("Klicken Sie auf das Bett. Dort beginnt das Rechteck."), "viewport"),
             step(
                 _(

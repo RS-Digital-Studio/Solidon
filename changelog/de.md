@@ -65,13 +65,15 @@ Nutzen da und sonst nichts.
 - Eine gewählte Bohrung fällt nach dem Neurechnen nicht mehr still auf ihren Körper zurück. Bisher konnte Entf danach den ganzen Körper entfernen.
 - Jede Funktion heißt überall gleich. Das Werkzeug *Teilen* bietet *An Ebene teilen*, *An gezeichneter Linie teilen* und *In Einzelteile aufteilen*.
 - Am gewählten Körper steht *Automatisch teilen …* jetzt unter *Vorbereiten*.
-- Im ruhenden Fenster ist nur *Bausteine* farbig hervorgehoben. Rot tragen nur Knöpfe, die etwas verwerfen oder löschen, und Rückfragen öffnen mit dem Fokus auf *Abbrechen*.
+- Im ruhenden Fenster ist nur *Bausteinkatalog …* farbig hervorgehoben. Rot tragen nur Knöpfe, die etwas verwerfen oder löschen, und Rückfragen öffnen mit dem Fokus auf *Abbrechen*.
+- Der Katalog heißt überall *Bausteinkatalog …*. Im Reiter *Auswahl* heißt *Bausteine* nur noch die Gruppe mit *Deckel erzeugen* und *Drehdeckel erzeugen*.
 - Im Zeichenmodus ist der Reiter *Auswahl* ausgeblendet. Die Liste der Bedingungen zeigt die der gewählten Punkte und Linien und jeden Widerspruch.
 - In der Parameterkarte steht unter einem Maß nur noch „Nicht verwendet“, wo das zutrifft. Wie viele feste Zahlen sich an Maße binden lassen, sagt der Knopf.
 - Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.
 - Die Karte der Tour ist so hoch wie ihre Schritte. Ein Schritt klappt per Klick oder Leertaste auf, und keine Sprechblase liegt mehr über der Ansicht.
 - Zeigt ein Tourschritt auf den Prüfbericht, bleibt die Tour sichtbar. Der Reiter ist gerahmt, und der Schritt sagt, welchen Reiter Sie öffnen.
 - Die Tour schneidet keinen Text mehr am Rand ab, auch nicht nach dem Verkleinern des Fensters. Der aktuelle Schritt steht auf so vielen Zeilen, wie er braucht.
+- Nach dem Einlesen eines Modells steht rechts der Prüfbericht vorn. Bisher sprang der Reiter *Auswahl* nach vorn, obwohl nichts gewählt war.
 - Ein Klick auf das i neben einer Handlung im Reiter *Auswahl* öffnet das Handbuch an der Stelle, die sie erklärt.
 - Jedes Maß eines Bausteins lässt sich über fx an ein Projektmaß binden, auch wenn noch kein Ausdruck darin steht.
 - Nach dem Ziehen am Griff einer Vorschau bleibt keine Zahl über der Ansicht stehen. Eine dabei getippte Zahl verschiebt die Vorschau, nicht den gewählten Körper.
