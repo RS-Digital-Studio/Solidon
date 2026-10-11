@@ -23,6 +23,7 @@ import sys
 import time
 from collections.abc import Callable
 from dataclasses import replace
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,7 @@ from app.core.export import appimage, cura_linux, handover, slicer_keys, slicer_
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles
 from app.core.slice.analysis import slice_body
+from app.core.slice.gcode import DEVIATION_LIMIT
 from app.core.types import Profile, SceneObject
 from app.core.units import format_length
 from tests.gcode_contact import support_contact
@@ -1826,3 +1828,116 @@ def slicer_keys_takes(setup: handover.SlicerSetup, path: str) -> bool:
     from app.core.export import slicer_keys
 
     return slicer_keys.takes(setup.flavour, path, program=slicer_keys.program_of(setup.executable))
+
+
+def _extrusion_levels(text: str) -> list[float]:
+    """Die Höhen, in denen gedruckt wird: jede Z-Lage mit Vorschub (``E`` steigt,
+    absolut wie relativ), aufsteigend. Ein Z-Sprung fördert nichts."""
+    absolute = True
+    last = 0.0
+    z = 0.0
+    levels: set[float] = set()
+    for line in text.splitlines():
+        if line.startswith("M82"):
+            absolute = True
+        elif line.startswith("M83"):
+            absolute = False
+        elif line.startswith("G92"):
+            reset = re.search(r"\bE(-?[\d.]+)", line)
+            if reset:
+                last = float(reset.group(1))
+        elif line.startswith(("G0 ", "G1 ", "G2 ", "G3 ")):
+            code = line.split(";", 1)[0]
+            height = re.search(r"\bZ(-?[\d.]+)", code)
+            if height:
+                z = float(height.group(1))
+            feed = re.search(r"\bE(-?\d*\.?\d+)", code)
+            if feed is None:
+                continue
+            value = float(feed.group(1))
+            if (value > last + 1e-6) if absolute else (value > 1e-6):
+                levels.add(round(z, 3))
+            if absolute:
+                last = value
+    return sorted(levels)
+
+
+@pytest.mark.parametrize(
+    ("program", "printer"),
+    [
+        pytest.param(program, printer, marks=pytest.mark.slicer(program), id=program)
+        for program, printer in PROGRAMS.items()
+        if program != "cura"
+    ],
+)
+def test_fine_layers_arrive_where_solidon_says(
+    program: str,
+    printer: str,
+    installed_slicer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Höhenkurve kommt an (RM-586): Eine Halbkugel R 20 mit übernommenen
+    feinen Schichten druckt ihre flache Kappe mit 0,1 mm, darunter mit 0,2.
+
+    Solidons Bereich liegt über 18,1 mm (Stufengrenze 25,5°), der Übergang fünf
+    Schichten davor. Gleichmäßig lägen zwischen 18,5 und 20 mm sieben Lagen,
+    mit der Kurve fünfzehn; zwischen 5 und 10 mm bleiben es 0,2 mm. Cura nimmt
+    keine Kurve (``slicer_keys.NOT_TAKEN_BY``).
+    """
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    set_test_license(monkeypatch, active=True)
+    sphere = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    floor = trimesh.creation.box((60.0, 60.0, 30.0))
+    floor.apply_translation((0.0, 0.0, 15.0))
+    dome = SceneObject("kuppe", "Kuppe", MeshData.of(trimesh.boolean.intersection([sphere, floor])))
+    profile = profiles.make_profile(printer, "pla")
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile), "layers.layer_height", 0.2
+    )
+    settings = print_settings.with_accepted(settings, "layers.fine_layer_height", 0.1)
+    setup = _preselected(handover.detect(installed_slicer), profile)
+    folder = tmp_path / "platte"
+    folder.mkdir()
+    job = _PlateJob(
+        objects=(dome,),
+        plates=(0,),
+        folder=folder,
+        name="kuppe",
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+        with_comparison=True,
+    )
+    run = _prepare_plate(job, 0)
+    outcome = handover.slice_model(
+        [run.model],
+        settings,
+        profile,
+        setup,
+        output_dir=folder,
+        timeout=600,
+        keep_arrangement=run.keep_arrangement,
+        slots=run.slots,
+        model_height=run.model_height,
+        model_meshes=run.meshes,
+        expected_tools=run.used_tools,
+    )
+    levels = _extrusion_levels(outcome.gcode_path.read_text(encoding="utf-8", errors="replace"))
+    cap = [z for z in levels if 18.5 <= z <= 20.05]
+    middle = [z for z in levels if 5.0 <= z <= 10.0]
+    assert len(cap) >= 13, f"Kappe nicht fein: {cap}"
+    steps = [b - a for a, b in pairwise(middle)]
+    assert steps and all(step == pytest.approx(0.2, abs=0.011) for step in steps), middle
+    # Die Gegenprobe zählt die Lagen der Kurve, keine Warnung „weicht ab“.
+    assert run.comparison is not None and run.comparison.model_layer_count
+    # Bambu Studio markiert seine Lagen anders, und der G-Code-Leser zählt dort
+    # keine Modelllagen; dann zählen die Höhen, in denen gefördert wird — die
+    # Halbkugel steht ohne Stütze und ohne Turm.
+    counted = outcome.metrics.model_layer_count
+    if counted is None:
+        counted = len(levels)
+    expected = run.comparison.model_layer_count
+    assert abs(counted - expected) <= DEVIATION_LIMIT * expected, (counted, expected)

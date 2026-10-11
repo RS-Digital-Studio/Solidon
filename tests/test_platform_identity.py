@@ -1091,6 +1091,49 @@ def _support_columns() -> str:
     ) + repr((sorted(place.channels), place.island_on_model))
 
 
+def _fine_layers_on_wedges() -> str:
+    """Feine Schichten an Keilen genau auf der Stufengrenze (RM-586, Review F7):
+    Steigung 1:2 bei 0,2 mm Schicht und 0,4 mm Bahn, 1:3 bei 0,2 und 0,6 — aus
+    ganzzahligen Ecken wie aus CAD. Mit ``math.atan2``/``math.cos`` kippte die
+    Auswahl dort an einem ULP: 670 mm² Schräge oder keine, Kurve oder keine."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.slice import fine_layers
+
+    def wedge(run: float, rise: float) -> MeshData:
+        vertices = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [run, 0.0, 0.0],
+                [run, 0.0, rise],
+                [0.0, 30.0, 0.0],
+                [run, 30.0, 0.0],
+                [run, 30.0, rise],
+            ]
+        )
+        faces = np.array(
+            [[0, 2, 1], [3, 4, 5], [0, 1, 4], [0, 4, 3], [1, 2, 5], [1, 5, 4], [0, 3, 5], [0, 5, 2]]
+        )
+        mesh = trimesh.Trimesh(vertices, faces, process=False)
+        mesh.fix_normals()
+        return MeshData.of(mesh)
+
+    measured: list[float] = []
+    shapes: list[object] = []
+    for run, rise, line in ((20.0, 10.0, 0.4), (30.0, 10.0, 0.6)):
+        body = wedge(run, rise)
+        edges = np.arange(0.0, rise + 0.4, 0.2)
+        areas = fine_layers.stepped_areas(body, edges, 0.2, line)
+        centres = (edges[:-1] + edges[1:]) / 2.0
+        measured += [float(areas.sum()), fine_layers.stepped_area_worth(0.2, line)]
+        shapes += [
+            fine_layers.fine_bands(centres, areas, 0.2, line),
+            fine_layers.profile_for(body, 0.2, 0.1, 0.2, line),
+        ]
+    return fingerprint(measured) + repr(shapes)
+
+
 def _bound_surface() -> str:
     """Zwei gespeicherte Kantenabstände auf einem schrägen, vergrößerten Träger."""
     import trimesh
@@ -1590,6 +1633,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "drill_hole": _drilled_along_the_face,
     "face_textures": _face_textures,
     "fill_band": _bore_wall_band,
+    "fine_layers": _fine_layers_on_wedges,
     "hinged_lid": _hinged_lid,
     "fill_bridged": _top_with_holes,
     "fit_pieces": _fit_pieces,

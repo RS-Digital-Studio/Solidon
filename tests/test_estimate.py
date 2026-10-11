@@ -852,3 +852,61 @@ def test_g92_counts_physical_plate_heights_and_preserves_uncertain_origins(
     assert layers.code == (
         "gcode.plate_comparison_unknown" if expected_layers is None else "gcode.plate_comparison"
     )
+
+
+def test_plate_comparison_counts_the_layers_of_a_height_curve():
+    """Mit feinen Schichten (RM-586) zählt die Gegenprobe die Lagen, die der
+    Slicer aus der Kurve legt — sonst meldeten alle Programme, die sie lesen,
+    „Modellschichten weichen ab“ (100 gegen 129 an Kuppe und Klotz).
+
+    Ein Klotz 2 mm hoch, 0,2 mm Raster, die Kurve fein ab 1 mm mit 0,1 mm: zehn
+    Lagen gleichmäßig, mit Kurve die Oberkanten aus ``printed_tops``. Allein auf
+    der Platte rechnet die Zeit mit diesen Lagen und wird länger; neben einem
+    zweiten Teil ohne Kurve zählt jede Höhe einmal, und die Zeit rechnet nur
+    der Slicer."""
+    from app.core.slice import fine_layers
+    from app.core.slice.estimate import plate_comparison
+    from app.core.slice.print_time import Motion
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = dataclasses.replace(
+        settings,
+        layers=dataclasses.replace(settings.layers, first_layer_height=0.2, layer_height=0.2),
+    )
+    curve = (0.0, 0.2, 0.2, 0.2, 0.5, 0.2, 1.0, 0.1, 2.0, 0.1)
+    tops = fine_layers.printed_tops(curve)
+    assert len(tops) > 10 and tops[-1] == pytest.approx(2.0, abs=0.06)
+    motion = Motion(nozzle=profile.printer.nozzle_diameter)
+    alone = [_plate_part("one", settings=settings)]
+
+    plain = plate_comparison(
+        0, alone, profile, keep_arrangement=True, separate_objects=True, motion=motion
+    )
+    curved = plate_comparison(
+        0,
+        alone,
+        profile,
+        keep_arrangement=True,
+        separate_objects=True,
+        motion=motion,
+        heights={"one": curve},
+    )
+    assert plain.model_layer_count == 10
+    assert curved.model_layer_count == len(tops)
+    assert plain.seconds is not None and curved.seconds is not None
+    assert curved.seconds > plain.seconds
+
+    pair = [*alone, _plate_part("two", (5.0, 0.0, 0.0), settings)]
+    both = plate_comparison(
+        0,
+        pair,
+        profile,
+        keep_arrangement=True,
+        separate_objects=True,
+        motion=motion,
+        heights={"one": curve},
+    )
+    shared = {round(top, 6) for top in tops} | {round(0.2 * (n + 1), 6) for n in range(10)}
+    assert both.model_layer_count == len(shared)
+    assert both.seconds is None and both.seconds_reason

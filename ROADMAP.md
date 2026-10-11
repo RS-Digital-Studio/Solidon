@@ -66,7 +66,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-584 — Die Stützart folgt der Deckenform, und hohe Bäume stehen stabil](#rm-584) | Geometrie, Erkennung und Druckvorbereitung | Fuß hoher Bäume, Spitzenabstand weiterer Materialien |
 | [RM-704 — Kinn und Bein am dritten Drachendruck](#rm-704) | Geometrie, Erkennung und Druckvorbereitung | Trennschicht auf jeder Baumspitze gebaut (Archiv, RM-704 Teil); offen: Kinn, Kopf und Vorderbeine an Druck 4 prüfen, Wände an schlanken Gliedern (nach welle4), die Spitze in PrusaSlicer und Cura |
-| [RM-586 — Feine Schichten, wo das Modell feine Formen hat](#rm-586) | Geometrie, Erkennung und Druckvorbereitung | Variable Schichthöhe über die 3MF, Deckschichten mindestens 0,8 mm |
 | [RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt](#rm-588) | Geometrie, Erkennung und Druckvorbereitung | Naht hinten bei Figuren, Bügeln der obersten Fläche |
 | [RM-626 — Eine Kanalsäule endet an ihrer höchsten Auflage, und eine Insel im umschlossenen Kanalraum verliert ihre Säule](#rm-626) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-571 (09.10.), mit Sonden belegt; nächster Schritt: Inseln behalten ihre Säule (Test an der Kammer), Schätzung messen, Kammer mit Insel in den vier Slicern |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
@@ -952,16 +951,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   zeigt Druck 4 und danach ein Korpuslauf über Figuren mit Beinen (nach welle4). Die Spitze
   in PrusaSlicer und Cura schneiden (`support_tree_tip_diameter`, `force_tip_to_roof`)
   und dort übergeben, wenn sie wirkt.
-
-<a id="rm-586"></a>
-
-- [ ] **RM-586 — Feine Schichten, wo das Modell feine Formen hat.**
-  Solidon schlägt keine Schichthöhe nach Detail vor. OrcaSlicer, Bambu Studio und
-  ElegooSlicer lesen eine variable Schichthöhe aus `Metadata/layer_heights_profile.txt`,
-  PrusaSlicer aus `Slic3r_PE_layer_heights_profile.txt`, Cura hat
-  `adaptive_layer_height_enabled`; bei feinen Schichten werden Deckschichten unter 0,8 mm
-  dünn (Recherche Nr. 9, 10). Abnahme: am Drachen feine Schichten nur an Kuppen und
-  Schuppen, Druckzeit genannt, in allen Familien gemessen.
 
 <a id="rm-588"></a>
 

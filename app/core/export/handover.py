@@ -3543,6 +3543,49 @@ def tower_cause(
     return None
 
 
+def same_layers_required(
+    setup: SlicerSetup | None, profile: Profile, *, filaments: int, objects: int
+) -> bool:
+    """Verlangt der Slicer auf dieser Platte für alle Objekte dieselben Schichten?
+
+    So prüfen die Orca-Familie und PrusaSlicer ihren Reinigungsturm
+    (``Print::validate``): nur mit mehr als einem Objekt, und dann muss jede
+    Höhenkurve gleich sein, sonst rechnet der Slicer die Platte nicht („The
+    Wipe tower is only supported if all objects have the same variable layer
+    height“). Ein Körper allein behält seine Kurve, auch neben seinem Turm.
+    Die Orca-Familie baut den Turm nach :func:`tower_cause`; PrusaSlicer 2.9.6
+    prüft, sobald der Prozess ``wipe_tower`` einschaltet und die Maschine mehr
+    als ein Werkzeug hat — auch mit nur einer Spule (XL 2T, MK4S MMU3,
+    Review RM-586).
+    """
+    if objects < 2 or setup is None:
+        return False
+    if setup.flavour == "orca":
+        return tower_cause(setup, filaments=filaments, objects=objects) is not None
+    return setup.flavour == "prusa" and _prusa_tower(setup, profile)
+
+
+def _prusa_tower(setup: SlicerSetup, profile: Profile) -> bool:
+    """Schaltet PrusaSlicers Kette den Reinigungsturm ein, an einer Maschine
+    mit mehr als einem Werkzeug (``Print::has_wipe_tower``)? Ohne Prozess des
+    Bestands gilt PrusaSlicers Vorgabe ``wipe_tower = 0``; eine Kette, die sich
+    nicht lesen lässt, sagt hier nichts — das meldet die Grundlage."""
+    try:
+        chain = manufacturer.prusa_chain(profile, setup)
+    except ExternalToolError as problem:
+        _log.warning("cannot resolve the Prusa chain: %s", problem.title)
+        return False
+    if chain is None:
+        return False
+    values = chain.values
+    tools = [entry for entry in str(values.get("nozzle_diameter", "")).split(",") if entry.strip()]
+    return (
+        _switched_on(values.get("wipe_tower", "0"))
+        and not _switched_on(values.get("spiral_vase", "0"))
+        and len(tools) > 1
+    )
+
+
 #: Stile der Orca-Familie, unter denen ``tree(…)`` ein organischer Baum ist
 #: (``TreeSupport.cpp``: nur ``smsTreeOrganic`` geht in den organischen Generator;
 #: ``default`` heißt beim Baum organisch). ``tree_hybrid``, ``tree_slim`` und
