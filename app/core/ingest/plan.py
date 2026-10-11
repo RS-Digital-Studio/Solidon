@@ -58,13 +58,17 @@ MODEL_SUFFIXES: Final = tuple(
     dict.fromkeys((*READABLE_SUFFIXES, *brep_step.SUFFIXES, *OUTLINE_SUFFIXES))
 )
 
-#: Welche Endungen jede Ladeoperation liest — dieselbe Aufteilung, nach der
-#: :func:`import_plan` eine Datei einer Operation zuordnet.
-_READ_BY: Final[dict[str, tuple[str, ...]]] = {
-    "load": READABLE_SUFFIXES,
-    "load_step": brep_step.SUFFIXES,
-    "load_outline": OUTLINE_SUFFIXES,
-}
+#: Die Ladeoperationen, unter denen :func:`import_plan` eine Datei aufteilt.
+_LOADERS: Final = frozenset({"load", "load_step", "load_outline"})
+
+
+def _loader_of(suffix: str) -> str:
+    """Welche Ladeoperation :func:`import_plan` einer Endung gibt — die eine Stelle dafür."""
+    if brep_step.is_step(suffix):
+        return "load_step"
+    if is_outline(suffix):
+        return "load_outline"
+    return "load"
 
 
 def reads(operation: str, path: str) -> bool:
@@ -72,11 +76,17 @@ def reads(operation: str, path: str) -> bool:
 
     Das Quellenfeld einer Ladeoperation bietet nur solche an (RM-775,
     Zwillinge): *STEP laden* belegte sein Feld mit der STL des Projekts, und
-    die Vorschau hielt mit „Diese Datei ist keine STEP-Datei.“ an. Für alle
-    anderen Operationen gilt jede Quelle.
+    die Vorschau hielt mit „Diese Datei ist keine STEP-Datei.“ an. Die
+    Aufteilung ist die von :func:`import_plan` (:func:`_loader_of`); *Modell
+    laden* liest dabei nur Endungen, die der Netzleser kennt. Für alle anderen
+    Operationen gilt jede Quelle.
     """
-    suffixes = _READ_BY.get(operation)
-    return suffixes is None or Path(path).suffix.lower() in suffixes
+    if operation not in _LOADERS:
+        return True
+    suffix = Path(path).suffix
+    if _loader_of(suffix) != operation:
+        return False
+    return operation != "load" or suffix.lower() in READABLE_SUFFIXES
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,11 +296,12 @@ def import_plan(
     # der Leser danach nichts damit anfangen kann.
     check_readable(payload, suffix)
     own_name = _own_name(name, taken, loads=False)
-    if brep_step.is_step(suffix):
+    loader = _loader_of(suffix)
+    if loader == "load_step":
         return _step_plan(
             source_id, name, payload, first_model=first_model, taken=taken, progress=progress
         )
-    if is_outline(suffix):
+    if loader == "load_outline":
         return ImportPlan(
             title=_TITLES["load_outline"],
             draft=OperationDraft(op="load_outline", params={"source": source_id, **own_name}),

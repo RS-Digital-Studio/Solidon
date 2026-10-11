@@ -3075,6 +3075,12 @@ def place_missing(operation: str, params: type[BaseParams], values: Mapping[str,
     erste Vorschau gleich beim Öffnen, bevor die Platzierung ihre Stelle gefunden
     hatte, und schrieb „Es ist auch keine Position eingetragen“ als angehaltene
     Auswertung ins Protokoll eines Kunden.
+
+    Ein Flächenbezug (``surface_anchor``) zählt hier als Stelle, obwohl
+    :func:`_anchor` ihn nicht liest: Die Platzierung trägt ihn nie ohne
+    Position und Richtung ein. Alle übrigen Fälle sind gegen :func:`_anchor`
+    geprüft in
+    ``test_parts.py::test_the_core_halts_exactly_where_the_dialog_says_a_place_is_missing``.
     """
     spec = part_of(operation)
     if spec is None or not operation.startswith(_PREFIX) or not (spec.at_face or spec.at_hole):

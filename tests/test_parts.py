@@ -2680,6 +2680,51 @@ def test_the_dialog_asks_the_same_question_about_a_missing_place() -> None:
     assert not place_missing("create_box", REGISTRY.get("create_box").params, {})
 
 
+def test_the_core_halts_exactly_where_the_dialog_says_a_place_is_missing() -> None:
+    """``_anchor`` hält genau dann an, wenn ``place_missing`` es vorher sagt (Review G2).
+
+    Der Test darüber vergleicht ``place_missing`` mit Schalterwerten; hier ist
+    der Sollwert der Kern selbst — für jeden Baustein an Fläche oder Bohrung und
+    dieselben Wertesätze. Der Flächenbezug allein ist ausgenommen und
+    ausdrücklich geprüft: Für den Dialog ist er eine Stelle, ``_anchor`` liest
+    ihn nicht; die Platzierung trägt ihn nie ohne Position und Richtung ein
+    (``place_missing``, Docstring).
+    """
+    from types import SimpleNamespace
+
+    from app.core.errors import AppError
+    from app.core.knowledge.parts.ops import _anchor, place_missing
+
+    source = SimpleNamespace(features={})
+    checked = 0
+    for spec in PARTS.all():
+        if not (spec.at_face or spec.at_hole):
+            continue
+        operation = part_ops.op_name(spec.name)
+        params = REGISTRY.get(operation).params
+        names = {field.name for field in dataclasses.fields(params)}
+        fields = part_ops.placement_fields(params)
+        values = required_defaults(spec)
+        for extra in (
+            {},
+            {fields["x"]: 5.0},
+            {fields["z"]: "=@wand"},
+            {fields["at_feature"]: "face_1"},
+        ):
+            entered = {**values, **extra}
+            instance = params(**{key: value for key, value in entered.items() if key in names})
+            try:
+                _anchor(source, instance, spec)  # type: ignore[arg-type]
+                halted = False
+            except AppError as error:
+                halted = error.values.get("part") == spec.name
+            assert halted is place_missing(operation, params, entered), (spec.name, extra)
+            checked += 1
+        anchored = {**values, fields["surface_anchor"]: '{"version":1}'}
+        assert not place_missing(operation, params, anchored), spec.name
+    assert checked > 0
+
+
 @pytest.mark.parametrize("spec", [s for s in PARTS.all() if s.joined_by_host], ids=lambda s: s.name)
 def test_a_part_held_by_its_host_becomes_one_with_it(spec: PartSpec, profile: Profile) -> None:
     """Wer den Träger zum Zusammenhalten braucht, wird dort geprüft.

@@ -48282,3 +48282,9 @@ wählen …“) und rechnet nicht; *STEP laden* und *Zeichnung laden* bieten nur
 sie lesen (`ingest.plan.reads`). **Nachweis:** `test_operation_ui.py::test_a_relief_without_an_image_waits_for_one`,
 `test_operation_ui.py::test_a_loading_dialog_offers_only_files_it_can_read[load_step|load_outline]`
 (am Stand davor rot), `test_import_formats.py::test_each_loading_step_reads_the_files_the_plan_gives_it`.
+
+**Nachgezogen aus dem Review:** `plan.reads` und `import_plan` teilen `_loader_of`, und der
+Test vergleicht je Endung aus `MODEL_SUFFIXES` mit der Operation, die `import_plan` wählt (G1).
+`test_parts.py::test_the_core_halts_exactly_where_the_dialog_says_a_place_is_missing` prüft
+für jeden Baustein an Fläche oder Bohrung, dass `_anchor` genau dort anhält, wo
+`place_missing` es sagt; der Flächenbezug allein ist die ausgewiesene Ausnahme (G2).
