@@ -181,6 +181,7 @@ Nutzen da und sonst nichts.
 - Ein Baustein für Fläche oder Bohrung rechnet erst, wenn er seine Stelle im Bild hat. Bis dahin lässt sich der Dialog nicht übernehmen und sagt, was fehlt.
 - Ändert sich die Fläche unter einem offenen Bausteindialog, bleibt die gewählte Stelle, solange sie auf der neuen Form noch hält. Sonst sucht der Baustein eine neue und sagt es.
 - Ein Bausteindialog, der öffnet, während der vorige Schritt noch rechnet, setzt den Baustein selbst, sobald das Ergebnis da ist, und lässt sich bis dahin nicht übernehmen.
+- Ein Baustein, der im Bild sitzt, lässt sich auch nach einer Eingabe im Dialog per Klick an eine andere Stelle setzen.
 
 ### Bearbeiten und Zeichnen
 

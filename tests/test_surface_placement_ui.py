@@ -3482,6 +3482,15 @@ def test_a_seat_measured_on_a_shape_that_changed_is_found_again(
         assert renewed in flow._note.text(), "und der Balken sagt, dass sie neu sitzt"
         moved = dialog.values()
         assert math.dist((moved["x"], moved["y"]), (1.5, 0.0)) > 3.0, "nicht im eben gesetzten Loch"
+        # Setzt der Kunde danach selbst eine Stelle, gilt der Hinweis nicht mehr
+        # (Nachprüfung N1): zwei Millimeter weiter weg vom eben gesetzten Loch.
+        away = np.asarray([moved["x"] - 1.5, moved["y"]], dtype=float)
+        away = away / np.linalg.norm(away) * 2.0
+        own = (float(moved["x"] + away[0]), float(moved["y"] + away[1]), float(moved["z"]))
+        assert flow.move_to(own), "die eigene Stelle liegt auf der Fläche"
+        QApplication.processEvents()
+        assert renewed not in flow._note.text(), "die eigene Wahl nimmt den Hinweis weg"
+        moved = dialog.values()
         assert dialog.can_accept()
         dialog.accept()
         for _ in range(40):
@@ -3657,7 +3666,7 @@ def test_a_place_that_still_holds_on_the_changed_shape_stays(qt_app: QApplicatio
 
 
 def test_a_part_opened_while_the_last_step_computes_seats_itself_afterwards(
-    qt_app: QApplication, caplog: pytest.LogCaptureFixture
+    qt_app: QApplication, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Das nächste Schraubenloch öffnen, solange das vorige rechnet — wie der Kunde.
 
@@ -3666,12 +3675,26 @@ def test_a_part_opened_while_the_last_step_computes_seats_itself_afterwards(
     Bild, *Übernehmen* war frei, und jedes neue Loch landete genau auf dem
     vorigen. Jetzt wartet der Dialog gesperrt auf das Ergebnis und setzt sich
     dann selbst — neben das vorige Loch.
+
+    Die Auswertung des vorigen Lochs steht auf einer Freigabe: Sonst wäre sie
+    auf einem schnellen Läufer schon fertig, bevor der Test die Sperre prüft.
     """
     import logging
+    import threading
     import time
 
     from app.ui.op_dialog import placement_hint
 
+    gate = threading.Event()
+    held = threading.Event()
+    evaluate = Session.run_evaluation
+
+    def gated(self: Session, *args: Any, **kwargs: Any) -> Any:
+        if held.is_set():
+            assert gate.wait(30.0), "der Test hat die Auswertung nie freigegeben"
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", gated)
     window = _window_with_a_renderer()
     try:
         _a_selected_plate(window, face_normal=(0.0, 0.0, 1.0))
@@ -3679,6 +3702,7 @@ def test_a_part_opened_while_the_last_step_computes_seats_itself_afterwards(
             dialog, _flow = _a_part_placement(window, "insert_screw_hole")
             first = dialog.values()
             first_seat = (float(first["x"]), float(first["y"]))
+            held.set()
             dialog.accept()
             QApplication.processEvents()
             assert not window.session.result_current, "das vorige rechnet noch"
@@ -3689,9 +3713,12 @@ def test_a_part_opened_while_the_last_step_computes_seats_itself_afterwards(
             assert dialog is not None and dialog.spec.name == "insert_screw_hole"
             flow = dialog.placement_flow
             assert flow is not None
-            if not window.session.result_current:
-                assert not dialog.can_accept(), "ohne Stelle auf der neuen Form nichts übernehmen"
-                assert dialog._accept_button.toolTip() == placement_hint()
+            assert not window.session.result_current, "die Freigabe hält das vorige an"
+            assert not dialog.can_accept(), "ohne Stelle auf der neuen Form nichts übernehmen"
+            assert dialog._accept_button.toolTip() == placement_hint()
+            assert not flow.active, "die Platzierung wartet auf das Ergebnis"
+            held.clear()
+            gate.set()
             for _ in range(300):
                 QApplication.processEvents()
                 assert window.session.wait_for_idle(60_000)
@@ -3716,6 +3743,108 @@ def test_a_part_opened_while_the_last_step_computes_seats_itself_afterwards(
         ]
         result = window.session.last_result
         assert result is not None and result.stopped_at is None
+    finally:
+        gate.set()
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def _a_renewed_part_placement(window):
+    """Schraubenloch sitzt, dann landet ein anderes genau daneben: Die Stelle wird neu gesetzt."""
+    object_id, _entry = _a_selected_plate(window, face_normal=(0.0, 0.0, 1.0))
+    dialog, flow = _a_part_placement(window, "insert_screw_hole")
+    window.session.apply(
+        "Schraubenloch",
+        [
+            OperationDraft(
+                op="insert_screw_hole",
+                inputs=(object_id,),
+                params={"x": 1.5, "y": 0.0, "z": 8.0, "nz": 1.0},
+            )
+        ],
+    )
+    _settle_window(window, 150)
+    from app.i18n import tr
+
+    renewed = str(tr("Die Fläche hat sich geändert. Die Stelle ist neu gesetzt."))
+    assert flow.active and flow._surface is not None, "die Platzierung sitzt wieder"
+    assert renewed in flow._note.text()
+    return dialog, flow, renewed
+
+
+def test_a_click_is_taken_after_the_place_was_renewed(qt_app: QApplication) -> None:
+    """Nach dem Neusetzen setzt ein Klick um, wie der Balken es anbietet — und der Hinweis geht.
+
+    Review zum Nachtrag (M1): Die Bindung setzte ``_seated_at_feature`` auch
+    für ein neues Teil, und ``pointer`` nahm danach keine Geste mehr. Der Balken
+    sagte „Klick: umsetzen“, der Klick tat still nichts.
+    """
+    window = _window_with_a_renderer()
+    try:
+        _dialog, flow, renewed = _a_renewed_part_placement(window)
+        assert flow.pointer(PointerEvent("press", 450, 300, button="left"))
+        assert flow.pointer(PointerEvent("release", 450, 300, button="left")), "der Klick zählt"
+        QApplication.processEvents()
+        assert renewed not in flow._note.text(), "die eigene Wahl nimmt den Hinweis weg"
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_a_click_is_taken_after_a_value_changed_in_the_dialog(qt_app: QApplication) -> None:
+    """Eine Eingabe im Dialog bindet die Stelle neu — danach setzt ein Klick weiterhin um.
+
+    Review zum Nachtrag (älter, seit dem Bindeweg): Nach jeder Wertänderung lief
+    ``_begin_bound_surface`` und setzte ``_seated_at_feature``; der Baustein
+    ließ sich danach nicht mehr per Klick umsetzen.
+    """
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_plate(window, face_normal=(0.0, 0.0, 1.0))
+        dialog, flow = _a_part_placement(window, "insert_screw_hole")
+        dialog.valuesChanged.emit()
+        _settle_window(window, 100)
+        assert flow.active
+        assert flow.pointer(PointerEvent("press", 450, 300, button="left"))
+        assert flow.pointer(PointerEvent("release", 450, 300, button="left")), "der Klick zählt"
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
+def test_an_edge_distance_after_the_renewal_is_an_own_choice(qt_app: QApplication) -> None:
+    """Ein Kantenabstand auf der Rückseite setzt die Stelle: Hinweis weg, x/y folgen.
+
+    Review zum Nachtrag (G1): Der Abstand verschob die Stelle im Bild um 2 mm,
+    der Balken sagte weiter „Die Stelle ist neu gesetzt“, und x/y im Dialog
+    blieben auf dem alten Wert.
+    """
+    from app.core.knowledge.parts.ops import placement_fields
+
+    window = _window_with_a_renderer()
+    try:
+        dialog, flow, renewed = _a_renewed_part_placement(window)
+        name = placement_fields(dialog.spec.params)["surface_distance_1"]
+        before = dict(dialog.values())
+        dialog.take_placement({name: float(before[name]) + 2.0})
+        _settle_window(window, 150)
+        assert flow._surface is not None, "die Stelle ist wieder gebunden"
+        assert renewed not in flow._note.text(), "der Kantenabstand ist eine eigene Wahl"
+        after = dialog.values()
+        point = flow._surface.point
+        assert (after["x"], after["y"], after["z"]) == pytest.approx(
+            (float(point[0]), float(point[1]), float(point[2])), abs=1e-6
+        ), "x/y/z im Dialog zeigen die gebundene Stelle"
+        assert math.dist((after["x"], after["y"]), (before["x"], before["y"])) == pytest.approx(
+            2.0, abs=0.01
+        ), "die Stelle ist um den Abstand gewandert"
+        assert dialog.can_accept()
     finally:
         for dialog in window.findChildren(OperationDialog):
             dialog.reject()
