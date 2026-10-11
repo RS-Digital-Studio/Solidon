@@ -804,8 +804,8 @@ def _refined_plate() -> str:
 
 
 def _evened_plate() -> str:
-    """*Dreiecke angleichen* an der Platte — Tauschen, Zusammenlegen und Teilen in der
-    Ebene entscheiden an Längen und Ebenenabständen (RM-671)."""
+    """*Dreiecke angleichen* an der Platte — das Teilen nach dem Kern entscheidet an
+    Längen, gemessen auf mehreren Fäden (RM-671)."""
     from app.core.geom.mesh_ops import uniform
 
     return _mesh_print(uniform(_plate(), 3.0, 0.0))
@@ -1749,6 +1749,7 @@ def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None
 _THREADED: dict[str, tuple[str, str, str]] = {
     "blend_field": ("app.core.geom.blend", "PAIR_WORKERS", "PAIR_CHUNK"),
     "blend_union": ("app.core.geom.blend", "PAIR_WORKERS", "PAIR_CHUNK"),
+    "remesh_uniform": ("app.core.geom.mesh_edits", "MEASURE_WORKERS", "MEASURE_CHUNK"),
 }
 
 

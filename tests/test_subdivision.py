@@ -273,7 +273,9 @@ def test_the_check_before_welding_says_what_merge_vertices_would_do() -> None:
     fast nie etwas und kostete am Quader 100 × 80 × 60 auf 0,5 mm doch 0,25 s.
     Die Vorprüfung muss dieselbe Antwort geben: hier gegen ``merge_vertices``
     selbst gehalten, an einem sauberen Netz, einer doppelten, einer bis auf
-    Rundung gleichen, einer knapp verschiedenen und einer unbenutzten Ecke.
+    Rundung gleichen, einer knapp verschiedenen und einer unbenutzten Ecke —
+    und an Gittern, wie der Kern sie zieht: Dort kollidierte der erste
+    Streuwert so oft, dass die Prüfung immer ja sagte und nichts sparte.
     """
     box = trimesh.creation.box(extents=(4.0, 3.0, 2.0))
     vertices = np.asarray(box.vertices, dtype=np.float64)
@@ -281,7 +283,11 @@ def test_the_check_before_welding_says_what_merge_vertices_would_do() -> None:
     doubled = np.concatenate((vertices, vertices[:1]))
     redirected = faces.copy()
     redirected[0, 0] = len(vertices)
+    ball = trimesh.creation.icosphere(subdivisions=4, radius=20.0)
+    grid = mesh_ops.refined(MeshData.of(trimesh.creation.box(extents=(20.0, 16.0, 12.0))), 0.5).raw
     cases = {
+        "Kugel": (np.asarray(ball.vertices), np.asarray(ball.faces, dtype=np.int64)),
+        "Gitter aus dem Kern": (np.asarray(grid.vertices), np.asarray(grid.faces, dtype=np.int64)),
         "sauber": (vertices, faces),
         "doppelt": (doubled, redirected),
         "gerundet gleich": (
@@ -302,6 +308,8 @@ def test_the_check_before_welding_says_what_merge_vertices_would_do() -> None:
         expected[name] = len(merged.vertices) < len(body.vertices)
         assert mesh_ops._needs_welding(points, corners) == expected[name], name
     assert expected == {
+        "Kugel": False,
+        "Gitter aus dem Kern": False,
         "sauber": False,
         "doppelt": True,
         "gerundet gleich": True,

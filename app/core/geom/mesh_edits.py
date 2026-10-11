@@ -35,6 +35,8 @@ Das Netz ist geschlossen und gleichsinnig gewickelt; was das nicht ist, gibt
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Final
 
@@ -480,6 +482,15 @@ HALF_SAFE: Final = 1.0 - 1e-9
 #: Je Ecke eines Dreiecks die nächste — Seite ``k`` läuft von Ecke ``k`` zu dieser.
 _AHEAD: Final = np.array([1, 2, 0])
 
+#: Ab wie vielen Dreiecken :func:`split_long` seine Seiten auf Fäden misst, in
+#: Portionen dieser Größe. Das Messen liest je Dreieck neun Zahlen verstreut aus
+#: den Ecken und war am Wedge-Lock gut ein Drittel des Teilens; NumPy gibt dabei
+#: die Sperre frei. Jede Portion schreibt nur ihren Abschnitt, Element für
+#: Element gleich gerechnet — das Ergebnis hängt nicht an der Zahl der Fäden
+#: (``tests/test_platform_identity.py``, ``_THREADED``).
+MEASURE_CHUNK: Final = 65_536
+MEASURE_WORKERS: Final = 4
+
 
 def split_long(
     vertices: np.ndarray,
@@ -535,23 +546,24 @@ def split_long(
         if measured is not None:
             measured.append(len(picked))
         heads = picked[:, _AHEAD]
-        at_corners = points[picked]
-        delta = at_corners[:, _AHEAD] - at_corners
-        squared = row_dots(delta, delta)
+        squared = _side_squares(points, picked)
         found = squared > limit
-        if not found.any():
+        hits = found.sum(axis=1)
+        if not hits.any():
             break
         # Einfach geteilt bis zur doppelten Grenze: Die Teile sind sicher kurz genug.
-        lone_short = (found.sum(axis=1) == 1) & (
-            np.where(found, squared, 0.0).max(axis=1) <= 4.0 * limit * HALF_SAFE
-        )
+        lone = np.flatnonzero(hits == 1)
+        lone_short = np.zeros(len(picked), dtype=bool)
+        lone_short[lone] = squared[lone][found[lone]] <= 4.0 * limit * HALF_SAFE
         if rows is None:
-            marked, settled = found, lone_short
+            marked, settled, count = found, lone_short, hits
         else:
             marked = np.zeros(corners.shape, dtype=bool)
             marked[rows] = found
             settled = np.zeros(len(corners), dtype=bool)
             settled[rows] = lone_short
+            count = np.zeros(len(corners), dtype=hits.dtype)
+            count[rows] = hits
         width = len(points)
         tails, ends = picked[found], heads[found]
         codes = np.minimum(tails, ends) * width + np.maximum(tails, ends)
@@ -560,8 +572,8 @@ def split_long(
         middles = np.full(corners.shape, -1, dtype=np.int64)
         middles[marked] = width + np.asarray(inverse, dtype=np.int64).reshape(-1)
         points = np.concatenate((points, (points[first] + points[second]) / 2.0))
-        unsplit = np.flatnonzero(~marked.any(axis=1))
-        corners, again = _split_by_pattern(points, corners, middles, settled)
+        unsplit = np.flatnonzero(count == 0)
+        corners, again = _split_by_pattern(points, corners, middles, settled, count)
         origin = np.concatenate(
             (origin[unsplit], np.full(len(corners) - len(unsplit), -1, dtype=np.int64))
         )
@@ -570,8 +582,38 @@ def split_long(
     return points, corners, origin
 
 
+def _side_squares(points: np.ndarray, corners: np.ndarray) -> np.ndarray:
+    """Je Dreieck die Quadrate seiner drei Seiten, Seite ``k`` von Ecke ``k`` zur nächsten.
+
+    Über :data:`MEASURE_CHUNK` Dreiecken auf bis zu :data:`MEASURE_WORKERS` Fäden.
+    """
+    workers = max(1, min(MEASURE_WORKERS, os.cpu_count() or 1))
+    if len(corners) <= MEASURE_CHUNK or workers < 2:
+        return _side_squares_of(points, corners)
+    squared = np.empty(corners.shape, dtype=np.float64)
+
+    def part(start: int) -> None:
+        end = start + MEASURE_CHUNK
+        squared[start:end] = _side_squares_of(points, corners[start:end])
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(part, range(0, len(corners), MEASURE_CHUNK)))
+    return squared
+
+
+def _side_squares_of(points: np.ndarray, corners: np.ndarray) -> np.ndarray:
+    """:func:`_side_squares` für eine Portion, auf einem Faden."""
+    at_corners = points[corners]
+    delta = at_corners[:, _AHEAD] - at_corners
+    return row_dots(delta, delta)
+
+
 def _split_by_pattern(
-    points: np.ndarray, corners: np.ndarray, middles: np.ndarray, settled: np.ndarray
+    points: np.ndarray,
+    corners: np.ndarray,
+    middles: np.ndarray,
+    settled: np.ndarray,
+    count: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Jedes Dreieck nach seinen geteilten Seiten (``middles`` je Seite, ``-1`` ungeteilt).
 
@@ -581,14 +623,13 @@ def _split_by_pattern(
     Dreiecke. Die Umlaufrichtung bleibt, die ungeteilten Dreiecke stehen vorn.
     Zurück kommt dazu je Teil, ob es noch zu lang sein kann — nein nur für die
     beiden Hälften eines Dreiecks, das ``settled`` nennt (:func:`split_long`).
+    ``count`` ist je Dreieck die Zahl seiner geteilten Seiten.
     """
-    marked = middles >= 0
-    count = marked.sum(axis=1)
     pieces = [corners[count == 0]]
     again: list[np.ndarray] = []
     lone = np.flatnonzero(count == 1)
     if len(lone):
-        turn = (np.argmax(marked[lone], axis=1)[:, None] + np.arange(3)) % 3
+        turn = (np.argmax(middles[lone] >= 0, axis=1)[:, None] + np.arange(3)) % 3
         a, b, c = np.take_along_axis(corners[lone], turn, axis=1).T
         middle = np.take_along_axis(middles[lone], turn, axis=1)[:, 0]
         pieces += [np.column_stack((a, middle, c)), np.column_stack((middle, b, c))]
@@ -597,7 +638,7 @@ def _split_by_pattern(
     pair = np.flatnonzero(count == 2)
     if len(pair):
         # Die ungeteilte Seite wird Seite 2: Die Ecke b liegt zwischen beiden geteilten.
-        turn = ((np.argmin(marked[pair], axis=1) + 1)[:, None] + np.arange(3)) % 3
+        turn = ((np.argmin(middles[pair] >= 0, axis=1) + 1)[:, None] + np.arange(3)) % 3
         a, b, c = np.take_along_axis(corners[pair], turn, axis=1).T
         halves = np.take_along_axis(middles[pair], turn, axis=1)
         near, far = halves[:, 0], halves[:, 1]

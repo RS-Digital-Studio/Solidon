@@ -755,7 +755,7 @@ def estimated_triangles(mesh: MeshData, edge: float, *, until_short: bool = Fals
 
     ``until_short`` zählt für *Kanten verfeinern* und *Dreiecke angleichen*,
     die teilen, bis keine Kante mehr zu lang ist (:func:`_split_conforming`,
-    :func:`_evened_in_planes`): Die weiteren Durchgänge teilen die Diagonalen
+    ``mesh_edits.split_long``): Die weiteren Durchgänge teilen die Diagonalen
     der Gitterzellen noch einmal, und der Anteil der Fläche zählt doppelt. So
     traf die Zahl an denselben Modellen und an ``plate_holes`` das 0,73- bis
     1,10-Fache des Ergebnisses von *Kanten verfeinern*; beim Angleichen am
@@ -1132,7 +1132,7 @@ def _evenly_ahead(mesh: MeshData, edge: float) -> int:
 def _uniform_ahead(mesh: MeshData, edge: float) -> int:
     """Die Vorabzählung von *Dreiecke angleichen* — oder seine Absage.
 
-    Es teilt, bis keine Kante mehr zu lang ist (:func:`_evened_in_planes`), und
+    Es teilt, bis keine Kante mehr zu lang ist (``mesh_edits.split_long``), und
     zählt deshalb wie *Kanten verfeinern* (``until_short=True``). Bis Review F
     zählte es einen Durchgang und lag am Quader 100 x 80 x 60 um das 1,8-Fache
     zu tief; die Decke hielt nur die Schätzung, und der Dialog nannte die
@@ -1440,11 +1440,16 @@ def _needs_welding(vertices: np.ndarray, faces: np.ndarray) -> bool:
     ``(v · 10^d).round()``), legt gleich gerundete zusammen und wirft
     unbenutzte weg. Ein Netz aus dem Kern hat weder das eine noch das andere,
     außer wo sich zwei Schalen berühren; trotzdem kostete das Verschweißen an
-    einem Quader mit 709 760 Dreiecken 0,25 s, mehr als das Teilen davor
-    (Review-Fix F). Gefragt wird hier dasselbe: benutzt jede Ecke, dann je
-    Zeile ein Streuwert der gerundeten Zahlen, sortiert, und wo zwei Streuwerte
-    gleich sind, der ganze Vergleich. Gleicher Streuwert bei verschiedenen
-    Zeilen sagt vorsichtshalber ja — dann verschweißt ``merge_vertices`` selbst.
+    einem Quader mit 709 760 Dreiecken 0,16 bis 0,25 s, mehr als das Teilen
+    davor (Review-Fix F). Gefragt wird hier dasselbe: benutzt jede Ecke, dann
+    je Zeile ein Streuwert der gerundeten Zahlen, sortiert. Gleicher Streuwert
+    sagt vorsichtshalber ja — dann verschweißt ``merge_vertices`` selbst, und
+    ``_as_mesh`` übernimmt das Ergebnis nur, wenn es Ecken weniger hat.
+
+    Der Streuwert mischt jede Zahl ganz durch (:func:`_mixed`), bevor die
+    nächste dazukommt. Die Zahlen mit je einer Konstante malgenommen und
+    verknüpft, kollidierten an den Gittern des Kerns bei 17 % (Quader) bis
+    39 % (Kugel) der Ecken, und die Prüfung sagte immer ja.
     Ganzzahlig und elementweise, also auf jeder Maschine dieselbe Antwort.
     """
     if not len(vertices):
@@ -1456,14 +1461,18 @@ def _needs_welding(vertices: np.ndarray, faces: np.ndarray) -> bool:
     digits = trimesh.util.decimal_to_digits(trimesh.constants.tol.merge)
     rounded = (np.asarray(vertices, dtype=np.float64) * (10**digits)).round().astype(np.int64)
     columns = rounded.astype(np.uint64)
-    spread = columns[:, 0] * np.uint64(0x9E3779B97F4A7C15)
-    spread ^= columns[:, 1] * np.uint64(0xBF58476D1CE4E5B9)
-    spread ^= columns[:, 2] * np.uint64(0x94D049BB133111EB)
-    spread ^= spread >> np.uint64(31)
-    order = np.argsort(spread, kind="stable")
-    ordered = spread[order]
-    same = np.flatnonzero(ordered[1:] == ordered[:-1])
-    return bool(len(same))
+    spread = _mixed(columns[:, 0])
+    spread = _mixed(spread ^ columns[:, 1])
+    spread = _mixed(spread ^ columns[:, 2])
+    ordered = np.sort(spread)
+    return bool((ordered[1:] == ordered[:-1]).any())
+
+
+def _mixed(values: np.ndarray) -> np.ndarray:
+    """Die Schlussmischung von SplitMix64: umkehrbar, und jedes Bit wirkt auf alle."""
+    values = (values ^ (values >> np.uint64(30))) * np.uint64(0xBF58476D1CE4E5B9)
+    values = (values ^ (values >> np.uint64(27))) * np.uint64(0x94D049BB133111EB)
+    return np.asarray(values ^ (values >> np.uint64(31)))
 
 
 def refined(mesh: MeshData, edge: float) -> MeshData:
