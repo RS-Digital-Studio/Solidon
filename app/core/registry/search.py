@@ -94,6 +94,17 @@ def stem_of(word: str) -> str:
     return word[: max(STEM_LENGTH, len(word) - STEM_CUT)]
 
 
+def stems_in(parts: Sequence[str], text: str) -> bool:
+    """Ob die Stämme der Wörter ab :data:`STEM_LENGTH` alle im Text stehen.
+
+    **Ohne ein solches Wort trifft der Stamm nichts.** Kürzere Wörter haben
+    keinen und zählen nicht mit; ohne sie war die Bedingung leer und damit
+    wahr: „qqq“ fand alle 273 Zeilen der Suche (RM-735).
+    """
+    stemmed = [part for part in parts if len(part) >= STEM_LENGTH]
+    return bool(stemmed) and all(stem_of(part) in text for part in stemmed)
+
+
 #: Operation *Modell einfügen* und Fensterbefehl ``file.import`` teilen die Wörter.
 _READ_IN_SYNONYMS: Final = ("oeffnen", "importieren", "stl", "datei")
 
@@ -694,7 +705,7 @@ def matches(entry: SearchEntry, query: str, *, stem: bool = False, any_word: boo
     parts = fold(query).split()
     if not stem:
         return all(part in haystack for part in parts)
-    return all(stem_of(part) in haystack for part in parts if len(part) >= STEM_LENGTH)
+    return stems_in(parts, haystack)
 
 
 def found_in_rounds(entries: Sequence[SearchEntry], query: str) -> tuple[list[SearchEntry], bool]:
@@ -796,7 +807,7 @@ def rank(entry: SearchEntry, query: str) -> int:
         return 4
     if in_title:
         return 5
-    if all(stem_of(part) in title for part in parts if len(part) >= STEM_LENGTH):
+    if stems_in(parts, title):
         return 6
     return 7
 

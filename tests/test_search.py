@@ -143,6 +143,23 @@ def test_the_search_falls_back_to_the_word_stem() -> None:
     )
 
 
+@pytest.mark.parametrize("query", ["qqq", "qj", "xq"])
+def test_a_short_word_that_matches_nothing_finds_nothing(query: str) -> None:
+    """Ein Wort unter der Stammlänge hat keinen Stamm — die zweite Runde trifft
+    mit ihm nichts.
+
+    Sie prüfte nur die Wörter ab :data:`~app.core.registry.search.STEM_LENGTH`,
+    und ohne ein solches war die Bedingung leer und damit wahr: „qqq“ fand alle
+    273 Zeilen der Suche, ohne Lockerungszeile, und Return startete die erste.
+    """
+    entries = list(search_entries())
+    assert not [entry for entry in entries if matches(entry, query)], (
+        f"{query} passt genau — dann prüft dieser Test nichts"
+    )
+    assert found_in_rounds(entries, query) == ([], False)
+    assert all(rank(entry, query) == 7 for entry in entries)
+
+
 def test_a_hit_in_the_title_beats_a_hit_in_the_description() -> None:
     """Ohne Ordnung stand bei „bohren“ das *An Merkmal ausrichten* vorn."""
     entries = list(search_entries())
