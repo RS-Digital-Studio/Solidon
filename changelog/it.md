@@ -110,7 +110,7 @@ scrive in `website/version.json`.
 - Per il PETG Solidon suggerisce *Raffreddamento pieno sul supporto*. Così si stacca più facilmente dal pezzo.
 - Sulle figure Solidon propone la cucitura dietro, senza linea davanti. Per una grande faccia superiore piana propone la stiratura.
 - Il tempo di stampa stimato ora include la stiratura.
-- Nuove impostazioni di stampa: *Strati di interfaccia inferiori*, *Pareti degli alberi* e *Punta dell'albero*, più *Restringi il primo strato* e *Allarga i fori*, che seguono lo slicer se non scegli.
+- Nuove impostazioni di stampa: *Strati fini*, *Spessore minimo superiore*, *Strati di interfaccia inferiori*, *Pareti degli alberi*, *Punta dell'albero*, *Restringi il primo strato* e *Allarga i fori*.
 - In *Stira la superficie* ora scegli tra *Faccia più alta* e *Tutte le facce superiori*.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
 - Se lo slicer rifiuta filamenti con temperature troppo diverse su un piatto, Solidon ora indica il motivo e la via d'uscita, invece di dire solo che non è stato creato alcun file.
@@ -120,10 +120,9 @@ scrive in `website/version.json`.
 - Se un pezzo compensa già nel modello, con un foro con *Considera la tolleranza del materiale* o *Compensa il piede d'elefante*, Solidon propone che lo slicer non lo faccia di nuovo.
 - Anche con stampanti che PrusaSlicer o SuperSlicer non conoscono, entrambi stimano il tempo di stampa con le accelerazioni trasmesse, e il file indica il materiale della bobina.
 - Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.
-- Il magazzino filamenti riconosce di nuovo un consumo scaricato con Solidon 0.5.1 e chiede prima di scaricare di nuovo la stessa stampa.
+- Il magazzino filamenti propone da verificare ogni registrazione precedente dello stesso progetto con bobine e quantità uguali, anche con *Registra senza chiedere*, invece di scaricare.
 - Da questa versione un consumo scaricato resta legato alla sua stampa, anche se un aggiornamento calcola più in fretta o cambia il profilo del produttore nello slicer. Prima contava come nuova.
 - Dove cupole piatte e pendenze mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa del pezzo.
-- Novità nelle impostazioni di stampa: *Strati fini* e *Spessore minimo superiore*, perché le superfici superiori sopra strati fini restino chiuse.
 
 ### Filettature, fori e componenti normalizzati
 
