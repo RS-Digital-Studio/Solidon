@@ -132,7 +132,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-701 — Die Brückenweite stimmt bei geschlossenen Ringen nicht](#rm-701) | Geometrie, Erkennung und Druckvorbereitung | Weite über geschlossene Ringe neu fassen; Wand mit Flanke und Steg, Rohr mit ausgestellter Wand und Sporn als Testkörper |
 | [RM-700 — Schichtanalyse und Kanalfrage brauchen an großen Figuren Minuten](#rm-700) | Geometrie, Erkennung und Druckvorbereitung | Schnitt je Säule auf ihre Hüllbox zuschneiden (bitgleich gemessen), Merker nach Körperzahl; nach RM-626 |
 | [RM-721 — Eine kleine flache Halbkuppel verliert bei 0,28 mm ihre Stütze](#rm-721) | Geometrie, Erkennung und Druckvorbereitung | Nachweis im Entwurfsprofil (0,28 mm) im G-Code; lose Kante kürzer als `SPAN_INTERESTING` |
-| [RM-782 — Sechseckige Öffnungen im Quadratraster heißen Wabe](#rm-782) | Geometrie, Erkennung und Druckvorbereitung | Eigener Schlüssel für die Öffnungsform des Lochfelds, mit Migration |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -4079,18 +4078,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   G-Code. Aus der gezielten Nachprüfung von RM-585 (11.10.2026).
   **Abnahme:** Slicerlauf im Entwurfsprofil; hängt der Ring frei, bekommt er Stütze, ohne dass
   Eiffelturm, Bögen und Arkade ihre Entwarnung verlieren.
-
-<a id="rm-782"></a>
-
-- [ ] **RM-782 — Sechseckige Öffnungen im Quadratraster heißen Wabe.**
-  Seit 0.6.0 heißt das Texturmuster wie die Abbildung *Wabe* (doppelter Schlüssel `hexagon`
-  in `surfaces._CHOICE_NAMES`, Handbuchprüfung C). Dieselbe Liste benennt die Öffnungsform von
-  *Lochfeld schneiden*; mit der Anordnung *Raster* entstehen dort Sechsecke im Quadratraster,
-  keine Wabe. Aus dem Review der Handbuchprüfung C (Welle 5, 11.10.2026).
-  **Nächster Schritt:** der Öffnungsform einen eigenen Schlüssel geben (`hexagon_hole` o. ä.),
-  Migration `vN→vN+1` für gespeicherte Lochfelder, Anzeigename *Sechseck*.
-  **Abnahme:** Textur heißt *Wabe*, die Lochfeld-Öffnung *Sechseck*; ein Projekt aus 0.6.0 öffnet
-  mit unveränderter Geometrie; Test gegen die Beispieldatei der alten Version.
 
 ## Bedienung und Darstellung
 
