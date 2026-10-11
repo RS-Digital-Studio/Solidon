@@ -1530,8 +1530,48 @@ def test_a_turn_that_fails_after_the_switch_leaves_the_notice_for_the_next(
         later = agent().propose("Noch einmal")
         assert len(later.notices) == 1 and "qwen3.5:9b" in later.notices[0], later.notices
         assert later.origin.model == "ollama:qwen3.5:9b"
+        agent_apply.discard(later, project.document)
         assert llm.configured_ollama_model() == "qwen3.5:9b", "zugestellt, jetzt gemerkt"
         assert not agent().propose("Und noch einmal").notices, "einmal, nicht je Zug"
+    finally:
+        llm.remember_ollama_model("")
+
+
+def test_a_proposal_that_never_reaches_the_chat_leaves_the_notice_for_the_next(
+    project: Project, profile: Profile
+) -> None:
+    """Nachprüfung M1: Gemerkt wurde am Ende von ``propose``. Die Oberfläche
+    verwirft aber fertige Vorschläge ohne Aufzeichnung — ein neuer ersetzt den
+    wartenden, ein Projektwechsel wirft ihn weg —, und der Satz erschien nie.
+    Zugestellt ist er erst, wenn ``record`` ihn in den Chat geschrieben hat."""
+    from app.core.backends import llm
+
+    llm.remember_ollama_model("")
+    ollama = _MissingDefault("text")
+    backend = llm.OllamaBackend(
+        url="http://127.0.0.1:11434", transport=ollama, fetch=ollama.tags, stand_in=True
+    )
+
+    def agent() -> AgentSession:
+        return AgentSession(
+            backend=backend,
+            document=project.document,
+            profile=profile,
+            sources=ProjectSources(project),
+        )
+
+    try:
+        replaced = agent().propose("Hallo")
+        assert replaced.notices, "der Satz ist am ersten Vorschlag"
+        assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL, "noch nicht im Chat"
+
+        newer = agent().propose("Lieber anders")
+        assert newer.notices == replaced.notices, "der ersetzende trägt ihn weiter"
+        assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
+
+        agent_apply.discard(newer, project.document)
+        assert [entry.text for entry in project.document.chat if entry.notice] == newer.notices
+        assert llm.configured_ollama_model() == "qwen3.5:9b"
     finally:
         llm.remember_ollama_model("")
 

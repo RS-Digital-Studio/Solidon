@@ -247,8 +247,9 @@ Einstellung. Die Mesh-Schnittstelle kennt nur `text_to_mesh` und
   (`stand_in`, `first_available`) — wer ein Modell nennt, prüft genau dieses —,
   ohne eigene Wahl, einmal nach dem 404, nach der Grafik wie die Vorgabe. Der
   Satz (`Reply.notices`) steht als Hinweis im Chat und nie im Auftrag
-  (`ChatEntry.notice`); gemerkt wird erst nach der Zustellung
-  (`notices_said`). Ein gewähltes Modell wird nie ersetzt.
+  (`ChatEntry.notice`); gemerkt wird erst, wenn `agent_apply.record` ihn in
+  den Chat geschrieben hat (`Proposal.delivered` → `notices_said`). Ein
+  gewähltes Modell wird nie ersetzt.
 - **Das Protokoll trägt die Fakten**: `str(BackendUnavailable)` hängt Anbieter,
   Status, Modell und Grund an — der Kunde liest den Satz, das Protokoll, was
   geschah.

@@ -400,11 +400,12 @@ class AgentSession:
         else:
             with resource_session(self.cancelled, progress=lambda text: self._progress(0, text)):
                 proposal = self._propose(request)
-        # Erst ein Zug, der seinen Vorschlag samt Sätzen abliefert, hat sie
-        # zugestellt; ein gescheiterter lässt sie dem nächsten (Regel 21).
+        # Zugestellt sind die Sätze erst, wenn sie im Chat stehen
+        # (``agent_apply.record``). Ein gescheiterter, verworfener oder
+        # ersetzter Zug lässt sie dem nächsten (Regel 21).
         said = getattr(self.backend, "notices_said", None)
         if proposal.notices and callable(said):
-            said()
+            proposal.delivered = said
         return proposal
 
     def _propose(self, request: str) -> Proposal:

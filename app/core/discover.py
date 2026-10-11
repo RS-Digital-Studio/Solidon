@@ -70,6 +70,7 @@ from uuid import uuid4
 
 from app.branding import APP_NAME
 from app.core import errors
+from app.core import paths as _paths
 from app.core.http import RejectRedirects
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_cache_dir, user_config_dir
@@ -183,7 +184,8 @@ def _load() -> dict[str, str]:
         if not path.is_file():
             return {}
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            # Geteilt gelesen: Ein Leser hält den Austausch nicht auf.
+            data = json.loads(_paths.read_text_shared(path))
         except (OSError, ValueError) as problem:
             _log.warning("could not read %s, ignoring it: %s", CHOICES_FILE, problem)
             return {}
@@ -191,14 +193,18 @@ def _load() -> dict[str, str]:
 
 
 def _store(entries: dict[str, str]) -> None:
-    """Über eine Datei daneben und ``Path.replace`` — ein Leser sieht die alte
-    Fassung oder die neue, nie eine gekürzte."""
+    """Über eine Datei daneben und :func:`~app.core.paths.replace_file` — ein
+    Leser sieht die alte Fassung oder die neue, nie eine gekürzte, und ein
+    offener Griff eines anderen Prozesses hält den Austausch unter Windows
+    nicht auf."""
     path = _choices_path()
     ensure_dir(path.parent)
     scratch = path.with_name(f"{path.name}.{uuid4().hex}.tmp")
     try:
         scratch.write_text(json.dumps(entries, indent=2), encoding="utf-8")
-        scratch.replace(path)
+        # Über das Modul: Eine Importzeile, die ``user_cache_dir`` allein nennt,
+        # hielte der Cache-Wächter für eine Nutzung der Wurzel (``test_cache``).
+        _paths.replace_file(scratch, path)
     finally:
         scratch.unlink(missing_ok=True)
 

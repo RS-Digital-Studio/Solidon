@@ -12,6 +12,7 @@ und ihn zurückzunehmen stellt genau das wieder her.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from app.core.scene.history import OperationDraft
@@ -63,6 +64,9 @@ class Proposal:
     notices: list[str] = field(default_factory=list)
     """Sätze des Backends zu diesem Zug (``Reply.notices``), jeder einmal —
     sie stehen im Chat vor der Antwort."""
+    delivered: Callable[[], None] | None = field(default=None, compare=False, repr=False)
+    """Wen ``agent_apply.record`` ruft, sobald :attr:`notices` im Chat stehen —
+    erst dann merkt das Backend ein Ersatzmodell (Regel 21)."""
     origin: Origin = field(default_factory=lambda: Origin(by="agent"))
     steps: int = 0
     input_tokens: int = 0

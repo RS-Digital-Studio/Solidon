@@ -1890,8 +1890,14 @@ class OllamaBackend:
         Ersatzmodell gemerkt, damit „Chat einrichten …“ es nennt (Regel 21)."""
         if not self.pending_notices:
             return
+        try:
+            remember_ollama_model(self.model)
+        except OSError:
+            # Merken ist Buchhaltung: Ein fertiger Zug geht daran nicht
+            # verloren. Der Satz bleibt anstehen, der nächste versucht es wieder.
+            _log.warning("could not remember the stand-in model %s", self.model, exc_info=True)
+            return
         self.pending_notices.clear()
-        remember_ollama_model(self.model)
 
     def _complete(
         self,

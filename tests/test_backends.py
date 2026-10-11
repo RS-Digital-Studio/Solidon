@@ -2574,6 +2574,27 @@ def test_a_stand_in_that_is_missing_too_is_tried_once() -> None:
     assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
 
 
+def test_a_failing_remember_keeps_the_notice_and_the_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nachprüfung G1: Unter Windows kann das Ersetzen der gemerkten Wahl
+    scheitern, solange ein anderer Griff die Datei hält. Merken ist
+    Buchhaltung — ein fertiger Zug geht daran nicht verloren, der Satz bleibt
+    anstehen."""
+    llm.remember_ollama_model("")
+    backend = _chat_backend(_Ollama("qwen3.5:9b"))
+    backend.complete([Message(role="user", content="Hallo")])
+
+    def refuse(_model: str) -> None:
+        raise PermissionError(13, "Zugriff verweigert")
+
+    monkeypatch.setattr(llm, "remember_ollama_model", refuse)
+    backend.notices_said()
+
+    assert len(backend.pending_notices) == 1, "der Satz steht weiter an"
+    assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
+
+
 def test_a_named_model_is_checked_as_named() -> None:
     """Review spät M2: „Werkzeuge prüfen“ meldete für das fehlende qwen3:14b
     „brauchbar“, weil qwen3.5:9b antwortete, und merkte es still. Wer ein

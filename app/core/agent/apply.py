@@ -212,6 +212,8 @@ def record(
         discarded=discarded,
     )
     document.chat.extend([question, *notices, answer])
+    if notices and proposal.delivered is not None:
+        proposal.delivered()
     return question, answer
 
 

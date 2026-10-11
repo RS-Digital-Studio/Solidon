@@ -341,6 +341,51 @@ def test_choices_survive_a_restart(tmp_path: Path) -> None:
     assert discover.remembered("comfyui") == str(program)
 
 
+def test_the_choices_are_changed_under_one_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review spät G3/Nachprüfung G2: Gemerkt wird auch aus dem Agentenfaden
+    (das Ersatzmodell des Chats), gelesen zugleich im Hauptfaden. Jeder
+    Schreibweg ändert die Datei unter der Sperre, ein anderer Faden kommt
+    während des Schreibens nicht hinein, und es bleibt keine Nebendatei übrig.
+
+    Ohne Wandzeit: Der Schreiber hält im Austausch an, bis der Test ihn
+    freigibt, und der Test fragt die Sperre, statt auf einen Leser zu warten.
+    """
+    import threading
+
+    real_store = discover._store
+    storing = threading.Event()
+    release = threading.Event()
+    owned: list[bool] = []
+
+    def gated(entries: dict[str, str]) -> None:
+        owned.append(discover._CHOICES_LOCK._is_owned())  # type: ignore[attr-defined]
+        if entries.get("held") == "1" and not release.is_set():
+            storing.set()
+            assert release.wait(10), "der Test gibt den Schreiber frei"
+        real_store(entries)
+
+    monkeypatch.setattr(discover, "_store", gated)
+    writer = threading.Thread(target=discover.remember, args=("held", "1"))
+    writer.start()
+    try:
+        assert storing.wait(10), "der Schreiber ist im Austausch"
+        assert not discover._CHOICES_LOCK.acquire(blocking=False), "niemand kommt dazwischen"
+    finally:
+        release.set()
+        writer.join(10)
+    assert not writer.is_alive()
+
+    discover.remember_path("comfyui", "C:/ComfyUI/main.py")
+    discover.remember_address("comfyui", "http://192.0.2.5:8188")
+    discover.use_local_address("comfyui")
+    discover.remember("ollama", "http://127.0.0.1:11434")
+
+    assert owned and all(owned), "jeder Schreibweg hält die Sperre"
+    assert discover.remembered("held") == "1" and discover.remembered("ollama")
+    leftovers = list(discover._choices_path().parent.glob(f"{discover.CHOICES_FILE}.*.tmp"))
+    assert not leftovers, leftovers
+
+
 def test_a_broken_choices_file_is_ignored_not_fatal() -> None:
     path = discover._choices_path()
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -46,6 +46,11 @@ from app.ui.theme import UNDONE_COLOUR
 #: auseinanderbleiben (§19.1).
 ROLE_MARKER = {"user": ">", "agent": "*"}
 
+#: Ein Satz der Anwendung im Gespräch (``ChatEntry.notice``) — etwa, dass ein
+#: Ersatzmodell antwortet. Eigenes Zeichen, kursiv und mit Kurzhilfe, damit er
+#: nicht wie eine Antwort des Modells aussieht (Regel 18: nicht nur Farbe).
+NOTICE_MARKER = "i"
+
 #: Die Zeile, die zeigt, was der Zug gerade tut. Ein eigenes Zeichen, weil sie
 #: kein Beitrag ist: Sie steht nur, solange gerechnet wird, und verschwindet
 #: ohne Spur — im Dokument taucht sie nie auf.
@@ -697,8 +702,15 @@ def _dropped_image(event: Any) -> str | None:
 
 
 def _item(entry: ChatEntry, discarded: bool) -> QListWidgetItem:
-    marker = ROLE_MARKER.get(entry.role, "-")
+    marker = NOTICE_MARKER if entry.notice else ROLE_MARKER.get(entry.role, "-")
     item = QListWidgetItem(f"{marker} {entry.text}")
+    if entry.notice:
+        font = QFont(item.font())
+        font.setItalic(True)
+        item.setFont(font)
+        item.setToolTip(tr("Hinweis von Solidon"))
+        item.setData(Qt.ItemDataRole.UserRole, entry.id)
+        return item
     if discarded:
         # Nicht gelöscht: der Beitrag ist passiert. Er gilt nur nicht mehr (§26.3).
         item.setForeground(QColor(UNDONE_COLOUR))
@@ -808,7 +820,13 @@ def describe(preview: Any) -> str:
         # Kubikzentimeter stehen, wenn die Anzeige auf Zoll steht, während
         # jede Länge daneben umschaltet.
         parts.append(f"+{volume(difference.added_volume)} / -{volume(difference.removed_volume)}")
-    return "\n".join([" · ".join(parts) or tr("Keine Änderung"), *_warnings(proposal)])
+    # Die Sätze des Backends gehören vor die Entscheidung: Wer den Vorschlag
+    # eines Ersatzmodells annimmt, soll wissen, wer ihn machte (Regel 21).
+    notices = [
+        tr("{name}: {value}", name=tr("Hinweis von Solidon"), value=notice)
+        for notice in getattr(proposal, "notices", ())
+    ]
+    return "\n".join([" · ".join(parts) or tr("Keine Änderung"), *notices, *_warnings(proposal)])
 
 
 def costs(proposal: Any) -> str:
