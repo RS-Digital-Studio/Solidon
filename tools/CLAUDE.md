@@ -86,6 +86,7 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 |---|---|
 | `bump_version.py` | Die zwei Stellen der Version, dazu drei abgeleitete |
 | `build_slice_core.py` | Übersetzt Ebenenschnitt und Konturverkettung; nach jedem Python-Wechsel mit dem aktuellen Interpreter neu fahren |
+| `fix_unwind_info.py` | Korrigiert auf macOS Intel direkt nach jeder Installation die Abwicklungstabelle der OCC-Bibliotheken (RM-768); prüft je Eintrag den Prolog Byte für Byte, kennt nur geprüfte Radversionen samt Zahl der Korrekturen und bricht sonst ab; `--codesign` signiert ad hoc neu, `--check --package dist` prüft das ausgelieferte Paket (auf macOS die `.app`), `--scan` zählt jedes Rad |
 | `build_licence_module.py` · `make_licence_keys.py` | Prüfmodul und Lizenzmanifest nach `packaging/build/` · Kaufcodes |
 | `make_installer.py` | Windows-Installer lokal, oder `--signing-handoff`: App-Baum und Installer-Eingänge als sortierte Pfadliste mit SHA-256 |
 | `windows_signed_installer.py` · `sign_release.py` | Schlüsselloser CI-Anschluss zwischen den zwei lokalen Signaturen · signiert **lokal** (`--check`, `--phase application`, `--phase installer`), Zertifikat per Fingerabdruck; eine rote Releaseakte sperrt die Ausgabe. Ablauf: `packaging/CLAUDE.md`, `Signierung/README.md` |

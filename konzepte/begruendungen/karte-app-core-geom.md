@@ -114,8 +114,11 @@ Scheitert die Vorfrage oder das Vereinigen, bleibt der Eingang, wie er war.
 **Nach jeder gelungenen Stufe bekommt das Ergebnis die Darstellung seiner
 Eingänge zurück** (`attributes.in_source_layout`, RM-261): Jedes Dreieck, das
 der Kern bitgleich übernommen hat, beginnt an der Ecke seines Vorbilds, und
-die übernommenen Ecken stehen in der Reihenfolge des Eingangs. Dreiecksfolge
-und Koordinaten bleiben die des Kerns. `prepare_ops._without_scars`, das den
+die übernommenen Ecken stehen in der Reihenfolge des Eingangs. Die Plätze der
+Dreiecke und die Koordinaten bleiben die des Kerns; die übernommenen Dreiecke
+besetzen ihre Plätze in der Folge ihres Eingangs (RM-592: der Kern legt
+Unberührtes auch untereinander um). Hat der Schritt nichts geändert, kommt der
+Eingang selbst zurück, und die Erkennung trifft ihren Cache. `prepare_ops._without_scars`, das den
 Kern ein zweites Mal rechnen lässt, legt ebenso zurück. Warum, steht in
 `operationen.md`.
 

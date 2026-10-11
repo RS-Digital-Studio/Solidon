@@ -43,7 +43,8 @@ from typing import TYPE_CHECKING, Any, Final, NamedTuple
 import numpy as np
 
 from app.core import units
-from app.core.geom.mesh import MeshData
+from app.core.deferred import cKDTree
+from app.core.geom.mesh import MeshData, stable_normals
 from app.core.perceive.surfaces import PATCH_BLOCK, clipped_patches, planar_patch
 from app.core.types import Feature, FeatureId, MeasureSource, SurfacePatch, Vec3
 from app.core.units import EPS_GEOM, positive_axis, weld_tolerance
@@ -657,16 +658,25 @@ def _open_slot_shell(
     """Erweitert den Bogen nur über erreichbare Flanken und weitere Kreisfacetten.
 
     Jede besuchte Fläche wird einmal geometrisch geprüft. Abgelehnte Nachbarn
-    bleiben als Grenze bekannt; ferne Dreiecke bekommen weder eine Maske noch
-    ein eigenes Koordinatenfeld für diesen Bogen.
+    bleiben als Grenze bekannt; ferne Dreiecke bekommen kein eigenes
+    Koordinatenfeld für diesen Bogen.
+
+    **Besucht, gewählt und Bogen als Masken, nicht als Mengen** (P5, RM-592):
+    Die Flutung läuft an einer umlaufenden Rundung um den ganzen Körper, und
+    eine Python-Menge je Schicht kostete am Laptop-Ständer 1,4 s für 110 Bögen.
+    Dieselben Flächen, dieselbe Folge der Schichten.
     """
-    chosen = set(patch)
-    visited = set(patch)
-    frontier = np.asarray(sorted(chosen), dtype=np.int64)
+    count = len(normals)
+    chosen = np.zeros(count, dtype=bool)
+    visited = np.zeros(count, dtype=bool)
+    arc = np.zeros(count, dtype=bool)
+    frontier = np.unique(np.asarray(patch, dtype=np.int64))
+    chosen[frontier] = True
+    visited[frontier] = True
     _allowed, on_arc = _open_slot_candidates(
         triangles[frontier], normals[frontier], centre, axis, radius, tolerance
     )
-    arc_faces = set(frontier[on_arc])
+    arc[frontier[on_arc]] = True
     incident_rows = []
     while len(frontier):
         if check_cancelled is not None:
@@ -674,23 +684,22 @@ def _open_slot_shell(
         incident = _adjacent_rows(graph, frontier)
         incident_rows.append(incident)
         neighbours = np.unique(adjacency[incident])
-        candidates = np.asarray(
-            [face for face in neighbours if face not in visited], dtype=np.int64
-        )
+        candidates = neighbours[~visited[neighbours]]
         if not len(candidates):
             break
-        visited.update(candidates)
+        visited[candidates] = True
         allowed, on_arc = _open_slot_candidates(
             triangles[candidates], normals[candidates], centre, axis, radius, tolerance
         )
         frontier = candidates[allowed]
-        chosen.update(frontier)
-        arc_faces.update(candidates[on_arc])
-    selected = np.asarray(sorted(chosen), dtype=np.int64)
+        chosen[frontier] = True
+        arc[candidates[on_arc]] = True
+    selected = np.flatnonzero(chosen)
     incident = np.unique(np.concatenate(incident_rows))
-    first = np.isin(adjacency[incident, 0], selected)
-    second = np.isin(adjacency[incident, 1], selected)
-    return selected, incident[first != second], not arc_faces.issuperset(chosen), arc_faces
+    first = chosen[adjacency[incident, 0]]
+    second = chosen[adjacency[incident, 1]]
+    arc_faces = set(np.flatnonzero(arc).tolist())
+    return selected, incident[first != second], bool((chosen & ~arc).any()), arc_faces
 
 
 def _open_slot_candidates(
@@ -1229,7 +1238,8 @@ def _flank_surfaces(
             continue
         first = int(chosen[np.argmax(np.asarray(body.area_faces)[chosen])])
         origin = np.asarray(body.triangles_center[first])
-        normal = np.asarray(body.face_normals[first])
+        # Dieselbe Quelle wie die erkannten ebenen Flächen (features._face_candidates).
+        normal = stable_normals(body)[0][first] + 0.0
         planar: list[int] = []
         for start in range(0, len(chosen), PATCH_BLOCK):
             if check_cancelled is not None:
@@ -1242,7 +1252,7 @@ def _flank_surfaces(
             mesh,
             planar,
             _point(body.triangles_center[first]),
-            _point(body.face_normals[first]),
+            _point(normal),
             check_cancelled=check_cancelled,
         )
         if part is not None:
@@ -1498,11 +1508,20 @@ def _shell_labels(across: np.ndarray, pairs: np.ndarray) -> _Components:
 
     count = len(across)
     inner = pairs[across[pairs[:, 0]] & across[pairs[:, 1]]]
+    # Der Graph nur über die querstehenden Flächen, eigens durchnummeriert: Die
+    # übrigen bekämen ohnehin ``-1``, und über alle Flächen des Körpers kostete
+    # jede Maske am Eiffelturm ein Vielfaches (RM-592).
+    members = np.flatnonzero(across)
+    local = np.full(count, -1, dtype=np.int64)
+    local[members] = np.arange(len(members))
     graph = coo_matrix(
-        (np.ones(len(inner), dtype=np.int8), (inner[:, 0], inner[:, 1])), shape=(count, count)
+        (np.ones(len(inner), dtype=np.int8), (local[inner[:, 0]], local[inner[:, 1]])),
+        shape=(len(members), len(members)),
     )
     _number, labels = connected_components(graph, directed=False)
-    return _Components(np.where(across, np.asarray(labels, dtype=np.int64), -1))
+    result = np.full(count, -1, dtype=np.int64)
+    result[members] = np.asarray(labels, dtype=np.int64)
+    return _Components(result)
 
 
 def _pairs_of(graph: tuple[np.ndarray, np.ndarray]) -> np.ndarray:
@@ -1737,7 +1756,8 @@ def _reaches_through(
     # Ein separat eingelesener Stift kann vor der Mündung stehen. Er ändert
     # nicht die Topologie des Langlochs im Träger. Echte Böden und Stege sind
     # mit seinen Mantelflächen verbunden; nur deren Komponenten zählen.
-    corners = np.asarray(body.triangles, dtype=float)
+    triangles = np.asarray(body.triangles, dtype=float)
+    rows: np.ndarray | None = None
     if patch is not None and len(patch):
         from app.core.geom.mesh import face_components
 
@@ -1746,9 +1766,53 @@ def _reaches_through(
             selected = np.zeros(len(body.faces), dtype=bool)
             selected[np.asarray(patch, dtype=np.intp)] = True
             carriers = [group for group in groups if bool(selected[group].any())]
-            corners = corners[np.concatenate(carriers)]
-    corners = corners - centre
-    along = corners @ axis
+            rows = np.concatenate(carriers)
+    # **Erst eine Kugel je Dreieck, dann die Ecken** (RM-592): Ein Dreieck,
+    # dessen Kugel mit Abstand außerhalb des Abschnitts liegt, liegt mit jeder
+    # Ecke außerhalb und fiele unten heraus. Gerechnet wird nur noch an dem,
+    # was den Abschnitt erreichen kann — am Eiffelturm 26 Fragen je Erkennung
+    # über 313 000 Dreiecke. Projiziert wird je Zeile über Grundrechenarten,
+    # nicht über ``@``: Dieselbe Zeile gibt so in jeder Auswahl dieselben Bits.
+    middles, radii, scale = _triangle_spheres(body)
+    along_axis = np.asarray(axis, dtype=float)
+    slack = depth / 2.0 + EPS_GEOM + _SPHERE_MARGIN * (1.0 + scale)
+    sideways_axis = np.asarray(direction, dtype=float)
+    across_axis = np.cross(along_axis, sideways_axis)
+    near = slack - depth / 2.0
+    stretch_along = math.sqrt(float((along_axis * along_axis).sum()))
+    stretch_side = math.sqrt(float((sideways_axis * sideways_axis).sum()))
+    stretch_across = math.sqrt(float((across_axis * across_axis).sum()))
+    nearby = _within_reach(
+        body,
+        centre,
+        np.stack((along_axis, sideways_axis, across_axis)),
+        np.array([slack, travel / 2.0 + near, near]),
+        np.array([stretch_along, stretch_side, stretch_across]),
+    )
+    if rows is None:
+        rows = np.arange(len(middles)) if nearby is None else nearby
+    elif nearby is not None:
+        within = np.zeros(len(middles), dtype=bool)
+        within[nearby] = True
+        rows = rows[within[rows]]
+    relative = middles[rows] - centre
+    offset = (relative * along_axis).sum(axis=1)
+    # Und quer dazu: Eine Kugel, die die Mittellinie in der Projektion nicht
+    # erreicht, überdeckt keinen Endpunkt und kreuzt sie nicht — bei einem
+    # offenen Langloch reicht der Abschnitt durch den ganzen Körper, dann
+    # entscheidet allein diese Auswahl.
+    # Gemessen in denselben, nicht zwingend senkrechten Richtungen wie unten:
+    # Jede Richtung streckt die Kugel um ihre Länge.
+    sideways = (relative * sideways_axis).sum(axis=1)
+    beside = (relative * across_axis).sum(axis=1)
+    own = radii[rows]
+    rows = rows[
+        (np.abs(offset) <= slack + own * stretch_along)
+        & (np.abs(sideways) <= travel / 2.0 + near + own * stretch_side)
+        & (np.abs(beside) <= near + own * stretch_across)
+    ]
+    corners = triangles[rows] - centre
+    along = (corners * along_axis).sum(axis=2)
     reach = (along.min(axis=1) <= depth / 2.0 + EPS_GEOM) & (
         along.max(axis=1) >= -depth / 2.0 - EPS_GEOM
     )
@@ -1756,11 +1820,125 @@ def _reaches_through(
     if not len(corners):
         return True
 
-    flat = np.stack([corners @ direction, corners @ np.cross(axis, direction)], axis=-1)
+    flat = np.stack(
+        [
+            (corners * np.asarray(direction, dtype=float)).sum(axis=2),
+            (corners * np.cross(along_axis, direction)).sum(axis=2),
+        ],
+        axis=-1,
+    )
     reach_x = travel / 2.0
     if _covers(flat, np.array([-reach_x, 0.0])) or _covers(flat, np.array([reach_x, 0.0])):
         return False
     return not _crosses(flat, reach_x)
+
+
+#: Wie weit die Kugelauswahl von :func:`_reaches_through` über Rundung hinaus
+#: großzügig ist, relativ zur größten Koordinate — eine Rechengrenze, keine
+#: Geometrietoleranz.
+_SPHERE_MARGIN: Final = 1e-9
+
+_SPHERES_KEY: Final = "solidon_triangle_spheres"
+
+_SPHERE_TREE_KEY: Final = "solidon_triangle_sphere_tree"
+
+#: Ab welchem Anteil der Körperdiagonale :func:`_within_reach` den Raumindex
+#: nicht fragt: Eine Kugel so groß wie der Körper wählt ohnehin fast alles,
+#: und die Frage an den Baum kostete dann mehr als die Auswahl über alle.
+_WHOLE_BODY_SHARE: Final = 0.25
+
+#: Wie viel weiter der Raumindex fragt, als die Auswahl je Richtung zulässt —
+#: eine Rechengrenze (die Kugel wird mit einem LAPACK-Singulärwert bemessen),
+#: keine Geometrietoleranz. Was er zu viel bringt, fällt unter der genauen
+#: Auswahl heraus.
+_REACH_MARGIN: Final = 1e-6
+
+
+def _within_reach(
+    body: Any,
+    centre: np.ndarray,
+    directions: np.ndarray,
+    bounds: np.ndarray,
+    stretch: np.ndarray,
+) -> np.ndarray | None:
+    """Die Dreiecke, deren Kugel die Auswahl von :func:`_reaches_through` bestehen kann.
+
+    **Eine Vorauswahl über einen Raumindex, aufsteigend und nie zu knapp**
+    (P5, RM-592): Am Eiffelturm kostete jede Frage einen Durchgang über
+    313 000 Dreiecke, 1,75 s für 26 Fragen. Eine Kugel mit Radius ``r`` besteht
+    die Auswahl nur, wenn ihre Mitte die drei Schranken
+    ``|Richtung · (Mitte - centre)| <= bounds + r · stretch`` einhält, und dann
+    liegt die Mitte höchstens ``|bounds + r · stretch| / s_min`` von ``centre``
+    (``s_min`` der kleinste Singulärwert der Richtungen). Gefragt wird der
+    Raumindex der kleinen Dreiecke mit dem Radius des größten von ihnen; die
+    wenigen großen (:data:`_LARGE_TRIANGLE_SHARE`) kommen immer dazu — ein
+    einzelnes langes Dreieck machte sonst jede Kugel so groß wie den Körper.
+    Die Entscheidung trifft danach die genaue Auswahl, Bit für Bit wie über
+    alle Dreiecke; der Singulärwert (LAPACK) bemisst nur die Vorauswahl
+    (``kern.md``). ``None``: alle fragen — bei entarteten Richtungen und bei
+    einer Kugel so groß wie der Körper.
+    """
+    tiers = _sphere_tiers(body)
+    if tiers is None:
+        return None
+    tree, small, large, small_radius, diagonal = tiers
+    smallest = float(np.linalg.svd(directions, compute_uv=False).min())
+    if not math.isfinite(smallest) or smallest <= EPS_GEOM:
+        return None
+    limits = bounds + small_radius * stretch
+    reach = math.sqrt(float((limits * limits).sum())) / smallest
+    if reach >= diagonal * _WHOLE_BODY_SHARE:
+        return None
+    found = tree.query_ball_point(
+        np.asarray(centre, dtype=float), reach * (1.0 + _REACH_MARGIN) + _REACH_MARGIN
+    )
+    return np.sort(np.concatenate((small[np.asarray(found, dtype=np.int64)], large)))
+
+
+#: Welcher Anteil der größten Dreiecke an :func:`_within_reach` immer teilnimmt,
+#: statt den Radius der Raumindexfrage zu bestimmen — ein Arbeitsstück.
+_LARGE_TRIANGLE_SHARE: Final = 0.02
+
+
+def _sphere_tiers(body: Any) -> tuple[Any, np.ndarray, np.ndarray, float, float] | None:
+    """Raumindex der kleinen Dreieckskugeln, die großen daneben — einmal je Körper."""
+    cache = getattr(body, "_cache", None)
+    if cache is not None and _SPHERE_TREE_KEY in cache:
+        known: tuple[Any, np.ndarray, np.ndarray, float, float] | None = cache[_SPHERE_TREE_KEY]
+        return known
+    middles, radii, _scale = _triangle_spheres(body)
+    tiers: tuple[Any, np.ndarray, np.ndarray, float, float] | None = None
+    if len(middles):
+        order = np.argsort(radii, kind="stable")
+        cut = len(order) - int(len(order) * _LARGE_TRIANGLE_SHARE)
+        small = np.sort(order[:cut])
+        large = np.sort(order[cut:])
+        small_radius = float(radii[small].max(initial=0.0))
+        span = np.ptp(middles, axis=0)
+        diagonal = math.sqrt(float((span * span).sum()))
+        tiers = (cKDTree(middles[small]), small, large, small_radius, diagonal)
+    if cache is not None:
+        cache[_SPHERE_TREE_KEY] = tiers
+    return tiers
+
+
+def _triangle_spheres(body: Any) -> tuple[np.ndarray, np.ndarray, float]:
+    """Mitte und Radius einer Kugel um jedes Dreieck und die größte Koordinate, einmal je Körper.
+
+    Liegt im Cache des Netzes und verfällt mit seiner Geometrie.
+    """
+    cache = getattr(body, "_cache", None)
+    if cache is not None and _SPHERES_KEY in cache:
+        known: tuple[np.ndarray, np.ndarray, float] = cache[_SPHERES_KEY]
+        return known
+    triangles = np.asarray(body.triangles, dtype=float)
+    middles = triangles.mean(axis=1)
+    gaps = triangles - middles[:, None, :]
+    radii = np.sqrt((gaps * gaps).sum(axis=2)).max(axis=1) if len(triangles) else np.zeros(0)
+    spheres = (middles, radii, float(np.abs(triangles).max(initial=0.0)))
+    if cache is not None:
+        cache[_SPHERES_KEY] = spheres
+    return spheres
 
 
 def _covers(flat: np.ndarray, point: np.ndarray) -> bool:

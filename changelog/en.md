@@ -22,6 +22,7 @@ it into `website/version.json`.
 - The demo now runs until 30 November 2026. Solidon3D 1.0 is planned for 1 December, and your projects are kept.
 - On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on can install it for free.
 - Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.
+- On Intel Macs, Solidon now reports when a fillet or chamfer on an exact body cannot be built. Version 0.5.3 quit at that point.
 - On the Mac, *Cancel* stops a running answer from the local model at once.
 - On the Mac, Return opens the selected entry on the start screen, in *Search functions* and in the report.
 - On Linux, input through Fcitx5 and IBus now reaches the text field in the Flatpak and the AppImage too.
@@ -63,6 +64,10 @@ it into `website/version.json`.
 - The workspace appears faster when opening large 3MF files.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
+- After a hole or a moved feature, the features of a large technical part are recognised about a third faster.
+- A model you open right after starting the program is ready to edit up to a quarter sooner.
+- With a slicer, a game or a render running alongside, calculations on large models finish in seconds instead of minutes.
+- A saved project with a large model now opens in a second or two after a restart instead of half a minute: the recognised features are kept.
 
 ### Printing and slicer handover
 

@@ -626,6 +626,43 @@ Problemen; darunter rechnet der echte Löser (`MIN_BATCH`). Große Flecken mit
 Tausenden Stützpunkten spart der Stapel nicht: Dort ist die Rechnung, nicht der
 Aufruf, das Teure.
 
+## Arbeiter rechnen vor, die Erkennung entscheidet
+
+Roberts Freigabe für RM-637 (09.10.2026): die Erkennung auf mehrere Prozesse
+verteilen, mit gleichem Ergebnis. Der Weg nutzt das Gedächtnis je Fleck aus
+RM-592: Was eine Runde fragt, steht dort schon unter einem Schlüssel, der alles
+nennt, was die Antwort liest. Rechnet ein Arbeiter dieselbe Frage an einer
+Kopie des Körpers, ist seine Antwort die des Hauptprozesses — dasselbe
+Argument, das das Gedächtnis über die Körpergrenze trägt, und dieselbe
+Gegenprobe (Messbank A1, `test_perceive_workers.py`). Eine eigene,
+nebenläufige Fassung der Runden hätte dagegen eine zweite Rechnung gebraucht,
+die mit der ersten Schritt halten muss.
+
+Drei Runden gehen an die Arbeiter: der Mantelnachweis der Ebenenregel, die
+ganzen Flecken und die Stücke samt tangentialer Trennung. Was am ganzen Körper
+hängt (Facettenurteil, Langlöcher, Bohrungen, Wendeln), bleibt im Prozess.
+Die Aufgaben sind ausgewogene Fächer, die schwersten Flecken zuerst verteilt:
+Zusammenhängende Teile legten am Drachen alle großen Flecken zu einem Arbeiter
+(23 s), ein Fleck je Aufgabe ließ den Stapel leer (`refine.MIN_BATCH`), und
+jeder Lauf ging an den echten Löser. Trägt der Körper eine Haut über der
+Gedächtnisgrenze, rechnet keine Runde bei den Arbeitern: Die Haut kostet im
+Prozess das meiste, ihre Antwort käme nicht zurück, und jeder Arbeiter baute
+den großen Körper umsonst auf.
+
+**Arbeiter starten erst, wenn eine Runde sie braucht** (Gewicht ab
+`AHEAD_FROM_WEIGHT`). Die erste Fassung startete sie zu Beginn jeder
+Erkennung ab 50 000 Dreiecken und schickte ihnen den Körper; im Wechsel mit
+frischem Prozess gemessen (10.10.2026, i9-13900K, Vorrang) wurden Ständer und
+Eiffelturm schneller (16,1 → 12,1 s, 37,0 → 22,2 s), aber Besteckkasten,
+Besenhalter, Würfel, Spiderman und Drache langsamer (+6 bis +28 %): acht
+Prozesse, die laden und Körper aufbauen, nehmen dem rechnenden Prozess Takt
+und Speicherbandbreite, auch wenn keine Runde sie fragt. Ein Arbeiter lädt
+seine Bibliotheken vor der ersten Aufgabe; ohne das wartete die erste Runde am
+Ständer 1,6 s auf das Nachladen.
+
+Die Messbank rechnet ohne Arbeiter: A4 und A5 messen die CPU-Zeit eines
+Prozesses, und die verteilte Arbeit fehlte darin.
+
 ## Auf einer Freiform sind Kugel, Ring, Kegel und Verrundung keine Merkmale
 
 *Ursprüngliche Überschrift: „Auf einer Freiform sind Kugel, Ring, Kegel und

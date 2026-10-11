@@ -22,6 +22,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A demo funciona agora até 30 de novembro de 2026. O Solidon3D 1.0 está previsto para 1 de dezembro e os seus projetos mantêm-se.
 - No Mac, o Solidon precisa agora do macOS 14 ou mais recente. Qualquer Mac a partir de 2018 pode instalá-lo gratuitamente.
 - O Solidon arranca agora nos Mac Intel com macOS 26. A versão 0.5.3 ficava aí bloqueada no arranque.
+- Nos Mac Intel, o Solidon indica agora quando um arredondamento ou um chanfro num corpo exato não pode ser construído. A versão 0.5.3 fechava-se nesse momento.
 - No Mac, *Cancelar* interrompe de imediato uma resposta em curso do modelo local.
 - No Mac, Return abre a entrada selecionada no ecrã inicial, em *Pesquisar função* e no relatório de verificação.
 - No Linux, a escrita com Fcitx5 e IBus chega agora ao campo de texto também no Flatpak e no AppImage.
@@ -63,6 +64,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
+- Depois de um furo ou de uma característica deslocada, as características de uma peça técnica grande são reconhecidas cerca de um terço mais depressa.
+- Um modelo que abre logo após iniciar o programa fica editável até um quarto mais cedo.
+- Com um slicer, um jogo ou uma renderização a correr ao lado, os cálculos em modelos grandes terminam em segundos em vez de minutos.
+- Um projeto guardado com um modelo grande abre após um reinício em um ou dois segundos em vez de meio minuto: as características reconhecidas ficam guardadas.
 
 ### Imprimir e entregar ao slicer
 

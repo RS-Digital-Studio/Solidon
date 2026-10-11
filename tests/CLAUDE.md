@@ -70,6 +70,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Erkennt die Gruppenerkennung Kammer, Nut, Kanal, Gewinde, Verschluss, Scharnier, Schrift und Aufnahme samt Gegenproben und Korpus, und ändert *Kammer ändern* eine Kammer als Ganzes? Ändert *Verschluss ändern* Spiel und Drehweg aller Stellungen genau um ihren Umriss? | `test_functional_groups.py` · `test_chamber_ops.py` · `test_closure_ops.py` (Rohr mit L-Wegen, Plattendeckel als STL, Bausteinaufnahme); Baum und Merkmalfenster in `test_feature_panel.py`; der Kasten dazu ist `helpers.walled_bin` |
 | Findet die Bindungshilfe feste Zahlen, die zu Projektmaßen passen, wählt sie nur Sicheres vor, und folgt das gebundene Puppenhaus seinen Maßen? Zählt der Plattenwähler die Körper, und rahmt die Plattenwahl einmal? | `test_parameter_binding.py` · `test_parameter_binding_ui.py`; Platten in `test_plates.py`; das Puppenhaus ist `helpers.dollhouse_document` |
 | Liest der exakte Körper dieselben Muster wie sein STL-Zwilling? | `test_exact_patterns.py` — STEP und binäre STL derselben Konstruktion über den echten Einleseweg |
+| Erkennungsarbeiter bitgleich, abbrechbar? | `test_perceive_workers.py` |
 | Ersetzt eine örtlich erkannte Textur die alten Einzelzellen auch nach Import, Speichern und Undo? | `test_local_detection.py` — echte Bereichssuche, reservierte Zellkennungen, leerer Cache und Plattencache; alte Zellbezüge halten mit Rückweg an |
 | Bleibt der exakte Körper bei Merkmalshandlungen exakt — Volumen, Kennungen, STEP-Umlauf? | `test_exact_feature_ops.py` |
 | Wulst und Kehle · Gewinde ändern und verschließen · Filament an Ringen und Gewinden, jeweils in beiden Kernen | `test_torus_feature_ops.py` · `test_thread_feature_ops.py` · `test_filament_on_rings_and_threads.py` |
@@ -97,7 +98,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Steht im Register jeder Umschalter vor den Feldern, die er schaltet, und nie hinter der Klappe eines Vorderfelds? | `test_dependency_order.py`; die Folge des Druckdialogs in `test_print_settings_ui.py` |
 | Bleiben Käuferzuordnung und Betreiberzugang aus dem Server? Halten die PHP-Endpunkte ihre Missbrauchsgrenzen? | `test_licence_admin.py`, `test_activation_server.py` · `test_public_php_security.py`; ohne PHP ein Skip, in der Linux-CI ein Fehler (`php_probe.py`) |
 | Website: tote Verweise, Stempel, Paketgrößen, „nichts von außen“, Sprachfassungen | `test_website.py` — Außenlinks getrennt von eingebundenen Ressourcen |
-| CI: vollständige Partitionen, Fenster-/Renderergrenze, adapterfreie Sammlung, Prozessisolation, Berichte · Workflowblöcke und Paketfreigabe | `test_ci_runner.py` · `test_packaging.py` mit `workflow_helpers.py` |
+| CI: vollständige Partitionen, Fenster-/Renderergrenze, adapterfreie Sammlung, Prozessisolation, Berichte · Workflowblöcke und Paketfreigabe · Abwicklungskorrektur | `test_ci_runner.py` · `test_packaging.py` mit `workflow_helpers.py` · `test_fix_unwind_info.py` |
 | Wählt `tools/affected_tests.py` richtig? Findet `tools/twin_scan.py` seine Zwillinge? | `test_affected_tests.py` · `test_twin_scan.py` |
 | Zählt die Einzeldateiabnahme wie das Audit, wählt sie dasselbe Merkmal, geht sie über eine abgesagte Zahl hinweg, liest sie die Abdrücke richtig — und gehen ihre Fensterwege an Lochplatte und dünnwandigem Kasten durch? | `test_file_acceptance.py` (die Fensterwege offscreen, also beim Release) |
 | Arbeitsliste und Archiv: Register, Sprungmarken und fortsetzbare Belege | `test_roadmap.py` — offene Punkte einschließlich Fortsetzungszeilen dürfen keine ausschließlich lokalen Nachweispfade führen; geschlossene Historie bleibt datiert |
@@ -106,7 +107,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? Halten harte Regeln am Quelltext — kein `eval`, keine Ja/Nein-Frage, kein `==` mit Unendlich? | `test_hard_rules.py` |
 | Kommt ein Backslash in einem Pfad als Backslash an? | `test_source_escapes.py` |
 | Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen und mit dem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte und nachgestellte Hilfsprozesse, die Fälle einzeln in `konzepte/begruendungen/karte-tests.md`; das gebaute Paket startet `tools/check_frozen_helper.py` im Paketjob, geprüft in `test_packaging.py` |
-| Endet ein rechnender Helfer mit seinem hart beendeten Elternprozess, und hat er nach normalem Start niedrigere OS-Priorität? | `test_kernel_process_lifecycle.py` — Windows-Jobobjekt, gehaltene Griffe, echte OS-Abfrage; negative Kontrollen treffen dasselbe Assert; ohne Fenster oder Leistungsmarken |
+| Endet ein rechnender Helfer mit seinem hart beendeten Elternprozess, und hat er nach normalem Start niedrigere OS-Priorität? | `test_kernel_process_lifecycle.py` |
 
 ## Helfer
 

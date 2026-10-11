@@ -22,6 +22,7 @@ scrive in `website/version.json`.
 - La demo ora funziona fino al 30 novembre 2026. Solidon3D 1.0 è prevista per il 1º dicembre e i tuoi progetti restano.
 - Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi può installarlo gratuitamente.
 - Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.
+- Sui Mac Intel, Solidon ora segnala quando un raccordo o uno smusso su un corpo esatto non si può costruire. La versione 0.5.3 si chiudeva in quel momento.
 - Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
 - Su Mac, Invio apre la voce selezionata nella schermata iniziale, in *Cerca funzione* e nel rapporto di verifica.
 - Su Linux, la scrittura con Fcitx5 e IBus arriva ora nel campo di testo anche nel Flatpak e nell'AppImage.
@@ -63,6 +64,10 @@ scrive in `website/version.json`.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
 - Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
+- Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo tecnico grande vengono riconosciute circa un terzo più velocemente.
+- Un modello aperto subito dopo l'avvio del programma è modificabile fino a un quarto prima.
+- Con uno slicer, un gioco o un rendering in esecuzione, i calcoli sui modelli grandi terminano in secondi anziché in minuti.
+- Un progetto salvato con un modello grande si apre dopo un riavvio in uno o due secondi invece di mezzo minuto: le caratteristiche riconosciute restano memorizzate.
 
 ### Stampare e passare allo slicer
 
