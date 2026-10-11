@@ -23,6 +23,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La demo funciona ahora hasta el 30 de noviembre de 2026. Solidon3D 1.0 está prevista para el 1 de diciembre y sus proyectos se conservan.
 - En el Mac, Solidon necesita ahora macOS 14 o más reciente. Cualquier Mac desde 2018 puede instalarlo gratis.
 - Solidon ya arranca en los Mac con Intel y macOS 26. La versión 0.5.3 se quedaba colgada allí al iniciar.
+- En los Mac con Intel, Solidon avisa ahora cuando un redondeo o un chaflán en un cuerpo exacto no se puede construir. La versión 0.5.3 se cerraba en ese momento.
 - En el Mac, *Cancelar* detiene al instante una respuesta en curso del modelo local.
 - En el Mac, Retorno abre la entrada seleccionada en la pantalla de inicio, en *Buscar función* y en el informe de comprobación.
 - En Linux, la escritura con Fcitx5 e IBus llega ahora al campo de texto también en el Flatpak y en el AppImage.
@@ -111,6 +112,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
 - Incluso con el ordenador a plena carga, Solidon indica el motivo real al detener un slicer, en lugar de un tiempo agotado. Un archivo de impresión terminado se aprovecha.
 - El almacén de filamentos vuelve a reconocer un consumo descontado con Solidon 0.5.1 y pregunta antes de descontar otra vez la misma impresión.
+- Desde esta versión, un consumo descontado sigue unido a su impresión aunque una actualización calcule más rápido o cambie el perfil del fabricante en el slicer. Antes contaba como nueva.
+- Donde cúpulas planas y pendientes mostrarían escalones, Solidon sugiere capas finas solo allí. La sugerencia indica cuánto más tarda entonces la pieza.
+- Nuevo en los ajustes de impresión: *Capas finas* y *Grosor mínimo superior*, para que las caras superiores sobre capas finas queden cerradas.
 
 ### Roscas, taladros y piezas normalizadas
 

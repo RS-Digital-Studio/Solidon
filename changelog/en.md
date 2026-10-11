@@ -22,6 +22,7 @@ it into `website/version.json`.
 - The demo now runs until 30 November 2026. Solidon3D 1.0 is planned for 1 December, and your projects are kept.
 - On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on can install it for free.
 - Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.
+- On Intel Macs, Solidon now reports when a fillet or chamfer on an exact body cannot be built. Version 0.5.3 quit at that point.
 - On the Mac, *Cancel* stops a running answer from the local model at once.
 - On the Mac, Return opens the selected entry on the start screen, in *Search functions* and in the report.
 - On Linux, input through Fcitx5 and IBus now reaches the text field in the Flatpak and the AppImage too.
@@ -110,6 +111,9 @@ it into `website/version.json`.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
 - The filament inventory again recognises a booking from Solidon 0.5.1 as an earlier booking and asks before deducting the same print again.
+- From this version on, a booking stays with its print, even when an update calculates faster or the manufacturer profile in the slicer changes. Previously, such a print counted as new.
+- Where shallow domes and slopes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the part then takes to print.
+- New in the print settings: *Fine layers* and *Minimum top thickness*, so top surfaces over fine layers stay closed.
 
 ### Threads, holes and standard parts
 

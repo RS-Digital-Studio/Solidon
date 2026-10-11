@@ -23,6 +23,7 @@ dans `website/version.json`.
 - La démo fonctionne désormais jusqu'au 30 novembre 2026. Solidon3D 1.0 est prévu pour le 1er décembre, et vos projets sont conservés.
 - Sur Mac, Solidon demande désormais macOS 14 ou plus récent. Tout Mac à partir de 2018 peut l'installer gratuitement.
 - Solidon démarre désormais sur les Mac Intel sous macOS 26. La version 0.5.3 y restait bloquée au démarrage.
+- Sur les Mac Intel, Solidon signale désormais qu'un congé ou un chanfrein sur un corps exact ne peut pas être construit. La version 0.5.3 se fermait à ce moment-là.
 - Sur Mac, *Annuler* interrompt aussitôt une réponse en cours du modèle local.
 - Sur Mac, Retour ouvre l'entrée sélectionnée sur l'écran d'accueil, dans *Rechercher une fonction* et dans le rapport de contrôle.
 - Sous Linux, la saisie par Fcitx5 et IBus arrive désormais dans le champ de texte, aussi dans le Flatpak et l'AppImage.
@@ -111,6 +112,9 @@ dans `website/version.json`.
 - Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
 - Même sur un ordinateur entièrement chargé, Solidon indique la vraie raison après l'arrêt d'un slicer, au lieu d'un délai dépassé. Un fichier d'impression terminé est repris.
 - Le stock de filament reconnaît de nouveau une consommation décomptée avec Solidon 0.5.1 et demande avant de décompter à nouveau la même impression.
+- Désormais, une consommation décomptée reste liée à son impression, même si une mise à jour calcule plus vite ou si le slicer change le profil du fabricant. Avant, l'impression comptait comme nouvelle.
+- Là où des dômes plats et des pentes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression de la pièce s'allonge.
+- Nouveau dans les réglages d'impression : *Couches fines* et *Épaisseur minimale du dessus*, pour que les dessus sur des couches fines restent fermés.
 
 ### Filetages, perçages et pièces normalisées
 

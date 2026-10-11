@@ -33,122 +33,33 @@ from app.core.perceive.match_records import (
     validate_edge_answer,
     validate_matches,
 )
-from app.core.registry import REGISTRY, Registry
-from app.core.scene import FORMAT_VERSION, EdgeTarget, History, ResultCache, evaluate
+from app.core.registry import REGISTRY
+from app.core.scene import FORMAT_VERSION, History, ResultCache, evaluate
 from app.core.scene.edge_binding import bind_edges
 from app.core.scene.history import _copy_operation_matches
 from app.core.scene.project import load, project_data, save
-from app.core.types import Document, OpContext, Operation, OpResult, SceneObject
-from tests.helpers import exact_kernel
+from app.core.types import Document, Operation
+from tests.helpers import (
+    COLLIDING_EDGE_KEY,
+    EDGE_PAIR_DEPTH,
+    EDGE_PAIR_GAP,
+    EDGE_PAIR_HEIGHT,
+    EDGE_PAIR_WIDTH,
+    EdgeChooser,
+    edge_document,
+    edge_pair,
+    edge_pair_mesh,
+    edge_registry,
+    exact_kernel,
+    left_box,
+    right_box,
+)
 
-WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
-#: Zwei Quader, deren Nachbarkanten vier Tausendstel auseinanderliegen — der
-#: gerundete Schlüssel unterscheidet sie nicht.
-GAP = 0.004
-COLLIDING_KEY = f"e:0.00,{DEPTH / 2:.2f},{HEIGHT / 2:.2f}:0.000,0.000,1.000"
-
-
-def _mesh_pair() -> MeshData:
-    left = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
-    left.apply_translation((-WIDTH / 2.0, 0.0, HEIGHT / 2.0))
-    right = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
-    right.apply_translation((WIDTH / 2.0 + GAP, 0.0, HEIGHT / 2.0))
-    return MeshData(trimesh.util.concatenate([left, right]))
-
-
-def _brep_pair() -> Any:
-    exact_kernel()
-    from OCP.BRep import BRep_Builder
-    from OCP.TopoDS import TopoDS_Compound
-
-    from app.core.brep import edit
-    from app.core.brep.kernel import Solid
-
-    builder = BRep_Builder()
-    compound = TopoDS_Compound()
-    builder.MakeCompound(compound)
-    builder.Add(
-        compound, edit.moved(edit.box(WIDTH, DEPTH, HEIGHT), (-WIDTH / 2.0, 0.0, 0.0)).shape
-    )
-    builder.Add(
-        compound, edit.moved(edit.box(WIDTH, DEPTH, HEIGHT), (WIDTH / 2.0 + GAP, 0.0, 0.0)).shape
-    )
-    return Solid(compound)
-
-
-def _body(backend: str) -> tuple[Any, str]:
-    if backend == "mesh":
-        return _mesh_pair(), "mesh"
-    return _brep_pair(), "brep"
-
-
-def _document(
-    keys: str, *, operation: str = "fillet_edges", choice: str = "named", size: float = 2.0
-) -> Document:
-    measure = "distance" if operation == "chamfer_edges" else "radius"
-    return Document(
-        format_version=1,
-        app_version="0.0.1",
-        ops=[
-            Operation(id=1, op="create_brep_cylinder", inputs=[], outputs=["obj_1"], params={}),
-            Operation(
-                id=2,
-                op=operation,
-                inputs=["obj_1"],
-                outputs=["obj_1"],
-                params={measure: size, "edges": choice, "edge_keys": keys},
-            ),
-        ],
-    )
-
-
-def _registry(body: Any, kind: str, operation: str = "fillet_edges") -> Registry:
-    """Die echte Kantenoperation hinter einer Quelle, die den Prüfkörper liefert."""
-    load_operations()
-
-    def make_body(ctx: OpContext) -> OpResult:
-        return OpResult(outputs=[SceneObject(id="", name="Paar", mesh=body, kind=kind)])
-
-    registry = Registry()
-    registry.register(dataclasses.replace(REGISTRY.get("create_brep_cylinder"), fn=make_body))
-    registry.register(REGISTRY.get(operation))
-    return registry
-
-
-class _EdgeChooser:
-    """Antwortet wie ein Kunde, der die Kante im Bild anklickt, die ``pick`` beschreibt."""
-
-    def __init__(self, pick: Callable[[EdgeTarget], bool]) -> None:
-        self.pick = pick
-        self.asked: list[str] = []
-        self.offered: list[list[str]] = []
-        self.previews: list[Any] = []
-        self.targets: tuple[EdgeTarget, ...] = ()
-        self.cleared = 0
-
-    def context(self, preview: Any, candidates: tuple[Any, ...]) -> None:
-        if preview is None:
-            self.cleared += 1
-            return
-        self.previews.append(preview)
-        assert all(isinstance(entry, EdgeTarget) for entry in candidates)
-        self.targets = candidates
-
-    def __call__(self, question: str, choices: list[str]) -> str:
-        self.asked.append(question)
-        self.offered.append(list(choices))
-        for target in self.targets:
-            if target.token in choices and self.pick(target):
-                return target.token
-        pytest.fail(f"kein passender Kandidat: {self.targets}")
-
-
-def _right_box(target: EdgeTarget) -> bool:
-    return target.middle[0] > GAP / 2.0
-
-
-def _left_box(target: EdgeTarget) -> bool:
-    return target.middle[0] < GAP / 2.0
+#: Das Kantenpaar mit gleichem Schlüssel liegt in ``tests.helpers``; der
+#: Verbrauchsabdruck (RM-706) prüft daran die Kantenantwort.
+WIDTH, DEPTH, HEIGHT = EDGE_PAIR_WIDTH, EDGE_PAIR_DEPTH, EDGE_PAIR_HEIGHT
+GAP = EDGE_PAIR_GAP
+COLLIDING_KEY = COLLIDING_EDGE_KEY
 
 
 @pytest.fixture
@@ -227,11 +138,11 @@ def test_a_colliding_key_asks_before_the_cache_and_binds_the_chosen_edge(
     backend: str, captured: dict[str, Any]
 ) -> None:
     """Zwei Kanten, ein Schlüssel: Der Kunde wählt im Bild, der Kern bekommt genau die."""
-    body, kind = _body(backend)
-    document = _document(COLLIDING_KEY)
-    registry = _registry(body, kind)
+    body, kind = edge_pair(backend)
+    document = edge_document(COLLIDING_KEY)
+    registry = edge_registry(body, kind)
     cache = ResultCache()
-    chooser = _EdgeChooser(_right_box)
+    chooser = EdgeChooser(right_box)
 
     result = evaluate(
         document,
@@ -303,25 +214,25 @@ def test_a_different_answer_is_a_different_key_and_result(
     backend: str, captured: dict[str, Any]
 ) -> None:
     """Dieselben Parameter, derselbe Eingang, andere Kante: ein anderer Cacheeintrag."""
-    body, kind = _body(backend)
-    registry = _registry(body, kind)
+    body, kind = edge_pair(backend)
+    registry = edge_registry(body, kind)
     cache = ResultCache()
     first = evaluate(
-        _document(COLLIDING_KEY),
+        edge_document(COLLIDING_KEY),
         _profile(),
         registry=registry,
         cache=cache,
-        ask=(right := _EdgeChooser(_right_box)),
+        ask=(right := EdgeChooser(right_box)),
         question_context=right.context,
     )
     right_middle = _bound_middle(captured)
     entries_after_first = len(cache)
     second = evaluate(
-        _document(COLLIDING_KEY),
+        edge_document(COLLIDING_KEY),
         _profile(),
         registry=registry,
         cache=cache,
-        ask=(left := _EdgeChooser(_left_box)),
+        ask=(left := EdgeChooser(left_box)),
         question_context=left.context,
     )
     left_middle = _bound_middle(captured)
@@ -337,11 +248,11 @@ def test_a_different_answer_is_a_different_key_and_result(
 @pytest.mark.parametrize("backend", ["mesh", "brep"])
 def test_without_anyone_to_ask_the_collision_is_a_finding_with_the_candidates(backend: str) -> None:
     """Kommandozeile und Agent: Halt vor dem Verbraucher, die Kandidaten als Vorschläge."""
-    body, kind = _body(backend)
+    body, kind = edge_pair(backend)
     cache = ResultCache()
 
     result = evaluate(
-        _document(COLLIDING_KEY), _profile(), registry=_registry(body, kind), cache=cache
+        edge_document(COLLIDING_KEY), _profile(), registry=edge_registry(body, kind), cache=cache
     )
 
     assert result.stopped_at == 2 and not result.matches and not result.answers
@@ -356,13 +267,13 @@ def test_without_anyone_to_ask_the_collision_is_a_finding_with_the_candidates(ba
 
 
 def test_an_answer_outside_the_offer_stops_without_a_record() -> None:
-    body, kind = _body("mesh")
-    chooser = _EdgeChooser(_right_box)
+    body, kind = edge_pair("mesh")
+    chooser = EdgeChooser(right_box)
 
     result = evaluate(
-        _document(COLLIDING_KEY),
+        edge_document(COLLIDING_KEY),
         _profile(),
-        registry=_registry(body, kind),
+        registry=edge_registry(body, kind),
         ask=lambda question, choices: "irgendwas",
         question_context=chooser.context,
     )
@@ -375,13 +286,13 @@ def test_an_answer_outside_the_offer_stops_without_a_record() -> None:
 
 def test_a_saved_answer_holds_only_for_the_same_input_version(captured: dict[str, Any]) -> None:
     """Ein anderer Eingang — hier ein anderes Paar — ist ein anderer Scope: neue Frage."""
-    body, kind = _body("mesh")
-    document = _document(COLLIDING_KEY)
-    chooser = _EdgeChooser(_right_box)
+    body, kind = edge_pair("mesh")
+    document = edge_document(COLLIDING_KEY)
+    chooser = EdgeChooser(right_box)
     first = evaluate(
         document,
         _profile(),
-        registry=_registry(body, kind),
+        registry=edge_registry(body, kind),
         ask=chooser,
         question_context=chooser.context,
     )
@@ -393,11 +304,11 @@ def test_a_saved_answer_holds_only_for_the_same_input_version(captured: dict[str
     right.apply_translation((WIDTH / 2.0 + GAP, 0.0, HEIGHT / 2.0))
     # Derselbe Körper unter einem anderen Erzeugerschlüssel: ein anderer Eingangshash.
     document.ops[0] = dataclasses.replace(document.ops[0], params={"diameter": 12.0})
-    again_chooser = _EdgeChooser(_left_box)
+    again_chooser = EdgeChooser(left_box)
     again = evaluate(
         document,
         _profile(),
-        registry=_registry(MeshData(trimesh.util.concatenate([taller, right])), kind),
+        registry=edge_registry(MeshData(trimesh.util.concatenate([taller, right])), kind),
         ask=again_chooser,
         question_context=again_chooser.context,
     )
@@ -411,13 +322,13 @@ def test_a_saved_answer_holds_only_for_the_same_input_version(captured: dict[str
 def test_a_stored_answer_whose_fingerprints_no_longer_tell_the_edges_apart_asks_again(
     captured: dict[str, Any],
 ) -> None:
-    body, kind = _body("mesh")
-    document = _document(COLLIDING_KEY)
-    chooser = _EdgeChooser(_right_box)
+    body, kind = edge_pair("mesh")
+    document = edge_document(COLLIDING_KEY)
+    chooser = EdgeChooser(right_box)
     first = evaluate(
         document,
         _profile(),
-        registry=_registry(body, kind),
+        registry=edge_registry(body, kind),
         ask=chooser,
         question_context=chooser.context,
     )
@@ -426,12 +337,12 @@ def test_a_stored_answer_whose_fingerprints_no_longer_tell_the_edges_apart_asks_
     # Beide Kandidaten tragen denselben Abdruck: keine belegte Wahl mehr.
     record["candidates"][COLLIDING_KEY][1] = dict(record["candidates"][COLLIDING_KEY][0])
     History(document).record_matches(first.matches)
-    again_chooser = _EdgeChooser(_right_box)
+    again_chooser = EdgeChooser(right_box)
 
     again = evaluate(
         document,
         _profile(),
-        registry=_registry(body, kind),
+        registry=edge_registry(body, kind),
         ask=again_chooser,
         question_context=again_chooser.context,
     )
@@ -443,12 +354,12 @@ def test_a_group_choice_binds_nothing_even_with_colliding_keys_in_the_field(
     captured: dict[str, Any],
 ) -> None:
     """Das ausgegraute Feld hat keine Meinung: Die Gruppe rechnet wie bisher, ohne Frage."""
-    body, kind = _body("mesh")
+    body, kind = edge_pair("mesh")
 
     result = evaluate(
-        _document(COLLIDING_KEY, choice="vertical"),
+        edge_document(COLLIDING_KEY, choice="vertical"),
         _profile(),
-        registry=_registry(body, kind),
+        registry=edge_registry(body, kind),
         ask=lambda *_: pytest.fail("eine Gruppe fragt nicht"),
     )
 
@@ -458,7 +369,7 @@ def test_a_group_choice_binds_nothing_even_with_colliding_keys_in_the_field(
 def test_a_unique_key_is_bound_without_a_question_and_reaches_the_kernel(
     captured: dict[str, Any],
 ) -> None:
-    body, kind = _body("brep")
+    body, kind = edge_pair("brep")
     unique = next(
         entry
         for entry in edges.edges_in_kernel(body, "brep")[1]
@@ -466,9 +377,9 @@ def test_a_unique_key_is_bound_without_a_question_and_reaches_the_kernel(
     )
 
     result = evaluate(
-        _document(edge_key(unique)),
+        edge_document(edge_key(unique)),
         _profile(),
-        registry=_registry(body, kind),
+        registry=edge_registry(body, kind),
         ask=lambda *_: pytest.fail("ein eindeutiger Schlüssel fragt nicht"),
     )
 
@@ -483,13 +394,13 @@ def test_the_alias_case_becomes_a_parameter_not_a_record(captured: dict[str, Any
     exact_kernel()
     tube = edit.boolean("difference", [edit.cylinder(20.0, HEIGHT), edit.cylinder(10.0, HEIGHT)])
     legacy = f"e:0.00,0.00,{HEIGHT:.2f}:0.000,0.000,0.000"
-    document = _document(legacy)
-    outer = _EdgeChooser(lambda target: target.length > 2.0 * math.pi * 7.5)
+    document = edge_document(legacy)
+    outer = EdgeChooser(lambda target: target.length > 2.0 * math.pi * 7.5)
 
     result = evaluate(
         document,
         _profile(),
-        registry=_registry(tube, "brep"),
+        registry=edge_registry(tube, "brep"),
         ask=outer,
         question_context=outer.context,
     )
@@ -505,7 +416,7 @@ def test_the_alias_case_becomes_a_parameter_not_a_record(captured: dict[str, Any
     again = evaluate(
         document,
         _profile(),
-        registry=_registry(tube, "brep"),
+        registry=edge_registry(tube, "brep"),
         ask=lambda *_: pytest.fail("der eindeutige Schlüssel fragt nicht mehr"),
     )
     assert again.complete and not again.answers
@@ -513,13 +424,13 @@ def test_the_alias_case_becomes_a_parameter_not_a_record(captured: dict[str, Any
 
 def test_the_bead_binds_on_the_mesh_even_for_an_exact_body(captured: dict[str, Any]) -> None:
     """*Wulst* vereinigt am Netz, also fragt die Bindung an den Zügen des Netzes."""
-    body, kind = _body("brep")
-    chooser = _EdgeChooser(_right_box)
+    body, kind = edge_pair("brep")
+    chooser = EdgeChooser(right_box)
 
     result = evaluate(
-        _document(COLLIDING_KEY, operation="bead_edges", size=1.5),
+        edge_document(COLLIDING_KEY, operation="bead_edges", size=1.5),
         _profile(),
-        registry=_registry(body, kind, "bead_edges"),
+        registry=edge_registry(body, kind, "bead_edges"),
         ask=chooser,
         question_context=chooser.context,
     )
@@ -553,7 +464,7 @@ def test_bind_edges_leaves_operations_without_an_edge_field_alone() -> None:
 
 @pytest.mark.parametrize("work", [edges.round_edges, edges.bevel_edges, edges.bead_edges])
 def test_an_explicit_selection_takes_precedence_over_keys_and_group_on_a_mesh(work: Any) -> None:
-    body = _mesh_pair()
+    body = edge_pair_mesh()
     found = edges_of(body)
     wanted_index = next(
         index for index, entry in enumerate(found) if entry.middle[0] > GAP / 2 and entry.upright
@@ -574,7 +485,7 @@ def test_an_explicit_selection_takes_precedence_over_keys_and_group_on_a_mesh(wo
 
 @pytest.mark.parametrize("indices", [(), (-1,), (10**6,), (1.5,), (True,), ("0",)], ids=repr)
 def test_an_invalid_mesh_selection_is_rejected_with_the_shared_sentence(indices: Any) -> None:
-    body = _mesh_pair()
+    body = edge_pair_mesh()
     with pytest.raises(ValidationError) as rejected:
         edges.round_edges(body, 2.0, "all", selected_edges=indices)
     assert rejected.value.detail == EDGE_SELECTION_REJECTED
@@ -721,16 +632,16 @@ def test_the_project_schema_rejects_an_edge_answer_on_a_body_that_is_not_an_inpu
 
 
 def test_an_edge_answer_survives_save_and_load() -> None:
-    body, kind = _body("mesh")
+    body, kind = edge_pair("mesh")
     from app.core.scene.project import ProjectSources, new_project
 
     project = new_project("centauri-carbon-2", "petg")
-    project.document.ops.extend(_document(COLLIDING_KEY).ops)
-    chooser = _EdgeChooser(_right_box)
+    project.document.ops.extend(edge_document(COLLIDING_KEY).ops)
+    chooser = EdgeChooser(right_box)
     result = evaluate(
         project.document,
         _profile(),
-        registry=_registry(body, kind),
+        registry=edge_registry(body, kind),
         ask=chooser,
         question_context=chooser.context,
         sources=ProjectSources(project),

@@ -47,6 +47,7 @@ Nutzen da und sonst nichts.
 - Die Demo läuft jetzt bis zum 30. November 2026. Solidon3D 1.0 ist für den 1. Dezember geplant, Ihre Projekte bleiben erhalten.
 - Am Mac braucht Solidon jetzt macOS 14 oder neuer. Jeder Mac ab 2018 kann es kostenlos installieren.
 - Auf Intel-Macs mit macOS 26 startet Solidon jetzt. Version 0.5.3 blieb dort beim Start hängen.
+- Auf Intel-Macs meldet Solidon jetzt, wenn sich eine Verrundung oder Fase am exakten Körper nicht bauen lässt. Version 0.5.3 beendete sich dabei.
 - Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
 - Am Mac öffnet Return den gewählten Eintrag im Startbildschirm, in *Funktion suchen* und im Prüfbericht.
 - Unter Linux kommen Eingaben über Fcitx5 und IBus jetzt auch im Flatpak und im AppImage im Textfeld an.
@@ -135,6 +136,9 @@ Nutzen da und sonst nichts.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
 - Das Filamentlager erkennt eine Buchung aus Solidon 0.5.1 wieder als frühere Buchung und fragt nach, bevor es denselben Druck erneut abbucht.
+- Ab dieser Version bleibt eine Buchung ihrem Druck zugeordnet, auch wenn ein Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
+- Wo flache Kuppen und Schrägen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger das Teil dann druckt.
+- Neu in den Druckeinstellungen: *Feine Schichten* und *Deckschichten mindestens*, damit Oberseiten über feinen Schichten dicht bleiben.
 
 ### Gewinde, Bohrungen und Normteile
 

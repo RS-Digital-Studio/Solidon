@@ -22,6 +22,7 @@ scrive in `website/version.json`.
 - La demo ora funziona fino al 30 novembre 2026. Solidon3D 1.0 è prevista per il 1º dicembre e i tuoi progetti restano.
 - Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi può installarlo gratuitamente.
 - Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.
+- Sui Mac Intel, Solidon ora segnala quando un raccordo o uno smusso su un corpo esatto non si può costruire. La versione 0.5.3 si chiudeva in quel momento.
 - Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
 - Su Mac, Invio apre la voce selezionata nella schermata iniziale, in *Cerca funzione* e nel rapporto di verifica.
 - Su Linux, la scrittura con Fcitx5 e IBus arriva ora nel campo di testo anche nel Flatpak e nell'AppImage.
@@ -110,6 +111,9 @@ scrive in `website/version.json`.
 - Anche con stampanti che PrusaSlicer o SuperSlicer non conoscono, entrambi stimano il tempo di stampa con le accelerazioni trasmesse, e il file indica il materiale della bobina.
 - Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.
 - Il magazzino filamenti riconosce di nuovo un consumo scaricato con Solidon 0.5.1 e chiede prima di scaricare di nuovo la stessa stampa.
+- Da questa versione un consumo scaricato resta legato alla sua stampa, anche se un aggiornamento calcola più in fretta o cambia il profilo del produttore nello slicer. Prima contava come nuova.
+- Dove cupole piatte e pendenze mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa del pezzo.
+- Novità nelle impostazioni di stampa: *Strati fini* e *Spessore minimo superiore*, perché le superfici superiori sopra strati fini restino chiuse.
 
 ### Filettature, fori e componenti normalizzati
 

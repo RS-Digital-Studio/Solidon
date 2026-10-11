@@ -534,7 +534,10 @@ _REFUSALS_KEPT: Final = 256
 #:   sobald einer selbst die volle Umdrehung trägt
 #:   (``brep.features._cylinder_group_extent``). Gespeicherte exakte Erkennungen
 #:   nannten die Bohrung durch berührende Platten angeschnitten.
-CACHE_FORMAT_VERSION: Final = 54
+#: - 55 (Intel-Mac): Ebene Dicht- und erkannte Flächen nennen ihre Normale
+#:   ohne ``trimesh``s Kehrwert, waagrechte genau als Achse. Gespeicherte
+#:   Erkennungen trügen ``±0.9999999999999999`` je nach erstem Dreieck.
+CACHE_FORMAT_VERSION: Final = 55
 
 
 @dataclass(frozen=True, slots=True)

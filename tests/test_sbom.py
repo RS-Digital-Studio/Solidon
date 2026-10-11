@@ -442,8 +442,21 @@ def test_the_build_creates_and_bundles_the_sbom_from_the_target_environment() ->
     assert "Test-Json" in package_job
 
 
-def test_the_emitted_subset_stays_inside_the_official_schema_contract() -> None:
-    """Der vollständige Schema-Lauf steht im Build; hier bleibt unser Ausschnitt klein."""
+@pytest.mark.parametrize("runner", ["here", "intel-mac"])
+def test_the_emitted_subset_stays_inside_the_official_schema_contract(
+    runner: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der vollständige Schema-Lauf steht im Build; hier bleibt unser Ausschnitt klein.
+
+    Einmal auf dieser Maschine und einmal als Intel-Mac-Läufer nachgestellt
+    (python.org-Universalfassung auf x86_64): Nur dort trägt OCP pedigree
+    (RM-768), und unter Windows sähe niemand, ob der Ausschnitt es zulässt.
+    """
+    import sysconfig
+
+    if runner == "intel-mac":
+        monkeypatch.setattr(sysconfig, "get_platform", lambda: "macosx-10.13-universal2")
+        monkeypatch.setattr(make_sbom, "this_machine", lambda: "x86_64")
     bom = make_sbom.build_bom()
     assert set(bom) == {
         "$schema",
@@ -467,7 +480,13 @@ def test_the_emitted_subset_stays_inside_the_official_schema_contract() -> None:
     assert set(product["supplier"]) == {"name"}
     assert all(set(entry) == {"name", "value"} for entry in metadata["properties"])
 
+    target = next(
+        entry["value"]
+        for entry in metadata["properties"]
+        if entry["name"] == "solidon:target-platform"
+    )
     references = {product["bom-ref"]}
+    modified = 0
     for component in bom["components"]:
         common = {"type", "bom-ref", "name", "version", "purl", "licenses"}
         assert component["type"] in {"library", "file"}
@@ -476,8 +495,21 @@ def test_the_emitted_subset_stays_inside_the_official_schema_contract() -> None:
             assert str(component["bom-ref"]).startswith("urn:solidon:native-file:")
             assert component["properties"]
         elif str(component["purl"]).startswith("pkg:pypi/"):
-            assert set(component) == common
+            pedigree = make_sbom.modified_pedigree(
+                str(component["name"]), str(component["version"]), target, make_sbom.this_machine()
+            )
+            assert set(component) == common | ({"pedigree"} if pedigree else set())
             assert PURL.fullmatch(component["purl"])
+            if pedigree:
+                modified += 1
+                assert component["pedigree"] == pedigree
+                assert set(pedigree) == {"patches", "notes"}
+                for patch in pedigree["patches"]:
+                    assert set(patch) == {"type", "resolves"}
+                    assert patch["type"] in {"unofficial", "monkey", "backport", "cherry-pick"}
+                    for issue in patch["resolves"]:
+                        assert set(issue) == {"type", "id", "name", "description", "references"}
+                        assert issue["type"] in {"defect", "enhancement", "security"}
         else:
             assert set(component) == common | {"externalReferences", "properties"}
             assert str(component["purl"]).startswith("pkg:generic/")
@@ -495,6 +527,9 @@ def test_the_emitted_subset_stays_inside_the_official_schema_contract() -> None:
         assert set(dependency) == {"ref", "dependsOn"}
         assert dependency["ref"] in references
         assert set(dependency["dependsOn"]) <= references
+    # Auf dem echten Intel-Läufer trägt auch „here“ die geänderte Komponente.
+    if runner == "intel-mac":
+        assert modified == 1
 
 
 def test_the_product_root_uses_the_declared_distribution_name() -> None:
@@ -655,3 +690,34 @@ def test_the_appimage_kernel_is_recognised_despite_its_filled_checksum(tmp_path:
     (tmp_path / "kein.AppImage").write_bytes(b"#!/bin/sh")
     with pytest.raises(RuntimeError, match="ELF"):
         make_sbom.appimage_runtime_sha256(tmp_path / "kein.AppImage")
+
+
+@pytest.mark.parametrize(
+    ("target", "machine", "modified"),
+    [
+        ("macosx-11.0-x86_64", "x86_64", True),
+        ("macosx-10.13-universal2", "x86_64", True),
+        ("macosx-14.0-arm64", "arm64", False),
+        ("win-amd64", "AMD64", False),
+        ("linux-x86_64", "x86_64", False),
+    ],
+)
+def test_the_intel_mac_sbom_names_the_corrected_ocp_libraries(target, machine, modified) -> None:
+    """RM-768: Nur im Intel-Mac-Paket trägt OCP ``pedigree`` mit Werkzeug, Fehler und Meldung."""
+    from tools import fix_unwind_info
+
+    bom = make_sbom.build_bom(platform=target, machine=machine)
+    component = _components(bom)[fix_unwind_info.WHEEL]
+    assert ("pedigree" in component) is modified
+    if modified:
+        pedigree = component["pedigree"]
+        assert pedigree["patches"][0]["type"] == "unofficial"  # type: ignore[index]
+        resolved = pedigree["patches"][0]["resolves"][0]  # type: ignore[index]
+        assert resolved["id"] == "RM-768"
+        assert resolved["references"] == ["https://github.com/CadQuery/ocp-build-system/issues/67"]
+        assert "tools/fix_unwind_info.py" in pedigree["notes"]  # type: ignore[index]
+    assert not any(
+        "pedigree" in other
+        for name, other in _components(bom).items()
+        if name != fix_unwind_info.WHEEL
+    )

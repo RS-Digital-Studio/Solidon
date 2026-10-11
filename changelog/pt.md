@@ -22,6 +22,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A demo funciona agora até 30 de novembro de 2026. O Solidon3D 1.0 está previsto para 1 de dezembro e os seus projetos mantêm-se.
 - No Mac, o Solidon precisa agora do macOS 14 ou mais recente. Qualquer Mac a partir de 2018 pode instalá-lo gratuitamente.
 - O Solidon arranca agora nos Mac Intel com macOS 26. A versão 0.5.3 ficava aí bloqueada no arranque.
+- Nos Mac Intel, o Solidon indica agora quando um arredondamento ou um chanfro num corpo exato não pode ser construído. A versão 0.5.3 fechava-se nesse momento.
 - No Mac, *Cancelar* interrompe de imediato uma resposta em curso do modelo local.
 - No Mac, Return abre a entrada selecionada no ecrã inicial, em *Pesquisar função* e no relatório de verificação.
 - No Linux, a escrita com Fcitx5 e IBus chega agora ao campo de texto também no Flatpak e no AppImage.
@@ -110,6 +111,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Também com impressoras que o PrusaSlicer ou o SuperSlicer não conhecem, ambos calculam o tempo de impressão com as acelerações entregues, e o ficheiro indica o material da bobina.
 - Mesmo com o computador em plena carga, o Solidon indica o motivo real ao parar um slicer, em vez de um tempo esgotado. Um ficheiro de impressão terminado é aproveitado.
 - O armazém de filamentos volta a reconhecer um consumo descontado com o Solidon 0.5.1 e pergunta antes de descontar de novo a mesma impressão.
+- A partir desta versão, um consumo descontado fica ligado à sua impressão, mesmo que uma atualização calcule mais depressa ou o perfil do fabricante mude no slicer. Antes contava como nova.
+- Onde cúpulas planas e rampas mostrariam degraus, o Solidon sugere camadas finas só aí. A sugestão indica quanto mais tempo a peça demora a imprimir.
+- Novo nas definições de impressão: *Camadas finas* e *Espessura mínima superior*, para que as faces superiores sobre camadas finas fiquem fechadas.
 
 ### Roscas, furos e peças normalizadas
 
