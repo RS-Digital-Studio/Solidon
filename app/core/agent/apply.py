@@ -196,7 +196,12 @@ def record(
     answer = ChatEntry(
         id=_identifier(),
         role="agent",
-        text=proposal.answer.strip() or proposal.summary(),
+        # Ein Satz des Backends (``Proposal.notices``) steht vor der Antwort.
+        text="\n\n".join(
+            part
+            for part in (*proposal.notices, proposal.answer.strip() or proposal.summary())
+            if part
+        ),
         transaction_id=None if discarded else (transaction.id if transaction else None),
         origin=proposal.origin,
         discarded=discarded,

@@ -60,6 +60,9 @@ class Proposal:
     questions: list[Question] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
     """Was die Prüfung nach jeder Operation gefunden hat (§26.5)."""
+    notices: list[str] = field(default_factory=list)
+    """Sätze des Backends zu diesem Zug (``Reply.notices``), jeder einmal —
+    sie stehen im Chat vor der Antwort."""
     origin: Origin = field(default_factory=lambda: Origin(by="agent"))
     steps: int = 0
     input_tokens: int = 0

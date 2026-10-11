@@ -29,7 +29,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar, Final, Literal, Protocol
 
 from app.core.backends import keys
@@ -61,7 +61,7 @@ from app.core.http import (
 from app.core.json_boundary import loads as load_json
 from app.core.log import get_logger, redact_external, redact_url
 from app.core.types import CancelToken
-from app.i18n import TranslatableText, _
+from app.i18n import TranslatableText, _, tr
 
 _log = get_logger(__name__)
 
@@ -287,6 +287,11 @@ class Reply:
     """Der Teil von :attr:`input_tokens`, der in den Zwischenspeicher
     geschrieben wurde (``cache_creation_input_tokens``)."""
     output_tokens: int = 0
+    notices: tuple[str, ...] = ()
+    """Was der Kunde zu diesem Schritt wissen muss, ohne dass etwas
+    fehlschlug — etwa, dass ein anderes Modell antwortet als die fehlende
+    Vorgabe (:meth:`OllamaBackend._stand_in`). Die Sitzung stellt es einmal
+    vor die Antwort im Chat (Regel 21: nicht still)."""
 
     @property
     def budget_input_tokens(self) -> int:
@@ -842,6 +847,10 @@ class ModelNotInstalled(BackendUnavailable):
     auf das lokale Modell wechselt: Die Vorgabe ist :data:`DEFAULT_OLLAMA_MODEL`,
     geholt wurde aber ein anderes oder keines. Der Ausweg liegt im Dialog, der
     Modelle herunterlädt und die geholten zur Wahl stellt.
+
+    Ist nichts gewählt und liegt ein empfohlenes Modell da, kommt es gar nicht
+    so weit: Dann antwortet dieses, mit einem Satz im Chat
+    (``OllamaBackend._stand_in``).
     """
 
     default_title = _("Das gewählte Modell ist bei Ollama nicht installiert.")
@@ -1616,6 +1625,9 @@ def default_ollama_model() -> str:
     Robert, „Voraussetzungen nennen, ansonsten so lassen“; Nachprüfung K, N4):
     Die Karte bestimmt dort nur den Satz. Ein Kunde ohne gemerktes Modell, der
     qwen3:14b geholt hat, fände nach einem Wechsel ein nicht installiertes vor.
+
+    **Fehlt die Vorgabe bei Ollama**, antwortet das erste empfohlene, das dort
+    liegt, und wird gemerkt (``OllamaBackend._stand_in``).
     """
     if not _machine.this_machine().apple_silicon:
         return DEFAULT_OLLAMA_MODEL
@@ -1640,6 +1652,11 @@ class OllamaBackend:
     # einem zweiten Rechner läuft (§38).
     url: str = field(default_factory=lambda: _configured_ollama_url())
     transport: Transport = post_json_local
+    #: Wie die Liste der geholten Modelle gefragt wird — ``None`` heißt über
+    #: das Netz (:func:`installed_models`). Gefragt wird nur nach einem 404
+    #: (:meth:`_stand_in`), nie beim Bauen: Das geschieht auch im
+    #: Einstellungsdialog.
+    fetch: Fetch | None = None
 
     #: Ob der letzte Zug auf einer Grafikkarte lief — ``None``, solange keiner
     #: gelaufen ist.
@@ -1798,6 +1815,51 @@ class OllamaBackend:
             cancelled=cancelled,
         )
 
+    def _send(self, payload: dict[str, Any], cancelled: CancelToken | None) -> dict[str, Any]:
+        """Eine Anfrage an ``/api/chat``, abbrechbar, wo der Transport es kann."""
+        address = ollama_endpoint(self.url)
+        if cancelled is not None and self.transport is post_json_local:
+            return post_json_local_cancelable(address, {}, payload, cancelled)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        answer = self.transport(address, {}, payload)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        return answer
+
+    def _missing(self, error: BackendUnavailable) -> ModelNotInstalled | None:
+        """Der Fehler „Modell nicht geholt“, wenn Ollama ihn meint — sonst ``None``.
+
+        Kein ``reject``: Ollama hat keinen Schlüssel, den man falsch eintragen
+        könnte. Der Name gehört trotzdem in die Meldung — er ist die Antwort
+        auf „welches Modell denn?". Ollamas 404 auf ``/api/chat`` nennt das
+        fehlende Modell beim Namen; ein 404 ohne ihn ist eine falsche Adresse.
+        """
+        error.provider = error.provider or self.id
+        error.values.setdefault("provider", self.id)
+        reason = str(error.values.get("reason", ""))
+        if error.status == 404 and self.model in reason:
+            return ModelNotInstalled(self.model, reason=reason)
+        return None
+
+    def _stand_in(self) -> str | None:
+        """Welches empfohlene Modell für die fehlende Vorgabe antwortet — oder keines.
+
+        Nur, wenn der Kunde nichts gewählt hat und die Vorgabe fehlt
+        (S-20261010-e5014c, Entscheidung Robert): dann das erste aus
+        :data:`RECOMMENDATION_ORDER`, das bei dieser Adresse liegt. Ein
+        gewähltes Modell wird nie ersetzt, ein nicht empfohlenes nie genommen
+        — beides bleibt :class:`ModelNotInstalled`.
+        """
+        from app.core import discover
+
+        if discover.remembered(OLLAMA_MODEL_SETTING) or self.model != default_ollama_model():
+            return None
+        there = set(installed_models(self.url, self.fetch or _get_json))
+        return next(
+            (name for name in RECOMMENDATION_ORDER if name != self.model and name in there), None
+        )
+
     def _complete(
         self,
         messages: Sequence[Message],
@@ -1845,32 +1907,45 @@ class OllamaBackend:
                 for entry in tools
             ]
 
+        notices: tuple[str, ...] = ()
         try:
-            address = ollama_endpoint(self.url)
-            if cancelled is not None and self.transport is post_json_local:
-                answer = post_json_local_cancelable(address, {}, payload, cancelled)
-            else:
-                if cancelled is not None:
-                    cancelled.raise_if_cancelled()
-                answer = self.transport(address, {}, payload)
-                if cancelled is not None:
-                    cancelled.raise_if_cancelled()
+            answer = self._send(payload, cancelled)
         except BackendUnavailable as error:
-            # Kein ``reject``: Ollama hat keinen Schlüssel, den man falsch
-            # eintragen könnte. Der Name gehört trotzdem in die Meldung — er
-            # ist die Antwort auf „welches Modell denn?".
-            error.provider = error.provider or self.id
-            error.values.setdefault("provider", self.id)
-            reason = str(error.values.get("reason", ""))
-            # Ollamas 404 auf ``/api/chat`` nennt das fehlende Modell beim
-            # Namen; ein 404 ohne ihn ist eine falsche Adresse.
-            if error.status == 404 and self.model in reason:
-                raise ModelNotInstalled(self.model, reason=reason) from error
-            _with_model(error, self.model)
-            raise
+            missing = self._missing(error)
+            if missing is None:
+                _with_model(error, self.model)
+                raise
+            stand_in = self._stand_in()
+            if stand_in is None:
+                raise missing from error
+            # Genau ein zweiter Versuch, nie eine Schleife: Fehlt auch das
+            # Ersatzmodell, gilt der Fehler zum gewählten.
+            payload["model"] = stand_in
+            try:
+                answer = self._send(payload, cancelled)
+            except BackendUnavailable as again:
+                if again.status == 404:
+                    raise missing from again
+                _with_model(again, stand_in)
+                raise
+            _log.info("ollama model %s is not installed, %s answers instead", self.model, stand_in)
+            notices = (
+                tr(
+                    "„{missing}“ ist bei Ollama nicht installiert, deshalb antwortet "
+                    "„{model}“. Ein anderes Modell wählen Sie unter „Chat einrichten …“.",
+                    missing=self.model,
+                    model=stand_in,
+                ),
+            )
+            # Gemerkt, damit „Chat einrichten …“ das Modell nennt, das
+            # antwortet — und der nächste Zug nicht wieder erst scheitert.
+            self.model = stand_in
+            remember_ollama_model(stand_in)
         self.answered = True
         self.on_gpu = _ran_on_gpu(answer)
         reply = _from_ollama(answer, self.model)
+        if notices:
+            reply = replace(reply, notices=notices)
         length = request_length(payload)
         if prompt_was_cut(reply.input_tokens, length, OLLAMA_CONTEXT_TOKENS):
             raise BackendPromptTruncated(
@@ -2395,7 +2470,10 @@ def installed_models(url: str | None = None, fetch: Fetch = _get_json) -> tuple[
     address = ollama_endpoint(url or _configured_ollama_url(), "/api/tags")
     try:
         answer = fetch(address)
-    except UNUSABLE_ADDRESS:
+    except UNUSABLE_ADDRESS as error:
+        # Ein ``HTTPError`` hält die Antwort offen, bis jemand sie schließt.
+        if isinstance(error, urllib.error.HTTPError):
+            error.close()
         return ()
     return tuple(
         str(entry.get("name", "")) for entry in answer.get("models", ()) if entry.get("name")

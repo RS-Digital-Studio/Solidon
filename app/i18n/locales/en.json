@@ -8720,6 +8720,7 @@
   "„{file}“ ließ sich nicht wieder öffnen.": "“{file}” could not be opened again.",
   "„{font}“ gibt es nur in einem Schnitt. Wählen Sie „Normal“, oder nehmen Sie eine Schrift, die fett und kursiv mitbringt.": "“{font}” comes in one style only. Choose “Regular”, or take a font that brings bold and italic along.",
   "„{licence}“ ist keine der erlaubten Lizenzen.": "“{licence}” is not one of the permitted licences.",
+  "„{missing}“ ist bei Ollama nicht installiert, deshalb antwortet „{model}“. Ein anderes Modell wählen Sie unter „Chat einrichten …“.": "“{missing}” is not installed in Ollama, so “{model}” is answering. You can choose a different model under “Set up the chat …”.",
   "„{name}“ aus Schritt {step}": "“{name}” from step {step}",
   "„{name}“ entfällt": "“{name}” removed",
   "„{name}“ hat mehr Farben, als ein Körper Filamente trägt, {count} kamen ohne. „Filament auf eine Fläche“ weist sie zu.": "“{name}” has more colours than a body carries filaments, and {count} arrived without one. “Filament on a face” assigns them.",

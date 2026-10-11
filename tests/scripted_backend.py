@@ -86,6 +86,7 @@ class ScriptedBackend:
             # ihnen stillschweigend ungewichtet — das Budget rechnet damit.
             cache_read_tokens=reply.cache_read_tokens,
             cache_write_tokens=reply.cache_write_tokens,
+            notices=reply.notices,
         )
 
     @property

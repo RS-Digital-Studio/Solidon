@@ -472,6 +472,12 @@ class AgentSession:
                     max_output_tokens=remaining,
                 )
             proposal.steps += 1
+            # Was das Backend dazu sagt — etwa ein Ersatzmodell —, einmal je
+            # Zug, und die Herkunft nennt das Modell, das wirklich antwortete.
+            for notice in reply.notices:
+                if notice not in proposal.notices:
+                    proposal.notices.append(notice)
+                    proposal.origin = self._origin(active)
             # Alle Zahlen kommen aus der Antwort und nicht aus einer eigenen
             # Schätzung — aber es sind zwei Auskünfte und nicht eine.
             # ``Reply.input_tokens`` zählt seit dem 25.08.2026 auch die

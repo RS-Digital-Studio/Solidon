@@ -232,6 +232,7 @@ Nutzen da und sonst nichts.
 - Vor dem Herunterladen nennen *Chat einrichten* und *ComfyUI einrichten*, wie viel Grafikspeicher und Platz ein Modell braucht und ob dieser Rechner das hat.
 - Auf einem Mac schlägt *Chat einrichten* ein lokales Modell vor, das in den gemeinsamen Speicher passt, und sagt, wann ein Schlüssel für ein gehostetes Modell besser ist.
 - Fehlt das gewählte lokale Modell oder lehnt der Anbieter den Schlüssel ab, sagt Solidon es in einem Satz und führt mit *Chat einrichten* direkt zum Ausweg.
+- Fehlt das vorgegebene lokale Modell, antwortet ein anderes empfohlenes, das schon installiert ist. Der Chat sagt, welches, und *Chat einrichten* zeigt es an.
 - Einen ungültigen Schlüssel übergeht Solidon einen Tag lang, bis Sie einen anderen eintragen oder *Noch einmal versuchen* wählen. So lange antwortet ein lokales Modell, wenn eines eingerichtet ist.
 - Bei einem neu erzeugten Modell rechnet *Größe ändern* nur das neue Maß und wiederholt die Reparatur nicht mehr. Das geht schneller, und Strg+Z nimmt die Änderung sofort zurück.
 

@@ -1427,6 +1427,30 @@ def test_a_discarded_proposal_keeps_the_conversation(project: Project, profile: 
     assert proposal.empty
 
 
+def test_a_notice_of_the_backend_stands_once_before_the_answer(
+    project: Project, profile: Profile
+) -> None:
+    """S-20261010-e5014c: Antwortet ein anderes Modell als das fehlende, liest
+    der Kunde das im Chat — einmal, vor der Antwort (Regel 21)."""
+    notice = "„qwen3:14b“ fehlt, deshalb antwortet „qwen3.5:9b“."
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(ToolCall(id="c1", name="read_digest", arguments={}),),
+                notices=(notice,),
+            ),
+            Reply(text="Guten Tag.", notices=(notice,)),
+        ],
+    )
+    proposal = agent.propose("Hallo")
+
+    assert proposal.notices == [notice]
+    agent_apply.discard(proposal, project.document)
+    assert project.document.chat[-1].text == f"{notice}\n\nGuten Tag."
+
+
 def test_explicit_discard_is_not_sent_as_an_executed_answer(
     project: Project, profile: Profile
 ) -> None:

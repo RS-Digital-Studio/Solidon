@@ -8720,6 +8720,7 @@
   "„{file}“ ließ sich nicht wieder öffnen.": "No se pudo volver a abrir «{file}».",
   "„{font}“ gibt es nur in einem Schnitt. Wählen Sie „Normal“, oder nehmen Sie eine Schrift, die fett und kursiv mitbringt.": "«{font}» solo existe en un estilo. Elija «Normal» o tome una fuente que incluya negrita y cursiva.",
   "„{licence}“ ist keine der erlaubten Lizenzen.": "«{licence}» no es ninguna de las licencias permitidas.",
+  "„{missing}“ ist bei Ollama nicht installiert, deshalb antwortet „{model}“. Ein anderes Modell wählen Sie unter „Chat einrichten …“.": "«{missing}» no está instalado en Ollama, así que responde «{model}». Puede elegir otro modelo en «Configurar el chat …».",
   "„{name}“ aus Schritt {step}": "«{name}» del paso {step}",
   "„{name}“ entfällt": "«{name}» se elimina",
   "„{name}“ hat mehr Farben, als ein Körper Filamente trägt, {count} kamen ohne. „Filament auf eine Fläche“ weist sie zu.": "«{name}» tiene más colores de los filamentos que admite un cuerpo, y {count} llegaron sin filamento. «Filamento en una cara» los asigna.",
