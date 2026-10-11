@@ -794,7 +794,7 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
                     "{slicer} kennt {printer} nicht, deshalb trägt die Datei keine "
                     "Maschinenangaben. Der Drucker lässt sich im Slicer einrichten.",
                     slicer=setup.name,
-                    printer=profile.printer.title,
+                    printer=profiles.shown_printer_title(profile.printer),
                 ),
                 values={"slicer": setup.name, "printer": profile.printer.title},
                 suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
@@ -851,7 +851,7 @@ def cura_active_printer_mismatch(
             "Öffnen Sie die Druckeinstellungen. Ist Curas Profil vollständig lesbar, "
             "können Sie den Drucker dort mit einem Klick übernehmen.",
             cura_printer=cura_printer,
-            solidon_printer=profile.printer.title,
+            solidon_printer=profiles.shown_printer_title(profile.printer),
         )
     else:
         message = _(
@@ -862,7 +862,7 @@ def cura_active_printer_mismatch(
             "Curas Profil vollständig lesbar, können Sie den Drucker dort mit einem "
             "Klick übernehmen.",
             cura_printer=cura_printer,
-            solidon_printer=profile.printer.title,
+            solidon_printer=profiles.shown_printer_title(profile.printer),
         )
     return Finding(
         code="slicer.machine_mismatch",
@@ -906,7 +906,7 @@ def _cura_printer_unknown(setup: SlicerSetup, profile: Profile) -> list[Finding]
             message=_(
                 "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den "
                 "Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.",
-                printer=profile.printer.title,
+                printer=profiles.shown_printer_title(profile.printer),
             ),
             values={"printer": profile.printer.title, "slicer": setup.name},
             suggestions=(CHOOSE_SLICER, EXPORT_ONLY),

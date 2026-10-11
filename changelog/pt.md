@@ -130,6 +130,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.
 - Se o slicer recusar filamentos com temperaturas demasiado diferentes numa placa, o Solidon indica agora o motivo e o que fazer, em vez de dizer apenas que não foi criado nenhum ficheiro.
 - No diálogo de impressão, impressora, filamentos e qualidade ficam totalmente visíveis também com letra ampliada. As legendas longas passam para a linha seguinte.
+- As impressoras genéricas aparecem agora no seu idioma no diálogo de impressão, no cabeçalho e nas mensagens. A versão 0.5.3 mostrava-as aí sempre em alemão.
 - No Linux com Flatpak, o Solidon indica agora que o slicer encerrou inesperadamente, em vez de dizer apenas que não foi criado nenhum ficheiro.
 - Se uma peça já compensa no modelo, com um furo com *Aplicar compensação do material* ou *Compensar o pé de elefante*, o Solidon sugere que o slicer não o faça de novo.
 - Também com impressoras que o PrusaSlicer ou o SuperSlicer não conhecem, ambos calculam o tempo de impressão com as acelerações entregues, e o ficheiro indica o material da bobina.

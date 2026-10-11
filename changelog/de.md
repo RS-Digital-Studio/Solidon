@@ -155,6 +155,7 @@ Nutzen da und sonst nichts.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
+- Die allgemeinen Drucker heißen in Druckdialog, Kopfzeile und Meldungen jetzt in der eingestellten Sprache. Version 0.5.3 nannte sie dort immer deutsch.
 - Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
 - Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.

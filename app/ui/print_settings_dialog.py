@@ -3749,14 +3749,14 @@ class PrintSettingsDialog(QDialog):
                         "oder verkleinern Sie es — sonst lehnt der Slicer es ab.",
                         name=name,
                         amount=length(excess),
-                        printer=source_text(printer.title),
+                        printer=profiles.shown_printer_title(printer),
                     )
                     if excess > EPS_DISPLAY
                     else _(
                         "„{name}“ passt nicht auf die Druckfläche dieses Druckers ({printer}). "
                         "Teilen oder verkleinern Sie es — sonst lehnt der Slicer es ab.",
                         name=name,
-                        printer=source_text(printer.title),
+                        printer=profiles.shown_printer_title(printer),
                     )
                 )
                 found = OutOfBuildVolume(detail, object_id=entry.id, printer=printer.id)

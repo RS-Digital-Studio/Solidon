@@ -25708,6 +25708,16 @@ class MainWindow(QMainWindow):
         if getattr(self, "_gesture_document", document) is not document:
             self._discard_gestures()
             self._gesture_document = document
+        if getattr(self, "_selection_document", document) is not document:
+            # **Ein anderes Projekt ist eine neue Auswahl**, auch wenn seine
+            # Körper dieselben Kennungen tragen: Nach *Neues Projekt* heißt der
+            # erste Quader wieder ``obj_1``, und wer im vorigen Projekt den
+            # Reiter *Auswahl* verlassen hatte, bekam ihn bei der ersten Wahl
+            # nicht zurück (:meth:`_SelectionPage.forget_dismissal`).
+            self._bodies_shown = ()
+            self._feature_shown = None
+            self.feature_dock.forget_dismissal()
+        self._selection_document = document
         request = self._map_request
         if request is not None and not self._map_is_current(request):
             self._cancel_map_worker()

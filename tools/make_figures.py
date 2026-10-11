@@ -43,7 +43,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QApplication, QLabel, QWidget
+from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core import figures
 from app.core.bootstrap import load_operations
@@ -234,27 +234,6 @@ def wait_until_uncovered(
         settle(QApplication.instance(), 20)  # type: ignore[arg-type]
 
 
-def show_sample_printer(widget: QWidget) -> None:
-    """Den Beispielnamen des Druckers in der Kopfzeile wie im Druckdialog zeigen.
-
-    Seit die Kopfzeile das Druckziel nennt, stand der allgemeine Drucker dort
-    in fünf Sprachen deutsch, während der Druckdialog im selben Handbuch ihn
-    übersetzt zeigte (:data:`SAMPLE_PRINTER`). Umgestellt wird nur der
-    sichtbare Text, wie im Dialog; Profil und Projekt bleiben.
-    """
-    from app.i18n import get_language
-
-    printer = getattr(getattr(widget.window(), "header", None), "printer", None)
-    language = get_language()
-    if printer is None or language not in SAMPLE_PRINTER or language == "de":
-        return
-    shown = printer.full_text()
-    if SAMPLE_PRINTER["de"] in shown:
-        printer.setText(shown.replace(SAMPLE_PRINTER["de"], SAMPLE_PRINTER[language]))
-        for _ in range(5):
-            QApplication.processEvents()
-
-
 def grab_uncovered(widget: QWidget, rect: QRect | None = None, *, seconds: float = 30.0) -> QPixmap:
     """Ein Bildschirmbild nur nach freier Vor- und Nachprüfung zurückgeben.
 
@@ -266,7 +245,6 @@ def grab_uncovered(widget: QWidget, rect: QRect | None = None, *, seconds: float
     """
     deadline = time.monotonic() + seconds
     other = ""
-    show_sample_printer(widget)
     for _attempt in range(10):
         wait_until_uncovered(widget, rect, seconds=max(0.0, deadline - time.monotonic()))
         screen = widget.screen() or QApplication.primaryScreen()
@@ -588,19 +566,6 @@ SAMPLE_OBJECT = {
     "pt": "Suporte",
 }
 
-#: Der mitgelieferte Profilname ist absichtlich eine unveränderliche
-#: Druckerbezeichnung. Für ein Handbuchbild wäre er damit in fünf Sprachen
-#: deutsch; die Aufnahme stellt nur den sichtbaren Beispielnamen um und lässt
-#: Profil-ID, Projekt und Benutzereinstellungen unberührt.
-SAMPLE_PRINTER = {
-    "de": "Allgemeiner FDM-Drucker 220 mm",
-    "en": "Generic FDM printer 220 mm",
-    "es": "Impresora FDM genérica de 220 mm",
-    "fr": "Imprimante FDM générique 220 mm",
-    "it": "Stampante FDM generica da 220 mm",
-    "pt": "Impressora FDM genérica de 220 mm",
-}
-
 
 def translate_parameter_titles(session: Any) -> None:
     """Setzt die Titel der Beispielparameter in die Sprache der Aufnahme.
@@ -820,16 +785,6 @@ def take_all(app: QApplication, language: str) -> None:
             if not print_dialog._profiles_pending:
                 break
             settle(app, 2)
-        # Erst nach der Slicersuche: Sie füllt die Druckerliste neu
-        # (``_fill_printer_choice``), und ein vorher gesetzter Beispielname
-        # stand danach wieder deutsch im Bild, auch im Satz zum Slicerprofil.
-        sample = SAMPLE_PRINTER.get(language, SAMPLE_PRINTER["de"])
-        current_printer = print_dialog.printer_choice.currentIndex()
-        if current_printer >= 0:
-            print_dialog.printer_choice.setItemText(current_printer, sample)
-        for label in print_dialog.findChildren(QLabel):
-            if SAMPLE_PRINTER["de"] in label.text():
-                label.setText(label.text().replace(SAMPLE_PRINTER["de"], sample))
         settle(app)
         shoot(print_dialog, "print-settings", language)
         print_dialog.release()

@@ -131,6 +131,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
 - En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.
+- Las impresoras genéricas aparecen ahora en su idioma en el diálogo de impresión, en la cabecera y en los mensajes. La versión 0.5.3 las mostraba allí siempre en alemán.
 - En Linux con Flatpak, Solidon indica ahora que el slicer se ha bloqueado, en lugar de decir solo que no se creó ningún archivo.
 - Si una pieza ya compensa en el modelo, con un taladro con *Aplicar compensación del material* o *Compensar la pata de elefante*, Solidon sugiere que el slicer no lo haga otra vez.
 - También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
