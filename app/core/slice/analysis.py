@@ -37,7 +37,14 @@ from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
 from app.core.slice import fine_layers
 from app.core.types import CancelToken, LayerInfo, Ring, SliceContour, SliceResult
-from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
+from app.core.units import (
+    EPS_GEOM,
+    exact_cos,
+    exact_tan_degrees,
+    inscribed_ratio,
+    is_close,
+    ring_area,
+)
 from app.i18n import _
 
 #: Die übersetzte Konturverkettung (§22.1), oder ``None``.
@@ -2319,8 +2326,11 @@ def _shaft_step(
                 # RM-629, Fund B).
                 if along < rise:
                     rise, axis_x, axis_y = along, mid_x, mid_y
-            lean = math.cos(math.atan(rise))
-            back = radius * (1.0 / lean - 1.0)
+            # ``1 / cos θ`` ohne Winkelfunktion: ``math.sqrt`` ist auf jeder
+            # Maschine korrekt gerundet, ``math.cos(math.atan(…))`` nicht
+            # (``kern.md``, „Dieselbe Datei, dasselbe Teil“).
+            secant = math.sqrt(1.0 + rise * rise)
+            back = radius * (secant - 1.0)
             if back > WIDTH_SIMPLIFY:
                 length = math.hypot(axis_x, axis_y)
                 # Vereinfacht wie die geschobenen Mitten unten: Als bloße
@@ -2328,7 +2338,7 @@ def _shaft_step(
                 # und ein Schlitz von 31 mm um 30° fiel zu.
                 stay = centres.simplify(WIDTH_SIMPLIFY).difference(blocked)
                 oval = _oval_centres(
-                    local, (axis_x / length, axis_y / length), lean, fallen, step + back
+                    local, (axis_x / length, axis_y / length), secant, fallen, step + back
                 ).buffer(back + SHAFT_OVAL_SPARE, quad_segs=SHAFT_STEP_SEGMENTS)
             centres = centres.union(fallen.buffer(push, quad_segs=SHAFT_STEP_SEGMENTS))
     # Vereinfacht vor der Differenz: Danach läge der Rand der Mitten bis
@@ -2343,20 +2353,21 @@ def _shaft_step(
     way.centres = centres
     # Was unter einem Quadrat der Vereinfachung bleibt, ist der Rest einer
     # Differenz an einer gemeinsamen Kante, kein Platz für einen Kreis.
-    return bool(centres.area > WIDTH_SIMPLIFY**2)
+    return bool(centres.area > WIDTH_SIMPLIFY * WIDTH_SIMPLIFY)
 
 
 def _oval_centres(
     shade: ShapelyPolygon,
     direction: tuple[float, float],
-    lean: float,
+    secant: float,
     near: ShapelyPolygon,
     reach: float,
 ) -> ShapelyPolygon:
     """Wo die Mitte eines Kreises von ``CHANNEL_WIDTH`` liegen kann, der schräg
-    in ``direction`` steigt (:func:`_shafts_pass`), ``lean`` der Kosinus seiner
-    Neigung — gefragt nur bis ``reach`` um ``near``. ``shade`` ist das
-    Material der Schicht, mindestens ``reach + R / cos θ`` um ``near``.
+    in ``direction`` steigt (:func:`_shafts_pass`), ``secant`` der Kehrwert
+    des Kosinus seiner Neigung — gefragt nur bis ``reach`` um ``near``.
+    ``shade`` ist das Material der Schicht, mindestens ``reach + R / cos θ``
+    um ``near``.
 
     Quer zur Achse ist ein schräger Schacht ``CHANNEL_WIDTH`` weit, wenn im
     waagerechten Schnitt eine Ellipse Platz hat: in Richtung der Neigung
@@ -2368,18 +2379,22 @@ def _oval_centres(
     window = (low_x - reach, low_y - reach, high_x + reach, high_y + reach)
     # Nur, was eine Ellipse im Fenster berühren kann: Vereinfachen und
     # Aufweiten kosten mit der Fläche (Zickzack 1,0 → 0,9 s CPU).
-    wide = reach + radius / lean + CHANNEL_POLYGON_GAP
+    wide = reach + radius * secant + CHANNEL_POLYGON_GAP
     local = _clipped(shade, (low_x - wide, low_y - wide, high_x + wide, high_y + wide))
-    # In Richtung ``u`` um ``f`` strecken: ``I + (f - 1) u uᵀ``, symmetrisch.
-    axis = np.asarray(direction, dtype=float)
-    outer = np.outer(axis, axis)
+    axis_x, axis_y = direction
+
+    def stretched(points: np.ndarray, factor: float) -> np.ndarray:
+        # In Richtung ``u`` um ``factor`` strecken: ``p + (f - 1) (p · u) u``,
+        # je Element gerechnet statt als Matrixprodukt (kein BLAS, ``kern.md``).
+        along = (factor - 1.0) * (points[:, 0] * axis_x + points[:, 1] * axis_y)
+        return np.column_stack((points[:, 0] + along * axis_x, points[:, 1] + along * axis_y))
+
     squeezed = shapely.transform(
-        local.simplify(CHANNEL_POLYGON_GAP),
-        lambda points: points @ (np.eye(2) + (lean - 1.0) * outer),
+        local.simplify(CHANNEL_POLYGON_GAP), lambda points: stretched(points, 1.0 / secant)
     )
     widened = shapely.transform(
         squeezed.buffer(radius, quad_segs=CHANNEL_QUAD_SEGMENTS),
-        lambda points: points @ (np.eye(2) + (1.0 / lean - 1.0) * outer),
+        lambda points: stretched(points, secant),
     )
     return cast(ShapelyPolygon, shapely.box(*window).difference(widened))
 
@@ -4064,7 +4079,7 @@ CHANNEL_QUAD_SEGMENTS: Final = 16
 #: (bei 15 mm Radius 0,018 mm) — so nah darf Material an einen Kreis des
 #: Schachts rücken, ohne ihn zu treffen (:func:`_shafts_pass`).
 CHANNEL_POLYGON_GAP: Final = (
-    CHANNEL_WIDTH / 2.0 * (1.0 - math.cos(math.pi / (4.0 * CHANNEL_QUAD_SEGMENTS)))
+    CHANNEL_WIDTH / 2.0 * (1.0 - inscribed_ratio(4 * CHANNEL_QUAD_SEGMENTS))
 )
 
 #: Wie weit der Kreis eines Schachts je Schicht zur Seite ausweichen darf, in
@@ -4085,7 +4100,7 @@ SHAFT_STEP_SEGMENTS: Final = 4
 #: (:func:`_shafts_pass`): so viel, wie das Vieleck des Schritts innerhalb
 #: seines Kreises liegt (bei vier Segmenten 2 %). Sonst bliebe eine geschobene
 #: Mitte um diesen Anteil im Gesperrten.
-SHAFT_PUSH_SPARE: Final = 1.0 / math.cos(math.pi / (4.0 * SHAFT_STEP_SEGMENTS))
+SHAFT_PUSH_SPARE: Final = 1.0 / inscribed_ratio(4 * SHAFT_STEP_SEGMENTS)
 
 #: Wie weit eine geschobene Mitte über den Rückstand ``R / cos θ - R`` hinaus
 #: von einer Mitte der Ellipse entfernt liegen darf (:func:`_shaft_step`), in
@@ -5482,7 +5497,7 @@ def _channel_space(
     heights = [layer.z for layer in layers]
     # So steil darf ein Schacht ausweichen: der Stützwinkel, mit dem geschnitten
     # wurde (:func:`_shafts_pass`).
-    slope = None if result.overhang_angle is None else math.tan(math.radians(result.overhang_angle))
+    slope = None if result.overhang_angle is None else exact_tan_degrees(result.overhang_angle)
     # Der Schritt einer gewöhnlichen Schicht; die erste ist dicker.
     step = heights[-1] - heights[-2] if len(heights) > 1 else CHANNEL_SLAB
     stride = max(1, round(CHANNEL_SLAB / max(step, EPS_GEOM)))
