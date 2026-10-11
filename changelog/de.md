@@ -178,6 +178,9 @@ Nutzen da und sonst nichts.
 - Auch eigene Bausteine entstehen so als eigener Körper und hängen nicht an einem Körper, der schon im Projekt liegt.
 - Mit *Auswahl als Baustein speichern* kommt der gewählte Körper mit genau den Schritten, die ihn bauen. Käme ein zweiter Körper mit, sagt der Dialog es vor dem Speichern.
 - Wandhalter, Rohrschellen, Profilklemmen und Halter nehmen jede Schraube von M3 bis M64. Passt eine Größe nicht zu den übrigen Maßen, sagt der Baustein, was zu ändern ist.
+- Ein Baustein für Fläche oder Bohrung rechnet erst, wenn er seine Stelle im Bild hat. Bis dahin lässt sich der Dialog nicht übernehmen und sagt, was fehlt.
+- Ändert sich die Fläche unter einem offenen Bausteindialog, bleibt die gewählte Stelle, solange sie auf der neuen Form noch hält. Sonst sucht der Baustein eine neue und sagt es.
+- Ein Bausteindialog, der öffnet, während der vorige Schritt noch rechnet, setzt den Baustein selbst, sobald das Ergebnis da ist, und lässt sich bis dahin nicht übernehmen.
 
 ### Bearbeiten und Zeichnen
 
@@ -211,6 +214,8 @@ Nutzen da und sonst nichts.
 - Träfe eine Handlung ein getrenntes Teil neben dem Merkmal oder berührte ein gesetztes Merkmal anderes Material nur auf einer Linie, sagt Solidon das, statt den Körper zu beschädigen.
 - Steht einer Merkmalshandlung ein getrenntes Teil im Weg, trennt *In Einzelteile aufteilen und erneut versuchen* es ab und führt die Handlung aus. Strg+Z nimmt beides zurück.
 - Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch Stifte und Scheiben neben einer großen Platte. Wegfallen nur kleine offene Flächen und Krümel, die der Drucker nicht abbildet.
+- Ein Relief rechnet erst, wenn ein Bild gewählt ist. Bis dahin nennt der Dialog den Knopf *Bild wählen …*.
+- Die Dialoge *STEP laden* und *Zeichnung hochziehen* bieten nur Dateien an, die sie lesen können. Liegt keine im Projekt, nennen sie den Knopf *Datei wählen …*.
 
 ### Erzeugen mit KI
 

@@ -2052,6 +2052,7 @@
   "Die Fläche hat ihre Farbe. Gedruckt wird wie in [Ein Modell prüfen und drucken](manual:print-a-model).": "The face has its colour. Print it as in [Check and print a model](manual:print-a-model).",
   "Die Fläche hat sich dabei kaum verschoben.": "The surface barely moved.",
   "Die Fläche hat sich dabei spürbar verschoben — Passungen neu prüfen.": "The surface moved noticeably — check the fits again.",
+  "Die Fläche hat sich geändert. Die Stelle ist neu gesetzt.": "The surface has changed. The spot has been set again.",
   "Die Fläche oder das Volumen lässt sich an dieser exakten Form nicht zuverlässig bestimmen. Verkleinern Sie die Änderung oder wählen Sie eine andere Ausgangsform.": "The area or volume of this exact shape cannot be determined reliably. Reduce the change or choose a different starting shape.",
   "Die Fläche wurde gefärbt.": "The face has been coloured.",
   "Die Fläche wurde nicht gefunden — vielleicht hat ein früherer Schritt sie verändert. Wählen Sie sie neu, oder färben Sie das ganze Teil.": "The face was not found — an earlier step may have changed it. Pick it again, or colour the whole part.",

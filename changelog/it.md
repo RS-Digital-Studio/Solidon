@@ -153,6 +153,9 @@ scrive in `website/version.json`.
 - Anche i tuoi blocchi nascono così come corpo a sé e non si attaccano a un corpo già presente nel progetto.
 - Con *Salva la selezione come blocco* il corpo selezionato arriva con esattamente i passi che lo costruiscono. Se arrivasse anche un secondo corpo, la finestra lo dice prima.
 - Supporti a parete, fascette per tubo, morsetti per profilo e supporti accettano ogni vite da M3 a M64. Se una misura non si accorda con le altre, il blocco dice cosa cambiare.
+- Un blocco per una faccia o un foro viene calcolato solo quando ha il suo punto nella vista. Fino ad allora la finestra non si può applicare e dice che cosa manca.
+- Se la faccia cambia mentre la finestra di un blocco è aperta, il punto scelto resta finché vale ancora sulla nuova forma. Altrimenti il blocco ne cerca uno nuovo e lo segnala.
+- Una finestra di blocco aperta mentre il passo precedente sta ancora calcolando posiziona il blocco da sola appena arriva il risultato, e fino ad allora non si può applicare.
 
 ### Modificare e disegnare
 
@@ -186,6 +189,8 @@ scrive in `website/version.json`.
 - Se un'azione colpisse un pezzo separato accanto alla caratteristica, o una caratteristica posizionata toccasse altro materiale solo lungo una linea, Solidon lo dice invece di danneggiare il corpo.
 - Se un pezzo separato intralcia un'azione su una caratteristica, *Dividi in pezzi distinti e riprova* lo separa ed esegue l'azione. Ctrl+Z annulla entrambe.
 - Dividendo in pezzi distinti resta ogni pezzo stampabile, anche perni e rondelle accanto a una piastra grande. Cadono solo piccole superfici aperte e briciole che la stampante non riproduce.
+- Un rilievo viene calcolato solo quando è scelta un'immagine. Fino ad allora la finestra indica il pulsante *Scegli un'immagine …*.
+- Le finestre *Carica STEP* e *Estrudi un disegno* offrono solo file che sanno leggere. Se il progetto non ne ha, indicano il pulsante *Scegli un file …*.
 
 ### Generare con l'IA
 

@@ -2783,6 +2783,104 @@ def test_the_pick_button_imports_and_selects(window: MainWindow, tmp_path: Path)
     )
 
 
+def test_a_relief_without_an_image_waits_for_one(
+    window: MainWindow,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Vor dem Bild rechnet *Relief auflegen* nichts, und *Übernehmen* nennt den Knopf.
+
+    RM-775, Kundenprotokoll zu 0.5.3: „op.displace_image.ValidationError:
+    Diese Quelle gibt es im Projekt nicht.“ Nachgestellt wie der Kunde: Körper
+    wählen, *Relief auflegen*. Die Vorschau lief sofort mit leerem Bildfeld und
+    meldete eine Quelle, die es nicht gibt — keine verlorene Quelle, sondern
+    noch gar keine. Danach das Bild über den Knopf holen und übernehmen.
+    """
+    import logging
+    import time
+
+    from PySide6.QtGui import QColor, QImage
+    from PySide6.QtWidgets import QFileDialog
+
+    picture = tmp_path / "relief.png"
+    image = QImage(32, 32, QImage.Format.Format_RGB32)
+    image.fill(QColor(128, 128, 128))
+    assert image.save(str(picture))
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileName", staticmethod(lambda *_a, **_k: (str(picture), ""))
+    )
+    object_id = next(iter(window.session.evaluate_now().scene.objects))
+    window.object_tree.select_object(object_id)
+
+    def settle() -> None:
+        for _ in range(60):
+            QApplication.processEvents()
+            assert window.session.wait_for_idle(60_000)
+            time.sleep(0.005)
+
+    settle()
+    with caplog.at_level(logging.WARNING, logger="app.core.scene.evaluate"):
+        window.run_operation(REGISTRY.get("displace_image"))
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == "displace_image"
+        settle()
+        stopped = [r.getMessage() for r in caplog.records if "stopped" in r.getMessage()]
+        assert not stopped, stopped
+        assert not dialog.can_accept()
+        button = dialog._accept_button
+        assert not button.isEnabled()
+        assert button.toolTip() == "Bild: Bild wählen …", button.toolTip()
+
+        dialog._editors["source"].button.click()
+        for _ in range(300):
+            QApplication.processEvents()
+            assert window.session.wait_for_idle(60_000)
+            if dialog.values().get("source") and dialog.can_accept():
+                break
+            time.sleep(0.01)
+        assert dialog.values().get("source") in window.session.project.document.sources
+        assert dialog.can_accept()
+        dialog.accept()
+        settle()
+        stopped = [r.getMessage() for r in caplog.records if "stopped" in r.getMessage()]
+        assert not stopped, stopped
+    assert window.session.project.document.ops[-1].op == "displace_image"
+    result = window.session.last_result
+    assert result is not None and result.stopped_at is None
+
+
+@pytest.mark.parametrize("name", ["load_step", "load_outline"])
+def test_a_loading_dialog_offers_only_files_it_can_read(
+    window: MainWindow, name: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """*STEP laden* und *Zeichnung hochziehen* belegen ihr Feld nicht mit der STL des Projekts.
+
+    Zwilling zu RM-775: Das Quellenfeld bot jede Projektquelle an und wählte
+    die erste vor, die Vorschau hielt mit „Diese Datei ist keine STEP-Datei.“
+    an. Jetzt bleibt das Feld leer, nichts rechnet, und *Übernehmen* nennt den
+    Knopf, der die Datei holt.
+    """
+    import logging
+    import time
+
+    assert window.session.project.document.sources, "die Platte ist eine Quelle"
+    with caplog.at_level(logging.WARNING, logger="app.core.scene.evaluate"):
+        window.run_operation(REGISTRY.get(name))
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == name
+        for _ in range(60):
+            QApplication.processEvents()
+            assert window.session.wait_for_idle(60_000)
+            time.sleep(0.005)
+        stopped = [r.getMessage() for r in caplog.records if "stopped" in r.getMessage()]
+        assert not stopped, stopped
+    assert not dialog.values().get("source")
+    assert not dialog._accept_button.isEnabled()
+    assert dialog._accept_button.toolTip() == "Quelle: Datei wählen …"
+    dialog.reject()
+
+
 def test_a_deferred_picker_keeps_the_field_until_its_answer(window: MainWindow) -> None:
     """Der Feldknopf verarbeitet eine nachgereichte Wahl ohne Eventloop im Dialog."""
 

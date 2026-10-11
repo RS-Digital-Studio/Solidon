@@ -505,3 +505,44 @@ def test_an_stl_is_read_without_a_scene_and_without_leftovers(name: str) -> None
     assert np.array_equal(found.face_normals, expected.face_normals)
     assert set(found.face_attributes) == set(expected.face_attributes)
     assert leftovers < 20, f"{leftovers} objects of a scene were left behind"
+
+
+def test_each_loading_step_reads_the_files_the_plan_gives_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``plan.reads`` sagt dem Quellenfeld, welche Dateien eine Ladeoperation liest.
+
+    Der Sollwert ist die Operation, die ``import_plan`` derselben Datei gibt,
+    je Endung aus ``MODEL_SUFFIXES``, klein und groß geschrieben — nicht eine
+    zweite Aufzählung derselben Konstanten (Review G1). Die Prüfungen auf den
+    Inhalt sind dafür abgeschaltet; entschieden wird an der Endung.
+    """
+    from types import SimpleNamespace
+
+    from app.core.ingest import plan
+    from app.core.ingest.plan import reads
+
+    monkeypatch.setattr(plan, "check_readable", lambda payload, suffix: None)
+    monkeypatch.setattr(plan, "check_limits", lambda *sizes: None)
+    monkeypatch.setattr(plan, "check_unpacked", lambda payload: None)
+    monkeypatch.setattr(plan.threemf, "scan_assembly", lambda payload, progress: (1, 0))
+    monkeypatch.setattr(plan.threemf, "declared_unit", lambda payload: None)
+    monkeypatch.setattr(
+        plan,
+        "_step_plan",
+        lambda *args, **kwargs: SimpleNamespace(draft=SimpleNamespace(op="load_step")),
+    )
+    loaders = ("load", "load_step", "load_outline")
+    assert MODEL_SUFFIXES
+    for suffix in MODEL_SUFFIXES:
+        for name in (f"teil{suffix}", f"teil{suffix.upper()}"):
+            chosen = import_plan("src_1", name, b"x").draft.op
+            assert chosen in loaders, (name, chosen)
+            for operation in loaders:
+                assert reads(operation, f"sources/{name}") == (operation == chosen), (
+                    name,
+                    operation,
+                    chosen,
+                )
+    assert not reads("load", "sources/irgendwas.bin"), "eine fremde Endung liest kein Laden"
+    assert reads("sculpt", "sources/irgendwas.bin")

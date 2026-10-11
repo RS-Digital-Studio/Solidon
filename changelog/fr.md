@@ -154,6 +154,9 @@ dans `website/version.json`.
 - Vos propres blocs se créent aussi ainsi comme corps à part et ne s'attachent pas à un corps déjà présent dans le projet.
 - Avec *Enregistrer la sélection comme bloc*, le corps sélectionné vient avec exactement les étapes qui le construisent. Si un second corps venait avec, le dialogue le dit avant.
 - Supports muraux, colliers de tube, colliers de profilé et supports acceptent toute vis de M3 à M64. Si une taille ne convient pas aux autres cotes, le bloc indique quoi changer.
+- Un bloc destiné à une face ou à un trou n'est calculé qu'une fois placé dans la vue. D'ici là, la boîte de dialogue ne peut pas être appliquée et indique ce qui manque.
+- Si la face change alors que la boîte de dialogue d'un bloc est ouverte, l'emplacement choisi reste tant qu'il convient à la nouvelle forme. Sinon, le bloc en cherche un nouveau et le signale.
+- Une boîte de dialogue de bloc ouverte pendant que l'étape précédente calcule encore place le bloc d'elle-même dès que le résultat est là, et ne peut pas être appliquée avant.
 
 ### Modifier et esquisser
 
@@ -187,6 +190,8 @@ dans `website/version.json`.
 - Si une action touchait une pièce séparée voisine, ou si une caractéristique posée ne touchait une autre matière que sur une ligne, Solidon le dit au lieu d'abîmer le corps.
 - Si une pièce séparée gêne une action sur une caractéristique, *Diviser en pièces distinctes et réessayer* la sépare et exécute l'action. Ctrl+Z annule les deux.
 - La division en pièces distinctes garde toute pièce imprimable, même goujons et rondelles près d'une grande plaque. Seules tombent petites surfaces ouvertes et miettes non imprimables.
+- Un relief n'est calculé qu'une fois une image choisie. D'ici là, la boîte de dialogue indique le bouton *Choisir une image …*.
+- Les boîtes de dialogue *Charger un STEP* et *Extruder un dessin* ne proposent que les fichiers qu'elles savent lire. Si le projet n'en contient aucun, elles indiquent le bouton *Choisir un fichier …*.
 
 ### Générer avec l'IA
 
