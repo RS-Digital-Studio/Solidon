@@ -240,16 +240,33 @@ def _picker(entries: tuple[changes.Entry, ...], selected: str, published: str, c
 def _summary(entry: changes.Entry, copy: Copy) -> str:
     """Eine kurze, auch ohne Fachsprache verständliche Größenordnung."""
     changes_count = len(entry.points)
-    topics_count = len(entry.groups)
+    # Der Vorspann ist kein Thema — derselbe Zähler wie in der Anwendung.
+    topics_count = len(entry.topics)
     changes_word = copy.change_one if changes_count == 1 else copy.change_many
     topics_word = copy.topic_one if topics_count == 1 else copy.topic_many
     return f"{changes_count} {changes_word} · {topics_count} {topics_word}"
 
 
+def _lead(entry: changes.Entry) -> str:
+    """Der Vorspann einer Version als hervorgehobener Absatz über den Gruppen.
+
+    Dieselbe Regel wie in der Anwendung (``changes.lead_of``): titellose Punkte
+    vor benannten Gruppen gelten jedem Leser und keinem Gebiet. Sie stehen
+    deshalb über dem Raster in voller Breite, größer und halbfett, mit
+    Akzentkante — die Kante als Form und die Schrift tragen es auch ohne
+    Farbe (Regel 18).
+    """
+    lead = entry.lead
+    if lead is None:
+        return ""
+    paragraphs = "".join(f"<p>{inline(point)}</p>" for point in lead.points)
+    return f'<div class="release-lead">{paragraphs}</div>'
+
+
 def _entry(entry: changes.Entry, selected: str, published: str, copy: Copy) -> str:
     """Eine Version mit ihren kundennahen Gruppen und Punkten."""
     groups = []
-    for index, group in enumerate(entry.groups, start=1):
+    for index, group in enumerate(entry.topics, start=1):
         title = (
             '<div class="release-group-head">'
             f'<span class="release-group-index" aria-hidden="true">{index:02d}</span>'
@@ -262,6 +279,7 @@ def _entry(entry: changes.Entry, selected: str, published: str, copy: Copy) -> s
         points = "".join(f"<li>{inline(point)}</li>" for point in group.points)
         groups.append(f'<div class="release-group">{title}<ul>{points}</ul></div>')
     summary = _summary(entry, copy)
+    lead = _lead(entry)
     badge = (
         f'<span class="release-badge">{html.escape(copy.current)}</span>'
         if entry.version == published
@@ -276,7 +294,7 @@ def _entry(entry: changes.Entry, selected: str, published: str, copy: Copy) -> s
         f'<div><p class="release-version-label">{html.escape(copy.version)}</p>'
         f"<h2>{html.escape(entry.version)}</h2>"
         f'<p class="release-summary">{html.escape(summary)}</p></div>{badge}'
-        f'</header><div class="release-groups">{"".join(groups)}</div></article>'
+        f'</header>{lead}<div class="release-groups">{"".join(groups)}</div></article>'
     )
 
 

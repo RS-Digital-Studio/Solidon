@@ -1652,6 +1652,18 @@ QLabel#chatModelHint {{
     padding: {TIGHT // 2}px {TIGHT}px;
 }}
 
+/* Der Vorspann einer Version und der Hinweis im Update-Fenster: die Meldung,
+   die jedem gilt (changes_dialog.lead_box). Akzentkante und gedämpfte
+   Akzentfläche tragen die Farbe; die breite Kante als Form und die Stufe
+   ``section`` (größer, halbfett) tragen es ohne Farbsehen (Regel 18). */
+QLabel#changesLead {{
+    color: {text};
+    background: {active};
+    border-left: 4px solid {accent_line};
+    border-radius: {SPACE}px;
+    padding: {NORMAL}px {ROOMY}px;
+}}
+
 /* Die Auswahlhandlungen bilden den unteren Teil derselben rechten Karte.
    Eine sichtbare Kante trennt sie von Bericht und Chat; die Beschriftungen
    bleiben in schmalen Fenstern linksbündig und nutzen die ganze Breite. */

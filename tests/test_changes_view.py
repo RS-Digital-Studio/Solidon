@@ -12,6 +12,7 @@ Geprüft wird deshalb beides: dass der Kern den Verlauf **aus dem Paket** liest
 from __future__ import annotations
 
 import html
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -80,6 +81,93 @@ def test_the_newest_version_comes_first() -> None:
     assert APP_VERSION in {entry.version for entry in changes.recent("de")}, (
         "the running version belongs among the ones the application shows"
     )
+
+
+LEAD_FILE = """# Neuerungen
+
+## 9.9.9
+
+- Die Demo läuft jetzt bis zum *30. November*.
+
+### Bausteine
+
+- Ein Baustein mehr.
+
+### Drucken
+
+- Ein Drucker mehr.
+
+## 9.9.8
+
+- Der alte Punkt ohne Gliederung.
+- Noch einer.
+"""
+
+
+@pytest.fixture
+def lead_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[tuple[changes.Entry, ...]]:
+    """Ein Verlauf mit Vorspann vor benannten Gruppen und eine Fassung vor 0.2.0."""
+    (tmp_path / "de.md").write_text(LEAD_FILE, encoding="utf-8")
+    changes.forget_cache()
+    monkeypatch.setattr(changes, "folder", lambda: tmp_path)
+    yield changes.history("de")
+    changes.forget_cache()
+
+
+def test_points_before_the_first_heading_are_the_lead(
+    lead_history: tuple[changes.Entry, ...],
+) -> None:
+    """Titellos **und** gefolgt von benannten Gruppen — das ist der Vorspann."""
+    newest = lead_history[0]
+
+    assert newest.lead is not None
+    assert newest.lead.points == ("Die Demo läuft jetzt bis zum *30. November*.",)
+    assert [group.title for group in newest.topics] == ["Bausteine", "Drucken"]
+    assert newest.points[0] == newest.lead.points[0], "the flat view keeps it first"
+
+
+def test_an_old_section_without_headings_has_no_lead(
+    lead_history: tuple[changes.Entry, ...],
+) -> None:
+    """Gegenprobe: Eine Fassung vor 0.2.0 ist eine titellose Gruppe allein.
+
+    Hervorgehoben stünde sonst eine ganze Fassung als Ankündigung da.
+    """
+    older = lead_history[1]
+
+    assert len(older.groups) == 1 and not older.groups[0].title
+    assert older.lead is None
+    assert older.topics == older.groups
+
+
+def test_a_titled_first_group_is_no_lead() -> None:
+    groups = (changes.Group("Bausteine", ("a",)), changes.Group("", ("b",)))
+
+    assert changes.lead_of(groups) is None
+    assert changes.without_lead(groups) == groups
+
+
+def test_the_bundled_old_sections_have_no_lead() -> None:
+    """Am echten Bestand: Keine Fassung vor 0.2.0 wird zur Ankündigung."""
+    old = [
+        entry
+        for entry in changes.history("de")
+        if tuple(int(part) for part in entry.version.split(".")) < (0, 2, 0)
+    ]
+
+    assert old, "no section before 0.2.0 — this test would check nothing"
+    assert all(entry.lead is None for entry in old)
+
+
+def test_note_and_lead_repeat_when_one_contains_the_other() -> None:
+    lead = changes.Group("", ("Die Demo läuft jetzt bis zum *30. November 2026*.",))
+
+    assert changes.repeats("die demo läuft jetzt bis zum 30. November 2026.", lead)
+    assert changes.repeats("Die Demo läuft jetzt bis zum 30. November 2026. Viel Spaß.", lead)
+    assert not changes.repeats("Neu ist ein Skizzeneditor.", lead)
+    assert not changes.repeats("", lead)
 
 
 # --- das Fenster ----------------------------------------------------------------------
@@ -235,3 +323,47 @@ def test_choosing_a_version_replaces_the_visible_entry(qt_app: object) -> None:
     assert dialog.summary.text() == (
         f"{len(entries[last].points)} Neuerungen · {len(entries[last].groups)} {topics}"
     )
+
+
+def test_the_lead_box_is_highlighted_in_both_themes() -> None:
+    """Akzentkante und Fläche aus dem Thema, dazu die Kante als Form (Regel 18)."""
+    from app.ui.style import stylesheet
+    from app.ui.theme import THEMES
+
+    for theme in THEMES:
+        sheet = stylesheet(theme, 10)
+        rule = sheet[sheet.index("QLabel#changesLead {") :]
+        rule = rule[: rule.index("}")]
+        assert f"border-left: 4px solid {THEMES[theme]['accent_line']}" in rule, theme
+        assert "background:" in rule, theme
+
+
+def test_the_dialog_sets_the_lead_above_the_groups(
+    qt_app: object, lead_history: tuple[changes.Entry, ...]
+) -> None:
+    """Der Vorspann steht im hervorgehobenen Kasten und nicht noch einmal darunter."""
+    from app.ui.changes_dialog import LEAD_BOX
+
+    dialog = ChangesDialog()
+    dialog.version_choice.setCurrentIndex(0)
+
+    assert not dialog.lead.isHidden(), "the lead belongs on screen"
+    assert dialog.lead.objectName() == LEAD_BOX
+    assert dialog.lead.property("level") == "section", "larger and bold, not only coloured"
+    assert "30. November" in dialog.lead.text()
+    assert "<em>30. November</em>" in dialog.lead.text(), "marked up like the list below"
+    assert "Die Demo" not in dialog.body.text(), "the lead must not stand twice"
+    assert "Bausteine" in dialog.body.text()
+    assert dialog.summary.text().startswith("3 "), "every point counts"
+    assert "2 " in dialog.summary.text(), "the lead is no topic"
+
+
+def test_an_old_version_shows_no_lead_box(
+    qt_app: object, lead_history: tuple[changes.Entry, ...]
+) -> None:
+    """Gegenprobe: Eine titellose Fassung allein bleibt eine schlichte Liste."""
+    dialog = ChangesDialog()
+    dialog.version_choice.setCurrentIndex(1)
+
+    assert dialog.lead.isHidden()
+    assert "Der alte Punkt" in dialog.body.text()

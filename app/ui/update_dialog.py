@@ -33,11 +33,12 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_VERSION, WEBSITE_URL, website_page_url
-from app.core import updates
+from app.core import changes, updates
+from app.core.changes import Group
 from app.core.errors import AppError, OperationCancelled
 from app.core.scene.cancel import CancelSignal
 from app.i18n import get_language, tr
-from app.ui.changes_dialog import groups_html
+from app.ui.changes_dialog import groups_html, lead_box, lead_html
 from app.ui.dialogs import open_link
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import NORMAL, SPACE, WIDE, make_primary
@@ -47,6 +48,40 @@ from app.ui.style import NORMAL, SPACE, WIDE, make_primary
 #: längere beginnen mit diesem Ausschnitt. Was der Nutzer später zieht,
 #: vergrößert weiter die Liste.
 CHANGES_START_HEIGHT = 240
+
+
+def announcement_html(note: str, lead: Group | None) -> str:
+    """Was oben im hervorgehobenen Kasten steht: Hinweistext und Vorspann.
+
+    Beide gelten jedem, der aktualisiert, und keinem Gebiet — deshalb stehen
+    sie zusammen über der Liste statt der Vorspann als erster Punkt darin
+    (Entscheidung Robert: die Demo-Verlängerung groß ankündigen). Fehlt der
+    Hinweis, steht der Vorspann allein oben.
+
+    **Sagen beide dasselbe, steht es einmal da** (:func:`changes.repeats`),
+    und zwar der längere der beiden: Der kürzere ist im anderen enthalten.
+
+    Der Hinweis kommt vom Server und bleibt Klartext: maskiert, Zeilenwechsel
+    als Umbruch, kein Verweis und kein Bild. Die Punkte des Vorspanns laufen
+    durch ``markup.inline`` wie jeder Punkt der Liste.
+    """
+    shown_note = note.strip()
+    if lead is not None and shown_note and changes.repeats(shown_note, lead):
+        if len(" ".join(lead.points)) > len(shown_note):
+            shown_note = ""
+        else:
+            lead = None
+    parts: list[str] = []
+    if shown_note:
+        parts.append(
+            '<p style="margin:0">' + html.escape(shown_note).replace("\n", "<br>") + "</p>"
+        )
+    if lead is not None:
+        if parts:
+            # Ein Absatz Luft zwischen beiden, sonst läsen sie sich als ein Satz.
+            parts.append('<p style="margin:0">&nbsp;</p>')
+        parts.append(lead_html(lead.points))
+    return "".join(parts)
 
 
 class _DownloadWorker(Worker):
@@ -114,11 +149,15 @@ class UpdateDialog(QDialog):
         # **Auch der Hinweis steht in Kundensprache** — er ist die Überschrift
         # über der übersetzten Punkteliste darunter, und die beiden aus zwei
         # Sprachen zu setzen wäre schlechter als gar kein Hinweis.
-        note = release.note()
-        self.notes = QLabel(note, self)
-        self.notes.setWordWrap(True)
-        self.notes.setTextFormat(Qt.TextFormat.PlainText)
-        self.notes.setVisible(bool(note))
+        #
+        # **Hervorgehoben, samt Vorspann** — derselbe Kasten wie unter
+        # *Hilfe → Neuerungen* (``changes_dialog.lead_box``). Der Vorspann
+        # verlässt dafür die Liste (``announcement_html``).
+        grouped = release.grouped()
+        lead = changes.lead_of(grouped)
+        self.notes = lead_box(self)
+        self.notes.setText(announcement_html(release.note(), lead))
+        self.notes.setVisible(bool(self.notes.text()))
 
         # **Was neu ist, in Kundensprache** — die Auswahl steht in
         # ``changelog/<sprache>.md`` und kommt über die Versionsdatei hierher.
@@ -153,7 +192,7 @@ class UpdateDialog(QDialog):
         # sollen sich auch gleich anfassen lassen.
         self.changes.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         points = release.points()
-        self.changes.setText(groups_html(release.grouped()))
+        self.changes.setText(groups_html(changes.without_lead(grouped)))
 
         # Ein Rollbereich mit Deckel: Acht Punkte passen, zwanzig nicht, und
         # ein Fenster, das über den Bildschirmrand wächst, verliert seine

@@ -127,6 +127,13 @@ Offen ist der oberste Abschnitt, solange es zu seiner Nummer keinen Tag gibt
 (`git tag -l v<nummer>`); sonst legt der Zweig den nächsten an, mit der Nummer
 aus `tools/bump_version.py --zeigen` (`--minor` nur nach Produktentscheidung).
 
+**Punkte vor der ersten `###` eines Abschnitts sind sein Vorspann** — nur für
+eine Meldung an jeden Nutzer (Entscheidung Robert, etwa die Demo-Laufzeit).
+`changes.lead_of` erkennt ihn (titellos **und** vor benannten Gruppen, sonst
+ist es eine alte ungegliederte Fassung); Update-Fenster samt Hinweistext,
+*Hilfe → Neuerungen* und die Changelog-Seite heben ihn über die Gruppen, und
+`version.json` trägt ihn als erste Gruppe ohne Titel.
+
 **Ein Punkt spricht allgemein** (Entscheidung Robert): von dem, was der Kunde
 an seinem eigenen Modell merkt — nicht von Teilen oder Namen der Prüfmodelle,
 an denen gemessen wurde („Kinn und Flügel“, „am Eiffelturm“). Damit kann ein
