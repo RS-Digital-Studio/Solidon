@@ -185,7 +185,11 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "circle": _("Kreis"),
     "polygon": _("Vieleck"),
     "slot": _("Langloch"),
-    "hexagon": _("Sechseck"),
+    # „hexagon“ steht hier nicht: Die sechseckige Öffnung eines Lochfelds und
+    # das Texturmuster sind dieselbe Wabe und heißen wie in
+    # ``figures.TEXTURE_NAMES``. Ein zweiter Eintrag überschrieb den Namen
+    # still, und der Dialog sagte „Sechseck“, wo Handbuch und Abbildung
+    # „Wabe“ zeigten.
     "staggered": _("Versetzte Reihen"),
     # Die zwei Lochbilder. Sie stehen bei den Grundformen, weil sie dasselbe
     # sind — ein Umriss, den die Operation hochzieht oder ausschneidet —, nur

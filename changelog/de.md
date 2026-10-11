@@ -113,6 +113,7 @@ Nutzen da und sonst nichts.
 - Startcode und Bauraum kommen nur noch von genau Ihrem Drucker, nicht von einem anderen Modell derselben Reihe.
 - Der Druckdialog ordnet die Profile des Slicers deutlich schneller zu, beim Öffnen und nach jedem Slicerwechsel.
 - Ein 3MF-Export liest die Profile des Slicers nur noch neu, wenn sich dort etwas geändert hat, und ist damit deutlich schneller.
+- Ein beim Export getipptes Namensmuster bleibt gemerkt, auch wenn Sie im Dateidialog erst von 3MF auf ein anderes Format wechseln.
 - Die geschätzte Druckzeit liegt näher an der des Slicers, bei Teilen mit Stützen deutlich näher.
 - Ob Stützen und Skirt auf dem Bett Platz haben, misst die Prüfung nur noch unter den Überhängen. Teile nahe am Rand bekommen keine grundlose Warnung mehr.
 - Übernommene Vorschläge lassen kaum noch Überhänge ohne Stütze, die eine brauchen. *Kanäle frei halten* sperrt nur noch Raum, aus dem keine Stütze mehr herauskäme.
@@ -193,6 +194,8 @@ Nutzen da und sonst nichts.
 ### Bearbeiten und Zeichnen
 
 - Verschieben Sie ein Merkmal, reist sein Material mit, wie es ist, und die alte Stelle wird sauber gefüllt. Wo das nicht geht, sagt es die Auswahl gleich.
+- Das Texturmuster *Wabe* heißt im Dialog wie im Handbuch. Bisher stand im Dialog Sechseck. Auch die sechseckigen Öffnungen von *Lochfeld schneiden* heißen *Wabe*.
+- Die Funktion *Textur aufbringen* öffnet mit einem Musterfeld, das auf die gewählte Fläche passt, und einer Teilung, die Ihre Düse druckt. Ragt ein Feld über den Rand, sagt der Dialog das samt Ausweg.
 - An Wulst und Kehle bietet die Auswahl nur noch an, was die Operation auch ausführt.
 - Liegt neben einer Wand eine Verrundung, sagt *Formschräge anstellen* vor der Rechnung, dass sie im Weg ist, und nennt *Merkmal entfernen* als Ausweg.
 - Schneiden Sie einen Teil des Körpers weg, verschwinden auch Fasen, Gewinde und Mutterntaschen von Bausteinen, die darin lagen.

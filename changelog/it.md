@@ -88,6 +88,7 @@ scrive in `website/version.json`.
 - Il codice di avvio e il volume di stampa vengono solo dalla tua stampante, non da un altro modello della stessa serie.
 - La finestra di stampa assegna i profili dello slicer molto più in fretta, all'apertura e dopo ogni cambio di slicer.
 - L’esportazione 3MF rilegge i profili dello slicer solo se lì è cambiato qualcosa, ed è molto più veloce.
+- Uno schema di nomi digitato durante l’esportazione resta memorizzato, anche se nella finestra dei file passi prima da 3MF a un altro formato.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
 - Il controllo che supporti e skirt stiano sul piano ora misura solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
 - I suggerimenti accettati non lasciano quasi più senza supporto gli sbalzi che ne hanno bisogno. *Tenere liberi i canali* blocca solo lo spazio da cui un supporto non si potrebbe più togliere.
@@ -168,6 +169,8 @@ scrive in `website/version.json`.
 ### Modificare e disegnare
 
 - Con *Sposta caratteristica* il materiale della caratteristica si sposta così com'è e il punto di prima viene riempito in modo pulito. Dove non si può, la selezione lo dice subito.
+- Il motivo *Nido d’ape* nella finestra si chiama come nel manuale. Prima la finestra diceva Esagono. Così si chiamano anche le aperture esagonali di *Taglia un campo di fori*.
+- La finestra *Applica texture* si apre con un’area del motivo che sta sulla faccia scelta e un passo che il tuo ugello stampa. Se un’area sporge dal bordo, la finestra lo dice e indica la soluzione.
 - Su cordoni e gole, la selezione offre solo ciò che l'operazione sa davvero fare.
 - Se accanto a una parete c'è un raccordo, *Applica l'angolo di sformo* dice prima del calcolo che è d'intralcio e indica *Rimuovi caratteristica* come via d'uscita.
 - Quando tagli via una parte di un corpo, spariscono anche smussi, filettature e sedi per dadi dei blocchi che vi si trovavano.

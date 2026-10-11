@@ -88,6 +88,7 @@ it into `website/version.json`.
 - Start code and build volume come only from exactly your printer, not from another model of the same series.
 - The print dialog matches the slicer's profiles much faster, when opening and after every slicer change.
 - A 3MF export only rereads the slicer's profiles when something changed there, which makes it considerably faster.
+- A naming pattern typed during export is remembered, even if you first switch from 3MF to another format in the file dialog.
 - The estimated print time is closer to the slicer's, much closer for parts with supports.
 - Whether supports and skirt fit on the bed is now measured only under the overhangs. Parts near the edge no longer get a needless warning.
 - Accepted suggestions hardly leave any overhang that needs support without it. *Keep channels clear* now only blocks space a support could never be removed from.
@@ -168,6 +169,8 @@ it into `website/version.json`.
 ### Editing and sketching
 
 - With *Move feature*, the feature's material travels along as it is and the old spot is filled cleanly. Where that is not possible, the selection says so straight away.
+- The texture pattern *Honeycomb* has the same name in the dialog as in the manual. The dialog used to say Hexagon. The hexagonal openings of *Cut a hole pattern* are *Honeycomb* too.
+- The *Apply texture* dialog opens with a pattern area that fits the selected face and a pitch your nozzle can print. If an area extends past the edge, the dialog says so and how to fix it.
 - On beads and grooves, the selection offers only what the operation can actually do.
 - If a fillet sits next to a wall, *Apply draft angle* says before calculating that it is in the way and names *Remove feature* as the way out.
 - When you cut away part of a body, chamfers, threads and nut pockets of parts that lay inside it go too.

@@ -88,6 +88,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O código de início e o volume de impressão vêm só da sua impressora, não de outro modelo da mesma série.
 - O diálogo de impressão atribui os perfis do slicer muito mais depressa, ao abrir e após cada mudança de slicer.
 - A exportação 3MF só volta a ler os perfis do slicer se algo mudou lá, e é bastante mais rápida.
+- Um padrão de nomes escrito ao exportar fica memorizado, mesmo que primeiro mude de 3MF para outro formato na caixa de diálogo de ficheiros.
 - O tempo de impressão estimado está mais perto do do slicer, muito mais perto em peças com suportes.
 - A verificação do espaço para suportes e skirt na mesa mede agora só sob as saliências. As peças junto ao rebordo já não recebem um aviso sem razão.
 - As sugestões aceites quase já não deixam sem suporte as saliências que precisam dele. *Manter os canais livres* só bloqueia o espaço de onde um suporte já não se conseguiria retirar.
@@ -168,6 +169,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Editar e esboçar
 
 - Com *Mover característica*, o material da característica vai tal como está e o lugar antigo fica bem preenchido. Onde não for possível, a seleção di-lo logo.
+- O padrão *Favo de mel* tem no diálogo o nome do manual. Antes o diálogo dizia Hexágono. As aberturas hexagonais de *Cortar padrão de furos* chamam-se assim também.
+- O diálogo *Aplicar textura* abre com uma área do padrão que cabe na face escolhida e um passo que o seu bico imprime. Se uma área ultrapassar o rebordo, o diálogo diz isso e como resolver.
 - Em cordões e gargantas, a seleção só oferece o que a operação consegue fazer.
 - Se houver um arredondamento junto a uma parede, *Aplicar o ângulo de saída* diz antes do cálculo que está a atrapalhar e indica *Remover característica* como saída.
 - Ao cortar uma parte de um corpo, desaparecem também chanfros, roscas e alojamentos de porcas dos blocos que lá estavam.

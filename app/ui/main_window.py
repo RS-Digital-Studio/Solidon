@@ -116,6 +116,7 @@ from app.core.errors import (
     CANCEL,
     CHANGE_THREAD_STEP,
     CHOOSE,
+    CORRECT_INPUT,
     DECIMATE_AND_RETRY,
     REMESH_AND_RETRY,
     REPAIR_AND_RETRY,
@@ -2482,6 +2483,17 @@ def export_scope(chosen: int, total: int) -> str:
     if chosen >= total:
         return ""
     return tr("{count} von {total} Körpern", count=chosen, total=total)
+
+
+def _writes_several(export_format: str, objects: Sequence[object]) -> bool:
+    """Ob ein Export in diesem Format mehrere Dateien schreibt — eine Regel für
+    Vorschlag und Merken (Review G4).
+
+    3MF hält alle Körper in einer Datei, jedes andere Format schreibt eine je
+    Körper (``_ExportWorker``). Vorschlag und Wahl liefen schon einmal
+    auseinander: Gemerkt wurde nach dem vorgeschlagenen Format.
+    """
+    return export_format != "3mf" and len(objects) > 1
 
 
 def _export_target(
@@ -10097,7 +10109,7 @@ class MainWindow(QMainWindow):
         # sieht die Platzhalter, kann sie umstellen, ergänzen oder wegwerfen.
         # Ein eigener Dialog dafür wäre ein zweiter Schritt vor einer
         # Handlung, die ohnehin schon einen hat.
-        multiple = wanted != "3mf" and len(objects) > 1
+        multiple = _writes_several(wanted, objects)
         scheme = document.export_scheme or default_scheme(objects)
         base = scheme.replace("{project}", stem) if multiple else stem
         suggested_name = f"{base}{FORMAT_SUFFIX[wanted]}"
@@ -10109,7 +10121,12 @@ class MainWindow(QMainWindow):
         if not name:
             return
         target, export_format = _export_target(Path(name), chosen_filter, suggested_name)
-        self._remember_export(target, export_format, multiple=multiple)
+        # Ob mehrere Dateien entstehen, entscheidet das gewählte Format, nicht
+        # das vorgeschlagene: Wer im Dialog von 3MF auf STL wechselt und ein
+        # Muster tippt, schreibt mehrere Dateien und will das Muster wieder.
+        self._remember_export(
+            target, export_format, multiple=_writes_several(export_format, objects)
+        )
         self._start_export(target, export_format)
 
     def _remember_export(self, target: Path, export_format: str, *, multiple: bool) -> None:
@@ -21841,6 +21858,7 @@ class MainWindow(QMainWindow):
         values.update(self._plane_through(spec, chosen[0] if chosen else None, values))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
         values.update(self._edges_from_view(spec, chosen[0] if chosen else None))
+        values.update(self._texture_that_prints(spec, chosen[0] if chosen else None, values))
         # **Zwei gewählte Teile einer Passung** (RM-184): Das Prüfstück sitzt
         # dort, wo sie sich am nächsten kommen — die Oberseite des ersten
         # träfe beim Deckel die Öffnung und beim Zapfen nur ihn.
@@ -22118,6 +22136,8 @@ class MainWindow(QMainWindow):
                 naming_default=self.settings.name_dimensions,
             )
             dialog.spoolChosen.connect(remember_spool)
+            if spec.name == "apply_texture":
+                self._follow_printable_pitch(dialog, values)
             if seat is not None:
                 self._show_seat(dialog, seat)
             if variant is not None:
@@ -23537,7 +23557,6 @@ class MainWindow(QMainWindow):
             ]
             if any(finding.converts_exact_body for finding in findings):
                 approval.required = True
-            incomplete = any(finding.severity == "error" for finding in findings)
             # Ein **erschienener** Körper hat keinen Nachherkörper: Er ist selbst
             # sein ``added``, und ``result`` bleibt leer — kein Loch in der
             # Vorschau (gemessen am 21.09.2026: ein im Vorschlag erzeugter und
@@ -23554,7 +23573,25 @@ class MainWindow(QMainWindow):
                 )
                 for identifier, entry in getattr(difference, "entries", {}).items()
             )
-            if incomplete or missing_result:
+            # **Der Fehler sagt selbst, was fehlt** (Regel 17): Ein Muster, das
+            # über die Fläche hinausragt, sperrte den Knopf mit „Die Vorschau ist
+            # unvollständig.“, während der Befund daneben Grund und Ausweg kannte.
+            # Er steht jetzt bei den Eingaben, samt Knopf, wo der Dialog ihn einlöst.
+            # **Nur der Satz** (Review G6): Seine Zahl steht schon darin, und
+            # „Eingabe korrigieren“ ist hier, wo die Eingaben stehen, kein Rat —
+            # darunter standen sonst „Lose Stücke: 4 / Vorher: 1 / Nachher: 5“.
+            error = next((finding for finding in findings if finding.severity == "error"), None)
+            if error is not None:
+                approval.problem = str(error.message)
+                said = replace(
+                    error,
+                    values={},
+                    suggestions=tuple(
+                        action for action in error.suggestions if action.id != CORRECT_INPUT.id
+                    ),
+                )
+                self._preview_refused(approval, said)
+            elif missing_result:
                 approval.problem = tr(
                     "Die Vorschau ist unvollständig. Ändern Sie die Werte "
                     "oder öffnen Sie die Bearbeitung erneut."
@@ -24832,6 +24869,106 @@ class MainWindow(QMainWindow):
             if longest > 0.0:
                 values["edge"] = _within(fields["edge"], longest / EDGE_SHARE)
         return values
+
+    def _texture_that_prints(
+        self, spec: OperationSpec, selected: ObjectId | None, values: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """*Textur aufbringen* öffnet mit Werten, die es selbst annimmt.
+
+        Mit den Vorgaben des Schemas — Rechteck 40 mal 30 mm, *Rändel gekreuzt*
+        bei 2 mm — lehnte der Dialog sich an der 0,4-mm-Düse selbst ab, und auf
+        einer kleineren Fläche ragte das Rechteck über den Rand. Die Teilung
+        wächst deshalb auf die kleinste, die diese Düse druckt
+        (:func:`texture_ops.printable_pitch`), und nur wo das Rechteck nicht in
+        die gewählte Fläche passt, nimmt der Dialog die ganze Fläche
+        (:func:`texture_ops.rectangle_fits_face`). Überall die ganze Fläche
+        vorzubelegen rechnete an einer 200-mm-Platte Minuten (Review M1).
+        Beides sind gewöhnliche Parameterwerte, sichtbar und änderbar (Regel 2).
+        """
+        if spec.name != "apply_texture":
+            return {}
+        from app.core.geom.texture_ops import printable_pitch
+
+        defaults = {entry.name: entry.default for entry in spec.params.spec()}
+        merged = {**defaults, **values}
+        fitted: dict[str, Any] = {}
+        if merged.get("face") and not self._texture_rectangle_fits(selected, merged):
+            fitted["coverage"] = "whole_face"
+        pattern = str(merged.get("pattern") or "")
+        pitch = merged.get("pitch")
+        if pattern and isinstance(pitch, int | float):
+            printer = self.session.evaluation_profile.printer
+            fitted["pitch"] = printable_pitch(pattern, float(pitch), printer)
+        return fitted
+
+    def _texture_rectangle_fits(self, selected: ObjectId | None, values: Mapping[str, Any]) -> bool:
+        """Ob das vorbelegte Musterfeld in die gewählte Fläche passt — der Kern misst."""
+        from app.core.geom.mesh import as_mesh_data
+        from app.core.geom.texture_ops import rectangle_fits_face
+
+        result = self.session.last_result
+        entry = result.scene.objects.get(selected) if result is not None and selected else None
+        feature = entry.features.get(str(values.get("face"))) if entry is not None else None
+        numbers = [values.get(name) for name in ("x", "y", "z", "nx", "ny", "nz", "angle")]
+        sizes = [values.get("width"), values.get("height")]
+        if (
+            entry is None
+            or feature is None
+            or not all(isinstance(v, int | float) for v in (*numbers, *sizes))
+        ):
+            return True
+        x, y, z, nx, ny, nz, angle = (float(v) for v in numbers)  # type: ignore[arg-type]
+        try:
+            mesh = as_mesh_data(entry.mesh)
+        except AppError:
+            return True
+        return rectangle_fits_face(
+            mesh,
+            tuple(feature.face_indices),
+            (x, y, z),
+            (nx, ny, nz),
+            angle,
+            float(sizes[0]),  # type: ignore[arg-type]
+            float(sizes[1]),  # type: ignore[arg-type]
+        )
+
+    def _follow_printable_pitch(self, dialog: OperationDialog, values: Mapping[str, Any]) -> None:
+        """Wechselt das Muster, zieht eine unberührte Teilung auf das neue nach (Review G7).
+
+        Bei 2,1 mm druckt jedes Muster außer Voronoi; wer nach dem Öffnen
+        Voronoi wählte, bekam die Absage. Eine Teilung, die der Kunde selbst
+        geändert hat, bleibt, wie sie ist.
+        """
+        from app.core.geom.texture_ops import printable_pitch
+
+        spec = dialog.spec
+        default = next(
+            (entry.default for entry in spec.params.spec() if entry.name == "pitch"), None
+        )
+        pitch = values.get("pitch", default)
+        if not isinstance(default, int | float) or not isinstance(pitch, int | float):
+            return
+        state: dict[str, Any] = {"pattern": str(values.get("pattern") or ""), "pitch": float(pitch)}
+        start = float(default)
+        printer = self.session.evaluation_profile.printer
+
+        def follow() -> None:
+            entered = dialog.values()
+            pattern = str(entered.get("pattern") or "")
+            if not pattern or pattern == state["pattern"]:
+                return
+            state["pattern"] = pattern
+            current = entered.get("pitch")
+            if not isinstance(current, int | float) or not is_close(
+                float(current), float(state["pitch"])
+            ):
+                return
+            wanted = printable_pitch(pattern, start, printer)
+            state["pitch"] = wanted
+            if not is_close(wanted, float(current)):
+                dialog.take_value("pitch", wanted)
+
+        dialog.valuesChanged.connect(follow)
 
     def _from_selection(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
         """Was das angeklickte Merkmal darüber sagt, wohin diese Operation
