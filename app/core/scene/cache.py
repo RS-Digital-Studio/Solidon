@@ -32,7 +32,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Protocol, cast
 
-from app.core.errors import AppError
+from app.core.errors import PROGRAMMING_ERRORS, AppError
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, results_cache_dir
 from app.core.scene.serialise import (
@@ -1174,6 +1174,30 @@ def _detection_name(key: bytes) -> str:
     return f"{key.hex()}-detection"
 
 
+class NotStorableError(TypeError):
+    """Ein Wert, den die Platte nicht verlustfrei schreibt: Der Eintrag fällt aus.
+
+    Ein ``TypeError``, weil ``json.dumps`` an derselben Stelle einen wirft und
+    beide dasselbe meinen. Eigene Klasse, damit :meth:`DiskCache.put` und
+    :meth:`DiskCache.save_detection` ihn von einem Programmierfehler
+    (``errors.PROGRAMMING_ERRORS``) trennen: Der eine lässt den Eintrag aus,
+    der andere soll beim ersten Lauf auffallen.
+    """
+
+
+def _json_text(payload: Any) -> str:
+    """``json.dumps`` — ein Wert, den es nicht kennt, ist :class:`NotStorableError`."""
+    try:
+        return json.dumps(payload)
+    except TypeError as problem:
+        raise NotStorableError(str(problem)) from problem
+
+
+def _storage_failure_is_a_bug(problem: Exception) -> bool:
+    """Ob ein Fehler beim Ablegen ein Programmierfehler ist, der durchlaufen soll."""
+    return isinstance(problem, PROGRAMMING_ERRORS) and not isinstance(problem, NotStorableError)
+
+
 def _exact_to_data(value: object) -> Any:
     """Ein Merkmalswert für JSON, so dass :func:`_exact_from_data` ihn Bit für Bit zurückgibt.
 
@@ -1198,7 +1222,7 @@ def _exact_to_data(value: object) -> Any:
         mapping = cast(dict[Any, Any], value)
         if all(type(name) is str for name in mapping):
             return {"dict": {name: _exact_to_data(item) for name, item in mapping.items()}}
-    raise TypeError(f"not stored exactly: {kind.__name__}")
+    raise NotStorableError(f"not stored exactly: {kind.__name__}")
 
 
 def _exact_from_data(data: Any) -> Any:
@@ -2061,13 +2085,17 @@ class DiskCache:
                 payload["answered"] = dict(result.answered)
             if not result.reads_quality:
                 payload["reads_quality"] = False
-            (folder / "objects.json").write_text(json.dumps(payload), encoding="utf-8")
+            (folder / "objects.json").write_text(_json_text(payload), encoding="utf-8")
         except Exception as problem:
             # **Ablegen bricht keine Auswertung ab:** Das Ergebnis ist fertig
             # gerechnet, der Cache nur eine Abkürzung. Eine leere Facettenliste
             # warf hier ``ValueError`` und nahm jedem verschobenen Körper ohne
-            # ebene Facette sein Ergebnis (H1, Review Paket E); was immer
-            # hier wirft, lässt den Eintrag aus und meldet sich.
+            # ebene Facette sein Ergebnis (H1, Review Paket E); was hier wirft,
+            # lässt den Eintrag aus und meldet sich. **Außer einem
+            # Programmierfehler** (``errors.PROGRAMMING_ERRORS``): Der soll beim
+            # ersten Lauf auffallen, nicht als Warnung in einem Protokoll.
+            # Einen Wert, den die Platte nicht schreibt, meldet
+            # :class:`NotStorableError` (ein ``TypeError``, aber kein Fehler im Code).
             #
             # ``TypeError`` hatte hier **zwei** Ursachen, und die zweite hat
             # zweimal Tage gekostet, weil sie wie die erste aussah:
@@ -2086,9 +2114,11 @@ class DiskCache:
             # Warnung ist wieder eine. ``_name_to_data`` deckt die zwei
             # bekannten Stellen ab; eine dritte wäre ein weiteres Feld dieses
             # Payloads.
-            _log.warning("could not write cache entry %s: %s", key, problem)
             if folder is not None:
                 shutil.rmtree(folder, ignore_errors=True)
+            if _storage_failure_is_a_bug(problem):
+                raise
+            _log.warning("could not write cache entry %s: %s", key, problem)
             return
         self._account_for(folder)
 
@@ -2149,17 +2179,20 @@ class DiskCache:
                 "freeform": detection.freeform,
                 "features": [_stored_feature_to_data(entry) for entry in detection.found.values()],
             }
-            text = json.dumps(payload)
+            text = _json_text(payload)
             folder = ensure_dir(self._folder(_detection_name(key)))
             spare = folder / f"{_DETECTION_FILE}.{os.getpid()}.{threading.get_ident()}"
             spare.write_text(text, encoding="utf-8")
             spare.replace(folder / _DETECTION_FILE)
         except Exception as problem:
-            # Wie bei :meth:`put`: Ablegen bricht keine Auswertung ab.
-            _log.warning("could not write detection entry %s: %s", key.hex(), problem)
+            # Wie bei :meth:`put`: Ablegen bricht keine Auswertung ab, ein
+            # Programmierfehler fällt auf.
             if spare is not None:
                 with suppress(OSError):
                     spare.unlink()
+            if _storage_failure_is_a_bug(problem):
+                raise
+            _log.warning("could not write detection entry %s: %s", key.hex(), problem)
             return
         self._account_for(folder)
 

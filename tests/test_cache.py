@@ -4754,6 +4754,38 @@ def test_a_failure_while_storing_never_ends_the_evaluation(
     assert any("could not write detection entry" in message for message in messages)
 
 
+@pytest.mark.parametrize("error", [AttributeError, NameError, TypeError])
+def test_a_programming_error_while_storing_is_not_swallowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: type[Exception]
+) -> None:
+    """Ein Programmierfehler beim Ablegen fällt auf, statt als Warnung zu enden (N1).
+
+    ``errors.PROGRAMMING_ERRORS`` laufen an beiden Stellen durch; der halbe
+    Ordner ist trotzdem weg. Ein Wert, den die Platte nicht schreibt, bleibt
+    eine Warnung (``NotStorableError``, die zwei Tests darüber und
+    ``test_a_payload_the_json_writer_cannot_take_stays_a_warning``).
+    """
+    from app.core.perceive.features import StoredDetection
+    from app.core.scene import cache as cache_module
+    from app.core.types import Feature
+
+    def broken(*_args: object) -> None:
+        raise error("Fehler im Code")
+
+    monkeypatch.setattr(cache_module, "_carried_to_disk", broken)
+    monkeypatch.setattr(cache_module, "_stored_feature_to_data", broken)
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    hole = Feature(id="hole_1", kind="hole", provenance="detected", params={}, face_indices=(1,))
+
+    with pytest.raises(error, match="Fehler im Code"):
+        disk.put("broken", CachedResult(objects=(make_object("obj_1", triangles=4),)))
+    with pytest.raises(error, match="Fehler im Code"):
+        disk.save_detection(b"\x03" * 16, StoredDetection({"hole_1": hole}, 0, 0, False))
+
+    assert not list(tmp_path.rglob("*.json"))
+    assert not list(tmp_path.rglob("*.npz"))
+
+
 def test_carried_measures_of_the_wrong_length_are_dropped(tmp_path: Path) -> None:
     """Je Name die erwartete Länge, sonst wird der Eintrag verworfen und neu gerechnet.
 

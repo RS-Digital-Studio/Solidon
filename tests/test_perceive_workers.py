@@ -261,3 +261,40 @@ def test_a_body_with_a_skin_asks_no_worker(workers: Any, monkeypatch: pytest.Mon
 
     assert _asked_inside_detect(mesh, [500.0] * 40) == {}
     assert parallel.statistics().get("tasks", 0) == before
+
+
+def test_a_long_detection_keeps_one_idle_clock(
+    workers: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Läuft die Ruhezeit während einer Erkennung ab, wartet die Uhr ohne neue Fäden (N2).
+
+    Sie fragte alle 50 ms nach, je mit einem neuen ``threading.Timer``. Jetzt
+    bleibt sie aus, bis die Erkennung den Körper loslässt; danach enden die
+    Arbeiter nach der Ruhezeit.
+    """
+    import threading
+    import time
+
+    started: list[float] = []
+    real = threading.Timer
+
+    class Counted(real):  # type: ignore[misc, valid-type]
+        def start(self) -> None:
+            started.append(self.interval)
+            super().start()
+
+    monkeypatch.setattr(threading, "Timer", Counted)
+    monkeypatch.setattr(parallel, "IDLE_WORKER_SECONDS", 0.05)
+    mesh = features._one_body(_corpus("post_with_fillet.stl"))
+    assert parallel.prepare(features._worker_arrays(mesh.raw), features._detection_key(mesh))
+    parallel.warm(1)
+    time.sleep(1.0)
+
+    assert parallel.statistics()["workers"] == 1, "während der Erkennung endet keiner"
+    assert len(started) <= 2, f"{len(started)} Zeitgeber in einer Sekunde"
+
+    parallel.release()
+    deadline = time.monotonic() + 30.0
+    while parallel.statistics()["workers"] and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert parallel.statistics()["workers"] == 0, "nach der Erkennung enden sie"

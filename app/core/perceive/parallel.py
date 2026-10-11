@@ -298,18 +298,21 @@ class _Pool:
         """Beendet die stehenden Arbeiter, wenn die Ruhezeit um ist und keine Erkennung läuft.
 
         Während einer Erkennung (ein Körper ist vorbereitet, eine Runde hält
-        Arbeiter) wartet die Uhr: Zwischen zwei Runden rechnet der Prozess
+        Arbeiter) endet keiner: Zwischen zwei Runden rechnet der Prozess
         mitunter lange selbst, und die nächste Runde soll ihre Arbeiter finden.
+        Die Uhr bleibt dann aus, statt in kurzen Schritten nachzufragen (je
+        Schritt ein neuer Faden); :func:`release` und :meth:`give_back` am Ende
+        der Erkennung stellen sie neu (:meth:`_used`).
         """
         with _PREPARED_LOCK:
             detecting = _PREPARED[0] is not None
         with self._lock:
             self._timer = None
-            if not self._workers:
+            if not self._workers or detecting or self._out:
                 return
             rest = IDLE_WORKER_SECONDS - (time.monotonic() - self._last_use)
-            if detecting or self._out or rest > 0:
-                self._arm(max(rest, CANCEL_POLL_SECONDS))
+            if rest > 0:
+                self._arm(rest)
                 return
             workers, self._workers = self._workers, []
         for worker in workers:
@@ -388,12 +391,14 @@ def release() -> None:
 
     Ohne das hielte jeder Arbeiter bis zur nächsten Erkennung die Kopie des
     Körpers und alles daran Gemerkte (Speicher je Prozess begrenzt, RM-637).
-    Der gemeinsame Speicher des vorbereiteten Körpers geht mit.
+    Der gemeinsame Speicher des vorbereiteten Körpers geht mit — vorher, denn
+    ``tell`` stellt die Uhr der Ruhezeit, und die soll keine laufende
+    Erkennung mehr sehen.
     """
-    _POOL.tell(("forget",))
     with _PREPARED_LOCK:
         _close(_PREPARED[0])
         _PREPARED[0] = None
+    _POOL.tell(("forget",))
 
 
 def shutdown() -> int:
