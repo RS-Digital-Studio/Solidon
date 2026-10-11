@@ -552,8 +552,8 @@ def thread_at_gauge(feature: Feature) -> tuple[float, float] | None:
     verschiedenen Höhen. Ein Gewinde aus der Bibliothek nennt deshalb auch
     ``gauge_nominal``, das Nennmaß seiner Größe in der Bezugsebene; das gebaute
     Maß dort liegt um dasselbe neben ``diameter`` wie das Nennmaß neben
-    ``nominal``, denn beide wachsen mit demselben Kegel. Ein gemessenes oder
-    gemessenes Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
+    ``nominal``, denn beide wachsen mit demselben Kegel. Ein am Netz gemessenes
+    Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
     Passung und Gegenstück raten sie nicht.
 
     **Ein geändertes Gewinde behält sie** (Nachprüfung GEW, N2): *Merkmal

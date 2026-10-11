@@ -1242,7 +1242,7 @@ wurde aus einer M6-Mutter beim Ändern der Steigung eine mit Bohrung Ø 6
 (Review, 21.09.2026). **Ein erkanntes Gewinde am Netz misst sich an seinen
 Ecken** (`_thread_corners`): Der Fit über Dreiecksmitten liegt radial
 innerhalb der Kammecken und axial neben der Stange; auf den gemessenen Kamm
-gesetzt blieben 51 Splitter, auf die gemessene Mitte eine Scheibe. Es
+gesetzt blieben 51 Splitter, auf die gemessene Mitte eine Scheibe.
 Seit RM-544 wird ein Linksgewinde links und ein mehrgängiges mit seiner
 Gangzahl neu geschnitten, statt abzusagen; als links zählt nur ein **belegtes**
 (`types.thread_is_left_handed`: gesetzt, nativ gelesen oder am Netz an den
