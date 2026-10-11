@@ -202,6 +202,7 @@ dans `website/version.json`.
 - Un clic que l'accrochage à la grille pose exactement sur un point existant accroche ce point. Jusqu'ici, le contour semblait fermé sans être relié.
 - Un double-clic avec l'outil Ligne termine la suite de lignes. Jusqu'ici, il créait une ligne de longueur nulle.
 - Entrée dans le champ de cote du dialogue *Dessiner une esquisse* fixe la cote et laisse le dialogue ouvert. Jusqu'ici, elle appliquait le dessin et le fermait.
+- Bien des parois rondes d'un petit texte, comme celles d'un « O » ou « D » posé avec *Appliquer du texte*, figurent aussi sur un grand corps dans l'arbre des objets comme *Face courbe*.
 
 ### Générer avec l'IA
 

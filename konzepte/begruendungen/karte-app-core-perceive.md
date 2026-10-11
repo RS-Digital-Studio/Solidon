@@ -1465,7 +1465,9 @@ genügte ein Skalarprodukt der Achsen ungleich null.
   ohne Zeile im Baum und ohne Filament. Die Phase läuft **zuletzt**, weil sie
   den Rest nimmt: gerundete Dreiecke (`_curved_faces`), die kein Merkmal in
   seinen `face_indices` führt, zusammenhängend über glatte Nähte, mindestens
-  ein Prozent der Haut (`CURVED_SIDE_SHARE`) und `MIN_FACE_AREA`. **Gerundet
+  ein Prozent der Haut (`CURVED_SIDE_SHARE`) und `MIN_FACE_AREA`, ringsum
+  scharf begrenzt nur `MIN_FACE_AREA` (Begründung in
+  `regel-schichtanalyse.md`). **Gerundet
   ist eine ganze koplanare Facette, wenn eines ihrer Dreiecke an einer
   Rundungsnaht liegt** (24.09.2026): Sonst fiel die Mitte einer geteilten
   Mantelfacette heraus, und dieselbe Seite war nach einer formgleichen

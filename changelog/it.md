@@ -201,6 +201,7 @@ scrive in `website/version.json`.
 - Un clic che l'aggancio alla griglia porta esattamente su un punto esistente aggancia quel punto. Finora il contorno sembrava chiuso senza essere collegato.
 - Un doppio clic con lo strumento Linea termina la sequenza di linee. Finora creava una linea di lunghezza zero.
 - Invio nel campo della quota del dialogo *Disegna schizzo* imposta la quota e lascia aperto il dialogo. Finora applicava il disegno e lo chiudeva.
+- Molte pareti tonde di un testo piccolo, come quelle di una «O» o di una «D» con *Applica testo*, compaiono ora anche su un corpo grande come *Faccia curva* nell'albero degli oggetti.
 
 ### Generare con l'IA
 

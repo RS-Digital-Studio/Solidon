@@ -201,6 +201,7 @@ it into `website/version.json`.
 - A click that grid snapping places exactly on an existing point catches that point. Until now the contour looked closed without being connected.
 - A double-click with the line tool ends the chain of lines. Until now it created a line of zero length.
 - Enter in the dimension field of the *Draw sketch* dialog sets the dimension and keeps the dialog open. Until now it applied the drawing and closed it.
+- Many round walls of small lettering, such as those of an “O” or “D” added with *Put text on*, now appear as *Curved face* in the object tree on a large body too.
 
 ### Generating with AI
 

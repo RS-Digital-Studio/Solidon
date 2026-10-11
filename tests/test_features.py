@@ -4835,6 +4835,63 @@ def test_the_curved_faces_of_a_letter_count_its_bows() -> None:
     assert not [f for f in found.values() if f.kind == "curved_face"]
 
 
+def _curved_faces_after(drafts: list[Any]) -> list[Feature]:
+    """Die gerundeten Seiten des letzten Körpers nach einer echten Auswertung."""
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.scene import History, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    forget_cache()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Schrift", drafts)
+    result = evaluate(
+        project.document,
+        profiles.make_profile("centauri-carbon-2", "petg"),
+        sources=ProjectSources(project),
+    )
+    entry = list(result.scene.objects.values())[-1]
+    return [feature for feature in entry.features.values() if feature.kind == "curved_face"]
+
+
+@pytest.mark.parametrize("text", ["O", "D", "0"])
+def test_the_round_walls_of_a_letter_on_a_cube_are_curved_faces(text: str) -> None:
+    """Ein „O“ per *Text aufbringen* auf einem Würfel trug im Baum keine runde Wand.
+
+    Die Schwelle für gerundete Seiten war ein Prozent der ganzen Haut: Am
+    20-mm-Würfel 24 mm², und die beiden Wände eines 8-mm-„O“ von 0,6 mm
+    Höhe haben zusammen 19 mm². Eine Wand, die an jedem Rand scharf an eine
+    eigene Fläche stößt, braucht diesen Anteil nicht — wie eine ebene
+    Fläche, die für sich steht (:func:`_facets_standing_apart`).
+    """
+    from app.core.scene import OperationDraft
+
+    curves = _curved_faces_after(
+        [
+            OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 20.0}),
+            OperationDraft(
+                op="label_text",
+                inputs=("obj_1",),
+                params={"text": text, "size": 8.0, "depth": 0.6, "x": 0.0, "y": 0.0, "z": 20.0},
+            ),
+        ]
+    )
+
+    assert sorted(bool(feature.params["inner"]) for feature in curves) == [False, True], curves
+
+
+def test_the_round_walls_of_a_lettering_body_stay_curved_faces() -> None:
+    """Derselbe Buchstabe als *Schriftzug als Körper* — dort trug er sie schon."""
+    from app.core.scene import OperationDraft
+
+    curves = _curved_faces_after(
+        [OperationDraft(op="create_label", params={"text": "O", "size": 8.0, "depth": 0.6})]
+    )
+
+    assert sorted(bool(feature.params["inner"]) for feature in curves) == [False, True], curves
+
+
 def _arc(
     centre: tuple[float, float], radius: float, start: float, stop: float
 ) -> list[tuple[float, float]]:
@@ -7277,8 +7334,12 @@ def test_lettering_is_read_like_its_original_after_refining_and_a_bore(edge: flo
     assert refined_units(refined.raw) is not None, "die Bohrung hat den Ursprung verloren"
     expected, found = _read_as_shapes(before), _read_as_shapes(after)
     kinds = [kind for kind, _value in expected]
-    assert kinds.count("curved_face") == 2 and kinds.count("fillet") == 1 and "hole" in kinds, (
-        "der Basisstand liest zwei gerundete Seiten, eine Verrundung und die Bohrung"
+    # Fünf gerundete Seiten: die zwei großen Bögen und drei Wände unter einem
+    # Prozent der Haut (43 mm²), deren Nähte alle scharf an ebene Facetten
+    # stoßen — der Innenbogen des R mit 33 mm² unter ihnen
+    # (``curved_sides_standing``).
+    assert kinds.count("curved_face") == 5 and kinds.count("fillet") == 1 and "hole" in kinds, (
+        "der Basisstand liest fünf gerundete Seiten, eine Verrundung und die Bohrung"
     )
     assert [kind for kind, _value in found] == kinds
     assert [value for _kind, value in found] == pytest.approx(
