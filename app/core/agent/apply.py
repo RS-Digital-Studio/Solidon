@@ -33,6 +33,7 @@ from app.core.log import get_logger
 from app.core.registry import REGISTRY, Registry
 from app.core.scene.history import History, change_for
 from app.core.types import (
+    NOTICE_ID_PREFIX,
     ChatEntry,
     Document,
     DocumentChange,
@@ -191,8 +192,17 @@ def record(
     transaction: Transaction | None,
     discarded: bool = False,
 ) -> tuple[ChatEntry, ChatEntry]:
-    """Schreibt beide Beiträge des Austauschs ins Projekt (§26.3)."""
+    """Schreibt beide Beiträge des Austauschs ins Projekt (§26.3).
+
+    Sätze des Backends (``Proposal.notices``) stehen als eigene Hinweise
+    dazwischen — im Chat vor der Antwort, aber nie im Auftrag an das Modell
+    (``ChatEntry.notice``).
+    """
     question = ChatEntry(id=_identifier(), role="user", text=proposal.request)
+    notices = [
+        ChatEntry(id=NOTICE_ID_PREFIX + _identifier(), role="agent", text=notice)
+        for notice in proposal.notices
+    ]
     answer = ChatEntry(
         id=_identifier(),
         role="agent",
@@ -201,7 +211,9 @@ def record(
         origin=proposal.origin,
         discarded=discarded,
     )
-    document.chat.extend([question, answer])
+    document.chat.extend([question, *notices, answer])
+    if notices and proposal.delivered is not None:
+        proposal.delivered()
     return question, answer
 
 

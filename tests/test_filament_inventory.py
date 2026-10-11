@@ -1054,7 +1054,10 @@ def test_a_filesystem_without_posix_rename_still_saves_the_inventory(
             return refuse
 
     first = spool()
-    monkeypatch.setattr(filaments, "_windows_file_api", lambda: Refusing(real()))
+    # Der Austausch liegt seit dem gemeinsamen Helfer in ``paths``.
+    from app.core import paths
+
+    monkeypatch.setattr(paths, "windows_file_api", lambda: Refusing(real()))
     second = filaments.save(filaments.CatalogueFilament("PLA Blau", "#2040d0"))
 
     names = {entry.name for entry in filaments.catalogue()}

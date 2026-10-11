@@ -127,6 +127,19 @@ Offen ist der oberste Abschnitt, solange es zu seiner Nummer keinen Tag gibt
 (`git tag -l v<nummer>`); sonst legt der Zweig den nächsten an, mit der Nummer
 aus `tools/bump_version.py --zeigen` (`--minor` nur nach Produktentscheidung).
 
+**Punkte vor der ersten `###` eines Abschnitts sind sein Vorspann** — nur für
+eine Meldung an jeden Nutzer (Entscheidung Robert, etwa die Demo-Laufzeit).
+`changes.lead_of` erkennt ihn (titellos **und** vor benannten Gruppen, sonst
+ist es eine alte ungegliederte Fassung); Update-Fenster samt Hinweistext,
+*Hilfe → Neuerungen* und die Changelog-Seite heben ihn über die Gruppen, und
+`version.json` trägt ihn als erste Gruppe ohne Titel. **Eine Meldung für jeden
+Nutzer steht als Vorspann im Changelog und am Anfang des Hinweistexts
+(`notes_by_language`) in allen Sprachen** (Entscheidung Koordinator 0.6.0):
+Das Update-Fenster sehen Kunden mit dem Code der Version davor, und hervorgehoben
+erreicht sie die Meldung nur über den Hinweis. Wiederholt der Hinweis einer
+Sprache den Vorspann (`changes.repeats`), nimmt `make_download` ihn dort aus der
+Liste der Versionsdatei, sonst stünde er doppelt da.
+
 **Ein Punkt spricht allgemein** (Entscheidung Robert): von dem, was der Kunde
 an seinem eigenen Modell merkt — nicht von Teilen oder Namen der Prüfmodelle,
 an denen gemessen wurde („Kinn und Flügel“, „am Eiffelturm“). Damit kann ein
@@ -198,7 +211,10 @@ auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
   Installation kennt nur die Schlüssel ihrer Version und verwirft den Rest still.
 - Neue Actions nur mit vollständiger 40-stelliger Commit-ID.
 - Downloads im Workflow nur von einer unveränderlichen Veröffentlichung und
-  nach Prüfsummenprüfung.
+  nach Prüfsummenprüfung. Echt ist ein Download über seine festgenagelte
+  SHA-256, nicht über TLS: Einen Rückfall ohne TLS-Prüfung gibt es nur in
+  `fetch()` der Slicerauswahl, nur bei curl-Code 60, nie ohne Prüfsumme danach
+  und nie mit Zugangsdaten im Aufruf (Wächter in `test_supply_chain.py`).
 - Vor einem Signierschlüssel läuft kein Repositorycode; die Lizenzprüfung
   (`make_licence_notices --release-check`) läuft **nach** der Signatur und
   ungeschützt, und `sign_release.py` schreibt die Evidenz danach neu — der

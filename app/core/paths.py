@@ -261,6 +261,114 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
+def windows_file_api() -> Any:
+    """Die drei Windows-Dateiaufrufe mit zeigerbreiten Signaturen.
+
+    **Die Weiche heißt ``sys.platform`` und nicht ``os.name``.** Beide sagen
+    zur Laufzeit dasselbe; nur die erste versteht mypy als Plattformzweig.
+    Mit ``os.name`` prüfte es ``ctypes.WinDLL`` und ``msvcrt`` auch auf Linux
+    und macOS, wo es sie nicht gibt — und die CI war seit dem 10.09.2026 auf
+    jedem Push rot, während das Windows-Tor nichts davon sah.
+    """
+    if sys.platform != "win32":
+        from app.core.errors import InternalError
+
+        raise InternalError(
+            detail=f"windows_file_api was called on {sys.platform}, which has no kernel32"
+        )
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.argtypes = (
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+    )
+    kernel32.CreateFileW.restype = ctypes.c_void_p
+    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+    kernel32.CloseHandle.restype = ctypes.c_int
+    kernel32.SetFileInformationByHandle.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    )
+    kernel32.SetFileInformationByHandle.restype = ctypes.c_int
+    return kernel32
+
+
+#: Womit ein Dateisystem sagt, dass es ``FileRenameInfoEx`` nicht kennt.
+#:
+#: Die Umbenennung mit POSIX-Semantik gibt es auf NTFS und ReFS ab Windows 10
+#: 1709. Ein FAT32- oder exFAT-Datenträger, eine Netzfreigabe ohne diese
+#: SMB-Fähigkeit und ein älteres Windows lehnen denselben Aufruf ab — und der
+#: Katalog liegt unter ``%APPDATA%``, das in einer Firma auf eine Freigabe
+#: umgeleitet sein kann. Gemessen mit einer abweisenden Gegenstelle
+#: (``ERROR_INVALID_PARAMETER``): Jeder Schreibweg des Lagers endete in
+#: „Die Datei ließ sich nicht schreiben.: [WinError 87]", und gespeichert
+#: wurde nichts.
+RENAME_WITHOUT_POSIX: Final = frozenset({1, 50, 87})
+
+
+def replace_file(source: Path, target: Path) -> None:
+    """Atomarer Austausch; offene Leser behalten ihren alten Stand auch auf Windows.
+
+    **Und wo das Dateisystem den Weg nicht kennt, bleibt der gewöhnliche.**
+    ``source.replace(target)`` ist genau das, was hier bis zum 12.09.2026
+    stand. Er gibt eine Zusage auf: Solange ein anderer Griff die Zieldatei
+    hält, antwortet Windows mit ``ERROR_ACCESS_DENIED`` — gemessen am
+    13.09.2026 gegen einen offenen ``_open_snapshot``, und genau deshalb wird
+    der POSIX-Weg zuerst versucht. Das Fenster dafür ist klein
+    (:func:`read_snapshot` öffnet und schließt in einem Zug), und der
+    ``FileWriteError`` darüber trägt ``RETRY``. Ohne den Rückfall wäre ein
+    nicht unterstützter Aufruf dagegen kein engeres Fenster, sondern gar
+    keines: Auf FAT32, exFAT, einer Netzfreigabe ohne diese SMB-Fähigkeit und
+    auf Windows vor 1709 scheiterte **jeder** Schreibweg des Lagers.
+    """
+    if sys.platform != "win32":
+        source.replace(target)
+        return
+    import ctypes
+
+    kernel32 = windows_file_api()
+    name = str(target.absolute())
+    units = len(name.encode("utf-16-le")) // 2
+
+    class RenameInfo(ctypes.Structure):
+        """FILE_RENAME_INFO mit ausreichend Platz für den vollständigen Zielnamen."""
+
+        _fields_ = [
+            ("flags", ctypes.c_uint32),
+            ("root_directory", ctypes.c_void_p),
+            ("name_length", ctypes.c_uint32),
+            ("name", ctypes.c_wchar * (units + 1)),
+        ]
+
+    # REPLACE_IF_EXISTS | POSIX_SEMANTICS: offene Griffe bleiben am alten
+    # Dateistand, neue Griffe öffnen den neuen. Kein Löschen vor dem Austausch.
+    info = RenameInfo(0x3, None, units * 2, name)
+    handle = kernel32.CreateFileW(str(source), 0x10000, 0x7, None, 3, 0, None)
+    if handle in (None, ctypes.c_void_p(-1).value):
+        raise ctypes.WinError(ctypes.get_last_error())
+    refused = 0
+    try:
+        if not kernel32.SetFileInformationByHandle(
+            handle, 22, ctypes.byref(info), ctypes.sizeof(info)
+        ):  # FileRenameInfoEx
+            refused = ctypes.get_last_error()
+    finally:
+        kernel32.CloseHandle(handle)
+    if not refused:
+        return
+    if refused not in RENAME_WITHOUT_POSIX:
+        raise ctypes.WinError(refused)
+    source.replace(target)
+
+
 @functools.cache
 def _shared_kernel() -> Any:
     """``kernel32`` mit den Prototypen für geteiltes Lesen, einmal je Prozess.

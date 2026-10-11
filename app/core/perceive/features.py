@@ -8179,6 +8179,7 @@ WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
         "surface_index",
         "facet_of_face",
         "facets_by_area",
+        "planar_members",
         "curvature_jumps",
         "face_radii",
         "prepared_surface",
@@ -8233,6 +8234,7 @@ SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
         "_cone_is_recognisable",
         "curved_faces",
         "facets_standing_apart",
+        "planar_members",
         "large_facet_faces",
         "facet_verdicts",
         "planar_facet",
@@ -15087,6 +15089,111 @@ def _parallel_candidates(
     return np.flatnonzero(same_shell & alike & above & (key_of != own_key))
 
 
+def curved_sides_standing(body: trimesh.Trimesh, patches: Sequence[np.ndarray]) -> list[bool]:
+    """Je Fleck gerundeter Haut, ob er als gerundete Seite gilt.
+
+    Die Vollerkennung (:func:`detect_curved_faces`) und die örtliche
+    (``local._recognise_region``) fragen hier, damit beide dasselbe sagen.
+    ``patches`` sind Dreiecksnummern des ganzen Körpers ``body``.
+
+    **Gegen die ganze Oberfläche gemessen**, wie :data:`BROAD_FACE_SHARE`
+    bei den ebenen Flächen, nur enger: Auf ``generated_figure.stl`` blieben
+    zwischen sechs Kugeln sechs Flecken von 4 bis 40 mm² übrig — Übergänge,
+    keine Seiten. Ein Prozent der Haut lässt die zwei Bögen eines D (2315
+    und 3311 mm² an rund 20 000) stehen und die Übergänge fallen.
+
+    **Ringsum scharf begrenzt genügt** :data:`MIN_FACE_AREA` — derselbe
+    Beleg wie bei einer kleinen ebenen Fläche (:func:`_bounded_by_planes`),
+    und kein Streifen (:func:`_a_sliver`). Die zwei Wände eines 8-mm-„O“,
+    0,6 mm erhaben auf einem 20-mm-Würfel, haben zusammen 19 mm² bei einer
+    Schwelle von 24 mm² und fehlten im Baum; jede stößt oben an die Schrift
+    und unten an den Würfel, beide eben und scharf geknickt. Ein Übergang
+    zwischen zwei Kugeln stößt dagegen mit der Stufe der Rundung an seine
+    Nachbarn. **Hinter jeder Naht liegt eine ebene Facette** (``body.facets``).
+    Gerundete Haut dahinter ist kein Beleg: An der eingelesenen Figur von
+    ``weg3-generiert-aufbereiten`` vor der Reparatur bekam ein Zwischenstand
+    so 87 gerundete „Seiten“ aus Rauschen. Die Antwort eines Flecks hängt nur
+    an ihm und am Körper, nicht an den übrigen Flecken — ein Nachbarfleck
+    zählt, was seine Dreiecke in ``body.facets`` sind.
+    """
+    areas = np.asarray(body.area_faces, dtype=float)
+    patch_areas = [float(areas[patch].sum()) for patch in patches]
+    floor = max(MIN_FACE_AREA, float(body.area) * CURVED_SIDE_SHARE)
+    bounded = [False] * len(patches)
+    if any(MIN_FACE_AREA <= area < floor for area in patch_areas):
+        bounded = _bounded_by_planes(body, patches).tolist()
+    return [
+        area >= floor or (area >= MIN_FACE_AREA and apart and not _a_sliver(body, patch.tolist()))
+        for patch, area, apart in zip(patches, patch_areas, bounded, strict=True)
+    ]
+
+
+def _planar_members(body: trimesh.Trimesh) -> np.ndarray:
+    """Je Dreieck, ob es zu einer ebenen Facette (``body.facets``) gehört — einmal je Körper."""
+    mask: np.ndarray = remembered(
+        "planar_members",
+        body,
+        (),
+        lambda: _planar_members_read(body),
+    )
+    return mask
+
+
+def _planar_members_read(body: trimesh.Trimesh) -> np.ndarray:
+    """Der Rumpf von :func:`_planar_members` — die Antwort merkt sich die Hülle."""
+    mask = np.zeros(len(body.faces), dtype=bool)
+    facets = body.facets
+    if len(facets):
+        mask[np.concatenate(facets)] = True
+    mask.flags.writeable = False
+    return mask
+
+
+def _bounded_by_planes(body: trimesh.Trimesh, patches: Sequence[np.ndarray]) -> np.ndarray:
+    """Je Fleck, ob jede seiner Nähte scharf an eine ebene Facette stößt.
+
+    Gelesen werden nur die Nähte, die ein Fleckdreieck berühren — eine
+    Bitmaske über ``face_adjacency``, keine Besitzer- oder Facettentabelle
+    über das ganze Netz: Die örtliche Erkennung fragt je Merkmal, und an
+    4,8 Millionen Dreiecken kostete die Tabelle 0,4 s und 360 MiB je Frage.
+    **Jeder Fleck steht für sich**: Hinter der Naht zählt nur, ob das
+    Dreieck in ``body.facets`` steht (:func:`_planar_members`), nicht, ob es
+    zu einem anderen gefragten Fleck gehört — sonst sagte die Vollerkennung,
+    die alle Flecken zugleich fragt, etwas anderes als die örtliche, die
+    einen fragt. Dazu hat jede Kante einen Nachbarn, wie in
+    :func:`_facets_standing_apart`. Die Flecken teilen kein Dreieck.
+    """
+    count = len(patches)
+    if not count:
+        return np.zeros(0, dtype=bool)
+    sizes = np.fromiter((len(patch) for patch in patches), dtype=np.int64, count=count)
+    members = np.concatenate([np.asarray(patch, dtype=np.int64) for patch in patches])
+    owner = np.repeat(np.arange(count, dtype=np.int64), sizes)
+    order = np.argsort(members, kind="stable")
+    members, owner = members[order], owner[order]
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    mine = np.zeros(len(body.faces), dtype=bool)
+    mine[members] = True
+    rows = np.flatnonzero(mine[pairs[:, 0]] | mine[pairs[:, 1]])
+    del mine
+    seams = pairs[rows]
+    spot = np.minimum(np.searchsorted(members, seams), len(members) - 1)
+    sides = np.where(members[spot] == seams, owner[spot], -1)
+    # Nur die Winkel der eigenen Nähte, nicht das Feld über alle Paare.
+    sharp = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float)[rows]) >= CURVATURE_LIMIT
+    planar = _planar_members(body)
+    edges = np.zeros(count, dtype=np.int64)
+    spoiled = np.zeros(count, dtype=bool)
+    for side, other in ((0, 1), (1, 0)):
+        here = sides[:, side]
+        valid = here >= 0
+        np.add.at(edges, here[valid], 1)
+        across = valid & (here != sides[:, other])
+        spoiled[here[across & ~(sharp & planar[seams[:, other]])]] = True
+    bounded: np.ndarray = (edges == 3 * sizes) & ~spoiled
+    return bounded
+
+
 def detect_curved_faces(
     mesh: MeshData,
     found: Mapping[FeatureId, Feature],
@@ -15167,21 +15274,15 @@ def detect_curved_faces(
         check_cancelled()
     areas = np.asarray(body.area_faces, dtype=float)
     convex = np.asarray(body.face_adjacency_convex, dtype=bool)
-    # **Gegen die ganze Oberfläche gemessen**, wie :data:`BROAD_FACE_SHARE`
-    # bei den ebenen Flächen, nur enger: Auf ``generated_figure.stl`` blieben
-    # zwischen sechs Kugeln sechs Flecken von 4 bis 40 mm² übrig — Übergänge,
-    # keine Seiten. Ein Prozent der Haut lässt die zwei Bögen eines D (2315
-    # und 3311 mm² an rund 20 000) stehen und die Übergänge fallen.
-    floor = max(MIN_FACE_AREA, float(body.area) * CURVED_SIDE_SHARE)
+    patches = [
+        np.asarray(sorted(int(index) for index in group), dtype=np.int64) for group in groups
+    ]
     entries: list[tuple[np.ndarray, float]] = []
-    for group in groups:
+    for patch, standing in zip(patches, curved_sides_standing(body, patches), strict=True):
         if check_cancelled is not None:
             check_cancelled()
-        patch = np.asarray(sorted(int(index) for index in group), dtype=np.int64)
-        area = float(areas[patch].sum())
-        if area < floor:
-            continue
-        entries.append((patch, area))
+        if standing:
+            entries.append((patch, float(areas[patch].sum())))
     # Größte zuerst, bei gleicher Fläche die Eckennummern — dieselbe
     # Stabilität wie bei den ebenen Flächen (:func:`_largest_first`).
     entries = _largest_first(body, entries)

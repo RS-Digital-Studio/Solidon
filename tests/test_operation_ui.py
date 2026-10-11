@@ -2696,6 +2696,76 @@ def test_whole_face_dialog_releases_its_grip_block_on_rectangle_and_cancel(
     assert not window.viewport._feature_gizmo_blocked
 
 
+def _texture_dialog_at_top(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Oberseite des ersten Körpers wählen und *Textur aufbringen* öffnen."""
+    from app.core.scene.placement import top_face
+
+    object_id = select(window)
+    face = top_face(window.session.last_result.scene.objects[object_id].features)
+    assert face is not None
+    window._on_feature_picked(face.id)
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    window.run_operation(REGISTRY.get("apply_texture"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    return dialog, face
+
+
+@pytest.mark.parametrize(
+    ("model", "coverage"), [("plate_holes.stl", "rectangle"), ("cube_clean.stl", "whole_face")]
+)
+def test_texture_at_a_face_opens_with_values_it_accepts(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, model: str, coverage: str
+) -> None:
+    """An einer gewählten Fläche öffnet *Textur aufbringen* druckbar (Regel 17).
+
+    Mit den Schemavorgaben — Rechteck 40 mal 30 mm, *Rändel gekreuzt* bei
+    2 mm — lehnte der Dialog sich an der 0,4-mm-Düse selbst ab, und auf einer
+    kleineren Fläche ragte das Rechteck über den Rand. Die ganze Fläche nimmt
+    er nur, wo das Rechteck nicht passt: Auf der 80-mm-Platte bleibt das
+    kleine Feld, denn die ganze Fläche großer Platten rechnet Minuten
+    (Review M1); auf dem 20-mm-Würfel passt es nicht.
+    """
+    from app.core.geom import texture_ops
+
+    window = MainWindow(Session(), UiSettings())
+    window.open_path(MESHES / model)
+    assert window.session.wait_for_idle(60_000)
+    dialog, face = _texture_dialog_at_top(window, monkeypatch)
+    values = dialog.values()
+    dialog.reject()
+    assert values["coverage"] == coverage
+    assert values["face"] == face.id
+    printer = window.session.evaluation_profile.printer
+    texture_ops.check_printable(values["pattern"], values["pitch"], values["depth"], printer)
+
+
+def test_an_untouched_pitch_follows_a_new_pattern(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wer nach dem Öffnen Voronoi wählt, bekommt eine Teilung, die druckt (Review G7).
+
+    Bei 2,1 mm druckt jedes Muster außer Voronoi. Eine selbst getippte Teilung
+    bleibt dagegen stehen.
+    """
+    from app.core.geom import texture_ops
+
+    dialog, _face = _texture_dialog_at_top(window, monkeypatch)
+    printer = window.session.evaluation_profile.printer
+    pattern = dialog._editors["pattern"]
+    pattern.setCurrentIndex(pattern.findData("voronoi"))
+    QApplication.processEvents()
+    values = dialog.values()
+    assert values["pattern"] == "voronoi"
+    texture_ops.check_printable("voronoi", values["pitch"], values["depth"], printer)
+
+    assert dialog.take_value("pitch", 5.0)
+    pattern.setCurrentIndex(pattern.findData("rib"))
+    QApplication.processEvents()
+    assert dialog.values()["pitch"] == pytest.approx(5.0), "die getippte Teilung bleibt"
+    dialog.reject()
+
+
 def test_the_description_is_as_tall_as_its_text(qt_app: QApplication) -> None:
     """Der Satz über den Feldern stand vertikal zentriert in 189 Pixeln.
 

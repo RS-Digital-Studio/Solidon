@@ -1427,6 +1427,155 @@ def test_a_discarded_proposal_keeps_the_conversation(project: Project, profile: 
     assert proposal.empty
 
 
+def test_a_notice_of_the_backend_stands_once_before_the_answer(
+    project: Project, profile: Profile
+) -> None:
+    """S-20261010-e5014c: Antwortet ein anderes Modell als das fehlende, liest
+    der Kunde das im Chat — einmal, vor der Antwort (Regel 21)."""
+    notice = "„qwen3:14b“ fehlt, deshalb antwortet „qwen3.5:9b“."
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(ToolCall(id="c1", name="read_digest", arguments={}),),
+                notices=(notice,),
+            ),
+            Reply(text="Guten Tag.", notices=(notice,)),
+        ],
+    )
+    proposal = agent.propose("Hallo")
+
+    assert proposal.notices == [notice]
+    agent_apply.discard(proposal, project.document)
+    chat = project.document.chat
+    assert [entry.text for entry in chat] == ["Hallo", notice, "Guten Tag."]
+    assert chat[1].notice and not chat[2].notice
+
+    # Review spät G2: Der Satz ist Anzeige für den Kunden, kein Beitrag des
+    # Modells — in einem späteren Auftrag steht er nicht.
+    sent = context.conversation(chat, project.document)
+    assert [message.role for message in sent] == ["user", "assistant"]
+    assert notice not in str(sent)
+
+
+class _MissingDefault:
+    """Ein Ollama ohne die Vorgabe qwen3:14b, mit qwen3.5:9b; ``steps`` legt
+    fest, was qwen3.5:9b je Anfrage tut."""
+
+    def __init__(self, *steps: str) -> None:
+        self.steps = list(steps)
+
+    def __call__(self, url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict:
+        from app.core.backends import llm
+
+        model = str(payload["model"])
+        if model != "qwen3.5:9b":
+            raise llm.refusal(404, b'{"error":"model \'' + model.encode() + b"' not found\"}")
+        step = self.steps.pop(0) if len(self.steps) > 1 else self.steps[0]
+        if step == "500":
+            raise llm.refusal(500, b'{"error":"boom"}')
+        message: dict[str, Any] = {"role": "assistant", "content": "Guten Tag."}
+        if step == "tool":
+            message = {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"function": {"name": "read_digest", "arguments": {}}}],
+            }
+        answer: dict[str, Any] = {"model": model, "done_reason": "stop", "message": message}
+        if step == "cut":
+            # Ein Token für einen langen Auftrag: gekürzt (``prompt_was_cut``).
+            # Sonst ohne Zähler — ungezählt ist nichts gekürzt.
+            answer["prompt_eval_count"] = 1
+        return answer
+
+    @staticmethod
+    def tags(url: str) -> dict[str, Any]:
+        return {"models": [{"name": "qwen3.5:9b"}]}
+
+
+@pytest.mark.parametrize("failing", ["second_step", "cut"])
+def test_a_turn_that_fails_after_the_switch_leaves_the_notice_for_the_next(
+    project: Project, profile: Profile, failing: str
+) -> None:
+    """Review spät M1 (Regel 21): Scheiterte der Zug nach dem Wechsel — zweiter
+    Schritt mit Fehler, gekürzter Auftrag —, war das Ersatzmodell gemerkt, im
+    Chat stand nichts, und ab da antwortete still ein anderes Modell. Gemerkt
+    wird erst, wenn der Satz zugestellt ist; bis dahin trägt ihn jeder Zug."""
+    from app.core.backends import llm
+    from app.core.errors import AppError
+
+    llm.remember_ollama_model("")
+    ollama = _MissingDefault(
+        *(("tool", "500", "text") if failing == "second_step" else ("cut", "text"))
+    )
+    backend = llm.OllamaBackend(
+        url="http://127.0.0.1:11434", transport=ollama, fetch=ollama.tags, stand_in=True
+    )
+
+    def agent() -> AgentSession:
+        return AgentSession(
+            backend=backend,
+            document=project.document,
+            profile=profile,
+            sources=ProjectSources(project),
+        )
+
+    try:
+        with pytest.raises(AppError):
+            agent().propose("Hallo")
+        assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL, "nicht gemerkt"
+        assert not project.document.chat
+
+        later = agent().propose("Noch einmal")
+        assert len(later.notices) == 1 and "qwen3.5:9b" in later.notices[0], later.notices
+        assert later.origin.model == "ollama:qwen3.5:9b"
+        agent_apply.discard(later, project.document)
+        assert llm.configured_ollama_model() == "qwen3.5:9b", "zugestellt, jetzt gemerkt"
+        assert not agent().propose("Und noch einmal").notices, "einmal, nicht je Zug"
+    finally:
+        llm.remember_ollama_model("")
+
+
+def test_a_proposal_that_never_reaches_the_chat_leaves_the_notice_for_the_next(
+    project: Project, profile: Profile
+) -> None:
+    """Nachprüfung M1: Gemerkt wurde am Ende von ``propose``. Die Oberfläche
+    verwirft aber fertige Vorschläge ohne Aufzeichnung — ein neuer ersetzt den
+    wartenden, ein Projektwechsel wirft ihn weg —, und der Satz erschien nie.
+    Zugestellt ist er erst, wenn ``record`` ihn in den Chat geschrieben hat."""
+    from app.core.backends import llm
+
+    llm.remember_ollama_model("")
+    ollama = _MissingDefault("text")
+    backend = llm.OllamaBackend(
+        url="http://127.0.0.1:11434", transport=ollama, fetch=ollama.tags, stand_in=True
+    )
+
+    def agent() -> AgentSession:
+        return AgentSession(
+            backend=backend,
+            document=project.document,
+            profile=profile,
+            sources=ProjectSources(project),
+        )
+
+    try:
+        replaced = agent().propose("Hallo")
+        assert replaced.notices, "der Satz ist am ersten Vorschlag"
+        assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL, "noch nicht im Chat"
+
+        newer = agent().propose("Lieber anders")
+        assert newer.notices == replaced.notices, "der ersetzende trägt ihn weiter"
+        assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
+
+        agent_apply.discard(newer, project.document)
+        assert [entry.text for entry in project.document.chat if entry.notice] == newer.notices
+        assert llm.configured_ollama_model() == "qwen3.5:9b"
+    finally:
+        llm.remember_ollama_model("")
+
+
 def test_explicit_discard_is_not_sent_as_an_executed_answer(
     project: Project, profile: Profile
 ) -> None:

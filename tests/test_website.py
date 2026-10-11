@@ -985,13 +985,16 @@ PUBLIC_WARNING_MARKERS = (
     "críticas para a segurança",
 )
 
+#: Je Startseite die Fassung des Termins und das Wort, mit dem der Kaufsatz am
+#: Aufmacher ihn als voraussichtlich ausweist (Entscheidung Robert, 11.10.2026:
+#: der Verkaufsstart ist voraussichtlich, das Demo-Ende fest).
 PLANNED_1_0_MARKERS = {
-    "index.html": "1. Dezember 2026 geplant",
-    "en/index.html": "planned for 1 December 2026",
-    "es/index.html": "prevista para el 1 de diciembre de 2026",
-    "fr/index.html": "prévue pour le 1er décembre 2026",
-    "it/index.html": "prevista per il 1º dicembre 2026",
-    "pt/index.html": "prevista para 1 de dezembro de 2026",
+    "index.html": ("voraussichtlich am 1. Dezember 2026", "Voraussichtlich ab"),
+    "en/index.html": ("expected on 1 December 2026", "Expected from 1 December"),
+    "es/index.html": ("previsiblemente el 1 de diciembre de 2026", "Previsiblemente desde"),
+    "fr/index.html": ("devrait sortir le 1er décembre 2026", "En principe à partir"),
+    "it/index.html": ("dovrebbe uscire il 1º dicembre 2026", "Indicativamente dal"),
+    "pt/index.html": ("deverá chegar a 1 de dezembro de 2026", "Em princípio a partir"),
 }
 
 RETIRED_MEDIA = (
@@ -1034,18 +1037,24 @@ def test_each_start_page_reads_like_product_copy(page: str) -> None:
 
 
 @pytest.mark.parametrize(("page", "marker"), PLANNED_1_0_MARKERS.items())
-def test_each_start_page_distinguishes_the_plan_from_an_offer(page: str, marker: str) -> None:
-    """Der Termin bleibt ein Plan, und vor dem Verkaufsstart gibt es kein Angebot.
+def test_each_start_page_distinguishes_the_plan_from_an_offer(
+    page: str, marker: tuple[str, str]
+) -> None:
+    """Der Termin bleibt voraussichtlich, und vor dem Verkaufsstart gibt es kein Angebot.
 
     **Seit dem 23.09.2026 stehen die Preise auf der Seite** (Entscheidung
     Robert: zwei Lizenzarten, Einstiegspreis bis Ende Januar). Angekündigt ist
     damit, was ab dem Verkaufsstart gilt — verkauft wird vorher nichts. Die
-    Seite sagt deshalb weiter „geplant", und sie zeichnet für Suchmaschinen
-    kein ``Offer`` und keine Vorbestellung aus: Ein Rich Result mit Preis und
-    „Jetzt kaufen" wäre eine Kaufmöglichkeit, die es noch nicht gibt.
+    Seite nennt den Termin deshalb voraussichtlich, auch im Kaufsatz am
+    Aufmacher, und sie zeichnet für Suchmaschinen kein ``Offer`` und keine
+    Vorbestellung aus: Ein Rich Result mit Preis und „Jetzt kaufen" wäre eine
+    Kaufmöglichkeit, die es noch nicht gibt.
     """
     text = (WEBSITE / page).read_text(encoding="utf-8")
-    assert marker in text, f"{page}: Planung für Version 1.0 fehlt"
+    date, hedge = marker
+    assert date in text, f"{page}: der voraussichtliche Termin für Version 1.0 fehlt"
+    hero = re.search(r'<p class="hero-kauf">(.*?)</p>', text, re.DOTALL)
+    assert hero and hedge in hero[1], f"{page}: der Kaufsatz am Aufmacher nennt den Termin als fest"
     assert "schema.org/PreOrder" not in text, f"{page}: Vorbestellung ausgezeichnet"
     assert '"priceCurrency"' not in text, f"{page}: noch nicht angebotener Preis"
 

@@ -25,9 +25,11 @@ from app.core.types import (
     Feature,
     ObjectId,
     Operation,
+    Profile,
     Scene,
     SceneObject,
     measure_status,
+    origin_word,
     replanned_steps,
     step_numbers,
 )
@@ -165,7 +167,7 @@ def digest(
 
     if document is not None:
         lines.extend(_fit_lines(document, scene))
-        lines.extend(_print_settings_line(document))
+        lines.extend(_print_settings_line(document, scene.profile))
         lines.extend(_source_lines(document))
 
     for object_id, entry in scene.objects.items():
@@ -315,7 +317,7 @@ def _fit_lines(document: Document, scene: Scene) -> list[str]:
     return [tr("Passungen: {fits}").format(fits=" · ".join(parts))]
 
 
-def _print_settings_line(document: Document) -> list[str]:
+def _print_settings_line(document: Document, profile: Profile | None = None) -> list[str]:
     """Was eingestellt ist, in einer Zeile (§29, §26.1).
 
     Nur wenn das Projekt eigene Einstellungen trägt — ``None`` heißt, die
@@ -323,7 +325,9 @@ def _print_settings_line(document: Document) -> list[str]:
     stehen schon in der Szenenzeile. Nicht das ganze Profil: die Zeile sagt,
     was gilt; was einzustellen wäre, ist Sache der Analyse.
     """
-    settings = document.print_settings
+    from app.core.knowledge.print_settings import stored
+
+    settings = stored(document.print_settings, profile.printer if profile is not None else None)
     if settings is None:
         return []
     walls = settings.shell.wall_count
@@ -1122,7 +1126,8 @@ def _stack_lines(document: Document, steps: Mapping[int, int]) -> list[str]:
             for entry in transaction.ops
             if entry in operations or entry not in superseded
         )
-        by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
+        word = origin_word(transaction.origin)
+        by = str(word) if word is not None else tr("Nutzer")
         # Der Titel einer Transaktion ist ein Name aus der Projektdatei wie
         # jeder andere — und einer, den der Agent selbst vorgeschlagen haben
         # kann (§32).

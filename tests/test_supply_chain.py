@@ -8,13 +8,19 @@ deshalb ein OIDC-Token anfordern oder ``signtool`` aufrufen.
 
 from __future__ import annotations
 
+import os
 import plistlib
 import re
 import shlex
+import subprocess
+import sys
 import textwrap
 from itertools import pairwise
 from pathlib import Path
 
+import pytest
+
+from tests.helpers import bash_executable
 from tests.workflow_helpers import job_block
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -372,3 +378,126 @@ def test_every_slicer_of_the_selection_is_a_fixed_version_with_its_checksum() ->
         )
     )
     assert not re.search(r"\bbrew\b|apt-get install -y (?!\"\$RUNNER_TEMP/)", recipes)
+
+
+#: SHA-256 von ``abc`` — die Bytes, die die curl-Attrappe schreibt.
+_ABC_SHA256 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+
+#: Eine curl-Attrappe: schreibt ``abc`` an das ``-o``-Ziel, wenn ihr Code 0 ist,
+#: nimmt je Aufruf den nächsten Code aus ``$CODES`` und hält die Argumente fest.
+_CURL_STAND_IN = textwrap.dedent(
+    """\
+    curl() {
+      local out="" prev="" arg code rest
+      for arg in "$@"; do
+        if [ "$prev" = "-o" ]; then out=$arg; fi
+        prev=$arg
+      done
+      printf '%s\n' "$*" >> "$CALLS"
+      read -r code rest < "$CODES"
+      printf '%s\n' "$rest" > "$CODES"
+      if [ "$code" -eq 0 ]; then printf 'abc' > "$out"; fi
+      return "$code"
+    }
+    """
+)
+
+
+def _fetch_function(text: str | None = None) -> str:
+    """``fetch()`` der Slicerauswahl, so wie die CI es fährt."""
+    if text is None:
+        text = (WORKFLOWS / "slicer-auswahl.yml").read_text(encoding="utf-8")
+    match = re.search(r"(?ms)^( *)fetch\(\) \{.*?^\1\}$", text)
+    assert match, "fetch() fehlt in der Slicerauswahl"
+    return textwrap.dedent(match.group(0))
+
+
+def _run_fetch(tmp_path: Path, fetch: str, codes: str, checksum: str) -> tuple[int, list[str]]:
+    """Fährt ``fetch`` mit bash gegen die Attrappe; liefert Exit-Code und curl-Aufrufe."""
+    bash = bash_executable()
+    if bash is None:
+        pytest.skip("keine bash gefunden")
+    calls, queue = tmp_path / "calls.txt", tmp_path / "codes.txt"
+    calls.write_text("", encoding="utf-8")
+    queue.write_text(codes + "\n", encoding="utf-8")
+    script, target = tmp_path / "fetch.sh", (tmp_path / "out.deb").as_posix()
+    script.write_text(
+        "set -euo pipefail\n"
+        + _CURL_STAND_IN
+        + fetch
+        + f'\nfetch https://example.invalid/slicer.deb {checksum} "{target}"\n',
+        encoding="utf-8",
+        newline="\n",
+    )
+    environment = {
+        **os.environ,
+        "RUNNER_OS": "macOS" if sys.platform == "darwin" else "Linux",
+        "CALLS": calls.as_posix(),
+        "CODES": queue.as_posix(),
+    }
+    finished = subprocess.run(
+        [str(bash), script.as_posix()],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    return finished.returncode, calls.read_text(encoding="utf-8").splitlines()
+
+
+@pytest.mark.parametrize(
+    ("codes", "checksum", "succeeds", "insecure"),
+    [
+        ("0", _ABC_SHA256, True, False),
+        ("60 0", _ABC_SHA256, True, True),
+        ("60 0", "0" * 64, False, True),
+        ("60 22", _ABC_SHA256, False, True),
+        ("22", _ABC_SHA256, False, False),
+        ("35", _ABC_SHA256, False, False),
+    ],
+    ids=[
+        "geladen",
+        "zertifikat-rueckfall",
+        "rueckfall-falsche-summe",
+        "rueckfall-scheitert",
+        "nicht-gefunden",
+        "verbindung",
+    ],
+)
+def test_a_slicer_download_is_genuine_only_by_its_checksum(
+    tmp_path: Path, codes: str, checksum: str, succeeds: bool, insecure: bool
+) -> None:
+    """Echt ist ein Download über seine festgenagelte SHA-256, nicht über TLS.
+
+    Nur ein nicht belegbares Zertifikat (curl 60) lädt ohne TLS-Prüfung nach,
+    und auch dann entscheidet allein die Prüfsumme danach. Jeder andere Fehler
+    bricht ab, ohne Rückfall (``.claude/rules/auslieferung.md``).
+    """
+    code, calls = _run_fetch(tmp_path, _fetch_function(), codes, checksum)
+
+    assert (code == 0) == succeeds, (code, calls)
+    assert len(calls) == len(codes.split()), calls
+    assert ("--insecure" in calls[-1]) == insecure, calls
+    assert "--insecure" not in calls[0], calls
+
+
+def test_the_download_check_would_catch_a_skipped_checksum(tmp_path: Path) -> None:
+    """Gegenprobe: Ein ``fetch`` ohne Prüfsummenprüfung nimmt die falsche Datei an."""
+    checks = re.compile(r"(?m)^( *)(echo .*\| (?:shasum|sha256sum) .*)$")
+    skipped = checks.sub(r"\1true", _fetch_function())
+    assert skipped != _fetch_function()
+
+    code, _calls = _run_fetch(tmp_path, skipped, "60 0", "0" * 64)
+
+    assert code == 0
+
+
+def test_tls_is_switched_off_nowhere_but_in_the_checked_download() -> None:
+    """``--insecure`` steht in keinem Workflow außerhalb von ``fetch()``."""
+    for path in sorted(WORKFLOWS.glob("*.y*ml")):
+        text = path.read_text(encoding="utf-8")
+        if path.name == "slicer-auswahl.yml":
+            text = re.sub(r"(?ms)^ *fetch\(\) \{.*?^ *\}$", "", text)
+        assert "--insecure" not in text, path.name
+        assert not re.search(r"(?m)\bcurl\b[^\n]*\s-[A-Za-z]*k[A-Za-z]*\b", text), path.name

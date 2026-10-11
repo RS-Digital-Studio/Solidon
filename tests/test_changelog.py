@@ -70,28 +70,40 @@ def test_every_language_carries_the_same_groups(language: str) -> None:
     Gruppen, in jeder dieselbe Punktzahl an derselben Stelle. Sonst zeigt
     ein italienisches Fenster andere Bündel als das deutsche daneben — und
     ein verrutschter Punkt fiele in keiner Zählung der flachen Liste auf.
+
+    **Genau eine Gruppe darf titellos sein: der Vorspann an Stelle 0**, vor
+    benannten Gruppen — die Meldung an jeden Nutzer (Entscheidung Robert,
+    Demo-Laufzeit). Erkannt wird er mit derselben Regel, die ihn in den
+    Fenstern und auf der Website hervorhebt (``changes.lead_of``), und er
+    steht in jeder Sprache oder in keiner.
     """
     from app.core import changes
 
-    def shape(lang: str, version: str) -> list[int]:
-        for entry in changes.history(lang):
-            if entry.version == version:
-                return [len(group.points) for group in entry.groups]
-        return []
+    def entry_of(lang: str, version: str) -> changes.Entry | None:
+        return next((entry for entry in changes.history(lang) if entry.version == version), None)
+
+    def shape(entry: changes.Entry | None) -> list[int]:
+        return [len(group.points) for group in entry.groups] if entry else []
 
     for version in _checked_versions():
-        source = shape(SOURCE_LANGUAGE, version)
+        original = entry_of(SOURCE_LANGUAGE, version)
+        translated = entry_of(language, version)
+        source = shape(original)
         assert source, f"{SOURCE_LANGUAGE} kennt {version} nicht"
-        assert shape(language, version) == source, (
-            f"{language} {version}: Gruppenform {shape(language, version)} gegen {source} "
+        assert shape(translated) == source, (
+            f"{language} {version}: Gruppenform {shape(translated)} gegen {source} "
             f"in {SOURCE_LANGUAGE}"
         )
-        for entry in changes.history(language):
-            if entry.version == version:
-                untitled = [i for i, group in enumerate(entry.groups) if not group.title]
-                assert not untitled, (
-                    f"{language} {version}: Gruppe(n) ohne Überschrift an {untitled}"
-                )
+        assert original is not None and translated is not None
+        assert (translated.lead is None) == (original.lead is None), (
+            f"{language} {version}: Vorspann nur in einer der beiden Sprachen"
+        )
+        untitled = [
+            i
+            for i, group in enumerate(translated.groups)
+            if not group.title and not (i == 0 and group is translated.lead)
+        ]
+        assert not untitled, f"{language} {version}: Gruppe(n) ohne Überschrift an {untitled}"
 
 
 #: Ab dieser Fassung tragen die Abschnitte ``###``-Gruppen.

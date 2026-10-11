@@ -917,3 +917,18 @@ def test_a_timed_out_call_reaches_the_client_as_a_sentence(qt_app: Any) -> None:
     assert "error" not in answer
     assert answer["result"]["isError"] is True
     assert "erneut" in answer["result"]["content"][0]["text"]
+
+
+def test_the_history_names_a_remote_step_apart_from_the_chat() -> None:
+    """§26.4: Der Verlauf sagt, woher ein Schritt kam — Fernsteuerung oder Chat.
+
+    Beide tragen den Urheber „agent“; was sie trennt, ist das Modell im
+    Vermerk. Stand dort an beiden „(Agent)“, sah ein Aufruf aus Claude Code
+    aus wie ein Vorschlag des Chats, und das Handbuch versprach mehr.
+    """
+    from app.core.types import Origin
+    from app.ui.panels import origin_mark
+
+    assert origin_mark(Origin(by="agent", model=remote.ORIGIN_MODEL)) == "  (Fernsteuerung)"
+    assert origin_mark(Origin(by="agent", model="ollama:qwen3:14b")) == "  (Agent)"
+    assert origin_mark(Origin(by="user")) == ""

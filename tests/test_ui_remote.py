@@ -118,6 +118,9 @@ def test_a_remote_call_says_where_it_came_from(window: MainWindow) -> None:
     assert origin is not None
     assert origin.by == "agent"
     assert origin.model == REMOTE_ORIGIN
+    history = window.history_panel.list
+    rows = [history.item(i).text() for i in range(history.count())]
+    assert any(row.endswith("(Fernsteuerung)") for row in rows), rows
 
 
 def test_scene_views_render_labelled_pngs(window: MainWindow) -> None:

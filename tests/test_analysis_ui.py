@@ -7555,6 +7555,45 @@ def _a_rib_on_the_plate(window: MainWindow) -> tuple[str, int]:
     return object_id, int(step.id)
 
 
+def test_a_face_drag_during_the_tour_shows_its_apply_button(window: MainWindow) -> None:
+    """Ein Zug am Flächengriff holt den Reiter *Auswahl* auch über die Tour (N3).
+
+    Gefunden in der Handbuchprüfung zu 0.6.0.
+
+    Der Zug legt den Weg in *Fläche versetzen*, und erst *Übernehmen* darunter
+    legt den Schritt an. Stand die Tour vorn, blieb der Reiter dahinter, und der
+    Zug schien nichts zu tun. Eine bloße Auswahl lässt die Tour weiter vorn.
+    """
+    from app.core import examples
+    from app.core.scene import OperationDraft
+    from app.core.tour import tour_for
+
+    window.session.apply("Quader", [OperationDraft(op="create_box")])
+    assert window.session.wait_for_idle(60_000)
+    example = next(item for item in examples.EXAMPLES if tour_for(item.id))
+    window.tour.start(example, tour_for(example.id))
+    window.right.setTabVisible(window.right.indexOf(window.tour), True)
+    window.right.setCurrentWidget(window.tour)
+    result = window.session.last_result
+    assert result is not None
+    object_id, entry = next(iter(result.scene.objects.items()))
+    face = next(fid for fid, f in entry.features.items() if f.kind == "face")
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, face)
+    for _ in range(40):
+        QApplication.processEvents()
+    assert window.tour.active
+    assert window.right.currentWidget() is window.tour, "eine Auswahl lässt die Tour vorn"
+
+    steps_before = len(window.session.project.document.ops)
+    window._on_face_dragged(face, 3.0)
+    for _ in range(40):
+        QApplication.processEvents()
+    assert window.feature_dock.is_current(), "der Zug zeigt den Reiter mit seinen Werten"
+    assert window.feature_panel._apply.isVisibleTo(window), "und *Übernehmen* darin"
+    assert len(window.session.project.document.ops) == steps_before, "noch kein Schritt"
+
+
 def test_a_face_of_a_part_carries_the_grip_of_the_part(window: MainWindow) -> None:
     """Die Rippe besteht aus nichts als Flächen — und ihr Griff bewegt die Rippe.
 

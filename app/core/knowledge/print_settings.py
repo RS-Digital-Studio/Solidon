@@ -40,6 +40,7 @@ from app.core.types import (
     InfillPattern,
     InfillSettings,
     LayerSettings,
+    PrinterProfile,
     PrintSettings,
     Profile,
     QualityPreset,
@@ -534,6 +535,54 @@ def read_path(settings: PrintSettings, path: str) -> Any:
             values={"path": path},
         )
     return getattr(section, name)
+
+
+#: Unter diesem Anteil der Düse ist eine Bahnbreite keine eines Filamentdruckers.
+#: Jedes Werksprofil liegt bei 0,8 bis 1,5 Düsen; was darunter liegt und niemand
+#: gewählt hat, ist der Bildpunkt eines Resin-Druckers (0,05 mm), den ein
+#: Wechsel Harz → FDM als Grundlage zurückließ.
+FOREIGN_LINE_SHARE: Final = 0.5
+
+
+def native_line_widths(settings: PrintSettings, printer: PrinterProfile) -> PrintSettings:
+    """Bahnbreiten, die nicht von diesem Verfahren stammen, gehen auf seine Grundlage zurück.
+
+    ``resolve`` setzt an Harz die Bahnbreite auf die Pixelgröße. Gespeichert
+    wird der Satz als Grundlage ohne Herkunft, und ``profiles.for_process``
+    nahm ihn nach einem Wechsel auf einen Filamentdrucker als dessen Raster:
+    0,05 statt 0,42 mm, die erste Bahn 0,054, und *Werte mitgeben* hätte das
+    an den Slicer geschickt. Eine Grundlage gehört dem Drucker, der sie
+    hervorbrachte; eigene Wahl und übernommene Vorschläge bleiben unberührt.
+    Gilt auch für Projekte, die einen solchen Rest schon gespeichert haben.
+    """
+    if printer.is_resin:
+        return settings
+    floor = printer.nozzle_diameter * FOREIGN_LINE_SHARE
+    result = settings
+    if "layers.line_width" not in settings.explicit and settings.layers.line_width < floor:
+        result = with_path(result, "layers.line_width", printer.extrusion_width)
+    first = settings.layers.first_layer_line_width
+    if "layers.first_layer_line_width" not in settings.explicit and first < floor:
+        native = (
+            round(printer.nozzle_diameter * printer.first_layer_line_factor, 3)
+            if printer.first_layer_line_factor is not None
+            else round(printer.extrusion_width * 1.07, 3)
+        )
+        result = with_path(result, "layers.first_layer_line_width", native)
+    return result
+
+
+def stored(settings: PrintSettings | None, printer: PrinterProfile | None) -> PrintSettings | None:
+    """Die gespeicherten Einstellungen eines Projekts, so wie jeder Leser sie sieht.
+
+    Eine Stelle für alle, die ``document.print_settings`` lesen statt es zu
+    schreiben: Steckbrief, Analyse, Bettrand, Prüfung vor der Übergabe. Las
+    einer davon roh, nannte der Steckbrief nach Harz → FDM „3 Wände mal 0,05
+    mm“, und Zeit, Material und Rat rechneten damit (Review fix/druck-rest).
+    """
+    if settings is None or printer is None:
+        return settings
+    return native_line_widths(settings, printer)
 
 
 def with_path(settings: PrintSettings, path: str, value: Any) -> PrintSettings:

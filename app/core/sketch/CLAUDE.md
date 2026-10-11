@@ -33,7 +33,7 @@ schweigt, wenn sie sich nicht auflösen lässt, `frame_for_sketch` sagt warum;
 | Datei | Rolle |
 |---|---|
 | `solver.py` | Der 2D-Löser (`solve_sketch`) samt Zugmodus, Rang (`_matrix_rank`), Redundanz (`_losses`), Elementgleichungen (`_element_equations`), Kurvenbedingungen (`_curve_equation`, `CURVE_SLOTS`), `closest_on_spline` |
-| `profile.py` | Vom gelösten Element zum Umriss: `arc_sweep` (wie weit ein Bogen läuft), `EllipseFrame`/`ellipse_turn`, `spline_controls`, `path_of`, `flat_curve` (Punktfolge der Ansicht) |
+| `profile.py` | Vom gelösten Element zum Umriss: `arc_sweep` (wie weit ein Bogen läuft), `EllipseFrame`/`ellipse_turn`, `spline_controls`, `path_of`, `flat_curve` (Punktfolge der Ansicht); `crosses_itself` schneidet nur Paare mit berührenden Hüllkästen (`touching_pairs`, als Feld) |
 | `shapes.py` | Grundformen und Lochbilder; `grid_centres`, die mittige Rasterlage für Skizze und Feldschnitt; `rectangle_between`/`circle_around` (bemaßt, für das Aufziehen) und `simple_shape` (Einfachform für den Schrittdialog) |
 | `planes.py` | Wo eine Skizze liegt (oben) |
 | `edit.py` | Trimmen (so entsteht der Ellipsenbogen), Verlängern, Versetzen, Spiegeln; Ecken (`corner_at`, `fillet`, `chamfer`); Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at`); `project` (exakt über `brep.section`), `face_outline`, `ellipse_from_clicks`, Splinepunkte, `removed`; Strecken auf ein Maß (`scaled`, `stretched`); die Pläne der Kurvenbedingungen (`tangent_plan`, `curvature_plan`, `on_curve_plan`, `equal_axes_plan`, `taken_back`) |
@@ -168,6 +168,17 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   wird über `_JOIN_TOL`, der exakte Kern verbindet Kanten nur auf 10⁻⁷ —
   dazwischen entstand ein undichter Körper. Ein Erzeuger meldet einen
   undichten Körper trotzdem als `mesh.not_watertight` (`ops._created`).
+- **Versetzen nimmt die Seite aus der Kette, nie aus der Zeichenrichtung**
+  (`edit.offset`): Ein geschlossener Zug der Auswahl geht positiv nach außen
+  wie der Kreis, eine einzelne Kante mit ihrem Umriss (`_on_a_ring`), erst eine
+  freie Linie flach nach oben, steiler als 45° nach rechts — die Seite, die der
+  Tooltip nennt. Ein Bogen wandert konzentrisch (`_Link.radius_at`). Ecken auf
+  Gehrung und gedeckt (`_mitred`), am Knick mit einem Bogen der nächste Schnitt
+  der versetzten Kurven (`_meeting`); ein Glied, das der Abstand aufzehrt oder
+  dessen Radius auf null fiele, fällt weg, das früheste zuerst (`_vanishing`),
+  eine zugelaufene Kerbe mit beiden Wänden — Kleinstkanten eingelesener Umrisse.
+  Ein offenes Ende, das wegfiele, eine Kreuzung oder ein Rest ohne Fläche ist
+  eine Absage.
 - **Strecken bleibt am Bezugspunkt und in seiner Richtung** (`edit.stretched`):
   um den Punkt der Hülle, der dem Nullpunkt am nächsten liegt
   (`_anchor_of`), nur die getippte Achse. Runde Elemente oder eine Bedingung

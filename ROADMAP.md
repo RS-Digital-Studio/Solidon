@@ -132,6 +132,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-701 — Die Brückenweite stimmt bei geschlossenen Ringen nicht](#rm-701) | Geometrie, Erkennung und Druckvorbereitung | Weite über geschlossene Ringe neu fassen; Wand mit Flanke und Steg, Rohr mit ausgestellter Wand und Sporn als Testkörper |
 | [RM-700 — Schichtanalyse und Kanalfrage brauchen an großen Figuren Minuten](#rm-700) | Geometrie, Erkennung und Druckvorbereitung | Schnitt je Säule auf ihre Hüllbox zuschneiden (bitgleich gemessen), Merker nach Körperzahl; nach RM-626 |
 | [RM-721 — Eine kleine flache Halbkuppel verliert bei 0,28 mm ihre Stütze](#rm-721) | Geometrie, Erkennung und Druckvorbereitung | Nachweis im Entwurfsprofil (0,28 mm) im G-Code; lose Kante kürzer als `SPAN_INTERESTING` |
+| [RM-782 — Sechseckige Öffnungen im Quadratraster heißen Wabe](#rm-782) | Geometrie, Erkennung und Druckvorbereitung | Eigener Schlüssel für die Öffnungsform des Lochfelds, mit Migration |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -162,6 +163,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-696 — Der Prüfbericht des vorigen Stands rechnet neben der neuen Auswertung weiter](#rm-696) | Bedienung und Darstellung | Gemessen in L3: am Eiffelturm 37 s CPU in 19,8 s Wand beim Verschieben, beide teilen den GIL; ein neuer Stand sollte den alten Bericht abbrechen |
 | [RM-776 — Ratsätze in Fehlerdialogen sind nur Text, wo ein Knopf ginge](#rm-776) | Bedienung und Darstellung | Zuerst `open_sketch` und die `sketch.*`-Wege als Knöpfe, die den Schritt öffnen |
 | [RM-711 — Eine Zeile zur Stützart schlägt in Orca vor, was die Datei schon tut](#rm-711) | Bedienung und Darstellung | Zeilen zu je Teil übernommenen Pfaden nur, wo Übernehmen die Datei ändert (wie `_cura_prints_alike`) |
+| [RM-783 — Die Einleitung der Tour wird in sehr kleinen Fenstern gestaucht](#rm-783) | Bedienung und Darstellung | Titel, Einleitung und Schritte in einen gemeinsamen Rollbereich |
+| [RM-784 — Versetzen sehr großer Auswahlen hält das Fenster kurz an](#rm-784) | Bedienung und Darstellung | Versetzen im Arbeitsfaden rechnen oder die verbleibende Zeit am Profil finden |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -4077,6 +4080,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Slicerlauf im Entwurfsprofil; hängt der Ring frei, bekommt er Stütze, ohne dass
   Eiffelturm, Bögen und Arkade ihre Entwarnung verlieren.
 
+<a id="rm-782"></a>
+
+- [ ] **RM-782 — Sechseckige Öffnungen im Quadratraster heißen Wabe.**
+  Seit 0.6.0 heißt das Texturmuster wie die Abbildung *Wabe* (doppelter Schlüssel `hexagon`
+  in `surfaces._CHOICE_NAMES`, Handbuchprüfung C). Dieselbe Liste benennt die Öffnungsform von
+  *Lochfeld schneiden*; mit der Anordnung *Raster* entstehen dort Sechsecke im Quadratraster,
+  keine Wabe. Aus dem Review der Handbuchprüfung C (Welle 5, 11.10.2026).
+  **Nächster Schritt:** der Öffnungsform einen eigenen Schlüssel geben (`hexagon_hole` o. ä.),
+  Migration `vN→vN+1` für gespeicherte Lochfelder, Anzeigename *Sechseck*.
+  **Abnahme:** Textur heißt *Wabe*, die Lochfeld-Öffnung *Sechseck*; ein Projekt aus 0.6.0 öffnet
+  mit unveränderter Geometrie; Test gegen die Beispieldatei der alten Version.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -5394,6 +5409,28 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   schreibt, und ihre Ablehnung bewirkt nichts. Gefunden in der Durchsicht des
   RM-584-Nachtrags (11.10.2026).
   **Abnahme:** keine Zeile ohne Wirkung; Test an Pilz und Drache unter Orca.
+
+<a id="rm-783"></a>
+
+- [ ] **RM-783 — Die Einleitung der Tour wird in sehr kleinen Fenstern gestaucht.**
+  Bei 400 x 400 bekommt die Tour 192 Punkte Höhe, ihr Layout braucht mindestens 239; die
+  Einleitung bekommt 34 statt 64 Punkte. Ab 480 x 480 passt alles, auf main ebenso. Aus dem
+  Kurzreview des Tourtexts (Welle 5, 11.10.2026).
+  **Nächster Schritt:** Titel, Einleitung, Fortschritt und Schritte in einen Rollbereich, nur die
+  Knöpfe fest; Nachrollen zum aktuellen Schritt und Höhenmeldung daran anpassen.
+  **Abnahme:** Bei 400 x 400 ist jeder Text der Tour ganz lesbar oder erreichbar; der
+  Fenstertest der Tour läuft auch bei dieser Größe.
+
+<a id="rm-784"></a>
+
+- [ ] **RM-784 — Versetzen sehr großer Auswahlen hält das Fenster kurz an.**
+  Versetzen von 2000 Linien braucht nach den Beschleunigungen in 0.6.0 noch 2,3 s (vorher
+  9,1 s), gerechnet im Hauptfaden; das Fenster steht so lange. Aus dem Integrationsreview der
+  Welle 5 (11.10.2026), Messung in `paket-versetzen.md`.
+  **Nächster Schritt:** Profil der 2,3 s; liegt der Rest im Kern, Versetzen wie andere
+  Editoraktionen in einen Arbeiter ziehen, mit Rückmeldung im Balken.
+  **Abnahme:** Versetzen von 2000 Linien lässt das Fenster bedienbar oder dauert unter
+  0,3 s; Ergebnis bitgleich zum heutigen.
 
 ## KI und Generatoren
 

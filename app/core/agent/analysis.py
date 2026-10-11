@@ -25,7 +25,7 @@ from typing import Final
 
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import profiles
-from app.core.knowledge.print_settings import resolve
+from app.core.knowledge.print_settings import resolve, stored
 from app.core.slice import advise as advise_module
 from app.core.slice.analysis import (
     island_layers,
@@ -82,7 +82,7 @@ def analysis_text(
     if not chosen:
         return tr("Dazu gibt es kein Objekt in der Szene.")
 
-    settings = document.print_settings or resolve(profile)
+    settings = stored(document.print_settings, profile.printer) or resolve(profile)
 
     # Regel 14 verlangt die Herkunft — und zwar die richtige: die Schätzung
     # schneidet nie, sie ist eine Formel aus Volumen und Oberfläche, und der

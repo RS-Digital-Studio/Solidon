@@ -22,7 +22,7 @@ Ein offener Fehler oder eine Warnung mit empfohlener Handlung ist kein
 Ruhezustand. Ein Hinweis ist es: Er wird nicht vorgewählt und leuchtet nicht.
 Der Prüfbericht meldet auch unkalibriertes Material; die ruhige Probe benutzt
 deshalb ein kalibriertes Profil. Das eine Element mit Akzent ist der Knopf
-*Bausteine* — der Hauptweg, wenn nichts gewählt ist (Entscheidung Robert,
+*Bausteinkatalog …* — der Hauptweg, wenn nichts gewählt ist (Entscheidung Robert,
 ``.claude/rules/grenzen.md``).
 """
 
@@ -250,7 +250,7 @@ def test_at_rest_only_one_element_carries_the_accent(
     verschwendet: Vier Elemente trugen sie gleichzeitig, bevor die
     Werkzeugdämpfung fiel; danach noch drei Kartenränder, die Kante des
     aktiven Reiters und eine vorgewählte Hinweiszeile mit Hauptknopf neben
-    *Bausteine* (RM-512). Wer dann ein echtes Signal setzen will, hat keine
+    *Bausteinkatalog …* (RM-512). Wer dann ein echtes Signal setzen will, hat keine
     Farbe mehr übrig, die auffiele.
 
     Ruhezustand heißt: Modell geladen, kein Werkzeug offen, nichts gewählt,
@@ -286,11 +286,23 @@ def test_at_rest_only_one_element_carries_the_accent(
             "ohne den Hinweis prüft diese Probe nichts"
         )
         assert window.report.isVisible(), "der Bericht steht vorn"
-    # Das eine Licht ist *Bausteine*, wo es zu sehen ist. Steht der Bericht
+    # Das eine Licht ist *Bausteinkatalog …*, wo es zu sehen ist. Steht der Bericht
     # vorn, liegt der Knopf hinter dem Reiter, und dann leuchtet nichts.
     catalog = window.selection_operations.catalog_button
     if scene == "clean":
-        assert catalog.isVisible(), "ohne Auswahl steht Bausteine vorn"
+        # Nach dem Einlesen steht der Bericht vorn (``test_ui.py::
+        # test_reading_a_model_leaves_the_report_in_front``); gemessen wird
+        # der Reiter *Auswahl*, wie ihn der Kunde mit einem Klick öffnet.
+        assert window.report.isVisible(), "nach dem Einlesen steht der Bericht vorn"
+        # So sieht ihn der Kunde zuerst: Der Katalogknopf liegt hinter dem
+        # Reiter, und nichts leuchtet (*An den Slicer übergeben …* ist halbfett,
+        # nicht farbig).
+        assert accent_elements(window, theme) == [], (
+            "mit dem Bericht vorn trägt nichts die Akzentfarbe"
+        )
+        window.right.setCurrentWidget(window.feature_dock)
+        _settle(window, 20)
+        assert catalog.isVisible(), "ohne Auswahl steht Bausteinkatalog … im Reiter Auswahl"
     expected = [element_name(catalog)] if catalog.isVisible() else []
     lit = accent_elements(window, theme)
     assert lit == expected, (

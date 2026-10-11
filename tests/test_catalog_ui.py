@@ -1253,10 +1253,17 @@ def test_the_application_path_rejects_an_unreferenced_executable_payload(
         window.close()
 
 
-def test_a_name_collision_uses_the_free_name_from_the_error_action(
-    qt_app: QApplication, tmp_path, monkeypatch
+@pytest.mark.parametrize("answer", [True, False])
+def test_a_name_collision_asks_and_uses_the_free_name(
+    qt_app: QApplication, tmp_path, monkeypatch, answer: bool
 ) -> None:
-    """Der Hauptknopf der Kollision wiederholt exakt dieselben Bytes mit Namen."""
+    """Eine Kollision ist eine Frage, kein Fehler (Regel 21, Handbuch „Bausteindateien
+    austauschen“): Ja wiederholt exakt dieselben Bytes unter dem freien Namen,
+    *Abbrechen* lässt den Katalog, wie er war. Gefragt wird mit beiden Titeln —
+    die Datei trägt einen anderen als der vorhandene Baustein, damit der Titel
+    aus dem Befund wirklich bis zur Frage reist."""
+    import dataclasses
+
     from PySide6.QtWidgets import QFileDialog
 
     from app.core.knowledge.parts import PARTS
@@ -1277,7 +1284,9 @@ def test_a_name_collision_uses_the_free_name_from_the_error_action(
     source = save(existing)
     register(existing)
     incoming = tmp_path / f"eingang{PART_FILE_SUFFIX}"
-    incoming.write_bytes(PartFileIO().export_file(existing))
+    incoming.write_bytes(
+        PartFileIO().export_file(dataclasses.replace(existing, title="Probeklotz aus der Post"))
+    )
 
     catalogs: list[PartCatalog] = []
     attempted_names: list[str | None] = []
@@ -1293,17 +1302,16 @@ def test_a_name_collision_uses_the_free_name_from_the_error_action(
 
     from app.ui import main_window as _mw
 
-    chosen_actions: list[str] = []
+    asked: list[tuple[str, str, str]] = []
+    errors: list[object] = []
 
-    def choose_suggestion(problem, parent=None, handlers=None):
-        ids = {action.id for action in problem.suggestions}
-        if "use_suggested_name" in ids:
-            assert handlers is not None
-            chosen_actions.append("use_suggested_name")
-            handlers["use_suggested_name"](problem)
+    def answer_yes(existing: str, title: str, suggested: str, parent=None) -> bool:
+        asked.append((existing, title, suggested))
+        return answer
 
     monkeypatch.setattr(PartFileIO, "install_file", counted_install)
-    monkeypatch.setattr(_mw, "show_error", choose_suggestion)
+    monkeypatch.setattr(_mw, "ask_free_part_name", answer_yes)
+    monkeypatch.setattr(_mw, "show_error", lambda problem, *_a, **_k: errors.append(problem))
     monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
     monkeypatch.setattr(
         QFileDialog,
@@ -1317,12 +1325,25 @@ def test_a_name_collision_uses_the_free_name_from_the_error_action(
         window.action_catalog()
         catalog = catalogs[-1]
         catalog.adopt_part.click()
+        if not answer:
+            wait_until(lambda: bool(asked), "die Frage kam nicht")
+            for _ in range(20):
+                qt_app.processEvents()
+            assert attempted_names == [None], "Abbrechen versucht keinen zweiten Namen"
+            assert asked[0][:2] == (existing.title, "Probeklotz aus der Post")
+            assert not any(PARTS.has(key) for key in (asked[0][2],))
+            assert errors == []
+            catalog.release()
+            return
         wait_until(lambda: len(attempted_names) == 2, "der freie Name wurde nicht erneut versucht")
         suggested = next((entry for entry in attempted_names if entry), "") or ""
         wait_until(lambda: bool(suggested) and PARTS.has(suggested), "der freie Name kam nicht an")
 
         assert attempted_names == [None, suggested]
-        assert chosen_actions == ["use_suggested_name"]
+        # Der Kunde liest Titel, wie der Katalog sie zeigt; der freie Schlüssel
+        # bleibt die Antwort darunter.
+        assert asked == [(existing.title, "Probeklotz aus der Post", suggested)]
+        assert errors == [], "die Kollision kommt als Frage, nicht als Fehlermeldung"
         assert suggested != name
         assert source.read_bytes(), "der vorhandene Baustein darf nicht ersetzt werden"
         catalog.release()
@@ -2455,3 +2476,66 @@ def test_nothing_chosen_is_said_once(qt_app: QApplication) -> None:
     finally:
         catalog.release()
         catalog.deleteLater()
+
+
+def test_a_collision_without_a_catalog_entry_keeps_the_message_with_the_free_name(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Trifft der Name nur eine Operation, gibt es keinen Baustein „im Katalog“:
+    Dann bleibt die Meldung mit *Freien Namen verwenden*, und gefragt wird nichts."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
+    from app.core.knowledge.parts.recipe import register
+    from app.core.registry import REGISTRY
+    from app.ui import main_window as _mw
+    from app.ui.catalog import PartCatalog
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    name = "nur_operation"
+    operation_name = f"insert_{name}"
+    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: tmp_path / "user-parts")
+    existing = _box_recipe(name)
+    register(existing)
+    PARTS.remove(name)
+    assert REGISTRY.has(operation_name) and not PARTS.has(name)
+    incoming = tmp_path / f"eingang{PART_FILE_SUFFIX}"
+    incoming.write_bytes(PartFileIO().export_file(existing))
+
+    catalogs: list[PartCatalog] = []
+    asked: list[object] = []
+    shown: list[tuple[object, object]] = []
+
+    def instead_of_exec(dialog: PartCatalog) -> int:
+        catalogs.append(dialog)
+        return int(PartCatalog.DialogCode.Rejected)
+
+    monkeypatch.setattr(_mw, "ask_free_part_name", lambda *args, **_k: asked.append(args))
+    monkeypatch.setattr(
+        _mw,
+        "show_error",
+        lambda problem, _parent=None, handlers=None: shown.append((problem, handlers)),
+    )
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(incoming), ""))
+    )
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.action_catalog()
+        catalog = catalogs[-1]
+        catalog.adopt_part.click()
+        wait_until(lambda: bool(shown), "die Meldung kam nicht")
+        problem, handlers = shown[0]
+        assert asked == [], "ohne Katalogeintrag keine Frage nach einem Eintrag"
+        assert "use_suggested_name" in {action.id for action in problem.suggestions}
+        assert handlers is not None and "use_suggested_name" in handlers
+        catalog.release()
+    finally:
+        clean_recipe_globals(name)
+        REGISTRY.remove(operation_name)
+        window.close()

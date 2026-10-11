@@ -2393,6 +2393,26 @@ class Origin:
     temperature: float | None = None
 
 
+#: Was im Herkunftsvermerk einer ferngesteuerten Transaktion als Modell
+#: steht. „user" und „agent" sind die einzigen Urheber, die das Format kennt
+#: (§26.4); ein dritter kostete eine Migration.
+REMOTE_MODEL: Final = "mcp"
+
+
+def origin_word(origin: Origin) -> TranslatableText | None:
+    """Wer außer dem Nutzer einen Schritt angelegt hat: „Fernsteuerung“, „Agent“ oder keiner.
+
+    Eine Stelle für Verlauf und Steckbrief. Standen beide je für sich, sagte
+    der Verlauf „Fernsteuerung“ und der Steckbrief des Chats weiter „Agent“ —
+    der Chat hielt einen Schritt aus einem anderen Programm für seinen eigenen.
+    """
+    if origin.by != "agent":
+        return None
+    if origin.model == REMOTE_MODEL:
+        return _("Fernsteuerung")
+    return _("Agent")
+
+
 RevisionKind = Literal["insert", "move", "suppress", "reactivate"]
 """Welche Handlung eine Transaktion am Verlauf selbst vorgenommen hat (P7).
 
@@ -2643,6 +2663,18 @@ class ChatEntry:
     Temperatur (§26.4)."""
     discarded: bool = False
     """Ausdrücklich verworfen, bevor eine Transaktion übernommen wurde."""
+
+    @property
+    def notice(self) -> bool:
+        """Ein Satz der Anwendung, kein Wort des Modells (:data:`NOTICE_ID_PREFIX`)."""
+        return self.id.startswith(NOTICE_ID_PREFIX)
+
+
+#: Woran ein Hinweis der Anwendung im Gespräch zu erkennen ist — etwa, dass
+#: ein Ersatzmodell antwortet. Er steht im Chat, geht aber nie als Beitrag des
+#: Modells in einen späteren Auftrag (``agent.context.conversation``). Die
+#: Kennung trägt es, damit die Projektdatei keinen neuen Schlüssel braucht.
+NOTICE_ID_PREFIX: Final = "notice-"
 
 
 @dataclass(frozen=True, slots=True)

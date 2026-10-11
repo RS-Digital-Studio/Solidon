@@ -88,9 +88,11 @@ def test_every_customer_point_reaches_the_page(language: str) -> None:
         for group in entry.groups:
             if group.title:
                 assert f"<h3>{group.title}</h3>" in text
+            # Der Vorspann steht als Absatz über den Gruppen, nicht als Liste.
+            tag = "p" if group is entry.lead else "li"
             for point in group.points:
                 # Ausgezeichnet wie in der Anwendung: kursiv statt Sternchen.
-                assert f"<li>{html.unescape(inline(point))}</li>" in text
+                assert f"<{tag}>{html.unescape(inline(point))}</{tag}>" in text
 
 
 def test_the_page_works_as_a_full_history_without_script() -> None:
@@ -123,8 +125,8 @@ def test_each_release_starts_with_a_plain_language_summary() -> None:
 
     for entry in released_only(changes.history("de"), published_version()):
         changes_word = "Neuerung" if len(entry.points) == 1 else "Neuerungen"
-        topics_word = "Thema" if len(entry.groups) == 1 else "Themen"
-        summary = f"{len(entry.points)} {changes_word} · {len(entry.groups)} {topics_word}"
+        topics_word = "Thema" if len(entry.topics) == 1 else "Themen"
+        summary = f"{len(entry.points)} {changes_word} · {len(entry.topics)} {topics_word}"
         assert f'<p class="release-summary">{summary}</p>' in text
         assert f'data-announcement="{entry.version}: {summary}"' in text
 
@@ -187,3 +189,66 @@ def test_a_release_with_packages_builds_the_badge_after_version_json(
 
     assert make_download.main() == 0
     assert [name for name, _value in calls] == ["pages", "version", "changelog"]
+
+
+LEAD_FILE = """## 9.9.9
+
+- Die Demo läuft jetzt bis zum *30. November*.
+
+### Bausteine
+
+- Ein Baustein mehr.
+
+### Drucken
+
+- Ein Drucker mehr.
+
+## 9.9.8
+
+- Der alte Punkt ohne Gliederung.
+"""
+
+
+def test_the_lead_stands_highlighted_above_the_groups(
+    tmp_path: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Titellose Punkte vor benannten Gruppen stehen als Vorspann über dem Raster.
+
+    Gegenprobe in derselben Seite: Die Fassung ohne Gliederung (wie vor 0.2.0)
+    bleibt eine schlichte Liste.
+    """
+    from pathlib import Path
+
+    folder = Path(str(tmp_path))
+    (folder / "de.md").write_text(LEAD_FILE, encoding="utf-8")
+    changes.forget_cache()
+    monkeypatch.setattr(changes, "folder", lambda: folder)
+    monkeypatch.setattr(make_changelog, "published_version", lambda: "9.9.9")
+    try:
+        text = render_page("de")
+    finally:
+        changes.forget_cache()
+
+    newest = text[text.index('data-version="9.9.9"') : text.index('data-version="9.9.8"')]
+    older = text[text.index('data-version="9.9.8"') :]
+    assert (
+        '<div class="release-lead"><p>Die Demo läuft jetzt bis zum <em>30. November</em>.</p>'
+        "</div>" in newest
+    )
+    assert newest.index("release-lead") < newest.index('class="release-groups"')
+    assert "<li>Die Demo" not in newest, "der Vorspann steht nicht noch einmal in einer Gruppe"
+    assert ">01</span><h3>Bausteine</h3>" in newest, "der Vorspann zählt nicht als Gebiet"
+    assert "3 Neuerungen · 2 Themen" in newest
+    assert "release-lead" not in older
+    assert "<li>Der alte Punkt ohne Gliederung.</li>" in older
+
+
+def test_the_lead_style_carries_a_second_cue() -> None:
+    """Akzent allein reichte nicht (Regel 18): Kante als Form, größer und halbfett."""
+    css = (make_changelog.WEBSITE / "style.css").read_text(encoding="utf-8")
+    rule = css[css.index(".release-lead {") :]
+    rule = rule[: rule.index("}")]
+
+    assert "border-left: 5px solid var(--accent)" in rule
+    assert "font-weight: 650" in rule
+    assert "font-size: var(--t-lg)" in rule

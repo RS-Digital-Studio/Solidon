@@ -250,6 +250,10 @@ class AskDialog(QDialog):
         """Je Antwort ein Knopf, wenn die Frage zwei oder drei Handlungen anbietet."""
 
         prompt = QLabel(question, self)
+        # **Klartext, nie Auszeichnung** (§32): Eine Frage nennt Namen aus
+        # Projekt- und Bausteindateien, und ein fremder Titel wie
+        # ``<span style="font-size:40pt">…`` setzte sich sonst als HTML.
+        prompt.setTextFormat(Qt.TextFormat.PlainText)
         prompt.setWordWrap(True)
         self._preparing = QLabel(
             tr("Die Kandidaten werden in der Ansicht vorbereitet. Danach können Sie auswählen."),
@@ -3156,8 +3160,8 @@ def expired_demo_text(state: activation.Activation, now: datetime | None = None)
                 date=deadline_date(state)
             ),
             tr(
-                "{app} 1.0 ist für den {start} um 10:00 Uhr deutscher Zeit geplant; "
-                "am Tag davor bereite ich die Verkaufsversion vor."
+                "{app} 1.0 erscheint voraussichtlich am {start} um 10:00 Uhr deutscher "
+                "Zeit. Am Tag davor bereite ich die Verkaufsversion vor."
             ).format(app=APP_NAME, start=calendar_date(PLANNED_SALE_START.date())),
             tr(
                 "Ihre gespeicherten Projekte bleiben erhalten. Auf {url} finden Sie den "
@@ -4186,6 +4190,22 @@ def _third_party_text() -> str:
         return tr("Die Liste der Fremdbestandteile ließ sich nicht lesen.")
 
 
+def as_plain_text(box: QMessageBox) -> None:
+    """Haupt- und Zusatztext einer Rückfrage als Klartext setzen (§32).
+
+    Rückfragen nennen Projekt- und Schrittnamen aus Dateien, die von
+    irgendwoher kommen. ``QMessageBox`` setzt beide Texte sonst als
+    Auszeichnung, sobald sie danach aussehen — ein Schritt namens
+    ``<span style="font-size:40pt">…`` füllte die Frage. ``setTextFormat``
+    erreicht nur den Haupttext; den Zusatztext legt Qt erst mit
+    ``setInformativeText`` an, darum steht der Aufruf direkt vor ``exec``.
+    """
+    box.setTextFormat(Qt.TextFormat.PlainText)
+    for label in box.findChildren(QLabel):
+        if label.objectName() in ("qt_msgbox_label", "qt_msgbox_informativelabel"):
+            label.setTextFormat(Qt.TextFormat.PlainText)
+
+
 def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     """Vor dem Wegwerfen eines geänderten Dokuments fragen (§2.1, Regel 19).
 
@@ -4209,6 +4229,7 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     # Rot, weil nach dem Schließen kein Undo zurückholt, was hier verworfen wird.
     make_danger(discard)
     box.setDefaultButton(save)
+    as_plain_text(box)
     box.exec()
 
     clicked = box.clickedButton()
@@ -4297,6 +4318,7 @@ def _go_on_despite(
     box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
     make_primary(write)
     box.setDefaultButton(write)
+    as_plain_text(box)
     box.exec()
     return box.clickedButton() is write
 
@@ -4341,6 +4363,37 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
     return "close" if box.clickedButton() is close else "back"
 
 
+def ask_free_part_name(
+    existing: str, title: str, suggested: str, parent: QWidget | None = None
+) -> bool:
+    """Gleichnamige Bausteindatei: als eigenen Eintrag übernehmen? (Regel 21)
+
+    Ein Name, den es im Katalog schon gibt, ist kein Fehler, sondern eine
+    Frage mit genau einer Antwort und dem Rückweg. Bis hierher kam sie als
+    „Das hat so nicht funktioniert — Die Eingabe war so nicht verwendbar“,
+    obwohl nichts schiefgegangen war. Genannt werden die Titel, wie der
+    Katalog sie zeigt — ``existing`` für den vorhandenen, ``title`` für den
+    neuen; der freie Schlüssel ``suggested`` bleibt die Antwort darunter und
+    erscheint nirgends. ``True`` heißt, der neue kommt unter ``suggested``.
+    """
+    dialog = AskDialog(
+        tr(
+            "Im Katalog liegt schon ein Baustein „{existing}“. Er bleibt, wie er ist. "
+            "Soll der neue „{title}“ als eigener Eintrag dazukommen?",
+            existing=existing,
+            title=title,
+        ),
+        [suggested],
+        parent,
+        labels={suggested: tr("Als eigenen Eintrag übernehmen")},
+        as_buttons=True,
+    )
+    try:
+        return dialog.exec() == QDialog.DialogCode.Accepted
+    finally:
+        dialog.deleteLater()
+
+
 def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | None = None) -> bool:
     """Die eine Frage, die sich zu stellen lohnt: mehr als einen Schritt
     wegzuwerfen (§15.4).
@@ -4375,5 +4428,6 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     no_primary(box)
     box.setEscapeButton(cancel)
     cancel.setFocus()
+    as_plain_text(box)
     box.exec()
     return box.clickedButton() is discard

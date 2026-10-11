@@ -90,7 +90,7 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
 * **Linie, Kreis und Bogen zeigen ihre Vorschau am Zeiger**, bis der Klick sie
   festmacht.
 * **Gefangen wird auf das Raster, ein vorhandener Punkt schlägt es** — sonst
-  risse der Fang die Deckung auf. Der Haken „Am Raster fangen" steht an der
+  risse der Fang die Deckung auf. Der Haken *Rasterfang* steht an der
   Ebenenzeile, an ist die Vorgabe; derselbe Fang gilt beim Ziehen eines
   Punktes.
 * **Was ein Klick tut, entscheidet die Methode, die auch ein Test ruft**
@@ -108,6 +108,17 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
   (`drawing_hint`), auch dass Esc den Linienzug beendet. Sobald etwas
   gezeichnet ist, hängt `status_text` „Esc wechselt zum Auswählen und Ziehen."
   an.
+* **Ein Linienzug endet, wenn er eine Schleife schließt** (`_closes_a_loop`:
+  Deckungen und Kurvenenden aus `edit.element_spots`), sonst hinge ein Strich am
+  Zeiger. Klick und getipptes Maß gehen über `_go_on_with_the_chain`. Den
+  Doppelklick nimmt im Linienwerkzeug immer `double_click_on_plane`; `place`
+  lehnt nur Länge null ab (`EPS_DISPLAY`). Gleich nahe Punkte: das Kurvenende.
+* **Die Eingabetaste eines Maßfelds setzt im Filter des Panels und endet dort**
+  (sonst drückte sie den Hauptknopf des Dialogs); danach Fokus zurück, wo die
+  erste Ziffer ankam (`give_focus_back`). Fokusverlust setzt nur Getipptes,
+  am `FocusOut` und sofort — ein Klick nimmt erst den Fokus, dann drückt er.
+* **Ein Rasterpunkt auf einem vorhandenen Punkt fängt ihn** (`EPS_DISPLAY`),
+  nur bei setzenden Werkzeugen, nicht bei Auswählen, Verrunden, Fase.
 * **Wo der Zeiger steht, steht in der Zeile** (`pointer_target`,
   `SketchPanel._show_pointer`) — der Ort, an dem ein Klick landet, nicht die
   rohe Lage. Genaue Zahlen gibt das Kontextmenü am Punkt (`edit_point`, mit
@@ -264,7 +275,8 @@ möglich.
 
 * **`_drag_solve` schreibt die ganze Lösung zurück** — die gespeicherte
   Zeichnung ist stets die gelöste, ein `fixed`-Anker wandert nie; `-0.0` wird
-  null.
+  null. Ein geändertes Maß schreibt nichts zurück: Handlungen auf der Auswahl,
+  Trimmen und Verlängern rechnen deshalb an `_solved_sketch()`, sonst am alten Ort.
 * **Fest heißt fest, auch gegen die Hand**; getippte Koordinaten (`edit_point`)
   setzen erst den Anker (`_anchor`).
 * **Die Mitte eines Kreises oder Bogens nimmt den Rand mit** (`move_point`),

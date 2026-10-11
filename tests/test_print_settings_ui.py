@@ -11194,7 +11194,8 @@ def test_a_resin_printer_reduces_the_dialog_to_what_applies_and_a_switch_brings_
         assert session.profile.material.id == profiles.DEFAULT_MATERIAL, (
             "PLA statt Harz, sobald ein Filamentdrucker dasteht"
         )
-        assert all(not widget.isHidden() for widget in hidden)
+        assert all(not widget.isHidden() for widget in hidden if widget is not dialog.save_button)
+        assert dialog.save_button.isHidden(), "ohne Druckdatei kein Speichern-Knopf"
         assert dialog.nozzle_state.isVisibleTo(dialog)
         assert dialog.filament_label.text() == tr("Filamente")
 
@@ -11205,6 +11206,70 @@ def test_a_resin_printer_reduces_the_dialog_to_what_applies_and_a_switch_brings_
         assert session.profile.material.id == profiles.DEFAULT_RESIN_MATERIAL
         assert all(widget.isHidden() for widget in hidden)
         assert not dialog.nozzle_state.isVisibleTo(dialog)
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+def test_a_resin_printer_keeps_the_slicer_profiles_away_after_the_profile_search(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, session: Session
+) -> None:
+    """Handbuch, Seite Resin: Der Dialog zeigt nur Drucker, Material, Platten und
+    das Programm — auch nachdem die Profilsuche eines Orca-Slicers geantwortet hat.
+
+    Am Fenster stand mit ElegooSlicer der aufgeklappte Kasten *Profile des
+    Slicers* mit FDM-Druckerprofilen und die Zeile „Dieser Slicer braucht ein
+    Druckerprofil“, denn die Suche machte ihn nach ``_reduce_for_resin`` wieder
+    sichtbar. *Im Slicer öffnen* braucht keine Profile.
+    """
+    monkeypatch.setattr(print_dialog.slicer_profiles, "find_profiles", lambda *_a, **_k: [])
+    session.start_new(profiles.DEFAULT_RESIN_PRINTER, profiles.DEFAULT_RESIN_MATERIAL)
+    # Wie nach einem früheren Harzdruck gespeichert: die Pixelgröße als Bahn.
+    session.project.document.print_settings = print_settings.resolve(session.profile)
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    try:
+        dialog._slicer_path = Path("C:/Programme/ElegooSlicer/elegoo-slicer.exe")
+        dialog._start_profile_search()
+        dialog._leash.wait_all(5000)
+        for _ in range(5):
+            qt_app.processEvents()
+        assert not dialog._profiles_pending, "die Profilsuche hat geantwortet"
+        assert dialog.slicer_box.isHidden()
+        assert dialog._profile_gap() == ""
+        assert dialog._machine_missing_line() not in dialog.state.text()
+        # Kein Satz über Grundlagen und kein Drucker des Slicers: Ein
+        # Resin-Drucker gibt keine Werte mit (RM-071), weder Solidons noch die
+        # des Herstellers, und ein Filamentdrucker passt nicht zu Harz.
+        assert not dialog.foundation_note.isVisibleTo(dialog), dialog.foundation_note.text()
+        dialog._slicer_path = Path("C:/Programme/UltiMaker Cura 5.13.0/UltiMaker-Cura.exe")
+        dialog._show_foundation_note()
+        assert not dialog.foundation_note.isVisibleTo(dialog), dialog.foundation_note.text()
+        # Zurück auf den Orca-Slicer ohne Profilbestand: Dort liefert beim
+        # Druckerwechsel keine Profilsuche nach (``_refill_slicer_profiles``
+        # kehrt früh zurück), das Angebot muss der Wechsel selbst zurückholen.
+        dialog._slicer_path = Path("C:/Programme/ElegooSlicer/elegoo-slicer.exe")
+        dialog._offer_the_slicers_printer("centauri-carbon-2")
+        assert not dialog.adopt_printer.isVisibleTo(dialog), dialog.adopt_printer.text()
+        assert not dialog.material_link.isVisibleTo(dialog), "an Harz gibt es keine Filamentliste"
+
+        dialog.printer_choice.setCurrentIndex(
+            dialog.printer_choice.findData(profiles.DEFAULT_PRINTER)
+        )
+        assert not session.profile.printer.is_resin
+        # Die Grundlage gehört dem neuen Drucker: Bahn seiner Düse, nicht der Bildpunkt.
+        fdm = print_settings.resolve(session.profile)
+        assert dialog.settings.layers.line_width == pytest.approx(fdm.layers.line_width)
+        assert dialog.settings.layers.first_layer_line_width == pytest.approx(
+            fdm.layers.first_layer_line_width
+        )
+        assert session.profile.printer.extrusion_width > 0.3
+        # Kein grauer Speichern-Knopf ohne Datei; das Angebot des Slicers kommt zurück.
+        assert dialog.save_button.isHidden()
+        # Am Filamentdrucker gilt das Angebot wieder, ohne neue Anfrage.
+        assert dialog.adopt_printer.isVisibleTo(dialog), "der Rückweg des Angebots"
+        assert not dialog.slicer_box.isHidden(), "am Filamentdrucker kommt der Kasten zurück"
+        assert dialog.material_link.isVisibleTo(dialog)
     finally:
         dialog.close()
         dialog.deleteLater()
@@ -11382,6 +11447,52 @@ def test_every_setting_field_carries_its_name_and_its_unit_once(
         assert all(editor.accessibleName() for editor in spool.editors.values())
     finally:
         spool.deleteLater()
+
+
+def test_a_resin_printer_shows_no_filament_stock_line(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, session: Session
+) -> None:
+    """Harz hat keine Spulen: Die Bestandszeile des Filamentlagers bleibt weg.
+
+    Am Resin-Dialog stand „Ohne Filamentzuweisung: Einzelbedarf erst nach dem
+    Slicen bekannt.“ — eine Zuweisung, die es dort nicht gibt, und ein Slicen,
+    das der Dialog dort nicht anbietet. Gegenprobe: Am Filamentdrucker steht
+    dieselbe Zeile weiter.
+    """
+    from types import SimpleNamespace
+
+    from app.ui import print_settings_dialog as module
+
+    line = "Ohne Filamentzuweisung: Einzelbedarf erst nach dem Slicen bekannt."
+    monkeypatch.setattr(module._StockWorker, "work", lambda worker: worker.done.emit(line))
+    session.start_new(profiles.DEFAULT_RESIN_PRINTER, profiles.DEFAULT_RESIN_MATERIAL)
+    monkeypatch.setattr(session, "last_result", _shown_result(SimpleNamespace(objects={})))
+    dialog = PrintSettingsDialog(session, UiSettings())
+    try:
+
+        def settled() -> str:
+            """Bestandsprüfung anstoßen und warten, bis sie still ist (höchstens 5 s)."""
+            dialog._stock_revision += 1
+            dialog._refresh_stock()
+            end = time.monotonic() + 5.0
+            while time.monotonic() < end:
+                if dialog._stock_worker is not None:
+                    dialog._stock_worker.wait(100)
+                qt_app.processEvents()
+                if dialog.stock_notice.text():
+                    break
+                time.sleep(0.02)
+            return dialog.stock_notice.text()
+
+        assert session.profile.printer.is_resin
+        assert settled() == ""
+        assert dialog.stock_notice.isHidden()
+
+        dialog.printer_choice.setCurrentIndex(dialog.printer_choice.findData("centauri-carbon-2"))
+        assert settled() == line, "am Filamentdrucker gilt die Zeile weiter"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
 
 
 def test_a_crashed_stock_check_reads_as_lines_not_as_title_colon_detail(
@@ -12411,6 +12522,7 @@ def test_real_operation_entry_reaches_size_dialog_with_fixed_id_without_feature_
         "_plane_through",
         "_measured_from_body",
         "_edges_from_view",
+        "_texture_that_prints",
         "_source_names",
         "_parameter_values",
         "_feature_names",

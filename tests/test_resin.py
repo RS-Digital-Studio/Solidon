@@ -343,3 +343,42 @@ def test_a_resin_slicer_is_a_program_that_only_opens(resin: Profile) -> None:
     assert handover.only_opens(setup)
     assert handover.machine_missing(setup, resin) == []
     assert handover.setting_limitations(setup.flavour) == []
+
+
+def test_a_resin_line_width_never_becomes_the_base_of_a_filament_printer(
+    resin: Profile, fdm: Profile
+) -> None:
+    """Harz → FDM: Die Pixelgröße als Bahnbreite blieb im Projekt (0,05 statt 0,42 mm,
+    erste Bahn 0,054), ``for_process`` nahm sie als Raster des Filamentdruckers, und
+    *Werte mitgeben* hätte sie an den Slicer geschickt. Auch ein schon so
+    gespeichertes Projekt rechnet und exportiert mit der Bahn seiner Düse."""
+    from app.ui.print_settings_dialog import settings_for_export
+    from app.ui.settings import UiSettings
+
+    left_over = print_settings.resolve(resin)
+    assert left_over.layers.line_width < 0.1, "Ausgangslage: der Bildpunkt als Bahn"
+
+    process = profiles.for_process(fdm, left_over)
+    assert process.printer.extrusion_width == pytest.approx(fdm.printer.extrusion_width)
+    native = print_settings.resolve(fdm)
+    shown = print_settings.native_line_widths(left_over, fdm.printer)
+    assert shown.layers.line_width == pytest.approx(native.layers.line_width)
+    assert shown.layers.first_layer_line_width == pytest.approx(
+        native.layers.first_layer_line_width
+    )
+
+    document = new_project(fdm.printer.id, fdm.material.id).document
+    document = replace(document, print_settings=left_over)
+    exported = settings_for_export(document, fdm, UiSettings(print_settings_in_files=True))
+    assert exported is not None
+    assert exported.layers.line_width == pytest.approx(native.layers.line_width)
+
+    # Eine eigene Wahl und ein übernommener Vorschlag bleiben, auch unter der
+    # Schwelle von einer halben Düse.
+    narrow = fdm.printer.nozzle_diameter * print_settings.FOREIGN_LINE_SHARE * 0.75
+    narrowed = print_settings.with_path(left_over, "layers.line_width", narrow)
+    chosen = replace(narrowed, chosen=left_over.chosen | {"layers.line_width"})
+    accepted = replace(narrowed, accepted=left_over.accepted | {"layers.line_width"})
+    for decided in (chosen, accepted):
+        kept = print_settings.native_line_widths(decided, fdm.printer)
+        assert kept.layers.line_width == pytest.approx(narrow)
