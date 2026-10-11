@@ -56,7 +56,7 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # „An den Slicer übergeben …" im Prüfbericht — der letzte Meter, wenn
         # nichts mehr zu beanstanden ist
         "report.slicer",
-        # „Bausteine" unten im Auswahlfenster: der Katalog, von der gewählten
+        # *Bausteinkatalog …* unten im Auswahlfenster: der Katalog, von der gewählten
         # Fläche aus, ohne Umweg über das Menü
         "selection.parts",
         # „Filament und Druck“ unter der Liste der Auswahl und der Filamentwähler
@@ -359,10 +359,10 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 "viewport",
             ),
             # **Unten der Knopf, nicht die Klappe**: An einer Fläche steht über
-            # der Liste auch die Abschnittsklappe *Bausteine* (Deckel, Dichtnut);
-            # ein Klick darauf klappt nur zu (Prüfung am Fenster, 11.10.2026).
+            # der Liste die Abschnittsklappe *Bausteine* (Deckel, Dichtnut); der
+            # Knopf zum Katalog heißt deshalb wie im Menü *Bausteinkatalog …*.
             step(
-                _("Rechts unter *Auswahl*: Klicken Sie unten auf den Knopf *Bausteine*."),
+                _("Rechts unter *Auswahl*: Klicken Sie unten auf *Bausteinkatalog …*."),
                 "selection.parts",
             ),
             # Ein Doppelklick fügt ein. Mit „Einfügen" im selben Bild wurde der

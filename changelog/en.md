@@ -40,7 +40,8 @@ it into `website/version.json`.
 - A selected hole no longer falls back silently to its body after recalculation. Until now, Del could then remove the whole body.
 - Every function has the same name everywhere. The *Split* tool offers *Split at a plane*, *Split along a drawn line* and *Split into separate parts*.
 - On the selected body, *Split automatically …* now sits under *Prepare*.
-- In the resting window only *Parts* is highlighted in colour. Red is kept for buttons that discard or delete, and confirmations open with the focus on *Cancel*.
+- In the resting window only *Part catalogue …* is highlighted in colour. Red is kept for buttons that discard or delete, and confirmations open with the focus on *Cancel*.
+- The catalogue button in the *Selection* tab is now called *Part catalogue …*, as in the *File* menu. *Parts* there is only the group with lid and seal groove.
 - In sketch mode the *Selection* tab is hidden. The list of constraints shows those of the selected points and lines, plus any conflict.
 - In the parameter card, a dimension shows “Not used” only where that is true. The button says how many fixed numbers can be bound to dimensions.
 - The error report attaches a crash log only when Solidon actually crashed.

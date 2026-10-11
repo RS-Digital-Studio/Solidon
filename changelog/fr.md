@@ -41,7 +41,8 @@ dans `website/version.json`.
 - Un perçage sélectionné ne retombe plus en silence sur son corps après un nouveau calcul. Avant, Suppr pouvait alors retirer tout le corps.
 - Chaque fonction porte le même nom partout. L'outil *Diviser* propose *Diviser selon un plan*, *Diviser le long d'une ligne tracée* et *Diviser en pièces distinctes*.
 - Sur le corps sélectionné, *Diviser automatiquement …* se trouve désormais sous *Préparer*.
-- Dans la fenêtre au repos, seul *Blocs* ressort en couleur. Le rouge est réservé aux boutons qui rejettent ou suppriment, et les questions s'ouvrent avec le focus sur *Annuler*.
+- Dans la fenêtre au repos, seul *Catalogue de blocs …* ressort en couleur. Le rouge est réservé aux boutons qui rejettent ou suppriment, et les questions s'ouvrent avec le focus sur *Annuler*.
+- Le bouton du catalogue dans l'onglet *Sélection* s'appelle désormais *Catalogue de blocs …*, comme dans le menu *Fichier*. *Blocs* n'y est plus que le groupe avec couvercle et rainure de joint.
 - En mode dessin, l'onglet *Sélection* est masqué. La liste des contraintes montre celles des points et lignes sélectionnés, ainsi que chaque conflit.
 - Dans la carte des paramètres, une cote n'affiche « Non utilisé » que si c'est le cas. Le bouton indique combien de nombres fixes peuvent être liés à des cotes.
 - Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.

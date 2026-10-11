@@ -65,7 +65,8 @@ Nutzen da und sonst nichts.
 - Eine gewählte Bohrung fällt nach dem Neurechnen nicht mehr still auf ihren Körper zurück. Bisher konnte Entf danach den ganzen Körper entfernen.
 - Jede Funktion heißt überall gleich. Das Werkzeug *Teilen* bietet *An Ebene teilen*, *An gezeichneter Linie teilen* und *In Einzelteile aufteilen*.
 - Am gewählten Körper steht *Automatisch teilen …* jetzt unter *Vorbereiten*.
-- Im ruhenden Fenster ist nur *Bausteine* farbig hervorgehoben. Rot tragen nur Knöpfe, die etwas verwerfen oder löschen, und Rückfragen öffnen mit dem Fokus auf *Abbrechen*.
+- Im ruhenden Fenster ist nur *Bausteinkatalog …* farbig hervorgehoben. Rot tragen nur Knöpfe, die etwas verwerfen oder löschen, und Rückfragen öffnen mit dem Fokus auf *Abbrechen*.
+- Der Knopf zum Katalog im Reiter *Auswahl* heißt jetzt *Bausteinkatalog …* wie im Menü *Datei*. *Bausteine* heißt dort nur noch die Gruppe mit Deckel und Dichtnut.
 - Im Zeichenmodus ist der Reiter *Auswahl* ausgeblendet. Die Liste der Bedingungen zeigt die der gewählten Punkte und Linien und jeden Widerspruch.
 - In der Parameterkarte steht unter einem Maß nur noch „Nicht verwendet“, wo das zutrifft. Wie viele feste Zahlen sich an Maße binden lassen, sagt der Knopf.
 - Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.

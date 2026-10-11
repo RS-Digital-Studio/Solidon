@@ -41,7 +41,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un taladro seleccionado ya no vuelve en silencio a su cuerpo tras recalcular. Antes, Supr podía quitar entonces el cuerpo entero.
 - Cada función se llama igual en todas partes. La herramienta *Dividir* ofrece *Dividir por un plano*, *Dividir por una línea dibujada* y *Dividir en piezas sueltas*.
 - En el cuerpo seleccionado, *Dividir automáticamente …* está ahora en *Preparar*.
-- En la ventana en reposo solo *Bloques* destaca en color. El rojo queda para los botones que descartan o borran, y las preguntas se abren con el foco en *Cancelar*.
+- En la ventana en reposo solo *Catálogo de bloques …* destaca en color. El rojo queda para los botones que descartan o borran, y las preguntas se abren con el foco en *Cancelar*.
+- El botón del catálogo en la pestaña *Selección* se llama ahora *Catálogo de bloques …*, como en el menú *Archivo*. *Bloques* ahí es solo el grupo con la tapa y la ranura de sellado.
 - En el modo de dibujo, la pestaña *Selección* se oculta. La lista de restricciones muestra las de los puntos y líneas seleccionados, además de cualquier conflicto.
 - En la tarjeta de parámetros, una medida solo muestra «Sin utilizar» cuando es así. El botón dice cuántos números fijos se pueden vincular a medidas.
 - El informe de errores adjunta un registro de fallo solo cuando Solidon se ha cerrado de verdad por un fallo.

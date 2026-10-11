@@ -68,7 +68,7 @@ gefalteten, getrennt durch einen nackten Trennstrich.
   Leiste, Karte, `menu_path` und Wächter; `create_lid` und `screw_lid` stehen
   ohne Kachel an der Fläche **und** unter *Erzeugen → Bausteine*.
 - **Zum Katalog in einem Klick, wenn das Teil gewählt ist** (Entscheidung
-  Robert): Hauptknopf *Bausteine*, dazu *Datei → Bausteinkatalog …*, Strg+K,
+  Robert): Hauptknopf *Bausteinkatalog …*, dazu *Datei → Bausteinkatalog …*, Strg+K,
   *Erzeugen → Bausteine*
   (`test_a_chosen_part_reaches_the_catalogue_in_one_click`).
 - **Der Katalog führt aus seiner Sperre hinaus:** Bei genau einem Körper gilt
@@ -149,9 +149,10 @@ Robert).
   (`OPEN_UP_TO` = `MAX_SUBMENU_ENTRIES`, `test_interface_limits`), gerechnet an
   der Stufe. Eine selbst bewegte Klappe bleibt über Auswahlwechsel (`clicked`,
   nicht `toggled`); ein Suchtreffer öffnet seine Gruppe.
-- **Der Knopf *Bausteine* ist ein Hauptknopf** an Körper und Fläche, an der
+- **Der Knopf *Bausteinkatalog …* ist ein Hauptknopf** an Körper und Fläche, an der
   Bohrung *Passende Bausteine …* mit gefiltertem Katalog (`MATCHING_PARTS_AT`),
-  an der Verrundung keiner (Entscheidung Robert). **Ohne Auswahl bleibt er**,
+  an der Verrundung keiner (Entscheidung Robert). Er heißt wie der Menüeintrag,
+  denn *Bausteine* ist schon die Abschnittsklappe darüber. **Ohne Auswahl bleibt er**,
   von der Operationsliste nur das Folgende.
 - **Handlungen für alle Körper (`takes_whole_scene`) stehen nur ohne Auswahl**
   (Entscheidung Robert), in der Karte davon nur `SCENE_ACTIONS_IN_THE_CARD`

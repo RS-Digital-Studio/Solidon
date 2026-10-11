@@ -3990,7 +3990,7 @@ def test_a_face_offers_the_catalogue_from_the_panel(
     opened: list[bool] = []
     monkeypatch.setattr(window, "_open_catalog", lambda: opened.append(True))
     catalog = window.selection_operations.catalog_button
-    assert not catalog.isHidden() and catalog.text() == tr("Bausteine")
+    assert not catalog.isHidden() and catalog.text() == tr("Bausteinkatalog …")
     catalog.click()
     assert opened == [True], "der Knopf öffnet den Katalog des Fensters"
 

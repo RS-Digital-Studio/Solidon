@@ -6731,7 +6731,7 @@ class ReportPanel(QWidget):
     def _emphasise_slicer(self, ready: bool) -> None:
         """Bietet der Bericht nichts mehr an, steht der Weg zum Slicer halbfett da.
 
-        **Ohne Akzentfläche:** Im Ruhezustand trägt nur *Bausteine* den Akzent
+        **Ohne Akzentfläche:** Im Ruhezustand trägt nur *Bausteinkatalog …* den Akzent
         (Entscheidung Robert, ``test_resting_state.py``). Als Hauptknopf leuchtete
         dieser Knopf neben ihm, sobald ein Modell übergabebereit war — zwei
         Signale, keines davon mehr eines. Dass nichts mehr aussteht, sagt die
@@ -9608,7 +9608,7 @@ class FeaturePanel(QWidget):
         # und Untermenü. Ein Panel aus vier grauen Zeilen ist eine Sackgasse
         # mit Begründung; eine Sackgasse bleibt es trotzdem.
         # **Nicht an einer Fläche**: Dort steht unter diesem Fenster der Knopf
-        # *Bausteine* zum selben Katalog, und zwei Knöpfe mit einem Ziel sind
+        # *Bausteinkatalog …* zum selben Katalog, und zwei Knöpfe mit einem Ziel sind
         # eine Frage ohne Antwort (RM-510).
         if not any(action.op for action in actions) and feature.kind != "face":
             catalog = QPushButton(tr("Baustein einsetzen …"), self)

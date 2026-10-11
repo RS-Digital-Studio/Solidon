@@ -40,7 +40,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um furo selecionado já não volta em silêncio ao seu corpo depois de recalcular. Até agora, o Delete podia então remover o corpo inteiro.
 - Cada função tem o mesmo nome em todo o lado. A ferramenta *Dividir* oferece *Dividir por um plano*, *Dividir ao longo de uma linha desenhada* e *Dividir em peças soltas*.
 - No corpo selecionado, *Dividir automaticamente …* está agora em *Preparar*.
-- Na janela em repouso só *Blocos* se destaca a cor. O vermelho fica para os botões que descartam ou apagam, e as perguntas abrem com o foco em *Cancelar*.
+- Na janela em repouso só *Catálogo de blocos …* se destaca a cor. O vermelho fica para os botões que descartam ou apagam, e as perguntas abrem com o foco em *Cancelar*.
+- O botão do catálogo no separador *Seleção* chama-se agora *Catálogo de blocos …*, como no menu *Ficheiro*. *Blocos* aí é só o grupo com a tampa e a ranhura de vedação.
 - No modo de desenho, o separador *Seleção* fica oculto. A lista de restrições mostra as dos pontos e linhas selecionados, mais qualquer conflito.
 - No cartão de parâmetros, uma medida só mostra «Não utilizado» quando é o caso. O botão diz quantos números fixos se podem associar a medidas.
 - O relatório de erro só anexa um registo de falha quando o Solidon falhou mesmo.
