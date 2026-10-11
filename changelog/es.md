@@ -109,7 +109,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un borde estrecho que se sostiene solo ya no cuenta como puente largo, tampoco junto a otro voladizo. El informe ya no avisa ahí, y Solidon no pide soportes por ello.
 - Sobre un canal, el informe ya no aconseja un soporte que luego no se podría sacar. Nombra el canal y una transición de menos de 45 grados.
 - Para PETG, Solidon sugiere *Refrigeración total en el soporte*. Así se suelta más fácil de la pieza.
+- En figuras, Solidon propone la costura detrás, sin línea por delante. Para una cara superior grande y plana propone planchar.
+- El tiempo de impresión estimado incluye ahora el planchado.
 - Nuevos ajustes de impresión: *Capas de separación inferiores*, *Paredes de los árboles* y *Punta del árbol*, más *Contraer la primera capa* y *Ensanchar agujeros*, que siguen al slicer si no elige.
+- En *Planchar la superficie* ahora elige entre *Cara más alta* y *Todas las caras superiores*.
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
 - En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.

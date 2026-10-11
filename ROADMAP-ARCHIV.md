@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)](#rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026) |
 | 2026-10-11 | [RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)](#rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026) |
 | 2026-10-10 | [RM-695: Ein gespeichertes Projekt öffnet nach einem Neustart ohne neue Erkennung (10.10.2026)](#rm-695-ein-gespeichertes-projekt-öffnet-nach-einem-neustart-ohne-neue-erkennung-10102026) |
 | 2026-10-10 | [RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)](#rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026) |
@@ -47920,6 +47921,62 @@ Schicht ab R 9,6 immer, unter R 8,3 nie; Changelog „flache Kuppen und Schräge
 „cuadrícula“. **Nachprüfung (`review_rm586_nach.md`):** N1 it nennt die Zeit, N2 die
 gemessene Grenze, N3 Test über mehrere Blöcke, N4 Unterlagen, N5 Test des Druckdialogs.
 Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586b.md`.
+
+## RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)
+
+<a id="rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026"></a>
+<a id="rm-588"></a>
+
+**RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt.**
+  Die Naht wählte der Hersteller, gebügelt wurde nur bei einer bündigen Passung. Eine Figur
+  zeigt die Naht als Linie auf der Schauseite, eine große flache Oberseite ihre Bahnen
+  (Recherche Nr. 14, 15). Abnahme: Vorschläge mit Grund in allen Familien.
+
+**Abschluss:** Zwei Regeln im Rat, beide je Teil (`advise.PART_PATHS`). *Naht hinten*
+(`shell.seam_position = rear`, Grund „Die Naht zöge sonst eine Linie über die Schauseite.“)
+für Körper ab 10 mm Höhe, deren Außenkontur zu mindestens 70 % frei geformt ist
+(`analysis.free_form_share`, je Schnitt gemerkt), wo der Slicer die Naht selbst sucht. *Oberfläche
+bügeln: Oberste Fläche* (`shell.ironing = topmost`, Grund „Bügeln glättet die große
+Oberseite und kostet Druckzeit.“) für eine letzte Schicht ab 400 mm² und der Hälfte des
+größten Querschnitts, nicht neben einer bündigen Passung. Übergabe: Orca-Familie
+`seam_position = back`, `ironing_type = topmost`; PrusaSlicer und SuperSlicer `rear`,
+`ironing = 1` mit `ironing_type = topmost`; Cura `z_seam_type = back`,
+`ironing_enabled` mit `ironing_only_highest_layer`; „alle Oberseiten“ (bündige Passung)
+ist `top`. Rücklesen aus den Herstellerketten samt Bügeltempo und
+-abstand (`Motion`), Druckzeit mit Bügelzug über die ganze Oberseite, um eine halbe Düse
+eingezogen.
+
+Belegt mit Herstellerprofil, Standard, PLA, Kerne gepinnt, in allen acht Programmen
+(ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next, PrusaSlicer,
+SuperSlicer, Cura). Je Teil: zwei Kegelstümpfe, nur einer mit Rat — dort Naht in 100 % der
+Schichten hinten und Bügelbahn nur in der obersten Schicht, am anderen keine. Figuren, Anteil
+der Außenschleifen mit Naht im hintersten Fünftel, Profil → Rat: Spider-Man 32–43 % → 90–99 % in den Programmen der Orca-Familie und
+bei Prusa, in Cura 62 → 77 %, vorn je 14–41 % → 0–3 %; Drache in ElegooSlicer 21 → 89 %,
+PrusaSlicer 2 → 100 % (vorher 76 % vorn), Cura 59 → 93 %. Bügeln am
+Pilz: der Slicer bügelt nur die oberste Schicht; Bügelzeit +29 bis +68 % der Druckzeit je
+Programm, Solidons Schätzung trifft sie auf 0 bis 1 %; am Besenhalter mit schmaler Oberseite (+4 bis +16 %) auf 0,99 bis 1,04. Der Befund
+unterwegs (Schätzung bügelte nur innerhalb der Wände, am Besenhalter 0,62 der Bügelzeit) ist
+behoben. Tests in `test_advise.py`, `test_print_time.py`, `test_print_settings.py`,
+`test_manufacturer.py`, `test_slicer_part_settings.py`, Slicertest
+`test_ironing_the_topmost_face_stays_with_that_part` (6 von 6 grün); der RM-587-Test der
+Wandrichtung liest jetzt Orcas Bögen mit. Messwerte und Begründung in
+`konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-naht`).
+
+**Format 52 (Entscheidung Koordinator, 11.10.2026):** *Oberfläche bügeln* ist eine Wahl
+(`shell.ironing`: `none`, `topmost`, `top_surfaces`) statt zweier Schalter mit Vorrangregel;
+die Slicer kennen es selbst als eine Wahl, und der Reiter *Wände* blieb so unter seiner
+Grenze (16 → 15 Felder, `test_every_group_holds_one_subject`). Migration 51 → 52: an wird
+`top_surfaces`, aus `none`, im Satz und in `plate_choices`; die Einordnung 35 → 36 liest den
+Schalter vorher so um, sonst wäre jedes „aus“ eine eigene Wahl. Beispieldatei
+`ironing_v51.p3d` (von welle4 geschrieben), `example_v52.p3d`, Beispielprojekte neu.
+`shell.ironing_topmost` gab es nur auf diesem Zweig (kein Tag, kein anderer Zweig). Der
+Abdruck einer Buchung kippt nicht: Er trägt das Bügeln weiter als Schalter
+(`filament_usage._as_saved`); an sieben Projekten, von 0.5.3 und von welle4 geschrieben,
+darunter Bügeln als Wahl, als Vorschlag und aus, gibt der Stand mit Format 52 denselben
+Abdruck (7 von 7), ohne die Umrechnung keinen (0 von 7). Im Slicer, Sockel 30 × 30 × 10 mit
+Würfel 10 × 10 × 10: „oberste Fläche“ bügelt in allen acht Programmen nur z 20, „alle
+Oberseiten“ z 10 und 20 (Orca-Familie 594–614 gegen 5 732–5 789 mm Bahn, Anycubic, Prusa
+und SuperSlicer 912–922 gegen 8 644–8 706 mm, Cura 863 gegen 8 297 mm).
 
 ## RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)
 

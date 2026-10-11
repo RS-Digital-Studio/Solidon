@@ -1257,6 +1257,10 @@ SupportStyle = Literal["none", "auto", "grid", "tree", "hybrid"]
 SupportPlacement = Literal["everywhere", "build_plate"]
 SeamPosition = Literal["aligned", "nearest", "random", "rear"]
 
+#: Was gebügelt wird (RM-588): nichts, die oberste Fläche des Teils oder jede
+#: Oberseite. Die Slicer kennen es als eine Wahl (Orca ``ironing_type``).
+Ironing = Literal["none", "topmost", "top_surfaces"]
+
 #: Wie die Wandbahnen erzeugt werden. ``classic`` legt feste Linienbreiten und
 #: füllt, was dazwischen übrig bleibt, mit Lückenfüllung; ``arachne`` verteilt
 #: die vorhandene Breite auf so viele Bahnen, wie hineinpassen. Der Unterschied
@@ -1332,9 +1336,11 @@ class ShellSettings:
     """Rechnet die Außenwand auf das Sollmaß statt auf die Bahnmitte. Kostet
     etwas Zeit und ist überall dort richtig, wo ein Maß eingehalten werden
     muss — also bei Passungen."""
-    ironing: bool = False
-    """Bügelt die oberste Fläche nach. Für Sicht- und Gleitflächen; sonst
-    kostet es nur Zeit."""
+    ironing: Ironing = "none"
+    """Welche Oberseiten der Slicer ein zweites Mal glättet (RM-588, Format 52):
+    keine, nur die oberste Fläche des Teils — den Deckel einer Box, die
+    Schauseite eines Schilds — oder jede Oberseite, auch die Gleitfläche einer
+    Passung darunter. Bis Format 51 ein Schalter; ``True`` war jede Oberseite."""
     thick_bridges: bool = False
     """Legt Brücken als runde Bahnen in Düsenbreite statt flach in Schichthöhe
     (RM-587). Sie tragen über eine lange freie Spanne, sehen unten aber rauer

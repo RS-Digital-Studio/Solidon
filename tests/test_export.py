@@ -4669,7 +4669,7 @@ def test_the_importable_profile_keeps_surface_and_ironing_at_the_surface_speed(
     settings = print_settings.resolve(profile)
     settings = replace(
         settings,
-        shell=replace(settings.shell, top_layers=top_layers, ironing=True),
+        shell=replace(settings.shell, top_layers=top_layers, ironing="top_surfaces"),
         speed=replace(settings.speed, infill=73.0, top_surface=30.0),
     )
     model = tmp_path / "pilz.stl"

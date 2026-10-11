@@ -1180,7 +1180,7 @@ def test_a_flush_fit_asks_for_ironing() -> None:
     Bahnen. Bisher war das ein Schalter im Dialog, den man kennen musste.
     """
     profile = profiles.make_profile()
-    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", False)
+    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", "none")
 
     paths = [entry.path for entry in advise.advise(settings, profile, fit_kinds=("flush",))]
 
@@ -1192,7 +1192,7 @@ def test_a_sliding_fit_does_not_ask_for_ironing() -> None:
     einer Fläche, die nichts berührt — die Art zählt, nicht nur das Ob.
     """
     profile = profiles.make_profile()
-    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", False)
+    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", "none")
 
     for kind in ("clearance", "press", "thread"):
         paths = [entry.path for entry in advise.advise(settings, profile, fit_kinds=(kind,))]
@@ -1404,6 +1404,7 @@ def _other_value(settings: print_settings.PrintSettings, path: str) -> object:
         return current + 3.0
     choices = {
         "shell.seam_position": "rear",
+        "shell.ironing": "topmost",
         "shell.wall_generator": "classic",
         "infill.pattern": "gyroid",
         "support.style": "tree",
@@ -5254,11 +5255,44 @@ def test_ironing_is_off_until_something_asks_for_it() -> None:
     denen etwas gleitet."""
     settings = print_settings.resolve(profiles.make_profile())
 
-    assert settings.shell.ironing is False
+    assert settings.shell.ironing == "none"
     assert handover.as_mapping(settings, "orca")["ironing_type"] == "no ironing"
+    prusa = handover.as_mapping(settings, "prusa")
+    assert prusa["ironing"] == "0" and "ironing_type" not in prusa
+    assert handover.as_mapping(settings, "cura")["ironing_enabled"] == "false"
 
-    ironed = print_settings.with_path(settings, "shell.ironing", True)
+    ironed = print_settings.with_path(settings, "shell.ironing", "top_surfaces")
     assert handover.as_mapping(ironed, "orca")["ironing_type"] == "top"
+
+
+def test_ironing_the_topmost_surface_reaches_every_family() -> None:
+    """RM-588: „Oberste Fläche“ heißt in der Orca-Familie und bei Prusa
+    ``ironing_type = topmost`` — dort mit eingeschaltetem ``ironing`` —, bei Cura
+    ``ironing_only_highest_layer``; „alle Oberseiten“ ist ``top`` und bei Cura
+    dasselbe ohne die oberste allein."""
+    settings = print_settings.resolve(profiles.make_profile())
+    topmost = print_settings.with_path(settings, "shell.ironing", "topmost")
+
+    assert handover.as_mapping(topmost, "orca")["ironing_type"] == "topmost"
+    prusa = handover.as_mapping(topmost, "prusa")
+    assert (prusa["ironing"], prusa["ironing_type"]) == ("1", "topmost")
+    cura = handover.as_mapping(topmost, "cura")
+    assert (cura["ironing_enabled"], cura["ironing_only_highest_layer"]) == ("true", "true")
+
+    every = print_settings.with_path(topmost, "shell.ironing", "top_surfaces")
+    assert handover.as_mapping(every, "orca")["ironing_type"] == "top"
+    prusa = handover.as_mapping(every, "prusa")
+    assert (prusa["ironing"], prusa["ironing_type"]) == ("1", "top")
+    cura = handover.as_mapping(every, "cura")
+    assert (cura["ironing_enabled"], cura["ironing_only_highest_layer"]) == ("true", "false")
+
+    # Nur der übernommene Pfad geht über das Herstellerprofil.
+    paths = frozenset({"shell.ironing"})
+    assert handover.as_mapping(topmost, "orca", paths) == {"ironing_type": "topmost"}
+    assert handover.as_mapping(topmost, "prusa", paths) == {
+        "ironing": "1",
+        "ironing_type": "topmost",
+    }
 
 
 def test_a_part_on_little_ground_asks_for_a_brim_on_its_own() -> None:

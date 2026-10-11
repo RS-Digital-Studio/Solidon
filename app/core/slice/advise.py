@@ -49,6 +49,7 @@ from app.core.slice.analysis import (
     cantilevers,
     channel_pieces,
     channel_space,
+    free_form_share,
     island_layers,
     kept_overhang,
     largest_overhang_patch,
@@ -236,6 +237,31 @@ SCARF_MIN_LOOP: Final = 2.0 * settings_table.SCARF_LENGTH
 #: Naht, und die Rampe kostet trotzdem Zeit.
 SCARF_MIN_HEIGHT: Final = 10.0
 
+#: Wo der Slicer die Naht selbst sucht: an einer Ecke, die sich in jeder
+#: Schicht wiederfindet („aligned“), oder an der nächsten („nearest“). Beides
+#: ist die Vorgabe der Hersteller; „random“ verteilt die Naht mit Absicht und
+#: bleibt, was es ist.
+SEAM_SEEKING: Final = frozenset({"aligned", "nearest"})
+
+#: Ab welchem Anteil frei geformter Außenkontur (``analysis.free_form_share``)
+#: ein Körper eine Figur ist, deren Naht hinten liegen soll (RM-588). Am Korpus
+#: (210 Körper aus Roberts Sammlung, 09.10.2026) liegen Drache, Spider-Man, die
+#: Schachfiguren und der Mausoleum-Drache darüber, alles mit Kanten darunter —
+#: Halter, Kästen, Würfel, Schalen. Darüber liegen außer den Figuren nur Körper
+#: ohne Kante für die Naht: Schrauben, ein Ring, gewölbte Minigolfbahnen, der
+#: Siebhalter (0,93). Und eine Ausnahme mit Kanten (10.10.2026): die
+#: Kumiko-Schale (0,78), ein Gitter aus Stegen unter ``analysis.STRAIGHT_RUN``.
+FIGURE_SHARE: Final = 0.7
+
+#: Ab welcher Fläche die oberste Schicht eine Oberseite ist, deren Bahnen man
+#: sieht, in mm²: 20 mal 20 mm, die Oberseite eines Kalibrierwürfels (RM-588).
+IRONING_TOP_AREA: Final = 400.0
+
+#: Welchen Teil des größten Querschnitts die oberste Fläche mindestens deckt,
+#: damit sie die Schauseite des Teils ist und nicht ein Griff oder eine Kante
+#: obenauf: der Deckel einer Box, ein Schild, ein Untersetzer (RM-588).
+IRONING_TOP_SHARE: Final = 0.5
+
 
 def advise(
     settings: PrintSettings,
@@ -312,6 +338,8 @@ def advise(
         )
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
+    if result is not None:
+        advice += _from_top(settings, result, fit_kinds)
     advice += _from_allowances(settings, profile, allowances)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
     # Wandzahl hängt an der Bahnbreite, und genau die senkt die Regel über die
@@ -2035,6 +2063,28 @@ def _from_geometry(
             )
         )
 
+    # **Eine Figur zeigt die Naht auf ihrer Schauseite** (RM-588, Recherche
+    # Nr. 14). Die Hersteller lassen den Slicer die Naht an einer Ecke suchen;
+    # an einer frei geformten Außenwand findet er in jeder Schicht eine andere,
+    # auch vorn im Gesicht. Hinten liegt sie dort, wo man nicht hinsieht — so
+    # liegen Figuren im Slicer, und so raten OrcaSlicer und Prusa. Wie bei der
+    # Schrägnaht erst ab :data:`SCARF_MIN_HEIGHT`: Darunter wird aus der Naht
+    # keine Linie.
+    if (
+        settings.shell.seam_position in SEAM_SEEKING
+        and result.layers
+        and result.layers[-1].z - result.layers[0].z >= SCARF_MIN_HEIGHT
+        and free_form_share(result) >= FIGURE_SHARE
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="shell.seam_position",
+                value="rear",
+                reason=_("Die Naht zöge sonst eine Linie über die Schauseite."),
+            )
+        )
+
     # **Nur, wo keine Mindestzeit gilt.** Genau dafür ist sie da: Der Slicer
     # bremst jede Schicht, die schneller fertig wäre. Die Hersteller stimmen sie
     # je Filament auf ihre Lüfter ab (Elegoo 4 s, Prusa 6 s, Curas Definitionen
@@ -2171,12 +2221,12 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
     """
     advice: list[SettingAdvice] = []
     careful = 30.0
-    if "flush" in kinds and not settings.shell.ironing:
+    if "flush" in kinds and settings.shell.ironing != "top_surfaces":
         advice.append(
             _advice(
                 settings,
                 path="shell.ironing",
-                value=True,
+                value="top_surfaces",
                 reason=_("Gebügelt gleiten die Flächen der bündigen Passung."),
             )
         )
@@ -2217,6 +2267,37 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
             )
         )
     return advice
+
+
+def _from_top(
+    settings: PrintSettings, result: SliceResult, kinds: Sequence[str]
+) -> list[SettingAdvice]:
+    """Eine große flache Oberseite zeigt ihre Bahnen (RM-588, Recherche Nr. 15).
+
+    Gebügelt wird nur die oberste Fläche, die letzte Schicht: der Deckel einer
+    Box, ein Schild, ein Untersetzer. Die übrigen Oberseiten liegen im Teil
+    oder unter dem Deckel, und sie zu bügeln kostete Zeit, die niemand sieht.
+    Eine bündige Passung bekommt jede Oberseite gebügelt (:func:`_from_fits`),
+    und die schließt die oberste ein; ohne Deckschicht gibt es nichts zu
+    bügeln. Die oberste Schicht ist dabei, was der Slicer bügelt: die Schicht,
+    über der keine mehr liegt.
+    """
+    shell = settings.shell
+    if "flush" in kinds or shell.ironing != "none" or shell.top_layers <= 0 or not result.layers:
+        return []
+    top = result.layers[-1].area
+    if top < IRONING_TOP_AREA or top < IRONING_TOP_SHARE * max(
+        layer.area for layer in result.layers
+    ):
+        return []
+    return [
+        _advice(
+            settings,
+            path="shell.ironing",
+            value="topmost",
+            reason=_("Bügeln glättet die große Oberseite und kostet Druckzeit."),
+        )
+    ]
 
 
 #: Die Materialwerte hinter den Löchern eines Modells (RM-589): Spiel der
@@ -2401,7 +2482,8 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
 #: Was je Teil geschrieben wird, wenn sein Grund an der Geometrie hängt
 #: (Konzept Herstellerprofil, Entscheidung G): Stützen mit Art, Ort und
 #: Sperre, die Haftung, die Werte einer Passung, Wände und Füllung um
-#: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Dazu der
+#: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen, Naht und
+#: Bügeln, die eine Figur oder ein Deckel verlangt (RM-588). Dazu der
 #: Stützkontakt: Abstand und Trennschichten hängen am Material der Spule, die
 #: das Teil druckt, und nur das gestützte Teil braucht sie (RM-583). Und was
 #: frei druckt (RM-587): Brückenstütze, dicke Brücken, Brückenfluss,
@@ -2436,6 +2518,7 @@ PART_PATHS: Final = frozenset(
         "shell.outer_wall_first",
         "shell.ironing",
         "shell.scarf_seam",
+        "shell.seam_position",
         "speed.outer_wall",
         "speed.outer_wall_acceleration",
         "speed.inner_wall",
@@ -2489,6 +2572,8 @@ SLICED_PATHS: Final = frozenset(
         "shell.wall_generator",
         "shell.outer_wall_first",
         "shell.scarf_seam",
+        "shell.seam_position",
+        "shell.ironing",
         "layers.line_width",
         "speed.outer_wall",
         "speed.inner_wall",

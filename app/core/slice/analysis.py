@@ -5448,6 +5448,113 @@ def _smooth_ring(ring: Ring | np.ndarray, min_length: float, arm: float) -> bool
     return bool(turn.max() <= SMOOTH_TURN_DEGREES)
 
 
+#: Ab welcher Länge ein gerades Stück der Außenkontur eine Wand ist, in mm:
+#: eine Kante, an deren Ende der Slicer die Naht in die Ecke legt. Gerade heißt
+#: nach der Vereinfachung um :data:`WIDTH_SIMPLIFY`; ein Bogen bleibt darunter
+#: bis zu einem Radius von 31 cm (Sehne 5 mm bei 0,01 mm Pfeilhöhe), eine
+#: Würfelkante liegt ab 5 mm darüber. Mit 2 oder 10 mm trennte der Korpus
+#: Figuren und Technik schlechter (RM-588).
+STRAIGHT_RUN: Final = 5.0
+
+
+def free_form_share(result: SliceResult) -> float:
+    """Welcher Anteil der Außenkontur frei geformt ist (RM-588), von 0 bis 1.
+
+    Frei geformt heißt: gebogen, also nicht auf einer Geraden ab
+    :data:`STRAIGHT_RUN`, und in einer Schicht, deren Umrisse nicht dieselben
+    sind wie darunter (:func:`_same_measures`, die billigen Fragen, mit denen
+    der Schnitt wiederholte Schichten erkennt). Eine Figur trägt fast nur solche Kontur,
+    ein Kasten fast keine, ein Rohr keine: Seine Wand ist rund, aber jede
+    Schicht dieselbe. Gezählt werden Umrisse, keine Löcher, gewichtet mit ihrer
+    Länge.
+
+    Gemerkt je Schnitt wie die Kanalfrage (:func:`keep_answers`): Der
+    Druckdialog fragt den Rat bei jedem geänderten Feld, und am Drachen
+    (2,9 Mio. Dreiecke, 650 Schichten) kostet die Messung 0,5 s.
+    """
+    with _ANSWERS_LOCK:
+        for number, (layers, answer) in enumerate(_FREE_FORM):
+            if layers is result.layers:
+                _recent(_FREE_FORM, number)
+                return answer
+    answer = _free_form_share(result)
+    with _ANSWERS_LOCK:
+        _FREE_FORM.append((result.layers, answer))
+        _keep_recent(_FREE_FORM)
+    return answer
+
+
+#: Gemessene Anteile frei geformter Kontur (:func:`free_form_share`) je Schnitt.
+_FREE_FORM: list[tuple[tuple[LayerInfo, ...], float]] = []
+
+
+def _free_form_share(result: SliceResult) -> float:
+    """Die Messung hinter :func:`free_form_share`, ungemerkt."""
+    total = 0.0
+    free = 0.0
+    previous: np.ndarray | None = None
+    for layer in result.layers:
+        outlines = [np.asarray(contour.outline, dtype=float) for contour in layer.contours]
+        outlines = [ring for ring in outlines if len(ring) >= 4]
+        if not outlines:
+            previous = None
+            continue
+        sizes = [len(ring) for ring in outlines]
+        rings = shapely.simplify(
+            shapely.linearrings(
+                np.concatenate(outlines), indices=np.repeat(np.arange(len(sizes)), sizes)
+            ),
+            WIDTH_SIMPLIFY,
+            preserve_topology=False,
+        )
+        points, index = shapely.get_coordinates(rings, return_index=True)
+        steps = np.hypot(*np.diff(points, axis=0).T)
+        steps = steps[index[1:] == index[:-1]]
+        length = float(steps.sum())
+        total += length
+        measures = _outline_measures(outlines)
+        if previous is not None and not _same_measures(measures, previous):
+            free += length - float(steps[steps >= STRAIGHT_RUN].sum())
+        previous = measures
+    return free / total if total > EPS_GEOM else 0.0
+
+
+def _outline_measures(outlines: Sequence[np.ndarray]) -> np.ndarray:
+    """Fläche, Umfang und Hüllbox der Umrisse einer Schicht (:func:`free_form_share`).
+
+    Als Feldrechnung über alle Umrisse zugleich: Kreuzprodukt und Schrittlänge
+    je Kante der aneinandergehängten Punkte, die Kante vom letzten Punkt eines
+    Umrisses zum ersten des nächsten fällt weg, die Fläche je Umriss
+    (``np.add.reduceat``) ohne Vorzeichen. Je Umriss in Python gerechnet waren
+    das an der Kumiko-Schale vier Fünftel der Messung (Review RM-588, L4).
+    """
+    stacked = np.concatenate(outlines)
+    sizes = np.fromiter((len(ring) for ring in outlines), dtype=np.int64, count=len(outlines))
+    starts = np.cumsum(sizes) - sizes
+    x, y = stacked[:, 0], stacked[:, 1]
+    cross = x[:-1] * y[1:] - x[1:] * y[:-1]
+    steps = np.hypot(np.diff(x), np.diff(y))
+    seams = starts[1:] - 1
+    cross[seams] = 0.0
+    steps[seams] = 0.0
+    area = 0.5 * float(np.abs(np.add.reduceat(cross, starts)).sum())
+    return np.array([area, float(steps.sum()), *stacked.min(axis=0), *stacked.max(axis=0)])
+
+
+def _same_measures(mine: np.ndarray, theirs: np.ndarray) -> bool:
+    """Die drei billigen Fragen von :func:`_same_layer` — Fläche, Umfang,
+    Hüllbox — an den Umrissen zweier Schichten. Eine senkrechte Wand trifft
+    jede Ebene an denselben Kanten; die Diagonale ihrer Dreiecke setzt zwar
+    in jeder Schicht einen Punkt woanders, aber auf dieselbe Gerade, und an
+    keiner der drei Zahlen ändert das etwas."""
+    tolerance = SAME_LAYER_TOLERANCE
+    scale = np.maximum(1.0, np.abs(mine[:2]))
+    return bool(
+        np.all(np.abs(mine[:2] - theirs[:2]) <= tolerance * scale)
+        and np.all(np.abs(mine[2:] - theirs[2:]) <= tolerance)
+    )
+
+
 def narrowest(result: SliceResult) -> float:
     """Die dünnste Struktur irgendwo im Körper.
 
