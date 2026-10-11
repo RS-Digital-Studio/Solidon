@@ -48423,3 +48423,10 @@ Test vergleicht je Endung aus `MODEL_SUFFIXES` mit der Operation, die `import_pl
 `test_parts.py::test_the_core_halts_exactly_where_the_dialog_says_a_place_is_missing` prüft
 für jeden Baustein an Fläche oder Bohrung, dass `_anchor` genau dort anhält, wo
 `place_missing` es sagt; der Flächenbezug allein ist die ausgewiesene Ausnahme (G2).
+
+**Nachtrag aus der Nachprüfung:** Der Hinweis im Balken verschwindet, sobald der Kunde selbst
+eine Stelle setzt (Klick, Griff, Maßfeld; geprüft im RM-774-Test über `move_to`, N1). Der
+Test zum Dialog, der während der Rechnung öffnet, hält die Auswertung über eine Freigabe an
+und prüft die Sperre damit unabhängig vom Takt (N2). Der Stand-in in
+`test_placement_dimensions.py` schreibt die Sätze im Balken mit und verlangt nach der Erholung
+„Position festgelegt …“ (N3).

@@ -2417,6 +2417,7 @@ class PlacementFlow(QObject):
         ):
             self._frozen = False
             self._seated_by_default = False
+            self._renewed = False
             self._commit_pending = False
             self._accept_pending = False
             self._pending = None
@@ -2989,6 +2990,7 @@ class PlacementFlow(QObject):
             # um (siehe :attr:`_seated_by_default`) — und ab hier hat jemand
             # geklickt.
             self._seated_by_default = False
+            self._renewed = False
             self._pending = event.x, event.y, confirm
             self._commit_pending = confirm
             self._serial += 1
@@ -5099,7 +5101,13 @@ class PlacementFlow(QObject):
         self.start()
 
     def _say(self, text: str) -> None:
-        """Den Satz im Balken setzen — nach einer neu gesetzten Stelle mit diesem Hinweis davor."""
+        """Den Satz im Balken setzen — nach einer neu gesetzten Stelle mit diesem Hinweis davor.
+
+        Nur, solange die Stelle die neu gesetzte ist: Setzt der Kunde selbst
+        eine — Klick, Griff, Maßfeld —, gilt der Hinweis nicht mehr.
+        """
+        if self._position_edited:
+            self._renewed = False
         if self._renewed:
             text = " ".join(
                 (str(tr("Die Fläche hat sich geändert. Die Stelle ist neu gesetzt.")), str(text))
