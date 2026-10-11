@@ -5071,10 +5071,26 @@ def test_v51_ironing_switch_becomes_the_same_choice() -> None:
 
 
 def test_the_ironing_step_leaves_everything_else_alone() -> None:
-    """Der Schritt 51 → 52 ändert nur einen Schalter; ohne Druckeinstellungen,
-    mit einer schon gewählten Art oder einem fremden Wert bleibt die Datei."""
+    """Der Schritt 51 → 52 ändert nur einen Schalter; ohne Druckeinstellungen oder
+    mit einer schon gewählten Art bleibt die Datei. Ein fremder Wert einer
+    beschädigten Datei wird „none“, sonst schrieben die Familien Verschiedenes
+    (Review RM-588, L5)."""
     base = {"format_version": 51, "scene": {}, "ops": [], "transactions": []}
     assert migrate(deepcopy(base))["format_version"] == FORMAT_VERSION
-    for value, expected in ((True, "top_surfaces"), (False, "none"), ("topmost", "topmost")):
-        data = {**deepcopy(base), "print_settings": {"shell": {"ironing": value}}}
-        assert migrate(data)["print_settings"]["shell"]["ironing"] == expected
+    for value, expected in (
+        (True, "top_surfaces"),
+        (False, "none"),
+        ("topmost", "topmost"),
+        ("solid", "none"),
+        (2, "none"),
+    ):
+        data = {
+            **deepcopy(base),
+            "print_settings": {
+                "shell": {"ironing": value},
+                "plate_choices": {"shell.ironing": value},
+            },
+        }
+        stored = migrate(data)["print_settings"]
+        assert stored["shell"]["ironing"] == expected
+        assert stored["plate_choices"]["shell.ironing"] == expected

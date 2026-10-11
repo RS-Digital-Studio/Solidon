@@ -1571,20 +1571,29 @@ def _ironing_becomes_a_choice(data: dict[str, Any]) -> dict[str, Any]:
     (Orca ``top``, Prusa ``ironing = 1`` mit der Vorgabe ``top``, Cura
     ``ironing_enabled``). Der Schalter wird zur gleichen Wahl, im Satz der
     Druckeinstellungen und in der Wahl der Platte unter einem übernommenen
-    Vorschlag (``plate_choices``); ein anderer Wert bleibt, wie er ist, die
-    Datei öffnet dann mit der Vorgabe. Festgehalten an
-    ``tests/data/projects/ironing_v51.p3d``, geschrieben vom Stand davor.
+    Vorschlag (``plate_choices``). Was eine beschädigte Datei sonst dort trägt,
+    wird „none“: Der Leser nimmt jeden Text, und die Familien läsen einen
+    fremden verschieden — Orca als kein Bügeln, Prusa und Cura als Bügeln.
+    Festgehalten an ``tests/data/projects/ironing_v51.p3d``, geschrieben vom
+    Stand davor.
     """
     stored = data.get("print_settings")
     if not isinstance(stored, dict):
         return data
     shell = stored.get("shell")
-    if isinstance(shell, dict) and isinstance(shell.get("ironing"), bool):
-        shell["ironing"] = _SAVED_IRONING[shell["ironing"]]
+    if isinstance(shell, dict) and "ironing" in shell:
+        shell["ironing"] = _ironing_choice(shell["ironing"])
     choices = stored.get("plate_choices")
-    if isinstance(choices, dict) and isinstance(choices.get("shell.ironing"), bool):
-        choices["shell.ironing"] = _SAVED_IRONING[choices["shell.ironing"]]
+    if isinstance(choices, dict) and "shell.ironing" in choices:
+        choices["shell.ironing"] = _ironing_choice(choices["shell.ironing"])
     return data
+
+
+def _ironing_choice(value: object) -> str:
+    """Der Schalter als Wahl, eine Wahl bleibt, alles andere wird „none“ (RM-588)."""
+    if isinstance(value, bool):
+        return _SAVED_IRONING[value]
+    return str(value) if value in ("none", "topmost", "top_surfaces") else "none"
 
 
 #: Alle bekannten Schritte, älteste zuerst.
