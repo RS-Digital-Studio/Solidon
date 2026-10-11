@@ -2636,12 +2636,11 @@ def write_assembly(
         # Herstellerprozess, deshalb hier im selben Lesedurchgang.
         hugging = {
             entry.id: handover.snug_beside_blocker(
-                setup, profile, own.support.style, flavour, program
+                setup, profile, effective.support.style, flavour, program
             )
             for entry in chosen
-            if for_slicer
-            and (own := part_values[entry.id].effective) is not None
-            and _may_block(own)
+            for effective in (part_values[entry.id].effective,)
+            if for_slicer and effective is not None and _may_block(effective)
         }
     asked = {key: values.asked for key, values in part_values.items()}
     # **Was kein Teil für sich verlangt, gilt allen** (:func:`_unserved`) —
