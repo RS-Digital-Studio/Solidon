@@ -172,6 +172,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si dos restricciones se contradicen, el editor de bocetos nombra ambas en lugar de reducir una línea o un círculo a un punto.
 - En el editor de bocetos, *Desplazar* lleva un contorno cerrado y cada lado hacia fuera con distancia positiva y une las esquinas, en cualquier sentido. La versión 0.5.3 solía ponerlos dentro.
 - Los arcos también se desplazan ahora con *Desplazar*, alrededor del mismo centro: una ranura conserva sus extremos redondos y un redondeo su forma.
+- Tras cambiar una cota, *Recortar*, *Prolongar*, *Desplazar* y *Reflejar* actúan sobre la posición visible. La versión 0.5.3 usaba el estado dibujado antes.
+- Los contornos grandes de muchas líneas, como un contorno de cara adoptado, se editan en el editor de bocetos sin esperas.
 - Un cuerpo se levanta con tres clics: *Dibujar* en la barra superior (Ctrl+Mayús+E), luego esquina, esquina opuesta, altura. Hacia fuera se une, hacia dentro recorta.
 - Al levantar se pueden escribir las medidas. Un doble clic en el paso abre sus medidas, y en *Tipo* se convierte en un sólido de revolución o un patrón de orificios sin volver a dibujar.
 - Desde el editor de bocetos, *Terminado* vuelve a la vista y el siguiente clic pone la altura. Escape aparta el contorno, Ctrl+Z lo recupera.

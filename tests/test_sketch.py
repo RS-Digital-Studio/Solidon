@@ -3847,6 +3847,71 @@ def test_the_box_phase_finds_the_same_crossings_as_every_pair(
     assert 0 < sum(with_boxes) < len(loops), "beide Antworten kommen vor"
 
 
+def _loops_with_ellipses_and_curves(seed: int, count: int) -> list[Profile]:
+    """Ketten aus einem Ellipsenbogen, dessen zweiter Achsenpunkt schief
+    gespeichert ist (die Kurve nimmt nur seine Länge), und einem Rückweg aus
+    Strecken oder einer Kurve (Spline) — teils quer durch die Ellipse."""
+    from app.core.sketch.profile import _segment, ellipse_frame
+
+    chance = random.Random(seed)
+    loops = []
+    for _ in range(count):
+        centre = (chance.uniform(-5, 5), chance.uniform(-5, 5))
+        angle = chance.uniform(0, 2 * math.pi)
+        first, second = chance.uniform(4, 12), chance.uniform(4, 12)
+        skew = chance.uniform(-0.5, 0.5)
+        first_end = (centre[0] + first * math.cos(angle), centre[1] + first * math.sin(angle))
+        second_end = (
+            centre[0] + second * math.cos(angle + math.pi / 2 + skew),
+            centre[1] + second * math.sin(angle + math.pi / 2 + skew),
+        )
+        frame = ellipse_frame(centre, first_end, second_end)
+        begin = chance.uniform(0, 2 * math.pi)
+        end = begin + chance.uniform(0.5, 5.0)
+        start = frame.at(math.cos(begin), math.sin(begin))
+        finish = frame.at(math.cos(end), math.sin(end))
+        arc = _segment("elliptical_arc", (centre, first_end, second_end, start, finish))
+        middle = [
+            (centre[0] + chance.uniform(-14, 14), centre[1] + chance.uniform(-14, 14))
+            for _ in range(chance.randint(1, 3))
+        ]
+        back = [finish, *middle, start]
+        if chance.random() < 0.3:
+            closing = [_segment("spline", tuple(back))]
+        else:
+            closing = [ProfileSegment("line", a, b) for a, b in pairwise(back)]
+        loops.append(Profile(segments=(arc, *closing)))
+    return loops
+
+
+@pytest.mark.parametrize("exact", [True, False], ids=["occ", "fallback"])
+def test_the_box_phase_holds_for_ellipses_and_curves(
+    exact: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review G5: Der Kasten einer Ellipse kommt aus ihrer Kurve
+    (``ellipse_frame``), nicht aus den gespeicherten Achsenpunkten; eine Kurve
+    bekommt die ganze Ebene. Gleiche Antworten wie jedes Paar."""
+    import app.core.brep.kernel as kernel
+    from app.core.sketch import profile
+
+    if exact and not kernel.available():
+        pytest.skip("ohne exakten Kern")
+    if not exact:
+        monkeypatch.setattr(kernel, "available", lambda: False)
+    loops = _loops_with_ellipses_and_curves(20261011, 150)
+
+    with_boxes = [profile.crosses_itself(loop) for loop in loops]
+    monkeypatch.setattr(
+        profile,
+        "touching_pairs",
+        lambda boxes: [(i, j) for i in range(len(boxes)) for j in range(i + 1, len(boxes))],
+    )
+    every_pair = [profile.crosses_itself(loop) for loop in loops]
+
+    assert with_boxes == every_pair
+    assert 0 < sum(with_boxes) < len(loops), "beide Antworten kommen vor"
+
+
 def test_touching_pairs_are_those_of_the_double_loop() -> None:
     """Dieselben Paare in derselben Folge wie die Doppelschleife, auch über
     mehrere Blöcke (``_BOX_ROWS``) und mit unbegrenzten Kästen einer Kurve."""

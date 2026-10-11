@@ -505,10 +505,13 @@ def _boxes(segments: list[ProfileSegment]) -> Any:
         if segment.kind == "spline":
             box = (-math.inf, -math.inf, math.inf, math.inf)
         elif segment.kind == "ellipse" and segment.ellipse is not None:
-            (cx, cy), (fx, fy), (sx, sy) = segment.ellipse
-            wide = abs(fx - cx) + abs(sx - cx)
-            high = abs(fy - cy) + abs(sy - cy)
-            box = (cx - wide, cy - high, cx + wide, cy + high)
+            # Wie die Kurve gebaut wird (:func:`ellipse_frame`): Der zweite
+            # Achsenpunkt trägt nur die Länge, seine Richtung folgt aus der
+            # ersten Achse — ein schief gespeicherter Punkt sagt über die Lage
+            # nichts (Review G5). Der Kreis der längeren Halbachse umfasst sie.
+            frame = ellipse_frame(*segment.ellipse)
+            (cx, cy), reach = frame.centre, max(frame.first, frame.second)
+            box = (cx - reach, cy - reach, cx + reach, cy + reach)
         elif segment.kind == "arc" and segment.via is not None:
             arc = arc_through(segment.start, segment.via, segment.end)
             if arc is not None:

@@ -579,6 +579,14 @@ def test_the_copied_corners_stay_together_when_dragged() -> None:
     }
     # Die Kopie beginnt beim flachen Punkt 8: Linien (8, 9), (10, 11), (12, 13), (14, 15).
     assert coincident == {frozenset(pair) for pair in ((9, 10), (11, 12), (13, 14), (15, 8))}
+    # Ein echter Zug an der Ecke (-2, -2) der Kopie nach (-6, -6), wie die
+    # Zeichenfläche ihn rechnet (Review G3): Der Partner folgt, das Original nicht.
+    from app.core.sketch.solver import solve_sketch
+
+    pulled = solve_sketch(moved, dragged={8: (-6.0, -6.0)}, start=edit.flat_points(moved))
+    points = [point for element in pulled.elements for point in element.points]
+    assert flat((points[8], points[15])) == pytest.approx([-6.0, -6.0, -6.0, -6.0], abs=1e-6)
+    assert flat(tuple(points[:8])) == pytest.approx(flat(tuple(edit.flat_points(sketch))))
 
 
 L_PROFILE = [(0.0, 0.0), (30.0, 0.0), (30.0, 10.0), (10.0, 10.0), (10.0, 40.0), (0.0, 40.0)]
@@ -782,6 +790,178 @@ def test_an_upright_open_line_goes_right(backwards: bool) -> None:
 
     assert copied_corners(sketch, edit.offset(sketch, (0,), 3.0)) == [(3.0, 0.0), (3.0, 10.0)]
     assert copied_corners(sketch, edit.offset(sketch, (0,), -3.0)) == [(-3.0, 0.0), (-3.0, 10.0)]
+
+
+@pytest.mark.parametrize(
+    "lean", [1e-6, -1e-6, 4.0, -4.0], ids=["hair-r", "hair-l", "steep-r", "steep-l"]
+)
+@pytest.mark.parametrize("backwards", [False, True], ids=["upwards", "downwards"])
+def test_a_steep_free_line_goes_right(lean: float, backwards: bool) -> None:
+    """Review G1: Eine fast senkrechte, von Hand gezogene Linie (10⁻⁶ mm
+    Neigung) sprang nach links. Steiler als 45° gilt jetzt „rechts“, gleich wohin
+    sie sich neigt und wie herum sie gezeichnet wurde."""
+    ends = ((0.0, 0.0), (lean, 10.0))
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="line", points=ends[::-1] if backwards else ends),),
+    )
+
+    copy = edit.offset(sketch, (0,), 3.0).elements[1]
+
+    assert min(x for x, _y in copy.points) > min(0.0, lean)
+    assert sum(x for x, _y in copy.points) / 2.0 > lean / 2.0 + 2.5
+
+
+@pytest.mark.parametrize("backwards", [False, True], ids=["rightwards", "leftwards"])
+def test_a_flat_free_line_goes_up(backwards: bool) -> None:
+    """Flacher als 45° gilt „oben“: eine Linie mit 30° Steigung, beide Richtungen."""
+    ends = ((0.0, 0.0), (10.0, 5.0))
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement(kind="line", points=ends[::-1] if backwards else ends),),
+    )
+
+    copy = edit.offset(sketch, (0,), 3.0).elements[1]
+
+    # Die Normale nach oben links: (-5, 10)/√125, um 3 mm.
+    shift = 3.0 / math.sqrt(125.0)
+    expected = sorted([(-5.0 * shift, 10.0 * shift), (10.0 - 5.0 * shift, 5.0 + 10.0 * shift)])
+    assert flat(tuple(sorted(copy.points))) == pytest.approx(flat(tuple(expected)))
+
+
+KINKED = (
+    SketchElement(
+        "arc",
+        (
+            (21.018168850036787, 5.6110970280561),
+            (19.895916729704798, 4.9712182678527155),
+            (20.75526155769133, 4.346275141393535),
+        ),
+    ),
+    SketchElement(
+        "arc",
+        (
+            (-27.950379104037033, -38.281679753718166),
+            (19.895916729704798, 4.9712182678527155),
+            (-13.373003669281664, 24.548100905683647),
+        ),
+    ),
+    SketchElement(
+        "arc",
+        (
+            (15.371067962147546, 9.463616316973445),
+            (-13.373003669281664, 24.548100905683647),
+            (8.379991083844727, -22.23635487136407),
+        ),
+    ),
+    SketchElement(
+        "line", ((8.379991083844727, -22.23635487136407), (20.75526155769133, 4.346275141393535))
+    ),
+)
+
+
+def _sampled(elements: tuple[SketchElement, ...]) -> list[tuple[float, float]]:
+    """Punkte entlang von Strecken und Bögen, unabhängig von der Profilbildung."""
+    points: list[tuple[float, float]] = []
+    for element in elements:
+        if element.kind == "line":
+            (ax, ay), (bx, by) = element.points
+            points.extend((ax + (bx - ax) * k / 50, ay + (by - ay) * k / 50) for k in range(51))
+            continue
+        centre, start, end = element.points
+        radius = math.dist(centre, start)
+        first = math.atan2(start[1] - centre[1], start[0] - centre[0])
+        sweep = (math.atan2(end[1] - centre[1], end[0] - centre[0]) - first) % (2 * math.pi)
+        points.extend(
+            (
+                centre[0] + radius * math.cos(first + sweep * k / 200),
+                centre[1] + radius * math.sin(first + sweep * k / 200),
+            )
+            for k in range(201)
+        )
+    return points
+
+
+def test_a_kinked_hollow_arc_the_offset_eats_keeps_the_distance() -> None:
+    """Review G2 (Sonde `sonde_knick`, Fall 219): Ein kleiner hohler Bogen mit
+    Knick fällt bei +2 mm weg. Die Verlängerungen seiner Nachbarn kamen dem
+    Original bis 1,77 mm nahe. Jetzt entweder eine Absage oder überall
+    mindestens der Abstand — gemessen an abgetasteten Kurven."""
+    from shapely.geometry import LineString, Point
+
+    sketch = Sketch(plane="plane:xy", elements=KINKED)
+    try:
+        moved = edit.offset(sketch, (0, 1, 2, 3), 2.0)
+    except ValidationError as error:
+        assert error.suggestions
+        return
+
+    original = LineString(_sampled(KINKED))
+    nearest = min(original.distance(Point(p)) for p in _sampled(moved.elements[4:]))
+    assert nearest >= 2.0 - 1e-3
+
+
+def test_a_selection_that_crosses_itself_says_so() -> None:
+    """Review G7: Eine Acht hat bei keinem Abstand eine Seite — die Absage
+    sagt es, statt zu weniger Abstand zu raten."""
+    sketch = loop_of([(0.0, 0.0), (20.0, 10.0), (20.0, 0.0), (0.0, 6.0)])
+
+    with pytest.raises(ValidationError) as raised:
+        edit.offset(sketch, (0, 1, 2, 3), 0.5)
+
+    assert "kreuzt sich selbst" in str(raised.value.detail)
+    assert "Weniger" not in str(raised.value.detail)
+
+
+NOSE_CENTRE = (10.0 + 2.0 / math.sqrt(2.0), 10.0 + 2.0 / math.sqrt(2.0))
+NOSE_ONE = (NOSE_CENTRE[0] + math.sqrt(4.0 - (NOSE_CENTRE[1] - 10.0) ** 2), 10.0)
+NOSE_TWO = (10.0, NOSE_CENTRE[1] + math.sqrt(4.0 - (NOSE_CENTRE[0] - 10.0) ** 2))
+
+
+def test_a_corner_where_line_and_arc_miss_each_other_says_so() -> None:
+    """Review G7 (Sonde `sonde_nase`): ein L mit runder Nase in der Innenecke,
+    −0,5 mm. Versetzte Linie und versetzter Kreis treffen sich nicht; ab −2 mm
+    geht es wieder. Die Absage rät deshalb nicht zu weniger Abstand."""
+    elements = (
+        SketchElement("line", ((0.0, 0.0), (30.0, 0.0))),
+        SketchElement("line", ((30.0, 0.0), (30.0, 10.0))),
+        SketchElement("line", ((30.0, 10.0), NOSE_ONE)),
+        SketchElement("arc", (NOSE_CENTRE, NOSE_ONE, NOSE_TWO)),
+        SketchElement("line", (NOSE_TWO, (10.0, 40.0))),
+        SketchElement("line", ((10.0, 40.0), (0.0, 40.0))),
+        SketchElement("line", ((0.0, 40.0), (0.0, 0.0))),
+    )
+    sketch = Sketch(plane="plane:xy", elements=elements)
+
+    with pytest.raises(ValidationError) as raised:
+        edit.offset(sketch, tuple(range(7)), -0.5)
+
+    assert "anderen Abstand" in str(raised.value.detail)
+    assert edit.offset(sketch, tuple(range(7)), -2.5).elements[7:]
+
+
+def test_many_free_lines_find_their_partners_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review G4: Die Ringsuche baute die Partner aller Enden je offener Kette
+    neu (2000 freie Linien: 15 s). Jetzt einmal je Art und Aufruf."""
+    calls: list[int] = []
+    real = edit._partners
+
+    def counted(ends: dict[tuple[int, int], tuple[float, float]]) -> object:
+        calls.append(len(ends))
+        return real(ends)
+
+    monkeypatch.setattr(edit, "_partners", counted)
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=tuple(
+            SketchElement(kind="line", points=((3.0 * k, 0.0), (3.0 * k + 1.0, 1.0)))
+            for k in range(300)
+        ),
+    )
+
+    edit.offset(sketch, tuple(range(300)), 0.5)
+
+    assert len(calls) == 2, "einmal die Auswahl, einmal die Zeichnung"
 
 
 @pytest.mark.parametrize("backwards", [False, True], ids=["forwards", "backwards"])

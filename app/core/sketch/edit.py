@@ -43,6 +43,7 @@ from app.core.sketch.profile import (
     ellipse_element_extremes,
     ellipse_frame,
     parameter_sweep,
+    points_on_circle,
     signed_area,
 )
 from app.core.sketch.solver import CURVE_SLOTS, closest_on_spline, solve_sketch
@@ -495,9 +496,8 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
     **Eine einzelne Kante gehört zu ihrem Umriss** (:func:`_on_a_ring`): Liegt
     ein offener Zug der Auswahl auf einem geschlossenen Umriss der Zeichnung,
     gilt dessen Umlaufsinn, und positiv ist auch hier außen. **Erst eine freie
-    Linie hat kein Außen** (:func:`_read_from_the_left`): Sie wandert auf die
-    Seite, die oben liegt, wenn man sie von ihrem linken Ende her liest — eine
-    waagerechte nach oben, eine senkrechte nach rechts.
+    Linie hat kein Außen** (:func:`_read_from_the_left`): Eine flache wandert
+    nach oben, eine steile (über 45°) nach rechts.
 
     **Die Ecken werden geschnitten oder verlängert** (:func:`_mitred`), und
     die Kopien sind dort gedeckt wie eine gezeichnete Kette. Vorher lagen vier
@@ -524,6 +524,7 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
     copies: list[SketchElement] = []
     joints: list[tuple[int, int]] = []
     flat = len(flat_points(sketch))
+    rings: _Rings = {}
     for chain, closed in _line_chains(sketch, members):
         if closed:
             links, turn = chain, _turn_of(sketch, chain)
@@ -535,8 +536,18 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
         else:
             # Eine Kante eines geschlossenen Umrisses gehört zu ihm: Außen ist
             # sein Außen. Nur eine Linie ohne Umriss nimmt die feste Seite.
-            ring = _on_a_ring(sketch, chain)
+            ring = _on_a_ring(sketch, chain, rings)
             links, turn = ring if ring is not None else (_read_from_the_left(sketch, chain), 0.0)
+        # Eine Auswahl, die sich selbst kreuzt, hat dort keine Seite — bei
+        # keinem Abstand; „weniger weit“ wäre ein Rat, der nicht trägt (G7).
+        if crosses_itself(_outline_of(sketch, links)):
+            raise ValidationError(
+                "element",
+                _(
+                    "Die gewählte Kontur kreuzt sich selbst — dort hat sie keine "
+                    "eindeutige Seite. Erst die Kreuzung trimmen."
+                ),
+            )
         # Links der Laufrichtung liegt bei einer linksherum laufenden Kette innen.
         towards = -distance if turn > 0.0 else distance
         # Je Kopie: wo sie in Laufrichtung beginnt und endet, als flacher Punkt.
@@ -720,36 +731,48 @@ def _ends_of(element: SketchElement) -> tuple[Point2, Point2] | None:
     return None
 
 
-def _turn_of(sketch: Sketch, links: tuple[tuple[int, bool], ...]) -> float:
-    """Der Umlaufsinn einer geschlossenen Kette als vorzeichenbehaftete Fläche
-    (:func:`~app.core.sketch.profile.signed_area`, Bögen exakt)."""
+def _outline_of(sketch: Sketch, links: tuple[tuple[int, bool], ...]) -> Profile:
+    """Die Kette als Profil in Laufrichtung, wie die Profilbildung sie baut."""
     segments = []
     for index, backwards in links:
         element = sketch.elements[index]
         segment = _segment(element.kind, element.points)
         segments.append(_flipped(segment) if backwards else segment)
-    return signed_area(Profile(segments=tuple(segments)))
+    return Profile(segments=tuple(segments))
 
 
-def _ring_through(sketch: Sketch, index: int) -> tuple[tuple[int, bool], ...] | None:
+def _turn_of(sketch: Sketch, links: tuple[tuple[int, bool], ...]) -> float:
+    """Der Umlaufsinn einer geschlossenen Kette als vorzeichenbehaftete Fläche
+    (:func:`~app.core.sketch.profile.signed_area`, Bögen exakt)."""
+    return signed_area(_outline_of(sketch, links))
+
+
+_Rings = dict[bool, tuple[dict[tuple[int, int], list[tuple[int, int]]], int]]
+
+
+def _ring_through(sketch: Sketch, index: int, rings: _Rings) -> tuple[tuple[int, bool], ...] | None:
     """Der geschlossene Umriss der Zeichnung, in dem das Element ``index`` liegt —
     oder keiner, wenn seine Kette offen bleibt oder sich verzweigt.
 
     Gekettet wird wie in der Profilbildung, unter Elementen derselben Art
     (Hilfslinie oder Kante), damit eine Mittellinie an einer Ecke den Umriss
-    nicht verzweigt.
+    nicht verzweigt. Die Partner aller Enden rechnen einmal je Art und Aufruf
+    von :func:`offset` (``rings``): je offener Kette neu gebaut, brauchten 2000
+    freie Linien 15 s (Review G4).
     """
     construction = sketch.elements[index].construction
-    ends: dict[tuple[int, int], Point2] = {}
-    for at, element in enumerate(sketch.elements):
-        pair = _ends_of(element)
-        if pair is None or element.construction != construction or _joins(*pair):
-            continue
-        ends[(at, 0)], ends[(at, 1)] = pair
-    partners = _partners(ends)
+    if construction not in rings:
+        ends: dict[tuple[int, int], Point2] = {}
+        for at, element in enumerate(sketch.elements):
+            pair = _ends_of(element)
+            if pair is None or element.construction != construction or _joins(*pair):
+                continue
+            ends[(at, 0)], ends[(at, 1)] = pair
+        rings[construction] = (_partners(ends), len(ends) // 2)
+    partners, members = rings[construction]
     ring: list[tuple[int, bool]] = []
     at, side = index, 0
-    while len(ring) < len(ends) // 2:
+    while len(ring) < members:
         ring.append((at, side == 1))
         following = partners.get((at, 1 - side), [])
         if len(following) != 1:
@@ -763,12 +786,12 @@ def _ring_through(sketch: Sketch, index: int) -> tuple[tuple[int, bool], ...] | 
 
 
 def _on_a_ring(
-    sketch: Sketch, chain: tuple[tuple[int, bool], ...]
+    sketch: Sketch, chain: tuple[tuple[int, bool], ...], rings: _Rings
 ) -> tuple[tuple[tuple[int, bool], ...], float] | None:
     """Ein offener Zug der Auswahl auf einem geschlossenen Umriss der Zeichnung:
     in dessen Laufrichtung gelesen, mit dessen Umlaufsinn."""
     index, backwards = chain[0]
-    ring = _ring_through(sketch, index)
+    ring = _ring_through(sketch, index, rings)
     if ring is None:
         return None
     turn = _turn_of(sketch, ring)
@@ -899,7 +922,18 @@ def _mitred(
             return mitre
         meeting = _meeting(one, other, shift, mitre)
         if meeting is None:
-            raise _too_far(distance)
+            # Weniger Abstand hilft hier nicht sicher (Review G7): Die
+            # Verlängerungen treffen sich in einem Bereich nicht, darüber
+            # wieder, wenn der Bogen wegfällt.
+            raise ValidationError(
+                "distance",
+                _(
+                    "An einer Ecke mit einem Bogen treffen sich die versetzten Stücke "
+                    "bei diesem Abstand nicht — einen anderen Abstand versuchen oder "
+                    "die Ecke verrunden."
+                ),
+                value=distance,
+            )
         return meeting
 
     def copies(alive: list[int], shift: float) -> list[tuple[Point2, Point2]]:
@@ -936,6 +970,9 @@ def _mitred(
         return None
 
     alive = list(range(count))
+    # Neue Nachbarn, an denen ein Bogen beteiligt war: Dort hält die Gehrung den
+    # Abstand nicht von selbst (Review G2), die Ecke wird am Ende nachgemessen.
+    doubtful: set[tuple[int, int]] = set()
     while True:
         # Ein Bogen ohne Radius trägt keine Ecke mehr: Er fällt zuerst.
         shrunk = [at for at, link in enumerate(alive) if _no_radius(chain[link], towards)]
@@ -963,6 +1000,14 @@ def _mitred(
         # Ein offenes Ende hat keinen zweiten Nachbarn, der die Lücke schlösse.
         if not closed and {0, len(alive) - 1} & set(gone_pair):
             raise _too_far(distance)
+        size = len(alive)
+        first = gone_pair[0]
+        last = (first + len(gone_pair) - 1) % size
+        before, after = alive[(first - 1) % size], alive[(last + 1) % size]
+        if any(chain[alive[at]].centre is not None for at in gone_pair) or (
+            chain[before].centre is not None or chain[after].centre is not None
+        ):
+            doubtful.add((before, after))
         for at in sorted(gone_pair, reverse=True):
             del alive[at]
         if len(alive) < (3 if closed else 1) and not (closed and _round(chain, alive)):
@@ -975,7 +1020,83 @@ def _mitred(
     )
     if crosses_itself(Profile(segments=outline)):
         raise _too_far(distance)
+    if doubtful and not _keeps_away(chain, alive, shifted, doubtful, closed, towards):
+        raise _too_far(distance)
     return list(zip(alive, shifted, strict=True))
+
+
+def _keeps_away(
+    chain: list[_Link],
+    alive: list[int],
+    shifted: list[tuple[Point2, Point2]],
+    doubtful: set[tuple[int, int]],
+    closed: bool,
+    towards: float,
+) -> bool:
+    """Ob die Kopie an den zweifelhaften Ecken den Abstand zum Original hält.
+
+    Abgetastet werden die beiden Kopien an der Ecke, gegen jedes Glied des
+    Originals; ``_JOIN_TOL`` darf fehlen. Fiel ein Bogen mit Knick weg,
+    liefen die Verlängerungen seiner Nachbarn sonst an seinem alten Ort
+    vorbei, 1,77 statt 2 mm vom Original, gut einen Millimeter neben der Ecke
+    (Review G2).
+    """
+    count = len(alive)
+    reach = abs(towards) - _JOIN_TOL
+    for at in range(count if closed else count - 1):
+        before, after = alive[at], alive[(at + 1) % count]
+        if (before, after) not in doubtful:
+            continue
+        probes = (
+            *_along_copy(chain[before], *shifted[at], towards),
+            *_along_copy(chain[after], *shifted[(at + 1) % count], towards),
+        )
+        for point in probes:
+            if min(_distance_to(link, point) for link in chain) < reach:
+                return False
+    return True
+
+
+def _along_copy(link: _Link, start: Point2, end: Point2, towards: float) -> tuple[Point2, ...]:
+    """Punkte entlang der Kopie eines Glieds von ``start`` bis ``end``, im Abstand
+    eines Achtels des Versatzes (höchstens 400): Die Lücke, die G2 fand, war
+    nur gut einen Millimeter breit."""
+    spacing = abs(towards) / 8.0
+    if link.centre is None:
+        steps = max(1, min(400, math.ceil(math.dist(start, end) / spacing)))
+        return tuple(
+            (
+                start[0] + (end[0] - start[0]) * at / steps,
+                start[1] + (end[1] - start[1]) * at / steps,
+            )
+            for at in range(steps + 1)
+        )
+    lead = _angle_between(link.centre, link.start, start) * link.turn
+    trail = _angle_between(link.centre, link.end, end) * link.turn
+    sweep = link.sweep - lead + trail
+    radius = link.radius_at(towards)
+    steps = max(1, min(400, math.ceil(abs(sweep) * radius / spacing)))
+    begin = exact_atan2(start[1] - link.centre[1], start[0] - link.centre[0])
+    turn = link.turn * sweep
+    return points_on_circle(
+        link.centre, radius, [begin + turn * at / steps for at in range(steps + 1)]
+    )
+
+
+def _distance_to(link: _Link, point: Point2) -> float:
+    """Der Abstand eines Punkts zu einem Glied des Originals."""
+    if link.centre is None:
+        (ax, ay), (bx, by) = link.start, link.end
+        dx, dy = bx - ax, by - ay
+        along = ((point[0] - ax) * dx + (point[1] - ay) * dy) / (dx * dx + dy * dy)
+        along = min(1.0, max(0.0, along))
+        return math.dist(point, (ax + along * dx, ay + along * dy))
+    turned = _angle_between(link.centre, link.start, point) * link.turn
+    if turned < 0.0:
+        turned += 2.0 * math.pi
+    if turned <= link.sweep:
+        return abs(math.dist(point, link.centre) - link.radius)
+    return min(math.dist(point, link.start), math.dist(point, link.end))
 
 
 def _no_radius(link: _Link, shift: float) -> bool:
@@ -1113,13 +1234,16 @@ def _read_from_the_left(
 ) -> tuple[tuple[int, bool], ...]:
     """Ein offener Zug, so herum gelesen, dass links von ihm oben liegt.
 
-    Gelesen wird vom linken Ende zum rechten; liegen beide Enden übereinander,
-    von oben nach unten — dann liegt links von ihm rechts. Fest und
+    Ein flacher Zug (die Enden höchstens 45° gegeneinander geneigt) wird vom
+    linken Ende zum rechten gelesen, links liegt oben; ein steiler von oben
+    nach unten, links liegt rechts. Die Grenze liegt bei 45° und nicht erst an
+    der Senkrechten: Dort sprang eine von Hand fast senkrecht gezogene Linie
+    mit 10⁻⁶ mm Neigung auf die andere Seite (Review G1). Fest und
     unabhängig davon, wie herum gezeichnet wurde, und dieselbe Seite, die
     der Tooltip des Abstandsfelds nennt.
     """
     (ax, ay), (bx, by) = _run_of(sketch, links[0])[0], _run_of(sketch, links[-1])[1]
-    forward = by < ay if abs(bx - ax) <= EPS_SKETCH else bx > ax
+    forward = by < ay if abs(by - ay) > abs(bx - ax) else bx > ax
     if forward:
         return links
     return tuple((index, not backwards) for index, backwards in reversed(links))

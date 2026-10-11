@@ -171,7 +171,7 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
 - **Versetzen nimmt die Seite aus der Kette, nie aus der Zeichenrichtung**
   (`edit.offset`): Ein geschlossener Zug der Auswahl geht positiv nach außen
   wie der Kreis, eine einzelne Kante mit ihrem Umriss (`_on_a_ring`), erst eine
-  freie Linie nach oben, eine senkrechte nach rechts — die Seite, die der
+  freie Linie flach nach oben, steiler als 45° nach rechts — die Seite, die der
   Tooltip nennt. Ein Bogen wandert konzentrisch (`_Link.radius_at`). Ecken auf
   Gehrung und gedeckt (`_mitred`), am Knick mit einem Bogen der nächste Schnitt
   der versetzten Kurven (`_meeting`); ein Glied, das der Abstand aufzehrt oder

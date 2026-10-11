@@ -1377,6 +1377,40 @@ def test_offsetting_one_side_of_a_drawn_rectangle_goes_outwards(qt_app: QApplica
     assert "Kanten" in panel.offset_distance.toolTip()
 
 
+@pytest.mark.parametrize("tool", ["trim", "extend"])
+def test_trim_and_extend_start_from_the_solved_drawing(qt_app: QApplication, tool: str) -> None:
+    """Dieselbe Frage wie bei Versetzen und Spiegeln (Review M2): Nach dem Maß
+    40 → 50 liegt die Unterkante bei 0…50. Trimmen bei x = 47,5 schneidet an
+    der Senkrechten x = 45, Verlängern läuft von 50 bis zur Senkrechten x = 60 —
+    vorher rechneten beide an der gezeichneten Kante 0…40."""
+    drawn = shapes.rectangle_between((0.0, 0.0), (40.0, 30.0))
+    wider = tuple(
+        replace(entry, value="50")
+        if entry.kind == "distance" and entry.targets == (0, 1)
+        else entry
+        for entry in drawn.constraints
+    )
+    walls = (
+        SketchElement("line", ((45.0, -10.0), (45.0, 10.0))),
+        SketchElement("line", ((60.0, -10.0), (60.0, 10.0))),
+    )
+    canvas = SketchCanvas()
+    canvas.set_sketch(replace(drawn, elements=(*drawn.elements, *walls), constraints=wider))
+    assert max(x for x, _y in canvas.points()[:8]) == pytest.approx(50.0), "der Löser legt 50 mm"
+    canvas.set_tool(tool)
+
+    canvas.cut_or_grow(canvas._to_screen(47.5 if tool == "trim" else 49.0, 0.0))
+
+    bottom = [
+        element
+        for element in canvas.sketch.elements
+        if element.kind == "line" and all(abs(y) < 1e-6 for _x, y in element.points)
+    ]
+    assert max(x for element in bottom for x, _y in element.points) == pytest.approx(
+        45.0 if tool == "trim" else 60.0
+    )
+
+
 @pytest.mark.parametrize("action", ["offset", "mirror"])
 def test_offset_and_mirror_start_from_the_solved_drawing(qt_app: QApplication, action: str) -> None:
     """Nach einem geänderten Maß steht das Rechteck dort, wo der Löser es

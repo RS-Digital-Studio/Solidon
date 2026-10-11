@@ -196,6 +196,8 @@ Nutzen da und sonst nichts.
 - Widersprechen sich zwei Bedingungen, nennt der Skizzeneditor beide, statt eine Linie oder einen Kreis auf einen Punkt schrumpfen zu lassen.
 - Im Skizzeneditor legt *Versetzen* einen geschlossenen Umriss und jede seiner Kanten positiv nach außen und schließt die Ecken, gleich wie herum gezeichnet. Version 0.5.3 setzte sie oft nach innen.
 - Beim *Versetzen* wandern auch Bögen mit, um dieselbe Mitte: Ein Langloch behält seine runden Enden, eine Verrundung ihre Form.
+- Nach einem geänderten Maß wirken *Trimmen*, *Verlängern*, *Versetzen* und *Spiegeln* im Skizzeneditor an der Lage, die zu sehen ist. Version 0.5.3 nahm den zuvor gezeichneten Stand.
+- Große Umrisse aus vielen Linien, etwa eine übernommene Flächenkontur, lassen sich im Skizzeneditor ohne Wartezeit bearbeiten.
 - Ein Körper entsteht mit drei Klicks: *Zeichnen* oben in der Werkzeugleiste (Strg+Umschalt+E), dann Ecke, Gegenecke, Höhe. Nach außen fügt er an, nach innen schneidet er.
 - Beim Aufziehen lassen sich die Maße tippen. Ein Doppelklick auf den Schritt öffnet seine Maße, und unter *Art* wird daraus ohne neues Zeichnen ein Drehkörper oder ein Lochfeld.
 - Aus dem Skizzeneditor führt *Fertig* zurück in die Ansicht, der nächste Klick setzt die Höhe. Escape legt den Umriss beiseite, Strg+Z holt ihn zurück.
