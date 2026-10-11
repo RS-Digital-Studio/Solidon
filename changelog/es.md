@@ -196,6 +196,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los diálogos *Cargar STEP* y *Extruir un dibujo* solo ofrecen archivos que pueden leer. Si el proyecto no tiene ninguno, señalan el botón *Elegir un archivo …*.
 - Un trazo de líneas en el boceto termina en cuanto se cierra sobre su inicio. Hasta ahora quedaba un tramo nuevo en el puntero, y el primer Esc parecía no hacer nada.
 - Una longitud tecleada con la herramienta Línea crea exactamente una línea. Hasta ahora, al salir del campo de cota se añadía una segunda, de vuelta hacia el puntero.
+- Las paredes redondas de un texto pequeño, como una «O» con *Aplicar texto*, aparecen en el árbol de objetos como *Cara curva*. En un cuerpo grande faltaban hasta ahora.
 
 ### Generar con IA
 

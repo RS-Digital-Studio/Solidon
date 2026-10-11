@@ -780,11 +780,13 @@ def _recognise_region(
         )
 
     # **Eine gerundete Seite misst sich am ganzen Körper.** Die Vollerkennung
-    # nimmt sie ab einem Hundertstel seiner Oberfläche (``CURVED_SIDE_SHARE``),
-    # der Ausschnitt ab einem Hundertstel des Ausschnitts — am Schaber kamen so
+    # nimmt sie ab einem Hundertstel seiner Oberfläche (``CURVED_SIDE_SHARE``)
+    # oder ringsum scharf begrenzt (``detection.curved_sides_standing``), der
+    # Ausschnitt nahm ein Hundertstel des Ausschnitts — am Schaber kamen so
     # 14 Stücke heraus, die die Vollerkennung nirgends führt (25.09.2026).
-    side_floor = max(detection.MIN_FACE_AREA, float(body.area) * detection.CURVED_SIDE_SHARE)
-    face_areas = np.asarray(body.area_faces, dtype=float)
+    def side_stands(feature: Feature) -> bool:
+        patch = np.asarray(feature.face_indices, dtype=np.int64)
+        return detection.curved_sides_standing(body, [patch])[0]
 
     def bounded(feature: Feature) -> bool:
         blocked = continuing_surface if feature.kind == "curved_face" else continuing
@@ -806,8 +808,7 @@ def _recognise_region(
 
     def is_complete(feature: Feature) -> bool:
         if feature.kind == "curved_face":
-            large = float(face_areas[list(feature.face_indices)].sum()) >= side_floor
-            return large and within(feature)
+            return side_stands(feature) and within(feature)
         if feature.kind != "face":
             return within(feature)
         # Erst der Suchrand, dann die Ebenenregel: Eine abgeschnittene Fläche
@@ -1035,7 +1036,8 @@ def _could_be_complete(
 
     Die notwendigen Bedingungen aus ``is_complete`` in :func:`_recognise_region`,
     an denselben Zahlen und ohne den ganzen Körper zu fragen: Eine gerundete
-    Seite braucht ihren Anteil an seiner Oberfläche (``large``), jedes andere
+    Seite muss als Seite des ganzen Körpers gelten
+    (``detection.curved_sides_standing``), jedes andere
     Merkmal außer einer Fläche muss ganz im Suchradius liegen
     (:func:`_inside_radius`, in ``bounded``). Eine Fläche besteht die Frage
     immer — ob sie abgeschnitten ist und eine Ebene nach der Regel des ganzen
@@ -1043,7 +1045,6 @@ def _could_be_complete(
     Facette an der Stelle eine gerundete Seite von 101 mm², ein Hundertstel
     seiner Oberfläche sind 108.
     """
-    side_floor: float | None = None
     for feature in found.values():
         if not feature.face_indices or feature.kind in {"edge_loop", "void"}:
             continue
@@ -1051,11 +1052,7 @@ def _could_be_complete(
             return True
         faces = indices[list(feature.face_indices)]
         if feature.kind == "curved_face":
-            if side_floor is None:
-                side_floor = max(
-                    detection.MIN_FACE_AREA, float(body.area) * detection.CURVED_SIDE_SHARE
-                )
-            if float(np.asarray(body.area_faces, dtype=float)[faces].sum()) >= side_floor:
+            if detection.curved_sides_standing(body, [np.asarray(faces, dtype=np.int64)])[0]:
                 return True
         elif _inside_radius(
             body, replace(feature, face_indices=tuple(int(index) for index in faces)), point, radius

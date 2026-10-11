@@ -196,6 +196,7 @@ dans `website/version.json`.
 - Les boîtes de dialogue *Charger un STEP* et *Extruder un dessin* ne proposent que les fichiers qu'elles savent lire. Si le projet n'en contient aucun, elles indiquent le bouton *Choisir un fichier …*.
 - Une suite de lignes dans l'esquisse s'arrête dès qu'elle se referme sur son début. Jusqu'ici, un nouveau segment restait accroché au pointeur, et le premier Échap semblait sans effet.
 - Une longueur tapée avec l'outil Ligne crée exactement une ligne. Jusqu'ici, quitter le champ de cote en ajoutait une seconde, revenant vers le pointeur.
+- Les parois rondes d'un petit texte, comme un « O » posé avec *Appliquer du texte*, figurent dans l'arbre des objets comme *Face courbe*. Sur un grand corps, elles y manquaient.
 
 ### Générer avec l'IA
 

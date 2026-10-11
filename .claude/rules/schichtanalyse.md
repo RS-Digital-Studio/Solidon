@@ -329,6 +329,12 @@ zählt nur, was für sich steht: Züge gleichen Radius als Ganzes
 
 ## Ein Umriss mit wanderndem Radius ist eine gerundete Seite
 
+Ob ein Fleck gerundeter Haut Seite ist, sagt nur `curved_sides_standing`, für
+Voll- und örtliche Erkennung: ab `CURVED_SIDE_SHARE` der Haut oder ab
+`MIN_FACE_AREA`, wenn jede Naht scharf an eine ebene Facette stößt (die Wände
+eines aufgebrachten „O“). Gerundete Haut hinter der Naht belegt nichts — sonst
+wird Rauschen zur Seite.
+
 `features._wandering_outline` entscheidet über die Stücke eines Flecks
 **zusammen**; Kennzahlen eines einzelnen Stücks trennen Spline und Bogen nicht
 (gemessen, nicht erneut messen).

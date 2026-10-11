@@ -195,6 +195,7 @@ scrive in `website/version.json`.
 - Le finestre *Carica STEP* e *Estrudi un disegno* offrono solo file che sanno leggere. Se il progetto non ne ha, indicano il pulsante *Scegli un file …*.
 - Una sequenza di linee nello schizzo finisce appena si chiude sul suo inizio. Finora un nuovo tratto restava attaccato al puntatore, e il primo Esc sembrava non fare nulla.
 - Una lunghezza digitata con lo strumento Linea crea esattamente una linea. Finora, lasciando il campo della quota se ne aggiungeva una seconda, di ritorno verso il puntatore.
+- Le pareti tonde di un testo piccolo, come una «O» con *Applica testo*, compaiono nell'albero degli oggetti come *Faccia curva*. Su un corpo grande finora mancavano.
 
 ### Generare con l'IA
 

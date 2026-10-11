@@ -1953,13 +1953,16 @@ def test_a_pocket_with_a_rounded_mouth_is_found_under_a_dome() -> None:
 
 
 def test_a_rounded_side_is_measured_against_the_whole_body() -> None:
-    """Eine gerundete Seite braucht ein Hundertstel des Körpers, nicht des Ausschnitts.
+    """Eine gerundete Seite misst sich am ganzen Körper, nicht am Ausschnitt.
 
     Die Vollerkennung nimmt eine gerundete Seite ab ``CURVED_SIDE_SHARE`` der
     Oberfläche des Körpers; die Erkennung am Ausschnitt maß dieselbe Schwelle
     an der Fläche des Ausschnitts. Am Schaber kamen so 14 Stücke heraus, die
     die Vollerkennung nirgends führt (25.09.2026). Hier: die Seite einer
-    elliptischen Erhebung auf einer großen Platte.
+    elliptischen Erhebung auf einer großen Platte — 87 mm² unter einem
+    Hundertstel der Haut (216 mm²), aber ringsum scharf an Deckfläche und
+    Platte gestoßen, also eine Seite (``curved_sides_standing``). Beide Wege
+    fragen dieselbe Regel und nennen sie gleich.
     """
     import manifold3d as m3
 
@@ -1979,7 +1982,12 @@ def test_a_rounded_side_is_measured_against_the_whole_body() -> None:
     mesh = MeshData.of(fine)
     assert mesh.raw.is_watertight
     full = detection.detect(mesh)
-    assert not any(feature.kind == "curved_face" for feature in full.values())
+    sides = sorted(
+        (len(feature.face_indices), round(float(feature.params["area"]), 9))
+        for feature in full.values()
+        if feature.kind == "curved_face"
+    )
+    assert len(sides) == 1 and sides[0][1] < mesh.raw.area * detection.CURVED_SIDE_SHARE, sides
     stitched = detection._one_body(mesh)
     centres = np.asarray(stitched.raw.triangles_center)
     normals = np.asarray(stitched.raw.face_normals)
@@ -1994,9 +2002,14 @@ def test_a_rounded_side_is_measured_against_the_whole_body() -> None:
         radius=12.0,
         seed_faces=(seed,),
     )
-    assert not any(feature.kind == "curved_face" for feature in found.features.values()), sorted(
-        (feature.kind, len(feature.face_indices)) for feature in found.features.values()
-    )
+    assert (
+        sorted(
+            (len(feature.face_indices), round(float(feature.params["area"]), 9))
+            for feature in found.features.values()
+            if feature.kind == "curved_face"
+        )
+        == sides
+    ), sorted((feature.kind, len(feature.face_indices)) for feature in found.features.values())
 
 
 def test_a_search_region_is_never_welded_again(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1465,7 +1465,13 @@ genügte ein Skalarprodukt der Achsen ungleich null.
   ohne Zeile im Baum und ohne Filament. Die Phase läuft **zuletzt**, weil sie
   den Rest nimmt: gerundete Dreiecke (`_curved_faces`), die kein Merkmal in
   seinen `face_indices` führt, zusammenhängend über glatte Nähte, mindestens
-  ein Prozent der Haut (`CURVED_SIDE_SHARE`) und `MIN_FACE_AREA`. **Gerundet
+  ein Prozent der Haut (`CURVED_SIDE_SHARE`) und `MIN_FACE_AREA`; ringsum
+  scharf an ebene Facetten gestoßen genügt `MIN_FACE_AREA`
+  (`curved_sides_standing`, Randprobe `_sharply_bounded` von
+  `_facets_standing_apart`) — die zwei Wände eines 8-mm-„O“ auf einem
+  20-mm-Würfel haben zusammen 19 mm² gegen 24 mm² Schwelle. Gerundete Haut
+  hinter der Naht zählte erst mit und machte an einem Zwischenstand von
+  `weg3-generiert-aufbereiten` 87 Rauschflecken zu Seiten. **Gerundet
   ist eine ganze koplanare Facette, wenn eines ihrer Dreiecke an einer
   Rundungsnaht liegt** (24.09.2026): Sonst fiel die Mitte einer geteilten
   Mantelfacette heraus, und dieselbe Seite war nach einer formgleichen

@@ -195,6 +195,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As caixas de diálogo *Carregar STEP* e *Extrudir um desenho* só oferecem ficheiros que conseguem ler. Se o projeto não tiver nenhum, indicam o botão *Escolher ficheiro …*.
 - Uma sequência de linhas no esboço termina assim que fecha no seu início. Até agora ficava um novo troço preso ao ponteiro, e o primeiro Esc parecia não fazer nada.
 - Um comprimento escrito com a ferramenta Linha cria exatamente uma linha. Até agora, ao sair do campo da cota juntava-se uma segunda, de volta ao ponteiro.
+- As paredes redondas de um texto pequeno, como um «O» com *Aplicar texto*, aparecem na árvore de objetos como *Face curva*. Num corpo grande faltavam até agora.
 
 ### Gerar com IA
 

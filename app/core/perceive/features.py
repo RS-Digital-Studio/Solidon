@@ -6413,26 +6413,39 @@ def _facets_standing_apart_read(
     members, facet_of, sizes, touches_curved = _facet_table(facets, len(body.faces), curved)
     owner = np.full(len(body.faces), -1, dtype=np.int64)
     owner[members] = facet_of
-    pairs = np.asarray(body.face_adjacency, dtype=np.int64)
-    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
-    first, second = owner[pairs[:, 0]], owner[pairs[:, 1]]
-    boundary = first != second
-    soft = boundary & ((angles < CURVATURE_LIMIT) | (first < 0) | (second < 0))
-    disqualified = np.unique(np.concatenate((first[soft], second[soft])))
-    disqualified = disqualified[disqualified >= 0]
-    counted = np.zeros(len(facets), dtype=np.int64)
-    inner = first == second
-    np.add.at(counted, first[inner & (first >= 0)], 2)
-    np.add.at(counted, first[boundary & (first >= 0)], 1)
-    np.add.at(counted, second[boundary & (second >= 0)], 1)
-    eligible = (counted == 3 * sizes) & ~touches_curved
-    eligible[disqualified] = False
+    eligible = _sharply_bounded(body, owner, sizes) & ~touches_curved
     apart: set[int] = set()
     for number in np.flatnonzero(eligible).tolist():
         if _a_sliver(body, [int(index) for index in facets[number]]):
             continue
         apart.add(number)
     return apart
+
+
+def _sharply_bounded(body: trimesh.Trimesh, owner: np.ndarray, sizes: np.ndarray) -> np.ndarray:
+    """Je Fleck, ob er ringsum scharf an eigene Flächen stößt — die Randprobe
+    von :func:`_facets_standing_apart`, geteilt mit :func:`detect_curved_faces`.
+
+    ``owner`` nennt je Dreieck seinen Fleck (``-1`` für keinen), ``sizes`` je
+    Fleck seine Dreieckszahl. Wahr heißt: Jede Naht zu einem fremden Dreieck
+    ist mindestens :data:`CURVATURE_LIMIT` geknickt, hinter jeder liegt ein
+    Fleck, und jede Randkante hat einen Nachbarn (``3n`` gezählte Kanten).
+    """
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+    first, second = owner[pairs[:, 0]], owner[pairs[:, 1]]
+    boundary = first != second
+    soft = boundary & ((angles < CURVATURE_LIMIT) | (first < 0) | (second < 0))
+    disqualified = np.unique(np.concatenate((first[soft], second[soft])))
+    disqualified = disqualified[disqualified >= 0]
+    counted = np.zeros(len(sizes), dtype=np.int64)
+    inner = first == second
+    np.add.at(counted, first[inner & (first >= 0)], 2)
+    np.add.at(counted, first[boundary & (first >= 0)], 1)
+    np.add.at(counted, second[boundary & (second >= 0)], 1)
+    bounded: np.ndarray = counted == 3 * sizes
+    bounded[disqualified] = False
+    return bounded
 
 
 def _all_but(count: int, left_out: set[int]) -> list[int]:
@@ -15087,6 +15100,60 @@ def _parallel_candidates(
     return np.flatnonzero(same_shell & alike & above & (key_of != own_key))
 
 
+def curved_sides_standing(body: trimesh.Trimesh, patches: Sequence[np.ndarray]) -> list[bool]:
+    """Je Fleck gerundeter Haut, ob er als gerundete Seite gilt.
+
+    Die Vollerkennung (:func:`detect_curved_faces`) und die örtliche
+    (``local._recognise_region``) fragen hier, damit beide dasselbe sagen.
+    ``patches`` sind Dreiecksnummern des ganzen Körpers ``body``.
+
+    **Gegen die ganze Oberfläche gemessen**, wie :data:`BROAD_FACE_SHARE`
+    bei den ebenen Flächen, nur enger: Auf ``generated_figure.stl`` blieben
+    zwischen sechs Kugeln sechs Flecken von 4 bis 40 mm² übrig — Übergänge,
+    keine Seiten. Ein Prozent der Haut lässt die zwei Bögen eines D (2315
+    und 3311 mm² an rund 20 000) stehen und die Übergänge fallen.
+
+    **Ringsum scharf begrenzt genügt** :data:`MIN_FACE_AREA` — derselbe
+    Beleg wie bei einer kleinen ebenen Fläche (:func:`_sharply_bounded`),
+    und kein Streifen (:func:`_a_sliver`). Die zwei Wände eines 8-mm-„O“,
+    0,6 mm erhaben auf einem 20-mm-Würfel, haben zusammen 19 mm² bei einer
+    Schwelle von 24 mm² und fehlten im Baum; jede stößt oben an die Schrift
+    und unten an den Würfel, beide eben und scharf geknickt. Ein Übergang
+    zwischen zwei Kugeln stößt dagegen mit der Stufe der Rundung an seine
+    Nachbarn. **Hinter jeder Naht liegt eine ebene Facette** (``body.facets``).
+    Gerundete Haut dahinter ist kein Beleg: An der eingelesenen Figur von
+    ``weg3-generiert-aufbereiten`` vor der Reparatur bekam ein Zwischenstand
+    so 87 gerundete „Seiten“ aus Rauschen. Die Antwort eines Flecks hängt nur
+    an ihm und am Körper, nicht an den übrigen Flecken.
+    """
+    areas = np.asarray(body.area_faces, dtype=float)
+    patch_areas = [float(areas[patch].sum()) for patch in patches]
+    floor = max(MIN_FACE_AREA, float(body.area) * CURVED_SIDE_SHARE)
+    bounded = [False] * len(patches)
+    if any(MIN_FACE_AREA <= area < floor for area in patch_areas):
+        count = len(body.faces)
+        owner = np.full(count, -1, dtype=np.int64)
+        members, _facet_of, _sizes, _touches = _facet_table(body.facets, count, set())
+        owner[members] = len(patches)
+        for number, patch in enumerate(patches):
+            owner[patch] = number
+        sizes = np.fromiter(
+            itertools.chain((len(patch) for patch in patches), (0,)), dtype=np.int64
+        )
+        apart = _sharply_bounded(body, owner, sizes)[: len(patches)]
+        # Ein anderer Fleck hinter der Naht ist keine ebene Facette — sonst
+        # hinge die Antwort daran, welche Flecken zugleich gefragt werden.
+        pairs = owner[np.asarray(body.face_adjacency, dtype=np.int64).reshape(-1, 2)]
+        crossing = (pairs[:, 0] != pairs[:, 1]) & (pairs < len(patches)).all(axis=1)
+        crossing &= (pairs >= 0).all(axis=1)
+        apart[pairs[crossing].ravel()] = False
+        bounded = apart.tolist()
+    return [
+        area >= floor or (area >= MIN_FACE_AREA and apart and not _a_sliver(body, patch.tolist()))
+        for patch, area, apart in zip(patches, patch_areas, bounded, strict=True)
+    ]
+
+
 def detect_curved_faces(
     mesh: MeshData,
     found: Mapping[FeatureId, Feature],
@@ -15167,21 +15234,15 @@ def detect_curved_faces(
         check_cancelled()
     areas = np.asarray(body.area_faces, dtype=float)
     convex = np.asarray(body.face_adjacency_convex, dtype=bool)
-    # **Gegen die ganze Oberfläche gemessen**, wie :data:`BROAD_FACE_SHARE`
-    # bei den ebenen Flächen, nur enger: Auf ``generated_figure.stl`` blieben
-    # zwischen sechs Kugeln sechs Flecken von 4 bis 40 mm² übrig — Übergänge,
-    # keine Seiten. Ein Prozent der Haut lässt die zwei Bögen eines D (2315
-    # und 3311 mm² an rund 20 000) stehen und die Übergänge fallen.
-    floor = max(MIN_FACE_AREA, float(body.area) * CURVED_SIDE_SHARE)
+    patches = [
+        np.asarray(sorted(int(index) for index in group), dtype=np.int64) for group in groups
+    ]
     entries: list[tuple[np.ndarray, float]] = []
-    for group in groups:
+    for patch, standing in zip(patches, curved_sides_standing(body, patches), strict=True):
         if check_cancelled is not None:
             check_cancelled()
-        patch = np.asarray(sorted(int(index) for index in group), dtype=np.int64)
-        area = float(areas[patch].sum())
-        if area < floor:
-            continue
-        entries.append((patch, area))
+        if standing:
+            entries.append((patch, float(areas[patch].sum())))
     # Größte zuerst, bei gleicher Fläche die Eckennummern — dieselbe
     # Stabilität wie bei den ebenen Flächen (:func:`_largest_first`).
     entries = _largest_first(body, entries)
