@@ -46,7 +46,49 @@ from app.ui.style import NORMAL, WIDE, no_primary, set_level
 INITIAL_SIZE = (640, 620)
 
 
-def history_html(entries: tuple[changes.Entry, ...], current: str = APP_VERSION) -> str:
+#: Der Objektname des Vorspann-Kastens; das Stylesheet hebt ihn darüber hervor
+#: (``style.stylesheet``, Akzentkante und Fläche, dazu Stufe ``section``).
+LEAD_BOX = "changesLead"
+
+
+def lead_box(parent: QWidget) -> QLabel:
+    """Der Kasten für die Meldung, die jedem Nutzer gilt — über allen Gruppen.
+
+    **Ein eigenes Label und keine Zeile im Text darunter**, weil nur das
+    Stylesheet die Farben des Themas kennt und beim Themenwechsel nachzieht;
+    Rich Text bekäme sie als feste Werte. Hervorgehoben wird zweifach
+    (Regel 18): Die Akzentkante samt Fläche trägt die Farbe, die größere und
+    halbfette Schrift (Stufe ``section``) und die Kante als Form tragen es
+    auch ohne Farbsehen.
+
+    Dieselbe Zurückhaltung wie in der Liste: kein Verweis wirkt, markieren
+    geht. Der Inhalt kommt im Update-Fenster vom Server und ist maskiert.
+    """
+    box = QLabel(parent)
+    box.setObjectName(LEAD_BOX)
+    box.setWordWrap(True)
+    box.setTextFormat(Qt.TextFormat.RichText)
+    box.setOpenExternalLinks(False)
+    box.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    set_level(box, "section")
+    box.setVisible(False)
+    return box
+
+
+def lead_html(points: tuple[str, ...]) -> str:
+    """Die Punkte eines Vorspanns als Absätze, ausgezeichnet wie die Liste."""
+    language = get_language()
+    return "".join(
+        f'<p style="margin:0">{inline(native_text(point, language))}</p>' for point in points
+    )
+
+
+def history_html(
+    entries: tuple[changes.Entry, ...],
+    current: str = APP_VERSION,
+    *,
+    lead_apart: bool = False,
+) -> str:
     """Der Verlauf als Auszeichnung, mit der laufenden Fassung markiert.
 
     Gegliedert, wie die Datei es vorgibt: je Version die Gruppen mit
@@ -63,6 +105,10 @@ def history_html(entries: tuple[changes.Entry, ...], current: str = APP_VERSION)
     unter 2 Extrusionsbreiten" ließe sich so schreiben —, verschwände sonst
     samt allem bis zum nächsten ``>``. Das ist kein Angriff, nur ein Satz, der
     dann fehlt.
+
+    ``lead_apart`` lässt den Vorspann weg, weil der Aufrufer ihn in seinem
+    eigenen Kasten zeigt (:func:`lead_box`); ohne den Schalter steht er wie
+    bisher als Liste ohne Überschrift vorn.
     """
     blocks: list[str] = []
     for entry in entries:
@@ -70,7 +116,7 @@ def history_html(entries: tuple[changes.Entry, ...], current: str = APP_VERSION)
         if entry.version == current:
             title += " — " + html.escape(tr("diese Version"))
         blocks.append(f'<h3 style="margin-bottom:2px">{title}</h3>')
-        blocks.append(groups_html(entry.groups))
+        blocks.append(groups_html(entry.topics if lead_apart else entry.groups))
     return "".join(blocks)
 
 
@@ -84,9 +130,9 @@ def groups_html(groups: tuple[changes.Group, ...]) -> str:
     wären zwei Gelegenheiten, auseinanderzulaufen; genau daran ist die
     Menütiefe schon einmal gescheitert.
 
-    Eine Gruppe ohne Titel liest sich wie bisher: eine Liste ohne Überschrift.
-    Das ist der Vorspann eines Abschnitts, der Stand vor 0.2.0 — und der
-    Rückfall, wenn eine Versionsdatei gar keine Gruppen mitbringt.
+    Eine Gruppe ohne Titel liest sich als Liste ohne Überschrift: der Stand
+    vor 0.2.0 und der Rückfall einer Versionsdatei ohne Gruppen. Einen
+    Vorspann (``changes.lead_of``) nehmen die Aufrufer vorher heraus.
     """
     blocks: list[str] = []
     # Die Punkte kommen aus einer Datei, nicht durch ``tr``: Ihre Kürzel
@@ -159,6 +205,11 @@ class ChangesDialog(QDialog):
         set_level(self.summary, "caption")
         self.summary.setVisible(bool(self.entries))
 
+        # **Der Vorspann der gewählten Fassung** — die Meldung, die jedem gilt,
+        # über den Gebieten und nicht als erster Punkt darin (Entscheidung
+        # Robert). Gefüllt in ``_show_selected``; ohne Vorspann bleibt er weg.
+        self.lead = lead_box(self)
+
         # **Hier darf ein Verweis wirken**, anders als in der Liste darunter:
         # Der Satz ist unser eigener und die Adresse baut die Anwendung aus
         # ihrer Sprache — es kommt nichts von außen hinein. Dieselbe Abwägung
@@ -230,6 +281,7 @@ class ChangesDialog(QDialog):
         layout.addWidget(self.picker)
         layout.addWidget(self.summary)
         layout.addWidget(self.empty)
+        layout.addWidget(self.lead)
         # Der Rollbereich bekommt jeden gezogenen Bildpunkt (Stretch 1):
         # Überschrift und Knöpfe brauchen nicht mehr, als sie haben, und ein
         # größeres Fenster soll mehr Verlauf zeigen, nicht mehr Leere.
@@ -251,14 +303,20 @@ class ChangesDialog(QDialog):
         if index < 0:
             self.body.clear()
             self.summary.clear()
+            self.lead.clear()
+            self.lead.setVisible(False)
             return
         version = self.version_choice.itemData(index)
         selected = tuple(entry for entry in self.entries if entry.version == version)
-        self.body.setText(history_html(selected))
+        self.body.setText(history_html(selected, lead_apart=True))
+        lead = selected[0].lead if selected else None
+        self.lead.setText(lead_html(lead.points) if lead is not None else "")
+        self.lead.setVisible(lead is not None)
         if selected:
             entry = selected[0]
             changes_count = len(entry.points)
-            topics_count = len(entry.groups)
+            # Der Vorspann ist kein Thema: Er gehört keinem Gebiet an.
+            topics_count = len(entry.topics)
             changes_word = tr(
                 "Neuerung" if changes_count == 1 else "Neuerungen",
                 context="Changelog-Zähler",

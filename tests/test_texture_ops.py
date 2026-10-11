@@ -1072,7 +1072,9 @@ def test_the_printable_pitch_passes_the_printability_check(pattern: str) -> None
     texture_ops.check_printable(pattern, pitch, 0.6, NOZZLE)
     if pitch > start:
         with pytest.raises(ValidationError):
-            texture_ops.check_printable(pattern, pitch - texture_ops.PITCH_STEP - 1e-6, 0.6, NOZZLE)
+            texture_ops.check_printable(
+                pattern, pitch - texture_ops.TEXTURE_PITCH_STEP - 1e-6, 0.6, NOZZLE
+            )
     assert texture_ops.printable_pitch(pattern, 10.0, NOZZLE) == 10.0, (
         "eine Teilung, die druckt, bleibt"
     )

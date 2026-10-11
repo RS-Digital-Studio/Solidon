@@ -58,7 +58,8 @@ class Group:
     """Ein Bündel Punkte unter einer gemeinsamen Überschrift.
 
     Der Titel darf leer sein — so lesen sich die Abschnitte vor 0.2.0, und so
-    liest sich ein Vorspann, der vor der ersten Überschrift steht.
+    liest sich ein Vorspann, der vor der ersten Überschrift steht
+    (:func:`lead_of` unterscheidet beides).
     """
 
     title: str
@@ -81,6 +82,65 @@ class Entry:
     def points(self) -> tuple[str, ...]:
         """Alle Punkte in Dateireihenfolge, über die Gruppen hinweg."""
         return tuple(point for group in self.groups for point in group.points)
+
+    @property
+    def lead(self) -> Group | None:
+        """Der Vorspann dieser Version, wenn sie einen hat (:func:`lead_of`)."""
+        return lead_of(self.groups)
+
+    @property
+    def topics(self) -> tuple[Group, ...]:
+        """Die Gruppen ohne den Vorspann — das, was ein Zähler „Themen" nennt."""
+        return without_lead(self.groups)
+
+
+def lead_of(groups: tuple[Group, ...]) -> Group | None:
+    """Die Meldung, die vor allen Gebieten einer Version steht, oder nichts.
+
+    Ein Vorspann ist eine Gruppe **ohne Titel vor benannten Gruppen**: Punkte,
+    die in der Datei vor der ersten ``###``-Überschrift stehen. Sie gelten
+    jedem Nutzer und keinem Gebiet — etwa, wie lange die Demo läuft —, und
+    jede Anzeige hebt sie über die Gruppen (Entscheidung Robert).
+
+    Eine titellose Gruppe **allein** ist keiner: So lesen sich die Abschnitte
+    vor 0.2.0 und jede Versionsdatei, die nur die flache Liste trägt. Würde sie
+    hervorgehoben, stünde eine ganze Fassung als Ankündigung da.
+
+    Hier und nicht in den Anzeigen, weil drei Stellen dieselbe Regel lesen:
+    *Hilfe → Neuerungen*, das Update-Fenster und die Changelog-Seite.
+    """
+    if len(groups) < 2 or groups[0].title:
+        return None
+    return groups[0] if any(group.title for group in groups[1:]) else None
+
+
+def without_lead(groups: tuple[Group, ...]) -> tuple[Group, ...]:
+    """Die Gruppen ohne Vorspann; ohne Vorspann unverändert."""
+    return groups[1:] if lead_of(groups) is not None else groups
+
+
+#: Was eine Auszeichnung im Fließtext trägt und für den Vergleich nicht zählt
+#: (``markup.inline`` liest Sternchen und Backticks).
+_MARKS: Final = re.compile(r"[*`]+")
+
+
+def plain(text: str) -> str:
+    """Ein Satz für den Vergleich: ohne Auszeichnung, Leerraum und Großschreibung."""
+    return " ".join(_MARKS.sub("", text).split()).casefold()
+
+
+def repeats(note: str, lead: Group) -> bool:
+    """Ob Hinweistext und Vorspann dasselbe sagen.
+
+    Das Update-Fenster stellt beide oben hin, und eine Meldung, die zweimal
+    untereinander steht, liest sich wie ein Fehler. Dasselbe heißt: Einer der
+    beiden enthält den anderen ganz — der kürzere ist dann überflüssig.
+    """
+    said = plain(note)
+    lead_text = plain(" ".join(lead.points))
+    if not said or not lead_text:
+        return False
+    return said in lead_text or lead_text in said
 
 
 def folder() -> Path:

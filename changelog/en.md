@@ -93,6 +93,7 @@ it into `website/version.json`.
 - Without a saved slicer profile, export and main window use what the print dialog suggests for the printer, including the manufacturer's machine and process.
 - Only slicers Solidon works with are offered, plus resin slicers such as ChituBox and Lychee. Bambu Studio as an AppImage now counts too.
 - With a resin printer, the print dialog now shows only printer, material, plates and the program. Version 0.5.3 also showed filament profiles and stock there.
+- After switching from a resin to a filament printer, the project prints with the nozzle's line width again. Version 0.5.3 kept the 0.05 mm pixel, also in saved projects.
 - Start code and build volume come only from exactly your printer, not from another model of the same series.
 - On Linux, Solidon now also creates the print file with Cura as a Flatpak or AppImage.
 - On Linux, the printers of OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print as an AppImage are offered right away, even if the slicer has never been opened.

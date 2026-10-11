@@ -588,7 +588,7 @@ def check_printable(
 
 #: In welchen Schritten :func:`printable_pitch` die Teilung anhebt, in mm: eine
 #: Zahl, die man im Dialog liest und tippt, keine Toleranz.
-PITCH_STEP: Final = 0.1
+TEXTURE_PITCH_STEP: Final = 0.1
 
 
 def printable_pitch(
@@ -599,7 +599,7 @@ def printable_pitch(
     Für die Vorbelegung des Dialogs: Er öffnete mit *Rändel gekreuzt* bei 2 mm,
     und an der 0,4-mm-Düse lehnte dieselbe Prüfung das sofort ab. Gerechnet
     wird mit derselben schmalsten Struktur wie dort, aufgerundet auf
-    :data:`PITCH_STEP`, damit die Zahl im Feld lesbar bleibt.
+    :data:`TEXTURE_PITCH_STEP`, damit die Zahl im Feld lesbar bleibt.
     """
     detail = printer.smallest_detail
     candidate = pitch
@@ -607,14 +607,14 @@ def printable_pitch(
     if narrowest >= detail or is_close(narrowest, detail):
         return pitch
     candidate = pitch * detail / max(narrowest, EPS_GEOM)
-    candidate = math.ceil(candidate / PITCH_STEP - 1e-9) * PITCH_STEP
+    candidate = math.ceil(candidate / TEXTURE_PITCH_STEP - 1e-9) * TEXTURE_PITCH_STEP
     # Nicht jedes Muster wächst genau mit der Teilung (die Zelle kann fest
     # sein): nachprüfen und notfalls weiter anheben, endlich begrenzt.
     for _step in range(1000):
         narrowest = narrowest_structure(pattern, candidate, cell)
         if narrowest >= detail or is_close(narrowest, detail):
             break
-        candidate += PITCH_STEP
+        candidate += TEXTURE_PITCH_STEP
     return round(candidate, 6)
 
 

@@ -4190,6 +4190,22 @@ def _third_party_text() -> str:
         return tr("Die Liste der Fremdbestandteile ließ sich nicht lesen.")
 
 
+def as_plain_text(box: QMessageBox) -> None:
+    """Haupt- und Zusatztext einer Rückfrage als Klartext setzen (§32).
+
+    Rückfragen nennen Projekt- und Schrittnamen aus Dateien, die von
+    irgendwoher kommen. ``QMessageBox`` setzt beide Texte sonst als
+    Auszeichnung, sobald sie danach aussehen — ein Schritt namens
+    ``<span style="font-size:40pt">…`` füllte die Frage. ``setTextFormat``
+    erreicht nur den Haupttext; den Zusatztext legt Qt erst mit
+    ``setInformativeText`` an, darum steht der Aufruf direkt vor ``exec``.
+    """
+    box.setTextFormat(Qt.TextFormat.PlainText)
+    for label in box.findChildren(QLabel):
+        if label.objectName() in ("qt_msgbox_label", "qt_msgbox_informativelabel"):
+            label.setTextFormat(Qt.TextFormat.PlainText)
+
+
 def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     """Vor dem Wegwerfen eines geänderten Dokuments fragen (§2.1, Regel 19).
 
@@ -4213,6 +4229,7 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     # Rot, weil nach dem Schließen kein Undo zurückholt, was hier verworfen wird.
     make_danger(discard)
     box.setDefaultButton(save)
+    as_plain_text(box)
     box.exec()
 
     clicked = box.clickedButton()
@@ -4301,6 +4318,7 @@ def _go_on_despite(
     box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
     make_primary(write)
     box.setDefaultButton(write)
+    as_plain_text(box)
     box.exec()
     return box.clickedButton() is write
 
@@ -4410,5 +4428,6 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     no_primary(box)
     box.setEscapeButton(cancel)
     cancel.setFocus()
+    as_plain_text(box)
     box.exec()
     return box.clickedButton() is discard

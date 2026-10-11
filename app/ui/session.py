@@ -4214,9 +4214,10 @@ class Session(QObject):
         source = reference() if reference is not None else None
         if source is not None:
             return bed_margin(source())
-        settings = self.project.document.print_settings
+        profile = self.profile
+        settings = print_settings.stored(self.project.document.print_settings, profile.printer)
         if settings is None:
-            settings = print_settings.resolve(self.profile)
+            settings = print_settings.resolve(profile)
         return bed_margin(settings)
 
     def auto_split(self, object_id: str) -> SplitApplied:
@@ -6211,7 +6212,7 @@ class Session(QObject):
                 reports = []
                 settings = (
                     review_settings
-                    or working.print_settings
+                    or print_settings.stored(working.print_settings, preview_profile.printer)
                     or print_settings.resolve(preview_profile)
                 )
                 for evaluation in (baseline, result):

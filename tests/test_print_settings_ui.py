@@ -11194,7 +11194,8 @@ def test_a_resin_printer_reduces_the_dialog_to_what_applies_and_a_switch_brings_
         assert session.profile.material.id == profiles.DEFAULT_MATERIAL, (
             "PLA statt Harz, sobald ein Filamentdrucker dasteht"
         )
-        assert all(not widget.isHidden() for widget in hidden)
+        assert all(not widget.isHidden() for widget in hidden if widget is not dialog.save_button)
+        assert dialog.save_button.isHidden(), "ohne Druckdatei kein Speichern-Knopf"
         assert dialog.nozzle_state.isVisibleTo(dialog)
         assert dialog.filament_label.text() == tr("Filamente")
 
@@ -11223,6 +11224,8 @@ def test_a_resin_printer_keeps_the_slicer_profiles_away_after_the_profile_search
     """
     monkeypatch.setattr(print_dialog.slicer_profiles, "find_profiles", lambda *_a, **_k: [])
     session.start_new(profiles.DEFAULT_RESIN_PRINTER, profiles.DEFAULT_RESIN_MATERIAL)
+    # Wie nach einem früheren Harzdruck gespeichert: die Pixelgröße als Bahn.
+    session.project.document.print_settings = print_settings.resolve(session.profile)
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     try:
@@ -11242,12 +11245,29 @@ def test_a_resin_printer_keeps_the_slicer_profiles_away_after_the_profile_search
         dialog._slicer_path = Path("C:/Programme/UltiMaker Cura 5.13.0/UltiMaker-Cura.exe")
         dialog._show_foundation_note()
         assert not dialog.foundation_note.isVisibleTo(dialog), dialog.foundation_note.text()
+        # Zurück auf den Orca-Slicer ohne Profilbestand: Dort liefert beim
+        # Druckerwechsel keine Profilsuche nach (``_refill_slicer_profiles``
+        # kehrt früh zurück), das Angebot muss der Wechsel selbst zurückholen.
+        dialog._slicer_path = Path("C:/Programme/ElegooSlicer/elegoo-slicer.exe")
         dialog._offer_the_slicers_printer("centauri-carbon-2")
         assert not dialog.adopt_printer.isVisibleTo(dialog), dialog.adopt_printer.text()
         assert not dialog.material_link.isVisibleTo(dialog), "an Harz gibt es keine Filamentliste"
 
-        dialog.printer_choice.setCurrentIndex(dialog.printer_choice.findData("centauri-carbon-2"))
+        dialog.printer_choice.setCurrentIndex(
+            dialog.printer_choice.findData(profiles.DEFAULT_PRINTER)
+        )
         assert not session.profile.printer.is_resin
+        # Die Grundlage gehört dem neuen Drucker: Bahn seiner Düse, nicht der Bildpunkt.
+        fdm = print_settings.resolve(session.profile)
+        assert dialog.settings.layers.line_width == pytest.approx(fdm.layers.line_width)
+        assert dialog.settings.layers.first_layer_line_width == pytest.approx(
+            fdm.layers.first_layer_line_width
+        )
+        assert session.profile.printer.extrusion_width > 0.3
+        # Kein grauer Speichern-Knopf ohne Datei; das Angebot des Slicers kommt zurück.
+        assert dialog.save_button.isHidden()
+        # Am Filamentdrucker gilt das Angebot wieder, ohne neue Anfrage.
+        assert dialog.adopt_printer.isVisibleTo(dialog), "der Rückweg des Angebots"
         assert not dialog.slicer_box.isHidden(), "am Filamentdrucker kommt der Kasten zurück"
         assert dialog.material_link.isVisibleTo(dialog)
     finally:
@@ -12502,6 +12522,7 @@ def test_real_operation_entry_reaches_size_dialog_with_fixed_id_without_feature_
         "_plane_through",
         "_measured_from_body",
         "_edges_from_view",
+        "_texture_that_prints",
         "_source_names",
         "_parameter_values",
         "_feature_names",

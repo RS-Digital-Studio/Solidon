@@ -94,6 +94,7 @@ dans `website/version.json`.
 - Sans profil du slicer mémorisé, l'export et la fenêtre principale prennent ce que la boîte d'impression propose pour l'imprimante, machine et processus du fabricant compris.
 - Seuls les slicers avec lesquels Solidon fonctionne sont proposés, plus les slicers pour résine comme ChituBox et Lychee. Bambu Studio en AppImage en fait désormais partie.
 - Avec une imprimante résine, le dialogue d'impression ne montre plus qu'imprimante, matériau, plateaux et programme. La version 0.5.3 y affichait aussi profils et stock de filament.
+- Après le passage d'une imprimante résine à une imprimante à filament, le projet imprime de nouveau avec la largeur de ligne de la buse. La version 0.5.3 gardait le pixel de 0,05 mm.
 - Le code de démarrage et le volume d'impression viennent uniquement de votre imprimante, pas d'un autre modèle de la même gamme.
 - Sous Linux, Solidon crée désormais aussi le fichier d'impression avec Cura en Flatpak ou en AppImage.
 - Sous Linux, les imprimantes d'OrcaSlicer, Bambu Studio, ElegooSlicer et Creality Print en AppImage sont proposées tout de suite, même si le slicer n'a jamais été ouvert.

@@ -118,6 +118,7 @@ Nutzen da und sonst nichts.
 - Ohne gemerktes Slicerprofil nehmen Export und Hauptfenster, was der Druckdialog für den Drucker vorschlägt, samt Maschine und Prozess des Herstellers.
 - Zur Wahl stehen nur noch Slicer, mit denen Solidon arbeitet, dazu Resin-Slicer wie ChituBox und Lychee. Bambu Studio als AppImage zählt jetzt dazu.
 - Mit einem Resin-Drucker zeigt der Druckdialog nur noch Drucker, Material, Platten und das Programm. Version 0.5.3 zeigte dort auch Filamentprofile und den Filamentbestand.
+- Nach dem Wechsel von einem Resin- auf einen Filamentdrucker druckt das Projekt wieder mit der Bahnbreite der Düse. Version 0.5.3 behielt den Bildpunkt von 0,05 mm, auch in gespeicherten Projekten.
 - Startcode und Bauraum kommen nur noch von genau Ihrem Drucker, nicht von einem anderen Modell derselben Reihe.
 - Unter Linux erzeugt Solidon die Druckdatei jetzt auch mit Cura als Flatpak oder AppImage.
 - Unter Linux stehen die Drucker von OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print als AppImage sofort zur Wahl, auch wenn der Slicer noch nie geöffnet wurde.

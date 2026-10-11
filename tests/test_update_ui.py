@@ -120,9 +120,16 @@ def shown_text(dialog: UpdateDialog) -> str:
     """
     from PySide6.QtGui import QTextDocument
 
-    document = QTextDocument()
-    document.setHtml(dialog.changes.text())
-    return document.toPlainText()
+    shown: list[str] = []
+    # Der hervorgehobene Kasten darüber gehört dazu: Er trägt Hinweis und
+    # Vorspann, und beides liest der Kunde vor der Liste.
+    for label in (dialog.notes, dialog.changes):
+        if label.isHidden():
+            continue
+        document = QTextDocument()
+        document.setHtml(label.text())
+        shown.append(document.toPlainText())
+    return "\n".join(shown)
 
 
 def test_the_window_shows_the_headings_of_the_changelog(
@@ -464,3 +471,132 @@ def test_the_release_page_without_a_browser_leaves_its_address(
 
     assert qt_app.clipboard().text() == "https://solidon3d.de/neu.html"
     assert said and "https://solidon3d.de/neu.html" in said[0]
+
+
+# --- der Vorspann: die Meldung, die jedem gilt -----------------------------------------
+
+DEMO = "Die Demo läuft jetzt bis zum 30. November 2026."
+
+
+def _with_lead(**values: object) -> updates.Release:
+    from app.core.changes import Group
+
+    return release(
+        changes={"de": (DEMO, "Gezeichnet.")},
+        groups={
+            "de": (
+                Group(title="", points=(DEMO,)),
+                Group(title="Zeichnen", points=("Gezeichnet.",)),
+            )
+        },
+        **values,
+    )
+
+
+def test_the_note_and_the_lead_stand_highlighted_above_the_list(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hinweis und Vorspann oben im Kasten, die Gebiete darunter (Entscheidung Robert)."""
+    from app.ui.changes_dialog import LEAD_BOX
+
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    _windows_setup(monkeypatch)
+
+    dialog = UpdateDialog(_with_lead())
+
+    assert not dialog.notes.isHidden()
+    assert dialog.notes.objectName() == LEAD_BOX, "the note is highlighted like the lead"
+    assert dialog.notes.property("level") == "section"
+    assert "Zweiter Bau der Demo." in dialog.notes.text()
+    assert DEMO in dialog.notes.text()
+    assert DEMO not in dialog.changes.text(), "the lead must not stand twice"
+    assert "Zeichnen" in dialog.changes.text()
+    assert shown_text(dialog).count(DEMO) == 1
+    assert dialog.notes.text().index(DEMO) < dialog.notes.text().index("Zweiter Bau der Demo."), (
+        "the message for everyone comes first — behind a long note it would not stand out"
+    )
+
+
+def test_without_a_note_the_lead_takes_its_place(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    _windows_setup(monkeypatch)
+
+    dialog = UpdateDialog(_with_lead(notes=""))
+
+    assert not dialog.notes.isHidden()
+    assert DEMO in dialog.notes.text()
+    assert DEMO not in dialog.changes.text()
+
+
+def test_a_note_that_says_the_same_stands_once(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    _windows_setup(monkeypatch)
+
+    dialog = UpdateDialog(_with_lead(notes=DEMO))
+
+    assert shown_text(dialog).count(DEMO) == 1, shown_text(dialog)
+
+
+def test_a_flat_list_keeps_its_first_point_in_the_list(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gegenprobe: Eine Versionsdatei ohne Gruppen hat keinen Vorspann.
+
+    ``Release.grouped`` macht daraus **eine** titellose Gruppe; hervorgehoben
+    würde sonst die ganze Liste.
+    """
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    _windows_setup(monkeypatch)
+
+    dialog = UpdateDialog(release())
+
+    assert "Der erste Punkt." in dialog.changes.text()
+    assert "Der erste Punkt." not in dialog.notes.text()
+    assert dialog.notes.text() == '<p style="margin:0">Zweiter Bau der Demo.</p>'
+
+
+def test_the_note_from_the_server_stays_text() -> None:
+    """Der Hinweis kommt vom Server: Auszeichnung darin wird gezeigt, nicht gedeutet."""
+    from app.ui.update_dialog import announcement_html
+
+    text = announcement_html('<img src="https://fremd.test/x.png">Zeile\nzwei', None)
+
+    assert "<img" not in text and "&lt;img" in text
+    assert "Zeile<br>zwei" in text
+    assert announcement_html("", None) == ""
+
+
+def test_a_lead_from_the_server_stays_text() -> None:
+    """Derselbe Schutz für den Vorspann: Er kommt über ``lead_html`` in den Kasten."""
+    from app.core.changes import Group
+    from app.ui.update_dialog import announcement_html
+
+    text = announcement_html(
+        "",
+        Group(
+            "",
+            ('<img src="https://fremd.test/x.png"><a href="https://fremd.test">x</a><b>fett</b>',),
+        ),
+    )
+
+    assert "<img" not in text and "&lt;img" in text
+    assert "<a " not in text and "&lt;a " in text
+    assert "<b>" not in text and "&lt;b&gt;" in text
+
+
+def test_of_two_texts_saying_the_same_the_longer_stays_without_markup() -> None:
+    """Gemessen ohne Auszeichnung wie ``changes.repeats``: Sternchen zählen nicht."""
+    from app.core.changes import Group
+    from app.ui.update_dialog import announcement_html
+
+    text = announcement_html(
+        "Die Demo läuft bis zum 30. November. Ja",
+        Group("", ("Die Demo läuft bis zum **30. November**.",)),
+    )
+
+    assert "Ja" in text, "the fuller note was dropped"
+    assert "<strong>" not in text, "the shorter lead must not stand as well"
