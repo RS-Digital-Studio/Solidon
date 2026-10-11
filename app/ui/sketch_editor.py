@@ -57,6 +57,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import edit, shapes
@@ -1092,6 +1093,8 @@ class SketchCanvas(QWidget):
         gab es im gefahrenen Modus schlicht nicht. Verliehen wird das Feld,
         nicht kopiert — eine zweite Anzeige desselben Werts wäre die zweite
         Zahl für dieselbe Sache."""
+        self._typing_from: QWidget | None = None
+        """Wo die erste Ziffer ankam — dorthin geht der Fokus nach dem Setzen zurück."""
         self._measure_screen_of: Callable[[tuple[float, float]], QPoint | None] | None = None
         self.highlighted: frozenset[int] = frozenset()
         """Punkte, die gerade aufleuchten sollen — die Ziele der Bedingung
@@ -3024,11 +3027,36 @@ class SketchCanvas(QWidget):
         wx, wy = self._to_world(position)
         reach = SNAP_PX / self._snap_scale()
         best: tuple[float, int] | None = None
+        ties: list[int] = []
         for flat, (x, y) in enumerate(self.points() if points is None else points):
             distance = math.hypot(x - wx, y - wy)
-            if distance <= reach and (best is None or distance < best[0]):
+            if distance > reach:
+                continue
+            if best is None or distance < best[0] - EPS_DISPLAY:
                 best = (distance, flat)
-        return best[1] if best is not None else None
+                ties = [flat]
+            elif abs(distance - best[0]) <= EPS_DISPLAY:
+                ties.append(flat)
+        if best is None:
+            return None
+        if len(ties) > 1:
+            # **Bei gleich nahen Punkten gewinnt ein Kurvenende** (Review
+            # G-N5). Ein Ellipsenbogen von Scheitel zu Scheitel hat seinen
+            # Anfang genau auf dem Achsenpunkt; gefangen war der Achsenpunkt,
+            # und die Kontur schloss den Linienzug nie.
+            ends = self._curve_ends()
+            return next((flat for flat in ties if flat in ends), ties[0])
+        return best[1]
+
+    def _curve_ends(self) -> frozenset[int]:
+        """Die Punkte, an denen eine offene Kurve endet (``edit._spots``)."""
+        return frozenset(
+            spot
+            for element, offset in zip(
+                self.sketch.elements, edit.offsets_of(self.sketch), strict=True
+            )
+            for spot in edit._spots(element, offset, ends_only=True)
+        )
 
     def _hit_element(self, position: QPointF) -> tuple[str, tuple[int, ...]] | None:
         offsets = edit.offsets_of(self.sketch)
@@ -3754,6 +3782,24 @@ class SketchCanvas(QWidget):
             widget.setVisible(False)
             widget.setParent(host)
 
+    def give_focus_back(self) -> None:
+        """Nach einem gesetzten Maß zurück dorthin, wo die nächste Ziffer ankommt.
+
+        **Sonst sprang der Fokus weiter** (Review 0.6.0, M-N1; schon in 0.5.3):
+        Das Feld verschwindet nach dem Setzen, und Qt gab den Fokus dem
+        nächsten Widget der Tabulatorfolge, dem Knopf *Auswählen*. Die zweite
+        Zahl ging verloren, und ihre Eingabetaste schloss den Dialog *Skizze
+        zeichnen*. Zurück geht er an die Stelle, von der die erste Ziffer kam —
+        die Zeichenfläche im Dialog, die Grafikfläche im Viewport; ohne sie an
+        die Zeichenfläche oder ihren Wirt.
+        """
+        target = self._typing_from
+        self._typing_from = None
+        if target is None or not isValid(target) or not target.isVisible():
+            target = self._measure_host if self._measure_host is not None else self
+        if isValid(target) and target.isVisible():
+            target.setFocus(Qt.FocusReason.OtherFocusReason)
+
     def reclaim_measure_field(self) -> None:
         """Holt das Feld zurück, bevor das Panel stirbt.
 
@@ -3776,6 +3822,13 @@ class SketchCanvas(QWidget):
         """
         if self.pending_measure() <= 0.0 or not str(event.text())[:1].isdigit():
             return False
+        focus = QApplication.focusWidget()
+        if (
+            focus is not None
+            and focus is not self.measure_field
+            and not self.measure_field.isAncestorOf(focus)
+        ):
+            self._typing_from = focus
         self.measure_field.setFocus(Qt.FocusReason.OtherFocusReason)
         # Von vorn und nicht an den Zeigerwert angehängt: Wer „25" tippt,
         # meint 25 und nicht 1025.
@@ -4609,7 +4662,11 @@ class SketchCanvas(QWidget):
             return True
         index = self.measure_at(point)
         if index is None:
-            return False
+            # **Ein Doppelklick ohne laufenden Zug beginnt keinen neuen**
+            # (Review G-N4): Sein erster Klick hat die Kontur eben auf ihrem
+            # Anfang geschlossen, und als zweites Drücken weitergereicht setzte
+            # er dort den Anfang einer neuen Linie.
+            return self.tool == "line"
         self.measureEditRequested.emit(index)
         return True
 
@@ -8306,6 +8363,7 @@ class SketchPanel(QWidget):
                 self._place_entered()
             else:
                 self._place_second_measured()
+            self.canvas.give_focus_back()
             event.accept()
             return True
         if (
