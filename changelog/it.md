@@ -130,6 +130,7 @@ scrive in `website/version.json`.
 - Da questa versione un consumo scaricato resta legato alla sua stampa, anche se un aggiornamento calcola più in fretta o cambia il profilo del produttore nello slicer. Prima contava come nuova.
 - Dove cupole piatte e pendenze mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa del pezzo.
 - Con una stampante a resina il dialogo di stampa mostra solo stampante, materiale, piatti e programma. La versione 0.5.3 mostrava anche profili e scorte di filamento.
+- Dopo il passaggio da una stampante a resina a una a filamento, il progetto stampa di nuovo con la larghezza di linea dell'ugello. La versione 0.5.3 manteneva il pixel di 0,05 mm.
 
 ### Filettature, fori e componenti normalizzati
 

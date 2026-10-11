@@ -364,7 +364,8 @@ def settings_for_export(
     if quality not in print_settings.quality_presets():
         quality = print_settings.DEFAULT_QUALITY
     return (
-        stored
+        # Ein gespeicherter Rest von Harz geht nicht an einen FDM-Slicer.
+        print_settings.native_line_widths(stored, profile.printer)
         if stored is not None
         else print_settings.resolve(profile, cast(QualityPreset, quality))
     )
@@ -3568,7 +3569,10 @@ class PrintSettingsDialog(QDialog):
             self.nozzle_choice.currentIndex() >= 0 and self.nozzle_choice.currentData() is None
         )
         self.filament_label.setText(tr("Filamente"))
-        self.material_link.setText(tr("Filamente …"))
+        # Gezeigt nur mit einer Datei: Vor dem ersten Slicen stand er nach Harz
+        # → FDM grau und ohne Datei da (``_hold_the_save``).
+        self.save_button.setVisible(bool(self._gcode) and not self.session.profile.printer.is_resin)
+        self.refresh_materials()
         self._lead_handover(self.settings.handover == "open")
         self.setMinimumWidth(560)
         self._show_slicer_state()
@@ -3628,6 +3632,7 @@ class PrintSettingsDialog(QDialog):
         self._show_foundation_note()
         # Harz ist kein Filament — dieselbe Zeile, das Wort des Verfahrens.
         self.filament_label.setText(tr("Material"))
+        self.refresh_materials()
         # Ohne Konsolenlauf ist Öffnen der einzige Weg — und damit der
         # Hauptknopf, gleich was das Projekt gemerkt hat.
         self._lead_handover(True)
@@ -3673,7 +3678,17 @@ class PrintSettingsDialog(QDialog):
         Anzeige.
         """
         names = [name for name in dict.fromkeys(materials) if name]
-        if names:
+        if self.session.profile.printer.is_resin:
+            # Harz hat keine Spule, die man wechseln könnte: Es gilt das Harz
+            # des Projekts.
+            fallback = self.session.project.document.material or profiles.DEFAULT_RESIN_MATERIAL
+            self.material_state.setText(
+                " + ".join(names) or f"{profiles.material(fallback).title} — {tr('Projektvorgabe')}"
+            )
+            self.material_state.setToolTip(
+                tr("Das Harz des Projekts. Mit ihm prüft Solidon Wände und Details.")
+            )
+        elif names:
             self.material_state.setText(" + ".join(names))
             self.material_state.setToolTip(
                 tr("Kommt aus den Körpern der Szene. Zum Ändern die Spule wechseln.")

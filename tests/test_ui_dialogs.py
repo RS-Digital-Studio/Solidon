@@ -806,3 +806,38 @@ def test_a_question_reads_a_foreign_title_literally(qt_app: QApplication) -> Non
     question = next((entry for entry in seen if marked in entry[0]), None)
     assert question is not None, seen
     assert question[1] == Qt.TextFormat.PlainText
+
+
+@pytest.mark.parametrize("which", ["discard", "unsaved"])
+def test_a_confirmation_reads_names_literally(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, which: str
+) -> None:
+    """§32: Schritt- und Projektnamen aus fremden Dateien sind Text, keine Auszeichnung.
+
+    Gemessen wird die Rückfrage, so wie sie vor ``exec`` steht: Haupt- und
+    Zusatztext tragen beide das Klartextformat, auch der Zusatztext, den
+    ``setTextFormat`` allein nicht erreicht.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QLabel, QMessageBox
+
+    from app.ui import dialogs
+
+    marked = '<span style="font-size:40pt">Alles weg</span>'
+    seen: list[tuple[str, Qt.TextFormat]] = []
+    real = dialogs.as_plain_text
+
+    def measured(box: QMessageBox) -> None:
+        real(box)
+        seen.extend((label.text(), label.textFormat()) for label in box.findChildren(QLabel))
+
+    monkeypatch.setattr(dialogs, "as_plain_text", measured)
+    monkeypatch.setattr(QMessageBox, "exec", lambda _box: int(QMessageBox.StandardButton.Cancel))
+    if which == "discard":
+        dialogs.confirm_discard(2, [marked])
+    else:
+        dialogs.confirm_unsaved(marked)
+
+    shown = [entry for entry in seen if "Alles weg" in entry[0]]
+    assert shown, seen
+    assert all(text_format == Qt.TextFormat.PlainText for _text, text_format in shown), shown

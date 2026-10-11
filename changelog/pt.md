@@ -130,6 +130,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A partir desta versão, um consumo descontado fica ligado à sua impressão, mesmo que uma atualização calcule mais depressa ou o perfil do fabricante mude no slicer. Antes contava como nova.
 - Onde cúpulas planas e rampas mostrariam degraus, o Solidon sugere camadas finas só aí. A sugestão indica quanto mais tempo a peça demora a imprimir.
 - Com uma impressora de resina, o diálogo de impressão mostra só impressora, material, placas e programa. A versão 0.5.3 mostrava também perfis e stock de filamento.
+- Depois de mudar de uma impressora de resina para uma de filamento, o projeto volta a imprimir com a largura de linha do bico. A versão 0.5.3 mantinha o píxel de 0,05 mm.
 
 ### Roscas, furos e peças normalizadas
 

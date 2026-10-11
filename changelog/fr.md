@@ -131,6 +131,7 @@ dans `website/version.json`.
 - Désormais, une consommation décomptée reste liée à son impression, même si une mise à jour calcule plus vite ou si le slicer change le profil du fabricant. Avant, l'impression comptait comme nouvelle.
 - Là où des dômes plats et des pentes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression de la pièce s'allonge.
 - Avec une imprimante résine, le dialogue d'impression ne montre plus qu'imprimante, matériau, plateaux et programme. La version 0.5.3 y affichait aussi profils et stock de filament.
+- Après le passage d'une imprimante résine à une imprimante à filament, le projet imprime de nouveau avec la largeur de ligne de la buse. La version 0.5.3 gardait le pixel de 0,05 mm.
 
 ### Filetages, perçages et pièces normalisées
 

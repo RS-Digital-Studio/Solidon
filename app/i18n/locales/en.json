@@ -1079,6 +1079,7 @@
   "Das Gewinde wird über ganze Umläufe gebaut und auf Länge geschnitten, die Maße bleiben, nur das Netz ändert sich.": "The thread is built over whole turns and cut to length, the dimensions stay, only the mesh changes.",
   "Das Glätten hat den Körper deutlich verkleinert, weil es an einem groben Netz die Ecken zusammenzieht.": "Smoothing shrank the body considerably, because on a coarse mesh it pulls the corners together.",
   "Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch.": "A greyscale image used as a height map. Lighter areas are raised higher.",
+  "Das Harz des Projekts. Mit ihm prüft Solidon Wände und Details.": "The project's resin. Solidon checks walls and details with it.",
   "Das Hauptfenster mit einem geladenen Modell im Viewport, dem Objektbaum links und dem Prüfbericht rechts.": "The main window with a loaded model in the viewport, the object tree on the left and the report on the right.",
   "Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht": "The Solidon3D main window with model, history and report",
   "Das Herstellerprofil baut einen Reinigungsturm, und damit rundet {slicer} den *Abstand oben und unten* auf ganze Schichten.": "The manufacturer profile builds a prime tower, so {slicer} rounds the *Gap above and below* to whole layers.",

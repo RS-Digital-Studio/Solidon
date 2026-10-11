@@ -948,6 +948,10 @@ def for_process(
     """
     if settings is None or profile.printer.is_resin:
         return profile
+    from app.core.knowledge.print_settings import native_line_widths
+
+    # Ein Rest von Harz ist keine Grundlage dieses Druckers.
+    settings = native_line_widths(settings, profile.printer)
     printer = replace(
         profile.printer,
         layer_height=settings.layers.layer_height,
