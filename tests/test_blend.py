@@ -471,6 +471,105 @@ def test_the_banded_field_computes_only_near_the_surface(monkeypatch: pytest.Mon
     assert sum(asked) < 0.5 * len(points), f"{sum(asked)} von {len(points)} genau gerechnet"
 
 
+def test_a_group_outside_the_band_takes_its_sign_only_from_an_agreeing_rim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nachprüfung F, T2-1: Eine Gruppe außerhalb des Bands nahm das Vorzeichen ihres
+    ersten Randpunkts in fester Folge der Achsen.
+
+    Trug gerade er ein falsches — die Art, die RM-769 beschreibt, am Besenhalter
+    einer von 351 120 Punkten —, kippte die ganze Gruppe, hier das ganze Äußere
+    nach innen. Jetzt gilt das Vorzeichen des Rands nur, wenn alle seine Punkte
+    sich einig sind; sonst entscheidet **ein** genau gerechneter Punkt der
+    Gruppe, denn in ihr wechselt das Vorzeichen nicht. Jeden Punkt genau zu
+    rechnen kostete an gekreuzten Rohren 5,0 statt 0,04 s, ohne Abbruch (Review
+    Blend, M1) — gezählt wird deshalb, wie viele Punkte genau rechnen. Gekippt
+    wird die ganze Lage links des Quaders, denn dort sucht die Folge zuerst.
+    """
+    box = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    axis = np.arange(-16.0, 16.0 + 1e-9, 2.0)
+    shape = (len(axis),) * 3
+    points = np.stack(np.meshgrid(axis, axis, axis, indexing="ij"), axis=-1).reshape(-1, 3)
+    exact = blend.distance_field(box, points, 2.0)
+    far = np.abs(exact) > 5.0
+    surface = blend._Surface.of(box, 2.0)
+    value = 9.0
+    asked: list[int] = []
+    signed = blend._Surface.signed
+
+    def counted(self: blend._Surface, where: np.ndarray, candidates: np.ndarray) -> np.ndarray:
+        asked.append(len(where))
+        return signed(self, where, candidates)
+
+    monkeypatch.setattr(blend._Surface, "signed", counted)
+    agreed = exact.copy()
+    blend._signs_from_the_band(surface, agreed, far, points, shape, value)
+    assert np.array_equal(agreed[far], np.where(exact[far] > 0.0, value, -value)), "einig: ±value"
+    assert sum(asked) == 0, "einig rechnet keinen Punkt genau"
+
+    torn = exact.copy()
+    left = ~far & (points[:, 0] < -10.0)
+    torn[left] = np.abs(torn[left])
+    blend._signs_from_the_band(surface, torn, far, points, shape, value)
+
+    outside = far & (exact < 0.0)
+    inside = far & (exact > 0.0)
+    assert outside.any() and inside.any()
+    assert np.array_equal(torn[outside], np.full(int(outside.sum()), -value)), "außen bleibt außen"
+    assert np.array_equal(torn[inside], np.full(int(inside.sum()), value)), "das Innere ist einig"
+    assert sum(asked) == 1, f"{sum(asked)} Punkte genau gerechnet statt einem für die Gruppe"
+
+
+def _hollow(outer: trimesh.Trimesh, inner: trimesh.Trimesh) -> MeshData:
+    """``outer`` mit ``inner`` als eingeschlossenem Hohlraum (nach innen gewickelt)."""
+    hole = inner.copy()
+    hole.invert()
+    return MeshData.of(trimesh.util.concatenate([outer, hole]))
+
+
+def _cavity_case(case: str) -> tuple[trimesh.Trimesh, trimesh.Trimesh, trimesh.Trimesh, float]:
+    """Außenkörper, Hohlraum, Partner daneben und das Volumen des Hohlraums von außen."""
+    if case == "hollow_ball":
+        outer = trimesh.creation.icosphere(subdivisions=4, radius=20.0)
+        inner = trimesh.creation.icosphere(subdivisions=4, radius=12.0)
+        other = trimesh.creation.icosphere(subdivisions=3, radius=8.0)
+        other.apply_translation((24.0, 0.0, 0.0))
+        volume = 4.0 / 3.0 * np.pi * 12.0**3
+    else:
+        outer = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+        inner = trimesh.creation.box(extents=(20.0, 10.0, 8.0))
+        other = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        other.apply_translation((24.0, 0.0, -5.0))
+        volume = 20.0 * 10.0 * 8.0
+    for body in (outer, inner, other):
+        body.apply_translation((0.0, 0.0, 20.0))
+    return outer, inner, other, float(volume)
+
+
+@pytest.mark.parametrize("case", ["hollow_ball", "box_with_cavity"])
+def test_a_closed_cavity_stays_a_cavity_when_blended(case: str, profile: Profile) -> None:
+    """Fund der Nachprüfung F (Teil 2), vorbestehend seit v0.1.1.
+
+    Nach Marching Cubes wendete ``fix_normals()`` bei mehr als einer Schale jede
+    für sich nach außen, auch die eines eingeschlossenen Hohlraums: Eine
+    Hohlkugel mit einer Kugel daneben kam mit 42 473 statt 28 089 mm³ heraus,
+    der Hohlraum als zweiter Körper, und der Schritt meldete
+    ``blend.still_apart``. Sollwert von außen: derselbe Körper ohne Hohlraum
+    verschmolzen, weniger dem Volumen des Hohlraums, auf das Raster genau —
+    Marching Cubes schneidet die Ecken des Hohlraums an (gemessen 0,6 und
+    1,5 % zu wenig).
+    """
+    outer, inner, other, cavity = _cavity_case(case)
+
+    hollow = run(_hollow(outer, inner), MeshData.of(other), profile, radius=2.0, grid=1.0)
+    full = run(MeshData.of(outer), MeshData.of(other), profile, radius=2.0, grid=1.0)
+
+    merged = hollow.outputs[0].mesh
+    assert merged.is_watertight and merged.component_count == 2, "Körper und Hohlraum"
+    assert full.outputs[0].mesh.volume - merged.volume == pytest.approx(cavity, rel=0.02)
+    assert "blend.still_apart" not in {finding.code for finding in hollow.findings}
+
+
 def test_a_curved_body_keeps_its_volume_when_blended(profile: Profile) -> None:
     """Und die Gegenprobe: An Rundungen ändert sich nichts Wesentliches.
 

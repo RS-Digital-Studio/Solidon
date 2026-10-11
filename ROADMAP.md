@@ -116,6 +116,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-767 — An CAD-Netzen mit Facettenstreifen und Nadelfächern bleibt das Angleichen splittrig](#rm-767) | Geometrie, Erkennung und Druckvorbereitung | Paket F: Besenhalter 89 %, Würfel W6 83 % Splitter; Vorschlag: je Ebene neu vernetzen |
 | [RM-769 — Das Abstandsfeld prüft nicht, ob das nächste Dreieck unter seinen Bewerbern ist](#rm-769) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671 (Rest von M3): an CAD-Nadelfächern bis 0,19 mm zu weit, ein Vorzeichen falsch |
 | [RM-778 — Kleine Teile entfernen schließt auch bewusst offene Öffnungen](#rm-778) | Geometrie, Erkennung und Druckvorbereitung | Nachstellen am Kundenweg, dann Öffnungen mit Absicht von Löchern im Netz trennen |
+| [RM-780 — *Weich verschmelzen* warnt „unverbunden“, wenn ein Eingang schon aus zwei Körpern besteht](#rm-780) | Geometrie, Erkennung und Druckvorbereitung | Review Blend (G2), vorbestehend: `blend.still_apart` vergleicht mit einem Körper statt mit den Körpern der Eingänge |
+| [RM-781 — Ein Eingang mit falsch gewickeltem Hohlraum wird beim Verschmelzen zur Kugel in einem neuen Hohlraum](#rm-781) | Geometrie, Erkennung und Druckvorbereitung | Review Blend (G3), vorbestehend: `blend._grid` hält die mehrdeutige Lage nicht an (Regel 21) |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -3881,6 +3883,33 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Entlüftung) bauen, Ursache im Reparaturweg finden.
   **Abnahme:** Eine bewusst offene Öffnung bleibt offen, lose Teile verschwinden weiter; Test
   gegen den Korpus.
+
+<a id="rm-780"></a>
+
+- [ ] **RM-780 — *Weich verschmelzen* warnt „unverbunden“, wenn ein Eingang schon aus zwei Körpern besteht.**
+  Review Blend (G2), vorbestehend: `blend.still_apart` meldet, sobald das Ergebnis mehr als einen
+  Körper trägt (seit dem Hohlraum-Fix zählen Hohlräume nicht mit, `blend._bodies_in`). Bringt ein
+  Eingang schon zwei Körper mit — eine Kugel als Insel im Hohlraum, zwei Teile in einem Objekt —,
+  steht „Die Körper liegen weiter auseinander, als der Übergang breit ist“, obwohl beide Eingänge
+  verbunden sind (Sonde `insel_im_hohlraum`: `components = 2`). Vorschlag: melden, wenn das
+  Ergebnis mehr Körper trägt als beide Eingänge zusammen weniger einem.
+  **Abnahme:** Test Hohlkugel mit Insel und Kugel daneben ohne Warnung, zwei getrennte Kugeln
+  weiter mit Warnung, Gegenprobe am Stand davor rot.
+
+<a id="rm-781"></a>
+
+- [ ] **RM-781 — Ein Eingang mit falsch gewickeltem Hohlraum wird beim Verschmelzen zur Kugel in einem neuen Hohlraum.**
+  Review Blend (G3), vorbestehend: Eine positive Schale im Material einer positiven hält
+  `blend._grid` nicht an. Das Feld liest die innere Schale als Material, und an der Mittelfläche
+  entsteht ein neuer Hohlraum (Sonde `hohlraum_falsch_gewickelt`: Kugel in einem Hohlraum vom
+  Radius etwa 16, Schalen +35 281 / −17 106 / +7 192 mm³, dazu `still_apart`); bis zum
+  Hohlraum-Fix kamen drei einander durchdringende Schalen. Keines fragt (Regel 21), obwohl
+  `repair.turn_shells_outward` dieselbe Lage mehrdeutig nennt (`parts_inside_parts`). Am selben
+  Ort wird ein ganz verkehrt gewickelter Eingang zwar abgewiesen, aber unter „Das Modell ist an
+  mehreren Stellen offen“, obwohl er geschlossen ist.
+  **Abnahme:** Test mit falsch gewickeltem Hohlraum hält mit Rückfrage und Handlungsvorschlag an,
+  der ganz verkehrt gewickelte Eingang bekommt den passenden Titel, Gegenprobe am Stand davor rot,
+  druckgleich an den Beispielprojekten.
 
 ## Bedienung und Darstellung
 

@@ -173,6 +173,7 @@ it into `website/version.json`.
 - When mirroring, the plane lies where the body matches itself, even when one part sticks far out to the side.
 - Sculpting follows the mouse smoothly, and even a step with hundreds of brush strokes is calculated quickly.
 - With *Blend together*, the mesh comes out even, with hardly any thin slivers. A part on the print bed no longer reaches below it.
+- A body with an enclosed cavity keeps it with *Blend together*. Since version 0.1.1 the cavity became a second body, and the step reported unconnected parts.
 - With *Even out the triangles*, no edge is longer than the length you set, and the shape stays the same. The same edge often gives nearly twice as many triangles; a longer one keeps the old density.
 - In *Armature*, every click after the first sets a bone, Enter ends the chain, dragging a joint bends it, and *Done* saves everything without a dialog.
 - An armature bends only what hangs on its bones, and the rest of the body stays put. Older projects calculate as saved.

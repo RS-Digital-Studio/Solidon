@@ -174,6 +174,7 @@ dans `website/version.json`.
 - En miroir, le plan passe là où le corps se correspond, même si une partie dépasse loin sur le côté.
 - Sculpter suit la souris avec fluidité, et même une étape de centaines de coups de pinceau se calcule vite.
 - Avec *Fusionner en douceur*, le maillage est régulier, presque sans éclats fins. Une pièce posée sur le plateau d'impression ne passe plus en dessous.
+- Un corps avec une cavité fermée la garde avec *Fusionner en douceur*. Depuis la version 0.1.1, la cavité devenait un second corps et l'étape signalait des pièces non reliées.
 - Avec *Uniformiser les triangles*, aucune arête ne dépasse la longueur voulue, sans changer la forme. La même arête donne souvent près du double de triangles ; une plus longue garde la densité d'avant.
 - Dans *Squelette*, chaque clic après le premier pose un os, Entrée termine la chaîne, glisser une articulation la plie, et *Terminé* enregistre tout sans dialogue.
 - Un squelette ne plie que ce qui tient à ses os, le reste du corps ne bouge pas. Les anciens projets se calculent comme enregistrés.
