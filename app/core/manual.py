@@ -263,12 +263,13 @@ def _where_to_start_page() -> Page:
             _(
                 "**Welche Dateien Solidon öffnet:** STL, 3MF, OBJ, PLY, OFF, GLB, GLTF, STEP "
                 "und STP als Modell, SVG und DXF als Zeichnung zum Hochziehen. Steht in der "
-                "Datei keine Einheit, wie bei STL, fragt Solidon nach; fast alles im Netz ist "
+                "Datei keine Einheit, wie bei STL, schließt Solidon sie aus der Größe und "
+                "fragt nur, wenn das nicht eindeutig ist. Fast alles im Netz ist "
                 "in Millimetern. Große Dateien liest Solidon im Hintergrund, das Fenster bleibt "
                 "bedienbar. Eine direkte Adresse einer Modelldatei ziehen Sie aus dem Browser "
                 "auf das Fenster oder öffnen sie über *Datei → Modell aus dem Netz …*. Bei "
-                "einer Modellseite bietet Solidon die gefundenen Dateien zur Auswahl an; "
-                "geschützte Downloads laden Sie im Browser herunter und öffnen die lokale "
+                "einer Modellseite bietet Solidon die gefundenen Dateien zur Auswahl an. "
+                "Geschützte Downloads laden Sie im Browser herunter und öffnen die lokale "
                 "Datei."
             )
         ),
