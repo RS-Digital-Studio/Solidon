@@ -20,56 +20,63 @@ scrive in `website/version.json`.
 ### Uso e sistema
 
 - La demo ora funziona fino al 30 novembre 2026. Solidon3D 1.0 è prevista per il 1º dicembre e i tuoi progetti restano.
-- Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi può installarlo gratuitamente.
+- Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi riceve macOS 14 gratuitamente.
 - Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.
 - Sui Mac Intel, Solidon ora segnala quando un raccordo o uno smusso su un corpo esatto non si può costruire. La versione 0.5.3 si chiudeva in quel momento.
-- Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
-- Su Mac, Invio apre la voce selezionata nella schermata iniziale, in *Cerca funzione* e nel rapporto di verifica.
-- Su Linux, la scrittura con Fcitx5 e IBus arriva ora nel campo di testo anche nel Flatpak e nell'AppImage.
-- La disinstallazione su Windows non lascia nel registro voci dell'associazione dei file.
-- Canc funziona anche quando la linguetta *Selezione* ha il focus, e rimuove più corpi contrassegnati in un solo passaggio. Se il tasto non fa nulla, la barra di stato ne dice il motivo.
-- Il clic destro sui corpi offre *Rimuovi oggetto* e, con più corpi, *Unisci*. *Svuota* c'è anche su una faccia selezionata, che diventa l'apertura.
 - I pannelli a sinistra e a destra si spostano con la maniglia, si agganciano a un bordo o restano sospesi. *Vista → Pannelli al loro posto* li rimette a posto.
 - I pannelli si possono disporre anche in basso a sinistra, in basso a destra e lungo il bordo inferiore.
 - Le linguette si riordinano e si trascinano in finestre proprie, anche su un secondo schermo. Chiudi la finestra o usa *Torna in Solidon* per riportare il contenuto.
 - Solidon ricorda la disposizione. Le finestre restano raggiungibili anche quando uno schermo viene scollegato.
+- Canc funziona anche quando la linguetta *Selezione* ha il focus, e rimuove più corpi contrassegnati in un solo passaggio. Se il tasto non fa nulla, la barra di stato ne dice il motivo.
+- Il clic destro sui corpi offre *Rimuovi oggetto* e, con più corpi, *Unisci*. *Svuota* c'è anche su una faccia selezionata, che diventa l'apertura.
+- Il pulsante *Filamenti* sta ora nell'intestazione. Elenca i filamenti del progetto e porta al magazzino filamenti.
+- Un altro filamento cambia solo il colore, anche su blocchi e corpi STEP. La forma non viene ricalcolata. I corpi selezionati mostrano il colore del filamento sotto l'evidenziazione.
+- Nella linguetta *Selezione*, il campo del filamento assegna solo con un clic o Invio. Le frecce e la digitazione scorrono soltanto l'elenco, e la rotellina scorre la linguetta.
+- In spagnolo, francese, italiano e portoghese, *Nuovo filamento* non scorre più di lato quando la finestra è più bassa del suo contenuto.
 - Durante il ricalcolo, il rapporto di verifica dice *Ricalcolo in corso …* e mostra le righe di prima come stato precedente. Finora i vecchi errori sembravano ancora validi.
 - Se il calcolo rapido fallisce in un passaggio, Solidon lo ricalcola a fondo nella stessa esecuzione invece di fermarsi.
 - Un rilievo che dice che un passaggio non ha avuto effetto apre quel passaggio sul campo giusto.
 - Dopo la rimozione di un corpo, il rapporto non ne parla più, e la cronologia mostra quali passaggi non lasciano più nulla.
 - Un foro selezionato non ricade più in silenzio sul suo corpo dopo il ricalcolo. Finora Canc poteva poi rimuovere l'intero corpo.
+- Dopo la riapertura di un progetto, il rapporto di verifica indica ancora in quale posto libero è finito un modello inserito.
+- L'avviso *Visualizzazione del modello …* scompare appena la vista è pronta e non resta più sopra il modello.
+- I messaggi su valori e forme non offrono più una segnalazione di errore. Compare solo quando l'errore è di Solidon.
+- La segnalazione di errore allega un registro di arresto anomalo solo dopo un vero arresto anomalo di Solidon.
+- Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Ogni funzione ha lo stesso nome ovunque. Lo strumento *Dividi* offre *Dividi lungo un piano*, *Dividi lungo una linea tracciata* e *Dividi in pezzi distinti*.
 - Sul corpo selezionato, *Dividi automaticamente …* si trova ora sotto *Prepara*.
 - Nella finestra a riposo solo *Blocchi* risalta a colori. Il rosso resta ai pulsanti che scartano o eliminano, e le domande si aprono con il focus su *Annulla*.
 - In modalità disegno la linguetta *Selezione* è nascosta. L'elenco dei vincoli mostra quelli dei punti e delle linee selezionati, più ogni conflitto.
 - Nella scheda dei parametri, una misura mostra «Non utilizzato» solo quando è così. Il pulsante dice quanti numeri fissi si possono collegare alle misure.
-- La segnalazione di errore allega un registro di arresto anomalo solo dopo un vero arresto anomalo di Solidon.
 - La scheda del tour è alta quanto i suoi passi. Un passo si apre con un clic o con la barra spaziatrice, e nessun fumetto copre più la vista.
 - Quando un passo del tour indica il rapporto di verifica, il tour resta visibile. La linguetta è incorniciata e il passo dice quale aprire.
 - Un clic sulla i accanto a un'azione nella linguetta *Selezione* apre il manuale nel punto in cui è spiegata.
 - Ogni quota di un blocco si può legare con fx a una quota del progetto, anche se non contiene ancora un'espressione.
 - Dopo aver trascinato la maniglia di un'anteprima, nessun numero resta sopra la vista. Un numero digitato durante il trascinamento sposta l'anteprima, non il corpo scelto.
 - Dopo *Ripara e riprova* e percorsi simili, la cronologia non chiama più «eliminato» un passaggio che continua a calcolare. Se la catena si ferma di nuovo, il passaggio è segnato.
-- Il pulsante *Filamenti* sta ora nell'intestazione. Elenca i filamenti del progetto e porta al magazzino filamenti.
-- Un altro filamento cambia solo il colore, anche su blocchi e corpi STEP. La forma non viene ricalcolata. I corpi selezionati mostrano il colore del filamento sotto l'evidenziazione.
-- Nella linguetta *Selezione*, il campo del filamento assegna solo con un clic o Invio. Le frecce e la digitazione scorrono soltanto l'elenco, e la rotellina scorre la linguetta.
-- Nelle versioni tradotte, *Nuovo filamento* non scorre più di lato quando la finestra è più bassa del suo contenuto.
+- Se fai clic su *Applica* mentre Solidon sta ancora calcolando, il passaggio nasce appena il calcolo è finito, e la barra di stato lo dice. Finora il clic andava perso.
+- Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
+- Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
+- Su Mac, Invio apre la voce selezionata nella schermata iniziale, in *Cerca funzione* e nel rapporto di verifica.
+- Su Linux, la scrittura con Fcitx5 e IBus arriva ora nel campo di testo anche nel Flatpak e nell'AppImage.
+- La disinstallazione su Windows non lascia nel registro voci dell'associazione dei file.
+
+### Più veloce e con meno memoria
+
+- Un progetto salvato con un modello grande si apre dopo un riavvio in uno o due secondi invece di mezzo minuto: le caratteristiche riconosciute restano memorizzate.
 - I modelli grandi si caricano molto più velocemente e richiedono meno memoria, anche con una cronologia lunga e su computer con 8 GB.
 - Un progetto salvato con molti passaggi su un modello grande si apre con molta meno memoria.
-- Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
-- Sui modelli con migliaia di caratteristiche, lo spostamento e gli altri passaggi che non cambiano la forma finiscono fino a due volte più in fretta.
-- Dopo la riapertura di un progetto, il rapporto di verifica indica ancora in quale posto libero è finito un modello inserito.
-- Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
-- Riparare e risolvere le sovrapposizioni è fino a quattro volte più veloce sui modelli grandi, ed esportare in 3MF è molto più veloce.
-- L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
-- L'avviso *Visualizzazione del modello …* scompare appena la vista è pronta e non resta più sopra il modello.
-- I messaggi su valori e forme non offrono più una segnalazione di errore. Compare solo quando l'errore è di Solidon.
-- Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
-- Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
-- Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo tecnico grande vengono riconosciute circa un terzo più velocemente.
 - Un modello aperto subito dopo l'avvio del programma è modificabile fino a un quarto prima.
 - Con uno slicer, un gioco o un rendering in esecuzione, i calcoli sui modelli grandi terminano in secondi anziché in minuti.
-- Un progetto salvato con un modello grande si apre dopo un riavvio in uno o due secondi invece di mezzo minuto: le caratteristiche riconosciute restano memorizzate.
+- Riparare e risolvere le sovrapposizioni è fino a quattro volte più veloce sui modelli grandi.
+- L’esportazione in 3MF è molto più veloce e rilegge i profili dello slicer solo se lì è cambiato qualcosa.
+- La finestra di stampa assegna i profili dello slicer molto più in fretta, all'apertura e dopo ogni cambio di slicer.
+- Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
+- Sui modelli con migliaia di caratteristiche, lo spostamento e gli altri passaggi che non cambiano la forma finiscono fino a due volte più in fretta.
+- Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo tecnico grande vengono riconosciute circa un terzo più velocemente.
+- Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
+- L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
+- Il rapporto di verifica calcola più velocemente e richiede meno memoria.
 
 ### Stampare e passare allo slicer
 
@@ -81,8 +88,6 @@ scrive in `website/version.json`.
 - Senza un profilo dello slicer memorizzato, esportazione e finestra principale usano quanto la finestra di stampa propone per la stampante, con macchina e processo del produttore.
 - Vengono offerti solo gli slicer con cui Solidon lavora, più gli slicer per resina come ChituBox e Lychee. Ora vale anche Bambu Studio come AppImage.
 - Il codice di avvio e il volume di stampa vengono solo dalla tua stampante, non da un altro modello della stessa serie.
-- La finestra di stampa assegna i profili dello slicer molto più in fretta, all'apertura e dopo ogni cambio di slicer.
-- L’esportazione 3MF rilegge i profili dello slicer solo se lì è cambiato qualcosa, ed è molto più veloce.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
 - Il controllo che supporti e skirt stiano sul piano ora misura solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
 - I suggerimenti accettati non lasciano quasi più senza supporto gli sbalzi che ne hanno bisogno. *Tenere liberi i canali* blocca solo lo spazio da cui un supporto non si potrebbe più togliere.
@@ -105,7 +110,7 @@ scrive in `website/version.json`.
 - Le impostazioni dei ponti, le pareti extra e il senso alternato valgono solo per il pezzo che ne ha bisogno. Gli altri pezzi dello stesso piatto si stampano come prima.
 - Senza profilo del produttore, PrusaSlicer e SuperSlicer stampano ora i ponti sottili. Dove un ponte ha bisogno di linee spesse e meno flusso, Solidon le propone per quel pezzo.
 - Dove Solidon propone più spazio sopra i supporti ad albero, propone anche una *Punta dell'albero* più larga. Ogni punta ha uno strato di interfaccia e sulle parti inferiori resta meno supporto.
-- Se molti piccoli sbalzi richiedono insieme supporti, come un mento con la parte inferiore inclinata, il rapporto indica ora il punto.
+- Se molti piccoli sbalzi richiedono insieme supporti, come su una parte inferiore inclinata, il rapporto indica ora il punto.
 - Un bordo stretto che si regge da solo non conta più come ponte lungo, nemmeno accanto a un altro sbalzo. Il rapporto non avvisa più lì e Solidon non chiede supporti per questo.
 - Sopra un canale il rapporto non consiglia più un supporto che poi non si potrebbe togliere. Nomina il canale e un raccordo sotto i 45 gradi.
 - Per il PETG Solidon suggerisce *Raffreddamento pieno sul supporto*. Così si stacca più facilmente dal pezzo.
@@ -116,7 +121,6 @@ scrive in `website/version.json`.
 - Il campo *Spazio verso l'alto* ora si chiama *Spazio sopra e sotto* e vale per entrambi i lati del supporto.
 - Se lo slicer rifiuta filamenti con temperature troppo diverse su un piatto, Solidon ora indica il motivo e la via d'uscita, invece di dire solo che non è stato creato alcun file.
 - Nella finestra di stampa, stampante, filamenti e qualità restano del tutto visibili anche con il testo ingrandito. Le etichette lunghe vanno a capo.
-- Il rapporto di verifica calcola più velocemente e richiede meno memoria.
 - Su Linux con Flatpak, Solidon ora segnala un arresto anomalo dello slicer come tale, invece di dire solo che non è stato creato alcun file.
 - Se un pezzo compensa già nel modello, con un foro con *Considera la tolleranza del materiale* o *Compensa il piede d'elefante*, Solidon propone che lo slicer non lo faccia di nuovo.
 - Anche con stampanti che PrusaSlicer o SuperSlicer non conoscono, entrambi stimano il tempo di stampa con le accelerazioni trasmesse, e il file indica il materiale della bobina.
@@ -139,7 +143,7 @@ scrive in `website/version.json`.
 - Il foro per la vite della sede per dado attraversa esattamente il pezzo, anche se spesso. Finora finiva 10 mm sotto la tasca o forava il lato opposto oltre una fessura.
 - Inserita da sotto, la sede per dado ha la tasca sotto la faccia e la fessura scende fino a essa. Finora la tasca stava per metà sopra, con la vite nella faccia.
 - Se il foro di un blocco non attraversa il pezzo, ora si chiama cieco. Finora si chiamava passante.
-- Se la parete è più spessa di quanto indicato per «Passacavo» o «Portagomma», il passaggio lo dice e apre lo spessore di parete. Finora il foro finiva in silenzio nel materiale.
+- Se la parete è più spessa di quanto indicato per *Passacavo con scarico di trazione* o *Portagomma*, il passaggio lo dice e apre lo spessore. Finora il foro finiva in silenzio nel materiale.
 - Le filettature esistono ora anche come filettature gas G e R, filettature in pollici UNC e UNF e NPT, nella *Filettatura stampabile*, su vite, dado e *Perno filettato*.
 - Ogni filettatura esiste anche sinistrorsa. Una misura personalizzata accetta filetti per pollice e più principi, anche in *Crea vite* e *Crea coperchio a vite*.
 - Quali serie di filettature mostrano gli elenchi delle misure si sceglie nelle Impostazioni, in *Serie di filettature negli elenchi*.
@@ -156,6 +160,7 @@ scrive in `website/version.json`.
 - Un blocco per una faccia o un foro viene calcolato solo quando ha il suo punto nella vista. Fino ad allora la finestra non si può applicare e dice che cosa manca.
 - Se la faccia cambia mentre la finestra di un blocco è aperta, il punto scelto resta finché vale ancora sulla nuova forma. Altrimenti il blocco ne cerca uno nuovo e lo segnala.
 - Una finestra di blocco aperta mentre il passo precedente sta ancora calcolando posiziona il blocco da sola appena arriva il risultato, e fino ad allora non si può applicare.
+- Nell'esempio *Blocchi — dadi, inserti, cavi* il cavo entra dal basso attraverso il fondo, e lo scarico di trazione sta dentro il contenitore. Finora pendeva sotto il piano di stampa.
 
 ### Modificare e disegnare
 
@@ -172,7 +177,7 @@ scrive in `website/version.json`.
 - Mentre si tira su, le misure si possono digitare. Un doppio clic sul passaggio apre le sue misure, e alla voce *Tipo* diventa un solido di rivoluzione o un campo di fori.
 - Dall'editor di schizzi, *Fatto* riporta nella vista e il clic successivo mette l'altezza. Esc mette da parte il contorno, Ctrl+Z lo riporta.
 - Se un nuovo passaggio non si può calcolare, la bozza resta nella vista e *Ripara e riprova* lo calcola senza un altro clic.
-- Per modellare ci sono quattro strumenti, ognuno con il suo pulsante e la sua scorciatoia. L'intensità è un livello da 1 a 10, e ripassare lo stesso punto non accumula più materiale.
+- In *Modella* ci sono quattro strumenti, ognuno con il suo pulsante e la sua scorciatoia. L'intensità è un livello da 1 a 10, e ripassare lo stesso punto non accumula più materiale.
 - Il pennello si adatta alle dimensioni del corpo. Se la mesh è troppo grossolana, *Modella* uniforma i triangoli al primo tratto, e un Ctrl+Z annulla entrambe le cose.
 - Nello specchiare il piano sta dove il corpo corrisponde a sé stesso, anche quando una parte sporge molto di lato.
 - Modellare segue il mouse in modo fluido, e anche un passaggio con centinaia di tratti di pennello si calcola in fretta.

@@ -45,56 +45,63 @@ Nutzen da und sonst nichts.
 ### Bedienung und System
 
 - Die Demo läuft jetzt bis zum 30. November 2026. Solidon3D 1.0 ist für den 1. Dezember geplant, Ihre Projekte bleiben erhalten.
-- Am Mac braucht Solidon jetzt macOS 14 oder neuer. Jeder Mac ab 2018 kann es kostenlos installieren.
+- Am Mac braucht Solidon jetzt macOS 14 oder neuer. Jeder Mac ab 2018 bekommt macOS 14 kostenlos.
 - Auf Intel-Macs mit macOS 26 startet Solidon jetzt. Version 0.5.3 blieb dort beim Start hängen.
 - Auf Intel-Macs meldet Solidon jetzt, wenn sich eine Verrundung oder Fase am exakten Körper nicht bauen lässt. Version 0.5.3 beendete sich dabei.
-- Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
-- Am Mac öffnet Return den gewählten Eintrag im Startbildschirm, in *Funktion suchen* und im Prüfbericht.
-- Unter Linux kommen Eingaben über Fcitx5 und IBus jetzt auch im Flatpak und im AppImage im Textfeld an.
-- Die Deinstallation unter Windows lässt keine Einträge der Dateizuordnung in der Registrierung zurück.
-- Entf wirkt auch, wenn der Reiter *Auswahl* den Fokus hat, und entfernt mehrere markierte Körper in einem Schritt. Tut die Taste nichts, nennt die Statuszeile den Grund.
-- Der Rechtsklick an Körpern bietet *Objekt entfernen* und bei mehreren *Vereinigen*. *Aushöhlen* steht auch an einer gewählten Fläche, sie wird die Öffnung.
 - Die Karten links und rechts lassen sich am Griff verschieben, an den Rand legen oder schweben lassen. *Ansicht → Karten an ihren Platz* legt sie zurück.
 - Die Karten lassen sich auch unten links, unten rechts und am unteren Rand anordnen.
 - Reiter lassen sich umordnen und in eigene Fenster ziehen, auch auf einen zweiten Bildschirm. Schließen oder *Zurück in Solidon* holt ihren Inhalt zurück.
 - Solidon merkt sich die Anordnung. Auch wenn ein Bildschirm fehlt, bleiben die Fenster erreichbar.
+- Entf wirkt auch, wenn der Reiter *Auswahl* den Fokus hat, und entfernt mehrere markierte Körper in einem Schritt. Tut die Taste nichts, nennt die Statuszeile den Grund.
+- Der Rechtsklick an Körpern bietet *Objekt entfernen* und bei mehreren *Vereinigen*. *Aushöhlen* steht auch an einer gewählten Fläche, sie wird die Öffnung.
+- Der Knopf *Filamente* steht jetzt in der Kopfzeile. Er listet die Filamente des Projekts und führt ins Filamentlager.
+- Ein anderes Filament ändert nur die Farbe, auch an Bausteinen und STEP-Teilen. Die Form wird dafür nicht neu berechnet. Gewählte Körper zeigen ihre Filamentfarbe unter der Markierung.
+- Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
+- Auf Spanisch, Französisch, Italienisch und Portugiesisch rollt *Neues Filament* nicht mehr seitwärts, wenn das Fenster kürzer ist als sein Inhalt.
 - Während neu gerechnet wird, sagt der Prüfbericht *Wird neu berechnet …* und zeigt die bisherigen Zeilen als vorigen Stand. Bisher sahen alte Fehler dabei aus, als gälten sie noch.
 - Scheitert die schnelle Rechnung an einem Schritt, rechnet Solidon ihn im selben Lauf gründlich nach, statt anzuhalten.
 - Sagt ein Befund, dass ein Schritt nichts bewirkt hat, öffnet er diesen Schritt mit dem passenden Feld.
 - Entfernen Sie einen Körper, spricht der Prüfbericht nicht mehr über ihn, und der Verlauf zeigt, welche Schritte danach nichts mehr hinterlassen.
 - Eine gewählte Bohrung fällt nach dem Neurechnen nicht mehr still auf ihren Körper zurück. Bisher konnte Entf danach den ganzen Körper entfernen.
+- Nach dem Wiederöffnen eines Projekts nennt der Prüfbericht weiter, an welche freie Stelle ein eingefügtes Modell kam.
+- Die Anzeige *Das Modell wird angezeigt …* verschwindet, sobald die Ansicht fertig ist, und bleibt nicht mehr über dem Modell stehen.
+- Meldungen zu Eingaben und Formen bieten keinen Fehlerbericht mehr an. Den gibt es nur noch, wo Solidon selbst einen Fehler gemacht hat.
+- Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.
+- Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Jede Funktion heißt überall gleich. Das Werkzeug *Teilen* bietet *An Ebene teilen*, *An gezeichneter Linie teilen* und *In Einzelteile aufteilen*.
 - Am gewählten Körper steht *Automatisch teilen …* jetzt unter *Vorbereiten*.
 - Im ruhenden Fenster ist nur *Bausteine* farbig hervorgehoben. Rot tragen nur Knöpfe, die etwas verwerfen oder löschen, und Rückfragen öffnen mit dem Fokus auf *Abbrechen*.
 - Im Zeichenmodus ist der Reiter *Auswahl* ausgeblendet. Die Liste der Bedingungen zeigt die der gewählten Punkte und Linien und jeden Widerspruch.
 - In der Parameterkarte steht unter einem Maß nur noch „Nicht verwendet“, wo das zutrifft. Wie viele feste Zahlen sich an Maße binden lassen, sagt der Knopf.
-- Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.
 - Die Karte der Tour ist so hoch wie ihre Schritte. Ein Schritt klappt per Klick oder Leertaste auf, und keine Sprechblase liegt mehr über der Ansicht.
 - Zeigt ein Tourschritt auf den Prüfbericht, bleibt die Tour sichtbar. Der Reiter ist gerahmt, und der Schritt sagt, welchen Reiter Sie öffnen.
 - Ein Klick auf das i neben einer Handlung im Reiter *Auswahl* öffnet das Handbuch an der Stelle, die sie erklärt.
 - Jedes Maß eines Bausteins lässt sich über fx an ein Projektmaß binden, auch wenn noch kein Ausdruck darin steht.
 - Nach dem Ziehen am Griff einer Vorschau bleibt keine Zahl über der Ansicht stehen. Eine dabei getippte Zahl verschiebt die Vorschau, nicht den gewählten Körper.
 - Nach *Reparieren und erneut versuchen* und verwandten Wegen heißt im Verlauf kein weiterrechnender Schritt mehr „gelöscht“. Hält die Kette erneut an, ist der Schritt markiert.
-- Der Knopf *Filamente* steht jetzt in der Kopfzeile. Er listet die Filamente des Projekts und führt ins Filamentlager.
-- Ein anderes Filament ändert nur die Farbe, auch an Bausteinen und STEP-Teilen. Die Form wird dafür nicht neu berechnet. Gewählte Körper zeigen ihre Filamentfarbe unter der Markierung.
-- Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
-- In den übersetzten Fassungen rollt *Neues Filament* nicht mehr seitwärts, wenn das Fenster kürzer ist als sein Inhalt.
+- Klicken Sie *Übernehmen*, während Solidon noch rechnet, entsteht der Schritt, sobald die Berechnung fertig ist, und die Statuszeile sagt das. Bisher ging der Klick verloren.
+- Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
+- Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
+- Am Mac öffnet Return den gewählten Eintrag im Startbildschirm, in *Funktion suchen* und im Prüfbericht.
+- Unter Linux kommen Eingaben über Fcitx5 und IBus jetzt auch im Flatpak und im AppImage im Textfeld an.
+- Die Deinstallation unter Windows lässt keine Einträge der Dateizuordnung in der Registrierung zurück.
+
+### Schneller und sparsamer
+
+- Ein gespeichertes Projekt mit einem großen Modell ist nach einem Neustart in ein, zwei Sekunden offen statt nach einer halben Minute: Die erkannten Merkmale bleiben gemerkt.
 - Große Modelle laden spürbar schneller und brauchen weniger Arbeitsspeicher, auch mit langem Verlauf und auf Rechnern mit 8 GB.
 - Ein gespeichertes Projekt mit vielen Schritten an einem großen Modell öffnet mit deutlich weniger Arbeitsspeicher.
-- Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
-- An Modellen mit Tausenden Merkmalen sind Verschieben und andere Schritte, die die Form nicht ändern, bis zu doppelt so schnell fertig.
-- Nach dem Wiederöffnen eines Projekts nennt der Prüfbericht weiter, an welche freie Stelle ein eingefügtes Modell kam.
-- Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
-- Reparieren und das Auflösen von Überschneidungen gehen an großen Modellen bis zu viermal so schnell, der Export als 3MF deutlich schneller.
-- Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
-- Die Anzeige *Das Modell wird angezeigt …* verschwindet, sobald die Ansicht fertig ist, und bleibt nicht mehr über dem Modell stehen.
-- Meldungen zu Eingaben und Formen bieten keinen Fehlerbericht mehr an. Den gibt es nur noch, wo Solidon selbst einen Fehler gemacht hat.
-- Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
-- Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
-- Nach einer Bohrung oder einem versetzten Merkmal sind die Merkmale eines großen technischen Teils rund ein Drittel schneller wieder erkannt.
 - Ein Modell, das Sie gleich nach dem Programmstart öffnen, ist bis zu ein Viertel schneller bearbeitbar.
 - Läuft nebenher ein Slicer, ein Spiel oder ein Rendering, kommen Rechnungen an großen Modellen in Sekunden statt in Minuten zurück.
-- Ein gespeichertes Projekt mit einem großen Modell ist nach einem Neustart in ein, zwei Sekunden offen statt nach einer halben Minute: Die erkannten Merkmale bleiben gemerkt.
+- Reparieren und das Auflösen von Überschneidungen gehen an großen Modellen bis zu viermal so schnell.
+- Der Export als 3MF ist deutlich schneller und liest die Profile des Slicers nur noch neu, wenn sich dort etwas geändert hat.
+- Der Druckdialog ordnet die Profile des Slicers deutlich schneller zu, beim Öffnen und nach jedem Slicerwechsel.
+- Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
+- An Modellen mit Tausenden Merkmalen sind Verschieben und andere Schritte, die die Form nicht ändern, bis zu doppelt so schnell fertig.
+- Nach einer Bohrung oder einem versetzten Merkmal sind die Merkmale eines großen technischen Teils rund ein Drittel schneller wieder erkannt.
+- Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
+- Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
+- Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -106,8 +113,6 @@ Nutzen da und sonst nichts.
 - Ohne gemerktes Slicerprofil nehmen Export und Hauptfenster, was der Druckdialog für den Drucker vorschlägt, samt Maschine und Prozess des Herstellers.
 - Zur Wahl stehen nur noch Slicer, mit denen Solidon arbeitet, dazu Resin-Slicer wie ChituBox und Lychee. Bambu Studio als AppImage zählt jetzt dazu.
 - Startcode und Bauraum kommen nur noch von genau Ihrem Drucker, nicht von einem anderen Modell derselben Reihe.
-- Der Druckdialog ordnet die Profile des Slicers deutlich schneller zu, beim Öffnen und nach jedem Slicerwechsel.
-- Ein 3MF-Export liest die Profile des Slicers nur noch neu, wenn sich dort etwas geändert hat, und ist damit deutlich schneller.
 - Die geschätzte Druckzeit liegt näher an der des Slicers, bei Teilen mit Stützen deutlich näher.
 - Ob Stützen und Skirt auf dem Bett Platz haben, misst die Prüfung nur noch unter den Überhängen. Teile nahe am Rand bekommen keine grundlose Warnung mehr.
 - Übernommene Vorschläge lassen kaum noch Überhänge ohne Stütze, die eine brauchen. *Kanäle frei halten* sperrt nur noch Raum, aus dem keine Stütze mehr herauskäme.
@@ -130,7 +135,7 @@ Nutzen da und sonst nichts.
 - Brückenwerte, Zusatzwände und die wechselnde Richtung gelten nur für das Teil, das sie braucht. Die anderen Teile derselben Platte drucken unverändert.
 - Ohne Herstellerprofil drucken PrusaSlicer und SuperSlicer Brücken jetzt dünn. Wo eine Brücke dicke Bahnen und weniger Fluss braucht, schlägt Solidon sie für dieses Teil vor.
 - Wo Solidon mehr Abstand über Baumstützen vorschlägt, schlägt es auch eine breitere *Baumspitze* vor. Dann sitzt auf jeder Spitze eine Trennschicht, und an Unterseiten bleibt weniger Stütze hängen.
-- Verlangen viele kleine Überhänge zusammen Stützen, etwa an einem Kinn mit schräger Unterseite, nennt der Prüfbericht jetzt die Stelle.
+- Verlangen viele kleine Überhänge zusammen Stützen, etwa an einer schrägen Unterseite, nennt der Prüfbericht jetzt die Stelle.
 - Ein schmaler Rand, der sich selbst trägt, gilt nicht mehr als lange Brücke, auch neben einem anderen Überhang. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.
 - Über einem Kanal rät der Prüfbericht nicht mehr zu einer Stütze, die dort nicht mehr herauskäme. Er nennt den Kanal und den Übergang unter 45 Grad.
 - Für PETG schlägt Solidon *Volle Kühlung an der Stütze* vor. Sie löst sich so leichter vom Teil.
@@ -141,7 +146,6 @@ Nutzen da und sonst nichts.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
-- Der Prüfbericht rechnet schneller und braucht weniger Arbeitsspeicher.
 - Unter Linux mit Flatpak meldet Solidon einen Absturz des Slicers jetzt als Absturz, statt nur zu sagen, dass keine Druckdatei entstand.
 - Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
@@ -164,7 +168,7 @@ Nutzen da und sonst nichts.
 - Das Schraubenloch der Mutternfalle geht genau durch das Teil, auch durch ein dickes. Bisher endete es 10 mm unter der Tasche oder bohrte jenseits eines Spalts in die Gegenseite.
 - Von unten eingelegt liegt die Tasche der Mutternfalle unter der Fläche, ihr Schlitz führt hinab. Bisher saß sie halb darüber, die Schraube in der Fläche.
 - Reicht die Bohrung eines Bausteins nicht durch das Teil, heißt sie jetzt Sackloch. Bisher hieß sie Durchgang.
-- Ist die Wand dicker als bei *Kabeldurchführung* oder *Schlauchtülle* eingetragen, sagt der Schritt es und öffnet die Wandstärke. Bisher endete der Durchgang still im Material.
+- Ist die Wand dicker als bei *Kabeldurchführung mit Zugentlastung* oder *Schlauchtülle* eingetragen, sagt der Schritt es und öffnet die Wandstärke. Bisher endete der Durchgang still im Material.
 - Gewinde gibt es jetzt auch als Rohrgewinde G und R, als Zollgewinde UNC und UNF und als NPT, im *Druckbaren Gewinde*, an Schraube, Mutter und *Gewindebolzen*.
 - Jedes Gewinde gibt es auch links. Ein eigenes Maß nimmt Gänge je Zoll und mehrere Gänge, auch bei *Schraube erstellen* und *Drehdeckel erzeugen*.
 - Welche Gewindereihen die Größenlisten zeigen, stellen Sie in den Einstellungen unter *Gewindereihen in den Auswahllisten* ein.
@@ -181,10 +185,11 @@ Nutzen da und sonst nichts.
 - Ein Baustein für Fläche oder Bohrung rechnet erst, wenn er seine Stelle im Bild hat. Bis dahin lässt sich der Dialog nicht übernehmen und sagt, was fehlt.
 - Ändert sich die Fläche unter einem offenen Bausteindialog, bleibt die gewählte Stelle, solange sie auf der neuen Form noch hält. Sonst sucht der Baustein eine neue und sagt es.
 - Ein Bausteindialog, der öffnet, während der vorige Schritt noch rechnet, setzt den Baustein selbst, sobald das Ergebnis da ist, und lässt sich bis dahin nicht übernehmen.
+- Im Beispiel *Bausteine — Muttern, Buchsen, Kabel* kommt das Kabel von unten durch den Boden, und die Zugentlastung sitzt im Gehäuse. Bisher hing sie unter dem Druckbett.
 
 ### Bearbeiten und Zeichnen
 
-- Verschieben Sie ein Merkmal, reist sein Material mit, wie es ist, und die alte Stelle wird sauber gefüllt. Wo das nicht geht, sagt es die Auswahl gleich.
+- Mit *Merkmal verschieben* reist das Material des Merkmals mit, wie es ist, und die alte Stelle wird sauber gefüllt. Wo das nicht geht, sagt es die Auswahl gleich.
 - An Wulst und Kehle bietet die Auswahl nur noch an, was die Operation auch ausführt.
 - Liegt neben einer Wand eine Verrundung, sagt *Formschräge anstellen* vor der Rechnung, dass sie im Weg ist, und nennt *Merkmal entfernen* als Ausweg.
 - Schneiden Sie einen Teil des Körpers weg, verschwinden auch Fasen, Gewinde und Mutterntaschen von Bausteinen, die darin lagen.

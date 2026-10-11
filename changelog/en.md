@@ -20,56 +20,63 @@ it into `website/version.json`.
 ### Operation and system
 
 - The demo now runs until 30 November 2026. Solidon3D 1.0 is planned for 1 December, and your projects are kept.
-- On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on can install it for free.
+- On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on gets macOS 14 for free.
 - Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.
 - On Intel Macs, Solidon now reports when a fillet or chamfer on an exact body cannot be built. Version 0.5.3 quit at that point.
-- On the Mac, *Cancel* stops a running answer from the local model at once.
-- On the Mac, Return opens the selected entry on the start screen, in *Search functions* and in the report.
-- On Linux, input through Fcitx5 and IBus now reaches the text field in the Flatpak and the AppImage too.
-- Uninstalling on Windows removes all of Solidon's file association entries.
-- Del also works while the *Selection* tab has focus, and it removes several marked bodies in one step. When the key does nothing, the status bar gives the reason.
-- Right-clicking bodies offers *Remove object* and, for several, *Unite*. *Hollow out* is also available on a selected face, which becomes the opening.
 - The left and right panels can be moved by their handle, docked to an edge or left floating. *View → Panels back to their place* puts them back.
 - Panels can also be placed at the bottom left, bottom right and along the bottom edge.
 - Tabs can be reordered or dragged into their own windows, also on a second screen. Closing the window or *Return to Solidon* brings the content back.
 - Solidon remembers the layout. The windows stay within reach even when a screen is disconnected.
+- Del also works while the *Selection* tab has focus, and it removes several marked bodies in one step. When the key does nothing, the status bar gives the reason.
+- Right-clicking bodies offers *Remove object* and, for several, *Unite*. *Hollow out* is also available on a selected face, which becomes the opening.
+- The *Filaments* button now sits in the header. It lists the project's filaments and leads to the filament inventory.
+- A different filament only changes the colour, on parts and STEP bodies too. The shape is not recalculated for it. Selected bodies show their filament colour beneath the highlight.
+- In the *Selection* tab, the filament field assigns only on a click or Enter. Arrow keys and typing just browse, and the mouse wheel scrolls the tab.
+- In Spanish, French, Italian and Portuguese, *New filament* no longer scrolls sideways when the window is shorter than its content.
 - While Solidon recalculates, the report says *Recalculating …* and shows the previous lines as the earlier state. Until now, old errors looked as if they still applied.
 - If the quick calculation fails at a step, Solidon calculates it thoroughly in the same run instead of stopping.
 - A finding that says a step had no effect opens that step at the matching field.
 - Once you remove a body, the report no longer talks about it, and the history shows which steps leave nothing behind.
 - A selected hole no longer falls back silently to its body after recalculation. Until now, Del could then remove the whole body.
+- After reopening a project, the report still says which free spot an inserted model went to.
+- The notice *Displaying the model …* disappears as soon as the view is ready and no longer stays over the model.
+- Messages about inputs and shapes no longer offer an error report. It is only offered where Solidon itself made a mistake.
+- The error report attaches a crash log only when Solidon actually crashed.
+- An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - Every function has the same name everywhere. The *Split* tool offers *Split at a plane*, *Split along a drawn line* and *Split into separate parts*.
 - On the selected body, *Split automatically …* now sits under *Prepare*.
 - In the resting window only *Parts* is highlighted in colour. Red is kept for buttons that discard or delete, and confirmations open with the focus on *Cancel*.
 - In sketch mode the *Selection* tab is hidden. The list of constraints shows those of the selected points and lines, plus any conflict.
 - In the parameter card, a dimension shows “Not used” only where that is true. The button says how many fixed numbers can be bound to dimensions.
-- The error report attaches a crash log only when Solidon actually crashed.
 - The tour card is as tall as its steps. A step unfolds with a click or the space bar, and no tooltip bubble covers the view any more.
 - When a tour step points at the report, the tour stays visible. The tab is framed, and the step tells you which tab to open.
 - Clicking the i next to an action in the *Selection* tab opens the manual where that action is explained.
 - Every dimension of a part can be bound to a project dimension with fx, even before it holds an expression.
 - After dragging the handle of a preview, no number stays above the view. A number typed during the drag moves the preview, not the selected body.
 - After *Repair and try again* and similar ways, the history no longer calls a step that keeps working “deleted”. If the chain stops again, that step is marked.
-- The *Filaments* button now sits in the header. It lists the project's filaments and leads to the filament inventory.
-- A different filament only changes the colour, on parts and STEP bodies too. The shape is not recalculated for it. Selected bodies show their filament colour beneath the highlight.
-- In the *Selection* tab, the filament field assigns only on a click or Enter. Arrow keys and typing just browse, and the mouse wheel scrolls the tab.
-- In the translated versions, *New filament* no longer scrolls sideways when the window is shorter than its content.
+- If you click *Apply* while Solidon is still calculating, the step is created as soon as the calculation is done, and the status bar says so. Until now the click was lost.
+- In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
+- On the Mac, *Cancel* stops a running answer from the local model at once.
+- On the Mac, Return opens the selected entry on the start screen, in *Search functions* and in the report.
+- On Linux, input through Fcitx5 and IBus now reaches the text field in the Flatpak and the AppImage too.
+- Uninstalling on Windows removes all of Solidon's file association entries.
+
+### Faster and lighter on memory
+
+- A saved project with a large model now opens in a second or two after a restart instead of half a minute: the recognised features are kept.
 - Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.
 - A saved project with many steps on a large model opens with much less memory.
-- Even in a long history, a new step takes hardly longer to calculate than the first.
-- On models with thousands of features, moving and other steps that leave the shape unchanged finish up to twice as fast.
-- After reopening a project, the check report still says which free spot an inserted model went to.
-- Undo and redo are faster, and memory that is no longer needed is freed right away.
-- Repairing and resolving overlaps are up to four times as fast on large models, and exporting as 3MF is considerably faster.
-- The workspace appears faster when opening large 3MF files.
-- The notice *Displaying the model …* disappears as soon as the view is ready and no longer stays over the model.
-- Messages about inputs and shapes no longer offer an error report. It is only offered where Solidon itself made a mistake.
-- An added model is in view afterwards, even when it lands next to a model you zoomed in on.
-- In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
-- After a hole or a moved feature, the features of a large technical part are recognised about a third faster.
 - A model you open right after starting the program is ready to edit up to a quarter sooner.
 - With a slicer, a game or a render running alongside, calculations on large models finish in seconds instead of minutes.
-- A saved project with a large model now opens in a second or two after a restart instead of half a minute: the recognised features are kept.
+- Repairing and resolving overlaps are up to four times as fast on large models.
+- Exporting as 3MF is considerably faster and only rereads the slicer's profiles when something changed there.
+- The print dialog matches the slicer's profiles much faster, when opening and after every slicer change.
+- Even in a long history, a new step takes hardly longer to calculate than the first.
+- On models with thousands of features, moving and other steps that leave the shape unchanged finish up to twice as fast.
+- After a hole or a moved feature, the features of a large technical part are recognised about a third faster.
+- Undo and redo are faster, and memory that is no longer needed is freed right away.
+- The workspace appears faster when opening large 3MF files.
+- The report calculates faster and needs less memory.
 
 ### Printing and slicer handover
 
@@ -81,8 +88,6 @@ it into `website/version.json`.
 - Without a saved slicer profile, export and main window use what the print dialog suggests for the printer, including the manufacturer's machine and process.
 - Only slicers Solidon works with are offered, plus resin slicers such as ChituBox and Lychee. Bambu Studio as an AppImage now counts too.
 - Start code and build volume come only from exactly your printer, not from another model of the same series.
-- The print dialog matches the slicer's profiles much faster, when opening and after every slicer change.
-- A 3MF export only rereads the slicer's profiles when something changed there, which makes it considerably faster.
 - The estimated print time is closer to the slicer's, much closer for parts with supports.
 - Whether supports and skirt fit on the bed is now measured only under the overhangs. Parts near the edge no longer get a needless warning.
 - Accepted suggestions hardly leave any overhang that needs support without it. *Keep channels clear* now only blocks space a support could never be removed from.
@@ -105,9 +110,9 @@ it into `website/version.json`.
 - Bridge settings, extra walls and the alternating direction apply only to the part that needs them. The other parts on the same plate print as before.
 - Without a manufacturer profile, PrusaSlicer and SuperSlicer now print bridges thin. Where a bridge needs thick lines and less flow, Solidon suggests them for that part.
 - Where Solidon suggests more clearance above tree supports, it also suggests a wider *Tree tip*. Every tip then carries an interface layer, and less support sticks to undersides.
-- When many small overhangs need supports together, such as a chin with a sloped underside, the check report now names the spot.
-- A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The check report no longer warns there, and Solidon asks for no supports for it.
-- Over a channel, the check report no longer recommends a support that could not be removed from it. It names the channel and a transition below 45 degrees.
+- When many small overhangs need supports together, such as on a sloped underside, the report now names the spot.
+- A narrow rim that holds up on its own no longer counts as a long bridge, even next to another overhang. The report no longer warns there, and Solidon asks for no supports for it.
+- Over a channel, the report no longer recommends a support that could not be removed from it. It names the channel and a transition below 45 degrees.
 - For PETG, Solidon suggests *Full cooling at the support*. It then comes off the part more easily.
 - On figures, Solidon suggests the seam at the back, so no line runs down the front. For a large flat top it suggests ironing.
 - The estimated print time now includes ironing.
@@ -116,7 +121,6 @@ it into `website/version.json`.
 - The *Gap above* field is now called *Gap above and below* and applies to both sides of the support.
 - If the slicer refuses filaments whose temperatures are too far apart on one plate, Solidon now names the reason and the way out instead of only saying that no print file was made.
 - In the print dialog, printer, filaments and quality stay fully visible even with enlarged text. Long labels wrap instead.
-- The report calculates faster and needs less memory.
 - On Linux with Flatpak, Solidon now reports a slicer crash as a crash instead of only saying that no print file was made.
 - If a part already compensates in the model, with a hole drilled with *Apply material tolerance* or *Compensate the elephant foot*, Solidon suggests that the slicer does not do it again.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
@@ -139,7 +143,7 @@ it into `website/version.json`.
 - The nut trap's screw hole goes exactly through the part, even a thick one. Until now it ended 10 mm below the pocket or drilled into the opposite side across a gap.
 - Laid in from below, the nut trap's pocket sits under the face, its slot leading down to it. Until now it sat half above, with the screw in the face.
 - If the hole of a part does not go all the way through, it is now called blind. Until now it was called through.
-- If the wall is thicker than entered for a *Cable gland* or *Hose barb*, the step says so and opens the wall thickness. Until now the passage silently ended in the material.
+- If the wall is thicker than entered for *Cable gland with strain relief* or *Hose barb*, the step says so and opens the wall thickness. Until now the passage silently ended in the material.
 - Threads now also come as pipe threads G and R, inch threads UNC and UNF and as NPT, in the *Printable thread*, on screw, nut and *Threaded stud*.
 - Every thread is also available left-handed. A custom size takes threads per inch and several starts, also in *Create screw* and *Create screw lid*.
 - Which thread series the size lists show is set in the settings under *Thread series in the lists*.
@@ -156,6 +160,7 @@ it into `website/version.json`.
 - A part for a face or hole is only computed once it has its spot in the view. Until then the dialog cannot be applied and says what is missing.
 - If the face under an open part dialog changes, the chosen spot stays as long as it still fits the new shape. Otherwise the part finds a new one and says so.
 - A part dialog that opens while the previous step is still computing places the part by itself as soon as the result is there, and cannot be applied until then.
+- In the example *Parts — nuts, inserts, cables*, the cable enters from below through the floor, and the strain relief sits inside the housing. Until now it hung below the print bed.
 
 ### Editing and sketching
 
@@ -172,7 +177,7 @@ it into `website/version.json`.
 - While pulling up, you can type the dimensions. A double-click on the step opens its dimensions, and under *Kind* it becomes a revolved body or a hole pattern without redrawing.
 - From the sketch editor, *Done* leads back into the view, and the next click sets the height. Escape lays the outline aside, Ctrl+Z brings it back.
 - If a new step cannot be calculated, the draft stays in the view, and *Repair and try again* calculates it without another click.
-- Sculpting offers four tools, each with its own button and shortcut. Strength is a level from 1 to 10, and going over the same spot again no longer piles up.
+- For *Sculpt*, there are four tools, each with its own button and shortcut. Strength is a level from 1 to 10, and going over the same spot again no longer piles up.
 - The brush fits the size of the body. If the mesh is too coarse for it, *Sculpt* evens out the triangles on the first stroke, and one Ctrl+Z undoes both.
 - When mirroring, the plane lies where the body matches itself, even when one part sticks far out to the side.
 - Sculpting follows the mouse smoothly, and even a step with hundreds of brush strokes is calculated quickly.

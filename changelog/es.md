@@ -21,56 +21,63 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Manejo y sistema
 
 - La demo funciona ahora hasta el 30 de noviembre de 2026. Solidon3D 1.0 está prevista para el 1 de diciembre y sus proyectos se conservan.
-- En el Mac, Solidon necesita ahora macOS 14 o más reciente. Cualquier Mac desde 2018 puede instalarlo gratis.
+- En el Mac, Solidon necesita ahora macOS 14 o más reciente. Cualquier Mac desde 2018 recibe macOS 14 gratis.
 - Solidon ya arranca en los Mac con Intel y macOS 26. La versión 0.5.3 se quedaba colgada allí al iniciar.
 - En los Mac con Intel, Solidon avisa ahora cuando un redondeo o un chaflán en un cuerpo exacto no se puede construir. La versión 0.5.3 se cerraba en ese momento.
-- En el Mac, *Cancelar* detiene al instante una respuesta en curso del modelo local.
-- En el Mac, Retorno abre la entrada seleccionada en la pantalla de inicio, en *Buscar función* y en el informe de comprobación.
-- En Linux, la escritura con Fcitx5 e IBus llega ahora al campo de texto también en el Flatpak y en el AppImage.
-- La desinstalación en Windows no deja en el registro entradas de la asociación de archivos.
-- Supr también funciona cuando la pestaña *Selección* tiene el foco, y quita varios cuerpos marcados en un solo paso. Si la tecla no hace nada, la barra de estado dice por qué.
-- El clic derecho en los cuerpos ofrece *Quitar objeto* y, con varios, *Unir*. *Vaciar* también está en una cara seleccionada, que pasa a ser la abertura.
 - Los paneles de la izquierda y la derecha se mueven por su asa, se acoplan a un borde o quedan flotando. *Vista → Paneles a su sitio* los devuelve.
 - Los paneles también se pueden colocar abajo a la izquierda, abajo a la derecha y en el borde inferior.
 - Puede reordenar las pestañas y arrastrarlas a ventanas propias, también en otra pantalla. Cerrar la ventana o *Volver a Solidon* devuelve su contenido.
 - Solidon recuerda la disposición. Las ventanas siguen al alcance aunque se desconecte una pantalla.
+- Supr también funciona cuando la pestaña *Selección* tiene el foco, y quita varios cuerpos marcados en un solo paso. Si la tecla no hace nada, la barra de estado dice por qué.
+- El clic derecho en los cuerpos ofrece *Quitar objeto* y, con varios, *Unir*. *Vaciar* también está en una cara seleccionada, que pasa a ser la abertura.
+- El botón *Filamentos* está ahora en la cabecera. Muestra los filamentos del proyecto y lleva al inventario de filamentos.
+- Otro filamento solo cambia el color, también en bloques y cuerpos STEP. La forma no se recalcula por ello. Los cuerpos seleccionados muestran su color de filamento bajo el resaltado.
+- En la pestaña *Selección*, el campo de filamento solo asigna con un clic o Intro. Las flechas y la escritura solo recorren la lista, y la rueda del ratón desplaza la pestaña.
+- En español, francés, italiano y portugués, *Filamento nuevo* ya no se desplaza de lado cuando la ventana es más baja que su contenido.
 - Mientras recalcula, el informe de comprobación dice *Recalculando …* y muestra las líneas anteriores como estado previo. Antes, los errores viejos parecían seguir vigentes.
 - Si el cálculo rápido falla en un paso, Solidon lo calcula a fondo en la misma pasada en lugar de detenerse.
 - Un hallazgo que dice que un paso no tuvo efecto abre ese paso en el campo correspondiente.
 - Al quitar un cuerpo, el informe deja de hablar de él, y el historial muestra qué pasos ya no dejan nada.
 - Un taladro seleccionado ya no vuelve en silencio a su cuerpo tras recalcular. Antes, Supr podía quitar entonces el cuerpo entero.
+- Al volver a abrir un proyecto, el informe de comprobación sigue indicando a qué hueco libre fue un modelo insertado.
+- El aviso *Mostrando el modelo …* desaparece en cuanto la vista está lista y ya no se queda sobre el modelo.
+- Los mensajes sobre entradas y formas ya no ofrecen un informe de error. Solo aparece cuando el fallo es de Solidon.
+- El informe de errores adjunta un registro de fallo solo cuando Solidon se ha cerrado de verdad por un fallo.
+- Un modelo añadido queda después a la vista, aunque se coloque junto a otro sobre el que se había hecho zoom.
 - Cada función se llama igual en todas partes. La herramienta *Dividir* ofrece *Dividir por un plano*, *Dividir por una línea dibujada* y *Dividir en piezas sueltas*.
 - En el cuerpo seleccionado, *Dividir automáticamente …* está ahora en *Preparar*.
 - En la ventana en reposo solo *Bloques* destaca en color. El rojo queda para los botones que descartan o borran, y las preguntas se abren con el foco en *Cancelar*.
 - En el modo de dibujo, la pestaña *Selección* se oculta. La lista de restricciones muestra las de los puntos y líneas seleccionados, además de cualquier conflicto.
 - En la tarjeta de parámetros, una medida solo muestra «Sin utilizar» cuando es así. El botón dice cuántos números fijos se pueden vincular a medidas.
-- El informe de errores adjunta un registro de fallo solo cuando Solidon se ha cerrado de verdad por un fallo.
 - La tarjeta del recorrido es tan alta como sus pasos. Un paso se despliega con un clic o la barra espaciadora, y ninguna burbuja tapa ya la vista.
 - Si un paso del recorrido señala el informe de comprobación, el recorrido sigue a la vista. La pestaña queda enmarcada y el paso dice cuál abrir.
 - Un clic en la i junto a una acción de la pestaña *Selección* abre el manual donde se explica esa acción.
 - Cada cota de un bloque se puede vincular con fx a una cota del proyecto, aunque todavía no tenga ninguna expresión.
 - Tras arrastrar el tirador de una vista previa, ya no queda ningún número sobre la vista. Un número tecleado al arrastrar mueve la vista previa, no el cuerpo elegido.
 - Tras *Reparar y volver a intentarlo* y caminos parecidos, el historial ya no llama «eliminado» a un paso que sigue calculando. Si la cadena vuelve a parar, el paso queda marcado.
-- El botón *Filamentos* está ahora en la cabecera. Muestra los filamentos del proyecto y lleva al inventario de filamentos.
-- Otro filamento solo cambia el color, también en bloques y cuerpos STEP. La forma no se recalcula por ello. Los cuerpos seleccionados muestran su color de filamento bajo el resaltado.
-- En la pestaña *Selección*, el campo de filamento solo asigna con un clic o Intro. Las flechas y la escritura solo recorren la lista, y la rueda del ratón desplaza la pestaña.
-- En las versiones traducidas, *Filamento nuevo* ya no se desplaza de lado cuando la ventana es más baja que su contenido.
+- Si pulsa *Aplicar* mientras Solidon aún calcula, el paso se crea en cuanto termina el cálculo, y la barra de estado lo indica. Hasta ahora el clic se perdía.
+- En el catálogo de bloques, *Gestionar bloques* aparece abierto mientras aún no haya ningún bloque propio.
+- En el Mac, *Cancelar* detiene al instante una respuesta en curso del modelo local.
+- En el Mac, Retorno abre la entrada seleccionada en la pantalla de inicio, en *Buscar función* y en el informe de comprobación.
+- En Linux, la escritura con Fcitx5 e IBus llega ahora al campo de texto también en el Flatpak y en el AppImage.
+- La desinstalación en Windows no deja en el registro entradas de la asociación de archivos.
+
+### Más rápido y con menos memoria
+
+- Un proyecto guardado con un modelo grande se abre tras un reinicio en uno o dos segundos en lugar de medio minuto: las características reconocidas se conservan.
 - Los modelos grandes se cargan notablemente más rápido y necesitan menos memoria, también con un historial largo y en equipos con 8 GB.
 - Un proyecto guardado con muchos pasos sobre un modelo grande se abre con mucha menos memoria.
-- Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
-- En modelos con miles de características, mover y otros pasos que no cambian la forma terminan hasta el doble de rápido.
-- Al volver a abrir un proyecto, el informe de comprobación sigue indicando a qué hueco libre fue un modelo insertado.
-- Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
-- Reparar y resolver solapamientos es hasta cuatro veces más rápido en modelos grandes, y exportar a 3MF, bastante más rápido.
-- El área de trabajo aparece más rápido al abrir archivos 3MF grandes.
-- El aviso *Mostrando el modelo …* desaparece en cuanto la vista está lista y ya no se queda sobre el modelo.
-- Los mensajes sobre entradas y formas ya no ofrecen un informe de error. Solo aparece cuando el fallo es de Solidon.
-- Un modelo añadido queda después a la vista, aunque se coloque junto a otro sobre el que se había hecho zoom.
-- En el catálogo de bloques, *Gestionar bloques* aparece abierto mientras aún no haya ningún bloque propio.
-- Tras un taladro o una característica desplazada, las características de una pieza técnica grande se reconocen alrededor de un tercio más rápido.
 - Un modelo que abre justo después de iniciar el programa se puede editar hasta una cuarta parte antes.
 - Con un slicer, un juego o un renderizado en marcha, los cálculos en modelos grandes terminan en segundos en lugar de minutos.
-- Un proyecto guardado con un modelo grande se abre tras un reinicio en uno o dos segundos en lugar de medio minuto: las características reconocidas se conservan.
+- Reparar y resolver solapamientos es hasta cuatro veces más rápido en modelos grandes.
+- Exportar a 3MF es bastante más rápido y solo vuelve a leer los perfiles del slicer si algo cambió allí.
+- El diálogo de impresión asigna los perfiles del slicer mucho más rápido, al abrirse y tras cada cambio de slicer.
+- Incluso en un historial largo, un paso nuevo apenas tarda más en calcularse que el primero.
+- En modelos con miles de características, mover y otros pasos que no cambian la forma terminan hasta el doble de rápido.
+- Tras un taladro o una característica desplazada, las características de una pieza técnica grande se reconocen alrededor de un tercio más rápido.
+- Deshacer y rehacer son más rápidos, y la memoria que ya no se necesita se libera enseguida.
+- El área de trabajo aparece más rápido al abrir archivos 3MF grandes.
+- El informe de comprobación calcula más rápido y necesita menos memoria.
 
 ### Imprimir y entregar al slicer
 
@@ -82,8 +89,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Sin un perfil del slicer guardado, la exportación y la ventana principal usan lo que el diálogo de impresión propone para la impresora, con la máquina y el proceso del fabricante.
 - Solo se ofrecen los slicers con los que trabaja Solidon, además de slicers de resina como ChituBox y Lychee. Bambu Studio como AppImage ahora también cuenta.
 - El código de inicio y el volumen de impresión vienen solo de su impresora, no de otro modelo de la misma serie.
-- El diálogo de impresión asigna los perfiles del slicer mucho más rápido, al abrirse y tras cada cambio de slicer.
-- La exportación 3MF solo vuelve a leer los perfiles del slicer si algo cambió allí, y es bastante más rápida.
 - El tiempo de impresión estimado se acerca más al del slicer, mucho más en piezas con soportes.
 - La comprobación de si los soportes y el skirt caben en la cama mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
 - Las sugerencias aceptadas ya casi no dejan sin soporte voladizos que lo necesitan. *Mantener libres los canales* solo bloquea el espacio del que ya no se podría sacar un soporte.
@@ -106,7 +111,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los ajustes de puente, las paredes extra y el sentido alterno solo se aplican a la pieza que los necesita. Las demás piezas de la misma placa se imprimen igual.
 - Sin perfil del fabricante, PrusaSlicer y SuperSlicer imprimen ahora los puentes finos. Donde un puente necesita líneas gruesas y menos flujo, Solidon las propone para esa pieza.
 - Donde Solidon propone más espacio sobre soportes en árbol, propone también una *Punta del árbol* más ancha. Cada punta lleva capa de separación y queda menos soporte en las caras inferiores.
-- Si muchos voladizos pequeños necesitan soportes juntos, como una barbilla con la cara inferior inclinada, el informe indica ahora el lugar.
+- Si muchos voladizos pequeños necesitan soportes juntos, como en una cara inferior inclinada, el informe indica ahora el lugar.
 - Un borde estrecho que se sostiene solo ya no cuenta como puente largo, tampoco junto a otro voladizo. El informe ya no avisa ahí, y Solidon no pide soportes por ello.
 - Sobre un canal, el informe ya no aconseja un soporte que luego no se podría sacar. Nombra el canal y una transición de menos de 45 grados.
 - Para PETG, Solidon sugiere *Refrigeración total en el soporte*. Así se suelta más fácil de la pieza.
@@ -117,7 +122,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El campo *Espacio superior* se llama ahora *Espacio arriba y abajo* y vale para ambos lados del soporte.
 - Si el slicer rechaza filamentos con temperaturas demasiado distintas en una placa, Solidon indica ahora el motivo y qué hacer, en lugar de decir solo que no se creó ningún archivo.
 - En el diálogo de impresión, impresora, filamentos y calidad se ven enteros también con la letra ampliada. Las etiquetas largas pasan a la línea siguiente.
-- El informe de comprobación calcula más rápido y necesita menos memoria.
 - En Linux con Flatpak, Solidon indica ahora que el slicer se ha bloqueado, en lugar de decir solo que no se creó ningún archivo.
 - Si una pieza ya compensa en el modelo, con un taladro con *Aplicar compensación del material* o *Compensar la pata de elefante*, Solidon sugiere que el slicer no lo haga otra vez.
 - También con impresoras que PrusaSlicer o SuperSlicer no conocen, ambos calculan el tiempo de impresión con las aceleraciones entregadas, y el archivo indica el material de la bobina.
@@ -140,7 +144,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El agujero para tornillo del alojamiento de tuerca atraviesa exactamente la pieza, también una gruesa. Hasta ahora terminaba 10 mm bajo el hueco o perforaba el lado opuesto de una ranura.
 - Colocado desde abajo, el alojamiento de tuerca tiene el hueco bajo la cara y su ranura baja hasta él. Hasta ahora el hueco quedaba medio encima, con el tornillo en la cara.
 - Si el taladro de un bloque no atraviesa la pieza, ahora se llama ciego. Hasta ahora se llamaba pasante.
-- Si la pared es más gruesa de lo indicado en *Pasacables* o *Espiga para manguera*, el paso lo dice y abre el espesor de pared. Hasta ahora el paso acababa en el material sin aviso.
+- Si la pared es más gruesa de lo indicado en *Pasacables con alivio de tensión* o *Espiga para manguera*, el paso lo dice y abre el espesor. Antes el paso acababa sin aviso en el material.
 - Las roscas existen ahora también como roscas de tubo G y R, roscas en pulgadas UNC y UNF y NPT, en la *Rosca imprimible*, en tornillo, tuerca y *Perno roscado*.
 - Toda rosca existe también a izquierdas. Una medida propia admite hilos por pulgada y varias entradas, también en *Crear tornillo* y *Generar tapa roscada*.
 - Qué series de roscas muestran las listas de medidas se elige en los Ajustes, en *Series de roscas en las listas*.
@@ -157,6 +161,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un bloque para una cara o un agujero solo se calcula cuando tiene su sitio en la vista. Hasta entonces el diálogo no se puede aplicar e indica lo que falta.
 - Si la cara cambia con el diálogo de un bloque abierto, el sitio elegido se mantiene mientras siga valiendo en la nueva forma. Si no, el bloque busca uno nuevo y lo indica.
 - Un diálogo de bloque que se abre mientras el paso anterior aún calcula coloca el bloque por sí solo en cuanto llega el resultado, y hasta entonces no se puede aplicar.
+- En el ejemplo *Bloques — tuercas, insertos, cables*, el cable entra desde abajo por el fondo, y el alivio de tensión queda dentro de la carcasa. Hasta ahora colgaba bajo la placa de impresión.
 
 ### Editar y dibujar
 
@@ -173,7 +178,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al levantar se pueden escribir las medidas. Un doble clic en el paso abre sus medidas, y en *Tipo* se convierte en un sólido de revolución o un patrón de orificios sin volver a dibujar.
 - Desde el editor de bocetos, *Terminado* vuelve a la vista y el siguiente clic pone la altura. Escape aparta el contorno, Ctrl+Z lo recupera.
 - Si un paso nuevo no se puede calcular, el borrador sigue en la vista y *Reparar y volver a intentarlo* lo calcula sin otro clic.
-- Para modelar hay cuatro herramientas, cada una con su botón y su atajo. La intensidad es un nivel de 1 a 10, y repasar la misma zona ya no acumula material.
+- Para *Modelar* hay cuatro herramientas, cada una con su botón y su atajo. La intensidad es un nivel de 1 a 10, y repasar la misma zona ya no acumula material.
 - El pincel se ajusta al tamaño del cuerpo. Si la malla es demasiado gruesa, *Modelar* iguala los triángulos en el primer trazo, y un Ctrl+Z deshace ambas cosas.
 - Al reflejar, el plano queda donde el cuerpo coincide consigo mismo, aunque una parte sobresalga mucho hacia un lado.
 - Modelar sigue al ratón con fluidez, y hasta un paso con cientos de trazos de pincel se calcula rápido.
