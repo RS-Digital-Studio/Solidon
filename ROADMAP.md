@@ -164,6 +164,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-776 — Ratsätze in Fehlerdialogen sind nur Text, wo ein Knopf ginge](#rm-776) | Bedienung und Darstellung | Zuerst `open_sketch` und die `sketch.*`-Wege als Knöpfe, die den Schritt öffnen |
 | [RM-711 — Eine Zeile zur Stützart schlägt in Orca vor, was die Datei schon tut](#rm-711) | Bedienung und Darstellung | Zeilen zu je Teil übernommenen Pfaden nur, wo Übernehmen die Datei ändert (wie `_cura_prints_alike`) |
 | [RM-783 — Die Einleitung der Tour wird in sehr kleinen Fenstern gestaucht](#rm-783) | Bedienung und Darstellung | Titel, Einleitung und Schritte in einen gemeinsamen Rollbereich |
+| [RM-784 — Versetzen sehr großer Auswahlen hält das Fenster kurz an](#rm-784) | Bedienung und Darstellung | Versetzen im Arbeitsfaden rechnen oder die verbleibende Zeit am Profil finden |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -5419,6 +5420,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Knöpfe fest; Nachrollen zum aktuellen Schritt und Höhenmeldung daran anpassen.
   **Abnahme:** Bei 400 x 400 ist jeder Text der Tour ganz lesbar oder erreichbar; der
   Fenstertest der Tour läuft auch bei dieser Größe.
+
+<a id="rm-784"></a>
+
+- [ ] **RM-784 — Versetzen sehr großer Auswahlen hält das Fenster kurz an.**
+  Versetzen von 2000 Linien braucht nach den Beschleunigungen in 0.6.0 noch 2,3 s (vorher
+  9,1 s), gerechnet im Hauptfaden; das Fenster steht so lange. Aus dem Integrationsreview der
+  Welle 5 (11.10.2026), Messung in `paket-versetzen.md`.
+  **Nächster Schritt:** Profil der 2,3 s; liegt der Rest im Kern, Versetzen wie andere
+  Editoraktionen in einen Arbeiter ziehen, mit Rückmeldung im Balken.
+  **Abnahme:** Versetzen von 2000 Linien lässt das Fenster bedienbar oder dauert unter
+  0,3 s; Ergebnis bitgleich zum heutigen.
 
 ## KI und Generatoren
 
