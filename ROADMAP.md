@@ -204,7 +204,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`): Entf im Reiter *Auswahl*, Felder behalten die Taste, bei Halt oder Sperre der Grund mit dem Titel aus `_removal_entry`; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an der Fläche, verschiebbare Karten](#rm-538) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`), drei Durchsichten; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
-| [RM-720 — Ein umbenanntes Projekt findet seine Buchung aus 0.5 nicht](#rm-720) | Filamentlager | Buchung aus 0.5 auch unter neuem Projektnamen zur Prüfung bringen, ohne fremde Projekte anzubieten |
+| [RM-720 — Eine Buchung aus 0.5 kennt weder einen neuen Projektnamen noch ihre Platte](#rm-720) | Filamentlager | Buchung aus 0.5 auch unter neuem Projektnamen zur Prüfung bringen, ohne fremde Projekte anzubieten; Antwort je Platte |
 
 ## Filamentlager
 
@@ -217,14 +217,20 @@ begründet Abwahl, Herstellerprofile und Buchungskorrekturen.
 
 <a id="rm-720"></a>
 
-- [ ] **RM-720 — Ein umbenanntes Projekt findet seine Buchung aus 0.5 nicht.**
+- [ ] **RM-720 — Eine Buchung aus 0.5 kennt weder einen neuen Projektnamen noch ihre Platte.**
   Ohne Abdrucktreffer kommt eine Buchung aus Solidon 0.5 desselben Projekts mit denselben
   Filamenten zur Prüfung, bis eine Buchung ab 0.6.0 die Frage beantwortet (T2-M1). Die
   Buchung kennt nur den Projektnamen: Wer das Projekt umbenennt oder unter neuem Namen
   speichert, bekommt keine Rückfrage, und *Ohne Rückfrage buchen* zieht denselben Druck ein
   zweites Mal ab. Aus der Nachprüfung der Altbuchungen nach Paket E (11.10.2026).
+  Zweiter Weg (N-G1, Nachtrag des Integrationsreviews): Zwei Platten mit denselben
+  Filamenten, beide in 0.5 gebucht. Ist Platte A beantwortet, gilt die Frage auch für B als
+  beantwortet (`_answered` in `app/ui/filament_usage.py` prüft Projekt und Filamente), und
+  *Ohne Rückfrage buchen* zieht B ohne neuen Druck ein zweites Mal ab. Eine Zählung je
+  Altbuchung schlösse das, fragte aber bei einer mehrfach gedruckten Platte jedes Mal.
   **Abnahme:** Eine Buchung aus 0.5 kommt auch nach dem Umbenennen zur Prüfung, ohne dass
-  Buchungen fremder Projekte angeboten werden; Test mit einer echten 0.5.3-Buchung.
+  Buchungen fremder Projekte angeboten werden, und die Antwort für eine Platte beantwortet
+  nicht die einer anderen; Tests mit echten 0.5.3-Buchungen.
 
 ## P0 — Skelett
 
