@@ -1750,6 +1750,9 @@ QFrame#tourStepRow[tourState="skipped"] {{
    steht immer und wechselt nur die Farbe, damit der Text nicht springt. */
 QLabel#tourStepText {{ border: 2px solid transparent; }}
 QFrame#tourStepRow[tourState="upcoming"] QLabel#tourStepText {{ color: {muted}; }}
+/* Halbfett steht der aktuelle Auftrag hier und nicht über setFont: Das
+   Polieren setzte eine von Hand gesetzte Schrift auf den vorigen Stand. */
+QFrame#tourStepRow[tourState="current"] QLabel#tourStepText {{ font-weight: bold; }}
 QLabel#tourStepText:focus {{ border: 2px dashed {focus}; }}
 
 /* Der Unterstützen-Dialog zeigt als ruhige Karte, wofür das Geld ist: je
