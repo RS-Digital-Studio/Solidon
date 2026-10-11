@@ -174,7 +174,7 @@ für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
 `_shells_apart`; große Vergleichsnetze zuerst über
 `mesh_ops._exactly_flattened`) · `mesh_ops.py` · `mesh_edits.py` (formtreu
-tauschen, teilen, zusammenlegen) · `colour_ops.py` ·
+teilen und zusammenlegen) · `colour_ops.py` ·
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
 `label_ops.py` (Schriften in `data/fonts/`, Satz über `glyphs.py`;
 *Auf beiden Seiten* setzt die Rückseite am ersten äußeren Austritt entgegen

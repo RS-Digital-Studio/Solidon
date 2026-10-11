@@ -2138,10 +2138,12 @@ class UniformParams(BaseParams):
         "Zum bloßen Verfeinern, denn hier verschwinden auch Dreiecke. Dafür gibt es „Kanten "
         "verfeinern“."
     ),
-    # 2: Ohne Abweichung kein ``simplify`` mehr; getauscht, geteilt und
-    # zusammengelegt wird in der Ebene, bis keine Kante länger ist als verlangt
-    # (RM-671). Dasselbe Projekt ergibt ein anderes Netz.
-    cache_version="2",
+    # 2: Ohne Abweichung kein ``simplify`` mehr; geteilt wird, bis keine Kante
+    # länger ist als verlangt (RM-671). Dasselbe Projekt ergibt ein anderes Netz.
+    # 3: Nach dem Kern nur noch Teilen, kein Tauschen und Zusammenlegen in der
+    # Ebene (Review-Fix F); ein Zweigstand mit 2 im Plattencache trüge die
+    # aufgeräumten Netze.
+    cache_version="3",
     retriangulates=True,
     expected_triangles=expected_uniform,
 )

@@ -1112,19 +1112,23 @@ Große Vergleichsnetze durchlaufen in `difference.py` zuerst die bestehende
 koplanare Entlastung aus `mesh_ops._exactly_flattened`, mit unveränderten
 Eingängen und denselben Dichtheits- und Volumenprüfungen.
 
-`mesh_edits.py` (RM-671) legt zusammen, tauscht und teilt an einem
-geschlossenen Netz, ohne die Form zu ändern: keine neue Koordinate beim
-Zusammenlegen, getauscht nur in einer Ebene, geteilt in der Mitte einer Kante.
-*Weich verschmelzen* legt damit die Nadeln aus Marching Cubes zusammen,
-*Dreiecke angleichen* hält seine Kantenlänge und räumt Splitter in der Ebene
-weg. Gearbeitet wird nur an einer Auswahl (`around`, `suspects`): an der Kugel
-aus §31 kostete das Tauschen über das ganze Netz 52 s, an einer Auswahl unter
-einer Sekunde. Das Angleichen räumt nur in Ebenen auf, die breit genug und
-nicht schon feiner als verlangt sind (`plane_measures`): An CAD-Netzen mit
-Facettenstreifen und Nadelfächern kostete es dort eine Minute und ließ vier von
-fünf Dreiecken spitz. Je Runde wird gewählt, bis kein Schritt mehr frei ist, in
-einer über das Netz gestreuten Folge (`_claimed`, `_scattered`) — einmal nach
-Länge gewählt, gewann je Runde nur das Ende eines Streifens.
+`mesh_edits.py` (RM-671) legt zusammen und teilt an einem geschlossenen Netz,
+ohne die Form zu ändern: keine neue Koordinate beim Zusammenlegen, geteilt in
+der Mitte einer Kante. *Weich verschmelzen* legt damit die Nadeln aus Marching
+Cubes zusammen, *Dreiecke angleichen* teilt nach dem Kern, was dieser im
+Inneren eines Dreiecks zu lang gezogen hat. Gearbeitet wird nur an einer
+Auswahl (`around`, `suspects`); das Teilen misst je Durchgang nur, was noch zu
+lang sein kann, ab einer Portionsgröße auf mehreren Fäden. Je Runde des
+Zusammenlegens wird gewählt, bis kein Schritt mehr frei ist, in einer über das
+Netz gestreuten Folge (`_claimed`, `_scattered`) — einmal nach Länge gewählt,
+gewann je Runde nur das Ende eines Streifens.
+
+Das Aufräumen in der Ebene (Tauschen nach Delaunay, Zusammenlegen um spitze
+Dreiecke) hatte das Angleichen bis zum Umbau nach Review F zu RM-671. An den
+Abnahmefällen änderte es kaum etwas (2 bis 22 Tausche), an CAD-Netzen kostete
+es das Drei- bis Fünffache der Zeit vor RM-671 und an einer viermal geteilten
+Lochplatte 262 s; `plate_holes` auf 1,5 mm trägt ohne es 44 statt 1,6 %
+Splitter (v0.5.3: 58,9 %). Ein formtreues Neuvernetzen je Ebene ist RM-767.
 
 `section.clip_triangles` begrenzt lose Markierungsdreiecke an denselben
 Halbräumen wie Körper. Es bleibt eine offene Anzeigefläche ohne zusätzliche

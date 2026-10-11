@@ -121,9 +121,10 @@ def test_uniform_remeshing_evens_out_more_than_splitting_does(
     identisch. Die Operation machte das Netz feiner, nicht gleichmäßiger.
 
     trimesh 5 teilte selbst gleichmäßig und kam auf **0,555** (14.08.2026),
-    der konforme Weg des exakten Kerns seit dem 25.09.2026 auf **0,445**. Der
-    Vorsprung steht: ``remesh_uniform`` lag bei **0,410**, seit es in der
-    Ebene tauscht und zusammenlegt (RM-671) bei **0,356**.
+    der konforme Weg des exakten Kerns seit dem 25.09.2026 auf **0,445**.
+    ``remesh_uniform`` lag bei **0,410**; seit es keine Kante über der
+    verlangten stehen lässt und nach dem Kern nur teilt (RM-671, Review-Fix F),
+    bei **0,441** — knapp vorn, mit Abweichung (0,2 mm) bei **0,325**.
     """
     plate = corpus("plate_holes.stl")
     before = spread(plate)
@@ -158,8 +159,9 @@ def test_uniform_remeshing_costs_a_fraction_of_the_triangles(profile: Profile) -
     """Warum es eine eigene Operation ist und keine Zeile in ``remesh_mesh``.
 
     Für dieselbe Zielkantenlänge von 1,5 mm braucht ``remesh_mesh`` auf
-    ``plate_holes`` **47 092** Dreiecke, ``remesh_uniform`` **28 566** und mit
-    zugelassenen 0,2 mm Abweichung **24 952** (10.10.2026, RM-671).
+    ``plate_holes`` **47 092** Dreiecke, ``remesh_uniform`` **46 480** und mit
+    zugelassenen 0,2 mm Abweichung **29 362** (11.10.2026, Review-Fix F zu
+    RM-671).
 
     Hier stand erst Faktor **hundert** (3 260 416 gegen rund 30 000), unter
     trimesh 5 Faktor 5,2 (160 084). Bis RM-671 ließ ``remesh_uniform`` die
@@ -168,11 +170,13 @@ def test_uniform_remeshing_costs_a_fraction_of_the_triangles(profile: Profile) -
     nur, weil Kanten bis 2,99 mm stehen blieben. Seitdem hält es wie
     ``remesh_mesh`` jede Kante unter 1,5 mm; die Fläche der Platte (rund
     10 500 mm²) verlangt dafür gut 20 000 Dreiecke, und die Hälfte ist keine
-    Zusage mehr. Es braucht trotzdem weniger als ``remesh_mesh``, weil es in
-    der Ebene tauscht und zusammenlegt. Der Grund für die eigene Operation ist
-    die Abweichung: Nur sie räumt die überflüssig feinen Stellen ab, und das
-    kann keine Zeile in einem Werkzeug, das nie einen Punkt verschiebt. Wer sie
-    infrage stellt, misst neu, statt diese Zahlen fortzuschreiben.
+    Zusage mehr. Ohne Abweichung liegt es seither knapp unter ``remesh_mesh``
+    (mit Tauschen und Zusammenlegen in der Ebene waren es 28 566, das kostete
+    an CAD-Netzen aber das Drei- bis Fünffache der Zeit, RM-767). Der Grund für
+    die eigene Operation ist die Abweichung: Nur sie räumt die überflüssig
+    feinen Stellen ab, und das kann keine Zeile in einem Werkzeug, das nie
+    einen Punkt verschiebt. Wer sie infrage stellt, misst neu, statt diese
+    Zahlen fortzuschreiben.
     """
     plate = corpus("plate_holes.stl")
     split = mesh_ops.remesh(plate, 1.5).triangle_count

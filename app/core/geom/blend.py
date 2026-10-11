@@ -767,7 +767,9 @@ class BlendParams(BaseParams):
     # der Hülle der Eingänge, und die Ecken stehen in doppelter Genauigkeit (RM-671).
     # 7: Begrenzt wird nur noch nach unten (Review F); ein Zweigstand mit 6 im
     # Plattencache trüge sonst die flach geschnittenen Übergänge.
-    cache_version="7",
+    # 8: Unten begrenzt das Bett, nicht die unterste Höhe der Eingänge
+    # (Nachprüfung N2) — schwebende Teile bleiben unter dem Hals rund.
+    cache_version="8",
     title=_("Weich verschmelzen"),
     category="boolean",
     params=BlendParams,

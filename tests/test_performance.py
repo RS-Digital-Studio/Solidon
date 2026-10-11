@@ -1514,11 +1514,11 @@ def test_evening_out_flat_faces_holds_the_edge_under_three_seconds() -> None:
 
     An der Kugel darüber teilt der Kern jedes Dreieck gleichseitig, auch bei
     krummem Verhältnis (auf ein 2,3-tel der Kante: kein Dreieck mit zu langer
-    Seite), und das Tauschen und Teilen in der Ebene hat nichts zu tun. An
-    ebenen Flächen zieht der Kern in jedem Gitterquadrat eine Diagonale über
-    der verlangten Länge: am Quader 100 × 80 × 60 auf 0,5 mm 328 824 von
-    341 456 Dreiecken, die ``flip_long`` und ``split_long`` bearbeiten
-    (638 768 danach). Bis RM-671 blieben diese Diagonalen stehen.
+    Seite), und das Teilen nach dem Kern hat nichts zu tun. An ebenen Flächen
+    zieht der Kern in jedem Gitterquadrat eine Diagonale über der verlangten
+    Länge: am Quader 100 × 80 × 60 auf 0,5 mm in fast allen der 341 456
+    Dreiecke, die ``split_long`` teilt (709 760 danach). Bis RM-671 blieben
+    diese Diagonalen stehen.
     """
     import trimesh
 
