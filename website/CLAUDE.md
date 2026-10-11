@@ -151,11 +151,14 @@ prüft zuerst, ob ein bestehender die Frage schon beantwortet.
   vorbehalten, denn `make_seo.py` liest daraus `llms.txt`.
 - **Unterstützen**: oben „Der Weg bis 1.0“ in zwei Spalten, Geschafft und
   Geplant; darunter Person und Kosten neben dem Handlungsfeld mit beiden
-  Wegen; ganz unten der Stand der Kampagne, der erst auf Klick lädt. Die
-  geplanten Punkte stammen aus RM-188 und sind von Robert zur Veröffentlichung
-  freigegeben: Nachbau, Montage und Maßblatt, Resin-Stufe 2, Zeichnen und
-  Maße im Bild, dazu Fehlerbehebungen und Tempo — mit dem Satz „Geplant heißt
-  nicht zugesagt“.
+  Wegen; ganz unten der Stand der Kampagne, der erst auf Klick lädt. Seit
+  0.6.0 nennt Geplant nur noch Fehlerbehebungen, Tempo und Stabilität und
+  sagt, dass vor 1.0 keine großen neuen Funktionen kommen (Entscheidung
+  Robert) — mit dem Satz „Geplant heißt nicht zugesagt“.
+- **Der Verkaufsstart am 1. Dezember ist voraussichtlich, das Demo-Ende am
+  30. November fest** (Entscheidung Robert): Jede Nennung des Verkaufsstarts
+  trägt „voraussichtlich“, auch der Kaufsatz am Aufmacher; „Die Demo lässt
+  sich ab dem 1. Dezember nicht mehr starten“ bleibt ohne Vorbehalt.
 - **Bei jedem Release wandert die Zeitleiste mit**: Die neue Version kommt als
   `li.done is-now` unter Geschafft, die Markierung der vorigen fällt weg, ein
   erledigter Planpunkt verschwindet aus Geplant — in allen sechs Fassungen.
