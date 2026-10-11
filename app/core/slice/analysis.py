@@ -4598,6 +4598,7 @@ class _Ceilings:
         self._layer_gaps: dict[int, np.ndarray] = {}
         self._boxes: dict[int, np.ndarray] = {}
         self._known: dict[tuple[int, int], frozenset[tuple[int, int]]] = {}
+        self._beyonds: dict[tuple[int, int], tuple[Any, Any, Any]] = {}
 
     def shape(self, name: tuple[int, int]) -> ShapelyPolygon:
         """Das Stück ``name`` (Schicht, Nummer) als Fläche."""
@@ -4876,30 +4877,53 @@ class _Ceilings:
         gap = self._gap(member)
         if not math.isfinite(gap):
             return False
-        shape = self.shape(member)
-        below = self._material(member[0] - 1)
-        reach = self._cantilever(member)
-        if _hangs_on(shape, below, reach):
+        free = self._beyond(member)[0]
+        if free.is_empty:
             return True
-        if self._runs_free(shape, below, reach):
+        if self._runs_free(member):
             return False
         bound = gap + min(2.0 * self._bead, CANTILEVER_LAYERS * self._step(member[0]))
-        return _hangs_on(shape, below, bound)
+        return _hangs_on(self.shape(member), self._material(member[0] - 1), bound)
 
-    @staticmethod
-    def _runs_free(shape: ShapelyPolygon, below: Any, reach: float) -> bool:
-        """Läuft ein Teil des Stücks, der weiter als ``reach`` über ``below``
-        ragt, länger als :data:`SPAN_INTERESTING`? Gemessen an der langen Seite
-        seines kleinsten umschriebenen Rechtecks. Ragt zusammen nicht mehr als
-        :data:`LEDGE_SPILL` des Stücks hinaus, ist es Rauschen der Puffer."""
-        low_x, low_y, high_x, high_y = shape.bounds
-        margin = reach + OVERHANG_MARGIN
-        near = shapely.clip_by_rect(
-            below, low_x - margin, low_y - margin, high_x + margin, high_y + margin
-        )
-        free = shape if near.is_empty else shape.difference(near.buffer(reach))
-        if free.area <= LEDGE_SPILL * shape.area:
-            return False
+    def _beyond(self, member: tuple[int, int]) -> tuple[Any, Any, Any]:
+        """Der Teil des Stücks jenseits seines Kragarms (:meth:`_cantilever`), das
+        Material darunter im Fenster und der Halt am Rand des Kragarms.
+
+        Leer, wenn zusammen nicht mehr als :data:`LEDGE_SPILL` des Stücks
+        hinausragt — Rauschen der Puffer. Eine Herleitung für :meth:`_carries`,
+        :meth:`_runs_free` und :meth:`_held_twice` (Nachprüfung RM-585, Z3): Je
+        für sich gerechnet, konnte ein geändertes Fenster oder eine geänderte
+        Rauschgrenze an einer Stelle denselben Streifen zugleich „ragt hinaus“
+        und „liegt ganz im Kragarm“ nennen. Der Halt reicht einen halben
+        :data:`OVERHANG_MARGIN` über den Kragarm hinaus: so weit, wie der Rand
+        des freien Teils von ihm entfernt liegt.
+        """
+        if member not in self._beyonds:
+            shape = self.shape(member)
+            reach = self._cantilever(member)
+            low_x, low_y, high_x, high_y = shape.bounds
+            margin = reach + OVERHANG_MARGIN
+            near = shapely.clip_by_rect(
+                self._material(member[0] - 1),
+                low_x - margin,
+                low_y - margin,
+                high_x + margin,
+                high_y + margin,
+            )
+            free = shape if near.is_empty else shape.difference(near.buffer(reach))
+            if not near.is_empty and free.area <= LEDGE_SPILL * shape.area:
+                free = ShapelyPolygon()
+            held = near.buffer(reach + OVERHANG_MARGIN / 2.0)
+            self._beyonds[member] = (free, near, held)
+        return self._beyonds[member]
+
+    def _runs_free(self, member: tuple[int, int]) -> bool:
+        """Läuft der freie Teil des Stücks (:meth:`_beyond`) länger als
+        :data:`SPAN_INTERESTING`?
+
+        Gemessen an der langen Seite seines kleinsten umschriebenen Rechtecks.
+        """
+        free = self._beyond(member)[0]
         for part in _areas_of(free):
             rectangle = part.minimum_rotated_rectangle
             if rectangle.geom_type != "Polygon":
@@ -4923,15 +4947,14 @@ class _Ceilings:
         liegt quer von Wand zu Wand, auch wenn der Tunnel sich krümmt (der
         Wasserkanal der Waschschüssel in Dateilage); am Eiffelturm halten die
         Gitterstäbe darunter die weitesten Streifen der Bögen ringsum (Inkreis
-        7,3 bis 7,5 mm bei 2,84 mm Reichweite, Review RM-585), und ein Ring
-        unter einer Kuppel ist ringsum gehalten.
+        7,3 bis 7,5 mm bei 2,84 mm Reichweite, Review RM-585).
 
         **Was weiter ragt als ein Kragarm** (:meth:`_cantilever`), **liegt selbst
         zwischen seinen Auflagen** (Nachprüfung RM-585, N2): Ein schmaler
         Streifen, der an einer Seite hängt, fasste mit den Stummeln an seinen
         Enden seine eigene Hülle — an einer Pultdecke unter 12° bei 60° galten so
-        41 von 42 Streifen als gefasst. Wie weit ein gefasster Streifen spannt,
-        fragt :meth:`arch` danach.
+        41 von 42 Streifen als gefasst.
+        Wie weit ein gefasster Streifen spannt, fragt :meth:`arch` danach.
         """
         gap = self._gap(member)
         if not math.isfinite(gap):
@@ -4951,24 +4974,15 @@ class _Ceilings:
         answer = self._spans(shape, near.buffer(reach), reach)
         if answer is None or not answer[0]:
             return False
-        below = self._material(member[0] - 1)
-        free_reach = self._cantilever(member)
-        margin = free_reach + OVERHANG_MARGIN
-        near = shapely.clip_by_rect(
-            below, low_x - margin, low_y - margin, high_x + margin, high_y + margin
-        )
-        free = shape.difference(near.buffer(free_reach))
-        if free.area <= LEDGE_SPILL * shape.area:
-            return True
+        free, _near, held = self._beyond(member)
         # Gehalten ist, was am Rand des Kragarms liegt; die Hülle ungepuffert
         # bis auf diesen Saum, sonst fasst ein schmaler Streifen mit den Stummeln
         # an seinen Enden sich selbst.
         seam = OVERHANG_MARGIN / 2.0
-        anchored = near.buffer(free_reach + seam)
         for part in _areas_of(free):
             if part.area <= LEDGE_SPILL * shape.area:
                 continue
-            answer = self._spans(part, anchored, seam)
+            answer = self._spans(part, held, seam)
             if answer is None or not answer[0]:
                 return False
         return True
