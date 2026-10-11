@@ -3880,6 +3880,11 @@ def web_loop_step(
         # Der Zeiger fährt an die Zählzeile des Prüfberichts („0 x Fehler ·
         # 0 x Warnung …") und bleibt dort: Das ist das Urteil nach der Änderung.
         report = getattr(window, "report", None)
+        # Der Bericht ist ein Reiter neben der Auswahl, und nach dem Übernehmen
+        # steht die Auswahl vorn; der Kunde holt ihn mit einem Klick nach vorn.
+        if report is not None:
+            window.right.setCurrentWidget(report)
+            settle(app, 10)
         summary = getattr(report, "summary", None)
         if summary is None or not summary.isVisible():
             raise SystemExit("Die Zählzeile des Prüfberichts steht nicht im Bild")
