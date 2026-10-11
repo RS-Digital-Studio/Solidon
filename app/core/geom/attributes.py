@@ -274,10 +274,14 @@ def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
 
     Hier bekommt jedes übernommene Dreieck die Eckenfolge seines Vorbilds, und
     die übernommenen Ecken stehen in der Reihenfolge ihres Eingangs; neue
-    Ecken folgen dahinter in der Reihenfolge des Kerns. **Die Dreiecksfolge
-    bleibt die des Kerns** — an ihr hängen die Nummern der Merkmale —, und
-    keine Koordinate ändert sich: Es wird nur umnummeriert und gedreht, wie
-    der Eingang es vorgab. Zwischen zwei Ergebnissen des Kerns blieb die
+    Ecken folgen dahinter in der Reihenfolge des Kerns. **Die Plätze der
+    Dreiecke bleiben die des Kerns, die übernommenen besetzen ihre Plätze in
+    der Folge ihres Eingangs** (RM-592): Der Kern legt Unberührtes auch
+    untereinander um, und die tangentiale Trennung der Erkennung liest diese
+    Folge (am Laptop-Ständer 245 von 1 574 Zielen nach einer Bohrung). Neue
+    Dreiecke bleiben, wo der Kern sie hinlegte, und keine Koordinate ändert
+    sich: Es wird nur umnummeriert, umgestellt und gedreht, wie der Eingang
+    es vorgab. Zwischen zwei Ergebnissen des Kerns blieb die
     Darstellung auch vorher schon stehen (gemessen: jede Ecke, jede
     Eckenfolge, jede Stützpunktlesung gleich); neu ist sie ab dem ersten
     Schritt nach dem Laden. Weil der Kern danach die Darstellung des Eingangs
@@ -289,6 +293,15 @@ def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
     Gleich heißt bitgleich (:func:`_places`). Mehrere Eingänge gelten in ihrer
     Reihenfolge; ein Dreieck, das in keiner Drehung auf seinem Vorbild liegt
     (umgekehrter Umlauf, entartet), bleibt, wie der Kern es lieferte.
+
+    **Hat der Schritt nichts geändert, kommt der Eingang zurück** (RM-592):
+    Liegt jedes Dreieck bitgleich und gleich umlaufend auf genau einem Dreieck
+    desselben Eingangs, und hat der so viele wie das Ergebnis, ist die Folge
+    des Kerns nur eine andere Darstellung desselben Körpers — ein Werkzeug
+    neben dem Teil, ein Vereinigen mit einem Körper ganz im Material. Dann
+    trägt das Ergebnis die Ecken und Dreiecke des Eingangs in dessen Folge, als
+    eigenes Netz, und die Erkennung trifft ihren Cache, statt den Körper neu zu
+    lesen (am Laptop-Ständer 12,6 s unter Last für einen Zylinder daneben).
     """
     body = result.raw
     faces = np.asarray(body.faces, dtype=np.int64)
@@ -298,7 +311,9 @@ def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
     unset = np.iinfo(np.int64).max
     rank = np.full(len(body.vertices), unset, dtype=np.int64)
     taken = np.zeros(len(faces), dtype=bool)
+    origin = np.zeros(len(faces), dtype=np.int64)
     offset = 0
+    face_offset = 0
     turns = np.arange(3)
     for source in sources:
         raw = source.raw
@@ -314,22 +329,43 @@ def in_source_layout(result: MeshData, sources: Sequence[MeshData]) -> MeshData:
                 fits = (turn < 0) & np.all(given[:, (turns + shift) % 3] == wanted, axis=1)
                 turn[fits] = shift
             kept = turn >= 0
+            if (
+                len(model) == len(faces)
+                and bool(kept.all())
+                and len(rows) == len(faces)
+                and len(np.unique(match[rows])) == len(faces)
+            ):
+                return result.replacing(
+                    trimesh.Trimesh(
+                        np.array(raw.vertices, dtype=np.float64), model.copy(), process=False
+                    )
+                )
             rows, turn = rows[kept], turn[kept]
             corners[rows] = faces[rows][np.arange(len(rows))[:, None], (turns + turn[:, None]) % 3]
             np.minimum.at(rank, corners[rows].ravel(), model[match[rows]].ravel() + offset)
             taken[rows] = True
+            origin[rows] = match[rows] + face_offset
         offset += len(raw.vertices)
+        face_offset += len(model)
     if not taken.any():
         return result
     order = np.argsort(
         np.where(rank < unset, rank, offset + np.arange(len(rank), dtype=np.int64)), kind="stable"
     )
+    places = np.flatnonzero(taken)
+    sequence = np.arange(len(faces))
+    sequence[places] = places[np.argsort(origin[places], kind="stable")]
+    corners = corners[sequence]
     if np.array_equal(order, np.arange(len(order))) and np.array_equal(corners, faces):
         return result
     renumbered = np.empty(len(order), dtype=np.int64)
     renumbered[order] = np.arange(len(order))
     vertices = np.asarray(body.vertices, dtype=np.float64)[order]
-    return result.replacing(trimesh.Trimesh(vertices, renumbered[corners], process=False))
+    slots = tuple(result.slots[index] for index in sequence.tolist()) if result.slots else ()
+    laid = trimesh.Trimesh(vertices, renumbered[corners], process=False)
+    if np.array_equal(sequence, np.arange(len(faces))):
+        return result.replacing(laid)
+    return MeshData(raw=laid, slots=slots if len(slots) == len(faces) else ())
 
 
 def with_slot(mesh: MeshData, slot: int) -> MeshData:

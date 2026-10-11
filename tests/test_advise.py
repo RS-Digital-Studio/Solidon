@@ -8,6 +8,7 @@ geurteilt haben — jeder mit dem Körper, der sie widerlegt hat.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
@@ -2251,6 +2252,153 @@ def test_a_tight_rounding_is_a_corner_for_the_slicer() -> None:
     )
 
 
+# --- Naht hinten an Figuren, Bügeln der obersten Fläche (RM-588) ----------------------
+
+MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def _corpus(name: str) -> SliceResult:
+    """Ein Netz aus ``tests/data/meshes``, auf das Bett gestellt."""
+    return _standing(trimesh.load(MESHES / name, force="mesh"))
+
+
+def test_free_form_share_tells_a_figure_from_walls_with_edges() -> None:
+    """Frei geformt ist gebogene Kontur in einer Schicht, die sich gegen die
+    darunter ändert. Der Ellipsoid und die Figur aus drei verschmolzenen Kugeln
+    tragen fast nur solche; Würfel und Zylinder keine — der Zylinder ist rund,
+    aber jede Schicht ist dieselbe —, die Pyramide ändert sich in jeder Schicht,
+    aber ihre Kontur sind Geraden mit Ecken. Mehrere Umrisse in einer Schicht
+    zählen zusammen (die Figur zerfällt oben in Kugelkappen)."""
+    from app.core.slice.analysis import free_form_share
+
+    assert free_form_share(_corpus("near_sphere_ellipsoid.stl")) > 0.95
+    assert free_form_share(_corpus("generated_figure.stl")) > 0.95
+    assert free_form_share(_corpus("cube_clean.stl")) == pytest.approx(0.0, abs=1e-9)
+    assert free_form_share(_corpus("dense_cylinder.stl")) == pytest.approx(0.0, abs=1e-9)
+    pyramid = _standing(trimesh.creation.cone(radius=20.0, height=40.0, sections=4))
+    assert free_form_share(pyramid) < 0.1
+
+
+def test_free_form_share_is_measured_once_per_cut(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Druckdialog fragt den Rat bei jedem geänderten Feld; der Anteil
+    hängt nur an den Schichten und wird je Schnitt einmal gemessen."""
+    from app.core.slice import analysis
+
+    figure = _corpus("generated_figure.stl")
+    measured: list[int] = []
+    measure = analysis._free_form_share
+
+    def counted(result: SliceResult) -> float:
+        measured.append(1)
+        return measure(result)
+
+    monkeypatch.setattr(analysis, "_free_form_share", counted)
+    first = analysis.free_form_share(figure)
+    assert analysis.free_form_share(figure) == first
+    assert len(measured) == 1
+    analysis.free_form_share(_corpus("generated_figure.stl"))
+    assert len(measured) == 2, "ein neuer Schnitt wird neu gemessen"
+
+
+def test_a_figure_asks_for_the_seam_at_the_back() -> None:
+    """Recherche Nr. 14: An einer frei geformten Außenwand findet der Slicer in
+    jeder Schicht eine andere Ecke für die Naht, auch vorn. Die Figur bekommt
+    „hinten“ vorgeschlagen, mit Grund; Würfel und Zylinder behalten die Naht des
+    Herstellers, und eine Figur unter :data:`advise.SCARF_MIN_HEIGHT` auch —
+    dort wird aus der Naht keine Linie. „Zufällig“ verteilt die Naht mit
+    Absicht und bleibt, „hinten“ ist schon hinten."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    assert settings.shell.seam_position in advise.SEAM_SEEKING
+
+    def seam(result: SliceResult, chosen: PrintSettings = settings) -> list[SettingAdvice]:
+        return [
+            entry
+            for entry in advise.advise(chosen, profile, result)
+            if entry.path == "shell.seam_position"
+        ]
+
+    figure = _corpus("generated_figure.stl")
+    offered = seam(figure)
+    assert [(entry.value, entry.severity) for entry in offered] == [("rear", "info")]
+    assert offered[0].reason, "ohne Grund kein Vorschlag"
+    assert not seam(_corpus("cube_clean.stl"))
+    assert not seam(_corpus("dense_cylinder.stl"))
+    low = trimesh.creation.icosphere(subdivisions=4, radius=1.0)
+    low.apply_scale((20.0, 15.0, 4.0))
+    assert not seam(_standing(low)), "8 mm hoch: aus der Naht wird keine Linie"
+    for value in ("random", "rear"):
+        assert not seam(figure, print_settings.with_path(settings, "shell.seam_position", value))
+    assert "shell.seam_position" in advise.PART_PATHS
+    assert "shell.seam_position" in advise.SLICED_PATHS
+
+
+def test_a_large_flat_top_asks_for_ironing_the_topmost_surface() -> None:
+    """Recherche Nr. 15: Eine große, zur Platte parallele Oberseite zeigt ihre
+    Bahnen. Die Platte mit Bohrungen bekommt „oberste Fläche bügeln“; die
+    Figur, der Becher auf dem Stiel (oben nur der Rand) und ein Kasten mit einem
+    Knauf obenauf nicht — dort ist die oberste Fläche nicht die Schauseite. Ohne
+    Deckschicht gibt es nichts zu bügeln, und wer schon jede Oberseite bügelt,
+    bügelt die oberste mit."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    assert settings.shell.ironing == "none"
+
+    def topmost(
+        result: SliceResult, chosen: PrintSettings = settings, kinds: tuple[str, ...] = ()
+    ) -> list[SettingAdvice]:
+        return [
+            entry
+            for entry in advise.advise(chosen, profile, result, fit_kinds=kinds)
+            if entry.path == "shell.ironing"
+        ]
+
+    plate = _corpus("plate_holes.stl")
+    offered = topmost(plate)
+    assert [(entry.value, entry.severity) for entry in offered] == [("topmost", "info")]
+    assert offered[0].reason
+    assert not topmost(_corpus("generated_figure.stl"))
+    assert not topmost(_corpus("cup_on_stem.stl"))
+    box = trimesh.creation.box(extents=(60.0, 40.0, 20.0))
+    knob = trimesh.creation.cylinder(radius=8.0, height=6.0, sections=64)
+    knob.apply_translation((0.0, 0.0, 13.0))
+    assert not topmost(_standing(trimesh.util.concatenate([box, knob]))), "oben nur der Knauf"
+    assert not topmost(plate, print_settings.with_path(settings, "shell.top_layers", 0))
+    every = print_settings.with_path(settings, "shell.ironing", "top_surfaces")
+    assert not topmost(plate, every)
+    assert "shell.ironing" in advise.PART_PATHS
+    assert "shell.ironing" in advise.SLICED_PATHS
+
+
+def test_a_flush_fit_keeps_ironing_every_top_surface() -> None:
+    """Die bündige Passung bügelt jede Oberseite, auch eine unter dem Deckel;
+    daneben bleibt „nur die oberste“ aus, sonst stünden zwei Vorschläge für
+    dieselbe Sache im Dialog. Wer schon die oberste bügelt, bekommt jede
+    vorgeschlagen."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+
+    offered = paths(
+        advise.advise(settings, profile, _corpus("plate_holes.stl"), fit_kinds=("flush",))
+    )
+
+    ironing = [
+        entry.value
+        for entry in advise.advise(
+            settings, profile, _corpus("plate_holes.stl"), fit_kinds=("flush",)
+        )
+        if entry.path == "shell.ironing"
+    ]
+    assert "shell.ironing" in offered
+    assert ironing == ["top_surfaces"]
+    topmost = print_settings.with_path(settings, "shell.ironing", "topmost")
+    assert [
+        entry.value
+        for entry in advise.advise(topmost, profile, fit_kinds=("flush",))
+        if entry.path == "shell.ironing"
+    ] == ["top_surfaces"]
+
+
 # --- Unterschrittene Materialtemperatur bleibt nach der Auflösung sichtbar ------------
 
 
@@ -2433,6 +2581,218 @@ def test_every_reason_fits_under_the_table_of_the_print_dialog() -> None:
             if len(catalog.get(text, "")) > 70
         ]
         assert not wide, f"{language}: länger als 70 Zeichen: {wide}"
+
+
+# --- Feine Schichten (RM-586) ---------------------------------------------------------
+
+
+def _dome(radius: float = 20.0) -> MeshData:
+    """Eine Halbkugel auf der Platte: oben eine flache Kuppe, unten eine ebene
+    Standfläche, und keine Überhänge."""
+    sphere = trimesh.creation.icosphere(subdivisions=5, radius=radius)
+    floor = trimesh.creation.box(extents=(3.0 * radius, 3.0 * radius, 1.5 * radius))
+    floor.apply_translation((0.0, 0.0, 0.75 * radius))
+    dome = trimesh.boolean.intersection([sphere, floor], engine="manifold")
+    return MeshData.of(dome)
+
+
+def _fine_advice(
+    mesh: MeshData, settings: PrintSettings | None = None, **asked: object
+) -> list[SettingAdvice]:
+    profile = profiles.make_profile()
+    settings = settings or print_settings.resolve(profile)
+    result = slice_body(
+        mesh,
+        settings.layers.layer_height,
+        first_layer_height=settings.layers.first_layer_height,
+        # Wie Druckdialog und Export: zwei Bahnen des Profils als Brückenbreite,
+        # die halbe ist die Bahn, gegen die die Stufen gemessen werden.
+        bridge_from=profile.minimum_wall_thickness,
+        support_volume=False,
+    )
+    return [
+        entry
+        for entry in advise.advise(settings, profile, result=result, bounds=mesh.bounds, **asked)  # type: ignore[arg-type]
+        if entry.path in {"layers.fine_layer_height", "shell.top_thickness"}
+    ]
+
+
+def test_a_dome_gets_fine_layers_with_the_extra_print_time() -> None:
+    """Die Kuppe einer Halbkugel legt Stufen; der Rat schlägt die halbe
+    Schichthöhe vor und nennt, um wie viel der Druck länger dauert. Mit fünf
+    Deckschichten zu 0,1 mm bliebe die Oberseite 0,5 mm dünn, also kommt die
+    Mindestdicke von 0,8 mm dazu."""
+    offered = {entry.path: entry for entry in _fine_advice(_dome(), flavour="orca")}
+    fine = offered["layers.fine_layer_height"]
+    assert fine.value == pytest.approx(0.1) and fine.was == pytest.approx(0.0)
+    share = fine.reason.values["share"]  # type: ignore[union-attr]
+    assert isinstance(share, int) and 1 <= share <= 30
+    assert "%" in str(fine.reason)
+    assert offered["shell.top_thickness"].value == pytest.approx(0.8)
+
+
+def _grooved(flank: float | None) -> MeshData:
+    """Ein Klotz 30 × 30 × 20 mit fünf Rillen quer über die Oberseite.
+
+    ``flank`` ist die Neigung der Rillenflanken gegen die Waagerechte in Grad;
+    ``None`` heißt senkrechte Wände und ebener Grund wie bei eingelassener
+    Schrift. Jede Rille ist 4 mm breit."""
+    from shapely.geometry import Polygon
+
+    block = trimesh.creation.box(extents=(30.0, 30.0, 20.0))
+    block.apply_translation((0.0, 0.0, 10.0))
+    cutters = []
+    for centre in (-10.0, -5.0, 0.0, 5.0, 10.0):
+        if flank is None:
+            cutter = trimesh.creation.box(extents=(32.0, 2.0, 2.0))
+            cutter.apply_translation((0.0, centre, 20.0))
+        else:
+            depth = 2.0 * math.tan(math.radians(flank))
+            # Das Dreieck liegt in (y, z) und wird entlang x gezogen.
+            outline = Polygon(
+                [(centre - 2.0, 20.01), (centre + 2.0, 20.01), (centre, 20.0 - depth)]
+            )
+            cutter = trimesh.creation.extrude_polygon(outline, 32.0)
+            cutter.apply_transform(
+                np.array(
+                    [
+                        [0.0, 0.0, 1.0, -16.0],
+                        [1.0, 0.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 1.0],
+                    ]
+                )
+            )
+        cutters.append(cutter)
+    return MeshData.of(trimesh.boolean.difference([block, *cutters], engine="manifold"))
+
+
+def _flat_cone() -> MeshData:
+    """Ein Kegel mit 20° Neigung, Radius 20 mm: Stufen über die ganze Höhe."""
+    cone = trimesh.creation.cone(
+        radius=20.0, height=20.0 * math.tan(math.radians(20.0)), sections=256
+    )
+    return MeshData.of(cone)
+
+
+@pytest.mark.parametrize(
+    ("body", "wanted"),
+    [
+        (lambda: _dome(20.0), True),
+        (_flat_cone, True),
+        (lambda: _grooved(15.0), True),
+        (lambda: _dome(6.0), False),
+        (lambda: _grooved(45.0), False),
+        (lambda: _grooved(None), False),
+    ],
+    ids=[
+        "Kuppe R20",
+        "Kegel 20°",
+        "flache Rillen 15°",
+        "kleine Kuppe R6",
+        "Rillen 45°",
+        "Rillen senkrecht",
+    ],
+)
+def test_fine_layers_where_steps_would_show_and_nowhere_else(
+    body: Callable[[], MeshData], wanted: bool
+) -> None:
+    """Feine Schichten nur, wo flache Schrägen über einen ganzen Übergang so
+    dicht liegen wie auf der kleinsten Kuppe mit zwei Stufen: an einer großen
+    Kuppe, einem flachen Kegel, flachen Rillen. Nicht an einer kleinen Kuppe
+    (ihr Scheitel ist 0,58 mm hoch), nicht an Rillen mit 45°-Flanken (die
+    Stufe ist schmaler als eine Bahn) und nicht an Rillen mit senkrechten
+    Wänden wie eingelassener Schrift — dort liegt jede Schicht genau."""
+    offered = {entry.path for entry in _fine_advice(body(), flavour="orca")}
+    assert ("layers.fine_layer_height" in offered) is wanted, offered
+
+
+@pytest.mark.parametrize(("layer", "wanted"), [(0.2, None), (0.28, 0.14)])
+def test_the_step_limit_follows_the_layer_height(layer: float, wanted: float | None) -> None:
+    """Ein Kegel mit 30° Neigung: Bei 0,2 mm Schicht ist die Stufe
+    0,2 / tan 30° = 0,35 mm breit, schmaler als die Bahn von 0,42 mm — kein
+    Rat. Bei 0,28 mm sind es 0,48 mm, und auf jeder Stufe liegt eine eigene
+    Deckbahn: feine Schichten zu 0,14 mm."""
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(
+        print_settings.resolve(profile), "layers.layer_height", layer
+    )
+    cone = trimesh.creation.cone(
+        radius=20.0, height=20.0 * math.tan(math.radians(30.0)), sections=256
+    )
+    offered = {
+        entry.path: entry.value
+        for entry in _fine_advice(MeshData.of(cone), settings, flavour="orca")
+    }
+    assert offered.get("layers.fine_layer_height") == wanted
+
+
+def test_a_box_gets_no_fine_layers() -> None:
+    """Ein Quader hat keine flache Schräge: kein Rat."""
+    raw = trimesh.creation.box(extents=(30.0, 30.0, 20.0))
+    raw.apply_translation((0.0, 0.0, 10.0))
+    assert _fine_advice(MeshData.of(raw), flavour="orca") == []
+
+
+@pytest.mark.parametrize(
+    "asked",
+    [
+        {"flavour": "cura"},
+        {"flavour": "orca", "whole_layers": True, "shared_layers": True},
+        {"flavour": "prusa", "shared_layers": True},
+    ],
+    ids=["Cura", "Turm neben weiteren Teilen", "XL 2T neben weiteren Teilen"],
+)
+def test_no_fine_layers_where_the_slicer_cannot_follow(asked: dict[str, object]) -> None:
+    """Cura nimmt keine Höhenkurve, und wo ein Reinigungsturm neben weiteren
+    Teilen steht, verlangt der Slicer dieselben Schichten für alle: dort kein
+    Rat."""
+    assert _fine_advice(_dome(), **asked) == []
+
+
+def test_a_part_alone_beside_its_tower_gets_fine_layers() -> None:
+    """Ein bemalter Körper allein auf der Platte hat seinen Turm
+    (``whole_layers``), und die Slicer drucken seine Kurve trotzdem — sie
+    vergleichen nur zwischen mehreren Objekten (Review RM-586 F2)."""
+    paths = {entry.path for entry in _fine_advice(_dome(), flavour="orca", whole_layers=True)}
+    assert "layers.fine_layer_height" in paths
+
+
+def test_no_fine_layers_under_organic_trees() -> None:
+    """Unter organischen Bäumen lehnen PrusaSlicer und die Orca-Familie eine
+    Höhenkurve ab; die Stütze geht vor. Gefragt wird die Art, mit der das Teil
+    druckt: Die Kuppe braucht keine Stütze, und mit dem Rat „keine“ gilt der
+    Rat zu den feinen Schichten — behält der Kunde seine Bäume, nicht."""
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "tree")
+    trees = frozenset({"tree"})
+    kept = _fine_advice(
+        _dome(), settings, flavour="orca", organic=trees, declined=frozenset({"support.style"})
+    )
+    assert kept == []
+    paths = {entry.path for entry in _fine_advice(_dome(), settings, flavour="orca", organic=trees)}
+    assert "layers.fine_layer_height" in paths
+
+
+def test_a_thick_enough_top_needs_no_minimum() -> None:
+    """Trägt das Profil schon 0,8 mm Mindestdicke oder reichen die Lagen, bleibt
+    es beim Rat zu den feinen Schichten."""
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(print_settings.resolve(profile), "shell.top_thickness", 1.0)
+    assert [entry.path for entry in _fine_advice(_dome(), settings, flavour="prusa")] == [
+        "layers.fine_layer_height"
+    ]
+    many = print_settings.with_path(print_settings.resolve(profile), "shell.top_layers", 8)
+    assert [entry.path for entry in _fine_advice(_dome(), many, flavour="prusa")] == [
+        "layers.fine_layer_height"
+    ]
+
+
+def test_fine_layers_combine_to_the_finest_wanted() -> None:
+    """Null heißt aus: Verlangt ein Körper feine Schichten, bekommt die Platte
+    sie, auch wenn der Würfel daneben nichts will."""
+    assert advise._combined_value("layers.fine_layer_height", [0.0, 0.1, 0.14]) == 0.1
+    assert advise._combined_value("layers.fine_layer_height", [0.0, 0.0]) == 0.0
 
 
 # --- Lange Brücken und steile Überhänge (RM-587) ---------------------------------

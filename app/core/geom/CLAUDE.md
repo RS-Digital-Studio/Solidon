@@ -57,9 +57,9 @@ dessen Docstring nennt Rundungsgrenzen/Ursprung. Nicht Vereinbares bleibt.
 `_meets_the_shells` prüft Werkzeugtreffer an selbstkreuzenden Schalen
 (`repair.self_crossing_shells`).
 
-`attributes.in_source_layout`/`prepare_ops._without_scars` erhalten nach jeder
-Stufe bitgleich übernommene Dreiecksecken und deren Eingangsfolge;
-Dreiecksfolge/Koordinaten bleiben beim Kern. Regel/Messfall:
+`attributes.in_source_layout`/`prepare_ops._without_scars` legen nach jeder
+Stufe bitgleich Übernommenes in Ecken- und Dreiecksfolge des Eingangs, ohne
+Wirkung den Eingang selbst. Regel/Messfall:
 `operationen.md`, „Boolesches geht durch die Rückfallkette“.
 
 - **Native Stufen** übergeben `Mesh64` und lesen Status und Volumen vor der
@@ -117,12 +117,12 @@ Vertrag: `kern.md`; Startplätze, Stoppreste und Abbau: Begründungen,
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
 Merkmale und Teilträger gemeinsam; ein Teil einer nativen Fläche folgt nur
-belegt, sonst entfällt er, statt zu wachsen; `apply` vermerkt jede starre Bewegung ohne
-Spiegelung am Netz, `perceive.features.note_movement`) · `ops.py` („Transformation“,
+belegt, sonst entfällt er, statt zu wachsen; `apply` teilt die Dreiecke mit dem Quellnetz
+und vermerkt Drehen und Schieben, `perceive.features.note_movement`) · `ops.py` („Transformation“,
 `place_on_bed`, `place_group_on_bed` ohne vorberechneten Versatz;
 `repair_object` gibt einen heilen Eingang unverändert zurück) · `align.py` ·
-`orient.py` (Kandidatenlagen, Stützraum `Orientation.support`; Stapel auf bis
-zu `PROJECTION_WORKERS` Arbeitern, Folge und Bits eines Fadens)
+`orient.py` (Kandidatenlagen, Stützraum `Orientation.support`; bis zu
+`PROJECTION_WORKERS` Arbeiter, Bits wie ein Faden)
 
 **Körper erzeugen und formen** — `primitive_ops.py` (Netzzwillinge der
 exakten Grundkörper, `primitive_local_tool()` für Op und Vorschau) ·
@@ -172,9 +172,9 @@ für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 `body_overlap`) · `section.py` (§18.2; Schnittkontakte siehe Stolperfallen) ·
 `difference.py` (§18.7; eine
 ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
-`_shells_apart`; große Vergleichsnetze durchlaufen zuerst die bestehende
-koplanare Entlastung aus `mesh_ops._exactly_flattened`, mit unveränderten
-Eingängen und denselben Dichtheits-/Volumenprüfungen) · `mesh_ops.py` · `colour_ops.py` ·
+`_shells_apart`; große Vergleichsnetze zuerst über
+`mesh_ops._exactly_flattened`) · `mesh_ops.py` · `mesh_edits.py` (formtreu
+teilen und zusammenlegen) · `colour_ops.py` ·
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
 `label_ops.py` (Schriften in `data/fonts/`, Satz über `glyphs.py`;
 *Auf beiden Seiten* setzt die Rückseite am ersten äußeren Austritt entgegen

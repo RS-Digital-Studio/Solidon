@@ -37,7 +37,7 @@ from contextlib import contextmanager
 from datetime import date
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
@@ -47,7 +47,8 @@ import trimesh
 
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.transform import place_on_bed
-from app.core.scene import History, OperationDraft
+from app.core.registry import Registry
+from app.core.scene import EdgeTarget, History, OperationDraft
 from app.core.scene.project import Project, new_project
 from app.core.types import (
     BoundingBox,
@@ -55,6 +56,7 @@ from app.core.types import (
     Feature,
     Finding,
     Mesh,
+    OpContext,
     Operation,
     OpResult,
     Parameter,
@@ -1675,18 +1677,27 @@ def primitive_operation(
     )
 
 
-def thread_volume(diameter: float, pitch: float, length: float, *, internal: bool) -> float:
-    """Analytisches Volumen eines Bausteingewindes nach Pappus."""
+def thread_volume(
+    diameter: float, pitch: float, length: float, *, internal: bool, profile: str = "flat"
+) -> float:
+    """Analytisches Volumen eines Bausteingewindes nach Pappus.
+
+    Die Gangzahl ändert es nicht: Mehrere Gänge teilen sich den Vorschub, und
+    im Längsschnitt folgt Gang auf Gang im Abstand der Steigung wie bei einem.
+    """
     from itertools import pairwise
 
     from app.core.knowledge.parts import shapes
 
-    profile = list(shapes.ridge_profile(diameter, pitch, internal=internal))
-    root = profile[0][0]
-    corners = [*profile, profile[0]]
+    corners = shapes.ridge_profile(
+        diameter, pitch, internal=internal, profile=cast(shapes.ThreadProfile, profile)
+    )
+    profile_points = list(corners)
+    root = profile_points[0][0]
+    closed = [*profile_points, profile_points[0]]
     area = 0.0
     moment = 0.0
-    for (r_a, z_a), (r_b, z_b) in pairwise(corners):
+    for (r_a, z_a), (r_b, z_b) in pairwise(closed):
         cross = r_a * z_b - r_b * z_a
         area += cross
         moment += (r_a + r_b) * cross
@@ -2222,3 +2233,159 @@ def chin_over_chest() -> MeshData:
         brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
         chin(44.0),
     )
+
+
+# --- Zwei Quader, deren Nachbarkanten denselben Schlüssel tragen ---------------------
+# Kantenbindung (test_edge_binding) und Verbrauchsabdruck (RM-706) fragen daran
+# nach der rechten oder linken Kante.
+
+EDGE_PAIR_WIDTH, EDGE_PAIR_DEPTH, EDGE_PAIR_HEIGHT = 40.0, 30.0, 20.0
+#: Zwei Quader, deren Nachbarkanten vier Tausendstel auseinanderliegen — der
+#: gerundete Schlüssel unterscheidet sie nicht.
+EDGE_PAIR_GAP = 0.004
+COLLIDING_EDGE_KEY = (
+    f"e:0.00,{EDGE_PAIR_DEPTH / 2:.2f},{EDGE_PAIR_HEIGHT / 2:.2f}:0.000,0.000,1.000"
+)
+
+
+def edge_pair_mesh() -> MeshData:
+    left = trimesh.creation.box(extents=(EDGE_PAIR_WIDTH, EDGE_PAIR_DEPTH, EDGE_PAIR_HEIGHT))
+    left.apply_translation((-EDGE_PAIR_WIDTH / 2.0, 0.0, EDGE_PAIR_HEIGHT / 2.0))
+    right = trimesh.creation.box(extents=(EDGE_PAIR_WIDTH, EDGE_PAIR_DEPTH, EDGE_PAIR_HEIGHT))
+    right.apply_translation((EDGE_PAIR_WIDTH / 2.0 + EDGE_PAIR_GAP, 0.0, EDGE_PAIR_HEIGHT / 2.0))
+    return MeshData(trimesh.util.concatenate([left, right]))
+
+
+def edge_pair_brep() -> Any:
+    exact_kernel()
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import edit
+    from app.core.brep.kernel import Solid
+
+    builder = BRep_Builder()
+    compound = TopoDS_Compound()
+    builder.MakeCompound(compound)
+    builder.Add(
+        compound,
+        edit.moved(
+            edit.box(EDGE_PAIR_WIDTH, EDGE_PAIR_DEPTH, EDGE_PAIR_HEIGHT),
+            (-EDGE_PAIR_WIDTH / 2.0, 0.0, 0.0),
+        ).shape,
+    )
+    builder.Add(
+        compound,
+        edit.moved(
+            edit.box(EDGE_PAIR_WIDTH, EDGE_PAIR_DEPTH, EDGE_PAIR_HEIGHT),
+            (EDGE_PAIR_WIDTH / 2.0 + EDGE_PAIR_GAP, 0.0, 0.0),
+        ).shape,
+    )
+    return Solid(compound)
+
+
+def edge_pair(backend: str) -> tuple[Any, str]:
+    if backend == "mesh":
+        return edge_pair_mesh(), "mesh"
+    return edge_pair_brep(), "brep"
+
+
+def edge_document(
+    keys: str, *, operation: str = "fillet_edges", choice: str = "named", size: float = 2.0
+) -> Document:
+    measure = "distance" if operation == "chamfer_edges" else "radius"
+    return Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(id=1, op="create_brep_cylinder", inputs=[], outputs=["obj_1"], params={}),
+            Operation(
+                id=2,
+                op=operation,
+                inputs=["obj_1"],
+                outputs=["obj_1"],
+                params={measure: size, "edges": choice, "edge_keys": keys},
+            ),
+        ],
+    )
+
+
+def edge_registry(body: Any, kind: str, operation: str = "fillet_edges") -> Registry:
+    """Die echte Kantenoperation hinter einer Quelle, die den Prüfkörper liefert."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+
+    def make_body(ctx: OpContext) -> OpResult:
+        return OpResult(outputs=[SceneObject(id="", name="Paar", mesh=body, kind=kind)])
+
+    registry = Registry()
+    registry.register(dataclasses.replace(REGISTRY.get("create_brep_cylinder"), fn=make_body))
+    registry.register(REGISTRY.get(operation))
+    return registry
+
+
+class EdgeChooser:
+    """Antwortet wie ein Kunde, der die Kante im Bild anklickt, die ``pick`` beschreibt."""
+
+    def __init__(self, pick: Callable[[EdgeTarget], bool]) -> None:
+        self.pick = pick
+        self.asked: list[str] = []
+        self.offered: list[list[str]] = []
+        self.previews: list[Any] = []
+        self.targets: tuple[EdgeTarget, ...] = ()
+        self.cleared = 0
+
+    def context(self, preview: Any, candidates: tuple[Any, ...]) -> None:
+        if preview is None:
+            self.cleared += 1
+            return
+        self.previews.append(preview)
+        assert all(isinstance(entry, EdgeTarget) for entry in candidates)
+        self.targets = candidates
+
+    def __call__(self, question: str, choices: list[str]) -> str:
+        self.asked.append(question)
+        self.offered.append(list(choices))
+        for target in self.targets:
+            if target.token in choices and self.pick(target):
+                return target.token
+        pytest.fail(f"kein passender Kandidat: {self.targets}")
+
+
+def right_box(target: EdgeTarget) -> bool:
+    return target.middle[0] > EDGE_PAIR_GAP / 2.0
+
+
+def left_box(target: EdgeTarget) -> bool:
+    return target.middle[0] < EDGE_PAIR_GAP / 2.0
+
+
+#: Unter welchem Winkel ein Dreieck ein Splitter ist, in Grad (:func:`sliver_share`).
+SLIVER_DEGREES = 10.0
+
+
+def sliver_share(mesh: MeshData) -> float:
+    """Der Anteil der Splitter — gemessen wie im Versionsvergleich von Weg 4 (RM-671).
+
+    Ein **Splitter** ist ein Dreieck mit einem Winkel unter :data:`SLIVER_DEGREES`.
+    Auf Splittern wirkt ein Pinsel ungleichmäßig, und jeder Folgeschritt rechnet
+    an Dreiecken, die keine Fläche tragen. Gemessen wird über die Kosinusse der
+    drei Ecken, ohne Winkelfunktion: Ein Winkel liegt unter zehn Grad, wenn sein
+    Kosinus über dem von zehn Grad liegt. Ein Dreieck mit einer Kante der Länge
+    null zählt als Splitter.
+    """
+    corners = np.asarray(mesh.raw.vertices, dtype=float)[np.asarray(mesh.raw.faces, dtype=np.int64)]
+    if not len(corners):
+        return 0.0
+    limit = math.cos(math.radians(SLIVER_DEGREES))
+    widest = np.full(len(corners), -1.0)
+    for corner in range(3):
+        one = corners[:, (corner + 1) % 3] - corners[:, corner]
+        two = corners[:, (corner + 2) % 3] - corners[:, corner]
+        lengths = np.sqrt((one * one).sum(axis=1) * (two * two).sum(axis=1))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            cosine = np.where(lengths > 0.0, (one * two).sum(axis=1) / lengths, 1.0)
+        widest = np.maximum(widest, cosine)
+    return float((widest > limit).mean())

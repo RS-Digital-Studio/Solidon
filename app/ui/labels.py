@@ -1203,6 +1203,11 @@ def colour_name(value: str) -> str:
 #: stehen wie oben nicht drin — wo der Name die ganze Auskunft ist, wäre ein
 #: Satz Tapete.
 _CHOICE_NOTES: dict[str, TranslatableText] = {
+    # Ohne Flankenwinkel: Die Bausteine bauen das druckbar abgeflachte Profil (49°),
+    # nur *Schraube erstellen* das ISO-nahe mit 60° (§39, Review GEW G5).
+    "metric": _("Steigung in Millimetern wie metrische ISO-Gewinde."),
+    "whitworth": _("Gänge je Zoll, Flanken 55° gerundet wie Rohrgewinde G."),
+    "unified": _("Gänge je Zoll wie UNC und UNF."),
     "mesh": _("Berechnet die Form als Dreiecksnetz."),
     "brep": _("Berechnet die Form mit dem exakten Kern aus Flächen und Kanten."),
     "motedis-2020-b6": _(
@@ -1403,6 +1408,8 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
         "Die Naht springt zufällig — keine durchgehende Linie, dafür überall kleine Punkte."
     ),
     "rear": _("Die Naht liegt gesammelt auf der Rückseite — die Schauseite bleibt frei."),
+    "topmost": _("Nur die oberste Fläche des Teils, etwa der Deckel einer Box."),
+    "top_surfaces": _("Jede Oberseite, auch die Gleitfläche einer Passung darunter."),
     "classic": _("Wandbahnen mit fester Breite — vorhersehbar und bewährt."),
     "arachne": _("Wandbahnen mit veränderlicher Breite — füllt dünne Stellen besser aus."),
     "gyroid": _(
@@ -1548,6 +1555,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # zeigen* fliegt dorthin, im Prüfbericht steht er als Ort des Befunds.
     "location": _("Stelle"),
     "narrowing": _("Verengung"),
+    # ``fasteners``: wo ein kegeliges Innengewinde in der Tiefe am engsten ist.
+    "narrowest": _("Engster Durchmesser"),
     "nominal_side_clearance": _("Seitliches Nennspiel"),
     "normal": _("Richtung der Fläche"),
     "outer": _("Senkung"),
@@ -1713,6 +1722,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "floor": _("Boden"),
     "flow_limit": _("Höchster Volumenstrom"),
     "format": _("Format"),
+    # ``counterpart``: die Gewindeform und die Gänge je Zoll eines eigenen Zollmaßes.
+    "form": _("Gewindeform"),
+    "tpi": _("Gänge je Zoll"),
     "excess": _("Überstand"),
     "footprint": _("Standfläche"),
     "formats": _("Formate"),
@@ -1725,8 +1737,6 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "given": _("Vorhanden"),
     "grams": _("Gramm"),
     "grid": _("Raster"),
-    # ``geom.prepare_ops``: die Händigkeit eines Gewindes, das nicht neu geschnitten wird.
-    "handedness": _("Gangrichtung"),
     "groups": _("Gruppen"),
     "height": _("Höhe"),
     # ``geom.repair``: geschlossene oder offene Stellen, gezählt als Ringe.
@@ -1782,6 +1792,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "megabytes": _("Megabyte"),
     "minimum": _("Mindestwert"),
     "minutes": _("Minuten"),
+    "model": _("Modell"),
     "motion": _("Bewegung"),
     "missed": _("Nicht getroffene Züge"),
     "missing": _("Fehlt"),

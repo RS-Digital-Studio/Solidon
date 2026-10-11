@@ -178,6 +178,26 @@ Gewinde usw sollten alle Größen unterstützen" und „nicht mehr begrenzen".
 Die Tabelle trägt die ISO-Reihe M1.6 bis M64; dazwischen und darüber ist
 ein Maß abgeleitet und sagt es, statt eine Normgröße vorzutäuschen.
 
+Warum ein Kegel in seiner Bezugsebene misst: Das Merkmal nennt das Maß in der
+Mitte, wie der exakte Leser. Gegenstück und Passung lasen es als Nennmaß der
+Bezugsebene; ein frisches R-1/4-Paar aus *Gegenstück zum Gewinde* meldete
+„enger als vorgesehen, 0,12 statt 0,50 mm“, 1/2-14 NPT mit 30 mm bekam R 1/2
+als Gegenstück (55° statt 60°), R 1/4 innen ab 20 mm gar keines (Review GEW,
+H1). Die zwei Mitten eines gefügten Paars liegen auf verschiedenen Höhen; nur
+die Bezugsebene ist beiden gemeinsam.
+
+Warum der Kegel am Netz durch OCCT geht: Kegelkern und kegelig gelegter Gang,
+am Netz vereinigt, ließen an R 1/4 über 200 mm eine Falte stehen, und ein
+nachträglich verzogener Zylinder faltete seine Stirnflächen. Genäht und
+vernetzt ist der Körper dicht. Der Preis: Dieser Netzweg ist plattformgleich
+nur so weit wie die Tessellierung von OCCT, anders als jeder andere Gewindeweg
+am Netz. Ohne exakten Kern sagt er deshalb ab, statt still zu verziehen.
+
+Warum Gänge je Zoll ein `least` tragen: Null heißt dort „die Reihe der Form“,
+also kann der Mindestwert nicht die gröbste Steigung sein. *Schraube
+erstellen* und der Drehdeckel nahmen 0,5 Gänge je Zoll an (50,8 mm), und der
+Nachweis fuhr das grobe Ende des eigenen Maßes in Zollform nie (Review GEW, M4).
+
 ## Was eine Richtung hat, wird an ihr gemessen
 
 > Rastnase und Schnapphaken standen bis zum 22.09.2026 verkehrt herum — die

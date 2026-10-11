@@ -44,6 +44,10 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   (`analysis.model_support`): Fasst der Raum **unter** ihr keinen Kreis von
   `CHANNEL_WIDTH` und liegt ihr Grundriss zwischen seinen Auflagen, gehalten
   nur von Material daneben (`_Ceilings.closes`), schließt sie sich selbst.
+  Die oberste Schicht der Decke hält bis zur doppelten Zugabe
+  (`_Ceilings._anchored`): Den Spalt zur hohen Wand schließt die nächste
+  Schicht von beiden Seiten; mit einer Zugabe hing die Antwort am
+  Schichtraster, für jede Schicht verdoppelt schlossen sich falsche Decken.
   Gefragt wird die ganze Decke (Flächenmehrheit). Außen auf dem Modell zählt
   `worth_support`, auch als `open_field`. Wer das anfasst, misst Schüssel und
   Drache. Der Brückenbefund rät über einer Kanaldecke zum Übergang, nicht zur
@@ -80,7 +84,7 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
 - **Zwei Wände für hohe Bäume** (`support.tree_walls`): ab `TALL_TREE_HEIGHT`
   Säulenhöhe (`ModelSupport.tallest_column`: bis zum Boden des Körpers oder zur
   letzten Auflage, ohne Ränder und Kanaldecken), gefragt mit `printed_style` gegen
-  `trees`. Die Orca-Familie liest die Wandzahl unter gefüllten organischen
+  `trees`, bei Cura mit der Art der Platte (`on_the_plate`). Die Orca-Familie liest die Wandzahl unter gefüllten organischen
   Bäumen nicht (`IGNORED_UNDER_TREES_BY_PROGRAM`), unter hohlen schon
   (`handover.hollow_trees`); Bambu Studio und Creality Print lesen sie überall,
   Creality als `tree_support_wall_count_tree` (`PROGRAM_KEYS`). Der Druckdialog
@@ -99,10 +103,18 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Schacht, der einen Kreis von `CHANNEL_WIDTH` fasst wie `_narrow`, sonst
   holt niemand die Stütze heraus), denn ein Loch im Schnitt ist auch das
   Innere jedes offenen Gefäßes; ausgespart wird dann die ganze Säule, ihr
-  Stück braucht selbst Stütze. Der Schacht steht senkrecht: Ein schräges Loch
-  zählt nur mit seiner senkrechten Durchsicht, ein Sims daneben bleibt
-  gesperrt (bekannte Grenze, Docstring von `_open_above`). Ohne gesperrten
-  Raum kein Vorschlag. Familien: `dateiformat.md`.
+  Stück braucht selbst Stütze. Ein schräger oder gerundet geknickter Schacht
+  zählt, wenn sich der Kreis Schicht für Schicht hindurchschiebt
+  (`_shafts_pass`, nur gefragt, wenn senkrecht keiner offen ist): Er weicht
+  nur so weit aus, wie eine Wand ihn schiebt, je Schicht höchstens um den
+  Stützwinkel des Schnitts (`SliceResult.overhang_angle`), sonst schöbe er
+  sich unter einem Dach hervor; wer geschoben wird, braucht Platz für die
+  Ellipse seines schrägen Wegs (`_oval_centres`), je Loch mit eigener Neigung
+  (`_split_by_hole`), sonst zählte ein schräger Schlitz oder Ast mit seiner
+  waagerechten statt seiner Weite quer zur Achse. Der
+  Kreis folgt der hinteren Wand, nicht der Achse: Scharfe Knicke, Lippen und
+  enge Wendeln bleiben zu wie vor RM-629 (Grenzen in der Begründung). Ohne
+  gesperrten Raum kein Vorschlag. Familien: `dateiformat.md`.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Ränder tragen sich selbst** (`analysis.ledges`): Eine Decke, deren Teil
   jenseits `LEDGE_REACH` um ihre Wurzel höchstens `LEDGE_SPILL` des Felds ist
@@ -120,6 +132,45 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   fragt mit `only`. `support.spare_ledges` sperrt ihre
   Überhangfläche (`ledge_space`) und spart aus, was Stütze braucht;
   vorgeschlagen nur mit Stützen.
+- **Ein Bogen druckt als zwei Kragarme, seine letzte Spanne ist eine
+  Brücke** (`analysis.vaults`, `_Ceilings.arch`): Schließt sich eine Decke
+  zwischen ihren Auflagen (`_Ceilings.closes`, die ganze Decke samt
+  Kanalstücken), trägt sich ein Streifen unter der obersten Schicht, der zu
+  `CEILING_SPANNED` zwischen den Auflagen liegt (keine Haube vor einer
+  Mündung), **als Kragarm, solange seine Außenbahn höchstens eine
+  Bahnbreite neben der Schicht darunter liegt** (`_cantilever`: anderthalb
+  Bahnbreiten, höchstens Zugabe und eine Bahn; die Bahn aus `bridge_from`
+  des Schnitts, nie in Schichthöhen umgerechnet); weiter Kragendes ist eine
+  Brücke längs der freien Kante und trägt sich nur kurz, bis
+  `SPAN_INTERESTING`, gemessen entlang der losen Kante — an einem Bogen der
+  Lauf, nicht die Sehne (`_runs_free`, `_runs_loose`) —, und nur bis Zugabe
+  plus zwei Bahnen und `CANTILEVER_LAYERS` Schichthöhen; bis gut 0,2 mm
+  deckeln die Schichthöhen. Keine Breite in Millimetern trennt eine
+  Satteldecke unter 8,5° bei 0,08 mm vom Rundbogen R 30 bei 0,2 mm. Läuft
+  sie weiter, gehört sie zum Scheitel: Ab 0,2 mm behalten Pultdecke unter 12°
+  und Haut unter 15° in 20 mm Tiefe ihre Stütze, ein Rundbogen in einer Wand
+  über 15 mm Tiefe auch; bei 0,08 und 0,12 mm trägt sich eine Decke ab gut 11°
+  als Kragarm, auch in tiefer Wand. Ein Streifen zwischen
+  zwei Auflagen (`_held_twice`) trägt sich, wenn sein Teil jenseits des
+  Kragarms selbst zwischen Auflagen liegt (sonst fasst ein einseitiger
+  Streifen mit seinen Enden die eigene Hülle), seine lose Kante nicht weiter
+  als `SPAN_INTERESTING` läuft, außer eine Bahnenrichtung hat über ihm an
+  beiden Enden Halt (`_anchored_span`; die Hülle eines gebogenen Rands ist
+  sein Kreissegment: Halbkuppel, Nische) und kein Punkt weiter als
+  `SPAN_INTERESTING / 2` vom Material darunter liegt — weiter ist er eine
+  Brücke, kein Bogen und kein Scheitel (Kumiko-Gitter, Tunneldecke). Ein
+  Scheitel trägt sich als Rand (`LEDGE_REACH` je Kragarm) oder als Brücke
+  zwischen den Flanken (`SPAN_INTERESTING`, quer gemessen). Bogenstreifen
+  zählen nicht zur Fläche, nicht zu „auf dem Modell“ und nicht zum
+  Überhangbefund; keine Sperre. **Die Brückenregel gilt für Streifen zwischen
+  zwei Auflagen**, nicht für die an einer Seite hängenden (`hanging_vaults`,
+  ihre Brückenweite wäre die Diagonale), in Stützbedarf, Bericht und
+  `open_pieces` gleich. Die oberste Schicht zählt mit ihrer Fläche. **In der
+  Kanalfrage wird ein Scheitel, der weiter kragt, als er sich trägt, samt
+  seiner letzten Spanne ausgespart** (`_Arch.overhanging`, `spared`), die
+  Decke bleibt Kanal — nach Mehrheit gezählt, kippte eine von zwei
+  gespiegelten Taschen. Wer nur Ränder fragt, rechnet keine Bögen; Schließ-
+  und Bogenantwort sind je Schichten gemerkt (`_closing_answers`).
 - **Der Stützkontakt folgt dem Material der Spule** (`_support_contact`):
   Abstand aus Schichthöhe × `support_gap_factor`, begrenzt durch
   `support_gap_min`/`support_gap_max` des Materialprofils (Regel 7,
@@ -146,7 +197,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   der das Teil druckt (`printed_style`: der Vorschlag, außer der Kunde lehnt
   ihn ab, `declined` — im Dialog abgewählt, dann fragt er neu, im Export nicht
   übernommen; `handover.organic_styles`, ohne Programm die Familie; Rat,
-  Feldsatz und Export fragen dieselbe Auskunft) —, das Vielfache innerhalb der
+  Feldsatz und Export fragen dieselbe Auskunft; bei Cura gilt die Art der
+  Platte, `on_the_plate`, und jeder Aufrufer des Rats je Teil gibt
+  `plate_style` mit, sonst kommt 0,4 mm Spitzenluft über Gitter zurück) —, das Vielfache innerhalb der
   Materialgrenzen, auch statt eines Werts in `SUPPORT_GAP_BAND`, der zwischen
   zwei Schichten liegt (`in_whole_layers`) — welches Vielfache, sagt das
   Material, nicht die Rundungsart; einen eigenen solchen Wert nennt der Export
@@ -176,6 +229,26 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `separate`); gegen die Übernahme gefragt, kam jede Zeile mit ihrer
   Gegenzeile wieder. Die Zeile nennt nur Teile mit ihrem Wert. Übergabe:
   `dateiformat.md`.
+- **Feine Schichten nur, wo Stufen zu sehen wären** (`advise._fine_layers`,
+  `slice/fine_layers.py`): aufwärts weisende Schrägen, deren Stufe breiter
+  als eine Bahn wird (`step_slope`), über einen ganzen Übergang so dicht wie
+  auf der kleinsten Kuppe mit zwei Stufen (`stepped_area_worth`) — jede Grenze
+  aus Schicht und Bahn, keine Streuzahl, entschieden ohne Winkelfunktion
+  (`_step_cosine`, `kern.md`). Wirksam ab Kuppen von etwa R 9 mm bei 0,2 mm
+  Schicht: Ein Bereich ist mindestens einen Übergang lang. Halbe Schicht, nie
+  unter einem Viertel der Düse, nur wo sie ein Viertel dünner wird. Der Grund
+  nennt den Zeitanteil des Teils
+  (`extra_time`); mit schon gewählter feiner Höhe nur für Teile mit Bereichen.
+  Nicht für Cura (seine Automatik folgt dem flachsten Dreieck jeder Höhe und
+  wird fast überall fein), nicht, wo ein Reinigungsturm neben weiteren Teilen
+  steht (`shared_layers`, `writer.shared_layer_plates`; PrusaSlicer prüft an
+  jeder Maschine mit mehreren Werkzeugen, auch mit einer Spule), und nicht unter
+  organischen Bäumen (`printed_style` in `organic`): Beides lehnen PrusaSlicer
+  und die Orca-Familie ab, und die Stütze geht vor. Unter Bäumen sagt es das
+  Feld (`slicer_keys.limitation`), am Turm der Befund des Exports; ein Körper
+  allein behält die feinen Schichten neben seinem Turm. Ließe die Lagenzahl
+  die Oberseite unter `TOP_SHELL_MINIMUM`, kommt `shell.top_thickness` dazu.
+  Übergabe: `dateiformat.md`.
 - **Was das Modell schon ausgleicht, gleicht der Slicer nicht noch einmal aus**
   (`_from_allowances`, RM-589): Legt ein Schritt des Körpers Spiel in eine
   Innenkontur (`scene.fits.allowances_for`, `"holes"`), heißt der Vorschlag
@@ -243,6 +316,26 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, gemessen über Arme
   der Düsenbreite wie im Slicer, ab `advise.SCARF_MIN_LOOP` Umfang) über
   `SCARF_MIN_HEIGHT`.
+- **Eine Figur bekommt die Naht hinten vorgeschlagen** (`shell.seam_position
+  = rear`): Außenkontur überwiegend frei geformt (`analysis.free_form_share`:
+  gebogen, keine Gerade ab `STRAIGHT_RUN`, in einer Schicht, die sich gegen
+  die darunter ändert) ab `advise.FIGURE_SHARE`, über `SCARF_MIN_HEIGHT`, und
+  nur wo der Slicer die Naht selbst sucht (`SEAM_SEEKING`) — „zufällig“ ist
+  eine eigene Antwort auf dieselbe Frage. Vorn ist, was der Slicer vorn nennt.
+- **Eine große flache Oberseite bekommt *Oberfläche bügeln: Oberste Fläche***
+  (`shell.ironing = topmost`, `_from_top`): die letzte Schicht ab
+  `IRONING_TOP_AREA` und mindestens `IRONING_TOP_SHARE` des größten
+  Querschnitts — sonst ist oben ein Griff, keine Schauseite. Nicht neben einer
+  bündigen Passung (die bügelt jede Oberseite), ohne Deckschicht oder wo
+  schon gebügelt wird.
+- **Übergabe von Naht und Bügeln, je Teil in allen acht Programmen belegt**:
+  „hinten“ ist bei Orca `back`, bei Prusa `rear`, bei Cura `z_seam_type =
+  back` (`handover._cura_seam`). Die oberste Fläche ist bei Orca
+  `ironing_type = topmost`, bei Prusa dasselbe mit `ironing = 1`, bei Cura
+  `ironing_only_highest_layer`; „alle Oberseiten“ (`top_surfaces`, die
+  bündige Passung) ist `top` bzw. Cura ohne die oberste allein. Bügeln ist
+  eine Wahl, kein Schalterpaar: Die Slicer kennen es so, und eine Vorrangregel
+  zwischen zwei Haken wäre schlechtere Bedienung (Format 52).
 - **Schmale Stege bekommen eine langsame erste Schicht**: Liegt mindestens
   `advise.NARROW_WEB_SHARE` der ersten Schicht in Stegen unter
   `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) oder mehr als

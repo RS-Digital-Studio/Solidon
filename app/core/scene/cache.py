@@ -30,9 +30,9 @@ from collections.abc import Callable, Collection, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Final, Protocol, cast
+from typing import TYPE_CHECKING, Any, Final, Protocol, cast
 
-from app.core.errors import AppError
+from app.core.errors import PROGRAMMING_ERRORS, AppError
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, results_cache_dir
 from app.core.scene.serialise import (
@@ -56,6 +56,10 @@ from app.core.types import (
     Transform,
 )
 from app.i18n import TranslatableText
+
+if TYPE_CHECKING:
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import StoredDetection
 
 _log = get_logger(__name__)
 
@@ -309,6 +313,66 @@ def _release_steps(excess: int) -> int:
     return release_remembered_steps(excess)
 
 
+def _fields_of(mesh: Mesh) -> tuple[int, tuple[int, ...], int, tuple[int, ...]] | None:
+    """Woran eine schlanke Kopie ihr volles Netz erkennt: Lage und Form von Ecken und Dreiecken.
+
+    ``MeshData.lean`` baut ein neues Netz über denselben Feldern; ein bewegtes
+    Netz teilt nur die Dreiecke (``transform``), nie beide.
+    """
+    raw = getattr(mesh, "raw", None)
+    if raw is None:
+        return None
+    import numpy as np
+
+    vertices = np.asarray(raw.vertices)
+    faces = np.asarray(raw.faces)
+    if not len(faces):
+        return None
+    return (
+        vertices.__array_interface__["data"][0],
+        vertices.shape,
+        faces.__array_interface__["data"][0],
+        faces.shape,
+    )
+
+
+def _same_content(shown: Mesh, lean: Mesh) -> bool:
+    """Ob ``shown`` dasselbe Netz ist wie die schlanke Kopie ``lean``, bis auf die Ableitungen.
+
+    Dieselben Felder (``MeshData.lean`` teilt Ecken und Dreiecke), dieselben
+    Slots und derselbe Hohlraum; am exakten Körper dieselbe Form mit denselben
+    Flächenfilamenten und derselben Vernetzung. Was so gleich ist, darf die
+    Kopie im Eintrag ersetzen, gleich welches Objekt es ist.
+    """
+    if type(shown) is not type(lean):
+        return False
+    from app.core.brep.kernel import Solid
+
+    if isinstance(shown, Solid) and isinstance(lean, Solid):
+        if (
+            shown.shape is not lean.shape
+            or shown.face_slots != lean.face_slots
+            or shown.deflection != lean.deflection
+            or shown.converted_from is not lean.converted_from
+        ):
+            return False
+        shown_mesh, lean_mesh = shown._cache.get("mesh"), lean._cache.get("mesh")
+        if shown_mesh is None or lean_mesh is None:
+            return False
+        return _same_content(shown_mesh, lean_mesh)
+    fields = _fields_of(shown)
+    if fields is None or fields != _fields_of(lean):
+        return False
+    if getattr(shown, "slots", None) != getattr(lean, "slots", None):
+        return False
+    if getattr(shown, "cavity_open", None) != getattr(lean, "cavity_open", None):
+        return False
+    inner, lean_inner = getattr(shown, "cavity", None), getattr(lean, "cavity", None)
+    if inner is None or lean_inner is None:
+        return inner is lean_inner
+    return _same_content(inner, lean_inner)
+
+
 def _leaner(result: CachedResult, kept: Collection[int]) -> CachedResult:
     """Der Eintrag mit schlanken Netzen (``MeshData.lean``) außer denen der Szene."""
     objects = []
@@ -474,7 +538,33 @@ _REFUSALS_KEPT: Final = 256
 #:   sobald einer selbst die volle Umdrehung trägt
 #:   (``brep.features._cylinder_group_extent``). Gespeicherte exakte Erkennungen
 #:   nannten die Bohrung durch berührende Platten angeschnitten.
-CACHE_FORMAT_VERSION: Final = 54
+#: - 54 (Welle 2): Die Pakete G, B und L auf einem gemeinsamen Stand; trennt ihn
+#:   von den Ergebnissen der einzelnen Zweige.
+#: - 55 (RM-592): Eine Boolesche ohne Wirkung gibt ihren Eingang in dessen
+#:   Dreiecksfolge zurück (``attributes.in_source_layout``). Ein gespeichertes
+#:   Ergebnis trüge die Folge des Kerns und träfe den Merkmalscache nicht.
+#: - 56 (RM-592): Der Merkmalscache unterscheidet ein bewegtes Netz mit
+#:   mitgetragenen Normalen und Flächen von einem frisch gebauten mit denselben
+#:   Ecken (``features._detection_key``). Ein gespeichertes Ergebnis trüge noch
+#:   die Erkennung des bewegten Zwillings.
+#: - 57 (RM-695): Merkmale stehen typgenau auf der Platte (``_exact_to_data``),
+#:   und die Erkennung eines Netzes liegt als eigener Eintrag daneben. Ein
+#:   älterer Eintrag gäbe Tupel als Listen zurück.
+#: - 58: Paket E auf dem Stand von welle3 (``fcac08701``: D, I, L3); trennt ihn
+#:   von den Ergebnissen der einzelnen Zweige.
+#: - 59 (RM-695): Ein bewegtes Netz trägt seine mitgetragenen Maße auf der
+#:   Platte (``_carried_to_disk``). Ein älterer Eintrag gäbe es ohne sie zurück,
+#:   und die Erkennung läse andere letzte Stellen als in der Sitzung.
+#: - 60: Paket E auf dem Stand von welle4 (``02213548a``, RM-698): Ein bewegtes
+#:   Netz trägt seine Facettennormalen gedreht und die Aufpunkte mitbewegt, und
+#:   beide reisen mit den mitgetragenen Maßen auf die Platte. Ein Eintrag von 59
+#:   trüge die Normalen in der alten Richtung.
+#: - 61 (Intel-Mac, ``7768d8e33``, dort als 55 eingetragen): Ebene Dicht- und
+#:   erkannte Flächen nennen ihre Normale ohne ``trimesh``s Kehrwert
+#:   (``stable_normals``), waagrechte genau als Achse; die Innenlage sucht
+#:   unter derselben Normale. Gespeicherte Erkennungen trügen
+#:   ``±0.9999999999999999`` je nach erstem Dreieck.
+CACHE_FORMAT_VERSION: Final = 61
 
 
 @dataclass(frozen=True, slots=True)
@@ -568,6 +658,10 @@ class ResultCache:
         """Je Schlüssel die zuletzt gemessenen Bytes und woran die Messung hing
         (:func:`_held_signature`)."""
         self._disk = disk
+        self._last_disk_hit: str | None = None
+        """Der Schlüssel des letzten Plattentreffers (:meth:`_lean_earlier_disk_hit`)."""
+        self._leaned: set[int] = set()
+        """Die Nummern der schlanken Kopien von dort, die :meth:`restore_shown` prüft."""
         self._refusals: OrderedDict[str, AppError] = OrderedDict()
         """Das Urteil der vollen Kette über Schritte, an denen sie gescheitert ist (RM-534).
 
@@ -620,11 +714,56 @@ class ResultCache:
             if from_disk is not None:
                 with self._lock:
                     self.statistics.disk_hits += 1
+                    released = self._lean_earlier_disk_hit(key)
                     self._store(key, from_disk)
+                    self._last_disk_hit = key
+                if released:
+                    from app.core.memory import note_released
+
+                    note_released(released)
                 return from_disk
         with self._lock:
             self.statistics.misses += 1
         return None
+
+    def _lean_earlier_disk_hit(self, key: str) -> int:
+        """Nur mit gehaltenem Schloss — der vorige Plattentreffer gibt seine Ableitungen ab.
+
+        Eine Auswertung geht den Verlauf von vorn durch; kommt der nächste
+        Stand von der Platte, ist der vorige nur noch Eintrag. Im Speicher
+        teilte ein bewegtes Netz Kantentabellen und Nachbarschaften mit seinem
+        Quellnetz (``transform._carry_cache``), von der Platte gelesen hält
+        jeder Stand eigene (``_warm_figures``, die Erkennung am geladenen
+        Netz): am Spiderman rund 290 MB je Verschieben, beim Öffnen eines
+        Verlaufs mit vier Schritten 1,1 GB mehr als derselbe Verlauf im
+        Speicher (RM-698). Der jüngste Treffer bleibt ganz. Ein Körper eines
+        früheren Schritts, den die Szene am Ende noch zeigt, bekommt sein volles
+        Netz in :meth:`trim` zurück (:meth:`_restore_shown`); hier ist die Szene
+        noch nicht bekannt. Gibt die Bytes zurück, die dabei losgelassen
+        werden — nur die der Netze: Merkmale bleiben, wie sie sind, und sie zu
+        zählen kostete am Eiffelturm 1,2 s unter dem Schloss (Review 1, G1).
+        """
+        earlier = self._last_disk_hit
+        if earlier is None or earlier == key:
+            return 0
+        entry = self._entries.get(earlier)
+        if entry is None:
+            return 0
+        loose = [0]
+        seen: set[int] = set()
+        for body in entry.objects:
+            _mesh_bytes(body.mesh, seen, loose)
+        leaner = _leaner(entry, ())
+        if leaner is entry:
+            return 0
+        for full, lean in zip(entry.objects, leaner.objects, strict=True):
+            if lean.mesh is not full.mesh:
+                # Keine Halterung des vollen Netzes: Es soll frei werden
+                # können, wenn die Szene es nicht zeigt.
+                self._leaned.add(id(lean.mesh))
+        self._entries[earlier] = leaner
+        self._held.pop(earlier, None)
+        return loose[0]
 
     def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
         """Legt ein Ergebnis ab — im Speicher immer, auf der Platte auf Verlangen.
@@ -750,9 +889,58 @@ class ResultCache:
         """
         from app.core.memory import note_released
 
+        kept = list(keep)
         with self._lock:
-            released = self._trim(list(keep))
+            self._restore_shown(kept)
+            released = self._trim(kept)
         note_released(released)
+
+    def restore_shown(self, keep: Iterable[Mesh]) -> None:
+        """Nur die Rückgabe aus :meth:`trim` — für einen Lauf, der angehalten hat.
+
+        Ein angehaltener Lauf ruft kein ``trim``; ohne Rückgabe blieb ein
+        gezeigter Körper im Cache schlank, und nach Strg+Z war er getauscht und
+        seine Schichtanalyse weg (Nachprüfung zu RM-698, N2).
+        """
+        kept = list(keep)
+        with self._lock:
+            self._restore_shown(kept)
+
+    def _restore_shown(self, kept: Sequence[Mesh]) -> None:
+        """Nur mit gehaltenem Schloss — gezeigte Netze kommen in ihren Eintrag zurück (RM-698).
+
+        Beim Öffnen gibt ein Eintrag seine Ableitungen ab, sobald der nächste
+        von der Platte kommt (:meth:`_lean_earlier_disk_hit`). Zeigt die Szene
+        danach einen Körper dieses Eintrags — in einer Szene mit mehreren
+        Körpern stammt nicht jeder aus dem letzten Schritt —, hält sie das
+        volle Netz, der Eintrag eine schlanke Kopie derselben Felder. Ohne
+        Rückgabe holte die nächste Auswertung die Kopie, die Szene tauschte den
+        Körper gegen sie, und der Prüfbericht schnitt ihn neu: am Laptop-Riser
+        18,8 s CPU. Zurück kommt nur **gleicher Inhalt** (:func:`_same_content`):
+        dieselben Felder, gleiche Slots, gleicher Hohlraum. Gleiche Felder allein
+        genügen nicht — ein bemalter Körper legt neue Slots über dieselben Ecken
+        und Dreiecke —, und die Nummer des Originals auch nicht: Beim ``trim``
+        ist es oft schon frei, und ein bemaltes Netz kann sie erben (Nachprüfung
+        zu RM-698, N1).
+        """
+        leaned, self._leaned = self._leaned, set()
+        if not leaned or not kept:
+            return
+        for key, entry in list(self._entries.items()):
+            objects = []
+            changed = False
+            for body in entry.objects:
+                mesh = None
+                if id(body.mesh) in leaned:
+                    mesh = next((shown for shown in kept if _same_content(shown, body.mesh)), None)
+                if mesh is None or mesh is body.mesh:
+                    objects.append(body)
+                    continue
+                objects.append(replace(body, mesh=mesh))
+                changed = True
+            if changed:
+                self._entries[key] = replace(entry, objects=tuple(objects))
+                self._held.pop(key, None)
 
     def _trim(self, kept: Sequence[Mesh]) -> int:
         """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`.
@@ -902,6 +1090,9 @@ class ResultCache:
             self._held.clear()
             self._features_held.clear()
             self._refusals.clear()
+            # Die Merker der Abgabe gehören zu den Einträgen (Nachprüfung zu RM-698, N2).
+            self._leaned.clear()
+            self._last_disk_hit = None
             self._cost = 0
 
     @property
@@ -914,6 +1105,14 @@ class ResultCache:
         """Wie viele Bytes die Speicherebene gerade hält (RM-567)."""
         with self._lock:
             return self._held_bytes()
+
+    @property
+    def detections(self) -> DiskCache | None:
+        """Wo die Auswertung Erkennungen über den Prozess hinaus ablegt (RM-695).
+
+        Die Platte, wenn es sie gibt; ohne sie lebt eine Erkennung nur im Prozess.
+        """
+        return self._disk
 
     @property
     def memory_budget(self) -> int:
@@ -929,7 +1128,12 @@ class ResultCache:
 
 
 def feature_to_data(feature: Feature) -> dict[str, Any]:
-    """Die gemeinsame vollständige Merkmalsauskunft für Plattencache und Folgehash."""
+    """Die vollständige Merkmalsauskunft für den Folgehash.
+
+    Tupel und Listen sind hier dasselbe, und das ist für einen Hash richtig. Die
+    Platte braucht mehr: Sie gibt zurück, was sie bekam, typgenau
+    (:func:`_stored_feature_to_data`).
+    """
     return {
         "id": feature.id,
         "kind": feature.kind,
@@ -957,6 +1161,160 @@ def feature_to_data(feature: Feature) -> dict[str, Any]:
     }
 
 
+#: Die Datei einer abgelegten Erkennung in ihrem Eintragsordner (RM-695).
+_DETECTION_FILE: Final = "detection.json"
+
+
+def _detection_name(key: bytes) -> str:
+    """Der Eintragsname einer Erkennung — neben den Operationsschlüsseln, nie gleich einem.
+
+    Der Abdruck vorn: ``DiskCache._folder`` legt nach den ersten zwei Zeichen
+    ab, und mit ``detection-`` vorn lag jede Erkennung im selben Unterordner.
+    """
+    return f"{key.hex()}-detection"
+
+
+class NotStorableError(TypeError):
+    """Ein Wert, den die Platte nicht verlustfrei schreibt: Der Eintrag fällt aus.
+
+    Ein ``TypeError``, weil ``json.dumps`` an derselben Stelle einen wirft und
+    beide dasselbe meinen. Eigene Klasse, damit :meth:`DiskCache.put` und
+    :meth:`DiskCache.save_detection` ihn von einem Programmierfehler
+    (``errors.PROGRAMMING_ERRORS``) trennen: Der eine lässt den Eintrag aus,
+    der andere soll beim ersten Lauf auffallen.
+    """
+
+
+def _json_text(payload: Any) -> str:
+    """``json.dumps`` — ein Wert, den es nicht kennt, ist :class:`NotStorableError`."""
+    try:
+        return json.dumps(payload)
+    except TypeError as problem:
+        raise NotStorableError(str(problem)) from problem
+
+
+def _storage_failure_is_a_bug(problem: Exception) -> bool:
+    """Ob ein Fehler beim Ablegen ein Programmierfehler ist, der durchlaufen soll."""
+    return isinstance(problem, PROGRAMMING_ERRORS) and not isinstance(problem, NotStorableError)
+
+
+def _exact_to_data(value: object) -> Any:
+    """Ein Merkmalswert für JSON, so dass :func:`_exact_from_data` ihn Bit für Bit zurückgibt.
+
+    Typgenau: Ein Tupel kommt als Tupel zurück, eine Liste als Liste, eine
+    Gleitkommazahl als dieselbe Zahl (``repr`` ist in Python verlustfrei).
+    Was keiner dieser Typen genau ist — auch eine Unterklasse wie
+    ``numpy.float64`` —, wirft ``TypeError``: Dann bleibt die Erkennung
+    ungespeichert, statt verändert zurückzukommen (RM-695).
+    """
+    kind = type(value)
+    if value is None or kind in (bool, int, float, str):
+        return value
+    if kind is tuple:
+        items = cast(tuple[Any, ...], value)
+        if all(type(item) is int for item in items):
+            # Dreiecksnummern: hunderttausende, ohne einen Aufruf je Zahl.
+            return list(items)
+        return [_exact_to_data(item) for item in items]
+    if kind is list:
+        return {"list": [_exact_to_data(item) for item in cast(list[Any], value)]}
+    if kind is dict:
+        mapping = cast(dict[Any, Any], value)
+        if all(type(name) is str for name in mapping):
+            return {"dict": {name: _exact_to_data(item) for name, item in mapping.items()}}
+    raise NotStorableError(f"not stored exactly: {kind.__name__}")
+
+
+def _exact_from_data(data: Any) -> Any:
+    """Gegenstück zu :func:`_exact_to_data`; eine fremde Gestalt ist ein beschädigter Eintrag."""
+    kind = type(data)
+    if data is None or kind in (bool, int, float, str):
+        return data
+    if kind is list:
+        return tuple(_exact_from_data(item) for item in data)
+    if kind is dict and len(data) == 1:
+        if type(data.get("list")) is list:
+            return [_exact_from_data(item) for item in data["list"]]
+        if type(data.get("dict")) is dict:
+            return {str(name): _exact_from_data(item) for name, item in data["dict"].items()}
+    raise ValueError("invalid stored value")
+
+
+def _indices_from_data(data: Any) -> tuple[int, ...]:
+    """Dreiecksnummern einer abgelegten Erkennung: ganze Zahlen ab null, sonst beschädigt."""
+    if type(data) is not list or not all(type(index) is int and index >= 0 for index in data):
+        raise ValueError("invalid stored face indices")
+    return tuple(data)
+
+
+def _stored_feature_to_data(feature: Feature) -> dict[str, Any]:
+    """Ein Merkmal für die Platte — Ergebniseintrag und abgelegte Erkennung —, verlustfrei.
+
+    Über :func:`feature_to_data` kam aus jedem Tupel eine Liste zurück: Nach dem
+    Wiederöffnen trugen die Merkmale eines Bausteins andere Werte als beim
+    ersten Öffnen, gleich nur nach dem Hash (RM-695).
+    """
+    return {
+        "id": feature.id,
+        "kind": feature.kind,
+        "provenance": feature.provenance,
+        "params": _exact_to_data(feature.params),
+        "face_indices": _exact_to_data(feature.face_indices),
+        "recognised": feature.recognised,
+        "created_by": feature.created_by,
+        "measure_sources": _exact_to_data(feature.measure_sources),
+        "surface_patches": [
+            {
+                "kind": patch.kind,
+                "source": patch.source,
+                "params": _exact_to_data(patch.params),
+                "face_indices": _exact_to_data(patch.face_indices),
+            }
+            for patch in feature.surface_patches
+        ],
+    }
+
+
+def _stored_feature_from_data(data: dict[str, Any]) -> Feature:
+    """Gegenstück zu :func:`_stored_feature_to_data`; die Träger gegen denselben Vertrag
+    wie die Erkennung (``perceive.surfaces.valid_patch``)."""
+    from app.core.perceive.surfaces import valid_patch
+
+    if not all(type(data[name]) is str for name in ("id", "kind", "provenance")):
+        raise ValueError("invalid stored feature")
+    creator = data["created_by"]
+    if type(data["recognised"]) is not bool or not (creator is None or type(creator) is int):
+        raise ValueError("invalid stored feature")
+    params = _exact_from_data(data["params"])
+    sources = _exact_from_data(data["measure_sources"])
+    if type(params) is not dict or type(sources) is not dict:
+        raise ValueError("invalid stored feature")
+    indices = _indices_from_data(data["face_indices"])
+    allowed = frozenset(indices)
+    patches = []
+    for item in data["surface_patches"]:
+        patch = SurfacePatch(
+            kind=item["kind"],
+            source=item["source"],
+            params=_exact_from_data(item["params"]),
+            face_indices=_indices_from_data(item["face_indices"]),
+        )
+        if type(patch.params) is not dict or not valid_patch(patch, allowed_indices=allowed):
+            raise ValueError("invalid stored surface patch")
+        patches.append(patch)
+    return Feature(
+        id=data["id"],
+        kind=data["kind"],
+        provenance=data["provenance"],
+        params=params,
+        face_indices=indices,
+        recognised=data["recognised"],
+        created_by=creator,
+        measure_sources=sources,
+        surface_patches=tuple(patches),
+    )
+
+
 def _frame_from_data(value: Any) -> Transform | None:
     """Ein gespeicherter Bezugsrahmen ist endlich und affin, sonst ein Cachefehler."""
     if value is None:
@@ -979,44 +1337,6 @@ def _frame_from_data(value: Any) -> Transform | None:
     ):
         raise ValueError("nonaffine cached frame")
     return cast(Transform, tuple(rows))
-
-
-def _surface_patches_from_data(
-    data: object, indices: tuple[int, ...], face_count: int | None
-) -> tuple[SurfacePatch, ...]:
-    """Wegwerfbare Cache-Daten gegen denselben Trägervertrag wie die Erkennung lesen."""
-    from app.core.perceive.surfaces import valid_patch
-
-    if not isinstance(data, list):
-        raise ValueError("invalid cached surface patches")
-    if not data:
-        return ()
-    if any(not isinstance(index, int) or isinstance(index, bool) for index in indices):
-        raise ValueError("invalid cached feature indices")
-    allowed = frozenset(indices)
-    patches = []
-    for item in data:
-        if (
-            not isinstance(item, dict)
-            or not isinstance(item.get("kind"), str)
-            or not isinstance(item.get("source"), str)
-            or not isinstance(item.get("params"), dict)
-            or not isinstance(item.get("face_indices"), list)
-        ):
-            raise ValueError("invalid cached surface patch")
-        patch = SurfacePatch(
-            kind=item["kind"],
-            source=item["source"],
-            params={
-                key: tuple(value) if isinstance(value, list) else value
-                for key, value in item["params"].items()
-            },
-            face_indices=tuple(item["face_indices"]),
-        )
-        if not valid_patch(patch, face_count=face_count, allowed_indices=allowed):
-            raise ValueError("invalid cached surface geometry")
-        patches.append(patch)
-    return tuple(patches)
 
 
 def _continuations_from_data(
@@ -1182,6 +1502,183 @@ def _movement_to_disk(mesh: Mesh) -> list[dict[str, Any]] | None:
     ]
 
 
+#: Die Endung der mitgetragenen Maße eines bewegten Netzes neben seinem Netz.
+_CARRIED_SUFFIX: Final = ".carried.npz"
+
+
+def _carried_to_disk(folder: Path, position: int, mesh: Mesh) -> dict[str, Any] | None:
+    """Legt die Maße neben das Netz, die eine starre Bewegung vom Quellnetz mitträgt.
+
+    Gedrehte Normalen, übernommene Flächen und Facetten folgen nicht Bit für Bit
+    den Ecken (``geom.transform._carry_cache``), und die Erkennung liest sie
+    (``perceive.features._detection_key``). Ohne sie auf der Platte erkannte ein
+    wiedergeöffnetes Projekt an einem bewegten Körper aus frisch gerechneten
+    Normalen — in der letzten Stelle andere Flächenmitten, andere Objekthashes
+    als in der Sitzung (§15.1, an der Profilklemme nach *Einlagen wechseln*).
+    Ein Wert, den diese Ablage nicht kennt, lässt die Maße aus; dann rechnet die
+    Erkennung wie vor RM-695.
+    """
+    import io
+
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import CARRIED_METRICS
+
+    if not isinstance(mesh, MeshData):
+        return None
+    cache = mesh.raw._cache
+    names = cache.cache.get(CARRIED_METRICS)
+    if not names:
+        return None
+    arrays: dict[str, np.ndarray] = {}
+    kinds: dict[str, str] = {}
+    for name in names:
+        value = cache.cache.get(name)
+        if isinstance(value, np.ndarray):
+            kinds[name] = "array"
+            arrays[f"a:{name}"] = value
+        elif type(value) is float:
+            kinds[name] = "float"
+            arrays[f"a:{name}"] = np.asarray(value, dtype=np.float64)
+        elif isinstance(value, np.floating):
+            kinds[name] = "numpy_float"
+            arrays[f"a:{name}"] = np.asarray(value)
+        elif isinstance(value, list) and all(isinstance(item, np.ndarray) for item in value):
+            ranks = {item.ndim for item in value}
+            if len(ranks) > 1 or 0 in ranks:
+                return None
+            # Die Breite der Formenzeilen steht fest, statt aus der Größe
+            # geschlossen zu werden: Eine leere Liste — die Facetten einer
+            # Kugel, die keine zwei Nachbardreiecke in einer Ebene hat — warf
+            # beim ``reshape(0, -1)`` und brach die ganze Auswertung ab (H1).
+            width = next(iter(ranks)) - 1 if ranks else 0
+            kinds[name] = "list"
+            arrays[f"o:{name}"] = np.asarray([len(item) for item in value], dtype=np.int64)
+            arrays[f"s:{name}"] = np.asarray(
+                [item.shape[1:] for item in value], dtype=np.int64
+            ).reshape(len(value), width)
+            arrays[f"d:{name}"] = (
+                np.concatenate([item.reshape(-1) for item in value])
+                if value
+                else np.zeros(0, dtype=np.float64)
+            )
+            arrays[f"t:{name}"] = np.asarray([item.dtype.str for item in value], dtype="<U8")
+        else:
+            return None
+    file = f"{position}{_CARRIED_SUFFIX}"
+    buffer = io.BytesIO()
+    np.savez(buffer, allow_pickle=False, **arrays)
+    (folder / file).write_bytes(buffer.getvalue())
+    return {"file": file, "names": list(names), "kinds": kinds}
+
+
+#: Mitgetragene Maße mit einem Eintrag je Dreieck.
+_CARRIED_PER_FACE: Final = frozenset({"face_normals", "area_faces"})
+
+#: Mitgetragene Maße mit einem Eintrag je Facette; sie sind gleich lang.
+_CARRIED_PER_FACET: Final = frozenset(
+    {"facets", "facets_area", "facets_boundary", "facets_normal", "facets_origin"}
+)
+
+
+def _check_carried_shapes(values: dict[str, Any], mesh: MeshData) -> None:
+    """Prüft gelesene mitgetragene Maße gegen das Netz, ``ValueError`` bei falscher Form.
+
+    Je Dreieck so lang wie das Netz, je Ecke so lang wie seine Ecken, die
+    Nachbarpaare (``face_adjacency_*``) und die Facettenmaße je unter sich
+    gleich lang, Facetten nur aus Dreiecksnummern des Netzes. Die Paarzahl
+    selbst liest erst ``face_adjacency``, das hier niemand rechnen soll — ein
+    abgeschnittener Eintrag fällt trotzdem auf, weil er die Gruppe trennt.
+    Ohne die Prüfung bekäme die Erkennung falsch lange Felder, statt neu zu
+    rechnen.
+    """
+    import numpy as np
+
+    faces = len(mesh.raw.faces)
+    pairs: set[int] = set()
+    facets: set[int] = set()
+    for name, value in values.items():
+        if name in _CARRIED_PER_FACE:
+            if len(value) != faces:
+                raise ValueError("carried")
+        elif name == "vertex_normals":
+            if len(value) != len(mesh.raw.vertices):
+                raise ValueError("carried")
+        elif name.startswith("face_adjacency_"):
+            pairs.add(len(value))
+        elif name in _CARRIED_PER_FACET:
+            facets.add(len(value))
+    if len(pairs) > 1 or len(facets) > 1:
+        raise ValueError("carried")
+    if values.get("facets"):
+        # Alle Facetten auf einmal; verschieden gestaltete wirft ``concatenate`` selbst.
+        members = np.concatenate(values["facets"])
+        if members.ndim != 1 or members.dtype.kind not in "iu":
+            raise ValueError("carried")
+        if len(members) and (int(members.min()) < 0 or int(members.max()) >= faces):
+            raise ValueError("carried")
+
+
+def _carried_from_disk(folder: Path, record: Any, mesh: Mesh) -> None:
+    """Legt gelesene mitgetragene Maße wieder an das Netz, samt ihrem Vermerk.
+
+    Geprüft wird die Form; ein beschädigter Eintrag wirft einen der Fehler aus
+    :data:`_DAMAGED_ENTRY` und wird neu gerechnet.
+    """
+    import io
+
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import CARRIED_METRICS
+
+    if not isinstance(mesh, MeshData) or not isinstance(record, dict):
+        raise TypeError("carried")
+    file = str(record["file"])
+    names = [str(name) for name in record["names"]]
+    kinds = dict(record["kinds"])
+    if Path(file).name != file or not file.endswith(_CARRIED_SUFFIX):
+        raise ValueError("carried")
+    values: dict[str, Any] = {}
+    with np.load(io.BytesIO((folder / file).read_bytes()), allow_pickle=False) as data:
+        for name in names:
+            kind = kinds[name]
+            if kind == "array":
+                values[name] = np.array(data[f"a:{name}"])
+            elif kind == "float":
+                values[name] = float(data[f"a:{name}"])
+            elif kind == "numpy_float":
+                values[name] = data[f"a:{name}"][()]
+            elif kind == "list":
+                lengths = data[f"o:{name}"]
+                tails = data[f"s:{name}"]
+                types = data[f"t:{name}"]
+                flat = data[f"d:{name}"]
+                items = []
+                start = 0
+                for length, tail, dtype in zip(lengths, tails, types, strict=True):
+                    shape = (int(length), *(int(size) for size in tail))
+                    count = int(np.prod(shape))
+                    items.append(
+                        np.array(flat[start : start + count], dtype=np.dtype(str(dtype))).reshape(
+                            shape
+                        )
+                    )
+                    start += count
+                if start != len(flat):
+                    raise ValueError("carried")
+                values[name] = items
+            else:
+                raise ValueError("carried")
+    _check_carried_shapes(values, mesh)
+    cache: Any = mesh.raw._cache
+    cache.verify()
+    cache.update(values)
+    cache.cache[CARRIED_METRICS] = tuple(names)
+    cache.id_set()
+
+
 def _movement_from_disk(record: Any, mesh: Mesh) -> None:
     """Legt einen gelesenen Bewegungsvermerk wieder an das Netz.
 
@@ -1207,33 +1704,6 @@ def _movement_from_disk(record: Any, mesh: Mesh) -> None:
             raise ValueError("moved_from")
         note.append((key, cells))
     restore_movement_note(mesh, tuple(note))
-
-
-def _feature_from_data(data: dict[str, Any], *, face_count: int | None = None) -> Feature:
-    indices = tuple(data["face_indices"])
-    return Feature(
-        id=data["id"],
-        kind=data["kind"],
-        provenance=data["provenance"],
-        params=data["params"],
-        face_indices=indices,
-        # **Mit ``get`` und nicht über den Index.** Der Cache ist hashbasiert
-        # und wegwerfbar — nur weggeworfen wird er nicht, wenn ein Feld
-        # dazukommt: Der Hash steht über dem Operationsstapel, nicht über der
-        # Gestalt dieser Datei. Ein Eintrag von gestern kennt ``created_by``
-        # nicht, und ein ``KeyError`` beim Lesen des Caches wäre ein Fehler
-        # ohne Handlungsvorschlag an einer Stelle, an der es nichts zu
-        # entscheiden gibt.
-        created_by=data.get("created_by"),
-        # ``get`` mit der Vorgabe wie oben: Ein Eintrag von vor diesem Feld
-        # kennt ``recognised`` nicht, und der Cache ist wegwerfbar, nicht
-        # versioniert.
-        recognised=data.get("recognised", True),
-        measure_sources=data.get("measure_sources", {}),
-        surface_patches=_surface_patches_from_data(
-            data.get("surface_patches", []), indices, face_count
-        ),
-    )
 
 
 def _name_to_data(name: TranslatableText | str) -> str | dict[str, Any]:
@@ -1468,6 +1938,8 @@ class DiskCache:
                     _refinement_from_disk(folder, entry["refined_from"], mesh)
                 if "moved_from" in entry:
                     _movement_from_disk(entry["moved_from"], mesh)
+                if "carried" in entry:
+                    _carried_from_disk(folder, entry["carried"], mesh)
                 _warm_figures(mesh)
                 objects_list.append(
                     SceneObject(
@@ -1487,7 +1959,7 @@ class DiskCache:
                         # 21.09.2026). Trägervertrag und Zugehörigkeit der
                         # Nummern zum Merkmal bleiben geprüft.
                         features={
-                            key_: _feature_from_data(value)
+                            key_: _stored_feature_from_data(value)
                             for key_, value in entry["features"].items()
                         },
                         material_slots=[_slot_from_data(slot) for slot in entry["material_slots"]],
@@ -1576,7 +2048,8 @@ class DiskCache:
                     "mesh": name,
                     "kind": entry.kind,
                     "features": {
-                        key_: feature_to_data(value) for key_, value in entry.features.items()
+                        key_: _stored_feature_to_data(value)
+                        for key_, value in entry.features.items()
                     },
                     "material_slots": [_slot_to_data(slot) for slot in entry.material_slots],
                     "material": entry.material,
@@ -1592,6 +2065,9 @@ class DiskCache:
                 moved = _movement_to_disk(entry.mesh)
                 if moved is not None:
                     record["moved_from"] = moved
+                carried = _carried_to_disk(folder, position, entry.mesh)
+                if carried is not None:
+                    record["carried"] = carried
                 entries.append(record)
             payload: dict[str, Any] = {"format_version": CACHE_FORMAT_VERSION, "objects": entries}
             if result.findings:
@@ -1609,8 +2085,18 @@ class DiskCache:
                 payload["answered"] = dict(result.answered)
             if not result.reads_quality:
                 payload["reads_quality"] = False
-            (folder / "objects.json").write_text(json.dumps(payload), encoding="utf-8")
-        except (OSError, TypeError) as problem:
+            (folder / "objects.json").write_text(_json_text(payload), encoding="utf-8")
+        except Exception as problem:
+            # **Ablegen bricht keine Auswertung ab:** Das Ergebnis ist fertig
+            # gerechnet, der Cache nur eine Abkürzung. Eine leere Facettenliste
+            # warf hier ``ValueError`` und nahm jedem verschobenen Körper ohne
+            # ebene Facette sein Ergebnis (H1, Review Paket E); was hier wirft,
+            # lässt den Eintrag aus und meldet sich. **Außer einem
+            # Programmierfehler** (``errors.PROGRAMMING_ERRORS``): Der soll beim
+            # ersten Lauf auffallen, nicht als Warnung in einem Protokoll.
+            # Einen Wert, den die Platte nicht schreibt, meldet
+            # :class:`NotStorableError` (ein ``TypeError``, aber kein Fehler im Code).
+            #
             # ``TypeError`` hatte hier **zwei** Ursachen, und die zweite hat
             # zweimal Tage gekostet, weil sie wie die erste aussah:
             #
@@ -1628,9 +2114,85 @@ class DiskCache:
             # Warnung ist wieder eine. ``_name_to_data`` deckt die zwei
             # bekannten Stellen ab; eine dritte wäre ein weiteres Feld dieses
             # Payloads.
-            _log.warning("could not write cache entry %s: %s", key, problem)
             if folder is not None:
                 shutil.rmtree(folder, ignore_errors=True)
+            if _storage_failure_is_a_bug(problem):
+                raise
+            _log.warning("could not write cache entry %s: %s", key, problem)
+            return
+        self._account_for(folder)
+
+    def load_detection(self, key: bytes) -> StoredDetection | None:
+        """Die abgelegte Erkennung unter diesem Netzabdruck (RM-695), Bit für Bit — oder ``None``.
+
+        Ein Eintrag eines anderen Formatstands oder einer, der sich nicht
+        sicher lesen lässt, wird verworfen: Dann erkennt ``detect`` neu und
+        legt wieder ab. Gelesen wird wie bei :meth:`get` im selben Fehlerpfad.
+        """
+        from app.core.perceive.features import StoredDetection
+
+        folder = self._folder(_detection_name(key))
+        index = folder / _DETECTION_FILE
+        if not index.is_file():
+            return None
+        try:
+            data = json.loads(index.read_text(encoding="utf-8"))
+            if data.get("format_version") != CACHE_FORMAT_VERSION or data.get("key") != key.hex():
+                raise ValueError("detection entry of another version")
+            found = {}
+            for entry in data["features"]:
+                feature = _stored_feature_from_data(entry)
+                found[feature.id] = feature
+            left_out = data["left_out"]
+            unreadable = data["unreadable"]
+            freeform = data["freeform"]
+            if type(left_out) is not int or type(unreadable) is not int:
+                raise ValueError("invalid detection counts")
+            if type(freeform) is not bool:
+                raise ValueError("invalid freeform verdict")
+        except _DAMAGED_ENTRY as problem:
+            _log.info(
+                "dropping detection entry %s: %s: %s", key.hex(), type(problem).__name__, problem
+            )
+            shutil.rmtree(folder, ignore_errors=True)
+            return None
+        with suppress(OSError):
+            os.utime(folder, None)
+        return StoredDetection(found, left_out, unreadable, freeform)
+
+    def save_detection(self, key: bytes, detection: StoredDetection) -> None:
+        """Eine vollständige Erkennung unter ihrem Netzabdruck ablegen (RM-695).
+
+        Ein Wert, den :func:`_exact_to_data` nicht verlustfrei schreiben kann,
+        lässt den Eintrag aus — dann erkennt das nächste Öffnen neu, wie vor
+        RM-695. Geschrieben wird über eine Nebendatei und ``os.replace``: Zwei
+        Fenster, die dasselbe Modell öffnen, lesen nie eine halbe Datei.
+        """
+        folder: Path | None = None
+        spare: Path | None = None
+        try:
+            payload = {
+                "format_version": CACHE_FORMAT_VERSION,
+                "key": key.hex(),
+                "left_out": detection.left_out,
+                "unreadable": detection.unreadable,
+                "freeform": detection.freeform,
+                "features": [_stored_feature_to_data(entry) for entry in detection.found.values()],
+            }
+            text = _json_text(payload)
+            folder = ensure_dir(self._folder(_detection_name(key)))
+            spare = folder / f"{_DETECTION_FILE}.{os.getpid()}.{threading.get_ident()}"
+            spare.write_text(text, encoding="utf-8")
+            spare.replace(folder / _DETECTION_FILE)
+        except Exception as problem:
+            # Wie bei :meth:`put`: Ablegen bricht keine Auswertung ab, ein
+            # Programmierfehler fällt auf.
+            if spare is not None:
+                with suppress(OSError):
+                    spare.unlink()
+            if _storage_failure_is_a_bug(problem):
+                raise
+            _log.warning("could not write detection entry %s: %s", key.hex(), problem)
             return
         self._account_for(folder)
 

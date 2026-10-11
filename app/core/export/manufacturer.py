@@ -460,6 +460,7 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("shell.wall_count", "wall_loops", _count),
     ("shell.top_layers", "top_shell_layers", _count),
     ("shell.bottom_layers", "bottom_shell_layers", _count),
+    ("shell.top_thickness", "top_shell_thickness", _number),
     (
         "shell.outer_wall_first",
         "wall_sequence",
@@ -476,7 +477,11 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
         _choice({"classic": "classic", "arachne": "arachne"}),
     ),
     ("shell.precise_outer_wall", "precise_outer_wall", _flag),
-    ("shell.ironing", "ironing_type", _choice({"no ironing": False, "top": True})),
+    (
+        "shell.ironing",
+        "ironing_type",
+        _choice({"no ironing": "none", "top": "top_surfaces", "topmost": "topmost"}),
+    ),
     ("shell.thick_bridges", "thick_bridges", _flag),
     ("shell.bridge_flow", "bridge_flow", _ratio),
     ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
@@ -953,6 +958,8 @@ def orca_motion(
         minimum_sparse_area=_amount(process.get("minimum_sparse_infill_area")),
         narrow_solid_loops=_text(process.get("detect_narrow_internal_solid_infill")) != "0",
         sparse_pattern=_text(process.get("sparse_infill_pattern")),
+        ironing_speed=_amount(process.get("ironing_speed")),
+        ironing_spacing=_amount(process.get("ironing_spacing")),
     )
 
 
@@ -1047,6 +1054,10 @@ def prusa_motion(values: Mapping[str, Any], nozzle: float) -> Motion | None:
     retraction = _amount(values.get("filament_retract_speed")) or _amount(
         values.get("retract_speed")
     )
+    # SuperSlicer nennt das Bügeltempo als Anteil der Oberseite, die ihrerseits
+    # ein Anteil der Vollfüllung sein darf.
+    solid = _amount(values.get("solid_infill_speed"), _amount(values.get("infill_speed")))
+    top = _amount(values.get("top_solid_infill_speed"), solid)
     return Motion(
         nozzle=nozzle,
         first_layer_wall_speed=first_wall,
@@ -1088,6 +1099,8 @@ def prusa_motion(values: Mapping[str, Any], nozzle: float) -> Motion | None:
         # Vollfüllung als Schleifen mit wechselnder Breite, wie bei Orca.
         narrow_solid_loops=True,
         sparse_pattern=_text(values.get("fill_pattern")),
+        ironing_speed=_amount(values.get("ironing_speed"), top),
+        ironing_spacing=_amount(values.get("ironing_spacing")),
     )
 
 
@@ -1138,6 +1151,7 @@ def cura_motion(setup: SlicerSetup, profile: Profile) -> Motion | None:
         # ``slicer_keys.CURA_INTERFACE_LINES``), nicht der Definition.
         support_interface_density=1.0 / slicer_keys.CURA_INTERFACE_LINES,
         support_closing=_cura_number(chain.get("support_join_distance")),
+        ironing_spacing=_cura_number(chain.get("ironing_line_spacing")),
     )
 
 
@@ -1454,6 +1468,7 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
     ("shell.wall_count", "perimeters", _count),
     ("shell.top_layers", "top_solid_layers", _count),
     ("shell.bottom_layers", "bottom_solid_layers", _count),
+    ("shell.top_thickness", "top_solid_min_thickness", _number),
     ("shell.outer_wall_first", "external_perimeters_first", _flag),
     (
         "shell.seam_position",
@@ -1465,7 +1480,6 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
         "perimeter_generator",
         _choice({"classic": "classic", "arachne": "arachne"}),
     ),
-    ("shell.ironing", "ironing", _flag),
     ("shell.thick_bridges", "thick_bridges", _flag),
     ("shell.bridge_flow", "bridge_flow_ratio", _ratio),
     ("shell.overhang_walls", "extra_perimeters_on_overhangs", _flag),
@@ -1500,7 +1514,8 @@ PRUSA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
 #: ``--save`` aus einem leeren ``--datadir`` (PrusaSlicer 2.9.6, 27.09.2026).
 #: Prusas Bündel nennen fast alles selbst; offen ließen sie am MK4S, MINI und
 #: XL Haftung, Bügeln und ``avoid_crossing_perimeters``, Sovols SV06 dazu
-#: Wandgenerator, Stützstil und die Füllung der ersten Schicht.
+#: Wandgenerator, Stützstil und die Füllung der ersten Schicht. Art, Tempo und
+#: Abstand des Bügelns nennt ``--help-fff`` (09.10.2026, RM-588).
 PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "avoid_crossing_perimeters": "0",
     "bed_temperature": "0",
@@ -1542,6 +1557,9 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "first_layer_temperature": "200",
     "infill_speed": "80",
     "ironing": "0",
+    "ironing_spacing": "0.1",
+    "ironing_speed": "15",
+    "ironing_type": "top",
     "layer_height": "0.3",
     "max_fan_speed": "100",
     "min_fan_speed": "35",
@@ -1606,7 +1624,8 @@ def prusa_defaults(program: str) -> Mapping[str, str]:
     PrusaSlicer 2.9.6 mit Arachne. Die Grundlage muss denselben Wechsel sehen
     wie der Slicer, sonst unterschlägt der Differenzschreiber die Wahl.
     Dieselben leeren ``--save``-Sätze nennen für kleine Umfänge 50 % des
-    Innenwandtempos bei SuperSlicer und 15 mm/s bei PrusaSlicer.
+    Innenwandtempos bei SuperSlicer und 15 mm/s bei PrusaSlicer; ``--help-fff``
+    nennt fürs Bügeln 50 % der Oberseite und 15 mm/s.
     """
     if program == "superslicer":
         # Einzug und Lochausgleich unter SuperSlicers Namen, ebenso mit
@@ -1622,6 +1641,7 @@ def prusa_defaults(program: str) -> Mapping[str, str]:
             "hole_size_compensation": "0",
             "perimeter_generator": "classic",
             "small_perimeter_speed": "50%",
+            "ironing_speed": "50%",
         }
     return PRUSA_PROGRAM_DEFAULTS
 
@@ -1739,6 +1759,7 @@ def _read_prusa(
     take("speed.outer_wall_acceleration", _prusa_outer_wall_acceleration(values))
     take("support.style", _prusa_support_style(values))
     take("shell.scarf_seam", _prusa_scarf_seam(values))
+    take("shell.ironing", _prusa_ironing(values))
     # SuperSlicer führt Einzug und Lochausgleich unter eigenen Namen, beide
     # als Materialzugabe, also mit umgekehrtem Vorzeichen
     # (``slicer_keys.PROGRAM_NEGATED``, RM-589).
@@ -1873,6 +1894,22 @@ def _prusa_scarf_seam(values: Mapping[str, Any]) -> bool | None:
         return True
     length = _prusa_first(values.get("scarf_seam_length"))
     return length is None or (_float(length) or 0.0) > 0.0
+
+
+def _prusa_ironing(values: Mapping[str, Any]) -> str | Foreign | None:
+    """Was gebügelt wird: ``ironing`` als Schalter, ``ironing_type`` als Art
+    (RM-588). Ohne Art gilt Prusas Vorgabe „top“, jede Oberseite. Eine andere
+    Art („solid“, jede Vollschicht) hat in Solidon keinen Namen und bleibt ein
+    Herstellerwert, wie bei Orca — umgedeutet wird nicht."""
+    ironing = _prusa_first(values.get("ironing"))
+    if ironing is None:
+        return None
+    if ironing != "1":
+        return "none"
+    kind = _prusa_first(values.get("ironing_type"))
+    if kind is None or kind == "top":
+        return "top_surfaces"
+    return "topmost" if kind == "topmost" else Foreign(kind)
 
 
 def _prusa_outer_width(values: Mapping[str, Any], context: _Context) -> float | None:

@@ -17,6 +17,7 @@ Die andere Hälfte von §20 — Textur zu Slots — steht in
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import cast
 
 import numpy as np
@@ -76,7 +77,7 @@ def feature_triangles(mesh: MeshData, feature: Feature) -> tuple[int, ...]:
     if feature.face_indices or feature.kind != "thread":
         return tuple(feature.face_indices)
     from app.core.knowledge.parts import shapes
-    from app.core.units import EPS_GEOM
+    from app.core.units import EPS_GEOM, dot3, exact_tan_degrees
 
     params = feature.params
     length = float(params.get("length", 0.0))
@@ -84,21 +85,38 @@ def feature_triangles(mesh: MeshData, feature: Feature) -> tuple[int, ...]:
         return ()
     centre = np.asarray(params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
     axis = np.asarray(params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
-    axis /= float(np.linalg.norm(axis)) or 1.0
+    axis /= math.sqrt(dot3(axis, axis)) or 1.0
+    # **Profil und Kegel aus dem Merkmal** (Nachprüfung GEW, N1): Whitworth und
+    # NPT sind tiefer als das flache Profil, und am Kegel wächst der Kamm um
+    # ``tan(taper)`` je Millimeter entlang der Achse. Mit dem flachen Kamm der
+    # Mitte blieb an R 1/2 mit 30 mm ein Ring am weiten Ende ungefärbt.
+    named = params.get("profile", "flat")
     profile = shapes.ridge_profile(
         float(params.get("diameter", 0.0)),
         float(params.get("pitch", 1.0)),
         internal=bool(params.get("internal", False)),
+        profile=named if named in shapes.THREAD_PROFILES else "flat",
     )
     crest = max(radial for radial, _axial in profile)
+    taper = params.get("taper", 0.0)
+    slope = (
+        exact_tan_degrees(float(taper))
+        if isinstance(taper, int | float) and not isinstance(taper, bool) and taper
+        else 0.0
+    )
     raw = mesh.raw
+    # Elementweise statt über BLAS: Die Wahl wird zur Farbe im Druck (``kern.md``).
     relative = np.asarray(raw.triangles_center, dtype=float) - centre
-    along = relative @ axis
-    radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
-    facing = np.abs(np.asarray(raw.face_normals, dtype=float) @ axis)
+    along = relative[:, 0] * axis[0] + relative[:, 1] * axis[1] + relative[:, 2] * axis[2]
+    across = relative - np.outer(along, axis)
+    radial = np.sqrt(
+        across[:, 0] * across[:, 0] + across[:, 1] * across[:, 1] + across[:, 2] * across[:, 2]
+    )
+    normals = np.asarray(raw.face_normals, dtype=float)
+    facing = np.abs(normals[:, 0] * axis[0] + normals[:, 1] * axis[1] + normals[:, 2] * axis[2])
     inside = (
         (np.abs(along) <= length / 2.0 + EPS_GEOM)
-        & (radial <= crest + EPS_GEOM)
+        & (radial <= crest + slope * along + EPS_GEOM)
         & (facing < 1.0 - EPS_GEOM)
     )
     return tuple(int(index) for index in np.flatnonzero(inside))
@@ -206,6 +224,9 @@ class PaintParams(BaseParams):
 
 @register_op(
     name="paint_slot",
+    # 2: Ein erzeugtes Gewinde nimmt Profil und Kegel aus dem Merkmal, am Kegel bis zum
+    # weiten Ende (Nachprüfung GEW, N1).
+    cache_version="2",
     title=_("Filament auf eine Fläche"),
     category="colour",
     params=PaintParams,

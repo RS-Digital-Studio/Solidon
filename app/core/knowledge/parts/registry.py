@@ -521,6 +521,19 @@ class PartSpec:
     Gedächtnis „Bausteinbereich ist ein Produktionsvertrag“: bedingte
     Eigenschaften stehen als Metadaten am Baustein, nicht als Sonderfall im
     Prüfkern und nicht als stille Kappung im Baustein."""
+    mirrored_by: str | None = None
+    """Ein Schalter, der den Baustein nur spiegelt — ``left_hand`` an den
+    Gewindebausteinen (RM-544): An der Ebene y = 0 gespiegelt wird aus dem
+    Rechtsgewinde das Linksgewinde, sonst ändert sich nichts.
+
+    Wasserdichtheit, Wandstärke, Selbstdurchdringung und Merkmale sind unter
+    einer Spiegelung dieselben; der Bereichstest (§24.3) fährt die Ecken
+    deshalb mit dem Schalter auf seiner Vorgabe und baut an jeder Ecke auch die
+    andere Stellung: Ihr Körper muss das Spiegelbild sein — Volumen, Flächen und
+    Merkmale (``range_check._mirror_problem``). So ist sie an jeder Ecke voll
+    belegt, ohne die Ecken zu verdoppeln. Ein Schalter, der mehr tut als
+    spiegeln, steht hier nicht — er wäre eine Bedingung wie jede andere und
+    zählte Ecken."""
     retaining_lip: RetainingLipOf | None = None
     """Die Haltelippe unter der Mündung, an der der Baustein seinen Inhalt hält
     (:class:`RetainingLip`). Schräg zur Fläche gesetzt, fehlt sie auf der tiefen
@@ -769,6 +782,7 @@ def register_part(
     grip_from_profile: bool = True,
     play_inside: bool = False,
     feasible: Feasibility | None = None,
+    mirrored_by: str | None = None,
     retaining_lip: RetainingLipOf | None = None,
     source: str = "shipped",
     registry: PartRegistry | None = None,
@@ -824,6 +838,7 @@ def register_part(
                 grip_from_profile=grip_from_profile,
                 play_inside=play_inside,
                 feasible=feasible,
+                mirrored_by=mirrored_by,
                 retaining_lip=retaining_lip,
                 source=source,
             )
@@ -898,7 +913,11 @@ def register_part(
 #: ihre Tasche unter der Fläche (``NUT_TRAP_BORES_THROUGH_THE_PART``, RM-631).
 #: Alle übrigen Bausteine bleiben maßgleich; dass eine Bohrung, die nicht durch
 #: das Teil reicht, Sackloch heißt, entscheidet die Operation (``targets:10``).
-LIBRARY_VERSION: Final = "27"
+#: Version 28: Der glatte Schaft des Gewindebolzens bleibt 0,02 mm unter dem
+#: Kamm, und Schaft und Kuppen bekommen die Sehnen des Gewindes
+#: (``ROD_SHANK_UNDER_THE_CREST``, Bereichsnachweis RM-544); alle übrigen
+#: Bausteine bleiben maßgleich.
+LIBRARY_VERSION: Final = "28"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

@@ -260,6 +260,7 @@ def test_invalid_dimension_blocks_the_visible_accept_and_recovers(centre):
     )
     entered = [50.0, 10.0]
     fields = [SimpleNamespace(value_mm=lambda index=index: entered[index]) for index in range(2)]
+    said: list[str] = []
     flow = SimpleNamespace(
         active=True,
         _disposed=False,
@@ -290,6 +291,7 @@ def test_invalid_dimension_blocks_the_visible_accept_and_recovers(centre):
         _measure_note=note,
         _accept=SimpleNamespace(setEnabled=lambda _: None),
         _note=SimpleNamespace(setText=lambda _: None),
+        _say=said.append,
         _serial=0,
         _set_values=lambda: None,
     )
@@ -306,6 +308,10 @@ def test_invalid_dimension_blocks_the_visible_accept_and_recovers(centre):
     assert shown.enabled and flow._distance_valid
     assert not shown.visible and not shown.text
     assert flow._surface.point == pytest.approx((12.0, 10.0, 0.0))
+    # Und der Balken sagt, dass die Stelle steht (Nachprüfung N3).
+    from app.i18n import tr
+
+    assert said[-1:] == [tr("Position festgelegt. Übernehmen oder mit Esc die Werte bearbeiten.")]
 
     # **Und jeder andere Weg zurück nimmt den Satz mit** (Review 24.09.2026):
     # Ein Zug am Griff (``move_to``) macht den Abstand gültig, ohne das Feld

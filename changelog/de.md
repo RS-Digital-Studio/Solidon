@@ -47,6 +47,7 @@ Nutzen da und sonst nichts.
 - Die Demo läuft jetzt bis zum 30. November 2026. Solidon3D 1.0 ist für den 1. Dezember geplant, Ihre Projekte bleiben erhalten.
 - Am Mac braucht Solidon jetzt macOS 14 oder neuer. Jeder Mac ab 2018 kann es kostenlos installieren.
 - Auf Intel-Macs mit macOS 26 startet Solidon jetzt. Version 0.5.3 blieb dort beim Start hängen.
+- Auf Intel-Macs meldet Solidon jetzt, wenn sich eine Verrundung oder Fase am exakten Körper nicht bauen lässt. Version 0.5.3 beendete sich dabei.
 - Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
 - Am Mac öffnet Return den gewählten Eintrag im Startbildschirm, in *Funktion suchen* und im Prüfbericht.
 - Unter Linux kommen Eingaben über Fcitx5 und IBus jetzt auch im Flatpak und im AppImage im Textfeld an.
@@ -79,14 +80,21 @@ Nutzen da und sonst nichts.
 - Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
 - In den übersetzten Fassungen rollt *Neues Filament* nicht mehr seitwärts, wenn das Fenster kürzer ist als sein Inhalt.
 - Große Modelle laden spürbar schneller und brauchen weniger Arbeitsspeicher, auch mit langem Verlauf und auf Rechnern mit 8 GB.
+- Ein gespeichertes Projekt mit vielen Schritten an einem großen Modell öffnet mit deutlich weniger Arbeitsspeicher.
 - Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
 - An Modellen mit Tausenden Merkmalen sind Verschieben und andere Schritte, die die Form nicht ändern, bis zu doppelt so schnell fertig.
 - Nach dem Wiederöffnen eines Projekts nennt der Prüfbericht weiter, an welche freie Stelle ein eingefügtes Modell kam.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
 - Reparieren und das Auflösen von Überschneidungen gehen an großen Modellen bis zu viermal so schnell, der Export als 3MF deutlich schneller.
 - Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
+- Die Anzeige *Das Modell wird angezeigt …* verschwindet, sobald die Ansicht fertig ist, und bleibt nicht mehr über dem Modell stehen.
+- Meldungen zu Eingaben und Formen bieten keinen Fehlerbericht mehr an. Den gibt es nur noch, wo Solidon selbst einen Fehler gemacht hat.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
+- Nach einer Bohrung oder einem versetzten Merkmal sind die Merkmale eines großen technischen Teils rund ein Drittel schneller wieder erkannt.
+- Ein Modell, das Sie gleich nach dem Programmstart öffnen, ist bis zu ein Viertel schneller bearbeitbar.
+- Läuft nebenher ein Slicer, ein Spiel oder ein Rendering, kommen Rechnungen an großen Modellen in Sekunden statt in Minuten zurück.
+- Ein gespeichertes Projekt mit einem großen Modell ist nach einem Neustart in ein, zwei Sekunden offen statt nach einer halben Minute: Die erkannten Merkmale bleiben gemerkt.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -103,9 +111,11 @@ Nutzen da und sonst nichts.
 - Die geschätzte Druckzeit liegt näher an der des Slicers, bei Teilen mit Stützen deutlich näher.
 - Ob Stützen und Skirt auf dem Bett Platz haben, misst die Prüfung nur noch unter den Überhängen. Teile nahe am Rand bekommen keine grundlose Warnung mehr.
 - Übernommene Vorschläge lassen kaum noch Überhänge ohne Stütze, die eine brauchen. *Kanäle frei halten* sperrt nur noch Raum, aus dem keine Stütze mehr herauskäme.
+- Gitterstützen laufen mit *Kanäle frei halten* nicht mehr in die Mündungen gesperrter Kanäle. In Version 0.5.3 reichten sie dort gut einen Millimeter hinein.
 - Setzen Stützen unter kleinen Überhängen auf dem Modell auf, schlägt Solidon Baumstützen vor. Sie hinterlassen dort weniger Spuren.
 - Bei kleinen Spitzen schlägt Solidon ein niedrigeres *Mindesttempo beim Bremsen* vor, damit sie nicht weich werden. Die Einstellung geht an jeden Slicer.
 - Schmale Ränder, die sich selbst tragen, bleiben mit *Ränder ohne Stütze* frei. Der Druck braucht so deutlich weniger Stütze.
+- Rund- und Spitzbögen tragen sich selbst, und Solidon verlangt dort keine Stützen mehr. Fast flache Decken behalten ihre.
 - Stützen lösen sich leichter und sauberer: Der Abstand folgt Material und Schichthöhe jedes Teils, auch bei mehreren Materialien auf einer Platte. Die Trennschicht folgt der Fläche darüber.
 - Steht eine Stütze auf dem Teil, schlägt Solidon auch darunter eine Trennschicht vor, damit ihr Fuß keine Spuren hinterlässt. Unter Baumstützen nur bei Slicern, die sie dort drucken.
 - Unter Baumstützen und neben einem Reinigungsturm schlägt Solidon den Stützabstand in ganzen Schichten vor, so wie der Slicer ihn druckt.
@@ -124,7 +134,10 @@ Nutzen da und sonst nichts.
 - Ein schmaler Rand, der sich selbst trägt, gilt nicht mehr als lange Brücke, auch neben einem anderen Überhang. Der Prüfbericht warnt dort nicht mehr, und Solidon verlangt dafür keine Stützen.
 - Über einem Kanal rät der Prüfbericht nicht mehr zu einer Stütze, die dort nicht mehr herauskäme. Er nennt den Kanal und den Übergang unter 45 Grad.
 - Für PETG schlägt Solidon *Volle Kühlung an der Stütze* vor. Sie löst sich so leichter vom Teil.
-- Neu in den Druckeinstellungen: *Trennschichten unten*, *Wände der Bäume* und *Baumspitze*, dazu *Erste Schicht einziehen* und *Löcher weiten*, die dem Slicer folgen, solange Sie nichts wählen.
+- An Figuren schlägt Solidon die Naht hinten vor, damit keine Linie über die Vorderseite läuft. Für eine große flache Oberseite schlägt es Bügeln vor.
+- Die geschätzte Druckzeit rechnet das Bügeln jetzt mit.
+- Neu in den Druckeinstellungen: *Feine Schichten*, *Deckschichten mindestens*, *Trennschichten unten*, *Wände der Bäume*, *Baumspitze*, *Erste Schicht einziehen* und *Löcher weiten*.
+- Bei *Oberfläche bügeln* wählen Sie jetzt zwischen *Oberste Fläche* und *Alle Oberseiten*.
 - Das Feld *Abstand nach oben* heißt jetzt *Abstand oben und unten* und gilt für beide Seiten der Stütze.
 - Lehnt der Slicer Filamente mit zu verschiedenen Temperaturen auf einer Platte ab, nennt Solidon jetzt Grund und Ausweg, statt nur zu melden, dass keine Druckdatei entstand.
 - Im Druckdialog bleiben Drucker, Filamente und Qualität auch bei vergrößerter Schrift ganz sichtbar. Lange Beschriftungen brechen dafür um.
@@ -133,7 +146,9 @@ Nutzen da und sonst nichts.
 - Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
-- Das Filamentlager erkennt eine Buchung aus Solidon 0.5.1 wieder als frühere Buchung und fragt nach, bevor es denselben Druck erneut abbucht.
+- Eine Buchung aus Solidon 0.5 desselben Projekts mit denselben Filamenten bietet das Filamentlager zur Prüfung an und fragt nach, bevor es denselben Druck erneut abbucht.
+- Ab dieser Version bleibt eine Buchung ihrem Druck zugeordnet, auch wenn ein Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
+- Wo flache Kuppen und Schrägen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger das Teil dann druckt.
 
 ### Gewinde, Bohrungen und Normteile
 
@@ -150,6 +165,12 @@ Nutzen da und sonst nichts.
 - Von unten eingelegt liegt die Tasche der Mutternfalle unter der Fläche, ihr Schlitz führt hinab. Bisher saß sie halb darüber, die Schraube in der Fläche.
 - Reicht die Bohrung eines Bausteins nicht durch das Teil, heißt sie jetzt Sackloch. Bisher hieß sie Durchgang.
 - Ist die Wand dicker als bei *Kabeldurchführung* oder *Schlauchtülle* eingetragen, sagt der Schritt es und öffnet die Wandstärke. Bisher endete der Durchgang still im Material.
+- Gewinde gibt es jetzt auch als Rohrgewinde G und R, als Zollgewinde UNC und UNF und als NPT, im *Druckbaren Gewinde*, an Schraube, Mutter und *Gewindebolzen*.
+- Jedes Gewinde gibt es auch links. Ein eigenes Maß nimmt Gänge je Zoll und mehrere Gänge, auch bei *Schraube erstellen* und *Drehdeckel erzeugen*.
+- Welche Gewindereihen die Größenlisten zeigen, stellen Sie in den Einstellungen unter *Gewindereihen in den Auswahllisten* ein.
+- Gegenstück und *Stift für Bohrung* passen auch zu Zoll-, Rohr-, Links-, mehrgängigen und kegeligen Gewinden. Passt ein gemessenes Gewinde zu zwei Reihen, fragt Solidon nach.
+- Links-, mehrgängige und kegelige Gewinde lassen sich mit *Merkmal ändern* und *Merkmal entfernen* bearbeiten und behalten dabei Drehsinn, Gangzahl und Kegel.
+- Ein mehrgängiges Gewinde in einem eingelesenen Netz erkennt Solidon als ein Gewinde mit seiner Gangzahl. Bisher standen dort mehrere Gewinde mit zu großer Steigung.
 
 ### Bausteine
 
@@ -157,6 +178,10 @@ Nutzen da und sonst nichts.
 - Auch eigene Bausteine entstehen so als eigener Körper und hängen nicht an einem Körper, der schon im Projekt liegt.
 - Mit *Auswahl als Baustein speichern* kommt der gewählte Körper mit genau den Schritten, die ihn bauen. Käme ein zweiter Körper mit, sagt der Dialog es vor dem Speichern.
 - Wandhalter, Rohrschellen, Profilklemmen und Halter nehmen jede Schraube von M3 bis M64. Passt eine Größe nicht zu den übrigen Maßen, sagt der Baustein, was zu ändern ist.
+- Ein Baustein für Fläche oder Bohrung rechnet erst, wenn er seine Stelle im Bild hat. Bis dahin lässt sich der Dialog nicht übernehmen und sagt, was fehlt.
+- Ändert sich die Fläche unter einem offenen Bausteindialog, bleibt die gewählte Stelle, solange sie auf der neuen Form noch hält. Sonst sucht der Baustein eine neue und sagt es.
+- Ein Bausteindialog, der öffnet, während der vorige Schritt noch rechnet, setzt den Baustein selbst, sobald das Ergebnis da ist, und lässt sich bis dahin nicht übernehmen.
+- Ein Baustein, der im Bild sitzt, lässt sich auch nach einer Eingabe im Dialog per Klick an eine andere Stelle setzen.
 
 ### Bearbeiten und Zeichnen
 
@@ -177,6 +202,9 @@ Nutzen da und sonst nichts.
 - Der Pinsel passt zur Größe des Körpers. Ist das Netz für ihn zu grob, gleicht *Formen* die Dreiecke beim ersten Zug selbst an, und ein Strg+Z nimmt beides zurück.
 - Beim Spiegeln liegt die Ebene dort, wo der Körper sich selbst gleicht, auch wenn ein Teil weit zur Seite ragt.
 - Formen folgt der Maus flüssig, und auch ein Schritt mit hunderten Pinselzügen ist schnell gerechnet.
+- Mit *Weich verschmelzen* entsteht ein gleichmäßiges Netz mit kaum noch schmalen Splittern. Ein Teil auf dem Druckbett reicht nicht mehr darunter.
+- Ein Körper mit eingeschlossenem Hohlraum behält ihn beim *Weich verschmelzen*. Seit Version 0.1.1 wurde der Hohlraum zu einem zweiten Körper, und der Schritt meldete unverbundene Teile.
+- Mit *Dreiecke angleichen* ist keine Kante länger als verlangt, die Form bleibt gleich. Bei gleicher Kante entstehen oft fast doppelt so viele Dreiecke; eine längere Kante hält die alte Dichte.
 - Im *Skelett* setzt jeder Klick nach dem ersten einen Knochen, Enter beendet die Kette, Ziehen an einem Gelenk beugt, und *Fertig* legt alles ohne Dialog ab.
 - Ein Skelett beugt nur, was an seinen Knochen hängt, der Rest des Körpers bleibt stehen. Ältere Projekte rechnen wie gespeichert.
 - Mit Strg oder Umschalt wählen Sie mehrere Kanten und verrunden oder fasen sie in einem Schritt. Ein Klick auf eine Ecke wählt alle Kanten, die dort zusammenlaufen.
@@ -187,6 +215,8 @@ Nutzen da und sonst nichts.
 - Träfe eine Handlung ein getrenntes Teil neben dem Merkmal oder berührte ein gesetztes Merkmal anderes Material nur auf einer Linie, sagt Solidon das, statt den Körper zu beschädigen.
 - Steht einer Merkmalshandlung ein getrenntes Teil im Weg, trennt *In Einzelteile aufteilen und erneut versuchen* es ab und führt die Handlung aus. Strg+Z nimmt beides zurück.
 - Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch Stifte und Scheiben neben einer großen Platte. Wegfallen nur kleine offene Flächen und Krümel, die der Drucker nicht abbildet.
+- Ein Relief rechnet erst, wenn ein Bild gewählt ist. Bis dahin nennt der Dialog den Knopf *Bild wählen …*.
+- Die Dialoge *STEP laden* und *Zeichnung hochziehen* bieten nur Dateien an, die sie lesen können. Liegt keine im Projekt, nennen sie den Knopf *Datei wählen …*.
 
 ### Erzeugen mit KI
 
@@ -195,11 +225,15 @@ Nutzen da und sonst nichts.
 - Dünne Wände, etwa an einer Vase, kommen geschlossen und mit Dicke an.
 - Der Assistent antwortet in der Sprache, in der Sie schreiben.
 - Mit lokalem Modell hat der Assistent so viel Raum wie mit einem gehosteten und schafft Aufträge mit bis zu zwölf Schritten.
+- Brechen Sie einen Vorschlag des Assistenten ab, bestätigt die Statuszeile das, statt einen Programmfehler zu melden.
+- Öffnen Sie während eines Vorschlags ein anderes Projekt, verwirft Solidon den Vorschlag und legt Ihre Anfrage zurück in den Chat.
 - Erzeugte Modelle kommen öfter geschlossen an. Wo sich Flächen nur berühren, trennt Solidon sie, und kleine Falten der Oberfläche glättet es, statt eine Selbstkreuzung zu melden.
 - Ist ein Versuch schon beim Erzeugen zerfallen, sagt der Dialog es vor dem Übernehmen und bietet *Noch ein Versuch* an.
 - Ist ein erzeugtes Modell nur eine dünne Haut um einen Hohlraum, sagt es der Dialog vor dem Übernehmen und der Prüfbericht danach, jeweils mit dem Weg zu einem neuen Versuch.
 - Vor dem Herunterladen nennen *Chat einrichten* und *ComfyUI einrichten*, wie viel Grafikspeicher und Platz ein Modell braucht und ob dieser Rechner das hat.
 - Auf einem Mac schlägt *Chat einrichten* ein lokales Modell vor, das in den gemeinsamen Speicher passt, und sagt, wann ein Schlüssel für ein gehostetes Modell besser ist.
+- Fehlt das gewählte lokale Modell oder lehnt der Anbieter den Schlüssel ab, sagt Solidon es in einem Satz und führt mit *Chat einrichten* direkt zum Ausweg.
+- Einen ungültigen Schlüssel übergeht Solidon einen Tag lang, bis Sie einen anderen eintragen oder *Noch einmal versuchen* wählen. So lange antwortet ein lokales Modell, wenn eines eingerichtet ist.
 - Bei einem neu erzeugten Modell rechnet *Größe ändern* nur das neue Maß und wiederholt die Reparatur nicht mehr. Das geht schneller, und Strg+Z nimmt die Änderung sofort zurück.
 
 ## 0.5.3

@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 from app.core import discover, tools
 from app.core.errors import CANCEL, RETRY, FileWriteError
 from app.core.knowledge import profiles
+from app.core.knowledge.standards import THREAD_FAMILIES
 from app.core.log import get_logger
 from app.core.types import PrinterProfile
 from app.core.units import DISPLAY_UNITS
@@ -143,6 +144,7 @@ def option_titles() -> dict[str, str]:
         "ai_disclosure_reset": tr("KI-Hinweis erneut anzeigen"),
         "remote": tr("Fernsteuerung durch andere Programme zulassen (MCP)"),
         "remote_port": tr("Port der Fernsteuerung"),
+        "thread_families": tr("Gewindereihen in den Auswahllisten"),
         "printer": tr("Drucker"),
         "material": tr("Material"),
     }
@@ -365,6 +367,30 @@ class SettingsDialog(QDialog):
                 "es aus ihrem CAD so gewohnt sind."
             )
         )
+        # RM-544: welche Gewindereihen die Größenlisten zeigen. Ein Haken je
+        # Reihe in einer Zeile; der letzte gesetzte lässt sich nicht nehmen —
+        # ohne Reihe gäbe es kein Gewinde.
+        self.thread_families = QWidget(self)
+        self.thread_families.setAccessibleName(titles["thread_families"])
+        families_layout = QHBoxLayout(self.thread_families)
+        families_layout.setContentsMargins(0, 0, 0, 0)
+        families_layout.setSpacing(NORMAL)
+        self._family_boxes: dict[str, QCheckBox] = {}
+        for family in THREAD_FAMILIES:
+            box = QCheckBox(tr("Metrisch") if family == "metric" else family, self.thread_families)
+            box.setChecked(family in settings.thread_families or not settings.thread_families)
+            box.toggled.connect(self._keep_one_family)
+            families_layout.addWidget(box)
+            self._family_boxes[family] = box
+        families_layout.addStretch(1)
+        self.thread_families.setToolTip(
+            tr(
+                "Welche Gewinde in den Größenlisten stehen. Ein Schritt mit einer "
+                "ausgeblendeten Größe rechnet weiter."
+            )
+        )
+        self._keep_one_family()
+
         self.spacemouse_speed.setEnabled(self.spacemouse.isChecked())
         self.spacemouse_invert.setEnabled(self.spacemouse.isChecked())
         self.spacemouse.toggled.connect(self.spacemouse_speed.setEnabled)
@@ -491,6 +517,7 @@ class SettingsDialog(QDialog):
             self.spacemouse_invert,
             self.shortcuts,
             self.diff_palette,
+            *self._family_boxes.values(),
             self.auto_accept,
             self.ai_disclosure_reset,
             self.remote,
@@ -628,6 +655,7 @@ class SettingsDialog(QDialog):
         details.addRow("", self.spacemouse_invert)
         details.addRow(titles["shortcuts"], self.shortcuts)
         details.addRow(titles["diff_palette"], self.diff_palette)
+        details.addRow(titles["thread_families"], self.thread_families)
         details.addRow("", self.auto_accept)
         details.addRow(tr("KI-Hinweis"), self.ai_disclosure_reset)
         details.addRow("", self.remote)
@@ -638,11 +666,14 @@ class SettingsDialog(QDialog):
         # wie der Kunde ihn verließ (RM-491).
         contents = (
             tr(
-                "Navigation, 3D-Maus, Tastenbelegung, Differenzansicht, Chat, "
+                "Navigation, 3D-Maus, Tastenbelegung, Differenzansicht, Gewindereihen, Chat, "
                 "KI-Hinweis, Fernsteuerung"
             )
             if self.settings.spacemouse_seen
-            else tr("Navigation, Tastenbelegung, Differenzansicht, Chat, KI-Hinweis, Fernsteuerung")
+            else tr(
+                "Navigation, Tastenbelegung, Differenzansicht, Gewindereihen, Chat, KI-Hinweis, "
+                "Fernsteuerung"
+            )
         )
         self.advanced = collapsible(
             tr("Weitere Einstellungen"),
@@ -868,6 +899,12 @@ class SettingsDialog(QDialog):
         self._closed = True
         self._leash.wait_all(timeout_ms)
 
+    def _keep_one_family(self) -> None:
+        """Der letzte gesetzte Haken der Gewindereihen bleibt gesperrt (RM-544)."""
+        checked = [box for box in self._family_boxes.values() if box.isChecked()]
+        for box in self._family_boxes.values():
+            box.setEnabled(not (len(checked) == 1 and box.isChecked()))
+
     def _language_changed(self) -> None:
         """Fordert den Neuaufbau mit den ungespeicherten Antworten in der neuen Sprache an."""
         chosen = str(self.language.currentData())
@@ -902,6 +939,9 @@ class SettingsDialog(QDialog):
         settings.spacemouse_enabled = self.spacemouse.isChecked()
         settings.spacemouse_speed = int(self.spacemouse_speed.value())
         settings.spacemouse_invert = self.spacemouse_invert.isChecked()
+        settings.thread_families = [
+            family for family, box in self._family_boxes.items() if box.isChecked()
+        ] or list(THREAD_FAMILIES)
         settings.printer = (
             str(self.printer.currentData()) if valid_printer_choice(self.printer) else ""
         )

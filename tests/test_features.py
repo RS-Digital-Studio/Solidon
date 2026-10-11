@@ -1305,6 +1305,40 @@ def test_a_ring_is_recognised_as_a_torus() -> None:
     assert abs(tori[0].params["axis"][2]) == pytest.approx(1.0, abs=0.01)
 
 
+def test_the_ring_axis_does_not_turn_with_the_corner_order() -> None:
+    """Die Achse eines Torus zeigt gleich, wie auch immer die Datei ihre Dreiecke schreibt.
+
+    Ein Ring hat kein Oben; die Einpassung (``fit_torus_samples``, SVD) gab
+    ihre Achse mit dem Vorzeichen zurück, das die letzten Stellen der Rechnung
+    ergaben. An ``torus_ring.stl`` kippte sie, wenn die Dreiecke gemischt und
+    ihre Ecken im Umlauf verdreht waren (Messbank Paket E, Sonde
+    ``probe_order.py``): derselbe Name, ``axis`` und ``surface_patches``
+    gespiegelt (RM-210, dieselbe Datei — dasselbe Teil). Jetzt steht sie
+    kanonisch, ihr Skalarprodukt mit (1, √2, √3) ist positiv — eine Richtung,
+    auf der keine Achse mit rationalen Anteilen senkrecht steht.
+    """
+    from app.core.geom.mesh import MeshData as Mesh
+
+    source = plate("torus_ring.stl").raw
+    toward = np.array([1.0, math.sqrt(2.0), math.sqrt(3.0)])
+    rng = np.random.default_rng(210)
+    axes = []
+    for trial in range(6):
+        faces = np.asarray(source.faces)
+        order = rng.permutation(len(faces)) if trial else np.arange(len(faces))
+        rolled = np.roll(faces[order], trial % 3, axis=1)
+        body = trimesh.Trimesh(np.array(source.vertices), rolled, process=False)
+        forget_cache()
+        (torus,) = detect_tori(Mesh.of(body))
+        axis = np.asarray(torus.params["axis"], dtype=float)
+        assert float(axis @ toward) > 0.0, f"Umordnung {trial}: Achse {axis}"
+        patch_axis = np.asarray(torus.surface_patches[0].params["axis"], dtype=float)
+        assert np.array_equal(axis, patch_axis)
+        axes.append(axis)
+    for trial, axis in enumerate(axes[1:], start=1):
+        assert np.allclose(axis, axes[0], rtol=0.0, atol=1e-9), f"Umordnung {trial}"
+
+
 def test_a_piece_of_a_ring_is_enough_for_the_two_radii() -> None:
     """Ein Torus**stück** reicht der Einpassung, ein ganzer Ring ist nicht nötig.
 
@@ -2935,6 +2969,13 @@ def test_every_question_across_bodies_is_named_and_shared() -> None:
     assert len(asked) >= 7, "die Suche findet die Fragen über die Körpergrenze"
     assert asked == module.GEOMETRY_KEYED_ANSWERS, sorted(asked ^ module.GEOMETRY_KEYED_ANSWERS)
     assert module.GEOMETRY_KEYED_ANSWERS <= module.SHARED_ANSWERS
+    # RM-592: Was unter dem Fleckabdruck abgelegt wird, steht in PRINT_KEYED_ANSWERS.
+    kept = {
+        getattr(module, constant)
+        for constant in re.findall(r"\b_keep_across\(\s*(_[A-Z_]+)", source)
+    }
+    assert kept == module.PRINT_KEYED_ANSWERS, sorted(kept ^ module.PRINT_KEYED_ANSWERS)
+    assert not module.PRINT_KEYED_ANSWERS & module.GEOMETRY_KEYED_ANSWERS
 
 
 def test_recognition_selects_triangles_and_corners_through_plain_arrays() -> None:
@@ -7482,7 +7523,7 @@ def test_the_round_screening_reports_progress_while_planning(
         observed_before_read.append(reported[-1] if reported else 0.0)
         return None
 
-    monkeypatch.setattr(features_module, "_surface_support", no_support)
+    monkeypatch.setattr(features_module, "_support_handle", no_support)
     features_module._screened_fits(body, patches, share=features_module._Share(reported.append))
 
     assert len(observed_before_read) == len(patches)
@@ -7700,3 +7741,138 @@ def test_subdividing_a_cone_rim_does_not_invent_measured_circle_points() -> None
     measured = support.points[features_module._circular_rim_points(support)]
     assert len(measured) == len(expected)
     assert {tuple(point) for point in measured} == {tuple(point) for point in expected}
+
+
+def test_a_flat_face_reports_its_axis_whichever_triangle_comes_first() -> None:
+    """Eine erkannte achsparallele Fläche meldet genau ihre Achse, gleich welches Dreieck vorn ist.
+
+    ``trimesh`` normiert über den Kehrwert der Länge; an der Dichtung gibt
+    das je nach Dreieck ``±0.9999999999999999``. Die Vernetzung eines
+    exakten Körpers ordnet ihre Dreiecke auf macOS Intel anders als
+    anderswo, die Normale kam dort mit anderen Bits heraus. Für eine schräge
+    Ebene sagt der Test nichts zu: Deren Dreiecke haben auch elementweise
+    normiert verschiedene letzte Bits (Review Intel G-1).
+    """
+    from app.core.knowledge.parts import seals
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    path = sketch_to_text(sketch_shapes.rectangle(20.0, 12.0))
+    raw = seals.seal_gasket(seals.GasketParams(path_sketch=path, width=2.6, height=2.4)).mesh.raw
+    uneven = [
+        index
+        for index, normal in enumerate(np.asarray(raw.face_normals))
+        if abs(normal[2]) not in (0.0, 1.0) and abs(normal[0]) == 0.0 and abs(normal[1]) == 0.0
+    ]
+    # Ohne ein solches Dreieck prüfte der Test nichts.
+    assert uneven
+    for first in uneven:
+        order = [first, *(index for index in range(len(raw.faces)) if index != first)]
+        body = trimesh.Trimesh(raw.vertices, raw.faces[order], process=False)
+        sign = 1.0 if raw.face_normals[first][2] > 0.0 else -1.0
+        found = [
+            feature
+            for feature in detect(MeshData.of(body)).values()
+            if feature.kind == "face" and 0 in feature.face_indices
+        ]
+        assert len(found) == 1
+        normal = found[0].params["normal"]
+        assert normal == (0.0, 0.0, sign)
+        assert all(math.copysign(1.0, value) == 1.0 for value in normal[:2])
+
+
+def _forbid_trimesh_normals(monkeypatch: pytest.MonkeyPatch, module: Any, name: str) -> list[int]:
+    """Sperrt trimeshs ``face_normals``, solange ``module.name`` läuft; zählt die Aufrufe."""
+    original = trimesh.Trimesh.face_normals
+    inside = [0]
+    calls = [0]
+
+    def read(self: trimesh.Trimesh) -> Any:
+        assert not inside[0], f"{name} liest trimeshs face_normals statt stable_normals"
+        return original.fget(self)
+
+    monkeypatch.setattr(trimesh.Trimesh, "face_normals", property(read, original.fset))
+    function = getattr(module, name)
+
+    def guarded(*args: Any, **kwargs: Any) -> Any:
+        calls[0] += 1
+        inside[0] += 1
+        try:
+            return function(*args, **kwargs)
+        finally:
+            inside[0] -= 1
+
+    monkeypatch.setattr(module, name, guarded)
+    return calls
+
+
+def test_the_face_roles_read_the_normal_the_faces_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Innenlage und gemeldete Fläche teilen eine Normalenquelle (Review Intel G-2)."""
+    from app.core.knowledge.parts import seals
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    path = sketch_to_text(sketch_shapes.rectangle(20.0, 12.0))
+    raw = seals.seal_gasket(seals.GasketParams(path_sketch=path, width=2.6, height=2.4)).mesh.raw
+    forget_cache()
+    calls = _forbid_trimesh_normals(monkeypatch, features_module, "_face_roles")
+    found = detect(MeshData.of(trimesh.Trimesh(raw.vertices, raw.faces, process=False)))
+    assert calls[0] and any(feature.kind == "face" for feature in found.values())
+
+
+def test_a_rounded_side_reports_the_mean_of_the_stable_normals() -> None:
+    """Die Normale einer gerundeten Seite ist das flächengewichtete Mittel der ``stable_normals``.
+
+    Nicht ``trimesh``s ``face_normals`` (Kehrwert über ``np.dot``, BLAS): An
+    diesem schräg liegenden elliptischen Mantel weicht deren Mittel in den letzten Bits ab
+    (Review Intel G-4).
+    """
+    from app.core.geom.mesh import stable_normals
+    from app.core.units import EPS_GEOM
+
+    body = trimesh.creation.cylinder(radius=10.0, height=8.0, sections=96)
+    points = np.asarray(body.vertices) * (1.7, 1.0, 1.0)
+    turn = trimesh.transformations.rotation_matrix(math.radians(37.0), (1.0, 0.3, 0.0))[:3, :3]
+    body = trimesh.Trimesh(points @ turn.T, body.faces, process=False)
+    forget_cache()
+    curved = [
+        feature for feature in detect(MeshData.of(body)).values() if feature.kind == "curved_face"
+    ]
+    assert curved
+    areas = np.asarray(body.area_faces)
+    unit = stable_normals(body)[0]
+    trimesh_normals = np.asarray(body.face_normals)
+    differs = False
+    for feature in curved:
+        patch = np.asarray(feature.face_indices)
+        weights = areas[patch]
+        total = max(float(weights.sum()), EPS_GEOM)
+        expected = (unit[patch] * weights[:, None]).sum(axis=0) / total
+        older = (trimesh_normals[patch] * weights[:, None]).sum(axis=0) / total
+        differs |= bool(np.any(expected != older))
+        assert feature.params["normal"] == tuple(float(value) for value in expected)
+    # Ohne Abweichung zwischen beiden Quellen prüfte der Test nichts.
+    assert differs
+
+
+def test_a_slot_flank_carries_the_normal_the_faces_report(
+    monkeypatch: pytest.MonkeyPatch, profile: Any
+) -> None:
+    """Der Ebenenträger einer Langlochwand nimmt dieselbe Normalenquelle (Review Intel G-3)."""
+    from app.core.geom.prepare import drill
+    from app.core.perceive import slots
+
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    mesh = drill(
+        plate,
+        profile=profile,
+        position=(0.0, 0.0, 5.0),
+        axis="z",
+        diameter=5.0,
+        compensate=False,
+        slot_length=20.0,
+    ).mesh
+    forget_cache()
+    calls = _forbid_trimesh_normals(monkeypatch, slots, "_flank_surfaces")
+    found = detect(mesh)
+    assert calls[0] and any(feature.kind == "slot" for feature in found.values())

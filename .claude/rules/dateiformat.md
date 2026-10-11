@@ -44,8 +44,7 @@ welcher (§24.5, §32).
   `project._validate_suppression_schema` weist Beschädigtes und unbekannte
   Umbauarten ab.
 - **Gleich heißt inhaltsgleich, nicht bytegleich**: Verglichen wird
-  `project.content_digest`, nie der Dateihash (Deflate-Bytes unterscheiden
-  sich je Plattform, der ZIP-Kopf nennt kein System: `CONTAINER_SYSTEM`).
+  `project.content_digest`, nie der Dateihash (`CONTAINER_SYSTEM`).
   Eingecheckte Beispiel- und Belegdateien werden nicht neu geschrieben — ihr
   Hash ist ihr Beleg.
 - **Was zum Teil gehört, steht im Dokument, was zum Rechner gehört, in den
@@ -225,11 +224,12 @@ Konstanten in Formelgestalt (`_cura_literal`).
   PrusaSlicer als Bereich (Dreiecke hinter denen des Körpers, `SupportBlocker`
   in der Beilage, Modell mit `slic3rpe:Version3mf`), CuraEngine als eigenes
   Netz mit `anti_overhang_mesh=true` (`slicer_keys.takes_mesh_settings`),
-  Curas Fenster als Komponente neben ihrem Körper mit
-  `cura:anti_overhang_mesh`. Jede Familie druckt die fremde Schreibweise als
-  Kunststoff — geprüft wird an der **Modellbahn** mit und ohne Sperre, nicht
-  an der Stütze. Geschrieben nur in die direkte Übergabe, nie in eine
-  gespeicherte 3MF.
+  Curas Fenster als Komponente mit `cura:anti_overhang_mesh`. Geprüft an der
+  Modellbahn, nicht an der Stütze; nur in die direkte Übergabe, nie in eine
+  gespeicherte 3MF. Gitter am Teil mit Sperre geht als `snug`
+  (`handover.snug_beside_blocker`).
+- **Feine Schichten reisen als Höhenkurve je Teil** (`writer._layer_heights`);
+  nicht unter organischen Bäumen, am Turm neben anderen Teilen, für Cura.
 - **CuraEngine bekommt kein 3MF, Curas Fenster schon** (`cura`): Für die
   Kommandozeile gibt `write_assembly` ein STL aller Teile der Platte, daneben
   je Teil ein Netz und eine Netzliste (`-s` nach `-l` gilt nur diesem Netz).
@@ -384,10 +384,10 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Solidons G-Code-Konfiguration der des Herstellerprofils allein, bis auf
   Namen, Objektmarken und `filament_self_index`.
 - **Ältere Dateien ordnet die Migration gegen jede Auflösung ein, mit der eine
-  Version schrieb** (`print_settings.legacy_choices`: heutige und 0.5.0,
-  `resolve(..., legacy=True)`); wer die Auflösung ändert, prüft an einer von
-  der alten Version gespeicherten Datei
-  (`tests/data/projects/print_settings_v33.p3d`).
+  Version schrieb** (`print_settings.legacy_choices`: heute und 0.5.0 mit
+  `legacy=True`); wer Auflösung oder Typ eines Werts ändert, rechnet ihn in
+  35 → 36 vorab um (Bügeln) und prüft an
+  `tests/data/projects/print_settings_v33.p3d`.
 
 ## Die drei Stufen der Übergabe
 

@@ -317,6 +317,24 @@ Die Messung zur Stützsperre:
 > (Abschnitt 1.5): 18 476 Stützbewegungen wurden 0, die Modellbahn blieb bis
 > auf zwei Bewegungen gleich.
 
+> **Gitter neben einer Sperre liegt am Überhang an** (`snug`, 11.10.2026). Die
+> Sperre der Orca-Familie und von PrusaSlicer nimmt nur die Überhangfläche in
+> ihr aus. Im Gitterstil legen beide jede Säule auf ein Raster
+> (`SupportGridPattern`) und schneiden sie danach nur am Modell zu; am Becher
+> mit Deckel und gesperrtem Tunnel liefen die Säulen unter dem Deckel 1,1 mm
+> in beide Mündungen, von der Sohle bis zur Decke (ElegooSlicer 1,08 m, Bambu
+> Studio 0,97, Creality Print 0,94, OrcaSlicer 0,70, PrusaSlicer mit Gitter
+> 0,95). Mit `snug` waren es je 0,01 m, der Deckel blieb ganz gestützt.
+> Gefragt wird, was das Teil druckt: Gitter, oder „automatisch“ über einem
+> Herstellerprozess mit normaler Stütze. Außer `snug` druckt die Orca-Familie
+> jeden Stil des Herstellers unter normaler Stütze als Gitter, auch einen
+> Baumstil (Prusa XL in OrcaSlicer: 1,14 m im Tunnel, bis das Teil auch dort
+> `snug` bekam). Was die Sperre deckt, bleibt mit `snug` wirklich frei: Deckt
+> sie einen Überhang, der Stütze braucht, fällt die Gitterstütze weg, die dort
+> über die Sperre hinaus zufällig mitstützte (Sims im Becher ohne RM-629:
+> Abdeckung 46 → 39 %). Sonst ist es dieselbe normale Stütze; der Befund
+> `export.snug_support` sagt, warum die Datei `snug` statt Gitter trägt.
+
 Warum Cura kein 3MF bekommt:
 
 > `CuraEngine` liest kein 3MF (die 3MF-Seite sitzt in Curas Fenster, nicht in
@@ -375,6 +393,26 @@ dessen Ecke sich verschieben ließe, kennt Solidon dort nicht."
 Warum ein exakter Körper neu vernetzt hinausgeht: „die Datei geht in den
 Slicer, und an 50-µm-Pixeln ist eine Facette von fünf Hundertsteln eine
 Stufe."
+
+Feine Schichten als Höhenkurve (RM-586, aus der Regel verschoben):
+`Metadata/layer_heights_profile.txt` liest die Orca-Familie,
+`Metadata/Slic3r_PE_layer_heights_profile.txt` PrusaSlicer und SuperSlicer, beide als
+`object_id=<Stelle ab eins>|z;h;…`. Die Kurve beginnt mit der ersten Schicht als zweitem
+Wert und endet genau auf der Oberkante (Toleranz 0,001 mm,
+`PrintObject::update_layer_height_profile`), sonst verwirft der Slicer sie still — auch,
+wenn ihre erste Schicht nicht die des Profils ist: Mit Solidons 0,25 gegen die 0,2 des
+Neptune-4-Profils druckten vier Orca-Programme gleichmäßig. Deshalb rechnet die Übergabe
+mit `manufacturer.effective`. OrcaSlicer lehnt eine Kurve unter Bäumen mit `support_style`
+organisch oder Vorgabe ab, nimmt sie unter `tree_slim`, `tree_strong`, `tree_hybrid` an;
+mit Reinigungsturm verlangt sie dieselbe Kurve an allen Teilen („The prime tower is only
+supported if all objects have the same variable layer height.“), aber nur, wenn mehr als
+ein Objekt auf der Platte steht; PrusaSlicer ebenso, an jeder Maschine mit mehreren
+Werkzeugen und eingeschaltetem `wipe_tower` (`handover.same_layers_required`). Gemessen am Drachen (feine
+Schichten erzwungen, 650 → 817 Lagen): ElegooSlicer +29,7 %, Bambu Studio +22,2 %,
+OrcaSlicer +30,7 %, Anycubic Slicer Next +27,9 %, Creality Print +21,7 %, PrusaSlicer
++22,3 % Druckzeit; Cura unverändert. Je Teil (Kuppe neben Klotz) in allen sieben lesenden
+Programmen nur an der Kuppe. SuperSlicer zählt `top_solid_min_thickness` in Lagen der
+normalen Schicht und bewirkt mit feinen Schichten nichts.
 
 ## Auf dem Herstellerprofil wird nur die Abweichung geschrieben
 

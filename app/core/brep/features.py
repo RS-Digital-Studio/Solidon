@@ -50,7 +50,14 @@ from app.core.types import (
     SurfacePatch,
     Vec3,
 )
-from app.core.units import EPS_DISPLAY, EPS_GEOM, exact_cos, match_tolerance, positive_axis
+from app.core.units import (
+    EPS_DISPLAY,
+    EPS_GEOM,
+    exact_cos,
+    match_tolerance,
+    positive_axis,
+    ring_axis,
+)
 
 _log = get_logger(__name__)
 
@@ -413,7 +420,7 @@ def _native_patch(
         kind = "torus"
         params = {
             "centre": surface.torus.Location().Coord(),
-            "axis": surface.torus.Axis().Direction().Coord(),
+            "axis": ring_axis(surface.torus.Axis().Direction().Coord()),
             "ring_radius": float(surface.torus.MajorRadius()),
             "tube_radius": float(surface.torus.MinorRadius()),
         }
@@ -1746,7 +1753,8 @@ def _describe(
         return "torus", {
             "diameter": float(torus.MajorRadius()) * 2.0,
             "tube_diameter": float(torus.MinorRadius()) * 2.0,
-            "axis": _oriented(torus.Axis().Direction()),
+            # Ein Ring hat kein Oben: dieselbe Regel wie die Einpassung am Netz.
+            "axis": ring_axis(torus.Axis().Direction().Coord()),
             "centre": tuple(float(value) for value in torus.Location().Coord()),
             "recess": surface.inward,
         }

@@ -140,8 +140,8 @@ from app.core.export.writer import (
     write_assembly,
     write_plan,
 )
+from app.core.filament_usage import StoredInputs, UsageRequest, with_spool
 from app.core.filament_usage import prepare as prepare_usage
-from app.core.filament_usage import with_spool
 from app.core.geom.measure import bounding_box_of, volume_of
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.pose import armature_to_text
@@ -150,6 +150,7 @@ from app.core.geom.sculpt import (
     SYMMETRY_BITS,
     SculptPreview,
     brush_radius_for,
+    evened_for_brush,
     median_edge,
     mirror_plane,
     refine_edge_for,
@@ -403,7 +404,14 @@ from app.ui.render.api import PointerEvent
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
-from app.ui.session import SHORT_CHAIN_PREVIEW, AskRequest, Session, TriangleCounts
+from app.ui.session import (
+    AGENT_STOPPED,
+    SHORT_CHAIN_PREVIEW,
+    AskRequest,
+    Session,
+    TriangleCounts,
+    agent_stop_sentence,
+)
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
 from app.ui.shortcut_schemes import (
@@ -1192,8 +1200,6 @@ class _SculptPreviewWorker(Worker):
         self.cancel = CancelSignal()
 
     def work(self) -> None:
-        from app.core.geom.mesh_ops import uniform
-
         base, preview, refined, refined_edge = self.mesh, self.preview, None, 0.0
         if self.refine is not None:
             source, radius, finest = self.refine
@@ -1201,8 +1207,13 @@ class _SculptPreviewWorker(Worker):
             if refined_edge:
                 values = _refinement_params(refined_edge)
                 try:
-                    refined = uniform(
-                        source, values["edge"], values["deviation"], cancelled=self.cancel
+                    refined_edge, refined = evened_for_brush(
+                        source,
+                        values["edge"],
+                        values["deviation"],
+                        radius=radius,
+                        finest=finest,
+                        cancelled=self.cancel,
                     )
                 except AppError:
                     # Ein offenes Netz lässt sich nicht angleichen. Geformt wird
@@ -1801,10 +1812,13 @@ class _ExportWorker(Worker):
         checked: list[Finding] | None = None,
         evaluated: Sequence[Finding] = (),
         chosen: _ChosenSetup | None = None,
+        inputs: StoredInputs | None = None,
     ) -> None:
         super().__init__()
         self._objects = objects
         self._target = target
+        self._inputs = inputs
+        """Die gespeicherten Eingänge der Körper für den Abdruck der Buchung (RM-706)."""
         self._chosen = chosen
         """Die Einrichtung, mit der das Hauptfenster schon rechnet — dann wird
         sie nicht neu hergeleitet (:class:`_ChosenSetup`)."""
@@ -1832,6 +1846,9 @@ class _ExportWorker(Worker):
         self.renewed: _ChosenSetup | None = None
         """Die Wahl, die dieser Export neu hergeleitet hat, weil sich der Bestand
         seit ``chosen`` geändert hatte (:meth:`_assembly_in_one_read`)."""
+        self._usage: tuple[UsageRequest, ...] = ()
+        """Der Bedarf dieser Datei, gerechnet mit der Grundlage, die sie trägt
+        (:meth:`_usage_for`)."""
 
     def cancel(self) -> bool:
         """Nimmt einen Abbruch nur vor dem gemeinsam geschützten Schreibbeginn an."""
@@ -1867,6 +1884,7 @@ class _ExportWorker(Worker):
             checked=list(findings),
             evaluated=self._evaluated,
             chosen=self._chosen,
+            inputs=self._inputs,
         )
 
     def work(self) -> None:
@@ -1891,16 +1909,13 @@ class _ExportWorker(Worker):
             if self._format == "3mf":
                 self._settings = self._profiles_for_selection(self._settings)
                 self._inventory_settings = self._profiles_for_selection(self._inventory_settings)
-            usage = (
-                prepare_usage(
-                    self._objects, self._inventory_settings, self._profile, self._project_name
-                )
-                if self._format == "3mf" and self._inventory_settings is not None
-                else ()
-            )
             plan: ExportPlan | None = None
+            usage: tuple[UsageRequest, ...] = ()
             if self._format == "3mf":
+                # Der Bedarf entsteht im Lesedurchgang der Datei, mit derselben
+                # Grundlage (:meth:`_usage_for`).
                 written, findings = self._assembly()
+                usage = self._usage
             else:
                 self._begin_write()
                 written, findings, plan = self._files()
@@ -1977,6 +1992,30 @@ class _ExportWorker(Worker):
         with slicer_profiles.single_read():
             return self._assembly_in_one_read()
 
+    def _usage_for(
+        self, unstaged: handover.SlicerSetup | None, staged: handover.SlicerSetup | None
+    ) -> tuple[UsageRequest, ...]:
+        """Der Bedarf der Datei, vor dem Schreiben gerechnet.
+
+        Die Wahl der Grundlage benennt den Druck mit (Review RM-706, M2): ein
+        eigener Prozess ist ein anderer Druck. Genommen wird der Prozess, den
+        die Stufe der Buchungswerte wählt — derselbe wie in der Datei, auch
+        wenn sie ohne Druckeinstellungen geschrieben wird.
+        """
+        inventory = self._inventory_settings
+        if inventory is None:
+            return ()
+        if self._settings is None or self._settings.quality != inventory.quality:
+            staged = manufacturer.for_stage(unstaged, self._profile, inventory.quality)
+        return prepare_usage(
+            self._objects,
+            inventory,
+            self._profile,
+            self._project_name,
+            inputs=self._inputs,
+            base=staged,
+        )
+
     def _assembly_in_one_read(self) -> tuple[list[Path], list[Finding]]:
         """Der Export aus :meth:`_assembly`, in dessen Lesedurchgang.
 
@@ -2010,6 +2049,7 @@ class _ExportWorker(Worker):
             found = tools.slicer_program()
             if found is not None:
                 setup = handover.detect(found)
+        unstaged = setup
         settings = self._settings
         if settings is not None:
             # Die Stufe wählt den Prozess des Herstellers (Entscheidung I), für
@@ -2023,6 +2063,7 @@ class _ExportWorker(Worker):
             settings = manufacturer.effective(
                 settings, manufacturer.base_settings(self._profile, settings.quality, setup)
             )
+        self._usage = self._usage_for(unstaged, setup)
         written_path, findings = write_assembly(
             self._objects,
             self._target.parent,
@@ -4361,6 +4402,7 @@ class MainWindow(QMainWindow):
         # mit ihm (oder seinem Scheitern) weicht der Schleier.
         self.viewport.sceneApplied.connect(self._veil_after_the_picture)
         self.viewport.sceneFailed.connect(self._veil_after_the_picture)
+        self.viewport.preparationEnded.connect(self._veil_after_the_picture)
 
         self.start_screen = StartScreen(self)
         self.start_screen.newRequested.connect(self.start_empty)
@@ -7303,6 +7345,7 @@ class MainWindow(QMainWindow):
         self.session.backendChanged.connect(self._refresh_chat_availability)
         self.session.proposalReady.connect(self._on_proposal)
         self.session.agentBusyChanged.connect(self._on_agent_busy)
+        self.session.agentCancelled.connect(self._on_agent_cancelled)
         self.session.agentProgress.connect(self._on_agent_progress)
         self.session.splitBusyChanged.connect(self._on_split_busy)
         self.session.splitProgressChanged.connect(self._on_split_progress)
@@ -10179,6 +10222,13 @@ class MainWindow(QMainWindow):
             # Dieselbe Slicerwahl wie die Zahlenzeile, ohne den Bestand ein
             # zweites Mal zu lesen (RM-623).
             chosen=self._chosen_setup_now(),
+            # Der Abdruck der Buchung liest das Gespeicherte, nicht die Netze (RM-706).
+            inputs=StoredInputs.snapshot(
+                self.session.project,
+                base_dir=self.session.base_dir,
+                stopped_at=result.stopped_at,
+                document=document,
+            ),
         )
         self._run_export(worker)
 
@@ -11517,7 +11567,7 @@ class MainWindow(QMainWindow):
         der nächsten Änderung auseinander, und der Kunde liest sie hier
         nacheinander.
         """
-        from app.core.counterpart import drafts_for
+        from app.core.counterpart import AMBIGUOUS_THREAD, drafts_for
         from app.ui.counterpart_dialog import CounterpartDialog
 
         chosen = self._counterpart_targets()
@@ -11541,13 +11591,31 @@ class MainWindow(QMainWindow):
         thread = self._thread_among((first_object, first_feature), (second_object, second_feature))
         if thread is not None:
             (thread_object, thread_feature), (other_object, other_feature) = thread
-            try:
-                applied = self.session.create_thread_counterpart(
-                    thread_feature, thread_object, other_object, {"at_feature": other_feature}
-                )
-            except AppError as error:
-                show_error(error, self)
-                return
+            size: str | None = None
+            while True:
+                try:
+                    applied = self.session.create_thread_counterpart(
+                        thread_feature,
+                        thread_object,
+                        other_object,
+                        {"at_feature": other_feature},
+                        size=size,
+                    )
+                    break
+                except AppError as error:
+                    # Passt das Gewinde zu Größen zweier Reihen, fragt der Kern
+                    # zurück (RM-544, Regel 21) — hier die Frage, dann derselbe Weg.
+                    choices = [str(entry) for entry in error.values.get("choices", ())]
+                    asked = getattr(error, "constraint", None) == AMBIGUOUS_THREAD
+                    if not asked or size is not None or not choices:
+                        show_error(error, self)
+                        return
+                    picked, accepted = QInputDialog.getItem(
+                        self, tr("Gegenstück zum Gewinde"), str(error.detail), choices, 0, False
+                    )
+                    if not accepted:
+                        return
+                    size = str(picked)
             for finding in applied.findings:
                 self.announce(str(finding.message))
             return
@@ -11699,6 +11767,11 @@ class MainWindow(QMainWindow):
         KeyDialog(parent=self, settings=self.settings).exec()
         self.session.set_agent_backend(None)
         self._refresh_chat_availability(probe_local=True)
+
+    def _try_chat_key_again(self) -> None:
+        llm.accept_again("anthropic")
+        self.session.set_agent_backend(None)
+        self._refresh_chat_availability()
 
     def _refresh_chat_availability(self, probe_local: bool = False) -> None:
         """Der eine Ort, an dem der Chat-Zustand gelesen wird.
@@ -11909,6 +11982,9 @@ class MainWindow(QMainWindow):
 
     def _apply_settings(self) -> None:
         """Trägt die Einstellungen dorthin, wo sie wirken."""
+        from app.core.knowledge import standards
+
+        standards.set_shown_thread_families(self.settings.thread_families)
         application = QApplication.instance()
         if application is not None:
             apply_theme(application, self.settings.theme)  # type: ignore[arg-type]
@@ -18292,6 +18368,17 @@ class MainWindow(QMainWindow):
         self._set_progress_state("agent", active=False)
         self._update_waiting_state()
 
+    def _on_agent_cancelled(self, reason: str, request: str) -> None:
+        """Ein Zug ohne Vorschlag ist kein Fehler (§2.7, Regel 17).
+
+        Wer selbst angehalten hat, liest eine Quittung. Kam der Abbruch von
+        woanders (``session.agent_stop_sentence``), steht die Anfrage wieder
+        im Chat — ein eigener Text im Feld bleibt.
+        """
+        if reason != AGENT_STOPPED and request and not self.chat.input.toPlainText().strip():
+            self.chat.restore_request(request)
+        self.announce(agent_stop_sentence(reason))
+
     def _on_agent_progress(self, step: int, label: str) -> None:
         """Was der Zug gerade tut, statt nur dass er läuft (§2.8).
 
@@ -21949,7 +22036,7 @@ class MainWindow(QMainWindow):
                 self._object_names(),
                 self,
                 values=values,
-                sources=self._source_names(),
+                sources=self._source_names(spec.name),
                 parameter_values=self._parameter_values(),
                 # **Auch hier die Merkmale**, nicht nur beim Korrigieren einer
                 # bestehenden Operation. Ohne sie baut der Dialog seine
@@ -22507,7 +22594,7 @@ class MainWindow(QMainWindow):
             values={**entry.params, **(given or {})},
             promote_values=False,
             front_fields=front,
-            sources=self._source_names(),
+            sources=self._source_names(spec.name),
             parameter_values=self._parameter_values(),
             # Dieselbe Verengung wie beim Anlegen: Wer einen Schritt im Verlauf
             # korrigiert, soll dort dieselbe Auswahl vorfinden wie beim ersten
@@ -23686,6 +23773,11 @@ class MainWindow(QMainWindow):
             flow = dialog.placement_flow
             if flow is not None and flow.active and approval.required is False:
                 return
+            if dialog.place_missing() or dialog.source_missing():
+                # Ohne Stelle oder Bild rechnet nichts: Die Auswertung hielte
+                # sicher an, und das Band zeigte die Absage, bevor jemand
+                # gewählt hat (RM-773, RM-775).
+                return
             self._request_order_preview(approval)
 
         def changed(*_ignored: Any) -> None:
@@ -24206,11 +24298,14 @@ class MainWindow(QMainWindow):
             return {}
         return {object_id: str(entry.name) for object_id, entry in result.scene.objects.items()}
 
-    def _source_names(self) -> dict[str, str]:
-        """Kennung auf Dateiname, für die Quellenwähler (§16.3)."""
+    def _source_names(self, operation: str = "") -> dict[str, str]:
+        """Kennung auf Dateiname, für die Quellenwähler (§16.3) — nur, was operation liest."""
+        from app.core.ingest.plan import reads
+
         return {
             source_id: Path(source.path).name or source_id
             for source_id, source in self.session.project.document.sources.items()
+            if reads(operation, source.path)
         }
 
     def _image_names(self) -> dict[str, str]:
@@ -27110,6 +27205,8 @@ class MainWindow(QMainWindow):
             # öffnete er die Liste der externen Programme, weil der Kern ihn
             # dafür benutzte — der Knopf log also seinen Namen.
             "open_settings": lambda _error: self.action_settings(),
+            "set_up_chat": lambda _error: self.action_llm_key(),
+            "try_key_again": lambda _error: self._try_chat_key_again(),
             # Die Wege am Verlauf selbst (P7): einschalten, ausschalten, den
             # Deckel mit seinem Hohlraum zusammen ausschalten, das Einfügen
             # beenden — alle rücknehmbar, alle ohne Nachfrage (Regel 19).

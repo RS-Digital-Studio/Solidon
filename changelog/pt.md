@@ -22,6 +22,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A demo funciona agora até 30 de novembro de 2026. O Solidon3D 1.0 está previsto para 1 de dezembro e os seus projetos mantêm-se.
 - No Mac, o Solidon precisa agora do macOS 14 ou mais recente. Qualquer Mac a partir de 2018 pode instalá-lo gratuitamente.
 - O Solidon arranca agora nos Mac Intel com macOS 26. A versão 0.5.3 ficava aí bloqueada no arranque.
+- Nos Mac Intel, o Solidon indica agora quando um arredondamento ou um chanfro num corpo exato não pode ser construído. A versão 0.5.3 fechava-se nesse momento.
 - No Mac, *Cancelar* interrompe de imediato uma resposta em curso do modelo local.
 - No Mac, Return abre a entrada selecionada no ecrã inicial, em *Pesquisar função* e no relatório de verificação.
 - No Linux, a escrita com Fcitx5 e IBus chega agora ao campo de texto também no Flatpak e no AppImage.
@@ -54,14 +55,21 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No separador *Seleção*, o campo de filamento só atribui com um clique ou Enter. As setas e a escrita apenas percorrem a lista, e a roda do rato desloca o separador.
 - Nas versões traduzidas, *Novo filamento* já não se desloca para o lado quando a janela é mais baixa do que o conteúdo.
 - Os modelos grandes carregam visivelmente mais depressa e precisam de menos memória, também com um histórico longo e em computadores com 8 GB.
+- Um projeto guardado com muitos passos num modelo grande abre com muito menos memória.
 - Mesmo num histórico longo, um passo novo quase não demora mais a calcular do que o primeiro.
 - Em modelos com milhares de características, mover e outros passos que não alteram a forma terminam até duas vezes mais depressa.
 - Ao reabrir um projeto, o relatório de verificação continua a indicar para que lugar livre foi um modelo inserido.
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
 - Reparar e resolver sobreposições é até quatro vezes mais rápido em modelos grandes, e exportar em 3MF é bastante mais rápido.
 - A área de trabalho aparece mais depressa ao abrir ficheiros 3MF grandes.
+- O aviso *A mostrar o modelo …* desaparece assim que a vista está pronta e já não fica por cima do modelo.
+- As mensagens sobre valores e formas já não oferecem um relatório de erro. Só aparece quando o erro é do próprio Solidon.
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
+- Depois de um furo ou de uma característica deslocada, as características de uma peça técnica grande são reconhecidas cerca de um terço mais depressa.
+- Um modelo que abre logo após iniciar o programa fica editável até um quarto mais cedo.
+- Com um slicer, um jogo ou uma renderização a correr ao lado, os cálculos em modelos grandes terminam em segundos em vez de minutos.
+- Um projeto guardado com um modelo grande abre após um reinício em um ou dois segundos em vez de meio minuto: as características reconhecidas ficam guardadas.
 
 ### Imprimir e entregar ao slicer
 
@@ -78,9 +86,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O tempo de impressão estimado está mais perto do do slicer, muito mais perto em peças com suportes.
 - A verificação do espaço para suportes e skirt na mesa mede agora só sob as saliências. As peças junto ao rebordo já não recebem um aviso sem razão.
 - As sugestões aceites quase já não deixam sem suporte as saliências que precisam dele. *Manter os canais livres* só bloqueia o espaço de onde um suporte já não se conseguiria retirar.
+- Com *Manter os canais livres*, os suportes em grelha já não entram nas bocas dos canais bloqueados. Na versão 0.5.3 entravam pouco mais de um milímetro.
 - Onde os suportes sob pequenas saliências assentam no modelo, o Solidon sugere suportes em árvore. Aí deixam menos marcas.
 - Em pontas pequenas, o Solidon sugere uma *Velocidade mínima ao abrandar* mais baixa para que não amoleçam. A definição chega a qualquer slicer.
 - Os rebordos estreitos que se sustentam sozinhos ficam livres com *Rebordos sem suporte*. Assim a impressão precisa de bem menos suporte.
+- Os arcos de volta perfeita e ogivais sustentam-se sozinhos, e o Solidon deixa de pedir suportes aí. Os tetos quase planos mantêm os seus.
 - Os suportes saem com mais facilidade: a distância segue o material e a altura de camada de cada peça, também com vários materiais numa placa. A camada de separação segue a superfície acima.
 - Se um suporte assenta na peça, o Solidon sugere também uma camada de separação por baixo, para que o seu pé não deixe marcas. Com suportes em árvore, só nos slicers que a imprimem aí.
 - Com suportes em árvore e junto a uma torre de purga, o Solidon propõe a distância do suporte em camadas inteiras, tal como o slicer a imprime.
@@ -99,7 +109,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um rebordo estreito que se sustenta sozinho já não conta como ponte longa, nem junto a outra saliência. O relatório já não avisa aí, e o Solidon não pede suportes por isso.
 - Sobre um canal, o relatório já não aconselha um suporte que depois não se conseguiria tirar. Indica o canal e uma transição abaixo de 45 graus.
 - Para PETG, o Solidon sugere *Arrefecimento total no suporte*. Assim solta-se mais facilmente da peça.
-- Novas definições de impressão: *Camadas de separação inferiores*, *Paredes das árvores* e *Ponta da árvore*, mais *Contrair a primeira camada* e *Alargar furos*, que seguem o slicer se não escolher.
+- Em figuras, o Solidon propõe a costura atrás, sem linha à frente. Para uma face superior grande e plana propõe engomar.
+- O tempo de impressão estimado inclui agora o engomar.
+- Novas definições: *Camadas finas*, *Espessura mínima superior*, *Camadas de separação inferiores*, *Paredes das árvores*, *Ponta da árvore*, *Contrair a primeira camada* e *Alargar furos*.
+- Em *Engomar a superfície* escolhe agora entre *Face mais alta* e *Todas as faces superiores*.
 - O campo *Distância acima* chama-se agora *Distância acima e abaixo* e vale para os dois lados do suporte.
 - Se o slicer recusar filamentos com temperaturas demasiado diferentes numa placa, o Solidon indica agora o motivo e o que fazer, em vez de dizer apenas que não foi criado nenhum ficheiro.
 - No diálogo de impressão, impressora, filamentos e qualidade ficam totalmente visíveis também com letra ampliada. As legendas longas passam para a linha seguinte.
@@ -108,7 +121,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma peça já compensa no modelo, com um furo com *Aplicar compensação do material* ou *Compensar o pé de elefante*, o Solidon sugere que o slicer não o faça de novo.
 - Também com impressoras que o PrusaSlicer ou o SuperSlicer não conhecem, ambos calculam o tempo de impressão com as acelerações entregues, e o ficheiro indica o material da bobina.
 - Mesmo com o computador em plena carga, o Solidon indica o motivo real ao parar um slicer, em vez de um tempo esgotado. Um ficheiro de impressão terminado é aproveitado.
-- O armazém de filamentos volta a reconhecer um consumo descontado com o Solidon 0.5.1 e pergunta antes de descontar de novo a mesma impressão.
+- O armazém de filamentos apresenta para verificar um registo do Solidon 0.5 do mesmo projeto com os mesmos filamentos e pergunta antes de descontar de novo.
+- A partir desta versão, um consumo descontado fica ligado à sua impressão, mesmo que uma atualização calcule mais depressa ou o perfil do fabricante mude no slicer. Antes contava como nova.
+- Onde cúpulas planas e rampas mostrariam degraus, o Solidon sugere camadas finas só aí. A sugestão indica quanto mais tempo a peça demora a imprimir.
 
 ### Roscas, furos e peças normalizadas
 
@@ -125,6 +140,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Colocado por baixo, o alojamento de porca tem a bolsa sob a face e a ranhura desce até ela. Até agora a bolsa ficava meio por cima, com o parafuso na face.
 - Se o furo de um bloco não atravessa a peça, chama-se agora cego. Até agora chamava-se passante.
 - Se a parede for mais espessa do que o indicado em *Passa-cabos* ou *Espigão para mangueira*, o passo diz isso e abre a espessura de parede. Até agora a passagem acabava sem aviso no material.
+- As roscas existem agora também como roscas de tubo G e R, roscas em polegadas UNC e UNF e NPT, na *Rosca imprimível*, em parafuso, porca e *Perno roscado*.
+- Todas as roscas também existem como rosca esquerda. Uma medida própria aceita fios por polegada e várias entradas, também em *Criar parafuso* e *Criar tampa de rosca*.
+- Que séries de roscas as listas de medidas mostram escolhe-se nas Definições, em *Séries de roscas nas listas*.
+- A contraparte e o *Pino para furo* servem também para roscas em polegadas, de tubo, esquerdas, de várias entradas e cónicas. Se uma rosca medida corresponder a duas séries, o Solidon pergunta.
+- As roscas esquerdas, de várias entradas e cónicas editam-se com *Alterar característica* e *Remover característica* e mantêm sentido, entradas e conicidade.
+- O Solidon reconhece uma rosca de várias entradas numa malha importada como uma só rosca com as suas entradas. Até agora apareciam várias roscas com passo demasiado grande.
 
 ### Blocos
 
@@ -132,6 +153,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os seus próprios blocos também surgem assim como corpo próprio e não se prendem a um corpo que já está no projeto.
 - Com *Guardar a seleção como bloco*, o corpo selecionado vem com exatamente os passos que o constroem. Se viesse um segundo corpo, o diálogo diz isso antes de guardar.
 - Suportes de parede, abraçadeiras de tubo e de perfil e suportes aceitam qualquer parafuso de M3 a M64. Se um tamanho não combina com as outras medidas, o bloco diz o que mudar.
+- Um bloco para uma face ou um furo só é calculado quando tem o seu lugar na vista. Até lá a caixa de diálogo não pode ser aplicada e diz o que falta.
+- Se a face mudar com a caixa de diálogo de um bloco aberta, o lugar escolhido mantém-se enquanto continuar válido na nova forma. Caso contrário, o bloco procura um novo e indica-o.
+- Uma caixa de diálogo de bloco aberta enquanto o passo anterior ainda calcula coloca o bloco sozinha assim que o resultado chega, e até lá não pode ser aplicada.
+- Um bloco colocado na vista pode ser levado com um clique para outro lugar também depois de uma entrada na caixa de diálogo.
 
 ### Editar e esboçar
 
@@ -152,6 +177,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O pincel ajusta-se ao tamanho do corpo. Se a malha for demasiado grosseira, *Modelar* uniformiza os triângulos no primeiro traço, e um Ctrl+Z desfaz ambos.
 - Ao espelhar, o plano fica onde o corpo coincide consigo próprio, mesmo quando uma parte sobressai muito para o lado.
 - Modelar acompanha o rato com fluidez, e até um passo com centenas de traços de pincel é calculado depressa.
+- Com *Fundir suavemente* a malha fica uniforme, quase sem lascas finas. Uma peça na mesa de impressão já não passa para baixo dela.
+- Um corpo com uma cavidade fechada mantém-na com *Fundir suavemente*. Desde a versão 0.1.1 a cavidade passava a ser um segundo corpo e o passo assinalava peças não ligadas.
+- Com *Uniformizar os triângulos* nenhuma aresta passa do comprimento definido e a forma não muda. A mesma aresta dá muitas vezes quase o dobro de triângulos; uma mais longa mantém a densidade antiga.
 - Em *Esqueleto*, cada clique depois do primeiro coloca um osso, Enter termina a cadeia, arrastar uma articulação dobra-a e *Concluído* guarda tudo sem diálogo.
 - Um esqueleto só dobra o que está preso aos seus ossos, e o resto do corpo fica parado. Os projetos anteriores calculam-se como foram guardados.
 - Com Ctrl ou Shift escolhe várias arestas e arredonda-as ou chanfra-as num só passo. Um clique num canto escolhe todas as arestas que lá se encontram.
@@ -162,6 +190,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma ação atingisse uma peça separada junto à característica, ou uma característica colocada tocasse outro material só numa linha, o Solidon diz isso em vez de danificar o corpo.
 - Se uma peça separada atrapalha uma ação sobre uma característica, *Dividir em peças soltas e tentar de novo* separa-a e executa a ação. Ctrl+Z desfaz ambas.
 - Ao dividir em peças soltas ficam todas as peças imprimíveis, também pinos e anilhas junto a uma placa grande. Só caem pequenas superfícies abertas e migalhas que a impressora não reproduz.
+- Um relevo só é calculado depois de escolhida uma imagem. Até lá a caixa de diálogo indica o botão *Escolher imagem …*.
+- As caixas de diálogo *Carregar STEP* e *Extrudir um desenho* só oferecem ficheiros que conseguem ler. Se o projeto não tiver nenhum, indicam o botão *Escolher ficheiro …*.
 
 ### Gerar com IA
 
@@ -170,11 +200,15 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As paredes finas, por exemplo de um vaso, chegam fechadas e com espessura.
 - O assistente responde na língua em que escreve.
 - Com um modelo local, o assistente tem tanto espaço como com um alojado e cumpre tarefas até doze passos.
+- Se cancelar uma proposta do assistente, a barra de estado confirma-o em vez de comunicar um erro do programa.
+- Se abrir outro projeto durante uma proposta, Solidon descarta-a e devolve o pedido ao chat.
 - Os modelos gerados chegam fechados com mais frequência. Onde as faces só se tocam, o Solidon separa-as e alisa pequenas dobras da superfície em vez de avisar de uma autointerseção.
 - Se uma tentativa já se desfez ao gerar, a janela di-lo antes de a aceitar e oferece *Mais uma tentativa*.
 - Se um modelo gerado for só uma pele fina à volta de um vazio, a janela di-lo antes de o aceitar e o relatório de verificação depois, com o caminho para uma nova tentativa.
 - Antes de transferir, *Configurar o chat* e *Configurar o ComfyUI* indicam quanta memória gráfica e espaço um modelo precisa e se este computador os tem.
 - Num Mac, *Configurar o chat* propõe um modelo local que cabe na memória partilhada e diz quando uma chave para um modelo alojado é melhor.
+- Se faltar o modelo local escolhido ou o fornecedor recusar a chave, o Solidon di-lo numa frase e *Configurar o chat* leva diretamente à solução.
+- O Solidon ignora uma chave inválida durante um dia, até introduzir outra ou escolher *Tentar novamente*. Entretanto responde um modelo local, se houver um configurado.
 - Num modelo acabado de gerar, *Alterar tamanho* só recalcula a nova medida e já não repete a reparação. É mais rápido, e Ctrl+Z desfaz a alteração de imediato.
 
 ## 0.5.3

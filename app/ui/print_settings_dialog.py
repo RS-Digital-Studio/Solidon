@@ -88,11 +88,12 @@ from app.core.export.writer import (
     arrangement_holds,
     part_advice,
     prepare_slicer_meshes,
+    shared_layer_plates,
     slicer_rim,
     tower_plates,
     write_assembly,
 )
-from app.core.filament_usage import UsageRequest, from_gcode
+from app.core.filament_usage import StoredInputs, UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
 from app.core.geom.attributes import used_slots
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -1171,6 +1172,9 @@ class _PlateJob:
     #: Arbeiter selbst.
     for_window: bool = False
     with_comparison: bool = False
+    #: Die gespeicherten Eingänge der Körper, für den Abdruck der Buchung
+    #: (RM-706): ein fester Stand, das Fenster rechnet weiter.
+    inputs: StoredInputs | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1371,6 +1375,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
 
     def remember_comparison(
         parts: Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
+        heights: Mapping[str, tuple[float, ...]],
     ) -> None:
         nonlocal comparison
         # Die Zeitgegenprobe rechnet mit dem, was das Herstellerprofil über
@@ -1384,6 +1389,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
             separate_objects=slicer_keys.reads_assembly_file(job.setup.flavour),
             cancelled=job.cancelled,
             motion=motion,
+            heights=heights,
         )
 
     written, findings = write_assembly(
@@ -1460,6 +1466,28 @@ def _few_names(names: Sequence[str]) -> str:
     return f"{', '.join(names[: SHOWN_PART_NAMES - 1])} {rest}"
 
 
+def _part_note(
+    parts: Sequence[str],
+    values: Mapping[str, Sequence[str]],
+    rest: str,
+    names: Callable[[Sequence[str]], str],
+) -> str:
+    """Der Hinweis am Feld zu einem Vorschlag je Teil: erst wer ihn bekommt,
+    dann je Wert, wer mit ihm seinen eigenen bekommt, zuletzt der Wert der
+    übrigen — leer, wo keines übrig bleibt. ``names`` kürzt die Namen oder
+    nennt jeden."""
+    said = [str(tr("Nur für {parts}.", parts=names(parts)))]
+    for value, group in values.items():
+        said.append(
+            str(tr("{part} bekommt {value}.", part=group[0], value=value))
+            if len(group) == 1
+            else str(tr("{parts} bekommen {value}.", parts=names(group), value=value))
+        )
+    if rest:
+        said.append(str(tr("Die übrigen Teile drucken mit {value}.")).replace("{value}", rest))
+    return " ".join(said)
+
+
 def _cura_prints_alike(first: object, second: object, trees: Collection[str]) -> bool:
     """Ob Cura zwei Stützarten gleich druckt (Nachprüfung RM-584, N1).
 
@@ -1476,6 +1504,17 @@ def _advice_identity(entry: SettingAdvice) -> object:
     if isinstance(entry, _TargetedAdvice) and entry.slot is not None:
         return (threemf.slot_identity(entry.slot), entry.path)
     return entry.path
+
+
+@dataclass(slots=True)
+class _BodyRules:
+    """Der Rat eines Körpers je Spule: was in die Platte geht, was ins Filament,
+    und mit welcher Stützart jede Spule druckt, mit und ohne die Ablehnungen des
+    Kunden (:func:`advise.printed_style`, :func:`advise.contact_style`)."""
+
+    own: list[tuple[PrintSettings, Sequence[SettingAdvice]]]
+    filament: list[tuple[MaterialSlot, PrintSettings, Sequence[SettingAdvice]]]
+    printed: list[tuple[str, str]]
 
 
 class _AdviceWorker(Worker):
@@ -1541,6 +1580,9 @@ class _AdviceWorker(Worker):
         self.towers: frozenset[int] = frozenset()
         """Die Platten mit Reinigungsturm (:func:`writer.tower_plates`), je Lauf
         einmal gefragt."""
+        self.shared: frozenset[int] = frozenset()
+        """Die Platten, deren Teile dieselben Schichten drucken müssen
+        (:func:`writer.shared_layer_plates`), je Lauf einmal gefragt."""
         self.organic: frozenset[str] = frozenset()
         """Die Stützarten, die das Programm als organische Bäume druckt
         (:func:`handover.organic_styles`), je Lauf einmal gefragt."""
@@ -1580,11 +1622,13 @@ class _AdviceWorker(Worker):
     def _calculate(self) -> None:
         """Erst messen, dann die Regeln je Körper und tatsächlicher Spule anwenden."""
         results: dict[str, tuple[float, float, SliceResult]] = {}
-        common: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
         materials: dict[
             threemf.SlotKey,
             tuple[MaterialSlot, list[tuple[PrintSettings, Sequence[SettingAdvice]]]],
         ] = {}
+        measured: list[tuple[SceneObject, MeshData, tuple[handover.SlotProcess, ...], SliceResult]]
+        measured = []
+        ruled: list[_BodyRules] = []
         # Der Stützkontakt geht je Teil und wird gegen die Grundlage gefragt,
         # wie im Export; gegen die Übernahme gefragt, kam jede Zeile mit ihrer
         # Gegenzeile wieder (RM-583).
@@ -1595,6 +1639,9 @@ class _AdviceWorker(Worker):
         # Slicer den Stützabstand; der Rat rechnet dort in ganzen Schichten, wie
         # im Export (RM-622).
         self.towers = tower_plates(self.objects, self.setup)
+        # Wo der Turm allen Teilen dieselben Schichten abverlangt, kein Rat zu
+        # feinen Schichten (RM-586).
+        self.shared = shared_layer_plates(self.objects, self.setup, self.profile)
         self.organic = handover.organic_styles(self.setup, self.profile, flavour=self.flavour)
         # Hohle Bäume bestehen aus ihren Wänden, dort wirkt die Wandzahl (RM-584).
         self.hollow = handover.hollow_trees(self.setup)
@@ -1607,6 +1654,97 @@ class _AdviceWorker(Worker):
         # Baum werden nur dort Hybrid, wo sie der Platte gilt (RM-584).
         if handover.style_per_part(self.flavour, program):
             separate = separate | {"support.style"}
+        # Lehnt der Kunde die Zeile zur Art ab, steht bei Cura die Art der Platte
+        # schon fest: Die Körper fragen gleich mit ihr, ohne Neufrage.
+        known = (
+            self.settings.support.style
+            if self.flavour == "cura" and "support.style" in self.declined
+            else None
+        )
+        # Abgelehnt ist, was der Export nicht übernimmt: Ist ein Pfad schon je
+        # Teil übernommen, bekommt jedes Teil weiter seinen Vorschlag, auch wenn
+        # der Kunde eine neue Zeile dazu ablehnt (``writer.part_advice``,
+        # Durchsicht 2 zum Nachtrag RM-584, M2). Sonst verlor der gestützte Pilz
+        # seine Trennschichtzeilen, und die Datei schrieb sie nicht mehr.
+        declined = self.declined - frozenset(
+            handover.split_for_parts(
+                self.settings, self.profile, self.setup, self.flavour
+            ).accepted_per_part()
+        )
+
+        def rules(
+            body: SceneObject,
+            mesh: MeshData,
+            processes: Sequence[handover.SlotProcess],
+            result: SliceResult,
+            plate: str | None,
+        ) -> _BodyRules:
+            # Erst über die Spulen dieses Körpers: Ein Teil bekommt einen Wert,
+            # der alle seine Spulen einschließt (wie ``writer.part_advice``).
+            # ``plate`` ist die Stützart der Platte, wo sie feststeht.
+            done = _BodyRules([], [], [])
+            for process in processes:
+                entries = advise.advise(
+                    process.settings,
+                    process.profile,
+                    result,
+                    bounds=mesh.bounds,
+                    fit_kinds=self.fit_kinds,
+                    connectors=self.connectors,
+                    flavour=self.flavour,
+                    whole_layers=body.plate in self.towers,
+                    organic=self.organic,
+                    declined=declined,
+                    allowances=self.part_allowances.get(body.id, ()),
+                    trees=trees,
+                    shared_layers=body.plate in self.shared,
+                    plate_style=plate,
+                )
+                style = advise.printed_style(process.settings, entries, declined)
+                done.printed.append((style, advise.printed_style(process.settings, entries)))
+                # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
+                # schlägt der Dialog nicht vor — je Körper wie der Export
+                # (``writer.part_advice``, RM-622).
+                under_trees = handover.ignored_under_trees(
+                    style, self.organic, program, hollow=self.hollow
+                )
+                entries = [entry for entry in entries if entry.path not in under_trees]
+                done.own.append(
+                    (
+                        process.settings,
+                        [
+                            entry
+                            for entry in entries
+                            if entry.path.partition(".")[0] not in FILAMENT_GROUPS
+                        ],
+                    )
+                )
+                done.filament.append(
+                    (
+                        process.slot,
+                        process.settings,
+                        [
+                            entry
+                            for entry in entries
+                            if entry.path.partition(".")[0] in FILAMENT_GROUPS
+                        ],
+                    )
+                )
+            return done
+
+        def assembled() -> list[SettingAdvice]:
+            # Die Platte aus den Körpern, die Filamentwerte je Spule.
+            common: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
+            materials.clear()
+            for done in ruled:
+                if done.own:
+                    common.append((asking, advise.combine(asking, done.own, trees=trees)))
+                for slot, settings, entries in done.filament:
+                    materials.setdefault(threemf.slot_identity(slot), (slot, []))[1].append(
+                        (settings, entries)
+                    )
+            return advise.combine(self.settings, common, separate=separate, trees=trees)
+
         for index, body in enumerate(self.objects):
             self.cancelled.raise_if_cancelled()
             self.progressed.emit(index + 1, len(self.objects), str(body.name))
@@ -1662,60 +1800,36 @@ class _AdviceWorker(Worker):
             results[body.id] = (angle, wall, result)
             if not self.rules_wanted:
                 continue
-            # Erst über die Spulen dieses Körpers: Ein Teil bekommt einen Wert,
-            # der alle seine Spulen einschließt (wie ``writer.part_advice``).
-            own: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
-            for process in processes:
-                entries = advise.advise(
-                    process.settings,
-                    process.profile,
-                    result,
-                    bounds=mesh.bounds,
-                    fit_kinds=self.fit_kinds,
-                    connectors=self.connectors,
-                    flavour=self.flavour,
-                    whole_layers=body.plate in self.towers,
-                    organic=self.organic,
-                    declined=self.declined,
-                    allowances=self.part_allowances.get(body.id, ()),
-                    trees=trees,
-                )
-                # Was das Programm unter den Bäumen dieses Körpers nicht druckt,
-                # schlägt der Dialog nicht vor — je Körper wie der Export
-                # (``writer.part_advice``, RM-622).
-                under_trees = handover.ignored_under_trees(
-                    advise.printed_style(process.settings, entries, self.declined),
-                    self.organic,
-                    program,
-                    hollow=self.hollow,
-                )
-                entries = [entry for entry in entries if entry.path not in under_trees]
-                own.append(
-                    (
-                        process.settings,
-                        [
-                            entry
-                            for entry in entries
-                            if entry.path.partition(".")[0] not in FILAMENT_GROUPS
-                        ],
-                    )
-                )
-                key = threemf.slot_identity(process.slot)
-                if key not in materials:
-                    materials[key] = (process.slot, [])
-                materials[key][1].append(
-                    (
-                        process.settings,
-                        [
-                            entry
-                            for entry in entries
-                            if entry.path.partition(".")[0] in FILAMENT_GROUPS
-                        ],
-                    )
-                )
-            if own:
-                common.append((asking, advise.combine(asking, own, trees=trees)))
-        plate_advice = advise.combine(self.settings, common, separate=separate, trees=trees)
+            measured.append((body, mesh, processes, result))
+            ruled.append(rules(body, mesh, processes, result, known))
+        plate_advice = assembled()
+        if self.flavour == "cura" and ruled and self.rules_wanted:
+            # **Cura druckt unter jedem gestützten Teil die Art der Platte**
+            # (``support_structure``): Wird der Baum des Drachen neben der
+            # flachen Decke des Pilzes zu Gitter, fragen Abstand, Spitzenluft
+            # und Baumwände mit Gitter, wie der Export (Nachtrag RM-584). Neu
+            # gefragt wird nur ein Körper, den Cura damit anders druckt: ohne
+            # Stütze, als Baum oder als Gitter (``trees``, die eine Quelle) —
+            # „automatisch“ und Hybrid fragen unter Gitter wie Gitter —, auch
+            # einer, dessen Art der Kunde abgelehnt hat (``contact_style``).
+            plate_style = advise.printed_style(self.settings, plate_advice, self.declined)
+            printed_trees = trees or frozenset()
+
+            def kind(style: str, wanted: str, plate: str | None) -> object:
+                printed = advise.contact_style(style, wanted, plate, self.flavour)
+                return "none" if printed == "none" else printed in printed_trees
+
+            changed = False
+            for index, measure in enumerate(measured):
+                if any(
+                    kind(style, wanted, plate_style) != kind(style, wanted, known)
+                    for style, wanted in ruled[index].printed
+                ):
+                    self.cancelled.raise_if_cancelled()
+                    ruled[index] = rules(*measure, plate_style)
+                    changed = True
+            if changed:
+                plate_advice = assembled()
         if self.flavour == "cura" and trees is not None:
             # Was Cura gleich druckt, ist kein Vorschlag: „Automatisch → Gitter“
             # unter der flachen Decke hielt nur den Baum eines anderen Körpers
@@ -1822,8 +1936,10 @@ class _AdviceWorker(Worker):
                 flavour=self.flavour,
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
+                shared_layers=body.plate in self.shared,
                 organic=self.organic,
                 allowances=self.part_allowances.get(body.id, ()),
+                plate_style=split.plate.support.style,
             ):
                 if entry.path not in wanted:
                     continue
@@ -1900,8 +2016,10 @@ class _AdviceWorker(Worker):
                 flavour=self.flavour,
                 accepted=chain,
                 whole_layers=body.plate in self.towers,
+                shared_layers=body.plate in self.shared,
                 organic=self.organic,
                 allowances=self.part_allowances.get(body.id, ()),
+                plate_style=split.plate.support.style,
             ):
                 # Beim Stützkontakt bekommt jedes Teil seinen Wert, ebenso die
                 # Stützart, wo sie je Teil geht (``separate``); die Zeile nennt
@@ -2152,6 +2270,8 @@ class _PrepareAndSliceWorker(_SliceWorker):
                 self._job.profile,
                 self._job.name,
                 slots_by_plate={run.plate: run.slots for run in runs},
+                inputs=self._job.inputs,
+                base=self._job.setup,
             )
         }
         super().work()
@@ -2250,6 +2370,8 @@ class _OpenInSlicerWorker(Worker):
             return
         findings = self._receipt_findings
         opened = 0
+        # Ein Gang über den Stapel für alle Platten (Review RM-706, L5).
+        inputs = self._job.inputs.settled() if self._job.inputs is not None else None
         for plate in self._job.plates:
             if self._was_cancelled():
                 self._report_receipt(
@@ -2267,6 +2389,8 @@ class _OpenInSlicerWorker(Worker):
                     self._job.profile,
                     self._job.name,
                     slots_by_plate={plate: run.slots},
+                    inputs=inputs,
+                    base=self._job.setup,
                 )
                 if self._was_cancelled():
                     self._report_receipt(
@@ -2331,6 +2455,8 @@ class _OpenInSlicerWorker(Worker):
                 self._job.profile,
                 self._job.name,
                 slots_by_plate=run.slots_by_plate,
+                inputs=self._job.inputs,
+                base=self._job.setup,
             )
             if self._was_cancelled():
                 self._report_receipt(
@@ -7562,16 +7688,17 @@ class PrintSettingsDialog(QDialog):
                 label.hide()
                 continue
             if not parts:
-                text = str(tr("Gilt allen Teilen: Keines verlangt diesen Vorschlag für sich."))
+                text = full = str(
+                    tr("Gilt allen Teilen: Keines verlangt diesen Vorschlag für sich.")
+                )
             elif len(parts) >= len(self._plate_bodies()):
                 label.hide()
                 continue
             else:
                 others = self._accepted_others.get(path, ())
-                own_values = " ".join(
-                    str(tr("{part} bekommt {value}.", part=name, value=self._shown(path, value)))
-                    for name, value in others
-                )
+                values: dict[str, list[str]] = {}
+                for name, value in others:
+                    values.setdefault(self._shown(path, value), []).append(name)
                 own = print_settings.plate_choice(self.settings, path)
                 rest = (
                     str(tr("{value} (Ihre Einstellung)")).replace(
@@ -7582,19 +7709,15 @@ class PrintSettingsDialog(QDialog):
                     .replace("{value}", self._shown(path, print_settings.read_path(base, path)))
                     .replace("{source}", source)
                 )
-                # Erst wer den Vorschlag bekommt, dann wer mit ihm seinen eigenen
-                # Wert bekommt, zuletzt der Rest — und den nur, wo einer bleibt.
-                said = [str(tr("Nur für {parts}.", parts=", ".join(parts)))]
-                if own_values:
-                    said.append(own_values)
-                if len(parts) + len(others) < len(self._plate_bodies()):
-                    said.append(
-                        str(tr("Die übrigen Teile drucken mit {value}.")).replace("{value}", rest)
-                    )
-                text = " ".join(said)
+                if len(parts) + len(others) >= len(self._plate_bodies()):
+                    rest = ""
+                # Das Feld kürzt die Namen wie die Zeile des Rats (Nachprüfung
+                # RM-584, L1), Tooltip und Bildschirmleser nennen jedes Teil.
+                text = _part_note(parts, values, rest, _few_names)
+                full = _part_note(parts, values, rest, ", ".join)
             label.setText(text)
-            label.setToolTip(text)
-            label.setAccessibleDescription(text)
+            label.setToolTip(full)
+            label.setAccessibleDescription(full)
             label.show()
 
     def _mark_foreign(self) -> None:
@@ -9087,6 +9210,15 @@ class PrintSettingsDialog(QDialog):
             with_settings=with_settings,
             scene=None if self.session.last_result is None else self.session.last_result.scene,
             document=self.session.project.document,
+            inputs=StoredInputs.snapshot(
+                self.session.project,
+                base_dir=self.session.base_dir,
+                stopped_at=(
+                    None
+                    if self.session.last_result is None
+                    else self.session.last_result.stopped_at
+                ),
+            ),
         )
 
     def _plate_run(

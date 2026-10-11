@@ -182,6 +182,11 @@ def _only(table: dict[str, str]) -> Callable[[object], str]:
     return convert
 
 
+#: Was gebügelt wird, in der Sprache von PrusaSlicer und der Orca-Familie
+#: (``ironing_type``, RM-588). Ohne Bügeln nennt PrusaSlicer keine Art.
+_IRONING_TYPES: Final[dict[str, str]] = {"topmost": "topmost", "top_surfaces": "top"}
+
+
 def _support_on(value: object) -> str:
     return "0" if str(value) == "none" else "1"
 
@@ -271,6 +276,7 @@ PRUSA: Final[tuple[Row, ...]] = (
     ("shell.wall_count", "perimeters", _integer),
     ("shell.top_layers", "top_solid_layers", _integer),
     ("shell.bottom_layers", "bottom_solid_layers", _integer),
+    ("shell.top_thickness", "top_solid_min_thickness", _number_or_silent),
     ("shell.outer_wall_first", "external_perimeters_first", _flag),
     ("shell.seam_position", "seam_position", _plain),
     ("shell.scarf_seam", "scarf_seam_placement", _mapped({"True": "contours"}, "nowhere")),
@@ -281,7 +287,10 @@ PRUSA: Final[tuple[Row, ...]] = (
     # PrusaSlicer kennt keine gesonderte „genaue Außenwand" — dort heißt die
     # Sache Kompensation der Bahnbreite und ist immer an. Kein Eintrag ist
     # hier richtiger als eine Zuordnung auf etwas Ähnliches.
-    ("shell.ironing", "ironing", _flag),
+    # Bügeln ist ein Schalter und eine Art (RM-588): „topmost“ nur die oberste
+    # Fläche, „top“ jede Oberseite. Ohne Bügeln schweigt die Art.
+    ("shell.ironing", "ironing", _mapped({"none": "0"}, "1")),
+    ("shell.ironing", "ironing_type", _only(_IRONING_TYPES)),
     # Brücken und flache Überhänge ohne Stütze (RM-587). PrusaSlicer legt Brücken
     # ohne eigenen Wert dick (``thick_bridges = 1``); die Umkehr an Überhängen
     # kennt es nicht.
@@ -433,6 +442,8 @@ ORCA: Final[tuple[Row, ...]] = (
     ("shell.wall_count", "wall_loops", _integer),
     ("shell.top_layers", "top_shell_layers", _integer),
     ("shell.bottom_layers", "bottom_shell_layers", _integer),
+    # Null heißt „Solidon sagt nichts“: Es gilt die Mindestdicke des Profils.
+    ("shell.top_thickness", "top_shell_thickness", _number_or_silent),
     (
         "shell.outer_wall_first",
         "wall_sequence",
@@ -456,9 +467,10 @@ ORCA: Final[tuple[Row, ...]] = (
     ("shell.scarf_seam", "override_filament_scarf_seam_setting", _only({"True": "1"})),
     ("shell.wall_generator", "wall_generator", _plain),
     ("shell.precise_outer_wall", "precise_outer_wall", _flag),
-    # Orca kennt vier Stufen des Bügelns; Solidon entscheidet nur, **ob** —
-    # wie stark und mit welchem Abstand weiß der Slicer besser.
-    ("shell.ironing", "ironing_type", _mapped({"True": "top"}, "no ironing")),
+    # Orca kennt vier Stufen des Bügelns; Solidon wählt keine, die oberste
+    # Fläche („topmost“, die Schicht, über der keine mehr liegt) oder jede
+    # Oberseite („top“). Wie stark und mit welchem Abstand weiß der Slicer besser.
+    ("shell.ironing", "ironing_type", _mapped(_IRONING_TYPES, "no ironing")),
     # Brücken und Überhänge (RM-587); ``thick_internal_bridges`` bleibt beim
     # Hersteller, der Rat meint die Brücke an der Außenseite.
     ("shell.thick_bridges", "thick_bridges", _flag),
@@ -634,7 +646,8 @@ CURA: Final[tuple[Row, ...]] = (
         "scarf_joint_seam_length",
         _mapped({"True": f"{SCARF_LENGTH:g}"}, "0"),
     ),
-    ("shell.ironing", "ironing_enabled", _boolean),
+    ("shell.ironing", "ironing_enabled", _mapped({"none": "false"}, "true")),
+    ("shell.ironing", "ironing_only_highest_layer", _mapped({"topmost": "true"}, "false")),
     # CuraEngine hat keinen umschaltbaren Wandgenerator und keine gesonderte
     # genaue Außenwand: es rechnet ohnehin mit variabler Bahnbreite. Was es
     # nicht kennt, bekommt keinen Eintrag — eine Zuordnung auf das
@@ -1192,6 +1205,15 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
             # Den Volumenstrom liest CuraEngine nicht; er wirkt nur über die
             # Tempi, die Solidon danach deckelt.
             "filament.max_flow",
+            # Cura kennt keine Mindestdicke, nur ``top_thickness``, aus dem es
+            # die Lagenzahl rechnet, solange keine geschrieben ist. Feine
+            # Schichten, für die der Rat sie vorschlägt, gehen dort nicht.
+            "shell.top_thickness",
+            # Cura nimmt keine Höhenkurve, nur seine Automatik
+            # ``adaptive_layer_height_enabled``. Die richtet sich nach dem
+            # flachsten Dreieck jeder Höhe und druckte den Drachen fast überall
+            # fein, 1 194 statt 650 Schichten (``AdaptiveLayerHeights.cpp``).
+            "layers.fine_layer_height",
         }
     ),
     "other": frozenset(),
@@ -1225,7 +1247,15 @@ CURA_SUPPORT_BLOCKER: Final = "anti_overhang_mesh"
 GEOMETRY_KEYS: Final[dict[str, tuple[str, ...]]] = {
     "support.block_channels": (ORCA_SUPPORT_BLOCKER, CURA_SUPPORT_BLOCKER),
     "support.spare_ledges": (ORCA_SUPPORT_BLOCKER, CURA_SUPPORT_BLOCKER),
+    "layers.fine_layer_height": ("layer_height_profile",),
 }
+
+#: Was als **Höhenkurve** reist (RM-586): PrusaSlicer und die Orca-Familie
+#: lesen ``layers.fine_layer_height`` nicht als Wert, sondern als Kurve je
+#: Objekt in der 3MF (``threemf.PRUSA_LAYER_HEIGHTS_PATH``,
+#: ``ORCA_LAYER_HEIGHTS_PATH``), die die Übergabe aus der Geometrie rechnet
+#: (``writer._layer_heights``). CuraEngine nimmt keine (:data:`NOT_TAKEN_BY`).
+AS_HEIGHT_PROFILE: Final[frozenset[str]] = frozenset({"layers.fine_layer_height"})
 
 
 #: Einstellungen, die ankommen, aber je nach Wert nur angenähert. Dazu
@@ -1343,7 +1373,13 @@ PLATE_ONLY_BY_PROGRAM: Final[dict[str, frozenset[str]]] = {
             "speed.outer_wall_acceleration",
         }
     ),
-    "superslicer": frozenset({"speed.acceleration", "speed.outer_wall_acceleration"}),
+    # SuperSlicer zählt die Mindestdicke der Deckschichten in Lagen der normalen
+    # Schicht: Mit feinen Schichten je Teil bewirkt sie dort nichts (Kuppe am
+    # Prusa-Mini: 1,2 mm verlangt, als Objekt- wie als Plattenwert 0,8 gedruckt,
+    # RM-586). Plattenweit bleibt sie die Lagenzahl der normalen Schicht.
+    "superslicer": frozenset(
+        {"speed.acceleration", "speed.outer_wall_acceleration", "shell.top_thickness"}
+    ),
     "bambustudio": frozenset({"speed.acceleration", "speed.outer_wall_acceleration"}),
     # Die regulären Rollenbreiten gehen je Netz, der Erstschichtfaktor nur
     # je Extruder. Unterschiedliche Breiten würden die unabhängige absolute
@@ -1981,6 +2017,19 @@ def limitation(
                 return None
             return _("Unter organischen Bäumen liest dieses Programm die Wandzahl nicht.")
         return _("Unter Baumstützen druckt dieses Programm keine untere Trennschicht.")
+    # Eine Höhenkurve lehnen PrusaSlicer und die Orca-Familie unter organischen
+    # Bäumen ab (``Print::validate``, RM-586); die Übergabe lässt sie weg
+    # (``writer._layer_heights``), das Feld sagt dasselbe.
+    if (
+        trees
+        and settings is not None
+        and path == "layers.fine_layer_height"
+        and settings.layers.fine_layer_height > 0.0
+    ):
+        return _(
+            "Unter Baumstützen druckt der Slicer nur gleiche Schichten. Mit Gitterstützen "
+            "gelten die feinen."
+        )
     return None
 
 

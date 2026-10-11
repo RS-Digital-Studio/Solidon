@@ -648,6 +648,7 @@ class LayerInfo:
     overhangs: tuple[SliceContour, ...] = ()
     bridge_width: float = 0.0
     taper_length: float = 0.0
+    stepped_area: float = 0.0  # Stufenfläche der Schicht, mm²; dort lohnen feine Schichten
 
 
 @dataclass(frozen=True, slots=True)
@@ -657,6 +658,7 @@ class SliceResult:
     first_layer_area: float
     source: MetricSource = "internal"
     bridge_from: float | None = None  # ab welcher Breite eine freie Fläche Brücke ist, mm
+    overhang_angle: float | None = None  # Stützwinkel des Schnitts, Grad von der Senkrechten
 
 
 @dataclass(frozen=True, slots=True)

@@ -305,12 +305,21 @@ def refine_once(arrays: Mapping[str, np.ndarray], values: Values, check: Check) 
 
 
 def simplify_and_refine(arrays: Mapping[str, np.ndarray], values: Values, check: Check) -> Outcome:
-    """``simplify(deviation)``, dann ``refine_to_length(edge)`` (``mesh_ops.uniform``)."""
+    """``simplify(deviation)``, dann ``refine_to_length(edge)`` (``mesh_ops.uniform``).
+
+    Ohne Abweichung kein ``simplify``: Mit null faltet der Kern jede ebene Fläche
+    zu einem Fächer ohne Längengrenze, und dessen innere Kanten blieben nach dem
+    Teilen bis zum Doppelten zu lang (RM-671). Die Kanten, die das Teilen im
+    Inneren eines Dreiecks zu lang zieht, teilt der Aufrufer.
+    """
     body = solid(arrays["vertices"], arrays["faces"])
     if body.is_empty():
         return {}, {"empty": True}
     check()
-    evened = body.simplify(float(values["deviation"])).refine_to_length(float(values["edge"]))
+    deviation = float(values["deviation"])
+    if deviation > 0.0:
+        body = body.simplify(deviation)
+    evened = body.refine_to_length(float(values["edge"]))
     return mesh_arrays(evened), {"empty": False}
 
 
@@ -456,6 +465,25 @@ def _voxel_parts() -> Any:
     return trimesh
 
 
+def warm(arrays: Mapping[str, np.ndarray], values: Values, check: Check) -> Outcome:
+    """Nichts rechnen — die Vorbereitung dieser Rechnung hat jede andere geladen (RM-672).
+
+    ``kernel_process.warm_up`` stellt sie dem vorgewärmten Hilfsprozess, damit
+    die erste Zusammenhangsfrage beim Laden nicht erst ``trimesh.graph``
+    nachlädt: rund eine CPU-Sekunde, die sonst in die erste Auswertung fiel.
+    ``prepared`` nennt, was geladen ist.
+    """
+    check()
+    return {}, {"prepared": sorted(name for name in PREPARATIONS if name != "warm")}
+
+
+def _every_preparation() -> None:
+    """Die Vorbereitung von :func:`warm`: jede andere aus :data:`PREPARATIONS`."""
+    for name, prepare in PREPARATIONS.items():
+        if name != "warm":
+            prepare()
+
+
 def _rasterised(body: Any, origin: np.ndarray, pitch: float, shape: tuple[int, ...]) -> np.ndarray:
     """Legt einen Körper auf das gemeinsame Raster."""
     grid = body.voxelized(pitch=pitch).fill()
@@ -568,6 +596,7 @@ JOBS: Final[dict[str, Callable[[Mapping[str, np.ndarray], Values, Check], Outcom
     "min_gap": min_gap,
     "component_labels": component_labels,
     "voxel": voxel,
+    "warm": warm,
 }
 
 #: Was eine Rechnung nachlädt, bevor sie rechnet — der Hilfsprozess ruft es nach
@@ -587,6 +616,7 @@ JOBS: Final[dict[str, Callable[[Mapping[str, np.ndarray], Values, Check], Outcom
 PREPARATIONS: Final[dict[str, Callable[[], object]]] = {
     "component_labels": _graph,
     "voxel": _voxel_parts,
+    "warm": _every_preparation,
 }
 
 

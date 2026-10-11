@@ -1307,8 +1307,10 @@ def part_advice(
     flavour: SlicerFlavour | None = None,
     accepted: Mapping[str, object] | None = None,
     whole_layers: bool = False,
+    shared_layers: bool = False,
     organic: Collection[str] = (),
     allowances: Sequence[str] = (),
+    plate_style: str | None = None,
 ) -> list[SettingAdvice]:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G).
 
@@ -1332,7 +1334,8 @@ def part_advice(
     das Modell dieses Teils schon ausgleicht (``scene.fits.allowances_for``,
     RM-589). Ist die Stützart nicht übernommen, druckt das Teil die der
     Platte, und Abstand wie Trennschicht fragen mit ihr
-    (``declined``, :func:`advise.printed_style`).
+    (``declined``, :func:`advise.printed_style`). Bei Cura gilt die Art der
+    Platte (``plate_style``) jedem gestützten Teil (:func:`advise.on_the_plate`).
 
     **Eine Regel kann einen Wert je Teil voraussetzen** (``accepted``, die
     übernommenen Werte je Teil aus :meth:`handover.PartSplit.accepted_per_part`):
@@ -1366,9 +1369,11 @@ def part_advice(
         program,
         dict(accepted or {}),
         whole_layers,
+        shared_layers,
         tuple(sorted(organic)),
         tuple(allowances),
         None if trees is None else tuple(sorted(trees)),
+        plate_style,
     )
     cache = getattr(mesh.raw, "_cache", None)
     name = f"solidon_export_advice|{entry.id}"
@@ -1405,10 +1410,12 @@ def part_advice(
                     connectors=connectors,
                     flavour=flavour,
                     whole_layers=whole_layers,
+                    shared_layers=shared_layers,
                     organic=organic,
                     declined=declined,
                     allowances=allowances,
                     trees=trees,
+                    plate_style=plate_style,
                 ),
             )
             for process in (
@@ -1479,6 +1486,7 @@ def _part_values(
     cancelled: CancelToken | None,
     whole_layers: bool = False,
     organic: Collection[str] = (),
+    shared_layers: bool = False,
 ) -> _PartValues:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G) — und warum.
 
@@ -1528,8 +1536,10 @@ def _part_values(
         flavour=flavour,
         accepted=split.accepted_per_part(),
         whole_layers=whole_layers,
+        shared_layers=shared_layers,
         organic=organic,
         allowances=allowances_for(document, entry) if document is not None else (),
+        plate_style=split.plate.support.style,
     )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -1623,9 +1633,7 @@ def _values_for(
         if item.path == "support.style":
             # Ein/aus geht je Netz. Ein eingeschaltetes Netz bekommt die
             # Stützart der Platte; „aus“ bleibt auch unter Bäumen aus.
-            if item.value == "none":
-                return item
-            actual = "tree" if split.plate.support.style == "tree" else "grid"
+            actual = advise.on_the_plate(str(item.value), split.plate.support.style, "cura")
             return replace(item, value=actual)
         return replace(item, value=read_path(split.plate, item.path))
 
@@ -1714,6 +1722,7 @@ def _served_elsewhere(
     cancelled: CancelToken | None,
     towers: frozenset[int] = frozenset(),
     organic: Collection[str] = (),
+    shared: frozenset[int] = frozenset(),
 ) -> frozenset[str]:
     """Welche dieser Pfade ein Teil des Auftrags auf einer anderen Platte verlangt.
 
@@ -1746,6 +1755,7 @@ def _served_elsewhere(
                 cancelled,
                 whole_layers=entry.plate in towers,
                 organic=organic,
+                shared_layers=entry.plate in shared,
             )
             hit = {item.path for item in (*values.applied, *values.unavailable)} & open_paths
             served |= hit
@@ -1982,6 +1992,16 @@ def _support_outline(
 
     return overhang_outline(
         _body_analysis(entry, mesh, settings, profile, cancelled, detail="support")
+    )
+
+
+def _may_block(settings: PrintSettings) -> bool:
+    """Bekommt ein Teil mit diesen Einstellungen eine Sperre, wenn es Raum dafür hat?
+
+    Nur mit Stützen und mit übernommenem Vorschlag zu Kanälen oder Rändern
+    (Entscheidung Robert, 26.09.2026; Entscheidung G)."""
+    return settings.support.style != "none" and (
+        settings.support.block_channels or settings.support.spare_ledges
     )
 
 
@@ -2413,7 +2433,13 @@ def write_assembly(
     job: Sequence[SceneObject] | None = None,
     mesh_plan: tuple[dict[str, MeshData], bool] | None = None,
     before_write: Callable[[], None] | None = None,
-    comparison: Callable[[Sequence[tuple[SceneObject, MeshData, PrintSettings | None]]], None]
+    comparison: Callable[
+        [
+            Sequence[tuple[SceneObject, MeshData, PrintSettings | None]],
+            Mapping[str, tuple[float, ...]],
+        ],
+        None,
+    ]
     | None = None,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
@@ -2582,6 +2608,7 @@ def write_assembly(
     # Herstellerprozess mehrfach.
     with slicer_profiles.single_read():
         towers = tower_plates(every, setup) if split is not None else frozenset()
+        shared = shared_layer_plates(every, setup, profile) if split is not None else frozenset()
         organic = (
             handover.organic_styles(setup, profile, flavour=flavour)
             if split is not None
@@ -2600,8 +2627,20 @@ def write_assembly(
                 cancelled,
                 whole_layers=entry.plate in towers,
                 organic=organic,
+                shared_layers=entry.plate in shared,
             )
             for entry in chosen
+        }
+        # Die Sperre hält nur, wo normale Stütze am Überhang anliegt
+        # (:func:`handover.snug_beside_blocker`); gefragt wird der
+        # Herstellerprozess, deshalb hier im selben Lesedurchgang.
+        hugging = {
+            entry.id: handover.snug_beside_blocker(
+                setup, profile, effective.support.style, flavour, program
+            )
+            for entry in chosen
+            for effective in (part_values[entry.id].effective,)
+            if for_slicer and effective is not None and _may_block(effective)
         }
     asked = {key: values.asked for key, values in part_values.items()}
     # **Was kein Teil für sich verlangt, gilt allen** (:func:`_unserved`) —
@@ -2625,6 +2664,7 @@ def write_assembly(
             cancelled,
             towers,
             organic,
+            shared,
         )
         everywhere = [item for item in everywhere if item.path not in served]
     if split is not None and everywhere:
@@ -2656,12 +2696,18 @@ def write_assembly(
             )
             for item in everywhere
         ]
+    # Die Höhenkurven je Teil (RM-586) vor der Gegenprobe: Sie zählt die Lagen,
+    # die der Slicer daraus legt.
+    heights, height_findings = _layer_heights(
+        chosen, exported, part_values, profile, flavour, setup, shared, organic, cancelled
+    )
     # Die Gegenprobe liest genau diese Vernetzung und diese endgültigen
     # Teilwerte, einschließlich der auf alle Teile verteilten Empfehlungen.
     # Der Aufrufer arbeitet bereits neben Qt; kein zweiter Empfehlungsdurchgang.
     if comparison is not None:
         comparison(
-            tuple((entry, exported[entry.id], part_values[entry.id].effective) for entry in chosen)
+            tuple((entry, exported[entry.id], part_values[entry.id].effective) for entry in chosen),
+            heights,
         )
     # Die Sperre nennt sich selbst, mit dem Namen des Teils
     # (``export.support_blocker``); ein zweiter Satz dazu wäre derselbe.
@@ -2824,26 +2870,40 @@ def write_assembly(
     # Je Teil mit dessen Einstellungen: Stützt nur ein Teil, sperrt auch nur
     # dieses seine Kanäle und Ränder (Entscheidung G).
     blockers: dict[str, MeshData | None] = {}
+    snug: dict[str, dict[str, str]] = {}
     if for_slicer:
         for entry in chosen:
             own_settings = part_values[entry.id].effective
-            if (
-                own_settings is None
-                or own_settings.support.style == "none"
-                or not (own_settings.support.block_channels or own_settings.support.spare_ledges)
-            ):
+            if own_settings is None or not _may_block(own_settings):
                 continue
             blockers[entry.id], noted = _support_blocker(
                 entry, exported[entry.id], own_settings, profile, cancelled
             )
             findings += noted
+            if blockers[entry.id] is not None and hugging.get(entry.id):
+                snug[entry.id] = hugging[entry.id]
+                findings.append(
+                    Finding(
+                        code="export.snug_support",
+                        severity="info",
+                        message=_(
+                            "In „{name}“ liegt die Gitterstütze neben der Sperre eng am "
+                            "Überhang an, damit sie nicht in gesperrte Stellen reicht.",
+                            name=source_text(entry.name),
+                        ),
+                        values={"name": source_text(entry.name)},
+                        object_id=entry.id,
+                    )
+                )
+    findings += height_findings
     parts = [
         threemf.AssemblyPart(
             mesh=exported[entry.id],
             name=source_text(entry.name),
             slots=threemf.slots_for_object(entry),
-            settings=part_values[entry.id].keys,
+            settings=part_values[entry.id].keys | snug.get(entry.id, {}),
             support_blocker=blockers.get(entry.id),
+            layer_heights=heights.get(entry.id, ()),
             # Die Platte reist mit. Ohne Einschränkung auf eine gehen alle in
             # dieselbe Datei — und dann muss dort stehen, welches Teil auf
             # welche gehört, sonst legt der Slicer sie übereinander.
@@ -3014,6 +3074,104 @@ def _tower_cause(
     return "process" if "process" in causes else None
 
 
+def _layer_heights(
+    chosen: Sequence[SceneObject],
+    exported: Mapping[str, MeshData],
+    part_values: Mapping[str, _PartValues],
+    profile: Profile,
+    flavour: SlicerFlavour,
+    setup: SlicerSetup | None,
+    shared: Collection[int],
+    organic: Collection[str],
+    cancelled: CancelToken | None,
+) -> tuple[dict[str, tuple[float, ...]], list[Finding]]:
+    """Die Höhenkurve je Teil mit feinen Schichten (RM-586), für die 3MF.
+
+    Nur PrusaSlicer und die Orca-Familie lesen eine; Cura nimmt keine
+    (``slicer_keys.NOT_TAKEN_BY``). Gerechnet am Netz, das hinausgeht, mit
+    Raster und Bahn der Analyse, aus der der Rat kam
+    (:func:`app.core.slice.fine_layers.profile_for`, Bahn = halbe Mindestwand
+    wie ``_body_analysis``) — ohne den Körper noch einmal zu schneiden. Zwei Fälle
+    lehnt der Slicer ab, und dort entfällt die Kurve mit einem Satz: ein Teil
+    unter organischen Bäumen und eine Platte, auf der der Reinigungsturm allen
+    Objekten dieselben Schichten abverlangt (``shared``, :func:`shared_layer_plates`;
+    ``Print::validate``).
+    """
+    from app.core.export import manufacturer
+    from app.core.knowledge import profiles as profile_table
+    from app.core.slice import fine_layers
+
+    heights: dict[str, tuple[float, ...]] = {}
+    findings: list[Finding] = []
+    if not slicer_keys.reads_assembly_file(flavour):
+        return heights, findings
+    for entry in chosen:
+        own = part_values[entry.id].effective
+        if own is None or own.layers.fine_layer_height <= EPS_GEOM:
+            continue
+        wall, _angle = profile_table.analysis_limits(
+            profile_table.for_process(profile, own, effective=True), entry
+        )
+        # Raster wie gedruckt: Auf einem Herstellerprofil schreibt die Übergabe
+        # nur die Abweichung, und was nicht abweicht, nimmt der Slicer aus dem
+        # Profil. Stand in der Kurve eine andere erste Schicht als dort, verwarf
+        # die Orca-Familie sie still (0,25 gegen 0,2 am Neptune 4, RM-586).
+        printed = (
+            manufacturer.effective(own, manufacturer.base_settings(profile, own.quality, setup))
+            if setup is not None and setup.flavour in ("orca", "prusa")
+            else own
+        )
+        curve = fine_layers.profile_for(
+            exported[entry.id],
+            printed.layers.layer_height,
+            printed.layers.fine_layer_height,
+            None if printed.adhesion.kind == "raft" else printed.layers.first_layer_height,
+            wall / 2.0,
+            cancelled=cancelled,
+        )
+        # Erst die Kurve, dann der Satz, warum sie entfällt: Ein Klotz neben der
+        # Kuppe hat keine, und über ihn gibt es nichts zu sagen.
+        if not curve:
+            continue
+        name = source_text(entry.name)
+        slicer = setup.name if setup is not None else _("der Slicer")
+        if own.support.style != "none" and own.support.style in organic:
+            findings.append(
+                Finding(
+                    code="export.fine_layers_trees",
+                    severity="warning",
+                    message=_(
+                        "„{name}“ stützt mit organischen Bäumen, und die druckt {slicer} nur mit "
+                        "gleichen Schichten. Mit Gitterstützen gelten die feinen Schichten.",
+                        name=name,
+                        slicer=slicer,
+                    ),
+                    values={"name": name, "field": "support.style"},
+                    object_id=entry.id,
+                    suggestions=(OPEN_PRINT_SETTINGS,),
+                )
+            )
+        elif entry.plate in shared:
+            findings.append(
+                Finding(
+                    code="export.fine_layers_tower",
+                    severity="warning",
+                    message=_(
+                        "Mit Reinigungsturm verlangt {slicer} gleiche Schichten für alle Teile "
+                        "neben „{name}“. Auf einer eigenen Platte gelten die feinen.",
+                        name=name,
+                        slicer=slicer,
+                    ),
+                    values={"name": name, "field": "layers.fine_layer_height"},
+                    object_id=entry.id,
+                    suggestions=(OPEN_PRINT_SETTINGS,),
+                )
+            )
+        else:
+            heights[entry.id] = curve
+    return heights, findings
+
+
 def tower_plates(bodies: Sequence[SceneObject], setup: SlicerSetup | None) -> frozenset[int]:
     """Die Platten dieser Körper, auf denen der Herstellerprozess einen
     Reinigungsturm baut (:func:`_tower_causes`).
@@ -3026,12 +3184,41 @@ def tower_plates(bodies: Sequence[SceneObject], setup: SlicerSetup | None) -> fr
     """
     if setup is None:
         return frozenset()
+    plates = _assembly_plates(bodies)
+    return frozenset(plate for plate, cause in _tower_causes(plates, setup).items() if cause)
+
+
+def shared_layer_plates(
+    bodies: Sequence[SceneObject], setup: SlicerSetup | None, profile: Profile
+) -> frozenset[int]:
+    """Die Platten dieser Körper, auf denen der Slicer allen Teilen dieselben
+    Schichten abverlangt (:func:`handover.same_layers_required`): Turm und mehr
+    als ein Objekt. Dort bekommt kein Teil eine Höhenkurve und keines den Rat
+    zu feinen Schichten (RM-586); ein Körper allein auf seiner Platte behält
+    beides. Druckdialog und Export fragen hier, mit allen Körpern einer Platte.
+    """
+    if setup is None or setup.flavour not in ("orca", "prusa"):
+        return frozenset()
+    from app.core.export import handover, slicer_profiles
+
+    with slicer_profiles.single_read():
+        return frozenset(
+            plate
+            for plate, here in _assembly_plates(bodies).items()
+            if handover.same_layers_required(
+                setup, profile, filaments=len(threemf.merge_slots(here)), objects=len(here)
+            )
+        )
+
+
+def _assembly_plates(bodies: Sequence[SceneObject]) -> dict[int, list[threemf.AssemblyPart]]:
+    """Die Körper je Platte, mit ihren Spulen, für die Turmfragen."""
     plates: dict[int, list[threemf.AssemblyPart]] = {}
     for body in bodies:
         plates.setdefault(body.plate, []).append(
             threemf.AssemblyPart(mesh=as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
         )
-    return frozenset(plate for plate, cause in _tower_causes(plates, setup).items() if cause)
+    return plates
 
 
 def _plate_settings(

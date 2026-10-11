@@ -542,6 +542,52 @@ def thread_is_tapered(feature: Feature) -> bool:
     return isinstance(taper, int | float) and not isinstance(taper, bool) and taper != 0.0
 
 
+def thread_at_gauge(feature: Feature) -> tuple[float, float] | None:
+    """Gebautes Maß und Nennmaß eines kegeligen Gewindes in seiner Bezugsebene — oder ``None``.
+
+    **Die eine Stelle, die sagt, in welcher Ebene ein Kegelmaß gilt** (Review GEW,
+    H1). Ein kegeliges Gewinde nennt ``diameter`` und ``nominal`` in der Mitte
+    seiner Strecke, wie der exakte Leser; ein Paar trifft sich aber in der
+    Bezugsebene, und die Mitten zweier gefügter Hälften liegen auf
+    verschiedenen Höhen. Ein Gewinde aus der Bibliothek nennt deshalb auch
+    ``gauge_nominal``, das Nennmaß seiner Größe in der Bezugsebene; das gebaute
+    Maß dort liegt um dasselbe neben ``diameter`` wie das Nennmaß neben
+    ``nominal``, denn beide wachsen mit demselben Kegel. Ein am Netz gemessenes
+    Gewinde kennt seine Bezugsebene nicht und gibt ``None`` —
+    Passung und Gegenstück raten sie nicht.
+
+    **Ein geändertes Gewinde behält sie** (Nachprüfung GEW, N2): *Merkmal
+    ändern* setzt das neue Maß in der Mitte bei gleichem Kegel und gleicher
+    Strecke, also liegt die Bezugsebene um dasselbe Stück daneben wie zuvor.
+    Es nennt dann ``gauge_offset``, gebautes Maß in der Bezugsebene minus Maß in
+    der Mitte, und ist gebaut, wie es dasteht: Nennmaß gleich gebautem Maß.
+    """
+    if not thread_is_tapered(feature):
+        return None
+    offset = feature.params.get("gauge_offset")
+    diameter = feature.params.get("diameter")
+    if (
+        isinstance(offset, int | float)
+        and not isinstance(offset, bool)
+        and isinstance(diameter, int | float)
+        and not isinstance(diameter, bool)
+        and math.isfinite(offset)
+        and math.isfinite(diameter)
+    ):
+        built = float(diameter) + float(offset)
+        return built, built
+    numbers: list[float] = []
+    for name in ("diameter", "nominal", "gauge_nominal"):
+        value = feature.params.get(name)
+        if not isinstance(value, int | float) or isinstance(value, bool):
+            return None
+        if not math.isfinite(value):
+            return None
+        numbers.append(float(value))
+    diameter, nominal, gauge = numbers
+    return diameter + (gauge - nominal), gauge
+
+
 def is_a_cavity(feature: Feature) -> bool:
     """Ist dieses Merkmal ein Hohlraum oder Materie?
 
@@ -1211,6 +1257,10 @@ SupportStyle = Literal["none", "auto", "grid", "tree", "hybrid"]
 SupportPlacement = Literal["everywhere", "build_plate"]
 SeamPosition = Literal["aligned", "nearest", "random", "rear"]
 
+#: Was gebügelt wird (RM-588): nichts, die oberste Fläche des Teils oder jede
+#: Oberseite. Die Slicer kennen es als eine Wahl (Orca ``ironing_type``).
+Ironing = Literal["none", "topmost", "top_surfaces"]
+
 #: Wie die Wandbahnen erzeugt werden. ``classic`` legt feste Linienbreiten und
 #: füllt, was dazwischen übrig bleibt, mit Lückenfüllung; ``arachne`` verteilt
 #: die vorhandene Breite auf so viele Bahnen, wie hineinpassen. Der Unterschied
@@ -1248,6 +1298,13 @@ class LayerSettings:
     schon das Modell die ersten Schichten ein (*Elefantenfuß ausgleichen*),
     schlägt der Druckrat null vor — nicht, wenn der Elefantenfuß des
     Materials gemessen ist (``MaterialProfile.measured``)."""
+    fine_layer_height: float = 0.0
+    """Die Schichthöhe an Kuppen und feinen Formen (RM-586); null schaltet sie ab.
+
+    Wo genau, rechnet die Übergabe aus der Geometrie
+    (:mod:`app.core.slice.fine_layers`): PrusaSlicer und die Orca-Familie
+    bekommen eine Höhenkurve in der 3MF; Cura nimmt keine, und seine eigene
+    Automatik würde fast überall fein. Dazwischen bleibt :attr:`layer_height`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1257,6 +1314,13 @@ class ShellSettings:
     wall_count: int = 3
     top_layers: int = 5
     bottom_layers: int = 4
+    top_thickness: float = 0.0
+    """Wie dick die Deckschichten mindestens werden, in mm (RM-586).
+
+    Der Slicer legt so viele Lagen mehr, wie dafür nötig sind, in jeder Höhe
+    nach der Schicht, die dort liegt — mit feinen Schichten sonst dünner als
+    gedacht (Recherche Nr. 10). Null heißt: Solidon sagt nichts, es gilt die
+    Lagenzahl und was das Profil des Slicers trägt."""
     outer_wall_first: bool = False
     """Außenwand zuerst gibt die genauere Kontur, innen zuerst die bessere
     Haftung an Überhängen."""
@@ -1272,9 +1336,11 @@ class ShellSettings:
     """Rechnet die Außenwand auf das Sollmaß statt auf die Bahnmitte. Kostet
     etwas Zeit und ist überall dort richtig, wo ein Maß eingehalten werden
     muss — also bei Passungen."""
-    ironing: bool = False
-    """Bügelt die oberste Fläche nach. Für Sicht- und Gleitflächen; sonst
-    kostet es nur Zeit."""
+    ironing: Ironing = "none"
+    """Welche Oberseiten der Slicer ein zweites Mal glättet (RM-588, Format 52):
+    keine, nur die oberste Fläche des Teils — den Deckel einer Box, die
+    Schauseite eines Schilds — oder jede Oberseite, auch die Gleitfläche einer
+    Passung darunter. Bis Format 51 ein Schalter; ``True`` war jede Oberseite."""
     thick_bridges: bool = False
     """Legt Brücken als runde Bahnen in Düsenbreite statt flach in Schichthöhe
     (RM-587). Sie tragen über eine lange freie Spanne, sehen unten aber rauer
@@ -2189,6 +2255,16 @@ class ParamSpec:
     Namen hieße er „wie gemessen“. Die Höhe der Öffnung eines Deckels ist eine
     Welthöhe, in der die Null eine Zahl ist wie jede andere; leer heißt dort
     „Oberkante“."""
+    least: float | None = None
+    """Der kleinste Wert außer der Null an einem Feld, dessen Null etwas anderes heißt.
+
+    **Für Felder mit** :attr:`zero_text` **und Mindestwert 0, deren Zahlen erst
+    ab einer Grenze tragen** (Review GEW, M4): Null Gänge je Zoll nimmt die
+    Reihe, 0,5 Gänge je Zoll wären 50,8 mm Steigung, gröber als
+    ``units.COARSEST_PITCH``. Die Prüfung lehnt Werte zwischen null und
+    ``least`` ab, und der Bereichsnachweis fährt ``least`` als eigene Ecke
+    (``range_check._corner_values``) — an der Null allein sähe er das grobe
+    Ende nie."""
 
 
 @runtime_checkable
@@ -2820,6 +2896,11 @@ class LayerInfo:
     Schicht, dazwischen fortgeschrieben — ein Keil ist eine Eigenschaft der
     Wand über ihre Höhe, und die Messung kostete an einer Vase ein Drittel der
     ganzen Analyse."""
+    stepped_area: float = 0.0
+    """Wie viel aufwärts weisende flache Schräge in dieser Schicht liegt, in mm²
+    (RM-586): Fläche, auf der jede Schicht eine sichtbare Stufe legt — Kuppen,
+    Schuppen, flache Rücken (:func:`app.core.slice.fine_layers.stepped_areas`).
+    Dort lohnen feine Schichten. Gemessen nur mit ``detail="full"``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -2836,6 +2917,11 @@ class SliceResult:
     mit denen geschnitten wurde. Auch ein Schnitt ohne Brückenweiten
     (``detail="support"``) trägt sie, denn die Randfrage braucht sie dort, wo die
     Übergabe ihre Sperre baut. ``None`` bei einem Ergebnis aus Kennzahlen."""
+    overhang_angle: float | None = None
+    """Mit welchem Stützwinkel geschnitten wurde, in Grad von der Senkrechten —
+    der wirksame des Druckers, nicht die Startregel. So steil darf ein Schacht
+    der Kanalsperre ausweichen (RM-629). ``None`` bei einem Ergebnis aus
+    Kennzahlen."""
 
 
 # --- Skizzen (§30.1) -----------------------------------------------------------

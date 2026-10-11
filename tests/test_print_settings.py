@@ -110,6 +110,7 @@ def _old_spool_dialog_state():
             profile=profiles.make_profile(),
             last_result=SimpleNamespace(scene=scene, stopped_at=None),
             picture=None,
+            base_dir=None,
         ),
         _opened_with=settings,
         _handover_project_id="old-spools",
@@ -1179,7 +1180,7 @@ def test_a_flush_fit_asks_for_ironing() -> None:
     Bahnen. Bisher war das ein Schalter im Dialog, den man kennen musste.
     """
     profile = profiles.make_profile()
-    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", False)
+    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", "none")
 
     paths = [entry.path for entry in advise.advise(settings, profile, fit_kinds=("flush",))]
 
@@ -1191,7 +1192,7 @@ def test_a_sliding_fit_does_not_ask_for_ironing() -> None:
     einer Fläche, die nichts berührt — die Art zählt, nicht nur das Ob.
     """
     profile = profiles.make_profile()
-    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", False)
+    settings = print_settings.with_path(print_settings.resolve(profile), "shell.ironing", "none")
 
     for kind in ("clearance", "press", "thread"):
         paths = [entry.path for entry in advise.advise(settings, profile, fit_kinds=(kind,))]
@@ -1271,6 +1272,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "layers.fine_layer_height": "reist als Höhenkurve in der 3MF (``AS_HEIGHT_PROFILE``).",
         "shell.overhang_reverse": "PrusaSlicer kennt keine Umkehr an Überhängen (2.9.6).",
         "support.tree_walls": "PrusaSlicer zählt keine Baumwände (``NOT_TAKEN_BY``, RM-584).",
         "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
@@ -1279,10 +1281,13 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "layers.fine_layer_height": "reist als Höhenkurve in der 3MF (``AS_HEIGHT_PROFILE``).",
     },
     "cura": {
         "support.block_channels": "reist als eigenes Netz (``AS_GEOMETRY``).",
         "support.spare_ledges": "reist als eigenes Netz (``AS_GEOMETRY``).",
+        "layers.fine_layer_height": "nimmt keine Höhenkurve, die Automatik wäre fast überall fein.",
+        "shell.top_thickness": "kennt keine Mindestdicke der Deckschichten, nur die Lagenzahl.",
         "support.tip_diameter": "Trennschicht dort nicht geschnitten (``NOT_TAKEN_BY``, RM-704).",
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
@@ -1399,6 +1404,7 @@ def _other_value(settings: print_settings.PrintSettings, path: str) -> object:
         return current + 3.0
     choices = {
         "shell.seam_position": "rear",
+        "shell.ironing": "topmost",
         "shell.wall_generator": "classic",
         "infill.pattern": "gyroid",
         "support.style": "tree",
@@ -5249,11 +5255,44 @@ def test_ironing_is_off_until_something_asks_for_it() -> None:
     denen etwas gleitet."""
     settings = print_settings.resolve(profiles.make_profile())
 
-    assert settings.shell.ironing is False
+    assert settings.shell.ironing == "none"
     assert handover.as_mapping(settings, "orca")["ironing_type"] == "no ironing"
+    prusa = handover.as_mapping(settings, "prusa")
+    assert prusa["ironing"] == "0" and "ironing_type" not in prusa
+    assert handover.as_mapping(settings, "cura")["ironing_enabled"] == "false"
 
-    ironed = print_settings.with_path(settings, "shell.ironing", True)
+    ironed = print_settings.with_path(settings, "shell.ironing", "top_surfaces")
     assert handover.as_mapping(ironed, "orca")["ironing_type"] == "top"
+
+
+def test_ironing_the_topmost_surface_reaches_every_family() -> None:
+    """RM-588: „Oberste Fläche“ heißt in der Orca-Familie und bei Prusa
+    ``ironing_type = topmost`` — dort mit eingeschaltetem ``ironing`` —, bei Cura
+    ``ironing_only_highest_layer``; „alle Oberseiten“ ist ``top`` und bei Cura
+    dasselbe ohne die oberste allein."""
+    settings = print_settings.resolve(profiles.make_profile())
+    topmost = print_settings.with_path(settings, "shell.ironing", "topmost")
+
+    assert handover.as_mapping(topmost, "orca")["ironing_type"] == "topmost"
+    prusa = handover.as_mapping(topmost, "prusa")
+    assert (prusa["ironing"], prusa["ironing_type"]) == ("1", "topmost")
+    cura = handover.as_mapping(topmost, "cura")
+    assert (cura["ironing_enabled"], cura["ironing_only_highest_layer"]) == ("true", "true")
+
+    every = print_settings.with_path(topmost, "shell.ironing", "top_surfaces")
+    assert handover.as_mapping(every, "orca")["ironing_type"] == "top"
+    prusa = handover.as_mapping(every, "prusa")
+    assert (prusa["ironing"], prusa["ironing_type"]) == ("1", "top")
+    cura = handover.as_mapping(every, "cura")
+    assert (cura["ironing_enabled"], cura["ironing_only_highest_layer"]) == ("true", "false")
+
+    # Nur der übernommene Pfad geht über das Herstellerprofil.
+    paths = frozenset({"shell.ironing"})
+    assert handover.as_mapping(topmost, "orca", paths) == {"ironing_type": "topmost"}
+    assert handover.as_mapping(topmost, "prusa", paths) == {
+        "ironing": "1",
+        "ironing_type": "topmost",
+    }
 
 
 def test_a_part_on_little_ground_asks_for_a_brim_on_its_own() -> None:
@@ -7347,6 +7386,18 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "Trennschicht zu einem Drittel dicht wie bei Creality und Elegoo "
         "(``handover._for_supports``). Diese Messung setzt den Wert ohne Wahl."
     ),
+    ("layers.fine_layer_height", "prusa"): (
+        "Reist als Höhenkurve je Objekt in der 3MF, nicht als Wert "
+        "(``slicer_keys.AS_HEIGHT_PROFILE``); ``test_export`` prüft die Kurve."
+    ),
+    ("layers.fine_layer_height", "orca"): "Wie bei PrusaSlicer — dieselbe Kurve, eigener Name.",
+    ("layers.fine_layer_height", "cura"): (
+        "CuraEngine nimmt keine Höhenkurve; seine Automatik druckte den Drachen fast "
+        "überall fein (RM-586)."
+    ),
+    ("shell.top_thickness", "cura"): (
+        "Cura kennt keine Mindestdicke der Deckschichten, nur die Lagenzahl."
+    ),
     ("shell.overhang_reverse", "prusa"): (
         "PrusaSlicer 2.9.6 kennt keine Umkehr an Überhängen (``--help-fff``); nur die "
         "Orca-Familie dreht die Wand dort je zweite Schicht (RM-587)."
@@ -8427,6 +8478,351 @@ def test_grid_and_tree_become_hybrid_only_where_the_style_is_the_plates(
     assert "support_style" not in values["Pilz"] and "support_style" not in values["Figur"]
 
 
+def _spiky(name: str, shift: float) -> Any:
+    """Ein Sockel mit hundert Stacheln, die auf zehn Höhen frei in der Luft
+    beginnen: Er will Bäume, und jede Spitze steht ohne Trennschicht — die
+    Kopfstacheln des Drachen im Kleinen (RM-584)."""
+    from app.core.geom.transform import apply, translation
+    from app.core.types import SceneObject
+    from tests.helpers import brick, on_bed
+
+    pins = [
+        brick(0.6, 0.6, 3.0, (-13.5 + 3.0 * (i % 10), -13.5 + 3.0 * (i // 10), 12.0 + (i % 10)))
+        for i in range(advise.TIP_ISLANDS)
+    ]
+    body = on_bed(brick(4.0, 4.0, 2.0, (0.0, 0.0, 1.0)), *pins)
+    return SceneObject(id=f"obj_{name}", name=name, mesh=apply(body, translation((shift, 0, 0))))
+
+
+def test_a_tree_cura_prints_as_grid_asks_its_gap_with_grid(tmp_path: Path) -> None:
+    """Bei Cura gilt die Stützart der Platte (Nachtrag RM-584): Neben dem Pilz
+    mit seiner flachen Decke wird der Baum des Stachelkörpers zu Gitter. Er
+    fragte Abstand und Spitzenluft trotzdem mit seinem Baum, die Zeile sagte
+    „Abstand oben → 0,4: Feine Spitzen brauchen mehr Luft über den
+    Baumstützen“, und die Datei bekam 0,4 über Gitter. Gegenprobe: allein
+    druckt er Bäume und bekommt die Luft."""
+    from app.core.export.writer import write_assembly
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    spiky = _spiky("Stacheln", 70.0)
+    tip = "Feine Spitzen brauchen mehr Luft über den Baumstützen."
+
+    def rows(bodies: tuple[Any, ...], current: Any) -> dict[str, Any]:
+        return {entry.path: entry for entry in _advice_of(bodies, current, profile, "cura")}
+
+    alone = rows((spiky,), settings)
+    assert alone["support.style"].value == "tree"
+    assert (alone["support.z_gap"].value, alone["support.z_gap"].reason) == (
+        pytest.approx(0.4),
+        tip,
+    ), "allein druckt er Bäume, und die Spitzen bekommen Luft"
+
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom), spiky)
+    # Die Platte steht auf 0,3 mm: Der Abstand kommt als Zeile aus dem Material
+    # (0,2) und geht je Teil in die Datei — dort fragt der Export jedes Teil
+    # selbst, mit der Art der Platte (Review des Nachtrags, M1).
+    wide = print_settings.with_path(settings, "support.z_gap", 0.3)
+    together = rows(bodies, wide)
+    assert together["support.style"].value == "grid"
+    assert all(entry.reason != tip for entry in together.values())
+    assert together["support.z_gap"].value == pytest.approx(0.2)
+    accepted = wide
+    for entry in together.values():
+        if getattr(entry, "slot", None) is None:
+            accepted = print_settings.with_accepted(accepted, entry.path, entry.value)
+    plate = handover.values_for(accepted, profile, "cura")
+    assert plate["support_structure"] == "normal"
+    assert float(plate["support_top_distance"]) == pytest.approx(0.2)
+    worker = _AdviceWorker(bodies, accepted, profile, None, {}, (), (), {}, flavour="cura")
+    worker.work()
+    assert "support.z_gap" in worker.accepted_parts, "der Abstand geht je Teil"
+    assert not worker.accepted_others.get("support.z_gap"), "kein Teil mit eigenem Abstand"
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Platte",
+        profile=profile,
+        settings=accepted,
+        flavour="cura",
+    )
+    parts = [mesh for mesh in handover.cura_meshes(written) if "-part-" in mesh.path.name]
+    assert len(parts) == 2, [mesh.path.name for mesh in handover.cura_meshes(written)]
+    for mesh in parts:
+        own = dict(mesh.settings)
+        top = own.get("support_top_distance", own.get("support_z_distance"))
+        bottom = own.get("support_bottom_distance", own.get("support_z_distance"))
+        for gap in (top, bottom):
+            assert gap is None or float(gap) == pytest.approx(0.2), (mesh.path.name, own)
+    # Der Export fragt je Teil ebenso mit der Art der Platte, auch wo ein
+    # anderes Teil den Abstand je Teil verlangt.
+    from app.core.export.writer import part_advice
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.slice.analysis import slice_body
+
+    mesh = as_mesh_data(spiky.mesh)
+    result = slice_body(mesh, 0.2)
+
+    def part_gap(plate_style: str | None) -> list[object]:
+        return [
+            entry.value
+            for entry in part_advice(
+                spiky,
+                mesh,
+                settings,
+                profile,
+                None,
+                {},
+                result=result,
+                fit_kinds=(),
+                flavour="cura",
+                accepted={"support.style": "grid"},
+                plate_style=plate_style,
+            )
+            if entry.path == "support.z_gap"
+        ]
+
+    assert part_gap("grid") == []
+    assert part_gap(None) == [pytest.approx(0.4)], "ohne Platte fragt er mit seinem Baum"
+
+
+@pytest.mark.parametrize(
+    ("case", "asked"),
+    [
+        # Der Stachelbaum wird neben dem Pilz zu Gitter: einmal neu gefragt.
+        ("tree to grid", 1),
+        # „Automatisch“ druckt Cura wie Gitter: nichts neu zu fragen.
+        ("auto", 0),
+        # Gitter übernommen, „Gitter → Baum“ abgelehnt: Die Art der Platte steht
+        # vorher fest, gefragt wird gleich mit ihr (Durchsicht der Fixe, N1).
+        ("grid kept", 0),
+        # Nichts abgelehnt: Ein Kragarm druckt „automatisch“, die Platte Gitter.
+        # Cura druckt beides gleich, ohne Baum — keine Neufrage (Durchsicht 2, L5).
+        ("auto beside grid", 0),
+        # Ist der Rat überholt (``measure_only``), fragt niemand mehr neu.
+        ("overtaken", 0),
+    ],
+)
+def test_cura_asks_again_only_where_the_plate_changes_the_print(
+    monkeypatch: pytest.MonkeyPatch, case: str, asked: int
+) -> None:
+    """Die Neufrage mit der Art der Platte kostet am Drachen 3,5 s CPU; sie läuft
+    nur für Körper, die Cura damit anders druckt, und nicht mehr, wenn der Auftrag
+    schon überholt ist (Review des Nachtrags RM-584, L4)."""
+    import sys
+
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+    from tests.helpers import brick, on_bed
+
+    calls: list[object] = []
+    original = advise.advise
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        # Nur die Regeln des Arbeiters; Zeile und Feld fragen je Teil über den Export.
+        if sys._getframe(1).f_code.co_name == "rules":
+            calls.append(kwargs["plate_style"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(advise, "advise", counted)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    declined: frozenset[str] = frozenset()
+    if case == "auto":
+        settings = print_settings.with_path(settings, "support.style", "auto")
+        declined = frozenset({"support.style"})
+    if case == "grid kept":
+        settings = print_settings.with_accepted(settings, "support.style", "grid")
+        declined = frozenset({"support.style"})
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    from app.core.slice.analysis import slice_body
+
+    second = _spiky("Stacheln", 70.0)
+    if case == "auto beside grid":
+        settings = print_settings.with_path(settings, "support.style", "auto")
+        arm = on_bed(
+            brick(4.0, 4.0, 12.0, (70.0, 0.0, 6.0)), brick(20.0, 4.0, 2.0, (80.0, 0.0, 13.0))
+        )
+        second = SceneObject(id="obj_arm", name="Kragarm", mesh=arm)
+        own = advise.advise(
+            settings, profile, slice_body(arm, 0.2), flavour="cura", trees=frozenset({"tree"})
+        )
+        assert advise.printed_style(settings, own) == "auto", "der Kragarm druckt „automatisch“"
+        assert any(entry.path.startswith("support.") for entry in own), "und braucht Stütze"
+    bodies = (
+        SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom),
+        second,
+        _standing_box("Klotz", (10.0, 10.0, 10.0)),
+    )
+    worker = _AdviceWorker(
+        bodies, settings, profile, None, {}, (), (), {}, flavour="cura", declined=declined
+    )
+    if case == "overtaken":
+        # Vor dem dritten Körper ändert der Dialog den Auftrag.
+        worker.progressed.connect(lambda index, _total, _name: index == 3 and worker.measure_only())
+    worker.work()
+
+    # Je Körper einmal, dazu die Neufragen; überholt nur die zwei vor dem Halt.
+    first = 2 if case == "overtaken" else len(bodies)
+    assert len(calls) == first + asked, calls
+
+
+@pytest.mark.parametrize("earlier", ["grid", None])
+def test_a_part_keeps_its_contact_where_its_style_was_accepted_before(
+    tmp_path: Path, earlier: str | None
+) -> None:
+    """Orca-Familie: Der Kunde hat „Aus → Gitter“ übernommen und lehnt jetzt
+    „Gitter → Baum · Stacheln, Pilz mit Gitter“ ab. Die Datei stützt den Pilz
+    weiter mit seinem Gitter; seine Zeilen zur dichten Trennschicht fielen weg,
+    und die Datei schrieb sie nicht mehr (Durchsicht 2 zum Nachtrag RM-584, M2).
+    Gegenprobe: Ohne früher übernommene Stützen druckt die Platte keine."""
+    from app.core.export.writer import write_assembly
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    if earlier is not None:
+        settings = print_settings.with_accepted(settings, "support.style", earlier)
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom), _spiky("Stacheln", 70.0))
+    worker = _AdviceWorker(
+        bodies,
+        settings,
+        profile,
+        None,
+        {},
+        (),
+        (),
+        {},
+        flavour="orca",
+        declined=frozenset({"support.style"}),
+    )
+    got: list[list[Any]] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    rows = {entry.path: entry for entry in got[0]}
+
+    dense = {"support.interface_spacing", "support.interface_layers"}
+    if earlier is None:
+        assert not dense & rows.keys()
+        return
+    assert dense <= rows.keys(), sorted(rows)
+    accepted = settings
+    for path in dense:
+        accepted = print_settings.with_accepted(accepted, path, rows[path].value)
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Platte",
+        profile=profile,
+        settings=accepted,
+        flavour="orca",
+    )
+    values = object_values(written, "Metadata/model_settings.config")
+    assert values["Pilz"].get("support_type") == "normal(auto)"
+    assert values["Pilz"].get("support_interface_top_layers") == str(
+        rows["support.interface_layers"].value
+    )
+
+
+@pytest.mark.parametrize("flavour", ["cura", "orca"])
+@pytest.mark.parametrize("declined", [True, False])
+def test_without_supports_on_the_plate_no_contact_rows(flavour: str, declined: bool) -> None:
+    """Lehnt der Kunde „Aus → Gitter“ ab, druckt die Platte ohne Stützen; die
+    Zeilen zu Trennschicht und Abstand änderten nichts und standen trotzdem da
+    (Durchsicht der Fixe zum Nachtrag RM-584). Gegenprobe: übernommen kommen sie."""
+    from app.core.types import SceneObject
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    assert settings.support.style == "none"
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom),)
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    worker = _AdviceWorker(
+        bodies,
+        settings,
+        profile,
+        None,
+        {},
+        (),
+        (),
+        {},
+        flavour=flavour,  # type: ignore[arg-type]
+        declined=frozenset({"support.style"}) if declined else frozenset(),
+    )
+    got: list[list[Any]] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    paths = {entry.path for entry in got[0]}
+
+    assert "support.style" in paths
+    contact = {"support.interface_spacing", "support.interface_layers"}
+    assert (contact & paths) == (set() if declined else contact), paths
+
+
+@pytest.mark.parametrize("earlier", ["tree", None])
+def test_a_declined_style_row_asks_the_contact_with_curas_plate(earlier: str | None) -> None:
+    """Hat der Kunde früher Bäume übernommen und lehnt er jetzt „Baum → Gitter“
+    ab, druckt Cura beide Netze mit Baum. Die Stacheln fragten den Kontakt mit
+    „aus“ und bekamen keine Spitzenluft (Review des Nachtrags RM-584).
+    Gegenprobe: Ohne übernommene Stützen druckt die Platte keine, und niemand
+    bekommt Luft über Bäumen."""
+    from app.core.types import SceneObject
+    from tests.helpers import brick, on_bed
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    if earlier is not None:
+        settings = print_settings.with_accepted(settings, "support.style", earlier)
+    mushroom = on_bed(
+        brick(8.0, 8.0, 12.0, (0.0, 0.0, 6.0)), brick(40.0, 40.0, 2.0, (0.0, 0.0, 13.0))
+    )
+    bodies = (SceneObject(id="obj_pilz", name="Pilz", mesh=mushroom), _spiky("Stacheln", 70.0))
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    worker = _AdviceWorker(
+        bodies,
+        settings,
+        profile,
+        None,
+        {},
+        (),
+        (),
+        {},
+        flavour="cura",
+        declined=frozenset({"support.style"}),
+    )
+    got: list[list[Any]] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    rows = {entry.path: entry for entry in got[0]}
+
+    tip = "Feine Spitzen brauchen mehr Luft über den Baumstützen."
+    if earlier is None:
+        assert all(entry.reason != tip for entry in rows.values())
+        return
+    assert handover.values_for(settings, profile, "cura")["support_structure"] == "tree"
+    assert (rows["support.z_gap"].value, rows["support.z_gap"].reason) == (pytest.approx(0.4), tip)
+    assert getattr(rows["support.z_gap"], "parts", ()) == ("Stacheln",)
+
+
 @pytest.mark.parametrize("kind", ["auto", "skirt"])
 def test_without_a_slicer_the_dialog_advises_for_its_actual_export(
     tmp_path: Path, kind: str
@@ -8649,16 +9045,18 @@ class _Note:
 
     def __init__(self) -> None:
         self.text = ""
+        self.tip = ""
+        self.described = ""
         self.visible = False
 
     def setText(self, text: str) -> None:  # noqa: N802 - Qt-Name
         self.text = text
 
-    def setToolTip(self, _text: str) -> None:  # noqa: N802 - Qt-Name
-        pass
+    def setToolTip(self, text: str) -> None:  # noqa: N802 - Qt-Name
+        self.tip = text
 
-    def setAccessibleDescription(self, _text: str) -> None:  # noqa: N802 - Qt-Name
-        pass
+    def setAccessibleDescription(self, text: str) -> None:  # noqa: N802 - Qt-Name
+        self.described = text
 
     def show(self) -> None:
         self.visible = True
@@ -8705,6 +9103,52 @@ def test_the_field_names_the_parts_that_print_their_own_value_with_it(
 
     assert note.visible
     assert note.text == expected
+
+
+def test_the_field_names_many_parts_once_per_value_like_the_row() -> None:
+    """Fünf Teile mit Gitter standen im Feld als fünf Sätze „Pilz bekommt
+    Gitter. Hut bekommt Gitter. …“, die Zeile fasste sie zu „Pilz, Hut und 2
+    weitere mit Gitter“ zusammen (Nachprüfung RM-584, L1). Das Feld nennt jeden
+    Wert einmal und kürzt die Namen wie die Zeile; Tooltip und Bildschirmleser
+    nennen jedes Teil."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    names = {"grid": "Gitter", "tree": "Baum", "none": "Aus", "auto": "Automatisch"}
+    base = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "none"
+    )
+    bodies = ["Figur", "Löwe", "Greif", "Adler", "Pilz", "Hut", "Dach", "Schirm", "Tor", "Würfel"]
+    note = _Note()
+    host = SimpleNamespace(
+        _part_notes={"support.style": note},
+        _accepted_parts={"support.style": ("Figur", "Löwe", "Greif", "Adler")},
+        _accepted_others={
+            "support.style": (
+                ("Pilz", "grid"),
+                ("Hut", "grid"),
+                ("Dach", "auto"),
+                ("Schirm", "grid"),
+                ("Tor", "grid"),
+            )
+        },
+        settings=print_settings.with_accepted(base, "support.style", "tree"),
+        _plate_bodies=lambda: bodies,
+        _shown=lambda _path, value: names[str(value)],
+    )
+
+    PrintSettingsDialog._mark_parts(host, base, "dem Herstellerprofil")  # type: ignore[arg-type]
+
+    assert note.visible
+    assert note.text == (
+        "Nur für Figur, Löwe und 2 weitere. Pilz, Hut und 2 weitere bekommen Gitter. "
+        "Dach bekommt Automatisch. Die übrigen Teile drucken mit Aus aus dem Herstellerprofil."
+    )
+    full = (
+        "Nur für Figur, Löwe, Greif, Adler. Pilz, Hut, Schirm, Tor bekommen Gitter. "
+        "Dach bekommt Automatisch. Die übrigen Teile drucken mit Aus aus dem Herstellerprofil."
+    )
+    assert note.tip == full
+    assert note.described == full
 
 
 @pytest.mark.parametrize(
@@ -8913,6 +9357,8 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
             _chosen=None,
             cancelled=None,
             _begin_write=lambda: None,
+            # Der Bedarf gehört nicht zu dieser Frage (Review RM-706, M2).
+            _usage_for=lambda *_args: (),
         )
         # Der Lesedurchgang (RM-670) ruft den Rest über die Instanz.
         worker._assembly_in_one_read = lambda: main_window._ExportWorker._assembly_in_one_read(
@@ -10007,6 +10453,77 @@ def test_prusaslicer_prints_automatic_supports_as_trees_where_its_process_does(
     assert handover.organic_styles(setup, profiles.make_profile()) == frozenset(organic)
 
 
+#: Herstellerprozesse der Orca-Familie: normale Stütze im Gitterstil, Bäume, ein
+#: Baumstil unter Bäumen (Prusa XL, ``process_common_xl``) und schon ``snug``.
+_NORMAL = {"support_type": "normal(auto)", "support_style": "default"}
+_TREES = {"support_type": "tree(auto)", "support_style": "default"}
+_ORGANIC_TREES = {"support_type": "tree(auto)", "support_style": "organic"}
+_NORMAL_SNUG = {"support_type": "normal(auto)", "support_style": "snug"}
+
+
+@pytest.mark.parametrize(
+    ("executable", "flavour", "native", "chain", "style", "snug"),
+    [
+        # Orca-Familie: Gitter schreibt normale Stütze, der Stil bleibt beim
+        # Hersteller — außer ``snug`` druckt jeder als Gitter, auch ein Baumstil.
+        ("elegoo-slicer.exe", "orca", _TREES, None, "grid", True),
+        ("orca-slicer.exe", "orca", _ORGANIC_TREES, None, "grid", True),
+        ("orca-slicer.exe", "orca", {}, None, "grid", True),
+        ("orca-slicer.exe", "orca", _NORMAL_SNUG, None, "grid", False),
+        # „Automatisch“ ist, was der Herstellerprozess druckt.
+        ("orca-slicer.exe", "orca", _NORMAL, None, "auto", True),
+        ("orca-slicer.exe", "orca", _NORMAL_SNUG, None, "auto", False),
+        ("elegoo-slicer.exe", "orca", _TREES, None, "auto", False),
+        ("orca-slicer.exe", "orca", {}, None, "auto", False),
+        ("orca-slicer.exe", "orca", _NORMAL, None, "tree", False),
+        ("orca-slicer.exe", "orca", _NORMAL, None, "hybrid", False),
+        ("orca-slicer.exe", "orca", _NORMAL, None, "none", False),
+        # PrusaSlicer: Gitter, Hybrid als Ersatz Gitter, „automatisch“ nach der Kette.
+        ("prusa-slicer.exe", "prusa", {}, "organic", "grid", True),
+        ("prusa-slicer.exe", "prusa", {}, None, "hybrid", True),
+        ("prusa-slicer.exe", "prusa", {}, "grid", "auto", True),
+        ("prusa-slicer.exe", "prusa", {}, None, "auto", True),
+        ("prusa-slicer.exe", "prusa", {}, "organic", "auto", False),
+        ("prusa-slicer.exe", "prusa", {}, "snug", "auto", False),
+        ("prusa-slicer.exe", "prusa", {}, None, "tree", False),
+        # SuperSlicer kennt keine Bäume: Ersatz Gitter.
+        ("superslicer.exe", "prusa", {}, None, "tree", True),
+        ("CuraEngine.exe", "cura", {}, None, "grid", False),
+    ],
+)
+def test_normal_support_beside_a_blocker_goes_out_snug(
+    monkeypatch: pytest.MonkeyPatch,
+    executable: str,
+    flavour: str,
+    native: dict[str, str],
+    chain: str | None,
+    style: str,
+    snug: bool,
+) -> None:
+    """Wer neben einer Sperre normale Stütze druckt, bekommt ``snug``
+    (``handover.snug_beside_blocker``): Im Gitterstil liefen die Säulen unter dem
+    Deckel des Bechers 1,1 mm in die Mündungen des gesperrten Tunnels. OrcaSlicer
+    mit Prusa XL (Baumstil ``organic`` im Prozess) druckte Solidons Gitter als
+    Gitter und bekam zuerst kein ``snug`` (Review rvtun, Fund 1: 1,14 m im
+    Tunnel)."""
+    from app.core.export import manufacturer
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    monkeypatch.setattr(
+        manufacturer,
+        "prusa_chain",
+        lambda *_args: (
+            None if chain is None else SimpleNamespace(values={"support_material_style": chain})
+        ),
+    )
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+    key = "support_style" if flavour == "orca" else "support_material_style"
+
+    written = handover.snug_beside_blocker(setup, profiles.make_profile(), style, flavour)  # type: ignore[arg-type]
+
+    assert written == ({key: "snug"} if snug else {})
+
+
 @pytest.mark.parametrize(
     ("flavour", "organic"), [("orca", {"tree"}), ("prusa", {"tree"}), ("cura", set())]
 )
@@ -10347,6 +10864,52 @@ def test_the_field_says_what_trees_do_to_it(
 
 
 @pytest.mark.parametrize(
+    ("flavour", "executable", "said"),
+    [
+        ("orca", "elegoo-slicer.exe", True),
+        ("orca", "bambu-studio.exe", True),
+        ("prusa", "prusa-slicer.exe", True),
+        ("prusa", "superslicer.exe", False),
+        ("cura", "CuraEngine.exe", False),
+    ],
+)
+def test_the_fine_layer_field_says_that_trees_print_even_layers(
+    monkeypatch: pytest.MonkeyPatch, flavour: str, executable: str, said: bool
+) -> None:
+    """Unter organischen Bäumen lehnen PrusaSlicer und die Orca-Familie eine
+    Höhenkurve ab, und die Übergabe lässt sie weg (RM-586). Das Feld sagt es,
+    solange feine Schichten gesetzt sind; SuperSlicer druckt statt Bäumen
+    Gitter, und Cura nimmt die Kurve ohnehin nicht."""
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {})
+    trees = print_settings.with_choice(
+        print_settings.resolve(profiles.make_profile()), "support.style", "tree"
+    )
+    fine = print_settings.with_choice(trees, "layers.fine_layer_height", 0.1)
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+    program = slicer_keys.program_of(setup.executable)
+    organic = handover.organic_styles(setup)
+
+    note = slicer_keys.limitation(
+        flavour,  # type: ignore[arg-type]
+        "layers.fine_layer_height",
+        fine,
+        program,
+        organic,
+    )
+    assert (note is not None) is said, note
+    assert (
+        slicer_keys.limitation(
+            flavour,  # type: ignore[arg-type]
+            "layers.fine_layer_height",
+            trees,
+            program,
+            organic,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
     ("style", "executable", "dropped"),
     [
         ("tree", "elegoo-slicer.exe", True),
@@ -10544,3 +11107,69 @@ def test_the_part_advice_memo_knows_the_tower() -> None:
     assert gap(False) == pytest.approx(0.1)
     assert gap(True) == pytest.approx(0.16)
     assert gap(False) == pytest.approx(0.1)
+
+
+def test_a_plate_job_carries_a_snapshot_of_the_stored_inputs(tmp_path: Path) -> None:
+    """Anschluss (RM-706): Jeder Plattenauftrag gibt dem Abdruck die gespeicherten
+    Eingänge mit, als festen Stand — das Fenster rechnet weiter."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    host, objects, _keys = _old_spool_dialog_state()
+    setup = handover.SlicerSetup(tmp_path / "orca.exe", "orca")
+    job = PrintSettingsDialog._plate_job(host, objects, (0, 1), tmp_path, "Altspulen", setup)
+    assert job.inputs is not None
+    document = host.session.project.document
+    assert job.inputs.document is not document
+    assert job.inputs.document.ops == document.ops
+    assert job.inputs.stopped_at is None
+
+
+@pytest.mark.parametrize(
+    ("with_block", "offered"), [(False, True), (True, False)], ids=["allein", "neben Klotz"]
+)
+def test_the_dialog_offers_fine_layers_only_where_the_tower_lets_them_through(
+    monkeypatch: pytest.MonkeyPatch, with_block: bool, offered: bool
+) -> None:
+    """Der Druckdialog fragt, wie der Export, auf welchen Platten der Turm allen
+    Teilen dieselben Schichten abverlangt (Nachprüfung RM-586, N5): Eine
+    zweifarbige Kuppe allein bekommt den Vorschlag feiner Schichten, neben einem
+    Klotz derselben Platte nicht — sonst schlüge der Dialog vor, was der Export
+    mit einem Befund verwirft."""
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: {"enable_prime_tower": "1"})
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    sphere = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    floor = trimesh.creation.box(extents=(60.0, 60.0, 30.0))
+    floor.apply_translation((0.0, 0.0, 15.0))
+    dome = trimesh.boolean.intersection([sphere, floor], engine="manifold")
+    white = MaterialSlot(0, "Weiß", (1.0, 1.0, 1.0), material_type="PLA")
+    red = MaterialSlot(1, "Rot", (0.8, 0.1, 0.1), material_type="PLA")
+    slots = tuple(int(z > 10.0) for z in dome.triangles_center[:, 2])
+    bodies: tuple[SceneObject, ...] = (
+        SceneObject(
+            id="kuppe",
+            name="Kuppe",
+            mesh=MeshData(raw=dome, slots=slots),
+            material_slots=[white, red],
+        ),
+    )
+    if with_block:
+        block = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+        block.apply_translation((50.0, 0.0, 5.0))
+        bodies += (
+            SceneObject(id="klotz", name="Klotz", mesh=MeshData(block), material_slots=[white]),
+        )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+    worker = _AdviceWorker(bodies, settings, profile, setup, {}, (), (), {}, flavour="orca")
+    got: list[list] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+
+    assert got, "der Arbeiter kam ohne Rat zurück"
+    assert worker.towers == frozenset({0})
+    assert worker.shared == (frozenset({0}) if with_block else frozenset())
+    paths = {entry.path for entry in got[0]}
+    assert ("layers.fine_layer_height" in paths) is offered

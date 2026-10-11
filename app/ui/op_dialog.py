@@ -233,6 +233,11 @@ def accept_text(spec: OperationSpec) -> str:
     return str(spec.title)
 
 
+#: Feldarten, deren Wert eine Projektquelle nennt, die erst gewählt werden muss
+#: (:meth:`OperationDialog.source_missing`).
+_CHOSEN_SOURCES: Final = ("image", "source")
+
+
 def placement_hint() -> str:
     """Was der Dialog sagt, solange im Bild gezielt wird — seine erste Zeile."""
     return tr("Stelle im Bild anklicken.")
@@ -280,6 +285,26 @@ def place_text(face: str, point: Sequence[float]) -> str:
         )
     )
     return tr("{face} · {point}", face=face, point=numbers) if face else numbers
+
+
+def shown_choices(choices: Sequence[Any], start: Any) -> tuple[Any, ...]:
+    """Die Auswahl ohne die Gewindegrößen ausgeblendeter Reihen (RM-544).
+
+    Nur an einer Liste, die Zoll- oder Rohrgewinde führt — das Schraubenloch mit
+    seinen metrischen Größen bleibt, wie es ist. Der gewählte Wert bleibt immer
+    stehen: Ein Schritt mit einer ausgeblendeten Größe zeigt sie weiter.
+    """
+    from app.core.knowledge import standards
+
+    families = [standards.thread_family(str(choice)) for choice in choices]
+    if not any(family not in (None, "metric") for family in families):
+        return tuple(choices)
+    shown = set(standards.shown_thread_families())
+    return tuple(
+        choice
+        for choice, family in zip(choices, families, strict=True)
+        if family is None or family in shown or choice == start
+    )
 
 
 class ValueField(QWidget):
@@ -2299,6 +2324,8 @@ class OperationDialog(QDialog):
         # solche Stelle führt, steht er allein wie bisher.
         self._place = place_fields(spec)
         self._place_known = self._place is not None and any(name in given for name in self._place)
+        self._place_held = False
+        """Ob die Stelle auf einer neuen Form erst noch gesetzt wird (:meth:`hold_place`)."""
         self._aligned = False
         """Ob die Beschriftungskante schon steht — vorher richtet die Stelle nichts neu aus."""
         self._place_row = QWidget(self)
@@ -2501,11 +2528,16 @@ class OperationDialog(QDialog):
         # siehe :meth:`_missing_sketch`): Der Knopf folgt ihr, sobald die Wahl
         # sie zur Eingabe macht. Und ein Pflicht-Ziel: Der Knopf gibt frei,
         # sobald es gewählt ist, nicht erst mit dem nächsten Vorschaubild.
-        if self.spec.name == "apply_texture" or any(
-            (entry.kind == "material" and entry.required)
-            or (entry.targets_feature and entry.required)
-            or (entry.kind == "sketch" and (entry.required or entry.depends_on is not None))
-            for entry in self.spec.params.spec()
+        if (
+            self.spec.name == "apply_texture"
+            or self._seeks_a_place()
+            or any(
+                (entry.kind == "material" and entry.required)
+                or (entry.targets_feature and entry.required)
+                or (entry.kind == "sketch" and (entry.required or entry.depends_on is not None))
+                or (entry.kind in _CHOSEN_SOURCES and entry.required)
+                for entry in self.spec.params.spec()
+            )
         ):
             self.valuesChanged.connect(self._follow_source_pending)
         self._follow_source_pending()
@@ -2581,6 +2613,7 @@ class OperationDialog(QDialog):
             self._hidden_expression_open.setAccessibleDescription("")
         missing_sketch = self._missing_sketch()
         missing_material = self._missing_material()
+        missing_source = self.source_missing()
         # Und ein Pflicht-Ziel ohne Eintrag (Bedienweg-Durchsicht 14.09.2026):
         # *An Merkmal ausrichten* am einzigen Körper hat keinen zweiten, dessen
         # Merkmal es anpeilen könnte — die Liste ist leer, und „Übernehmen"
@@ -2589,6 +2622,7 @@ class OperationDialog(QDialog):
         # dieselbe Auskunft für den Weg über Palette und Kürzel.
         no_target = self._target_missing()
         no_texture_face = self._texture_face_missing()
+        no_place = self.place_missing()
         # Und was das Fenster von außen sperrt: Ein Grund aus dem Band, der
         # eine Handlung trägt („Erst reparieren, dann aushöhlen"), sperrt den
         # Knopf, statt drei Schritte später im Prüfbericht zu enden
@@ -2609,8 +2643,10 @@ class OperationDialog(QDialog):
             or no_count
             or missing_sketch
             or missing_material
+            or missing_source
             or (self._target_reason() if no_target else "")
             or (tr("Wählen Sie eine ebene Fläche für das Muster.") if no_texture_face else "")
+            or (placement_hint() if no_place else "")
             or (blocked or "")
         )
         incomplete = (
@@ -2622,8 +2658,10 @@ class OperationDialog(QDialog):
             or bool(no_count)
             or bool(missing_sketch)
             or bool(missing_material)
+            or bool(missing_source)
             or no_target
             or no_texture_face
+            or no_place
             or blocked is not None
         )
         button.setEnabled(not pending and not incomplete)
@@ -2737,7 +2775,9 @@ class OperationDialog(QDialog):
             self._target_missing()
             or self._missing_sketch()
             or self._missing_material()
+            or self.source_missing()
             or self._texture_face_missing()
+            or self.place_missing()
             or self._blocked_reason is not None
             or not preview_ready
         )
@@ -2750,7 +2790,13 @@ class OperationDialog(QDialog):
         steht (``MainWindow._apply_when_previewed``).
         """
         if not self.can_accept():
-            if self.preview_defer is not None:
+            # Ohne Stelle gibt es keine Vorschau, auf die ein Klick warten
+            # könnte (RM-773).
+            if (
+                self.preview_defer is not None
+                and not self.place_missing()
+                and not self.source_missing()
+            ):
                 self.preview_defer()
             return
         super().accept()
@@ -2799,6 +2845,52 @@ class OperationDialog(QDialog):
             if not values.get(entry.name):
                 return tr("{name}: {value}", name=entry.title, value=tr("Materialprofil wählen …"))
         return ""
+
+    def source_missing(self) -> str:
+        """Ein Pflichtfeld für Bild oder Datei ohne Wahl — und der Knopf, der es füllt (RM-775).
+
+        Kundenprotokoll zu 0.5.3: „op.displace_image.ValidationError: Diese
+        Quelle gibt es im Projekt nicht.“ Das Bild war noch gar nicht gewählt:
+        Die Vorschau lief beim Öffnen von *Relief auflegen* mit leerer Quelle,
+        und der Kern meldete eine Kennung, die es nicht gibt. Solange der Satz
+        hier steht, rechnet keine Vorschau, und *Übernehmen* nennt den Knopf.
+        """
+        schema = self.spec.params.spec()
+        wanted = [
+            entry
+            for entry in schema
+            if entry.kind in _CHOSEN_SOURCES and entry.required and not entry.internal
+        ]
+        if not wanted:
+            return ""
+        values = self.values()
+        for entry in wanted:
+            if inactive_dependency(entry, schema, values) is not None or values.get(entry.name):
+                continue
+            choose = tr("Bild wählen …") if entry.kind == "image" else tr("Datei wählen …")
+            return tr("{name}: {value}", name=entry.title, value=choose)
+        return ""
+
+    def _seeks_a_place(self) -> bool:
+        """Ob dieser Dialog einen Baustein einsetzt — nur dort gibt es eine Stelle zu fragen."""
+        from app.core.knowledge.parts.ops import part_of
+
+        return part_of(self.spec.name) is not None
+
+    def place_missing(self) -> bool:
+        """Ob ein Baustein für Fläche oder Bohrung weder Stelle noch Position hat (RM-773).
+
+        Die Frage stellt der Kern (``parts.ops.place_missing``) — dieselbe, an
+        der die Auswertung sonst anhält. Solange sie gilt, rechnet keine
+        Vorschau, und *Übernehmen* nennt den Weg: die Stelle im Bild.
+        """
+        if self._place_held:
+            return True
+        if not self._seeks_a_place():
+            return False
+        from app.core.knowledge.parts.ops import place_missing
+
+        return place_missing(self.spec.name, self.spec.params, self.values())
 
     def _texture_face_missing(self) -> bool:
         """Ein Ganzflächenmuster braucht eine ausdrücklich gewählte Fläche."""
@@ -3937,7 +4029,7 @@ class OperationDialog(QDialog):
             # Normteiltabelle daneben. Was schon ein Name ist — „M4", „PLA" —
             # bleibt unverändert.
             combo = QComboBox(self)
-            for choice in entry.choices:
+            for choice in shown_choices(entry.choices, start):
                 combo.addItem(choice_label(str(choice)), choice)
             # **Der Name sagt, wie der Wert heißt — nicht, was er tut.**
             # „Würfelgitter" benennt ``cubic`` und erklärt es nicht, und wo
@@ -4239,10 +4331,33 @@ class OperationDialog(QDialog):
                 return editor.take_point(point)
         return None
 
+    def hold_place(self, held: bool) -> None:
+        """Vorschau und *Übernehmen* anhalten, bis die Platzierung die Stelle neu setzt.
+
+        Gerufen vom :class:`~app.ui.placement_flow.PlacementFlow`, wenn die
+        Form unter einer gesetzten Stelle wechselt oder der Dialog öffnet,
+        während der vorige Schritt noch rechnet (RM-774). Bis dahin
+        ist die Stelle im Dialog auf einer anderen Form gemessen; gerechnet
+        oder übernommen würde sie geraten (Regel 21). Der Knopf sagt
+        derweil, was fehlt: „Stelle im Bild anklicken.“ Die nächste Stelle
+        aus dem Bild (:meth:`take_placement`) hebt die Sperre auf.
+        """
+        if self._place_held == held:
+            return
+        self._place_held = held
+        self.valuesChanged.emit()
+
     def take_placement(self, values: Mapping[str, Any]) -> None:
         """Übernimmt eine vollständige Raumlage ohne gerundete Zwischenwerte."""
         if self._place is not None and any(name in values for name in self._place):
             self._place_known = True
+        # Eine Stelle, die die Platzierung jetzt einträgt, ist auf der heutigen
+        # Form gemessen — auch bei einem Erzeuger, der keine Lesezeile führt.
+        from app.core.knowledge.parts.ops import placement_fields
+
+        placed = placement_fields(self.spec.params)
+        if any(placed.get(axis, axis) in values for axis in ("x", "y", "z")):
+            self._place_held = False
         with QSignalBlocker(self):
             for name, value in values.items():
                 editor = self._editors.get(name)

@@ -55,12 +55,12 @@ geht über `ctx.ask` (Regel 21).
 
 Regeln 6, 7 und 9 gelten wörtlich; die Griffe sind `units.is_close`/`is_zero`
 statt `==`, `auto:<material>` und `ctx.seed` mit `deterministic=False` — ohne
-beides ist eine randomisierte Prozedur falsch, auch wenn sie funktioniert.
+beides ist eine Zufallsprozedur falsch, auch wenn sie funktioniert.
 
 Text, den der Kern **fertig** ausliefert (eine Frage über `ctx.ask`), schreibt
 Zahlen wie die Oberfläche: `format_decimal` bzw. `decimal_separator()` und
-Längen in `app.i18n.display_unit()` — sonst liest der Kunde „177.80 mm“ in
-einem auf Zoll gestellten deutschen Fenster (`unit_question`).
+Längen in `app.i18n.display_unit()` — sonst steht „177.80 mm“ in
+einem deutschen Fenster in Zoll (`unit_question`).
 
 Eine Zahl als **Platzhalterwert** eines Satzes (`_("… unter {largest}", largest=…)`)
 geht als `format_length`/`format_volume`/`format_area` (sie liefern eine
@@ -81,13 +81,13 @@ entscheidet, rechnet ohne Wege, deren letzte Stelle an der Plattform hängt:
 - `trimesh`s `apply_translation` rechnet exakt, sieht für das Rauschen aber
   wie ein Matrixprodukt aus — in Wegen unter dem Rauschtest `mesh.shift_body`;
 - keine Winkel- und Exponentialfunktion aus NumPy oder `math` (Winkel über
-  `units.exact_cos`/`exact_sin`, viele auf einmal über
-  `mesh.periodic_sin_cos`), keine Potenz `**` auf Gleitkommazahlen (`x * x`,
-  `math.sqrt`);
+  `units.exact_cos`/`exact_sin`, gebündelt bitgleich `exact_cos_sin_array`,
+  sonst `mesh.periodic_sin_cos`), keine Potenz `**` auf Gleitkommazahlen
+  (`x * x`, `math.sqrt`);
 - Zufall nur aus Rohbits (`Generator.random`, `integers`), nie `normal` oder
   andere Verteilungen über `exp`/`log`;
-- keine Summe, deren Folge an der Zahl der Arbeiter hängt: Schichten und
-  Teile in fester Folge verrechnen (`analysis._support_volume`).
+- keine Summe, deren Folge an der Zahl der Arbeiter hängt: Teile in fester
+  Folge (`analysis._support_volume`); Fäden: `_THREADED`.
 
 Ersatzwerkzeuge: `app/core/geom/CLAUDE.md` („Plattformgleich gerechnet"). Ein
 neuer Weg zu Geometrie kommt in `tests/test_platform_identity.py` (`_WAYS`),
@@ -127,14 +127,12 @@ Sie ist eine Provenienz-ID (§21.2); Passungen und Operationen hängen an ihr.
 
 ## Was je Aufruf teuer ist, gehört nicht in eine Schleife über Flecken
 
-Die Regel gilt der Bibliothek, nicht dem Verzeichnis, in dem sie auffiel. In
-`app/ui` wird keine Geometrie gerechnet; die Ansicht fragt den Kern.
+In `app/ui` wird keine Geometrie gerechnet; die Ansicht fragt den Kern.
 
 - **`scipy.spatial.ConvexHull`** legt je Aufruf eine Temporärdatei an. Ebene
   Hüllen über GEOS (`MultiPoint(punkte).convex_hull`; für die
-  Schattenprojektion `geom.mesh.planar_outline`, wie `hull_planes`); GEOS gibt
-  bei entartetem Eingang Strecke oder Punkt statt `QhullError`, sein Ring
-  läuft andersherum, eine Ausgleichsrechnung danach summiert anders.
+  Schattenprojektion `geom.mesh.planar_outline`, wie `hull_planes`); Fallen
+  bei entartetem Eingang: `regel-kern.md`.
   `geom/mesh.py` und `geom/orient.py` fragen einmal je Körper und behalten
   Qhull.
 - **Kein `np.unique(…, axis=0)` an Kanten oder Ecken in einer Schleife** — es
@@ -177,11 +175,10 @@ ihn ruft, hält das Fenster an (RM-212).
   BLAS-Faden (`HELPER_ENVIRONMENT`, spart je Bibliothek einen Puffer je
   Rechenkern), und über BLAS hinge das Ergebnis an der Fadenzahl.
   `test_the_jobs_call_no_blas` hält es.
-- **Eine Rechnung lädt zurückgestellt nichts nach**: Was sie an Modulen
-  braucht, steht in `kernel_jobs.PREPARATIONS` und lädt vorher in normaler
-  Klasse — unter Windows verhungert ein Import eine Klasse tiefer auf
-  ausgelasteten Kernen (RM-380). `test_a_job_gives_the_same_bytes_in_the_helper_as_here`
-  misst es je Rechnung im Hilfsprozess.
+- **Eine Rechnung lädt zurückgestellt nichts nach**: Ihre Module stehen in
+  `kernel_jobs.PREPARATIONS` und laden vorher in normaler Klasse (RM-380), beim
+  Vorwärmen alle (`warm`); bis dahin bleibt Kleines im Prozess. Verhungert der
+  Hilfsprozess, hebt ihn der Wartende (`_Starvation`, RM-672).
 - **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
   Verfeinerung die erwartete des Ergebnisses, bei der Voxelstufe
   (`kernel_jobs.voxel`) die Zellzahl des Rasters.
@@ -239,25 +236,27 @@ vergleicht beide an Korpusnetzen, ungeteilt und nach *Kanten verfeinern*.
 Die Vollerkennung nach jedem Schritt (§21.1) bleibt; ein bitgleich gelesener
 Fleck bekommt auch an einem neuen Körper dieselbe Antwort
 (`features._by_geometry`). Schlüssel: der Abdruck der Stützpunktlesung
-(`_SurfaceSupport.digest`: jedes Feld, die Dreiecke des Flecks), die Zahlen,
-die die Frage sonst vom Körper liest (Toleranz aus seiner Diagonale,
-geprüfter Fit), die Löserbudgets. **Kein Toleranzvergleich** — eine Normale,
-die in der letzten Stelle abweicht, ist eine andere Frage.
+(`_SurfaceSupport.digest`), die Zahlen, die die Frage sonst vom Körper liest
+(Toleranz aus seiner Diagonale, geprüfter Fit), die Löserbudgets. **Kein
+Toleranzvergleich** — eine Normale, die in der letzten Stelle abweicht, ist
+eine andere Frage.
 
 - **Eine Frage in `GEOMETRY_KEYED_ANSWERS` liest den Körper nur über ihre
   Lesung und Zahlen ihres Aufrufers** (Toleranz als Argument, in Rechnung und
-  Schlüssel): Normalen und Flächen des Flecks sind Felder der Lesung, Mitten
-  folgen aus den Dreiecken, Ecken in Nummernfolge gehen nur in Minimum oder
-  Maximum ein. Die Antwort ist unveränderlich (Fit, Wahrheitswert), nie eine
+  Schlüssel). Die Antwort ist unveränderlich (Fit, Wahrheitswert), nie eine
   Dreiecksnummer;
   `tests/test_features.py::test_every_question_across_bodies_is_named_and_shared`
   verlangt den Eintrag.
-- Grenze wie jede kleine Frage (`CACHE_LIMIT_PER_QUESTION`), Lebensdauer wie
-  der Merker je Körper: Die Antwort gehört den Abstammungen, die sie rechneten
-  oder lasen, und geht mit der letzten; `forget_cache` leert auch sie.
-- Treffen kann sie nur bei derselben Darstellung (Eckenfolge, Reihenfolge der
-  Ecken); deshalb legt eine Boolesche Ungeschnittenes zurück
-  (`attributes.in_source_layout`, `operationen.md`).
+- **Eine Frage in `PRINT_KEYED_ANSWERS` schlüsselt nach dem Fleckabdruck**
+  (`_patch_print`) und den Körperzahlen, die sie liest, als Argument
+  (`_body_numbers`). Eine Ganzkörperfrage unterwegs wird Rückfrage
+  (`_HULL_QUESTIONS`), Stücke sind Lagen im Fleck; wer über den Ring hinaus
+  liest, merkt nichts. Nie nach Dreiecksnummern (RM-210).
+- Grenze `CACHE_LIMIT_PER_QUESTION`, Lebensdauer wie der Merker je Körper;
+  `forget_cache` leert auch sie.
+- Treffen kann sie nur bei derselben Darstellung; deshalb legt eine Boolesche
+  Ungeschnittenes in Ecken- und Dreiecksfolge des Eingangs zurück
+  (`attributes.in_source_layout`).
 
 ## Fehler
 
@@ -300,7 +299,9 @@ Testzugang geht ins echte Netz und fällt in einem fremden Test auf.
 
 `OpContext.scene` ist nur lesend (Regel 3). Zweimal auswerten ist identisch;
 eine geänderte Objektzahl hält die Auswertung an, statt still
-weiterzurechnen.
+weiterzurechnen. **Felder eines Netzes nie an Ort und Stelle schreiben**:
+Ein bewegtes Netz teilt seine Dreiecke mit dem Quellnetz
+(`transform.apply`), ein schlanker Eintrag seine Felder mit der Szene.
 
 **Wo die kurze Kette nur ausgeht, rechnen Fenster, Umbau und Agent weiter;
 eine Vorschau nie** (RM-534, §17.2): Ein Halt mit `BooleanFailedError` aus

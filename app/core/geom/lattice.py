@@ -160,7 +160,10 @@ def _gyroid(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     built = trimesh.Trimesh(vertices=points + origin, faces=faces, process=True)
-    built.fix_normals()
+    # Alle Schalen zugleich wenden wie in ``blend.blend_bodies``: Einzeln nach
+    # außen gewendet, würde die Schale eines eingeschlossenen Hohlraums zum
+    # zweiten Körper (Nachprüfung F, Teil 2).
+    built.fix_normals(multibody=False)
     return MeshData.of(built)
 
 

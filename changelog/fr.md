@@ -23,6 +23,7 @@ dans `website/version.json`.
 - La démo fonctionne désormais jusqu'au 30 novembre 2026. Solidon3D 1.0 est prévu pour le 1er décembre, et vos projets sont conservés.
 - Sur Mac, Solidon demande désormais macOS 14 ou plus récent. Tout Mac à partir de 2018 peut l'installer gratuitement.
 - Solidon démarre désormais sur les Mac Intel sous macOS 26. La version 0.5.3 y restait bloquée au démarrage.
+- Sur les Mac Intel, Solidon signale désormais qu'un congé ou un chanfrein sur un corps exact ne peut pas être construit. La version 0.5.3 se fermait à ce moment-là.
 - Sur Mac, *Annuler* interrompt aussitôt une réponse en cours du modèle local.
 - Sur Mac, Retour ouvre l'entrée sélectionnée sur l'écran d'accueil, dans *Rechercher une fonction* et dans le rapport de contrôle.
 - Sous Linux, la saisie par Fcitx5 et IBus arrive désormais dans le champ de texte, aussi dans le Flatpak et l'AppImage.
@@ -55,14 +56,21 @@ dans `website/version.json`.
 - Dans l'onglet *Sélection*, le champ du filament n'attribue qu'au clic ou avec Entrée. Les flèches et la saisie ne font que parcourir la liste, et la molette fait défiler l'onglet.
 - Dans les versions traduites, *Nouveau filament* ne défile plus de côté quand la fenêtre est moins haute que son contenu.
 - Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.
+- Un projet enregistré avec de nombreuses étapes sur un grand modèle s’ouvre avec beaucoup moins de mémoire.
 - Même dans un long historique, une nouvelle étape ne prend guère plus de temps à calculer que la première.
 - Sur les modèles à plusieurs milliers de caractéristiques, le déplacement et les autres étapes qui ne changent pas la forme se terminent jusqu'à deux fois plus vite.
 - Après la réouverture d'un projet, le rapport de contrôle indique toujours à quel emplacement libre un modèle inséré a été placé.
 - Annuler et rétablir vont plus vite, et la mémoire devenue inutile est libérée aussitôt.
 - Réparer et résoudre les recouvrements va jusqu'à quatre fois plus vite sur les gros modèles, et l'export en 3MF nettement plus vite.
 - L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
+- L'indication *Affichage du modèle …* disparaît dès que la vue est prête et ne reste plus au-dessus du modèle.
+- Les messages sur les saisies et les formes ne proposent plus de rapport d'erreur. Il n'apparaît que lorsque l'erreur vient de Solidon.
 - Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
 - Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
+- Après un perçage ou une caractéristique déplacée, les caractéristiques d'une grande pièce technique sont reconnues environ un tiers plus vite.
+- Un modèle ouvert juste après le démarrage du programme est modifiable jusqu'à un quart plus tôt.
+- Avec un slicer, un jeu ou un rendu en cours à côté, les calculs sur de grands modèles aboutissent en secondes au lieu de minutes.
+- Un projet enregistré avec un grand modèle s'ouvre après un redémarrage en une ou deux secondes au lieu d'une demi-minute : les caractéristiques reconnues sont conservées.
 
 ### Imprimer et transmettre au slicer
 
@@ -79,9 +87,11 @@ dans `website/version.json`.
 - La durée d'impression estimée est plus proche de celle du slicer, nettement plus pour les pièces avec supports.
 - La place des supports et du skirt sur le plateau se mesure désormais sous les seuls surplombs. Les pièces près du bord ne reçoivent plus d'avertissement injustifié.
 - Les suggestions acceptées ne laissent presque plus sans support les surplombs qui en ont besoin. *Garder les canaux libres* ne bloque plus que l'espace d'où un support ne pourrait plus être retiré.
+- Avec *Garder les canaux libres*, les supports en grille n'entrent plus dans l'embouchure des canaux bloqués. En version 0.5.3, ils y pénétraient d'un bon millimètre.
 - Là où les supports sous de petits surplombs reposent sur le modèle, Solidon propose des supports arborescents. Ils y laissent moins de traces.
 - Pour les petites pointes, Solidon propose une *Vitesse minimale de ralentissement* plus basse afin qu'elles ne ramollissent pas. Le réglage parvient à chaque slicer.
 - Les rebords étroits qui se portent seuls restent libres avec *Rebords sans support*. L'impression demande ainsi nettement moins de support.
+- Les arcs en plein cintre et brisés se portent seuls, et Solidon n'y demande plus de supports. Les plafonds presque plats gardent les leurs.
 - Les supports se retirent plus facilement : l'espace suit le matériau et la hauteur de couche de chaque pièce, même avec plusieurs matériaux sur un plateau. L'interface suit la surface au-dessus.
 - Quand un support repose sur la pièce, Solidon propose aussi une couche d'interface en dessous pour que son pied ne laisse pas de traces. Sous les supports arborescents, si le slicer l'y imprime.
 - Sous les supports arborescents et à côté d'une tour de purge, Solidon propose l'espace du support en couches entières, comme le slicer l'imprime.
@@ -100,7 +110,10 @@ dans `website/version.json`.
 - Un rebord étroit qui se porte seul ne compte plus comme un long pont, même à côté d'un autre surplomb. Le rapport n'avertit plus à cet endroit, et Solidon n'y demande plus de supports.
 - Au-dessus d'un canal, le rapport ne conseille plus un support qu'on ne pourrait plus retirer. Il nomme le canal et une transition sous 45 degrés.
 - Pour le PETG, Solidon propose *Refroidissement complet au support*. Il se détache ainsi plus facilement de la pièce.
-- Nouveaux réglages : *Couches d'interface en bas*, *Parois des arbres* et *Pointe d'arbre*, plus *Resserrer la première couche* et *Élargir les trous*, qui suivent le slicer à défaut de votre choix.
+- Sur les figurines, Solidon propose la couture à l'arrière, sans ligne devant. Pour une grande face supérieure plane, il propose le repassage.
+- Le temps d'impression estimé tient désormais compte du repassage.
+- Nouveaux réglages : *Couches fines*, *Épaisseur minimale du dessus*, *Couches d'interface en bas*, *Parois des arbres*, *Pointe d'arbre*, *Resserrer la première couche* et *Élargir les trous*.
+- Pour *Repasser la surface*, vous choisissez désormais entre *Face la plus haute* et *Toutes les faces supérieures*.
 - Le champ *Espace au-dessus* s'appelle désormais *Espace dessus et dessous* et vaut pour les deux côtés du support.
 - Si le slicer refuse des filaments aux températures trop différentes sur un plateau, Solidon en donne désormais la raison et l'issue, au lieu de dire seulement qu'aucun fichier n'a été créé.
 - Dans la boîte de dialogue d'impression, imprimante, filaments et qualité restent entièrement visibles, même avec un texte agrandi. Les libellés longs passent à la ligne.
@@ -109,7 +122,9 @@ dans `website/version.json`.
 - Si une pièce compense déjà dans le modèle, avec un trou percé avec *Tenir compte de la tolérance du matériau* ou *Compenser le pied d'éléphant*, Solidon propose que le slicer ne le refasse pas.
 - Même pour des imprimantes inconnues de PrusaSlicer ou SuperSlicer, tous deux estiment la durée d'impression avec les accélérations transmises, et le fichier indique le matériau de la bobine.
 - Même sur un ordinateur entièrement chargé, Solidon indique la vraie raison après l'arrêt d'un slicer, au lieu d'un délai dépassé. Un fichier d'impression terminé est repris.
-- Le stock de filament reconnaît de nouveau une consommation décomptée avec Solidon 0.5.1 et demande avant de décompter à nouveau la même impression.
+- Le stock de filament soumet à vérification une consommation enregistrée avec Solidon 0.5 pour le même projet et les mêmes filaments, et demande avant de décompter à nouveau.
+- Désormais, une consommation décomptée reste liée à son impression, même si une mise à jour calcule plus vite ou si le slicer change le profil du fabricant. Avant, l'impression comptait comme nouvelle.
+- Là où des dômes plats et des pentes montreraient des marches, Solidon propose des couches fines, seulement là. La suggestion indique de combien l'impression de la pièce s'allonge.
 
 ### Filetages, perçages et pièces normalisées
 
@@ -126,6 +141,12 @@ dans `website/version.json`.
 - Posé par en dessous, le piège à écrou a sa poche sous la face, et sa fente y descend. Jusqu'ici la poche était à moitié au-dessus, la vis dans la face.
 - Si le perçage d'un bloc ne traverse pas la pièce, il s'appelle désormais borgne. Jusqu'ici il s'appelait traversant.
 - Si la paroi est plus épaisse que celle saisie pour un *Passe-câble* ou un *Embout cannelé*, l'étape le signale et ouvre l'épaisseur de paroi. Jusqu'ici le passage finissait en silence dans la matière.
+- Les filetages existent désormais aussi en filetages de tuyauterie G et R, en filetages en pouces UNC et UNF et en NPT, dans le *Filetage imprimable*, sur vis, écrou et *Goujon fileté*.
+- Chaque filetage existe aussi à gauche. Une taille personnalisée accepte des filets par pouce et plusieurs filets, aussi dans *Créer une vis* et *Créer un couvercle vissé*.
+- Les séries de filetages que montrent les listes de tailles se choisissent dans les Réglages, sous *Séries de filetages dans les listes*.
+- La contrepartie et la *Goupille pour perçage* vont aussi aux filetages en pouces, de tuyauterie, à gauche, à plusieurs filets et coniques. Entre deux séries, Solidon demande laquelle.
+- Les filetages à gauche, à plusieurs filets et coniques se modifient avec *Modifier la caractéristique* et *Supprimer la caractéristique* et gardent sens, filets et conicité.
+- Solidon reconnaît un filetage à plusieurs filets dans un maillage importé comme un seul filetage avec son nombre de filets. Jusqu'ici, il en montrait plusieurs au pas trop grand.
 
 ### Blocs
 
@@ -133,6 +154,10 @@ dans `website/version.json`.
 - Vos propres blocs se créent aussi ainsi comme corps à part et ne s'attachent pas à un corps déjà présent dans le projet.
 - Avec *Enregistrer la sélection comme bloc*, le corps sélectionné vient avec exactement les étapes qui le construisent. Si un second corps venait avec, le dialogue le dit avant.
 - Supports muraux, colliers de tube, colliers de profilé et supports acceptent toute vis de M3 à M64. Si une taille ne convient pas aux autres cotes, le bloc indique quoi changer.
+- Un bloc destiné à une face ou à un trou n'est calculé qu'une fois placé dans la vue. D'ici là, la boîte de dialogue ne peut pas être appliquée et indique ce qui manque.
+- Si la face change alors que la boîte de dialogue d'un bloc est ouverte, l'emplacement choisi reste tant qu'il convient à la nouvelle forme. Sinon, le bloc en cherche un nouveau et le signale.
+- Une boîte de dialogue de bloc ouverte pendant que l'étape précédente calcule encore place le bloc d'elle-même dès que le résultat est là, et ne peut pas être appliquée avant.
+- Un bloc placé dans la vue se déplace aussi d'un clic vers un autre endroit après une saisie dans la boîte de dialogue.
 
 ### Modifier et esquisser
 
@@ -153,6 +178,9 @@ dans `website/version.json`.
 - Le pinceau s'adapte à la taille du corps. Si le maillage est trop grossier, *Sculpter* uniformise les triangles au premier trait, et un Ctrl+Z annule les deux.
 - En miroir, le plan passe là où le corps se correspond, même si une partie dépasse loin sur le côté.
 - Sculpter suit la souris avec fluidité, et même une étape de centaines de coups de pinceau se calcule vite.
+- Avec *Fusionner en douceur*, le maillage est régulier, presque sans éclats fins. Une pièce posée sur le plateau d'impression ne passe plus en dessous.
+- Un corps avec une cavité fermée la garde avec *Fusionner en douceur*. Depuis la version 0.1.1, la cavité devenait un second corps et l'étape signalait des pièces non reliées.
+- Avec *Uniformiser les triangles*, aucune arête ne dépasse la longueur voulue, sans changer la forme. La même arête donne souvent près du double de triangles ; une plus longue garde la densité d'avant.
 - Dans *Squelette*, chaque clic après le premier pose un os, Entrée termine la chaîne, glisser une articulation la plie, et *Terminé* enregistre tout sans dialogue.
 - Un squelette ne plie que ce qui tient à ses os, le reste du corps ne bouge pas. Les anciens projets se calculent comme enregistrés.
 - Avec Ctrl ou Maj, vous sélectionnez plusieurs arêtes et leur appliquez un congé ou un chanfrein en une étape. Un clic sur un coin sélectionne toutes les arêtes qui s'y rejoignent.
@@ -163,6 +191,8 @@ dans `website/version.json`.
 - Si une action touchait une pièce séparée voisine, ou si une caractéristique posée ne touchait une autre matière que sur une ligne, Solidon le dit au lieu d'abîmer le corps.
 - Si une pièce séparée gêne une action sur une caractéristique, *Diviser en pièces distinctes et réessayer* la sépare et exécute l'action. Ctrl+Z annule les deux.
 - La division en pièces distinctes garde toute pièce imprimable, même goujons et rondelles près d'une grande plaque. Seules tombent petites surfaces ouvertes et miettes non imprimables.
+- Un relief n'est calculé qu'une fois une image choisie. D'ici là, la boîte de dialogue indique le bouton *Choisir une image …*.
+- Les boîtes de dialogue *Charger un STEP* et *Extruder un dessin* ne proposent que les fichiers qu'elles savent lire. Si le projet n'en contient aucun, elles indiquent le bouton *Choisir un fichier …*.
 
 ### Générer avec l'IA
 
@@ -171,11 +201,15 @@ dans `website/version.json`.
 - Les parois minces, par exemple d'un vase, arrivent fermées et avec une épaisseur.
 - L'assistant répond dans la langue dans laquelle vous écrivez.
 - Avec un modèle local, l'assistant dispose d'autant de place qu'avec un modèle hébergé et mène des tâches jusqu'à douze étapes.
+- Si vous annulez une proposition de l'assistant, la barre d'état le confirme au lieu de signaler une erreur du programme.
+- Si vous ouvrez un autre projet pendant une proposition, Solidon l'écarte et remet votre demande dans le chat.
 - Les modèles générés arrivent plus souvent fermés. Là où des faces se touchent seulement, Solidon les sépare, et il lisse les petits plis de la surface au lieu de signaler une auto-intersection.
 - Si un essai s'est déjà défait pendant la génération, la boîte de dialogue le dit avant de l'accepter et propose *Encore un essai*.
 - Si un modèle généré n'est qu'une fine peau autour d'une cavité, la boîte de dialogue le dit avant de l'accepter et le rapport de contrôle ensuite, avec la voie vers un nouvel essai.
 - Avant le téléchargement, *Configurer le chat* et *Configurer ComfyUI* indiquent la mémoire graphique et la place qu'un modèle demande, et si cet ordinateur les a.
 - Sur un Mac, *Configurer le chat* propose un modèle local qui tient dans la mémoire partagée et dit quand une clé pour un modèle hébergé vaut mieux.
+- S'il manque le modèle local choisi ou si le fournisseur refuse la clé, Solidon le dit en une phrase et *Configurer le chat* mène directement à la solution.
+- Solidon ignore une clé non valide pendant un jour, jusqu'à ce que vous en saisissiez une autre ou choisissiez *Réessayer*. Entre-temps, un modèle local répond s'il y en a un.
 - Sur un modèle nouvellement généré, *Modifier la taille* ne recalcule que la nouvelle taille et ne refait plus la réparation. C'est plus rapide, et Ctrl+Z annule aussitôt la modification.
 
 ## 0.5.3

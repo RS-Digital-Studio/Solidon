@@ -684,6 +684,60 @@ def test_quitting_the_application_frees_the_card_of_the_warm_model() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        llm.BackendUnavailable(status=404, detail="model 'qwen3:14b' not found"),
+        llm.BackendUnavailable(detail="[WinError 10061] connection refused"),
+    ],
+    ids=["model_missing", "not_running"],
+)
+def test_a_turn_ollama_refused_leaves_nothing_to_unload(refusal: BackendUnavailable) -> None:
+    """Kundenprotokoll S-20261010-e5014c: Nach fünf Zügen, die an einem nicht
+    geholten ``qwen3:14b`` scheiterten, versuchte jedes Beenden, genau dieses
+    Modell zu entladen — „konnte nicht entladen werden", auch noch nach dem
+    Wechsel auf das inzwischen geholte ``qwen2.5:14b``. Geladen hatte es nie
+    jemand: Wer abgewiesen wurde oder niemanden erreichte, hält nichts warm.
+    """
+    from app.core.backends import resources
+
+    transport = Recorder(refusal)
+    backend = OllamaBackend(model="qwen3:14b", transport=transport)
+
+    with pytest.raises(BackendUnavailable), backend.resource_session(None):
+        backend.complete([Message(role="user", content="Halter")])
+
+    assert resources.warm_holders() == ()
+    assert resources.release_warm_before_exit() is True
+    assert len(transport.calls) == 1, "beim Beenden geht keine Entladeanfrage hinaus"
+
+
+def test_a_model_that_answered_without_counters_still_stays_warm() -> None:
+    """Review G4: „hat geantwortet“ wurde an ``on_gpu`` erraten, und das bleibt
+    ``None`` bei einer Antwort ohne Zähler. Dann stand das Modell, das geladen
+    war, nirgends — ein ComfyUI-Lauf hätte es nicht freigegeben."""
+    from app.core.backends import resources
+
+    answers: list[dict[str, Any] | Exception] = [
+        {"message": {"role": "assistant", "content": "ok"}, "done_reason": "stop"},
+        llm.BackendUnavailable(detail="[WinError 10054] connection reset"),
+    ]
+
+    def transport(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    backend = OllamaBackend(model="qwen3:14b", transport=transport)
+    with pytest.raises(BackendUnavailable), backend.resource_session(None):
+        backend.complete([Message(role="user", content="eins")])
+        assert backend.on_gpu is None, "die Antwort trug keine Zähler"
+        backend.complete([Message(role="user", content="zwei")])
+
+    assert resources.warm_holders() == (backend.holder,)
+
+
 def test_a_model_on_the_processor_is_unloaded_after_the_turn() -> None:
     """Auf dem Prozessor belegt das Modell den Arbeitsspeicher der Anwendung."""
     from app.core.backends import resources
@@ -2320,6 +2374,475 @@ def test_the_chat_falls_back_to_the_local_model(monkeypatch: pytest.MonkeyPatch)
     llm.reject("anthropic")
 
     assert llm.first_available().id == "ollama"
+
+
+# --- Was die Gegenstelle ablehnt, steht als Satz da, nicht als JSON ----------------
+
+
+def _refusing_server(status: int, body: bytes) -> tuple[LoopbackServer, threading.Thread]:
+    """Ein Dienst auf der Rückschleife, der jede Anfrage mit ``status`` ablehnt."""
+
+    class Refuse(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, _format: str, *_args: object) -> None:
+            pass
+
+    server = LoopbackServer(("127.0.0.1", 0), Refuse)
+    serving = threading.Thread(target=server.serve_forever, daemon=True)
+    serving.start()
+    return server, serving
+
+
+def _stop(server: LoopbackServer, serving: threading.Thread) -> None:
+    server.shutdown()
+    server.server_close()
+    serving.join(2.0)
+
+
+def _shown(error: AppError) -> str:
+    """Was der Fehlerdialog davon zeigt: Titel, Satz und die Werte."""
+    return " ".join([str(error.title), str(error.detail or ""), *map(str, error.values.values())])
+
+
+#: Wörtlich, was Ollama 0.12 auf ``/api/chat`` mit einem nicht geholten Modell
+#: antwortet — so stand es viermal im Kundenprotokoll S-20261010-e5014c.
+OLLAMA_MISSING_MODEL: Final = b'{"error":"model \'qwen3:14b\' not found"}'
+
+#: Wörtlich Anthropics Antwort auf einen ungültigen Schlüssel (dasselbe Protokoll).
+ANTHROPIC_INVALID_KEY: Final = (
+    b'{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},'
+    b'"request_id":"req_011Cfu8tzfzJB7VK3aP3SK8n"}'
+)
+
+
+@pytest.mark.parametrize("cancelable", [False, True], ids=["complete", "complete_cancelable"])
+def test_a_model_ollama_does_not_have_is_named_with_the_way_to_get_it(cancelable: bool) -> None:
+    """Der Kunde las ``{"error":"model 'qwen3:14b' not found"}`` unter „Das
+    Sprachmodell hat nicht geantwortet." — fünfmal, über zwei Starts, und als
+    Hauptknopf „Zusätzliche Programme …", das Ollama installiert, das schon
+    lief. Was hilft, ist das Modell zu holen oder ein geholtes zu wählen, und
+    beides geht unter „Chat einrichten …" (Regel 17).
+    """
+    from app.core.errors import SET_UP_CHAT
+    from app.core.scene.cancel import CancelSignal
+
+    server, serving = _refusing_server(404, OLLAMA_MISSING_MODEL)
+    try:
+        backend = OllamaBackend(model="qwen3:14b", url=f"http://127.0.0.1:{server.server_port}")
+        with pytest.raises(BackendUnavailable) as raised:
+            if cancelable:
+                backend.complete_cancelable(
+                    [Message(role="user", content="Hallo")], cancelled=CancelSignal()
+                )
+            else:
+                backend.complete([Message(role="user", content="Hallo")])
+    finally:
+        _stop(server, serving)
+
+    problem = raised.value
+    shown = _shown(problem)
+    assert "{" not in shown and '"error"' not in shown, f"rohes JSON beim Kunden: {shown!r}"
+    assert "nicht installiert" in str(problem.title), problem.title
+    assert problem.values["model"] == "qwen3:14b", "der Name dessen, was fehlt"
+    assert problem.suggestions[0] == SET_UP_CHAT, problem.suggestions
+    # Review M1: Die Protokollzeile (``session._on_failed`` schreibt ``str``)
+    # trägt die Fakten, aus denen der Kundenfall ausgewertet wurde.
+    logged = str(problem)
+    assert "status=404" in logged and "model=qwen3:14b" in logged, logged
+    assert "not found" in logged and "{" not in logged, logged
+
+
+def test_a_refused_key_says_to_check_the_key_not_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dasselbe Protokoll, der andere Zugang: Unter dem Titel stand Anthropics
+    Fehlerobjekt samt ``request_id``. Der Satz sagt jetzt, was geschehen ist und
+    wo der Schlüssel geändert wird — und dass der Chat bis dahin das lokale
+    Modell nimmt.
+    """
+    from app.core.errors import SET_UP_CHAT
+
+    monkeypatch.setattr(keys, "read", lambda account: "sk-ant-ungueltig")
+    server, serving = _refusing_server(401, ANTHROPIC_INVALID_KEY)
+    address = f"http://127.0.0.1:{server.server_port}/v1/messages"
+    try:
+        # Über blankes HTTP reist kein Schlüssel (``post_json``); der Kopf
+        # bleibt darum hier, der echte Weg der Antwort nicht.
+        backend = AnthropicBackend(
+            transport=lambda _url, _headers, payload: llm.post_json(address, {}, payload)
+        )
+        with pytest.raises(BackendUnavailable) as raised:
+            backend.complete([Message(role="user", content="Hallo")])
+    finally:
+        _stop(server, serving)
+
+    problem = raised.value
+    shown = _shown(problem)
+    assert "{" not in shown and "request_id" not in shown, f"rohes JSON beim Kunden: {shown!r}"
+    assert isinstance(problem, llm.KeyRefused), type(problem)
+    assert "kennt diesen Schlüssel nicht" in str(problem.detail), problem.detail
+    assert problem.suggestions[0] == SET_UP_CHAT, problem.suggestions
+    assert backend.available is False
+    logged = str(problem)
+    assert "status=401" in logged and "invalid x-api-key" in logged, logged
+    assert "sk-ant" not in logged, "der Schlüssel steht nie im Protokoll"
+
+
+def test_any_other_refusal_keeps_the_providers_words_and_drops_the_json() -> None:
+    """Für jeden anderen Status bleibt die Auskunft der Gegenstelle erhalten —
+    als ihr Satz unter „Grund", nicht als Objekt mit Klammern."""
+    body = b'{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}'
+    server, serving = _refusing_server(529, body)
+    try:
+        with pytest.raises(BackendUnavailable) as raised:
+            llm.post_json(f"http://127.0.0.1:{server.server_port}/v1/messages", {}, {})
+    finally:
+        _stop(server, serving)
+
+    problem = raised.value
+    shown = _shown(problem)
+    assert "{" not in shown, shown
+    assert problem.values["reason"] == "Overloaded"
+    assert problem.detail, "ein Satz, was jetzt hilft (Regel 17)"
+    assert problem.suggestions[0].id == "retry", "ausgelastet heilt mit der Zeit, nicht im Dialog"
+    assert "status=529" in str(problem) and "Overloaded" in str(problem)
+
+
+@pytest.mark.parametrize(
+    ("status", "sentence"),
+    [
+        (400, llm._CHECK_SETUP),
+        (404, llm._NOT_THERE),
+        (413, llm._CHECK_SETUP),
+        (429, llm._TOO_MANY),
+        (500, llm._PROVIDER_TROUBLE),
+        (529, llm._PROVIDER_TROUBLE),
+    ],
+)
+def test_each_status_gets_the_sentence_that_helps(status: int, sentence: object) -> None:
+    """Review G5: ein Satz je Lage, nicht einer für alle."""
+    assert llm.refusal(status, b"").detail == sentence
+
+
+@pytest.mark.parametrize(
+    ("status", "first", "words"),
+    [(404, "check_updates", "nicht mehr an"), (400, "set_up_chat", "Konto")],
+)
+def test_the_hosted_way_names_only_what_can_be_changed_there(
+    monkeypatch: pytest.MonkeyPatch, status: int, first: str, words: str
+) -> None:
+    """Review G8: Beim gehosteten Weg sind Adresse und Modell fest. Ein 404
+    heißt dort „dieses Modell gibt es nicht mehr“ — die Hilfe ist eine neuere
+    Version, nicht ein Feld, das es nicht gibt."""
+    monkeypatch.setattr(keys, "read", lambda account: "sk-ant-gueltig")
+
+    def refuse(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+        raise llm.refusal(status, b'{"error":{"message":"nope"}}')
+
+    with pytest.raises(BackendUnavailable) as raised:
+        AnthropicBackend(transport=refuse).complete([Message(role="user", content="x")])
+
+    problem = raised.value
+    assert problem.suggestions[0].id == first, problem.suggestions
+    assert words in str(problem.detail) and "Adresse" not in str(problem.detail)
+    assert problem.values["model"] == AnthropicBackend().model
+
+
+@pytest.mark.parametrize("stored", [None, "sk-ant-zwei\nzeilen"], ids=["none", "unusable"])
+def test_a_missing_or_broken_key_leads_to_the_chat_setup(
+    monkeypatch: pytest.MonkeyPatch, stored: str | None
+) -> None:
+    """Review G7: Dieselbe Fehlleitung wie im Kundenfall stand zehn Zeilen
+    darüber — „Zusätzliche Programme …“ für einen Schlüssel, dazu der
+    unübersetzte Satz „no key stored“."""
+    from app.core.errors import SET_UP_CHAT
+
+    monkeypatch.setattr(keys, "read", lambda account: stored)
+    with pytest.raises(BackendUnavailable) as raised:
+        AnthropicBackend(transport=Recorder({})).complete([Message(role="user", content="x")])
+
+    assert raised.value.suggestions[0] == SET_UP_CHAT, raised.value.suggestions
+    assert "no key stored" not in str(raised.value.detail)
+
+
+@pytest.mark.parametrize(
+    ("body", "said"),
+    [
+        (b'[{"error": {"message": "zu viel"}}]', "zu viel"),
+        (b"<html><head><title>502 Bad Gateway</title></head><body>{x}</body>", "502 Bad Gateway"),
+        (b"<html><body>{x}</body></html>", ""),
+        (b'{"error": "' + b"x" * (llm.MAX_ERROR_BYTES + 10) + b'"}', ""),
+        (b"404 page not found", "404 page not found"),
+    ],
+    ids=["list", "html_title", "html_without_title", "too_big", "plain"],
+)
+def test_the_providers_words_are_never_its_markup(body: bytes, said: str) -> None:
+    """Review G9: auch Liste, HTML-Seite und übergroßes JSON stehen nie roh unter „Grund“."""
+    assert llm.said_by(body) == said
+
+
+def test_unloading_a_model_ollama_does_not_have_is_not_a_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Review G5: 404 beim Entladen heißt „nichts geladen“ — keine Warnung."""
+    import logging
+
+    backend = OllamaBackend(model="qwen3:14b", transport=Recorder(llm.refusal(404, b"")))
+    with caplog.at_level(logging.INFO, logger="app.core.backends.llm"):
+        backend.release()
+
+    assert not [entry for entry in caplog.records if entry.levelno >= logging.WARNING]
+    assert "nothing to unload" in caplog.text
+
+
+def test_the_suite_runner_still_says_how_to_get_a_missing_model() -> None:
+    """Review G6: ``why_unreachable`` erkannte das fehlende Modell am Text
+    „not found“, und der steht seit dem Satz für den Kunden nicht mehr dort."""
+    from tools.run_agent_suite import why_unreachable
+
+    class Missing(ScriptedBackend):
+        @property
+        def id(self) -> str:
+            return "ollama"
+
+        def complete(self, *_args: object, **_kwargs: object) -> Reply:
+            raise llm.ModelNotInstalled("qwen3:14b")
+
+    lines = why_unreachable(Missing(model="qwen3:14b"))
+
+    assert any("ollama pull qwen3:14b" in line for line in lines), lines
+
+
+def test_a_key_called_invalid_stays_refused_until_it_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bei jedem Start scheiterte der erste Chatzug am selben ungültigen
+    Schlüssel, erst danach nahm der Chat das lokale Modell (dreimal im
+    Protokoll). Ein 401 heilt nicht von selbst — er gilt, bis ein anderer
+    Schlüssel dasteht; ein 403 (gültig, aber ohne Recht) dagegen nur bis zum
+    Neustart.
+    """
+    stored = {"anthropic": "sk-ant-ungueltig"}
+    monkeypatch.setattr(keys, "read", lambda account: stored.get(account))
+
+    def refuse(status: int) -> Callable[..., dict[str, Any]]:
+        def transport(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+            raise BackendUnavailable(status=status, detail="refused")
+
+        return transport
+
+    with pytest.raises(BackendUnavailable):
+        AnthropicBackend(transport=refuse(401)).complete([Message(role="user", content="x")])
+    llm._rejected.clear()  # ein Neustart: der Merker im Speicher ist fort
+
+    assert AnthropicBackend().available is False, "derselbe ungültige Schlüssel"
+    stored["anthropic"] = "sk-ant-der-neue"
+    assert AnthropicBackend().available is True, "ein anderer Schlüssel ist ein neuer Versuch"
+
+    with pytest.raises(BackendUnavailable):
+        AnthropicBackend(transport=refuse(403)).complete([Message(role="user", content="x")])
+    llm._rejected.clear()
+    assert AnthropicBackend().available is True, "ohne Recht ist nicht ungültig"
+
+
+def test_storing_the_same_key_again_lifts_the_lasting_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wer den Schlüssel im Dialog neu einträgt, meint: noch einmal versuchen —
+    auch wenn es derselbe ist (beim Anbieter wieder freigeschaltet)."""
+    chain = _Keychain()
+    monkeypatch.setattr(keys, "_keyring", lambda: chain)
+    keys.store("anthropic", "sk-ant-gesperrt")
+    llm.reject("anthropic", lasting=True, key="sk-ant-gesperrt")
+    llm._rejected.clear()
+    assert AnthropicBackend().available is False
+
+    keys.store("anthropic", "sk-ant-gesperrt")
+
+    assert AnthropicBackend().available is True
+
+
+def test_a_refused_key_from_the_environment_can_be_tried_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review M2: Ohne Schlüsselbund gab es keinen Rückweg — ``keys.store``
+    scheitert dort, und der Rat „in die Umgebungsvariable eintragen und neu
+    starten“ führte in dieselbe Sperre. „Noch einmal versuchen“ ruft
+    ``accept_again`` und geht ohne den Schlüsseltext."""
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "sk-ant-aus-der-umgebung")
+    llm.reject("anthropic", lasting=True, key="sk-ant-aus-der-umgebung")
+    llm._rejected.clear()
+    assert AnthropicBackend().available is False
+
+    llm.accept_again("anthropic")
+
+    assert AnthropicBackend().available is True
+
+
+def test_a_remembered_refusal_runs_out_after_a_day() -> None:
+    """Review M2 (Entscheidung Koordinator): Ob ein 401 heilt, entscheidet der
+    Anbieter — der Merker verfällt nach ``REFUSAL_HOLDS_SECONDS``."""
+    keys.mark_refused("anthropic", "sk-ant-x", now=1_000.0)
+
+    assert keys.refused("anthropic", "sk-ant-x", now=1_000.0 + keys.REFUSAL_HOLDS_SECONDS - 1)
+    assert not keys.refused("anthropic", "sk-ant-x", now=1_000.0 + keys.REFUSAL_HOLDS_SECONDS)
+    assert not keys.refused("anthropic", "sk-ant-anderer", now=1_001.0)
+    assert keys.REFUSAL_HOLDS_SECONDS == 24 * 3600.0
+
+
+def test_a_damaged_mark_file_is_no_refusal_and_no_crash() -> None:
+    """Ein beschädigtes Salz darf ``available`` nicht zum Programmfehler machen."""
+    path = keys._refusals_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"salt": "zz" * 16, "anthropic": {"mark": "x", "at": 1.0}}))
+
+    assert not keys.refused("anthropic", "sk-ant-x", now=2.0)
+    keys.mark_refused("anthropic", "sk-ant-x", now=2.0)
+    assert keys.refused("anthropic", "sk-ant-x", now=3.0), "ein neues Salz ersetzt das kaputte"
+
+
+def test_the_refusal_marks_the_key_that_was_sent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review G1: Wer während der abgelehnten Anfrage einen neuen Schlüssel
+    einträgt, darf nicht den neuen gesperrt bekommen."""
+    stored = {"anthropic": "sk-ant-alt"}
+    monkeypatch.setattr(keys, "read", lambda account: stored.get(account))
+
+    def swap_then_refuse(
+        url: str, headers: dict[str, str], payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        stored["anthropic"] = "sk-ant-neu"
+        raise BackendUnavailable(status=401, detail="refused")
+
+    with pytest.raises(BackendUnavailable):
+        AnthropicBackend(transport=swap_then_refuse).complete([Message(role="user", content="x")])
+    llm._rejected.clear()
+
+    assert AnthropicBackend().available is True, "der neue Schlüssel ist ein neuer Versuch"
+    stored["anthropic"] = "sk-ant-alt"
+    assert AnthropicBackend().available is False, "gemerkt ist der gesendete"
+
+
+def test_the_mark_is_quiet_and_never_the_key(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Review G2: Der Merker steht nicht im Protokoll, das mit jedem Bericht
+    hinausgeht, und nicht bei den gemerkten Programmen; gemerkt ist ein HMAC mit
+    Salz je Installation."""
+    import logging
+
+    from app.core import discover
+
+    with caplog.at_level(logging.INFO):
+        keys.mark_refused("anthropic", "sk-ant-geheim")
+
+    saved = json.loads(keys._refusals_path().read_text(encoding="utf-8"))
+    mark = saved["anthropic"]["mark"]
+    assert len(saved["salt"]) == 32 and len(mark) == 64
+    # Der positive Anker: Ohne ihn bestünde der Verbotstest auch, wenn gar
+    # nichts mitgeschnitten würde.
+    assert "anthropic key marked as refused" in caplog.text, caplog.text
+    assert mark not in caplog.text and "sk-ant-geheim" not in caplog.text
+    assert "sk-ant-geheim" not in keys._refusals_path().read_text(encoding="utf-8")
+    assert not any("rejected" in name for name in discover._load())
+
+
+def test_a_mark_that_cannot_be_written_keeps_the_refusal_a_sentence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review G3: Ein schreibgeschützter Nutzerordner machte aus dem 401 einen
+    ``PermissionError`` — einen Programmfehler mit Absturzbericht statt des
+    Satzes mit Ausweg. Das Merken ist Buchhaltung."""
+
+    def refuse_to_write(_data: dict[str, Any]) -> None:
+        raise PermissionError("schreibgeschützt")
+
+    before = keys._load_refusals()
+    monkeypatch.setattr(keys, "_store_refusals", refuse_to_write)
+    monkeypatch.setattr(keys, "read", lambda account: "sk-ant-ungueltig")
+
+    def refuse(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+        raise BackendUnavailable(status=401, detail="refused")
+
+    with pytest.raises(llm.KeyRefused):
+        AnthropicBackend(transport=refuse).complete([Message(role="user", content="x")])
+    assert AnthropicBackend().available is False, "der Sitzungsmerker trägt weiter"
+    assert keys._load_refusals() == before, "geschrieben wurde wirklich nichts"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        llm.BackendAnswerUnreadable(url="http://127.0.0.1:11434/api/chat", excerpt="<html>"),
+        llm.BackendPromptTruncated(counted=1026, expected=2049, window=2048),
+        llm.BackendContextShifted(counted=32800, window=32768),
+    ],
+    ids=["unreadable", "prompt_cut", "context_shifted"],
+)
+def test_every_chat_error_leads_to_the_chat_setup(error: AppError) -> None:
+    """Nachtrag aus dem Abbruch-Paket: Drei Sprachmodell-Fehler boten
+    *Einstellungen öffnen* an und nannten im Satz die Einstellungen — Adresse
+    und Modell liegen aber hinter *Chat einrichten …*."""
+    from app.core.errors import SET_UP_CHAT
+
+    assert error.suggestions[0] == SET_UP_CHAT, error.suggestions
+    assert "Einstellungen" not in str(error.detail)
+    assert "„Chat einrichten …“" in str(error.detail)
+
+
+def test_a_mark_that_cannot_be_cleared_is_logged_not_raised(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Review G3, Gegenrichtung (Nachprüfung N3): Das Aufheben erreicht den
+    Schreibweg nur, wenn ein Eintrag da ist — also erst merken, dann das
+    Schreiben sperren."""
+    import logging
+
+    keys.mark_refused("anthropic", "sk-ant-x")
+    assert keys.refused("anthropic", "sk-ant-x")
+
+    def refuse_to_write(_data: dict[str, Any]) -> None:
+        raise PermissionError("schreibgeschützt")
+
+    monkeypatch.setattr(keys, "_store_refusals", refuse_to_write)
+    with caplog.at_level(logging.WARNING):
+        llm.accept_again("anthropic")
+
+    assert "could not clear the refused anthropic key" in caplog.text, caplog.text
+    assert "anthropic" not in llm._rejected
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"mark": "ä" * 64, "at": 1.0},
+        {"mark": "0" * 64, "at": 10**400},
+        {"mark": 7, "at": 1.0},
+        {"mark": "0" * 64, "at": "gestern"},
+    ],
+    ids=["non_ascii_mark", "huge_time", "mark_no_text", "time_no_number"],
+)
+def test_a_hand_damaged_entry_counts_as_not_refused(
+    monkeypatch: pytest.MonkeyPatch, entry: dict[str, Any]
+) -> None:
+    """Nachprüfung N2: Eine von Hand beschädigte Datei ließ ``available`` mit
+    ``TypeError`` (``compare_digest`` und Nicht-ASCII) oder ``OverflowError``
+    (riesige Zeitzahl) werfen — ein Programmfehler beim bloßen Nachsehen."""
+    path = keys._refusals_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"salt": "ab" * 16, "anthropic": entry}, ensure_ascii=False), encoding="utf-8"
+    )
+    monkeypatch.setattr(keys, "read", lambda account: "sk-ant-x")
+
+    assert keys.refused("anthropic", "sk-ant-x", now=2.0) is False
+    assert AnthropicBackend().available is True
 
 
 # --- Vier Wege zu Ollama, und drei fingen den Pfad nicht --------------------------

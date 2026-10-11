@@ -1,0 +1,13 @@
+ecken Exit: 3
+eckennummern Exit: 3
+ring Exit: 3
+normalen Exit: 3
+flaechen Exit: 3
+diagonale Exit: 3
+winkel Exit: 3
+runde Exit: 3
+rueckfrage Exit: 3
+dicht Exit: 3
+umlauf Exit: 3
+deckungsgleich Exit: 3
+ursprung Exit: 3

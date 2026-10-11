@@ -69,6 +69,19 @@ _log = get_logger(__name__)
 #: Kopieren nichts Sichtbares.
 OFFLOAD_ABOVE: int = 10_000
 
+#: Bis zu wie vielen Dreiecken eine Rechnung im Prozess bleibt, solange der
+#: vorgewärmte Hilfsprozess noch startet oder lädt (:func:`warm_up`, RM-672).
+#: Sonst startete sie einen zweiten Hilfsprozess und wartete auf dessen Start
+#: samt Vorbereitung — beim Öffnen gleich nach dem Programmstart der größte
+#: Posten.
+STARTUP_IN_PROCESS_UP_TO: Final = 400_000
+
+#: Über wie viele Sekunden der Wartende die Rechenzeit eines rechnenden
+#: Hilfsprozesses misst, und welchen Anteil eines Kerns er mindestens bekommen
+#: muss, um zurückgestellt zu bleiben (:class:`_Starvation`, RM-672).
+STARVED_WINDOW_SECONDS: Final = 0.25
+STARVED_SHARE: Final = 0.25
+
 #: Wie lange ein frisch gestarteter Hilfsprozess bis zu seiner ersten Meldung
 #: brauchen darf, in Sekunden. Danach gilt er als hängend und wird beendet.
 STARTUP_SECONDS: Final = 30.0
@@ -239,9 +252,58 @@ def _helper_environment() -> Iterator[None]:
                     os.environ[name] = value
 
 
+class _Starvation:
+    """Ob ein zurückgestellter Hilfsprozess während seiner Rechnung verhungert (RM-672).
+
+    Er rechnet eine Klasse unter der Anwendung (``kernel_jobs._yield_to_the_window``),
+    damit das Fenster vor ihm drankommt. Unter Windows teilt der Planer die Zeit
+    aber streng nach Klasse zu: Lasten fremde Programme mit normaler Priorität
+    die Kerne aus, bekommt er fast nichts, und das Laden wartete minutenlang.
+    Gemessen an einer Ikosphäre mit 327 680 Dreiecken bei 100 % Fremdlast
+    (09.10.2026, je drei Läufe im Wechsel, ``display_simplify`` / ``boolean``):
+    zurückgestellt 73 bis 130 s / 106 bis 127 s, gleich gehoben 1,2 bis 1,4 s /
+    0,9 bis 1,7 s, gehoben nach einer Sekunde Hunger 1,9 bis 3,4 s / 2,1 bis
+    3,2 s. Das Fenster gewann dabei nichts: Sein längster Stillstand lag
+    zurückgestellt bei 94 bis 142 ms, gehoben bei 2 bis 57 ms — die Kerne nimmt
+    sich die fremde Last. Bekommt
+    er in :data:`STARVED_WINDOW_SECONDS` weniger als :data:`STARVED_SHARE`
+    eines Kerns, hebt ihn der Wartende für den Rest dieser Rechnung auf normale
+    Priorität (``process.hurry_helper``); die nächste beginnt wieder zurückgestellt.
+    """
+
+    def __init__(self, process: Any) -> None:
+        self.process = process
+        self.since = time.monotonic()
+        self.spent = process_boundary.helper_cpu_seconds(process)
+        self.done = self.spent is None
+
+    def starving(self) -> bool:
+        """``True`` genau einmal: in dem Blick, in dem er gehoben wird."""
+        if self.done:
+            return False
+        now = time.monotonic()
+        if now - self.since < STARVED_WINDOW_SECONDS:
+            return False
+        spent = process_boundary.helper_cpu_seconds(self.process)
+        if spent is None or self.spent is None:
+            self.done = True
+            return False
+        if spent - self.spent >= STARVED_SHARE * (now - self.since):
+            self.since, self.spent = now, spent
+            return False
+        self.done = True
+        with suppress(OSError, ValueError):
+            process_boundary.hurry_helper(self.process)
+        return True
+
+
 class _Helper:
     """Ein Hilfsprozess und die Leitung zu ihm. Gehört immer genau einem Faden."""
 
+    #: Ob er in seiner letzten Rechnung verhungerte und gehoben wurde (RM-672).
+    hurried: bool = False
+    #: Der Hungerblick der laufenden Rechnung, sonst ``None`` (:class:`_Starvation`).
+    watch: _Starvation | None = None
     generation: int
 
     def __init__(self) -> None:
@@ -309,6 +371,7 @@ class _Helper:
         beim Kunden an. Reicht der Speicher nicht, kommt ``MemoryError`` wie
         aus einer Rechnung im Prozess — und mit ihm der Hinweis der Operation.
         """
+        self.hurried = False
         try:
             segment, layout = kernel_jobs.pack(arrays)
         except OSError as unmade:
@@ -329,7 +392,11 @@ class _Helper:
             except _HelperLostError as lost:
                 raise _HelperRefusedError(f"lost before accepting: {lost}", lasting=False) from lost
             if reply[0] == "accepted":
-                reply = self._receive(cancelled, None)
+                self.watch = _Starvation(self.process)
+                try:
+                    reply = self._receive(cancelled, None)
+                finally:
+                    self.watch = None
         finally:
             if segment is not None:
                 segment.close()
@@ -365,9 +432,12 @@ class _Helper:
 
         Gewartet wird auf Leitung und Prozess zugleich: Ein gestorbener
         Hilfsprozess meldet sich sofort, nicht erst nach einer Frist. Zwischen
-        zwei Blicken fragt der Faden nach dem Abbruch.
+        zwei Blicken fragt der Faden nach dem Abbruch und, während einer
+        Rechnung, ob der Hilfsprozess verhungert (:attr:`watch`).
         """
         while True:
+            if self.watch is not None and self.watch.starving():
+                self.hurried = True
             try:
                 if self.connection.poll(0):
                     return tuple(self.connection.recv())
@@ -441,7 +511,25 @@ class _Pool:
         self._failed_starts = 0
         self._disabled = False
         self._paused_until: float | None = None
+        self._warming = 0
         self.counts: dict[str, int] = {}
+
+    @contextmanager
+    def warming(self) -> Iterator[None]:
+        """Solange :func:`warm_up` einen Hilfsprozess startet und vorbereitet."""
+        with self._lock:
+            self._warming += 1
+        try:
+            yield
+        finally:
+            with self._lock:
+                self._warming -= 1
+                self._lock.notify_all()
+
+    def still_warming(self) -> bool:
+        """Ob das Vorwärmen läuft und kein bereiter Hilfsprozess untätig wartet."""
+        with self._lock:
+            return self._warming > 0 and not any(helper.alive for helper in self._idle)
 
     @property
     def disabled(self) -> bool:
@@ -748,6 +836,10 @@ def run(
             _NOTICE.pending = DISK_FULL
         _POOL.count("in_process")
         return function(arrays, plain, check)
+    if weight <= STARTUP_IN_PROCESS_UP_TO and _POOL.still_warming():
+        # Ein zweiter Start kostete mehr als die Rechnung hier (RM-672).
+        _POOL.count("while_warming")
+        return function(arrays, plain, check)
     try:
         helper = _POOL.take(cancelled)
     except _HelperCancelledError:
@@ -759,6 +851,7 @@ def run(
         return function(arrays, plain, check)
     try:
         outcome = helper.call(job, arrays, plain, cancelled)
+        hurried = helper.hurried
     except _HelperCancelledError:
         _POOL.discard(helper)
         _POOL.count("cancelled")
@@ -802,6 +895,8 @@ def run(
     _POOL.give_back(helper)
     _POOL.count("helper")
     _POOL.count(f"helper:{job}")
+    if hurried:
+        _POOL.count("hurried")
     return outcome
 
 
@@ -826,12 +921,30 @@ def warm_up() -> bool:
     27./28.09.2026) — genau die Zeit, um die sonst die erste grobe Vorschau
     eines großen Modells später stünde. Wartet im rufenden Faden; ``True``, wenn
     danach ein bereiter Hilfsprozess untätig wartet.
+
+    Der bereite Hilfsprozess lädt dann alles, was eine Rechnung vorbereitet
+    (die Rechnung ``warm``, :data:`kernel_jobs.PREPARATIONS`), und bis dahin
+    rechnet eine Rechnung bis :data:`STARTUP_IN_PROCESS_UP_TO` Dreiecke im
+    Prozess (RM-672). Vorher startete die erste Zusammenhangsfrage eines gleich
+    nach dem Programmstart geöffneten Modells einen zweiten Hilfsprozess und
+    wartete auf dessen Start und Import — am Rucksack-Halter das Doppelte der
+    Ladezeit nach drei Sekunden.
     """
-    helper = _POOL.take(None)
-    if helper is None:
-        return False
-    _POOL.give_back(helper)
-    return helper.alive
+    with _POOL.warming():
+        helper = _POOL.take(None)
+        if helper is None:
+            return False
+        try:
+            helper.call("warm", {}, {}, None)
+        except (_HelperLostError, _HelperSilentError, _HelperRefusedError) as problem:
+            _log.warning("kernel helper %s did not warm up: %s", helper.pid, problem)
+            _POOL.discard(helper)
+            return False
+        except Exception as problem:
+            # Eine fehlende Bibliothek meldet sich bei ihrer ersten Rechnung.
+            _log.info("kernel helper %s warmed up partly: %s", helper.pid, problem)
+        _POOL.give_back(helper)
+        return helper.alive
 
 
 def shutdown() -> int:
@@ -846,7 +959,18 @@ def statistics() -> dict[str, int]:
     """Wie oft wo gerechnet wurde, wie oft gestartet, abgebrochen, verloren."""
     with _POOL._lock:
         known = dict.fromkeys(
-            ("in_process", "helper", "started", "stopped", "cancelled", "lost", "fallback"), 0
+            (
+                "in_process",
+                "while_warming",
+                "helper",
+                "started",
+                "stopped",
+                "cancelled",
+                "lost",
+                "fallback",
+                "hurried",
+            ),
+            0,
         )
         return {**known, **_POOL.counts}
 

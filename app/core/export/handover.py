@@ -1542,6 +1542,7 @@ CURA_PER_MESH: Final = frozenset(
         "infill_sparse_density",
         "line_width",
         "ironing_enabled",
+        "ironing_only_highest_layer",
         "inset_direction",
         "wall_line_count",
         "speed_wall_0",
@@ -3543,6 +3544,49 @@ def tower_cause(
     return None
 
 
+def same_layers_required(
+    setup: SlicerSetup | None, profile: Profile, *, filaments: int, objects: int
+) -> bool:
+    """Verlangt der Slicer auf dieser Platte für alle Objekte dieselben Schichten?
+
+    So prüfen die Orca-Familie und PrusaSlicer ihren Reinigungsturm
+    (``Print::validate``): nur mit mehr als einem Objekt, und dann muss jede
+    Höhenkurve gleich sein, sonst rechnet der Slicer die Platte nicht („The
+    Wipe tower is only supported if all objects have the same variable layer
+    height“). Ein Körper allein behält seine Kurve, auch neben seinem Turm.
+    Die Orca-Familie baut den Turm nach :func:`tower_cause`; PrusaSlicer 2.9.6
+    prüft, sobald der Prozess ``wipe_tower`` einschaltet und die Maschine mehr
+    als ein Werkzeug hat — auch mit nur einer Spule (XL 2T, MK4S MMU3,
+    Review RM-586).
+    """
+    if objects < 2 or setup is None:
+        return False
+    if setup.flavour == "orca":
+        return tower_cause(setup, filaments=filaments, objects=objects) is not None
+    return setup.flavour == "prusa" and _prusa_tower(setup, profile)
+
+
+def _prusa_tower(setup: SlicerSetup, profile: Profile) -> bool:
+    """Schaltet PrusaSlicers Kette den Reinigungsturm ein, an einer Maschine
+    mit mehr als einem Werkzeug (``Print::has_wipe_tower``)? Ohne Prozess des
+    Bestands gilt PrusaSlicers Vorgabe ``wipe_tower = 0``; eine Kette, die sich
+    nicht lesen lässt, sagt hier nichts — das meldet die Grundlage."""
+    try:
+        chain = manufacturer.prusa_chain(profile, setup)
+    except ExternalToolError as problem:
+        _log.warning("cannot resolve the Prusa chain: %s", problem.title)
+        return False
+    if chain is None:
+        return False
+    values = chain.values
+    tools = [entry for entry in str(values.get("nozzle_diameter", "")).split(",") if entry.strip()]
+    return (
+        _switched_on(values.get("wipe_tower", "0"))
+        and not _switched_on(values.get("spiral_vase", "0"))
+        and len(tools) > 1
+    )
+
+
 #: Stile der Orca-Familie, unter denen ``tree(…)`` ein organischer Baum ist
 #: (``TreeSupport.cpp``: nur ``smsTreeOrganic`` geht in den organischen Generator;
 #: ``default`` heißt beim Baum organisch). ``tree_hybrid``, ``tree_slim`` und
@@ -3552,6 +3596,55 @@ _ORGANIC_ORCA_STYLES: Final = frozenset({"", "default", "organic"})
 #: Der Hybridstil der Orca-Familie: Bäume an den Details, normale Stütze unter
 #: großen flachen Decken (RM-584).
 _HYBRID_ORCA_STYLE: Final = "tree_hybrid"
+
+#: Der Stil, unter dem normale Stütze schon am Umriss anliegt. Jeden anderen
+#: druckt die Orca-Familie unter normaler Stütze als Gitter, auch einen Baumstil
+#: (``SupportParameters.hpp``: ``organic``, ``tree_…`` → ``smsDefault`` → ``smsGrid``).
+_SNUG_STYLE: Final = "snug"
+
+
+def snug_beside_blocker(
+    setup: SlicerSetup | None,
+    profile: Profile,
+    style: str,
+    flavour: SlicerFlavour,
+    program: str = "",
+) -> dict[str, str]:
+    """Normale Stütze neben einer Stützsperre liegt am Überhang an, nicht auf dem Raster.
+
+    Die Sperre der Orca-Familie und von PrusaSlicer nimmt nur die
+    Überhangfläche in ihr aus. Unter dem Gitterstil legen beide jede Säule auf
+    ein Raster und schneiden sie danach nur am Modell zu: Am Becher mit Deckel
+    und gesperrtem Tunnel (ElegooSlicer, Centauri Carbon 2) liefen die Säulen
+    unter dem Deckel 1,1 mm in beide Mündungen, 1,08 m Bahn von der Sohle bis
+    zur Decke, mit ``snug`` 0,01 m; der Deckel blieb ganz gestützt. Ein Teil mit
+    Sperre, das normale Stütze druckt, bekommt deshalb ``snug`` — dieselbe
+    Stütze, dicht am Umriss. Was die Sperre deckt, bleibt dann auch frei:
+    Deckt sie einen Überhang, der Stütze braucht, fällt die Gitterstütze weg,
+    die dort sonst über die Sperre hinaus mitstützte.
+
+    ``style`` ist die Art, mit der das Teil druckt. „Automatisch“ fragt den
+    Herstellerprozess wie der Rat (:func:`tree_styles`); ohne lesbaren Prozess
+    der Orca-Familie zählt es als Baum."""
+    program = program or (slicer_keys.program_of(setup.executable) if setup else "")
+    replaced = slicer_keys.substitute("support.style", style, program)
+    if replaced is not None:
+        style = str(replaced.value)
+    if style not in ("auto", "grid") or flavour not in ("orca", "prusa"):
+        return {}
+    if flavour == "orca":
+        native = _native_process(setup)
+        if style == "auto" and (not native or manufacturer.auto_prints_trees(native, "orca")):
+            return {}
+        native_style = str(_printed(native.get("support_style", ""))).strip().casefold()
+        return {} if native_style == _SNUG_STYLE else {"support_style": _SNUG_STYLE}
+    if style == "auto":
+        chosen = _prusa_auto_style(setup, profile, program)
+        if chosen == _SNUG_STYLE or manufacturer.auto_prints_trees(
+            {"support_material_style": chosen}, "prusa"
+        ):
+            return {}
+    return {"support_material_style": _SNUG_STYLE}
 
 
 def tree_over_hybrid(
@@ -3668,11 +3761,20 @@ def tree_styles(
         if not native or manufacturer.auto_prints_trees(native, "orca"):
             styles.add("auto")
     elif setup.flavour == "prusa":
-        style = _prusa_process_style(setup, profile) if profile is not None else ""
-        chosen = style or manufacturer.prusa_defaults(program).get("support_material_style", "")
+        chosen = _prusa_auto_style(setup, profile, program)
         if manufacturer.auto_prints_trees({"support_material_style": chosen}, "prusa"):
             styles.add("auto")
     return frozenset(styles)
+
+
+def _prusa_auto_style(setup: SlicerSetup | None, profile: Profile | None, program: str) -> str:
+    """Der Stil, mit dem PrusaSlicer „automatisch“ stützt: der des gewählten
+    Prozesses, ohne Kette die Vorgabe des Programms — für Rat und Übergabe."""
+    style = (
+        _prusa_process_style(setup, profile) if setup is not None and profile is not None else ""
+    )
+    chosen = style or str(manufacturer.prusa_defaults(program).get("support_material_style", ""))
+    return chosen.strip().casefold()
 
 
 def _prusa_process_style(setup: SlicerSetup, profile: Profile) -> str:

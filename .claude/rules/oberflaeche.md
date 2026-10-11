@@ -89,7 +89,12 @@ Stapelabzug, keine Adresse aus dem Code: `spoken_values` lässt `field` und
 Feld (`NewFilamentDialog.focus_field`). Titel und Detail in zwei Zeilen
 (`problem_text`), nie „Titel.: Detail“. Wer im Satz eine Handlung nennt,
 bietet genau sie an („Laden Sie den Stand neu“ → `RELOAD`), und jeder
-Vorschlag ist ausführbar.
+Vorschlag ist ausführbar. *Fehlerbericht erstellen* als Rückfall bekommt nur
+ein `InternalError` (`offered_actions`, RM-771); jede Handlung des Kerns hat im
+Fenster einen Handler oder einen Grund (`test_action_effects`). **Ein Abbruch
+ist kein Fehler:** Kein `except OperationCancelled` baut ein `AppError`
+(`test_errors`); wer selbst abbrach, bekommt eine Quittung, sonst Grund und
+Handlung (`Session.agentCancelled`).
 
 **Kein Wort, das nur ein Konstrukteur kennt, wo ein Neuling liest** — das Wort
 aus seinem Slicer: Richtung (nicht Normale), Außenseiten angleichen, geschlossen
@@ -249,6 +254,12 @@ Befunde stehen in höchstens drei Zeilen darunter (`review_difference`).
 selbst wenn der Dialog keinen zusätzlichen Handlungsknopf ausführen kann.
 Die nächste Vorschau räumt den alten Satz ab; das Vorschauband bleibt die
 Rückmeldung im Bild.
+
+**Ohne Pflichtwahl keine Vorschau:** Fehlt ein Bild, eine Datei
+(`OperationDialog.source_missing`) oder die Stelle eines Bausteins
+(`place_missing`), rechnet der Dialog nicht — die Auswertung hielte sicher an
+und das Band nennte eine Absage, bevor jemand gewählt hat —, und *Übernehmen*
+nennt den Knopf oder „Stelle im Bild anklicken.“ (RM-773, RM-775).
 
 Eine fehlgeschlagene oder unvollständige Rechnung sperrt auch ohne Bildpflicht
 das Übernehmen und verwirft einen bereits wartenden Klick. Neue Werte brauchen

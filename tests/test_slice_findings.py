@@ -9,11 +9,14 @@ Modell endet und als „erreicht das Bett" gemeldet wurde.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import replace
 from typing import Final
 
+import numpy as np
 import pytest
 import trimesh
+from shapely import affinity
 from shapely.geometry import Point, box
 from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry.base import BaseGeometry
@@ -30,6 +33,7 @@ from app.core.slice.analysis import (
     TIP_ROOF_AREA,
     WIDTH_INTERESTING,
     channel_space,
+    hanging_vaults,
     largest_sloped_patch,
     ledge_space,
     ledges,
@@ -42,9 +46,11 @@ from app.core.slice.analysis import (
     spanning_width,
     support_on_model,
     tip_islands,
+    vaults,
     worth_support,
 )
 from app.core.types import PrintSettings, Profile, SettingAdvice, SliceResult
+from app.core.units import EPS_GEOM
 from tests.helpers import brick, chin, chin_over_chest, column_table, on_bed
 
 #: Die Bahnbreite der Vorgabe: Zuschlag und Mindestbreite des Kanalraums.
@@ -1238,7 +1244,11 @@ def cup_lid(opening: trimesh.Trimesh) -> trimesh.Trimesh:
 
 def ledge_share_blocked(body: MeshData) -> float:
     """Welcher Anteil des Simses unter ihm im Sperrraum liegt."""
-    result = slice_body(body, 0.5)
+    return ledge_share_of(slice_body(body, 0.5))
+
+
+def ledge_share_of(result: SliceResult) -> float:
+    """:func:`ledge_share_blocked` an einem schon geschnittenen Becher."""
     model = model_support(result)
     under = [region for low, _high, region in channel_space(result, model, LINE) if low < 15.0]
     assert model.channel_columns and len(under) > 5, "die Sperre reicht bis unter den Sims"
@@ -1324,6 +1334,433 @@ def test_a_lid_open_wider_than_a_channel_opens_the_cup(opening: float) -> None:
     lid = cup_lid(brick(opening, 80.0, 5.0, (-opening / 2.0, 0.0, 61.5)))
 
     assert ledge_share_blocked(cup_with_a_ledge(lid)) < 0.05
+
+
+def shaft_lid(
+    path: list[tuple[float, float]],
+    diameters: list[float],
+    *,
+    radius: float = 40.0,
+    keep: trimesh.Trimesh | None = None,
+) -> trimesh.Trimesh:
+    """Ein Deckel auf dem Becher aus :func:`cup_with_a_ledge`, von seinem Rand in
+    z = 60 bis zum letzten Punkt von ``path`` hoch, durchbohrt von einem runden
+    Schacht entlang ``path`` (Punkte x, z in der Ebene y = 0), je Strecke mit
+    ihrem Durchmesser, an den Knicken mit einer Kugel gerundet. Unten und oben
+    reicht er um seinen Durchmesser über den Deckel hinaus — bis 63° weit genug,
+    dass sein Ende den Deckel nicht anschneidet; mit 10 mm ließ es ab 40° oben
+    vorn eine Lippe stehen. ``keep`` bleibt im Schacht stehen."""
+    top = path[-1][1]
+    lid = trimesh.creation.cylinder(radius=radius, height=top - 60.0, sections=96)
+    lid.apply_translation((0.0, 0.0, (60.0 + top) / 2.0))
+    points = [np.array([x, 0.0, z]) for x, z in path]
+    cuts = []
+    for number, (start, end, diameter) in enumerate(
+        zip(points[:-1], points[1:], diameters, strict=True)
+    ):
+        axis = (end - start) / np.linalg.norm(end - start)
+        low = start - diameter * axis if number == 0 else start
+        high = end + diameter * axis if number == len(diameters) - 1 else end
+        cuts.append(
+            trimesh.creation.cylinder(radius=diameter / 2.0, sections=128, segment=[low, high])
+        )
+        if number:
+            joint = trimesh.creation.icosphere(subdivisions=3, radius=diameters[number - 1] / 2.0)
+            joint.apply_translation(start)
+            cuts.append(joint)
+    shaft = trimesh.boolean.union(cuts)
+    if keep is not None:
+        shaft = trimesh.boolean.difference([shaft, keep])
+    return trimesh.boolean.difference([lid, shaft])
+
+
+def tilted_shaft(
+    tilt: float,
+    diameter: float = 34.0,
+    keep: trimesh.Trimesh | None = None,
+    height: float = 20.0,
+    radius: float = 40.0,
+) -> trimesh.Trimesh:
+    """Ein Deckel von ``height`` mm und ``radius`` mm mit einem Loch, um ``tilt``
+    Grad geneigt — positiv nach oben zum Sims hin. Unten reicht es 2 mm über die
+    Kante des Simses; senkrecht schaut man nur ``d / cos θ - H · tan θ`` weit
+    hindurch."""
+    theta = math.radians(tilt)
+    start = 2.0 - diameter / 2.0 / math.cos(theta)
+    path = [(start, 60.0), (start + height * math.tan(theta), 60.0 + height)]
+    return shaft_lid(path, [diameter], keep=keep, radius=radius)
+
+
+@pytest.mark.parametrize(
+    ("tilt", "angle", "open_"),
+    [(44.0, None, True), (50.0, None, False), (44.0, 40.0, False), (50.0, 55.0, True)],
+)
+def test_a_shaft_steeper_than_the_support_angle_keeps_the_cup_closed(
+    tilt: float, angle: float | None, open_: bool
+) -> None:
+    """Ein Kreis weicht je Schicht höchstens so steil aus, wie der Drucker ohne
+    Stütze überhängt — mit dem Stützwinkel, mit dem geschnitten wurde, nicht
+    mit der Startregel (Review RM-629, Funde 2 und 4). Ein Deckel von 60 mm
+    mit einem Loch Ø 34 mm: senkrecht schaut man nirgends hindurch. Bei 45°
+    ist es um 44° offen und um 50° zu; ein Drucker, der nur 40° ohne Stütze
+    schafft, sperrt schon 44°, einer mit 55° öffnet 50°. Offen liegen 4 bis
+    5 % des Simses im Sperrraum (mit 55° etwas mehr Saum), zu über 60 %."""
+    body = cup_with_a_ledge(tilted_shaft(tilt, height=60.0, radius=75.0))
+    result = slice_body(body, 0.5, overhang_angle=angle)
+
+    share = ledge_share_of(result)
+    assert share < 0.1 if open_ else share > 0.5
+
+
+@pytest.mark.parametrize("tilt", [20.0, 30.0, 40.0, -30.0])
+def test_a_tilted_shaft_as_wide_as_a_channel_opens_the_cup(tilt: float) -> None:
+    """Ein schräger Schacht zählt mit seiner Weite quer zur Achse, nicht mit
+    seiner senkrechten Durchsicht: Schicht für Schicht schiebt sich der Kreis
+    von ``CHANNEL_WIDTH`` durch ihn hindurch. Ein Loch Ø 34 mm in einem Deckel
+    von 20 mm sieht bei 20° senkrecht 28,9 mm, bei 30° 27,7 mm; nach der
+    senkrechten Schnittmenge gefragt, lag der Sims darunter zu 64 % im Sperrraum
+    und druckte ohne Stütze (Nachprüfung RM-571, RM-629). Bei 40° hat die
+    Ellipse des schrägen Wegs (:func:`_oval_centres`) noch Platz."""
+    assert ledge_share_blocked(cup_with_a_ledge(tilted_shaft(tilt))) < 0.05
+
+
+def test_a_shaft_bent_upright_stays_open() -> None:
+    """Ein Loch Ø 34 mm, erst 20 mm um 40° geneigt, dann gerundet 20 mm
+    senkrecht. Über dem Knick schiebt die Wand die Kreise noch einige
+    Millimeter schräg zur Achse; nach diesem Schub allein geschätzt, passte die
+    Ellipse eines 40°-Wegs nicht in den senkrechten Teil, und der Schacht blieb
+    zu. Das Wandern der Mitte des Lochs zeigt die Achse (``SHAFT_SLOPE_TURN``)."""
+    theta = math.radians(40.0)
+    start = 2.0 - 17.0 / math.cos(theta)
+    bend = start + 20.0 * math.tan(theta)
+    lid = shaft_lid([(start, 60.0), (bend, 80.0), (bend, 100.0)], [34.0, 34.0])
+
+    assert ledge_share_blocked(cup_with_a_ledge(lid)) < 0.05
+
+
+def tilted_slit(tilt: float, width: float) -> trimesh.Trimesh:
+    """Ein Deckel von 20 mm mit einem Schlitz, quer zu seiner Achse ``width``
+    weit und 60 mm lang, um ``tilt`` Grad zum Sims hin geneigt. Unten reicht er
+    2 mm über die Kante des Simses."""
+    theta = math.radians(tilt)
+    start = 2.0 - width / math.cos(theta) / 2.0
+    end = start + 20.0 * math.tan(theta)
+    slab = trimesh.creation.box(extents=(width, 60.0, 60.0))
+    slab.apply_transform(trimesh.transformations.rotation_matrix(theta, (0.0, 1.0, 0.0)))
+    slab.apply_translation(((start + end) / 2.0, 0.0, 70.0))
+    lid = trimesh.creation.cylinder(radius=max(40.0, abs(end) + 25.0), height=20.0, sections=96)
+    lid.apply_translation((0.0, 0.0, 70.0))
+    return trimesh.boolean.difference([lid, slab])
+
+
+@pytest.mark.parametrize(
+    ("tilt", "width", "open_"),
+    [(45.0, 22.0, False), (40.0, 24.0, False), (30.0, 27.0, False), (45.0, 31.0, True)],
+)
+def test_a_tilted_slit_counts_with_its_width_across_the_axis(
+    tilt: float, width: float, open_: bool
+) -> None:
+    """Ein schräger Schlitz ist quer zu seiner Achse ``width`` weit,
+    waagerecht geschnitten aber ``width / cos θ`` — bei 45° und 22 mm 31,1 mm.
+    Nach dem waagerechten Schnitt gefragt, zählte er als Kanal, obwohl keine
+    Stütze durch ihn herauskommt (Review RM-629, Fund 6). Ein geschobener Kreis
+    braucht Platz für die Ellipse seines schrägen Wegs; ab 30 mm quer zur
+    Achse hat er ihn."""
+    share = ledge_share_blocked(cup_with_a_ledge(tilted_slit(tilt, width)))
+
+    assert share < 0.05 if open_ else share > 0.5
+
+
+def test_a_tilted_shaft_narrower_than_a_channel_keeps_the_cup_closed() -> None:
+    """Die Gegenprobe zum schrägen Schacht: Ø 28 mm ist quer zur Achse enger als
+    ein Kanal, und daran ändert die Neigung nichts."""
+    assert ledge_share_blocked(cup_with_a_ledge(tilted_shaft(20.0, 28.0))) > 0.5
+
+
+def zigzag_shaft(second: float) -> trimesh.Trimesh:
+    """Ein Deckel von 110 mm mit einem Schacht im Zickzack: Ø 34 mm um 40° zum
+    Sims hin geneigt, nach 55 mm Höhe um 40° zurück, die zweite Strecke mit
+    ``second`` mm. Unten reicht er 2 mm über die Kante des Simses. Die Strecke
+    versetzt ihn weiter, als er waagerecht weit ist — senkrecht schaut man
+    nirgends hindurch."""
+    theta = math.radians(40.0)
+    width = 34.0 / math.cos(theta)
+    start = 2.0 - width / 2.0
+    shift = 55.0 * math.tan(theta)
+    assert shift > width, "senkrecht nirgends durchschaubar"
+    path = [(start, 60.0), (start + shift, 115.0), (start, 170.0)]
+    return shaft_lid(path, [34.0, second], radius=52.0)
+
+
+@pytest.mark.parametrize(("second", "open_"), [(34.0, True), (28.0, False)])
+def test_a_zigzag_shaft_counts_as_open_where_a_channel_passes(second: float, open_: bool) -> None:
+    """Der Kreis folgt dem Schacht auch durch einen Knick, solange keine Wand
+    flacher ist als die Überhanggrenze. Ein Zickzack, durch den man senkrecht
+    nirgends hindurchschaut, ist offen, wenn er überall so weit ist wie ein
+    Kanal; wird er irgendwo enger, bleibt der Sims gesperrt."""
+    share = ledge_share_blocked(cup_with_a_ledge(zigzag_shaft(second)))
+
+    assert share < 0.05 if open_ else share > 0.5
+
+
+@pytest.mark.parametrize(("width", "open_"), [(29.5, False), (31.0, True)])
+def test_a_shaft_narrower_than_a_channel_in_a_single_layer_stays_closed(
+    width: float, open_: bool
+) -> None:
+    """Gefragt wird jede Schicht: Eine Platte von 0,4 mm im schrägen Schacht
+    (Ø 34 mm, 20°), die ihn quer zur Neigung auf ``width`` verengt, liegt beim
+    Schnitt mit 0,5 mm in genau einer Schicht. Enger als ein Kanal, schließt
+    sie den Schacht; weiter, bleibt er offen."""
+    plate = brick(100.0, 100.0, 0.4, (0.0, 0.0, 70.2))
+    keep = trimesh.boolean.difference([plate, brick(100.0, width, 1.0, (0.0, 0.0, 70.2))])
+    result = slice_body(cup_with_a_ledge(tilted_shaft(20.0, keep=keep)), 0.5)
+
+    assert sum(70.0 <= layer.z <= 70.4 for layer in result.layers) == 1
+    share = ledge_share_of(result)
+    assert share < 0.05 if open_ else share > 0.5
+
+
+@pytest.mark.parametrize(("narrowest", "open_"), [(None, True), (29.9, False), (30.1, True)])
+def test_a_shaft_is_open_where_every_layer_holds_a_channel_circle(
+    narrowest: float | None, open_: bool
+) -> None:
+    """Die Grenze des Schachts liegt bei ``CHANNEL_WIDTH`` wie die der Enge
+    (:func:`_narrow`), auch in einer einzigen Schicht. Synthetisch: eine Platte
+    von 20 mm, darin ein Loch Ø 34 mm, das je Millimeter Höhe um tan 20° zur
+    Seite wandert — senkrecht schaut man nur 26,7 mm hindurch. In der Schicht
+    z = 20,25 ist es quer zur Neigung auf ``narrowest`` verengt. Die Toleranz
+    von 0,1 mm deckt die Vereinfachungen (``WIDTH_SIMPLIFY`` und die Lücke des
+    Kreisvielecks, je unter 0,02 mm); die Grenze selbst liegt zwischen 30,01 und
+    30,03 mm, gerade wie schräg."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    heights = [0.25 + 0.5 * index for index in range(80)]
+    slope = math.tan(math.radians(20.0))
+    plate = box(-80.0, -80.0, 80.0, 80.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if not 10.0 <= z <= 30.0:
+            return ShapelyPolygon()
+        hole = Point(slope * (z - 10.0), 0.0).buffer(17.0, quad_segs=64)
+        if narrowest is not None and math.isclose(z, 20.25):
+            hole = hole.intersection(box(-80.0, -narrowest / 2.0, 80.0, narrowest / 2.0))
+        return plate.difference(hole)
+
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    sky = _sky_above(_sky_window(column, LINE), [4], shade_at, len(heights))[4]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
+
+
+@pytest.mark.parametrize(("width", "open_"), [(22.0, False), (28.0, False), (31.0, True)])
+def test_each_branch_of_a_forked_shaft_counts_with_its_width_across_the_axis(
+    width: float, open_: bool
+) -> None:
+    """Ein Schacht, der sich in zwei Äste teilt, gegenläufig um 45° geneigt,
+    quer zur Achse je ``width`` weit. Lagen die Mitten eines Wegs in beiden
+    Ästen, wanderte ihr gemeinsamer Schwerpunkt nicht, die Ellipse wurde nie
+    gerechnet, und jeder Ast zählte mit seiner waagerechten Weite: 22 und
+    28 mm waren offen (Nachprüfung RM-629, Fund A). Synthetisch: eine Platte
+    von z = 10 bis 30, die Äste wandern je Millimeter Höhe um 1 mm nach außen."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    heights = [0.25 + 0.5 * index for index in range(84)]
+    across = width / math.cos(math.radians(45.0))
+    plate = box(-150.0, -150.0, 150.0, 150.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if not 10.0 <= z <= 30.0:
+            return ShapelyPolygon()
+        shift = z - 10.0
+        right = box(shift, -30.0, shift + across, 30.0)
+        left = box(-shift - across, -30.0, -shift, 30.0)
+        return plate.difference(right.union(left))
+
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    sky = _sky_above(_sky_window(column, LINE), [4], shade_at, len(heights))[4]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
+
+
+@pytest.mark.parametrize(
+    ("width", "layer", "open_"), [(29.0, 0.5, False), (29.0, 0.2, False), (31.0, 0.5, True)]
+)
+def test_a_slit_tilted_aslant_to_its_narrow_side_counts_with_its_width_across_the_axis(
+    width: float, layer: float, open_: bool
+) -> None:
+    """Ein Schlitz mit runden Enden, quer zur Achse ``width`` weit und 60 mm
+    lang, um 45° in x geneigt; seine schmale Seite liegt 45° gegen die
+    Neigungsrichtung. Die Wand schiebt dann flacher, als die Mitte wandert;
+    kam die Neigung aus dem Schub und die Richtung aus der Mitte, war die
+    Ellipse quer zur Wand zu schmal, und 29 mm waren offen (Nachprüfung
+    RM-629, Fund B). Synthetisch: eine Platte von z = 10 bis 30."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    tilt, turn = math.radians(45.0), math.radians(45.0)
+    # Schmale Achse u, lange Achse v, Achse a — erst um ``turn`` gedreht,
+    # dann um die y-Achse geneigt.
+    narrow = np.array([math.cos(turn), math.sin(turn), 0.0])
+    long_ = np.array([-math.sin(turn), math.cos(turn), 0.0])
+    lean = np.array(
+        [
+            [math.cos(tilt), 0.0, math.sin(tilt)],
+            [0.0, 1.0, 0.0],
+            [-math.sin(tilt), 0.0, math.cos(tilt)],
+        ]
+    )
+    narrow, long_, axis = lean @ narrow, lean @ long_, lean @ np.array([0.0, 0.0, 1.0])
+    half, straight = width / 2.0, 30.0 - width / 2.0
+    ends = [
+        (half * math.cos(t), (straight if t < math.pi else -straight) + half * math.sin(t))
+        for t in (math.pi * k / 64 for k in range(129))
+    ]
+    profile = np.array(ends)
+    heights = [layer / 2.0 + layer * index for index in range(math.ceil(42.0 / layer))]
+    start = next(index for index, z in enumerate(heights) if z > 2.0)
+    plate = box(-150.0, -150.0, 150.0, 150.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if not 10.0 <= z <= 30.0:
+            return ShapelyPolygon()
+        centre = np.array([0.0, 0.0, 10.0]) + (z - 10.0) / axis[2] * axis
+        points = centre + profile[:, :1] * narrow + profile[:, 1:] * long_
+        flat = points + ((z - points[:, 2]) / axis[2])[:, None] * axis
+        return plate.difference(ShapelyPolygon(flat[:, :2]))
+
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    sky = _sky_above(_sky_window(column, LINE), [start], shade_at, len(heights))[start]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    found = _shafts_pass(column, {start: ShapelyPolygon()}, shade_at, heights, LINE)
+    assert found == {start: open_}
+
+
+@pytest.mark.parametrize(
+    ("lean", "gap", "open_"),
+    [(0.0, 2.0, False), (0.57, 2.0, False), (2.9, 2.0, False), (0.0, 0.3, True), (2.9, 0.3, True)],
+)
+def test_a_leaning_wall_moves_a_circle_only_as_far_as_it_pushes(
+    lean: float, gap: float, open_: bool
+) -> None:
+    """Ein Kreis weicht nur so weit aus, wie die Wand ihn schiebt. Synthetisch:
+    eine Kammer von z = 2 bis 30, darüber ein Dach von 3 mm mit einer weiten
+    Öffnung, deren freie Mitten ``gap`` mm neben den Kreisen der Säule liegen;
+    die Wand bei -y hängt um ``lean`` Grad über und schiebt die Kreise in +y,
+    die Öffnung liegt in +x. Weitete sich jeder getroffene Kreis um den vollen
+    Schritt, wanderten die Enden des Streifens an der Wand entlang: Mit 0,57°
+    (0,005 mm je Schicht) lag die Öffnung 2 mm daneben offen, mit 2,9° 10 mm
+    (Review RM-629). 0,3 mm daneben öffnet schon der senkrechte Himmel die
+    Kammer nicht, wohl aber ein Schritt an der Dachkante."""
+    from app.core.slice.analysis import _open_above, _shafts_pass, _sky_above, _sky_window
+
+    heights = [0.25 + 0.5 * index for index in range(90)]
+    slope = math.tan(math.radians(lean))
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    # Die Mitten der Startkreise reichen bis x = 2 + Saum von zwei Bahnen, um
+    # eine halbe Bahn eingerückt, und um den Radius weniger eine halbe Bahn
+    # zurück (``_touching_centres``); die Öffnung beginnt einen Radius davor.
+    reach = 2.0 + LINE + 15.0
+    edge = reach + gap - 15.0
+    outer = box(-120.0, -120.0, 120.0, 120.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if z < 2.0:
+            return ShapelyPolygon()
+        if z < 30.0:
+            return outer.difference(box(-25.0, -25.0 + slope * (z - 2.0), 90.0, 25.0))
+        if z < 33.0:
+            return outer.difference(box(edge, -30.0, edge + 40.0, 30.0))
+        return ShapelyPolygon()
+
+    sky = _sky_above(_sky_window(column, LINE), [4], shade_at, len(heights))[4]
+
+    assert not _open_above(column, ShapelyPolygon(), sky, LINE), "senkrecht kein Schacht"
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
+
+
+def stepped_shaft(offset: float) -> trimesh.Trimesh:
+    """Ein Deckel von 30 mm auf dem Becher, durchbohrt von zwei senkrechten
+    Löchern Ø 34 mm übereinander: das untere bis z = 75, 2 mm über die Kante
+    des Simses, das obere darüber um ``offset`` zum Sims hin versetzt. An der
+    Stufe überlappen sie nur ``34 - offset`` weit."""
+    lid = trimesh.creation.cylinder(radius=40.0, height=30.0, sections=96)
+    lid.apply_translation((0.0, 0.0, 75.0))
+    lower = trimesh.creation.cylinder(radius=17.0, height=25.0, sections=128)
+    lower.apply_translation((-15.0, 0.0, 62.5))
+    upper = trimesh.creation.cylinder(radius=17.0, height=25.0, sections=128)
+    upper.apply_translation((offset - 15.0, 0.0, 87.5))
+    return trimesh.boolean.difference([lid, trimesh.boolean.union([lower, upper])])
+
+
+def test_a_step_narrower_than_a_channel_keeps_the_shaft_closed() -> None:
+    """Ein Kreis weicht je Schicht nur so weit aus, wie eine Wand ohne Stütze
+    überhängt (``SHAFT_DRIFT``). Zwei Löcher Ø 34 mm, um 6 mm versetzt,
+    überlappen an ihrer Stufe 28 mm — da passt kein Kreis von 30 mm durch,
+    auch nicht in Schritten: Der Kreis müsste an der Stufe 2 mm auf einmal
+    springen. Am Becher sperrt schon die Decke des Simses (auch bei 3 mm
+    Versatz, Review RM-629); die Stufe selbst misst
+    :func:`test_a_step_is_open_where_a_channel_circle_passes`."""
+    assert ledge_share_blocked(cup_with_a_ledge(stepped_shaft(6.0))) > 0.5
+
+
+def test_two_slabs_on_different_ways_keep_their_own_answers() -> None:
+    """Zwei Scheiben einer Säule gehen nur dann einen gemeinsamen Weg, wenn ihre
+    Kreise dieselben sind (:func:`_same_centres`). Synthetisch: Die untere
+    Scheibe beginnt bei z = 1,25; ein Block bis y = 0 von z = 3 bis 5 nimmt
+    ihr die Kreise auf der Seite -y. Die obere beginnt bei z = 5,25 darüber
+    mit allen Kreisen. Der Deckel von z = 20 bis 23 ist nur auf der Seite -y
+    offen: Die obere kommt hinaus, die untere nicht (Review RM-629, Fund 4)."""
+    from app.core.slice.analysis import _shafts_pass
+
+    heights = [0.25 + 0.5 * index for index in range(60)]
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    outer = box(-120.0, -120.0, 120.0, 120.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if 3.0 <= z < 5.0:
+            return box(-60.0, -60.0, 60.0, 0.0)
+        if 20.0 <= z < 23.0:
+            return outer.difference(box(-60.0, -60.0, 60.0, 3.0))
+        return ShapelyPolygon()
+
+    lower, upper = 2, 10
+    materials = {lower: ShapelyPolygon(), upper: ShapelyPolygon()}
+
+    assert _shafts_pass(column, materials, shade_at, heights, LINE) == {
+        lower: False,
+        upper: True,
+    }
+
+
+@pytest.mark.parametrize(("offset", "open_"), [(3.0, True), (6.0, False)])
+def test_a_step_is_open_where_a_channel_circle_passes(offset: float, open_: bool) -> None:
+    """Die Stufe selbst, ohne den Sims des Bechers: zwei senkrechte Löcher Ø 34 mm
+    übereinander, das obere um ``offset`` versetzt. Bei 3 mm passt ein Kreis
+    von ``CHANNEL_WIDTH`` senkrecht durch beide (die Mitten überlappen), bei 6 mm
+    müsste er 2 mm auf einmal ausweichen, mehr als einen Schritt (Review RM-629,
+    Fund 4: am Becher sperrte schon die Decke des Simses)."""
+    from app.core.slice.analysis import _shafts_pass
+
+    heights = [0.25 + 0.5 * index for index in range(90)]
+    column = box(-2.0, -2.0, 2.0, 2.0)
+    plate = box(-80.0, -80.0, 80.0, 80.0)
+
+    def shade_at(index: int) -> BaseGeometry:
+        z = heights[index]
+        if 10.0 <= z < 25.0:
+            return plate.difference(Point(0.0, 0.0).buffer(17.0, quad_segs=64))
+        if 25.0 <= z < 40.0:
+            return plate.difference(Point(offset, 0.0).buffer(17.0, quad_segs=64))
+        return ShapelyPolygon()
+
+    assert _shafts_pass(column, {4: ShapelyPolygon()}, shade_at, heights, LINE) == {4: open_}
 
 
 def test_open_sky_is_asked_two_line_widths_around_a_column_even_at_a_tip() -> None:
@@ -2608,6 +3045,108 @@ def test_tips_need_many_islands_trees_and_a_measured_material(case: str) -> None
         )
 
 
+@pytest.mark.parametrize(
+    ("flavour", "plate", "gap", "walls"),
+    [
+        # Cura druckt jede Art außer Baum als ``normal``: Unter Gitter gilt der
+        # Abstand des Materials genau, ohne Spitzenluft und ohne Baumwände.
+        ("cura", "grid", None, []),
+        ("cura", "auto", None, []),
+        # Gegenproben: Baum auf der Platte, die Platte unbekannt, und die
+        # Orca-Familie, in der die Art je Teil geht.
+        ("cura", "tree", 0.4, [2]),
+        ("cura", None, 0.4, [2]),
+        ("orca", "grid", 0.4, [2]),
+    ],
+)
+def test_under_curas_plate_grid_a_tree_asks_no_tip_air_and_no_walls(
+    flavour: str, plate: str | None, gap: float | None, walls: list[int]
+) -> None:
+    """Bei Cura gilt die Stützart der Platte jedem gestützten Teil (Nachtrag
+    RM-584): Neben der flachen Decke des Pilzes wird der Baum des Drachen zu
+    Gitter, und er fragte Abstand und Baumwände trotzdem mit seinem Baum —
+    „Abstand oben 0,4: Feine Spitzen brauchen mehr Luft über den Baumstützen“,
+    und Cura druckte 0,4 über Gitter. Gefragt wird mit der Art der Platte."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    organic = frozenset() if flavour == "cura" else frozenset({"tree"})
+    trees = frozenset({"tree"}) if flavour == "cura" else None
+    settings = print_settings.resolve(profile)
+    for path, value in (
+        ("layers.layer_height", 0.2),
+        ("support.style", "tree"),
+        ("support.z_gap", 0.2),
+    ):
+        settings = print_settings.with_path(settings, path, value)
+
+    def asked(body: MeshData, path: str) -> list[object]:
+        entries = advise.advise(
+            settings,
+            profile,
+            slice_body(body, 0.2),
+            flavour=flavour,  # type: ignore[arg-type]
+            organic=organic,
+            declined=_KEEP_STYLE,
+            trees=trees,
+            plate_style=plate,
+        )
+        return [entry.value for entry in entries if entry.path == path]
+
+    tips = asked(bearded_table(advise.TIP_ISLANDS), "support.z_gap")
+    assert tips == ([] if gap is None else [pytest.approx(gap)])
+    assert asked(_tower_with_island(120.0), "support.tree_walls") == walls
+
+
+def test_on_the_plate_is_the_style_cura_prints() -> None:
+    """Dieselbe Übersetzung wie die Datei (``writer._values_for``): ``tree`` als
+    Baum, jede andere Art als Gitter, „aus“ bleibt aus; anderswo und ohne
+    bekannte Platte die eigene Art."""
+    assert advise.on_the_plate("tree", "grid", "cura") == "grid"
+    assert advise.on_the_plate("tree", "hybrid", "cura") == "grid"
+    assert advise.on_the_plate("grid", "tree", "cura") == "tree"
+    assert advise.on_the_plate("tree", "none", "cura") == "grid"
+    assert advise.on_the_plate("none", "tree", "cura") == "none"
+    assert advise.on_the_plate("tree", None, "cura") == "tree"
+    assert advise.on_the_plate("tree", "grid", "orca") == "tree"
+    assert advise.on_the_plate("tree", "grid", None) == "tree"
+
+
+def test_the_contact_follows_curas_plate_even_where_the_style_is_declined() -> None:
+    """Unter einer gestützten Cura-Platte druckt jedes Netz, das Stützen will, deren
+    Art, auch wenn der Kunde die Zeile zur Art ablehnt (Review des Nachtrags
+    RM-584); ohne Stützen auf der Platte und außerhalb von Cura gilt
+    ``on_the_plate``."""
+    assert advise.contact_style("none", "tree", "tree", "cura") == "tree"
+    assert advise.contact_style("none", "grid", "tree", "cura") == "tree"
+    assert advise.contact_style("none", "tree", "auto", "cura") == "grid"
+    assert advise.contact_style("none", "none", "tree", "cura") == "none", "will keine Stützen"
+    assert advise.contact_style("none", "tree", "none", "cura") == "none", "Platte ohne Stützen"
+    assert advise.contact_style("tree", "tree", "none", "cura") == "grid"
+    assert advise.contact_style("none", "tree", None, "cura") == "none"
+    assert advise.contact_style("none", "tree", "tree", "orca") == "none"
+
+
+def test_on_the_plate_names_the_trees_the_file_and_the_program_name() -> None:
+    """Curas Baum steht an drei Stellen: in ``on_the_plate``, in der Auskunft
+    ``handover.tree_styles`` (die ``_cura_prints_alike`` fragt) und in der
+    Übersetzung der Datei (``support_structure``). Für jede Stützart des Felds
+    sagen alle drei dasselbe (Review des Nachtrags RM-584, L2)."""
+    from app.core.export import handover
+    from app.core.knowledge import print_fields
+
+    field = print_fields.field_of("support.style")
+    assert field is not None
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    trees = handover.tree_styles(None, profile, "", flavour="cura")
+    assert trees is not None
+    for style in field.choices:
+        if style == "none":
+            continue
+        settings = print_settings.with_path(print_settings.resolve(profile), "support.style", style)
+        written = handover.values_for(settings, profile, "cura")["support_structure"]
+        printed = advise.on_the_plate("grid", style, "cura")
+        assert (printed == "tree") == (style in trees) == (written == "tree"), style
+
+
 def test_the_roof_tip_is_the_smallest_with_a_roof() -> None:
     """Die Spitze, ab der die Orca-Familie jede Spitze mit Trennschicht deckt
     (RM-704): Ihr Querschnitt liegt über ``minimum_roof_area`` (1 mm²), eine
@@ -2965,16 +3504,31 @@ def test_each_part_gets_the_contact_of_its_own_material() -> None:
     body = column_table()
     result = slice_body(body, 0.2)
 
-    def gap(material: str) -> object:
+    def gap(material: str, accepted: dict[str, object] | None) -> object:
         entry = SceneObject(id=material, name=material, mesh=body, material=material)
         advice = writer.part_advice(
-            entry, body, settings, profile, None, {}, result=result, fit_kinds=(), flavour="orca"
+            entry,
+            body,
+            settings,
+            profile,
+            None,
+            {},
+            result=result,
+            fit_kinds=(),
+            flavour="orca",
+            accepted=accepted,
         )
         return {item.path: item.value for item in advice}.get("support.z_gap")
 
+    # Der Kunde hat die Stützen übernommen; ohne sie druckt die Platte keine,
+    # und der Abstand änderte nichts (Durchsicht der Fixe zum Nachtrag RM-584).
+    supported: dict[str, object] = {"support.style": "grid"}
     assert settings.support.z_gap == pytest.approx(0.2)
-    assert gap("pla") is None, "PLA löst sich bei 0,2 mm schon sauber"
-    assert gap("petg") == pytest.approx(0.28), "PETG haftet stärker und braucht mehr Luft"
+    assert gap("pla", supported) is None, "PLA löst sich bei 0,2 mm schon sauber"
+    assert gap("petg", supported) == pytest.approx(0.28), (
+        "PETG haftet stärker und braucht mehr Luft"
+    )
+    assert gap("petg", None) is None, "ohne Stützen kein Abstand"
 
 
 def test_a_cantilever_in_a_narrow_pocket_is_no_channel() -> None:
@@ -4212,14 +4766,15 @@ class _StopAfter:
 def test_the_report_stops_on_the_way_down_to_the_channel_floor(after: int) -> None:
     """Nachprüfung zu RM-627 (L2): Der Bericht bricht in der Kanalfrage ab,
     schon im Abstieg der Säulen bis zum Tunnelboden, nicht erst in der
-    Kreisfrage danach — am Drachen kostet der Abstieg bis 18 s. Die Randfrage
-    ist gemerkt und fragt nicht; abgebrochen wird weder die Kanalfrage noch
-    eine Brückenweite gemerkt."""
+    Kreisfrage danach — am Drachen kostet der Abstieg bis 18 s. Rand- und
+    Bogenfrage (RM-585) sind gemerkt und fragen nicht; abgebrochen wird weder
+    die Kanalfrage noch eine Brückenweite gemerkt."""
     from app.core.errors import OperationCancelled
     from app.core.slice import analysis
 
     result = slice_body(_tunnel_beside(None), 0.2)
     ledges(result)
+    hanging_vaults(result)
     token = _StopAfter(after)
 
     with pytest.raises(OperationCancelled):
@@ -4289,6 +4844,680 @@ def test_the_ledge_blocker_covers_the_ledge_and_spares_the_arm() -> None:
         print_settings.resolve(petg()), petg(), slice_body(column_with_flange_and_arm(0.0), 0.2)
     )
     assert "support.spare_ledges" not in {entry.path for entry in lone}, "ohne Stützen nichts"
+
+
+def _areas(shape: BaseGeometry) -> list[ShapelyPolygon]:
+    """Die Flächen einer Form, ob eine oder mehrere."""
+    return list(getattr(shape, "geoms", [shape]))
+
+
+def cutter(opening: BaseGeometry, depth: float) -> trimesh.Trimesh:
+    """Die Öffnung (in der Ansicht von vorn: x quer, y die Höhe) als Körper, der
+    ``depth`` mm von vorn nach hinten durchgeht."""
+    parts = [trimesh.creation.extrude_polygon(part, depth + 10.0) for part in _areas(opening)]
+    cut = parts[0] if len(parts) == 1 else trimesh.boolean.union(parts)
+    cut.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1, 0, 0)))
+    cut.apply_translation((0.0, (depth + 10.0) / 2.0, 0.0))
+    return cut
+
+
+def gate(
+    opening: BaseGeometry, depth: float = 8.0, width: float = 60.0, height: float = 40.0
+) -> MeshData:
+    """Eine Wand ``width`` mm breit, ``depth`` mm tief und ``height`` mm hoch, durch
+    die ``opening`` von vorn nach hinten durchgeht."""
+    wall = brick(width, depth, height, (0.0, 0.0, height / 2.0))
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([wall, cutter(opening, depth)])))
+
+
+def segment(span: float, rise: float, legs: float = 15.0) -> BaseGeometry:
+    """Ein Flachbogen: Kreissegment mit Sehne ``span`` und Stich ``rise`` auf Beinen."""
+    half = span / 2.0
+    radius = (half * half + rise * rise) / (2.0 * rise)
+    disc = Point(0.0, legs + rise - radius).buffer(radius, 512)
+    return unary_union(
+        [
+            disc.intersection(box(-half, legs - 0.5, half, legs + rise + 1.0)),
+            box(-half, -10.0, half, legs),
+        ]
+    )
+
+
+def ramp(span: float, rise: float, legs: float = 15.0) -> BaseGeometry:
+    """Eine Pultdecke: steigt geradlinig von links (``legs``) nach rechts um ``rise``."""
+    half = span / 2.0
+    return ShapelyPolygon([(-half, -10.0), (half, -10.0), (half, legs + rise), (-half, legs)])
+
+
+#: Ein Rundbogen von 20 mm Halbmesser auf Beinen von 15 mm, Scheitel auf 35 mm.
+ROUND_ARCH = unary_union([Point(0.0, 15.0).buffer(20.0, 32), box(-20.0, -10.0, 20.0, 15.0)])
+#: Ein Rundbogen von 30 mm Halbmesser, für eine Wand 80 mm breit und 55 mm hoch.
+WIDE_ARCH = unary_union([Point(0.0, 15.0).buffer(30.0, 64), box(-30.0, -10.0, 30.0, 15.0)])
+#: Ein Spitzbogen über 40 mm aus zwei Kreisen von 24 mm, Wand 45 mm hoch.
+POINTED_ARCH = unary_union(
+    [
+        Point(4.0, 15.0)
+        .buffer(24.0, 256)
+        .intersection(Point(-4.0, 15.0).buffer(24.0, 256))
+        .intersection(box(-20.0, 15.0, 20.0, 39.0)),
+        box(-20.0, -10.0, 20.0, 15.0),
+    ]
+)
+#: Drei Rundbögen von 8 mm Halbmesser nebeneinander, Pfeiler 4 mm, Wand 70 mal 35 mm.
+ARCADE = unary_union(
+    [
+        unary_union([Point(at, 15.0).buffer(8.0, 64), box(at - 8.0, -10.0, at + 8.0, 15.0)])
+        for at in (-20.0, 0.0, 20.0)
+    ]
+)
+#: Eine flache Decke von 30 mm auf 30 mm Höhe zwischen zwei Wänden, die Ecken mit
+#: 4 mm ausgerundet: Die Ausrundungen hängen in Streifen an den Wänden, die Decke
+#: dazwischen spannt 22 mm.
+FLAT_CEILING = box(-11.0, -14.0, 11.0, 26.0).buffer(4.0, 16)
+#: Der halbe Rundbogen ohne das zweite Bein: eine Konsole mit gewölbter Unterseite.
+HALF_ARCH = unary_union(
+    [Point(20.0, 15.0).buffer(20.0, 32), box(0.0, -10.0, 40.0, 15.0), box(20.0, -10.0, 40.0, 50.0)]
+)
+#: Die Decken aus dem Review von RM-585, die sich zwischen zwei Wänden schließen,
+#: aber Schicht für Schicht weiter kragen, als sie tragen: (Öffnung, Wandbreite).
+PENT_ROOF = (ramp(40.0, 3.0), 60.0)  # Pultdecke 40 mm, 3 mm Anstieg: 4,3°
+TWO_DEGREES = (ramp(30.0, 30.0 * math.tan(math.radians(2.0))), 60.0)
+SEGMENTAL_ARCH = (segment(60.0, 8.0), 80.0)  # Flachbogen, Sehne 60, Stich 8
+GABLE = (
+    ShapelyPolygon([(-20.0, -10.0), (20.0, -10.0), (20.0, 15.0), (0.0, 18.0), (-20.0, 15.0)]),
+    60.0,
+)  # Satteldecke 40 mm, 3 mm Stich: 8,5°
+BASKET_ARCH = (
+    unary_union(
+        [
+            affinity.translate(
+                affinity.scale(Point(0.0, 0.0).buffer(1.0, 256), 30.0, 12.0, origin=(0.0, 0.0)),
+                0.0,
+                15.0,
+            ),
+            box(-30.0, -10.0, 30.0, 15.0),
+        ]
+    ),
+    80.0,
+)  # Korbbogen 60 mal 12
+
+
+@pytest.mark.parametrize(
+    ("opening", "depth", "needed"),
+    [
+        pytest.param(ROUND_ARCH, 8.0, False, id="rundbogen"),
+        pytest.param(FLAT_CEILING, 8.0, True, id="flache-decke"),
+        pytest.param(HALF_ARCH, 16.0, True, id="konsole"),
+    ],
+)
+def test_an_arch_that_closes_between_its_legs_carries_itself(
+    opening: BaseGeometry, depth: float, needed: bool
+) -> None:
+    """Ein Bogen trägt sich, nur seine letzte Spanne ist eine Brücke (RM-585). Am
+    Eiffelturm verlangte der Rat für die Bögen unten Stützen: als Feld 360 mm²,
+    19 mm über die Beine hinaus. Jeder Streifen kragt nur ein Stück über die
+    Schicht darunter, und der Bogen schließt sich zwischen den Beinen.
+
+    Die flache Decke zwischen zwei Wänden bleibt, was sie war: Ihre letzte Spanne
+    ist 22 mm weit und braucht Stützen (Brückenregel). Und die Konsole mit
+    gewölbter Unterseite schließt sich nicht — sie hängt an einer Wand wie ein Kinn
+    und bleibt ein Feld (RM-570)."""
+    result = slice_body(gate(opening, depth), 0.2)
+    arches = vaults(result)
+    top = max(index for index, layer in enumerate(result.layers) if layer.overhangs)
+
+    assert largest_sloped_patch(result) > OVERHANG_LAYER_WORTH_SUPPORT, "als Feld trüge es"
+    assert advise.support_need(result).needed is needed
+    assert not {name for name in arches if name[0] == top}, "die letzte Spanne zählt"
+    if opening is ROUND_ARCH:
+        last = math.fsum(piece_area(piece) for piece in result.layers[top].overhangs)
+        assert largest_sloped_patch(result, without=arches) == pytest.approx(last), (
+            "ohne die Streifen bleibt nur die letzte Spanne"
+        )
+        assert not advise.located_warnings(result, petg()), "kein Bericht über den Bogen"
+    if opening is FLAT_CEILING:
+        assert arches, "die Ausrundungen sind Streifen"
+        assert result.layers[top].bridge_width > SPAN_INTERESTING
+    if opening is HALF_ARCH:
+        assert not arches, "die Konsole ist kein Bogen"
+
+
+@pytest.mark.parametrize(
+    ("opening", "width", "height", "depth", "layer_height", "angle"),
+    [
+        pytest.param(ROUND_ARCH, 60.0, 40.0, 8.0, 0.08, 45.0, id="r20-0.08-45"),
+        pytest.param(ROUND_ARCH, 60.0, 40.0, 8.0, 0.28, 45.0, id="r20-0.28-45"),
+        pytest.param(ROUND_ARCH, 60.0, 40.0, 8.0, 0.2, 60.0, id="r20-0.2-60"),
+        pytest.param(WIDE_ARCH, 80.0, 55.0, 8.0, 0.2, 45.0, id="r30-0.2-45"),
+        pytest.param(WIDE_ARCH, 80.0, 55.0, 8.0, 0.28, 45.0, id="r30-0.28-45"),
+        pytest.param(WIDE_ARCH, 80.0, 55.0, 8.0, 0.08, 60.0, id="r30-0.08-60"),
+        pytest.param(POINTED_ARCH, 60.0, 45.0, 8.0, 0.2, 45.0, id="spitzbogen"),
+        pytest.param(ARCADE, 70.0, 35.0, 8.0, 0.2, 45.0, id="arkade"),
+    ],
+)
+def test_a_round_arch_carries_itself_at_any_layer_height_and_angle(
+    opening: BaseGeometry,
+    width: float,
+    height: float,
+    depth: float,
+    layer_height: float,
+    angle: float,
+) -> None:
+    """Rund-, Spitzbogen und Arkade tragen sich bei jeder Schichthöhe und jedem
+    wirksamen Winkel (Review RM-585): Nur am Scheitel liegt die Außenbahn eines
+    Streifens weiter als eine Bahnbreite neben der Schicht darunter, und der
+    Scheitel spannt kürzer als eine Brücke, die der Bericht meldet. Die Flanken
+    darunter tragen als kurze Brücke längs der freien Kante.
+
+    Die Streifen hängen an einer Seite, und ihre Brückenweite wäre die Diagonale,
+    praktisch die Wandtiefe: Die Brückenregel fragt sie nicht. In einer Wand
+    tiefer als SPAN_INTERESTING läuft der Scheitel frei und behält seine
+    Stütze (test_a_cantilever_that_runs_free_along_a_deep_wall_keeps_its_supports)."""
+    result = slice_body(gate(opening, depth, width, height), layer_height, overhang_angle=angle)
+    arches = vaults(result)
+    top = max(index for index, layer in enumerate(result.layers) if layer.overhangs)
+    need = advise.support_need(result)
+
+    assert not need.needed
+    assert arches, "die Streifen sind Bogenstreifen"
+    assert not {name for name in arches if name[0] == top}, "die letzte Spanne zählt"
+    assert hanging_vaults(result) <= arches
+    last = max(piece_area(piece) for piece in result.layers[top].overhangs)
+    assert largest_sloped_patch(result, without=arches) == pytest.approx(last), (
+        "jeder Streifen trägt sich, auch der Scheitel; es bleibt die letzte Spanne"
+    )
+    assert "slice.long_bridge" not in {
+        entry.code for entry in advise.located_warnings(result, petg())
+    }, "keine Decke über die Wandtiefe"
+
+
+@pytest.mark.parametrize(
+    ("ceiling", "layer_height", "angle"),
+    [
+        pytest.param(PENT_ROOF, 0.2, 45.0, id="pultdecke-0.2-45"),
+        pytest.param(PENT_ROOF, 0.08, 45.0, id="pultdecke-0.08-45"),
+        pytest.param(PENT_ROOF, 0.2, 60.0, id="pultdecke-0.2-60"),
+        pytest.param(TWO_DEGREES, 0.08, 45.0, id="zwei-grad-0.08-45"),
+        pytest.param(SEGMENTAL_ARCH, 0.2, 45.0, id="flachbogen-0.2-45"),
+        pytest.param(SEGMENTAL_ARCH, 0.2, 55.0, id="flachbogen-0.2-55"),
+        pytest.param(SEGMENTAL_ARCH, 0.08, 60.0, id="flachbogen-0.08-60"),
+        pytest.param(SEGMENTAL_ARCH, 0.28, 60.0, id="flachbogen-0.28-60"),
+        pytest.param(GABLE, 0.08, 45.0, id="satteldecke-0.08-45"),
+        pytest.param(GABLE, 0.2, 60.0, id="satteldecke-0.2-60"),
+        pytest.param(GABLE, 0.28, 55.0, id="satteldecke-0.28-55"),
+        pytest.param(BASKET_ARCH, 0.28, 60.0, id="korbbogen-0.28-60"),
+    ],
+)
+def test_a_ceiling_that_cantilevers_further_than_it_carries_keeps_its_supports(
+    ceiling: tuple[BaseGeometry, float], layer_height: float, angle: float
+) -> None:
+    """Fast flache Decken zwischen zwei Wänden schließen sich auch, aber gedruckt
+    kragt jede Schicht weiter, als sie trägt (Review RM-585): Mit 3 mm Reichweite
+    je Streifen galten Pult-, Flach-, Korb- und Satteldecken als Bogen, und der Rat
+    nahm ihnen die Stützen — im ElegooSlicer 12 bis 27 m Stütze weniger, Bahnen mit
+    freiem Ende bis 1,7 mm neben der Kante. Über Schichthöhe und wirksamen Winkel,
+    denn eine Decke kippt bei feinen Schichten und steilen Winkeln zuerst."""
+    opening, width = ceiling
+    result = slice_body(gate(opening, width=width), layer_height, overhang_angle=angle)
+
+    assert advise.support_need(result).needed
+
+
+#: Zwei Bahnen der 0,4er Düse am Centauri Carbon 2 (``bridge_from`` des Druckdialogs).
+TWO_LINES = 0.84
+
+
+def ramp_deg(span: float, degrees: float, legs: float = 15.0) -> BaseGeometry:
+    """Eine Pultdecke über ``span`` mm, unter ``degrees`` gegen die Waagerechte."""
+    return ramp(span, span * math.tan(math.radians(degrees)), legs)
+
+
+def skin(degrees: float, depth: float = 20.0) -> MeshData:
+    """Eine Flügelhaut: eine 1,5 mm dünne Platte, 40 mm lang unter ``degrees``,
+    zwischen zwei Knochen (Säulen 4 mal ``depth``), vorn und hinten frei."""
+    rise = 40.0 * math.tan(math.radians(degrees))
+    plate = trimesh.creation.box(extents=(40.0 / math.cos(math.radians(degrees)) + 2.0, depth, 1.5))
+    plate.apply_transform(
+        trimesh.transformations.rotation_matrix(-math.radians(degrees), (0, 1, 0))
+    )
+    plate.apply_translation((0.0, 0.0, 10.0 + rise / 2.0))
+    height = 16.0 + rise
+    bones = [brick(4.0, depth, height, (side * 22.0, 0.0, height / 2.0)) for side in (-1.0, 1.0)]
+    return place_on_bed(MeshData.of(trimesh.boolean.union([*bones, plate])))
+
+
+@pytest.mark.parametrize(
+    ("body", "layer_height", "angle"),
+    [
+        pytest.param(
+            lambda: gate(ramp_deg(40.0, 12.0), 20.0, height=50.0), 0.2, 45.0, id="pult12-45"
+        ),
+        pytest.param(
+            lambda: gate(ramp_deg(40.0, 12.0), 20.0, height=50.0), 0.2, 60.0, id="pult12-60"
+        ),
+        pytest.param(
+            lambda: gate(ramp_deg(40.0, 15.0), 20.0, height=50.0), 0.2, 60.0, id="pult15-60"
+        ),
+        pytest.param(lambda: skin(15.0), 0.2, 45.0, id="haut15-45"),
+        pytest.param(lambda: skin(15.0), 0.2, 60.0, id="haut15-60"),
+        pytest.param(lambda: gate(ROUND_ARCH, 16.0), 0.2, 45.0, id="r20-tief16"),
+        pytest.param(lambda: gate(ROUND_ARCH, 20.0), 0.2, 55.0, id="r20-tief20"),
+    ],
+)
+def test_a_cantilever_that_runs_free_along_a_deep_wall_keeps_its_supports(
+    body: Callable[[], MeshData], layer_height: float, angle: float
+) -> None:
+    """Ein Streifen trägt sich als Kragarm nur, solange seine Außenbahn höchstens
+    eine Bahnbreite neben der Schicht darunter liegt (Nachprüfung RM-585, N2).
+    Ragt er weiter, druckt die Außenbahn ganz neben der Schicht darunter als
+    Brücke längs der freien Kante: in einer 8 mm tiefen Wand kurz, in einer
+    20 mm tiefen Wand oder Haut 20 mm frei je Schicht — im ElegooSlicer an der
+    Pultdecke unter 12° 0,73 mm neben der Kante über 20,5 mm, unter 15° 0,54 mm.
+    Mit vier Schichthöhen als Grenze galten sie als Bogen, und der Rat schaltete
+    die Stütze ab. Der Rundbogen in tiefer Wand bekommt seine Stütze zurück: Seine
+    Scheitelstreifen laufen ebenso weit frei."""
+    result = slice_body(body(), layer_height, overhang_angle=angle, bridge_from=TWO_LINES)
+
+    assert advise.support_need(result).needed
+
+
+@pytest.mark.parametrize(
+    ("depth", "layer_height", "angle"),
+    [
+        pytest.param(20.0, 0.2, 45.0, id="tief20-0.2-45"),
+        pytest.param(20.0, 0.2, 60.0, id="tief20-0.2-60"),
+        pytest.param(20.0, 0.28, 45.0, id="tief20-0.28-45"),
+        pytest.param(8.0, 0.2, 60.0, id="tief8-0.2-60"),
+        pytest.param(8.0, 0.28, 45.0, id="tief8-0.28-45"),
+    ],
+)
+def test_a_steeper_ceiling_never_needs_more_support(
+    depth: float, layer_height: float, angle: float
+) -> None:
+    """Ob eine Pultdecke Stützen braucht, folgt ihrer Neigung, nicht dem
+    Schichtraster (Nachprüfung RM-585, N4): Eine Pultdecke unter 13° brauchte bei
+    0,2 mm/60° Stützen, unter 12° und 15° nicht. Ihr oberster Streifen endete
+    0,58 mm vor der hohen Wand, mehr als eine Zugabe; die nächste Schicht wuchs
+    von beiden Seiten darüber, und die Schließfrage fand den zweiten Halt nicht."""
+    needed = [
+        advise.support_need(
+            slice_body(
+                gate(ramp_deg(40.0, degrees), depth, height=50.0),
+                layer_height,
+                overhang_angle=angle,
+                bridge_from=TWO_LINES,
+            )
+        ).needed
+        for degrees in (11.0, 12.0, 13.0, 14.0, 15.0, 17.0, 20.0, 25.0, 30.0)
+    ]
+
+    assert needed == sorted(needed, reverse=True), needed
+    assert not needed[-1], "unter 30° trägt sich die Decke"
+
+
+def lattice_between_walls() -> MeshData:
+    """Die Gitterplatte der Kumiko-Schale nachgebaut: 80 auf 40 mm zwischen zwei
+    Seitenwänden, 78 Löcher, die sich nach oben schließen. Ihre erste Schicht ist
+    ein Stück, die Ringe um die Löcher darüber gehören zu derselben Decke."""
+    walls = [brick(4.0, 40.0, 30.0, (side * 42.0, 0.0, 15.0)) for side in (-1.0, 1.0)]
+    plate = brick(80.0, 40.0, 3.0, (0.0, 0.0, 21.5))
+    holes = [
+        trimesh.convex.convex_hull(
+            [(x + dx * 2.0, y + dy * 2.0, 19.9) for dx in (-1, 1) for dy in (-1, 1)]
+            + [(x + dx * 0.1, y + dy * 0.1, 21.0) for dx in (-1, 1) for dy in (-1, 1)]
+        )
+        for x in np.arange(-36.0, 36.5, 6.0)
+        for y in np.arange(-15.0, 15.5, 6.0)
+    ]
+    lattice = trimesh.boolean.difference([plate, trimesh.boolean.union(holes)])
+    return place_on_bed(MeshData.of(trimesh.boolean.union([*walls, lattice])))
+
+
+def test_a_lattice_plate_between_two_walls_is_no_arch() -> None:
+    """Ein Stück zwischen zwei Auflagen trägt sich nur bis zu einer Brücke, die der
+    Bericht meldet: Kein Punkt liegt weiter als ``SPAN_INTERESTING / 2`` vom
+    Material darunter (Nachprüfung RM-585, N1). Die Kumiko-Schale aus dem Korpus
+    beginnt ihre Gitterplatte als ein Stück von 3 587 mm², 40,6 mm vom Material
+    entfernt; die Brückenregel ihrer Schicht misst nur die Stäbe, und am
+    generischen Drucker verlor sie ihre Stütze — im G-Code 82 mm lange Bahnen in
+    der Luft."""
+    result = slice_body(lattice_between_walls(), 0.2)
+    plate = max(
+        (
+            (index, number)
+            for index, layer in enumerate(result.layers)
+            for number, piece in enumerate(layer.overhangs)
+        ),
+        key=lambda name: piece_area(result.layers[name[0]].overhangs[name[1]]),
+    )
+
+    assert result.layers[plate[0]].bridge_width < SPAN_INTERESTING, "nur die Stäbe sind Brücken"
+    assert plate not in vaults(result)
+    assert advise.support_need(result).needed
+
+
+def niche(radius: float, rise: float) -> MeshData:
+    """Eine Nische, vorn offen: halber Zylinder bis 30 mm Höhe, darüber eine flache
+    Halbkuppel (Kugelkappe mit Sehne ``2·radius`` und Stich ``rise``)."""
+    sphere = (radius * radius + rise * rise) / (2.0 * rise)
+    centre = 30.0 + rise - sphere
+    profile = [(0.0, -30.0), (radius, -30.0), (radius, 30.0)]
+    for step in range(1, 41):
+        r = radius * (1.0 - step / 40.0)
+        profile.append((r, centre + math.sqrt(max(sphere * sphere - r * r, 0.0))))
+    cutter = trimesh.creation.revolve(np.asarray(profile), sections=128)
+    width, depth = 2.0 * radius + 16.0, radius + 4.0
+    block = brick(width, depth, 45.0, (0.0, depth / 2.0, 22.5))
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([block, cutter])))
+
+
+@pytest.mark.parametrize(
+    ("radius", "rise", "angle"),
+    [
+        pytest.param(10.0, 1.7, 45.0, id="r10-45"),
+        pytest.param(10.0, 1.7, 60.0, id="r10-60"),
+        pytest.param(12.0, 2.0, 60.0, id="r12-60"),
+    ],
+)
+def test_a_flat_half_dome_keeps_its_supports(radius: float, rise: float, angle: float) -> None:
+    """Ein gekrümmter Streifen, der an einer Seite hängt, liegt nicht zwischen zwei
+    Auflagen (Nachprüfung RM-585, Z1): Die Hülle seines gebogenen Rands ist das
+    Kreissegment, in dem er liegt, und ein Halbring unter einer flachen Halbkuppel
+    galt als gefasst. Am Centauri bekam die Nische R 12 mit 2 mm Stich bei 0,2 mm
+    keine Stütze mehr (vorher 12,9 m), im G-Code hingen Bahnen bis 2,5 mm neben der
+    Schicht darunter. Gemessen wird die freie Kante entlang, nicht ihre Sehne."""
+    result = slice_body(niche(radius, rise), 0.2, overhang_angle=angle, bridge_from=TWO_LINES)
+
+    assert advise.support_need(result).needed
+
+
+def slab_between_posts() -> MeshData:
+    """Eine Platte 12 auf 10 mm kragt aus einer Wand, an ihrem Ende steigt eine Lippe
+    unter 20° an; zwei Pfosten stehen 0,5 mm neben ihren Längsseiten, berühren sie aber
+    nicht — wie die Ablage „Side kit rest 3“ aus dem Korpus."""
+    rise = 3.0 * math.tan(math.radians(20.0))
+    lip = trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for y in (0.0, 10.0)
+            for x, z in ((12.0, 10.0), (12.0, 13.0), (15.0, 10.0 + rise), (15.0, 13.0))
+        ]
+    )
+    body = trimesh.boolean.union(
+        [brick(5.0, 16.0, 25.0, (-2.5, 5.0, 12.5)), brick(12.0, 10.0, 3.0, (6.0, 5.0, 11.5)), lip]
+    )
+    posts = [brick(13.0, 1.0, 20.0, (5.5, y, 10.0)) for y in (-1.0, 11.0)]
+    return place_on_bed(MeshData.of(trimesh.util.concatenate([body, *posts])))
+
+
+def test_only_the_last_layer_of_a_ceiling_holds_across_two_allowances() -> None:
+    """Nur die oberste Schicht einer Decke hält bis zur doppelten Zugabe (Nachprüfung
+    RM-585, N4): Dort schließt die nächste Schicht den Spalt zur hohen Wand von beiden
+    Seiten. Für jede Schicht verdoppelt, hielten Pfosten 0,5 mm neben der Platte sie
+    fest, die Decke schloss sich, und die Ablage „Side kit rest 3“ verlor am Centauri
+    ihre Stütze — im G-Code hingen dort Bahnen 10 mm mit freiem Ende."""
+    from app.core.slice import analysis
+
+    result = slice_body(slab_between_posts(), 0.2, overhang_angle=60.0, bridge_from=TWO_LINES)
+    layers = result.layers
+    ceilings = analysis._Ceilings(layers, lambda index: analysis._material(layers[index]))
+    first = min(
+        (index, number)
+        for index, layer in enumerate(layers)
+        for number in range(len(layer.overhangs))
+    )
+    ceiling = ceilings.of(first)
+
+    assert len({index for index, _number in ceiling}) > 1, "die Lippe gehört zur Decke"
+    assert not ceilings.closes(ceiling), "Luft neben der Platte ist kein Halt"
+    assert advise.support_need(result).needed
+
+
+def two_flat_arches_on_slabs() -> MeshData:
+    """Der flache Bogen auf der Platte zweimal, der zweite gespiegelt daneben."""
+    first = flat_arch_on_a_slab().raw.copy()
+    second = first.copy()
+    second.apply_transform(trimesh.transformations.reflection_matrix((0, 0, 0), (1, 0, 0)))
+    second.invert()
+    second.apply_translation((0.0, 30.0, 0.0))
+    return place_on_bed(MeshData.of(trimesh.util.concatenate([first, second])))
+
+
+def flat_arch_on_a_slab() -> MeshData:
+    """Eine Wand mit flachem Bogen (Sehne 36, Stich 3) auf einer Platte, die 64 mm
+    frei auskragt; das rechte Bein steht auf dem freien Teil (Review RM-585)."""
+    pier = brick(16.0, 8.0, 20.0, (-32.0, 0.0, 10.0))
+    slab = brick(80.0, 8.0, 4.0, (0.0, 0.0, 22.0))
+    wall = brick(80.0, 8.0, 36.0, (0.0, 0.0, 42.0))
+    cut = cutter(segment(36.0, 3.0, legs=10.0), 8.0)
+    cut.apply_translation((12.0, 0.0, 24.0))
+    upper = trimesh.boolean.difference([wall, cut])
+    return place_on_bed(MeshData.of(trimesh.boolean.union([pier, slab, upper])))
+
+
+def test_a_flat_arch_over_the_model_spares_its_crown() -> None:
+    """Die Kanalfrage trug dieselbe Prämisse wie die Bogenfrage (Review RM-585):
+    Unter seinem Scheitel ist ein Bogen schmal, und sein Grundriss schließt sich
+    zwischen den Beinen — ein flacher Bogen auf einer Platte galt als Kanaldecke,
+    und die Übergabe sperrte den Raum darunter. Gedruckt kragen seine Schichten
+    weiter, als sie tragen; er braucht Stützen dort, wo sie erreichbar sind.
+
+    Ausgespart wird der Scheitel, der weiter kragt, als er sich trägt, samt seiner
+    letzten Spanne — wie ein Stück, das selbst Stütze braucht. Nach Mehrheit
+    gezählt, fiel am Drachen die Sperre einer ganzen Flügeltasche wegen 25,6 mm²
+    Scheitel, die gespiegelte behielt ihren Scheitel darunter (Nachprüfung, N3)."""
+    result = slice_body(flat_arch_on_a_slab(), 0.2)
+    need = advise.support_need(result)
+    top = max(index for index, layer in enumerate(result.layers) if layer.overhangs)
+    crown = {(top, number) for number in range(len(result.layers[top].overhangs))}
+
+    assert need.needed
+    assert not crown & need.model.channels, "der Scheitel ist kein Kanalstück"
+    assert any(
+        abs(high - result.layers[top].z) <= EPS_GEOM
+        for _outline, _low, high in need.model.open_columns
+    ), "und bleibt frei für seine Stütze"
+
+
+def test_a_mirrored_pocket_gets_the_same_blocker() -> None:
+    """Dieselbe Decke gespiegelt bekommt dieselbe Sperre und dieselbe Aussparung
+    (Nachprüfung RM-585, N3): Nach Mehrheit entschieden, kippte am Drachen die
+    eine Flügeltasche, die andere nicht."""
+    body = two_flat_arches_on_slabs()
+    result = slice_body(body, 0.2)
+    model = advise.support_need(result).model
+    middle = (float(body.bounds.minimum[1]) + float(body.bounds.maximum[1])) / 2.0
+
+    def side(names: frozenset[tuple[int, int]], low: bool) -> list[tuple[float, float]]:
+        found = []
+        for index, number in names:
+            piece = result.layers[index].overhangs[number]
+            if (ShapelyPolygon(piece.outline).centroid.y < middle) is low:
+                found.append((round(result.layers[index].z, 6), round(piece_area(piece), 1)))
+        return sorted(found)
+
+    assert model.channels, "die Decke über der Platte ist Kanal"
+    assert side(model.channels, True) == side(model.channels, False)
+    assert len(model.open_columns) % 2 == 0
+
+
+def test_a_flat_vault_over_an_enclosed_chamber_stays_a_channel() -> None:
+    """Die Gegenprobe zum flachen Bogen auf der Platte: Dieselbe Decke über einer
+    geschlossenen Kammer kragt nicht — jeder Streifen liegt zwischen Vorder- und
+    Rückwand der Kammer (``_Ceilings._held_twice``), und eine Stütze darin bekäme
+    man nicht mehr heraus (§22.2). Sie bleibt Kanaldecke (Review RM-585)."""
+    block = brick(50.0, 30.0, 30.0, (0.0, 0.0, 15.0))
+    chamber = cutter(segment(26.0, 1.5, legs=8.0), 6.0)
+    chamber.apply_translation((0.0, 0.0, 12.0))
+    body = place_on_bed(MeshData.of(trimesh.boolean.difference([block, chamber])))
+    result = slice_body(body, 0.2)
+
+    assert advise.support_need(result).model.channels
+
+
+def test_a_round_arch_over_the_model_stays_a_channel() -> None:
+    """Die Gegenprobe: Ein Rundbogen auf derselben Platte trägt sich, und unter
+    seinem Scheitel bleibt der Raum eine Kanaldecke wie bisher."""
+    pier = brick(16.0, 8.0, 20.0, (-32.0, 0.0, 10.0))
+    slab = brick(80.0, 8.0, 4.0, (0.0, 0.0, 22.0))
+    wall = brick(80.0, 8.0, 36.0, (0.0, 0.0, 42.0))
+    cut = cutter(
+        unary_union([Point(0.0, 10.0).buffer(12.0, 64), box(-12.0, -10.0, 12.0, 10.0)]), 8.0
+    )
+    cut.apply_translation((12.0, 0.0, 24.0))
+    upper = trimesh.boolean.difference([wall, cut])
+    result = slice_body(place_on_bed(MeshData.of(trimesh.boolean.union([pier, slab, upper]))), 0.2)
+
+    assert advise.support_need(result).model.channels
+
+
+def test_a_channel_with_rounded_corners_stays_a_channel_at_fine_layers() -> None:
+    """Ein Kanal von 28 mm mit flacher Decke von 16 mm und 6 mm ausgerundeten Ecken:
+    Bei 0,08 mm kragt der oberste Streifen jeder Rundung weiter als seine Zugabe
+    und vier Schichthöhen, und mit der Decke spannt der Scheitel über 15 mm. Er
+    trägt sich trotzdem — jede Rundung kragt nur einen halben Millimeter wie ein
+    Rand (:data:`LEDGE_REACH`), und die Decke ist eine Brücke im Kanal. Die
+    Kanalfrage nimmt ihm deshalb seine Kanaldecke nicht (Review RM-585)."""
+    opening = box(-8.0, 2.0, 8.0, 6.0).buffer(6.0, 64).intersection(box(-15.0, 2.0, 15.0, 13.0))
+    block = brick(60.0, 40.0, 24.0, (0.0, 0.0, 12.0))
+    body = place_on_bed(MeshData.of(trimesh.boolean.difference([block, cutter(opening, 40.0)])))
+
+    assert model_support(slice_body(body, 0.08)).channels
+
+
+def arch_on_a_plate(opening: BaseGeometry) -> MeshData:
+    """Eine Wand mit ``opening`` auf einer Platte 70 × 20 × 2 mm: Die Säulen unter
+    dem Bogen setzen auf dem Modell auf."""
+    plate = brick(70.0, 20.0, 2.0, (0.0, 0.0, 1.0))
+    wall = brick(60.0, 8.0, 40.0, (0.0, 0.0, 22.0))
+    cut = cutter(opening, 8.0)
+    cut.apply_translation((0.0, 0.0, 2.0))
+    return on_bed(plate, trimesh.boolean.difference([wall, cut]))
+
+
+def sloped_slot(floor: float = -1.0, span: float = 14.0, run: float = 9.0) -> MeshData:
+    """Ein Block 40 × 20 × 16 mm mit einem Schlitz ``span`` mm breit von vorn nach
+    hinten, der auf ``floor`` beginnt (unter null: durch den Boden) und dessen
+    Decke auf 10 mm Höhe beginnt und je ``run`` mm um 0,2 mm steigt. Bei 0,2 mm legt
+    jede Schicht einen Streifen quer über den Schlitz, mit Halt an beiden Wänden —
+    eine Brücke von ``span`` mm, kein Kragarm; der mittlere misst 120 mm², der
+    oberste 86 mm²."""
+    slope = 0.2 / run
+    opening = hull(
+        [
+            (x, y, z)
+            for x in (-span / 2.0, span / 2.0)
+            for y in (-10.5, 10.5)
+            for z in (floor, 10.0 + slope * (y + 10.0))
+        ]
+    )
+    block = brick(40.0, 20.0, 16.0, (0.0, 0.0, 8.0))
+    return place_on_bed(MeshData.of(trimesh.boolean.difference([block, opening])))
+
+
+def test_arch_strips_over_the_model_rest_nowhere_and_bridge_where_held_twice() -> None:
+    """„Auf dem Modell“ zählt kein Bogenstreifen, und nach Brücken gefragt wird nur,
+    wo einer zwischen zwei Auflagen liegt (Review RM-585).
+
+    Ohne Kanäle gefragt (``channel_width`` klein), damit die Streifen selbst
+    entscheiden: Der Rundbogen auf einer Platte setzt mit seinen Streifen auf dem
+    Modell auf, trägt sie aber selbst — offen bleibt nur seine letzte Spanne. Seine
+    Streifen hängen an einer Seite, ihre Brückenweite wäre die Diagonale. Die
+    Streifen der steigenden Schlitzdecke liegen je zwischen zwei Wänden; ihre
+    Brücke ist gemessen und bleibt gefragt."""
+    arch = slice_body(arch_on_a_plate(ROUND_ARCH), 0.2)
+    strips = vaults(arch)
+    model = model_support(arch, channel_width=1.0)
+    top = max(index for index, layer in enumerate(arch.layers) if layer.overhangs)
+    last = math.fsum(piece_area(piece) for piece in arch.layers[top].overhangs)
+
+    assert strips and hanging_vaults(arch) == strips
+    assert model.open_area > 0.0, "die Säulen setzen auf der Platte auf"
+    assert model.open_area == pytest.approx(last), "auf dem Modell nur die letzte Spanne"
+    assert not strips & model.open_pieces, "an einer Seite hängend: keine Brückenfrage"
+
+    slot_result = slice_body(sloped_slot(floor=2.0), 0.2)
+    held = vaults(slot_result) - hanging_vaults(slot_result)
+    assert held, "die Streifen der Schlitzdecke liegen zwischen zwei Wänden"
+    assert held <= model_support(slot_result, channel_width=1.0).open_pieces
+
+
+def test_the_report_names_no_arch_strip() -> None:
+    """Der Prüfbericht meldet keinen Bogenstreifen als frei hängende Fläche (RM-585):
+    Die größten Stücke der steigenden Schlitzdecke messen über 100 mm², liegen aber
+    je als Brücke von 14 mm zwischen zwei Wänden; die letzte Spanne bleibt darunter.
+    Wie am Eiffelturm, dessen größte Stücke über 100 mm² gefasste Bogenstreifen
+    sind."""
+    from app.core.slice import findings
+
+    result = slice_body(sloped_slot(), 0.2)
+    strips = vaults(result)
+    pieces = {
+        (index, number): piece_area(piece)
+        for index, layer in enumerate(result.layers)
+        for number, piece in enumerate(layer.overhangs)
+    }
+    largest = max(pieces, key=lambda name: pieces[name])
+
+    assert pieces[largest] > OVERHANG_LAYER_WORTH_SUPPORT
+    assert largest in strips
+    assert all(
+        area <= OVERHANG_LAYER_WORTH_SUPPORT for name, area in pieces.items() if name not in strips
+    )
+    assert not findings.overhang_findings("obj_1", result)
+    assert not advise.support_need(result).needed
+
+
+def test_the_arch_question_asks_only_the_named_ceilings() -> None:
+    """``vaults(result, only)`` antwortet für die gefragten Stücke wie die volle
+    Frage, mit der ganzen Decke des Stücks — gefragt vor der vollen Frage, deren
+    Antwort jeder engeren dient."""
+    result = slice_body(gate(ROUND_ARCH), 0.2)
+    lowest = min(
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number in range(len(layer.overhangs))
+    )
+
+    asked = vaults(result, frozenset({lowest}))
+    assert lowest in asked
+    assert asked == vaults(result), "die ganze Decke des Stücks"
+
+
+def test_asking_only_for_ledges_does_not_ask_for_arches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wer nur Ränder fragt, rechnet keine Bögen (Review RM-585): Die Hinweise in
+    Druckdialog und Prüfbericht fragen nur Ränder, und die Schließfrage des
+    Turmbogens kostete sie am Eiffelturm das Vierfache. Fragt der Prüfbericht Rand
+    und Bogen mit derselben Auswahl, geht die Randfrage einmal."""
+    from app.core.slice import analysis
+
+    result = slice_body(gate(ROUND_ARCH), 0.2)
+    asked = frozenset(
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number in range(len(layer.overhangs))
+        if index % 2
+    )
+    calls = {"rims": 0, "arches": 0}
+    rims, arches = analysis._ledges, analysis._vaults
+
+    def count_rims(*args: object) -> object:
+        calls["rims"] += 1
+        return rims(*args)  # type: ignore[arg-type]
+
+    def count_arches(*args: object) -> object:
+        calls["arches"] += 1
+        return arches(*args)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(analysis, "_ledges", count_rims)
+    monkeypatch.setattr(analysis, "_vaults", count_arches)
+
+    ledges(result, asked)
+    assert calls == {"rims": 1, "arches": 0}
+    vaults(result, asked)
+    ledges(result, asked)
+    hanging_vaults(result, asked)
+    assert calls == {"rims": 1, "arches": 1}, "dieselbe Auswahl, dieselbe Antwort"
 
 
 def slot(length: float) -> MeshData:

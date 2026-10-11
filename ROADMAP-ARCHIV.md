@@ -31,7 +31,17 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-629: Ein schräger Schacht über einer Säule zählt, wenn der Kanalkreis Schicht für Schicht hindurchpasst (10.10.2026)](#rm-629-ein-schräger-schacht-über-einer-säule-zählt-wenn-der-kanalkreis-schicht-für-schicht-hindurchpasst-10102026) |
+| 2026-10-11 | [RM-766: Das Angleichen verschweißt nur, wo es etwas zu verschweißen gibt (11.10.2026)](#rm-766-das-angleichen-verschweißt-nur-wo-es-etwas-zu-verschweißen-gibt-11102026) |
+| 2026-10-10 | [RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)](#rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026) |
+| 2026-10-11 | [RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)](#rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026) |
+| 2026-10-11 | [RM-773, RM-774, RM-775: Platzierung und Quellen warten auf die Wahl des Kunden (11.10.2026)](#rm-773-rm-774-rm-775-platzierung-und-quellen-warten-auf-die-wahl-des-kunden-11102026) |
+| 2026-10-10 | [RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz, das nicht unter das Bett reicht, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)](#rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-das-nicht-unter-das-bett-reicht-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026) |
+| 2026-10-10 | [RM-695: Ein gespeichertes Projekt öffnet nach einem Neustart ohne neue Erkennung (10.10.2026)](#rm-695-ein-gespeichertes-projekt-öffnet-nach-einem-neustart-ohne-neue-erkennung-10102026) |
+| 2026-10-10 | [RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)](#rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026) |
+| 2026-10-10 | [RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)](#rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026) |
 | 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
+| 2026-10-10 | [RM-706: Der Abdruck einer Buchung hängt an den gespeicherten Eingängen (10.10.2026)](#rm-706-der-abdruck-einer-buchung-hängt-an-den-gespeicherten-eingängen-10102026) |
 | 2026-10-10 | [RM-707: Spulenwerte aus 0.5.3 überschreiben das Herstellerprofil nicht mehr (10.10.2026)](#rm-707-spulenwerte-aus-053-überschreiben-das-herstellerprofil-nicht-mehr-10102026) |
 | 2026-10-10 | [RM-705: Ein vor dem Update gebuchter Druck wird danach wiedererkannt (10.10.2026)](#rm-705-ein-vor-dem-update-gebuchter-druck-wird-danach-wiedererkannt-10102026) |
 | 2026-10-10 | [RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)](#rm-704-teil-mit-zwei-schichten-luft-trägt-jede-baumspitze-eine-trennschicht-10102026) |
@@ -57,6 +67,7 @@ entfernt hat.
 | 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
 | 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
 | 2026-10-09 | [RM-571: Ein Sims im offenen Becher neben einem gesperrten Kanal behält seine Stütze (09.10.2026)](#rm-571-ein-sims-im-offenen-becher-neben-einem-gesperrten-kanal-behält-seine-stütze-09102026) |
+| 2026-10-09 | [RM-585: Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst (09.10.2026)](#rm-585-bögen-die-sich-zwischen-ihren-beinen-schließen-tragen-sich-selbst-09102026) |
 | 2026-10-09 | [RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)](#rm-628-solidon-rechnet-mit-curas-aufrunden-des-stützabstands-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
@@ -27347,6 +27358,33 @@ zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahme
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
 
+## RM-695: Ein gespeichertes Projekt öffnet nach einem Neustart ohne neue Erkennung (10.10.2026)
+
+<a id="rm-695-ein-gespeichertes-projekt-öffnet-nach-einem-neustart-ohne-neue-erkennung-10102026"></a>
+
+**Ausgangslage (Paket L3, 09.10.2026):** Der Plattencache hielt Netze, aber keine Erkennung;
+jedes Öffnen nach einem Neustart rechnete sie ganz neu — Eiffelturm 57 s, davon `detect` 47 s,
+Spiderman 45 s, Laptop-Ständer 19 s, Besteckkasten 16 s `detect`.
+
+**Gebaut (Paket E, `5159f1deb`, `a4a5e717e`, Review 1 `abbf4694d`):** Die Erkennung liegt je
+Netzabdruck auf der Platte (`DiskCache.save_detection`/`load_detection`), geschrieben erst mit
+dem vollständigen Lauf (§15.6) und atomar über `os.replace`; Merkmale typgenau (Tupel bleiben
+Tupel — vorher trugen sieben Beispielprojekte nach dem Wiederöffnen andere Werte); die
+mitgetragenen Maße bewegter Netze reisen mit (`<n>.carried.npz`), auch eine leere
+Facettenliste; ein Fehler beim Ablegen lässt den Eintrag aus und bricht keine Auswertung ab.
+Cache-Format 59.
+
+**Nachweis (10.10.2026, Kernweg mit Plattencache, drei Läufe im Wechsel, Vorrang, CPU):**
+Öffnen eines gespeicherten Projekts im frischen Prozess Eiffelturm 29,7 → 1,39 s, Ständer
+12,3 → 0,89 s, Spiderman 19,9 → 1,88 s, Kumiko 0,88 → 0,59 s, ohne Erkennungslauf; je Modell
+ein Abdruck über beide Bäume und alle Läufe, gleich dem ersten Öffnen
+(`konzepte/nachweise-oertliche-erkennung-2026-10/ergebnisse/rm695_wieder_5159f1deb_2026-10-10.jsonl`).
+Alle zwölf Beispielprojekte öffnen zweimal mit Plattencache mit gleichen Objekthashes
+(`tests/test_examples.py::test_every_example_reopens_from_the_disk_cache_without_a_miss`).
+Tests in `tests/test_cache.py`: typgenau Bit für Bit, veralteter Eintrag verworfen und neu
+erkannt, beschädigte Einträge verworfen, verschobene Kugel über die Platte, Fehler beim
+Ablegen. Bauplan §21.2, §31.
+
 ## RM-670: Ein zweiter 3MF-Export liest den Slicerbestand nicht neu (10.10.2026)
 
 <a id="rm-670-ein-zweiter-3mf-export-liest-den-slicerbestand-nicht-neu-10102026"></a>
@@ -27586,6 +27624,15 @@ Turm: Hybrid mit zwei Wänden 14 % mehr Stützmaterial, organisch derselbe G-Cod
 `support_structure=normal` statt `tree` und trägt den Hut auf senkrechten Säulen gleicher
 Dichte statt auf Ästen; ElegooSlicer gibt dem Pilz `normal(auto)` und der Figur
 `tree(auto)`, wie die Zeile „Stützen · Figur, Pilz mit Gitter“ sagt.
+
+**Nachtrag (10.10.2026):** Bei Cura fragten Abstand, Spitzenluft und Baumwände eines Körpers
+mit seinem Baum, auch wo die Platte Gitter druckt: Drache neben Pilz bekam „Abstand oben
+0,4: Feine Spitzen …“ und „Wände der Bäume 2“, Cura `support_structure=normal` mit
+`support_top_distance=0.4`. Jetzt fragen Druckdialog und Export mit der Art der Platte
+(`advise.on_the_plate`, `plate_style`); echter Cura-Lauf am Drachen neben dem Pilz:
+`normal`, 0,2 mm, keine Wandzeile. Das Feld fasst Teile mit gleichem Wert zusammen wie die
+Zeile („Pilz, Hut und 2 weitere bekommen Gitter.“). Tests in `test_slice_findings.py` und
+`test_print_settings.py`; Bericht `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm584n.md`.
 Offen im Register: der Fuß hoher Bäume.
 Changelog: ja.
 
@@ -44480,7 +44527,7 @@ in der Randfrage ab. Der neue Schalter „Ränder ohne Stütze“ (`support.spar
 Vorschlag nur mit Stützen) sperrt ihre Überhangfläche in der Übergabe (`ledge_space`,
 gemerkt) und spart aus, was Stütze braucht; eigener Befund `export.ledge_blocker` über die
 gesperrten Ränder, und die Plattengegenprobe kennt die Sperre. Die Bögen unten bleiben
-gestützt: [RM-585](ROADMAP.md#rm-585).
+gestützt: [RM-585](#rm-585).
 
 **Nachweis (08.10.2026, Endstand):** Eiffelturm mit Solidons Vorschlägen: ElegooSlicer 216 statt 869 m Stütze, OrcaSlicer 163 statt 592, PrusaSlicer 81 statt 367, Cura 104 statt 358 (gegen „Stützen automatisch“); der
 Rest steht unter den Bögen. Drache: von den Überhängen, die Stütze brauchen (ohne Kanaldecken und Ränder, `gcode_stuetzen.py`, `needed_share`), sind gestützt: ElegooSlicer 99,8 %, OrcaSlicer 99,6 %, PrusaSlicer 100 %, Cura 96,5 %. Tests in `test_slice_findings.py`,
@@ -46699,6 +46746,140 @@ sechs Sprachen „ab 0.5.0“ neben „Version 0.5.3“, wie im Repository. Chan
 
 **Abschluss:** Der Abschnitt *Bausteine verwalten* beginnt offen, solange der eigene Bausteinordner nichts hält (`PartCatalog`, `_own_library_is_empty`). Gezählt werden gespeicherte Rezepte und hinzugefügte Bausteine, dieselbe Frage wie für Weitergabe, *Bearbeiten* und *Entfernen* (`_in_own_library`, vorher dreimal hergeleitet); ein mitgereister und ein `.py`-Baustein zählen nicht, `PartSpec.own` zählte anders. Danach gilt der Merker (`remember`, RM-491), und ein eigener Baustein klappt den Abschnitt wie bisher auf (RM-455; dass dieses Aufklappen gemerkt wird, steht in [RM-658](ROADMAP.md#rm-658)). Damit stehen *Auswahl als Baustein speichern …*, *Baustein aus Datei hinzufügen …* und beide Sperrgründe ohne Klick da, wie in 0.5.1 (Rückschritt seit `48ffcf145`, in 0.5.2 und 0.5.3). Weil der Weitergabegrund jetzt vorn steht, sagt er ohne eigenen Baustein „Speichern Sie zuerst einen eigenen Baustein, um ihn weiterzugeben.“ statt zum Wählen aufzufordern, das bei einem eingebauten in die nächste Absage führte. Die Hinweistests prüfen den Grund ohne vorheriges Aufklappen und stellen die Bibliothek ohne eigene Bausteine selbst her (`no_own_parts`); `test_the_closed_management_names_what_it_holds` prüft den zugeklappten Zustand nach einem Klick; neu `test_a_fresh_catalogue_shows_its_management_without_a_click` und `test_only_a_part_in_the_own_library_closes_the_management` (Rezept und hinzugefügt zu, mitgereist und `.py` offen). Gegenprobe über ein Plugin, je Mutation von acht Tests rot: immer zu 6, immer offen 2, Prädikat über `PartSpec.own` 2, alter Weitergabegrund 3; Katalogtests 52 grün, Handbuch-, Katalog-, Wortlaut- und Changelogtests 539 grün. Die Handbuchseiten *Eigene Bausteine* und *Bausteindateien austauschen* nennen Abschnitt und Knopf in allen sechs Sprachen, der eingefrorene Musterbestand trägt die neuen Seitenschlüssel; Changelog 0.6.0. Fenstersonde am echten Fenster, frischer Nutzerordner: 4 von 4, *Speichern*, *Hinzufügen* und beide Sperrgründe ohne Klick sichtbar, der Weitergabegrund schickt zum Speichern. Umgesetzt von Claude (Thread „Bedienung und KI“).
 
+## RM-585: Bögen, die sich zwischen ihren Beinen schließen, tragen sich selbst (09.10.2026)
+
+<a id="rm-585-bögen-die-sich-zwischen-ihren-beinen-schließen-tragen-sich-selbst-09102026"></a>
+<a id="rm-585"></a>
+
+**Befund (Eiffelturm, 08.10.2026, nach RM-582):** Solidon verlangte Stützen für die Bögen unten
+(Feld 360 mm², 19 mm Reichweite über die Beine). Mit seinen Vorschlägen stellte der
+ElegooSlicer dort 216 m Stütze hin, der PrusaSlicer 81 m (Stand RM-582). Der Turm ist ohne
+Stützen gedacht („一体无支撑“). Die Decke des Turmbogens hängt über das Gitter mit 2 244
+Stücken zusammen, davon 1 188 im Kanal; die übrigen 1 056 zählten als Feld.
+
+**Behoben:** `analysis.vaults` nennt die Streifen von Decken, die sich zwischen ihren
+Auflagen schließen (`_Ceilings.closes`, gefragt an der ganzen Decke samt Kanalstücken), und
+die sich selbst tragen (`_Ceilings.arch`): jedes Stück unter der obersten Schicht, das zu
+`CEILING_SPANNED` zwischen den Auflagen liegt (`_Ceilings.spanned`) und entweder als
+Kragarm trägt — seine Außenbahn liegt höchstens eine Bahnbreite neben der Schicht darunter
+(`_cantilever`, Bahnbreite aus `bridge_from`) — oder als kurze Brücke längs der freien Kante
+(bis `SPAN_INTERESTING`, bis Zugabe plus zwei Bahnen und `CANTILEVER_LAYERS` Schichthöhen),
+zwischen zwei Auflagen liegt (`_held_twice`, bis `SPAN_INTERESTING`/2 vom Material) oder zu
+einem Scheitel gehört, dessen Kragarme je als Rand tragen (`LEDGE_REACH`) oder der quer zwischen den
+Flanken nicht weiter als `SPAN_INTERESTING` spannt. Sie zählen nicht zum Stützbedarf, nicht
+zu dem, was auf dem Modell aufsetzt, und nicht zum Überhangbefund. Die oberste Schicht ist
+die letzte Spanne und zählt mit ihrer Fläche weiter. Die an einer Seite hängenden Streifen
+(`hanging_vaults`) sind für die Brückenregel ruhig, in Stützbedarf, Hinweisen und
+`open_pieces` gleich; die gefassten bleiben darunter. In der Kanalfrage wird ein Scheitel, der
+weiter kragt, als er trägt, samt letzter Spanne ausgespart (`_Arch.overhanging`); die Decke
+bleibt Kanal.
+Wer nur Ränder fragt, rechnet keine Bögen (`_self_carried`); Schließ- und Bogenantworten
+sind je Schichten gemerkt (`_closing_answers`), enge Rand- und Bogenantworten derselben
+Auswahl auch.
+
+**Review (10.10.2026, `review_rm585.md`, Urteil „nicht“) und Behebung:** S1 — mit 3 mm
+Reichweite je Streifen galten Pult-, Sattel-, Flach- und Korbbogendecken als Bogen (im
+ElegooSlicer 12,45 und 27,25 m Stütze weniger, Bahnen bis 1,7 mm mit freiem Ende); jetzt
+die Kragarmfrage oben. Zwilling — ein flacher Bogen auf einer auskragenden Platte galt als
+Kanaldecke und wurde gesperrt; jetzt kein Kanal, Stütze. L1 — Rundbögen in 16 und 20 mm
+tiefen Wänden verlangten Stützen für die Diagonale; jetzt ohne. M2 — gebündelt (eigener
+Grundriss im Fenster abgezogen, Filter in einem Aufruf, Scheitel nur über
+`SPAN_INTERESTING` Diagonale gemessen und vereinfacht). L2 — die Zahl „0,51 mm“ war die der
+längsten Läufe; im G-Code des Turms hängen kurze Wandstücke bis 2,14 mm (Elegoo) und
+1,72 mm (Prusa) mit freiem Ende über die Kante, die einseitigen Scheitelstreifen; „ein
+Durchgang“ für Rand und Bogen galt nur der vollen Frage und ist ersetzt. Die CPU-Zeit von
+`support_need` im ersten Archivtext stammte aus einem Lauf unter Fremdlast; gleicher Kern im
+Wechsel: Eiffelturm 175,1 → 181,2 s (+3,5 %), Drache +0,5 % (Review).
+
+**Nachweis (10.10.2026):** `tests/test_slice_findings.py`:
+`test_a_round_arch_carries_itself_at_any_layer_height_and_angle` (R 20 bei 0,08/0,28 mm und
+60°, in 16 und 20 mm tiefer Wand, R 30 bei 0,2/0,28 mm und 0,08 mm/60°, Spitzbogen, Arkade:
+keine Stütze, ohne die Streifen bleibt nur die letzte Spanne, kein Brückenbefund),
+`test_a_ceiling_that_cantilevers_further_than_it_carries_keeps_its_supports` (Pultdecke,
+Decke unter 2°, Flachbogen 60/8, Satteldecke 40/3, Korbbogen 60/12 über 0,08/0,2/0,28 mm und
+45/55/60°), `test_a_flat_arch_over_the_model_spares_its_crown`,
+`test_a_flat_vault_over_an_enclosed_chamber_stays_a_channel`,
+`test_a_round_arch_over_the_model_stays_a_channel`,
+`test_a_channel_with_rounded_corners_stays_a_channel_at_fine_layers`,
+`test_arch_strips_over_the_model_rest_nowhere_and_bridge_where_held_twice`,
+`test_the_report_names_no_arch_strip`, `test_asking_only_for_ledges_does_not_ask_for_arches`.
+Gegenprobe am Stand `d176bc5ca`: 18 der neuen Fälle rot. 20 Mutationen (Grenze je Streifen
+immer wahr, halbiert, anderthalbfach; oberste Schicht mit; ohne Filter und ohne
+Schließfrage; Brückenregel für alle oder keine Bogenstreifen; `open_pieces` mit allen oder
+ohne gefasste; Bericht, „auf dem Modell“ und Stützbedarf ohne Bögen; Scheitel immer, nur als
+Rand, nur als Brücke; Kanal ohne Kragarm; nie gefasst; Bögen mit jeder Randfrage) über
+`test_slice_findings`, `test_advise`, `test_print_findings`: jede mindestens ein Test rot.
+Prüfkörper (`bedarf.py`, 22 Körper × 0,08/0,2/0,28 mm × 45/55/60°): Rund-, Spitzbogen,
+Arkade, Rippe, tiefe Wände 81 von 81 ohne Stütze; Pult-, Sattel-, Flach-, Korbbogen- und
+schwach geneigte Decken 99 von 99 mit. Echte Modelle (0,2 mm, Startregel): Eiffelturm
+Stützbedarf nein, Feld 0,5 mm², dieselben 2 504 Bogenstreifen und Kanäle wie zuvor, keine
+Vorschläge; Waschschüssel Vorschläge und Sperre (230 Säulen) wie vor RM-585, 54 Stücke an
+den Lippen der Schalen sind keine Kanaldecken mehr; Drache Vorschläge wie vor RM-585, die
+Sperre mit 29 statt 70 Säulen (zwei kragende Scheitelstreifen kippen eine Decke aus 475
+Stücken aus dem Kanal). Slicer (`tools/matrix_unit.py`, aufrecht, gepinnt): Pultdecke
+40/3 mit Solidons Vorschlägen im ElegooSlicer 12,45 m und im PrusaSlicer 12,96 m Stütze,
+Flachbogen 60/8 27,25 und 25,81 m — wie vor RM-585; Rundbogen R 20 und Eiffelturm 0 m in
+beiden. CPU-Zeit im Wechsel, je zwei Läufe, gegen den Stand des Reviews: Rand- und Bogenfrage
+Eiffelturm 21,5 → 11,7 s, Drache 13,3 → 14,8 s; nur Ränder 20,4 → 7,2 und 13,4 → 6,8 s;
+Hinweise 17,2 → 8,2 und 5,2 → 6,6 s; Prüfbericht Eiffelturm 80,5 → 54,1 s (vier → ein
+Randlauf). Das Bündeln allein ändert keine Rand- und Bogenmenge (Eiffelturm, Drache
+hashgleich).
+
+**Nachprüfung (10.10.2026, `review_rm585_nach.md`, Urteil „nicht“) und Behebung:** N1 — ein
+Streifen „zwischen zwei Auflagen“ zählte ohne Spannweite; die Kumiko-Schale aus dem Korpus
+verlor am generischen Drucker (45°) ihre Stütze, ihre Gitterplatte spannt 81 mm. Jetzt trägt
+er sich nur bis `SPAN_INTERESTING`/2 vom Material darunter; weiter ist er eine Brücke, kein
+Scheitel (über einem Kanal Kanaldecke wie eine Tunneldecke). N2 — die Grenze Zugabe plus
+vier Schichthöhen entwarnte Decken zwischen 11,3° und gut 17°; in 20 mm tiefen Wänden und
+Häuten liefen Außenbahnen 0,54 bis 0,73 mm neben der Kante 20 mm frei. Jetzt die Bahnbreite
+(oben) und lange freie Läufe zum Scheitel; ein einseitiger Streifen gilt nur als gefasst,
+wenn sein Teil jenseits des Kragarms selbst zwischen Auflagen liegt (41 von 42 Streifen der
+Pultdecke unter 12° bei 60° kamen sonst so durch). Vier Schichthöhen bleiben als Grenze
+feiner Schichten: Ohne sie galten Satteldecke 8,5° bei 0,08 und 0,12 mm, Pultdecke 4,3° und
+Flachbögen bei 0,08 mm als Bogen; keine Breite in Millimetern trennt sie vom Rundbogen R 30
+bei 0,2 mm. Rundbögen in Wänden über 15 mm Tiefe bekommen bei 0,2 mm ihre Stütze zurück
+(wie vor RM-585, L1 zurückgenommen); bei 0,08 und 0,12 mm tragen sich tiefe Decken ab gut
+11° als Kragarm. N3 — der Kanal-Zwilling entschied je Decke nach Fläche; jetzt
+wird nur der kragende Scheitel samt letzter Spanne ausgespart. N5–N7 — Docstrings, eine
+Halt-Rechnung für Schließfrage und Scheitel (`_anchored`), `hanging` vor `arches` gesetzt.
+N4 — ob eine Decke sich schließt, hing am Schichtraster (Pultdecke 13° bei 0,2 mm/60° mit
+Stütze, 12° und 15° ohne): An der obersten Schicht der Decke gilt der Spalt zur hohen Wand
+bis zur doppelten Zugabe als Halt (`_anchored`), die nächste Schicht schließt ihn von beiden
+Seiten. Für jede Schicht verdoppelt, verlor „Side kit rest 3“ am Centauri ihre Stütze
+(G-Code: Bahnen 10 mm frei); deshalb nur oben.
+
+**Nachweis der Nachprüfung (10.10.2026):** `test_a_cantilever_that_runs_free_along_a_deep_wall_keeps_its_supports`
+(Pultdecke 12° in 20 mm Wand bei 0,2 mm/45° und 60°, 15° bei 60°, Haut 15° bei 45° und 60°,
+Rundbogen R 20 in 16 und 20 mm Wand; mit zwei Bahnen des Centauri, 0,84 mm),
+`test_a_lattice_plate_between_two_walls_is_no_arch`, `test_a_flat_arch_over_the_model_spares_its_crown`,
+`test_a_mirrored_pocket_gets_the_same_blocker`, `test_a_steeper_ceiling_never_needs_more_support`
+(Pultreihe 11 bis 30° in 8 und 20 mm Wand). Gegenprobe am Stand `acc6283d5`: alle zehn
+Fälle rot; die Neigungsreihe vor N4 in drei von fünf Einstellungen rot. Sieben Mutationen (ohne Spannweitengrenze, ohne Zwei-Seiten-Halt, lange Läufe
+tragen, Kragarm ohne Bahnbreite, Scheitel bleibt Kanal, Scheitel ohne letzte Spanne, kurze
+Brücken ohne Deckel): je 1 bis 13 Fälle rot. Prüfkörper (`probe.py`, 41 Fälle je Bahnbreite
+1,0 und 0,84 mm): Rund-, Spitzbogen, Arkade, R 30, R 35 ohne Stütze; S1-Körper mit; Pultdecke
+und Haut unter 12 bis 15° in 20 mm Tiefe mit (15° bei 60° nur mit 0,84 mm; mit dem runden
+Millimeter ohne Profil 0,746 gegen 0,75 mm, frei). Eiffelturm 0,2 mm/45° und 60° ohne Stütze
+(Feld 0,5 bzw. 10,9 mm², 2 504 bzw. 392 Bogenstreifen); Kumiko-Schale bei 45° Stützen nötig
+(Feld 3 632 mm²). Drache 45° (`sonde_kanalraum.py`): Kanalstücke 1 836 / 1 795 / 1 827,
+gesperrte Säulen 70 / 29 / 61, Sperrraum 8 227 / 4 819 / 7 594 mm³ (welle3 / Stand der
+Nachprüfung / jetzt); bei 60° in allen drei ohne Sperrsäule.
+
+**Zweite Nachprüfung (11.10.2026, `review_rm585_nach2.md`) und Behebung:** Z1 — ein
+gekrümmter Streifen, der an einer Seite hängt, galt als „zwischen zwei Auflagen“: Die Hülle
+seines gebogenen Rands ist das Kreissegment, in dem er liegt, und `_runs_free` maß die Sehne
+statt des Laufs. Eine flache Halbkuppel (Nische R 12, 2 mm Stich) bekam am Centauri bei
+0,2 mm keine Stütze mehr (vorher 12,9 m), im G-Code hingen Bahnen bis 2,5 mm neben der
+Schicht darunter. Jetzt wird die lose Kante des freien Teils entlang gemessen
+(`_runs_loose`), in `_runs_free` und `_held_twice`; gefasst bleibt ein solcher Teil nur
+mit einer Bahnenrichtung, die an beiden Enden Halt hat (`_anchored_span`, die Brücke
+zwischen zwei Beinen). Z2 — Regel, Begründung, Archiv und
+Changelog nennen die Schichthöhe: Tiefe Decken und Bögen behalten ihre Stütze ab 0,2 mm, bei
+0,08 und 0,12 mm trägt sich eine Decke ab gut 11° als Kragarm; die kurze Brücke deckeln bis
+gut 0,2 mm die Schichthöhen. Z3 — der Teil jenseits des Kragarms wird einmal hergeleitet
+(`_beyond`), druckgleich. Nachweis: `test_a_flat_half_dome_keeps_its_supports` (Nische R 10
+bei 45° und 60°, R 12 bei 60°), am Stand vor Z1 drei von drei rot.
+
 ## RM-628: Solidon rechnet mit Curas Aufrunden des Stützabstands (09.10.2026)
 
 <a id="rm-628-solidon-rechnet-mit-curas-aufrunden-des-stützabstands-09102026"></a>
@@ -47488,6 +47669,71 @@ gleich), und der senkrechte Schacht ist als Grenze benannt. Belege:
 `output/konsolidierung-2026-10-07/codex-claude/belege/lauf-a.md`. Changelog: nein (die
 Lücke entstand mit RM-566 im selben 0.6.0-Zyklus).
 
+## RM-629: Ein schräger Schacht über einer Säule zählt, wenn der Kanalkreis Schicht für Schicht hindurchpasst (10.10.2026)
+
+<a id="rm-629-ein-schräger-schacht-über-einer-säule-zählt-wenn-der-kanalkreis-schicht-für-schicht-hindurchpasst-10102026"></a>
+<a id="rm-629"></a>
+
+**Befund (Nachprüfung RM-571, 09.10.2026):** Ob eine Säule im umschlossenen Raum von oben
+erreichbar ist, fragte `_open_above` nur senkrecht. Ein schräges Loch der Weite 2R in einem
+Deckel der Dicke H zählte mit 2R / cos θ − H · tan θ: Am Becher mit Deckel und Loch Ø 34 mm um
+20° lag der Sims zu 64 statt 4 % im Sperrraum und druckte ohne Stütze. Ein Zickzackschacht brach
+die Rechnung mit einer `TopologyException` ab.
+
+**Behoben:** Ist senkrecht kein Schacht offen, schiebt `_shafts_pass` einen Kreis von
+`CHANNEL_WIDTH` Schicht für Schicht durch den Schacht, je Säule einmal für alle Scheiben: Ein
+freier Kreis bleibt, wo er ist, einer, den Material trifft, weicht so weit aus, wie die Wand ihn
+schiebt (`SHAFT_PUSH_SPARE`), höchstens um Schichthöhe · Tangens des Stützwinkels, mit dem
+geschnitten wurde (`SliceResult.overhang_angle`, ohne ihn `SHAFT_DRIFT`). Wer geschoben wird,
+braucht Platz für die Ellipse seines schrägen Wegs (`_oval_centres`, R / cos θ in
+Schubrichtung, R quer dazu; θ die flachere Schätzung aus Schub der Wand und Wandern der Mitte
+des Lochs). Dass freie Kreise nicht wandern, hält die Entscheidung „offen über der Säule“ aus
+RM-571 (`test_open_sky_is_asked_at_each_slab`). `_clipped` repariert ungültige Zuschnitte.
+Warum, mit den Grenzen (Unterkante eines Dachs je Schichthöhe; der Kreis folgt der hinteren
+Wand, nicht der Achse: scharfe Knicke, Lippen, enge Wendeln, enger schräger Kegel bleiben zu wie
+vorher): `konzepte/begruendungen/regel-druckrat.md`, Abschnitt zur Kanalsperre.
+
+**Review RM-629 (10.10.2026), behoben:** Ein getroffener Kreis weitete sich um den vollen Schritt
+in jede Richtung und kroch an einer leicht überhängenden Wand unter ein Dach (0,57° → 2 mm,
+2,9° → 10 mm seitwärts); ein schräger Schlitz zählte mit seiner waagerechten Weite (45° 22 mm
+offen); die Ausweichweite war die Startregel statt des Stützwinkels des Druckers. Die ersten
+beiden öffneten, was vor RM-629 zu war; beide sind wieder zu, und die Ausweichweite folgt dem
+Profil. **Nachprüfung (11.10.2026), behoben:** Ein Y oder gegenläufige Schlitze (Äste 22–28 mm
+um 45°) blieben offen, weil der gemeinsame Schwerpunkt zweier Löcher nicht wanderte — jetzt je
+Loch ein Weg (`_split_by_hole`); ein Schlitz schräg zu seiner schmalen Seite war bis 29 mm offen
+— Richtung und Neigung jetzt aus derselben Schätzung. Dabei schließen sicher: Wendel r 5 Ø 31
+bei 0,5 mm und r 8 Ø 34 (Ganghöhe 40), wie vor RM-629. Tests: Y 22/28 zu, 31 offen; Schlitz
+schräg 29 zu, 31 offen. `SliceResult.overhang_angle` steht in Bauplan §9.
+
+**Nachweis (10.10.2026):** Becher mit Deckel, Sims im Sperrraum vorher → nachher: Loch Ø 34 mm
+um 10°, 20°, 30°, 40°, −30° 64 → 4 %, Ø 30,2 mm um 20° 64 → 4 %, Ø 28 mm 64 → 64 %; Zickzack
+Ø 34 mm offen (vorher Abbruch), mit Ø 28 mm zu. Tests in `test_slice_findings.py`: Neigung 20°,
+30°, −30° und Zickzack (am Stand `219360698` rot), Engstelle in genau einer Schicht (29,5 zu,
+31 offen), Grenze synthetisch auch in einer Schicht (29,9 zu, 30,1 offen), Stufe mit 28 mm
+Überlappung (zu). Nach dem Review dazu: Kammer mit überhängender Wand (0,57° und 2,9°, Öffnung
+2 mm daneben zu, 0,3 mm offen), schräge Schlitze (45° 22, 40° 24, 30° 27 mm zu, 45° 31 offen),
+Ø 34 um 40° offen, Deckel 60 mm mit Stützwinkel (44° offen / 50° zu bei 45°, 44° zu bei 40°,
+50° offen bei 55°), Stufe synthetisch (3 mm offen, 6 mm zu), getrennte Wege zweier Scheiben,
+gerundeter Knick 40° in die Senkrechte offen. Mutanten am fertigen Stand (47 Tests der Auswahl):
+freie Kreise wandern (6 rot), Drift 10 (4), Winkel doppelt (2), Startregel statt Winkel (2),
+voller Schritt statt Schub (2), ohne Ellipse (3), Ellipse ohne Abstand (10), nur Schub statt
+Achse (1), alle Wege zusammen (1), Zuschnitt ohne Reparatur (3), Saum ohne Säule (2) werden
+gefangen; nicht gefangen: `SHAFT_DRIFT` 1,5 und 2 (nur noch Rückfall ohne Winkel im Schnitt),
+Treffer immer (nur Leistung), Reste leben, oberste Scheibe offen (Randfälle). Im Slicer (Ø 34 mm um 20°, Vorschläge
+übernommen), Stützbahn unter dem Sims vorher → nachher (ohne Sperre): ElegooSlicer CC2 3,60 →
+7,49 m (6,33), OrcaSlicer Kobra 2 2,65 → 4,37 m (4,37), PrusaSlicer MK4S 1,78 → 3,83 m
+(3,81), Cura SV06 7,72 → 17,29 m (16,91); Tunnel 0,0 m wie vorher. Gegenprobe Ø 28 mm in
+ElegooSlicer und Cura vorher = nachher (2,69 und 7,69 m, Sperre bleibt). Becher, Drache 50 und
+130 %, Schüssel in Dateilage 55° und 60° und Eiffelturm: Scheiben gleich, CPU-Zeit des
+Sperrraums gleich (Becher 0,34 s, Drache 130 % 6,9 s); dort und an der Schüssel in Drucklage
+50° (186 704 mm³ wie vorher) fragt keine Säule nach dem Schacht;
+Drache im Druckrat (`sonde_rat.py`, CC2) gleich. Nach dem Review: alle Becherfälle des Prüfers
+(67 bei 0,5 mm, 45 bei 0,2 mm) wie mit dem ersten Fix allein, die Schlitze zu; Becher, Drache 50
+%, Schüssel 50° Scheiben gleich und CPU gleich (Becher 0,27 / 0,25 s), Ellipse am Deckel mit 20°
+0,36 → 0,42 s, am Zickzack 0,50 → 0,88 s. Changelog: nein (die Sperre im umschlossenen Raum kam
+mit RM-566/RM-571 im selben 0.6.0-Zyklus, `git tag --contains` leer; der 0.6.0-Punkt zu *Kanäle
+frei halten* beschreibt die Eigenschaft).
+
 ## RM-676: *Größe ändern* an einem erzeugten Modell rechnet nur das Maß (10.10.2026)
 
 <a id="rm-676-größe-ändern-an-einem-erzeugten-modell-rechnet-nur-das-maß-10102026"></a>
@@ -47546,6 +47792,178 @@ Sonde endete der Prozess so viermal mit Exit 127). `release` hält `_sculpt_chec
 `_check_sculpted_walls` fängt nach dem Schließen nichts mehr an.
 **Nachweis:** `test_sculpt_session.py::test_a_released_window_starts_no_wall_check` am Stand
 davor rot, jetzt grün. Changelog: nein.
+
+## RM-671: Weich verschmelzen gibt ein gleichmäßiges Netz, das nicht unter das Bett reicht, und Dreiecke angleichen hält seine Kantenlänge (10.10.2026)
+
+<a id="rm-671-weich-verschmelzen-gibt-ein-gleichmäßiges-netz-das-nicht-unter-das-bett-reicht-und-dreiecke-angleichen-hält-seine-kantenlänge-10102026"></a>
+<a id="rm-671"></a>
+
+**RM-671 — *Weich verschmelzen* lieferte ein splittriges Netz, und *Dreiecke angleichen* hielt
+die Kantenlänge nicht** (Versionsvergleich 0.5.2, Weg 4, W4-3; dazu F5 der Funktionsliste 0.5.2).
+
+**Ursache, gegen das Register korrigiert.** Das Register nannte den Sprung des Ebenenabstands
+(`2006fc7d1`) als Quelle der Splitter. Mit dem exakten Feld bleiben es an Kugel auf Zylinder
+dieselben 11,81 %: Die Splitter sind zu 98 % Nadeln, die Marching Cubes legt, wo die Fläche dicht
+an einem Rasterpunkt vorbeiläuft (kürzeste Kante im Median 0,07 Raster). Bis v0.4.2 gab es sie
+kaum, weil das Feld zum nächsten Stützpunkt maß und nahe der Fläche nie null wurde (0,014 statt
+0,245 % der Rasterpunkte unter 0,05 mm; das alte Feld nachgebaut: 2,89 %), um den Preis welliger
+Wände. Der Ebenenabstand lag dafür neben Kanten bis 1,9 mm daneben und rechnete über
+`np.einsum` (Plattformregel). Das Angleichen faltete mit `simplify(0)` ebene Flächen zu Fächern
+ohne Längengrenze, und `refine_to_length` ließ deren innere Kanten bis zum Doppelten stehen. F5:
+Die weiche Mischung hebt das Feld, wo beide gleich sind, um bis zu ein Viertel des Übergangs; an
+bündigen Flächen wuchs das Ergebnis über die Eingänge hinaus, mit dem Ebenenfehler bis 1,69 mm
+unter das Bett.
+
+**Behoben.** `blend.distance_field` misst zum nächsten Punkt auf dem Dreieck, das Vorzeichen aus
+Pseudonormalen, ohne `einsum` — genau aber nur im Band, aus dem Marching Cubes und die weiche
+Mischung lesen (Raster plus Übergang plus Viertelübergang). Weiter draußen trägt jeder
+Rasterpunkt nur sein Vorzeichen, vom Band her über Gruppen benachbarter Punkte
+(`scipy.ndimage.label`); das Netz ist bitgleich zur vollen Rechnung, am §31-Fall rechnen 191 706
+statt 486 798 Zeilen genau. Das Feld reicht nicht unter das Bett, oder nicht unter die unterste
+Höhe der Eingänge, wenn sie schon darunter reichen (`_above_the_floor`, Entscheidungen
+Koordinator nach Review F und Nachprüfung N2 — die Begrenzung auf alle Seiten des Hüllquaders
+schnitt runde Übergänge flach ab, an gekreuzten Rohren 269 mm² auf x = ±10, die auf die unterste
+Eingangshöhe zwei schwebende Kugeln 74,5 mm² eben). Werte nahe null gelten als knapp außen
+(`CLEAR_OF_ZERO`), die Ecken stehen in doppelter Genauigkeit (`_in_double`, `skimage` gibt
+`float32`), und Nadeln unter 0,2 Raster werden zusammengelegt (`NEEDLE`). Das Feld ist exakt,
+solange das nächste Dreieck unter den Bewerbern der acht nächsten Stützpunkte ist; an CAD-Netzen
+mit Nadelfächern fehlt es manchmal (Besenhalter: bis 0,19 mm, eines von 351 120 Vorzeichen falsch,
+das Ebenenfeld lag dort bis 1,81 mm daneben; RM-769). `mesh_ops.uniform` vereinfacht ohne
+Abweichung nicht mehr und teilt nach dem Kern jede Kante, die dieser im Inneren eines Dreiecks
+zu lang gezogen hat, in der Mitte (`mesh_edits.split_long`, die Seiten ab 65 536 Dreiecken auf
+Fäden gemessen); verschweißt wird nur, wo `merge_vertices` etwas ändern würde (RM-766). Neues
+Modul `app/core/geom/mesh_edits.py`; `cache_version` 8 und 3.
+
+**Review F.** Mit der Kantenzusage teilt das Angleichen die Diagonalen der Gitterzellen und trägt
+bei gleicher Kante bis doppelt so viele Dreiecke. Es zählt vorab deshalb wie *Kanten verfeinern*
+(`_uniform_ahead`, am Quader 100 × 80 × 60 auf 1 mm 176 946 statt 90 113 bei 161 644 Ergebnis),
+die Decke gilt dem Netz nach dem Kern und nach dem Teilen (`_below_the_ceiling`). Das Formen
+verlangt als längste Kante das √2-Fache seiner mittleren (`sculpt.EVEN_LONGEST`), höchstens so
+fein, wie eine Schranke der Zählung unter `REFINE_MAX_TRIANGLES` zulässt
+(`_longest_within_budget`, mit `ESTIMATE_RESERVE`; im Fensterfaden einmal je Netz, über der
+Grenze gar nicht, Nachprüfung N5). Das ist eine Vorhersage, die an Gitterflächen trifft; an
+Kugeln lag die mittlere Kante damit beim 1,05- bis 1,18-Fachen des Solls, an Zylinderfacetten
+beim 0,82-Fachen mit bis zu 33 % mehr Dreiecken als vor RM-671, an dichten Eingängen nutzte es
+0,29 bis 0,59 der Grenze (Nachprüfung N1). `sculpt.evened_for_brush` eicht deshalb am Ergebnis und
+gleicht höchstens einmal nach: feiner, wenn die mittlere Kante über dem 1,05-Fachen des Solls
+liegt und Platz ist (`EVEN_COARSER`; bestimmt die Grenze, nur bei mindestens einem Viertel mehr
+Dreiecken), gröber, wenn das Netz mehr als ein Viertel dichter ist als am Soll (`EVEN_DENSER`,
+die Schwelle aus §31), gröber auf die gezählte Dichte über der Grenze. Der Kern teilt eine Kante
+in `floor(l / e) + 1` Stücke; feiner wird es erst unter der Stücklänge der mittleren Kante des
+Eingangs.
+
+**Umbau nach Review F** (Entscheidung Koordinator, dann Robert: F ganz in 0.6.0, ohne neuen
+Bremser). Bis dahin tauschte das Angleichen zu lange Kanten in der Ebene, räumte um spitze
+Dreiecke auf und zählte dafür Ebenenmaße. Am ersten angeschlossenen Stand hing es an CAD-Netzen
+aus `F:\3D Dateien` über zehn Minuten (Delaunay tauschte in 293 Runden eine Million Kanten und
+ließ 93,8 % spitz); mit Ebenenregeln und Wahl bis zur Sättigung kostete es das Drei- bis
+Fünffache der Zeit vor RM-671, an einer viermal unterteilten Lochplatte 262 s. An den
+Abnahmefällen tat das Aufräumen fast nichts (2 bis 22 Tausche, kein Zusammenlegen); es ist
+entfernt, `plate_holes` auf 1,5 mm trägt ohne es 44 statt 1,6 % Splitter (v0.5.3: 58,9 %,
+RM-767). Ein zweiter `refine_to_length`-Durchgang im Kern statt des Teilens kostete am Wedge-Lock
+0,9 statt 0,085 s und hielt die Kante nicht. Eine Prüfung je Zeile, ob das nächste Dreieck unter
+den Bewerbern ist, kostete am §31-Fall 25,4 statt 1,1 s (RM-769, nicht gebaut).
+
+**Messlatte des Koordinators** (Wand und CPU, je Runde ein Prozess je Stand im Wechsel gegen den
+Stand vor RM-671, Kern im Prozess, Median der Verhältnisse aus zehn Runden, unter Fremdlast von
+100 %; Formen mit der Kante der Sitzung und geeicht, Pinsel 1 mm):
+
+| Fall | Maß | Wand | CPU |
+|---|---|---|---|
+| Wedge-Lock, Formen | absolut | 1,15 | 0,90 |
+| Seitenablage, Formen | absolut | 0,68 | 0,67 |
+| Seitenablage, Kante 1 mm (1,93-mal so viele Dreiecke) | je Dreieck | 0,98 | 1,14 |
+| Quader 100 × 80 × 60, 0,5 mm (2,08-mal) | je Dreieck | 0,96 | 0,74 |
+| Lochplatte viermal geteilt, halbe Kante (7,1-mal, 2,33 s) | je Dreieck | 0,55 | 1,06 |
+| §31-Kugel, halbe Kante (2,41 s) | absolut | 0,92 | 0,94 |
+| §31-Rohre, *Weich verschmelzen* | absolut | 1,07 | 1,23 |
+
+**Messung** (fein, Splitter = Winkel unter 10°, vorher → nachher): Kugel auf Zylinder 11,81 →
+1,34 % nach dem Verschmelzen, 30,59 → 0,57 % nach dem Angleichen auf 1,2 mm, längste Kante
+2,389 → 1,200 mm; *Figur formen* 6,27 → 0,41 % und 17,78 → 0,32 %, 3,102 → 1,499 mm (verlangt
+1,5); zwei kreuzende Zylinder 10,85 → 0,71 % und 28,26 → 0,55 %, 2,664 → 1,200 mm, rund bis
+x = ±10,978 wie bis v0.5.3; zwei Quader auf dem Bett z −1,69 bis 11,44 → 0 bis 10,75 mm,
+16 575,6 → 15 671,9 mm³ (Vereinigung 14 400, die Beule über Deckel und Seiten bleibt, RM-763);
+zwei schwebende Kugeln bei z = 20 unter dem Hals rund. Angleichen ohne Abweichung lässt Volumen
+und Fläche gleich, auch an den Splitternetzen aus W4-3 (11,81 → 7,79 % und 7,18 → 4,30 %).
+`plate_holes` auf 1,5 mm: 58,9 → 44,4 % Splitter, längste Kante 2,784 → 1,500 mm. Die drei
+CAD-Netze (Kante 1,0, 0,5 und 1,0 mm): längste Kante 2,19 → 1,00, 1,05 → 0,50 und 6,16 → 1,00 mm,
+Volumen und Fläche gleich, Splitter 93,7 → 89,6, 84,9 → 83,0 und 6,0 → 4,3 %, Dreiecke 971 234 →
+1 038 046, 490 738 → 491 558 und 296 524 → 573 394. Formen an 29 Körpern und Pinseln
+(Nachprüfung N1): unter der Grenze höchstens 1,18-mal so viele Dreiecke wie vor RM-671 und die
+mittlere Kante beim 0,89- bis 1,05-Fachen des Solls (0,79 an einer Kugel, an der das nächste
+ganze Stück je Kante zu grob wäre); wo die Grenze greift, 0,55 bis 0,98 von ihr (vor RM-671 1,06
+bis 2,19, vorhergesagt 0,29 bis 0,82). Druckgleich (§11.2) gegen welle4 ohne F (`a72079433`):
+11 von 12 Beispielprojekten bitgleich, *Figur formen* mit beiden Schritten gewollt anders
+(879,4845 µm); gegen v0.5.3 bringt F nur *Figur formen* dazu.
+
+**Nachweis:** `test_blend.py` (exakter Abstand gegen `mesh.on_surface`, die drei Abnahmefälle,
+zwei Quader auf dem Bett, runde Übergänge an Rohren, gestapelten und schwebenden Kugeln ohne
+ebene Flecken, das Band bitgleich zum vollen Feld und an weniger als der Hälfte der Punkte genau),
+`test_subdivision.py` (die Splitternetze `meshes/blend_splinters_*.npz`, Zählung vorab, Decke am
+Ergebnis, die Arbeit des Angleichens gezählt, die Prüfung vor dem Verschweißen gegen
+`merge_vertices`), `test_sculpt.py` (Dreiecksgrenze am Netz, geeicht an Kugel, Zylinder und
+dichter Figur, die Schranke einmal je Netz), `test_platform_identity.py` (`blend_field`,
+`blend_union`, `remesh_uniform`; ein, vier und rückwärts abgeschlossene Fäden bitgleich),
+§31-Fall `remesh_uniform_flat`; die neuen Fälle am Stand davor rot, jetzt grün. Die
+Leistungsmarken `blend_union` und `remesh_uniform` sind verworfen: Sie maßen vor RM-671 Wege,
+die die Kante nicht hielten, bei fester Kante mit halb so vielen Dreiecken; an ihre Stelle tritt
+die Messlatte oben. Changelog: ja, 0.6.0 (die Ursache `2006fc7d1` steckt in v0.4.4 bis v0.5.3).
+
+## RM-766: Das Angleichen verschweißt nur, wo es etwas zu verschweißen gibt (11.10.2026)
+
+<a id="rm-766-das-angleichen-verschweißt-nur-wo-es-etwas-zu-verschweißen-gibt-11102026"></a>
+<a id="rm-766"></a>
+
+**Befund** (Paket F, offener Punkt 1 zu RM-671): An der Kugel aus §31 (2,46 Mio. Dreiecke)
+kostete `mesh_ops._as_mesh` mit `trimesh.merge_vertices` 1,0 bis 1,5 der 3,2 bis 3,4 s von
+*Dreiecke angleichen*, am Quader 100 × 80 × 60 auf 0,5 mm 0,16 s von 0,51 s; *Fläche
+unterteilen* und jeder Weg über `_as_mesh` zahlten dasselbe. Der Kern gibt ein per Index
+dichtes Netz heraus.
+
+**Behoben.** `_needs_welding` fragt vorher, ob `merge_vertices` etwas ändern würde: jede Ecke
+benutzt, dann je Zeile ein Streuwert der wie in `trimesh` gerundeten Zahlen, sortiert; gleicher
+Streuwert sagt vorsichtshalber ja. Übernommen wird das Verschweißte wie bisher nur mit weniger
+Ecken, das Netz bleibt also bitgleich. Die erste Fassung im Umbau von RM-671 mischte die Zahlen
+mit je einer Konstante und kollidierte an den Gittern des Kerns bei 17 % (Quader) bis 39 %
+(Kugel) der Ecken — sie sagte immer ja und sparte nichts; seither mischt SplitMix64 jede Zahl ganz
+durch (`_mixed`), an denselben Netzen ohne Kollision. Am Quader kostet `_as_mesh` 0,03 statt
+0,22 s.
+
+**Nachweis:** `test_subdivision.py::test_the_check_before_welding_says_what_merge_vertices_would_do`
+(gegen `merge_vertices` selbst, dazu Kugel und ein Gitter aus dem Kern, an denen der erste
+Streuwert ja sagte), Druckgleich der Beispielprojekte gegen welle4 `a72079433` (11 von 12
+bitgleich, *Figur formen* aus RM-671 gewollt anders), §31-Kugel im Wechsel mit dem Stand vor
+RM-671 bei Wand 0,92 und CPU 0,94 des Stands davor (Median der Paare aus zehn Runden, 2,41 s).
+Changelog: nein (mit RM-671 in 0.6.0, ungelandet).
+
+## RM-544: Gewinde nach G, R, UNC, UNF und NPT, links und mehrgängig (10.10.2026)
+
+<a id="rm-544-gewinde-nach-g-r-unc-unf-und-npt-links-und-mehrgängig-10102026"></a>
+<a id="rm-544"></a>
+
+**RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg.** Anlass ist
+  derselbe Kundenvorschlag wie bei RM-532 (S-20261006-c66299, Innengewinde in einem Rohr); Rohre
+  tragen meist Whitworth-Rohrgewinde. Solidon kennt nur metrische Gewinde nach ISO 261/262 und
+  sagt bei links-, mehrgängigen und kegeligen ab. **Entschieden (Robert, 06.10.2026):** „alle“ —
+  neben metrisch in jedem Maß auch G (zylindrisches Rohrgewinde, ISO 228-1, 55°-Flanken, Gänge je
+  Zoll) sowie UNC und UNF (60°, Gänge je Zoll). **Umfang:** Tabelle der Nennmaße und Gänge je
+  Zoll mit Herkunft (`standards.toml`, Version erhöhen), das Flankenprofil als Parameter der
+  Gewindeform (55° gerundet / 60°), *Eigenes Maß* auch in Zoll (Gänge je Zoll statt Steigung),
+  dieselben Wege wie RM-532: Druckbares Gewinde, Bohrung mit Gewinde, Gegenstück
+  (`counterpart.thread_values_for`), *Schraube erstellen*, *Drehdeckel erzeugen*, Stift für
+  Bohrung (RM-536), Erkennung einer gemessenen Bohrung als Zoll- oder Rohrgewinde mit Rückfrage
+  bei Mehrdeutigkeit (Regel 21). **Einstellung (Robert, 06.10.2026):** In den Einstellungen
+  wählt der Kunde, welche Gewindearten in den Auswahllisten stehen (metrisch, G, UNC, UNF,
+  später die zweite Stufe), Vorgabe alle. Die Wahl ist Darstellung, kein Dokumentzustand: Ein
+  Schritt, der eine ausgeblendete Art trägt, zeigt und rechnet sie weiter, und die Erkennung
+  schlägt nur eingeblendete Arten vor. Zweite Stufe, weil „alle“ auch die heutigen Absagen meint:
+  kegelige Rohrgewinde (R nach ISO 7-1, NPT), Linksgewinde und mehrgängige Gewinde.
+  **Abnahme:** Paar G 1/2 innen und außen greift an beiden Kernen, Kernmaße gegen ISO 228-1,
+  UNC 1/4-20 gegen ASME B1.1; Bereichsnachweis, Tor, Texte in sechs Sprachen, Handbuchabsatz;
+  die zweite Stufe mit eigener Abnahme.
+
+**Abschluss:** Beide Stufen fertig (Zweig `paket/gew-zollgewinde`, Bericht `output/konsolidierung-2026-10-07/paket-gew.md`). Normteiltabelle 14 mit 146 Gewindegrößen (27 metrisch, dazu G 24, R 15, UNC 33, UNF 23, NPT 24 bis 24 Zoll), gegen zweite Quellen in 540 Vergleichen geprüft; Gangprofile `flat`, `whitworth` (ISO 228-1) und `npt`; Gangzahl, Linksgang und Kegel 1:16 in jedem Gewindeweg: Druckbares Gewinde, Schraube, Mutter, Gewindebolzen, Gegenstück (Rückfrage, wo die Messung zwei Reihen nicht trennt), Stift für Bohrung, Drehdeckel, *Schraube erstellen*, *Merkmal ändern* und *Entfernen*; der Netzleser erkennt mehrgängige Gewinde; Einstellung der gezeigten Reihen. Abnahme: G 1/2 greift am Netz und exakt, Kernmaße gegen ISO 228-1, 1/4-20 UNC gegen ASME B1.1, R 1/2 und NPT 1/2 greifen in der Bezugsebene. Der Gang rechnet gebündelt, Bit für Bit wie zuvor (`units.exact_cos_sin_array`, Gang Ø 1000 × 0,25 × 50 von 6,0 auf 1,2 s CPU). Der Nachweis fand am Gewindebolzen drei Fehler (Schaft auf dem Kamm, 48 Sehnen an Schaft und Kuppen in jeder Größe, Spiegelschranke unter einem Mikrometer), behoben mit Bibliotheksversion 28. Review 1 behoben (Kegel in der Bezugsebene über `types.thread_at_gauge`, Reihen als Argument statt Einstellung in der Auswertung, Umrisse plattformgleich, eine Umrechnung Gänge je Zoll mit `ParamSpec.least`). **Bereichsnachweis (11.10.2026, Stand `dd6858d17`, Dichtungen nach welle4 `a72079433`):** 50 von 50 Bausteinen bestanden, 21 832 Ecken, kein Bruch; Gewinde 1 424, Schraube 1 424, Mutter 356, Bolzen 2 848 Ecken, jede auch in der gespiegelten Stellung, dazu die gröbste Zollsteigung; `--check` 50 von 50.
 
 ## RM-704 (Teil): Mit zwei Schichten Luft trägt jede Baumspitze eine Trennschicht (10.10.2026)
 
@@ -47664,7 +48082,7 @@ Abdruck kippt weiter, wo sich der Druck wirklich oder in seinen Bits ändert.
   Ausnahme ist `gehaeuse-mit-bausteinen` (Bausteinänderungen, `LIBRARY_VERSION` 23 → 27,
   Mutternfalle `PartChange` 25 und 26). Ebenso jede druckgleiche Beschleunigung, die Bits
   verschiebt; Paket D trifft die Beispiele aus 0.5.3 nicht. Umbau auf gespeicherte Eingänge:
-  RM-706.
+  [RM-706](#rm-706).
 - Solidons eigene neue Grundlage eines eingefrorenen Felds: Cura rechnet seit RM-583
   (`fafcd4841`) `support.z_gap` in ganzen Schichten — Cura 2 von 4 Fällen verschieden (Generic
   220, Fein 0,2 → 0,12 mm, Entwurf 0,2 → 0,28 mm); K1 auf Standard gleich.
@@ -47708,3 +48126,313 @@ Fenstertest `test_print_settings_ui.py::test_a_spool_from_053_shows_and_keeps_th
 Am echten ElegooSlicer 1.5.3.5 danach `slow_down_min_speed = 20`, die Spule weicht nur noch in
 Düse, erster Schicht, Lüfter und Mindestschichtzeit ab (die Mindestschichtzeit trägt die Spule
 aus 0.5.3 als eigenen Wert, ein Feld von 0.5.3).
+
+## RM-706: Der Abdruck einer Buchung hängt an den gespeicherten Eingängen (10.10.2026)
+
+<a id="rm-706-der-abdruck-einer-buchung-hängt-an-den-gespeicherten-eingängen-10102026"></a>
+<a id="rm-706"></a>
+
+**RM-706 — Jede druckgleiche Beschleunigung und jedes Slicer-Update machte aus einem gebuchten
+Druck einen neuen.** `filament_usage.prepare` bildete den Geometrieteil des Abdrucks als
+Prüfsumme über `vertices.tobytes()` und `faces.tobytes()` der ausgewerteten Netze, dazu
+`mesh.slots`, und die Einstellungen als wirksame Werte samt Grundlage des Herstellers
+(Review RM-705, N3). Druckgleich (Bauplan §11.2) erlaubt Bitänderungen innerhalb `PRINT_LIMIT`,
+eine andere Dreiecksfolge und schmalere Datentypen (RM-698); ein Slicer-Update oder eine neue
+Grundlage in Solidon (Cura `z_gap`, RM-583) ändert die Grundlage. Jede solche Änderung ließ
+Solidon die Buchung nicht mehr finden, bei *Ohne Rückfrage buchen* mit einem zweiten Abzug.
+Die Bildung stammt aus `39933e994` (in `v0.4.0` bis `v0.5.3`) — im Changelog als Behebung.
+
+**Behoben:** Ein Körper heißt nach seinen gespeicherten Eingängen (`StoredInputs.bodies`): Der
+Stapel wird wie in der Auswertung durchlaufen (nach Kennung, ausgeschaltete Schritte
+übersprungen, Halt bei `stopped_at` und an einem unbekannten Schritt), ohne ein Netz zu rechnen.
+Je Schritt gehen Name, gespeicherte Werte, Startwert, die Abdrücke der Eingänge, was er an ihnen
+vorbei liest (Quellen mit Inhaltsprüfsumme und Dateiname, Projektmaße als gespeicherte Angabe
+samt Kette, bei `reads_other_bodies`, `reads_scene`, Merkmal- und Zielparametern und einer
+Skizzenebene auf einem Merkmal alle lebenden Körper), die Fassung des Bausteins
+(`PartSpec.version`, bei Rezepten auch die der Bausteine darin) und die gespeicherten Kanten- und
+Merkmalsantworten als Entscheidung (Rang des gewählten Kandidaten nach Lage, Zahlen bis auf
+`PRINT_LIMIT` gleich, ohne `scope`) ein —
+keine Rückfallstufe und keine `cache_version`, die gerade bei druckgleichen Beschleunigungen
+steigt. Benennende und prüfende Schritte und unverändert durchgereichte Eingänge behalten den
+Abdruck ihres Körpers; überzählige Eingänge eines Erzeugers fallen wie in der Auswertung weg. Die
+Einstellungen zählen mit dem, was dem Projekt gehört (`_owned_settings`: Stufe, eigene Wahl und
+Vorschläge mit Wert, Wahl der Platte, eigene Spulenwerte ohne geerbte Felder), dazu die Wahl der
+Grundlage im Slicer (Slicerart, Maschine, Prozess, als Name und nie als Pfad), nicht ihr Inhalt. Drucker und Material zählen
+wie im Cache-Schlüssel (`profile_key` ohne Prozesswerte, je Körper sein Material, jedes Material
+eines Schrittfelds): Eine Kalibrierung (§28.3) ist ein anderer Druck. Der Abdruck von RM-705 reist als **Vorabdruck**
+mit (`former_fingerprints`) — eine belegte Gleichheit, kein Kandidat: Ein bestehender Vorgang
+bucht unter seinem eigenen Abdruck nach (`filaments.book` nähme einen anderen als Konflikt), das
+Angebot heißt nach sich selbst. Export und beide Slicerwege geben die Eingänge als festen Stand
+mit (`StoredInputs.snapshot`), dazu die Grundlage, die die Datei trägt; der Öffnen-Weg rechnet
+die Eingänge einmal je Auftrag statt je Platte (`settled`, vier Platten mit verknüpfter Quelle
+von 16,4 MB: CPU 594 → 141 ms). Nur die Bestandsanzeige rechnet ohne. Kein Format- und kein
+Cacheschritt, es ändert sich nichts Gespeichertes. Regel: `.claude/rules/verbrauch.md`.
+Das Review (`reviews-2026-10-10/review_rm706.md`) fand die Kalibrierung (S1), die
+Antworten (M1) und den eigenen Prozess (M2) als Drucke, die sich einen Abdruck teilten, dazu
+L1–L5; alle vor der Landung behoben.
+
+**Nachweis:** `test_filament_usage_stored_inputs.py` — umsortiert, um `PRINT_LIMIT/4`
+verschoben, über float32 gerundet und alles zusammen lässt den Abdruck stehen, an einem Quader
+und an einer eingelesenen Quelle, während der Vorabdruck (der Abdruck des alten Stands) jedes
+Mal kippt; jede Eingabe, eine Bausteinfassung und eine eigene Wahl ändern ihn, eine neue
+Grundlage, eine neue `cache_version` und eine Spulenbindung nicht. Die Buchung, die 0.5.3 selbst
+schrieb (`aa373e5e…`), steht unter dem Vorabdruck und wird ohne Rückfrage wiedererkannt;
+`PINNED_BOOKING` hält die neue Bildung fest. Eine Kalibrierung jedes festen Materialwerts, ein
+eigenes Material eines Körpers oder Schrittfelds, eine andere Kanten- oder Merkmalsantwort und ein
+eigener Prozess ergeben einen anderen Abdruck; eine gleich beantwortete neue Frage, ein
+Slicer-Update unter denselben Namen und ein anderer Ort des Slicers nicht. Ein Wächter hält die
+Lesarten neben den Eingängen über das ganze Register gleich denen des Cache-Schlüssels. Am
+Basisstand `80d623957` rot (ohne `StoredInputs`), jeder Reviewtest am Stand `35aef0b10` rot,
+danach 39 grün. 29 Mutationen, je eine Entscheidung zurückgenommen (darunter Netzbits,
+Grundlage, Projektprofil, Körper- und Schrittmaterial, Antworten, Wahl der Grundlage in Kern,
+Export und Slicerweg, Streueingänge, jede Lesart, Rezeptbausteine, ein Gang je Platte), machen
+die Tests je rot. Den Anschluss an Export und Slicerwege halten `test_filament_workflow.py` (mit
+Fenster) und `test_print_settings.py`. An den zwölf Beispielprojekten aus
+`v0.5.3` (13 Platten, 21 Körper): Buchungen des Stands vor RM-706 13 von 13 als Vorabdruck
+erkannt; Buchungen aus 0.5.3 12 von 13 — die Ausnahme bleibt `gehaeuse-mit-bausteinen` (bewusste
+Bausteinänderungen, RM-705); druckgleich verändert bleibt der Abdruck 13 von 13, der Vorabdruck
+kippt 13 von 13.
+
+**Grenzen:** Eine Migration, die gespeicherte Schrittwerte umschreibt, eine neue Lesart am
+Register und eine Maßänderung eines Bausteins ändern den Abdruck. Buchungen aus 0.5.2 und 0.5.3
+stehen nur unter dem Vorabdruck und kippen weiter mit Netzbits, Grundlage und Slicer-Updates
+(Cura Fein und Entwurf seit RM-583, siehe [RM-705](#rm-705)).
+
+**Nachtrag 11.10.2026 (Integrationsreview welle4, M1):** Paket E ordnet die Dreiecke von 17 der 21
+Beispielkörper druckgleich um; der Vorabdruck traf danach nur noch 3 von 13 Buchungen aus 0.5.3, mit
+Paket F (*Figur formen*) 2 von 13, und *Ohne Rückfrage buchen* hätte die übrigen ein zweites Mal
+abgezogen. Ordnungsfrei rechnen hilft
+nicht: Die gespeicherten Abdrücke von 0.5.3 hängen an dessen Folge. Ohne Treffer kommt deshalb eine
+Buchung aus 0.5 desselben Projekts mit denselben Druckfilamenten als frühere Buchung zur Prüfung
+und wird nie still gebucht (`ui._earlier_print`), gleich welche Menge, Quelle, Spule oder
+Aufteilung (Review Altbuchung, M2: Schätzung gegen G-Code, Slicer-Update, Spulenwechsel,
+Aufteilung, Handbuchung). Abdrücke ab 0.6.0 tragen das Zeichen `si1-` (`STORED_MARK`, ohne
+Formatschritt, RM-706 war nicht ausgeliefert) und sind nie Kandidat: Eine geänderte Variante mit
+gleicher Menge bucht ohne Rückfrage (M1). **Grenze:** Ein umbenanntes oder unter neuem Namen
+gespeichertes Projekt findet seine Buchung aus 0.5 nicht — die Buchung kennt nur den Namen. Die
+Frage gilt, bis sie beantwortet ist: Trägt das Projekt mit denselben Druckfilamenten eine gültige
+Buchung ab 0.6.0, bucht die nächste Variante selbst; eine zurückgenommene Buchung aus 0.5 ist kein
+Kandidat (Integrationsreview welle4, T2-M1). Offen bleibt das umbenannte Projekt ([RM-720](ROADMAP.md#rm-720)).
+Projekt und Lager schrieb 0.5.3 ohne
+Slicerlauf (23,45 g mit der Quelle G-Code gesetzt), die Spule steht im Test an der Bedarfszeile. Nachweis: Projekt
+und Lager, die 0.5.3 selbst schrieb (*Halter konstruieren*, `usage_booking_weg2_v053*`), am Stand
+davor rot, danach grün; an den zwölf Beispielen vorher 2 erkannt und 11 ohne Rückfrage, nachher 2
+erkannt und 11 zur Prüfung.
+
+## RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)
+
+<a id="rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026"></a>
+<a id="rm-586"></a>
+
+**Befund:** Solidon schlug keine Schichthöhe nach Detail vor. OrcaSlicer, Bambu Studio,
+ElegooSlicer, Creality Print und Anycubic Slicer Next lesen eine Höhenkurve aus
+`Metadata/layer_heights_profile.txt`, PrusaSlicer und SuperSlicer aus
+`Metadata/Slic3r_PE_layer_heights_profile.txt`; Cura hat nur seine Automatik
+`adaptive_layer_height_enabled`, die dem flachsten Dreieck jeder Höhe folgt (am Drachen
+1 194 statt 650 Schichten). Mit feinen Schichten und fester Lagenzahl werden Oberseiten dünn
+(Recherche Nr. 9, 10).
+
+**Gebaut:** `app/core/slice/fine_layers.py` misst je Schicht die aufwärts weisende Schräge,
+deren Stufe breiter als eine Bahn wird (`step_slope = atan(h/Bahn)`, Bahn = halbe
+`bridge_from` der Analyse), und wählt Höhen, in denen sie über einen Übergang (fünf
+Schichten, wie die Glättung der Slicer) so dicht liegt wie auf der kleinsten Kuppe mit zwei
+Stufen (`stepped_area_worth`, 25,9 mm²/mm bei 0,2/0,42). Der Rat `layers.fine_layer_height`
+(halbe Schicht, nie unter einem Viertel der Düse) nennt den Zeitanteil, gebremst bis zur
+Mindestschichtzeit; `shell.top_thickness` 0,8 mm kommt dazu, wo die Lagenzahl die Oberseite
+dünner ließe. Die Übergabe schreibt je Teil eine Höhenkurve mit dem Raster, das gedruckt wird
+(`manufacturer.effective`), nicht unter organischen Bäumen (Befund und Satz am Feld) und
+nicht, wo ein Reinigungsturm neben weiteren Teilen steht (Befund beim Export) — beides lehnen
+die Slicer ab (`Print::validate`) —, nicht für Cura (`NOT_TAKEN_BY`). Die Plattengegenprobe zählt die Lagen der Kurve; vorher
+meldete jede Übergabe mit feinen Schichten „Modellschichten weichen ab“ (100 gegen 129).
+Die Schrägmessung rechnet ihre Normalen nur für aufwärts weisende Dreiecke, elementweise und
+damit auf jeder Maschine gleich (§31-Körper 28 statt 72 ms; Drache 1,1 s von 54 s Schnitt).
+
+**Nachweis (10.10.2026):** Drache (`F:\3D Dateien\Drache.p3d`, 2,9 Mio. Dreiecke, CC2-Raster
+0,2 mm): feine Bereiche 1,2–16,0 (Schwanz, Füße), 40,8–44,7 (Knie), 69,3–79,3 (Schultern),
+110,7–118,9 mm (Kopf); Flügel und Rumpf gleichmäßig. Feine Schichten erzwungen, je Programm
+Druckzeit vorher → nachher (Lagen 650 → 817, davon 352 feiner als 0,2 mm):
+
+| Programm (Drucker) | ohne | mit | Anteil | Solidons Gegenprobe |
+|---|---|---|---|---|
+| ElegooSlicer (CC2) | 333,4 min | 432,5 min | +29,7 % | 258,3 → 318,8 |
+| Bambu Studio (P1S) | 249,1 | 304,3 | +22,2 % | 254,3 → 313,6 |
+| OrcaSlicer (Kobra 2, Rat) | 499,7 | 653,1 | +30,7 % (ohne Deckschicht 27,7 %) | 410,7 → 503,6 |
+| Anycubic Slicer Next (Kobra 2) | 464,1 | 593,6 | +27,9 % | 380,7 → 463,1 |
+| Creality Print (K1) | 234,5 | 285,5 | +21,7 % | 242,9 → 298,7 |
+| PrusaSlicer (MK4S) | 279,2 | 341,4 | +22,3 % | 325,2 → 395,1 |
+| SuperSlicer (Mini, 0,15 mm, Rat) | 878,5 | 900,1 | +2,5 % | 870,5 → 911,8 |
+| Cura (SV06) | 914,0 | 914,0 | 0 % (nimmt keine Kurve) | — |
+
+Rat am Drachen: 26,8 % (Schätzung), keine Warnung zur Lagenzahl in der Gegenprobe. Im Weg
+des Druckdialogs rät Solidon am Drachen Bäume; wo sie organisch gedruckt werden (Elegoo,
+Bambu, Anycubic, Creality, PrusaSlicer), kommt der Rat zu feinen Schichten nicht, das Feld
+nennt den Grund; in OrcaSlicer am Kobra 2 und SuperSlicer kommt er. Je Teil (Kuppe neben
+Klotz) in sieben Programmen: Kuppe fein 17,0–20,0 mm, Klotz gleichmäßig; Deckschicht 0,8 bzw.
+1,2 mm je Teil wirksam, außer SuperSlicer, der die Mindestdicke in Lagen der normalen Schicht
+zählt (dort plattenweit). `test_fine_layers_arrive_where_solidon_says` hält die Kurve in sechs
+Programmen (vor der Rasterkorrektur fünf rot). Würfel 16 mm (abgerundete Kanten): kein Rat.
+Eiffelturm (ElegooSlicer-Raster): Bereiche 23–33, 37–40, 43–44 und 161–162 mm (Bogenscheitel, Plattformen). Bericht:
+`.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586.md`.
+
+**Review (`review_rm586.md`) behoben:** F1 PrusaSlicer verweigerte am XL 2T und am MK4S MMU3
+jede Platte mit zwei Teilen, sobald eines feine Schichten hatte, auch mit einer Spule: Die
+Sperre kennt jetzt PrusaSlicer (`wipe_tower`, mehrere Werkzeuge, `handover.same_layers_required`);
+XL 2T rechnet Kuppe und Klotz (51,6 min, eine Spule 32,6), MMU3 18,4 min. F2 Der Turm sperrt
+nur neben weiteren Objekten (`writer.shared_layer_plates`), wie die Slicer prüfen; eine bemalte
+Kuppe allein druckt ihre Kurve neben dem Turm (Bambu Studio, ElegooSlicer: 113 Lagen, 28 fein;
+XL 2T: 112 Lagen). F3 Der Slicertest zählt in Bambu Studio die Höhen mit Vorschub. F4 Der Grund
+nennt den Zeitanteil des Teils. F5 Die Sonde `slicer_fein.py` liegt versioniert. F6 Die
+Prüfanleitung „an der Modellbahn“ steht wieder in der Regel. F7 Die Grenze entscheidet ohne
+Winkelfunktion (`_step_cosine`); Keile 1:2 und 1:3 auf der Grenze kippten mit einem ULP, Weg
+`fine_layers` in `test_platform_identity.py`. F8 Wirksam ist die Mindestlänge: Kuppen bei 0,2 mm
+Schicht ab R 9,6 immer, unter R 8,3 nie; Changelog „flache Kuppen und Schrägen“. F9
+`_shallow_faces` rechnet in Blöcken, am Drachen 272 → 65 MB Spitze, bitgleich. F10 es:
+„cuadrícula“. **Nachprüfung (`review_rm586_nach.md`):** N1 it nennt die Zeit, N2 die
+gemessene Grenze, N3 Test über mehrere Blöcke, N4 Unterlagen, N5 Test des Druckdialogs.
+Bericht: `.claude/.state/drache-2026-10-08/berichte-2026-10-10/rm586b.md`.
+
+## RM-588: Figuren tragen die Naht hinten, und große Oberseiten werden gebügelt (10.10.2026)
+
+<a id="rm-588-figuren-tragen-die-naht-hinten-und-große-oberseiten-werden-gebügelt-10102026"></a>
+<a id="rm-588"></a>
+
+**RM-588 — Die Naht liegt hinten, und große Oberseiten werden gebügelt.**
+  Die Naht wählte der Hersteller, gebügelt wurde nur bei einer bündigen Passung. Eine Figur
+  zeigt die Naht als Linie auf der Schauseite, eine große flache Oberseite ihre Bahnen
+  (Recherche Nr. 14, 15). Abnahme: Vorschläge mit Grund in allen Familien.
+
+**Abschluss:** Zwei Regeln im Rat, beide je Teil (`advise.PART_PATHS`). *Naht hinten*
+(`shell.seam_position = rear`, Grund „Die Naht zöge sonst eine Linie über die Schauseite.“)
+für Körper ab 10 mm Höhe, deren Außenkontur zu mindestens 70 % frei geformt ist
+(`analysis.free_form_share`, je Schnitt gemerkt), wo der Slicer die Naht selbst sucht. *Oberfläche
+bügeln: Oberste Fläche* (`shell.ironing = topmost`, Grund „Bügeln glättet die große
+Oberseite und kostet Druckzeit.“) für eine letzte Schicht ab 400 mm² und der Hälfte des
+größten Querschnitts, nicht neben einer bündigen Passung. Übergabe: Orca-Familie
+`seam_position = back`, `ironing_type = topmost`; PrusaSlicer und SuperSlicer `rear`,
+`ironing = 1` mit `ironing_type = topmost`; Cura `z_seam_type = back`,
+`ironing_enabled` mit `ironing_only_highest_layer`; „alle Oberseiten“ (bündige Passung)
+ist `top`. Rücklesen aus den Herstellerketten samt Bügeltempo und
+-abstand (`Motion`), Druckzeit mit Bügelzug über die ganze Oberseite, um eine halbe Düse
+eingezogen.
+
+Belegt mit Herstellerprofil, Standard, PLA, Kerne gepinnt, in allen acht Programmen
+(ElegooSlicer, OrcaSlicer, Bambu Studio, Creality Print, Anycubic Slicer Next, PrusaSlicer,
+SuperSlicer, Cura). Je Teil: zwei Kegelstümpfe, nur einer mit Rat — dort Naht in 100 % der
+Schichten hinten und Bügelbahn nur in der obersten Schicht, am anderen keine. Figuren, Anteil
+der Außenschleifen mit Naht im hintersten Fünftel, Profil → Rat: Spider-Man 32–43 % → 90–99 % in den Programmen der Orca-Familie und
+bei Prusa, in Cura 62 → 77 %, vorn je 14–41 % → 0–3 %; Drache in ElegooSlicer 21 → 89 %,
+PrusaSlicer 2 → 100 % (vorher 76 % vorn), Cura 59 → 93 %. Bügeln am
+Pilz: der Slicer bügelt nur die oberste Schicht; Bügelzeit +29 bis +68 % der Druckzeit je
+Programm, Solidons Schätzung trifft sie auf 0 bis 1 %; am Besenhalter mit schmaler Oberseite (+4 bis +16 %) auf 0,99 bis 1,04. Der Befund
+unterwegs (Schätzung bügelte nur innerhalb der Wände, am Besenhalter 0,62 der Bügelzeit) ist
+behoben. Tests in `test_advise.py`, `test_print_time.py`, `test_print_settings.py`,
+`test_manufacturer.py`, `test_slicer_part_settings.py`, Slicertest
+`test_ironing_the_topmost_face_stays_with_that_part` (6 von 6 grün); der RM-587-Test der
+Wandrichtung liest jetzt Orcas Bögen mit. Messwerte und Begründung in
+`konzepte/begruendungen/regel-druckrat.md`. Umgesetzt von Claude (Worktree `F:/sl-naht`).
+
+**Format 52 (Entscheidung Koordinator, 11.10.2026):** *Oberfläche bügeln* ist eine Wahl
+(`shell.ironing`: `none`, `topmost`, `top_surfaces`) statt zweier Schalter mit Vorrangregel;
+die Slicer kennen es selbst als eine Wahl, und der Reiter *Wände* blieb so unter seiner
+Grenze (16 → 15 Felder, `test_every_group_holds_one_subject`). Migration 51 → 52: an wird
+`top_surfaces`, aus `none`, im Satz und in `plate_choices`; die Einordnung 35 → 36 liest den
+Schalter vorher so um, sonst wäre jedes „aus“ eine eigene Wahl. Beispieldatei
+`ironing_v51.p3d` (von welle4 geschrieben), `example_v52.p3d`, Beispielprojekte neu.
+`shell.ironing_topmost` gab es nur auf diesem Zweig (kein Tag, kein anderer Zweig). Der
+Abdruck einer Buchung kippt nicht: Er trägt das Bügeln weiter als Schalter
+(`filament_usage._as_saved`); an sieben Projekten, von 0.5.3 und von welle4 geschrieben,
+darunter Bügeln als Wahl, als Vorschlag und aus, gibt der Stand mit Format 52 denselben
+Abdruck (7 von 7), ohne die Umrechnung keinen (0 von 7). Im Slicer, Sockel 30 × 30 × 10 mit
+Würfel 10 × 10 × 10: „oberste Fläche“ bügelt in allen acht Programmen nur z 20, „alle
+Oberseiten“ z 10 und 20 (Orca-Familie 594–614 gegen 5 732–5 789 mm Bahn, Anycubic, Prusa
+und SuperSlicer 912–922 gegen 8 644–8 706 mm, Cura 863 gegen 8 297 mm).
+
+## RM-771: Den Fehlerbericht als Rückfall bekommt nur ein Programmfehler (11.10.2026)
+
+<a id="rm-771-den-fehlerbericht-als-rückfall-bekommt-nur-ein-programmfehler-11102026"></a>
+<a id="rm-771"></a>
+
+**RM-771 — Jeder Fehler ohne einlösbaren Vorschlag bekam *Fehlerbericht erstellen* als
+Hauptknopf.** Gefunden am Kundenbericht S-20261010-e5014c (0.5.3): Ein abgebrochener
+Agentenzug kam als nacktes `AppError` mit nur `CANCEL`, `dialogs.offered_actions` fiel auf
+*Einzelheiten* und den Fehlerbericht zurück, und der Kunde schickte sein eigenes *Abbrechen*
+als Programmfehler. Dasselbe traf jeden Bedien- oder Geometriefehler, dessen Vorschläge das
+Fenster nicht einlöst (am bloßen Klassenstand: `AppError`, `GenerationFailed`).
+**Behoben (Paket abbruch, Zweig `fix/vorschlag-abbruch`):** Den Rückfall auf den Bericht hat
+nur noch ein `InternalError`; ein Fehler, der den Bericht selbst vorschlägt, behält ihn. Bleibt
+weder Knopf noch Rat, heißt der Ausgang *Schließen*. Ein Wächter liest
+`MainWindow.error_handlers` ohne Fenster und verlangt für jede Kennung aus
+`action_effects.SIDE_EFFECTS` einen Handler oder einen Eintrag mit Grund
+(`WIRED_ELSEWHERE`: örtliche Erkennung, Filamentlager, Katalog; `NOT_A_BUTTON`: Schließen,
+Knöpfe des Rückmeldedialogs, ein Slicerschritt und 27 Ratsätze zum Lesen). Ausnahmen, die
+einen Handler bekommen oder die der Kern nicht mehr anbietet, machen ihn rot.
+**Nachweis:** `test_errors.py::test_only_a_programming_error_falls_back_to_the_bug_report`
+über alle Fehlerklassen, am Stand davor rot (`AppError`, `GenerationFailed`), jetzt grün;
+`test_action_effects.py::test_every_action_of_the_core_is_wired_in_the_window_or_named`,
+Gegenprobe: ohne den Handler `export_only` rot. Changelog 0.6.0: eigener Punkt unter
+*Bedienung und System*. Die 27 Ratsätze stehen als Text im Dialog; sie als Knöpfe einzulösen
+(etwa `open_sketch`, die `sketch.*`-Wege) ist als neuer Punkt beim Koordinator gemeldet.
+
+## RM-773, RM-774, RM-775: Platzierung und Quellen warten auf die Wahl des Kunden (11.10.2026)
+
+<a id="rm-773-rm-774-rm-775-platzierung-und-quellen-warten-auf-die-wahl-des-kunden-11102026"></a>
+<a id="rm-773"></a>
+<a id="rm-774"></a>
+<a id="rm-775"></a>
+
+Gefunden am Kundenprotokoll S-20261010 (0.5.3); alle drei Warnungen waren **Vorschauen**, keine
+Schritte (`evaluation stopped at op N` nennt auch die Kennung des Entwurfs). Zweig
+`fix/schraubenloch-setzen`.
+
+**RM-773 — Schraubenloch ohne Stelle.** Die Vorschau beim Öffnen rechnete mit x = y = z = 0
+ohne Merkmal, bevor der Arbeiter die Fläche gefunden hatte, und *Übernehmen* stand frei.
+**Behoben:** `parts.ops.place_missing` stellt die Frage, an der `_anchor` anhält;
+`OperationDialog.place_missing` sperrt Vorschau und *Übernehmen* mit „Stelle im Bild
+anklicken.“ **Nachweis:** `test_surface_placement_ui.py::test_a_part_without_a_place_is_neither_computed_nor_applied`
+(am Stand davor rot), `test_parts.py::test_the_dialog_asks_the_same_question_about_a_missing_place`.
+
+**RM-774 — „Dieser Punkt liegt außerhalb der gewählten Fläche“ nach dem vorigen
+Schraubenloch.** Der Kunde öffnete das nächste, solange das vorige rechnete; der Fluss trat
+zurück, und die Vorschau band den alten Punkt an die neue Form. **Behoben in zwei Schritten.**
+Der erste vergaß die Stelle bei jedem `projectChanged`, auch beim Speichern, und ließ bei
+Flächenoperationen ohne Baustein den Nullpunkt übernehmbar (Review: *Merkmal verschieben*
+legte nach Strg+S die Bohrung bei (0, 0, 2) ab). Der zweite: `_document_changed` tritt nur
+zurück, wenn das Ergebnis veraltet ist (jede Formänderung erklärt es vorher dafür,
+`Session._changed`); bis zum neuen Ergebnis halten Vorschau und *Übernehmen* an
+(`OperationDialog.hold_place`). Mit dem Ergebnis bindet `start` die gesetzte Stelle über
+`placement.bind_surface` an die neue Form; hält sie, bleibt sie, sonst setzt
+`_renew_the_place` sie neu, und der Balken sagt „Die Fläche hat sich geändert. Die Stelle ist
+neu gesetzt.“ Wo x/y/z das Ziel eines vorhandenen Merkmals sind (`_MOVES_A_FEATURE`), startet
+nichts neu. Ein Dialog, der öffnet, während der vorige Schritt rechnet, wartet gesperrt und
+setzt sich mit dem Ergebnis selbst (vorher fünf Löcher genau übereinander, an jedem Stand).
+**Nachweis** (Fenstertests in `test_surface_placement_ui.py`, am Stand davor je rot):
+`test_saving_keeps_the_place_of_an_open_part_placement`,
+`test_the_target_of_a_moved_feature_survives_an_unrelated_change[save|drill]`,
+`test_a_place_that_still_holds_on_the_changed_shape_stays`,
+`test_a_part_opened_while_the_last_step_computes_seats_itself_afterwards`,
+`test_a_seat_measured_on_a_shape_that_changed_is_found_again` (mit dem Hinweis im Balken).
+
+**RM-775 — „Diese Quelle gibt es im Projekt nicht.“ am Relief.** Die Vorschau beim Öffnen las
+die leere Quelle. **Behoben:** `OperationDialog.source_missing` nennt den Knopf („Bild: Bild
+wählen …“) und rechnet nicht; *STEP laden* und *Zeichnung laden* bieten nur Dateien an, die
+sie lesen (`ingest.plan.reads`). **Nachweis:** `test_operation_ui.py::test_a_relief_without_an_image_waits_for_one`,
+`test_operation_ui.py::test_a_loading_dialog_offers_only_files_it_can_read[load_step|load_outline]`
+(am Stand davor rot), `test_import_formats.py::test_each_loading_step_reads_the_files_the_plan_gives_it`.
+
+**Nachgezogen aus dem Review:** `plan.reads` und `import_plan` teilen `_loader_of`, und der
+Test vergleicht je Endung aus `MODEL_SUFFIXES` mit der Operation, die `import_plan` wählt (G1).
+`test_parts.py::test_the_core_halts_exactly_where_the_dialog_says_a_place_is_missing` prüft
+für jeden Baustein an Fläche oder Bohrung, dass `_anchor` genau dort anhält, wo
+`place_missing` es sagt; der Flächenbezug allein ist die ausgewiesene Ausnahme (G2).
+
+**Nachtrag aus der Nachprüfung:** Der Hinweis im Balken verschwindet, sobald der Kunde selbst
+eine Stelle setzt (Klick, Griff, Maßfeld; geprüft im RM-774-Test über `move_to`, N1). Der
+Test zum Dialog, der während der Rechnung öffnet, hält die Auswertung über eine Freigabe an
+und prüft die Sperre damit unabhängig vom Takt (N2). Der Stand-in in
+`test_placement_dimensions.py` schreibt die Sätze im Balken mit und verlangt nach der Erholung
+„Position festgelegt …“ (N3).
+Aus dem Review dazu: `_begin_bound_surface` setzt `_seated_at_feature` nur noch, wo ein Merkmal
+oder ein alter Schritt die Stelle trägt; vorher nahm die Platzierung nach dem Neusetzen und nach
+jeder Eingabe im Dialog keinen Klick mehr (M1, Tests `test_a_click_is_taken_after_*`). Ein
+Kantenabstand auf der Rückseite nimmt den Hinweis weg, und x/y/z zeigen die gebundene Stelle
+(G1, `test_an_edge_distance_after_the_renewal_is_an_own_choice`).

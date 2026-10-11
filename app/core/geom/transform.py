@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 import numpy as np
 
@@ -425,11 +425,17 @@ _METRIC_IN_CACHE: tuple[str, ...] = (
     "facets",
     "facets_area",
     "facets_boundary",
-    "facets_normal",
     "area_faces",
     "area",
     "solidon_cavity_links",
 )
+
+
+#: Unter diesem Namen vermerkt eine starre Bewegung im Cache der Kopie, welche
+#: Maße sie vom Quellnetz mitgetragen hat (:func:`_carry_cache`). Gedrehte
+#: Normalen und übernommene Flächeninhalte stimmen nur bis auf die letzten
+#: Stellen mit dem überein, was ``trimesh`` aus den neuen Ecken rechnete.
+CARRIED_METRICS: Final = "solidon_carried_metrics"
 
 
 def _carry_cache(source: trimesh.Trimesh, body: trimesh.Trimesh, matrix: np.ndarray) -> None:
@@ -469,13 +475,63 @@ def _carry_cache(source: trimesh.Trimesh, body: trimesh.Trimesh, matrix: np.ndar
         for name in ("face_normals", "vertex_normals"):
             if name in kept.cache:
                 carried[name] = turned(np.asarray(kept.cache[name], dtype=np.float64), cells)
+        # **Die Facettennormalen drehen mit, ihre Aufpunkte wandern mit**:
+        # ``trimesh`` legt beide in einem Zug ab (``facets_origin`` liest nur
+        # den Cache). Unverändert übernommen zeigten die Normalen nach einer
+        # Drehung in die alte Richtung, und ``facets_origin`` gab ``None``.
+        # Zeilenweise gerechnet sind es dieselben Bits wie frisch am bewegten
+        # Netz: die Normale des größten Dreiecks, die erste Ecke darin.
+        if "facets_normal" in kept.cache and "facets_origin" in kept.cache:
+            normals = np.asarray(kept.cache["facets_normal"], dtype=np.float64).reshape(-1, 3)
+            origins = np.asarray(kept.cache["facets_origin"], dtype=np.float64).reshape(-1, 3)
+            carried["facets_normal"] = turned(normals, cells)
+            carried["facets_origin"] = moved_points(origins, cells)
     if not carried:
         return
+    metric = tuple(
+        sorted(
+            name
+            for name in carried
+            if name not in _TOPOLOGY_IN_CACHE and name != "solidon_cavity_links"
+        )
+    )
+    if metric:
+        # Mitgetragene Maße folgen nicht Bit für Bit den neuen Ecken; wer ein
+        # Netz nach Ecken und Dreiecken wiedererkennt, liest sie mit
+        # (``perceive.features._detection_key``, RM-592).
+        carried[CARRIED_METRICS] = metric
     target.verify()
     target.cache.update(carried)
     # Den Stempel auf den bewegten Stand setzen, sonst wirft die nächste
     # Prüfung alles weg, was eben übernommen wurde.
     target.id_set()
+
+
+def _copy_to_move(raw: trimesh.Trimesh) -> trimesh.Trimesh:
+    """``Trimesh.copy()`` für :func:`moved` — Ecken und Dreiecke geteilt statt kopiert.
+
+    :func:`moved` setzt die Ecken neu und bei einer Spiegelung auch die
+    Dreiecke; geschrieben wird in keines der beiden Felder. Die tiefe Kopie
+    von ``copy()`` hielt deshalb nur eine zweite Dreiecksliste: 24 Byte je
+    Dreieck und Bewegung, am Spiderman 21 MB je Verschieben, bei einem Muster
+    je Kopie. Ein Netz gilt als unveränderlich (``geom.mesh``); wer an seinen
+    Feldern etwas ändert, kopiert vorher (``repair.wind_consistently``,
+    ``turn_shells_outward``). Schreibgeschützt ist die geteilte Liste nicht:
+    ``fast_simplification`` (*Dreiecke verringern*) nimmt nur beschreibbare
+    Felder an, auch wenn es nicht hineinschreibt (Review 1 zu RM-698). Farben,
+    Attribute und Metadaten werden kopiert wie bei ``copy()``.
+    """
+    from copy import deepcopy
+
+    copied = trimesh.Trimesh()
+    copied._data.data = dict(raw._data.data)
+    if raw.visual is not None:
+        copied.visual = raw.visual.copy()
+    copied.vertex_attributes.update({k: deepcopy(v) for k, v in raw.vertex_attributes.items()})
+    copied.face_attributes.update({k: deepcopy(v) for k, v in raw.face_attributes.items()})
+    copied.metadata = deepcopy(raw.metadata)
+    copied._cache.verify()
+    return copied
 
 
 def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
@@ -496,7 +552,7 @@ def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
     """
     from app.core.perceive.features import note_movement
 
-    body = mesh.raw.copy()
+    body = _copy_to_move(mesh.raw)
     moved(body, matrix)
     _carry_cache(mesh.raw, body, matrix)
     result = replace(

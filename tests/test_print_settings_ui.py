@@ -1000,7 +1000,8 @@ def test_plate_job_keeps_a_real_dialog_choice_for_persistence_and_handover(
     session = SimpleNamespace(
         profile=profile,
         last_result=None,
-        project=SimpleNamespace(document=document),
+        project=SimpleNamespace(document=document, sources={}),
+        base_dir=None,
         set_print_settings=lambda settings: writes.append(settings),
     )
     dialog = SimpleNamespace(
@@ -8055,12 +8056,13 @@ def test_the_search_lifts_the_hit_instead_of_hiding_the_rest(
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.tabs_toggle is not None and not dialog.tabs_toggle.isChecked()
 
-    # „Bügeln" liegt hinter der Klappe und trifft genau eine Zeile — an einem
-    # Begriff mit acht Treffern (etwa „Bett", das in fünf note-Sätzen steht)
-    # prüfte der Test die Reihenfolge statt das Heben.
-    assert dialog.search_hits("Bügeln") == ["shell.ironing"]
+    # „Oberfläche bügeln" liegt hinter der Klappe und trifft genau eine Zeile —
+    # an einem Begriff mit acht Treffern (etwa „Bett", das in fünf note-Sätzen
+    # steht) prüfte der Test die Reihenfolge statt das Heben. „Bügeln" allein
+    # trifft seit RM-588 auch „Oberste Fläche bügeln“.
+    assert dialog.search_hits("Oberfläche bügeln") == ["shell.ironing"]
 
-    dialog.jump_to("Bügeln")
+    dialog.jump_to("Oberfläche bügeln")
     qt_app.processEvents()
 
     assert dialog.tabs_toggle.isChecked(), "die Tiefe klappt auf, wenn der Treffer dort liegt"
@@ -8877,6 +8879,9 @@ def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
         # oder, bei Cura, als eigenes Netz neben den Teilen (Stufe D).
         if slicer_keys.reads_assembly_file(flavour) or slicer_keys.takes_mesh_settings(flavour):
             measured -= slicer_keys.AS_GEOMETRY
+        # Die feinen Schichten reisen dort als Höhenkurve je Objekt (RM-586).
+        if slicer_keys.reads_assembly_file(flavour):
+            measured -= slicer_keys.AS_HEIGHT_PROFILE
         assert measured == slicer_keys.NOT_TAKEN_BY[flavour], (
             f"{flavour}: gemessen {sorted(measured)}, "
             f"eingetragen {sorted(slicer_keys.NOT_TAKEN_BY[flavour])}"
@@ -10044,6 +10049,9 @@ def test_secondary_filament_advice_is_visible_but_not_applicable_in_prusa(qt_app
     # Ohne Mindestzeit je Schicht, damit der kleine Würfel einen Rat für seine
     # Spule bekommt (``advise`` schlägt sie nur vor, wo keine gilt).
     settings = print_settings.with_choice(settings, "cooling.minimum_layer_time", 0.0)
+    # Die 40 mal 40 mm des großen Würfels sind eine große flache Oberseite; ohne
+    # eigene Wahl stünde „oberste Fläche bügeln“ (RM-588) als übertragbar daneben.
+    settings = print_settings.with_choice(settings, "shell.ironing", "topmost")
     dialog = _print_advice_dialog(qt_app, [large, small], settings=settings)
     dialog._slicer_path = Path("PrusaSlicer.exe")
     dialog._refresh_advice()
@@ -11731,7 +11739,7 @@ def test_plate_preparation_compares_the_final_writer_snapshot(
     passed = []
 
     def write(objects, folder, *, comparison, **_kwargs):
-        comparison(((body, body.mesh, effective),))
+        comparison(((body, body.mesh, effective),), {})
         return folder / "actual.3mf", []
 
     def compare(plate, parts, actual_profile, **kwargs):

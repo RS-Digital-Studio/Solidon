@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Container, Iterable, Mapping, Sequence
+from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from itertools import pairwise
 from typing import TYPE_CHECKING, Any, Final, cast, overload
 
@@ -752,8 +752,12 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
 
 #: Bausteine, deren Gewindemerkmal das gebaute Maß und das Nennmaß nennt statt
 #: nur das Nennmaß — die Geometrie blieb gleich, ein Ergebnis aus dem Cache
-#: trüge aber das alte Merkmal, und die Gewindepassung maß dort 0,00 mm.
-PRINTED_THREADS: Final = frozenset({"printed_thread", "printed_screw", "printed_nut"})
+#: trüge aber das alte Merkmal, und die Gewindepassung maß dort 0,00 mm. Seit
+#: RM-544 (Stand 3) nennt es dazu Größe, Profil, Drehsinn, Gangzahl und Kegel, seit
+#: Stand 4 am Kegel auch das Nennmaß der Bezugsebene (Review GEW, H1).
+PRINTED_THREADS: Final = frozenset(
+    {"printed_thread", "printed_screw", "printed_nut", "threaded_rod"}
+)
 
 
 def _result_version(spec: PartSpec) -> str:
@@ -761,7 +765,7 @@ def _result_version(spec: PartSpec) -> str:
     und des Gewindemerkmals (:data:`PRINTED_THREADS`)."""
     if spec.name in SPRING_ARMS:
         return f"{spec.version}:spring:2"
-    return f"{spec.version}:thread:2" if spec.name in PRINTED_THREADS else spec.version
+    return f"{spec.version}:thread:4" if spec.name in PRINTED_THREADS else spec.version
 
 
 def _title_for(spec: PartSpec) -> TranslatableText | str:
@@ -3042,11 +3046,16 @@ def _placed_by_hand(params: Any) -> bool:
     Ein Parameterausdruck (``=@wand``) zählt als eingetragen, auch wenn er sich
     zu null auswertet: Wer ihn hinschreibt, hat eine Absicht.
     """
+    return _said_by_hand(type(params), lambda field: getattr(params, field, 0.0))
+
+
+def _said_by_hand(params: type[BaseParams], read: Callable[[str], Any]) -> bool:
+    """Ob Position oder Richtung eingetragen sind — gelesen über ``read``."""
     for field in (
-        *(placement_fields(type(params))[name] for name in ("x", "y", "z")),
-        *normal_fields(type(params)),
+        *(placement_fields(params)[name] for name in ("x", "y", "z")),
+        *normal_fields(params),
     ):
-        value = getattr(params, field, 0.0)
+        value = read(field)
         if isinstance(value, str):
             return True
         try:
@@ -3055,6 +3064,31 @@ def _placed_by_hand(params: Any) -> bool:
         except TypeError, ValueError:
             return True
     return False
+
+
+def place_missing(operation: str, params: type[BaseParams], values: Mapping[str, Any]) -> bool:
+    """Ob ein Baustein für Fläche oder Bohrung noch nirgends hin soll (RM-773).
+
+    Dieselbe Frage, mit der :func:`_anchor` die Auswertung anhält: kein
+    Merkmal, keine gebundene Fläche, keine eingetragene Position. Der Dialog
+    stellt sie vor jeder Vorschau und vor *Übernehmen*. Bis 0.6.0 rechnete die
+    erste Vorschau gleich beim Öffnen, bevor die Platzierung ihre Stelle gefunden
+    hatte, und schrieb „Es ist auch keine Position eingetragen“ als angehaltene
+    Auswertung ins Protokoll eines Kunden.
+
+    Ein Flächenbezug (``surface_anchor``) zählt hier als Stelle, obwohl
+    :func:`_anchor` ihn nicht liest: Die Platzierung trägt ihn nie ohne
+    Position und Richtung ein. Alle übrigen Fälle sind gegen :func:`_anchor`
+    geprüft in
+    ``test_parts.py::test_the_core_halts_exactly_where_the_dialog_says_a_place_is_missing``.
+    """
+    spec = part_of(operation)
+    if spec is None or not operation.startswith(_PREFIX) or not (spec.at_face or spec.at_hole):
+        return False
+    fields = placement_fields(params)
+    if any(str(values.get(fields[name], "") or "") for name in ("at_feature", "surface_anchor")):
+        return False
+    return not _said_by_hand(params, lambda field: values.get(field, 0.0))
 
 
 def _anchor(

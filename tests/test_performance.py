@@ -559,6 +559,33 @@ def test_feature_detection_on_two_hundred_thousand_triangles() -> None:
     assert taken < 10.0, "the target is one second; ten catches an order of magnitude"
 
 
+def test_feature_detection_after_a_bore_elsewhere() -> None:
+    """Die warme Marke neben der kalten (RM-592, Konzept §6): erkennen nach einem Schritt.
+
+    Nach *Übernehmen* erkennt die Auswertung den ganzen Körper neu (§21.1); was
+    sich nicht geändert hat, antwortet aus dem Gedächtnis über die Körpergrenze.
+    Gemessen wird die Erkennung nach einer Bohrung Ø 6 mitten in der Platte, fern
+    der vier Bohrungen — nach der kalten Erkennung desselben Körpers im selben
+    Prozess, wie im Fenster. Die Marke hält fest, was das Gedächtnis spart; die
+    Gleichheit Bit für Bit belegt die Messbank
+    (``konzepte/nachweise-oertliche-erkennung-2026-10/messbank/``).
+    """
+    import trimesh
+
+    from app.core.geom.boolean import boolean
+
+    mesh = mechanical_feature_mesh()
+    forget_cache()
+    detect(mesh)
+    tool = trimesh.creation.cylinder(radius=3.0, height=20.0, sections=48)
+    bored = boolean("difference", [mesh, MeshData.of(tool)]).mesh
+    found: list[dict[Any, Any]] = []
+    taken = measure("detect_after_a_bore_204k", lambda: found.append(detect(bored)))
+
+    assert sum(feature.kind == "hole" for feature in found[0].values()) == 5
+    assert taken < 10.0, "a step must not cost more than an order of magnitude over the target"
+
+
 def pocketed_plate(count: int) -> MeshData:
     """Eine Platte mit ``count`` rechteckigen Taschen, jede mit vier Eckrundungen.
 
@@ -1506,6 +1533,33 @@ def test_evening_out_a_mesh_stays_under_three_seconds() -> None:
     edge = float(np.median(np.asarray(mesh.raw.edges_unique_length, dtype=float))) / 2.0
 
     taken = measure("remesh_uniform", lambda: uniform(mesh, edge, 0.0))
+    assert taken < 3.0
+
+
+def test_evening_out_flat_faces_holds_the_edge_under_three_seconds() -> None:
+    """§31 (neu, Review F): dasselbe Budget für den Fall, in dem die Kantenzusage kostet.
+
+    An der Kugel darüber teilt der Kern jedes Dreieck gleichseitig, auch bei
+    krummem Verhältnis (auf ein 2,3-tel der Kante: kein Dreieck mit zu langer
+    Seite), und das Teilen nach dem Kern hat nichts zu tun. An ebenen Flächen
+    zieht der Kern in jedem Gitterquadrat eine Diagonale über der verlangten
+    Länge: am Quader 100 × 80 × 60 auf 0,5 mm in fast allen der 341 456
+    Dreiecke, die ``split_long`` teilt (709 760 danach). Bis RM-671 blieben
+    diese Diagonalen stehen.
+    """
+    import trimesh
+
+    from app.core.geom.mesh_ops import edge_lengths, uniform
+
+    box = MeshData.of(trimesh.creation.box(extents=(100.0, 80.0, 60.0)))
+    evened: list[MeshData] = []
+
+    def verify() -> None:
+        assert float(edge_lengths(evened[0]).max()) <= 0.5 * (1.0 + 1e-9)
+
+    taken = measure(
+        "remesh_uniform_flat", lambda: evened.append(uniform(box, 0.5, 0.0)), verify=verify
+    )
     assert taken < 3.0
 
 

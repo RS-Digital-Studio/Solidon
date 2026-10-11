@@ -114,8 +114,11 @@ Scheitert die Vorfrage oder das Vereinigen, bleibt der Eingang, wie er war.
 **Nach jeder gelungenen Stufe bekommt das Ergebnis die Darstellung seiner
 Eingänge zurück** (`attributes.in_source_layout`, RM-261): Jedes Dreieck, das
 der Kern bitgleich übernommen hat, beginnt an der Ecke seines Vorbilds, und
-die übernommenen Ecken stehen in der Reihenfolge des Eingangs. Dreiecksfolge
-und Koordinaten bleiben die des Kerns. `prepare_ops._without_scars`, das den
+die übernommenen Ecken stehen in der Reihenfolge des Eingangs. Die Plätze der
+Dreiecke und die Koordinaten bleiben die des Kerns; die übernommenen Dreiecke
+besetzen ihre Plätze in der Folge ihres Eingangs (RM-592: der Kern legt
+Unberührtes auch untereinander um). Hat der Schritt nichts geändert, kommt der
+Eingang selbst zurück, und die Erkennung trifft ihren Cache. `prepare_ops._without_scars`, das den
 Kern ein zweites Mal rechnen lässt, legt ebenso zurück. Warum, steht in
 `operationen.md`.
 
@@ -1108,6 +1111,28 @@ erfinden — Regel 7, RM-097; eine Seite, die der Kern nicht schneidet, folgt au
 der Volumenbilanz, auch an Körpern mit eingeschlossenen Hohlräumen,
 `_shells_apart`)
 
+Große Vergleichsnetze durchlaufen in `difference.py` zuerst die bestehende
+koplanare Entlastung aus `mesh_ops._exactly_flattened`, mit unveränderten
+Eingängen und denselben Dichtheits- und Volumenprüfungen.
+
+`mesh_edits.py` (RM-671) legt zusammen und teilt an einem geschlossenen Netz,
+ohne die Form zu ändern: keine neue Koordinate beim Zusammenlegen, geteilt in
+der Mitte einer Kante. *Weich verschmelzen* legt damit die Nadeln aus Marching
+Cubes zusammen, *Dreiecke angleichen* teilt nach dem Kern, was dieser im
+Inneren eines Dreiecks zu lang gezogen hat. Gearbeitet wird nur an einer
+Auswahl (`around`, `suspects`); das Teilen misst je Durchgang nur, was noch zu
+lang sein kann, ab einer Portionsgröße auf mehreren Fäden. Je Runde des
+Zusammenlegens wird gewählt, bis kein Schritt mehr frei ist, in einer über das
+Netz gestreuten Folge (`_claimed`, `_scattered`) — einmal nach Länge gewählt,
+gewann je Runde nur das Ende eines Streifens.
+
+Das Aufräumen in der Ebene (Tauschen nach Delaunay, Zusammenlegen um spitze
+Dreiecke) hatte das Angleichen bis zum Umbau nach Review F zu RM-671. An den
+Abnahmefällen änderte es kaum etwas (2 bis 22 Tausche), an CAD-Netzen kostete
+es das Drei- bis Fünffache der Zeit vor RM-671 und an einer viermal geteilten
+Lochplatte 262 s; `plate_holes` auf 1,5 mm trägt ohne es 44 statt 1,6 %
+Splitter (v0.5.3: 58,9 %). Ein formtreues Neuvernetzen je Ebene ist RM-767.
+
 `section.clip_triangles` begrenzt lose Markierungsdreiecke an denselben
 Halbräumen wie Körper. Es bleibt eine offene Anzeigefläche ohne zusätzliche
 Kappen; die übergebenen Eckpunkte und der ursprüngliche Körper bleiben erhalten.
@@ -1278,9 +1303,9 @@ sagt Grenzen und Strecke über seine eigenen Ecken (`_thread_corners`,
 `_thread_bounds`) — der Fit über Dreiecksmitten liegt radial innerhalb der
 Kammecken und axial neben der Stange —, und sein Kern bleibt um den Überlapp
 unter dem gemessenen Fuß. Ist das Gewinde der ganze Körper, nimmt die Hülle
-alles, und das neue Gewinde ist danach allein der Körper. Linksgängig
-(belegt, `types.thread_is_left_handed`), mehrgängig und ohne Strecke sind
-Absagen mit Vorschlag. Versetzt, gedreht oder verdoppelt wird nicht das
+alles, und das neue Gewinde ist danach allein der Körper. Profil,
+Gangzahl, belegter Drehsinn und Kegel bleiben beim Neuschneiden
+(`_thread_kind`, RM-544); ohne Strecke ist es eine Absage mit Vorschlag. Versetzt, gedreht oder verdoppelt wird nicht das
 Gewinde, sondern der Körper oder die Bohrung.
 
 **Filament nehmen Wulst, Kehle und Gewinde seit P2.6 wie eine Fläche an**
