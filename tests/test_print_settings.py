@@ -10419,6 +10419,77 @@ def test_prusaslicer_prints_automatic_supports_as_trees_where_its_process_does(
     assert handover.organic_styles(setup, profiles.make_profile()) == frozenset(organic)
 
 
+#: Herstellerprozesse der Orca-Familie: normale Stütze im Gitterstil, Bäume, ein
+#: Baumstil unter Bäumen (Prusa XL, ``process_common_xl``) und schon ``snug``.
+_NORMAL = {"support_type": "normal(auto)", "support_style": "default"}
+_TREES = {"support_type": "tree(auto)", "support_style": "default"}
+_ORGANIC_TREES = {"support_type": "tree(auto)", "support_style": "organic"}
+_NORMAL_SNUG = {"support_type": "normal(auto)", "support_style": "snug"}
+
+
+@pytest.mark.parametrize(
+    ("executable", "flavour", "native", "chain", "style", "snug"),
+    [
+        # Orca-Familie: Gitter schreibt normale Stütze, der Stil bleibt beim
+        # Hersteller — außer ``snug`` druckt jeder als Gitter, auch ein Baumstil.
+        ("elegoo-slicer.exe", "orca", _TREES, None, "grid", True),
+        ("orca-slicer.exe", "orca", _ORGANIC_TREES, None, "grid", True),
+        ("orca-slicer.exe", "orca", {}, None, "grid", True),
+        ("orca-slicer.exe", "orca", _NORMAL_SNUG, None, "grid", False),
+        # „Automatisch“ ist, was der Herstellerprozess druckt.
+        ("orca-slicer.exe", "orca", _NORMAL, None, "auto", True),
+        ("orca-slicer.exe", "orca", _NORMAL_SNUG, None, "auto", False),
+        ("elegoo-slicer.exe", "orca", _TREES, None, "auto", False),
+        ("orca-slicer.exe", "orca", {}, None, "auto", False),
+        ("orca-slicer.exe", "orca", _NORMAL, None, "tree", False),
+        ("orca-slicer.exe", "orca", _NORMAL, None, "hybrid", False),
+        ("orca-slicer.exe", "orca", _NORMAL, None, "none", False),
+        # PrusaSlicer: Gitter, Hybrid als Ersatz Gitter, „automatisch“ nach der Kette.
+        ("prusa-slicer.exe", "prusa", {}, "organic", "grid", True),
+        ("prusa-slicer.exe", "prusa", {}, None, "hybrid", True),
+        ("prusa-slicer.exe", "prusa", {}, "grid", "auto", True),
+        ("prusa-slicer.exe", "prusa", {}, None, "auto", True),
+        ("prusa-slicer.exe", "prusa", {}, "organic", "auto", False),
+        ("prusa-slicer.exe", "prusa", {}, "snug", "auto", False),
+        ("prusa-slicer.exe", "prusa", {}, None, "tree", False),
+        # SuperSlicer kennt keine Bäume: Ersatz Gitter.
+        ("superslicer.exe", "prusa", {}, None, "tree", True),
+        ("CuraEngine.exe", "cura", {}, None, "grid", False),
+    ],
+)
+def test_normal_support_beside_a_blocker_goes_out_snug(
+    monkeypatch: pytest.MonkeyPatch,
+    executable: str,
+    flavour: str,
+    native: dict[str, str],
+    chain: str | None,
+    style: str,
+    snug: bool,
+) -> None:
+    """Wer neben einer Sperre normale Stütze druckt, bekommt ``snug``
+    (``handover.snug_beside_blocker``): Im Gitterstil liefen die Säulen unter dem
+    Deckel des Bechers 1,1 mm in die Mündungen des gesperrten Tunnels. OrcaSlicer
+    mit Prusa XL (Baumstil ``organic`` im Prozess) druckte Solidons Gitter als
+    Gitter und bekam zuerst kein ``snug`` (Review rvtun, Fund 1: 1,14 m im
+    Tunnel)."""
+    from app.core.export import manufacturer
+
+    monkeypatch.setattr(handover, "_native_process", lambda _setup: native)
+    monkeypatch.setattr(
+        manufacturer,
+        "prusa_chain",
+        lambda *_args: (
+            None if chain is None else SimpleNamespace(values={"support_material_style": chain})
+        ),
+    )
+    setup = handover.SlicerSetup(executable=Path(executable), flavour=flavour)  # type: ignore[arg-type]
+    key = "support_style" if flavour == "orca" else "support_material_style"
+
+    written = handover.snug_beside_blocker(setup, profiles.make_profile(), style, flavour)  # type: ignore[arg-type]
+
+    assert written == ({key: "snug"} if snug else {})
+
+
 @pytest.mark.parametrize(
     ("flavour", "organic"), [("orca", {"tree"}), ("prusa", {"tree"}), ("cura", set())]
 )
