@@ -70,6 +70,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um modelo que abre logo após iniciar o programa fica editável até um quarto mais cedo.
 - Com um slicer, um jogo ou uma renderização a correr ao lado, os cálculos em modelos grandes terminam em segundos em vez de minutos.
 - Um projeto guardado com um modelo grande abre após um reinício em um ou dois segundos em vez de meio minuto: as características reconhecidas ficam guardadas.
+- Arrastar o manípulo de uma face deixa o percurso preparado em *Deslocar a face*, no separador *Seleção*, e traz o separador para a frente, também durante uma visita guiada. Só *Aplicar* cria o passo.
 
 ### Imprimir e entregar ao slicer
 
@@ -192,6 +193,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao dividir em peças soltas ficam todas as peças imprimíveis, também pinos e anilhas junto a uma placa grande. Só caem pequenas superfícies abertas e migalhas que a impressora não reproduz.
 - Um relevo só é calculado depois de escolhida uma imagem. Até lá a caixa de diálogo indica o botão *Escolher imagem …*.
 - As caixas de diálogo *Carregar STEP* e *Extrudir um desenho* só oferecem ficheiros que conseguem ler. Se o projeto não tiver nenhum, indicam o botão *Escolher ficheiro …*.
+- Uma sequência de linhas no esboço termina assim que fecha no seu início. Até agora ficava um novo troço preso ao ponteiro, e o primeiro Esc parecia não fazer nada.
+- Um comprimento escrito com a ferramenta Linha cria exatamente uma linha. Até agora, ao sair do campo da cota juntava-se uma segunda, de volta ao ponteiro.
 
 ### Gerar com IA
 

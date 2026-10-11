@@ -8949,6 +8949,10 @@ class FeaturePanel(QWidget):
     #: die Freigabe der alten — gerechnet wird erst bei einem echten Wert.
     handlingArmed = Signal(str, dict)
 
+    #: Ein Zug im Bild hat Werte in eine Handlung gelegt (:meth:`take_values`).
+    #: Das Fenster zeigt daraufhin den Reiter, in dem ihr *Übernehmen* steht.
+    valuesTaken = Signal()
+
     stepChangeRequested = Signal(int, dict)
     """Neue Werte für einen Schritt des Verlaufs — die Kennung und die Werte.
 
@@ -11234,6 +11238,7 @@ class FeaturePanel(QWidget):
         entry.take(values)
         if arm:
             self._arm(key)
+            self.valuesTaken.emit()
         return True
 
     def _run_armed(self) -> None:
