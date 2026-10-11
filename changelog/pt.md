@@ -199,6 +199,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um clique que a captura à grelha coloca exatamente sobre um ponto existente apanha esse ponto. Até agora o contorno parecia fechado sem estar ligado.
 - Um duplo clique com a ferramenta Linha termina a sequência de linhas. Até agora criava uma linha de comprimento zero.
 - Enter no campo da cota do diálogo *Desenhar esboço* define a cota e deixa o diálogo aberto. Até agora aplicava o desenho e fechava-o.
+- Muitas paredes redondas de um texto pequeno, como as de um «O» ou de um «D» com *Aplicar texto*, aparecem agora também num corpo grande como *Face curva* na árvore de objetos.
 
 ### Gerar com IA
 

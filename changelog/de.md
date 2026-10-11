@@ -224,6 +224,7 @@ Nutzen da und sonst nichts.
 - Ein Klick, den der Rasterfang genau auf einen vorhandenen Punkt legt, fängt diesen Punkt. Bisher sah die Kontur geschlossen aus, ohne verbunden zu sein.
 - Ein Doppelklick im Linienwerkzeug beendet den Linienzug. Bisher legte er eine Linie der Länge null an.
 - Die Eingabetaste im Maßfeld des Dialogs *Skizze zeichnen* setzt das Maß und lässt den Dialog offen. Bisher übernahm sie die Zeichnung und schloss ihn.
+- Viele runde Wände kleiner Schrift, etwa die eines „O“ oder „D“ per *Text aufbringen*, stehen jetzt auch auf einem großen Körper im Objektbaum als *Gerundete Seite*.
 
 ### Erzeugen mit KI
 

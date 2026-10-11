@@ -564,7 +564,10 @@ _REFUSALS_KEPT: Final = 256
 #:   (``stable_normals``), waagrechte genau als Achse; die Innenlage sucht
 #:   unter derselben Normale. Gespeicherte Erkennungen trügen
 #:   ``±0.9999999999999999`` je nach erstem Dreieck.
-CACHE_FORMAT_VERSION: Final = 61
+#: - 62: Eine gerundete Seite, die ringsum scharf an ebene Facetten stößt,
+#:   gilt ab :data:`~app.core.perceive.features.MIN_FACE_AREA` — die Wände
+#:   eines aufgebrachten „O“. Gespeicherte Erkennungen trügen sie nicht.
+CACHE_FORMAT_VERSION: Final = 62
 
 
 @dataclass(frozen=True, slots=True)
