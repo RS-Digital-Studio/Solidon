@@ -80,14 +80,14 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
-- Su Linux, Solidon crea ora il file di stampa anche con Cura come Flatpak o AppImage.
-- Su Linux, le stampanti di OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print come AppImage sono subito disponibili, anche se lo slicer non è mai stato aperto.
 - La finestra di stampa offre le stampanti dello slicer scelto, come *Primi passi* e *Impostazioni*. Una stampante ripresa così resta legata al suo slicer.
 - Nella finestra di stampa lo slicer si cambia come in *Primi passi*, anche con *Scegli programma …* per uno che Solidon non trova da solo.
 - Una stampante dell'elenco di Solidon e la stessa dello slicer contano come un solo apparecchio. La finestra sceglie il profilo con l'ugello giusto e il file porta il codice di avvio.
 - Senza un profilo dello slicer memorizzato, esportazione e finestra principale usano quanto la finestra di stampa propone per la stampante, con macchina e processo del produttore.
 - Vengono offerti solo gli slicer con cui Solidon lavora, più gli slicer per resina come ChituBox e Lychee. Ora vale anche Bambu Studio come AppImage.
 - Il codice di avvio e il volume di stampa vengono solo dalla tua stampante, non da un altro modello della stessa serie.
+- Su Linux, Solidon crea ora il file di stampa anche con Cura come Flatpak o AppImage.
+- Su Linux, le stampanti di OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print come AppImage sono subito disponibili, anche se lo slicer non è mai stato aperto.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
 - Il controllo che supporti e skirt stiano sul piano ora misura solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
 - I suggerimenti accettati non lasciano quasi più senza supporto gli sbalzi che ne hanno bisogno. *Tenere liberi i canali* blocca solo lo spazio da cui un supporto non si potrebbe più togliere.
