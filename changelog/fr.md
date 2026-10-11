@@ -84,6 +84,7 @@ dans `website/version.json`.
 - Le code de démarrage et le volume d'impression viennent uniquement de votre imprimante, pas d'un autre modèle de la même gamme.
 - La boîte de dialogue d'impression attribue les profils du slicer bien plus vite, à l'ouverture et après chaque changement de slicer.
 - L’export 3MF ne relit les profils du slicer que si quelque chose y a changé, et va nettement plus vite.
+- Un modèle de nom saisi à l’export est mémorisé, même si vous passez d’abord de 3MF à un autre format dans la boîte de dialogue des fichiers.
 - La durée d'impression estimée est plus proche de celle du slicer, nettement plus pour les pièces avec supports.
 - La place des supports et du skirt sur le plateau se mesure désormais sous les seuls surplombs. Les pièces près du bord ne reçoivent plus d'avertissement injustifié.
 - Les suggestions acceptées ne laissent presque plus sans support les surplombs qui en ont besoin. *Garder les canaux libres* ne bloque plus que l'espace d'où un support ne pourrait plus être retiré.

@@ -83,6 +83,7 @@ scrive in `website/version.json`.
 - Il codice di avvio e il volume di stampa vengono solo dalla tua stampante, non da un altro modello della stessa serie.
 - La finestra di stampa assegna i profili dello slicer molto più in fretta, all'apertura e dopo ogni cambio di slicer.
 - L’esportazione 3MF rilegge i profili dello slicer solo se lì è cambiato qualcosa, ed è molto più veloce.
+- Uno schema di nomi digitato durante l’esportazione resta memorizzato, anche se nella finestra dei file passi prima da 3MF a un altro formato.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
 - Il controllo che supporti e skirt stiano sul piano ora misura solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
 - I suggerimenti accettati non lasciano quasi più senza supporto gli sbalzi che ne hanno bisogno. *Tenere liberi i canali* blocca solo lo spazio da cui un supporto non si potrebbe più togliere.

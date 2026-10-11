@@ -108,6 +108,7 @@ Nutzen da und sonst nichts.
 - Startcode und Bauraum kommen nur noch von genau Ihrem Drucker, nicht von einem anderen Modell derselben Reihe.
 - Der Druckdialog ordnet die Profile des Slicers deutlich schneller zu, beim Öffnen und nach jedem Slicerwechsel.
 - Ein 3MF-Export liest die Profile des Slicers nur noch neu, wenn sich dort etwas geändert hat, und ist damit deutlich schneller.
+- Ein beim Export getipptes Namensmuster bleibt gemerkt, auch wenn Sie im Dateidialog erst von 3MF auf ein anderes Format wechseln.
 - Die geschätzte Druckzeit liegt näher an der des Slicers, bei Teilen mit Stützen deutlich näher.
 - Ob Stützen und Skirt auf dem Bett Platz haben, misst die Prüfung nur noch unter den Überhängen. Teile nahe am Rand bekommen keine grundlose Warnung mehr.
 - Übernommene Vorschläge lassen kaum noch Überhänge ohne Stütze, die eine brauchen. *Kanäle frei halten* sperrt nur noch Raum, aus dem keine Stütze mehr herauskäme.

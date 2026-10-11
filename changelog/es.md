@@ -84,6 +84,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El código de inicio y el volumen de impresión vienen solo de su impresora, no de otro modelo de la misma serie.
 - El diálogo de impresión asigna los perfiles del slicer mucho más rápido, al abrirse y tras cada cambio de slicer.
 - La exportación 3MF solo vuelve a leer los perfiles del slicer si algo cambió allí, y es bastante más rápida.
+- Un patrón de nombres escrito al exportar se recuerda, aunque primero cambie de 3MF a otro formato en el diálogo de archivos.
 - El tiempo de impresión estimado se acerca más al del slicer, mucho más en piezas con soportes.
 - La comprobación de si los soportes y el skirt caben en la cama mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
 - Las sugerencias aceptadas ya casi no dejan sin soporte voladizos que lo necesitan. *Mantener libres los canales* solo bloquea el espacio del que ya no se podría sacar un soporte.
