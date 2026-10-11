@@ -11,7 +11,7 @@
 [[parts]]
 name = "barrel_hinge"
 version = "15"
-fingerprint = "a0165f4bf3e24f1af049d6f0694256934e327271338282afcb21bb5b09764878"
+fingerprint = "9521280a52b8e4985f11abd8ae2ef5b89a2ca80111a47a44f2ddcde13e32057e"
 corners = 32
 checked = 32
 excluded = 0
@@ -22,7 +22,7 @@ date = "2026-10-11"
 [[parts]]
 name = "bayonet"
 version = "1"
-fingerprint = "7ae4c0db00573b164535a0836aaccb621fc749aafeaacc041a28bbf556c266f2"
+fingerprint = "78f3014e63361383f7e15fb6f98c4b3ee991fedafd596ff1bbaadd81c7a26361"
 corners = 512
 checked = 512
 excluded = 160
@@ -33,7 +33,7 @@ date = "2026-10-11"
 [[parts]]
 name = "bearing_seat"
 version = "15"
-fingerprint = "401733e70a3a9226a98a1ed3628055d7ab92c6533a15bc22632549173cb0edb6"
+fingerprint = "0ad0ee407ce501a136488a8065cea5820f237ab2d17cb93fcab184708c23e129"
 corners = 64
 checked = 64
 excluded = 0
@@ -44,7 +44,7 @@ date = "2026-10-11"
 [[parts]]
 name = "cable_clip"
 version = "15"
-fingerprint = "1575898700f7cd70fb7ed6e7068beb88b062b314581560b244cb78b0d0f80c57"
+fingerprint = "84043952b14cd419c9330646e7490a01b4d5700c0c50a8d3423d2f36ec3792fa"
 corners = 128
 checked = 128
 excluded = 32
@@ -55,7 +55,7 @@ date = "2026-10-11"
 [[parts]]
 name = "cable_gland"
 version = "16"
-fingerprint = "5ddccc7e6261ea724449a5f60e4bcf35d0663a6be2a6f851e675ecca70f76c4a"
+fingerprint = "670681c3b4f96d3650ea8da143f0daefdfa927484a3c3c977b45f03ba0a4a514"
 corners = 128
 checked = 128
 excluded = 16
@@ -66,7 +66,7 @@ date = "2026-10-11"
 [[parts]]
 name = "channel_joint"
 version = "1"
-fingerprint = "22c681303d5c796b321b4701aba75de8fc5ff211abd230bbfc320776bed84954"
+fingerprint = "ecd1b0ac11e5b0d253b573cb6699a0bef50d5ab9425ffc57bfed30618b583ed4"
 corners = 192
 checked = 192
 excluded = 96
@@ -77,7 +77,7 @@ date = "2026-10-11"
 [[parts]]
 name = "detent_disc"
 version = "1"
-fingerprint = "e27498809b6df25117664a9cc7012730ca9fb48d3bc61ac3f9de90a342adbeb2"
+fingerprint = "c1c65a16fd00456d9c22fbc0f06ae01fb4dfa5d1dbdf1ecb8864e73afe0a0521"
 corners = 256
 checked = 256
 excluded = 172
@@ -88,7 +88,7 @@ date = "2026-10-11"
 [[parts]]
 name = "dowel"
 version = "20"
-fingerprint = "18a8e848f9bb0f2a9b6333ae8fe91abde26001edd6f4c81c1f99a73e555d4506"
+fingerprint = "7214049faace6b883ec160532f31158d8eb5f173b3afcb357f42624d207a77ac"
 corners = 96
 checked = 96
 excluded = 0
@@ -99,7 +99,7 @@ date = "2026-10-11"
 [[parts]]
 name = "fit_ladder"
 version = "18"
-fingerprint = "27ec621d38b1ba0c9a76314c14ec8fa1614de01573c9c616e102f862410cf1e2"
+fingerprint = "1e449bcd5ee59c967fdd2f85fa0b5aeecff47f65c6b1f94aeb679d25ff42daa7"
 corners = 32
 checked = 32
 excluded = 0
@@ -110,7 +110,7 @@ date = "2026-10-11"
 [[parts]]
 name = "foot"
 version = "15"
-fingerprint = "bdb2c08a9114be0a10dcfccc245772a4361293afee62c3a809fd522451b33f75"
+fingerprint = "74c0df8312b1e54239488703ffe212875a9b983d444c0273c623787b85b47755"
 corners = 32
 checked = 32
 excluded = 0
@@ -121,7 +121,7 @@ date = "2026-10-11"
 [[parts]]
 name = "gusset"
 version = "10"
-fingerprint = "b224e6fe332077d5930f1b241d909b49d00cc1075c285ddb15623fc04dac37c8"
+fingerprint = "0b321dd90b96805cd12e20968397707f1139281bc11c3428edaa0fa97cdab915"
 corners = 8
 checked = 8
 excluded = 0
@@ -132,7 +132,7 @@ date = "2026-10-11"
 [[parts]]
 name = "heatset_m4"
 version = "17"
-fingerprint = "976caf10a41c1d1e6a5593e3560c8f7f5c3359c9a8a0c590ebf620233c70ab17"
+fingerprint = "d64ba5ff156c23df9df0fc82c053c26cdab86b4450209c03a6c404210b69b2df"
 corners = 64
 checked = 64
 excluded = 0
@@ -143,7 +143,7 @@ date = "2026-10-11"
 [[parts]]
 name = "hinge_eye"
 version = "15"
-fingerprint = "d823a22d039e116a6e558718fba30ce1f0add8274b44d3c0255683da62efb130"
+fingerprint = "5288d8117816403c54a304191c7dc82008840ce40a06fba66352298ca296f43e"
 corners = 32
 checked = 32
 excluded = 0
@@ -154,7 +154,7 @@ date = "2026-10-11"
 [[parts]]
 name = "holder_fork"
 version = "22"
-fingerprint = "a7726d0d604b513c7e2994024811e6eacfe536b23cd374b8c6084485a0f77bae"
+fingerprint = "ef2d10553b5623f519b21619d2ea44b13b75acd451fa5450b4ba634f6e6e78ad"
 corners = 960
 checked = 960
 excluded = 240
@@ -165,7 +165,7 @@ date = "2026-10-11"
 [[parts]]
 name = "holder_ring"
 version = "22"
-fingerprint = "09c3135757217b230c6dea0ab8c0b8d9971a461549f708086a46e8fc5d212d33"
+fingerprint = "bac77262e4d5c53df7182b8914c449432c89c5846b7106da7f78b7d226b05821"
 corners = 960
 checked = 960
 excluded = 0
@@ -176,7 +176,7 @@ date = "2026-10-11"
 [[parts]]
 name = "holder_shelf"
 version = "22"
-fingerprint = "4c0e7a93d9b49124f9a15d10b5285e7299af66820903cc30808c33f10c128cb3"
+fingerprint = "41a55d2a7a689133408b35194338c51fcc97bf3c836543ed85e87ee17c6efbf1"
 corners = 1920
 checked = 1920
 excluded = 0
@@ -187,7 +187,7 @@ date = "2026-10-11"
 [[parts]]
 name = "holder_u"
 version = "22"
-fingerprint = "5b33f87ea7e737489691d64fe0e1d6003eb77da97d1669b6ffd171de2189e37d"
+fingerprint = "61c11d8839ed7d5729f63fc9c2996ed86090102176e9becb38133495ff51e769"
 corners = 1920
 checked = 1920
 excluded = 0
@@ -198,7 +198,7 @@ date = "2026-10-11"
 [[parts]]
 name = "hose_barb"
 version = "1"
-fingerprint = "555a1c0536406d29f9753e8703506853e30b0453dc192075062835e41f33ea5e"
+fingerprint = "d26dbb07ef2570c67427d9daba731f504d4373ddc387896cb02b2ec2e9cb290f"
 corners = 128
 checked = 128
 excluded = 68
@@ -209,7 +209,7 @@ date = "2026-10-11"
 [[parts]]
 name = "keyhole"
 version = "15"
-fingerprint = "ed0abde3545ee9ec9e6f3ddc5f66483371f0cf9f5a964b90725e67a0cfdaecfd"
+fingerprint = "4d7039ada554c891bec7961877f415525d2d79643557560f130929726b487624"
 corners = 432
 checked = 432
 excluded = 252
@@ -220,7 +220,7 @@ date = "2026-10-11"
 [[parts]]
 name = "latch"
 version = "20"
-fingerprint = "f919570c3aa4675d7121ed6d38d9919bb592ab6572290ab09264b5cad97c8207"
+fingerprint = "e224fb77d9947fa5059e372f618fdf2a1ca78c361151bdf7e01d2a30f42c42fe"
 corners = 32
 checked = 32
 excluded = 0
@@ -231,7 +231,7 @@ date = "2026-10-11"
 [[parts]]
 name = "living_hinge"
 version = "20"
-fingerprint = "30c944d39a159cb84787ed2ef6f3ba9b0c0db12179fa870dd83477a0425d50d7"
+fingerprint = "306e0dc6585bb5e8568cf0e04dcfc153bc203fbcde7b4d31ce8cfe5960ef04f9"
 corners = 32
 checked = 32
 excluded = 8
@@ -242,7 +242,7 @@ date = "2026-10-11"
 [[parts]]
 name = "lug"
 version = "24"
-fingerprint = "5d01c955fd3c98c9a491b9e9058dafba97be78b05c9a2469ccc7df4d55fe898f"
+fingerprint = "aaf524e9ff78f9420e6da458031974ac1307d33e32feb53b83a2ad2d825a9855"
 corners = 192
 checked = 192
 excluded = 0
@@ -253,7 +253,7 @@ date = "2026-10-11"
 [[parts]]
 name = "magnet_pocket"
 version = "15"
-fingerprint = "9554b44f6c9d5d601d008af91d4bf2d1a202c49862ace95e63283143b983a3e0"
+fingerprint = "816fc669e67eea6b2c3e4ebbed3347ce9103e65cc5691bd7c11d3a665e589899"
 corners = 320
 checked = 320
 excluded = 0
@@ -264,7 +264,7 @@ date = "2026-10-11"
 [[parts]]
 name = "nut_trap"
 version = "26"
-fingerprint = "7729526a0f24fb2a10d2b51bede127841f2477e1f7cebfd1be5ebc32dad327e5"
+fingerprint = "f458f90d08c852775a80e35a10f7b7efed8254cb8279f8b64980e8219c6fd3cc"
 corners = 464
 checked = 464
 excluded = 120
@@ -275,7 +275,7 @@ date = "2026-10-11"
 [[parts]]
 name = "organizer_divider"
 version = "1"
-fingerprint = "deb1f99e6ed490f1bb25532089278920537428970fe5b64861b0e24a296c6d8d"
+fingerprint = "25dc42b8b371b26a43acff4dfc7a0a83ab82f94fb66e48d365aa13dd896aaafe"
 corners = 8
 checked = 8
 excluded = 0
@@ -286,7 +286,7 @@ date = "2026-10-11"
 [[parts]]
 name = "organizer_foot"
 version = "1"
-fingerprint = "0e7dc18d320bfb51ed688b365415188fd02ae0f85e74167a72a768af99c01692"
+fingerprint = "0b8c8b044a64c5e09d9339c1f0316518084b7eb66492a00fc13dafaddda7eda3"
 corners = 16
 checked = 16
 excluded = 4
@@ -297,7 +297,7 @@ date = "2026-10-11"
 [[parts]]
 name = "organizer_rim"
 version = "1"
-fingerprint = "4dd9d142ecb9cc64411baadeda8d5e1e19acf3cbb4fc0a1fbb65a91f8c639a54"
+fingerprint = "c6a21a537327e1598950b9a522261ef9f34283792443d060791f38ba13c2c78b"
 corners = 32
 checked = 32
 excluded = 18
@@ -308,7 +308,7 @@ date = "2026-10-11"
 [[parts]]
 name = "organizer_tray"
 version = "1"
-fingerprint = "c7bfc5beb0f58d599cb1729f5fbc01feb567a4a0b2bbab10706dd8e95342e33c"
+fingerprint = "79ec867fa08bd75b257ac7cbbf5f569a2185bc03ac55e63bd94c85e1c0aad2bc"
 corners = 64
 checked = 64
 excluded = 43
@@ -319,7 +319,7 @@ date = "2026-10-11"
 [[parts]]
 name = "overhang_fan"
 version = "20"
-fingerprint = "2106410a96d1a19ccfdb02ed6ec3bf9a1429f6a83090628d2609fe7cbdaad083"
+fingerprint = "a51f721640bc0fef9e6fa8e477a7239d9c1613d286e68e911e9bf1214f888e8e"
 corners = 32
 checked = 32
 excluded = 16
@@ -330,7 +330,7 @@ date = "2026-10-11"
 [[parts]]
 name = "pegboard_hook"
 version = "15"
-fingerprint = "b2da9a2f4d604da831c8fe7d2baec259260d9104a035a7f261491d41bc480b91"
+fingerprint = "aa798ab53694aacb9f730a05ed9c5df7a12fd67040fc2bab4d90c3d03e66088f"
 corners = 128
 checked = 128
 excluded = 0
@@ -341,7 +341,7 @@ date = "2026-10-11"
 [[parts]]
 name = "pipe_clamp"
 version = "1"
-fingerprint = "b35336205a75d3fa79e6c154498e1ddf330bac926a187e6dc7475bafdbe49047"
+fingerprint = "31c8a3c04dfbb902595748af59f2779aabb89a3dd3939e07eb936c42cc230fd9"
 corners = 3072
 checked = 3072
 excluded = 1472
@@ -352,7 +352,7 @@ date = "2026-10-11"
 [[parts]]
 name = "printed_nut"
 version = "24"
-fingerprint = "53b84b4576c5a0ca13e2003aec2ae1ab0d73c4e6825e0930d55c2389ac8a2b88"
+fingerprint = "838060c3d3b06eaff3168b0cbd56583f92e9d27f54ec4cd022dd87cfa16e1e62"
 corners = 356
 checked = 356
 excluded = 30
@@ -363,7 +363,7 @@ date = "2026-10-11"
 [[parts]]
 name = "printed_screw"
 version = "24"
-fingerprint = "e417cd746b9fb78786904a47b260644766eb306f990cfd17f4741a3f77fecc4a"
+fingerprint = "cbfcac2ae8b210f16568b9b8765072cca19b2e0ecadf64b0158dbb31f5f2cfa2"
 corners = 1424
 checked = 1424
 excluded = 84
@@ -374,7 +374,7 @@ date = "2026-10-11"
 [[parts]]
 name = "printed_thread"
 version = "24"
-fingerprint = "0fc941592785ce5033faad9428808e69629795b246023e6b1601c9605681c344"
+fingerprint = "22fea821c93b0995218e030960c77cf9e43d38c705a7d0273544d423be188020"
 corners = 1424
 checked = 1424
 excluded = 96
@@ -385,7 +385,7 @@ date = "2026-10-11"
 [[parts]]
 name = "profile_clamp_liner"
 version = "1"
-fingerprint = "c9f4e4b5d2b4214a6fa8524b68169fc7a1dea3c11e4ca0057b72d7a154f07849"
+fingerprint = "20c042637fae927c9de2546fc9aeb3609133fcd7db9f178236448456377d27ef"
 corners = 256
 checked = 256
 excluded = 0
@@ -396,7 +396,7 @@ date = "2026-10-11"
 [[parts]]
 name = "profile_clamp_shell"
 version = "19"
-fingerprint = "d78c03cbe8881ad78341a2444e6f7d6bcbe00a32c4f6dc2c9093a61a4247f4da"
+fingerprint = "9ac9e35d78ea2bd7b48d6c7c59970f86d0079477c837a6fc5d90e4572e2916b6"
 corners = 768
 checked = 768
 excluded = 364
@@ -407,7 +407,7 @@ date = "2026-10-11"
 [[parts]]
 name = "profile_tongue"
 version = "23"
-fingerprint = "9a3da6db8e9837a9a09193056e1ab024110a7f6faf4c6aa68560d0c2fd01c69a"
+fingerprint = "59895524306207e6470a8a669f5a1fa8c735c3e98bee9ab30fbe785ba5cc3277"
 corners = 80
 checked = 80
 excluded = 16
@@ -418,7 +418,7 @@ date = "2026-10-11"
 [[parts]]
 name = "rib"
 version = "20"
-fingerprint = "e4ae7cc34c09273bf917e29dcc0f2099130e082844d605e0c3a4a1a85a773269"
+fingerprint = "9e552a0866c7b55e968c8fa17b13d2e565b11d5485defa394b9147570d5e9ae5"
 corners = 32
 checked = 32
 excluded = 0
@@ -429,7 +429,7 @@ date = "2026-10-11"
 [[parts]]
 name = "rod_connector"
 version = "1"
-fingerprint = "095a595e1869e5a06b90ab34b4ddc11a4ab488a5e6521fc2735e1a3eedbae986"
+fingerprint = "112a7a9458fdf428e9f0fab570c15173b008c77833c53aceaff3985bbee38b46"
 corners = 384
 checked = 384
 excluded = 48
@@ -440,7 +440,7 @@ date = "2026-10-11"
 [[parts]]
 name = "room_floor"
 version = "1"
-fingerprint = "b27df056a83a4c8f47dc76a98539cb032f8ebd9b31b0eb8e178a7231a0012976"
+fingerprint = "b9020296c088ce25b32b2e46eecd5a19fad97d230827c4e958f65a47d37b211f"
 corners = 320
 checked = 320
 excluded = 216
@@ -451,7 +451,7 @@ date = "2026-10-11"
 [[parts]]
 name = "room_pane"
 version = "1"
-fingerprint = "66f81b55cb01aacb04d3dcf028fbf2609b9f579cf4becd729db0b8d20a8edf5c"
+fingerprint = "47faab2cdde5fc4d2247a350b03f74968bd771fe59eb37df2bbc415909e46724"
 corners = 16
 checked = 16
 excluded = 0
@@ -462,7 +462,7 @@ date = "2026-10-11"
 [[parts]]
 name = "room_wall"
 version = "1"
-fingerprint = "c84e040cb6150fc674d33becdc8ceb3bfe5da544c76837cf9ec9f6a8f23e1ef4"
+fingerprint = "8da2d93e10198beb24de973cf5cb025f6c3e26c836479a661aa6b26f9a968c53"
 corners = 256
 checked = 256
 excluded = 84
@@ -473,7 +473,7 @@ date = "2026-10-11"
 [[parts]]
 name = "screw_hole"
 version = "15"
-fingerprint = "869c535dbf2d542808ed4f0304dab8067675ba8ce75da38d5ec8b986d272c7df"
+fingerprint = "848bd49d0e10f340669caa037f7c692b1d52c97d27eb3e96e00151554c2d92f8"
 corners = 464
 checked = 464
 excluded = 0
@@ -484,7 +484,7 @@ date = "2026-10-11"
 [[parts]]
 name = "seal_gasket"
 version = "1"
-fingerprint = "a53e15ef359be2211dbc2a0e96126fab01363b2c0e4af37479e030f8deffe144"
+fingerprint = "28e48f847ea35cd2d50a521441f2eff152ee6b587a914ceeb49f93840c9c2f19"
 corners = 12
 checked = 12
 excluded = 0
@@ -495,7 +495,7 @@ date = "2026-10-11"
 [[parts]]
 name = "seal_groove"
 version = "1"
-fingerprint = "eb22d07383ff08bd21a779bfee42d7a35ff382d527408b5c4cbfbf72cea5eea6"
+fingerprint = "c86de15db9324b5000dd587053a3e9d509490eb24ec3a463fe7016c86d02c3d2"
 corners = 8
 checked = 8
 excluded = 0
@@ -506,7 +506,7 @@ date = "2026-10-11"
 [[parts]]
 name = "snap_connector"
 version = "20"
-fingerprint = "dc9544e2bbc91cf7ccdecebd55ceaf8f31694797105b2009358f02539f165ac2"
+fingerprint = "e6abcea9919704f4619764e526273d1efd325717ea90b2e2f2c31d64346225da"
 corners = 16
 checked = 16
 excluded = 0
@@ -517,7 +517,7 @@ date = "2026-10-11"
 [[parts]]
 name = "snap_fit"
 version = "20"
-fingerprint = "8b5b15a9889169fc1a02e3c488ad1fb78886e2f556890962efc89d8d60c7a76a"
+fingerprint = "d9350e4dfdc765548bfebc762a9296ca37217b42fff5c417e8244267a6769f37"
 corners = 32
 checked = 32
 excluded = 0
@@ -528,7 +528,7 @@ date = "2026-10-11"
 [[parts]]
 name = "threaded_rod"
 version = "28"
-fingerprint = "e44857e9312e75b8113e1cdec4e7cbd95be2d7f43ed1a2effc4a0ce09579272c"
+fingerprint = "439ba3e036ae3f596db27334957d444cb9aa763cfef02662b16a209423cd1615"
 corners = 2848
 checked = 2848
 excluded = 1679
@@ -539,7 +539,7 @@ date = "2026-10-11"
 [[parts]]
 name = "wall_ladder"
 version = "20"
-fingerprint = "dd62717d69b32330c377e17b9387c0e0c81a07eacdbe563af0c562bc12d7facb"
+fingerprint = "fb813f7362bc0f176a293478366369494e438c6c2707f7bb4fcc8c6302fd4607"
 corners = 16
 checked = 16
 excluded = 0
@@ -550,7 +550,7 @@ date = "2026-10-11"
 [[parts]]
 name = "wall_mount"
 version = "20"
-fingerprint = "d77a784618f5aa05d21cd35db930041d622915819efa763b69edbcd5a3922759"
+fingerprint = "9e16cfbe14b52d6a21dcc7666a3907ddc08fe8180137b0aedbc8d4486ac591dc"
 corners = 832
 checked = 832
 excluded = 0
