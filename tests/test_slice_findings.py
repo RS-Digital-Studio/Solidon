@@ -4765,6 +4765,48 @@ def test_a_lattice_plate_between_two_walls_is_no_arch() -> None:
     assert advise.support_need(result).needed
 
 
+def slab_between_posts() -> MeshData:
+    """Eine Platte 12 auf 10 mm kragt aus einer Wand, an ihrem Ende steigt eine Lippe
+    unter 20° an; zwei Pfosten stehen 0,5 mm neben ihren Längsseiten, berühren sie aber
+    nicht — wie die Ablage „Side kit rest 3“ aus dem Korpus."""
+    rise = 3.0 * math.tan(math.radians(20.0))
+    lip = trimesh.convex.convex_hull(
+        [
+            (x, y, z)
+            for y in (0.0, 10.0)
+            for x, z in ((12.0, 10.0), (12.0, 13.0), (15.0, 10.0 + rise), (15.0, 13.0))
+        ]
+    )
+    body = trimesh.boolean.union(
+        [brick(5.0, 16.0, 25.0, (-2.5, 5.0, 12.5)), brick(12.0, 10.0, 3.0, (6.0, 5.0, 11.5)), lip]
+    )
+    posts = [brick(13.0, 1.0, 20.0, (5.5, y, 10.0)) for y in (-1.0, 11.0)]
+    return place_on_bed(MeshData.of(trimesh.util.concatenate([body, *posts])))
+
+
+def test_only_the_last_layer_of_a_ceiling_holds_across_two_allowances() -> None:
+    """Nur die oberste Schicht einer Decke hält bis zur doppelten Zugabe (Nachprüfung
+    RM-585, N4): Dort schließt die nächste Schicht den Spalt zur hohen Wand von beiden
+    Seiten. Für jede Schicht verdoppelt, hielten Pfosten 0,5 mm neben der Platte sie
+    fest, die Decke schloss sich, und die Ablage „Side kit rest 3“ verlor am Centauri
+    ihre Stütze — im G-Code hingen dort Bahnen 10 mm mit freiem Ende."""
+    from app.core.slice import analysis
+
+    result = slice_body(slab_between_posts(), 0.2, overhang_angle=60.0, bridge_from=TWO_LINES)
+    layers = result.layers
+    ceilings = analysis._Ceilings(layers, lambda index: analysis._material(layers[index]))
+    first = min(
+        (index, number)
+        for index, layer in enumerate(layers)
+        for number in range(len(layer.overhangs))
+    )
+    ceiling = ceilings.of(first)
+
+    assert len({index for index, _number in ceiling}) > 1, "die Lippe gehört zur Decke"
+    assert not ceilings.closes(ceiling), "Luft neben der Platte ist kein Halt"
+    assert advise.support_need(result).needed
+
+
 def two_flat_arches_on_slabs() -> MeshData:
     """Der flache Bogen auf der Platte zweimal, der zweite gespiegelt daneben."""
     first = flat_arch_on_a_slab().raw.copy()
