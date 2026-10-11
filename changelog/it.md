@@ -120,7 +120,7 @@ scrive in `website/version.json`.
 - Se un pezzo compensa già nel modello, con un foro con *Considera la tolleranza del materiale* o *Compensa il piede d'elefante*, Solidon propone che lo slicer non lo faccia di nuovo.
 - Anche con stampanti che PrusaSlicer o SuperSlicer non conoscono, entrambi stimano il tempo di stampa con le accelerazioni trasmesse, e il file indica il materiale della bobina.
 - Anche con il computer a pieno carico, Solidon indica il vero motivo dopo l'arresto di uno slicer, invece di un tempo scaduto. Un file di stampa finito viene usato.
-- Il magazzino filamenti propone da verificare ogni registrazione precedente dello stesso progetto con bobine e quantità uguali, anche con *Registra senza chiedere*, invece di scaricare.
+- Il magazzino filamenti propone da verificare una registrazione di Solidon 0.5 dello stesso progetto con gli stessi filamenti e chiede prima di scaricare di nuovo.
 - Da questa versione un consumo scaricato resta legato alla sua stampa, anche se un aggiornamento calcola più in fretta o cambia il profilo del produttore nello slicer. Prima contava come nuova.
 - Dove cupole piatte e pendenze mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa del pezzo.
 
