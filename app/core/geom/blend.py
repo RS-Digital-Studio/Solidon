@@ -412,7 +412,9 @@ def distance_field(
                 progress(done, str(_("Abstandsfeld rechnen")))
     if banded and far.any():
         far_value = cast(float, beyond) + 2.0 * spacing
-        _signs_from_the_band(surface, field, far, grid, cast(tuple[int, ...], shape), far_value)
+        _signs_from_the_band(
+            surface, field, far, grid, cast(tuple[int, ...], shape), far_value, cancelled
+        )
     return field
 
 
@@ -438,6 +440,7 @@ def _signs_from_the_band(
     grid: np.ndarray,
     shape: tuple[int, ...],
     value: float,
+    cancelled: CancelToken | None = None,
 ) -> None:
     """Gibt jedem Punkt außerhalb des Bands ``±value`` mit dem Vorzeichen seiner Nachbarn.
 
@@ -447,9 +450,15 @@ def _signs_from_the_band(
     sind** (Nachprüfung F, T2-1): Bis dahin entschied der erste Bandpunkt in
     fester Folge, und trug gerade er ein falsches Vorzeichen — die Art, die
     RM-769 beschreibt, an einem CAD-Besenhalter einer von 351 120 —, kippte die
-    ganze Gruppe, etwa das ganze Äußere. Eine uneinige Gruppe rechnet jeden
-    ihrer Punkte genau. Eine Gruppe ohne Bandpunkt daneben fragt einen ihrer
-    Punkte genau.
+    ganze Gruppe, etwa das ganze Äußere.
+
+    Eine uneinige Gruppe und eine ohne Bandpunkt daneben rechnen **einen**
+    ihrer Punkte genau und geben sein Vorzeichen allen: Zwei benachbarte
+    Punkte außerhalb liegen beide weiter als das Band von der Fläche, keine
+    Rasterkante zwischen ihnen kreuzt sie, also wechselt das Vorzeichen in der
+    Gruppe nicht. Jeden Punkt genau zu rechnen kostete an gekreuzten Rohren
+    mit Raster 0,5 für einen gekippten Randpunkt 5,0 statt 0,04 s, ohne
+    Abbruch (Review Blend, M1).
     """
     from scipy import ndimage
 
@@ -472,24 +481,19 @@ def _signs_from_the_band(
     seen = np.bincount(listed, minlength=groups + 1)
     plus = np.bincount(listed[marks], minlength=groups + 1)
     positive = plus > 0
-    torn = (plus > 0) & (plus < seen)
     flat_labels = labels.reshape(-1)
-    count = min(NEAREST_SAMPLES, len(surface.owners))
-    for label in np.flatnonzero(seen[1:] == 0) + 1:
-        point = np.asarray(grid[int(np.flatnonzero(flat_labels == label)[0])], dtype=np.float64)
-        _away, near = surface.tree.query(point[None, :], k=count)
-        candidates = surface.owners[np.asarray(near, dtype=np.int64).reshape(1, count)]
-        positive[label] = bool(surface.signed(point[None, :], candidates)[0] > 0.0)
-    exact = far & torn[flat_labels]
-    rest = far & ~exact
-    field[rest] = np.where(positive[flat_labels[rest]], value, -value)
-    asked = np.flatnonzero(exact)
-    for start in range(0, len(asked), PAIR_CHUNK):
-        rows = asked[start : start + PAIR_CHUNK]
+    undecided = np.flatnonzero(((plus > 0) & (plus < seen)) | (seen == 0))
+    undecided = undecided[undecided > 0]
+    if len(undecided):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        count = min(NEAREST_SAMPLES, len(surface.owners))
+        rows = [int(np.argmax(flat_labels == label)) for label in undecided]
         points = np.asarray(grid[rows], dtype=np.float64)
-        _away, near = surface.tree.query(points, k=count, workers=-1)
+        _away, near = surface.tree.query(points, k=count)
         candidates = surface.owners[np.asarray(near, dtype=np.int64).reshape(len(rows), count)]
-        field[rows] = surface.signed(points, candidates)
+        positive[undecided] = surface.signed(points, candidates) > 0.0
+    field[far] = np.where(positive[flat_labels[far]], value, -value)
 
 
 def _share(progress: ProgressFn | None, offset: float) -> ProgressFn | None:
@@ -726,16 +730,22 @@ def blend_bodies(
     found, faces, _normals, _values = measure.marching_cubes(field, 0.0)
     # Die Polsterung verschiebt den Ursprung um einen Schritt je Achse zurück.
     vertices = low + (_in_double(field, found) - 1.0) * grid
-    body = trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
-    # **Alle Schalen zugleich wenden, nicht jede für sich.** Marching Cubes
-    # wickelt jedes Dreieck nach dem Gefälle des Felds, die Schale eines
-    # Hohlraums also nach innen — nur zeigt bei innen positivem Feld alles
-    # verkehrt herum. ``fix_normals()`` wendet bei mehr als einer Schale jede
-    # einzeln nach außen und machte so seit v0.1.1 aus einem eingeschlossenen
-    # Hohlraum einen zweiten Körper: Eine Hohlkugel mit einer Kugel daneben kam
-    # mit 42 473 statt 28 090 mm³ heraus und meldete sich als unverbunden
-    # (Nachprüfung F, Teil 2).
-    body.fix_normals(multibody=False)
+    # **Die Wicklung kommt aus der Konstruktion, alle Schalen zugleich.**
+    # Marching Cubes wickelt jedes Dreieck nach dem Gefälle des Felds, die
+    # Schale eines Hohlraums also nach innen — nur zeigt bei innen positivem
+    # Feld alles verkehrt herum, und das kehrt der Bau um. ``fix_normals()``
+    # wendete bei mehr als einer Schale jede einzeln nach außen und machte so
+    # seit v0.1.1 aus einem eingeschlossenen Hohlraum einen zweiten Körper: Eine
+    # Hohlkugel mit einer Kugel daneben kam mit 42 473 statt 28 089 mm³ heraus
+    # und meldete sich als unverbunden (Nachprüfung F, Teil 2). Nach dem
+    # Gesamtvolumen gewendet bliebe ein offenes Ergebnis ganz verkehrt (Review
+    # Blend, G1); ``fix_normals`` bleibt der Rückfall für eine uneinheitliche
+    # Wicklung.
+    body = trimesh.Trimesh(
+        vertices=vertices, faces=np.ascontiguousarray(faces[:, ::-1]), process=True
+    )
+    if not body.is_winding_consistent:
+        body.fix_normals(multibody=False)
     body = _without_needles(body, grid, cancelled)
     _log.info(
         "blended %d and %d triangles into %d over %d samples",

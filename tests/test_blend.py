@@ -471,15 +471,20 @@ def test_the_banded_field_computes_only_near_the_surface(monkeypatch: pytest.Mon
     assert sum(asked) < 0.5 * len(points), f"{sum(asked)} von {len(points)} genau gerechnet"
 
 
-def test_a_group_outside_the_band_takes_its_sign_only_from_an_agreeing_rim() -> None:
+def test_a_group_outside_the_band_takes_its_sign_only_from_an_agreeing_rim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Nachprüfung F, T2-1: Eine Gruppe außerhalb des Bands nahm das Vorzeichen ihres
     ersten Randpunkts in fester Folge der Achsen.
 
     Trug gerade er ein falsches — die Art, die RM-769 beschreibt, am Besenhalter
     einer von 351 120 Punkten —, kippte die ganze Gruppe, hier das ganze Äußere
     nach innen. Jetzt gilt das Vorzeichen des Rands nur, wenn alle seine Punkte
-    sich einig sind; sonst rechnet die Gruppe genau. Gekippt wird die ganze Lage
-    links des Quaders, denn dort sucht die Folge zuerst.
+    sich einig sind; sonst entscheidet **ein** genau gerechneter Punkt der
+    Gruppe, denn in ihr wechselt das Vorzeichen nicht. Jeden Punkt genau zu
+    rechnen kostete an gekreuzten Rohren 5,0 statt 0,04 s, ohne Abbruch (Review
+    Blend, M1) — gezählt wird deshalb, wie viele Punkte genau rechnen. Gekippt
+    wird die ganze Lage links des Quaders, denn dort sucht die Folge zuerst.
     """
     box = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
     axis = np.arange(-16.0, 16.0 + 1e-9, 2.0)
@@ -489,10 +494,18 @@ def test_a_group_outside_the_band_takes_its_sign_only_from_an_agreeing_rim() -> 
     far = np.abs(exact) > 5.0
     surface = blend._Surface.of(box, 2.0)
     value = 9.0
+    asked: list[int] = []
+    signed = blend._Surface.signed
 
+    def counted(self: blend._Surface, where: np.ndarray, candidates: np.ndarray) -> np.ndarray:
+        asked.append(len(where))
+        return signed(self, where, candidates)
+
+    monkeypatch.setattr(blend._Surface, "signed", counted)
     agreed = exact.copy()
     blend._signs_from_the_band(surface, agreed, far, points, shape, value)
     assert np.array_equal(agreed[far], np.where(exact[far] > 0.0, value, -value)), "einig: ±value"
+    assert sum(asked) == 0, "einig rechnet keinen Punkt genau"
 
     torn = exact.copy()
     left = ~far & (points[:, 0] < -10.0)
@@ -502,8 +515,9 @@ def test_a_group_outside_the_band_takes_its_sign_only_from_an_agreeing_rim() -> 
     outside = far & (exact < 0.0)
     inside = far & (exact > 0.0)
     assert outside.any() and inside.any()
-    assert np.array_equal(torn[outside], exact[outside]), "uneinig: genau gerechnet, außen"
+    assert np.array_equal(torn[outside], np.full(int(outside.sum()), -value)), "außen bleibt außen"
     assert np.array_equal(torn[inside], np.full(int(inside.sum()), value)), "das Innere ist einig"
+    assert sum(asked) == 1, f"{sum(asked)} Punkte genau gerechnet statt einem für die Gruppe"
 
 
 def _hollow(outer: trimesh.Trimesh, inner: trimesh.Trimesh) -> MeshData:
