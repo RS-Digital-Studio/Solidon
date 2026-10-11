@@ -186,6 +186,25 @@ UNIT_TO_MM: Final[dict[LengthUnit, float]] = {
     "in": 25.4,
 }
 
+#: Die Gewindeformen eines eigenen Maßes (RM-544): metrisch mit der Steigung in
+#: Millimetern, Whitworth (55°, das Profil von G und R) und Unified (das von UNC
+#: und UNF) mit Gängen je Zoll. Hier und nicht bei den Bausteinen, weil
+#: *Schraube erstellen* (``brep``) sie ohne Bausteinbibliothek liest.
+THREAD_FORMS: Final = ("metric", "whitworth", "unified")
+
+#: Die meisten Gänge, die sich einen Vorschub teilen. Acht trägt jede Flasche und
+#: jede Trapezspindel eines Druckers (Tr8x8 hat vier); darüber stehen die Gänge
+#: so steil, dass sie sich nicht mehr wie ein Gewinde drehen.
+MOST_THREAD_STARTS: Final = 8
+
+#: Die meisten Gänge je Zoll — die feinste Steigung als Gänge je Zoll.
+MOST_TPI: Final = UNIT_TO_MM["in"] / FINEST_PITCH
+
+#: Die wenigsten Gänge je Zoll außer der Null (die Reihe der Form): so grob wie
+#: :data:`COARSEST_PITCH`. Jeder Weg mit dem Feld trägt sie als ``least``
+#: (Review GEW, M4), und der Bereichsnachweis fährt sie als eigene Ecke.
+LEAST_TPI: Final = UNIT_TO_MM["in"] / COARSEST_PITCH
+
 #: Nachkommastellen je Einheit, so gewählt, dass die gezeigte Genauigkeit
 #: EPS_DISPLAY entspricht.
 _UNIT_DECIMALS: Final[dict[LengthUnit, int]] = {"mm": 2, "cm": 3, "m": 5, "in": 4}

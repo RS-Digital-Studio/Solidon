@@ -1553,6 +1553,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # zeigen* fliegt dorthin, im Prüfbericht steht er als Ort des Befunds.
     "location": _("Stelle"),
     "narrowing": _("Verengung"),
+    # ``fasteners``: wo ein kegeliges Innengewinde in der Tiefe am engsten ist.
+    "narrowest": _("Engster Durchmesser"),
     "nominal_side_clearance": _("Seitliches Nennspiel"),
     "normal": _("Richtung der Fläche"),
     "outer": _("Senkung"),
@@ -1718,6 +1720,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "floor": _("Boden"),
     "flow_limit": _("Höchster Volumenstrom"),
     "format": _("Format"),
+    # ``counterpart``: die Gewindeform und die Gänge je Zoll eines eigenen Zollmaßes.
+    "form": _("Gewindeform"),
+    "tpi": _("Gänge je Zoll"),
     "excess": _("Überstand"),
     "footprint": _("Standfläche"),
     "formats": _("Formate"),
@@ -1730,8 +1735,6 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "given": _("Vorhanden"),
     "grams": _("Gramm"),
     "grid": _("Raster"),
-    # ``geom.prepare_ops``: die Händigkeit eines Gewindes, das nicht neu geschnitten wird.
-    "handedness": _("Gangrichtung"),
     "groups": _("Gruppen"),
     "height": _("Höhe"),
     # ``geom.repair``: geschlossene oder offene Stellen, gezählt als Ringe.

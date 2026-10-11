@@ -57,7 +57,11 @@ from app.core.units import (
     EPS_GEOM,
     FINEST_PITCH,
     LARGEST_THREAD,
+    LEAST_TPI,
+    MOST_THREAD_STARTS,
+    MOST_TPI,
     SMALLEST_THREAD,
+    THREAD_FORMS,
     THREAD_MIN_CORE_SHARE,
     THREAD_MIN_GRIP_SHARE,
     UNIT_TO_MM,
@@ -71,10 +75,8 @@ from app.i18n import TranslatableText, _
 #: Bohrung und Länge aus dem Datenblatt.
 CUSTOM_SIZE: Final = "custom_size"
 
-#: Die Gewindeformen eines eigenen Maßes (RM-544): metrisch mit der Steigung in
-#: Millimetern, Whitworth (55°, das Profil von G und R) und Unified (60°, das von
-#: UNC und UNF) mit Gängen je Zoll.
-CUSTOM_FORMS: Final = ("metric", "whitworth", "unified")
+#: Die Gewindeformen eines eigenen Maßes (RM-544, ``units.THREAD_FORMS``).
+CUSTOM_FORMS: Final = THREAD_FORMS
 
 #: Welches Gangprofil eine Gewindeform eines eigenen Maßes baut, und aus welcher
 #: Reihe ihre Gänge je Zoll kommen, wenn keine eingetragen sind.
@@ -85,18 +87,8 @@ _FORM_PROFILE: Final[dict[str, ThreadProfile]] = {
 }
 _FORM_SERIES: Final = standards.FORM_SERIES
 
-#: Die meisten Gänge, die sich einen Vorschub teilen. Acht trägt jede Flasche und
-#: jede Trapezspindel eines Druckers (Tr8x8 hat vier); darüber stehen die Gänge
-#: so steil, dass sie sich nicht mehr wie ein Gewinde drehen.
-MOST_STARTS: Final = 8
-
-#: Die meisten Gänge je Zoll — die feinste Steigung als Gänge je Zoll.
-MOST_TPI: Final = UNIT_TO_MM["in"] / FINEST_PITCH
-
-#: Die wenigsten Gänge je Zoll außer der Null (die Reihe der Form): so grob wie
-#: ``units.COARSEST_PITCH``. Jeder Weg mit dem Feld trägt sie als ``least``
-#: (Review GEW, M4), und der Bereichsnachweis fährt sie als eigene Ecke.
-LEAST_TPI: Final = UNIT_TO_MM["in"] / COARSEST_PITCH
+#: Die meisten Gänge je Vorschub und die Grenzen der Gänge je Zoll — aus ``units``.
+MOST_STARTS: Final = MOST_THREAD_STARTS
 
 #: Das längste Gewinde der Gewindebausteine: Gewinde, Schraube und Bolzen.
 LONGEST_PRINTED_THREAD: Final = 200.0

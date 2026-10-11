@@ -69,7 +69,6 @@ from app.core.geom.primitive_ops import (
     tube_fits_the_ring,
 )
 from app.core.geom.transform import Axis
-from app.core.knowledge.parts.fasteners import CUSTOM_FORMS, LEAST_TPI, MOST_STARTS, MOST_TPI
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.registry.params import ZERO_AUTOMATIC
 from app.core.types import (
@@ -89,8 +88,12 @@ from app.core.units import (
     EPS_GEOM,
     FINEST_PITCH,
     LARGEST_THREAD,
+    LEAST_TPI,
     MAX_FACET_SAG,
+    MOST_THREAD_STARTS,
+    MOST_TPI,
     SMALLEST_THREAD,
+    THREAD_FORMS,
     is_close,
 )
 from app.i18n import TranslatableText, _
@@ -587,6 +590,17 @@ class ThreadParams(PositionedPrimitiveParams):
         maximum=LARGEST_THREAD,
         doc=_("Außendurchmesser über die Gewindespitzen — das Maß, das M10 meint."),
     )
+    # Der Umschalter steht vor den Feldern, die er schaltet, und vorn wie sie
+    # (``tests/test_dependency_order.py``).
+    form: str = param(
+        title=_("Gewindeform"),
+        default="metric",
+        choices=THREAD_FORMS,
+        doc=_(
+            "Metrisch mit der Steigung in Millimetern, Whitworth (55°, wie G) oder Unified "
+            "(60°, wie UNC) mit Gängen je Zoll."
+        ),
+    )
     pitch: float = param(
         title=_("Steigung"),
         default=1.5,
@@ -627,21 +641,11 @@ class ThreadParams(PositionedPrimitiveParams):
         doc=NAME_DOC,
     )
     # RM-544: Zoll und Whitworth, mehrgängig und links — wie beim Gewindebaustein.
-    form: str = param(
-        title=_("Gewindeform"),
-        default="metric",
-        choices=CUSTOM_FORMS,
-        placement="advanced",
-        doc=_(
-            "Metrisch mit der Steigung in Millimetern, Whitworth (55°, wie G) oder Unified "
-            "(60°, wie UNC) mit Gängen je Zoll."
-        ),
-    )
     starts: int = param(
         title=_("Gangzahl"),
         default=1,
         minimum=1,
-        maximum=MOST_STARTS,
+        maximum=MOST_THREAD_STARTS,
         placement="advanced",
         doc=_(
             "Mehrere Gänge nebeneinander, wie an Flaschen und Spindeln: Je Umdrehung "

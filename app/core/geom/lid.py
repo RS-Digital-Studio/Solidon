@@ -31,7 +31,6 @@ from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest, shared_volu
 from app.core.geom.lid_hinge import HINGE_SIDES, HINGES
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.build import face
-from app.core.knowledge.parts.fasteners import CUSTOM_FORMS, MOST_STARTS
 from app.core.knowledge.parts.shapes import (
     ThreadProfile,
     mesh_only,
@@ -60,7 +59,14 @@ from app.core.types import (
     Vec3,
     vec3_or_none,
 )
-from app.core.units import COARSEST_PITCH, EPS_GEOM, LARGEST_THREAD, UNIT_TO_MM
+from app.core.units import (
+    COARSEST_PITCH,
+    EPS_GEOM,
+    LARGEST_THREAD,
+    MOST_THREAD_STARTS,
+    THREAD_FORMS,
+    UNIT_TO_MM,
+)
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -1694,6 +1700,17 @@ class ScrewLidParams(BaseParams):
         maximum=100.0,
         doc=_("Wie hoch der Gewindehals wird. Zwei Umdrehungen halten, drei sitzen fest."),
     )
+    # Der Umschalter steht vor den Feldern, die er schaltet, und vorn wie sie
+    # (``tests/test_dependency_order.py``).
+    form: str = param(
+        title=_("Gewindeform"),
+        default="metric",
+        choices=THREAD_FORMS,
+        doc=_(
+            "Metrisch mit der Steigung in Millimetern, Whitworth (55°, wie G) oder Unified "
+            "(wie UNC) mit Gängen je Zoll."
+        ),
+    )
     # **Die benannte Ausnahme von ``units.FINEST_PITCH``**: Ein Schraubdeckel
     # greift feiner als 1 mm nicht mehr sicher, und die Kappe soll mit der Hand
     # aufgehen. Die übrigen Gewindewege beginnen bei 0,25. Seit RM-544 gilt sie
@@ -1788,21 +1805,11 @@ class ScrewLidParams(BaseParams):
         doc=_("Null heißt: der Wert aus dem Materialprofil."),
         zero_text=ZERO_FROM_PROFILE,
     )
-    form: str = param(
-        title=_("Gewindeform"),
-        default="metric",
-        choices=CUSTOM_FORMS,
-        placement="advanced",
-        doc=_(
-            "Metrisch mit der Steigung in Millimetern, Whitworth (55°, wie G) oder Unified "
-            "(60°, wie UNC) mit Gängen je Zoll."
-        ),
-    )
     starts: int = param(
         title=_("Gangzahl"),
         default=1,
         minimum=1,
-        maximum=MOST_STARTS,
+        maximum=MOST_THREAD_STARTS,
         placement="advanced",
         doc=_(
             "Mehrere Gänge nebeneinander, wie an Flaschen: Der Deckel sitzt nach einem "

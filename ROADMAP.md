@@ -57,6 +57,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-694 — Am echten Fenster endeten zwei Läufe mit dem Spiderman ohne Python-Spur](#rm-694) | Plattformen, Pakete und Grafik | Unter Volllast auf dem i9 gesehen, alter und neuer Stand; auf ruhiger Maschine mit nativem Abbild nachstellen, bevor eine Ursache zugeordnet wird |
 | [RM-770 — Weitere x86_64-Räder tragen denselben Fehler, in C-Bibliotheken](#rm-770) | Plattformen, Pakete und Grafik | Pillow `libavif` und FFmpeg aus PySide6_Addons; ohne C++-Ausnahmen ohne Wirkung, offen ob sie im Paket liegen |
 | [RM-768 — Die Abwicklungstabelle im Intel-Mac-Rad von OCP ist falsch kodiert](#rm-768) | Plattformen, Pakete und Grafik | Seit 0.6.0 korrigiert `tools/fix_unwind_info.py` sie nach jeder Installation und prüft das Paket; gemeldet als [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67), die Korrektur entfällt mit einem behobenen Rad |
+| [RM-777 — Schwalbenschwanz, Sechskant und Stiftkopf rechnen mit den Winkeln der Plattform](#rm-777) | Plattformen, Pakete und Grafik | Umstellen auf `units.exact_*`, druckgleich gegen Beispiele und Korpus, danach Bereichsnachweis aller 50 (`shapes.py` und `exact.py` stehen in jedem Abdruck) |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z3 (Z2 bis auf die Drehachse durch RM-559). Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Restentscheidung offen. Gelöst (09.10., Claude): PrusaSlicer ohne Bündel schätzte mit 1500 mm/s² (`ignore` und Dialekt `reprap`), jetzt `marlin` mit den angeforderten Werten als Grenze, dazu `extra_perimeters`/`solid_infill_below_area = 0` und die Materialart der Spule; Gewürzregal am CC2 407 → 292 min, gegen ElegooSlicer mit denselben Wänden 280 min (+4,5 %, Material −4,2 %), SuperSlicer 527 → 381 min. Offen: Solidons Tabelle druckt „Standard“ mit drei Wänden und vier Bodenschichten, die Standardprozesse von Elegoo, Bambu, Creality und Prusa (MK4S) mit zwei und drei (232 gegen 292 min, 128 gegen 154 g) — Entscheidung, ob die Tabelle dem Standardprozess des Druckers folgt |
@@ -954,6 +955,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Intel-Paket liegen; wenn ja, den Fehler den Projekten melden (Pillow, Qt for Python).
   **Abnahme:** Die Bibliotheken liegen nicht im Paket, oder ihre Räder sind gemeldet; bei
   jedem Bibliothekslauf (RM-467) zählt der Scan alle nativen x86_64-Räder.
+
+<a id="rm-777"></a>
+
+- [ ] **RM-777 — Schwalbenschwanz, Sechskant und Stiftkopf rechnen mit den Winkeln der Plattform.**
+  `shapes.rounded_dovetail`, `shapes.hexagon` und ihre Zwillinge `exact.rounded_dovetail` und
+  `exact.hexagon` legen ihre Ecken über `math.cos`/`math.sin`; in `geom/bore_pin.py` rechnen
+  Senkkopf und Abschnitte des Stifts über `math.tan`/`math.atan2`/`math.cos`. Das ist Geometrie,
+  die `kern.md` („Dieselbe Datei, dasselbe Teil — auf jeder Maschine“) plattformgleich verlangt;
+  gefunden in der Nachprüfung von RM-544 (Paket GEW), vorbestehend in main. Nicht im Nachtrag
+  behoben, weil `shapes.py` und `exact.py` im Abdruck jedes Bausteins stehen: Die Umstellung
+  verlangt den Bereichsnachweis aller 50 (rund 3¾ Stunden mit sechs Prozessen).
+  **Nächster Schritt:** auf `units.exact_cos_degrees`/`exact_sin_degrees`/`circle_point` und im
+  Stift auf `units.exact_tan_degrees`/`exact_atan2` umstellen, Weg in
+  `tests/test_platform_identity.py` (`_WAYS`) ergänzen.
+  **Abnahme:** druckgleich gegen den Stand davor über Beispielprojekte und Korpus
+  (`tools/check_print_equal.py`), `cache_version` der berührten Schritte gestiegen, wo Bits
+  sich ändern, Bereichsnachweis 50 von 50, der Plattformwächter rot mit `math.cos` an diesen
+  Stellen.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
