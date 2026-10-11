@@ -4026,6 +4026,19 @@ def test_ironing_the_topmost_surface_is_read_back(kind: str, ironing: str) -> No
         assert manufacturer._read_prusa({"ironing": "1"}, context)[0]["shell.ironing"] == ironing
 
 
+def test_ironing_every_solid_layer_stays_a_manufacturer_value() -> None:
+    """„solid“ bügelt jede Vollschicht; Solidon hat dafür keinen Namen. Beide
+    Familien zeigen den Herstellerwert und deuten ihn nicht um (Review RM-588, L3)."""
+    context = manufacturer._Context(nozzle=0.4)
+    read, foreign = manufacturer._read_process({"ironing_type": "solid"}, context, {})
+    assert "shell.ironing" not in read
+    assert foreign["shell.ironing"] == "solid"
+
+    read, foreign = manufacturer._read_prusa({"ironing": "1", "ironing_type": "solid"}, context)
+    assert "shell.ironing" not in read
+    assert foreign["shell.ironing"] == "solid"
+
+
 def test_bridges_and_overhangs_are_read_back_from_both_families() -> None:
     """RM-587: Brückenstütze, dicke Brücken, Brückenfluss, Zusatzwände und Umkehr
     kommen aus dem Herstellerprofil. Die Schalter, die Brücken frei lassen, heißen

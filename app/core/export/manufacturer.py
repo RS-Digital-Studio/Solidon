@@ -1896,16 +1896,20 @@ def _prusa_scarf_seam(values: Mapping[str, Any]) -> bool | None:
     return length is None or (_float(length) or 0.0) > 0.0
 
 
-def _prusa_ironing(values: Mapping[str, Any]) -> str | None:
+def _prusa_ironing(values: Mapping[str, Any]) -> str | Foreign | None:
     """Was gebügelt wird: ``ironing`` als Schalter, ``ironing_type`` als Art
-    (RM-588). Ohne Art gilt Prusas Vorgabe „top“, jede Oberseite; „solid“, jede
-    Vollschicht, ist davon die nächste Wahl."""
+    (RM-588). Ohne Art gilt Prusas Vorgabe „top“, jede Oberseite. Eine andere
+    Art („solid“, jede Vollschicht) hat in Solidon keinen Namen und bleibt ein
+    Herstellerwert, wie bei Orca — umgedeutet wird nicht."""
     ironing = _prusa_first(values.get("ironing"))
     if ironing is None:
         return None
     if ironing != "1":
         return "none"
-    return "topmost" if _prusa_first(values.get("ironing_type")) == "topmost" else "top_surfaces"
+    kind = _prusa_first(values.get("ironing_type"))
+    if kind is None or kind == "top":
+        return "top_surfaces"
+    return "topmost" if kind == "topmost" else Foreign(kind)
 
 
 def _prusa_outer_width(values: Mapping[str, Any], context: _Context) -> float | None:
