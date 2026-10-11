@@ -62,6 +62,7 @@ scrive in `website/version.json`.
 - Riparare e risolvere le sovrapposizioni è fino a quattro volte più veloce sui modelli grandi, ed esportare in 3MF è molto più veloce.
 - L'area di lavoro viene visualizzata più rapidamente quando si aprono file 3MF di grandi dimensioni.
 - L'avviso *Visualizzazione del modello …* scompare appena la vista è pronta e non resta più sopra il modello.
+- I messaggi su valori e forme non offrono più una segnalazione di errore. Compare solo quando l'errore è di Solidon.
 - Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
 

@@ -63,6 +63,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Reparar y resolver solapamientos es hasta cuatro veces más rápido en modelos grandes, y exportar a 3MF, bastante más rápido.
 - El área de trabajo aparece más rápido al abrir archivos 3MF grandes.
 - El aviso *Mostrando el modelo …* desaparece en cuanto la vista está lista y ya no se queda sobre el modelo.
+- Los mensajes sobre entradas y formas ya no ofrecen un informe de error. Solo aparece cuando el fallo es de Solidon.
 - Un modelo añadido queda después a la vista, aunque se coloque junto a otro sobre el que se había hecho zoom.
 - En el catálogo de bloques, *Gestionar bloques* aparece abierto mientras aún no haya ningún bloque propio.
 

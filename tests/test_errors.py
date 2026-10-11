@@ -946,3 +946,34 @@ def test_no_window_turns_a_cancel_into_an_error() -> None:
 
     assert geprueft > 20, f"nur {geprueft} Abbruchzweige gefunden — die Suche greift nicht mehr"
     assert not offenders, f"ein Abbruch wird hier zum Fehler: {offenders}"
+
+
+@pytest.mark.parametrize("error_class", all_error_classes(), ids=lambda cls: cls.__name__)
+def test_only_a_programming_error_falls_back_to_the_bug_report(
+    error_class: type[AppError],
+) -> None:
+    """Den Fehlerbericht als Rückfall bekommt nur der ``InternalError`` (RM-771).
+
+    Ohne einlösbaren Vorschlag bot ``offered_actions`` jedem Fehler
+    *Fehlerbericht erstellen* als Hauptknopf an — einem Bedien- oder
+    Geometriefehler ebenso wie einem abgebrochenen Vorschlag
+    (S-20261010-e5014c). Der Kunde schickte dann einen Absturzbericht für
+    etwas, das kein Absturz war. Ein Fehler, der den Bericht selbst vorschlägt,
+    behält ihn.
+    """
+    from app.core.errors import REPORT_ERROR
+    from app.ui.dialogs import offered_actions
+
+    def nothing(_error: AppError) -> None:
+        return None
+
+    handlers = {"show_details": nothing, "report_error": nothing}
+    problem = error_class()
+    offered = {action.id for action in offered_actions(problem, handlers)}
+
+    if isinstance(problem, InternalError) or REPORT_ERROR in problem.suggestions:
+        assert REPORT_ERROR.id in offered
+    else:
+        assert REPORT_ERROR.id not in offered, (
+            f"{error_class.__name__} ist kein Programmfehler und bekommt doch den Fehlerbericht"
+        )

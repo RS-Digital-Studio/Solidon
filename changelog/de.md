@@ -87,6 +87,7 @@ Nutzen da und sonst nichts.
 - Reparieren und das Auflösen von Überschneidungen gehen an großen Modellen bis zu viermal so schnell, der Export als 3MF deutlich schneller.
 - Die Arbeitsfläche wird beim Öffnen großer 3MF-Dateien schneller angezeigt.
 - Die Anzeige *Das Modell wird angezeigt …* verschwindet, sobald die Ansicht fertig ist, und bleibt nicht mehr über dem Modell stehen.
+- Meldungen zu Eingaben und Formen bieten keinen Fehlerbericht mehr an. Den gibt es nur noch, wo Solidon selbst einen Fehler gemacht hat.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
 

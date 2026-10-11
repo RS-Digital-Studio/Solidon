@@ -63,6 +63,7 @@ dans `website/version.json`.
 - Réparer et résoudre les recouvrements va jusqu'à quatre fois plus vite sur les gros modèles, et l'export en 3MF nettement plus vite.
 - L'espace de travail s'affiche plus rapidement à l'ouverture de gros fichiers 3MF.
 - L'indication *Affichage du modèle …* disparaît dès que la vue est prête et ne reste plus au-dessus du modèle.
+- Les messages sur les saisies et les formes ne proposent plus de rapport d'erreur. Il n'apparaît que lorsque l'erreur vient de Solidon.
 - Un modèle ajouté est ensuite visible, même s'il se pose à côté d'un modèle sur lequel la vue était zoomée.
 - Dans le catalogue de blocs, *Gérer les blocs* est ouvert tant qu'il n'y a pas encore de bloc personnel.
 

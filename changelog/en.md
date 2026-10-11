@@ -62,6 +62,7 @@ it into `website/version.json`.
 - Repairing and resolving overlaps are up to four times as fast on large models, and exporting as 3MF is considerably faster.
 - The workspace appears faster when opening large 3MF files.
 - The notice *Displaying the model …* disappears as soon as the view is ready and no longer stays over the model.
+- Messages about inputs and shapes no longer offer an error report. It is only offered where Solidon itself made a mistake.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
 
