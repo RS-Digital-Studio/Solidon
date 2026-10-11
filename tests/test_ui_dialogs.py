@@ -780,3 +780,29 @@ def test_the_free_part_name_is_asked_with_the_name_and_cancel(
     assert "pruefwuerfel" not in str(seen["text"]) + str(seen["buttons"])
     assert "Das hat so nicht funktioniert" not in str(seen["text"])
     assert len(seen["buttons"]) == 2, seen["buttons"]
+
+
+def test_a_question_reads_a_foreign_title_literally(qt_app: QApplication) -> None:
+    """§32: Ein Titel aus einer fremden Bausteindatei ist Text, keine Auszeichnung."""
+    from PySide6.QtCore import Qt, QTimer
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.dialogs import AskDialog, ask_free_part_name
+
+    marked = '<span style="font-size:40pt">Ihr Katalog wurde gelöscht</span>'
+    seen: list[tuple[str, Qt.TextFormat]] = []
+
+    def respond() -> None:
+        dialog = qt_app.activeModalWidget()
+        if not isinstance(dialog, AskDialog):
+            QTimer.singleShot(50, respond)
+            return
+        seen.extend((label.text(), label.textFormat()) for label in dialog.findChildren(QLabel))
+        dialog.reject()
+
+    QTimer.singleShot(50, respond)
+    assert not ask_free_part_name("Halter", marked, "halter_imported")
+
+    question = next((entry for entry in seen if marked in entry[0]), None)
+    assert question is not None, seen
+    assert question[1] == Qt.TextFormat.PlainText

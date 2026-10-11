@@ -70,6 +70,7 @@ scrive in `website/version.json`.
 - Un modello aperto subito dopo l'avvio del programma è modificabile fino a un quarto prima.
 - Con uno slicer, un gioco o un rendering in esecuzione, i calcoli sui modelli grandi terminano in secondi anziché in minuti.
 - Un progetto salvato con un modello grande si apre dopo un riavvio in uno o due secondi invece di mezzo minuto: le caratteristiche riconosciute restano memorizzate.
+- I passaggi che un altro programma crea con il controllo remoto compaiono nella cronologia con «Controllo remoto» invece di «Agente», e così anche nella scheda del chat.
 
 ### Stampare e passare allo slicer
 
@@ -157,7 +158,7 @@ scrive in `website/version.json`.
 - Un blocco per una faccia o un foro viene calcolato solo quando ha il suo punto nella vista. Fino ad allora la finestra non si può applicare e dice che cosa manca.
 - Se la faccia cambia mentre la finestra di un blocco è aperta, il punto scelto resta finché vale ancora sulla nuova forma. Altrimenti il blocco ne cerca uno nuovo e lo segnala.
 - Una finestra di blocco aperta mentre il passo precedente sta ancora calcolando posiziona il blocco da sola appena arriva il risultato, e fino ad allora non si può applicare.
-- Se aggiungendo un file di blocco nel catalogo c'è già un blocco con quel nome, Solidon chiede se il nuovo entra con un nome libero. La versione 0.5.3 mostrava un messaggio di errore.
+- Se aggiungendo un file di blocco nel catalogo c'è già un blocco con quel nome, Solidon chiede se il nuovo va aggiunto come voce a sé. La versione 0.5.3 mostrava un messaggio di errore.
 
 ### Modificare e disegnare
 

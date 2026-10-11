@@ -3514,6 +3514,8 @@ class PrintSettingsDialog(QDialog):
         self._adopt_field = QWidget(self)
         adopt_row = QHBoxLayout(self._adopt_field)
         adopt_row.setContentsMargins(0, 0, 0, 0)
+        self._offer_wanted = ""
+        """Der Drucker, den der Slicer zuletzt anbot — für den Rückweg von Harz."""
         self.adopt_printer = QPushButton("", self._adopt_field)
         self.adopt_printer.clicked.connect(self._adopt_the_slicers_printer)
         adopt_row.addWidget(self.adopt_printer)
@@ -3559,7 +3561,9 @@ class PrintSettingsDialog(QDialog):
             return
         for widget in self._fdm_only_widgets():
             widget.show()
-        self.slicer_box.setVisible(self._slicer_box_wanted)
+        self._show_slicer_box(self._slicer_box_wanted)
+        if self._offer_wanted:
+            self._offer_the_slicers_printer(self._offer_wanted)
         self.nozzle.setVisible(
             self.nozzle_choice.currentIndex() >= 0 and self.nozzle_choice.currentData() is None
         )
@@ -3588,6 +3592,9 @@ class PrintSettingsDialog(QDialog):
             self.advice_box,
             self.slice_button,
             self.save_button,
+            # Er öffnet die Filamente des Projekts und das Lager — an Harz
+            # gibt es keine Spule, die er zeigen könnte.
+            self.material_link,
         ]
         widgets += [
             self.search_label,
@@ -3614,10 +3621,13 @@ class PrintSettingsDialog(QDialog):
         """
         for widget in self._fdm_only_widgets():
             widget.hide()
-        self.slicer_box.hide()
+        # Profile, Grundlage und ein Drucker des Slicers gehören zur Übergabe
+        # von Werten, und ein Resin-Drucker gibt nie welche mit (RM-071).
+        self._show_slicer_box(self._slicer_box_wanted)
+        self._show_adopt_printer(False)
+        self._show_foundation_note()
         # Harz ist kein Filament — dieselbe Zeile, das Wort des Verfahrens.
         self.filament_label.setText(tr("Material"))
-        self.material_link.setText(tr("Material …"))
         # Ohne Konsolenlauf ist Öffnen der einzige Weg — und damit der
         # Hauptknopf, gleich was das Projekt gemerkt hat.
         self._lead_handover(True)
@@ -5734,10 +5744,18 @@ class PrintSettingsDialog(QDialog):
         wechseln (Robert, 27.09.2026: allgemeiner Drucker im Projekt, der
         ElegooSlicer auf dem Centauri Carbon 2).
         """
+        self._offer_wanted = printer_id
         candidate = self._cura_printer_candidate
         offered = candidate if candidate is not None and candidate.id == printer_id else None
         entry = offered or self._printer_entries().get(printer_id)
-        if not printer_id or printer_id == self.session.profile.printer.id or entry is None:
+        if (
+            not printer_id
+            or printer_id == self.session.profile.printer.id
+            or entry is None
+            # Er führte von einem Resin-Drucker auf einen Filamentdrucker,
+            # damit FDM-Profile passen, die es an Harz nicht gibt.
+            or self.session.profile.printer.is_resin
+        ):
             self._slicers_printer = ""
             self._show_adopt_printer(False)
             return
@@ -7831,7 +7849,12 @@ class PrintSettingsDialog(QDialog):
         Satz allein, und der Kasten bleibt zu, wenn es darin nichts zu wählen
         gibt. Verlangt der Slicer ein Profil, das fehlt, schweigt er: Dann
         steht der Weg im aufgeklappten Kasten und in der Zustandszeile.
+
+        An Harz gibt es keine Grundlage: Ein Resin-Drucker gibt keine Werte
+        mit, also gelten dort weder Solidons noch die des Herstellers.
         """
+        if self.session.profile.printer.is_resin:
+            return ""
         foundation = self._foundation
         if foundation is not None and foundation.has_profile:
             return self._profile_line(foundation)

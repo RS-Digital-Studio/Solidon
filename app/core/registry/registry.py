@@ -468,13 +468,9 @@ VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
     VariantGroup(
         title=_("Zeichnen …"),
         doc=_(
-            "Aus einer Grundform oder einer gezeichneten Skizze einen Körper "
-            "machen — hochziehen, um eine Achse drehen, an einem Bogen "
-            "entlangführen, zwischen zwei Größen überblenden — oder mit "
-            "denselben Werkzeugen aus einem vorhandenen Körper schneiden: als "
-            "Tasche, Ringnut, Kanal oder Übergang. Es beginnt mit dem Aufziehen "
-            "in der Ansicht, die übrigen Arten wählen Sie danach im Dialog des "
-            "Schritts unter „Art“."
+            "Einen Körper aus einer Grundform oder Skizze machen oder damit "
+            "schneiden. Aufgezogen wird in der Ansicht, die Art wählen Sie "
+            "danach im Schritt."
         ),
         choice=_("Art"),
         # **``sketch_pocket`` gehört dazu, seit dem 03.09.2026.** Der

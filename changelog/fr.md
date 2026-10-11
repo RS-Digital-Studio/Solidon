@@ -71,6 +71,7 @@ dans `website/version.json`.
 - Un modèle ouvert juste après le démarrage du programme est modifiable jusqu'à un quart plus tôt.
 - Avec un slicer, un jeu ou un rendu en cours à côté, les calculs sur de grands modèles aboutissent en secondes au lieu de minutes.
 - Un projet enregistré avec un grand modèle s'ouvre après un redémarrage en une ou deux secondes au lieu d'une demi-minute : les caractéristiques reconnues sont conservées.
+- Les étapes qu'un autre programme crée par la commande à distance apparaissent dans l'historique avec « Commande à distance » au lieu de « Agent », et la fiche du chat aussi.
 
 ### Imprimer et transmettre au slicer
 
@@ -158,7 +159,7 @@ dans `website/version.json`.
 - Un bloc destiné à une face ou à un trou n'est calculé qu'une fois placé dans la vue. D'ici là, la boîte de dialogue ne peut pas être appliquée et indique ce qui manque.
 - Si la face change alors que la boîte de dialogue d'un bloc est ouverte, l'emplacement choisi reste tant qu'il convient à la nouvelle forme. Sinon, le bloc en cherche un nouveau et le signale.
 - Une boîte de dialogue de bloc ouverte pendant que l'étape précédente calcule encore place le bloc d'elle-même dès que le résultat est là, et ne peut pas être appliquée avant.
-- Si le catalogue contient déjà un bloc de ce nom quand vous ajoutez un fichier de bloc, Solidon demande si le nouveau arrive sous un nom libre. La version 0.5.3 affichait un message d'erreur.
+- Si le catalogue contient déjà un bloc de ce nom quand vous ajoutez un fichier de bloc, Solidon demande s'il faut l'ajouter comme entrée à part. La version 0.5.3 affichait un message d'erreur.
 
 ### Modifier et esquisser
 

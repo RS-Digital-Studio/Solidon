@@ -70,6 +70,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um modelo que abre logo após iniciar o programa fica editável até um quarto mais cedo.
 - Com um slicer, um jogo ou uma renderização a correr ao lado, os cálculos em modelos grandes terminam em segundos em vez de minutos.
 - Um projeto guardado com um modelo grande abre após um reinício em um ou dois segundos em vez de meio minuto: as características reconhecidas ficam guardadas.
+- Os passos que outro programa cria pelo comando à distância aparecem no histórico com «Comando à distância» em vez de «Agente», e a ficha do chat diz o mesmo.
 
 ### Imprimir e entregar ao slicer
 
@@ -157,7 +158,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um bloco para uma face ou um furo só é calculado quando tem o seu lugar na vista. Até lá a caixa de diálogo não pode ser aplicada e diz o que falta.
 - Se a face mudar com a caixa de diálogo de um bloco aberta, o lugar escolhido mantém-se enquanto continuar válido na nova forma. Caso contrário, o bloco procura um novo e indica-o.
 - Uma caixa de diálogo de bloco aberta enquanto o passo anterior ainda calcula coloca o bloco sozinha assim que o resultado chega, e até lá não pode ser aplicada.
-- Se, ao adicionar um ficheiro de bloco, o catálogo já tiver um bloco com esse nome, o Solidon pergunta se o novo entra com um nome livre. A versão 0.5.3 mostrava uma mensagem de erro.
+- Se, ao adicionar um ficheiro de bloco, o catálogo já tiver um bloco com esse nome, o Solidon pergunta se o novo deve ser adicionado como entrada própria. A versão 0.5.3 mostrava uma mensagem de erro.
 
 ### Editar e esboçar
 

@@ -10927,18 +10927,23 @@ class MainWindow(QMainWindow):
             show_error(problem, self, handlers)
             return
         suggested = problem.values.get("suggested_name")
+        from app.core.knowledge.parts.registry import PARTS
+
+        key = str(problem.values.get("recipe", ""))
         if (
             payload is not None
             and getattr(problem, "constraint", "") == "exists"
             and isinstance(suggested, str)
             and suggested
+            # Nur ein Katalogeintrag hat einen Titel, den die Frage nennen
+            # kann. Trifft der Name eine Operation oder eine liegengebliebene
+            # Datei, gibt es keinen Baustein „im Katalog“ — dort bleibt die
+            # Meldung mit *Freien Namen verwenden*.
+            and PARTS.has(key)
         ):
             # **Ein vorhandener Name ist eine Frage, kein Fehler** (Regel 21):
-            # Ihrer bleibt, der neue kommt auf Wunsch unter dem freien Namen.
-            from app.core.knowledge.parts.registry import PARTS
-
-            key = str(problem.values.get("recipe", ""))
-            existing = str(PARTS.get(key).title) if PARTS.has(key) else key
+            # Ihrer bleibt, der neue kommt auf Wunsch als eigener Eintrag.
+            existing = str(PARTS.get(key).title)
             title = str(problem.values.get("title", "") or existing)
             if ask_free_part_name(existing, title, suggested, catalog):
                 self._use_suggested_part_name(catalog, payload, problem)

@@ -70,6 +70,7 @@ it into `website/version.json`.
 - A model you open right after starting the program is ready to edit up to a quarter sooner.
 - With a slicer, a game or a render running alongside, calculations on large models finish in seconds instead of minutes.
 - A saved project with a large model now opens in a second or two after a restart instead of half a minute: the recognised features are kept.
+- Steps that another program creates through remote control appear in the history with “Remote control” instead of “Agent”, and the chat's summary says the same.
 
 ### Printing and slicer handover
 
@@ -157,7 +158,7 @@ it into `website/version.json`.
 - A part for a face or hole is only computed once it has its spot in the view. Until then the dialog cannot be applied and says what is missing.
 - If the face under an open part dialog changes, the chosen spot stays as long as it still fits the new shape. Otherwise the part finds a new one and says so.
 - A part dialog that opens while the previous step is still computing places the part by itself as soon as the result is there, and cannot be applied until then.
-- If the catalogue already has a part of the same name when you add a part file, Solidon asks whether the new one should come in under a free name. Version 0.5.3 showed an error message instead.
+- If the catalogue already has a part of the same name when you add a part file, Solidon asks whether the new one should be added as an entry of its own. Version 0.5.3 showed an error message instead.
 
 ### Editing and sketching
 

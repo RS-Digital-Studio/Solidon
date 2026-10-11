@@ -95,6 +95,7 @@ Nutzen da und sonst nichts.
 - Ein Modell, das Sie gleich nach dem Programmstart öffnen, ist bis zu ein Viertel schneller bearbeitbar.
 - Läuft nebenher ein Slicer, ein Spiel oder ein Rendering, kommen Rechnungen an großen Modellen in Sekunden statt in Minuten zurück.
 - Ein gespeichertes Projekt mit einem großen Modell ist nach einem Neustart in ein, zwei Sekunden offen statt nach einer halben Minute: Die erkannten Merkmale bleiben gemerkt.
+- Schritte, die ein anderes Programm über die Fernsteuerung anlegt, stehen im Verlauf mit „Fernsteuerung“ statt „Agent“, und der Steckbrief des Chats sagt dasselbe.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -182,7 +183,7 @@ Nutzen da und sonst nichts.
 - Ein Baustein für Fläche oder Bohrung rechnet erst, wenn er seine Stelle im Bild hat. Bis dahin lässt sich der Dialog nicht übernehmen und sagt, was fehlt.
 - Ändert sich die Fläche unter einem offenen Bausteindialog, bleibt die gewählte Stelle, solange sie auf der neuen Form noch hält. Sonst sucht der Baustein eine neue und sagt es.
 - Ein Bausteindialog, der öffnet, während der vorige Schritt noch rechnet, setzt den Baustein selbst, sobald das Ergebnis da ist, und lässt sich bis dahin nicht übernehmen.
-- Liegt beim Hinzufügen einer Bausteindatei schon ein Baustein dieses Namens im Katalog, fragt Solidon, ob der neue unter einem freien Namen kommt. Version 0.5.3 zeigte dafür eine Fehlermeldung.
+- Liegt beim Hinzufügen einer Bausteindatei schon ein Baustein dieses Namens im Katalog, fragt Solidon, ob der neue als eigener Eintrag dazukommt. Version 0.5.3 zeigte dafür eine Fehlermeldung.
 
 ### Bearbeiten und Zeichnen
 

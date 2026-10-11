@@ -1253,11 +1253,17 @@ def test_the_application_path_rejects_an_unreferenced_executable_payload(
         window.close()
 
 
+@pytest.mark.parametrize("answer", [True, False])
 def test_a_name_collision_asks_and_uses_the_free_name(
-    qt_app: QApplication, tmp_path, monkeypatch
+    qt_app: QApplication, tmp_path, monkeypatch, answer: bool
 ) -> None:
     """Eine Kollision ist eine Frage, kein Fehler (Regel 21, Handbuch „Bausteindateien
-    austauschen“): Ja wiederholt exakt dieselben Bytes unter dem freien Namen."""
+    austauschen“): Ja wiederholt exakt dieselben Bytes unter dem freien Namen,
+    *Abbrechen* lässt den Katalog, wie er war. Gefragt wird mit beiden Titeln —
+    die Datei trägt einen anderen als der vorhandene Baustein, damit der Titel
+    aus dem Befund wirklich bis zur Frage reist."""
+    import dataclasses
+
     from PySide6.QtWidgets import QFileDialog
 
     from app.core.knowledge.parts import PARTS
@@ -1278,7 +1284,9 @@ def test_a_name_collision_asks_and_uses_the_free_name(
     source = save(existing)
     register(existing)
     incoming = tmp_path / f"eingang{PART_FILE_SUFFIX}"
-    incoming.write_bytes(PartFileIO().export_file(existing))
+    incoming.write_bytes(
+        PartFileIO().export_file(dataclasses.replace(existing, title="Probeklotz aus der Post"))
+    )
 
     catalogs: list[PartCatalog] = []
     attempted_names: list[str | None] = []
@@ -1299,7 +1307,7 @@ def test_a_name_collision_asks_and_uses_the_free_name(
 
     def answer_yes(existing: str, title: str, suggested: str, parent=None) -> bool:
         asked.append((existing, title, suggested))
-        return True
+        return answer
 
     monkeypatch.setattr(PartFileIO, "install_file", counted_install)
     monkeypatch.setattr(_mw, "ask_free_part_name", answer_yes)
@@ -1317,6 +1325,16 @@ def test_a_name_collision_asks_and_uses_the_free_name(
         window.action_catalog()
         catalog = catalogs[-1]
         catalog.adopt_part.click()
+        if not answer:
+            wait_until(lambda: bool(asked), "die Frage kam nicht")
+            for _ in range(20):
+                qt_app.processEvents()
+            assert attempted_names == [None], "Abbrechen versucht keinen zweiten Namen"
+            assert asked[0][:2] == (existing.title, "Probeklotz aus der Post")
+            assert not any(PARTS.has(key) for key in (asked[0][2],))
+            assert errors == []
+            catalog.release()
+            return
         wait_until(lambda: len(attempted_names) == 2, "der freie Name wurde nicht erneut versucht")
         suggested = next((entry for entry in attempted_names if entry), "") or ""
         wait_until(lambda: bool(suggested) and PARTS.has(suggested), "der freie Name kam nicht an")
@@ -1324,7 +1342,7 @@ def test_a_name_collision_asks_and_uses_the_free_name(
         assert attempted_names == [None, suggested]
         # Der Kunde liest Titel, wie der Katalog sie zeigt; der freie Schlüssel
         # bleibt die Antwort darunter.
-        assert asked == [(existing.title, existing.title, suggested)]
+        assert asked == [(existing.title, "Probeklotz aus der Post", suggested)]
         assert errors == [], "die Kollision kommt als Frage, nicht als Fehlermeldung"
         assert suggested != name
         assert source.read_bytes(), "der vorhandene Baustein darf nicht ersetzt werden"

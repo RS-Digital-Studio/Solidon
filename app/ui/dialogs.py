@@ -250,6 +250,10 @@ class AskDialog(QDialog):
         """Je Antwort ein Knopf, wenn die Frage zwei oder drei Handlungen anbietet."""
 
         prompt = QLabel(question, self)
+        # **Klartext, nie Auszeichnung** (§32): Eine Frage nennt Namen aus
+        # Projekt- und Bausteindateien, und ein fremder Titel wie
+        # ``<span style="font-size:40pt">…`` setzte sich sonst als HTML.
+        prompt.setTextFormat(Qt.TextFormat.PlainText)
         prompt.setWordWrap(True)
         self._preparing = QLabel(
             tr("Die Kandidaten werden in der Ansicht vorbereitet. Danach können Sie auswählen."),

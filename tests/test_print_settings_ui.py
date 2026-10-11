@@ -11235,10 +11235,21 @@ def test_a_resin_printer_keeps_the_slicer_profiles_away_after_the_profile_search
         assert dialog.slicer_box.isHidden()
         assert dialog._profile_gap() == ""
         assert dialog._machine_missing_line() not in dialog.state.text()
+        # Kein Satz über Grundlagen und kein Drucker des Slicers: Ein
+        # Resin-Drucker gibt keine Werte mit (RM-071), weder Solidons noch die
+        # des Herstellers, und ein Filamentdrucker passt nicht zu Harz.
+        assert not dialog.foundation_note.isVisibleTo(dialog), dialog.foundation_note.text()
+        dialog._slicer_path = Path("C:/Programme/UltiMaker Cura 5.13.0/UltiMaker-Cura.exe")
+        dialog._show_foundation_note()
+        assert not dialog.foundation_note.isVisibleTo(dialog), dialog.foundation_note.text()
+        dialog._offer_the_slicers_printer("centauri-carbon-2")
+        assert not dialog.adopt_printer.isVisibleTo(dialog), dialog.adopt_printer.text()
+        assert not dialog.material_link.isVisibleTo(dialog), "an Harz gibt es keine Filamentliste"
 
         dialog.printer_choice.setCurrentIndex(dialog.printer_choice.findData("centauri-carbon-2"))
         assert not session.profile.printer.is_resin
         assert not dialog.slicer_box.isHidden(), "am Filamentdrucker kommt der Kasten zurück"
+        assert dialog.material_link.isVisibleTo(dialog)
     finally:
         dialog.close()
         dialog.deleteLater()

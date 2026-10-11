@@ -89,7 +89,6 @@ from shiboken6 import isValid
 
 from app.core import expressions, manual
 from app.core.action_effects import effect_worth_showing, side_effect
-from app.core.agent.remote import ORIGIN_MODEL as REMOTE_ORIGIN
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
     ARRANGE_ON_BED,
@@ -171,6 +170,7 @@ from app.core.types import (
     SceneObject,
     Transaction,
     measure_status,
+    origin_word,
     replanned_steps,
     step_numbers,
 )
@@ -4860,11 +4860,8 @@ def origin_mark(origin: Origin) -> str:
     „Fernsteuerung“ und nicht „Agent“ wie ein Vorschlag des Chats: Wer beides
     benutzt, sieht so, welches Programm den Schritt angelegt hat.
     """
-    if origin.by != "agent":
-        return ""
-    if origin.model == REMOTE_ORIGIN:
-        return f"  ({tr('Fernsteuerung')})"
-    return f"  ({tr('Agent')})"
+    word = origin_word(origin)
+    return f"  ({word})" if word is not None else ""
 
 
 class HistoryPanel(QWidget):
