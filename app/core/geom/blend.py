@@ -49,7 +49,9 @@ from app.core.geom import mesh_edits
 from app.core.geom.mesh import (
     MeshData,
     as_mesh_data,
+    face_components,
     row_dots,
+    signed_volume_of,
     stable_normals,
     stable_vertex_normals,
     unique_edges,
@@ -441,8 +443,12 @@ def _signs_from_the_band(
 
     Die Punkte außerhalb hängen über Rasterkanten zu Gruppen zusammen
     (``scipy.ndimage.label``, sechs Nachbarn); jede Gruppe nimmt das
-    Vorzeichen des ersten Bandpunkts an ihrem Rand, in fester Folge der Achsen
-    und Richtungen. Eine Gruppe ohne Bandpunkt daneben fragt einen ihrer
+    Vorzeichen der Bandpunkte an ihrem Rand. **Nur, wenn alle sich einig
+    sind** (Nachprüfung F, T2-1): Bis dahin entschied der erste Bandpunkt in
+    fester Folge, und trug gerade er ein falsches Vorzeichen — die Art, die
+    RM-769 beschreibt, an einem CAD-Besenhalter einer von 351 120 —, kippte die
+    ganze Gruppe, etwa das ganze Äußere. Eine uneinige Gruppe rechnet jeden
+    ihrer Punkte genau. Eine Gruppe ohne Bandpunkt daneben fragt einen ihrer
     Punkte genau.
     """
     from scipy import ndimage
@@ -462,19 +468,28 @@ def _signs_from_the_band(
             found.append(labels[here][edge])
             signs.append(inner[there][edge] > 0.0)
     listed = np.concatenate(found)
-    chosen, first = np.unique(listed, return_index=True)
-    positive = np.zeros(groups + 1, dtype=bool)
-    known = np.zeros(groups + 1, dtype=bool)
-    positive[chosen] = np.concatenate(signs)[first]
-    known[chosen] = True
+    marks = np.concatenate(signs)
+    seen = np.bincount(listed, minlength=groups + 1)
+    plus = np.bincount(listed[marks], minlength=groups + 1)
+    positive = plus > 0
+    torn = (plus > 0) & (plus < seen)
     flat_labels = labels.reshape(-1)
-    for label in np.flatnonzero(~known[1:]) + 1:
+    count = min(NEAREST_SAMPLES, len(surface.owners))
+    for label in np.flatnonzero(seen[1:] == 0) + 1:
         point = np.asarray(grid[int(np.flatnonzero(flat_labels == label)[0])], dtype=np.float64)
-        count = min(NEAREST_SAMPLES, len(surface.owners))
         _away, near = surface.tree.query(point[None, :], k=count)
         candidates = surface.owners[np.asarray(near, dtype=np.int64).reshape(1, count)]
         positive[label] = bool(surface.signed(point[None, :], candidates)[0] > 0.0)
-    field[far] = np.where(positive[flat_labels[far]], value, -value)
+    exact = far & torn[flat_labels]
+    rest = far & ~exact
+    field[rest] = np.where(positive[flat_labels[rest]], value, -value)
+    asked = np.flatnonzero(exact)
+    for start in range(0, len(asked), PAIR_CHUNK):
+        rows = asked[start : start + PAIR_CHUNK]
+        points = np.asarray(grid[rows], dtype=np.float64)
+        _away, near = surface.tree.query(points, k=count, workers=-1)
+        candidates = surface.owners[np.asarray(near, dtype=np.int64).reshape(len(rows), count)]
+        field[rows] = surface.signed(points, candidates)
 
 
 def _share(progress: ProgressFn | None, offset: float) -> ProgressFn | None:
@@ -712,7 +727,15 @@ def blend_bodies(
     # Die Polsterung verschiebt den Ursprung um einen Schritt je Achse zurück.
     vertices = low + (_in_double(field, found) - 1.0) * grid
     body = trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
-    body.fix_normals()
+    # **Alle Schalen zugleich wenden, nicht jede für sich.** Marching Cubes
+    # wickelt jedes Dreieck nach dem Gefälle des Felds, die Schale eines
+    # Hohlraums also nach innen — nur zeigt bei innen positivem Feld alles
+    # verkehrt herum. ``fix_normals()`` wendet bei mehr als einer Schale jede
+    # einzeln nach außen und machte so seit v0.1.1 aus einem eingeschlossenen
+    # Hohlraum einen zweiten Körper: Eine Hohlkugel mit einer Kugel daneben kam
+    # mit 42 473 statt 28 090 mm³ heraus und meldete sich als unverbunden
+    # (Nachprüfung F, Teil 2).
+    body.fix_normals(multibody=False)
     body = _without_needles(body, grid, cancelled)
     _log.info(
         "blended %d and %d triangles into %d over %d samples",
@@ -769,7 +792,9 @@ class BlendParams(BaseParams):
     # Plattencache trüge sonst die flach geschnittenen Übergänge.
     # 8: Unten begrenzt das Bett, nicht die unterste Höhe der Eingänge
     # (Nachprüfung N2) — schwebende Teile bleiben unter dem Hals rund.
-    cache_version="8",
+    # 9: Ein eingeschlossener Hohlraum bleibt ein Hohlraum, und eine Gruppe
+    # außerhalb des Bands mit uneinigem Rand rechnet genau (Nachprüfung F, Teil 2).
+    cache_version="9",
     title=_("Weich verschmelzen"),
     category="boolean",
     params=BlendParams,
@@ -830,7 +855,8 @@ def blend_union(ctx: OpContext) -> OpResult:
                 values={"grid_mm": round(grid, 3)},
             )
         )
-    if merged.component_count > 1:
+    bodies = _bodies_in(merged) if merged.component_count > 1 else merged.component_count
+    if bodies > 1:
         findings.append(
             Finding(
                 code="blend.still_apart",
@@ -840,7 +866,7 @@ def blend_union(ctx: OpContext) -> OpResult:
                     "bleiben unverbunden."
                 ),
                 object_id=ctx.inputs[0].id,
-                values={"components": merged.component_count},
+                values={"components": bodies},
                 # Regel 17: Die Breite des Übergangs steht im Schritt.
                 suggestions=(CORRECT_INPUT,),
             )
@@ -858,6 +884,18 @@ def blend_union(ctx: OpContext) -> OpResult:
         ],
         findings=findings,
     )
+
+
+def _bodies_in(mesh: MeshData) -> int:
+    """Wie viele Körper das Netz trägt — Schalen mit Material, ohne die Hohlräume.
+
+    Die Schale eines eingeschlossenen Hohlraums ist nach innen gewickelt und
+    hat negatives Volumen; unverbunden ist sie nicht. Bis zur Nachprüfung F
+    zählte hier jede Schale, und eine Hohlkugel meldete ``blend.still_apart``.
+    """
+    groups = face_components(mesh.raw)
+    corners = np.asarray(mesh.raw.vertices, dtype=np.float64)[np.asarray(mesh.raw.faces)]
+    return sum(1 for group in groups if signed_volume_of(corners[group]) > 0.0)
 
 
 def _with_filaments(merged: MeshData, first: MeshData, second: MeshData, reach: float) -> MeshData:
