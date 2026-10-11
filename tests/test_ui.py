@@ -3650,6 +3650,46 @@ def test_a_left_selection_tab_stays_behind_for_this_selection(window: MainWindow
     )
 
 
+def test_a_new_project_brings_the_selection_tab_back_for_the_same_ids(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach *Neues Projekt* holt die erste Auswahl den Reiter *Auswahl* wieder.
+
+    Der erste Quader eines neuen Projekts heißt wieder ``obj_1``. Wer im
+    vorigen Projekt denselben Körper gewählt und dann den Prüfbericht angeklickt
+    hatte, wählte im neuen „dieselbe“ Auswahl — das Fenster erkannte keinen
+    Wechsel, und der Reiter blieb hinten. Ein anderes Projekt ist eine neue
+    Auswahl. Der Weg geht über Menü und Startfläche, wie der Kunde ihn geht.
+    """
+    window = MainWindow(Session(), UiSettings())
+    monkeypatch.setattr(window, "_may_discard", lambda: True)
+
+    def quader() -> str:
+        window.session.apply("Quader", [OperationDraft(op="create_box", params={})])
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        return next(iter(window.session.last_result.scene.objects))
+
+    window.start_screen.new_button.click()
+    QApplication.processEvents()
+    first = quader()
+    window.object_tree.select_object(first)
+    QApplication.processEvents()
+    assert window.feature_dock.is_current()
+    _close_the_feature_window(window)
+    assert window.feature_dock.dismissed
+
+    window.new_action.trigger()
+    QApplication.processEvents()
+    window.start_screen.new_button.click()
+    QApplication.processEvents()
+    second = quader()
+    assert second == first, "die Lage, um die es geht: dieselbe Kennung"
+    window.object_tree.select_object(second)
+    QApplication.processEvents()
+    assert window.feature_dock.is_current(), "die erste Auswahl im neuen Projekt holt den Reiter"
+
+
 def test_coming_back_to_the_selection_tab_takes_the_decision_back(window: MainWindow) -> None:
     """Ein Klick auf den Reiter *Auswahl* hebt das Verlassen auf.
 
