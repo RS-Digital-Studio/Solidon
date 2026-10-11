@@ -4163,6 +4163,7 @@
   "Für {size} führt die Normteiltabelle keinen Senkkopf, die Senkung Ø {diameter} ist abgeleitet. Für einen Zylinderkopf „Senkkopf“ ausschalten.": "Pour {size}, la table des pièces normalisées ne contient pas de tête fraisée. La fraisure Ø {diameter} est dérivée. Pour une tête cylindrique, désactivez « Tête fraisée ».",
   "Für {size} zu weit, der Gang griffe nicht. Eigenes Maß: Ø {diameter}, Steigung {pitch}.": "Trop large pour {size}, le filet ne prendrait pas. Taille personnalisée : Ø {diameter}, pas {pitch}.",
   "Für „Auf eine Fläche“ fehlt die Fläche. Klicken Sie eine an, bevor Sie das Relief auflegen.": "Il manque la face pour « Sur une face ». Cliquez sur une face avant d'appliquer le relief.",
+  "Für „{first}“, „{second}“ und „{third}“ ein zweites Objekt mit Umschalt oder {key} und Klick hinzuwählen.": "Pour « {first} », « {second} » et « {third} », ajoutez un second objet avec Maj ou {key} et un clic.",
   "Für „{machine}“ fehlt ein Prozessprofil des Herstellers. Bis Sie eines im Druckdialog wählen, gelten Solidons Werte.": "Il manque un profil de processus du fabricant pour « {machine} ». Tant que vous n'en choisissez pas un dans la fenêtre d'impression, les valeurs de Solidon s'appliquent.",
   "G-Code": "G-Code",
   "G-Code gegenprüfen": "Contrôler le G-Code",

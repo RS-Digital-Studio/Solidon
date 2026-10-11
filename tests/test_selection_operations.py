@@ -1334,3 +1334,80 @@ def test_auto_split_stands_with_the_other_ways_to_split(qt_app: QApplication) ->
     assert not row.isVisibleTo(panel), "ohne Auswahl auch nicht"
     # Ohne Gruppe sagt die Karte nein, und das Fenster legt die Aktion ins Menü.
     assert not panel.add_window_action("anders", "keine_kategorie", action)
+
+
+def test_one_chosen_body_says_how_to_reach_the_boolean_operations(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bei einem gewählten Körper und einem zweiten in der Szene steht eine Zeile,
+    wie man zu Vereinigen, Abziehen und Schnittmenge kommt (RM-734).
+
+    Fragebogen zu 0.5.3: „Boolesche Operationen wären toll.“ Es gab sie, aber
+    oben stehen sie erst bei zwei gewählten Körpern, und bei einem sagte die
+    Karte nichts davon. Reiner Text, kein grauer Knopf (Entscheidung vom
+    07.09.2026); die Titel kommen aus dem Register, die Taste je Plattform.
+    """
+    from PySide6.QtWidgets import QToolButton
+
+    from app import i18n
+    from app.ui.labels import adding_key
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+
+    def knoepfe() -> int:
+        return len(panel.findChildren(QPushButton)) + len(panel.findChildren(QToolButton))
+
+    vorher = knoepfe()
+    panel.set_context(1, _availability(1), pairing=True)
+    assert not panel.pairing_hint.isHidden(), "ein Körper gewählt, ein zweiter da"
+    text = panel.pairing_hint.text()
+    for name in QUICK_BODIES:
+        assert str(REGISTRY.get(name).title) in text, name
+    assert adding_key() in text
+
+    for weg, gewaehlt, weiter in (
+        ("kein zweiter Körper oder eine Sperre", 1, {"pairing": False}),
+        ("zwei gewählt — die drei stehen oben", 2, {"pairing": True}),
+        ("nichts gewählt", 0, {"pairing": True}),
+        ("ein Merkmal gewählt", 1, {"pairing": True, "feature_kind": "face"}),
+        ("mehrere Merkmalszeilen", 1, {"pairing": True, "features": 2}),
+    ):
+        panel.set_context(gewaehlt, _availability(gewaehlt), **weiter)
+        assert panel.pairing_hint.isHidden(), weg
+
+    monkeypatch.setattr(i18n, "key_platform", lambda: "darwin")
+    panel.set_context(1, _availability(1), pairing=True)
+    assert "⌘" in panel.pairing_hint.text(), "am Mac die Befehlstaste"
+    assert knoepfe() == vorher, "die Zeile ist Text, kein Knopf"
+
+
+def test_the_window_offers_the_second_body_only_where_there_is_one(qt_app: QApplication) -> None:
+    """Das Fenster sagt der Karte, ob sich ein zweiter Körper dazuwählen ließe:
+    zwei Körper in der Szene und keine Sperre, die die Booleschen auch mit zweien
+    verweigerte (RM-734)."""
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.run_remote("create_box", {"width": 20.0, "depth": 20.0, "height": 20.0})
+        assert window.session.wait_for_idle(60_000)
+        result = window.session.last_result
+        assert result is not None
+        first = next(iter(result.scene.objects))
+        window.object_tree.select_object(first)
+        window._update_actions()
+        assert window.selection_operations.pairing_hint.isHidden(), "ein Körper allein"
+
+        window.run_remote("create_box", {"width": 10.0, "depth": 10.0, "height": 10.0})
+        assert window.session.wait_for_idle(60_000)
+        window.object_tree.select_object(first)
+        window._update_actions()
+        assert not window.selection_operations.pairing_hint.isHidden(), "ein zweiter steht da"
+        assert window._pairing_possible(locked=False, gesturing=False)
+        assert not window._pairing_possible(locked=True, gesturing=False), "Lizenzsperre"
+        assert not window._pairing_possible(locked=False, gesturing=True), "Formen oder Skelett"
+    finally:
+        window.wait_for_workers()

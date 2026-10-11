@@ -4163,6 +4163,7 @@
   "Für {size} führt die Normteiltabelle keinen Senkkopf, die Senkung Ø {diameter} ist abgeleitet. Für einen Zylinderkopf „Senkkopf“ ausschalten.": "Per {size} la tabella dei componenti normalizzati non riporta una testa svasata. La svasatura Ø {diameter} è derivata. Per una testa cilindrica disattiva «Testa svasata».",
   "Für {size} zu weit, der Gang griffe nicht. Eigenes Maß: Ø {diameter}, Steigung {pitch}.": "Troppo largo per {size}, il filetto non farebbe presa. Misura personalizzata: Ø {diameter}, passo {pitch}.",
   "Für „Auf eine Fläche“ fehlt die Fläche. Klicken Sie eine an, bevor Sie das Relief auflegen.": "A «Su una faccia» manca la faccia. Fai clic su una faccia prima di applicare il rilievo.",
+  "Für „{first}“, „{second}“ und „{third}“ ein zweites Objekt mit Umschalt oder {key} und Klick hinzuwählen.": "Per «{first}», «{second}» e «{third}», aggiungi un secondo oggetto con Maiusc o {key} e clic.",
   "Für „{machine}“ fehlt ein Prozessprofil des Herstellers. Bis Sie eines im Druckdialog wählen, gelten Solidons Werte.": "Manca un profilo di processo del produttore per «{machine}». Finché non ne scegli uno nella finestra di stampa, si applicano i valori di Solidon.",
   "G-Code": "G-Code",
   "G-Code gegenprüfen": "Controlla il G-Code",

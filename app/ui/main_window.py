@@ -6324,6 +6324,7 @@ class MainWindow(QMainWindow):
             # Zusammenfassen als Muster an (RM-504).
             features=self._several_features_chosen(),
             rebuild=self._rebuild_allowed(chosen, locked, gesturing),
+            pairing=self._pairing_possible(locked=locked, gesturing=gesturing),
         )
         selected_ids = self.object_tree.selected_objects()
         result = self.session.last_result
@@ -8583,6 +8584,18 @@ class MainWindow(QMainWindow):
             and result.complete
             and result.stopped_at is None
         )
+
+    def _pairing_possible(self, *, locked: bool, gesturing: bool) -> bool:
+        """Ob sich zu einem gewählten Körper ein zweiter dazuwählen ließe (RM-734).
+
+        Zwei Körper in der Szene — ausgeblendete zählen mit wie in
+        :meth:`_reason_locked`, denn der Objektbaum wählt sie trotzdem — und
+        keine Sperre, die die Booleschen auch mit zweien verweigerte: Lizenz,
+        Halt, Formen, Skelett. Die Karte nennt dann den Weg zu ihnen.
+        """
+        result = self.session.last_result
+        objects = len(result.scene.objects) if result is not None else 0
+        return objects >= 2 and not locked and not gesturing and self._halt_reason() is None
 
     def action_rebuild(self, object_id: str) -> None:
         """Bericht → geprüfter Kandidat → sichtbarer Vergleich → eine Transaktion."""

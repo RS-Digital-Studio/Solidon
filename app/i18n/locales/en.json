@@ -4163,6 +4163,7 @@
   "Für {size} führt die Normteiltabelle keinen Senkkopf, die Senkung Ø {diameter} ist abgeleitet. Für einen Zylinderkopf „Senkkopf“ ausschalten.": "The standard parts table lists no countersunk head for {size}. The countersink Ø {diameter} is derived. For a cap screw, turn off “Countersunk head”.",
   "Für {size} zu weit, der Gang griffe nicht. Eigenes Maß: Ø {diameter}, Steigung {pitch}.": "Too wide for {size}, its thread would not grip. Custom size: Ø {diameter}, pitch {pitch}.",
   "Für „Auf eine Fläche“ fehlt die Fläche. Klicken Sie eine an, bevor Sie das Relief auflegen.": "“Onto a face” is missing its face. Click one before applying the relief.",
+  "Für „{first}“, „{second}“ und „{third}“ ein zweites Objekt mit Umschalt oder {key} und Klick hinzuwählen.": "For “{first}”, “{second}” and “{third}”, Shift-click or {key}-click to add a second object.",
   "Für „{machine}“ fehlt ein Prozessprofil des Herstellers. Bis Sie eines im Druckdialog wählen, gelten Solidons Werte.": "There is no manufacturer process profile for “{machine}”. Until you choose one in the print dialog, Solidon's values apply.",
   "G-Code": "G-code",
   "G-Code gegenprüfen": "Cross-check G-code",

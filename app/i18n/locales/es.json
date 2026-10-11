@@ -4163,6 +4163,7 @@
   "Für {size} führt die Normteiltabelle keinen Senkkopf, die Senkung Ø {diameter} ist abgeleitet. Für einen Zylinderkopf „Senkkopf“ ausschalten.": "Para {size} la tabla de piezas normalizadas no incluye cabeza avellanada. El avellanado Ø {diameter} es derivado. Para una cabeza cilíndrica, desactive «Cabeza avellanada».",
   "Für {size} zu weit, der Gang griffe nicht. Eigenes Maß: Ø {diameter}, Steigung {pitch}.": "Demasiado ancho para {size}, el filete no agarraría. Medida propia: Ø {diameter}, paso {pitch}.",
   "Für „Auf eine Fläche“ fehlt die Fläche. Klicken Sie eine an, bevor Sie das Relief auflegen.": "A «Sobre una cara» le falta la cara. Haga clic en una antes de aplicar el relieve.",
+  "Für „{first}“, „{second}“ und „{third}“ ein zweites Objekt mit Umschalt oder {key} und Klick hinzuwählen.": "Para «{first}», «{second}» e «{third}», añadir un segundo objeto con Mayús o {key} y clic.",
   "Für „{machine}“ fehlt ein Prozessprofil des Herstellers. Bis Sie eines im Druckdialog wählen, gelten Solidons Werte.": "Falta un perfil de proceso del fabricante para «{machine}». Hasta que elija uno en el diálogo de impresión, se aplican los valores de Solidon.",
   "G-Code": "G-Code",
   "G-Code gegenprüfen": "Contrastar con el G-Code",

@@ -52,6 +52,7 @@ from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD, menu_rank
 from app.i18n import sort_key, tr
 from app.ui.command_palette import fold, found_in_rounds
 from app.ui.icons import icon, icon_name_for
+from app.ui.labels import adding_key
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.overlay import ContentScroller
 from app.ui.panels import collapsible
@@ -583,6 +584,15 @@ class SelectionOperationsPanel(QWidget):
         self._quick_buttons[REBUILD] = rebuild
         self.rebuild_button = rebuild
 
+        # **Der Weg zu den Booleschen bei einem gewählten Körper** (RM-734): Wer
+        # aus Fusion kommt, sucht erst das Werkzeug; hier stehen die drei oben,
+        # sobald zwei Körper gewählt sind. Die Zeile sagt, wie der zweite
+        # dazukommt (:meth:`_say_how_to_pair`).
+        self.pairing_hint = QLabel(self)
+        self.pairing_hint.setWordWrap(True)
+        set_level(self.pairing_hint, "caption")
+        self.pairing_hint.setVisible(False)
+
         self.search = QLineEdit(self)
         self.search.setClearButtonEnabled(True)
         self.search.setMinimumHeight(TARGET_SIZE)
@@ -732,6 +742,7 @@ class SelectionOperationsPanel(QWidget):
         layout.setSpacing(TIGHT)
         layout.addWidget(self.summary)
         layout.addLayout(quick)
+        layout.addWidget(self.pairing_hint)
         layout.addWidget(self.search)
         layout.addWidget(self._nothing)
         layout.addWidget(self._everywhere)
@@ -1072,12 +1083,17 @@ class SelectionOperationsPanel(QWidget):
         left_out: frozenset[str] = frozenset(),
         features: int = 0,
         rebuild: bool = False,
+        pairing: bool = False,
     ) -> None:
         """Auswahl, Lage und Freigaben nachführen, ohne die Liste neu zu bauen.
 
         ``rebuild`` sagt, ob *Modell nachbauen* am gewählten Körper geht
         (``MainWindow._rebuild_allowed``); die Hauptaktion steht an genau einem
         Körper ohne gewähltes Merkmal.
+
+        ``pairing`` sagt, ob sich ein zweiter Körper dazuwählen ließe
+        (``MainWindow._pairing_possible``): Dann nennt an genau einem gewählten
+        Körper eine Zeile den Weg zu den Booleschen (RM-734).
 
         ``features`` ist die Zahl markierter Merkmale am gewählten Körper, wenn
         kein einzelnes gewählt ist (:func:`quick_names`).
@@ -1120,6 +1136,9 @@ class SelectionOperationsPanel(QWidget):
             else frozenset()
         )
         self.setVisible(not part_selected or bool(only))
+        self._say_how_to_pair(
+            pairing and selected == 1 and not feature_kind and features <= 1 and not part_selected
+        )
         if part_selected and not only:
             return
         self._only = only if part_selected else None
@@ -1187,6 +1206,27 @@ class SelectionOperationsPanel(QWidget):
             quick.append(REBUILD)
         self._lay_out_quick(tuple(quick))
         self._filter()
+
+    def _say_how_to_pair(self, shown: bool) -> None:
+        """Die Zeile zu den Booleschen bei einem gewählten Körper (RM-734).
+
+        Reiner Text, kein grauer Knopf (Entscheidung Robert, 07.09.2026): Ein
+        Klick müsste raten, welcher zweite Körper gemeint ist. Die Titel kommen
+        aus dem Register (:data:`QUICK_BODIES`), die Taste je Plattform.
+        """
+        if shown:
+            first, second, third = (str(REGISTRY.get(name).title) for name in QUICK_BODIES)
+            self.pairing_hint.setText(
+                tr(
+                    "Für „{first}“, „{second}“ und „{third}“ ein zweites Objekt mit Umschalt"
+                    " oder {key} und Klick hinzuwählen.",
+                    first=first,
+                    second=second,
+                    third=third,
+                    key=adding_key(),
+                )
+            )
+        self.pairing_hint.setVisible(shown)
 
     def _search_everywhere(self) -> None:
         """*In allen Funktionen suchen*: die Befehlspalette mit demselben Wort.
