@@ -8427,6 +8427,7 @@
   "{object}: übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "{object}: skipped — the mesh is too large for this turn, the analysis map in the window can handle it.",
   "{openings} große Öffnungen bleiben offen.": "{openings} large openings stay open.",
   "{parts} Teile liegen ganz in einem anderen. Slicer drucken sie je nach Einstellung hohl oder voll.": "{parts} parts lie entirely inside another. Depending on their settings, slicers print them hollow or solid.",
+  "{parts} bekommen {value}.": "{parts} get {value}.",
   "{part} bekommt {value}.": "{part} gets {value}.",
   "{part} mit {value}": "{part} with {value}",
   "{path}, dort unter {group}: {title}": "{path}, then under {group}: {title}",

@@ -22,6 +22,7 @@ scrive in `website/version.json`.
 - La demo ora funziona fino al 30 novembre 2026. Solidon3D 1.0 è prevista per il 1º dicembre e i tuoi progetti restano.
 - Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi può installarlo gratuitamente.
 - Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.
+- Sui Mac Intel, Solidon ora segnala quando un raccordo o uno smusso su un corpo esatto non si può costruire. La versione 0.5.3 si chiudeva in quel momento.
 - Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
 - Su Mac, Invio apre la voce selezionata nella schermata iniziale, in *Cerca funzione* e nel rapporto di verifica.
 - Su Linux, la scrittura con Fcitx5 e IBus arriva ora nel campo di testo anche nel Flatpak e nell'AppImage.

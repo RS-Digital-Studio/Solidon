@@ -27,7 +27,7 @@ from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, OpResult, Profile, Quality, Scene, SceneObject
 from app.core.units import EPS_GEOM
-from tests.triangle_shapes import sliver_share
+from tests.helpers import sliver_share
 
 
 def rod(along: str = "z") -> MeshData:

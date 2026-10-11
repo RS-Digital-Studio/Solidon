@@ -229,7 +229,7 @@ hsluv = { licence = "MIT", note = "Farbraum für pygfx; die Metadaten sagen nur 
 # Der zweite Konstruktionskern (§30). Die Python-Anbindung steht unter
 # Apache-2.0; OpenCASCADE selbst unter LGPL-2.1 mit der OCCT-Linking-Ausnahme
 # und wird dynamisch gebunden, genau wie PySide6 (§36).
-cadquery-ocp-novtk = { licence = "Apache-2.0 AND (LGPL-2.1-only WITH OCCT-exception-1.0)", note = "OCP-Anbindung und mitgereichtes OpenCASCADE unter LGPL-2.1 mit Linking-Ausnahme" }
+cadquery-ocp-novtk = { licence = "Apache-2.0 AND (LGPL-2.1-only WITH OCCT-exception-1.0)", note = "OCP-Anbindung und mitgereichtes OpenCASCADE unter LGPL-2.1 mit Linking-Ausnahme; auf macOS Intel mit korrigierter Abwicklungstabelle (RM-768, tools/fix_unwind_info.py, offengelegt in THIRD-PARTY-NOTICES.md)" }
 cadquery-ocp-proxy = { licence = "Apache-2.0", note = "wählt die OCP-Version, die zum installierten VTK passt" }
 lazy_loader = { licence = "BSD-3-Clause", note = "kommt mit scikit-image" }
 imageio = { licence = "BSD-2-Clause", note = "direkt: liest das Höhenbild der Reliefoperation (geom/displace.py)" }
