@@ -46,6 +46,7 @@ from app.core.types import (
     SlotOverride,
 )
 from app.core.units import PRINT_LIMIT
+from app.i18n import tr
 from app.ui import filament_usage as ui
 from tests.helpers import plate_project
 
@@ -821,8 +822,9 @@ def test_an_old_booking_is_kept_under_its_own_fingerprint(tmp_path: Path) -> Non
     assert again == previous
 
 
-#: Die Buchung, die 0.5.3 für *Halter konstruieren* nach einem Slicerlauf schrieb
-#: (``usage_booking_weg2_v053_inventory.json``): Vorgang, Menge und Bestand danach.
+#: Die Buchung, die 0.5.3 für *Halter konstruieren* schrieb
+#: (``usage_booking_weg2_v053_inventory.json``): 23,45 g mit der Quelle G-Code, ohne
+#: Slicerlauf gesetzt; Vorgang, Menge und Bestand danach.
 WEG2_OPERATION = "rm706-altbuchung-053"
 WEG2_GRAMS = 23.45
 WEG2_LEFT = 476.55
@@ -831,7 +833,10 @@ WEG2_LEFT = 476.55
 def _weg2_after_e(
     tmp_path: Path, *, grams: float = WEG2_GRAMS, project_name: str = "weg2-halter-konstruieren"
 ) -> tuple[usage.UsageRequest, str]:
-    """Dasselbe Projekt aus 0.5.3 nach dem Update noch einmal gesliced, wie die Anwendung."""
+    """Dasselbe Projekt aus 0.5.3 nach dem Update noch einmal ausgegeben, wie die Anwendung.
+
+    Das Projekt trägt keine Spulenbindung; die Spule der Buchung steht deshalb an der
+    Bedarfszeile, wie eine gebundene Spule sie dorthin brächte."""
     target = filaments.catalogue_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(DATA / "usage_booking_weg2_v053_inventory.json", target)
@@ -879,7 +884,7 @@ def test_a_053_booking_whose_triangles_moved_is_offered_not_booked_again(
     assert ui._previous(request, snapshot) == [], "der Vorabdruck trifft hier nicht mehr"
     offered = ui._legacy_bookings(request, snapshot)
     assert [one.operation_id for one in offered] == [WEG2_OPERATION]
-    assert "denselben Spulen und Mengen" in ui._legacy_booking_text(offered, request)
+    assert ui._legacy_booking_text(offered, request) == ACTIVE_TEXT
     with pytest.raises(ValidationError):
         ui._auto_book(request)
     assert filaments.get(spool).remaining_grams == pytest.approx(WEG2_LEFT)
@@ -899,6 +904,111 @@ def test_another_amount_or_project_is_a_new_print(tmp_path: Path, other: str) ->
     assert booked is not None and booked.operation_id != WEG2_OPERATION
     left = WEG2_LEFT - request.lines[0].grams
     assert filaments.get(spool).remaining_grams == pytest.approx(left)
+
+
+#: Die beiden Hinweise der Rückfrage, wie der Kunde sie liest.
+ACTIVE_TEXT = str(
+    tr(
+        "Für dieses Projekt gibt es eine frühere Buchung mit denselben Spulen und "
+        "Mengen. Prüfen Sie, ob dies ein weiterer Druck ist."
+    )
+)
+REVERSED_TEXT = str(
+    tr(
+        "Für dieses Projekt gibt es eine frühere, zurückgenommene Buchung mit "
+        "denselben Spulen und Mengen. Prüfen Sie, ob dies ein weiterer Druck ist."
+    )
+)
+_SLOT = MaterialSlot(0, "PLA Rot", (0.8, 0.1, 0.1), material_type="PLA")
+_OTHER_SLOT = MaterialSlot(1, "PETG Blau", (0.1, 0.1, 0.8), material_type="PETG")
+
+
+def _offer(
+    lines: tuple[tuple[MaterialSlot, float | None, str], ...],
+    positions: tuple[tuple[MaterialSlot, float, str], ...],
+    *,
+    project: str = "Halter",
+    booked_project: str = "Halter",
+    reversed_at: str = "",
+) -> tuple[usage.UsageRequest, filaments.InventoryBooking]:
+    """Eine Ausgabe und eine frühere Buchung ohne Abdrucktreffer, Zeile für Zeile."""
+    request = usage.UsageRequest(
+        "neuer-abdruck",
+        project,
+        0,
+        tuple(usage.UsageLine(slot, grams, spool, source="gcode") for slot, grams, spool in lines),
+    )
+    booking = filaments.InventoryBooking(
+        "frueher",
+        "alter-abdruck",
+        tuple(
+            filaments.BookingPosition(
+                spool,
+                grams,
+                "gcode",
+                filament_key=ui._line_key(usage.UsageLine(slot, grams, spool)),
+            )
+            for slot, grams, spool in positions
+        ),
+        "2026-10-01T00:00:00+00:00",
+        "2026-10-01T00:00:00+00:00",
+        project_name=booked_project,
+        reversed_at=reversed_at,
+    )
+    return request, booking
+
+
+SAME_AMOUNT_CASES = {
+    "gleich": (((_SLOT, 23.45, "a"),), ((_SLOT, 23.45, "a"),), {}, True),
+    "Zeile ohne Spule": (((_SLOT, 23.45, ""),), ((_SLOT, 23.45, "a"),), {}, True),
+    "andere Spule": (((_SLOT, 23.45, "a"),), ((_SLOT, 23.45, "b"),), {}, False),
+    "aufgeteilt auf zwei Positionen": (
+        ((_SLOT, 11.0, ""), (_SLOT, 11.0, "")),
+        ((_SLOT, 11.0, "a"), (_SLOT, 11.0, "b")),
+        {},
+        False,
+    ),
+    "mehr Positionen als Zeilen": (
+        ((_SLOT, 23.45, "a"),),
+        ((_SLOT, 23.45, "a"), (_OTHER_SLOT, 5.0, "c")),
+        {},
+        False,
+    ),
+    "Menge unbekannt": (((_SLOT, None, "a"),), ((_SLOT, 23.45, "a"),), {}, False),
+    "Abstand 0,049 g": (((_SLOT, 23.499, "a"),), ((_SLOT, 23.45, "a"),), {}, True),
+    "Abstand 0,05 g": (((_SLOT, 23.5, "a"),), ((_SLOT, 23.45, "a"),), {}, False),
+    "Abstand 0,3 g": (((_SLOT, 23.75, "a"),), ((_SLOT, 23.45, "a"),), {}, False),
+    "anderes Projekt": (((_SLOT, 23.45, "a"),), ((_SLOT, 23.45, "a"),), {"project": "B"}, False),
+    "ohne Projektnamen": (
+        ((_SLOT, 23.45, "a"),),
+        ((_SLOT, 23.45, "a"),),
+        {"project": "", "booked_project": ""},
+        False,
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(SAME_AMOUNT_CASES))
+def test_each_condition_of_an_earlier_booking_counts(case: str) -> None:
+    """Review Altbuchung, L1: jede Bedingung von ``_same_amounts`` einzeln — Projekt, je
+    Druckfilament genau eine Position, dieselbe Spule, eine bekannte Menge höchstens
+    0,05 g entfernt (die halbe Anzeigestufe des Lagers)."""
+    lines, positions, names, expected = SAME_AMOUNT_CASES[case]
+    request, booking = _offer(lines, positions, **names)
+    assert ui._same_amounts(request, booking) is expected
+
+
+@pytest.mark.parametrize("reversed_at", ["", "2026-10-02T00:00:00+00:00"])
+def test_an_earlier_booking_is_offered_with_its_own_sentence(reversed_at: str) -> None:
+    """L1: auch eine zurückgenommene Buchung kommt zur Prüfung, mit ihrem eigenen Satz."""
+    request, booking = _offer(
+        ((_SLOT, 23.45, "a"),), ((_SLOT, 23.45, "a"),), reversed_at=reversed_at
+    )
+    snapshot = SimpleNamespace(bookings=lambda: (booking,))
+    offered = ui._legacy_bookings(request, snapshot)
+    assert offered == (booking,)
+    expected = REVERSED_TEXT if reversed_at else ACTIVE_TEXT
+    assert ui._legacy_booking_text(offered, request) == expected
 
 
 def test_a_creator_with_stray_inputs_keeps_them_like_the_evaluation() -> None:

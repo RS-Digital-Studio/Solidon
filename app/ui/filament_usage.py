@@ -135,8 +135,8 @@ def _booking_fingerprint(request: UsageRequest, booking: filaments.InventoryBook
     return request.fingerprint
 
 
-#: Mengen, die das Lager mit einer Nachkommastelle gleich zeigt, gelten als gleich:
-#: die halbe Anzeigestufe (``filament_inventory``, ``{grams:.1f}``).
+#: Mengen, die weniger als 0,05 g auseinanderliegen, gelten als gleich: die halbe
+#: Anzeigestufe des Lagers (``filament_inventory``, ``{grams:.1f}``).
 SAME_SHOWN_GRAMS: Final = 0.05
 
 
@@ -168,8 +168,9 @@ def _same_amounts(request: UsageRequest, booking: filaments.InventoryBooking) ->
     eine druckgleiche Beschleunigung, die Dreiecke umordnet, trifft ihn nicht
     mehr. Ohne Treffer buchte *Ohne Rückfrage buchen* denselben Druck ein zweites
     Mal. Gleich heißt: derselbe Projektname, je Druckfilament genau eine Position
-    mit seiner Identität, dieselbe Spule, wo eine gebunden ist, und eine Menge,
-    die das Lager gleich zeigt. Eine unbekannte Menge ist kein Beleg.
+    mit seiner Identität, dieselbe Spule, wo eine gebunden ist, und eine Menge
+    weniger als 0,05 g entfernt. Eine unbekannte Menge ist kein Beleg. Das gilt für
+    jede frühere Buchung ohne Abdrucktreffer, auch eine aus dieser Version.
     """
     if not booking.project_name or booking.project_name != request.project_name:
         return False

@@ -145,7 +145,7 @@ Nutzen da und sonst nichts.
 - Gleicht ein Teil schon im Modell aus, mit einer Bohrung mit *Materialtoleranz berücksichtigen* oder *Elefantenfuß ausgleichen*, schlägt Solidon vor, dass der Slicer es nicht noch einmal tut.
 - Auch bei Druckern, die PrusaSlicer oder SuperSlicer nicht selbst kennen, rechnen beide die Druckzeit mit den übergebenen Beschleunigungen, und die Datei nennt das Material der Spule.
 - Auch auf einem voll ausgelasteten Rechner nennt Solidon nach dem Anhalten eines Slicers den wirklichen Grund statt einer Zeitüberschreitung. Eine fertige Druckdatei wird übernommen.
-- Eine Buchung aus Solidon 0.5 mit gleichem Projekt, gleichen Spulen und Mengen bietet das Filamentlager als frühere Buchung an und fragt nach, bevor es denselben Druck erneut abbucht.
+- Jede frühere Buchung desselben Projekts mit gleichen Spulen und Mengen bietet das Filamentlager zur Prüfung an, auch bei *Ohne Rückfrage buchen*, statt denselben Druck erneut abzubuchen.
 - Ab dieser Version bleibt eine Buchung ihrem Druck zugeordnet, auch wenn ein Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
 - Wo flache Kuppen und Schrägen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger das Teil dann druckt.
 

@@ -120,7 +120,7 @@ it into `website/version.json`.
 - If a part already compensates in the model, with a hole drilled with *Apply material tolerance* or *Compensate the elephant foot*, Solidon suggests that the slicer does not do it again.
 - Even for printers that PrusaSlicer or SuperSlicer do not know themselves, both estimate the print time with the accelerations handed over, and the file names the material of the spool.
 - Even on a fully loaded computer, Solidon gives the real reason after stopping a slicer instead of a timeout. A finished print file is used.
-- The filament inventory offers a booking from Solidon 0.5 with the same project, spools and amounts as an earlier booking and asks before deducting the same print again.
+- The filament inventory offers every earlier booking of the same project with the same spools and amounts for review, also with *Record without asking*, instead of deducting again.
 - From this version on, a booking stays with its print, even when an update calculates faster or the manufacturer profile in the slicer changes. Previously, such a print counted as new.
 - Where shallow domes and slopes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the part then takes to print.
 

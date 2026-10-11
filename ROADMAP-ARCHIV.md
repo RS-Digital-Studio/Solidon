@@ -47997,11 +47997,14 @@ stehen nur unter dem Vorabdruck und kippen weiter mit Netzbits, Grundlage und Sl
 (Cura Fein und Entwurf seit RM-583, siehe [RM-705](#rm-705)).
 
 **Nachtrag 11.10.2026 (Integrationsreview welle4, M1):** Paket E ordnet die Dreiecke von 17 der 21
-Beispielkörper druckgleich um; der Vorabdruck traf danach nur noch 2 von 13 Buchungen aus 0.5.3, und
-*Ohne Rückfrage buchen* hätte die übrigen ein zweites Mal abgezogen. Ordnungsfrei rechnen hilft
+Beispielkörper druckgleich um; der Vorabdruck traf danach nur noch 3 von 13 Buchungen aus 0.5.3, mit
+Paket F (*Figur formen*) 2 von 13, und *Ohne Rückfrage buchen* hätte die übrigen ein zweites Mal
+abgezogen. Ordnungsfrei rechnen hilft
 nicht: Die gespeicherten Abdrücke von 0.5.3 hängen an dessen Folge. Ohne Treffer kommt deshalb eine
-Buchung desselben Projekts mit denselben Spulen und Mengen (Menge gleich, wie das Lager sie zeigt)
-als frühere Buchung zur Prüfung und wird nie still gebucht (`ui._same_amounts`). Nachweis: Projekt
+Buchung desselben Projekts mit denselben Spulen und Mengen (weniger als 0,05 g auseinander) als
+frühere Buchung zur Prüfung und wird nie still gebucht (`ui._same_amounts`); das gilt für jede
+frühere Buchung ohne Abdrucktreffer, auch eine aus 0.6.0. Projekt und Lager schrieb 0.5.3 ohne
+Slicerlauf (23,45 g mit der Quelle G-Code gesetzt), die Spule steht im Test an der Bedarfszeile. Nachweis: Projekt
 und Lager, die 0.5.3 selbst schrieb (*Halter konstruieren*, `usage_booking_weg2_v053*`), am Stand
 davor rot, danach grün; an den zwölf Beispielen vorher 2 erkannt und 11 ohne Rückfrage, nachher 2
 erkannt und 11 zur Prüfung.
