@@ -8179,6 +8179,7 @@ WHOLE_BODY_ANSWERS: Final[frozenset[str]] = frozenset(
         "surface_index",
         "facet_of_face",
         "facets_by_area",
+        "planar_members",
         "curvature_jumps",
         "face_radii",
         "prepared_surface",
@@ -15141,8 +15142,9 @@ def _planar_members(body: trimesh.Trimesh) -> np.ndarray:
 def _planar_members_read(body: trimesh.Trimesh) -> np.ndarray:
     """Der Rumpf von :func:`_planar_members` — die Antwort merkt sich die Hülle."""
     mask = np.zeros(len(body.faces), dtype=bool)
-    members, _facet_of, _sizes, _touches = _facet_table(body.facets, len(body.faces), set())
-    mask[members] = True
+    facets = body.facets
+    if len(facets):
+        mask[np.concatenate(facets)] = True
     mask.flags.writeable = False
     return mask
 

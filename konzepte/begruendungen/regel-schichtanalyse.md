@@ -1053,7 +1053,9 @@ Kante mit Nachbar, kein Streifen.
   `test_sharply_bounded_sides_are_the_same_alone_and_together`).
 - **Nur die eigenen Nähte.** Eine Besitzertabelle über alle Dreiecke kostete
   die örtliche Frage an 4,8 Mio. Dreiecken 0,4 s und 360 MiB; die Bitmaske
-  über `face_adjacency` kostet rund 30 ms.
+  über `face_adjacency` kostet 31–125 ms CPU je Frage (die erste mit der
+  Facettenmaske; zwei Messreihen unter Fremdlast), Spitze 43 MiB über drei
+  Fragen.
 - Gemessen am 20-mm-Würfel (8 mm, 0,6 mm): O, D, 0 und 8 je zwei Seiten, B
   und 3 eine, R keine (Wände unter 4 mm² oder an andere Bögen gestoßen).
 

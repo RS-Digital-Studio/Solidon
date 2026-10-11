@@ -2148,12 +2148,12 @@ def test_a_softly_rounded_side_under_the_share_is_no_side_alone_either(
     """
     from app.core.perceive import features as detection
 
-    asked: list[bool] = []
+    asked: list[tuple[int, bool]] = []
     original = detection.curved_sides_standing
 
     def spy(body: Any, patches: Any) -> list[bool]:
         answers = original(body, patches)
-        asked.extend(answers)
+        asked.extend((len(body.faces), answer) for answer in answers)
         return answers
 
     full, alone = _full_and_local_sides(
@@ -2165,7 +2165,9 @@ def test_a_softly_rounded_side_under_the_share_is_no_side_alone_either(
     )
 
     assert full == [] and alone == []
-    assert False in asked, "der Ausschnitt fand keinen gerundeten Fleck, den er verwarf"
+    whole = max(faces for faces, _answer in asked)
+    assert any(faces < whole for faces, _answer in asked), "der Ausschnitt fand keinen Fleck"
+    assert (whole, False) in asked, "der ganze Körper hat den Fleck nicht verworfen"
 
 
 def test_a_search_region_is_never_welded_again(monkeypatch: pytest.MonkeyPatch) -> None:
