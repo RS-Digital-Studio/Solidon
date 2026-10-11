@@ -980,6 +980,39 @@ def test_a_line_beside_an_outline_keeps_the_rule_of_a_free_line() -> None:
     assert copied_corners(sketch, moved) == [(50.0, 2.0), (60.0, 2.0)]
 
 
+def test_the_grid_finds_the_same_partners_as_every_pair() -> None:
+    """Punkt 3: Die Endensuche über das Gitter gibt dieselben Partner in
+    derselben Folge wie der Vergleich jedes Paars — an Zufallsenden mit festem
+    Startwert, viele davon knapp unter und über der Fangweite."""
+    import random
+
+    from app.core.sketch.profile import _JOIN_TOL, _joins
+
+    chance = random.Random(20261011)
+    ends: dict[tuple[int, int], tuple[float, float]] = {}
+    for index in range(600):
+        for side in (0, 1):
+            if ends and chance.random() < 0.5:
+                x, y = chance.choice(list(ends.values()))
+                spread = _JOIN_TOL * chance.choice((0.3, 0.9, 1.1, 2.5))
+                point = (x + chance.uniform(-spread, spread), y + chance.uniform(-spread, spread))
+            else:
+                point = (chance.uniform(-50, 50), chance.uniform(-50, 50))
+            ends[(index, side)] = point
+    keys = list(ends)
+    expected: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for at, key in enumerate(keys):
+        for other in keys[at + 1 :]:
+            if other[0] != key[0] and _joins(ends[key], ends[other]):
+                expected.setdefault(key, []).append(other)
+                expected.setdefault(other, []).append(key)
+
+    found = edit._partners(ends)
+
+    assert list(found.items()) == list(expected.items())
+    assert sum(len(others) for others in found.values()) > 100
+
+
 def test_a_circle_beside_an_outline_grows_with_it() -> None:
     """Kreis und Umriss in einer Auswahl: beide nach außen."""
     sketch = replace(

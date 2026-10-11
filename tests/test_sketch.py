@@ -23,7 +23,7 @@ from app.core.sketch.planes import (
     to_plane,
     to_world,
 )
-from app.core.sketch.profile import _LEAST_STEPS, curves_of
+from app.core.sketch.profile import _LEAST_STEPS, Profile, ProfileSegment, curves_of
 from app.core.types import PlaneFrame, Sketch, SketchConstraint, SketchElement, SolvedSketch
 from tests.helpers import assert_sketch_gradients, exact_kernel, rectangle
 
@@ -3779,3 +3779,91 @@ def test_an_arc_that_runs_back_along_its_own_circle_still_crosses() -> None:
 
     with pytest.raises(AppError):
         regions_of(solve_sketch(sketch))
+
+
+# --- Kreuzungsprüfung mit Breitphase ---------------------------------------------
+
+
+def _random_loops(seed: int, count: int) -> list[Profile]:
+    """Zufällige Ketten aus Strecken und Bögen, mit und ohne Kreuzung — fester Startwert."""
+    chance = random.Random(seed)
+    loops = []
+    for number in range(count):
+        corners = 3 + number % 37
+        if number % 3 == 0:
+            # Sternförmig um die Mitte, nach Winkel geordnet: kreuzungsfrei,
+            # der teure Fall, in dem jedes Paar geprüft werden muss.
+            points = []
+            for step in range(corners):
+                angle = 2.0 * math.pi * (step + chance.random() * 0.5) / corners
+                reach = 20.0 + 10.0 * chance.random()
+                points.append((reach * math.cos(angle), reach * math.sin(angle)))
+        else:
+            points = [(chance.uniform(-30, 30), chance.uniform(-30, 30)) for _ in range(corners)]
+        segments = []
+        for at, start in enumerate(points):
+            end = points[(at + 1) % corners]
+            if chance.random() < 0.3:
+                middle = ((start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0)
+                bulge = chance.uniform(-0.3, 0.3) * math.dist(start, end)
+                normal = (-(end[1] - start[1]), end[0] - start[0])
+                length = math.hypot(*normal) or 1.0
+                via = (
+                    middle[0] + bulge * normal[0] / length,
+                    middle[1] + bulge * normal[1] / length,
+                )
+                segments.append(ProfileSegment("arc", start, end, via=via))
+            else:
+                segments.append(ProfileSegment("line", start, end))
+        loops.append(Profile(segments=tuple(segments)))
+    return loops
+
+
+@pytest.mark.parametrize("exact", [True, False], ids=["occ", "fallback"])
+def test_the_box_phase_finds_the_same_crossings_as_every_pair(
+    exact: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Punkt 3: Die Breitphase über Hüllkästen gibt an zufälligen Ketten
+    (Startwert fest) dieselbe Antwort wie die Prüfung jedes Paars — am
+    exakten Kern und im Rückfall ohne ihn."""
+    import app.core.brep.kernel as kernel
+    from app.core.sketch import profile
+
+    if exact and not kernel.available():
+        pytest.skip("ohne exakten Kern")
+    if not exact:
+        monkeypatch.setattr(kernel, "available", lambda: False)
+    loops = _random_loops(20261011, 120)
+
+    with_boxes = [profile.crosses_itself(loop) for loop in loops]
+    monkeypatch.setattr(
+        profile,
+        "touching_pairs",
+        lambda boxes: [(i, j) for i in range(len(boxes)) for j in range(i + 1, len(boxes))],
+    )
+    every_pair = [profile.crosses_itself(loop) for loop in loops]
+
+    assert with_boxes == every_pair
+    assert 0 < sum(with_boxes) < len(loops), "beide Antworten kommen vor"
+
+
+def test_touching_pairs_are_those_of_the_double_loop() -> None:
+    """Dieselben Paare in derselben Folge wie die Doppelschleife, auch über
+    mehrere Blöcke (``_BOX_ROWS``) und mit unbegrenzten Kästen einer Kurve."""
+    from app.core.sketch import profile
+
+    chance = np.random.default_rng(20261011)
+    low = chance.random((700, 2)) * 100.0
+    boxes = np.concatenate([low, low + chance.random((700, 2)) * 8.0], axis=1)
+    boxes[17] = (-math.inf, -math.inf, math.inf, math.inf)
+
+    def touching(i: int, j: int) -> bool:
+        return bool(
+            boxes[i, 0] <= boxes[j, 2]
+            and boxes[j, 0] <= boxes[i, 2]
+            and boxes[i, 1] <= boxes[j, 3]
+            and boxes[j, 1] <= boxes[i, 3]
+        )
+
+    expected = [(i, j) for i in range(700) for j in range(i + 1, 700) if touching(i, j)]
+    assert profile.touching_pairs(boxes) == expected

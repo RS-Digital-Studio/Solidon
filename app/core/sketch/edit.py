@@ -674,12 +674,34 @@ def _partners(
     ends: Mapping[tuple[int, int], Point2],
 ) -> dict[tuple[int, int], list[tuple[int, int]]]:
     """Je Ende ``(Element, Seite)`` die Enden anderer Elemente, die es nach
-    :func:`~app.core.sketch.profile._joins` trifft — in der Folge von ``ends``."""
+    :func:`~app.core.sketch.profile._joins` trifft — in der Folge von ``ends``.
+
+    Verglichen wird nur in Nachbarzellen eines Gitters der Weite ``_JOIN_TOL``:
+    Was sich trifft, liegt höchstens eine Zelle auseinander. Dieselben Paare
+    in derselben Folge wie der Vergleich jedes Paars, ohne dessen n² — an
+    2000 Linien waren das 1,4 s.
+    """
     keys = list(ends)
+    order = {key: at for at, key in enumerate(keys)}
+    cells: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for key in keys:
+        x, y = ends[key]
+        cells.setdefault((math.floor(x / _JOIN_TOL), math.floor(y / _JOIN_TOL)), []).append(key)
     found: dict[tuple[int, int], list[tuple[int, int]]] = {}
-    for at, key in enumerate(keys):
-        for other in keys[at + 1 :]:
-            if other[0] != key[0] and _joins(ends[key], ends[other]):
+    for key in keys:
+        x, y = ends[key]
+        column, row = math.floor(x / _JOIN_TOL), math.floor(y / _JOIN_TOL)
+        near = sorted(
+            (
+                other
+                for step_x in (-1, 0, 1)
+                for step_y in (-1, 0, 1)
+                for other in cells.get((column + step_x, row + step_y), ())
+            ),
+            key=order.__getitem__,
+        )
+        for other in near:
+            if order[other] > order[key] and other[0] != key[0] and _joins(ends[key], ends[other]):
                 found.setdefault(key, []).append(other)
                 found.setdefault(other, []).append(key)
     return found
@@ -839,11 +861,24 @@ def _mitred(
     """
     chain = [_link_of(sketch, link) for link in links]
     count = len(chain)
+    # Die Normalen an den Enden und jede Ecke rechnen einmal: Nach einem
+    # Wegfall ändert sich nur die Ecke der neuen Nachbarn (gemessen: 2000
+    # Linien, 1385 Wegfälle, 3,6 Millionen Eckrechnungen ohne Merker).
+    heads = [link.normal(link.start) for link in chain]
+    tails = [link.normal(link.end) for link in chain]
+    known: dict[tuple[int, int, float], Point2] = {}
 
     def corner(before: int, after: int, shift: float) -> Point2:
         """Wo sich zwei Glieder im Abstand ``shift`` treffen, die jetzt Nachbarn sind."""
+        key = (before, after, shift)
+        if key not in known:
+            known[key] = meet(before, after, shift)
+        return known[key]
+
+    def meet(before: int, after: int, shift: float) -> Point2:
+        """Die Rechnung hinter :func:`corner`."""
         one, other = chain[before], chain[after]
-        (nx, ny), (mx, my) = one.normal(one.end), other.normal(other.start)
+        (nx, ny), (mx, my) = tails[before], heads[after]
         bend = 1.0 + nx * mx + ny * my
         if bend <= EPS_SKETCH:
             # Die Kette läuft auf sich selbst zurück: Die Gehrung läge im Unendlichen.
@@ -874,7 +909,7 @@ def _mitred(
             corners.append(corner(alive[-1], alive[0], shift))
             return list(zip([corners[-1], *corners[:-1]], corners, strict=True))
         first, last = chain[alive[0]], chain[alive[-1]]
-        (nx, ny), (mx, my) = first.normal(first.start), last.normal(last.end)
+        (nx, ny), (mx, my) = heads[alive[0]], tails[alive[-1]]
         starts = [(first.start[0] + shift * nx, first.start[1] + shift * ny), *corners]
         ends = [*corners, (last.end[0] + shift * mx, last.end[1] + shift * my)]
         return list(zip(starts, ends, strict=True))
@@ -884,11 +919,13 @@ def _mitred(
         ihnen sich bei diesem Abstand geschlossen hat."""
         for at in range(len(alive) if closed else len(alive) - 1):
             before, after = alive[at], alive[(at + 1) % len(alive)]
+            if after == (before + 1) % count:
+                continue
             one, other = chain[before], chain[after]
             if one.centre is not None or other.centre is not None:
                 continue
-            (nx, ny), (mx, my) = one.normal(one.end), other.normal(other.start)
-            if after == (before + 1) % count or 1.0 + nx * mx + ny * my > EPS_SKETCH:
+            (nx, ny), (mx, my) = tails[before], heads[after]
+            if 1.0 + nx * mx + ny * my > EPS_SKETCH:
                 continue
             (ax, ay), (bx, by) = one.start, other.start
             # Die Breite der Kerbe zwischen den versetzten Geraden, gemessen in
