@@ -1728,6 +1728,36 @@ def test_the_naming_scheme_is_offered_and_kept(
     assert window.session.project.document.export_scheme == "{index}_{object}", "und es bleibt"
 
 
+def test_a_scheme_typed_after_switching_from_3mf_is_kept(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wer im Dateidialog von 3MF auf STL wechselt, behält sein Muster (§29, RM-141).
+
+    Der erste Export eines Projekts schlägt 3MF vor, eine Datei, also ohne
+    Muster im Namensfeld. Wechselt der Kunde dort auf STL und tippt ein
+    Muster, entstehen mehrere Dateien nach diesem Muster — gemerkt wurde es
+    aber nicht, weil das Fenster nach dem vorgeschlagenen Format fragte.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(60_000)
+    window.session.import_model(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(60_000)
+    window.object_tree.select_object(None)
+    export_anyway(monkeypatch)
+
+    asked = _asked_dialog(monkeypatch, (str(tmp_path / "{index}_{object}.stl"), "STL (*.stl)"))
+    window.action_export()
+    wait_for_export(window)
+
+    assert asked[0][0].endswith(".3mf"), f"vorgeschlagen war 3MF: {asked[0][0]}"
+    assert len(list(tmp_path.glob("*.stl"))) == 2
+    assert window.session.project.document.export_scheme == "{index}_{object}"
+
+    asked = _asked_dialog(monkeypatch, ("", ""))
+    window.action_export()
+    assert "{object}" in asked[0][0], f"das Muster kommt wieder: {asked[0][0]}"
+
+
 def test_a_plain_name_does_not_become_a_scheme(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

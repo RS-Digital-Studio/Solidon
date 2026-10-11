@@ -10100,7 +10100,12 @@ class MainWindow(QMainWindow):
         if not name:
             return
         target, export_format = _export_target(Path(name), chosen_filter, suggested_name)
-        self._remember_export(target, export_format, multiple=multiple)
+        # Ob mehrere Dateien entstehen, entscheidet das gewählte Format, nicht
+        # das vorgeschlagene: Wer im Dialog von 3MF auf STL wechselt und ein
+        # Muster tippt, schreibt mehrere Dateien und will das Muster wieder.
+        self._remember_export(
+            target, export_format, multiple=export_format != "3mf" and len(objects) > 1
+        )
         self._start_export(target, export_format)
 
     def _remember_export(self, target: Path, export_format: str, *, multiple: bool) -> None:
