@@ -4974,8 +4974,12 @@ class _Ceilings:
         als** :data:`SPAN_INTERESTING` (Z1): Die Hülle eines gebogenen Rands ist
         das Kreissegment, in dem er liegt — ein Halbring unter einer flachen
         Halbkuppel galt als gefasst, und im G-Code hingen Bahnen bis 2,5 mm neben
-        der Schicht darunter. Ein Ring unter einer flachen Kuppel, weiter als
-        knapp 5 mm, ist damit auch nicht mehr gefasst; er gehört zum Scheitel.
+        der Schicht darunter. Läuft die lose Kante weiter, ist der freie Teil nur
+        gefasst, wenn eine Bahnenrichtung über ihm an beiden Enden Halt hat
+        (:func:`_anchored_span`): Eine Brücke zwischen zwei Beinen hat eine, ihre
+        lose Kante ist die Spanne, und die Brückenregel misst sie; ein Halbring
+        hat keine. Ein Ring unter einer flachen Kuppel, weiter als knapp 5 mm,
+        hat keine solche Richtung und gehört zum Scheitel.
         Wie weit ein gefasster Streifen spannt, fragt :meth:`arch` danach.
         """
         gap = self._gap(member)
@@ -5005,7 +5009,12 @@ class _Ceilings:
             if part.area <= LEDGE_SPILL * shape.area:
                 continue
             answer = self._spans(part, held, seam)
-            if answer is None or not answer[0] or _runs_loose(part, held):
+            if answer is None or not answer[0]:
+                return False
+            # Eine Brücke zwischen zwei Beinen hat eine Bahnenrichtung mit Halt an
+            # beiden Enden, ihre lose Kante ist die Spanne, und die Brückenregel misst
+            # sie; ein Halbring unter einer Halbkuppel hat keine.
+            if _runs_loose(part, held) and _anchored_span(_simplified(part), held) is None:
                 return False
         return True
 
