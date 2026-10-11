@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 from typing import Any, Final
 
 from app.core.errors import CANCEL, CHECK_UPDATES, ValidationError
@@ -1559,7 +1560,9 @@ def _keep_split_splinters_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
 
 
 #: Format 51 speicherte das Bügeln als Schalter; ``True`` bügelte jede Oberseite.
-_SAVED_IRONING: Final = {True: "top_surfaces", False: "none"}
+#: Die eine Quelle dieser Zuordnung: Der Abdruck einer Buchung rechnet mit ihrer
+#: Umkehrung auf den Schalter zurück (``filament_usage._SAVED_IRONING``).
+SAVED_IRONING: Final[Mapping[bool, str]] = MappingProxyType({True: "top_surfaces", False: "none"})
 
 
 def _ironing_becomes_a_choice(data: dict[str, Any]) -> dict[str, Any]:
@@ -1592,7 +1595,7 @@ def _ironing_becomes_a_choice(data: dict[str, Any]) -> dict[str, Any]:
 def _ironing_choice(value: object) -> str:
     """Der Schalter als Wahl, eine Wahl bleibt, alles andere wird „none“ (RM-588)."""
     if isinstance(value, bool):
-        return _SAVED_IRONING[value]
+        return SAVED_IRONING[value]
     return str(value) if value in ("none", "topmost", "top_surfaces") else "none"
 
 

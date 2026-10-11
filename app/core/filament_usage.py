@@ -31,6 +31,7 @@ from app.core.export.handover import (
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import print_settings, profiles
 from app.core.scene.hashing import digest, profile_key
+from app.core.scene.migrations import SAVED_IRONING
 from app.core.scene.serialise import print_settings_to_data
 from app.core.slice.estimate import estimate
 from app.core.slice.gcode import GcodeMetrics
@@ -518,8 +519,11 @@ def _part_versions(operation: Operation) -> list[str]:
 #: Wie Format 51 das Bügeln speicherte (RM-588): als Schalter, ``True`` für
 #: jede Oberseite. Der Abdruck einer Buchung aus 0.5.3 oder 0.6.0 trägt den
 #: Schalter; dieselbe Wahl heißt seit Format 52 „none“ oder „top_surfaces“
-#: und muss denselben Abdruck geben. „topmost“ gab es davor nicht.
-_SAVED_IRONING: Final[Mapping[str, bool]] = MappingProxyType({"none": False, "top_surfaces": True})
+#: und muss denselben Abdruck geben. „topmost“ gab es davor nicht. Die Umkehrung
+#: der Migration, nicht eine zweite Tabelle (Integrationsreview welle4, T2-G2).
+_SAVED_IRONING: Final[Mapping[str, bool]] = MappingProxyType(
+    {choice: switch for switch, choice in SAVED_IRONING.items()}
+)
 
 
 def _as_saved(path: str, value: object) -> object:

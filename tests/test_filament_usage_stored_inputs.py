@@ -763,6 +763,18 @@ def test_a_feature_mapping_counts_with_its_decision() -> None:
     assert len({first["obj_1"], second["obj_1"], dropped["obj_1"]}) == 3
 
 
+@pytest.mark.parametrize("switch", [True, False])
+def test_the_saved_ironing_switch_goes_there_and_back(switch: bool) -> None:
+    """Integrationsreview welle4, T2-G2: Die Migration hebt den Schalter von Format 51
+    auf die Wahl, der Abdruck einer Buchung rechnet die Wahl auf denselben Schalter
+    zurück — eine Tabelle, beide Richtungen. Eine Wahl ohne Schalter bleibt, wie sie ist."""
+    from app.core.scene import migrations
+
+    choice = migrations._ironing_choice(switch)
+    assert usage._as_saved("shell.ironing", choice) is switch
+    assert usage._as_saved("shell.ironing", "topmost") == "topmost"
+
+
 def test_the_former_fingerprint_is_the_one_of_rm705() -> None:
     """Ohne Eingänge rechnet ``prepare`` wie bisher; mit ihnen ist das der Vorabdruck."""
     objects, settings, profile, inputs = job(build())
