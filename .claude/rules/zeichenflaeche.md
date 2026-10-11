@@ -108,21 +108,17 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
   (`drawing_hint`), auch dass Esc den Linienzug beendet. Sobald etwas
   gezeichnet ist, hängt `status_text` „Esc wechselt zum Auswählen und Ziehen."
   an.
-* **Ein Linienzug endet, wenn er eine Schleife schließt** (`_closes_a_loop`
-  fragt die Zeichnung: Deckungen und die Enden jeder offenen Kurve aus
-  `edit._spots`; getippte Seiten und Strg+Z zählen mit); sonst hinge ein neuer
-  Strich am Zeiger, und das erste Esc nähme nur ihn. Klick und getipptes Maß
-  führen den Zug über `_go_on_with_the_chain`. Den Doppelklick entscheidet
-  `double_click_on_plane` (beendet den Zug); `place` lehnt nur eine Linie der
-  Länge null ab (`EPS_DISPLAY`, nicht die Fangweite).
-* **Die Eingabetaste eines Maßfelds setzt im Ereignisfilter des Panels und
-  endet dort** — getippt oder angezeigt; sonst drückte sie im Dialog *Skizze
-  zeichnen* danach dessen Hauptknopf. Der Fokusverlust setzt nur eine getippte,
-  noch nicht genommene Eingabe, am `FocusOut` erkannt und sofort, weil ein
-  Klick ins Bild zuerst den Fokus nimmt und dann drückt (kein Zeitgeber).
-* **Ein Rasterpunkt auf einem vorhandenen Punkt fängt diesen**
-  (`_placement_target`, Toleranz `EPS_DISPLAY`), nur bei Werkzeugen, die einen
-  Punkt setzen — Auswählen, Verrunden und Fase treffen, was unter dem Zeiger liegt.
+* **Ein Linienzug endet, wenn er eine Schleife schließt** (`_closes_a_loop`:
+  Deckungen und Kurvenenden aus `edit._spots`), sonst hinge ein Strich am
+  Zeiger. Klick und getipptes Maß gehen über `_go_on_with_the_chain`. Den
+  Doppelklick nimmt im Linienwerkzeug immer `double_click_on_plane`; `place`
+  lehnt nur Länge null ab (`EPS_DISPLAY`). Gleich nahe Punkte: das Kurvenende.
+* **Die Eingabetaste eines Maßfelds setzt im Filter des Panels und endet dort**
+  (sonst drückte sie den Hauptknopf des Dialogs); danach Fokus zurück, wo die
+  erste Ziffer ankam (`give_focus_back`). Fokusverlust setzt nur Getipptes,
+  am `FocusOut` und sofort — ein Klick nimmt erst den Fokus, dann drückt er.
+* **Ein Rasterpunkt auf einem vorhandenen Punkt fängt ihn** (`EPS_DISPLAY`),
+  nur bei setzenden Werkzeugen, nicht bei Auswählen, Verrunden, Fase.
 * **Wo der Zeiger steht, steht in der Zeile** (`pointer_target`,
   `SketchPanel._show_pointer`) — der Ort, an dem ein Klick landet, nicht die
   rohe Lage. Genaue Zahlen gibt das Kontextmenü am Punkt (`edit_point`, mit

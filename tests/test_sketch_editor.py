@@ -7063,18 +7063,113 @@ def test_a_typed_length_comes_first_when_a_click_takes_the_focus(qt_app: QApplic
         assert math.isclose(math.dist(*first), 40.0, abs_tol=EPS_DISPLAY), first
         assert first[1][0] > 39.0, "in Zeigerrichtung, nicht zum Klickpunkt"
 
-        heard: list[str] = []
-        canvas.statusChanged.connect(heard.append)
-        canvas.measure_field.setFocus()
-        canvas.measure_field.selectAll()
-        QTest.keyClicks(canvas.measure_field, "40")
-        panel.drop_tool()
-        canvas.setFocus()
-        QApplication.processEvents()
-        assert not any(text.startswith("Erst einen Punkt setzen") for text in heard), heard
     finally:
         panel.close()
         panel.deleteLater()
+
+
+def test_esc_after_a_typed_length_leaves_no_instruction(qt_app: QApplication) -> None:
+    """„40“ tippen und Esc: Die letzte Zeile ist kein „Erst einen Punkt setzen …“ (Review M1).
+
+    Wer abbricht, liest keine Anweisung. Ein Zeitgeber setzte die getippte
+    Zahl nach dem Abbruch noch, ohne angefangenes Element.
+    """
+    from PySide6.QtTest import QTest
+
+    panel = SketchPanel()
+    panel.resize(900, 700)
+    panel.show()
+    panel.activateWindow()
+    QTest.qWaitForWindowActive(panel)
+    try:
+        canvas = panel.canvas
+        panel.choose_tool("line")
+        canvas.set_snapping(False)
+        canvas.place_on_plane((0.0, 0.0))
+        canvas.hover_on_plane((30.0, 10.0))
+        QApplication.processEvents()
+        assert not canvas.measure_field.isHidden(), "das Feld steht am Zeiger"
+        canvas.measure_field.setFocus()
+        QApplication.processEvents()
+        assert canvas.measure_field.hasFocus(), "und hat den Fokus — sonst prüft der Test nichts"
+        canvas.measure_field.selectAll()
+        QTest.keyClicks(canvas.measure_field, "40")
+        panel.drop_tool()
+        for _ in range(5):
+            QApplication.processEvents()
+        assert not canvas.sketch.elements, "abgebrochen ist abgebrochen"
+        assert not panel.status.text().startswith("Erst einen Punkt setzen"), panel.status.text()
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
+def test_two_typed_lengths_in_a_row_keep_the_sketch_dialog_open(qt_app: QApplication) -> None:
+    """„40“ Eingabe, „30“ Eingabe: zwei Linien, der Dialog bleibt offen (Review M-N1).
+
+    Nach dem Setzen verschwand das Feld, und Qt gab den Fokus dem Knopf
+    *Auswählen*: Die zweite Zahl ging verloren, ihre Eingabetaste schloss den
+    Dialog. Der Fokus geht dorthin zurück, wo die erste Ziffer ankam.
+    """
+    from PySide6.QtTest import QTest
+
+    dialog = SketchEditorDialog()
+    dialog.show()
+    dialog.activateWindow()
+    QTest.qWaitForWindowActive(dialog)
+    try:
+        canvas = dialog.panel.canvas
+        dialog.panel.choose_tool("line")
+        canvas.set_snapping(False)
+        canvas.place_on_plane((0.0, 0.0))
+        for pointer, typed in (((35.0, 0.3), "40"), ((40.2, 25.0), "30")):
+            canvas.hover_on_plane(pointer)
+            canvas.setFocus()
+            QApplication.processEvents()
+            for character in typed:
+                QTest.keyClick(QApplication.focusWidget(), character)
+            QTest.keyClick(QApplication.focusWidget(), Qt.Key.Key_Return)
+            QApplication.processEvents()
+            assert QApplication.focusWidget() is canvas, (
+                "der Fokus ist wieder auf der Zeichenfläche"
+            )
+        assert len(canvas.sketch.elements) == 2
+        second = canvas.sketch.elements[1].points
+        assert math.isclose(math.dist(*second), 30.0, abs_tol=EPS_DISPLAY)
+        assert dialog.isVisible(), "der Dialog bleibt offen"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+def test_a_double_click_on_the_start_starts_no_new_chain(qt_app: QApplication) -> None:
+    """Der Doppelklick auf den Anfang schließt die Kontur und beginnt keinen neuen Zug (G-N4)."""
+    canvas = SketchCanvas()
+    canvas.set_snapping(True, 1.0)
+    canvas.set_tool("line")
+    for point in ((0.0, 0.0), (40.0, 0.0), (40.0, 30.0), (0.0, 30.0), (0.0, 0.0)):
+        canvas.place_on_plane(point)
+    assert not canvas._pending_world, "der erste Klick des Doppelklicks schließt"
+    assert canvas.double_click_on_plane((0.0, 0.0)), "der Doppelklick selbst ist genommen"
+    assert not canvas._pending_world
+    assert len(canvas.sketch.elements) == 4
+
+
+def test_an_elliptical_arc_from_vertex_to_vertex_closes_the_chain(qt_app: QApplication) -> None:
+    """Liegt das Bogenende auf dem Achsenpunkt, fängt der Klick das Ende (G-N5)."""
+    from app.core.types import Sketch
+
+    arc = SketchElement(
+        "elliptical_arc", ((20.0, 0.0), (40.0, 0.0), (20.0, 8.0), (40.0, 0.0), (0.0, 0.0))
+    )
+    canvas = SketchCanvas()
+    canvas.set_sketch(Sketch(plane="plane:xy", elements=(arc,), constraints=()))
+    canvas.set_snapping(True, 1.0)
+    canvas.set_tool("line")
+    for point in ((40.0, 0.0), (40.0, -30.0), (0.0, -30.0), (0.0, 0.0)):
+        canvas.place_on_plane(point)
+    assert len(canvas.sketch.elements) == 4
+    assert not canvas._pending_world, "die Kontur ist zu"
 
 
 def test_enter_in_the_measure_field_keeps_the_sketch_dialog_open(qt_app: QApplication) -> None:
