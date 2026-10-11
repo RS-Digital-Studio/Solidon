@@ -98,6 +98,15 @@ jobs:
       - name: Abhängigkeiten
         run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
 
+      - name: Abwicklungsinformation von OpenCASCADE korrigieren (Intel-Mac)
+        # Das x86_64-Rad kodiert die Rahmengröße jeder Funktion mit
+        # Stapelprobe falsch, und jede OCC-Ausnahme durch einen solchen Rahmen
+        # endete mit einem Bus-Fehler (RM-768). Direkt nach der Installation,
+        # vor Tests und Paketbau; die geänderten Bibliotheken werden ad hoc
+        # neu signiert. Warum und wie: tools/fix_unwind_info.py.
+        if: runner.os == 'macOS' && runner.arch == 'X64'
+        run: python tools/fix_unwind_info.py --codesign
+
       - name: Konturverkettung übersetzen
         run: python tools/build_slice_core.py
 

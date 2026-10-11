@@ -3122,8 +3122,9 @@ def _layer_heights(
                         name=name,
                         slicer=slicer,
                     ),
-                    values={"name": name},
+                    values={"name": name, "field": "support.style"},
                     object_id=entry.id,
+                    suggestions=(OPEN_PRINT_SETTINGS,),
                 )
             )
         elif entry.plate in shared:
@@ -3137,8 +3138,9 @@ def _layer_heights(
                         name=name,
                         slicer=slicer,
                     ),
-                    values={"name": name},
+                    values={"name": name, "field": "layers.fine_layer_height"},
                     object_id=entry.id,
+                    suggestions=(OPEN_PRINT_SETTINGS,),
                 )
             )
         else:
