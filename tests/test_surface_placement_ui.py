@@ -3355,6 +3355,72 @@ def test_a_part_sits_on_the_top_face_at_once_and_carries_a_grip(qt_app: QApplica
         window.release()
 
 
+def test_a_part_without_a_place_is_neither_computed_nor_applied(
+    qt_app: QApplication, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Bis die Platzierung ihre Stelle hat, rechnet nichts, und *Übernehmen* nennt den Weg.
+
+    RM-773, Kundenprotokoll zu 0.5.3: „evaluation stopped at op 2:
+    op.insert_screw_hole.AppError: … Es ist auch keine Position eingetragen“.
+    Nachgestellt wie der Kunde: Körper gewählt, *Schraubenloch einfügen*. Die
+    erste Vorschau lief gleich beim Öffnen mit x = y = z = 0 und ohne Merkmal,
+    bevor der Arbeiter die Fläche gefunden hatte, und hielt sicher an. Jetzt
+    wartet sie auf die Stelle, und danach entsteht ein Schritt, der rechnet.
+    """
+    import logging
+    import time
+
+    from app.ui.op_dialog import placement_hint
+
+    window = _window_with_a_renderer()
+    try:
+        _a_selected_plate(window)
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger="app.core.scene.evaluate"):
+            window.run_operation(REGISTRY.get("insert_screw_hole"))
+            dialog = window._op_dialog
+            assert dialog is not None and dialog.spec.name == "insert_screw_hole"
+            assert not dialog.can_accept(), "frisch geöffnet steht noch keine Stelle"
+            button = dialog._accept_button
+            assert not button.isEnabled()
+            assert button.toolTip() == placement_hint(), "der Knopf sagt, was fehlt"
+            dialog.accept()
+            flow = dialog.placement_flow
+            assert flow is not None
+            for _ in range(300):
+                QApplication.processEvents()
+                assert window.session.wait_for_idle(60_000)
+                if flow._surface is not None and flow._tool is not None:
+                    break
+                time.sleep(0.02)
+            for _ in range(40):
+                QApplication.processEvents()
+            assert window.session.wait_for_idle(60_000)
+            stopped = [r.getMessage() for r in caplog.records if "stopped" in r.getMessage()]
+            assert not stopped, stopped
+            assert [entry.op for entry in window.session.history.operations] == ["load"], (
+                "der Klick vor der Stelle legt keinen Schritt an"
+            )
+            assert dialog.can_accept()
+            dialog.accept()
+            for _ in range(40):
+                QApplication.processEvents()
+            assert window.session.wait_for_idle(60_000)
+            stopped = [r.getMessage() for r in caplog.records if "stopped" in r.getMessage()]
+            assert not stopped, stopped
+        assert [entry.op for entry in window.session.history.operations] == [
+            "load",
+            "insert_screw_hole",
+        ]
+        result = window.session.last_result
+        assert result is not None and result.stopped_at is None
+    finally:
+        for dialog in window.findChildren(OperationDialog):
+            dialog.reject()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_a_part_for_a_hole_sits_in_the_chosen_hole(qt_app: QApplication) -> None:
     """Eine gewählte Bohrung, ein Baustein für Bohrungen — er sitzt darin.
 

@@ -136,6 +136,7 @@ scrive in `website/version.json`.
 - Anche i tuoi blocchi nascono così come corpo a sé e non si attaccano a un corpo già presente nel progetto.
 - Con *Salva la selezione come blocco* il corpo selezionato arriva con esattamente i passi che lo costruiscono. Se arrivasse anche un secondo corpo, la finestra lo dice prima.
 - Supporti a parete, fascette per tubo, morsetti per profilo e supporti accettano ogni vite da M3 a M64. Se una misura non si accorda con le altre, il blocco dice cosa cambiare.
+- Un blocco per una faccia o un foro viene calcolato solo quando ha il suo punto nella vista. Fino ad allora la finestra non si può applicare e dice che cosa manca.
 
 ### Modificare e disegnare
 

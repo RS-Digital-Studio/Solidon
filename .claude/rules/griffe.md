@@ -339,7 +339,10 @@ und stellt die gemessenen Werte wieder her (`_drag_kind` bleibt `"slot"`).
   (`grip_placement`, `placementDragged` → `_dragged_at_the_tool` → `move_to`),
   der Auswahlgriff weicht bis Escape. **Ein Klick bestätigt keine Stelle, die
   niemand gewählt hat** (`_seated_by_default`: der erste setzt um, der nächste
-  übernimmt). Nur Bausteine — die Bohrung wird gezielt gesetzt.
+  übernimmt). Nur Bausteine — die Bohrung wird gezielt gesetzt. **Bis er
+  sitzt, rechnet nichts**: ohne Merkmal, Flächenbezug und Position keine
+  Vorschau und kein Übernehmen (`OperationDialog.place_missing` fragt
+  `parts.ops.place_missing`, dieselbe Frage, an der `_anchor` anhält; RM-773).
 
 ## Was am Griff steht, ist ASCII — und sonst nichts
 

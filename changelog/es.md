@@ -137,6 +137,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Sus propios bloques también se crean así como cuerpo propio y no se unen a un cuerpo que ya está en el proyecto.
 - Con *Guardar la selección como bloque* se guarda el cuerpo seleccionado con exactamente los pasos que lo construyen. Si viniera un segundo cuerpo, el diálogo lo indica antes.
 - Soportes de pared, abrazaderas de tubo y de perfil y soportes admiten cualquier tornillo de M3 a M64. Si un tamaño no encaja con las demás medidas, el bloque indica qué cambiar.
+- Un bloque para una cara o un agujero solo se calcula cuando tiene su sitio en la vista. Hasta entonces el diálogo no se puede aplicar e indica lo que falta.
 
 ### Editar y dibujar
 

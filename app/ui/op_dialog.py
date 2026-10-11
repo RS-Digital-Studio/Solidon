@@ -2501,11 +2501,15 @@ class OperationDialog(QDialog):
         # siehe :meth:`_missing_sketch`): Der Knopf folgt ihr, sobald die Wahl
         # sie zur Eingabe macht. Und ein Pflicht-Ziel: Der Knopf gibt frei,
         # sobald es gewählt ist, nicht erst mit dem nächsten Vorschaubild.
-        if self.spec.name == "apply_texture" or any(
-            (entry.kind == "material" and entry.required)
-            or (entry.targets_feature and entry.required)
-            or (entry.kind == "sketch" and (entry.required or entry.depends_on is not None))
-            for entry in self.spec.params.spec()
+        if (
+            self.spec.name == "apply_texture"
+            or self._seeks_a_place()
+            or any(
+                (entry.kind == "material" and entry.required)
+                or (entry.targets_feature and entry.required)
+                or (entry.kind == "sketch" and (entry.required or entry.depends_on is not None))
+                for entry in self.spec.params.spec()
+            )
         ):
             self.valuesChanged.connect(self._follow_source_pending)
         self._follow_source_pending()
@@ -2589,6 +2593,7 @@ class OperationDialog(QDialog):
         # dieselbe Auskunft für den Weg über Palette und Kürzel.
         no_target = self._target_missing()
         no_texture_face = self._texture_face_missing()
+        no_place = self.place_missing()
         # Und was das Fenster von außen sperrt: Ein Grund aus dem Band, der
         # eine Handlung trägt („Erst reparieren, dann aushöhlen"), sperrt den
         # Knopf, statt drei Schritte später im Prüfbericht zu enden
@@ -2611,6 +2616,7 @@ class OperationDialog(QDialog):
             or missing_material
             or (self._target_reason() if no_target else "")
             or (tr("Wählen Sie eine ebene Fläche für das Muster.") if no_texture_face else "")
+            or (placement_hint() if no_place else "")
             or (blocked or "")
         )
         incomplete = (
@@ -2624,6 +2630,7 @@ class OperationDialog(QDialog):
             or bool(missing_material)
             or no_target
             or no_texture_face
+            or no_place
             or blocked is not None
         )
         button.setEnabled(not pending and not incomplete)
@@ -2738,6 +2745,7 @@ class OperationDialog(QDialog):
             or self._missing_sketch()
             or self._missing_material()
             or self._texture_face_missing()
+            or self.place_missing()
             or self._blocked_reason is not None
             or not preview_ready
         )
@@ -2750,7 +2758,9 @@ class OperationDialog(QDialog):
         steht (``MainWindow._apply_when_previewed``).
         """
         if not self.can_accept():
-            if self.preview_defer is not None:
+            # Ohne Stelle gibt es keine Vorschau, auf die ein Klick warten
+            # könnte (RM-773).
+            if self.preview_defer is not None and not self.place_missing():
                 self.preview_defer()
             return
         super().accept()
@@ -2799,6 +2809,25 @@ class OperationDialog(QDialog):
             if not values.get(entry.name):
                 return tr("{name}: {value}", name=entry.title, value=tr("Materialprofil wählen …"))
         return ""
+
+    def _seeks_a_place(self) -> bool:
+        """Ob dieser Dialog einen Baustein einsetzt — nur dort gibt es eine Stelle zu fragen."""
+        from app.core.knowledge.parts.ops import part_of
+
+        return part_of(self.spec.name) is not None
+
+    def place_missing(self) -> bool:
+        """Ob ein Baustein für Fläche oder Bohrung weder Stelle noch Position hat (RM-773).
+
+        Die Frage stellt der Kern (``parts.ops.place_missing``) — dieselbe, an
+        der die Auswertung sonst anhält. Solange sie gilt, rechnet keine
+        Vorschau, und *Übernehmen* nennt den Weg: die Stelle im Bild.
+        """
+        if not self._seeks_a_place():
+            return False
+        from app.core.knowledge.parts.ops import place_missing
+
+        return place_missing(self.spec.name, self.spec.params, self.values())
 
     def _texture_face_missing(self) -> bool:
         """Ein Ganzflächenmuster braucht eine ausdrücklich gewählte Fläche."""

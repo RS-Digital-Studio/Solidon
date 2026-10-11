@@ -136,6 +136,7 @@ it into `website/version.json`.
 - Your own parts are created as a body of their own in the same way and do not attach to a body already in the project.
 - With *Save selection as a part*, the selected body comes with exactly the steps that build it. If a second body would come along, the dialog says so before saving.
 - Wall mounts, pipe clamps, profile clamps and holders take every screw from M3 to M64. If a size does not fit the other dimensions, the part says what to change.
+- A part for a face or hole is only computed once it has its spot in the view. Until then the dialog cannot be applied and says what is missing.
 
 ### Editing and sketching
 
