@@ -35,6 +35,7 @@ it into `website/version.json`.
 - In the *Selection* tab, the filament field assigns only on a click or Enter. Arrow keys and typing just browse, and the mouse wheel scrolls the tab.
 - In Spanish, French, Italian and Portuguese, *New filament* no longer scrolls sideways when the window is shorter than its content.
 - While Solidon recalculates, the report says *Recalculating …* and shows the previous lines as the earlier state. Until now, old errors looked as if they still applied.
+- After a model is read in, the report is in front on the right. Until now the *Selection* tab jumped forward although nothing was selected.
 - If the quick calculation fails at a step, Solidon calculates it thoroughly in the same run instead of stopping.
 - A finding that says a step had no effect opens that step at the matching field.
 - Once you remove a body, the report no longer talks about it, and the history shows which steps leave nothing behind.
@@ -46,17 +47,20 @@ it into `website/version.json`.
 - An added model is in view afterwards, even when it lands next to a model you zoomed in on.
 - Every function has the same name everywhere. The *Split* tool offers *Split at a plane*, *Split along a drawn line* and *Split into separate parts*.
 - On the selected body, *Split automatically …* now sits under *Prepare*.
-- While nothing needs attention, only *Parts* is highlighted in colour. Red is kept for buttons that discard or delete, and confirmations open with the focus on *Cancel*.
+- While nothing needs attention, only *Part catalogue …* is highlighted in colour. Red is kept for buttons that discard or delete, and confirmations open with the focus on *Cancel*.
+- The catalogue is called *Part catalogue …* everywhere. In the *Selection* tab, *Parts* is only the group with *Create lid* and *Create screw lid*.
 - In sketch mode the *Selection* tab is hidden. The list of constraints shows those of the selected points and lines, plus any conflict.
 - In the parameter card, a dimension shows “Not used” only where that is true. The button says how many fixed numbers can be bound to dimensions.
 - The tour card is as tall as its steps. A step unfolds with a click or the space bar, and no tooltip bubble covers the view any more.
 - When a tour step points at the report, the tour stays visible. The tab is framed, and the step tells you which tab to open.
+- The tour no longer cuts text off at the edge, even after the window gets smaller. The current step takes as many lines as it needs.
 - Clicking the i next to an action in the *Selection* tab opens the manual where that action is explained.
 - Every dimension of a part can be bound to a project dimension with fx, even before it holds an expression.
 - After dragging the handle of a preview, no number stays above the view. A number typed during the drag moves the preview, not the selected body.
 - After *Repair and try again* and similar ways, the history no longer calls a step that keeps working “deleted”. If the chain stops again, that step is marked.
 - If you click *Apply* while Solidon is still calculating, the step is created as soon as the calculation is done, and the status bar says so. Until now the click was lost.
 - In the part catalogue, *Manage parts* is open as long as there is no part of your own yet.
+- Steps that another program creates through remote control appear in the history as “Remote control” instead of “Agent”.
 - On the Mac, *Cancel* stops a running answer from the local model at once.
 - On the Mac, Return opens the selected entry on the start screen, in *Search functions* and in the report.
 - On Linux, input through Fcitx5 and IBus now reaches the text field in the Flatpak and the AppImage too.
@@ -73,6 +77,7 @@ it into `website/version.json`.
 - Exporting as 3MF is considerably faster and only rereads the slicer's profiles when something changed there.
 - The print dialog matches the slicer's profiles much faster, when opening and after every slicer change.
 - Even in a long history, a new step takes hardly longer to calculate than the first.
+- Large outlines made of many lines, such as an adopted face outline, can be edited in the sketch editor without waiting.
 - On models with thousands of features, moving and other steps that leave the shape unchanged finish up to twice as fast.
 - After a hole or a moved feature, the features of a large technical part are recognised about a third faster.
 - Undo and redo are faster, and memory that is no longer needed is freed right away.
@@ -86,6 +91,7 @@ it into `website/version.json`.
 - A printer from Solidon's list and the same one from the slicer count as one device. The print dialog picks the slicer profile with the right nozzle, and the print file carries the start code.
 - Without a saved slicer profile, export and main window use what the print dialog suggests for the printer, including the manufacturer's machine and process.
 - Only slicers Solidon works with are offered, plus resin slicers such as ChituBox and Lychee. Bambu Studio as an AppImage now counts too.
+- With a resin printer, the print dialog now shows only printer, material, plates and the program. Version 0.5.3 also showed filament profiles and stock there.
 - Start code and build volume come only from exactly your printer, not from another model of the same series.
 - On Linux, Solidon now also creates the print file with Cura as a Flatpak or AppImage.
 - On Linux, the printers of OrcaSlicer, Bambu Studio, ElegooSlicer and Creality Print as an AppImage are offered right away, even if the slicer has never been opened.
@@ -129,6 +135,7 @@ it into `website/version.json`.
 - The filament inventory offers a booking from Solidon 0.5 of the same project with the same filaments for review and asks before deducting the same print again.
 - From this version on, a booking stays with its print, even when an update calculates faster or the manufacturer profile in the slicer changes. Previously, such a print counted as new.
 - Where shallow domes and slopes would show steps, Solidon suggests fine layers only there. The suggestion says how much longer the part then takes to print.
+- A naming pattern typed during export is remembered, even if you first switch from 3MF to another format in the file dialog.
 
 ### Threads, holes and standard parts
 
@@ -161,6 +168,7 @@ it into `website/version.json`.
 - A part for a face or hole is only computed once it has its spot in the view. Until then the dialog cannot be applied and says what is missing.
 - If the face under an open part dialog changes, the chosen spot stays as long as it still fits the new shape. Otherwise the part finds a new one and says so.
 - A part dialog that opens while the previous step is still computing places the part by itself as soon as the result is there, and cannot be applied until then.
+- If the catalogue already has a part of the same name when you add a part file, Solidon asks whether the new one should be added as an entry of its own. Version 0.5.3 showed an error message instead.
 - In the example *Parts — nuts, inserts, cables*, the cable enters from below through the floor, and the strain relief sits inside the housing. Until now it hung below the print bed.
 
 ### Editing and sketching
@@ -174,8 +182,14 @@ it into `website/version.json`.
 - A sketch with many separate shapes solves quickly, even with hundreds of dimensioned rectangles or circles.
 - If *Curvature continuous* cannot be met while you draw, the sketch editor says so within seconds instead of minutes.
 - If two constraints contradict each other, the sketch editor names both instead of shrinking a line or circle to a point.
-- A chain of lines in a sketch ends as soon as it closes on its start. Until now a new segment hung on the pointer, and the first Esc seemed to do nothing.
+- A chain of lines in a sketch ends as soon as it closes a loop. Until now a new segment hung on the pointer, and the first Esc seemed to do nothing.
 - A length typed with the line tool creates exactly one line. Until now leaving the dimension field added a second one, back towards the pointer.
+- In the sketch editor, *Offset* moves a closed outline and each of its sides outwards for a positive distance and joins the corners, however it was drawn. Version 0.5.3 often put them inside.
+- Arcs now move with *Offset* too, around the same centre: a slot keeps its round ends and a fillet its shape.
+- After a dimension changes, *Trim*, *Extend*, *Offset* and *Mirror* in the sketch editor act on the position you see. Version 0.5.3 used the previously drawn state.
+- A click that grid snapping places exactly on an existing point catches that point. Until now the contour looked closed without being connected.
+- A double-click with the line tool ends the chain of lines. Until now it created a line of zero length.
+- Enter in the dimension field of the *Draw sketch* dialog sets the dimension and keeps the dialog open. Until now it applied the drawing and closed it.
 - A body takes three clicks: *Draw* in the top toolbar (Ctrl+Shift+E), then corner, opposite corner, height. Outwards it joins on, inwards it cuts.
 - While pulling up, you can type the dimensions. A double-click on the step opens its dimensions, and under *Kind* it becomes a revolved body or a hole pattern without redrawing.
 - From the sketch editor, *Done* leads back into the view, and the next click sets the height. Escape lays the outline aside, Ctrl+Z brings it back.
@@ -191,6 +205,7 @@ it into `website/version.json`.
 - An armature bends only what hangs on its bones, and the rest of the body stays put. Older projects calculate as saved.
 - With Ctrl or Shift you select several edges and fillet or chamfer them in one step. A click on a corner selects all edges that meet there.
 - On an exact body, the highlight of an edge also shows the tangentially adjoining edges that *Fillet* and *Add a chamfer* take along.
+- Many round walls of small lettering, such as those of an “O” or “D” added with *Put text on*, now appear as *Curved face* in the object tree on a large body too.
 - What the selection offers for a feature, the operation carries out with exactly those values. What is greyed out, it states in the same words, also via chat and command line.
 - As the spot for the copy, *Duplicate feature* suggests one and a half widths beside the original, with a wall in between and never along its axis.
 - On a countersink, *Turn feature* suggests the largest angle at which it stays one, and says when a turn only lays the feature onto itself.
@@ -198,6 +213,8 @@ it into `website/version.json`.
 - If a separate part is in the way of a feature action, *Split into separate parts and try again* separates it and runs the action. Ctrl+Z undoes both.
 - Splitting into separate parts keeps every printable part, including pins and washers next to a large plate. Only small open surfaces and crumbs the printer cannot reproduce are dropped.
 - A relief only computes once an image is chosen. Until then the dialog points to the *Choose an image …* button.
+- The *Apply texture* dialog opens with a pattern area that fits the selected face and a pitch your nozzle can print. If an area extends past the edge, the dialog says so and how to fix it.
+- In the dialog, the texture pattern and the hexagonal openings of *Cut a hole pattern* are now called *Honeycomb*, as in the manual. The dialog used to say Hexagon.
 - The *Load STEP* and *Extrude a drawing* dialogs only offer files they can read. If the project has none, they point to the *Choose a file …* button.
 
 ### Generating with AI

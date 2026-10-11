@@ -35,6 +35,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No separador *Seleção*, o campo de filamento só atribui com um clique ou Enter. As setas e a escrita apenas percorrem a lista, e a roda do rato desloca o separador.
 - Em espanhol, francês, italiano e português, *Novo filamento* já não se desloca para o lado quando a janela é mais baixa do que o conteúdo.
 - Enquanto recalcula, o relatório de verificação diz *A recalcular …* e mostra as linhas anteriores como estado anterior. Até agora, os erros antigos pareciam continuar válidos.
+- Depois de ler um modelo, à direita fica à frente o relatório de verificação. Até agora o separador *Seleção* passava para a frente, embora nada estivesse selecionado.
 - Se o cálculo rápido falhar num passo, o Solidon calcula-o a fundo na mesma execução em vez de parar.
 - Uma constatação que diz que um passo não teve efeito abre esse passo no campo certo.
 - Depois de remover um corpo, o relatório deixa de falar dele, e o histórico mostra que passos já não deixam nada.
@@ -46,17 +47,20 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um modelo adicionado passa a ficar à vista, mesmo quando aparece ao lado de um modelo em que a vista estava ampliada.
 - Cada função tem o mesmo nome em todo o lado. A ferramenta *Dividir* oferece *Dividir por um plano*, *Dividir ao longo de uma linha desenhada* e *Dividir em peças soltas*.
 - No corpo selecionado, *Dividir automaticamente …* está agora em *Preparar*.
-- Enquanto não houver nada pendente, só *Blocos* se destaca a cor. O vermelho fica para os botões que descartam ou apagam, e as perguntas abrem com o foco em *Cancelar*.
+- Enquanto não houver nada pendente, só *Catálogo de blocos …* se destaca a cor. O vermelho fica para os botões que descartam ou apagam, e as perguntas abrem com o foco em *Cancelar*.
+- O catálogo chama-se em todo o lado *Catálogo de blocos …*. No separador *Seleção*, *Blocos* é só o grupo com *Criar tampa* e *Criar tampa de rosca*.
 - No modo de desenho, o separador *Seleção* fica oculto. A lista de restrições mostra as dos pontos e linhas selecionados, mais qualquer conflito.
 - No cartão de parâmetros, uma medida só mostra «Não utilizado» quando é o caso. O botão diz quantos números fixos se podem associar a medidas.
 - O cartão da visita guiada tem a altura dos seus passos. Um passo abre-se com um clique ou com a barra de espaços, e nenhum balão tapa mais a vista.
 - Quando um passo da visita guiada aponta para o relatório de verificação, a visita continua visível. O separador fica emoldurado e o passo diz qual abrir.
+- A visita guiada já não corta o texto na margem, mesmo depois de reduzir a janela. O passo atual ocupa as linhas de que precisa.
 - Um clique no i junto a uma ação do separador *Seleção* abre o manual onde essa ação é explicada.
 - Cada cota de um bloco pode ser ligada com fx a uma cota do projeto, mesmo antes de ter uma expressão.
 - Depois de arrastar a pega de uma pré-visualização, nenhum número fica sobre a vista. Um número escrito durante o arrasto move a pré-visualização, não o corpo escolhido.
 - Depois de *Reparar e tentar de novo* e caminhos semelhantes, o histórico já não chama «eliminado» a um passo que continua a calcular. Se a cadeia voltar a parar, o passo fica marcado.
 - Se clicar em *Aplicar* enquanto o Solidon ainda calcula, o passo é criado assim que o cálculo termina, e a barra de estado indica-o. Até agora o clique perdia-se.
 - No catálogo de blocos, *Gerir blocos* aparece aberto enquanto ainda não existir nenhum bloco próprio.
+- Os passos que outro programa cria pelo comando à distância aparecem no histórico como «Comando à distância» em vez de «Agente».
 - No Mac, *Cancelar* interrompe de imediato uma resposta em curso do modelo local.
 - No Mac, Return abre a entrada selecionada no ecrã inicial, em *Pesquisar função* e no relatório de verificação.
 - No Linux, a escrita com Fcitx5 e IBus chega agora ao campo de texto também no Flatpak e no AppImage.
@@ -73,6 +77,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Exportar em 3MF é bastante mais rápido e só volta a ler os perfis do slicer se algo mudou lá.
 - O diálogo de impressão atribui os perfis do slicer muito mais depressa, ao abrir e após cada mudança de slicer.
 - Mesmo num histórico longo, um passo novo quase não demora mais a calcular do que o primeiro.
+- Contornos grandes com muitas linhas, como um contorno da face aproveitado, editam-se no editor de esboços sem esperas.
 - Em modelos com milhares de características, mover e outros passos que não alteram a forma terminam até duas vezes mais depressa.
 - Depois de um furo ou de uma característica deslocada, as características de uma peça técnica grande são reconhecidas cerca de um terço mais depressa.
 - Desfazer e refazer são mais rápidos, e a memória que já não é precisa fica logo livre.
@@ -86,6 +91,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma impressora da lista do Solidon e a mesma do slicer contam como um só aparelho. O diálogo escolhe o perfil com o bico certo e o ficheiro leva o código de início.
 - Sem um perfil do slicer guardado, a exportação e a janela principal usam o que o diálogo de impressão propõe para a impressora, com a máquina e o processo do fabricante.
 - Só são oferecidos os slicers com que o Solidon trabalha, além de slicers de resina como o ChituBox e o Lychee. O Bambu Studio em AppImage passa a contar também.
+- Com uma impressora de resina, o diálogo de impressão mostra só impressora, material, placas e programa. A versão 0.5.3 mostrava também perfis e stock de filamento.
 - O código de início e o volume de impressão vêm só da sua impressora, não de outro modelo da mesma série.
 - No Linux, o Solidon cria agora o ficheiro de impressão também com o Cura em Flatpak ou AppImage.
 - No Linux, as impressoras do OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print em AppImage ficam disponíveis de imediato, mesmo que o slicer nunca tenha sido aberto.
@@ -129,6 +135,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O armazém de filamentos apresenta para verificar um registo do Solidon 0.5 do mesmo projeto com os mesmos filamentos e pergunta antes de descontar de novo.
 - A partir desta versão, um consumo descontado fica ligado à sua impressão, mesmo que uma atualização calcule mais depressa ou o perfil do fabricante mude no slicer. Antes contava como nova.
 - Onde cúpulas planas e rampas mostrariam degraus, o Solidon sugere camadas finas só aí. A sugestão indica quanto mais tempo a peça demora a imprimir.
+- Um padrão de nomes escrito ao exportar fica memorizado, mesmo que primeiro mude de 3MF para outro formato na caixa de diálogo de ficheiros.
 
 ### Roscas, furos e peças normalizadas
 
@@ -161,6 +168,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um bloco para uma face ou um furo só é calculado quando tem o seu lugar na vista. Até lá a caixa de diálogo não pode ser aplicada e diz o que falta.
 - Se a face mudar com a caixa de diálogo de um bloco aberta, o lugar escolhido mantém-se enquanto continuar válido na nova forma. Caso contrário, o bloco procura um novo e indica-o.
 - Uma caixa de diálogo de bloco aberta enquanto o passo anterior ainda calcula coloca o bloco sozinha assim que o resultado chega, e até lá não pode ser aplicada.
+- Se, ao adicionar um ficheiro de bloco, o catálogo já tiver um bloco com esse nome, o Solidon pergunta se o novo deve ser adicionado como entrada própria. A versão 0.5.3 mostrava uma mensagem de erro.
 - No exemplo *Blocos — porcas, buchas, cabos*, o cabo entra por baixo através do fundo, e o alívio de tração fica dentro da caixa. Até agora ficava pendurado abaixo da mesa de impressão.
 
 ### Editar e esboçar
@@ -174,8 +182,14 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um esboço com muitas formas separadas resolve-se depressa, mesmo com centenas de retângulos ou círculos cotados.
 - Se *Curvatura contínua* não puder ser cumprida ao desenhar, o editor de esboços indica-o em segundos e não em minutos.
 - Se duas restrições se contradizem, o editor de esboços nomeia ambas em vez de reduzir uma linha ou um círculo a um ponto.
-- Uma sequência de linhas no esboço termina assim que fecha no seu início. Até agora ficava um novo troço preso ao ponteiro, e o primeiro Esc parecia não fazer nada.
+- Uma sequência de linhas no esboço termina assim que fecha um ciclo. Até agora ficava um novo troço preso ao ponteiro, e o primeiro Esc parecia não fazer nada.
 - Um comprimento escrito com a ferramenta Linha cria exatamente uma linha. Até agora, ao sair do campo da cota juntava-se uma segunda, de volta ao ponteiro.
+- No editor de esboços, *Afastar* leva um contorno fechado e cada um dos seus lados para fora com distância positiva e une os cantos, em qualquer sentido. A versão 0.5.3 punha-os muitas vezes dentro.
+- Os arcos acompanham agora também *Afastar*, em torno do mesmo centro: um furo oblongo mantém as pontas redondas e um arredondamento a sua forma.
+- Depois de mudar uma cota, *Aparar*, *Prolongar*, *Afastar* e *Espelhar* atuam na posição visível. A versão 0.5.3 usava o estado desenhado antes.
+- Um clique que a captura à grelha coloca exatamente sobre um ponto existente apanha esse ponto. Até agora o contorno parecia fechado sem estar ligado.
+- Um duplo clique com a ferramenta Linha termina a sequência de linhas. Até agora criava uma linha de comprimento zero.
+- Enter no campo da cota do diálogo *Desenhar esboço* define a cota e deixa o diálogo aberto. Até agora aplicava o desenho e fechava-o.
 - Um corpo levanta-se com três cliques: *Desenhar* na barra superior (Ctrl+Shift+E), depois canto, canto oposto, altura. Para fora une-se, para dentro recorta.
 - Ao levantar, as medidas podem ser escritas. Um duplo clique no passo abre as suas medidas, e em *Tipo* passa a sólido de revolução ou padrão de furos sem desenhar de novo.
 - No editor de esboços, *Concluído* leva de volta à vista e o clique seguinte põe a altura. Escape põe o contorno de lado, Ctrl+Z trá-lo de volta.
@@ -191,6 +205,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um esqueleto só dobra o que está preso aos seus ossos, e o resto do corpo fica parado. Os projetos anteriores calculam-se como foram guardados.
 - Com Ctrl ou Shift escolhe várias arestas e arredonda-as ou chanfra-as num só passo. Um clique num canto escolhe todas as arestas que lá se encontram.
 - Num corpo exato, o realce de uma aresta mostra também as arestas tangentes contíguas que *Arredondar* e *Aplicar um chanfro* incluem.
+- Muitas paredes redondas de um texto pequeno, como as de um «O» ou de um «D» com *Aplicar texto*, aparecem agora também num corpo grande como *Face curva* na árvore de objetos.
 - O que a seleção oferece numa característica, a operação executa com exatamente esses valores. O que está a cinzento, diz com a mesma frase, também por chat e linha de comandos.
 - Como lugar da cópia, *Duplicar característica* propõe uma largura e meia ao lado do original, com uma parede entre ambas e nunca ao longo do seu eixo.
 - Num escareamento, *Rodar característica* propõe o maior ângulo com que continua a sê-lo, e avisa quando uma rotação só repõe a característica sobre si própria.
@@ -198,6 +213,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se uma peça separada atrapalha uma ação sobre uma característica, *Dividir em peças soltas e tentar de novo* separa-a e executa a ação. Ctrl+Z desfaz ambas.
 - Ao dividir em peças soltas ficam todas as peças imprimíveis, também pinos e anilhas junto a uma placa grande. Só caem pequenas superfícies abertas e migalhas que a impressora não reproduz.
 - Um relevo só é calculado depois de escolhida uma imagem. Até lá a caixa de diálogo indica o botão *Escolher imagem …*.
+- O diálogo *Aplicar textura* abre com uma área do padrão que cabe na face escolhida e um passo que o seu bico imprime. Se uma área ultrapassar o rebordo, o diálogo diz isso e como resolver.
+- No diálogo, o padrão de textura e as aberturas hexagonais de *Cortar padrão de furos* chamam-se agora *Favo de mel*, como no manual. Antes dizia Hexágono.
 - As caixas de diálogo *Carregar STEP* e *Extrudir um desenho* só oferecem ficheiros que conseguem ler. Se o projeto não tiver nenhum, indicam o botão *Escolher ficheiro …*.
 
 ### Gerar com IA

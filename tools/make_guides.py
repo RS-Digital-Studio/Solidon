@@ -1538,13 +1538,13 @@ def story_round_edges(run: GuideRun) -> None:
     body = _new_box(run, (60.0, 40.0, 20.0))
     run.capture(1, points={"viewport": _click_spot(run, body)})
     heading = guide_targets.widget_for(run.window, "section:shaping")
-    # Wie beim Kunden, der den Abschnitt noch nie geöffnet hat: zu.
-    if heading.isChecked():  # type: ignore[attr-defined]
-        heading.click()  # type: ignore[attr-defined]
-        run.settle(10)
+    # Wie der Kunde ihn vorfindet: Am frisch gewählten Quader steht *Ändern*
+    # offen (``selection_operations.OPEN_UP_TO``), und der Schritt sagt
+    # „Ist er zugeklappt, klappen Sie ihn auf“. Geklickt wird nur dann.
     run.capture(2)
-    heading.click()  # type: ignore[attr-defined]
-    run.settle(20)
+    if not heading.isChecked():  # type: ignore[attr-defined]
+        heading.click()  # type: ignore[attr-defined]
+        run.settle(20)
     run.capture(3)
     guide_targets.widget_for(run.window, "operation:fillet_edges").click()
     run.settle(40)

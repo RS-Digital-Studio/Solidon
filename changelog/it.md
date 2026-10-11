@@ -35,6 +35,7 @@ scrive in `website/version.json`.
 - Nella linguetta *Selezione*, il campo del filamento assegna solo con un clic o Invio. Le frecce e la digitazione scorrono soltanto l'elenco, e la rotellina scorre la linguetta.
 - In spagnolo, francese, italiano e portoghese, *Nuovo filamento* non scorre più di lato quando la finestra è più bassa del suo contenuto.
 - Durante il ricalcolo, il rapporto di verifica dice *Ricalcolo in corso …* e mostra le righe di prima come stato precedente. Finora i vecchi errori sembravano ancora validi.
+- Dopo aver letto un modello, a destra resta in primo piano il rapporto di verifica. Finora passava davanti la linguetta *Selezione* anche se non era selezionato nulla.
 - Se il calcolo rapido fallisce in un passaggio, Solidon lo ricalcola a fondo nella stessa esecuzione invece di fermarsi.
 - Un rilievo che dice che un passaggio non ha avuto effetto apre quel passaggio sul campo giusto.
 - Dopo la rimozione di un corpo, il rapporto non ne parla più, e la cronologia mostra quali passaggi non lasciano più nulla.
@@ -46,17 +47,20 @@ scrive in `website/version.json`.
 - Un modello aggiunto è poi visibile, anche se finisce accanto a un modello su cui la vista era ingrandita.
 - Ogni funzione ha lo stesso nome ovunque. Lo strumento *Dividi* offre *Dividi lungo un piano*, *Dividi lungo una linea tracciata* e *Dividi in pezzi distinti*.
 - Sul corpo selezionato, *Dividi automaticamente …* si trova ora sotto *Prepara*.
-- Finché non c'è nulla in sospeso, solo *Blocchi* risalta a colori. Il rosso resta ai pulsanti che scartano o eliminano, e le domande si aprono con il focus su *Annulla*.
+- Finché non c'è nulla in sospeso, solo *Catalogo dei blocchi …* risalta a colori. Il rosso resta ai pulsanti che scartano o eliminano, e le domande si aprono con il focus su *Annulla*.
+- Il catalogo si chiama ovunque *Catalogo dei blocchi …*. Nella linguetta *Selezione*, *Blocchi* è solo il gruppo con *Crea coperchio* e *Crea coperchio a vite*.
 - In modalità disegno la linguetta *Selezione* è nascosta. L'elenco dei vincoli mostra quelli dei punti e delle linee selezionati, più ogni conflitto.
 - Nella scheda dei parametri, una misura mostra «Non utilizzato» solo quando è così. Il pulsante dice quanti numeri fissi si possono collegare alle misure.
 - La scheda del tour è alta quanto i suoi passi. Un passo si apre con un clic o con la barra spaziatrice, e nessun fumetto copre più la vista.
 - Quando un passo del tour indica il rapporto di verifica, il tour resta visibile. La linguetta è incorniciata e il passo dice quale aprire.
+- Il tour non taglia più il testo sul bordo, nemmeno dopo aver rimpicciolito la finestra. Il passo attuale occupa tutte le righe che servono.
 - Un clic sulla i accanto a un'azione nella linguetta *Selezione* apre il manuale nel punto in cui è spiegata.
 - Ogni quota di un blocco si può legare con fx a una quota del progetto, anche se non contiene ancora un'espressione.
 - Dopo aver trascinato la maniglia di un'anteprima, nessun numero resta sopra la vista. Un numero digitato durante il trascinamento sposta l'anteprima, non il corpo scelto.
 - Dopo *Ripara e riprova* e percorsi simili, la cronologia non chiama più «eliminato» un passaggio che continua a calcolare. Se la catena si ferma di nuovo, il passaggio è segnato.
 - Se fai clic su *Applica* mentre Solidon sta ancora calcolando, il passaggio nasce appena il calcolo è finito, e la barra di stato lo dice. Finora il clic andava perso.
 - Nel catalogo dei blocchi, *Gestisci blocchi* è aperto finché non esiste ancora un blocco proprio.
+- I passaggi che un altro programma crea con il controllo remoto compaiono nella cronologia come «Controllo remoto» invece di «Agente».
 - Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
 - Su Mac, Invio apre la voce selezionata nella schermata iniziale, in *Cerca funzione* e nel rapporto di verifica.
 - Su Linux, la scrittura con Fcitx5 e IBus arriva ora nel campo di testo anche nel Flatpak e nell'AppImage.
@@ -73,6 +77,7 @@ scrive in `website/version.json`.
 - L’esportazione in 3MF è molto più veloce e rilegge i profili dello slicer solo se lì è cambiato qualcosa.
 - La finestra di stampa assegna i profili dello slicer molto più in fretta, all'apertura e dopo ogni cambio di slicer.
 - Anche in una cronologia lunga, un nuovo passaggio richiede appena più tempo del primo.
+- I contorni grandi fatti di molte linee, come un contorno della faccia ripreso, si modificano nell'editor di schizzi senza attese.
 - Sui modelli con migliaia di caratteristiche, lo spostamento e gli altri passaggi che non cambiano la forma finiscono fino a due volte più in fretta.
 - Dopo un foro o una caratteristica spostata, le caratteristiche di un pezzo tecnico grande vengono riconosciute circa un terzo più velocemente.
 - Annulla e ripristina sono più veloci, e la memoria non più necessaria si libera subito.
@@ -86,6 +91,7 @@ scrive in `website/version.json`.
 - Una stampante dell'elenco di Solidon e la stessa dello slicer contano come un solo apparecchio. La finestra sceglie il profilo con l'ugello giusto e il file porta il codice di avvio.
 - Senza un profilo dello slicer memorizzato, esportazione e finestra principale usano quanto la finestra di stampa propone per la stampante, con macchina e processo del produttore.
 - Vengono offerti solo gli slicer con cui Solidon lavora, più gli slicer per resina come ChituBox e Lychee. Ora vale anche Bambu Studio come AppImage.
+- Con una stampante a resina il dialogo di stampa mostra solo stampante, materiale, piatti e programma. La versione 0.5.3 mostrava anche profili e scorte di filamento.
 - Il codice di avvio e il volume di stampa vengono solo dalla tua stampante, non da un altro modello della stessa serie.
 - Su Linux, Solidon crea ora il file di stampa anche con Cura come Flatpak o AppImage.
 - Su Linux, le stampanti di OrcaSlicer, Bambu Studio, ElegooSlicer e Creality Print come AppImage sono subito disponibili, anche se lo slicer non è mai stato aperto.
@@ -129,6 +135,7 @@ scrive in `website/version.json`.
 - Il magazzino filamenti propone da verificare una registrazione di Solidon 0.5 dello stesso progetto con gli stessi filamenti e chiede prima di scaricare di nuovo.
 - Da questa versione un consumo scaricato resta legato alla sua stampa, anche se un aggiornamento calcola più in fretta o cambia il profilo del produttore nello slicer. Prima contava come nuova.
 - Dove cupole piatte e pendenze mostrerebbero gradini, Solidon suggerisce strati fini solo lì. Il suggerimento dice quanto dura in più la stampa del pezzo.
+- Uno schema di nomi digitato durante l’esportazione resta memorizzato, anche se nella finestra dei file passi prima da 3MF a un altro formato.
 
 ### Filettature, fori e componenti normalizzati
 
@@ -161,6 +168,7 @@ scrive in `website/version.json`.
 - Un blocco per una faccia o un foro viene calcolato solo quando ha il suo punto nella vista. Fino ad allora la finestra non si può applicare e dice che cosa manca.
 - Se la faccia cambia mentre la finestra di un blocco è aperta, il punto scelto resta finché vale ancora sulla nuova forma. Altrimenti il blocco ne cerca uno nuovo e lo segnala.
 - Una finestra di blocco aperta mentre il passo precedente sta ancora calcolando posiziona il blocco da sola appena arriva il risultato, e fino ad allora non si può applicare.
+- Se aggiungendo un file di blocco nel catalogo c'è già un blocco con quel nome, Solidon chiede se il nuovo va aggiunto come voce a sé. La versione 0.5.3 mostrava un messaggio di errore.
 - Nell'esempio *Blocchi — dadi, inserti, cavi* il cavo entra dal basso attraverso il fondo, e lo scarico di trazione sta dentro il contenitore. Finora pendeva sotto il piano di stampa.
 
 ### Modificare e disegnare
@@ -174,8 +182,14 @@ scrive in `website/version.json`.
 - Uno schizzo con molte forme separate si risolve rapidamente, anche con centinaia di rettangoli o cerchi quotati.
 - Se *Curvatura continua* non si può rispettare mentre disegni, l'editor di schizzi lo segnala in pochi secondi invece che in minuti.
 - Se due vincoli si contraddicono, l'editor di schizzi li nomina entrambi invece di ridurre una linea o un cerchio a un punto.
-- Una sequenza di linee nello schizzo finisce appena si chiude sul suo inizio. Finora un nuovo tratto restava attaccato al puntatore, e il primo Esc sembrava non fare nulla.
+- Una sequenza di linee nello schizzo finisce appena chiude un anello. Finora un nuovo tratto restava attaccato al puntatore, e il primo Esc sembrava non fare nulla.
 - Una lunghezza digitata con lo strumento Linea crea esattamente una linea. Finora, lasciando il campo della quota se ne aggiungeva una seconda, di ritorno verso il puntatore.
+- Nell'editor di schizzi, *Sposta parallelamente* porta un contorno chiuso e ogni suo lato verso l'esterno se positivo e unisce gli angoli, in qualunque verso. Nella 0.5.3 finivano spesso dentro.
+- Ora anche gli archi seguono *Sposta parallelamente*, attorno allo stesso centro: un'asola conserva le estremità tonde e un raccordo la sua forma.
+- Dopo aver cambiato una quota, *Rifila*, *Prolunga*, *Sposta parallelamente* e *Specchia* agiscono sulla posizione visibile. La 0.5.3 usava lo stato disegnato prima.
+- Un clic che l'aggancio alla griglia porta esattamente su un punto esistente aggancia quel punto. Finora il contorno sembrava chiuso senza essere collegato.
+- Un doppio clic con lo strumento Linea termina la sequenza di linee. Finora creava una linea di lunghezza zero.
+- Invio nel campo della quota del dialogo *Disegna schizzo* imposta la quota e lascia aperto il dialogo. Finora applicava il disegno e lo chiudeva.
 - Un corpo si tira su con tre clic: *Disegna* nella barra in alto (Ctrl+Maiusc+E), poi angolo, angolo opposto, altezza. Verso l'esterno si unisce, verso l'interno ritaglia.
 - Mentre si tira su, le misure si possono digitare. Un doppio clic sul passaggio apre le sue misure, e alla voce *Tipo* diventa un solido di rivoluzione o un campo di fori.
 - Dall'editor di schizzi, *Fatto* riporta nella vista e il clic successivo mette l'altezza. Esc mette da parte il contorno, Ctrl+Z lo riporta.
@@ -191,6 +205,7 @@ scrive in `website/version.json`.
 - Uno scheletro piega solo ciò che è legato alle sue ossa, il resto del corpo resta fermo. I progetti precedenti si calcolano come salvati.
 - Con Ctrl o Maiusc selezioni più spigoli e li raccordi o smussi in un solo passaggio. Un clic su un angolo seleziona tutti gli spigoli che vi si incontrano.
 - Su un corpo esatto l'evidenziazione di uno spigolo mostra anche gli spigoli tangenti adiacenti che *Raccorda* e *Applica uno smusso* includono.
+- Molte pareti tonde di un testo piccolo, come quelle di una «O» o di una «D» con *Applica testo*, compaiono ora anche su un corpo grande come *Faccia curva* nell'albero degli oggetti.
 - Ciò che la selezione offre su una caratteristica, l'operazione lo esegue con esattamente quei valori. Ciò che è in grigio lo dice con la stessa frase, anche via chat e riga di comando.
 - Come posto della copia, *Duplica caratteristica* propone una larghezza e mezza accanto all'originale, con una parete in mezzo e mai lungo il suo asse.
 - Su una svasatura, *Ruota caratteristica* propone l'angolo più grande con cui resta tale, e avvisa quando una rotazione rimette la caratteristica solo su sé stessa.
@@ -198,6 +213,8 @@ scrive in `website/version.json`.
 - Se un pezzo separato intralcia un'azione su una caratteristica, *Dividi in pezzi distinti e riprova* lo separa ed esegue l'azione. Ctrl+Z annulla entrambe.
 - Dividendo in pezzi distinti resta ogni pezzo stampabile, anche perni e rondelle accanto a una piastra grande. Cadono solo piccole superfici aperte e briciole che la stampante non riproduce.
 - Un rilievo viene calcolato solo quando è scelta un'immagine. Fino ad allora la finestra indica il pulsante *Scegli un'immagine …*.
+- La finestra *Applica texture* si apre con un’area del motivo che sta sulla faccia scelta e un passo che il tuo ugello stampa. Se un’area sporge dal bordo, la finestra lo dice e indica la soluzione.
+- Nella finestra, il motivo della texture e le aperture esagonali di *Taglia un campo di fori* si chiamano ora *Nido d'ape*, come nel manuale. Prima c'era scritto Esagono.
 - Le finestre *Carica STEP* e *Estrudi un disegno* offrono solo file che sanno leggere. Se il progetto non ne ha, indicano il pulsante *Scegli un file …*.
 
 ### Generare con l'IA

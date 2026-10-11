@@ -115,7 +115,7 @@ def _report_slicer(window: MainWindow) -> QWidget:
 
 
 def _selection_parts(window: MainWindow) -> QWidget:
-    """„Bausteine" unten im Auswahlfenster — sichtbar ohne Auswahl und an einer Fläche."""
+    """*Bausteinkatalog …* unten im Auswahlfenster — ohne Auswahl und an einer Fläche."""
     button: QWidget = window.selection_operations.catalog_button
     return button
 

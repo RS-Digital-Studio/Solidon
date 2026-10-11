@@ -427,24 +427,28 @@ def _crosses_exactly(loop: Profile) -> bool | None:
             if not lies_at_an_end(found.Point(index), segment):
                 return True
 
-    for index, (first, first_segment) in enumerate(curves):
-        for second, second_segment in curves[index + 1 :]:
-            found = Geom2dAPI_InterCurveCurve(first, second, EPS_GEOM)
-            # **Zwei Stücke, die aufeinander liegen, kreuzen sich auch** —
-            # nur meldet OpenCASCADE das nicht als Punkt, sondern als
-            # gemeinsames Stück. Eine Linie, die auf sich selbst zurückläuft
-            # (0→10, dann 10→5), ergab so einen Umriss mit einer Spitze ohne
-            # Breite; der Kern baute daraus einen Körper, den seine eigene
-            # Prüfung für ungültig hielt (Durchsicht 22.09.2026). **Aber nur,
-            # wenn das Stück eine Länge hat** (:func:`_share_a_stretch`).
-            if found.NbSegments() > 0 and _share_a_stretch(first_segment, second_segment):
+    # **Nur Paare, deren Hüllkästen sich berühren** (:func:`touching_pairs`) —
+    # in derselben Folge wie vorher alle Paare, also mit derselben Antwort:
+    # Stücke mit getrennten Kästen schneiden sich nicht. An 2000 Linien waren
+    # es sonst zwei Millionen Schnitte.
+    for index, other in touching_pairs(_boxes([segment for _curve, segment in curves])):
+        (first, first_segment), (second, second_segment) = curves[index], curves[other]
+        found = Geom2dAPI_InterCurveCurve(first, second, EPS_GEOM)
+        # **Zwei Stücke, die aufeinander liegen, kreuzen sich auch** — nur
+        # meldet OpenCASCADE das nicht als Punkt, sondern als gemeinsames
+        # Stück. Eine Linie, die auf sich selbst zurückläuft (0→10, dann
+        # 10→5), ergab so einen Umriss mit einer Spitze ohne Breite; der Kern
+        # baute daraus einen Körper, den seine eigene Prüfung für ungültig
+        # hielt (Durchsicht 22.09.2026). **Aber nur, wenn das Stück eine Länge
+        # hat** (:func:`_share_a_stretch`).
+        if found.NbSegments() > 0 and _share_a_stretch(first_segment, second_segment):
+            return True
+        for point_index in range(1, found.NbPoints() + 1):
+            intersection = found.Point(point_index)
+            if not lies_at_an_end(intersection, first_segment) and not lies_at_an_end(
+                intersection, second_segment
+            ):
                 return True
-            for point_index in range(1, found.NbPoints() + 1):
-                intersection = found.Point(point_index)
-                if not lies_at_an_end(intersection, first_segment) and not lies_at_an_end(
-                    intersection, second_segment
-                ):
-                    return True
     return False
 
 
@@ -468,13 +472,81 @@ def _crosses_approximately(loop: Profile) -> bool:
             points = (segment.start, segment.end)
         pieces.extend(pairwise(points))
 
-    for index, one in enumerate(pieces):
-        for other in pieces[index + 1 :]:
-            if strictly_crossing(one[0], one[1], other[0], other[1]):
-                return True
-            if _overlapping(one[0], one[1], other[0], other[1]):
-                return True
+    for index, other in touching_pairs(
+        _boxes([ProfileSegment("line", start, end) for start, end in pieces])
+    ):
+        one, two = pieces[index], pieces[other]
+        if strictly_crossing(one[0], one[1], two[0], two[1]):
+            return True
+        if _overlapping(one[0], one[1], two[0], two[1]):
+            return True
     return False
+
+
+#: Wie viele Zeilen der Paarprüfung zugleich als Feld gerechnet werden — die
+#: Spitze bleibt bei ``_BOX_ROWS`` mal Stückzahl Wahrheitswerten.
+_BOX_ROWS: Final = 256
+
+
+def _boxes(segments: list[ProfileSegment]) -> Any:
+    """Je Stück ein Hüllkasten ``(x₀, y₀, x₁, y₁)``, um ``_JOIN_TOL`` geweitet.
+
+    Grob, aber nie zu klein: ein Bogen nimmt den Kasten seines ganzen Kreises,
+    eine Ellipse den ihrer ganzen Kurve, eine Kurve (Spline) die ganze Ebene —
+    sie kann über ihre Stützpunkte hinaus schwingen. Zu groß kostet nur einen
+    Schnitt mehr, zu klein verlöre eine Kreuzung.
+    """
+    import numpy as np
+
+    boxes = np.empty((len(segments), 4), dtype=np.float64)
+    for at, segment in enumerate(segments):
+        (ax, ay), (bx, by) = segment.start, segment.end
+        box = (min(ax, bx), min(ay, by), max(ax, bx), max(ay, by))
+        if segment.kind == "spline":
+            box = (-math.inf, -math.inf, math.inf, math.inf)
+        elif segment.kind == "ellipse" and segment.ellipse is not None:
+            # Wie die Kurve gebaut wird (:func:`ellipse_frame`): Der zweite
+            # Achsenpunkt trägt nur die Länge, seine Richtung folgt aus der
+            # ersten Achse — ein schief gespeicherter Punkt sagt über die Lage
+            # nichts (Review G5). Der Kreis der längeren Halbachse umfasst sie.
+            frame = ellipse_frame(*segment.ellipse)
+            (cx, cy), reach = frame.centre, max(frame.first, frame.second)
+            box = (cx - reach, cy - reach, cx + reach, cy + reach)
+        elif segment.kind == "arc" and segment.via is not None:
+            arc = arc_through(segment.start, segment.via, segment.end)
+            if arc is not None:
+                (cx, cy), radius, _sweep = arc
+                box = (cx - radius, cy - radius, cx + radius, cy + radius)
+        boxes[at] = box
+    boxes[:, :2] -= _JOIN_TOL
+    boxes[:, 2:] += _JOIN_TOL
+    return boxes
+
+
+def touching_pairs(boxes: Any) -> list[tuple[int, int]]:
+    """Die Paare ``(i, j)``, ``i < j``, deren Hüllkästen sich berühren — in der
+    Folge erst ``i``, dann ``j``, wie eine Doppelschleife über alle Paare.
+
+    Als Feld gerechnet, je ``_BOX_ROWS`` Zeilen zugleich: nur Vergleiche, kein
+    BLAS, auf jeder Maschine dieselben Paare (`kern.md`).
+    """
+    import numpy as np
+
+    count = len(boxes)
+    found: list[tuple[int, int]] = []
+    low_x, low_y, high_x, high_y = (boxes[:, axis] for axis in range(4))
+    for begin in range(0, count, _BOX_ROWS):
+        rows = np.arange(begin, min(begin + _BOX_ROWS, count))
+        touching = (
+            (low_x[None, :] <= high_x[rows, None])
+            & (high_x[None, :] >= low_x[rows, None])
+            & (low_y[None, :] <= high_y[rows, None])
+            & (high_y[None, :] >= low_y[rows, None])
+            & (np.arange(count)[None, :] > rows[:, None])
+        )
+        first, second = np.nonzero(touching)
+        found.extend(zip((first + begin).tolist(), second.tolist(), strict=True))
+    return found
 
 
 def _share_a_stretch(first: ProfileSegment, second: ProfileSegment) -> bool:

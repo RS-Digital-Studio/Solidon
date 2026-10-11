@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -24,6 +25,9 @@ from app.core.tour import TOURS, Tour, tour_for
 from app.core.types import Document
 from app.i18n import SOURCE_LANGUAGE, set_language
 from app.i18n.catalog import install_language
+
+if TYPE_CHECKING:
+    from app.ui.tour import TourPanel
 
 
 def test_every_example_has_a_tour() -> None:
@@ -539,6 +543,197 @@ def test_only_the_current_tour_step_is_expanded(qt_app: object) -> None:
 
     panel.deleteLater()
     session.release()
+
+
+def _in_the_customers_style() -> None:
+    """Thema und Stilblatt wie beim Kunden — samt Fokusrahmen der Schrittzeilen.
+
+    Der Rahmen gibt dem Label eine Rahmenbreite, und damit rückt Qt den Text
+    von sich aus ein. Ohne Stilblatt gibt es beides nicht (``tests.md``).
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.theme import apply_theme
+
+    application = QApplication.instance()
+    assert application is not None
+    apply_theme(application, "dark")  # type: ignore[arg-type]
+
+
+def _assert_tour_lines_fit(panel: TourPanel, where: str) -> None:
+    """Jede sichtbare Tourzeile liegt im sichtbaren Bereich und zeigt sich ganz."""
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtWidgets import QLabel, QWidget
+
+    from app.ui.tour import StepLabel
+
+    viewport = panel._scroll.viewport()
+    assert panel._scroll.horizontalScrollBar().maximum() == 0, (
+        f"{where}: die Liste ist breiter als ihr Rollbereich "
+        f"({panel._scroll.widget().width()} > {viewport.width()})"
+    )
+    lines: list[tuple[str, QLabel, QWidget]] = [
+        ("Titel", panel.title, panel),
+        ("Einleitung", panel.intro, panel),
+        ("Fortschritt", panel.progress, panel),
+        ("Schluss", panel.closing, panel),
+    ]
+    for at, (_marker, text) in enumerate(panel._rows):
+        lines.append((f"Schritt {at + 1}", text, viewport))
+    for name, label, clip in lines:
+        if not label.isVisible():
+            continue
+        box = QRect(label.mapTo(clip, QPoint(0, 0)), label.size())
+        assert clip.rect().left() <= box.left() and box.right() <= clip.rect().right(), (
+            f"{where}: {name} liegt bei {box.left()}..{box.right()}, "
+            f"sichtbar ist 0..{clip.rect().right()}"
+        )
+        metrics = label.fontMetrics()
+        if label.wordWrap():
+            assert label.heightForWidth(label.width()) <= label.height(), (
+                f"{where}: {name} ist niedriger als sein Umbruch"
+            )
+            continue
+        indent = label.indent()
+        if indent < 0 and label.frameWidth() > 0:
+            indent = metrics.horizontalAdvance("x") // 2
+        room = label.contentsRect().width() - max(indent, 0)
+        shown = label.text()
+        assert metrics.horizontalAdvance(shown) <= room, (
+            f"{where}: {name} ist breiter als sein Platz: {shown!r}"
+        )
+        if isinstance(label, StepLabel) and shown != label.full_text():
+            assert shown.endswith("…"), f"{where}: {name} endet ohne Auslassung"
+            assert label.full_text().startswith(shown[:-1]), (
+                f"{where}: {name} ist vorn beschnitten: {shown!r}"
+            )
+
+    if panel.current_index >= len(panel._rows):
+        return
+    current = panel._rows[panel.current_index][1]
+    assert current.wordWrap(), f"{where}: der aktuelle Schritt bricht um"
+    metrics = current.fontMetrics()
+    if metrics.horizontalAdvance(current.full_text()) > current.contentsRect().width():
+        assert current.height() >= 2 * metrics.lineSpacing(), (
+            f"{where}: der aktuelle Schritt passt auf keine Zeile und steht doch auf einer"
+        )
+
+
+@pytest.mark.parametrize("example_id", [tour.example_id for tour in TOURS])
+def test_every_tour_line_stays_inside_the_card(qt_app: object, example_id: str) -> None:
+    """Kein Tourtext wird seitlich beschnitten, auch nicht nach dem Verkleinern.
+
+    Eine gekürzte Schrittzeile verlangte als Mindestbreite ihren schon
+    gekürzten Text und schrumpfte nie wieder: Die Liste wurde breiter als ihr
+    Rollbereich, rechts fehlte der Rest, und das Nachrollen zum aktuellen
+    Schritt schob den Anfang links hinaus. Der aktuelle Schritt stand dann
+    einzeilig, weil er so breit war (Robert, 0.6.0). Dazu rückte der
+    Fokusrahmen den Text um ein halbes „x“ ein, das die Kürzung nicht kannte.
+
+    Jede Tour, und zuletzt bei der schmalsten Karte, die es gibt: Schmaler
+    lassen weder die Seitenzone noch das abgedockte Fenster die Tour werden.
+    Dort steht jeder Schritt einmal als aktueller — ein umgebrochener verlangt
+    sein längstes Wort. Offscreen gibt es keine echte Schrift; geprüft werden
+    Lage, Umbruch und Metrik, nicht Bildpunkte.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.session import Session
+    from app.ui.tour import TourPanel
+
+    _in_the_customers_style()
+    example = next(entry for entry in examples.EXAMPLES if entry.id == example_id)
+    project, history = _opened(example.id)
+    session = Session()
+    session.project = project
+    session.history = history
+    tour = tour_for(example.id)
+    assert tour is not None
+    panel = TourPanel(session)
+
+    def settle() -> None:
+        for _ in range(8):
+            QApplication.processEvents()
+
+    try:
+        panel.resize(560, 700)
+        panel.show()
+        panel.start(example, tour)
+        settle()
+        # Erst breit, dann schmaler: Eine Zeile, die beim Kürzen ihre Breite
+        # festhielte, wüchse nur noch.
+        for width in (560, 420, 320, 260):
+            panel.resize(width, 700)
+            settle()
+            _assert_tour_lines_fit(panel, f"{example_id} bei {width}")
+        # Ein aufgeklappter erledigter Schritt bricht um wie der aktuelle.
+        panel.advance()
+        settle()
+        panel._toggle(0)
+        settle()
+        assert panel._rows[0][1].wordWrap()
+        _assert_tour_lines_fit(panel, f"{example_id} aufgeklappt")
+        panel._toggle(0)
+        settle()
+
+        narrowest = panel.minimumSizeHint().width()
+        panel.resize(narrowest, 700)
+        settle()
+        while True:
+            where = f"{example_id} bei {narrowest}, Schritt {panel.current_index + 1}"
+            _assert_tour_lines_fit(panel, where)
+            if panel.current_index >= len(tour.steps):
+                break
+            panel.advance()
+            settle()
+        assert panel.closing.isVisible() and panel.closing.wordWrap()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        session.release()
+
+
+def test_a_folded_step_is_cut_inside_its_frame_and_not_earlier(qt_app: object) -> None:
+    """Gekürzt wird auf die Fläche im Rahmen — bei jeder Breite, nicht bei vier.
+
+    Offscreen hat jedes Zeichen dieselbe Breite. Bei wenigen festen Breiten
+    fiele die Kürzung auf die ganze Breite deshalb zufällig nie in den Rahmen;
+    dreißig aufeinanderfolgende Breiten treffen jede Lage im Raster. Gemessen
+    wird in beide Richtungen: nicht breiter als der Platz, aber auch nicht
+    viel früher gekürzt als nötig.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.tour import StepLabel
+
+    _in_the_customers_style()
+    full = (
+        "2. Öffnen Sie „Bohrung setzen“ im Verlauf mit einem Doppelklick und "
+        "ändern Sie den Durchmesser auf 5 mm."
+    )
+    label = StepLabel(full)
+    label.setObjectName("tourStepText")
+    label.set_wrapped(False)
+    label.show()
+    try:
+        QApplication.processEvents()
+        assert label.frameWidth() > 0, "premise: der Fokusrahmen aus dem Stilblatt liegt an"
+        metrics = label.fontMetrics()
+        slack = 3 * metrics.averageCharWidth()
+        for width in range(200, 230):
+            label.resize(width, 40)
+            QApplication.processEvents()
+            shown = label.text()
+            room = label.contentsRect().width()
+            advance = metrics.horizontalAdvance(shown)
+            assert shown.endswith("…") and full.startswith(shown[:-1]), (width, shown)
+            assert advance <= room, f"bei {width}: {advance} Punkte Text in {room} Punkten"
+            assert advance > room - slack, (
+                f"bei {width}: zu früh gekürzt, {shown!r} lässt {room - advance} Punkte frei"
+            )
+    finally:
+        label.close()
+        label.deleteLater()
 
 
 def test_a_step_taller_than_the_card_shows_its_beginning(

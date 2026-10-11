@@ -742,3 +742,67 @@ def test_a_hidden_row_in_front_does_not_widen_the_column(qt_app: QApplication) -
         assert hidden.maximumWidth() == max(shown.minimumWidth(), hidden.minimumSizeHint().width())
     finally:
         holder.deleteLater()
+
+
+@pytest.mark.parametrize("answer", ["take", "cancel"])
+def test_the_free_part_name_is_asked_with_the_name_and_cancel(
+    qt_app: QApplication, answer: str
+) -> None:
+    """Gleichnamige Bausteindatei: eine Rückfrage mit den Katalogtiteln und
+    *Abbrechen*, kein Fehlerdialog (Handbuch „Bausteindateien austauschen“).
+    Der freie Schlüssel ist die Antwort, zu lesen ist er nirgends."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QLabel, QPushButton
+
+    from app.ui.dialogs import AskDialog, ask_free_part_name
+
+    seen: dict[str, object] = {}
+
+    def respond() -> None:
+        dialog = qt_app.activeModalWidget()
+        if not isinstance(dialog, AskDialog):
+            QTimer.singleShot(50, respond)
+            return
+        seen["text"] = " ".join(label.text() for label in dialog.findChildren(QLabel))
+        shown = [b for b in dialog.findChildren(QPushButton) if b.isVisibleTo(dialog)]
+        seen["buttons"] = [b.text() for b in shown]
+        if answer == "take":
+            next(b for b in shown if b.text() == "Als eigenen Eintrag übernehmen").click()
+        else:
+            box = dialog.findChild(QDialogButtonBox)
+            box.button(QDialogButtonBox.StandardButton.Cancel).click()
+
+    QTimer.singleShot(50, respond)
+    taken = ask_free_part_name("Prüfwürfel", "Prüfwürfel groß", "pruefwuerfel_imported")
+
+    assert taken is (answer == "take")
+    assert "„Prüfwürfel“" in str(seen["text"]) and "„Prüfwürfel groß“" in str(seen["text"])
+    assert "pruefwuerfel" not in str(seen["text"]) + str(seen["buttons"])
+    assert "Das hat so nicht funktioniert" not in str(seen["text"])
+    assert len(seen["buttons"]) == 2, seen["buttons"]
+
+
+def test_a_question_reads_a_foreign_title_literally(qt_app: QApplication) -> None:
+    """§32: Ein Titel aus einer fremden Bausteindatei ist Text, keine Auszeichnung."""
+    from PySide6.QtCore import Qt, QTimer
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.dialogs import AskDialog, ask_free_part_name
+
+    marked = '<span style="font-size:40pt">Ihr Katalog wurde gelöscht</span>'
+    seen: list[tuple[str, Qt.TextFormat]] = []
+
+    def respond() -> None:
+        dialog = qt_app.activeModalWidget()
+        if not isinstance(dialog, AskDialog):
+            QTimer.singleShot(50, respond)
+            return
+        seen.extend((label.text(), label.textFormat()) for label in dialog.findChildren(QLabel))
+        dialog.reject()
+
+    QTimer.singleShot(50, respond)
+    assert not ask_free_part_name("Halter", marked, "halter_imported")
+
+    question = next((entry for entry in seen if marked in entry[0]), None)
+    assert question is not None, seen
+    assert question[1] == Qt.TextFormat.PlainText

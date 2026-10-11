@@ -1033,6 +1033,32 @@ gleichen Radius, und auf den ganzen Verbund passt keine Form.
   ein breiter Mantelstreifen der Ebenenregel bleibt ohne Merkmal. Gemessen an
   Quader R 8 und T R 3 bei 0,05 bis 0,0005 mm.
 
+## Eine ringsum scharf begrenzte gerundete Seite braucht keinen Anteil
+
+Anlass (handbuch-c, Nachauftrag 4, 11.10.2026): Ein „O“ per *Text aufbringen*
+auf `cube_clean` trug keine runde Wand im Baum. Beide Wände zusammen
+19,17 mm², ein Hundertstel der Haut 24,19 mm²; als *Schriftzug als Körper*
+war die Haut klein und die Schwelle griff nicht. Die Ausnahme ist der Beleg
+der kleinen ebenen Fläche (`_facets_standing_apart`): jede Naht scharf, jede
+Kante mit Nachbar, kein Streifen.
+
+- **Hinter der Naht ein Dreieck aus `body.facets`.** Zählte gerundete Haut
+  dahinter mit, bekam ein Zwischenkörper von `weg3-generiert-aufbereiten`
+  87 Rauschflecken als Seiten.
+- **Jeder Fleck allein.** Eine erste Fassung fragte alle Flecken zugleich und
+  verwarf zwei, die scharf aneinanderstoßen; die örtliche Erkennung fragt
+  einen, und dort steht der Nachbar als Paar koplanarer Manteldreiecke in
+  `body.facets`. An einer Linse aus zwei Ellipsenbögen und einem ovalen
+  Knopf mit Fase nannte sie zwei Seiten, die volle keine (Review rvowand,
+  `test_sharply_bounded_sides_are_the_same_alone_and_together`).
+- **Nur die eigenen Nähte.** Eine Besitzertabelle über alle Dreiecke kostete
+  die örtliche Frage an 4,8 Mio. Dreiecken 0,4 s und 360 MiB; die Bitmaske
+  über `face_adjacency` kostet 31–125 ms CPU je Frage (die erste mit der
+  Facettenmaske; zwei Messreihen unter Fremdlast), Spitze 43 MiB über drei
+  Fragen.
+- Gemessen am 20-mm-Würfel (8 mm, 0,6 mm): O, D, 0 und 8 je zwei Seiten, B
+  und 3 eine, R keine (Wände unter 4 mm² oder an andere Bögen gestoßen).
+
 ## Ein Umriss mit wanderndem Radius ist eine gerundete Seite
 
 *Ursprüngliche Überschrift: „Ein Umriss mit wanderndem Radius ist eine

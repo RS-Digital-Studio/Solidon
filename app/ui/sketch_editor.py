@@ -57,6 +57,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import edit, shapes
@@ -1092,6 +1093,8 @@ class SketchCanvas(QWidget):
         gab es im gefahrenen Modus schlicht nicht. Verliehen wird das Feld,
         nicht kopiert — eine zweite Anzeige desselben Werts wäre die zweite
         Zahl für dieselbe Sache."""
+        self._typing_from: QWidget | None = None
+        """Wo die erste Ziffer ankam — dorthin geht der Fokus nach dem Setzen zurück."""
         self._measure_screen_of: Callable[[tuple[float, float]], QPoint | None] | None = None
         self.highlighted: frozenset[int] = frozenset()
         """Punkte, die gerade aufleuchten sollen — die Ziele der Bedingung
@@ -1242,10 +1245,30 @@ class SketchCanvas(QWidget):
         """
         screen = position if position is not None else self._to_screen(*self._pointer)
         world = self._to_world(position) if position is not None else self._pointer
-        hit = self._hit_point(screen)
+        points = self.points()
+        hit = self._hit_point(screen, points)
         if hit is not None:
-            return hit, self.points()[hit]
-        return None, self.snapped(world)
+            return hit, points[hit]
+        snapped = self.snapped(world)
+        # **Ein Rasterpunkt auf einem vorhandenen Punkt fängt diesen** (Review
+        # 0.6.0; schon in 0.5.3). Weit herausgezoomt ist die Rasterweite größer
+        # als die Fangweite: Der Klick fiel genau auf eine Ecke, ohne sie zu
+        # fangen, und die Kontur sah geschlossen aus, ohne Deckung zu haben.
+        # Nur bei Werkzeugen, die einen Punkt setzen: Auswählen, Verrunden und
+        # Fase treffen, was unter dem Zeiger liegt (Review G2). Ohne Raster
+        # fände die Suche nichts, was die Fangweite verfehlt hätte (G7).
+        if self.snapping and self.tool != "select" and self.tool not in CORNER_TOOLS:
+            on_point = next(
+                (
+                    flat
+                    for flat, point in enumerate(points)
+                    if math.dist(point, snapped) <= EPS_DISPLAY
+                ),
+                None,
+            )
+            if on_point is not None:
+                return on_point, points[on_point]
+        return None, snapped
 
     def pending_elements(self) -> tuple[SketchElement, ...]:
         """Die Geometrie, die der nächste Klick festsetzen würde.
@@ -2551,17 +2574,19 @@ class SketchCanvas(QWidget):
 
     def offset_selected(self, distance: float) -> None:
         """Legt eine versetzte Kopie der gewählten Elemente daneben."""
-        self._change_selected(lambda indices: edit.offset(self.sketch, indices, distance))
+        self._change_selected(lambda indices: edit.offset(self._solved_sketch(), indices, distance))
 
     def mirror_selected(self, axis: str) -> None:
         """Spiegelt die gewählten Elemente an einer der beiden Achsen."""
-        self._change_selected(lambda indices: edit.mirror(self.sketch, indices, axis))
+        self._change_selected(lambda indices: edit.mirror(self._solved_sketch(), indices, axis))
 
     def _change_selected(self, run: Any) -> None:
         """Der gemeinsame Weg für Versetzen und Spiegeln.
 
         Beide arbeiten auf der Auswahl, beide melden ihren Fehler in die
-        Statuszeile, und beide sind ein Schritt für das Rückgängig.
+        Statuszeile, und beide sind ein Schritt für das Rückgängig. Beide
+        gehen von der gelösten Zeichnung aus (:meth:`_solved_sketch`): Nach
+        einem geänderten Maß stand die Kopie sonst am gezeichneten Stand.
         """
         indices = tuple(sorted({_located(self.sketch, entry[1][0])[0] for entry in self.selection}))
         if not indices:
@@ -2998,15 +3023,42 @@ class SketchCanvas(QWidget):
         """
         return self._view_scale if self._view_scale is not None else self._scale
 
-    def _hit_point(self, position: QPointF) -> int | None:
+    def _hit_point(
+        self, position: QPointF, points: Sequence[tuple[float, float]] | None = None
+    ) -> int | None:
         wx, wy = self._to_world(position)
         reach = SNAP_PX / self._snap_scale()
         best: tuple[float, int] | None = None
-        for flat, (x, y) in enumerate(self.points()):
+        ties: list[int] = []
+        for flat, (x, y) in enumerate(self.points() if points is None else points):
             distance = math.hypot(x - wx, y - wy)
-            if distance <= reach and (best is None or distance < best[0]):
+            if distance > reach:
+                continue
+            if best is None or distance < best[0] - EPS_DISPLAY:
                 best = (distance, flat)
-        return best[1] if best is not None else None
+                ties = [flat]
+            elif abs(distance - best[0]) <= EPS_DISPLAY:
+                ties.append(flat)
+        if best is None:
+            return None
+        if len(ties) > 1:
+            # **Bei gleich nahen Punkten gewinnt ein Kurvenende** (Review
+            # G-N5). Ein Ellipsenbogen von Scheitel zu Scheitel hat seinen
+            # Anfang genau auf dem Achsenpunkt; gefangen war der Achsenpunkt,
+            # und die Kontur schloss den Linienzug nie.
+            ends = self._curve_ends()
+            return next((flat for flat in ties if flat in ends), ties[0])
+        return best[1]
+
+    def _curve_ends(self) -> frozenset[int]:
+        """Die Punkte, an denen eine offene Kurve endet (``edit.element_spots``)."""
+        return frozenset(
+            spot
+            for element, offset in zip(
+                self.sketch.elements, edit.offsets_of(self.sketch), strict=True
+            )
+            for spot in edit.element_spots(element, offset, ends_only=True)
+        )
 
     def _hit_element(self, position: QPointF) -> tuple[str, tuple[int, ...]] | None:
         offsets = edit.offsets_of(self.sketch)
@@ -3173,11 +3225,15 @@ class SketchCanvas(QWidget):
             return
         index = _located(self.sketch, hit[1][0])[0]
         world = self._to_world(position)
+        # Gerechnet wird an der gelösten Zeichnung, die zu sehen ist, wie bei
+        # Versetzen und Spiegeln: Nach einem geänderten Maß lag der gezeichnete
+        # Stand woanders, und Trimmen schnitt an der alten Lage.
+        solved = self._solved_sketch()
         try:
             changed = (
-                edit.trim(self.sketch, index, world)
+                edit.trim(solved, index, world)
                 if self.tool == "trim"
-                else edit.extend(self.sketch, index, world)
+                else edit.extend(solved, index, world)
             )
         except AppError as error:
             # Ein Fehler endet nie mit „fehlgeschlagen" (Regel 17) — und er
@@ -3378,6 +3434,23 @@ class SketchCanvas(QWidget):
             self.finish_spline()
             return
 
+        # **Keine Linie der Länge null** (Review 0.6.0; schon in 0.5.3). Ein
+        # Klick, der nach dem Fang genau auf dem offenen Anfang landet, setzte
+        # das Ende auf den Anfang. Er wird abgelehnt, der Zug bleibt; den
+        # Doppelklick, der ihn beendet, entscheidet :meth:`double_click_on_plane`.
+        # Gemessen wird mit ``EPS_DISPLAY`` wie bei Rechteck und Ellipse, nicht
+        # mit der Fangweite: Weit herausgezoomt verschwände sonst eine kurze
+        # erste Linie still (G3).
+        if (
+            self.tool == "line"
+            and len(self._pending_world) == 1
+            and (
+                (snapped is not None and snapped == self._pending[0])
+                or math.dist(world, self._pending_world[0]) <= EPS_DISPLAY
+            )
+        ):
+            return
+
         self._pending.append(snapped if snapped is not None else -1)
         self._pending_world.append(world)
         # Der Hinweis über den flachen Bogen gilt dem einen abgelehnten Klick.
@@ -3516,13 +3589,15 @@ class SketchCanvas(QWidget):
             self._go_on_with_the_chain(begin, kept, closes=closes)
 
     def _closes_a_loop(self, clicked: Sequence[int]) -> bool:
-        """Ob die Linie aus diesen Klicks einen Zug auf seinen Anfang schließt.
+        """Ob die Linie aus diesen Klicks eine Schleife schließt.
 
         **Gefragt wird die Zeichnung, nicht ein Merkzettel** (Handbuchprüfung
         0.6.0, N2 und Review G1). Der Endklick fängt einen Punkt, der über
-        Linien und Deckungen schon mit dem Anfangspunkt verbunden ist: Dann
-        schließt die Linie eine Schleife. So zählt es gleich, ob die Seiten
-        geklickt oder getippt waren und ob dazwischen ein Strg+Z lag.
+        Linien, Bögen und Deckungen schon mit dem Anfangspunkt verbunden ist:
+        Dann schließt die Linie eine Schleife. So zählt es gleich, ob die Seiten
+        geklickt oder getippt waren und ob dazwischen ein Strg+Z lag. Jede
+        offene Kurve verbindet ihre beiden Enden, sonst schlösse eine Kontur
+        aus Bogen, Spline oder Ellipsenbogen und Linien nie (G-N2, G1).
         """
         if len(clicked) < 2 or clicked[0] < 0 or clicked[1] < 0:
             return False
@@ -3539,8 +3614,14 @@ class SketchCanvas(QWidget):
                 parent[root(first)] = root(second)
 
         for element, offset in zip(self.sketch.elements, edit.offsets_of(self.sketch), strict=True):
-            if element.kind == "line" and not element.construction:
-                join(offset, offset + 1)
+            if element.construction:
+                continue
+            # Welche Punkte die Enden einer Kurve sind, weiß der Kern
+            # (``edit.element_spots``): Linie, Bogen, Ellipsenbogen und Spline
+            # verbinden ihre beiden Enden (Review G1, Zwilling zu G-N2).
+            ends = edit.element_spots(element, offset, ends_only=True)
+            if len(ends) == 2:
+                join(*ends)
         for constraint in self.sketch.constraints:
             if constraint.kind == "coincident" and len(constraint.targets) == 2:
                 join(constraint.targets[0], constraint.targets[1])
@@ -3553,7 +3634,7 @@ class SketchCanvas(QWidget):
         """Nach einer Linie: weiterzeichnen am Ende — oder fertig, wenn sie schloss.
 
         Ein Linienzug hängt die nächste Linie an das Ende der letzten, mit
-        Deckung auf den eben gesetzten Punkt. **Schließt er auf seinem Anfang,
+        Deckung auf den eben gesetzten Punkt. **Schließt er eine Schleife,
         ist er fertig** (Handbuchprüfung 0.6.0, N2): Vorher hing sofort ein
         neuer Strich am Zeiger, und das erste Esc nahm nur ihn weg, während die
         Zeile schon „Esc wechselt zum Auswählen“ sagte. Das Maßfeld geht mit
@@ -3707,6 +3788,24 @@ class SketchCanvas(QWidget):
             widget.setVisible(False)
             widget.setParent(host)
 
+    def give_focus_back(self) -> None:
+        """Nach einem gesetzten Maß zurück dorthin, wo die nächste Ziffer ankommt.
+
+        **Sonst sprang der Fokus weiter** (Review 0.6.0, M-N1; schon in 0.5.3):
+        Das Feld verschwindet nach dem Setzen, und Qt gab den Fokus dem
+        nächsten Widget der Tabulatorfolge, dem Knopf *Auswählen*. Die zweite
+        Zahl ging verloren, und ihre Eingabetaste schloss den Dialog *Skizze
+        zeichnen*. Zurück geht er an die Stelle, von der die erste Ziffer kam —
+        die Zeichenfläche im Dialog, die Grafikfläche im Viewport; ohne sie an
+        die Zeichenfläche oder ihren Wirt.
+        """
+        target = self._typing_from
+        self._typing_from = None
+        if target is None or not isValid(target) or not target.isVisible():
+            target = self._measure_host if self._measure_host is not None else self
+        if isValid(target) and target.isVisible():
+            target.setFocus(Qt.FocusReason.OtherFocusReason)
+
     def reclaim_measure_field(self) -> None:
         """Holt das Feld zurück, bevor das Panel stirbt.
 
@@ -3729,6 +3828,13 @@ class SketchCanvas(QWidget):
         """
         if self.pending_measure() <= 0.0 or not str(event.text())[:1].isdigit():
             return False
+        focus = QApplication.focusWidget()
+        if (
+            focus is not None
+            and focus is not self.measure_field
+            and not self.measure_field.isAncestorOf(focus)
+        ):
+            self._typing_from = focus
         self.measure_field.setFocus(Qt.FocusReason.OtherFocusReason)
         # Von vorn und nicht an den Zeigerwert angehängt: Wer „25" tippt,
         # meint 25 und nicht 1025.
@@ -4546,18 +4652,27 @@ class SketchCanvas(QWidget):
         """Ein Doppelklick an dieser Stelle der Ebene — ``True``, wenn er etwas
         getan hat.
 
-        Zwei Dinge, in dieser Reihenfolge: Ein begonnener Spline wird
-        geschlossen; sonst öffnet eine getroffene Maßkarte ihr Maß — der
-        Griff, den jeder Fusion-Kunde sucht, und der bis zum 13.09.2026 nur in
-        der Bedingungsliste am rechten Rand lag (Robert: „rechteck maße
-        anpassen geht nicht").
+        Drei Dinge, in dieser Reihenfolge: Ein begonnener Spline wird
+        geschlossen, ein laufender Linienzug beendet (wie im CAD; Review 0.6.0,
+        G3 — sein erster Klick hat die letzte Linie schon gesetzt); sonst
+        öffnet eine getroffene Maßkarte ihr Maß — der Griff, den jeder
+        Fusion-Kunde sucht, und der bis zum 13.09.2026 nur in der
+        Bedingungsliste am rechten Rand lag (Robert: „rechteck maße anpassen
+        geht nicht").
         """
         if self.tool == "spline" and self._pending_world:
             self.finish_spline()
             return True
+        if self.tool == "line" and self._pending_world:
+            self.drop_chain()
+            return True
         index = self.measure_at(point)
         if index is None:
-            return False
+            # **Ein Doppelklick ohne laufenden Zug beginnt keinen neuen**
+            # (Review G-N4): Sein erster Klick hat die Kontur eben auf ihrem
+            # Anfang geschlossen, und als zweites Drücken weitergereicht setzte
+            # er dort den Anfang einer neuen Linie.
+            return self.tool == "line"
         self.measureEditRequested.emit(index)
         return True
 
@@ -6622,7 +6737,13 @@ class SketchPanel(QWidget):
         self.offset_distance = LengthSpin(self)
         self.offset_distance.set_range_mm(-1000.0, 1000.0)
         self.offset_distance.set_value_mm(2.0)
-        offset_note = tr("Um wie viel versetzt wird. Negativ ist nach innen.")
+        # Die Seite legt ``edit.offset`` fest; der Satz nennt sie für beide
+        # Fälle, denn eine freie Linie hat kein Innen (N1). Eine einzelne Kante
+        # eines Umrisses gehört zu ihm und geht mit ihm nach außen.
+        offset_note = tr(
+            "Um wie viel versetzt wird. Positiv ist außen an Kreis, Umriss und jeder "
+            "seiner Kanten, oben an einer flachen freien Linie, rechts an einer steilen."
+        )
         self.offset_distance.setToolTip(offset_note)
         # Beim Vorleser derselbe Satz wie im Tooltip (Regel 18). Wofür das
         # Feld ist, war ohne Hover nicht zu erkennen (Robert, 26.08.2026);
@@ -6706,9 +6827,13 @@ class SketchPanel(QWidget):
         # Abschließen ist eine Sache des Panels, weil der Solverlauf danach
         # kommt.
         self._measure_typed = False
-        """Ob im Maßfeld seit dem letzten Setzen getippt wurde (siehe :meth:`_place_measured`)."""
+        """Ob im Maßfeld seit dem letzten Setzen getippt wurde (siehe :meth:`_place_on_leaving`)."""
         self.canvas.measure_field.lineEdit().textEdited.connect(self._note_measure_typed)
-        self.canvas.measure_field.editingFinished.connect(self._place_measured)
+        self._measure_leaving = False
+        """Ob das Maßfeld gerade den Fokus verliert (gesetzt am ``FocusOut``)."""
+        self.canvas.measure_field.installEventFilter(self)
+        self.canvas.second_measure_field.installEventFilter(self)
+        self.canvas.measure_field.editingFinished.connect(self._place_on_leaving)
         self.canvas.second_measure_field.editingFinished.connect(self._place_second_measured)
         QWidget.setTabOrder(
             self.canvas.measure_field,
@@ -7668,25 +7793,37 @@ class SketchPanel(QWidget):
         """Eine Eingabe im Maßfeld wartet darauf, gesetzt zu werden."""
         self._measure_typed = True
 
-    def _place_measured(self) -> None:
-        """Das eingetippte Maß an die Bedingung legen, die darauf wartet.
+    def _place_entered(self) -> None:
+        """Die Eingabetaste setzt das Maß, das im Feld steht — getippt oder angezeigt.
 
         Das Feld gehört seit Schritt zwei der Zeichenfläche; das Abschließen
         bleibt hier, weil danach der Solverlauf und die Liste der Bedingungen
-        nachziehen — beides Sachen des Panels.
+        nachziehen — beides Sachen des Panels. Wer das Feld per Klick oder Tab
+        erreicht und den angezeigten Wert mit der Eingabetaste nimmt, meint ihn
+        (Review 0.6.0, G-N3).
         """
-        field = self.canvas.measure_field
-        # **Ein Maß wird einmal gesetzt** (Review 0.6.0; schon in 0.5.3). Qt
-        # meldet ``editingFinished`` bei der Eingabetaste und noch einmal,
-        # wenn das Feld danach den Fokus verliert; der zweite Aufruf legte an
-        # das getippte Ende eine zweite Linie derselben Länge, zurück zum
-        # Zeiger. Gezählt wird nur eine getippte Eingabe, die noch nicht
-        # genommen ist. Das Merkmal ``isModified`` hilft nicht: Das Drehfeld
-        # schreibt seinen Text vor der Meldung neu und löscht es dabei.
-        if not self._measure_typed:
+        self._measure_typed = False
+        self.canvas.place_measured(self.canvas.measure_field.value_mm())
+
+    def _place_on_leaving(self) -> None:
+        """Beim Fokusverlust: eine getippte, noch nicht genommene Eingabe setzen.
+
+        **Ein Maß wird einmal gesetzt** (Review 0.6.0; schon in 0.5.3). Qt
+        meldet ``editingFinished`` bei der Eingabetaste — vor
+        ``returnPressed`` — und noch einmal, wenn das Feld den Fokus verliert;
+        der zweite Aufruf legte an das getippte Ende eine zweite Linie. Der
+        Fokusverlust wird deshalb am Ereignis erkannt (``FocusOut`` in
+        :meth:`eventFilter`), und gesetzt wird **sofort**: Ein Klick ins Bild
+        vergibt zuerst den Fokus und liefert dann das Drücken — die getippte
+        Länge muss vorher stehen, in Zeigerrichtung (Review fix/skizze-rest,
+        M1; ein Zeitgeber setzte sie erst nach dem Klickpunkt). Die
+        Eingabetaste setzt in :meth:`eventFilter` selbst.
+        """
+        leaving, self._measure_leaving = self._measure_leaving, False
+        if not leaving or not self._measure_typed:
             return
         self._measure_typed = False
-        self.canvas.place_measured(field.value_mm())
+        self.canvas.place_measured(self.canvas.measure_field.value_mm())
 
     def _place_second_measured(self) -> None:
         """Die Höhe beendet das Rechteck nach der verriegelten Breite."""
@@ -8216,6 +8353,31 @@ class SketchPanel(QWidget):
 
         if stop_watching_the_dying(self, watched, event):
             return False
+        if watched is self.canvas.measure_field and event.type() in (
+            QEvent.Type.FocusOut,
+            QEvent.Type.FocusIn,
+        ):
+            self._measure_leaving = event.type() == QEvent.Type.FocusOut
+            return False
+        if (
+            watched in (self.canvas.measure_field, self.canvas.second_measure_field)
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+        ):
+            # **Die Eingabetaste eines Maßfelds setzt das Maß und endet hier**
+            # (Review 0.6.0; schon in 0.5.3). Das Drehfeld ließ sie nach dem
+            # Setzen weiterlaufen, und im Dialog *Skizze zeichnen* drückte sie
+            # danach dessen Hauptknopf: Der Kunde tippte die erste Länge und war
+            # draußen. Gesetzt wird, was im Feld steht, getippt oder angezeigt
+            # (G-N3).
+            watched.interpretText()
+            if watched is self.canvas.measure_field:
+                self._place_entered()
+            else:
+                self._place_second_measured()
+            self.canvas.give_focus_back()
+            event.accept()
+            return True
         if (
             watched is self.constraint_list
             and event.type() == QEvent.Type.ShortcutOverride

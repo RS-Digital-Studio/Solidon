@@ -165,10 +165,12 @@ from app.core.types import (
     MaterialSlot,
     ObjectId,
     OpId,
+    Origin,
     Parameter,
     SceneObject,
     Transaction,
     measure_status,
+    origin_word,
     replanned_steps,
     step_numbers,
 )
@@ -2764,7 +2766,6 @@ class ObjectTree(QWidget):
             # **Nie still zum Körper** (RM-537): Gewählt war ein Merkmal, und
             # nach der Entf-Taste wäre sonst der ganze Körper fort.
             self._restore((), None)
-            self._on_selection()
         else:
             self._restore(selected, selected_feature)
         self.lost_selection = tuple(
@@ -2919,10 +2920,21 @@ class ObjectTree(QWidget):
             # hat einen Anfang. Ohne sie stand ``currentItem()`` auf nichts,
             # und wer per Tabulator in den Baum kam, bewegte mit den
             # Pfeiltasten gar nichts.
+            # **Ohne Auswahl, auch nicht für einen Augenblick:** Ein
+            # ``setCurrentItem`` ohne ``NoUpdate`` wählte die Zeile erst und
+            # nahm sie danach zurück. Die Zwischenmeldung holte nach jedem
+            # Einlesen den Reiter *Auswahl* nach vorn, und der Prüfbericht, den
+            # die Anleitungen dort nennen, stand dahinter (Handbuchprüfung
+            # 11.10.2026).
             first = self.tree.topLevelItem(0)
             if first is not None and self.tree.currentItem() is None:
-                self.tree.setCurrentItem(first)
-                first.setSelected(False)
+                self.tree.setCurrentItem(first, 0, QItemSelectionModel.SelectionFlag.NoUpdate)
+            # **Gemeldet wird trotzdem, einmal und leer** (``show_scene``): An
+            # der Meldung hängen Empfänger, die nach jeder Auswertung neu
+            # rechnen, etwa die Schichtansicht ohne Auswahl
+            # (``MainWindow._on_layer_changed``). Ohne sie stand der Regler nach
+            # einer Maßänderung auf null (Review Handbuch A, M1).
+            self._on_selection()
             return
         wanted = set(objects)
         self._order = list(objects)
@@ -4851,6 +4863,17 @@ class _HistoryList(QListWidget):
         super().mouseDoubleClickEvent(event)
 
 
+def origin_mark(origin: Origin) -> str:
+    """Der Vermerk hinter einer Verlaufszeile, die nicht vom Nutzer kam (§26.4).
+
+    Nur was abweicht, wird ausgeschrieben. Ein Fernaufruf heißt dort
+    „Fernsteuerung“ und nicht „Agent“ wie ein Vorschlag des Chats: Wer beides
+    benutzt, sieht so, welches Programm den Schritt angelegt hat.
+    """
+    word = origin_word(origin)
+    return f"  ({word})" if word is not None else ""
+
+
 class HistoryPanel(QWidget):
     """Transaktionen, neueste zuletzt. Die Einheit des Undo (§15.5).
 
@@ -5215,7 +5238,7 @@ class HistoryPanel(QWidget):
             # überall, und was überall steht, liest niemand mehr. Dieselbe
             # Überlegung wie beim Material im Steckbrief: genannt wird, was
             # nicht die Regel ist.
-            by = f"  ({tr('Agent')})" if transaction.origin.by == "agent" else ""
+            by = origin_mark(transaction.origin)
             # **Die Nummer steht an jeder Zeile, die genau einen Schritt
             # vertritt** — bisher trugen sie nur die Kinder einer
             # mehrschrittigen Transaktion, und damit war sie eine Auszeichnung
@@ -5432,7 +5455,7 @@ class HistoryPanel(QWidget):
         und den Satz dazu wie jede andere (§15.3) — gerade nach „… und erneut
         versuchen“ sucht der Kunde diese Stelle (Review U1, Fund 2).
         """
-        by = f"  ({tr('Agent')})" if transaction.origin.by == "agent" else ""
+        by = origin_mark(transaction.origin)
         header = QListWidgetItem(f"{transaction.title}{by}")
         header.setForeground(QColor(UNDONE_COLOUR))
         header.setToolTip(
@@ -6726,7 +6749,7 @@ class ReportPanel(QWidget):
     def _emphasise_slicer(self, ready: bool) -> None:
         """Bietet der Bericht nichts mehr an, steht der Weg zum Slicer halbfett da.
 
-        **Ohne Akzentfläche:** Im Ruhezustand trägt nur *Bausteine* den Akzent
+        **Ohne Akzentfläche:** Im Ruhezustand trägt nur *Bausteinkatalog …* den Akzent
         (Entscheidung Robert, ``test_resting_state.py``). Als Hauptknopf leuchtete
         dieser Knopf neben ihm, sobald ein Modell übergabebereit war — zwei
         Signale, keines davon mehr eines. Dass nichts mehr aussteht, sagt die
@@ -9607,7 +9630,7 @@ class FeaturePanel(QWidget):
         # und Untermenü. Ein Panel aus vier grauen Zeilen ist eine Sackgasse
         # mit Begründung; eine Sackgasse bleibt es trotzdem.
         # **Nicht an einer Fläche**: Dort steht unter diesem Fenster der Knopf
-        # *Bausteine* zum selben Katalog, und zwei Knöpfe mit einem Ziel sind
+        # *Bausteinkatalog …* zum selben Katalog, und zwei Knöpfe mit einem Ziel sind
         # eine Frage ohne Antwort (RM-510).
         if not any(action.op for action in actions) and feature.kind != "face":
             catalog = QPushButton(tr("Baustein einsetzen …"), self)

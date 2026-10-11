@@ -2202,7 +2202,7 @@ def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -
 
     Vier graue Zeilen mit Begründung sind eine Sackgasse mit Erklärung; eine
     Sackgasse bleibt es trotzdem. Der Katalog lag hinter Rechtsklick und
-    Untermenü. **Seit RM-510 trägt ihn an der Fläche der Hauptknopf *Bausteine*
+    Untermenü. **Seit RM-510 trägt ihn an der Fläche der Hauptknopf *Bausteinkatalog …*
     der Karte darunter** (``test_ui.py``,
     ``test_a_face_offers_the_catalogue_from_the_panel``): Zwei Knöpfe mit einem
     Ziel wären eine Frage ohne Antwort. Das Merkmalfenster selbst bietet, was

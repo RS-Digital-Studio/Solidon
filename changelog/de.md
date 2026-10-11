@@ -60,6 +60,7 @@ Nutzen da und sonst nichts.
 - Im Reiter *Auswahl* weist das Filamentfeld erst mit Klick oder Enter zu. Pfeiltasten und Tippen blättern nur, und das Mausrad rollt den Reiter.
 - Auf Spanisch, Französisch, Italienisch und Portugiesisch rollt *Neues Filament* nicht mehr seitwärts, wenn das Fenster kürzer ist als sein Inhalt.
 - Während neu gerechnet wird, sagt der Prüfbericht *Wird neu berechnet …* und zeigt die bisherigen Zeilen als vorigen Stand. Bisher sahen alte Fehler dabei aus, als gälten sie noch.
+- Nach dem Einlesen eines Modells steht rechts der Prüfbericht vorn. Bisher sprang der Reiter *Auswahl* nach vorn, obwohl nichts gewählt war.
 - Scheitert die schnelle Rechnung an einem Schritt, rechnet Solidon ihn im selben Lauf gründlich nach, statt anzuhalten.
 - Sagt ein Befund, dass ein Schritt nichts bewirkt hat, öffnet er diesen Schritt mit dem passenden Feld.
 - Entfernen Sie einen Körper, spricht der Prüfbericht nicht mehr über ihn, und der Verlauf zeigt, welche Schritte danach nichts mehr hinterlassen.
@@ -71,17 +72,20 @@ Nutzen da und sonst nichts.
 - Ein eingefügtes Modell steht danach im Bild, auch wenn es neben einem herangezoomten Modell landet.
 - Jede Funktion heißt überall gleich. Das Werkzeug *Teilen* bietet *An Ebene teilen*, *An gezeichneter Linie teilen* und *In Einzelteile aufteilen*.
 - Am gewählten Körper steht *Automatisch teilen …* jetzt unter *Vorbereiten*.
-- Solange nichts ansteht, ist im Fenster nur *Bausteine* farbig hervorgehoben. Rot tragen nur Knöpfe, die etwas verwerfen oder löschen, und Rückfragen öffnen mit dem Fokus auf *Abbrechen*.
+- Solange nichts ansteht, ist im Fenster nur *Bausteinkatalog …* farbig hervorgehoben. Rot tragen nur Knöpfe, die etwas verwerfen oder löschen, und Rückfragen öffnen mit dem Fokus auf *Abbrechen*.
+- Der Katalog heißt überall *Bausteinkatalog …*. Im Reiter *Auswahl* heißt *Bausteine* nur noch die Gruppe mit *Deckel erzeugen* und *Drehdeckel erzeugen*.
 - Im Zeichenmodus ist der Reiter *Auswahl* ausgeblendet. Die Liste der Bedingungen zeigt die der gewählten Punkte und Linien und jeden Widerspruch.
 - In der Parameterkarte steht unter einem Maß nur noch „Nicht verwendet“, wo das zutrifft. Wie viele feste Zahlen sich an Maße binden lassen, sagt der Knopf.
 - Die Karte der Tour ist so hoch wie ihre Schritte. Ein Schritt klappt per Klick oder Leertaste auf, und keine Sprechblase liegt mehr über der Ansicht.
 - Zeigt ein Tourschritt auf den Prüfbericht, bleibt die Tour sichtbar. Der Reiter ist gerahmt, und der Schritt sagt, welchen Reiter Sie öffnen.
+- Die Tour schneidet keinen Text mehr am Rand ab, auch nicht nach dem Verkleinern des Fensters. Der aktuelle Schritt steht auf so vielen Zeilen, wie er braucht.
 - Ein Klick auf das i neben einer Handlung im Reiter *Auswahl* öffnet das Handbuch an der Stelle, die sie erklärt.
 - Jedes Maß eines Bausteins lässt sich über fx an ein Projektmaß binden, auch wenn noch kein Ausdruck darin steht.
 - Nach dem Ziehen am Griff einer Vorschau bleibt keine Zahl über der Ansicht stehen. Eine dabei getippte Zahl verschiebt die Vorschau, nicht den gewählten Körper.
 - Nach *Reparieren und erneut versuchen* und verwandten Wegen heißt im Verlauf kein weiterrechnender Schritt mehr „gelöscht“. Hält die Kette erneut an, ist der Schritt markiert.
 - Klicken Sie *Übernehmen*, während Solidon noch rechnet, entsteht der Schritt, sobald die Berechnung fertig ist, und die Statuszeile sagt das. Bisher ging der Klick verloren.
 - Im Bausteinkatalog steht *Bausteine verwalten* offen, solange es noch keinen eigenen Baustein gibt.
+- Schritte, die ein anderes Programm über die Fernsteuerung anlegt, stehen im Verlauf als „Fernsteuerung“ statt „Agent“.
 - Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
 - Am Mac öffnet Return den gewählten Eintrag im Startbildschirm, in *Funktion suchen* und im Prüfbericht.
 - Unter Linux kommen Eingaben über Fcitx5 und IBus jetzt auch im Flatpak und im AppImage im Textfeld an.
@@ -98,6 +102,7 @@ Nutzen da und sonst nichts.
 - Der Export als 3MF ist deutlich schneller und liest die Profile des Slicers nur noch neu, wenn sich dort etwas geändert hat.
 - Der Druckdialog ordnet die Profile des Slicers deutlich schneller zu, beim Öffnen und nach jedem Slicerwechsel.
 - Auch in einem langen Verlauf rechnet ein neuer Schritt kaum länger als der erste.
+- Große Umrisse aus vielen Linien, etwa eine übernommene Flächenkontur, lassen sich im Skizzeneditor ohne Wartezeit bearbeiten.
 - An Modellen mit Tausenden Merkmalen sind Verschieben und andere Schritte, die die Form nicht ändern, bis zu doppelt so schnell fertig.
 - Nach einer Bohrung oder einem versetzten Merkmal sind die Merkmale eines großen technischen Teils rund ein Drittel schneller wieder erkannt.
 - Rückgängig und Wiederholen gehen schneller, und nicht mehr gebrauchter Arbeitsspeicher wird gleich wieder frei.
@@ -111,6 +116,7 @@ Nutzen da und sonst nichts.
 - Ein Drucker aus Solidons Liste und derselbe aus dem Slicer gelten als ein Gerät. Der Druckdialog wählt das Slicerprofil mit der richtigen Düse, und die Druckdatei trägt den Startcode.
 - Ohne gemerktes Slicerprofil nehmen Export und Hauptfenster, was der Druckdialog für den Drucker vorschlägt, samt Maschine und Prozess des Herstellers.
 - Zur Wahl stehen nur noch Slicer, mit denen Solidon arbeitet, dazu Resin-Slicer wie ChituBox und Lychee. Bambu Studio als AppImage zählt jetzt dazu.
+- Mit einem Resin-Drucker zeigt der Druckdialog nur noch Drucker, Material, Platten und das Programm. Version 0.5.3 zeigte dort auch Filamentprofile und den Filamentbestand.
 - Startcode und Bauraum kommen nur noch von genau Ihrem Drucker, nicht von einem anderen Modell derselben Reihe.
 - Unter Linux erzeugt Solidon die Druckdatei jetzt auch mit Cura als Flatpak oder AppImage.
 - Unter Linux stehen die Drucker von OrcaSlicer, Bambu Studio, ElegooSlicer und Creality Print als AppImage sofort zur Wahl, auch wenn der Slicer noch nie geöffnet wurde.
@@ -154,6 +160,7 @@ Nutzen da und sonst nichts.
 - Eine Buchung aus Solidon 0.5 desselben Projekts mit denselben Filamenten bietet das Filamentlager zur Prüfung an und fragt nach, bevor es denselben Druck erneut abbucht.
 - Ab dieser Version bleibt eine Buchung ihrem Druck zugeordnet, auch wenn ein Update schneller rechnet oder sich das Herstellerprofil im Slicer ändert. Bisher galt der Druck dann als neu.
 - Wo flache Kuppen und Schrägen Stufen zeigen würden, schlägt Solidon feine Schichten nur dort vor. Der Vorschlag sagt, wie viel länger das Teil dann druckt.
+- Ein beim Export getipptes Namensmuster bleibt gemerkt, auch wenn Sie im Dateidialog erst von 3MF auf ein anderes Format wechseln.
 
 ### Gewinde, Bohrungen und Normteile
 
@@ -186,6 +193,7 @@ Nutzen da und sonst nichts.
 - Ein Baustein für Fläche oder Bohrung rechnet erst, wenn er seine Stelle im Bild hat. Bis dahin lässt sich der Dialog nicht übernehmen und sagt, was fehlt.
 - Ändert sich die Fläche unter einem offenen Bausteindialog, bleibt die gewählte Stelle, solange sie auf der neuen Form noch hält. Sonst sucht der Baustein eine neue und sagt es.
 - Ein Bausteindialog, der öffnet, während der vorige Schritt noch rechnet, setzt den Baustein selbst, sobald das Ergebnis da ist, und lässt sich bis dahin nicht übernehmen.
+- Liegt beim Hinzufügen einer Bausteindatei schon ein Baustein dieses Namens im Katalog, fragt Solidon, ob der neue als eigener Eintrag dazukommt. Version 0.5.3 zeigte dafür eine Fehlermeldung.
 - Im Beispiel *Bausteine — Muttern, Buchsen, Kabel* kommt das Kabel von unten durch den Boden, und die Zugentlastung sitzt im Gehäuse. Bisher hing sie unter dem Druckbett.
 
 ### Bearbeiten und Zeichnen
@@ -199,8 +207,14 @@ Nutzen da und sonst nichts.
 - Eine Skizze mit vielen getrennten Formen löst schnell, auch mit Hunderten bemaßter Rechtecke oder Kreise.
 - Lässt sich *Krümmungsstetig* beim Zeichnen nicht erfüllen, sagt der Skizzeneditor das nach Sekunden statt nach Minuten.
 - Widersprechen sich zwei Bedingungen, nennt der Skizzeneditor beide, statt eine Linie oder einen Kreis auf einen Punkt schrumpfen zu lassen.
-- Ein Linienzug in der Skizze endet, sobald er auf seinem Anfang schließt. Bisher hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
+- Ein Linienzug in der Skizze endet, sobald er eine Schleife schließt. Bisher hing ein neuer Strich am Zeiger, und das erste Esc schien nichts zu tun.
 - Eine im Linienwerkzeug getippte Länge legt genau eine Linie an. Bisher kam beim Verlassen des Maßfelds eine zweite dazu, zurück zum Zeiger.
+- Im Skizzeneditor legt *Versetzen* einen geschlossenen Umriss und jede seiner Kanten positiv nach außen und schließt die Ecken, gleich wie herum gezeichnet. Version 0.5.3 setzte sie oft nach innen.
+- Beim *Versetzen* wandern auch Bögen mit, um dieselbe Mitte: Ein Langloch behält seine runden Enden, eine Verrundung ihre Form.
+- Nach einem geänderten Maß wirken *Trimmen*, *Verlängern*, *Versetzen* und *Spiegeln* im Skizzeneditor an der Lage, die zu sehen ist. Version 0.5.3 nahm den zuvor gezeichneten Stand.
+- Ein Klick, den der Rasterfang genau auf einen vorhandenen Punkt legt, fängt diesen Punkt. Bisher sah die Kontur geschlossen aus, ohne verbunden zu sein.
+- Ein Doppelklick im Linienwerkzeug beendet den Linienzug. Bisher legte er eine Linie der Länge null an.
+- Die Eingabetaste im Maßfeld des Dialogs *Skizze zeichnen* setzt das Maß und lässt den Dialog offen. Bisher übernahm sie die Zeichnung und schloss ihn.
 - Ein Körper entsteht mit drei Klicks: *Zeichnen* oben in der Werkzeugleiste (Strg+Umschalt+E), dann Ecke, Gegenecke, Höhe. Nach außen fügt er an, nach innen schneidet er.
 - Beim Aufziehen lassen sich die Maße tippen. Ein Doppelklick auf den Schritt öffnet seine Maße, und unter *Art* wird daraus ohne neues Zeichnen ein Drehkörper oder ein Lochfeld.
 - Aus dem Skizzeneditor führt *Fertig* zurück in die Ansicht, der nächste Klick setzt die Höhe. Escape legt den Umriss beiseite, Strg+Z holt ihn zurück.
@@ -216,6 +230,7 @@ Nutzen da und sonst nichts.
 - Ein Skelett beugt nur, was an seinen Knochen hängt, der Rest des Körpers bleibt stehen. Ältere Projekte rechnen wie gespeichert.
 - Mit Strg oder Umschalt wählen Sie mehrere Kanten und verrunden oder fasen sie in einem Schritt. Ein Klick auf eine Ecke wählt alle Kanten, die dort zusammenlaufen.
 - An einem exakten Körper zeigt die Hervorhebung einer Kante auch die tangential anschließenden, die *Verrunden* und *Fase anbringen* mitnehmen.
+- Viele runde Wände kleiner Schrift, etwa die eines „O“ oder „D“ per *Text aufbringen*, stehen jetzt auch auf einem großen Körper im Objektbaum als *Gerundete Seite*.
 - Was die Auswahl an einem Merkmal anbietet, führt die Operation mit genau diesen Werten aus. Was grau steht, sagt sie mit demselben Satz, auch über Chat und Kommandozeile.
 - Als Stelle der Kopie schlägt *Merkmal verdoppeln* anderthalb Breiten neben dem Original vor, mit einer Wand dazwischen und nie entlang seiner Achse.
 - An einer Senkung schlägt *Merkmal drehen* den größten Winkel vor, unter dem sie eine bleibt, und sagt, wenn eine Drehung das Merkmal nur auf sich selbst legt.
@@ -223,6 +238,8 @@ Nutzen da und sonst nichts.
 - Steht einer Merkmalshandlung ein getrenntes Teil im Weg, trennt *In Einzelteile aufteilen und erneut versuchen* es ab und führt die Handlung aus. Strg+Z nimmt beides zurück.
 - Jedes druckbare Teil bleibt beim Aufteilen in Einzelteile erhalten, auch Stifte und Scheiben neben einer großen Platte. Wegfallen nur kleine offene Flächen und Krümel, die der Drucker nicht abbildet.
 - Ein Relief rechnet erst, wenn ein Bild gewählt ist. Bis dahin nennt der Dialog den Knopf *Bild wählen …*.
+- Die Funktion *Textur aufbringen* öffnet mit einem Musterfeld, das auf die gewählte Fläche passt, und einer Teilung, die Ihre Düse druckt. Ragt ein Feld über den Rand, sagt der Dialog das samt Ausweg.
+- Im Dialog heißen das Texturmuster und die sechseckigen Öffnungen von *Lochfeld schneiden* jetzt *Wabe*, wie im Handbuch. Bisher stand dort Sechseck.
 - Die Dialoge *STEP laden* und *Zeichnung hochziehen* bieten nur Dateien an, die sie lesen können. Liegt keine im Projekt, nennen sie den Knopf *Datei wählen …*.
 
 ### Erzeugen mit KI

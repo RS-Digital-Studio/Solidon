@@ -341,7 +341,7 @@ Warum, mit Anlässen: `regel-fenster.md`, „Der Hauptknopf“; Wächter `test_s
 - `make_danger` genau an `DestructiveRole`, nie mit `make_primary`, nie an
   Abbrechen/Schließen. Rückfragen vor Verwerfen oder Löschen: `no_primary`,
   Fokus und Escape auf Abbrechen.
-- Ruhezustand: nur *Bausteine* im Akzent, Kartenrand in `line`, aktiver Reiter
+- Ruhezustand: nur *Bausteinkatalog …* im Akzent, Kartenrand in `line`, aktiver Reiter
   in Schriftfarbe (`test_resting_state.py`).
 - Fokus verschiebt keinen Akzent (`_FocusTakesNoAccent`); Enter gehört dem per
   Tab gewählten Knopf (`test_enter_key.py`).

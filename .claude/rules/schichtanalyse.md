@@ -327,6 +327,16 @@ Ecken bis zur Verschweißtoleranz auf dem Mantel (`_tangential_pieces`). Es
 zählt nur, was für sich steht: Züge gleichen Radius als Ganzes
 (`_drawn_chains`), kein Stück nur am unerklärten Rest (`_enclosed_rounds`).
 
+## Eine ringsum scharf begrenzte gerundete Seite braucht keinen Anteil
+
+Ob ein Fleck gerundeter Haut Seite ist, sagt nur `curved_sides_standing`, für
+Voll- und örtliche Erkennung: ab `CURVED_SIDE_SHARE` der Haut oder ab
+`MIN_FACE_AREA`, wenn jede Naht scharf an ein Dreieck aus `body.facets` stößt.
+Jeder Fleck wird allein geprüft, nie gegen die anderen gefragten — sonst sagt
+die örtliche Erkennung etwas anderes als die volle. Hinter der Naht belegt nur
+ein Dreieck aus `body.facets` (auch ein koplanares Paar einer Nachbarwand);
+Rauschen ohne koplanare Paare belegt nichts.
+
 ## Ein Umriss mit wanderndem Radius ist eine gerundete Seite
 
 `features._wandering_outline` entscheidet über die Stücke eines Flecks
