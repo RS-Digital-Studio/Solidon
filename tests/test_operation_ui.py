@@ -5374,7 +5374,9 @@ def test_the_thread_dialog_at_a_bore_names_the_thread_it_chose(
 
     Vorher: „Bohrungsmaß: 5,20 mm (eingepasst). Passt vermutlich zu M5
     (Durchgangsloch fein).“ über der Vorauswahl M6 (Handbuchbild *Ein Gewinde
-    in eine Bohrung*, 4).
+    in eine Bohrung*, 4). Seit den Zollgewinden (RM-544) nennt der Hinweis
+    jede passende Größe und die vorgewählte: „Es passen M6, 1/4-20 UNC,
+    vorgewählt ist M6 …“.
     """
     from app.ui import main_window as fenster
 
@@ -5395,7 +5397,7 @@ def test_the_thread_dialog_at_a_bore_names_the_thread_it_chose(
 
     assert gezeigt, "der Dialog wurde nie gebaut — der Test prüft nichts"
     note, values = gezeigt[0]
-    assert "Innengewinde M6" in note and "Durchgangsloch" not in note, note
+    assert "vorgewählt ist M6" in note and "Durchgangsloch" not in note, note
     assert values.get("size") == "M6", values
 
 
