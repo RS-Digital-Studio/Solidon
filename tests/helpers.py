@@ -2389,3 +2389,32 @@ def sliver_share(mesh: MeshData) -> float:
             cosine = np.where(lengths > 0.0, (one * two).sum(axis=1) / lengths, 1.0)
         widest = np.maximum(widest, cosine)
     return float((widest > limit).mean())
+
+
+def release_version_file(path: Path) -> Path:
+    """Eine Versionsdatei, an der ``make_download`` für ``APP_VERSION`` nicht anhält.
+
+    Der Hinweis jeder Sprache wiederholt ihren Vorspann aus ``changelog/``, wie
+    es ``auslieferung.md`` verlangt. So hängt ein Test weder an der
+    eingecheckten ``website/version.json`` noch daran, ob der Abschnitt der
+    laufenden Version einen Vorspann hat.
+    """
+    # Über den Kern und nicht über ``tools.make_download``: Ein Import hier
+    # machte jede Datei, die ``helpers`` liest, zum betroffenen Test des
+    # Werkzeugs (``tools/affected_tests.py``).
+    from app.branding import APP_VERSION
+    from app.core import changes
+    from app.i18n.catalog import available_languages
+
+    notes = {}
+    for language in available_languages():
+        lead = changes.lead_of(changes.groups_for(APP_VERSION, language))
+        notes[language] = " ".join(lead.points) if lead else "Neue Fassung"
+    data = {
+        "url": "https://solidon3d.de/",
+        "notes": "Neue Fassung",
+        "notes_version": APP_VERSION,
+        "notes_by_language": notes,
+    }
+    path.write_text(json.dumps(data, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path

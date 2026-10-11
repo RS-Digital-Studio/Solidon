@@ -339,7 +339,10 @@ sichtbaren Dateien. Ein später Fehler beim Ersetzen der Prüfsummendatei
 entfernt die veraltete Prüfsumme und meldet keinen Erfolg.
 
 `make_download.read_packages` prüft alle Eingänge vor dem Anlegen des
-Downloadordners und vor jeder Kopie. Windows-Pakete müssen über die gemeinsame
+Downloadordners und vor jeder Kopie; `main` rechnet danach Startseiten
+(`render_pages`) und Versionsdatei (`version_content`) fertig und schreibt erst
+dann, in der Reihenfolge Pakete, Kasten, Versionsdatei. Ein Halt der
+Versionsdatei lässt so weder Pakete unter `dl/` noch einen Kasten zurück. Windows-Pakete müssen über die gemeinsame
 Funktion `sign_release.verify_file` einschließlich aller Signaturen und des
 Zeitstempels bestehen. Fehlendes SignTool oder eine abgewiesene Prüfung hält
 Downloads, Seiten und Manifest unverändert; eine Umgehungsoption gibt es nicht.

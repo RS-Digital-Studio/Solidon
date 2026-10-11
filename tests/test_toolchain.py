@@ -1627,7 +1627,7 @@ def test_the_delivered_file_carries_both_views_and_they_agree() -> None:
     **Der Anschluss zu ``test_both_views_of_the_changelog_carry_the_same_points``
     darüber.** Der prüft die *Erzeuger* (``changes_for``, ``grouped_for``) an
     den Changelog-Quellen; dieser prüft das *Ergebnis*. Zwischen beiden liegt
-    ``write_version`` mit der Kappung, und dort geht die Zusage verloren, wenn
+    ``version_content`` mit der Kappung, und dort geht die Zusage verloren, wenn
     sie verloren geht: Eine Kappung, die nur die flache Liste stutzt, macht
     genau diese Datei in sich falsch, und beide Nachbartests blieben grün.
 
@@ -1712,36 +1712,24 @@ def test_a_written_package_is_one_the_application_would_take(
     """
     import tools.make_download as make_download
     from app.core import updates
-    from app.i18n.catalog import available_languages
+    from tests.helpers import release_version_file
 
-    version_file = tmp_path / "version.json"
-    # Ein Hinweis in jeder Sprache, wie ihn die echte Datei trägt: Beginnt der
-    # Abschnitt von ``APP_VERSION`` mit einem Vorspann, hielte ``write_version``
-    # sonst vor dem Paketeintrag an, den dieser Test sucht.
-    version_file.write_text(
-        json.dumps(
-            {
-                "url": "https://solidon3d.de",
-                "notes": "Neue Fassung",
-                "notes_version": make_download.APP_VERSION,
-                "notes_by_language": dict.fromkeys(available_languages(), "Neue Fassung"),
-            },
-            ensure_ascii=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    # Ein Hinweis in jeder Sprache, der ihren Vorspann wiederholt: Sonst hielte
+    # ``version_content`` vor dem Paketeintrag an, den dieser Test sucht.
+    version_file = release_version_file(tmp_path / "version.json")
     monkeypatch.setattr(make_download, "VERSION_FILE", version_file)
 
     make_download.write_version(
-        [
-            make_download.Package(
-                kind="windows",
-                name="Solidon3D-Setup-9.9.9.exe",
-                bytes_=199_048_177,
-                hash_="e5bf396c5c915006454436aa24ffe9d435898a4c5fe7db01d6d102c3c3d77fbc",
-            )
-        ]
+        make_download.version_content(
+            [
+                make_download.Package(
+                    kind="windows",
+                    name="Solidon3D-Setup-9.9.9.exe",
+                    bytes_=199_048_177,
+                    hash_="e5bf396c5c915006454436aa24ffe9d435898a4c5fe7db01d6d102c3c3d77fbc",
+                )
+            ]
+        )
     )
 
     data = json.loads(version_file.read_text(encoding="utf-8"))
