@@ -1,0 +1,21 @@
+埃菲尔铁塔18cm_repariert.stl: 312938 Dreiecke, kalt 56.33 s, 4878 Merkmale
+Zwilling warm 26.61 s (mit Prototyp), 4878 Merkmale
+  _fitted                          10.77  1
+  slots_instead_of_half_bores       5.84  1
+  _faces_finished_in                3.98  1
+  _merged_cylinders                 2.97  1
+  _large_facet_faces                2.69  1
+  find_helices                      1.67  1
+  curvature_jumps                   1.36  1
+  patterns_instead_of_cells         1.27  1
+  _connected_patches                0.81  10
+  detect_edge_loops                 0.30  1
+  _one_body                         0.25  2
+  detect_holes                      0.11  1
+  _tangential_pieces                0.00  1
+  Prototyp Lesung Treffer       1962
+  Prototyp Trennung Treffer     2914
+  Prototyp Trennung neu         1
+Zwilling kalt ohne Prototyp 49.06 s
+Abdruck warm 460f006597a71390 kalt 460f006597a71390 GLEICH
+Exit: 0

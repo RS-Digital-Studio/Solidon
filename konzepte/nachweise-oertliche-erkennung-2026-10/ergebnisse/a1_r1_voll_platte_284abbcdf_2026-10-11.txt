@@ -1,0 +1,38 @@
+A1 über die ganze liste_klein.txt (219 Fälle) am Stand 284abbcdf, folge.py --pruefen --platte, zwei Prozesse, 10.10. 22:53 bis 11.10. 02:57
+
+Fälle 219, Zustände 3828, getragen 685, verglichen 3131
+nicht getragen und anders als die Kopie: 0
+wieder geöffnet über die Platte: 551, anders als in der Sitzung: 0
+davon ganz von der Platte (ohne Erkennungslauf): 10
+nicht vollständig ausgewertet: 103
+    ('obj_6_Assembly_B.stl', 'obj_1', '1_bohren_1')
+    ('obj_6_Assembly_B.stl', 'obj_1', '1_bohren_2')
+    ('obj_6_Assembly_B.stl', 'obj_1', '1_bohren_3')
+    ('obj_6_Assembly_B.stl', 'obj_1', '5_quader')
+    ('obj_6_Assembly_B.stl', 'obj_1', '6_zapfen')
+    ('obj_6_Assembly_B.stl', 'obj_1', '7_abschneiden')
+    ('obj_6_Assembly_B.stl', 'obj_1', '8_verschieben')
+    ('obj_6_Assembly_B.stl', 'obj_1', '9_bohren')
+    ('obj_6_Assembly_B.stl', 'obj_1', '10_wieder')
+    ('obj_16_ship sails 3d model.stl_1_B.stl', 'obj_1', '1_bohren_1')
+    ('obj_16_ship sails 3d model.stl_1_B.stl', 'obj_1', '1_bohren_2')
+    ('obj_16_ship sails 3d model.stl_1_B.stl', 'obj_1', '5_quader')
+    ('obj_16_ship sails 3d model.stl_1_B.stl', 'obj_1', '6_zapfen')
+    ('obj_16_ship sails 3d model.stl_1_B.stl', 'obj_1', '7_abschneiden')
+    ('obj_16_ship sails 3d model.stl_1_B.stl', 'obj_1', '8_verschieben')
+    ('obj_16_ship sails 3d model.stl_1_B.stl', 'obj_1', '9_bohren')
+    ('obj_16_ship sails 3d model.stl_1_B.stl', 'obj_1', '10_wieder')
+    ('obj_4_ship sails 3d model.stl_1_B.stl', 'obj_1', '5_quader')
+    ('obj_4_ship sails 3d model.stl_1_B.stl', 'obj_1', '6_zapfen')
+    ('obj_4_ship sails 3d model.stl_1_B.stl', 'obj_1', '7_abschneiden')
+Halte: 3
+    ('beispiel:drucker-kalibrieren', 'ValueError: attempt to get argmax of an empty sequence')
+    ('beispiel:passung-nach-materialwechsel', 'ValueError: attempt to get argmax of an empty sequence')
+    ('beispiel:dose-mit-deckel', 'ValueError: attempt to get argmax of an empty sequence')
+je Schritt: {'0_geladen': 551, '1_bohren_1': 248, '1_bohren_2': 234, '1_bohren_3': 207, '2_versetzen': 201, '3_aufweiten': 197, '4_entfernen': 196, '5_quader': 298, '6_zapfen': 298, '7_abschneiden': 298, '8_verschieben': 298, '9_bohren': 251, '10_wieder': 551, 'ende': 219, 'halt': 3}
+Schlusszeilen: {'fertig': 219}
+
+--- unvollständige Zustände gegen den Lauf des Pakets vom 10.10. (a1_w4, ohne 10_wieder) ---
+neu 88, alt 88, nur neu 0, nur alt 0
+
+Ganz von der Platte (10 Körper, BowlingGame.3mf): keine rohe Erkennung im Speicher, Namen und object_hash gleich der Sitzung.

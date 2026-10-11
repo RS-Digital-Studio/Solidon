@@ -573,6 +573,35 @@ def positive_axis(axis: Sequence[float]) -> tuple[float, float, float]:
     return (sign * values[0] + 0.0, sign * values[1] + 0.0, sign * values[2] + 0.0)
 
 
+#: Wohin eine Ringachse zeigt (:func:`ring_axis`): (1, √2, √3). Auf dieser
+#: Richtung steht keine Achse mit rationalen Anteilen senkrecht, also keine,
+#: die eine Konstruktion meint — achsparallel, diagonal, in kleinen Verhältnissen.
+RING_AXIS_TOWARD: Final = (1.0, math.sqrt(2.0), math.sqrt(3.0))
+
+
+def ring_axis(axis: Sequence[float]) -> tuple[float, float, float]:
+    """Die Achse eines Torus in kanonischer Richtung — ein Ring hat kein Oben.
+
+    Nicht :func:`positive_axis`: Deren Wahl kippt zwischen zwei gleich großen
+    Anteilen, und genau dort liegen Konstruktionsachsen (45 Grad). Eine
+    eingepasste Ringachse kippte am Netz mit der Dreiecksfolge (RM-210); hier
+    zeigt sie dorthin, wo das Skalarprodukt mit :data:`RING_AXIS_TOWARD`
+    positiv ist. **Beide Kerne rufen dieselbe Regel** — die Einpassung am Netz
+    (``perceive.features._ring_axis``, dieselbe Summe in derselben Folge) und
+    ``brep.features`` am exakten Körper —, sonst nannten sie an einem schräg
+    liegenden Ring entgegengesetzte Achsen.
+    """
+    values = (float(axis[0]), float(axis[1]), float(axis[2]))
+    toward = (
+        values[0] * RING_AXIS_TOWARD[0]
+        + values[1] * RING_AXIS_TOWARD[1]
+        + values[2] * RING_AXIS_TOWARD[2]
+    )
+    sign = -1.0 if toward < 0.0 else 1.0
+    # ``+ 0.0`` streicht die negative Null, wie bei :func:`positive_axis`.
+    return (sign * values[0] + 0.0, sign * values[1] + 0.0, sign * values[2] + 0.0)
+
+
 # --- Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben -----------------
 
 #: Pi als feste Ziffernfolge, weit über :data:`EXACT_DIGITS`.

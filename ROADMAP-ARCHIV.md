@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-10 | [RM-695: Ein gespeichertes Projekt öffnet nach einem Neustart ohne neue Erkennung (10.10.2026)](#rm-695-ein-gespeichertes-projekt-öffnet-nach-einem-neustart-ohne-neue-erkennung-10102026) |
 | 2026-10-10 | [RM-586: Feine Schichten, wo das Modell feine Formen hat (10.10.2026)](#rm-586-feine-schichten-wo-das-modell-feine-formen-hat-10102026) |
 | 2026-10-09 | [RM-587: Lange Brücken und steile Überhänge drucken sauber (09.10.2026)](#rm-587-lange-brücken-und-steile-überhänge-drucken-sauber-09102026) |
 | 2026-10-10 | [RM-706: Der Abdruck einer Buchung hängt an den gespeicherten Eingängen (10.10.2026)](#rm-706-der-abdruck-einer-buchung-hängt-an-den-gespeicherten-eingängen-10102026) |
@@ -27348,6 +27349,33 @@ nach einer Rücknahme bucht wirklich, eine abgewiesene Spule kommt in den Dialog
 zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahmen
 sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
 Datumsfelder haben einen Kalender.
+
+## RM-695: Ein gespeichertes Projekt öffnet nach einem Neustart ohne neue Erkennung (10.10.2026)
+
+<a id="rm-695-ein-gespeichertes-projekt-öffnet-nach-einem-neustart-ohne-neue-erkennung-10102026"></a>
+
+**Ausgangslage (Paket L3, 09.10.2026):** Der Plattencache hielt Netze, aber keine Erkennung;
+jedes Öffnen nach einem Neustart rechnete sie ganz neu — Eiffelturm 57 s, davon `detect` 47 s,
+Spiderman 45 s, Laptop-Ständer 19 s, Besteckkasten 16 s `detect`.
+
+**Gebaut (Paket E, `5159f1deb`, `a4a5e717e`, Review 1 `abbf4694d`):** Die Erkennung liegt je
+Netzabdruck auf der Platte (`DiskCache.save_detection`/`load_detection`), geschrieben erst mit
+dem vollständigen Lauf (§15.6) und atomar über `os.replace`; Merkmale typgenau (Tupel bleiben
+Tupel — vorher trugen sieben Beispielprojekte nach dem Wiederöffnen andere Werte); die
+mitgetragenen Maße bewegter Netze reisen mit (`<n>.carried.npz`), auch eine leere
+Facettenliste; ein Fehler beim Ablegen lässt den Eintrag aus und bricht keine Auswertung ab.
+Cache-Format 59.
+
+**Nachweis (10.10.2026, Kernweg mit Plattencache, drei Läufe im Wechsel, Vorrang, CPU):**
+Öffnen eines gespeicherten Projekts im frischen Prozess Eiffelturm 29,7 → 1,39 s, Ständer
+12,3 → 0,89 s, Spiderman 19,9 → 1,88 s, Kumiko 0,88 → 0,59 s, ohne Erkennungslauf; je Modell
+ein Abdruck über beide Bäume und alle Läufe, gleich dem ersten Öffnen
+(`konzepte/nachweise-oertliche-erkennung-2026-10/ergebnisse/rm695_wieder_5159f1deb_2026-10-10.jsonl`).
+Alle zwölf Beispielprojekte öffnen zweimal mit Plattencache mit gleichen Objekthashes
+(`tests/test_examples.py::test_every_example_reopens_from_the_disk_cache_without_a_miss`).
+Tests in `tests/test_cache.py`: typgenau Bit für Bit, veralteter Eintrag verworfen und neu
+erkannt, beschädigte Einträge verworfen, verschobene Kugel über die Platte, Fehler beim
+Ablegen. Bauplan §21.2, §31.
 
 ## RM-670: Ein zweiter 3MF-Export liest den Slicerbestand nicht neu (10.10.2026)
 

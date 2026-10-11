@@ -30,6 +30,12 @@ prüft; die Karte nennt nur noch Frage und Datei.
 
 *Früher unter „`tests/` — die Suite“.*
 
+`test_kernel_process_lifecycle.py` prüft am Windows-Jobobjekt, mit gehaltenen
+Griffen und über eine echte OS-Abfrage, dass ein rechnender Helfer mit seinem
+hart beendeten Elternprozess endet und nach normalem Start niedrigere
+OS-Priorität hat; die negativen Kontrollen treffen dasselbe Assert. Er braucht
+weder Fenster noch Leistungsmarken.
+
 `test_matching_lifecycle.py` führt ein Raster mit 1056 wirklichen Flächen als
 STL und STEP durch Import, Änderung, Cache, Speichern und Undo/Redo. Nur die
 Merkmalszahlgrenze wird im Test freigegeben; Erkennung und Zuordnung laufen
