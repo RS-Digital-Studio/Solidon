@@ -189,10 +189,11 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
   entfernt nichts): `check_env` meldet `leftovers`, jedes wird vorher entfernt
   oder bewusst aufgenommen. Eine geänderte bedingte Kante prüft
   `PLATFORM_PINS` und die Auflösung aller drei Plattformen zusammen.
-- **Erst prüfen, dann veröffentlichen**: `make_download.read_packages` prüft
-  jeden Eingang vor dem Anlegen des Ordners, Windows-Pakete über
-  `sign_release.verify_file` — ohne SignTool keine Downloads, keine
-  Umgehungsoption. `sign_release.py` ersetzt Paket und Prüfsumme unter `dist/`
+- **Erst prüfen, dann veröffentlichen**: `make_download.main` rechnet Pakete,
+  Seiten und Versionsdatei samt jedem Halt, bevor es kopiert oder schreibt
+  (dann Pakete, Kasten, Versionsdatei). `read_packages` prüft jeden Eingang,
+  Windows-Pakete über `sign_release.verify_file` — ohne SignTool keine
+  Downloads, keine Umgehungsoption. `sign_release.py` ersetzt Paket und Prüfsumme unter `dist/`
   erst aus vollständigen, geprüften Kopien.
 - **Geheimnisse schreibt der 0600-Schreiber aus `make_stats_access.py`**
   (Ordner 0700, Rechtefehler halten an). `deploy_activation_server.py`

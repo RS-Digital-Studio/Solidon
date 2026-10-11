@@ -362,8 +362,8 @@ def test_a_lead_needs_its_note_in_every_language(
 
     Der Leser fällt auf den deutschen Hinweis zurück, der englische Vorspann
     wiederholt ihn nicht wörtlich und bleibt in der Liste. Sagt der eigene
-    Hinweis etwas anderes, bleibt der Vorspann ebenso stehen. ``write_version``
-    hält in beiden Fällen an, bevor es schreibt, und nennt jede Sprache samt
+    Hinweis etwas anderes, bleibt der Vorspann ebenso stehen. ``version_content``
+    hält in beiden Fällen an, bevor etwas geschrieben wird, und nennt jede Sprache samt
     dem Feld, in das sie gehört (Regel 17). Ohne Vorspann gibt es nichts zu
     wiederholen, und eine fehlende Sprache fällt wie bisher zurück.
     """
@@ -402,9 +402,9 @@ def test_a_lead_needs_its_note_in_every_language(
     try:
         if said is not None:
             with pytest.raises(SystemExit) as stopped:
-                make_download.write_version([])
+                make_download.version_content([])
         else:
-            make_download.write_version([])
+            make_download.write_version(make_download.version_content([]))
     finally:
         changes.forget_cache()
 
