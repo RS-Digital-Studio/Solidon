@@ -161,7 +161,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un bloque para una cara o un agujero solo se calcula cuando tiene su sitio en la vista. Hasta entonces el diálogo no se puede aplicar e indica lo que falta.
 - Si la cara cambia con el diálogo de un bloque abierto, el sitio elegido se mantiene mientras siga valiendo en la nueva forma. Si no, el bloque busca uno nuevo y lo indica.
 - Un diálogo de bloque que se abre mientras el paso anterior aún calcula coloca el bloque por sí solo en cuanto llega el resultado, y hasta entonces no se puede aplicar.
-- Un bloque colocado en la vista se puede mover con un clic a otro sitio también después de una entrada en el diálogo.
 - En el ejemplo *Bloques — tuercas, insertos, cables*, el cable entra desde abajo por el fondo, y el alivio de tensión queda dentro de la carcasa. Hasta ahora colgaba bajo la placa de impresión.
 
 ### Editar y dibujar
