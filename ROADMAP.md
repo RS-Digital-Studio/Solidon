@@ -94,7 +94,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Selbstschnittsuche, Zuordnung, Ringvereinfachung, 3MF und gemerkte Zuordnungsschritte gebaut (Paket L, 08./09.10.); Kandidatensuche der Selbstschnitte (Paket L2, K-1 erfüllt); offen: Laden mechanischer Teile (K-3; mit druckgleich nach §11.2 sind Löserbudget und früheres Freiformurteil zulässig, die Verteilung auf mehrere Prozesse folgt als RM-637), Formen und Skelett, örtliche Neuerkennung (RM-592) |
 | [RM-592 — Nach einem Schritt erkennt die Auswertung fast so lange wie beim Laden](#rm-592) | Geometrie, Erkennung und Druckvorbereitung | Gebaut (Paket E): A1, A2, A5, A6 erfüllt, A3 lokal grün; offen A3 auf den übrigen Plattformen mit der CI beim Weg nach main; A4 an Ständer, Eiffelturm und Spiderman verfehlt, weiter in RM-761 |
 | [RM-761 — Nach einem Schritt rechnen Langlöcher, Bohrungsdurchgang, Wendeln und Facettenurteil noch am ganzen Körper](#rm-761) | Geometrie, Erkennung und Druckvorbereitung | Konzept für die große Fassung von P5 (Klebstufen über die Körpergrenze), dann Bau mit A1 und A4 aus RM-592 |
-| [RM-671 — *Weich verschmelzen* liefert ein splittriges Netz, und *Dreiecke angleichen* hält die Kantenlänge nicht](#rm-671) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-f`). Regression seit v0.4.4: Splitter unter 10° 2,9 → 11,8 %, nach dem Angleichen 30 % und doppelte Kantenlänge |
 | [RM-672 — Laden gleich nach dem Start dauert doppelt so lang, und unter Fremdlast hungert der Hilfsprozess das Laden aus](#rm-672) | Geometrie, Erkennung und Druckvorbereitung | Gebaut (Paket E): Rucksack sofort 10,2 → 7,6 s, unter Fremdlast 16,5 → 9,0 s, 3MF 39,9 → 33,3 s; offen STEP sofort (wartet auf die Importe des Vorwärmens), *Dreiecke angleichen* an der Figur aus Weg 4, der Bibliothekseinfluss und das Vorauslesen des Slicerbestands (c) |
 | [RM-673 — Eine Bohrung mit neuer Richtung: die Kerne schneiden verschieden, der exakte warnt falsch, und das Verdoppeln hat keinen Test](#rm-673) | Geometrie, Erkennung und Druckvorbereitung | Netz dreht starr und meldet `no_longer_through`, exakt bohrt durch und meldet `mouth_covered` |
 | [RM-675 — SVG-Zeichnungen: gerundete Rechtecke mischen ihre Ringe, die Verschachtelung weicht ab, ein roher Fehler, und die Lage ist gespiegelt](#rm-675) | Geometrie, Erkennung und Druckvorbereitung | Regression seit `71b7ba0a8`: `<rect rx>` bildet ungültige Ringe; dazu deckungsgleiche Ringe, roher `ValueError` und spiegelverkehrte Schrift |
@@ -112,6 +111,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-752 — Bei jedem Übernehmen und Öffnen läuft eine volle Erkennung am Einheitswürfel](#rm-752) | Geometrie, Erkennung und Druckvorbereitung | Gemessen in D: 7–73 s CPU je Modell seit v0.5.1, findet nie ein Merkmal; `scene/evaluate.py`, löst §21.2 |
 | [RM-753 — Beim Skalieren wächst die Normale einer gerundeten Seite um 1/f](#rm-753) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in D: mitgetragen hat die Normale die Länge \|n\|/f, frisch erkannt \|n\|; `perceive/matching.py` |
 | [RM-758 — Der Plattencache friert übersetzbare Befundwerte ein](#rm-758) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review 1 zu RM-698: `serialise.finding_to_data` schreibt `values` mit `str(value)`, nach dem Öffnen nennt ein Befund den Körper in der Sprache des Caches |
+| [RM-763 — Die Beule der weichen Mischung nur, wo Flächen unter einem Winkel zusammenlaufen](#rm-763) | Geometrie, Erkennung und Druckvorbereitung | Rest aus Review F zu RM-671: über bündigen Deckeln und Seiten und an gekippten bündigen Flächen wächst das Ergebnis bis ein Viertel des Übergangs hinaus; begrenzt ist nur nach unten |
+| [RM-764 — Der nächste Punkt auf einem Dreieck einmal und plattformgleich](#rm-764) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671: `mesh.on_surface` und `_SurfaceIndex.bound` rechnen über `closest_point` mit `np.dot`, `blend._Surface` plattformgleich; dazu `float32`-Ecken in `lattice.py` |
+| [RM-767 — An CAD-Netzen mit Facettenstreifen und Nadelfächern bleibt das Angleichen splittrig](#rm-767) | Geometrie, Erkennung und Druckvorbereitung | Paket F: Besenhalter 89 %, Würfel W6 83 % Splitter; Vorschlag: je Ebene neu vernetzen |
+| [RM-769 — Das Abstandsfeld prüft nicht, ob das nächste Dreieck unter seinen Bewerbern ist](#rm-769) | Geometrie, Erkennung und Druckvorbereitung | Review F zu RM-671 (Rest von M3): an CAD-Nadelfächern bis 0,19 mm zu weit, ein Vorzeichen falsch |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
@@ -3351,38 +3354,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   gleichen Befunden.
   Vermerk 09.10.2026 (Versionsvergleich Kern 0.5.2, K-3): Laden mechanischer Teile ist eine **Regression gegenüber v0.4.4**: Besteckkasten (`Modern++Cutlery+Organizer…3mf`, 59 744 Dreiecke) bis bearbeitbar 3,45–3,51 s → 17,97–18,45 s, Laptop-Ständer 6,7–8,0 → 22,5–23,2 s, `dense_1m.stl` 6,6–6,7 → 20,0–20,1 s (am Stand `09d8e9485`, Fenster offscreen, ruhige Maschine). Die Erkennung allein am Besteckkasten 1,13–1,54 → 6,15–8,09 s, davon 6,2 s in 958 Feinanpassungen (`app/core/perceive/features.py:2630` `classify` → `:8351` `_refined_fit` → `app/core/perceive/refine.py:244` `solve`), eingeführt mit `851f913af` (v0.5.0); Gewinn: Maße auf zwei Stellen und Gewinde als Gewinde. Hebel: die Feinanpassung nur für Flecken, die nach der groben Einpassung als Merkmal bleiben. Am Stand origin/main nicht nachgemessen, die Stellen sind unverändert, Paket L ändert sie nicht. Abnahme dafür: Besteckkasten und Laptop-Ständer höchstens 25 % über v0.4.4 bei gleichen Merkmalen und Maßen wie heute, §31. Der zweite Anteil (Schalenfrage je Füllrunde über den Hilfsprozess) steht bei [RM-672](#rm-672). Beleg: `F:\solidon-review-reports\regression-0.5.2\kern\befunde.md` (K-3). Die Ladezeiten „aktuell“ dieser Tabelle enthalten je Probe zwei Fehlstarts des Hilfsprozesses ([RM-693](#rm-693)); über einen Starter gemessen steht der Besteckkasten bei 20–22 s (Vermerk Paket L2 oben).
 
-<a id="rm-671"></a>
-
-- [ ] **RM-671 — *Weich verschmelzen* liefert ein splittriges Netz, und *Dreiecke angleichen* hält die Kantenlänge nicht.**
-  Versionsvergleich 0.5.2 (03.10.2026), Weg 4 (W4-3). **Regression gegenüber v0.4.2**, eingeführt
-  mit `2006fc7d1` („Weich verschmelzen maß zum nächsten Punkt statt zur nächsten Ebene“).
-  Verschmelzung Kugel auf Zylinder (je ≈ 7 628 Dreiecke): Anteil mit Mindestwinkel unter 10°
-  2,9 % (v0.1.1–v0.4.2) → 12,3 % (v0.4.4) → 11,8 % (v0.5.1, `09d8e9485`); Beispiel *Figur formen*
-  3,9 % → 7,2 %. Danach *Dreiecke angleichen* 1,2 mm: 2,2 % → 30,6 %, längste Kante 1,20 → 2,39 mm,
-  doppelt so lang wie verlangt. Exportierte Figur 10 296 → 14 746 Dreiecke, Median-Mindestwinkel
-  35,5° → 21,6°. `uniform` selbst ist in allen Ständen gleich, anders ist sein Eingang: Das Feld
-  misst zur Ebene des nächsten Oberflächenpunkts und springt an gewölbten Übergängen, wo der
-  nächste Punkt die Seite wechselt; Marching Cubes macht daraus Splitter, und das Angleichen mit
-  Abweichung 0 teilt nur. Seit v0.5.x zeigt das Fenster die feine Verschmelzung, der Kunde arbeitet
-  direkt darauf (Pinsel wirkt ungleichmäßig, Folgeschritte langsamer). Das Feld ist am Stand
-  origin/main unverändert: `blend.py` änderte sich seit 02.10. nur in Texten und im
-  Entwurfsbudget des Fensters (`b3c6c7a96`), nicht in `distance_field`.
-  **Stellen:** `app/core/geom/blend.py:143` (`distance_field`), `:210–211` (Feld `-outward`,
-  Ebenenabstand), `:343` (`marching_cubes`), `:414` (`blend_union`), `app/core/geom/mesh_ops.py:1443`
-  (`uniform`: bei Abweichung 0 kein Zusammenlegen, kein Kantentausch).
-  **Fix (allgemein):** Abstand zum nächsten Punkt auf dem Dreieck statt zu seiner Ebene (an ebenen
-  Wänden ebenso exakt, an Kanten stetig). Im Angleichen bei Abweichung 0 nur formtreue Schritte:
-  Kanten tauschen, wo beide Dreiecke in einer Ebene liegen, und nur innerhalb einer Ebene
-  zusammenlegen; die Obergrenze der Kantenlänge hält das Teilen ein.
-  **Abnahme:** Geometrietest an Kugel auf Zylinder, Beispiel *Figur formen* und zwei sich kreuzenden
-  Zylindern: Anteil unter 10° nach `blend_union` höchstens 3 % wie v0.4.2, nach `remesh_uniform`
-  unter 5 % bei längster Kante höchstens 1,1 × verlangt; bei Abweichung 0 bleiben Volumen und
-  Fläche unverändert (Zusage in `app/core/geom/mesh_ops.py:2013–2022` und `:1458–1459`); die ebene
-  Wand aus dem Anlass von `2006fc7d1` bleibt exakt. Bauplan §25, §31, P16.
-  Belege: `F:\solidon-review-reports\regression-0.5.2\weg4\befunde.md` (W4-3), Netze in
-  `weg4\netze\`, Sonde `weg4\sonde_uniform.py`.
-  Vermerk 09.10.2026 (Funktionsliste 0.5.2, F5, so schon in v0.5.1): *Weich verschmelzen* zweier Quader auf dem Bett meldet „Ein Objekt steckt unter dem Druckbett.“ (`arrange.below_bed`), weil das Raster unter z = 0 rundet. Mit dem Umbau des Felds das Ergebnis auf die Unterkante der Eingänge setzen oder den Befund für Überstand unter einer Rastergröße nicht melden; Abnahme an zwei Quadern, Kugel auf Zylinder und dem Beispiel *Figur formen*. Beleg: `F:\solidon-review-reports\funktionsliste\befunde.md` (F5).
-
 <a id="rm-672"></a>
 
 - [ ] **RM-672 — Laden gleich nach dem Start dauert doppelt so lang, und unter Fremdlast hungert der Hilfsprozess das Laden aus.**
@@ -3836,6 +3807,64 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Test zuerst (Befund mit übersetzbarem Wert durch den Plattencache, nach
   Sprachwechsel in der neuen Sprache), Auswertung mit und ohne Cache gleich, `cache_version`
   bzw. `CACHE_FORMAT_VERSION` steigt.
+
+<a id="rm-763"></a>
+
+- [ ] **RM-763 — Die Beule der weichen Mischung nur, wo Flächen unter einem Winkel zusammenlaufen.**
+  Rest aus Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (H2 b, N1): *Weich verschmelzen* hebt das
+  Feld, wo beide Felder gleich sind, um bis zu ein Viertel des Übergangs. Seit Review F ist nur
+  nach unten begrenzt, auf die Bettebene oder die unterste Höhe der Eingänge, wenn sie darunter
+  reichen (`blend._above_the_floor`, Nachprüfung N2); über bündigen Deckeln und Seiten bleibt die Beule
+  wie bis v0.5.3, und zwei um 30° gekippte bündige Quader 40 × 30 × 10 reichten (mit der Begrenzung
+  auf den Hüllquader gemessen) 0,75 mm über ihre Deckel- und unter ihre Bodenebene, 15 883 statt
+  14 400 mm³. Vorschlag: den Anteil der Beule aus dem Winkel zwischen den Richtungen zum nächsten
+  Punkt beider Körper (`_Surface._to_triangles` rechnet sie schon).
+  **Abnahme:** Test zuerst (gekippte bündige Quader ohne Überstand, gekreuzte Rohre ohne Fläche
+  auf x = ±10, zwei berührende Kugeln ohne flache Flecken), Gegenprobe am Stand davor rot,
+  `cache_version` von `blend_union`, druckgleich an den Beispielprojekten außer *Figur formen*.
+
+<a id="rm-764"></a>
+
+- [ ] **RM-764 — Der nächste Punkt auf einem Dreieck einmal und plattformgleich.**
+  Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (G2, N2) und offener Plattformpunkt aus Paket F:
+  Der nächste Punkt auf einem Dreieck wird zweimal hergeleitet — `blend._Surface._to_triangles`
+  mit Grundrechenarten und Pseudonormalen, `mesh.on_surface` und `_SurfaceIndex.bound` über
+  `trimesh.triangles.closest_point` mit `np.dot` (BLAS, `kern.md`). Dazu legt `lattice.py` die
+  Ecken aus Marching Cubes in `float32` (blind für ULP-Rauschen wie `blend.py` vor `_in_double`).
+  **Abnahme:** eine Rechnung für beide, die Wege in `tests/test_platform_identity.py` (`_WAYS`),
+  druckgleich gegen den Stand davor an Korpus und Beispielprojekten.
+
+<a id="rm-767"></a>
+
+- [ ] **RM-767 — An CAD-Netzen mit Facettenstreifen und Nadelfächern bleibt das Angleichen splittrig.**
+  Offener Punkt 2 aus Paket F (RM-671): Facettenstreifen und Nadelfächer lassen sich ohne neue
+  Punkte nicht formtreu aufräumen. Seit dem Umbau nach Review F räumt das Angleichen gar nicht
+  mehr auf, es teilt nach dem Kern nur, was zu lang ist: Tauschen in der Ebene und Zusammenlegen
+  änderten an den Abnahmefällen von RM-671 kaum etwas und kosteten an CAD-Netzen das Drei- bis
+  Fünffache der Zeit. Am CAD-Besenhalter aus `F:\3D Dateien` bleiben 89,6 %, am Würfel W6
+  83,0 % Splitter (mit dem Aufräumen 89,4 und 83,4), an `plate_holes` auf 1,5 mm 44,4 % (mit dem
+  Aufräumen 1,6, v0.5.3 58,9). Vorschlag: je Ebene neu vernetzen (eingeschränktes Delaunay mit
+  Innenpunkten), in der Laufzeit des Teilens.
+  **Abnahme:** Splitter unter 5 % an Besenhalter, Würfel W6 und `plate_holes`, Volumen und Fläche
+  gleich, Zeit höchstens das 1,25-Fache des Teilens allein, druckgleich an Korpus und
+  Beispielprojekten.
+
+<a id="rm-769"></a>
+
+- [ ] **RM-769 — Das Abstandsfeld prüft nicht, ob das nächste Dreieck unter seinen Bewerbern ist.**
+  Review F zu [RM-671](ROADMAP-ARCHIV.md#rm-671) (Rest von M3): `blend.distance_field` rechnet den
+  Abstand zu den Dreiecken der acht nächsten Stützpunkte. Fehlt das nächste darunter — an
+  CAD-Netzen mit Nadelfächern —, misst es zu weit: am Besenhalter bis 0,19 mm, 2 913 von 351 120
+  Punkten im Band, eines mit falschem Vorzeichen (das Ebenenfeld davor bis 1,81 mm). Die Prüfung
+  je Zeile, ob der k-te Stützpunkt weiter liegt als bester Abstand plus größter Abstand
+  Stückmitte–Ecke, sonst mit doppeltem k neu fragen (wie die Bänder in `mesh.on_surface`),
+  kostete im Umbau von Paket F an den gekreuzten Rohren aus §31 25,4 statt 1,1 s, obwohl das
+  Feld seither nur im Band genau rechnet: Weiter von der Fläche braucht der Nachweis über
+  Stützpunkte immer mehr von ihnen. Vorschlag: die Bewerber über Stücke statt über Stützpunkte
+  (ein Baum über die Hüllkugeln der Stücke), nur für die Zeilen im Band.
+  **Abnahme:** Test gegen `on_surface` an `plate_holes` (Review 1: 281 Abweichungen im Band) und am
+  Besenhalter, Gegenprobe am Stand davor rot, `cache_version` von `blend_union`, druckgleich an
+  den Beispielprojekten außer *Figur formen*.
 
 ## Bedienung und Darstellung
 

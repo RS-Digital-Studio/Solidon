@@ -305,12 +305,21 @@ def refine_once(arrays: Mapping[str, np.ndarray], values: Values, check: Check) 
 
 
 def simplify_and_refine(arrays: Mapping[str, np.ndarray], values: Values, check: Check) -> Outcome:
-    """``simplify(deviation)``, dann ``refine_to_length(edge)`` (``mesh_ops.uniform``)."""
+    """``simplify(deviation)``, dann ``refine_to_length(edge)`` (``mesh_ops.uniform``).
+
+    Ohne Abweichung kein ``simplify``: Mit null faltet der Kern jede ebene Fläche
+    zu einem Fächer ohne Längengrenze, und dessen innere Kanten blieben nach dem
+    Teilen bis zum Doppelten zu lang (RM-671). Die Kanten, die das Teilen im
+    Inneren eines Dreiecks zu lang zieht, teilt der Aufrufer.
+    """
     body = solid(arrays["vertices"], arrays["faces"])
     if body.is_empty():
         return {}, {"empty": True}
     check()
-    evened = body.simplify(float(values["deviation"])).refine_to_length(float(values["edge"]))
+    deviation = float(values["deviation"])
+    if deviation > 0.0:
+        body = body.simplify(deviation)
+    evened = body.refine_to_length(float(values["edge"]))
     return mesh_arrays(evened), {"empty": False}
 
 

@@ -330,8 +330,11 @@ def _plate() -> Any:
     return boolean("difference", [MeshData.of(plate), MeshData.of(first), MeshData.of(second)]).mesh
 
 
-def _registered(name: str, source: Any, **params: object) -> Any:
-    """Eine Operation über ihren Registereintrag, mit dem Vorgabeprofil."""
+def _registered(name: str, *sources: Any, **params: object) -> Any:
+    """Eine Operation über ihren Registereintrag, mit dem Vorgabeprofil.
+
+    Mehrere Quellen werden mehrere Eingänge in ihrer Folge (*Weich verschmelzen*).
+    """
     from app.core.bootstrap import load_operations
     from app.core.knowledge import profiles
     from app.core.registry import REGISTRY
@@ -339,13 +342,16 @@ def _registered(name: str, source: Any, **params: object) -> Any:
     from app.core.types import OpContext, Scene, SceneObject
 
     load_operations()
-    entry = SceneObject(id="obj_1", name="Platte", mesh=source)
+    entries = [
+        SceneObject(id=f"obj_{index + 1}", name="Platte", mesh=source)
+        for index, source in enumerate(sources)
+    ]
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     spec = REGISTRY.get(name)
     result = spec.fn(
         OpContext(
-            scene=Scene(objects={entry.id: entry}, profile=profile),
-            inputs=[entry],
+            scene=Scene(objects={entry.id: entry for entry in entries}, profile=profile),
+            inputs=entries,
             params=spec.params(**params),
             profile=profile,
             quality="fine",
@@ -795,6 +801,45 @@ def _refined_plate() -> str:
     from app.core.geom.mesh_ops import remesh
 
     return _mesh_print(remesh(_plate(), 3.0))
+
+
+def _evened_plate() -> str:
+    """*Dreiecke angleichen* an der Platte — das Teilen nach dem Kern entscheidet an
+    Längen, gemessen auf mehreren Fäden (RM-671)."""
+    from app.core.geom.mesh_ops import uniform
+
+    return _mesh_print(uniform(_plate(), 3.0, 0.0))
+
+
+def _blend_field() -> str:
+    """Das Abstandsfeld von *Weich verschmelzen* selbst, vor Marching Cubes.
+
+    Am fertigen Netz allein sähe das Rauschen nichts, solange ``skimage`` die
+    Ecken in einfacher Genauigkeit legte: Ein ULP im Feld kam dort nie an. Bis
+    RM-671 rechnete das Feld über ``np.einsum``.
+    """
+    from app.core.geom.blend import distance_field
+    from app.core.geom.mesh import MeshData
+
+    post = lathe.cylinder(radius=3.5, height=10.0, sections=32)
+    axes = [np.arange(-6.0, 6.0, 0.7) + 0.13 for _axis in range(3)]
+    points = np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, 3)
+    return fingerprint(distance_field(MeshData.of(post), points, 1.0))
+
+
+def _blended_post() -> str:
+    """*Weich verschmelzen* einer Säule auf einer Platte — das Abstandsfeld entscheidet
+    über jede Ecke, die Marching Cubes setzt (RM-671: bis dahin über ``np.einsum``)."""
+    from app.core.deferred import trimesh
+    from app.core.geom.mesh import MeshData
+
+    base = trimesh.creation.box(extents=(16.0, 12.0, 4.0))
+    base.vertices = np.asarray(base.vertices) + np.array([0.0, 0.0, 2.0])
+    post = lathe.cylinder(radius=3.5, height=10.0, sections=32)
+    post.vertices = np.asarray(post.vertices) + np.array([1.25, -0.5, 8.0])
+    return _mesh_print(
+        _registered("blend_union", MeshData.of(base), MeshData.of(post), radius=2.0, grid=1.0)
+    )
 
 
 def _mended_import() -> str:
@@ -1639,6 +1684,8 @@ def _split_seam() -> str:
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
     "bent_lettering": _bent_lettering,
+    "blend_field": _blend_field,
+    "blend_union": _blended_post,
     "bound_surface": _bound_surface,
     "carried_collar": _carried_collar,
     "container_hinge": lambda: _container("hinged"),
@@ -1667,6 +1714,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "prusa_support_angle": _automatic_support_angle,
     "read_lattices": _read_lattices,
     "remesh_mesh": _refined_plate,
+    "remesh_uniform": _evened_plate,
     "resize_chamber": _changed_chamber,
     "resize_closure": _changed_closure,
     "rebuild_box": _rebuilt_box,
@@ -1714,6 +1762,65 @@ def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None
         noisy = _WAYS[way]()
 
     assert noisy == quiet, f"{way} hängt an einer plattformabhängigen Rechnung"
+
+
+#: Die Wege, die auf mehreren Fäden rechnen: Modul, Zahl der Fäden, Portionsgröße.
+_THREADED: dict[str, tuple[str, str, str]] = {
+    "blend_field": ("app.core.geom.blend", "PAIR_WORKERS", "PAIR_CHUNK"),
+    "blend_union": ("app.core.geom.blend", "PAIR_WORKERS", "PAIR_CHUNK"),
+    "remesh_uniform": ("app.core.geom.mesh_edits", "MEASURE_WORKERS", "MEASURE_CHUNK"),
+}
+
+
+class _Backwards:
+    """Ein Ausführer, der die Portionen von der letzten zur ersten rechnet.
+
+    Echte Fäden enden in einer Reihenfolge, die kein Lauf wiederholt; dieser
+    endet in der, die am weitesten von der gewohnten entfernt liegt.
+    """
+
+    def __init__(self, max_workers: int) -> None:
+        self.max_workers = max_workers
+
+    def __enter__(self) -> _Backwards:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def map(self, function: Callable[[Any], Any], items: Any) -> list[Any]:
+        listed = list(items)
+        done = {index: function(listed[index]) for index in reversed(range(len(listed)))}
+        return [done[index] for index in range(len(listed))]
+
+
+@pytest.mark.parametrize("way", sorted(_THREADED))
+def test_a_threaded_way_gives_the_same_bits_on_one_thread_and_on_many(
+    way: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Faden, vier Fäden, rückwärts abgeschlossen — derselbe Fingerabdruck.
+
+    Das Abstandsfeld von *Weich verschmelzen* rechnet in Portionen auf mehreren
+    Fäden (RM-671).
+    Zugesagt ist, dass jede Portion nur ihren eigenen Abschnitt schreibt und
+    Element für Element dasselbe rechnet; dann hängt das Ergebnis weder an der
+    Zahl der Fäden noch daran, welcher zuerst fertig wird. Die Portionen sind
+    hier klein und gehen nicht auf, damit es viele gibt und eine kurze am Ende.
+    """
+    import importlib
+
+    module_name, workers, chunk = _THREADED[way]
+    module = importlib.import_module(module_name)
+    monkeypatch.setattr(module, chunk, 97)
+    monkeypatch.setattr(module, workers, 1)
+    alone = _WAYS[way]()
+    monkeypatch.setattr(module, workers, 4)
+    shared = _WAYS[way]()
+    monkeypatch.setattr(module, "ThreadPoolExecutor", _Backwards)
+    backwards = _WAYS[way]()
+
+    assert shared == alone, f"{way} rechnet auf vier Fäden anders als auf einem"
+    assert backwards == alone, f"{way} hängt an der Reihenfolge, in der die Fäden enden"
 
 
 def _thread_profile_constants(module: Any) -> list[object]:

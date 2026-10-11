@@ -86,8 +86,8 @@ entscheidet, rechnet ohne Wege, deren letzte Stelle an der Plattform hängt:
   (`x * x`, `math.sqrt`);
 - Zufall nur aus Rohbits (`Generator.random`, `integers`), nie `normal` oder
   andere Verteilungen über `exp`/`log`;
-- keine Summe, deren Folge an der Zahl der Arbeiter hängt: Schichten und
-  Teile in fester Folge verrechnen (`analysis._support_volume`).
+- keine Summe, deren Folge an der Zahl der Arbeiter hängt: Teile in fester
+  Folge (`analysis._support_volume`); Fäden: `_THREADED`.
 
 Ersatzwerkzeuge: `app/core/geom/CLAUDE.md` („Plattformgleich gerechnet"). Ein
 neuer Weg zu Geometrie kommt in `tests/test_platform_identity.py` (`_WAYS`),

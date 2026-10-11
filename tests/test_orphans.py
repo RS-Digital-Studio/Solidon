@@ -1076,8 +1076,13 @@ def test_a_shaping_step_names_its_unreferenced_losses_once(profile: Profile) -> 
     *Gleichmäßig vernetzen* dieselbe gekrümmte Fläche wie davor, und die
     Pinselzüge nehmen nur, was sie treffen: im ersten Zug nichts, im zweiten
     drei Restfacetten und die gekrümmte Fläche, weil der Körper danach als
-    Freiform gilt. Mit dem Skalieren sind es fünf Kennungen statt 51 — und die
-    vier des zweiten Zugs stehen weiterhin in einem Befund.
+    Freiform gilt. Mit dem Skalieren waren es fünf Kennungen statt 51 — und die
+    vier des zweiten Zugs standen weiterhin in einem Befund.
+
+    Seit RM-671 hält das Angleichen auf 1,8 mm seine Kante und trägt 20 992
+    statt 11 536 Dreiecke. Die gekrümmte Fläche nimmt schon der erste Zug, der
+    zweite fünf Restfacetten: sieben Kennungen in drei Befunden, je Schritt
+    einer, keiner davon eine Warnung (gemessen gegen welle4 ``a72079433``).
     """
     from collections import Counter
 
@@ -1107,10 +1112,11 @@ def test_a_shaping_step_names_its_unreferenced_losses_once(profile: Profile) -> 
         assert int(entry.values.get("count", 1)) == len(named), dict(entry.values)
         counted += len(named)
     # Die Merkmale gehen nicht verloren, nur ihre Wiederholung: Jede der
-    # fünf Kennungen steht weiterhin in genau einem Befund.
-    assert counted == 5, counted
-    assert max(int(entry.values.get("count", 1)) for entry in lost) == 4
+    # sieben Kennungen steht weiterhin in genau einem Befund.
+    assert counted == 7, counted
+    assert max(int(entry.values.get("count", 1)) for entry in lost) == 5
 
-    # Zwei Schritte mit Verlust, zweimal *Pinselzüge angewendet*, Angleichen
-    # und Abweichung des Vernetzens, dazu die Freiform: sieben Hinweise statt 55.
-    assert len(findings) <= 8, Counter(entry.code for entry in findings)
+    # Drei Schritte mit Verlust, zweimal *Pinselzüge angewendet*, Angleichen
+    # und Abweichung des Vernetzens, dazu die Freiform nach beiden Zügen: neun
+    # Hinweise statt 55 (bis RM-671 sieben, die Freiform erst nach dem zweiten).
+    assert len(findings) <= 9, Counter(entry.code for entry in findings)

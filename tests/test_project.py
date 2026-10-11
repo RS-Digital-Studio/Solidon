@@ -4881,6 +4881,13 @@ def test_v48_sculpting_and_posing_compute_as_saved(profile) -> None:
     Körper rechnen wie gespeichert. Gegenproben: Mit festem Rumpf bleibt der Fuß
     auf dem Bett, mit angepasster Spiegelmitte rechnet der Klotz anders, und
     dieselben Züge in Fassung 2 rechnen anders.
+
+    Seit RM-671 hält *Dreiecke angleichen* seine Kante, und alle drei Körper
+    tragen danach mehr Dreiecke (6 080 → 8 960, 2 156 → 4 452, 4 962 → 10 474,
+    gemessen gegen welle4 ``a72079433``). Gleich gespeichert rechnen sie seitdem
+    um Hundertstel anders, und das hält der Test fest: Kugel 32 738,155384 mm³ bis
+    z = 44,328971; Stab 8 584,961382 mm³, Fuß bei z = 1,019238; Klotz
+    16 508,358279 mm³ bis z = 21,427774. Die Migration ändert daran nichts.
     """
     import numpy as np
 
@@ -4904,12 +4911,12 @@ def test_v48_sculpting_and_posing_compute_as_saved(profile) -> None:
         return {entry.name: entry.mesh for entry in result.scene.objects.values()}
 
     saved = bodies()
-    assert float(saved["kugel"].volume) == pytest.approx(32742.854319, abs=1e-5)
-    assert float(saved["kugel"].raw.bounds[1][2]) == pytest.approx(44.328983, abs=1e-6)
-    assert float(saved["stab"].volume) == pytest.approx(8584.334036, abs=1e-5)
+    assert float(saved["kugel"].volume) == pytest.approx(32738.155384, abs=1e-5)
+    assert float(saved["kugel"].raw.bounds[1][2]) == pytest.approx(44.328971, abs=1e-6)
+    assert float(saved["stab"].volume) == pytest.approx(8584.961382, abs=1e-5)
     assert float(saved["stab"].raw.bounds[0][2]) == pytest.approx(1.019238, abs=1e-6)
-    assert float(saved["klotz"].volume) == pytest.approx(16508.448935, abs=1e-5)
-    assert float(saved["klotz"].raw.bounds[1][2]) == pytest.approx(21.387214, abs=1e-6)
+    assert float(saved["klotz"].volume) == pytest.approx(16508.358279, abs=1e-5)
+    assert float(saved["klotz"].raw.bounds[1][2]) == pytest.approx(21.427774, abs=1e-6)
 
     history = History(project.document)
     history.change_params(lumpy.id, {**lumpy.params, "mirror_fitted": True})
@@ -4923,7 +4930,7 @@ def test_v48_sculpting_and_posing_compute_as_saved(profile) -> None:
     )
     renewed = [dataclasses.replace(stroke, brush=2) for stroke in strokes]
     history.change_params(sculpt.id, {**sculpt.params, "strokes": strokes_to_text(renewed)})
-    assert abs(float(bodies()["kugel"].volume) - 32742.854319) > 1.0, (
+    assert abs(float(bodies()["kugel"].volume) - float(saved["kugel"].volume)) > 1.0, (
         "Gegenprobe: in Fassung 2 rechnen dieselben Züge anders"
     )
 
