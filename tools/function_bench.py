@@ -636,6 +636,19 @@ def protocol_row(row: Mapping[str, Any]) -> dict[str, Any]:
     return data
 
 
+def protocol_spec(spec: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Die Spezifikation im Protokoll: nur die Schlüssel des Schemas, ohne Lesevermerke.
+
+    ``function_list`` hängt an jede gelesene Spezifikation, aus welcher Datei und
+    welchem Paket sie stammt (``file``, ``package``); das Protokoll trägt das Paket
+    oben und die Datei nicht.
+    """
+    if not spec:
+        return None
+    keys = PROTOCOL_SCHEMA["spec"].keys or frozenset(spec)
+    return {key: spec[key] for key in spec if key in keys}
+
+
 def empty_protocol(
     row: Mapping[str, Any], variant: Mapping[str, Any], version: Mapping[str, str]
 ) -> dict[str, Any]:
@@ -652,7 +665,7 @@ def empty_protocol(
             "row": protocol_row(row),
             "kind": str(row.get("kind") or ""),
             "package": str(row.get("package") or ""),
-            "spec": dict(row.get("spec") or {}) or None,
+            "spec": protocol_spec(row.get("spec")),
             "variant": dict(variant),
             "version": {
                 "commit": str(version.get("commit", "")),
@@ -1301,6 +1314,25 @@ RECENT_KIND: Final = "start.recent"
 _STEP_NUMBER: Final = re.compile(r"\b(\d+)\b")
 
 
+def walk_target(row: Mapping[str, Any]) -> str:
+    """Wohin der Hauptweg einer Zeile führt.
+
+    Meist ihr Ziel. Eine Operation, deren Eingaben in einer Handlung des
+    Merkmalfensters stehen (``feature.field:<op>.…``), findet der Kunde an der
+    Auswahl als diese Handlung (``feature:<op>``) — ihr Eintrag liegt sonst nur
+    im Kontextmenü, und ``next_click`` verlangte den Rechtsklick. Die Suche
+    misst weiter das Ziel der Zeile (``operation:<op>``), denn so heißt der
+    Treffer.
+    """
+    target = str(row.get("target") or "")
+    kind, _separator, name = target.partition(":")
+    if kind == "operation":
+        inputs = (row.get("spec") or {}).get("inputs") or {}
+        if any(str(key).startswith(f"feature.field:{name}.") for key in inputs):
+            return f"feature:{name}"
+    return target
+
+
 def default_apply_target(row: Mapping[str, Any]) -> str | None:
     """Womit eine Zeile übernommen wird.
 
@@ -1308,7 +1340,7 @@ def default_apply_target(row: Mapping[str, Any]) -> str | None:
     Operationen mit dem Hauptknopf ihres Dialogs; ein Fensterbefehl und eine
     Bedienfläche wirken mit ihrem Klick selbst.
     """
-    target = str(row.get("target") or "")
+    target = walk_target(row)
     if target.startswith(("feature:", "edge:")):
         return "feature.apply"
     if target.startswith(("operation:", "dialog:")):
@@ -1332,7 +1364,7 @@ def route_of(row: Mapping[str, Any]) -> list[tuple[str, str]]:
         )
         for entry in steps
     ]
-    target = str(row.get("target") or "")
+    target = walk_target(row)
     if target and (not route or route[-1][0] != target):
         route.append((target, "left"))
     return route
@@ -1402,14 +1434,14 @@ def result_metrics(scene: Any, document: Any, selected: tuple[str, str] | None) 
 
 
 def cli_arguments(operation: Mapping[str, Any]) -> list[str] | None:
-    """Die Werte eines Schritts als Kommandozeile von ``app.cli.main run``.
+    """Die Werte eines Schritts (``serialise.operation_to_data``) für ``app.cli.main run``.
 
     Nur Zahlen, Texte und Wahrheitswerte haben dort ein Feld; ein Schritt mit
     anderen Werten (Listen, Bezüge) ist über die Kommandozeile nicht derselbe —
     dann ``None``, und Prüfpunkt 4 vermerkt den Vergleich als nicht gemessen.
     """
     arguments = [str(operation["op"])]
-    inputs = [str(name) for name in operation.get("inputs", ())]
+    inputs = [str(name) for name in operation.get("in", ())]
     if inputs:
         arguments += ["--on", *inputs]
     for name, value in (operation.get("params") or {}).items():
@@ -1928,7 +1960,7 @@ class FunctionFlow:
         from tools import function_capture as capture
 
         inputs = self.spec.get("inputs") or {}
-        target = str(self.row.get("target") or "")
+        target = walk_target(self.row)
         focus_before = QApplication.focusWidget()
         self.snapshot("before")
         self.picture("01-vorher")
@@ -2325,7 +2357,7 @@ class FunctionFlow:
             "eine_kante": [(f"view:{edges[0][0]}.{edges[0][1]}", "left")] if edges else None,
         }
         assert tuple(clicks) == tuple(SELECTION_STAGES)
-        target = str(self.row.get("target") or "")
+        target = walk_target(self.row)
         matrix: dict[str, Any] = {}
         for stage, route in clicks.items():
             if route is None:
@@ -2594,7 +2626,7 @@ class FunctionFlow:
 
         from tools.function_capture import reference_factor
 
-        target = str(self.row.get("target") or "")
+        target = walk_target(self.row)
         if not target.startswith("handle:") and "Z1" not in (self.spec.get("criteria") or ()):
             unmeasured(self.data, "frames", "kein Griff an dieser Zeile")
             return
@@ -2632,7 +2664,7 @@ class FunctionFlow:
 
     def phase_licence(self) -> None:
         """Prüfpunkt 18: Wie das Ziel im Lizenzzustand dasteht, und ob Schreiben gesperrt ist."""
-        target = str(self.row.get("target") or "")
+        target = walk_target(self.row)
         before = self.scene_now()
         selection = [
             self.walker.step(name, button) for name, button in route_of(self.row) if name != target

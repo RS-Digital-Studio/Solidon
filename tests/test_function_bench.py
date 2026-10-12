@@ -1181,6 +1181,22 @@ def test_route_apply_target_and_command_line_come_from_the_row() -> None:
         ("menu:tree.rename", "left"),
     ]
     assert bench.route_of({"target": "feature:resize_hole"}) == [("feature:resize_hole", "left")]
+    feature_row = {
+        "target": "operation:resize_hole",
+        "route": [{"target": "tree.row:obj_1.hole_1", "button": "left", "modifier": ""}],
+        "spec": {"inputs": {"feature.field:resize_hole.diameter": 8.0}},
+    }
+    # Eine Merkmalsoperation findet der Kunde an der Auswahl als Handlung, nicht im
+    # Kontextmenü: Der Hauptweg führt zu ihrem Kopf, übernommen wird dort.
+    assert bench.walk_target(feature_row) == "feature:resize_hole"
+    assert bench.route_of(feature_row)[-1] == ("feature:resize_hole", "left")
+    assert bench.default_apply_target(feature_row) == "feature.apply"
+    dialog_row = {"target": "operation:drill_hole", "spec": {"inputs": {"field:diameter": 5}}}
+    assert bench.walk_target(dialog_row) == "operation:drill_hole"
+    assert bench.protocol_spec({"inputs": {}, "file": "d04.toml", "package": "D4"}) == {
+        "inputs": {}
+    }
+    assert bench.protocol_spec(None) is None
     assert bench.selected_feature(ROWS[0]) == ("obj_1", "hole_1")
     assert bench.selected_feature(ROWS[1]) is None
     assert bench.default_apply_target({"target": "feature:resize_hole"}) == "feature.apply"
@@ -1190,7 +1206,7 @@ def test_route_apply_target_and_command_line_come_from_the_row() -> None:
     assert bench.cli_arguments(
         {
             "op": "drill_hole",
-            "inputs": ["obj_1"],
+            "in": ["obj_1"],
             "params": {"diameter": 5.2, "axis": "z", "slotted": False},
         }
     ) == ["drill_hole", "--on", "obj_1", "--diameter", "5.2", "--axis", "z", "--no-slotted"]
