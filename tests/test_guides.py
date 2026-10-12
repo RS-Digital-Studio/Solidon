@@ -957,6 +957,7 @@ NEW_RESOLVERS = (
     "_row_click",
     "_visible_row_click",
     "_expander_click",
+    "_row_scroll",
     "_tile_click",
     "_command_click",
     "_actions_below",
@@ -2167,7 +2168,9 @@ for round in range(5):
     settle(0.8)
     held = None
 print('tree survived', flush=True)
-os._exit(0)
+window.session.forget_changes()
+from tools.window_bench import shutdown_window
+shutdown_window(window, application)
 """
 
 
@@ -2245,3 +2248,144 @@ def test_a_tree_item_iterator_turns_the_guard_red() -> None:
         "    return QtWidgets.QTreeWidgetItemIterator(tree)\n"
     )
     assert tree_iterator_uses(source) == [1, 4]
+
+
+#: Der Kindprozess des Überstandstests: Anwendung wie beim Kunden (mit Stilblatt
+#: und Einstellungen — im nackten Fenster stand *Vorher/Nachher* nicht da), ein
+#: Körper mit Bohrung, aufgeklappt, dann Fensterhöhen von 820 bis 640 Punkten.
+#: ``SOLIDON_PROBE_OLD_HISTORY=1`` setzt die frühere Höhenmeldung des Verlaufs
+#: ohne den Abstand ein — die Gegenprobe.
+_SECTIONS = r"""
+import os
+import time
+import app.ui
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QWidget
+from app.core.bootstrap import load_operations
+load_operations()
+from app.ui.app import build_application
+application, window = build_application([])
+from app.core.scene.history import OperationDraft
+from app.ui.overlay import extra_height, is_room_taker, living
+from app.ui.panels import HistoryPanel
+if os.environ.get('SOLIDON_PROBE_OLD_HISTORY'):
+    def _old(self):
+        if self.compare.isHidden():
+            return 0
+        return self.compare.sizeHint().height() + (
+            self.timeline.sizeHint().height() if self.compare.isChecked() else 0
+        )
+    HistoryPanel._timeline_height = _old
+
+
+def settle(seconds):
+    until = time.monotonic() + seconds
+    while time.monotonic() < until:
+        application.processEvents()
+        time.sleep(0.005)
+
+
+window.resize(800, 800)
+window.show()
+window._show_start_screen(False)
+assert window.session.apply('Quader mit Bohrung', [
+    OperationDraft(op='create_box'),
+    OperationDraft(op='drill_hole', inputs=('obj_1',), params={'diameter': 5.0, 'z': 12.0}),
+])
+assert window.session.wait_for_idle(60000)
+tree = window.object_tree.tree
+tree.topLevelItem(0).setExpanded(True)
+zone = window.overlay.left
+section = window.object_tree.parentWidget()
+checked = 0
+problems = []
+for height in range(820, 640, -12):
+    window.resize(800, height)
+    settle(0.4)
+    takers = [
+        child for child in living(zone, QWidget)
+        if is_room_taker(child) and child.isVisibleTo(zone)
+    ]
+    floors = sum(child.least_height() for child in takers)
+    if extra_height(zone) + floors > window.overlay.card_room():
+        continue
+    checked += 1
+    for child in takers:
+        holder = child.parentWidget()
+        if holder.height() < holder.minimumSizeHint().height():
+            least = holder.minimumSizeHint().height()
+            problems.append((height, type(child).__name__, holder.height(), least))
+    bottom = tree.mapTo(section, QPoint(0, tree.height())).y()
+    if bottom > section.height():
+        problems.append((height, 'Baum', bottom, section.height()))
+print('geprüft', checked, flush=True)
+print('probleme', problems, flush=True)
+window.session.forget_changes()
+from tools.window_bench import shutdown_window
+shutdown_window(window, application)
+"""
+
+
+def _sections(extra: dict[str, str] | None = None) -> Any:
+    import os
+    import subprocess
+    import sys
+
+    return subprocess.run(
+        [sys.executable, "-X", "faulthandler", "-c", _SECTIONS],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", **(extra or {})},
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+
+
+def test_the_object_tree_stays_inside_its_section_when_the_card_is_tight(qt_app: Any) -> None:
+    """Die linke Karte teilt ihre Höhe auf Baum, Parameter und Verlauf; passt das
+    Ganze, ragt kein Abschnitt über seinen Platz. Der Verlauf nahm den Abstand
+    zwischen *Vorher/Nachher* und seiner Liste, ohne ihn zu melden — der Baum ragte
+    um diese Punkte über seinen Abschnitt, und seine letzte Zeile war
+    abgeschnitten (Fund D0-P, 800 × 800). Im eigenen Prozess, weil die Anwendung
+    wie beim Kunden gebaut sein muss."""
+    del qt_app
+    done = _sections()
+    assert done.returncode == 0, done.stderr[-3000:]
+    assert "probleme []" in done.stdout, done.stdout
+    checked = int(done.stdout.split("geprüft", 1)[1].split()[0])
+    assert checked >= 5, done.stdout
+
+
+def test_a_row_cut_off_by_its_parent_is_reached_by_scrolling(qt_app: Any) -> None:
+    """Eine Zeile, deren Liste über ihren Elternteil ragt, ist nur halb zu sehen;
+    gefragt wird der sichtbare Teil der Liste, nicht ihr ganzes Rechteck (Fund
+    D0-P: die letzte Baumzeile hieß „ziel“, obwohl 8 Punkte abgeschnitten waren)."""
+    from PySide6.QtWidgets import QListWidget, QWidget
+
+    from app.ui import guide_targets
+
+    host = QWidget()
+    host.resize(240, 100)
+    listing = QListWidget(host)
+    listing.setGeometry(0, 0, 240, 300)
+    for number in range(12):
+        listing.addItem(f"Zeile {number}")
+    host.show()
+    _settle(qt_app, 5)
+    try:
+        visible = listing.viewport().visibleRegion().boundingRect()
+        cut = next(
+            listing.item(row)
+            for row in range(listing.count())
+            if listing.visualItemRect(listing.item(row)).bottom() > visible.bottom()
+            and listing.visualItemRect(listing.item(row)).top() <= visible.bottom()
+        )
+        step = guide_targets._visible_row_click(listing, cut, "history.row:1", "ziel")
+        assert (step.why, step.direction) == ("rollen", 1)
+        whole = listing.item(0)
+        assert guide_targets._visible_row_click(listing, whole, "history.row:1", "ziel").why == (
+            "ziel"
+        )
+    finally:
+        host.close()
+        host.deleteLater()
