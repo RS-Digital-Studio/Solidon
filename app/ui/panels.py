@@ -5153,11 +5153,20 @@ class HistoryPanel(QWidget):
         return min(self._timeline_height() + least_height_of(self.list), self.wanted_height())
 
     def set_room(self, pixels: int) -> None:
-        """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
+        """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``).
+
+        Wer am Ende stand, bleibt am Ende: ``show_document`` rollt dorthin,
+        und schrumpft die Zuteilung danach, lag der neueste Schritt sonst unter
+        der Kante (bei 1920x1080 und zwölf Körpern).
+        """
         if pixels == self._room:
             return
         self._room = pixels
+        bar = self.list.verticalScrollBar()
+        at_end = bar.value() >= bar.maximum()
         self._fit()
+        if at_end:
+            self.list.scrollToBottom()
 
     def _fit(self) -> None:
         """So hoch wie der Inhalt, höchstens so hoch wie zugeteilt."""

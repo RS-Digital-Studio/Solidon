@@ -262,6 +262,45 @@ def test_the_history_claims_the_timeline_as_it_stands_in_the_column(qt_app: Any)
         panel.deleteLater()
 
 
+def test_the_newest_step_stays_in_view_when_the_history_loses_room(qt_app: Any) -> None:
+    """Wer am Ende des Verlaufs stand, bleibt dort, wenn die Spalte ihn kleiner legt.
+
+    ``show_document`` rollt ans Ende, danach teilt die Überlagerung die Spalte
+    neu: Bei 1920 × 1080 und zwölf Körpern zeigte der Verlauf die Schritte 4
+    bis 11, der neueste lag unter der Kante. Wer nach oben gerollt hat, bleibt
+    dagegen, wo er ist."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    from app.ui.panels import HistoryPanel, row_height_of, view_chrome
+
+    panel = HistoryPanel()
+    try:
+        for number in range(1, 13):
+            panel.list.addItem(f"{number}  Quader {number}")
+        panel.resize(298, 800)
+        panel.show()
+        panel.set_room(panel.wanted_height())
+        _settle(qt_app, 6)
+        panel.list.scrollToBottom()
+        small = panel._timeline_height() + view_chrome(panel.list) + 5 * row_height_of(panel.list)
+        panel.set_room(small)
+        _settle(qt_app, 6)
+        last = panel.list.visualItemRect(panel.list.item(panel.list.count() - 1))
+        assert last.isValid() and last.bottom() < panel.list.viewport().height(), (
+            f"der neueste Schritt liegt unter der Kante: {last} im Sichtfeld "
+            f"{panel.list.viewport().height()}"
+        )
+
+        panel.list.scrollToTop()
+        panel.set_room(small - row_height_of(panel.list))
+        _settle(qt_app, 6)
+        assert panel.list.verticalScrollBar().value() == 0, "wer oben las, bleibt oben"
+    finally:
+        panel.close()
+        panel.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 def test_a_card_with_few_rows_asks_no_floor_above_its_wish(qt_app: Any) -> None:
     """Der Boden einer Liste sind drei Zeilen, aber nie mehr, als da sind (FD-25).
 
