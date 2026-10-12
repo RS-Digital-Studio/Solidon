@@ -5697,6 +5697,7 @@ class HistoryPanel(QWidget):
             (tr("Nach unten", context="Verlauf"), False, self.down_action),
         ):
             entry = menu.addAction(label)
+            entry.setObjectName("history.up" if upwards else "history.down")
             entry.setShortcut(action.shortcut())
             found, before = self._neighbour_target(op_ids, upwards)
             problem = places.get(before) if found else None
@@ -5711,9 +5712,11 @@ class HistoryPanel(QWidget):
         valid = [before for before, problem in places.items() if problem is None]
         if valid:
             further = menu.addMenu(tr("Verschieben vor"))
+            further.menuAction().setObjectName("history.move_before")
             for before in valid:
                 label = tr("Ans Ende") if before is None else f"{before}  {self._title_of(before)}"
                 target = further.addAction(label)
+                target.setObjectName(f"history.move_before.{'end' if before is None else before}")
                 target.triggered.connect(
                     lambda _checked=False, chosen=op_ids, where=before: self.moveRequested.emit(
                         chosen, where
@@ -5737,6 +5740,7 @@ class HistoryPanel(QWidget):
         switch.setObjectName("history.switch")
         if self._inserting is not None:
             stop = menu.addAction(tr("Einfügen beenden"))
+            stop.setObjectName("history.stop_insert")
             stop.setShortcut(self.stop_insert_action.shortcut())
             stop.triggered.connect(lambda _checked=False: self.stopInsertRequested.emit())
 
@@ -5950,6 +5954,7 @@ class HistoryPanel(QWidget):
             # hochziehen, Innenkontur als Tasche — ohne neu zu zeichnen. Der
             # Eintrag steht nur an Schritten, die eine Zeichnung tragen.
             reuse = menu.addAction(tr("Zeichnung weiterverwenden"))
+            reuse.setObjectName("history.reuse_drawing")
             reuse.setToolTip(tr("Öffnet eine Kopie dieser Zeichnung für einen neuen Schritt."))
             menu.setToolTipsVisible(True)
             reuse.triggered.connect(
@@ -5969,6 +5974,7 @@ class HistoryPanel(QWidget):
             # Ohne Auslassungspunkte: Es folgt keine Frage mehr, und Strg+Z
             # nimmt es zurück (``MainWindow.bake_sculpt``).
             frozen = menu.addAction(tr("Stand festschreiben"))
+            frozen.setObjectName("history.bake")
             frozen.setToolTip(
                 tr(
                     "Legt den jetzigen Stand als Körper ab. Die Züge bleiben als Beleg, "
@@ -12074,6 +12080,10 @@ def collapsible(
     )
     if inline:
         heading.setProperty("inline", True)
+        # Die Überschrift wandert in die fremde Zeile und ist dann kein Kind
+        # des Wrappers mehr; wer vom Inhalt aus die Klappe sucht
+        # (``guide_targets._obstacles``), findet sie hier.
+        wrapper.setProperty("heading", heading)
     summary: _SectionSummary | None = None
     if contents:
         heading.setToolTip(contents)

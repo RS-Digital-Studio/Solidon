@@ -22,21 +22,31 @@ haben kein eigenes Widget — sie haben nur einen Ort.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, Any, Final
+import itertools
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractButton,
+    QAbstractItemView,
     QApplication,
+    QDialog,
     QDialogButtonBox,
     QFormLayout,
     QListWidget,
+    QListWidgetItem,
     QMenu,
     QPushButton,
     QScrollArea,
+    QTabBar,
+    QTabWidget,
     QToolButton,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QTreeWidgetItemIterator,
     QWidget,
 )
 
@@ -288,7 +298,11 @@ def marked_widgets(window: MainWindow, name: str) -> list[QWidget]:
             for widget in root.findChildren(QWidget)
             if widget.property(guides.TARGET_PROPERTY) == name
         )
-    return sorted(found, key=lambda widget: not widget.isVisible())
+    # Ein verborgenes Feld eines offenen Dialogs geht einem liegengebliebenen
+    # aus einem geschlossenen vor.
+    return sorted(
+        found, key=lambda widget: (not widget.isVisible(), not widget.window().isVisible())
+    )
 
 
 def _marked(name: str) -> Callable[[MainWindow], QWidget]:
@@ -372,7 +386,13 @@ RESOLVED: Final[frozenset[str]] = (
 
 
 def widget_for(window: MainWindow, name: str) -> QWidget:
-    """Das Widget hinter einem festen Namen oder einem ``operation:``/``field:``-Ziel."""
+    """Das Widget hinter einem Namen aus dem Wortschatz, auch wenn es gerade verdeckt ist.
+
+    Feste Namen über ihre Tabellen, die neuen Arten über ihr Kennzeichen
+    (:data:`guides.TARGET_PROPERTY`, :func:`marked_widgets`) oder ein
+    öffentliches Attribut. Was nur einen Ort hat (Menüzeile, Listenzeile,
+    Stelle im Bild), hat kein Widget: :class:`MissingTargetError`.
+    """
     if not guides.is_target(name):
         raise MissingTargetError(f"{name}: kein Name aus dem Wortschatz der Anleitungen")
     if name in _AREAS:
@@ -385,16 +405,16 @@ def widget_for(window: MainWindow, name: str) -> QWidget:
     if finder is not None:
         return finder(window)
     kind, _separator, rest = name.partition(":")
-    if kind == "field":
-        dialog = window._op_dialog
-        editor = dialog._editors.get(rest) if dialog is not None else None
-        if editor is None:
-            raise MissingTargetError(f"{name}: kein offener Dialog mit diesem Feld")
-        return editor
     if kind == "operation":
         button = window.selection_operations.button_for(rest)
         if button is not None and button.isVisible():
             return button
+    if kind in _MARKED_KINDS:
+        return _marked(name)(window)
+    if kind == "handle" and rest in _BARS:
+        return _bar(window, rest)
+    if kind == "dialog":
+        return _dialog_of_class(window, rest)
     return _named(window, kind, rest)
 
 
@@ -406,6 +426,10 @@ def area_for(window: MainWindow, name: str) -> QRect:
     wird vorher in den Blick gerollt, wie der Kunde es mit dem Mausrad täte:
     Im aufgeklappten Abschnitt *Ändern* stand *Verrunden* unterhalb des
     sichtbaren Teils, und ein Rahmen darum hätte ins Leere gezeigt.
+
+    Diese Funktion **deckt auf** — Reiter, Klappen, Rollen —, denn eine Tour
+    und ein Bild im Handbuch zeigen das Ziel und nicht den Weg dorthin. Wer
+    die Klicks des Kunden zählt, fragt :func:`next_click`.
     """
     if name == "history.last":
         return _last_row(window.history_panel.list, name)
@@ -414,25 +438,38 @@ def area_for(window: MainWindow, name: str) -> QRect:
     kind, separator, rest = name.partition(":")
     if kind == "part":
         return _catalog_tile(rest, name)
-    if separator and kind == "history":
-        return _open_menu_entry_named(f"history.{rest}", name)
+    if separator and kind in ("history", "menu"):
+        return _open_menu_entry_named(_menu_name(kind, rest), name)
+    if kind in _ROW_KINDS:
+        view, item = _row(window, kind, rest, name)
+        _reveal(view)
+        return _item_area(view, item, reveal=True)
+    if kind == "view":
+        return _spot(point_for(window, *_object_and_feature(rest)))
+    if kind == "handle" and rest not in _BARS:
+        return _spot(_grip_point(window, rest, name))
+    if kind == "operation":
+        # **Erst der Knopf, dann das Menü** (RM-737, B3): Die Hälfte der
+        # Operationen hat gar keine Menüzeile; vorher scheiterte sie hier,
+        # bevor nach ihrem Knopf gefragt war.
+        button = window.selection_operations.button_for(rest)
+        if button is not None and not button.isVisible():
+            _reveal(button)
+        if button is not None and button.isVisible():
+            return _global(_in_view(button))
     if kind in ("command", "operation"):
         action = _action_for(window, kind, rest)
-        if kind == "operation":
-            button = window.selection_operations.button_for(rest)
-            if button is not None and not button.isVisible():
-                _reveal(window, button)
-            if button is not None and button.isVisible():
-                return _global(_in_view(button))
         shown = _shown_in_toolbar(window, action)
         if shown is not None:
             return _global(shown)
         return _open_menu_entry(action, name)
     widget = widget_for(window, name)
-    if not widget.isVisible() and name in _FINDERS:
-        _reveal(window, widget)
+    # Ein Bereich des Fensters wird nicht hervorgeholt: Eine Legende über das
+    # ganze Fenster zeigt für die verdeckte Seite auf ihren Reiter.
+    if not widget.isVisible() and name not in _AREAS:
+        _reveal(widget)
     if not widget.isVisible():
-        tab = _tab_of_a_page_behind(window, widget)
+        tab = _tab_of_a_page_behind(widget)
         if tab is not None:
             return tab
         raise MissingTargetError(f"{name}: {type(widget).__name__} ist gerade nicht zu sehen")
@@ -471,29 +508,101 @@ def _global(widget: QWidget) -> QRect:
     return QRect(widget.mapToGlobal(QPoint(0, 0)), widget.size())
 
 
-def _reveal(window: MainWindow, widget: QWidget) -> None:
-    """Holt ein verdecktes Ziel der rechten Karte hervor, wie der Kunde es täte.
+#: Was vor einem verdeckten Ziel liegt: ein Reiter, dessen Seite nicht vorn ist,
+#: oder eine zugeklappte Klappe.
+ObstacleKind = Literal["reiter", "klappe"]
+
+#: Die Kopfzeilen, die einen Inhalt auf- und zuklappen: ein Abschnitt
+#: (``panels.collapsible``) und eine Handlung im Merkmalfenster (RM-510).
+_HEADINGS: Final = frozenset({"sectionHeading", "actionHeading"})
+
+
+@dataclass(frozen=True, slots=True)
+class _Obstacle:
+    """Ein Hindernis auf dem Weg zum Ziel und der Klick, der es wegnimmt."""
+
+    why: ObstacleKind
+    clicked: QWidget
+    """Die Reiterleiste oder die Kopfzeile der Klappe."""
+    index: int = -1
+    """Bei einem Reiter seine Stelle in der Leiste."""
+
+    def rect(self) -> QRect:
+        if isinstance(self.clicked, QTabBar):
+            place = self.clicked.tabRect(self.index)
+            return QRect(self.clicked.mapToGlobal(place.topLeft()), place.size())
+        return _global(self.clicked)
+
+    def remove(self) -> None:
+        """Nimmt das Hindernis weg, wie der Klick es täte — nur für :func:`_reveal`."""
+        if isinstance(self.clicked, QTabBar):
+            self.clicked.setCurrentIndex(self.index)
+        elif isinstance(self.clicked, QAbstractButton) and not self.clicked.isChecked():
+            self.clicked.setChecked(True)
+
+
+def _obstacles(widget: QWidget) -> list[_Obstacle]:
+    """Was zwischen dem Kunden und diesem Widget liegt, von außen nach innen.
+
+    **Die eine Antwort für zwei Fragen** (RM-737, B2): :func:`_reveal` nimmt
+    die Hindernisse weg, :func:`next_click` nennt das erste als Klick. Gefragt
+    wird an jedem Vorfahren: Steckt er in einem Reiter, dessen Seite nicht vorn
+    ist, oder ist er verborgen, und neben ihm steht eine zugeklappte Kopfzeile?
+    Ein Reiter ohne sichtbare Leiste ist kein Weg, den ein Kunde gehen kann;
+    er steht nicht in der Liste.
+    """
+    found: list[_Obstacle] = []
+    child = widget
+    parent = widget.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QTabWidget):
+            index = next(
+                (
+                    number
+                    for number in range(parent.count())
+                    if (page := parent.widget(number)) is not None
+                    and (page is widget or page.isAncestorOf(widget))
+                ),
+                -1,
+            )
+            bar = parent.tabBar()
+            if index >= 0 and index != parent.currentIndex() and not bar.isHidden():
+                found.append(_Obstacle("reiter", bar, index))
+        elif child.isHidden():
+            heading = next(
+                (
+                    candidate
+                    for candidate in parent.children()
+                    if isinstance(candidate, QToolButton)
+                    and candidate is not child
+                    and candidate.objectName() in _HEADINGS
+                ),
+                None,
+            )
+            if heading is None and isinstance(parent.property("heading"), QToolButton):
+                heading = parent.property("heading")
+            if heading is not None and not heading.isChecked():
+                found.append(_Obstacle("klappe", heading))
+        child, parent = parent, parent.parentWidget()
+    found.reverse()
+    return found
+
+
+def _reveal(widget: QWidget) -> None:
+    """Holt ein verdecktes Ziel hervor, wie der Kunde es täte.
 
     Er klickt auf den Reiter, auf dessen Seite es steht, und klappt die Gruppe
     auf, in der es liegt: Die Karte der Handlungen klappt Gruppen zu, sobald
     mehr als ``OPEN_UP_TO`` Knöpfe offen stünden, und seit RM-511 steht vorn
-    nicht immer die Auswahl.
+    nicht immer die Auswahl. Die Hindernisse sind dieselben, die
+    :func:`next_click` als Klicks nennt (:func:`_obstacles`).
     """
-    from app.ui.panels import open_section
-
-    tabs = window.right
-    for index in range(tabs.count()):
-        page = tabs.widget(index)
-        if page is not None and page.isAncestorOf(widget) and index != tabs.currentIndex():
-            tabs.setCurrentIndex(index)
-    parent = widget.parentWidget()
-    while parent is not None and parent is not tabs:
-        open_section(parent)
-        parent = parent.parentWidget()
+    for obstacle in _obstacles(widget):
+        obstacle.remove()
     QApplication.processEvents()
 
 
-def _tab_of_a_page_behind(window: MainWindow, widget: QWidget) -> QRect | None:
+def _tab_of_a_page_behind(widget: QWidget) -> QRect | None:
     """Der Reiter, hinter dem das Ziel steht, wenn seine Seite nicht vorn ist.
 
     Seit RM-511 teilen sich Auswahl, Prüfbericht und Chat die rechte Karte,
@@ -501,16 +610,10 @@ def _tab_of_a_page_behind(window: MainWindow, widget: QWidget) -> QRect | None:
     nennt sie trotzdem einzeln; für die verdeckte zeigt die Nummer auf ihren
     Reiter, dorthin klickt der Kunde.
     """
-    tabs = window.right
-    for index in range(tabs.count()):
-        page = tabs.widget(index)
-        if page is not None and (page is widget or page.isAncestorOf(widget)):
-            if index == tabs.currentIndex() or not tabs.isVisible():
-                return None
-            bar = tabs.tabBar()
-            place = bar.tabRect(index)
-            return QRect(bar.mapToGlobal(place.topLeft()), place.size())
-    return None
+    tab = next((obstacle for obstacle in _obstacles(widget) if obstacle.why == "reiter"), None)
+    if tab is None or not tab.clicked.isVisible():
+        return None
+    return tab.rect()
 
 
 def _open_view(window: MainWindow) -> QRect:
@@ -678,3 +781,762 @@ def _open_menu_entry_named(object_name: str, name: str) -> QRect:
             if action.objectName() == object_name:
                 return _open_menu_entry(action, name)
     raise MissingTargetError(f"{name}: kein offenes Kontextmenü trägt diesen Eintrag")
+
+
+# --- Die neuen Arten (RM-737) --------------------------------------------------
+
+#: Arten, deren Widget sein Ziel als Kennzeichen trägt (``guides.TARGET_PROPERTY``).
+_MARKED_KINDS: Final = frozenset(
+    {
+        "field",
+        "feature",
+        "edge",
+        "feature.field",
+        "measure.field",
+        "finding.action",
+        "print",
+        "setting",
+    }
+)
+
+#: Arten, deren Ziel eine Zeile in einer Liste oder einem Baum ist.
+_ROW_KINDS: Final = frozenset({"tree.row", "history.row", "finding", "start.recent"})
+
+#: Die Leisten über der Ansicht, als ``handle:<rolle>``.
+_BARS: Final = frozenset(
+    {
+        "bar.section",
+        "bar.split",
+        "bar.analysis",
+        "bar.explode",
+        "bar.sculpt",
+        "bar.pose",
+        "bar.draw",
+    }
+)
+
+#: Die Griffe im Bild: Rolle → Name des Bildelements, das der Renderer führt
+#: (``render.gizmo``, ``scale_widget``, ``slot_handle``).
+_GRIPS: Final[dict[str, str]] = {
+    "move.x": "gizmo:arrow:0",
+    "move.y": "gizmo:arrow:1",
+    "move.z": "gizmo:arrow:2",
+    "rotate.x": "gizmo:ring:0",
+    "rotate.y": "gizmo:ring:1",
+    "rotate.z": "gizmo:ring:2",
+    "scale": "scale-handle",
+    "slot.end": "slot-handle:knob:0",
+}
+
+#: Griffe, die am Ursprung des Bewegungsgriffs gefasst werden: an einem
+#: gewählten Merkmal und am Dach eines Bausteins.
+_GRIP_ORIGINS: Final = frozenset({"feature.grip", "part.grip"})
+
+#: Was diese Datei an Arten auflöst — ``tests/test_guides.py`` hält es gegen
+#: ``guides.TARGET_KINDS``.
+RESOLVED_KINDS: Final[frozenset[str]] = frozenset(
+    {
+        "command",
+        "operation",
+        "field",
+        "part",
+        "tool",
+        "transform",
+        "section",
+        "sketch",
+        "history",
+        "feature",
+        "edge",
+        "feature.field",
+        "measure.field",
+        "menu",
+        "finding",
+        "finding.action",
+        "print",
+        "setting",
+        "handle",
+        "tree.row",
+        "history.row",
+        "view",
+        "dialog",
+        "start.recent",
+    }
+)
+
+#: Wie viele Dreiecke :func:`point_for` probiert, bevor es aufgibt.
+_POINT_TRIES: Final = 48
+
+
+def _menu_name(kind: str, rest: str) -> str:
+    """``history:edit`` ist ``menu:history.edit`` — der Name der Anleitungen bleibt."""
+    return f"history.{rest}" if kind == "history" else rest
+
+
+def _bar(window: MainWindow, role: str) -> QWidget:
+    """Eine Leiste über der Ansicht; sie steht nur, solange ihr Werkzeug offen ist."""
+    bars: dict[str, QWidget] = {
+        "bar.section": window.section_bar,
+        "bar.split": window.split_bar,
+        "bar.analysis": window.analysis_bar,
+        "bar.explode": window.explode_bar,
+        "bar.sculpt": window.sculpt_bar,
+        "bar.pose": window.pose_bar,
+        "bar.draw": window.draw_bar,
+    }
+    return bars[role]
+
+
+def _dialog_of_class(window: MainWindow, name: str) -> QWidget:
+    """Das offene Fenster dieser Klasse — ``dialog:print_settings_dialog``."""
+    candidates = [*QApplication.topLevelWidgets(), *window.findChildren(QDialog)]
+    for candidate in candidates:
+        if (
+            candidate.isWindow()
+            and candidate.isVisible()
+            and guides.dialog_name(type(candidate).__name__) == name
+        ):
+            return candidate
+    raise MissingTargetError(f"dialog:{name}: kein Fenster dieser Klasse ist offen")
+
+
+def _object_and_feature(rest: str) -> tuple[str, str | None]:
+    """``obj_1.op5.pin_1`` ist Körper ``obj_1`` mit Merkmal ``op5.pin_1``."""
+    object_id, separator, feature_id = rest.partition(".")
+    return object_id, feature_id if separator else None
+
+
+def _spot(point: QPoint) -> QRect:
+    """Eine Stelle als kleines Rechteck um den Punkt."""
+    return QRect(point.x() - 2, point.y() - 2, 5, 5)
+
+
+def _row(
+    window: MainWindow, kind: str, rest: str, name: str
+) -> tuple[QAbstractItemView, QTreeWidgetItem | QListWidgetItem]:
+    """Die Liste oder der Baum und die Zeile, die ``name`` meint."""
+    if kind == "tree.row":
+        tree = window.object_tree.tree
+        object_id, feature_id = _object_and_feature(rest)
+        iterator = QTreeWidgetItemIterator(tree)
+        while (item := iterator.value()) is not None:
+            if item.data(0, Qt.ItemDataRole.UserRole) == object_id and (
+                (feature_id is None and item.parent() is None)
+                or (feature_id is not None and item.data(1, Qt.ItemDataRole.UserRole) == feature_id)
+            ):
+                return tree, item
+            iterator += 1
+        raise MissingTargetError(f"{name}: der Baum zeigt keine solche Zeile")
+    if kind == "history.row":
+        from app.ui.labels import step_number
+
+        listing = window.history_panel.list
+        document = window.session.project.document
+        number = int(rest)
+        for row in range(listing.count()):
+            entry = listing.item(row)
+            op_id = entry.data(Qt.ItemDataRole.UserRole) if entry is not None else None
+            if entry is not None and op_id is not None and step_number(document, op_id) == number:
+                return listing, entry
+        raise MissingTargetError(f"{name}: der Verlauf hat keinen Schritt mit dieser Nummer")
+    if kind == "start.recent":
+        recent = window.start_screen.recent_list
+        entry = recent.item(int(rest) - 1)
+        if entry is None:
+            raise MissingTargetError(f"{name}: „Zuletzt geöffnet“ hat so viele Einträge nicht")
+        return recent, entry
+    report = window.report.list
+    for row in range(report.count()):
+        entry = report.item(row)
+        finding = entry.data(Qt.ItemDataRole.UserRole) if entry is not None else None
+        if entry is not None and not entry.isHidden() and getattr(finding, "code", None) == rest:
+            return report, entry
+    raise MissingTargetError(f"{name}: der Prüfbericht zeigt keinen Befund mit dieser Kennung")
+
+
+def _item_rect(view: QAbstractItemView, item: QTreeWidgetItem | QListWidgetItem) -> QRect:
+    """Die Zeile in Koordinaten ihrer Sichtfläche — leer, wenn sie gerade keine hat."""
+    if isinstance(view, QTreeWidget) and isinstance(item, QTreeWidgetItem):
+        return view.visualItemRect(item)
+    if isinstance(view, QListWidget) and isinstance(item, QListWidgetItem):
+        return view.visualItemRect(item)
+    return QRect()
+
+
+def _item_area(
+    view: QAbstractItemView, item: QTreeWidgetItem | QListWidgetItem, *, reveal: bool
+) -> QRect:
+    """Wo die Zeile steht, global; mit ``reveal`` vorher auf- und in den Blick gerollt."""
+    if reveal:
+        if isinstance(view, QTreeWidget) and isinstance(item, QTreeWidgetItem):
+            parent = item.parent()
+            while parent is not None:
+                parent.setExpanded(True)
+                parent = parent.parent()
+            view.scrollToItem(item)
+        elif isinstance(view, QListWidget) and isinstance(item, QListWidgetItem):
+            view.scrollToItem(item)
+    rect = _item_rect(view, item)
+    if rect.isEmpty():
+        raise MissingTargetError("die Zeile steht gerade nicht im Bild")
+    return QRect(view.viewport().mapToGlobal(rect.topLeft()), rect.size())
+
+
+def point_of_world(window: MainWindow, world: Sequence[float]) -> QPoint | None:
+    """Ein Weltpunkt als globaler Bildschirmpunkt — ``None`` ohne Bild.
+
+    Über :meth:`Viewport.display_of`, das in Gerätepixeln antwortet; der Faktor
+    zum Qt-Logikpunkt kommt vom Renderer. Dieselbe Rechnung für Wortschatz,
+    Prüfstand und Videos (``tools/make_video.py``).
+    """
+    viewport = window.viewport
+    renderer = viewport.renderer
+    display = viewport.display_of(world)
+    if renderer is None or display is None:
+        return None
+    surface = renderer.widget if isinstance(renderer.widget, QWidget) else viewport
+    ratio = float(renderer.device_ratio()) or 1.0
+    return surface.mapToGlobal(QPoint(round(display[0] / ratio), round(display[1] / ratio)))
+
+
+def _shows_the_view(window: MainWindow, point: QPoint) -> bool:
+    """Ob an dieser Stelle die Ansicht selbst liegt — keine Karte, kein Feld darüber."""
+    under = widget_under(point)
+    renderer = window.viewport.renderer
+    surface = renderer.widget if renderer is not None else None
+    return under is not None and (under is window.viewport or under is surface)
+
+
+def point_for(window: MainWindow, object_id: str, feature_id: str | None = None) -> QPoint:
+    """Eine Stelle im Bild, an der ein Klick diesen Körper oder dieses Merkmal trifft.
+
+    Eine der Kamera zugewandte Stelle **auf den Dreiecken** des Merkmals — die
+    Mitte eines Durchgangslochs ist leer, die Achse kein Ziel. Probiert werden
+    die größten zugewandten Dreiecke; eines gilt, wenn an seiner Mitte die
+    Ansicht selbst liegt (:func:`widget_under`) und ihr Pick dasselbe
+    Dreieck, mindestens denselben Körper meldet (``Viewport.placement_hit``).
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import as_mesh_data
+
+    name = f"view:{object_id}" + (f".{feature_id}" if feature_id else "")
+    viewport = window.viewport
+    result = window.session.last_result
+    entry = result.scene.objects.get(object_id) if result is not None else None
+    if viewport.renderer is None or entry is None:
+        raise MissingTargetError(f"{name}: die Ansicht zeigt diesen Körper nicht")
+    raw = as_mesh_data(entry.mesh).raw
+    faces = np.arange(len(raw.faces))
+    if feature_id is not None:
+        feature = entry.features.get(feature_id)
+        if feature is None or not feature.face_indices:
+            raise MissingTargetError(f"{name}: kein Merkmal dieses Namens mit Dreiecken")
+        faces = np.asarray(feature.face_indices, dtype=int)
+    facing = faces[raw.face_normals[faces] @ np.asarray(viewport.view_direction()) < 0.0]
+    order = facing[np.argsort(-raw.area_faces[facing], kind="stable")][:_POINT_TRIES]
+    wanted = {int(face) for face in faces}
+    for face in order:
+        centre = tuple(float(value) for value in raw.triangles_center[face])
+        point = point_of_world(window, centre)
+        display = viewport.display_of(centre)
+        if point is None or display is None or not _shows_the_view(window, point):
+            continue
+        hit = viewport.placement_hit(int(display[0]), int(display[1]))
+        if hit is None or hit[0] != object_id:
+            continue
+        if feature_id is not None and hit[2] >= 0 and hit[2] not in wanted:
+            continue
+        return point
+    raise MissingTargetError(f"{name}: keine zugewandte Stelle, die ein Klick trifft")
+
+
+def _grip_point(window: MainWindow, role: str, name: str) -> QPoint:
+    """Eine Stelle auf einem Griff im Bild.
+
+    Wo der Griff sitzt und wie weit er greift, sagt ``Viewport.gizmo_reach``;
+    welcher Teil wo liegt, sagt der Renderer, der die Teile unter ihrem Namen
+    führt (``gizmo:arrow:0``). Gesucht wird zuerst entlang der Weltachsen und
+    auf den Kreisen um sie, dann auf einem Raster um den Ursprung.
+    """
+    import math
+
+    viewport = window.viewport
+    renderer = viewport.renderer
+    reach = viewport.gizmo_reach()
+    if renderer is None or reach is None:
+        raise MissingTargetError(f"{name}: im Bild steht kein Griff")
+    origin, radius = reach
+    if role in _GRIP_ORIGINS:
+        point = point_of_world(window, origin)
+        if viewport.gizmo_feature() is None or point is None:
+            raise MissingTargetError(f"{name}: der Griff hängt an keinem Merkmal")
+        return point
+    wanted = _GRIPS.get(role)
+    centre = viewport.display_of(origin)
+    if wanted is None or centre is None:
+        raise MissingTargetError(f"{name}: keine Rolle eines Griffs im Bild")
+    axes = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    worlds: list[tuple[float, float, float]] = []
+    for index, axis in enumerate(axes):
+        worlds.extend(
+            (
+                origin[0] + axis[0] * radius * share,
+                origin[1] + axis[1] * radius * share,
+                origin[2] + axis[2] * radius * share,
+            )
+            for share in (0.25, 0.35, 0.45, 0.55, 0.65)
+        )
+        first, second = axes[(index + 1) % 3], axes[(index + 2) % 3]
+        worlds.extend(
+            (
+                origin[0] + radius * (math.cos(turn) * first[0] + math.sin(turn) * second[0]),
+                origin[1] + radius * (math.cos(turn) * first[1] + math.sin(turn) * second[1]),
+                origin[2] + radius * (math.cos(turn) * first[2] + math.sin(turn) * second[2]),
+            )
+            for turn in (step * math.pi / 8 for step in range(16))
+        )
+    projected = [viewport.display_of(world) for world in worlds]
+    probes = [spot for spot in projected if spot is not None]
+    span = max((math.dist(spot, centre) for spot in probes), default=0.0) * 1.1
+    probes.extend(
+        (
+            centre[0] + span * ring / 12 * math.cos(turn),
+            centre[1] + span * ring / 12 * math.sin(turn),
+        )
+        for ring in range(1, 13)
+        for turn in (step * math.pi / 24 for step in range(48))
+    )
+    hits = [spot for spot in probes if getattr(renderer.pick_item(*spot), "name", None) == wanted]
+    if not hits:
+        raise MissingTargetError(f"{name}: der Griff steht nicht im Bild")
+    x, y = hits[len(hits) // 2]
+    surface = renderer.widget if isinstance(renderer.widget, QWidget) else viewport
+    ratio = float(renderer.device_ratio()) or 1.0
+    point = surface.mapToGlobal(QPoint(round(x / ratio), round(y / ratio)))
+    if not _shows_the_view(window, point):
+        raise MissingTargetError(f"{name}: über dem Griff liegt ein Bedienelement")
+    return point
+
+
+def widget_under(point: QPoint) -> QWidget | None:
+    """Was an dieser Bildschirmstelle einen Klick bekäme — die Probe vor jedem Klick.
+
+    Zuerst ein offenes Menü und ein modaler Dialog, dann ``QApplication.widgetAt``;
+    findet das nichts (ohne Fenstersystem), das oberste Fenster, das die Stelle
+    enthält, und darin ``childAt``.
+    """
+    tops: list[QWidget | None] = [
+        QApplication.activePopupWidget(),
+        QApplication.activeModalWidget(),
+    ]
+    for top in tops:
+        if top is not None and top.isVisible() and top.rect().contains(top.mapFromGlobal(point)):
+            return top.childAt(top.mapFromGlobal(point)) or top
+    found = QApplication.widgetAt(point)
+    if found is not None:
+        return found
+    windows = [top for top in QApplication.topLevelWidgets() if top.isWindow() and top.isVisible()]
+    # Ein Fenster mit Elternteil (Dialog, Karte) liegt über dem Hauptfenster.
+    windows.sort(key=lambda top: top.parentWidget() is None)
+    for top in windows:
+        local = top.mapFromGlobal(point)
+        if top.rect().contains(local):
+            return top.childAt(local) or top
+    return None
+
+
+#: Die Zonen des Fensters, in denen ein Bedienelement steht (Kriterium E4).
+Zone = Literal["ansicht", "karte_rechts", "karte_links", "dialog", "statusleiste", "kopf", "menue"]
+
+
+def zone_of(window: MainWindow, widget: QWidget) -> Zone:
+    """In welcher Zone des Fensters dieses Widget steht."""
+    probe: QWidget | None = widget
+    while probe is not None:
+        if isinstance(probe, QMenu):
+            return "menue"
+        probe = probe.parentWidget()
+    if widget.window() is not window:
+        return "dialog"
+
+    def inside(container: QWidget | None) -> bool:
+        return container is not None and (container is widget or container.isAncestorOf(widget))
+
+    if inside(window.menuBar()):
+        return "menue"
+    if inside(window.statusBar()):
+        return "statusleiste"
+    host = window.overlay
+    if inside(host.right):
+        return "karte_rechts"
+    if inside(host.left):
+        return "karte_links"
+    if inside(window.viewport) or inside(host):
+        return "ansicht"
+    return "kopf"
+
+
+def search_hits(window: MainWindow) -> list[str]:
+    """Die Treffer der Suche, wie sie dastehen — als Namen aus dem Wortschatz.
+
+    Eine Operation heißt ``operation:<name>``, ein Befehl des Fensters
+    ``command:<kennung>``; die Überschrift über losen Treffern hat keinen Namen
+    und fehlt. Ohne Suchtext ist die Liste leer.
+    """
+    from app.core.registry import REGISTRY
+
+    hits = window.selection_operations.hits
+    if not hits.isVisible():
+        return []
+    found: list[str] = []
+    for row in range(hits.count()):
+        item = hits.item(row)
+        named = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        if item is None or item.isHidden() or not named:
+            continue
+        found.append(f"operation:{named}" if REGISTRY.has(str(named)) else f"command:{named}")
+    return found
+
+
+def _hit_row(window: MainWindow, entry: str) -> QListWidgetItem | None:
+    """Die Zeile dieser Operation oder dieses Befehls in der sichtbaren Trefferliste."""
+    hits = window.selection_operations.hits
+    if not hits.isVisible():
+        return None
+    for row in range(hits.count()):
+        item = hits.item(row)
+        if (
+            item is not None
+            and not item.isHidden()
+            and item.data(Qt.ItemDataRole.UserRole) == entry
+        ):
+            return item
+    return None
+
+
+# --- Der nächste Klick ------------------------------------------------------------
+
+#: Warum ein Klick fällig ist: das Ziel selbst oder ein Schritt auf dem Weg dorthin.
+ClickReason = Literal["ziel", "reiter", "klappe", "menue", "untermenue", "aufklappen", "rollen"]
+
+
+@dataclass(frozen=True, slots=True)
+class Click:
+    """Der nächste Klick des Kunden auf dem Weg zu einem Ziel (:func:`next_click`).
+
+    ``rect`` ist global. Bei ``rollen`` ist es die Fläche, über der das Rad
+    dreht, ``button`` ist dann ``NoButton`` und ``direction`` sagt, wohin:
+    ``1`` weiter nach unten, ``-1`` nach oben.
+    """
+
+    rect: QRect
+    button: Qt.MouseButton
+    why: ClickReason
+    target: str
+    direction: int = 0
+
+
+def next_click(window: MainWindow, name: str) -> Click:
+    """Der nächste Klick auf dem Weg des Kunden zu ``name`` — **ohne etwas aufzudecken**.
+
+    Steht das Ziel da, ist es das Ziel (``ziel``). Sonst ist es der erste
+    Schritt dorthin: der Reiter, die Klappe, der Menütitel, das Untermenü, das
+    Aufklappen einer Zeile oder das Rollen. Was dieselbe Frage für Touren
+    beantwortet und dabei aufdeckt, ist :func:`area_for`; beide lesen die
+    Hindernisse aus :func:`_obstacles`. Ist kein Weg zu sehen — ein
+    geschlossenes Kontextmenü, ein Dialog, der nicht offen ist —, ist das ein
+    :class:`MissingTargetError`; der Aufrufer geht dann einen Weg, den er
+    selbst kennt.
+    """
+    if not guides.is_target(name):
+        raise MissingTargetError(f"{name}: kein Name aus dem Wortschatz der Anleitungen")
+    if name == "history.last":
+        listing = window.history_panel.list
+        last = next(
+            (
+                item
+                for row in range(listing.count() - 1, -1, -1)
+                if (item := listing.item(row)) is not None and not item.isHidden()
+            ),
+            None,
+        )
+        if last is None:
+            raise MissingTargetError(f"{name}: die Liste ist leer")
+        return _row_click(listing, last, name)
+    if name == "viewport":
+        return Click(_open_view(window), Qt.MouseButton.LeftButton, "ziel", name)
+    kind, separator, rest = name.partition(":")
+    if separator and kind in ("history", "menu"):
+        action = _menu_action_named(window, _menu_name(kind, rest))
+        if action is None:
+            raise MissingTargetError(f"{name}: kein offenes Menü und keine Leiste trägt die Zeile")
+        return _menu_click(window, action, name)
+    if kind == "command":
+        hit = _hit_row(window, rest)
+        if hit is not None:
+            return _visible_row_click(window.selection_operations.hits, hit, name, "ziel")
+        if rest.startswith("tool."):
+            return next_click(window, f"tool:{rest.removeprefix('tool.')}")
+        action = _action_for(window, kind, rest)
+        shown = _shown_in_toolbar(window, action)
+        if shown is not None:
+            return Click(_global(shown), Qt.MouseButton.LeftButton, "ziel", name)
+        return _menu_click(window, action, name)
+    if kind == "operation":
+        return _operation_click(window, rest, name)
+    if kind == "part":
+        return _tile_click(rest, name)
+    if kind in _ROW_KINDS:
+        view, row_item = _row(window, kind, rest, name)
+        obstacles = _obstacles(view)
+        if obstacles:
+            return _obstacle_click(obstacles[0], name)
+        return _row_click(view, row_item, name)
+    if kind == "view":
+        point = point_for(window, *_object_and_feature(rest))
+        return Click(_spot(point), Qt.MouseButton.LeftButton, "ziel", name)
+    if kind == "handle" and rest not in _BARS:
+        return Click(
+            _spot(_grip_point(window, rest, name)), Qt.MouseButton.LeftButton, "ziel", name
+        )
+    widget = widget_for(window, name)
+    button = (
+        Qt.MouseButton.RightButton if name == "measure.reference" else Qt.MouseButton.LeftButton
+    )
+    return _widget_click(widget, name, button)
+
+
+def _obstacle_click(obstacle: _Obstacle, name: str) -> Click:
+    """Der Klick, der das erste Hindernis wegnimmt — wenn der Kunde es sehen kann."""
+    if not obstacle.clicked.isVisible():
+        raise MissingTargetError(f"{name}: der Weg führt über etwas, das gerade nicht dasteht")
+    return Click(obstacle.rect(), Qt.MouseButton.LeftButton, obstacle.why, name)
+
+
+def _widget_click(widget: QWidget, name: str, button: Qt.MouseButton) -> Click:
+    """Der Klick auf ein Widget — oder der erste Schritt, der es hervorholt."""
+    obstacles = _obstacles(widget)
+    if obstacles:
+        return _obstacle_click(obstacles[0], name)
+    if not widget.isVisible():
+        raise MissingTargetError(
+            f"{name}: {type(widget).__name__} steht nicht da, und kein Weg führt hin"
+        )
+    scrolled = _scroll_needed(widget, name)
+    if scrolled is not None:
+        return scrolled
+    rect = _checkbox_area(widget) if isinstance(widget, RowCheckBox) else _global(widget)
+    return Click(rect, button, "ziel", name)
+
+
+def _scroll_needed(widget: QWidget, name: str) -> Click | None:
+    """Ob das Widget außerhalb des sichtbaren Teils seines Rollbereichs steht."""
+    parent = widget.parentWidget()
+    while parent is not None and not isinstance(parent, QScrollArea):
+        parent = parent.parentWidget()
+    if parent is None:
+        return None
+    viewport = parent.viewport()
+    centre = widget.mapTo(viewport, widget.rect().center())
+    if viewport.rect().contains(centre):
+        return None
+    direction = 1 if centre.y() >= viewport.height() else -1
+    return Click(_global(viewport), Qt.MouseButton.NoButton, "rollen", name, direction)
+
+
+def _row_click(
+    view: QAbstractItemView, item: QTreeWidgetItem | QListWidgetItem, name: str
+) -> Click:
+    """Der Klick auf eine Zeile — oder das Aufklappen und Rollen davor."""
+    if not view.isVisible():
+        raise MissingTargetError(f"{name}: die Liste steht gerade nicht da")
+    if isinstance(item, QTreeWidgetItem):
+        ancestors: list[QTreeWidgetItem] = []
+        parent = item.parent()
+        while parent is not None:
+            ancestors.append(parent)
+            parent = parent.parent()
+        for ancestor in reversed(ancestors):
+            if not ancestor.isExpanded():
+                return _expander_click(view, ancestor, name)
+    elif isinstance(item, QListWidgetItem) and item.isHidden():
+        from app.ui.panels import GROUP_ROLE
+
+        group = item.data(GROUP_ROLE)
+        listing = item.listWidget()
+        header = next(
+            (
+                candidate
+                for row in range(listing.count() if listing is not None else 0)
+                if listing is not None
+                and (candidate := listing.item(row)) is not None
+                and not candidate.isHidden()
+                and candidate.data(GROUP_ROLE) == group
+            ),
+            None,
+        )
+        if group is None or header is None:
+            raise MissingTargetError(
+                f"{name}: die Zeile ist verborgen, und keine Gruppe klappt sie auf"
+            )
+        return _visible_row_click(view, header, name, "aufklappen")
+    return _visible_row_click(view, item, name, "ziel")
+
+
+def _visible_row_click(
+    view: QAbstractItemView,
+    item: QTreeWidgetItem | QListWidgetItem,
+    name: str,
+    why: ClickReason,
+) -> Click:
+    rect = _item_rect(view, item)
+    surface = view.viewport()
+    if rect.isEmpty():
+        raise MissingTargetError(f"{name}: die Zeile hat gerade keinen Ort")
+    if not surface.rect().contains(rect.center()):
+        direction = 1 if rect.center().y() >= surface.height() else -1
+        return Click(_global(surface), Qt.MouseButton.NoButton, "rollen", name, direction)
+    return Click(
+        QRect(surface.mapToGlobal(rect.topLeft()), rect.size()),
+        Qt.MouseButton.LeftButton,
+        why,
+        name,
+    )
+
+
+def _expander_click(view: QAbstractItemView, item: QTreeWidgetItem, name: str) -> Click:
+    """Das Dreieck vor einer zugeklappten Baumzeile."""
+    assert isinstance(view, QTreeWidget)
+    rect = view.visualItemRect(item)
+    surface = view.viewport()
+    if rect.isEmpty() or not surface.rect().contains(rect.center()):
+        direction = 1 if rect.center().y() >= surface.height() else -1
+        return Click(_global(surface), Qt.MouseButton.NoButton, "rollen", name, direction)
+    indent = view.indentation()
+    arrow = QRect(rect.left() - indent, rect.top(), indent, rect.height())
+    return Click(
+        QRect(surface.mapToGlobal(arrow.topLeft()), arrow.size()),
+        Qt.MouseButton.LeftButton,
+        "aufklappen",
+        name,
+    )
+
+
+def _tile_click(part: str, name: str) -> Click:
+    """Die Kachel eines Bausteins im offenen Katalog, ohne zu rollen."""
+    from app.ui.catalog import PartCatalog
+
+    catalog = QApplication.activeModalWidget()
+    if not isinstance(catalog, PartCatalog):
+        raise MissingTargetError(f"{name}: der Bausteinkatalog ist nicht offen")
+    view = catalog.list
+    for row in range(view.count()):
+        item = view.item(row)
+        if item is not None and item.data(Qt.ItemDataRole.UserRole) == part:
+            return _visible_row_click(view, item, name, "ziel")
+    raise MissingTargetError(f"{name}: der Katalog zeigt keinen Baustein dieses Namens")
+
+
+def _operation_click(window: MainWindow, operation: str, name: str) -> Click:
+    """Eine Operation: ihr Treffer in der Suche, ihr Knopf, sonst ihre Menüzeile (B3)."""
+    hit = _hit_row(window, operation)
+    if hit is not None:
+        return _visible_row_click(window.selection_operations.hits, hit, name, "ziel")
+    button = window.selection_operations.button_for(operation)
+    if button is not None:
+        obstacles = _obstacles(button)
+        if obstacles:
+            return _obstacle_click(obstacles[0], name)
+        if button.isVisible():
+            return _widget_click(button, name, Qt.MouseButton.LeftButton)
+    try:
+        action = _action_for(window, "operation", operation)
+    except MissingTargetError:
+        raise MissingTargetError(f"{name}: weder ein Knopf noch eine Menüzeile steht da") from None
+    shown = _shown_in_toolbar(window, action)
+    if shown is not None:
+        return Click(_global(shown), Qt.MouseButton.LeftButton, "ziel", name)
+    return _menu_click(window, action, name)
+
+
+def _open_menus() -> list[QMenu]:
+    return [
+        widget
+        for widget in QApplication.topLevelWidgets()
+        if isinstance(widget, QMenu) and widget.isVisible()
+    ]
+
+
+def _menu_action_named(window: MainWindow, object_name: str) -> QAction | None:
+    """Die Aktion mit diesem ``objectName``: in einem offenen Menü, in der Leiste,
+    oder der Titel eines benannten Menüs der Leiste."""
+    for menu in _open_menus():
+        for action in menu.actions():
+            if action.objectName() == object_name:
+                return action
+    for entry_name, _menus, action in menubar_entries(window):
+        if entry_name == object_name:
+            return action
+    for menu in window.findChildren(QMenu):
+        if menu.objectName() == object_name:
+            return menu.menuAction()
+    return None
+
+
+def _menubar_chain(container: QWidget, action: QAction, path: list[QMenu]) -> list[QMenu] | None:
+    """Die Menüs von der Leiste bis zu dem, das ``action`` trägt — ``None`` außerhalb."""
+    for entry in container.actions():
+        if entry is action:
+            return path
+        sub = entry.menu()
+        if isinstance(sub, QMenu):
+            found = _menubar_chain(sub, action, [*path, sub])
+            if found is not None:
+                return found
+    return None
+
+
+def _menu_click(window: MainWindow, action: QAction, name: str) -> Click:
+    """Die Zeile in einem offenen Menü — oder der Menütitel und die Untermenüs davor."""
+    for menu in _open_menus():
+        if action in menu.actions() and action.isVisible():
+            place = menu.actionGeometry(action)
+            return Click(
+                QRect(menu.mapToGlobal(place.topLeft()), place.size()),
+                Qt.MouseButton.LeftButton,
+                "ziel",
+                name,
+            )
+    bar = window.menuBar()
+    chain = _menubar_chain(bar, action, [])
+    if chain is None:
+        raise MissingTargetError(f"{name}: das Kontextmenü ist zu — erst der Rechtsklick")
+    if not chain:
+        place = bar.actionGeometry(action)
+        own = action.menu()
+        why: ClickReason = "menue" if isinstance(own, QMenu) and not own.isVisible() else "ziel"
+        return Click(
+            QRect(bar.mapToGlobal(place.topLeft()), place.size()),
+            Qt.MouseButton.LeftButton,
+            why,
+            name,
+        )
+    top = chain[0]
+    if not top.isVisible():
+        place = bar.actionGeometry(top.menuAction())
+        return Click(
+            QRect(bar.mapToGlobal(place.topLeft()), place.size()),
+            Qt.MouseButton.LeftButton,
+            "menue",
+            name,
+        )
+    for outer, inner in itertools.pairwise(chain):
+        if not inner.isVisible():
+            place = outer.actionGeometry(inner.menuAction())
+            return Click(
+                QRect(outer.mapToGlobal(place.topLeft()), place.size()),
+                Qt.MouseButton.LeftButton,
+                "untermenue",
+                name,
+            )
+    raise MissingTargetError(f"{name}: das Menü ist offen, aber die Zeile steht nicht darin")

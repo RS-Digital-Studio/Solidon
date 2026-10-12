@@ -150,7 +150,10 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``tree.row:obj_1`` und ``tree.row:obj_1.hole_2`` — eine Zeile im Baum;
 #: * ``history.row:3`` — die Verlaufszeile mit der sichtbaren Nummer 3;
 #: * ``view:obj_1.hole_2`` — eine Stelle im Bild auf diesem Merkmal;
-#: * ``dialog:print_settings_dialog`` — ein offener Dialog dieser Klasse.
+#: * ``dialog:print_settings_dialog`` — ein offener Dialog dieser Klasse;
+#: * ``start.recent:1`` — ein Eintrag unter „Zuletzt geöffnet“ auf dem
+#:   Startbildschirm, gezählt ab 1 in der Folge der Liste. Eine Menüzeile
+#:   dafür gibt es nicht.
 TARGET_KINDS: Final[tuple[str, ...]] = (
     "command",
     "operation",
@@ -175,6 +178,7 @@ TARGET_KINDS: Final[tuple[str, ...]] = (
     "history.row",
     "view",
     "dialog",
+    "start.recent",
 )
 
 #: Der Name einer Widget-Eigenschaft, die ein Bedienelement als Ziel ausweist.
@@ -199,6 +203,7 @@ _PATTERNS: Final[dict[str, re.Pattern[str]]] = {
     "measure.field": re.compile(_WORD),
     "finding": re.compile(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*"),
     "history.row": re.compile(r"[1-9][0-9]*"),
+    "start.recent": re.compile(r"[1-9][0-9]*"),
     "dialog": re.compile(r"[a-z][a-z0-9_]*"),
 }
 
@@ -250,6 +255,17 @@ def menubar_name_of(text: TranslatableText | str) -> str:
     if isinstance(text, TranslatableText):
         return menubar_name(text.msgid, text.context)
     return menubar_name(text)
+
+
+def dialog_name(class_name: str) -> str:
+    """Der Name hinter ``dialog:`` für eine Fensterklasse: ``PrintSettingsDialog``
+    heißt ``print_settings_dialog``, ``LLMKeyDialog`` ``llm_key_dialog``.
+
+    Eine Quelle für die Funktionsliste, die die Klassen im Quelltext findet,
+    und die Auflösung, die das offene Fenster sucht.
+    """
+    spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", class_name)
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", spaced).lower()
 
 
 def _slug(text: str) -> str:
