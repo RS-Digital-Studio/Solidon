@@ -3015,7 +3015,10 @@ def test_every_platform_can_do_the_same_things() -> None:
     # Display in einer Wayland-Sitzung weg und machte den Viewport nach dem
     # Laden eines Modells leer. Qt läuft über Xwayland, damit nicht zwei
     # Fenstersysteme im selben Fenster gegeneinander arbeiten.
-    assert "--device=dri" in manifest
+    # ``all`` deckt ``/dev/dri`` und ``/dev/hidraw*`` der 3D-Maus; ein engeres
+    # Recht für hidraw kennt Flatpak nicht, und mit ``dri`` allein war sie tot.
+    assert "--device=all" in manifest
+    assert "--device=dri" not in manifest, "dri ist in all enthalten"
     assert "--socket=x11" in manifest
     assert "--socket=wayland" not in manifest
     assert "--socket=fallback-x11" not in manifest

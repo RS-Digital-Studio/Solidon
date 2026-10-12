@@ -1003,6 +1003,9 @@ def test_the_linux_help_limits_access_to_the_detected_usb_device() -> None:
     assert "0666" not in text and "chmod" not in text
     assert "sudo tee" not in manual.spacemouse_access_help("linux")
     assert "Treibererweiterungen" in manual.spacemouse_access_help("darwin")
+    # Im Flatpak gibt es kein sudo: Die Regel gehört auf den Rechner.
+    assert "Flatpak" in manual.spacemouse_access_help("linux")
+    assert "Flatpak" not in manual.spacemouse_access_help("darwin")
     assert "udev" not in manual.spacemouse_access_help("win32")
     page = manual.find(manual.SPACEMOUSE_ACCESS)
     assert page is not None and "systemd-logind" in str(page.body)

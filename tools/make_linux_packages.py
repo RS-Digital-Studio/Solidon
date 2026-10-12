@@ -587,10 +587,15 @@ def flatpak_manifest() -> str:
       sucht, und erspart Qt den ersten Fehlversuch, denn
       ``XDG_SESSION_TYPE=wayland`` reist ebenfalls mit und lässt Qt 6 Wayland
       vor xcb probieren. Flathub macht es bei FreeCAD genauso.
-    * ``--device=dri`` — der Viewport rechnet über wgpu auf der Grafikkarte
-      (§18). Die Freigabe gibt ``/dev/dri`` frei; den Vulkan-Loader und
-      seinen Treiber bringt die Laufzeit mit (Mesa), nicht dieses Paket.
-      Bis zum 06.09.2026 stand hier OpenGL — das galt für den VTK-Viewport.
+    * ``--device=all`` — zwei Geräte: Der Viewport rechnet über wgpu auf der
+      Grafikkarte (§18, ``/dev/dri``; den Vulkan-Loader und seinen Treiber
+      bringt die Laufzeit mit, Mesa), und die 3D-Maus liest unter Linux
+      ``/dev/hidraw*`` (``spacemouse.hid_module_name``). Für hidraw hat
+      Flatpak kein engeres Recht — ``--device=input`` deckt nur
+      ``/dev/input`` —, und mit ``--device=dri`` allein blieb die Maus im
+      Flatpak tot. Zugreifen darf der Prozess trotzdem nur, was die udev-Regel
+      des Handbuchs dem Benutzer freigibt; einen Socket braucht es nicht,
+      Solidon liest das Gerät selbst und nicht über spacenavd.
     * ``--filesystem=home`` — Modelle liegen beim Nutzer, und ein Dateidialog,
       der nur in einen Sandkasten sehen darf, ist kein Dateidialog. Portale
       wären der feinere Weg; sie setzen voraus, dass jeder Öffnen- und
@@ -666,7 +671,7 @@ def flatpak_manifest() -> str:
             "--env=QT_QPA_PLATFORM=xcb",
             "--share=ipc",
             "--share=network",
-            "--device=dri",
+            "--device=all",
             "--filesystem=home",
             "--filesystem=/var/lib/flatpak/app:ro",
             "--filesystem=/var/lib/flatpak/exports/bin:ro",
