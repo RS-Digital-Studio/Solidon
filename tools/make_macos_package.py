@@ -173,6 +173,52 @@ def write_files(architecture: str, *, notarized: bool = False) -> list[Path]:
     return [DISTRIBUTION_FILE, conclusion_file]
 
 
+#: Wo Paketverwalter auf einem Mac Bibliotheken ablegen: Homebrew auf Intel
+#: und Apple Silicon, MacPorts. Was PyInstaller von dort einsammelt, stammt vom
+#: Runner, nicht aus einem Rad — Fassung und Lizenz hängen am Runner-Image.
+FOREIGN_PREFIXES: tuple[str, ...] = ("/usr/local/", "/opt/homebrew/", "/opt/local/")
+
+
+def _library_stem(name: str) -> str:
+    """``libfreetype.6.dylib`` → ``libfreetype``: der Name ohne Fassung und Endung."""
+    return name.replace("\\", "/").rsplit("/", 1)[-1].split(".", 1)[0]
+
+
+def trim_foreign_macos_binaries(
+    binaries: list[tuple[str, str, str]],
+) -> list[tuple[str, str, str]]:
+    """Nimmt Bibliotheken des Runners aus PyInstallers Binaries-Liste.
+
+    Ein Eintrag ist ``(zielname, quellpfad, typ)``. PyInstallers ctypes-Analyse
+    findet über ``ctypes.util.find_library`` auch, was ein Paketverwalter unter
+    ``/usr/local/lib`` abgelegt hat (so kam Homebrews ``libfreetype.dylib`` ins
+    Intel-Paket 0.6.0, obwohl freetype-py seine eigene mitbringt und zuerst
+    lädt). Bringt ein Rad dieselbe Bibliothek mit — gleicher Name ohne Fassung
+    —, fällt die Runner-Kopie weg; sonst hält der Bau an, denn eine solche
+    Datei hätte weder Besitzer noch belegte Fassung und wiche je Runner-Image
+    ab.
+    """
+    foreign = [entry for entry in binaries if str(entry[1]).startswith(FOREIGN_PREFIXES)]
+    if not foreign:
+        return list(binaries)
+    wheels = {
+        _library_stem(entry[0])
+        for entry in binaries
+        if entry not in foreign and "site-packages" in Path(str(entry[1])).parts
+    }
+    unowned = [entry for entry in foreign if _library_stem(entry[0]) not in wheels]
+    if unowned:
+        listed = "\n".join(f"  {target} ← {source}" for target, source, _kind in unowned)
+        raise ValueError(
+            "Der macOS-Bau sammelte Bibliotheken eines Paketverwalters des Runners "
+            f"ein, die kein Rad mitbringt:\n{listed}\n"
+            "Die Abhängigkeit über ein Rad beziehen oder in der .spec ausschließen."
+        )
+    for target, source, _kind in foreign:
+        print(f"Runner-Bibliothek ausgelassen, ein Rad bringt sie mit: {target} ← {source}")
+    return [entry for entry in binaries if entry not in foreign]
+
+
 def component_settings(analysed: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Die Komponentenliste aus ``pkgbuild --analyze``, nicht umziehbar gemacht.
 

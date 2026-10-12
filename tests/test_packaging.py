@@ -3567,6 +3567,61 @@ def test_the_macos_package_is_built_from_a_component_list_that_does_not_relocate
     assert "check_package(target)" in source, "das gebaute Paket wird nicht nachgelesen"
 
 
+#: Was PyInstaller im Intel-Paketjob von 0.6.0 einsammelte, gekürzt: die
+#: Homebrew-Kopie über die ctypes-Analyse von freetype-py, daneben die Räder.
+_SITE = "/Users/runner/hostedtoolcache/Python/3.14.8/x64/lib/python3.14/site-packages"
+_MAC_BINARIES = [
+    ("libfreetype.dylib", "/usr/local/lib/libfreetype.dylib", "BINARY"),
+    ("freetype/libfreetype.dylib", f"{_SITE}/freetype/libfreetype.dylib", "BINARY"),
+    ("PIL/.dylibs/libfreetype.6.dylib", f"{_SITE}/PIL/.dylibs/libfreetype.6.dylib", "BINARY"),
+    ("PIL/.dylibs/libpng16.16.dylib", f"{_SITE}/PIL/.dylibs/libpng16.16.dylib", "BINARY"),
+    ("libpng16.16.dylib", "PIL/.dylibs/libpng16.16.dylib", "SYMLINK"),
+    ("Python", "/Library/Frameworks/Python.framework/Versions/3.14/Python", "BINARY"),
+]
+
+
+def test_the_macos_bundle_takes_no_library_from_the_runners_package_manager() -> None:
+    """Eine Bibliothek aus Homebrew oder MacPorts reist nicht mit.
+
+    Bringt ein Rad dieselbe mit, fällt die Runner-Kopie weg (freetype-py lädt
+    zuerst seine eigene); bringt keines sie mit, hält der Bau an, statt eine
+    Datei ohne Besitzer und belegte Fassung auszuliefern.
+    """
+    from tools import make_macos_package as tool
+
+    kept = tool.trim_foreign_macos_binaries(_MAC_BINARIES)
+    assert kept == _MAC_BINARIES[1:], "nur die Homebrew-Kopie fällt weg"
+
+    for prefix in ("/opt/homebrew/lib", "/opt/local/lib", "/usr/local/Cellar/libpng/1.6/lib"):
+        dependency = ("libpng16.16.dylib", f"{prefix}/libpng16.16.dylib", "BINARY")
+        assert dependency not in tool.trim_foreign_macos_binaries([*_MAC_BINARIES, dependency])
+
+    alone = ("libgmp.10.dylib", "/opt/homebrew/lib/libgmp.10.dylib", "BINARY")
+    with pytest.raises(ValueError, match=re.escape("libgmp.10.dylib")):
+        tool.trim_foreign_macos_binaries([*_MAC_BINARIES, alone])
+    outside = [entry for entry in _MAC_BINARIES if not entry[0].startswith("freetype/")]
+    outside = [entry for entry in outside if not entry[0].startswith("PIL/.dylibs/libfreetype")]
+    with pytest.raises(ValueError, match=re.escape("libfreetype.dylib")):
+        tool.trim_foreign_macos_binaries(outside)
+    # Nur ein Rad zählt als Besitzer, nicht irgendeine Datei gleichen Namens.
+    framework = "/Library/Frameworks/Python.framework/Versions/3.14/lib/libssl.3.dylib"
+    named = [
+        *_MAC_BINARIES,
+        ("libssl.3.dylib", framework, "BINARY"),
+        ("libssl.3.dylib", "/usr/local/opt/openssl@3/lib/libssl.3.dylib", "BINARY"),
+    ]
+    with pytest.raises(ValueError, match=re.escape("openssl@3")):
+        tool.trim_foreign_macos_binaries(named)
+
+    spec = SPEC.read_text(encoding="utf-8")
+    darwin = spec.split('if sys.platform == "darwin":\n    try:', 1)
+    assert len(darwin) == 2, "die Spec filtert den macOS-Bau nicht"
+    assert "make_macos_package.trim_foreign_macos_binaries(analysis.binaries)" in darwin[1][:200]
+    assert spec.index("trim_foreign_macos_binaries") < spec.index("COLLECT("), (
+        "gefiltert wird vor dem Zusammentragen"
+    )
+
+
 def test_the_macos_release_check_installs_next_to_a_copy_and_lands_in_applications() -> None:
     """Die Releaseakte liest die ``PackageInfo`` des signierten Pakets und prüft das Verhalten.
 

@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT, PROJECT_SUFFIX  # noqa: E402
 from app.branding import MACOS_MINIMUM, PART_FILE_MIME_TYPE, PART_FILE_SUFFIX  # noqa: E402
 from tools import asset_rights, build_slice_core, make_linux_packages, make_sbom  # noqa: E402
+from tools import make_macos_package  # noqa: E402
 
 # Bilder, Symbole und Schriften sind Teil des Kundenpakets und brauchen vor
 # PyInstaller dieselbe Freigabe auf allen drei Zielsystemen. Website-only-
@@ -330,6 +331,15 @@ if sys.platform == "win32":
 # Releaseakte nicht durch.
 if sys.platform.startswith("linux"):
     analysis.binaries = make_linux_packages.trim_linux_binaries(analysis.binaries)
+
+# macOS: Keine Bibliothek aus dem Homebrew oder MacPorts des Runners. Bringt
+# ein Rad dieselbe mit, fällt die Runner-Kopie weg, sonst hält der Bau an —
+# Grund und Regel an ``make_macos_package.trim_foreign_macos_binaries``.
+if sys.platform == "darwin":
+    try:
+        analysis.binaries = make_macos_package.trim_foreign_macos_binaries(analysis.binaries)
+    except ValueError as problem:
+        raise SystemExit(str(problem)) from problem
 
 pyz = PYZ(analysis.pure)
 
