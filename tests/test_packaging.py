@@ -2619,6 +2619,41 @@ def test_the_intel_mac_tries_a_start_with_a_window_after_the_icon_service_is_gon
     assert any("GITHUB_STEP_SUMMARY" in line and "^Ergebnis:" in line for line in code)
 
 
+@pytest.mark.parametrize("started", [0, 1])
+def test_the_window_trial_always_writes_its_outcome_and_ends_with_the_start(
+    tmp_path: Path, started: int
+) -> None:
+    """Auch ein roter Fensterstart schreibt „Ergebnis:“ in die Zusammenfassung (Review 1, G1).
+
+    Der Schritt läuft wie in der CI mit ``set -euo pipefail``; ``launchctl`` und
+    der Starttest sind Attrappen. Vorher endete ein roter Start vor dem
+    Schreiben der Zeile — die Erprobung sagte dann nicht, wie weit sie kam.
+    """
+    shell = _workflow_shell()
+    if shell is None:
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
+    job = job_block(WORKFLOW.read_text(encoding="utf-8"), "macos-release-check")
+    step = step_block(job, "Installiertes Paket mit Fenster starten (Intel-Mac, Erprobung)")
+    script = textwrap.dedent(step.split("        run: |\n", 1)[1])
+    stand_ins = (
+        "launchctl() { :; }\n"
+        f"python() {{ echo 'Ergebnis: Plattform cocoa'; return {started}; }}\n"
+    )
+    summary = tmp_path / "summary.md"
+    done = subprocess.run(
+        [shell, "-c", stand_ins + script],
+        cwd=tmp_path,
+        env={**os.environ, "GITHUB_STEP_SUMMARY": str(summary), "UID": "501"},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
+    assert done.returncode == started, done.stderr
+    assert summary.read_text(encoding="utf-8").startswith("Ergebnis: Plattform cocoa")
+
+
 def test_the_start_check_says_in_one_line_how_far_the_start_came() -> None:
     """Die Erprobung mit Fenster auf dem Intel-Mac darf rot werden; ihre Zeile sagt, warum."""
     from tools.check_frozen_start import outcome
