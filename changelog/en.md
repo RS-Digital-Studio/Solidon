@@ -30,6 +30,10 @@ it into `website/version.json`.
 - Even when nothing overlaps, *Check overlaps* now gives an answer.
 - If a function lacks a second body in the scene, the reason names *Duplicate object* as the way.
 - The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
+- After an action in the *Report*, the report stays in front, and Ctrl+Z takes it back straight away. Until now the *Selection* tab jumped to the front.
+- Ctrl+Z and Ctrl+Y also work when the cursor sits in an empty field, such as the search field. If you typed there, your typing is undone first.
+- Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
+- Messages in the status bar no longer put a colon after a complete sentence.
 
 ### Editing and sketching
 

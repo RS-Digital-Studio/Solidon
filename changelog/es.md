@@ -31,6 +31,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Aunque nada se solape, *Comprobar solapamientos* da ahora una respuesta.
 - Si a una función le falta un segundo cuerpo en la escena, el motivo indica *Duplicar objeto* como camino.
 - La lista de atajos de teclado nombra *Modelar*, *Esqueleto* y *Dibujar* una sola vez.
+- Tras una acción en el *Informe de comprobación*, el informe sigue delante y Ctrl+Z la deshace al momento. Hasta ahora saltaba al frente la pestaña *Selección*.
+- Ctrl+Z y Ctrl+Y funcionan también con el cursor en un campo vacío, por ejemplo en el campo de búsqueda. Si escribió algo allí, primero se deshace lo escrito.
+- Sin activación, las acciones que cambian algo en el *Informe de comprobación*, *Selección*, los menús contextuales y el filamento salen en gris con el motivo. Antes el rechazo llegaba tras el clic.
+- Los mensajes de la barra de estado ya no ponen dos puntos detrás de una frase completa.
 
 ### Editar y dibujar
 

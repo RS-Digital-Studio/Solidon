@@ -287,6 +287,7 @@ from app.ui.ai_disclosure import (
 )
 from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
 from app.ui.catalog import PartCatalog
+from app.ui.change_lock import change_refusal
 from app.ui.chat import ChatPanel
 from app.ui.dialogs import (
     AboutDialog,
@@ -6180,8 +6181,10 @@ class MainWindow(QMainWindow):
         gesturing = drawing or self.sculpting() or self.setting_armature()
         # §2 C: nach Ablauf des Testlaufs graut die schreibende Seite aus —
         # vor dem Klick, mit Grund im Hinweistext. Die Hürde selbst liegt im
-        # Kern; das hier ist die Freundlichkeit davor.
-        locked = not activation.state().unlocked
+        # Kern; das hier ist die Freundlichkeit davor — aus der einen Quelle,
+        # die auch Bericht, Merkmalfenster und Kontextmenüs fragen (FD-5).
+        refusal = change_refusal()
+        locked = bool(refusal)
         # **Und solange die Kette hält, kommt kein neuer Schritt dazu** (§15.3):
         # Er stünde hinter dem angehaltenen und würde nie gerechnet. Der Grund
         # steht an jedem Eintrag, und die Handlungen des Halts stehen im
@@ -6202,7 +6205,7 @@ class MainWindow(QMainWindow):
         # hätte abraten können (Regel 19). Zurückgenommen wird sie von
         # selbst: Nach einem Strg+Z rechnet die Kette wieder, `_update_actions`
         # läuft mit dem neuen Ergebnis, und der Grund ist leer.
-        self.feature_panel.set_locked(halted or "")
+        self.feature_panel.set_locked(refusal or halted or "")
 
         # **Gegenstücke brauchen zwei markierte Stellen an zwei Teilen** (E1).
         # Der Grund steht am Eintrag, statt hinterher als Dialog zu kommen: Ein
@@ -6634,8 +6637,12 @@ class MainWindow(QMainWindow):
 
         Die Reihenfolge ist die, in der ein Nutzer sie beheben würde: erst
         den Halt lösen, dann etwas in die Szene, dann etwas auswählen, dann
-        die richtige Bauart.
+        die richtige Bauart. Davor steht die Freischaltung: Ohne sie löst auch
+        der Halt nichts (FD-5, ``change_lock``).
         """
+        refusal = change_refusal()
+        if refusal:
+            return refusal
         halted = self._halt_reason()
         if halted is not None:
             return halted
@@ -7327,7 +7334,7 @@ class MainWindow(QMainWindow):
         if locked:
             if stored is None:
                 action.setProperty("tip_before_lock", action.statusTip())
-            explanation = licence_lock_line()
+            explanation = change_refusal() or licence_lock_line()
             reason = self._with_name(action, explanation)
             action.setStatusTip(reason)
             action.setToolTip(reason)
@@ -16166,14 +16173,14 @@ class MainWindow(QMainWindow):
         # Schreib- und Gestensperre einhalten. Das betrifft insbesondere
         # Bausteine in der Suche und Varianten im Auswahlpanel; bislang
         # prüfte der Ersatzweg darunter nur Körperzahl und Bauart.
-        locked = not activation.state().unlocked if locked is None else locked
+        locked = bool(change_refusal()) if locked is None else locked
         gesturing = (
             self._sketch_panel is not None or self.sculpting() or self.setting_armature()
             if gesturing is None
             else gesturing
         )
         if locked:
-            return False, licence_lock_line()
+            return False, change_refusal() or licence_lock_line()
         if gesturing:
             return False, tr("Solange gezeichnet oder geformt wird, gilt die Taste dem Werkzeug.")
 
@@ -17051,7 +17058,7 @@ class MainWindow(QMainWindow):
             # Filter der Anwendung und käme davor. Mit dem Fokus im Baum oder
             # im Reiter kommt die Taste dort nie an; dann sagt sie den Grund.
             return False
-        if self._halt_reason() is None and activation.state().unlocked:
+        if self._halt_reason() is None and not change_refusal():
             return False
         # Der Titel des Kontextmenüs: An einem Bausteinmerkmal ist Entf
         # *Baustein entfernen*, nicht der Zwilling der Operation.
@@ -19422,12 +19429,15 @@ class MainWindow(QMainWindow):
             return None
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
+        refusal = change_refusal()
         for action in edge_actions(" ".join(keys)):
             if action.op is None:
                 continue
             entry = menu.addAction(str(action.title))
             entry.setObjectName(guides.action_key(action))
-            entry.setToolTip(str(REGISTRY.get(action.op).doc))
+            # Gesperrt grau mit Grund, wie das Merkmalfenster daneben (FD-5).
+            entry.setEnabled(not refusal)
+            entry.setToolTip(refusal or str(REGISTRY.get(action.op).doc))
             # **Der Dialog und nicht die Ausführung.** Das Panel daneben hat
             # das Feld für den Radius schon im Bild; ein Menüeintrag hat keins,
             # und eine Verrundung mit stillschweigender Vorgabe wäre ein
@@ -20268,8 +20278,9 @@ class MainWindow(QMainWindow):
 
     def _manual_fit_reason(self) -> str:
         """Der sichtbare und erneut geprüfte Schreibzustand der Passungszeile."""
-        if not activation.state().unlocked:
-            return licence_lock_line()
+        refusal = change_refusal()
+        if refusal:
+            return refusal
         if self._sketch_panel is not None or self.sculpting() or self.setting_armature():
             return tr("Zuerst das aktive Werkzeug beenden.")
         result = self.session.last_result
@@ -22488,7 +22499,7 @@ class MainWindow(QMainWindow):
                 profiles.printer(printer or document.printer)
                 profiles.material(material or document.material)
             except AppError as error:
-                return f"{error.title} {error.detail or ''}".strip()
+                return str(error)  # Titel und Detail als Satzfolge (``errors.title_and_detail``)
             changed = self.session.change_scene_profile(
                 printer or document.printer,
                 material or document.material,
@@ -25592,7 +25603,11 @@ class MainWindow(QMainWindow):
         # es auf den Bauraum ein statt auf das Teil.
         self._seen_objects = bool(result.scene.objects)
         self._sketch_body_missing(result)
-        self.object_tree.show_scene(result, self.session.project.document)
+        # **Die wiederhergestellte Auswahl ist keine neue** (FD-4): Sie holte
+        # nach einer Befundhandlung den Reiter *Auswahl* über den Bericht, und
+        # der Fokus fiel dort in ein Feld.
+        with self.feature_dock.held():
+            self.object_tree.show_scene(result, self.session.project.document)
         self._show_project_filaments(result, self.effective_print_settings())
         plates = [entry.plate for entry in picture.scene.objects.values()]
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der

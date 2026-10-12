@@ -31,6 +31,10 @@ dans `website/version.json`.
 - Même quand rien ne se recouvre, *Vérifier les recouvrements* donne désormais une réponse.
 - S'il manque à une fonction un second corps dans la scène, la raison indique *Dupliquer l'objet* comme solution.
 - La liste des raccourcis clavier ne nomme plus qu'une fois *Sculpter*, *Squelette* et *Dessiner*.
+- Après une action dans le *Rapport de contrôle*, le rapport reste au premier plan, et Ctrl+Z l'annule aussitôt. Jusqu'ici, l'onglet *Sélection* passait devant.
+- Ctrl+Z et Ctrl+Y fonctionnent aussi quand le curseur se trouve dans un champ vide, par exemple le champ de recherche. Si vous y avez tapé du texte, c'est d'abord la saisie qui est annulée.
+- Sans activation, les actions qui modifient le modèle sont grisées avec leur raison dans le *Rapport de contrôle*, *Sélection*, les menus contextuels et le filament. Le refus venait après le clic.
+- Les messages de la barre d'état ne mettent plus de deux-points après une phrase complète.
 
 ### Modifier et esquisser
 

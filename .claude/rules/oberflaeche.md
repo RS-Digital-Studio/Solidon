@@ -302,8 +302,8 @@ einem Drehfeld gemessen).
 ## PySide legt seine Qt-Typen an, bevor das erste Fenster entsteht
 
 `PYSIDE6_OPTION_LAZY=0` muss stehen, bevor `PySide6` zum ersten Mal lädt —
-sonst hängt die Entstehung der Typen an der Importreihenfolge, und darin lag
-ein Riss beim Abbau (`0xc0000374` im `gc.collect`). `app/ui/__init__.py` setzt
+sonst hängt die Entstehung der Typen an der Importreihenfolge (Riss beim
+Abbau, `regel-oberflaeche.md`). `app/ui/__init__.py` setzt
 sie, `app.py` lädt das Paket als **ersten** Import, `tests/conftest.py` vor
 jeder Testdatei. **Bei einem Riss dieser Gestalt zuerst die Importe
 verdächtigen, dann den Code** — die Reichweite ist der Prozess.

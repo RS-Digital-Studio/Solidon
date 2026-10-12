@@ -55,6 +55,10 @@ Nutzen da und sonst nichts.
 - Auch wenn sich nichts überschneidet, gibt *Überschneidungen prüfen* jetzt eine Antwort.
 - Fehlt einer Funktion ein zweiter Körper in der Szene, nennt der Grund *Objekt duplizieren* als Weg.
 - Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
+- Nach einer Handlung im Prüfbericht bleibt der Bericht vorn, und Strg+Z nimmt sie gleich zurück. Bisher sprang der Reiter *Auswahl* nach vorn.
+- Strg+Z und Strg+Y wirken auch, wenn der Cursor in einem leeren Feld steht, etwa im Suchfeld. Wer dort getippt hat, nimmt zuerst sein Tippen zurück.
+- Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
+- Meldungen in der Statuszeile setzen keinen Doppelpunkt mehr hinter einen ganzen Satz.
 
 ### Bearbeiten und Zeichnen
 

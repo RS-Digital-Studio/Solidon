@@ -61,6 +61,7 @@ from app.core.units import (
     to_mm,
 )
 from app.i18n import source_text, tr
+from app.ui.change_lock import change_refusal
 from app.ui.dialogs import ErrorNotice, align_to_the_front
 from app.ui.labels import (
     BoundedSpin,
@@ -2643,7 +2644,10 @@ class OperationDialog(QDialog):
         # Knopf, statt drei Schritte später im Prüfbericht zu enden
         # (:meth:`block_apply`, gerufen aus ``MainWindow._preview_explained``).
         blocked = self._attachment_problem or self._blocked_reason
-        reason = (
+        # **Ansehen ja, Übernehmen nein** (FD-5): Ohne Freischaltung geht ein
+        # Schritt aus Verlauf oder Baum zum Lesen auf; der Knopf trägt den Grund.
+        refusal = change_refusal()
+        reason = refusal or (
             tr("Datei wird gelesen …")
             if source_pending
             else (
@@ -2678,6 +2682,7 @@ class OperationDialog(QDialog):
             or no_texture_face
             or no_place
             or blocked is not None
+            or bool(refusal)
         )
         button.setEnabled(not pending and not incomplete)
         button.setToolTip(reason)
@@ -2759,7 +2764,7 @@ class OperationDialog(QDialog):
 
     def can_accept(self) -> bool:
         """Alle Eingaben und die Freigabe derselben Vorschau erneut prüfen."""
-        if self._attachment_problem is not None:
+        if self._attachment_problem is not None or change_refusal():
             return False
         for editor in (*self.findChildren(QSpinBox), *self.findChildren(QDoubleSpinBox)):
             editor.interpretText()

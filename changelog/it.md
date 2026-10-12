@@ -30,6 +30,10 @@ scrive in `website/version.json`.
 - Anche quando nulla si sovrappone, *Controlla sovrapposizioni* ora dà una risposta.
 - Se a una funzione manca un secondo corpo nella scena, il motivo indica *Duplica oggetto* come via.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
+- Dopo un'azione nel *Rapporto di verifica* il rapporto resta in primo piano e Ctrl+Z la annulla subito. Finora passava davanti la scheda *Selezione*.
+- Ctrl+Z e Ctrl+Y funzionano anche con il cursore in un campo vuoto, per esempio nel campo di ricerca. Se lì ha scritto qualcosa, viene annullato prima il testo digitato.
+- Senza attivazione, le azioni che modificano qualcosa in *Rapporto di verifica*, *Selezione*, menu contestuali e filamento sono in grigio con il motivo. Prima il rifiuto arrivava dopo il clic.
+- I messaggi nella barra di stato non mettono più i due punti dopo una frase completa.
 
 ### Modificare e disegnare
 
