@@ -326,7 +326,7 @@ def boolean(
             findings=[*united, *_findings_for(stage, kind, meshes, result)],
         )
 
-    if emptied and "voxel" not in attempted:
+    if emptied and cut_short:
         # **„Nichts übrig" ist keine Aussage über die Maße, solange die Kette
         # noch Stufen hätte.** Genau das stand hier — „Kein Rückfall hilft
         # gegen Maße" —, und es ist widerlegt: Am Mast des Piratenschiffs
@@ -339,10 +339,11 @@ def boolean(
         # Handlung am selben Körper einmal ein Ergebnis und einmal „Prüfen Sie
         # Maß und Lage" — und Maß und Lage waren in Ordnung.
         #
-        # Der Rat gehört deshalb dem, was noch offen ist. Titel und
-        # Vorschläge setzt hier **niemand**: Die Ausnahme wählt sie selbst
-        # danach, ob die Voxelstufe dran war (``errors.BooleanFailedError``),
-        # und eine zweite Entscheidung derselben Frage liefe auseinander.
+        # Der Satz gehört deshalb dem, was noch offen ist — aber nur, wo die
+        # Güte die Kette gekürzt hat (``cut_short``): Dann rechnet die
+        # Auswertung den Schritt selbst zu Ende (``evaluate._FullChain``). Hat
+        # der Aufrufer seine Stufen festgelegt, gibt es keine vollständige, und
+        # „nichts übrig" ist sein Ergebnis (FD-6).
         raise BooleanFailedError(
             detail=_(
                 "In der schnellen Vorschau blieb von dem Körper nichts übrig. "
@@ -378,10 +379,7 @@ def boolean(
             transient=transient,
         )
     raise BooleanFailedError(
-        detail=_(
-            "Häufig ist das Modell an einer Stelle offen — dann hilft Reparieren. Gröber "
-            "gerechnet gelingt es meist, mit gerundeten Maßen."
-        ),
+        detail=_("Häufig ist das Modell an einer Stelle offen — dann hilft Reparieren."),
         attempted=tuple(attempted),
         seed=seed,
         cut_short=cut_short,

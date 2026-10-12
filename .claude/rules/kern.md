@@ -309,10 +309,10 @@ gekürzter Kette (`cut_short`) an einem Schritt, der nach der Güte fragte,
 rechnet mit `full_chain_when_stuck` im selben Lauf voll (`_FullChain`) —
 gesetzt nur in `Session.run_evaluation`, `_RevisionWorker` und
 `AgentSession`. Eine Vorschau nimmt ein vorliegendes Urteil aus dem Cache,
-hält sonst mit `short_chain_only`, *Übernehmen* bleibt frei.
-`ResultCache.refuse` merkt nur ein Urteil mit gelaufener Voxelstufe und ohne
-`transient`; auf die Platte geht nur ein vollständiger Durchlauf (§15.6). Ein
-Halt nimmt `reads_quality` mit, sonst gälte ein Entwurfshalt als fein.
+hält sonst mit `short_chain_only`, *Übernehmen* bleibt frei. Ein Halt nimmt
+`reads_quality` mit, sonst gälte ein Entwurfshalt als fein. **Kürzt die Güte,
+kürzt `boolean`** (`cut_short`), nie `stages=DRAFT_CHAIN` je nach Güte: Eine
+festgelegte Stufenfolge rechnet auch fein nicht anders (FD-6).
 
 **Ein Befund über mehrere Körper nennt sie alle** (`Finding.object_ids`;
 `prepare.named_for` setzt sie aus den Indizes, *Fügeweg prüfen* selbst): Die

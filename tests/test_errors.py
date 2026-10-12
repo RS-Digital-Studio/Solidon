@@ -266,24 +266,23 @@ def test_the_boolean_failure_says_which_stages_really_ran() -> None:
     versucht, und daneben stand als einziger Rat *Voxelstufe erzwingen*: also
     genau die Stufe, die noch offen war. Zwei Sätze, die sich widersprechen.
 
-    Jetzt sagt der Titel, was gilt — und wo die Voxelstufe wirklich dran war,
-    fällt der Rat weg, statt eine Wiederholung anzubieten.
+    Jetzt sagt der Titel, was gilt. *Gröber rechnen* bietet keine Absage mehr
+    an (FD-6): Die gekürzte Kette rechnet die Auswertung selbst zu Ende, und
+    eine volle hat die Voxelstufe schon hinter sich.
 
     Beide Titel nennen seit dem 29.08.2026 die Handlung statt des Verfahrens:
     „boolesch" steht in keinem Menü und in keinem Glossareintrag, und „im
     Entwurf" verwies auf eine Qualitätsstufe, die in der Oberfläche keinen
     Namen trägt — im Skizzenmodus zeichnet der Kunde einen Entwurf.
     """
-    vorschau = BooleanFailedError(attempted=("direct", "welded"))
+    vorschau = BooleanFailedError(attempted=("direct", "welded"), cut_short=True)
     assert "schnellen Rechnung" in str(vorschau.title)
-    assert errors.USE_VOXEL_STAGE in vorschau.suggestions, "hier ist die Stufe noch offen"
 
     voll = BooleanFailedError(attempted=("direct", "welded", "jittered", "voxel"))
     assert "keinem Weg" in str(voll.title)
-    assert errors.USE_VOXEL_STAGE not in voll.suggestions, (
-        "die Voxelstufe war dran — sie zu erzwingen wäre eine Wiederholung"
-    )
-    assert voll.suggestions, "without a suggestion the error ends in a dead end"
+    for error in (vorschau, voll):
+        assert "use_voxel_stage" not in {action.id for action in error.suggestions}
+        assert error.suggestions, "without a suggestion the error ends in a dead end"
 
 
 def test_cancelling_is_not_an_error() -> None:

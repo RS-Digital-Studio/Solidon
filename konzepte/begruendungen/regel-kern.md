@@ -515,8 +515,7 @@ Die Regel in voller Länge, mit dem Warum:
 **Wo die kurze Kette nur ausgeht, rechnen Fenster, Umbau und Agent weiter;
 eine Vorschau nie** (RM-534, §17.2): Hält ein Schritt mit einem
 `BooleanFailedError`, dessen Kette die Güte gekürzt hat (`cut_short`, nicht
-eine verlangte Stufenfolge) und der *Voxelstufe erzwingen* anbietet, und hat
-er nach der Güte gefragt, rechnet `evaluate` ihn mit `full_chain_when_stuck`
+eine verlangte Stufenfolge), und hat er nach der Güte gefragt, rechnet `evaluate` ihn mit `full_chain_when_stuck`
 im selben Lauf mit der vollen Kette (`_FullChain`). Gesetzt wird es nur in
 `Session.run_evaluation`, `_RevisionWorker` und `AgentSession` — die
 Voxelstufe kostet an einem überdeckenden Werkzeug Sekunden, in einer Vorschau
@@ -533,3 +532,12 @@ Durchlauf (§15.6). Der Agent rechnet mit dem Sitzungscache
 (`AgentSession.cache`). Ein Halt nimmt mit, ob der Schritt nach der Güte
 fragte (`reads_quality`); sonst gilt ein Entwurfshalt als fein, und Export wie
 Slicer rechnen nie nach.
+
+**Darum gibt es keinen Knopf *Gröber rechnen*** (FD-6). Er rechnete einmal fein
+(`Session.recompute_fully`). An einer gekürzten Kette tut das die Auswertung
+schon selbst, an einer vollen war die Voxelstufe schon dran, und wo ein Aufruf
+seine Stufen festlegt (Musterentfernung, Textur, Hohlraummessung), rechnet
+auch die feine Güte nicht anders — der Kunde klickte, und nichts wurde anders.
+Der Behälterbau setzte `stages=DRAFT_CHAIN` je nach Güte; damit war seine Absage
+nicht `cut_short`, und die volle Kette lief nie von selbst. Er lässt jetzt
+`boolean` kürzen.

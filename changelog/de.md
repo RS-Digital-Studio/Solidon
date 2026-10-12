@@ -55,6 +55,7 @@ Nutzen da und sonst nichts.
 - Auch wenn sich nichts überschneidet, gibt *Überschneidungen prüfen* jetzt eine Antwort.
 - Fehlt einer Funktion ein zweiter Körper in der Szene, nennt der Grund *Objekt duplizieren* als Weg.
 - Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
+- Der Knopf *Gröber rechnen* entfällt, denn Solidon rechnet von selbst vollständig weiter. In Version 0.6.0 stand er auch dort, wo er nichts änderte.
 
 ### Bearbeiten und Zeichnen
 

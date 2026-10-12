@@ -187,7 +187,6 @@
     "Gilt nur, solange das Teil keine eingefärbte Spule hat — dann steht hier, womit der Slicer rechnet. Sobald Sie im Filamentwähler eine Farbe setzen oder über „Filament auf eine Fläche“ arbeiten, gilt die Spule.",
     "Grundlage ist das Herstellerprofil, Lücken füllen Solidons Tabellen.\n\nPrüfen Sie die wirksamen Werte vor dem Druck, besonders bei neuem Filament oder ungeprüfter Kombination aus Drucker und Material.",
     "Hier hält die Kette an — der Grund steht im Prüfbericht.",
-    "Häufig ist das Modell an einer Stelle offen — dann hilft Reparieren. Gröber gerechnet gelingt es meist, mit gerundeten Maßen.",
     "Höhenzuwachs je Umdrehung, null nimmt die Regelsteigung des Durchmessers. Eine feinere Steigung schneidet nur mit kleinerem Nenndurchmesser weniger tief in die Wand.",
     "Innendurchmesser des Schlauchs. So dick ist der Schaft, die Widerhaken stehen darüber hinaus.",
     "Jedes Teil trägt seinen Wert eingelassen auf der Oberseite — nach dem Druck ist das die einzige Stelle, an der er noch steht. Wo kein Platz dafür ist, sagt es der Bericht.",

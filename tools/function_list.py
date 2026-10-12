@@ -673,19 +673,11 @@ ERROR_DIALOG_ACTIONS: Final[dict[str, str]] = {
     "suppress_along": "D11",
 }
 
-#: Befundhandlungen ohne Startszene, je mit dem Grund. Jede andere beginnt in einer
-#: Szene, deren Befund sie trägt (``promises.actions``); der Test hält beide Mengen
-#: gegeneinander. Hier steht nur, was keine Eingabe erreicht — ein Fund der Art
-#: Aufräumen, über dessen Entfernen der Koordinator entscheidet.
-FINDING_ACTIONS_WITHOUT_SCENE: Final[dict[str, str]] = {
-    "use_voxel_stage": "Im Fenster nie an einem Befund: Hält die kurze Kette an, rechnet "
-    "dieselbe Auswertung den Schritt mit der vollen Kette samt Voxelstufe nach "
-    "(scene.evaluate._FullChain), und deren Absage trägt den Vorschlag nicht mehr "
-    "(errors.BooleanFailedError). Übrig bleiben Boolesche mit ausdrücklich nur der "
-    "direkten Stufe (Musterentfernung, Textur), die nur bei einem Kernversagen an einer "
-    "selbst gebauten Form absagen — und dort hülfe der Knopf nicht, weil der Aufruf die "
-    "Stufen festlegt.",
-}
+#: Befundhandlungen ohne Startszene, je mit dem Grund — leer, und der Test hält es so:
+#: Jede Befundhandlung beginnt in einer Szene, deren Befund sie trägt
+#: (``promises.actions``). Hierher käme nur eine Handlung, die keine Eingabe erreicht,
+#: bis über ihr Entfernen entschieden ist.
+FINDING_ACTIONS_WITHOUT_SCENE: Final[dict[str, str]] = {}
 
 
 def kernel_action_ids(root: Path = KERNEL) -> frozenset[str]:

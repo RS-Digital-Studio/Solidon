@@ -31,6 +31,7 @@ dans `website/version.json`.
 - Même quand rien ne se recouvre, *Vérifier les recouvrements* donne désormais une réponse.
 - S'il manque à une fonction un second corps dans la scène, la raison indique *Dupliquer l'objet* comme solution.
 - La liste des raccourcis clavier ne nomme plus qu'une fois *Sculpter*, *Squelette* et *Dessiner*.
+- Le bouton *Calculer plus grossièrement* disparaît : Solidon poursuit seul avec le calcul complet. Dans la version 0.6.0, il apparaissait aussi là où il ne changeait rien.
 
 ### Modifier et esquisser
 

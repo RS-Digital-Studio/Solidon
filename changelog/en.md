@@ -30,6 +30,7 @@ it into `website/version.json`.
 - Even when nothing overlaps, *Check overlaps* now gives an answer.
 - If a function lacks a second body in the scene, the reason names *Duplicate object* as the way.
 - The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
+- The *Compute more coarsely* button is gone, as Solidon carries on with the full calculation by itself. In version 0.6.0 it also appeared where it changed nothing.
 
 ### Editing and sketching
 
