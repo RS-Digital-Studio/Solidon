@@ -278,7 +278,7 @@ from app.core.types import (
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
 from app.i18n import TranslatableText, _, format_decimal, tr
-from app.ui import app_events, first_run
+from app.ui import app_events, change_lock, first_run
 from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
     DisclosureResult,
@@ -3374,6 +3374,8 @@ class MainWindow(QMainWindow):
 
         Gefüllt von ``_menu_commands``, gelesen von ``_extra_availability`` —
         die Suche graut damit aus, was das Menü ausgraut."""
+        self._lock_shown: str | None = None
+        """Mit welchem Sperrgrund Griffe und Maßgruppe zuletzt gestellt wurden (FD-28)."""
         self._display_actions: list[QAction] = []
         """Die Einträge unter *Ansicht → Darstellung*.
 
@@ -3474,7 +3476,7 @@ class MainWindow(QMainWindow):
             self.tools.set_shortcut(key, f"Alt+{index}")
             self._window_shortcut(
                 QKeySequence(f"Alt+{index}"),
-                weak_slot(self, lambda view, name: view.tools.toggle(name), key),
+                weak_slot(self, lambda view, name: view.tools.press(name), key),
                 self._tool_command_title(key),
             )
 
@@ -3816,6 +3818,7 @@ class MainWindow(QMainWindow):
             (window := tools_window_ref()) is not None
             and (key != "split" or window._quiet_command_allowed())
         )
+        self.tools.refused.connect(self.announce)
         self.tools.add(
             "section",
             tr("Schnitt"),
@@ -6185,6 +6188,10 @@ class MainWindow(QMainWindow):
         # die auch Bericht, Merkmalfenster und Kontextmenüs fragen (FD-5).
         refusal = change_refusal()
         locked = bool(refusal)
+        # Nach dem Freischalten gibt frei, was nur die Sperre grau hielt; die
+        # eigenen Bedingungen darunter setzen es danach neu (FD-26).
+        for action in change_lock.reopen_commands(self):
+            self._lock_hint(action, False)
         # **Und solange die Kette hält, kommt kein neuer Schritt dazu** (§15.3):
         # Er stünde hinter dem angehaltenen und würde nie gerechnet. Der Grund
         # steht an jedem Eintrag, und die Handlungen des Halts stehen im
@@ -6267,6 +6274,8 @@ class MainWindow(QMainWindow):
         # weil das jeden Knopf wieder freigibt.
         if objects > 0 and not gesturing:
             self.tools.set_tool_usable("explode", objects > 1, str(_NEEDS_TWO_BODIES))
+        # *Bewegen* und *Teilen* legen Schritte an: gesperrt grau mit Grund (FD-26).
+        change_lock.close_tools(self.tools)
 
         # Rückgängig und Wiederholen bleiben nach Ablauf offen (§2 C): wer
         # nichts mehr ändern kann, darf trotzdem zurück und wieder vor.
@@ -6469,6 +6478,19 @@ class MainWindow(QMainWindow):
         # Fenster, 18.09.2026). Mit gewähltem Körper bleibt er — dort trägt die
         # Karte Handlungen, und er sagt, wie man an die Maße kommt.
         self.feature_panel.say_nothing_is_chosen(bool(selected_ids or chosen_features))
+        # **Jeder Fensterbefehl, der ändert, fragt dieselbe Quelle** (FD-26):
+        # *Parameter anlegen …* stand ohne Freischaltung offen, weil keine
+        # Zeile hier ihn kannte. Grau wird, was ``change_lock`` nicht als
+        # lesend führt; dazu die Parameterleiste.
+        for action in change_lock.close_commands(self):
+            self._lock_hint(action, True)
+        change_lock.hold_inputs(self.parameters, refusal)
+        if refusal != self._lock_shown:
+            # Griffe im Bild und die Maßgruppe folgen dem Wechsel (FD-28).
+            self._lock_shown = refusal
+            self.viewport.refresh_gizmo()
+            if self._quiet_placement is not None:
+                self._quiet_placement.redraw()
         self._hide_dead_menus()
 
     def _hide_dead_menus(self) -> None:
@@ -8051,7 +8073,7 @@ class MainWindow(QMainWindow):
 
     def action_import(self) -> None:
         """Eine oder mehrere Modelldateien in einem Auftrag einfügen."""
-        if self._drawing_refuses():
+        if self._drawing_refuses() or change_lock.refused(self.announce):
             return
         names, _filter = QFileDialog.getOpenFileNames(
             self,
@@ -8065,8 +8087,13 @@ class MainWindow(QMainWindow):
             self.import_paths([Path(name) for name in names])
 
     def _gesture_allows_import(self) -> bool:
-        """Import und Ablegen warten auf den Abschluss des sichtbaren Gesteneditors."""
-        if self._drawing_refuses():
+        """Import und Ablegen warten auf den Abschluss des sichtbaren Gesteneditors.
+
+        Und ohne Freischaltung kommt nichts herein: Ein abgelegtes Modell oder
+        *Modell aus dem Netz* endete sonst nach Dateiwahl oder Download im
+        Meldungsfenster (FD-26).
+        """
+        if self._drawing_refuses() or change_lock.refused(self.announce):
             return False
         if (
             self.sculpting()
@@ -8124,6 +8151,8 @@ class MainWindow(QMainWindow):
         einer Modellseite kommt, hat die Adresse gerade kopiert. Steht dort
         etwas anderes, bleibt das Feld leer statt Unsinn anzubieten.
         """
+        if change_lock.refused(self.announce):
+            return
         clipboard = QApplication.clipboard()
         pasted = clipboard.text().strip() if clipboard is not None else ""
         try:
@@ -10814,7 +10843,9 @@ class MainWindow(QMainWindow):
         catalog.set_can_save(*self._recipe_readiness())
         catalog.set_can_insert(*self._insert_readiness())
         result = self.session.last_result
-        if result is None or not result.scene.objects:
+        if (result is None or not result.scene.objects) and not change_refusal():
+            # Gesperrt führen beide Wege in eine Sperre; der Satz nennt dann
+            # die Freischaltung (:meth:`_insert_readiness`).
             # **Der Satz über der Sperre nennt zwei Wege, also stehen zwei
             # Knöpfe darunter** (RM-356): In der leeren Szene sagte er
             # „legen Sie einen Grundkörper an“, und der modale Katalog bot
@@ -10896,6 +10927,11 @@ class MainWindow(QMainWindow):
         Fall ist ein eigener Satz: Auf der Startseite gibt es keinen
         Objektbaum, auf den der Standardsatz zeigen könnte.
         """
+        refusal = change_refusal()
+        if refusal:
+            # Der Katalog bleibt zum Ansehen offen; Einsetzen legt einen
+            # Schritt an und graut gesperrt mit Grund (FD-26).
+            return False, refusal
         result = self.session.last_result
         if result is None or not result.scene.objects:
             return False, tr(
@@ -12406,11 +12442,19 @@ class MainWindow(QMainWindow):
 
         Dieselbe Auskunft wie ``_operation_availability`` für die Operationen,
         aus derselben Quelle: der Action, die auch das Menü ausgraut. Was von
-        Hand in ``window_commands`` steht und keine Action hat — Speichern,
-        das Handbuch, „Einpassen" — kann immer.
+        Hand in ``window_commands`` steht und keine Action hat, fragt seine
+        Quelle; ``window_commands`` läuft davor und ordnet die Actions zu.
         """
         action = self._command_actions.get(key)
-        if action is None or action.isEnabled():
+        if action is None:
+            # **Ohne Action fragt der Befehl seine Quelle** (FD-26): ein
+            # Werkzeug den Umschalter, alles andere ``change_lock`` — *Zahlen an
+            # Maße binden* stand gesperrt sonst als einziger Weg offen.
+            if key.startswith("tool."):
+                return self.tools.usable(key.removeprefix("tool."))
+            refusal = change_lock.command_refusal(key)
+            return not refusal, refusal
+        if action.isEnabled():
             return True, ""
         hint = action.toolTip().strip()
         if hint and hint != action.text().replace("&", "").strip():
@@ -16564,6 +16608,8 @@ class MainWindow(QMainWindow):
         wartete. Dann ist es ein Schritt für beides; ohne Stelle bleibt das
         Loch, wo es ist (drei Nullen heißen in ``slot_hole`` genau das).
         """
+        if change_lock.refused(self.announce):
+            return
         values: dict[str, Any] = {"slot_length": float(length), "slot_angle": float(angle)}
         if place is not None:
             values.update({"x": float(place[0]), "y": float(place[1]), "z": float(place[2])})
@@ -28431,7 +28477,13 @@ class MainWindow(QMainWindow):
         self.measurements.show_object(name, bounds.size, volume_of(meshes))
 
     def action_add_parameter(self) -> None:
-        """§13: ein Hauptmaß benennen — auch ohne den Agenten (§2.3)."""
+        """§13: ein Hauptmaß benennen — auch ohne den Agenten (§2.3).
+
+        Gesperrt sagt der Weg an der grauen Zeile vorbei den Grund, statt den
+        Dialog zu öffnen, dessen *Anlegen* abgelehnt würde (FD-26).
+        """
+        if change_lock.refused(self.announce):
+            return
         dialog = ParameterDialog(self.session.project.document.parameters, self)
         if dialog.exec() != ParameterDialog.DialogCode.Accepted:
             return
@@ -28447,6 +28499,8 @@ class MainWindow(QMainWindow):
         from app.core.scene.parameter_binding import binding_spots, bound_params
         from app.ui.binding_dialog import BindingDialog
 
+        if change_lock.refused(self.announce):
+            return
         document = self.session.project.document
         result = self.session.last_result
         spots = result.binding_spots if result is not None else ()
@@ -28479,7 +28533,7 @@ class MainWindow(QMainWindow):
         """
         parameters = self.session.project.document.parameters
         existing = parameters.get(name)
-        if existing is None:
+        if existing is None or change_lock.refused(self.announce):
             return
         dialog = ParameterDialog(parameters, self, existing=existing)
         if dialog.exec() != ParameterDialog.DialogCode.Accepted:

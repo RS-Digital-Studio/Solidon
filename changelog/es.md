@@ -41,6 +41,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras una acción en el *Informe de comprobación*, el informe sigue delante y Ctrl+Z la deshace al momento. Hasta ahora saltaba al frente la pestaña *Selección*.
 - Ctrl+Z y Ctrl+Y funcionan también con el cursor en un campo vacío, por ejemplo en el campo de búsqueda. Si escribió algo allí, primero se deshace lo escrito.
 - Sin activación, las acciones que cambian algo en el *Informe de comprobación*, *Selección*, los menús contextuales y el filamento salen en gris con el motivo. Antes el rechazo llegaba tras el clic.
+- Sin activación, también *Crear parámetro …*, *Mover*, *Dividir* y las medidas en la vista salen en gris. Cada motivo indica el camino, como *Ayuda → Desbloquear Solidon …*.
+- Si una acción del *Informe de comprobación* espera al cálculo en curso, dice que después vuelve a estar disponible, también a los lectores de pantalla.
 - Los mensajes de la barra de estado ya no ponen dos puntos detrás de una frase completa.
 
 ### Imprimir y entregar al slicer

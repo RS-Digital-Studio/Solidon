@@ -3917,12 +3917,21 @@ def licence_lock_line(state: activation.Activation | None = None) -> str:
     beschädigte Installation und ein noch nicht aktivierter Rechner sperren
     zwar dieselben Handlungen, brauchen aber jeweils einen anderen nächsten
     Schritt. Diese eine Quelle hält Wortlaut und Handlung zusammen.
+
+    **Jeder Satz nennt den Weg** (FD-30, V5): die Menüzeile der Freischaltung,
+    an der Schlüssel, Aktivierung und das erneute Senden der Deaktivierung
+    liegen — oder, bei einer beschädigten Installation, die Neuinstallation.
     """
     current = state or activation.state()
     if current.damaged:
         return damaged_line()
     if current.deactivation_pending:
-        return deactivation_pending_line()
+        return str(
+            tr(
+                "Die Deaktivierung dieses Rechners ist noch nicht bestätigt. Senden Sie sie "
+                "erneut (Hilfe → Solidon freischalten …)."
+            )
+        )
     if current.needs_activation:
         return str(
             tr(
@@ -3932,7 +3941,10 @@ def licence_lock_line(state: activation.Activation | None = None) -> str:
         )
     if current.expired:
         return str(
-            tr("Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen Lizenzschlüssel.")
+            tr(
+                "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen "
+                "Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+            )
         )
     return str(
         tr(

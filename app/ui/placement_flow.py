@@ -66,6 +66,7 @@ from app.core.sketch.profile import strictly_crossing
 from app.core.types import Feature, SceneObject, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, tr
+from app.ui.change_lock import change_refusal, hold_inputs
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
@@ -348,9 +349,11 @@ class QuietHost(QObject):
         """Der gesetzte Sperrgrund, ohne eine neue Vorschauprüfung auszulösen.
 
         Eine Ablehnung in den Feldern geht vor: Sie nennt, was der Kunde
-        ändern muss, die Vorschau nur, was sie gerade nicht zeigen kann.
+        ändern muss, die Vorschau nur, was sie gerade nicht zeigen kann. Davor
+        steht die Freischaltung (FD-28): Ohne sie nannte der Knopf den Satz,
+        mit dem die Vorschau am Kern scheiterte, und der hatte keinen Weg.
         """
-        return self._field_refusal or self._blocked_reason
+        return change_refusal() or self._field_refusal or self._blocked_reason
 
     def can_accept(self) -> bool:
         """Ob der Träger die aktuellen Werte übernehmen darf."""
@@ -1945,6 +1948,23 @@ class PlacementFlow(QObject):
         if pulled:
             reason = None
             begun = True
+        # **Ohne Freischaltung nimmt die Maßgruppe nichts an** (FD-28): Bis
+        # hierher war nur *Übernehmen* grau, die Felder nahmen Zahlen an, die
+        # nie übernommen wurden. Eingang und Knopf tragen jetzt den Satz aus
+        # ``change_lock``, und er nennt den Weg zur Freischaltung. Ein
+        # Operationsdialog bleibt zum Ansehen bedienbar; sein *Übernehmen*
+        # sperrt er selbst (FD-5).
+        refusal = change_refusal() if isinstance(host, QuietHost) else ""
+        if refusal:
+            reason = refusal
+        for root in (
+            self._measure_scroll,
+            self._measure_scope_box,
+            *self._measures,
+            *self._centre_measures,
+            self._depth_measure,
+        ):
+            hold_inputs(root, refusal)
         # **Ein Werkzeug, das gerade neu gebaut wird, sperrt nicht** (Durchsicht
         # 0.5.1, Kunde Weg b): Nach jeder getippten Zahl baut der Fluss das
         # Werkzeug neu, der Knopf war so lange grau, und ein Klick gleich nach
@@ -1999,8 +2019,10 @@ class PlacementFlow(QObject):
         self._measure_note.setText(
             "\n".join(filter(None, (reason, distance, self._reference_message, information)))
         )
+        # Die Sperre steht auch ungefragt da: Grau allein wäre eine Farbe ohne
+        # Wort (Regel 18), und begonnen wird gesperrt nie.
         self._measure_note.setVisible(
-            (bool(reason) and begun)
+            (bool(reason) and (begun or bool(refusal)))
             or bool(distance)
             or bool(self._reference_message)
             or bool(information)
@@ -2118,8 +2140,16 @@ class PlacementFlow(QObject):
         return self._surface is None and self._seat_waits == self._serial
 
     def _begin_edit(self) -> None:
-        """Eine Nutzergeste beginnt den stillen Entwurf, nie seine bloße Anzeige."""
-        if not self._disposed and self.active and isinstance(self.dialog, QuietHost):
+        """Eine Nutzergeste beginnt den stillen Entwurf, nie seine bloße Anzeige.
+
+        Gesperrt beginnt keine (FD-28): Der Entwurf könnte nie übernommen werden.
+        """
+        if (
+            not self._disposed
+            and self.active
+            and isinstance(self.dialog, QuietHost)
+            and not change_refusal()
+        ):
             self.dialog.begin_edit()
 
     def _grip_belongs_to_another_flow(self) -> bool:
@@ -5585,14 +5615,19 @@ class PlacementFlow(QObject):
         # zieht die Maus die Tiefe; nicht am vorhandenen Merkmal, dort steht
         # der Griff der Auswahl; und nicht, wo die Werte ohnehin im
         # Merkmalfenster stehen. Frisch angehängt bei jedem Zeichnen, weil der
-        # Körper eben neu gesetzt wurde.
+        # Körper eben neu gesetzt wurde. Ohne Freischaltung trägt die
+        # Maßgruppe keinen Griff: Ihr Entwurf ließe sich nie übernehmen (FD-28).
         gripped = (
             tool_valid
             and self._frozen
             and not self._deepening
             and self._tool is not None
             and (
-                (self._measure_group is not None and self.spec_of().name != "slot_hole")
+                (
+                    self._measure_group is not None
+                    and self.spec_of().name != "slot_hole"
+                    and not change_refusal()
+                )
                 or (not self._seated_at_feature and not self.dialog.values_stand_elsewhere)
             )
         )

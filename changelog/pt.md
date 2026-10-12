@@ -40,6 +40,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois de uma ação no *Relatório de verificação*, o relatório fica à frente e Ctrl+Z desfá-la logo. Até agora, o separador *Seleção* passava para a frente.
 - Ctrl+Z e Ctrl+Y funcionam também com o cursor num campo vazio, por exemplo no campo de pesquisa. Se escreveu algo ali, primeiro é desfeito o que escreveu.
 - Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
+- Sem ativação, também *Criar parâmetro …*, *Mover*, *Dividir* e as medidas na vista ficam a cinzento. Cada motivo indica o caminho, como *Ajuda → Desbloquear o Solidon …*.
+- Quando uma ação do *Relatório de verificação* espera pelo cálculo em curso, indica que depois volta a ficar disponível, também para leitores de ecrã.
 - As mensagens da barra de estado já não colocam dois pontos depois de uma frase completa.
 
 ### Imprimir e entregar ao slicer

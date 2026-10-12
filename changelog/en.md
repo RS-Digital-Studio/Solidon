@@ -40,6 +40,8 @@ it into `website/version.json`.
 - After an action in the *Report*, the report stays in front, and Ctrl+Z takes it back straight away. Until now the *Selection* tab jumped to the front.
 - Ctrl+Z and Ctrl+Y also work when the cursor sits in an empty field, such as the search field. If you typed there, your typing is undone first.
 - Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
+- Without activation, *Create parameter …*, *Move*, *Split* and the dimensions in the view are greyed out too. Every reason names the way, such as *Help → Unlock Solidon …*.
+- When an action in the *Report* waits for the running calculation, it says that it becomes available afterwards, to screen readers as well.
 - Messages in the status bar no longer put a colon after a complete sentence.
 
 ### Printing and slicer handover
