@@ -7,11 +7,12 @@ beurteilt wird: die 19 Prüfpunkte (:data:`CHECKPOINTS`), die 35 Kriterien E1
 bis I6 (:data:`CRITERIA`) mit Stufe, Schwelle und Quelle, die Wertebereiche
 der Urteile und das Schema des Protokolls (:data:`PROTOCOL_SCHEMA`).
 
-Drei Module teilen sich die Arbeit, damit keines die Größengrenze der
+Vier Module teilen sich die Arbeit, damit keines die Größengrenze der
 Codestruktur (2 000 Zeilen, W1) reißt:
 
 * hier das Schema und das Datenmodell,
-* ``tools/function_judges.py`` die Urteilsfunktion je Prüfpunkt und Kriterium,
+* ``tools/function_judges.py`` die Urteilsfunktion je Kriterium,
+* ``tools/function_points.py`` die je Prüfpunkt und ``judge_case``,
 * ``tools/function_samples.py`` die Gegenproben (``BROKEN_SAMPLES``).
 
 **Was gemessen werden kann, wird gemessen; was ein Urteil ist, bleibt Stufe
@@ -224,6 +225,11 @@ MIN_CONTRAST_LARGE: Final = 3.0
 #: Z1: Verzug bis zum nächsten gemalten Bild beim Ziehen, auf die Referenz
 #: umgerechnet (Bauplan §31).
 MAX_DRAG_MS: Final = 33
+#: Z1 und Prüfpunkt 6: Wo das Protokoll den Referenzfaktor trägt (Block,
+#: Schlüssel) — Referenzzeit durch Zeit hier, einmal je Lauf gemessen, für
+#: Zeiten und Bilder (Entscheidung Koordinator). Die endgültige Stelle legt
+#: P fest; umgestellt wird nur hier.
+REFERENCE_FACTOR_AT: Final = ("frames", "reference_factor")
 #: Z6: Die Startgröße des Fensters steht in ``main_window.START_SIZE`` (eine
 #: Quelle für Aufbau und Messung); dazu der Laptop mit Taskleiste und die
 #: Skalierungen.
@@ -386,6 +392,8 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         _keys("surface", "widget", "theme", "foreground", "background", "large", "symbol"),
         {"theme": ("light", "dark")},
     ),
+    # ``icons: []`` heißt: die Fläche hat keinen Symbolknopf (G7 erfüllt);
+    # ``fonts: []`` und ``contrast: []`` heißen: nichts aufgenommen.
     "icons": ProtocolField(
         "liste",
         _keys(
@@ -926,7 +934,7 @@ CHECKPOINTS: Final[dict[int, Checkpoint]] = {
             6,
             "Rückmeldung und Zeit",
             ("A",),
-            ("timing",),
+            ("timing", REFERENCE_FACTOR_AT[0]),
             numbers=(MAIN_GAP_MS, FEEDBACK_AFTER_S, BAR_AFTER_S),
         ),
         Checkpoint(7, "Fehlerweg", ("A", "B"), ("messages", "spec"), parts=("V5",)),

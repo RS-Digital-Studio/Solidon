@@ -1,7 +1,7 @@
 """Urteile, Abhakliste und Funddatei des Funktionsdurchgangs (RM-737, Paket D0-U).
 
 Was der Prüfstand gemessen hat (``<out>/cases/<nr>/function.json``), wird hier
-mit ``tools/function_judges.py`` beurteilt und mit den Urteilen der Stufen B
+mit ``tools/function_points.py`` beurteilt und mit den Urteilen der Stufen B
 und C (``urteile-<paket>.toml``, Konzept §5, Stufe B) und der Funddatei
 (``funde.md``, Konzept §7) zur Abhakliste je Paket zusammengeführt
 (``abhakliste-<paket>.md``, Konzept §7). Alle drei liegen unter
@@ -61,8 +61,9 @@ from tools.function_checks import (
     Issue,
     Outcome,
 )
-from tools.function_judges import compare_themes, judge_case, judge_licence
+from tools.function_judges import compare_themes, judge_sizes
 from tools.function_list import ROW_KINDS
+from tools.function_points import judge_case, judge_design, judge_licence
 from tools.function_samples import BrokenSample, sample_context, sample_protocol
 
 ROOT: Final = Path(__file__).resolve().parent.parent
@@ -785,7 +786,8 @@ def merge_cases(
     """Alle Fälle einer Zeile zu einem Ergebnis; hell gegen dunkel für Z6.
 
     Prüfpunkt 18 urteilt einmal je Zeile über die Lizenzläufe aller ihrer Fälle:
-    Der Prüfstand fährt je Lizenzzustand einen Fall mit genau einem Lauf.
+    Der Prüfstand fährt je Lizenzzustand einen Fall mit genau einem Lauf. Ebenso
+    Z6 über die Fenstergrößen — je Größe ein Fall — und mit ihm Prüfpunkt 19.
     """
     points = {
         number: _merge([case.points[number] for case in cases if number in case.points])
@@ -802,6 +804,11 @@ def merge_cases(
             runs.update(given)
     if runs:
         points[18] = judge_licence(runs, complete=True)
+    sized = judge_sizes(protocols, complete=True)
+    if sized is not None and "Z6" in criteria and criteria["Z6"].verdict != "entfaellt":
+        criteria["Z6"] = replace(sized, evidence=criteria["Z6"].evidence)
+        if 19 in points and points[19].verdict != "entfaellt":
+            points[19] = replace(judge_design(criteria), evidence=points[19].evidence)
     light, dark = _theme_case(protocols, "light"), _theme_case(protocols, "dark")
     if light is not None and dark is not None:
         issues = compare_themes(light, dark)

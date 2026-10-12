@@ -965,10 +965,13 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample("E4", "Stelle nicht gemessen", change=_drop("spot"), expect="nicht_gelaufen"),
     BrokenSample(
         "Z6",
-        "Rollleisten nur bei 1920 x 1080",
-        change=_set(
-            "scrollbars",
-            [{"surface": "OperationDialog", "window_size": [1920, 1080], "front": True}],
+        "Fall lief nur bei 1920 x 1080",
+        change=_all(
+            _set("variant.window_size", [1920, 1080]),
+            _set(
+                "scrollbars",
+                [{"surface": "OperationDialog", "window_size": [1920, 1080], "front": True}],
+            ),
         ),
         expect="nicht_gelaufen",
     ),
