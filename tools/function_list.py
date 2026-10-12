@@ -46,7 +46,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.function_scan import scan_ui, statements  # noqa: E402
+from tools.function_scan import UiScan, scan_ui, statements  # noqa: E402
 from tools.function_scenes import (  # noqa: E402
     DATA,
     EXACT,
@@ -317,43 +317,44 @@ CONTEXT_PACKAGES: Final[dict[str, tuple[str, str]]] = {
 SETTINGS_PACKAGE: Final = "D12"
 
 
-#: Funktionen, die ein rohes Meldungsfenster bauen (``<modul>.<funktion>``), nach Paket
-#: und Anforderung. Konzept §6: Wiederherstellen und Speicherfrage in D1, die
-#: Löschnachfrage im Verlauf (Ausnahme zu Regel 19) in D11.
+#: Funktionen, die ein rohes Meldungsfenster bauen, beim Namen (Zeile ``meldung:<name>``;
+#: eine Kennung nennt die Sache, nie ihr Modul), nach Paket und Anforderung. Konzept §6:
+#: Wiederherstellen und Speicherfrage in D1, die Löschnachfrage im Verlauf (Ausnahme zu
+#: Regel 19) in D11.
 RAW_WINDOW_PACKAGES: Final[dict[str, tuple[str, str]]] = {
-    "dialogs.open_link": ("D12", "leer"),
-    "dialogs.show_expired_demo": ("D12", "start"),
-    "dialogs.show_error": ("D12", "leer"),
-    "dialogs.show_details": ("D12", "leer"),
-    "dialogs.confirm_unsaved": ("D1", "koerper:1"),
+    "open_link": ("D12", "leer"),
+    "show_expired_demo": ("D12", "start"),
+    "show_error": ("D12", "leer"),
+    "show_details": ("D12", "leer"),
+    "confirm_unsaved": ("D1", "koerper:1"),
     # Die Vorabfrage mit Befunden vor Export und Übergabe (confirm_export,
     # confirm_handover); der Export ist D1, die Übergabe prüft D9 am Druckdialog.
-    "dialogs._go_on_despite": ("D1", "koerper:1"),
-    "dialogs.confirm_generation_loss": ("D2", "leer"),
-    "dialogs.confirm_discard": ("D11", "koerper:1"),
-    "dialogs._save_request": ("D12", "leer"),
-    "dialogs._open_page": ("D12", "leer"),
-    "dialogs._import_answer": ("D12", "leer"),
-    "dialogs._remember": ("D12", "leer"),
-    "dialogs._online_completed": ("D12", "leer"),
-    "dialogs._deactivation_completed": ("D12", "leer"),
-    "filament_picker._pick_colour": ("D10", "koerper:1"),
-    "filament_picker._replacement_slot": ("D10", "koerper:1"),
-    "install_dialog._choose_address": ("D12", "leer"),
-    "install_dialog._show_details": ("D12", "leer"),
-    "main_window.action_import_url": ("D1", "leer"),
-    "main_window.remove_history_operations": ("D11", "koerper:1"),
-    "main_window._assign_inventory_spool": ("D9", "koerper:1"),
-    "main_window.action_counterpart": ("D10", "koerper:2"),
-    "main_window._ask_recovery": ("D1", "start"),
-    "print_settings_dialog._choose": ("D9", "koerper:1"),
-    "print_settings_dialog._show_slicer_output": ("D9", "koerper:1"),
-    "sketch_editor.change_constraint_value": ("D7", "leer"),
+    "_go_on_despite": ("D1", "koerper:1"),
+    "confirm_generation_loss": ("D2", "leer"),
+    "confirm_discard": ("D11", "koerper:1"),
+    "_save_request": ("D12", "leer"),
+    "_open_page": ("D12", "leer"),
+    "_import_answer": ("D12", "leer"),
+    "_remember": ("D12", "leer"),
+    "_online_completed": ("D12", "leer"),
+    "_deactivation_completed": ("D12", "leer"),
+    "_pick_colour": ("D10", "koerper:1"),
+    "_replacement_slot": ("D10", "koerper:1"),
+    "_choose_address": ("D12", "leer"),
+    "_show_details": ("D12", "leer"),
+    "action_import_url": ("D1", "leer"),
+    "remove_history_operations": ("D11", "koerper:1"),
+    "_assign_inventory_spool": ("D9", "koerper:1"),
+    "action_counterpart": ("D10", "koerper:2"),
+    "_ask_recovery": ("D1", "start"),
+    "_choose": ("D9", "koerper:1"),
+    "_show_slicer_output": ("D9", "koerper:1"),
+    "change_constraint_value": ("D7", "leer"),
 }
-#: Kennungen, die nicht ``meldung:<funktion>`` heißen. „Demo abgelaufen“ (``over``)
+#: Kennungen, die nicht ``meldung:<name>`` heißen. „Demo abgelaufen“ (``over``)
 #: startet die Anwendung nicht — eine eigene Zeile des Startablaufs, kein Lauf je
 #: Funktion; U liest sie unter diesem Namen.
-RAW_WINDOW_IDS: Final[dict[str, str]] = {"dialogs.show_expired_demo": "startup.expired_demo"}
+RAW_WINDOW_IDS: Final[dict[str, str]] = {"show_expired_demo": "startup.expired_demo"}
 
 # --- Anforderung und Szene (Bauplan D0 §2.5) ----------------------------------
 
@@ -1152,10 +1153,16 @@ def settings_rows(
     titles: Iterable[str], targets: Mapping[str, str], scenes: Mapping[str, Scene]
 ) -> list[Row]:
     """Konzept §3: eine Zeile je Abschnitt der Einstellungen, mit dem Ziel, das sein
-    Abschnittsbauer setzt (:func:`_settings_sections`) — sonst ohne Ziel."""
+    Abschnittsbauer setzt (``function_scan._settings_sections``) — sonst ohne Ziel.
+
+    Die Kennung ist ``setting.section:<name>`` aus dem Titel (``guides.name_part``),
+    wie das Ziel, das ein Abschnitt trägt — ohne Modul und Klasse.
+    """
+    from app.core.guides import name_part
+
     return [
         Row(
-            id=f"dialog:settings_dialog/{title}",
+            id=f"setting.section:{name_part(title)}",
             kind="bedienflaeche",
             source="einstellungen",
             package=SETTINGS_PACKAGE,
@@ -1167,18 +1174,24 @@ def settings_rows(
     ]
 
 
-def raw_window_rows(
-    keys: Iterable[str], targets: Mapping[str, str], scenes: Mapping[str, Scene]
-) -> list[Row]:
+def raw_window_rows(scan: UiScan, scenes: Mapping[str, Scene]) -> list[Row]:
     """Jede Funktion, die ein rohes Meldungsfenster baut, als Zeile — Wiederherstellen,
     Speicherfrage, Löschnachfrage, der Start nach abgelaufener Demo und die übrigen.
 
     Ein rohes Fenster hat keine eigene Klasse; sein Ziel ist das Kennzeichen, das
-    seine Funktion im Quelltext setzt (:func:`_own_target`), sonst hat es keines.
+    seine Funktion im Quelltext setzt (``function_scan._own_target``), sonst hat es
+    keines. Die Kennung ist der Funktionsname; zwei gleichnamige Meldungsfunktionen
+    halten an, statt sich eine Zeile zu teilen.
     """
-    problems: list[str] = []
+    problems = [
+        f"meldung:{name}: zwei Meldungsfunktionen heißen so ({', '.join(places)}) — eine "
+        "umbenennen, die Kennung nennt nur den Namen"
+        for name, places in sorted(scan.raw_places.items())
+        if len(places) > 1
+    ]
+    targets = scan.raw_targets
     rows: list[Row] = []
-    for key in keys:
+    for key in scan.raw_windows:
         if key not in RAW_WINDOW_PACKAGES:
             problems.append(f"{key}: Meldungsfenster ohne Paket (RAW_WINDOW_PACKAGES)")
             continue
@@ -1230,7 +1243,7 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
         lambda: tool_rows(scan.tools, scenes),
         lambda: context_rows(scan.context_actions, scenes),
         lambda: settings_rows(scan.settings_sections, scan.settings_targets, scenes),
-        lambda: raw_window_rows(scan.raw_windows, scan.raw_targets, scenes),
+        lambda: raw_window_rows(scan, scenes),
         lambda: command_rows(menubar, source, scenes),
     )
     for build in builders:

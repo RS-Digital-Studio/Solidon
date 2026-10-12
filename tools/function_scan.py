@@ -14,14 +14,14 @@ import ast
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from functools import cache, lru_cache
-from pathlib import Path
 from typing import Any, Final
 
 CONTEXT_PREFIXES: Final[tuple[str, ...]] = ("tree.", "parameters.")
 
 
-#: Das Modul der Einstellungen; ein Abschnitt ist dort ein ``collapsible(tr("…"), …)``.
-SETTINGS_MODULE: Final = "app/ui/settings_dialog.py"
+#: Die Klasse der Einstellungen; ihre Abschnitte baut das Modul, das sie definiert, als
+#: ``collapsible(tr("…"), …)`` — gleich, wie das Modul heißt.
+SETTINGS_CLASS: Final = "SettingsDialog"
 
 
 #: Rohe Qt-Fenster: Klassen und die Fabrikfunktionen, die eines bauen.
@@ -215,10 +215,14 @@ class UiScan:
     settings_sections: tuple[str, ...] = ()
     """Die Abschnitte der Einstellungen, in ihrer Folge im Dialog."""
     raw_windows: tuple[str, ...] = ()
-    """Die Funktionen, die ein rohes Meldungsfenster bauen, als ``<modul>.<funktion>``."""
+    """Die Funktionen, die ein rohes Meldungsfenster bauen, beim Namen — ohne Modul, damit
+    ein umgezogenes oder geteiltes Modul ihre Kennung nicht ändert."""
+    raw_places: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    """Wo eine solche Funktion steht, je Name; mehr als ein Ort macht die Kennung
+    zweideutig (``function_list.raw_window_rows`` hält dann an)."""
     raw_targets: Mapping[str, str] = field(default_factory=dict)
     """Das Ziel, das ein Meldungsfenster selbst setzt (``setProperty(…TARGET_PROPERTY, …)``
-    oder ``raw_window("…")``), je ``<modul>.<funktion>``."""
+    oder ``raw_window("…")``), je Funktionsname."""
     settings_targets: Mapping[str, str] = field(default_factory=dict)
     """Das Ziel eines Einstellungsabschnitts, den sein Abschnittsbauer kennzeichnet."""
     texts: frozenset[str] = frozenset()
@@ -246,13 +250,12 @@ def _scan(items: tuple[tuple[str, str], ...]) -> UiScan:
     tools: set[str] = set()
     contexts: set[str] = set()
     sections: list[str] = []
-    raw: set[str] = set()
+    raw: dict[str, list[str]] = {}
     raw_targets: dict[str, str] = {}
     settings_targets: dict[str, str] = {}
     texts: set[str] = set()
     for module, text in items:
         tree = ast.parse(text, filename=module)
-        stem = Path(module).stem
         raw_here = any(name in text for name in RAW_CLASSES)
         constants = _module_texts(tree)
         for node in statements(tree):
@@ -264,10 +267,12 @@ def _scan(items: tuple[tuple[str, str], ...]) -> UiScan:
                 and isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
                 and any(_builds_raw_window(inner) for inner in _own_nodes(node))
             ):
-                raw.add(f"{stem}.{node.name}")
+                raw.setdefault(node.name, []).append(module)
                 if marked := _own_target(node, constants):
-                    raw_targets[f"{stem}.{node.name}"] = marked
-        if module == SETTINGS_MODULE:
+                    raw_targets[node.name] = marked
+        if any(
+            isinstance(node, ast.ClassDef) and node.name == SETTINGS_CLASS for node in tree.body
+        ):
             titles, targets = _settings_sections(tree)
             sections.extend(titles)
             settings_targets.update(targets)
@@ -301,6 +306,7 @@ def _scan(items: tuple[tuple[str, str], ...]) -> UiScan:
         context_actions=tuple(sorted(contexts)),
         settings_sections=tuple(dict.fromkeys(sections)),
         raw_windows=tuple(sorted(raw)),
+        raw_places={name: tuple(places) for name, places in raw.items()},
         raw_targets=raw_targets,
         settings_targets=settings_targets,
         texts=frozenset(texts),

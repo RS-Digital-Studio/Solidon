@@ -236,7 +236,7 @@ def test_the_expired_demo_is_a_row_of_its_own(rows: list[fl.Row]) -> None:
     row = _by_id(rows)["startup.expired_demo"]
     assert row.package == "D12" and row.source == "startablauf"
     module, function = "app.ui.dialogs", "show_expired_demo"
-    assert fl.RAW_WINDOW_IDS["dialogs.show_expired_demo"] == "startup.expired_demo"
+    assert fl.RAW_WINDOW_IDS["show_expired_demo"] == "startup.expired_demo"
     assert callable(getattr(importlib.import_module(module), function))
     tree = ast.parse((fl.UI / "app.py").read_text(encoding="utf-8"))
     guarded = [
@@ -362,8 +362,8 @@ def test_every_settings_section_is_a_row(rows: list[fl.Row], ui_sources: dict[st
     sections = fscan.scan_ui(ui_sources).settings_sections
     assert {"Anwendung", "Vorgaben für neue Projekte", "Weitere Einstellungen"} <= set(sections)
     found = _by_id(rows)
-    for title in sections:
-        assert found[f"dialog:settings_dialog/{title}"].package == "D12"
+    assert found["setting.section:vorgaben_fuer_neue_projekte"].package == "D12"
+    assert len([row for row in rows if row.source == "einstellungen"]) == len(sections)
 
 
 def test_every_raw_message_window_is_a_row(rows: list[fl.Row], ui_sources: dict[str, str]) -> None:
@@ -371,19 +371,52 @@ def test_every_raw_message_window_is_a_row(rows: list[fl.Row], ui_sources: dict[
     Wiederherstellen und Speicherfrage (D1) und die Löschnachfrage im Verlauf (D11)."""
     windows = fscan.scan_ui(ui_sources).raw_windows
     assert {
-        "dialogs.confirm_unsaved",
-        "main_window._ask_recovery",
-        "main_window.remove_history_operations",
-        "dialogs.confirm_discard",
-        "dialogs.show_expired_demo",
+        "confirm_unsaved",
+        "_ask_recovery",
+        "remove_history_operations",
+        "confirm_discard",
+        "show_expired_demo",
     } <= set(windows)
     assert set(fl.RAW_WINDOW_PACKAGES) == set(windows)
     found = _by_id(rows)
-    assert found["meldung:dialogs.confirm_unsaved"].package == "D1"
-    assert found["meldung:main_window._ask_recovery"].package == "D1"
-    assert found["meldung:main_window.remove_history_operations"].package == "D11"
+    assert found["meldung:confirm_unsaved"].package == "D1"
+    assert found["meldung:_ask_recovery"].package == "D1"
+    assert found["meldung:remove_history_operations"].package == "D11"
     assert found["startup.expired_demo"].package == "D12"
-    assert "meldung:dialogs.show_expired_demo" not in found
+    assert "meldung:show_expired_demo" not in found
+
+
+def test_two_message_functions_of_one_name_turn_red(cached_sources: dict[str, str]) -> None:
+    """Die Kennung eines Meldungsfensters ist sein Funktionsname. Heißen zwei so, hält
+    die Liste an und nennt beide Orte — sie teilen sich keine Zeile."""
+    cached_sources["app/ui/invented/twin.py"] = (
+        "def confirm_unsaved(parent):\n    box = QMessageBox(parent)\n"
+    )
+    found = fl.problems()
+    clash = [issue for issue in found if issue.startswith("meldung:confirm_unsaved:")]
+    assert len(clash) == 1 and "app/ui/invented/twin.py" in clash[0], found
+
+
+def test_a_renamed_module_keeps_every_row_id(
+    rows: list[fl.Row], ui_sources: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gegenprobe zur Codestruktur: Eine Kennung nennt die Sache, nie ihren Ort. Ziehen
+    Dialoge, Hauptfenster, Einstellungen und Druckeinstellungen in andere Module, bleibt
+    jede Kennung gleich — die Meldungsfenster, Abschnitte und Dialogklassen darin
+    eingeschlossen."""
+    moved = {
+        "app/ui/dialogs.py": "app/ui/dialogs/messages.py",
+        "app/ui/main_window.py": "app/ui/window/main.py",
+        "app/ui/settings_dialog.py": "app/ui/settings/sections.py",
+        "app/ui/print_settings_dialog.py": "app/ui/printing/dialog.py",
+    }
+    assert set(moved) <= set(ui_sources)
+    renamed = {moved.get(name, name): text for name, text in ui_sources.items()}
+    monkeypatch.setattr(fl, "ui_sources", lambda root=fl.UI: renamed)
+    after = fl.rows(with_specs=False)
+    assert [row.id for row in after] == [row.id for row in rows]
+    for kind in ("meldungsfenster", "einstellungen", "dialogklasse"):
+        assert any(row.source == kind for row in after), kind
 
 
 def test_an_invented_tool_context_action_or_message_window_turns_red(
@@ -400,7 +433,7 @@ def test_an_invented_tool_context_action_or_message_window_turns_red(
     found = fl.problems()
     assert any("tool:magnifier" in issue for issue in found)
     assert any("menu:tree.magnify" in issue for issue in found)
-    assert any("extra.ask_twice" in issue for issue in found)
+    assert any(issue.startswith("ask_twice:") for issue in found)
 
 
 def test_targets_of_raw_windows_and_sections_come_from_the_source(
@@ -415,13 +448,13 @@ def test_targets_of_raw_windows_and_sections_come_from_the_source(
 
     assert _by_id(rows)["startup.expired_demo"].target == "dialog:expired_demo"
     scan = fscan.scan_ui(ui_sources)
-    assert scan.raw_targets["dialogs.show_expired_demo"] == "dialog:expired_demo"
+    assert scan.raw_targets["show_expired_demo"] == "dialog:expired_demo"
     marked = ("TARGET_PROPERTY", "raw_window(")
     for row in rows:
         if row.target or row.source != "meldungsfenster":
             continue
-        module, _dot, function = row.id.removeprefix("meldung:").partition(".")
-        path = next(name for name in ui_sources if Path(name).stem == module)
+        function = row.id.removeprefix("meldung:")
+        (path,) = scan.raw_places[function]
         tree = ast.parse(ui_sources[path])
         node = next(
             item
@@ -435,7 +468,8 @@ def test_targets_of_raw_windows_and_sections_come_from_the_source(
 def test_a_marked_surface_without_its_target_turns_red() -> None:
     """Gegenprobe: Jede Form, in der eine Fläche ihr Kennzeichen setzt, kommt als Ziel an —
     ein Meldungsfenster mit ``setProperty`` (auch über eine Modulkonstante), ein statischer
-    Aufruf in ``raw_window`` und ein Abschnitt über den Abschnittsbauer der Einstellungen."""
+    Aufruf in ``raw_window`` und ein Abschnitt über den Abschnittsbauer der Einstellungen,
+    in dem Modul, das die Klasse der Einstellungen definiert, wie es auch heißt."""
     windows = fscan.scan_ui(
         {
             "app/ui/extra.py": (
@@ -452,7 +486,9 @@ def test_a_marked_surface_without_its_target_turns_red() -> None:
                 "def bare(parent):\n"
                 "    QMessageBox(parent)\n"
             ),
-            fscan.SETTINGS_MODULE: (
+            "app/ui/irgendwo/einstellungen.py": (
+                f"class {fscan.SETTINGS_CLASS}(QDialog):\n"
+                "    pass\n"
                 "def section(title, content, **options):\n"
                 "    wrapper = collapsible(str(title), content, **options)\n"
                 "    heading.setProperty(\n"
@@ -468,16 +504,11 @@ def test_a_marked_surface_without_its_target_turns_red() -> None:
         }
     )
     assert windows.raw_targets == {
-        "extra.ask": "message:extra.ask",
-        "extra.ask_named": "message:extra.ask_named",
-        "extra.inform": "message:extra.inform",
+        "ask": "message:extra.ask",
+        "ask_named": "message:extra.ask_named",
+        "inform": "message:extra.inform",
     }
-    assert set(windows.raw_windows) == {
-        "extra.ask",
-        "extra.ask_named",
-        "extra.inform",
-        "extra.bare",
-    }
+    assert set(windows.raw_windows) == {"ask", "ask_named", "inform", "bare"}
     assert windows.settings_sections == ("Vorgaben für neue Projekte", "Ohne Kennzeichen")
     assert windows.settings_targets == {
         "Vorgaben für neue Projekte": "setting.section:vorgaben_fuer_neue_projekte"
