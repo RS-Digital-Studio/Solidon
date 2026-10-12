@@ -61,6 +61,22 @@ das Konzept.
 
 ## Verlauf
 
+- 12.10.2026, 05:45, Phase 1, angehalten auf Wunsch Robert (Wechsel in die
+  Desktop-App): Changelog `## 0.6.1` in sechs Sprachen steht (`1543a076f`).
+  **Offen vor main, in dieser Reihenfolge:** (1) Review mit `solidon3d-review`
+  über `git diff origin/main...HEAD` im Worktree `F:\sl-suche` — der erste Lauf
+  wurde ohne Bericht gestoppt, also neu starten; Bericht nach
+  `F:\3D Druck\output\review\rm-734-735-2026-10-11\review.md`; (2) Funde
+  beheben, bei mehreren mittleren oder schweren eine Nachprüfung; (3) volles
+  Tor (`bash .claude/scripts/suite-getrennt.sh`, auf diesem i9 gepinnt über
+  `start /affinity FFFFF0FF`, Ergebnis aus der Ausgabedatei, nicht aus `$?`),
+  ruff, format, mypy; (4) vorher `git fetch` und, falls main weiter ist,
+  origin/main erneut hereinmergen; (5) in `F:\3D Druck` auf main
+  `git merge --no-ff origin/061/suche-und-palette`, Push; kein Release, kein
+  Tag, keine Version; (6) Worktree `F:\sl-suche` und Zweig abbauen, Robert
+  Bescheid geben; dann Phase 2. Das Tor vom 11.10. war rot nur durch die
+  Maschine und den behobenen `test_orient.py`-Fund; das Frühtor vom 12.10.
+  wurde mit dem Halt abgebrochen.
 - 12.10.2026, Phase 1: „main steht“ (Robert). origin/main hereingeholt
   (`21d1407e4`), RM-734 und RM-735 im Register (`[~]`, offen die Abnahme am
   echten Fenster, RM-213), Konzept und Nachweise unter `konzepte/`,
