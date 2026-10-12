@@ -280,7 +280,8 @@ def marked_widgets(window: MainWindow, name: str) -> list[QWidget]:
 
     Gesucht wird im Fenster und in jedem offenen Fenster ohne Elternteil — ein
     Dialog über ``exec()`` hängt nicht immer am Hauptfenster. Sichtbare stehen
-    vorn, sonst gilt die Reihenfolge, in der sie entstanden sind.
+    vorn — und die im aktiven modalen Fenster vor allen —, sonst gilt die
+    Reihenfolge, in der sie entstanden sind.
     """
     roots: list[QWidget] = [window]
     roots.extend(
@@ -297,10 +298,18 @@ def marked_widgets(window: MainWindow, name: str) -> list[QWidget]:
             for widget in root.findChildren(QWidget)
             if widget.property(guides.TARGET_PROPERTY) == name
         )
-    # Ein verborgenes Feld eines offenen Dialogs geht einem liegengebliebenen
-    # aus einem geschlossenen vor.
+    # Im aktiven modalen Fenster zuerst — nur dort kann der Kunde klicken
+    # (``field:name`` im Operationsdialog und im Parameterdialog, Nachprüfung
+    # N3); dann sichtbar vor verborgen, und ein verborgenes Feld eines offenen
+    # Dialogs vor einem liegengebliebenen aus einem geschlossenen.
+    modal = QApplication.activeModalWidget()
     return sorted(
-        found, key=lambda widget: (not widget.isVisible(), not widget.window().isVisible())
+        found,
+        key=lambda widget: (
+            modal is None or widget.window() is not modal,
+            not widget.isVisible(),
+            not widget.window().isVisible(),
+        ),
     )
 
 

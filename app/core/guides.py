@@ -181,6 +181,9 @@ TARGET_KINDS: Final[tuple[str, ...]] = (
     "start.recent",
 )
 
+#: Das erste Glied jedes Namens einer Zeile der Menüleiste (:func:`menubar_name`).
+MENUBAR: Final = "menubar"
+
 #: Der Name einer Widget-Eigenschaft, die ein Bedienelement als Ziel ausweist.
 #:
 #: Widgets tragen ihr Ziel als dynamische Eigenschaft und nicht als
@@ -243,7 +246,7 @@ def menubar_name(msgid: str, context: str | None = None) -> str:
     parts = [name_part(text) for text in (context, msgid) if text]
     if not parts or not all(parts):
         raise ValueError(f"menubar_name: aus {msgid!r} entsteht kein Name")
-    return ".".join(("menubar", *parts))
+    return ".".join((MENUBAR, *parts))
 
 
 def menubar_name_of(text: TranslatableText | str) -> str:
