@@ -62,6 +62,7 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import importlib
 import logging
 import math
 import queue
@@ -552,6 +553,21 @@ def camera_step(
     return CameraPose(position, focal, _unit(up), scale)
 
 
+def hid_module_name(platform: str | None = None) -> str:
+    """Das hidapi-Modul dieses Rechners: ``hidraw`` unter Linux, sonst ``hid``.
+
+    Das Linux-Rad trägt zwei Module mit derselben Schnittstelle. ``hid`` geht
+    über libusb und bräuchte Schreibrecht auf ``/dev/bus/usb`` und das Lösen
+    des Kerneltreibers; ``hidraw`` liest ``/dev/hidraw*`` über den
+    Kerneltreiber — genau das, was die udev-Regel des Handbuchs freigibt und
+    was das Flatpak mit ``--device=all`` sieht. Die Plattform ist ein
+    Parameter, damit der Linux-Zweig überall prüfbar bleibt; die Spec nimmt
+    dasselbe Modul ins Paket.
+    """
+    chosen = sys.platform if platform is None else platform
+    return "hidraw" if chosen.startswith("linux") else "hid"
+
+
 def _is_motion_interface(info: dict[str, Any]) -> bool:
     return (
         info.get("vendor_id") in KNOWN_VENDORS
@@ -586,11 +602,11 @@ class HidReader:
     def _hid(self) -> Any:
         if self._module is None and not self._unavailable:
             try:
-                import hid
+                module = importlib.import_module(hid_module_name())
             except ImportError:
                 self._unavailable = True
             else:
-                self._module = hid
+                self._module = module
         return self._module
 
     def search(self) -> list[dict[str, Any]]:
@@ -606,8 +622,10 @@ class HidReader:
             devices = list(hid.enumerate())
             candidates = [info for info in devices if _is_motion_interface(info)]
             if not candidates:
-                # Linux (hidraw) nennt Nutzungsseite und Nutzung nicht immer.
-                # Dann zählt allein die Herstellerkennung von 3Dconnexion —
+                # Unter Linux liest das Modul ``hidraw`` Nutzungsseite und
+                # Nutzung aus dem Report-Deskriptor des Kerneltreibers, und
+                # nicht jedes Gerät nennt sie dort (``hid`` über libusb nannte
+                # sie nie). Dann zählt allein die Herstellerkennung von 3Dconnexion —
                 # nicht die von Logitech, unter der auch Tastaturempfänger
                 # laufen.
                 candidates = [info for info in devices if info.get("vendor_id") == 0x256F]

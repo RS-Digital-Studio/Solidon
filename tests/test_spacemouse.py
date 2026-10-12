@@ -55,6 +55,7 @@ from app.ui.spacemouse import (
     camera_step,
     decode_report,
     default_reader,
+    hid_module_name,
     load_driver,
     quiet_crosstalk,
     speed_factor,
@@ -679,7 +680,7 @@ def test_a_blocked_device_is_seen_once_and_recovers_without_restart(
 
     reader = HidReader()
     reader._module = SimpleNamespace(
-        enumerate=lambda: [{"vendor_id": 0x256F, "product_id": 0xC635, "path": b"hidraw1"}],
+        enumerate=lambda: [{"vendor_id": 0x256F, "product_id": 0xC635, "path": b"/dev/hidraw1"}],
         device=Device,
     )
     settings = _Settings()
@@ -930,7 +931,7 @@ def test_repeated_searches_with_the_real_hid_module_keep_the_process_alive() -> 
     keinen Test zurückgibt; ohne Fenster, damit die Kernsuite ihn auf jedem
     System fährt.
     """
-    pytest.importorskip("hid")
+    pytest.importorskip(hid_module_name())
     script = textwrap.dedent(
         """
         import sys
@@ -974,6 +975,32 @@ def test_repeated_searches_with_the_real_hid_module_keep_the_process_alive() -> 
         result.returncode,
         result.stderr[-2000:],
     )
+
+
+@pytest.mark.parametrize(
+    ("platform", "module"),
+    [("linux", "hidraw"), ("win32", "hid"), ("darwin", "hid")],
+)
+def test_linux_reads_the_mouse_through_hidraw(platform: str, module: str) -> None:
+    """Unter Linux ``hidraw`` (Kerneltreiber), sonst ``hid``.
+
+    Im Linux-Rad geht ``hid`` über libusb und bräuchte Schreibrecht auf
+    ``/dev/bus/usb``; die udev-Regel des Handbuchs und das Flatpak geben aber
+    ``/dev/hidraw*`` frei. Die Plattform ist ein Parameter, damit der
+    Linux-Zweig auch hier geprüft wird.
+    """
+    assert hid_module_name(platform) == module
+
+
+def test_the_reader_imports_the_module_of_its_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Leser importiert, was ``hid_module_name`` wählt — nicht fest ``hid``."""
+    from app.ui import spacemouse
+
+    chosen = SimpleNamespace(enumerate=list, device=object)
+    monkeypatch.setitem(sys.modules, "hidraw", chosen)
+    monkeypatch.setattr(spacemouse, "hid_module_name", lambda: hid_module_name("linux"))
+
+    assert HidReader()._hid() is chosen
 
 
 def test_driver_fallback_keeps_the_blocked_device_visible() -> None:

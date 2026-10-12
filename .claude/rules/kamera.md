@@ -206,7 +206,10 @@ Operation.
   einmal — die einzige Stelle, an der die 3D-Maus den Viewport anfasst;
   `sketch_active` sagt ihr, dass im Zeichenmodus nur geschoben und gezoomt wird.
 * **Direkt über HID, neben dem Herstellertreiber**: `hidapi` (BSD-3 gewählt)
-  öffnet *Multi-axis Controller*, 3DxWare darf mitlesen. Raw Input bleibt leer
+  öffnet *Multi-axis Controller*, 3DxWare darf mitlesen; unter Linux über das
+  Modul `hidraw` (`hid_module_name`), denn `hid` ginge über libusb, und die
+  udev-Regel des Handbuchs wie `--device=all` im Flatpak geben `/dev/hidraw*`
+  frei. Raw Input bleibt leer
   (3DxWare reicht Rohdaten nur an bekannte Programme). Gelesen nicht
   blockierend im Hauptthread, ein Takt für Lesen und Fahren; gesucht
   (`hid.enumerate`) im **einen, nie endenden** Faden `_SearchThread` (hidapi

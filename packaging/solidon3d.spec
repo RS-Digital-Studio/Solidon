@@ -224,8 +224,10 @@ hiddenimports = [
     "OCP.Message",
     "vhacdx",
     # Die 3D-Maus liest über hidapi, importiert erst beim Öffnen des Geräts
-    # (app/ui/spacemouse.py) — ein Bau ohne das Modul soll auffallen.
-    "hid",
+    # (app/ui/spacemouse.py) — ein Bau ohne das Modul soll auffallen. Unter
+    # Linux das Modul ``hidraw`` (Kerneltreiber, /dev/hidraw*), sonst ``hid``;
+    # dieselbe Wahl wie ``spacemouse.hid_module_name``.
+    "hidraw" if sys.platform.startswith("linux") else "hid",
     # trimesh fragt xxhash in einem try/except am Modulkopf ab und fällt ohne
     # es still auf blake2b zurück — der Kunde merkt nur, dass jede Auswertung
     # großer Baugruppen langsamer ist. Der Modulgraph findet auch try-Importe;
@@ -277,6 +279,9 @@ analysis = Analysis(
         "curses",
         "_curses",
         "_curses_panel",
+        # Unter Linux liest die 3D-Maus über ``hidraw``; ``hid`` ginge über
+        # libusb, das Recht auf /dev/bus/usb bräuchte und dann nicht mitreist.
+        *(["hid"] if sys.platform.startswith("linux") else []),
     ],
     # Die vier Grenzdateien aus §2 C reisen als Quelltext, nicht im Archiv:
     # integrity.intact() hasht genau die Datei, aus der Python sie lädt —

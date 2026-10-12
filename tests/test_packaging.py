@@ -335,6 +335,40 @@ def test_every_optional_dependency_the_package_needs_is_a_hidden_import() -> Non
         )
 
 
+def test_the_spec_packs_the_hid_module_the_spacemouse_reader_chooses() -> None:
+    """Unter Linux ``hidraw`` und kein ``hid`` (libusb fällt damit aus dem Paket).
+
+    Dieselbe Wahl wie ``app.ui.spacemouse.hid_module_name``; ein Paket ohne das
+    gewählte Modul ließe die 3D-Maus still.
+    """
+    from app.ui.spacemouse import hid_module_name
+
+    tree = ast.parse(SPEC.read_text(encoding="utf-8"))
+    choice = ast.unparse(
+        ast.parse('"hidraw" if sys.platform.startswith("linux") else "hid"', mode="eval").body
+    )
+    hidden = next(
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "hiddenimports" for t in node.targets)
+    )
+    assert isinstance(hidden, ast.List)
+    assert choice in [ast.unparse(element) for element in hidden.elts]
+    assert ast.unparse(hidden).count("'hid'") == 1, "hid steht zusätzlich fest in der Liste"
+    analysis = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "Analysis"
+    )
+    excludes = next(word.value for word in analysis.keywords if word.arg == "excludes")
+    assert "*(['hid'] if sys.platform.startswith('linux') else [])" in ast.unparse(excludes)
+    for platform, module in (("linux", "hidraw"), ("win32", "hid"), ("darwin", "hid")):
+        assert hid_module_name(platform) == module
+
+
 def test_the_spec_carries_xxhash_so_trimesh_does_not_fall_back_silently() -> None:
     """``xxhash`` steht in keinem Installationsregister — und muss trotzdem mit.
 
