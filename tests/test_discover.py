@@ -14,6 +14,7 @@ Test selbst gebaut hat.
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import stat
@@ -1763,3 +1764,33 @@ def test_a_slicer_the_list_finds_ends_the_remembered_no_of_the_folders(
 
     assert discover.cache_generation() != generation
     assert find("slicer", names) == program
+
+
+@pytest.mark.parametrize(
+    ("problem", "not_a_program"),
+    [
+        pytest.param(OSError(errno.ENOEXEC, "Exec format error"), True, id="posix-enoexec"),
+        pytest.param(PermissionError(errno.EACCES, "Permission denied"), True, id="posix-eacces"),
+        pytest.param(FileNotFoundError(errno.ENOENT, "No such file"), False, id="posix-enoent"),
+    ],
+)
+def test_a_start_that_finds_no_program_is_said_in_own_words_everywhere(
+    problem: OSError, not_a_program: bool
+) -> None:
+    """Unter POSIX zählen ``ENOEXEC`` und ``EACCES`` als „kein Programm“, wie unter
+    Windows 193 und 216 (die prüft ``test_print_settings.py`` am echten Start).
+    Ein fehlender Pfad bleibt der Grund des Systems mit den Vorschlägen des Aufrufers."""
+    from app.core.errors import EXPORT_ONLY, INSTALL_MISSING
+
+    refusal = discover.slicer_start_refused(
+        "Orca", Path("bin") / "orca-slicer", problem, otherwise=(INSTALL_MISSING, EXPORT_ONLY)
+    )
+
+    ids = [action.id for action in refusal.suggestions]
+    if not_a_program:
+        assert ids == ["choose_slicer", "export_only"]
+        assert refusal.values["file"] == "orca-slicer"
+        assert "reason" not in refusal.values
+    else:
+        assert ids == ["install", "export_only"]
+        assert refusal.values["reason"] == str(problem)

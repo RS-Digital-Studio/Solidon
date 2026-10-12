@@ -33,7 +33,7 @@ it into `website/version.json`.
 
 ### Printing and slicer handover
 
-- If the chosen slicer is a file that is not a program, Solidon now says so at once. In version 0.6.0 a Windows message about a 16-bit application held up slicing until someone closed it.
+- If the chosen slicer is a file that is not a program, Solidon now says so at once and offers to choose another slicer. In version 0.6.0 slicing waited until someone closed a Windows message.
 
 ### Editing and sketching
 

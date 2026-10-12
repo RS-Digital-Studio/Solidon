@@ -58,7 +58,7 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Übergabe an den Slicer
 
-- Ist als Slicer eine Datei gewählt, die kein Programm ist, meldet Solidon das jetzt sofort. In Version 0.6.0 hielt eine Windows-Meldung zur 16-Bit-Anwendung das Slicen an, bis jemand sie schloss.
+- Ist als Slicer eine Datei gewählt, die kein Programm ist, sagt Solidon das sofort und bietet einen anderen Slicer an. In Version 0.6.0 wartete das Slicen, bis jemand eine Windows-Meldung schloss.
 
 ### Bearbeiten und Zeichnen
 

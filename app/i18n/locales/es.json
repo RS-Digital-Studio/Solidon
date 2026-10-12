@@ -2535,6 +2535,7 @@
   "Die gespeicherten Trennwandhöhen sind ungültig. Wählen Sie die Wände erneut.": "Las alturas guardadas de las paredes divisorias no son válidas. Seleccione las paredes de nuevo.",
   "Die gewählte Bausteindatei ließ sich nicht öffnen. Wählen Sie eine andere Datei oder prüfen Sie deren Zugriffsrechte.": "El archivo de bloque seleccionado no se pudo abrir. Seleccione otro archivo o compruebe sus permisos de acceso.",
   "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche oder Kante. Verschieben Sie einen der beiden so weit, dass sich die Körper wirklich überlappen.": "La operación seleccionada no funciona con estos cuerpos en su posición actual; normalmente solo se tocan en una cara o una arista. Mueva uno de ellos lo suficiente para que los cuerpos se solapen de verdad.",
+  "Die gewählte Datei ist kein Programm.": "El archivo seleccionado no es un programa.",
   "Die gewählte Datei wird begrenzt in das Projekt aufgenommen.": "El archivo seleccionado se lee con un límite de tamaño y se añade al proyecto.",
   "Die gewählte G-Code-Datei wird gelesen und ausgewertet.": "Se está leyendo y analizando el archivo G-code seleccionado.",
   "Die gewählte Kante ist nicht eindeutig — wählen Sie sie am Körper neu.": "La arista seleccionada es ambigua — volver a seleccionarla en el cuerpo.",

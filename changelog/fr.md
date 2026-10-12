@@ -34,7 +34,7 @@ dans `website/version.json`.
 
 ### Imprimer et transmettre au slicer
 
-- Si le slicer choisi n'est pas un programme, Solidon le signale désormais aussitôt. En version 0.6.0, un message Windows sur une application 16 bits bloquait le slicer jusqu'à ce qu'on le ferme.
+- Si le slicer choisi n'est pas un programme, Solidon le dit désormais aussitôt et propose d'en choisir un autre. En version 0.6.0, le tranchage attendait qu'on ferme un message de Windows.
 
 ### Modifier et esquisser
 
