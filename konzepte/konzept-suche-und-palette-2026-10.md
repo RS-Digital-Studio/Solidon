@@ -218,3 +218,12 @@ Die Nachprüfung der Fixe fand vier weitere.
 | N2: Der Fix zu F7 hielt auch die selbsttätige Vorauswahl über einen Auswahlwechsel fest („hinlegen“, dann Körper: Return richtete die Szene aus) | Fehler, Rückschritt aus F7 | mittel | `test_the_preselection_follows_a_new_selection_unless_chosen_by_hand`, vorher rot; Fenstersonde 437 Wörter, drei Wechsel, keiner mit alter Wahl | behoben, nur eine Wahl von Hand bleibt |
 | N3: `main_window.py` zieht 17 Byte unter der Grenze Unterlagen nach | Risiko | leicht | `test_no_source_file_pulls_more_than_its_budget` | ohne Zuwachs gehalten; der Raum entsteht mit der Codestruktur (RM-722 ff.) |
 | N4: Fehlendes Leerzeichen im Zitat von `make_workshop_videos.py` | Text | leicht | Bericht | behoben |
+| N5: Der Schlüssel „an der Lage“ aus N1 galt auch in den ungenauen Stufen und schlug die Wertung der Wortsuche („zurück“ am Körper wählte *Objekt entfernen*) | Fehler, Rückschritt aus N1 | mittel | `test_a_loose_hit_is_ordered_by_the_word_search_not_by_the_place`, vorher rot; Sonde über 1085 Wörter: übrig nur Treffer im Titelwort an der Lage („entfernen“ an der Bohrung → *Merkmal entfernen*) | behoben, nur unter `LOOSE_RANK` |
+| N6: Der Schlüssel „frei vor gesperrt“ hatte keinen Test | Testlücke | leicht | `test_among_the_best_hits_what_works_stands_before_what_is_locked` | behoben |
+
+Weitere Vorauswahlen gegenüber 0.6.0 aus dem ganzen Titel: „Wandhalter“ ohne
+Auswahl (der eigene Körper, der Baustein an der Auswahl ist dort gesperrt),
+„Dichtnut“ an der Fläche, „brep“ an Körper, Fläche und Bohrung
+(*Aushöhlen*, aus RM-734). Bei gleichem Titel ohne Kundenwort entscheidet der
+interne Name („Schraube“ an der Fläche wählt den eigenen Körper); das bleibt
+so, bis ein Kundenwort es entscheidet.

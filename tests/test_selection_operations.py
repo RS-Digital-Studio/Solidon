@@ -1413,6 +1413,24 @@ def test_among_equal_hits_the_place_then_the_whole_title_then_the_word_decides(
         set_language("de")
 
 
+def test_a_loose_hit_is_ordered_by_the_word_search_not_by_the_place(
+    qt_app: QApplication,
+) -> None:
+    """In den ungenauen Stufen wertet die Wortsuche, wie beim Agenten — die Lage
+    bricht dort keinen Gleichstand vor der Wertung.
+
+    Mit der Lage vor der Wertung wählte „zurück“ am Körper *Objekt entfernen*
+    vor, und Return löschte ihn; „tiefe“ fand *Durch Überblenden schneiden*
+    statt *Bohrung ändern* (Nachprüfung RM-735, N5).
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1))
+    panel.search.setText("tiefe")
+    chosen = panel.hits.currentItem().data(Qt.ItemDataRole.UserRole)
+    assert chosen == "resize_hole", chosen
+
+
 def test_return_in_the_hit_list_ends_there(qt_app: QApplication) -> None:
     """Return in der Trefferliste führt aus und läuft nicht an die Vorfahren weiter.
 

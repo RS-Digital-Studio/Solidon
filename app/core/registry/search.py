@@ -888,7 +888,10 @@ def ranked(
             -score if loosened else 0.0,
             -word_hits(entry, query) if loosened else 0,
             good,
-            entry.name not in here,
+            # Nur in den genauen Stufen: Darüber wertet die Wortsuche wie beim
+            # Agenten, und „zurück“ wählte am Körper sonst *Objekt entfernen*
+            # (Nachprüfung RM-735, N5).
+            good < LOOSE_RANK and entry.name not in here,
             entry.name in hidden,
             # Frei vor gesperrt, wie die Reihenfolge der ``entries`` — sonst
             # stünde ein gesperrtes Kundenwort über einem freien Titel.

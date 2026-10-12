@@ -697,6 +697,28 @@ def test_a_customer_word_said_exactly_beats_a_longer_word_in_a_title(
     assert rank(gemeint, word) < rank(zeile, word), f"„{word}“ ({language}) zeigt {shown} zuerst"
 
 
+def test_among_the_best_hits_what_works_stands_before_what_is_locked() -> None:
+    """Unter den besten Treffern steht das Freie vor dem Gesperrten, auch wenn
+    das Gesperrte ein Kundenwort trägt.
+
+    „Wandhalter“ ohne Auswahl: Beide Zeilen heißen so, nur der Baustein *an*
+    die Auswahl hat das Kundenwort „Wandhalterung“ — und geht ohne Körper
+    nicht. Er stand ohne diesen Schlüssel über dem freien, eigenen Körper
+    (Nachprüfung RM-735, N6).
+    """
+    gesperrt = SearchEntry(
+        name="insert_wall_mount",
+        title="Wandhalter",
+        category="parts",
+        doc="",
+        available=False,
+        reason="Wählen Sie dafür ein Objekt aus.",
+    )
+    frei = SearchEntry(name="create_wall_mount", title="Wandhalter", category="parts", doc="")
+    hits, _loosened = ranked([gesperrt, frei], "Wandhalter")
+    assert [entry.name for entry in hits] == ["create_wall_mount", "insert_wall_mount"]
+
+
 @pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
 def test_whoever_types_a_whole_title_gets_that_row_first(language: str) -> None:
     """Den ganzen Titel einer Zeile schlägt keine andere Zeile.
