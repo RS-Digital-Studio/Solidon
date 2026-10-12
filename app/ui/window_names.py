@@ -7,9 +7,11 @@ sie deshalb nur als „irgendein Meldungsfenster“ (Konzept Funktionsdurchgang
 §5: Was nicht erreichbar ist, wird ein Ziel im Wortschatz).
 
 :func:`raw_window` schließt den Aufruf ein und gibt dem Fenster, das darin
-aufgeht, sein Kennzeichen (``guides.TARGET_PROPERTY``) — ``message:<modul>.<funktion>``,
-der Name der Funktion, die es baut. Dass jede solche Funktion es tut, hält
-``tests/test_guide_targets.py``.
+aufgeht, sein Kennzeichen (``guides.TARGET_PROPERTY``) —
+``message:<sache>``, benannt nach der Frage und nie nach Datei oder Modul,
+die beim Aufteilen der Oberfläche wandern. Ein ``QMessageBox(…)`` trägt sein
+Kennzeichen und das seiner Knöpfe (``message.button:<sache>.<knopf>``) selbst.
+Dass jedes rohe Fenster es tut, hält ``tests/test_guide_targets.py``.
 """
 
 from __future__ import annotations
@@ -18,9 +20,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from PySide6.QtCore import QEvent, QObject
-from PySide6.QtWidgets import QApplication, QColorDialog, QInputDialog, QMessageBox, QWidget
+from PySide6.QtWidgets import QColorDialog, QInputDialog, QMessageBox, QWidget
 
 from app.core import guides
+from app.ui import app_events
 
 #: Die Fensterklassen, die ohne eigene Klasse aufgehen.
 RAW_WINDOWS = (QMessageBox, QInputDialog, QColorDialog)
@@ -52,14 +55,14 @@ def raw_window(name: str) -> Iterator[None]:
     Für ein Fenster mit Objekt wie für einen statischen Aufruf
     (``QMessageBox.information``) gleich: Gehört wird auf das Erscheinen, nicht
     auf den Aufruf. Ein Fenster, das schon ein Kennzeichen trägt, behält es.
+    Angemeldet über den einen Filter der Anwendung (:mod:`app.ui.app_events`)
+    und nur für das Erscheinen eines Fensters.
     """
-    application = QApplication.instance()
-    if application is None:
+    namer = _Namer(name)
+    if not app_events.listen(namer, (QEvent.Type.Show,)):
         yield
         return
-    namer = _Namer(name)
-    application.installEventFilter(namer)
     try:
         yield
     finally:
-        application.removeEventFilter(namer)
+        app_events.forget(namer)

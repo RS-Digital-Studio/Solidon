@@ -432,7 +432,7 @@ class _Row(QWidget):
         problem = ""
         entered = self.tool.remote_address() or self.tool.url
         while True:
-            with raw_window("message:install_dialog._choose_address"):
+            with raw_window("message:service_address"):
                 entered, accepted = QInputDialog.getText(
                     self,
                     str(self.tool.title),
@@ -1069,7 +1069,7 @@ class InstallDialog(QDialog):
     def _show_details(self) -> None:
         """Das Protokoll, für den der es weitergeben will (§33.2)."""
         box = QMessageBox(self)
-        box.setProperty(guides.TARGET_PROPERTY, "message:install_dialog._show_details")
+        box.setProperty(guides.TARGET_PROPERTY, "message:install_details")
         box.setWindowTitle(tr("Einzelheiten"))
         # Beim Start eines Dienstes hat keine Paketverwaltung etwas gemeldet —
         # dort stehen Aufruf und Adresse.

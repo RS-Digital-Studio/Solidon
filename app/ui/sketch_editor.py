@@ -8316,7 +8316,7 @@ class SketchPanel(QWidget):
                 shown = f"{circle_shown(float(entry.value)):.9f}".rstrip("0").rstrip(".")
             except ValueError:
                 shown = str(entry.value)
-        with raw_window("message:sketch_editor.change_constraint_value"):
+        with raw_window("message:constraint_value"):
             value, agreed = QInputDialog.getText(
                 self, str(tr("Maß ändern")), tr("{name}:", name=caption), text=shown
             )

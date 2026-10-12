@@ -2311,7 +2311,7 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        with raw_window("message:dialogs._save_request"):
+        with raw_window("message:activation_request_saved"):
             QMessageBox.information(
                 self,
                 tr("Aktivierungsanfrage gespeichert"),
@@ -2328,7 +2328,7 @@ class OfflineActivationDialog(QDialog):
         target.setQuery(query)
         if QDesktopServices.openUrl(target) is False:
             self._copy_page()
-            with raw_window("message:dialogs._open_page"):
+            with raw_window("message:activation_page"):
                 QMessageBox.information(
                     self,
                     tr("2 · Aktivierungsseite öffnen"),
@@ -2372,7 +2372,7 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        with raw_window("message:dialogs._import_answer"):
+        with raw_window("message:activated_offline"):
             QMessageBox.information(
                 self,
                 tr("Solidon ist freigeschaltet"),
@@ -2816,7 +2816,7 @@ class ActivationDialog(QDialog):
             show_error(problem, self)
             return
         if activation.read_key() is None:
-            with raw_window("message:dialogs._remember"):
+            with raw_window("message:activation_reminder"):
                 QMessageBox.information(
                     self,
                     tr("Solidon freischalten"),
@@ -2894,7 +2894,7 @@ class ActivationDialog(QDialog):
         except AppError as problem:
             show_error(problem, self)
             return
-        with raw_window("message:dialogs._online_completed"):
+        with raw_window("message:activated_online"):
             QMessageBox.information(
                 self,
                 tr("Solidon ist freigeschaltet"),
@@ -2983,7 +2983,7 @@ class ActivationDialog(QDialog):
             self._show_state()
             return
         self.field.clear()
-        with raw_window("message:dialogs._deactivation_completed"):
+        with raw_window("message:deactivated"):
             QMessageBox.information(
                 self,
                 tr("Rechner deaktiviert"),
@@ -3090,7 +3090,7 @@ def open_link(address: str, parent: QWidget | None = None) -> bool:
     """
     if open_or_copy(QUrl(address), address):
         return True
-    with raw_window("message:dialogs.open_link"):
+    with raw_window("message:browser_failed"):
         QMessageBox.information(
             parent,
             tr("Der Browser ließ sich nicht öffnen"),
@@ -3219,7 +3219,9 @@ def show_expired_demo(state: activation.Activation) -> None:
     box.setIcon(QMessageBox.Icon.Information)
     box.setText(expired_demo_text(state))
     website = box.addButton(tr("Website öffnen"), QMessageBox.ButtonRole.AcceptRole)
-    box.addButton(QMessageBox.StandardButton.Close)
+    website.setProperty(guides.TARGET_PROPERTY, "message.button:expired_demo.website")
+    close = box.addButton(QMessageBox.StandardButton.Close)
+    close.setProperty(guides.TARGET_PROPERTY, "message.button:expired_demo.close")
     box.exec()
     if box.clickedButton() is website:
         open_website()
@@ -3613,7 +3615,7 @@ def show_error(
     offered = offered_actions(error, known)
 
     box = QMessageBox(parent)
-    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs.show_error")
+    box.setProperty(guides.TARGET_PROPERTY, "message:error")
     box.setTextFormat(Qt.TextFormat.PlainText)
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr("Das hat so nicht funktioniert"))
@@ -3640,6 +3642,7 @@ def show_error(
             else QMessageBox.ButtonRole.ActionRole
         )
         button = box.addButton(str(action.label), role)
+        button.setProperty(guides.TARGET_PROPERTY, f"message.button:error.{action.id}")
         # **Welcher Knopf der Hauptknopf ist, stand schon im Datenmodell** —
         # ``Action.primary`` entscheidet zwei Zeilen darüber die Rolle. Es
         # fehlte nur das letzte Glied: Ohne ``make_primary`` bekam der Knopf
@@ -3649,6 +3652,7 @@ def show_error(
             make_primary(button)
         buttons[button] = action
     abbrechen = box.addButton(str(CANCEL.label), QMessageBox.ButtonRole.RejectRole)
+    abbrechen.setProperty(guides.TARGET_PROPERTY, f"message.button:error.{CANCEL.id}")
 
     # **Bleibt nur „Abbrechen" übrig, trägt niemand den Akzent.** Das
     # passiert, wenn das Fenster für keinen Vorschlag einen Handler hat
@@ -3681,7 +3685,7 @@ def show_details(error: AppError, parent: QWidget | None = None) -> None:
         lines.append(tr("Operation: {op_id}", op_id=error.op_id))
 
     box = QMessageBox(parent)
-    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs.show_details")
+    box.setProperty(guides.TARGET_PROPERTY, "message:error_details")
     box.setIcon(QMessageBox.Icon.Information)
     box.setWindowTitle(tr("Einzelheiten"))
     box.setText(str(error.title))
@@ -4246,14 +4250,17 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     Gibt ``save``, ``discard`` oder ``cancel`` zurück.
     """
     box = QMessageBox(parent)
-    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs.confirm_unsaved")
+    box.setProperty(guides.TARGET_PROPERTY, "message:unsaved_changes")
     box.setIcon(QMessageBox.Icon.Question)
     box.setWindowTitle(tr("Ungesicherte Änderungen"))
     box.setText(tr("Dieses Projekt hat Änderungen, die noch nicht gespeichert sind."))
     box.setInformativeText(title)
     save = box.addButton(tr("Speichern"), QMessageBox.ButtonRole.AcceptRole)
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
-    box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    save.setProperty(guides.TARGET_PROPERTY, "message.button:unsaved_changes.save")
+    discard.setProperty(guides.TARGET_PROPERTY, "message.button:unsaved_changes.discard")
+    cancel.setProperty(guides.TARGET_PROPERTY, "message.button:unsaved_changes.cancel")
     make_primary(save)
     # Rot, weil nach dem Schließen kein Undo zurückholt, was hier verworfen wird.
     make_danger(discard)
@@ -4336,7 +4343,7 @@ def _go_on_despite(
 ) -> bool:
     """Die Befunde in fünf Zeilen, dazu Weitergehen als Vorgabe und Abbrechen."""
     box = QMessageBox(parent)
-    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs._go_on_despite")
+    box.setProperty(guides.TARGET_PROPERTY, "message:go_on_despite_findings")
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(title)
     box.setText(text)
@@ -4345,7 +4352,9 @@ def _go_on_despite(
         lines.append(tr("Der Rest steht im Prüfbericht."))
     box.setInformativeText(newline.join(lines))
     write = box.addButton(go_on, QMessageBox.ButtonRole.AcceptRole)
-    box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    write.setProperty(guides.TARGET_PROPERTY, "message.button:go_on_despite_findings.go_on")
+    cancel.setProperty(guides.TARGET_PROPERTY, "message.button:go_on_despite_findings.cancel")
     make_primary(write)
     box.setDefaultButton(write)
     as_plain_text(box)
@@ -4363,7 +4372,7 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
     ``close`` zurück.
     """
     box = QMessageBox(parent)
-    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs.confirm_generation_loss")
+    box.setProperty(guides.TARGET_PROPERTY, "message:generation_loss")
     box.setIcon(QMessageBox.Icon.Question)
     lost = ""
     if tries == 1:
@@ -4386,6 +4395,8 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
         box.setText(lost)
     back = box.addButton(tr("Zur Erzeugung"), QMessageBox.ButtonRole.RejectRole)
     close = box.addButton(tr("Trotzdem schließen"), QMessageBox.ButtonRole.DestructiveRole)
+    back.setProperty(guides.TARGET_PROPERTY, "message.button:generation_loss.back")
+    close.setProperty(guides.TARGET_PROPERTY, "message.button:generation_loss.close")
     make_primary(back)
     make_danger(close)
     box.setDefaultButton(back)
@@ -4439,7 +4450,7 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     if count <= 1:
         return True
     box = QMessageBox(parent)
-    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs.confirm_discard")
+    box.setProperty(guides.TARGET_PROPERTY, "message:discard_undone_steps")
     box.setWindowTitle(tr("Abgeschnittene Schritte verwerfen?"))
     box.setText(
         tr("Diese Änderung verwirft {count} zurückgenommene Schritte.").replace(
@@ -4450,6 +4461,8 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
         box.setInformativeText("\n".join(f"· {name}" for name in names))
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
     cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    discard.setProperty(guides.TARGET_PROPERTY, "message.button:discard_undone_steps.discard")
+    cancel.setProperty(guides.TARGET_PROPERTY, "message.button:discard_undone_steps.cancel")
     # **Rot und ohne Hauptknopf** (RM-512): Verwerfen ist unwiederbringlich,
     # also kein Akzent, der dazu einlädt, und keine Eingabetaste, die es im
     # Vorbeigehen tut. Abbrechen ist ein Ausgang und kein Hauptknopf; Escape

@@ -32,6 +32,7 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractButton,
     QAbstractItemView,
+    QAbstractScrollArea,
     QApplication,
     QDialog,
     QDialogButtonBox,
@@ -39,6 +40,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QTabBar,
@@ -325,6 +327,30 @@ def _marked(name: str) -> Callable[[MainWindow], QWidget]:
     return find
 
 
+def _message_button(window: MainWindow, name: str, rest: str) -> QWidget:
+    """Ein Knopf eines offenen rohen Meldungsfensters (``message.button:``).
+
+    Ein ``QMessageBox(…)`` benennt seine Knöpfe selbst; ein statischer Aufruf
+    gibt sie nicht heraus, dort heißt der Knopf nach seinem Standardknopf
+    (``yes``, ``ok``) im Fenster ``message:<sache>``.
+    """
+    found = marked_widgets(window, name)
+    if found:
+        return found[0]
+    holder, _dot, key = rest.partition(".")
+    for top in QApplication.topLevelWidgets():
+        if not top.isVisible() or top.property(guides.TARGET_PROPERTY) != f"message:{holder}":
+            continue
+        boxes: list[QMessageBox | QDialogButtonBox] = (
+            [top] if isinstance(top, QMessageBox) else top.findChildren(QDialogButtonBox)
+        )
+        for box in boxes:
+            for button in box.buttons():
+                if (box.standardButton(button).name or "").lower() == key:
+                    return button
+    raise MissingTargetError(f"{name}: kein offenes Meldungsfenster trägt diesen Knopf")
+
+
 def _chat_page(window: MainWindow) -> QWidget:
     """Die Seite *Chat* der rechten Karte."""
     page: QWidget = window.chat
@@ -431,6 +457,8 @@ def widget_for(window: MainWindow, name: str) -> QWidget:
         button = window.selection_operations.button_for(rest)
         if button is not None and button.isVisible():
             return button
+    if kind == "message.button":
+        return _message_button(window, name, rest)
     if kind in _MARKED_KINDS:
         return _marked(name)(window)
     if kind == "handle" and rest in _BARS:
@@ -899,6 +927,7 @@ RESOLVED_KINDS: Final[frozenset[str]] = frozenset(
         "dialog",
         "start.recent",
         "message",
+        "message.button",
         "setting.section",
     }
 )
@@ -1078,10 +1107,15 @@ def _reveal_row(
             obstacle.setExpanded(True)
         else:
             window.history_panel.open_group(str(obstacle.data(GROUP_ROLE)))
+    # Eine aufgeklappte Gruppe macht ihre Liste höher, und die Karte legt sich
+    # neu; gerollt und gemessen wird danach, sonst stimmt der Ort um die Zeilen
+    # nicht, um die die Karte gewachsen ist.
+    QApplication.processEvents()
     if isinstance(view, QTreeWidget) and isinstance(item, QTreeWidgetItem):
         view.scrollToItem(item)
     if isinstance(view, QListWidget) and isinstance(item, QListWidgetItem):
         view.scrollToItem(item)
+    QApplication.processEvents()
 
 
 def _item_area(view: QAbstractItemView, item: QTreeWidgetItem | QListWidgetItem) -> QRect:
@@ -1496,7 +1530,8 @@ def _visible_row_click(
     scrolled = _row_scroll(surface, rect, name)
     if scrolled is not None:
         return scrolled
-    # Was von der Zeile zu sehen ist: Eine lange Zeile reicht rechts aus der Liste.
+    # Was von der Zeile zu sehen ist: Eine lange Zeile reicht rechts aus der
+    # Liste, und eine Liste, die nicht rollen kann, schneidet ihr Elternteil ab.
     rect = rect.intersected(surface.visibleRegion().boundingRect())
     return Click(
         QRect(surface.mapToGlobal(rect.topLeft()), rect.size()),
@@ -1515,6 +1550,11 @@ def _row_scroll(surface: QWidget, rect: QRect, name: str) -> Click | None:
     Zeile gilt, wenn sie in der Höhe ganz zu sehen ist — oder, höher als das
     Sichtbare, wenn ihre Mitte darin liegt. In der Breite reicht ein sichtbarer
     Teil: Eine lange Zeile ist breiter als ihre Liste.
+
+    **Rollen nur, wo ein Mausrad etwas bewegt** (:func:`_can_roll`). Eine Liste,
+    die so hoch ist wie ihre Zeilen, rollt nicht; ragt sie über ihren
+    Elternteil, ist der sichtbare Teil der Zeile das Ziel (``None``), und eine
+    Zeile ganz außerhalb hat keinen Weg.
     """
     visible = surface.visibleRegion().boundingRect()
     if visible.isEmpty():
@@ -1527,8 +1567,33 @@ def _row_scroll(surface: QWidget, rect: QRect, name: str) -> Click | None:
     if across and upright:
         return None
     direction = 1 if rect.center().y() >= visible.center().y() else -1
+    if not _can_roll(surface, direction):
+        if across and rect.intersects(visible):
+            return None
+        raise MissingTargetError(
+            f"{name}: die Zeile liegt außerhalb des sichtbaren Teils, und weder ihre "
+            "Liste noch ein Bereich um sie rollt"
+        )
     shown = QRect(surface.mapToGlobal(visible.topLeft()), visible.size())
     return Click(shown, Qt.MouseButton.NoButton, "rollen", name, direction)
+
+
+def _can_roll(surface: QWidget, direction: int) -> bool:
+    """Ob ein Mausrad über ``surface`` in diese Richtung etwas bewegt.
+
+    Die Liste selbst oder ein Rollbereich um sie: Qt reicht ein Rad, das die
+    Liste nicht bewegen kann, an ihre Eltern weiter.
+    """
+    holder = surface.parentWidget()
+    while holder is not None and not holder.isWindow():
+        if isinstance(holder, QAbstractScrollArea):
+            bar = holder.verticalScrollBar()
+            if bar is not None and (
+                bar.value() < bar.maximum() if direction > 0 else bar.value() > bar.minimum()
+            ):
+                return True
+        holder = holder.parentWidget()
+    return False
 
 
 def _expander_click(view: QAbstractItemView, item: QTreeWidgetItem, name: str) -> Click:
@@ -1543,6 +1608,9 @@ def _expander_click(view: QAbstractItemView, item: QTreeWidgetItem, name: str) -
         return scrolled
     indent = view.indentation()
     arrow = QRect(rect.left() - indent, rect.top(), indent, rect.height())
+    arrow = arrow.intersected(surface.visibleRegion().boundingRect())
+    if arrow.isEmpty():
+        raise MissingTargetError(f"{name}: das Dreieck der Zeile ist gerade verdeckt")
     return Click(
         QRect(surface.mapToGlobal(arrow.topLeft()), arrow.size()),
         Qt.MouseButton.LeftButton,

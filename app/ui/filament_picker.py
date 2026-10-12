@@ -1258,7 +1258,7 @@ class NewFilamentDialog(QDialog):
             QWidget.setTabOrder(previous, self.location)
 
     def _pick_colour(self, number: int = 0) -> None:
-        with raw_window("message:filament_picker._pick_colour"):
+        with raw_window("message:filament_colour"):
             chosen = QColorDialog.getColor(
                 QColor(self._colours[number]), self, tr("Farbe des Filaments")
             )
@@ -1721,7 +1721,7 @@ class FilamentField(QComboBox):
         labels = [
             self._label(slot.index, str(slot.name), str(slot.material_type or "")) for slot in slots
         ]
-        with raw_window("message:filament_picker._replacement_slot"):
+        with raw_window("message:filament_slot"):
             chosen, accepted = QInputDialog.getItem(
                 self,
                 tr("Filament ersetzen"),

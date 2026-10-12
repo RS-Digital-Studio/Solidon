@@ -5107,7 +5107,10 @@ class HistoryPanel(QWidget):
         return (
             self._timeline_height()
             + view_chrome(self.list)
-            + self.list.count() * row_height_of(self.list)
+            # Gezählt wird, was zu sehen ist: Die Teilschritte eines
+            # eingeklappten Sammelschritts sind versteckte Zeilen.
+            + sum(not self.list.isRowHidden(row) for row in range(self.list.count()))
+            * row_height_of(self.list)
         )
 
     def least_height(self) -> int:
@@ -5134,7 +5137,8 @@ class HistoryPanel(QWidget):
         self._empty.setVisible(empty)
         self.list.setVisible(not empty)
         room = None if self._room is None else max(0, self._room - self._timeline_height())
-        fit_to_rows(self.list, self.list.count(), room=room)
+        shown = sum(not self.list.isRowHidden(row) for row in range(self.list.count()))
+        fit_to_rows(self.list, shown, room=room)
         # Dieselbe Stelle wie im Objektbaum: die Liste ist bemessen, die Karte
         # um sie herum meldete weiter ihre Mindesthöhe und wurde auf zehn Pixel
         # gedrückt.
