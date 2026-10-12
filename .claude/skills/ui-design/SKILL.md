@@ -53,6 +53,41 @@ selbst, statt Varianten zur Wahl zu stellen. Ist Umsetzung beauftragt, wird
 der Entwurf umgesetzt, ohne zusätzliche Freigabe für rücknehmbare Änderungen.
 Ändert sich dabei der Bedienweg, zusätzlich `/ux-review`.
 
+## Kriterien des Funktionsdurchgangs
+
+Die eine Quelle für Gestaltung (G), zeitgemäß (Z) und innovativ (I) im
+Funktionsdurchgang (`konzepte/konzept-funktionsdurchgang-2026-10.md` §4); Stufe
+A misst der Prüfstand, B urteilt am Bild, C von Hand. Die Zahlen hält
+`tools/function_checks.py`, ein Test hält beide gleich. Ein Fix aus Z oder I
+zählt nur, wenn E und V an derselben Zeile nicht schlechter werden und er im
+gewöhnlichen Weg sichtbar ist. G9 ist höchstens *leicht*; I1, I5 und der
+Chatweg zu I6 sagt der Bauplan zu, ihr Fehlen ist ein Fund.
+
+| Kennung | Zählgröße | Schwelle | Stufe | Messung |
+|---|---|---|---|---|
+| G1 | Hauptknöpfe und Akzentflächen im Ruhezustand | ≤ 1 Hauptaktion je Dialog oder Karte (ohne Handlung keine), ≤ 1 Akzent je Fenster | A | `layout` |
+| G2 | Abstände | Vielfaches von `SPACE` (4), je Gruppe einheitlich | A | `layout` |
+| G3 | Ausrichtung | Beschriftungen, Felder, Einheiten bündig; Werte rechtsbündig mit Einheit | A | `layout` |
+| G4 | Schrift | nur die vier Stufen aus `LEVELS`; keine feste Größe oder Farbe außerhalb der Gestaltungswerte | A | `fonts` |
+| G5 | Zustände: Hover, Fokus, gedrückt, deaktiviert, beschäftigt, Fehler | je sichtbar unterscheidbar, zweite Kodierung, Fokus immer sichtbar | A misst, B urteilt | `state_images` |
+| G6 | Kontrast von Text und Symbolen | ≥ 4,5 : 1, große Schrift und Symbole ≥ 3 : 1, hell und dunkel | A | `contrast` |
+| G7 | Symbole | Symbol aus `icons`, Tooltip mit Name und Kürzel, ein Stil | A | `icons` |
+| G8 | Bewegung | Übergang aus `motion`, 110–220 ms, abschaltbar, kein Sprung ohne Übergang | A | `animations` |
+| G9 | Direkt statt Formular | Gestaltungsurteil, höchstens leicht | B | Bild |
+| Z1 | Ziehen: Griff, Geist und Zahl am Zeiger | ≤ 33 ms bis zum nächsten Bild, umgerechnet auf den Referenzrechner | A | `frames` |
+| Z2 | Nicht-modal | `activeModalWidget()` leer, außer den Ausnahmen aus Konzept §4 | A | `modals` |
+| Z3 | Am Objekt: Handlung ohne Menü und Suche nach dem Klick auf die Stelle | ja je Zeile mit Merkmals- oder Körperbezug | A misst, B urteilt | `steps` |
+| Z4 | Leere Zustände führen weiter | Knopf zur nächsten Handlung | B, A listet | `empty_states` |
+| Z5 | Rohe Qt-Fenster im Kundenweg | 0, außer `QFileDialog` und den Ausnahmen aus Z2 | A | `raw_windows` |
+| Z6 | Größen und Skalierungen | 1280 × 820 und 1366 × 728 ohne Rollleiste vorn; Symbole scharf bei 100, 150, 200 %; hell und dunkel gleiche Flächen und Akzente | A | `scrollbars`, `icons` |
+| Z7 | Die ersten fünf Minuten | Schritte und Fehlklicks, jeder Fehlklick ein Fund | C | Protokoll der Stufe C |
+| I1 | Merkmal statt Dreieck: Name und Maß beim Überfahren | ja an jeder erkannten Art | A misst, B urteilt | `hover_labels` |
+| I2 | Druckfolge im Vorschauband | ja an jeder Zeile mit gerechneter Vorschau | A misst, B urteilt | `preview.banner_text` |
+| I3 | Vorschlag statt Suche | ≥ 80 % der häufigsten Kundenziele | A | `steps` gegen `tests/data/common_goals.toml` |
+| I4 | Befund mit Lösung | Zahl genannt; jede Art ohne Handlung ist ein Vorschlag | A | Befundarten und ihre Handlungen |
+| I5 | Vorher und nachher mit einem Klick | ja an der Zeile Vorher/Nachher | A misst, B urteilt | `steps` |
+| I6 | Sagen statt suchen: Suchproben als Frage | Treffer unter den ersten drei | A | `search` |
+
 ## Umsetzung und Sichtprüfung
 
 An der zuständigen Quelle ändern: sichtbare App-Texte über `tr()` und alle
