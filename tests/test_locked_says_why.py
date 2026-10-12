@@ -582,7 +582,20 @@ def test_the_missing_objects_sentence_counts_and_names_the_mac_key() -> None:
 
 
 def test_a_locked_operation_with_four_inputs_asks_for_four(window: MainWindow) -> None:
-    """Am Fenster: Der Sperrgrund von *Einlagen für neues Profil* nennt vier Objekte."""
+    """Am Fenster: Der Sperrgrund von *Einlagen für neues Profil* nennt vier Objekte.
+
+    Zwei Lagen, zwei Sätze (RM-735, Befund F4): Liegen vier Körper in der
+    Szene und einer ist gewählt, schickt er zum Dazuwählen. Liegt nur einer
+    darin, gibt es nichts dazuzuwählen, und er nennt den Weg zu weiteren.
+    """
     _with_a_selected_body(window)
-    reason = window._reason_locked(REGISTRY.get("replace_profile_liners"), [], 1, 1)
+    spec = REGISTRY.get("replace_profile_liners")
+    bodies = len(window.session.evaluate_now().scene.objects)
+    assert bodies == 1, "der Fall braucht eine Szene mit weniger Körpern, als die Operation nimmt"
+    reason = window._reason_locked(spec, [], bodies, 1)
+    assert reason is not None and reason.startswith("Dafür braucht es 4 Körper in der Szene."), (
+        reason
+    )
+    assert str(REGISTRY.get("duplicate_object").title) in reason, "der Weg zu weiteren Körpern"
+    reason = window._reason_locked(spec, [], 4, 1)
     assert reason is not None and reason.startswith("Diese Operation braucht 4 Objekte."), reason

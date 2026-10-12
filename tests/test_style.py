@@ -2638,10 +2638,10 @@ def test_a_shortcut_search_without_a_hit_says_so(qt_app: QApplication) -> None:
 #: Die Layoutarten, deren Abstand Qt sonst mit 6 vorgibt — kein Vielfaches des Rasters.
 _LAYOUTS = frozenset({"QVBoxLayout", "QHBoxLayout", "QFormLayout", "QGridLayout"})
 
-#: Module mit Dialogklasse, die der Wächter unten nicht prüft: ``panels.py`` trägt
-#: die Karten des Hauptfensters (mit ``BodyChoiceDialog`` nur nebenbei), und deren
-#: Höhen teilt ``OverlayHost._share_room`` — ein eigener Schritt mit eigener Messung.
-_SPACING_ELSEWHERE = frozenset({"panels.py"})
+#: Module der Karten des Hauptfensters: geprüft, auch wenn ihre Dialogklasse
+#: (``BodyChoiceDialog``) einmal umzieht. Ihre Höhen teilt
+#: ``OverlayHost._share_room`` und liest dabei die Abstände der Layouts (FD-23).
+_CARD_MODULES = frozenset({"panels.py"})
 
 
 def _layouts_without_spacing(source: str) -> list[str]:
@@ -2689,20 +2689,23 @@ def _layouts_without_spacing(source: str) -> list[str]:
 
 
 def test_every_layout_of_a_dialog_keeps_the_grid() -> None:
-    """Jedes Layout eines Dialogs setzt seinen Abstand selbst (G2, FD-15).
+    """Jedes Layout eines Dialogs und jeder Karte setzt seinen Abstand selbst (G2,
+    FD-15, FD-23).
 
     Qt gibt 6 Punkte vor, kein Vielfaches des Rasters: Inhalt und beide
     Formulare des Operationsdialogs standen damit neben dem Kalibrierdialog,
-    der ``NORMAL`` setzt, und in 19 weiteren Dialogmodulen ebenso. Ohne Fenster,
-    am Quelltext jedes Moduls mit einer Dialogklasse.
+    der ``NORMAL`` setzt, und in 19 weiteren Dialogmodulen ebenso; in den
+    Karten des Hauptfensters zehn Layouts neben Nachbarn mit ``TIGHT``. Ohne
+    Fenster, am Quelltext jedes Moduls mit einer Dialogklasse und der Karten.
     """
     modules = [
         path
         for path in sorted(UI.glob("*.py"))
-        if path.name not in _SPACING_ELSEWHERE
-        and re.search(r"^class \w+\(.*QDialog\b", path.read_text(encoding="utf-8"), re.MULTILINE)
+        if path.name in _CARD_MODULES
+        or re.search(r"^class \w+\(.*QDialog\b", path.read_text(encoding="utf-8"), re.MULTILINE)
     ]
     assert len(modules) > 20, f"nur {len(modules)} Dialogmodule — die Suche greift nicht"
+    assert {path.name for path in modules} >= _CARD_MODULES, "die Karten fehlen in der Prüfung"
     missing = [
         f"{path.name}:{entry}"
         for path in modules

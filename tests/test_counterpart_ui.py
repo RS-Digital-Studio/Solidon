@@ -14,6 +14,7 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from app.core.scene.history import OperationDraft
+from app.i18n import tr
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -770,7 +771,19 @@ def test_a_printed_inner_thread_offers_only_the_pin_in_the_card(qt_app: QApplica
         window.object_tree.select_object(second)
         window.object_tree.select_feature(second, thread_of(second))
         QApplication.processEvents()
-        assert panel.isHidden(), "am Außengewinde gibt es keinen Stift, und die Karte bleibt zu"
+        # **Die Karte steht immer, mit dem Suchfeld** (RM-735, Entscheidung
+        # Robert 11.10.2026); am Außengewinde bietet sie nur nichts an.
+        assert not panel.isHidden(), "die Karte steht, das Suchfeld sucht über alles"
+        assert not panel.search.isHidden()
+        assert not {name for name in panel._buttons if panel._fits_the_level(name)}, (
+            "am Außengewinde gibt es keinen Stift"
+        )
+        assert panel._buttons["pin_for_bore"].isHidden()
+        assert panel.catalog_button.isHidden(), "kein Katalog an einem Bausteinmerkmal"
+        assert not panel._nothing.isHidden(), "die leere Karte sagt, wo die Handlungen stehen"
+        assert panel._nothing.text() == str(
+            tr("Was sich hier tun lässt, steht oben bei den Maßen.")
+        )
     finally:
         release = getattr(type(window), "release", None)
         if release is not None:

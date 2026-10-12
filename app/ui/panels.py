@@ -2202,6 +2202,7 @@ class ObjectTree(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
         layout.addWidget(self._empty)
         layout.addWidget(self.tree)
 
@@ -3656,6 +3657,7 @@ class ParameterPanel(QWidget):
         super().__init__(parent)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        outer.setSpacing(TIGHT)
         self._room: int | None = None
         """Was die Überlagerung dieser Karte zugeteilt hat, oder nichts.
 
@@ -3673,6 +3675,7 @@ class ParameterPanel(QWidget):
         self._scroll.setWidget(self._sheet)
         self._form = QFormLayout(self._sheet)
         self._form.setContentsMargins(0, 0, 0, 0)
+        self._form.setSpacing(TIGHT)
         self._empty = QLabel(_empty_parameters_text(), self)
         self._empty.setWordWrap(True)
         fit_wrapped(self._empty)
@@ -3778,7 +3781,10 @@ class ParameterPanel(QWidget):
         drei Zeilen wäre Platz, den sie niemandem zeigen kann, während die
         Nachbarn ihn brauchen.
         """
-        rows = LEAST_PARAMETER_ROWS * (self.add_button.sizeHint().height() + TIGHT)
+        # Der Zeilenabstand ist der des Formulars — eine Quelle, kein zweites TIGHT.
+        rows = LEAST_PARAMETER_ROWS * (
+            self.add_button.sizeHint().height() + self._form.verticalSpacing()
+        )
         return min(self._around_the_rows() + rows, self.wanted_height())
 
     def set_room(self, pixels: int) -> None:
@@ -5034,6 +5040,7 @@ class HistoryPanel(QWidget):
         self.timeline = QWidget(self)
         timeline_layout = QVBoxLayout(self.timeline)
         timeline_layout.setContentsMargins(NORMAL, 0, NORMAL, TIGHT)
+        timeline_layout.setSpacing(TIGHT)
         self.timeline_slider = QSlider(Qt.Orientation.Horizontal, self.timeline)
         self.timeline_slider.setAccessibleName(tr("Stand im Verlauf"))
         self.timeline_slider.setSingleStep(1)
@@ -5059,6 +5066,7 @@ class HistoryPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
         layout.addWidget(self.compare)
         layout.addWidget(self.timeline)
         layout.addWidget(self._empty)
@@ -5107,7 +5115,13 @@ class HistoryPanel(QWidget):
         gap = max(layout.spacing(), 0) if layout is not None else 0
         height = self.compare.sizeHint().height() + gap
         if self.compare.isChecked():
-            height += self.timeline.sizeHint().height() + gap
+            # An der Breite, die die Spalte ihr gibt: Der Satz unter dem Regler
+            # bricht in Qts Wunschhöhe auf zwei Zeilen um und steht in der
+            # Spalte in einer — der Verlauf verlangte 16 Punkte zu viel (FD-23).
+            timeline = self.timeline.sizeHint().height()
+            if self.isVisible() and self.timeline.hasHeightForWidth():
+                timeline = self.timeline.heightForWidth(self.width())
+            height += timeline + gap
         return height
 
     def wanted_height(self) -> int:
@@ -6353,6 +6367,7 @@ class ReportPanel(QWidget):
         # Prüfumfang hierher (:meth:`_fit_head`), statt die Zähler zu kürzen.
         self._head_spill = QHBoxLayout()
         self._head_spill.setContentsMargins(0, 0, 0, 0)
+        self._head_spill.setSpacing(TIGHT)
         self._head_spill.addStretch(1)
         layout.addLayout(self._head_spill)
 
@@ -6409,6 +6424,7 @@ class ReportPanel(QWidget):
         self.severity.currentIndexChanged.connect(self._refilter)
         filter_row = QHBoxLayout()
         filter_row.setContentsMargins(0, 0, 0, 0)
+        filter_row.setSpacing(TIGHT)
         filter_row.addWidget(self.search, stretch=1)
         filter_row.addWidget(self.severity)
         findings.addLayout(filter_row)
@@ -9575,6 +9591,7 @@ class FeaturePanel(QWidget):
         form = QFormLayout(box)
         form.setContentsMargins(0, 0, 0, 0)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setSpacing(TIGHT)
         said = evidence_texts()[unit.evidence]
         if unit.suggested:
             said = tr("{sentence} Ein Verdacht, kein Befund.", sentence=said)
@@ -9647,6 +9664,7 @@ class FeaturePanel(QWidget):
                 form = QFormLayout(box)
                 form.setContentsMargins(0, 0, 0, 0)
                 form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+                form.setSpacing(TIGHT)
                 for label, value in (
                     (tr("Innendurchmesser"), sleeve.bore_diameter),
                     (tr("Außendurchmesser"), sleeve.outer_diameter),
@@ -10176,6 +10194,7 @@ class FeaturePanel(QWidget):
         form = QFormLayout(box)
         form.setContentsMargins(0, 0, 0, 0)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setSpacing(TIGHT)
         choice = column_choice(QComboBox(box))
         choice.setAccessibleName(tr("Passungsart"))
         if len(choices) > 1:

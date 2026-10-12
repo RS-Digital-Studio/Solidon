@@ -9,6 +9,7 @@ ist kein Nachweis.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -41,6 +42,7 @@ from app.ui.dialogs import KeyDialog
 from app.ui.main_window import MainWindow
 from app.ui.settings import UiSettings, load_settings, save_settings
 from app.ui.settings_dialog import SettingsDialog
+from app.ui.style import WIDE
 from tests.scripted_backend import ScriptedBackend
 from tests.ui_helpers import session as session
 from tests.ui_helpers import wait_until
@@ -92,6 +94,36 @@ def _show_and_accept(dialog: AiDisclosureDialog, application: QApplication) -> i
 def _flush_deletes(application: QApplication) -> None:
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     application.processEvents()
+
+
+def _large_system_font(application: QApplication, factor: float) -> Callable[[], None]:
+    """Große Schrift, wie der Kunde sie bekommt: Systemschrift, Thema, Stylesheet.
+
+    Am Dialog gesetzt überstimmt das Stylesheet sie, und das steht im Betrieb
+    immer — ``tests/test_style.py`` lässt es auch in der Suite stehen. Gibt
+    zurück, was Schrift und Stylesheet wiederherstellt.
+    """
+    from PySide6.QtGui import QFont
+
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme, current_theme
+
+    before_font, before_sheet, theme = (
+        QFont(application.font()),
+        application.styleSheet(),
+        current_theme(),
+    )
+    large = QFont(before_font)
+    large.setPointSizeF(max(before_font.pointSizeF(), 9.0) * factor)
+    application.setFont(large)
+    apply_theme(application, theme)
+    apply_style(application, theme)
+
+    def restore() -> None:
+        application.setFont(before_font)
+        application.setStyleSheet(before_sheet)
+
+    return restore
 
 
 def test_the_record_binds_version_backend_target_and_a_real_utc_timestamp() -> None:
@@ -235,6 +267,12 @@ def test_a_notice_taller_than_the_screen_comes_to_rest(qt_app: QApplication) -> 
     zurück, und jede der beiden Größenänderungen stieß die nächste Anpassung
     an: Die Zahl der Durchläufe verdoppelte sich jede Sekunde, bis das
     Programm stand. Große Schrift oder ein kleiner Bildschirm genügten.
+
+    **Die große Schrift kommt, wie der Kunde sie bekommt:** über die
+    Systemschrift, die ``apply_style`` ins Stylesheet trägt. Gesetzt am Dialog
+    überstimmte sie das Stylesheet, und der Test war nur grün, solange kein
+    vorheriger Test eines stehen ließ — nach ``tests/test_style.py`` blieb der
+    Inhalt 419 Punkte hoch auf einem 800 Punkte hohen Bildschirm.
     """
     from app.ui.ai_disclosure import target_for_comfy
 
@@ -248,12 +286,10 @@ def test_a_notice_taller_than_the_screen_comes_to_rest(qt_app: QApplication) -> 
                 self.count += 1
             return False
 
+    restore = _large_system_font(qt_app, 3)
     dialog = AiDisclosureDialog(target_for_comfy("https://comfy.example"))
     counter = ResizeCounter()
     try:
-        font = dialog.font()
-        font.setPointSizeF(max(font.pointSizeF(), 9.0) * 3)
-        dialog.setFont(font)
         _show_until_ready(dialog, qt_app)
         screen = dialog.screen()
         assert screen is not None
@@ -270,6 +306,38 @@ def test_a_notice_taller_than_the_screen_comes_to_rest(qt_app: QApplication) -> 
         dialog.removeEventFilter(counter)
         dialog.deleteLater()
         _flush_deletes(qt_app)
+        restore()
+
+
+def test_a_word_wider_than_the_notice_widens_it(qt_app: QApplication) -> None:
+    """Ein Wort, das nicht in die Öffnungsbreite passt, macht den Hinweis breiter.
+
+    Bei dreifacher Systemschrift war „Interaktion“ in der Überschrift breiter als
+    die 600 Punkte, mit denen der Hinweis öffnet. Der Inhalt rollte quer, die
+    Prüfung auf vollständig lesbaren Inhalt schlug fehl, und *KI-Anfrage
+    fortsetzen* blieb für immer gesperrt — eine Sackgasse ohne Satz.
+    """
+    from app.ui.ai_disclosure import target_for_comfy
+
+    restore = _large_system_font(qt_app, 3)
+    dialog = AiDisclosureDialog(target_for_comfy("https://comfy.example"))
+    try:
+        dialog.show()
+        for _ in range(20):
+            qt_app.processEvents()
+            QTest.qWait(5)
+        widest = dialog.content.minimumSizeHint().width()
+        assert widest > 600, "das längste Wort passt nicht in die Öffnungsbreite"
+        screen = dialog.screen()
+        assert screen is not None
+        assert widest < screen.availableGeometry().width() - 2 * WIDE, "der Bildschirm hat Platz"
+        assert dialog.scroll_area.horizontalScrollBar().maximum() == 0, "nichts rollt quer"
+        assert dialog.scroll_area.viewport().width() >= widest
+        assert dialog.continue_button.isEnabled(), "der Hinweis ist ganz lesbar und gibt frei"
+    finally:
+        dialog.deleteLater()
+        _flush_deletes(qt_app)
+        restore()
 
 
 def test_a_tall_notice_reads_as_one_piece(qt_app: QApplication) -> None:
