@@ -36,7 +36,15 @@ from app.core.geom.mesh import MeshData, as_mesh_data, stable_normals
 from app.core.knowledge.profiles import for_object
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.registry.params import ZERO_NONE
-from app.core.types import BaseParams, BRepBody, Finding, OpContext, OpResult, SolverInfo
+from app.core.types import (
+    BaseParams,
+    BRepBody,
+    Feature,
+    Finding,
+    OpContext,
+    OpResult,
+    SolverInfo,
+)
 from app.core.units import EPS_GEOM, format_length
 from app.i18n import _
 
@@ -149,6 +157,8 @@ def _matrix(u: np.ndarray, v: np.ndarray, w: np.ndarray, start: float) -> np.nda
 
 @register_op(
     name="cut_counter_form",
+    # 2: Der exakte Einsatz behält seine Merkmale.
+    cache_version="2",
     title=_("Gegenform einlassen"),
     category="boolean",
     params=CounterFormParams,
@@ -225,8 +235,12 @@ def cut_counter_form(ctx: OpContext) -> OpResult:
         pockets.append((outline, start))
 
     solver: SolverInfo | None = None
+    # Am Netz erkennt die Auswertung den Einsatz neu; am exakten Körper bringt
+    # die Operation seine Merkmale mit, unter ihren bisherigen Namen (§21.2).
+    features: dict[str, Feature] = {}
     if exact:
         from app.core.brep import edit
+        from app.core.geom.prepare_ops import _exact_features_after
 
         body: Any = cast(Any, insert.mesh)
         tools_exact = [
@@ -234,6 +248,9 @@ def cut_counter_form(ctx: OpContext) -> OpResult:
         ]
         ctx.cancelled.raise_if_cancelled()
         result: Any = edit.unified(edit.boolean("difference", [body, *tools_exact]))
+        features, _continued, _lost = _exact_features_after(
+            insert, result, expected=None, cancelled=ctx.cancelled
+        )
     else:
         mesh = as_mesh_data(insert.mesh)
         tool_meshes = [_mesh_pocket(outline, start, top, u, v, w) for outline, start in pockets]
@@ -264,7 +281,7 @@ def cut_counter_form(ctx: OpContext) -> OpResult:
         )
     )
     return OpResult(
-        outputs=[dataclasses.replace(insert, mesh=result, features={}), *tools],
+        outputs=[dataclasses.replace(insert, mesh=result, features=features), *tools],
         solver=solver,
         findings=findings,
     )

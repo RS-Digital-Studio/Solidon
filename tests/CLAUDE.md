@@ -74,6 +74,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Erkennungsarbeiter bitgleich, abbrechbar? | `test_perceive_workers.py` |
 | Ersetzt eine örtlich erkannte Textur die alten Einzelzellen auch nach Import, Speichern und Undo? | `test_local_detection.py` — echte Bereichssuche, reservierte Zellkennungen, leerer Cache und Plattencache; alte Zellbezüge halten mit Rückweg an |
 | Bleibt der exakte Körper bei Merkmalshandlungen exakt — Volumen, Kennungen, STEP-Umlauf? | `test_exact_feature_ops.py` |
+| Jede Operation an beiden Kernen; trägt jeder exakte Ausgang Merkmale? | `test_exact_body_parity.py` |
 | Wulst und Kehle · Gewinde ändern und verschließen · Filament an Ringen und Gewinden, jeweils in beiden Kernen | `test_torus_feature_ops.py` · `test_thread_feature_ops.py` · `test_filament_on_rings_and_threads.py` |
 | Bekommt ein Gewinde sein Gegenstück am anderen Teil, im Tabellenmaß und als ein Schritt? | `test_thread_counterpart.py`; das Fenster ohne Dialog in `test_counterpart_ui.py` |
 | Baut *Stift für Bohrung* das Gegenstück zu Senkung, Ansenkung und Gewinde — Kopf, Gewinde, Abstand, beide Kerne, Absagen, alte Projektdatei? | `test_bore_pin.py` |

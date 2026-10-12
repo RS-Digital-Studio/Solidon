@@ -2186,6 +2186,24 @@ waren es fünf, vier davon in `tests/test_agent_suite.py`.
   weitere Antwortdomäne braucht, erweitert `match_records` (Schlüsselpräfix,
   Pflichtfelder) und `_answer_matches` — keinen zweiten Speicher, keine
   zweite Gruppenlogik.
+
+  **Der Neubau gibt seine Merkmale mit** (12.10.2026, Funktionsdurchgang
+  D0-L). Am Netz erkennt die Auswertung nach jedem Schritt neu, am exakten
+  Körper nicht: Sie ordnet nur zu, was die Operation ausgibt. *Text
+  aufbringen*, *Schrift einlegen* und *Gegenform einlassen* gaben ihren
+  exakten Ausgang bis 0.6.0 mit `features={}` aus — nach „OS“ auf einem
+  exakten Quader 0 statt 15 Merkmale, ohne Befund, keine Fläche mehr
+  anzuklicken, und ein späterer Schritt an einer Seite hielt mit
+  `NativeReferenceLost` an. Seitdem verlangt die Falltabelle in
+  `test_exact_body_parity.py` an jedem exakten Ausgang jeder Operation
+  Merkmale. **Welcher Weg:** Mit `features_of` allein führt die Auswertung
+  nur bis auf Rechenrauschen unveränderte Merkmale unter ihrem Namen fort
+  (`_unchanged_continuations`); die beschriftete Deckfläche bekäme einen
+  neuen Namen, obwohl `match` sie eindeutig zuordnet und das Netz sie behält
+  (§21.2: „eindeutig unter Schwelle: ID bleibt“). Wer einen Körper aus einem
+  Eingang neu baut, führt die Namen deshalb über
+  `prepare_ops._exact_features_after` fort — wie *Fläche versetzen* und die
+  exakten Merkmalshandlungen.
 - **Ein Kantenfeld wird vor dem Cache gebunden, und die gebundene Auswahl
   geht in den Schlüssel des Verbrauchers** (20.09.2026, P1.4c.4b). Ein
   Kantenschlüssel ist eine gerundete Lage; zwei Kanten können denselben

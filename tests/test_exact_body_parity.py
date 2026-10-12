@@ -1943,6 +1943,14 @@ def test_every_operation_completes_with_its_declared_result(
         assert isinstance(entry.mesh, Solid if expected_kind == "brep" else MeshData)
         assert math.isfinite(entry.mesh.volume) and entry.mesh.volume > 0.0
         assert as_mesh_data(entry.mesh).is_watertight
+        # **Ein exakter Körper bringt seine Merkmale mit.** Am Netz erkennt die
+        # Auswertung nach jedem Schritt neu, am exakten Körper ordnet sie nur
+        # zu, was die Operation ausgibt. *Text aufbringen*, *Schrift einlegen*
+        # und *Gegenform einlassen* gaben bis 0.6.0 ``features={}`` aus, und
+        # der Körper stand ohne eine anklickbare Fläche da.
+        assert expected_kind != "brep" or entry.features, (
+            f"{case.name}: der exakte Ausgang {entry.id} trägt keine Merkmale"
+        )
     _assert_invariant(case, outputs, inputs, result)
 
 
@@ -3290,3 +3298,281 @@ def test_the_exact_rebuild_hands_both_twins_on_under_their_names(
     )
     (output,) = result.outputs
     assert _round_sides(output, "fillet") == before
+
+
+# --- Schrift und Gegenform: der exakte Körper behält seine Merkmale ----------
+
+
+def _box_sides(width: float, depth: float, height: float) -> dict[tuple[int, ...], Any]:
+    """Mitte und Inhalt jeder Seite des Quaders aus :func:`_native_box`, je Normale.
+
+    Die Sollwerte kommen aus den Maßen, nicht aus einer Erkennung: Der Quader
+    steht mittig auf dem Bett, von z = 0 bis ``height``.
+    """
+    x, y, z = width / 2.0, depth / 2.0, height / 2.0
+    return {
+        (0, 0, 1): ((0.0, 0.0, height), width * depth),
+        (0, 0, -1): ((0.0, 0.0, 0.0), width * depth),
+        (1, 0, 0): ((x, 0.0, z), depth * height),
+        (-1, 0, 0): ((-x, 0.0, z), depth * height),
+        (0, 1, 0): ((0.0, y, z), width * height),
+        (0, -1, 0): ((0.0, -y, z), width * height),
+    }
+
+
+def _assert_sides_kept(
+    before: SceneObject, after: SceneObject, size: tuple[float, float, float]
+) -> None:
+    """Jede Seite außer der Deckfläche heißt danach wie vorher und liegt, wo sie lag (§21.2)."""
+    sides = _box_sides(*size)
+    for name, feature in before.features.items():
+        normal = tuple(round(float(value)) for value in feature.params["normal"])
+        if normal == (0, 0, 1):
+            continue
+        centre, area = sides[normal]
+        kept = after.features.get(name)
+        assert kept is not None, (after.kind, name, sorted(after.features))
+        assert kept.kind == "face", (after.kind, name, kept.kind)
+        assert kept.params["normal"] == pytest.approx(normal, abs=1e-9), (after.kind, name)
+        assert kept.params["centre"] == pytest.approx(centre, abs=1e-6), (after.kind, name)
+        assert kept.params["area"] == pytest.approx(area, rel=1e-9), (after.kind, name)
+
+
+def _letters(text: str, size: float) -> tuple[float, float, float]:
+    """Was ein Schriftzug in DejaVu Sans bedeckt, wie viel davon Tinte ist und wie
+    lang seine Umrisse sind, in mm² und mm.
+
+    Unabhängig vom Prüfling, aus der Schriftdatei: fontTools zeichnet jede
+    Kontur einzeln, ``AreaPen`` integriert sie exakt über Green,
+    ``PerimeterPen`` misst die Länge. Außen- und Innenkonturen laufen
+    entgegengesetzt; bedeckt ist, was die Außenkonturen umschließen — beim „O“
+    samt Innenraum —, Tinte der Betrag der Summe.
+    """
+    from fontTools.pens.areaPen import AreaPen
+    from fontTools.pens.perimeterPen import PerimeterPen
+    from fontTools.pens.recordingPen import RecordingPen
+    from fontTools.ttLib import TTFont
+
+    from app.core.geom.glyphs import font_file
+
+    areas: list[float] = []
+    length = 0.0
+    with TTFont(font_file("DejaVu Sans", "regular")) as source:
+        glyph_set = source.getGlyphSet()
+        cmap = source.getBestCmap()
+        scale = size / source["head"].unitsPerEm
+        for character in text:
+            recording = RecordingPen()
+            glyph_set[cmap[ord(character)]].draw(recording)
+            perimeter = PerimeterPen(glyph_set)
+            recording.replay(perimeter)
+            length += perimeter.value * scale
+            pen = AreaPen(glyph_set)
+            for operator, arguments in recording.value:
+                getattr(pen, operator)(*arguments)
+                if operator in ("closePath", "endPath"):
+                    areas.append(pen.value * scale * scale)
+                    pen = AreaPen(glyph_set)
+    outer = math.copysign(1.0, max(areas, key=abs))
+    covered = sum(abs(area) for area in areas if area * outer > 0.0)
+    return covered, abs(sum(areas)), length
+
+
+def _letter_tolerance(kind: str, length: float, size: float) -> float:
+    """Wie weit eine Fläche an Buchstaben vom Sollwert der Kurven abweichen darf.
+
+    Zwischen der Kurve und einer Kante, die höchstens ``d`` von ihr abweicht,
+    liegt je Umrissstück höchstens Stücklänge mal ``d``, über den ganzen Umriss
+    also höchstens seine Länge mal ``d``. Am exakten Körper sind die Kanten die
+    Kurven der Schrift bis auf ``EPS_GEOM``; am Netz sind die Buchstaben
+    Vielecke, deren Sehnen höchstens ``glyphs.sag_for(size)`` abweichen.
+    """
+    from app.core.geom.glyphs import sag_for
+
+    return length * (EPS_GEOM if kind == "brep" else sag_for(size))
+
+
+def _faces_at(
+    entry: SceneObject, height: float, *, new_against: SceneObject | None = None
+) -> list[Feature]:
+    """Die nach oben zeigenden Flächen eines Körpers auf einer Höhe — mit
+    ``new_against`` nur die, deren Namen der Körper davor nicht trug."""
+    known = new_against.features if new_against is not None else {}
+    return [
+        feature
+        for name, feature in entry.features.items()
+        if name not in known
+        and feature.kind == "face"
+        and float(feature.params["normal"][2]) > 0.99
+        and abs(float(feature.params["centre"][2]) - height) < 1e-6
+    ]
+
+
+def _evaluated_chain(
+    steps: list[tuple[str, dict[str, Any]]], inputs: list[SceneObject], profile: Profile
+) -> Any:
+    """Vorbereitete Eingaben und mehrere Schritte am ersten Körper durch die Auswertung."""
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    registry = Registry()
+    for spec in REGISTRY.all():
+        registry.register(spec)
+
+    def seed(ctx: OpContext) -> OpResult:
+        """Die Referenzkörper betreten den echten Auswertungsweg."""
+        return OpResult(outputs=[dataclasses.replace(entry, id="") for entry in inputs])
+
+    registry.register(
+        OperationSpec(
+            name="matrix_input",
+            title="Referenzkörper",
+            category="primitive",
+            params=BaseParams,
+            fn=seed,
+            consumes=0,
+            produces=len(inputs),
+        )
+    )
+    history = History(project.document, registry=registry)
+    history.apply("Referenzkörper", [OperationDraft(op="matrix_input")])
+    body = project.document.ops[-1].outputs[0]
+    for op, params in steps:
+        history.apply(op, [OperationDraft(op=op, inputs=(body,), params=params, seed=1234)])
+        body = project.document.ops[-1].outputs[0]
+    result = evaluate(
+        project.document,
+        profile,
+        registry=registry,
+        sources=ProjectSources(project),
+        ask=_unexpected_question,
+    )
+    return result, result.scene.objects.get(body)
+
+
+@pytest.mark.parametrize("mode", ["raised", "engraved"])
+def test_text_keeps_the_features_of_its_body_under_their_names_on_both_kernels(
+    mode: str, profile: Profile
+) -> None:
+    """*Text aufbringen* lässt die Merkmale des Körpers stehen, unter ihren Namen (§21.2).
+
+    Am exakten Körper erkennt die Auswertung nicht nach — sie ordnet zu, was
+    die Operation mitbringt, und der exakte Weg brachte seit 0.5.0 nichts mit
+    (``features={}``): „OS“ auf dem Quader 40 × 30 × 20, und er trug danach
+    0 statt 15 Merkmale, ohne Befund; keine Fläche war mehr anzuklicken. Das
+    Netz hielt es immer. Sollwerte aus Quader und Schriftdatei, nicht aus der
+    Erkennung: Die fünf Seiten, die die Schrift nicht berührt, kommen mit Name,
+    Mitte, Normale und Inhalt zurück. Die Deckfläche ist eindeutig dieselbe
+    und behält ihren Namen, bei z = 20 und um genau die Fläche kleiner, die
+    die Buchstaben samt Innenraum des „O“ bedecken. Die Buchstaben bringen
+    eigene Flächen mit, oben auf den erhabenen oder am Boden der vertieften,
+    zusammen so groß wie ihre Tinte.
+    """
+    exact_kernel()
+    covered, ink, length = _letters("OS", 12.0)
+    label = {"text": "OS", "size": 12.0, "depth": 1.0, "z": 20.0, "mode": mode}
+    for kind in ("mesh", "brep"):
+        entry = _object(_native_box(40.0, 30.0, 20.0), kind)
+        (labelled,) = _evaluated("label_text", label, [entry], profile)
+        assert labelled.kind == kind
+        _assert_sides_kept(entry, labelled, (40.0, 30.0, 20.0))
+        top = labelled.features.get("top")
+        assert top is not None and top.kind == "face", (kind, sorted(labelled.features))
+        assert top.params["normal"] == pytest.approx((0.0, 0.0, 1.0), abs=1e-9)
+        assert top.params["centre"][2] == pytest.approx(20.0, abs=1e-6)
+        tolerance = _letter_tolerance(kind, length, 12.0)
+        assert top.params["area"] == pytest.approx(1200.0 - covered, abs=tolerance), kind
+        letters = _faces_at(labelled, 21.0 if mode == "raised" else 19.0, new_against=entry)
+        assert sum(float(face.params["area"]) for face in letters) == pytest.approx(
+            ink, abs=tolerance
+        ), kind
+
+
+def test_a_later_step_still_finds_its_face_after_text_on_both_kernels(profile: Profile) -> None:
+    """Nach dem Beschriften setzt ein Schritt an einer Seite an, an beiden Kernen.
+
+    Der Kunde merkte den Verlust als Sackgasse: Ohne Merkmale war am exakten
+    Körper keine Fläche mehr anzuklicken, und ein Schritt, der schon an einer
+    Seite hing — hier *Fläche versetzen* an der rechten —, hielt mit
+    ``NativeReferenceLost`` an. Sollwert aus dem Quader: Die rechte Seite
+    (30 × 20 mm) wandert um 2 mm, der Körper wächst um 1200 mm³ und reicht
+    bis x = 22.
+    """
+    exact_kernel()
+    label = {"text": "OS", "size": 12.0, "depth": 1.0, "z": 20.0}
+    for kind in ("mesh", "brep"):
+        entry = _object(_native_box(40.0, 30.0, 20.0), kind)
+        right = next(
+            name
+            for name, feature in entry.features.items()
+            if float(feature.params["normal"][0]) > 0.99
+        )
+        (labelled,) = _evaluated("label_text", label, [entry], profile)
+        result, pushed = _evaluated_chain(
+            [("label_text", label), ("push_face", {"face": right, "distance": 2.0})],
+            [entry],
+            profile,
+        )
+        assert result.complete, (
+            kind,
+            [(finding.code, str(finding.message)) for finding in result.scene.report.findings],
+        )
+        assert pushed.kind == kind
+        assert pushed.mesh.volume == pytest.approx(labelled.mesh.volume + 1200.0, abs=1e-6)
+        assert pushed.mesh.bounds.maximum[0] == pytest.approx(22.0, abs=1e-6)
+
+
+def test_an_inlay_and_its_carrier_carry_their_features_on_both_kernels(profile: Profile) -> None:
+    """*Schrift einlegen* gibt Träger und Einlage mit Merkmalen aus, an beiden Kernen.
+
+    Derselbe Fehler wie bei *Text aufbringen*, zweimal: Der exakte Weg gab den
+    Träger mit ``features={}`` und die Einlage ganz ohne Merkmale aus (seit
+    0.5.2). Sollwerte aus Quader und Schriftdatei: Der Träger behält Seiten und
+    Deckfläche unter ihren Namen, die Deckfläche verliert, was die Buchstaben
+    samt Innenraum des „O“ bedecken, und die Einlage zeigt oben bündig bei
+    z = 20 genau ihre Tinte.
+    """
+    exact_kernel()
+    covered, ink, length = _letters("OS", 12.0)
+    inlay_params = {"text": "OS", "size": 12.0, "depth": 1.0, "z": 20.0, "slot": 1}
+    for kind in ("mesh", "brep"):
+        entry = _object(_native_box(40.0, 30.0, 20.0), kind)
+        carrier, inlay = _evaluated("inlay_text", inlay_params, [entry], profile)
+        assert carrier.kind == inlay.kind == kind
+        _assert_sides_kept(entry, carrier, (40.0, 30.0, 20.0))
+        tolerance = _letter_tolerance(kind, length, 12.0)
+        top = carrier.features.get("top")
+        assert top is not None and top.kind == "face", (kind, sorted(carrier.features))
+        assert top.params["area"] == pytest.approx(1200.0 - covered, abs=tolerance), kind
+        flush = _faces_at(inlay, 20.0)
+        assert sum(float(face.params["area"]) for face in flush) == pytest.approx(
+            ink, abs=tolerance
+        ), kind
+
+
+def test_a_counter_form_keeps_the_features_of_its_insert_on_both_kernels(
+    profile: Profile,
+) -> None:
+    """*Gegenform einlassen* lässt den Einsatz mit seinen Merkmalen stehen, an beiden Kernen.
+
+    Der dritte Zwilling: Der exakte Weg gab den Einsatz mit ``features={}``
+    aus (seit 0.5.2). Einsatz 60 × 40 × 20, darin ein Teil 20 × 10 × 10 von
+    z = 12 bis 22, Spiel 0,4 mm. Sollwerte aus den Maßen: Die Tasche ist das
+    Rechteck 20,4 × 10,4 von z = 11,8 bis durch die Oberseite. Die Seiten und
+    der Boden behalten Name und Lage, die Deckfläche behält ihren Namen und
+    verliert die Öffnung, und der Taschenboden ist eine eigene Fläche.
+    """
+    exact_kernel()
+    pocket = 20.4 * 10.4
+    for kind in ("mesh", "brep"):
+        insert = _object(_native_box(60.0, 40.0, 20.0), kind)
+        part = _object(_native_box(20.0, 10.0, 10.0, (0.0, 0.0, 12.0)), kind, 2)
+        (carved, _kept) = _evaluated(
+            "cut_counter_form", {"axis": "z", "clearance": 0.4}, [insert, part], profile
+        )
+        assert carved.kind == kind
+        _assert_sides_kept(insert, carved, (60.0, 40.0, 20.0))
+        top = carved.features.get("top")
+        assert top is not None and top.kind == "face", (kind, sorted(carved.features))
+        assert top.params["area"] == pytest.approx(2400.0 - pocket, rel=1e-9), kind
+        (floor,) = _faces_at(carved, 11.8, new_against=insert)
+        assert floor.params["area"] == pytest.approx(pocket, rel=1e-9), kind
