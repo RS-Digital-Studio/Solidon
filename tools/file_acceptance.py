@@ -158,8 +158,13 @@ FUNCTION_CASE_TIMEOUT = 1800.0
 LANGUAGE_CASE_TIMEOUT = 3600.0
 
 #: Die Arten eines Falls: eine Datei (RM-184), eine Zeile der Funktionsliste,
-#: eine Sprache über die Flächen eines Pakets (RM-737).
-CASE_KINDS: tuple[str, ...] = ("file", "function", "language")
+#: eine Sprache über die Flächen eines Pakets, der Start einer Zeile des
+#: Startablaufs über ``app.ui.app.main`` (RM-737).
+CASE_KINDS: tuple[str, ...] = ("file", "function", "language", "start")
+
+#: Die Quelle der Zeilen, die vor dem Hauptfenster stehen (``function_list.startup_rows``):
+#: Sie laufen als Startfall, nicht als Funktionsfall.
+STARTUP_SOURCE = "startablauf"
 
 #: Das Messprofil des Audits: kein Materialurteil, nur ein fester Rahmen —
 #: auch der Filamentdrucker der Funktionsfälle (``function_bench.PRINTERS``).
@@ -356,17 +361,35 @@ def function_cases(
     Was die Spezifikation an Lizenz und Vorbedingungen nennt, gilt für jeden Fall
     der Zeile; eine Vorbedingung mit zwei Zuständen bekommt im Satz ``basis``
     einen Lauf im anderen Zustand dazu, denn „fehlt“ ist der Fehlerweg
-    (``function_bench.spec_variants``).
+    (``function_bench.spec_variants``). Die Läufe von ``lizenz`` liest
+    ``function_bench.variant_sets`` jetzt an der Fassung. Eine Zeile des
+    Startablaufs (:data:`STARTUP_SOURCE`) wird im Satz ``basis`` ein Startfall
+    im Zustand „Demo abgelaufen“ und in keinem anderen Satz gefahren — sie hat
+    kein Fenster, an dem eine Phase liefe. ``phases`` gilt nur für Sätze, die
+    sie haben; ein Satz ohne eine davon fällt weg.
     """
     from app.i18n.catalog import available_languages
-    from tools.function_bench import VARIANT_SETS, Variant, spec_variants
+    from tools.function_bench import (
+        PHASES,
+        STARTUP_LICENCE,
+        Variant,
+        spec_variants,
+    )
+    from tools.function_bench import (
+        variant_sets as known_sets,
+    )
 
-    unknown_sets = sorted(set(variant_sets) - set(VARIANT_SETS))
+    sets = known_sets()
+    unknown_sets = sorted(set(variant_sets) - set(sets))
     if unknown_sets:
         raise ValueError(
-            f"unbekannte Variantensätze: {', '.join(unknown_sets)}"
-            f" — bekannt: {', '.join(VARIANT_SETS)}"
+            f"unbekannte Variantensätze: {', '.join(unknown_sets)} — bekannt: {', '.join(sets)}"
         )
+    unknown_phases = sorted(
+        set(phases) - {phase for name in variant_sets for phase in PHASES.get(name, ())}
+    )
+    if unknown_phases:
+        raise ValueError(f"Phasen {unknown_phases} gibt es in {list(variant_sets)} nicht")
     known = {str(row["id"]) for row in rows}
     missing = sorted(set(row_ids) - known)
     if missing:
@@ -380,10 +403,29 @@ def function_cases(
     cases: list[Case] = []
     number = first_number
     for name in variant_sets:
+        own = tuple(phase for phase in phases if phase in PHASES[name])
+        if phases and not own:
+            continue
         for row in chosen if name != "sprachen" else ():
+            if row.get("source") == STARTUP_SOURCE:
+                if name == "basis" and not phases:
+                    variant = Variant.of({"set": "start", "licence": STARTUP_LICENCE})
+                    cases.append(
+                        Case(
+                            number,
+                            f"{row['id']} [{STARTUP_LICENCE}]",
+                            "",
+                            "",
+                            kind="start",
+                            row=str(row["id"]),
+                            variant=variant.as_dict(),
+                        )
+                    )
+                    number += 1
+                continue
             scene = str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "")
             base, others = spec_variants(row.get("spec"))
-            entries = [{**base, **entry, "phases": tuple(phases)} for entry in VARIANT_SETS[name]]
+            entries = [{**base, **entry, "phases": own} for entry in sets[name]]
             if name == "basis" and not phases:
                 entries += [{**base, "set": "basis", **other} for other in others]
             for entry in entries:
@@ -449,8 +491,10 @@ def function_inventory(
     dem Fenster (Konzept §3). Dann baut ``tools/function_list.py`` (D0-L) daraus
     und aus Register, Dialogklassen und Wortschatz die Zeilen; ``rows.json``
     trägt sie für Kindprozesse und Bericht (D0-U liest dieselbe Datei). Die
-    Startszenen speichert ``function_list.save_scenes`` nach ``scenes/``, die
-    schweren nur, wenn eine gewählte Zeile in einer beginnt.
+    Startszenen speichert ``function_list.save_scenes`` nach ``scenes/``: alle
+    leichten, und die schweren dazu, sobald eine gewählte Zeile in einer
+    schweren beginnt — L baut die Szenen nur als Ganzes. Jeder Fall öffnet
+    davon seine eigene Kopie (``function_bench.FunctionFlow.scene_path``).
     """
     from dataclasses import asdict as as_dict
 
@@ -461,7 +505,7 @@ def function_inventory(
     cases = function_cases(
         rows, packages=packages, row_ids=row_ids, variant_sets=variant_sets, phases=phases
     )
-    chosen = {case.row for case in cases if case.kind == "function"}
+    chosen = {case.row for case in cases if case.kind in ("function", "start")}
     languages = {case.row for case in cases if case.kind == "language"}
     kept = [row for row in rows if str(row["id"]) in chosen or row.get("package") in languages]
     write_json(out / "rows.json", kept)
@@ -746,7 +790,7 @@ def function_summary(case: Case, folder: Path, process: Mapping[str, Any]) -> di
     state = _read(folder / "bench.json")
     protocols = (
         [_read(folder / "function.json")]
-        if case.kind == "function"
+        if case.kind in ("function", "start")
         else [_read(path) for path in sorted((folder / "surfaces").glob("*.json"))]
     )
     return {
@@ -933,9 +977,16 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
     """Je Fall ein frischer Prozess mit eigenem Profil — wie im Audit.
 
     ``screen`` legt das Fenster auf einen Schirm (Nummer oder Name); ohne Angabe
-    nimmt der Fall den ersten, der nicht der Hauptschirm ist.
+    nimmt der Fall den ersten, der nicht der Hauptschirm ist. Mit Funktionsfällen
+    misst der Lauf zuerst einmal den Referenzfaktor (§31, Entscheidung
+    Koordinator 12.10.); alle Fälle dieses Laufs lesen ihn aus ``reference.json``.
     """
     cases = read_cases(out)
+    if any(case.kind in ("function", "language") for case in cases):
+        sys.path.insert(0, str(ROOT))
+        from tools.function_capture import measure_reference
+
+        print(f"Referenzfaktor {measure_reference(out):.3f}", flush=True)
     failures = 0
     for case in cases:
         if not first <= case.number <= last:
@@ -1003,6 +1054,8 @@ def child(out: Path, number: int, screen: str = "") -> int:
     import faulthandler
 
     faulthandler.enable()
+    if case.kind == "start":
+        return start_child(out, case, folder)
     if case.kind != "file":
         return function_child(out, case, folder, screen)
     data: dict[str, Any] = {
@@ -1022,15 +1075,21 @@ def child(out: Path, number: int, screen: str = "") -> int:
     # Das Register füllt sonst ``main`` vor dem Fenster — wie im Audit hier.
     from app.core.bootstrap import load_operations
     from app.ui.app import build_application
+    from tools import function_bench as bench
     from tools.window_bench import shutdown_window
 
-    load_operations()
-    no_native_dialogs()
-    application, window = build_application([])
-    session = window.session
-    flow = WindowFlow(application, window, session, folder, data, persist)
     exit_code = 0
+    application: Any = None
+    window: Any = None
     try:
+        # Der feste Rahmen der Abnahme (RM-184): Das neue Projekt, das *Neues
+        # Projekt* anlegt, nimmt Drucker und Material aus dem Profil
+        # (:data:`PRINTER`, :data:`MATERIAL`), und die Ersteinrichtung ist erledigt.
+        bench.write_profile(bench.Variant())
+        load_operations()
+        no_native_dialogs()
+        application, window = build_application([])
+        flow = WindowFlow(application, window, window.session, folder, data, persist)
         flow.prepare()
         flow.run(case)
     except Exception:
@@ -1038,8 +1097,9 @@ def child(out: Path, number: int, screen: str = "") -> int:
         persist()
         exit_code = 1
     finally:
-        session.forget_changes()
-        shutdown_window(window, application)
+        if window is not None:
+            window.session.forget_changes()
+            shutdown_window(window, application)
         data["shutdown_complete"] = True
         persist()
     return exit_code
@@ -1112,29 +1172,35 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         keep()
 
     persist()
-    bench.write_profile(variant, recent=[scenes / f"{bench.SECOND_SCENE}.p3d"])
     from app.core.bootstrap import load_operations
     from app.ui.app import build_application
+    from tools.function_capture import run_reference_factor
     from tools.window_bench import shutdown_window
 
-    load_operations()
-    no_native_dialogs()
-    bench.apply_licence(variant.licence)
-    state["preconditions_applied"] = bench.apply_preconditions(variant.preconditions)
-    application, window = build_application([])
-    flow: Any
-    if data is None:
-        package_rows = [row for row in rows.values() if row.get("package") == case.row]
-        flow = bench.LanguageFlow(
-            application, window, folder, state, keep, package_rows, variant, scenes, version
-        )
-    else:
-        flow = bench.FunctionFlow(
-            application, window, folder, data, persist, row, variant, scenes, state, out
-        )
     exit_code = 0
+    application: Any = None
+    window: Any = None
     try:
-        if isinstance(flow, bench.FunctionFlow):
+        # Vorbereitung im ``try``: Scheitert Profil, Lizenz oder eine
+        # Vorbedingung, steht der Grund in ``bench.json`` und in der Übersicht.
+        second = bench.case_scene(folder, scenes, bench.SECOND_SCENE)
+        bench.write_profile(variant, recent=[second] if second is not None else [])
+        load_operations()
+        no_native_dialogs()
+        bench.apply_licence(variant.licence)
+        state["preconditions_applied"] = bench.apply_preconditions(variant.preconditions)
+        state["reference_factor"] = run_reference_factor(out)
+        application, window = build_application([])
+        flow: Any
+        if data is None:
+            package_rows = [row for row in rows.values() if row.get("package") == case.row]
+            flow = bench.LanguageFlow(
+                application, window, folder, state, keep, package_rows, variant, scenes, version
+            )
+        else:
+            flow = bench.FunctionFlow(
+                application, window, folder, data, persist, row, variant, scenes, state, out
+            )
             flow.prepare()
         flow.run()
         state["stage"] = "done"
@@ -1143,8 +1209,44 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         persist()
         exit_code = 1
     finally:
-        window.session.forget_changes()
-        shutdown_window(window, application)
+        if window is not None:
+            window.session.forget_changes()
+            shutdown_window(window, application)
+        state["shutdown_complete"] = True
+        persist()
+    return exit_code
+
+
+def start_child(out: Path, case: Case, folder: Path) -> int:
+    """Ein Startfall: Profil, Zustand „Demo abgelaufen“, dann ``app.ui.app.main`` selbst.
+
+    Kein ``build_application``: Das Starttor steht in ``main`` vor dem Fenster
+    (``function_bench.StartFlow``). ``function.json`` ist das Protokoll nach dem
+    Schema von D0-U, ``bench.json`` der Lauf samt Ausgang von ``main``.
+    """
+    from tools import function_bench as bench
+
+    variant = bench.Variant.of(case.variant)
+    row = read_rows(out).get(case.row) or {"id": case.row}
+    state: dict[str, Any] = {"case": asdict(case), "stage": "start"}
+    data = bench.empty_protocol(row, variant.protocol(None, (0, 0)), version_info())
+
+    def persist() -> None:
+        write_json(folder / "function.json", data)
+        write_json(folder / "bench.json", state)
+
+    persist()
+    exit_code = 0
+    try:
+        bench.write_profile(variant)
+        bench.apply_licence(variant.licence)
+        no_native_dialogs()
+        state["main_exit_code"] = bench.StartFlow(data, persist).run()
+        state["stage"] = "done"
+    except Exception:
+        state["harness_exception"] = traceback.format_exc()
+        exit_code = 1
+    finally:
         state["shutdown_complete"] = True
         persist()
     return exit_code

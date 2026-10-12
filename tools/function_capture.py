@@ -12,23 +12,29 @@ direkt auf (Wächter in ``tests/test_function_bench.py``,
 :data:`function_bench.FORBIDDEN_CALLS`).
 
 Die Rechnung hinter den Aufnahmen ist ohne Fenster prüfbar: :class:`Heartbeat`,
-:class:`FrameCounter`, :func:`chain_breaks`, :func:`overflowing`,
-:func:`duplicate_names` und :func:`modal_allowed` bekommen Zahlen, Namen und
+:class:`FrameCounter` und :func:`modal_allowed` bekommen Zahlen, Namen und
 Aufrufer, keine Widgets. Gemessen wird an der echten Plattform; offscreen hat
 keine Schrift (``tests.md``, „Isolation heißt Betriebslage“), dort sind Breiten
 und Kontraste nur Platzhalter.
 
-Geurteilt wird hier nicht. Die Schwellen und Urteile stehen in
-``tools/function_checks.py`` und ``tools/function_judges.py``; diese Datei sagt
-nur, was zu sehen war.
+Geurteilt wird hier über die Prüfpunkte nicht: Rücksprünge der Tab-Kette,
+abgeschnittene Texte, doppelte Namen und gleiche Zustandsbilder rechnet D0-U
+aus diesen Rohdaten (``tools/function_judges.py``), mit den Schwellen aus
+``tools/function_checks.py``. Einige Felder des Schemas sind selbst eine
+kleine Einordnung dessen, was zu sehen war — ``allowed`` (Fenster der Ausnahmeliste
+oder aus einer erlaubten Funktion), ``question`` (eine Wahl zwischen
+mindestens zwei Knöpfen), ``large`` (große Schrift nach WCAG) und ``cut`` (der
+Text braucht mehr Platz, als er hat); die Regel dafür steht je an der Funktion.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 import time
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any, Final
 
 #: Takt des Herzschlags in Millisekunden. Eine Lücke weit darüber heißt: Der
@@ -68,9 +74,16 @@ ALLOWED_CALLERS: Final[frozenset[str]] = frozenset(
     }
 )
 
-#: Rohe Qt-Fenster: Klassen, an denen Z5 zählt (``function_checks.RAW_CLASSES``
-#: und der erlaubte Dateidialog).
-RAW_BASES: Final[tuple[str, ...]] = ("QMessageBox", "QInputDialog", "QColorDialog", "QFileDialog")
+
+def _raw_bases() -> tuple[str, ...]:
+    """Die rohen Qt-Fensterklassen, die aufgenommen werden — aus D0-U (``RAW_BASES``).
+
+    Spät importiert: ``function_checks`` zieht die Oberfläche nach, und dieses
+    Modul misst im Elternprozess eines Laufs auch den Referenzfaktor, ohne sie.
+    """
+    from tools.function_checks import RAW_BASES
+
+    return tuple(RAW_BASES)
 
 
 # --- Herzschlag (Prüfpunkt 6) -------------------------------------------------------------
@@ -170,15 +183,38 @@ class FrameCounter:
 
 
 def reference_factor() -> float:
-    """Wie schnell dieser Rechner gegen die Referenzmaschine ist (§31).
+    """Wie schnell dieser Rechner gegen den Referenzrechner ist (Bauplan §31).
 
-    Dieselbe Probe wie die Zeitschätzung der Vollerkennung
-    (``perceive.recognition_time``): Referenzzeit durch die Zeit hier. Eine
-    gemessene Dauer mal diesem Faktor ist die Dauer auf der Referenz.
+    Die Kalibrierung, mit der §31 jede Messung auf einem anderen Rechner
+    umrechnet: die Rechenprobe aus ``perceive.recognition_time`` — „Messzeit
+    mal 18 ms durch die Probe des Laufs“. Eine gemessene Dauer mal diesem Faktor
+    ist die Dauer auf der Referenz; umgerechnet wird bei D0-U, einmal.
     """
     from app.core.perceive import recognition_time
 
     return recognition_time.PROBE_REFERENCE_SECONDS / recognition_time.calibrate()
+
+
+#: Wo ein Lauf seinen Referenzfaktor ablegt — einer je ``run``, für alle Fälle.
+REFERENCE_FILE: Final = "reference.json"
+
+
+def measure_reference(out: Path) -> float:
+    """Misst den Referenzfaktor einmal für einen ganzen Lauf und legt ihn nach ``out``."""
+    factor = round(reference_factor(), 4)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / REFERENCE_FILE).write_text(json.dumps({"reference_factor": factor}), encoding="utf-8")
+    return factor
+
+
+def run_reference_factor(out: Path) -> float:
+    """Der Referenzfaktor dieses Laufs; fehlt er (Fall ohne ``run``), wird er hier gemessen."""
+    try:
+        return float(
+            json.loads((out / REFERENCE_FILE).read_text(encoding="utf-8"))["reference_factor"]
+        )
+    except OSError, ValueError, KeyError, TypeError:
+        return measure_reference(out)
 
 
 # --- Fenster: modal, roh, alle (E6, Z2, Z5, V6) -----------------------------------------------
@@ -265,7 +301,7 @@ class ModalWatch:
                     "question": is_question(type(widget).__name__, buttons),
                 }
             )
-            raw = next((name for name in RAW_BASES if name in classes), "")
+            raw = next((name for name in _raw_bases() if name in classes), "")
             if raw:
                 self.raw_windows.append(
                     {
@@ -281,7 +317,7 @@ class ModalWatch:
             self._windows_seen.add(id(widget))
             self.windows.append({"class": type(widget).__name__, "title": widget.windowTitle()})
             classes = _classes(widget)
-            raw = next((name for name in RAW_BASES if name in classes), "")
+            raw = next((name for name in _raw_bases() if name in classes), "")
             if raw and id(widget) not in self._seen:
                 self._seen.add(id(widget))
                 self.raw_windows.append(
@@ -447,13 +483,6 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
     return found
 
 
-def overflowing(entries: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-    """Die Texte, deren Bedarf über ihrer Breite liegt."""
-    return [
-        entry for entry in entries if int(entry.get("need_px", 0)) > int(entry.get("width_px", 0))
-    ]
-
-
 def _caption_map(root: Any) -> dict[int, str]:
     from PySide6.QtWidgets import QFormLayout
 
@@ -519,15 +548,6 @@ def field_values(root: Any) -> dict[str, Any]:
     return values
 
 
-def duplicate_names(names: Iterable[str]) -> list[str]:
-    """Zugängliche Namen, die mehr als einmal vorkommen (Prüfpunkt 10)."""
-    counted: dict[str, int] = {}
-    for name in names:
-        if name:
-            counted[name] = counted.get(name, 0) + 1
-    return sorted(name for name, count in counted.items() if count > 1)
-
-
 # --- Tab-Kette (Prüfpunkt 10) ---------------------------------------------------------------
 
 
@@ -574,29 +594,6 @@ def tab_chain(
             break
         seen.add(id(current))
     return chain
-
-
-#: Wie weit ein Feld höher liegen darf als sein Vorgänger und doch als „weiter
-#: unten“ gilt: Felder einer Zeile schwanken um ihre Mittellinie.
-SAME_LINE_PX: Final = 8
-
-
-def chain_breaks(chain: Sequence[Mapping[str, Any]]) -> list[int]:
-    """Wo die Kette gegen die Lesefolge springt: Stellen, an denen es nach oben geht.
-
-    Lesefolge heißt zeilenweise von oben, in der Zeile von links. Ein Sprung
-    zurück an den Anfang am Ende der Kette ist ihr Schluss, kein Bruch.
-    """
-    breaks: list[int] = []
-    for index in range(1, len(chain)):
-        before, after = chain[index - 1]["rect"], chain[index]["rect"]
-        if index == len(chain) - 1 and chain[index]["rect"] == chain[0]["rect"]:
-            break
-        rises = int(after[1]) < int(before[1]) - SAME_LINE_PX
-        same_line = abs(int(after[1]) - int(before[1])) <= SAME_LINE_PX
-        if rises or (same_line and int(after[0]) < int(before[0])):
-            breaks.append(index)
-    return breaks
 
 
 # --- Layout, Schrift, Kontrast, Symbole, Animationen, Rollleisten (G1 bis G8, Z6) ---------
@@ -829,17 +826,6 @@ def state_images(widget: Any) -> dict[str, str]:
     QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, outside)
     QApplication.processEvents()
     return images
-
-
-def alike_states(images: Mapping[str, str]) -> list[tuple[str, str]]:
-    """Zustandspaare mit gleichem Abdruck — nicht unterscheidbar (G5)."""
-    names = [name for name in STATES if name in images]
-    return [
-        (first, second)
-        for index, first in enumerate(names)
-        for second in names[index + 1 :]
-        if images[first] == images[second]
-    ]
 
 
 # --- Leere Zustände, Meldungen, Handlungen (Z4, E7, Prüfpunkt 7) ---------------------------------

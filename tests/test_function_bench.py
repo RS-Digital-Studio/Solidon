@@ -44,13 +44,15 @@ from tools.file_acceptance import (
 )
 from tools.function_checks import (
     CHECKPOINTS,
-    LICENCE_RUNS,
     LICENCE_STATES,
+    LICENCE_UNLOCKED,
     MAIN_PHASES,
     PROTOCOL_FIELDS,
     PROTOCOL_SCHEMA,
     SELECTION_STAGES,
+    STARTUP_LICENCE,
     WHY,
+    licence_runs,
     validate_protocol,
 )
 
@@ -676,31 +678,17 @@ def test_the_frame_counter_measures_from_each_event_to_the_next_picture() -> Non
     assert counter.latencies([0.0, 0.040, 0.100]) == [10.0, 10.0, None]
 
 
-def test_the_tab_chain_breaks_where_focus_goes_back_up() -> None:
-    """Zeilenweise von oben, in der Zeile von links; der Sprung zum Anfang schließt die Kette."""
+def test_the_captures_judge_nothing_that_d0_u_judges() -> None:
+    """Keine Zwillinge der Urteile (Review M9): Rücksprünge, Überlauf, Doppelnamen, gleiche Bilder.
 
-    def link(name: str, x: int, y: int) -> dict[str, Any]:
-        return {"name": name, "rect": [x, y, 100, 24]}
+    Die Aufnahme liefert Rohdaten; U rechnet daraus (``function_judges``). Die
+    rohen Fensterklassen kommen aus U's ``RAW_BASES``, nicht abgeschrieben.
+    """
+    from tools.function_checks import RAW_BASES
 
-    chain = [link("a", 10, 10), link("b", 10, 40), link("c", 120, 42), link("d", 10, 20)]
-    chain.append(link("a", 10, 10))
-    assert capture.chain_breaks(chain) == [3]
-    assert capture.chain_breaks([*chain[:3], chain[0]]) == []
-    assert capture.chain_breaks([link("a", 100, 10), link("b", 10, 12)]) == [1]
-    assert capture.duplicate_names(["Durchmesser", "Tiefe", "Durchmesser", ""]) == ["Durchmesser"]
-
-
-def test_a_text_wider_than_its_place_is_cut() -> None:
-    entries = [
-        {"text": "Bohrung ändern", "need_px": 90, "width_px": 120},
-        {"text": "Modifier la profondeur", "need_px": 140, "width_px": 120},
-    ]
-    assert [entry["text"] for entry in capture.overflowing(entries)] == ["Modifier la profondeur"]
-
-
-def test_equal_pictures_of_two_states_are_named() -> None:
-    images = {"rest": "a", "hover": "b", "focus": "a", "pressed": "c"}
-    assert capture.alike_states(images) == [("rest", "focus")]
+    for twin in ("chain_breaks", "overflowing", "duplicate_names", "alike_states", "RAW_BASES"):
+        assert not hasattr(capture, twin), twin
+    assert capture._raw_bases() == tuple(RAW_BASES)
 
 
 def test_a_window_is_allowed_by_its_class_or_the_function_that_opened_it() -> None:
@@ -756,37 +744,70 @@ def test_the_prepared_profile_is_what_the_application_reads_at_its_start() -> No
     assert (settings.language, settings.printer) == ("de", "centauri-carbon-2")
 
 
-@pytest.mark.parametrize("state", LICENCE_STATES)
-def test_the_licence_state_is_set_through_the_suites_seam(
-    monkeypatch: pytest.MonkeyPatch, state: str
+@pytest.mark.parametrize("trial_from", [None, date(2026, 12, 1)])
+def test_each_licence_run_of_the_shipped_version_is_set_through_the_suites_seam(
+    monkeypatch: pytest.MonkeyPatch, trial_from: date | None
 ) -> None:
-    """Jeder Lizenzzustand ohne private Schlüssel — über ``activation._cached`` wie die Suite.
+    """Die Läufe sind die Zustände, die die Fassung erreicht (Entscheidung 12.10., Review S1).
 
-    Die Namen sind Eigenschaften von ``Activation`` (``function_checks``): An dem
-    gebauten Zustand gilt genau die genannte. Gesperrt heißt, die Grenze im
-    Datenpfad wirft (``activation.require``) — in den abgelaufenen Zuständen.
+    Ohne ``store.TRIAL_FROM`` (Verkaufsversion) ``sale_without_trial``, mit ihm
+    ``expired``; dazu ``needs_activation`` und ``licensed``. Jeder ohne private
+    Schlüssel über ``activation._cached``, und an dem gebauten Zustand gilt genau
+    seine Eigenschaft — auch keine von ``over``. Gesperrt heißt: Die Grenze im
+    Datenpfad wirft (``activation.require``), so wie U es erwartet
+    (``LICENCE_UNLOCKED``). Der Satz ``lizenz`` liest die Läufe erst jetzt.
     """
     from app.core import activation
     from app.core.activation import store
-    from app.core.errors import LicenceRequired
+    from app.core.errors import DeviceActivationRequired, LicenceRequired
 
     monkeypatch.setattr(activation, "_cached", activation._cached)
     monkeypatch.setattr(store, "DEMO_UNTIL", store.DEMO_UNTIL)
-    monkeypatch.setattr(store, "TRIAL_FROM", store.TRIAL_FROM)
-    cached = bench.apply_licence(state, date(2026, 10, 12))
-    assert activation.state() is cached
-    assert getattr(cached, state) is True
-    # in_demo heißt „diese Fassung ist eine Demo“ und gilt auch nach ihrem
-    # Stichtag; jede andere Eigenschaft gilt nur in ihrem eigenen Zustand.
-    others = {name for name in LICENCE_STATES if bool(getattr(cached, name))} - {state}
-    assert others == ({"in_demo"} if state == "over" else set()), others
-    assert cached.unlocked is (state not in ("over", "expired"))
-    if state in ("over", "expired"):
-        with pytest.raises(LicenceRequired):
+    monkeypatch.setattr(store, "TRIAL_FROM", trial_from)
+    runs = licence_runs()
+    assert ("expired" in runs) is (trial_from is not None)
+    assert {entry["licence"] for entry in bench.variant_sets()["lizenz"]} == set(runs)
+    for state in runs:
+        monkeypatch.setattr(store, "TRIAL_FROM", trial_from)
+        cached = bench.apply_licence(state, date(2026, 10, 12))
+        assert activation.state() is cached
+        holding = {name for name in (*LICENCE_STATES, STARTUP_LICENCE) if getattr(cached, name)}
+        assert holding == {state}, (state, holding)
+        assert store.DEMO_UNTIL is None
+        assert cached.unlocked is LICENCE_UNLOCKED[state]
+        if LICENCE_UNLOCKED[state]:
             activation.require(activation.CHANGE)
-    else:
-        activation.require(activation.CHANGE)
-    assert set(LICENCE_RUNS) <= set(LICENCE_STATES)
+        else:
+            # Ein Kaufcode ohne Gerätefreigabe sperrt mit eigenem Weg hinaus.
+            with pytest.raises((LicenceRequired, DeviceActivationRequired)):
+                activation.require(activation.CHANGE)
+    if trial_from is None:
+        with pytest.raises(ValueError, match="TRIAL_FROM"):
+            bench.apply_licence("expired", date(2026, 10, 12))
+
+
+def test_the_expired_demo_is_the_start_case_and_no_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``over`` ist kein Lauf je Funktion, sondern der Startfall der D12-Zeile (Review S1).
+
+    Der Zustand trägt seinen Stichtag (gestern), und eine Variante mit ihm gibt
+    es nur im Satz ``start``.
+    """
+    from app.core import activation
+    from app.core.activation import store
+
+    monkeypatch.setattr(activation, "_cached", activation._cached)
+    monkeypatch.setattr(store, "DEMO_UNTIL", store.DEMO_UNTIL)
+    cached = bench.apply_licence(STARTUP_LICENCE, date(2026, 10, 12))
+    assert cached.over is True and cached.unlocked is False
+    assert store.DEMO_UNTIL == cached.deadline == date(2026, 10, 11)
+    assert STARTUP_LICENCE not in licence_runs()
+    with pytest.raises(ValueError, match="Startfall"):
+        bench.Variant.of({"licence": STARTUP_LICENCE})
+    with pytest.raises(ValueError, match="Startfall"):
+        bench.Variant.of({"set": "start", "licence": "licensed"})
+    start = bench.Variant.of({"set": "start", "licence": STARTUP_LICENCE})
+    assert start.protocol(None, (0, 0))["licence"] == STARTUP_LICENCE
+    assert bench.PHASES["start"] == ()
 
 
 def test_missing_preconditions_go_through_the_seams_and_present_ones_are_checked(
@@ -803,6 +824,7 @@ def test_missing_preconditions_go_through_the_seams_and_present_ones_are_checked
 
     monkeypatch.setattr(discover, "find_program", discover.find_program)
     monkeypatch.setattr(discover, "find_programs", discover.find_programs)
+    monkeypatch.setattr(discover, "reachable", discover.reachable)
     monkeypatch.setattr(llm, "backends", llm.backends)
     monkeypatch.setattr(mesh, "reachable", mesh.reachable)
     applied = bench.apply_preconditions(
@@ -815,23 +837,70 @@ def test_missing_preconditions_go_through_the_seams_and_present_ones_are_checked
     assert bench.apply_preconditions({"slicer": "vorhanden"}) == {"slicer": "fehlt (Maschine)"}
 
 
+def test_present_ai_and_a_missing_comfyui_are_read_the_way_the_application_reads_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """„KI vorhanden“ liest ``available`` als Eigenschaft (M2), ComfyUI fehlt an beiden Wegen (L1).
+
+    Gegenprobe M2: Ein Backend-Doppel mit ``available`` als Eigenschaft —
+    vorher stürzte ``available()`` an einem ``bool`` ab. Gegenprobe L1: Der
+    Werkzeugdialog fragt ``discover.reachable``; nach „ComfyUI fehlt“ antwortet
+    dort keine ComfyUI-Adresse mehr, jede andere wie vorher.
+    """
+    from app.core import discover
+    from app.core.backends import llm, mesh
+
+    class Backend:
+        def __init__(self, ready: bool) -> None:
+            self.ready = ready
+
+        @property
+        def available(self) -> bool:
+            return self.ready
+
+    monkeypatch.setattr(llm, "backends", lambda: (Backend(False), Backend(True)))
+    assert bench.apply_preconditions({"ki": "vorhanden"}) == {"ki": "vorhanden"}
+    monkeypatch.setattr(llm, "backends", lambda: (Backend(False),))
+    assert bench.apply_preconditions({"ki": "vorhanden"}) == {"ki": "fehlt (Maschine)"}
+
+    asked: list[str] = []
+
+    def answers(url: str, seconds: float = 0.0) -> bool:
+        asked.append(url)
+        return True
+
+    monkeypatch.setattr(discover, "reachable", answers)
+    monkeypatch.setattr(mesh, "reachable", mesh.reachable)
+    assert bench.apply_preconditions({"comfyui": "fehlt"}) == {"comfyui": "fehlt"}
+    assert discover.reachable(mesh.DEFAULT_COMFY_URL) is False
+    assert discover.reachable("127.0.0.1:8188") is False
+    assert mesh.reachable(mesh.DEFAULT_COMFY_URL) is False
+    assert discover.reachable("http://127.0.0.1:11434") is True
+    assert asked == ["http://127.0.0.1:11434"]
+
+
 def test_the_spec_sets_licence_and_preconditions_and_both_states_run() -> None:
     """Die Spezifikation legt Lizenz und Vorbedingungen fest; „fehlt“ und „vorhanden“ laufen beide.
 
-    Die Lizenzwörter der Spezifikation (L) werden die Zustände des Protokolls (U).
+    Die Lizenzwörter der Spezifikation (L) werden die Zustände des Protokolls (U):
+    „abgelaufen“ ist der gesperrte Lauf der Fassung, „gekauft“ ``licensed``; „demo“
+    hat seit der Entscheidung vom 12.10. keinen Lauf und ist ein Fehler.
     """
     base, others = bench.spec_variants(
         {"preconditions": {"licence": "abgelaufen", "slicer": "vorhanden", "printer": "resin"}}
     )
     assert base == {
-        "licence": "expired",
+        "licence": licence_runs()[0],
         "preconditions": {"slicer": "vorhanden", "printer": "resin"},
     }
     assert others == [
         {"preconditions": {"slicer": "fehlt", "printer": "resin"}, "phases": ["main"]}
     ]
     assert bench.spec_variants(None) == ({}, [])
-    assert set(bench.SPEC_LICENCES.values()) <= set(LICENCE_STATES)
+    assert bench.spec_licence("gekauft") == "licensed"
+    assert bench.spec_licence("abgelaufen") in LICENCE_STATES
+    with pytest.raises(ValueError, match="keinen Lauf"):
+        bench.spec_licence("demo")
 
 
 def test_a_variant_takes_only_states_the_bench_can_make() -> None:
@@ -848,6 +917,7 @@ def test_a_variant_takes_only_states_the_bench_can_make() -> None:
         {"set": "bunt"},
         {"phases": ["fliegen"]},
         {"set": "lizenz", "phases": ["main"]},
+        {"licence": STARTUP_LICENCE},
     ):
         with pytest.raises(ValueError):
             bench.Variant.of(broken)
@@ -855,12 +925,11 @@ def test_a_variant_takes_only_states_the_bench_can_make() -> None:
     assert bench.parse_size(variant.window_size) == (1366, 728)
     assert variant.phases == ("main",)
     assert bench.Variant.of(variant.as_dict()) == variant
-    assert set(bench.PHASES) == set(bench.VARIANT_SETS)
-    assert {entry.get("licence") for entry in bench.VARIANT_SETS["lizenz"]} == set(LICENCE_RUNS)
-    assert {entry.get("window_size") for entry in bench.VARIANT_SETS["skalierung"]} >= set(
-        bench.WINDOW_SIZES
-    )
-    assert bench.VARIANT_SETS["bewegung"] == ({"set": "bewegung", "motion": False},)
+    sets = bench.variant_sets()
+    assert set(bench.PHASES) == {*sets, "start"}
+    assert {entry.get("licence") for entry in sets["lizenz"]} == set(licence_runs())
+    assert {entry.get("window_size") for entry in sets["skalierung"]} >= set(bench.WINDOW_SIZES)
+    assert sets["bewegung"] == ({"set": "bewegung", "motion": False},)
 
 
 # --- Fälle, Wiederaufnahme, Bericht ------------------------------------------------------------
@@ -899,6 +968,17 @@ ROWS: list[dict[str, Any]] = [
         "route": [],
         "spec": None,
     },
+    {
+        "id": "startup.expired_demo",
+        "kind": "bedienflaeche",
+        "source": "startablauf",
+        "package": "D12",
+        "requirement": "start",
+        "start_scene": "startbildschirm",
+        "target": "",
+        "route": [],
+        "spec": None,
+    },
 ]
 
 
@@ -914,8 +994,9 @@ def test_function_cases_unfold_rows_variants_and_languages() -> None:
     function = [case for case in cases if case.kind == "function"]
     language = [case for case in cases if case.kind == "language"]
     assert [case.number for case in cases] == list(range(5, 5 + len(cases)))
-    # basis: resize_hole einmal, drill_hole zweimal (Slicer vorhanden und fehlt); lizenz: je drei.
-    assert len(function) == 1 + 2 + 2 * len(LICENCE_RUNS)
+    # basis: resize_hole einmal, drill_hole zweimal (Slicer vorhanden und fehlt); lizenz: je
+    # einer je Lauf der Fassung.
+    assert len(function) == 1 + 2 + 2 * len(licence_runs())
     slicer = [case.variant["preconditions"] for case in function if case.row == "drill_hole"]
     assert {"slicer": "vorhanden"} in slicer and {"slicer": "fehlt"} in slicer
     assert [(case.row, case.variant["language"]) for case in language] == [
@@ -925,7 +1006,7 @@ def test_function_cases_unfold_rows_variants_and_languages() -> None:
     first = function[0]
     assert first.path == "scenes/merkmal.hole.exakt.p3d" and first.variant["set"] == "basis"
     assert {case.variant["licence"] for case in function if case.variant["set"] == "lizenz"} == set(
-        LICENCE_RUNS
+        licence_runs()
     )
     assert function_cases(ROWS, row_ids=["finding.action:place_on_bed"])[0].row == (
         "finding.action:place_on_bed"
@@ -934,6 +1015,18 @@ def test_function_cases_unfold_rows_variants_and_languages() -> None:
     assert [case.variant["phases"] for case in again] == [["escape", "main"]]
     with pytest.raises(ValueError, match="Phasen"):
         function_cases(ROWS, row_ids=["resize_hole"], variant_sets=["lizenz"], phases=["main"])
+    # Review L5: Phasen gelten nur für Sätze, die sie haben; der Lizenzsatz fällt weg.
+    mixed = function_cases(
+        ROWS, row_ids=["resize_hole"], variant_sets=["basis", "lizenz"], phases=["main"]
+    )
+    assert [(case.variant["set"], case.variant["phases"]) for case in mixed] == [
+        ("basis", ["main"])
+    ]
+    # Die Zeile des Startablaufs ist ein Startfall, einmal, im Zustand „Demo abgelaufen“.
+    started = function_cases(ROWS, packages=["D12"], variant_sets=["basis", "lizenz", "dunkel"])
+    assert [
+        (case.kind, case.row, case.variant["set"], case.variant["licence"]) for case in started
+    ] == [("start", "startup.expired_demo", "start", STARTUP_LICENCE)]
     with pytest.raises(ValueError, match="keine Zeile"):
         function_cases(ROWS, row_ids=["gibt_es_nicht"])
     with pytest.raises(ValueError, match="Variantensätze"):
@@ -1111,7 +1204,7 @@ def test_an_assembled_protocol_is_valid_against_the_schema_of_u() -> None:
     variant = bench.Variant().protocol({"screen": "MSI"}, (1280, 820))
     protocol = bench.empty_protocol(ROWS[0], variant, {"commit": "abc", "app": "0.6.1"})
     assert set(protocol) == set(PROTOCOL_SCHEMA)
-    assert "route" not in protocol["row"], "der Auswahlweg steht in steps, nicht in row"
+    assert set(protocol["row"]) <= set(PROTOCOL_SCHEMA["row"].keys or ())
     print_ = {
         "ops": ["create_box"],
         "params": ["x"],
@@ -1428,6 +1521,66 @@ def test_the_probe_row_runs_in_its_own_process_from_inventory_to_report(tmp_path
 
     menu = function_list.read_menubar(out / "menubar.json")
     assert len(menu) > 30 and all(entry.object_name.startswith("menubar.") for entry in menu)
+    report = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert (report["function_cases"], report["function_complete"]) == (1, 1)
+
+
+def _run_acceptance(out: Path, *arguments: list[str]) -> None:
+    """``tools/file_acceptance.py`` in eigenen Prozessen, offscreen, je Aufruf ein Prozess."""
+    import os
+    import subprocess
+    import sys
+
+    environment = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONUTF8": "1"}
+    for argument in arguments:
+        finished = subprocess.run(
+            [sys.executable, str(ACCEPTANCE), *argument, "--out", str(out)],
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=1200,
+            check=False,
+        )
+        assert finished.returncode == 0, (finished.stdout, finished.stderr)
+
+
+@pytest.mark.windowed
+def test_the_expired_demo_row_starts_through_main_and_stops(tmp_path: Path) -> None:
+    """D12 „Demo abgelaufen“: der Startfall über ``app.ui.app.main`` im eigenen Prozess (S1).
+
+    Das Starttor wird nicht umgangen: Der Fall setzt nur den Zustand über die
+    Nahtstelle der Suite und ruft ``main``. Die Anwendung startet nicht, zeigt den
+    Grund, der Prüfstand schließt die Meldung mit *Schließen* samt Probe, und
+    ``main`` endet mit seinem eigenen Ausgang.
+    """
+    out = tmp_path / "start"
+    _run_acceptance(
+        out,
+        ["inventory", "--functions", "--rows", "startup.expired_demo"],
+        ["run", "--timeout", "600"],
+    )
+    (case,) = read_cases(out)
+    assert (case.kind, case.variant["licence"]) == ("start", STARTUP_LICENCE)
+    folder = out / "cases" / "001"
+    state = json.loads((folder / "bench.json").read_text(encoding="utf-8"))
+    assert state["stage"] == "done" and state["main_exit_code"] == 1, state
+    protocol = json.loads((folder / "function.json").read_text(encoding="utf-8"))
+    assert validate_protocol(protocol) == []
+    assert protocol["variant"]["licence"] == STARTUP_LICENCE
+    assert protocol["errors"] == [] and protocol["findings"] == []
+    assert protocol["result"]["metrics"] == {
+        "exit_code": 1,
+        "main_window": False,
+        "message_shown": True,
+    }
+    (message,) = protocol["messages"]
+    assert message["text"].strip()
+    assert [action["clicked"] for action in message["actions"]].count(True) == 1
+    (click,) = protocol["steps"]
+    assert click["hit"] is True and click["phase"] == "start"
+    assert [entry["class"] for entry in protocol["raw_windows"]] == ["QMessageBox"]
     report = json.loads((out / "summary.json").read_text(encoding="utf-8"))
     assert (report["function_cases"], report["function_complete"]) == (1, 1)
 

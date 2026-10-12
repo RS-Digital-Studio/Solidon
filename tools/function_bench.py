@@ -58,11 +58,12 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Final, Protocol
 
+from app.ui.main_window import START_SIZE
 from tools.file_acceptance import MATERIAL, PRINTER
+from tools.function_capture import run_reference_factor
 from tools.function_checks import (
     COVERED,
     LAPTOP_SIZE,
-    LICENCE_RUNS,
     LICENCE_STATES,
     MAIN_PHASES,
     MATRIX_UNREACHABLE,
@@ -71,8 +72,9 @@ from tools.function_checks import (
     PROTOCOL_SCHEMA,
     SCALES,
     SELECTION_STAGES,
-    START_SIZE,
+    STARTUP_LICENCE,
     WHY,
+    licence_runs,
 )
 from tools.function_list import PRECONDITIONS as SPEC_PRECONDITIONS
 
@@ -184,14 +186,30 @@ def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tup
 
 # --- Vorbereitetes Profil und Vorbedingungen ----------------------------------------
 
-#: Die Lizenzwörter der Zeilenspezifikation (``function_list.PRECONDITIONS``) in
-#: den Zuständen des Protokolls (``function_checks.LICENCE_STATES``). Beide
-#: Listen gehören anderen Paketen; hier steht nur die Übersetzung.
-SPEC_LICENCES: Final[dict[str, str]] = {
-    "demo": "in_demo",
-    "gekauft": "licensed",
-    "abgelaufen": "expired",
-}
+
+def spec_licence(word: str) -> str:
+    """Ein Lizenzwort der Zeilenspezifikation als Zustand des Protokolls.
+
+    Die Wörter gehören D0-L (``function_list.PRECONDITIONS``), die Zustände D0-U
+    (``function_checks.LICENCE_STATES``); hier steht nur die Übersetzung.
+    „gekauft“ ist ``licensed``, „abgelaufen“ der gesperrte Lauf, den die
+    ausgelieferte Fassung erreicht — der erste aus ``licence_runs()``:
+    ``expired`` mit ``store.TRIAL_FROM``, sonst ``sale_without_trial``. „demo“
+    hat seit der Entscheidung vom 12.10. keinen Lauf mehr: Eine abgelaufene Demo
+    startet nicht (der Startfall), eine laufende ist kein eigener Zustand.
+    """
+    if word in licence_runs():
+        # L stellt seine Wörter auf die Namen aus ``app.core.activation`` um.
+        return word
+    if word == "gekauft":
+        return "licensed"
+    if word == "abgelaufen":
+        return licence_runs()[0]
+    raise ValueError(
+        f"Lizenzwort {word!r} hat keinen Lauf in der ausgelieferten Fassung"
+        f" — erreichbar sind {licence_runs()} (Spezifikation mit D0-L klären)"
+    )
+
 
 #: Äußere Vorbedingungen, die der Prüfstand herstellt — die Liste der
 #: Spezifikation ohne die Lizenz, die eine eigene Angabe der Variante ist.
@@ -207,17 +225,15 @@ PRINTERS: Final[dict[str, tuple[str, str]]] = {
     "resin": ("generic-resin-130", "resin"),
 }
 
-#: Wie lange eine laufende Demo oder ein laufender Testlauf im Prüfstand noch dauert.
-RUNNING_DAYS: Final = 14
-
-#: Die Fenstergrößen aus Z6 (``function_checks.START_SIZE``, ``LAPTOP_SIZE``).
+#: Die Fenstergrößen aus Z6 (``main_window.START_SIZE``, ``function_checks.LAPTOP_SIZE``).
 WINDOW_SIZES: Final[tuple[str, ...]] = tuple(
     f"{width}x{height}" for width, height in (START_SIZE, LAPTOP_SIZE)
 )
 
 #: Die Phasen je Variantensatz, in ihrer Folge (``FunctionFlow.phase_<name>``).
 #: Jede beginnt an der Startszene; ``sprachen`` hat eine eigene Klasse
-#: (:class:`LanguageFlow`) und deshalb keine Phase hier.
+#: (:class:`LanguageFlow`), ``start`` den echten Startweg (:class:`StartFlow`) —
+#: beide deshalb ohne Phase hier.
 PHASES: Final[dict[str, tuple[str, ...]]] = {
     "basis": (
         "search",
@@ -238,6 +254,7 @@ PHASES: Final[dict[str, tuple[str, ...]]] = {
     "dunkel": ("surface",),
     "bewegung": ("surface",),
     "sprachen": (),
+    "start": (),
 }
 
 
@@ -247,7 +264,8 @@ class Variant:
 
     ``set`` sagt, welche Phasen laufen: ``basis`` den ganzen Weg, ``lizenz`` nur
     Angebot und Sperre, ``zoll``, ``skalierung``, ``dunkel`` und ``bewegung`` den
-    Weg bis zur offenen Fläche mit ihren Aufnahmen (:data:`VARIANT_SETS`,
+    Weg bis zur offenen Fläche mit ihren Aufnahmen, ``start`` den Startweg über
+    ``app.ui.app.main`` (:func:`variant_sets`,
     :data:`PHASES`). ``phases`` beschränkt auf einzelne davon — die Nachprüfung
     einer Zeile nach einem Fix fährt nur, was der Fix berührt (Konzept §7).
     ``motion`` falsch heißt: Lauf mit ``SOLIDON3D_MOTION=aus`` (G8).
@@ -304,8 +322,14 @@ class Variant:
         strange = sorted(set(self.phases) - set(PHASES[self.set]))
         if strange:
             raise ValueError(f"Phasen {strange} gibt es im Satz {self.set!r} nicht")
-        if self.licence not in LICENCE_STATES:
-            raise ValueError(f"Lizenzzustand {self.licence!r} ist keiner aus {LICENCE_STATES}")
+        if self.set == "start":
+            if self.licence != STARTUP_LICENCE:
+                raise ValueError(f"Der Startfall läuft im Zustand {STARTUP_LICENCE!r}")
+        elif self.licence not in LICENCE_STATES:
+            raise ValueError(
+                f"Lizenzzustand {self.licence!r} ist keiner aus {LICENCE_STATES}"
+                f" — {STARTUP_LICENCE!r} ist der Startfall, kein Lauf je Funktion"
+            )
         for name, state in self.preconditions.items():
             allowed = PRECONDITIONS.get(name)
             if allowed is None or state not in allowed:
@@ -324,14 +348,13 @@ class Variant:
         return self.preconditions.get("printer", PRECONDITIONS["printer"][0])
 
 
-#: Die Variantensätze der Kommandozeile (``--variants``), je Zeile ausgefaltet.
+#: Die Variantensätze der Kommandozeile (``--variants``), je Zeile ausgefaltet —
+#: ohne ``lizenz``, dessen Läufe an der Fassung hängen (:func:`variant_sets`).
 #: ``sprachen`` ist kein Satz je Zeile: Je Sprache und Paket geht ein Prozess die
-#: Flächen aller Zeilen ab (:class:`LanguageFlow`). ``lizenz`` fährt die Läufe,
-#: die Prüfpunkt 18 verlangt (``function_checks.LICENCE_RUNS``).
-VARIANT_SETS: Final[dict[str, tuple[dict[str, Any], ...]]] = {
+#: Flächen aller Zeilen ab (:class:`LanguageFlow`).
+FIXED_VARIANT_SETS: Final[dict[str, tuple[dict[str, Any], ...]]] = {
     "basis": ({"set": "basis"},),
     "zoll": ({"set": "zoll", "unit": "in"},),
-    "lizenz": tuple({"set": "lizenz", "licence": state} for state in LICENCE_RUNS),
     "skalierung": (
         *({"set": "skalierung", "window_size": size} for size in WINDOW_SIZES),
         *({"set": "skalierung", "scale": scale} for scale in SCALES if scale != 1.0),
@@ -340,6 +363,20 @@ VARIANT_SETS: Final[dict[str, tuple[dict[str, Any], ...]]] = {
     "bewegung": ({"set": "bewegung", "motion": False},),
     "sprachen": (),
 }
+
+
+def variant_sets() -> dict[str, tuple[dict[str, Any], ...]]:
+    """Alle Variantensätze, ``lizenz`` mit den Läufen dieser Fassung (Prüfpunkt 18).
+
+    Welche Zustände erreichbar sind, hängt an ``store.TRIAL_FROM`` der
+    Auslieferung (``function_checks.licence_runs``) und wird deshalb zur
+    Inventarzeit gelesen, nicht beim Import. ``over`` ist kein Lauf: Eine
+    abgelaufene Demo startet nicht, das misst der Startfall der D12-Zeile.
+    """
+    return {
+        **FIXED_VARIANT_SETS,
+        "lizenz": tuple({"set": "lizenz", "licence": state} for state in licence_runs()),
+    }
 
 
 def spec_variants(spec: Mapping[str, Any] | None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -353,7 +390,7 @@ def spec_variants(spec: Mapping[str, Any] | None) -> tuple[dict[str, Any], list[
     base: dict[str, Any] = {}
     licence = preconditions.pop("licence", None)
     if licence is not None:
-        base["licence"] = SPEC_LICENCES[str(licence)]
+        base["licence"] = spec_licence(str(licence))
     if preconditions:
         base["preconditions"] = {str(key): str(value) for key, value in preconditions.items()}
     others: list[dict[str, Any]] = []
@@ -421,63 +458,75 @@ def write_profile(variant: Variant, recent: Sequence[Path] = ()) -> Path:
 
 
 def licence_activation(state: str, today: date) -> Any:
-    """Der Freischaltzustand zu einem Namen aus ``function_checks.LICENCE_STATES``.
+    """Der Freischaltzustand zu einem Lauf (``function_checks.LICENCE_STATES``) oder ``over``.
 
     Die Namen sind Eigenschaften von ``activation.Activation``; gebaut wird je
-    ein Zustand, an dem genau diese Eigenschaft gilt — ohne private Schlüssel.
-    Gekauft heißt Kaufcode samt Gerätezertifikat wie in
-    ``tests/helpers.set_test_license``. Die Oberfläche graut nur aus, die Hürde
-    liegt im Datenpfad, und genau das Ausgrauen ist geprüft (Plan D0, Abschnitt 5.1).
+    ein Zustand, an dem genau diese Eigenschaft gilt — ohne private Schlüssel,
+    so wie D0-U ihn in seiner Gegenprobe baut. Kaufcode und Zertifikat tragen den
+    Tag der Gerätebindung (``DEVICE_ACTIVATION_FROM``): Erst ab ihm wartet ein
+    Kaufcode auf die Freigabe (``needs_activation``), mit Zertifikat ist er
+    gekauft. ``sale_without_trial`` und ``expired`` sind derselbe Zustand ohne
+    Kaufcode — welcher gilt, entscheidet ``store.TRIAL_FROM`` (:func:`apply_licence`).
+    ``over`` ist der Startfall: eine Demo, deren Stichtag gestern war.
     """
     from app.core import activation
     from app.core.activation import key
 
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=activation.DEVICE_ACTIVATION_FROM,
+        order="PRUEFSTAND-1",
+        holder="pruefstand@beispiel.de",
+    )
     if state == "licensed":
-        licence = key.Licence(
-            major=key.current_major(),
-            purchased_on=today - timedelta(days=30),
-            order="PRUEFSTAND-1",
-            holder="pruefstand@beispiel.de",
-        )
         certificate = activation.ActivationCertificate(
             licence_digest="pruefstand",
             device_public=b"\x01" * 32,
             device_name="Prüfstand",
             activation_id="pruefstand",
-            issued_on=today - timedelta(days=29),
+            issued_on=activation.DEVICE_ACTIVATION_FROM,
         )
         return activation.Activation(licence=licence, certificate=certificate)
-    if state == "in_demo":
-        return activation.Activation(
-            days_left=RUNNING_DAYS, deadline=today + timedelta(days=RUNNING_DAYS)
-        )
-    if state == "over":
-        return activation.Activation(days_left=0, deadline=today - timedelta(days=1))
-    if state == "in_trial":
-        return activation.Activation(days_left=RUNNING_DAYS)
-    if state == "expired":
+    if state == "needs_activation":
+        return activation.Activation(licence=licence)
+    if state in ("sale_without_trial", "expired"):
         return activation.Activation(days_left=0)
-    raise ValueError(f"Lizenzzustand {state!r} ist keiner aus {LICENCE_STATES}")
+    if state == STARTUP_LICENCE:
+        return activation.Activation(days_left=0, deadline=today - timedelta(days=1))
+    raise ValueError(f"Lizenzzustand {state!r} ist keiner aus {(*LICENCE_STATES, STARTUP_LICENCE)}")
 
 
 def apply_licence(state: str, today: date | None = None) -> Any:
     """Setzt den Lizenzzustand über die Nahtstelle der Suite (``activation._cached``).
 
-    Nur im Kindprozess eines Falls. Testlauf und Demo brauchen dazu die Frist
-    der Auslieferung: ein Testlauf ist nur einer, wenn die Fassung einen anbietet
-    (``store.TRIAL_FROM``), eine Demo nur mit Stichtag (``store.DEMO_UNTIL``) —
-    dieselben zwei Zeilen wie ``tests/conftest._the_calendar_stays_out_of_it``.
+    Nur im Kindprozess eines Falls. Die vier Läufe sind Zustände der
+    Verkaufsfassung, also ohne Demo-Stichtag (``store.DEMO_UNTIL``). Den Testlauf
+    lässt der Prüfstand, wie die Fassung ihn ausliefert (``store.TRIAL_FROM``),
+    außer für ``sale_without_trial`` — dort gibt es keinen. ``expired`` gibt es
+    nur mit ausgeliefertem ``TRIAL_FROM`` (Entscheidung Koordinator, 12.10.);
+    verlangt eine Zeile ihn ohne, ist das ein Fehler und kein stiller Ersatz.
+    ``over`` trägt seinen Stichtag. Danach gilt genau die Eigenschaft des
+    Zustands und keine der anderen, sonst bricht der Fall hier ab.
     """
     from app.core import activation
     from app.core.activation import store
 
     day = today or date.today()
     cached = licence_activation(state, day)
-    if state in ("in_trial", "expired", "licensed"):
-        store.DEMO_UNTIL = None
-        store.TRIAL_FROM = store.DEMO_FROM
-    else:
+    if state == STARTUP_LICENCE:
         store.DEMO_UNTIL = cached.deadline
+    else:
+        store.DEMO_UNTIL = None
+        if state == "sale_without_trial":
+            store.TRIAL_FROM = None
+        elif state == "expired" and store.TRIAL_FROM is None:
+            raise ValueError(
+                "„expired“ gibt es nur, wenn die Fassung einen Testlauf anbietet"
+                f" (store.TRIAL_FROM) — erreichbar sind {licence_runs()}"
+            )
+    others = [name for name in (*LICENCE_STATES, STARTUP_LICENCE) if name != state]
+    if not getattr(cached, state) or any(getattr(cached, name) for name in others):
+        raise RuntimeError(f"Der Zustand {state!r} ließ sich nicht eindeutig herstellen")
     activation._cached = cached
     return cached
 
@@ -490,7 +539,7 @@ def apply_preconditions(preconditions: Mapping[str, str]) -> dict[str, str]:
     misst dann nicht, was er verspricht, und sagt es.
     """
     from app.core import discover
-    from app.core.backends import llm, mesh
+    from app.core.backends import llm
 
     applied: dict[str, str] = {}
     for name, state in preconditions.items():
@@ -513,22 +562,60 @@ def apply_preconditions(preconditions: Mapping[str, str]) -> dict[str, str]:
             elif name == "ki":
                 llm.backends = tuple  # type: ignore[assignment]
             elif name == "comfyui":
-                mesh.reachable = lambda url, seconds=0.0: False  # type: ignore[assignment]
+                _comfyui_unreachable()
             applied[name] = "fehlt"
             continue
         applied[name] = state if _present(name) else "fehlt (Maschine)"
     return applied
 
 
+def _comfyui_addresses() -> frozenset[str]:
+    """Wo ComfyUI gesucht wird: die Vorgabe und die gemerkte Adresse, normalisiert."""
+    from app.core import discover
+    from app.core.backends import mesh
+
+    return frozenset(
+        mesh.comfy_base(address)
+        for address in (mesh.DEFAULT_COMFY_URL, discover.service_url("comfyui", ""))
+        if address
+    )
+
+
+def _comfyui_unreachable() -> None:
+    """„ComfyUI fehlt“ an beiden Wegen, die danach fragen (Review L1).
+
+    Die Erzeugung fragt ``mesh.reachable``, der Werkzeugdialog
+    ``tools.Tool.running`` über ``discover.reachable`` — die Suite kennt dafür
+    keine Nahtstelle. ``discover.reachable`` bleibt für jede andere Adresse,
+    wie sie war; nur ComfyUIs Adressen antworten nicht.
+    """
+    from app.core import discover
+    from app.core.backends import mesh
+
+    addresses = _comfyui_addresses()
+    asked = discover.reachable
+
+    def only_other_services(url: str, *args: Any, **kwargs: Any) -> bool:
+        if mesh.comfy_base(url) in addresses:
+            return False
+        return bool(asked(url, *args, **kwargs))
+
+    mesh.reachable = lambda url, seconds=0.0: False  # type: ignore[assignment]
+    discover.reachable = only_other_services  # type: ignore[assignment]
+
+
 def _present(name: str) -> bool:
-    """Ob eine Vorbedingung auf dieser Maschine wirklich erfüllt ist."""
+    """Ob eine Vorbedingung auf dieser Maschine wirklich erfüllt ist.
+
+    ``available`` ist an jedem Sprachmodell eine Eigenschaft, kein Aufruf (Review M2).
+    """
     from app.core import tools
     from app.core.backends import llm, mesh
 
     if name == "slicer":
         return bool(tools.slicer_programs())
     if name == "ki":
-        return any(backend.available() for backend in llm.backends())
+        return any(bool(backend.available) for backend in llm.backends())
     if name == "comfyui":
         return mesh.reachable(mesh.DEFAULT_COMFY_URL)
     return True
@@ -639,7 +726,8 @@ def compare_prints(
 def protocol_row(row: Mapping[str, Any]) -> dict[str, Any]:
     """Die Zeile, wie das Protokoll sie trägt: nur die Schlüssel des Schemas.
 
-    ``route`` (der Auswahlweg von L) bleibt draußen — er steht in ``steps``.
+    Das sind die Felder von L's ``Row`` (``function_checks.ROW_KEYS``), samt dem
+    Auswahlweg ``route``; geklickt steht er zusätzlich in ``steps``.
     """
     keys = PROTOCOL_SCHEMA["row"].keys or frozenset()
     data = {key: row[key] for key in sorted(keys) if key in row}
@@ -1047,6 +1135,40 @@ class Walk:
         return round(self.ports.now() - self.began, 4)
 
 
+def click_button(ports: Any, walker: Walk, button: Any, label: str) -> bool:
+    """Ein Knopf ohne Wortschatznamen — Rückfrage, Starttor —, angeklickt mit Probe.
+
+    W führt für diese Knöpfe keinen Namen (Bericht: Lücke für W). Geklickt wird
+    trotzdem nur, wenn ``widget_under`` an der Mitte den Knopf trifft; der
+    Klick steht wie jeder andere in ``steps``, mit ``label`` als Ziel. ``False``
+    heißt: verdeckt, nicht geklickt — der Eintrag trägt den Fund.
+    """
+    from PySide6.QtCore import QPoint, QRect
+
+    rect = QRect(button.mapToGlobal(QPoint(0, 0)), button.size())
+    point = rect.center()
+    hit = ports.widget_under(point)
+    record = walker.record(
+        {
+            "target": label,
+            "why": TARGET_REASON,
+            "button": "left",
+            "rect": ports.rect_data(rect),
+            "point": ports.point_data(point),
+            "widget_at": ports.describe(hit, point) if hit is not None else None,
+            "hit": hit is not None and (hit is button or button.isAncestorOf(hit)),
+            "zone": None,
+            "decision": False,
+        }
+    )
+    if not record["hit"]:
+        record["finding"] = COVERED
+        record["detail"] = f"an {record['point']} liegt {record['widget_at']}, nicht {label}"
+        return False
+    ports.press(hit, point, "left")
+    return True
+
+
 def way_clicks(steps: Sequence[Mapping[str, Any]]) -> int:
     """Wie viele Wegklicks ein Weg gekostet hat (``why`` nicht ``ziel``)."""
     return sum(1 for step in steps if step.get("why") in WAY_REASONS)
@@ -1362,6 +1484,25 @@ LATE_WINDOW_S: Final = 3.0
 #: Wie lange nach einem Klick auf eine Handlung auf ihre Wirkung gewartet wird.
 EFFECT_WINDOW_S: Final = 2.0
 
+#: Z1: Bewegungen eines Zugs und ihr Takt — 60 je Sekunde wie eine Hand an der
+#: Maus (Review L11), nicht so schnell, wie die Schleife sie senden kann.
+DRAG_MOVES: Final = 20
+DRAG_TICK_S: Final = 1 / 60
+
+#: Die Meldungen der Ansicht während eines Zugs am Griff: Geist, Zahl am Zeiger,
+#: verschobener Körper. Kommt keine, hat der Zug den Griff nicht gefasst.
+DRAG_SIGNALS: Final[tuple[str, ...]] = (
+    "transformDragged",
+    "placementDragged",
+    "previewDragged",
+    "gizmoStatus",
+    "featureMoved",
+    "featureMoveProposed",
+    "faceDragged",
+    "scaleDragged",
+    "slotDragged",
+)
+
 #: Die Einträge unter „Zuletzt geöffnet“ auf dem Startbildschirm (Prüfpunkt 16):
 #: ``start.recent:<n>``, n ab 1 in der Folge der Liste. Ein Menü dafür gibt es
 #: nicht; zum Startbildschirm führt *Datei → Neu* (``MainWindow.new_action``).
@@ -1369,6 +1510,27 @@ RECENT_KIND: Final = "start.recent"
 
 #: Ein Szenenschlüssel, wie er im Dateinamen steht.
 _STEP_NUMBER: Final = re.compile(r"\b(\d+)\b")
+
+
+def case_scene(folder: Path, scenes: Path, key: str) -> Path | None:
+    """Die eigene Kopie einer Startszene im Fallordner, beim ersten Mal angelegt.
+
+    Geöffnet wird nie die gemeinsame Datei unter ``<out>/scenes``: Die Anwendung
+    legt ihre Sicherung neben das Projekt (``<szene>.p3d.autosave``), und stirbt
+    ein Fall danach, hinge jeder folgende Fall derselben Szene an der
+    Wiederherstellungsfrage (Review M6, Erinnerung „sonden-bauen“). ``None``,
+    wenn es die Szene nicht gibt.
+    """
+    import shutil
+
+    source = scenes / f"{key}.p3d"
+    if not source.is_file():
+        return None
+    copy = folder / "scenes" / source.name
+    if not copy.is_file():
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, copy)
+    return copy
 
 
 def walk_target(row: Mapping[str, Any]) -> str:
@@ -1572,6 +1734,11 @@ class FunctionFlow:
         self.scene_key = str(self.spec.get("start_scene") or row.get("start_scene") or EMPTY_SCENE)
         self.apply_target = default_apply_target(self.row)
         self.selected = selected_feature(self.row)
+        #: Ein Referenzfaktor je Lauf (Bauplan §31, Entscheidung Koordinator 12.10.):
+        #: aus dem Lauf (``reference.json``), sonst hier gemessen.
+        self.reference_factor = float(
+            self.bench.get("reference_factor") or run_reference_factor(self.out)
+        )
 
     # --- Grundgerüst -----------------------------------------------------------------
 
@@ -1727,6 +1894,9 @@ class FunctionFlow:
             self.pump()
         self.data["variant"] = self.variant.protocol(placed, self.window_size())
         self.frames_wrapped = self.frames.wrap(getattr(self.window.viewport, "renderer", None))
+        # Der Faktor gilt für Zeiten (Prüfpunkt 6) und Bilder (Z1); die Ziehzeiten
+        # trägt erst der Zug nach (:meth:`phase_drag`).
+        self.data["frames"] = {"reference_factor": self.reference_factor}
         self.persist()
 
     def finish(self) -> None:
@@ -1741,16 +1911,36 @@ class FunctionFlow:
 
     # --- Startszene ---------------------------------------------------------------------
 
+    def scene_path(self, key: str) -> Path | None:
+        """Die Kopie einer Szene im Fallordner (Review M6, :func:`case_scene`)."""
+        return case_scene(self.folder, self.scenes, key)
+
+    def new_project_line(self) -> str:
+        """Der Wortschatzname von *Datei → Neu* in der Menüleiste, oder leer."""
+        from app.ui import guide_targets
+
+        return next(
+            (
+                str(name)
+                for name, _menus, action in guide_targets.menubar_entries(self.window)
+                if action is self.window.new_action
+            ),
+            "",
+        )
+
     def reset(self) -> bool:
         """Zurück an die Startszene; die Vorbereitung ist nicht die geprüfte Handlung.
 
-        Die Szene ``startbildschirm`` heißt: kein Projekt, der Fall beginnt dort.
-        Die leere Szene beginnt beim ersten Mal mit einem Klick auf *Neues
-        Projekt*. Sonst öffnet ``open_path`` die Szenendatei (Konzept §5: „Nur die
-        Startszene entsteht über ``open_path``“). Was die Phase davor geändert
-        hat, wird verworfen, ohne die Speicherfrage zu stellen — sie gehört nicht
-        zu dieser Zeile.
+        Die Szene ``startbildschirm`` heißt: kein Projekt, der Fall beginnt dort;
+        hat eine Phase ein Projekt geöffnet, führt *Datei → Neu* zurück (wie
+        :meth:`phase_switch`). Die leere Szene beginnt beim ersten Mal mit einem
+        Klick auf *Neues Projekt*. Sonst öffnet ``open_path`` die Kopie der
+        Szenendatei im Fallordner (Konzept §5: „Nur die Startszene entsteht über
+        ``open_path``“; :func:`case_scene`). Was die Phase davor geändert hat,
+        wird verworfen, ohne die Speicherfrage zu stellen — sie gehört nicht zu
+        dieser Zeile.
         """
+        on_start = self.window.stack.currentWidget() is self.window.start_screen
         if self.scene_key == START_SCREEN:
             if self.data.get("scene") is None:
                 self.data["scene"] = {
@@ -1759,14 +1949,29 @@ class FunctionFlow:
                     "build_s": None,
                     "eval_s": 0.0,
                 }
-            return self.window.stack.currentWidget() is self.window.start_screen
+            if on_start:
+                return True
+            line = self.new_project_line()
+            if not line:
+                self.data["errors"].append("Datei → Neu trägt keinen Namen im Wortschatz")
+                return False
+            self.session.forget_changes()
+            return self.run_steps(
+                "startbildschirm",
+                [
+                    self.walker.step(f"menu:{line}"),
+                    self.wait_step(
+                        "startbildschirm steht",
+                        lambda: self.window.stack.currentWidget() is self.window.start_screen,
+                    ),
+                ],
+            )
         previous = self.session.last_result
-        path = self.scenes / f"{self.scene_key}.p3d"
-        on_start = self.window.stack.currentWidget() is self.window.start_screen
+        path = self.scene_path(self.scene_key)
         began = time.perf_counter()
         if self.scene_key == EMPTY_SCENE and on_start:
             steps = [self.walker.step("start.new")]
-        elif path.is_file():
+        elif path is not None:
             self.session.forget_changes()
             steps = [self.do_step("szene öffnen", lambda: self.window.open_path(path))]
         else:
@@ -1927,18 +2132,25 @@ class FunctionFlow:
     # --- Die Phasen ------------------------------------------------------------------------
 
     def run(self) -> None:
-        """Die Phasen der Variante (:data:`PHASES`); jede beginnt an der Startszene."""
-        if not self.reset():
-            self.finish()
-            return
+        """Die Phasen der Variante (:data:`PHASES`), jede an der Startszene (Review M5).
+
+        Vor jeder Phase geht der Fall zurück an die Startszene — auch nach einer,
+        die mit einer Ausnahme endete. Gelingt das nicht, läuft die Phase nicht:
+        Sie stünde sonst an dem, was die vorige liegen ließ, und ihre Messung
+        gälte einer anderen Lage. Der Grund steht in ``errors``.
+        """
         for name in self.variant.phases or PHASES[self.variant.set]:
             phase: Callable[[], None] = getattr(self, f"phase_{name}")
             self.bench["stage"] = name
             try:
+                if not self.reset():
+                    self.data["errors"].append(f"{name}: Startszene nicht herstellbar")
+                    continue
                 phase()
             except Exception:
                 self.data["errors"].append(f"{name}: {traceback.format_exc()}")
-            self.persist()
+            finally:
+                self.persist()
         self.finish()
 
     def phase_search(self) -> None:
@@ -1987,7 +2199,6 @@ class FunctionFlow:
                 "question": bool(probe["question"]),
             }
         self.data["search"] = found
-        self.reset()
 
     def phase_escape(self) -> None:
         """Prüfpunkt 5: Weg, Eingaben, Vorschau, dann Escape — der Stand ist der vorher."""
@@ -2008,7 +2219,6 @@ class FunctionFlow:
         )
         self.data["states"].setdefault("before", before)
         self.snapshot("escape")
-        self.reset()
 
     def phase_main(self) -> None:
         """Hauptweg: Ort, Weg, Eingaben, Vorschau, Fläche, Übernehmen, Rückgängig, Wiederholen."""
@@ -2327,7 +2537,6 @@ class FunctionFlow:
             record["history_after"] = len(self.session.project.document.ops)
             entries.append(record)
         self.data["revise"] = entries
-        self.reset()
 
     def phase_fault(self) -> None:
         """Prüfpunkt 7: erzwungener Fehlfall, Meldung, erste Handlung und ihre Wirkung."""
@@ -2379,7 +2588,6 @@ class FunctionFlow:
                 or self.surface() is not self.window
             )
         self.data["messages"] = [*(self.data.get("messages") or []), *messages]
-        self.reset()
 
     def phase_matrix(self) -> None:
         """Prüfpunkt 13: sechs Auswahlstufen — angeboten, grau, fehlt, nicht herstellbar."""
@@ -2436,7 +2644,6 @@ class FunctionFlow:
                 continue
             matrix[stage] = self.offer_state(target, f"matrix {stage}")
         self.data["matrix"] = matrix
-        self.reset()
 
     def offer_state(self, target: str, label: str) -> dict[str, Any]:
         """Wie ein Ziel gerade dasteht: angeboten (und wirksam?), grau mit Grund, fehlt."""
@@ -2508,12 +2715,17 @@ class FunctionFlow:
             self.pump()
         self.data["states"].setdefault("before", before)
         self.snapshot("aborted")
+        # Wie lange die Rechnung dauert, die hier abgebrochen wurde: aus dem Lauf
+        # ohne Abbruch an derselben Szene — dem Hauptweg (Review M4) —, roh auf
+        # diesem Rechner; nicht die Ladezeit der Startszene.
+        timing = self.data.get("timing") or {}
+        if timing.get("total_s") is None:
+            unmeasured(self.data, "abort.eval_s", "der Hauptweg ohne Abbruch lief nicht durch")
         self.data["abort"] = {
-            "eval_s": (self.data.get("scene") or {}).get("eval_s"),
+            "eval_s": timing.get("total_s"),
             "cancel_shown_s": moment["shown"],
             "clicked": clicked,
         }
-        self.reset()
 
     def phase_halt(self) -> None:
         """Prüfpunkt 15: Haltgrund mit Schrittnummer; Einfügen vor dem letzten Schritt."""
@@ -2559,7 +2771,6 @@ class FunctionFlow:
         self.data["insertion"] = record if record["outcome"] is not None else None
         if record["outcome"] is None:
             unmeasured(self.data, "insertion", "der Weg zur Einfügemarke kam nicht an")
-        self.reset()
 
     def recent_number(self, stem: str) -> int | None:
         """Die Stelle eines Projekts unter „Zuletzt geöffnet“ (ab 1), abgelesen an der Liste."""
@@ -2571,36 +2782,66 @@ class FunctionFlow:
         return None
 
     def phase_switch(self) -> None:
-        """Prüfpunkt 16: Projektwechsel über *Zuletzt geöffnet*, während die Vorschau steht.
+        """Prüfpunkt 16: Projektwechsel während Vorschau, Entwurf und Rechnung (Konzept §4).
 
         Der Weg des Kunden: *Datei → Neu* führt zum Startbildschirm, dort steht
-        „Zuletzt geöffnet“ (``start.recent:<n>``). Die Stelle des zweiten Projekts
-        wird an der Liste abgelesen, wenn sie dasteht.
+        „Zuletzt geöffnet“ (``start.recent:<n>``); die Stelle des zweiten Projekts
+        wird an der Liste abgelesen, wenn sie dasteht. Eine Speicherfrage
+        beantwortet der Prüfstand mit *Verwerfen* (:meth:`answer_discard`). Je
+        Lage (``function_checks.SWITCH_PHASES``):
+
+        * ``vorschau`` — Eingaben getippt, die Vorschau steht;
+        * ``entwurf`` — Eingaben getippt, gewechselt wird sofort, ohne auf die
+          Vorschau zu warten;
+        * ``rechnung`` — *Übernehmen* geklickt, gewechselt wird, während die
+          Sitzung rechnet. War die Rechnung beim ersten Wechselklick schon vorbei,
+          ist diese Lage nicht gemessen.
+
+        Spät heißt: Nach dem Wechsel, wenn das neue Projekt steht, kommt binnen
+        :data:`LATE_WINDOW_S` noch ein Fenster, eine neue Meldung oder eine
+        Änderung am Abdruck des neuen Projekts.
         """
-        from app.ui import guide_targets
-        from tools import function_capture as capture
+        from tools.function_checks import SWITCH_PHASES
 
         inputs = self.spec.get("inputs") or {}
-        if not inputs:
-            unmeasured(self.data, "switch", "keine Eingaben, keine Vorschau beim Wechsel")
-            return
-        second = self.scenes / f"{SECOND_SCENE}.p3d"
-        if not second.is_file():
+        if self.scene_path(SECOND_SCENE) is None:
             unmeasured(self.data, "switch", f"Szene {SECOND_SCENE} fehlt")
             return
-        new_line = next(
-            (
-                name
-                for name, _menus, action in guide_targets.menubar_entries(self.window)
-                if action is self.window.new_action
-            ),
-            "",
-        )
+        new_line = self.new_project_line()
         if not new_line:
             unmeasured(self.data, "switch", "Datei → Neu trägt keinen Namen im Wortschatz")
             return
+        measured: list[str] = []
+        late: list[dict[str, Any]] = []
+        notes: list[str] = []
+        for number, situation in enumerate(SWITCH_PHASES):
+            if number and not self.reset():
+                notes.append(f"{situation}: Startszene nicht herstellbar")
+                continue
+            if situation in ("vorschau", "entwurf") and not inputs:
+                notes.append(f"{situation}: keine Eingaben, kein {situation}")
+                continue
+            outcome = self.switch_once(situation, inputs, new_line)
+            if outcome is None:
+                notes.append(f"{situation}: der Wechsel kam nicht an oder fiel nicht in die Lage")
+                continue
+            measured.append(situation)
+            late += outcome
+            if situation == SWITCH_PHASES[0]:
+                self.snapshot("after_switch")
+        if notes:
+            unmeasured(self.data, "switch", "; ".join(notes))
+        if measured:
+            self.data["switch"] = {"phases": measured, "late_events": late}
+
+    def switch_once(
+        self, situation: str, inputs: Mapping[str, Any], new_line: str
+    ) -> list[dict[str, Any]] | None:
+        """Ein Wechsel in einer Lage; die späten Ereignisse, oder ``None`` ohne Messung."""
+        from tools import function_capture as capture
+
         project = self.session.project
-        modals_before = len(self.watch.modals)
+        computing: dict[str, bool | None] = {"busy": None}
 
         def to_the_recent(machine: StepMachine) -> None:
             number = self.recent_number(SECOND_SCENE)
@@ -2612,37 +2853,90 @@ class FunctionFlow:
                 )
             machine.insert([self.walker.step(f"{RECENT_KIND}:{number}")])
 
-        switched = self.run_steps(
-            "wechsel",
-            [
-                *self.path_steps(),
-                *self.input_steps(inputs),
-                self.walker.step(f"menu:{new_line}"),
-                Step("liste lesen", to_the_recent, settle_ms=SETTLE_MS),
-                self.wait_step(
-                    "anderes projekt", lambda: self.session.project is not project and self.idle()
-                ),
-            ],
-        )
+        def note_busy(machine: StepMachine) -> None:
+            computing["busy"] = bool(self.session.busy)
+
+        steps = [*self.path_steps(), *self.input_steps(inputs)]
+        if situation == "vorschau":
+            steps += self.preview_steps()
+        elif situation == "rechnung":
+            if inputs:
+                steps += self.preview_steps()
+            if self.apply_target:
+                steps.append(self.walker.step(self.apply_target))
+            steps.append(Step("rechnet sie?", note_busy))
+        steps += [
+            self.walker.step(f"menu:{new_line}"),
+            Step(
+                "rückfrage",
+                self.answer_discard,
+                ready=lambda: capture.modal_now() is not None or self.on_start_screen(),
+            ),
+            self.wait_step("startbildschirm", self.on_start_screen),
+            Step("liste lesen", to_the_recent, settle_ms=SETTLE_MS),
+            self.wait_step(
+                "anderes projekt", lambda: self.session.project is not project and self.idle()
+            ),
+        ]
+        if not self.run_steps(f"wechsel {situation}", steps):
+            return None
+        if situation == "rechnung" and not computing["busy"]:
+            return None
+        self.watch.poll()
+        modals_before = len(self.watch.modals)
+        print_before = self.scene_now()
+        texts_before = {entry["text"] for entry in capture.message_entries(self.window)}
         until = time.perf_counter() + LATE_WINDOW_S
         while time.perf_counter() < until:
             self.pump()
         self.watch.poll()
-        late = [
-            {"kind": "fenster", "text": entry["title"], "phase": "vorschau"}
+        events = [
+            {"kind": "fenster", "text": entry["title"], "phase": situation}
             for entry in self.watch.modals[modals_before:]
         ]
-        late += [
-            {"kind": "meldung", "text": entry["text"], "phase": "vorschau"}
+        events += [
+            {"kind": "meldung", "text": entry["text"], "phase": situation}
             for entry in capture.message_entries(self.window)
-            if entry["text"]
+            if entry["text"] and entry["text"] not in texts_before
         ]
-        if not switched:
-            unmeasured(self.data, "switch", "der Wechsel über den Startbildschirm kam nicht an")
-        else:
-            self.data["switch"] = {"phases": ["vorschau"], "late_events": late}
-            self.snapshot("after_switch")
-        self.reset()
+        changed = compare_prints(print_before, self.scene_now())
+        if changed["same"] is False:
+            events.append(
+                {
+                    "kind": "abdruck",
+                    "text": f"das neue Projekt änderte sich danach: {changed['differs']}",
+                    "phase": situation,
+                }
+            )
+        return events
+
+    def on_start_screen(self) -> bool:
+        return bool(self.window.stack.currentWidget() is self.window.start_screen)
+
+    def answer_discard(self, machine: StepMachine) -> None:
+        """Steht die Speicherfrage, klickt der Prüfstand *Verwerfen* — wie der Kunde, der wechselt.
+
+        Die Frage (``confirm_unsaved``, ``confirm_discard``) trägt keinen
+        Wortschatznamen (Lücke für W); geklickt wird der Knopf mit der Rolle
+        „verwerfen“, mit Probe (:func:`click_button`).
+        """
+        from PySide6.QtWidgets import QApplication, QMessageBox
+
+        box = QApplication.activeModalWidget()
+        if not isinstance(box, QMessageBox):
+            return
+        discard = next(
+            (
+                button
+                for button in box.buttons()
+                if box.buttonRole(button) == QMessageBox.ButtonRole.DestructiveRole
+            ),
+            None,
+        )
+        if discard is None:
+            raise RuntimeError(f"Rückfrage „{box.windowTitle()}“ ohne Knopf zum Verwerfen")
+        if not click_button(self.ports, self.walker, discard, "Verwerfen"):
+            raise BenchFinding(COVERED, "Verwerfen", "der Knopf liegt unter etwas anderem")
 
     def phase_hover(self) -> None:
         """I1: Name und Maß beim Überfahren je erkannter Art (``view:``), ohne Klick."""
@@ -2677,20 +2971,32 @@ class FunctionFlow:
         self.data["hover_labels"] = labels
 
     def phase_drag(self) -> None:
-        """Z1: ein Zug am Griff der Zeile, je Bewegung die Zeit bis zum nächsten Bild."""
+        """Z1: ein Zug am Griff der Zeile, je Bewegung die rohe Zeit bis zum nächsten Bild."""
         from PySide6.QtCore import QPoint, Qt
         from PySide6.QtTest import QTest
 
-        from tools.function_capture import reference_factor
-
         target = walk_target(self.row)
         if not target.startswith("handle:") and "Z1" not in (self.spec.get("criteria") or ()):
-            unmeasured(self.data, "frames", "kein Griff an dieser Zeile")
+            unmeasured(self.data, "frames.raw_drag_ms", "kein Griff an dieser Zeile")
             return
         if not self.frames_wrapped:
-            unmeasured(self.data, "frames", "kein Renderer, kein Bildzähler")
+            unmeasured(self.data, "frames.raw_drag_ms", "kein Renderer, kein Bildzähler")
             return
         moves: list[float] = []
+        gripped = {"signals": 0}
+
+        def noticed(*_values: object) -> None:
+            gripped["signals"] += 1
+
+        # Gefasst ist der Griff, wenn die Ansicht während des Zugs einen ihrer
+        # Zugwerte meldet — Geist, Zahl am Zeiger, verschobener Körper (Review L11).
+        listened = [
+            getattr(self.window.viewport, name)
+            for name in DRAG_SIGNALS
+            if hasattr(self.window.viewport, name)
+        ]
+        for signal in listened:
+            signal.connect(noticed)
 
         def pull(machine: StepMachine) -> None:
             click = self.ports.next_click(target)
@@ -2700,24 +3006,34 @@ class FunctionFlow:
                 raise BenchFinding(COVERED, target, "der Griff liegt unter etwas anderem")
             local = hit.mapFromGlobal(point)
             QTest.mousePress(hit, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, local)
-            for number in range(1, 21):
+            for number in range(1, DRAG_MOVES + 1):
                 moves.append(time.perf_counter())
                 QTest.mouseMove(hit, local + QPoint(4 * number, 0))
-                self.application.processEvents()
+                # Im Takt einer Hand an der Maus, nicht so schnell die Schleife kann.
+                until = time.perf_counter() + DRAG_TICK_S
+                while time.perf_counter() < until:
+                    self.application.processEvents()
             QTest.mouseRelease(
                 hit, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, local
             )
 
-        self.run_steps("zug", [*self.path_steps()[:-1], Step("ziehen", pull, settle_ms=SETTLE_MS)])
-        factor = reference_factor()
+        try:
+            self.run_steps(
+                "zug", [*self.path_steps()[:-1], Step("ziehen", pull, settle_ms=SETTLE_MS)]
+            )
+        finally:
+            for signal in listened:
+                signal.disconnect(noticed)
+        if not gripped["signals"]:
+            unmeasured(self.data, "frames.raw_drag_ms", "der Zug fasste keinen Griff")
+            return
+        # Roh, wie gemessen; umgerechnet wird einmal, bei D0-U (Review M3).
         self.data["frames"] = {
-            "drag_ms": [
-                None if value is None else round(value * factor, 1)
-                for value in self.frames.latencies(moves)
+            "raw_drag_ms": [
+                None if value is None else round(value, 1) for value in self.frames.latencies(moves)
             ],
-            "reference_factor": round(factor, 3),
+            "reference_factor": self.reference_factor,
         }
-        self.reset()
 
     def phase_licence(self) -> None:
         """Prüfpunkt 18: Wie das Ziel im Lizenzzustand dasteht, und ob Schreiben gesperrt ist."""
@@ -2766,6 +3082,168 @@ class _SceneOf:
 class _Body:
     mesh: Any
     features: Mapping[str, Any]
+
+
+#: Wie lange der Startfall auf das Starttor wartet: Meldung oder Hauptfenster (Sekunden).
+START_WAIT_S: Final = 120.0
+
+
+class StartFlow:
+    """Der Startfall (D12, Zustand ``over``): der echte Startweg über ``app.ui.app.main``.
+
+    Eine abgelaufene Demo startet nicht (Demo-Konzept §2 B2): ``main`` zeigt den
+    Abschied und endet mit einem eigenen Ausgang. Der Prüfstand umgeht das
+    Starttor nicht — er setzt nur den Zustand über die Nahtstelle der Suite
+    (:func:`apply_licence`) und ruft ``main``. Weil ``main`` die
+    ``QApplication`` selbst baut, wartet ein Nebenfaden, bis es sie gibt, und
+    reicht dann einen Auftrag über die Warteschlange in den Hauptfaden
+    (``QMetaObject.invokeMethod``). Von dort sieht ein Zeitgeber nach: Steht die
+    Meldung, wird ihr Text gelesen und sie mit einem Klick auf *Schließen*
+    samt Probe geschlossen — nie *Website öffnen*. Entsteht stattdessen ein
+    Hauptfenster, hat das Tor nicht gehalten; das steht im Protokoll, und der
+    Lauf endet.
+
+    Ins Protokoll: ``messages`` (Text und Knöpfe), ``modals``/``raw_windows``/
+    ``windows`` aus der Wache, der Klick in ``steps`` (Phase ``start``) und in
+    ``result.metrics`` der Ausgang von ``main`` (``exit_code``), ob ein
+    Hauptfenster entstand (``main_window``) und ob die Meldung erschien
+    (``message_shown``). Geurteilt wird bei D0-U.
+    """
+
+    def __init__(self, data: dict[str, Any], persist: Callable[[], None]) -> None:
+        from tools.function_capture import ModalWatch
+
+        self.data = data
+        self.persist = persist
+        self.began = time.perf_counter()
+        self.ports = QtPorts(None, self.began)
+        self.walker = Walk(self.ports, data["steps"], self.began)
+        self.walker.phase = "start"
+        self.watch = ModalWatch(self.began)
+        self.seen: dict[str, Any] = {"message": False, "main_window": False, "closed": False}
+        self.deadline = time.monotonic() + START_WAIT_S
+
+    def run(self, argv: Sequence[str] = ("solidon",)) -> int:
+        """Ruft ``main`` und gibt seinen Ausgang zurück; das Protokoll steht danach."""
+        import threading
+
+        from PySide6.QtCore import QMetaObject, QObject, Qt, QTimer, Slot
+        from PySide6.QtWidgets import QApplication
+
+        from app.ui import app as start
+
+        flow = self
+
+        class Watch(QObject):
+            """Lebt im Hauptfaden, bevor es eine ``QApplication`` gibt."""
+
+            timer: Any = None
+
+            @Slot()
+            def begin(self) -> None:
+                self.timer = QTimer(self)
+                self.timer.timeout.connect(flow.look)
+                self.timer.start(50)
+
+        watch = Watch()
+        stop = threading.Event()
+
+        def hand_over() -> None:
+            while not stop.is_set() and time.monotonic() < flow.deadline:
+                if QApplication.instance() is not None:
+                    QMetaObject.invokeMethod(watch, "begin", Qt.ConnectionType.QueuedConnection)
+                    return
+                time.sleep(0.01)
+
+        helper = threading.Thread(target=hand_over, name="startfall", daemon=True)
+        helper.start()
+        try:
+            code = int(start.main(list(argv)))
+        finally:
+            stop.set()
+            helper.join(timeout=5)
+            if watch.timer is not None:
+                watch.timer.stop()
+        self.watch.poll()
+        self.data["modals"] = self.watch.modal_entries()
+        self.data["raw_windows"] = self.watch.raw_entries()
+        self.data["windows"] = list(self.watch.windows)
+        self.data["result"] = {
+            "metrics": {
+                "exit_code": code,
+                "main_window": bool(self.seen["main_window"]),
+                "message_shown": bool(self.seen["message"]),
+            }
+        }
+        if not self.seen["message"]:
+            unmeasured(self.data, "messages", "das Starttor zeigte keine Meldung")
+        self.persist()
+        return code
+
+    def look(self) -> None:
+        """Ein Takt im Hauptfaden: Hauptfenster? Meldung? Dann lesen und schließen."""
+        from PySide6.QtWidgets import QAbstractButton, QApplication, QMessageBox
+
+        from app.ui.main_window import MainWindow
+        from tools.function_capture import name_of, visible_texts
+
+        self.watch.poll()
+        if any(isinstance(top, MainWindow) for top in QApplication.topLevelWidgets()):
+            if not self.seen["main_window"]:
+                self.data["errors"].append("Die Anwendung startete trotz abgelaufener Demo")
+                self.persist()
+            self.seen["main_window"] = True
+            QApplication.exit(2)
+            return
+        if time.monotonic() > self.deadline:
+            self.data["errors"].append(f"Nach {START_WAIT_S:.0f} s weder Meldung noch Fenster")
+            self.persist()
+            QApplication.exit(3)
+            return
+        box = QApplication.activeModalWidget()
+        if box is None or self.seen["closed"]:
+            return
+        self.seen["message"] = True
+        buttons = [
+            button
+            for button in box.findChildren(QAbstractButton)
+            if button.isVisible() and name_of(button)
+        ]
+        closing = (
+            box.button(QMessageBox.StandardButton.Close) if isinstance(box, QMessageBox) else None
+        )
+        text = box.text() if isinstance(box, QMessageBox) else " ".join(visible_texts(box))
+        entry = {
+            "text": str(text),
+            "actions": [
+                {"label": name_of(button), "target": "", "clicked": False, "effect": None}
+                for button in buttons
+            ],
+        }
+        self.data["messages"] = [entry]
+        self.seen["closed"] = True
+        self.persist()
+        if closing is None:
+            self.data["errors"].append("Die Meldung hat keinen Knopf Schließen")
+            self.ports.keys("Escape")
+            return
+        label = name_of(closing)
+        for action in entry["actions"]:
+            action["clicked"] = action["label"] == label
+        self.persist()
+        if not click_button(self.ports, self.walker, closing, label):
+            for action in entry["actions"]:
+                action["clicked"] = False
+            self.data["findings"].append(
+                {
+                    "phase": "start",
+                    "kind": COVERED,
+                    "target": label,
+                    "detail": str(self.data["steps"][-1].get("detail", "")),
+                }
+            )
+            self.persist()
+            self.ports.keys("Escape")
 
 
 class LanguageFlow:
