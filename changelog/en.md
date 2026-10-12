@@ -37,6 +37,10 @@ it into `website/version.json`.
 - The *Calibrate material* dialog now shows only clearance, interference and hole compensation up front. Elephant foot, shrinkage, wall and overhang are under *More settings*.
 - Numbers are right-aligned in every field, digit under digit.
 - A screen reader now reads the name and explanation of every number field in a dialog.
+- After an action in the *Report*, the report stays in front, and Ctrl+Z takes it back straight away. Until now the *Selection* tab jumped to the front.
+- Ctrl+Z and Ctrl+Y also work when the cursor sits in an empty field, such as the search field. If you typed there, your typing is undone first.
+- Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
+- Messages in the status bar no longer put a colon after a complete sentence.
 
 ### Editing and sketching
 

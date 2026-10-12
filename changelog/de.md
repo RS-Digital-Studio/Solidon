@@ -62,6 +62,10 @@ Nutzen da und sonst nichts.
 - Der Dialog *Material kalibrieren* zeigt vorn nur Spiel, Übermaß und Lochkorrektur. Elefantenfuß, Schwindung, Wand und Überhang stehen unter *Weitere Einstellungen*.
 - Zahlen stehen in allen Feldern rechtsbündig, Stelle unter Stelle.
 - Ein Bildschirmleser liest an jedem Zahlenfeld eines Dialogs Namen und Erklärung vor.
+- Nach einer Handlung im Prüfbericht bleibt der Bericht vorn, und Strg+Z nimmt sie gleich zurück. Bisher sprang der Reiter *Auswahl* nach vorn.
+- Strg+Z und Strg+Y wirken auch, wenn der Cursor in einem leeren Feld steht, etwa im Suchfeld. Wer dort getippt hat, nimmt zuerst sein Tippen zurück.
+- Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
+- Meldungen in der Statuszeile setzen keinen Doppelpunkt mehr hinter einen ganzen Satz.
 
 ### Bearbeiten und Zeichnen
 

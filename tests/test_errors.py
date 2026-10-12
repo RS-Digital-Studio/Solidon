@@ -26,6 +26,8 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
+from app.i18n import install_catalog, set_language
+from app.i18n.catalog import available_languages, read_catalog
 
 
 @pytest.mark.parametrize(
@@ -979,3 +981,36 @@ def test_only_a_programming_error_falls_back_to_the_bug_report(
         assert REPORT_ERROR.id not in offered, (
             f"{error_class.__name__} ist kein Programmfehler und bekommt doch den Fehlerbericht"
         )
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_a_title_that_is_a_sentence_takes_no_colon_before_its_detail(language: str) -> None:
+    """„aktiviert.: Aktivieren Sie …" stand im Text des Fehlers (FD-5).
+
+    ``str(error)`` setzt Titel und Detail für Protokoll, Statuszeile und
+    Prüfstand zusammen, und ein Titel, der schon ein Satz ist, bekam einen
+    Doppelpunkt dahinter. Geprüft in jeder Sprache, deren Katalog daliegt:
+    Übersetzt ist auch der Satzschluss.
+    """
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    joined = [
+        (error_class.__name__, str(error_class()))
+        for error_class in all_error_classes()
+        if error_class.default_detail is not None
+    ]
+    assert len(joined) > 3, f"nur {len(joined)} Fehler mit Detail — die Prüfung greift nicht"
+    doubled = [f"{name}: {text}" for name, text in joined if re.search(r"[.!?…:]:\s", text)]
+    assert not doubled, "Satzzeichen vor dem Doppelpunkt:\n" + "\n".join(doubled)
+    assert str(errors.DeviceActivationRequired()).startswith(
+        f"{errors.DeviceActivationRequired.default_title} "
+    ), "der Fall aus dem Funktionsdurchgang"
+
+
+def test_a_title_without_a_full_stop_keeps_the_colon() -> None:
+    assert errors.title_and_detail("Datei fehlt", "Wählen Sie eine andere.") == (
+        "Datei fehlt: Wählen Sie eine andere."
+    )
+    assert errors.title_and_detail("Datei fehlt.", "Wählen Sie eine andere.") == (
+        "Datei fehlt. Wählen Sie eine andere."
+    )
