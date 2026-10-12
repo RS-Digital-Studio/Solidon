@@ -21,7 +21,8 @@ from collections.abc import Collection, Iterable, Sequence
 from functools import lru_cache
 from typing import TYPE_CHECKING, Final
 
-from app.core.registry.registry import REGISTRY, Registry, menu_twins, variant_members
+from app.core.guides import MENUBAR
+from app.core.registry.registry import Registry, menu_twins, variant_members
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -660,16 +661,18 @@ def hidden_from_the_menu() -> frozenset[str]:
 
 
 def searched_name(entry: SearchEntry) -> str:
-    """Der Name eines Eintrags als Suchtext — nur der einer Registeroperation.
+    """Der Name eines Eintrags als Suchtext — außer der Kennung einer Menüzeile.
 
-    ``drill_hole`` ist ein Wort, das ein Umsteiger tippt. Die Kennung einer
-    Zeile des Fensters ist es nicht: ``menubar.flache_schattierung`` ist
-    deutsch in jeder Sprache, „chat“ fand darüber die Schattierung, und ein
+    ``drill_hole`` und die Handschlüssel der Fensterbefehle (``file.save``,
+    ``settings.updates``) sind englische Wörter, die ein Umsteiger tippt. Die
+    Kennung einer Zeile der Menüleiste ist es nicht: ``menubar.flache_schattierung``
+    ist deutsch in jeder Sprache, „chat“ fand darüber die Schattierung, und ein
     Wortteil mitten im Titel stieg über die Kundenwendungen (Review D0-W, L1).
-    Fensterbefehle suchen über Titel, Satz und Kundenwörter.
+    Allein diese Kennungen suchen über Titel, Satz und Kundenwörter
+    (Nachprüfung N1: „save“ fand sonst *Speichern* nicht mehr).
     """
     name = str(entry.name)
-    return name if REGISTRY.has(name) else ""
+    return "" if name.startswith(f"{MENUBAR}.") else name
 
 
 def _haystack(entry: SearchEntry) -> str:

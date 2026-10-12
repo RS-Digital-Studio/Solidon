@@ -359,8 +359,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 
 ## Testen
 
-Fenstertests (`windowed` für `qt_app`) nur beim Release, je Datei in eigenem
-Prozess; Umfang/Aufruf: `/pruefen`, `.claude/rules/tests.md`.
+Fenstertests (`windowed` für `qt_app`) lokal nur nach `AGENTS.md`, je Datei
+in eigenem Prozess (`/pruefen`).
 
 - Sichtbarkeit nativ prüfen (`wartezeit.md`): `QMenu` zeigt gesetzte Tooltips
   nicht zwingend. Widgetwerte allein belegen keine Darstellung.
