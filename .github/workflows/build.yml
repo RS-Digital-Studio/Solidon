@@ -1795,12 +1795,25 @@ jobs:
         run: |
           set -euo pipefail
           package=$(find release-download -maxdepth 1 -type f -name "Solidon3D-*-macos-${{ matrix.machine_arch }}.pkg")
-          # Das Paket ist umziehbar (pkgbuild): Apples Installer aktualisiert
-          # ein Bundle derselben Kennung dort, wo es liegt — hier die
-          # ausgepackte Prüfkopie, und /Applications bliebe leer.
-          rm -rf release-app
+          [[ "$package" =~ Solidon3D-([0-9]+\.[0-9]+\.[0-9]+)-macos- ]]
+          version=${BASH_REMATCH[1]}
+          # Das Paket ist nicht umziehbar (tools/make_macos_package.py,
+          # COMPONENT_SETTINGS): Sonst aktualisierte Apples Installer eine
+          # Kopie derselben Kennung dort, wo sie liegt, und der Kunde startete
+          # aus /Applications weiter die alte Version. Geprüft an der
+          # PackageInfo des signierten Pakets und am Verhalten: Die
+          # ausgepackte Prüfkopie unter release-app bleibt als solche Kopie
+          # liegen, und die Installation muss trotzdem in /Applications landen.
+          python tools/make_macos_package.py --check "$package"
+          [ -d release-app/Solidon3D.app ] || { echo "Die Prüfkopie fehlt — der Umzugsfall bliebe ungeprüft."; exit 1; }
           xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$package"
           sudo installer -pkg "$package" -target /
+          installed=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" /Applications/Solidon3D.app/Contents/Info.plist) || { echo "In /Applications liegt kein Solidon3D — das Paket hat eine andere Kopie aktualisiert."; exit 1; }
+          [ "$installed" = "$version" ] || { echo "In /Applications liegt $installed statt $version."; exit 1; }
+          rm -rf release-app
+          if [ "$MACOS_SIGNING_MODE" != unsigned ]; then
+            codesign --verify --deep --strict --verbose=2 /Applications/Solidon3D.app
+          fi
           if [ "$MACOS_SIGNING_MODE" = notarized ]; then
             spctl --assess --type execute --verbose=2 /Applications/Solidon3D.app
           fi

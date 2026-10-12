@@ -242,6 +242,12 @@ auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
   Fehler reist in den anderen Formaten weiter. Die Regel gehört in den
   Startpfad (`app/ui/qt_platform.py` ist das Muster); das Manifest trägt sie
   zusätzlich.
+- **Das macOS-Paket ist nicht umziehbar und ohne Versionssperre**
+  (`make_macos_package.COMPONENT_SETTINGS`, gebaut über `pkgbuild --root` mit
+  Komponentenliste): Sonst aktualisiert Apples Installer eine Kopie gleicher
+  Kennung anderswo oder überspringt das Bundle still, und der Kunde startet aus
+  `/Applications` weiter die alte Version. Die Releaseakte liest die
+  `PackageInfo` des signierten Pakets und installiert neben einer Kopie.
 - **Wer täglich baut, sieht den Cache-Fehler nie**: Der Ergebniscache trägt
   den Code-Hash im Pfad, der Kunde fährt denselben Stand wochenlang. Bei
   Verdacht den Cache absichtlich warm fahren — dieselbe Lage zweimal, mit einer

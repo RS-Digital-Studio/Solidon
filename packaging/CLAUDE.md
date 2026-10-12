@@ -49,7 +49,10 @@ die lokale Fassung für den KI-Hinweis, ohne Webabruf gelesen.
   eine Datei statt des Reststroms, das Wörterbuch belegt 8 statt 32 bis 64 MB.
   `LZMADictionarySize` wirkt nicht; Messreihe und Anlass stehen im Kommentar
   über den beiden Zeilen, `tests/test_packaging.py` hält sie.
-- **macOS** bleibt beim `.pkg` mit Apples Installer (Entscheidung Robert).
+- **macOS** bleibt beim `.pkg` mit Apples Installer (Entscheidung Robert):
+  `pkgbuild --root` über eine Wurzel mit nur dem Bundle, mit der
+  Komponentenliste aus `make_macos_package.COMPONENT_SETTINGS`;
+  `--check <pkg>` liest die `PackageInfo` des fertigen Pakets nach.
 - **Linux: AppImage und Flatpak.** Das AppImage wird nicht installiert, nach
   einmaligem Ausführrecht startet es per Doppelklick; `appimagetool` 1.9.1 und
   der Type-2-Laufzeitkern 20251108 kommen aus festen Veröffentlichungen, gegen

@@ -96,3 +96,15 @@ notarisierten Pakets dort steht aus (RM-104).
 
 Der Fall, an dem sich die verteilte Menge von der geprüften unterschied: „(die
 AppImage stand in keiner `version.json`)".
+
+Warum das macOS-Paket nicht umziehbar ist (Forensik 0.6.0, 12.10.2026): Die
+`PackageInfo` aus `pkgbuild --component` trug `<relocate>` und
+`<bundle-version>` für `de.rsdigital.solidon3d` — `pkgbuild` setzt
+`BundleIsRelocatable` und `BundleIsVersionChecked` bis macOS 26 von selbst
+(Handbuchseite `pkgbuild(1)`, „COMPONENT PROPERTY LIST“). Ein Kunde mit einer
+zweiten Kopie (etwa einer ad hoc neu signierten Testkopie) hätte nach dem
+Update weiter die alte Version gestartet. Die Releaseakte löschte die
+Prüfkopie bis dahin vor dem Installieren, damit es am Runner nicht auffiel;
+jetzt bleibt sie liegen und belegt den Fall. `BundleOverwriteAction`
+`upgrade` ersetzt das Bundle ganz: Dateien der alten Version blieben sonst im
+versiegelten Bundle liegen.

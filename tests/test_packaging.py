@@ -3461,6 +3461,133 @@ def test_the_macos_package_keeps_the_two_architectures_apart() -> None:
         assert options.get("hostArchitectures") == architecture
 
 
+#: Die ``PackageInfo`` des Pakets 0.6.0 (Intel, Tag-Lauf 38170638968), gebaut
+#: mit ``pkgbuild --component``: umziehbar und mit Versionssperre.
+_RELOCATABLE_PACKAGE_INFO = """<?xml version="1.0" encoding="utf-8"?>
+<pkg-info overwrite-permissions="true" relocatable="false"
+    identifier="de.rsdigital.solidon3d" postinstall-action="none" version="0.6.0"
+    format-version="2" generator-version="InstallCmds-864.12 (25G76)"
+    install-location="/Applications" auth="root">
+    <payload numberOfFiles="2008" installKBytes="510386"/>
+    <bundle id="de.rsdigital.solidon3d" CFBundleShortVersionString="0.6.0" path="./Solidon3D.app"/>
+    <bundle-version>
+        <bundle id="de.rsdigital.solidon3d"/>
+    </bundle-version>
+    <upgrade-bundle>
+        <bundle id="de.rsdigital.solidon3d"/>
+    </upgrade-bundle>
+    <update-bundle/>
+    <atomic-update-bundle/>
+    <strict-identifier>
+        <bundle id="de.rsdigital.solidon3d"/>
+    </strict-identifier>
+    <relocate>
+        <bundle id="de.rsdigital.solidon3d"/>
+    </relocate>
+</pkg-info>"""
+
+
+def test_the_macos_package_check_rejects_the_relocatable_package_of_0_6_0() -> None:
+    """Die Prüfung erkennt am echten Paket, was den Kunden die alte Kopie starten ließ.
+
+    ``<relocate>``: Der Installer aktualisiert eine Kopie gleicher Kennung dort,
+    wo sie liegt, und ``/Applications`` bleibt alt. ``<bundle-version>``: Er
+    überspringt das Bundle still, wenn am Ziel eine höhere Nummer liegt.
+    """
+    from tools import make_macos_package as tool
+
+    problems = tool.package_info_problems(_RELOCATABLE_PACKAGE_INFO)
+    assert any("<relocate>" in problem for problem in problems), problems
+    assert any("<bundle-version>" in problem for problem in problems), problems
+
+    settled = re.sub(
+        r"<(relocate|bundle-version)>.*?</\1>", "", _RELOCATABLE_PACKAGE_INFO, flags=re.DOTALL
+    )
+    assert tool.package_info_problems(settled) == []
+
+    elsewhere = settled.replace('install-location="/Applications"', 'install-location="/tmp"')
+    assert tool.package_info_problems(elsewhere), "ein anderes Ziel fiele durch"
+    renamed = settled.replace('path="./Solidon3D.app"', 'path="./Other.app"')
+    assert tool.package_info_problems(renamed), "ein anderer Bundlepfad fiele durch"
+
+
+def test_the_macos_package_is_built_from_a_component_list_that_does_not_relocate() -> None:
+    """``pkgbuild --component`` nimmt keine Komponentenliste — gebaut wird über ``--root``.
+
+    Jede Ebene der Analyse (das Bundle und seine eingebetteten Frameworks)
+    bekommt dieselben Werte; eine Wurzel mit mehr als dem Bundle hält an.
+    """
+    import inspect
+
+    from tools import make_macos_package as tool
+
+    analysed = [
+        {
+            "RootRelativeBundlePath": "Solidon3D.app",
+            "BundleIsRelocatable": True,
+            "BundleIsVersionChecked": True,
+            "BundleHasStrictIdentifier": True,
+            "BundleOverwriteAction": "upgrade",
+            "ChildBundles": [
+                {
+                    "RootRelativeBundlePath": "Solidon3D.app/Contents/Frameworks/QtCore.framework",
+                    "BundleOverwriteAction": "update",
+                }
+            ],
+        }
+    ]
+    settled = tool.component_settings(analysed)
+    assert analysed[0]["BundleIsRelocatable"] is True, "die Eingabe bleibt unberührt"
+    for entry in (settled[0], settled[0]["ChildBundles"][0]):
+        assert entry["BundleIsRelocatable"] is False
+        assert entry["BundleIsVersionChecked"] is False
+        assert entry["BundleOverwriteAction"] == "upgrade"
+    assert settled[0]["BundleHasStrictIdentifier"] is True
+
+    with pytest.raises(ValueError, match="Nutzlastwurzel"):
+        tool.component_settings([*analysed, {"RootRelativeBundlePath": "Fremd.app"}])
+
+    root, plist, component = Path("root"), Path("component.plist"), Path("component.pkg")
+    assert tool.analyse_command(root, plist) == [
+        "pkgbuild",
+        "--analyze",
+        "--root",
+        str(root),
+        str(plist),
+    ]
+    command = tool.component_command(root, plist, component)
+    assert "--component" not in command, "ohne Komponentenliste ist das Paket umziehbar"
+    assert command[command.index("--root") + 1] == str(root)
+    assert command[command.index("--component-plist") + 1] == str(plist)
+    assert command[command.index("--install-location") + 1] == "/Applications"
+    assert command[-1] == str(component)
+
+    source = inspect.getsource(tool.build)
+    assert "component_command(" in source and "component_settings(" in source
+    assert "check_package(target)" in source, "das gebaute Paket wird nicht nachgelesen"
+
+
+def test_the_macos_release_check_installs_next_to_a_copy_and_lands_in_applications() -> None:
+    """Die Releaseakte liest die ``PackageInfo`` des signierten Pakets und prüft das Verhalten.
+
+    Die ausgepackte Prüfkopie bleibt beim Installieren liegen — ein umziehbares
+    Paket aktualisierte sie, und ``/Applications`` bliebe leer.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    step = workflow.split("- name: Installiertes Paket starten", 1)[1].split("- name:", 1)[0]
+
+    check = step.index('make_macos_package.py --check "$package"')
+    decoy = step.index("[ -d release-app/Solidon3D.app ]")
+    install = step.index("sudo installer -pkg")
+    landed = step.index("/Applications/Solidon3D.app/Contents/Info.plist")
+    removed = step.index("rm -rf release-app")
+    assert check < install and decoy < install < landed < removed, (
+        "die Prüfkopie muss während der Installation liegen und danach erst weg"
+    )
+    assert '[ "$installed" = "$version" ]' in step
+    assert "codesign --verify --deep --strict" in step, "das installierte Siegel bleibt ungeprüft"
+
+
 def test_the_macos_conclusion_only_promises_an_apple_check_when_it_follows() -> None:
     """Der Schlusstext darf Gatekeeper weder verschweigen noch herbeireden."""
     from tools import make_macos_package as tool
