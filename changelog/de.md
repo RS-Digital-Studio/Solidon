@@ -55,6 +55,10 @@ Nutzen da und sonst nichts.
 - Auch wenn sich nichts überschneidet, gibt *Überschneidungen prüfen* jetzt eine Antwort.
 - Fehlt einer Funktion ein zweiter Körper in der Szene, nennt der Grund *Objekt duplizieren* als Weg.
 - Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
+- Fehlermeldungen, Einzelheiten und Hinweise stehen jetzt im Stil von Solidon, mit den Handlungen als Knöpfen. Strg+C kopiert die ganze Meldung.
+- Der Dialog *Material kalibrieren* zeigt vorn nur Spiel, Übermaß und Lochkorrektur. Elefantenfuß, Schwindung, Wand und Überhang stehen unter *Weitere Einstellungen*.
+- Zahlen stehen in allen Feldern rechtsbündig, Stelle unter Stelle.
+- Ein Bildschirmleser liest an jedem Zahlenfeld eines Dialogs Namen und Erklärung vor.
 
 ### Bearbeiten und Zeichnen
 

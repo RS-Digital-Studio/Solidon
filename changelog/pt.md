@@ -30,6 +30,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Mesmo quando nada se sobrepõe, *Verificar sobreposições* dá agora uma resposta.
 - Se a uma função faltar um segundo corpo na cena, o motivo indica *Duplicar objeto* como caminho.
 - A lista de atalhos de teclado nomeia *Modelar*, *Esqueleto* e *Desenhar* uma única vez.
+- As mensagens de erro, os detalhes e os avisos aparecem agora no estilo do Solidon, com as ações como botões. Ctrl+C copia a mensagem inteira.
+- A caixa *Calibrar material* mostra à frente apenas a folga, a interferência e a compensação de furos. Pé de elefante, contração, parede e saliência ficam em *Mais definições*.
+- Os números ficam alinhados à direita em todos os campos, algarismo sob algarismo.
+- Um leitor de ecrã lê o nome e a explicação de cada campo numérico de uma caixa de diálogo.
 
 ### Editar e esboçar
 

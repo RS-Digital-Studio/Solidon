@@ -30,6 +30,10 @@ it into `website/version.json`.
 - Even when nothing overlaps, *Check overlaps* now gives an answer.
 - If a function lacks a second body in the scene, the reason names *Duplicate object* as the way.
 - The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
+- Error messages, details and notices now appear in Solidon's own style, with the actions as buttons. Ctrl+C copies the whole message.
+- The *Calibrate material* dialog now shows only clearance, interference and hole compensation up front. Elephant foot, shrinkage, wall and overhang are under *More settings*.
+- Numbers are right-aligned in every field, digit under digit.
+- A screen reader now reads the name and explanation of every number field in a dialog.
 
 ### Editing and sketching
 

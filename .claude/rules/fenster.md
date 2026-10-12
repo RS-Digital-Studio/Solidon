@@ -102,6 +102,9 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 
 ## Rückfragen
 
+**Eine Meldung ist kein `QMessageBox`** (Z5), sondern `message_dialog`; nur
+die Fragen hier bleiben eins (`test_message_dialog`).
+
 Die gewollten Ausnahmen von Regel 19, und was sie davon abhält, zur Blockade zu
 werden:
 
@@ -374,7 +377,8 @@ Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
 zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
-(`panels.align_forms`, gerahmte Reiter über `apart`), gleich breite Felder
+(`panels.align_forms`, gerahmte Reiter über `apart`), jedes Layout mit eigenem
+Abstand (nie Qts 6), gleich breite Felder
 (`panels.even_fields`, `op_dialog.even_value_fields`); eine Zeile aus Feld und
 Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt, keine zweimal
 im Dialog. **Hat der Dialog eine Rückseite, setzen die Zeilen vorn, die
