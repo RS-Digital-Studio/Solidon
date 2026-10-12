@@ -342,7 +342,7 @@ Umschalt+S gehören dem Speichern, und ein erfundener Buchstabe wäre schlechter
 als keiner. Wer eine Taste vergibt, prüft vorher am gebauten Fenster gegen die
 Kürzel, die nicht aus dem Register kommen (Ansichten, Werkzeugzeile,
 Dateibefehle, Navigation): Eine doppelt belegte Taste führt keine der beiden
-Aktionen aus („Ambiguous shortcut overload“). `tests/test_ui.py`
+Aktionen aus. `tests/test_ui.py`
 (`test_no_two_shortcuts_in_the_window_collide`) hält das,
 `tests/test_registry_consistency.py` sieht nur das Register.
 

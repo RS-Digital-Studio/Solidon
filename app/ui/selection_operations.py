@@ -1127,7 +1127,10 @@ class SelectionOperationsPanel(QWidget):
             return False
         if key == Qt.Key.Key_Escape:
             if self.search.text():
-                self.search.clear()
+                # ``setText`` und nicht ``clear``: Ein geleertes Feld hat nichts
+                # mehr zurückzunehmen, und Strg+Z gilt wieder dem Verlauf
+                # (``shortcut_schemes.nothing_to_take_back``, FD-4).
+                self.search.setText("")
             else:
                 self.searchLeft.emit()
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -1163,7 +1166,7 @@ class SelectionOperationsPanel(QWidget):
         if not isinstance(name, str):
             return
         if item.flags() & Qt.ItemFlag.ItemIsEnabled:
-            self.search.clear()
+            self.search.setText("")
             self.searchLeft.emit()
         self.searchChosen.emit(name)
 

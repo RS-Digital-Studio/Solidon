@@ -68,6 +68,30 @@ Auswertung `output/konsolidierung-2026-10-12/auswertung-probelauf-d0.md`; FD-4 b
 FD-6 folgen mit ihrem Fix). Leichte Funde einer Zeile behebt ihr Paket; mittlere und
 die systemischen leichten behebt D0.
 
+### FD-4 Strg+Z nimmt nach einer Befundhandlung nichts zurück
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: 5
+- Beleg: Nach *Auf das Bett setzen* liegt der Fokus im Suchfeld der Auswahlkarte; Strg+Z am Fokuswidget nimmt den Schritt nicht zurück, ans Fenster geschickt wirkt es; am echten Fenster nachgestellt (`fix-befundhandlung-ui.md`)
+- Ursache: Die nach jeder Auswertung wiederhergestellte Auswahl holte den Reiter *Auswahl* ohne `held()` nach vorn (seit v0.3.1), und jedes Textfeld beanspruchte Strg+Z, auch leer.
+- Vorschlag: Wiederherstellung unter `held()`; ein Feld ohne Rücknehmbares gibt Strg+Z und Strg+Y ans Fenster; Fokus bleibt im Bericht.
+- Wirkung beim Kunden: Strg+Z nach einer angebotenen Lösung tut nichts, Bauplan §19.2 sagt Undo überall.
+- Stand: behoben `da0bae89f`
+
+### FD-5 Ohne Freischaltung scheitert eine angebotene Handlung erst nach dem Klick
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: 18
+- Beleg: In `sale_without_trial` und `needs_activation` ist *Auf das Bett setzen* offen, der Klick endet im Meldungsfenster mit „… noch nicht aktiviert.: Aktivieren …“; Lauf, Fälle 028 und 029
+- Ursache: Prüfbericht, Merkmalfenster, Kontextmenüs, Filament-Schnellwähler und Operationsdialog fragten den Freischaltzustand nicht (seit v0.2.2); `AppError` fügte Titel und Ursache mit „: “ auch hinter einem Satzende.
+- Vorschlag: eine Quelle `change_lock` für alle Zugänge, lesende Handlungen bleiben offen; `errors.title_and_detail` für den Satzschluss.
+- Wirkung beim Kunden: In der Demo klickt er eine angebotene Lösung und bekommt eine Absage, statt vorher am grauen Knopf den Grund zu lesen.
+- Stand: behoben `da0bae89f`
+
 ### FD-6 Gröber rechnen änderte nirgends etwas
 
 - Art: Fehler

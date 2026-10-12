@@ -38,6 +38,10 @@ dans `website/version.json`.
 - Le dialogue *Calibrer le matériau* n'affiche plus devant que le jeu, la surcote et la compensation des trous. Pied d'éléphant, retrait, paroi et surplomb sont sous *Autres réglages*.
 - Les nombres sont alignés à droite dans tous les champs, chiffre sous chiffre.
 - Un lecteur d'écran lit le nom et l'explication de chaque champ numérique d'un dialogue.
+- Après une action dans le *Rapport de contrôle*, le rapport reste au premier plan, et Ctrl+Z l'annule aussitôt. Jusqu'ici, l'onglet *Sélection* passait devant.
+- Ctrl+Z et Ctrl+Y fonctionnent aussi quand le curseur se trouve dans un champ vide, par exemple le champ de recherche. Si vous y avez tapé du texte, c'est d'abord la saisie qui est annulée.
+- Sans activation, les actions qui modifient le modèle sont grisées avec leur raison dans le *Rapport de contrôle*, *Sélection*, les menus contextuels et le filament. Le refus venait après le clic.
+- Les messages de la barre d'état ne mettent plus de deux-points après une phrase complète.
 
 ### Modifier et esquisser
 

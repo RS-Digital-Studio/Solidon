@@ -176,6 +176,7 @@ from app.core.types import (
 )
 from app.core.units import LengthUnit, is_close
 from app.i18n import TranslatableText, sort_key, tr
+from app.ui.change_lock import action_refusal, change_refusal
 from app.ui.dialogs import ADDRESS_VALUES, NEEDS_OP, handlers_of, unhandled_advice
 from app.ui.icons import icon, icon_name_for, svg_pixmap
 from app.ui.labels import (
@@ -3481,6 +3482,10 @@ class ObjectTree(QWidget):
         change = menu.addAction(tr("Diesen Schritt ändern"))
         change.setObjectName("tree.step")
         change.setStatusTip(tr("Öffnet den Schritt, der dieses Merkmal erzeugt hat."))
+        # Gesperrt grau mit Grund, wie jede ändernde Handlung (FD-5).
+        refusal = change_refusal()
+        change.setEnabled(not refusal)
+        change.setToolTip(refusal)
         change.triggered.connect(lambda _checked=False: self.stepRequested.emit(step))
         menu.addSeparator()
 
@@ -3524,6 +3529,9 @@ class ObjectTree(QWidget):
         draw = menu.addAction(tr("Auf dieser Fläche zeichnen"))
         draw.setObjectName("tree.sketch")
         draw.setStatusTip(tr("Beginnt eine Skizze auf dieser Fläche statt auf einer Grundebene."))
+        refusal = change_refusal()
+        draw.setEnabled(not refusal)
+        draw.setToolTip(refusal)
         draw.triggered.connect(
             lambda _checked=False: self.sketchOnFaceRequested.emit(str(feature_id))
         )
@@ -6010,6 +6018,13 @@ class HistoryPanel(QWidget):
             switch.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.kernelSwitchRequested.emit(chosen)
             )
+        refusal = change_refusal()
+        if refusal:
+            # **Jeder Eintrag hier ändert den Verlauf** (FD-5): gesperrt grau,
+            # mit dem Grund der Freischaltung statt des eigenen Satzes.
+            for entry in menu.actions():
+                entry.setEnabled(False)
+                entry.setToolTip(refusal)
         return menu
 
 
@@ -6262,6 +6277,14 @@ class ReportPanel(QWidget):
         """Der wirklich angehaltene Schritt der gerade gezeigten Auswertung."""
         self._live_objects: Mapping[ObjectId, SceneObject] = {}
         """Die wirklich ausgewerteten Körper, nicht nur geplante Ausgänge."""
+        self._change_refusal = change_refusal()
+        """Der Sperrgrund, mit dem die Knopfzeile zuletzt gebaut wurde (:meth:`follow_export`)."""
+        self._focus_parked = False
+        """Ob der Fokus eines weggeräumten Handlungsknopfs auf der Liste wartet (FD-4).
+
+        Die Knopfzeile entsteht nach einer Handlung neu; Qt reichte den Fokus
+        des versteckten Knopfs sonst irgendwohin weiter. Wohin er gehört,
+        entscheidet :meth:`show_result`, wenn die neuen Zeilen stehen."""
         self._findings: list[Finding] = []
         """Die rohen Befunde hinter den Zeilen. Die Liste im Fenster ist eine
         *Darstellung* davon (gebündelt, sortiert) — wer Zeilen aus Zeilen neu
@@ -6660,7 +6683,16 @@ class ReportPanel(QWidget):
         nachziehen — drei Gelegenheiten für einen Knopf, der das Falsche tut.
         """
         self._unfold_the_chosen()
+        self._change_refusal = change_refusal()
         row = self._offer_row
+        focused = QApplication.focusWidget()
+        if focused is not None and self._offers.isAncestorOf(focused) and self.list.isVisible():
+            # **Der Fokus bleibt im Bericht** (FD-4): Der Knopf, den der Kunde
+            # gedrückt hat, verschwindet gleich. Versteckt gab Qt seinen Fokus
+            # in der Kette weiter, und nach einem Reiterwechsel stand er im
+            # Suchfeld der Auswahl, das Strg+Z für sich nahm.
+            self.list.setFocus(Qt.FocusReason.OtherFocusReason)
+            self._focus_parked = True
         while row.count():
             item = row.takeAt(0)
             widget = item.widget() if item is not None else None
@@ -6740,6 +6772,14 @@ class ReportPanel(QWidget):
                 button.setToolTip(
                     tr("Erst nach der Berechnung — der Befund gehört zum vorigen Stand.")
                 )
+            refusal = action_refusal(action.id)
+            if refusal:
+                # **Gesperrt heißt grau mit Grund, vor dem Klick** (FD-5): In
+                # der Demo und ohne Geräteaktivierung endete *Auf das Bett
+                # setzen* sonst im Meldungsfenster. Lesendes bleibt bedienbar.
+                button.setEnabled(False)
+                button.setToolTip(refusal)
+                button.setAccessibleDescription(refusal)
             # ``weak_slot`` und nicht ein Lambda: ``handlers`` hält gebundene
             # Methoden des Fensters, und ein Lambda, das es fängt, schließt
             # den Ring Panel → Knopf → Handler → Fenster — gemessen hielten
@@ -6839,10 +6879,17 @@ class ReportPanel(QWidget):
         item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
 
     def follow_export(self, allowed: bool, tip: str) -> None:
-        """*Exportieren …* folgt dem Menüeintrag: dieselbe Sperre, derselbe Grund."""
+        """*Exportieren …* folgt dem Menüeintrag: dieselbe Sperre, derselbe Grund.
+
+        Und die Handlungen der Befundzeile folgen der Freischaltung: Das Fenster
+        ruft hier nach jedem Zustandswechsel, auch nach dem Freischaltdialog,
+        und eine gesperrte Zeile wird wieder bedienbar, ohne neue Wahl (FD-5).
+        """
         self.export_button.setEnabled(allowed)
         self.export_button.setToolTip(tip)
         self.export_button.setAccessibleDescription(tip)
+        if change_refusal() != self._change_refusal:
+            self._show_offers()
 
     def _run_bound_bed_action(self, error: AppError, document: Document | None) -> None:
         """Der angezeigte Importumfang bleibt gebunden, der Handler prüft seine Gültigkeit."""
@@ -7083,6 +7130,18 @@ class ReportPanel(QWidget):
         self._grew()
         # Nach dem Filtern, denn eine ausgeblendete Zeile ist keine Antwort.
         self._preselect()
+        focused = QApplication.focusWidget()
+        if self._focus_parked and (focused is None or self.isAncestorOf(focused)):
+            # **Nach einer Handlung arbeitet der Kunde dort weiter, wo der
+            # Bericht ihn hinführt** (FD-4): an der nächsten Befundzeile, oder,
+            # wenn keine mehr dasteht, an der Übergabe, die dann halbfett steht
+            # (:meth:`_emphasise_slicer`). Wer inzwischen woanders hingeklickt
+            # hat, behält seinen Fokus.
+            rows = self.list.isVisibleTo(self) and self.list.count()
+            target = self.list if rows else self.to_slicer
+            if target.isEnabled() and target.isVisibleTo(self):
+                target.setFocus(Qt.FocusReason.OtherFocusReason)
+        self._focus_parked = False
 
     def add_findings(self, findings: list[Finding], *, replacing_source: str | None = None) -> None:
         """Hängt Befunde an, die nicht aus der Auswertung kamen — die
@@ -7789,12 +7848,16 @@ class ReportPanel(QWidget):
         document = self._document
 
         menu = QMenu(self)
+        menu.setToolTipsVisible(True)
         chosen: dict[Any, Any] = {}
         for action in offered:
             entry = menu.addAction(str(action.label))
             entry.setObjectName(f"report.{action.id}")
-            # Dieselbe Sperre wie an den Knöpfen darunter (RM-534).
-            entry.setEnabled(not self._previous(item))
+            # Dieselben Sperren wie an den Knöpfen darunter (RM-534, FD-5).
+            refusal = action_refusal(action.id)
+            entry.setEnabled(not self._previous(item) and not refusal)
+            if refusal:
+                entry.setToolTip(refusal)
             chosen[entry] = action
         # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
         # None — ``QMenu.exec`` gibt dann nichts zurück.
@@ -9704,6 +9767,9 @@ class FeaturePanel(QWidget):
             )
             self._rows.insertWidget(self._rows.count() - 1, button)
             self._built.append(button)
+            # Beide legen einen Schritt an: Sie folgen der Sperre wie jede
+            # Handlung (:meth:`_settle_lock`, FD-5).
+            self._keyed.append(button)
 
     def _build_protection(self, feature_id: str, feature: Feature, protected: bool) -> None:
         """Der Umschalter *Vor Trennnähten schützen* — die eine Kundengeste der

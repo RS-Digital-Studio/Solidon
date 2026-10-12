@@ -38,6 +38,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El diálogo *Calibrar material* muestra delante solo la holgura, el apriete y la compensación de agujeros. Pata de elefante, contracción, pared y voladizo están en *Más ajustes*.
 - Los números quedan alineados a la derecha en todos los campos, cifra bajo cifra.
 - Un lector de pantalla lee el nombre y la explicación de cada campo numérico de un diálogo.
+- Tras una acción en el *Informe de comprobación*, el informe sigue delante y Ctrl+Z la deshace al momento. Hasta ahora saltaba al frente la pestaña *Selección*.
+- Ctrl+Z y Ctrl+Y funcionan también con el cursor en un campo vacío, por ejemplo en el campo de búsqueda. Si escribió algo allí, primero se deshace lo escrito.
+- Sin activación, las acciones que cambian algo en el *Informe de comprobación*, *Selección*, los menús contextuales y el filamento salen en gris con el motivo. Antes el rechazo llegaba tras el clic.
+- Los mensajes de la barra de estado ya no ponen dos puntos detrás de una frase completa.
 
 ### Editar y dibujar
 

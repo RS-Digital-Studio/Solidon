@@ -353,6 +353,24 @@ class QuestionDeclined(OperationCancelled):
     """
 
 
+#: Zeichen, mit denen ein Titel schon als Satz endet — in jeder Sprache der Kataloge.
+_SENTENCE_ENDS = (".", "!", "?", "…", ":")
+
+
+def title_and_detail(title: str, detail: str) -> str:
+    """Titel und Detail in einer Zeile, wie Protokoll und Traceback sie lesen.
+
+    **Ein Titel, der schon ein Satz ist, bekommt keinen Doppelpunkt dahinter**
+    (FD-5): Aus „… noch nicht aktiviert." und dem Detail wurde „aktiviert.:
+    Aktivieren Sie …" — in jeder Sprache, deren Titel mit einem Punkt endet.
+    Ein Titel ohne Satzzeichen behält den Doppelpunkt als Trenner.
+    """
+    head = title.rstrip()
+    if head.endswith(_SENTENCE_ENDS):
+        return f"{head} {detail}"
+    return f"{head}: {detail}"
+
+
 def _with_values(kwargs: dict[str, Any], **extra: Any) -> dict[str, Any]:
     """Vereint die Werte, die eine Unterklasse kennt, mit denen des Aufrufers."""
     kwargs["values"] = {**extra, **(kwargs.pop("values", None) or {})}
@@ -396,7 +414,9 @@ class AppError(Exception):
         # sieht, weiß nichts. Die Oberfläche liest beide Felder einzeln und
         # merkt davon nichts; Protokoll und Traceback zeigen bisher allein
         # diesen Text, und dort ist der Unterschied der ganze Inhalt.
-        super().__init__(f"{self.title}: {self.detail}" if self.detail else str(self.title))
+        super().__init__(
+            title_and_detail(str(self.title), str(self.detail)) if self.detail else str(self.title)
+        )
 
     def as_dict(self) -> dict[str, Any]:
         """Serialisierbare Form für Protokoll, Prüfbericht und
