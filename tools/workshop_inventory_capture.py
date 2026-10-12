@@ -322,10 +322,11 @@ def _open(tutorial: Any, step: dict[str, Any]) -> None:
 
 
 def _create(tutorial: Any, step: dict[str, Any]) -> None:
-    from PySide6.QtWidgets import QColorDialog, QDialogButtonBox, QLineEdit, QScrollArea
+    from PySide6.QtWidgets import QApplication, QDialogButtonBox, QScrollArea
 
     from app.i18n import get_language
     from app.ui.filament_picker import NewFilamentDialog
+    from app.ui.place_popup import ColourPopup, typed_colour
 
     view = _view(tutorial)
     language = get_language()
@@ -419,57 +420,50 @@ def _create(tutorial: Any, step: dict[str, Any]) -> None:
             target=dialog.colour_buttons[0],
         )
 
-        def colour_fill(colour_dialog: Any) -> None:
-            if not isinstance(colour_dialog, QColorDialog):
-                raise RuntimeError("Farbdialog fehlt; Spulenaufnahme prüfen.")
-            colour_dialog.setMinimumSize(700, 600)
-            colour_text = colour_dialog.findChild(QLineEdit, "qt_colorname_lineedit")
-            if colour_text is None:
-                raise RuntimeError("Das Eingabefeld für die Farbe fehlt.")
-            _segment(
-                tutorial,
-                "create-colour",
-                (
-                    "Orange einstellen",
-                    "Die Farbe gehört zur Vorführspule.",
-                    "Ich trage diesen Orangeton ein und kontrolliere die Farbvorschau.",
-                ),
-                (
-                    "Set the orange colour",
-                    "The colour identifies the demonstration spool.",
-                    "I enter this shade of orange and check the colour preview.",
-                ),
-                action=lambda: _type(tutorial, colour_text, step["colour"], dialog=colour_dialog),
-                dialog=colour_dialog,
-                target=colour_text,
-            )
-            if colour_dialog.currentColor().name().lower() != step["colour"].lower():
-                raise RuntimeError("Die eingetippte Farbe stimmt nicht mit der Vorschau überein.")
-            box = colour_dialog.findChild(QDialogButtonBox)
-            button = box.button(QDialogButtonBox.StandardButton.Ok) if box else None
-            if button is None:
-                raise RuntimeError("Bestätigung im Farbdialog fehlt.")
-            _segment(
-                tutorial,
-                "create-colour-confirm",
-                (
-                    "Die Farbe übernehmen",
-                    "Die Vorschau ist orange.",
-                    "Die Vorschau stimmt. Ich bestätige die Farbe.",
-                ),
-                (
-                    "Confirm the colour",
-                    "The preview is orange.",
-                    "The preview looks right. I confirm the colour.",
-                ),
-                dialog=colour_dialog,
-                target=button,
-            )
-            _click(tutorial, button, dialog=colour_dialog)
-
-        tutorial.modal(
-            lambda: _click(tutorial, dialog.colour_buttons[0], dialog=dialog), colour_fill
+        # Der Farbwähler steht am Knopf und ist kein modales Fenster (FD-22): Er
+        # öffnet mit dem Klick und wird danach im selben Ablauf bedient.
+        _click(tutorial, dialog.colour_buttons[0], dialog=dialog)
+        colour_popup = QApplication.activePopupWidget()
+        if not isinstance(colour_popup, ColourPopup):
+            raise RuntimeError("Farbwähler fehlt; Spulenaufnahme prüfen.")
+        colour_text = colour_popup.field
+        _segment(
+            tutorial,
+            "create-colour",
+            (
+                "Orange einstellen",
+                "Die Farbe gehört zur Vorführspule.",
+                "Ich trage diesen Orangeton ein und kontrolliere die Farbvorschau.",
+            ),
+            (
+                "Set the orange colour",
+                "The colour identifies the demonstration spool.",
+                "I enter this shade of orange and check the colour preview.",
+            ),
+            action=lambda: _type(tutorial, colour_text, step["colour"], dialog=colour_popup),
+            dialog=colour_popup,
+            target=colour_text,
         )
+        if typed_colour(colour_text.text()) != step["colour"].lower():
+            raise RuntimeError("Die eingetippte Farbe stimmt nicht mit der Vorschau überein.")
+        button = colour_popup.take
+        _segment(
+            tutorial,
+            "create-colour-confirm",
+            (
+                "Die Farbe übernehmen",
+                "Die Vorschau ist orange.",
+                "Die Vorschau stimmt. Ich bestätige die Farbe.",
+            ),
+            (
+                "Confirm the colour",
+                "The preview is orange.",
+                "The preview looks right. I confirm the colour.",
+            ),
+            dialog=colour_popup,
+            target=button,
+        )
+        _click(tutorial, button, dialog=colour_popup)
         _segment(
             tutorial,
             "create-location",

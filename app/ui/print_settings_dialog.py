@@ -37,7 +37,6 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractSpinBox,
     QCheckBox,
-    QColorDialog,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -169,6 +168,7 @@ from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.message_dialog import MessageDialog
 from app.ui.palette import ROLES
 from app.ui.panels import align_forms, collapsible, even_fields
+from app.ui.place_popup import choose_colour
 from app.ui.print_contract import handoff_receipt
 from app.ui.print_disclosure import share_label
 from app.ui.session import Session
@@ -191,7 +191,6 @@ from app.ui.style import (
     set_level,
 )
 from app.ui.theme import THEMES, current_theme
-from app.ui.window_names import raw_window
 
 _log = get_logger(__name__)
 
@@ -507,11 +506,13 @@ class _ColourButton(QPushButton):
         self.setStyleSheet(f"background-color: {self._value}; color: {readable};")
 
     def _choose(self) -> None:
-        with raw_window("message:print_colour"):
-            chosen = QColorDialog.getColor(QColor(self._value), self, tr("Filamentfarbe"))
-        if chosen.isValid():
-            self.set_value(chosen.name())
-            self.changed.emit(self._value)
+        """Der Farbwähler am Knopf (FD-22): Die gewählte Farbe steht, dann meldet der Knopf sie."""
+        popup = choose_colour(
+            self, self._value, title=tr("Filamentfarbe"), target="message:print_colour"
+        )
+        # In dieser Reihenfolge: erst der Wert, dann die Meldung mit ihm.
+        popup.chosen.connect(self.set_value)
+        popup.chosen.connect(self.changed)
 
 
 def swatch_size(reference: QWidget) -> int:

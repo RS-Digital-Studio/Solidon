@@ -1361,13 +1361,32 @@ _RAW_STATIC = {
 }
 
 
-def raw_window_names(source: str) -> tuple[list[str], list[str]]:
-    """Die rohen Meldungsfenster einer Datei: die ohne Kennzeichen und die Namen.
+#: Was eine Meldung oder Eingabe im Hausstil baut und ihr Kennzeichen als ``target=``
+#: nimmt — dieselbe Liste wie ``tools/function_scan.MESSAGE_BUILDERS``.
+HOUSE_BUILDERS = frozenset(
+    {
+        "MessageDialog",
+        "inform",
+        "InputDialog",
+        "ask_text",
+        "ask_choice",
+        "ColourPopup",
+        "choose_colour",
+        "ValuePopup",
+        "edit_value",
+    }
+)
 
-    Ein statischer Aufruf steht in ``with raw_window("message:<sache>")``; ein
+
+def raw_window_names(source: str) -> tuple[list[str], list[str]]:
+    """Die Meldungs- und Eingabefenster einer Datei: die ohne Kennzeichen und die Namen.
+
+    Ein Fenster im Hausstil nennt sein Kennzeichen als ``target=``; ein
     ``QMessageBox(…)`` bekommt in derselben Funktion ``setProperty`` mit
     ``guides.TARGET_PROPERTY`` und einem Namen (oder einer Konstanten wie
-    ``EXPIRED_DEMO_TARGET``). Die Funktion ist die innerste, die den Aufruf trägt.
+    ``EXPIRED_DEMO_TARGET``). Ein statischer Aufruf (``QMessageBox.information``,
+    ``QInputDialog.getText``) hat keinen Ort für ein Kennzeichen und fehlt immer.
+    Die Funktion ist die innerste, die den Aufruf trägt.
     """
     import ast
 
@@ -1389,8 +1408,9 @@ def raw_window_names(source: str) -> tuple[list[str], list[str]]:
             and isinstance(func.value, ast.Name)
             and (func.value.id, func.attr) in _RAW_STATIC
         )
-        # Eine Meldung im Hausstil (FD-21) nennt ihr Kennzeichen im Aufruf.
-        house = isinstance(func, ast.Name) and func.id in {"MessageDialog", "inform"}
+        # Eine Meldung oder Eingabe im Hausstil (FD-21, FD-22) nennt ihr Kennzeichen
+        # im Aufruf.
+        house = isinstance(func, ast.Name) and func.id in HOUSE_BUILDERS
         if house:
             given_here = [word.value for word in node.keywords if word.arg == "target"]
             if not given_here:
@@ -1411,16 +1431,7 @@ def raw_window_names(source: str) -> tuple[list[str], list[str]]:
             None,
         )
         given: list[ast.expr] = []
-        if static:
-            given = [
-                entry.context_expr.args[0]
-                for item in chain
-                if isinstance(item, ast.With)
-                for entry in item.items
-                if isinstance(entry.context_expr, ast.Call)
-                and ast.unparse(entry.context_expr.func) == "raw_window"
-            ]
-        elif function is not None:
+        if not static and function is not None:
             given = [
                 call.args[1]
                 for call in ast.walk(function)
@@ -1445,8 +1456,8 @@ def raw_window_names(source: str) -> tuple[list[str], list[str]]:
 
 
 def test_every_raw_message_window_carries_its_name() -> None:
-    """Jedes rohe Meldungsfenster unter ``app/ui`` trägt ``message:<sache>`` (Nachtrag
-    D0-W): Sonst findet der Prüfstand Wiederherstellen, Speicherfrage und
+    """Jedes Meldungs- und Eingabefenster unter ``app/ui`` trägt ``message:<sache>``
+    (Nachtrag D0-W): Sonst findet der Prüfstand Wiederherstellen, Speicherfrage und
     Löschnachfrage nur als „irgendein Meldungsfenster“. Jeder Name ist gültig und
     gehört genau einem Fenster."""
     root = Path(__file__).resolve().parents[1] / "app" / "ui"
@@ -1461,7 +1472,8 @@ def test_every_raw_message_window_carries_its_name() -> None:
     assert missing == []
     assert [name for name in names if not guides.is_target(name)] == []
     assert sorted(name for name in set(names) if names.count(name) > 1) == []
-    assert len(names) >= 25, "die Suche nach rohen Fenstern greift nicht mehr"
+    # Seit FD-24 quittiert die Freischaltung im Dialog: sechs Meldungsfenster weniger.
+    assert len(names) >= 15, "die Suche nach Meldungsfenstern greift nicht mehr"
 
 
 def test_an_unnamed_raw_window_turns_the_guard_red() -> None:
@@ -1469,29 +1481,34 @@ def test_an_unnamed_raw_window_turns_the_guard_red() -> None:
         "def ask(parent):\n"
         "    return QMessageBox.question(parent, 'a', 'b')\n"
         "def named(parent):\n"
-        "    with raw_window('message:sample_named'):\n"
-        "        return QInputDialog.getText(parent, 'a', 'b')\n"
+        "    return ask_text(parent, title='a', target='message:sample_named')\n"
         "def boxed(parent):\n"
         "    box = QMessageBox(parent)\n"
         "    return box.exec()\n"
+        "def bare(parent):\n"
+        "    return choose_colour(parent, '#ffffff', title='a')\n"
+        "def typed(parent):\n"
+        "    return QInputDialog.getText(parent, 'a', 'b')\n"
     )
     assert raw_window_names(source) == (
-        ["ask (Zeile 2)", "boxed (Zeile 7)"],
+        ["ask (Zeile 2)", "boxed (Zeile 6)", "choose_colour (Zeile 9)", "typed (Zeile 11)"],
         ["message:sample_named"],
     )
 
 
-def test_a_raw_message_window_resolves_while_it_is_open(qt_app: Any) -> None:
-    """Ein rohes Fenster, statisch oder mit Objekt, heißt im Wortschatz nach seiner
-    Funktion, solange es offen ist — geprüft aus dem Lauf des modalen Fensters."""
+def test_a_message_or_input_window_resolves_while_it_is_open(qt_app: Any) -> None:
+    """Ein Fenster im Hausstil und eine Rückfrage heißen im Wortschatz nach ihrer Frage,
+    solange sie offen sind — geprüft aus dem Lauf des modalen Fensters; der Farbwähler
+    am Ort ebenso, ohne modal zu sein (FD-22)."""
     from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox
+    from PySide6.QtWidgets import QDialog
 
     from app.ui import dialogs, guide_targets
+    from app.ui.input_dialog import ask_choice, ask_text
     from app.ui.main_window import MainWindow
+    from app.ui.place_popup import choose_colour
     from app.ui.session import Session
     from app.ui.settings import UiSettings
-    from app.ui.window_names import raw_window
 
     window = MainWindow(Session(), UiSettings())
     window.show()
@@ -1515,21 +1532,36 @@ def test_a_raw_message_window_resolves_while_it_is_open(qt_app: Any) -> None:
 
     try:
         look("message:sample_text")
-        with raw_window("message:sample_text"):
-            QInputDialog.getText(window, "Probe", "Name")
-        look("message:sample_box")
-        with raw_window("message:sample_box"):
-            QMessageBox.information(window, "Probe", "Satz")
+        ask_text(
+            window, title="Probe", sentence="Name", target="message:sample_text", accept="Nehmen"
+        )
+        look("message:sample_choice")
+        ask_choice(
+            window,
+            title="Probe",
+            question="Welche?",
+            choices=["a", "b"],
+            target="message:sample_choice",
+        )
         look("message:unsaved_changes")
         dialogs.confirm_unsaved("Probe", window)
         for name in (
             "message:sample_text",
-            "message:sample_box",
+            "message:sample_choice",
             "message:unsaved_changes",
         ):
             widget, modal = found[name]
             assert widget is modal and modal is not None, name
             assert found.get(name + "/why") == "ziel", name
+
+        popup = choose_colour(
+            window.header.filament_button, "#ff0000", title="Probe", target="message:sample_colour"
+        )
+        _settle(qt_app, 3)
+        try:
+            assert guide_targets.widget_for(window, "message:sample_colour") is popup
+        finally:
+            popup.close()
     finally:
         window.hide()
         window.release()
@@ -1673,18 +1705,18 @@ def test_a_target_with_a_module_turns_the_guard_red() -> None:
 
 
 def test_the_buttons_of_a_message_window_resolve_while_it_is_open(qt_app: Any) -> None:
-    """Speicherfrage, Fehlermeldung mit Handlung und ein statischer Aufruf: Jeder
-    Knopf ist über seinen Namen zu finden, solange sein Fenster offen ist, und
-    ist dann selbst der nächste Klick."""
+    """Speicherfrage, Fehlermeldung mit Handlung, Eingabe im Hausstil und Rückfrage
+    nach Regel 21: Jeder Knopf ist über seinen Namen zu finden, solange sein Fenster
+    offen ist, und ist dann selbst der nächste Klick."""
     from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QAbstractButton, QDialog, QMessageBox
+    from PySide6.QtWidgets import QAbstractButton, QDialog
 
     from app.core.errors import RETRY, AppError
     from app.ui import dialogs, guide_targets
+    from app.ui.input_dialog import ask_choice, ask_text
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
-    from app.ui.window_names import raw_window
 
     window = MainWindow(Session(), UiSettings())
     window.show()
@@ -1717,7 +1749,8 @@ def test_the_buttons_of_a_message_window_resolve_while_it_is_open(qt_app: Any) -
         f"message.button:unsaved_changes.{key}" for key in ("save", "discard", "cancel")
     )
     failed = ("message.button:error.retry", "message.button:error.cancel")
-    asked = ("message.button:sample_ask.yes", "message.button:sample_ask.no")
+    typed = ("message.button:sample_text.accept", "message.button:sample_text.cancel")
+    asked = ("message.button:sample_ask.ok", "message.button:sample_ask.cancel")
     try:
         look(*unsaved)
         dialogs.confirm_unsaved("Probe", window)
@@ -1725,10 +1758,15 @@ def test_the_buttons_of_a_message_window_resolve_while_it_is_open(qt_app: Any) -
         dialogs.show_error(
             AppError("Probe", suggestions=(RETRY,)), window, handlers={"retry": lambda error: None}
         )
+        look(*typed)
+        ask_text(
+            window, title="Probe", sentence="Satz", target="message:sample_text", accept="Nehmen"
+        )
         look(*asked)
-        with raw_window("message:sample_ask"):
-            QMessageBox.question(window, "Probe", "Satz")
-        for name in (*unsaved, *failed, *asked):
+        ask_choice(
+            window, title="Probe", question="Satz", choices=["a"], target="message:sample_ask"
+        )
+        for name in (*unsaved, *failed, *typed, *asked):
             inside_modal, why, label = found[name]
             assert inside_modal, (name, label)
             assert why == "ziel", name

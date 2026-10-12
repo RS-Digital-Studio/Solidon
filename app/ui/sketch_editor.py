@@ -114,7 +114,6 @@ from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES, text_colour
 from app.ui.shortcut_schemes import delete_keys, deletes, redo_keys
 from app.ui.viewport import MEASURE_GAP
-from app.ui.window_names import raw_window
 
 #: Was eine widersprüchliche Bedingung in der Liste anschreibt.
 #:
@@ -8281,23 +8280,25 @@ class SketchPanel(QWidget):
         remove.triggered.connect(lambda _checked=False, at=index: self.canvas.remove_constraint(at))
         return menu
 
-    def change_constraint_value(self, index: int) -> None:
-        """Nach dem neuen Maß der Bedingung ``index`` fragen und es setzen.
+    def change_constraint_value(self, index: int, value: str = "") -> None:
+        """Nach dem neuen Maß der Bedingung ``index`` fragen — mit ``value`` es setzen.
 
         **Die Bedingung, nicht die Zeile:** Die Liste zeigt nur, was an der
         Auswahl hängt (RM-519), und die Maßkarte im Bild kennt gar keine
         Zeile — sie meldet den Index (``measureEditRequested``).
 
-        Ein Eingabedialog und keine Bestätigung: Regel 19 verbietet die Frage
-        *vor* einer rücknehmbaren Handlung, nicht die Frage *nach* dem Wert,
-        den die Handlung braucht. Vorbelegt mit dem alten — wer nur eine Ziffer
-        tauschen will, tippt eine Ziffer.
+        **Das Feld steht am Ort** (FD-22): an der Maßkarte, auf die doppelt
+        geklickt wurde, oder an der Zeile der Liste (``place_popup.edit_value``).
+        Seine Antwort kommt über diese Methode zurück, mit ``value``. Eine Frage
+        *nach* dem Wert, den die Handlung braucht, keine Bestätigung *vor* ihr
+        (Regel 19). Vorbelegt mit dem alten — wer nur eine Ziffer tauschen will,
+        tippt eine Ziffer.
 
         Der Wert bleibt Text, weil er einer ist: „30" ebenso wie „breite/2".
         Eine Zahleneingabe nähme dem Kunden die Ausdrücke weg, für die es die
         Projektparameter gibt (§13).
         """
-        from PySide6.QtWidgets import QInputDialog
+        from app.ui.place_popup import edit_value
 
         constraints = self.canvas.sketch.constraints
         if not 0 <= index < len(constraints):
@@ -8316,15 +8317,23 @@ class SketchPanel(QWidget):
                 shown = f"{circle_shown(float(entry.value)):.9f}".rstrip("0").rstrip(".")
             except ValueError:
                 shown = str(entry.value)
-        with raw_window("message:constraint_value"):
-            value, agreed = QInputDialog.getText(
-                self, str(tr("Maß ändern")), tr("{name}:", name=caption), text=shown
+        if not value.strip():
+            popup = edit_value(
+                self,
+                title=str(tr("Maß ändern")),
+                caption=str(caption),
+                text=shown,
+                note=str(tr("Eine Zahl oder ein Ausdruck mit Projektparametern, etwa breite/2.")),
+                target="message:constraint_value",
             )
-        if agreed and value.strip():
-            entered = value.strip()
-            if as_circle and (typed := read_number(entered)) is not None:
-                entered = f"{circle_stored(typed):.9f}"
-            self.canvas.change_constraint(index, entered)
+            popup.submitted.connect(
+                weak_slot(self, SketchPanel.change_constraint_value, index, forward=True)
+            )
+            return
+        entered = value.strip()
+        if as_circle and (typed := read_number(entered)) is not None:
+            entered = f"{circle_stored(typed):.9f}"
+        self.canvas.change_constraint(index, entered)
 
     def _constraint_double_click(self, item: Any) -> None:
         """Doppelklick auf eine Zeile — der Griff, den ein Fusion-Kunde sucht.

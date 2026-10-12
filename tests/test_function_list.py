@@ -96,7 +96,8 @@ def test_the_list_finds_enough_to_mean_something(
     assert sources["befundhandlung"] >= 50, "ohne die Handler nur des Fehlerdialogs"
     assert sources["verlauf"] >= 4
     assert sources["werkzeugzeile"] >= 7 and sources["kontextmenue"] >= 5
-    assert sources["einstellungen"] >= 3 and sources["meldungsfenster"] >= 20
+    # Seit FD-24 quittiert die Freischaltung im Dialog: sechs Meldungsfenster weniger.
+    assert sources["einstellungen"] >= 3 and sources["meldungsfenster"] >= 15
     assert {row.package for row in rows} == set(fl.PACKAGES), "jedes Paket hat Zeilen"
 
 
@@ -464,8 +465,8 @@ def test_targets_of_raw_windows_and_sections_come_from_the_source(
     rows: list[fl.Row], ui_sources: dict[str, str]
 ) -> None:
     """Das Ziel einer Meldungsfensterzeile und eines Einstellungsabschnitts steht im
-    Quelltext der Fläche — ``setProperty(…TARGET_PROPERTY, …)``, ``raw_window("…")`` oder
-    der Abschnittsbauer der Einstellungen. Kontrollfall: das Demo-Ende trägt
+    Quelltext der Fläche — ``setProperty(…TARGET_PROPERTY, …)``, ``target=`` am Bauer im
+    Hausstil oder der Abschnittsbauer der Einstellungen. Kontrollfall: das Demo-Ende trägt
     ``dialog:expired_demo``. Eine Zeile ohne Ziel gibt es nur, wenn ihre Fläche kein
     Kennzeichen setzt."""
     import ast
@@ -473,7 +474,7 @@ def test_targets_of_raw_windows_and_sections_come_from_the_source(
     assert _by_id(rows)["startup.expired_demo"].target == "dialog:expired_demo"
     scan = fscan.scan_ui(ui_sources)
     assert scan.raw_targets["show_expired_demo"] == "dialog:expired_demo"
-    marked = ("TARGET_PROPERTY", "raw_window(")
+    marked = ("TARGET_PROPERTY", "target=")
     for row in rows:
         if row.target or row.source != "meldungsfenster":
             continue
@@ -491,8 +492,8 @@ def test_targets_of_raw_windows_and_sections_come_from_the_source(
 
 def test_a_marked_surface_without_its_target_turns_red() -> None:
     """Gegenprobe: Jede Form, in der eine Fläche ihr Kennzeichen setzt, kommt als Ziel an —
-    ein Meldungsfenster mit ``setProperty`` (auch über eine Modulkonstante), ein statischer
-    Aufruf in ``raw_window`` und ein Abschnitt über den Abschnittsbauer der Einstellungen,
+    ein Meldungsfenster mit ``setProperty`` (auch über eine Modulkonstante), eine Eingabe im
+    Hausstil mit ``target=`` und ein Abschnitt über den Abschnittsbauer der Einstellungen,
     in dem Modul, das die Klasse der Einstellungen definiert, wie es auch heißt."""
     windows = fscan.scan_ui(
         {
@@ -504,9 +505,8 @@ def test_a_marked_surface_without_its_target_turns_red() -> None:
                 "def ask_named(parent):\n"
                 "    box = QMessageBox(parent)\n"
                 "    box.setProperty(guides.TARGET_PROPERTY, NAME)\n"
-                "def inform(parent):\n"
-                "    with raw_window('message:extra.inform'):\n"
-                "        QMessageBox.information(parent, 'a', 'b')\n"
+                "def told(parent):\n"
+                "    return ask_text(parent, title='a', target='message:extra.told')\n"
                 "def bare(parent):\n"
                 "    QMessageBox(parent)\n"
             ),
@@ -530,9 +530,9 @@ def test_a_marked_surface_without_its_target_turns_red() -> None:
     assert windows.raw_targets == {
         "ask": "message:extra.ask",
         "ask_named": "message:extra.ask_named",
-        "inform": "message:extra.inform",
+        "told": "message:extra.told",
     }
-    assert set(windows.raw_windows) == {"ask", "ask_named", "inform", "bare"}
+    assert set(windows.raw_windows) == {"ask", "ask_named", "told", "bare"}
     assert windows.settings_sections == ("Vorgaben für neue Projekte", "Ohne Kennzeichen")
     assert windows.settings_targets == {
         "Vorgaben für neue Projekte": "setting.section:vorgaben_fuer_neue_projekte"

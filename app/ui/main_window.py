@@ -62,7 +62,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidgetItem,
@@ -315,7 +314,14 @@ from app.ui.draw_tool import DRAW_KEY, JOIN_OP, POCKET_OP, DrawSurface, face_sur
 from app.ui.draw_tool import EXTRUDE_OP as PULL_OP
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
-from app.ui.filament_picker import CatalogueWrites, FilamentPopup, colours_of, spool_slot
+from app.ui.filament_picker import (
+    CatalogueWrites,
+    FilamentPopup,
+    colours_of,
+    slot_colours,
+    spool_slot,
+    swatch,
+)
 from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.guide_targets import (
@@ -326,6 +332,7 @@ from app.ui.guide_targets import (
 )
 from app.ui.header import ALL_PLATES, HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
+from app.ui.input_dialog import ask_choice, ask_text
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
     MENU_GROUPS,
@@ -471,7 +478,7 @@ from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
 from app.ui.viewport import DisplayMode, Projection, SketchSelectionBadge, Viewport
-from app.ui.window_names import name_button, raw_window
+from app.ui.window_names import name_button
 
 _log = get_logger(__name__)
 
@@ -8124,14 +8131,15 @@ class MainWindow(QMainWindow):
         except AppError as error:
             suggestion = pasted if error.values.get("constraint") == "web_page" else ""
 
-        with raw_window("message:model_address"):
-            url, accepted = QInputDialog.getText(
-                self,
-                tr("Modell aus dem Netz"),
-                tr("Adresse der Modelldatei oder Modellseite:"),
-                text=suggestion,
-            )
-        if accepted and url.strip():
+        url = ask_text(
+            self,
+            title=tr("Modell aus dem Netz"),
+            sentence=tr("Adresse der Modelldatei oder Modellseite:"),
+            target="message:model_address",
+            accept=tr("Herunterladen"),
+            text=suggestion,
+        )
+        if url is not None and url.strip():
             self.download_model(url.strip())
 
     def download_model(self, url: str) -> None:
@@ -9679,22 +9687,23 @@ class MainWindow(QMainWindow):
                         )
                         for slot in body.material_slots
                     ]
-                    with raw_window("message:inventory_spool"):
-                        chosen, accepted = QInputDialog.getItem(
-                            self,
-                            tr("Filament ersetzen"),
-                            tr(
-                                "Alle acht Filamente sind belegt. Welches soll auch auf "
-                                "seinen bisherigen Flächen ersetzt werden? "
-                                "Strg+Z nimmt die Zuweisung zurück."
-                            ),
-                            choices,
-                            0,
-                            False,
-                        )
-                    if not accepted:
+                    chosen = ask_choice(
+                        self,
+                        title=tr("Filament ersetzen"),
+                        question=tr(
+                            "Alle acht Filamente sind belegt. Welches soll auch auf "
+                            "seinen bisherigen Flächen ersetzt werden? "
+                            "Strg+Z nimmt die Zuweisung zurück."
+                        ),
+                        choices=choices,
+                        target="message:inventory_spool",
+                        icons=[
+                            swatch(slot_colours(slot.index, slot)) for slot in body.material_slots
+                        ],
+                    )
+                    if chosen is None:
                         return
-                    slot_index = body.material_slots[choices.index(chosen)].index
+                    slot_index = body.material_slots[chosen].index
             params = {
                 "slot": slot_index,
                 "name": entry.name,
@@ -11781,13 +11790,16 @@ class MainWindow(QMainWindow):
                     if not asked or size is not None or not choices:
                         show_error(error, self)
                         return
-                    with raw_window("message:thread_counterpart"):
-                        picked, accepted = QInputDialog.getItem(
-                            self, tr("Gegenstück zum Gewinde"), str(error.detail), choices, 0, False
-                        )
-                    if not accepted:
+                    picked = ask_choice(
+                        self,
+                        title=tr("Gegenstück zum Gewinde"),
+                        question=str(error.detail),
+                        choices=choices,
+                        target="message:thread_counterpart",
+                    )
+                    if picked is None:
                         return
-                    size = str(picked)
+                    size = choices[picked]
             for finding in applied.findings:
                 self.announce(str(finding.message))
             return

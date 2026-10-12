@@ -549,9 +549,7 @@ def test_confirmed_deactivation_never_claims_that_an_unremovable_key_is_gone(
     monkeypatch.setattr(activation, "clear_pending_deactivation", lambda: True)
     monkeypatch.setattr(activation, "forget_key", lambda: False)
     shown: list[object] = []
-    notices: list[object] = []
     monkeypatch.setattr(dialogs, "show_error", lambda error, *_args: shown.append(error))
-    monkeypatch.setattr(dialogs, "inform", lambda *_args, **_kwargs: notices.append(object()))
 
     dialog = ActivationDialog()
     previous = dialog.field.toPlainText()
@@ -559,7 +557,8 @@ def test_confirmed_deactivation_never_claims_that_an_unremovable_key_is_gone(
 
     assert dialog.field.toPlainText() == previous
     assert shown, "der lokale Rest wird erklärt"
-    assert not notices, "keine falsche Erfolgsmeldung"
+    # Die Quittung steht im Dialog (FD-24) — hier darf sie nicht erscheinen.
+    assert dialog.receipt.isHidden(), "keine falsche Erfolgsmeldung"
     activation.forget_cache()
 
 

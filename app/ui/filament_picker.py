@@ -49,7 +49,6 @@ from PySide6.QtCore import (
     QModelIndex,
     QObject,
     QPersistentModelIndex,
-    QPoint,
     QRectF,
     QSignalBlocker,
     QSize,
@@ -60,7 +59,6 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QColor,
     QIcon,
-    QMouseEvent,
     QPainter,
     QPainterPath,
     QPen,
@@ -70,15 +68,12 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
-    QColorDialog,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QFrame,
     QGridLayout,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QListView,
@@ -105,6 +100,7 @@ from app.core.types import CancelToken, MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
 from app.ui.dialogs import problem_text
 from app.ui.icons import icon
+from app.ui.input_dialog import ask_choice
 from app.ui.labels import NO_BODIES_YET, DateField, NumberSpin, localised, wheel_needs_focus
 from app.ui.leash import RELEASE_RETRY_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.overlay import rows_height
@@ -116,6 +112,7 @@ from app.ui.panels import (
     row_height_of,
     view_chrome,
 )
+from app.ui.place_popup import PlacePopup, choose_colour
 from app.ui.style import (
     NORMAL,
     ROOMY,
@@ -129,7 +126,6 @@ from app.ui.style import (
     set_level,
 )
 from app.ui.theme import current_theme, slot_colour, viewport_colours
-from app.ui.window_names import raw_window
 
 _log = logging.getLogger(__name__)
 
@@ -1235,7 +1231,7 @@ class NewFilamentDialog(QDialog):
         for number, one in enumerate(self._colours):
             if number == len(self.colour_buttons):
                 button = QPushButton(self)
-                button.clicked.connect(partial(self._pick_colour, number))
+                button.clicked.connect(weak_slot(self, NewFilamentDialog._pick_colour, number))
                 self._colour_row.addWidget(button, number // 2, number % 2)
                 self.colour_buttons.append(button)
             button = self.colour_buttons[number]
@@ -1259,16 +1255,27 @@ class NewFilamentDialog(QDialog):
         if hasattr(self, "location"):
             QWidget.setTabOrder(previous, self.location)
 
-    def _pick_colour(self, number: int = 0) -> None:
-        with raw_window("message:filament_colour"):
-            chosen = QColorDialog.getColor(
-                QColor(self._colours[number]), self, tr("Farbe des Filaments")
+    def _pick_colour(self, number: int = 0, chosen: str = "") -> None:
+        """Ohne ``chosen`` öffnet der Farbwähler am Knopf (FD-22), mit ihr gilt die Farbe.
+
+        Der Wähler steht am Ort und hält nichts an: Seine Antwort kommt über
+        dieselbe Methode zurück, mit der gewählten Farbe.
+        """
+        button = self.colour_buttons[number]
+        if not chosen:
+            popup = choose_colour(
+                button,
+                self._colours[number],
+                title=tr("Farbe des Filaments"),
+                target="message:filament_colour",
             )
-        if not chosen.isValid():
+            popup.chosen.connect(
+                weak_slot(self, NewFilamentDialog._pick_colour, number, forward=True)
+            )
             return
-        self._colours[number] = chosen.name()
-        self.colour_buttons[number].setIcon(swatch(self._colours[number]))
-        self.colour_buttons[number].setText(self._colours[number])
+        self._colours[number] = chosen
+        button.setIcon(swatch(chosen))
+        button.setText(chosen)
 
     def _add_colour(self) -> None:
         """Eine weitere Farbe, vorbelegt mit der letzten — ein Klick darauf ändert sie."""
@@ -1723,20 +1730,19 @@ class FilamentField(QComboBox):
         labels = [
             self._label(slot.index, str(slot.name), str(slot.material_type or "")) for slot in slots
         ]
-        with raw_window("message:filament_slot"):
-            chosen, accepted = QInputDialog.getItem(
-                self,
-                tr("Filament ersetzen"),
-                tr(
-                    "Alle Filamente dieses Körpers sind belegt. Welches soll ersetzt werden? "
-                    "Die bisherigen Flächen dieses Filaments bekommen die neue Spule. "
-                    "Strg+Z nimmt die Zuweisung zurück."
-                ),
-                labels,
-                0,
-                False,
-            )
-        return slots[labels.index(chosen)].index if accepted and chosen in labels else None
+        chosen = ask_choice(
+            self,
+            title=tr("Filament ersetzen"),
+            question=tr(
+                "Alle Filamente dieses Körpers sind belegt. Welches soll ersetzt werden? "
+                "Die bisherigen Flächen dieses Filaments bekommen die neue Spule. "
+                "Strg+Z nimmt die Zuweisung zurück."
+            ),
+            choices=labels,
+            target="message:filament_slot",
+            icons=[swatch(slot_colours(slot.index, slot)) for slot in slots],
+        )
+        return slots[chosen].index if chosen is not None else None
 
     def _make_one(self, position: int) -> None:
         """*Neues Filament …* — anlegen, merken, auswählen.
@@ -2087,58 +2093,27 @@ class FilamentPanel(QWidget):
             self.overrideRequested.emit(slot)
 
 
-class FilamentPopup(QFrame):
+class FilamentPopup(PlacePopup):
     """Die Liste unter dem Knopf *Filamente* der Kopfzeile (RM-556).
 
     Ein ``Qt.Popup`` wie die Druckersuche (``first_run.PrinterComboBox``):
     Escape und ein Klick daneben schließen es, und es hält niemanden auf —
-    ``show`` statt ``exec``, sonst stünde offscreen die Suite.
+    ``show`` statt ``exec``, sonst stünde offscreen die Suite. Lage und der
+    Druck auf den eigenen Knopf kommen aus :class:`place_popup.PlacePopup`.
     """
 
     def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent, Qt.WindowType.Popup)
+        super().__init__(parent, name=tr("Filamente im Projekt"), once=False)
         self.setObjectName("filamentPopup")
-        self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setAutoFillBackground(True)
-        self.setAccessibleName(tr("Filamente im Projekt"))
         self.panel = FilamentPanel(self)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(NORMAL)
         layout.addWidget(self.panel)
-        self._anchor: QWidget | None = None
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
-        """Ein Druck auf den Knopf, der die Liste öffnete, schließt sie nur — wie ``QMenu``.
-
-        Qt schließt ein Popup beim Druck daneben. Unter X11 spielt es den
-        Druck danach dem Widget darunter zu, und der Knopf öffnete die Liste
-        sofort wieder; unter Windows und offscreen bleibt der Druck bei der
-        Liste (Review U2, Fund 5 und Nachprüfung).
-        """
-        anchor = self._anchor
-        if anchor is not None and anchor.isVisible():
-            where = anchor.mapFromGlobal(event.globalPosition().toPoint())
-            if anchor.rect().contains(where):
-                self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, True)
-        super().mousePressEvent(event)
 
     def show_below(self, anchor: QWidget) -> None:
-        """Unter dem Knopf, oder darüber, wenn unten der Platz fehlt — nie über den Schirmrand."""
-        self._anchor = anchor
-        self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, False)
-        screen = anchor.screen().availableGeometry()
-        self.adjustSize()
-        width = min(screen.width(), max(self.sizeHint().width(), POPUP_WIDTH))
-        height = min(self.sizeHint().height(), screen.height())
-        below = anchor.mapToGlobal(QPoint(0, anchor.height()))
-        above = anchor.mapToGlobal(QPoint(0, 0))
-        top = below.y() if below.y() + height <= screen.bottom() + 1 else above.y() - height
-        left = min(
-            max(below.x() + anchor.width() - width, screen.left()), screen.right() - width + 1
-        )
-        self.setGeometry(left, max(top, screen.top()), width, height)
-        self.show()
+        """Unter dem Knopf, rechtsbündig mit ihm, oder darüber, wenn unten der Platz fehlt."""
+        self.place_below(anchor, width=POPUP_WIDTH, flush_right=True)
         self.panel.list.setFocus(Qt.FocusReason.PopupFocusReason)
 
 

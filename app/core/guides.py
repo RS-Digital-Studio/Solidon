@@ -157,13 +157,13 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``start.recent:1`` — ein Eintrag unter „Zuletzt geöffnet“ auf dem
 #:   Startbildschirm, gezählt ab 1 in der Folge der Liste. Eine Menüzeile
 #:   dafür gibt es nicht;
-#: * ``message:unsaved_changes`` — ein rohes Meldungsfenster (``QMessageBox``,
-#:   ``QInputDialog``, ``QColorDialog``) über ein Wort für seine Frage
-#:   (``app/ui/window_names.raw_window``);
+#: * ``message:unsaved_changes`` — ein Meldungs-, Frage- oder Eingabefenster
+#:   über ein Wort für seine Frage: eine Rückfrage (``QMessageBox``), eine
+#:   Meldung, eine Eingabe, ein Farbwähler am Ort (``app/ui/window_names``);
 #: * ``message.button:unsaved_changes.save`` — ein Knopf darin; bei einer
 #:   Fehlermeldung ist der Knopf die Kennung der Handlung
-#:   (``message.button:error.retry``), in einem statischen Aufruf der
-#:   Standardknopf (``yes``, ``ok``);
+#:   (``message.button:error.retry``), in einer Rückfrage über Qts
+#:   Knopfleiste der Standardknopf (``ok``, ``cancel``);
 #: * ``setting.section:weitere_einstellungen`` — die Kopfzeile eines Abschnitts
 #:   der Einstellungen, gebildet aus seinem Titel (:func:`name_part`).
 #:

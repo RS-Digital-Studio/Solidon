@@ -365,9 +365,8 @@ def test_a_thread_matching_two_series_asks_and_takes_the_answer(
     Größen nicht trennt, steht über ``_told_apart`` nach: Ein erzeugtes Ø 4 × 0,7
     wäre sonst genau M4.
     """
-    from PySide6.QtWidgets import QInputDialog
-
     from app.core import counterpart
+    from app.ui import main_window
 
     window = MainWindow(Session(), UiSettings())
     try:
@@ -400,12 +399,13 @@ def test_a_thread_matching_two_series_asks_and_takes_the_answer(
         monkeypatch.setattr(counterpart, "_told_apart", lambda _f, _d, _p, sizes: tuple(sizes))
         asked: list[list[str]] = []
 
-        def answer(*args: object) -> tuple[str, bool]:
-            choices = list(args[3])  # type: ignore[call-overload]
-            asked.append(choices)
-            return "#8-36 UNF", True
+        def answer(_parent: object, *, choices: list[str], target: str, **_rest: object) -> int:
+            # Die Rückfrage nach Regel 21 mit ihrem Kennzeichen (FD-22).
+            assert target == "message:thread_counterpart"
+            asked.append(list(choices))
+            return list(choices).index("#8-36 UNF")
 
-        monkeypatch.setattr(QInputDialog, "getItem", answer)
+        monkeypatch.setattr(main_window, "ask_choice", answer)
         window.object_tree.select_features(((first, thread), (second, _top_face(window, second))))
         QApplication.processEvents()
         window.action_counterpart()

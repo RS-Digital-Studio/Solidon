@@ -174,6 +174,9 @@ DIALOG_SURFACES: Final[dict[str, tuple[str, str]]] = {
     # Die Meldung im Hausstil (FD-21): Fehler, Einzelheiten, Hinweise. Ihre
     # Fenster tragen ``message:<sache>`` wie zuvor die rohen.
     "MessageDialog": ("D12", "leer"),
+    # Die Eingabe im Hausstil (FD-22): Modelladresse, Dienstadresse. Ihre Fenster
+    # tragen ``message:<sache>`` wie zuvor die rohen ``QInputDialog``.
+    "InputDialog": ("D12", "leer"),
     "AboutDialog": ("D12", "leer"),
     "PartCatalog": ("D2", "leer"),
     "GenerateDialog": ("D2", "leer"),
@@ -343,12 +346,6 @@ RAW_WINDOW_PACKAGES: Final[dict[str, tuple[str, str]]] = {
     "_go_on_despite": ("D1", "koerper:1"),
     "confirm_generation_loss": ("D2", "leer"),
     "confirm_discard": ("D11", "koerper:1"),
-    "_save_request": ("D12", "leer"),
-    "_open_page": ("D12", "leer"),
-    "_import_answer": ("D12", "leer"),
-    "_remember": ("D12", "leer"),
-    "_online_completed": ("D12", "leer"),
-    "_deactivation_completed": ("D12", "leer"),
     "_pick_colour": ("D10", "koerper:1"),
     "_replacement_slot": ("D10", "koerper:1"),
     "_choose_address": ("D12", "leer"),
