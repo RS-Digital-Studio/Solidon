@@ -136,12 +136,14 @@ class FakePorts:
         self.keys_sent: list[str] = []
         self.typed: list[str] = []
         self._last: FakeClick | None = None
+        self._last_name = ""
 
     def next_click(self, name: str) -> FakeClick:
+        """Der nächste Klick, so oft gefragt wird; erst ein Klick schiebt das Drehbuch weiter."""
         clicks = self.script.get(name)
         if not clicks:
             raise LookupError(f"{name}: kein Weg")
-        self._last = clicks.pop(0) if len(clicks) > 1 else clicks[0]
+        self._last, self._last_name = clicks[0], name
         return self._last
 
     def widget_under(self, point: tuple[int, int]) -> FakeWidget | None:
@@ -156,6 +158,9 @@ class FakePorts:
 
     def press(self, widget: FakeWidget, point: tuple[int, int], button: str) -> None:
         self.pressed.append((widget.name, point, button))
+        clicks = self.script.get(self._last_name, [])
+        if len(clicks) > 1:
+            clicks.pop(0)
         if self.on_press is not None:
             self.on_press(widget, button)
 
@@ -371,6 +376,36 @@ def test_a_way_that_never_reaches_the_target_ends_as_not_found() -> None:
     machine = run_machine(timer, [bench.Walk(ports, steps, 0.0).step("feature:x")])
     assert machine.finding is not None and machine.finding.kind == bench.NOT_FOUND
     assert len(ports.pressed) == bench.MOST_WAY_CLICKS + 1
+
+
+def test_a_click_waits_until_its_place_stands_still() -> None:
+    """Die Karte setzt ihre Höhen erst Runden nach dem Aufklappen: geklickt wird, wo es stillsteht.
+
+    Der nachgestellte Weg nennt dreimal ein anderes Rechteck, dann bleibt es.
+    Der Klick fällt auf das letzte — und erst :data:`STABLE_S` danach.
+    """
+    timer = FakeTimer()
+    row = FakeWidget("zeile")
+
+    class Drifting(FakePorts):
+        def __init__(self) -> None:
+            super().__init__(
+                timer, {"tree.row:obj_1": [FakeClick((0, 0, 10, 10), "left", "ziel", row)]}
+            )
+            self.asked = 0
+
+        def next_click(self, name: str) -> FakeClick:
+            self.asked += 1
+            y = min(self.asked, 4) * 40
+            self._last = FakeClick((0, y, 100, 20), "left", "ziel", row)
+            return self._last
+
+    ports = Drifting()
+    steps: list[dict[str, Any]] = []
+    machine = run_machine(timer, [bench.Walk(ports, steps, 0.0).step("tree.row:obj_1")])
+    assert machine.done and machine.error is None
+    assert [point for _name, point, _button in ports.pressed] == [(50, 170)]
+    assert steps[-1]["t"] >= bench.STABLE_S
 
 
 def test_a_scroll_click_turns_the_wheel_in_its_direction() -> None:

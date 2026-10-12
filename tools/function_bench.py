@@ -104,6 +104,12 @@ SETTLE_MS: Final = 120
 #: Wie lange ein Schritt auf seine Voraussetzung wartet (Sekunden).
 STEP_TIMEOUT_S: Final = 180.0
 
+#: Wie lange der nächste Klick unverändert stehen muss, bevor er fällt (Sekunden):
+#: Die Karten setzen ihre Höhen über Nullzeitgeber, mehrere Ereignisrunden nach
+#: einem Aufklappen. Die Probezeile ``resize_hole`` traf nach 120 ms noch die
+#: Klappe „Parameter“, nach dreißig Ereignisrunden ihre Zeile.
+STABLE_S: Final = 0.1
+
 #: Ruhe nach dem Tippen einer Suchprobe, bevor die Treffer gelesen werden: Die
 #: Suche filtert bei jedem Zeichen, und die Liste baut sich danach in einer
 #: Ereignisrunde; eine Sekunde trägt beides auch unter Fremdlast.
@@ -931,7 +937,14 @@ class Walk:
         return entry
 
     def step(self, name: str, button: str = "left") -> Step:
-        """Ein Schritt, der bis zum Ziel wächst: jeder Wegklick reiht den nächsten ein."""
+        """Ein Schritt, der bis zum Ziel wächst: jeder Wegklick reiht den nächsten ein.
+
+        Geklickt wird erst, wenn der nächste Klick :data:`STABLE_S` lang derselbe
+        ist (:meth:`stable`): Nach einem Aufklappen setzt die Karte ihre Höhen erst
+        in den folgenden Ereignisrunden (``fenster.md``, „Wie die Karten ihre Höhe
+        teilen“); vorher lag an der genannten Stelle noch die nächste Klappe, und
+        die Probe meldete „verdeckt“, wo nur gewartet werden musste.
+        """
         counter = {"way": 0}
 
         def act(machine: StepMachine) -> None:
@@ -943,9 +956,32 @@ class Walk:
                 raise BenchFinding(
                     NOT_FOUND, name, f"nach {MOST_WAY_CLICKS} Wegklicks noch nicht am Ziel"
                 )
-            machine.insert([Step(f"weg zu {name}", act, settle_ms=SETTLE_MS)])
+            machine.insert(
+                [Step(f"weg zu {name}", act, ready=self.stable(name), settle_ms=SETTLE_MS)]
+            )
 
-        return Step(f"weg zu {name}", act, settle_ms=SETTLE_MS)
+        return Step(f"weg zu {name}", act, ready=self.stable(name), settle_ms=SETTLE_MS)
+
+    def stable(self, name: str) -> Callable[[], bool]:
+        """Ob der nächste Klick zu ``name`` seit :data:`STABLE_S` derselbe ist.
+
+        Ohne Weg ist er sofort „still“ — der Klick meldet dann „nicht auffindbar“.
+        """
+        seen: dict[str, Any] = {"key": None, "since": 0.0}
+
+        def ready() -> bool:
+            try:
+                click = self.ports.next_click(name)
+            except LookupError:
+                return True
+            key = (str(click.why), tuple(self.ports.rect_data(click.rect)))
+            now = self.ports.now()
+            if key != seen["key"]:
+                seen["key"], seen["since"] = key, now
+                return False
+            return now - seen["since"] >= STABLE_S
+
+        return ready
 
     def click_once(self, name: str, button: str = "left") -> str:
         """Ein Klick auf dem Weg zu ``name``; gibt seinen Grund zurück."""
