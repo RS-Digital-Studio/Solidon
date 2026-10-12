@@ -377,8 +377,8 @@ Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
 zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
-(`panels.align_forms`, gerahmte Reiter über `apart`), jedes Layout mit eigenem
-Abstand (nie Qts 6), gleich breite Felder
+(`panels.align_forms`, gerahmte Reiter über `apart`), jedes Layout (auch Karten)
+mit Rasterabstand (nie Qts 6), gleich breite Felder
 (`panels.even_fields`, `op_dialog.even_value_fields`); eine Zeile aus Feld und
 Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt, keine zweimal
 im Dialog. **Hat der Dialog eine Rückseite, setzen die Zeilen vorn, die
@@ -433,7 +433,7 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 ## Wie die Karten ihre Höhe teilen
 
 `OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`
-(`tests/test_overlay.py`): nie mit gerade gesetzten Höhen (`extra_height`,
+(`test_overlay`): nie mit gerade gesetzten Höhen (`extra_height`,
 nicht `natural_height`); abgezogen wird, was nicht den Karten gehört; jede
 Karte nennt ihren Boden (`least_height`, nie über ihrem Wunsch); viele feste
 Zeilen rollen (`FittedScroller`). Ungleiche Zeilen misst `rows_height`, und

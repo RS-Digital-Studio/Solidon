@@ -230,6 +230,38 @@ def test_the_history_asks_only_for_the_rows_it_shows(qt_app: Any) -> None:
     assert panel.wanted_height() == expected
 
 
+def test_the_history_claims_the_timeline_as_it_stands_in_the_column(qt_app: Any) -> None:
+    """Die Zeitleiste von *Vorher/Nachher* meldet die Höhe, die sie in der Spalte hat.
+
+    Der Satz unter dem Regler („Stand 3 von 3: Versteifung“) bricht in Qts
+    Wunschhöhe auf zwei Zeilen um, in der 298 Punkte breiten Spalte steht er
+    in einer. ``_timeline_height`` las die Wunschhöhe: Der Verlauf verlangte
+    16 Punkte mehr, als er brauchte, und gab sie der Liste nicht (FD-23,
+    gemessen am echten Fenster bei 1920 × 1032 und 2560 × 1392)."""
+    from app.ui.panels import HistoryPanel
+
+    panel = HistoryPanel()
+    try:
+        panel.list.addItem("1  Grundkörper")
+        panel.compare.show()
+        panel.compare.setChecked(True)
+        panel.timeline.show()
+        panel.timeline_label.setText("Stand 2 von 2: Quader")
+        panel.resize(298, 100)
+        panel.show()
+        for _ in range(5):
+            qt_app.processEvents()
+        label = panel.timeline_label
+        assert label.sizeHint().height() > label.heightForWidth(label.width()), (
+            "der Satz bricht im Wunsch um, in der Spalte nicht — sonst prüft der Test nichts"
+        )
+        # Was Qt an dieser Breite über der Liste legt: das Ganze ohne die Liste.
+        laid_out = panel.heightForWidth(panel.width()) - panel.list.height()
+        assert panel._timeline_height() == laid_out
+    finally:
+        panel.deleteLater()
+
+
 #: Der Kindprozess des Überstandstests: Anwendung wie beim Kunden (mit Stilblatt
 #: und Einstellungen — im nackten Fenster stand *Vorher/Nachher* nicht da), erst
 #: die Fenstergröße, dann ein Körper mit Bohrung, aufgeklappt per Klick.
