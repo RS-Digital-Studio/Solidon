@@ -4,7 +4,7 @@ description: >
   Führt Solidons betroffene Kerntests oder das Entwicklungstor aus und berichtet
   echte Prozessausgänge und Testzahlen. Ohne Argument Kerntests, ruff check,
   ruff format --check und mypy. Fenster-, Renderer- und Leistungsprüfungen laufen
-  ausschließlich beim Release mit --release.
+  beim Release mit --release, lokal sonst nur in den zwei Ausnahmen aus AGENTS.md.
 argument-hint: "[optional: betroffene Dateien] [--release nur beim Release]"
 allowed-tools: Bash, Read, Grep, Glob
 ---
@@ -19,7 +19,13 @@ Ohne Dateiliste untersucht das Werkzeug auch fremde lokale Änderungen.
 Meldet der Importgraph, dass die vollständige Suite betroffen ist, läuft die
 gesamte Kernsammlung. Fenster-, Renderer- und Leistungstests bleiben auch bei einer
 gezielten Dateiauswahl bis zum Release zurückgestellt. Das ist keine fehlende
-Umgebung und kein Anlass, sie mit einem direkten Pytest-Aufruf nachzuholen.
+Umgebung und kein Anlass, sie mit einem direkten Pytest-Aufruf nachzuholen —
+außer den zwei Ausnahmen aus `AGENTS.md` („Arbeitsweise“): vor dem Merge eines
+Oberflächenschritts der Codestruktur die Fensterdateien, die
+`tools/ci_selection.py --diff <basis>...HEAD` nennt, und je Fund des
+Funktionsdurchgangs die eine Datei, die ihn nachstellt (vorher rot, nachher
+grün), je Datei ein Prozess:
+`.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider <datei> [-k <fälle>]`.
 Keine vollständige Suite allein wegen eines kleinen Doku-Edits.
 
 Ohne Argument und vor jedem Merge oder Commit auf main läuft das Entwicklungstor (auf
@@ -30,8 +36,8 @@ ohne `performance` und ohne die
 Erzeugnisvergleiche (`not rendered` — sie brauchen einen Lauf von `/erzeugen`
 und gehören wie in der CI zum Release), dazu Ruff, Format und mypy.
 **Fenster-, Renderer- und Leistungsprüfungen laufen lokal ausschließlich beim
-Release**; auf Linux und macOS fährt sie die CI beim Push nach main von selbst
-(`/liefern`), auf Zweigen nie.
+Release** (Ausnahmen oben); auf Linux und macOS fährt sie die CI beim Push nach
+main im öffentlichen Repository von selbst (`/liefern`), auf Zweigen nie.
 Nur dort wählt `--release` das zusätzliche Release-Tor. Die Option autorisiert
 weder einen Paketbau noch eine Veröffentlichung.
 Ein bereits vollständig grüner Nachweis für denselben relevanten Stand muss
