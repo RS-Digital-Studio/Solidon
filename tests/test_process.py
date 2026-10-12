@@ -1025,3 +1025,58 @@ def test_a_file_that_is_no_program_fails_at_once_instead_of_waiting_for_a_click(
     # 216 für einen Text oder einen MZ-Kopf ohne Programm, 193 für eine leere
     # Datei oder eine DLL; ein verrutschter Pfad (2) erreichte den 16-Bit-Weg nie.
     assert output.split()[:2] in (["OSError", "216"], ["OSError", "193"]), output + errors
+
+
+def test_the_comfyui_setup_starts_behind_the_shared_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Einrichtung von ComfyUI startet wie jedes externe Werkzeug (§32, RM-789).
+
+    Ihr Python bekam die ganze Umgebung von Solidon — gesetzte API-Schlüssel und
+    Python-Suchpfade eingeschlossen — und den Arbeitsordner des Aufrufers. Was
+    der Download von Hugging Face liest (``HF_*``: Spiegel, Cache, Zugang),
+    reist weiter mit; es gehört zu genau diesem Programm.
+    """
+    import json
+
+    from app.core.backends import comfy_setup
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "geheim")
+    monkeypatch.setenv("PYTHONPATH", "fremd")
+    monkeypatch.setenv("HF_ENDPOINT", "https://spiegel.example")
+    output = comfy_setup._run(
+        [
+            sys.executable,
+            "-c",
+            "import json, os; print(json.dumps([sorted(os.environ), os.getcwd()]))",
+        ],
+        "Umgebung",
+        comfy_setup._silent,
+    )
+
+    names, folder = json.loads(output.splitlines()[-1])
+    assert "ANTHROPIC_API_KEY" not in names, "ein fremder Schlüssel reiste mit"
+    assert "PYTHONPATH" not in names, "Solidons Suchpfad reiste mit"
+    assert "HF_ENDPOINT" in names, "der Spiegel von Hugging Face fehlt dem Download"
+    assert Path(folder).resolve() == process.trusted_cwd()
+
+
+def test_a_cancelled_comfyui_step_ends_its_whole_tree(tmp_path: Path) -> None:
+    """Abbrechen beendet auch, was der Schritt gestartet hat (§32, RM-789).
+
+    ``process.kill()`` traf nur das direkte Kind; ein Enkel lief weiter. Der
+    Abbruch greift, sobald der Enkel läuft.
+    """
+    from app.core.backends import comfy_setup
+
+    parent, alive = _parent_of_a_sleeper(tmp_path, then=f"time.sleep({SLEEP})\n")
+
+    with pytest.raises(comfy_setup.Cancelled):
+        comfy_setup._run(
+            [sys.executable, "-c", parent],
+            "Ein Schritt mit Enkel",
+            comfy_setup._silent,
+            alive.exists,
+        )
+
+    _assert_the_sleeper_is_gone(alive, "der Enkel überlebte den Abbruch der Einrichtung")
