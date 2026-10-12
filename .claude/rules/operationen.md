@@ -19,8 +19,7 @@ Regel 4 mit der Checkliste in `AGENTS.md` (`/neue-op`). `ctx.quality`: Entwurf
 zum Iterieren, Fein für Export und Prüfbericht; **eine Entwurfsstufe nur über
 einem Budget und mit Befund** (`blend.draft_grid`). **Wer Eingänge unter ihrer
 Kennung zurückgibt, sagt, ob er sie unverändert lässt oder einen mit einem
-anderen formt** (`registry/CLAUDE.md`), sonst spricht ein entfernter Körper
-weiter aus dem Bericht.
+anderen formt** (`registry/CLAUDE.md`).
 
 ## Was die Operation verlangt, steht im Register
 
@@ -465,12 +464,13 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
 - **Ein Verweis folgt seinem Körper durch den Stapel** (`orphans.lineage`); ein
   Operationsverweis (`kind="feature"`) bleibt bei `inputs[0]`. Vergebene
   Kennungen bleiben reserviert (`reserved_feature_ids`).
-- **Wer einen exakten Körper neu baut, belegt die Bezüge, die danach noch jemand
-  braucht — oder die Kette hält an.** Beleg ist Durchreichen, eindeutige
-  Zuordnung auf denselben Namen oder ein unberührtes Merkmal
-  (`_unchanged_continuations`), oder ein geometrisch nachgewiesener Übergang
+- **Wer einen exakten Körper neu baut, gibt seine Merkmale mit** (aus einem
+  Eingang über `_exact_features_after`, ohne Vorgänger `features_of`) **und
+  belegt die Bezüge, die danach noch jemand braucht — oder die Kette hält an.** Beleg: Durchreichen, eindeutige
+  Zuordnung auf denselben Namen, ein unberührtes Merkmal
+  (`_unchanged_continuations`) oder ein geometrisch nachgewiesener Übergang
   (`OpResult.feature_continuations`) — nie aus Namen, `created_by` oder
-  `provenance` geraten, und `touches_features` ist kein Erhaltungsflag. Ein Halt
+  `provenance` geraten; `touches_features` ist kein Erhaltungsflag. Ein Halt
   ist atomar und nennt den Verbraucher (`NativeReferenceLost`); ohne Beleg wählt
   der Kunde am neuen Körper (`native-group:`, erweitert über `match_records`,
   kein zweiter Speicher); „Nicht weiterführen" wird nicht gespeichert.
@@ -518,6 +518,5 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
 
 - **Slots reisen nur mit, wenn die Operation sie mitnimmt:**
   `MeshData.replacing` behält die Slotliste nur bei gleicher Dreieckszahl, sonst
-  gibt es keine (der Export ergänzt stumm „Slot 0"). `Trimesh.split` und
-  `submesh` kennen die Liste nicht: Wer Dreiecke auswählt, schneidet sie selbst
-  (`prepare_ops._loose_parts`).
+  gibt es keine. `Trimesh.split` und `submesh` kennen die Liste nicht: Wer
+  Dreiecke auswählt, schneidet sie selbst (`prepare_ops._loose_parts`).

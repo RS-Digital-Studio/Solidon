@@ -50,6 +50,7 @@ from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import (
     MAX_SLOTS,
     BaseParams,
+    Feature,
     Finding,
     MaterialSlot,
     OpContext,
@@ -1156,8 +1157,17 @@ def _label_exact(ctx: OpContext, params: LabelParams, source: SceneObject) -> Op
     werden exakt vereinigt oder abgezogen. Die drei Auskünfte des Netzwegs —
     wirkungslos, danebengefallen, im Körper versteckt — fragen dieselben
     Kennzahlen am exakten Körper.
+
+    **Die Merkmale bringt die Operation mit**, unter ihren bisherigen Namen
+    (:func:`prepare_ops._exact_features_after`, §21.2). Am Netz erkennt die
+    Auswertung nach jedem Schritt neu, am exakten Körper ordnet sie nur zu, was
+    hier ausgegeben wird. Bis 0.6.0 stand hier ``features={}``: Nach „OS“ auf
+    einem exakten Quader trug er 0 statt 15 Merkmale, keine Fläche war mehr
+    anzuklicken, und ein Schritt an einer Seite hielt an.
     """
     from app.core.brep import edit
+    from app.core.brep.features import threads_to_read
+    from app.core.geom.prepare_ops import _exact_features_after
 
     mode = cast(Placement, params.mode)
     body = cast(Any, source.mesh)
@@ -1183,10 +1193,20 @@ def _label_exact(ctx: OpContext, params: LabelParams, source: SceneObject) -> Op
     apart = _fell_apart(body, result, mode)
     buried = _buried(_Letters(sum(tool.volume for tool in tools)), body, result, mode)
     fine = _too_fine(params.text, params.size, params.font, params.style, ctx.profile)
+    # Eine Schrift legt keine Wendel an: Gewinde liest nur, wer eines trug.
+    features, _continued, _lost = _exact_features_after(
+        source,
+        result,
+        expected=None,
+        cancelled=ctx.cancelled,
+        known_threads=threads_to_read(source.features),
+    )
     _log.info("labelled an exact body with %r, %s", params.text, mode)
     return OpResult(
         outputs=[
-            dataclasses.replace(source, mesh=result, kind="brep", features={}, material_slots=slots)
+            dataclasses.replace(
+                source, mesh=result, kind="brep", features=features, material_slots=slots
+            )
         ],
         findings=[
             finding
@@ -1212,7 +1232,8 @@ class _Letters:
     # den Rillen, und am exakten Körper bleibt der Körper exakt (P2.8).
     # 4: Die Rückseite überspringt belegte Innenhaut auch bei einer Entlüftung.
     # 5: … aber nicht die einer offenen Dose (RM-422).
-    cache_version="5",
+    # 6: Der exakte Körper behält seine Merkmale, statt ohne sie dazustehen.
+    cache_version="6",
     title=_("Text aufbringen"),
     category="label",
     params=LabelParams,
@@ -1418,6 +1439,8 @@ def _inlay_too_thin(depth: float, profile: Profile | None) -> Finding | None:
 
 @register_op(
     name="inlay_text",
+    # 2: Am exakten Körper tragen Träger und Einlage ihre Merkmale.
+    cache_version="2",
     title=_("Schrift einlegen"),
     category="label",
     params=InlayParams,
@@ -1466,8 +1489,14 @@ def inlay_text(ctx: OpContext) -> OpResult:
     findings: list[Finding] = []
     solver = None
     faceted: Finding | None = None
+    # Am Netz erkennt die Auswertung beide Körper neu; am exakten Körper bringt
+    # die Operation die Merkmale mit, wie bei *Text aufbringen* (:func:`_label_exact`).
+    carrier_features: dict[str, Feature] = {}
+    inlay_features: dict[str, Feature] = {}
     if exact:
         from app.core.brep import edit
+        from app.core.brep.features import features_of, threads_to_read
+        from app.core.geom.prepare_ops import _exact_features_after
 
         tools, answered, _missing, faceted = _exact_tools(
             params, source, "engraved", both_sides=False, letter_slot=0, cancelled=ctx.cancelled
@@ -1480,6 +1509,11 @@ def inlay_text(ctx: OpContext) -> OpResult:
         if inlay.volume <= EPS_GEOM:
             raise _no_inlay()
         inlay = dataclasses.replace(inlay, face_slots=(params.slot,) * inlay.face_count)
+        threads = threads_to_read(source.features)
+        carrier_features, _continued, _lost = _exact_features_after(
+            source, carrier, expected=None, cancelled=ctx.cancelled, known_threads=threads
+        )
+        inlay_features = features_of(inlay, cancelled=ctx.cancelled, known_threads=threads)
     else:
         mesh_tools, answered, _missing = _mesh_tools(params, source, "engraved", both_sides=False)
         body_mesh = as_mesh_data(source.mesh)
@@ -1517,12 +1551,13 @@ def inlay_text(ctx: OpContext) -> OpResult:
     _log.info("inlaid %r into %s", params.text, source.id)
     return OpResult(
         outputs=[
-            dataclasses.replace(source, mesh=carrier, features={}),
+            dataclasses.replace(source, mesh=carrier, features=carrier_features),
             SceneObject(
                 id="",
                 name=params.name or _("Einlage {text}", text=params.text.strip()[:20]),
                 mesh=inlay,
                 kind="brep" if exact else "mesh",
+                features=inlay_features,
                 material=source.material,
                 material_slots=_with_slot_named(list(source.material_slots), params.slot),
             ),
