@@ -48485,7 +48485,8 @@ ComfyUI-Einrichtung, der Installer und das Einhängen eines AppImage. **Nach dem
 (`f41e18fcf`, `940fc9496`):** Statt des Windows-Texts „Die Version von %1 …“ liest der Kunde
 „Die gewählte Datei ist kein Programm.“ mit dem Dateinamen, *Einen anderen Slicer auswählen*
 zuerst und *Nur exportieren* danach; Slicen und Fenster fragen dieselbe Stelle
-(`discover.slicer_start_refused`: Windows 193 und 216, POSIX `ENOEXEC` und `EACCES`). Der
+(`discover.slicer_start_refused`: Windows 193 und 216, POSIX `ENOEXEC`; einer Datei ohne
+Ausführungsrecht nennt `EACCES` das und den Weg, sonst bleibt „Permission denied“). Der
 Wächter sieht auch Aliase, Direktimporte, `os.startfile`, `os.system`, `os.spawn*`, `os.exec*`,
 `asyncio` und `QProcess`; Regel (`kern.md`, `tests.md`) und Karte nennen den Vertrag.
 Changelog 0.6.1 unter *Drucken und Übergabe an den Slicer*.
@@ -48499,8 +48500,9 @@ jedem Start, mit Gegenprobe. Am Stand davor rot (acht Starts ohne Block, beide L
 höchstens 0,05 s; vier gleichzeitige Nachstellungen der Testfolge von `gw3` mit je 2 390
 bestandenen Fällen; in keinem Lauf ein Hänger oder ein Systemfenster. Die Absage prüft
 `test_print_settings.py::test_a_slicer_that_cannot_start_is_an_answer` an beiden Startwegen,
-am Stand davor rot; `ENOEXEC`, `EACCES` und einen fehlenden Pfad
-`test_discover.py::test_a_start_that_finds_no_program_is_said_in_own_words_everywhere`.
+am Stand davor rot; `ENOEXEC`, `EACCES` ohne Datei und einen fehlenden Pfad
+`test_discover.py::test_a_start_that_finds_no_program_is_said_in_own_words_everywhere`, die
+Datei ohne Ausführungsrecht `test_a_slicer_without_execute_permission_says_how_to_allow_it`.
 
 ## RM-789: Die Einrichtung von ComfyUI startet hinter der gemeinsamen Prozessgrenze (12.10.2026)
 
@@ -48516,6 +48518,7 @@ mit `process.kill()` nur das direkte Kind.
 `trusted_cwd` und `process_group_options(no_window=True)`, Abbruch und Frist über
 `terminate_process_tree`. Was der Download von Hugging Face liest, reist mit: `HF_*` (Spiegel,
 Cache, Zugang) und `HUGGING_FACE_HUB_TOKEN` — der Schlüssel gehört zu genau diesem Programm.
+Proxy-Adressen reisen ohne Zugangsdaten, wie bei pip und winget (§32, im Review entschieden).
 **Nachweis:** `test_process.py::test_the_comfyui_setup_starts_behind_the_shared_boundary`
 (kein fremder Schlüssel, kein `PYTHONPATH`, `HF_ENDPOINT` da, Arbeitsordner `trusted_cwd`) und
 `test_a_cancelled_comfyui_step_ends_its_whole_tree` (ein Enkel endet mit dem Abbruch), am Stand

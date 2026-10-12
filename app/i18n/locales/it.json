@@ -2536,6 +2536,7 @@
   "Die gewählte Bausteindatei ließ sich nicht öffnen. Wählen Sie eine andere Datei oder prüfen Sie deren Zugriffsrechte.": "Impossibile aprire il file del blocco selezionato. Scegli un altro file o verificane i permessi di accesso.",
   "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche oder Kante. Verschieben Sie einen der beiden so weit, dass sich die Körper wirklich überlappen.": "L'operazione scelta non funziona con questi corpi nella loro posizione attuale: di solito si toccano solo su una faccia o uno spigolo. Sposta uno dei due abbastanza da far sovrapporre davvero i corpi.",
   "Die gewählte Datei ist kein Programm.": "Il file selezionato non è un programma.",
+  "Die gewählte Datei ist nicht als ausführbar markiert. Erlauben Sie das Ausführen in ihren Eigenschaften und versuchen Sie es erneut.": "Il file selezionato non è contrassegnato come eseguibile. Consentine l'esecuzione nelle sue proprietà e riprova.",
   "Die gewählte Datei wird begrenzt in das Projekt aufgenommen.": "Il file selezionato viene letto con un limite di dimensione e aggiunto al progetto.",
   "Die gewählte G-Code-Datei wird gelesen und ausgewertet.": "Il file G-Code selezionato viene letto e analizzato.",
   "Die gewählte Kante ist nicht eindeutig — wählen Sie sie am Körper neu.": "Lo spigolo selezionato è ambiguo — selezionalo di nuovo sul corpo.",

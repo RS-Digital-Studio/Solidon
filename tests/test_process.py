@@ -766,11 +766,27 @@ def _starts_a_program(module: str, name: str) -> bool:
 #: Was eine Datei tragen muss, damit sie einen Start enthalten kann: den Namen
 #: des Moduls oder der Startfunktion, auch hinter einem Alias. Eine Datei ohne
 #: Treffer wird nicht geparst; das Parsen aller Dateien unter ``app/`` war fast
-#: die ganze Laufzeit des Wächters.
-_MAY_START = re.compile(
-    r"subprocess|startfile|QProcess|\bspawn[lv]|posix_spawn|\bexec[lv]"
-    r"|\b(?:system|popen)\s*\(|import[^\n]*\b(?:system|popen)\b"
+#: die ganze Laufzeit des Wächters. Zuerst feste Wörter, die Python ohne
+#: Muster sucht; nur ``system`` und ``popen`` stehen auch in gewöhnlichem Text
+#: und brauchen das Muster.
+_START_WORDS = (
+    "subprocess",
+    "startfile",
+    "QProcess",
+    "spawnl",
+    "spawnv",
+    "posix_spawn",
+    "execl",
+    "execv",
 )
+_SYSTEM_OR_POPEN = re.compile(r"\b(?:system|popen)\s*\(|import[^\n]*\b(?:system|popen)\b")
+
+
+def _may_start(source: str) -> bool:
+    """Ob ``source`` einen Start enthalten kann (verlustfrei gegenüber :func:`_scan`)."""
+    if any(word in source for word in _START_WORDS):
+        return True
+    return ("system" in source or "popen" in source) and bool(_SYSTEM_OR_POPEN.search(source))
 
 
 def _is_shield(expression: ast.expr) -> bool:
@@ -782,15 +798,17 @@ def _is_shield(expression: ast.expr) -> bool:
     return name == "no_error_dialogs"
 
 
-def _scan(source: str) -> tuple[list[int], list[int]]:
-    """Zeilen aller Programmstarts und der Starts außerhalb von ``no_error_dialogs``.
+def _scan(source: str) -> tuple[list[int], list[int], list[int]]:
+    """Zeilen aller Programmstarts, der Starts außerhalb von ``no_error_dialogs``
+    und jeder Nennung von ``QProcess``.
 
     Ein Start ist ``subprocess.Popen(…)`` und seine Geschwister, auch über
     ``import subprocess as …`` und ``from subprocess import …``, dazu die Wege
-    an ``subprocess`` vorbei (``os.startfile``, ``os.system``, ``os.spawn*``,
-    ``os.exec*``, ``asyncio.create_subprocess_*``). ``QProcess`` startet
-    außerhalb jedes Blocks (``start`` läuft später als der Bau) und zählt
-    deshalb immer als ungeschützt.
+    an ``subprocess`` vorbei (``os.startfile``, ``os.system``, ``os.popen``,
+    ``os.spawn*``, ``os.exec*``, ``os.posix_spawn*``,
+    ``asyncio.create_subprocess_*``). ``QProcess`` steht für sich: Sein
+    ``start`` läuft später als der Bau, kein Block schützt ihn, und unter
+    ``app/`` wird es gar nicht verwendet.
     """
     tree = ast.parse(source)
     modules: dict[str, str] = {}
@@ -831,33 +849,45 @@ def _scan(source: str) -> tuple[list[int], list[int]]:
                 shielded.update(id(inner) for inner in ast.walk(statement))
     starts = [node for node in ast.walk(tree) if isinstance(node, ast.Call) and is_start(node)]
     return (
-        sorted([node.lineno for node in starts] + forbidden),
-        sorted([node.lineno for node in starts if id(node) not in shielded] + forbidden),
+        sorted(node.lineno for node in starts),
+        sorted(node.lineno for node in starts if id(node) not in shielded),
+        sorted(forbidden),
     )
 
 
-def _unshielded_starts(source: str) -> tuple[list[int], list[int]]:
-    """:func:`_scan` hinter dem Vorfilter :data:`_MAY_START`."""
-    return _scan(source) if _MAY_START.search(source) else ([], [])
+def _unshielded_starts(source: str) -> tuple[list[int], list[int], list[int]]:
+    """:func:`_scan` hinter dem Vorfilter :func:`_may_start`."""
+    return _scan(source) if _may_start(source) else ([], [], [])
 
 
 def test_every_program_start_of_the_application_opens_no_system_window() -> None:
-    """Jeder Start über ``subprocess`` unter ``app/`` steht in ``no_error_dialogs`` (RM-788).
+    """Jeder Start unter ``app/`` steht in ``no_error_dialogs`` (RM-788), und
+    ``QProcess`` gibt es dort nicht.
 
-    Ohne den Block öffnet Windows für eine ``.exe``, die kein Programm ist, das
-    Fenster „Nicht unterstützte 16-Bit-Anwendung“ im startenden Faden und
-    wartet auf einen Klick. ``multiprocessing`` startet nur den eigenen
-    Interpreter und zählt nicht.
+    Gezählt wird jeder Startweg aus :func:`_scan`: ``subprocess`` (auch hinter
+    Alias oder Direktimport), ``os.startfile``, ``os.system``, ``os.popen``,
+    ``os.spawn*``, ``os.exec*``, ``os.posix_spawn*`` und
+    ``asyncio.create_subprocess_*``. Ohne den Block öffnet Windows für eine
+    ``.exe``, die kein Programm ist, das Fenster „Nicht unterstützte
+    16-Bit-Anwendung“ im startenden Faden und wartet auf einen Klick.
+    ``multiprocessing`` startet nur den eigenen Interpreter und zählt nicht.
     """
     starts: list[str] = []
     bare: list[str] = []
+    qprocess: list[str] = []
     for path in sorted((ROOT / "app").rglob("*.py")):
-        found, unshielded = _unshielded_starts(path.read_text(encoding="utf-8"))
+        found, unshielded, named = _unshielded_starts(path.read_text(encoding="utf-8"))
         name = path.relative_to(ROOT).as_posix()
         starts += [f"{name}:{line}" for line in found]
         bare += [f"{name}:{line}" for line in unshielded]
+        qprocess += [f"{name}:{line}" for line in named]
     assert len(starts) >= 5, f"die Suche fand die Programmstarts nicht mehr: {starts}"
     assert not bare, f"Programmstart ohne no_error_dialogs: {bare}"
+    assert not qprocess, (
+        "QProcess wird unter app/ nicht verwendet: Sein start läuft nach dem Bau, kein "
+        "no_error_dialogs schützt ihn. Über process.run_limited oder subprocess starten: "
+        f"{qprocess}"
+    )
 
 
 def test_the_start_guard_sees_a_start_outside_the_block() -> None:
@@ -875,7 +905,7 @@ def test_the_start_guard_sees_a_start_outside_the_block() -> None:
         "with open('e'):\n"
         "    subprocess.check_output(['e'])\n"
     )
-    assert _unshielded_starts(source) == ([3, 5, 7, 8, 11], [3, 8, 11])
+    assert _unshielded_starts(source) == ([3, 5, 7, 8, 11], [3, 8, 11], [])
 
 
 @pytest.mark.parametrize(
@@ -884,56 +914,57 @@ def test_the_start_guard_sees_a_start_outside_the_block() -> None:
         pytest.param(
             "import subprocess as sp\nsp.Popen(['a'])\n"
             "with no_error_dialogs():\n    sp.run(['b'])\n",
-            ([2, 4], [2]),
+            ([2, 4], [2], []),
             id="import-subprocess-as",
         ),
         pytest.param(
             "from subprocess import Popen as P, PIPE\nP(['a'], stdout=PIPE)\n"
             "with no_error_dialogs():\n    P(['b'])\n",
-            ([2, 4], [2]),
+            ([2, 4], [2], []),
             id="from-subprocess-import",
         ),
         pytest.param(
             "import os\nos.startfile('a.exe')\nwith no_error_dialogs():\n    os.startfile('b')\n",
-            ([2, 4], [2]),
+            ([2, 4], [2], []),
             id="os-startfile",
         ),
         pytest.param(
             "import os as o\no.system('a')\no.spawnv(0, 'b', [])\no.execv('c', [])\n"
             "o.popen('d')\no.path.join('e')\n",
-            ([2, 3, 4, 5], [2, 3, 4, 5]),
+            ([2, 3, 4, 5], [2, 3, 4, 5], []),
             id="os-system-spawn-exec-popen",
         ),
         pytest.param(
             "from os import startfile\nstartfile('a')\n",
-            ([2], [2]),
+            ([2], [2], []),
             id="from-os-import",
         ),
         pytest.param(
             "import asyncio\nasyncio.create_subprocess_exec('a')\n",
-            ([2], [2]),
+            ([2], [2], []),
             id="asyncio",
         ),
         pytest.param(
             "from PySide6.QtCore import QProcess\nwith no_error_dialogs():\n"
             "    QProcess.startDetached('a')\n",
-            ([1, 3], [1, 3]),
+            ([], [], [1, 3]),
             id="qprocess",
         ),
         pytest.param(
             "import os\nos.makedirs('a')\nrun(['b'])\n",
-            ([], []),
+            ([], [], []),
             id="nothing-that-starts",
         ),
     ],
 )
 def test_the_start_guard_sees_every_way_to_start_a_program(
-    source: str, expected: tuple[list[int], list[int]]
+    source: str, expected: tuple[list[int], list[int], list[int]]
 ) -> None:
     """Gegenprobe je Form (N3): Alias, Direktimport und die Wege an ``subprocess`` vorbei.
 
     Jede Form geht durch denselben Vorfilter wie der Wächter; was er wegließe,
-    fände der Fall hier nicht. ``QProcess`` gilt auch im Block als ungeschützt.
+    fände der Fall hier nicht. ``QProcess`` steht in der dritten Liste, auch im
+    Block — der Wächter meldet es mit eigenem Satz.
     """
     assert _unshielded_starts(source) == expected
 

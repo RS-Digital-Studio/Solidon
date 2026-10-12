@@ -541,7 +541,8 @@ def _run(
     # Schlüssel und Python-Suchpfade, im vertrauten Arbeitsordner, als eigene
     # Gruppe ohne Konsolenfenster; ein Abbruch beendet den ganzen Baum. Was der
     # Download von Hugging Face liest, reist mit: ``HF_*`` (Spiegel, Cache,
-    # Zugang) und der alte Name des Schlüssels.
+    # Zugang) und der alte Name des Schlüssels. Proxy-Adressen kommen ohne
+    # Zugangsdaten an, wie bei pip und winget.
     environment = {
         **trusted_environment(),
         **{

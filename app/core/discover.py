@@ -57,6 +57,7 @@ import os
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -779,10 +780,19 @@ def on_host(command: Sequence[str]) -> list[str]:
 
 #: Was der Start meldet, wenn die gewählte Datei kein Programm ist. Windows:
 #: 216 für einen Text oder einen MZ-Kopf ohne Programm, 193 für eine leere
-#: Datei oder eine DLL. POSIX: ``ENOEXEC`` für ein unbekanntes Format,
-#: ``EACCES`` für eine Datei ohne Ausführungsrecht.
+#: Datei oder eine DLL. POSIX: ``ENOEXEC`` für ein unbekanntes Format.
+#: ``EACCES`` gehört nicht dazu: Unter Linux heißt es meist „nicht ausführbar“,
+#: etwa bei einem frisch geladenen AppImage, und das ist ein Programm.
 _NOT_A_PROGRAM_WINDOWS: Final = frozenset({193, 216})
-_NOT_A_PROGRAM_POSIX: Final = frozenset({errno.ENOEXEC, errno.EACCES})
+
+
+def _lacks_execute_permission(program: Path) -> bool:
+    """Ob ``program`` eine gewöhnliche Datei ohne jedes Ausführungsrecht ist."""
+    try:
+        mode = program.stat().st_mode
+    except OSError:
+        return False
+    return stat.S_ISREG(mode) and not mode & 0o111
 
 
 def slicer_start_refused(
@@ -794,20 +804,34 @@ def slicer_start_refused(
     fragen hier. Ist die Datei kein Programm, liest der Kunde das in eigenen
     Worten, mit ihrem Namen und *Einen anderen Slicer auswählen* zuerst; vorher
     stand dort der Windows-Text „Die Version von %1 ist mit der ausgeführten
-    Windows-Version nicht kompatibel …“ (RM-788). Jeder andere Startfehler
-    behält den Grund des Systems und die Vorschläge des Aufrufers.
+    Windows-Version nicht kompatibel …“ (RM-788). Fehlt einer Datei unter POSIX
+    nur das Ausführungsrecht, nennt die Absage das und den Weg. Jeder andere
+    Startfehler behält den Grund des Systems und die Vorschläge des Aufrufers.
     """
     winerror = getattr(problem, "winerror", None)
     if (
         winerror in _NOT_A_PROGRAM_WINDOWS
         if winerror is not None
-        else problem.errno in _NOT_A_PROGRAM_POSIX
+        else problem.errno == errno.ENOEXEC
     ):
         return errors.ExternalToolError(
             title=_("Der Slicer ließ sich nicht starten."),
             detail=_("Die gewählte Datei ist kein Programm."),
             tool=tool,
             values={"file": program.name},
+            suggestions=(errors.CHOOSE_SLICER, errors.EXPORT_ONLY),
+        )
+    if winerror is None and problem.errno == errno.EACCES and _lacks_execute_permission(program):
+        return errors.ExternalToolError(
+            title=_("Der Slicer ließ sich nicht starten."),
+            detail=_(
+                "Die gewählte Datei ist nicht als ausführbar markiert. Erlauben Sie das "
+                "Ausführen in ihren Eigenschaften und versuchen Sie es erneut."
+            ),
+            tool=tool,
+            values={"file": program.name},
+            # Erneut slicen ist der Knopf des Dialogs selbst; ein *Erneut
+            # versuchen* hätte am Slicen keinen Handler und stünde nicht da.
             suggestions=(errors.CHOOSE_SLICER, errors.EXPORT_ONLY),
         )
     return errors.ExternalToolError(
