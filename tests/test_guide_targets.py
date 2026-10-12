@@ -106,6 +106,7 @@ NEW_RESOLVERS = (
     "_obstacle_click",
     "_widget_click",
     "_scroll_needed",
+    "_unclipped",
     "_row_click",
     "_visible_row_click",
     "_expander_click",
@@ -412,6 +413,7 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     assert widget("feature.field:resize_hole.diameter") is not None
     assert widget("measure.field:diameter").isVisible()
     assert widget("measure.reference") is not None
+    assert widget("measure.apply") is not None
     for name in ("feature.apply", "feature.in_view", "feature.every"):
         assert guide_targets.widget_for(window, name) is not None, name
 
@@ -1116,6 +1118,57 @@ def test_a_widget_below_the_visible_part_is_reached_by_scrolling(qt_app: Any) ->
     finally:
         area.close()
         area.deleteLater()
+        window.deleteLater()
+
+
+def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(qt_app: Any) -> None:
+    """D0 F-19: Ein Feld, das sein innerer Rollbereich ganz zeigt, der äußere aber abschneidet.
+
+    Die Auswahlkarte steckt im Rollbereich der Karte und im äußeren
+    ``FittedScroller``. Gefragt war nur der nächste Rollbereich: Dort stand das
+    Ziel „sichtbar“, und der Klick fiel unter die Karte. Jetzt zählt jeder
+    Bereich, gerollt wird der erste, der rollen kann — hier der äußere.
+    """
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    outer = QScrollArea()
+    holder = QWidget()
+    holder_column = QVBoxLayout(holder)
+    inner = QScrollArea(holder)
+    inner.setWidgetResizable(True)
+    inner.setFixedHeight(600)
+    content = QWidget()
+    column = QVBoxLayout(content)
+    column.addSpacing(400)
+    probe = QPushButton("Probe", content)
+    probe.setProperty(guides.TARGET_PROPERTY, "setting:probe")
+    column.addWidget(probe)
+    column.addStretch(1)
+    inner.setWidget(content)
+    holder_column.addWidget(inner)
+    outer.setWidget(holder)
+    outer.resize(300, 200)
+    outer.show()
+    _settle(qt_app)
+    try:
+        assert inner.verticalScrollBar().maximum() == 0, "der innere Bereich rollt nicht"
+        bar = outer.verticalScrollBar()
+        assert bar.maximum() > 0
+        step = guide_targets.next_click(window, "setting:probe")
+        assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
+        assert bar.value() == 0, "next_click hat selbst gerollt"
+        bar.setValue(bar.maximum())
+        _settle(qt_app)
+        assert guide_targets.next_click(window, "setting:probe").why == "ziel"
+    finally:
+        outer.close()
+        outer.deleteLater()
         window.deleteLater()
 
 

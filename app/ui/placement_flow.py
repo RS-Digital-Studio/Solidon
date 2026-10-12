@@ -2691,6 +2691,9 @@ class PlacementFlow(QObject):
         measure_actions.addStretch()
         self._measure_accept = QPushButton(tr("Übernehmen"), self._measure_box)
         self._measure_accept.setObjectName("placement_measure_accept")
+        # Ein Name im Wortschatz (``measure.apply``): Der Funktionsdurchgang klickt
+        # ihn, wo die Handlung im Bild steht (D0, N2).
+        self._measure_accept.setProperty(guides.TARGET_PROPERTY, "measure.apply")
         self._measure_accept.setIcon(icon("done", self._measure_accept))
         measure_actions.addWidget(self._measure_accept)
         self._measure_cancel = QPushButton(tr("Abbrechen"), self._measure_box)

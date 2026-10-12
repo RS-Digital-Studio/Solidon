@@ -413,6 +413,7 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "feature.in_view": _marked("feature.in_view"),
     "feature.every": _marked("feature.every"),
     "measure.reference": _marked("measure.reference"),
+    "measure.apply": _marked("measure.apply"),
     "search": _search_field,
     "toolbar.search": _toolbar_search,
     "progress.cancel": _progress_cancel,
@@ -547,12 +548,19 @@ def _checkbox_area(box: QWidget) -> QRect:
 
 
 def _in_view(widget: QWidget) -> QWidget:
-    """Das Widget in seinem Rollbereich in den sichtbaren Teil rollen, falls es einen hat."""
+    """Das Widget in jedem seiner Rollbereiche in den sichtbaren Teil rollen, von innen nach außen.
+
+    Der Zwilling von :func:`_scroll_needed` (D0, F-19): Rollte nur der nächste
+    Bereich, stand ein Knopf der Auswahlkarte innen im Blick und blieb außen
+    abgeschnitten.
+    """
     parent = widget.parentWidget()
-    while parent is not None and not isinstance(parent, QScrollArea):
+    while parent is not None:
+        if isinstance(parent, QScrollArea):
+            parent.ensureWidgetVisible(widget, 0, 24)
+        if parent.isWindow():
+            break
         parent = parent.parentWidget()
-    if parent is not None:
-        parent.ensureWidgetVisible(widget, 0, 24)
     return widget
 
 
@@ -1489,18 +1497,59 @@ def _widget_click(widget: QWidget, name: str, button: Qt.MouseButton) -> Click:
 
 
 def _scroll_needed(widget: QWidget, name: str) -> Click | None:
-    """Ob das Widget außerhalb des sichtbaren Teils seines Rollbereichs steht."""
-    parent = widget.parentWidget()
-    while parent is not None and not isinstance(parent, QScrollArea):
+    """Ob das Widget außerhalb des sichtbaren Teils eines seiner Rollbereiche steht.
+
+    **Jeder umgebende Rollbereich zählt, von innen nach außen** (D0, F-19). Die
+    Auswahlkarte steckt im Rollbereich der Karte und im äußeren
+    ``overlay.FittedScroller``: Innen stand das Ziel „sichtbar“, der äußere
+    schnitt es ab, und der Klick fiel unter die Karte. Gemessen wird die Mitte
+    gegen den Teil der Sichtfläche, den kein äußerer Bereich abschneidet
+    (:func:`_unclipped`); gerollt wird der erste Bereich, der in diese Richtung
+    rollen kann — wie das Mausrad, das Qt nach außen weiterreicht. Rollt keiner,
+    bleibt das Ziel, wie es steht.
+    """
+    areas: list[QScrollArea] = []
+    parent: QWidget | None = widget.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QScrollArea):
+            areas.append(parent)
+        if parent.isWindow():
+            break
         parent = parent.parentWidget()
-    if parent is None:
+    centre = widget.mapToGlobal(widget.rect().center())
+    hidden = next(
+        (area for area in areas if not _unclipped(area.viewport()).contains(centre)),
+        None,
+    )
+    if hidden is None:
         return None
-    viewport = parent.viewport()
-    centre = widget.mapTo(viewport, widget.rect().center())
-    if viewport.rect().contains(centre):
-        return None
-    direction = 1 if centre.y() >= viewport.height() else -1
-    return Click(_global(viewport), Qt.MouseButton.NoButton, "rollen", name, direction)
+    seen = _unclipped(hidden.viewport())
+    direction = 1 if centre.y() >= seen.center().y() else -1
+    for area in areas:
+        bar = area.verticalScrollBar()
+        if bar is not None and (
+            bar.value() < bar.maximum() if direction > 0 else bar.value() > bar.minimum()
+        ):
+            return Click(
+                _unclipped(area.viewport()), Qt.MouseButton.NoButton, "rollen", name, direction
+            )
+    return None
+
+
+def _unclipped(widget: QWidget) -> QRect:
+    """Der Teil des Widgets, den seine Eltern bis zum Fenster nicht abschneiden — global.
+
+    Anders als ``visibleRegion`` zählen Kinder und Geschwister darüber nicht:
+    Gefragt ist, wohin ein Rollbereich blicken lässt, nicht, was darin liegt.
+    """
+    shown = _global(widget)
+    holder = widget.parentWidget()
+    while holder is not None:
+        shown = shown.intersected(_global(holder))
+        if holder.isWindow():
+            break
+        holder = holder.parentWidget()
+    return shown
 
 
 def _row_click(

@@ -370,22 +370,48 @@ def _judged(watch: Any, criterion: str) -> list[str]:
 
 
 def test_only_the_questions_of_the_concept_are_modal_without_a_finding(qt_app: Any) -> None:
-    """Z2 wie im Konzept (welle4 ``89e7f5819``): nur die Rückfragen aus ``fenster.md``.
+    """Z2 wie im Konzept (welle4 ``7aaa0b163``): Rückfragen aus ``fenster.md`` und ``ctx.ask``.
 
-    Eine Rückfrage über ``ctx.ask`` war als Klasse ``AskDialog`` ganz erlaubt; jetzt
-    ist nur die Frage vor der Vollerkennung ausgenommen, an ihrer Antwort erkannt.
-    Gegenprobe: Eine andere modale Frage ist rot (Z2 und E6).
+    Eine Rückfrage über ``ctx.ask`` ist an ihrer Herkunft ausgenommen: Das
+    Hauptfenster zeigt sie aus ``_on_ask`` mit ``exec()``, und die Wache, die in
+    dieser Schleife läuft, sieht den Rahmen. Gegenprobe: Derselbe ``AskDialog``
+    ohne diese Herkunft — eine Frage der Oberfläche selbst — ist rot (Z2 und E6).
     """
-    from app.i18n import tr
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
+
     from app.ui.dialogs import AskDialog
+    from app.ui.main_window import MainWindow
+    from app.ui.session import AskRequest, Session
+    from app.ui.settings import UiSettings
 
     other = _watched(qt_app, AskDialog("Welche Fläche ist gemeint?", ["Oben", "Unten"]))
     assert other.modal_entries()[0]["allowed"] is False
     assert _judged(other, "Z2") and _judged(other, "E6")
-    answers = [str(tr("Sofort laden")), str(tr(capture.FULL_RECOGNITION_ANSWER))]
-    recognition = _watched(qt_app, AskDialog("Lange Erkennung?", answers, as_buttons=True))
-    assert recognition.modal_entries()[0]["allowed"] is True
-    assert _judged(recognition, "Z2") == [] and _judged(recognition, "E6") == []
+
+    window = MainWindow(Session(), UiSettings())
+    asked = capture.ModalWatch(0.0)
+    seen: list[str] = []
+
+    def look() -> None:
+        # In der Schleife des ``exec()`` von ``_on_ask``, wie die Wache des Prüfstands.
+        asked.poll()
+        question = QApplication.activeModalWidget()
+        seen.append(type(question).__name__)
+        if question is not None:
+            question.reject()
+
+    QTimer.singleShot(200, look)
+    try:
+        window._on_ask(AskRequest("Welche Fläche ist gemeint?", ["Oben", "Unten"]))
+        _settle(qt_app)
+    finally:
+        window.close()
+        window.deleteLater()
+        _settle(qt_app)
+    assert seen == ["AskDialog"], seen
+    assert asked.modal_entries()[0]["allowed"] is True
+    assert _judged(asked, "Z2") == [] and _judged(asked, "E6") == []
 
 
 def test_a_message_in_house_style_is_modal_but_neither_raw_nor_a_question(qt_app: Any) -> None:
@@ -438,3 +464,51 @@ def test_a_message_in_house_style_is_read_with_its_actions(qt_app: Any) -> None:
     assert len(house) == 1, entries
     assert [action["label"] for action in house[0]["actions"]] == ["Rückgängig"], house
     assert house[0]["actions"][0]["target"] == "message.button:probe.undo", house
+
+
+def test_a_lock_reason_names_its_way_out_and_a_field_names_its_limit(qt_app: Any) -> None:
+    """Prüfpunkt 7 und V5: Jede Absage trägt ihre Art; ein Sperrgrund sagt, ob er den Ausweg nennt.
+
+    Ein grauer Knopf ist ein Sperrgrund — mit Ausweg, wenn der Satz eine
+    bedienbare Menüzeile oder einen offenen Knopf nennt („Hilfe → Solidon
+    freischalten …“), sonst ohne. Ein Zahlenfeld, das eine getippte Zahl
+    ablehnt, ist eine Grenzablehnung (``BoundedSpin.refusal``).
+    """
+    from PySide6.QtWidgets import QMainWindow, QPushButton, QVBoxLayout, QWidget
+
+    from app.ui.labels import BoundedSpin
+
+    main = QMainWindow()
+    body = QWidget()
+    column = QVBoxLayout(body)
+    unlock = QPushButton("Solidon freischalten …", body)
+    named = QPushButton("Auf das Bett setzen", body)
+    named.setToolTip(
+        "Dafür braucht Solidon einen Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+    )
+    named.setEnabled(False)
+    bare = QPushButton("Exportieren", body)
+    bare.setToolTip("Der Testzeitraum ist abgelaufen.")
+    bare.setEnabled(False)
+    spin = BoundedSpin(body)
+    spin.setRange(0.5, 50.0)
+    for widget in (unlock, named, bare, spin):
+        column.addWidget(widget)
+    main.setCentralWidget(body)
+    main.show()
+    _settle(qt_app)
+    spin.lineEdit().setText("0,1")
+    _settle(qt_app)
+    try:
+        entries = capture.message_entries(main)
+    finally:
+        main.close()
+        main.deleteLater()
+        _settle(qt_app)
+    locks = {entry["text"]: entry["way_out"] for entry in entries if entry["kind"] == "sperrgrund"}
+    assert locks == {
+        "Dafür braucht Solidon einen Lizenzschlüssel (Hilfe → Solidon freischalten …).": True,
+        "Der Testzeitraum ist abgelaufen.": False,
+    }, entries
+    limits = [entry for entry in entries if entry["kind"] == "grenzablehnung"]
+    assert len(limits) == 1 and limits[0]["text"], entries

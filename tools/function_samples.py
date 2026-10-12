@@ -24,6 +24,7 @@ from tools.function_checks import (
     COARSE_NOTE,
     COVERED,
     CRITERIA,
+    FAULT_PHASE,
     GOOD_OVER_FINDING,
     MANUAL_WINDOW,
     NO_RESPONSE,
@@ -105,7 +106,7 @@ def sample_protocol() -> dict[str, Any]:
             },
             "fault_case": {
                 "inputs": {"feature.field:drill_hole.depth": 500.0},
-                "refusal": "grenzablehnung",
+                "expected": "meldung",
             },
         },
         "variant": {
@@ -217,6 +218,8 @@ def sample_protocol() -> dict[str, Any]:
                         "effect": True,
                     }
                 ],
+                "kind": "meldung",
+                "phase": FAULT_PHASE,
             }
         ],
         "texts": [
@@ -628,6 +631,9 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(7, "Meldung ohne Handlung", change=_set("messages.0.actions", [])),
     BrokenSample(7, "Handlung ohne Wirkung", change=_set("messages.0.actions.0.effect", False)),
     BrokenSample(
+        7, "Sperrgrund, wo eine Meldung erwartet war", change=_set("messages.0.kind", "sperrgrund")
+    ),
+    BrokenSample(
         8,
         "Negativwort im sichtbaren Text",
         change=_set("texts.0.text", "Macht den Körper wasserdicht."),
@@ -801,6 +807,14 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         reason="V4 ohne vorher geschriebene Vorhersage",
     ),
     BrokenSample("V5", "Meldung ohne Handlung", change=_set("messages.0.actions", [])),
+    BrokenSample(
+        "V5",
+        "Sperrgrund ohne Ausweg",
+        change=_set(
+            "messages.0",
+            {"text": "Gesperrt.", "actions": [], "kind": "sperrgrund", "way_out": False},
+        ),
+    ),
     BrokenSample(
         "V6",
         "Handbuchfenster im Protokoll",

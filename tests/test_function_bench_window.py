@@ -39,6 +39,7 @@ from tools.file_acceptance import (
 )
 from tools.function_checks import (
     MAIN_PHASES,
+    NOT_FOUND,
     PROTOCOL_SCHEMA,
     SMALLEST_WINDOW,
     validate_protocol,
@@ -335,16 +336,18 @@ def test_a_window_command_with_inputs_creates_and_tries_to_write_when_locked(
 
 
 @pytest.mark.usefixtures("require_graphics_adapter")
-def test_a_hole_is_changed_where_the_real_window_shows_it(
+def test_the_real_window_measures_the_action_of_the_row_not_the_one_in_the_view(
     tmp_path: Path, native_window_platform: str
 ) -> None:
-    """F-20 am echten Fenster: Mit Bild steht *Bohrung ändern* nach der Auswahl in der Maßgruppe.
+    """F-20 und N5 am echten Fenster: Die Maßgruppe im Bild zählt nur mit der Handlung der Zeile.
 
-    Offscreen gibt es kein Bild, und die Handlung bleibt im Merkmalfenster; am
-    echten Fenster rückt sie in die Maßgruppe über der Ansicht, der Kopf im
-    Merkmalfenster ist verborgen. Vorher hieß das nach zwei Sekunden „nicht
-    auffindbar“ (Probelauf, Fälle 004 bis 027). Jetzt tippt der Fall dort und
-    übernimmt mit der Eingabetaste, wie der Kunde.
+    Offscreen gibt es kein Bild, und *Bohrung ändern* steht im Merkmalfenster.
+    Am echten Fenster rückt an der gesetzten Bohrung von ``merkmal.hole.exakt``
+    *Bohrung im ursprünglichen Schritt ändern* (``drill_hole``) in die Maßgruppe,
+    und der Kopf von *Bohrung ändern* ist verborgen. Der Prüfstand tippte dort
+    für ``resize_hole``, änderte den Ursprungsschritt und maß 8,2 mm. Jetzt
+    misst er die Handlung der Zeile: nicht auffindbar, mit dem Vermerk, welche
+    Handlung im Bild stand.
     """
     import os
     import subprocess
@@ -366,10 +369,12 @@ def test_a_hole_is_changed_where_the_real_window_shows_it(
         )
         assert done.returncode == 0, done.stdout + done.stderr
     data = json.loads((out / "cases" / "001" / "function.json").read_text(encoding="utf-8"))
-    assert data["findings"] == [], data["findings"]
-    assert data["place"]["error"] is None, data["place"]
-    assert data["result"]["metrics"]["hole.diameter"] is not None
     assert validate_protocol(data) == []
+    assert [(found["kind"], found["target"]) for found in data["findings"]] == [
+        (NOT_FOUND, "feature:resize_hole")
+    ], data["findings"]
+    assert "drill_hole" in data["unmeasured"]["im_bild:feature:resize_hole"]
+    assert data["result"] is None, "gemessen wurde eine andere Handlung"
 
 
 def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:

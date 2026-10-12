@@ -96,8 +96,9 @@ TARGETS: Final[frozenset[str]] = frozenset(
         "feature.apply",
         "feature.in_view",
         "feature.every",
-        # *Bezug ändern* an der Maßgruppe im Bild
+        # *Bezug ändern* und *Übernehmen* an der Maßgruppe im Bild
         "measure.reference",
+        "measure.apply",
         # Das Suchfeld der Auswahlkarte und *Funktion suchen …* oben
         "search",
         "toolbar.search",

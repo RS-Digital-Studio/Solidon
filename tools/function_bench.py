@@ -609,6 +609,17 @@ class FunctionFlow(GesturePhases, SwitchPhase):
 
         def act(machine: StepMachine) -> None:
             if not surfaces.in_view(self.window, inputs):
+                shown, wanted = surfaces.op_in_view(self.window), target.partition(":")[2]
+                group = self.widget("measure.apply")
+                if shown and group is not None and group.isVisible() and shown != wanted:
+                    # Im Bild steht eine andere Handlung — an einer gesetzten Bohrung
+                    # *Bohrung im ursprünglichen Schritt ändern* (N5). Gemessen wird
+                    # die Handlung der Zeile, nicht die im Bild.
+                    unmeasured(
+                        self.data,
+                        f"im_bild:{target}",
+                        f"die Maßgruppe im Bild trägt {shown}, nicht {wanted}",
+                    )
                 machine.insert([self.walker.step(target)])
                 return
             if self.walker.before_target is not None:
@@ -622,17 +633,16 @@ class FunctionFlow(GesturePhases, SwitchPhase):
         return Step(f"handlung {target}", act, ready=ready, settle_ms=SETTLE_MS)
 
     def apply_step(self) -> Step:
-        """Übernehmen: der Hauptknopf — steht die Handlung im Bild, die Eingabetaste im Feld.
+        """Übernehmen: der Hauptknopf — steht die Handlung im Bild, der der Maßgruppe.
 
-        Die Maßgruppe im Bild übernimmt mit der Eingabetaste wie mit ihrem Knopf
-        (``placement_flow``, „Die Eingabetaste im Maßfeld wartet wie der Knopf“);
-        ihr Knopf trägt keinen Namen im Wortschatz (Bericht D0-P2, neuer Punkt).
+        Mit Bild rückt die Handlung in die Maßgruppe über der Ansicht (F-20); ihr
+        *Übernehmen* heißt im Wortschatz ``measure.apply`` (N2).
         """
         inputs = list(self.spec.get("inputs") or {})
 
         def act(machine: StepMachine) -> None:
             if self.apply_target == "feature.apply" and surfaces.in_view(self.window, inputs):
-                machine.insert([self.key_step("Return", "übernehmen im bild")])
+                machine.insert([self.walker.step("measure.apply")])
             elif self.apply_target is not None:
                 machine.insert([self.walker.step(self.apply_target)])
 
@@ -1381,6 +1391,7 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             return
         messages: list[dict[str, Any]] = []
         shown: dict[str, set[str]] = {"before": set()}
+        findings_before = surfaces.report_findings(self.session)
 
         def in_dialog() -> list[dict[str, Any]]:
             # Ein Dialog sagt ab, wo er steht (``ParameterDialog.problem``): neu
@@ -1392,7 +1403,7 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                 if dialog is not None and "MessageDialog" not in surfaces.classes_of(dialog)
                 else []
             )
-            return [{"text": " ".join(new), "actions": []}] if new else []
+            return [{"text": " ".join(new), "actions": [], "kind": "meldung"}] if new else []
 
         def remember(machine: StepMachine) -> None:
             dialog = surfaces.open_dialog(self.window)
@@ -1400,6 +1411,11 @@ class FunctionFlow(GesturePhases, SwitchPhase):
 
         def read(machine: StepMachine) -> None:
             messages.extend([*capture.message_entries(self.window), *in_dialog()])
+            messages.extend(
+                {"text": text, "actions": [], "kind": "befund"}
+                for code, text in surfaces.report_findings(self.session).items()
+                if code not in findings_before
+            )
 
         computed = {"seen": False}
 
@@ -1492,6 +1508,8 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                 or len(self.watch.modals) > modal_before
                 or surfaces.open_dialog(self.window) is not None
             )
+        for message in messages:
+            message["phase"] = FAULT_PHASE
         self.data["messages"] = [*(self.data.get("messages") or []), *messages]
 
     def phase_matrix(self) -> None:

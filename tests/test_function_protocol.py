@@ -169,13 +169,13 @@ def test_a_window_is_allowed_by_its_class_or_the_function_that_opened_it() -> No
     jede genannte Funktion in ``app/ui`` steht — sonst erkennte die Wache nach
     einer Umbenennung nichts mehr.
     """
-    # Konzept Z2 wie ``fenster.md`` (welle4 ``89e7f5819``): Eine Rückfrage über
-    # ``ctx.ask`` ist nur vor der Vollerkennung ausgenommen, erkannt an der Antwort.
+    # Konzept Z2 (welle4 ``7aaa0b163``): Eine Rückfrage über ``ctx.ask`` ist
+    # ausgenommen, erkannt an ihrer Herkunft — nicht an der Klasse, nicht am Text.
     assert not capture.modal_allowed(["AskDialog", "QDialog"], [])
-    assert not capture.modal_allowed(["AskDialog", "QDialog"], [], ["Oben", "Unten"])
-    assert capture.modal_allowed(
-        ["AskDialog", "QDialog"], [], ["Sofort laden", capture.FULL_RECOGNITION_ANSWER]
-    )
+    assert not capture.modal_allowed(["AskDialog", "QDialog"], ["poll", "ask_free_part_name"])
+    assert capture.modal_allowed(["AskDialog", "QDialog"], ["poll", "_on_ask", "x"])
+    assert capture.modal_allowed(["AskDialog", "QDialog"], [], ["LocalRecognitionDialog"])
+    assert not capture.modal_allowed(["QMessageBox", "QDialog"], ["poll", "_on_ask"])
     assert capture.modal_allowed(["QMessageBox", "QDialog"], ["poll", "confirm_unsaved", "x"])
     assert capture.modal_allowed(["QMessageBox", "QDialog"], ["poll", "_ask_recovery"])
     assert capture.modal_allowed(["QMessageBox", "QDialog"], ["poll", "confirm_generation_loss"])
@@ -185,8 +185,6 @@ def test_a_window_is_allowed_by_its_class_or_the_function_that_opened_it() -> No
     assert capture.is_question("AskDialog", ["OK"])
     # Die Meldung im Hausstil ist nie eine Frage, auch mit Handlung und Ausgang (FD-21).
     assert not capture.is_question("MessageDialog", ["Rückgängig", "Schließen"])
-    sources = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "app").rglob("*.py"))
-    assert f'"{capture.FULL_RECOGNITION_ANSWER}"' in sources
     defined = {
         node.name
         for path in (ROOT / "app" / "ui").rglob("*.py")
@@ -194,7 +192,7 @@ def test_a_window_is_allowed_by_its_class_or_the_function_that_opened_it() -> No
         if isinstance(node, (ast.FunctionDef, ast.ClassDef))
     }
     assert len(defined) > 1000
-    assert defined >= capture.ALLOWED_CALLERS
+    assert defined >= capture.ALLOWED_CALLERS | capture.ASK_CALLERS | capture.ASK_HOSTS
     assert defined >= capture.ALLOWED_CLASSES - {"QFileDialog"}
 
 

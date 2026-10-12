@@ -54,8 +54,8 @@ STATES: Final[tuple[str, ...]] = ("rest", "hover", "focus", "pressed")
 
 #: Dialogklassen, die als Fenster erlaubt sind (Konzept §4, Z2 und Z5): die
 #: Dateidialoge und der KI- und der Druckhinweis. Eine Rückfrage über
-#: ``ctx.ask`` (``AskDialog``) ist keine Ausnahme — nur die vor der Vollerkennung
-#: (:data:`FULL_RECOGNITION_ANSWER`).
+#: ``ctx.ask`` ist an ihrer Herkunft erlaubt (:data:`ASK_CALLERS`), nicht an
+#: der Klasse ``AskDialog``.
 ALLOWED_CLASSES: Final[frozenset[str]] = frozenset(
     {"QFileDialog", "AiDisclosureDialog", "PrintDisclosureDialog"}
 )
@@ -79,11 +79,18 @@ ALLOWED_CALLERS: Final[frozenset[str]] = frozenset(
     }
 )
 
-#: Die Frage vor der Vollerkennung (§21.1) stellt der Kern im Arbeiter über
-#: ``ctx.ask``; im Aufrufstapel des Dialogs steht er nicht. Erkannt wird sie an
-#: ihrer Antwort (``scene.evaluate._asked_about_recognition``), übersetzt wie im
-#: Fenster. Ein Wächter hält, dass die Anwendung den Satz noch führt.
-FULL_RECOGNITION_ANSWER: Final = "Mit Merkmalserkennung laden"
+#: Woher eine Rückfrage über ``ctx.ask`` kommt (Regel 21, §21.3; Konzept Z2):
+#: Der Arbeiter wartet an einer ``AskRequest``, das Fenster zeigt sie als
+#: ``AskDialog`` — im Hauptfenster aus ``MainWindow._on_ask`` mit ``exec()``,
+#: dessen Rahmen unter der Wache steht (auch die Frage vor der Vollerkennung).
+#: Ein ``AskDialog`` anderer Herkunft — eine Frage der Oberfläche selbst — ist
+#: keine Ausnahme. Ein Wächter hält, dass die Funktion in ``app/ui`` steht.
+ASK_CALLERS: Final[frozenset[str]] = frozenset({"_on_ask"})
+
+#: Dialoge, die eine ``AskRequest`` als Kind-``AskDialog`` mit ``open()`` zeigen —
+#: ohne ``exec()``, also ohne Rahmen im Aufrufstapel: die Ortserkennung
+#: (``LocalRecognitionDialog._ask``). Erkannt am Elternfenster der Frage.
+ASK_HOSTS: Final[frozenset[str]] = frozenset({"LocalRecognitionDialog"})
 
 #: Meldungen und Fragen sind nie die Bedienfläche einer Zeile: die Meldung im
 #: Hausstil (``message_dialog.MessageDialog``, FD-21) und die Rückfrage
@@ -250,21 +257,18 @@ def callers() -> list[str]:
     return names
 
 
-def modal_allowed(
-    classes: Sequence[str], stack: Sequence[str], buttons: Sequence[str] = ()
-) -> bool:
+def modal_allowed(classes: Sequence[str], stack: Sequence[str], hosts: Sequence[str] = ()) -> bool:
     """Ob ein Fenster zu den erlaubten gehört (Konzept Z2, E6).
 
     Erlaubt nach Klasse (Dateidialog, KI- und Druckhinweis), nach öffnender
-    Funktion (:data:`ALLOWED_CALLERS`) oder als die Frage vor der Vollerkennung,
-    an ihrer Antwort erkannt. Jede andere modale Frage ist ein Fund.
+    Funktion (:data:`ALLOWED_CALLERS`) oder als Rückfrage über ``ctx.ask``, an
+    ihrer Herkunft erkannt: ``AskDialog`` aus :data:`ASK_CALLERS` oder als Kind
+    eines Dialogs aus :data:`ASK_HOSTS` (``hosts``: die Klassen des
+    Elternfensters). Jede andere modale Frage ist ein Fund.
     """
-    from app.i18n import tr
-
     if ALLOWED_CLASSES & set(classes) or ALLOWED_CALLERS & set(stack):
         return True
-    answer = str(tr(FULL_RECOGNITION_ANSWER))
-    return "AskDialog" in classes and any(text.replace("&", "") == answer for text in buttons)
+    return "AskDialog" in classes and bool(ASK_CALLERS & set(stack) or ASK_HOSTS & set(hosts))
 
 
 def is_question(class_name: str, buttons: Sequence[str]) -> bool:
@@ -294,6 +298,12 @@ def _buttons(widget: Any) -> list[str]:
     from PySide6.QtWidgets import QAbstractButton
 
     return [button.text() for button in widget.findChildren(QAbstractButton) if button.text()]
+
+
+def _hosts(widget: Any) -> list[str]:
+    """Die Klassen des Fensters, in dem ein Dialog steht — leer ohne Elternteil."""
+    parent = widget.parentWidget()
+    return _classes(parent.window()) if parent is not None else []
 
 
 def modal_now() -> dict[str, Any] | None:
@@ -334,7 +344,9 @@ class ModalWatch:
             self._seen.add(id(widget))
             classes = _classes(widget)
             buttons = _buttons(widget)
-            allowed = modal_allowed(classes, stack, buttons) or type(widget).__name__ in self.own
+            allowed = (
+                modal_allowed(classes, stack, _hosts(widget)) or type(widget).__name__ in self.own
+            )
             self.modals.append(
                 {
                     "class": type(widget).__name__,
@@ -366,7 +378,7 @@ class ModalWatch:
                     {
                         "class": raw,
                         "title": widget.windowTitle(),
-                        "allowed": modal_allowed(classes, stack, _buttons(widget)),
+                        "allowed": modal_allowed(classes, stack, _hosts(widget)),
                         "own_class": type(widget).__name__,
                     }
                 )
@@ -1384,14 +1396,17 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
     Statuszeile, sichtbare Hinweise und gesperrte Knöpfe mit Grund. Je Meldung
     ihre Handlungen — die sichtbaren Knöpfe im selben Hinweis — mit
     ``clicked = False`` und ``effect = None``; der Fall, der eine anklickt, trägt
-    beides nach.
+    beides nach. ``kind`` ist die Art der Absage wie ``fault_case.expected``
+    (Prüfpunkt 7): ``sperrgrund`` am grauen Knopf, mit ``way_out``, ob der Grund
+    einen Ausweg nennt (V5); ``grenzablehnung`` an einem Zahlenfeld, das eine
+    getippte Zahl ablehnt; sonst ``meldung``.
     """
     from PySide6.QtWidgets import QAbstractButton, QFrame, QPushButton
 
     found: list[dict[str, Any]] = []
     status = window.statusBar().currentMessage() if window.statusBar() is not None else ""
     if status:
-        found.append({"text": status, "actions": []})
+        found.append({"text": status, "actions": [], "kind": "meldung"})
     for frame in window.findChildren(QFrame):
         name = frame.objectName().lower()
         if not _visible(frame) or not any(
@@ -1414,15 +1429,76 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
                     for button in frame.findChildren(QAbstractButton)
                     if _visible(button) and _text_of(button) and button.isEnabled()
                 ],
+                "kind": "meldung",
             }
         )
+    ways = _ways_out(window)
     for button in window.findChildren(QPushButton):
         # Die Kurzhilfe zuerst, wie ``function_surface.grey_reason``: Sie zeigt der
         # graue Knopf dem Kunden; die Beschreibung kann vom offenen stammen (F-34).
         reason = button.toolTip() or button.accessibleDescription()
         if _visible(button) and not button.isEnabled() and reason:
-            found.append({"text": reason, "actions": []})
-    return [*found, *_house_messages()]
+            found.append(
+                {
+                    "text": reason,
+                    "actions": [],
+                    "kind": "sperrgrund",
+                    "way_out": any(way in reason for way in ways),
+                }
+            )
+    return [*found, *_field_refusals(), *_house_messages()]
+
+
+def _ways_out(window: Any) -> set[str]:
+    """Wohin ein Sperrgrund den Kunden schicken kann: Menüzeilen und offene Knöpfe.
+
+    Ein Sperrgrund braucht keinen Knopf, er muss aber den Ausweg nennen (Konzept
+    V5, Entscheidung Koordinator) — etwa „(Hilfe → Solidon freischalten …)“.
+    Genannt ist er, wenn der Satz den Text einer bedienbaren Menüzeile oder eines
+    offenen Knopfs trägt, so wie der Kunde ihn in seiner Sprache liest. Kürzer als
+    vier Zeichen zählt nicht, „OK“ ist kein Ausweg.
+    """
+    from PySide6.QtWidgets import QAbstractButton, QApplication
+
+    from app.ui.guide_targets import menubar_entries
+
+    texts = [
+        action.text() for _name, _menus, action in menubar_entries(window) if action.isEnabled()
+    ]
+    for top in QApplication.topLevelWidgets():
+        if top.isVisible():
+            texts += [
+                button.text()
+                for button in top.findChildren(QAbstractButton)
+                if _visible(button) and button.isEnabled()
+            ]
+    cleaned = {text.replace("&", "").rstrip(".… ").strip() for text in texts}
+    return {text for text in cleaned if len(text) >= 4}
+
+
+def _field_refusals() -> list[dict[str, Any]]:
+    """Zahlenfelder, die eine getippte Zahl ablehnen — die Grenzablehnung (Prüfpunkt 7).
+
+    Gelesen über die öffentliche Auskunft des Feldes (``refused_value``,
+    ``refusal``, ``app/ui/labels.py``): Der Satz nennt die Grenze, und die ist der
+    Ausweg; einen Knopf braucht er nicht.
+    """
+    from PySide6.QtWidgets import QAbstractSpinBox, QApplication
+
+    found: list[dict[str, Any]] = []
+    for top in QApplication.topLevelWidgets():
+        if not top.isVisible():
+            continue
+        for spin in top.findChildren(QAbstractSpinBox):
+            refused = getattr(spin, "refused_value", None)
+            if not callable(refused) or not _visible(spin) or refused() is None:
+                continue
+            text = str(spin.refusal())
+            if text:
+                found.append(
+                    {"text": text, "actions": [], "kind": "grenzablehnung", "way_out": True}
+                )
+    return found
 
 
 def _house_messages() -> list[dict[str, Any]]:
@@ -1451,7 +1527,7 @@ def _house_messages() -> list[dict[str, Any]]:
             and button.isEnabled()
             and dialog.button_box.buttonRole(button) != exits
         ]
-        found.append({"text": dialog.text(), "actions": actions})
+        found.append({"text": dialog.text(), "actions": actions, "kind": "meldung"})
     return found
 
 

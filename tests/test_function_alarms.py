@@ -35,7 +35,7 @@ from tools.function_checks import (
     validate_protocol,
 )
 from tools.function_judges import CRITERION_JUDGES
-from tools.function_points import judge_case, judge_licence
+from tools.function_points import POINT_JUDGES, judge_case, judge_licence
 from tools.function_samples import click_step, sample_context, sample_protocol
 
 PATH, APPLY = MAIN_PHASES
@@ -639,6 +639,7 @@ def test_the_fault_case_walks_its_own_scene_and_way() -> None:
     ]
     flow.run_steps = lambda label, steps: walked.extend(step.name for step in steps) or True
     flow.picture = lambda label: None
+    flow.session = type("Session", (), {"last_result": None})()
     flow.phase_fault()
     assert scenes == ["unter_dem_bett_langsam"]
     # Die Rechnung muss zu sehen sein, bevor die Handlung geklickt wird; stößt
@@ -759,13 +760,14 @@ def test_hovering_takes_a_facing_feature_per_kind_and_names_what_it_missed() -> 
     assert "hole" in flow.data["unmeasured"]["hover_labels"]
 
 
-def test_an_action_shown_in_the_view_is_typed_there_and_taken_with_return(
+def test_an_action_shown_in_the_view_is_typed_there_and_taken_there(
     monkeypatch: Any,
 ) -> None:
-    """F-20: Steht die Handlung im Bild, klickt der Fall keinen Kopf im Merkmalfenster.
+    """F-20, N2: Steht die Handlung im Bild, klickt der Fall keinen Kopf im Merkmalfenster.
 
     Er schreibt den Schritt als Ziel in der Zone ``ansicht``, tippt ins Maßfeld
-    (``measure.field:<feld>``) und übernimmt mit der Eingabetaste. Steht sie im
+    (``measure.field:<feld>``) und übernimmt mit dem Knopf der Maßgruppe
+    (``measure.apply``, vorher ohne Namen: die Eingabetaste). Steht sie im
     Merkmalfenster, geht der Weg wie bisher über den Kopf und *Übernehmen*.
     """
     from tools import function_surface
@@ -805,7 +807,7 @@ def test_an_action_shown_in_the_view_is_typed_there_and_taken_with_return(
                 "weg zu measure.field:diameter",
                 "alles markieren measure.field:diameter",
                 "tippen measure.field:diameter",
-                "taste übernehmen im bild",
+                "weg zu measure.apply",
             ], names
         else:
             assert names == [
@@ -921,3 +923,88 @@ def test_a_message_after_the_click_is_not_the_surface_of_the_row() -> None:
     assert function_surface.own_surface({"target": "message:recovery"}, raw)
     assert function_surface.own_surface({"target": "dialog:AskDialog"}, question)
     assert function_surface.own_surface({"target": "", "source": "startablauf"}, raw)
+
+
+def test_v5_a_lock_reason_needs_no_button_but_a_way_out() -> None:
+    """V5 (Entscheidung Koordinator): Ein Sperrgrund ist keine Meldung, er nennt aber den Ausweg.
+
+    Vorher galt jeder graue Knopf mit Grund als „Meldung ohne Handlung“; jetzt
+    ist nur der Sperrgrund ohne Ausweg ein Fund. Die Grenzablehnung nennt die
+    Grenze und braucht keinen Knopf.
+    """
+    protocol = sample_protocol()
+    protocol["messages"] = [
+        {
+            "text": "Dafür braucht Solidon einen Lizenzschlüssel (Hilfe → Solidon freischalten …).",
+            "actions": [],
+            "kind": "sperrgrund",
+            "way_out": True,
+        },
+        {"text": "0,1 mm liegt unter 0,5 mm.", "actions": [], "kind": "grenzablehnung"},
+    ]
+    assert CRITERION_JUDGES["V5"](protocol, sample_context()).issues == ()
+    protocol["messages"].append(
+        {
+            "text": "Der Testzeitraum ist abgelaufen.",
+            "actions": [],
+            "kind": "sperrgrund",
+            "way_out": False,
+        }
+    )
+    outcome = CRITERION_JUDGES["V5"](protocol, sample_context())
+    assert [issue.text for issue in outcome.issues] == [
+        "Sperrgrund ohne Ausweg: „Der Testzeitraum ist abgelaufen.“"
+    ]
+
+
+def test_p7_compares_the_refusal_with_the_expected_kind() -> None:
+    """Prüfpunkt 7 (Entscheidung Koordinator): Die Absage hat die Art, die die Spezifikation nennt.
+
+    Gezählt werden nur die Meldungen des Fehlfalls; ein Sperrgrund der Fläche
+    davor täuscht keinen erwarteten Sperrgrund vor.
+    """
+    protocol = sample_protocol()
+    protocol["spec"]["fault_case"]["expected"] = "sperrgrund"
+    surface_lock = {"text": "Gesperrt (Hilfe → Solidon freischalten …).", "actions": []}
+    protocol["messages"] = [
+        {**surface_lock, "kind": "sperrgrund", "way_out": True},
+        {"text": "Das ging nicht.", "actions": [], "kind": "meldung", "phase": FAULT_PHASE},
+    ]
+    outcome = POINT_JUDGES[7](protocol, sample_context(), {})
+    assert any(issue.text == "erwartet sperrgrund, gemessen meldung" for issue in outcome.issues), (
+        outcome
+    )
+    protocol["messages"][1]["kind"] = "sperrgrund"
+    protocol["messages"][1]["way_out"] = True
+    outcome = POINT_JUDGES[7](protocol, sample_context(), {})
+    assert not [issue for issue in outcome.issues if "erwartet" in issue.text], outcome
+
+
+def test_the_measure_group_counts_only_for_the_action_it_carries(monkeypatch: Any) -> None:
+    """N5: Die Maßgruppe im Bild ist die Fläche der Zeile nur, wenn sie deren Handlung trägt.
+
+    An einer gesetzten Bohrung trägt sie mit Bild *Bohrung im ursprünglichen
+    Schritt ändern* (``drill_hole``); deren Durchmesser heißt wie der von *Bohrung
+    ändern*. Der Prüfstand tippte dort für ``resize_hole``, änderte den
+    Ursprungsschritt samt Materialtoleranz und maß 8,2 mm statt 8 mm.
+    """
+    from tools import function_surface
+
+    shown = {"measure.field:diameter"}
+    monkeypatch.setattr(
+        function_surface, "_shown", lambda window, name: object() if name in shown else None
+    )
+
+    class Panel:
+        armed: tuple[str, dict[str, Any]] = ("drill_hole", {})
+
+        def preview_values(self) -> tuple[str, dict[str, Any]]:
+            return self.armed
+
+    window = type("Window", (), {"feature_panel": Panel()})()
+    name = "feature.field:resize_hole.diameter"
+    assert function_surface.field_name(window, name) == name
+    assert not function_surface.in_view(window, [name])
+    window.feature_panel.armed = ("resize_hole", {})
+    assert function_surface.field_name(window, name) == "measure.field:diameter"
+    assert function_surface.in_view(window, [name])
