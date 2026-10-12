@@ -31,6 +31,10 @@ it into `website/version.json`.
 - If a function lacks a second body in the scene, the reason names *Duplicate object* as the way.
 - The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
 
+### Printing and slicer handover
+
+- If the chosen slicer is a file that is not a program, Solidon now says so at once. In version 0.6.0 a Windows message about a 16-bit application held up slicing until someone closed it.
+
 ### Editing and sketching
 
 - An exact body now keeps its features after *Put text on*, *Inlay text* and *Cut counter-form*. In version 0.6.0 no face could be clicked afterwards.

@@ -80,6 +80,7 @@ from app.core.process import (
     ProcessCancelled,
     ProcessOutputLimitExceeded,
     detached_process_options,
+    no_error_dialogs,
     run_limited,
 )
 from app.core.slice import gcode
@@ -8034,7 +8035,8 @@ def open_in_slicer(model: Path, setup: SlicerSetup) -> None:
     # Rechner, nicht in den Sandkasten (``discover.on_host``).
     command = discover.on_host([str(program.resolve()), str(model.resolve())])
     try:
-        subprocess.Popen(command, **detached_process_options(graphical=True))
+        with no_error_dialogs():
+            subprocess.Popen(command, **detached_process_options(graphical=True))
     except OSError as problem:
         raise ExternalToolError(
             tool=setup.name,

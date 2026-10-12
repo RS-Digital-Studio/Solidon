@@ -31,6 +31,10 @@ scrive in `website/version.json`.
 - Se a una funzione manca un secondo corpo nella scena, il motivo indica *Duplica oggetto* come via.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
 
+### Stampare e passare allo slicer
+
+- Se lo slicer scelto non è un programma, Solidon ora lo segnala subito. Nella versione 0.6.0 un messaggio di Windows su un'applicazione a 16 bit bloccava lo slicer finché qualcuno non lo chiudeva.
+
 ### Modificare e disegnare
 
 - Un corpo esatto ora conserva le sue caratteristiche dopo *Applica testo*, *Intarsia testo* e *Ricava controforma*. Nella versione 0.6.0 dopo non si poteva più fare clic su nessuna faccia.
