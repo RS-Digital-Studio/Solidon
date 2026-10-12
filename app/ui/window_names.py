@@ -10,7 +10,8 @@ sie deshalb nur als „irgendein Meldungsfenster“ (Konzept Funktionsdurchgang
 aufgeht, sein Kennzeichen (``guides.TARGET_PROPERTY``) —
 ``message:<sache>``, benannt nach der Frage und nie nach Datei oder Modul,
 die beim Aufteilen der Oberfläche wandern. Ein ``QMessageBox(…)`` trägt sein
-Kennzeichen und das seiner Knöpfe (``message.button:<sache>.<knopf>``) selbst.
+Kennzeichen selbst, seine Knöpfe bekommen ihres über :func:`name_button`
+(``message.button:<sache>.<knopf>``).
 Dass jedes rohe Fenster es tut, hält ``tests/test_guide_targets.py``.
 """
 
@@ -20,7 +21,13 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from PySide6.QtCore import QEvent, QObject
-from PySide6.QtWidgets import QColorDialog, QInputDialog, QMessageBox, QWidget
+from PySide6.QtWidgets import (
+    QAbstractButton,
+    QColorDialog,
+    QInputDialog,
+    QMessageBox,
+    QWidget,
+)
 
 from app.core import guides
 from app.ui import app_events
@@ -66,3 +73,14 @@ def raw_window(name: str) -> Iterator[None]:
         yield
     finally:
         app_events.forget(namer)
+
+
+def name_button(button: QAbstractButton, name: str) -> None:
+    """Gibt einem Knopf eines rohen Meldungsfensters seinen Namen im Wortschatz.
+
+    Ein eigener Aufruf und kein ``setProperty`` am Knopf: Die Funktionsliste liest
+    das Kennzeichen eines Meldungsfensters aus dem ``setProperty`` seiner
+    Funktion (``tools/function_scan``), und ein Knopfname dort hieße sonst wie
+    das Fenster.
+    """
+    button.setProperty(guides.TARGET_PROPERTY, name)

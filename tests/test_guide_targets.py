@@ -1526,8 +1526,8 @@ def unnamed_message_buttons(source: str) -> list[str]:
     """Jeder Knopf eines rohen ``QMessageBox(…)``, der keinen Namen bekommt.
 
     In einer Funktion, die ein ``QMessageBox`` baut, steht jedes ``addButton`` in
-    einer Zuweisung, und derselbe Knopf bekommt ``setProperty`` mit
-    ``guides.TARGET_PROPERTY`` (``message.button:<sache>.<knopf>``) — ein Knopf
+    einer Zuweisung, und derselbe Knopf geht an ``name_button``
+    (``message.button:<sache>.<knopf>``, ``app/ui/window_names.py``) — ein Knopf
     mit Text wie ein Standardknopf: Der Prüfstand drückt ihn über seinen Namen,
     nicht über die Beschriftung, die mit der Sprache wechselt."""
     import ast
@@ -1544,12 +1544,9 @@ def unnamed_message_buttons(source: str) -> list[str]:
         ):
             continue
         named = {
-            ast.unparse(call.func.value)
+            ast.unparse(call.args[0])
             for call in calls
-            if isinstance(call.func, ast.Attribute)
-            and call.func.attr == "setProperty"
-            and len(call.args) == 2
-            and ast.unparse(call.args[0]) == "guides.TARGET_PROPERTY"
+            if isinstance(call.func, ast.Name) and call.func.id == "name_button" and call.args
         }
         for call in calls:
             if not (isinstance(call.func, ast.Attribute) and call.func.attr == "addButton"):
@@ -1588,7 +1585,7 @@ def test_an_unnamed_message_button_turns_the_guard_red() -> None:
         "def ask(parent):\n"
         "    box = QMessageBox(parent)\n"
         "    keep = box.addButton('a', role)\n"
-        "    keep.setProperty(guides.TARGET_PROPERTY, 'message.button:sample_ask.keep')\n"
+        "    name_button(keep, 'message.button:sample_ask.keep')\n"
         "    box.addButton(QMessageBox.StandardButton.Close)\n"
         "    other = box.addButton('b', role)\n"
         "    return box.exec()\n"

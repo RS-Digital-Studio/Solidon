@@ -471,7 +471,7 @@ from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
 from app.ui.viewport import DisplayMode, Projection, SketchSelectionBadge, Viewport
-from app.ui.window_names import raw_window
+from app.ui.window_names import name_button, raw_window
 
 _log = get_logger(__name__)
 
@@ -9102,8 +9102,8 @@ class MainWindow(QMainWindow):
         box.setProperty(guides.TARGET_PROPERTY, "message:remove_steps")
         remove = box.addButton(tr("Löschen"), QMessageBox.ButtonRole.DestructiveRole)
         cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
-        remove.setProperty(guides.TARGET_PROPERTY, "message.button:remove_steps.remove")
-        cancel.setProperty(guides.TARGET_PROPERTY, "message.button:remove_steps.cancel")
+        name_button(remove, "message.button:remove_steps.remove")
+        name_button(cancel, "message.button:remove_steps.cancel")
         # Rot, und Enter löscht nicht: Die Nachfrage steht nur hier, weil das
         # Löschen abhängige Schritte und den Redo-Zweig mitnimmt. Abbrechen
         # bleibt ein Ausgang ohne Akzent — Escape nimmt ihn (RM-512).
@@ -29306,8 +29306,8 @@ class MainWindow(QMainWindow):
         box.setInformativeText("\n".join(lines))
         restore = box.addButton(tr("Sicherung öffnen"), QMessageBox.ButtonRole.AcceptRole)
         refuse = box.addButton(decline, QMessageBox.ButtonRole.RejectRole)
-        restore.setProperty(guides.TARGET_PROPERTY, "message.button:recovery.restore")
-        refuse.setProperty(guides.TARGET_PROPERTY, "message.button:recovery.decline")
+        name_button(restore, "message.button:recovery.restore")
+        name_button(refuse, "message.button:recovery.decline")
         # Akzent und halbfette Schrift, nicht nur der Default (Regel 18).
         make_primary(restore)
         box.setDefaultButton(restore)

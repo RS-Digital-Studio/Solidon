@@ -136,7 +136,7 @@ from app.ui.style import (
     set_level,
     set_role,
 )
-from app.ui.window_names import raw_window
+from app.ui.window_names import name_button, raw_window
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort. Der Name ist englisch wie jeder andere in
@@ -3219,9 +3219,9 @@ def show_expired_demo(state: activation.Activation) -> None:
     box.setIcon(QMessageBox.Icon.Information)
     box.setText(expired_demo_text(state))
     website = box.addButton(tr("Website öffnen"), QMessageBox.ButtonRole.AcceptRole)
-    website.setProperty(guides.TARGET_PROPERTY, "message.button:expired_demo.website")
+    name_button(website, "message.button:expired_demo.website")
     close = box.addButton(QMessageBox.StandardButton.Close)
-    close.setProperty(guides.TARGET_PROPERTY, "message.button:expired_demo.close")
+    name_button(close, "message.button:expired_demo.close")
     box.exec()
     if box.clickedButton() is website:
         open_website()
@@ -3642,7 +3642,7 @@ def show_error(
             else QMessageBox.ButtonRole.ActionRole
         )
         button = box.addButton(str(action.label), role)
-        button.setProperty(guides.TARGET_PROPERTY, f"message.button:error.{action.id}")
+        name_button(button, f"message.button:error.{action.id}")
         # **Welcher Knopf der Hauptknopf ist, stand schon im Datenmodell** —
         # ``Action.primary`` entscheidet zwei Zeilen darüber die Rolle. Es
         # fehlte nur das letzte Glied: Ohne ``make_primary`` bekam der Knopf
@@ -3652,7 +3652,7 @@ def show_error(
             make_primary(button)
         buttons[button] = action
     abbrechen = box.addButton(str(CANCEL.label), QMessageBox.ButtonRole.RejectRole)
-    abbrechen.setProperty(guides.TARGET_PROPERTY, f"message.button:error.{CANCEL.id}")
+    name_button(abbrechen, f"message.button:error.{CANCEL.id}")
 
     # **Bleibt nur „Abbrechen" übrig, trägt niemand den Akzent.** Das
     # passiert, wenn das Fenster für keinen Vorschlag einen Handler hat
@@ -4258,9 +4258,9 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     save = box.addButton(tr("Speichern"), QMessageBox.ButtonRole.AcceptRole)
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
     cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
-    save.setProperty(guides.TARGET_PROPERTY, "message.button:unsaved_changes.save")
-    discard.setProperty(guides.TARGET_PROPERTY, "message.button:unsaved_changes.discard")
-    cancel.setProperty(guides.TARGET_PROPERTY, "message.button:unsaved_changes.cancel")
+    name_button(save, "message.button:unsaved_changes.save")
+    name_button(discard, "message.button:unsaved_changes.discard")
+    name_button(cancel, "message.button:unsaved_changes.cancel")
     make_primary(save)
     # Rot, weil nach dem Schließen kein Undo zurückholt, was hier verworfen wird.
     make_danger(discard)
@@ -4353,8 +4353,8 @@ def _go_on_despite(
     box.setInformativeText(newline.join(lines))
     write = box.addButton(go_on, QMessageBox.ButtonRole.AcceptRole)
     cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
-    write.setProperty(guides.TARGET_PROPERTY, "message.button:go_on_despite_findings.go_on")
-    cancel.setProperty(guides.TARGET_PROPERTY, "message.button:go_on_despite_findings.cancel")
+    name_button(write, "message.button:go_on_despite_findings.go_on")
+    name_button(cancel, "message.button:go_on_despite_findings.cancel")
     make_primary(write)
     box.setDefaultButton(write)
     as_plain_text(box)
@@ -4395,8 +4395,8 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
         box.setText(lost)
     back = box.addButton(tr("Zur Erzeugung"), QMessageBox.ButtonRole.RejectRole)
     close = box.addButton(tr("Trotzdem schließen"), QMessageBox.ButtonRole.DestructiveRole)
-    back.setProperty(guides.TARGET_PROPERTY, "message.button:generation_loss.back")
-    close.setProperty(guides.TARGET_PROPERTY, "message.button:generation_loss.close")
+    name_button(back, "message.button:generation_loss.back")
+    name_button(close, "message.button:generation_loss.close")
     make_primary(back)
     make_danger(close)
     box.setDefaultButton(back)
@@ -4461,8 +4461,8 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
         box.setInformativeText("\n".join(f"· {name}" for name in names))
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
     cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
-    discard.setProperty(guides.TARGET_PROPERTY, "message.button:discard_undone_steps.discard")
-    cancel.setProperty(guides.TARGET_PROPERTY, "message.button:discard_undone_steps.cancel")
+    name_button(discard, "message.button:discard_undone_steps.discard")
+    name_button(cancel, "message.button:discard_undone_steps.cancel")
     # **Rot und ohne Hauptknopf** (RM-512): Verwerfen ist unwiederbringlich,
     # also kein Akzent, der dazu einlädt, und keine Eingabetaste, die es im
     # Vorbeigehen tut. Abbrechen ist ein Ausgang und kein Hauptknopf; Escape
