@@ -944,10 +944,16 @@ def runtime_components(
                     f"{owner}.__config__",
                 )
             )
-    if "gcc-runtime" in owners or any(
-        Path(path).name.startswith(("libgcc", "libgfortran", "libquadmath", "libstdc++"))
-        for path in paths
-    ):
+    # **Nur Dateien, die der GCC-Laufzeit selbst gehören** — die vom Bauserver
+    # (``_runtime_owner``). Seit Linux auf 22.04 baut, reisen libgcc_s und
+    # libstdc++ nicht mehr mit (``check_glibc_floor.HOST_LIBRARIES``); was
+    # bleibt, sind libgfortran und libquadmath in ``numpy.libs/`` und
+    # ``scipy.libs/``. Die gehören ihrem Rad, dessen ``LICENSE.txt`` den Text der
+    # GCC-Laufzeit samt Ausnahme mitbringt, und sie sind gestrippt: kein
+    # ``.comment``, nur scipy nennt in seiner auditwheel-Stückliste eine Fassung.
+    # Eine Familie aus ihnen hätte nur die Compilerangabe des Interpreters, und
+    # die Releaseakte weist sie zu Recht ab (Review 1, S2).
+    if "gcc-runtime" in owners:
         # **Die Fassung kommt aus dem Paket des Bauservers, nicht aus dem
         # Interpreter** (03.09.2026). `platform.python_compiler()` nennt den
         # Compiler, mit dem CPython gebaut wurde — nicht die Bibliothek, die
@@ -959,9 +965,7 @@ def runtime_components(
         # `dpkg-query` sagt, aus welchem Paket die Datei stammt und in welcher
         # Fassung. Wo es kein dpkg gibt — macOS —, bleibt es bei der alten
         # Angabe; dort greift die Prüfung nicht.
-        gcc_files = [
-            entry for entry in entries if Path(entry.path).name.startswith(("libgcc", "libstdc++"))
-        ]
+        gcc_files = [entry for entry in entries if entry.owner == "gcc-runtime"]
         if gcc_files and shutil.which("dpkg-query") is not None:
             gcc_version, gcc_source = _dpkg_version(Path(gcc_files[0].path).name)
         else:
