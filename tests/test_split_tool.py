@@ -606,13 +606,13 @@ def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> No
     titles: dict[str, set[str]] = {}
     actions: dict[str, dict[int, str]] = {}
     for key, (title, sequence, _fn) in window.window_commands().items():
-        # Was aus der Menüleiste gelesen wurde (``menu.…``), trägt das Kürzel
+        # Was aus der Menüleiste gelesen wurde (``menubar.…``), trägt das Kürzel
         # **derselben** Aktion, die die Schleife darunter ohnehin prüft — nur
         # unter dem Titel mit Weg davor („Ansicht > Darstellung: Massiv" gegen
         # „Massiv"). Beides zu zählen fände sechzehn Konflikte, wo keiner ist:
         # zwei Namen, eine Taste, eine Aktion. Ein echter Konflikt hätte zwei
         # Aktionen, und die stehen beide in der Schleife darunter.
-        if key.startswith("menu."):
+        if key.startswith("menubar."):
             continue
         if sequence:
             titles.setdefault(QKeySequence(sequence).toString(), set()).add(title)
