@@ -440,6 +440,7 @@ entfernt hat.
 | 2026-09-08 | [Filamentlager — Review und vollständiger Anschluss (08.09.2026)](#filamentlager--review-und-vollständiger-anschluss-08092026) |
 | 2026-09-08 | [Bauplan v12 — vollständiger Abgleich (08.09.2026)](#bauplan-v12--vollständiger-abgleich-08092026) |
 | 2026-10-11 | [RM-782: Die Lochfeld-Öffnung bleibt Wabe, auch im Quadratraster (11.10.2026)](#rm-782-die-lochfeld-öffnung-bleibt-wabe-auch-im-quadratraster-11102026) |
+| 2026-10-12 | [RM-788: Ein Slicertest wartete auf ein Windows-Fenster, das niemand sah (12.10.2026)](#rm-788-ein-slicertest-wartete-auf-ein-windows-fenster-das-niemand-sah-12102026) |
 | ohne Datum | [Gegen echte Modelle geprüft](#gegen-echte-modelle-geprüft) |
 | ohne Datum | [Referenzkorpus und Passungen vervollständigt](#referenzkorpus-und-passungen-vervollständigt) |
 | ohne Datum | [Durchsicht nach P12 — was noch offen ist](#durchsicht-nach-p12--was-noch-offen-ist) |
@@ -48456,3 +48457,37 @@ Kantenabstand auf der Rückseite nimmt den Hinweis weg, und x/y/z zeigen die geb
 **Entfallen (11.10.2026, Entscheidung Robert):** Die Öffnungsform von *Lochfeld schneiden*
 heißt weiter *Wabe*, auch mit der Anordnung *Raster*. Ein eigener Schlüssel und die Migration
 gespeicherter Lochfelder entfallen.
+
+## RM-788: Ein Slicertest wartete auf ein Windows-Fenster, das niemand sah (12.10.2026)
+
+<a id="rm-788-ein-slicertest-wartete-auf-ein-windows-fenster-das-niemand-sah-12102026"></a>
+<a id="rm-788"></a>
+
+**RM-788 — Ein Slicertest bleibt im parallelen Lauf ohne CPU stehen.** Zwei von zwei Läufen der
+betroffenen Tests für `fix/schrift-merkmale` (12.10.2026, `-n 6 --dist worksteal`) standen in
+`test_print_settings.py::test_a_slicer_that_cannot_start_is_an_answer` im Arbeiter `gw3`.
+Vermutet waren Last, Virenscanner oder ein Zustand aus einem früheren Test; keins davon traf.
+**Ursache (py-spy `--native` am hängenden Arbeiter):** `CreateProcessW` →
+`BasepProcessInvalidImage` → `NtVdm64RaiseInvalid16BitError` → `MessageBoxW`. Eine `.exe`, die
+kein Programm ist, gilt Windows als 16-Bit-Anwendung; im Standardfehlermodus öffnet es im
+startenden Faden das Fenster „Nicht unterstützte 16 Bit-Anwendung“ und wartet auf einen Klick.
+Läufe aus Git Bash erben `SEM_FAILCRITICALERRORS` und kamen in Millisekunden zurück; Läufe über
+PowerShells `Start-Process` — so starteten beide — hingen jedes Mal, nachgestellt in fünf von
+fünf. `gw3` war nur der Arbeiter, in dessen Anfangsblock die Datei liegt. Dasselbe trifft die
+Anwendung, die Explorer und Startmenü über `ShellExecute` im Standardfehlermodus starten, wenn
+der Kunde als Slicer eine Datei wählt, die kein Programm ist.
+**Behoben (Zweig `fix/testisolation`, `e6eea822d`):** `process.no_error_dialogs()` setzt
+`SEM_FAILCRITICALERRORS` nur für den startenden Faden und nur für den Start; das Programm erbt
+ihn nicht. Jeder `subprocess`-Start unter `app/` steht darin: `run_limited`,
+`run_stream_limited`, `_taskkill`, das Slicerfenster, der Dienststart, die ComfyUI-Einrichtung,
+der Installer und das Einhängen eines AppImage. Changelog 0.6.1 unter *Drucken und Übergabe an
+den Slicer*.
+**Nachweis:** `test_process.py::test_a_file_that_is_no_program_fails_at_once_instead_of_waiting_for_a_click`
+startet `run_limited` und `run_stream_limited` in einem Kind mit `CREATE_DEFAULT_ERROR_MODE`
+und endet nach der Frist ab dem Aufruf rot mit der Ursache in der Meldung;
+`test_every_program_start_of_the_application_opens_no_system_window` verlangt den Block an
+jedem Start, mit Gegenprobe. Am Stand davor rot (acht Starts ohne Block, beide Läufer nach
+10 s), danach grün. Abnahme im Standardfehlermodus, gepinnt: 20 gleichzeitige Läufe von
+`test_print_settings.py` und `test_process.py` mit je 938 bestandenen Fällen, der Slicertest
+höchstens 0,05 s; vier gleichzeitige Nachstellungen der Testfolge von `gw3` mit je 2 390
+bestandenen Fällen; in keinem Lauf ein Hänger oder ein Systemfenster.
