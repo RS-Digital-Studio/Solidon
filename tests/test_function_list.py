@@ -91,8 +91,10 @@ def test_the_list_finds_enough_to_mean_something(
     assert sources["dialogklasse"] == len(classes)
     assert sources["wortschatz"] == len(TARGETS) + 1, "dazu start.recent:1"
     assert sources["fensteraktion"] >= 1
-    assert sources["befundhandlung"] >= 15
+    assert sources["befundhandlung"] >= 60
     assert sources["verlauf"] >= 4
+    assert sources["werkzeugzeile"] >= 7 and sources["kontextmenue"] >= 5
+    assert sources["einstellungen"] >= 3 and sources["meldungsfenster"] >= 20
     assert {row.package for row in rows} == set(fl.PACKAGES), "jedes Paket hat Zeilen"
 
 
@@ -104,7 +106,8 @@ def test_every_row_carries_its_fields(rows: list[fl.Row]) -> None:
         assert row.source in fl.ROW_SOURCES, row
         assert row.package in fl.PACKAGES, row
         assert row.requirement, row
-        assert row.target or row.source == "startablauf", row
+        assert row.target or row.source in fl.SOURCES_WITHOUT_TARGET, row
+        assert row.spec is None or not {"package", "file"} & set(row.spec), row
 
 
 # --- Pakete --------------------------------------------------------------------
@@ -207,6 +210,13 @@ def test_the_feature_window_rows_come_from_the_action_keys(rows: list[fl.Row]) -
         assert found[f"feature:{key}"].package == found["apply_texture"].package
         assert found[f"feature:{key}"].start_scene == "merkmal.pattern.netz"
     assert EDGE_VARIANT_KEYS
+    from app.core.guides import action_key, action_target
+    from app.core.perceive.actions import edge_actions
+
+    variants = {
+        action_target(action) for action in edge_actions("probe") if action_key(action) != action.op
+    }
+    assert variants == {row.id for row in rows if row.id.startswith("edge:")}
     for key in EDGE_VARIANT_KEYS:
         row = found[f"edge:{key}"]
         assert row.package == found[key.split(".")[0]].package and row.requirement == "kante"
@@ -222,8 +232,9 @@ def test_the_expired_demo_is_a_row_of_its_own(rows: list[fl.Row]) -> None:
     import importlib
 
     row = _by_id(rows)["startup.expired_demo"]
-    package, module, function = fl.STARTUP_SURFACES["startup.expired_demo"]
-    assert row.package == package == "D12" and row.source == "startablauf"
+    assert row.package == "D12" and row.source == "startablauf"
+    module, function = "app.ui.dialogs", "show_expired_demo"
+    assert fl.RAW_WINDOW_IDS["dialogs.show_expired_demo"] == "startup.expired_demo"
     assert callable(getattr(importlib.import_module(module), function))
     tree = ast.parse((fl.UI / "app.py").read_text(encoding="utf-8"))
     guarded = [
@@ -244,8 +255,13 @@ def test_every_surface_row_names_a_target_of_the_vocabulary(rows: list[fl.Row]) 
     """Jede Zeile zeigt auf ein Ziel des Wortschatzes — sonst findet der Prüfstand sie nicht."""
     from app.core.guides import is_target
 
-    wrong = [row.id for row in rows if not is_target(row.target)]
+    wrong = [row.id for row in rows if row.target and not is_target(row.target)]
     assert wrong == []
+    # Ohne Ziel bleiben nur Flächen, für die der Wortschatz noch keinen Namen hat
+    # (Bericht D0-L, „braucht W“): rohe Meldungsfenster und Einstellungsabschnitte.
+    missing = {row.source for row in rows if not row.target}
+    assert missing <= fl.SOURCES_WITHOUT_TARGET
+    assert _by_id(rows)["startup.expired_demo"].target == "dialog:expired_demo"
 
 
 def test_window_actions_outside_the_menu_bar_have_rows(
@@ -257,6 +273,102 @@ def test_window_actions_outside_the_menu_bar_have_rows(
     assert "edit.auto_split" in keys
     assert set(fl.WINDOW_ACTION_PACKAGES) == set(keys)
     assert _by_id(rows)["command:edit.auto_split"].package == "D8"
+
+
+def test_the_finding_actions_come_from_the_kernel_and_the_table(rows: list[fl.Row]) -> None:
+    """Die Befundhandlungen sind die Handlungen, die Befunde selbst mitbringen (jede
+    ``Action`` des Kerns) und die ``FINDING_ACTIONS`` nennt — soweit das Fenster sie
+    ausführt (``MainWindow.error_handlers``). Keine nachgebaute Probe."""
+    from app.ui.panels import FINDING_ACTIONS
+
+    found = {
+        row.id.removeprefix("finding.action:") for row in rows if row.source == "befundhandlung"
+    }
+    handled = fl.report_handlers()
+    table = {action.id for actions in FINDING_ACTIONS.values() for action in actions}
+    assert found == (fl.kernel_action_ids() | table) & handled
+    assert len(handled) >= 60 and found == handled
+    assert {"change_selection", "show_layers", "mesh_and_retry", "split_and_retry"} <= found
+    assert {"give_thickness", "resolve_intersections", "use_reachable"} <= found
+    by_id = _by_id(rows)
+    assert by_id["finding.action:change_selection"].start_scene == "halt"
+    assert by_id["finding.action:correct_input"].start_scene == "halt"
+
+
+def test_the_tools_under_the_view_are_rows(rows: list[fl.Row], ui_sources: dict[str, str]) -> None:
+    """Jedes Werkzeug der Zeile unter der Ansicht (``tools.add``) ist eine Zeile ``tool:``,
+    gelesen aus dem Quelltext; die Pakettabelle trägt keinen toten Schlüssel."""
+    tools = fl.scan_ui(ui_sources).tools
+    assert {"section", "measure", "transform", "analysis", "layers", "explode", "split"} <= set(
+        tools
+    )
+    assert set(fl.TOOL_PACKAGES) == set(tools)
+    found = _by_id(rows)
+    assert found["tool:layers"].package == "D8" and found["tool:transform"].package == "D3"
+    assert found["tool:section"].package == "D11" and found["tool:split"].package == "D8"
+
+
+def test_the_named_context_actions_are_rows(rows: list[fl.Row], ui_sources: dict[str, str]) -> None:
+    """Die benannten Kontextaktionen von Baum und Parameterleiste sind Zeilen ``menu:``."""
+    names = fl.scan_ui(ui_sources).context_actions
+    assert {
+        "tree.step",
+        "tree.sketch",
+        "tree.visibility",
+        "tree.isolate",
+        "parameters.edit",
+    } <= set(names)
+    assert set(fl.CONTEXT_PACKAGES) == set(names)
+    found = _by_id(rows)
+    assert found["menu:tree.sketch"].package == "D7"
+    assert found["menu:tree.visibility"].package == "D11"
+    assert found["menu:parameters.edit"].package == "D10"
+
+
+def test_every_settings_section_is_a_row(rows: list[fl.Row], ui_sources: dict[str, str]) -> None:
+    """Konzept §3: Die Einstellungen sind eine Zeile je Abschnitt des Dialogs."""
+    sections = fl.scan_ui(ui_sources).settings_sections
+    assert {"Anwendung", "Vorgaben für neue Projekte", "Weitere Einstellungen"} <= set(sections)
+    found = _by_id(rows)
+    for title in sections:
+        assert found[f"dialog:settings_dialog/{title}"].package == "D12"
+
+
+def test_every_raw_message_window_is_a_row(rows: list[fl.Row], ui_sources: dict[str, str]) -> None:
+    """Jede Funktion, die ein rohes Meldungsfenster baut, ist eine Zeile — darunter
+    Wiederherstellen und Speicherfrage (D1) und die Löschnachfrage im Verlauf (D11)."""
+    windows = fl.scan_ui(ui_sources).raw_windows
+    assert {
+        "dialogs.confirm_unsaved",
+        "main_window._ask_recovery",
+        "main_window.remove_history_operations",
+        "dialogs.confirm_discard",
+        "dialogs.show_expired_demo",
+    } <= set(windows)
+    assert set(fl.RAW_WINDOW_PACKAGES) == set(windows)
+    found = _by_id(rows)
+    assert found["meldung:dialogs.confirm_unsaved"].package == "D1"
+    assert found["meldung:main_window._ask_recovery"].package == "D1"
+    assert found["meldung:main_window.remove_history_operations"].package == "D11"
+    assert found["startup.expired_demo"].package == "D12"
+    assert "meldung:dialogs.show_expired_demo" not in found
+
+
+def test_an_invented_tool_context_action_or_message_window_turns_red(
+    cached_sources: dict[str, str],
+) -> None:
+    """Gegenprobe: Werkzeug, Kontextaktion und Meldungsfenster ohne Paket halten an."""
+    cached_sources["app/ui/invented/extra.py"] = (
+        "def build(self):\n"
+        "    self.tools.add('magnifier', tr('Lupe'), self.bar)\n"
+        "    action.setObjectName('tree.magnify')\n"
+        "def ask_twice(parent):\n"
+        "    box = QMessageBox(parent)\n"
+    )
+    found = fl.problems()
+    assert any("tool:magnifier" in issue for issue in found)
+    assert any("menu:tree.magnify" in issue for issue in found)
+    assert any("extra.ask_twice" in issue for issue in found)
 
 
 def test_the_history_entries_come_from_the_context_menu(ui_sources: dict[str, str]) -> None:
@@ -272,6 +384,23 @@ def test_the_history_entries_come_from_the_context_menu(ui_sources: dict[str, st
 # --- Anforderung und Szene --------------------------------------------------------
 
 
+def test_mesh_operations_start_on_a_fine_mesh(rows: list[fl.Row]) -> None:
+    """L6: Ausdünnen, Glätten, Formen und Skelett beginnen an einem fein vernetzten Netz,
+    nicht an einem Quader aus zwölf Dreiecken; die Wandlung ins Netz am exakten Körper."""
+    found = _by_id(rows)
+    scenes = _scenes()
+    for name in (
+        "decimate_mesh",
+        "smooth_mesh",
+        "remesh_uniform",
+        "sculpt_strokes",
+        "pose_armature",
+    ):
+        scene = scenes[found[name].start_scene]
+        assert scene.kernel == "netz" and scene.promises.get("triangles_over", 0) >= 1000, name
+    assert found["brep_to_mesh"].start_scene == "quader.exakt"
+
+
 def test_every_operation_has_a_start_scene(rows: list[fl.Row]) -> None:
     """Jede Anforderung einer Operation hat eine Szene im Katalog (§2.5)."""
     scenes = fl.load_scenes()
@@ -279,6 +408,14 @@ def test_every_operation_has_a_start_scene(rows: list[fl.Row]) -> None:
     for row in rows:
         if row.kind == "operation":
             assert row.start_scene in scenes, row
+
+
+def test_a_duplicate_surface_is_reported_not_dropped() -> None:
+    """L4: Zweimal derselbe Name ergibt zwei Zeilen, und die Prüfung der ganzen Liste meldet
+    die doppelte Kennung."""
+    doubled = fl.surface_rows(["tree", "tree"], (), (), fl.load_scenes())
+    assert [row.id for row in doubled].count("tree") == 2
+    assert fl.duplicate_ids(doubled) == ["tree: zwei Zeilen mit derselben Kennung"]
 
 
 def test_the_whole_list_has_no_problem() -> None:
@@ -374,8 +511,18 @@ def test_a_light_mesh_scene_keeps_its_promises(key: str) -> None:
     """Die leichte Szene rechnet und hält, was sie zusagt: Körper, Bauart, Merkmalsarten,
     Körperzustand, Befunde, Halt."""
     scenes = _scenes()
+    if fl.needs_exact_kernel(key, scenes):
+        exact_kernel()
     result = fl.evaluate_scene(fl.build_scene(key, scenes))
     assert fl.broken_promises(scenes[key], result) == []
+
+
+def test_a_mesh_scene_built_by_the_exact_kernel_knows_it() -> None:
+    """L3: ``merkmal.thread.netz`` entsteht über ``thread_exact`` — ohne OpenCASCADE wird
+    der Fall übersprungen statt rot; ein reiner Netzquader braucht den Kern nicht."""
+    scenes = _scenes()
+    assert fl.needs_exact_kernel("merkmal.thread.netz", scenes)
+    assert not fl.needs_exact_kernel("quader.netz", scenes)
 
 
 @pytest.mark.parametrize("key", _light(fl.EXACT))
@@ -404,10 +551,10 @@ def test_a_heavy_scene_is_a_valid_stack(key: str) -> None:
     assert {"triangles_over", "seconds_over"} & set(scenes[key].promises)
 
 
-def test_the_four_heavy_scenes_of_the_plan_are_there() -> None:
+def test_the_heavy_scenes_of_the_plan_are_there() -> None:
     """§2.5: zwei langsame, eine über der Erkennungsgrenze, eine über der groben Vorschau."""
     heavy = {key for key, scene in _scenes().items() if scene.heavy}
-    assert heavy == {"langsam_2s", "langsam_10s", "ueber_erkennungsgrenze", "ueber_grober_vorschau"}
+    assert heavy >= {"langsam_2s", "langsam_10s", "ueber_erkennungsgrenze", "ueber_grober_vorschau"}
 
 
 def test_the_promise_check_sees_a_broken_promise() -> None:
@@ -437,7 +584,17 @@ def test_a_broken_recipe_is_named() -> None:
             ops=(fl.SceneStep(op="gibt_es_nicht"),),
         ),
     }
+    scenes["d.netz"] = fl.Scene(
+        key="d.netz",
+        summary="d",
+        kernel="netz",
+        ops=(
+            fl.SceneStep(op="create_box"),
+            fl.SceneStep(op="remesh_mesh", inputs=("obj_1",), params={"edge": -1.0}),
+        ),
+    )
     found = fl.validate_scenes(scenes)
+    assert any("d.netz" in issue and "remesh_mesh" in issue for issue in found), found
     assert any("Kreis" in issue for issue in found)
     assert any("gibt_es_nicht.stl" in issue for issue in found)
     assert any("'gibt_es_nicht'" in issue for issue in found)
@@ -520,7 +677,7 @@ def test_an_unknown_id_in_a_spec_turns_red(
         fl,
         "load_specs",
         lambda directory=fl.ROW_SPECS: {
-            "gibt_es_nicht": {"package": "D4", "file": "d04.toml", "example_goal": "x"}
+            "gibt_es_nicht": fl.SpecEntry("D4", "d04.toml", {"example_goal": "x"})
         },
     )
     found = fl.problems()
@@ -540,29 +697,174 @@ def test_the_probe_rows_cover_every_kind(rows: list[fl.Row]) -> None:
     """Je Art eine Probezeile (Bauplan D0 §1.2): Operation in D4, Befundhandlung in D8,
     Fensterbefehl in D10 — jede mit Beispielziel, Suchproben und Erwartung."""
     specs = fl.load_specs()
-    assert {"resize_hole", "finding.action:place_on_bed", "Bearbeiten/Parameter anlegen …"} <= set(
-        specs
-    )
+    probes = ("resize_hole", "finding.action:place_on_bed", "Bearbeiten/Parameter anlegen …")
+    assert set(probes) <= set(specs)
     found = _by_id(rows)
-    assert found["resize_hole"].kind == "operation" and specs["resize_hole"]["package"] == "D4"
+    assert found["resize_hole"].kind == "operation" and specs["resize_hole"].package == "D4"
     assert found["finding.action:place_on_bed"].package == "D8"
-    assert specs["Bearbeiten/Parameter anlegen …"]["package"] == "D10"
-    for spec in specs.values():
-        assert spec["example_goal"] and spec["search_probes"] and spec["expectation"], spec
+    assert specs["Bearbeiten/Parameter anlegen …"].package == "D10"
+    # Die Eigenschaft der drei Probezeilen, nicht jeder Spezifikation (M4).
+    for row_id in probes:
+        values = specs[row_id].values
+        assert values["example_goal"] and values["search_probes"] and values["expectation"]
+
+
+def _spec(
+    values: dict[str, Any], package: str = "D12", row_id: str = "dialog:about_dialog"
+) -> dict[str, fl.SpecEntry]:
+    return {row_id: fl.SpecEntry(package, f"d{package[1:]}.toml", values)}
+
+
+def test_a_valid_spec_without_calculation_stays_green(rows: list[fl.Row]) -> None:
+    """M4: Eine nach §2.4 gültige Spezifikation ohne Rechnung — ohne Erwartung, Prüfpunkt 4
+    entfällt — macht nichts rot."""
+    values = {
+        "start_scene": "leer",
+        "example_goal": "Den Über-Dialog öffnen.",
+        "search_probes": [{"word": "Version", "origin": "slicer"}],
+        "not_applicable": {"4": "ohne_rechnung", "E5": "ohne_dialog"},
+        "criteria": ["Z1"],
+    }
+    assert fl.validate_specs(rows, _spec(values), fl.load_scenes()) == []
+
+
+def test_the_spec_format_is_closed(rows: list[fl.Row]) -> None:
+    """M5, L7, L11: Prüfpunkte 1–19 und die Kriterien als Schlüssel von ``not_applicable``,
+    nur Gründe der geschlossenen Liste, ``criteria`` nur aus den 35 Kennungen, Paket der
+    Datei, Erwartung mit Herkunft und Toleranz über null, bekannte Vorbedingungen."""
+    scenes = fl.load_scenes()
+    assert len(fl.CRITERION_IDS) == 35 and len(fl.CHECKPOINT_NUMBERS) == 19
+    assert set(fl.NOT_APPLICABLE_REASONS) == {
+        "ohne_rechnung",
+        "ohne_auswahlbezug",
+        "ohne_dialog",
+        "ohne_agentenwerkzeug",
+        "nur_stufe_c",
+    }
+    cases = {
+        "Grund": ({"not_applicable": {"4": "keine_lust"}}, "D12"),
+        "Prüfpunkt": ({"not_applicable": {"20": "ohne_rechnung"}}, "D12"),
+        "Kriterium": ({"criteria": ["X9"]}, "D12"),
+        "gehört zu": ({}, "D4"),
+        "Herkunft": ({"expectation": {"volume": {"value": 1.0, "tolerance": 0.1}}}, "D12"),
+        "Toleranz": (
+            {"expectation": {"volume": {"value": 1.0, "tolerance": 0.0, "origin": "x"}}},
+            "D12",
+        ),
+        "Vorbedingung": ({"preconditions": {"licence": "demo"}}, "D12"),
+    }
+    for word, (values, package) in cases.items():
+        issues = fl.validate_specs(rows, _spec({"start_scene": "leer", **values}, package), scenes)
+        assert any(word in issue for issue in issues), (word, issues)
+
+
+def test_a_fault_case_is_checked_like_a_spec(rows: list[fl.Row]) -> None:
+    """Der Fehlfall hat ein geschlossenes Format: bekannte Schlüssel, ``during`` aus der
+    Liste, Weg und Eingaben aus dem Wortschatz, eine Startszene aus dem Katalog.
+
+    Die Probezeile D8 trägt ihn: *Auf das Bett setzen* ist während einer Neuberechnung
+    gesperrt und nennt den Grund (RM-534) — eine Startszene, deren Neuberechnung nicht
+    aus dem Zwischenspeicher kommt.
+    """
+    scenes = fl.load_scenes()
+    good = {
+        "start_scene": "leer",
+        "fault_case": {
+            "start_scene": "unter_dem_bett_langsam",
+            "route": [{"target": "history.row:4", "button": "double"}],
+            "inputs": {"field:edge": 0.21},
+            "during": "rechnung",
+            "expected": "sperrgrund",
+        },
+    }
+    assert fl.validate_specs(rows, _spec(good), scenes) == []
+    bad = {
+        "start_scene": "leer",
+        "fault_case": {
+            "start_scene": "gibt_es_nicht",
+            "route": [{"target": "Knopf"}],
+            "during": "irgendwann",
+            "expected": "sperrgrund",
+            "wann": "jetzt",
+        },
+    }
+    issues = fl.validate_specs(rows, _spec(bad), scenes)
+    for word in ("gibt_es_nicht", "'Knopf'", "irgendwann", "wann"):
+        assert any(word in issue for issue in issues), (word, issues)
+    fault = fl.load_specs()["finding.action:place_on_bed"].values["fault_case"]
+    assert fault["during"] == "rechnung" and fault["expected"] == "sperrgrund"
+    assert scenes[fault["start_scene"]].heavy
+
+
+def test_the_licence_preconditions_are_the_states_of_the_application() -> None:
+    """Die Lizenzzustände einer Vorbedingung sind Eigenschaften von ``Activation``; ``expired``
+    gibt es nur mit Testzeitraum (``TRIAL_FROM``)."""
+    from app.core.activation import Activation
+    from app.core.activation.store import TRIAL_FROM
+
+    states = fl.licence_states()
+    assert set(fl.PRECONDITIONS["licence"]) == {*fl.LICENCE_STATES, fl.STARTUP_LICENCE}
+    assert set(states) <= set(fl.LICENCE_STATES)
+    for name in (*fl.LICENCE_STATES, fl.STARTUP_LICENCE):
+        assert hasattr(Activation, name), name
+    assert ("expired" in states) == (TRIAL_FROM is not None)
+    assert ("sale_without_trial" in states) == (TRIAL_FROM is None)
+
+
+def test_spec_files_are_read_strictly(tmp_path: Path) -> None:
+    """L7: dieselbe Kennung in zwei Dateien und ein Dateiname ohne Paketnummer halten an."""
+    (tmp_path / "d04.toml").write_text(
+        '[row."resize_hole"]\nexample_goal = "a"\n', encoding="utf-8"
+    )
+    (tmp_path / "d05.toml").write_text(
+        '[row."resize_hole"]\nexample_goal = "b"\n', encoding="utf-8"
+    )
+    with pytest.raises(fl.FunctionListError):
+        fl.load_specs(tmp_path)
+    (tmp_path / "d05.toml").unlink()
+    (tmp_path / "dx.toml").write_text("", encoding="utf-8")
+    with pytest.raises(fl.FunctionListError):
+        fl.load_specs(tmp_path)
+
+
+def test_a_menu_path_is_checked_against_every_ui_module(
+    rows: list[fl.Row], cached_sources: dict[str, str]
+) -> None:
+    """L8: Ohne Fenster sucht die Prüfung den Text einer Menüzeile in allen Modulen unter
+    ``app/ui`` — ein Umzug von ``main_window.py`` in ein Paket macht sie nicht rot."""
+    cached_sources["app/ui/window/menus.py"] = "x = _('Ganz neu …')\n"
+    values = {"start_scene": "leer", "example_goal": "x"}
+    specs = {"Datei/Ganz neu …": fl.SpecEntry("D1", "d01.toml", values)}
+    assert fl.validate_specs(rows, specs, fl.load_scenes()) == []
+
+
+def test_the_menubar_is_read_in_the_source_language_only() -> None:
+    """L8: Den Weg einer Menüzeile gibt es nur in der Quellsprache; in einer anderen
+    Sprache hält ``menubar_of`` an, bevor es ein Fenster anfasst."""
+    from app.i18n import set_language
+
+    set_language("en")
+    try:
+        with pytest.raises(fl.FunctionListError):
+            fl.menubar_of(object())
+    finally:
+        set_language("de")
 
 
 def test_a_spec_with_an_unknown_field_or_target_turns_red(rows: list[fl.Row]) -> None:
     """Gegenprobe: ein Feld, das die Operation nicht hat, ein Ziel außerhalb des Wortschatzes,
     eine Szene, die es nicht gibt, ein Menüpfad, den die Quelle nicht kennt."""
     bad = {
-        "resize_hole": {
-            "package": "D4",
-            "file": "d04.toml",
-            "start_scene": "gibt_es_nicht",
-            "example_goal": "x",
-            "inputs": {"feature.field:resize_hole.durchmesser": 8.0, "Feld:Durchmesser": 1.0},
-        },
-        "Bearbeiten/Gibt es nicht …": {"package": "D10", "file": "d10.toml"},
+        "resize_hole": fl.SpecEntry(
+            "D4",
+            "d04.toml",
+            {
+                "start_scene": "gibt_es_nicht",
+                "example_goal": "x",
+                "inputs": {"feature.field:resize_hole.durchmesser": 8.0, "Feld:Durchmesser": 1.0},
+            },
+        ),
+        "Bearbeiten/Gibt es nicht …": fl.SpecEntry("D10", "d10.toml", {}),
     }
     found = fl.validate_specs(rows, bad, fl.load_scenes())
     assert any("durchmesser" in issue for issue in found)
@@ -647,9 +949,8 @@ def test_the_common_goals_name_what_exists() -> None:
         assert goal["origin"] in {"bauplan", "fragebogen"} and goal["ref"], goal
         assert goal["scene"] in scenes, goal
         selection = goal["selection"]
-        assert selection in {"koerper", "koerper:2", "kante"} or (
-            selection.startswith("merkmal:") and selection.removeprefix("merkmal:") in FEATURE_KINDS
-        ), goal
+        assert fl.scene_for(selection, fl.EXACT), goal
+        assert fl.route_for(selection, goal["scene"], scenes), goal
         kind, _colon, name = goal["target"].partition(":")
         assert kind in {"operation", "feature", "edge"}, goal
         assert REGISTRY.has(name.split(".")[0]), goal
@@ -679,6 +980,25 @@ def test_the_command_line_lists_one_package(
     assert fl.main(["--paket", "D4"]) == 0
     table = capsys.readouterr().out
     assert "`resize_hole`" in table and table.count("\n") == len(listed) + 2
+
+
+def test_the_command_line_reports_instead_of_tracing(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """L10: Ein Menüleistenformat von früher und ``--out`` im Baum enden mit Meldung und
+    Ausgang 1, nicht im Stapelabzug."""
+    old = tmp_path / "alt.json"
+    old.write_text(json.dumps([{"name": "x", "path": ["Datei"]}]), encoding="utf-8")
+    assert fl.main(["--menueleiste", str(old)]) == 1
+    assert fl.main(["--szenen", "--out", str(DATA / "erzeugt")]) == 1
+    assert "Format" in capsys.readouterr().err
+
+
+def test_the_scenes_compute_with_the_profile_of_the_application() -> None:
+    """L9: kein dritter fest geschriebener Drucker im Werkzeug — die Szene rechnet mit dem
+    Profil, das die Anwendung einem Projekt ohne Wahl gibt (``profiles.scene_profile``)."""
+    source = Path(fl.__file__).read_text(encoding="utf-8")
+    assert "centauri-carbon-2" not in source and "scene_profile" in source
 
 
 def test_the_list_is_built_without_a_window() -> None:
@@ -716,16 +1036,52 @@ def test_every_menubar_line_becomes_a_row_with_a_package(qt_app: Any, tmp_path: 
     commands = [row for row in found if row.source == "menueleiste"]
     assert len(commands) >= 30, f"nur {len(commands)} Fensterbefehle"
     assert {row.package for row in commands} >= {"D1", "D2", "D11", "D12"}
-    assert len({row.target for row in commands}) == len(commands), "ein Name, zwei Zeilen"
+    from app.core.guides import is_target
+
+    assert all(is_target(row.target) for row in commands)
+    # Zwei Handler gibt es nur nach einem gescheiterten Schreiben (*Erneut*, *Anderen
+    # Ort wählen*); der statische Leser sieht beide Zweige, das Fenster nach dem Fall.
+    window._write_failure = object()
+    assert fl.report_handlers() == set(window.error_handlers()), "Handler statisch gelesen"
+    by_path = {row.id: row for row in commands}
+    assert by_path["Erzeugen/Zeichnen …"].package == "D7"
+    assert by_path["Hilfe/Beispiele"].package == "D1"
     by_id = {row.id: row for row in found}
     for row_id, spec in fl.load_specs().items():
         if "/" in row_id:
-            assert row_id in by_id, f"{spec['file']}: {row_id} ist keine Zeile der Menüleiste"
-            assert by_id[row_id].package == spec["package"]
+            assert row_id in by_id, f"{spec.file}: {row_id} ist keine Zeile der Menüleiste"
+            assert by_id[row_id].package == spec.package
     assert fl.validate_specs(found, fl.load_specs(), fl.load_scenes()) == []
     used = {row.id.rsplit("/", 1)[-1] for row in commands}
     assert set(fl.COMMAND_PACKAGES) <= used, "Ausnahme ohne Menüzeile"
-    assert {row.id.split("/")[0] for row in commands} <= set(fl.MENU_PACKAGES)
+    assert {row.id.split("/")[0] for row in commands} == set(fl.MENU_PACKAGES)
+
+
+def test_a_window_command_lands_in_the_package_of_its_area() -> None:
+    """Konzept §6: *Zeichnen …* ist die Variantengruppe der Skizzenoperationen (D7),
+    *Beispiele* steht bei D1 — nicht im Paket ihres Hauptmenüs."""
+    assert fl.command_package(fl.MenuEntry("menubar.zeichnen", ("Erzeugen", "Zeichnen …"))) == "D7"
+    assert fl.command_package(fl.MenuEntry("menubar.beispiele", ("Hilfe", "Beispiele"))) == "D1"
+
+
+def test_same_name_different_line_is_not_merged() -> None:
+    """Gegenprobe L1: Zwei Zeilen unter einem Objektnamen mit verschiedenem Text sind zwei
+    Funktionen, keine — das hält an; ebenso eine Zeile ohne Namen."""
+    source = fl.registry()
+    scenes = fl.load_scenes()
+    twice = [
+        fl.MenuEntry("menubar.neu", ("Datei", "Neu")),
+        fl.MenuEntry("menubar.neu", ("Hilfe", "Neuerungen …")),
+    ]
+    with pytest.raises(fl.FunctionListError):
+        fl.command_rows(twice, source, scenes)
+    with pytest.raises(fl.FunctionListError):
+        fl.command_rows([fl.MenuEntry("", ("Datei", "Speichern"))], source, scenes)
+    same = [
+        fl.MenuEntry("menubar.bausteinkatalog", ("Datei", "Bausteinkatalog …")),
+        fl.MenuEntry("menubar.bausteinkatalog", ("Erzeugen", "Bausteine", "Bausteinkatalog …")),
+    ]
+    assert len(fl.command_rows(same, source, scenes)) == 1
 
 
 def test_the_menubar_format_has_one_shape(tmp_path: Path) -> None:
