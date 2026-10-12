@@ -10,15 +10,17 @@ konnte, kann sie auch: Escape schließt, Enter löst den Hauptknopf aus, Tab
 geht die Knöpfe ab, Strg+C kopiert den ganzen Text.
 
 Fragen (Regel 19, Speicherfrage) bleiben, was sie sind; dieses Modul ist für
-Meldungen. Welche Fenster es zeigen, steht im Wortschatz unter ihrem
-Kennzeichen (``message:<sache>``, ``window_names``).
+Meldungen. Ein Erfolg oder Hinweis ist keine Meldung, sondern eine Quittung
+in dem Dialog, in dem gehandelt wurde (:func:`acknowledge`, Z2). Welche Fenster
+es zeigt, steht im Wortschatz unter ihrem Kennzeichen (``message:<sache>``,
+``window_names``).
 """
 
 from __future__ import annotations
 
 from typing import Final, Literal
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import SIGNAL, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
@@ -42,9 +44,13 @@ from app.ui.style import (
     SPACE,
     TIGHT,
     WIDE,
+    DialogScrollArea,
+    _hidden_height,
+    fit_dialog_to_screen,
     make_primary,
     no_primary,
     set_level,
+    set_role,
 )
 from app.ui.window_names import name_button
 
@@ -236,6 +242,62 @@ class MessageDialog(QDialog):
         first = lead or (self._buttons[0] if self._buttons else None)
         if first is not None:
             first.setFocus(Qt.FocusReason.OtherFocusReason)
+
+
+def acknowledge(
+    line: QLabel,
+    headline: str,
+    text: str = "",
+    *,
+    then: QPushButton | None = None,
+    role: Literal["ok", "warning"] = "ok",
+) -> None:
+    """Ein Erfolg oder Hinweis am Ort, wo er geschah — statt eines Meldungsfensters (Z2).
+
+    Die Zeile ``line`` gehört dem Dialog, in dem gehandelt wurde, und trägt
+    Zeichen und Satz (``set_role``, Regel 18). ``then`` ist, was der Kunde
+    danach tun kann: Er wird Hauptknopf — kein zweiter behält den Akzent — und
+    bekommt den Fokus, und seine Beschreibung nennt die Quittung, damit ein
+    Bildschirmleser sie mit dem Knopf vorliest. Steht die Zeile in einem
+    Rollbereich, wächst der Dialog um sie (:func:`_make_room`).
+    """
+    said = "\n".join(part for part in (headline, text) if part)
+    set_role(line, role, said)
+    line.show()
+    _make_room(line)
+    if then is None:
+        return
+    for button in then.window().findChildren(QPushButton):
+        if button is not then and button.isDefault():
+            make_primary(button, leading=False)
+    make_primary(then)
+    then.setAccessibleDescription(said)
+    then.setFocus(Qt.FocusReason.OtherFocusReason)
+
+
+def _make_room(line: QLabel) -> None:
+    """Der Dialog wächst um die Quittung, statt sie oder den Schritt darunter zu verdecken.
+
+    Passiv wie jeder nachgereichte Inhalt (``fenster.md``, „Ein Dialog, der höher
+    ist als sein Inhalt“): um das, was im Rollbereich verdeckt läge, höchstens bis
+    zum Bildschirmrand, nie kleiner. Ein Dialog, der seinem Inhalt schon folgt
+    (``contentSizeChanged`` ist verbunden, ``ContentHeight``), regelt das selbst.
+    """
+    scroll = line.parentWidget()
+    while scroll is not None and not isinstance(scroll, DialogScrollArea):
+        scroll = scroll.parentWidget()
+    if scroll is None or scroll.receivers(SIGNAL("contentSizeChanged()")) > 0:
+        return
+    window = scroll.window()
+    QTimer.singleShot(0, window, weak_slot(window, _grow_by_hidden, scroll))
+
+
+def _grow_by_hidden(window: QWidget, scroll: DialogScrollArea) -> None:
+    hidden = _hidden_height(scroll)
+    if hidden <= 0:
+        return
+    window.resize(window.width(), window.height() + hidden)
+    fit_dialog_to_screen(window)
 
 
 def inform(

@@ -24621,10 +24621,12 @@ def test_model_page_clipboard_survives_url_dialog(window, monkeypatch, accepted)
     project = window.session.project
 
     def answer(*args, **kwargs):
+        # Die Eingabe im Hausstil (FD-22) gibt None für Abbrechen zurück.
         offered.append(kwargs["text"])
-        return url, accepted
+        assert kwargs["target"] == "message:model_address"
+        return url if accepted else None
 
-    monkeypatch.setattr("app.ui.main_window.QInputDialog.getText", answer)
+    monkeypatch.setattr("app.ui.main_window.ask_text", answer)
     monkeypatch.setattr("app.ui.main_window.show_error", lambda error, parent: shown.append(error))
     try:
         window.action_import_url()

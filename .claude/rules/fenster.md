@@ -102,8 +102,10 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 
 ## Rückfragen
 
-**Eine Meldung ist kein `QMessageBox`** (Z5), sondern `message_dialog`; nur
-die Fragen hier bleiben eins (`test_message_dialog`).
+**Eine Meldung ist kein `QMessageBox`, eine Eingabe kein `QInputDialog` oder
+`QColorDialog`** (Z5): `message_dialog`, `input_dialog`, am Ort `place_popup`;
+nur die Fragen hier bleiben `QMessageBox`. Erfolg und Hinweis quittiert der
+Dialog selbst (`acknowledge`, Z2), `inform` nur ein Scheitern (`test_input_dialog`).
 
 Die gewollten Ausnahmen von Regel 19, und was sie davon abhält, zur Blockade zu
 werden:
@@ -447,25 +449,13 @@ beide Rechnungen.
 
 ## Rückmeldung und Fehlerbericht
 
-Ein Dialog für beides (`app/ui/support_dialog.py`): *Hilfe → Rückmeldung
-senden* und `report_error` — dort mit `kind=crash`, eigenem Titel und „Das war
-ein Programmfehler, nicht Ihre Schuld“ (§33.1).
-
-- **Von allein geht nichts** (`kern.md`, „Fehler“).
-- **Nichts ungesehen:** Die Vorschau zeigt den ganzen Text samt Anhängen und
-  Gesamtgröße.
-- **Das Bildschirmfoto entsteht vor dem Dialog** (`window_shot(self)` im
-  Fenster), aus vorhandenen Bildpunkten über `screen().grabWindow(winId())`
-  ohne neues Rendern des womöglich defekten Modells; nur wenn das leer bleibt,
-  `grab()`. Nur das Solidon-Fenster, nie der Bildschirm.
-- **Der abgelegte Ordner ist ein Weg, kein Notausgang:** *Bericht ablegen* steht
-  dauerhaft in der Knopfleiste (§37.2); *Selbst per E-Mail senden* erscheint
-  erst, wenn ein Versand scheiterte.
-- **Einmal erzeugt, identisch verwendet:** Die Sitzung wird einmal im Arbeiter
-  gespeichert, ebenso die Protokollbytes — Vorschau, Versand und Ablage nehmen
-  dieselben. Bis der Anhang fertig ist, zeigt der Dialog die Vorbereitung und
-  sperrt den Versand; Abwahl und Schließen gehen, ein geschlossener Dialog
-  verwirft späte Antworten.
+Ein Dialog für beides (`support_dialog.py`; `report_error` mit `kind=crash`,
+§33.1). Von allein geht nichts (`kern.md`, „Fehler“); die Vorschau zeigt alles
+samt Anhängen; das Bildschirmfoto entsteht vorher (`window_shot` im Fenster,
+nur das Solidon-Fenster, ohne neues Rendern); *Bericht ablegen* steht immer,
+*Selbst per E-Mail senden* erst nach gescheitertem Versand (§37.2); Sitzung und
+Protokoll entstehen einmal im Arbeiter und gelten für Vorschau, Versand und
+Ablage, bis dahin ist der Versand gesperrt. Warum und wie: `regel-fenster.md`.
 
 
 ### Formen und Skelett: Gesten

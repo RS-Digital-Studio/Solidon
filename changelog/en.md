@@ -34,6 +34,9 @@ it into `website/version.json`.
 - The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
 - The *Compute more coarsely* button is gone, as Solidon carries on with the full calculation by itself. In version 0.6.0 it also appeared where it changed nothing.
 - Error messages, details and notices now appear in Solidon's own style, with the actions as buttons. Ctrl+C copies the whole message.
+- A spool's colour is chosen with Solidon's own colour picker right at the button, with named shelf colours and the exact colour value. The Windows colour dialog is gone.
+- A sketch dimension now changes in a field right where it is. Addresses and the choice of which filament to replace are asked in Solidon's own style.
+- After activating or deactivating, the confirmation appears in the dialog itself, without an extra window you have to click away.
 - The *Calibrate material* dialog now shows only clearance, interference and hole compensation up front. Elephant foot, shrinkage, wall and overhang are under *More settings*.
 - Numbers are right-aligned in every field, digit under digit.
 - A screen reader now reads the name and explanation of every number field in a dialog.

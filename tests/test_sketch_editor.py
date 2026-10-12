@@ -7458,14 +7458,14 @@ def test_a_radius_that_does_not_fit_is_named_before_the_click(qt_app: QApplicati
     assert "20" in canvas.status_text()
 
 
-def test_a_double_click_on_a_measure_card_opens_its_value(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_double_click_on_a_measure_card_opens_its_value(qt_app: QApplication) -> None:
     """Der Griff, den jeder Fusion-Kunde sucht: Doppelklick auf das Maß im
     Bild, Zahl ändern, fertig. Bis zum 13.09.2026 gab es ihn nur in der
-    Bedingungsliste am rechten Rand."""
-    from PySide6.QtWidgets import QInputDialog
+    Bedingungsliste am rechten Rand. Das Feld steht am Ort (FD-22)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
 
+    from app.ui.place_popup import ValuePopup
     from app.ui.sketch_editor import SketchPanel
 
     panel = SketchPanel()
@@ -7478,15 +7478,11 @@ def test_a_double_click_on_a_measure_card_opens_its_value(
         assert canvas.measure_at(place) == index
         assert canvas.measure_at((place[0] + 500.0, place[1])) is None
 
-        asked: list[str] = []
-
-        def answer(*_args: object, **_kwargs: object) -> tuple[str, bool]:
-            asked.append("asked")
-            return ("55", True)
-
-        monkeypatch.setattr(QInputDialog, "getText", staticmethod(answer))
         assert canvas.double_click_on_plane(place)
-        assert asked == ["asked"]
+        popup = QApplication.activePopupWidget()
+        assert isinstance(popup, ValuePopup), "das Maß fragt am Ort"
+        popup.field.setText("55")
+        QTest.keyClick(popup.field, Qt.Key.Key_Return)
         assert canvas.sketch.constraints[index].value == "55"
         assert not canvas.double_click_on_plane((place[0] + 500.0, place[1]))
     finally:
