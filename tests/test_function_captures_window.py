@@ -345,3 +345,96 @@ def test_a_grey_button_reports_the_reason_its_tooltip_shows(qt_app: Any) -> None
         main.deleteLater()
         _settle(qt_app)
     assert texts == ["Erst nach der Berechnung — der Befund gehört zum vorigen Stand."], texts
+
+
+def _watched(qt_app: Any, dialog: Any) -> Any:
+    """Die Wache über einem offenen modalen Dialog, wie der Prüfstand sie fährt."""
+    watch = capture.ModalWatch(0.0)
+    dialog.open()
+    _settle(qt_app)
+    try:
+        watch.poll()
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        _settle(qt_app)
+    return watch
+
+
+def _judged(watch: Any, criterion: str) -> list[str]:
+    protocol = sample_protocol()
+    protocol["modals"] = watch.modal_entries()
+    protocol["raw_windows"] = watch.raw_entries()
+    outcome = CRITERION_JUDGES[criterion](protocol, sample_context())
+    return [issue.text for issue in outcome.issues]
+
+
+def test_only_the_questions_of_the_concept_are_modal_without_a_finding(qt_app: Any) -> None:
+    """Z2 wie im Konzept (welle4 ``89e7f5819``): nur die Rückfragen aus ``fenster.md``.
+
+    Eine Rückfrage über ``ctx.ask`` war als Klasse ``AskDialog`` ganz erlaubt; jetzt
+    ist nur die Frage vor der Vollerkennung ausgenommen, an ihrer Antwort erkannt.
+    Gegenprobe: Eine andere modale Frage ist rot (Z2 und E6).
+    """
+    from app.i18n import tr
+    from app.ui.dialogs import AskDialog
+
+    other = _watched(qt_app, AskDialog("Welche Fläche ist gemeint?", ["Oben", "Unten"]))
+    assert other.modal_entries()[0]["allowed"] is False
+    assert _judged(other, "Z2") and _judged(other, "E6")
+    answers = [str(tr("Sofort laden")), str(tr(capture.FULL_RECOGNITION_ANSWER))]
+    recognition = _watched(qt_app, AskDialog("Lange Erkennung?", answers, as_buttons=True))
+    assert recognition.modal_entries()[0]["allowed"] is True
+    assert _judged(recognition, "Z2") == [] and _judged(recognition, "E6") == []
+
+
+def test_a_message_in_house_style_is_modal_but_neither_raw_nor_a_question(qt_app: Any) -> None:
+    """FD-21: ``MessageDialog`` ist kein rohes Fenster (Z5), aber modal (Z2), keine Frage (E6).
+
+    Mit Handlung und Ausgang hat er zwei Knöpfe; vorher hätte die Wache ihn
+    deshalb als Nachfrage gezählt. Und der Klick, nach dem er aufgeht, macht ihn
+    nicht zur Fläche der Zeile (``function_surface.own_surface``).
+    """
+    from app.ui.message_dialog import MessageDialog
+    from tools import function_surface
+
+    dialog = MessageDialog(None, title="Fehler", headline="Das ging nicht", kind="error")
+    dialog.add_action("Rückgängig", "message.button:probe.undo", lead=True)
+    dialog.add_exit("Schließen", "message.button:probe.close")
+    assert not function_surface.own_surface({"target": "operation:drill_hole"}, dialog)
+    assert function_surface.own_surface({"target": "message:probe"}, dialog)
+    watch = _watched(qt_app, dialog)
+    entry = watch.modal_entries()[0]
+    assert (entry["class"], entry["allowed"], entry["question"]) == ("MessageDialog", False, False)
+    assert watch.raw_entries() == []
+    assert _judged(watch, "Z2") and _judged(watch, "Z5") == [] and _judged(watch, "E6") == []
+
+
+def test_a_message_in_house_style_is_read_with_its_actions(qt_app: Any) -> None:
+    """V5 an FD-21: Die Meldung im Hausstil zählt mit Text und Handlung, ohne den Ausgang.
+
+    ``message_entries`` las Hinweisrahmen im Hauptfenster und graue Knöpfe; eine
+    Meldung als eigenes Fenster fehlte, und ihre Handlung hätte V5 nie geklickt.
+    """
+    from PySide6.QtWidgets import QMainWindow
+
+    from app.ui.message_dialog import MessageDialog
+
+    main = QMainWindow()
+    dialog = MessageDialog(main, title="Fehler", headline="Das ging nicht", kind="error")
+    dialog.add_action("Rückgängig", "message.button:probe.undo", lead=True)
+    dialog.add_exit("Schließen", "message.button:probe.close")
+    main.show()
+    dialog.show()
+    _settle(qt_app)
+    try:
+        entries = capture.message_entries(main)
+    finally:
+        dialog.close()
+        main.close()
+        main.deleteLater()
+        _settle(qt_app)
+    house = [entry for entry in entries if "Das ging nicht" in entry["text"]]
+    assert len(house) == 1, entries
+    assert [action["label"] for action in house[0]["actions"]] == ["Rückgängig"], house
+    assert house[0]["actions"][0]["target"] == "message.button:probe.undo", house

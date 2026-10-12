@@ -53,26 +53,42 @@ MOST_TABS: Final = 60
 STATES: Final[tuple[str, ...]] = ("rest", "hover", "focus", "pressed")
 
 #: Dialogklassen, die als Fenster erlaubt sind (Konzept §4, Z2 und Z5): die
-#: Dateidialoge, der KI- und der Druckhinweis und die Rückfrage nach Regel 21
-#: (``AskDialog``, auch die Frage vor der Vollerkennung, Regel 19).
+#: Dateidialoge und der KI- und der Druckhinweis. Eine Rückfrage über
+#: ``ctx.ask`` (``AskDialog``) ist keine Ausnahme — nur die vor der Vollerkennung
+#: (:data:`FULL_RECOGNITION_ANSWER`).
 ALLOWED_CLASSES: Final[frozenset[str]] = frozenset(
-    {"QFileDialog", "AiDisclosureDialog", "PrintDisclosureDialog", "AskDialog"}
+    {"QFileDialog", "AiDisclosureDialog", "PrintDisclosureDialog"}
 )
 
-#: Funktionen, aus denen eine Rückfrage erlaubt ist (Regel 19 und ihre Ausnahmen,
-#: ``fenster.md`` „Rückfragen“): Speicherfrage, verworfene Schritte, Export,
-#: Übergabe, Löschen im Verlauf. Erkannt am Aufrufstapel des ``exec()`` — so
-#: hängt die Zuordnung an keiner Übersetzung. Ein Wächter hält, dass jede
-#: dieser Funktionen in ``app/ui`` steht.
+#: Funktionen, aus denen eine Rückfrage erlaubt ist — die Rückfragen aus
+#: ``fenster.md`` und die Speicherfrage, wie Konzept Z2 sie nennt: Löschen im
+#: Verlauf, Export und Übergabe trotz Befunden, Verwerfen zurückgenommener
+#: Schritte, Wiederherstellen nach einem Absturz, Verlust einer Generierung,
+#: Speicherfrage. Erkannt am Aufrufstapel des ``exec()`` — so hängt die
+#: Zuordnung an keiner Übersetzung. Ein Wächter hält, dass jede dieser
+#: Funktionen in ``app/ui`` steht.
 ALLOWED_CALLERS: Final[frozenset[str]] = frozenset(
     {
-        "confirm_unsaved",
-        "confirm_discard",
+        "remove_history_operations",
         "confirm_export",
         "confirm_handover",
-        "remove_history_operations",
+        "confirm_discard",
+        "_ask_recovery",
+        "confirm_generation_loss",
+        "confirm_unsaved",
     }
 )
+
+#: Die Frage vor der Vollerkennung (§21.1) stellt der Kern im Arbeiter über
+#: ``ctx.ask``; im Aufrufstapel des Dialogs steht er nicht. Erkannt wird sie an
+#: ihrer Antwort (``scene.evaluate._asked_about_recognition``), übersetzt wie im
+#: Fenster. Ein Wächter hält, dass die Anwendung den Satz noch führt.
+FULL_RECOGNITION_ANSWER: Final = "Mit Merkmalserkennung laden"
+
+#: Meldungen und Fragen sind nie die Bedienfläche einer Zeile: die Meldung im
+#: Hausstil (``message_dialog.MessageDialog``, FD-21) und die Rückfrage
+#: (``AskDialog``); dazu die rohen Qt-Fenster (``function_checks.RAW_CLASSES``).
+MESSAGE_CLASSES: Final[frozenset[str]] = frozenset({"MessageDialog", "AskDialog"})
 
 
 def _raw_bases() -> tuple[str, ...]:
@@ -234,14 +250,40 @@ def callers() -> list[str]:
     return names
 
 
-def modal_allowed(classes: Sequence[str], stack: Sequence[str]) -> bool:
-    """Ob ein Fenster zu den erlaubten gehört: Klasse oder öffnende Funktion (Z2, E6)."""
-    return bool(ALLOWED_CLASSES & set(classes)) or bool(ALLOWED_CALLERS & set(stack))
+def modal_allowed(
+    classes: Sequence[str], stack: Sequence[str], buttons: Sequence[str] = ()
+) -> bool:
+    """Ob ein Fenster zu den erlaubten gehört (Konzept Z2, E6).
+
+    Erlaubt nach Klasse (Dateidialog, KI- und Druckhinweis), nach öffnender
+    Funktion (:data:`ALLOWED_CALLERS`) oder als die Frage vor der Vollerkennung,
+    an ihrer Antwort erkannt. Jede andere modale Frage ist ein Fund.
+    """
+    from app.i18n import tr
+
+    if ALLOWED_CLASSES & set(classes) or ALLOWED_CALLERS & set(stack):
+        return True
+    answer = str(tr(FULL_RECOGNITION_ANSWER))
+    return "AskDialog" in classes and any(text.replace("&", "") == answer for text in buttons)
 
 
 def is_question(class_name: str, buttons: Sequence[str]) -> bool:
-    """Eine Nachfrage (E6) statt einer Meldung (Z2): eine Wahl zwischen mindestens zwei Knöpfen."""
+    """Eine Nachfrage (E6) statt einer Meldung (Z2): eine Wahl zwischen mindestens zwei Knöpfen.
+
+    Die Meldung im Hausstil (``MessageDialog``) ist nie eine Frage, auch mit
+    Handlung und Ausgang: Fragen bleiben ``QMessageBox`` oder ``AskDialog``
+    (``fenster.md``, „Rückfragen“).
+    """
+    if class_name == "MessageDialog":
+        return False
     return class_name == "AskDialog" or len([text for text in buttons if text]) >= 2
+
+
+def message_window(widget: Any) -> bool:
+    """Ob ein Fenster eine Meldung oder Frage ist — roh oder im Hausstil, nie eine Fläche."""
+    from tools.function_checks import RAW_CLASSES
+
+    return bool(set(_classes(widget)) & (MESSAGE_CLASSES | set(RAW_CLASSES)))
 
 
 def _classes(widget: Any) -> list[str]:
@@ -291,8 +333,8 @@ class ModalWatch:
         if widget is not None and id(widget) not in self._seen:
             self._seen.add(id(widget))
             classes = _classes(widget)
-            allowed = modal_allowed(classes, stack) or type(widget).__name__ in self.own
             buttons = _buttons(widget)
+            allowed = modal_allowed(classes, stack, buttons) or type(widget).__name__ in self.own
             self.modals.append(
                 {
                     "class": type(widget).__name__,
@@ -324,7 +366,7 @@ class ModalWatch:
                     {
                         "class": raw,
                         "title": widget.windowTitle(),
-                        "allowed": modal_allowed(classes, stack),
+                        "allowed": modal_allowed(classes, stack, _buttons(widget)),
                         "own_class": type(widget).__name__,
                     }
                 )
@@ -1380,6 +1422,36 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
         reason = button.toolTip() or button.accessibleDescription()
         if _visible(button) and not button.isEnabled() and reason:
             found.append({"text": reason, "actions": []})
+    return [*found, *_house_messages()]
+
+
+def _house_messages() -> list[dict[str, Any]]:
+    """Offene Meldungen im Hausstil (``MessageDialog``, FD-21) mit ihren Handlungen.
+
+    Gelesen über das, was der Dialog öffentlich führt: ``text()`` wie Strg+C,
+    ``buttons()`` und ihre Rolle. Der Ausgang (*Schließen*, Escape) ist keine
+    Handlung, die das Problem löst — er zählte sonst als „ohne Wirkung“ (V5).
+    """
+    from PySide6.QtWidgets import QApplication, QDialogButtonBox
+
+    found: list[dict[str, Any]] = []
+    for dialog in QApplication.topLevelWidgets():
+        if "MessageDialog" not in _classes(dialog) or not dialog.isVisible():
+            continue
+        exits = QDialogButtonBox.ButtonRole.RejectRole
+        actions = [
+            {
+                "label": _text_of(button),
+                "target": vocabulary_name(button),
+                "clicked": False,
+                "effect": None,
+            }
+            for button in dialog.buttons()
+            if _visible(button)
+            and button.isEnabled()
+            and dialog.button_box.buttonRole(button) != exits
+        ]
+        found.append({"text": dialog.text(), "actions": actions})
     return found
 
 

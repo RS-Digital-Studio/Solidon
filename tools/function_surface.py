@@ -80,12 +80,35 @@ def surface_for(window: Any, target: str) -> Any:
     return _shown(window, "selection") or window
 
 
-def raw_window(widget: Any) -> bool:
-    """Ob ein Fenster ein rohes Qt-Fenster ist (``function_checks.RAW_CLASSES``) — eine
-    Meldung, nie die eigene Fläche einer Zeile (F-26)."""
-    from tools.function_checks import RAW_CLASSES
+#: Woher Zeilen stammen, deren Fläche selbst eine Meldung ist (``function_list``).
+MESSAGE_SOURCES: Final[frozenset[str]] = frozenset({"meldungsfenster", "startablauf"})
 
-    return any(cls.__name__ in RAW_CLASSES for cls in type(widget).__mro__)
+
+def own_surface(row: Mapping[str, Any], widget: Any) -> bool:
+    """Ob ein offenes Fenster die Bedienfläche der Zeile ist (F-26).
+
+    Eine Meldung — roh oder im Hausstil (``MessageDialog``) — und eine Rückfrage
+    sind es nie, außer die Zeile ist diese Meldung (``message:<sache>``, Zeilen
+    der Meldungsfenster und des Startablaufs) oder dieser Dialog
+    (``dialog:<klasse>``). Sonst hieße die Fehlermeldung nach dem Klick „eigene
+    Fläche“, und Z2, Z5 und E6 sähen sie nicht.
+    """
+    from tools.function_capture import message_window
+
+    if not message_window(widget):
+        return True
+    target = str(row.get("target") or "")
+    kind, _separator, rest = target.partition(":")
+    return (
+        kind == "message"
+        or (kind == "dialog" and rest in classes_of(widget))
+        or row.get("source") in MESSAGE_SOURCES
+    )
+
+
+def classes_of(widget: Any) -> set[str]:
+    """Die Klassennamen eines Fensters samt Basisklassen."""
+    return {cls.__name__ for cls in type(widget).__mro__}
 
 
 def grey_reason(window: Any, target: str) -> str | None:

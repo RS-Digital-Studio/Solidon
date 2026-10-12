@@ -401,9 +401,7 @@ def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
         qt_app.processEvents()
 
 
-def test_a_click_into_a_field_lands_in_its_box_not_beside_it(
-    qt_app: Any, monkeypatch: Any
-) -> None:
+def test_a_click_into_a_field_lands_in_its_box_not_beside_it(qt_app: Any, monkeypatch: Any) -> None:
     """F-34: Ein Feld, breiter als sein Kästchen, wird im Kästchen geklickt.
 
     Ein Zahlenfeld des Operationsdialogs (``ValueField``) ist ein Behälter mit
@@ -1141,7 +1139,9 @@ def test_the_expired_demo_row_starts_through_main_and_stops(tmp_path: Path) -> N
     assert [action["clicked"] for action in message["actions"]].count(True) == 1
     (click,) = protocol["steps"]
     assert click["hit"] is True and click["phase"] == "start"
-    assert [entry["class"] for entry in protocol["raw_windows"]] == ["QMessageBox"]
+    # Seit FD-21 eine Meldung im Hausstil: modal, aber kein rohes Qt-Fenster (Z5).
+    assert [entry["class"] for entry in protocol["modals"]] == ["MessageDialog"]
+    assert protocol["raw_windows"] == []
     report = json.loads((out / "summary.json").read_text(encoding="utf-8"))
     assert (report["function_cases"], report["function_complete"]) == (1, 1)
 

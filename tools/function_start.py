@@ -145,9 +145,13 @@ class StartFlow:
             if button.isVisible() and name_of(button)
         ]
         closing = (
-            box.button(QMessageBox.StandardButton.Close) if isinstance(box, QMessageBox) else None
+            box.button(QMessageBox.StandardButton.Close)
+            if isinstance(box, QMessageBox)
+            else _exit_of(box)
         )
-        text = box.text() if isinstance(box, QMessageBox) else " ".join(visible_texts(box))
+        house = "MessageDialog" in {cls.__name__ for cls in type(box).__mro__}
+        text = box.text() if isinstance(box, QMessageBox) or house else ""
+        text = text or " ".join(visible_texts(box))
         entry = {
             "text": str(text),
             "actions": [
@@ -179,3 +183,16 @@ class StartFlow:
             )
             self.persist()
             self.ports.keys("Escape")
+
+
+def _exit_of(box: Any) -> Any | None:
+    """Der Ausgang einer Meldung im Hausstil (``MessageDialog``, FD-21): ihr Knopf mit der
+    Rolle *Verwerfen* — Schließen, Escape. ``None`` für jedes andere Fenster."""
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    if "MessageDialog" not in {cls.__name__ for cls in type(box).__mro__}:
+        return None
+    exits = QDialogButtonBox.ButtonRole.RejectRole
+    return next(
+        (button for button in box.buttons() if box.button_box.buttonRole(button) == exits), None
+    )

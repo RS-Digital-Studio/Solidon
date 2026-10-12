@@ -925,7 +925,7 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             root = self.surface()
             # Zurückkehren kann der Fokus nur aus einem Dialog (F-29).
             focus["dialog"] = surfaces.open_dialog(self.window) is not None
-            self.watch.own.add(type(root).__name__)
+            self.claim_surface(root)
             self.capture_surface(root)
             self.data["messages"] = capture.message_entries(self.window)
             apply_button = self.widget(self.apply_target) if self.apply_target else None
@@ -1384,11 +1384,12 @@ class FunctionFlow(GesturePhases, SwitchPhase):
 
         def in_dialog() -> list[dict[str, Any]]:
             # Ein Dialog sagt ab, wo er steht (``ParameterDialog.problem``): neu
-            # sichtbarer Text nach dem Hauptknopf ist seine Meldung (F-24).
+            # sichtbarer Text nach dem Hauptknopf ist seine Meldung (F-24). Eine
+            # Meldung im Hausstil liest ``message_entries`` samt Handlungen.
             dialog = surfaces.open_dialog(self.window)
             new = (
                 [t for t in capture.visible_texts(dialog) if t not in shown["before"]]
-                if dialog
+                if dialog is not None and "MessageDialog" not in surfaces.classes_of(dialog)
                 else []
             )
             return [{"text": " ".join(new), "actions": []}] if new else []
@@ -1599,8 +1600,14 @@ class FunctionFlow(GesturePhases, SwitchPhase):
     def mark_own(self, machine: StepMachine) -> None:
         """Der offene Dialog der Zeile ist ihre Fläche, keine fremde Nachfrage (F-26)."""
         dialog = surfaces.open_dialog(self.window)
-        if dialog is not None and not surfaces.raw_window(dialog):
-            self.watch.own.add(type(dialog).__name__)
+        if dialog is not None:
+            self.claim_surface(dialog)
+
+    def claim_surface(self, root: Any) -> None:
+        """Die Fläche der Zeile zählt nicht als fremdes Fenster — eine Meldung oder Frage
+        schon, außer die Zeile ist sie selbst (``function_surface.own_surface``)."""
+        if surfaces.own_surface(self.row, root):
+            self.watch.own.add(type(root).__name__)
 
     def phase_abort(self) -> None:
         """Prüfpunkt 14: *Abbrechen* während der Rechnung, danach der Stand von vorher."""
@@ -1806,7 +1813,7 @@ class FunctionFlow(GesturePhases, SwitchPhase):
         def take(machine: StepMachine) -> None:
             root = self.surface()
             # Die eigene Fläche der Zeile ist kein fremdes Fenster (Review L13).
-            self.watch.own.add(type(root).__name__)
+            self.claim_surface(root)
             self.capture_surface(root)
             # Ein Bild je Fläche, im Sprachfall mit Sprache und Zeile (F-31).
             self.picture(

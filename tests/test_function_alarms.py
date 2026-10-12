@@ -898,3 +898,26 @@ def test_the_scene_names_are_its_bodies_and_its_project() -> None:
         path=Path("F:/fall/scenes/unter_dem_bett.netz.p3d"),
     )
     assert function_surface.scene_names(session) == ["cube_clean", "unter_dem_bett.netz"]
+
+
+def test_a_message_after_the_click_is_not_the_surface_of_the_row() -> None:
+    """Z2, Z5, E6: Eine Meldung oder Frage ist nie die Fläche einer Zeile, außer sie ist die Zeile.
+
+    Der Prüfstand merkt den Dialog nach dem Klick als eigene Fläche; vorher nahm
+    er davon nur rohe Qt-Fenster aus. Seit FD-21 kommen Fehler als
+    ``MessageDialog`` — als „eigene Fläche“ wären sie erlaubt, und Z2 sähe sie
+    nicht. Ebenso eine Rückfrage (``AskDialog``).
+    """
+    from tools import function_surface
+
+    message = type("MessageDialog", (), {})()
+    question = type("AskDialog", (), {})()
+    raw = type("QMessageBox", (), {})()
+    own = type("ParameterDialog", (), {})()
+    operation = {"target": "operation:drill_hole", "source": "register"}
+    for window in (message, question, raw):
+        assert not function_surface.own_surface(operation, window), type(window).__name__
+    assert function_surface.own_surface(operation, own)
+    assert function_surface.own_surface({"target": "message:recovery"}, raw)
+    assert function_surface.own_surface({"target": "dialog:AskDialog"}, question)
+    assert function_surface.own_surface({"target": "", "source": "startablauf"}, raw)
