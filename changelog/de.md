@@ -44,6 +44,10 @@ Nutzen da und sonst nichts.
 
 ### Bedienung und System
 
+- Am Mac darf Solidon für die 3D-Maus jetzt den Treiber von 3Dconnexion (3DxWare) laden. Von Version 0.4.1 bis 0.6.0 ließ macOS das nicht zu.
+- Am Mac installiert das Paket Solidon jetzt immer in *Programme*. Lag noch eine Kopie woanders, ersetzte es bisher diese, und in *Programme* blieb die alte Version.
+- Unter Linux startet das AppImage jetzt auch auf Ubuntu 22.04, Linux Mint 21 und Debian 12. Version 0.6.0 lief dort nur als Flatpak.
+- Unter Linux darf Solidon jetzt auch als Flatpak auf die 3D-Maus zugreifen. Die udev-Regel aus dem Handbuch bleibt dafür nötig.
 - Die Suche findet *Vereinigen*, *Abziehen* und *Schnittmenge* auch unter „boolesch“ und „Boolean“, *Abziehen* auch unter „Differenz“.
 - Ist ein Körper gewählt und liegt ein zweiter in der Szene, sagt der Reiter *Auswahl*, wie man den zweiten für *Vereinigen*, *Abziehen* und *Schnittmenge* dazuwählt.
 - Das Suchfeld im Reiter *Auswahl* steht jetzt immer, auch ohne Auswahl, und findet jede Funktion und jeden Befehl samt Tastenkürzel.

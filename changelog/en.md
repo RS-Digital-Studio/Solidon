@@ -19,6 +19,10 @@ it into `website/version.json`.
 
 ### Operation and system
 
+- On the Mac, Solidon may now load the 3Dconnexion driver (3DxWare) for the 3D mouse. From version 0.4.1 to 0.6.0, macOS did not allow this.
+- On the Mac, the installer now always puts Solidon in *Applications*. If another copy lay elsewhere, it used to replace that one, and the old version stayed in *Applications*.
+- On Linux, the AppImage now also starts on Ubuntu 22.04, Linux Mint 21 and Debian 12. Version 0.6.0 ran there only as a Flatpak.
+- On Linux, Solidon may now reach the 3D mouse as a Flatpak too. It still needs the udev rule from the manual.
 - The search finds *Unite*, *Subtract* and *Intersection* under “boolean” too, and *Subtract* also under “difference”.
 - With one body selected and a second in the scene, the *Selection* tab says how to add the second for *Unite*, *Subtract* and *Intersection*.
 - The search field in the *Selection* tab is now always there, even with nothing selected, and finds every function and command along with its shortcut.
