@@ -24,11 +24,18 @@ from typing import Any
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QAbstractSpinBox,
+    QApplication,
+    QMessageBox,
+    QPushButton,
+    QWidget,
+)
 
 from app.core import activation, guides
 from app.core.activation import store
 from app.core.scene.project import save
+from app.core.types import Parameter
 from app.i18n import tr
 from app.ui import change_lock
 from app.ui.dialogs import ParameterDialog, licence_lock_line
@@ -265,6 +272,11 @@ def test_no_window_command_that_changes_stays_open(
     und Lesendes bleibt offen.
     """
     window = below_the_bed
+    # Ein Maß in der Leiste, solange es noch geht: Seine Zahl ist ein Schritt.
+    assert window.session.add_parameter(Parameter(name="hoehe", value=8.0, unit="mm"))
+    assert window.session.wait_for_idle(60_000)
+    qt_app.processEvents()
+    assert window.parameters.findChildren(QAbstractSpinBox), "Voraussetzung: ein Zahlenfeld"
     reason = _set_licence(monkeypatch, state)
     window._update_actions()
     found = _open_changes(window, reason)

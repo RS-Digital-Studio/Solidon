@@ -16608,8 +16608,6 @@ class MainWindow(QMainWindow):
         wartete. Dann ist es ein Schritt für beides; ohne Stelle bleibt das
         Loch, wo es ist (drei Nullen heißen in ``slot_hole`` genau das).
         """
-        if change_lock.refused(self.announce):
-            return
         values: dict[str, Any] = {"slot_length": float(length), "slot_angle": float(angle)}
         if place is not None:
             values.update({"x": float(place[0]), "y": float(place[1]), "z": float(place[2])})

@@ -134,6 +134,8 @@ _CLOSED: Final = "change_lock_closed"
 """Merker an einer Aktion, die nur die Sperre grau hält (:func:`close_commands`)."""
 _HELD: Final = "change_lock_enabled"
 """Ob ein Eingabefeld vor der Sperre bedienbar war (:func:`hold_inputs`)."""
+_HOLDING: Final = "change_lock_holding"
+"""Merker an Wurzel und Fenster: Es gibt Gesperrtes zurückzugeben."""
 _SAID: Final = "change_lock_said"
 _TIP: Final = "change_lock_tip"
 _SECOND: Final = "change_lock_second"
@@ -239,8 +241,12 @@ def hold_inputs(root: QWidget, reason: str) -> None:
     Parameterleiste nahmen ohne Freischaltung Eingaben an, die erst beim
     Übernehmen scheiterten. Gemerkt wird, ob ein Feld vorher bedienbar war;
     eine Beschriftung mit Partnerfeld bekommt den Grund als Satz. Rollbalken
-    bleiben, damit sich Gesperrtes weiter ansehen lässt.
+    bleiben, damit sich Gesperrtes weiter ansehen lässt. Frei und nie gesperrt
+    kostet der Aufruf nichts — er läuft mit jeder Aktualisierung des Fensters.
     """
+    if not reason and root.property(_HOLDING) is None:
+        return
+    root.setProperty(_HOLDING, True if reason else None)
     for widget in (root, *root.findChildren(QWidget)):
         if isinstance(widget, QLabel):
             if widget.buddy() is not None:
@@ -302,15 +308,19 @@ def close_commands(window: QMainWindow) -> list[QAction]:
     """Gesperrt: jeden ändernden Fensterbefehl grau stellen — zurück kommen sie (FD-26).
 
     Läuft am Ende von ``MainWindow._update_actions``, nach den eigenen
-    Bedingungen der Einträge; der Aufrufer schreibt den Grund dazu. Ohne
-    Sperre geschieht nichts.
+    Bedingungen der Einträge. Zurück kommen die, die erst hier grau wurden —
+    ihnen schreibt der Aufrufer den Grund dazu; die übrigen hat ihre eigene
+    Zeile schon gesperrt und benannt. Ohne Sperre geschieht nichts.
     """
     if not change_refusal():
         return []
-    closed = changing_commands(window)
-    for action in closed:
-        action.setEnabled(False)
+    closed = []
+    for action in changing_commands(window):
+        if action.isEnabled():
+            closed.append(action)
+            action.setEnabled(False)
         action.setProperty(_CLOSED, True)
+    window.setProperty(_HOLDING, True)
     return closed
 
 
@@ -318,10 +328,12 @@ def reopen_commands(window: QMainWindow) -> list[QAction]:
     """Freigeschaltet: was nur die Sperre grau hielt, wieder freigeben — zurück kommen sie.
 
     Läuft am Anfang von ``MainWindow._update_actions``: Was danach eine eigene
-    Bedingung hat, setzt sie dort neu. Gesperrt geschieht nichts.
+    Bedingung hat, setzt sie dort neu. Gesperrt geschieht nichts, und ohne
+    vorherige Sperre auch — dann ist der Aufruf frei.
     """
-    if change_refusal():
+    if change_refusal() or window.property(_HOLDING) is None:
         return []
+    window.setProperty(_HOLDING, None)
     reopened = [action for action in changing_commands(window) if action.property(_CLOSED)]
     for action in reopened:
         action.setEnabled(True)
