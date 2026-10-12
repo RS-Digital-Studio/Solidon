@@ -171,64 +171,173 @@ SECOND_REVIEW_SHARE: Final = 0.1
 FEEDBACK_AFTER_S: Final = DELAY_MS / 1000
 BAR_AFTER_S: Final = BAR_AFTER_MS / 1000
 
-#: Das Messprotokoll (Bauplan D0 §2.7 mit den Ergänzungen dieses Pakets,
-#: Bericht „Schnittstelle“): je Feld, ob es eine Liste, eine Tabelle oder ein
-#: einzelner Wert ist. Ein unbekanntes Feld ist eine ungültige Eingabe —
-#: sonst wüchse das Protokoll an einer Stelle, die niemand liest.
-PROTOCOL_SCHEMA: Final[dict[str, str]] = {
-    "row": "tabelle",
-    "kind": "wert",
-    "package": "wert",
-    "spec": "tabelle",
-    "variant": "tabelle",
-    "version": "tabelle",
-    "scene": "tabelle",
-    "steps": "liste",
-    "states": "tabelle",
-    "preview": "tabelle",
-    "result": "tabelle",
-    "cli": "tabelle",
-    "timing": "tabelle",
-    "frames": "tabelle",
-    "modals": "liste",
-    "raw_windows": "liste",
-    "windows": "liste",
-    "messages": "liste",
-    "texts": "liste",
-    "fields": "liste",
-    "tab_chain": "liste",
-    "names": "liste",
-    "focus_return": "wert",
-    "matrix": "tabelle",
-    "search": "tabelle",
-    "place": "tabelle",
-    "spot": "tabelle",
-    "layout": "liste",
-    "fonts": "liste",
-    "state_images": "liste",
-    "contrast": "liste",
-    "icons": "liste",
-    "animations": "liste",
-    "scrollbars": "liste",
-    "hover_labels": "liste",
-    "empty_states": "liste",
-    "licence_runs": "tabelle",
-    "halt": "tabelle",
-    "insertion": "tabelle",
-    "switch": "tabelle",
-    "revise": "liste",
-    "abort": "tabelle",
-    "images": "liste",
-    "errors": "liste",
-}
+# --- Das Messprotokoll -------------------------------------------------------
+
+#: Arten einer Funktionszeile (Bauplan D0 §2.3).
+ROW_KINDS: Final = ("operation", "fensterbefehl", "bedienflaeche")
+
+#: Wo der Kunde eine Funktion findet (``place.where``, Prüfpunkt 1 und 17).
+PLACES: Final = ("karte", "menue", "werkzeugleiste", "kuerzel", "kontext")
+
+#: Die Szenenabdrücke in ``states`` (§2.7); ``aborted`` ist der Stand nach
+#: *Abbrechen* der Rechnung (Prüfpunkt 14), ``cancelled`` der Abbruch im Dialog.
+STATE_KEYS: Final = (
+    "before",
+    "preview",
+    "applied",
+    "undo",
+    "redo",
+    "escape",
+    "cancelled",
+    "aborted",
+    "after_switch",
+)
+
+
+@dataclass(frozen=True)
+class ProtocolField:
+    """Ein Feld des Messprotokolls: Form, Schlüssel und erlaubte Werte.
+
+    ``shape`` ist ``tabelle`` (ein Objekt), ``liste`` (eine Liste von
+    Objekten), ``texte`` (eine Liste von Texten), ``text``, ``zahl`` oder
+    ``wahr``. ``keys`` sind bei einer Tabelle ihre Schlüssel, bei einer Liste
+    die Schlüssel jedes Eintrags; ``None`` heißt frei (Suchproben, Abdrücke).
+    ``values`` legt für einzelne Schlüssel die erlaubten Werte fest, ``choices``
+    die eines einzelnen Texts.
+    """
+
+    shape: str
+    keys: frozenset[str] | None = None
+    values: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    choices: tuple[str, ...] = ()
+    required: bool = False
+
+
+def _keys(*names: str) -> frozenset[str]:
+    return frozenset(names)
+
+
+#: Das Schema des Messprotokolls ``cases/<nr>/function.json`` (Bauplan D0 §2.7
+#: mit den Ergänzungen dieses Pakets, Bericht „Schnittstelle“). Es gehört D0-U;
+#: der Prüfstand schreibt danach und prüft sich mit :func:`validate_protocol`.
+#: Ein unbekanntes Feld oder ein unbekannter Schlüssel ist eine ungültige
+#: Eingabe — sonst wüchse das Protokoll an einer Stelle, die niemand liest.
+PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
+    "row": ProtocolField(
+        "tabelle",
+        _keys(
+            "id", "kind", "source", "package", "requirement", "start_scene", "target",
+            "menu_path", "shortcut", "covers", "spec",
+        ),
+        {"kind": ROW_KINDS},
+        required=True,
+    ),
+    "kind": ProtocolField("text", choices=ROW_KINDS, required=True),
+    "package": ProtocolField("text", required=True),
+    "spec": ProtocolField(
+        "tabelle",
+        _keys(
+            "start_scene", "route", "example_goal", "inputs", "search_probes", "questions",
+            "expectation", "fault_case", "preconditions", "not_applicable", "budget_s",
+            "budget_ref", "criteria",
+        ),
+    ),
+    "variant": ProtocolField(
+        "tabelle",
+        _keys(
+            "language", "theme", "unit", "licence", "preconditions", "platform", "screen",
+            "scale", "window_size", "motion",
+        ),
+        {"theme": ("light", "dark"), "unit": ("mm", "inch")},
+        required=True,
+    ),
+    "version": ProtocolField("tabelle", _keys("commit", "app"), required=True),
+    "scene": ProtocolField("tabelle", _keys("key", "triangles", "build_s", "eval_s")),
+    "steps": ProtocolField(
+        "liste",
+        _keys(
+            "target", "why", "button", "rect", "point", "widget_at", "hit", "zone", "typed",
+            "key", "decision", "t",
+        ),
+        {"why": WHY, "zone": ZONES},
+    ),
+    "states": ProtocolField("tabelle", frozenset(STATE_KEYS)),
+    "preview": ProtocolField(
+        "tabelle", _keys("bodies", "coarse", "banner_text", "volume", "extent")
+    ),
+    "result": ProtocolField("tabelle", _keys("metrics", "digest")),
+    "cli": ProtocolField("tabelle", _keys("digest", "max_deviation_mm", "print_equal")),
+    "timing": ProtocolField(
+        "tabelle",
+        _keys(
+            "total_s", "first_feedback_s", "progress_shown_s", "cancel_shown_s", "main_gap_ms",
+            "budget_s",
+        ),
+    ),
+    "frames": ProtocolField("tabelle", _keys("drag_ms", "reference_factor")),
+    "modals": ProtocolField("liste", _keys("class", "title", "allowed", "question")),
+    "raw_windows": ProtocolField("liste", _keys("class", "title", "allowed")),
+    "windows": ProtocolField("liste", _keys("class", "title")),
+    "messages": ProtocolField("liste", _keys("text", "actions")),
+    "texts": ProtocolField("liste", _keys("text", "carrier", "need_px", "width_px", "cut", "lead")),
+    "fields": ProtocolField(
+        "liste", _keys("label", "accessible_name", "description", "tooltip", "front")
+    ),
+    "tab_chain": ProtocolField("liste", _keys("name", "rect")),
+    "names": ProtocolField("texte"),
+    "focus_return": ProtocolField("wahr"),
+    "matrix": ProtocolField("tabelle", frozenset(SELECTION_STAGES)),
+    "search": ProtocolField("tabelle"),
+    "place": ProtocolField("tabelle", _keys("where", "path", "error"), {"where": PLACES}),
+    "spot": ProtocolField("tabelle", _keys("point", "covered_by")),
+    "layout": ProtocolField(
+        "liste",
+        _keys(
+            "kind", "surface", "primary", "accents", "group", "spacing", "margins",
+            "label_edges", "field_edges", "values",
+        ),
+        {"kind": ("primary", "spacing", "form")},
+    ),
+    "fonts": ProtocolField("liste", _keys("surface", "widget", "level", "stylesheet")),
+    "state_images": ProtocolField("liste", _keys("surface", "widget", "states")),
+    "contrast": ProtocolField(
+        "liste",
+        _keys("surface", "widget", "theme", "foreground", "background", "large", "symbol"),
+        {"theme": ("light", "dark")},
+    ),
+    "icons": ProtocolField(
+        "liste",
+        _keys(
+            "surface", "widget", "text", "icon", "own", "tooltip", "shortcut", "style", "scale",
+            "pixmap_ratio",
+        ),
+    ),
+    "animations": ProtocolField("liste", _keys("surface", "widget", "duration_ms")),
+    "scrollbars": ProtocolField(
+        "liste", _keys("surface", "window_size", "front", "vertical", "horizontal")
+    ),
+    "hover_labels": ProtocolField("liste", _keys("kind", "label")),
+    "empty_states": ProtocolField("liste", _keys("surface", "sentence", "button", "intended")),
+    "licence_runs": ProtocolField("tabelle", frozenset(LICENCE_RUNS)),
+    "halt": ProtocolField("tabelle", _keys("text", "step")),
+    "insertion": ProtocolField(
+        "tabelle", _keys("outcome", "text", "actions"), {"outcome": ("ergebnis", "absage")}
+    ),
+    "switch": ProtocolField("tabelle", _keys("phases", "late_events")),
+    "revise": ProtocolField(
+        "liste",
+        _keys("way", "opened", "fields", "params", "history_before", "history_after"),
+        {"way": ("menue", "doppelklick")},
+    ),
+    "abort": ProtocolField("tabelle", _keys("eval_s", "cancel_shown_s", "clicked")),
+    "images": ProtocolField("texte"),
+    "errors": ProtocolField("texte"),
+}  # fmt: skip
 
 #: Die Felder des Protokolls.
 PROTOCOL_FIELDS: Final = frozenset(PROTOCOL_SCHEMA)
 #: Pflichtfelder jedes Protokolls.
-REQUIRED_FIELDS: Final = ("row", "kind", "package", "variant", "version")
-
-#: Arten einer Funktionszeile (Bauplan D0 §2.3).
-ROW_KINDS: Final = ("operation", "fensterbefehl", "bedienflaeche")
+REQUIRED_FIELDS: Final = tuple(name for name, spec in PROTOCOL_SCHEMA.items() if spec.required)
 
 
 # --- Datenmodell ----------------------------------------------------------
@@ -763,38 +872,67 @@ CHECKPOINTS: Final[dict[int, Checkpoint]] = {
 # --- Das Protokoll ----------------------------------------------------------
 
 
-def check_protocol(protocol: Mapping[str, Any]) -> list[str]:
-    """Was an einem Protokoll ungültig ist — leer, wenn es gelesen werden kann."""
-    problems = [f"Pflichtfeld fehlt: {key}" for key in REQUIRED_FIELDS if key not in protocol]
-    for key in sorted(protocol):
-        shape = PROTOCOL_SCHEMA.get(key)
-        if shape is not None and protocol[key] is None:
-            # Ein leeres Feld ist eine fehlende Messung (``spec`` einer Zeile
-            # ohne Spezifikation); das Urteil sagt dann „nicht gelaufen“.
-            if key in REQUIRED_FIELDS:
-                problems.append(f"Pflichtfeld leer: {key}")
+def _entry_problems(name: str, entry: Any, spec: ProtocolField) -> list[str]:
+    """Schlüssel und Werte eines Objekts gegen sein Feld im Schema."""
+    if not isinstance(entry, Mapping):
+        return [f"{name} ist keine Tabelle"]
+    problems = []
+    if spec.keys is not None:
+        problems += [
+            f"{name}: unbekannter Schlüssel {key}" for key in sorted(set(entry) - spec.keys)
+        ]
+    for key, allowed in spec.values.items():
+        value = entry.get(key)
+        if value is not None and value not in allowed:
+            problems.append(f"{name}: {key} = {value!r} nicht in {list(allowed)}")
+    return problems
+
+
+def validate_protocol(protocol: Mapping[str, Any]) -> list[str]:
+    """Was an einem Messprotokoll ungültig ist — leer, wenn es gelesen werden kann.
+
+    Geprüft werden Feldnamen, Form, Pflichtfelder, die Schlüssel jedes Objekts
+    und die Werte aus geschlossenen Listen (:data:`PROTOCOL_SCHEMA`). Ein Feld
+    mit ``null`` ist eine fehlende Messung, kein Fehler — außer bei einem
+    Pflichtfeld. Der Prüfstand fährt diese Prüfung über das, was er schreibt.
+    """
+    if not isinstance(protocol, Mapping):
+        return ["das Protokoll ist keine Tabelle"]
+    problems = [f"Pflichtfeld fehlt: {name}" for name in REQUIRED_FIELDS if name not in protocol]
+    for name in sorted(protocol):
+        spec = PROTOCOL_SCHEMA.get(name)
+        value = protocol[name]
+        if spec is None:
+            problems.append(f"unbekanntes Feld: {name}")
             continue
-        if shape is None:
-            problems.append(f"unbekanntes Feld: {key}")
-        elif shape == "liste" and not isinstance(protocol[key], list):
-            problems.append(f"{key} ist keine Liste")
-        elif shape == "tabelle" and not isinstance(protocol[key], (Mapping, str)):
-            # ``row`` darf auch die bloße Kennung sein.
-            problems.append(f"{key} ist keine Tabelle")
-        elif shape == "tabelle" and isinstance(protocol[key], str) and key != "row":
-            problems.append(f"{key} ist keine Tabelle")
-    kind = protocol.get("kind")
-    if kind is not None and kind not in ROW_KINDS:
-        problems.append(f"unbekannte Art: {kind}")
-    steps = protocol.get("steps")
-    for index, step in enumerate(steps if isinstance(steps, list) else ()):
-        if not isinstance(step, Mapping):
-            problems.append(f"Schritt {index + 1} ist keine Tabelle")
+        if value is None:
+            if spec.required:
+                problems.append(f"Pflichtfeld leer: {name}")
             continue
-        if step.get("why") is not None and step["why"] not in WHY:
-            problems.append(f"Schritt {index + 1}: unbekanntes why {step['why']}")
-        if step.get("zone") is not None and step["zone"] not in ZONES:
-            problems.append(f"Schritt {index + 1}: unbekannte Zone {step['zone']}")
+        if spec.shape == "tabelle":
+            problems += _entry_problems(name, value, spec)
+        elif spec.shape == "liste":
+            if not isinstance(value, list):
+                problems.append(f"{name} ist keine Liste")
+                continue
+            for index, entry in enumerate(value, 1):
+                problems += _entry_problems(f"{name}[{index}]", entry, spec)
+        elif spec.shape == "texte":
+            if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                problems.append(f"{name} ist keine Liste von Texten")
+        elif spec.shape == "text":
+            if not isinstance(value, str):
+                problems.append(f"{name} ist kein Text")
+            elif spec.choices and value not in spec.choices:
+                problems.append(f"{name} = {value!r} nicht in {list(spec.choices)}")
+        elif spec.shape == "wahr" and not isinstance(value, bool):
+            problems.append(f"{name} ist nicht wahr oder falsch")
+    matrix = protocol.get("matrix")
+    for stage, entry in sorted(matrix.items()) if isinstance(matrix, Mapping) else ():
+        if isinstance(entry, Mapping) and entry.get("state") not in MATRIX_STATES:
+            problems.append(
+                f"matrix.{stage}: Zustand {entry.get('state')!r} nicht in {list(MATRIX_STATES)}"
+            )
     return problems
 
 

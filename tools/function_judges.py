@@ -63,7 +63,7 @@ from tools.function_checks import (
     Context,
     Issue,
     Outcome,
-    check_protocol,
+    validate_protocol,
     words,
 )
 
@@ -1522,7 +1522,7 @@ def _apply_not_applicable(outcome: Outcome, reasons: Mapping[str, str]) -> Outco
 
 def judge_case(protocol: Mapping[str, Any], context: Context) -> CaseOutcome:
     """Alle Prüfpunkte und die geltenden Kriterien eines Falls."""
-    problems = tuple(check_protocol(protocol))
+    problems = tuple(validate_protocol(protocol))
     reasons = _not_applicable(_spec(protocol))
     images = tuple(str(image) for image in _list(protocol, "images") or ())
 

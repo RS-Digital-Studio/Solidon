@@ -33,11 +33,11 @@ from tools.function_checks import (
     CRITERIA,
     START_SIZE,
     Checkpoint,
-    check_protocol,
     skill_mismatches,
     skill_rows,
     start_size_in_window,
     threshold_numbers,
+    validate_protocol,
     words,
 )
 from tools.function_judges import CRITERION_JUDGES, POINT_JUDGES, judge_case
@@ -145,7 +145,7 @@ def test_the_sample_protocol_has_nothing_to_find() -> None:
     ihre eine verdorbene Stelle rot wird.
     """
     protocol = sample_protocol()
-    assert check_protocol(protocol) == []
+    assert validate_protocol(protocol) == []
     case = judge_case(protocol, sample_context())
     assert set(case.points) == set(CHECKPOINTS)
     assert len(case.criteria) >= 30, sorted(case.criteria)
@@ -223,17 +223,74 @@ def test_a_protocol_with_unknown_or_malformed_fields_is_invalid() -> None:
     protocol["surprise"] = 1
     protocol["steps"] = {"not": "a list"}
     del protocol["version"]
-    problems = check_protocol(protocol)
+    problems = validate_protocol(protocol)
     assert "unbekanntes Feld: surprise" in problems
     assert "steps ist keine Liste" in problems
     assert "Pflichtfeld fehlt: version" in problems
+
+
+NESTED = {
+    "unbekannter Schlüssel im Eintrag": (
+        ("spot", "covered"),
+        True,
+        "spot: unbekannter Schlüssel covered",
+    ),
+    "Zone außerhalb der Liste": (("steps", 0, "zone"), "links", "steps[1]: zone = 'links'"),
+    "why außerhalb der Liste": (("steps", 1, "why"), "suche", "steps[2]: why = 'suche'"),
+    "Ort außerhalb der Liste": (
+        ("place", "where"),
+        "seitenleiste",
+        "place: where = 'seitenleiste'",
+    ),
+    "Art der Zeile": (("kind",), "dialog", "kind = 'dialog'"),
+    "Zustand der Auswahlstufe": (("matrix", "ohne", "state"), "aus", "matrix.ohne: Zustand 'aus'"),
+    "Pflichtfeld leer": (("variant",), None, "Pflichtfeld leer: variant"),
+    "Zeile als bloße Kennung": (("row",), "drill_hole", "row ist keine Tabelle"),
+    "Namen keine Texte": (("names",), [1, 2], "names ist keine Liste von Texten"),
+    "Fokus kein Wahrheitswert": (
+        ("focus_return",),
+        "ja",
+        "focus_return ist nicht wahr oder falsch",
+    ),
+    "Lizenzlauf unbekannt": (
+        ("licence_runs", "abgelaufen"),
+        {},
+        "licence_runs: unbekannter Schlüssel",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(NESTED))
+def test_the_protocol_schema_reaches_into_every_object(name: str) -> None:
+    """Schlüssel und Werte aus geschlossenen Listen werden bis in die Einträge geprüft.
+
+    Der Prüfstand schreibt nach diesem Schema und prüft sich mit
+    ``validate_protocol`` — ein Tippfehler in einem Schlüssel fiele sonst erst
+    als „nicht gelaufen“ auf.
+    """
+    path, value, expected = NESTED[name]
+    protocol = sample_protocol()
+    target: Any = protocol
+    for part in path[:-1]:
+        target = target[part]
+    target[path[-1]] = value
+    problems = validate_protocol(protocol)
+    assert any(problem.startswith(expected) for problem in problems), problems
+
+
+def test_the_sample_protocol_carries_every_field_of_the_schema() -> None:
+    """Das Muster nutzt das ganze Schema — sonst prüfte keine Gegenprobe ein neues Feld."""
+    from tools.function_checks import PROTOCOL_FIELDS, REQUIRED_FIELDS
+
+    assert set(sample_protocol()) == PROTOCOL_FIELDS
+    assert set(REQUIRED_FIELDS) == {"row", "kind", "package", "variant", "version"}
 
 
 def test_a_row_without_specification_is_valid_but_not_measured() -> None:
     """Eine Zeile ohne Spezifikation ist „ungeprüft“, kein ungültiges Protokoll (§2.3)."""
     protocol = sample_protocol()
     protocol["spec"] = None
-    assert check_protocol(protocol) == []
+    assert validate_protocol(protocol) == []
     case = judge_case(protocol, sample_context())
     assert case.points[4].verdict == "nicht_gelaufen"
     assert case.points[7].verdict == "nicht_gelaufen"
