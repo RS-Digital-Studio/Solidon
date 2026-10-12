@@ -64,6 +64,7 @@ ROW_SOURCES: Final[tuple[str, ...]] = (
     "merkmalfenster",
     "verlauf",
     "fensteraktion",
+    "startablauf",
 )
 
 #: Die Zeile, die für alle Kacheln des Bausteinkatalogs steht (Konzept §3).
@@ -263,6 +264,14 @@ COMMAND_PACKAGES: Final[dict[str, str]] = {
 #: mehrere Operationen und steht unter *Vorbereiten*.
 WINDOW_ACTION_PACKAGES: Final[dict[str, str]] = {
     "edit.auto_split": "D8",
+}
+
+#: Bedienflächen des Startablaufs, die vor dem Hauptfenster stehen und dann die
+#: Anwendung beenden: Kennung → Paket, die Funktion in ``app/ui``, die sie zeigt,
+#: und der Name in ``app/ui/app.py``, der sie ruft. „Demo abgelaufen“ (``over``)
+#: startet die Anwendung nicht — eine eigene Zeile und kein Lauf je Funktion.
+STARTUP_SURFACES: Final[dict[str, tuple[str, str, str]]] = {
+    "startup.expired_demo": ("D12", "app.ui.dialogs", "show_expired_demo"),
 }
 
 # --- Anforderung und Szene (Bauplan D0 §2.5) ----------------------------------
@@ -1002,6 +1011,27 @@ def window_action_rows(keys: Iterable[str], scenes: Mapping[str, Scene]) -> list
     return rows
 
 
+def startup_rows(scenes: Mapping[str, Scene]) -> list[Row]:
+    """Was der Start zeigt, bevor es ein Fenster gibt (:data:`STARTUP_SURFACES`).
+
+    Ein rohes Meldungsfenster ohne eigene Klasse und ohne Wortschatznamen: Die
+    Zeile trägt kein Ziel, bis der Wortschatz eines hat; der Prüfstand startet
+    sie mit der Vorbedingung ``licence = abgelaufen``.
+    """
+    return [
+        Row(
+            id=key,
+            kind="bedienflaeche",
+            source="startablauf",
+            package=package,
+            requirement="start",
+            start_scene=_start_scene("start", EXACT, scenes),
+            target="",
+        )
+        for key, (package, _module, _function) in STARTUP_SURFACES.items()
+    ]
+
+
 def read_menubar(path: Path) -> list[MenuEntry]:
     """Die Menüleiste aus :func:`write_menubar` zurück."""
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -1030,6 +1060,7 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
         lambda: surface_rows(TARGETS, scan.history, finding_action_ids(), scenes),
         lambda: feature_rows(source, scenes),
         lambda: window_action_rows(scan.window_actions, scenes),
+        lambda: startup_rows(scenes),
         lambda: command_rows(menubar, source, scenes),
     )
     for build in builders:
