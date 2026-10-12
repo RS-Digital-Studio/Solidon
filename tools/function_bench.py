@@ -110,6 +110,14 @@ STEP_TIMEOUT_S: Final = 180.0
 #: Klappe „Parameter“, nach dreißig Ereignisrunden ihre Zeile.
 STABLE_S: Final = 0.1
 
+#: Wie lange etwas über dem stillstehenden Klickort liegen muss, bevor es als
+#: „verdeckt“ zählt (Sekunden): Wächst der Baum nach einem Aufklappen, setzt er
+#: seine Höhe sofort, die Karte ihre erst Runden später — dazwischen liegt die
+#: neue Zeile außerhalb ihres Abschnitts, über der Karte oder unter der nächsten
+#: Klappe. Ein Kunde sieht diesen Zwischenstand nicht; was nach einer Sekunde
+#: noch deckt, sieht er.
+COVERED_S: Final = 1.0
+
 #: Ruhe nach dem Tippen einer Suchprobe, bevor die Treffer gelesen werden: Die
 #: Suche filtert bei jedem Zeichen, und die Liste baut sich danach in einer
 #: Ereignisrunde; eine Sekunde trägt beides auch unter Fremdlast.
@@ -940,10 +948,12 @@ class Walk:
         """Ein Schritt, der bis zum Ziel wächst: jeder Wegklick reiht den nächsten ein.
 
         Geklickt wird erst, wenn der nächste Klick :data:`STABLE_S` lang derselbe
-        ist (:meth:`stable`): Nach einem Aufklappen setzt die Karte ihre Höhen erst
-        in den folgenden Ereignisrunden (``fenster.md``, „Wie die Karten ihre Höhe
-        teilen“); vorher lag an der genannten Stelle noch die nächste Klappe, und
-        die Probe meldete „verdeckt“, wo nur gewartet werden musste.
+        ist und an seiner Stelle das Ziel liegt (:meth:`stable`): Nach einem
+        Aufklappen setzt die Karte ihre Höhen erst in den folgenden
+        Ereignisrunden (``fenster.md``, „Wie die Karten ihre Höhe teilen“);
+        vorher lag an der genannten Stelle noch die Karte oder die nächste
+        Klappe, und die Probe meldete „verdeckt“, wo nur gewartet werden musste.
+        Was :data:`COVERED_S` lang deckt, bleibt der Fund.
         """
         counter = {"way": 0}
 
@@ -963,11 +973,14 @@ class Walk:
         return Step(f"weg zu {name}", act, ready=self.stable(name), settle_ms=SETTLE_MS)
 
     def stable(self, name: str) -> Callable[[], bool]:
-        """Ob der nächste Klick zu ``name`` seit :data:`STABLE_S` derselbe ist.
+        """Ob der nächste Klick zu ``name`` fallen kann.
 
-        Ohne Weg ist er sofort „still“ — der Klick meldet dann „nicht auffindbar“.
+        Er muss seit :data:`STABLE_S` derselbe sein, und an seiner Mitte liegt
+        das Ziel — oder seit :data:`COVERED_S` etwas anderes; dann meldet der
+        Klick „verdeckt“. Ohne Weg ist er sofort bereit — der Klick meldet dann
+        „nicht auffindbar“.
         """
-        seen: dict[str, Any] = {"key": None, "since": 0.0}
+        seen: dict[str, Any] = {"key": None, "since": 0.0, "covered": None}
 
         def ready() -> bool:
             try:
@@ -977,9 +990,17 @@ class Walk:
             key = (str(click.why), tuple(self.ports.rect_data(click.rect)))
             now = self.ports.now()
             if key != seen["key"]:
-                seen["key"], seen["since"] = key, now
+                seen["key"], seen["since"], seen["covered"] = key, now, None
                 return False
-            return now - seen["since"] >= STABLE_S
+            if now - seen["since"] < STABLE_S:
+                return False
+            hit = self.ports.widget_under(self.ports.centre(click.rect))
+            if hit is not None and self.ports.covers(click, hit):
+                seen["covered"] = None
+                return True
+            if seen["covered"] is None:
+                seen["covered"] = now
+            return bool(now - seen["covered"] >= COVERED_S)
 
         return ready
 

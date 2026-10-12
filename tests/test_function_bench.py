@@ -339,7 +339,28 @@ def test_a_click_that_would_land_on_something_else_is_the_finding_covered() -> N
     assert ports.pressed == []
     assert steps[-1]["hit"] is False and steps[-1]["finding"] == bench.COVERED
     assert steps[-1]["widget_at"]["object_name"] == "einladung"
+    assert steps[-1]["t"] >= bench.STABLE_S + bench.COVERED_S
     assert bench.place_of(steps, "feature:resize_hole")["error"] is not None
+
+
+def test_a_cover_that_clears_while_the_card_settles_is_no_finding() -> None:
+    """Der Zwischenstand nach einem Aufklappen deckt kurz — gewartet wird, geklickt aufs Ziel.
+
+    Der Baum wächst sofort, die Karte Runden später: Eine halbe Sekunde liegt
+    über der Zeile die Karte, danach die Zeile selbst. Kein Fund, ein Klick.
+    """
+    timer = FakeTimer()
+    row = FakeWidget("zeile")
+    card = FakeWidget("overlayCard")
+    script = {"tree.row:obj_1.hole_1": [FakeClick((0, 300, 200, 20), "left", "ziel", row)]}
+    ports = FakePorts(timer, script, under=lambda click: card if timer.now < 0.5 else row)
+    steps: list[dict[str, Any]] = []
+    walker = bench.Walk(ports, steps, 0.0)
+    walker.phase = bench.PATH_PHASE
+    machine = run_machine(timer, [walker.step("tree.row:obj_1.hole_1")])
+    assert machine.done and machine.finding is None and machine.error is None
+    assert ports.pressed == [("zeile", (100, 310), "left")]
+    assert steps[-1]["hit"] is True and steps[-1]["t"] >= 0.5
 
 
 def test_a_target_without_a_way_is_the_finding_not_found() -> None:
