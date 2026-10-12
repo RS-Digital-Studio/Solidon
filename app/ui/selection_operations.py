@@ -34,6 +34,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QAction,
+    QFont,
     QFontMetrics,
     QFontMetricsF,
     QKeyEvent,
@@ -547,7 +548,10 @@ class _HitRows(QStyledItemDelegate):
         area = option.rect.adjusted(NORMAL, TIGHT, -SHORTCUT_MARGIN, -TIGHT)
         metrics = plain.fontMetrics
         line = metrics.height()
-        title_font = plain.font
+        # **Eine Kopie:** ``plain.font`` ist in PySide6 eine Referenz auf das
+        # Feld, und halbfett stand sonst auch Kürzel und zweite Zeile — normal
+        # umbrochen, halbfett zu breit, ihre letzte Zeile abgeschnitten.
+        title_font = QFont(plain.font)
         if chosen:
             title_font.setBold(True)
         painter.setFont(title_font)
@@ -605,6 +609,35 @@ class _HitList(QListWidget):
         super().resizeEvent(event)
         self.doItemsLayout()
         self.updateGeometry()
+
+    @override
+    def event(self, event: QEvent) -> bool:
+        """Return gehört der Liste, nicht einem Kürzel des Fensters (:meth:`keyPressEvent`)."""
+        if (
+            event.type() == QEvent.Type.ShortcutOverride
+            and isinstance(event, QKeyEvent)
+            and event.key() in _CHOOSE_KEYS
+        ):
+            event.accept()
+            return True
+        return super().event(event)
+
+    @override
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """**Return führt aus und endet hier** (Review RM-735, F11).
+
+        Qt meldet die Aktivierung und reicht das Ereignis danach an die
+        Vorfahren weiter — an den Filter einer laufenden Platzierung in
+        derselben Spalte, der auf Return seine Werte übernimmt. Im Suchfeld
+        nimmt :meth:`SelectionOperationsPanel._search_key` die Taste ab.
+        """
+        super().keyPressEvent(event)
+        if event.key() in _CHOOSE_KEYS:
+            event.accept()
+
+
+#: Die Tasten, mit denen die Trefferliste ausführt.
+_CHOOSE_KEYS: Final = frozenset({Qt.Key.Key_Return, Qt.Key.Key_Enter})
 
 
 #: Die Tasten, die im Suchfeld ihm gehören und nicht dem Fenster
@@ -686,9 +719,6 @@ class SelectionOperationsPanel(QWidget):
         self._creators = frozenset(spec.name for spec in scene_creators(specs))
         """Was ohne Auswahl einen Körper anlegt (:func:`scene_creators`) — es steht
         auf der Stufe ohne Auswahl und auf keiner anderen."""
-        self._searched = frozenset(spec.name for spec in specs)
-        """Welche Operationen die Suche kennt: alle, die das Panel bekommen hat,
-        jeder Stufe — auch die Bausteine des Katalogs (RM-735)."""
         self._commands: Callable[[], list[SearchEntry]] = list
         """Die Befehle des Fensters als Zeilen der Suche (:meth:`set_search_sources`)."""
         self._key_of: Callable[[str, str | None], str | None] = lambda _name, declared: declared
@@ -699,9 +729,14 @@ class SelectionOperationsPanel(QWidget):
         """Die Freigabe aus dem letzten :meth:`set_context` — auch für die Suche."""
         self._rows: list[SearchEntry] | None = None
         """Die Zeilen der Suche zu dieser Auswahl, gebaut beim ersten Zeichen
-        und verworfen, sobald sich Auswahl oder Freigabe ändern."""
+        und verworfen, sobald sich Auswahl, Freigabe oder Register ändern."""
+        self._rows_from: tuple[OperationSpec, ...] = ()
+        """Der Registerstand, aus dem :attr:`_rows` gebaut ist."""
         self._hits: list[SearchEntry] = []
         """Was die Trefferliste gerade zeigt, in ihrer Reihenfolge."""
+        self._hits_for = ""
+        """Für welchen Suchtext die Trefferliste gebaut ist — bei demselben
+        bleibt die gewählte Zeile (:meth:`_show_hits`)."""
         self._at_a_feature = frozenset(spec.name for spec in feature_operations(specs))
         """Welche Handlungen einem **Merkmal** gelten.
 
@@ -1187,7 +1222,9 @@ class SelectionOperationsPanel(QWidget):
         (self._list_twins if twin else self._buttons)[spec.name] = button
         return button
 
-    def add_window_action(self, name: str, category: str, action: QAction) -> bool:
+    def add_window_action(
+        self, name: str, category: str, action: QAction, *, replaces: str = ""
+    ) -> bool:
         """Eine Handlung des Fensters als Zeile der Gruppe ihrer Kategorie.
 
         *Automatisch teilen* ist ein Ablauf über mehreren Operationen und kein
@@ -1197,6 +1234,12 @@ class SelectionOperationsPanel(QWidget):
         und Grund liest :meth:`_take_availability` von der Aktion — dieselbe,
         die Suche und Kürzel auslösen.
 
+        ``replaces`` nennt die Operation, deren Platz die Aktion einnimmt
+        (``WINDOW_COMMAND_OPERATIONS``): Ihr Knopf geht, und die Aktion steht
+        auf ihrer Stufe. Ohne Auswahl stand sonst die Operation ``load`` als
+        „Modell einfügen“ mit eigenem Dialog neben dem Befehl gleichen Namens,
+        der die Dateiauswahl öffnet (Review RM-735, F8).
+
         ``False``, wenn es die Gruppe nicht gibt (keine Operation der Kategorie
         im Register): Dann sucht sich der Aufrufer einen anderen Platz — ein
         Eintrag darf umziehen, nicht verschwinden.
@@ -1205,6 +1248,16 @@ class SelectionOperationsPanel(QWidget):
         if title not in self._groups:
             return False
         section, toggle, buttons = self._groups[title]
+        replaced = self._buttons.pop(replaces, None) if replaces else None
+        if replaced is not None:
+            buttons = tuple(button for button in buttons if button is not replaced)
+            replaced.hide()
+            replaced.deleteLater()
+            self._states.pop(replaces, None)
+            if replaces in self._creators:
+                self._creators = (self._creators - {replaces}) | {name}
+            if replaces in self._for_all_bodies:
+                self._for_all_bodies = (self._for_all_bodies - {replaces}) | {name}
         grid = self._grids[title]
         box = grid.parentWidget()
         button = QToolButton(box)
@@ -1654,7 +1707,13 @@ class SelectionOperationsPanel(QWidget):
         arbeiten auf ihr.
         """
         hits, loosened = ranked(self._search_rows(), wanted)
+        # **Die gewählte Zeile bleibt bei demselben Wort** (Review RM-735, F7):
+        # Das Fenster meldet die Lage nach jeder fertigen Auswertung neu, und
+        # die Wahl mit den Pfeiltasten fiel dabei auf den ersten Treffer zurück.
+        current = self.hits.currentItem() if wanted == self._hits_for else None
+        kept = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
         self._hits = hits
+        self._hits_for = wanted
         self.scroller.setVisible(False)
         self.hits.clear()
         if not hits:
@@ -1676,7 +1735,9 @@ class SelectionOperationsPanel(QWidget):
             self.hits.addItem(heading)
         for entry in hits:
             self.hits.addItem(self._hit_item(entry))
-        self.hits.setCurrentRow(first_choice(hits, wanted) + int(loosened))
+        names = [entry.name for entry in hits]
+        choice = names.index(kept) if kept in names else first_choice(hits, wanted)
+        self.hits.setCurrentRow(choice + int(loosened))
         self.hits.setVisible(True)
         self.hits.updateGeometry()
 
@@ -1732,8 +1793,15 @@ class SelectionOperationsPanel(QWidget):
         sonst geht, zuletzt das Gesperrte, je nach Titel. Gebaut beim ersten
         Zeichen und verworfen, sobald sich Auswahl oder Freigabe ändern
         (:meth:`set_context`) — ein Tastendruck rechnet nur die Rangfolge.
+
+        **Aus dem Register von jetzt**, nicht aus dem beim Bau der Karte: Ein
+        eingelesener oder im Rezeptdialog gespeicherter Baustein kommt zur
+        Laufzeit dazu und fand bis zum Neustart „Kein Treffer“ (Review RM-735,
+        F10). Der Vergleich kostet einen Zeigervergleich je Operation.
         """
-        if self._rows is None:
+        operations_now = REGISTRY.all()
+        if self._rows is None or operations_now != self._rows_from:
+            self._rows_from = operations_now
             operations = [
                 replace(
                     entry,
@@ -1742,7 +1810,7 @@ class SelectionOperationsPanel(QWidget):
                     shortcut=self._key_of(entry.name, entry.shortcut),
                 )
                 for entry in search_entries()
-                if entry.name in self._searched and entry.name not in self._as_commands
+                if entry.name not in self._as_commands
                 for usable, reason in (self._availability(entry.name),)
             ]
             rows = sorted(
@@ -1854,16 +1922,23 @@ class SelectionOperationsPanel(QWidget):
         self.hits.clear()
         self.hits.setVisible(False)
         self._hits = []
+        self._hits_for = ""
         self._manual.setVisible(False)
         self.scroller.setVisible(found > 0)
         if found > 0:
             self._nothing.setVisible(False)
             return
-        if self._nothing_chosen:
-            reasons = (
-                self._states.get(name, (True, ""))[1]
-                for name in sorted(self._creators | self._for_all_bodies)
-            )
+        # **Gesperrt nennt den Grund, an jeder Stufe** (Review RM-735, F9): Am
+        # Körper mit abgelaufener Lizenz stand „steht oben bei den Maßen“, und
+        # oben stehen am Körper keine. Den Satz zu den Maßen gibt es nur, wo die
+        # Stufe selbst keine Handlungen hat.
+        here = sorted(
+            name
+            for name in self._buttons
+            if self._fits_the_level(name) and name not in self._quick_shown
+        )
+        if here:
+            reasons = (self._states.get(name, (True, ""))[1] for name in here)
             text = next((reason for reason in reasons if reason), "")
         else:
             text = tr("Was sich hier tun lässt, steht oben bei den Maßen.")

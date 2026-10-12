@@ -375,7 +375,8 @@ Wortstamm („bohren“ → *Bohrung setzen*), zuletzt für mehrere Wörter
 **irgendeines**, nach Trefferzahl — mit einer Zeile darüber, die das sagt, denn
 eine Liste, die still weniger prüft, sähe aus wie eine genaue. Die Kundenwörter
 stehen je Sprache im Katalog (`registry.search.CUSTOMER_WORDS`, Kontext
-„Suchwörter“): Ein Titeltreffer mitten im Wort zählt nach ihnen, die Wörter
+„Suchwörter“): Ein Titeltreffer mitten im Wort zählt nach ihnen, ein
+Kundenwort vor einem Titelwort, nie vor einem ganzen Titel, die Wörter
 einer Anfrage stehen in **einer** Wendung, und die ungenauen Stufen
 (`LOOSE_RANK`) werten wie der Agent (`rank_entries`). Rangfolge und
 Vorauswahl: `registry.search.ranked`, `first_choice`.

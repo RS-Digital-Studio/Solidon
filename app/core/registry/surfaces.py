@@ -715,7 +715,7 @@ def _panel_place(spec: OperationSpec) -> str:
         if spec.also_on_body:
             # **Beide Stellen, der Körper zuerst** (``also_on_body``): Oben am
             # gewählten Körper ist die Hauptstelle. Wer nur das Merkmal nennt,
-            # schickt Palette, Agent und Handbuch an die Nebenstelle.
+            # schickt Suche, Agent und Handbuch an die Nebenstelle.
             selection = _("bei gewähltem Körper oder Merkmal: {kinds}", kinds=kinds)
         else:
             selection = _("bei gewähltem Merkmal: {kinds}", kinds=kinds)
@@ -928,7 +928,7 @@ def sentences(text: str) -> list[str]:
 
     Ein Satz endet an Punkt, Ausrufe- oder Fragezeichen, wenn danach etwas
     beginnt, das kein Kleinbuchstabe ist; eine Abkürzung wie „z. B.“ beendet
-    keinen, eine Zahl wie „1.5“ auch nicht. Menü, Statuszeile, Palette und der
+    keinen, eine Zahl wie „1.5“ auch nicht. Menü, Statuszeile, Suche und der
     Längenwächter schneiden mit dieser einen Regel — zwei Regeln hießen, der
     Wächter misst etwas anderes, als der Kunde liest.
     """
@@ -947,7 +947,7 @@ def sentences(text: str) -> list[str]:
 
 
 def first_sentence(text: str) -> str:
-    """Der erste Satz eines Kundentexts — was Menü, Statuszeile und Palette zeigen."""
+    """Der erste Satz eines Kundentexts — was Menü, Statuszeile und Suche zeigen."""
     parts = sentences(text)
     return parts[0] if parts else ""
 

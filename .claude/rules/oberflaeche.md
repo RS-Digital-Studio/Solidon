@@ -99,7 +99,7 @@ Handlung (`Session.agentCancelled`).
 **Kein Wort, das nur ein Konstrukteur kennt, wo ein Neuling liest** — das Wort
 aus seinem Slicer: Richtung (nicht Normale), Außenseiten angleichen, geschlossen
 (nicht wasserdicht), auf einem Raster (nicht Voxelstufe), Vereinigen oder
-Abziehen (nicht boolesch), jede Kante sichtbar (nicht Facetten), ohne Zufall
+Abziehen (nicht boolesch; Suchwort ja), jede Kante sichtbar (nicht Facetten), ohne Zufall
 (nicht deterministisch). Begründet bleiben *Slot* im 3MF-Weg und *Rasterweite* hinter der Klappe.
 *Bahnbreite* heißt dieselbe Druckgröße in Einstellungen, Befunden,
 Wandstärkenleiter und Handbuch; die Übersetzungen verwenden den Namen des
@@ -142,8 +142,8 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
   Gedankenstriche im Übermaß; der zusammenfassende Schlusssatz. Dagegen:
   kürzer, ruhig ein unfertiger Gedanke oder umgangssprachlicher Einwurf, ein
   Absatz ungerundet. Gilt auch im Gespräch mit Robert. Semikolon, die Formel
-  „Nur …:“ und Fachwörter der Datenhaltung hält `test_wording` über jeden
-  Katalogtext samt Übersetzung mit eingefrorenem Bestand
+  „Nur …:“ und Fachwörter der Datenhaltung hält `test_wording` über die
+  Katalogtexte samt Übersetzung (ohne Suchwörter) mit eingefrorenem Bestand
   (`tests/data/text_patterns.json`, `translated_semicolons.json`, RM-509).
 - **Nach außen heißt es „Version“, nicht „Fassung“** (Entscheidung Robert) —
   ein zweites Wort lässt den Kunden einen Unterschied suchen. Intern (Commits,

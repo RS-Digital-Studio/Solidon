@@ -191,3 +191,21 @@ Auswahlpanel und Suche) wird mit RM-735 entsprechend neu gefasst.
 | Die Trefferliste brach jede zweite Zeile je Tastendruck rund zehnmal neu um | Leistung | leicht | Profil und Messung C4 (`nachweise-palette-2026-10/leistung-tastendruck.md`): Höchstwert 31,5 → 22,7 ms | behoben, Merker im Zeilenzeichner |
 | Bei Suchtext rechnete `_filter` die verdeckte Karte je Tastendruck mit | Leistung | leicht | gepaarte Messung an `_filter`, je 720 Paare: Median −0,42 ms, schneller in 394/720; zweiter Lauf −0,20 ms, 469/720 | behoben, früher Ausstieg; `test_the_card_rests_while_searching_and_comes_back_at_the_new_level` |
 | `test_orient.py` erwartete für *Druckoptimal ausrichten* noch die Kategorie `transform` | Test zog nicht mit | leicht | Tor vom 11.10., gepinnt nachgestellt | behoben im RM-735-Commit |
+
+Das Review vor dem Merge (`solidon3d-review`, 12.10.) fand zwölf weitere, keinen
+schweren. Die Kennungen sind die des Berichts.
+
+| Fund | Art | Schwere | Beleg | Stand |
+|---|---|---|---|---|
+| F1: Die vorgewählte Trefferzeile schrieb auch Kürzel und zweite Zeile halbfett, deren letzte Zeile fiel aus dem Rechteck (`plain.font` ist eine Referenz) | Fehler | mittel | `test_search.py::test_the_chosen_hit_sets_only_its_title_in_bold`, vorher rot | behoben, Kopie der Schrift |
+| F6: „Wiederholen“ wählte *Kopien in Reihe oder Kreis* vor — ein Kundenwort schlug den ganzen Titel einer anderen Zeile | Fehler | mittel | `test_search.py::test_whoever_types_a_whole_title_gets_that_row_first` (sechs Sprachen), vorher rot | behoben: der ganze Titel zählt wie Titel und Kundenwort; die übrigen zehn geänderten Vorauswahlen („bewegen“ → *Verschieben*, „laden“ → *Öffnen*, „rau“ → *Glätten* …) bleiben bewusst, dort trifft das Kundenwort nur ein Wort im fremden Titel |
+| F8: Ohne Auswahl stand die Operation `load` als „Modell einfügen“ mit eigenem Dialog neben dem gleichnamigen Befehl | Fehler, Ein Text eine Wirkung | mittel | `test_ui.py::test_the_card_without_a_selection_inserts_a_model_like_the_menu`, `test_selection_operations.py::test_the_window_command_takes_the_place_of_its_operation`, vorher rot | behoben, `add_window_action(replaces=…)` |
+| F10: Ein zur Laufzeit registrierter Baustein fehlte in der Suche bis zum Neustart | Fehler | mittel | `test_selection_operations.py::test_an_operation_registered_later_is_found`, vorher rot | behoben, Zeilen aus dem Register von jetzt |
+| F2: *Funktion suchen* hatte keinen Fenstertest | Testlücke | mittel | drei Tests in `test_ui.py` (Lage, Startbildschirm, Zeichnung und Reiterfenster) und *Im Handbuch suchen* | behoben |
+| F3: Der Pfeiltastentest blieb grün, wenn die Pfeiltasten nichts taten | Testlücke | mittel | Gegenprobe mit stillgelegtem `_step_through_hits` jetzt rot | behoben, Wort mit fünf Treffern und Kopfzeile |
+| F4: Sollwert „was zur Auswahl passt“ mit der geprüften Methode gerechnet; Zeichner der Liste ungeprüft | Testlücke | leicht | `test_interface_limits.py`, `test_the_hit_list_draws_with_its_own_rows` | behoben, Sollwert aus dem Register |
+| F5: Sechs Kommentare sprachen im Präsens von der Palette | Aufräumen | leicht | Bericht | behoben |
+| F7: Jede neue Lage setzte die mit Pfeiltasten gewählte Zeile zurück | Fehler | leicht | `test_a_new_report_of_the_selection_keeps_the_hit_chosen_by_arrow`, vorher rot | behoben |
+| F9: Am Körper mit lauter Sperren „steht oben bei den Maßen“ (seit 0.6.0) | Fehler, Regel 17 | leicht | `test_a_body_with_every_action_locked_says_why`, vorher rot | behoben, Grund an jeder Stufe |
+| F11: Return in der Trefferliste lief an die Vorfahren weiter | Fehler | leicht | `test_return_in_the_hit_list_ends_there`, vorher rot | behoben, `_HitList` nimmt die Taste |
+| F12: Regel `oberflaeche.md`, Zitat in `make_workshop_videos.py`, eine Testmeldung | Unterlage | leicht | Bericht | behoben |

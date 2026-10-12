@@ -789,14 +789,18 @@ def rank(entry: SearchEntry, query: str) -> int:
     )
     # **Titel *und* Kundenwort schlägt Titel allein.** Seit beide Filament-
     # Handlungen das Wort im Titel tragen („Filament zuweisen“, „Filament auf
-    # eine Fläche“), bricht das Kundenwort den Gleichstand.
-    if at_title_start and in_phrase:
+    # eine Fläche“), bricht das Kundenwort den Gleichstand. **Der ganze Titel
+    # zählt genauso:** „Wiederholen“ ist der Titel des Befehls und ein
+    # Kundenwort von *Kopien in Reihe oder Kreis*; mit dem Kundenwort vorn
+    # startete Return eine andere Handlung als die beim Namen genannte
+    # (Review RM-735, F6). Bei gleicher Güte entscheidet die Auswahl.
+    if at_title_start and (in_phrase or re.findall(r"\w+", title) == re.findall(r"\w+", typed)):
         return 0
     # **Genau gesagt vor jedem Titelwort einer anderen Zeile** (RM-734):
     # „Differenz“ ist ein Kundenwort des *Abziehens* und der Anfang der
     # Einstellung *Differenzansicht*, „difference“ ein Wort von *Settings:
-    # Difference view*. Das Kundenwort ist eine Zuordnung, der Titel der
-    # anderen Zeile ein Zufall.
+    # Difference view*. Das Kundenwort ist eine Zuordnung, ein Wort im Titel
+    # der anderen Zeile ein Zufall — anders als ihr ganzer Titel (oben).
     if said_exactly:
         return 1
     if at_title_start:

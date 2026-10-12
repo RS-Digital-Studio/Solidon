@@ -763,6 +763,14 @@ def test_the_search_puts_what_fits_the_selection_first(qt_app: QApplication) -> 
         f"Diese Operationen sollten bei ausgewählter Bohrung vorn stehen: "
         f"{sorted(for_hole)}, vorn stehen aber {sorted(leading)}."
     )
+    # **Und gegen eine Herkunft von außen** (Review RM-735, F4): Sollwert und
+    # Sortierung lesen beide ``_stands_here``; ein falsches gäbe beiden
+    # dieselbe Antwort. Was an einer Bohrung gilt, sagt das Register; *Bohrung
+    # ändern* steht dort als Feld im Merkmalfenster, nicht in der Karte.
+    at_holes = {spec.name for spec in REGISTRY.all() if "hole" in spec.applies_to}
+    assert {"countersink_hole", "plug_hole"} <= at_holes, "das Register sagt es anders"
+    assert {"countersink_hole", "plug_hole"} <= leading
+    assert "union_objects" not in leading, "eine Körperhandlung steht an der Bohrung vorn"
 
 
 def _menu_entries(menu: QMenu) -> list[str]:

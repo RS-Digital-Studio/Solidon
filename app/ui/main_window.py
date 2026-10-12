@@ -5330,9 +5330,16 @@ class MainWindow(QMainWindow):
                         # neben „Modell einfügen …“ in *Datei* — zwei Zeilen,
                         # ein Name, zwei Wege. Wie beim Katalog hängt hier
                         # dieselbe ``QAction``; die Operation behält ihre
-                        # Aktion am Fenster für Suche und Freigabe.
+                        # Aktion am Fenster für Suche und Freigabe. In der
+                        # Karte ohne Auswahl ebenso (Review RM-735, F8).
                         place.addAction(self.import_action)
                         self._op_actions[spec.name] = self._operation_action(None, spec)
+                        self.selection_operations.add_window_action(
+                            WINDOW_COMMAND_OPERATIONS[spec.name],
+                            spec.category,
+                            self.import_action,
+                            replaces=spec.name,
+                        )
                         continue
                     self._op_actions[spec.name] = self._operation_action(place, spec)
                 self._add_variant_entries(section.category, target, subgroups)
@@ -12837,7 +12844,7 @@ class MainWindow(QMainWindow):
         Fläche; erst wenn nichts gewählt ist, ist die Grundebene die richtige
         Vorgabe. Das gilt für jeden Weg ohne eigene Ebene — den Knopf der
         Werkzeugzeile genauso wie eine Skizzen-Operation aus Menü oder
-        Palette.
+        Suche.
 
         **Gezeichnet wird für genau einen Körper** (Robert, 23.09.2026; Bericht
         „Bedienabnahme Zeichnen", Abschnitt 7). ``body`` nennt ihn

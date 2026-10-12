@@ -303,6 +303,61 @@ view.close()
     assert done.returncode == 0, done.stdout + done.stderr
 
 
+def test_the_chosen_hit_sets_only_its_title_in_bold(qt_app: QApplication) -> None:
+    """Die vorgewählte Zeile steht halbfett — nur ihr Titel.
+
+    ``QStyleOptionViewItem.font`` gibt in PySide6 eine Referenz auf das Feld,
+    keine Kopie: Wer sie halbfett stellte, stellte Kürzel und zweite Zeile mit
+    um. Die zweite Zeile wurde normal umbrochen und halbfett geschrieben, und
+    ihre letzte Zeile fiel aus dem Rechteck — in der Zeile, die Return
+    ausführt (Review RM-735, F1).
+    """
+    from PySide6.QtCore import QRect
+    from PySide6.QtGui import QFont, QImage, QPainter
+    from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
+
+    from app.ui.selection_operations import _HitList, _HitRows
+
+    gezeichnet: list[tuple[str, bool]] = []
+
+    class Painter(QPainter):
+        def drawText(self, *args: object) -> None:  # noqa: N802 — Qt-Name
+            gezeichnet.append((str(args[-1]), self.font().bold()))
+            super().drawText(*args)  # type: ignore[call-overload]
+
+    view = _HitList()
+    view.resize(320, 200)
+    view.addItem("Bohrung setzen\tCtrl+B\nSetzt eine Bohrung an der gewählten Stelle.")
+    delegate = _HitRows(view)
+    try:
+        for gewaehlt in (False, True):
+            gezeichnet.clear()
+            option = QStyleOptionViewItem()
+            option.rect = QRect(0, 0, 320, 60)
+            option.widget = view
+            option.font = QFont(view.font())
+            option.state = QStyle.StateFlag.State_Enabled | (
+                QStyle.StateFlag.State_Selected if gewaehlt else QStyle.StateFlag.State_None
+            )
+            image = QImage(320, 60, QImage.Format.Format_ARGB32)
+            painter = Painter(image)
+            try:
+                delegate.paint(painter, option, view.model().index(0, 0))
+            finally:
+                painter.end()
+            assert [text for text, _bold in gezeichnet] == [
+                "Bohrung setzen",
+                "Ctrl+B",
+                "Setzt eine Bohrung an der gewählten Stelle.",
+            ], gezeichnet
+            assert [bold for _text, bold in gezeichnet] == [gewaehlt, False, False], (
+                "gewählt" if gewaehlt else "frei",
+                gezeichnet,
+            )
+    finally:
+        view.close()
+
+
 def test_the_search_writes_the_keys_the_way_the_keyboard_does(qt_app: QApplication) -> None:
     """Die Palette lehrte „Del", während das Menü daneben „Entf" sagte.
 
@@ -480,7 +535,7 @@ def test_the_word_a_customer_types_lands_on_top() -> None:
 
     load_operations()
     eintraege = search_entries(REGISTRY)
-    assert eintraege, "no palette entries — nothing would be checked below"
+    assert eintraege, "keine Zeilen der Suche — dann prüft das nichts"
 
     daneben: list[str] = []
     for wort, gemeint in CUSTOMER_WORDS:
@@ -640,6 +695,44 @@ def test_a_customer_word_said_exactly_beats_a_longer_word_in_a_title(
     shown = tr("{name}: {value}", name=tr("Einstellungen"), value=tr(title))
     zeile = SearchEntry(name=row, title=shown, doc="", category="settings")
     assert rank(gemeint, word) < rank(zeile, word), f"„{word}“ ({language}) zeigt {shown} zuerst"
+
+
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+def test_whoever_types_a_whole_title_gets_that_row_first(language: str) -> None:
+    """Den ganzen Titel einer Zeile schlägt keine andere Zeile.
+
+    RM-734 stellte ein genau gesagtes Kundenwort vor jeden Titelanfang, damit
+    „Differenz“ das Abziehen vor der Einstellung *Differenzansicht* zeigt. Die
+    Regel griff auch, wo die Anfrage der **ganze Titel** einer anderen Zeile
+    war: „Wiederholen“ wählte *Kopien in Reihe oder Kreis* vor, weil
+    „wiederholen“ dessen Kundenwort ist — Return startete eine andere Handlung
+    als die, deren Namen man getippt hatte (Review RM-735, F6). Gleich gut
+    darf eine andere sein („Verschieben“ und *Merkmal verschieben*): Dann
+    entscheidet, was an der Auswahl steht.
+    """
+    from app.core.registry.search import rank
+    from app.i18n import set_language, tr
+    from app.i18n.catalog import install_language
+
+    load_operations()
+    install_language(language)
+    set_language(language)
+    try:
+        wiederholen = SearchEntry(
+            name="edit.redo", title=tr("Wiederholen"), doc="", category="edit"
+        )
+        zeilen = [*search_entries(REGISTRY), wiederholen]
+        daneben: list[str] = []
+        for zeile in zeilen:
+            titel = str(zeile.title)
+            eigene = rank(zeile, titel)
+            for andere in zeilen:
+                if str(andere.title) != titel and rank(andere, titel) < eigene:
+                    daneben.append(f"„{titel}“ -> {andere.name} vor {zeile.name}")
+        assert not daneben, f"{language}: " + "; ".join(daneben[:10])
+    finally:
+        install_language("de")
+        set_language("de")
 
 
 def test_every_customer_word_belongs_to_a_row_of_the_search() -> None:

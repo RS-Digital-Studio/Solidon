@@ -7769,7 +7769,7 @@ class ReportPanel(QWidget):
             entry.setEnabled(not self._previous(item))
             chosen[entry] = action
         # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
-        # None. Dieselbe Notlüge wie bei ``currentItem`` in der Palette.
+        # None — ``QMenu.exec`` gibt dann nichts zurück.
         picked = cast(QAction | None, menu.exec(self.list.viewport().mapToGlobal(position)))
         # Erst nachschlagen, dann wegräumen: Die gewählte Aktion gehört dem
         # Menü, und ``deleteLater`` lässt ihr die Runde, in der sie gelesen

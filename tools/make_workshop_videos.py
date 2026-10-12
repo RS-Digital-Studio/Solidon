@@ -9,7 +9,7 @@ Ein Import dieses Moduls verändert weder die Umgebung noch Nutzerdaten.
 ``--encode-only`` kodiert einen bereits abgeschlossenen Aufnahmelauf.
 
 **Gezeigt wird der Weg, den ein Kunde nimmt** (Entscheidung Robert, 13.09.2026:
-nicht über die Suche): Eine Bohrung wird angeklickt und bekommt ihre
+nicht über die damalige Befehlspalette):Eine Bohrung wird angeklickt und bekommt ihre
 neue Zahl in der Karte rechts, der Knopf *Übernehmen* darunter führt sie aus.
 Verrunden und Fase kommen aus der Handlungsliste zur Auswahl, das Verschieben
 aus der Bewegen-Leiste unten, ein benanntes Maß aus dem Doppelklick auf den

@@ -459,6 +459,9 @@ def test_selection_changes_update_in_place_and_explain_disabled_actions(
     creators = {spec.name for spec in scene_creators(REGISTRY.all())}
     assert {"create_brep_cone", "create_label", "load_step"} <= creators
     shown = {name for name, button in panel._buttons.items() if button.isVisible()}
+    # ``load`` steht am Fenster als Befehl *Modell einfügen …*
+    # (``test_the_window_command_takes_the_place_of_its_operation``); die Karte
+    # allein kennt nur die Operation.
     assert shown == for_all | creators, shown
 
 
@@ -1276,13 +1279,29 @@ def test_the_search_reaches_every_function_and_its_keys_belong_to_it(
     names = _hit_names(panel)
     assert any(name in catalogue_operations() for name in names), "auch die Bausteine"
 
-    panel.search.setText("duplizieren")
-    assert _hit_names(panel)[0] == "duplicate_object"
+    # **Mit mehreren Treffern**, sonst kann die Pfeiltaste nicht zeigen, dass
+    # sie etwas tut: „duplizieren“ hat einen, und der Test blieb grün, als
+    # ``_step_through_hits`` nichts tat (Review RM-735, F3).
+    panel.search.setText("drehen")
+    assert len(_hit_names(panel)) > 2, _hit_names(panel)
     first = panel.hits.currentRow()
+    assert first + 1 < panel.hits.count()
     press(Qt.Key.Key_Down)
-    assert panel.hits.currentRow() in (first, first + 1), "die Pfeiltaste bewegt die Wahl"
+    assert panel.hits.currentRow() == first + 1, "die Pfeiltaste bewegt die Wahl"
     press(Qt.Key.Key_Up)
     assert panel.hits.currentRow() == first
+
+    # Über der gelockerten Liste steht eine Kopfzeile; Pfeil hoch bleibt auf
+    # dem ersten Treffer und wählt sie nie.
+    panel.search.setText("zacken abrunden")
+    heading = panel.hits.item(0)
+    assert heading.data(Qt.ItemDataRole.UserRole) is None, "keine Lockerung — Test prüft nichts"
+    panel.hits.setCurrentRow(1)
+    press(Qt.Key.Key_Up)
+    assert panel.hits.currentRow() == 1, "die Kopfzeile ist keine Wahl"
+
+    panel.search.setText("duplizieren")
+    assert _hit_names(panel)[0] == "duplicate_object"
     assert press(Qt.Key.Key_Return)
     assert chosen == ["duplicate_object"], "Return führt den vorgewählten aus"
     assert panel.search.text() == "" and left == [True], "Feld leer, Fokus in die Ansicht"
@@ -1292,6 +1311,179 @@ def test_the_search_reaches_every_function_and_its_keys_belong_to_it(
     assert panel.search.text() == "" and left == [True], "Escape leert erst das Feld"
     press(Qt.Key.Key_Escape)
     assert left == [True, True], "und gibt dann den Fokus ab"
+
+
+def test_a_new_report_of_the_selection_keeps_the_hit_chosen_by_arrow(
+    qt_app: QApplication,
+) -> None:
+    """Die mit den Pfeiltasten gewählte Zeile bleibt, wenn das Fenster die Lage
+    neu meldet — nach jeder fertigen Auswertung (``_update_actions``).
+
+    Bis dahin baute jede Meldung die Liste neu und wählte wieder den ersten
+    Treffer; ein Return in diesem Moment startete eine andere Zeile als die
+    gewählte (Review RM-735, F7). Ein anderes Wort wählt neu.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QKeyEvent
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1))
+    panel.search.setText("drehen")
+    first = panel.hits.currentRow()
+    down = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Down, Qt.KeyboardModifier.NoModifier)
+    panel.eventFilter(panel.search, down)
+    assert panel.hits.currentRow() == first + 1
+    picked = panel.hits.currentItem().data(Qt.ItemDataRole.UserRole)
+
+    panel.set_context(1, _availability(1))
+    assert panel.hits.currentItem().data(Qt.ItemDataRole.UserRole) == picked, "die Wahl bleibt"
+
+    from app.core.registry.search import first_choice
+
+    panel.search.setText("drehe")
+    assert panel.hits.currentRow() == first_choice(panel._hits, "drehe"), (
+        "ein anderes Wort wählt neu"
+    )
+
+
+def test_return_in_the_hit_list_ends_there(qt_app: QApplication) -> None:
+    """Return in der Trefferliste führt aus und läuft nicht an die Vorfahren weiter.
+
+    Im Feld nahm :meth:`_search_key` die Taste schon ab; in der Liste (Tab,
+    Klick) meldete Qt die Aktivierung und reichte das Ereignis danach hinauf —
+    an den Filter einer laufenden Platzierung in derselben Spalte, der auf
+    Return seine Werte übernimmt (Review RM-735, F11).
+    """
+    from PySide6.QtCore import QEvent, QObject
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QVBoxLayout
+
+    class Spy(QObject):
+        def __init__(self) -> None:
+            super().__init__()
+            self.seen: list[str] = []
+
+        def eventFilter(self, _watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
+            if event.type() in (QEvent.Type.KeyPress, QEvent.Type.ShortcutOverride):
+                key = getattr(event, "key", lambda: None)()
+                if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                    self.seen.append(event.type().name)
+            return False
+
+    load_operations()
+    zone = QWidget()
+    QVBoxLayout(zone)
+    panel = SelectionOperationsPanel(REGISTRY.all(), zone)
+    zone.layout().addWidget(panel)
+    spy = Spy()
+    zone.installEventFilter(spy)
+    zone.show()
+    try:
+        panel.set_context(1, _availability(1))
+        chosen: list[str] = []
+        panel.searchChosen.connect(chosen.append)
+        panel.search.setText("drehen")
+        panel.hits.setFocus()
+        QApplication.processEvents()
+        QTest.keyClick(panel.hits, Qt.Key.Key_Return)
+        QApplication.processEvents()
+        assert chosen == ["rotate_object"], chosen
+        assert spy.seen == [], f"Return kam beim Vorfahren an: {spy.seen}"
+    finally:
+        zone.close()
+        zone.deleteLater()
+
+
+def test_an_operation_registered_later_is_found(qt_app: QApplication) -> None:
+    """Ein Baustein, der nach dem Bau der Karte ins Register kommt — eingelesen
+    oder im Rezeptdialog gespeichert —, steht sofort in der Suche.
+
+    Die Karte fror ihre Operationen beim Bau ein; die Suche sagte bis zum
+    Neustart „Kein Treffer“, wo die Palette ihn in 0.6.0 fand (Review RM-735,
+    F10). Auch eine schon gebaute Trefferliste rechnet mit dem neuen Stand.
+    """
+    import dataclasses
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(0, _availability(0))
+    panel.search.setText("halter")
+    late = dataclasses.replace(
+        REGISTRY.get("create_container"), name="late_sample_part", title="Sondenhalter Zebra"
+    )
+    REGISTRY.register(late)
+    try:
+        panel.search.setText("Sondenhalter Zebra")
+        assert _hit_names(panel)[:1] == ["late_sample_part"], _hit_names(panel)
+        panel.set_context(0, _availability(0))
+        assert _hit_names(panel)[:1] == ["late_sample_part"], "auch nach einer neuen Lage"
+    finally:
+        REGISTRY.remove("late_sample_part")
+
+
+def test_the_window_command_takes_the_place_of_its_operation(qt_app: QApplication) -> None:
+    """Ohne Auswahl steht *Modell einfügen …* einmal — als dieselbe Aktion wie in
+    Menü und Leiste, nicht als Operation ``load`` mit eigenem Dialog.
+
+    Die Karte zeigte die Operation als Erzeugerknopf: gleicher Name, andere
+    Wirkung (Operationsdialog statt Dateiauswahl), gegen „Ein Text, eine
+    Wirkung“ (Review RM-735, F8). Die Aktion nimmt den Platz der Operation ein,
+    auf ihrer Stufe.
+    """
+    from PySide6.QtGui import QAction
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.resize(320, 600)
+    panel.show()
+    action = QAction("Modell einfügen …", panel)
+    triggered: list[bool] = []
+    action.triggered.connect(lambda: triggered.append(True))
+    assert panel.add_window_action("file.import", "import", action, replaces="load")
+
+    panel.set_context(0, _availability(0))
+    QApplication.processEvents()
+    shown = {name for name, button in panel._buttons.items() if button.isVisible()}
+    assert "load" not in shown and "load" not in panel._buttons, "kein zweiter Weg"
+    assert "file.import" in shown, "die Aktion steht auf der Stufe ohne Auswahl"
+    panel._buttons["file.import"].click()
+    assert triggered == [True], "derselbe Weg wie Menü und Leiste"
+
+    panel.set_context(1, _availability(1))
+    QApplication.processEvents()
+    assert not panel._buttons["file.import"].isVisible(), "an einer Auswahl nicht"
+
+
+def test_a_body_with_every_action_locked_says_why(qt_app: QApplication) -> None:
+    """Am gewählten Körper, an dem alles gesperrt ist, nennt die Karte den Grund.
+
+    Sie sagte „steht oben bei den Maßen“ — am Körper stehen oben keine
+    (Review RM-735, F9). Den Satz zu den Maßen gibt es nur an einer Stufe ohne
+    eigene Handlungen.
+    """
+    from app.i18n import tr
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    reason = "Die Lizenz ist abgelaufen."
+    panel.set_context(1, lambda _name: (False, reason))
+    assert not panel._nothing.isHidden()
+    assert panel._nothing.text() == reason
+
+    panel.set_context(1, _availability(1), feature_kind="face", part_selected=True)
+    assert panel._nothing.text() == tr("Was sich hier tun lässt, steht oben bei den Maßen.")
+
+
+def test_the_hit_list_draws_with_its_own_rows(qt_app: QApplication) -> None:
+    """Die Trefferliste zeichnet mit ``_HitRows`` — Kürzel in einer Spalte,
+    darunter Satz oder Grund. Mit Qts Zeichner stünde die Taste nach einem
+    Tabulator an jeder Zeile woanders (Review RM-735, F4)."""
+    from app.ui.selection_operations import _HitRows
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    assert isinstance(panel.hits.itemDelegate(), _HitRows)
 
 
 def test_the_list_stands_in_two_columns_where_every_title_fits(qt_app: QApplication) -> None:

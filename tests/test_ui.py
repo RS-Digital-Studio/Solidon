@@ -24771,3 +24771,154 @@ def test_redo_replaces_undo_announcement_after_completed_evaluation(window):
     assert len(window.session.last_result.scene.objects) == 1
     window.action_redo()
     assert window._announcement == expected, "ein leeres Redo behauptet keine weitere Handlung"
+
+
+def _settled_focus(qt_app: QApplication) -> QWidget | None:
+    """Der Fokus, nachdem die angestoßenen Ereignisse durch sind."""
+    for _ in range(5):
+        qt_app.processEvents()
+    return QApplication.focusWidget()
+
+
+def test_function_search_reaches_the_field_from_any_state(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """*Funktion suchen* (Strg+Umschalt+P, Knopf oben) scheitert an keiner Lage (RM-735).
+
+    Spalte verborgen, ein anderer Reiter vorn, nichts gewählt: Danach steht die
+    Spalte, der Reiter *Auswahl* ist vorn, der einzige Körper gewählt und der
+    Cursor im Feld. Escape leert erst das Feld und gibt dann den Fokus an die
+    Ansicht; die Auswahl bleibt. Der Haupteinstieg der Suche hatte keinen Test
+    (Review RM-735, F2).
+    """
+    from PySide6.QtTest import QTest
+
+    from tests.ui_helpers import with_a_body
+
+    window.show()
+    window.resize(1400, 900)
+    window._show_start_screen(False)
+    window.activateWindow()
+    try:
+        body = with_a_body(window)
+        window.object_tree.tree.clearSelection()
+        window._update_actions()
+        assert not window.object_tree.selected_objects()
+        window.right.setCurrentWidget(window.report)
+        window.action_toggle_right()
+        qt_app.processEvents()
+        assert not window.right_column.isVisible(), "die Spalte ist verborgen"
+
+        window.search_action.trigger()
+        field = window.selection_operations.search
+        assert _settled_focus(qt_app) is field, "der Cursor steht im Feld"
+        assert window.right_column.isVisible(), "die Spalte kommt zurück"
+        assert window.right.currentWidget() is window.feature_dock, "der Reiter Auswahl vorn"
+        assert list(window.object_tree.selected_objects()) == [body], "der einzige Körper gewählt"
+
+        QTest.keyClicks(field, "drehen")
+        assert window.selection_operations.hits.isVisible()
+        QTest.keyClick(field, Qt.Key.Key_Escape)
+        assert field.text() == "", "Escape leert erst das Feld"
+        assert list(window.object_tree.selected_objects()) == [body], "die Auswahl bleibt"
+        QTest.keyClick(field, Qt.Key.Key_Escape)
+        assert _settled_focus(qt_app) is window.viewport, "dann zurück in die Ansicht"
+        assert list(window.object_tree.selected_objects()) == [body], "die Auswahl bleibt"
+    finally:
+        window.close()
+
+
+def test_function_search_begins_the_empty_project_on_the_start_screen(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Auf dem Startbildschirm beginnt *Funktion suchen* das leere Projekt, wie
+    jeder Arbeitsbeginn dort, und setzt den Cursor ins Feld (Review RM-735, F2)."""
+    window.show()
+    window.resize(1400, 900)
+    window.activateWindow()
+    try:
+        qt_app.processEvents()
+        assert window.stack.currentWidget() is window.start_screen
+        window.search_action.trigger()
+        assert _settled_focus(qt_app) is window.selection_operations.search
+        assert window.stack.currentWidget() is not window.start_screen
+    finally:
+        window.close()
+
+
+def test_function_search_waits_for_the_drawing_and_follows_a_floated_tab(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """In der Zeichnung sagt die Taste, wann die Suche wieder bereitsteht, und
+    lässt den Fokus, wo er ist (RM-519); ein herausgezogener Reiter *Auswahl*
+    kommt mit seinem Fenster nach vorn (Review RM-735, F2)."""
+    window.show()
+    window.resize(1400, 900)
+    window._show_start_screen(False)
+    try:
+        window.start_sketch("sketch_extrude", "")
+        assert window._sketch_panel is not None
+        before = _settled_focus(qt_app)
+        window.search_action.trigger()
+        assert window._announcement == tr(
+            "Die Suche steht wieder bereit, sobald die Zeichnung fertig oder verworfen ist."
+        )
+        assert _settled_focus(qt_app) is before, "kein Fokuswechsel in der Zeichnung"
+        window.finish_sketch(keep=False)
+        assert window._sketch_panel is None
+
+        window.right.detach_page(window.feature_dock)
+        assert window.right.is_detached(window.feature_dock)
+        window.right.setCurrentWidget(window.report)
+        window.search_action.trigger()
+        qt_app.processEvents()
+        assert window.right.page_is_visible(window.feature_dock), "das Fenster des Reiters steht"
+        field = window.selection_operations.search
+        # Das eigene Fenster des Reiters ist ein zweites Hauptfenster; ob es
+        # aktiv wird, entscheidet der Fenstermanager. Sein Fokus liegt im Feld.
+        assert field.window() is not window, "das Feld steht im Fenster des Reiters"
+        assert field.window().focusWidget() is field
+    finally:
+        window.close()
+
+
+def test_searching_the_manual_from_the_card_opens_it_with_the_word(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Ohne Treffer führt *Im Handbuch suchen* ins Handbuch, mit demselben Wort
+    im Suchfeld (§2.7; Review RM-735, F2)."""
+    window._show_start_screen(False)
+    card = window.selection_operations
+    card.set_context(0, lambda _name: (True, ""))
+    card.search.setText("xyzzy")
+    assert not card._manual.isHidden()
+    card._manual.click()
+    qt_app.processEvents()
+    assert window._manual is not None and window._manual.isVisible()
+    assert window._manual.search.text() == "xyzzy"
+    window._manual.close()
+
+
+def test_the_card_without_a_selection_inserts_a_model_like_the_menu(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne Auswahl steht *Modell einfügen …* in der Karte als dieselbe Aktion
+    wie in *Datei* und *Erzeugen* — die Dateiauswahl, nicht der rohe Dialog
+    der Operation ``load`` (Review RM-735, F8)."""
+    asked: list[str] = []
+    monkeypatch.setattr(
+        main_window_module.QFileDialog,
+        "getOpenFileNames",
+        lambda _parent, title, *_args: (asked.append(title), ([], ""))[1],
+    )
+    window._show_start_screen(False)
+    window._update_actions()
+    card = window.selection_operations
+    assert "load" not in card._buttons, "kein zweites „Modell einfügen“ mit anderer Wirkung"
+    button = card._buttons.get("file.import")
+    assert button is not None, "der Befehl steht in der Karte"
+    assert card._fits_the_level("file.import"), "auf der Stufe ohne Auswahl"
+    assert button.property("operationTitle") == window.import_action.text()
+    button.click()
+    assert asked == [tr("Modell einfügen")], "die Dateiauswahl wie über Menü und Leiste"
+    assert window._op_dialog is None, "kein Operationsdialog"
