@@ -266,6 +266,32 @@ def test_a_modal_left_open_is_closed_until_the_action_returns() -> None:
     assert machine.done and machine.unsticks >= 1 and machine.error is None
 
 
+def test_a_window_escape_cannot_close_is_named_once_not_escaped_forever() -> None:
+    """Review L12: Höchstens ``MOST_UNSTICKS`` Escape, dann einmal ``on_stuck`` — und weiter.
+
+    Das Fenster schließt erst ``on_stuck`` (am Fenster der Knopf zum Ablehnen);
+    vorher sendete der Automat alle 120 ms Escape, bis die Frist ablief.
+    """
+    timer = FakeTimer()
+    state = {"open": False, "stuck": 0, "escapes": 0}
+
+    def open_window(machine: bench.StepMachine) -> None:
+        state["open"] = True
+        timer.loop_until(lambda: not state["open"])
+
+    def escape() -> None:
+        state["escapes"] += 1
+
+    def stuck() -> None:
+        state["stuck"] += 1
+        state["open"] = False
+
+    machine = bench.StepMachine(timer.schedule, timer.clock, unstick=escape, on_stuck=stuck)
+    bench.drive(machine, [bench.Step("öffnen", open_window)], timer.pump, timer.clock, 600.0)
+    assert machine.done and machine.stuck
+    assert state == {"open": False, "stuck": 1, "escapes": bench.MOST_UNSTICKS}
+
+
 def test_an_error_in_an_action_stops_the_machine_with_the_trace() -> None:
     timer = FakeTimer()
 
@@ -373,20 +399,41 @@ def test_a_target_without_a_way_is_the_finding_not_found() -> None:
     walker.phase = "weg"
     machine = run_machine(timer, [walker.step("operation:drill_hole")])
     assert machine.finding is not None and machine.finding.kind == bench.NOT_FOUND
-    assert steps == [
-        {
-            "target": "operation:drill_hole",
-            "finding": bench.NOT_FOUND,
-            "detail": "operation:drill_hole: kein Weg",
-            "phase": "weg",
-            "t": 0.0,
-        }
-    ]
+    assert len(steps) == 1 and steps[0]["t"] >= bench.MISSING_S, "erst nach der Frist"
+    assert {key: value for key, value in steps[0].items() if key != "t"} == {
+        "target": "operation:drill_hole",
+        "finding": bench.NOT_FOUND,
+        "detail": "operation:drill_hole: kein Weg",
+        "phase": "weg",
+    }
     assert bench.place_of(steps, "operation:drill_hole") == {
         "where": None,
         "path": [],
         "error": "operation:drill_hole: kein Weg",
     }
+
+
+def test_a_target_that_appears_late_is_no_finding() -> None:
+    """Review M14: Ein Ziel, das 0,5 s nach dem Klick davor erscheint, wird geklickt, kein Fund.
+
+    Vorher war ein Schritt ohne Weg sofort „nicht auffindbar“ — ein Dialog nach
+    einer Rechnung wurde so zum schweren Fund.
+    """
+    timer = FakeTimer()
+    dialog = FakeWidget("dialog")
+
+    class Late(FakePorts):
+        def next_click(self, name: str) -> FakeClick:
+            if timer.now < 0.5:
+                raise LookupError(f"{name}: der Dialog ist noch nicht da")
+            self._last, self._last_name = FakeClick((0, 0, 80, 20), "left", "ziel", dialog), name
+            return self._last
+
+    ports = Late(timer, {})
+    steps: list[dict[str, Any]] = []
+    machine = run_machine(timer, [bench.Walk(ports, steps, 0.0).step("dialog.accept")])
+    assert machine.done and machine.finding is None and machine.error is None
+    assert ports.pressed == [("dialog", (40, 10), "left")]
 
 
 def test_a_way_that_never_reaches_the_target_ends_as_not_found() -> None:
@@ -683,8 +730,16 @@ def test_the_result_metrics_carry_the_names_the_row_specs_expect(profile: Any) -
     assert metrics["extent"] == pytest.approx([20.0, 10.0, 5.0], abs=1e-3)
     assert metrics["bounds.z_max"] - metrics["bounds.z_min"] == pytest.approx(5.0, abs=1e-3)
     assert any("." in key and not key.startswith(("bounds.", "parameter.")) for key in metrics)
-    assert bench.step_number("Die Kette hält bei Schritt 3: kein Körper.") == 3
-    assert bench.step_number("ohne Nummer") is None
+    assert "bodies_without_mesh" not in metrics
+    # Review L15: Ein Körper ohne Netz fällt nicht still heraus.
+    from types import SimpleNamespace
+
+    scene = evaluated().scene
+    body = SimpleNamespace(mesh=object(), features={})
+    shape = SimpleNamespace(objects={**scene.objects, "obj_x": body})
+    metrics = bench.result_metrics(shape, project.document, None)
+    assert metrics["bodies_without_mesh"] == ["obj_x"]
+    assert metrics["volume"] == pytest.approx(20.0 * 10.0 * 5.0, abs=1e-3)
 
 
 # --- Zahlen getippt ------------------------------------------------------------------------
@@ -1281,6 +1336,11 @@ def test_an_assembled_protocol_is_valid_against_the_schema_of_u() -> None:
     protocol = bench.empty_protocol(ROWS[0], variant, {"commit": "abc", "app": "0.6.1"})
     assert set(protocol) == set(PROTOCOL_SCHEMA)
     assert set(protocol["row"]) <= set(PROTOCOL_SCHEMA["row"].keys or ())
+    # Z6 je Zeile über alle Fälle (D0-U): jeder Fall trägt seine Fenstergröße
+    # und eine Liste der Rollleisten, auch leer — gültig schon im Gerüst.
+    assert protocol["variant"]["window_size"] == [1280, 820]
+    assert protocol["scrollbars"] == []
+    assert validate_protocol(protocol) == []
     print_ = {
         "ops": ["create_box"],
         "params": ["x"],
@@ -1394,7 +1454,10 @@ def test_route_apply_target_and_command_line_come_from_the_row() -> None:
         }
     ) == ["drill_hole", "--on", "obj_1", "--diameter", "5.2", "--axis", "z", "--no-slotted"]
     assert bench.cli_arguments({"op": "pattern", "params": {"points": [[0, 0]]}}) is None
-    assert bench.safe_name("Datei/Speichern unter …") == "Datei_Speichern_unter"
+    named = bench.safe_name("Datei/Speichern unter …")
+    assert named.startswith("Datei_Speichern_unter-")
+    # Review L4: zwei Kennungen, die sich nur im Zeichen danach unterscheiden.
+    assert named != bench.safe_name("Datei/Speichern unter")
     assert bench.bodies_digest({"b": "2", "a": "1"}) == bench.bodies_digest({"a": "1", "b": "2"})
 
 
@@ -1437,6 +1500,37 @@ def test_bench_captures_and_window_flow_go_through_input_events_only() -> None:
     found = bench.forbidden_calls(broken, within_class="WindowFlow")
     assert [line for line, _call in found] == list(range(3, 16))
     assert "self.history.apply" not in {call for _line, call in found}
+    # Review M8: die vierzehn Umwege der Durchsicht — jeder muss gefunden werden.
+    detours = "\n".join(
+        [
+            "class WindowFlow:",
+            "    def run(self):",
+            "        getattr(self.button, 'click')()",
+            "        press = self.button.click",
+            "        QMetaObject.invokeMethod(self.button, 'click')",
+            "        self.window._show_start_screen(False)",
+            "        approval = getattr(self.window, '_preview_approval')",
+            "        self.window.feature_panel._apply.released.connect(print)",
+            "        guide_targets.area_for(self.window, 'feature.apply')",
+            "        self.dialog.accept()",
+            "        self.edit.setText('5')",
+            "        self.session.start_new('p', 'm')",
+            "        self.window.run_operation(spec)",
+            "        self.list.setCurrentRow(2)",
+            "        self.box.toggle()",
+            "        self.dialog.done(0)",
+            "        self.dialog.reject()",
+            "        self.row.setSelected(True)",
+            "        self.field.setFocus()",
+            "        if machine.done or self._answering:",
+            "            activation._cached = cached",
+            "            sys._getframe(1)",
+            "        getattr(view, 'renderer', None)",
+        ]
+    )
+    found = bench.forbidden_calls(detours, within_class="WindowFlow")
+    lines = sorted({line for line, _call in found})
+    assert lines == list(range(3, 20)), found
     with pytest.raises(LookupError):
         bench.forbidden_calls("x = 1\n", within_class="WindowFlow")
 
@@ -1589,10 +1683,10 @@ def test_the_probe_row_runs_in_its_own_process_from_inventory_to_report(tmp_path
     main = [step for step in protocol["steps"] if step["phase"] in MAIN_PHASES]
     assert main and all("hit" in step or "finding" in step for step in main if step.get("why"))
     assert protocol["errors"] == [], protocol["errors"]
-    for found in protocol["findings"]:
-        assert found["kind"] in (bench.COVERED, bench.NOT_FOUND) and found["detail"]
-    if not protocol["findings"]:
-        _assert_the_main_way(protocol)
+    # Review L9: streng wie im Prozess — ein falsches „verdeckt“ hielte den Fall
+    # sonst grün. Die Probe kennt seit der Fixrunde den Empfänger jedes Klicks.
+    assert protocol["findings"] == [], protocol["findings"]
+    _assert_the_main_way(protocol)
     from tools import function_list
 
     menu = function_list.read_menubar(out / "menubar.json")
@@ -1678,6 +1772,160 @@ def test_the_probe_finds_a_list_or_the_view_over_a_real_target(window: Any) -> N
     assert hit is view or view.isAncestorOf(hit), hit
     assert not ports.covers(click(spot, name), hit), "die Ansicht an der Stelle des Ziels"
     assert ports.covers(click(spot, "viewport"), hit), "die Ansicht als eigenes Ziel"
+
+
+def test_text_needs_count_box_symbol_padding_rich_text_and_list_cells(qt_app: Any) -> None:
+    """Review M12 und L3 an echten Widgets.
+
+    Je Widget genau so breit wie sein Text: Ein Haken braucht sein Kästchen, ein
+    Knopf mit Symbol Symbol und Polsterung — beide abgeschnitten; der Kontrollfall
+    ``QLabel`` passt genau. Rich Text zählt mit seinem sichtbaren Text, eine
+    schmale Listenzelle ist abgeschnitten. Ein Symbolknopf trägt die Farbe seines
+    Symbols, und „groß“ beginnt bei 18 pt (fett 14 pt).
+    """
+    from PySide6.QtGui import QColor, QFont, QIcon, QPixmap
+    from PySide6.QtWidgets import (
+        QApplication,
+        QCheckBox,
+        QLabel,
+        QListWidget,
+        QPushButton,
+        QToolButton,
+        QVBoxLayout,
+        QWidget,
+    )
+
+    root = QWidget()
+    root.resize(600, 500)
+    layout = QVBoxLayout(root)
+    pixmap = QPixmap(16, 16)
+    pixmap.fill(QColor("#ff0000"))
+    label = QLabel("Durchmesser ändern", root)
+    box = QCheckBox("Durchgehend bohren", root)
+    button = QPushButton(QIcon(pixmap), "Mit Symbol übernehmen", root)
+    rich = QLabel("<b>Fett</b> und <i>schräg</i>", root)
+    listing = QListWidget(root)
+    listing.addItem("Ein sehr langer Eintrag, der in keine schmale Liste passt")
+    symbol = QToolButton(root)
+    symbol.setIcon(QIcon(pixmap))
+    for widget in (label, box, button, rich, listing, symbol):
+        layout.addWidget(widget)
+    root.show()
+    QApplication.processEvents()
+    for widget in (label, box, button):
+        text_px = widget.fontMetrics().horizontalAdvance(widget.text().replace("&", ""))
+        widget.setFixedWidth(text_px + (widget.width() - widget.contentsRect().width()))
+    listing.setFixedWidth(120)
+    QApplication.processEvents()
+    texts = {entry["text"]: entry for entry in capture.text_entries(root)}
+    assert texts["Durchmesser ändern"]["cut"] is False, "Kontrollfall: das Etikett passt"
+    assert texts["Durchgehend bohren"]["cut"] is True, "das Kästchen braucht Platz"
+    assert texts["Mit Symbol übernehmen"]["cut"] is True, "Symbol und Polsterung brauchen Platz"
+    assert "Fett und schräg" in texts, "Rich Text zählt mit seinem sichtbaren Text"
+    cell = texts["Ein sehr langer Eintrag, der in keine schmale Liste passt"]
+    assert cell["carrier"] == "QListWidget.Zeile" and cell["cut"] is True
+    contrast = {entry["widget"]: entry for entry in capture.contrast_entries(root, "light")}
+    (painted,) = [entry for entry in contrast.values() if entry["symbol"]]
+    assert painted["foreground"] == "#ff0000"
+    big = QLabel("Groß", root)
+    big.setFont(QFont(big.font().family(), 16))
+    bold = QLabel("Fett", root)
+    font = QFont(bold.font().family(), 14)
+    font.setBold(True)
+    bold.setFont(font)
+    layout.addWidget(big)
+    layout.addWidget(bold)
+    QApplication.processEvents()
+    contrast = {entry["widget"]: entry for entry in capture.contrast_entries(root, "light")}
+    assert contrast["Groß"]["large"] is False, "16 pt ist nach WCAG nicht groß"
+    assert contrast["Fett"]["large"] is True
+    root.close()
+    root.deleteLater()
+
+
+def test_a_screen_that_matches_none_is_an_error_not_another_screen() -> None:
+    """Review L14: ``--screen`` ohne Treffer fällt nicht still auf einen anderen Schirm zurück."""
+
+    class Screen:
+        def __init__(self, name: str) -> None:
+            self.label = name
+
+        def name(self) -> str:
+            return self.label
+
+        def model(self) -> str:
+            return ""
+
+        def manufacturer(self) -> str:
+            return ""
+
+    class Application:
+        def screens(self) -> list[Screen]:
+            return [Screen("Haupt"), Screen("MSI")]
+
+        def primaryScreen(self) -> Screen:  # noqa: N802 - Qts Name
+            return self.screens()[0]
+
+    with pytest.raises(ValueError, match="trifft keinen Schirm"):
+        bench.place_window(Application(), None, bench.Variant.of({"screen": "Mond"}))
+    with pytest.raises(ValueError, match="trifft keinen Schirm"):
+        bench.place_window(Application(), None, bench.Variant.of({"screen": "7"}))
+
+
+def test_typing_needs_the_focus_in_the_field_and_actions_need_a_vocabulary_name(
+    qt_app: Any,
+) -> None:
+    """Review M13 und M11 an echten Widgets.
+
+    Getippt wird nur, wenn der Fokus im Feld des Ziels liegt — auch in der
+    Textzeile eines Zahlenfelds; sonst ein Fehler, der das Fokuswidget nennt.
+    Eine Handlung einer Meldung hat nur mit Wortschatzkennzeichen ein Ziel; ein
+    ``objectName`` ist keines.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QDoubleSpinBox, QLineEdit, QPushButton, QWidget
+
+    from app.core.guides import TARGET_PROPERTY
+
+    root = QWidget()
+    spin = QDoubleSpinBox(root)
+    other = QLineEdit(root)
+    other.move(0, 40)
+    root.show()
+    root.activateWindow()
+    spin.setFocus(Qt.FocusReason.OtherFocusReason)
+    QApplication.processEvents()
+    bench.focus_check(spin, "feature.field:resize_hole.diameter")
+    other.setFocus(Qt.FocusReason.OtherFocusReason)
+    QApplication.processEvents()
+    with pytest.raises(RuntimeError, match="QLineEdit"):
+        bench.focus_check(spin, "feature.field:resize_hole.diameter")
+    with pytest.raises(RuntimeError, match="kein Feld"):
+        bench.focus_check(None, "search")
+    named = QPushButton("Auf das Bett legen", root)
+    named.setProperty(TARGET_PROPERTY, "finding.action:place_on_bed")
+    plain = QPushButton("Ohne Namen", root)
+    plain.setObjectName("handlung_ohne_namen")
+    assert capture.vocabulary_name(named) == "finding.action:place_on_bed"
+    assert capture.vocabulary_name(plain) == ""
+    root.close()
+    root.deleteLater()
+
+
+def test_a_menubar_child_that_never_answers_is_a_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review L6: Hängt der Kindprozess der Menüleiste, kommt eine Meldung, kein Stapel."""
+    import subprocess
+
+    from tools import file_acceptance
+
+    def hangs(*args: Any, **kwargs: Any) -> Any:
+        raise subprocess.TimeoutExpired(cmd="menubar", timeout=kwargs.get("timeout", 0))
+
+    monkeypatch.setattr(file_acceptance.subprocess, "run", hangs)
+    with pytest.raises(RuntimeError, match="antwortete"):
+        file_acceptance.menubar(tmp_path)
 
 
 def _run_acceptance(out: Path, *arguments: list[str]) -> None:
@@ -1842,7 +2090,7 @@ def test_the_captures_read_a_small_dialog_without_acting_on_it(qt_app: Any) -> N
         assert chain[0]["name"] == "Bohrung ändern — Durchmesser" and len(chain) >= 3
         assert all(entry["inside"] for entry in chain)
         assert chain[-1]["name"] == chain[0]["name"], "das Schlussglied kommt wieder"
-        from tools.function_judges import _reading_order_jumps, _within_chain
+        from tools.function_points import _reading_order_jumps, _within_chain
 
         within = _within_chain(chain)
         assert len(within) == len(chain) - 1

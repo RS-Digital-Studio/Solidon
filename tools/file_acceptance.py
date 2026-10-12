@@ -157,6 +157,9 @@ FUNCTION_CASE_TIMEOUT = 1800.0
 #: wieder aufnehmbar je Fläche, also verliert ein Abbruch nur die eine.
 LANGUAGE_CASE_TIMEOUT = 3600.0
 
+#: Wie lange der Kindprozess braucht, um die Menüleiste am Fenster zu zählen (Sekunden).
+MENUBAR_TIMEOUT = 600.0
+
 #: Die Arten eines Falls: eine Datei (RM-184), eine Zeile der Funktionsliste,
 #: eine Sprache über die Flächen eines Pakets, der Start einer Zeile des
 #: Startablaufs über ``app.ui.app.main`` (RM-737).
@@ -527,16 +530,23 @@ def menubar(out: Path) -> Path:
     Fenster im selben Prozess die Fälle danach nicht stören soll.
     """
     target = out / "menubar.json"
-    finished = subprocess.run(
-        [sys.executable, str(Path(__file__).resolve()), "menubar", "--out", str(out)],
-        cwd=ROOT,
-        env={**os.environ, "PYTHONUTF8": "1", "QT_QPA_PLATFORM": "offscreen"},
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=600,
-        check=False,
-    )
+    try:
+        finished = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve()), "menubar", "--out", str(out)],
+            cwd=ROOT,
+            env={**os.environ, "PYTHONUTF8": "1", "QT_QPA_PLATFORM": "offscreen"},
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=MENUBAR_TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as expired:
+        # Eine Meldung statt eines Stapels (Review L6).
+        raise RuntimeError(
+            f"Die Menüleiste ließ sich nicht zählen: Der Kindprozess antwortete"
+            f" nach {MENUBAR_TIMEOUT:.0f} s nicht."
+        ) from expired
     if finished.returncode != 0 or not target.is_file():
         raise RuntimeError(f"Die Menüleiste ließ sich nicht zählen:\n{finished.stderr[-4000:]}")
     return target
@@ -1313,7 +1323,12 @@ class WindowFlow:
         self.walker.phase = label
         from tools.function_bench import StepMachine, drive, qt_schedule
 
-        machine = StepMachine(qt_schedule, time.perf_counter, unstick=self._escape)
+        machine = StepMachine(
+            qt_schedule,
+            time.perf_counter,
+            unstick=self._escape,
+            on_stuck=lambda: self._stuck(label),
+        )
         drive(machine, steps, lambda: self.pump(0.005), time.perf_counter, timeout)
         if machine.finding is not None:
             raise RuntimeError(f"{label}: {machine.finding}")
@@ -1340,6 +1355,18 @@ class WindowFlow:
         widget = QApplication.activePopupWidget() or QApplication.activeModalWidget()
         if widget is not None:
             QTest.keyClick(widget, Qt.Key.Key_Escape)
+
+    def _stuck(self, label: str) -> None:
+        """Escape schloss das Fenster nicht: welches es war, steht im Ergebnis (Review L12)."""
+        from PySide6.QtWidgets import QApplication
+
+        widget = QApplication.activePopupWidget() or QApplication.activeModalWidget()
+        if widget is not None:
+            self.data["errors"].append(
+                f"{label}: {type(widget).__name__} „{widget.windowTitle()}“ ließ sich"
+                " nicht mit Escape schließen"
+            )
+            self.persist()
 
     def _sweep(self) -> None:
         """Ein modales Fenster: die Rückfrage mit ihrem Hauptknopf beantworten, sonst Escape.
@@ -1639,21 +1666,39 @@ class WindowFlow:
         return Step(f"Taste {label}", act, settle_ms=SETTLE_MS)
 
     def _typing(self, target: str, value: float) -> list[Any]:
-        """Ins Feld klicken, alles markieren, die Zahl in der Anzeigeeinheit tippen."""
+        """Ins Feld klicken, alles markieren, die Zahl in der Anzeigeeinheit tippen.
+
+        Markiert und getippt wird nur, wenn der Fokus im Feld liegt
+        (``function_bench.focus_check``, Review M13).
+        """
         from PySide6.QtGui import QKeySequence
 
+        from app.ui import guide_targets
         from app.ui.labels import display_unit
-        from tools.function_bench import SETTLE_MS, Step, typed_number
+        from tools.function_bench import SETTLE_MS, Step, focus_check, typed_number
 
         text = typed_number(value, display_unit())
 
+        def field() -> Any:
+            try:
+                return guide_targets.widget_for(self.window, target)
+            except LookupError:
+                return None
+
+        def mark(machine: Any) -> None:
+            focus_check(field(), target)
+            keys = QKeySequence(QKeySequence.StandardKey.SelectAll)
+            self.walker.record({"target": "alles markieren", "key": keys.toString()})
+            self.ports.keys(keys)
+
         def type_it(machine: Any) -> None:
+            focus_check(field(), target)
             self.walker.record({"target": target, "typed": text})
             self.ports.type_text(text)
 
         return [
             self.walker.step(target),
-            self._key(QKeySequence(QKeySequence.StandardKey.SelectAll), "alles markieren"),
+            Step("alles markieren", mark, settle_ms=SETTLE_MS),
             Step(f"tippen {text}", type_it, settle_ms=SETTLE_MS),
         ]
 

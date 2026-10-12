@@ -48,7 +48,6 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
-import re
 import sys
 import time
 import traceback
@@ -99,6 +98,10 @@ MOST_WAY_CLICKS: Final = 8
 #: Takt des Schrittautomaten in Millisekunden.
 TICK_MS: Final = 15
 
+#: Wie oft der Automat ein offen gebliebenes Fenster mit Escape zu schließen
+#: versucht, bevor er notiert, dass es klemmt (Review L12).
+MOST_UNSTICKS: Final = 8
+
 #: Ruhe nach einem Klick, bevor der nächste gerechnet wird: Ein Reiter, ein Menü
 #: oder eine Klappe steht nach einer Ereignisrunde; die Karte setzt ihre Höhe
 #: über einen Nullzeitgeber (``fenster.md``, „Wie die Karten ihre Höhe teilen“).
@@ -121,6 +124,11 @@ STABLE_S: Final = 0.1
 #: noch deckt, sieht er.
 COVERED_S: Final = 1.0
 
+#: Wie lange ein Ziel ohne Weg sein darf, bevor es „nicht auffindbar“ ist
+#: (Sekunden): so lange wie die Frist, in der eine Handlung wirkt — ein Dialog
+#: nach einer Rechnung kommt nach dem Klick, der sie startete (Review M14).
+MISSING_S: Final = 2.0
+
 #: Wie lange eine Fläche stillstehen muss, bevor sie aufgenommen wird (Sekunden):
 #: die längste Bewegung der Oberfläche (``app.ui.motion``) und ein Takt mehr — eine
 #: Aufnahme mitten im Übergang mäße Breiten und Rollleisten vom halben Weg.
@@ -134,33 +142,73 @@ SEARCH_SETTLE_MS: Final = 1000
 #: Wie lange eine ganze Phase eines Funktionsfalls dauern darf (Sekunden).
 PHASE_TIMEOUT_S: Final = 900.0
 
-#: Die Aufrufe, die eine Bedienung umgehen (Konzept §12 „Die Abkürzungen der
-#: Bildwerkzeuge“, Plan D0 B5). Ein Name mit ``*`` meint den Anfang.
-#: ``setValue``, ``setCurrentIndex``, ``setChecked`` und ``animateClick`` sind
-#: dieselben Abkürzungen in Qts Schreibweise.
+#: Die Namen, über die eine Bedienung umgangen wird (Konzept §12 „Die Abkürzungen
+#: der Bildwerkzeuge“, Plan D0 B5, Review M8). Ein Name mit ``*`` meint den
+#: Anfang. ``setValue``, ``setCurrent*``, ``setChecked``, ``setText``,
+#: ``setSelected``, ``toggle``, ``setFocus`` und ``animateClick`` sind dieselben
+#: Abkürzungen in Qts Schreibweise; ``accept``, ``reject`` und ``done`` schließen
+#: einen Dialog am Kunden vorbei, ``start_new`` und ``run_operation`` rufen den
+#: Kern statt der Oberfläche, ``area_for`` deckt auf, statt den Weg zu gehen (B2).
 FORBIDDEN_CALLS: Final[tuple[str, ...]] = (
     "click",
     "animateClick",
     "set_value*",
     "setValue",
-    "setCurrentIndex",
+    "setCurrent*",
     "setChecked",
+    "setSelected",
+    "setText",
+    "setFocus",
+    "toggle",
     "emit",
     "trigger",
     "select_*",
     "action_undo",
     "action_redo",
+    "accept",
+    "reject",
+    "done",
+    "start_new",
+    "run_operation",
+    "area_for",
+)
+
+#: Namen, die nur als Aufruf verboten sind: ``done`` heißt am Automaten „fertig“
+#: (:attr:`StepMachine.done`), nur ``dialog.done(…)`` schließt einen Dialog.
+CALL_ONLY: Final[frozenset[str]] = frozenset({"done"})
+
+#: Private Namen fremder Objekte, die der Prüfstand berühren darf: die
+#: Nahtstellen der Suite für die Vorbereitung (``tests/conftest.py``) und der
+#: Aufrufstapel der Wache. Alles andere mit ``_`` an einem fremden Objekt ist
+#: ein Umweg an der Oberfläche vorbei (Konzept §5).
+ALLOWED_PRIVATE: Final[frozenset[str]] = frozenset(
+    {"activation._cached", "discover._remembered_program", "sys._getframe"}
 )
 
 
-def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tuple[int, str]]:
-    """Wo ein Quelltext eine Bedienung umgeht: Zeile und Aufruf.
+def _forbidden_name(name: str) -> bool:
+    return any(
+        name == pattern or (pattern.endswith("*") and name.startswith(pattern.rstrip("*")))
+        for pattern in FORBIDDEN_CALLS
+    )
 
-    ``session.apply`` zählt als Kernaufruf an der Oberfläche vorbei, ein
-    ``apply`` an etwas anderem nicht. ``within_class`` prüft nur den Rumpf dieser
-    Klasse (``WindowFlow`` in ``file_acceptance``). Der Wächter in
-    ``tests/test_function_bench.py`` fährt diese Funktion über die drei Orte und
-    einmal über einen Quelltext mit bekannten Verstößen.
+
+def _private(name: str) -> bool:
+    return name.startswith("_") and not (name.startswith("__") and name.endswith("__"))
+
+
+def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tuple[int, str]]:
+    """Wo ein Quelltext eine Bedienung umgeht: Zeile und Umweg (Review M8).
+
+    Gefunden werden ein verbotener Name als Aufruf und als Zugriff (``press =
+    button.click``), über ``getattr`` mit Zeichenkette, über
+    ``QMetaObject.invokeMethod`` mit Zeichenkette, ``session.apply`` als
+    Kernaufruf an der Oberfläche vorbei und jeder private Name an einem
+    fremden Objekt — Attribut oder ``getattr`` — außer :data:`ALLOWED_PRIVATE`.
+    ``within_class`` prüft nur den Rumpf dieser Klasse (``WindowFlow`` in
+    ``file_acceptance``). Der Wächter in ``tests/test_function_bench.py`` fährt
+    diese Funktion über die drei Orte und über einen Quelltext mit allen
+    bekannten Umwegen.
     """
     tree = ast.parse(source)
     roots: list[ast.AST] = [tree]
@@ -172,21 +220,44 @@ def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tup
         ]
         if not roots:
             raise LookupError(f"Klasse {within_class} steht nicht im Quelltext")
-    found: list[tuple[int, str]] = []
+    called = {
+        id(node.func)
+        for root in roots
+        for node in ast.walk(root)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    found: set[tuple[int, str]] = set()
     for root in roots:
         for node in ast.walk(root):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
-                continue
-            name = node.func.attr
-            receiver = ast.unparse(node.func.value)
-            if name == "apply" and "session" in receiver.lower():
-                found.append((node.lineno, f"{receiver}.apply"))
-                continue
-            for pattern in FORBIDDEN_CALLS:
-                stem = pattern.rstrip("*")
-                if name == pattern or (pattern.endswith("*") and name.startswith(stem)):
-                    found.append((node.lineno, f"{receiver}.{name}"))
-                    break
+            if isinstance(node, ast.Attribute):
+                name, receiver = node.attr, ast.unparse(node.value)
+                whole = f"{receiver}.{name}"
+                core = name == "apply" and "session" in receiver.lower() and id(node) in called
+                shortcut = _forbidden_name(name) and (name not in CALL_ONLY or id(node) in called)
+                foreign = (
+                    _private(name)
+                    and receiver not in ("self", "cls")
+                    and whole not in ALLOWED_PRIVATE
+                )
+                if core or shortcut or foreign:
+                    found.add((node.lineno, whole))
+            elif isinstance(node, ast.Call):
+                label = ast.unparse(node.func)
+                texts = [
+                    argument.value
+                    for argument in node.args
+                    if isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+                ]
+                second = node.args[1] if label == "getattr" and len(node.args) >= 2 else None
+                named = (
+                    second.value
+                    if isinstance(second, ast.Constant) and isinstance(second.value, str)
+                    else None
+                )
+                if named is not None and (_forbidden_name(named) or _private(named)):
+                    found.add((node.lineno, f"getattr(…, {named!r})"))
+                elif label.endswith("invokeMethod") and any(_forbidden_name(t) for t in texts):
+                    found.add((node.lineno, f"{label}(…, {texts!r})"))
     return sorted(found)
 
 
@@ -765,7 +836,9 @@ def empty_protocol(
     Jedes Feld des Schemas steht da; ungemessen heißt ``None``, und
     ``unmeasured`` nennt den Grund — fehlende ``steps`` ergeben bei U „nicht
     gemessen“, nie „gut“. ``variant`` ist schon die Form des Protokolls
-    (:meth:`Variant.protocol`).
+    (:meth:`Variant.protocol`), mit der Fenstergröße des Falls. ``scrollbars``
+    ist immer eine Liste, auch leer: U urteilt Z6 je Zeile über alle ihre Fälle
+    und braucht dafür jede Größe (D0-U, ``ccbb4df12``).
     """
     data: dict[str, Any] = dict.fromkeys(PROTOCOL_SCHEMA)
     data.update(
@@ -781,6 +854,7 @@ def empty_protocol(
             },
             "steps": [],
             "states": {},
+            "scrollbars": [],
             "findings": [],
             "closed_by_escape": [],
             "unmeasured": {},
@@ -843,11 +917,16 @@ class StepMachine:
         *,
         tick_ms: int = TICK_MS,
         unstick: Callable[[], None] | None = None,
+        on_stuck: Callable[[], None] | None = None,
     ) -> None:
         self._schedule = schedule
         self._clock = clock
         self._tick_ms = tick_ms
         self._unstick = unstick
+        self._on_stuck = on_stuck
+        #: Nach :data:`MOST_UNSTICKS` Versuchen mit Escape einmal ``on_stuck`` —
+        #: nicht alle 120 ms Escape bis zur Frist des Elternprozesses (Review L12).
+        self.stuck = False
         self.queue: list[Step] = []
         self.index = 0
         self.depth = 0
@@ -892,11 +971,19 @@ class StepMachine:
             self.stop(error="Zeitgrenze der Phase überschritten")
         if self.finished:
             # Steht noch eine Handlung in einer modalen Schleife, kehrt sie erst
-            # zurück, wenn ihr Fenster schließt — am Fenster mit Escape.
+            # zurück, wenn ihr Fenster schließt — am Fenster mit Escape, höchstens
+            # MOST_UNSTICKS Mal; dann einmal ``on_stuck``, das notiert, welches
+            # Fenster es war, und es noch auf anderem Weg versucht.
             if self.depth > 0 and self._unstick is not None:
-                self.unsticks += 1
-                self.log.append({"step": "unstick", "event": "act", "t": now})
-                self._unstick()
+                if self.unsticks < MOST_UNSTICKS:
+                    self.unsticks += 1
+                    self.log.append({"step": "unstick", "event": "act", "t": now})
+                    self._unstick()
+                elif not self.stuck:
+                    self.stuck = True
+                    self.log.append({"step": "unstick", "event": "stuck", "t": now})
+                    if self._on_stuck is not None:
+                        self._on_stuck()
                 self._schedule(max(SETTLE_MS, self._tick_ms), self._tick)
             return
         step = self.queue[self.index]
@@ -1074,18 +1161,22 @@ class Walk:
 
         Er muss seit :data:`STABLE_S` derselbe sein, und an seiner Mitte liegt
         das Ziel — oder seit :data:`COVERED_S` etwas anderes; dann meldet der
-        Klick „verdeckt“. Ohne Weg ist er sofort bereit — der Klick meldet dann
-        „nicht auffindbar“.
+        Klick „verdeckt“. Ohne Weg wartet er :data:`MISSING_S` — ein Dialog nach
+        einer Rechnung, der Startbildschirm nach *Neu* erscheinen später als der
+        Klick davor (Review M14) —, dann meldet der Klick „nicht auffindbar“.
         """
-        seen: dict[str, Any] = {"key": None, "since": 0.0, "covered": None}
+        seen: dict[str, Any] = {"key": None, "since": 0.0, "covered": None, "missing": None}
 
         def ready() -> bool:
+            now = self.ports.now()
             try:
                 click = self.ports.next_click(name)
             except LookupError:
-                return True
+                if seen["missing"] is None:
+                    seen["missing"] = now
+                return bool(now - seen["missing"] >= MISSING_S)
+            seen["missing"] = None
             key = (str(click.why), tuple(self.ports.rect_data(click.rect)))
-            now = self.ports.now()
             if key != seen["key"]:
                 seen["key"], seen["since"], seen["covered"] = key, now, None
                 return False
@@ -1515,6 +1606,11 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
             ),
             None,
         )
+    if chosen is None and wanted:
+        # Nie still ein anderer Schirm (Review L14, Regel 21): Der Lauf mäße dann
+        # Größe und Skalierung eines Schirms, den niemand verlangt hat.
+        named = ", ".join(f"{number}: {screen.name()}" for number, screen in enumerate(screens))
+        raise ValueError(f"--screen {wanted!r} trifft keinen Schirm — vorhanden: {named}")
     if chosen is None:
         chosen = next((screen for screen in screens if screen != primary), primary)
     area = chosen.availableGeometry()
@@ -1583,9 +1679,6 @@ DRAG_SIGNALS: Final[tuple[str, ...]] = (
 #: nicht; zum Startbildschirm führt *Datei → Neu* (``MainWindow.new_action``).
 RECENT_KIND: Final = "start.recent"
 
-#: Ein Szenenschlüssel, wie er im Dateinamen steht.
-_STEP_NUMBER: Final = re.compile(r"\b(\d+)\b")
-
 
 def until_step(
     name: str, condition: Callable[[], bool], at_most_s: float, clock: Callable[[], float]
@@ -1631,6 +1724,28 @@ def hover_steps(
         until_step("hinweis", lambda: bool(tooltip()), delay_s + HOVER_READ_S, clock),
         Step("lesen", read),
     ]
+
+
+def focus_check(field: Any, target: str) -> None:
+    """Ob der Fokus im Feld des Ziels liegt — sonst wird nicht getippt (Review M13).
+
+    Im Feld heißt: das Feld selbst, ein Kind davon (die Textzeile eines
+    Zahlenfelds) oder sein Fokusvertreter. Sonst ein Fehler mit dem Namen des
+    Widgets, das den Fokus hat.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from tools.function_capture import name_of
+
+    focus = QApplication.focusWidget()
+    if field is None:
+        raise RuntimeError(f"{target}: kein Feld hinter dem Namen — nicht getippt")
+    inside = focus is not None and (
+        focus is field or field.isAncestorOf(focus) or field.focusProxy() is focus
+    )
+    if not inside:
+        holder = f"{type(focus).__name__} „{name_of(focus)}“" if focus is not None else "nichts"
+        raise RuntimeError(f"{target}: der Fokus liegt auf {holder}, nicht im Feld — nicht getippt")
 
 
 def surface_signature(root: Any) -> tuple[Any, ...]:
@@ -1751,10 +1866,12 @@ def result_metrics(scene: Any, document: Any, selected: tuple[str, str] | None) 
     volume = 0.0
     lows: list[Any] = []
     highs: list[Any] = []
-    for entry in scene.objects.values():
+    for key, entry in scene.objects.items():
         try:
             raw = as_mesh_data(entry.mesh).raw
         except AppError:
+            # Nicht still (Review L15): Volumen und Maße gelten dann für weniger Körper.
+            metrics.setdefault("bodies_without_mesh", []).append(str(key))
             continue
         volume += float(raw.volume)
         low, high = raw.bounds
@@ -1814,12 +1931,6 @@ def cli_arguments(operation: Mapping[str, Any]) -> list[str] | None:
 def bodies_digest(bodies: Mapping[str, str]) -> str:
     """Ein Abdruck über die Abdrücke aller Körper — ``result.digest``, ``cli.digest``."""
     return _digest(dict(sorted(bodies.items())))
-
-
-def step_number(text: str) -> int | None:
-    """Die erste Zahl in einem Haltgrund — die Schrittnummer (Prüfpunkt 15)."""
-    found = _STEP_NUMBER.search(text)
-    return int(found.group(1)) if found else None
 
 
 class FunctionFlow:
@@ -1892,7 +2003,12 @@ class FunctionFlow:
         schreiben (``Walk.phase``).
         """
         self.walker.phase = label
-        machine = StepMachine(qt_schedule, time.perf_counter, unstick=self.escape_modal)
+        machine = StepMachine(
+            qt_schedule,
+            time.perf_counter,
+            unstick=self.escape_modal,
+            on_stuck=lambda: self.stuck_modal(label),
+        )
         drive(machine, steps, self.pump, time.perf_counter, timeout_s)
         ok = True
         if machine.finding is not None:
@@ -1922,6 +2038,48 @@ class FunctionFlow:
         widget = QApplication.activePopupWidget() or QApplication.activeModalWidget()
         if widget is not None:
             QTest.keyClick(widget, Qt.Key.Key_Escape)
+
+    def stuck_modal(self, label: str) -> None:
+        """Ein Fenster, das Escape nicht schließt: welches es ist, und ein Klick auf seinen Rückweg.
+
+        Notiert Klasse und Titel in ``errors`` (Review L12) und klickt, wenn es
+        einen gibt, den Knopf mit der Rolle „ablehnen“ oder *Schließen* — mit
+        Probe (:func:`click_button`). Hilft auch das nicht, endet der Fall an der
+        Frist des Elternprozesses, und das Protokoll sagt, woran.
+        """
+        from PySide6.QtWidgets import QApplication, QDialogButtonBox, QMessageBox
+
+        from tools.function_capture import name_of
+
+        widget = QApplication.activePopupWidget() or QApplication.activeModalWidget()
+        if widget is None:
+            return
+        self.data["errors"].append(
+            f"{label}: {type(widget).__name__} „{widget.windowTitle()}“ ließ sich"
+            f" {MOST_UNSTICKS}-mal nicht mit Escape schließen"
+        )
+        self.persist()
+        rejecting: Any = None
+        if isinstance(widget, QMessageBox):
+            rejecting = widget.escapeButton() or next(
+                (
+                    button
+                    for button in widget.buttons()
+                    if widget.buttonRole(button) == QMessageBox.ButtonRole.RejectRole
+                ),
+                None,
+            )
+        for box in widget.findChildren(QDialogButtonBox):
+            rejecting = rejecting or next(
+                (
+                    button
+                    for button in box.buttons()
+                    if box.buttonRole(button) == QDialogButtonBox.ButtonRole.RejectRole
+                ),
+                None,
+            )
+        if rejecting is not None:
+            click_button(self.ports, self.walker, rejecting, name_of(rejecting))
 
     def idle(self) -> bool:
         return self.session.last_result is not None and not self.session.busy
@@ -2175,7 +2333,6 @@ class FunctionFlow:
         Ein Haken wird geklickt; ein Text, der keine Zahl ist, ist eine Wahl
         (``decision``, E3) — getippt wie jede Eingabe.
         """
-        from PySide6.QtGui import QKeySequence
 
         steps: list[Step] = []
         for target, value in inputs.items():
@@ -2193,9 +2350,7 @@ class FunctionFlow:
                 continue
             number = isinstance(value, (int, float))
             text = typed_number(float(value), self.variant.unit) if number else str(value)
-            steps.append(
-                self.key_step(QKeySequence(QKeySequence.StandardKey.SelectAll), "alles markieren")
-            )
+            steps.append(self.mark_all_step(target))
             steps.append(
                 Step(
                     f"tippen {target}",
@@ -2213,10 +2368,31 @@ class FunctionFlow:
         if box is not None and bool(box.isChecked()) != value:
             machine.insert([self.walker.step(target)])
 
+    def mark_all_step(self, target: str) -> Step:
+        """Alles markieren im Feld des Ziels — erst, wenn der Fokus dort liegt (Review M13)."""
+        from PySide6.QtGui import QKeySequence
+
+        keys = QKeySequence(QKeySequence.StandardKey.SelectAll)
+
+        def act(machine: StepMachine) -> None:
+            focus_check(self.widget(target), target)
+            self.walker.record(
+                {"target": "alles markieren", "key": keys.toString(), "button": None}
+            )
+            self.ports.keys(keys)
+
+        return Step(f"alles markieren {target}", act, settle_ms=SETTLE_MS)
+
     def _type(self, target: str, text: str, *, decision: bool = False) -> None:
-        """Tippt ans Fokusfeld; ein Feld, das erst beim Verlassen übernimmt, bekommt Tab."""
+        """Tippt ins Feld des Ziels; eines, das erst beim Verlassen übernimmt, bekommt Tab.
+
+        Getippt wird nur, wenn der Fokus im Feld liegt (:func:`focus_check`):
+        Ein nie aktiviertes Fenster hat keinen, und die Ziffern landeten als
+        Tasten anderswo, während ``steps`` „getippt“ sagte.
+        """
         from PySide6.QtWidgets import QAbstractSpinBox, QApplication
 
+        focus_check(self.widget(target), target)
         self.walker.record({"target": target, "typed": text, "button": None, "decision": decision})
         self.ports.type_text(text)
         focus = QApplication.focusWidget()
@@ -2323,7 +2499,6 @@ class FunctionFlow:
 
     def phase_search(self) -> None:
         """Prüfpunkt 1 und I6: jede Suchprobe getippt, der Rang aus ``search_hits``."""
-        from PySide6.QtGui import QKeySequence
 
         from app.ui import guide_targets
 
@@ -2348,9 +2523,7 @@ class FunctionFlow:
                 f"suche {word}",
                 [
                     self.walker.step("search"),
-                    self.key_step(
-                        QKeySequence(QKeySequence.StandardKey.SelectAll), "alles markieren"
-                    ),
+                    self.mark_all_step("search"),
                     Step(
                         f"tippen {word}",
                         lambda machine, word=word: self._type("search", word),
@@ -2752,16 +2925,18 @@ class FunctionFlow:
                 *self.path_steps(),
                 *self.input_steps(inputs),
                 *(self.preview_steps() if inputs else []),
-                Step("meldung lesen", read, settle_ms=SETTLE_MS),
+                # Die Meldung kommt nach der Absage — erst sie, dann lesen (Review M1).
+                self.until_step("meldung", lambda: bool(capture.message_entries(self.window))),
+                Step("meldung lesen", read),
             ],
         )
         self.picture("04-fehlfall")
-        offered = [
-            action
-            for message in messages
-            for action in message.get("actions", ())
-            if action.get("target")
-        ]
+        actions = [action for message in messages for action in message.get("actions", ())]
+        nameless = [str(action.get("label", "")) for action in actions if not action.get("target")]
+        if nameless:
+            # Eine Lücke im Wortschatz (W), kein Fund an der Anwendung (Review M11).
+            unmeasured(self.data, "messages", f"Handlung ohne Wortschatzname: {nameless}")
+        offered = [action for action in actions if action.get("target")]
         if offered:
             action = offered[0]
             before = self.scene_now()
@@ -3555,6 +3730,7 @@ class LanguageFlow:
         surfaces = self.folder / "surfaces"
         done: list[str] = []
         placed = place_window(self.application, self.window, self.variant)
+        crashed = str(self.bench.get("surface_started") or "")
         for row in self.rows:
             path = surfaces / f"{safe_name(str(row.get('id', '')))}.json"
             if path.exists():
@@ -3562,6 +3738,19 @@ class LanguageFlow:
                 continue
             size = [self.window.width(), self.window.height()]
             protocol = empty_protocol(row, self.variant.protocol(placed, size), self.version)
+            if crashed and str(row.get("id")) == crashed:
+                # Die Fläche, an der der vorige Lauf starb, kommt nicht wieder dran —
+                # sonst begänne jeder neue Lauf mit ihr und stürbe wieder (Review M14).
+                protocol["errors"].append("Die Fläche brach im vorigen Lauf den Prozess ab")
+                unmeasured(protocol, "texts", "abgestürzt")
+                write_json(path, protocol)
+                done.append(crashed)
+                self.bench["surface_started"] = None
+                self.persist()
+                continue
+            # Vor jeder Fläche ein Anfangsvermerk; ohne Ergebnis danach war es ein Absturz.
+            self.bench["surface_started"] = str(row.get("id"))
+            self.persist()
             flow = FunctionFlow(
                 self.application,
                 self.window,
@@ -3571,6 +3760,7 @@ class LanguageFlow:
                 row,
                 self.variant,
                 self.scenes,
+                bench=self.bench,
                 out=self.folder.parent.parent,
             )
             if flow.reset():
@@ -3578,14 +3768,21 @@ class LanguageFlow:
             write_json(path, protocol)
             done.append(str(row.get("id")))
             self.bench["surfaces_done"] = done
+            self.bench["surface_started"] = None
             self.persist()
         self.bench["surfaces_done"] = done
         self.persist()
 
 
 def safe_name(text: str) -> str:
-    """Ein Dateiname aus einer Kennung: ``Datei/Speichern unter …`` → ``Datei_Speichern_unter``."""
+    """Ein eindeutiger Dateiname aus einer Kennung: lesbarer Anfang und ein Kurzabdruck.
+
+    ``Datei/Speichern unter …`` und ``Datei/Speichern unter`` ergaben vorher
+    denselben Namen, und eine Fläche überschrieb die andere oder galt als
+    erledigt (Review L4). Der Abdruck hängt an der ganzen Kennung.
+    """
     cleaned = "".join(
         character if character.isalnum() or character in "._-" else "_" for character in text
     )
-    return cleaned.strip("_")[:120] or "zeile"
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
+    return f"{cleaned.strip('_')[:100] or 'zeile'}-{digest}"

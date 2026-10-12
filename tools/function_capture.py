@@ -376,6 +376,18 @@ def mark_of(widget: Any) -> str:
     return str(mark) if mark else widget.objectName()
 
 
+def vocabulary_name(widget: Any) -> str:
+    """Das Wortschatzkennzeichen eines Widgets, wenn es ein Name aus dem Wortschatz ist, sonst leer.
+
+    Nur damit geht ein Klick über ``next_click`` (Review M11); ein ``objectName``
+    ist keiner.
+    """
+    from app.core import guides
+
+    mark = widget.property(guides.TARGET_PROPERTY)
+    return str(mark) if mark and guides.is_target(str(mark)) else ""
+
+
 def name_of(widget: Any) -> str:
     """Wie ein Widget im Protokoll heißt: sichtbarer Text, sonst Name, Kennzeichen, Klasse."""
     return _text_of(widget) or widget.accessibleName() or mark_of(widget) or type(widget).__name__
@@ -429,9 +441,12 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
     """Jeder sichtbare Text unter ``root`` mit Bedarf und Breite in Pixeln (Schema ``texts``).
 
     Der Bedarf ist die Breite der längsten Zeile in der Schrift des Trägers; ein
-    umbrechender Text braucht nur sein längstes Wort. ``cut`` heißt Bedarf über
-    der Breite (Prüfpunkt 9). ``lead`` heißt: steht über dem ersten Feld (E5).
-    Reiter einer Leiste stehen mit ihrem eigenen Rechteck da.
+    umbrechender Text braucht nur sein längstes Wort. Ein Knopf oder Haken
+    braucht dazu Kästchen, Symbol und Polsterung (:func:`_button_need`) und hat
+    seine ganze Breite (Review M12); Rich Text zählt mit seinem sichtbaren Text.
+    ``cut`` heißt Bedarf über der Breite (Prüfpunkt 9), ``lead``: steht über dem
+    ersten Feld (E5). Reiter einer Leiste stehen mit ihrem eigenen Rechteck da,
+    Zeilen sichtbarer Listen und Bäume mit ihrer Zelle (:func:`_item_texts`).
     """
     from PySide6.QtWidgets import QAbstractButton, QGroupBox, QLabel, QTabBar
 
@@ -442,8 +457,8 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
     for widget in carriers + root.findChildren(QGroupBox):
         if not _visible(widget):
             continue
-        text = _text_of(widget)
-        if not text.strip() or text.lstrip().startswith("<"):
+        text = _plain(_text_of(widget))
+        if not text.strip():
             continue
         metrics = widget.fontMetrics()
         lines = text.splitlines() or [text]
@@ -451,6 +466,8 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
         pieces = [word for line in lines for word in line.split()] if wraps else lines
         need = max((metrics.horizontalAdvance(piece) for piece in pieces), default=0)
         width = widget.contentsRect().width()
+        if isinstance(widget, QAbstractButton):
+            need, width = _button_need(widget, need), widget.width()
         bottom = _top(widget, root) + widget.height()
         found.append(
             {
@@ -480,6 +497,112 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
                     "lead": False,
                 }
             )
+    found += _item_texts(root)
+    return found
+
+
+#: Wie viele Zellen sichtbarer Listen und Bäume je Fläche aufgenommen werden.
+MOST_ITEM_TEXTS: Final = 200
+
+
+def _plain(text: str) -> str:
+    """Der sichtbare Text eines Trägers — Rich Text ohne seine Auszeichnung (Review M12)."""
+    from PySide6.QtGui import Qt, QTextDocument
+
+    if not Qt.mightBeRichText(text):
+        return text
+    document = QTextDocument()
+    document.setHtml(text)
+    return str(document.toPlainText())
+
+
+def _button_need(button: Any, text_px: int) -> int:
+    """Was ein Knopf oder Haken für seinen Text braucht: Text, Kästchen, Symbol, Polsterung.
+
+    Aus den Maßen seines Stils, nicht aus ``sizeHint`` — der hebt kurze Knöpfe
+    auf die Mindestbreite des Stils, und „OK“ hieße dann abgeschnitten.
+    """
+    from PySide6.QtWidgets import QCheckBox, QRadioButton, QStyle
+
+    style = button.style()
+
+    def metric(which: QStyle.PixelMetric) -> int:
+        return int(style.pixelMetric(which, None, button))
+
+    if isinstance(button, QCheckBox):
+        extra = metric(QStyle.PixelMetric.PM_IndicatorWidth) + metric(
+            QStyle.PixelMetric.PM_CheckBoxLabelSpacing
+        )
+    elif isinstance(button, QRadioButton):
+        extra = metric(QStyle.PixelMetric.PM_ExclusiveIndicatorWidth) + metric(
+            QStyle.PixelMetric.PM_RadioButtonLabelSpacing
+        )
+    else:
+        extra = 2 * metric(QStyle.PixelMetric.PM_ButtonMargin) + 2 * metric(
+            QStyle.PixelMetric.PM_DefaultFrameWidth
+        )
+    if not button.icon().isNull():
+        extra += button.iconSize().width() + 4
+    return text_px + extra
+
+
+def _columns(model: Any, parent: Any) -> int:
+    """Spalten eines Modells; eine Liste (``QListWidget``) hält ihre Zählung privat — eine."""
+    try:
+        return int(model.columnCount(parent))
+    except TypeError:
+        return 1
+
+
+def _item_texts(root: Any) -> list[dict[str, Any]]:
+    """Die sichtbaren Zellen der Listen und Bäume unter ``root``: Text gegen Zellbreite (M12).
+
+    Eine Ansicht kürzt mit „…“, statt umzubrechen — der Kunde sieht dann nur
+    einen Teil. Bedarf ist Text, Symbol und der Innenrand der Zelle.
+    """
+    from PySide6.QtCore import QModelIndex, Qt
+    from PySide6.QtWidgets import QAbstractItemView, QStyle
+
+    found: list[dict[str, Any]] = []
+    for view in root.findChildren(QAbstractItemView):
+        model = view.model()
+        if not _visible(view) or model is None:
+            continue
+        area = view.viewport().rect()
+        metrics = view.fontMetrics()
+        margin = 2 * (view.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1)
+        pending = [QModelIndex()]
+        while pending and len(found) < MOST_ITEM_TEXTS:
+            parent = pending.pop(0)
+            for row in range(model.rowCount(parent)):
+                for column in range(_columns(model, parent)):
+                    index = model.index(row, column, parent)
+                    cell = view.visualRect(index)
+                    text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
+                    if not text or cell.isEmpty() or not area.intersects(cell):
+                        continue
+                    icon = index.data(Qt.ItemDataRole.DecorationRole)
+                    need = metrics.horizontalAdvance(text.splitlines()[0]) + margin
+                    if icon is not None and not (hasattr(icon, "isNull") and icon.isNull()):
+                        need += view.iconSize().width() + 4
+                    # Zu sehen ist die Zelle nur, soweit sie in der Sichtfläche liegt;
+                    # eine Liste ohne Umbruch macht die Zelle so breit wie ihren Text.
+                    shown = cell.intersected(area).width()
+                    found.append(
+                        {
+                            "text": text,
+                            "carrier": f"{type(view).__name__}.Zeile",
+                            "need_px": need,
+                            "width_px": shown,
+                            "cut": need > shown,
+                            "lead": False,
+                        }
+                    )
+                # Nur ein Baum hat Kinder, und nur aufgeklappte sind zu sehen.
+                expanded = getattr(view, "isExpanded", None)
+                child = model.index(row, 0, parent)
+                if expanded is not None and expanded(child) and model.rowCount(child) > 0:
+                    pending.append(child)
     return found
 
 
@@ -745,7 +868,10 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
     """Schrift gegen Hintergrund je Textträger als ``#rrggbb`` (G6).
 
     Die Farben kommen aus der Palette des Trägers, die das Stylesheet beim
-    Polieren setzt; das Verhältnis rechnet U mit ``theme.contrast_ratio``.
+    Polieren setzt; das Verhältnis rechnet U mit ``theme.contrast_ratio``. Bei
+    einem Symbolknopf ist die Vordergrundfarbe die des Symbols selbst — die
+    häufigste deckende Farbe seines Bilds (:func:`_icon_colour`, Review L3).
+    ``large`` ist große Schrift nach WCAG: ab 18 pt, fett ab 14 pt.
     """
     from PySide6.QtWidgets import QAbstractButton, QLabel
 
@@ -760,18 +886,43 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
             continue
         palette = widget.palette()
         font = widget.font()
+        size = font.pointSizeF()
+        foreground = (
+            _icon_colour(widget) if symbol else palette.color(widget.foregroundRole()).name()
+        )
         found.append(
             {
                 "surface": surface,
                 "widget": name_of(widget),
                 "theme": theme,
-                "foreground": palette.color(widget.foregroundRole()).name(),
+                "foreground": foreground,
                 "background": palette.color(widget.backgroundRole()).name(),
-                "large": font.pointSizeF() >= 14 or (font.pointSizeF() >= 11 and font.bold()),
+                "large": size >= LARGE_POINTS or (size >= LARGE_BOLD_POINTS and font.bold()),
                 "symbol": symbol,
             }
         )
     return found
+
+
+#: Große Schrift nach WCAG 2.2 (1.4.3): ab 18 Punkt, fett ab 14 Punkt.
+LARGE_POINTS: Final = 18.0
+LARGE_BOLD_POINTS: Final = 14.0
+
+
+def _icon_colour(button: Any) -> str:
+    """Die häufigste deckende Farbe im Symbol eines Knopfs, als ``#rrggbb``."""
+    from collections import Counter
+
+    image = button.icon().pixmap(button.iconSize(), float(button.devicePixelRatioF())).toImage()
+    counted: Counter[int] = Counter()
+    for y in range(image.height()):
+        for x in range(image.width()):
+            pixel = image.pixelColor(x, y)
+            if pixel.alpha() >= 200:
+                counted[pixel.rgb() & 0xFFFFFF] += 1
+    if not counted:
+        return str(button.palette().color(button.foregroundRole()).name())
+    return f"#{counted.most_common(1)[0][0]:06x}"
 
 
 def icon_entries(root: Any) -> list[dict[str, Any]]:
@@ -969,7 +1120,7 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
                 "actions": [
                     {
                         "label": _text_of(button),
-                        "target": mark_of(button),
+                        "target": vocabulary_name(button),
                         "clicked": False,
                         "effect": None,
                     }
