@@ -1077,9 +1077,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   *Programme* fehlt Solidon. Liegt es in `/Applications`, zieht nichts um
   (`bericht-web.md`, „Wenn 0.6.0 doch hängt“, Punkt 1). Am Runner unsichtbar, weil die Releaseakte die
   ausgepackte Prüfkopie vorher löscht. In der Plattformwelle (12.10.) nicht umziehbar
-  gebaut, samt Prüfung des fertigen Pakets. **Abnahme:** Im ersten Lauf trägt
-  `PackageInfo` kein `relocate`, und die Releaseakte installiert nach `/Applications`,
-  obwohl dort keine, aber anderswo eine Kopie derselben Kennung liegt.
+  gebaut (`pkgbuild --analyze/--root` mit `BundleIsRelocatable=false`,
+  `BundleIsVersionChecked=false`, damit der Installer nicht still überspringt), samt
+  Prüfung der `PackageInfo` nach dem Bau; die Releaseakte installiert neben einer liegen
+  gelassenen Kopie und verlangt Version und gültige Signatur in `/Applications`.
+  Ungemessen ist, ob `--root` die erweiterten Attribute im Bundle erhält — sonst wird die
+  Signaturprüfung im ersten Lauf rot. **Abnahme:** Im ersten Lauf trägt `PackageInfo` kein
+  `relocate`, und die Releaseakte installiert nach `/Applications`, obwohl dort keine,
+  aber anderswo eine Kopie derselben Kennung liegt.
 
 <a id="rm-801"></a>
 
@@ -1120,8 +1125,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Linux-Teil). In der Plattformwelle (12.10.) entstehen die Linux-Pakete auf
   `ubuntu-22.04` (glibc 2.35), libstdc++ und libgcc_s reisen nicht mehr mit (vermutet: eine
   ältere mitgereiste bräche das Laden des GPU-Treibers neuerer Systeme, der eine neuere
-  `GLIBCXX` verlangt), ein Wächter bricht den Paketjob bei höheren `GLIBC_`-, `GLIBCXX_`-
-  oder `CXXABI_`-Versionen ab, und die Releaseakte startet das AppImage auch auf 22.04. Die
+  `GLIBCXX` verlangt), `tools/check_glibc_floor.py` bricht Paketjob und Releaseakte bei
+  höheren `GLIBC_`-, `GLIBCXX_`-, `CXXABI_`- oder `GCC_`-Versionen ab, das Flatpak entsteht
+  getrennt auf 24.04 aus demselben Archiv (jammy trägt nur flatpak 1.12), und die
+  Releaseakte startet das AppImage auf frischen Läufern mit 22.04 und 24.04. Die
   Website nennt die Untergrenze schon; sie stimmt erst ab 0.6.1 und geht deshalb erst mit
   dessen Release auf den Server. **Abnahme:** erster Lauf mit grünem Wächter und Start auf
   22.04 und 24.04, dazu die 3D-Ansicht auf einem neueren System mit Mesa (Fedora oder
@@ -1158,8 +1165,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Symbolanfragen ohne den Agenten sofort ein Ersatzsymbol. In der Plattformwelle (12.10.)
   startet die Releaseakte Intel danach zusätzlich mit Fenster, zunächst ohne den Lauf
   anzuhalten. Die Hardened Runtime prüft auch dieser Start nicht (SIP ist am Runner aus).
-  **Abnahme:** zwei grüne Läufe mit Fenster, danach hält der Schritt den Lauf an; offen,
-  ob die Fensterverträge `window-contracts-intel` denselben Weg nehmen.
+  Ob die paravirtualisierte GPU eine gezeichnete 3D-Ansicht trägt, ist offen; der Schritt
+  schreibt eine Zeile „Ergebnis:“ mit Plattform, Fenster und 3D-Ansicht in die
+  Zusammenfassung. Die Fensterverträge `window-contracts-intel` bekommen den Weg erst über
+  einen eigenen, nicht haltenden Job mit fortgeschriebenem CI-Vertrag — ein Schritt, der
+  rot werden darf, verletzt dort CI-03 und CI-05. **Abnahme:** zwei grüne Läufe mit
+  Fenster, danach hält der Schritt den Lauf an; dann der Job für die Fensterverträge.
 
 <a id="rm-807"></a>
 
