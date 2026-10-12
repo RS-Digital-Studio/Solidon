@@ -900,8 +900,19 @@ def _bar(window: MainWindow, role: str) -> QWidget:
 
 
 def _dialog_of_class(window: MainWindow, name: str) -> QWidget:
-    """Das offene Fenster dieser Klasse — ``dialog:print_settings_dialog``."""
+    """Das offene Fenster dieser Klasse — ``dialog:print_settings_dialog``.
+
+    Ein Fenster ohne eigene Klasse (das Meldungsfenster nach abgelaufener Demo)
+    trägt seinen Namen als Kennzeichen; das geht dem Klassennamen vor.
+    """
     candidates = [*QApplication.topLevelWidgets(), *window.findChildren(QDialog)]
+    for candidate in candidates:
+        if (
+            candidate.isWindow()
+            and candidate.isVisible()
+            and candidate.property(guides.TARGET_PROPERTY) == f"dialog:{name}"
+        ):
+            return candidate
     for candidate in candidates:
         if (
             candidate.isWindow()

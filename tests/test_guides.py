@@ -906,6 +906,7 @@ def test_every_kind_of_the_vocabulary_has_its_resolution_in_the_interface() -> N
         ("LLMKeyDialog", "llm_key_dialog"),
         ("MainWindow", "main_window"),
         ("PartCatalog", "part_catalog"),
+        ("_PanelWindow", "panel_window"),
     ],
 )
 def test_a_dialog_is_named_after_its_class(class_name: str, expected: str) -> None:
@@ -2389,3 +2390,54 @@ def test_a_row_cut_off_by_its_parent_is_reached_by_scrolling(qt_app: Any) -> Non
     finally:
         host.close()
         host.deleteLater()
+
+
+def test_the_expired_demo_and_the_parameter_dialog_resolve(qt_app: Any, monkeypatch) -> None:
+    """Das Fenster nach abgelaufener Demo (ein ``QMessageBox`` ohne eigene Klasse)
+    heißt ``dialog:expired_demo``; im Dialog für Projektparameter lösen Name, Wert,
+    Einheit, Grenzen und Ausdruck als ``field:`` auf (Funde D0-L)."""
+    from PySide6.QtWidgets import QMessageBox
+
+    from app.core import activation
+    from app.ui import dialogs, guide_targets
+    from app.ui.dialogs import EXPIRED_DEMO_TARGET, ParameterDialog
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    seen: list[Any] = []
+
+    class ShownBox(QMessageBox):
+        """Zeigt sich, statt modal zu warten, und hält fest, was der Wortschatz findet."""
+
+        def exec(self) -> int:  # type: ignore[override]
+            self.show()
+            _settle(qt_app, 3)
+            seen.append(guide_targets.widget_for(window, EXPIRED_DEMO_TARGET))
+            seen.append(self)
+            self.hide()
+            return 0
+
+    monkeypatch.setattr(dialogs, "QMessageBox", ShownBox)
+    try:
+        assert guides.is_target(EXPIRED_DEMO_TARGET)
+        dialogs.show_expired_demo(activation.Activation())
+        assert seen and seen[0] is seen[1]
+
+        dialog = ParameterDialog({}, window)
+        dialog.show()
+        _settle(qt_app, 3)
+        expected = {
+            "name": dialog.name_field,
+            "value": dialog.value_field,
+            "unit": dialog.unit_field,
+            "minimum": dialog.minimum_field,
+            "maximum": dialog.maximum_field,
+            "expression": dialog.expression_field,
+        }
+        for key, editor in expected.items():
+            assert guide_targets.widget_for(window, f"field:{key}") is editor, key
+        dialog.close()
+    finally:
+        window.deleteLater()

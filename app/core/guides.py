@@ -259,12 +259,13 @@ def menubar_name_of(text: TranslatableText | str) -> str:
 
 def dialog_name(class_name: str) -> str:
     """Der Name hinter ``dialog:`` für eine Fensterklasse: ``PrintSettingsDialog``
-    heißt ``print_settings_dialog``, ``LLMKeyDialog`` ``llm_key_dialog``.
+    heißt ``print_settings_dialog``, ``LLMKeyDialog`` ``llm_key_dialog``; ein
+    führender Unterstrich fällt weg (``_PanelWindow`` → ``panel_window``).
 
     Eine Quelle für die Funktionsliste, die die Klassen im Quelltext findet,
     und die Auflösung, die das offene Fenster sucht.
     """
-    spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", class_name)
+    spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", class_name.lstrip("_"))
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", spaced).lower()
 
 
