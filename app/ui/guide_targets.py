@@ -611,21 +611,43 @@ def _action_for(window: MainWindow, kind: str, rest: str) -> QAction:
     if rest not in commands:
         raise MissingTargetError(f"command:{rest}: keine Befehlskennung des Fensters")
     title = commands[rest][0]
-    for action in _menu_actions(window.menuBar().actions()):
-        if action.text() == title:
+    for name, _menus, action in menubar_entries(window):
+        if name == rest or action.text() == title:
             return action
     raise MissingTargetError(f"command:{rest}: „{title}“ steht in keinem Menü")
 
 
-def _menu_actions(actions: list[QAction]) -> Iterator[QAction]:
-    for action in actions:
+#: Eine Zeile eines Menüs: ihr ``objectName``, die Titel der Menüs darüber
+#: (von außen nach innen) und die Aktion selbst.
+MenuEntry = tuple[str, tuple[str, ...], QAction]
+
+
+def menu_entries(menu: QWidget, menus: tuple[str, ...] = ()) -> Iterator[MenuEntry]:
+    """Jede anklickbare Zeile eines Menüs oder der Leiste, Untermenüs eingeschlossen.
+
+    Trennstriche und Überschriften fallen weg (``style.menu_heading`` ist ein
+    Trennstrich mit Text), ein Untermenü liefert seine Kinder statt sich selbst
+    und gibt ihnen seinen Titel in den Weg mit.
+    """
+    for action in menu.actions():
         if action.isSeparator():
             continue
         sub = action.menu()
         if isinstance(sub, QMenu):
-            yield from _menu_actions(sub.actions())
+            yield from menu_entries(sub, (*menus, action.text()))
             continue
-        yield action
+        yield action.objectName(), menus, action
+
+
+def menubar_entries(window: MainWindow) -> list[MenuEntry]:
+    """Jede Zeile der Menüleiste mit Namen und Weg — die eine Lesart der Leiste.
+
+    Suche (``MainWindow._menu_commands``), Wortschatz (``menu:``) und
+    Funktionsliste lesen sie hier. Der Name ist der ``objectName`` aus der
+    unübersetzten Quelle (:func:`guides.menubar_name`), der Weg die Titel der
+    Menüs darüber in der Anzeigesprache.
+    """
+    return list(menu_entries(window.menuBar()))
 
 
 def _shown_in_toolbar(window: MainWindow, action: QAction) -> QWidget | None:

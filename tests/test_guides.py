@@ -855,3 +855,12 @@ def test_capture_protects_visible_dialog_text_and_item_views(qt_app):
     finally:
         dialog.close()
         window.close()
+
+
+def test_a_title_from_the_register_names_its_menu_line_by_its_source() -> None:
+    """Ein übersetzbarer Titel gibt Quelle und Kontext, ein schlichter steht für sich."""
+    from app.i18n import _
+
+    assert guides.menubar_name_of(_("Rechts", context="Kamera")) == "menubar.kamera.rechts"
+    assert guides.menubar_name_of(_("Öffnen …")) == "menubar.oeffnen"
+    assert guides.menubar_name_of("Mein Haken") == "menubar.mein_haken"

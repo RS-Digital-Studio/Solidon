@@ -241,6 +241,17 @@ def menubar_name(msgid: str, context: str | None = None) -> str:
     return ".".join(("menubar", *parts))
 
 
+def menubar_name_of(text: TranslatableText | str) -> str:
+    """:func:`menubar_name` für einen Titel, wie Register und Menüaufbau ihn führen.
+
+    Ein übersetzbarer Text gibt Quelle und Kontext; ein schlichter Text ist ein
+    Titel, den niemand übersetzt (ein eigener Baustein), und steht für sich.
+    """
+    if isinstance(text, TranslatableText):
+        return menubar_name(text.msgid, text.context)
+    return menubar_name(text)
+
+
 def _slug(text: str) -> str:
     text = text.replace("…", "").replace("&", "").translate(_UMLAUTS).lower()
     return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
