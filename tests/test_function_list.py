@@ -104,7 +104,7 @@ def test_every_row_carries_its_fields(rows: list[fl.Row]) -> None:
         assert row.source in fl.ROW_SOURCES, row
         assert row.package in fl.PACKAGES, row
         assert row.requirement, row
-        assert row.target, row
+        assert row.target or row.source == "startablauf", row
 
 
 # --- Pakete --------------------------------------------------------------------
@@ -212,6 +212,34 @@ def test_the_feature_window_rows_come_from_the_action_keys(rows: list[fl.Row]) -
         assert row.package == found[key.split(".")[0]].package and row.requirement == "kante"
 
 
+def test_the_expired_demo_is_a_row_of_its_own(rows: list[fl.Row]) -> None:
+    """„Demo abgelaufen“ startet die Anwendung nicht; das ist eine eigene Zeile in D12.
+
+    Gehalten am Startweg selbst: ``app/ui/app.py`` ruft die Funktion der Tabelle
+    unter ``state.over`` und kehrt danach zurück, und die Funktion gibt es.
+    """
+    import ast
+    import importlib
+
+    row = _by_id(rows)["startup.expired_demo"]
+    package, module, function = fl.STARTUP_SURFACES["startup.expired_demo"]
+    assert row.package == package == "D12" and row.source == "startablauf"
+    assert callable(getattr(importlib.import_module(module), function))
+    tree = ast.parse((fl.UI / "app.py").read_text(encoding="utf-8"))
+    guarded = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.If)
+        and ast.unparse(node.test) == "state.over"
+        and any(
+            isinstance(call, ast.Call) and ast.unparse(call.func) == function
+            for call in ast.walk(node)
+        )
+        and isinstance(node.body[-1], ast.Return)
+    ]
+    assert len(guarded) == 1
+
+
 def test_every_surface_row_names_a_target_of_the_vocabulary(rows: list[fl.Row]) -> None:
     """Jede Zeile zeigt auf ein Ziel des Wortschatzes — sonst findet der Prüfstand sie nicht."""
     from app.core.guides import is_target
@@ -221,7 +249,9 @@ def test_every_surface_row_names_a_target_of_the_vocabulary(rows: list[fl.Row]) 
     # stehen, und ``dialog:`` verlangt einen Buchstaben vorn: Das abgelöste
     # Kartenfenster hat damit kein Ziel (Bericht D0-L, gemeldet an W). Behebt W
     # es, wird diese Zeile rot und fällt weg.
-    assert wrong == ["dialog:_panel_window"]
+    # Das Meldungsfenster nach abgelaufener Demo hat keine Klasse und keinen Namen
+    # im Wortschatz (Bericht D0-L, gemeldet an W).
+    assert sorted(wrong) == ["dialog:_panel_window", "startup.expired_demo"]
 
 
 def test_window_actions_outside_the_menu_bar_have_rows(
