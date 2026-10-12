@@ -33,6 +33,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A captura de ecrã de um comentário mostra agora também o modelo no Windows. Com algumas placas gráficas aparecia antes uma imagem antiga, como o ecrã de carregamento.
 - No macOS, uma caixa de diálogo aberta, por exemplo ao criar um parafuso do catálogo de blocos, fica por cima da janela principal. Antes, um clique na janela empurrava-a para trás.
 
+### Imprimir e entregar ao slicer
+
+- Se o slicer escolhido não for um programa, o Solidon diz-o agora de imediato e propõe escolher outro. Na versão 0.6.0, o fatiamento esperava que alguém fechasse uma mensagem do Windows.
+
 ### Editar e esboçar
 
 - Um corpo exato mantém agora as suas características depois de *Aplicar texto*, *Incrustar texto* e *Rebaixar contraforma*. Na versão 0.6.0 já não era possível clicar em nenhuma face a seguir.

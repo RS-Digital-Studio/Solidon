@@ -46,6 +46,13 @@ from typing import IO, Final
 from app.core import discover
 from app.core.backends.mesh import MINIMUM_COMFYUI, role_candidates
 from app.core.log import get_logger
+from app.core.process import (
+    no_error_dialogs,
+    process_group_options,
+    terminate_process_tree,
+    trusted_cwd,
+    trusted_environment,
+)
 from app.i18n import TranslatableText, _, format_decimal
 
 _log = get_logger(__name__)
@@ -516,7 +523,7 @@ def _run(
     Gelesen wird über einen eigenen Faden (:func:`_pump`), und diese Schleife
     wartet mit Zeitscheibe: Alle :data:`WATCH_SECONDS` wird gefragt, ob
     abgebrochen wurde und ob die Frist steht — mit Ausgabe oder ohne. Ein
-    Abbruch beendet den Kindprozess; ``huggingface_hub`` lässt teilweise
+    Abbruch beendet den Kindprozess samt Nachkommen; ``huggingface_hub`` lässt teilweise
     geladene Dateien liegen und setzt beim nächsten Lauf fort.
     """
     if cancelled is not None and cancelled():
@@ -530,17 +537,36 @@ def _run(
     # **Die Einrichtung läuft auf dem Rechner, nicht im Sandkasten.** ComfyUI
     # und sein Python liegen dort.
     launched = discover.on_host(list(command))
+    # **Hinter der gemeinsamen Prozessgrenze (§32, RM-789):** ohne fremde
+    # Schlüssel und Python-Suchpfade, im vertrauten Arbeitsordner, als eigene
+    # Gruppe ohne Konsolenfenster; ein Abbruch beendet den ganzen Baum. Was der
+    # Download von Hugging Face liest, reist mit: ``HF_*`` (Spiegel, Cache,
+    # Zugang) und der alte Name des Schlüssels. Proxy-Adressen kommen ohne
+    # Zugangsdaten an, wie bei pip und winget.
+    environment = {
+        **trusted_environment(),
+        **{
+            name: value
+            for name, value in os.environ.items()
+            if name.startswith("HF_") or name == "HUGGING_FACE_HUB_TOKEN"
+        },
+    }
     try:
-        with subprocess.Popen(
-            launched,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-        ) as process:
+        with no_error_dialogs():
+            started = subprocess.Popen(
+                launched,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+                cwd=trusted_cwd(),
+                env=environment,
+                **process_group_options(no_window=True),
+            )
+        with started as process:
             assert process.stdout is not None
             sink: queue.Queue[str | None] = queue.Queue()
             reader = threading.Thread(
@@ -558,10 +584,10 @@ def _run(
                 if line:
                     lines.append(line)
                 if cancelled is not None and cancelled():
-                    process.kill()
+                    terminate_process_tree(process)
                     raise Cancelled(str(what))
                 if time.monotonic() > deadline:
-                    process.kill()
+                    terminate_process_tree(process)
                     raise SetupFailed(
                         str(_("{step}: Der Schritt hat zu lange gebraucht.", step=what))
                     )

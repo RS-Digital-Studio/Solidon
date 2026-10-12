@@ -50,6 +50,7 @@ from app.core.export import appimage, squashfs
 from app.core.log import get_logger
 from app.core.paths import ensure_dir
 from app.core.process import (
+    no_error_dialogs,
     process_group_options,
     terminate_process_tree,
     trusted_cwd,
@@ -377,15 +378,16 @@ def _mounted(
     seconds: float | None = None,
 ) -> Iterator[Mount]:
     try:
-        process = subprocess.Popen(
-            list(command),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=cwd or trusted_cwd(),
-            env=trusted_environment(),
-            **process_group_options(no_window=True),
-        )
+        with no_error_dialogs():
+            process = subprocess.Popen(
+                list(command),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=cwd or trusted_cwd(),
+                env=trusted_environment(),
+                **process_group_options(no_window=True),
+            )
     except OSError as problem:
         _log.warning("cannot mount with %s: %s", " ".join(command), problem)
         yield Mount(None, str(problem))

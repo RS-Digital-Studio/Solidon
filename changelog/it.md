@@ -33,6 +33,10 @@ scrive in `website/version.json`.
 - Lo screenshot allegato a un riscontro ora mostra anche il modello su Windows. Con alcune schede grafiche prima mostrava un'immagine vecchia, come la schermata di caricamento.
 - Su macOS una finestra di dialogo aperta, ad esempio per creare una vite dal catalogo dei blocchi, resta sopra la finestra principale. Prima un clic nella finestra la spingeva dietro.
 
+### Stampare e passare allo slicer
+
+- Se lo slicer scelto non è un programma, Solidon ora lo dice subito e propone di sceglierne un altro. Nella versione 0.6.0 lo slicing aspettava che qualcuno chiudesse un messaggio di Windows.
+
 ### Modificare e disegnare
 
 - Un corpo esatto ora conserva le sue caratteristiche dopo *Applica testo*, *Intarsia testo* e *Ricava controforma*. Nella versione 0.6.0 dopo non si poteva più fare clic su nessuna faccia.

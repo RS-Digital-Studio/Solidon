@@ -34,6 +34,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La captura de pantalla de un comentario muestra ahora también el modelo en Windows. Con algunas tarjetas gráficas aparecía antes una imagen antigua, como la pantalla de carga.
 - En macOS un diálogo abierto, por ejemplo al crear un tornillo desde el catálogo de bloques, queda sobre la ventana principal. Antes, un clic en la ventana lo dejaba detrás.
 
+### Imprimir y entregar al slicer
+
+- Si el slicer elegido no es un programa, Solidon lo dice ahora al momento y ofrece elegir otro. En la versión 0.6.0 el laminado esperaba a que alguien cerrara un aviso de Windows.
+
 ### Editar y dibujar
 
 - Un cuerpo exacto conserva ahora sus características tras *Aplicar texto*, *Incrustar texto* y *Rebajar contraforma*. En la versión 0.6.0 después ya no se podía hacer clic en ninguna cara.

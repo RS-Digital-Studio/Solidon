@@ -34,6 +34,10 @@ dans `website/version.json`.
 - La capture d'écran jointe à un retour montre désormais aussi le modèle sous Windows. Avec certaines cartes graphiques, elle montrait auparavant une image ancienne, comme l'écran de chargement.
 - Sous macOS, une boîte de dialogue ouverte, par exemple pour créer une vis du catalogue de blocs, reste au-dessus de la fenêtre principale. Un clic dans la fenêtre la passait derrière.
 
+### Imprimer et transmettre au slicer
+
+- Si le slicer choisi n'est pas un programme, Solidon le dit désormais aussitôt et propose d'en choisir un autre. En version 0.6.0, le tranchage attendait qu'on ferme un message de Windows.
+
 ### Modifier et esquisser
 
 - Un corps exact garde désormais ses caractéristiques après *Appliquer du texte*, *Incruster du texte* et *Creuser la contre-forme*. En version 0.6.0, plus aucune face ne pouvait ensuite être cliquée.

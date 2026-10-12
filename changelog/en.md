@@ -33,6 +33,10 @@ it into `website/version.json`.
 - The screenshot attached to feedback now shows the model on Windows too. On some graphics cards it used to show an old picture, such as the loading screen.
 - On macOS an open dialog, for example when creating a screw from the part catalogue, stays above the main window. A click into the window used to push it behind.
 
+### Printing and slicer handover
+
+- If the chosen slicer is a file that is not a program, Solidon now says so at once and offers to choose another slicer. In version 0.6.0 slicing waited until someone closed a Windows message.
+
 ### Editing and sketching
 
 - An exact body now keeps its features after *Put text on*, *Inlay text* and *Cut counter-form*. In version 0.6.0 no face could be clicked afterwards.

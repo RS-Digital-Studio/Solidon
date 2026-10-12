@@ -58,6 +58,10 @@ Nutzen da und sonst nichts.
 - Das Bildschirmfoto einer Rückmeldung zeigt unter Windows jetzt auch das Modell. Auf manchen Grafikkarten stand dort vorher ein altes Bild, etwa der Ladebildschirm.
 - Unter macOS bleibt ein offener Dialog, etwa beim Anlegen einer Schraube aus dem Bausteinkatalog, über dem Hauptfenster. Ein Klick ins Fenster schob ihn vorher dahinter.
 
+### Drucken und Übergabe an den Slicer
+
+- Ist als Slicer eine Datei gewählt, die kein Programm ist, sagt Solidon das sofort und bietet einen anderen Slicer an. In Version 0.6.0 wartete das Slicen, bis jemand eine Windows-Meldung schloss.
+
 ### Bearbeiten und Zeichnen
 
 - Ein exakter Körper behält jetzt nach *Text aufbringen*, *Schrift einlegen* und *Gegenform einlassen* seine Merkmale. In Version 0.6.0 ließ sich danach keine Fläche mehr anklicken.

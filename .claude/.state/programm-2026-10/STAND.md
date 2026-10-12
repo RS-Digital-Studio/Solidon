@@ -67,6 +67,18 @@ das Konzept.
 
 ## Verlauf
 
+- 13.10.2026, 00:52, Phase 2, D0 läuft: RM-788 und RM-789 sind vorgezogen auf
+  main (`0742a8c50`). Der hängende Slicertest war ein Windows-Fenster „Nicht
+  unterstützte 16 Bit-Anwendung“ beim Start einer Datei, die kein Programm ist,
+  und traf auch Kunden. ComfyUI startet jetzt hinter der Prozessgrenze. Review,
+  Folgerunde und Nachprüfung sind durch, das Tor gepinnt grün (28 150). D0 auf
+  `welle4`: Prüfstand, Funktionsliste mit Szenen für jede Befundhandlung,
+  Urteile, Wortschatz und die Funde FD-1 bis FD-24 behoben. Offen sind FD-25
+  bis FD-30 (zwei Fixagenten laufen), danach zweiter Probelauf, Tor,
+  Durchsicht der Merge-Auflösungen, main. RM-790 (einmaliger Abbruch nach
+  Rückgängig) steht im Register. **Als Nächstes:** D0 abschließen, dann
+  Codestruktur Schritt 0 (Plan und Auftrag liegen in
+  `output/konsolidierung-2026-10-12/plan-cs0.md` und `AUFTRAG-cs0.md`).
 - 12.10.2026, 14:35, Phase 2: Robert legt fest, dass alle vier Phasen ohne
   Datum direkt hintereinander und sauber bis zu Ende laufen. Der Halt vor
   Phase 4 bis zum 01.12. und der Kandidatentermin am 25.11. als Bedingung

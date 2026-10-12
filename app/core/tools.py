@@ -37,7 +37,7 @@ from typing import Final, Literal
 from app.core import discover
 from app.core.backends import llm, mesh
 from app.core.log import get_logger
-from app.core.process import detached_process_options, trusted_cwd
+from app.core.process import detached_process_options, no_error_dialogs, trusted_cwd
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -472,7 +472,8 @@ def start_detailed(
         program.parent if program.is_absolute() and program.parent.is_dir() else trusted_cwd()
     )
     try:
-        subprocess.Popen(launched, **detached_process_options(cwd=working_folder))
+        with no_error_dialogs():
+            subprocess.Popen(launched, **detached_process_options(cwd=working_folder))
     except OSError as problem:
         _log.warning("could not start %s: %s", tool.id, problem)
         return StartResult(
