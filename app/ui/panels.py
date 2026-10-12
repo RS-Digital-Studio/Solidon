@@ -12127,18 +12127,17 @@ def open_section(content: QWidget) -> None:
     also um eine Kopfzeile, unter der nichts steht.
 
     Gesucht wird unter den **direkten** Kindern des Wrappers: Der Inhalt hat
-    eigene Knöpfe, und einer davon wäre sonst der erste Treffer. Steckt das
-    Widget in keinem Abschnitt — der Prüfbericht sitzt in einem Reiter —,
-    geschieht nichts.
+    eigene Knöpfe, und einer davon wäre sonst der erste Treffer. Steht die
+    Überschrift in einer fremden Zeile, trägt der Wrapper sie als Eigenschaft.
+    Die Auskunft gibt ``guide_targets.section_heading``, dieselbe, nach der
+    der Wortschatz seine Klappen nennt. Steckt das Widget in keinem
+    Abschnitt, geschieht nichts.
     """
-    wrapper = content.parentWidget()
-    if wrapper is None:
-        return
-    for child in wrapper.children():
-        if isinstance(child, QToolButton) and child.objectName() == "sectionHeading":
-            if not child.isChecked():
-                child.setChecked(True)
-            return
+    from app.ui.guide_targets import section_heading
+
+    heading = section_heading(content)
+    if heading is not None and not heading.isChecked():
+        heading.setChecked(True)
 
 
 def least_number_width(spin: QDoubleSpinBox) -> int:

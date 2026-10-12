@@ -938,6 +938,9 @@ NEW_RESOLVERS = (
     "_row",
     "_item_rect",
     "_item_area",
+    "_row_obstacle",
+    "_reveal_row",
+    "section_heading",
     "point_of_world",
     "_display_to_global",
     "_shows_the_view",
@@ -1730,10 +1733,13 @@ def test_a_window_command_goes_over_its_button_in_the_card(
     _settle(qt_app)
     button = window.selection_operations.button_for("edit.auto_split")
     assert button is not None and button.isVisible(), "Automatisch teilen steht nicht da"
+    # area_for rollt den Knopf in den Blick; danach steht er dort, wo next_click ihn nennt.
+    area = guide_targets.area_for(window, "command:edit.auto_split")
+    _settle(qt_app)
     expected = QRect(button.mapToGlobal(QPoint(0, 0)), button.size())
     step = guide_targets.next_click(window, "command:edit.auto_split")
+    assert area == expected
     assert (step.why, step.rect) == ("ziel", expected)
-    assert guide_targets.area_for(window, "command:edit.auto_split") == expected
 
 
 def test_an_operation_that_does_not_apply_here_says_so(prepared_window: Any, qt_app: Any) -> None:
@@ -1945,3 +1951,35 @@ def test_a_widget_below_the_visible_part_is_reached_by_scrolling(qt_app: Any) ->
         area.close()
         area.deleteLater()
         window.deleteLater()
+
+
+def test_area_for_opens_the_group_that_next_click_names(prepared_window: Any, qt_app: Any) -> None:
+    """Eine Zeile in einer zugeklappten Verlaufsgruppe: ``next_click`` nennt das
+    Aufklappen, ``area_for`` nimmt dasselbe Hindernis weg (Review L2)."""
+    from app.ui import guide_targets
+
+    window = prepared_window
+    assert guide_targets.next_click(window, "history.row:1").why == "aufklappen"
+    rect = guide_targets.area_for(window, "history.row:1")
+    _settle(qt_app)
+    assert guide_targets.next_click(window, "history.row:1") == guide_targets.Click(
+        rect, Qt.MouseButton.LeftButton, "ziel", "history.row:1"
+    )
+
+
+def test_open_section_finds_a_heading_in_a_foreign_row(prepared_window: Any, qt_app: Any) -> None:
+    """Die Befundliste klappt über eine Überschrift in der Kopfzeile des Berichts
+    auf; ``open_section`` und die Hindernisse fragen dieselbe Stelle (Review L3)."""
+    from app.ui import guide_targets
+    from app.ui.panels import open_section
+
+    window = prepared_window
+    content = window.report.list.parentWidget()
+    heading = guide_targets.section_heading(content)
+    assert heading is not None and heading.parentWidget() is not content.parentWidget()
+    heading.setChecked(False)
+    _settle(qt_app)
+    assert content.isHidden()
+    open_section(content)
+    _settle(qt_app)
+    assert heading.isChecked() and not content.isHidden()

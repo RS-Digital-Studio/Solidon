@@ -443,7 +443,8 @@ def area_for(window: MainWindow, name: str) -> QRect:
     if kind in _ROW_KINDS:
         view, item = _row(window, kind, rest, name)
         _reveal(view)
-        return _item_area(view, item, reveal=True)
+        _reveal_row(window, view, item, name)
+        return _item_area(view, item)
     if kind == "view":
         return _spot(point_for(window, *_object_and_feature(rest)))
     if kind == "handle" and rest not in _BARS:
@@ -542,6 +543,29 @@ class _Obstacle:
             self.clicked.setChecked(True)
 
 
+def section_heading(content: QWidget) -> QToolButton | None:
+    """Die Kopfzeile, die diesen Inhalt auf- und zuklappt — ``None``, wenn keine.
+
+    Ein direktes Geschwister namens ``sectionHeading`` (``panels.collapsible``)
+    oder ``actionHeading`` (Handlung im Merkmalfenster), sonst die Überschrift,
+    die der Wrapper als Eigenschaft ``heading`` trägt, weil sie in einer fremden
+    Zeile steht (Prüfbericht). Eine Stelle für :func:`_obstacles` und
+    ``panels.open_section``.
+    """
+    wrapper = content.parentWidget()
+    if wrapper is None:
+        return None
+    for candidate in wrapper.children():
+        if (
+            isinstance(candidate, QToolButton)
+            and candidate is not content
+            and candidate.objectName() in _HEADINGS
+        ):
+            return candidate
+    inline = wrapper.property("heading")
+    return inline if isinstance(inline, QToolButton) else None
+
+
 def _obstacles(widget: QWidget) -> list[_Obstacle]:
     """Was zwischen dem Kunden und diesem Widget liegt, von außen nach innen.
 
@@ -570,18 +594,7 @@ def _obstacles(widget: QWidget) -> list[_Obstacle]:
             if index >= 0 and index != parent.currentIndex() and not bar.isHidden():
                 found.append(_Obstacle("reiter", bar, index))
         elif child.isHidden():
-            heading = next(
-                (
-                    candidate
-                    for candidate in parent.children()
-                    if isinstance(candidate, QToolButton)
-                    and candidate is not child
-                    and candidate.objectName() in _HEADINGS
-                ),
-                None,
-            )
-            if heading is None and isinstance(parent.property("heading"), QToolButton):
-                heading = parent.property("heading")
+            heading = section_heading(child)
             if heading is not None and not heading.isChecked():
                 found.append(_Obstacle("klappe", heading))
         child, parent = parent, parent.parentWidget()
@@ -963,19 +976,71 @@ def _item_rect(view: QAbstractItemView, item: QTreeWidgetItem | QListWidgetItem)
     return QRect()
 
 
-def _item_area(
-    view: QAbstractItemView, item: QTreeWidgetItem | QListWidgetItem, *, reveal: bool
-) -> QRect:
-    """Wo die Zeile steht, global; mit ``reveal`` vorher auf- und in den Blick gerollt."""
-    if reveal:
-        if isinstance(view, QTreeWidget) and isinstance(item, QTreeWidgetItem):
-            parent = item.parent()
-            while parent is not None:
-                parent.setExpanded(True)
-                parent = parent.parent()
-            view.scrollToItem(item)
-        elif isinstance(view, QListWidget) and isinstance(item, QListWidgetItem):
-            view.scrollToItem(item)
+def _row_obstacle(
+    item: QTreeWidgetItem | QListWidgetItem, name: str
+) -> QTreeWidgetItem | QListWidgetItem | None:
+    """Was eine Zeile verbirgt: der äußerste zugeklappte Elternteil im Baum oder die
+    Kopfzeile ihrer zugeklappten Verlaufsgruppe — ``None``, wenn nichts.
+
+    Die eine Auskunft für :func:`_row_click`, das sie als Klick nennt, und
+    :func:`_reveal_row`, das sie wegnimmt (Review L2).
+    """
+    if isinstance(item, QTreeWidgetItem):
+        ancestors: list[QTreeWidgetItem] = []
+        parent = item.parent()
+        while parent is not None:
+            ancestors.append(parent)
+            parent = parent.parent()
+        return next((entry for entry in reversed(ancestors) if not entry.isExpanded()), None)
+    if not item.isHidden():
+        return None
+    from app.ui.panels import GROUP_ROLE
+
+    group = item.data(GROUP_ROLE)
+    listing = item.listWidget()
+    header = next(
+        (
+            candidate
+            for row in range(listing.count() if listing is not None else 0)
+            if listing is not None
+            and (candidate := listing.item(row)) is not None
+            and not candidate.isHidden()
+            and candidate.data(GROUP_ROLE) == group
+        ),
+        None,
+    )
+    if group is None or header is None:
+        raise MissingTargetError(
+            f"{name}: die Zeile ist verborgen, und keine Gruppe klappt sie auf"
+        )
+    return header
+
+
+def _reveal_row(
+    window: MainWindow,
+    view: QAbstractItemView,
+    item: QTreeWidgetItem | QListWidgetItem,
+    name: str,
+) -> None:
+    """Nimmt weg, was :func:`_row_obstacle` nennt, und rollt die Zeile in den Blick."""
+    from app.ui.panels import GROUP_ROLE
+
+    for _level in range(64):
+        obstacle = _row_obstacle(item, name)
+        if obstacle is None:
+            break
+        if isinstance(obstacle, QTreeWidgetItem):
+            obstacle.setExpanded(True)
+        else:
+            window.history_panel.open_group(str(obstacle.data(GROUP_ROLE)))
+    if isinstance(view, QTreeWidget) and isinstance(item, QTreeWidgetItem):
+        view.scrollToItem(item)
+    if isinstance(view, QListWidget) and isinstance(item, QListWidgetItem):
+        view.scrollToItem(item)
+
+
+def _item_area(view: QAbstractItemView, item: QTreeWidgetItem | QListWidgetItem) -> QRect:
+    """Wo die Zeile steht, global."""
     rect = _item_rect(view, item)
     if rect.isEmpty():
         raise MissingTargetError("die Zeile steht gerade nicht im Bild")
@@ -1361,36 +1426,11 @@ def _row_click(
     """Der Klick auf eine Zeile — oder das Aufklappen und Rollen davor."""
     if not view.isVisible():
         raise MissingTargetError(f"{name}: die Liste steht gerade nicht da")
-    if isinstance(item, QTreeWidgetItem):
-        ancestors: list[QTreeWidgetItem] = []
-        parent = item.parent()
-        while parent is not None:
-            ancestors.append(parent)
-            parent = parent.parent()
-        for ancestor in reversed(ancestors):
-            if not ancestor.isExpanded():
-                return _expander_click(view, ancestor, name)
-    elif isinstance(item, QListWidgetItem) and item.isHidden():
-        from app.ui.panels import GROUP_ROLE
-
-        group = item.data(GROUP_ROLE)
-        listing = item.listWidget()
-        header = next(
-            (
-                candidate
-                for row in range(listing.count() if listing is not None else 0)
-                if listing is not None
-                and (candidate := listing.item(row)) is not None
-                and not candidate.isHidden()
-                and candidate.data(GROUP_ROLE) == group
-            ),
-            None,
-        )
-        if group is None or header is None:
-            raise MissingTargetError(
-                f"{name}: die Zeile ist verborgen, und keine Gruppe klappt sie auf"
-            )
-        return _visible_row_click(view, header, name, "aufklappen")
+    obstacle = _row_obstacle(item, name)
+    if isinstance(obstacle, QTreeWidgetItem):
+        return _expander_click(view, obstacle, name)
+    if obstacle is not None:
+        return _visible_row_click(view, obstacle, name, "aufklappen")
     return _visible_row_click(view, item, name, "ziel")
 
 
