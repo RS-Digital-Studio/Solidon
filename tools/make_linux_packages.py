@@ -624,7 +624,7 @@ def flatpak_manifest() -> str:
       bekam deshalb keinen seiner Drucker angeboten. Mit den Exporten findet
       Solidon den Slicer auch von selbst, und der Dateidialog gibt den echten
       Pfad statt einer Portalkopie zurück. Freigegeben wird nur, was
-      :data:`app.core.tools.SLICER_FLATPAKS` nennt, nicht ``~/.var/app`` im
+      :data:`app.core.discover.SLICER_FLATPAKS` nennt, nicht ``~/.var/app`` im
       Ganzen; dieselben Installationsordner liest Flatseal.
     * ``--talk-name=org.fcitx.Fcitx5`` und ``--talk-name=org.freedesktop.portal.Fcitx``
       — die Eingabemethode. Derselbe Kunde meldete: „So muss ich diesen Text in
@@ -662,7 +662,7 @@ def flatpak_manifest() -> str:
     Entscheidung Robert, 27.08.2026: „jede plattform sollte das gleiche haben
     und alles funktionieren."
     """
-    from app.core.tools import SLICER_FLATPAKS
+    from app.core.discover import SLICER_FLATPAKS
 
     permissions = "\n".join(
         f"  - {entry}"

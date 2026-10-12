@@ -36,6 +36,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import textwrap
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -3134,6 +3135,42 @@ def test_the_metainfo_is_well_formed_and_names_both_licences() -> None:
     assert root.find("description") is not None
     versions = [entry.get("version") for entry in root.iter("release")]
     assert versions == [APP_VERSION], f"Version im Manifest: {versions}"
+
+
+#: Was die Linux-Jobs ohne installierte Abhängigkeiten aufrufen: ``linux-flatpak``
+#: (Beschreibungen, Manifest, Grenze, Starttest) und ``linux-release-start``.
+_WITHOUT_PACKAGES: Final = textwrap.dedent(
+    """
+    import sys
+    sys.path.insert(0, sys.argv[1])
+    from tools import check_frozen_start, check_glibc_floor, make_linux_packages as tool
+    for build in (tool.desktop_entry, tool.flatpak_manifest, tool.metainfo,
+                  tool.mime_definition, tool.install_script):
+        assert build()
+    assert "--device=all" in tool.flatpak_manifest()
+    print("ohne Pakete")
+    """
+)
+
+
+def test_the_flatpak_job_needs_no_installed_package() -> None:
+    """``linux-flatpak`` installiert kein Paket — Manifest und Starttest laufen ohne.
+
+    Bis zur Fixrunde las das Manifest die Slicer-Kennungen aus
+    ``app.core.tools``, und das zog über die Backends numpy nach; der Job wäre
+    am ersten Import gestorben. ``python -S`` lädt keine site-packages.
+    """
+    done = subprocess.run(
+        [sys.executable, "-S", "-c", _WITHOUT_PACKAGES, str(ROOT)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0 and "ohne Pakete" in done.stdout, done.stderr[-3000:]
+    for job in ("linux-flatpak", "linux-release-start"):
+        assert "pip install" not in job_block(WORKFLOW.read_text(encoding="utf-8"), job), job
 
 
 def test_the_workflow_builds_both_linux_formats() -> None:
