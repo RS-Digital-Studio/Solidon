@@ -46,7 +46,6 @@ from PySide6.QtWidgets import (
     QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
-    QTreeWidgetItemIterator,
     QWidget,
 )
 
@@ -281,7 +280,8 @@ def marked_widgets(window: MainWindow, name: str) -> list[QWidget]:
 
     Gesucht wird im Fenster und in jedem offenen Fenster ohne Elternteil — ein
     Dialog über ``exec()`` hängt nicht immer am Hauptfenster. Sichtbare stehen
-    vorn, sonst gilt die Reihenfolge, in der sie entstanden sind.
+    vorn — und die im aktiven modalen Fenster vor allen —, sonst gilt die
+    Reihenfolge, in der sie entstanden sind.
     """
     roots: list[QWidget] = [window]
     roots.extend(
@@ -298,10 +298,18 @@ def marked_widgets(window: MainWindow, name: str) -> list[QWidget]:
             for widget in root.findChildren(QWidget)
             if widget.property(guides.TARGET_PROPERTY) == name
         )
-    # Ein verborgenes Feld eines offenen Dialogs geht einem liegengebliebenen
-    # aus einem geschlossenen vor.
+    # Im aktiven modalen Fenster zuerst — nur dort kann der Kunde klicken
+    # (``field:name`` im Operationsdialog und im Parameterdialog, Nachprüfung
+    # N3); dann sichtbar vor verborgen, und ein verborgenes Feld eines offenen
+    # Dialogs vor einem liegengebliebenen aus einem geschlossenen.
+    modal = QApplication.activeModalWidget()
     return sorted(
-        found, key=lambda widget: (not widget.isVisible(), not widget.window().isVisible())
+        found,
+        key=lambda widget: (
+            modal is None or widget.window() is not modal,
+            not widget.isVisible(),
+            not widget.window().isVisible(),
+        ),
     )
 
 
@@ -901,8 +909,19 @@ def _bar(window: MainWindow, role: str) -> QWidget:
 
 
 def _dialog_of_class(window: MainWindow, name: str) -> QWidget:
-    """Das offene Fenster dieser Klasse — ``dialog:print_settings_dialog``."""
+    """Das offene Fenster dieser Klasse — ``dialog:print_settings_dialog``.
+
+    Ein Fenster ohne eigene Klasse (das Meldungsfenster nach abgelaufener Demo)
+    trägt seinen Namen als Kennzeichen; das geht dem Klassennamen vor.
+    """
     candidates = [*QApplication.topLevelWidgets(), *window.findChildren(QDialog)]
+    for candidate in candidates:
+        if (
+            candidate.isWindow()
+            and candidate.isVisible()
+            and candidate.property(guides.TARGET_PROPERTY) == f"dialog:{name}"
+        ):
+            return candidate
     for candidate in candidates:
         if (
             candidate.isWindow()
@@ -931,14 +950,22 @@ def _row(
     if kind == "tree.row":
         tree = window.object_tree.tree
         object_id, feature_id = _object_and_feature(rest)
-        iterator = QTreeWidgetItemIterator(tree)
-        while (item := iterator.value()) is not None:
+        # **Über ``topLevelItem`` und ``child``, nicht über
+        # ``QTreeWidgetItemIterator``**: Nach dem Iterator riss ein späteres
+        # ``tree.clear()`` in ``ObjectTree.show_scene`` mit einer
+        # Zugriffsverletzung ab (PySide 6.12, Fund D0-P). Dieselbe Folge wie
+        # der Iterator: jede Zeile vor ihren Kindern.
+        pending = [tree.topLevelItem(index) for index in range(tree.topLevelItemCount())]
+        while pending:
+            item = pending.pop(0)
+            if item is None:
+                continue
             if item.data(0, Qt.ItemDataRole.UserRole) == object_id and (
                 (feature_id is None and item.parent() is None)
                 or (feature_id is not None and item.data(1, Qt.ItemDataRole.UserRole) == feature_id)
             ):
                 return tree, item
-            iterator += 1
+            pending[0:0] = [item.child(index) for index in range(item.childCount())]
         raise MissingTargetError(f"{name}: der Baum zeigt keine solche Zeile")
     if kind == "history.row":
         from app.ui.labels import step_number
@@ -1044,6 +1071,10 @@ def _item_area(view: QAbstractItemView, item: QTreeWidgetItem | QListWidgetItem)
     rect = _item_rect(view, item)
     if rect.isEmpty():
         raise MissingTargetError("die Zeile steht gerade nicht im Bild")
+    # Nur was zu sehen ist, wie bei _visible_row_click: Eine lange Zeile reicht
+    # rechts aus ihrer Liste.
+    clipped = rect.intersected(view.viewport().visibleRegion().boundingRect())
+    rect = clipped if not clipped.isEmpty() else rect
     return QRect(view.viewport().mapToGlobal(rect.topLeft()), rect.size())
 
 
@@ -1444,9 +1475,11 @@ def _visible_row_click(
     surface = view.viewport()
     if rect.isEmpty():
         raise MissingTargetError(f"{name}: die Zeile hat gerade keinen Ort")
-    if not surface.rect().contains(rect.center()):
-        direction = 1 if rect.center().y() >= surface.height() else -1
-        return Click(_global(surface), Qt.MouseButton.NoButton, "rollen", name, direction)
+    scrolled = _row_scroll(surface, rect, name)
+    if scrolled is not None:
+        return scrolled
+    # Was von der Zeile zu sehen ist: Eine lange Zeile reicht rechts aus der Liste.
+    rect = rect.intersected(surface.visibleRegion().boundingRect())
     return Click(
         QRect(surface.mapToGlobal(rect.topLeft()), rect.size()),
         Qt.MouseButton.LeftButton,
@@ -1455,14 +1488,41 @@ def _visible_row_click(
     )
 
 
+def _row_scroll(surface: QWidget, rect: QRect, name: str) -> Click | None:
+    """Ob eine Zeile erst in den Blick gerollt werden muss — gemessen am
+    **sichtbaren** Teil der Fläche, nicht an ihrem Rechteck.
+
+    Ragt die Liste über ihren Elternteil, schneidet er die letzte Zeile ab;
+    ihre Mitte lag noch im Rechteck, und der Klick hieß „ziel“ (Fund D0-P). Eine
+    Zeile gilt, wenn sie in der Höhe ganz zu sehen ist — oder, höher als das
+    Sichtbare, wenn ihre Mitte darin liegt. In der Breite reicht ein sichtbarer
+    Teil: Eine lange Zeile ist breiter als ihre Liste.
+    """
+    visible = surface.visibleRegion().boundingRect()
+    if visible.isEmpty():
+        raise MissingTargetError(f"{name}: die Liste ist gerade ganz verdeckt")
+    across = rect.left() <= visible.right() and rect.right() >= visible.left()
+    if rect.height() <= visible.height():
+        upright = visible.top() <= rect.top() and rect.bottom() <= visible.bottom()
+    else:
+        upright = visible.top() <= rect.center().y() <= visible.bottom()
+    if across and upright:
+        return None
+    direction = 1 if rect.center().y() >= visible.center().y() else -1
+    shown = QRect(surface.mapToGlobal(visible.topLeft()), visible.size())
+    return Click(shown, Qt.MouseButton.NoButton, "rollen", name, direction)
+
+
 def _expander_click(view: QAbstractItemView, item: QTreeWidgetItem, name: str) -> Click:
     """Das Dreieck vor einer zugeklappten Baumzeile."""
     assert isinstance(view, QTreeWidget)
     rect = view.visualItemRect(item)
     surface = view.viewport()
-    if rect.isEmpty() or not surface.rect().contains(rect.center()):
-        direction = 1 if rect.center().y() >= surface.height() else -1
-        return Click(_global(surface), Qt.MouseButton.NoButton, "rollen", name, direction)
+    if rect.isEmpty():
+        raise MissingTargetError(f"{name}: die Zeile hat gerade keinen Ort")
+    scrolled = _row_scroll(surface, rect, name)
+    if scrolled is not None:
+        return scrolled
     indent = view.indentation()
     arrow = QRect(rect.left() - indent, rect.top(), indent, rect.height())
     return Click(

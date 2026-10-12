@@ -661,6 +661,30 @@ def test_the_key_of_a_window_command_is_not_searched_as_text() -> None:
     assert rank(drill, "drill hole") <= 3
 
 
+@pytest.mark.parametrize(
+    ("key", "title", "word"),
+    [
+        ("file.save", "Speichern", "save"),
+        ("settings.updates", "Settings: Check for a new version at start-up", "updates"),
+        ("tool.section", "Ansicht: Schnitt", "section"),
+    ],
+)
+def test_a_hand_key_of_a_window_command_stays_a_search_word(
+    key: str, title: str, word: str
+) -> None:
+    """Die Handschlüssel der Fensterbefehle sind englische Wörter, die ein Kunde
+    tippt — „save“ findet *Speichern*, auch auf Deutsch. Nur die Kennungen der
+    Menüleiste (``menubar.*``) sind kein Suchtext (Nachprüfung D0-W, N1)."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry.search import matches, rank
+    from app.core.registry.surfaces import SearchEntry
+
+    load_operations()
+    entry = SearchEntry(name=key, title=title, doc="", category=key.split(".", 1)[0])
+    assert matches(entry, word)
+    assert rank(entry, word) <= 3
+
+
 #: Der Fachbegriff, den ein Umsteiger aus einem CAD-Programm tippt, je Sprache
 #: (RM-734). Fragebogen zu 0.5.3: „Boolesche Operationen wären toll“ — es gab
 #: sie, aber „boolesch“, „Boolean“ und „kombinieren“ fanden nichts, und
