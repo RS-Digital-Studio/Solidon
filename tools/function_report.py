@@ -2,9 +2,9 @@
 
 Was der Prüfstand gemessen hat (``<out>/cases/<nr>/function.json``), wird hier
 mit ``tools/function_judges.py`` beurteilt und mit den Urteilen der Stufen B
-und C (``urteile-<paket>.toml``, Plan D0, Abschnitt 2.9) und der Funddatei
-(``funde.md``, Plan D0, Abschnitt 2.11) zur Abhakliste je Paket zusammengeführt
-(``abhakliste-<paket>.md``, Plan D0, Abschnitt 2.10). Alle drei liegen unter
+und C (``urteile-<paket>.toml``, Konzept §5, Stufe B) und der Funddatei
+(``funde.md``, Konzept §7) zur Abhakliste je Paket zusammengeführt
+(``abhakliste-<paket>.md``, Konzept §7). Alle drei liegen unter
 ``.claude/.state/funktionsdurchgang-2026-10/``; Bilder und Rohdaten bleiben
 außerhalb des Baums.
 
@@ -30,6 +30,7 @@ import ast
 import copy
 import datetime
 import functools
+import hashlib
 import html
 import json
 import re
@@ -39,6 +40,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Final
 
+from app.ui.op_dialog import MAX_FRONT_FIELDS, USUAL_FRONT_SHARE
 from tools.function_checks import (
     AGREEMENT,
     CHECKPOINTS,
@@ -46,18 +48,21 @@ from tools.function_checks import (
     CRITERIA,
     FINDING_KINDS,
     GOAL_SHARE,
+    GOOD_OVER_FINDING,
     INPUT_SHARE,
     MAX_INPUTS,
     NOT_APPLICABLE,
-    ROW_KINDS,
+    NOT_APPLICABLE_OVER_FINDING,
     SECOND_REVIEW_SHARE,
     SEVERITIES,
+    UNMEASURED_VERDICT,
     CaseOutcome,
     Context,
     Issue,
     Outcome,
 )
-from tools.function_judges import compare_themes, judge_case
+from tools.function_judges import compare_themes, judge_case, judge_licence
+from tools.function_list import ROW_KINDS
 from tools.function_samples import BrokenSample, sample_context, sample_protocol
 
 ROOT: Final = Path(__file__).resolve().parent.parent
@@ -77,7 +82,7 @@ COMMON_GOALS: Final = ROOT / "tests" / "data" / "common_goals.toml"
 #: Die Website-Seiten, an denen Prüfpunkt 11 die Fundstellen sucht.
 WEBSITE: Final = ROOT / "website"
 
-#: Urteile je Zeile (Plan D0, Abschnitt 2.9): Werte und Prüfer.
+#: Urteile je Zeile (Konzept §5, Stufe B): Werte und Prüfer.
 VERDICTS: Final = ("gut", "gut_nach_fix", "offen", "entfaellt")
 REVIEWERS: Final = ("stufe_b", "zweitpruefer", "stufe_c")
 
@@ -109,15 +114,28 @@ VERDICT_KEYS: Final = frozenset(
     }
 )
 
+#: Wo das Urteil selbst die Messung ist: die Vorhersage (V4), das
+#: Gestaltungsurteil zu G9 und das Protokoll der Stufe C (Z7). Nur hier darf
+#: „gut“ an einem Ergebnis stehen, das Stufe A nicht gemessen hat.
+JUDGED_BY_VERDICT: Final = frozenset({"V4", "G9", "Z7"})
+
 #: Kriterien, deren Urteil als Gestaltungsurteil gekennzeichnet sein muss.
 DESIGN_SUBJECTS: Final = frozenset(key for key, c in CRITERIA.items() if c.design_judgement)
 
 #: Wo ein Fund *Vorschlag* sein darf: I ohne Bauplanzusage und G9 (Konzept §4).
+#: I6 ist hier nur die Suche mit Frageformen; der Chatweg zu I6 ist eine
+#: Bauplanzusage und steht als Fund an Prüfpunkt 17 (Agentenweg), der kein
+#: Vorschlag sein kann (:data:`_CHAT_WAY`).
 PROPOSALS: Final = frozenset(
     key for key, c in CRITERIA.items() if key[0] == "I" and not c.promised
 ) | {"G9"}
 
-#: Felder eines Funds (Plan D0, Abschnitt 2.11); ``Prüfpunkt`` nimmt auch eine Kennung E1 … I6.
+#: Woran ein Fund zu I6 als Chatweg erkennbar ist: Er spricht vom Chat oder vom
+#: Agenten. Dann gilt Prüfpunkt 17 (Konzept §4, I6), und ein Vorschlag geht nicht.
+_CHAT_WAY: Final = re.compile(r"\b(?:chat|agent)", re.IGNORECASE)
+_CHAT_FIELDS: Final = ("Funktion", "Beleg", "Ursache", "Vorschlag", "Wirkung beim Kunden")
+
+#: Felder eines Funds (Konzept §7); ``Prüfpunkt`` nimmt auch eine Kennung E1 … I6.
 FINDING_FIELDS: Final = (
     "Art",
     "Schwere",
@@ -138,7 +156,9 @@ _FIELD_LINE: Final = re.compile(
 _STAND: Final = (
     re.compile(r"^offen\b.*\bRM-\d+"),
     re.compile(r"^behoben\b.*`[0-9a-f]{7,40}`"),
-    re.compile(r"^gut nach Fix\b\s*\S"),
+    # Kein FD ohne Commit oder RM (Konzept §10): auch „gut nach Fix“ nennt
+    # den Commit, der behoben hat, dazu den Lauf, der es belegt.
+    re.compile(r"^gut nach Fix\b.*`[0-9a-f]{7,40}`"),
 )
 _RM: Final = re.compile(r"\bRM-\d+\b")
 
@@ -222,7 +242,7 @@ def _manual_index() -> tuple[frozenset[str], dict[str, frozenset[str]]]:
     return keys, anchors
 
 
-def _manual_place(row: Mapping[str, Any]) -> str | None:
+def manual_place(row: Mapping[str, Any]) -> str | None:
     """Seite und Stelle im Handbuch (``manual.help_for``) — nur, wenn es sie gibt."""
     from app.core import manual
     from app.core.registry import REGISTRY
@@ -274,29 +294,19 @@ def _website_hits(row: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(hits)
 
 
-def _agent_place(row: Mapping[str, Any]) -> tuple[str, str] | None:
-    """Ort und Menüpfad, die das Agentenwerkzeug nennt (``registry.menu_path``)."""
-    from app.core.registry import (
-        REGISTRY,
-        catalogue_operations,
-        in_the_menu_bar,
-        menu_path,
-        menu_twins,
-    )
+def agent_place(row: Mapping[str, Any]) -> tuple[str, str] | None:
+    """Ort und Menüpfad, die das Agentenwerkzeug nennt.
+
+    Der Ort kommt aus ``registry.menu_place`` — derselben Verzweigung, der
+    ``menu_path`` folgt —, nicht aus einer zweiten Herleitung über Kategorien.
+    """
+    from app.core.registry import REGISTRY, menu_path, menu_place
 
     name = str(row.get("id", ""))
     if row.get("kind") != "operation" or not REGISTRY.has(name):
         return None
     spec = REGISTRY.get(name)
-    twins = menu_twins()
-    located = REGISTRY.get(twins[name]) if name in twins else spec
-    if located.name in catalogue_operations():
-        where = "katalog"
-    elif in_the_menu_bar(located.category):
-        where = "menue"
-    else:
-        where = "karte"
-    return where, menu_path(spec)
+    return menu_place(spec), menu_path(spec)
 
 
 def repository_context() -> Context:
@@ -308,9 +318,10 @@ def repository_context() -> Context:
         negative_words=read_negative_words(),
         frozen_texts=read_frozen_texts(),
         coarse_note=_translated(COARSE_NOTE),
-        manual_place=_manual_place,
+        manual_place=manual_place,
         website_hits=_website_hits,
-        agent_place=_agent_place,
+        agent_place=agent_place,
+        common_goal_targets=frozenset(read_common_goals().values()),
     )
 
 
@@ -350,7 +361,7 @@ def finding_solutions(app_root: Path = ROOT / "app") -> dict[str, bool]:
     return {code: code in FINDING_ACTIONS for code in sorted(codes)}
 
 
-# --- Urteile (Plan D0, Abschnitt 2.9) ---------------------------------------------------------
+# --- Urteile (Konzept §5, Stufe B) ---------------------------------------------------------
 
 
 def subject_of(entry: Mapping[str, Any]) -> int | str | None:
@@ -373,7 +384,7 @@ def read_verdicts(path: Path) -> list[dict[str, Any]]:
 
 @dataclass(frozen=True)
 class Finding:
-    """Ein Fund aus der Funddatei (Plan D0, Abschnitt 2.11)."""
+    """Ein Fund aus der Funddatei (Konzept §7)."""
 
     number: int
     title: str
@@ -484,8 +495,21 @@ def _verdict_problems(
         problems.append(f"unbekannte Zeile: {row}")
     case = outcomes.get(row)
     measured = case.get(subject) if case is not None and subject is not None else None
-    if verdict in {"gut", "gut_nach_fix"} and measured is not None and measured.verdict == "fund":
-        problems.append("„gut“ gegen einen Fund der Stufe A")
+    if measured is not None:
+        if verdict in {"gut", "gut_nach_fix"} and measured.verdict == "fund":
+            problems.append(GOOD_OVER_FINDING)
+        # Was Stufe A nicht gemessen hat oder nicht prüfen konnte, macht ein
+        # Urteil nicht grün — außer wo das Urteil selbst die Messung ist (V4,
+        # G9, Z7: Vorhersage, Gestaltungsurteil, Protokoll der Stufe C).
+        if (
+            verdict in {"gut", "gut_nach_fix"}
+            and measured.verdict in {"nicht_gelaufen", "nicht_pruefbar"}
+            and subject not in JUDGED_BY_VERDICT
+        ):
+            problems.append(UNMEASURED_VERDICT)
+        # *entfällt* deckt keinen Fund zu: was gemessen schiefging, gilt.
+        if verdict == "entfaellt" and measured.verdict == "fund":
+            problems.append(NOT_APPLICABLE_OVER_FINDING)
     return problems
 
 
@@ -498,7 +522,7 @@ def check_verdicts(
 ) -> Checked:
     """Prüft Urteile gegen das Format, die Messung der Stufe A und die Funddatei.
 
-    Das Format steht in Plan D0, Abschnitt 2.9.
+    Das Format steht in Konzept §5, Stufe B.
     """
     known = frozenset(rows) if rows is not None else None
     accepted: list[dict[str, Any]] = []
@@ -517,7 +541,7 @@ def check_verdicts(
     return Checked(tuple(accepted), tuple(rejected))
 
 
-# --- Funddatei (Plan D0, Abschnitt 2.11) --------------------------------------------------------
+# --- Funddatei (Konzept §7) --------------------------------------------------------
 
 
 def parse_findings(text: str) -> tuple[list[Finding], list[str]]:
@@ -558,7 +582,7 @@ def parse_findings(text: str) -> tuple[list[Finding], list[str]]:
 
 
 def check_findings(findings: Sequence[Finding]) -> list[str]:
-    """Nummern eindeutig, Art und Schwere aus der Liste, Stand gesetzt (Plan D0, Abschnitt 2.11)."""
+    """Nummern eindeutig, Art und Schwere aus der Liste, Stand gesetzt (Konzept §7)."""
     problems = []
     numbers = [finding.number for finding in findings]
     for number in sorted({n for n in numbers if numbers.count(n) > 1}):
@@ -587,6 +611,15 @@ def check_findings(findings: Sequence[Finding]) -> list[str]:
         if severity == "Vorschlag" and not (subjects and set(subjects) <= PROPOSALS):
             problems.append(
                 f"{name}: Vorschlag nur bei I ohne Bauplanzusage oder G9, nicht bei {subjects}"
+            )
+        elif (
+            severity == "Vorschlag"
+            and "I6" in subjects
+            and any(_CHAT_WAY.search(finding.fields.get(key, "")) for key in _CHAT_FIELDS)
+        ):
+            problems.append(
+                f"{name}: Der Chatweg zu I6 ist eine Bauplanzusage — Fund an Prüfpunkt 17, "
+                "kein Vorschlag"
             )
         stand = finding.stand
         if stand and not any(pattern.search(stand) for pattern in _STAND):
@@ -656,6 +689,17 @@ def input_share(inputs: Iterable[int]) -> Share:
     return Share(sum(1 for n in counted if n <= MAX_INPUTS), len(counted), INPUT_SHARE)
 
 
+def front_share(fronts: Iterable[int]) -> Share:
+    """E5: Anteil der Zeilen mit höchstens drei Feldern vorn — vier sind die Ausnahme.
+
+    Dieselbe Schwelle wie ``test_interface_limits`` über das Register
+    (``op_dialog.USUAL_FRONT_SHARE``), hier am offenen Dialog gemessen.
+    """
+    counted = list(fronts)
+    usual = sum(1 for n in counted if n <= MAX_FRONT_FIELDS - 1)
+    return Share(usual, len(counted), USUAL_FRONT_SHARE)
+
+
 def goal_share(reached: Iterable[bool]) -> Share:
     """I3: Anteil der häufigsten Kundenziele, die ohne Suche und Aufklappen dastehen."""
     counted = list(reached)
@@ -715,10 +759,34 @@ def _merge(outcomes: Sequence[Outcome]) -> Outcome:
     return replace(worst, issues=tuple(issues))
 
 
+def _theme_case(protocols: Sequence[Mapping[str, Any]], theme: str) -> Mapping[str, Any] | None:
+    """Der Fall eines Themas, der die Hauptknöpfe gemessen hat — bevorzugt der Satz ``basis``.
+
+    Der Lizenzfall misst kein Layout; ihn gegen den dunklen Fall zu halten,
+    ergäbe einen Unterschied, den es nicht gibt.
+    """
+    measured = [
+        protocol
+        for protocol in protocols
+        if (protocol.get("variant") or {}).get("theme") == theme
+        and any(
+            isinstance(entry, Mapping) and entry.get("kind") == "primary"
+            for entry in protocol.get("layout") or ()
+        )
+    ]
+    basis = [p for p in measured if (p.get("variant") or {}).get("set") == "basis"]
+    chosen = basis or measured
+    return chosen[0] if chosen else None
+
+
 def merge_cases(
     cases: Sequence[CaseOutcome], protocols: Sequence[Mapping[str, Any]] = ()
 ) -> CaseOutcome:
-    """Alle Fälle einer Zeile zu einem Ergebnis; hell gegen dunkel für Z6."""
+    """Alle Fälle einer Zeile zu einem Ergebnis; hell gegen dunkel für Z6.
+
+    Prüfpunkt 18 urteilt einmal je Zeile über die Lizenzläufe aller ihrer Fälle:
+    Der Prüfstand fährt je Lizenzzustand einen Fall mit genau einem Lauf.
+    """
     points = {
         number: _merge([case.points[number] for case in cases if number in case.points])
         for number in sorted({n for case in cases for n in case.points})
@@ -727,10 +795,16 @@ def merge_cases(
         key: _merge([case.criteria[key] for case in cases if key in case.criteria])
         for key in sorted({k for case in cases for k in case.criteria}, key=_subject_order)
     }
-    light = [p for p in protocols if (p.get("variant") or {}).get("theme") == "light"]
-    dark = [p for p in protocols if (p.get("variant") or {}).get("theme") == "dark"]
-    if light and dark:
-        issues = compare_themes(light[0], dark[0])
+    runs: dict[str, Any] = {}
+    for protocol in protocols:
+        given = protocol.get("licence_runs")
+        if isinstance(given, Mapping):
+            runs.update(given)
+    if runs:
+        points[18] = judge_licence(runs, complete=True)
+    light, dark = _theme_case(protocols, "light"), _theme_case(protocols, "dark")
+    if light is not None and dark is not None:
+        issues = compare_themes(light, dark)
         if issues:
             base = criteria.get("Z6") or Outcome("Z6", "A", "fund")
             criteria["Z6"] = replace(
@@ -742,7 +816,7 @@ def merge_cases(
     return CaseOutcome(cases[0].row, cases[0].variant, points, criteria, problems)
 
 
-# --- Abhakliste (Plan D0, Abschnitt 2.10) --------------------------------------------------------
+# --- Abhakliste (Konzept §7) --------------------------------------------------------
 
 
 def package_slug(package: str) -> str:
@@ -752,7 +826,7 @@ def package_slug(package: str) -> str:
 
 
 def package_name(package: str) -> str:
-    """``d04``, ``D04`` oder ``D4`` → ``D4``: der Wert der Zeilen (Plan D0, Abschnitt 2.3)."""
+    """``d04``, ``D04`` oder ``D4`` → ``D4``: der Wert der Zeilen (Konzept §3)."""
     return f"D{int(re.sub(r'\D', '', package))}"
 
 
@@ -785,31 +859,65 @@ def _cell(
     verdict: Mapping[str, Any] | None,
     findings: Mapping[str, Finding],
 ) -> Cell:
-    """Das Feld eines Prüfpunkts (Plan D0, Abschnitt 2.10): ja, FD-n, —, B, C, ? oder n.p."""
+    """Das Feld eines Prüfpunkts in der Abhakliste: ja, FD-n, —, B, C, ? oder n.p.
+
+    Die Messung der Stufe A geht vor dem Urteil: Ein Fund bleibt Fund, bis er
+    *offen* mit RM steht oder ein neuer Lauf ihn nicht mehr findet; was nicht
+    gemessen oder nicht prüfbar ist, schließt nur *entfällt* mit Grund.
+    Ein offener Fund aus der Funddatei hält auch einen erfüllten Punkt offen.
+    """
     if outcome is None:
         return Cell("?", "ausstehend")
     known = _finding_for(row, outcome.subject, findings)
     number = str(verdict.get("finding")) if verdict and verdict.get("finding") else None
     number = number or (known.key if known else None)
     said = verdict.get("verdict") if verdict else None
-    if said == "entfaellt" or outcome.verdict == "entfaellt":
+    rms = tuple(_RM.findall(str((verdict or {}).get("rm") or "")))
+    known_open = known is not None and known.stand.startswith("offen")
+    if outcome.verdict == "entfaellt":
         return Cell("—", "erledigt")
-    if said == "offen":
-        return Cell(number or "offen", "offen", tuple(_RM.findall(str(verdict.get("rm")))))
-    if said == "gut_nach_fix":
-        return Cell(number or "ja", "behoben")
     if outcome.verdict == "fund":
-        if known is not None and known.stand.startswith("offen"):
+        if said == "offen":
+            return Cell(number or "offen", "offen", rms)
+        if known is not None and known_open:
             return Cell(known.key, "offen", tuple(_RM.findall(known.stand)))
         return Cell(number or "Fund", "ausstehend")
-    if said == "gut" or outcome.verdict == "erfuellt":
-        fixed = known is not None and not known.stand.startswith("offen")
-        return Cell("ja", "behoben" if fixed else "erledigt")
-    if outcome.verdict == "stufe_b":
-        return Cell("B", "ausstehend")
+    if said == "entfaellt":
+        return Cell("—", "erledigt")
+    if said == "offen":
+        return Cell(number or "offen", "offen", rms)
     if outcome.verdict == "nicht_pruefbar":
         return Cell("n.p.", "ausstehend")
-    return Cell("C" if outcome.stage == "C" else "?", "ausstehend")
+    if outcome.verdict == "nicht_gelaufen":
+        return Cell("C" if outcome.stage == "C" else "?", "ausstehend")
+    if known is not None and known_open:
+        return Cell(known.key, "offen", tuple(_RM.findall(known.stand)))
+    if said == "gut_nach_fix":
+        return Cell(number or "ja", "behoben")
+    if said == "gut" or outcome.verdict == "erfuellt":
+        return Cell("ja", "behoben" if known is not None else "erledigt")
+    return Cell("B", "ausstehend")
+
+
+#: Welches Urteil an einem Punkt gilt, wenn Stufe B und C beide urteilen:
+#: das strengere, gleich in welcher Folge sie in der Datei stehen.
+_VERDICT_RANK: Final = {"offen": 0, "gut_nach_fix": 1, "entfaellt": 2, "gut": 3}
+
+
+def primary_verdicts(
+    accepted: Iterable[Mapping[str, Any]],
+) -> dict[tuple[str, str], Mapping[str, Any]]:
+    """Das geltende Urteil je Zeile und Punkt aus den Stufen B und C (Zweitprüfer zählt nicht)."""
+    chosen: dict[tuple[str, str], Mapping[str, Any]] = {}
+    for entry in accepted:
+        if entry.get("reviewer") not in {"stufe_b", "stufe_c"}:
+            continue
+        key = (str(entry["row"]), str(subject_of(entry)))
+        known = chosen.get(key)
+        rank = _VERDICT_RANK.get(str(entry.get("verdict")), 9)
+        if known is None or rank < _VERDICT_RANK.get(str(known.get("verdict")), 9):
+            chosen[key] = entry
+    return chosen
 
 
 def _row_verdict(cells: Sequence[Cell], ran: bool) -> str:
@@ -825,9 +933,10 @@ def _row_verdict(cells: Sequence[Cell], ran: bool) -> str:
 
 @dataclass(frozen=True)
 class PackageValues:
-    """Die Paketwerte der Abhakliste (Plan D0, Abschnitt 2.10)."""
+    """Die Paketwerte der Abhakliste (Konzept §7)."""
 
     inputs: Share
+    fronts: Share
     goals: Share
     solutions: Solutions
     agreement: Mapping[str, Share]
@@ -841,7 +950,7 @@ def package_values(
     common_goals: Mapping[str, str],
     solutions: Mapping[str, bool],
 ) -> PackageValues:
-    """E2-Anteil, I3-Anteil, I4-Zahl und die Übereinstimmung der Prüfer eines Pakets.
+    """E2-, E5- und I3-Anteil, I4-Zahl und die Übereinstimmung der Prüfer eines Pakets.
 
     I3 zählt je Kundenziel, dessen Zeile (``target``) im Paket gemessen ist;
     zwei Ziele an derselben Zeile zählen beide.
@@ -850,6 +959,11 @@ def package_values(
         int(case.criteria["E2"].measurement["inputs"])
         for case in cases.values()
         if "E2" in case.criteria and "inputs" in case.criteria["E2"].measurement
+    ]
+    fronts = [
+        int(case.criteria["E5"].measurement["front"])
+        for case in cases.values()
+        if "E5" in case.criteria and "front" in case.criteria["E5"].measurement
     ]
     by_target = {
         str(case.row.get("target")): case
@@ -866,6 +980,7 @@ def package_values(
     }
     return PackageValues(
         input_share(inputs),
+        front_share(fronts),
         goal_share(reached),
         solution_count(solutions),
         agreement(verdicts),
@@ -889,10 +1004,7 @@ def render_checklist(
     out: str,
 ) -> str:
     """Die Abhakliste eines Pakets — gleiche Eingaben, gleiche Bytes."""
-    primary: dict[tuple[str, str], Mapping[str, Any]] = {}
-    for entry in verdicts.accepted:
-        if entry.get("reviewer") in {"stufe_b", "stufe_c"}:
-            primary[(str(entry["row"]), str(subject_of(entry)))] = entry
+    primary = primary_verdicts(verdicts.accepted)
     ordered = sorted(rows, key=lambda r: (_KIND_ORDER.get(str(r.get("kind")), 9), str(r.get("id"))))
     table: list[str] = []
     second: list[str] = []
@@ -952,12 +1064,13 @@ def render_checklist(
     lines = [
         f"# Abhakliste {package}",
         "",
-        "Erzeugt von `tools/function_report.py` (Plan D0, Abschnitt 2.10); "
-        "nicht von Hand bearbeiten.",
+        "Erzeugt von `tools/function_report.py` (Konzept Funktionsdurchgang §7); "
+        "nicht von Hand bearbeiten — die Prüfsumme merkt es.",
         "",
         "| | |",
         "|---|---|",
         f"| Paket | {package} |",
+        _CHECKSUM_SLOT,
         f"| Commit | {_cell_text(commit)} |",
         f"| Datum | {date} |",
         f"| Laufordner | `{_cell_text(out)}` |",
@@ -994,6 +1107,7 @@ def render_checklist(
         "| Wert | Messung | Schwelle | Stand |",
         "|---|---|---|---|",
         _value_line("E2-Anteil", values.inputs, f"≥ {INPUT_SHARE:.0%}"),
+        _value_line("E5-Anteil", values.fronts, f"≥ {USUAL_FRONT_SHARE:.0%}"),
         _value_line("I3-Anteil", values.goals, f"≥ {GOAL_SHARE:.0%}"),
         f"| I4-Zahl | {values.solutions.text()} | Zahl genannt | — |",
         _value_line("Zweitprüfer", values.second_review, f"≥ {SECOND_REVIEW_SHARE:.0%} der Zeilen"),
@@ -1027,7 +1141,31 @@ def render_checklist(
             + " |"
             for entry, reasons in verdicts.rejected
         ]
-    return "\n".join(lines) + "\n"
+    body = "\n".join(line for line in lines if line != _CHECKSUM_SLOT) + "\n"
+    sealed = f"| Prüfsumme | {_digest(body)} |"
+    return "\n".join(sealed if line == _CHECKSUM_SLOT else line for line in lines) + "\n"
+
+
+#: Der Platz der Prüfsumme in der Kopftabelle, bis sie gerechnet ist.
+_CHECKSUM_SLOT: Final = "\x00Prüfsumme"
+_CHECKSUM_LINE: Final = re.compile(r"^\| Prüfsumme \| ([0-9a-f]{64}) \|$", re.MULTILINE)
+
+
+def _digest(body: str) -> str:
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def checklist_intact(text: str) -> bool:
+    """Ob eine Abhakliste so dasteht, wie ``render_checklist`` sie schrieb.
+
+    Die Prüfsumme in der Kopftabelle deckt alles übrige; eine Änderung von Hand
+    — ein „gut“ eingetragen, eine Zeile gestrichen — macht sie ungültig.
+    """
+    found = _CHECKSUM_LINE.search(text)
+    if found is None:
+        return False
+    body = text[: found.start()] + text[found.end() + 1 :]
+    return _digest(body) == found.group(1)
 
 
 def _value_line(title: str, share: Share, threshold: str) -> str:
@@ -1090,6 +1228,23 @@ class WindowCommands:
     unchecked: tuple[str, ...]
 
 
+def window_commands_of(window: Any) -> dict[str, str]:
+    """Die Fensterbefehle eines gebauten Fensters mit ihrem Paket, wie der Prüfstand sie zählt.
+
+    Die Menüleiste über ``function_list.menubar_of``, die Zeilen über
+    ``function_list.rows`` — so gehören die Aktionen der Auswahlkarte
+    (``command:edit.auto_split``) dazu, und nichts wird hier nachgebaut.
+    """
+    from tools.function_list import menubar_of
+    from tools.function_list import rows as function_rows
+
+    return {
+        row.id: row.package
+        for row in function_rows(menubar_of(window), with_specs=False)
+        if row.kind == "fensterbefehl"
+    }
+
+
 def compare_window_commands(
     menubar: Mapping[str, str], checklists: Mapping[str, Iterable[str]]
 ) -> WindowCommands:
@@ -1144,6 +1299,8 @@ def is_red(sample: BrokenSample) -> tuple[bool, str]:
     if sample.kind == "share":
         if sample.subject == "E2":
             share = input_share(int(value) for value in sample.values)
+        elif sample.subject == "E5":
+            share = front_share(int(value) for value in sample.values)
         else:
             share = goal_share(bool(value) for value in sample.values)
         return share.flagged, share.text()
@@ -1163,12 +1320,16 @@ def is_red(sample: BrokenSample) -> tuple[bool, str]:
 PROTOCOL_FILES: Final = ("function.json", "surfaces/*.json")
 
 
-def read_protocols(out: Path) -> tuple[list[dict[str, Any]], list[str]]:
-    """Die Messprotokolle eines Laufs in Fallfolge, dazu was an ihnen ungültig ist."""
-    protocols: list[dict[str, Any]] = []
+def read_protocols(out: Path) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+    """Die Messprotokolle eines Laufs in Fallfolge, je mit ihrer Datei relativ zu ``cases``.
+
+    Dazu, was an ihnen unlesbar ist.
+    """
+    protocols: list[tuple[str, dict[str, Any]]] = []
     problems: list[str] = []
+    folders = (out / "cases").glob("*") if (out / "cases").is_dir() else iter(())
     cases = sorted(
-        (folder for folder in (out / "cases").glob("*") if folder.is_dir()),
+        (folder for folder in folders if folder.is_dir()),
         key=lambda folder: (int(folder.name) if folder.name.isdigit() else 0, folder.name),
     )
     for folder in cases:
@@ -1183,7 +1344,7 @@ def read_protocols(out: Path) -> tuple[list[dict[str, Any]], list[str]]:
                 if not isinstance(data, dict):
                     problems.append(f"{where}: kein Protokoll")
                     continue
-                protocols.append(data)
+                protocols.append((where, data))
     return protocols, problems
 
 
@@ -1217,33 +1378,55 @@ def write(
 ) -> int:
     """Beurteilt einen Lauf und schreibt Ergebnisse und Abhakliste je Paket.
 
-    Ausgang 1 nur bei ungültigen Eingaben (Plan D0, Abschnitt 2.13): ein unlesbares
-    oder ungültiges Protokoll, ein abgewiesenes Urteil, eine fehlerhafte
-    Funddatei. Die Abhakliste wird auch dann geschrieben — mit den
-    abgewiesenen Urteilen in einem eigenen Abschnitt.
+    Ausgang 1 nur bei ungültigen Eingaben (Kommandozeile des Prüfstands,
+    ``file_acceptance.py report``): kein Protokoll, ein unlesbares oder
+    ungültiges Protokoll, ein Fall, an dem das Urteil scheitert, ein
+    abgewiesenes Urteil, eine fehlerhafte Funddatei. Eine Abhakliste bekommt nur
+    ein Paket mit mindestens einem Fall — ein leerer oder verirrter Laufordner
+    überschreibt keine; sie nennt abgewiesene Urteile in einem eigenen Abschnitt.
     """
-    protocols, invalid = read_protocols(out)
+    readings, invalid = read_protocols(out)
+    if not readings:
+        print(f"ungültig: keine Protokolle unter {out / 'cases'}")
+        for problem in invalid:
+            print(f"ungültig: {problem}")
+        return 1
+    protocols = [protocol for _where, protocol in readings]
     all_rows = [dict(row) for row in rows] if rows is not None else _rows_of(out, protocols)
-    packages = sorted(
-        {package_name(package)}
-        if package
-        else {package_name(str(r["package"])) for r in all_rows if r.get("package")},
-        key=lambda name: int(name[1:]),
-    )
-    if (checklist is not None or verdicts is not None) and len(packages) != 1:
-        invalid.append("--checklist und --verdicts verlangen genau ein Paket")
-        packages = []
-    used = context if context is not None or not protocols else repository_context()
-    judged = [(protocol, judge_case(protocol, used)) for protocol in protocols] if used else []
-    for _protocol, case in judged:
-        invalid += [f"{case.row_id}: {problem}" for problem in case.problems]
+    used = context if context is not None else repository_context()
+    judged: list[tuple[str, Mapping[str, Any], CaseOutcome]] = []
+    for where, protocol in readings:
+        try:
+            case = judge_case(protocol, used, source=where)
+        except (TypeError, ValueError, KeyError, AttributeError, IndexError) as error:
+            # Ein Protokoll, an dem das Urteil scheitert, ist eine ungültige
+            # Eingabe — der Bericht über die übrigen Fälle entsteht trotzdem.
+            invalid.append(f"{where}: {type(error).__name__}: {error}")
+            continue
+        invalid += [f"{where}: {problem}" for problem in case.problems]
+        judged.append((where, protocol, case))
     grouped: dict[str, list[tuple[Mapping[str, Any], CaseOutcome]]] = {}
-    for protocol, case in judged:
-        grouped.setdefault(case.row_id, []).append((protocol, case))
+    for _where, measured, case in judged:
+        grouped.setdefault(case.row_id, []).append((measured, case))
     merged = {
         row: merge_cases([case for _p, case in pairs], [p for p, _case in pairs])
         for row, pairs in sorted(grouped.items())
     }
+    measured_packages = {
+        package_name(str(row.get("package")))
+        for row in all_rows
+        if row.get("package") and str(row.get("id")) in merged
+    }
+    if package:
+        packages = [package_name(package)]
+        if packages[0] not in measured_packages:
+            invalid.append(f"{packages[0]}: kein Fall im Lauf — keine Abhakliste geschrieben")
+            packages = []
+    else:
+        packages = sorted(measured_packages, key=lambda name: int(name[1:]))
+    if (checklist is not None or verdicts is not None) and len(packages) != 1:
+        invalid.append("--checklist und --verdicts verlangen genau ein Paket")
+        packages = []
     found, finding_problems = read_findings(findings or state / "funde.md")
     invalid += [f"funde.md: {problem}" for problem in finding_problems]
     commits = sorted(
@@ -1283,12 +1466,13 @@ def write(
         print(f"{name}: {len(package_rows)} Zeilen, {len(cases)} gemessen -> {target}")
 
     def linked(case: CaseOutcome, outcome: Outcome) -> dict[str, Any]:
-        # Plan D0, Abschnitt 2.8: ``finding`` ist die FD-Nummer, sobald die Funddatei eine vergibt.
+        # ``finding`` ist die FD-Nummer, sobald die Funddatei eine vergibt.
         known = _finding_for(case.row_id, outcome.subject, found)
         return replace(outcome, finding=known.key if known else None).record()
 
     results = [
         {
+            "case": where,
             "row": case.row_id,
             "variant": dict(case.variant),
             "results": [
@@ -1296,7 +1480,7 @@ def write(
                 for outcome in (*case.points.values(), *case.criteria.values())
             ],
         }
-        for _protocol, case in judged
+        for where, _protocol, case in judged
     ]
     (out / "function_results.json").write_text(
         json.dumps(results, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"

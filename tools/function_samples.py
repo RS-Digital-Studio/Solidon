@@ -1,4 +1,4 @@
-"""Die Gegenproben des Funktionsdurchgangs (RM-737, Paket D0-U, Plan D0, Abschnitt 3).
+"""Die Gegenproben des Funktionsdurchgangs (RM-737, Paket D0-U, Konzept §10).
 
 Je Prüfpunkt und Kriterium mindestens eine Gegenprobe: ein absichtlich
 kaputtes Protokoll, Urteil oder Fund, das rot werden muss
@@ -19,16 +19,18 @@ from typing import Any, Final
 
 from app.ui.motion import MEDIUM_MS
 from app.ui.op_dialog import MAX_LEAD_WORDS
-from app.ui.session import COARSE_PREVIEW_ABOVE
 from tools.function_checks import (
     CHECKPOINTS,
     COARSE_NOTE,
     COVERED,
     CRITERIA,
+    GOOD_OVER_FINDING,
     LAPTOP_SIZE,
     MANUAL_WINDOW,
+    NOT_APPLICABLE_OVER_FINDING,
     NOT_FOUND,
     START_SIZE,
+    UNMEASURED_VERDICT,
     Context,
 )
 
@@ -50,6 +52,7 @@ def sample_context() -> Context:
         manual_place=lambda row: "ref-holes#operation-drill_hole",
         website_hits=lambda row: ("website/funktionen.html",),
         agent_place=lambda row: ("karte", "Handlungen rechts (bei gewähltem Körper) → Bohrung"),
+        common_goal_targets=frozenset({"operation:drill_hole"}),
     )
 
 
@@ -239,14 +242,14 @@ def sample_protocol() -> dict[str, Any]:
                 "label": "Durchmesser",
                 "accessible_name": "Durchmesser",
                 "description": "Wie weit das Loch quer gemessen wird.",
-                "tooltip": "",
+                "tooltip": "Die Weite des Lochs, quer über die Öffnung.",
                 "front": True,
             },
             {
                 "label": "Tiefe",
                 "accessible_name": "Tiefe",
                 "description": "Wie weit es in den Körper reicht.",
-                "tooltip": "",
+                "tooltip": "Wie weit das Loch hineingeht.",
                 "front": True,
             },
         ],
@@ -370,15 +373,15 @@ def sample_protocol() -> dict[str, Any]:
             }
         ],
         "licence_runs": {
-            "over": {
+            "sale_without_trial": {
                 "writes": True,
                 "enabled": False,
-                "reason": "Die Demo ist abgelaufen.",
+                "reason": "Ändern braucht einen Kaufcode.",
             },
-            "expired": {
+            "needs_activation": {
                 "writes": True,
                 "enabled": False,
-                "reason": "Der Testlauf ist abgelaufen.",
+                "reason": "Der Kaufcode wartet auf die Freigabe dieses Geräts.",
             },
             "licensed": {"writes": True, "enabled": True, "reason": ""},
         },
@@ -523,7 +526,7 @@ _FINDING: Final = """### FD-1 Zwei Hauptknöpfe im Bohrdialog
 """
 
 
-#: Je Prüfpunkt und Kriterium mindestens eine Gegenprobe (Plan D0, Abschnitt 3).
+#: Je Prüfpunkt und Kriterium mindestens eine Gegenprobe (Konzept §10).
 BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(1, "Suchprobe auf Rang 4", change=_set("search.bohren.rank", 4)),
     BrokenSample(
@@ -574,9 +577,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         ),
     ),
     BrokenSample(3, "ungleiche Abdrücke", change=_set("preview.bodies.body1", "cccc")),
-    BrokenSample(
-        3, "grobe Szene ohne Bandsatz", change=_set("scene.triangles", COARSE_PREVIEW_ABOVE + 1)
-    ),
+    BrokenSample(3, "grobe Vorschau ohne Bandsatz", change=_set("preview.coarse", True)),
     BrokenSample(4, "Volumen außerhalb der Toleranz", change=_set("result.metrics.volume", 24.5)),
     BrokenSample(
         4,
@@ -619,7 +620,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         kind="verdict",
         change=_set("texts.0.text", "Rechnet mit Voxeln."),
         verdict=_verdict(point=8),
-        reason="„gut“ gegen einen Fund der Stufe A",
+        reason=GOOD_OVER_FINDING,
     ),
     BrokenSample(9, "Bedarf über Platz", change=_set("texts.1.need_px", 120)),
     BrokenSample(
@@ -678,9 +679,9 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(
         18,
         "schreibendes Ziel frei trotz Ablauf",
-        change=_set("licence_runs.over.enabled", True),
+        change=_set("licence_runs.sale_without_trial.enabled", True),
     ),
-    BrokenSample(18, "grau ohne Grund", change=_set("licence_runs.expired.reason", "")),
+    BrokenSample(18, "grau ohne Grund", change=_set("licence_runs.needs_activation.reason", "")),
     BrokenSample(19, "zwei Hauptknöpfe", change=_set("layout.0.primary", 2)),
     BrokenSample(
         "E1",
@@ -841,7 +842,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         kind="verdict",
         change=lambda p: p["steps"].insert(2, click_step("feature.more", "dialog", "klappe")),
         verdict=_verdict(criterion="Z3", design_judgement=True),
-        reason="„gut“ gegen einen Fund der Stufe A",
+        reason=GOOD_OVER_FINDING,
     ),
     BrokenSample(
         "Z4",
@@ -849,7 +850,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         kind="verdict",
         change=_set("empty_states.0.button", None),
         verdict=_verdict(criterion="Z4", design_judgement=True),
-        reason="„gut“ gegen einen Fund der Stufe A",
+        reason=GOOD_OVER_FINDING,
     ),
     BrokenSample(
         "Z5",
@@ -871,7 +872,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         kind="verdict",
         change=_set("hover_labels.0.label", ""),
         verdict=_verdict(criterion="I1", design_judgement=True),
-        reason="„gut“ gegen einen Fund der Stufe A",
+        reason=GOOD_OVER_FINDING,
     ),
     BrokenSample(
         "I2",
@@ -892,11 +893,165 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         "I5",
         "fehlt, Urteil gut",
         kind="verdict",
-        change=_all(_set("spec.criteria", ["I5"]), _set("place.error", "MissingTargetError")),
+        change=_all(
+            _set("spec.criteria", ["I5"]),
+            lambda p: p["steps"].append(
+                {"target": "menu:history.compare", "finding": NOT_FOUND, "phase": "weg"}
+            ),
+        ),
         verdict=_verdict(criterion="I5", design_judgement=True),
-        reason="„gut“ gegen einen Fund der Stufe A",
+        reason=GOOD_OVER_FINDING,
     ),
     BrokenSample("I6", "Rang 5", change=_set("search.Loch machen.rank", 5)),
+    # --- Fixrunde: Ein B-Urteil macht nichts grün, was Stufe A nicht gemessen
+    # hat, und kein entfällt deckt einen Fund zu (Review S1).
+    BrokenSample(
+        14,
+        "B „gut“ an einer Szene unter 2 s",
+        kind="verdict",
+        change=_set("abort.eval_s", 0.8),
+        verdict=_verdict(point=14),
+        reason=UNMEASURED_VERDICT,
+    ),
+    BrokenSample(
+        6,
+        "B „gut“ ohne Zeitmessung",
+        kind="verdict",
+        change=_drop("timing"),
+        verdict=_verdict(point=6),
+        reason=UNMEASURED_VERDICT,
+    ),
+    BrokenSample(
+        4,
+        "B „gut“ gegen eine Erwartung ohne Herkunft",
+        kind="verdict",
+        change=_set("spec.expectation.volume.origin", ""),
+        verdict=_verdict(point=4),
+        reason=UNMEASURED_VERDICT,
+    ),
+    BrokenSample(
+        3,
+        "entfällt gegen einen Fund",
+        kind="verdict",
+        change=_set("preview.bodies.body1", "cccc"),
+        verdict=_verdict(
+            point=3, verdict="entfaellt", not_applicable="ohne_dialog", image=None, place=None
+        ),
+        reason=NOT_APPLICABLE_OVER_FINDING,
+    ),
+    # --- Eine fehlende Messung im Feld ist nie erfüllt (Review S2).
+    BrokenSample(6, "leere Zeitmessung", change=_set("timing", {}), expect="nicht_gelaufen"),
+    BrokenSample(
+        12,
+        "nur der Weg über das Menü",
+        change=lambda p: p["revise"].pop(),
+        expect="nicht_gelaufen",
+    ),
+    BrokenSample(12, "kein Weg gemessen", change=_set("revise", []), expect="nicht_gelaufen"),
+    BrokenSample(16, "leerer Wechsel", change=_set("switch", {}), expect="nicht_gelaufen"),
+    BrokenSample(
+        3,
+        "Vorschau ohne Körperabdrücke",
+        change=lambda p: p["preview"].pop("bodies"),
+        expect="nicht_gelaufen",
+    ),
+    BrokenSample(3, "Vorschau zeigt keinen geänderten Körper", change=_set("preview.bodies", {})),
+    BrokenSample(
+        5,
+        "Escape nicht gemessen",
+        change=lambda p: p["states"].pop("escape"),
+        expect="nicht_gelaufen",
+    ),
+    BrokenSample("E4", "Stelle nicht gemessen", change=_drop("spot"), expect="nicht_gelaufen"),
+    BrokenSample(
+        "Z6",
+        "Rollleisten nur bei 1920 x 1080",
+        change=_set(
+            "scrollbars",
+            [{"surface": "OperationDialog", "window_size": [1920, 1080], "front": True}],
+        ),
+        expect="nicht_gelaufen",
+    ),
+    BrokenSample(
+        "E7",
+        "nur die Meldungen gemessen",
+        change=_all(_drop("matrix"), _drop("empty_states")),
+        expect="nicht_gelaufen",
+    ),
+    BrokenSample(1, "keine Suchprobe gemessen", change=_set("search", {}), expect="nicht_gelaufen"),
+    BrokenSample(8, "Felder nicht gemessen", change=_drop("fields"), expect="nicht_gelaufen"),
+    BrokenSample(
+        19,
+        "Gestaltung nicht gemessen",
+        change=_all(*(_drop(key) for key in ("layout", "fonts", "state_images", "contrast"))),
+        expect="nicht_gelaufen",
+    ),
+    # --- null, wie der Prüfstand es nach einem Fehlschlag schreibt (Review S4).
+    BrokenSample(6, "Dauer null", change=_set("timing.total_s", None), expect="nicht_gelaufen"),
+    BrokenSample(
+        "Z1",
+        "Ereignisse ohne Bild",
+        change=_set("frames.drag_ms", [None, None]),
+        expect="nicht_gelaufen",
+    ),
+    BrokenSample(14, "Rechenzeit null", change=_set("abort.eval_s", None), expect="nicht_gelaufen"),
+    BrokenSample(
+        "G1", "Hauptknöpfe null", change=_set("layout.0.primary", None), expect="nicht_gelaufen"
+    ),
+    BrokenSample(
+        "G6", "Farbe null", change=_set("contrast.0.foreground", None), expect="nicht_gelaufen"
+    ),
+    BrokenSample(
+        12,
+        "Verlaufslänge null",
+        change=_set("revise.0.history_after", None),
+        expect="nicht_gelaufen",
+    ),
+    BrokenSample(
+        10, "Rechteck null", change=_set("tab_chain.1.rect", None), expect="nicht_gelaufen"
+    ),
+    BrokenSample(
+        4,
+        "Erwartung ohne Wert",
+        change=_set("spec.expectation.volume.value", None),
+        expect="nicht_pruefbar",
+    ),
+    BrokenSample(15, "Schrittnummer null", change=_set("halt.step", None), expect="nicht_gelaufen"),
+    # --- Ein gemessener Fund bleibt, auch wenn eine zweite Messung fehlt (Review M1).
+    BrokenSample(
+        4,
+        "falsches Volumen ohne Kommandozeile",
+        change=_all(_set("result.metrics.volume", 30.0), _drop("cli")),
+    ),
+    BrokenSample(
+        14,
+        "kein Abbrechen, Stand danach nicht gemessen",
+        change=_all(_set("abort.cancel_shown_s", None), lambda p: p["states"].pop("aborted")),
+    ),
+    # --- Ein Bildklick im Weg setzt die Zählung nicht zurück (Review M5).
+    BrokenSample(
+        "E1",
+        "Bildklick im Weg zählt mit",
+        change=_steps(
+            click_step("tree.row:body1", "karte_links"),
+            click_step("operation:drill_hole"),
+            click_step("feature.more", "dialog", "klappe"),
+            click_step("feature.in_view", "dialog"),
+            click_step("view:body1", "ansicht"),
+            click_step("feature.apply", "dialog", phase="übernehmen"),
+        ),
+    ),
+    # --- Drei vorn bei neun von zehn (Review M6).
+    BrokenSample(
+        "E5",
+        "2 von 10 Zeilen mit 4 Feldern vorn",
+        kind="share",
+        values=(3, 3, 3, 3, 3, 3, 3, 3, 4, 4),
+    ),
+    # --- Rückmeldung zur rechten Zeit, nicht irgendwann (Review L12).
+    BrokenSample(6, "Zeiger erst nach 0,5 s", change=_set("timing.first_feedback_s", 0.5)),
+    # --- Beide Sätze am Feld (Review L17).
+    BrokenSample("V3", "Feld ohne Kurzhilfe", change=_set("fields.0.tooltip", "")),
 )
 
 

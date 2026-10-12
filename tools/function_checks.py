@@ -2,7 +2,7 @@
 
 Der Prüfstand (``tools/file_acceptance.py`` mit ``tools/function_bench.py``)
 fährt je Funktion einen Fall am echten Fenster und schreibt das Messprotokoll
-``cases/<nr>/function.json`` (Plan D0, Abschnitt 2.7). Hier steht, wonach es
+``cases/<nr>/function.json`` (Konzept §5, Stufe A). Hier steht, wonach es
 beurteilt wird: die 19 Prüfpunkte (:data:`CHECKPOINTS`), die 35 Kriterien E1
 bis I6 (:data:`CRITERIA`) mit Stufe, Schwelle und Quelle, die Wertebereiche
 der Urteile und das Schema des Protokolls (:data:`PROTOCOL_SCHEMA`).
@@ -37,10 +37,13 @@ import ast
 import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Final
+from dataclasses import fields as dataclass_fields
+from typing import Any, Final, get_args
 
 from app.core.units import DISPLAY_UNITS
+from app.ui.guide_targets import ClickReason, Zone
 from app.ui.loading import BAR_AFTER_MS, DELAY_MS
+from app.ui.manual_window import ManualWindow
 from app.ui.motion import ACCENT_MS, MEDIUM_MS
 from app.ui.op_dialog import (
     MAX_FRONT_FIELDS,
@@ -48,13 +51,14 @@ from app.ui.op_dialog import (
     MAX_LEAD_WORDS_TRANSLATED,
 )
 from app.ui.style import LEVELS, SPACE
+from tools.function_list import ROW_KINDS, Row
 
 # --- Wertebereiche --------------------------------------------------------
 
 #: Stufen des Prüfschemas (Konzept §5).
 STAGES: Final = ("A", "B", "C")
 
-#: Ergebnis je Prüfpunkt oder Kriterium (Plan D0, Abschnitt 2.8). ``nicht_gelaufen``
+#: Ergebnis je Prüfpunkt oder Kriterium (Konzept §4). ``nicht_gelaufen``
 #: heißt: Das Protokoll trägt die Messung nicht — ist die Stufe C, steht in der
 #: Abhakliste „C“, sonst „?“.
 RESULTS: Final = ("erfuellt", "fund", "entfaellt", "stufe_b", "nicht_gelaufen", "nicht_pruefbar")
@@ -84,14 +88,14 @@ FINDING_KINDS: Final = (
     "Gestaltung",
 )
 
-#: Warum ein Schritt geklickt wurde (``next_click``, Plan D0, Abschnitt 2.2). Nur
-#: ``ziel`` ist die Handlung selbst; alles andere ist ein Wegklick.
-WHY: Final = ("ziel", "reiter", "klappe", "menue", "untermenue", "aufklappen", "rollen")
+#: Warum ein Schritt geklickt wurde, und die Bereiche des Fensters für E4: die
+#: Werte von ``guide_targets.ClickReason`` und ``Zone`` (Teilpaket W), gelesen
+#: statt abgeschrieben. Nur ``ziel`` ist die Handlung selbst; alles andere ist ein
+#: Wegklick.
+WHY: Final[tuple[str, ...]] = get_args(ClickReason)
+ZONES: Final[tuple[str, ...]] = get_args(Zone)
 
-#: Bereiche des Fensters für E4 (``zone_of``, Plan D0, Abschnitt 2.2).
-ZONES: Final = ("ansicht", "karte_rechts", "karte_links", "dialog", "statusleiste", "kopf", "menue")
-
-#: Die sechs Auswahlstufen von Prüfpunkt 13 (Konzept §4).
+#: Die sechs Auswahlstufen von Prüfpunkt 13 (Konzept Funktionsdurchgang §4).
 SELECTION_STAGES: Final = (
     "ohne",
     "ein_koerper",
@@ -107,18 +111,47 @@ SELECTION_STAGES: Final = (
 MATRIX_UNREACHABLE: Final = "nicht herstellbar"
 MATRIX_STATES: Final = ("angeboten", "grau", "fehlt", MATRIX_UNREACHABLE)
 
-#: Die Lizenzzustände eines Falls (Prüfpunkt 18). Die Anwendung führt keine
-#: Aufzählung, sondern liest den Zustand an Eigenschaften von
-#: ``app.core.activation.Activation`` ab; ihre Namen sind die Zustände:
-#: ``in_demo`` (Demo läuft), ``over`` (Demo abgelaufen), ``in_trial``
-#: (Testlauf läuft), ``expired`` (Testlauf abgelaufen), ``licensed`` (gekauft).
-#: Der Prüfstand setzt sie wie die Suite über ``activation._cached``; ein
-#: Wächter hält die Namen gegen die Klasse.
-LICENCE_STATES: Final = ("in_demo", "over", "in_trial", "expired", "licensed")
-#: Die Läufe, die Prüfpunkt 18 verlangt: Demo und Testlauf abgelaufen, gekauft.
-LICENCE_RUNS: Final = ("over", "expired", "licensed")
-#: Abgelaufen heißt: Schreibendes ist gesperrt, nur Lesendes läuft weiter.
-EXPIRED_RUNS: Final = frozenset({"over", "expired"})
+#: Die Lizenzzustände eines Laufs (Prüfpunkt 18) und ob Schreibendes in ihnen
+#: offensteht (``Activation.unlocked``). Die Anwendung führt keine Aufzählung,
+#: sie liest den Zustand an Eigenschaften von ``app.core.activation.Activation``
+#: ab; deren Namen sind die Zustände. Ein Wächter setzt jeden Zustand wie die
+#: Suite über ``activation._cached`` und prüft Eigenschaft und Freischaltung.
+#:
+#: ``over`` (Demo abgelaufen) ist kein Lauf: Dort startet die Anwendung nicht
+#: (``app.ui.app``, ``show_expired_demo``) — das prüft eine eigene Zeile des
+#: Pakets D12. ``in_demo`` ist auch nach dem Demo-Ende wahr und kein Zustand.
+LICENCE_UNLOCKED: Final[dict[str, bool]] = {
+    "sale_without_trial": False,
+    "needs_activation": False,
+    "licensed": True,
+    "expired": False,
+}
+LICENCE_STATES: Final = tuple(LICENCE_UNLOCKED)
+#: Gesperrt heißt: Schreibendes ist grau mit Grund, nur Lesendes läuft weiter.
+LOCKED_STATES: Final = frozenset(state for state, open_ in LICENCE_UNLOCKED.items() if not open_)
+
+
+def licence_runs() -> tuple[str, ...]:
+    """Die Läufe, die Prüfpunkt 18 je Zeile verlangt: die erreichbaren Zustände.
+
+    Ohne ``store.TRIAL_FROM`` (die Verkaufsversion) gibt es keinen Testlauf,
+    also auch keinen abgelaufenen — wer keinen Schlüssel hat, sieht die lesende
+    Verkaufsversion. Mit ``TRIAL_FROM`` ist es umgekehrt. Kaufcode ohne
+    Gerätefreigabe und gekauft gibt es in beiden.
+    """
+    from app.core.activation.store import TRIAL_FROM
+
+    first = "sale_without_trial" if TRIAL_FROM is None else "expired"
+    return (first, "needs_activation", "licensed")
+
+
+#: Die zwei Wege zum Ändern eines Schritts (Prüfpunkt 12): *Diesen Schritt
+#: ändern* im Menü und der Doppelklick im Verlauf (Konzept §4).
+REVISE_WAYS: Final = ("menue", "doppelklick")
+
+#: Wann der Projektwechsel geprüft wird (Prüfpunkt 16): während Vorschau,
+#: Entwurf und Rechnung (Konzept §4).
+SWITCH_PHASES: Final = ("vorschau", "entwurf", "rechnung")
 
 #: Die Phasen des Prüfstands, die der Hauptweg zum Beispielziel sind. Nur ihre
 #: Schritte zählen für Prüfpunkt 2 und E1 bis E4; Suche, Escape, Matrix,
@@ -136,12 +169,18 @@ BENCH_FINDINGS: Final = (COVERED, NOT_FOUND)
 RAW_CLASSES: Final = frozenset({"QMessageBox", "QInputDialog", "QColorDialog"})
 
 #: Das Handbuchfenster: Muss der Kunde es öffnen, ist V6 verletzt.
-MANUAL_WINDOW: Final = "ManualWindow"
+MANUAL_WINDOW: Final = ManualWindow.__name__
 
 #: Der Satz im Vorschauband einer groben Vorschau (Prüfpunkt 3) — die
 #: Message-ID aus ``MainWindow._show_preview``. Ein Wächter in der Suite hält
 #: sie: Steht sie in keinem Katalog mehr, hat die Anwendung den Satz geändert.
 COARSE_NOTE: Final = "Grobe Vorschau — beim Übernehmen wird genau gerechnet"
+
+#: Warum ein Urteil abgewiesen wird, wo es der Messung der Stufe A
+#: widerspricht — die Gegenproben verlangen genau diese Gründe.
+GOOD_OVER_FINDING: Final = "„gut“ gegen einen Fund der Stufe A"
+UNMEASURED_VERDICT: Final = "„gut“ ohne Messung der Stufe A"
+NOT_APPLICABLE_OVER_FINDING: Final = "entfällt gegen einen Fund der Stufe A"
 
 # --- Schwellen ohne Codequelle (Wächter gegen die Skills) ------------------
 
@@ -198,13 +237,14 @@ BAR_AFTER_S: Final = BAR_AFTER_MS / 1000
 
 # --- Das Messprotokoll -------------------------------------------------------
 
-#: Arten einer Funktionszeile (Plan D0, Abschnitt 2.3).
-ROW_KINDS: Final = ("operation", "fensterbefehl", "bedienflaeche")
+#: Die Schlüssel einer Zeile: die Felder von ``function_list.Row`` (Teilpaket L),
+#: die Arten (``ROW_KINDS``) ebenfalls von dort.
+ROW_KEYS: Final = frozenset(item.name for item in dataclass_fields(Row))
 
 #: Wo der Kunde eine Funktion findet (``place.where``, Prüfpunkt 1 und 17).
 PLACES: Final = ("karte", "menue", "werkzeugleiste", "kuerzel", "kontext")
 
-#: Die Szenenabdrücke in ``states`` (Plan D0, Abschnitt 2.7); ``aborted`` ist der Stand nach
+#: Die Szenenabdrücke in ``states`` (Konzept §5, Stufe A); ``aborted`` ist der Stand nach
 #: *Abbrechen* der Rechnung (Prüfpunkt 14), ``cancelled`` der Abbruch im Dialog.
 STATE_KEYS: Final = (
     "before",
@@ -244,7 +284,7 @@ def _keys(*names: str) -> frozenset[str]:
     return frozenset(names)
 
 
-#: Das Schema des Messprotokolls ``cases/<nr>/function.json`` (Plan D0, Abschnitt 2.7
+#: Das Schema des Messprotokolls ``cases/<nr>/function.json`` (Konzept §5, Stufe A
 #: mit den Ergänzungen dieses Pakets, Bericht „Schnittstelle“). Es gehört D0-U;
 #: der Prüfstand schreibt danach und prüft sich mit :func:`validate_protocol`.
 #: Ein unbekanntes Feld oder ein unbekannter Schlüssel ist eine ungültige
@@ -252,10 +292,7 @@ def _keys(*names: str) -> frozenset[str]:
 PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     "row": ProtocolField(
         "tabelle",
-        _keys(
-            "id", "kind", "source", "package", "requirement", "start_scene", "target",
-            "menu_path", "shortcut", "covers", "spec",
-        ),
+        ROW_KEYS,
         {"kind": ROW_KINDS},
         required=True,
     ),
@@ -355,7 +392,7 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     "revise": ProtocolField(
         "liste",
         _keys("way", "opened", "fields", "params", "history_before", "history_after"),
-        {"way": ("menue", "doppelklick")},
+        {"way": REVISE_WAYS},
     ),
     "abort": ProtocolField("tabelle", _keys("eval_s", "cancel_shown_s", "clicked")),
     "findings": ProtocolField(
@@ -387,7 +424,7 @@ class Issue:
 
 @dataclass(frozen=True)
 class Outcome:
-    """Das Ergebnis eines Prüfpunkts oder Kriteriums an einem Fall (Plan D0, Abschnitt 2.8).
+    """Das Ergebnis eines Prüfpunkts oder Kriteriums an einem Fall (Konzept §4).
 
     ``subject`` ist die Nummer des Prüfpunkts oder die Kennung des
     Kriteriums; :meth:`record` schreibt sie als ``point`` oder ``criterion``.
@@ -405,7 +442,7 @@ class Outcome:
     finding: str | None = None
 
     def record(self) -> dict[str, Any]:
-        """Das Ergebnis als Eintrag nach Plan D0, Abschnitt 2.8."""
+        """Das Ergebnis als Eintrag nach Konzept §4."""
         key = "point" if isinstance(self.subject, int) else "criterion"
         return {
             key: self.subject,
@@ -430,7 +467,7 @@ class Context:
 
     Aus dem Baum gebaut über ``function_report.repository_context``; die
     Gegenproben setzen ihre eigenen Werte (``function_samples.sample_context``).
-    Die Funktionen bekommen die Zeile nach Plan D0, Abschnitt 2.3.
+    Die Funktionen bekommen die Zeile nach Konzept §3.
     """
 
     #: V1: die Negativliste als (Wort, Sprache, Suchmuster), das Muster nach
@@ -447,6 +484,9 @@ class Context:
     #: Prüfpunkt 17: Ort laut Agentenwerkzeug (``menue``, ``karte``,
     #: ``katalog``) und sein Menüpfad, ``None`` ohne Werkzeug.
     agent_place: Callable[[Mapping[str, Any]], tuple[str, str] | None]
+    #: I3: die Ziele (``target``) der häufigsten Kundenziele. Nur an ihren
+    #: Zeilen wird I3 gemessen; der Anteil steht in den Paketwerten.
+    common_goal_targets: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -472,7 +512,7 @@ class CaseOutcome:
 
 @dataclass(frozen=True)
 class Checkpoint:
-    """Ein Prüfpunkt des Schemas (Konzept §4, Plan D0, Abschnitt 3.1)."""
+    """Ein Prüfpunkt des Schemas (Konzept §4)."""
 
     number: int
     title: str
@@ -486,7 +526,7 @@ class Checkpoint:
 
 @dataclass(frozen=True)
 class Criterion:
-    """Ein Kriterium aus Einfachheit, Verständlichkeit oder Gestaltung (Plan D0, Abschnitt 2.12)."""
+    """Ein Kriterium aus Einfachheit, Verständlichkeit oder Gestaltung (Konzept §4)."""
 
     key: str
     measure: str
@@ -558,8 +598,8 @@ def _criterion(
     )
 
 
-#: Die 35 Kriterien (Konzept §4, Plan D0, Abschnitte 3.2 und 3.3) mit Stufe, Schwelle
-#: und Quelle (Plan D0, Abschnitt 2.12). ``numbers`` sind die Zahlen, die die Schwelle im Skill
+#: Die 35 Kriterien (Konzept §4) mit Stufe, Schwelle
+#: und Quelle (Konzept §4). ``numbers`` sind die Zahlen, die die Schwelle im Skill
 #: nennen muss.
 CRITERIA: Final[dict[str, Criterion]] = {
     c.key: c
@@ -835,7 +875,7 @@ CRITERIA: Final[dict[str, Criterion]] = {
             "ja an der Zeile Vorher/Nachher",
             (),
             "AB",
-            ("place", "steps"),
+            ("steps",),
             design=True,
             promised=True,
         ),
@@ -922,7 +962,7 @@ def _entry_problems(name: str, entry: Any, spec: ProtocolField) -> list[str]:
     return problems
 
 
-def validate_protocol(protocol: Mapping[str, Any]) -> list[str]:
+def validate_protocol(protocol: object) -> list[str]:
     """Was an einem Messprotokoll ungültig ist — leer, wenn es gelesen werden kann.
 
     Geprüft werden Feldnamen, Form, Pflichtfelder, die Schlüssel jedes Objekts
@@ -961,6 +1001,11 @@ def validate_protocol(protocol: Mapping[str, Any]) -> list[str]:
                 problems.append(f"{name} = {value!r} nicht in {list(spec.choices)}")
         elif spec.shape == "wahr" and not isinstance(value, bool):
             problems.append(f"{name} ist nicht wahr oder falsch")
+    for name in ("matrix", "licence_runs", "states"):
+        table = protocol.get(name)
+        for key, entry in sorted(table.items()) if isinstance(table, Mapping) else ():
+            if entry is not None and not isinstance(entry, Mapping):
+                problems.append(f"{name}.{key} ist keine Tabelle")
     matrix = protocol.get("matrix")
     for stage, entry in sorted(matrix.items()) if isinstance(matrix, Mapping) else ():
         if isinstance(entry, Mapping) and entry.get("state") not in MATRIX_STATES:
@@ -995,7 +1040,8 @@ def start_size_in_window(source: str) -> tuple[int, int] | None:
                             assert isinstance(first, ast.Constant) and isinstance(
                                 second, ast.Constant
                             )
-                            return int(first.value), int(second.value)
+                            assert isinstance(first.value, int) and isinstance(second.value, int)
+                            return first.value, second.value
     return None
 
 
@@ -1113,9 +1159,15 @@ def skill_mismatches(skill: str, text: str) -> list[str]:
             problems.append(
                 f"{skill}: {key} Stufe {sorted(stages)}, CRITERIA {list(criterion.stages)}"
             )
-        unread = sorted(skill_fields(row.measurement) - set(criterion.fields))
+        named = skill_fields(row.measurement)
+        unread = sorted(named - set(criterion.fields))
         if unread:
             problems.append(
                 f"{skill}: {key} nennt Protokollfelder, die das Urteil nicht liest: {unread}"
+            )
+        unnamed = sorted(set(criterion.fields) - named)
+        if unnamed:
+            problems.append(
+                f"{skill}: {key} nennt nicht alle Protokollfelder des Urteils: {unnamed}"
             )
     return problems
