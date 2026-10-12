@@ -47,9 +47,10 @@ Erzeugt, nicht geschrieben, mit stabilen Kennungen:
 | Fensterbefehle | Menüleiste des Fensters, aus den unübersetzten Quelltexten | Menüpfad, z. B. `Datei/Speichern unter` |
 | Bedienflächen | Dialogklassen unter `app/ui/` (`*dialog*.py` und Fenster), Wortschatz der Ziele, `panels.FINDING_ACTIONS`, die Merkmalfenster-Handlungen ohne Operation — erzeugt aus `perceive.actions` und `selection_operations`, heute u. a. *Auf alle N gleichartigen anwenden*, *Bezug ändern*, *Im Bild einstellen* —, Kontextmenü des Verlaufs | fester Name aus dem Wortschatz |
 
-Nicht aus `window_commands`: Es nummeriert Menüzeilen nach ihrer Lage
-(`menu.<n>`) und speist seit RM-735 die Suche — eine stabile Kennung ist das
-nicht. Die Einstellungen sind eine
+Die Menüzeilen trugen in `window_commands` eine Kennung nach ihrer Lage
+(`menu.<n>`) — eine stabile Kennung war das nicht. Seit D0-W heißen sie nach
+ihrer deutschen Quelle (`menubar.<slug>`, `guides.menubar_name`), gleich in
+jeder Sprache; gelesen wird die Leiste über `guide_targets.menubar_entries`. Die Einstellungen sind eine
 Zeile je Abschnitt des Dialogs. Der Bausteinkatalog — 83 Kacheln, dahinter
 50 Bausteine — ist **eine** Zeile mit einem Lauf über alle; ihre Texte prüft
 Stufe B, ihren Maßbereich hält `check_part_ranges`.
@@ -246,7 +247,7 @@ und `finding.action:<id>`, `print:<feld>` aus `print_fields.FIELDS`,
 und `tree.row:<objekt>.<merkmal>`, `history.row:<n>`,
 `feature.field:<op>.<feld>` (Feld im Merkmalfenster) und `measure.field:<feld>`
 (Maßfeld im Bild). Punkte in der Ansicht liefert `point_for(…)` in
-`guide_targets`, gerechnet über `Viewport.projection`;
+`guide_targets`, gerechnet über `Viewport.display_of`;
 `make_video._world_to_window` zieht dorthin. `area_for("operation:…")` nimmt den
 sichtbaren Knopf auch ohne Menüaktion (heute haben 90 von 190 Operationen eine
 Aktion).

@@ -618,16 +618,71 @@ def test_a_word_inside_a_title_does_not_beat_the_word_that_means_it() -> None:
     """„Stützen" stellte *Hilfe: Solidon3D unterstützen …* vor alles, weil das
     Wort mitten in „unterstützen" steckt. Ein Titel zählt am Wortanfang; mitten
     im Wort erst nach den Kundenwörtern."""
+    from app.core import guides
     from app.core.bootstrap import load_operations
     from app.core.registry.search import rank
     from app.core.registry.surfaces import SearchEntry, search_entries
 
     load_operations()
     spende = SearchEntry(
-        name="menu.41", title="Hilfe: Solidon3D unterstützen …", doc="", category="menu"
+        name=guides.menubar_name("{app} unterstützen …"),
+        title="Hilfe: Solidon3D unterstützen …",
+        doc="",
+        category="menubar",
     )
     ausrichten = next(e for e in search_entries(REGISTRY) if e.name == "orient_for_print")
     assert rank(ausrichten, "Stützen") < rank(spende, "Stützen")
+    # Mitten im Titel, und die Kennung der Menüzeile zählt nicht als Text: Sonst
+    # stünde der Treffer vor jeder Kundenwendung (Rang 4).
+    assert rank(spende, "Stützen") == 5
+
+
+def test_the_key_of_a_window_command_is_not_searched_as_text() -> None:
+    """Der Name einer Registeroperation ist ein Suchwort, die Kennung einer Menüzeile
+    nicht: ``menubar.flache_schattierung`` ließ „chat“ die Schattierung finden und
+    deutsche Wörter in jeder Sprache treffen (Review D0-W, L1)."""
+    from app.core import guides
+    from app.core.bootstrap import load_operations
+    from app.core.registry.search import matches, rank
+    from app.core.registry.surfaces import SearchEntry, search_entries
+
+    load_operations()
+    flat = SearchEntry(
+        name=guides.menubar_name("Flache Schattierung"),
+        title="View > Display: Flat shading",
+        doc="",
+        category="menubar",
+    )
+    assert not matches(flat, "chat")
+    assert not matches(flat, "schattierung")
+    assert matches(flat, "flat")
+    drill = next(e for e in search_entries(REGISTRY) if e.name == "drill_hole")
+    assert matches(drill, "drill_hole")
+    assert rank(drill, "drill hole") <= 3
+
+
+@pytest.mark.parametrize(
+    ("key", "title", "word"),
+    [
+        ("file.save", "Speichern", "save"),
+        ("settings.updates", "Settings: Check for a new version at start-up", "updates"),
+        ("tool.section", "Ansicht: Schnitt", "section"),
+    ],
+)
+def test_a_hand_key_of_a_window_command_stays_a_search_word(
+    key: str, title: str, word: str
+) -> None:
+    """Die Handschlüssel der Fensterbefehle sind englische Wörter, die ein Kunde
+    tippt — „save“ findet *Speichern*, auch auf Deutsch. Nur die Kennungen der
+    Menüleiste (``menubar.*``) sind kein Suchtext (Nachprüfung D0-W, N1)."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry.search import matches, rank
+    from app.core.registry.surfaces import SearchEntry
+
+    load_operations()
+    entry = SearchEntry(name=key, title=title, doc="", category=key.split(".", 1)[0])
+    assert matches(entry, word)
+    assert rank(entry, word) <= 3
 
 
 #: Der Fachbegriff, den ein Umsteiger aus einem CAD-Programm tippt, je Sprache

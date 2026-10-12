@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from app.core import expressions
+from app.core import expressions, guides
 from app.core.errors import AppError, ValidationError
 from app.core.geom.mesh import as_mesh_data, ray_hit_distances
 from app.core.geom.transform import snap_to_marks
@@ -2762,6 +2762,9 @@ class PlacementFlow(QObject):
             box_layout.setSpacing(SPACE)
             box_layout.addWidget(reference_field)
             reference_field.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            # *Bezug ändern* steht im Kontextmenü dieses Maßes; das Maß ist
+            # die Stelle, an der der Kunde es öffnet (``measure.reference``).
+            reference_field.setProperty(guides.TARGET_PROPERTY, "measure.reference")
             box.hide()
         # **Die Tabulatortaste geht denselben Weg wie das Auge** (`oberflaeche.md`):
         # erst die zwei Kantenmaße, dann die Mitten.
@@ -4233,9 +4236,14 @@ class PlacementFlow(QObject):
             menu.addSeparator()
         menu.addSection(tr("Bezug ändern"))
         pick = menu.addAction(tr("Im Modell wählen"))
+        pick.setObjectName("measure.reference.pick")
         pick.setData(_PICK_IN_MODEL)
         for label, data in entries:
-            menu.addAction(label).setData(data)
+            entry = menu.addAction(label)
+            entry.setData(data)
+            # Der Bezug als Ziel im Wortschatz (``menu:measure.reference.<bezug>``).
+            reference = data[0] if isinstance(data, tuple) else data
+            entry.setObjectName(f"measure.reference.{guides.name_part(str(reference))}")
         menu.triggered.connect(
             lambda action, slot=index: self._reference_selected(slot, action.data())
         )

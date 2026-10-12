@@ -83,7 +83,17 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
-from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
+from app.core import (
+    activation,
+    bootstrap,
+    discover,
+    examples,
+    feedback,
+    guides,
+    manual,
+    tools,
+    updates,
+)
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
 from app.core.agent.remote import ORIGIN_MODEL as REMOTE_ORIGIN
@@ -308,7 +318,12 @@ from app.ui.facts import PrintFacts
 from app.ui.filament_picker import CatalogueWrites, FilamentPopup, colours_of, spool_slot
 from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
-from app.ui.guide_targets import MissingTargetError, widget_for
+from app.ui.guide_targets import (
+    MissingTargetError,
+    menu_entries,
+    menubar_entries,
+    widget_for,
+)
 from app.ui.header import ALL_PLATES, HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
@@ -469,6 +484,11 @@ RECENT_WAIT_S = 0.05
 
 #: Wie oft danach nachgesehen wird, ob die Prüfung zurück ist.
 RECENT_POLL_MS = 100
+
+#: Wie groß das Hauptfenster beim ersten Öffnen ist, in Logikpunkten (Breite,
+#: Höhe). Eine Quelle für den Aufbau und den Funktionsdurchgang, der die
+#: Textpassung an dieser Größe misst.
+START_SIZE: Final = (1280, 820)
 
 #: Wie lange nach dem letzten Verschieben einer Seitenkarte die Einstellungen
 #: geschrieben werden — lang genug für eine gehaltene Pfeiltaste, kurz genug,
@@ -3085,7 +3105,7 @@ class MainWindow(QMainWindow):
         session.follow_print_settings(self.effective_print_settings)
         self.setAcceptDrops(True)
         self.setWindowTitle(APP_NAME)
-        self.resize(1280, 820)
+        self.resize(*START_SIZE)
         self._foundation_cache: tuple[tuple[object, ...], manufacturer.Foundation] | None = None
         """Die zuletzt gerechnete Grundlage aus dem Herstellerprofil und wofür."""
         self._foundation_worker: Any = None
@@ -4945,13 +4965,13 @@ class MainWindow(QMainWindow):
         dort keiner etwas tut, sind keine Auskunft, sondern Kulisse (§2.6).
         Datei und Hilfe bleiben — Öffnen, Beenden, Handbuch und Freischalten
         sind genau dort sinnvoll."""
-        file_menu = self._menu(tr("Datei"))
+        file_menu = self._menu(_("Datei"))
         # Festgehalten, nicht weil das Menü sie bräuchte, sondern weil die
         # Werkzeugleiste ihren Satz und ihr Kürzel übernimmt: derselbe Knopf
         # soll nicht zwei Erklärungen haben, die auseinanderdriften.
         self.new_action = self._add_action(
             file_menu,
-            tr("Neu"),
+            _("Neu"),
             QKeySequence.StandardKey.New,
             self.action_new,
             tr("Zum Startbildschirm: leeres Projekt, ein Beispiel, oder zuletzt Geöffnetes."),
@@ -4959,7 +4979,7 @@ class MainWindow(QMainWindow):
         )
         self.open_action = self._add_action(
             file_menu,
-            tr("Öffnen …"),
+            _("Öffnen …"),
             QKeySequence.StandardKey.Open,
             self.action_open,
             tr("Ein gespeichertes Projekt öffnen (.p3d)."),
@@ -4967,7 +4987,7 @@ class MainWindow(QMainWindow):
         )
         self.save_action = self._add_action(
             file_menu,
-            tr("Speichern"),
+            _("Speichern"),
             QKeySequence.StandardKey.Save,
             self.action_save,
             tr("Projekt mit Geometrie, Verlauf und Parametern in eine Datei schreiben."),
@@ -4975,7 +4995,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             file_menu,
-            tr("Speichern unter …"),
+            _("Speichern unter …"),
             QKeySequence.StandardKey.SaveAs,
             self.action_save_as,
             tr("Das Projekt unter einem anderen Namen ablegen."),
@@ -4984,7 +5004,7 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         self.import_action = self._add_action(
             file_menu,
-            tr("Modell einfügen …"),
+            _("Modell einfügen …"),
             "Ctrl+I",
             self.action_import,
             tr(
@@ -4995,7 +5015,7 @@ class MainWindow(QMainWindow):
         )
         self.import_url_action = self._add_action(
             file_menu,
-            tr("Modell aus dem Netz …"),
+            _("Modell aus dem Netz …"),
             None,
             self.action_import_url,
             tr(
@@ -5005,7 +5025,7 @@ class MainWindow(QMainWindow):
         )
         self.generate_action = self._add_action(
             file_menu,
-            tr("Modell erzeugen …"),
+            _("Modell erzeugen …"),
             "Ctrl+G",
             self.action_generate,
             tr("Aus Text oder Bild ein 3D-Modell erzeugen lassen — braucht ein laufendes ComfyUI."),
@@ -5018,7 +5038,7 @@ class MainWindow(QMainWindow):
         # Kürzel gehört ihr, nicht dem Menü.
         self._catalog_action = self._add_action(
             file_menu,
-            tr("Bausteinkatalog …"),
+            _("Bausteinkatalog …"),
             "Ctrl+K",
             self.action_catalog,
             tr("Alle Bausteine durchsehen: Mutternfalle, Rastnase, Scharnier und die anderen."),
@@ -5026,7 +5046,7 @@ class MainWindow(QMainWindow):
         )
         self.export_action = self._add_action(
             file_menu,
-            tr("Exportieren …"),
+            _("Exportieren …"),
             "Ctrl+E",
             self.action_export,
             tr(
@@ -5040,7 +5060,7 @@ class MainWindow(QMainWindow):
         # und der Kopfknopf *Druckeinstellungen …* — drei Namen für einen Weg.
         self._add_action(
             file_menu,
-            tr("An den Slicer übergeben …"),
+            _("An den Slicer übergeben …"),
             "Ctrl+P",
             self.action_print_settings,
             tr("Schichten, Temperaturen, Farbe und Stützen einstellen — und slicen lassen."),
@@ -5048,7 +5068,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             file_menu,
-            tr("G-Code gegenprüfen …"),
+            _("G-Code gegenprüfen …"),
             None,
             self.action_check_gcode,
             tr("Eine Datei aus dem Slicer lesen und ihre Zahlen neben die eigenen stellen."),
@@ -5062,21 +5082,21 @@ class MainWindow(QMainWindow):
         # Anwendungsmenü. Ein falsches Kürzel ist schlechter als keines.
         self._quit_action = self._add_action(
             file_menu,
-            tr("Beenden"),
+            _("Beenden"),
             None,
             self.close,
             tr("Solidon schließen. Ungesichertes wird vorher erfragt."),
             symbol="quit",
         )
 
-        edit_menu = self._menu(tr("Bearbeiten"))
+        edit_menu = self._menu(_("Bearbeiten"))
         self._workspace_menus.append(edit_menu)
         # Rückgängig und Wiederholen zuerst: sie sind die häufigsten Einträge
         # des Menüs und stehen in jeder Anwendung oben. Vorher lagen sie unter
         # den Spezialfunktionen, hinter „Chat einrichten".
         self.undo_action = self._add_action(
             edit_menu,
-            tr("Rückgängig"),
+            _("Rückgängig"),
             QKeySequence.StandardKey.Undo,
             self.action_undo,
             tr("Den letzten Schritt zurücknehmen — auch einen Vorschlag des Chats, ganz."),
@@ -5084,7 +5104,7 @@ class MainWindow(QMainWindow):
         )
         self.redo_action = self._add_action(
             edit_menu,
-            tr("Wiederholen"),
+            _("Wiederholen"),
             QKeySequence.StandardKey.Redo,
             self.action_redo,
             tr("Einen zurückgenommenen Schritt wieder anwenden."),
@@ -5102,21 +5122,21 @@ class MainWindow(QMainWindow):
         # als Text, und der war falsch.
         self.search_action = self._add_action(
             None,
-            tr("Funktion suchen"),
+            _("Funktion suchen"),
             "Ctrl+Shift+P",
             self.action_function_search,
             tr("Jede Funktion über ihren Namen finden, mit Ort und Kürzel."),
         )
         self._add_action(
             edit_menu,
-            tr("Parameter anlegen …"),
+            _("Parameter anlegen …"),
             None,
             self.action_add_parameter,
             tr("Ein Maß benennen, auf das Operationen und Skizzen mit @name verweisen können."),
         )
         self._add_action(
             edit_menu,
-            tr("Material kalibrieren …"),
+            _("Material kalibrieren …"),
             None,
             self.action_calibrate,
             tr(
@@ -5126,7 +5146,7 @@ class MainWindow(QMainWindow):
         )
         self.variants_action = self._add_action(
             edit_menu,
-            tr("Varianten erzeugen …"),
+            _("Varianten erzeugen …"),
             None,
             self.action_variants,
             tr(
@@ -5136,21 +5156,21 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             edit_menu,
-            tr("Einstellungen …"),
+            _("Einstellungen …"),
             "Ctrl+,",
             self.action_settings,
             tr("Sprache, Anzeigeeinheit, Thema, Navigation und die Vorgaben für neue Projekte."),
         )
         self._add_action(
             edit_menu,
-            tr("Filamentlager …"),
+            _("Filamentlager …"),
             None,
             self.action_inventory,
             tr("Spulen, Restmengen und Verbrauch verwalten."),
         )
         self._add_action(
             edit_menu,
-            tr("Chat einrichten …"),
+            _("Chat einrichten …"),
             None,
             self.action_llm_key,
             tr(
@@ -5205,7 +5225,7 @@ class MainWindow(QMainWindow):
                             continue
                         self._op_actions[spec.name] = self._operation_action(None, spec)
                 continue
-            group = self._menu(str(title))
+            group = self._menu(title)
             groups[str(title)] = group
             self._workspace_menus.append(group)
             # **Je Kategorie, nicht je Gruppe** (§2.6). Vorher entschied
@@ -5286,6 +5306,7 @@ class MainWindow(QMainWindow):
                     # das Untermenü, und sein C++-Objekt wird eingesammelt,
                     # während die Leiste es noch zeigt.
                     target = QMenu(str(section.title), self)
+                    target.setObjectName(guides.menubar_name_of(section.title))
                     target.setToolTipsVisible(True)
                     group.addMenu(target)
                     self._menus.append(target)
@@ -5301,7 +5322,7 @@ class MainWindow(QMainWindow):
                     target.addAction(self._catalog_action)
                     self.counterpart_action = self._add_action(
                         target,
-                        tr("Gegenstücke setzen …"),
+                        _("Gegenstücke setzen …"),
                         None,
                         self.action_counterpart,
                         tr(
@@ -5354,7 +5375,7 @@ class MainWindow(QMainWindow):
         # Freigabe gehen über dieselbe Aktion am Fenster.
         self.auto_split_action = self._add_action(
             None,
-            tr("Automatisch teilen …"),
+            _("Automatisch teilen …"),
             None,
             self.action_auto_split,
             tr(
@@ -5377,12 +5398,12 @@ class MainWindow(QMainWindow):
         for section in menu_tree(skip=own):
             if section.category in grouped:
                 continue
-            menu = self._menu(str(section.title))
+            menu = self._menu(section.title)
             self._workspace_menus.append(menu)
             for spec in section.entries:
                 self._op_actions[spec.name] = self._operation_action(menu, spec)
 
-        view_menu = self._menu(tr("Ansicht"))
+        view_menu = self._menu(_("Ansicht"))
         # Festgehalten, weil das Merkmalsfenster seinen Ein-/Ausschalter
         # später dort einhängt — es entsteht erst mit dem Zentrum.
         self._view_menu = view_menu
@@ -5399,7 +5420,7 @@ class MainWindow(QMainWindow):
         self._display_actions.append(
             self._add_action(
                 view_menu,
-                tr("Einpassen"),
+                _("Einpassen"),
                 "Home",
                 self.viewport.reset_camera,
                 tr("Rückt die Kamera auf den gewählten Körper — ohne Auswahl auf die ganze Szene."),
@@ -5408,7 +5429,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             view_menu,
-            tr("Rechten Bereich zeigen"),
+            _("Rechten Bereich zeigen"),
             "F9",
             self.action_toggle_right,
             # Links stehen Objekte, Parameter und Verlauf — die rechte Spalte
@@ -5419,7 +5440,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             view_menu,
-            tr("Karten an ihren Platz"),
+            _("Karten an ihren Platz"),
             None,
             self.action_reset_cards,
             tr("Legt verschobene Karten zurück an den Rand, an dem sie anfangs lagen."),
@@ -5429,7 +5450,7 @@ class MainWindow(QMainWindow):
         # gelistet, und der Zustand bleibt über den Neustart.
         self._bed_action = self._add_action(
             view_menu,
-            tr("Druckplatte zeigen"),
+            _("Druckplatte zeigen"),
             "Ctrl+Shift+D",
             self.action_toggle_bed,
             tr("Bett, Bauraum und Maßstab ein- oder ausblenden — das Teil bleibt."),
@@ -5441,7 +5462,7 @@ class MainWindow(QMainWindow):
         # Sechs Blöcke ohne Überschrift waren dreiundzwanzig Zeilen, durch
         # Trennstriche gegliedert — eine Liste, die man absucht (Konzept P15
         # §5). Was zusammengehört, bekommt jetzt seinen Namen und seine Ebene.
-        display_menu = self._submenu(view_menu, tr("Darstellung"))
+        display_menu = self._submenu(view_menu, _("Darstellung"))
         # **Die drei Gruppen tragen Häkchen, und ihre Wahl wird gemerkt.**
         # Vorher waren es zwölf Einträge ohne Zustand: Man sah nicht, welcher
         # gilt, und beim nächsten Start galt wieder die Vorgabe. Wer
@@ -5450,22 +5471,22 @@ class MainWindow(QMainWindow):
         self._mode_group = QActionGroup(self)
         self._mode_group.setExclusive(True)
         for mode, label, shortcut, hint in (
-            ("solid", tr("Massiv"), "1", tr("Die Oberfläche, wie sie gedruckt wird.")),
+            ("solid", _("Massiv"), "1", tr("Die Oberfläche, wie sie gedruckt wird.")),
             (
                 "solid_edges",
-                tr("Massiv mit Kanten"),
+                _("Massiv mit Kanten"),
                 "2",
                 tr("Dazu die Dreieckskanten — zeigt, wie fein das Netz ist."),
             ),
             (
                 "wireframe",
-                tr("Drahtgitter"),
+                _("Drahtgitter"),
                 "3",
                 tr("Nur die Kanten. Lässt durch das Teil hindurchsehen."),
             ),
             (
                 "transparent",
-                tr("Transparent"),
+                _("Transparent"),
                 "4",
                 tr("Durchscheinend — für Hohlräume und Teile, die ineinandergreifen."),
             ),
@@ -5488,12 +5509,12 @@ class MainWindow(QMainWindow):
         for shading, label, hint in (
             (
                 "flat",
-                tr("Flache Schattierung"),
+                _("Flache Schattierung"),
                 tr("Jedes Dreieck für sich — die wahre Form, jede Kante sichtbar."),
             ),
             (
                 "smooth",
-                tr("Weiche Schattierung"),
+                _("Weiche Schattierung"),
                 tr("Über die Kanten hinweg gemittelt. Schöner, aber beschönigend."),
             ),
         ):
@@ -5515,13 +5536,13 @@ class MainWindow(QMainWindow):
         for projection, label, shortcut, hint in (
             (
                 "perspective",
-                tr("Perspektivisch"),
+                _("Perspektivisch"),
                 "5",
                 tr("Wie das Auge sieht: Fernes wird kleiner."),
             ),
             (
                 "orthographic",
-                tr("Orthografisch"),
+                _("Orthografisch"),
                 "6",
                 tr("Ohne Fluchtpunkt — gleich lange Kanten sehen gleich lang aus. Zum Messen."),
             ),
@@ -5539,16 +5560,16 @@ class MainWindow(QMainWindow):
             self._projection_group.addAction(action)
             self._display_actions.append(action)
 
-        camera_menu = self._submenu(view_menu, tr("Kamera"))
+        camera_menu = self._submenu(view_menu, _("Kamera"))
         standpoint = tr("Kamera auf diesen Standpunkt setzen.")
         for name, label, shortcut in (
-            ("iso", tr("Isometrisch"), "Ctrl+0"),
-            ("front", tr("Vorne"), "Ctrl+1"),
-            ("back", tr("Hinten"), "Ctrl+2"),
-            ("left", tr("Links"), "Ctrl+3"),
-            ("right", tr("Rechts"), "Ctrl+4"),
-            ("top", tr("Oben"), "Ctrl+5"),
-            ("bottom", tr("Unten"), "Ctrl+6"),
+            ("iso", _("Isometrisch"), "Ctrl+0"),
+            ("front", _("Vorne"), "Ctrl+1"),
+            ("back", _("Hinten"), "Ctrl+2"),
+            ("left", _("Links"), "Ctrl+3"),
+            ("right", _("Rechts"), "Ctrl+4"),
+            ("top", _("Oben"), "Ctrl+5"),
+            ("bottom", _("Unten"), "Ctrl+6"),
         ):
             self._add_action(
                 camera_menu,
@@ -5561,7 +5582,7 @@ class MainWindow(QMainWindow):
         # Vier Navigationsschemata und zwei Themen, und keines sagte, welches
         # gerade gilt. Wer die Vorgabe einmal umgestellt hat, konnte danach nur
         # ausprobieren, worauf sie steht.
-        theme_menu = self._submenu(view_menu, tr("Thema"))
+        theme_menu = self._submenu(view_menu, _("Thema"))
         self._theme_group = QActionGroup(self)
         self._theme_group.setExclusive(True)
         for theme, hint in (
@@ -5570,7 +5591,7 @@ class MainWindow(QMainWindow):
         ):
             action = self._add_action(
                 theme_menu,
-                str(THEMES[theme]),
+                THEMES[theme],
                 None,
                 weak_slot(self, lambda view, key: view.action_theme(key), theme),
                 hint,
@@ -5580,7 +5601,7 @@ class MainWindow(QMainWindow):
             action.setData(theme)
             self._theme_group.addAction(action)
 
-        navigation_menu = self._submenu(view_menu, tr("Navigation"))
+        navigation_menu = self._submenu(view_menu, _("Navigation"))
         self._navigation_group = QActionGroup(self)
         self._navigation_group.setExclusive(True)
         # **Die Mitgliedschaft kommt aus dem Katalog, nicht aus einer Liste
@@ -5610,7 +5631,7 @@ class MainWindow(QMainWindow):
             hint = hints.get(scheme, "")
             action = self._add_action(
                 navigation_menu,
-                str(NAVIGATION[scheme]),
+                NAVIGATION[scheme],
                 None,
                 weak_slot(self, lambda view, key: view.action_navigation(key), scheme),
                 hint,
@@ -5620,10 +5641,10 @@ class MainWindow(QMainWindow):
             action.setData(scheme)
             self._navigation_group.addAction(action)
 
-        help_menu = self._menu(tr("Hilfe"))
+        help_menu = self._menu(_("Hilfe"))
         self._add_action(
             help_menu,
-            tr("Handbuch …"),
+            _("Handbuch …"),
             QKeySequence.StandardKey.HelpContents,
             self.action_manual,
             tr("Anleitungen in Bildern, vom ersten Schritt bis zum Nachschlagen jeder Operation."),
@@ -5631,7 +5652,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             help_menu,
-            tr("Beispiele"),
+            _("Beispiele"),
             None,
             self.action_examples,
             tr("Die Beispielprojekte mit ihren Touren — sie stehen auf dem Startbildschirm."),
@@ -5639,28 +5660,28 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._add_action(
             help_menu,
-            tr("Zusätzliche Programme …"),
+            _("Zusätzliche Programme …"),
             None,
             self.action_install_extras,
             tr("Was Solidon außerdem benutzen kann, wo es liegt und wie es dazukommt."),
         )
         self._add_action(
             help_menu,
-            tr("Tastenkürzel …"),
+            _("Tastenkürzel …"),
             "?",
             self.action_shortcuts,
             tr("Alle belegten Tasten, erzeugt aus dem Register — nie veraltet."),
         )
         self._add_action(
             help_menu,
-            tr("Erste Schritte …"),
+            _("Erste Schritte …"),
             None,
             self.action_first_run,
             tr("Sprache, Drucker, Filamente und die externen Programme noch einmal einstellen."),
         )
         self._add_action(
             help_menu,
-            tr("Rückmeldung senden …"),
+            _("Rückmeldung senden …"),
             None,
             self.action_feedback,
             tr("Vorschlag, Fehler oder Frage an den Support — auf Wunsch mit Bild und Sitzung."),
@@ -5668,7 +5689,7 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._add_action(
             help_menu,
-            tr("Nach einer neuen Version sehen"),
+            _("Nach einer neuen Version sehen"),
             None,
             self.action_check_updates,
             tr(
@@ -5681,7 +5702,7 @@ class MainWindow(QMainWindow):
         # im Paket — dieser Eintrag fragt nichts nach draußen.
         self._add_action(
             help_menu,
-            tr("Neuerungen …"),
+            _("Neuerungen …"),
             None,
             self.action_changes,
             tr("Was sich in dieser und den vorigen Versionen geändert hat."),
@@ -5689,14 +5710,14 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._add_action(
             help_menu,
-            tr("Solidon freischalten …"),
+            _("Solidon freischalten …"),
             None,
             self.action_activate,
             tr("Testzeitraum, Lizenzschlüssel eintragen, und was nach Ablauf offen bleibt."),
         )
         self._add_action(
             help_menu,
-            tr("{app} unterstützen …").format(app=APP_NAME),
+            _("{app} unterstützen …", app=APP_NAME),
             None,
             self.action_donate,
             tr("Wofür das Geld ist und wie Sie freiwillig helfen können."),
@@ -5704,7 +5725,7 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             help_menu,
-            tr("Über Solidon"),
+            _("Über Solidon"),
             None,
             self.action_about,
             tr("Version, Rechteinhaber und die verwendeten Fremdbibliotheken."),
@@ -5743,7 +5764,7 @@ class MainWindow(QMainWindow):
         # Vier der sieben haben ein Menüpendant; von ihm kommen Satz und
         # Kürzel (``source``). Die drei anderen gibt es nur hier und tragen
         # ihren Satz selbst.
-        for symbol, label, slot, source, own_hint in (
+        for symbol, caption, slot, source, own_hint in (
             ("new", tr("Neues Projekt"), self.action_new, self.new_action, ""),
             ("open", tr("Öffnen"), self.action_open, self.open_action, ""),
             ("save", tr("Speichern"), self.action_save, self.save_action, ""),
@@ -5784,7 +5805,7 @@ class MainWindow(QMainWindow):
         ):
             if symbol in ("import", "sculpt"):
                 toolbar.addSeparator()
-            action = QAction(icon(symbol, toolbar), label, self)
+            action = QAction(icon(symbol, toolbar), caption, self)
             if symbol == "category.sketch":
                 # Gedrückt, solange das Aufziehen offen ist (G10).
                 action.setCheckable(True)
@@ -5800,7 +5821,7 @@ class MainWindow(QMainWindow):
             # die Statusleiste (§2 C). Der ``statusTip`` ist zugleich das,
             # woraus ``_lock_hint`` den eigenen Hinweis wiederherstellt — ohne
             # ihn bliebe der Knopf nach dem Freischalten stumm.
-            tip = self._button_tip(label, source or action, own_hint)
+            tip = self._button_tip(caption, source or action, own_hint)
             action.setToolTip(tip)
             action.setStatusTip(tip)
             action.setProperty("wordless", False)
@@ -5851,19 +5872,27 @@ class MainWindow(QMainWindow):
         self.header.filamentsRequested.connect(self._toggle_filament_list)
         toolbar.addWidget(self.header)
 
-    def _menu(self, title: str) -> QMenu:
-        """Ein Menü der Leiste — festgehalten, damit es nicht eingesammelt wird."""
-        menu = self.menuBar().addMenu(title)
+    def _menu(self, title: TranslatableText | str) -> QMenu:
+        """Ein Menü der Leiste — festgehalten, damit es nicht eingesammelt wird.
+
+        Sein ``objectName`` kommt aus der unübersetzten Quelle
+        (:func:`guides.menubar_name`): gleich in jeder Sprache und unabhängig
+        davon, wo das Menü in der Leiste steht.
+        """
+        menu = self.menuBar().addMenu(str(title))
+        menu.setObjectName(guides.menubar_name_of(title))
         menu.setToolTipsVisible(True)
         self._menus.append(menu)
         return menu
 
-    def _submenu(self, parent: QMenu, title: str) -> QMenu:
+    def _submenu(self, parent: QMenu, title: TranslatableText) -> QMenu:
         """Eine Zwischenebene. Elternteil ist das Fenster, nicht das Menü —
         sonst hält nichts auf der Python-Seite das Untermenü fest, und sein
         C++-Objekt wird eingesammelt, während die Leiste es noch zeigt.
+        Der ``objectName`` wie bei :meth:`_menu`.
         """
-        submenu = QMenu(title, self)
+        submenu = QMenu(str(title), self)
+        submenu.setObjectName(guides.menubar_name_of(title))
         submenu.setToolTipsVisible(True)
         parent.addMenu(submenu)
         self._menus.append(submenu)
@@ -5893,6 +5922,7 @@ class MainWindow(QMainWindow):
             # Elternteil ist das Fenster, nicht das Menü — siehe die
             # Begründung eine Ebene höher.
             submenu = QMenu(str(GROUPS[group]), self)
+            submenu.setObjectName(guides.menubar_name_of(GROUPS[group]))
             submenu.setToolTipsVisible(True)
             menu.addMenu(submenu)
             self._menus.append(submenu)
@@ -5911,6 +5941,9 @@ class MainWindow(QMainWindow):
         Aktionen auf einer Taste führt Qt beide nicht aus.
         """
         action = QAction(icon(icon_name_for(spec), self), str(spec.title), self)
+        # Benannt wie jede Zeile der Leiste, aus der Quelle ihres Titels; ein
+        # eigener Baustein trägt seinen Titel als schlichten Text.
+        action.setObjectName(guides.menubar_name_of(spec.title))
         key = shortcut_for(spec.name, spec.shortcut, self.settings.shortcut_scheme)
         if key:
             action.setShortcut(QKeySequence(key))
@@ -6034,7 +6067,7 @@ class MainWindow(QMainWindow):
             key = shortcut_for(first.name, first.shortcut, self.settings.shortcut_scheme)
             action = self._add_action(
                 place,
-                str(group.title),
+                group.title,
                 key or None,
                 weak_slot(self, MainWindow.launch_operation, first),
                 str(group.doc),
@@ -6050,7 +6083,7 @@ class MainWindow(QMainWindow):
     def _add_action(
         self,
         menu: Any,
-        label: str,
+        label: TranslatableText,
         shortcut: Any,
         slot: Any,
         hint: str = "",
@@ -6068,8 +6101,14 @@ class MainWindow(QMainWindow):
         Drei gab es davon, alle drei in Menüs, deren übrige Zeilen eines
         tragen: *Zeichnen …*, *Automatisch teilen* und
         *Bausteinkatalog* standen als Lücke in einer Symbolspalte.
+
+        Die Beschriftung kommt unübersetzt: Aus ihrer Quelle entsteht der
+        ``objectName`` (:func:`guides.menubar_name`), über den Suche,
+        Wortschatz und Funktionsliste die Zeile finden — in jeder Sprache
+        derselbe, gleich wo sie im Menü steht.
         """
-        action = QAction(label, self)
+        action = QAction(str(label), self)
+        action.setObjectName(guides.menubar_name_of(label))
         if symbol:
             action.setIcon(icon(symbol, self))
         if shortcut is not None:
@@ -6530,7 +6569,7 @@ class MainWindow(QMainWindow):
                 # Nur die obersten: Untermenüs stehen auch in _menus, und
                 # ein Untermenü auszublenden verschöbe die Zeile darüber.
                 continue
-            entries = list(_menu_entries(menu))
+            entries = [action for _name, _path, action in menu_entries(menu)]
             # Ein Menü ohne Einträge bleibt stehen: Es ist keines, in dem
             # nichts geht, sondern eines, das noch gefüllt wird.
             handle.setVisible(not entries or any(entry.isEnabled() for entry in entries))
@@ -12296,9 +12335,8 @@ class MainWindow(QMainWindow):
         by_title = {title: key for key, (title, _shortcut, _slot) in known.items()}
         ops = set(self._op_actions.values())
         found: dict[str, Any] = {}
-        overridden = 0
         self._command_actions.clear()
-        for path, action in _menu_lines(self.menuBar()):
+        for name, menus, action in menubar_entries(self):
             if action in ops:
                 continue
             if action.text() in known_titles:
@@ -12313,14 +12351,17 @@ class MainWindow(QMainWindow):
                 actual = action.shortcut().toString()
                 if actual and actual != shortcut:
                     found[known_key] = (title, actual, slot)
-                    overridden += 1
                 continue
             if action is self._quit_action:
                 continue
             # Der Weg steht im Titel: „Vorne" allein sagt in einer Liste aus
             # hundert Zeilen nichts, „Kamera: Vorne" schon.
+            path = " > ".join(menus)
             title = tr("{name}: {value}", name=path, value=action.text()) if path else action.text()
-            key = f"menu.{len(found) - overridden}"
+            # **Die Kennung ist der Name der Zeile, nicht ihre Lage** (RM-737):
+            # Hier stand ``menu.<n>`` nach der Reihenfolge, und eine neue Zeile
+            # weiter oben gab jeder folgenden eine andere Kennung.
+            key = name
             found[key] = (
                 title,
                 action.shortcut().toString(),
@@ -16897,6 +16938,9 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         for spec, (title, sentence), key in entries:
             action = menu.addAction(f"{title}\t{key}" if key else title)
+            # Der Name der Operation als ``objectName``: So nennt der Wortschatz
+            # die Zeile im offenen Menü (``menu:delete_object``, RM-737).
+            action.setObjectName(spec.name)
             locked = self._reason_locked(spec, kinds, objects, len(chosen))
             action.setEnabled(locked is None)
             action.setToolTip(locked or sentence)
@@ -19338,6 +19382,7 @@ class MainWindow(QMainWindow):
         if hit is not None and entry is not None and entry.kind == "mesh" and not self.session.busy:
             menu = menu or QMenu(self)
             local = menu.addAction(str(REGISTRY.get("detect_region").title))
+            local.setObjectName("detect_region")
             local.triggered.connect(partial(self.local_features().begin, hit))
         if menu is None:
             return
@@ -19373,6 +19418,7 @@ class MainWindow(QMainWindow):
             if action.op is None:
                 continue
             entry = menu.addAction(str(action.title))
+            entry.setObjectName(guides.action_key(action))
             entry.setToolTip(str(REGISTRY.get(action.op).doc))
             # **Der Dialog und nicht die Ausführung.** Das Panel daneben hat
             # das Feld für den Radius schon im Bild; ein Menüeintrag hat keins,
@@ -29760,40 +29806,6 @@ class MainWindow(QMainWindow):
             )
         )
         return False
-
-
-def _menu_entries(menu: Any) -> Iterator[Any]:
-    """Jede anklickbare Zeile eines Menüs, Untermenüs eingeschlossen.
-
-    Getrennt von :func:`_menu_lines`, weil das den **Weg** liefert und dies die
-    **Handlung**: Wer wissen will, ob in einem Menü irgendetwas geht, braucht
-    die Actions selbst und nicht ihre Beschriftungen.
-    """
-    for action in menu.actions():
-        if action.isSeparator():
-            continue
-        sub = action.menu()
-        if sub is not None:
-            yield from _menu_entries(sub)
-            continue
-        yield action
-
-
-def _menu_lines(menu: Any, path: str = "") -> Iterator[tuple[str, Any]]:
-    """Jede Zeile der Menüleiste mit ihrem Weg — Untermenüs eingeschlossen.
-
-    Trennstriche fallen weg, ein Untermenü liefert seine Kinder statt sich
-    selbst. Der Weg ist das, was in einer Liste aus hundert Zeilen den
-    Unterschied macht: „Vorne" sagt nichts, „Kamera: Vorne" schon.
-    """
-    for action in menu.actions():
-        if action.isSeparator():
-            continue
-        sub = action.menu()
-        if sub is not None:
-            yield from _menu_lines(sub, f"{path} > {action.text()}" if path else action.text())
-            continue
-        yield path, action
 
 
 def _image_path(event: QDragEnterEvent | QDropEvent) -> Path | None:

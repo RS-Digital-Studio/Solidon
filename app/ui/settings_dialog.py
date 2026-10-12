@@ -39,7 +39,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import discover, tools
+from app.core import discover, guides, tools
 from app.core.errors import CANCEL, RETRY, FileWriteError
 from app.core.knowledge import profiles
 from app.core.knowledge.standards import THREAD_FAMILIES
@@ -538,9 +538,24 @@ class SettingsDialog(QDialog):
                     label.setBuddy(editor)
                     if not editor.accessibleName():
                         editor.setAccessibleName(label.text())
+        # Jede Zeile trägt ihr Ziel im Wortschatz (``setting:<schlüssel>``,
+        # RM-737) — dieselben Schlüssel wie :meth:`show_option` und die Suche.
+        for key in option_titles():
+            widget = self.option_widget(key)
+            if widget is not None:
+                widget.setProperty(guides.TARGET_PROPERTY, f"setting:{key}")
         self.printer.currentIndexChanged.connect(self._printer_choice_changed)
         self._slicer_changed()
         self._find_slicers()
+
+    def option_widget(self, key: str) -> QWidget | None:
+        """Das Feld einer Einzeloption aus :func:`option_titles` — sonst ``None``.
+
+        Die Schlüssel sind die Attributnamen der Felder; eine Quelle für
+        :meth:`show_option` und das Kennzeichen der Zeile.
+        """
+        widget = getattr(self, key, None) if key in option_titles() else None
+        return widget if isinstance(widget, QWidget) else None
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
@@ -556,8 +571,8 @@ class SettingsDialog(QDialog):
         Ist es gesperrt, weil ein Haken darüber aus ist (der Port ohne
         Fernsteuerung), bekommt dieser Haken den Fokus — er ist der Weg.
         """
-        widget = getattr(self, key, None) if key in option_titles() else None
-        if not isinstance(widget, QWidget):
+        widget = self.option_widget(key)
+        if widget is None:
             return
         more = self._advanced_form.parentWidget()
         if more is not None and more.isAncestorOf(widget):

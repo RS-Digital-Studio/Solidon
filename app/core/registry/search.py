@@ -21,6 +21,7 @@ from collections.abc import Collection, Iterable, Sequence
 from functools import lru_cache
 from typing import TYPE_CHECKING, Final
 
+from app.core.guides import MENUBAR
 from app.core.registry.registry import Registry, menu_twins, variant_members
 from app.i18n import TranslatableText, _
 
@@ -659,10 +660,25 @@ def hidden_from_the_menu() -> frozenset[str]:
     return frozenset(menu_twins()) | variant_members()
 
 
+def searched_name(entry: SearchEntry) -> str:
+    """Der Name eines Eintrags als Suchtext — außer der Kennung einer Menüzeile.
+
+    ``drill_hole`` und die Handschlüssel der Fensterbefehle (``file.save``,
+    ``settings.updates``) sind englische Wörter, die ein Umsteiger tippt. Die
+    Kennung einer Zeile der Menüleiste ist es nicht: ``menubar.flache_schattierung``
+    ist deutsch in jeder Sprache, „chat“ fand darüber die Schattierung, und ein
+    Wortteil mitten im Titel stieg über die Kundenwendungen (Review D0-W, L1).
+    Allein diese Kennungen suchen über Titel, Satz und Kundenwörter
+    (Nachprüfung N1: „save“ fand sonst *Speichern* nicht mehr).
+    """
+    name = str(entry.name)
+    return "" if name.startswith(f"{MENUBAR}.") else name
+
+
 def _haystack(entry: SearchEntry) -> str:
     """Titel, Name, Beschreibung und Kundenwörter eines Eintrags, gefaltet."""
     return _folded_haystack(
-        str(entry.title), str(entry.name), str(entry.doc), synonyms_for(str(entry.name))
+        str(entry.title), searched_name(entry), str(entry.doc), synonyms_for(str(entry.name))
     )
 
 
@@ -782,7 +798,7 @@ def rank(entry: SearchEntry, query: str) -> int:
     if not parts:
         return 0
     title = fold(str(entry.title))
-    name = fold(str(entry.name))
+    name = fold(searched_name(entry))
     in_title = all(part in title for part in parts)
     # **Am Wortanfang, nicht mitten im Wort.** „Stützen“ stellte *Hilfe:
     # Solidon3D unterstützen …* vor alles andere, weil das Wort in
@@ -814,7 +830,7 @@ def rank(entry: SearchEntry, query: str) -> int:
         return 1
     if at_title_start:
         return 2
-    if all(part in name for part in parts):
+    if name and all(part in name for part in parts):
         return 3
     if in_phrase:
         return 4
@@ -833,14 +849,19 @@ LOOSE_RANK: Final = 4
 
 
 @lru_cache(maxsize=8)
-def _fields_of(texts: tuple[tuple[str, str, str], ...]) -> dict[str, dict[str, str]]:
+def _fields_of(texts: tuple[tuple[str, str, str, bool], ...]) -> dict[str, dict[str, str]]:
     """:func:`search_fields` über die Zeilen einer Suche, einmal je Zeilenbestand.
 
     Gerechnet wird je Tastendruck; gefaltet werden die gut zweihundertsiebzig
     Beschreibungen nur, wenn sich die Zeilen ändern — eine andere Auswahl gibt
-    andere Freigaben, aber dieselben Texte.
+    andere Freigaben, aber dieselben Texte. Das vierte Glied sagt, ob der Name
+    als Text zählt (:func:`searched_name`); sonst bleibt er nur Schlüssel.
     """
-    return search_fields(texts)
+    fields = search_fields((name, title, doc) for name, title, doc, _named in texts)
+    for name, title, doc, named in texts:
+        if not named:
+            fields[name] = {**fields[name], "name": "", "all": fold(f"{title} {doc}")}
+    return fields
 
 
 def ranked(
@@ -874,7 +895,10 @@ def ranked(
     found, loosened = found_in_rounds(entries, query)
     if not query.strip():
         return found, loosened
-    texts = tuple((str(entry.name), _texts_of(entry.title), str(entry.doc)) for entry in entries)
+    texts = tuple(
+        (str(entry.name), _texts_of(entry.title), str(entry.doc), bool(searched_name(entry)))
+        for entry in entries
+    )
     scores = dict(rank_entries([query], _fields_of(texts)))
     hidden = hidden_from_the_menu()
     parts = fold(query).split()

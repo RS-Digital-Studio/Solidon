@@ -1,0 +1,17 @@
+# Zeilenspezifikationen für D10 — Filament, Beschriftung, Passungen, Parameter
+# (RM-746). Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+[row."Bearbeiten/Parameter anlegen …"]
+start_scene = "quader.exakt"
+example_goal = "Ein Maß „breite“ mit 40 mm anlegen."
+inputs = { "field:name" = "breite", "field:value" = 40.0 }
+search_probes = [
+  { word = "Variable", origin = "cad" },
+  { word = "Parameter", origin = "cad" },
+  { word = "Benutzerparameter", origin = "cad" },
+]
+questions = ["Wie lege ich ein Maß an, das ich mehrfach verwende?"]
+fault_case = { inputs = { "field:name" = "breite außen" }, expected = "sperrgrund" }
+
+[row."Bearbeiten/Parameter anlegen …".expectation]
+"parameter.breite" = { value = 40.0, tolerance = 0.0, origin = "Konstruktion: getippte 40 mm" }

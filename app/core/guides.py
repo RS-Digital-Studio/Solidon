@@ -28,7 +28,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from app.i18n import TranslatableText, _
 
@@ -91,6 +91,21 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # „Zeichnen" in der Werkzeugleiste und „Fertig" im Zeichenmodus
         "toolbar.draw",
         "sketch.done",
+        # Der gemeinsame Knopf unten im Merkmalfenster, *Im Bild einstellen*
+        # und der Haken *Auf alle N gleichartigen anwenden* darüber
+        "feature.apply",
+        "feature.in_view",
+        "feature.every",
+        # *Bezug ändern* an der Maßgruppe im Bild
+        "measure.reference",
+        # Das Suchfeld der Auswahlkarte und *Funktion suchen …* oben
+        "search",
+        "toolbar.search",
+        # *Abbrechen* in der Statusleiste, das Vorschauband in der Ansicht und
+        # *Modell nachbauen* in der Auswahlkarte
+        "progress.cancel",
+        "preview.banner",
+        "selection.rebuild",
     }
 )
 
@@ -112,7 +127,33 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #:   des Registers; im Bild seine Überschrift, die ihn auf- und zuklappt;
 #: * ``sketch:rectangle`` — ein Werkzeug des Zeichenmodus;
 #: * ``history:edit`` — ein Eintrag im Kontextmenü des Verlaufs (``edit``,
-#:   ``insert``, ``switch``, ``delete``), solange das Menü offen ist.
+#:   ``insert``, ``switch``, ``delete``), solange das Menü offen ist; derselbe
+#:   Eintrag wie ``menu:history.edit``, als Name der Anleitungen geblieben;
+#: * ``feature:resize_hole`` — der Kopf einer Handlung im Merkmalfenster über
+#:   ihren Schlüssel (``FeatureAction.key``: die Operation oder ein Schlüssel
+#:   wie ``part.move``), siehe :func:`action_target`;
+#: * ``edge:fillet_edges`` — eine Zeile an einer angeklickten Kante, eine
+#:   Variante als ``edge:fillet_edges.variable_radius``;
+#: * ``feature.field:resize_hole.diameter`` — ein Feld einer Handlung, gebildet
+#:   aus Schlüssel und Feldname (:func:`action_field_target`);
+#: * ``measure.field:diameter`` — ein Feld der Maßgruppe im Bild;
+#: * ``menu:menubar.speichern_unter`` — eine Zeile der Menüleiste über
+#:   ihren ``objectName`` (:func:`menubar_name`) oder eine Zeile eines offenen
+#:   Kontextmenüs (``history.edit``, ``tree.…``, Operationsname,
+#:   ``report.<handlung>``, ``parameters.…``);
+#: * ``finding:arrange.below_bed`` — eine Zeile im Prüfbericht über ihre
+#:   Befundkennung; die darf Großbuchstaben tragen (``op.drill_hole.ValidationError``);
+#: * ``finding.action:place_on_bed`` — ein Knopf zum gewählten Befund;
+#: * ``print:layers.layer_height`` — ein Feld im Druckdialog;
+#: * ``setting:language`` — eine Zeile in den Einstellungen;
+#: * ``handle:move.x`` — ein Griff im Bild oder eine Leiste (``bar.section``);
+#: * ``tree.row:obj_1`` und ``tree.row:obj_1.hole_2`` — eine Zeile im Baum;
+#: * ``history.row:3`` — die Verlaufszeile mit der sichtbaren Nummer 3;
+#: * ``view:obj_1.hole_2`` — eine Stelle im Bild auf diesem Merkmal;
+#: * ``dialog:print_settings_dialog`` — ein offener Dialog dieser Klasse;
+#: * ``start.recent:1`` — ein Eintrag unter „Zuletzt geöffnet“ auf dem
+#:   Startbildschirm, gezählt ab 1 in der Folge der Liste. Eine Menüzeile
+#:   dafür gibt es nicht.
 TARGET_KINDS: Final[tuple[str, ...]] = (
     "command",
     "operation",
@@ -123,9 +164,56 @@ TARGET_KINDS: Final[tuple[str, ...]] = (
     "section",
     "sketch",
     "history",
+    "feature",
+    "edge",
+    "feature.field",
+    "measure.field",
+    "menu",
+    "finding",
+    "finding.action",
+    "print",
+    "setting",
+    "handle",
+    "tree.row",
+    "history.row",
+    "view",
+    "dialog",
+    "start.recent",
 )
 
-_NAME: Final = re.compile(r"[a-z0-9_.]+")
+#: Das erste Glied jedes Namens einer Zeile der Menüleiste (:func:`menubar_name`).
+MENUBAR: Final = "menubar"
+
+#: Der Name einer Widget-Eigenschaft, die ein Bedienelement als Ziel ausweist.
+#:
+#: Widgets tragen ihr Ziel als dynamische Eigenschaft und nicht als
+#: ``objectName``: Der gehört dem Stylesheet (``actionHeading``,
+#: ``functionSearch``). Aktionen in Menüs tragen es dagegen als ``objectName``.
+TARGET_PROPERTY: Final = "guideTarget"
+
+_WORD: Final = r"[a-z0-9_]+"
+_DOTTED: Final = rf"{_WORD}(?:\.{_WORD})*"
+
+#: Wie der Name hinter jeder Art aussieht. Eine Befundkennung trägt den Namen
+#: einer Ausnahmeklasse und damit Großbuchstaben; alles andere ist klein.
+_PATTERNS: Final[dict[str, re.Pattern[str]]] = {
+    **{kind: re.compile(_DOTTED) for kind in TARGET_KINDS},
+    "operation": re.compile(_WORD),
+    "part": re.compile(_WORD),
+    "field": re.compile(_WORD),
+    "edge": re.compile(rf"{_WORD}(?:\.{_WORD})?"),
+    "feature.field": re.compile(rf"{_WORD}(?:\.{_WORD})+"),
+    "measure.field": re.compile(_WORD),
+    "finding": re.compile(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*"),
+    "history.row": re.compile(r"[1-9][0-9]*"),
+    "start.recent": re.compile(r"[1-9][0-9]*"),
+    "dialog": re.compile(r"[a-z][a-z0-9_]*"),
+}
+
+#: Die Umlaute in einem Namen aus der deutschen Quelle.
+_UMLAUTS: Final = str.maketrans(
+    {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss", "Ä": "ae", "Ö": "oe", "Ü": "ue"}
+)
 
 #: Wie viele Wörter ein Schritt höchstens hat, gezählt an der deutschen
 #: Quelle. Ein Schritt ist ein Satz unter einem Bild; wer mehr sagen muss,
@@ -137,11 +225,87 @@ MAX_LABEL_WORDS: Final = 12
 
 
 def is_target(name: str) -> bool:
-    """Ob ``name`` ein Ziel aus dem Wortschatz ist."""
+    """Ob ``name`` ein Ziel aus dem Wortschatz ist — fest oder Art mit passendem Namen."""
     if name in TARGETS:
         return True
     kind, separator, rest = name.partition(":")
-    return bool(separator) and kind in TARGET_KINDS and bool(_NAME.fullmatch(rest))
+    pattern = _PATTERNS.get(kind)
+    return bool(separator) and pattern is not None and bool(pattern.fullmatch(rest))
+
+
+def menubar_name(msgid: str, context: str | None = None) -> str:
+    """Der ``objectName`` einer Zeile der Menüleiste, gebildet aus ihrer deutschen Quelle.
+
+    Klein, Umlaute ausgeschrieben, alles andere als ``_``, ohne Auslassungspunkte
+    und Kürzelzeichen: *Speichern unter …* heißt ``menubar.speichern_unter``. Ein
+    Übersetzungskontext steht vorn (``menubar.kamera.rechts``). Der Name hängt
+    an der Quelle und nicht an der Anzeige, also gilt er in jeder Sprache, und
+    er hängt nicht an der Lage der Zeile — eine neue Zeile darüber ändert ihn
+    nicht.
+    """
+    parts = [name_part(text) for text in (context, msgid) if text]
+    if not parts or not all(parts):
+        raise ValueError(f"menubar_name: aus {msgid!r} entsteht kein Name")
+    return ".".join((MENUBAR, *parts))
+
+
+def menubar_name_of(text: TranslatableText | str) -> str:
+    """:func:`menubar_name` für einen Titel, wie Register und Menüaufbau ihn führen.
+
+    Ein übersetzbarer Text gibt Quelle und Kontext; ein schlichter Text ist ein
+    Titel, den niemand übersetzt (ein eigener Baustein), und steht für sich.
+    """
+    if isinstance(text, TranslatableText):
+        return menubar_name(text.msgid, text.context)
+    return menubar_name(text)
+
+
+def dialog_name(class_name: str) -> str:
+    """Der Name hinter ``dialog:`` für eine Fensterklasse: ``PrintSettingsDialog``
+    heißt ``print_settings_dialog``, ``LLMKeyDialog`` ``llm_key_dialog``; ein
+    führender Unterstrich fällt weg (``_PanelWindow`` → ``panel_window``).
+
+    Eine Quelle für die Funktionsliste, die die Klassen im Quelltext findet,
+    und die Auflösung, die das offene Fenster sucht.
+    """
+    spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", class_name.lstrip("_"))
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", spaced).lower()
+
+
+def name_part(text: str) -> str:
+    """Ein Glied eines Zielnamens aus einem Text: klein, Umlaute ausgeschrieben,
+    alles andere ``_`` (``Speichern unter …`` → ``speichern_unter``)."""
+    text = text.replace("…", "").replace("&", "").translate(_UMLAUTS).lower()
+    return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
+
+
+def action_key(action: Any) -> str:
+    """Der Schlüssel einer Handlung im Merkmalfenster (``FeatureAction.key``).
+
+    Leer heißt: der Name ihrer Operation. Eine Handlung ohne Operation und ohne
+    Schlüssel hat keinen und damit kein Ziel.
+    """
+    return str(action.key or action.op or "")
+
+
+def action_target(action: Any) -> str:
+    """Das Ziel am Kopf einer Handlung: ``edge:<schlüssel>`` an einer angeklickten
+    Kante, sonst ``feature:<schlüssel>``; leer ohne Schlüssel.
+
+    Eine Kantenzeile erkennt sich an dem Wert, den nur sie mitbringt
+    (``edges="named"``, ``perceive.actions.edge_actions``).
+    """
+    key = action_key(action)
+    if not key:
+        return ""
+    edge = ("edges", "named") in tuple(getattr(action, "fixed", ()))
+    return f"{'edge' if edge else 'feature'}:{key}"
+
+
+def action_field_target(action: Any, field_name: str) -> str:
+    """Das Ziel an einem Feld einer Handlung: ``feature.field:<schlüssel>.<feld>``."""
+    key = action_key(action)
+    return f"feature.field:{key}.{field_name}" if key else ""
 
 
 @dataclass(frozen=True, slots=True)

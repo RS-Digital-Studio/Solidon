@@ -61,7 +61,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import activation, discover, tools
+from app.core import activation, discover, guides, tools
 from app.core.build_area import size_excess
 from app.core.errors import (
     SCALE_TO_FIT,
@@ -7588,6 +7588,9 @@ class PrintSettingsDialog(QDialog):
             field, self, weak_slot(self, PrintSettingsDialog._editor_changed, field.path)
         )
         self._editors[field.path] = editor
+        # Das Ziel im Wortschatz (``print:<pfad>``, RM-737): eine Eigenschaft,
+        # denn der ``objectName`` gehört dem Stylesheet.
+        editor.setProperty(guides.TARGET_PROPERTY, f"print:{field.path}")
         # **Der Satz gehört an beide Hälften der Zeile.** Ein Tooltip nur am
         # Eingabefeld findet, wer schon dort steht; wer die Zeile liest, zeigt
         # auf ihre Beschriftung. Die Beschreibung kommt dazu, weil ein

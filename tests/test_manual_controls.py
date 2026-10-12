@@ -309,7 +309,7 @@ def _bar_menus() -> set[str]:
         and node.args
         and isinstance(node.args[0], ast.Call)
         and isinstance(node.args[0].func, ast.Name)
-        and node.args[0].func.id == "tr"
+        and node.args[0].func.id in ("tr", "_")
         and isinstance(node.args[0].args[0], ast.Constant)
         and isinstance(node.args[0].args[0].value, str)
     ]
