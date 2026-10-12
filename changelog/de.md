@@ -40,6 +40,22 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.6.1
+
+### Bedienung und System
+
+- Die Suche findet *Vereinigen*, *Abziehen* und *Schnittmenge* auch unter „boolesch“ und „Boolean“, *Abziehen* auch unter „Differenz“.
+- Ist ein Körper gewählt und liegt ein zweiter in der Szene, sagt der Reiter *Auswahl*, wie man den zweiten für *Vereinigen*, *Abziehen* und *Schnittmenge* dazuwählt.
+- Das Suchfeld im Reiter *Auswahl* steht jetzt immer, auch ohne Auswahl, und findet jede Funktion und jeden Befehl samt Tastenkürzel.
+- Die Befehlspalette entfällt, denn das Suchfeld findet dasselbe. *Funktion suchen* und Strg+Umschalt+P setzen den Cursor hinein.
+- Ein Treffer, der an der Auswahl nicht geht, nennt seinen Grund. Ohne Treffer führt *Im Handbuch suchen* weiter.
+- Esc leert zuerst das Suchfeld, die Auswahl bleibt. Enter startet den vorgewählten Treffer.
+- Ein kurzes Wort, das nichts trifft, meldet jetzt *Kein Treffer*. Version 0.6.0 listete dann alle Funktionen auf.
+- Ohne Auswahl stehen im Reiter *Auswahl* alle Handlungen für die ganze Szene und die Funktionen zum Erzeugen, darunter *Überschneidungen prüfen*.
+- Auch wenn sich nichts überschneidet, gibt *Überschneidungen prüfen* jetzt eine Antwort.
+- Fehlt einer Funktion ein zweiter Körper in der Szene, nennt der Grund *Objekt duplizieren* als Weg.
+- Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
+
 ## 0.6.0
 
 - Die Demo läuft jetzt bis zum 30. November 2026. Solidon3D 1.0 erscheint voraussichtlich am 1. Dezember, Ihre Projekte bleiben erhalten.

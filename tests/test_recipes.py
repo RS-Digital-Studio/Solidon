@@ -2061,7 +2061,7 @@ def test_a_travelled_recipe_gets_the_same_text_limits_as_a_local_one(profile: Pr
     umgingen damit ``PartFileIO._strict_shape`` — samt ``MAX_TITLE_CHARS`` und
     ``MAX_DOC_CHARS``. Ein Rezept aus einer fremden Projektdatei trug deshalb
     einen Titel beliebiger Länge und beliebigen Inhalts, und der reist weit:
-    ins Handbuch, in den Katalog, in die Menüs und in die Befehlspalette
+    ins Handbuch, in den Katalog, in die Menüs und in die Suche
     (Sicherheitsdurchsicht 04.09.2026).
     """
     from app.core.knowledge.parts import shared

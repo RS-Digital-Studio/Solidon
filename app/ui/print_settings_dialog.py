@@ -4333,7 +4333,7 @@ class PrintSettingsDialog(QDialog):
         von sechsundfünfzig Zeilen, ohne dass eine davon gemeint wäre — ein
         Treffer, der ein Drittel des Dialogs trifft, ist keiner.
 
-        Gefaltet wie in der Befehlspalette (``registry.search.fold``): „ä" wird
+        Gefaltet wie in der Suche (``registry.search.fold``): „ä" wird
         zu „ae", damit „aushoehlen" und „Aushöhlen" dasselbe finden. Zwei
         Aufgaben, eine Tabelle — nicht zu verwechseln mit der Sortierfaltung,
         wo „ä" wie „a" zählt.

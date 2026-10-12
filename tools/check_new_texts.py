@@ -135,7 +135,7 @@ def _catalog_key(call: ast.Call, text: str) -> str:
 
     **Mit Kontext steht er als ``Kontext\\x04Text`` darin**, wie
     ``TranslatableText`` nachschlägt. Ohne diese Zeile suchte der Wächter die
-    Kundenwörter der Befehlspalette (``context="Suchwörter"``, Durchsicht 0.5.1)
+    Kundenwörter der Suche (``context="Suchwörter"``, Durchsicht 0.5.1)
     ohne ihren Kontext, fand keinen davon und hielt einen vollständig
     übersetzten Commit an.
     """

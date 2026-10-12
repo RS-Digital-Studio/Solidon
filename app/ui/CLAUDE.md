@@ -37,7 +37,7 @@ und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
 `main_window.py` bindet Menüs/Auswahl, `session.py` Stapel/Auswertung/Arbeiter
 (§2.8, `wartezeit.md`); `viewport.py` zeigt das `EvaluationResult`. Einstiege:
 
-- **Operation** — Menü, Palette, Auswahlfeld und Kürzel gehen durch
+- **Operation** — Menü, Suche, Auswahlfeld und Kürzel gehen durch
   `MainWindow.launch_operation`, damit Gesten-Editoren und Undo erhalten
   bleiben → `OperationDialog` oder Platzierung → `Session.apply` →
   `evaluate_async` → `Viewport`.
@@ -142,7 +142,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
-| `selection_operations.py` | Auswahlhandlungen im Reiter Auswahl, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES`; `add_window_action` |
+| `selection_operations.py` | Auswahlhandlungen im Reiter Auswahl, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES`; `add_window_action`; Suchfeld mit Trefferliste (`set_search_sources`, `_HitList`) |
 | `tool_strip.py` | Werkzeugzeile unter der Ansicht (§2.4, §2.5) |
 | `analysis_bar.py` | Analysekarten, Legende und Schichtvorschau (§18.4, §18.10) |
 | `section_bar.py` | Schnittebene (§18.2) |
@@ -246,15 +246,14 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `guide_targets.py` | Ziele für Tour und `tools/make_guides.py`: `widget_for`, `area_for`, `action_for`; fehlend: `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
-| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac |
-| `command_palette.py` | die Befehlspalette (§2.6, §19.2) |
+| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac; `native_key`: die Taste in der Schreibweise der Plattform |
 
 ### Einstellungen und Rückmeldung
 
 | Datei | Zweck |
 |---|---|
 | `settings.py` | Oberflächen-Einstellungen (`UiSettings`) in einer schlichten Datei (§38) |
-| `settings_dialog.py` | Einstellungen als Entwurf (§19.3, §38); Slicer vor Drucker, gemeinsame Erhebung aus `first_run`; jede Zeile in der Palette (`option_titles`) |
+| `settings_dialog.py` | Einstellungen als Entwurf (§19.3, §38); Slicer vor Drucker, gemeinsame Erhebung aus `first_run`; jede Zeile in der Suche (`searchable_options`) |
 | `support_dialog.py` | Rückmeldung senden (§37.2): Anhänge als ein Schnappschuss (`report.diagnostic_attachments()`), vor dem Senden sichtbar; ein Absturz sendet nichts |
 | `survey.py` | Bogen, Nutzungsuhr und die zwei Einladungen über der Ansicht (`SurveyNotice`, `SupportNotice` auf `ViewNotice`) |
 

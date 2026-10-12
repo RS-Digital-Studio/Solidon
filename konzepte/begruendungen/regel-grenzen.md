@@ -82,7 +82,7 @@ und hat sie eine Kachel im Katalog.**
   (`app/core/registry/registry.py`) nennt ihre Kategorien, `in_the_menu_bar`
   beantwortet die Frage je Kategorie, und `_build_menus` legt für eine
   solche Gruppe **kein Menü** an. Die Aktionen entstehen trotzdem — am
-  Fenster, damit Strg+B bohrt, die Palette weiß, ob eine Handlung geht
+  Fenster, damit Strg+B bohrt, die Suche weiß, ob eine Handlung geht
   (`_update_actions` liest `_op_actions`), und die Kürzelübersicht sie unter
   „Handlungen rechts" führt. **Nackte Tasten bleiben an Objektbaum und
   Ansicht** (`_scope_shortcut`): Am Fenster dazu läge Entf noch einmal über
@@ -141,7 +141,7 @@ bekommt:
 | Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen": erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig"), Menü *Erzeugen* / *Ändern*; die Grundkörper tragen vorn den Haken *Maße als Parameter anlegen* (§13) |
 | Weg 3 — generieren | Chat und Generierungsdialog |
 | Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — beide brauchen einen gewählten Körper und sagen das, bevor man klickt), Menü *Ändern* |
-| keiner der vier | Untermenü und Befehlspalette, sonst nichts |
+| keiner der vier | Untermenü oder Liste der Karte und die Suche, sonst nichts |
 
 ## Die Karte der Handlungen
 
@@ -163,6 +163,31 @@ Karte — einem Langloch, einer Kante — versprach es etwas zu finden, wo es
 nichts gibt (Befund Robert, 18.09.2026). Es verschwindet mit der Liste, und
 ein Satz nennt, wo die Handlungen dieser Auswahl stehen. Wer **sucht** und
 nichts findet, behält es: Dort ist das Feld die Ursache und der Weg zurück.
+
+**Seit RM-735 steht das Suchfeld wieder immer** (Entscheidung Robert,
+11.10.2026). Mit der Befehlspalette fiel der Ort, der über alles suchte; das
+Feld der Karte übernahm ihn und durchsucht seitdem jede Operation jeder Stufe
+und jeden Fensterbefehl. Damit verspricht es an einem Langloch oder ohne
+Auswahl nichts mehr, was es nicht hält: Es findet dort, was anderswo geht, und
+nennt am gesperrten Treffer den Grund. Der Befund vom 18.09. gilt weiter für
+den Satz, der eine leere Liste erklärt, nicht mehr für das Feld. Was die
+Palette konnte und wohin es zog, steht in
+`konzepte/konzept-suche-und-palette-2026-10.md` und der Inventur unter
+`konzepte/nachweise-palette-2026-10/`.
+
+**Und die Tasten gehören dem Feld.** Escape lief bis dahin an die
+Fensteraktion und hob an einem Merkmal mit Maßen im Bild Auswahl und Entwurf
+auf; Return lief an eine Platzierung, die in derselben Spalte offen war
+(Durchsicht `bedienlogik` zu RM-735). Escape geht eine Stufe zurück, im Feld
+zuerst (§18.5), und vor dem Start eines Treffers leert sich das Feld, damit
+der nächste Tastendruck der Ansicht gilt.
+
+**Und an einem Körper nennt eine Zeile den Weg zu den Booleschen** (RM-734).
+Die drei stehen erst bei zwei gewählten Körpern; wer einen gewählt hatte, sah
+nicht, dass es sie gibt, und suchte sie unter einem Wort, das in keinem Titel
+steht („boolesch“). Ein grauer Knopf hätte raten müssen, welcher zweite Körper
+gemeint ist (Entscheidung Robert, 07.09.2026) — also ein Satz mit der Taste
+der Plattform, und die Fachwörter stehen als Kundenwörter in allen Sprachen.
 
 **Und der Filament-Schnellwähler gehört nicht in die leere Karte.** Er hat
 einen eigenen leeren Zustand („Das Filamentlager ist auch ohne Auswahl
@@ -197,7 +222,7 @@ gescheitert ist:
   `quick_names(bodies, feature_kind)` liest sie aus `QUICK_BODIES`,
   `QUICK_BODY`, `QUICK_FEATURES` und `QUICK_FEATURE`. Sie ist eine
   **Empfehlung, keine Aufzählung** — was dort fehlt, steht in der Suchliste,
-  im Menü und in der Palette. Deshalb ist Unvollständigkeit hier kein Fehler,
+  im Menü und in der Suche. Deshalb ist Unvollständigkeit hier kein Fehler,
   anders als bei einer Angabe, die eine Fähigkeit ausspricht (`requires_kind`,
   `applies_to`): die gehört ins Register, weil eine Liste in der Oberfläche
   beim nächsten Zuwachs schweigt.
@@ -295,7 +320,10 @@ Körper sagte der Knopf, er gelte diesem Körper, und nahm doch alle. Robert,
 ziemlich das gleiche und nur ohne Auswahl.“ Die Karte zeigt deshalb nur
 `SCENE_ACTIONS_IN_THE_CARD`; *Auf dem Bett anordnen* (Strg+Umschalt+O) und
 *Überschneidungen prüfen* stehen in der Palette, und `menu_path` nennt dort
-„Befehlspalette“ statt „bei gewähltem Körper“ (RM-506).
+„Befehlspalette“ statt „bei gewähltem Körper“ (RM-506). **Seit RM-735 stehen
+ohne Auswahl alle**, dazu die Erzeuger: Ohne die Palette hätte *Auf dem Bett
+anordnen* nur noch sein Kürzel gehabt und *Überschneidungen prüfen* gar keinen
+sichtbaren Ort; `menu_path` nennt „Handlungen rechts (ohne Auswahl)“.
 
 **Und die Gruppen folgen der Menüleiste** (RM-506). Sortiert wurde mit
 `str.casefold` des übersetzten Titels: Auf Deutsch stand „Ändern“ mit 32
@@ -309,9 +337,10 @@ Transformationen unter dem Ausschnitt.
 **Und an einer Bohrung heißt der Knopf *Passende Bausteine …*** (Robert,
 05.10.2026). Der volle Katalog an einer Bohrung bot neunundvierzig Bausteine,
 von denen fünf dort ansetzen; der gefilterte führt mit einem Klick zu allen.
-Findet die Kartensuche nichts, bietet sie *In allen Funktionen suchen*: Sie
-kennt nur, was zur Auswahl passt, und „gewinde“ am Körper blieb leer, obwohl
-es die Funktion gibt.
+Fand die Kartensuche nichts, bot sie bis RM-735 *In allen Funktionen suchen*:
+Sie kannte nur, was zur Auswahl passt, und „gewinde“ am Körper blieb leer,
+obwohl es die Funktion gibt. Seitdem sucht das Feld selbst über alles, und
+ohne Treffer führt *Im Handbuch suchen* mit demselben Wort weiter.
 
 ## Die Vorderseite eines Dialogs
 
@@ -429,7 +458,7 @@ sagt, welcher der beiden ihn trägt — auch für den Menüort, den der Agent ne
 §10.1, Entscheidung 4): Ein Erzeuger entsteht exakt, wo der Kern da ist; eine
 Bearbeitung fragt die Körperart ihres Eingangs (*Bohrung setzen*, *Aushöhlen*
 — „der Körper entscheidet"); der versteckte Zwilling steht in der
-Befehlspalette, und ein gespeicherter Schritt wechselt seinen Kern über das
+Suche, und ein gespeicherter Schritt wechselt seinen Kern über das
 Kontextmenü des Verlaufs (`History.change_kernel`).
 
 *Bis zur Verdichtung in `oberflaeche.md`:*
@@ -442,7 +471,7 @@ musste, um sieben Werkzeuge nicht später grau zu finden. Heute entscheidet
 niemand mehr: Ein Grundkörper entsteht exakt, wo der exakte Kern da ist
 (`registry.menu_twins()`, faul, denn die Antwort lädt OpenCASCADE: sichtbar
 `create_brep_*`, versteckt der Netz-Zwilling, erreichbar über die
-Befehlspalette — und der Agent liest an ihm „Zweite Wahl“ mit dem Namen des
+Suche — und der Agent liest an ihm „Zweite Wahl“ mit dem Namen des
 Eintrags im Menü); *Bohrung setzen* und
 *Aushöhlen* fragen die Körperart ihres Eingangs (`prepare_ops.drill_hole`,
 `hollow_object` mit der Tabelle aus §10.1: Oberseite offen ohne Entlüftung
@@ -493,10 +522,10 @@ demselben Text" — die engere Fassung wäre am Tag des nächsten Zwillings stil
 „Quader anlegen", `drill_brep_hole` „Bohrung setzen" (`app/core/brep/ops.py`)
 — denselben Titel wie `create_box` und `drill_hole`. Den Unterschied nennt
 nicht der Titel, sondern der Weg: `TWIN_WAYS` in `registry.py` sagt je Paar,
-wo der versteckte Zwilling steht („über die Befehlspalette" bzw. „im selben
+wo der versteckte Zwilling steht („über das Kontextmenü des Verlaufsschritts" bzw. „im selben
 Dialog — der Körper entscheidet"); im Menü steht er nicht ein zweites Mal
 (`hidden_from_the_menu`). Kein eigener Titel und kein Wort davor: Die
-Befehlspalette sortiert nach Titel, und „Exakt" vor dem Namen liest sich wie
+Suche ordnet nach Titel, und „Exakt" vor dem Namen liest sich wie
 eine Qualitätsstufe, obwohl es den Rechenkern meint. Dahinter steht der
 Kunde: Er sucht das **Substantiv** („Bohrung"), und wer den Zwilling
 umformuliert, nimmt ihm eine der beiden Antworten aus der Liste.
@@ -682,7 +711,7 @@ Navigation. Eine doppelt belegte Taste führt keine der beiden Aktionen aus
 ## Sortiert wird nach dem Titel, gesucht in der Sprache des Kunden
 
 **Und sortiert wird nach dem Titel, überall mit `i18n.sort_key`** — in der
-Menüleiste (`by_category`), in der Palette und im Kontextmenü, nicht in der
+Menüleiste (`by_category`), in der Suche und im Kontextmenü, nicht in der
 Ordnung von `Registry.all()`, die der internen englischen Bezeichner. Nicht
 `str` und nicht `casefold`: „Überhangfächer" landet nach Codepunkt hinter allem
 anderen. Nicht zu verwechseln mit `registry.search.fold`, der **Suchfaltung** —
@@ -710,7 +739,7 @@ Kundenwörtern, die Wörter einer Anfrage müssen in **einer** Wendung stehen,
 und in den ungenauen Stufen (`LOOSE_RANK`) entscheidet dieselbe Wertung,
 mit der der Agent seine Werkzeuge wählt (`rank_entries`).
 
-**Die Kundenwörter gehören der Palette, nicht dem Agenten.** Der Agent wertet
+**Die Kundenwörter gehören der Suche, nicht dem Agenten.** Der Agent wertet
 nur `SYNONYMS` (`rank_operations`, `customer_words=False`). Mit den
 Kundenwörtern holte „Versteifung" den Eckwinkel neben die Rippe ins
 ausführliche Angebot, und qwen3:14b traf „Versteife die Wand mit einer Rippe"
@@ -720,7 +749,7 @@ vorher/nachher (`.claude/rules/agentenschicht.md`). Wer ein Kundenwort
 einträgt, trägt es in allen Sprachen ein und prüft zwei Dinge: dass es kein
 Füllwort ist (eine Wendung „zu einem Teil" traf jede Anfrage mit „eine" und
 „Teils"), und dass es nicht über einen kurzen Stamm ein anderes Wort meint —
-`test_every_customer_word_belongs_to_a_row_of_the_palette` hält die Schlüssel
+`test_every_customer_word_belongs_to_a_row_of_the_search` hält die Schlüssel
 am Register und an den Fensterbefehlen fest.
 
 ## Maße als Parameter anlegen

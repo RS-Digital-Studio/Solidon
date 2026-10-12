@@ -31,7 +31,7 @@ from app.core.registry import (
     cli_commands,
     documentation,
     menu_tree,
-    palette_entries,
+    search_entries,
     tool_schemas,
 )
 
@@ -258,7 +258,7 @@ def test_shortcuts_are_unique() -> None:
 def test_every_operation_reaches_every_surface() -> None:
     names = {spec.name for spec in registered()}
     assert {spec.name for section in menu_tree() for spec in section.entries} == names
-    assert {entry.name for entry in palette_entries()} == names
+    assert {entry.name for entry in search_entries()} == names
     assert {command.name for command in cli_commands()} == names
     assert {schema["name"] for schema in tool_schemas()} == names
     text = documentation()

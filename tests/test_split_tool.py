@@ -581,8 +581,9 @@ def test_greying_out_and_back_keeps_the_shortcut_visible(window: MainWindow) -> 
     assert "Alt+" in window.tools._buttons["split"].toolTip()
 
 
-def test_the_palette_carries_the_tool_shortcuts(window: MainWindow) -> None:
-    """Die Palette ist der Universalzugang, und daneben lernt man das Kürzel."""
+def test_the_search_carries_the_tool_shortcuts(window: MainWindow) -> None:
+    """Die Suche ist mit der Ansicht der Universalzugang, und daneben lernt man
+    das Kürzel."""
     commands = window.window_commands()
 
     assert all(commands[f"tool.{key}"][1] for key in window.tools.tools())
@@ -599,8 +600,8 @@ def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> No
     from PySide6.QtGui import QAction, QKeySequence
 
     # Befehle und Aktionen getrennt: Je Taste zählen die Aktionen über ihre
-    # Identität, nicht über den Namen. Die Werkzeugaktion heißt wie ihr
-    # Paletteneintrag; zwei Aktionen mit Alt+1 und demselben Namen fielen in
+    # Identität, nicht über den Namen. Die Werkzeugaktion heißt wie ihre
+    # Zeile in der Suche; zwei Aktionen mit Alt+1 und demselben Namen fielen in
     # einer Namensmenge zu einer zusammen — und Qt löste dann keine aus.
     titles: dict[str, set[str]] = {}
     actions: dict[str, dict[int, str]] = {}

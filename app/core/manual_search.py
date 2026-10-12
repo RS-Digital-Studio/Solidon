@@ -12,9 +12,9 @@ dort mehr als in einer Überschrift, dort mehr als im Fließtext — und **wie
 genau** es passt. Jeder Treffer nennt die Stelle, an der die Seite aufschlägt.
 
 **Was als Treffer zählt, entscheidet dieselbe Rechnung wie in der
-Befehlspalette** (``app/core/registry/search.py``): dieselbe Faltung
+Suche** (``app/core/registry/search.py``): dieselbe Faltung
 („aushoehlen" findet *Aushöhlen*), derselbe Wortstamm, dieselben
-Kundenwörter. Wer in der Palette „abrunden" tippt, bekommt *Verrunden*; im
+Kundenwörter. Wer ins Suchfeld „abrunden" tippt, bekommt *Verrunden*; im
 Handbuch führt dasselbe Wort auf die Seiten, die *Verrunden* erklären. Eine
 zweite Tabelle für dieselben Wörter liefe auseinander, sobald jemand eine
 davon nachbessert (``.claude/rules/zwillinge.md``).
@@ -43,7 +43,7 @@ _BODY_WEIGHT: Final = 4.0
 _BODY_LIMIT: Final = 24.0
 
 #: Das ganze Wort zählt die Hälfte mehr als ein Wort, das nur so anfängt. Die
-#: Palette unterscheidet das nicht, sie ordnet Titel aus zwei, drei Wörtern;
+#: Suche unterscheidet das nicht, sie ordnet Titel aus zwei, drei Wörtern;
 #: auf einer Seite aus tausenden trennt es *hohl* von *Hohlkehle* und *Text*
 #: von *Textur*. Gemessen an den Kundensuchen: mit einem Viertel landete
 #: „hohl" bei der Hohlkehle, mit dem Ganzen fiel „Stütze" auf Rang drei.
@@ -141,7 +141,7 @@ def _marked(body: str, title: str) -> str:
 def _words(text: str) -> tuple[str, ...]:
     """Die Wörter einer Suche, gefaltet wie die Seiten, jedes einmal.
 
-    Anders als die Palette (``request_terms``) behält das Handbuch Zahlen und
+    Anders als die Suche (``request_terms``) behält das Handbuch Zahlen und
     kurze Wörter: Wer „3MF" oder „M3" sucht, meint genau das, und auf einer
     Seite steht es so da.
     """
@@ -267,7 +267,7 @@ class SearchIndex:
     def _strengths(self, word: str, *, exact: bool = False) -> dict[str, float]:
         """Wie gut ein Suchwort die Wörter des Handbuchs trifft — nur die Treffer.
 
-        Die Stärke rechnet die Palette (:func:`strength`); das ganze Wort
+        Die Stärke rechnet die Suche (:func:`strength`); das ganze Wort
         bekommt :data:`_WHOLE_WORD` dazu. ``exact`` zählt nur das ganze Wort:
         So wird der Titel einer Operation gesucht, zu der ein Kundenwort
         führt. Das Handbuch schreibt ihn genau so, und *Text aufbringen* soll

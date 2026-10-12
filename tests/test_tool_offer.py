@@ -170,7 +170,7 @@ def test_a_detailed_part_keeps_the_fields_of_its_place() -> None:
     ],
 )
 def test_the_request_brings_its_operation_with_its_fields(request_text: str, wanted: str) -> None:
-    """Die Wortsuche der Befehlspalette findet die gemeinte Operation — in
+    """Die Wortsuche des Suchfelds findet die gemeinte Operation — in
     Beugung, als Zusammensetzung und auf Englisch über den Namen."""
     assert wanted in ToolOffer.for_turn(REGISTRY, [request_text]).detailed
 

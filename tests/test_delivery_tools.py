@@ -916,7 +916,7 @@ def test_the_commit_guard_reads_a_text_with_context_under_its_catalog_key(
 ) -> None:
     """Ein Text mit ``context=`` steht im Katalog als ``Kontext\\x04Text``.
 
-    Durchsicht 0.5.1: Die Kundenwörter der Befehlspalette tragen den Kontext
+    Durchsicht 0.5.1: Die Kundenwörter der Suche tragen den Kontext
     „Suchwörter“. Der Wächter suchte sie ohne ihn — „Ball“ statt
     „Suchwörter\\x04Ball“ —, fand sie in keinem Katalog und hielt einen
     vollständig übersetzten Commit an. Gefragt wird der Schlüssel, unter dem

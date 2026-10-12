@@ -33,6 +33,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Erreichen Helfer- und Stopfehler den Kundenweg unverändert? | `test_prepare.py` · `test_difference.py` · `test_missing_ops.py` · `test_repair.py` · `test_threemf_native_materials.py` |
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Umschalter, vier Felder vorn? | `test_theme_and_palette.py` · `test_interface_limits.py` |
+| Findet die Suche, was der Kunde tippt? | `test_search.py`; das Suchfeld der Karte in `test_selection_operations.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Erkennt der druckgleich-Vergleich (§11.2) jede Verletzung? | `test_print_equal.py` |
 | Verhindert eine abweisende Nachprüfung das Schreiben einer Vergleichsmarke und bleibt sie außerhalb der API-Zeit? | `test_performance_marks.py` — nachgestellte Prüfablehnungen, gestellte Uhr, eigene temporäre Marken; keine Leistungsmessung |
@@ -65,7 +66,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Zylinder- und Rundflächenmaße aus den Originalpunkten, stabil unter starrer Bewegung? | `test_cylinder_measurements.py`, `test_round_surface_measurements.py` |
 | Sagen beide Kerne an einer angeschnittenen Bohrung dasselbe? | `test_partial_bores.py` |
 | Fällt weg, was ein Schnitt wegnimmt — auch ein Bausteinmerkmal, das die Erkennung nicht sieht —, behält ein Passungsprüfstück seine Passungsmerkmale, und folgt der Rest einem abgelegten Prüfstück? | `test_cut_features.py` |
-| Bleiben Musteränderung und -entfernung auf STL-gerundeten Zylinderfacetten dicht und frei von Selbstschnitten? | `test_pattern_features.py` — binärer STL-Rundlauf in beiden Güten, getrennte Importfelder und deren unabhängige Bearbeitung, Schnittprüfung, Wiedererkennung, Winkelnaht, Abbruch und Attributerhalt; `test_platform_identity.py` prüft die Ausrichtung aufrecht und gekippt gegen Plattformrauschen |
+| Bleiben Musteränderung und -entfernung auf STL-gerundeten Zylinderfacetten dicht und frei von Selbstschnitten? | `test_pattern_features.py`; gegen Plattformrauschen `test_platform_identity.py` |
 | Wird ein kleines Feld unter den Schwellen ausdrücklich ein Muster — mit Absagen für Bohrungen, Träger und zwei Seiten, durch Verlauf, Projektdatei, Cache und Undo? | `test_pattern_grouping.py` |
 | Erkennt die Gruppenerkennung Kammer, Nut, Kanal, Gewinde, Verschluss, Scharnier, Schrift und Aufnahme samt Gegenproben und Korpus, und ändert *Kammer ändern* eine Kammer als Ganzes? Ändert *Verschluss ändern* Spiel und Drehweg aller Stellungen genau um ihren Umriss? | `test_functional_groups.py` · `test_chamber_ops.py` · `test_closure_ops.py` (Rohr mit L-Wegen, Plattendeckel als STL, Bausteinaufnahme); Baum und Merkmalfenster in `test_feature_panel.py`; der Kasten dazu ist `helpers.walled_bin` |
 | Findet die Bindungshilfe feste Zahlen, die zu Projektmaßen passen, wählt sie nur Sicheres vor, und folgt das gebundene Puppenhaus seinen Maßen? Zählt der Plattenwähler die Körper, und rahmt die Plattenwahl einmal? | `test_parameter_binding.py` · `test_parameter_binding_ui.py`; Platten in `test_plates.py`; das Puppenhaus ist `helpers.dollhouse_document` |

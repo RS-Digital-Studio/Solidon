@@ -2010,7 +2010,7 @@ class History:
         spec = self._registry.get(op_name)
         # **Ins Netz nur, wenn niemand darüber den exakten Körper braucht** (P2.8).
         # Bis dahin sagte das ein Hinweis am Haken; jetzt ist es die Hürde des
-        # Kerns, damit Verlauf, Palette und Agent dieselbe Absage bekommen — mit
+        # Kerns, damit Verlauf, Suche und Agent dieselbe Absage bekommen — mit
         # der Zahl der Schritte, die anhalten würden (Regel 17).
         exact = exact_names()
         if entry.op in exact and op_name not in exact:

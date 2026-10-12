@@ -206,7 +206,7 @@ def lead_sentence(spec: OperationSpec) -> str:
     Vor dem ersten Feld standen bis zu 118 Wörter — die ganze Beschreibung und
     die Grenze dazu. Den Rest trägt der Tooltip derselben Zeile, die Grenze
     die zugeklappte Klappe „Wann nicht?“. Gekürzt wird wie in der
-    Befehlspalette (:func:`app.core.registry.surfaces.first_sentence`), damit
+    Suche (:func:`app.core.registry.surfaces.first_sentence`), damit
     beide Orte denselben Satz zeigen.
     """
     return first_sentence(str(spec.doc or "")).strip()
@@ -2619,7 +2619,7 @@ class OperationDialog(QDialog):
         # Merkmal es anpeilen könnte — die Liste ist leer, und „Übernehmen"
         # führte sicher in den Formatfehler des Kerns („obj_2:hole_1"). Das
         # Fenster sagt es vorher am Knopf (``_NEEDS_TARGET``); hier steht
-        # dieselbe Auskunft für den Weg über Palette und Kürzel.
+        # dieselbe Auskunft für den Weg über Suche und Kürzel.
         no_target = self._target_missing()
         no_texture_face = self._texture_face_missing()
         no_place = self.place_missing()

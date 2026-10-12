@@ -3,7 +3,7 @@
 Die Texte schreiben ein Kürzel so, wie es unter Windows und Linux heißt:
 „Strg+Z“, in den Katalogen „Ctrl+Z“. Auf dem Mac ist dieselbe Taste ⌘Z, und
 wer dort Control+Z drückt, bekommt nichts — über sechzig Sätze vom
-Prüfbericht bis zur Tour führten ihn so ins Leere. Menüs und Palette fragen
+Prüfbericht bis zur Tour führten ihn so ins Leere. Menüs und Suche fragen
 Qt (``QKeySequence.toString(NativeText)``); dieser Weg gilt den Sätzen, die
 ein Kürzel im Text nennen.
 

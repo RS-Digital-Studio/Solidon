@@ -338,7 +338,7 @@ def _checked_text(value: str, limit: int, field: str, *, paragraphs: bool = Fals
     ``MAX_TITLE_CHARS`` und ``MAX_DOC_CHARS`` — gelten nur für den lokalen
     ``.solidon-part``-Import. Ein Rezept aus einer fremden Projektdatei trug
     damit einen Titel beliebiger Länge und beliebigen Inhalts, und der reist
-    weit: ins Handbuch, in den Katalog, in die Menüs und in die Befehlspalette
+    weit: ins Handbuch, in den Katalog, in die Menüs und in die Suche
     (Sicherheitsdurchsicht 04.09.2026).
 
     **Markdown bleibt erlaubt**, und zwar bewusst: ``doc`` wird als
@@ -886,7 +886,7 @@ def register(
     Das Parameterschema entsteht aus den freigegebenen Parametern — dieselbe
     Deklaration, die ein eingebauter Baustein über ``param()`` trägt, nur aus
     Daten gebaut. Registriert wird über denselben Weg wie jede ``.py``
-    (``ops.register_all``-Mechanik), damit Katalog, Palette, Dialog und
+    (``ops.register_all``-Mechanik), damit Katalog, Suche, Dialog und
     Provenienz nichts Neues lernen müssen.
 
     ``fn`` wertet mit dem **Standardprofil** aus — das trifft Vorschaubild

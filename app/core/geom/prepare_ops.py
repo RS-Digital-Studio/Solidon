@@ -11269,7 +11269,7 @@ class SlotHoleParams(BaseParams):
         # Die **richtige** Vorgabe ist der gemessene Durchmesser mal zwei, und
         # die steht am angeklickten Merkmal (``perceive.actions._SHIFTED_BY``).
         # Sie gilt dort, wo eine Bohrung gewählt ist; hier steht die Zahl für
-        # den Weg ohne Merkmal — Kommandozeile, Chat, Palette.
+        # den Weg ohne Merkmal — Kommandozeile, Chat, Suche.
         default=20.0,
         unit="mm",
         minimum=0.2,
@@ -23280,7 +23280,9 @@ class OrientParams(BaseParams):
     # 4: Ein Überschneidungsbefund nennt beide Körper (``Finding.object_ids``).
     cache_version="4",
     title=_("Druckoptimal ausrichten"),
-    category="transform",
+    # Szene, nicht Transformation (RM-735): Die Handlung gilt jedem Körper der
+    # Szene und steht nur ohne Auswahl — bei den beiden anderen ihrer Art.
+    category="scene",
     params=OrientParams,
     # **Die ganze Szene** (Entscheidung Robert, 10.09.2026: „druckoptimal
     # ausrichten alle körper"). Zwei Schritte hierher: ``consumes=1`` nahm den
@@ -23770,7 +23772,8 @@ class CollisionParams(BaseParams):
 @register_op(
     name="check_collisions",
     # 2: Ein Überschneidungsbefund nennt beide Körper (``Finding.object_ids``).
-    cache_version="2",
+    # 3: Ohne Überschneidung sagt ein Hinweis es (``arrange.no_collision``, RM-735).
+    cache_version="3",
     # „Überschneidungen" statt „Kollisionen": Der Kunde denkt bei Kollision an
     # einen Zusammenstoß, gemeint ist, dass zwei Teile ineinanderstecken.
     title=_("Überschneidungen prüfen"),
@@ -23785,6 +23788,19 @@ def check_collisions_op(ctx: OpContext) -> OpResult:
     params = cast(CollisionParams, ctx.params)
     meshes = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
     findings = check_collisions(meshes, params.clearance)
+    if not findings:
+        # **Auch „keine“ ist eine Antwort** (§2.8): Ohne sie entstand ein
+        # Verlaufsschritt und sonst nichts, und ein Klick ohne sichtbare
+        # Antwort wirkt kaputt — sichtbar, seit die Prüfung ohne Auswahl in der
+        # Karte steht (Befund F5 zu RM-735). Was der Bauraum meldet, steht
+        # daneben; die Frage war die nach den Überschneidungen.
+        findings.append(
+            Finding(
+                code="arrange.no_collision",
+                severity="info",
+                message=_("Keine Überschneidungen gefunden."),
+            )
+        )
     findings.extend(check_build_volume(meshes, ctx.profile))
     # Ändert nichts: die Objekte gehen unberührt hindurch, die Befunde sind das
     # Ergebnis.

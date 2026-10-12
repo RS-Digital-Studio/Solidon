@@ -1,7 +1,7 @@
 """Der Kommandozeilen-Einstieg (Bauplan §10, ROADMAP P0).
 
 Die Befehle stehen hier nicht ausgeschrieben: sie kommen aus dem
-Operationsregister — derselben Quelle, aus der Menü, Palette und
+Operationsregister — derselben Quelle, aus der Menü, Suche und
 Agenten-Werkzeugschema kommen. Eine Operation, die es gibt, ist von der
 Kommandozeile aus erreichbar, sobald sie deklariert ist.
 

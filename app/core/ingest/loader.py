@@ -1362,7 +1362,7 @@ def _too_fine(triangles: int) -> Finding | None:
     Dezimieren", und beides war falsch — das Menü heißt *Ändern*, die
     Operation *Dreiecke verringern*. Ein Weg im Text driftet, sobald jemand
     eine Kategorie verschiebt; ein Operationstitel ist derselbe String, den
-    Menü, Palette und Kontextmenü zeigen, und die Palette findet ihn.
+    Menü, Suche und Kontextmenü zeigen, und die Suche findet ihn.
     """
     if triangles <= HEAVY_TRIANGLES:
         return None

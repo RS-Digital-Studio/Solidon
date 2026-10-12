@@ -70,46 +70,52 @@ def test_rebuilt_counterpart_fields_stay_before_the_accept_button(qt_app: QAppli
         dialog.deleteLater()
 
 
-def test_palette_detail_has_its_own_line_without_horizontal_scrolling(qt_app: QApplication):
-    from app.core.registry import PaletteEntry
-    from app.ui.command_palette import CommandPalette
+def test_a_hit_wraps_its_reason_below_the_title_without_horizontal_scrolling(
+    qt_app: QApplication,
+):
+    """Der Sperrgrund eines Treffers steht unter dem Titel und bricht um, statt
+    die schmale Karte seitlich rollen zu lassen (RM-735; vorher in der
+    Befehlspalette, C-N2)."""
+    from app.core.registry import SearchEntry
+    from app.ui.selection_operations import SelectionOperationsPanel, _HitList, _HitRows
 
     reason = "Wählen Sie zuerst einen Körper, damit der Befehl darauf angewendet werden kann. " * 4
-    entry = PaletteEntry(
+    entry = SearchEntry(
         name="dialog_layout_sample",
-        title="Ein langer Befehlstitel für eine schmale Palette " * 4,
+        title="Ein langer Befehlstitel für eine schmale Karte " * 4,
         category="modify",
         doc="Die vollständige Beschreibung des Befehls.",
         shortcut="Ctrl+Shift+B",
         available=False,
         reason=reason,
     )
-    dialog = CommandPalette([entry])
+    hits = _HitList()
+    hits.setItemDelegate(_HitRows(hits))
+    hits.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    item = SelectionOperationsPanel._hit_item(entry)
+    hits.addItem(item)
     try:
-        dialog.resize(520, 480)
-        dialog.show()
+        hits.resize(320, 400)
+        hits.show()
         qt_app.processEvents()
-        item = dialog.list.item(0)
-        assert item is not None
-        row = dialog.list.visualItemRect(item)
-        assert row.height() >= 2 * dialog.list.fontMetrics().height()
-        assert row.width() <= dialog.list.viewport().width()
-        assert dialog.list.horizontalScrollBar().maximum() == 0
-        assert dialog.list.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        # Die Palette schneidet Ränder ab und entdoppelt die Zeilen (C-N2).
+        row = hits.visualItemRect(item)
+        assert row.height() >= 3 * hits.fontMetrics().height(), "der Grund bricht um"
+        assert row.width() <= hits.viewport().width()
+        assert hits.horizontalScrollBar().maximum() == 0
+        # Die Zeile kürzt, der Tooltip trägt alles, je einmal (C-N2).
         assert reason.strip() in item.toolTip()
         assert str(entry.title).strip() in item.toolTip()
     finally:
-        dialog.close()
-        dialog.deleteLater()
+        hits.close()
+        hits.deleteLater()
 
 
-def test_palette_shows_a_description_for_an_available_command(qt_app: QApplication) -> None:
+def test_an_available_hit_shows_its_description(qt_app: QApplication) -> None:
     """Ein verfügbarer Treffer erklärt sein Ergebnis direkt in der Liste."""
-    from app.core.registry import PaletteEntry
-    from app.ui.command_palette import CommandPalette
+    from app.core.registry import SearchEntry
+    from app.ui.selection_operations import SelectionOperationsPanel
 
-    entry = PaletteEntry(
+    entry = SearchEntry(
         name="available_dialog_layout_sample",
         title="Maß setzen",
         category="modify",
@@ -118,13 +124,8 @@ def test_palette_shows_a_description_for_an_available_command(qt_app: QApplicati
         available=True,
         reason="",
     )
-    dialog = CommandPalette([entry])
-    try:
-        item = dialog.list.item(0)
-        assert item is not None
-        assert item.text() == f"{entry.title}\n{entry.doc}"
-    finally:
-        dialog.deleteLater()
+    item = SelectionOperationsPanel._hit_item(entry)
+    assert item.text() == f"{entry.title}\n{entry.doc}"
 
 
 def _room(dialog: QDialog) -> int:
@@ -577,16 +578,16 @@ def test_dialog_rechecks_reachability_when_screen_metrics_change(
         ),
     ],
 )
-def test_the_palette_tooltip_names_every_line_once(
+def test_the_hit_tooltip_names_every_line_once(
     qt_app: QApplication, doc: str, available: bool, reason: str, expected: list[str]
 ) -> None:
-    """Titel, Grund und Beschreibung stehen je einmal im Tooltip, zeilengenau
-    (RM-342, C-N2): Ein ``doc`` gleich dem Titel und ein Grund gleich dem
-    ``doc`` wurden entdoppelt, ohne dass ein Test es hielt."""
-    from app.core.registry import PaletteEntry
-    from app.ui.command_palette import CommandPalette
+    """Titel, Grund und Beschreibung stehen je einmal im Tooltip eines Treffers,
+    zeilengenau (RM-342, C-N2): Ein ``doc`` gleich dem Titel und ein Grund
+    gleich dem ``doc`` wurden entdoppelt, ohne dass ein Test es hielt."""
+    from app.core.registry import SearchEntry
+    from app.ui.selection_operations import SelectionOperationsPanel
 
-    entry = PaletteEntry(
+    entry = SearchEntry(
         name="tooltip_sample",
         title="Maß setzen",
         category="modify",
@@ -595,13 +596,8 @@ def test_the_palette_tooltip_names_every_line_once(
         available=available,
         reason=reason,
     )
-    dialog = CommandPalette([entry])
-    try:
-        item = dialog.list.item(0)
-        assert item is not None
-        assert item.toolTip().split("\n") == expected
-    finally:
-        dialog.deleteLater()
+    item = SelectionOperationsPanel._hit_item(entry)
+    assert item.toolTip().split("\n") == expected
 
 
 def _out_of_view(scroll: QScrollArea, *notes: QWidget) -> list[str]:

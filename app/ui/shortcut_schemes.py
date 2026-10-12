@@ -67,6 +67,22 @@ def shortcut_for(name: str, declared: str | None, scheme: str) -> str | None:
     return table.get(name, declared)
 
 
+def native_key(shortcut: str) -> str:
+    """Eine Taste, wie sie auf der Tastatur heißt: „Strg+B", nicht „Ctrl+B".
+
+    Bei den Operationen steht die Deklaration aus dem Register, bei den
+    Fensterbefehlen ``action.shortcut().toString()`` ohne ``NativeText``.
+    Gemessen mit installiertem Qt-Katalog sprachen damit fünf Operationen und
+    37 Fensterbefehle in der Suche englisch, während das Menü daneben deutsch
+    sprach — „Del" hier und „Entf" dort. Eine Folge, die Qt nicht versteht,
+    bleibt stehen, wie sie ist: Sie wegzuwerfen wäre schlimmer, als sie
+    englisch zu zeigen.
+    """
+    if not shortcut:
+        return ""
+    return QKeySequence(shortcut).toString(QKeySequence.SequenceFormat.NativeText) or shortcut
+
+
 def redo_keys(platform: str, standard: QKeySequence) -> list[QKeySequence]:
     """Die Tasten für *Wiederholen* auf ``platform`` (``sys.platform``); die erste steht im Menü.
 

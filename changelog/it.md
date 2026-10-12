@@ -15,6 +15,22 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.6.1
+
+### Uso e sistema
+
+- La ricerca trova *Unisci*, *Sottrai* e *Intersezione* anche come «booleano», e *Sottrai* anche come «differenza».
+- Con un corpo selezionato e un secondo nella scena, la linguetta *Selezione* dice come aggiungere il secondo per *Unisci*, *Sottrai* e *Intersezione*.
+- Il campo di ricerca della linguetta *Selezione* ora c'è sempre, anche senza selezione, e trova ogni funzione e ogni comando con la sua scorciatoia.
+- La palette dei comandi non c'è più, perché il campo di ricerca trova lo stesso. *Cerca funzione* e Ctrl+Maiusc+P vi portano il cursore.
+- Un risultato che non funziona sulla selezione ne indica il motivo. Senza risultati, *Cerca nel manuale* porta oltre.
+- Esc svuota prima il campo di ricerca, e la selezione resta. Invio avvia il risultato preselezionato.
+- Una parola breve che non trova nulla ora indica *Nessun risultato*. La versione 0.6.0 elencava allora tutte le funzioni.
+- Senza selezione, la linguetta *Selezione* raccoglie tutte le azioni per l'intera scena e le funzioni per creare, tra cui *Controlla sovrapposizioni*.
+- Anche quando nulla si sovrappone, *Controlla sovrapposizioni* ora dà una risposta.
+- Se a una funzione manca un secondo corpo nella scena, il motivo indica *Duplica oggetto* come via.
+- L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
+
 ## 0.6.0
 
 - La demo ora funziona fino al 30 novembre 2026. Solidon3D 1.0 dovrebbe uscire il 1º dicembre e i tuoi progetti restano.

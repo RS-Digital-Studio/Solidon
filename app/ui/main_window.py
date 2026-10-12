@@ -5,7 +5,7 @@ Prüfbericht oder Chat rechts — und die rechte Seite klappt mit einer Taste ga
 weg. Betriebsarten gibt es nicht; es gibt einen Zustand, und der ist die Szene.
 
 Das Menü steht auch hier nicht ausgeschrieben: es wird aus dem Register gebaut
-— eine Operation erscheint also im Menü, in der Palette und auf der
+— eine Operation erscheint also im Menü, in der Suche und auf der
 Kommandozeile, sobald sie deklariert ist (§10).
 """
 
@@ -187,7 +187,7 @@ from app.core.registry import (
     VARIABLE,
     VARIANT_GROUPS,
     OperationSpec,
-    PaletteEntry,
+    SearchEntry,
     catalogue_operations,
     caveat_line,
     exact_kernel_present,
@@ -199,10 +199,10 @@ from app.core.registry import (
     menu_tree,
     menu_twins,
     needed_inputs,
-    palette_entries,
     variant_members,
 )
 from app.core.registry.params import body_keys, inactive_dependency
+from app.core.registry.search import fold
 from app.core.registry.surfaces import chooses_a_centre, first_sentence
 from app.core.report import crash_detail
 from app.core.scene import (
@@ -278,7 +278,6 @@ from app.ui.ai_disclosure import (
 from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
-from app.ui.command_palette import CommandPalette, fold, native_key
 from app.ui.dialogs import (
     AboutDialog,
     ActivationDialog,
@@ -421,6 +420,7 @@ from app.ui.shortcut_schemes import (
     delete_keys,
     deletes,
     install_navigation_keys,
+    native_key,
     redo_keys,
     shortcut_for,
 )
@@ -610,7 +610,7 @@ TOOLBAR_SIGNS: Final = 0
 #: Operationen, deren Menüeintrag ein Fensterbefehl ist, mit dessen Kennung
 #: (RM-507): Unter *Erzeugen* steht für ``load`` dieselbe Aktion wie
 #: *Datei → Modell einfügen …*, die den Dateidialog öffnet. Als eigene
-#: Palettenzeile stünde die Operation daneben, fast gleich benannt und mit
+#: Zeile der Suche stünde die Operation daneben, fast gleich benannt und mit
 #: anderer Wirkung.
 WINDOW_COMMAND_OPERATIONS: Final = {"load": "file.import"}
 
@@ -750,7 +750,7 @@ def counterpart_needs_two() -> str:
     """Was den Gegenstücken fehlt, in **einem** Satz (RM-147 E1).
 
     Zwei Stellen: der Menüeintrag sagt es vor dem Klick, der Fehlerdialog dem,
-    der über Palette oder Kürzel daran vorbeigeht. Eine Funktion und keine
+    der über Suche oder Kürzel daran vorbeigeht. Eine Funktion und keine
     Konstante, weil ``tr()`` zur Aufrufzeit übersetzt — ein Sprachwechsel im
     laufenden Fenster fände einen einmal gerechneten Wert sonst nicht mehr.
     """
@@ -2730,6 +2730,27 @@ def _needs_objects(count: int) -> str:
     )
 
 
+def _too_few_bodies(count: int) -> str:
+    """Der Satz, wenn die Szene weniger Körper hat, als die Operation nimmt.
+
+    :func:`_needs_objects` schickt zum Dazuwählen — mit einem einzigen Körper
+    in der Szene gibt es aber keinen zweiten, und der Satz verlangte einen
+    Schritt, den es nicht gibt (Befund F4, Bedienlogik zu RM-735). Er nennt
+    stattdessen den Weg zu einem weiteren.
+    """
+    duplicate = str(REGISTRY.get("duplicate_object").title)
+    if count == 2:
+        return tr(
+            "Dafür braucht es zwei Körper in der Szene. Einen zweiten legt „{duplicate}“ an.",
+            duplicate=duplicate,
+        )
+    return tr(
+        "Dafür braucht es {count} Körper in der Szene. Weitere legt „{duplicate}“ an.",
+        count=count,
+        duplicate=duplicate,
+    )
+
+
 def _works_on(names: Sequence[str], chosen: int, takes: int) -> str:
     """Woran die Operation arbeitet, wenn mehr gewählt ist als sie nimmt.
 
@@ -3326,11 +3347,11 @@ class MainWindow(QMainWindow):
         ersten Operation. Getrennt von ``_op_actions``, weil sie keiner
         Operation gehören: Wer dort nachschlägt, sucht einen Eintrag, der
         genau eine Operation auslöst, und das tun sie nicht."""
-        self._palette_actions: dict[str, QAction] = {}
-        """Zu welcher Action ein Fensterbefehl der Palette gehört.
+        self._command_actions: dict[str, QAction] = {}
+        """Zu welcher Action ein Fensterbefehl der Suche gehört.
 
         Gefüllt von ``_menu_commands``, gelesen von ``_extra_availability`` —
-        die Palette graut damit aus, was das Menü ausgraut."""
+        die Suche graut damit aus, was das Menü ausgraut."""
         self._display_actions: list[QAction] = []
         """Die Einträge unter *Ansicht → Darstellung*.
 
@@ -4284,7 +4305,23 @@ class MainWindow(QMainWindow):
         self.selection_operations.operationRequested.connect(self.launch_operation)
         self.selection_operations.catalogRequested.connect(self.action_catalog)
         self.selection_operations.matchingPartsRequested.connect(self.open_matching_parts)
-        self.selection_operations.paletteRequested.connect(self.open_palette)
+        # **Das Suchfeld der Karte ist die eine Suche** (RM-735): Es findet
+        # jede Operation und jeden Befehl des Fensters, und was es findet, läuft
+        # über dieselbe Wache wie Menü und Kürzel (:meth:`_run_search_choice`).
+        self.selection_operations.searchChosen.connect(self._run_search_choice)
+        self.selection_operations.searchLeft.connect(self._back_to_the_view)
+        self.selection_operations.manualRequested.connect(self._search_the_manual)
+        # Schwach gehalten: Das Panel ist ein Kind des Fensters.
+        alive = weakref.ref(self)
+        self.selection_operations.set_search_sources(
+            lambda: [] if (view := alive()) is None else view._window_command_rows(),
+            lambda name, declared: (
+                declared
+                if (view := alive()) is None
+                else shortcut_for(name, declared, view.settings.shortcut_scheme)
+            ),
+            frozenset(WINDOW_COMMAND_OPERATIONS),
+        )
         self.selection_operations.rebuildRequested.connect(self._rebuild_chosen_body)
         from app.ui.filament_assignment import QuickFilamentPicker
 
@@ -5058,14 +5095,17 @@ class MainWindow(QMainWindow):
             redo_keys(sys.platform, QKeySequence(QKeySequence.StandardKey.Redo))
         )
         edit_menu.addSeparator()
-        # Gemerkt, weil die Kürzelübersicht darauf verweist. Dort stand die
-        # Taste als Text, und der war falsch.
-        self._palette_action = self._add_action(
-            edit_menu,
-            tr("Befehlspalette …"),
+        # **Funktion suchen, ohne Menüzeile** (RM-735): Die Befehlspalette ist
+        # gefallen; Taste und Knopf oben setzen den Cursor ins Suchfeld der
+        # Karte rechts (:meth:`action_function_search`). Gemerkt, weil Knopf
+        # und Kürzelübersicht die Taste von hier holen — dort stand sie einmal
+        # als Text, und der war falsch.
+        self.search_action = self._add_action(
+            None,
+            tr("Funktion suchen"),
             "Ctrl+Shift+P",
-            self.action_command_palette,
-            tr("Jede Operation über ihren Namen finden, ohne durch die Menüs zu gehen."),
+            self.action_function_search,
+            tr("Jede Funktion über ihren Namen finden, mit Ort und Kürzel."),
         )
         self._add_action(
             edit_menu,
@@ -5128,7 +5168,7 @@ class MainWindow(QMainWindow):
         # einem Menü eine Liste zum Absuchen, und die Zeilengrenze aus
         # ``tests/test_interface_limits.py`` kann es nie sehen — die Suite
         # liest den Nutzerordner bewusst nicht (§38). Erreichbar bleiben sie
-        # über Bausteinkatalog, Befehlspalette und Kontextmenü.
+        # über Bausteinkatalog, Suche und Kontextmenü.
         # **Und die Bausteine der Bibliothek ebenso** (§2.6): Ein räumliches
         # Teil als Textzeile zu führen ist die schlechtere Darstellung, und im
         # Menü standen neunundzwanzig davon in sechs Untermenüs — jede Zeile
@@ -5157,7 +5197,7 @@ class MainWindow(QMainWindow):
                 # *Vorbereiten* waren dieselben Einträge wie die Karte der
                 # Handlungen, als Liste zum Absuchen (§2.6). Die Aktionen
                 # bleiben trotzdem: Am Fenster, damit Strg+B weiter bohrt,
-                # Entf weiter löscht und die Befehlspalette weiter weiß, ob
+                # Entf weiter löscht und die Suche weiter weiß, ob
                 # eine Handlung gerade geht (``_update_actions`` liest sie).
                 for section in present:
                     for spec in section.entries:
@@ -5274,7 +5314,7 @@ class MainWindow(QMainWindow):
                     if spec.name in menu_twins():
                         # Zusammengelegte Zwillinge (MENU_TWINS): der versteckte
                         # Zwilling hat keinen eigenen Eintrag — erreichbar
-                        # bleibt er über die Befehlspalette und den Verlauf (P2.8).
+                        # bleibt er über die Suche und den Verlauf (P2.8).
                         continue
                     if spec.name in variant_members():
                         # Variantengruppe (VARIANT_GROUPS): Die vier Wege aus
@@ -5290,9 +5330,16 @@ class MainWindow(QMainWindow):
                         # neben „Modell einfügen …“ in *Datei* — zwei Zeilen,
                         # ein Name, zwei Wege. Wie beim Katalog hängt hier
                         # dieselbe ``QAction``; die Operation behält ihre
-                        # Aktion am Fenster für Palette und Freigabe.
+                        # Aktion am Fenster für Suche und Freigabe. In der
+                        # Karte ohne Auswahl ebenso (Review RM-735, F8).
                         place.addAction(self.import_action)
                         self._op_actions[spec.name] = self._operation_action(None, spec)
+                        self.selection_operations.add_window_action(
+                            WINDOW_COMMAND_OPERATIONS[spec.name],
+                            spec.category,
+                            self.import_action,
+                            replaces=spec.name,
+                        )
                         continue
                     self._op_actions[spec.name] = self._operation_action(place, spec)
                 self._add_variant_entries(section.category, target, subgroups)
@@ -5303,7 +5350,7 @@ class MainWindow(QMainWindow):
         # großes Teil vor sich hat, sucht nicht nach der Bauart einer Funktion,
         # sondern nach dem Wort „teilen“. Die übrigen Wege stehen rechts in der
         # Auswahlkarte unter *Vorbereiten*, und dort steht seit RM-507 auch
-        # dieser (``SelectionOperationsPanel.add_window_action``); Palette und
+        # dieser (``SelectionOperationsPanel.add_window_action``); Suche und
         # Freigabe gehen über dieselbe Aktion am Fenster.
         self.auto_split_action = self._add_action(
             None,
@@ -5316,8 +5363,10 @@ class MainWindow(QMainWindow):
             ),
             symbol="split",
         )
+        # Unter der Kennung, unter der die Suche den Befehl führt
+        # (:meth:`window_commands`): Steht er in der Karte, steht er dort vorn.
         if not self.selection_operations.add_window_action(
-            "auto_split", "prepare", self.auto_split_action
+            "edit.auto_split", "prepare", self.auto_split_action
         ):
             # Ohne Vorbereiten-Gruppe bleibt *Bearbeiten* der Platz.
             edit_menu.addAction(self.auto_split_action)
@@ -5376,7 +5425,7 @@ class MainWindow(QMainWindow):
             tr("Legt verschobene Karten zurück an den Rand, an dem sie anfangs lagen."),
         )
         # Robert, 02.09.2026: „eine Option, wo man schnell hinkommt, um die
-        # Druckplatte auszublenden". Ein Haken mit Kürzel, in der Palette
+        # Druckplatte auszublenden". Ein Haken mit Kürzel, in der Suche
         # gelistet, und der Zustand bleibt über den Neustart.
         self._bed_action = self._add_action(
             view_menu,
@@ -5716,7 +5765,7 @@ class MainWindow(QMainWindow):
             # Und Weg 4 daneben. Beide lagen unter *Ändern → Netz* zwischen
             # Reparaturwerkzeugen, ohne Kürzel — die Hauptwege-Tabelle nennt
             # für „organisch formen" die Werkzeugzeile, und die untere ist mit
-            # acht Umschaltern voll. Der Menüeintrag bleibt, wo er war: Palette
+            # acht Umschaltern voll. Der Menüeintrag bleibt, wo er war: Suche
             # und Verlauf führen über ihn.
             (
                 "sculpt",
@@ -5770,22 +5819,24 @@ class MainWindow(QMainWindow):
         # **Suchen, sichtbar** (RM-506): Die Befehlspalette fand jede Funktion,
         # aber niemand fand die Palette — sie stand nur unter *Bearbeiten*,
         # und sieben der zwölf Kernfunktionen stehen in keinem Menü. Das Feld
-        # sieht aus wie eines und öffnet sie; daneben steht dasselbe Kürzel wie
-        # im Menü, aus derselben Aktion, damit eine andere Belegung mitgeht.
-        keys = self._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+        # sieht aus wie eines; seit RM-735 setzt es den Cursor ins Suchfeld der
+        # Karte rechts, das dieselben Wörter trägt. Daneben steht das Kürzel
+        # aus derselben Aktion, damit eine andere Belegung mitgeht.
+        keys = self.search_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
         searching = tr("Funktion suchen …")
         self._search_words = f"{searching}   {keys}" if keys else searching
         self.function_search = QPushButton(icon("search", toolbar), self._search_words, toolbar)
         self.function_search.setObjectName("functionSearch")
         self.function_search.setAccessibleName(tr("Funktion suchen"))
-        hint = tr("Öffnet die Befehlspalette: jede Funktion mit Ort und Kürzel.")
+        hint = tr("Setzt den Cursor ins Suchfeld rechts: jede Funktion mit Ort und Kürzel.")
         # Name und Kürzel auch im Tooltip: In der schmalsten Form der Leiste
         # bleibt von der Suche nur die Lupe (:meth:`_fit_toolbar`).
         self.function_search.setToolTip(
-            self._button_tip(tr("Funktion suchen"), self._palette_action, hint)
+            self._button_tip(tr("Funktion suchen"), self.search_action, hint)
         )
         self.function_search.setAccessibleDescription(hint)
-        self.function_search.clicked.connect(self.action_command_palette)
+        self.function_search.clicked.connect(self.action_function_search)
+        self.selection_operations.set_search_words(self._search_words)
         toolbar.addSeparator()
         toolbar.addWidget(self.function_search)
 
@@ -5853,7 +5904,7 @@ class MainWindow(QMainWindow):
 
         **Ohne Menü** (``menu is None``) entsteht dieselbe Aktion für eine
         Handlung, die rechts in der Karte steht (11.09.2026): Sie hängt am
-        Fenster, damit ihr Kürzel greift und die Palette weiß, ob sie geht —
+        Fenster, damit ihr Kürzel greift und die Suche weiß, ob sie geht —
         außer sie trägt eine nackte Taste. Die begrenzt :meth:`_scope_shortcut`
         auf Objektbaum und Ansicht, und am Fenster dazu läge Entf noch einmal
         über dem Verlauf, wo *Schritt löschen* dieselbe Taste hat: Zwei
@@ -5885,7 +5936,7 @@ class MainWindow(QMainWindow):
         return action
 
     def launch_operation(self, spec: OperationSpec) -> None:
-        """Der eine Einstieg für Menü, Palette und jeden künftigen Weg.
+        """Der eine Einstieg für Menü, Suche und jeden künftigen Weg.
 
         Eine Operation mit Gestenfeld führt in ihren Editor statt in einen
         Dialog mit einem Feld, das man erst aufklappen muss (§30.1 Stufe
@@ -5898,7 +5949,7 @@ class MainWindow(QMainWindow):
         """
         if self.drawing():
             # Eine andere Handlung beginnt erst nach dem dritten Klick oder
-            # Escape (§18.11) — die Palette sagt es wie die Knöpfe.
+            # Escape (§18.11) — die Suche sagt es wie die Knöpfe.
             self.announce(str(_DRAWING_FIRST))
             return
         if spec.name == "detect_region":
@@ -5919,7 +5970,7 @@ class MainWindow(QMainWindow):
             self.run_operation(spec)
 
     def local_features(self) -> LocalRecognitionFlow:
-        """Der gemeinsame Ablauf für lokale Auswahl aus Menü, Palette und Bild."""
+        """Der gemeinsame Ablauf für lokale Auswahl aus Menü, Suche und Bild."""
         if self._local_features is None:
             self._local_features = LocalRecognitionFlow(self)
         return self._local_features
@@ -5973,7 +6024,7 @@ class MainWindow(QMainWindow):
         ``QAction`` hinge. Anders als bei ``shell_exact`` (dort ist es
         entfallen) bleibt es hier erhalten und sitzt am Sammeleintrag: Der
         beginnt mit der ersten Variante. Eine Zeichnung beginnt über denselben
-        Einstieg wie die Palette direkt im Zeichenmodus.
+        Einstieg wie die Suche direkt im Zeichenmodus.
         """
         for group in VARIANT_GROUPS:
             first = REGISTRY.get(group.members[0])
@@ -6301,7 +6352,7 @@ class MainWindow(QMainWindow):
         # Der Knopf im Prüfbericht folgt dem Menüeintrag: dieselbe Sperre,
         # derselbe Grund (RM-508).
         self.report.follow_export(self.export_action.isEnabled(), self.export_action.toolTip())
-        # Derselbe Registervertrag wie Menü und Palette, ohne eine dritte
+        # Derselbe Registervertrag wie Menü und Suche, ohne eine dritte
         # Freigabelogik. Das Panel hält seine Knöpfe über Auswahlwechsel hinweg
         # und ändert hier nur Zustand und Hinweise.
         from app.core.perceive.actions import not_offered_at
@@ -6309,8 +6360,8 @@ class MainWindow(QMainWindow):
         picked = self._selected_feature_object()
         self.selection_operations.set_context(
             chosen,
-            lambda name: self._palette_availability(name, locked=locked, gesturing=gesturing),
-            # Dieselbe Auskunft, aus der die Befehlspalette ihre Reihenfolge
+            lambda name: self._operation_availability(name, locked=locked, gesturing=gesturing),
+            # Dieselbe Auskunft, aus der die Suche ihre Reihenfolge
             # nimmt: Wer eine Bohrung angeklickt hat, sucht Senken und
             # Verschließen und nicht das Vereinigen zweier Körper.
             feature_kind=self.selected_feature_kind() or "",
@@ -6324,6 +6375,7 @@ class MainWindow(QMainWindow):
             # Zusammenfassen als Muster an (RM-504).
             features=self._several_features_chosen(),
             rebuild=self._rebuild_allowed(chosen, locked, gesturing),
+            pairing=self._pairing_possible(locked=locked, gesturing=gesturing),
         )
         selected_ids = self.object_tree.selected_objects()
         result = self.session.last_result
@@ -6565,6 +6617,8 @@ class MainWindow(QMainWindow):
         if chosen < braucht:
             if objects <= 0:
                 return str(_NEEDS_BODY)
+            if objects < braucht:
+                return _too_few_bodies(braucht)
             if braucht == 1:
                 return str(tr("Wählen Sie dafür ein Objekt aus — im Bild oder im Objektbaum."))
             # **Derselbe Satz wie beim Tastendruck** (:func:`_needs_objects`):
@@ -7425,9 +7479,9 @@ class MainWindow(QMainWindow):
     def _begin_from_the_start_screen(self) -> bool:
         """Wer auf dem Startbildschirm zu arbeiten beginnt, beginnt das leere Projekt.
 
-        Die Menüs sind dort verborgen, die Kürzel und die Befehlspalette nicht
-        — *Quader anlegen* über Strg+Umschalt+P öffnete seinen Dialog über dem
-        Startbildschirm, in einer Sitzung, die nie ausgewertet worden war. Seit
+        Die Menüs sind dort verborgen, die Kürzel und die Suche nicht —
+        *Quader anlegen* über die damalige Befehlspalette öffnete seinen Dialog
+        über dem Startbildschirm, in einer Sitzung, die nie ausgewertet worden war. Seit
         Übernehmen auf die aktuelle dargestellte Vorschau wartet (20.09.2026),
         gibt es die nur zu einem ausgewerteten Stand (``result_current``): Der
         Knopf war frei und tat nichts (gemessen am 21.09.2026, ``test_ui``).
@@ -8584,6 +8638,18 @@ class MainWindow(QMainWindow):
             and result.stopped_at is None
         )
 
+    def _pairing_possible(self, *, locked: bool, gesturing: bool) -> bool:
+        """Ob sich zu einem gewählten Körper ein zweiter dazuwählen ließe (RM-734).
+
+        Zwei Körper in der Szene — ausgeblendete zählen mit wie in
+        :meth:`_reason_locked`, denn der Objektbaum wählt sie trotzdem — und
+        keine Sperre, die die Booleschen auch mit zweien verweigerte: Lizenz,
+        Halt, Formen, Skelett. Die Karte nennt dann den Weg zu ihnen.
+        """
+        result = self.session.last_result
+        objects = len(result.scene.objects) if result is not None else 0
+        return objects >= 2 and not locked and not gesturing and self._halt_reason() is None
+
     def action_rebuild(self, object_id: str) -> None:
         """Bericht → geprüfter Kandidat → sichtbarer Vergleich → eine Transaktion."""
         from app.ui.rebuild_dialog import RebuildDialog
@@ -9050,7 +9116,7 @@ class MainWindow(QMainWindow):
         """Druckplatte, Bauraum und Maßstab aus- oder wieder einblenden.
 
         Der Haken im Menü und die Einstellung folgen dem Aufruf, gleich ob er
-        aus dem Menü, der Palette oder dem Kürzel kommt.
+        aus dem Menü, der Suche oder dem Kürzel kommt.
         """
         visible = not self.settings.bed_visible
         self.settings.bed_visible = visible
@@ -9126,6 +9192,21 @@ class MainWindow(QMainWindow):
     def action_reset_cards(self) -> None:
         """*Ansicht → Karten an ihren Platz*: beide Seitenkarten zurück an ihren Rand."""
         self.overlay.reset_cards()
+
+    def _show_right_column(self) -> None:
+        """Die rechte Spalte einblenden wie über F9, samt Einstellung.
+
+        Für eine ausdrückliche Bitte, die dort landet — Befunde, Chat, Tour,
+        *Funktion suchen* —: Wer die Spalte ausgeblendet hatte, bekäme sonst
+        eine Antwort, die niemand sieht, und einen Cursor in einem verborgenen
+        Feld (RM-448). Eine Stelle für vier Wege.
+        """
+        if self.right_column.isVisible() and self.settings.right_panel_visible:
+            return
+        self.right_column.setVisible(True)
+        self.settings.right_panel_visible = True
+        self._store_settings()
+        self._mark_status_alerts()
 
     def action_toggle_right(self) -> None:
         visible = not self.settings.right_panel_visible
@@ -9242,11 +9323,7 @@ class MainWindow(QMainWindow):
         """
         from app.ui.shortcuts_window import ShortcutsWindow
 
-        ShortcutsWindow(
-            self.menuBar(),
-            self,
-            self._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText),
-        ).exec()
+        ShortcutsWindow(self.menuBar(), self).exec()
 
     def action_manual(self, page: str = "", spot: str = "") -> None:
         """Das Handbuch — ein Fenster, kein Dialog.
@@ -11947,7 +12024,7 @@ class MainWindow(QMainWindow):
     def show_setting(self, option: str) -> None:
         """Die Einstellungen öffnen, bei ``option`` mit dieser Zeile im Fokus.
 
-        Der Weg der Befehlspalette zu jeder Einzeloption (RM-491); leer heißt
+        Der Weg der Suche zu jeder Einzeloption (RM-491); leer heißt
         der Dialog wie über das Menü. Eine eigene Methode neben
         ``action_settings``, weil ``triggered`` sein ``checked`` in den ersten
         Parameter reichte.
@@ -12119,12 +12196,12 @@ class MainWindow(QMainWindow):
             field.refresh_unit()
 
     def window_commands(self) -> dict[str, tuple[str, str, Any]]:
-        """Was die Palette außer den Operationen kennen muss (§2.6, §19.2).
+        """Was die Suche außer den Operationen kennen muss (§2.6, §19.2).
 
         „Alles aus dem Register" war zu wenig: Speichern, das Handbuch, die
         Darstellungsarten und die sieben Ansichtswerkzeuge stehen nicht im
-        Register, und die Palette soll der Universalzugang sein. Kennung,
-        Titel, Kürzel und was zu tun ist.
+        Register, und die Suche im Reiter *Auswahl* ist mit der Ansicht der
+        Universalzugang (RM-735). Kennung, Titel, Kürzel und was zu tun ist.
         """
         commands: dict[str, tuple[str, str, Any]] = {
             "file.new": (tr("Neu"), "Ctrl+N", self.action_new),
@@ -12194,8 +12271,8 @@ class MainWindow(QMainWindow):
         """Alles Übrige aus der Menüleiste — sie ist die Quelle, nicht eine
         zweite Liste daneben.
 
-        §19.2 verlangt die Palette als Universalzugang, und das Wörterbuch
-        darüber führte sie von Hand. Von Hand heißt: Es driftet, und es war
+        §19.2 verlangt einen Universalzugang, und das Wörterbuch darüber
+        führte die Befehle von Hand. Von Hand heißt: Es driftet, und es war
         gedriftet — **39 von 136 Menüzeilen fehlten**, darunter jede
         Darstellungsart, jede Kameravorgabe, beide Themen, alle vier
         Navigationsschemata und acht Zeilen aus dem Hilfe-Menü. Nachzutragen
@@ -12206,9 +12283,8 @@ class MainWindow(QMainWindow):
         tragen dort ihre Beschreibung, ihre Kategorie und ihre Verfügbarkeit —
         über das Menü gelesen wären sie ein zweites, ärmeres Exemplar.
 
-        **Zwei Zeilen bleiben ebenfalls draußen**, und beide mit Grund:
-        *Beenden* wäre in einer Liste, durch die man tippt, ein Klick zu nah am
-        Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
+        **Eine Zeile bleibt ebenfalls draußen:** *Beenden* wäre in einer
+        Liste, durch die man tippt, ein Klick zu nah am Verlust der Arbeit.
         """
         known_titles = {title for title, _shortcut, _slot in known.values()}
         # Und wo dieselbe Handlung schon von Hand in der Tabelle steht, wird
@@ -12221,13 +12297,13 @@ class MainWindow(QMainWindow):
         ops = set(self._op_actions.values())
         found: dict[str, Any] = {}
         overridden = 0
-        self._palette_actions.clear()
+        self._command_actions.clear()
         for path, action in _menu_lines(self.menuBar()):
             if action in ops:
                 continue
             if action.text() in known_titles:
                 known_key = by_title[action.text()]
-                self._palette_actions[known_key] = action
+                self._command_actions[known_key] = action
                 # **Und das Kürzel kommt von der Action**, nicht aus der
                 # Tabelle. Dort stand „Ctrl+Y" für Wiederholen; das Menü setzt
                 # aber ``StandardKey.Redo``, und das ist auf macOS ⌘⇧Z, unter
@@ -12239,7 +12315,7 @@ class MainWindow(QMainWindow):
                     found[known_key] = (title, actual, slot)
                     overridden += 1
                 continue
-            if action in (self._quit_action, self._palette_action):
+            if action is self._quit_action:
                 continue
             # Der Weg steht im Titel: „Vorne" allein sagt in einer Liste aus
             # hundert Zeilen nichts, „Kamera: Vorne" schon.
@@ -12251,8 +12327,8 @@ class MainWindow(QMainWindow):
                 action.trigger,
             )
             # **Und die Action wird gemerkt.** Sie ist die einzige Quelle
-            # dafür, ob dieser Befehl jetzt geht — die Operationen der Palette
-            # lesen sie längst (``_palette_availability``), die
+            # dafür, ob dieser Befehl jetzt geht — die Operationen der Suche
+            # lesen sie längst (``_operation_availability``), die
             # Fensterbefehle taten es nicht: Sie standen alle gleich da, und
             # „Rückgängig" ohne Verlauf nahm den Klick an und tat nichts. Bei
             # leerem Projekt sind das fünf von 54 (Exportieren, Rückgängig,
@@ -12262,22 +12338,22 @@ class MainWindow(QMainWindow):
             # ``window_commands`` hat sechs Aufrufstellen, die drei auspacken,
             # und eine Signatur zu ändern, um eine Frage zu beantworten, ist
             # der teurere Weg zum selben Ergebnis.
-            self._palette_actions[key] = action
+            self._command_actions[key] = action
         # **Was in keinem Menü steht, gilt genauso** (RM-507): *Automatisch
         # teilen* hängt am Fenster und steht in der Auswahlkarte; über die
         # Menüschleife allein stand es in der Palette ohne Sperre und Grund.
-        self._palette_actions.setdefault("edit.auto_split", self.auto_split_action)
+        self._command_actions.setdefault("edit.auto_split", self.auto_split_action)
         return found
 
     def _extra_availability(self, key: str) -> tuple[bool, str]:
         """Ob ein Fensterbefehl jetzt ausführbar ist, und warum nicht.
 
-        Dieselbe Auskunft wie ``_palette_availability`` für die Operationen,
+        Dieselbe Auskunft wie ``_operation_availability`` für die Operationen,
         aus derselben Quelle: der Action, die auch das Menü ausgraut. Was von
         Hand in ``window_commands`` steht und keine Action hat — Speichern,
         das Handbuch, „Einpassen" — kann immer.
         """
-        action = self._palette_actions.get(key)
+        action = self._command_actions.get(key)
         if action is None or action.isEnabled():
             return True, ""
         hint = action.toolTip().strip()
@@ -12303,7 +12379,7 @@ class MainWindow(QMainWindow):
         """Die Art des gerade ausgewählten Merkmals — ``hole``, ``face`` und
         so fort, oder ``None``.
 
-        Sie entscheidet, was die Befehlspalette zuerst zeigt (Konzept P15 §5,
+        Sie entscheidet, was die Suche zuerst zeigt (Konzept P15 §5,
         E13). Dieselbe Auskunft, aus der auch das Kontextmenü gebaut wird, nur
         an der anderen Stelle gefragt.
         """
@@ -12385,7 +12461,7 @@ class MainWindow(QMainWindow):
     def _selected_face_plane(self) -> str:
         """Die gewählte Fläche als Zeichenebene — leer, wenn keine gewählt ist.
 
-        Dieselbe Auskunft, aus der Palette und Kontextmenü ihre Vorschläge
+        Dieselbe Auskunft, aus der Suche und Kontextmenü ihre Vorschläge
         bauen, nur als eindeutigen Ebenennamen des Kerns. Ob die Fläche als
         Zeichenebene taugt, entscheidet danach ``choose_plane`` — hier wird
         nur weitergegeben, was der Nutzer schon gesagt hat.
@@ -12768,7 +12844,7 @@ class MainWindow(QMainWindow):
         Fläche; erst wenn nichts gewählt ist, ist die Grundebene die richtige
         Vorgabe. Das gilt für jeden Weg ohne eigene Ebene — den Knopf der
         Werkzeugzeile genauso wie eine Skizzen-Operation aus Menü oder
-        Palette.
+        Suche.
 
         **Gezeichnet wird für genau einen Körper** (Robert, 23.09.2026; Bericht
         „Bedienabnahme Zeichnen", Abschnitt 7). ``body`` nennt ihn
@@ -15729,7 +15805,7 @@ class MainWindow(QMainWindow):
 
         Gesperrt wie jede schreibende Handlung: ein Halt der Kette nennt seinen
         Schritt, ohne exakten Kern sagt der Satz der Skizzen-Operationen, was
-        fehlt (F-j). ``intent`` ist die gewählte Art aus Menü oder Palette (N1).
+        fehlt (F-j). ``intent`` ist die gewählte Art aus Menü oder Suche (N1).
         """
         if not self._quiet_command_allowed() or self.drawing():
             return
@@ -15874,28 +15950,22 @@ class MainWindow(QMainWindow):
         eigene Methode wie der Nachbar darüber."""
         self.start_armature()
 
-    def palette_rows(
-        self, commands: dict[str, tuple[str, str, Any]] | None = None
-    ) -> list[PaletteEntry]:
-        """Was in der Palette steht — Operationen und Fensterbefehle.
+    def _window_command_rows(self) -> list[SearchEntry]:
+        """Die Befehle des Fensters als Zeilen der Suche im Reiter *Auswahl*.
 
-        Getrennt von :meth:`action_command_palette`, weil dort ein modaler
-        Dialog aufgeht: Was danach kommt, sieht keine Prüfung mehr, und was
-        eine Prüfung nicht sieht, driftet. Die Kürzelfrage ist genau so
-        entstanden.
-
-        Die Fensterbefehle kommen als Argument, wenn der Aufrufer sie ohnehin
-        braucht — er führt sie danach aus, und zweimal gebaut wären es zwei
-        Listen, von denen niemand garantiert, dass sie dieselbe ist.
+        Die Operationen baut die Karte selbst aus dem Register
+        (``SelectionOperationsPanel._search_rows``); hier entsteht, was kein
+        Register kennt — Speichern, das Handbuch, jede Menüzeile, die
+        Werkzeuge der Ansicht und jede Einstellung (:meth:`window_commands`).
         """
-        commands = self.window_commands() if commands is None else commands
+        commands = self.window_commands()
         registered_tools = self.tools.tools()
 
         def explanation(key: str, title: str, usable: bool) -> str:
             """Nimmt den Erklärungssatz aus der Quelle der Handlung."""
             if not usable:
                 return ""
-            action = self._palette_actions.get(key)
+            action = self._command_actions.get(key)
             if action is not None:
                 doc = action.statusTip().strip() or action.toolTip().strip()
             elif key.startswith("tool."):
@@ -15922,8 +15992,12 @@ class MainWindow(QMainWindow):
             doc = doc.strip()
             return "" if doc == title.strip() else doc
 
-        extra = [
-            PaletteEntry(
+        # Die Verfügbarkeit kommt aus derselben Quelle wie im Menü — den
+        # QActions, die `_update_actions` pflegt. Ohne sie stand jeder Befehl
+        # gleich da, und „Rückgängig" ohne Verlauf nahm den Klick an und tat
+        # nichts.
+        return [
+            SearchEntry(
                 name=key,
                 title=title,
                 doc=explanation(key, title, usable),
@@ -15935,96 +16009,84 @@ class MainWindow(QMainWindow):
             for key, (title, shortcut, _slot) in commands.items()
             for usable, reason in (self._extra_availability(key),)
         ]
-        # Die Verfügbarkeit kommt aus derselben Quelle wie im Menü — den
-        # QActions, die `_update_actions` pflegt. Vorher zeigte die Palette
-        # jeden Eintrag gleich, und wer einen ohne passende Auswahl wählte,
-        # bekam die modale Sackgasse, die das Menü längst beseitigt hat.
-        # **Das Kürzel geht durch die Belegung, wie im Menü.** Der Kern liefert
-        # das Kürzel aus dem Register — er kennt die Belegung nicht und darf es
-        # nicht, sie ist eine Einstellung der Oberfläche. Ungefiltert
-        # weitergereicht lehrte die Palette im Schema „Wie Fusion und Onshape"
-        # drei falsche Tasten (`translate_object` „Strg+T" statt „M") und
-        # verschwieg sieben, die es dort gibt — während der Menüeintrag daneben
-        # die richtige zeigte. Dieselbe Umrechnung wie in `_update_actions`.
-        entries = [
-            replace(
-                entry,
-                available=usable,
-                reason=reason,
-                shortcut=shortcut_for(entry.name, entry.shortcut, self.settings.shortcut_scheme),
-            )
-            for entry in palette_entries(for_feature=self.selected_feature_kind())
-            if entry.name not in WINDOW_COMMAND_OPERATIONS
-            for usable, reason in (self._palette_availability(entry.name),)
-        ]
-        return [*entries, *extra]
 
-    def action_command_palette(self) -> None:
-        """Eine Taste, alles — und die Kürzel lernen sich nebenbei (§2.6)."""
-        self.open_palette("")
+    def action_function_search(self) -> None:
+        """*Funktion suchen* (Strg+Umschalt+P): der Cursor ins Suchfeld der Karte (RM-735).
 
-    def open_palette(self, query: str = "") -> None:
-        """Die Befehlspalette, auf Wunsch mit einem Suchtext.
+        **Eine ausdrückliche Bitte scheitert an keiner Lage**, die eine bloße
+        Auswahl zurückhält: Die rechte Spalte kommt zurück, wenn F9 sie
+        verborgen hatte; der Reiter *Auswahl* kommt nach vorn, auch über eine
+        laufende Tour und über einen Reiter, den der Kunde verlassen hat; ein
+        herausgezogener Reiter bekommt sein Fenster nach vorn. Auf dem
+        Startbildschirm beginnt erst das leere Projekt, wie jeder Arbeitsbeginn
+        dort (:meth:`_begin_from_the_start_screen`).
 
-        **Bei genau einem Körper nimmt sie ihn** (RM-506): Ohne Auswahl stand
-        jede Körperhandlung gesperrt da, und „Wählen Sie einen Körper“ ist an
-        einem Projekt mit einem einzigen keine Frage, sondern ein Umweg —
-        derselbe Gedanke wie beim Katalog (:meth:`_lone_body`).
+        **Bei genau einem Körper nimmt sie ihn** (RM-506), wie die Palette es
+        tat: Ohne Auswahl stünde jede Körperhandlung gesperrt da, und „Wählen
+        Sie einen Körper“ ist an einem Projekt mit einem einzigen ein Umweg.
+        Nur hier, beim Aufruf — ein Mausklick ins Feld wechselt die Stufe
+        nicht unter dem Cursor.
+
+        In der Zeichnung ist der Reiter mit Absicht verborgen (RM-519); dort
+        sagt die Taste, wann die Suche wieder bereitsteht, statt stumm zu bleiben.
         """
+        if self._sketch_panel is not None:
+            self.announce(
+                tr("Die Suche steht wieder bereit, sobald die Zeichnung fertig oder verworfen ist.")
+            )
+            return
+        if not self._begin_from_the_start_screen():
+            return
+        self._show_right_column()
         lone = self._lone_body()
         if lone is not None and not self.object_tree.selected_objects():
             self.object_tree.select_object(lone)
-        commands = self.window_commands()
-        palette = CommandPalette(self.palette_rows(commands), parent=self, query=query)
-        try:
-            if palette.exec() != CommandPalette.DialogCode.Accepted:
-                return
-            name = palette.chosen()
-        finally:
-            # Ein Kind des Fensters: Ungelöscht blieb jede geschlossene Palette
-            # mit allen Zeilen stehen, bis das Fenster ging.
-            palette.deleteLater()
-        if not name:
-            return
-        if name in commands:
-            self._run_window_command(name, commands)
-            return
-        self._run_palette_choice(name)
+            self._update_actions()
+        if self.right.is_detached(self.feature_dock):
+            # Holt das eigene Fenster des Reiters nach vorn (``TabWindows``).
+            self.right.setCurrentWidget(self.feature_dock)
+        else:
+            self.feature_dock.reveal(for_a_gesture=True)
+        self.selection_operations.focus_search()
 
-    def _run_window_command(self, name: str, commands: Mapping[str, tuple[str, str, Any]]) -> None:
-        """Führt den gewählten Fensterbefehl aus — oder sagt, warum nicht.
+    def _back_to_the_view(self) -> None:
+        """Der Fokus vom Suchfeld zurück in die Ansicht — dort gilt Escape wieder wie
+        immer, und Strg+Z nimmt den Schritt zurück statt des Tippens."""
+        self.viewport.setFocus(Qt.FocusReason.OtherFocusReason)
 
-        Dieselbe Wache wie in :meth:`_run_palette_choice`, im Nachbarzweig:
-        Die Liste sperrt ihre Zeilen, aber die Tastatur springt auch auf eine
-        gesperrte, und Enter führte den Fensterbefehl trotzdem aus (Regel 19 —
-        dieselbe Bauart, die für Operationen seit cc40aaa4 behoben ist). Der
-        Grund geht in die Statuszeile, wie dort. Als eigene Methode, weil
-        ``action_command_palette`` an einem ``exec`` hängt und ein Test die
-        Wache sonst nur mit offenem Dialog erreichte.
-        """
-        available, reason = self._extra_availability(name)
-        if not available:
-            self.announce(reason)
-            return
-        commands[name][2]()
+    def _search_the_manual(self, words: str) -> None:
+        """*Im Handbuch suchen* aus der Karte: das Handbuch mit demselben Wort."""
+        self.action_manual()
+        window = self._manual
+        if window is not None and words:
+            window.search.setText(words)
 
-    def _run_palette_choice(self, name: str) -> None:
-        """Führt die gewählte Operation aus — oder sagt, warum nicht.
+    def _run_search_choice(self, name: str) -> None:
+        """Führt einen Treffer der Suche aus — Operation oder Fensterbefehl — oder
+        sagt, warum nicht.
 
         **Gesperrt bleibt gesperrt, auch über die Pfeiltasten.** Die Liste
-        sperrt ihre Zeilen, aber die Tastatur konnte auf eine gesperrte
-        springen, und Enter führte sie aus: „Gitter füllen" auf leerer Szene
-        öffnete die modale Sackgasse, die der Kommentar an ``palette_rows``
-        als beseitigt beschreibt (Regel 19, Gesamtreview I-3). Der Grund geht
-        in die Statuszeile — dieselbe Auskunft, die die Zeile trägt.
+        sperrt ihre Zeilen, aber die Tastatur springt auch auf eine gesperrte,
+        und Return führte sie in der Befehlspalette einmal aus: „Gitter füllen"
+        auf leerer Szene öffnete eine modale Sackgasse (Regel 19, Gesamtreview
+        I-3). Der Grund geht in die Statuszeile — dieselbe Auskunft, die die
+        Zeile trägt.
         """
-        available, reason = self._palette_availability(name)
+        commands = self.window_commands()
+        if name in commands:
+            available, reason = self._extra_availability(name)
+            if not available:
+                self.announce(reason)
+                return
+            commands[name][2]()
+            return
+        available, reason = self._operation_availability(name)
         if not available:
             self.announce(reason)
             return
         self.launch_operation(REGISTRY.get(name))
 
-    def _palette_availability(
+    def _operation_availability(
         self,
         name: str,
         *,
@@ -16044,7 +16106,7 @@ class MainWindow(QMainWindow):
         in den Katalog wandern statt in die Menüleiste — dann hätte *jeder*
         von ihnen die Antwort „erlaubt" bekommen, auch auf leerer Szene, und
         der Kunde wäre in genau der modalen Sackgasse gelandet, gegen die
-        ``_run_palette_choice`` gebaut wurde.
+        ``_run_search_choice`` gebaut wurde.
 
         ``_reason_locked`` ist dabei keine zweite Quelle, sondern **die**
         Quelle: Der Menüeintrag wird über sie ausgegraut (``_kind_hint``), der
@@ -16053,7 +16115,7 @@ class MainWindow(QMainWindow):
         """
         # Auch Registereinträge ohne eigene Menü-Action müssen die globale
         # Schreib- und Gestensperre einhalten. Das betrifft insbesondere
-        # Bausteine in der Palette und Varianten im Auswahlpanel; bislang
+        # Bausteine in der Suche und Varianten im Auswahlpanel; bislang
         # prüfte der Ersatzweg darunter nur Körperzahl und Bauart.
         locked = not activation.state().unlocked if locked is None else locked
         gesturing = (
@@ -19132,7 +19194,7 @@ class MainWindow(QMainWindow):
 
         Die Frage steht hier und nicht in der Leiste, weil sie hier schon
         einmal steht: `feature_instead_of` beantwortet für Taste, Menü und
-        Befehlspalette dasselbe. Zwei Antworten darauf liefen nach der nächsten
+        Suche dasselbe. Zwei Antworten darauf liefen nach der nächsten
         Registeränderung auseinander, und dann graute das Menü etwas aus, das
         die Leiste noch anbietet.
 
@@ -21766,7 +21828,7 @@ class MainWindow(QMainWindow):
         # **Erst das Merkmal, dann der Körper** (Robert, 03.09.2026: „wenn wir
         # ein Merkmal auswählen und auf der Tastatur Entf drücken löschen wir
         # den ganzen Körper statt das Merkmal"). Der Weg gilt für jeden
-        # Aufrufer dieser Methode — Taste, Menüeintrag, Befehlspalette —, weil
+        # Aufrufer dieser Methode — Taste, Menüeintrag, Suche —, weil
         # die Frage hier steht und nicht an jeder Taste neu.
         #
         # **Ohne Dialog, wenn nichts zu fragen bleibt.** *Merkmal entfernen*
@@ -22022,7 +22084,7 @@ class MainWindow(QMainWindow):
             # **Kein Haken zwischen den Rechenkernen mehr** (P2.8, Entscheidung 4
             # im Konzept §10.1): Ein Erzeuger entsteht exakt, wo der Kern da
             # ist, eine Bearbeitung fragt die Körperart ihres Eingangs. Den
-            # Zwilling erreicht man über die Befehlspalette und den Verlauf.
+            # Zwilling erreicht man über die Suche und den Verlauf.
 
             # **Die Variantengruppe (VARIANT_GROUPS), und warum sie eine Liste
             # bekommt und keinen Haken.** Ein Haken trägt zwei Zustände; hier
@@ -24663,7 +24725,7 @@ class MainWindow(QMainWindow):
     def _edges_from_view(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
         """Die im Bild gewählten Kanten als Vorgabe jedes Kantenfelds (RM-563).
 
-        Wer Kanten anklickt und *Verrunden* aus Menü oder Befehlspalette holt,
+        Wer Kanten anklickt und *Verrunden* aus Menü oder Suche holt,
         meint diese Kanten und nicht die Vorgabegruppe des Dialogs — sonst
         rundete ein Klick auf OK alle senkrechten. Belegt wird bei den
         Handlungen einer Kante (``EDGE_OPERATIONS``) jedes Feld der Art
@@ -25375,11 +25437,7 @@ class MainWindow(QMainWindow):
             # Stand der Reiter auf dem Prüfbericht oder war die Spalte
             # ausgeblendet, landete der Fokus in einem verborgenen Feld, und
             # wer zu tippen begann, schrieb ins Nichts.
-            if not self.right_column.isVisible():
-                self.right_column.setVisible(True)
-                self.settings.right_panel_visible = True
-                self._store_settings()
-                self._mark_status_alerts()
+            self._show_right_column()
             switch(self.right, self.chat)
             self.chat.input.setFocus(Qt.FocusReason.OtherFocusReason)
         elif REGISTRY.has(chosen):
@@ -28135,7 +28193,7 @@ class MainWindow(QMainWindow):
         Knopf ist die Handlung, die dort hilft.
 
         Die Eingaben kommen über :func:`inputs_for`, aus demselben Grund, aus
-        dem Menü, Palette und Fernaufruf sie dort holen: Die Regel, was eine
+        dem Menü, Suche und Fernaufruf sie dort holen: Die Regel, was eine
         Operation bekommt, gehört an eine Stelle.
 
         Der Abstand kommt aus der Druckbetthaftung wie im Dialog des
@@ -28997,9 +29055,7 @@ class MainWindow(QMainWindow):
 
     def _show_alerts(self) -> None:
         """Die rechte Spalte zurückholen und den Bericht nach vorn."""
-        self.right_column.setVisible(True)
-        self.settings.right_panel_visible = True
-        self._store_settings()
+        self._show_right_column()
         self._focus_report(force=True)
         self._mark_status_alerts()
 
@@ -29047,13 +29103,9 @@ class MainWindow(QMainWindow):
         self.right.setCurrentWidget(self.tour)
         self.tour.set_tab_names(self._tour_tab_names())
         self.tour.start(example, tour)
-        if not self.right_column.isVisible():
-            # Wer die rechte Spalte ausgeblendet hatte, bekäme eine
-            # unsichtbare Tour — und das Beispiel wurde gerade absichtlich
-            # geöffnet. Einblenden wie über F9, samt Einstellung.
-            self.settings.right_panel_visible = True
-            self._store_settings()
-            self.right_column.setVisible(True)
+        # Wer die rechte Spalte ausgeblendet hatte, bekäme eine unsichtbare
+        # Tour — und das Beispiel wurde gerade absichtlich geöffnet.
+        self._show_right_column()
 
     def _tour_tab_names(self) -> dict[str, str]:
         """Welche Ziele der Tour Reiter der rechten Karte sind, mit dem Namen am Reiter.

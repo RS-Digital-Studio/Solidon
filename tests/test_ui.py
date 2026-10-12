@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QListWidgetItem,
     QMessageBox,
     QToolBar,
     QWidget,
@@ -2161,20 +2162,20 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
 
     Beide Male gilt dasselbe Hausprinzip — „eine Operation je Handlung, nicht
     je Variante" — und beide Male dieselbe Auflage: erreichbar bleibt alles,
-    notfalls über die Palette.
+    notfalls über die Suche.
     """
     from app.core.registry import (
         MENU_TWINS,
         VARIANT_GROUPS,
         in_the_menu_bar,
-        palette_entries,
+        search_entries,
         variant_members,
     )
     from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
 
     entries = all_menu_actions(window)
     labels = {action.text() for action in entries}
-    offered = {entry.name for entry in palette_entries()}
+    offered = {entry.name for entry in search_entries()}
     gruppen = {str(group.title) for group in VARIANT_GROUPS}
 
     for spec in REGISTRY.all():
@@ -2183,8 +2184,8 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
             # hängt dieselbe ``QAction`` wie in *Datei* („Modell einfügen …“
             # öffnet den Dateidialog), nicht ein zweiter, fast gleich
             # benannter Eintrag. Die Operation behält ihre Aktion am Fenster;
-            # dass die Palette den Befehl anbietet, prüft
-            # ``test_theme_and_palette``.
+            # dass die Suche den Befehl anbietet, prüft
+            # ``test_search``.
             command = window.import_action
             assert WINDOW_COMMAND_OPERATIONS[spec.name] == "file.import", spec.name
             assert sum(entry is command for entry in entries) >= 2, (
@@ -2200,7 +2201,7 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
             assert spec.name not in window._op_actions, (
                 f"{spec.name} soll kein eigener Eintrag sein"
             )
-            assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
+            assert spec.name in offered, f"{spec.name} muss über die Suche erreichbar bleiben"
             partner = REGISTRY.get(MENU_TWINS[spec.name])
             assert partner.name in window._op_actions, "der sichtbare Zwilling trägt den Eintrag"
             if in_the_menu_bar(partner.category):
@@ -2213,7 +2214,7 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
             continue
         if spec.name in variant_members():
             assert str(spec.title) not in labels, f"{spec.name} soll kein eigener Eintrag sein"
-            assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
+            assert spec.name in offered, f"{spec.name} muss über die Suche erreichbar bleiben"
             continue
         if spec.name in catalogue_operations():
             # **Dritter Fall neben Zwilling und Variante, seit dem 29.08.2026.**
@@ -2231,17 +2232,17 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
             assert spec.name not in window._op_actions, (
                 f"{spec.name} gehört in den Katalog, nicht ins Menü"
             )
-            assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
+            assert spec.name in offered, f"{spec.name} muss über die Suche erreichbar bleiben"
             continue
         if not in_the_menu_bar(spec.category):
             # **Vierter Fall, seit dem 11.09.2026: die Karte rechts.** Was einer
             # Auswahl gilt, steht nicht in der Leiste — die Aktion gibt es
-            # trotzdem (Kürzel, Palette), der Knopf steht rechts, und der Weg
+            # trotzdem (Kürzel, Suche), der Knopf steht rechts, und der Weg
             # des Chats nennt genau das.
             assert spec.name in window._op_actions, f"{spec.name}: ohne Aktion kein Kürzel"
             assert str(spec.title) not in labels, f"{spec.name} steht rechts und in der Leiste"
             assert spec.name in window.selection_operations._buttons, f"{spec.name} fehlt rechts"
-            assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
+            assert spec.name in offered, f"{spec.name} muss über die Suche erreichbar bleiben"
             continue
         assert str(spec.title) in labels, f"{spec.name} is missing from the menu"
 
@@ -4464,7 +4465,7 @@ def test_delete_removes_the_feature_not_the_body(window: MainWindow) -> None:
     tastatur entf drück löschen wir den ganzen körper statt das merkmal."
 
     Die Weiche sitzt in ``run_operation``, also an der **einen** Stelle, durch
-    die Taste, Menüeintrag und Befehlspalette laufen. Gemessen wird beides:
+    die Taste, Menüeintrag und Suche laufen. Gemessen wird beides:
     dass die Bohrung verschwindet **und** dass der Körper bleibt — nur zusammen
     sagen sie, dass die richtige Operation gelaufen ist.
     """
@@ -5782,7 +5783,7 @@ def test_a_halted_chain_locks_the_feature_panel_and_lets_go_after_undo(
     Gemessen am gebauten Fenster (13.09.2026): Nach dem Halt waren
     *Übernehmen*, *Im Bild einstellen* und alle vierzehn Zahlenfelder aktiv,
     und der Versuch endete in einem modalen „Das hat so nicht funktioniert"
-    (Regel 19). Menü, Werkzeugzeile und Befehlspalette trugen den Grund
+    (Regel 19). Menü, Werkzeugzeile und Suche trugen den Grund
     längst.
 
     Der Rückweg gilt ohne Neuauswahl: Nach Strg+Z rechnet die Kette wieder,
@@ -7191,7 +7192,7 @@ def test_a_halted_chain_takes_no_new_step_and_names_the_way_on(
     beim Ändern von Schrift und Text fällt sie weg und löst denselben Halt aus.
 
     Drei Zusagen, in der Reihenfolge, in der der Kunde sie trifft: Vor dem
-    Klick ist jede Operation gesperrt und sagt warum — Aktion, Palette und
+    Klick ist jede Operation gesperrt und sagt warum — Aktion, Suche und
     Karte aus derselben Quelle (``_reason_locked``); Rückgängig und *Schritt
     löschen* bleiben frei, denn beides löst den Halt. Kommt trotzdem ein
     Schritt an (Kürzel, Fernsteuerung, Agent), schreibt die Sitzung ihn nicht
@@ -7235,7 +7236,7 @@ def test_a_halted_chain_takes_no_new_step_and_names_the_way_on(
     reason = action.toolTip()
     assert not action.isEnabled()
     assert f"Schritt {split_step}" in reason and "Prüfbericht" in reason, reason
-    assert window._palette_availability("create_box") == (False, reason), (
+    assert window._operation_availability("create_box") == (False, reason), (
         "auch eine Operation ohne Eingang legte ihren Schritt hinter den Halt"
     )
     card = window.selection_operations._buttons["split_bodies"]
@@ -7279,7 +7280,7 @@ def test_a_halted_chain_takes_no_new_step_and_names_the_way_on(
     result = window.session.evaluate_now()
     window._on_scene(result)
     assert result.stopped_at is None and len(result.scene.objects) == 10
-    assert window._palette_availability("create_box") == (True, "")
+    assert window._operation_availability("create_box") == (True, "")
     assert window.import_action.isEnabled() and window._toolbar_sketch.isEnabled()
     assert reason not in window._toolbar_sketch.toolTip(), "der eigene Satz kommt zurück"
 
@@ -8147,7 +8148,7 @@ def test_isolating_a_hidden_body_isolates_instead_of_revealing(
     assert window.viewport.hidden == frozenset(), "derselbe Eintrag holt alles zurück"
 
 
-def test_the_palette_refuses_a_locked_choice_with_the_reason(window: MainWindow) -> None:
+def test_the_search_refuses_a_locked_choice_with_the_reason(window: MainWindow) -> None:
     """Gesperrt bleibt gesperrt, auch über die Pfeiltasten (Regel 19).
 
     Die Liste sperrt ihre Zeilen, aber die Tastatur sprang auf eine gesperrte,
@@ -8158,21 +8159,21 @@ def test_the_palette_refuses_a_locked_choice_with_the_reason(window: MainWindow)
     launched: list[str] = []
     window.launch_operation = lambda spec: launched.append(spec.name)  # type: ignore[method-assign]
 
-    available, reason = window._palette_availability("lattice_fill")
+    available, reason = window._operation_availability("lattice_fill")
     assert not available and reason, "auf leerer Szene ist die Wahl gesperrt, mit Grund"
 
-    window._run_palette_choice("lattice_fill")
+    window._run_search_choice("lattice_fill")
     assert launched == [], "eine gesperrte Wahl startet nichts"
     assert window.status_message.text() == reason, "der Grund steht in der Zeile"
 
-    window._run_palette_choice("create_box")
+    window._run_search_choice("create_box")
     assert launched == ["create_box"], "eine freie Wahl startet wie bisher"
 
 
 def test_an_operation_without_a_menu_entry_is_not_simply_allowed(window: MainWindow) -> None:
     """Keine Menü-Action zu haben heißt nicht, dass alles geht.
 
-    ``_palette_availability`` las die Sperre aus der Action, die auch das Menü
+    ``_operation_availability`` las die Sperre aus der Action, die auch das Menü
     ausgraut — richtig, solange jede Operation eine hat. ``action is None``
     ergab „erlaubt", und das ist eine Annahme über den Bestand, keine über die
     Sache: Die zusammengelegten Zwillinge haben schon heute keinen eigenen
@@ -8192,38 +8193,39 @@ def test_an_operation_without_a_menu_entry_is_not_simply_allowed(window: MainWin
         "ohne Eintrag im Register prüft dieser Test nur seinen eigenen Aufbau"
     )
 
-    available, reason = window._palette_availability("lattice_fill")
+    available, reason = window._operation_availability("lattice_fill")
     assert not available, "auf leerer Szene geht „Gitter füllen“ auch ohne Menüeintrag nicht"
     assert reason, "und der Grund steht dabei — sonst sucht der Kunde ihn bei sich"
 
-    window._run_palette_choice("lattice_fill")
+    window._run_search_choice("lattice_fill")
     assert launched == [], "gestartet wird nichts"
 
 
 def test_a_locked_window_command_is_refused_with_the_reason(window: MainWindow) -> None:
     """Regel 19, der Nachbarzweig: auch ein Fensterbefehl bleibt gesperrt.
 
-    ``_run_palette_choice`` bekam die Wache mit cc40aaa4; der Zweig für
-    Fensterbefehle rief seinen Rückruf weiter direkt — die Tastatur sprang
-    auf eine gesperrte Zeile, und Enter führte aus (Update-Review 25.08.,
-    ce-Befund). ``palette_rows`` sperrte die Zeile längst richtig; nur der
-    Vollzug fragte nie nach.
+    Die Wache für Operationen kam mit cc40aaa4; der Zweig für Fensterbefehle
+    rief seinen Rückruf weiter direkt — die Tastatur sprang auf eine
+    gesperrte Zeile, und Enter führte aus (Update-Review 25.08., ce-Befund).
+    Die Zeile war längst gesperrt; nur der Vollzug fragte nie nach. Seit
+    RM-735 gehen beide Zweige durch :meth:`MainWindow._run_search_choice`.
     """
     commands = window.window_commands()
-    name = next(key for key in commands if window._palette_actions.get(key) is not None)
-    action = window._palette_actions[name]
+    name = next(key for key in commands if window._command_actions.get(key) is not None)
+    action = window._command_actions[name]
     ran: list[str] = []
     guarded = dict(commands)
     guarded[name] = (*commands[name][:2], lambda: ran.append(name))
+    window.window_commands = lambda: guarded  # type: ignore[method-assign]
     was_enabled = action.isEnabled()
     try:
         action.setEnabled(False)
-        window._run_window_command(name, guarded)
+        window._run_search_choice(name)
         assert ran == [], "ein gesperrter Fensterbefehl startet nichts"
         assert window.status_message.text(), "der Grund steht in der Zeile"
 
         action.setEnabled(True)
-        window._run_window_command(name, guarded)
+        window._run_search_choice(name)
         assert ran == [name], "frei heißt weiterhin: er läuft"
     finally:
         action.setEnabled(was_enabled)
@@ -11779,7 +11781,7 @@ def test_dropping_a_model_on_the_start_screen_asks_before_replacing(
 def test_a_creation_from_the_start_screen_begins_the_empty_project(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, entry: str
 ) -> None:
-    """Palette und Kürzel gelten auch über dem Startbildschirm — und dort begann nichts.
+    """Suche und Kürzel gelten auch über dem Startbildschirm — und dort begann nichts.
 
     *Quader anlegen* über Strg+Umschalt+P öffnete seinen Dialog über dem
     Startbildschirm, in einer Sitzung, die nie ausgewertet worden war. Seit
@@ -11803,7 +11805,7 @@ def test_a_creation_from_the_start_screen_begins_the_empty_project(
         window.finish_sketch(keep=False)
         return
 
-    window._run_palette_choice("create_box")
+    window._run_search_choice("create_box")
     dialog = window._op_dialog
     assert dialog is not None
     assert window.stack.currentWidget() is not window.start_screen, "die Vorschau liegt im Bild"
@@ -11815,11 +11817,11 @@ def test_a_creation_from_the_start_screen_begins_the_empty_project(
     window.action_new()
     assert window.stack.currentWidget() is window.start_screen
     monkeypatch.setattr(module, "confirm_unsaved", lambda title, parent: "cancel")
-    window._run_palette_choice("create_box")
+    window._run_search_choice("create_box")
     assert window._op_dialog is None, "Abbrechen lässt das Projekt, wie es war"
     assert [entry.op for entry in window.session.project.document.ops] == ["create_box"]
     monkeypatch.setattr(module, "confirm_unsaved", lambda title, parent: "discard")
-    window._run_palette_choice("create_box")
+    window._run_search_choice("create_box")
     dialog = window._op_dialog
     assert dialog is not None
     assert window.session.project.document.ops == [], "Verwerfen beginnt das neue Projekt"
@@ -12024,10 +12026,11 @@ def test_the_printer_of_an_open_project_can_change(session: Session) -> None:
 # --- Entdeckbarkeit (§2.6, §19.2) -----------------------------------------------
 
 
-def test_the_palette_reaches_more_than_the_registry(
+def test_the_search_reaches_more_than_the_registry(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """§2.6: die Palette ist der Universalzugang — sie kannte nur Operationen.
+    """§2.6: die Suche ist mit der Ansicht der Universalzugang — die Befehlspalette
+    kannte nur Operationen.
 
     Speichern, das Handbuch und die sieben Ansichtswerkzeuge stehen nicht im
     Register. `ToolStrip.tool_titles()` und `strip_title()` wurden dafür
@@ -12044,14 +12047,14 @@ def test_the_palette_reaches_more_than_the_registry(
     commands["file.part_share"][2]()
     assert opened == [True], "die Weitergabe öffnet den Katalog zur Auswahl"
     for key in window.tools.tool_titles():
-        assert f"tool.{key}" in commands, f"{key} fehlt in der Palette"
+        assert f"tool.{key}" in commands, f"{key} fehlt in der Suche"
 
     for _title, _shortcut, slot in commands.values():
         assert callable(slot)
 
 
 def test_part_file_commands_do_not_add_a_file_menu_row(window: MainWindow) -> None:
-    """Beide Dateihandlungen leben in der Palette; das volle Menü bleibt an der Grenze."""
+    """Beide Dateihandlungen leben in der Suche; das volle Menü bleibt an der Grenze."""
     from app.core.registry.surfaces import MAX_MENU_ROWS
 
     file_menu = next(
@@ -14435,7 +14438,7 @@ def test_the_toolbar_has_the_two_entries_for_way_four(window: MainWindow) -> Non
     untere Werkzeugzeile ist mit acht Umschaltern voll; die obere hat den
     Platz, und dort steht Weg 2 bereits.
 
-    Der Menüeintrag bleibt: Befehlspalette und Verlauf führen über ihn.
+    Der Menüeintrag bleibt: Suche und Verlauf führen über ihn.
     """
     from PySide6.QtWidgets import QToolBar
 
@@ -14691,7 +14694,7 @@ def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWi
 
     window.window_commands()  # füllt die Aktionen der Fensterbefehle
     for name, key in WINDOW_COMMAND_OPERATIONS.items():
-        shared = window._palette_actions[key]
+        shared = window._command_actions[key]
         assert built[shared].removesuffix(" …") == menu_path(REGISTRY.get(name)), name
     ohne_weg = sorted(
         name
@@ -14707,19 +14710,10 @@ def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWi
         if action not in built and not in_the_menu_bar(REGISTRY.get(name).category)
     ]
     assert rechts, "keine Handlung rechts — dann prüft dieser Test den zweiten Ort nicht"
-    from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD
-
-    palette = {entry.name for entry in window.palette_rows()}
     for name in rechts:
-        spec = REGISTRY.get(name)
-        if spec.takes_whole_scene and name not in SCENE_ACTIONS_IN_THE_CARD:
-            # **Eine Handlung für alle Körper ohne Platz in der Karte nennt die
-            # Palette** (RM-506): Sie steht nur ohne Auswahl, und dort trägt die
-            # Karte allein *Druckoptimal ausrichten*.
-            assert menu_path(spec) == f"Befehlspalette → {spec.title}", name
-            assert name in palette, f"{name}: in der Palette genannt, dort keine Zeile"
-            continue
-        assert menu_path(spec).startswith("Handlungen rechts"), name
+        # Auch die Handlungen für alle Körper stehen rechts — ohne Auswahl,
+        # alle drei seit RM-735; die Befehlspalette als dritter Ort ist weg.
+        assert menu_path(REGISTRY.get(name)).startswith("Handlungen rechts"), name
 
 
 def test_dragging_a_face_reaches_the_document(window: MainWindow) -> None:
@@ -19934,19 +19928,26 @@ def test_a_clean_part_offers_the_way_to_the_slicer(window: MainWindow) -> None:
     assert opened == ["dialog"]
 
 
-def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
-    """Jedes Zwillingspaar trägt denselben Titel; die Palette zeigt beide mit ihrem Satz.
+def _hit_rows(window: MainWindow, query: str) -> list[QListWidgetItem]:
+    """Die Zeilen, die das Suchfeld der Karte zu diesem Wort zeigt."""
+    panel = window.selection_operations
+    panel.search.setText(query)
+    return [panel.hits.item(row) for row in range(panel.hits.count())]
+
+
+def test_search_twins_do_not_look_alike(window: MainWindow) -> None:
+    """Jedes Zwillingspaar trägt denselben Titel; die Suche zeigt beide mit ihrem Satz.
 
     Wer „quader" tippte, sah zweimal „Quader anlegen", und der Unterschied
     stand nur im Tooltip (Review 02.09.2026).
     """
     from app.core.registry import MENU_TWINS
-    from app.ui.command_palette import CommandPalette
 
-    palette = CommandPalette(parent=window)
     for hidden, visible in MENU_TWINS.items():
-        palette._refilter(str(window._op_actions[visible].text()).replace("&", ""))
-        rows = [palette.list.item(row).text() for row in range(palette.list.count())]
+        rows = [
+            row.text()
+            for row in _hit_rows(window, str(window._op_actions[visible].text()).replace("&", ""))
+        ]
         both = [
             row
             for row in rows
@@ -19958,10 +19959,10 @@ def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
         assert all(chr(10) in row for row in both), both
 
 
-def test_twins_differ_in_the_sentence_the_palette_shows() -> None:
+def test_twins_differ_in_the_sentence_the_search_shows() -> None:
     """Ein Zwillingspaar trennt nur sein erster Satz — in jeder Sprache.
 
-    Beide Partner heißen gleich (``grenzen.md``, „Zwillinge“), die Palette
+    Beide Partner heißen gleich (``grenzen.md``, „Zwillinge“), die Suche
     zeigt unter dem Titel ``first_sentence`` des ``doc``. Fünf Grundkörper
     standen zum Release 0.5.2 wortgleich da, nachdem ihre exakten Sätze den
     Vorteil verloren hatten; gesehen hat es nur der Fenstertest oben, der
@@ -19970,8 +19971,8 @@ def test_twins_differ_in_the_sentence_the_palette_shows() -> None:
     """
     from app.core.bootstrap import load_operations
     from app.core.registry import PRIMITIVE_TWINS, menu_twins
+    from app.core.registry.surfaces import first_sentence
     from app.i18n.catalog import available_languages, read_catalog
-    from app.ui.command_palette import first_sentence
 
     load_operations()
     pairs = {tuple(sorted(pair)) for pair in (*PRIMITIVE_TWINS, *menu_twins().items())}
@@ -19986,34 +19987,27 @@ def test_twins_differ_in_the_sentence_the_palette_shows() -> None:
             assert shown[0] != shown[1], (language, one, other, shown[0])
 
 
-def test_the_palette_finds_every_setting_behind_the_closed_section(
+def test_the_search_finds_every_setting_behind_the_closed_section(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """„Tastenbelegung" und „Fernsteuerung" in der Palette führen zur Zeile (RM-491).
+    """„Tastenbelegung" und „Fernsteuerung" in der Suche führen zur Zeile (RM-491).
 
     Seit sieben Optionen hinter „Weitere Einstellungen" liegen, fand die
-    Palette sie nicht: Sie kannte nur *Einstellungen …*. Jetzt steht jede
-    Zeile darin, unter ihrem Namen, und der Klick öffnet den Dialog mit
-    aufgeklapptem Bereich und dem Feld im Fokus.
+    Befehlspalette sie nicht: Sie kannte nur *Einstellungen …*. Jetzt steht
+    jede Zeile in der Suche der Karte, unter ihrem Namen, und der Klick öffnet
+    den Dialog mit aufgeklapptem Bereich und dem Feld im Fokus.
     """
     from PySide6.QtWidgets import QToolButton
 
-    from app.ui.command_palette import CommandPalette
     from app.ui.settings_dialog import SettingsDialog
 
-    entries = window.palette_rows()
-    palette = CommandPalette(entries, parent=window)
     for query, wanted in (
         ("Tastenbelegung", "settings.shortcuts"),
         ("Fernsteuerung", "settings.remote"),
     ):
-        palette._refilter(query)
-        found = [
-            palette.list.item(row).data(Qt.ItemDataRole.UserRole)
-            for row in range(palette.list.count())
-        ]
+        found = [row.data(Qt.ItemDataRole.UserRole) for row in _hit_rows(window, query)]
         assert found and found[0] == wanted, (query, found[:5])
-    palette.deleteLater()
+    window.selection_operations.search.clear()
 
     seen: dict[str, object] = {}
 
@@ -20029,14 +20023,13 @@ def test_the_palette_finds_every_setting_behind_the_closed_section(
     assert seen == {"open": True, "focus": True}, seen
 
 
-def test_command_palette_shows_explanations_without_repeating_window_titles(
+def test_the_search_shows_explanations_without_repeating_window_titles(
     window: MainWindow,
 ) -> None:
-    from app.ui.command_palette import CommandPalette, first_sentence
+    from app.core.registry.surfaces import first_sentence
 
-    entries = window.palette_rows()
+    entries = window.selection_operations._search_rows()
     commands = window.window_commands()
-    palette = CommandPalette(entries, parent=window)
     entry = next(
         candidate
         for candidate in entries
@@ -20045,13 +20038,11 @@ def test_command_palette_shows_explanations_without_repeating_window_titles(
         and str(candidate.doc).strip()
         and first_sentence(str(candidate.doc)).strip() != str(candidate.title).strip()
     )
-    palette._refilter(str(entry.title))
     row = next(
-        palette.list.item(index)
-        for index in range(palette.list.count())
-        if palette.list.item(index).data(Qt.ItemDataRole.UserRole) == str(entry.name)
+        item
+        for item in _hit_rows(window, str(entry.title))
+        if item.data(Qt.ItemDataRole.UserRole) == str(entry.name)
     )
-
     assert row.text().splitlines()[1] == first_sentence(str(entry.doc)).strip()
 
     for key, tool in window.tools.tools().items():
@@ -20064,14 +20055,13 @@ def test_command_palette_shows_explanations_without_repeating_window_titles(
         assert part_entry.doc.strip() and part_entry.doc != part_entry.title, name
 
     window_entry = next(candidate for candidate in entries if candidate.name == "view.bed")
-    action = window._palette_actions[window_entry.name]
+    action = window._command_actions[window_entry.name]
     assert window_entry.doc == action.statusTip()
     assert window_entry.doc != window_entry.title
-    palette._refilter(str(window_entry.title))
     window_row = next(
-        palette.list.item(index)
-        for index in range(palette.list.count())
-        if palette.list.item(index).data(Qt.ItemDataRole.UserRole) == str(window_entry.name)
+        item
+        for item in _hit_rows(window, str(window_entry.title))
+        if item.data(Qt.ItemDataRole.UserRole) == str(window_entry.name)
     )
     assert window_row.text().splitlines()[1] == first_sentence(str(window_entry.doc)).strip()
     tooltip_lines = window_row.toolTip().splitlines()
@@ -20087,34 +20077,32 @@ def test_a_question_of_several_words_still_finds_something(window: MainWindow) -
 
     „ecke abrunden" selbst passt seit den Kundenwörtern je Sprache ganz
     (Durchsicht 0.5.1: „Ecken rund" am *Verrunden*); die dritte Runde prüft
-    deshalb ein Wort, das nirgends steht, neben einem, das trifft.
+    deshalb ein Wort, das nirgends steht, neben einem, das trifft. Bis RM-735
+    zeigte die Karte diese Zeile nicht, nur die Befehlspalette.
     """
-    from app.ui.command_palette import CommandPalette
+    heading = str(tr("Keine Funktion passt auf alle Wörter — das Folgende passt auf einzelne."))
+    panel = window.selection_operations
 
-    heading = str(tr("Kein Befehl passt auf alle Wörter — das Folgende passt auf einzelne."))
-    palette = CommandPalette(parent=window)
+    rows = _hit_rows(window, "ecke abrunden")
+    assert rows[0].data(Qt.ItemDataRole.UserRole) == "fillet_edges"
 
-    palette._refilter("ecke abrunden")
-    assert palette.list.item(0).data(Qt.ItemDataRole.UserRole) == "fillet_edges"
-
-    palette._refilter("zacken abrunden")
-    rows = [palette.list.item(row) for row in range(palette.list.count())]
+    rows = _hit_rows(window, "zacken abrunden")
     assert rows and rows[0].text() == heading, [row.text() for row in rows[:3]]
     assert not rows[0].flags() & Qt.ItemFlag.ItemIsSelectable, "die Überschrift ist kein Befehl"
     names = [row.data(Qt.ItemDataRole.UserRole) for row in rows[1:]]
     assert "fillet_edges" in names, names
-    assert palette.list.currentRow() >= 1, "vorausgewählt ist ein Befehl, nicht die Überschrift"
+    assert panel.hits.currentRow() >= 1, "vorausgewählt ist ein Befehl, nicht die Überschrift"
 
-    palette._refilter("abrunden")
-    assert palette.list.item(0).text() != heading, "ein Wort, das ganz passt, braucht keine"
-    assert palette.list.item(0).data(Qt.ItemDataRole.UserRole) == "fillet_edges"
+    rows = _hit_rows(window, "abrunden")
+    assert rows[0].text() != heading, "ein Wort, das ganz passt, braucht keine"
+    assert rows[0].data(Qt.ItemDataRole.UserRole) == "fillet_edges"
 
 
 def test_the_build_plate_hides_in_one_step(window: MainWindow) -> None:
     """Robert, 02.09.2026: „eine Option, wo man schnell hinkommt, um die Druckplatte auszublenden".
 
-    Ein Haken im Ansichtsmenü mit Kürzel, in der Palette gelistet, und der
-    Zustand bleibt in den Einstellungen — gleich, ob Menü, Palette oder Taste
+    Ein Haken im Ansichtsmenü mit Kürzel, in der Suche gelistet, und der
+    Zustand bleibt in den Einstellungen — gleich, ob Menü, Suche oder Taste
     ihn umlegen.
     """
     assert window.viewport.bed_visible
@@ -24783,3 +24771,154 @@ def test_redo_replaces_undo_announcement_after_completed_evaluation(window):
     assert len(window.session.last_result.scene.objects) == 1
     window.action_redo()
     assert window._announcement == expected, "ein leeres Redo behauptet keine weitere Handlung"
+
+
+def _settled_focus(qt_app: QApplication) -> QWidget | None:
+    """Der Fokus, nachdem die angestoßenen Ereignisse durch sind."""
+    for _ in range(5):
+        qt_app.processEvents()
+    return QApplication.focusWidget()
+
+
+def test_function_search_reaches_the_field_from_any_state(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """*Funktion suchen* (Strg+Umschalt+P, Knopf oben) scheitert an keiner Lage (RM-735).
+
+    Spalte verborgen, ein anderer Reiter vorn, nichts gewählt: Danach steht die
+    Spalte, der Reiter *Auswahl* ist vorn, der einzige Körper gewählt und der
+    Cursor im Feld. Escape leert erst das Feld und gibt dann den Fokus an die
+    Ansicht; die Auswahl bleibt. Der Haupteinstieg der Suche hatte keinen Test
+    (Review RM-735, F2).
+    """
+    from PySide6.QtTest import QTest
+
+    from tests.ui_helpers import with_a_body
+
+    window.show()
+    window.resize(1400, 900)
+    window._show_start_screen(False)
+    window.activateWindow()
+    try:
+        body = with_a_body(window)
+        window.object_tree.tree.clearSelection()
+        window._update_actions()
+        assert not window.object_tree.selected_objects()
+        window.right.setCurrentWidget(window.report)
+        window.action_toggle_right()
+        qt_app.processEvents()
+        assert not window.right_column.isVisible(), "die Spalte ist verborgen"
+
+        window.search_action.trigger()
+        field = window.selection_operations.search
+        assert _settled_focus(qt_app) is field, "der Cursor steht im Feld"
+        assert window.right_column.isVisible(), "die Spalte kommt zurück"
+        assert window.right.currentWidget() is window.feature_dock, "der Reiter Auswahl vorn"
+        assert list(window.object_tree.selected_objects()) == [body], "der einzige Körper gewählt"
+
+        QTest.keyClicks(field, "drehen")
+        assert window.selection_operations.hits.isVisible()
+        QTest.keyClick(field, Qt.Key.Key_Escape)
+        assert field.text() == "", "Escape leert erst das Feld"
+        assert list(window.object_tree.selected_objects()) == [body], "die Auswahl bleibt"
+        QTest.keyClick(field, Qt.Key.Key_Escape)
+        assert _settled_focus(qt_app) is window.viewport, "dann zurück in die Ansicht"
+        assert list(window.object_tree.selected_objects()) == [body], "die Auswahl bleibt"
+    finally:
+        window.close()
+
+
+def test_function_search_begins_the_empty_project_on_the_start_screen(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Auf dem Startbildschirm beginnt *Funktion suchen* das leere Projekt, wie
+    jeder Arbeitsbeginn dort, und setzt den Cursor ins Feld (Review RM-735, F2)."""
+    window.show()
+    window.resize(1400, 900)
+    window.activateWindow()
+    try:
+        qt_app.processEvents()
+        assert window.stack.currentWidget() is window.start_screen
+        window.search_action.trigger()
+        assert _settled_focus(qt_app) is window.selection_operations.search
+        assert window.stack.currentWidget() is not window.start_screen
+    finally:
+        window.close()
+
+
+def test_function_search_waits_for_the_drawing_and_follows_a_floated_tab(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """In der Zeichnung sagt die Taste, wann die Suche wieder bereitsteht, und
+    lässt den Fokus, wo er ist (RM-519); ein herausgezogener Reiter *Auswahl*
+    kommt mit seinem Fenster nach vorn (Review RM-735, F2)."""
+    window.show()
+    window.resize(1400, 900)
+    window._show_start_screen(False)
+    try:
+        window.start_sketch("sketch_extrude", "")
+        assert window._sketch_panel is not None
+        before = _settled_focus(qt_app)
+        window.search_action.trigger()
+        assert window._announcement == tr(
+            "Die Suche steht wieder bereit, sobald die Zeichnung fertig oder verworfen ist."
+        )
+        assert _settled_focus(qt_app) is before, "kein Fokuswechsel in der Zeichnung"
+        window.finish_sketch(keep=False)
+        assert window._sketch_panel is None
+
+        window.right.detach_page(window.feature_dock)
+        assert window.right.is_detached(window.feature_dock)
+        window.right.setCurrentWidget(window.report)
+        window.search_action.trigger()
+        qt_app.processEvents()
+        assert window.right.page_is_visible(window.feature_dock), "das Fenster des Reiters steht"
+        field = window.selection_operations.search
+        # Das eigene Fenster des Reiters ist ein zweites Hauptfenster; ob es
+        # aktiv wird, entscheidet der Fenstermanager. Sein Fokus liegt im Feld.
+        assert field.window() is not window, "das Feld steht im Fenster des Reiters"
+        assert field.window().focusWidget() is field
+    finally:
+        window.close()
+
+
+def test_searching_the_manual_from_the_card_opens_it_with_the_word(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Ohne Treffer führt *Im Handbuch suchen* ins Handbuch, mit demselben Wort
+    im Suchfeld (§2.7; Review RM-735, F2)."""
+    window._show_start_screen(False)
+    card = window.selection_operations
+    card.set_context(0, lambda _name: (True, ""))
+    card.search.setText("xyzzy")
+    assert not card._manual.isHidden()
+    card._manual.click()
+    qt_app.processEvents()
+    assert window._manual is not None and window._manual.isVisible()
+    assert window._manual.search.text() == "xyzzy"
+    window._manual.close()
+
+
+def test_the_card_without_a_selection_inserts_a_model_like_the_menu(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne Auswahl steht *Modell einfügen …* in der Karte als dieselbe Aktion
+    wie in *Datei* und *Erzeugen* — die Dateiauswahl, nicht der rohe Dialog
+    der Operation ``load`` (Review RM-735, F8)."""
+    asked: list[str] = []
+    monkeypatch.setattr(
+        main_window_module.QFileDialog,
+        "getOpenFileNames",
+        lambda _parent, title, *_args: (asked.append(title), ([], ""))[1],
+    )
+    window._show_start_screen(False)
+    window._update_actions()
+    card = window.selection_operations
+    assert "load" not in card._buttons, "kein zweites „Modell einfügen“ mit anderer Wirkung"
+    button = card._buttons.get("file.import")
+    assert button is not None, "der Befehl steht in der Karte"
+    assert card._fits_the_level("file.import"), "auf der Stufe ohne Auswahl"
+    assert button.property("operationTitle") == window.import_action.text()
+    button.click()
+    assert asked == [tr("Modell einfügen")], "die Dateiauswahl wie über Menü und Leiste"
+    assert window._op_dialog is None, "kein Operationsdialog"
