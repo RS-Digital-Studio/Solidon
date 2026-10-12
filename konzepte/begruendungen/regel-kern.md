@@ -394,6 +394,19 @@ sind."
 Zum eigenen `/tmp` eines Flatpaks: „Ein Arbeitsordner aus `tempfile` ist für
 es unsichtbar; der Aufruf kommt an, und das Programm findet die Datei nicht."
 
+Zum Start ohne Systemfenster (RM-788): Eine `.exe`, die kein Programm ist
+(Text, leere Datei, DLL), gilt `CreateProcess` als 16-Bit-Anwendung. Im
+Standardfehlermodus öffnet `NtVdm64` im startenden Faden „Nicht unterstützte
+16 Bit-Anwendung“ und wartet auf einen Klick — der Slicerlauf stand still, in
+der Suite ein Arbeiter ohne CPU (py-spy: `CreateProcessW` →
+`BasepProcessInvalidImage` → `MessageBoxW`). Explorer und Startmenü starten
+Solidon über `ShellExecute` im Standardmodus; Git Bash vererbt
+`SEM_FAILCRITICALERRORS`, dort fiel es nie auf. `no_error_dialogs` setzt den
+Modus nur für den startenden Faden, das gestartete Programm erbt ihn nicht.
+Danach meldet Windows 216 (Text, MZ-Kopf) oder 193 (leere Datei, DLL), POSIX
+`ENOEXEC` oder `EACCES`; `discover.slicer_start_refused` sagt das in eigenen
+Worten und bietet einen anderen Slicer an.
+
 ### Im eigenen Flatpak sieht der Rechner anders aus
 
 Die Überschrift hieß „Und die vierte: Wir sind selbst einer".

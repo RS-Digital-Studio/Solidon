@@ -138,6 +138,9 @@ nicht weggeräumt.
 - **Aber nur, wo die Messgröße an der Lage hängt**; sonst vergleicht man über
   dieselbe Funktion, die auch anzeigt (`_native`). **Eine Zeile, deren
   Entfernen nichts rot macht, prüft nichts.**
+- **Aus Git Bash erbt die Suite den Fehlermodus `SEM_FAILCRITICALERRORS`**
+  (0x3), der Kunde startet mit 0: Wer ein Systemfenster prüft, startet sein
+  Kind mit `CREATE_DEFAULT_ERROR_MODE` (`test_process.py`, RM-788).
 
 ### Und bei einer Farbe hängt es immer an ihr — die Suite fährt ohne Stylesheet
 
@@ -277,9 +280,6 @@ Das ist der einzige Teil des Tors, dessen Rot nicht „nicht fertig“ bedeutet.
 
 ## Fremdlast macht auch funktionale Tests rot, nicht nur Messungen langsam
 
-Neben einem zweiten Testlauf endet ein Lauf mit Exit 139, dieselben Tests
-einzeln laufen grün. Deshalb:
-
 - **Erst nachsehen, was sonst rechnet, dann urteilen**; der billigste
   Gegenbeweis ist der einzelne Test.
 - **Steht er oder rechnet er?** Die Prozesse an der Kommandozeile suchen, nicht
@@ -298,8 +298,8 @@ einzeln laufen grün. Deshalb:
 - **Ein BLAS-Faden je Prozess**: `import app` setzt `OPENBLAS_NUM_THREADS=1`,
   wenn niemand etwas setzt (RM-567), Tor und `affected_tests.py --run` ebenso
   für Prozesse, die NumPy vor der Anwendung laden. Sonst sagt jeder Prozess
-  mit numpy und scipy je Rechenkern einen Puffer zu, an 32 Kernen 1,5 GB, und
-  Läufe nebeneinander reißen die Zusagegrenze. Leistungsläufe messen damit
+  je Rechenkern einen Puffer zu, und Läufe nebeneinander reißen die
+  Zusagegrenze. Leistungsläufe messen damit
   denselben Stand wie der Kunde.
 - **Im Tor eine feste Arbeiterzahl, nie `-n auto`**: Parallelität zeigt
   Speicherhunger als Korrektheitsfehler, 32 Arbeiter sterben schon beim
@@ -308,8 +308,6 @@ einzeln laufen grün. Deshalb:
 - **Zweimal fahren und die Mengen vergleichen**: Ein Test, der von einem
   Vorgänger abhängt, wird parallel *manchmal* rot — zwei gleiche Läufe sind
   kein Beweis, zwei ungleiche sofort einer.
-- ComfyUI läuft mit rund einem Gigabyte im Hintergrund mit — bei der Lastfrage
-  mitzählen.
 - **Ein Prozessende braucht Rechenzeit; zugesichert wird, dass es eingeleitet
   ist.** Ein zurückgestellter Prozess bekommt unter Volllast die Zeitscheiben
   für sein Ende erst nach Sekunden; `IsProcessDeleting` sagt sofort, ob das
@@ -317,10 +315,8 @@ einzeln laufen grün. Deshalb:
   danach abbaut, hebt vorher die Klasse (wie `process.hurry_helper`); ist die
   Zusage die Freigabe (Speicher, Griffe, Ordner), wartet er danach auf den
   Abschluss.
-- **Eine Zeitgrenze im Test zählt ab dem Zustand, um den es geht** (RM-635):
-  Ein frischer Interpreter braucht unter Last Sekunden bis zu seiner ersten
-  Zeile, und eine Frist ab dem Start entschied dann den Fall. Ist die Frist das
-  Thema, läuft sie ab dem Ereignis (`test_process._clock_held_until`, Ordnung
+- **Eine Zeitgrenze im Test zählt ab dem Zustand, um den es geht** (RM-635).
+  Ist die Frist das Thema, läuft sie ab dem Ereignis (`test_process._clock_held_until`, Ordnung
   von Ereignissen); schützt sie nur vor Hängern, hält ein Wächter an Stille an —
   ohne Aufruf, Ausgabe oder Rechenzeit (`run_while_moving`, `in_a_worker`).
 - **Eine eben umbenannte Datei sperrt kurz**: Eine Meldung, die über
@@ -331,7 +327,9 @@ einzeln laufen grün. Deshalb:
 
 `py-spy dump --pid N --native` liest den Stapel eines laufenden Prozesses,
 ohne ihn anzufassen; erst `--native` zeigt, was hinter der Python-Grenze
-wartet. `faulthandler` hilft nur einem Faden, der stürzt. py-spy liegt in der
+wartet. `faulthandler` hilft nur einem Faden, der stürzt. Ein Stapel in
+`MessageBoxW` ist ein unsichtbares Systemfenster; `Get-Process` nennt seinen
+Titel (`MainWindowTitle`). py-spy liegt in der
 Nutzer-Umgebung (`%APPDATA%\Python\Python313\Scripts\py-spy.exe`), **nicht**
 in der `.venv` oder `constraints.txt` — es gehört nicht zum Produkt.
 
