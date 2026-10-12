@@ -20,6 +20,8 @@ scrive in `website/version.json`.
 ### Uso e sistema
 
 - La ricerca trova *Unisci*, *Sottrai* e *Intersezione* anche come «booleano», e *Sottrai* anche come «differenza».
+- La ricerca trova la funzione anche per una domanda come «Come appoggio il pezzo sul piano?» e conosce parole di slicer e CAD come «piano di stampa» o «variabile».
+- Anche la ricerca nel manuale trova la pagina giusta per una domanda con parole proprie.
 - Con un corpo selezionato e un secondo nella scena, la linguetta *Selezione* dice come aggiungere il secondo per *Unisci*, *Sottrai* e *Intersezione*.
 - Il campo di ricerca della linguetta *Selezione* ora c'è sempre, anche senza selezione, e trova ogni funzione e ogni comando con la sua scorciatoia.
 - La palette dei comandi non c'è più, perché il campo di ricerca trova lo stesso. *Cerca funzione* e Ctrl+Maiusc+P vi portano il cursore.
