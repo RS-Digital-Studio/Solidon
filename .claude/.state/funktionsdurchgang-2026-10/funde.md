@@ -150,7 +150,7 @@ die systemischen leichten behebt D0.
 - Ursache: `app/ui/op_dialog.py` (`_explain` an den Behälter, nicht an `ValueField.spin` und `FeatureSetField.whole`).
 - Vorschlag: `_explain` gibt den Satz auch an das innere Feld.
 - Wirkung beim Kunden: Ein Bildschirmleser liest am fokussierten Zahlenfeld keine Erklärung.
-- Stand: offen RM-737
+- Stand: behoben `3a4dd788e`
 
 ### FD-13 Material kalibrieren zeigt vorn neun Felder und zwei Absätze
 
@@ -162,7 +162,7 @@ die systemischen leichten behebt D0.
 - Ursache: `app/ui/dialogs.py` (Überschrift, zwei Absätze, fünf Messwerte, zwei Haken alle vorn).
 - Vorschlag: ein Satz, vorn nur, was der Prüfkörper liefert; der Rest unter *Weitere Einstellungen*.
 - Wirkung beim Kunden: Wer nur sein Spiel nachtragen will, liest drei Absätze und sieht neun Felder.
-- Stand: offen RM-737
+- Stand: behoben `74c183721`
 
 ### FD-14 Zahlen stehen linksbündig
 
@@ -174,7 +174,7 @@ die systemischen leichten behebt D0.
 - Ursache: Drehfeldklassen in `app/ui/labels.py` und `NumberSpin` ohne `setAlignment`.
 - Vorschlag: rechtsbündig zentral in den Drehfeldklassen.
 - Wirkung beim Kunden: Zahlen untereinander stehen nicht Stelle unter Stelle.
-- Stand: offen RM-737
+- Stand: behoben `746e2eb12`
 
 ### FD-15 Operationsdialoge halten das 4er-Raster nicht
 
@@ -186,7 +186,7 @@ die systemischen leichten behebt D0.
 - Ursache: `app/ui/op_dialog.py` (Formulare und Inhalt ohne gesetzten Abstand, Qt-Vorgabe 6).
 - Vorschlag: `NORMAL` setzen wie im Kalibrierdialog.
 - Wirkung beim Kunden: Der meistbenutzte Dialog wirkt minimal unruhig.
-- Stand: offen RM-737
+- Stand: behoben `4cc120f79`
 
 ### FD-16 Zwei Hauptknöpfe in der Auswahlkarte bei gewähltem Merkmal
 
@@ -258,4 +258,40 @@ die systemischen leichten behebt D0.
 - Ursache: `app/ui/dialogs.py` (`show_error` baut `QMessageBox` mit `setIcon(Warning)`).
 - Vorschlag: eigener Meldungsdialog im Hausstil — Titel, Ursache, Handlungen als Knöpfe, Symbol aus dem eigenen Satz.
 - Wirkung beim Kunden: Ein Systemfenster mit Warndreieck bricht den Stil; Z5 erlaubt im Kundenweg keines.
+- Stand: behoben `4dee5f9bc`
+
+### FD-22 Eingabe- und Farbfragen sind rohe Systemfenster
+
+- Art: Gestaltung
+- Schwere: mittel
+- Funktion: `meldung:_pick_colour`
+- Kriterium: Z5
+- Beleg: acht Aufrufe von `QInputDialog.getText`/`getItem` und `QColorDialog.getColor` im Kundenweg: Filamentfarbe und -platz (`filament_picker.py`), Druckfarbe (`print_settings_dialog.py`), Dienstadresse (`install_dialog.py`), Modell-Adresse, Gegenstück und Lagerspule (`main_window.py`), Maßwert einer Bedingung (`sketch_editor.py`); gemeldet beim Fix von FD-21
+- Ursache: Für Eingabe und Farbwahl gibt es keinen eigenen Dialog im Hausstil; FD-21 deckte nur Meldungen ab.
+- Vorschlag: Eingabe am Ort, wo es geht, sonst ein Eingabedialog im Hausstil auf der Grundlage von `message_dialog`; Farbwahl über den eigenen Farbwähler des Filamentlagers.
+- Wirkung beim Kunden: Mitten im Ablauf ein Systemfenster in anderem Stil, bei der Farbe der Windows-Farbdialog.
+- Stand: offen RM-737
+
+### FD-23 Die Karten halten das 4er-Raster nicht
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Kriterium: G2
+- Beleg: zehn Kartenlayouts in `panels.py` mit Qts Abstand 6; der Wächter aus FD-15 nimmt sie aus, weil `OverlayHost` ihre Höhen teilt
+- Ursache: `app/ui/panels.py` (Layouts der Karten ohne gesetzten Abstand).
+- Vorschlag: Raster setzen und die Höhenrechnung von `OverlayHost` und `natural_height` mitziehen; Ausnahme im Wächter streichen.
+- Wirkung beim Kunden: Die Karten wirken neben den Dialogen minimal unruhiger.
+- Stand: offen RM-737
+
+### FD-24 Erfolgsmeldungen der Freischaltung sind modal
+
+- Art: Gestaltung
+- Schwere: mittel
+- Funktion: `meldung:_online_completed`
+- Kriterium: Z2
+- Beleg: Nach erfolgreicher Freischaltung und Abmeldung erscheint ein modales Meldungsfenster; Z2: „Erfolg und Hinweis erscheinen nie als Meldungsfenster“; gemeldet beim Fix von FD-21
+- Ursache: `app/ui/dialogs.py` (Erfolgsmeldungen der Freischaltung über `inform`, modal).
+- Vorschlag: Erfolg nicht-modal am Ort oder in der Statusleiste, im Hausstil; was der Kunde danach tun kann, als Handlung dabei.
+- Wirkung beim Kunden: Ein Erfolg hält das Fenster an, bis er weggeklickt ist.
 - Stand: offen RM-737
