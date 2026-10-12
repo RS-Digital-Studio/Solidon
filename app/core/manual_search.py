@@ -29,7 +29,14 @@ from typing import Final
 from app.core.manual import FIGURE_PATTERN, Page, Part, pages
 from app.core.markup import unlinked
 from app.core.registry.registry import REGISTRY, Registry
-from app.core.registry.search import customer_phrases, fold, request_terms, says, strength
+from app.core.registry.search import (
+    asked,
+    customer_phrases,
+    fold,
+    request_terms,
+    says,
+    strength,
+)
 
 #: Was ein Treffer an welcher Stelle wert ist, gerechnet für ein Wort, das
 #: am Wortanfang passt (:func:`strength` gleich eins). Titel, Kurzfassung und
@@ -214,14 +221,19 @@ class SearchIndex:
         Ohne Suchwort kommen alle Seiten in ihrer Reihenfolge und schlagen oben
         auf. Mehrere Wörter finden die Seiten, auf denen jedes vorkommt, und
         die, auf denen sie nebeneinander stehen, zuerst.
+
+        **Eine Frage sucht ohne ihre Fragewörter** (:func:`asked`, wie die Suche
+        im Reiter *Auswahl*): Jedes Wort muss auf der Seite stehen, und das
+        Handbuch sagt „Sie“, nie „ich“ — „Wie kann ich abrunden?“ fand bis FD-18
+        keine Seite, „abrunden“ die richtige.
         """
-        words = _words(needle)
+        words = tuple(asked(_words(needle), needle))
         if not words:
             return [Found(entry.page, "") for entry in self._entries]
         # Was der Kunde getippt hat, und die Titel der Operationen, die er mit
         # einem Kundenwort meint. Eine Seite zählt mit der besseren Antwort.
         variants = [(words, False)]
-        variants.extend((meant, True) for meant in self._meant(needle) if meant != words)
+        variants.extend((meant, True) for meant in self._meant(" ".join(words)) if meant != words)
         ranked: list[tuple[float, int, Found]] = []
         for entry in self._entries:
             best: tuple[float, str] | None = None

@@ -20,6 +20,8 @@ it into `website/version.json`.
 ### Operation and system
 
 - The search finds *Unite*, *Subtract* and *Intersection* under “boolean” too, and *Subtract* also under “difference”.
+- The search also finds the function for a question like “How do I put the part on the build plate?” and knows words from slicers and CAD such as “print bed” or “variable”.
+- The search in the manual also finds the right page for a question in your own words.
 - With one body selected and a second in the scene, the *Selection* tab says how to add the second for *Unite*, *Subtract* and *Intersection*.
 - The search field in the *Selection* tab is now always there, even with nothing selected, and finds every function and command along with its shortcut.
 - The command palette is gone, because the search field finds the same. *Search functions* and Ctrl+Shift+P put the cursor into it.

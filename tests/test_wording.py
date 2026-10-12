@@ -736,7 +736,8 @@ UEBERSETZT_DATEI = Path(__file__).resolve().parent / "data" / "translated_semico
 
 
 def suchwoerter() -> frozenset[str]:
-    """Die Katalogschlüssel der Kundenwörter (``registry.search.CUSTOMER_WORDS``).
+    """Die Katalogschlüssel der Kundenwörter (``registry.search.CUSTOMER_WORDS``)
+    und der Fragewörter der Suche (``QUESTION_WORDS``, ``REQUEST_WORDS``).
 
     **Eine Wortliste, kein Kundentext:** Der Kunde liest sie nie, er tippt sie,
     und die Suche trennt ihre Wendungen am Semikolon. Ein Fachwort darin ist
@@ -744,11 +745,11 @@ def suchwoerter() -> frozenset[str]:
     nichts. Bis dahin standen diese Listen im eingefrorenen Bestand der
     Musterwächter, mit jedem neuen Kundenwort ein Eintrag mehr.
     """
-    from app.core.registry.search import CUSTOMER_WORDS
+    from app.core.registry.search import CUSTOMER_WORDS, QUESTION_WORDS, REQUEST_WORDS
 
     return frozenset(
         f"{text.context}\x04{text.msgid}" if text.context else text.msgid
-        for text in CUSTOMER_WORDS.values()
+        for text in (*CUSTOMER_WORDS.values(), QUESTION_WORDS, REQUEST_WORDS)
     )
 
 

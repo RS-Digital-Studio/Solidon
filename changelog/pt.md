@@ -20,6 +20,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Utilização e sistema
 
 - A pesquisa encontra *Unir*, *Subtrair* e *Interseção* também como «booleano», e *Subtrair* também como «diferença».
+- A pesquisa encontra a função também para uma pergunta como «Como ponho a peça na mesa de impressão?» e conhece palavras de slicers e CAD como «variável».
+- Também a pesquisa no manual encontra a página certa para uma pergunta com as suas palavras.
 - Com um corpo selecionado e um segundo na cena, o separador *Seleção* indica como acrescentar o segundo para *Unir*, *Subtrair* e *Interseção*.
 - O campo de pesquisa do separador *Seleção* está agora sempre presente, também sem seleção, e encontra cada função e cada comando com o seu atalho.
 - A paleta de comandos desaparece, porque o campo de pesquisa encontra o mesmo. *Pesquisar função* e Ctrl+Shift+P põem o cursor nele.
