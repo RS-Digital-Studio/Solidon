@@ -8,8 +8,8 @@ ihrem Platzbedarf, Felder, Tab-Kette, Layoutmaße, Schriften, Zustandsbilder,
 Kontraste, Symbole, Animationen, Rollleisten, leere Zustände und Meldungen samt
 Handlungen. Was die Aufnahme dazu tun muss — eine Taste drücken, mit der Maus
 darüberfahren —, sind Eingabeereignisse; keine Aufnahme ruft eine Handlung
-direkt auf (Wächter in ``tests/test_function_bench.py``,
-:data:`function_bench.FORBIDDEN_CALLS`).
+direkt auf (Wächter in ``tests/test_function_guard.py``,
+:data:`function_guard.FORBIDDEN_CALLS`).
 
 Die Rechnung hinter den Aufnahmen ist ohne Fenster prüfbar: :class:`Heartbeat`,
 :class:`FrameCounter` und :func:`modal_allowed` bekommen Zahlen, Namen und

@@ -18,14 +18,15 @@ die Funktionsfälle des Funktionsdurchgangs an (RM-737, Konzept
 Funktionsliste (``tools/function_list.py``) und Variante ein Fall, je Sprache
 und Paket ein Sprachfall; dazu die Startszenen nach ``<ordner>/scenes/`` und die
 Menüleiste des gebauten Fensters nach ``<ordner>/menubar.json``. Gefahren
-werden sie von ``tools/function_bench.py`` — dieses Werkzeug bleibt der eine
-Einstieg (Konzept §12: kein drittes Fensterwerkzeug).
+werden sie vom Prüfstand (``tools/function_bench.py`` und seine Nachbarn) —
+dieses Werkzeug bleibt der eine Einstieg (Konzept §12: kein drittes
+Fensterwerkzeug).
 
 **Jede geprüfte Handlung ist ein Eingabeereignis** (Bauplan D0 B5): Auswahl per
 Klick auf die Baumzeile, Zahlen getippt mit dem Dezimalzeichen der Sprache,
 *Übernehmen* geklickt, Rückgängig und Wiederholen über ihre Tasten — jeder Klick
 an der Stelle, die ``guide_targets.next_click`` nennt, mit der Probe, ob dort
-wirklich das Ziel liegt (``function_bench.Walk``). Nur die Startszene entsteht
+wirklich das Ziel liegt (``function_walk.Walk``). Nur die Startszene entsteht
 über ``open_path``. Der Kindprozess setzt ``AA_DontUseNativeDialogs``: Den
 Systemdialog prüft nur Stufe C.
 
@@ -63,7 +64,7 @@ nächsten Lauf übersprungen (``--again`` fährt ihn neu).
 Kein Testlauf und nicht im Tor: Der Lauf braucht ein echtes Fenster und
 dauert. Seine Logik — Bestand, Wahl des Merkmals, neue Zahl, Abgleich der
 Abdrücke, Bericht — prüft ``tests/test_file_acceptance.py`` ohne Fenster, die
-der Funktionsfälle ``tests/test_function_bench.py``.
+der Funktionsfälle ``tests/test_function_bench.py`` und ihre Nachbarn.
 """
 
 from __future__ import annotations
@@ -173,7 +174,7 @@ CASE_KINDS: tuple[str, ...] = ("file", "function", "language", "start")
 STARTUP_SOURCE = "startablauf"
 
 #: Das Messprofil des Audits: kein Materialurteil, nur ein fester Rahmen —
-#: auch der Filamentdrucker der Funktionsfälle (``function_bench.PRINTERS``).
+#: auch der Filamentdrucker der Funktionsfälle (``function_setup.PRINTERS``).
 PRINTER = "centauri-carbon-2"
 MATERIAL = "petg"
 
@@ -193,7 +194,7 @@ class Case:
 
     ``kind`` ist einer aus :data:`CASE_KINDS`; ``row`` die Kennung der Zeile
     (beim Sprachfall das Paket), ``variant`` die Bedingungen des Laufs
-    (``function_bench.Variant``). Alte ``cases.json`` ohne diese Felder sind
+    (``function_setup.Variant``). Alte ``cases.json`` ohne diese Felder sind
     Dateifälle und bleiben lesbar.
     """
 
@@ -361,29 +362,23 @@ def function_cases(
     der nichts fand. ``sprachen`` faltet nicht je Zeile aus: Ein Prozess je
     Sprache und Paket geht die Flächen aller Zeilen ab (``tools/CLAUDE.md``,
     sechs Sprachen in einem Prozess brechen ab). ``phases`` beschränkt jeden
-    Funktionsfall auf diese Phasen (``function_bench.PHASES``) — für die
+    Funktionsfall auf diese Phasen (``function_setup.PHASES``) — für die
     Nachprüfung einer Zeile nach einem Fix.
 
     Was die Spezifikation an Lizenz und Vorbedingungen nennt, gilt für jeden Fall
     der Zeile; eine Vorbedingung mit zwei Zuständen bekommt im Satz ``basis``
     einen Lauf im anderen Zustand dazu, denn „fehlt“ ist der Fehlerweg
-    (``function_bench.spec_variants``). Die Läufe von ``lizenz`` liest
-    ``function_bench.variant_sets`` jetzt an der Fassung. Eine Zeile des
+    (``function_setup.spec_variants``). Die Läufe von ``lizenz`` liest
+    ``function_setup.variant_sets`` jetzt an der Fassung. Eine Zeile des
     Startablaufs (:data:`STARTUP_SOURCE`) wird im Satz ``basis`` ein Startfall
     im Zustand „Demo abgelaufen“ und in keinem anderen Satz gefahren — sie hat
     kein Fenster, an dem eine Phase liefe. ``phases`` gilt nur für Sätze, die
     sie haben; ein Satz ohne eine davon fällt weg.
     """
     from app.i18n.catalog import available_languages
-    from tools.function_bench import (
-        PHASES,
-        Variant,
-        spec_variants,
-    )
-    from tools.function_bench import (
-        variant_sets as known_sets,
-    )
     from tools.function_list import STARTUP_LICENCE
+    from tools.function_setup import PHASES, Variant, spec_variants
+    from tools.function_setup import variant_sets as known_sets
 
     sets = known_sets()
     unknown_sets = sorted(set(variant_sets) - set(sets))
@@ -564,9 +559,9 @@ def menubar_child(out: Path) -> int:
     """
     isolate(out / "menubar-profile")
     sys.path.insert(0, str(ROOT))
-    from tools import function_bench as bench
+    from tools import function_setup
 
-    bench.write_profile(bench.Variant())
+    function_setup.write_profile(function_setup.Variant())
     from app.core.bootstrap import load_operations
     from app.ui.app import build_application
     from tools import function_list
@@ -967,7 +962,7 @@ def resumes(case: Case, process: Mapping[str, Any]) -> bool:
     """Ob ein schon gelaufener Fall beim nächsten ``run`` weiterläuft, ohne ``--again``.
 
     Nur ein abgebrochener Sprachfall: Er nimmt seine Flächen einzeln wieder auf
-    (``function_bench.LanguageFlow``) und verliert durch einen Abbruch nur die
+    (``function_language.LanguageFlow``) und verliert durch einen Abbruch nur die
     eine, an der er stand. Jeder andere Fall läuft nur mit ``--again`` neu.
     """
     return case.kind == "language" and (
@@ -1091,7 +1086,7 @@ def child(out: Path, number: int, screen: str = "") -> int:
     # Das Register füllt sonst ``main`` vor dem Fenster — wie im Audit hier.
     from app.core.bootstrap import load_operations
     from app.ui.app import build_application
-    from tools import function_bench as bench
+    from tools import function_setup
     from tools.window_bench import shutdown_window
 
     exit_code = 0
@@ -1101,7 +1096,7 @@ def child(out: Path, number: int, screen: str = "") -> int:
         # Der feste Rahmen der Abnahme (RM-184): Das neue Projekt, das *Neues
         # Projekt* anlegt, nimmt Drucker und Material aus dem Profil
         # (:data:`PRINTER`, :data:`MATERIAL`), und die Ersteinrichtung ist erledigt.
-        bench.write_profile(bench.Variant())
+        function_setup.write_profile(function_setup.Variant())
         load_operations()
         no_native_dialogs()
         application, window = build_application([])
@@ -1161,9 +1156,9 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     Abbau, erledigte Flächen). Ein Sprachfall schreibt kein ``function.json``,
     sondern je Fläche ein Protokoll unter ``surfaces/``.
     """
-    from tools import function_bench as bench
+    from tools import function_bench, function_language, function_protocol, function_setup
 
-    variant = bench.Variant.of({**case.variant, **({"screen": screen} if screen else {})})
+    variant = function_setup.Variant.of({**case.variant, **({"screen": screen} if screen else {})})
     if variant.scale != 1.0:
         os.environ["QT_SCALE_FACTOR"] = f"{variant.scale:g}"
     if not variant.motion:
@@ -1174,7 +1169,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     state: dict[str, Any] = {
         "case": asdict(case),
         "stage": "start",
-        "cleared": bench.fresh_case(folder),
+        "cleared": function_setup.fresh_case(folder),
     }
     version = version_info()
 
@@ -1185,7 +1180,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     data: dict[str, Any] | None = None
     if case.kind == "function":
         row = rows.get(case.row) or {"id": case.row}
-        data = bench.empty_protocol(row, variant.protocol(None, (0, 0)), version)
+        data = function_protocol.empty_protocol(row, variant.protocol(None, (0, 0)), version)
 
     def persist() -> None:
         if data is not None:
@@ -1204,22 +1199,22 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     try:
         # Vorbereitung im ``try``: Scheitert Profil, Lizenz oder eine
         # Vorbedingung, steht der Grund in ``bench.json`` und in der Übersicht.
-        second = bench.case_scene(folder, scenes, bench.SECOND_SCENE)
-        bench.write_profile(variant, recent=[second] if second is not None else [])
+        second = function_setup.case_scene(folder, scenes, function_setup.SECOND_SCENE)
+        function_setup.write_profile(variant, recent=[second] if second is not None else [])
         load_operations()
         no_native_dialogs()
-        bench.apply_licence(variant.licence)
-        state["preconditions_applied"] = bench.apply_preconditions(variant.preconditions)
+        function_setup.apply_licence(variant.licence)
+        state["preconditions_applied"] = function_setup.apply_preconditions(variant.preconditions)
         state["reference_factor"] = run_reference_factor(out)
         application, window = build_application([])
         flow: Any
         if data is None:
             package_rows = [row for row in rows.values() if row.get("package") == case.row]
-            flow = bench.LanguageFlow(
+            flow = function_language.LanguageFlow(
                 application, window, folder, state, keep, package_rows, variant, scenes, version
             )
         else:
-            flow = bench.FunctionFlow(
+            flow = function_bench.FunctionFlow(
                 application, window, folder, data, persist, row, variant, scenes, state, out
             )
             flow.prepare()
@@ -1242,19 +1237,19 @@ def start_child(out: Path, case: Case, folder: Path) -> int:
     """Ein Startfall: Profil, Zustand „Demo abgelaufen“, dann ``app.ui.app.main`` selbst.
 
     Kein ``build_application``: Das Starttor steht in ``main`` vor dem Fenster
-    (``function_bench.StartFlow``). ``function.json`` ist das Protokoll nach dem
+    (``function_start.StartFlow``). ``function.json`` ist das Protokoll nach dem
     Schema von D0-U, ``bench.json`` der Lauf samt Ausgang von ``main``.
     """
-    from tools import function_bench as bench
+    from tools import function_protocol, function_setup, function_start
 
-    variant = bench.Variant.of(case.variant)
+    variant = function_setup.Variant.of(case.variant)
     row = read_rows(out).get(case.row) or {"id": case.row}
     state: dict[str, Any] = {
         "case": asdict(case),
         "stage": "start",
-        "cleared": bench.fresh_case(folder),
+        "cleared": function_setup.fresh_case(folder),
     }
-    data = bench.empty_protocol(row, variant.protocol(None, (0, 0)), version_info())
+    data = function_protocol.empty_protocol(row, variant.protocol(None, (0, 0)), version_info())
 
     def persist() -> None:
         write_json(folder / "function.json", data)
@@ -1263,10 +1258,10 @@ def start_child(out: Path, case: Case, folder: Path) -> int:
     persist()
     exit_code = 0
     try:
-        bench.write_profile(variant)
-        bench.apply_licence(variant.licence)
+        function_setup.write_profile(variant)
+        function_setup.apply_licence(variant.licence)
         no_native_dialogs()
-        state["main_exit_code"] = bench.StartFlow(data, persist).run()
+        state["main_exit_code"] = function_start.StartFlow(data, persist).run()
         state["stage"] = "done"
     except Exception:
         state["harness_exception"] = traceback.format_exc()
@@ -1280,10 +1275,10 @@ def start_child(out: Path, case: Case, folder: Path) -> int:
 class WindowFlow:
     """Die Schritte eines Dateifalls am Fenster; jeder schreibt sein Bild und seine Abdrücke.
 
-    Jede Handlung ist ein Eingabeereignis über ``function_bench.Walk`` — Klick
+    Jede Handlung ist ein Eingabeereignis über ``function_walk.Walk`` — Klick
     mit Probe an der Stelle, die ``next_click`` nennt, Tippen, Taste (B5). Was
     hier direkt am Fenster gelesen wird — Abdrücke, Merkmale, Feldwerte —, ist
-    Ablesen; ``tests/test_function_bench.py`` hält per AST, dass diese Klasse
+    Ablesen; ``tests/test_function_guard.py`` hält per AST, dass diese Klasse
     keine Bedienung umgeht.
     """
 
@@ -1296,7 +1291,7 @@ class WindowFlow:
         data: dict[str, Any],
         persist: Callable[[], None],
     ) -> None:
-        from tools.function_bench import QtPorts, Walk
+        from tools.function_walk import QtPorts, Walk
 
         self.application = application
         self.window = window
@@ -1336,7 +1331,7 @@ class WindowFlow:
     def drive(self, label: str, steps: Sequence[Any], timeout: float = STEP_TIMEOUT) -> None:
         """Fährt Schritte über den Automaten; ein Fund oder Fehler bricht den Fall ab."""
         self.walker.phase = label
-        from tools.function_bench import StepMachine, drive, qt_schedule
+        from tools.function_machine import StepMachine, drive, qt_schedule
 
         machine = StepMachine(
             qt_schedule,
@@ -1444,7 +1439,7 @@ class WindowFlow:
         """Wache anlegen, Fenster zeigen, *Neues Projekt* klicken."""
         from PySide6.QtCore import QTimer
 
-        from tools.function_bench import Step
+        from tools.function_machine import Step
 
         self.session.failed.connect(
             lambda error: self.data["errors"].append(str(error)), self.window
@@ -1672,7 +1667,7 @@ class WindowFlow:
         return redo_keys(sys.platform, QKeySequence(QKeySequence.StandardKey.Redo))[0]
 
     def _key(self, sequence: Any, label: str) -> Any:
-        from tools.function_bench import SETTLE_MS, Step
+        from tools.function_machine import SETTLE_MS, Step
 
         def act(machine: Any) -> None:
             self.walker.record({"target": label, "key": sequence.toString()})
@@ -1684,13 +1679,14 @@ class WindowFlow:
         """Ins Feld klicken, alles markieren, die Zahl in der Anzeigeeinheit tippen.
 
         Markiert und getippt wird nur, wenn der Fokus im Feld liegt
-        (``function_bench.focus_check``, Review M13).
+        (``function_walk.focus_check``, Review M13).
         """
         from PySide6.QtGui import QKeySequence
 
         from app.ui import guide_targets
         from app.ui.labels import display_unit
-        from tools.function_bench import SETTLE_MS, Step, focus_check, typed_number
+        from tools.function_machine import SETTLE_MS, Step
+        from tools.function_walk import focus_check, typed_number
 
         text = typed_number(value, display_unit())
 
