@@ -33,7 +33,7 @@ from app.core.scene.parameter_binding import BindingSpot
 from app.core.types import Document, OpId
 from app.i18n import tr
 from app.ui.labels import length, step_number, wheel_needs_focus
-from app.ui.style import SPACE, DialogScrollArea, fit_dialog_to_screen, make_primary
+from app.ui.style import NORMAL, SPACE, DialogScrollArea, fit_dialog_to_screen, make_primary
 
 
 def spot_title(document: Document, spot: BindingSpot) -> str:
@@ -77,6 +77,7 @@ class BindingDialog(QDialog):
         self._checks: list[QCheckBox] = []
         self._choices: list[QComboBox] = []
         outer = QVBoxLayout(self)
+        outer.setSpacing(NORMAL)
         intro = QLabel(
             tr(
                 "Diese festen Zahlen passen zu Projektmaßen. Gebunden folgen sie dem Maß, "
@@ -88,6 +89,7 @@ class BindingDialog(QDialog):
         outer.addWidget(intro)
         sheet = QWidget(self)
         grid = QGridLayout(sheet)
+        grid.setVerticalSpacing(NORMAL)
         grid.setHorizontalSpacing(SPACE)
         for row, spot in enumerate(self._spots):
             title = spot_title(document, spot)

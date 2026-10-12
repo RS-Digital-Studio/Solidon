@@ -31,11 +31,9 @@ from PySide6.QtGui import QDesktopServices, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
-    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -81,9 +79,9 @@ from app.core.errors import (
     InstallationDamaged,
     InternalError,
 )
-from app.core.knowledge import calibration, licences, profiles
+from app.core.knowledge import licences
 from app.core.log import get_logger
-from app.core.types import Finding, Profile
+from app.core.types import Finding
 from app.core.units import UNIT_NAMES
 from app.i18n import format_decimal, get_language, tr
 from app.ui.ai_disclosure import (
@@ -100,7 +98,6 @@ from app.ui.labels import (
     demo_days,
     fill_parameter_units,
     localised_value,
-    printer_title,
     trial_days,
     unit_of,
     value_line,
@@ -113,6 +110,7 @@ from app.ui.leash import (
     stop_watching_the_dying,
     weak_slot,
 )
+from app.ui.message_dialog import MessageDialog, inform
 from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
@@ -136,7 +134,7 @@ from app.ui.style import (
     set_level,
     set_role,
 )
-from app.ui.window_names import name_button, raw_window
+from app.ui.window_names import name_button
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort. Der Name ist englisch wie jeder andere in
@@ -386,219 +384,6 @@ class AskDialog(QDialog):
     def chosen(self) -> str | None:
         item = self.list.currentItem()
         return str(item.data(Qt.ItemDataRole.UserRole)) if item is not None else None
-
-
-class CalibrationDialog(QDialog):
-    """Gemessene Werte eintragen (Bauplan §28.3).
-
-    Schritt zwei von dreien: den Prüfkörper drucken, ihn messen, und die Zahlen
-    kommen hier hinein. Sie landen im Materialprofil, nicht in einem Modell —
-    und weil Toleranzen im Stapel Verweise sind (§12), folgt danach jedes
-    bestehende Projekt. Der Dialog sagt das, denn es ist der Teil, der Leute
-    überrascht.
-    """
-
-    def __init__(
-        self, material: str, parent: QWidget | None = None, *, process: Profile | None = None
-    ) -> None:
-        super().__init__(parent)
-        self.material = material
-        self.process = process
-        self.setWindowTitle(tr("Material kalibrieren"))
-        self.setMinimumWidth(420)
-
-        current = profiles.material(material)
-        state = (
-            tr("kalibriert") if current.calibrated else tr("Startwert", context="Kalibrierstand")
-        )
-        # Der Titel, den der Kunde überall sonst liest — nicht die Kennung des
-        # Profils („resin — Startwert" über einem „Standardharz").
-        # **Was kalibriert wird, ist die Überschrift** — es stand als erste
-        # Zeile im Fließtext, so laut wie der Satz darunter.
-        heading = QLabel(f"{current.title} — {state}", self)
-        heading.setWordWrap(True)
-        set_level(heading, "section")
-        explanation = QLabel(
-            tr(
-                "Gemessene Werte gehören ins Materialprofil, nicht ins Modell. "
-                "Alle bestehenden Projekte rechnen danach mit den neuen Werten.\n\n"
-                "Gemessen wird an einem gedruckten Prüfkörper: der Toleranz-Testkörper "
-                "aus dem Bausteinkatalog bringt Zapfen und Bohrungen mit gestaffeltem "
-                "Spiel auf zwei steckbare Messleisten."
-            ),
-            self,
-        )
-        explanation.setWordWrap(True)
-
-        self.editors: dict[str, QDoubleSpinBox] = {}
-        self.measured_fields: dict[str, QCheckBox] = {}
-        self._original_values: dict[str, float] = {}
-        self._edited_fields: set[str] = set()
-        form = QFormLayout()
-        form.setHorizontalSpacing(NORMAL)
-        form.setVerticalSpacing(NORMAL)
-        for name, title in (
-            ("clearance", tr("Spiel für Schiebesitz")),
-            ("press", tr("Übermaß für Presssitz")),
-            ("hole_compensation", tr("Lochkorrektur")),
-            ("elephant_foot", tr("Elefantenfuß")),
-            ("shrinkage", tr("Schwindung")),
-        ):
-            editor = NumberSpin(self)
-            # Die Schwindung ist ein Anteil, kein Maß: „0,004" trug deshalb
-            # als Einziges keine Einheit und sagte niemandem etwas. Als
-            # Prozentwert liest sie sich — 0,4 % ist eine Zahl, die man aus
-            # einem Datenblatt kennt.
-            percent = name == "shrinkage"
-            editor.setDecimals(2 if percent else 3)
-            editor.setRange(-100.0 if percent else -1.0, 500.0 if percent else 5.0)
-            editor.setSingleStep(0.1 if percent else 0.01)
-            editor.setSuffix(" %" if percent else " mm")
-            value = float(getattr(current, name))
-            self._original_values[name] = value
-            editor.setValue(value * 100.0 if percent else value)
-            self.editors[name] = editor
-            form.addRow(title, editor)
-
-        for name, title, suffix, maximum in (
-            ("minimum_wall", tr("Mindestwand übernehmen"), " mm", 50.0),
-            ("overhang_angle", tr("Überhangwinkel übernehmen"), " °", 89.9),
-        ):
-            checkbox = QCheckBox(title, self)
-            checkbox.setEnabled(process is not None)
-            editor = NumberSpin(self)
-            editor.setDecimals(2)
-            editor.setRange(0.01, maximum)
-            editor.setSuffix(suffix)
-            editor.setAccessibleName(title)
-            value = getattr(current, name)
-            applies = process is not None and process.has_process_calibration and value is not None
-            default = (
-                process.minimum_wall_thickness
-                if name == "minimum_wall" and process is not None
-                else process.overhang_limit_degrees
-                if process is not None
-                else 1.0
-            )
-            self._original_values[name] = float(value) if applies else default
-            editor.setValue(self._original_values[name])
-            editor.setEnabled(applies)
-            checkbox.setChecked(applies)
-            checkbox.toggled.connect(editor.setEnabled)
-            explanation_text = tr(
-                "Nur aktivieren, wenn Sie die Probe gedruckt und geprüft haben. "
-                "Der Überhangwinkel wird von der Senkrechten aus gemessen. "
-                "Ohne Auswahl bleiben gespeicherte Messwerte unverändert."
-            )
-            for widget in (checkbox, editor):
-                widget.setToolTip(explanation_text)
-                widget.setAccessibleDescription(explanation_text)
-            self.editors[name] = editor
-            self.measured_fields[name] = checkbox
-            form.addRow(checkbox, editor)
-
-        # Erst nach der Vorbelegung beobachten: Qt rundet schon bei setValue.
-        # Auch bewusstes Neueintippen derselben sichtbaren Zahl ist eine Änderung.
-        for name, observed_editor in self.editors.items():
-            observed_editor.valueChanged.connect(
-                lambda _value, field=name: self._edited_fields.add(field)
-            )
-            line = observed_editor.lineEdit()
-            if line is not None:
-                line.textEdited.connect(lambda _text, field=name: self._edited_fields.add(field))
-
-        process_note = QLabel(self)
-        process_note.setWordWrap(True)
-        if process is not None:
-            printer = process.printer
-            # Der Prozess des Verfahrens: Bei Resin gibt es keine Düse und
-            # keine Bahn — dort sind es Schichthöhe und Bildpunkt (RM-071).
-            conditions = (
-                tr("Schichthöhe")
-                + f" {format_decimal(printer.layer_height)} mm · "
-                + tr("Pixelgröße")
-                + f" {format_decimal(printer.pixel_size)} mm"
-                if printer.is_resin
-                else tr("Düse")
-                + f" {format_decimal(printer.nozzle_diameter)} mm · "
-                + tr("Schichthöhe")
-                + f" {format_decimal(printer.layer_height)} mm · "
-                + tr("Bahnbreite")
-                + f" {format_decimal(printer.extrusion_width)} mm"
-            )
-            process_note.setText(
-                tr("Wand und Überhang gelten nur für diese Druckbedingungen:")
-                + "\n"
-                + f"{printer_title(printer)} · {current.title}\n"
-                + conditions
-            )
-        else:
-            process_note.setText(tr("Wählen Sie zuerst den Drucker der Probe im Projekt aus."))
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
-        )
-        button_layout = buttons.layout()
-        assert button_layout is not None
-        button_layout.setSpacing(SPACE)
-        # Die gemessenen Werte zu übernehmen ist die Handlung dieses Fensters.
-        # Den Akzent trug der Knopf schon — Qt vergibt ihn beim ersten
-        # ``show()`` an den ersten autoDefault-Knopf —, aber ohne die
-        # halbfette Schrift daneben (Regel 18).
-        save = buttons.button(QDialogButtonBox.StandardButton.Save)
-        if save is not None:
-            make_primary(save)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-
-        content = QWidget(self)
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(heading)
-        layout.addWidget(explanation)
-        layout.addLayout(form)
-        layout.addWidget(process_note)
-        layout.setSpacing(NORMAL)
-        layout.addStretch(1)
-        scroll = DialogScrollArea(self)
-        scroll.setWidget(content)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
-        outer.setSpacing(NORMAL)
-        outer.addWidget(scroll, 1)
-        outer.addWidget(buttons)
-        for measurement in self.editors.values():
-            wheel_needs_focus(measurement)
-
-    def measured(self) -> calibration.Calibration:
-        """Was eingetragen wurde, als anwendungsfertige Kalibrierung.
-
-        Die Schwindung steht im Feld als Prozentwert und im Profil als Anteil —
-        umgerechnet wird hier, an der einen Stelle, an der beide sich treffen.
-
-        **Nur was eingetragen wurde** (RM-589): Ein unberührtes Feld ist keine
-        Messung. Es behält im Profil seinen Wert, aber nicht das Kennzeichen
-        „gemessen“ — sonst bliebe nach einer reinen Spielmessung der
-        Startwert des Elefantenfußes als gemessen stehen, und der Druckrat
-        nähme dem Slicer seinen Einzug nicht ab. Wand und Überhang zählen, wenn
-        ihr Haken steht.
-        """
-        return calibration.from_measurements(
-            self.material,
-            **{
-                name: self._original_values[name]
-                if name not in self._edited_fields
-                else editor.value() / 100.0
-                if name == "shrinkage"
-                else editor.value()
-                for name, editor in self.editors.items()
-                if (
-                    self.measured_fields[name].isChecked()
-                    if name in self.measured_fields
-                    else name in self._edited_fields
-                )
-            },
-        )
 
 
 class _ParameterValueSpin(NumberSpin):
@@ -2311,15 +2096,15 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        with raw_window("message:activation_request_saved"):
-            QMessageBox.information(
-                self,
-                tr("Aktivierungsanfrage gespeichert"),
-                tr(
-                    "Übertragen Sie die Datei auf ein Gerät mit Internet und öffnen Sie dort "
-                    "die Aktivierungsseite."
-                ),
-            )
+        inform(
+            self,
+            tr("Aktivierungsanfrage gespeichert"),
+            tr(
+                "Übertragen Sie die Datei auf ein Gerät mit Internet und öffnen Sie dort "
+                "die Aktivierungsseite."
+            ),
+            target="message:activation_request_saved",
+        )
 
     def _open_page(self) -> None:
         target = QUrl(self.PAGE_URL)
@@ -2328,15 +2113,15 @@ class OfflineActivationDialog(QDialog):
         target.setQuery(query)
         if QDesktopServices.openUrl(target) is False:
             self._copy_page()
-            with raw_window("message:activation_page"):
-                QMessageBox.information(
-                    self,
-                    tr("2 · Aktivierungsseite öffnen"),
-                    tr(
-                        "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; "
-                        "öffnen Sie sie auf einem Gerät mit Internet."
-                    ),
-                )
+            inform(
+                self,
+                tr("2 · Aktivierungsseite öffnen"),
+                tr(
+                    "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; "
+                    "öffnen Sie sie auf einem Gerät mit Internet."
+                ),
+                target="message:activation_page",
+            )
 
     def _copy_page(self) -> None:
         """Kopiert den bewusst sichtbaren Weg für das Gerät mit Internet."""
@@ -2372,12 +2157,12 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        with raw_window("message:activated_offline"):
-            QMessageBox.information(
-                self,
-                tr("Solidon ist freigeschaltet"),
-                tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
-            )
+        inform(
+            self,
+            tr("Solidon ist freigeschaltet"),
+            tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+            target="message:activated_offline",
+        )
         self.accept()
 
 
@@ -2816,15 +2601,15 @@ class ActivationDialog(QDialog):
             show_error(problem, self)
             return
         if activation.read_key() is None:
-            with raw_window("message:activation_reminder"):
-                QMessageBox.information(
-                    self,
-                    tr("Solidon freischalten"),
-                    tr(
-                        "Der Schlüssel gilt für diese Sitzung, ließ sich aber nicht "
-                        "ablegen — beim nächsten Start wird er wieder gebraucht."
-                    ),
-                )
+            inform(
+                self,
+                tr("Solidon freischalten"),
+                tr(
+                    "Der Schlüssel gilt für diese Sitzung, ließ sich aber nicht "
+                    "ablegen — beim nächsten Start wird er wieder gebraucht."
+                ),
+                target="message:activation_reminder",
+            )
         self._show_state()
         self._follow_field()
         self.device_name.setFocus()
@@ -2894,12 +2679,12 @@ class ActivationDialog(QDialog):
         except AppError as problem:
             show_error(problem, self)
             return
-        with raw_window("message:activated_online"):
-            QMessageBox.information(
-                self,
-                tr("Solidon ist freigeschaltet"),
-                tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
-            )
+        inform(
+            self,
+            tr("Solidon ist freigeschaltet"),
+            tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+            target="message:activated_online",
+        )
         self._show_state()
 
     def _online_failed(self, problem: object) -> None:
@@ -2983,15 +2768,15 @@ class ActivationDialog(QDialog):
             self._show_state()
             return
         self.field.clear()
-        with raw_window("message:deactivated"):
-            QMessageBox.information(
-                self,
-                tr("Rechner deaktiviert"),
-                tr(
-                    "Die lokale Freischaltung und der Lizenzschlüssel wurden entfernt. "
-                    "Der Geräteplatz ist jetzt für einen anderen Rechner frei."
-                ),
-            )
+        inform(
+            self,
+            tr("Rechner deaktiviert"),
+            tr(
+                "Die lokale Freischaltung und der Lizenzschlüssel wurden entfernt. "
+                "Der Geräteplatz ist jetzt für einen anderen Rechner frei."
+            ),
+            target="message:deactivated",
+        )
         self._show_state()
 
     def _deactivation_failed(self, problem: object) -> None:
@@ -3090,14 +2875,14 @@ def open_link(address: str, parent: QWidget | None = None) -> bool:
     """
     if open_or_copy(QUrl(address), address):
         return True
-    with raw_window("message:browser_failed"):
-        QMessageBox.information(
-            parent,
-            tr("Der Browser ließ sich nicht öffnen"),
-            tr("Die Adresse ist kopiert — fügen Sie sie in einen Browser ein:\n{address}").replace(
-                "{address}", address
-            ),
-        )
+    inform(
+        parent,
+        tr("Der Browser ließ sich nicht öffnen"),
+        tr("Die Adresse ist kopiert — fügen Sie sie in einen Browser ein:\n{address}").replace(
+            "{address}", address
+        ),
+        target="message:browser_failed",
+    )
     return False
 
 
@@ -3116,27 +2901,26 @@ def copy_donation_url(url: str = DONATION_URL) -> None:
     QApplication.clipboard().setText(url)
 
 
-class DonationOpenErrorDialog(QMessageBox):
-    """Der Browser-Ausfall endet mit einem kopierbaren Ausweg."""
+class DonationOpenErrorDialog(MessageDialog):
+    """Der Browser-Ausfall endet mit einem kopierbaren Ausweg — im Hausstil (FD-21)."""
 
     def __init__(self, parent: QWidget | None = None, *, url: str = DONATION_URL) -> None:
-        super().__init__(parent)
-        self._url = url
-        self.setIcon(QMessageBox.Icon.Warning)
-        self.setWindowTitle(tr("Die Unterstützungsseite ließ sich nicht öffnen"))
-        self.setText(tr("Der Standardbrowser konnte die Unterstützungsseite nicht öffnen."))
-        self.setInformativeText(
-            tr(
+        super().__init__(
+            parent,
+            title=tr("Die Unterstützungsseite ließ sich nicht öffnen"),
+            headline=tr("Der Standardbrowser konnte die Unterstützungsseite nicht öffnen."),
+            body=tr(
                 "Kopieren Sie den Zahlungslink und öffnen Sie ihn selbst. "
                 "Bei Fragen hilft Ihnen {address}."
-            ).format(address=SUPPORT_ADDRESS)
+            ).format(address=SUPPORT_ADDRESS),
+            kind="warning",
         )
-        self.copy_button = self.addButton(
-            tr("Zahlungslink kopieren"), QMessageBox.ButtonRole.ActionRole
+        self._url = url
+        self.copy_button = self.add_action(
+            tr("Zahlungslink kopieren"), "message.button:donation_failed.copy", lead=True
         )
-        self.copy_button.clicked.connect(self._copy_url)
-        close_button = self.addButton(QMessageBox.StandardButton.Close)
-        close_button.setText(tr("Schließen"))
+        self.copy_button.clicked.connect(weak_slot(self, DonationOpenErrorDialog._copy_url))
+        self.add_exit(tr("Schließen"), "message.button:donation_failed.close")
 
     def _copy_url(self) -> None:
         """Kopiert genau den zuvor gewählten Unterstützungsweg."""
@@ -3201,9 +2985,9 @@ def expired_demo_text(state: activation.Activation, now: datetime | None = None)
     return "\n\n".join(str(line) for line in lines)
 
 
-#: Der Name des Fensters nach abgelaufener Demo im Wortschatz. Es ist ein
-#: ``QMessageBox`` ohne eigene Klasse; der Name hängt deshalb als Kennzeichen
-#: am Fenster, nicht an einem Klassennamen.
+#: Der Name des Fensters nach abgelaufener Demo im Wortschatz. Es ist eine
+#: Meldung ohne eigene Klasse; der Name hängt deshalb als Kennzeichen am
+#: Fenster, nicht an einem Klassennamen.
 EXPIRED_DEMO_TARGET: Final = "dialog:expired_demo"
 
 
@@ -3213,17 +2997,18 @@ def show_expired_demo(state: activation.Activation) -> None:
     Ein Fenster und kein stiller Nichtstart: Wer doppelt klickt und nichts
     geschieht, sucht den Fehler bei sich oder hält das Programm für kaputt.
     """
-    box = QMessageBox()
-    box.setProperty(guides.TARGET_PROPERTY, EXPIRED_DEMO_TARGET)
-    box.setWindowTitle(tr("Die Demo ist beendet"))
-    box.setIcon(QMessageBox.Icon.Information)
-    box.setText(expired_demo_text(state))
-    website = box.addButton(tr("Website öffnen"), QMessageBox.ButtonRole.AcceptRole)
-    name_button(website, "message.button:expired_demo.website")
-    close = box.addButton(QMessageBox.StandardButton.Close)
-    name_button(close, "message.button:expired_demo.close")
+    title = tr("Die Demo ist beendet")
+    box = MessageDialog(
+        title=title,
+        headline=title,
+        body=expired_demo_text(state),
+        kind="info",
+        target=EXPIRED_DEMO_TARGET,
+    )
+    website = box.add_action(tr("Website öffnen"), "message.button:expired_demo.website", lead=True)
+    box.add_exit(tr("Schließen"), "message.button:expired_demo.close")
     box.exec()
-    if box.clickedButton() is website:
+    if box.clicked_button() is website:
         open_website()
 
 
@@ -3614,12 +3399,8 @@ def show_error(
     known = dict(handlers if handlers is not None else handlers_of(parent))
     offered = offered_actions(error, known)
 
-    box = QMessageBox(parent)
-    box.setProperty(guides.TARGET_PROPERTY, "message:error")
-    box.setTextFormat(Qt.TextFormat.PlainText)
-    box.setIcon(QMessageBox.Icon.Warning)
-    box.setWindowTitle(tr("Das hat so nicht funktioniert"))
-    box.setText(str(error.title))
+    # **Im Hausstil, nicht als Systemfenster** (FD-21, Z5): Symbol aus dem
+    # eigenen Satz, Titel, Ursache, Handlungen als Knöpfe.
     # Erst was nicht ging, dann die Angaben dazu, dann was jetzt möglich ist
     # (§2.7). Der letzte Teil fehlte für jeden Vorschlag ohne Handler — siehe
     # :func:`unhandled_advice`; der mittlere fehlte für jeden Fehler, siehe
@@ -3627,47 +3408,35 @@ def show_error(
     spoken = [str(error.detail)] if error.detail else []
     spoken.extend(spoken_values(error))
     spoken.extend(unhandled_advice(error, known))
-    if spoken:
-        box.setInformativeText("\n".join(spoken))
+    box = MessageDialog(
+        parent,
+        title=tr("Das hat so nicht funktioniert"),
+        headline=str(error.title),
+        body="\n".join(spoken),
+        kind="error",
+        target="message:error",
+    )
 
     buttons: dict[Any, Action] = {}
     # **Genau ein Hauptknopf** (RM-512), gewählt wie überall
     # (``leading_action``): Zwei Akzentknöpfe sagen nicht, welcher gemeint
-    # ist, und ohne gesetzten rät Qt einen — mit Akzent, ohne Halbfett.
+    # ist. Halbfett und Akzent setzt ``add_action`` über ``make_primary`` —
+    # Farbe allein wäre keine zweite Kodierung (Regel 18, Befund D3).
     lead = leading_action(offered)
     for action in offered:
-        role = (
-            QMessageBox.ButtonRole.AcceptRole
-            if action is lead
-            else QMessageBox.ButtonRole.ActionRole
+        button = box.add_action(
+            str(action.label), f"message.button:error.{action.id}", lead=action is lead
         )
-        button = box.addButton(str(action.label), role)
-        name_button(button, f"message.button:error.{action.id}")
-        # **Welcher Knopf der Hauptknopf ist, stand schon im Datenmodell** —
-        # ``Action.primary`` entscheidet zwei Zeilen darüber die Rolle. Es
-        # fehlte nur das letzte Glied: Ohne ``make_primary`` bekam der Knopf
-        # zwar Qts Akzentfarbe, aber nicht die halbfette Schrift, die neben ihr
-        # die zweite Kodierung ist (Regel 18, Befund D3).
-        if action is lead:
-            make_primary(button)
         buttons[button] = action
-    abbrechen = box.addButton(str(CANCEL.label), QMessageBox.ButtonRole.RejectRole)
-    name_button(abbrechen, f"message.button:error.{CANCEL.id}")
-
-    # **Bleibt nur „Abbrechen" übrig, trägt niemand den Akzent.** Das
-    # passiert, wenn das Fenster für keinen Vorschlag einen Handler hat
-    # (:func:`offered_actions`) — dann macht Qt den einzigen Knopf zum
-    # Default, und der Ausgang steht im Akzent da. „Schließen ist nie ein
-    # Hauptknopf" gilt auch, wenn er der einzige ist: Der Akzent lädt zu einer
-    # Handlung ein, und Abbrechen ist keine.
-    if not offered:
-        abbrechen.setAutoDefault(False)
-        abbrechen.setDefault(False)
-        # Ohne Handlung gibt es nichts abzubrechen — das Fenster schließt nur.
-        abbrechen.setText(tr("Schließen"))
+    # Ohne Handlung gibt es nichts abzubrechen — das Fenster schließt nur, und
+    # der Ausgang trägt nie den Akzent, auch nicht als einziger Knopf.
+    box.add_exit(
+        str(CANCEL.label) if offered else tr("Schließen"),
+        f"message.button:error.{CANCEL.id}",
+    )
 
     box.exec()
-    chosen = buttons.get(box.clickedButton())
+    chosen = buttons.get(box.clicked_button())
     if chosen is not None:
         known[chosen.id](error)
     return chosen
@@ -3684,12 +3453,18 @@ def show_details(error: AppError, parent: QWidget | None = None) -> None:
     if error.op_id is not None:
         lines.append(tr("Operation: {op_id}", op_id=error.op_id))
 
-    box = QMessageBox(parent)
-    box.setProperty(guides.TARGET_PROPERTY, "message:error_details")
-    box.setIcon(QMessageBox.Icon.Information)
-    box.setWindowTitle(tr("Einzelheiten"))
-    box.setText(str(error.title))
-    box.setDetailedText("\n".join(lines) or tr("Keine weiteren Angaben."))
+    box = MessageDialog(
+        parent,
+        title=tr("Einzelheiten"),
+        headline=str(error.title),
+        details="\n".join(lines) or tr("Keine weiteren Angaben."),
+        kind="info",
+        target="message:error_details",
+    )
+    # Die Angaben sind zum Weitergeben da — in eine Rückmeldung, eine Mail.
+    copy = box.add_action(tr("Kopieren"), "message.button:error_details.copy", closes=False)
+    copy.clicked.connect(weak_slot(box, MessageDialog.copy_text))
+    box.add_exit(tr("Schließen"), "message.button:error_details.close")
     box.exec()
 
 

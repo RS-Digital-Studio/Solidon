@@ -32,6 +32,10 @@ dans `website/version.json`.
 - S'il manque à une fonction un second corps dans la scène, la raison indique *Dupliquer l'objet* comme solution.
 - La liste des raccourcis clavier ne nomme plus qu'une fois *Sculpter*, *Squelette* et *Dessiner*.
 - Le bouton *Calculer plus grossièrement* disparaît : Solidon poursuit seul avec le calcul complet. Dans la version 0.6.0, il apparaissait aussi là où il ne changeait rien.
+- Les messages d'erreur, les détails et les avis s'affichent désormais dans le style de Solidon, avec les actions sous forme de boutons. Ctrl+C copie tout le message.
+- Le dialogue *Calibrer le matériau* n'affiche plus devant que le jeu, la surcote et la compensation des trous. Pied d'éléphant, retrait, paroi et surplomb sont sous *Autres réglages*.
+- Les nombres sont alignés à droite dans tous les champs, chiffre sous chiffre.
+- Un lecteur d'écran lit le nom et l'explication de chaque champ numérique d'un dialogue.
 
 ### Modifier et esquisser
 

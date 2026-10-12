@@ -168,6 +168,7 @@ class RebuildDialog(QDialog):
             )
         layout.addWidget(self.intro)
         form = QFormLayout()
+        form.setSpacing(NORMAL)
         self.local_limit = BoundedLengthSpin(content)
         self.local_limit.set_range_mm(0.01, 1000.0)
         self.local_limit.set_value_mm(0.1)
@@ -244,6 +245,7 @@ class RebuildDialog(QDialog):
         self.buttons.rejected.connect(self.reject)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        outer.setSpacing(NORMAL)
         outer.addWidget(self._scroll, 1)
         outer.addWidget(self.buttons)
 

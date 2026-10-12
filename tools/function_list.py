@@ -169,8 +169,11 @@ DIALOG_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "UpdateDialog": ("D12", "leer"),
     "ChangesDialog": ("D12", "leer"),
     "DonationDialog": ("D12", "leer"),
-    # Ein ``QMessageBox`` mit eigenem Ausweg (Zahlungslink kopieren).
+    # Eine Meldung mit eigenem Ausweg (Zahlungslink kopieren).
     "DonationOpenErrorDialog": ("D12", "leer"),
+    # Die Meldung im Hausstil (FD-21): Fehler, Einzelheiten, Hinweise. Ihre
+    # Fenster tragen ``message:<sache>`` wie zuvor die rohen.
+    "MessageDialog": ("D12", "leer"),
     "AboutDialog": ("D12", "leer"),
     "PartCatalog": ("D2", "leer"),
     "GenerateDialog": ("D2", "leer"),
@@ -324,8 +327,9 @@ CONTEXT_PACKAGES: Final[dict[str, tuple[str, str]]] = {
 SETTINGS_PACKAGE: Final = "D12"
 
 
-#: Funktionen, die ein rohes Meldungsfenster bauen, beim Namen (Zeile ``meldung:<name>``;
-#: eine Kennung nennt die Sache, nie ihr Modul), nach Paket und Anforderung. Konzept §6:
+#: Funktionen, die ein Meldungsfenster bauen — roh oder im Hausstil (``MessageDialog``) —,
+#: beim Namen (Zeile ``meldung:<name>``; eine Kennung nennt die Sache, nie ihr Modul),
+#: nach Paket und Anforderung. Konzept §6:
 #: Wiederherstellen und Speicherfrage in D1, die Löschnachfrage im Verlauf (Ausnahme zu
 #: Regel 19) in D11.
 RAW_WINDOW_PACKAGES: Final[dict[str, tuple[str, str]]] = {

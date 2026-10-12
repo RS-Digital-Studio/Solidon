@@ -397,6 +397,7 @@ class LocalRecognitionDialog(QDialog):
         heading.setWordWrap(True)
         layout.addWidget(heading)
         form = QFormLayout()
+        form.setSpacing(NORMAL)
         radius_spec = next(entry for entry in DetectRegionParams.spec() if entry.name == "radius")
         self._radius_spec = radius_spec
         self.radius = ValueField(radius_spec, radius, self._parameters, self)

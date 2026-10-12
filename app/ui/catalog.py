@@ -60,6 +60,7 @@ from app.ui.panels import collapsible, open_section
 from app.ui.style import (
     NORMAL,
     SPACE,
+    TIGHT,
     WIDE,
     DialogScrollArea,
     fit_dialog_to_screen,
@@ -416,6 +417,7 @@ class PartCatalog(QDialog):
         file_result_row = QWidget(self)
         file_result_layout = QHBoxLayout(file_result_row)
         file_result_layout.setContentsMargins(0, 0, 0, 0)
+        file_result_layout.setSpacing(TIGHT)
         file_result_layout.addWidget(self.file_result, stretch=1)
         file_result_layout.addWidget(self.show_affected_step)
         file_result_layout.addWidget(self.file_undo)

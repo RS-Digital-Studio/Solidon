@@ -1159,9 +1159,7 @@ def test_a_key_the_keychain_refuses_stays_in_the_field_with_the_real_reason(
         monkeypatch.setattr(keys, "_keyring_installed", lambda: False)
         said = "Auf diesem Rechner gibt es keinen Schlüsselbund."
     boxes: list[object] = []
-    monkeypatch.setattr(
-        dialogs.QMessageBox, "information", lambda *args, **kwargs: boxes.append(args)
-    )
+    monkeypatch.setattr(dialogs, "inform", lambda *args, **kwargs: boxes.append(args))
     dialog = KeyDialog()
     closed: list[int] = []
     dialog.finished.connect(closed.append)
@@ -2981,18 +2979,17 @@ def test_the_error_dialog_really_shows_them(
     Der Dialog ist modal; gemessen wird an dem, was er vor ``exec`` gesetzt
     hat — dasselbe, was ein Kunde liest.
     """
-    from PySide6.QtWidgets import QMessageBox
-
     from app.core.backends.llm import BackendAnswerUnreadable
     from app.ui.dialogs import show_details, show_error
+    from app.ui.message_dialog import MessageDialog
 
     gelesen: list[str] = []
 
-    def statt_exec(box: QMessageBox) -> int:
-        gelesen.append(" ".join((box.text(), box.informativeText(), box.detailedText())))
+    def statt_exec(box: MessageDialog) -> int:
+        gelesen.append(box.text())
         return 0
 
-    monkeypatch.setattr(QMessageBox, "exec", statt_exec)
+    monkeypatch.setattr(MessageDialog, "exec", statt_exec)
 
     problem = BackendAnswerUnreadable(
         url="http://192.168.1.50:11434",

@@ -32,6 +32,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si a una función le falta un segundo cuerpo en la escena, el motivo indica *Duplicar objeto* como camino.
 - La lista de atajos de teclado nombra *Modelar*, *Esqueleto* y *Dibujar* una sola vez.
 - Desaparece el botón *Calcular de forma más aproximada*: Solidon sigue solo con el cálculo completo. En la versión 0.6.0 aparecía también donde no cambiaba nada.
+- Los mensajes de error, los detalles y los avisos aparecen ahora con el estilo de Solidon, con las acciones como botones. Ctrl+C copia el mensaje entero.
+- El diálogo *Calibrar material* muestra delante solo la holgura, el apriete y la compensación de agujeros. Pata de elefante, contracción, pared y voladizo están en *Más ajustes*.
+- Los números quedan alineados a la derecha en todos los campos, cifra bajo cifra.
+- Un lector de pantalla lee el nombre y la explicación de cada campo numérico de un diálogo.
 
 ### Editar y dibujar
 
