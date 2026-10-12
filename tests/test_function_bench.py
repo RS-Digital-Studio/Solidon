@@ -37,7 +37,6 @@ from tools.file_acceptance import (
     ROOT,
     Case,
     function_cases,
-    menubar_lines,
     read_cases,
     resumes,
     summary,
@@ -941,47 +940,6 @@ def test_old_cases_stay_file_cases_and_new_ones_keep_their_fields(tmp_path: Path
     assert read_cases(tmp_path) == [new]
 
 
-def test_the_menubar_reaches_the_list_with_the_line_in_its_path(tmp_path: Path) -> None:
-    """W nennt die Titel **über** der Zeile, L liest den Weg **bis zur** Zeile (``MenuEntry``).
-
-    Die Zeile selbst kommt dazu, das Kürzel steht, wie die Aktion es trägt, und
-    ``read_menubar`` aus ``function_list`` liest die Datei so, wie der Prüfstand sie
-    schreibt.
-    """
-    from tools import function_list
-
-    class Shortcut:
-        def toString(self) -> str:  # noqa: N802 - Qts Name
-            return "Ctrl+Shift+S"
-
-    class Action:
-        def text(self) -> str:
-            return "Speichern unter …"
-
-        def shortcut(self) -> Shortcut:
-            return Shortcut()
-
-    lines = menubar_lines([("menubar.datei.speichern_unter", ("Datei",), Action())])
-    assert lines == [
-        {
-            "object_name": "menubar.datei.speichern_unter",
-            "path": ["Datei", "Speichern unter …"],
-            "shortcut": "Ctrl+Shift+S",
-        }
-    ]
-    assert (
-        function_list.MenuEntry(
-            "menubar.datei.speichern_unter", ("Datei", "Speichern unter …"), "Ctrl+Shift+S"
-        )
-        == function_list.read_menubar(_written(tmp_path, lines))[0]
-    )
-
-
-def _written(folder: Path, lines: list[dict[str, Any]]) -> Path:
-    write_json(folder / "menubar.json", lines)
-    return folder / "menubar.json"
-
-
 def test_only_a_broken_language_case_resumes_without_again() -> None:
     """Ein Sprachfall nimmt seine Flächen einzeln wieder auf, andere Fälle nur mit ``--again``."""
     language = Case(1, "D4 [de]", "", "", kind="language", row="D4")
@@ -1427,10 +1385,28 @@ def test_the_probe_row_runs_in_its_own_process_from_inventory_to_report(tmp_path
     state = json.loads((out / "cases" / "001" / "bench.json").read_text(encoding="utf-8"))
     assert state["stage"] == "done" and state["shutdown_complete"] is True
     protocol = json.loads((out / "cases" / "001" / "function.json").read_text(encoding="utf-8"))
-    assert protocol["variant"]["licence"] == "licensed" and protocol["variant"]["language"] == "de"
-    _assert_the_main_way(protocol)
-    menu = json.loads((out / "menubar.json").read_text(encoding="utf-8"))
-    assert len(menu) > 30 and all(entry["object_name"].startswith("menubar.") for entry in menu)
+    assert validate_protocol(protocol) == []
+    variant = protocol["variant"]
+    assert (variant["licence"], variant["language"], variant["phases"]) == (
+        "licensed",
+        "de",
+        ["escape", "main"],
+    )
+    assert protocol["row"]["id"] == PROBE_ROW and protocol["scene"]["key"]
+    # Der Hauptweg ist geprobt: Jeder Klick steht mit Treffer oder Fund da. Ob
+    # die Anwendung ihn freigibt, ist ein Befund über sie, nicht über den
+    # Prüfstand — ein Fund steht dann vollständig in ``findings``.
+    main = [step for step in protocol["steps"] if step["phase"] in MAIN_PHASES]
+    assert main and all("hit" in step or "finding" in step for step in main if step.get("why"))
+    assert protocol["errors"] == [], protocol["errors"]
+    for found in protocol["findings"]:
+        assert found["kind"] in (bench.COVERED, bench.NOT_FOUND) and found["detail"]
+    if not protocol["findings"]:
+        _assert_the_main_way(protocol)
+    from tools import function_list
+
+    menu = function_list.read_menubar(out / "menubar.json")
+    assert len(menu) > 30 and all(entry.object_name.startswith("menubar.") for entry in menu)
     report = json.loads((out / "summary.json").read_text(encoding="utf-8"))
     assert (report["function_cases"], report["function_complete"]) == (1, 1)
 

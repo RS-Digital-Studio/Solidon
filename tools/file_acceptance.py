@@ -498,24 +498,6 @@ def menubar(out: Path) -> Path:
     return target
 
 
-def menubar_lines(entries: Iterable[tuple[str, Sequence[str], Any]]) -> list[dict[str, Any]]:
-    """``guide_targets.menubar_entries`` in der Form von ``function_list.read_menubar``.
-
-    W liefert die Titel der Menüs **über** der Zeile, L liest den Weg **bis
-    zur** Zeile (``MenuEntry.path``) und bildet daraus die Kennung
-    ``Datei/Speichern unter …``; die Zeile selbst kommt deshalb dazu. Das
-    Kürzel steht, wie die Aktion es trägt.
-    """
-    return [
-        {
-            "object_name": str(name),
-            "path": [str(part).replace("&", "") for part in (*menus, action.text())],
-            "shortcut": action.shortcut().toString(),
-        }
-        for name, menus, action in entries
-    ]
-
-
 def menubar_child(out: Path) -> int:
     """Kindprozess von :func:`menubar`: Fenster bauen, Menüleiste lesen, schreiben.
 
@@ -529,14 +511,14 @@ def menubar_child(out: Path) -> int:
 
     bench.write_profile(bench.Variant())
     from app.core.bootstrap import load_operations
-    from app.ui import guide_targets
     from app.ui.app import build_application
+    from tools import function_list
     from tools.window_bench import shutdown_window
 
     load_operations()
     application, window = build_application([])
     try:
-        write_json(out / "menubar.json", menubar_lines(guide_targets.menubar_entries(window)))
+        function_list.write_menubar(out / "menubar.json", function_list.menubar_of(window))
     finally:
         shutdown_window(window, application)
     return 0
