@@ -344,7 +344,7 @@ def function_cases(
 ) -> list[Case]:
     """Die Fälle zu Zeilen der Funktionsliste: je Zeile und Variante, je Sprache und Paket.
 
-    ``rows`` sind die Zeilen aus ``tools/function_list.py`` (Bauplan D0 §2.3).
+    ``rows`` sind die Zeilen aus ``tools/function_list.py`` (Plan D0, Abschnitt 2.3).
     ``packages`` und ``row_ids`` schränken ein; eine Kennung, die keine Zeile
     trifft, ist ein Fehler — ein Lauf, der still nichts prüft, sähe aus wie einer,
     der nichts fand. ``sprachen`` faltet nicht je Zeile aus: Ein Prozess je
@@ -1032,7 +1032,7 @@ def no_native_dialogs() -> None:
 
 
 def version_info() -> dict[str, str]:
-    """Commit und Anwendungsversion für das Protokoll (Bauplan D0 §2.7 ``version``)."""
+    """Commit und Anwendungsversion für das Protokoll (Plan D0, Abschnitt 2.7 ``version``)."""
     from app.branding import APP_VERSION
 
     finished = subprocess.run(
@@ -1385,7 +1385,7 @@ class WindowFlow:
         self, object_id: str, feature_id: str, prefix: str, *, restore: bool
     ) -> dict[str, Any]:
         """Auswahl, Maßänderung, Vorschau, Übernehmen, Rückgängig, Wiederholen an einem Merkmal."""
-        from app.core.guides import TARGET_PROPERTY  # type: ignore[attr-defined]
+        from app.core.guides import TARGET_PROPERTY
 
         record: dict[str, Any] = {"object": object_id, "feature": feature_id}
         states: dict[str, dict[str, str]] = {}
@@ -1421,7 +1421,7 @@ class WindowFlow:
         if not chosen["target"]:
             raise RuntimeError(
                 f"{prefix}Feld „{chosen['name']}“ trägt kein Wortschatzkennzeichen"
-                " — ohne Ziel kein Klick (Bauplan D0 §2.1, feature.field:)"
+                " — ohne Ziel kein Klick (Plan D0, Abschnitt 2.1, feature.field:)"
             )
         before = float(chosen["value"])
         preview: dict[str, str] | None = None
@@ -1679,7 +1679,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 checklist=arguments.checklist,
             )
         except ValueError as problem:
-            # Ausgang 1 nur bei ungültigen Eingaben (Bauplan D0 §2.13): ein
+            # Ausgang 1 nur bei ungültigen Eingaben (Plan D0, Abschnitt 2.13): ein
             # Urteil ohne Bild, ein fremder Grund — nicht bei Funden.
             print(str(problem), file=sys.stderr, flush=True)
             return 1

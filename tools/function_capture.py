@@ -1,7 +1,7 @@
 """Aufnahmen am Fenster für das Messprotokoll eines Funktionsfalls (D0, RM-737).
 
 Jede Aufnahme liest, was die Oberfläche gerade zeigt, und gibt reine Daten für
-ein Feld des Protokolls zurück (Bauplan D0 §2.7): Herzschlag des Hauptfadens,
+ein Feld des Protokolls zurück (Plan D0, Abschnitt 2.7): Herzschlag des Hauptfadens,
 Bildzähler der Ansicht, modale und rohe Qt-Fenster, Texte mit ihrem Platzbedarf,
 Felder, Tab-Kette, Layoutmaße, Schriften, Zustandsbilder, Kontraste, Symbole,
 Animationen, Rollleisten, leere Zustände und Meldungen samt Handlungen. Was die
@@ -242,7 +242,7 @@ def modal_now() -> dict[str, Any] | None:
 
 def mark_of(widget: Any) -> str:
     """Das Wortschatzkennzeichen eines Widgets, sonst sein ``objectName``."""
-    from app.core.guides import TARGET_PROPERTY  # type: ignore[attr-defined]
+    from app.core.guides import TARGET_PROPERTY
 
     mark = widget.property(TARGET_PROPERTY)
     return str(mark) if mark else widget.objectName()

@@ -8,8 +8,8 @@ ist, prüft diese Datei an nachgestellten Ereignissen und Zeitgebern: der
 Automat, Wegklicks, „verdeckt“, „nicht auffindbar“, der Szenenabdruck, das
 Zahlenformat je Sprache, die Herzschlaglücke, Profil, Lizenz und Vorbedingungen.
 Dazu der Wächter, dass Prüfstand, Aufnahmen und ``WindowFlow`` keine Bedienung
-umgehen, und dass ``function_bench`` keinen eigenen Einstieg hat (Konzept
-Funktionsdurchgang §12: kein drittes Fensterwerkzeug).
+umgehen, und dass ``function_bench`` keinen eigenen Einstieg hat (kein drittes
+Fensterwerkzeug, Konzept Funktionsdurchgang §12).
 
 Die Wege am Fenster selbst prüfen die Fenstertests unten (``windowed``), die
 beim Push nach main in der CI laufen.
@@ -989,10 +989,11 @@ def test_bench_captures_and_window_flow_go_through_input_events_only() -> None:
 
 
 def test_the_bench_has_no_entry_of_its_own() -> None:
-    """``function_bench`` und ``function_capture`` laufen nur unter ``file_acceptance`` (§12).
+    """``function_bench`` und ``function_capture`` laufen nur unter ``file_acceptance``.
 
     Kein ``if __name__ == "__main__"``, kein ``argparse`` — sonst wäre es das
-    dritte Fensterwerkzeug. Gegenprobe: ``file_acceptance`` hat beides.
+    dritte Fensterwerkzeug (Konzept Funktionsdurchgang §12). Gegenprobe:
+    ``file_acceptance`` hat beides.
     """
 
     def entries(path: Path) -> tuple[bool, bool]:
@@ -1017,7 +1018,7 @@ def test_the_bench_has_no_entry_of_its_own() -> None:
 
 # --- Am Fenster (Fenster-CI) ----------------------------------------------------------------
 
-#: Die Probezeile der Merkmalshandlungen (Bauplan D0 §1.2, D4).
+#: Die Probezeile der Merkmalshandlungen (Plan D0, Abschnitt 1.2, D4).
 PROBE_ROW = "resize_hole"
 
 
@@ -1141,7 +1142,7 @@ def test_the_captures_read_a_small_dialog_without_acting_on_it(qt_app: Any) -> N
         QWidget,
     )
 
-    from app.core.guides import TARGET_PROPERTY  # type: ignore[attr-defined]
+    from app.core.guides import TARGET_PROPERTY
 
     dialog = QDialog()
     outer = QVBoxLayout(dialog)

@@ -7,7 +7,7 @@ drittes Fensterwerkzeug neben ``file_acceptance`` und ``make_guides`` gibt es
 nicht (Konzept Funktionsdurchgang §12); ``tests/test_function_bench.py`` hält,
 dass dieses Modul weder ``__main__`` noch ``argparse`` trägt.
 
-Drei Grundsätze (Konzept §5, Bauplan D0 §0):
+Drei Grundsätze (Konzept §5, Plan D0, Abschnitt 0):
 
 * **Jede Handlung ist ein Eingabeereignis an der Stelle, die der Kunde trifft.**
   ``guide_targets.next_click`` nennt den nächsten Klick auf seinem Weg — Reiter,
@@ -37,7 +37,7 @@ private Schlüssel. Systemdateidialoge prüft nur Stufe C; der Kindprozess setzt
 ``AA_DontUseNativeDialogs`` (B7).
 
 Was gemessen wird, steht im Messprotokoll ``cases/<nr>/function.json``
-(Bauplan D0 §2.7), das ``tools/function_report.py`` liest. Welches Feld welchen
+(Plan D0, Abschnitt 2.7), das ``tools/function_report.py`` liest. Welches Feld welchen
 Prüfpunkt trägt, sagt :data:`POINT_FIELDS`.
 """
 
@@ -164,7 +164,7 @@ LICENCE_STATES: Final[tuple[str, ...]] = (
     "gekauft",
 )
 
-#: Äußere Vorbedingungen und ihre Zustände (Bauplan D0 §2.4); die erste ist die Vorgabe.
+#: Äußere Vorbedingungen und ihre Zustände (Plan D0, Abschnitt 2.4); die erste ist die Vorgabe.
 PRECONDITIONS: Final[dict[str, tuple[str, ...]]] = {
     "ki": ("vorhanden", "fehlt"),
     "comfyui": ("vorhanden", "fehlt"),
@@ -359,7 +359,7 @@ def licence_activation(state: str, today: date) -> Any:
     Gekauft heißt Kaufcode samt Gerätezertifikat, gebaut wie in
     ``tests/helpers.set_test_license`` — die Oberfläche graut nur aus, die Hürde
     liegt im Datenpfad (``activation``), und genau das Ausgrauen ist geprüft
-    (Bauplan D0 §5.1).
+    (Plan D0, Abschnitt 5.1).
     """
     from app.core import activation
     from app.core.activation import key
@@ -503,7 +503,7 @@ def scene_print(
     selection: Mapping[str, Any] | None = None,
     camera: Sequence[Any] | None = None,
 ) -> dict[str, Any]:
-    """Der Abdruck einer Szene (Konzept §4 „Szenenabdruck“, Bauplan D0 §2.7).
+    """Der Abdruck einer Szene (Konzept §4 „Szenenabdruck“, Plan D0, Abschnitt 2.7).
 
     Ops mit ihren Parametern, Projektparameter und Passungen über die
     Schreibweise der Projektdatei (``scene.serialise``), je Körper sein Netz
@@ -559,7 +559,7 @@ def compare_prints(
 
 # --- Messprotokoll -----------------------------------------------------------------------
 
-#: Welche Felder des Protokolls welchen Prüfpunkt tragen (Bauplan D0 §2.7, §3.1).
+#: Welche Felder des Protokolls welchen Prüfpunkt tragen (Plan D0, Abschnitt 2.7, 3.1).
 #: Jeder der 19 Prüfpunkte hat mindestens eines; was Stufe B dazu urteilt, steht
 #: in :data:`STAGE_B`. ``tests/test_function_bench.py`` hält beides gegen das
 #: Gerüst (:func:`empty_protocol`).
@@ -618,7 +618,7 @@ def empty_protocol(
     """Das Gerüst eines Messprotokolls: jedes Feld da, ungemessen heißt ``None``.
 
     ``unmeasured`` nennt je Feld, warum es leer blieb — fehlende ``steps``
-    ergeben bei U „nicht gemessen“, nie „gut“ (Bauplan D0 §3.1, Prüfpunkt 2).
+    ergeben bei U „nicht gemessen“, nie „gut“ (Plan D0, Abschnitt 3.1, Prüfpunkt 2).
     """
     data: dict[str, Any] = {
         "row": str(row.get("id", "")),
@@ -826,7 +826,7 @@ def drive(
 
 
 class ClickLike(Protocol):
-    """Was ``guide_targets.next_click`` zurückgibt (Bauplan D0 §2.2)."""
+    """Was ``guide_targets.next_click`` zurückgibt (Plan D0, Abschnitt 2.2)."""
 
     rect: Any
     button: Any
@@ -1084,7 +1084,7 @@ class QtPorts:
         QTest.keyClicks(target, text)
 
     def describe(self, widget: Any) -> dict[str, Any]:
-        from app.core.guides import TARGET_PROPERTY  # type: ignore[attr-defined]
+        from app.core.guides import TARGET_PROPERTY
 
         if widget is None:
             return {}
@@ -1166,7 +1166,7 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
 
 # --- Der Funktionsfall am Fenster ------------------------------------------------------------
 
-#: Die Szene, die jede Zeile ohne eigene Szene bekommt (Bauplan D0 §2.5).
+#: Die Szene, die jede Zeile ohne eigene Szene bekommt (Plan D0, Abschnitt 2.5).
 EMPTY_SCENE: Final = "leer"
 
 #: Die Szene, in die der Projektwechsel geht (Prüfpunkt 16).
@@ -1206,7 +1206,7 @@ def route_of(row: Mapping[str, Any]) -> list[tuple[str, str]]:
     """Der Weg einer Zeile: ihre Schritte aus der Spezifikation, sonst ihr Ziel.
 
     ``route`` nennt, was ``next_click`` allein nicht findet — einen Rechtsklick
-    auf eine Baumzeile, dann den Eintrag im Kontextmenü (Bauplan D0 §2.4).
+    auf eine Baumzeile, dann den Eintrag im Kontextmenü (Plan D0, Abschnitt 2.4).
     """
     spec = row.get("spec") or {}
     route = [
