@@ -1,0 +1,18 @@
+# Zeilenspezifikationen für D4 — Merkmale (RM-740). Format: Bauplan D0 §2.4.
+# Eine Zeile ohne Eintrag hier ist „ungeprüft“, nie rot im Tor.
+
+[row."resize_hole"]
+start_scene = "merkmal.hole.exakt"
+example_goal = "Die Bohrung auf 8 mm aufweiten."
+inputs = { "feature.field:resize_hole.diameter" = 8.0 }
+search_probes = [
+  { word = "Bohrung vergrößern", origin = "cad" },
+  { word = "Loch", origin = "slicer" },
+  { word = "Bohrung", origin = "fragebogen" },
+]
+questions = ["Loch größer machen", "Wie mache ich die Bohrung größer?"]
+fault_case = { inputs = { "feature.field:resize_hole.diameter" = 0.1 }, expected = "grenzablehnung" }
+
+[row."resize_hole".expectation]
+"hole.diameter" = { value = 8.0, tolerance = 0.01, origin = "Konstruktion: getippte 8 mm; resize_hole gleicht nicht aus (compensate = false)" }
+volume = { value = 22994.69, tolerance = 5.0, origin = "Formel 24000 − π · 4² · 20 mm³; die Toleranz deckt die Sehnen der Darstellung (gemessen 22998,44 exakt, 22997,56 am Netz)" }

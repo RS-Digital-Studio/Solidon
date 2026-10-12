@@ -11,10 +11,13 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import get_args
+from typing import Any, get_args
 
 import pytest
+from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtWidgets import QMenu, QToolButton
 
 from app.branding import APP_VERSION
 from app.core import figures, guides, manual, tour
@@ -131,6 +134,178 @@ def test_the_vocabulary_accepts_named_kinds_and_nothing_else() -> None:
     assert not guides.is_target("command:")
     assert not guides.is_target("widget:report")
     assert not guides.is_target("field:Durchmesser")
+
+
+@pytest.mark.parametrize(
+    ("name", "valid"),
+    [
+        ("feature:resize_hole", True),
+        ("feature:part.move", True),
+        ("feature:Resize", False),
+        ("edge:fillet_edges", True),
+        ("edge:fillet_edges.variable_radius", True),
+        ("edge:fillet_edges.a.b", False),
+        ("feature.field:resize_hole.diameter", True),
+        ("feature.field:part.move.x", True),
+        ("feature.field:diameter", False),
+        ("measure.field:diameter", True),
+        ("measure.field:hole.diameter", False),
+        ("menu:menubar.datei.speichern_unter", True),
+        ("menu:history.edit", True),
+        ("menu:Speichern", False),
+        ("menu:menubar..datei", False),
+        ("finding:arrange.below_bed", True),
+        ("finding:op.drill_hole.ValidationError", True),
+        ("finding:op drill", False),
+        ("finding.action:place_on_bed", True),
+        ("finding.action:Place", False),
+        ("print:layers.layer_height", True),
+        ("print:Layers", False),
+        ("setting:language", True),
+        ("handle:move.x", True),
+        ("handle:bar.section", True),
+        ("tree.row:obj_1", True),
+        ("tree.row:obj_1.op5.pin_1", True),
+        ("tree.row:obj_1:hole_2", False),
+        ("history.row:3", True),
+        ("history.row:0", False),
+        ("history.row:three", False),
+        ("view:obj_2.hole_1", True),
+        ("dialog:print_settings_dialog", True),
+        ("dialog:2nd_dialog", False),
+        ("dialog:PrintSettingsDialog", False),
+        ("start.recent:1", True),
+        ("start.recent:0", False),
+        ("history:edit", True),
+        ("operation:part.move", False),
+        ("feature.apply", True),
+        ("feature.in_view", True),
+        ("feature.every", True),
+        ("measure.reference", True),
+        ("search", True),
+        ("toolbar.search", True),
+        ("progress.cancel", True),
+        ("preview.banner", True),
+        ("selection.rebuild", True),
+        ("feature", False),
+        ("feature:", False),
+    ],
+)
+def test_every_kind_has_its_own_pattern(name: str, valid: bool) -> None:
+    """Je Art ein Muster: Ein Befundcode trägt Großbuchstaben, eine Verlaufszeile
+    eine Zahl ab 1, eine Kantenvariante höchstens einen Punkt."""
+    assert guides.is_target(name) is valid, name
+
+
+def test_every_kind_has_a_pattern_and_every_pattern_a_kind() -> None:
+    assert set(guides._PATTERNS) == set(guides.TARGET_KINDS)
+    assert len(guides.TARGET_KINDS) == len(set(guides.TARGET_KINDS))
+
+
+@pytest.mark.parametrize(
+    ("msgid", "context", "expected"),
+    [
+        ("Speichern unter …", None, "menubar.speichern_unter"),
+        ("Öffnen …", None, "menubar.oeffnen"),
+        ("Rückgängig", None, "menubar.rueckgaengig"),
+        ("Größe & Maße", None, "menubar.groesse_masse"),
+        ("{app} unterstützen …", None, "menubar.app_unterstuetzen"),
+        ("Massiv mit Kanten", None, "menubar.massiv_mit_kanten"),
+        ("Rechts", "Kamera", "menubar.kamera.rechts"),
+        ("Ändern", "Menü", "menubar.menue.aendern"),
+    ],
+)
+def test_a_menubar_name_comes_from_the_source_text(
+    msgid: str, context: str | None, expected: str
+) -> None:
+    name = guides.menubar_name(msgid, context)
+    assert name == expected
+    assert guides.is_target(f"menu:{name}")
+
+
+def test_a_menubar_name_needs_letters() -> None:
+    with pytest.raises(ValueError, match="kein Name"):
+        guides.menubar_name("…")
+
+
+def test_a_part_offers_its_three_actions_under_their_fixed_keys() -> None:
+    """Maße und Verschieben tragen dieselbe Operation, Entfernen keine (B9):
+    unterschieden werden sie über ``FeatureAction.key``."""
+    from types import SimpleNamespace
+
+    from app.core.perceive.actions import PART_ACTION_KEYS, part_actions
+    from app.core.registry import REGISTRY
+
+    spec = REGISTRY.get("insert_screw_hole")
+    actions = part_actions(SimpleNamespace(id=4, params={}), spec)
+    assert [action.key for action in actions] == list(PART_ACTION_KEYS)
+    assert [guides.action_target(action) for action in actions] == [
+        f"feature:{key}" for key in PART_ACTION_KEYS
+    ]
+    moving = actions[1]
+    assert guides.action_field_target(moving, "x") == "feature.field:part.move.x"
+    assert all(guides.is_target(guides.action_target(action)) for action in actions)
+
+
+def test_a_texture_offers_its_two_actions_under_their_fixed_keys() -> None:
+    from types import SimpleNamespace
+
+    from app.core.perceive.actions import TEXTURE_ACTION_KEYS, texture_actions
+    from app.core.registry import REGISTRY
+
+    spec = REGISTRY.get("apply_texture")
+    actions = texture_actions(SimpleNamespace(id=2, params={}), spec)
+    assert tuple(action.key for action in actions) == TEXTURE_ACTION_KEYS
+
+
+def test_an_action_without_its_own_key_is_named_after_its_operation() -> None:
+    from app.core.perceive.actions import FeatureAction
+
+    plain = FeatureAction(title="Bohrung ändern", op="resize_hole")
+    assert guides.action_key(plain) == "resize_hole"
+    assert guides.action_target(plain) == "feature:resize_hole"
+    assert guides.action_field_target(plain, "diameter") == "feature.field:resize_hole.diameter"
+    blocked = FeatureAction(title="Merkmal drehen", op=None, key="rotate_feature", reason="nein")
+    assert guides.action_target(blocked) == "feature:rotate_feature"
+    nameless = FeatureAction(title="Etwas", op=None, reason="nein")
+    assert guides.action_target(nameless) == ""
+    assert guides.action_field_target(nameless, "x") == ""
+
+
+def test_an_edge_row_is_an_edge_target_and_a_variant_carries_its_mode() -> None:
+    from app.core.perceive.actions import EDGE_OPERATIONS, EDGE_VARIANT_KEYS, edge_actions
+    from app.core.registry import REGISTRY
+
+    assert EDGE_VARIANT_KEYS == ("fillet_edges.variable_radius",)
+    actions = edge_actions("1 2 3 4 5 6")
+    expected = [name for name, _measure in EDGE_OPERATIONS if REGISTRY.has(name)] + [
+        key for key in EDGE_VARIANT_KEYS if REGISTRY.has(key.partition(".")[0])
+    ]
+    assert [action.key for action in actions] == expected
+    for action in actions:
+        target = guides.action_target(action)
+        assert target == f"edge:{action.key}"
+        assert guides.is_target(target), target
+
+
+def test_every_action_of_a_feature_has_a_key_even_when_it_is_refused() -> None:
+    """Eine gesperrte Zeile trägt die Operation, für die sie steht — sonst hätte
+    sie kein Ziel, und ihr Grund ließe sich am Fenster nicht ablesen."""
+    from app.core.perceive.actions import actions_for
+    from app.core.types import Feature
+
+    hole = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 5.0, "depth": 4.0, "axis": (0.0, 0.0, 1.0), "center": (0, 0, 0)},
+        face_indices=(0, 1, 2, 3),
+    )
+    actions = actions_for(hole)
+    assert actions
+    for action in actions:
+        assert guides.action_key(action), action.title
+        assert guides.is_target(guides.action_target(action)), action
 
 
 def test_every_named_operation_and_part_exists() -> None:
@@ -601,6 +776,11 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "parameters.first",
         "report.action",
         "history.last",
+        # Das Merkmalfenster und die Maßgruppe stehen erst an einer Auswahl
+        "feature.apply",
+        "feature.in_view",
+        "feature.every",
+        "measure.reference",
         *printing,
     }
     window = MainWindow(Session(), UiSettings())
@@ -680,3 +860,816 @@ def test_capture_protects_visible_dialog_text_and_item_views(qt_app):
     finally:
         dialog.close()
         window.close()
+
+
+def test_a_title_from_the_register_names_its_menu_line_by_its_source() -> None:
+    """Ein übersetzbarer Titel gibt Quelle und Kontext, ein schlichter steht für sich."""
+    from app.i18n import _
+
+    assert guides.menubar_name_of(_("Rechts", context="Kamera")) == "menubar.kamera.rechts"
+    assert guides.menubar_name_of(_("Öffnen …")) == "menubar.oeffnen"
+    assert guides.menubar_name_of("Mein Haken") == "menubar.mein_haken"
+
+
+# --- Wortschatz des Funktionsdurchgangs (RM-737) ------------------------------
+
+#: Die Arten, die der Funktionsdurchgang dazugebracht hat; die alten neun prüfen
+#: die Bildanleitungen beim Release.
+NEW_KINDS = frozenset(guides.TARGET_KINDS) - {
+    "command",
+    "operation",
+    "field",
+    "part",
+    "tool",
+    "transform",
+    "section",
+    "sketch",
+    "history",
+}
+
+
+def test_every_kind_of_the_vocabulary_has_its_resolution_in_the_interface() -> None:
+    """Eine Art im Kern, die die Oberfläche nicht kennt, scheiterte erst am Prüfstand."""
+    from app.ui import guide_targets
+
+    assert frozenset(guides.TARGET_KINDS) == guide_targets.RESOLVED_KINDS
+
+
+@pytest.mark.parametrize(
+    ("class_name", "expected"),
+    [
+        ("PrintSettingsDialog", "print_settings_dialog"),
+        ("SettingsDialog", "settings_dialog"),
+        ("LLMKeyDialog", "llm_key_dialog"),
+        ("MainWindow", "main_window"),
+        ("PartCatalog", "part_catalog"),
+    ],
+)
+def test_a_dialog_is_named_after_its_class(class_name: str, expected: str) -> None:
+    assert guides.dialog_name(class_name) == expected
+    assert guides.is_target(f"dialog:{expected}")
+
+
+#: Die Auflöser, die mit dem Funktionsdurchgang entstanden sind. Sie greifen
+#: auf kein privates Attribut zu: Was sie brauchen, trägt die Oberfläche als
+#: Kennzeichen oder unter einem öffentlichen Namen (Abnahme D0-W).
+NEW_RESOLVERS = (
+    "marked_widgets",
+    "_marked",
+    "_rebuild_button",
+    "_search_field",
+    "_toolbar_search",
+    "_progress_cancel",
+    "_preview_banner",
+    "_obstacles",
+    "_Obstacle",
+    "_reveal",
+    "_tab_of_a_page_behind",
+    "menu_entries",
+    "menubar_entries",
+    "_menu_name",
+    "_bar",
+    "_dialog_of_class",
+    "_object_and_feature",
+    "_spot",
+    "_row",
+    "_item_rect",
+    "_item_area",
+    "point_of_world",
+    "_shows_the_view",
+    "point_for",
+    "_grip_point",
+    "widget_under",
+    "zone_of",
+    "search_hits",
+    "_hit_row",
+    "next_click",
+    "_obstacle_click",
+    "_widget_click",
+    "_scroll_needed",
+    "_row_click",
+    "_visible_row_click",
+    "_expander_click",
+    "_tile_click",
+    "_operation_click",
+    "_open_menus",
+    "_menu_action_named",
+    "_menubar_chain",
+    "_menu_click",
+)
+
+
+def private_reads(source: str, names: tuple[str, ...]) -> list[str]:
+    """Jeder Zugriff ``x._name`` in den genannten Funktionen und Klassen."""
+    import ast
+
+    tree = ast.parse(source)
+    found: list[str] = []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef | ast.ClassDef) or node.name not in names:
+            continue
+        for inner in ast.walk(node):
+            if (
+                isinstance(inner, ast.Attribute)
+                and inner.attr.startswith("_")
+                and not inner.attr.startswith("__")
+            ):
+                found.append(f"{node.name}: {ast.unparse(inner)}")
+    return found
+
+
+def test_the_new_resolvers_read_no_private_attribute() -> None:
+    import inspect
+
+    from app.ui import guide_targets
+
+    source = inspect.getsource(guide_targets)
+    defined = {name for name in NEW_RESOLVERS if hasattr(guide_targets, name)}
+    assert defined == set(NEW_RESOLVERS), sorted(set(NEW_RESOLVERS) - defined)
+    assert private_reads(source, NEW_RESOLVERS) == []
+
+
+def test_a_private_read_in_a_resolver_turns_the_guard_red() -> None:
+    """Gegenprobe: ``window.feature_panel._apply`` wäre ein Zugriff am Kennzeichen vorbei."""
+    source = "def next_click(window, name):\n    return window.feature_panel._apply\n"
+    assert private_reads(source, ("next_click",)) == ["next_click: window.feature_panel._apply"]
+
+
+@pytest.fixture
+def prepared_window(qt_app: Any) -> Iterator[Any]:
+    """Ein Fenster mit einem Quader samt Bohrung, unter das Bett geschoben.
+
+    Die Attrappe des Renderers gibt der Ansicht eine Projektion; offscreen gibt
+    es sonst keine, und die Maßgruppe im Bild bliebe aus.
+    """
+    from app.core.scene.history import OperationDraft
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from tests.render_fakes import RecordingRenderer
+
+    window = MainWindow(Session(), UiSettings())
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.resize(1400, 900)
+    window.show()
+    window._show_start_screen(False)
+    assert window.session.apply(
+        "Quader mit Bohrung",
+        [
+            OperationDraft(op="create_box"),
+            OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}),
+            OperationDraft(
+                op="translate_object", inputs=("obj_1",), params={"dx": 0.0, "dy": 0.0, "dz": -15.0}
+            ),
+        ],
+    )
+    assert window.session.wait_for_idle(60_000)
+    window.report.show_result(window.session.last_result, window.session.project.document)
+    _settle(qt_app)
+    try:
+        yield window
+    finally:
+        for menu in [*window.findChildren(QMenu), *qt_app.topLevelWidgets()]:
+            if isinstance(menu, QMenu) and menu.isVisible():
+                menu.hide()
+        window.hide()
+        window.release()
+        window.viewport.renderer = None
+
+
+def _settle(qt_app: Any, rounds: int = 20) -> None:
+    for _ in range(rounds):
+        qt_app.processEvents()
+
+
+def _follow(qt_app: Any, window: Any, name: str) -> str:
+    """Den Weg zu ``name`` gehen wie der Kunde: Reiter, Klappe, Aufklappen per Klick
+    auf das Rechteck aus ``next_click``, bis das Ziel dasteht."""
+    from PySide6.QtTest import QTest
+
+    from app.ui import guide_targets
+
+    for _step in range(6):
+        step = guide_targets.next_click(window, name)
+        if step.why not in {"reiter", "klappe", "aufklappen"}:
+            return str(step.why)
+        centre = step.rect.center()
+        under = guide_targets.widget_under(centre)
+        assert under is not None, (name, step)
+        QTest.mouseClick(under, Qt.MouseButton.LeftButton, pos=under.mapFromGlobal(centre))
+        _settle(qt_app)
+    raise AssertionError(f"{name}: kein Ziel nach sechs Klicks")
+
+
+def _popup(qt_app: Any, menu: Any) -> None:
+    menu.popup(QPoint(40, 40))
+    _settle(qt_app, 5)
+    assert menu.isVisible()
+
+
+def test_every_menu_line_carries_a_unique_name_from_its_source(qt_app: Any) -> None:
+    """Jede Zeile und jedes Menü der Leiste trägt einen gültigen, eindeutigen Namen;
+    eine Zeile in zwei Menüs ist **eine** Aktion mit einem Namen."""
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        entries = guide_targets.menubar_entries(window)
+        assert len(entries) > 60
+        by_action: dict[int, str] = {}
+        for name, _menus, action in entries:
+            assert name.startswith("menubar."), (name, action.text())
+            assert guides.is_target(f"menu:{name}"), name
+            by_action[id(action)] = name
+        names = list(by_action.values())
+        assert len(names) == len(set(names)), sorted(
+            name for name in names if names.count(name) > 1
+        )
+        menus = {
+            menu.objectName()
+            for menu in window.findChildren(QMenu)
+            if menu.objectName().startswith("menubar.")
+        }
+        assert len(menus) >= 8
+        assert not menus & set(names)
+        assert not [key for key in window.window_commands() if key.startswith("menu.")]
+    finally:
+        window.deleteLater()
+
+
+def test_the_command_keys_do_not_follow_the_position_of_a_line(qt_app: Any) -> None:
+    """Eine neue Zeile oben im Menü ändert keine Kennung darunter (Prüfbericht S1)."""
+    from PySide6.QtGui import QAction
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        before = {
+            key: title
+            for key, (title, _keys, _slot) in window.window_commands().items()
+            if key.startswith("menubar.")
+        }
+        file_menu = next(
+            menu for menu in window.findChildren(QMenu) if menu.objectName() == "menubar.datei"
+        )
+        probe = QAction("Probe", window)
+        probe.setObjectName("menubar.probe")
+        file_menu.insertAction(file_menu.actions()[0], probe)
+        after = {
+            key: title
+            for key, (title, _keys, _slot) in window.window_commands().items()
+            if key.startswith("menubar.")
+        }
+        assert set(after) == set(before) | {"menubar.probe"}
+        assert {key: after[key] for key in before} == before
+    finally:
+        window.deleteLater()
+
+
+def test_every_context_action_carries_a_name(
+    prepared_window: Any, qt_app: Any, monkeypatch
+) -> None:
+    """Baum, Verlauf, Prüfbericht und Parameterleiste: Jede Zeile eines Kontextmenüs
+    trägt einen ``objectName``, unter dem ``menu:`` sie findet."""
+    window = prepared_window
+
+    def names(menu: Any) -> list[str]:
+        found: list[str] = []
+        for action in menu.actions():
+            if action.isSeparator():
+                continue
+            found.append(action.objectName())
+            if action.menu() is not None:
+                found.extend(names(action.menu()))
+        return found
+
+    window.object_tree.select_object("obj_1")
+    _settle(qt_app)
+    on_body = names(window.object_tree.context_menu())
+    window.object_tree.select_feature("obj_1", "hole_1")
+    _settle(qt_app)
+    on_feature = names(window.object_tree.context_menu())
+    listing = window.history_panel.list
+    on_step = names(window.history_panel.context_menu(listing.item(listing.count() - 1)))
+    monkeypatch.setattr(window.parameters, "parameter_at", lambda _position: "breite")
+    on_parameter = names(window.parameters.context_menu(QPoint(0, 0)))
+    shown: list[list[str]] = []
+
+    class ShownMenu(QMenu):
+        """Hält fest, was das Menü zeigen würde, statt modal zu warten."""
+
+        def exec(self, *_args: Any) -> None:  # type: ignore[override]
+            shown.append(names(self))
+
+    from app.ui import panels
+
+    monkeypatch.setattr(panels, "QMenu", ShownMenu)
+    window.right.setCurrentIndex(1)
+    _settle(qt_app)
+    report = window.report.list
+    row = next(
+        number
+        for number in range(report.count())
+        if getattr(report.item(number).data(Qt.ItemDataRole.UserRole), "code", "")
+        == "arrange.below_bed"
+    )
+    window.report._on_menu(report.visualItemRect(report.item(row)).center())
+
+    assert "tree.visibility" in on_body and "delete_object" in on_body
+    assert "tree.step" in on_feature
+    assert {"history.edit", "history.switch", "history.delete"} <= set(on_step)
+    assert on_parameter == ["parameters.edit"]
+    assert shown and "report.place_on_bed" in shown[0]
+    for found in (on_body, on_feature, on_step, on_parameter, *shown):
+        assert all(found), found
+        assert all(guides.is_target(f"menu:{name}") for name in found), found
+
+
+def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_app: Any) -> None:
+    """Jede Art aus dem Wortschatz des Funktionsdurchgangs findet ihr Ziel am Fenster."""
+    from app.core.perceive.actions import edge_actions
+    from app.ui import guide_targets
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.settings_dialog import SettingsDialog
+
+    window = prepared_window
+    seen: set[str] = set()
+
+    def widget(name: str) -> Any:
+        found = guide_targets.widget_for(window, name)
+        assert found is not None, name
+        seen.add(name.partition(":")[0])
+        return found
+
+    def click(name: str) -> Any:
+        found = guide_targets.next_click(window, name)
+        seen.add(name.partition(":")[0])
+        return found
+
+    # Baum, Verlauf, Prüfbericht
+    assert click("tree.row:obj_1").why == "ziel"
+    assert click("tree.row:obj_1.hole_1").why in {"aufklappen", "ziel"}
+    # Drei Schritte in einer Transaktion: Schritt 1 steht in der zugeklappten
+    # Gruppe, der Klick auf ihre Zeile klappt sie auf.
+    from PySide6.QtTest import QTest
+
+    step = click("history.row:1")
+    assert step.why == "aufklappen"
+    surface = window.history_panel.list.viewport()
+    QTest.mouseClick(
+        surface, Qt.MouseButton.LeftButton, pos=surface.mapFromGlobal(step.rect.center())
+    )
+    _settle(qt_app)
+    assert click("history.row:1").why == "ziel"
+    with pytest.raises(guide_targets.MissingTargetError):
+        guide_targets.next_click(window, "history.row:99")
+    assert _follow(qt_app, window, "finding:arrange.below_bed") == "ziel"
+    seen.add("finding")
+    report = window.report.list
+    for number in range(report.count()):
+        if getattr(report.item(number).data(Qt.ItemDataRole.UserRole), "code", "") == (
+            "arrange.below_bed"
+        ):
+            report.setCurrentRow(number)
+    _settle(qt_app)
+    assert widget("finding.action:place_on_bed").isVisible()
+
+    # Merkmalfenster und Maßgruppe an der Bohrung
+    window.object_tree.select_object("obj_1")
+    window.object_tree.select_feature("obj_1", "hole_1")
+    _settle(qt_app, 40)
+    assert widget("feature:resize_hole") is not None
+    assert widget("feature.field:resize_hole.diameter") is not None
+    assert widget("measure.field:diameter").isVisible()
+    assert widget("measure.reference") is not None
+    for name in ("feature.apply", "feature.in_view", "feature.every"):
+        assert guide_targets.widget_for(window, name) is not None, name
+
+    # Kante
+    key = "1 2 3 4 5 6"
+    window.feature_panel.show_edge(key, "Kante")
+    _settle(qt_app)
+    for action in edge_actions(key):
+        assert widget(guides.action_target(action)) is not None
+    if not edge_actions(key):
+        seen.add("edge")
+
+    # Menüleiste, und der Name der Anleitungen für das Verlaufsmenü
+    assert click("menu:menubar.speichern_unter").why == "menue"
+    listing = window.history_panel.list
+    history_menu = window.history_panel.context_menu(listing.item(listing.count() - 1))
+    _popup(qt_app, history_menu)
+    assert click("history:edit") == guide_targets.Click(
+        guide_targets.next_click(window, "menu:history.edit").rect,
+        Qt.MouseButton.LeftButton,
+        "ziel",
+        "history:edit",
+    )
+    history_menu.hide()
+
+    # Leisten, Suche, Fortschritt, Vorschauband, Nachbauen
+    window.tools.toggle("section")
+    _settle(qt_app)
+    assert widget("handle:bar.section").isVisible()
+    window.tools.toggle("section")
+    for name in (
+        "search",
+        "toolbar.search",
+        "progress.cancel",
+        "preview.banner",
+        "selection.rebuild",
+    ):
+        assert guide_targets.widget_for(window, name) is not None, name
+
+    # Druckdialog und Einstellungen, offen neben dem Fenster
+    printing = PrintSettingsDialog(window.session, window.settings, window)
+    printing.show()
+    _settle(qt_app)
+    settings = SettingsDialog(window.settings, window)
+    settings.show()
+    _settle(qt_app)
+    try:
+        assert widget("print:layers.layer_height") is not None
+        assert click("print:layers.layer_height").why in {"ziel", "reiter", "klappe", "rollen"}
+        assert widget("setting:language") is not None
+        assert widget("dialog:settings_dialog") is settings
+        assert widget("dialog:print_settings_dialog") is printing
+    finally:
+        settings.close()
+        printing.close()
+
+    # Stelle im Bild und Griffe brauchen Projektion und Pick; sie prüfen die
+    # zwei Fälle darunter an der Attrappe und der native Fall am echten Bild.
+    # „Zuletzt geöffnet“ steht auf dem Startbildschirm: eigener Fall darunter.
+    seen.update({"view", "start.recent"})
+    assert seen >= NEW_KINDS, sorted(NEW_KINDS - seen)
+
+
+def test_every_widget_has_its_zone(prepared_window: Any, qt_app: Any) -> None:
+    """Wo ein Bedienelement steht, in den Zonen des Kriteriums E4."""
+    from app.ui import guide_targets
+    from app.ui.settings_dialog import SettingsDialog
+
+    window = prepared_window
+    host = window.overlay
+    assert guide_targets.zone_of(window, window.viewport) == "ansicht"
+    assert guide_targets.zone_of(window, window.statusBar()) == "statusleiste"
+    assert guide_targets.zone_of(window, window.toolbar) == "kopf"
+    assert guide_targets.zone_of(window, window.menuBar()) == "menue"
+    if host.right is not None:
+        assert guide_targets.zone_of(window, host.right) == "karte_rechts"
+    if host.left is not None:
+        assert guide_targets.zone_of(window, host.left) == "karte_links"
+    menu = QMenu(window)
+    assert guide_targets.zone_of(window, menu) == "menue"
+    dialog = SettingsDialog(window.settings, window)
+    try:
+        assert guide_targets.zone_of(window, dialog.language) == "dialog"
+    finally:
+        dialog.deleteLater()
+        menu.deleteLater()
+
+
+def test_next_click_names_each_step_in_order_and_reveals_nothing(
+    prepared_window: Any, qt_app: Any
+) -> None:
+    """Reiter, Klappe, Menütitel, Untermenü, Aufklappen und Rollen — und nach
+    jeder Frage steht das Fenster wie vorher: ``next_click`` deckt nicht auf."""
+    from app.ui import guide_targets
+
+    window = prepared_window
+    tabs = window.right
+
+    def state() -> tuple[Any, ...]:
+        tree = window.object_tree.tree
+        return (
+            tabs.currentIndex(),
+            tuple(
+                heading.isChecked()
+                for heading in window.findChildren(QToolButton, "sectionHeading")
+            ),
+            tuple(tree.topLevelItem(row).isExpanded() for row in range(tree.topLevelItemCount())),
+            tuple(menu.isVisible() for menu in window.findChildren(QMenu)),
+            window.selection_operations.hits.verticalScrollBar().value(),
+        )
+
+    def ask(name: str) -> Any:
+        before = state()
+        found = guide_targets.next_click(window, name)
+        assert state() == before, f"{name}: next_click hat aufgedeckt"
+        return found
+
+    # Reiter: Die Suche steht auf der Seite *Auswahl*.
+    tabs.setCurrentIndex(1)
+    _settle(qt_app)
+    step = ask("search")
+    assert step.why == "reiter"
+    bar = tabs.tabBar()
+    assert step.rect == QRect(bar.mapToGlobal(bar.tabRect(0).topLeft()), bar.tabRect(0).size())
+    tabs.setCurrentIndex(0)
+    _settle(qt_app)
+    assert ask("search").why == "ziel"
+
+    # Klappe: der Abschnitt *Objekte* links, zugeklappt
+    tree = window.object_tree.tree
+    heading = next(
+        candidate
+        for candidate in window.findChildren(QToolButton, "sectionHeading")
+        if candidate.parentWidget() is window.object_tree.parentWidget()
+    )
+    heading.setChecked(False)
+    _settle(qt_app)
+    step = ask("tree.row:obj_1")
+    assert step.why == "klappe"
+    assert step.rect == QRect(heading.mapToGlobal(QPoint(0, 0)), heading.size())
+    heading.setChecked(True)
+    _settle(qt_app)
+
+    # Aufklappen: eine Merkmalszeile unter einem zugeklappten Körper
+    body = tree.topLevelItem(0)
+    body.setExpanded(False)
+    _settle(qt_app)
+    assert ask("tree.row:obj_1.hole_1").why == "aufklappen"
+    body.setExpanded(True)
+    _settle(qt_app)
+    assert ask("tree.row:obj_1.hole_1").why == "ziel"
+
+    # Menütitel, Untermenü, Zeile
+    assert ask("menu:menubar.vorne").why == "menue"
+    view_menu = next(
+        menu for menu in window.findChildren(QMenu) if menu.objectName() == "menubar.ansicht"
+    )
+    _popup(qt_app, view_menu)
+    assert ask("menu:menubar.vorne").why == "untermenue"
+    camera = next(
+        menu for menu in window.findChildren(QMenu) if menu.objectName() == "menubar.kamera"
+    )
+    _popup(qt_app, camera)
+    assert ask("menu:menubar.vorne").why == "ziel"
+    camera.hide()
+    view_menu.hide()
+
+    # Rollen: der letzte Treffer einer langen Trefferliste
+    window.selection_operations.search.setText("e")
+    _settle(qt_app)
+    hits = guide_targets.search_hits(window)
+    assert len(hits) > 20
+    step = ask(hits[-1])
+    assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
+    assert ask(hits[0]).why == "ziel"
+    window.selection_operations.search.setText("")
+
+
+def test_an_operation_without_a_menu_line_resolves_over_its_button(
+    prepared_window: Any, qt_app: Any, monkeypatch
+) -> None:
+    """Erst der Knopf, dann die Menüzeile (RM-737, B3) — vorher scheiterte eine
+    Operation ohne Menüzeile, bevor nach ihrem Knopf gefragt war."""
+    from app.ui import guide_targets
+
+    window = prepared_window
+    window.right.setCurrentIndex(0)
+    window.object_tree.select_object("obj_1")
+    _settle(qt_app)
+    shown = [
+        name
+        for name in ("hollow_object", "orient_for_print", "split_pinned", "delete_object")
+        if (button := window.selection_operations.button_for(name)) is not None
+        and button.isVisible()
+    ]
+    assert shown, "an einem gewählten Körper steht keiner der Knöpfe"
+    name = shown[0]
+    monkeypatch.delitem(window._op_actions, name, raising=False)
+    button = window.selection_operations.button_for(name)
+    assert guide_targets.area_for(window, f"operation:{name}") == QRect(
+        button.mapToGlobal(QPoint(0, 0)), button.size()
+    )
+    assert guide_targets.next_click(window, f"operation:{name}").why == "ziel"
+
+
+def test_point_for_takes_a_facing_triangle_the_pick_confirms(
+    prepared_window: Any, monkeypatch
+) -> None:
+    """Eine Stelle auf den Dreiecken des Merkmals, die der Pick bestätigt — nie die Achse.
+
+    Die Attrappe projiziert x und y; der Pick ist hier nachgestellt und nimmt
+    nur Dreiecke der Bohrung an. Ob ein Klick am echten Fenster das Merkmal
+    wählt, prüft der native Fall darunter.
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.ui import guide_targets
+
+    window = prepared_window
+    viewport = window.viewport
+    entry = window.session.last_result.scene.objects["obj_1"]
+    hole = entry.features["hole_1"]
+    raw = as_mesh_data(entry.mesh).raw
+    wanted = {int(face) for face in hole.face_indices}
+    centres = {index: viewport.display_of(tuple(raw.triangles_center[index])) for index in wanted}
+
+    def picked(x: int, y: int) -> Any:
+        for index, spot in centres.items():
+            if spot is not None and abs(spot[0] - x) <= 1 and abs(spot[1] - y) <= 1:
+                return ("obj_1", (0.0, 0.0, 0.0), index, None)
+        return None
+
+    monkeypatch.setattr(viewport, "placement_hit", picked)
+    monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
+    point = guide_targets.point_for(window, "obj_1", "hole_1")
+    facing = [
+        index
+        for index in wanted
+        if float(raw.face_normals[index] @ np.asarray(viewport.view_direction())) < 0.0
+    ]
+    expected = {
+        (
+            viewport.mapToGlobal(QPoint(round(centres[index][0]), round(centres[index][1]))).x(),
+            viewport.mapToGlobal(QPoint(round(centres[index][0]), round(centres[index][1]))).y(),
+        )
+        for index in facing
+    }
+    assert (point.x(), point.y()) in expected
+    monkeypatch.setattr(viewport, "placement_hit", lambda _x, _y: None)
+    with pytest.raises(guide_targets.MissingTargetError, match="keine zugewandte Stelle"):
+        guide_targets.point_for(window, "obj_1", "hole_1")
+
+
+def test_a_grip_is_found_by_the_name_the_renderer_gives_it(
+    prepared_window: Any, monkeypatch
+) -> None:
+    """``handle:move.x`` ist die Stelle, an der der Pick den Pfeil der x-Achse meldet."""
+    from types import SimpleNamespace
+
+    from app.ui import guide_targets
+
+    window = prepared_window
+    viewport = window.viewport
+    renderer = viewport.renderer
+    monkeypatch.setattr(viewport, "gizmo_reach", lambda: ((0.0, 0.0, 0.0), 20.0))
+    tip = viewport.display_of((8.0, 0.0, 0.0))
+    arrow = SimpleNamespace(name="gizmo:arrow:0")
+    monkeypatch.setattr(
+        renderer,
+        "pick_item",
+        lambda x, y: arrow if abs(x - tip[0]) <= 6 and abs(y - tip[1]) <= 3 else None,
+    )
+    monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
+    found = guide_targets.next_click(window, "handle:move.x")
+    centre = found.rect.center()
+    local = viewport.mapFromGlobal(centre)
+    assert abs(local.x() - tip[0]) <= 6 and abs(local.y() - tip[1]) <= 3
+    with pytest.raises(guide_targets.MissingTargetError):
+        guide_targets.next_click(window, "handle:rotate.z")
+
+
+def test_widget_under_finds_the_child_and_an_open_menu_first(qt_app: Any) -> None:
+    """Die Probe vor jedem Klick, offscreen belegt: das Kind an der Stelle, und ein
+    offenes Menü darüber geht vor."""
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from app.ui import guide_targets
+
+    host = QWidget()
+    host.resize(300, 200)
+    layout = QVBoxLayout(host)
+    first = QPushButton("Eins", host)
+    second = QPushButton("Zwei", host)
+    layout.addWidget(first)
+    layout.addWidget(second)
+    host.show()
+    _settle(qt_app, 5)
+    try:
+        point = second.mapToGlobal(second.rect().center())
+        assert guide_targets.widget_under(point) is second
+        menu = QMenu(host)
+        menu.addAction("Probe")
+        menu.popup(point)
+        _settle(qt_app, 5)
+        under = guide_targets.widget_under(menu.mapToGlobal(menu.rect().center()))
+        assert under is menu or (under is not None and menu.isAncestorOf(under))
+        menu.hide()
+    finally:
+        host.close()
+        host.deleteLater()
+
+
+@pytest.mark.usefixtures("require_graphics_adapter")
+def test_a_click_at_point_for_chooses_the_feature(native_window_platform: str) -> None:
+    """Am echten Fenster: Klicks an der Stelle aus ``point_for`` wählen erst den
+    Körper, dann die Fläche — die Stelle trifft, was sie verspricht. Danach findet
+    ``handle:move.*`` die Pfeile des Bewegungsgriffs im echten Bild."""
+    import os
+    import subprocess
+    import sys
+
+    script = r"""
+import app.ui
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
+from app.core.bootstrap import load_operations
+load_operations()
+application = QApplication([])
+assert application.platformName() not in ('offscreen', 'minimal')
+from app.core.scene.history import OperationDraft
+from app.ui import guide_targets
+from app.ui.main_window import MainWindow
+from app.ui.session import Session
+from app.ui.settings import UiSettings
+window = MainWindow(Session(), UiSettings())
+window.resize(1400, 900)
+window.show()
+assert QTest.qWaitForWindowExposed(window)
+window._show_start_screen(False)
+assert window.session.apply('Quader', [OperationDraft(op='create_box')])
+assert window.session.wait_for_idle(60000)
+for _ in range(60):
+    application.processEvents()
+    QTest.qWait(20)
+assert window.viewport.renderer is not None
+window.viewport.reset_camera()
+for _ in range(30):
+    application.processEvents()
+    QTest.qWait(20)
+assert window.object_tree.selected_feature() != 'face_top'
+clicks = 0
+for click in range(2):
+    if window.object_tree.selected_feature() == 'face_top':
+        break
+    clicks += 1
+    point = guide_targets.point_for(window, 'obj_1', 'face_top')
+    under = guide_targets.widget_under(point)
+    QTest.mouseClick(under, Qt.MouseButton.LeftButton, pos=under.mapFromGlobal(point))
+    for _ in range(30):
+        application.processEvents()
+        QTest.qWait(20)
+assert window.object_tree.selected_feature() == 'face_top', window.object_tree.selected_feature()
+window.object_tree.select_object('obj_1')
+window.tools.toggle('transform')
+for _ in range(30):
+    application.processEvents()
+    QTest.qWait(20)
+for role in ('move.x', 'move.y', 'move.z'):
+    step = guide_targets.next_click(window, f'handle:{role}')
+    assert step.why == 'ziel', (role, step)
+window.release()
+print(f'point_for chose the feature after {clicks} clicks', flush=True)
+import os
+os._exit(0)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "QT_QPA_PLATFORM": native_window_platform},
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "point_for chose the feature" in done.stdout, done.stdout
+
+
+def test_the_recent_projects_and_the_dialog_fields_resolve(qt_app: Any, tmp_path: Path) -> None:
+    """„Zuletzt geöffnet“ auf dem Startbildschirm (``start.recent:<n>`` ab 1) und die
+    Felder des offenen Operationsdialogs (``field:<parameter>``) über ihr Kennzeichen."""
+    from app.core.registry import REGISTRY
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window.resize(1200, 800)
+    window.show()
+    try:
+        first, second = tmp_path / "eins.p3d", tmp_path / "zwei.p3d"
+        window.start_screen.show_recent([first, second])
+        _settle(qt_app)
+        step = guide_targets.next_click(window, "start.recent:2")
+        listing = window.start_screen.recent_list
+        place = listing.visualItemRect(listing.item(1))
+        assert step.why == "ziel"
+        assert step.rect == QRect(listing.viewport().mapToGlobal(place.topLeft()), place.size())
+        with pytest.raises(guide_targets.MissingTargetError):
+            guide_targets.next_click(window, "start.recent:3")
+
+        window._show_start_screen(False)
+        window.run_operation(REGISTRY.get("create_box"))
+        _settle(qt_app)
+        editor = guide_targets.widget_for(window, "field:width")
+        assert editor.property(guides.TARGET_PROPERTY) == "field:width"
+        assert editor.window().isVisible()
+        assert guide_targets.next_click(window, "field:width").why in {"ziel", "rollen"}
+    finally:
+        if window._op_dialog is not None:
+            window._op_dialog.reject()
+        window.hide()
+        window.release()

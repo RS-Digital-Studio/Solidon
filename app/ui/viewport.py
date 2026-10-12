@@ -10248,8 +10248,8 @@ class Viewport(QWidget):
             return None
         sideways = sideways / span
         shifted = np.asarray(point, dtype=float) + sideways
-        here = self._display_of(point)
-        there = self._display_of([float(value) for value in shifted])
+        here = self.display_of(point)
+        there = self.display_of([float(value) for value in shifted])
         if here is None or there is None:
             return None
         measured = math.dist(here, there)
@@ -17832,8 +17832,8 @@ class Viewport(QWidget):
         width, height = self.renderer.view_size()
         if min(width, height) < LEAST_VIEW_PIXELS:
             return FALLBACK_SCALE
-        first = self._display_of(here)
-        second = self._display_of(there)
+        first = self.display_of(here)
+        second = self.display_of(there)
         if first is None or second is None:
             return FALLBACK_SCALE
         span = math.dist(first, second)
@@ -18438,7 +18438,7 @@ class Viewport(QWidget):
 
     # --- Bildpunkte einer Weltstelle ---------------------------------------------
 
-    def _display_of(self, world: Sequence[float]) -> tuple[float, float] | None:
+    def display_of(self, world: Sequence[float]) -> tuple[float, float] | None:
         """Ein Weltpunkt im Bild — in Gerätepixeln, gezählt wie Qt (oben links),
         oder nichts ohne Bild."""
         if self.renderer is None:

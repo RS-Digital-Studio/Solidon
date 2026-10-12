@@ -87,7 +87,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from app.core import expressions, manual
+from app.core import expressions, guides, manual
 from app.core.action_effects import effect_worth_showing, side_effect
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
@@ -3479,6 +3479,7 @@ class ObjectTree(QWidget):
                 return
             step = feature.created_by
         change = menu.addAction(tr("Diesen Schritt ändern"))
+        change.setObjectName("tree.step")
         change.setStatusTip(tr("Öffnet den Schritt, der dieses Merkmal erzeugt hat."))
         change.triggered.connect(lambda _checked=False: self.stepRequested.emit(step))
         menu.addSeparator()
@@ -3521,6 +3522,7 @@ class ObjectTree(QWidget):
         if feature_id is None:
             return
         draw = menu.addAction(tr("Auf dieser Fläche zeichnen"))
+        draw.setObjectName("tree.sketch")
         draw.setStatusTip(tr("Beginnt eine Skizze auf dieser Fläche statt auf einer Grundebene."))
         draw.triggered.connect(
             lambda _checked=False: self.sketchOnFaceRequested.emit(str(feature_id))
@@ -3544,6 +3546,7 @@ class ObjectTree(QWidget):
         else:
             label = tr("Ausblenden") if wants_hiding else tr("Einblenden")
         hide = menu.addAction(label)
+        hide.setObjectName("tree.visibility")
         hide.triggered.connect(
             lambda _checked=False: self.visibilityRequested.emit(chosen, not wants_hiding)
         )
@@ -3551,6 +3554,7 @@ class ObjectTree(QWidget):
         isolate = menu.addAction(
             tr("Alles andere ausblenden") if not self.isolation_holds(chosen) else tr("Alle zeigen")
         )
+        isolate.setObjectName("tree.isolate")
         isolate.triggered.connect(lambda _checked=False: self.isolateRequested.emit(chosen))
 
 
@@ -3865,6 +3869,7 @@ class ParameterPanel(QWidget):
         # Satz an und Qt zeigt ihn nie.
         menu.setToolTipsVisible(True)
         entry = menu.addAction(tr("Ändern …"))
+        entry.setObjectName("parameters.edit")
         note = tr("Untergrenze, Obergrenze, Einheit und Ausdruck dieses Maßes — rücknehmbar.")
         entry.setToolTip(note)
         entry.setStatusTip(note)
@@ -5692,6 +5697,7 @@ class HistoryPanel(QWidget):
             (tr("Nach unten", context="Verlauf"), False, self.down_action),
         ):
             entry = menu.addAction(label)
+            entry.setObjectName("history.up" if upwards else "history.down")
             entry.setShortcut(action.shortcut())
             found, before = self._neighbour_target(op_ids, upwards)
             problem = places.get(before) if found else None
@@ -5706,9 +5712,11 @@ class HistoryPanel(QWidget):
         valid = [before for before, problem in places.items() if problem is None]
         if valid:
             further = menu.addMenu(tr("Verschieben vor"))
+            further.menuAction().setObjectName("history.move_before")
             for before in valid:
                 label = tr("Ans Ende") if before is None else f"{before}  {self._title_of(before)}"
                 target = further.addAction(label)
+                target.setObjectName(f"history.move_before.{'end' if before is None else before}")
                 target.triggered.connect(
                     lambda _checked=False, chosen=op_ids, where=before: self.moveRequested.emit(
                         chosen, where
@@ -5732,6 +5740,7 @@ class HistoryPanel(QWidget):
         switch.setObjectName("history.switch")
         if self._inserting is not None:
             stop = menu.addAction(tr("Einfügen beenden"))
+            stop.setObjectName("history.stop_insert")
             stop.setShortcut(self.stop_insert_action.shortcut())
             stop.triggered.connect(lambda _checked=False: self.stopInsertRequested.emit())
 
@@ -5945,6 +5954,7 @@ class HistoryPanel(QWidget):
             # hochziehen, Innenkontur als Tasche — ohne neu zu zeichnen. Der
             # Eintrag steht nur an Schritten, die eine Zeichnung tragen.
             reuse = menu.addAction(tr("Zeichnung weiterverwenden"))
+            reuse.setObjectName("history.reuse_drawing")
             reuse.setToolTip(tr("Öffnet eine Kopie dieser Zeichnung für einen neuen Schritt."))
             menu.setToolTipsVisible(True)
             reuse.triggered.connect(
@@ -5964,6 +5974,7 @@ class HistoryPanel(QWidget):
             # Ohne Auslassungspunkte: Es folgt keine Frage mehr, und Strg+Z
             # nimmt es zurück (``MainWindow.bake_sculpt``).
             frozen = menu.addAction(tr("Stand festschreiben"))
+            frozen.setObjectName("history.bake")
             frozen.setToolTip(
                 tr(
                     "Legt den jetzigen Stand als Körper ab. Die Züge bleiben als Beleg, "
@@ -6689,6 +6700,7 @@ class ReportPanel(QWidget):
         previous: QWidget = self.finding_place
         for action in offered:
             button = QPushButton(str(action.label), self._offers)
+            button.setProperty(guides.TARGET_PROPERTY, f"finding.action:{action.id}")
             button.setToolTip(str(finding.message) if finding is not None else "")
             if finding is not None and action.id == CORRECT_INPUT.id:
                 # Der Rat des Kerns, den kein Knopf einlöst, steht beim Knopf,
@@ -7765,6 +7777,7 @@ class ReportPanel(QWidget):
         chosen: dict[Any, Any] = {}
         for action in offered:
             entry = menu.addAction(str(action.label))
+            entry.setObjectName(f"report.{action.id}")
             # Dieselbe Sperre wie an den Knöpfen darunter (RM-534).
             entry.setEnabled(not self._previous(item))
             chosen[entry] = action
@@ -7989,6 +8002,7 @@ def _folded(actions: Sequence[Any]) -> list[Any]:
             title=_and_then(str(first.title), str(action.title)),
             op=None,
             reason=first.reason,
+            key=guides.action_key(first),
         )
     return folded
 
@@ -9102,15 +9116,18 @@ class FeaturePanel(QWidget):
         self._in_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._in_view.clicked.connect(self._show_armed_in_view)
         self._in_view.setVisible(False)
+        self._in_view.setProperty(guides.TARGET_PROPERTY, "feature.in_view")
         below.addWidget(self._in_view)
         self._every = QCheckBox("", self._footer)
         self._every.setVisible(False)
+        self._every.setProperty(guides.TARGET_PROPERTY, "feature.every")
         self._every.toggled.connect(self._group_changed)
         below.addWidget(self._every)
         self._apply = make_primary(QPushButton(tr("Übernehmen"), self._footer))
         self._apply.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._apply.clicked.connect(self._run_armed)
         self._apply.setVisible(False)
+        self._apply.setProperty(guides.TARGET_PROPERTY, "feature.apply")
         below.addWidget(self._apply)
         # Ein normaler Knopf: Abbrechen verwirft nur eine Vorschau, die das
         # Dokument nie gesehen hat. Rot trägt das unwiederbringliche Verwerfen
@@ -10350,6 +10367,7 @@ class FeaturePanel(QWidget):
             name = QLabel(f"{action.title} — {action.reason}", box)
             name.setWordWrap(True)
             name.setAccessibleDescription(str(action.reason))
+            name.setProperty(guides.TARGET_PROPERTY, guides.action_target(action))
             fit_wrapped(name)
             layout.addWidget(name)
             return box
@@ -10666,6 +10684,12 @@ class FeaturePanel(QWidget):
         schon (:func:`configure_feature_field`).
         """
         box = row.box
+        # Das Ziel im Wortschatz (``feature:<schlüssel>``, an einer Kante
+        # ``edge:``) — als Eigenschaft, denn den ``objectName`` des Kopfes
+        # führt das Stylesheet (``actionHeading``).
+        for head in (row.toggle, row.button):
+            if head is not None:
+                head.setProperty(guides.TARGET_PROPERTY, guides.action_target(action))
         if row.title is not None and row.dot is not None:
             row.title.setText(str(action.title))
             # Die Erklärung beginnt leer: Eine wiederverwendete Zeile trug
@@ -10702,6 +10726,7 @@ class FeaturePanel(QWidget):
                 # stehen vier Handlungen mit je eigenen Feldern.
                 editor.setAccessibleName(f"{action.title} — {field.label}")
                 editor.setProperty(FIELD_PROPERTY, name)
+                editor.setProperty(guides.TARGET_PROPERTY, guides.action_field_target(action, name))
                 if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
                     refusal = row.refusals.get(name)
                     if refusal is not None:
@@ -11524,6 +11549,7 @@ class FeaturePanel(QWidget):
             label.setAccessibleDescription(editor.accessibleDescription())
             editor.setAccessibleName(f"{action.title} — {field.label}")
             editor.setProperty(FIELD_PROPERTY, name)
+            editor.setProperty(guides.TARGET_PROPERTY, f"measure.field:{name}")
             if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
                 refusal = group.refusals.get(name)
                 if refusal is not None:
@@ -12054,6 +12080,10 @@ def collapsible(
     )
     if inline:
         heading.setProperty("inline", True)
+        # Die Überschrift wandert in die fremde Zeile und ist dann kein Kind
+        # des Wrappers mehr; wer vom Inhalt aus die Klappe sucht
+        # (``guide_targets._obstacles``), findet sie hier.
+        wrapper.setProperty("heading", heading)
     summary: _SectionSummary | None = None
     if contents:
         heading.setToolTip(contents)
