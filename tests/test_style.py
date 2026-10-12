@@ -2624,3 +2624,55 @@ def test_a_shortcut_search_without_a_hit_says_so(qt_app: QApplication) -> None:
     finally:
         window.deleteLater()
         bar.deleteLater()
+
+
+def test_every_number_field_stands_right_aligned(qt_app: QApplication) -> None:
+    """Zahlen stehen Stelle unter Stelle (G3, FD-14): jedes Zahlenfeld rechtsbündig.
+
+    Gesetzt an einer Stelle, die jedes Drehfeld erreicht — dem Stylesheet —,
+    damit auch ein nacktes ``QSpinBox`` einer Leiste mitgeht. Gemessen wird,
+    was Qt nach dem Polieren meldet, am Kalibrierdialog so, wie der Prüfstand
+    es liest (``function_capture.layout_entries``).
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QDoubleSpinBox, QSpinBox
+
+    from app.ui.dialogs import CalibrationDialog
+    from app.ui.labels import BoundedLengthSpin, BoundedSpin, LengthSpin, NumberSpin
+    from app.ui.theme import apply_theme, current_theme
+    from tools.function_capture import layout_entries
+
+    previous_theme = current_theme()
+    previous_palette = qt_app.palette()
+    previous_sheet = qt_app.styleSheet()
+    dialog = None
+    try:
+        apply_theme(qt_app, "dark")
+        qt_app.setStyleSheet(stylesheet("dark", 10))
+        kinds = (NumberSpin, BoundedSpin, LengthSpin, BoundedLengthSpin, QSpinBox, QDoubleSpinBox)
+        for kind in kinds:
+            field = kind()
+            field.ensurePolished()
+            assert field.alignment() & Qt.AlignmentFlag.AlignRight, (
+                f"{kind.__name__} steht linksbündig"
+            )
+            field.deleteLater()
+        dialog = CalibrationDialog("pla")
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        dialog.show()
+        qt_app.processEvents()
+        values = [
+            value
+            for entry in layout_entries(dialog)
+            if entry["kind"] == "form"
+            for value in entry["values"]
+        ]
+        assert values, "ohne Zahlenfeld im Formular prüft der Dialog nichts"
+        assert {value["alignment"] for value in values} == {"right"}, values
+    finally:
+        if dialog is not None:
+            dialog.hide()
+            dialog.deleteLater()
+        apply_theme(qt_app, previous_theme)
+        qt_app.setPalette(previous_palette)
+        qt_app.setStyleSheet(previous_sheet)
