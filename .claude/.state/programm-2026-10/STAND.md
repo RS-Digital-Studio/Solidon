@@ -64,7 +64,15 @@ das Konzept.
 
 ## Verlauf
 
-- 12.10.2026, 08:40, Phase 2, Schritt 1: Funktionsdurchgang abgelegt
+- 12.10.2026, 08:37, Phase 2, D0 begonnen: Zuschnitt in fünf Teilpakete
+  (W Wortschatz, L Liste und Szenen, P Prüfstand, U Urteile, S Unterlagen) in
+  `.claude/.state/funktionsdurchgang-2026-10/plan-d0.md`; Integrationszweig
+  `welle4` (Worktree `F:\sl-welle4`), Teilpakete auf `d0/wortschatz`,
+  `d0/liste`, `d0/urteile`, `d0/pruefstand` (Worktrees `F:\sl-d0w`, `-d0l`,
+  `-d0u`, `-d0p`); S macht der Koordinator. Lizenz „gekauft“ im Prüfstand über
+  die Nahtstelle der Suite, ohne private Schlüssel. Stand je Paket in
+  `F:\3D Druck\output\konsolidierung-2026-10-12\paket-d0-<kürzel>.md`.
+- 12.10.2026, 08:37, Phase 2, Schritt 1 auf main (`31dd59af1`): Funktionsdurchgang abgelegt
   (Konzept und Prüfberichte unter `konzepte/`, RM-736 bis RM-749 im Register,
   Programmplan als Beleg der Termine in Konzept §9; Paketzuordnung nach §6
   ohne Ausnahme außer D6 — Verrunden, Fase, Fläche versetzen prüft D3).
