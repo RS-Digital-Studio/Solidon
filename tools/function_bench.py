@@ -1572,7 +1572,12 @@ class FunctionFlow:
             self.session.project.document,
             result.scene if result is not None else None,
             selection=selection,
-            camera=self.window.viewport.camera_pose(),
+            # Ohne Renderer (offscreen) hat die Ansicht keine Kamera.
+            camera=(
+                self.window.viewport.camera_pose()
+                if getattr(self.window.viewport, "renderer", None) is not None
+                else None
+            ),
         )
 
     def snapshot(self, label: str) -> dict[str, Any]:

@@ -622,10 +622,15 @@ def layout_entries(root: Any) -> list[dict[str, Any]]:
             ),
         }
     ]
+    # Jedes Layout, auch die geschachtelten: widget.layout() nennt nur das
+    # oberste eines Widgets, ein Formular steht meist darin.
+    layouts: list[Any] = []
     for widget in [root, *root.findChildren(QWidget)]:
-        layout = widget.layout()
-        if not isinstance(layout, QLayout) or not _visible(widget):
-            continue
+        top = widget.layout()
+        if isinstance(top, QLayout) and _visible(widget):
+            layouts += [top, *(item for item in top.findChildren(QLayout) if item not in layouts)]
+    for layout in dict.fromkeys(layouts):
+        widget = layout.parentWidget() or root
         margins = layout.contentsMargins()
         found.append(
             {
