@@ -1,0 +1,106 @@
+ELF-Dateien: 486
+== Höchste benötigte Symbolversion je Familie (über alle Dateien) ==
+  ATTR_1.0  <- usr/bin/_internal/hidapi.libs/libcap-79733b59.so.2.22 (aus libattr-4f2a9577.so.1.1.0)
+  BLKID_2.17  <- usr/bin/_internal/libmount.so.1 (aus libblkid.so.1)
+  CXXABI_1.3.13  <- usr/bin/_internal/PySide6/Qt/lib/libQt6Core.so.6 (aus libstdc++.so.6)
+  ELFUTILS_1.7  <- usr/bin/_internal/hidapi.libs/libdw-0-780627ce.176.so (aus libelf-0-3d9de92a.176.so)
+  GCC_4.8.0  <- usr/bin/_internal/scipy.libs/libgfortran-040039e1-0352e75f.so.5.0.0 (aus libgcc_s.so.1)
+  GCRYPT_1.6  <- usr/bin/_internal/libsystemd.so.0 (aus libgcrypt.so.20)
+  GFORTRAN_8  <- usr/bin/_internal/numpy.libs/libscipy_openblas64_-f48b354e.so (aus libgfortran-83c28eba-468e71e5.so.5.0.0)
+  GLIBC_2.38  <- usr/bin/_internal/libblkid.so.1 (aus libc.so.6)
+  GLIBCXX_3.4.29  <- usr/bin/_internal/PySide6/libpyside6.abi3.so.6.12 (aus libstdc++.so.6)
+  GOMP_4.0  <- usr/bin/_internal/cadquery_ocp_novtk.libs/libraw-37b1f733.so.19.0.2 (aus libgomp-6a29c32d.so.1.0.0)
+  KEYUTILS_1.5  <- usr/bin/_internal/libkrb5.so.3 (aus libkeyutils.so.1)
+  LIBJPEG_6.2  <- usr/bin/_internal/cadquery_ocp_novtk.libs/libfreeimage-3-69ba4c2d.17.0.so (aus libjpeg-e87d2658.so.62.2.0)
+  LIBJPEGTURBO_6.2  <- usr/bin/_internal/cadquery_ocp_novtk.libs/libraw-37b1f733.so.19.0.2 (aus libjpeg-e87d2658.so.62.2.0)
+  LIBSELINUX_1.0  <- usr/bin/_internal/libgio-2.0.so.0 (aus libselinux.so.1)
+  LIBSYSTEMD_209  <- usr/bin/_internal/libdbus-1.so.3 (aus libsystemd.so.0)
+  LIBTIFF_4.0  <- usr/bin/_internal/cadquery_ocp_novtk.libs/libfreeimage-3-69ba4c2d.17.0.so (aus libtiff-92a88e40.so.5.3.0)
+  LIBUDEV_183  <- usr/bin/_internal/hidapi.libs/libusb-1-150b88da.0.so.0.1.0 (aus libudev-1f672570.so.1.6.2)
+  MOUNT_2.26  <- usr/bin/_internal/libgio-2.0.so.0 (aus libmount.so.1)
+  OMP_1.0  <- usr/bin/_internal/cadquery_ocp_novtk.libs/libraw-37b1f733.so.19.0.2 (aus libgomp-6a29c32d.so.1.0.0)
+  OPENSSL_3.0.3  <- usr/bin/_internal/libssl.so.3 (aus libcrypto.so.3)
+  QUADMATH_1.0  <- usr/bin/_internal/numpy.libs/libgfortran-83c28eba-468e71e5.so.5.0.0 (aus libquadmath-2284e583-a9307bba.so.0.0.0)
+  UUID_2.20  <- usr/bin/_internal/python3.14/lib-dynload/_uuid.cpython-314-x86_64-linux-gnu.so (aus libuuid.so.1)
+  V_0.5.0  <- usr/bin/_internal/libxkbcommon-x11.so.0 (aus libxkbcommon.so.0)
+  XZ_5.0  <- usr/bin/_internal/libsystemd.so.0 (aus liblzma.so.5)
+  ZLIB_1.2.9  <- usr/bin/_internal/cadquery_ocp_novtk.libs/libpng16-ebd1fa42.so.16.34.0 (aus libz.so.1)
+== Die 15 Dateien mit dem höchsten GLIBC-Bedarf ==
+  GLIBC_2.38  usr/bin/_internal/python3.14/lib-dynload/pyexpat.cpython-314-x86_64-linux-gnu.so
+  GLIBC_2.38  usr/bin/_internal/python3.14/lib-dynload/math.cpython-314-x86_64-linux-gnu.so
+  GLIBC_2.38  usr/bin/_internal/python3.14/lib-dynload/_pickle.cpython-314-x86_64-linux-gnu.so
+  GLIBC_2.38  usr/bin/_internal/python3.14/lib-dynload/_decimal.cpython-314-x86_64-linux-gnu.so
+  GLIBC_2.38  usr/bin/_internal/libxkbcommon.so.0
+  GLIBC_2.38  usr/bin/_internal/libxcb-cursor.so.0
+  GLIBC_2.38  usr/bin/_internal/libuuid.so.1
+  GLIBC_2.38  usr/bin/_internal/libsystemd.so.0
+  GLIBC_2.38  usr/bin/_internal/libstdc++.so.6
+  GLIBC_2.38  usr/bin/_internal/libselinux.so.1
+  GLIBC_2.38  usr/bin/_internal/libpython3.14.so.1.0
+  GLIBC_2.38  usr/bin/_internal/libmount.so.1
+  GLIBC_2.38  usr/bin/_internal/libkrb5support.so.0
+  GLIBC_2.38  usr/bin/_internal/libkrb5.so.3
+  GLIBC_2.38  usr/bin/_internal/libk5crypto.so.3
+  GLIBC: Ubuntu 22.04 hat 2.35 -> ZU NEU
+  GLIBC: Ubuntu 24.04 hat 2.39 -> ok
+  GLIBC: Debian 12 hat 2.36 -> ZU NEU
+  GLIBC: Fedora 40 hat 2.39 -> ok
+  GLIBC: RHEL 9 hat 2.34 -> ZU NEU
+  GLIBCXX: Ubuntu 22.04 hat 3.4.30 -> ok
+  GLIBCXX: Ubuntu 24.04 hat 3.4.33 -> ok
+  GLIBCXX: Debian 12 hat 3.4.30 -> ok
+  GLIBCXX: Fedora 40 hat 3.4.33 -> ok
+  GLIBCXX: RHEL 9 hat 3.4.29 -> ok
+libstdc++ im Paket: ['usr/bin/_internal/libstdc++.so.6']
+libgcc_s im Paket: ['usr/bin/_internal/libgcc_s.so.1']
+== NEEDED, die nicht im Paket liegen ==
+  ld-linux-x86-64.so.2               55x  [System]  z.B. usr/bin/_internal/libcom_err.so.2
+  libEGL.so.1                        12x  [System]  z.B. usr/bin/_internal/PySide6/Qt/lib/libQt6EglFSDeviceIntegration.so.6
+  libGL.so.1                         64x  [System]  z.B. usr/bin/_internal/cadquery_ocp_novtk.libs/libTKOpenGl-41228440.so.8.0.1
+  libc.so.6                         480x  [System]  z.B. usr/bin/Solidon3D
+  libdl.so.2                         12x  [System]  z.B. usr/bin/Solidon3D
+  libdrm.so.2                         3x  [System]  z.B. usr/bin/_internal/PySide6/Qt/lib/libQt6EglFsKmsSupport.so.6
+  libm.so.6                         259x  [System]  z.B. usr/bin/_internal/libglib-2.0.so.0
+  libpthread.so.0                    52x  [System]  z.B. usr/bin/Solidon3D
+  libresolv.so.2                      2x  [System]  z.B. usr/bin/_internal/libkrb5.so.3
+  librt.so.1                          2x  [System]  z.B. usr/bin/_internal/cadquery_ocp_novtk.libs/libTKernel-2f987288.so.8.0.1
+  libwayland-client.so.0             15x  [System]  z.B. usr/bin/_internal/PySide6/Qt/lib/libQt6WaylandClient.so.6
+  libwayland-cursor.so.0             15x  [System]  z.B. usr/bin/_internal/PySide6/Qt/lib/libQt6WaylandClient.so.6
+  libwayland-egl.so.1                 1x  [System]  z.B. usr/bin/_internal/PySide6/Qt/plugins/wayland-graphics-integration-client/libqt-plugin-wayland-egl.so
+  libxcb.so.1                        21x  [System]  z.B. usr/bin/_internal/libX11.so.6
+== GNU_PROPERTY_X86_ISA_1_NEEDED ==
+  ('-',): 486  z.B. ['usr/bin/Solidon3D', 'usr/bin/_internal/hid.cpython-314-x86_64-linux-gnu.so', 'usr/bin/_internal/libblkid.so.1', 'usr/bin/_internal/libbrotlicommon.so.1', 'usr/bin/_internal/libbrotlidec.so.1']
+  FEATURE_1_AND (IBT/SHSTK): {'-': 268, '0x3': 218}
+== Qt-Plugins ==
+   egldeviceintegrations/libqeglfs-emu-integration.so NEEDED: ['libEGL.so.1', 'libxkbcommon.so.0', 'libGL.so.1']
+   egldeviceintegrations/libqeglfs-kms-egldevice-integration.so NEEDED: ['libdrm.so.2', 'libEGL.so.1', 'libGL.so.1', 'libxkbcommon.so.0']
+   egldeviceintegrations/libqeglfs-x11-integration.so NEEDED: ['libX11.so.6', 'libX11-xcb.so.1', 'libxcb.so.1', 'libEGL.so.1', 'libxkbcommon.so.0', 'libGL.so.1']
+   platforminputcontexts/libcomposeplatforminputcontextplugin.so NEEDED: ['libxkbcommon.so.0', 'libGL.so.1']
+   platforminputcontexts/libibusplatforminputcontextplugin.so NEEDED: ['libxkbcommon.so.0', 'libGL.so.1']
+   platforminputcontexts/libqtvirtualkeyboardplugin.so NEEDED: ['libxkbcommon.so.0', 'libGL.so.1']
+   platforms/libqeglfs.so NEEDED: ['libEGL.so.1', 'libxkbcommon.so.0', 'libGL.so.1']
+   platforms/libqlinuxfb.so NEEDED: ['libGL.so.1', 'libxkbcommon.so.0', 'libdrm.so.2']
+   platforms/libqminimal.so NEEDED: ['libGL.so.1', 'libxkbcommon.so.0', 'libfreetype.so.6']
+   platforms/libqminimalegl.so NEEDED: ['libEGL.so.1', 'libxkbcommon.so.0', 'libGL.so.1']
+   platforms/libqoffscreen.so NEEDED: ['libX11.so.6', 'libGL.so.1', 'libxkbcommon.so.0']
+   platforms/libqvkkhrdisplay.so NEEDED: ['libfreetype.so.6', 'libGL.so.1', 'libxkbcommon.so.0']
+   platforms/libqvnc.so NEEDED: ['libGL.so.1', 'libxkbcommon.so.0']
+   platforms/libqwayland.so NEEDED: ['libwayland-client.so.0', 'libwayland-cursor.so.0', 'libGL.so.1', 'libxkbcommon.so.0']
+   platforms/libqxcb.so NEEDED: ['libGL.so.1', 'libxkbcommon.so.0', 'libxkbcommon-x11.so.0', 'libxcb-cursor.so.0', 'libxcb-icccm.so.4', 'libxcb-util.so.1', 'libxcb-image.so.0', 'libxcb-keysyms.so.1', 'libxcb-randr.so.0', 'libxcb-render-util.so.0', 'libxcb-shm.so.0', 'libxcb-sync.so.1', 'libxcb-xfixes.so.0', 'libxcb-render.so.0', 'libxcb-shape.so.0', 'libxcb-xkb.so.1', 'libxcb.so.1', 'libX11-xcb.so.1', 'libX11.so.6']
+   platformthemes/libqxdgdesktopportal.so NEEDED: ['libGL.so.1', 'libxkbcommon.so.0']
+   wayland-decoration-client/libadwaita.so NEEDED: ['libwayland-client.so.0', 'libwayland-cursor.so.0', 'libGL.so.1', 'libxkbcommon.so.0']
+   wayland-decoration-client/libbradient.so NEEDED: ['libwayland-client.so.0', 'libwayland-cursor.so.0', 'libGL.so.1', 'libxkbcommon.so.0']
+   wayland-graphics-integration-client/libdmabuf-server.so NEEDED: ['libEGL.so.1', 'libwayland-client.so.0', 'libwayland-cursor.so.0', 'libGL.so.1', 'libxkbcommon.so.0']
+   wayland-graphics-integration-client/libdrm-egl-server.so NEEDED: ['libEGL.so.1', 'libwayland-client.so.0', 'libwayland-cursor.so.0', 'libGL.so.1', 'libxkbcommon.so.0']
+   wayland-graphics-integration-client/libqt-plugin-wayland-egl.so NEEDED: ['libEGL.so.1', 'libwayland-client.so.0', 'libwayland-egl.so.1', 'libwayland-cursor.so.0', 'libGL.so.1', 'libxkbcommon.so.0']
+   wayland-graphics-integration-client/libshm-emulation-server.so NEEDED: ['libwayland-client.so.0', 'libwayland-cursor.so.0', 'libGL.so.1', 'libxkbcommon.so.0']
+   wayland-graphics-integration-client/libvulkan-server.so NEEDED: ['libwayland-client.so.0', 'libwayland-cursor.so.0', 'libGL.so.1', 'libxkbcommon.so.0']
+   wayland-shell-integration/libfullscreen-shell-v1.so NEEDED: ['libwayland-client.so.0', 'libxkbcommon.so.0', 'libGL.so.1', 'libwayland-cursor.so.0']
+   wayland-shell-integration/libivi-shell.so NEEDED: ['libwayland-client.so.0', 'libxkbcommon.so.0', 'libGL.so.1', 'libwayland-cursor.so.0']
+   wayland-shell-integration/libqt-shell.so NEEDED: ['libwayland-client.so.0', 'libxkbcommon.so.0', 'libGL.so.1', 'libwayland-cursor.so.0']
+   wayland-shell-integration/libwl-shell-plugin.so NEEDED: ['libxkbcommon.so.0', 'libGL.so.1', 'libwayland-client.so.0', 'libwayland-cursor.so.0']
+   wayland-shell-integration/libxdg-shell.so NEEDED: ['libwayland-client.so.0', 'libxkbcommon.so.0', 'libGL.so.1', 'libwayland-cursor.so.0']
+   xcbglintegrations/libqxcb-egl-integration.so NEEDED: ['libEGL.so.1', 'libGL.so.1', 'libxkbcommon.so.0', 'libxkbcommon-x11.so.0', 'libxcb-cursor.so.0', 'libxcb-icccm.so.4', 'libxcb-util.so.1', 'libxcb-image.so.0', 'libxcb-keysyms.so.1', 'libxcb-randr.so.0', 'libxcb-render-util.so.0', 'libxcb-shm.so.0', 'libxcb-sync.so.1', 'libxcb-xfixes.so.0', 'libxcb-render.so.0', 'libxcb-shape.so.0', 'libxcb-xkb.so.1', 'libxcb.so.1', 'libX11-xcb.so.1', 'libX11.so.6']
+   xcbglintegrations/libqxcb-glx-integration.so NEEDED: ['libxcb-glx.so.0', 'libGL.so.1', 'libxkbcommon.so.0', 'libxkbcommon-x11.so.0', 'libxcb-cursor.so.0', 'libxcb-icccm.so.4', 'libxcb-util.so.1', 'libxcb-image.so.0', 'libxcb-keysyms.so.1', 'libxcb-randr.so.0', 'libxcb-render-util.so.0', 'libxcb-shm.so.0', 'libxcb-sync.so.1', 'libxcb-xfixes.so.0', 'libxcb-render.so.0', 'libxcb-shape.so.0', 'libxcb-xkb.so.1', 'libX11-xcb.so.1', 'libX11.so.6', 'libxcb.so.1']
+== Interpreter == Counter({None: 483, '/lib64/ld-linux-x86-64.so.2': 3})
+== Fehler == []

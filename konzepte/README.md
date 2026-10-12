@@ -42,6 +42,7 @@ Volltextsuche zu erreichen, und die findet nur, wer die Wörter schon kennt.
 | **Produkt, Verkauf, Veröffentlichung** | `konzept-produktkompass-2026-08` · `konzept-demo-2026-10` · `konzept-demo-zu-1.0-2026-09` · `konzept-lizenzarten-2026-09` · `konzept-aktivierungsserver-2026-08` · `konzept-foerdermodell` · `konzept-versionspflege-2026-08` |
 | **Wettbewerb und Maßstab** | nur im Archiv |
 | **Arbeitsweise am Code** | `konzept-codestruktur-2026-10` · `konzept-codestruktur-funde-2026-10` (Funde aus Messung und Umbau) · `konzept-ci-testlaufzeiten-2026-09` · `konzept-zwillinge-2026-09` · `entscheidungen-2026-08-22` |
+| **Plattformen und Pakete** | `nachweise-plattform-2026-10/` (Intel-Mac, Apple-Silicon-Mac und Linux: Paketforensik, CI-Lücken, fremde Berichte; RM-800 bis RM-809) |
 | **Release-Durchsichten** | `nachweise-release-0.5.1/` (Berichte, Sonden und Patches der Durchsicht und des Releases 0.5.1) · `nachweise-release-0.5.0/` (Belege der Durchsicht 0.5.0) |
 
 Was erledigt oder abgelöst ist, steht im [Archiv](#archiv), mit demselben Gebiet.
@@ -71,6 +72,7 @@ heute aus, nicht nach Datum. Was nur noch erklärt, steht im [Archiv](#archiv).
 
 | Dokument | Stand | Thema | Wie es dasteht |
 |---|---|---|---|
+| [nachweise-plattform-2026-10/README.md](nachweise-plattform-2026-10/README.md) | **12.10.** | Solidon auf Intel-Mac, Apple-Silicon-Mac und Linux: Forensik der 0.6.0-Pakete, Lücken der CI, fremde Berichte | **Gemessen am Tag-Lauf v0.6.0**; begründet [RM-800](../ROADMAP.md#rm-800) bis [RM-809](../ROADMAP.md#rm-809) und die Nachträge an RM-070, RM-104 und RM-770 |
 | [konzept-funktionsdurchgang-2026-10.md](konzept-funktionsdurchgang-2026-10.md) | **12.10.** | Jede Funktion einmal über die Oberfläche benutzen, nach neunzehn Prüfpunkten bewerten, Funde beheben, abhaken | **Beschlossen, Beginn mit D0** ([RM-736](../ROADMAP.md#rm-736), Pakete D0 bis D12 als RM-737 bis RM-749; Entscheidungen Robert §13: Fenstertest je Fund lokal, Kundenpakete bis 25.11. vor den Komponenten von `MainWindow`; Programmplan in §9). Entworfen am 11.10., abgelegt und nach 0.6.1 nachgezogen am 12.10. |
 | [nachweise-funktionsdurchgang-2026-10/README.md](nachweise-funktionsdurchgang-2026-10/README.md) | **11.10.** | Prüfberichte von `bedienlogik` und `konzept` zum Entwurf des Funktionsdurchgangs | **Nachweise zum Konzept, unverändert abgelegt**; Zeilenangaben gelten für den 11.10. |
 | [konzept-suche-und-palette-2026-10.md](konzept-suche-und-palette-2026-10.md) | **12.10.** | Boolesche Operationen finden, Befehlspalette entfernen: eine Suche im Auswahlpanel | **Umgesetzt in 0.6.1, auf main** ([RM-734](../ROADMAP.md#rm-734), [RM-735](../ROADMAP.md#rm-735), Entscheidung Robert 11.10.: die Palette geht ganz, das Suchfeld steht immer); offen allein die Abnahme am echten Fenster beim Release. Funde unterwegs und aus dem Review am Ende des Dokuments |

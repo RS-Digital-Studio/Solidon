@@ -1,0 +1,2 @@
+Mach-O: 381 Fixup-Art: {'chained': 39, 'dyld_info': 342, 'keine': 0}
+Auffällig (Header-Flags, W+X-Segment, LC_DYSYMTAB-Relokationen, Rebase in r-x): 0

@@ -1,0 +1,8 @@
+cpio-Einträge: 2007 Zip-Einträge (ohne __MACOSX): 2006
+nur in cpio: 1 ['Solidon3D.app/Contents/MacOS/._THIRD-PARTY-NOTICES.md']
+nur im Zip: 0 []
+gleich: 1742
+Inhalt verschieden: 0 []
+Symlink verschieden: 0 []
+Rechte verschieden: 0 []
+AppleDouble in cpio: ['Solidon3D.app/Contents/MacOS/._THIRD-PARTY-NOTICES.md']

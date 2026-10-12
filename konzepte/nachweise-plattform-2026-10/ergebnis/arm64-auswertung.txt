@@ -1,0 +1,98 @@
+== Info.plist ==
+  CFBundleDisplayName: 'Solidon3D'
+  CFBundleDocumentTypes: [{'CFBundleTypeName': 'Solidon3D project', 'CFBundleTypeRole': 'Editor', 'LSHandlerRank': 'Owner', 'LSItemContentTypes': ['de.rsdigital.solidon3d.project']}, {'CFBundleTypeName': 'Solidon3D part', 'CFBundleTypeRole': 'Editor', 'LSHandlerRank': 'Owner', 'LSItemContentTypes': ['de.rsdigital.solidon3d.part']}]
+  CFBundleExecutable: 'Solidon3D'
+  CFBundleIconFile: 'solidon3d.icns'
+  CFBundleIdentifier: 'de.rsdigital.solidon3d'
+  CFBundleInfoDictionaryVersion: '6.0'
+  CFBundleName: 'Solidon3D'
+  CFBundlePackageType: 'APPL'
+  CFBundleShortVersionString: '0.6.0'
+  LSMinimumSystemVersion: '14.0'
+  NSHighResolutionCapable: True
+  NSHumanReadableCopyright: 'Copyright © 2026 RS Digital'
+  UTExportedTypeDeclarations: [{'UTTypeConformsTo': ['public.data', 'public.zip-archive'], 'UTTypeDescription': 'Solidon3D project', 'UTTypeIdentifier': 'de.rsdigital.solidon3d.project', 'UTTypeTagSpecification': {'public.filename-extension': ['p3d']}}, {'UTTypeConformsTo': ['public.data', 'public.json'], 'UTTypeDescription': 'Solidon3D part', 'UTTypeIdentifier': 'de.rsdigital.solidon3d.part', 'UTTypeTagSpecification': {'public.filename-extension': ['solidon-part'], 'public.mime-type': 'application/vnd.solidon.part+json'}}]
+== Hauptprogramm Spezialslots == {'arm64/sha256': {'info_plist_slot': 'ok', 'coderesources_slot': 'ok'}}
+== Zahl == 381 Mach-O
+== Architekturen == {('arm64',): 381}
+== Dateitypen == {8: 260, 6: 120, 2: 1}
+== minos == [(('LC_BUILD_VERSION', '11.0.0'), 176), (('LC_BUILD_VERSION', '11.1.0'), 52), (('LC_BUILD_VERSION', '14.0.0'), 104), (('LC_BUILD_VERSION', '14.4.0'), 39), (('LC_BUILD_VERSION', '26.0.0'), 10)]
+== SDK == [('11.0.0', 26), ('14.0.0', 1), ('14.5.0', 105), ('15.5.0', 104), ('26.0.0', 49), ('26.2.0', 1), ('26.5.0', 95)]
+== über LSMinimumSystemVersion 14.0 == 153
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtCore.framework/Versions/A/QtCore', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtDBus.framework/Versions/A/QtDBus', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtGui.framework/Versions/A/QtGui', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtNetwork.framework/Versions/A/QtNetwork', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtOpenGL.framework/Versions/A/QtOpenGL', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtPdf.framework/Versions/A/QtPdf', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQml.framework/Versions/A/QtQml', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlMeta.framework/Versions/A/QtQmlMeta', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlModels.framework/Versions/A/QtQmlModels', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlWorkerScript.framework/Versions/A/QtQmlWorkerScript', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQuick.framework/Versions/A/QtQuick', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtSvg.framework/Versions/A/QtSvg', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtSvgWidgets.framework/Versions/A/QtSvgWidgets', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboard.framework/Versions/A/QtVirtualKeyboard', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboardQml.framework/Versions/A/QtVirtualKeyboardQml', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtWidgets.framework/Versions/A/QtWidgets', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/generic/libqtuiotouchplugin.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/iconengines/libqsvgicon.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqgif.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqicns.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqico.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqjpeg.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqmacheif.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqmacjp2.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqpdf.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqsvg.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqtga.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqtiff.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqwbmp.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/imageformats/libqwebp.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/networkinformation/libqapplenetworkinformation.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/platforminputcontexts/libqtvirtualkeyboardplugin.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/platforms/libqcocoa.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/platforms/libqminimal.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/platforms/libqoffscreen.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/styles/libqmacstyle.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/tls/libqcertonlybackend.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/tls/libqopensslbackend.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/plugins/tls/libqsecuretransportbackend.dylib', 'arm64', '14.4.0')
+    ('Solidon3D.app/Contents/Frameworks/PySide6/QtCore.abi3.so', 'arm64', '26.0.0')
+== Team-IDs (je CD) == {'D6D857LWR7': 381}
+== Flags (je CD) == {('runtime',): 381}
+== Hashes (je CD) == {'sha256': 381} CDs je Datei {1: 381}
+== CMS ==
+    381 ('ja', (('Developer ID Certification Authority', 'G2'),), True, True)
+== ohne Signatur == 0 []
+== ad hoc == 0 []
+== linker-signed == 0 []
+== ohne runtime == 0 []
+== Seitenhash falsch == 0
+== Spezialslot falsch == 0 []
+== Entitlements == 1
+    Solidon3D.app/Contents/MacOS/Solidon3D
+      XML: <?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+</dict>
+</plist>
+
+      DER: cEICAQGwPTA7DDZjb20uYXBwbGUuc2VjdXJpdHkuY3MuYWxsb3ctdW5zaWduZWQtZXhlY3V0YWJsZS1tZW1vcnkBAf8=
+== fehlende Abhängigkeiten == 0
+== Fehler == []
+== CodeResources ==
+   files2: 1653
+   hash_ok: 931
+   hash_bad: 0 []
+   nested_ok: 363
+   nested_bad: 1 [['MacOS/THIRD-PARTY-NOTICES.md', 'kein Mach-O']]
+   symlink_ok: 341
+   symlink_bad: 0 []
+   listed_but_missing: 17 ['Frameworks/PySide6/Qt/lib/QtCore.framework', 'Frameworks/PySide6/Qt/lib/QtDBus.framework', 'Frameworks/PySide6/Qt/lib/QtGui.framework', 'Frameworks/PySide6/Qt/lib/QtNetwork.framework', 'Frameworks/PySide6/Qt/lib/QtOpenGL.framework', 'Frameworks/PySide6/Qt/lib/QtPdf.framework', 'Frameworks/PySide6/Qt/lib/QtQml.framework', 'Frameworks/PySide6/Qt/lib/QtQmlMeta.framework', 'Frameworks/PySide6/Qt/lib/QtQmlModels.framework', 'Frameworks/PySide6/Qt/lib/QtQmlWorkerScript.framework', 'Frameworks/PySide6/Qt/lib/QtQuick.framework', 'Frameworks/PySide6/Qt/lib/QtSvg.framework', 'Frameworks/PySide6/Qt/lib/QtSvgWidgets.framework', 'Frameworks/PySide6/Qt/lib/QtVirtualKeyboard.framework', 'Frameworks/PySide6/Qt/lib/QtVirtualKeyboardQml.framework']
+   unsealed_sample: 50 ['Solidon3D.app/Contents/CodeResources', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboardQml.framework/Versions/A/_CodeSignature/CodeResources', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboardQml.framework/Versions/A/QtVirtualKeyboardQml', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboardQml.framework/Versions/A/Resources/Info.plist', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlMeta.framework/Versions/A/_CodeSignature/CodeResources', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlMeta.framework/Versions/A/Resources/Info.plist', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlMeta.framework/Versions/A/QtQmlMeta', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtPdf.framework/Versions/A/_CodeSignature/CodeResources', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtPdf.framework/Versions/A/Resources/Info.plist', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtPdf.framework/Versions/A/QtPdf', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtGui.framework/Versions/A/_CodeSignature/CodeResources', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtGui.framework/Versions/A/Resources/Info.plist', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtGui.framework/Versions/A/QtGui', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtDBus.framework/Versions/A/_CodeSignature/CodeResources', 'Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtDBus.framework/Versions/A/Resources/Info.plist']
+   unsealed_count: 103
+   rules2_keys: 13 ['.*\\.dSYM($|/)', '^(.*/)?\\.DS_Store$', '^(Frameworks|SharedFrameworks|PlugIns|Plug-ins|XPCServices|Helpers|MacOS|Library/(Automator|Spotlight|LoginItems))/', '^.*', '^Info\\.plist$', '^PkgInfo$', '^Resources/', '^Resources/.*\\.lproj/', '^Resources/.*\\.lproj/locversion.plist$', '^Resources/Base\\.lproj/', '^[^/]+$', '^embedded\\.provisionprofile$', '^version\\.plist$']

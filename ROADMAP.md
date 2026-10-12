@@ -51,14 +51,22 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-050 — Kopier- und Pufferkosten großer Szenen am Fenster messen](#rm-050) | Plattformen, Pakete und Grafik | VTK ausgebaut (`5a57e261`), matplotlib durch HarfBuzz ersetzt (`25d5536ee`); offen die kopierten Bytes und Pufferkosten je großer Szene am Fenster |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der 0.5.3-Pakete am echten Linux- und Mac-Bildschirm; der Release-Starttest belegt Fenster und 3D-Ansicht nur unter Xvfb und am ARM-Runner |
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Aktualisieren und Deinstallieren prüft der Installer-Workflow ab dem nächsten Release (`tools/check_windows_update.py`, am Runner von 0.5.2 auf 0.5.3 grün); offen: der Lauf im Release ohne Ausnahme für den behobenen Registerrest, Flatpak auf echter Linux-Grafik, Offline-Start |
-| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Signatur, Notarisierung, Installer und macOS-Releaseakte beider Architekturen im Handstart grün (Lauf 37530876754); eine Gegenprobe von Hand (Nachtrag, ohne Skript) am Intel-Mac des Kunden spricht für die Ursache (08.10.: ohne die Berechtigung hing es, mit ihr startete es), offen der Doppelklick auf das signierte Paket mit dem nächsten Tag. Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
+| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Signatur, Notarisierung, Installer und macOS-Releaseakte beider Architekturen im Handstart grün (Lauf 37530876754); eine Gegenprobe von Hand (Nachtrag, ohne Skript) am Intel-Mac des Kunden spricht für die Ursache (08.10.: ohne die Berechtigung hing es, mit ihr startete es). 0.6.0 trägt die Korrektur, die Forensik aller 382 Mach-O fand nichts, was den Start verhindert (12.10.); offen der Doppelklick des Kunden auf 0.6.0, vorher alle Kopien derselben Kennung suchen (RM-800). Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
 | [RM-682 — Die mitgelieferten Schriften fehlen in Lizenzbeilage, Über-Dialog und SBOM](#rm-682) | Plattformen, Pakete und Grafik | Nachprüfung RM-471 09.10.: für DejaVu formal Regression gegenüber v0.5.1; Schriftsippen als eigene Komponenten aus einer Quelle |
 | [RM-694 — Am echten Fenster endeten zwei Läufe mit dem Spiderman ohne Python-Spur](#rm-694) | Plattformen, Pakete und Grafik | Unter Volllast auf dem i9 gesehen, alter und neuer Stand; auf ruhiger Maschine mit nativem Abbild nachstellen, bevor eine Ursache zugeordnet wird |
-| [RM-770 — Weitere x86_64-Räder tragen denselben Fehler, in C-Bibliotheken](#rm-770) | Plattformen, Pakete und Grafik | Pillow `libavif` und FFmpeg aus PySide6_Addons; ohne C++-Ausnahmen ohne Wirkung, offen ob sie im Paket liegen |
+| [RM-770 — Weitere x86_64-Räder tragen denselben Fehler, in C-Bibliotheken](#rm-770) | Plattformen, Pakete und Grafik | Pillow `libavif` liegt im Intel-Paket, FFmpeg aus PySide6_Addons nicht (Forensik 12.10.); ohne C++-Ausnahmen ohne Wirkung, offen die Meldung an Pillow |
 | [RM-768 — Die Abwicklungstabelle im Intel-Mac-Rad von OCP ist falsch kodiert](#rm-768) | Plattformen, Pakete und Grafik | Seit 0.6.0 korrigiert `tools/fix_unwind_info.py` sie nach jeder Installation und prüft das Paket; gemeldet als [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67), die Korrektur entfällt mit einem behobenen Rad |
+| [RM-800 — Das Mac-Paket aktualisiert eine andere Kopie statt der in *Programme*](#rm-800) | Plattformen, Pakete und Grafik | Paket nicht mehr umziehbar gebaut (Plattformwelle 12.10.); offen der erste Lauf: `PackageInfo` ohne `relocate` und Installation nach `/Applications`, obwohl eine zweite Kopie liegt |
+| [RM-801 — Die 3D-Maus bleibt am Mac mit 3DxWare seit 0.4.1 stumm](#rm-801) | Plattformen, Pakete und Grafik | `disable-library-validation` gebaut (Plattformwelle 12.10.); offen der erste Signierlauf mit beiden Berechtigungen und die Maus am Gerät (RM-070) |
+| [RM-802 — Eine Homebrew-Bibliothek des Runners reist im Intel-Paket mit](#rm-802) | Plattformen, Pakete und Grafik | Wächter in der Spec gebaut (Plattformwelle 12.10.); offen der erste Lauf, dessen Intel-Bundle keine `libfreetype.dylib` mehr auf oberster Ebene trägt |
+| [RM-803 — AppImage und Archiv starten erst ab glibc 2.38](#rm-803) | Plattformen, Pakete und Grafik | Linux-Bau auf Ubuntu 22.04 mit glibc-Wächter und ohne mitgereiste libstdc++ gebaut (Plattformwelle 12.10.); offen der erste Lauf: Wächter grün, Start auf 22.04 und 24.04 |
+| [RM-804 — Das Flatpak erreicht die 3D-Maus nicht](#rm-804) | Plattformen, Pakete und Grafik | Gerätefreigabe gebaut (Plattformwelle 12.10.); offen die Maus am Gerät (RM-070) |
+| [RM-805 — Der Intel-Mac startet in der CI nur ohne Bildschirm](#rm-805) | Plattformen, Pakete und Grafik | Start mit Fenster in der Releaseakte zur Erprobung (Plattformwelle 12.10.); nach zwei grünen Läufen scharf schalten |
+| [RM-807 — AppImage und Archiv aktualisieren sich nicht selbst](#rm-807) | Plattformen, Pakete und Grafik | Selbstersatz für beide Formate bauen, wie bei Windows, Mac und Flatpak |
+| [RM-809 — Qt stürzt unter macOS 26 ab, wenn ein Werkzeug die Bedienhilfen liest](#rm-809) | Plattformen, Pakete und Grafik | Die Qt-Fassung mit der Korrektur von QTBUG-149612 übernehmen, sobald sie erscheint |
 | [RM-777 — Schwalbenschwanz, Sechskant und Stiftkopf rechnen mit den Winkeln der Plattform](#rm-777) | Plattformen, Pakete und Grafik | Umstellen auf `units.exact_*`, druckgleich gegen Beispiele und Korpus, danach Bereichsnachweis aller 50 (`shapes.py` und `exact.py` stehen in jedem Abdruck) |
 | [RM-714 — Die Untergrenze von shapely passt nicht zum Kern](#rm-714) | Plattformen, Pakete und Grafik | Untergrenze in `pyproject.toml` auf 2.1 heben |
 | [RM-732 — Fenster ohne geordneten Abbau reißen den Prozess](#rm-732) | Plattformen, Pakete und Grafik | Jeden Abbauweg der Anwendung auf `release` prüfen: Sprachwechsel, zweites Fenster, eigenständiger Viewport, elternlose Dialoge mit Arbeitern |
@@ -223,6 +231,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-035 — EULA wirksam in den Bestellvorgang einbeziehen](#rm-035) | Veröffentlichung, Betrieb und Vertrieb | Produktgrenzen und EULA im vollständigen Bestellweg rechtlich prüfen |
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
 | [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Kandidat bis 25.11.; Demo ab 0.6.0 bis 30.11. (bis 0.5.3: 30.10.); Start 01.12.2026 um 10:00 Uhr deutscher Zeit — gebaut in 0.5.0: Abschied mit Pause und Start, ‚heute letzter Tag‘, Hinweis ab 24.10. (`29dcefa4`); offen täglicher Ablaufwächter und Bestell-Webhook |
+| [RM-806 — Ohne Secret Service lässt sich Solidon unter Linux nicht freischalten](#rm-806) | Veröffentlichung, Betrieb und Vertrieb | Vor dem 01.12.: messen, auf welchen Desktops er fehlt, die Meldung mit Handlungsvorschlag versehen und die Freischaltung gegen einen echten Secret Service prüfen |
+| [RM-808 — Am Mac fragt der Schlüsselbund nach, wenn eine ad hoc signierte Kopie den Geräteschlüssel angelegt hat](#rm-808) | Veröffentlichung, Betrieb und Vertrieb | Vor dem 01.12. am Runner nachstellen und den Weg festlegen, der den Start nicht anhält |
 | [RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Meldeweg entschieden (Robert, 23.09.2026: über die Support-Adresse, Antwortfrist zwei Arbeitstage, keine Belohnung, kein PGP; `SECURITY.md`, `SECURITY-INCIDENT.md` und `security.html` sind konform); offen EU-Login, Vertretung, CSIRT-Zuordnung, Alarmierung und Probelauf — Roberts Konten |
 | [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Anbieter, Bestellstrecke, Lieferung, Widerruf und Signierung bis 15.10. |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
@@ -730,6 +740,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   37532529293, alle drei Jobs samt shellcheck grün). Ob `sample` auf einem Kunden-Mac mit SIP einen Prozess mit Hardened Runtime lesen
   darf, ist offen.
 
+  **Stand 12.10.2026 (0.6.0 veröffentlicht):** Die Ursache ist am Quelltext belegt — Apples
+  libffi ist auf x86_64 mit `FFI_MMAP_EXEC_WRIT` gebaut, `dlmmap` springt beim
+  Temp-Datei-Ausweichweg ohne Zähler zurück; `allow-jit` hülfe nicht, weil libffi kein
+  `MAP_JIT` nimmt; ein dritter fremder Bericht zeigt dasselbe auf macOS 15.7.9. Die Forensik
+  am Tag-Lauf 38170638968 fand im Intel-Bundle nichts, was den Start verhindert: 382 Mach-O
+  mit Developer ID, Runtime-Flag und Zeitstempel, alle Seitenhashes stimmig, die Berechtigung
+  am Hauptprogramm, die Payload des Pakets bytegleich mit der notarisierten App, Befehle
+  jenseits von Coffee Lake nur hinter CPUID-Weichen
+  (`konzepte/nachweise-plattform-2026-10/`). Die Download- und Updatezahlen können den
+  Start nicht belegen: Die Updateabfrage trägt nur die Version, und ein Profil ohne
+  abgeschlossene Ersteinrichtung fragt erst nach dem Dialog „Erste Schritte“. Zwei Wege,
+  auf denen 0.6.0 trotzdem „nicht startet“: eine umgezogene Installation (RM-800) und ein
+  bisher verdeckter Fehler hinter dem Bootstrap, denn Cocoa und Metal liefen auf Intel nie
+  (RM-805). **Am Kundengerät:** vor dem Doppelklick alle Kopien suchen
+  (`mdfind "kMDItemCFBundleIdentifier == 'de.rsdigital.solidon3d'"`), am gestarteten Bundle
+  `codesign -dv --entitlements -` lesen; hängt es, `sudo spindump <pid> 10 -onlyTarget`
+  (`lldb` geht unter Hardened Runtime nicht).
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-vier-plattform-lauf-seit-dem-06092026-08092026).
 
 <a id="rm-107"></a>
@@ -1030,10 +1058,109 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   in Absturzberichten. Ohne einen einzigen `STACK_IND`-Eintrag sind PySide6_Essentials (219
   Bibliotheken, Qt mit Rahmenzeiger), shiboken6, wgpu-native 0.32.0, manifold3d, shapely
   (GEOS), numpy, scipy, scikit-image, uharfbuzz, xxhash, hidapi, fast_simplification, vhacdx.
-  **Nächster Schritt:** an der Paket-SBOM nachsehen, ob `libavif` und FFmpeg überhaupt im
-  Intel-Paket liegen; wenn ja, den Fehler den Projekten melden (Pillow, Qt for Python).
+  Am Intel-Bundle 0.6.0 gemessen (12.10.): `libavif.16.4.2.dylib` liegt im Paket, FFmpeg
+  nicht (`konzepte/nachweise-plattform-2026-10/bericht-forensik.md`).
+  **Nächster Schritt:** den Fehler Pillow melden (Freigabe Robert, die Meldung ist öffentlich).
   **Abnahme:** Die Bibliotheken liegen nicht im Paket, oder ihre Räder sind gemeldet; bei
   jedem Bibliothekslauf (RM-467) zählt der Scan alle nativen x86_64-Räder.
+
+<a id="rm-800"></a>
+
+- [~] **RM-800 — Das Mac-Paket aktualisiert eine andere Kopie statt der in *Programme*.**
+  `tools/make_macos_package.py` baute mit `pkgbuild --component` ohne Komponentenliste;
+  `PackageInfo` trug `<relocate><bundle id="de.rsdigital.solidon3d"/>`, und Apples
+  Installer aktualisiert dann ein Bundle derselben Kennung dort, wo es liegt — etwa eine
+  Testkopie aus einer Gegenprobe. In `/Applications` startet weiter die alte Version, was
+  wie „das Update startet nicht“ aussieht. Am Runner unsichtbar, weil die Releaseakte die
+  ausgepackte Prüfkopie vorher löscht. Gemessen am Artefakt v0.6.0
+  (`konzepte/nachweise-plattform-2026-10/bericht-forensik.md`). In der Plattformwelle
+  (12.10.) nicht umziehbar gebaut, samt Prüfung des fertigen Pakets.
+  **Abnahme:** Im ersten Lauf trägt `PackageInfo` kein `relocate`, und die Releaseakte
+  installiert nach `/Applications`, obwohl eine zweite Kopie derselben Kennung liegt.
+
+<a id="rm-801"></a>
+
+- [~] **RM-801 — Die 3D-Maus bleibt am Mac mit 3DxWare seit 0.4.1 stumm.** Seit 0.4.1
+  läuft jedes Mac-Paket mit Hardened Runtime und Bibliotheksprüfung. `app/ui/spacemouse.py`
+  lädt `/Library/Frameworks/3DconnexionClient.framework` per `ctypes.CDLL`; das Framework
+  trägt die Team-ID von 3Dconnexion, dyld lehnt es ab, und `load_driver` gab still `None`
+  zurück — den HID-Weg hält 3DxWare exklusiv. Apple nennt für Hardware-Plug-ins genau
+  `com.apple.security.cs.disable-library-validation`. Gefolgert aus Apples Dokumentation
+  und dem Code (`konzepte/nachweise-plattform-2026-10/bericht-web.md`, Befund B), am Gerät
+  nie gemessen; die Gegenprobe am Intel-Mac des Kunden (RM-104) lief mit der Berechtigung
+  und konnte es nicht zeigen. In
+  der Plattformwelle (12.10.) signiert der Mac-Job mit beiden Berechtigungen, liest beide
+  zurück, und ein Wächter verlangt genau diese zwei; der stille Rückweg schreibt den Grund
+  ins Protokoll. **Abnahme:** erster Signierlauf mit beiden Berechtigungen grün, dann die
+  Maus an einem Mac mit 3DxWare (RM-070, Zusage an den Dentalkunden RM-072).
+
+<a id="rm-802"></a>
+
+- [~] **RM-802 — Eine Homebrew-Bibliothek des Runners reist im Intel-Paket mit.** Nur das
+  Intel-Bundle 0.6.0 trägt `Contents/Frameworks/libfreetype.dylib` (minos 14.0, SDK 14.5),
+  die über PyInstallers ctypes-Analyse von freetype-py aus `/usr/local/lib` des
+  Intel-Runners kam; freetype-py lädt seine eigene Datei, die Stückliste kennt die Fassung
+  der fremden nicht (Paketjob: „FT_Library_Version … ging nicht“). Ihre Fassung hängt am
+  Runner-Image. In der Plattformwelle (12.10.) entfernt die Spec auf macOS jede Bibliothek
+  aus `/usr/local`, `/opt/homebrew` oder `/opt/local`, die ein Rad selbst mitbringt, und
+  bricht sonst den Bau ab. **Abnahme:** Das Intel-Bundle des ersten Laufs trägt keine
+  `libfreetype.dylib` mehr auf oberster Ebene, und die 3D-Ansicht zeichnet Text.
+
+<a id="rm-803"></a>
+
+- [~] **RM-803 — AppImage und Archiv starten erst ab glibc 2.38.** Gebaut auf
+  `ubuntu-24.04`, verlangt `libpython3.14.so.1.0` `fmod@GLIBC_2.38`, ebenso libstdc++,
+  libxkbcommon und libxcb-cursor aus dem Runner; Ubuntu 22.04, Mint 21, Debian 12 und
+  RHEL 9 starteten AppImage und Archiv nicht, die Website nannte keine Untergrenze.
+  Gemessen am AppImage 0.6.0 (`konzepte/nachweise-plattform-2026-10/bericht-forensik.md`,
+  Linux-Teil). In der Plattformwelle (12.10.) entstehen die Linux-Pakete auf
+  `ubuntu-22.04` (glibc 2.35), libstdc++ und libgcc_s reisen nicht mehr mit (eine ältere
+  mitgereiste bräche das Laden des GPU-Treibers neuerer Systeme), ein Wächter bricht den
+  Paketjob bei einer höheren `GLIBC_`-Version ab, und die Releaseakte startet das AppImage
+  auch auf 22.04; die Website nennt die Untergrenze. **Abnahme:** erster Lauf mit grünem
+  Wächter und Start auf 22.04 und 24.04, dazu die 3D-Ansicht auf einem neueren System mit
+  Mesa (Fedora oder Ubuntu 26.04) am Gerät (RM-051).
+
+<a id="rm-804"></a>
+
+- [~] **RM-804 — Das Flatpak erreicht die 3D-Maus nicht.** Das Manifest gab nur
+  `--device=dri` frei; `/dev/hidraw*` erreicht ein Flatpak nur mit `--device=all`. In der
+  Plattformwelle (12.10.) freigegeben, das Handbuch nennt die udev-Regel auch für das
+  Flatpak. **Abnahme:** die Maus im Flatpak an einem Linux-Rechner mit udev-Regel (RM-070).
+
+<a id="rm-805"></a>
+
+- [~] **RM-805 — Der Intel-Mac startet in der CI nur ohne Bildschirm.** Auf dem Intel-Runner
+  stürzt `iconservicesagent` auf der paravirtualisierten Grafik in Metal ab, Qt wartet beim
+  ersten Fokus synchron auf ein Systemsymbol; deshalb startet die Releaseakte Intel nur
+  `--offscreen`, und hinter dem Bootstrap ist auf Intel nie etwas mit Fenster gelaufen —
+  weder Cocoa noch die 3D-Ansicht. Nach
+  [runner-images#14751](https://github.com/actions/runner-images/issues/14751) liefern
+  Symbolanfragen ohne den Agenten sofort ein Ersatzsymbol. In der Plattformwelle (12.10.)
+  startet die Releaseakte Intel danach zusätzlich mit Fenster, zunächst ohne den Lauf
+  anzuhalten. Die Hardened Runtime prüft auch dieser Start nicht (SIP ist am Runner aus).
+  **Abnahme:** zwei grüne Läufe mit Fenster, danach hält der Schritt den Lauf an; offen,
+  ob die Fensterverträge `window-contracts-intel` denselben Weg nehmen.
+
+<a id="rm-807"></a>
+
+- [ ] **RM-807 — AppImage und Archiv aktualisieren sich nicht selbst.** `updates.REPLACEABLE`
+  kennt Windows-Setup, Mac-Paket und Flatpak; AppImage und Archiv bekommen nur den
+  Hinweis mit dem Link. Robert, 05.09.2026: jeder Weg auf jeder Plattform gleich.
+  **Nächster Schritt:** Selbstersatz für das AppImage (die laufende Datei aus `$APPIMAGE`
+  durch die neue ersetzen) und für das entpackte Archiv bauen, mit denselben Prüfsummen
+  wie bei den anderen Formaten. **Abnahme:** Update aus der Anwendung heraus auf AppImage
+  und Archiv, Neustart in der neuen Version.
+
+<a id="rm-809"></a>
+
+- [ ] **RM-809 — Qt stürzt unter macOS 26 ab, wenn ein Werkzeug die Bedienhilfen liest.**
+  QTBUG-149612: Liest ein Programm über die Bedienungshilfen den Fensterbaum (Fernsteuerung
+  durch KI-Werkzeuge, AltTab und ähnliche), stürzen Qt-Anwendungen von 6.7 bis 6.11 unter
+  macOS 26.5/26.6 ab, gemeldet bisher auf Apple Silicon; die Korrektur ist nicht gemergt
+  (`konzepte/nachweise-plattform-2026-10/bericht-web.md`). Ob Qt 6.12 betroffen ist, ist
+  offen. **Nächster Schritt:** die Qt-Fassung mit der Korrektur übernehmen, sobald sie
+  erscheint, und bis dahin prüfen, ob 6.12 die Korrektur schon trägt.
 
 <a id="rm-777"></a>
 
@@ -4315,6 +4442,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   reproduzierbarer Navigation; eine automatische Änderung der Treiberkonfiguration vorher
   entscheiden.
 
+  **Der Feldnachweis vom 12.09. liegt vor 0.4.1** (12.10.2026): Seit 0.4.1 läuft jedes
+  Mac-Paket mit Hardened Runtime, und die Bibliotheksprüfung verwehrte dem Treiberweg das
+  3Dconnexion-Framework (RM-801); das Flatpak erreichte kein Gerät (RM-804). Beides ist in
+  der Plattformwelle gebaut; die Abnahme hier gilt erst mit einem Paket, das beides trägt.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#eine-kundenanfrage-aus-dem-dentalbereich-30082026).
 
 <a id="rm-084"></a>
@@ -6570,6 +6702,38 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   und Über-Dialog nennen die Lizenzart (privat oder gewerblich, Platzzahl), ebenso die Karte
   `app/core/activation/CLAUDE.md`. Die Altaussage, das Handbuch nenne sie nicht, steht noch in
   `konzepte/konzept-lizenzarten-2026-09.md`.
+
+<a id="rm-806"></a>
+
+- [ ] **RM-806 — Ohne Secret Service lässt sich Solidon unter Linux nicht freischalten.**
+  Die Geräteidentität liegt ausschließlich im Schlüsselbund des Betriebssystems
+  (`app/core/activation/device.py`, absichtlich ohne Rückfall auf eine Datei). Unter Linux
+  heißt das: Ohne laufenden Secret Service (gnome-keyring, KWallet mit Secret-Service-Brücke,
+  KeePassXC) endet die Freischaltung mit `DeviceIdentityError`. Betroffen sind schlanke
+  Installationen, Tiling-Fenstermanager und KDE ohne Wallet; kein Test und kein CI-Lauf
+  benutzt einen echten Schlüsselbund (`konzepte/nachweise-plattform-2026-10/bericht-geschichte-ci.md`).
+  Ab dem Verkaufsstart am 01.12. trifft es zahlende Kunden. **Nächster Schritt:** auf den
+  gängigen Desktops messen, wo er fehlt; die Meldung „gesperrt oder nicht erreichbar“ um
+  den Handlungsvorschlag ergänzen (welchen Dienst installieren oder entsperren); die
+  Freischaltung in der Linux-CI gegen einen echten gnome-keyring in einer D-Bus-Sitzung
+  fahren. **Abnahme:** Freischaltung mit echtem Secret Service in der CI grün, Meldung mit
+  Handlungsvorschlag ohne ihn.
+
+<a id="rm-808"></a>
+
+- [ ] **RM-808 — Am Mac fragt der Schlüsselbund nach, wenn eine ad hoc signierte Kopie den
+  Geräteschlüssel angelegt hat.** Mit abgelegtem Lizenzschlüssel liest der Start den
+  Geräteschlüssel, bevor ein Fenster steht (`app/ui/app.py` → `activation.state()` →
+  `certificate.load_for` → `device.public_key()`). Ein Schlüsselbundeintrag vertraut der
+  Signatur, die ihn angelegt hat; stammt er von einer ad hoc neu signierten Kopie (so liefen
+  Intel-Macs bis 0.5.3, RM-104), fragt macOS beim Developer-ID-Paket nach, und der Start
+  wartet auf die Antwort. Am Code belegt, die Wirkung beim Kunden vermutet
+  (`konzepte/nachweise-plattform-2026-10/bericht-forensik.md`). Heute ohne Wirkung, es gibt
+  noch keine Käufe. **Nächster Schritt:** am ARM-Runner nachstellen (ad hoc signierte Kopie
+  legt an, Developer-ID-Paket liest) und festlegen, wie der Start damit umgeht — etwa den
+  Schlüsselbund erst nach dem Fenster lesen oder den Eintrag mit einer Begründung neu
+  anlegen lassen. **Abnahme:** Kein Start hält ohne Fenster an; eine Abfrage, die bleibt,
+  steht im Handbuch.
 
 <a id="rm-091"></a>
 
