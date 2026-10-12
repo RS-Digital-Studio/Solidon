@@ -51,6 +51,7 @@ from PySide6.QtWidgets import (
 from app.core import guides
 from app.i18n import tr
 from app.ui.labels import colour_name
+from app.ui.leash import stop_watching_the_dying
 from app.ui.palette import readable_on
 from app.ui.style import NORMAL, TIGHT, make_primary, set_level
 from app.ui.theme import THEMES, current_theme
@@ -358,6 +359,8 @@ class ColourPopup(PlacePopup):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
         """Pfeiltasten wandern durch die Felder, Enter nimmt das Feld unter dem Fokus."""
+        if stop_watching_the_dying(self, watched, event):
+            return False
         if not isinstance(watched, _Swatch) or event.type() != QEvent.Type.KeyPress:
             return False
         assert isinstance(event, QKeyEvent)
