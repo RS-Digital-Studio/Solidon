@@ -2124,22 +2124,12 @@ def _feature_click(
     Punkt liegt auf seiner zylindrischen Wand, ein Viertel der Tiefe unter der
     Oberseite — dort trifft der Zell-Picker wirklich ein Dreieck des Merkmals.
     """
-    from PySide6.QtCore import QPoint
-
     _object_id, _feature_id, feature = _feature_demo_target(window.session, target_id)
     centre = tuple(float(value) for value in feature.params["centre"])
     diameter = float(feature.params["diameter"])
     depth = float(feature.params["depth"])
     world = (centre[0] + diameter / 2.0, centre[1], centre[2] + depth / 4.0)
-    viewport = window.viewport
-    display = viewport._display_of(world)
-    interactor = viewport.renderer.widget
-    if display is None:
-        raise SystemExit("Die Bohrung ließ sich nicht ins Videobild projizieren")
-    ratio = float(interactor.devicePixelRatioF()) or 1.0
-    local = QPoint(round(display[0] / ratio), round(display[1] / ratio))
-    visible = interactor.mapTo(window, local)
-    return interactor, world, (float(visible.x()), float(visible.y()))
+    return window.viewport.renderer.widget, world, _world_to_window(window, world)
 
 
 def _ease(
@@ -3702,15 +3692,14 @@ def web_loop_chapter_starts(name: str) -> tuple[float, ...]:
 
 
 def _world_to_window(window: Any, world: tuple[float, float, float]) -> tuple[float, float]:
-    """Ein Weltpunkt in Fensterkoordinaten — dieselbe Rechnung wie ``_feature_click``."""
-    from PySide6.QtCore import QPoint
+    """Ein Weltpunkt in Fensterkoordinaten — die Rechnung des Wortschatzes
+    (``guide_targets.point_of_world``), die auch der Prüfstand benutzt."""
+    from app.ui.guide_targets import point_of_world
 
-    interactor = window.viewport.renderer.widget
-    display = window.viewport._display_of(world)
-    if display is None:
+    point = point_of_world(window, world)
+    if point is None:
         raise SystemExit(f"Der Punkt {world} ließ sich nicht ins Bild projizieren")
-    ratio = float(interactor.devicePixelRatioF()) or 1.0
-    visible = interactor.mapTo(window, QPoint(round(display[0] / ratio), round(display[1] / ratio)))
+    visible = window.mapFromGlobal(point)
     return float(visible.x()), float(visible.y())
 
 

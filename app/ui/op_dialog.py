@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import expressions, manual
+from app.core import expressions, guides, manual
 from app.core.errors import AppError
 from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
 from app.core.registry import OperationSpec, inactive_dependency
@@ -2151,6 +2151,8 @@ class OperationDialog(QDialog):
             if isinstance(editor, SealPathField):
                 editor.set_selection(given)
             self._editors[entry.name] = editor
+            # Das Ziel im Wortschatz (``field:<parameter>``, RM-737).
+            editor.setProperty(guides.TARGET_PROPERTY, f"field:{entry.name}")
             self._watch(editor)
             if entry.kind in ("feature", "features") or entry.targets_feature:
                 editor.installEventFilter(self)
@@ -4440,6 +4442,7 @@ class OperationDialog(QDialog):
                 if isinstance(editor, SealPathField):
                     editor.set_selection(given)
                 self._editors[entry.name] = editor
+                editor.setProperty(guides.TARGET_PROPERTY, f"field:{entry.name}")
                 self._watch(editor)
                 if entry.kind in ("feature", "features") or entry.targets_feature:
                     editor.installEventFilter(self)
