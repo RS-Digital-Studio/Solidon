@@ -38,6 +38,7 @@ from tools.file_acceptance import (
 from tools.function_checks import (
     MAIN_PHASES,
     PROTOCOL_SCHEMA,
+    SMALLEST_WINDOW,
     validate_protocol,
 )
 from tools.function_list import STARTUP_LICENCE
@@ -381,7 +382,7 @@ def test_the_probe_finds_a_list_or_the_view_over_a_real_target(window: Any) -> N
             rect=rect, why="ziel", target=target, button=Qt.MouseButton.LeftButton, direction=0
         )
 
-    window.resize(1280, 820)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     settle()
     ports = function_walk.QtPorts(window, 0.0)
@@ -448,7 +449,7 @@ def box_window(qt_app: Any) -> Any:
 
     window = MainWindow(Session(), UiSettings())
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.resize(1400, 900)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     window._show_start_screen(False)
     assert window.session.apply(
@@ -1013,7 +1014,7 @@ def test_the_captures_read_a_small_dialog_without_acting_on_it(qt_app: Any) -> N
             "texts": capture.text_entries(dialog),
             "fields": capture.field_entries(dialog),
             "empty_states": capture.empty_states(dialog),
-            **capture.sheet_snapshot(dialog, "light", (1280, 820)),
+            **capture.sheet_snapshot(dialog, "light", SMALLEST_WINDOW),
         }
         texts = {entry["text"]: entry for entry in protocol["texts"]}
         assert {"Durchmesser", "Durchgehend", "Übernehmen", "Noch kein Eintrag"} <= set(texts)

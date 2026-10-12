@@ -23,12 +23,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Final
 
-from app.ui.main_window import START_SIZE
 from tools.file_acceptance import MATERIAL, PRINTER
-from tools.function_checks import (
-    LAPTOP_SIZE,
-    SCALES,
-)
+from tools.function_checks import SCALES, SMALLEST_SCREEN, SMALLEST_WINDOW
 from tools.function_list import (
     LICENCE_STATES,
     STARTUP_LICENCE,
@@ -69,10 +65,9 @@ PRINTERS: Final[dict[str, tuple[str, str]]] = {
     "resin": ("generic-resin-130", "resin"),
 }
 
-#: Die Fenstergrößen aus Z6 (``main_window.START_SIZE``, ``function_checks.LAPTOP_SIZE``).
-WINDOW_SIZES: Final[tuple[str, ...]] = tuple(
-    f"{width}x{height}" for width, height in (START_SIZE, LAPTOP_SIZE)
-)
+#: Die Fenstergröße aus Z6: die kleinste Fläche (``function_checks.SMALLEST_WINDOW``).
+#: Größere misst jeder Satz, der maximiert auf einem größeren Schirm läuft.
+WINDOW_SIZES: Final[tuple[str, ...]] = (f"{SMALLEST_WINDOW[0]}x{SMALLEST_WINDOW[1]}",)
 
 #: Die Phasen je Variantensatz, in ihrer Folge (``FunctionFlow.phase_<name>``).
 #: Jede beginnt an der Startszene; ``sprachen`` hat eine eigene Klasse
@@ -472,7 +467,11 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
     Angabe der erste, der nicht der Hauptschirm ist — dort arbeitet Robert nicht
     (Erinnerung „qt-sonde-am-echten-fenster“). Ohne Fenstergröße maximiert, wie
     die Aufnahmewerkzeuge; mit Größe (Z6) genau diese, oben links auf dem Schirm.
-    Später verschieben wechselte Größe und DPI mitten im Lauf.
+    Später verschieben wechselte Größe und DPI mitten im Lauf. Kleiner als
+    ``SMALLEST_WINDOW`` wird nie gemessen (Festlegung Robert): Ist die Fläche
+    des Schirms kleiner — offscreen 800 x 800 —, nimmt das Fenster die kleinste
+    Fläche an; eine Skalierung, die die Fläche darunter drückt, ist kein Fall
+    (:func:`below_smallest`).
     """
     screens = list(application.screens())
     primary = application.primaryScreen()
@@ -499,6 +498,8 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
         chosen = next((screen for screen in screens if screen != primary), primary)
     area = chosen.availableGeometry()
     size = parse_size(variant.window_size) if variant.window_size else None
+    if size is None and (area.width() < SMALLEST_WINDOW[0] or area.height() < SMALLEST_WINDOW[1]):
+        size = SMALLEST_WINDOW
     if size is None:
         window.setGeometry(area)
         window.showMaximized()
@@ -513,6 +514,24 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
         "geometry": [area.x(), area.y(), area.width(), area.height()],
         "requested": wanted,
     }
+
+
+def below_smallest(placed: Mapping[str, Any], variant: Variant) -> str:
+    """Warum dieser Fall kein Fall ist — oder leer.
+
+    Eine Skalierung, die die logische Fläche des Schirms (``placed["geometry"]``
+    aus :func:`place_window`, schon skaliert) unter ``SMALLEST_WINDOW`` drückt,
+    wird weder geprüft noch gestaltet (Festlegung Robert: 1920 x 1080 logisch,
+    drunter nie). Bei 100 % stellt der Prüfstand die kleinste Fläche nach.
+    """
+    _x, _y, width, height = placed.get("geometry") or (0, 0, 0, 0)
+    if variant.scale == 1.0 or (width >= SMALLEST_WINDOW[0] and height >= SMALLEST_WINDOW[1]):
+        return ""
+    return (
+        f"Skalierung {variant.scale:.0%} lässt auf {placed.get('screen') or 'diesem Schirm'} "
+        f"nur {width} x {height} logisch — unter {SMALLEST_SCREEN[0]} x "
+        f"{SMALLEST_SCREEN[1]} kein Fall"
+    )
 
 
 #: Die Szene, die jede Zeile ohne eigene Szene bekommt (Plan D0, Abschnitt 2.5).

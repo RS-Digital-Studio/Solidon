@@ -35,6 +35,7 @@ from tools.function_checks import (
     PROTOCOL_FIELDS,
     PROTOCOL_SCHEMA,
     SELECTION_STAGES,
+    SMALLEST_WINDOW,
     validate_protocol,
 )
 
@@ -235,13 +236,13 @@ def test_an_assembled_protocol_is_valid_against_the_schema_of_u() -> None:
     Gegenprobe: ein Feld außerhalb des Schemas und ein Schritt ohne Phase werden
     abgewiesen — die Prüfung von U greift also an dem, was hier entsteht.
     """
-    variant = function_setup.Variant().protocol({"screen": "MSI"}, (1280, 820))
+    variant = function_setup.Variant().protocol({"screen": "MSI"}, SMALLEST_WINDOW)
     protocol = function_protocol.empty_protocol(ROWS[0], variant, {"commit": "abc", "app": "0.6.1"})
     assert set(protocol) == set(PROTOCOL_SCHEMA)
     assert set(protocol["row"]) <= set(PROTOCOL_SCHEMA["row"].keys or ())
     # Z6 je Zeile über alle Fälle (D0-U): jeder Fall trägt seine Fenstergröße
     # und eine Liste der Rollleisten, auch leer — gültig schon im Gerüst.
-    assert protocol["variant"]["window_size"] == [1280, 820]
+    assert protocol["variant"]["window_size"] == list(SMALLEST_WINDOW)
     assert protocol["scrollbars"] == []
     assert validate_protocol(protocol) == []
     print_ = {

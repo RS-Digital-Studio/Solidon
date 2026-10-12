@@ -17,7 +17,6 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
-from app.ui.main_window import START_SIZE
 from app.ui.motion import MEDIUM_MS
 from app.ui.op_dialog import MAX_LEAD_WORDS
 from tools.function_checks import (
@@ -26,10 +25,10 @@ from tools.function_checks import (
     COVERED,
     CRITERIA,
     GOOD_OVER_FINDING,
-    LAPTOP_SIZE,
     MANUAL_WINDOW,
     NOT_APPLICABLE_OVER_FINDING,
     NOT_FOUND,
+    SMALLEST_WINDOW,
     UNMEASURED_VERDICT,
     Context,
 )
@@ -117,7 +116,7 @@ def sample_protocol() -> dict[str, Any]:
             "platform": "windows",
             "screen": "1",
             "scale": 1.0,
-            "window_size": list(START_SIZE),
+            "window_size": list(SMALLEST_WINDOW),
             "motion": True,
         },
         "version": {"commit": "a280ee8f5", "app": "0.6.1"},
@@ -350,14 +349,15 @@ def sample_protocol() -> dict[str, Any]:
         "scrollbars": [
             {
                 "surface": "OperationDialog",
-                "window_size": list(START_SIZE),
+                "window_size": list(SMALLEST_WINDOW),
                 "front": True,
                 "vertical": False,
                 "horizontal": False,
             },
             {
                 "surface": "OperationDialog",
-                "window_size": list(LAPTOP_SIZE),
+                # Eine größere Fläche zählt mit (der maximierte Schirm des Laufs).
+                "window_size": [2560, 1392],
                 "front": True,
                 "vertical": False,
                 "horizontal": False,

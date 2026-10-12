@@ -35,6 +35,7 @@ from tools.file_acceptance import (
 from tools.function_checks import (
     COVERED,
     LICENCE_UNLOCKED,
+    SMALLEST_WINDOW,
 )
 from tools.function_list import LICENCE_STATES, STARTUP_LICENCE, licence_states
 
@@ -247,9 +248,9 @@ def test_a_variant_takes_only_states_the_bench_can_make() -> None:
         with pytest.raises(ValueError):
             function_setup.Variant.of(broken)
     variant = function_setup.Variant.of(
-        {"window_size": "1366x728", "scale": 1.5, "phases": ["main"]}
+        {"window_size": "1920x1032", "scale": 1.5, "phases": ["main"]}
     )
-    assert function_setup.parse_size(variant.window_size) == (1366, 728)
+    assert function_setup.parse_size(variant.window_size) == (1920, 1032)
     assert variant.phases == ("main",)
     assert function_setup.Variant.of(variant.as_dict()) == variant
     sets = function_setup.variant_sets()
@@ -605,6 +606,79 @@ def test_a_screen_that_matches_none_is_an_error_not_another_screen() -> None:
         )
     with pytest.raises(ValueError, match="trifft keinen Schirm"):
         function_setup.place_window(Application(), None, function_setup.Variant.of({"screen": "7"}))
+
+
+def test_nothing_is_measured_below_the_smallest_screen() -> None:
+    """Befund C (Festlegung Robert): 1920 × 1080 logisch ist die Untergrenze, drunter nie.
+
+    Ist der Schirm kleiner als die kleinste Fensterfläche (offscreen 800 × 800),
+    nimmt das Fenster sie an, statt kleiner zu messen; ein größerer Schirm
+    bleibt maximiert. Eine Skalierung, die die logische Fläche darunter drückt,
+    ist kein Fall — 150 % auf 2560 × 1440 (1707 × 928), nicht aber 200 % auf
+    3840 × 2160 (1920 × 1056).
+    """
+    from PySide6.QtCore import QRect
+
+    class Screen:
+        def __init__(self, width: int, height: int) -> None:
+            self.size = (width, height)
+
+        def name(self) -> str:
+            return "Schirm"
+
+        def model(self) -> str:
+            return ""
+
+        def availableGeometry(self) -> QRect:  # noqa: N802 - Qts Name
+            return QRect(0, 0, *self.size)
+
+        def devicePixelRatio(self) -> float:  # noqa: N802 - Qts Name
+            return 1.0
+
+    class Application:
+        def __init__(self, screen: Screen) -> None:
+            self.screen = screen
+
+        def screens(self) -> list[Screen]:
+            return [self.screen]
+
+        def primaryScreen(self) -> Screen:  # noqa: N802 - Qts Name
+            return self.screen
+
+    class Window:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, Any]] = []
+
+        def resize(self, width: int, height: int) -> None:
+            self.calls.append(("resize", (width, height)))
+
+        def move(self, point: Any) -> None:
+            self.calls.append(("move", (point.x(), point.y())))
+
+        def show(self) -> None:
+            self.calls.append(("show", None))
+
+        def setGeometry(self, area: QRect) -> None:  # noqa: N802 - Qts Name
+            self.calls.append(("geometry", (area.width(), area.height())))
+
+        def showMaximized(self) -> None:  # noqa: N802 - Qts Name
+            self.calls.append(("maximized", None))
+
+    small, large = Window(), Window()
+    function_setup.place_window(Application(Screen(800, 800)), small, function_setup.Variant())
+    assert ("resize", SMALLEST_WINDOW) in small.calls and ("maximized", None) not in small.calls
+    function_setup.place_window(Application(Screen(2560, 1392)), large, function_setup.Variant())
+    assert ("maximized", None) in large.calls
+    scaled = function_setup.Variant.of({"set": "skalierung", "scale": 1.5})
+    reason = function_setup.below_smallest({"screen": "MSI", "geometry": [0, 0, 1707, 928]}, scaled)
+    assert "kein Fall" in reason and "1707 x 928" in reason
+    doubled = function_setup.Variant.of({"set": "skalierung", "scale": 2.0})
+    assert function_setup.below_smallest({"geometry": [0, 0, 1920, 1056]}, doubled) == ""
+    assert (
+        function_setup.below_smallest({"geometry": [0, 0, 796, 796]}, function_setup.Variant())
+        == ""
+    )
+    assert function_setup.WINDOW_SIZES == ("1920x1032",)
 
 
 def test_a_menubar_child_that_never_answers_is_a_message(

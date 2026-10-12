@@ -68,6 +68,7 @@ from tools.function_setup import (
     SLOW_SCENES,
     START_SCREEN,
     Variant,
+    below_smallest,
     case_scene,
     default_apply_target,
     place_window,
@@ -219,6 +220,8 @@ class FunctionFlow:
         self.heartbeat = Heartbeat()
         self.frames = FrameCounter()
         self.frames_wrapped = False
+        #: Warum dieser Fall kein Fall ist (``below_smallest``), sonst leer.
+        self.not_a_case = ""
         self.watch = ModalWatch(self.began)
         self._timers: list[Any] = []
         self.scene_key = str(self.spec.get("start_scene") or row.get("start_scene") or EMPTY_SCENE)
@@ -458,6 +461,7 @@ class FunctionFlow:
         self._timers.append(start_heartbeat(self.window, self.heartbeat))
         self._timers.append(self.watch.start(self.window))
         placed = place_window(self.application, self.window, self.variant)
+        self.not_a_case = below_smallest(placed, self.variant)
         for _ in range(20):
             self.pump()
         self.data["variant"] = self.variant.protocol(placed, self.window_size())
@@ -725,6 +729,12 @@ class FunctionFlow:
         Sie stünde sonst an dem, was die vorige liegen ließ, und ihre Messung
         gälte einer anderen Lage. Der Grund steht in ``errors``.
         """
+        if self.not_a_case:
+            # Unter der kleinsten Fläche wird nichts gemessen — auch kein Fund.
+            for name in ("scrollbars", "icons"):
+                unmeasured(self.data, name, self.not_a_case)
+            self.finish()
+            return
         for name in self.variant.phases or PHASES[self.variant.set]:
             phase: Callable[[], None] = getattr(self, f"phase_{name}")
             self.bench["stage"] = name
