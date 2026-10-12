@@ -83,7 +83,9 @@ ist ausgeführt worden, es ist aus dem Code gelesen.
   `#e08b4e`, 3 px Stift; darauf der Systempfeil, sonst ein Ersatzpfeil.
 - `record(...)` (1757) wartet vor jedem Bild mit `wait_until_uncovered`.
 - Geometrie: `_widget_centre` (2113), `_world_to_window` (3707 über
-  `viewport._display_of` und `devicePixelRatioF`), `_feature_click` (2121),
+  `viewport._display_of` und `devicePixelRatioF`; Stand der Aufnahme — heute
+  rechnen beide über `guide_targets.point_of_world` und `Viewport.display_of`),
+  `_feature_click` (2121),
   `viewport_rect` (1039), `show_panels` (1085), `hide_axis_marker` (3322).
 - Zielsuche mit Abbruch: `_feature_action_row` (2006, Knopftext gleich
   Registertitel, sonst `SystemExit`), `_web_loop_diameter_field` (3720).

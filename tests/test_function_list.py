@@ -255,16 +255,13 @@ def test_every_surface_row_names_a_target_of_the_vocabulary(rows: list[fl.Row]) 
     """Jede Zeile zeigt auf ein Ziel des Wortschatzes — sonst findet der Prüfstand sie nicht."""
     from app.core.guides import is_target
 
-    wrong = {row.id for row in rows if row.target and not is_target(row.target)}
-    # ``guides.dialog_name`` lässt den führenden Unterstrich von ``_PanelWindow``
-    # stehen, und ``dialog:`` verlangt einen Buchstaben vorn (Bericht D0-L, Fund 3,
-    # „braucht W“). Eine Zusage, keine Festschreibung: Behebt W es, bleibt das grün.
-    assert wrong <= {"dialog:_panel_window"}
+    wrong = [row.id for row in rows if row.target and not is_target(row.target)]
+    assert wrong == []
     # Ohne Ziel bleiben nur Flächen, für die der Wortschatz noch keinen Namen hat
-    # (Bericht D0-L, „braucht W“): rohe Meldungsfenster, Einstellungsabschnitte,
-    # der Start nach abgelaufener Demo.
+    # (Bericht D0-L, „braucht W“): rohe Meldungsfenster und Einstellungsabschnitte.
     missing = {row.source for row in rows if not row.target}
     assert missing <= fl.SOURCES_WITHOUT_TARGET
+    assert _by_id(rows)["startup.expired_demo"].target == "dialog:expired_demo"
 
 
 def test_window_actions_outside_the_menu_bar_have_rows(

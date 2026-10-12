@@ -1376,7 +1376,8 @@ def test_the_search_knows_every_line_of_the_menu_bar(qt_app: object) -> None:
     Verlust der Arbeit.
     """
 
-    from app.ui.main_window import MainWindow, _menu_lines
+    from app.ui.guide_targets import menubar_entries
+    from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
@@ -1388,9 +1389,10 @@ def test_the_search_knows_every_line_of_the_menu_bar(qt_app: object) -> None:
         gewollt_draussen = {window._quit_action}
 
         missing = []
-        for path, action in _menu_lines(window.menuBar()):
+        for _name, menus, action in menubar_entries(window):
             if action in operations or action in gewollt_draussen:
                 continue
+            path = " > ".join(menus)
             full = f"{path}: {action.text()}" if path else action.text()
             if full not in titles and action.text() not in titles:
                 missing.append(full)

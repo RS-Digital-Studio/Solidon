@@ -17,7 +17,7 @@ from typing import Any, get_args
 
 import pytest
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtWidgets import QMenu, QToolButton
+from PySide6.QtWidgets import QMenu, QScrollArea, QToolButton
 
 from app.branding import APP_VERSION
 from app.core import figures, guides, manual, tour
@@ -150,7 +150,8 @@ def test_the_vocabulary_accepts_named_kinds_and_nothing_else() -> None:
         ("feature.field:diameter", False),
         ("measure.field:diameter", True),
         ("measure.field:hole.diameter", False),
-        ("menu:menubar.datei.speichern_unter", True),
+        ("menu:menubar.speichern_unter", True),
+        ("menu:menubar.kamera.rechts", True),
         ("menu:history.edit", True),
         ("menu:Speichern", False),
         ("menu:menubar..datei", False),
@@ -178,6 +179,8 @@ def test_the_vocabulary_accepts_named_kinds_and_nothing_else() -> None:
         ("start.recent:0", False),
         ("history:edit", True),
         ("operation:part.move", False),
+        ("field:a.b", False),
+        ("part:a.b", False),
         ("feature.apply", True),
         ("feature.in_view", True),
         ("feature.every", True),
@@ -903,6 +906,7 @@ def test_every_kind_of_the_vocabulary_has_its_resolution_in_the_interface() -> N
         ("LLMKeyDialog", "llm_key_dialog"),
         ("MainWindow", "main_window"),
         ("PartCatalog", "part_catalog"),
+        ("_PanelWindow", "panel_window"),
     ],
 )
 def test_a_dialog_is_named_after_its_class(class_name: str, expected: str) -> None:
@@ -935,7 +939,11 @@ NEW_RESOLVERS = (
     "_row",
     "_item_rect",
     "_item_area",
+    "_row_obstacle",
+    "_reveal_row",
+    "section_heading",
     "point_of_world",
+    "_display_to_global",
     "_shows_the_view",
     "point_for",
     "_grip_point",
@@ -950,8 +958,12 @@ NEW_RESOLVERS = (
     "_row_click",
     "_visible_row_click",
     "_expander_click",
+    "_row_scroll",
     "_tile_click",
-    "_operation_click",
+    "_command_click",
+    "_actions_below",
+    "_in_the_bar",
+    "_chain_click",
     "_open_menus",
     "_menu_action_named",
     "_menubar_chain",
@@ -1298,6 +1310,14 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
         assert widget("print:layers.layer_height") is not None
         assert click("print:layers.layer_height").why in {"ziel", "reiter", "klappe", "rollen"}
         assert widget("setting:language") is not None
+        # Jede Zeile der Einstellungen und jedes Feld des Druckdialogs, nicht nur eines
+        from app.core.knowledge.print_fields import FIELDS
+        from app.ui.settings_dialog import option_titles
+
+        for key in option_titles():
+            assert guide_targets.widget_for(window, f"setting:{key}") is not None, key
+        for field in FIELDS:
+            assert guide_targets.widget_for(window, f"print:{field.path}") is not None, field.path
         assert widget("dialog:settings_dialog") is settings
         assert widget("dialog:print_settings_dialog") is printing
     finally:
@@ -1357,6 +1377,7 @@ def test_next_click_names_each_step_in_order_and_reveals_nothing(
             tuple(tree.topLevelItem(row).isExpanded() for row in range(tree.topLevelItemCount())),
             tuple(menu.isVisible() for menu in window.findChildren(QMenu)),
             window.selection_operations.hits.verticalScrollBar().value(),
+            tuple(area.verticalScrollBar().value() for area in window.findChildren(QScrollArea)),
         )
 
     def ask(name: str) -> Any:
@@ -1516,13 +1537,17 @@ def test_a_grip_is_found_by_the_name_the_renderer_gives_it(
     monkeypatch.setattr(viewport, "gizmo_reach", lambda: ((0.0, 0.0, 0.0), 20.0))
     tip = viewport.display_of((8.0, 0.0, 0.0))
     arrow = SimpleNamespace(name="gizmo:arrow:0")
-    monkeypatch.setattr(
-        renderer,
-        "pick_item",
-        lambda x, y: arrow if abs(x - tip[0]) <= 6 and abs(y - tip[1]) <= 3 else None,
-    )
+    picks: list[tuple[float, float]] = []
+
+    def pick(x: float, y: float) -> Any:
+        picks.append((x, y))
+        return arrow if abs(x - tip[0]) <= 6 and abs(y - tip[1]) <= 3 else None
+
+    monkeypatch.setattr(renderer, "pick_item", pick)
     monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
     found = guide_targets.next_click(window, "handle:move.x")
+    # Liegt der Griff auf einer Achse, reicht die erste Runde (Review L9).
+    assert len(picks) < 100, len(picks)
     centre = found.rect.center()
     local = viewport.mapFromGlobal(centre)
     assert abs(local.x() - tip[0]) <= 6 and abs(local.y() - tip[1]) <= 3
@@ -1673,3 +1698,746 @@ def test_the_recent_projects_and_the_dialog_fields_resolve(qt_app: Any, tmp_path
             window._op_dialog.reject()
         window.hide()
         window.release()
+
+
+def test_a_menu_hidden_from_the_bar_has_no_way(qt_app: Any) -> None:
+    """Auf dem Startbildschirm stehen die Arbeitsmenüs nicht in der Leiste: kein
+    Rechteck am Ursprung der Leiste, sondern ``MissingTargetError`` (Review M1)."""
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window.resize(1200, 800)
+    window.show()
+    _settle(qt_app)
+    try:
+        assert window.start_screen.isVisible()
+        for name in ("menu:menubar.vorne", "menu:menubar.einpassen", "menu:menubar.ansicht"):
+            with pytest.raises(guide_targets.MissingTargetError, match="nicht in der Leiste"):
+                guide_targets.next_click(window, name)
+        assert guide_targets.next_click(window, "menu:menubar.oeffnen").why == "menue"
+    finally:
+        window.hide()
+        window.release()
+
+
+def test_a_window_command_goes_over_its_button_in_the_card(
+    prepared_window: Any, qt_app: Any
+) -> None:
+    """Ein Fensterbefehl mit Knopf in der Karte: erst der Knopf, dann das Menü (Review M4)."""
+    from app.ui import guide_targets
+
+    window = prepared_window
+    window.right.setCurrentIndex(0)
+    window.object_tree.select_object("obj_1")
+    _settle(qt_app)
+    button = window.selection_operations.button_for("edit.auto_split")
+    assert button is not None and button.isVisible(), "Automatisch teilen steht nicht da"
+    # area_for rollt den Knopf in den Blick; danach steht er dort, wo next_click ihn nennt.
+
+    def where() -> QRect:
+        return QRect(button.mapToGlobal(QPoint(0, 0)), button.size())
+
+    # area_for rollt den Knopf in den Blick (auch um ein paar Punkte zur Seite);
+    # verglichen wird je Antwort mit dem Ort des Knopfes in diesem Augenblick.
+    assert guide_targets.area_for(window, "command:edit.auto_split") == where()
+    _settle(qt_app)
+    step = guide_targets.next_click(window, "command:edit.auto_split")
+    assert (step.why, step.rect) == ("ziel", where())
+
+
+def test_an_operation_that_does_not_apply_here_says_so(prepared_window: Any, qt_app: Any) -> None:
+    """Ohne Knopf und ohne Menüzeile nennt die Meldung den Grund, nicht ein
+    geschlossenes Kontextmenü (Review L4)."""
+    from app.ui import guide_targets
+
+    window = prepared_window
+    window.right.setCurrentIndex(0)
+    window.object_tree.select_object(None)
+    _settle(qt_app)
+    button = window.selection_operations.button_for("hollow_object")
+    assert button is None or not button.isVisible()
+    with pytest.raises(guide_targets.MissingTargetError, match="gilt an dieser Auswahl nicht"):
+        guide_targets.next_click(window, "operation:hollow_object")
+
+
+def test_a_closed_submenu_of_an_open_context_menu_is_a_step(
+    prepared_window: Any, qt_app: Any
+) -> None:
+    """*Verschieben vor* im offenen Verlaufsmenü: erst das Untermenü, dann die Zeile
+    (Review L5)."""
+    from app.core.scene.history import OperationDraft
+    from app.ui import guide_targets
+
+    window = prepared_window
+    assert window.session.apply("Zweiter Quader", [OperationDraft(op="create_box")])
+    assert window.session.wait_for_idle(60_000)
+    _settle(qt_app)
+    listing = window.history_panel.list
+    menu = window.history_panel.context_menu(listing.item(listing.count() - 1))
+    further = next(
+        action for action in menu.actions() if action.objectName() == "history.move_before"
+    )
+    entry = further.menu().actions()[0].objectName()
+    assert entry.startswith("history.move_before.")
+    _popup(qt_app, menu)
+    try:
+        step = guide_targets.next_click(window, f"menu:{entry}")
+        place = menu.actionGeometry(further)
+        assert (step.why, step.rect) == (
+            "untermenue",
+            QRect(menu.mapToGlobal(place.topLeft()), place.size()),
+        )
+    finally:
+        menu.hide()
+
+
+def test_a_command_of_a_tool_keeps_its_own_name(prepared_window: Any) -> None:
+    """``command:tool.section`` antwortet unter seinem eigenen Namen (Review L10)."""
+    from app.ui import guide_targets
+
+    step = guide_targets.next_click(prepared_window, "command:tool.section")
+    assert step.target == "command:tool.section"
+
+
+def test_point_for_follows_the_body_where_the_view_draws_it(
+    prepared_window: Any, monkeypatch
+) -> None:
+    """Auseinandergezogen oder auf einer zweiten Platte steht der Körper im Bild
+    verschoben (``Viewport.view_offset_of``); die Stelle folgt ihm (Review M2)."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.ui import guide_targets
+
+    window = prepared_window
+    viewport = window.viewport
+    entry = window.session.last_result.scene.objects["obj_1"]
+    raw = as_mesh_data(entry.mesh).raw
+    shift = (40.0, 0.0, 0.0)
+    faces = {int(face) for face in entry.features["hole_1"].face_indices}
+    drawn = {
+        index: viewport.display_of(
+            tuple(float(a) + b for a, b in zip(raw.triangles_center[index], shift, strict=True))
+        )
+        for index in faces
+    }
+
+    def picked(x: int, y: int) -> Any:
+        for index, spot in drawn.items():
+            if spot is not None and abs(spot[0] - x) <= 1 and abs(spot[1] - y) <= 1:
+                return ("obj_1", (0.0, 0.0, 0.0), index, None)
+        return None
+
+    monkeypatch.setattr(viewport, "view_offset_of", lambda _object_id: shift)
+    monkeypatch.setattr(viewport, "placement_hit", picked)
+    monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
+    point = guide_targets.point_for(window, "obj_1", "hole_1")
+    local = viewport.mapFromGlobal(point)
+    assert any(
+        spot is not None and abs(spot[0] - local.x()) <= 1 and abs(spot[1] - local.y()) <= 1
+        for spot in drawn.values()
+    )
+
+
+def test_point_for_on_a_coarse_view_takes_only_a_hit_on_its_own_triangle(
+    prepared_window: Any, monkeypatch
+) -> None:
+    """Ohne Dreiecksnummern (grobe Anzeige) gilt ein Pick nur, wenn der getroffene
+    Punkt auf dem probierten Dreieck liegt — nicht auf einer Fläche davor."""
+    import numpy as np
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.ui import guide_targets
+
+    window = prepared_window
+    viewport = window.viewport
+    entry = window.session.last_result.scene.objects["obj_1"]
+    raw = as_mesh_data(entry.mesh).raw
+    faces = [int(face) for face in entry.features["hole_1"].face_indices]
+    centres = {
+        index: (
+            viewport.display_of(tuple(raw.triangles_center[index])),
+            raw.triangles_center[index],
+        )
+        for index in faces
+    }
+    far = np.asarray(raw.bounds[1]) + 50.0
+
+    def picked(near: bool) -> Any:
+        def pick(x: int, y: int) -> Any:
+            for spot, centre in centres.values():
+                if spot is not None and abs(spot[0] - x) <= 1 and abs(spot[1] - y) <= 1:
+                    return ("obj_1", tuple(centre if near else far), -1, None)
+            return None
+
+        return pick
+
+    monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
+    monkeypatch.setattr(viewport, "placement_hit", picked(near=False))
+    with pytest.raises(guide_targets.MissingTargetError):
+        guide_targets.point_for(window, "obj_1", "hole_1")
+    monkeypatch.setattr(viewport, "placement_hit", picked(near=True))
+    assert guide_targets.point_for(window, "obj_1", "hole_1") is not None
+
+
+def test_the_menu_names_are_the_same_in_another_language(qt_app: Any) -> None:
+    """Die Namen kommen aus der Quelle: auf Englisch gebaut dieselben wie auf Deutsch
+    (Review M3) — auf Deutsch sind Anzeige und Quelle gleich und beweisen nichts."""
+    from app.i18n import _, set_language
+    from app.i18n.catalog import install_language
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    def names() -> tuple[set[str], set[str], set[str]]:
+        window = MainWindow(Session(), UiSettings())
+        try:
+            entries = guide_targets.menubar_entries(window)
+            menus = {
+                menu.objectName()
+                for menu in window.findChildren(QMenu)
+                if menu.objectName().startswith("menubar.")
+            }
+            return (
+                {name for name, _menus, _action in entries},
+                menus,
+                {text for _name, _menus, action in entries if (text := action.text())},
+            )
+        finally:
+            window.deleteLater()
+
+    german, german_menus, german_texts = names()
+    install_language("en")
+    set_language("en")
+    try:
+        english, english_menus, english_texts = names()
+        assert guides.menubar_name_of(_("Öffnen …")) == "menubar.oeffnen"
+    finally:
+        set_language(SOURCE_LANGUAGE)
+    assert english_texts != german_texts, "die englische Leiste ist nicht übersetzt"
+    assert english == german
+    assert english_menus == german_menus
+
+
+def test_a_widget_below_the_visible_part_is_reached_by_scrolling(qt_app: Any) -> None:
+    """Ein Feld unter dem Rand seines Rollbereichs: erst rollen, mit Richtung — und
+    ``next_click`` rollt nicht selbst (Review L7)."""
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    area = QScrollArea()
+    content = QWidget()
+    column = QVBoxLayout(content)
+    column.addSpacing(900)
+    probe = QPushButton("Probe", content)
+    probe.setProperty(guides.TARGET_PROPERTY, "setting:probe")
+    column.addWidget(probe)
+    area.setWidget(content)
+    area.resize(300, 200)
+    area.show()
+    _settle(qt_app)
+    try:
+        bar = area.verticalScrollBar()
+        assert bar.maximum() > 0
+        step = guide_targets.next_click(window, "setting:probe")
+        assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
+        assert step.rect == QRect(area.viewport().mapToGlobal(QPoint(0, 0)), area.viewport().size())
+        assert bar.value() == 0, "next_click hat selbst gerollt"
+        bar.setValue(bar.maximum())
+        _settle(qt_app)
+        assert guide_targets.next_click(window, "setting:probe").why == "ziel"
+    finally:
+        area.close()
+        area.deleteLater()
+        window.deleteLater()
+
+
+def test_area_for_opens_the_group_that_next_click_names(prepared_window: Any, qt_app: Any) -> None:
+    """Eine Zeile in einer zugeklappten Verlaufsgruppe: ``next_click`` nennt das
+    Aufklappen, ``area_for`` nimmt dasselbe Hindernis weg (Review L2)."""
+    from app.ui import guide_targets
+
+    window = prepared_window
+    assert guide_targets.next_click(window, "history.row:1").why == "aufklappen"
+    rect = guide_targets.area_for(window, "history.row:1")
+    _settle(qt_app)
+    assert guide_targets.next_click(window, "history.row:1") == guide_targets.Click(
+        rect, Qt.MouseButton.LeftButton, "ziel", "history.row:1"
+    )
+
+
+def test_open_section_finds_a_heading_in_a_foreign_row(prepared_window: Any, qt_app: Any) -> None:
+    """Die Befundliste klappt über eine Überschrift in der Kopfzeile des Berichts
+    auf; ``open_section`` und die Hindernisse fragen dieselbe Stelle (Review L3)."""
+    from app.ui import guide_targets
+    from app.ui.panels import open_section
+
+    window = prepared_window
+    content = window.report.list.parentWidget()
+    heading = guide_targets.section_heading(content)
+    assert heading is not None and heading.parentWidget() is not content.parentWidget()
+    heading.setChecked(False)
+    _settle(qt_app)
+    assert content.isHidden()
+    open_section(content)
+    _settle(qt_app)
+    assert heading.isChecked() and not content.isHidden()
+
+
+def test_every_reference_under_change_reference_carries_a_name(
+    prepared_window: Any, qt_app: Any
+) -> None:
+    """Unter *Bezug ändern* trägt jeder Bezug einen Namen; der Prüfstand öffnet das
+    Menü über ``measure.reference`` und wählt dort (Review L6)."""
+    window = prepared_window
+    window.object_tree.select_object("obj_1")
+    window.object_tree.select_feature("obj_1", "hole_1")
+    _settle(qt_app, 40)
+    flow = window._quiet_placement
+    assert flow is not None
+    menu = flow._reference_menu(0)
+    assert menu is not None
+    try:
+        chosen = [action for action in menu.actions() if action.data() is not None]
+        assert len(chosen) >= 2, [action.text() for action in menu.actions()]
+        names = [action.objectName() for action in chosen]
+        assert all(name.startswith("measure.reference.") for name in names), names
+        assert len(set(names)) == len(names), names
+        assert all(guides.is_target(f"menu:{name}") for name in names), names
+    finally:
+        menu.hide()
+
+
+def test_move_before_names_the_numbers_the_history_shows(qt_app: Any) -> None:
+    """Nach einem Verschieben zeigen Verlauf und *Verschieben vor* dieselben Nummern —
+    das Untermenü nannte die internen Kennungen, und ``history.move_before.<n>``
+    übernahm sie (Review U1)."""
+    from app.core.scene.history import OperationDraft
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window.resize(1400, 900)
+    window.show()
+    window._show_start_screen(False)
+    try:
+        for title, draft in (
+            ("Quader", OperationDraft(op="create_box")),
+            ("Zylinder", OperationDraft(op="create_cylinder")),
+            ("Kegel", OperationDraft(op="create_cone")),
+            (
+                "Verschieben",
+                OperationDraft(
+                    op="translate_object",
+                    inputs=("obj_1",),
+                    params={"dx": 0.0, "dy": 0.0, "dz": 5.0},
+                ),
+            ),
+        ):
+            assert window.session.apply(title, [draft])
+            assert window.session.wait_for_idle(60_000)
+        _settle(qt_app)
+        listing = window.history_panel.list
+
+        def move_menu() -> Any:
+            return window.history_panel.context_menu(listing.item(listing.count() - 1))
+
+        def entries(menu: Any) -> list[Any]:
+            further = next(
+                action for action in menu.actions() if action.objectName() == "history.move_before"
+            )
+            return [action for action in further.menu().actions() if action.data() is None]
+
+        # Den letzten Schritt vor Schritt 2 legen: Danach weichen Kennung und Nummer ab.
+        target = next(
+            action
+            for action in entries(move_menu())
+            if action.objectName() == "history.move_before.2"
+        )
+        target.trigger()
+        assert window.session.wait_for_idle(60_000)
+        _settle(qt_app)
+        ids = [listing.item(row).data(Qt.ItemDataRole.UserRole) for row in range(listing.count())]
+        assert ids != list(range(1, len(ids) + 1)), f"Kennungen gleich den Nummern: {ids}"
+
+        numbered = [action for action in entries(move_menu()) if action.objectName()[-3:] != "end"]
+        assert numbered
+        for action in numbered:
+            number = action.objectName().rpartition(".")[2]
+            shown, _gap, title = action.text().partition("  ")
+            assert shown == number, (action.text(), action.objectName())
+            _view, row = guide_targets._row(window, "history.row", number, f"history.row:{number}")
+            assert title.strip() in row.text(), (action.text(), row.text())
+    finally:
+        window.hide()
+        window.release()
+
+
+def test_the_window_opens_at_its_start_size(qt_app: Any) -> None:
+    """Die Startgröße steht als Konstante; der Prüfstand misst an ihr (Kriterium Z6)."""
+    from app.ui.main_window import START_SIZE, MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        assert (window.width(), window.height()) == START_SIZE
+    finally:
+        window.deleteLater()
+
+
+#: Der Kindprozess des Abrisstests: Anwendung wie beim Kunden, Szene vom
+#: Startbildschirm öffnen, die Zeile über den Wortschatz suchen und bis zum Ende
+#: der Runde halten, dann neu öffnen. ``SOLIDON_PROBE_ITERATOR=1`` setzt die
+#: frühere Suche über ``QTreeWidgetItemIterator`` ein — die Gegenprobe.
+_TREE_ROUNDS = r"""
+import os
+import sys
+import time
+from pathlib import Path
+import app.ui
+from app.core.bootstrap import load_operations
+load_operations()
+from app.ui.app import build_application
+from app.ui import guide_targets
+application, window = build_application([])
+window.resize(1280, 820)
+window.show()
+if os.environ.get('SOLIDON_PROBE_ITERATOR'):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QTreeWidgetItemIterator
+    original = guide_targets._row
+
+    def _row(window, kind, rest, name):
+        if kind != 'tree.row':
+            return original(window, kind, rest, name)
+        tree = window.object_tree.tree
+        object_id, feature_id = guide_targets._object_and_feature(rest)
+        iterator = QTreeWidgetItemIterator(tree)
+        while (item := iterator.value()) is not None:
+            if item.data(0, Qt.ItemDataRole.UserRole) == object_id and (
+                item.data(1, Qt.ItemDataRole.UserRole) == feature_id
+            ):
+                return tree, item
+            iterator += 1
+        raise guide_targets.MissingTargetError(name)
+
+    guide_targets._row = _row
+
+
+def settle(seconds):
+    until = time.monotonic() + seconds
+    while time.monotonic() < until:
+        application.processEvents()
+        time.sleep(0.005)
+
+
+scene = Path(sys.argv[1])
+if sys.argv[2] == 'build':
+    from app.core.scene.history import OperationDraft
+    window._show_start_screen(False)
+    assert window.session.apply('Quader mit Bohrung', [
+        OperationDraft(op='create_brep_box'),
+        OperationDraft(op='drill_hole', inputs=('obj_1',), params={'diameter': 5.0, 'z': 12.0}),
+    ])
+    assert window.session.wait_for_idle(60000)
+    window.session.save_project(scene)
+    print('built', flush=True)
+    os._exit(0)
+for round in range(5):
+    previous = window.session.last_result
+    window.session.forget_changes()
+    window.open_path(scene)
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        settle(0.01)
+        result = window.session.last_result
+        if result is not None and result is not previous and not window.session.busy:
+            break
+    settle(0.5)
+    held = guide_targets._row(window, 'tree.row', 'obj_1.hole_1', 'tree.row:obj_1.hole_1')
+    guide_targets.next_click(window, 'tree.row:obj_1.hole_1')
+    settle(0.8)
+    held = None
+print('tree survived', flush=True)
+window.session.forget_changes()
+from tools.window_bench import shutdown_window
+shutdown_window(window, application)
+"""
+
+
+def _tree_rounds(scene: Path, mode: str, extra: dict[str, str] | None = None) -> Any:
+    import os
+    import subprocess
+    import sys
+
+    return subprocess.run(
+        [sys.executable, "-X", "faulthandler", "-c", _TREE_ROUNDS, str(scene), mode],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", **(extra or {})},
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+
+
+def test_the_tree_survives_new_scenes_after_a_row_was_found(qt_app: Any, tmp_path: Path) -> None:
+    """Nach der Suche einer Baumzeile riss ein späteres ``ObjectTree.show_scene``
+    beim Leeren des Baums ab (Zugriffsverletzung in ``tree.clear()``), solange
+    ``_row`` sie mit ``QTreeWidgetItemIterator`` suchte (Fund D0-P: 8 von 12
+    Läufen des Prüfstands). Im eigenen Prozess, damit ein Abriss ein roter Fall
+    ist und nicht die Suite beendet; sechs Prozesse zu je fünf Öffnungen, weil
+    er nicht jedes Mal kommt (Gegenprobe mit dem Iterator: 3 von 8 Prozessen)."""
+    del qt_app
+    scene = tmp_path / "szene.p3d"
+    built = _tree_rounds(scene, "build")
+    assert built.returncode == 0 and "built" in built.stdout, built.stderr[-3000:]
+    for attempt in range(6):
+        done = _tree_rounds(scene, "rounds")
+        assert done.returncode == 0, (attempt, done.returncode, done.stderr[-4000:])
+        assert "tree survived" in done.stdout
+
+
+def tree_iterator_uses(source: str) -> list[int]:
+    """Die Zeilen, in denen ``QTreeWidgetItemIterator`` als Name vorkommt — Import,
+    Aufruf oder Attribut, nicht im Kommentar."""
+    import ast
+
+    lines: set[int] = set()
+    for node in ast.walk(ast.parse(source)):
+        named = (
+            node.id
+            if isinstance(node, ast.Name)
+            else node.attr
+            if isinstance(node, ast.Attribute)
+            else node.name
+            if isinstance(node, ast.alias)
+            else ""
+        )
+        if named == "QTreeWidgetItemIterator":
+            lines.add(getattr(node, "lineno", 0))
+    return sorted(lines)
+
+
+def test_no_tree_item_iterator_in_the_application() -> None:
+    """``QTreeWidgetItemIterator`` hinterlässt in PySide Zeilenhüllen, an denen ein
+    späteres ``QTreeWidget.clear()`` abreißt (Fund D0-P); Zeilen werden über
+    ``topLevelItem``/``child`` gesucht. Rekursiv über ``app/`` (W4)."""
+    root = Path(__file__).resolve().parents[1] / "app"
+    found = [
+        f"{path.relative_to(root.parent).as_posix()}:{number}"
+        for path in sorted(root.rglob("*.py"))
+        for number in tree_iterator_uses(path.read_text(encoding="utf-8"))
+    ]
+    assert found == []
+
+
+def test_a_tree_item_iterator_turns_the_guard_red() -> None:
+    source = (
+        "from PySide6.QtWidgets import QTreeWidgetItemIterator\n"
+        "# QTreeWidgetItemIterator im Kommentar zählt nicht\n"
+        "def walk(tree):\n"
+        "    return QtWidgets.QTreeWidgetItemIterator(tree)\n"
+    )
+    assert tree_iterator_uses(source) == [1, 4]
+
+
+#: Der Kindprozess des Überstandstests: Anwendung wie beim Kunden (mit Stilblatt
+#: und Einstellungen — im nackten Fenster stand *Vorher/Nachher* nicht da), ein
+#: Körper mit Bohrung, aufgeklappt, dann Fensterhöhen von 820 bis 640 Punkten.
+#: ``SOLIDON_PROBE_OLD_HISTORY=1`` setzt die frühere Höhenmeldung des Verlaufs
+#: ohne den Abstand ein — die Gegenprobe.
+_SECTIONS = r"""
+import os
+import time
+import app.ui
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QWidget
+from app.core.bootstrap import load_operations
+load_operations()
+from app.ui.app import build_application
+application, window = build_application([])
+from app.core.scene.history import OperationDraft
+from app.ui.overlay import extra_height, is_room_taker, living
+from app.ui.panels import HistoryPanel
+if os.environ.get('SOLIDON_PROBE_OLD_HISTORY'):
+    def _old(self):
+        if self.compare.isHidden():
+            return 0
+        return self.compare.sizeHint().height() + (
+            self.timeline.sizeHint().height() if self.compare.isChecked() else 0
+        )
+    HistoryPanel._timeline_height = _old
+
+
+def settle(seconds):
+    until = time.monotonic() + seconds
+    while time.monotonic() < until:
+        application.processEvents()
+        time.sleep(0.005)
+
+
+window.resize(800, 800)
+window.show()
+window._show_start_screen(False)
+assert window.session.apply('Quader mit Bohrung', [
+    OperationDraft(op='create_box'),
+    OperationDraft(op='drill_hole', inputs=('obj_1',), params={'diameter': 5.0, 'z': 12.0}),
+])
+assert window.session.wait_for_idle(60000)
+tree = window.object_tree.tree
+tree.topLevelItem(0).setExpanded(True)
+zone = window.overlay.left
+section = window.object_tree.parentWidget()
+checked = 0
+problems = []
+for height in range(820, 640, -12):
+    window.resize(800, height)
+    settle(0.4)
+    takers = [
+        child for child in living(zone, QWidget)
+        if is_room_taker(child) and child.isVisibleTo(zone)
+    ]
+    floors = sum(child.least_height() for child in takers)
+    if extra_height(zone) + floors > window.overlay.card_room():
+        continue
+    checked += 1
+    for child in takers:
+        holder = child.parentWidget()
+        if holder.height() < holder.minimumSizeHint().height():
+            least = holder.minimumSizeHint().height()
+            problems.append((height, type(child).__name__, holder.height(), least))
+    bottom = tree.mapTo(section, QPoint(0, tree.height())).y()
+    if bottom > section.height():
+        problems.append((height, 'Baum', bottom, section.height()))
+print('geprüft', checked, flush=True)
+print('probleme', problems, flush=True)
+window.session.forget_changes()
+from tools.window_bench import shutdown_window
+shutdown_window(window, application)
+"""
+
+
+def _sections(extra: dict[str, str] | None = None) -> Any:
+    import os
+    import subprocess
+    import sys
+
+    return subprocess.run(
+        [sys.executable, "-X", "faulthandler", "-c", _SECTIONS],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", **(extra or {})},
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+
+
+def test_the_object_tree_stays_inside_its_section_when_the_card_is_tight(qt_app: Any) -> None:
+    """Die linke Karte teilt ihre Höhe auf Baum, Parameter und Verlauf; passt das
+    Ganze, ragt kein Abschnitt über seinen Platz. Der Verlauf nahm den Abstand
+    zwischen *Vorher/Nachher* und seiner Liste, ohne ihn zu melden — der Baum ragte
+    um diese Punkte über seinen Abschnitt, und seine letzte Zeile war
+    abgeschnitten (Fund D0-P, 800 × 800). Im eigenen Prozess, weil die Anwendung
+    wie beim Kunden gebaut sein muss."""
+    del qt_app
+    done = _sections()
+    assert done.returncode == 0, done.stderr[-3000:]
+    assert "probleme []" in done.stdout, done.stdout
+    checked = int(done.stdout.split("geprüft", 1)[1].split()[0])
+    assert checked >= 5, done.stdout
+
+
+def test_a_row_cut_off_by_its_parent_is_reached_by_scrolling(qt_app: Any) -> None:
+    """Eine Zeile, deren Liste über ihren Elternteil ragt, ist nur halb zu sehen;
+    gefragt wird der sichtbare Teil der Liste, nicht ihr ganzes Rechteck (Fund
+    D0-P: die letzte Baumzeile hieß „ziel“, obwohl 8 Punkte abgeschnitten waren)."""
+    from PySide6.QtWidgets import QListWidget, QWidget
+
+    from app.ui import guide_targets
+
+    host = QWidget()
+    host.resize(240, 100)
+    listing = QListWidget(host)
+    listing.setGeometry(0, 0, 240, 300)
+    for number in range(12):
+        listing.addItem(f"Zeile {number}")
+    host.show()
+    _settle(qt_app, 5)
+    try:
+        visible = listing.viewport().visibleRegion().boundingRect()
+        cut = next(
+            listing.item(row)
+            for row in range(listing.count())
+            if listing.visualItemRect(listing.item(row)).bottom() > visible.bottom()
+            and listing.visualItemRect(listing.item(row)).top() <= visible.bottom()
+        )
+        step = guide_targets._visible_row_click(listing, cut, "history.row:1", "ziel")
+        assert (step.why, step.direction) == ("rollen", 1)
+        whole = listing.item(0)
+        assert guide_targets._visible_row_click(listing, whole, "history.row:1", "ziel").why == (
+            "ziel"
+        )
+    finally:
+        host.close()
+        host.deleteLater()
+
+
+def test_the_expired_demo_and_the_parameter_dialog_resolve(qt_app: Any, monkeypatch) -> None:
+    """Das Fenster nach abgelaufener Demo (ein ``QMessageBox`` ohne eigene Klasse)
+    heißt ``dialog:expired_demo``; im Dialog für Projektparameter lösen Name, Wert,
+    Einheit, Grenzen und Ausdruck als ``field:`` auf (Funde D0-L)."""
+    from PySide6.QtWidgets import QMessageBox
+
+    from app.core import activation
+    from app.ui import dialogs, guide_targets
+    from app.ui.dialogs import EXPIRED_DEMO_TARGET, ParameterDialog
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    seen: list[Any] = []
+
+    class ShownBox(QMessageBox):
+        """Zeigt sich, statt modal zu warten, und hält fest, was der Wortschatz findet."""
+
+        def exec(self) -> int:  # type: ignore[override]
+            self.show()
+            _settle(qt_app, 3)
+            seen.append(guide_targets.widget_for(window, EXPIRED_DEMO_TARGET))
+            seen.append(self)
+            self.hide()
+            return 0
+
+    monkeypatch.setattr(dialogs, "QMessageBox", ShownBox)
+    try:
+        assert guides.is_target(EXPIRED_DEMO_TARGET)
+        dialogs.show_expired_demo(activation.Activation())
+        assert seen and seen[0] is seen[1]
+
+        dialog = ParameterDialog({}, window)
+        dialog.show()
+        _settle(qt_app, 3)
+        expected = {
+            "name": dialog.name_field,
+            "value": dialog.value_field,
+            "unit": dialog.unit_field,
+            "minimum": dialog.minimum_field,
+            "maximum": dialog.maximum_field,
+            "expression": dialog.expression_field,
+        }
+        for key, editor in expected.items():
+            assert guide_targets.widget_for(window, f"field:{key}") is editor, key
+        dialog.close()
+    finally:
+        window.deleteLater()

@@ -73,11 +73,9 @@ ROW_SOURCES: Final[tuple[str, ...]] = (
 )
 
 #: Quellen, deren Zeilen heute kein Ziel im Wortschatz haben (Bericht D0-L, „braucht
-#: W“): rohe Meldungsfenster ohne Klasse, Abschnitte der Einstellungen, der Start nach
-#: abgelaufener Demo. Jede andere Zeile trägt ein Ziel.
-SOURCES_WITHOUT_TARGET: Final[frozenset[str]] = frozenset(
-    {"startablauf", "meldungsfenster", "einstellungen"}
-)
+#: W“): rohe Meldungsfenster ohne Klasse und Abschnitte der Einstellungen. Jede andere
+#: Zeile trägt ein Ziel.
+SOURCES_WITHOUT_TARGET: Final[frozenset[str]] = frozenset({"meldungsfenster", "einstellungen"})
 
 #: Die Zeile, die für alle Kacheln des Bausteinkatalogs steht (Konzept §3).
 CATALOGUE_ROW: Final = "part:*"
@@ -1387,9 +1385,14 @@ def raw_window_rows(keys: Iterable[str], scenes: Mapping[str, Scene]) -> list[Ro
     """Jede Funktion, die ein rohes Meldungsfenster baut, als Zeile — Wiederherstellen,
     Speicherfrage, Löschnachfrage, der Start nach abgelaufener Demo und die übrigen.
 
-    Ein rohes Fenster hat keine eigene Klasse und keinen Namen im Wortschatz; die
-    Zeile trägt kein Ziel, bis es einen gibt (Bericht D0-L, „braucht W“).
+    Ein rohes Fenster hat keine eigene Klasse; ein Ziel hat es nur, wo es sein
+    Kennzeichen selbst trägt (das Fenster nach abgelaufener Demo). Die übrigen
+    tragen keines, bis der Wortschatz eines hat (Bericht D0-L, „braucht W“).
     """
+    from app.ui.dialogs import EXPIRED_DEMO_TARGET
+
+    # Ein Meldungsfenster, das sein Ziel als Kennzeichen selbst trägt (W).
+    targets = {"dialogs.show_expired_demo": EXPIRED_DEMO_TARGET}
     problems: list[str] = []
     rows: list[Row] = []
     for key in keys:
@@ -1405,7 +1408,7 @@ def raw_window_rows(keys: Iterable[str], scenes: Mapping[str, Scene]) -> list[Ro
                 package=package,
                 requirement=requirement,
                 start_scene=_start_scene(requirement, kernel_of(None, requirement), scenes),
-                target="",
+                target=targets.get(key, ""),
             )
         )
     if problems:

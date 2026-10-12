@@ -137,7 +137,7 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``feature.field:resize_hole.diameter`` — ein Feld einer Handlung, gebildet
 #:   aus Schlüssel und Feldname (:func:`action_field_target`);
 #: * ``measure.field:diameter`` — ein Feld der Maßgruppe im Bild;
-#: * ``menu:menubar.datei.speichern_unter`` — eine Zeile der Menüleiste über
+#: * ``menu:menubar.speichern_unter`` — eine Zeile der Menüleiste über
 #:   ihren ``objectName`` (:func:`menubar_name`) oder eine Zeile eines offenen
 #:   Kontextmenüs (``history.edit``, ``tree.…``, Operationsname,
 #:   ``report.<handlung>``, ``parameters.…``);
@@ -240,7 +240,7 @@ def menubar_name(msgid: str, context: str | None = None) -> str:
     er hängt nicht an der Lage der Zeile — eine neue Zeile darüber ändert ihn
     nicht.
     """
-    parts = [_slug(text) for text in (context, msgid) if text]
+    parts = [name_part(text) for text in (context, msgid) if text]
     if not parts or not all(parts):
         raise ValueError(f"menubar_name: aus {msgid!r} entsteht kein Name")
     return ".".join(("menubar", *parts))
@@ -259,16 +259,19 @@ def menubar_name_of(text: TranslatableText | str) -> str:
 
 def dialog_name(class_name: str) -> str:
     """Der Name hinter ``dialog:`` für eine Fensterklasse: ``PrintSettingsDialog``
-    heißt ``print_settings_dialog``, ``LLMKeyDialog`` ``llm_key_dialog``.
+    heißt ``print_settings_dialog``, ``LLMKeyDialog`` ``llm_key_dialog``; ein
+    führender Unterstrich fällt weg (``_PanelWindow`` → ``panel_window``).
 
     Eine Quelle für die Funktionsliste, die die Klassen im Quelltext findet,
     und die Auflösung, die das offene Fenster sucht.
     """
-    spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", class_name)
+    spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", class_name.lstrip("_"))
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", spaced).lower()
 
 
-def _slug(text: str) -> str:
+def name_part(text: str) -> str:
+    """Ein Glied eines Zielnamens aus einem Text: klein, Umlaute ausgeschrieben,
+    alles andere ``_`` (``Speichern unter …`` → ``speichern_unter``)."""
     text = text.replace("…", "").replace("&", "").translate(_UMLAUTS).lower()
     return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
 
