@@ -1170,7 +1170,12 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         os.environ["SOLIDON3D_MOTION"] = "aus"
     rows = read_rows(out)
     scenes = out / "scenes"
-    state: dict[str, Any] = {"case": asdict(case), "stage": "start"}
+    # Ein neuer Lauf beginnt ohne die Kopien und Sicherungen des vorigen (Review N2).
+    state: dict[str, Any] = {
+        "case": asdict(case),
+        "stage": "start",
+        "cleared": bench.fresh_case(folder),
+    }
     version = version_info()
 
     def keep() -> None:
@@ -1244,7 +1249,11 @@ def start_child(out: Path, case: Case, folder: Path) -> int:
 
     variant = bench.Variant.of(case.variant)
     row = read_rows(out).get(case.row) or {"id": case.row}
-    state: dict[str, Any] = {"case": asdict(case), "stage": "start"}
+    state: dict[str, Any] = {
+        "case": asdict(case),
+        "stage": "start",
+        "cleared": bench.fresh_case(folder),
+    }
     data = bench.empty_protocol(row, variant.protocol(None, (0, 0)), version_info())
 
     def persist() -> None:

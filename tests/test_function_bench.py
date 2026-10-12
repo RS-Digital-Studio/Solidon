@@ -1761,6 +1761,50 @@ def test_a_failed_preparation_lands_in_the_case_state(
     assert "Lizenz ließ sich nicht setzen" in state["harness_exception"]
 
 
+def test_a_case_run_again_starts_without_the_copies_and_backups_of_its_last_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review N2: ``--again`` nach einem Absturz öffnet eine frische Kopie, ohne alte Sicherung.
+
+    Nachgestellt ist der Fall nach dem Absturz: Die Kopie der zweiten Szene ist
+    verändert, daneben liegt ihre ``.autosave``, im Profil die Sicherung eines
+    namenlosen Projekts. Vorher öffnete der neue Lauf dieselbe Kopie samt
+    Sicherung und stand an der Wiederherstellungsfrage. Die Lizenz scheitert
+    absichtlich, damit der Lauf nach der Vorbereitung endet.
+    """
+    from tools import file_acceptance
+
+    monkeypatch.setattr(file_acceptance, "version_info", lambda: {"commit": "", "app": ""})
+
+    def refuses(state: str, today: Any = None) -> Any:
+        raise RuntimeError("Lauf endet hier")
+
+    monkeypatch.setattr(bench, "apply_licence", refuses)
+    out = tmp_path / "lauf"
+    write_json(out / "rows.json", [ROWS[0]])
+    shared = out / "scenes" / f"{bench.SECOND_SCENE}.p3d"
+    shared.parent.mkdir(parents=True)
+    shared.write_bytes(b"frisch")
+    case = function_cases(ROWS, row_ids=["resize_hole"])[0]
+    folder = out / "cases" / "001"
+    copy = folder / "scenes" / shared.name
+    copy.parent.mkdir(parents=True)
+    copy.write_bytes(b"vom abgestuerzten Lauf")
+    copy.with_name(copy.name + ".autosave").write_bytes(b"sicherung")
+    unsaved = folder / "profile" / "Solidon3D" / "recovery" / "unsaved-1a2b3c4d.p3d.autosave"
+    unsaved.parent.mkdir(parents=True)
+    unsaved.write_bytes(b"sicherung")
+    settings = folder / "profile" / "settings.json"
+    settings.write_text("{}", encoding="utf-8")
+    file_acceptance.function_child(out, case, folder, "")
+    assert copy.read_bytes() == b"frisch", "die Kopie ist neu"
+    assert not list(folder.rglob("*.autosave")), "keine Sicherung des vorigen Laufs"
+    assert settings.is_file(), "Einstellungen bleiben"
+    state = json.loads((folder / "bench.json").read_text(encoding="utf-8"))
+    assert f"scenes/{shared.name}.autosave" in state["cleared"]
+    assert "profile/Solidon3D/recovery/unsaved-1a2b3c4d.p3d.autosave" in state["cleared"]
+
+
 # --- Wächter: keine Abkürzung, kein eigener Einstieg ---------------------------------------------
 
 
@@ -2526,8 +2570,10 @@ def test_the_project_switch_runs_in_preview_draft_and_computation(tmp_path: Path
     assert validate_protocol(protocol) == []
     assert protocol["errors"] == [], protocol["errors"]
     switch = protocol["switch"]
-    assert switch is not None, protocol["unmeasured"]
-    assert {"vorschau", "entwurf"} <= set(switch["phases"]), switch
+    # Review N3: Kam der Wechsel nicht an, steht der Grund in den Funden, nicht
+    # nur in ``unmeasured`` — die Meldung nennt beides.
+    assert switch is not None, (protocol["unmeasured"], protocol["findings"])
+    assert {"vorschau", "entwurf"} <= set(switch["phases"]), (switch, protocol["findings"])
     if "rechnung" not in switch["phases"]:
         assert "rechnung" in protocol["unmeasured"].get("switch", ""), protocol["unmeasured"]
     assert all(event["phase"] in switch["phases"] for event in switch["late_events"])

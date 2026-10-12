@@ -1919,6 +1919,32 @@ def case_scene(folder: Path, scenes: Path, key: str) -> Path | None:
     return copy
 
 
+def fresh_case(folder: Path) -> list[str]:
+    """Räumt weg, was ein früherer Lauf dieses Falls liegen ließ, und nennt es.
+
+    Ein Fall, der nach einer Sicherung starb, ließ seine Szenenkopien samt
+    ``<kopie>.p3d.autosave`` und im Profil die Sicherung eines namenlosen
+    Projekts zurück; mit ``--again`` stand der neue Lauf dann an der
+    Wiederherstellungsfrage (Review N2). Weg sind danach die Kopien — die
+    nächste ist frisch (:func:`case_scene`) — und jede Sicherung im Profil;
+    Einstellungen und Protokolle bleiben.
+    """
+    import shutil
+
+    from app.core.scene.project import AUTOSAVE_SUFFIX
+
+    cleared: list[str] = []
+    copies = folder / "scenes"
+    if copies.is_dir():
+        cleared.extend(path.relative_to(folder).as_posix() for path in sorted(copies.rglob("*")))
+        shutil.rmtree(copies)
+    profile = folder / "profile"
+    for leftover in sorted(profile.rglob(f"*{AUTOSAVE_SUFFIX}")) if profile.is_dir() else ():
+        leftover.unlink()
+        cleared.append(leftover.relative_to(folder).as_posix())
+    return cleared
+
+
 def walk_target(row: Mapping[str, Any]) -> str:
     """Wohin der Hauptweg einer Zeile führt.
 
