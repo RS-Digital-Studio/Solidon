@@ -3645,6 +3645,9 @@ RENDERED_TESTS: Final[frozenset[str]] = frozenset(
         # Die toten Verweise auf den Bau-Rechner verschwinden erst mit dem
         # nächsten Druck der PDFs.
         "test_the_pdf_links_nowhere_outside_itself_but_the_website",
+        # Die Fensterbefehle der Abhaklisten stimmen erst nach dem Lauf des
+        # Prüfstands mit der Menüleiste überein (Funktionsdurchgang §3).
+        "test_the_menu_bar_matches_the_window_commands_of_every_checklist",
     }
 )
 
