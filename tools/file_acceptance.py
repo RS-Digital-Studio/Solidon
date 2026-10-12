@@ -492,14 +492,14 @@ def function_inventory(
     dem Fenster (Konzept §3). Dann baut ``tools/function_list.py`` (D0-L) daraus
     und aus Register, Dialogklassen und Wortschatz die Zeilen; ``rows.json``
     trägt sie für Kindprozesse und Bericht (D0-U liest dieselbe Datei). Die
-    Startszenen speichert ``function_list.save_scenes`` nach ``scenes/``: alle
+    Startszenen speichert ``function_scenes.save_scenes`` nach ``scenes/``: alle
     leichten, und die schweren dazu, sobald eine gewählte Zeile in einer
     schweren beginnt — L baut die Szenen nur als Ganzes. Jeder Fall öffnet
     davon seine eigene Kopie (``function_bench.FunctionFlow.scene_path``).
     """
     from dataclasses import asdict as as_dict
 
-    from tools import function_list
+    from tools import function_list, function_scenes
 
     entries = function_list.read_menubar(menubar(out))
     rows = [as_dict(row) for row in function_list.rows(entries)]
@@ -510,13 +510,13 @@ def function_inventory(
     languages = {case.row for case in cases if case.kind == "language"}
     kept = [row for row in rows if str(row["id"]) in chosen or row.get("package") in languages]
     write_json(out / "rows.json", kept)
-    catalogue = function_list.load_scenes()
+    catalogue = function_scenes.load_scenes()
     wanted = {
         str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "")
         for row in kept
     }
     heavy = any(catalogue[key].heavy for key in wanted if key in catalogue)
-    function_list.save_scenes(out / "scenes", heavy=heavy)
+    function_scenes.save_scenes(out / "scenes", heavy=heavy)
     return cases
 
 
