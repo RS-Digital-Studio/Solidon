@@ -5563,15 +5563,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
     Menüaktion.
   - **Erzeugt:** die Funktionsliste mit stabilen Kennungen und Paket (§3, §6) und der
     Szenenkatalog in `tests/data/` mit der Tabelle „Anforderung → Szene“; die vorbereiteten
-    Nutzerprofile für Lizenz (Demo, gekauft, abgelaufen) und die Zustände „vorhanden/fehlt“ von
-    KI-Modell, ComfyUI und Slicer.
+    Nutzerprofile für Lizenz (Demo, gekauft, abgelaufen) und Drucker (Filament, Resin) und die
+    Zustände „vorhanden/fehlt“ von KI-Modell, ComfyUI und Slicer.
   - **Wächter im Tor ohne Fenster:** jede Operation hat eine Startszene, jede Dialogklasse eine
     Zeile, jede Operation genau ein Paket; dazu der `rendered`-Test für die Vollständigkeit der
     Fensterbefehle am gebauten Fenster.
   - **Eingaben für Stufe B:** Negativ- und Positivliste zu V1 neben
     `tests/data/text_patterns.json`, die vorab festgelegte Liste der häufigsten Kundenziele zu
     I3, die Vergleichsbilder je Durchgang (Programm, Version, Datum, außerhalb des Baums).
-  - **Funddatei und Abhakliste** (§7), erzeugt aus Messungen und `urteile-<paket>.toml`.
+  - **Funddatei und Abhakliste** (§7); die Abhakliste erzeugt aus Messungen und
+    `urteile-<paket>.toml`.
   - **Skills:** E und V in `ux-review`, G, Z und I in `ui-design`, samt `sync_agents.py`.
   - **Unterlagen:** der gemeinsame Satz in `AGENTS.md` („Arbeitsweise“) für beide Ausnahmen von
     „Fenster lokal nur beim Release“ (Codestruktur 7.2, Funktionsdurchgang §13.1) und der
@@ -6270,7 +6271,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Registerabzug, W4 rekursive Quelltextprüfungen, W5 statisch auflösbare Importe in `app/`,
   `tools/` und `tests/`, W6 Namenslisten lösen auf; dazu das Verschiebewerkzeug
   `tools/move_names.py` mit `ast`-Beweis. Die Ausnahme „Fenstertests lokal vor
-  Oberflächenschritten“ (Konzept 7, Punkt 2) steht mit D0 (RM-737) im gemeinsamen Satz in
+  Oberflächenschritten“ (Konzept 7, Punkt 2) kommt mit D0 (RM-737) in den gemeinsamen Satz in
   `AGENTS.md`; Schritt 0 zieht nur noch `/liefern` nach.
   **Nächster Schritt:** CS-2, CS-9, CS-10, CS-11 und CS-12 (RM-723, RM-726 bis RM-729) und die
   25 `raising=False` auf `app.*` beheben, dann W1 bis W6 und das Werkzeug mit Test an einer

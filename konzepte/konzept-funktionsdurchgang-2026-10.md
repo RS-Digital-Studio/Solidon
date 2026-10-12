@@ -35,7 +35,7 @@ und Kundenberichte bleiben die zweite Quelle.
 | `tools/run_ui_audit.py` | alle Projekte und Modelle durch die laufende Oberfläche bis zum Export | bleibt für den Bestand an Dateien |
 | Suite, Fenstertests | Verhalten einzelner Wege | jeder Fund wird ein Test |
 | Plan und Inventur 0.6.1 (`output/konsolidierung-2026-10-07/vorbereitung-061-boolesch-und-palette.md` und `inventur-061-palette.md`, mit RM-735 abgelegt als `konzepte/konzept-suche-und-palette-2026-10.md` und `konzepte/nachweise-palette-2026-10/`) | 273 Paletteneinträge mit Ort, offscreen gemessen, vor RM-735 | Ausgangspunkt; den Ort misst der Prüfstand neu |
-| Skills `ux-review` und `ui-design`, Agent `bedienlogik` | Ablaufaufnahme, Bewertung, Gestaltungsprüfung | **eine Quelle** für die Kriterien: `ux-review` bekommt E und V, `ui-design` bekommt G aus §4, das Konzept verweist auf beide |
+| Skills `ux-review` und `ui-design`, Agent `bedienlogik` | Ablaufaufnahme, Bewertung, Gestaltungsprüfung | **eine Quelle** für die Kriterien: `ux-review` bekommt E und V, `ui-design` bekommt G, Z und I aus §4, das Konzept verweist auf beide |
 
 ## 3 Die Funktionsliste
 
@@ -45,7 +45,7 @@ Erzeugt, nicht geschrieben, mit stabilen Kennungen:
 |---|---|---|
 | Operationen | Register | Registername |
 | Fensterbefehle | Menüleiste des Fensters, aus den unübersetzten Quelltexten | Menüpfad, z. B. `Datei/Speichern unter` |
-| Bedienflächen | Dialogklassen unter `app/ui/` (`*dialog*.py` und Fenster), Wortschatz der Ziele, `panels.FINDING_ACTIONS`, die Merkmalfenster-Handlungen ohne Operation — erzeugt aus `perceive.actions` und `selection_operations`, heute u. a. *Auf alle N gleichartigen anwenden*, *Bezug ändern*, *Im Bild einstellen*, *Als Muster zusammenfassen* —, Kontextmenü des Verlaufs | fester Name aus dem Wortschatz |
+| Bedienflächen | Dialogklassen unter `app/ui/` (`*dialog*.py` und Fenster), Wortschatz der Ziele, `panels.FINDING_ACTIONS`, die Merkmalfenster-Handlungen ohne Operation — erzeugt aus `perceive.actions` und `selection_operations`, heute u. a. *Auf alle N gleichartigen anwenden*, *Bezug ändern*, *Im Bild einstellen* —, Kontextmenü des Verlaufs | fester Name aus dem Wortschatz |
 
 Nicht aus `window_commands`: Es nummeriert Menüzeilen nach ihrer Lage
 (`menu.<n>`) und speist seit RM-735 die Suche — eine stabile Kennung ist das
@@ -366,11 +366,13 @@ Schritt in `/erzeugen` und ein `rendered`-Test wie die Handbuchbilder.
 - **Kapazität:** Codestruktur und Durchgang beginnen beide nach 0.6.0. Die
   Kundenpakete (D0, D1, D9, D8, D3, D4) gehen bis zum 25.11. vor die
   Komponenten von `MainWindow` (Entscheidung Robert, §13).
-- **Programmplan (Auftrag Robert, 11.10.2026):** D0, dann D1, D9 und D8 (Weg 1
-  bis zum Slicer), daneben die Codestruktur-Schritte 1 bis 3, dann D3 und D4 —
-  bis zum Verkaufskandidaten am 25.11.; nach dem Start am 01.12. D2, D5, D6, D7
-  und D10, D11 und D12 jeweils nach den Komponenten der Klassen, die sie
-  berühren (`MainWindow`, für D11 auch `Viewport`: Kamera und Griffe).
+- **Programmplan (Auftrag Robert, 11.10.2026):** D0, dann Codestruktur Schritt
+  0. Bis zum Verkaufskandidaten am 25.11.: D1, D9 und D8 (Weg 1 bis zum
+  Slicer), dann die Codestruktur-Schritte 1, 2 und 3, dann D3 und D4.
+  Kundenpakete haben Vorrang; wird es eng, werden Codestruktur-Schritte
+  gekürzt, nicht die Kundenpakete. Nach dem Start am 01.12.: D2, D5, D6, D7 und
+  D10, D11 und D12 jeweils nach den Komponenten der Klassen, die sie berühren
+  (`MainWindow`, für D11 auch `Viewport`: Kamera und Griffe).
 
 ## 10 Abnahme
 

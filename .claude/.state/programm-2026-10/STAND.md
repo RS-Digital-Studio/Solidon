@@ -74,8 +74,10 @@ das Konzept.
   `724a153f2` auf `claude/bk-251`, Worktree abgebaut (Vermerk an RM-251). Die
   CI auf main startet nicht, solange das Repository privat ist (Normalzustand,
   Robert 12.10.); ihre Fenstertests laufen in der Release-Phase. **Als
-  Nächstes:** D0 (RM-737) nach `plan-d0.md` im Koordinationsordner, über den
-  Integrationszweig `welle4`; danach Codestruktur Schritt 0 (RM-722).
+  Nächstes:** D0 (RM-737) nach dem Zuschnitt in
+  `.claude/.state/funktionsdurchgang-2026-10/plan-d0.md` (entsteht gerade, der
+  beschlossene Zuschnitt kommt danach in RM-737), über den Integrationszweig
+  `welle4`; danach Codestruktur Schritt 0 (RM-722).
 - 12.10.2026, 07:45, Phase 1 gelandet: 0.6.1 (RM-734, RM-735) per
   `--no-ff` auf main und gepusht; kein Release, keine Version. Review in drei
   Durchgängen (Berichte örtlich unter
