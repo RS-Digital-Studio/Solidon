@@ -634,11 +634,30 @@ class QtPorts:
             QTest.keyClick(target, combination.key(), combination.keyboardModifiers())
 
     def type_text(self, text: str) -> None:
+        """Tippt ``text`` Zeichen für Zeichen in das Widget mit dem Fokus, wie eine Tastatur.
+
+        ``QTest.keyClicks`` kennt nur ASCII: An ö, ß oder € bricht Qt mit einem
+        ASSERT in ``qasciikey.cpp`` den ganzen Prozess ab, ohne eine Zeile in
+        ``stderr.log`` (Probelauf, Befund A: die Suchprobe „Bohrung vergrößern“).
+        Jedes Zeichen geht deshalb als Tastendruck mit seinem Text hinaus — mit
+        der Taste, die Qt für ein Zeichen aus Latin-1 kennt (der Code des
+        Großbuchstabens, ß selbst), sonst ``Key_unknown``; eingefügt wird der Text.
+        """
+        from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QApplication
 
-        target = QApplication.focusWidget() or self.window
-        QTest.keyClicks(target, text)
+        for character in text:
+            target = QApplication.focusWidget() or self.window
+            upper = character.upper()
+            code = ord(upper) if len(upper) == 1 and ord(upper) < 256 else ord(character)
+            try:
+                key = Qt.Key(code) if code < 256 else Qt.Key.Key_unknown
+            except ValueError:
+                key = Qt.Key.Key_unknown
+            QTest.sendKeyEvent(
+                QTest.KeyAction.Click, target, key, character, Qt.KeyboardModifier.NoModifier
+            )
 
     def describe(self, widget: Any, point: Any = None) -> dict[str, Any]:
         """Klasse, Name, Kennzeichen und der sichtbare Text an der Stelle des Klicks.

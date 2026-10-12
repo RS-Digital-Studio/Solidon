@@ -638,6 +638,54 @@ def test_text_needs_count_box_symbol_padding_rich_text_and_list_cells(qt_app: An
     root.deleteLater()
 
 
+#: Tippt im eigenen Prozess Umlaute, ß und Zeichen außerhalb von Latin-1 über
+#: ``QtPorts.type_text`` in eine Zeile und gibt deren Text aus.
+_TYPING = """
+import sys
+sys.path.insert(0, sys.argv[1])
+from PySide6.QtWidgets import QApplication, QLineEdit
+from tools.function_walk import QtPorts
+application = QApplication([])
+line = QLineEdit()
+line.show()
+line.activateWindow()
+line.setFocus()
+for _ in range(10):
+    application.processEvents()
+QtPorts(None, 0.0).type_text(sys.argv[2])
+application.processEvents()
+print(line.text(), flush=True)
+"""
+
+
+@pytest.mark.windowed
+def test_typing_umlauts_and_signs_reaches_the_field_without_aborting_qt(tmp_path: Path) -> None:
+    """Probelauf, Befund A: Die Suchprobe „Bohrung vergrößern“ brach den Fall nativ ab.
+
+    ``QTest.keyClicks`` kennt nur ASCII; an ö und ß endet Qt mit einem ASSERT in
+    ``qasciikey.cpp`` (Ausgang 0xC0000409), ohne eine Zeile in ``stderr.log``.
+    Im eigenen Prozess, denn vorher riss der Abbruch den Testlauf mit.
+    """
+    import os
+    import subprocess
+    import sys
+
+    text = "Bohrung vergrößern 5,0 € É"
+    script = tmp_path / "tippen.py"
+    script.write_text(_TYPING, encoding="utf-8")
+    finished = subprocess.run(
+        [sys.executable, str(script), str(ROOT), text],
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONUTF8": "1"},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+        check=False,
+    )
+    assert finished.returncode == 0, (hex(finished.returncode & 0xFFFFFFFF), finished.stderr)
+    assert finished.stdout.strip() == text
+
+
 def test_typing_needs_the_focus_in_the_field_and_actions_need_a_vocabulary_name(
     qt_app: Any,
 ) -> None:
