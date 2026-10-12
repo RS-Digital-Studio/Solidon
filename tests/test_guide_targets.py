@@ -1186,6 +1186,29 @@ def test_area_for_opens_the_group_that_next_click_names(prepared_window: Any, qt
     )
 
 
+def test_area_for_names_the_place_where_the_cards_come_to_rest(
+    prepared_window: Any, qt_app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach dem Aufklappen gleitet die Zone an ihren neuen Platz; ``area_for`` nennt
+    den Ort am Ende, nicht unterwegs (Prüfstand D0-P2: unter Last stand die Zeile
+    5 bis 23 Punkte tiefer, als ``area_for`` sie nannte). Das Gleiten dauert hier
+    eine Minute und wird danach ans Ende gesetzt — gemessen wird ohne Takt."""
+    from PySide6.QtCore import QAbstractAnimation
+
+    from app.ui import guide_targets, overlay
+
+    monkeypatch.setattr(overlay, "MOVE_MS", 60_000)
+    window = prepared_window
+    assert guide_targets.next_click(window, "history.row:1").why == "aufklappen"
+    rect = guide_targets.area_for(window, "history.row:1")
+    _settle(qt_app)
+    for move in window.overlay.findChildren(QAbstractAnimation):
+        if move.state() == QAbstractAnimation.State.Running:
+            move.setCurrentTime(move.totalDuration())
+    _settle(qt_app)
+    assert guide_targets.next_click(window, "history.row:1").rect == rect
+
+
 def test_open_section_finds_a_heading_in_a_foreign_row(prepared_window: Any, qt_app: Any) -> None:
     """Die Befundliste klappt über eine Überschrift in der Kopfzeile des Berichts
     auf; ``open_section`` und die Hindernisse fragen dieselbe Stelle (Review L3)."""

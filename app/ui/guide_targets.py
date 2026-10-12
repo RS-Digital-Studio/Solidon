@@ -671,7 +671,36 @@ def _reveal(widget: QWidget) -> None:
     """
     for obstacle in _obstacles(widget):
         obstacle.remove()
-    QApplication.processEvents()
+    _settle_cards(widget)
+
+
+#: Höchstens so viele Runden legt :func:`_settle_cards` nach, bis nichts mehr wandert.
+SETTLE_ROUNDS: Final = 8
+
+
+def _settle_cards(widget: QWidget) -> None:
+    """Die Karten dorthin legen, wo sie nach dem Aufdecken stehen bleiben.
+
+    Ein Aufdecken lässt Inhalt wachsen; die Überlagerung legt die Zone danach
+    über einen Nullzeitgeber neu und lässt sie gleiten
+    (``OverlayHost._place_later``). Gemessen nach einer Runde stand das Ziel
+    je nach Takt vor, während oder nach dem Gleiten: Unter Last lag eine
+    aufgeklappte Verlaufszeile 5 bis 23 Punkte tiefer, als :func:`area_for` sie
+    nannte, und ein Rahmen der Tour hätte daneben gezeigt. Jede Runde läuft
+    die Ereignisse ab und setzt die Zonen ohne Gleiten an ihr Ziel
+    (``reflow``), bis Ziel und Zonen eine Runde lang stillstehen.
+    """
+    host = getattr(widget.window(), "overlay", None)
+    zones = () if host is None else (host.left, host.right, host.bottom)
+    standing: tuple[QRect, ...] | None = None
+    for _round in range(SETTLE_ROUNDS):
+        QApplication.processEvents()
+        if host is not None:
+            host.reflow()
+        now = (_global(widget), *(zone.geometry() for zone in zones))
+        if now == standing:
+            return
+        standing = now
 
 
 def _tab_of_a_page_behind(widget: QWidget) -> QRect | None:
@@ -1118,7 +1147,7 @@ def _reveal_row(
     # Eine aufgeklappte Gruppe macht ihre Liste höher, und die Karte legt sich
     # neu; gerollt und gemessen wird danach, sonst stimmt der Ort um die Zeilen
     # nicht, um die die Karte gewachsen ist.
-    QApplication.processEvents()
+    _settle_cards(view)
     if isinstance(view, QTreeWidget) and isinstance(item, QTreeWidgetItem):
         view.scrollToItem(item)
     if isinstance(view, QListWidget) and isinstance(item, QListWidgetItem):
