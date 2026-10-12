@@ -982,13 +982,15 @@ def test_a_step_can_be_cancelled_while_it_runs(
         def __exit__(self, *_args: object) -> None:
             return None
 
-        def kill(self) -> None:
-            getoetet.append(True)
-
         def wait(self) -> int:
             return 0
 
     monkeypatch.setattr(comfy_setup.subprocess, "Popen", lambda *a, **k: Endlos())
+    # Beendet wird der ganze Baum (RM-789); am echten Prozess prüft das
+    # ``test_process.py::test_a_cancelled_comfyui_step_ends_its_whole_tree``.
+    monkeypatch.setattr(
+        comfy_setup, "terminate_process_tree", lambda process, **_k: getoetet.append(True)
+    )
     gesehen: list[str] = []
     abfragen = iter((False, True))
 

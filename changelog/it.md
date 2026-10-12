@@ -47,7 +47,10 @@ scrive in `website/version.json`.
 
 ### Stampare e passare allo slicer
 
-- Se lo slicer scelto non è un programma, Solidon ora lo segnala subito. Nella versione 0.6.0 un messaggio di Windows su un'applicazione a 16 bit bloccava lo slicer finché qualcuno non lo chiudeva.
+
+### Stampare e passare allo slicer
+
+- Se lo slicer scelto non è un programma, Solidon ora lo dice subito e propone di sceglierne un altro. Nella versione 0.6.0 lo slicing aspettava che qualcuno chiudesse un messaggio di Windows.
 
 ### Modificare e disegnare
 

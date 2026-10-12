@@ -3,7 +3,7 @@
 Eine Sitzung, die übernimmt, liest zuerst diese Datei und dann das Konzept der
 laufenden Phase. Neueste Zeile oben unter „Verlauf“.
 
-## Auftrag Robert (11.10.2026), verbindlich
+## Auftrag Robert (11. und 12.10.2026), verbindlich
 
 Drei Konzepte in fester Reihenfolge, jedes bis zu seiner Abnahme (Abschnitt
 „Abnahme“ im Konzept). Was dort als Entscheidung Robert steht, gilt.
@@ -28,14 +28,16 @@ und RM-737 bis RM-749 (Pakete D0 bis D12) ins Register. Dann D0 (Prüfstand).
 Dann Codestruktur Schritt 0 mit den Funden, die es vorher behebt (CS-2, CS-9,
 CS-10, CS-11, CS-12, die `raising=False`).
 
-**Phase 3, bis zum Verkaufskandidaten am 25.11.2026:** D1, D9, D8; dann
-Codestruktur Schritte 1, 2, 3 (prepare_ops, panels, features); dann D3 und D4.
-Daneben die vom Umbau unabhängigen Funde CS-3, CS-6, CS-13, CS-14, CS-15.
-Kundenpakete haben Vorrang; wird es eng, werden Codestruktur-Schritte gekürzt,
-nicht die Kundenpakete. Robert rechtzeitig sagen, ob der Kandidat bereit ist
-oder was fehlt.
+**Die vier Phasen laufen ohne Datum direkt hintereinander, jede sauber bis zu
+Ende** (Robert, 12.10.2026): Keine Phase wartet auf einen Termin, kein Schritt
+wird für einen Termin gekürzt. Der Verkaufsstart in RM-061 ist ein
+Geschäftstermin und keine Bedingung dieses Programms.
 
-**Phase 4, nach dem Start am 01.12.2026:** CS-16, dann Schritte 4a bis 4d, 5
+**Phase 3:** D1, D9, D8; dann Codestruktur Schritte 1, 2, 3 (prepare_ops,
+panels, features); dann D3 und D4. Daneben die vom Umbau unabhängigen Funde
+CS-3, CS-6, CS-13, CS-14, CS-15.
+
+**Phase 4, direkt nach Phase 3:** CS-16, dann Schritte 4a bis 4d, 5
 und 6 (Komponenten von MainWindow und den übrigen großen Fensterklassen), dann
 Schritt 7 (weitere große Dateien; Bauplanänderung bei `analysis.py`,
 Neunachweis der Befestiger bei `geom/prepare.py`), zuletzt Schritt 8
@@ -57,13 +59,44 @@ mypy; Review mit `solidon3d-review`, Funde beheben, bei mehreren mittleren oder
 schweren Nachprüfung; Tor vor jedem Stand nach main; Merge, Commit, Push;
 Agentenberichte sofort als Datei. Lokale Fenstertests nur, wo die Konzepte es
 erlauben (Codestruktur-Oberflächenschritte: was `tools/ci_selection.py` für den
-Diff nennt; Durchgang: je Fund die eine Datei). Neue Schätzungen an Robert nach
-D1 (Durchgang) und nach Schritt 4d (Codestruktur). Fragen nur bei Geld,
+Diff nennt; Durchgang: je Fund die eine Datei). Bescheid an Robert am Ende
+jeder Phase, nach D1 (Durchgang) und nach Schritt 4d (Codestruktur) mit neuer
+Schätzung, und vor Stufe C (braucht Roberts Bildschirm und Freigabe). Fragen nur bei Geld,
 Veröffentlichung, Rechten, schwer Umkehrbarem oder einer Alternative größer als
 das Konzept.
 
 ## Verlauf
 
+- 13.10.2026, 00:52, Phase 2, D0 läuft: RM-788 und RM-789 sind vorgezogen auf
+  main (`0742a8c50`). Der hängende Slicertest war ein Windows-Fenster „Nicht
+  unterstützte 16 Bit-Anwendung“ beim Start einer Datei, die kein Programm ist,
+  und traf auch Kunden. ComfyUI startet jetzt hinter der Prozessgrenze. Review,
+  Folgerunde und Nachprüfung sind durch, das Tor gepinnt grün (28 150). D0 auf
+  `welle4`: Prüfstand, Funktionsliste mit Szenen für jede Befundhandlung,
+  Urteile, Wortschatz und die Funde FD-1 bis FD-24 behoben. Offen sind FD-25
+  bis FD-30 (zwei Fixagenten laufen), danach zweiter Probelauf, Tor,
+  Durchsicht der Merge-Auflösungen, main. RM-790 (einmaliger Abbruch nach
+  Rückgängig) steht im Register. **Als Nächstes:** D0 abschließen, dann
+  Codestruktur Schritt 0 (Plan und Auftrag liegen in
+  `output/konsolidierung-2026-10-12/plan-cs0.md` und `AUFTRAG-cs0.md`).
+- 12.10.2026, 14:35, Phase 2: Robert legt fest, dass alle vier Phasen ohne
+  Datum direkt hintereinander und sauber bis zu Ende laufen. Der Halt vor
+  Phase 4 bis zum 01.12. und der Kandidatentermin am 25.11. als Bedingung
+  entfallen, ebenso das Kürzen von Codestruktur-Schritten für einen Termin.
+  Register und Konzepte ziehen auf `welle4` nach und landen mit D0.
+- 12.10.2026, 14:31, Phase 2, D0 läuft: Der schwere Fund aus D0 ist auf main
+  (`e871f6062`). *Text aufbringen*, *Schrift einlegen* und *Gegenform
+  einlassen* löschten am exakten Körper alle Merkmale, seit 0.5.0 bzw. 0.5.2.
+  Behoben mit Wächter über die Falltabelle, druckgleich und schneller, mit
+  Changelog. Review, Fixrunde und Nachprüfung sind durch, das Tor gepinnt
+  grün (28 130 bestanden). In der Funddatei stehen FD-1 bis FD-3 auf
+  `welle4`. Die Geschwister mit berührten oder geteilten Flächen führt
+  RM-787, den Slicertest, der unter Volllast hängt, RM-788; beide werden
+  in Phase 2 behoben. D0 steht auf `welle4`: W, L und U sind integriert, die
+  Karten nachgezogen, P und die Folgerunden laufen. **Als Nächstes:** P und
+  W's Nachtrag integrieren, Probelauf am Fenster, Tor, Durchsicht der
+  Merge-Auflösungen, D0 nach main; danach Codestruktur Schritt 0 (RM-722),
+  RM-787, RM-788.
 - 12.10.2026, 08:37, Phase 2, D0 begonnen: Zuschnitt in fünf Teilpakete
   (W Wortschatz, L Liste und Szenen, P Prüfstand, U Urteile, S Unterlagen) in
   `.claude/.state/funktionsdurchgang-2026-10/plan-d0.md`; Integrationszweig

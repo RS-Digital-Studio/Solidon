@@ -292,8 +292,8 @@ def no_error_dialogs() -> Iterator[None]:
     kernel32.SetThreadErrorMode.argtypes = (ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32))
     kernel32.SetThreadErrorMode.restype = ctypes.c_int
     previous = ctypes.c_uint32(kernel32.GetThreadErrorMode())
-    kernel32.SetThreadErrorMode(previous.value | _WINDOWS_FAIL_CRITICAL_ERRORS, None)
     try:
+        kernel32.SetThreadErrorMode(previous.value | _WINDOWS_FAIL_CRITICAL_ERRORS, None)
         yield
     finally:
         kernel32.SetThreadErrorMode(previous.value, None)

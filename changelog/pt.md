@@ -47,7 +47,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Imprimir e entregar ao slicer
 
-- Se o slicer escolhido não for um programa, o Solidon indica-o agora de imediato. Na versão 0.6.0 uma mensagem do Windows sobre uma aplicação de 16 bits parava o slicer até alguém a fechar.
+
+### Imprimir e entregar ao slicer
+
+- Se o slicer escolhido não for um programa, o Solidon diz-o agora de imediato e propõe escolher outro. Na versão 0.6.0, o fatiamento esperava que alguém fechasse uma mensagem do Windows.
 
 ### Editar e esboçar
 
