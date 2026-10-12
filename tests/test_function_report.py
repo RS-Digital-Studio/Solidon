@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from app.ui.main_window import MainWindow
+from app.ui.main_window import START_SIZE, MainWindow
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
 from tools import function_checks, function_report
@@ -32,11 +32,9 @@ from tools.function_checks import (
     COARSE_NOTE,
     CRITERIA,
     GOOD_OVER_FINDING,
-    START_SIZE,
     Checkpoint,
     skill_mismatches,
     skill_rows,
-    start_size_in_window,
     threshold_numbers,
     validate_protocol,
     words,
@@ -309,6 +307,27 @@ def test_the_licence_states_are_the_ones_the_application_reads(
         others = [name for name in LICENCE_STATES if name != state and getattr(reached, name)]
         assert others == [], (state, others)
         assert reached.unlocked is LICENCE_UNLOCKED[state], state
+
+
+def test_the_expired_demo_row_carries_its_licence_state() -> None:
+    """``over`` ist kein Lauf je Funktion, aber der Zustand der D12-Zeile von L.
+
+    Die Zeile ``startup.expired_demo`` startet die Anwendung im Zustand „Demo
+    abgelaufen“; ihr Protokoll muss ihn tragen dürfen, und die Anwendung muss
+    ihn so lesen: ``over`` wahr, nichts frei.
+    """
+    from datetime import date
+
+    from app.core import activation
+    from tools.function_checks import STARTUP_LICENCE
+    from tools.function_list import STARTUP_SURFACES
+
+    assert "startup.expired_demo" in STARTUP_SURFACES
+    reached = activation.Activation(days_left=0, deadline=date(2026, 1, 1))
+    assert getattr(reached, STARTUP_LICENCE) is True and not reached.unlocked
+    protocol = sample_protocol()
+    protocol["variant"]["licence"] = STARTUP_LICENCE
+    assert validate_protocol(protocol) == []
 
 
 def test_the_display_unit_is_the_one_the_application_writes() -> None:
@@ -1041,12 +1060,13 @@ def test_threshold_numbers_read_like_a_reader() -> None:
 
 
 def test_the_start_size_is_the_one_the_window_opens_with() -> None:
-    """Z6 misst bei der Startgröße; sie steht in ``MainWindow.__init__`` (gehaltener Zwilling)."""
-    source = (ROOT / "app" / "ui" / "main_window.py").read_text(encoding="utf-8")
-    assert start_size_in_window(source) == START_SIZE
-    assert start_size_in_window(
-        "class MainWindow:\n    def __init__(self):\n        self.resize(1, 2)\n"
-    ) == (1, 2)
+    """Z6 misst bei der Startgröße, die das Fenster selbst nimmt — eine Quelle.
+
+    ``main_window.START_SIZE`` öffnet das Fenster; das Prüfschema hält keine
+    zweite Zahl, und die Schwelle von Z6 nennt genau diese Größe.
+    """
+    assert vars(function_checks)["START_SIZE"] is START_SIZE
+    assert set(START_SIZE) <= set(CRITERIA["Z6"].numbers)
 
 
 def test_the_coarse_preview_sentence_is_the_one_the_window_shows() -> None:

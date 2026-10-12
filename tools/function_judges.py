@@ -28,6 +28,7 @@ from dataclasses import replace
 from itertools import pairwise
 from typing import Any, Final
 
+from app.ui.main_window import START_SIZE
 from app.ui.motion import ACCENT_MS, MEDIUM_MS
 from app.ui.op_dialog import MAX_FRONT_FIELDS, MAX_LEAD_WORDS, MAX_LEAD_WORDS_TRANSLATED
 from app.ui.style import LEVELS, SPACE
@@ -63,7 +64,6 @@ from tools.function_checks import (
     RAW_CLASSES,
     REVISE_WAYS,
     SELECTION_STAGES,
-    START_SIZE,
     SWITCH_PHASES,
     CaseOutcome,
     Context,

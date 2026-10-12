@@ -17,6 +17,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
+from app.ui.main_window import START_SIZE
 from app.ui.motion import MEDIUM_MS
 from app.ui.op_dialog import MAX_LEAD_WORDS
 from tools.function_checks import (
@@ -29,7 +30,6 @@ from tools.function_checks import (
     MANUAL_WINDOW,
     NOT_APPLICABLE_OVER_FINDING,
     NOT_FOUND,
-    START_SIZE,
     UNMEASURED_VERDICT,
     Context,
 )

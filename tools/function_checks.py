@@ -33,7 +33,6 @@ Kein Einstieg: Aufgerufen wird über ``tools/file_acceptance.py report``
 
 from __future__ import annotations
 
-import ast
 import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -43,6 +42,7 @@ from typing import Any, Final, get_args
 from app.core.units import DISPLAY_UNITS
 from app.ui.guide_targets import ClickReason, Zone
 from app.ui.loading import BAR_AFTER_MS, DELAY_MS
+from app.ui.main_window import START_SIZE
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import ACCENT_MS, MEDIUM_MS
 from app.ui.op_dialog import (
@@ -127,6 +127,11 @@ LICENCE_UNLOCKED: Final[dict[str, bool]] = {
     "expired": False,
 }
 LICENCE_STATES: Final = tuple(LICENCE_UNLOCKED)
+#: Der Zustand der Startzeile „Demo abgelaufen“ (``startup.expired_demo`` in
+#: ``tools/function_list.py``, D12): kein Lauf je Funktion, aber das Protokoll
+#: dieser Zeile trägt ihn in ``variant.licence``.
+STARTUP_LICENCE: Final = "over"
+VARIANT_LICENCES: Final = (*LICENCE_STATES, STARTUP_LICENCE)
 #: Gesperrt heißt: Schreibendes ist grau mit Grund, nur Lesendes läuft weiter.
 LOCKED_STATES: Final = frozenset(state for state, open_ in LICENCE_UNLOCKED.items() if not open_)
 
@@ -214,9 +219,9 @@ MIN_CONTRAST_LARGE: Final = 3.0
 #: Z1: Verzug bis zum nächsten gemalten Bild beim Ziehen, auf die Referenz
 #: umgerechnet (Bauplan §31).
 MAX_DRAG_MS: Final = 33
-#: Z6: Die Startgröße des Fensters (``MainWindow.__init__``, ein Wächter hält
-#: sie), der Laptop mit Taskleiste und die Skalierungen.
-START_SIZE: Final = (1280, 820)
+#: Z6: Die Startgröße des Fensters steht in ``main_window.START_SIZE`` (eine
+#: Quelle für Aufbau und Messung); dazu der Laptop mit Taskleiste und die
+#: Skalierungen.
 LAPTOP_SIZE: Final = (1366, 728)
 SCALES: Final = (1.0, 1.5, 2.0)
 #: I3: Anteil der häufigsten Kundenziele, die ohne Suche dastehen.
@@ -312,7 +317,7 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
             "language", "theme", "unit", "licence", "preconditions", "platform", "screen",
             "scale", "window_size", "motion", "set", "phases", "placed",
         ),
-        {"theme": ("light", "dark"), "unit": DISPLAY_UNITS, "licence": LICENCE_STATES},
+        {"theme": ("light", "dark"), "unit": DISPLAY_UNITS, "licence": VARIANT_LICENCES},
         required=True,
     ),
     "version": ProtocolField("tabelle", _keys("commit", "app"), required=True),
@@ -1013,36 +1018,6 @@ def validate_protocol(protocol: object) -> list[str]:
                 f"matrix.{stage}: Zustand {entry.get('state')!r} nicht in {list(MATRIX_STATES)}"
             )
     return problems
-
-
-# --- Wächter -----------------------------------------------------------------
-
-
-def start_size_in_window(source: str) -> tuple[int, int] | None:
-    """Die Startgröße aus ``MainWindow.__init__`` (``self.resize(b, h)``), für den Wächter."""
-    tree = ast.parse(source)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name == "MainWindow":
-            for item in node.body:
-                if isinstance(item, ast.FunctionDef) and item.name == "__init__":
-                    for call in ast.walk(item):
-                        if (
-                            isinstance(call, ast.Call)
-                            and isinstance(call.func, ast.Attribute)
-                            and call.func.attr == "resize"
-                            and len(call.args) == 2
-                            and all(
-                                isinstance(a, ast.Constant) and isinstance(a.value, int)
-                                for a in call.args
-                            )
-                        ):
-                            first, second = call.args
-                            assert isinstance(first, ast.Constant) and isinstance(
-                                second, ast.Constant
-                            )
-                            assert isinstance(first.value, int) and isinstance(second.value, int)
-                            return first.value, second.value
-    return None
 
 
 # --- Skill-Tabellen (Wächter Skill ↔ Konstante) ---------------------------
