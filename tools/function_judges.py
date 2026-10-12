@@ -62,6 +62,7 @@ from tools.function_checks import (
     NOT_APPLICABLE,
     NOT_FOUND,
     RAW_CLASSES,
+    REFERENCE_FACTOR_AT,
     REVISE_WAYS,
     SELECTION_STAGES,
     SWITCH_PHASES,
@@ -832,6 +833,12 @@ def _g9(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     return Outcome("G9", "B", "stufe_b", "Gestaltungsurteil")
 
 
+def _reference_factor(protocol: Mapping[str, Any]) -> float | None:
+    """Der Referenzfaktor des Laufs (:data:`REFERENCE_FACTOR_AT`), ``None`` ohne Messung."""
+    block, key = REFERENCE_FACTOR_AT
+    return _number((_map(protocol, block) or {}).get(key))
+
+
 def _z1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     frames = _map(protocol, "frames")
     if frames is None:
@@ -842,7 +849,7 @@ def _z1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         )
     measured = [_number(value) for value in frames.get("raw_drag_ms") or ()]
     delays = [value for value in measured if value is not None]
-    factor = _number(frames.get("reference_factor"))
+    factor = _reference_factor(protocol)
     if not delays or factor is None:
         # Kein Bild nach dem Ziehen oder kein Referenzfaktor: nichts gemessen.
         return _missing("Z1", "frames.raw_drag_ms", "frames.reference_factor")
@@ -1423,18 +1430,35 @@ def _point_6(
                 Issue(f"{title} erst nach {shown:.2f} s, fällig ab {after:g} s", "mittel")
             )
     budget = _number(timing.get("budget_s"))
+    factor = _reference_factor(protocol)
+    # Das Budget gilt auf der Referenzmaschine (§31): die rohe Dauer einmal
+    # umgerechnet, wie bei Z1. Ohne Faktor roh, und der Vermerk sagt es.
+    reference = None if total is None or factor is None else total * factor
     if budget is None:
         notes.append("kein Budget")
-    elif total is not None and total > budget:
+    elif reference is not None and reference > budget:
         # Eine Überschreitung ist ein Verdacht, den ``window_bench.py`` oder
         # die Leistungstests bestätigen (Konzept §4, Prüfpunkt 6).
-        notes.append(f"Verdacht: {total:.2f} s über dem Budget von {budget:.2f} s")
+        notes.append(
+            f"Verdacht: {reference:.2f} s auf der Referenz über dem Budget von {budget:.2f} s"
+        )
+    elif reference is None and total is not None and total > budget:
+        notes.append(
+            f"Verdacht: {total:.2f} s über dem Budget von {budget:.2f} s, roh verglichen "
+            "(kein Referenzfaktor)"
+        )
     return _settled(
         6,
         issues,
         absent,
         f"{total or 0:.2f} s, Lücke {gap or 0:.0f} ms",
-        {"total_s": total, "main_gap_ms": gap, "budget_s": budget},
+        {
+            "total_s": total,
+            "main_gap_ms": gap,
+            "budget_s": budget,
+            "reference_factor": factor,
+            "reference_s": None if reference is None else round(reference, 3),
+        },
         notes=notes,
     )
 

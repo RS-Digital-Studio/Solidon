@@ -1633,3 +1633,43 @@ def _protocol_with(change: Any) -> dict[str, Any]:
     protocol = copy.deepcopy(sample_protocol())
     change(protocol)
     return protocol
+
+
+def test_the_budget_is_compared_on_the_reference_machine() -> None:
+    """Prüfpunkt 6 rechnet die Dauer einmal auf die Referenz um, wie Z1 (Koordinator).
+
+    Die Überschreitung bleibt ein Verdacht, kein Fund. Ohne Referenzfaktor wird
+    roh verglichen, und der Vermerk sagt es.
+    """
+
+    def slow_here(protocol: dict[str, Any]) -> None:
+        protocol["timing"].update(total_s=1.5, budget_s=1.0)
+        protocol["frames"]["reference_factor"] = 0.5
+
+    def slow_there(protocol: dict[str, Any]) -> None:
+        protocol["timing"].update(total_s=1.5, budget_s=1.0)
+        protocol["frames"]["reference_factor"] = 1.0
+
+    def without_factor(protocol: dict[str, Any]) -> None:
+        protocol["timing"].update(total_s=1.5, budget_s=1.0)
+        protocol.pop("frames")
+
+    fast = _judged(slow_here).points[6]
+    assert fast.verdict == "erfuellt" and not any("Verdacht" in n for n in fast.notes)
+    assert fast.measurement["reference_s"] == 0.75
+    slow = _judged(slow_there).points[6]
+    assert slow.verdict == "erfuellt" and not slow.issues
+    assert any(note.startswith("Verdacht: 1.50 s auf der Referenz") for note in slow.notes)
+    raw = _judged(without_factor).points[6]
+    assert any("roh verglichen" in note for note in raw.notes), raw.notes
+
+
+def test_times_and_images_read_one_reference_factor() -> None:
+    """Z1 und Prüfpunkt 6 lesen den Faktor an derselben Stelle des Protokolls."""
+
+    def factor(protocol: dict[str, Any]) -> None:
+        protocol["frames"]["reference_factor"] = 2.0
+
+    case = _judged(factor)
+    assert case.criteria["Z1"].measurement["factor"] == 2.0
+    assert case.points[6].measurement["reference_factor"] == 2.0
