@@ -136,6 +136,7 @@ from app.ui.style import (
     set_level,
     set_role,
 )
+from app.ui.window_names import name_button, raw_window
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort. Der Name ist englisch wie jeder andere in
@@ -2310,14 +2311,15 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        QMessageBox.information(
-            self,
-            tr("Aktivierungsanfrage gespeichert"),
-            tr(
-                "Übertragen Sie die Datei auf ein Gerät mit Internet und öffnen Sie dort "
-                "die Aktivierungsseite."
-            ),
-        )
+        with raw_window("message:activation_request_saved"):
+            QMessageBox.information(
+                self,
+                tr("Aktivierungsanfrage gespeichert"),
+                tr(
+                    "Übertragen Sie die Datei auf ein Gerät mit Internet und öffnen Sie dort "
+                    "die Aktivierungsseite."
+                ),
+            )
 
     def _open_page(self) -> None:
         target = QUrl(self.PAGE_URL)
@@ -2326,14 +2328,15 @@ class OfflineActivationDialog(QDialog):
         target.setQuery(query)
         if QDesktopServices.openUrl(target) is False:
             self._copy_page()
-            QMessageBox.information(
-                self,
-                tr("2 · Aktivierungsseite öffnen"),
-                tr(
-                    "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; "
-                    "öffnen Sie sie auf einem Gerät mit Internet."
-                ),
-            )
+            with raw_window("message:activation_page"):
+                QMessageBox.information(
+                    self,
+                    tr("2 · Aktivierungsseite öffnen"),
+                    tr(
+                        "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; "
+                        "öffnen Sie sie auf einem Gerät mit Internet."
+                    ),
+                )
 
     def _copy_page(self) -> None:
         """Kopiert den bewusst sichtbaren Weg für das Gerät mit Internet."""
@@ -2369,11 +2372,12 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        QMessageBox.information(
-            self,
-            tr("Solidon ist freigeschaltet"),
-            tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
-        )
+        with raw_window("message:activated_offline"):
+            QMessageBox.information(
+                self,
+                tr("Solidon ist freigeschaltet"),
+                tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+            )
         self.accept()
 
 
@@ -2812,14 +2816,15 @@ class ActivationDialog(QDialog):
             show_error(problem, self)
             return
         if activation.read_key() is None:
-            QMessageBox.information(
-                self,
-                tr("Solidon freischalten"),
-                tr(
-                    "Der Schlüssel gilt für diese Sitzung, ließ sich aber nicht "
-                    "ablegen — beim nächsten Start wird er wieder gebraucht."
-                ),
-            )
+            with raw_window("message:activation_reminder"):
+                QMessageBox.information(
+                    self,
+                    tr("Solidon freischalten"),
+                    tr(
+                        "Der Schlüssel gilt für diese Sitzung, ließ sich aber nicht "
+                        "ablegen — beim nächsten Start wird er wieder gebraucht."
+                    ),
+                )
         self._show_state()
         self._follow_field()
         self.device_name.setFocus()
@@ -2889,11 +2894,12 @@ class ActivationDialog(QDialog):
         except AppError as problem:
             show_error(problem, self)
             return
-        QMessageBox.information(
-            self,
-            tr("Solidon ist freigeschaltet"),
-            tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
-        )
+        with raw_window("message:activated_online"):
+            QMessageBox.information(
+                self,
+                tr("Solidon ist freigeschaltet"),
+                tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+            )
         self._show_state()
 
     def _online_failed(self, problem: object) -> None:
@@ -2977,14 +2983,15 @@ class ActivationDialog(QDialog):
             self._show_state()
             return
         self.field.clear()
-        QMessageBox.information(
-            self,
-            tr("Rechner deaktiviert"),
-            tr(
-                "Die lokale Freischaltung und der Lizenzschlüssel wurden entfernt. "
-                "Der Geräteplatz ist jetzt für einen anderen Rechner frei."
-            ),
-        )
+        with raw_window("message:deactivated"):
+            QMessageBox.information(
+                self,
+                tr("Rechner deaktiviert"),
+                tr(
+                    "Die lokale Freischaltung und der Lizenzschlüssel wurden entfernt. "
+                    "Der Geräteplatz ist jetzt für einen anderen Rechner frei."
+                ),
+            )
         self._show_state()
 
     def _deactivation_failed(self, problem: object) -> None:
@@ -3083,13 +3090,14 @@ def open_link(address: str, parent: QWidget | None = None) -> bool:
     """
     if open_or_copy(QUrl(address), address):
         return True
-    QMessageBox.information(
-        parent,
-        tr("Der Browser ließ sich nicht öffnen"),
-        tr("Die Adresse ist kopiert — fügen Sie sie in einen Browser ein:\n{address}").replace(
-            "{address}", address
-        ),
-    )
+    with raw_window("message:browser_failed"):
+        QMessageBox.information(
+            parent,
+            tr("Der Browser ließ sich nicht öffnen"),
+            tr("Die Adresse ist kopiert — fügen Sie sie in einen Browser ein:\n{address}").replace(
+                "{address}", address
+            ),
+        )
     return False
 
 
@@ -3211,7 +3219,9 @@ def show_expired_demo(state: activation.Activation) -> None:
     box.setIcon(QMessageBox.Icon.Information)
     box.setText(expired_demo_text(state))
     website = box.addButton(tr("Website öffnen"), QMessageBox.ButtonRole.AcceptRole)
-    box.addButton(QMessageBox.StandardButton.Close)
+    name_button(website, "message.button:expired_demo.website")
+    close = box.addButton(QMessageBox.StandardButton.Close)
+    name_button(close, "message.button:expired_demo.close")
     box.exec()
     if box.clickedButton() is website:
         open_website()
@@ -3605,6 +3615,7 @@ def show_error(
     offered = offered_actions(error, known)
 
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:error")
     box.setTextFormat(Qt.TextFormat.PlainText)
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr("Das hat so nicht funktioniert"))
@@ -3631,6 +3642,7 @@ def show_error(
             else QMessageBox.ButtonRole.ActionRole
         )
         button = box.addButton(str(action.label), role)
+        name_button(button, f"message.button:error.{action.id}")
         # **Welcher Knopf der Hauptknopf ist, stand schon im Datenmodell** —
         # ``Action.primary`` entscheidet zwei Zeilen darüber die Rolle. Es
         # fehlte nur das letzte Glied: Ohne ``make_primary`` bekam der Knopf
@@ -3640,6 +3652,7 @@ def show_error(
             make_primary(button)
         buttons[button] = action
     abbrechen = box.addButton(str(CANCEL.label), QMessageBox.ButtonRole.RejectRole)
+    name_button(abbrechen, f"message.button:error.{CANCEL.id}")
 
     # **Bleibt nur „Abbrechen" übrig, trägt niemand den Akzent.** Das
     # passiert, wenn das Fenster für keinen Vorschlag einen Handler hat
@@ -3672,6 +3685,7 @@ def show_details(error: AppError, parent: QWidget | None = None) -> None:
         lines.append(tr("Operation: {op_id}", op_id=error.op_id))
 
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:error_details")
     box.setIcon(QMessageBox.Icon.Information)
     box.setWindowTitle(tr("Einzelheiten"))
     box.setText(str(error.title))
@@ -4236,13 +4250,17 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     Gibt ``save``, ``discard`` oder ``cancel`` zurück.
     """
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:unsaved_changes")
     box.setIcon(QMessageBox.Icon.Question)
     box.setWindowTitle(tr("Ungesicherte Änderungen"))
     box.setText(tr("Dieses Projekt hat Änderungen, die noch nicht gespeichert sind."))
     box.setInformativeText(title)
     save = box.addButton(tr("Speichern"), QMessageBox.ButtonRole.AcceptRole)
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
-    box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    name_button(save, "message.button:unsaved_changes.save")
+    name_button(discard, "message.button:unsaved_changes.discard")
+    name_button(cancel, "message.button:unsaved_changes.cancel")
     make_primary(save)
     # Rot, weil nach dem Schließen kein Undo zurückholt, was hier verworfen wird.
     make_danger(discard)
@@ -4325,6 +4343,7 @@ def _go_on_despite(
 ) -> bool:
     """Die Befunde in fünf Zeilen, dazu Weitergehen als Vorgabe und Abbrechen."""
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:go_on_despite_findings")
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(title)
     box.setText(text)
@@ -4333,7 +4352,9 @@ def _go_on_despite(
         lines.append(tr("Der Rest steht im Prüfbericht."))
     box.setInformativeText(newline.join(lines))
     write = box.addButton(go_on, QMessageBox.ButtonRole.AcceptRole)
-    box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    name_button(write, "message.button:go_on_despite_findings.go_on")
+    name_button(cancel, "message.button:go_on_despite_findings.cancel")
     make_primary(write)
     box.setDefaultButton(write)
     as_plain_text(box)
@@ -4351,6 +4372,7 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
     ``close`` zurück.
     """
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:generation_loss")
     box.setIcon(QMessageBox.Icon.Question)
     lost = ""
     if tries == 1:
@@ -4373,6 +4395,8 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
         box.setText(lost)
     back = box.addButton(tr("Zur Erzeugung"), QMessageBox.ButtonRole.RejectRole)
     close = box.addButton(tr("Trotzdem schließen"), QMessageBox.ButtonRole.DestructiveRole)
+    name_button(back, "message.button:generation_loss.back")
+    name_button(close, "message.button:generation_loss.close")
     make_primary(back)
     make_danger(close)
     box.setDefaultButton(back)
@@ -4426,6 +4450,7 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     if count <= 1:
         return True
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:discard_undone_steps")
     box.setWindowTitle(tr("Abgeschnittene Schritte verwerfen?"))
     box.setText(
         tr("Diese Änderung verwirft {count} zurückgenommene Schritte.").replace(
@@ -4436,6 +4461,8 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
         box.setInformativeText("\n".join(f"· {name}" for name in names))
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
     cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    name_button(discard, "message.button:discard_undone_steps.discard")
+    name_button(cancel, "message.button:discard_undone_steps.cancel")
     # **Rot und ohne Hauptknopf** (RM-512): Verwerfen ist unwiederbringlich,
     # also kein Akzent, der dazu einlädt, und keine Eingabetaste, die es im
     # Vorbeigehen tut. Abbrechen ist ein Ausgang und kein Hauptknopf; Escape

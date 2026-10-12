@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from itertools import pairwise
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import QCoreApplication, QSignalBlocker, Qt, QTimer
 from PySide6.QtGui import QShowEvent
@@ -65,6 +66,7 @@ from app.ui.first_run import (
     slicer_printer_ids,
     valid_printer_choice,
 )
+from app.ui.guide_targets import section_heading
 from app.ui.icons import icon
 from app.ui.labels import TrackSlider, by_title, slicer_title, wheel_needs_focus
 from app.ui.leash import WAIT_TIMEOUT_MS, WorkerLeash
@@ -159,6 +161,19 @@ _GATES = {
     "spacemouse_speed": "spacemouse",
     "spacemouse_invert": "spacemouse",
 }
+
+
+def section(title: TranslatableText, content: QWidget, **options: Any) -> QWidget:
+    """Ein Abschnitt der Einstellungen (``panels.collapsible``), dessen Kopfzeile
+    ihr Ziel im Wortschatz trägt: ``setting.section:<titel>`` aus der deutschen
+    Quelle, gleich in jeder Sprache (RM-737)."""
+    wrapper = collapsible(str(title), content, **options)
+    heading = section_heading(content)
+    if heading is not None:
+        heading.setProperty(
+            guides.TARGET_PROPERTY, f"setting.section:{guides.name_part(title.msgid)}"
+        )
+    return wrapper
 
 
 def searchable_options(settings: UiSettings) -> dict[str, str]:
@@ -690,8 +705,8 @@ class SettingsDialog(QDialog):
                 "Fernsteuerung"
             )
         )
-        self.advanced = collapsible(
-            tr("Weitere Einstellungen"),
+        self.advanced = section(
+            _("Weitere Einstellungen"),
             more,
             open_now=False,
             contents=contents,
@@ -700,7 +715,7 @@ class SettingsDialog(QDialog):
         self._advanced_form = details
         self._application_form = form
         form.addRow(self.advanced)
-        return collapsible(tr("Anwendung"), box)
+        return section(_("Anwendung"), box)
 
     def _project_group(self, titles: Mapping[str, str]) -> QWidget:
         box = QWidget(self)
@@ -725,7 +740,7 @@ class SettingsDialog(QDialog):
         form.addRow(self.search_again)
         form.addRow(titles["material"], self.material)
         self._project_form = form
-        return collapsible(tr("Vorgaben für neue Projekte"), box)
+        return section(_("Vorgaben für neue Projekte"), box)
 
     @property
     def slicer_path(self) -> str:
