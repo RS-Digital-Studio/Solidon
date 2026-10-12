@@ -1,0 +1,194 @@
+# Die häufigsten Kundenziele für I3 des Funktionsdurchgangs (Konzept §4,
+# „Vorschlag statt Suche“): Steht das Ziel nach der Auswahl ohne Suche und ohne
+# Aufklappen da — als Hauptaktion der Auswahlkarte oder als Feld oben im
+# Merkmalfenster? Schwelle 80 % dieser Liste.
+#
+# Vorab festgelegt aus Bauplan §2.2 (die vier Hauptwege) und den anonymen
+# Fragebögen. Keine Kundenkennung: Der Korpus wird veröffentlicht.
+#
+#   goal       das Ziel in den Worten des Kunden
+#   origin     bauplan oder fragebogen; ref nennt die Stelle bzw. den Wunsch
+#   scene      Startszene aus function_scenes.toml
+#   selection  was gewählt ist: koerper, koerper:2, kante oder merkmal:<art>
+#   target     wo das Ziel stehen soll: operation:<op> als Hauptaktion,
+#              feature:<schlüssel> oder edge:<op> als Feld oben
+
+[[goal]]
+id = "bohrung_vergroessern"
+goal = "Eine Bohrung größer machen."
+origin = "bauplan"
+ref = "§2.2 Weg 1: Bohrung anklicken, passende Operation wählen"
+scene = "merkmal.hole.exakt"
+selection = "merkmal:hole"
+target = "feature:resize_hole"
+
+[[goal]]
+id = "bohrung_versetzen"
+goal = "Eine Bohrung mit Maßen versetzen."
+origin = "fragebogen"
+ref = "Lob für das Verschieben mit Maßen an Bohrungen, Wunsch nach demselben an anderen Merkmalen"
+scene = "merkmal.hole.exakt"
+selection = "merkmal:hole"
+target = "feature:move_feature"
+
+[[goal]]
+id = "zapfen_versetzen"
+goal = "Einen Zapfen mit Maßen versetzen."
+origin = "fragebogen"
+ref = "Wunsch nach Verschieben mit Maßen an anderen Merkmalen als Bohrungen"
+scene = "merkmal.pin.exakt"
+selection = "merkmal:pin"
+target = "feature:move_feature"
+
+[[goal]]
+id = "bohrung_schliessen"
+goal = "Eine Bohrung wieder zumachen."
+origin = "bauplan"
+ref = "§2.2 Weg 1: fremdes Modell anpassen"
+scene = "merkmal.hole.exakt"
+selection = "merkmal:hole"
+target = "operation:plug_hole"
+
+[[goal]]
+id = "senkung_setzen"
+goal = "Eine Bohrung für eine Senkkopfschraube ansenken."
+origin = "bauplan"
+ref = "§2.2 Weg 1: Bohrung anklicken, passende Operation wählen"
+scene = "merkmal.hole.exakt"
+selection = "merkmal:hole"
+target = "operation:countersink_hole"
+
+[[goal]]
+id = "flaeche_bohren"
+goal = "In eine Fläche ein Loch bohren."
+origin = "bauplan"
+ref = "§2.2 Weg 1: Fläche anklicken, passende Operation wählen"
+scene = "merkmal.face.exakt"
+selection = "merkmal:face"
+target = "operation:drill_hole"
+
+[[goal]]
+id = "flaeche_versetzen"
+goal = "Eine Fläche ein Stück herausziehen oder hineinschieben."
+origin = "bauplan"
+ref = "§2.2 Weg 1: Fläche anklicken, Maß ändern"
+scene = "merkmal.face.exakt"
+selection = "merkmal:face"
+target = "feature:push_face"
+
+[[goal]]
+id = "gegenstueck_zum_gewinde"
+goal = "Zu einer Bohrung das passende Gegenstück bauen."
+origin = "fragebogen"
+ref = "Wunsch nach dem passenden Gegenstück zu Gewinde und Senkung"
+scene = "merkmal.hole.exakt"
+selection = "merkmal:hole"
+target = "operation:pin_for_bore"
+
+[[goal]]
+id = "kante_verrunden"
+goal = "Eine Kante abrunden."
+origin = "bauplan"
+ref = "§2.2 Weg 1 und §25: an der angeklickten Stelle ändern"
+scene = "kante.exakt"
+selection = "kante"
+target = "edge:fillet_edges"
+
+[[goal]]
+id = "kante_fasen"
+goal = "Eine Kante brechen (Fase)."
+origin = "bauplan"
+ref = "§2.2 Weg 1 und §25: an der angeklickten Stelle ändern"
+scene = "kante.exakt"
+selection = "kante"
+target = "edge:chamfer_edges"
+
+[[goal]]
+id = "koerper_vereinigen"
+goal = "Zwei Körper zu einem verbinden."
+origin = "fragebogen"
+ref = "Wunsch nach Booleschen Operationen"
+scene = "zwei_koerper.exakt"
+selection = "koerper:2"
+target = "operation:union_objects"
+
+[[goal]]
+id = "koerper_abziehen"
+goal = "Einen Körper aus einem anderen herausschneiden."
+origin = "fragebogen"
+ref = "Wunsch nach Booleschen Operationen"
+scene = "zwei_koerper.exakt"
+selection = "koerper:2"
+target = "operation:subtract_objects"
+
+[[goal]]
+id = "aushoehlen"
+goal = "Einen Körper aushöhlen, um Material zu sparen."
+origin = "fragebogen"
+ref = "Wunsch nach Aushöhlen direkt am gewählten Teil"
+scene = "quader.exakt"
+selection = "koerper"
+target = "operation:hollow_object"
+
+[[goal]]
+id = "teilen_fuers_bett"
+goal = "Ein zu großes Teil teilen, damit es auf das Bett passt."
+origin = "bauplan"
+ref = "§2.2 Weg 3: gegebenenfalls teilen und verstiften"
+scene = "quader.exakt"
+selection = "koerper"
+target = "operation:split_pinned"
+
+[[goal]]
+id = "offenes_modell_reparieren"
+goal = "Ein offenes Modell schließen."
+origin = "bauplan"
+ref = "§2.2 Weg 3: Reparaturkette"
+scene = "merkmal.edge_loop.netz"
+selection = "merkmal:edge_loop"
+target = "operation:repair"
+
+[[goal]]
+id = "weich_verschmelzen"
+goal = "Zwei grob gesetzte Grundkörper weich verschmelzen."
+origin = "bauplan"
+ref = "§2.2 Weg 4: Grundkörper grob zusammensetzen, weich verschmelzen"
+scene = "zwei_koerper.netz"
+selection = "koerper:2"
+target = "operation:blend_union"
+
+[[goal]]
+id = "gleichmaessig_vernetzen"
+goal = "Ein Netz gleichmäßig machen, bevor es von Hand geformt wird."
+origin = "bauplan"
+ref = "§2.2 Weg 4: gleichmäßig vernetzen"
+scene = "quader.netz"
+selection = "koerper"
+target = "operation:remesh_uniform"
+
+[[goal]]
+id = "beschriften"
+goal = "Einen Namen auf eine Fläche schreiben."
+origin = "bauplan"
+ref = "§2.2 Weg 2: neu konstruieren"
+scene = "merkmal.face.exakt"
+selection = "merkmal:face"
+target = "operation:label_text"
+
+[[goal]]
+id = "merkmal_entfernen"
+goal = "Ein erkanntes Merkmal entfernen."
+origin = "fragebogen"
+ref = "Wunsch, dass Entf am gewählten Merkmal oder Körper löscht"
+scene = "merkmal.pin.exakt"
+selection = "merkmal:pin"
+target = "feature:remove_feature"
+
+[[goal]]
+id = "koerper_entfernen"
+goal = "Einen gewählten Körper entfernen."
+origin = "fragebogen"
+ref = "Wunsch, dass Entf am gewählten Merkmal oder Körper löscht"
+scene = "quader.exakt"
+selection = "koerper"
+target = "operation:delete_object"
