@@ -52,7 +52,9 @@ from app.ui.op_dialog import (
     MAX_LEAD_WORDS_TRANSLATED,
 )
 from app.ui.style import LEVELS, SPACE
-from tools.function_list import ROW_KINDS, Row
+from tools.function_list import LICENCE_STATES as LICENCE_STATES
+from tools.function_list import PRECONDITIONS, ROW_KINDS, SPEC_KEYS, Row, licence_states
+from tools.function_list import STARTUP_LICENCE as STARTUP_LICENCE
 
 # --- Wertebereiche --------------------------------------------------------
 
@@ -64,15 +66,8 @@ STAGES: Final = ("A", "B", "C")
 #: Abhakliste „C“, sonst „?“.
 RESULTS: Final = ("erfuellt", "fund", "entfaellt", "stufe_b", "nicht_gelaufen", "nicht_pruefbar")
 
-#: Die geschlossene Liste der Gründe für *entfällt* (Konzept §4, „Urteil und
-#: Schwere“). Ein anderer Grund wird abgewiesen.
-NOT_APPLICABLE: Final[dict[str, str]] = {
-    "ohne_rechnung": "Operation ohne Rechnung",
-    "ohne_auswahlbezug": "ohne Auswahlbezug",
-    "ohne_dialog": "ohne Dialog",
-    "ohne_agentenwerkzeug": "ohne Agentenwerkzeug",
-    "nur_stufe_c": "nur Stufe C",
-}
+# Die geschlossene Liste der Gründe für *entfällt* (Konzept §4) führt das
+# Spezifikationsformat: ``function_list.NOT_APPLICABLE_REASONS``.
 
 #: Schwere eines Funds, von schwer nach leicht (Konzept §4).
 SEVERITIES: Final = ("schwer", "mittel", "leicht", "Vorschlag")
@@ -112,43 +107,23 @@ SELECTION_STAGES: Final = (
 MATRIX_UNREACHABLE: Final = "nicht herstellbar"
 MATRIX_STATES: Final = ("angeboten", "grau", "fehlt", MATRIX_UNREACHABLE)
 
-#: Die Lizenzzustände eines Laufs (Prüfpunkt 18) und ob Schreibendes in ihnen
-#: offensteht (``Activation.unlocked``). Die Anwendung führt keine Aufzählung,
-#: sie liest den Zustand an Eigenschaften von ``app.core.activation.Activation``
-#: ab; deren Namen sind die Zustände. Ein Wächter setzt jeden Zustand wie die
-#: Suite über ``activation._cached`` und prüft Eigenschaft und Freischaltung.
+#: Die Lizenzzustände eines Laufs (Prüfpunkt 18) führt L im
+#: Spezifikationsformat (``function_list.LICENCE_STATES``, die Namen der
+#: Eigenschaften von ``app.core.activation.Activation``); ``licence_runs`` ist
+#: ``function_list.licence_states`` (die erreichbaren), ``VARIANT_LICENCES``
+#: die Werte von ``variant.licence`` samt ``over`` für die Startzeile
+#: ``startup.expired_demo``. Die Namen bleiben hier ausgeführt, weil der
+#: Prüfstand sie von hier nimmt — es sind dieselben Objekte.
 #:
-#: ``over`` (Demo abgelaufen) ist kein Lauf: Dort startet die Anwendung nicht
-#: (``app.ui.app``, ``show_expired_demo``) — das prüft eine eigene Zeile des
-#: Pakets D12. ``in_demo`` ist auch nach dem Demo-Ende wahr und kein Zustand.
-LICENCE_UNLOCKED: Final[dict[str, bool]] = {
-    "sale_without_trial": False,
-    "needs_activation": False,
-    "licensed": True,
-    "expired": False,
-}
-LICENCE_STATES: Final = tuple(LICENCE_UNLOCKED)
-#: Der Zustand der Startzeile „Demo abgelaufen“ (``startup.expired_demo`` in
-#: ``tools/function_list.py``, D12): kein Lauf je Funktion, aber das Protokoll
-#: dieser Zeile trägt ihn in ``variant.licence``.
-STARTUP_LICENCE: Final = "over"
-VARIANT_LICENCES: Final = (*LICENCE_STATES, STARTUP_LICENCE)
+#: Hier steht nur, was ein Zustand bedeuten muss: ob Schreibendes offensteht
+#: (``Activation.unlocked``). Ein Wächter setzt jeden Zustand wie die Suite
+#: über ``activation._cached`` und prüft Eigenschaft und Freischaltung.
+_UNLOCKING: Final = frozenset({"licensed"})
+LICENCE_UNLOCKED: Final[dict[str, bool]] = {state: state in _UNLOCKING for state in LICENCE_STATES}
+VARIANT_LICENCES: Final = PRECONDITIONS["licence"]
 #: Gesperrt heißt: Schreibendes ist grau mit Grund, nur Lesendes läuft weiter.
 LOCKED_STATES: Final = frozenset(state for state, open_ in LICENCE_UNLOCKED.items() if not open_)
-
-
-def licence_runs() -> tuple[str, ...]:
-    """Die Läufe, die Prüfpunkt 18 je Zeile verlangt: die erreichbaren Zustände.
-
-    Ohne ``store.TRIAL_FROM`` (die Verkaufsversion) gibt es keinen Testlauf,
-    also auch keinen abgelaufenen — wer keinen Schlüssel hat, sieht die lesende
-    Verkaufsversion. Mit ``TRIAL_FROM`` ist es umgekehrt. Kaufcode ohne
-    Gerätefreigabe und gekauft gibt es in beiden.
-    """
-    from app.core.activation.store import TRIAL_FROM
-
-    first = "sale_without_trial" if TRIAL_FROM is None else "expired"
-    return (first, "needs_activation", "licensed")
+licence_runs: Final = licence_states
 
 
 #: Die zwei Wege zum Ändern eines Schritts (Prüfpunkt 12): *Diesen Schritt
@@ -314,14 +289,8 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     ),
     "kind": ProtocolField("text", choices=ROW_KINDS, required=True),
     "package": ProtocolField("text", required=True),
-    "spec": ProtocolField(
-        "tabelle",
-        _keys(
-            "start_scene", "route", "example_goal", "inputs", "search_probes", "questions",
-            "expectation", "fault_case", "preconditions", "not_applicable", "budget_s",
-            "budget_ref", "criteria",
-        ),
-    ),
+    # Das Spezifikationsformat gehört L (``function_list.SPEC_KEYS``).
+    "spec": ProtocolField("tabelle", SPEC_KEYS),
     "variant": ProtocolField(
         "tabelle",
         _keys(
