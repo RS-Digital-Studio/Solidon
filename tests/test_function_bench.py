@@ -1915,6 +1915,69 @@ def test_the_probe_finds_a_list_or_the_view_over_a_real_target(window: Any) -> N
     assert ports.covers(click(spot, "viewport"), hit), "die Ansicht als eigenes Ziel"
 
 
+def test_a_scroll_click_covers_its_scroll_area_and_not_a_list_over_it(qt_app: Any) -> None:
+    """Rollen nennt bei D0-W die Sichtfläche, ganz oder ihren sichtbaren Teil.
+
+    Ziel ist die Rollfläche selbst: Die Probe an der Mitte trifft ihre
+    Sichtfläche — gedeckt, ob der Klick die ganze Sichtfläche oder nur ihren
+    sichtbaren Teil nennt. Eine Liste darüber ist auch eine Rollfläche, aber
+    nicht die mit diesem Rechteck: verdeckt.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QPoint, QRect, QSize, Qt
+    from PySide6.QtWidgets import QApplication, QLabel, QListWidget, QScrollArea, QWidget
+
+    def settle() -> None:
+        for _ in range(20):
+            QApplication.processEvents()
+
+    root = QWidget()
+    root.resize(400, 300)
+    area = QScrollArea(root)
+    # Unten ragt die Rollfläche aus dem Fenster: Ihr sichtbarer Teil ist kleiner.
+    area.setGeometry(20, 20, 300, 400)
+    inner = QLabel("lang")
+    inner.setMinimumSize(280, 900)
+    area.setWidget(inner)
+    root.show()
+    settle()
+    try:
+        ports = bench.QtPorts(None, 0.0)
+        viewport = area.viewport()
+        whole = QRect(viewport.mapToGlobal(QPoint(0, 0)), viewport.size())
+        shown = bench._shown(viewport)
+        assert shown != whole and whole.contains(shown), (shown, whole)
+
+        def roll(rect: QRect) -> Any:
+            return SimpleNamespace(
+                rect=rect,
+                why="rollen",
+                target="param.x",
+                button=Qt.MouseButton.NoButton,
+                direction=1,
+            )
+
+        hit = ports.widget_under(whole.center())
+        assert hit is viewport or viewport.isAncestorOf(hit), hit
+        assert ports.covers(roll(whole), hit), "die ganze Sichtfläche"
+        assert ports.covers(roll(shown), hit), "ihr sichtbarer Teil"
+
+        cover = QListWidget(root)
+        cover.addItem("darüber")
+        cover.setGeometry(QRect(root.mapFromGlobal(whole.center()) - QPoint(40, 20), QSize(80, 40)))
+        cover.raise_()
+        cover.show()
+        settle()
+        hit = ports.widget_under(whole.center())
+        assert hit is cover or cover.isAncestorOf(hit), hit
+        assert not ports.covers(roll(whole), hit), "eine Liste über der Rollfläche"
+    finally:
+        root.close()
+        root.deleteLater()
+        settle()
+
+
 def test_text_needs_count_box_symbol_padding_rich_text_and_list_cells(qt_app: Any) -> None:
     """Review M12 und L3 an echten Widgets.
 

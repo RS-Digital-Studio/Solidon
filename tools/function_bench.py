@@ -1358,7 +1358,8 @@ class QtPorts:
 
         ``Click`` nennt eine Fläche, kein Widget. Ein Behälter zählt nur, wenn er
         der Behälter **dieses** Ziels ist (Review S2, :meth:`receiver`): beim
-        Rollen die Rollfläche mit genau diesem Rechteck, bei Reiter, Menü und
+        Rollen die Liste der Zeile oder die Rollfläche mit genau diesem Rechteck
+        oder diesem sichtbaren Teil (so nennt W sie), bei Reiter, Menü und
         Untermenü die Reiterleiste oder das offene Menü, bei einer Zeile ihre
         Liste oder ihr Baum, bei ``view:``, ``handle:`` und ``viewport`` die
         Ansicht, sonst das Widget hinter dem Namen (``widget_for``) oder das
@@ -1376,7 +1377,13 @@ class QtPorts:
             area = QRect(probe.mapToGlobal(QPoint(0, 0)), probe.size())
             if kind == "rechteck" and area == rect:
                 return True
-            if kind != "rechteck" and isinstance(probe, kind) and area.contains(rect.center()):
+            if kind == "rollfläche" and _scrolls(probe) and rect in (area, _shown(probe)):
+                return True
+            if (
+                kind not in ("rechteck", "rollfläche")
+                and isinstance(probe, kind)
+                and area.contains(rect.center())
+            ):
                 return True
             if probe.isWindow():
                 return False
@@ -1387,7 +1394,8 @@ class QtPorts:
         """Wer diesen Klick empfangen soll: ``(Art, Widget)``.
 
         Ein Widget, wenn es eines gibt; sonst ``("rechteck", None)`` — das Widget
-        mit genau dem Rechteck des Klicks (Rollfläche, Klappe) — oder eine
+        mit genau dem Rechteck des Klicks (Klappe) —, ``("rollfläche", None)`` —
+        eine Rollfläche mit genau diesem Rechteck oder sichtbaren Teil — oder eine
         Widgetklasse, deren Fläche die Mitte enthält (Reiterleiste, Menü).
         """
         from PySide6.QtWidgets import QMenu, QMenuBar, QTabBar
@@ -1397,7 +1405,12 @@ class QtPorts:
         name = str(getattr(click, "target", "") or "")
         why = str(click.why)
         kind = name.partition(":")[0]
-        if why in ("rollen", "klappe"):
+        if why == "rollen":
+            # Gerollt wird die Liste der Zeile; sonst die Rollfläche, deren
+            # sichtbaren Teil der Klick nennt (W nennt dort das Sichtbare).
+            view = self.row_view(kind, name)
+            return ("rollfläche", None) if view is None else (None, view)
+        if why == "klappe":
             return "rechteck", None
         if why == "reiter":
             return QTabBar, None
@@ -1572,6 +1585,22 @@ class QtPorts:
 
     def now(self) -> float:
         return time.perf_counter()
+
+
+def _scrolls(widget: Any) -> bool:
+    """Ob ein Widget eine Rollfläche ist oder deren Sichtfläche."""
+    from PySide6.QtWidgets import QAbstractScrollArea
+
+    parent = widget.parentWidget()
+    return isinstance(widget, QAbstractScrollArea) or isinstance(parent, QAbstractScrollArea)
+
+
+def _shown(widget: Any) -> Any:
+    """Der sichtbare Teil eines Widgets, global — so nennt W die Fläche zum Rollen."""
+    from PySide6.QtCore import QRect
+
+    visible = widget.visibleRegion().boundingRect()
+    return QRect(widget.mapToGlobal(visible.topLeft()), visible.size())
 
 
 def qt_schedule(milliseconds: int, callback: Callable[[], None]) -> None:
