@@ -352,9 +352,14 @@ def function_cases(
     sechs Sprachen in einem Prozess brechen ab). ``phases`` beschränkt jeden
     Funktionsfall auf diese Phasen (``function_bench.PHASES``) — für die
     Nachprüfung einer Zeile nach einem Fix.
+
+    Was die Spezifikation an Lizenz und Vorbedingungen nennt, gilt für jeden Fall
+    der Zeile; eine Vorbedingung mit zwei Zuständen bekommt im Satz ``basis``
+    einen Lauf im anderen Zustand dazu, denn „fehlt“ ist der Fehlerweg
+    (``function_bench.spec_variants``).
     """
     from app.i18n.catalog import available_languages
-    from tools.function_bench import VARIANT_SETS, Variant
+    from tools.function_bench import VARIANT_SETS, Variant, spec_variants
 
     unknown_sets = sorted(set(variant_sets) - set(VARIANT_SETS))
     if unknown_sets:
@@ -377,16 +382,21 @@ def function_cases(
     for name in variant_sets:
         for row in chosen if name != "sprachen" else ():
             scene = str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "")
-            for entry in VARIANT_SETS[name]:
-                variant = Variant.of({**entry, "phases": tuple(phases)})
-                label = (
-                    ", ".join(f"{key}={value}" for key, value in entry.items() if key != "set")
-                    or name
+            base, others = spec_variants(row.get("spec"))
+            entries = [{**base, **entry, "phases": tuple(phases)} for entry in VARIANT_SETS[name]]
+            if name == "basis" and not phases:
+                entries += [{**base, "set": "basis", **other} for other in others]
+            for entry in entries:
+                variant = Variant.of(entry)
+                label = ", ".join(
+                    f"{key}={value}"
+                    for key, value in entry.items()
+                    if key not in ("set", "phases") and value
                 )
                 cases.append(
                     Case(
                         number,
-                        f"{row['id']} [{label}]",
+                        f"{row['id']} [{label or name}]",
                         f"scenes/{scene}.p3d" if scene else "",
                         "",
                         kind="function",
@@ -432,17 +442,22 @@ def function_inventory(
     variant_sets: Sequence[str],
     phases: Sequence[str] = (),
 ) -> list[Case]:
-    """``inventory --functions``: Zeilen, Fälle, Startszenen und Menüleiste ablegen.
+    """``inventory --functions``: Menüleiste, Zeilen, Fälle und Startszenen ablegen.
 
-    Die Zeilen und Szenen erzeugt ``tools/function_list.py`` (Paket L), die
-    Menüleiste zählt ein Kindprozess am gebauten Fenster (offscreen) über
-    ``guide_targets.menubar_entries`` — sie entsteht erst mit dem Fenster
-    (Konzept §3).
+    Zuerst zählt ein Kindprozess am gebauten Fenster die Menüleiste
+    (``menubar.json``, :func:`menubar`) — die Fensterbefehle entstehen erst mit
+    dem Fenster (Konzept §3). Dann baut ``tools/function_list.py`` (D0-L) daraus
+    und aus Register, Dialogklassen und Wortschatz die Zeilen; ``rows.json``
+    trägt sie für Kindprozesse und Bericht (D0-U liest dieselbe Datei). Die
+    Startszenen speichert ``function_list.save_scenes`` nach ``scenes/``, die
+    schweren nur, wenn eine gewählte Zeile in einer beginnt.
     """
-    from tools import function_list
-    from tools.function_bench import EMPTY_SCENE, SECOND_SCENE
+    from dataclasses import asdict as as_dict
 
-    rows = [dict(row) for row in function_list.rows()]  # type: ignore[attr-defined]
+    from tools import function_list
+
+    entries = function_list.read_menubar(menubar(out))
+    rows = [as_dict(row) for row in function_list.rows(entries)]
     cases = function_cases(
         rows, packages=packages, row_ids=row_ids, variant_sets=variant_sets, phases=phases
     )
@@ -450,12 +465,13 @@ def function_inventory(
     languages = {case.row for case in cases if case.kind == "language"}
     kept = [row for row in rows if str(row["id"]) in chosen or row.get("package") in languages]
     write_json(out / "rows.json", kept)
-    scenes = {
-        str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or EMPTY_SCENE)
+    catalogue = function_list.load_scenes()
+    wanted = {
+        str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "")
         for row in kept
-    } | {EMPTY_SCENE, SECOND_SCENE}
-    function_list.build_scenes(sorted(scenes), out / "scenes")  # type: ignore[attr-defined]
-    menubar(out)
+    }
+    heavy = any(catalogue[key].heavy for key in wanted if key in catalogue)
+    function_list.save_scenes(out / "scenes", heavy=heavy)
     return cases
 
 
@@ -482,10 +498,36 @@ def menubar(out: Path) -> Path:
     return target
 
 
+def menubar_lines(entries: Iterable[tuple[str, Sequence[str], Any]]) -> list[dict[str, Any]]:
+    """``guide_targets.menubar_entries`` in der Form von ``function_list.read_menubar``.
+
+    W liefert die Titel der Menüs **über** der Zeile, L liest den Weg **bis
+    zur** Zeile (``MenuEntry.path``) und bildet daraus die Kennung
+    ``Datei/Speichern unter …``; die Zeile selbst kommt deshalb dazu. Das
+    Kürzel steht, wie die Aktion es trägt.
+    """
+    return [
+        {
+            "object_name": str(name),
+            "path": [str(part).replace("&", "") for part in (*menus, action.text())],
+            "shortcut": action.shortcut().toString(),
+        }
+        for name, menus, action in entries
+    ]
+
+
 def menubar_child(out: Path) -> int:
-    """Kindprozess von :func:`menubar`: Fenster bauen, Menüleiste lesen, schreiben."""
+    """Kindprozess von :func:`menubar`: Fenster bauen, Menüleiste lesen, schreiben.
+
+    Das Profil steht auf der Quellsprache: Die Kennungen der Fensterbefehle sind
+    die deutschen Menüpfade (``function_list.MenuEntry``), gleich welche
+    Sprache das System spricht.
+    """
     isolate(out / "menubar-profile")
     sys.path.insert(0, str(ROOT))
+    from tools import function_bench as bench
+
+    bench.write_profile(bench.Variant())
     from app.core.bootstrap import load_operations
     from app.ui import guide_targets
     from app.ui.app import build_application
@@ -494,11 +536,7 @@ def menubar_child(out: Path) -> int:
     load_operations()
     application, window = build_application([])
     try:
-        entries = [
-            {"name": name, "path": [str(part) for part in path]}
-            for name, path, _action in guide_targets.menubar_entries(window)  # type: ignore[attr-defined]
-        ]
-        write_json(out / "menubar.json", entries)
+        write_json(out / "menubar.json", menubar_lines(guide_targets.menubar_entries(window)))
     finally:
         shutdown_window(window, application)
     return 0
@@ -723,21 +761,26 @@ def function_summary(case: Case, folder: Path, process: Mapping[str, Any]) -> di
     den Urteilen. Die Übersicht sagt, ob der Lauf durchkam, wie die
     Dateiabnahme es für ihre Fälle sagt.
     """
-    protocol = _read(folder / "function.json")
+    state = _read(folder / "bench.json")
+    protocols = (
+        [_read(folder / "function.json")]
+        if case.kind == "function"
+        else [_read(path) for path in sorted((folder / "surfaces").glob("*.json"))]
+    )
     return {
         "number": case.number,
         "relative": case.relative,
         "kind": case.kind,
         "row": case.row,
         "variant": case.variant.get("set", ""),
-        "stage": protocol.get("stage", "nicht gelaufen"),
+        "stage": state.get("stage", "nicht gelaufen"),
         "exit_code": process.get("exit_code"),
         "timeout": process.get("timeout"),
         "seconds": process.get("wall_s"),
-        "findings": len(protocol.get("findings", [])),
-        "unmeasured": len(protocol.get("unmeasured", {})),
-        "errors": list(protocol.get("errors", []))
-        + ([protocol["harness_exception"]] if "harness_exception" in protocol else []),
+        "findings": sum(len(protocol.get("findings") or []) for protocol in protocols),
+        "unmeasured": sum(len(protocol.get("unmeasured") or {}) for protocol in protocols),
+        "errors": [error for protocol in protocols for error in protocol.get("errors") or []]
+        + ([state["harness_exception"]] if "harness_exception" in state else []),
     }
 
 
@@ -1032,7 +1075,7 @@ def no_native_dialogs() -> None:
 
 
 def version_info() -> dict[str, str]:
-    """Commit und Anwendungsversion für das Protokoll (Plan D0, Abschnitt 2.7 ``version``)."""
+    """Commit und Anwendungsversion für das Protokoll (``version``: ``commit``, ``app``)."""
     from app.branding import APP_VERSION
 
     finished = subprocess.run(
@@ -1043,36 +1086,48 @@ def version_info() -> dict[str, str]:
         encoding="utf-8",
         check=False,
     )
-    return {"commit": finished.stdout.strip(), "app_version": APP_VERSION}
+    return {"commit": finished.stdout.strip(), "app": APP_VERSION}
 
 
 def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     """Ein Funktions- oder Sprachfall: Profil, Lizenz, Vorbedingungen, Fenster, Prüfstand.
 
     Die Reihenfolge ist die Aussage: Das Profil liegt vor dem Bau des Fensters,
-    denn die Anwendung liest Sprache, Thema, Einheit und Drucker beim Start; die
-    Skalierung steht vor der ``QApplication``; Lizenz und Vorbedingungen über die
-    Nahtstellen der Suite nach dem Laden des Registers und vor dem Fenster.
+    denn die Anwendung liest Sprache, Thema, Einheit und Drucker beim Start;
+    Skalierung und Bewegung stehen vor der ``QApplication``; Lizenz und
+    Vorbedingungen über die Nahtstellen der Suite nach dem Laden des Registers
+    und vor dem Fenster.
+
+    Zwei Dateien: ``function.json`` ist das Messprotokoll nach dem Schema von
+    D0-U, ``bench.json`` hält, was nur den Lauf betrifft (Phase, Ausnahme,
+    Abbau, erledigte Flächen). Ein Sprachfall schreibt kein ``function.json``,
+    sondern je Fläche ein Protokoll unter ``surfaces/``.
     """
     from tools import function_bench as bench
 
     variant = bench.Variant.of({**case.variant, **({"screen": screen} if screen else {})})
     if variant.scale != 1.0:
         os.environ["QT_SCALE_FACTOR"] = f"{variant.scale:g}"
+    if not variant.motion:
+        os.environ["SOLIDON3D_MOTION"] = "aus"
     rows = read_rows(out)
     scenes = out / "scenes"
-    if case.kind == "language":
-        package_rows = [row for row in rows.values() if row.get("package") == case.row]
-        row: dict[str, Any] = {"id": case.row, "package": case.row, "kind": "language"}
-    else:
-        package_rows = []
+    state: dict[str, Any] = {"case": asdict(case), "stage": "start"}
+    version = version_info()
+
+    def keep() -> None:
+        write_json(folder / "bench.json", state)
+
+    keep()
+    data: dict[str, Any] | None = None
+    if case.kind == "function":
         row = rows.get(case.row) or {"id": case.row}
-    data = bench.empty_protocol(row, case.kind, variant, version_info())
-    data["case"] = asdict(case)
-    data["stage"] = "start"
+        data = bench.empty_protocol(row, variant.protocol(None, (0, 0)), version)
 
     def persist() -> None:
-        write_json(folder / "function.json", data)
+        if data is not None:
+            write_json(folder / "function.json", data)
+        keep()
 
     persist()
     bench.write_profile(variant, recent=[scenes / f"{bench.SECOND_SCENE}.p3d"])
@@ -1082,33 +1137,33 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
 
     load_operations()
     no_native_dialogs()
-    data["licence"] = variant.licence
     bench.apply_licence(variant.licence)
-    data["preconditions_applied"] = bench.apply_preconditions(variant.preconditions)
+    state["preconditions_applied"] = bench.apply_preconditions(variant.preconditions)
     application, window = build_application([])
     flow: Any
-    if case.kind == "language":
+    if data is None:
+        package_rows = [row for row in rows.values() if row.get("package") == case.row]
         flow = bench.LanguageFlow(
-            application, window, folder, data, persist, package_rows, variant, scenes
+            application, window, folder, state, keep, package_rows, variant, scenes, version
         )
     else:
-        flow = bench.FunctionFlow(application, window, folder, data, persist, row, variant, scenes)
+        flow = bench.FunctionFlow(
+            application, window, folder, data, persist, row, variant, scenes, state, out
+        )
     exit_code = 0
     try:
         if isinstance(flow, bench.FunctionFlow):
             flow.prepare()
-        else:
-            bench.place_window(application, window, variant)
         flow.run()
-        data["stage"] = "done"
+        state["stage"] = "done"
     except Exception:
-        data["harness_exception"] = traceback.format_exc()
+        state["harness_exception"] = traceback.format_exc()
         persist()
         exit_code = 1
     finally:
         window.session.forget_changes()
         shutdown_window(window, application)
-        data["shutdown_complete"] = True
+        state["shutdown_complete"] = True
         persist()
     return exit_code
 
@@ -1668,22 +1723,25 @@ def main(argv: Iterable[str] | None = None) -> int:
     cases = read_cases(out)
     data = summary(out, cases)
     print(f"{data['passed']} von {data['cases']} Dateifällen bestanden", flush=True)
-    if any(case.kind != "file" for case in cases):
-        from tools import function_report
+    if not any(case.kind != "file" for case in cases):
+        return 0
+    from tools import function_report
 
-        try:
-            function_report.write(  # type: ignore[attr-defined]
-                out,
-                packages=arguments.package,
-                verdicts=arguments.verdicts,
-                checklist=arguments.checklist,
-            )
-        except ValueError as problem:
-            # Ausgang 1 nur bei ungültigen Eingaben (Plan D0, Abschnitt 2.13): ein
-            # Urteil ohne Bild, ein fremder Grund — nicht bei Funden.
-            print(str(problem), file=sys.stderr, flush=True)
-            return 1
-    return 0
+    # Ausgang 1 nur bei ungültigen Eingaben (Plan D0, Abschnitt 2.13) — ein
+    # Urteil ohne Bild, ein fremder Grund, ein ungültiges Protokoll; Funde
+    # nicht. write sagt es über seinen Rückgabewert, je Paket oder für alle.
+    if (arguments.verdicts or arguments.checklist) and len(arguments.package) != 1:
+        print(
+            "--verdicts und --checklist verlangen genau ein --package.", file=sys.stderr, flush=True
+        )
+        return 1
+    codes = [
+        function_report.write(
+            out, package=package, verdicts=arguments.verdicts, checklist=arguments.checklist
+        )
+        for package in (arguments.package or [None])
+    ]
+    return 1 if any(codes) else 0
 
 
 if __name__ == "__main__":

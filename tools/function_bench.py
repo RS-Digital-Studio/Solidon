@@ -36,9 +36,11 @@ und die äußeren Vorbedingungen über dieselben Nahtstellen wie die Suite
 private Schlüssel. Systemdateidialoge prüft nur Stufe C; der Kindprozess setzt
 ``AA_DontUseNativeDialogs`` (B7).
 
-Was gemessen wird, steht im Messprotokoll ``cases/<nr>/function.json``
-(Plan D0, Abschnitt 2.7), das ``tools/function_report.py`` liest. Welches Feld welchen
-Prüfpunkt trägt, sagt :data:`POINT_FIELDS`.
+**Das Messprotokoll gehört D0-U** (``tools/function_checks.PROTOCOL_SCHEMA``):
+Feldnamen, Wertebereiche, Lizenzzustände, Auswahlstufen und die Phasen des
+Hauptwegs kommen von dort, und ``validate_protocol`` prüft, was der Prüfstand
+schreibt (:func:`empty_protocol`, Test in ``tests/test_function_bench.py``).
+Zeilen und Startszenen kommen aus ``tools/function_list.py`` (D0-L).
 """
 
 from __future__ import annotations
@@ -46,6 +48,8 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import re
+import sys
 import time
 import traceback
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -55,22 +59,34 @@ from pathlib import Path
 from typing import Any, Final, Protocol
 
 from tools.file_acceptance import MATERIAL, PRINTER
+from tools.function_checks import (
+    COVERED,
+    LAPTOP_SIZE,
+    LICENCE_RUNS,
+    LICENCE_STATES,
+    MAIN_PHASES,
+    MATRIX_UNREACHABLE,
+    NOT_FOUND,
+    PLACES,
+    PROTOCOL_SCHEMA,
+    SCALES,
+    SELECTION_STAGES,
+    START_SIZE,
+    WHY,
+)
+from tools.function_list import PRECONDITIONS as SPEC_PRECONDITIONS
 
 # --- Wege und Funde ---------------------------------------------------------------
 
 #: Warum ein Klick fällt (``guide_targets.next_click``): das Ziel selbst …
 TARGET_REASON: Final = "ziel"
 
-#: … oder ein Wegklick davor, der etwas aufdeckt. Jeder zählt (E1, Prüfpunkt 2).
-WAY_REASONS: Final[frozenset[str]] = frozenset(
-    {"reiter", "klappe", "menue", "untermenue", "aufklappen", "rollen"}
-)
+#: … oder ein Wegklick davor, der etwas aufdeckt (``function_checks.WHY``).
+WAY_REASONS: Final[frozenset[str]] = frozenset(WHY) - {TARGET_REASON}
 
-#: Der Fund, wenn an der Stelle des Klicks etwas anderes liegt als das Ziel.
-COVERED: Final = "verdeckt"
-
-#: Der Fund, wenn ``next_click`` keinen Weg mehr nennt (Prüfpunkt 1, schwer).
-NOT_FOUND: Final = "nicht auffindbar"
+#: Die Phase des Wegs und die des Übernehmens — zusammen der Hauptweg, den U für
+#: E1 bis E4 zählt (``function_checks.MAIN_PHASES``).
+PATH_PHASE, APPLY_PHASE = MAIN_PHASES
 
 #: Wie viele Wegklicks ein Ziel höchstens braucht, bevor der Weg als Kreis gilt.
 #: Der längste Weg im Bestand ist Menütitel, Untermenü, Eintrag; dazu Reiter,
@@ -97,7 +113,7 @@ SEARCH_SETTLE_MS: Final = 1000
 PHASE_TIMEOUT_S: Final = 900.0
 
 #: Die Aufrufe, die eine Bedienung umgehen (Konzept §12 „Die Abkürzungen der
-#: Bildwerkzeuge“, Bauplan D0 B5). Ein Name mit ``*`` meint den Anfang.
+#: Bildwerkzeuge“, Plan D0 B5). Ein Name mit ``*`` meint den Anfang.
 #: ``setValue``, ``setCurrentIndex``, ``setChecked`` und ``animateClick`` sind
 #: dieselben Abkürzungen in Qts Schreibweise.
 FORBIDDEN_CALLS: Final[tuple[str, ...]] = (
@@ -154,22 +170,19 @@ def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tup
 
 # --- Vorbereitetes Profil und Vorbedingungen ----------------------------------------
 
-#: Die Lizenzzustände eines Falls (Prüfpunkt 18): laufende und abgelaufene Demo,
-#: laufender und abgelaufener Testlauf, gekauft.
-LICENCE_STATES: Final[tuple[str, ...]] = (
-    "demo",
-    "demo_abgelaufen",
-    "test",
-    "abgelaufen",
-    "gekauft",
-)
+#: Die Lizenzwörter der Zeilenspezifikation (``function_list.PRECONDITIONS``) in
+#: den Zuständen des Protokolls (``function_checks.LICENCE_STATES``). Beide
+#: Listen gehören anderen Paketen; hier steht nur die Übersetzung.
+SPEC_LICENCES: Final[dict[str, str]] = {
+    "demo": "in_demo",
+    "gekauft": "licensed",
+    "abgelaufen": "expired",
+}
 
-#: Äußere Vorbedingungen und ihre Zustände (Plan D0, Abschnitt 2.4); die erste ist die Vorgabe.
+#: Äußere Vorbedingungen, die der Prüfstand herstellt — die Liste der
+#: Spezifikation ohne die Lizenz, die eine eigene Angabe der Variante ist.
 PRECONDITIONS: Final[dict[str, tuple[str, ...]]] = {
-    "ki": ("vorhanden", "fehlt"),
-    "comfyui": ("vorhanden", "fehlt"),
-    "slicer": ("vorhanden", "fehlt"),
-    "printer": ("filament", "resin"),
+    name: states for name, states in SPEC_PRECONDITIONS.items() if name != "licence"
 }
 
 #: Drucker und Material je Druckart — der feste Rahmen des Dateiaudits für
@@ -183,12 +196,10 @@ PRINTERS: Final[dict[str, tuple[str, str]]] = {
 #: Wie lange eine laufende Demo oder ein laufender Testlauf im Prüfstand noch dauert.
 RUNNING_DAYS: Final = 14
 
-#: Die Fenstergrößen aus Z6: Startgröße und Laptop mit Taskleiste.
-WINDOW_SIZES: Final[tuple[str, ...]] = ("1280x820", "1366x728")
-
-#: Die Skalierungen aus Z6.
-SCALES: Final[tuple[float, ...]] = (1.0, 1.5, 2.0)
-
+#: Die Fenstergrößen aus Z6 (``function_checks.START_SIZE``, ``LAPTOP_SIZE``).
+WINDOW_SIZES: Final[tuple[str, ...]] = tuple(
+    f"{width}x{height}" for width, height in (START_SIZE, LAPTOP_SIZE)
+)
 
 #: Die Phasen je Variantensatz, in ihrer Folge (``FunctionFlow.phase_<name>``).
 #: Jede beginnt an der Startszene; ``sprachen`` hat eine eigene Klasse
@@ -198,20 +209,20 @@ PHASES: Final[dict[str, tuple[str, ...]]] = {
         "search",
         "escape",
         "main",
-        "edit_later",
+        "revise",
         "fault",
         "matrix",
-        "cancel",
+        "abort",
         "halt",
         "switch",
         "hover",
         "drag",
-        "promise",
     ),
     "lizenz": ("licence",),
     "zoll": ("surface",),
     "skalierung": ("surface",),
     "dunkel": ("surface",),
+    "bewegung": ("surface",),
     "sprachen": (),
 }
 
@@ -221,21 +232,23 @@ class Variant:
     """Unter welchen Bedingungen ein Fall läuft (Protokollfeld ``variant``).
 
     ``set`` sagt, welche Phasen laufen: ``basis`` den ganzen Weg, ``lizenz`` nur
-    Angebot und Sperre, ``zoll``, ``skalierung`` und ``dunkel`` den Weg bis zur
-    offenen Fläche mit ihren Aufnahmen (:data:`VARIANT_SETS`, :data:`PHASES`).
-    ``phases`` beschränkt auf einzelne davon — die Nachprüfung einer Zeile nach
-    einem Fix fährt nur, was der Fix berührt (Konzept §7).
+    Angebot und Sperre, ``zoll``, ``skalierung``, ``dunkel`` und ``bewegung`` den
+    Weg bis zur offenen Fläche mit ihren Aufnahmen (:data:`VARIANT_SETS`,
+    :data:`PHASES`). ``phases`` beschränkt auf einzelne davon — die Nachprüfung
+    einer Zeile nach einem Fix fährt nur, was der Fix berührt (Konzept §7).
+    ``motion`` falsch heißt: Lauf mit ``SOLIDON3D_MOTION=aus`` (G8).
     """
 
     set: str = "basis"
     language: str = "de"
     theme: str = "light"
     unit: str = "mm"
-    licence: str = "gekauft"
+    licence: str = "licensed"
     preconditions: Mapping[str, str] = field(default_factory=dict)
     screen: str = ""
     scale: float = 1.0
     window_size: str = ""
+    motion: bool = True
     phases: tuple[str, ...] = ()
 
     @classmethod
@@ -258,8 +271,20 @@ class Variant:
         data["phases"] = list(self.phases)
         return data
 
+    def protocol(
+        self, placed: Mapping[str, Any] | None, window_size: Sequence[int]
+    ) -> dict[str, Any]:
+        """Die Variante, wie das Protokoll sie trägt: dazu Plattform, Schirm und echte Größe."""
+        data = self.as_dict()
+        data["platform"] = sys.platform
+        data["placed"] = dict(placed or {})
+        data["window_size"] = list(window_size)
+        return data
+
     def check(self) -> None:
         """Nur Zustände, die der Prüfstand herstellen kann."""
+        from app.core.units import DISPLAY_UNITS
+
         if self.set not in PHASES:
             raise ValueError(f"Variantensatz {self.set!r} ist keiner aus {tuple(PHASES)}")
         strange = sorted(set(self.phases) - set(PHASES[self.set]))
@@ -271,8 +296,8 @@ class Variant:
             allowed = PRECONDITIONS.get(name)
             if allowed is None or state not in allowed:
                 raise ValueError(f"Vorbedingung {name}={state!r} gibt es nicht")
-        if self.unit not in ("mm", "in"):
-            raise ValueError(f"Anzeigeeinheit {self.unit!r} gibt es nicht")
+        if self.unit not in DISPLAY_UNITS:
+            raise ValueError(f"Anzeigeeinheit {self.unit!r} ist keine aus {DISPLAY_UNITS}")
         if self.theme not in ("light", "dark"):
             raise ValueError(f"Thema {self.theme!r} gibt es nicht")
         if self.window_size and parse_size(self.window_size) is None:
@@ -287,21 +312,49 @@ class Variant:
 
 #: Die Variantensätze der Kommandozeile (``--variants``), je Zeile ausgefaltet.
 #: ``sprachen`` ist kein Satz je Zeile: Je Sprache und Paket geht ein Prozess die
-#: Flächen aller Zeilen ab (:class:`LanguageFlow`).
+#: Flächen aller Zeilen ab (:class:`LanguageFlow`). ``lizenz`` fährt die Läufe,
+#: die Prüfpunkt 18 verlangt (``function_checks.LICENCE_RUNS``).
 VARIANT_SETS: Final[dict[str, tuple[dict[str, Any], ...]]] = {
     "basis": ({"set": "basis"},),
     "zoll": ({"set": "zoll", "unit": "in"},),
-    "lizenz": tuple(
-        {"set": "lizenz", "licence": state}
-        for state in ("demo_abgelaufen", "abgelaufen", "gekauft")
-    ),
+    "lizenz": tuple({"set": "lizenz", "licence": state} for state in LICENCE_RUNS),
     "skalierung": (
         *({"set": "skalierung", "window_size": size} for size in WINDOW_SIZES),
         *({"set": "skalierung", "scale": scale} for scale in SCALES if scale != 1.0),
     ),
     "dunkel": ({"set": "dunkel", "theme": "dark"},),
+    "bewegung": ({"set": "bewegung", "motion": False},),
     "sprachen": (),
 }
+
+
+def spec_variants(spec: Mapping[str, Any] | None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Was die Spezifikation einer Zeile an der Variante festlegt, und die Gegenläufe.
+
+    Gibt die Grundangaben (Lizenz, Vorbedingungen, Druckart) und je benannter
+    Vorbedingung mit zwei Zuständen einen Lauf im anderen Zustand zurück:
+    „fehlt“ ist der Fehlerweg, und beide Zustände werden geprüft (Konzept §3).
+    """
+    preconditions = dict((spec or {}).get("preconditions") or {})
+    base: dict[str, Any] = {}
+    licence = preconditions.pop("licence", None)
+    if licence is not None:
+        base["licence"] = SPEC_LICENCES[str(licence)]
+    if preconditions:
+        base["preconditions"] = {str(key): str(value) for key, value in preconditions.items()}
+    others: list[dict[str, Any]] = []
+    for name, state in sorted(preconditions.items()):
+        states = PRECONDITIONS.get(str(name), ())
+        if name == "printer" or len(states) != 2:
+            continue
+        other = states[1] if state == states[0] else states[0]
+        others.append(
+            {
+                "preconditions": {**base.get("preconditions", {}), str(name): other},
+                "phases": ["main"],
+            }
+        )
+    return base, others
 
 
 def parse_size(text: str) -> tuple[int, int] | None:
@@ -354,17 +407,18 @@ def write_profile(variant: Variant, recent: Sequence[Path] = ()) -> Path:
 
 
 def licence_activation(state: str, today: date) -> Any:
-    """Der Freischaltzustand eines Lizenzzustands, ohne private Schlüssel.
+    """Der Freischaltzustand zu einem Namen aus ``function_checks.LICENCE_STATES``.
 
-    Gekauft heißt Kaufcode samt Gerätezertifikat, gebaut wie in
-    ``tests/helpers.set_test_license`` — die Oberfläche graut nur aus, die Hürde
-    liegt im Datenpfad (``activation``), und genau das Ausgrauen ist geprüft
-    (Plan D0, Abschnitt 5.1).
+    Die Namen sind Eigenschaften von ``activation.Activation``; gebaut wird je
+    ein Zustand, an dem genau diese Eigenschaft gilt — ohne private Schlüssel.
+    Gekauft heißt Kaufcode samt Gerätezertifikat wie in
+    ``tests/helpers.set_test_license``. Die Oberfläche graut nur aus, die Hürde
+    liegt im Datenpfad, und genau das Ausgrauen ist geprüft (Plan D0, Abschnitt 5.1).
     """
     from app.core import activation
     from app.core.activation import key
 
-    if state == "gekauft":
+    if state == "licensed":
         licence = key.Licence(
             major=key.current_major(),
             purchased_on=today - timedelta(days=30),
@@ -379,15 +433,15 @@ def licence_activation(state: str, today: date) -> Any:
             issued_on=today - timedelta(days=29),
         )
         return activation.Activation(licence=licence, certificate=certificate)
-    if state == "demo":
+    if state == "in_demo":
         return activation.Activation(
             days_left=RUNNING_DAYS, deadline=today + timedelta(days=RUNNING_DAYS)
         )
-    if state == "demo_abgelaufen":
+    if state == "over":
         return activation.Activation(days_left=0, deadline=today - timedelta(days=1))
-    if state == "test":
+    if state == "in_trial":
         return activation.Activation(days_left=RUNNING_DAYS)
-    if state == "abgelaufen":
+    if state == "expired":
         return activation.Activation(days_left=0)
     raise ValueError(f"Lizenzzustand {state!r} ist keiner aus {LICENCE_STATES}")
 
@@ -405,7 +459,7 @@ def apply_licence(state: str, today: date | None = None) -> Any:
 
     day = today or date.today()
     cached = licence_activation(state, day)
-    if state in ("test", "abgelaufen", "gekauft"):
+    if state in ("in_trial", "expired", "licensed"):
         store.DEMO_UNTIL = None
         store.TRIAL_FROM = store.DEMO_FROM
     else:
@@ -500,46 +554,54 @@ def scene_print(
     document: Any,
     scene: Any | None,
     *,
-    selection: Mapping[str, Any] | None = None,
+    selection: Sequence[str] = (),
     camera: Sequence[Any] | None = None,
 ) -> dict[str, Any]:
     """Der Abdruck einer Szene (Konzept §4 „Szenenabdruck“, Plan D0, Abschnitt 2.7).
 
-    Ops mit ihren Parametern, Projektparameter und Passungen über die
-    Schreibweise der Projektdatei (``scene.serialise``), je Körper sein Netz
-    (``file_acceptance.body_digest``). Auswahl und Kamera stehen getrennt: Nach
-    einem Rückgängig ist eine andere Auswahl ein Vermerk, kein Fehler (Prüfpunkt 5).
+    ``ops`` nennt die Operationen in ihrer Folge — U liest daran, ob der Verlauf
+    gewachsen ist —, ``params`` je Schritt den Abdruck seiner Werte,
+    ``project_params`` und ``fits`` die Projektparameter und Passungen über die
+    Schreibweise der Projektdatei (``scene.serialise``), ``bodies`` je Körper
+    sein Netz (``file_acceptance.body_digest``). Auswahl und Kamera stehen
+    getrennt: Nach einem Rückgängig ist eine andere Auswahl ein Vermerk, kein
+    Fehler (Prüfpunkt 5).
     """
     from app.core.scene.serialise import fit_to_data, operation_to_data, parameter_to_data
     from tools.file_acceptance import body_digest
 
-    ops = [operation_to_data(entry) for entry in document.ops]
+    operations = [operation_to_data(entry) for entry in document.ops]
     parameters = {
         str(name): parameter_to_data(parameter) for name, parameter in document.parameters.items()
     }
-    fits = [fit_to_data(fit) for fit in document.fits]
     bodies = (
         {str(key): body_digest(entry.mesh) for key, entry in scene.objects.items()}
         if scene is not None
         else {}
     )
+    position, focal, up, scale = (list(camera) + [None] * 4)[:4] if camera else (None,) * 4
     return {
-        "history_length": len(document.ops),
-        "ops": _digest(ops),
-        "op_names": [entry.op for entry in document.ops],
-        "parameters": _digest(parameters),
-        "fits": _digest(fits),
+        "ops": [entry.op for entry in document.ops],
+        "params": [_digest(entry.get("params")) for entry in operations],
+        "project_params": _digest(parameters),
+        "fits": _digest([fit_to_data(fit) for fit in document.fits]),
         "bodies": bodies,
-        "selection": dict(selection or {}),
-        "camera": [
-            [round(float(value), 4) for value in part] if isinstance(part, (list, tuple)) else part
-            for part in (camera or ())
-        ],
+        "selection": list(selection),
+        "camera": {
+            "position": _rounded(position),
+            "focal": _rounded(focal),
+            "up": _rounded(up),
+            "scale": None if scale is None else round(float(scale), 4),
+        },
     }
 
 
+def _rounded(vector: Any) -> list[float] | None:
+    return None if vector is None else [round(float(value), 4) for value in vector]
+
+
 #: Die Teile eines Abdrucks, die zum Dokument gehören; Auswahl und Kamera nicht.
-DOCUMENT_PARTS: Final[tuple[str, ...]] = ("history_length", "ops", "parameters", "fits", "bodies")
+DOCUMENT_PARTS: Final[tuple[str, ...]] = ("ops", "params", "project_params", "fits", "bodies")
 
 
 def compare_prints(
@@ -559,92 +621,52 @@ def compare_prints(
 
 # --- Messprotokoll -----------------------------------------------------------------------
 
-#: Welche Felder des Protokolls welchen Prüfpunkt tragen (Plan D0, Abschnitt 2.7, 3.1).
-#: Jeder der 19 Prüfpunkte hat mindestens eines; was Stufe B dazu urteilt, steht
-#: in :data:`STAGE_B`. ``tests/test_function_bench.py`` hält beides gegen das
-#: Gerüst (:func:`empty_protocol`).
-POINT_FIELDS: Final[dict[int, tuple[str, ...]]] = {
-    1: ("place", "search"),
-    2: ("steps",),
-    3: ("preview",),
-    4: ("result", "cli"),
-    5: ("states",),
-    6: ("timing",),
-    7: ("fault", "messages"),
-    8: ("texts", "fields", "manual_opened"),
-    9: ("texts", "units"),
-    10: ("tab_chain", "names", "focus_return"),
-    11: ("promise",),
-    12: ("edit_later",),
-    13: ("matrix",),
-    14: ("cancel",),
-    15: ("halt", "insertion"),
-    16: ("switch",),
-    17: ("place",),
-    18: ("licence_runs",),
-    19: (
-        "layout",
-        "fonts",
-        "state_images",
-        "contrast",
-        "icons",
-        "animations",
-        "scrollbars",
-        "frames",
-        "modals",
-        "raw_windows",
-        "hover_labels",
-        "empty_states",
-    ),
-}
 
-#: Was Stufe B an einem Prüfpunkt am Bild urteilt (Konzept §5 „Stufe B“). Stufe A
-#: misst trotzdem; der Vermerk sagt, dass das Urteil dort nicht endet.
-STAGE_B: Final[dict[int, str]] = {
-    1: "Herkunft der Suchproben",
-    2: "Weg und Entscheidungen mit Vorwissen",
-    7: "Wortlaut der Meldungen (V5)",
-    8: "Gesamturteil Verständlichkeit (V4 bis V6)",
-    9: "keine Bedeutung allein über Farbe (Regel 18)",
-    11: "Inhalt von Handbuchstelle und Website",
-    13: "Matrix gegen grenzen.md",
-    19: "G9, Z3, Z4, I1 bis I6 und der Vergleich",
-}
+def protocol_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Die Zeile, wie das Protokoll sie trägt: nur die Schlüssel des Schemas.
+
+    ``route`` (der Auswahlweg von L) bleibt draußen — er steht in ``steps``.
+    """
+    keys = PROTOCOL_SCHEMA["row"].keys or frozenset()
+    data = {key: row[key] for key in sorted(keys) if key in row}
+    if "spec" in data:
+        data["spec"] = dict(data["spec"] or {})
+    if "covers" in data:
+        data["covers"] = list(data["covers"] or ())
+    return data
 
 
 def empty_protocol(
-    row: Mapping[str, Any], case_kind: str, variant: Variant, version: Mapping[str, str]
+    row: Mapping[str, Any], variant: Mapping[str, Any], version: Mapping[str, str]
 ) -> dict[str, Any]:
-    """Das Gerüst eines Messprotokolls: jedes Feld da, ungemessen heißt ``None``.
+    """Das Gerüst eines Messprotokolls nach ``function_checks.PROTOCOL_SCHEMA``.
 
-    ``unmeasured`` nennt je Feld, warum es leer blieb — fehlende ``steps``
-    ergeben bei U „nicht gemessen“, nie „gut“ (Plan D0, Abschnitt 3.1, Prüfpunkt 2).
+    Jedes Feld des Schemas steht da; ungemessen heißt ``None``, und
+    ``unmeasured`` nennt den Grund — fehlende ``steps`` ergeben bei U „nicht
+    gemessen“, nie „gut“. ``variant`` ist schon die Form des Protokolls
+    (:meth:`Variant.protocol`).
     """
-    data: dict[str, Any] = {
-        "row": str(row.get("id", "")),
-        "kind": case_kind,
-        "row_kind": row.get("kind"),
-        "package": row.get("package"),
-        "spec": dict(row.get("spec") or {}),
-        "target": row.get("target"),
-        "variant": variant.as_dict(),
-        "version": dict(version),
-        "scene": None,
-        "steps": [],
-        "states": {},
-        "stage_b": {str(point): text for point, text in STAGE_B.items()},
-        "unmeasured": {},
-        "images": [],
-        "errors": [],
-    }
-    for names in POINT_FIELDS.values():
-        for name in names:
-            data.setdefault(name, None)
-    data["steps"] = []
-    data["states"] = {}
-    data["modals"] = []
-    data["raw_windows"] = []
-    data["messages"] = []
+    data: dict[str, Any] = dict.fromkeys(PROTOCOL_SCHEMA)
+    data.update(
+        {
+            "row": protocol_row(row),
+            "kind": str(row.get("kind") or ""),
+            "package": str(row.get("package") or ""),
+            "spec": dict(row.get("spec") or {}) or None,
+            "variant": dict(variant),
+            "version": {
+                "commit": str(version.get("commit", "")),
+                "app": str(version.get("app", "")),
+            },
+            "steps": [],
+            "states": {},
+            "findings": [],
+            "closed_by_escape": [],
+            "unmeasured": {},
+            "images": [],
+            "errors": [],
+        }
+    )
     return data
 
 
@@ -813,8 +835,6 @@ def drive(
     machine.start(steps, timeout_s)
     while not machine.done:
         pump()
-        if machine.finished and machine.depth == 0:
-            break
         if machine.deadline is not None and clock() > machine.deadline + timeout_s:
             # Der Automat hat seine Frist und eine zweite dazu verpasst — dann
             # tickt er nicht mehr, und diese Schleife ist die letzte Wache.
@@ -826,12 +846,17 @@ def drive(
 
 
 class ClickLike(Protocol):
-    """Was ``guide_targets.next_click`` zurückgibt (Plan D0, Abschnitt 2.2)."""
+    """Was ``guide_targets.next_click`` zurückgibt (``guide_targets.Click``).
+
+    ``target`` ist der Wortschatzname, ``direction`` die Richtung beim Rollen
+    (1 nach unten, -1 nach oben).
+    """
 
     rect: Any
     button: Any
     why: str
     target: Any
+    direction: int
 
 
 class Ports(Protocol):
@@ -839,13 +864,13 @@ class Ports(Protocol):
 
     def next_click(self, name: str) -> ClickLike: ...
     def widget_under(self, point: Any) -> Any: ...
-    def covers(self, target: Any, hit: Any) -> bool: ...
+    def covers(self, click: ClickLike, hit: Any) -> bool: ...
     def centre(self, rect: Any) -> Any: ...
     def press(self, widget: Any, point: Any, button: str) -> None: ...
     def keys(self, sequence: Any) -> None: ...
     def type_text(self, text: str) -> None: ...
-    def describe(self, widget: Any) -> dict[str, Any]: ...
-    def zone_of(self, widget: Any) -> str: ...
+    def describe(self, widget: Any, point: Any = None) -> dict[str, Any]: ...
+    def zone_of(self, widget: Any) -> str | None: ...
     def rect_data(self, rect: Any) -> list[int]: ...
     def point_data(self, point: Any) -> list[int]: ...
     def now(self) -> float: ...
@@ -863,6 +888,11 @@ def button_name(button: Any) -> str:
     return "left"
 
 
+def with_modifier(button: str, modifier: str) -> str:
+    """Taste und Zusatztaste als ein Wort, wie :meth:`QtPorts.press` es liest: ``ctrl+left``."""
+    return f"{modifier}+{button}" if modifier else button
+
+
 class Walk:
     """Der Weg des Kunden zu einem Ziel: Wegklicks, dann das Ziel — jeder mit Probe.
 
@@ -877,8 +907,8 @@ class Walk:
         self.ports = ports
         self.steps = steps
         self.began = began
-        #: Die Phase, zu der die nächsten Einträge gehören — der Hauptweg heißt
-        #: ``weg`` und ``übernehmen``; nur sie zählt U für E1 bis E4.
+        #: Die Phase der nächsten Einträge. Der Hauptweg heißt ``weg`` und
+        #: ``übernehmen`` (``function_checks.MAIN_PHASES``); nur er zählt für E1 bis E4.
         self.phase = ""
 
     def record(self, entry: dict[str, Any]) -> dict[str, Any]:
@@ -913,16 +943,24 @@ class Walk:
             raise BenchFinding(NOT_FOUND, name, str(error)) from error
         point = self.ports.centre(click.rect)
         hit = self.ports.widget_under(point)
+        why = str(click.why)
+        if why == "rollen":
+            pressed = "wheel_up" if int(getattr(click, "direction", 1) or 1) < 0 else "wheel_down"
+        elif why == TARGET_REASON:
+            pressed = button
+        else:
+            pressed = button_name(click.button)
         record = self.record(
             {
                 "target": name,
-                "why": click.why,
-                "button": button_name(click.button) if click.why != TARGET_REASON else button,
+                "why": why,
+                "button": pressed,
                 "rect": self.ports.rect_data(click.rect),
                 "point": self.ports.point_data(point),
-                "widget_at": self.ports.describe(hit) if hit is not None else None,
-                "hit": hit is not None and self.ports.covers(click.target, hit),
-                "zone": self.ports.zone_of(hit if hit is not None else click.target),
+                "widget_at": self.ports.describe(hit, point) if hit is not None else None,
+                "hit": hit is not None and self.ports.covers(click, hit),
+                "zone": self.ports.zone_of(hit) if hit is not None else None,
+                "decision": False,
             }
         )
         if not record["hit"]:
@@ -933,7 +971,7 @@ class Walk:
                 f"an {record['point']} liegt {record['widget_at']}, nicht das Ziel des Klicks",
             )
         self.ports.press(hit, point, record["button"])
-        return str(click.why)
+        return why
 
     def _t(self) -> float:
         return round(self.ports.now() - self.began, 4)
@@ -944,39 +982,49 @@ def way_clicks(steps: Sequence[Mapping[str, Any]]) -> int:
     return sum(1 for step in steps if step.get("why") in WAY_REASONS)
 
 
-def place_of(steps: Sequence[Mapping[str, Any]], target: str) -> dict[str, Any] | None:
-    """Wo das Ziel einer Zeile steht, aus ihrem ersten Weg (Prüfpunkt 1, 17).
+def place_of(steps: Sequence[Mapping[str, Any]], target: str) -> dict[str, Any]:
+    """Wo das Ziel einer Zeile steht, aus ihrem Hauptweg (Prüfpunkt 1, 17; Schema ``place``).
 
-    ``ort`` ist die Art des Fundorts — Karte, Menü, Werkzeugleiste, Kontext —, aus
-    der Zone des Zielklicks und der Gründe davor. ``None``, wenn der Weg nicht
-    ankam.
+    ``where`` ist einer aus ``function_checks.PLACES``: ``kontext`` bei einem
+    Rechtsklick auf dem Weg, ``menue`` bei einem Menü, ``werkzeugleiste`` am
+    Kopf des Fensters, sonst ``karte``. ``path`` sind die sichtbaren Texte der
+    Klicks bis zum Ziel. Kam der Weg nicht an, steht der Grund in ``error``.
     """
-    walked: list[Mapping[str, Any]] = []
-    for step in steps:
-        if step.get("target") != target:
-            continue
-        walked.append(step)
-        if step.get("why") == TARGET_REASON or step.get("finding"):
+    walked = [step for step in steps if step.get("phase") == PATH_PHASE]
+    upto: list[Mapping[str, Any]] = []
+    for step in walked:
+        upto.append(step)
+        if step.get("target") == target and (
+            step.get("why") == TARGET_REASON or step.get("finding")
+        ):
             break
-    if not walked or walked[-1].get("why") != TARGET_REASON or not walked[-1].get("hit"):
-        return None
-    reasons = [str(step.get("why")) for step in walked]
-    zone = str(walked[-1].get("zone") or "")
-    if any(step.get("button") == "right" for step in walked):
+    final = upto[-1] if upto else None
+    if final is None or final.get("target") != target:
+        return {"where": None, "path": [], "error": "der Hauptweg erreichte das Ziel nicht"}
+    if final.get("finding") or not final.get("hit"):
+        return {
+            "where": None,
+            "path": [],
+            "error": str(final.get("detail") or final.get("finding")),
+        }
+    clicks = [step for step in upto if step.get("why")]
+    reasons = {str(step.get("why")) for step in clicks}
+    zones = [str(step.get("zone") or "") for step in clicks if step.get("target") == target]
+    if any(str(step.get("button", "")).endswith("right") for step in clicks):
         where = "kontext"
-    elif "menue" in reasons or zone == "menue":
+    elif reasons & {"menue", "untermenue"} or "menue" in zones:
         where = "menue"
-    elif zone == "kopf":
+    elif zones and zones[0] == "kopf":
         where = "werkzeugleiste"
     else:
-        where = "karte" if zone.startswith("karte") else zone
-    return {
-        "ort": where,
-        "zone": zone,
-        "why": reasons,
-        "way_clicks": way_clicks(walked),
-        "widget": walked[-1].get("widget_at"),
-    }
+        where = "karte"
+    assert where in PLACES
+    path = [
+        str((step.get("widget_at") or {}).get("text") or step.get("target"))
+        for step in clicks
+        if step.get("target") == target
+    ]
+    return {"where": where, "path": path, "error": None}
 
 
 def search_rank(hits: Sequence[str], target: str) -> int | None:
@@ -1011,13 +1059,42 @@ class QtPorts:
 
         return guide_targets.widget_under(point)  # type: ignore[attr-defined]
 
-    def covers(self, target: Any, hit: Any) -> bool:
-        if target is None or hit is None:
-            return False
-        if target is hit:
-            return True
-        is_ancestor = getattr(target, "isAncestorOf", None)
-        return bool(is_ancestor is not None and is_ancestor(hit))
+    def covers(self, click: ClickLike, hit: Any) -> bool:
+        """Ob der Treffer der Probe das ist, was der Klick meint — das Ziel oder ein Kind davon.
+
+        ``Click`` nennt eine Fläche, kein Widget. Gemeint ist das Widget, dessen
+        Rechteck genau diese Fläche ist (Knopf, Klappe, Feld, Reiter als Knopf),
+        oder der Behälter, in dem die Fläche als Zeile liegt: Liste und Baum,
+        Menü und Menüleiste, Reiterleiste, die Ansicht, beim Rollen die
+        Rollfläche. Ein Treffer gilt, wenn er selbst oder ein Vorfahr innerhalb
+        seines Fensters das ist; eine Einladung, eine Karte oder ein Dialog
+        darüber ist es nicht — der Fund „verdeckt“.
+        """
+        from PySide6.QtCore import QPoint, QRect
+        from PySide6.QtWidgets import (
+            QAbstractItemView,
+            QAbstractScrollArea,
+            QMenu,
+            QMenuBar,
+            QTabBar,
+        )
+
+        holders: tuple[type, ...] = (QAbstractItemView, QMenu, QMenuBar, QTabBar)
+        if str(click.why) == "rollen":
+            holders = (*holders, QAbstractScrollArea)
+        rect = click.rect
+        probe = hit
+        while probe is not None:
+            area = QRect(probe.mapToGlobal(QPoint(0, 0)), probe.size())
+            if area == rect:
+                return True
+            holder = isinstance(probe, holders) or probe is self.window.viewport
+            if holder and area.contains(rect.center()):
+                return True
+            if probe.isWindow():
+                return False
+            probe = probe.parentWidget()
+        return False
 
     def centre(self, rect: Any) -> Any:
         return rect.center()
@@ -1064,6 +1141,14 @@ class QtPorts:
         }[button]
         QTest.mouseClick(widget, mouse, modifiers, local)
 
+    def move(self, point: Any) -> None:
+        """Die Maus an eine Stelle, ohne zu klicken — Überfahren für I1."""
+        from PySide6.QtTest import QTest
+
+        hit = self.widget_under(point)
+        if hit is not None:
+            QTest.mouseMove(hit, hit.mapFromGlobal(point))
+
     def keys(self, sequence: Any) -> None:
         """Eine Tastenfolge an das Fokuswidget, sonst an das Fenster."""
         from PySide6.QtGui import QKeySequence
@@ -1083,24 +1168,47 @@ class QtPorts:
         target = QApplication.focusWidget() or self.window
         QTest.keyClicks(target, text)
 
-    def describe(self, widget: Any) -> dict[str, Any]:
+    def describe(self, widget: Any, point: Any = None) -> dict[str, Any]:
+        """Klasse, Name, Kennzeichen und der sichtbare Text an der Stelle des Klicks.
+
+        Am Text hängt ``place.path``: Ein Menü nennt die Zeile unter dem Zeiger,
+        eine Reiterleiste den Reiter, eine Liste den Eintrag, ein Knopf sich selbst.
+        """
+        from PySide6.QtWidgets import QAbstractItemView, QMenu, QMenuBar, QTabBar
+
         from app.core.guides import TARGET_PROPERTY
 
         if widget is None:
             return {}
+        text = ""
+        local = widget.mapFromGlobal(point) if point is not None else None
+        if isinstance(widget, (QMenu, QMenuBar)) and local is not None:
+            action = widget.actionAt(local)
+            text = action.text() if action is not None else ""
+        elif isinstance(widget, QTabBar) and local is not None:
+            index = widget.tabAt(local)
+            text = widget.tabText(index) if index >= 0 else ""
+        elif isinstance(widget.parentWidget(), QAbstractItemView) and local is not None:
+            view = widget.parentWidget()
+            index = view.indexAt(local)
+            text = str(index.data() or "") if index.isValid() else ""
+        elif callable(getattr(widget, "text", None)):
+            text = str(widget.text() or "")
         mark = widget.property(TARGET_PROPERTY)
         return {
             "class": type(widget).__name__,
             "object_name": widget.objectName(),
             "mark": str(mark) if mark else "",
+            "text": text.replace("&", ""),
         }
 
-    def zone_of(self, widget: Any) -> str:
+    def zone_of(self, widget: Any) -> str | None:
         from app.ui import guide_targets
 
         if widget is None:
-            return ""
-        return str(guide_targets.zone_of(self.window, widget))  # type: ignore[attr-defined]
+            return None
+        zone = guide_targets.zone_of(self.window, widget)  # type: ignore[attr-defined]
+        return str(zone) if zone else None
 
     def rect_data(self, rect: Any) -> list[int]:
         return [rect.x(), rect.y(), rect.width(), rect.height()]
@@ -1169,6 +1277,9 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
 #: Die Szene, die jede Zeile ohne eigene Szene bekommt (Plan D0, Abschnitt 2.5).
 EMPTY_SCENE: Final = "leer"
 
+#: Die Szene ohne Projekt: Der Fall bleibt auf dem Startbildschirm (``start.*``).
+START_SCREEN: Final = "startbildschirm"
+
 #: Die Szene, in die der Projektwechsel geht (Prüfpunkt 16).
 SECOND_SCENE: Final = "zweites_projekt"
 
@@ -1181,18 +1292,21 @@ LATE_WINDOW_S: Final = 3.0
 #: Wie lange nach einem Klick auf eine Handlung auf ihre Wirkung gewartet wird.
 EFFECT_WINDOW_S: Final = 2.0
 
-#: Das Ziel für den ersten Eintrag unter *Datei → Zuletzt geöffnet* (Prüfpunkt 16).
-#: Der Name kommt aus dem Wortschatz (``menubar_name``); der Fall bricht mit
-#: „nicht auffindbar“ ab, wenn es ihn nicht gibt, statt den Wechsel zu umgehen.
-RECENT_TARGET: Final = "menu:menubar.datei.zuletzt_geoeffnet.1"
+#: Die Einträge unter „Zuletzt geöffnet“ auf dem Startbildschirm (Prüfpunkt 16):
+#: ``start.recent:<n>``, n ab 1 in der Folge der Liste. Ein Menü dafür gibt es
+#: nicht; zum Startbildschirm führt *Datei → Neu* (``MainWindow.new_action``).
+RECENT_KIND: Final = "start.recent"
+
+#: Ein Szenenschlüssel, wie er im Dateinamen steht.
+_STEP_NUMBER: Final = re.compile(r"\b(\d+)\b")
 
 
 def default_apply_target(row: Mapping[str, Any]) -> str | None:
-    """Womit eine Zeile übernommen wird, wenn ihre Spezifikation nichts sagt.
+    """Womit eine Zeile übernommen wird.
 
     Handlungen des Merkmalfensters und Kantenzeilen mit *Übernehmen* dort,
-    Operationen mit dem Hauptknopf ihres Dialogs; ein Fensterbefehl wirkt mit
-    seinem Klick selbst.
+    Operationen mit dem Hauptknopf ihres Dialogs; ein Fensterbefehl und eine
+    Bedienfläche wirken mit ihrem Klick selbst.
     """
     target = str(row.get("target") or "")
     if target.startswith(("feature:", "edge:")):
@@ -1203,42 +1317,88 @@ def default_apply_target(row: Mapping[str, Any]) -> str | None:
 
 
 def route_of(row: Mapping[str, Any]) -> list[tuple[str, str]]:
-    """Der Weg einer Zeile: ihre Schritte aus der Spezifikation, sonst ihr Ziel.
+    """Der Hauptweg einer Zeile: Auswahl (L), Schritte der Spezifikation, dann das Ziel.
 
-    ``route`` nennt, was ``next_click`` allein nicht findet — einen Rechtsklick
-    auf eine Baumzeile, dann den Eintrag im Kontextmenü (Plan D0, Abschnitt 2.4).
+    ``row.route`` stellt die Auswahl der Anforderung her (``function_list``:
+    Baumzeile, mit Strg weitere), ``spec.route`` nennt, was ``next_click``
+    allein nicht findet (Rechtsklick, Kontextmenü). Jeder Schritt ist
+    ``{target, button, modifier}``.
     """
-    spec = row.get("spec") or {}
+    steps = [*(row.get("route") or ()), *((row.get("spec") or {}).get("route") or ())]
     route = [
-        (str(entry["target"]), str(entry.get("button", "left"))) for entry in spec.get("route", ())
+        (
+            str(entry["target"]),
+            with_modifier(str(entry.get("button") or "left"), str(entry.get("modifier") or "")),
+        )
+        for entry in steps
     ]
     target = str(row.get("target") or "")
-    if target and (not route or route[-1][0] != target) and not spec.get("route_ends_elsewhere"):
+    if target and (not route or route[-1][0] != target):
         route.append((target, "left"))
     return route
 
 
-def body_figures(scene: Any) -> dict[str, Any]:
-    """Kennzahlen je Körper: Volumen, Außenmaß, Dreiecke, dicht (Prüfpunkt 4)."""
+def selected_feature(row: Mapping[str, Any]) -> tuple[str, str] | None:
+    """Das Merkmal, das der Auswahlweg wählt (``tree.row:obj_1.hole_1``), oder keins."""
+    for entry in reversed(list(row.get("route") or ())):
+        target = str(entry.get("target") or "")
+        if target.startswith("tree.row:"):
+            body, _dot, feature = target.removeprefix("tree.row:").partition(".")
+            return (body, feature) if feature else None
+    return None
+
+
+def result_metrics(scene: Any, document: Any, selected: tuple[str, str] | None) -> dict[str, Any]:
+    """Kennzahlen des Ergebnisses, benannt wie die Erwartungen der Spezifikation.
+
+    ``volume`` und ``extent`` über alle Körper, ``bounds.<achse>_<min|max>``,
+    ``<art>.<wert>`` am gewählten Merkmal (``hole.diameter``; ohne Auswahl das
+    erste seiner Art) und ``parameter.<name>`` aus den Projektparametern — die
+    Namen, die ``tests/data/function_rows`` verwendet (Bericht D0-L).
+    """
     from app.core.errors import AppError
     from app.core.geom.mesh import as_mesh_data
 
-    figures: dict[str, Any] = {}
-    for key, entry in scene.objects.items():
+    metrics: dict[str, Any] = {}
+    volume = 0.0
+    lows: list[Any] = []
+    highs: list[Any] = []
+    for entry in scene.objects.values():
         try:
             raw = as_mesh_data(entry.mesh).raw
-        except AppError as problem:
-            figures[str(key)] = {"error": str(problem)}
+        except AppError:
             continue
+        volume += float(raw.volume)
         low, high = raw.bounds
-        figures[str(key)] = {
-            "volume": round(float(raw.volume), 4),
-            "extents": [round(float(value), 4) for value in high - low],
-            "triangles": len(raw.faces),
-            "watertight": bool(raw.is_watertight),
-            "features": {str(name): feature.kind for name, feature in entry.features.items()},
-        }
-    return figures
+        lows.append(low)
+        highs.append(high)
+    if lows:
+        low = [min(float(point[axis]) for point in lows) for axis in range(3)]
+        high = [max(float(point[axis]) for point in highs) for axis in range(3)]
+        metrics["volume"] = round(volume, 4)
+        metrics["extent"] = [round(b - a, 4) for a, b in zip(low, high, strict=True)]
+        for axis, name in enumerate("xyz"):
+            metrics[f"bounds.{name}_min"] = round(low[axis], 4)
+            metrics[f"bounds.{name}_max"] = round(high[axis], 4)
+    seen: set[str] = set()
+    ordered = []
+    if selected is not None and selected[0] in scene.objects:
+        chosen = scene.objects[selected[0]].features.get(selected[1])
+        if chosen is not None:
+            ordered.append(chosen)
+    ordered += [feature for entry in scene.objects.values() for feature in entry.features.values()]
+    for feature in ordered:
+        if feature.kind in seen:
+            continue
+        seen.add(feature.kind)
+        for key, value in feature.params.items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                metrics[f"{feature.kind}.{key}"] = round(float(value), 4)
+    for name, parameter in document.parameters.items():
+        value = getattr(parameter, "value", None)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            metrics[f"parameter.{name}"] = round(float(value), 4)
+    return metrics
 
 
 def cli_arguments(operation: Mapping[str, Any]) -> list[str] | None:
@@ -1246,7 +1406,7 @@ def cli_arguments(operation: Mapping[str, Any]) -> list[str] | None:
 
     Nur Zahlen, Texte und Wahrheitswerte haben dort ein Feld; ein Schritt mit
     anderen Werten (Listen, Bezüge) ist über die Kommandozeile nicht derselbe —
-    dann ``None``, und Prüfpunkt 4 vermerkt den Vergleich als nicht prüfbar.
+    dann ``None``, und Prüfpunkt 4 vermerkt den Vergleich als nicht gemessen.
     """
     arguments = [str(operation["op"])]
     inputs = [str(name) for name in operation.get("inputs", ())]
@@ -1263,6 +1423,17 @@ def cli_arguments(operation: Mapping[str, Any]) -> list[str] | None:
     return arguments
 
 
+def bodies_digest(bodies: Mapping[str, str]) -> str:
+    """Ein Abdruck über die Abdrücke aller Körper — ``result.digest``, ``cli.digest``."""
+    return _digest(dict(sorted(bodies.items())))
+
+
+def step_number(text: str) -> int | None:
+    """Die erste Zahl in einem Haltgrund — die Schrittnummer (Prüfpunkt 15)."""
+    found = _STEP_NUMBER.search(text)
+    return int(found.group(1)) if found else None
+
+
 class FunctionFlow:
     """Ein Funktionsfall am echten Fenster: Phasen nach der Variante, jede mit Abdruck.
 
@@ -1270,7 +1441,8 @@ class FunctionFlow:
     Fenster; scheitert eine, steht ihr Grund in ``errors`` oder ``findings``,
     und die nächste läuft trotzdem. Gemessen wird ins Protokoll ``data``,
     geschrieben nach jeder Phase (``persist``) — ein Absturz lässt stehen, was
-    schon gemessen war.
+    schon gemessen war. ``bench`` hält, was nur den Lauf betrifft (Phase,
+    Ausnahme), getrennt vom Protokoll.
     """
 
     def __init__(
@@ -1283,6 +1455,8 @@ class FunctionFlow:
         row: Mapping[str, Any],
         variant: Variant,
         scenes: Path,
+        bench: dict[str, Any] | None = None,
+        out: Path | None = None,
     ) -> None:
         from tools.function_capture import FrameCounter, Heartbeat, ModalWatch
 
@@ -1290,8 +1464,10 @@ class FunctionFlow:
         self.window = window
         self.session = window.session
         self.folder = folder
+        self.out = out or folder.parent.parent
         self.data = data
         self.persist = persist
+        self.bench = bench if bench is not None else {}
         self.row = dict(row)
         self.spec: dict[str, Any] = dict(row.get("spec") or {})
         self.variant = variant
@@ -1301,9 +1477,12 @@ class FunctionFlow:
         self.walker = Walk(self.ports, data["steps"], self.began)
         self.heartbeat = Heartbeat()
         self.frames = FrameCounter()
+        self.frames_wrapped = False
         self.watch = ModalWatch(self.began)
         self._timers: list[Any] = []
         self.scene_key = str(self.spec.get("start_scene") or row.get("start_scene") or EMPTY_SCENE)
+        self.apply_target = default_apply_target(self.row)
+        self.selected = selected_feature(self.row)
 
     # --- Grundgerüst -----------------------------------------------------------------
 
@@ -1324,7 +1503,7 @@ class FunctionFlow:
         drive(machine, steps, self.pump, time.perf_counter, timeout_s)
         ok = True
         if machine.finding is not None:
-            self.data.setdefault("findings", []).append(
+            self.data["findings"].append(
                 {
                     "phase": label,
                     "kind": machine.finding.kind,
@@ -1337,9 +1516,7 @@ class FunctionFlow:
             self.data["errors"].append(f"{label}: {machine.error}")
             ok = False
         if machine.unsticks:
-            self.data.setdefault("closed_by_escape", []).append(
-                {"phase": label, "times": machine.unsticks}
-            )
+            self.data["closed_by_escape"].append({"phase": label, "times": machine.unsticks})
         self.persist()
         return ok
 
@@ -1366,13 +1543,11 @@ class FunctionFlow:
 
     def key_step(self, sequence: Any, name: str) -> Step:
         def act(machine: StepMachine) -> None:
-            self.walker.record({"target": name, "key": str(sequence)})
+            text = sequence.toString() if hasattr(sequence, "toString") else str(sequence)
+            self.walker.record({"target": name, "key": text, "button": None})
             self.ports.keys(sequence)
 
         return Step(f"taste {name}", act, settle_ms=SETTLE_MS)
-
-    def _t(self) -> float:
-        return round(time.perf_counter() - self.began, 4)
 
     def undo_keys(self) -> Any:
         from PySide6.QtGui import QKeySequence
@@ -1381,30 +1556,43 @@ class FunctionFlow:
 
     def redo_keys(self) -> Any:
         """Die Wiederholen-Taste aus ``shortcut_schemes.redo_keys`` — die, die im Menü steht."""
-        import sys
-
         from PySide6.QtGui import QKeySequence
 
         from app.ui.shortcut_schemes import redo_keys
 
         return redo_keys(sys.platform, QKeySequence(QKeySequence.StandardKey.Redo))[0]
 
-    def snapshot(self, label: str) -> dict[str, Any]:
-        """Der Abdruck jetzt, unter ``states[label]``."""
+    def scene_now(self) -> dict[str, Any]:
+        """Der Abdruck jetzt (:func:`scene_print`)."""
         result = self.session.last_result
         tree = self.window.object_tree
-        printed = scene_print(
+        selection = [str(name) for name in tree.selected_objects()]
+        selection += [f"{body}.{feature}" for body, feature in tree.selected_features()]
+        return scene_print(
             self.session.project.document,
             result.scene if result is not None else None,
-            selection={
-                "objects": [str(name) for name in tree.selected_objects()],
-                "features": [[str(a), str(b)] for a, b in tree.selected_features()],
-            },
+            selection=selection,
             camera=self.window.viewport.camera_pose(),
         )
+
+    def snapshot(self, label: str) -> dict[str, Any]:
+        """Der Abdruck jetzt, unter ``states[label]`` (``function_checks.STATE_KEYS``)."""
+        printed = self.scene_now()
         self.data["states"][label] = printed
         self.persist()
         return printed
+
+    def picture(self, label: str) -> None:
+        """Bild des Fensters und eines offenen Dialogs für Stufe B, relativ zu ``--out``."""
+        from PySide6.QtWidgets import QApplication
+
+        for suffix, widget in (("", self.window), ("-dialog", QApplication.activeModalWidget())):
+            if widget is None:
+                continue
+            picture = widget.screen().grabWindow(int(widget.winId()))
+            path = self.folder / f"{label}{suffix}.png"
+            if picture.save(str(path)):
+                self.data["images"].append(path.relative_to(self.out).as_posix())
 
     def widget(self, name: str) -> Any | None:
         """Das Widget hinter einem Wortschatznamen, oder ``None`` — nur zum Ablesen."""
@@ -1423,6 +1611,9 @@ class FunctionFlow:
                 return widget
         return self.window
 
+    def window_size(self) -> list[int]:
+        return [self.window.width(), self.window.height()]
+
     # --- Vorbereitung ------------------------------------------------------------------
 
     def prepare(self) -> None:
@@ -1437,19 +1628,19 @@ class FunctionFlow:
         )
         self._timers.append(start_heartbeat(self.window, self.heartbeat))
         self._timers.append(self.watch.start(self.window))
-        self.data["variant"]["placed"] = place_window(self.application, self.window, self.variant)
+        placed = place_window(self.application, self.window, self.variant)
         for _ in range(20):
             self.pump()
-        self.data["frames_wrapped"] = self.frames.wrap(
-            getattr(self.window.viewport, "renderer", None)
-        )
+        self.data["variant"] = self.variant.protocol(placed, self.window_size())
+        self.frames_wrapped = self.frames.wrap(getattr(self.window.viewport, "renderer", None))
         self.persist()
 
     def finish(self) -> None:
         """Was die Wachen gesehen haben, ins Protokoll."""
-        self.data["modals"] = list(self.watch.modals)
-        self.data["raw_windows"] = list(self.watch.raw_windows)
-        self.data["manual_opened"] = self.watch.opened("ManualWindow")
+        self.watch.poll()
+        self.data["modals"] = self.watch.modal_entries()
+        self.data["raw_windows"] = self.watch.raw_entries()
+        self.data["windows"] = list(self.watch.windows)
         for timer in self._timers:
             timer.stop()
         self.persist()
@@ -1459,12 +1650,22 @@ class FunctionFlow:
     def reset(self) -> bool:
         """Zurück an die Startszene; die Vorbereitung ist nicht die geprüfte Handlung.
 
-        Beim ersten Mal steht der Startbildschirm da, und die leere Szene beginnt
-        mit einem Klick auf *Neues Projekt*. Danach öffnet ``open_path`` die
-        Szenendatei (Konzept §5: „Nur die Startszene entsteht über
-        ``open_path``“). Was die Phase davor geändert hat, wird verworfen, ohne die
-        Speicherfrage zu stellen — sie gehört nicht zu dieser Zeile.
+        Die Szene ``startbildschirm`` heißt: kein Projekt, der Fall beginnt dort.
+        Die leere Szene beginnt beim ersten Mal mit einem Klick auf *Neues
+        Projekt*. Sonst öffnet ``open_path`` die Szenendatei (Konzept §5: „Nur die
+        Startszene entsteht über ``open_path``“). Was die Phase davor geändert
+        hat, wird verworfen, ohne die Speicherfrage zu stellen — sie gehört nicht
+        zu dieser Zeile.
         """
+        if self.scene_key == START_SCREEN:
+            if self.data.get("scene") is None:
+                self.data["scene"] = {
+                    "key": START_SCREEN,
+                    "triangles": 0,
+                    "build_s": None,
+                    "eval_s": 0.0,
+                }
+            return self.window.stack.currentWidget() is self.window.start_screen
         previous = self.session.last_result
         path = self.scenes / f"{self.scene_key}.p3d"
         on_start = self.window.stack.currentWidget() is self.window.start_screen
@@ -1502,16 +1703,17 @@ class FunctionFlow:
         return [self.walker.step(target, button) for target, button in route_of(self.row)]
 
     def input_steps(self, inputs: Mapping[str, Any]) -> list[Step]:
-        """Je Feld: hinklicken, alles markieren, tippen; ohne Mitschreiben mit Tab bestätigen."""
+        """Je Feld: hinklicken, alles markieren, tippen; ohne Mitschreiben mit Tab bestätigen.
+
+        Ein Haken wird geklickt; ein Text, der keine Zahl ist, ist eine Wahl
+        (``decision``, E3) — getippt wie jede Eingabe.
+        """
         from PySide6.QtGui import QKeySequence
 
         steps: list[Step] = []
         for target, value in inputs.items():
             steps.append(self.walker.step(target))
             if isinstance(value, bool):
-                # Ein Haken wird geklickt, wenn er anders steht; der Weg oben
-                # hat ihn schon einmal geklickt, also stimmt er, wenn er jetzt
-                # dem Wert entspricht — sonst ein zweiter Klick.
                 steps.append(
                     Step(
                         f"haken {target}",
@@ -1522,33 +1724,33 @@ class FunctionFlow:
                     )
                 )
                 continue
-            text = (
-                typed_number(float(value), self.variant.unit)
-                if isinstance(value, (int, float))
-                else str(value)
-            )
+            number = isinstance(value, (int, float))
+            text = typed_number(float(value), self.variant.unit) if number else str(value)
             steps.append(
                 self.key_step(QKeySequence(QKeySequence.StandardKey.SelectAll), "alles markieren")
             )
             steps.append(
                 Step(
                     f"tippen {target}",
-                    lambda machine, target=target, text=text: self._type(target, text),
+                    lambda machine, target=target, text=text, number=number: self._type(
+                        target, text, decision=not number
+                    ),
                     settle_ms=SETTLE_MS,
                 )
             )
         return steps
 
     def _tick_box(self, machine: StepMachine, target: str, value: bool) -> None:
+        """Der Weg hat den Haken einmal geklickt; steht er falsch, kommt ein zweiter Klick."""
         box = self.widget(target)
         if box is not None and bool(box.isChecked()) != value:
             machine.insert([self.walker.step(target)])
 
-    def _type(self, target: str, text: str) -> None:
+    def _type(self, target: str, text: str, *, decision: bool = False) -> None:
         """Tippt ans Fokusfeld; ein Feld, das erst beim Verlassen übernimmt, bekommt Tab."""
         from PySide6.QtWidgets import QAbstractSpinBox, QApplication
 
-        self.walker.record({"target": target, "typed": text})
+        self.walker.record({"target": target, "typed": text, "button": None, "decision": decision})
         self.ports.type_text(text)
         focus = QApplication.focusWidget()
         spin = (
@@ -1557,7 +1759,7 @@ class FunctionFlow:
             else getattr(focus, "parentWidget", lambda: None)()
         )
         if isinstance(spin, QAbstractSpinBox) and not spin.keyboardTracking():
-            self.walker.record({"target": target, "key": "Tab"})
+            self.walker.record({"target": target, "key": "Tab", "button": None})
             self.ports.keys("Tab")
 
     def preview_steps(self) -> list[Step]:
@@ -1568,7 +1770,6 @@ class FunctionFlow:
         zugängliche Beschreibung). Beides sieht der Kunde.
         """
         shown = {"difference": self.window.viewport.difference}
-        apply_name = self.spec.get("apply") or default_apply_target(self.row)
 
         def remember(machine: StepMachine) -> None:
             shown["difference"] = self.window.viewport.difference
@@ -1586,43 +1787,48 @@ class FunctionFlow:
                 and legend.isVisible()
             ):
                 return True
-            button = self.widget(apply_name) if apply_name else None
+            button = self.widget(self.apply_target) if self.apply_target else None
             if button is not None and not button.isEnabled():
                 return bool(button.accessibleDescription() or button.toolTip())
-            return not apply_name and self.idle()
+            return not self.apply_target and self.idle()
 
         return [Step("vorschau merken", remember), self.wait_step("vorschau steht", settled)]
 
     def preview_record(self) -> dict[str, Any]:
-        """Band, Differenz und Sperrgrund, wie sie gerade stehen (Prüfpunkt 3, I2)."""
+        """Band, Differenz und Kennzahlen der Vorschau (Prüfpunkt 3, I2; Schema ``preview``)."""
         from app.ui.session import COARSE_PREVIEW_ABOVE
         from tools.file_acceptance import body_digest
         from tools.function_capture import visible_texts
 
         banner = self.widget("preview.banner")
         difference = self.window.viewport.difference
-        apply_name = self.spec.get("apply") or default_apply_target(self.row)
-        button = self.widget(apply_name) if apply_name else None
         triangles = (self.data.get("scene") or {}).get("triangles") or 0
         entries = getattr(difference, "entries", {}) if difference is not None else {}
+        shown = {key: entry for key, entry in entries.items() if entry.result is not None}
+        metrics = result_metrics(_SceneOf(shown), self.session.project.document, None)
         return {
-            "banner_text": visible_texts(banner)
-            if banner is not None and banner.isVisible()
-            else [],
-            "bodies": {
-                str(key): body_digest(entry.result.mesh)
-                for key, entry in entries.items()
-                if entry.result is not None
-            },
-            "figures": {str(key): fig for key, fig in body_figures(_SceneOf(entries)).items()}
-            if entries
-            else {},
+            "bodies": {str(key): body_digest(entry.result.mesh) for key, entry in shown.items()},
             "coarse": triangles > COARSE_PREVIEW_ABOVE,
-            "refused": bool(button is not None and not button.isEnabled()),
-            "reason": (button.accessibleDescription() or button.toolTip())
-            if button is not None
+            "banner_text": "\n".join(visible_texts(banner))
+            if banner is not None and banner.isVisible()
             else "",
+            "volume": metrics.get("volume"),
+            "extent": metrics.get("extent"),
         }
+
+    def capture_surface(self, root: Any) -> None:
+        """G1 bis G8, Texte, Felder und Tab-Kette der offenen Fläche ins Protokoll."""
+        from tools import function_capture as capture
+
+        theme = self.variant.theme
+        for name, entries in capture.sheet_snapshot(root, theme, self.window_size()).items():
+            self.data[name] = [*(self.data.get(name) or []), *entries]
+        self.data["texts"] = [*(self.data.get("texts") or []), *capture.text_entries(root)]
+        self.data["fields"] = [*(self.data.get("fields") or []), *capture.field_entries(root)]
+        self.data["empty_states"] = [
+            *(self.data.get("empty_states") or []),
+            *capture.empty_states(self.window),
+        ]
 
     # --- Die Phasen ------------------------------------------------------------------------
 
@@ -1633,7 +1839,7 @@ class FunctionFlow:
             return
         for name in self.variant.phases or PHASES[self.variant.set]:
             phase: Callable[[], None] = getattr(self, f"phase_{name}")
-            self.data["stage"] = name
+            self.bench["stage"] = name
             try:
                 phase()
             except Exception:
@@ -1647,33 +1853,33 @@ class FunctionFlow:
 
         from app.ui import guide_targets
 
-        probes = list(self.spec.get("search_probes") or ())
-        questions = [{"word": text, "origin": "frage"} for text in self.spec.get("questions") or ()]
-        if not probes and not questions:
+        probes = [{**probe, "question": False} for probe in self.spec.get("search_probes") or ()]
+        probes += [
+            {"word": text, "origin": "fragebogen", "question": True}
+            for text in self.spec.get("questions") or ()
+        ]
+        if not probes:
             unmeasured(self.data, "search", "Spezifikation ohne Suchproben")
             return
         target = str(self.row.get("target") or "")
         found: dict[str, Any] = {}
-        for probe in [*probes, *questions]:
+        for probe in probes:
             word = str(probe["word"])
             hits: list[str] = []
 
             def read(machine: StepMachine, hits: list[str] = hits) -> None:
                 hits[:] = list(guide_targets.search_hits(self.window))  # type: ignore[attr-defined]
 
-            field_name = str(self.spec.get("search_target") or "search")
             ok = self.run_steps(
                 f"suche {word}",
                 [
-                    self.walker.step(field_name),
+                    self.walker.step("search"),
                     self.key_step(
                         QKeySequence(QKeySequence.StandardKey.SelectAll), "alles markieren"
                     ),
                     Step(
                         f"tippen {word}",
-                        lambda machine, word=word, field_name=field_name: self._type(
-                            field_name, word
-                        ),
+                        lambda machine, word=word: self._type("search", word),
                         settle_ms=SEARCH_SETTLE_MS,
                     ),
                     Step("treffer lesen", read),
@@ -1681,9 +1887,10 @@ class FunctionFlow:
                 ],
             )
             found[word] = {
-                "origin": probe.get("origin"),
                 "rank": search_rank(hits, target) if ok else None,
                 "hits": hits[:10],
+                "origin": probe.get("origin"),
+                "question": bool(probe["question"]),
             }
         self.data["search"] = found
         self.reset()
@@ -1691,7 +1898,7 @@ class FunctionFlow:
     def phase_escape(self) -> None:
         """Prüfpunkt 5: Weg, Eingaben, Vorschau, dann Escape — der Stand ist der vorher."""
         inputs = self.spec.get("inputs") or {}
-        self.snapshot("before")
+        before = self.scene_now()
         if not inputs:
             unmeasured(self.data, "states.escape", "keine Eingaben, kein Entwurf zum Verwerfen")
             return
@@ -1705,6 +1912,7 @@ class FunctionFlow:
                 self.wait_step("ruhe", self.idle),
             ],
         )
+        self.data["states"].setdefault("before", before)
         self.snapshot("escape")
         self.reset()
 
@@ -1716,80 +1924,78 @@ class FunctionFlow:
 
         inputs = self.spec.get("inputs") or {}
         target = str(self.row.get("target") or "")
-        first_step = len(self.data["steps"])
-        focus = QApplication.focusWidget()
-        focus_before = capture.focus_record(focus, self.window) if focus is not None else None
+        focus_before = QApplication.focusWidget()
         self.snapshot("before")
+        self.picture("01-vorher")
         surface: dict[str, Any] = {}
 
-        def capture_surface(machine: StepMachine) -> None:
+        def take_surface(machine: StepMachine) -> None:
             root = self.surface()
-            surface.update(capture.sheet_snapshot(root))
-            surface["texts"] = capture.text_entries(root)
-            surface["fields"] = capture.field_entries(root)
-            surface["messages"] = capture.message_entries(self.window)
-            surface["empty_states"] = capture.empty_states(self.window)
-            apply_button = self.widget(
-                self.spec.get("apply") or default_apply_target(self.row) or ""
-            )
-            surface["state_images"] = (
-                [
+            self.watch.own.add(type(root).__name__)
+            self.capture_surface(root)
+            self.data["messages"] = capture.message_entries(self.window)
+            apply_button = self.widget(self.apply_target) if self.apply_target else None
+            if apply_button is not None and apply_button.isVisible():
+                self.data["state_images"] = [
                     {
-                        "mark": capture.mark_of(apply_button),
+                        "surface": type(root).__name__,
+                        "widget": capture.name_of(apply_button),
                         "states": capture.state_images(apply_button),
                     }
                 ]
-                if apply_button is not None and apply_button.isVisible()
-                else []
-            )
-            surface["tab_chain"] = capture.tab_chain(root, lambda: self.ports.keys("Tab"))
+            chain = capture.tab_chain(root, lambda: self.ports.keys("Tab"))
+            self.data["tab_chain"] = chain
+            self.data["names"] = [entry["name"] for entry in chain]
+            surface["root"] = type(root).__name__
+            self.picture("02-flaeche")
 
-        ok = self.run_steps(
-            "weg",
+        self.run_steps(
+            PATH_PHASE,
             [
                 *self.path_steps(),
                 *self.input_steps(inputs),
                 *(self.preview_steps() if inputs else [self.wait_step("ruhe", self.idle)]),
-                Step("fläche aufnehmen", capture_surface),
+                Step("fläche aufnehmen", take_surface),
             ],
         )
-        self.data["place"] = place_of(self.data["steps"][first_step:], target)
-        for name in (
-            "texts",
-            "fields",
-            "layout",
-            "fonts",
-            "contrast",
-            "icons",
-            "animations",
-            "scrollbars",
-        ):
-            self.data[name] = surface.get(name)
-        self.data["state_images"] = surface.get("state_images")
-        self.data["tab_chain"] = surface.get("tab_chain")
-        self.data["names"] = [entry.get("name", "") for entry in surface.get("fields") or ()]
-        self.data["messages"] = surface.get("messages") or []
-        self.data["empty_states"] = surface.get("empty_states")
-        self.data["primaries"] = surface.get("primaries")
+        self.data["place"] = place_of(self.data["steps"], target)
+        self.data["spot"] = self.spot()
         if inputs:
             self.data["preview"] = self.preview_record()
             self.snapshot("preview")
-        if not ok:
-            unmeasured(self.data, "result", "der Weg kam nicht an")
+        if self.data["place"]["error"] is not None:
+            unmeasured(self.data, "result", "der Hauptweg kam nicht an")
             return
         self.apply_and_measure()
         after = QApplication.focusWidget()
-        self.data["focus_return"] = {
-            "before": focus_before,
-            "after": capture.focus_record(after, self.window) if after is not None else None,
-        }
+        self.data["focus_return"] = (
+            None
+            if focus_before is None or after is None
+            else capture.name_of(after) == capture.name_of(focus_before)
+        )
         self.undo_and_redo()
+
+    def spot(self) -> dict[str, Any] | None:
+        """E4: liegt über der bearbeiteten Stelle ein Fenster? Über ``view:`` und die Probe."""
+        if self.selected is None:
+            return None
+        name = f"view:{self.selected[0]}.{self.selected[1]}"
+        try:
+            click = self.ports.next_click(name)
+        except LookupError:
+            return None
+        point = self.ports.centre(click.rect)
+        hit = self.ports.widget_under(point)
+        covered = hit is not None and not self.ports.covers(click, hit)
+        return {
+            "point": self.ports.point_data(point),
+            "covered_by": type(hit.window()).__name__ if covered and hit is not None else None,
+        }
 
     def apply_and_measure(self) -> None:
         """Übernehmen mit Herzschlag und Zeiten (Prüfpunkt 6), dann Ergebnis und Kommandozeile."""
-        from tools import function_capture as capture
+        from PySide6.QtWidgets import QApplication, QProgressBar
 
-        apply_name = self.spec.get("apply") or default_apply_target(self.row)
         previous = self.session.last_result
         timing: dict[str, Any] = {
             "total_s": None,
@@ -1798,8 +2004,6 @@ class FunctionFlow:
             "cancel_shown_s": None,
             "main_gap_ms": None,
             "budget_s": self.spec.get("budget_s"),
-            "budget_ref": self.spec.get("budget_ref"),
-            "reference_factor": None,
         }
         status_before = self.window.statusBar().currentMessage()
         moment = {"t0": 0.0}
@@ -1809,8 +2013,6 @@ class FunctionFlow:
             self.heartbeat.open(moment["t0"])
 
         def watched() -> bool:
-            from PySide6.QtWidgets import QApplication, QProgressBar
-
             elapsed = round(time.perf_counter() - moment["t0"], 3)
             if timing["first_feedback_s"] is None and (
                 QApplication.overrideCursor() is not None
@@ -1829,21 +2031,28 @@ class FunctionFlow:
             return self.idle() and self.session.last_result is not previous
 
         steps = [Step("uhr", start)]
-        if apply_name:
-            steps.append(self.walker.step(apply_name))
+        if self.apply_target:
+            steps.append(self.walker.step(self.apply_target))
         steps.append(self.wait_step("ergebnis", watched))
-        ok = self.run_steps("übernehmen", steps)
+        ok = self.run_steps(APPLY_PHASE, steps)
         timing["main_gap_ms"] = self.heartbeat.close(time.perf_counter())
         if ok:
             timing["total_s"] = round(time.perf_counter() - moment["t0"], 3)
-            factor = capture.reference_factor()
-            timing["reference_factor"] = round(factor, 3)
         self.data["timing"] = timing
-        self.data["after_apply_modal"] = capture.modal_now()
-        self.snapshot("applied")
+        # Z2: Ein Fenster, das nach dem Übernehmen offen steht, hat die Wache
+        # schon in modals notiert; hier steht es zum Lauf dazu.
+        self.watch.note_after(APPLY_PHASE)
+        self.watch.poll()
+        applied = self.snapshot("applied")
+        self.picture("03-uebernommen")
         result = self.session.last_result
         if result is not None:
-            self.data["result"] = {"bodies": body_figures(result.scene)}
+            self.data["result"] = {
+                "metrics": result_metrics(
+                    result.scene, self.session.project.document, self.selected
+                ),
+                "digest": bodies_digest(applied["bodies"]),
+            }
         self.data["cli"] = self.compare_with_cli()
 
     def undo_and_redo(self) -> None:
@@ -1869,27 +2078,32 @@ class FunctionFlow:
         """Prüfpunkt 4: Dieselben Werte über die Kommandozeile ergeben ein druckgleiches Netz.
 
         Die Startszene wird kopiert, ``app.cli.main run`` legt den Schritt mit den
-        Werten des übernommenen an, und beide Ergebnisse gehen durch den einen
-        Vergleich der Suite (``tests/print_equal``). Der Prozess erbt die
-        umgebogenen Nutzerordner dieses Falls.
+        Werten des übernommenen an, und beide Dokumente gehen in derselben Güte
+        (fein) durch den einen Vergleich der Suite (``tests/print_equal``). Der
+        Prozess erbt die umgebogenen Nutzerordner dieses Falls.
         """
         import shutil
         import subprocess
-        import sys
+        from copy import deepcopy
 
         from app.core.scene.serialise import operation_to_data
 
+        states = self.data["states"]
         document = self.session.project.document
-        if not document.ops or self.data.get("states", {}).get("applied", {}).get(
-            "history_length", 0
-        ) <= (self.data.get("states", {}).get("before", {}).get("history_length", 0)):
-            return {"compared": False, "reason": "kein neuer Schritt"}
+        grown = len(states.get("applied", {}).get("ops", ())) > len(
+            states.get("before", {}).get("ops", ())
+        )
+        if not document.ops or not grown:
+            unmeasured(self.data, "cli", "kein neuer Schritt im Verlauf")
+            return None
         scene = self.scenes / f"{self.scene_key}.p3d"
         if not scene.is_file():
-            return {"compared": False, "reason": "Startszene ohne Datei"}
+            unmeasured(self.data, "cli", "Startszene ohne Datei")
+            return None
         arguments = cli_arguments(operation_to_data(document.ops[-1]))
         if arguments is None:
-            return {"compared": False, "reason": "Werte ohne Kommandozeilenfeld"}
+            unmeasured(self.data, "cli", "Werte ohne Feld auf der Kommandozeile")
+            return None
         copy = self.folder / "cli.p3d"
         shutil.copyfile(scene, copy)
         finished = subprocess.run(
@@ -1901,15 +2115,14 @@ class FunctionFlow:
             check=False,
         )
         if finished.returncode != 0:
-            return {"compared": False, "reason": finished.stderr[-2000:], "arguments": arguments}
-        from copy import deepcopy
-
+            self.data["errors"].append(f"Kommandozeile: {finished.stderr[-2000:]}")
+            unmeasured(self.data, "cli", "die Kommandozeile lehnte ab")
+            return None
         from app.core.scene import project as projects
         from app.core.scene.evaluate import evaluate
         from tests import print_equal
+        from tools.file_acceptance import body_digest
 
-        # Beide Dokumente in derselben Güte gerechnet: Das Fenster zeigt den
-        # Entwurf, die Datei bekommt die feine Rechnung (``wartezeit.md``).
         loaded = projects.load(copy)
         profile = self.session.profile
         window_result = evaluate(
@@ -1921,107 +2134,141 @@ class FunctionFlow:
             print_equal.shot(cli_result, exports=()),
         )
         return {
-            "compared": True,
-            "quality": "fine",
-            "arguments": arguments,
+            "digest": bodies_digest(
+                {
+                    str(key): body_digest(entry.mesh)
+                    for key, entry in cli_result.scene.objects.items()
+                }
+            ),
+            "max_deviation_mm": verdict.largest,
             "print_equal": verdict.print_equal,
-            "largest_mm": verdict.largest,
-            "where": verdict.where,
-            "discrete": verdict.discrete[:10],
         }
 
-    def phase_edit_later(self) -> None:
-        """Prüfpunkt 12: Doppelklick auf den Schritt im Verlauf öffnet ihn mit seinen Werten."""
+    def phase_revise(self) -> None:
+        """Prüfpunkt 12: Schritt über Kontextmenü und Doppelklick ändern, Verlauf gleich lang.
+
+        Je Weg öffnet der Klick den übernommenen Schritt; Felder und Parameter
+        stehen nebeneinander, dann eine neue Zahl ins erste Zahlenfeld des
+        Schritts, Übernehmen, und die Verlaufslänge danach.
+        """
         from app.core.scene.serialise import operation_to_data
         from tools import function_capture as capture
+        from tools.file_acceptance import changed_value
 
         applied = self.data["states"].get("redo") or self.data["states"].get("applied")
-        if not applied or applied.get("history_length", 0) == 0:
-            unmeasured(self.data, "edit_later", "kein übernommener Schritt")
+        if not applied or not applied.get("ops"):
+            unmeasured(self.data, "revise", "kein übernommener Schritt")
             return
-        number = int(applied["history_length"])
-        document = self.session.project.document
-        params = (
-            dict(operation_to_data(document.ops[-1]).get("params") or {}) if document.ops else {}
-        )
-        record: dict[str, Any] = {"row": f"history.row:{number}", "params": params}
-
-        def read(machine: StepMachine) -> None:
-            record["fields"] = capture.field_entries(self.surface())
-
-        self.run_steps(
-            "nachträglich ändern",
-            [
-                self.walker.step(f"history.row:{number}", "double"),
-                Step("fläche lesen", read, settle_ms=SETTLE_MS * 2),
-            ],
-        )
-        numeric = [
-            entry["mark"]
-            for entry in record.get("fields") or ()
-            if str(entry.get("mark", "")).startswith("field:")
-            and isinstance(params.get(str(entry["mark"]).partition(":")[2]), (int, float))
-            and not isinstance(params.get(str(entry["mark"]).partition(":")[2]), bool)
-        ]
-        length_before = len(document.ops)
-        if numeric:
-            from tools.file_acceptance import changed_value
-
-            name = str(numeric[0])
-            value = changed_value(float(params[name.partition(":")[2]]))
-            previous = self.session.last_result
+        number = len(applied["ops"])
+        entries: list[dict[str, Any]] = []
+        for way, route in (
+            ("menue", [(f"history.row:{number}", "right"), ("menu:history.edit", "left")]),
+            ("doppelklick", [(f"history.row:{number}", "double")]),
+        ):
+            self.reset()
             self.run_steps(
-                "neuer wert",
+                f"übernehmen für {way}",
+                [*self.path_steps(), *self.input_steps(self.spec.get("inputs") or {})]
+                + ([self.walker.step(self.apply_target)] if self.apply_target else [])
+                + [self.wait_step("übernommen", self.idle)],
+            )
+            document = self.session.project.document
+            if not document.ops:
+                entries.append(
+                    {
+                        "way": way,
+                        "opened": False,
+                        "fields": {},
+                        "params": {},
+                        "history_before": 0,
+                        "history_after": 0,
+                    }
+                )
+                continue
+            params = dict(operation_to_data(document.ops[-1]).get("params") or {})
+            record: dict[str, Any] = {
+                "way": way,
+                "opened": False,
+                "fields": {},
+                "params": params,
+                "history_before": len(document.ops),
+                "history_after": None,
+            }
+
+            def read(machine: StepMachine, record: dict[str, Any] = record) -> None:
+                root = self.surface()
+                record["opened"] = root is not self.window
+                record["fields"] = capture.field_values(root)
+
+            self.run_steps(
+                f"nachträglich {way}",
                 [
-                    *self.input_steps({name: value}),
-                    self.walker.step("dialog.accept"),
-                    self.wait_step(
-                        "geändert", lambda: self.idle() and self.session.last_result is not previous
-                    ),
+                    *(self.walker.step(name, button) for name, button in route),
+                    Step("felder lesen", read, settle_ms=SETTLE_MS * 2),
                 ],
             )
-            record["typed"] = {name: value}
-        record["length_before"] = length_before
-        record["length_after"] = len(self.session.project.document.ops)
-        self.data["edit_later"] = record
+            numeric = [
+                name
+                for name, value in record["fields"].items()
+                if isinstance(params.get(name), (int, float))
+                and not isinstance(params.get(name), bool)
+            ]
+            if record["opened"] and numeric:
+                name = numeric[0]
+                previous = self.session.last_result
+                accept = "dialog.accept" if self.widget("dialog") is not None else "feature.apply"
+                self.run_steps(
+                    f"neuer wert {way}",
+                    [
+                        *self.input_steps({f"field:{name}": changed_value(float(params[name]))}),
+                        self.walker.step(accept),
+                        self.wait_step(
+                            "geändert",
+                            lambda previous=previous: (
+                                self.idle() and self.session.last_result is not previous
+                            ),
+                        ),
+                    ],
+                )
+            record["history_after"] = len(self.session.project.document.ops)
+            entries.append(record)
+        self.data["revise"] = entries
         self.reset()
 
     def phase_fault(self) -> None:
-        """Prüfpunkt 7: der erzwungene Fehlfall, die Meldung und ihre erste Handlung."""
+        """Prüfpunkt 7: erzwungener Fehlfall, Meldung, erste Handlung und ihre Wirkung."""
         from tools import function_capture as capture
 
         fault = self.spec.get("fault_case")
         if not fault:
-            unmeasured(self.data, "fault", "Spezifikation ohne Fehlfall")
+            unmeasured(self.data, "messages", "Spezifikation ohne Fehlfall")
             return
-        record: dict[str, Any] = {"case": dict(fault), "messages": [], "action": None}
+        messages: list[dict[str, Any]] = []
 
         def read(machine: StepMachine) -> None:
-            record["messages"] = capture.message_entries(self.window)
-            record["preview"] = self.preview_record()
+            messages.extend(capture.message_entries(self.window))
 
+        inputs = fault.get("inputs") or {}
         self.run_steps(
             "fehlfall",
             [
-                *[
-                    self.walker.step(str(entry["target"]), str(entry.get("button", "left")))
-                    for entry in fault.get("route", ())
-                ],
                 *self.path_steps(),
-                *self.input_steps(fault.get("inputs") or {}),
-                *(self.preview_steps() if fault.get("inputs") else []),
+                *self.input_steps(inputs),
+                *(self.preview_steps() if inputs else []),
                 Step("meldung lesen", read, settle_ms=SETTLE_MS),
             ],
         )
-        actions = [
+        self.picture("04-fehlfall")
+        offered = [
             action
-            for message in record["messages"]
+            for message in messages
             for action in message.get("actions", ())
-            if action.get("enabled") and action.get("target")
+            if action.get("target")
         ]
-        if actions:
-            action = actions[0]
-            before = self.snapshot("fault_before_action")
+        if offered:
+            action = offered[0]
+            before = self.scene_now()
+            modal_before = len(self.watch.modals)
             self.run_steps(
                 "handlung der meldung",
                 [
@@ -2029,22 +2276,19 @@ class FunctionFlow:
                     self.wait_step("ruhe", self.idle, EFFECT_WINDOW_S * 30),
                 ],
             )
-            after = self.snapshot("fault_after_action")
-            record["action"] = {
-                **action,
-                "clicked": True,
-                "effect": {
-                    "document_changed": compare_prints(before, after)["same"] is False,
-                    "modal": capture.modal_now(),
-                    "messages_after": capture.message_entries(self.window),
-                },
-            }
-        self.data["fault"] = record
-        self.data["messages"] = [*(self.data.get("messages") or []), *record["messages"]]
+            self.watch.poll()
+            after = self.scene_now()
+            action["clicked"] = True
+            action["effect"] = (
+                compare_prints(before, after)["same"] is False
+                or len(self.watch.modals) > modal_before
+                or self.surface() is not self.window
+            )
+        self.data["messages"] = [*(self.data.get("messages") or []), *messages]
         self.reset()
 
     def phase_matrix(self) -> None:
-        """Prüfpunkt 13: sechs Auswahlstufen — angeboten, grau mit Grund oder nicht da."""
+        """Prüfpunkt 13: sechs Auswahlstufen — angeboten, grau, fehlt, nicht herstellbar."""
         result = self.session.last_result
         objects = list(result.scene.objects.items()) if result is not None else []
         features = [
@@ -2054,7 +2298,7 @@ class FunctionFlow:
         ]
         bodies = [str(key) for key, _entry in objects]
         edges = [entry for entry in features if entry[2] == "edge"]
-        stages: dict[str, list[tuple[str, str]] | None] = {
+        clicks: dict[str, list[tuple[str, str]] | None] = {
             "ohne": [],
             "ein_koerper": [(f"tree.row:{bodies[0]}", "left")] if bodies else None,
             "mehrere_koerper": (
@@ -2062,9 +2306,9 @@ class FunctionFlow:
                 if len(bodies) > 1
                 else None
             ),
-            "ein_merkmal": [(f"tree.row:{features[0][0]}.{features[0][1]}", "left")]
-            if features
-            else None,
+            "ein_merkmal": (
+                [(f"tree.row:{features[0][0]}.{features[0][1]}", "left")] if features else None
+            ),
             "mehrere_merkmale": (
                 [
                     (f"tree.row:{features[0][0]}.{features[0][1]}", "left"),
@@ -2073,80 +2317,78 @@ class FunctionFlow:
                 if len(features) > 1
                 else None
             ),
-            "kante": [(f"view:{edges[0][0]}.{edges[0][1]}", "left")] if edges else None,
+            "eine_kante": [(f"view:{edges[0][0]}.{edges[0][1]}", "left")] if edges else None,
         }
+        assert tuple(clicks) == tuple(SELECTION_STAGES)
         target = str(self.row.get("target") or "")
         matrix: dict[str, Any] = {}
-        for stage, clicks in stages.items():
-            if clicks is None:
+        for stage, route in clicks.items():
+            if route is None:
                 matrix[stage] = {
-                    "state": "nicht herstellbar",
+                    "state": MATRIX_UNREACHABLE,
                     "reason": "die Startszene hat dafür zu wenig",
+                    "effective": None,
                 }
                 continue
             self.reset()
-            selection = [self.key_step("Escape", "auswahl leeren")] if not clicks else []
-            selection += [self.walker.step(name, button) for name, button in clicks]
+            selection = [self.key_step("Escape", "auswahl leeren")] if not route else []
+            selection += [self.walker.step(name, button) for name, button in route]
             if not self.run_steps(f"matrix {stage} auswahl", selection):
                 matrix[stage] = {
-                    "state": "nicht herstellbar",
-                    "reason": "Auswahl ließ sich nicht klicken",
+                    "state": MATRIX_UNREACHABLE,
+                    "reason": "die Auswahl ließ sich nicht klicken",
+                    "effective": None,
                 }
                 continue
-            matrix[stage] = self.offer_state(target)
+            matrix[stage] = self.offer_state(target, f"matrix {stage}")
         self.data["matrix"] = matrix
         self.reset()
 
-    def offer_state(self, target: str) -> dict[str, Any]:
+    def offer_state(self, target: str, label: str) -> dict[str, Any]:
         """Wie ein Ziel gerade dasteht: angeboten (und wirksam?), grau mit Grund, fehlt."""
-        from app.ui import guide_targets
         from tools import function_capture as capture
 
         try:
-            guide_targets.next_click(self.window, target)  # type: ignore[attr-defined]
+            self.ports.next_click(target)
         except LookupError as error:
-            return {"state": "fehlt", "reason": str(error)}
+            return {"state": "fehlt", "reason": str(error), "effective": None}
         widget = self.widget(target)
         if widget is not None and not widget.isEnabled():
             return {
                 "state": "grau",
                 "reason": widget.accessibleDescription() or widget.toolTip(),
+                "effective": None,
             }
-        before = self.snapshot("matrix_before")
+        before = self.scene_now()
         result_before = self.session.last_result
         difference = self.window.viewport.difference
-        opened: dict[str, Any] = {}
+        opened: dict[str, bool] = {}
 
         def look(machine: StepMachine) -> None:
-            opened["modal"] = capture.modal_now()
-            opened["surface"] = type(self.surface()).__name__
+            opened["modal"] = capture.modal_now() is not None
+            opened["surface"] = self.surface() is not self.window
             opened["preview"] = self.window.viewport.difference is not difference
             opened["result"] = self.session.last_result is not result_before
 
         self.run_steps(
-            f"matrix klick {target}",
-            [*self.path_steps(), Step("wirkung", look, settle_ms=int(EFFECT_WINDOW_S * 1000))],
+            f"{label} klick",
+            [
+                self.walker.step(target),
+                Step("wirkung", look, settle_ms=int(EFFECT_WINDOW_S * 1000)),
+            ],
         )
-        after = self.snapshot("matrix_after")
-        effective = bool(
-            opened.get("modal")
-            or opened.get("preview")
-            or opened.get("result")
-            or opened.get("surface") not in (None, type(self.window).__name__)
-            or compare_prints(before, after)["same"] is False
-        )
-        return {"state": "angeboten", "effective": effective, "effect": opened}
+        after = self.scene_now()
+        effective = any(opened.values()) or compare_prints(before, after)["same"] is False
+        return {"state": "angeboten", "reason": "", "effective": effective}
 
-    def phase_cancel(self) -> None:
+    def phase_abort(self) -> None:
         """Prüfpunkt 14: *Abbrechen* während der Rechnung, danach der Stand von vorher."""
-        if self.scene_key not in SLOW_SCENES and not self.spec.get("cancel"):
-            unmeasured(self.data, "cancel", "Startszene rechnet nicht lang genug")
+        if self.scene_key not in SLOW_SCENES:
+            unmeasured(self.data, "abort", "Startszene rechnet nicht lang genug")
             return
         inputs = self.spec.get("inputs") or {}
-        apply_name = self.spec.get("apply") or default_apply_target(self.row)
-        before = self.snapshot("before_cancel")
-        previous = self.session.last_result
-        moment = {"t0": 0.0, "shown": None}
+        before = self.scene_now()
+        moment: dict[str, Any] = {"t0": 0.0, "shown": None}
 
         def start(machine: StepMachine) -> None:
             moment["t0"] = time.perf_counter()
@@ -2159,8 +2401,8 @@ class FunctionFlow:
             return False
 
         steps = [*self.path_steps(), *self.input_steps(inputs), Step("uhr", start)]
-        if apply_name:
-            steps.append(self.walker.step(apply_name))
+        if self.apply_target:
+            steps.append(self.walker.step(self.apply_target))
         steps += [
             self.wait_step("abbrechen sichtbar", cancel_visible, timeout_s=30.0),
             self.walker.step("progress.cancel"),
@@ -2170,46 +2412,44 @@ class FunctionFlow:
         settle_until = time.perf_counter() + LATE_WINDOW_S
         while time.perf_counter() < settle_until:
             self.pump()
-        after = self.snapshot("cancelled")
-        self.data["cancel"] = {
+        self.data["states"].setdefault("before", before)
+        self.snapshot("aborted")
+        self.data["abort"] = {
+            "eval_s": (self.data.get("scene") or {}).get("eval_s"),
             "cancel_shown_s": moment["shown"],
             "clicked": clicked,
-            "late_result": self.session.last_result is not previous
-            and compare_prints(before, after)["same"] is False,
-            "compared": compare_prints(before, after),
         }
         self.reset()
 
     def phase_halt(self) -> None:
-        """Prüfpunkt 15: Haltgrund mit Schrittnummer; Einfügen an einer Marke."""
-        import re
-
+        """Prüfpunkt 15: Haltgrund mit Schrittnummer; Einfügen vor dem letzten Schritt."""
         from tools import function_capture as capture
 
         if self.scene_key == "halt":
-            texts = capture.message_entries(self.window) + [
-                {"carrier": "baum", "text": text}
-                for text in capture.visible_texts(self.window.object_tree)
-            ]
-            self.data["halt"] = {
-                "texts": texts,
-                "with_number": any(re.search(r"\d", str(entry.get("text", ""))) for entry in texts),
-            }
+            texts = [entry["text"] for entry in capture.message_entries(self.window)]
+            texts += capture.visible_texts(self.window.object_tree)
+            reason = next(
+                (text for text in texts if step_number(text) is not None), texts[0] if texts else ""
+            )
+            self.data["halt"] = {"text": reason, "step": step_number(reason)}
         else:
             unmeasured(self.data, "halt", "Startszene ohne angehaltene Kette")
-        if not self.spec.get("insertion"):
-            unmeasured(self.data, "insertion", "Spezifikation ohne Einfügen")
-            return
         length = len(self.session.project.document.ops)
         if length < 1:
             unmeasured(self.data, "insertion", "kein Schritt, vor dem eingefügt werden könnte")
             return
         previous = self.session.last_result
-        record: dict[str, Any] = {}
+        record: dict[str, Any] = {"outcome": None, "text": "", "actions": []}
 
         def read(machine: StepMachine) -> None:
-            record["messages"] = capture.message_entries(self.window)
-            record["result"] = self.session.last_result is not previous
+            messages = capture.message_entries(self.window)
+            record["text"] = " ".join(message["text"] for message in messages)
+            record["actions"] = [
+                {"label": action["label"], "target": action["target"]}
+                for message in messages
+                for action in message["actions"]
+            ]
+            record["outcome"] = "ergebnis" if self.session.last_result is not previous else "absage"
 
         self.run_steps(
             "einfügen",
@@ -2218,24 +2458,32 @@ class FunctionFlow:
                 self.walker.step("menu:history.insert"),
                 *self.path_steps(),
                 *self.input_steps(self.spec.get("inputs") or {}),
-                *(self.preview_steps() if self.spec.get("inputs") else []),
-                *(
-                    [
-                        self.walker.step(
-                            str(self.spec.get("apply") or default_apply_target(self.row))
-                        )
-                    ]
-                    if (self.spec.get("apply") or default_apply_target(self.row))
-                    else []
-                ),
+                *([self.walker.step(self.apply_target)] if self.apply_target else []),
                 Step("antwort lesen", read, settle_ms=int(EFFECT_WINDOW_S * 1000)),
             ],
         )
-        self.data["insertion"] = record
+        self.data["insertion"] = record if record["outcome"] is not None else None
+        if record["outcome"] is None:
+            unmeasured(self.data, "insertion", "der Weg zur Einfügemarke kam nicht an")
         self.reset()
 
+    def recent_number(self, stem: str) -> int | None:
+        """Die Stelle eines Projekts unter „Zuletzt geöffnet“ (ab 1), abgelesen an der Liste."""
+        listing = self.window.start_screen.recent_list
+        for row in range(listing.count()):
+            item = listing.item(row)
+            if item is not None and stem in f"{item.text()} {item.toolTip()}":
+                return row + 1
+        return None
+
     def phase_switch(self) -> None:
-        """Prüfpunkt 16: Projektwechsel über *Zuletzt geöffnet* während der Vorschau."""
+        """Prüfpunkt 16: Projektwechsel über *Zuletzt geöffnet*, während die Vorschau steht.
+
+        Der Weg des Kunden: *Datei → Neu* führt zum Startbildschirm, dort steht
+        „Zuletzt geöffnet“ (``start.recent:<n>``). Die Stelle des zweiten Projekts
+        wird an der Liste abgelesen, wenn sie dasteht.
+        """
+        from app.ui import guide_targets
         from tools import function_capture as capture
 
         inputs = self.spec.get("inputs") or {}
@@ -2246,14 +2494,37 @@ class FunctionFlow:
         if not second.is_file():
             unmeasured(self.data, "switch", f"Szene {SECOND_SCENE} fehlt")
             return
+        new_line = next(
+            (
+                name
+                for name, _menus, action in guide_targets.menubar_entries(self.window)
+                if action is self.window.new_action
+            ),
+            "",
+        )
+        if not new_line:
+            unmeasured(self.data, "switch", "Datei → Neu trägt keinen Namen im Wortschatz")
+            return
         project = self.session.project
         modals_before = len(self.watch.modals)
-        self.run_steps(
+
+        def to_the_recent(machine: StepMachine) -> None:
+            number = self.recent_number(SECOND_SCENE)
+            if number is None:
+                raise BenchFinding(
+                    NOT_FOUND,
+                    f"{RECENT_KIND}:?",
+                    f"{SECOND_SCENE} steht nicht unter „Zuletzt geöffnet“",
+                )
+            machine.insert([self.walker.step(f"{RECENT_KIND}:{number}")])
+
+        switched = self.run_steps(
             "wechsel",
             [
                 *self.path_steps(),
                 *self.input_steps(inputs),
-                self.walker.step(RECENT_TARGET),
+                self.walker.step(f"menu:{new_line}"),
+                Step("liste lesen", to_the_recent, settle_ms=SETTLE_MS),
                 self.wait_step(
                     "anderes projekt", lambda: self.session.project is not project and self.idle()
                 ),
@@ -2262,12 +2533,21 @@ class FunctionFlow:
         until = time.perf_counter() + LATE_WINDOW_S
         while time.perf_counter() < until:
             self.pump()
-        self.data["switch"] = {
-            "switched": self.session.project is not project,
-            "late_modals": self.watch.modals[modals_before:],
-            "late_messages": capture.message_entries(self.window),
-        }
-        self.snapshot("after_switch")
+        self.watch.poll()
+        late = [
+            {"kind": "fenster", "text": entry["title"], "phase": "vorschau"}
+            for entry in self.watch.modals[modals_before:]
+        ]
+        late += [
+            {"kind": "meldung", "text": entry["text"], "phase": "vorschau"}
+            for entry in capture.message_entries(self.window)
+            if entry["text"]
+        ]
+        if not switched:
+            unmeasured(self.data, "switch", "der Wechsel über den Startbildschirm kam nicht an")
+        else:
+            self.data["switch"] = {"phases": ["vorschau"], "late_events": late}
+            self.snapshot("after_switch")
         self.reset()
 
     def phase_hover(self) -> None:
@@ -2275,24 +2555,22 @@ class FunctionFlow:
         from tools import function_capture as capture
 
         result = self.session.last_result
-        if result is None:
+        if result is None or not any(entry.features for entry in result.scene.objects.values()):
+            unmeasured(self.data, "hover_labels", "die Startszene trägt kein Merkmal")
             return
-        seen: dict[str, Any] = {}
+        labels: list[dict[str, Any]] = []
+        seen: set[str] = set()
         for key, entry in result.scene.objects.items():
             for name, feature in entry.features.items():
                 if feature.kind in seen:
                     continue
+                seen.add(feature.kind)
                 target = f"view:{key}.{name}"
                 texts: list[str] = []
 
                 def hover(machine: StepMachine, target: str = target) -> None:
                     click = self.ports.next_click(target)
-                    point = self.ports.centre(click.rect)
-                    hit = self.ports.widget_under(point)
-                    if hit is not None:
-                        from PySide6.QtTest import QTest
-
-                        QTest.mouseMove(hit, hit.mapFromGlobal(point))
+                    self.ports.move(self.ports.centre(click.rect))
 
                 def read(machine: StepMachine, texts: list[str] = texts) -> None:
                     texts[:] = capture.visible_texts(self.window.viewport)
@@ -2301,99 +2579,90 @@ class FunctionFlow:
                     f"überfahren {target}",
                     [Step("hin", hover), Step("lesen", read, settle_ms=SETTLE_MS * 4)],
                 )
-                seen[feature.kind] = {"target": target, "texts": texts}
-        self.data["hover_labels"] = seen
+                labels.append({"kind": feature.kind, "label": " ".join(texts)})
+        self.data["hover_labels"] = labels
 
     def phase_drag(self) -> None:
-        """Z1: ein Zug am Griff, je Bewegung die Zeit bis zum nächsten Bild."""
+        """Z1: ein Zug am Griff der Zeile, je Bewegung die Zeit bis zum nächsten Bild."""
         from PySide6.QtCore import QPoint, Qt
         from PySide6.QtTest import QTest
 
-        drag = self.spec.get("drag")
-        if not drag:
-            unmeasured(self.data, "frames", "Spezifikation ohne Zug")
+        from tools.function_capture import reference_factor
+
+        target = str(self.row.get("target") or "")
+        if not target.startswith("handle:") and "Z1" not in (self.spec.get("criteria") or ()):
+            unmeasured(self.data, "frames", "kein Griff an dieser Zeile")
             return
-        if not self.data.get("frames_wrapped"):
+        if not self.frames_wrapped:
             unmeasured(self.data, "frames", "kein Renderer, kein Bildzähler")
             return
-        target = str(drag["target"])
         moves: list[float] = []
 
         def pull(machine: StepMachine) -> None:
             click = self.ports.next_click(target)
             point = self.ports.centre(click.rect)
             hit = self.ports.widget_under(point)
-            if hit is None or not self.ports.covers(click.target, hit):
+            if hit is None or not self.ports.covers(click, hit):
                 raise BenchFinding(COVERED, target, "der Griff liegt unter etwas anderem")
             local = hit.mapFromGlobal(point)
             QTest.mousePress(hit, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, local)
-            for step in range(1, int(drag.get("moves", 20)) + 1):
-                offset = QPoint(int(drag.get("dx", 4)) * step, int(drag.get("dy", 0)) * step)
+            for number in range(1, 21):
                 moves.append(time.perf_counter())
-                QTest.mouseMove(hit, local + offset)
+                QTest.mouseMove(hit, local + QPoint(4 * number, 0))
                 self.application.processEvents()
             QTest.mouseRelease(
                 hit, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, local
             )
 
         self.run_steps("zug", [*self.path_steps()[:-1], Step("ziehen", pull, settle_ms=SETTLE_MS)])
-        from tools.function_capture import reference_factor
-
+        factor = reference_factor()
         self.data["frames"] = {
-            "latencies_ms": self.frames.latencies(moves),
-            "reference_factor": round(reference_factor(), 3),
+            "drag_ms": [
+                None if value is None else round(value * factor, 1)
+                for value in self.frames.latencies(moves)
+            ],
+            "reference_factor": round(factor, 3),
         }
         self.reset()
 
-    def phase_promise(self) -> None:
-        """Prüfpunkt 11: Handbuchstelle und Website je Sprache, ohne Fenster."""
-        self.data["promise"] = promise_of(self.row)
-
     def phase_licence(self) -> None:
-        """Prüfpunkt 18: Wie das Ziel im Lizenzzustand dasteht, und ob Schreiben gesperrt bleibt."""
+        """Prüfpunkt 18: Wie das Ziel im Lizenzzustand dasteht, und ob Schreiben gesperrt ist."""
         target = str(self.row.get("target") or "")
-        before = self.snapshot("before")
-        state = self.offer_state(target)
-        after = self.snapshot("licence_after")
-        state["document_changed"] = compare_prints(before, after)["same"] is False
-        self.data["licence_runs"] = {self.variant.licence: state}
+        before = self.scene_now()
+        selection = [
+            self.walker.step(name, button) for name, button in route_of(self.row) if name != target
+        ]
+        self.run_steps(PATH_PHASE, selection)
+        state = self.offer_state(target, "lizenz")
+        writes = self.row.get("kind") == "operation" or (
+            compare_prints(before, self.scene_now())["same"] is False
+        )
+        self.data["licence_runs"] = {
+            self.variant.licence: {
+                "writes": writes,
+                "enabled": state["state"] == "angeboten",
+                "reason": state.get("reason", ""),
+            }
+        }
 
     def phase_surface(self) -> None:
-        """Zoll, Skalierung, dunkles Thema: Weg bis zur offenen Fläche, dann ihre Aufnahmen."""
-        from tools import function_capture as capture
-
-        surface: dict[str, Any] = {}
+        """Zoll, Skalierung, Thema, Bewegung: Weg bis zur offenen Fläche, dann ihre Aufnahmen."""
 
         def take(machine: StepMachine) -> None:
-            root = self.surface()
-            surface.update(capture.sheet_snapshot(root))
-            surface["texts"] = capture.text_entries(root)
-            surface["window"] = [self.window.width(), self.window.height()]
+            self.capture_surface(self.surface())
+            self.picture(f"flaeche-{self.variant.set}")
 
         self.run_steps(
-            "fläche", [*self.path_steps(), Step("aufnehmen", take, settle_ms=SETTLE_MS * 2)]
+            PATH_PHASE, [*self.path_steps(), Step("aufnehmen", take, settle_ms=SETTLE_MS * 2)]
         )
-        for name in ("texts", "layout", "fonts", "contrast", "icons", "scrollbars", "primaries"):
-            self.data[name] = surface.get(name)
-        self.data["accents"] = surface.get("accents")
-        self.data["window_size"] = surface.get("window")
-        if self.variant.unit == "in":
-            self.data["units"] = {
-                "unit": "in",
-                "mm_texts": [
-                    entry["text"]
-                    for entry in surface.get("texts") or ()
-                    if " mm" in f" {entry['text']}"
-                ],
-            }
 
 
 class _SceneOf:
-    """Die Einträge einer Vorschaudifferenz als Szene für :func:`body_figures`."""
+    """Die Einträge einer Vorschaudifferenz als Szene für :func:`result_metrics`."""
 
     def __init__(self, entries: Mapping[Any, Any]) -> None:
         self.objects = {
-            key: _Body(entry.result.mesh, getattr(entry.result, "features", {}))
+            key: _Body(entry.result.mesh, getattr(entry.result, "features", {}) or {})
             for key, entry in entries.items()
             if entry.result is not None
         }
@@ -2405,41 +2674,13 @@ class _Body:
     features: Mapping[str, Any]
 
 
-def promise_of(row: Mapping[str, Any]) -> dict[str, Any]:
-    """Wo Handbuch und Website eine Operation zusagen (Prüfpunkt 11, Stufe A).
-
-    Die Handbuchstelle aus ``manual.help_for``; je Sprache, ob die
-    Funktionsseite der Website ihren Kundentitel nennt (Pfade aus
-    ``site_nav.entries_for``, Titel aus dem Katalog). Den Inhalt urteilt Stufe B.
-    """
-    from app.core import manual
-    from app.core.registry.registry import REGISTRY
-    from app.i18n import source_text
-    from app.i18n.catalog import available_languages
-    from tools.file_acceptance import ROOT
-    from tools.site_nav import entries_for, site_text
-
-    target = str(row.get("target") or "")
-    kind, _separator, name = target.partition(":")
-    if kind != "operation" or not REGISTRY.has(name):
-        return {"help": None, "website": {}, "reason": "keine Operation"}
-    page, anchor = manual.help_for(name)
-    title = source_text(REGISTRY.get(name).title)
-    website: dict[str, bool] = {}
-    for language in available_languages():
-        address = entries_for(language)[0][0].lstrip("/")
-        path = ROOT / "website" / address
-        shown = site_text(title, language)
-        website[language] = path.is_file() and shown in path.read_text(encoding="utf-8")
-    return {"help": {"page": page, "anchor": anchor}, "title": title, "website": website}
-
-
 class LanguageFlow:
     """Ein Sprachfall: je Zeile eines Pakets die Fläche öffnen und ihre Texte messen (Prüfpunkt 9).
 
     Ein Prozess je Sprache und Paket — sechs Sprachen in einem Prozess brechen
-    ab (``tools/CLAUDE.md``). Wieder aufnehmbar je Fläche: Was unter
-    ``surfaces/<zeile>.json`` steht, wird übersprungen.
+    ab (``tools/CLAUDE.md``). Je Fläche ein Protokoll nach demselben Schema unter
+    ``surfaces/<zeile>.json``, mit ``texts`` und ``fields``; was dort steht, wird
+    beim nächsten Lauf übersprungen (wieder aufnehmbar je Fläche).
     """
 
     def __init__(
@@ -2447,76 +2688,54 @@ class LanguageFlow:
         application: Any,
         window: Any,
         folder: Path,
-        data: dict[str, Any],
+        bench: dict[str, Any],
         persist: Callable[[], None],
         rows: Sequence[Mapping[str, Any]],
         variant: Variant,
         scenes: Path,
+        version: Mapping[str, str],
     ) -> None:
         self.application = application
         self.window = window
         self.folder = folder
-        self.data = data
+        self.bench = bench
         self.persist = persist
         self.rows = rows
         self.variant = variant
         self.scenes = scenes
+        self.version = version
 
     def run(self) -> None:
-        from tools import function_capture as capture
         from tools.file_acceptance import write_json
 
         surfaces = self.folder / "surfaces"
         done: list[str] = []
+        placed = place_window(self.application, self.window, self.variant)
         for row in self.rows:
-            safe = safe_name(str(row.get("id", "")))
-            path = surfaces / f"{safe}.json"
+            path = surfaces / f"{safe_name(str(row.get('id', '')))}.json"
             if path.exists():
                 done.append(str(row.get("id")))
                 continue
-            record: dict[str, Any] = {
-                "row": row.get("id"),
-                "language": self.variant.language,
-                "steps": [],
-            }
+            size = [self.window.width(), self.window.height()]
+            protocol = empty_protocol(row, self.variant.protocol(placed, size), self.version)
             flow = FunctionFlow(
                 self.application,
                 self.window,
                 self.folder,
-                {**empty_protocol(row, "language", self.variant, {}), "steps": record["steps"]},
+                protocol,
                 lambda: None,
                 row,
                 self.variant,
                 self.scenes,
+                out=self.folder.parent.parent,
             )
             if flow.reset():
-                texts: list[dict[str, Any]] = []
-                fields_seen: list[dict[str, Any]] = []
-
-                def take(
-                    machine: StepMachine,
-                    flow: FunctionFlow = flow,
-                    texts: list[dict[str, Any]] = texts,
-                    fields_seen: list[dict[str, Any]] = fields_seen,
-                ) -> None:
-                    root = flow.surface()
-                    texts.extend(capture.text_entries(root))
-                    fields_seen.extend(capture.field_entries(root))
-
-                flow.run_steps(
-                    "fläche", [*flow.path_steps(), Step("texte", take, settle_ms=SETTLE_MS * 2)]
-                )
-                record["texts"] = texts
-                record["fields"] = fields_seen
-                record["cut"] = [dict(entry) for entry in capture.overflowing(texts)]
-                record["errors"] = flow.data["errors"]
-                record["findings"] = flow.data.get("findings", [])
-            write_json(path, record)
+                flow.phase_surface()
+            write_json(path, protocol)
             done.append(str(row.get("id")))
-            self.data["surfaces_done"] = done
+            self.bench["surfaces_done"] = done
             self.persist()
-        self.data["surfaces_done"] = done
-        self.data["texts"] = {"surfaces": len(done), "folder": "surfaces"}
+        self.bench["surfaces_done"] = done
         self.persist()
 
 
