@@ -571,6 +571,33 @@ params = { edge = 0.22 }
 op = "subtract_objects"
 inputs = ["obj_1", "obj_2"]
 
+[scene.unter_dem_bett_langsam]
+summary = "Der Würfel unter dem Bett neben zwei fein vernetzten Kugeln, die voneinander abgezogen werden: Ein geänderter Wert rechnet Sekunden, nicht aus dem Zwischenspeicher."
+kernel = "netz"
+heavy = true
+sources = { src_1 = "meshes/cube_clean.stl" }
+promises = { objects = 2, seconds_over = 2, findings = ["arrange.below_bed"], actions = { place_on_bed = "arrange.below_bed" } }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "load"
+params = { source = "src_1", unit = "mm" }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "create_sphere"
+params = { diameter = 40.0, segments = 128, x = 60.0 }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "create_sphere"
+params = { diameter = 40.0, segments = 128, x = 75.0 }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "remesh_mesh"
+inputs = ["obj_2"]
+params = { edge = 0.15 }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "remesh_mesh"
+inputs = ["obj_3"]
+params = { edge = 0.15 }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "subtract_objects"
+inputs = ["obj_2", "obj_3"]
+
 [scene.langsam_10s]
 summary = "Dieselben Kugeln auf 0,15 mm verfeinert, voneinander abgezogen: rechnet über 10 s."
 kernel = "netz"

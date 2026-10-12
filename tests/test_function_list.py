@@ -551,10 +551,10 @@ def test_a_heavy_scene_is_a_valid_stack(key: str) -> None:
     assert {"triangles_over", "seconds_over"} & set(scenes[key].promises)
 
 
-def test_the_four_heavy_scenes_of_the_plan_are_there() -> None:
+def test_the_heavy_scenes_of_the_plan_are_there() -> None:
     """§2.5: zwei langsame, eine über der Erkennungsgrenze, eine über der groben Vorschau."""
     heavy = {key for key, scene in _scenes().items() if scene.heavy}
-    assert heavy == {"langsam_2s", "langsam_10s", "ueber_erkennungsgrenze", "ueber_grober_vorschau"}
+    assert heavy >= {"langsam_2s", "langsam_10s", "ueber_erkennungsgrenze", "ueber_grober_vorschau"}
 
 
 def test_the_promise_check_sees_a_broken_promise() -> None:
@@ -756,6 +756,44 @@ def test_the_spec_format_is_closed(rows: list[fl.Row]) -> None:
     for word, (values, package) in cases.items():
         issues = fl.validate_specs(rows, _spec({"start_scene": "leer", **values}, package), scenes)
         assert any(word in issue for issue in issues), (word, issues)
+
+
+def test_a_fault_case_is_checked_like_a_spec(rows: list[fl.Row]) -> None:
+    """Der Fehlfall hat ein geschlossenes Format: bekannte Schlüssel, ``during`` aus der
+    Liste, Weg und Eingaben aus dem Wortschatz, eine Startszene aus dem Katalog.
+
+    Die Probezeile D8 trägt ihn: *Auf das Bett setzen* ist während einer Neuberechnung
+    gesperrt und nennt den Grund (RM-534) — eine Startszene, deren Neuberechnung nicht
+    aus dem Zwischenspeicher kommt.
+    """
+    scenes = fl.load_scenes()
+    good = {
+        "start_scene": "leer",
+        "fault_case": {
+            "start_scene": "unter_dem_bett_langsam",
+            "route": [{"target": "history.row:4", "button": "double"}],
+            "inputs": {"field:edge": 0.21},
+            "during": "rechnung",
+            "expected": "sperrgrund",
+        },
+    }
+    assert fl.validate_specs(rows, _spec(good), scenes) == []
+    bad = {
+        "start_scene": "leer",
+        "fault_case": {
+            "start_scene": "gibt_es_nicht",
+            "route": [{"target": "Knopf"}],
+            "during": "irgendwann",
+            "expected": "sperrgrund",
+            "wann": "jetzt",
+        },
+    }
+    issues = fl.validate_specs(rows, _spec(bad), scenes)
+    for word in ("gibt_es_nicht", "'Knopf'", "irgendwann", "wann"):
+        assert any(word in issue for issue in issues), (word, issues)
+    fault = fl.load_specs()["finding.action:place_on_bed"].values["fault_case"]
+    assert fault["during"] == "rechnung" and fault["expected"] == "sperrgrund"
+    assert scenes[fault["start_scene"]].heavy
 
 
 def test_the_licence_preconditions_are_the_states_of_the_application() -> None:

@@ -1896,6 +1896,14 @@ BUTTONS: Final[tuple[str, ...]] = ("left", "right", "double")
 MODIFIERS: Final[tuple[str, ...]] = ("", "ctrl", "shift")
 #: Welche Absage ein erzwungener Fehlfall erwartet (Prüfpunkt 7).
 FAULT_KINDS: Final[tuple[str, ...]] = ("sperrgrund", "grenzablehnung", "befund", "meldung")
+#: Die Schlüssel eines Fehlfalls: Weg und Eingaben wie in der Spezifikation, eine
+#: eigene Startszene, wenn der Fehlfall einen anderen Stand braucht, und ``during``:
+#: wann die Handlung geklickt wird — ``rechnung`` heißt, während die nach Weg und
+#: Eingaben angestoßene Rechnung läuft.
+FAULT_KEYS: Final[frozenset[str]] = frozenset(
+    {"start_scene", "route", "inputs", "during", "expected"}
+)
+FAULT_MOMENTS: Final[tuple[str, ...]] = ("", "rechnung")
 #: Die Prüfpunkte des Konzepts (§4), als Schlüssel von ``not_applicable`` geschrieben
 #: wie ``"4"``.
 CHECKPOINT_NUMBERS: Final[tuple[int, ...]] = tuple(range(1, 20))
@@ -2067,8 +2075,20 @@ def validate_specs(
                 issues.append(f"{where}: Erwartung {measure} mit Toleranz {expected['tolerance']}")
         fault = spec.get("fault_case")
         if fault is not None:
+            extra = set(fault) - FAULT_KEYS
+            if extra:
+                issues.append(f"{where}: Fehlfall mit unbekannten Schlüsseln {sorted(extra)}")
             if fault.get("expected") not in FAULT_KINDS:
                 issues.append(f"{where}: Fehlfall erwartet {fault.get('expected')!r}")
+            if fault.get("during", "") not in FAULT_MOMENTS:
+                issues.append(f"{where}: Fehlfall während {fault.get('during')!r} unbekannt")
+            if "start_scene" in fault and fault["start_scene"] not in scenes:
+                issues.append(
+                    f"{where}: Fehlfall-Startszene {fault['start_scene']!r} gibt es nicht"
+                )
+            for step in fault.get("route", ()):
+                if not is_target(str(step.get("target", ""))):
+                    issues.append(f"{where}: Fehlfall-Weg zu {step.get('target')!r} ist kein Ziel")
             for name in fault.get("inputs", {}):
                 if not is_target(name):
                     issues.append(f"{where}: Fehlfall-Eingabe {name!r} ist kein Ziel")
