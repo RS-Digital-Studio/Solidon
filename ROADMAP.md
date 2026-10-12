@@ -5476,7 +5476,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   [Konzept](konzepte/konzept-suche-und-palette-2026-10.md).
   **Gebaut (`ddd82fb9b`, `5ca7f94cb`):** Kundenwörter der drei in sechs Sprachen; ein genau
   gesagtes Kundenwort steht vor dem Titelwort einer anderen Zeile (sonst zeigte „Differenz“ die
-  Differenzansicht). An einem gewählten Körper mit einem zweiten in der Szene nennt eine Zeile
+  Differenzansicht), nie vor ihrem ganzen Titel (Review vor dem Merge). An einem gewählten Körper mit einem zweiten in der Szene nennt eine Zeile
   der Karte den Weg (Umschalt oder Strg und Klick). Die Funktionsseite der Website nennt den
   Begriff in sechs Sprachen. Handbuchquote vorher und nachher 37 von 38 unter den ersten drei.
   **Offen** allein die Abnahme am echten Fenster beim Release (RM-213): „boolesch“, „Boolean“
@@ -5496,7 +5496,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   setzen den Cursor hinein, Escape und Return gehören dem Feld. Ohne Auswahl stehen alle
   Handlungen für alle Körper und die Erzeuger. Jeder Tastendruck unter 43 ms (Grenze 0,2 s).
   Unterwegs behoben: Ein kurzes Wort ohne Treffer fand alle 273 Zeilen (aus der Palette), und
-  die Kürzelübersicht nannte drei Werkzeuge doppelt.
+  die Kürzelübersicht nannte drei Werkzeuge doppelt; das Review vor dem Merge fand sechzehn
+  weitere, keinen schweren, alle behoben (Tabelle im Konzept).
   **Offen** allein die Abnahme am echten Fenster beim Release (RM-213): Strg+Umschalt+P ohne
   Auswahl, ein Wort tippen, Return startet den Treffer, Escape leert das Feld und gibt die
   Ansicht zurück, ein gesperrter Treffer nennt seinen Grund, ohne Treffer *Im Handbuch suchen*

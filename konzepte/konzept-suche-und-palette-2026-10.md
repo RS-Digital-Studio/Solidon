@@ -198,7 +198,7 @@ schweren. Die Kennungen sind die des Berichts.
 | Fund | Art | Schwere | Beleg | Stand |
 |---|---|---|---|---|
 | F1: Die vorgewählte Trefferzeile schrieb auch Kürzel und zweite Zeile halbfett, deren letzte Zeile fiel aus dem Rechteck (`plain.font` ist eine Referenz) | Fehler | mittel | `test_search.py::test_the_chosen_hit_sets_only_its_title_in_bold`, vorher rot | behoben, Kopie der Schrift |
-| F6: „Wiederholen“ wählte *Kopien in Reihe oder Kreis* vor — ein Kundenwort schlug den ganzen Titel einer anderen Zeile | Fehler | mittel | `test_search.py::test_whoever_types_a_whole_title_gets_that_row_first` (sechs Sprachen), vorher rot | behoben: der ganze Titel zählt wie Titel und Kundenwort; die übrigen zehn geänderten Vorauswahlen („bewegen“ → *Verschieben*, „laden“ → *Öffnen*, „rau“ → *Glätten* …) bleiben bewusst, dort trifft das Kundenwort nur ein Wort im fremden Titel |
+| F6: „Wiederholen“ wählte *Kopien in Reihe oder Kreis* vor — ein Kundenwort schlug den ganzen Titel einer anderen Zeile | Fehler | mittel | `test_search.py::test_whoever_types_a_whole_title_gets_that_row_first` (sechs Sprachen, Güte und Vorauswahl), vorher rot | behoben: der ganze Titel zählt wie Titel und Kundenwort, den Gleichstand bricht N1; die zehn übrigen Vorauswahlen aus RM-734 („bewegen“ → *Verschieben*, „laden“ → *Öffnen*, „rau“ → *Glätten* …) bleiben bewusst, dort trifft das Kundenwort nur ein Wort im fremden Titel. Gegenüber 0.6.0 wählen dazu „Neu“, „Schraube“ und „Verschieben“ die Zeile mit genau diesem Titel |
 | F8: Ohne Auswahl stand die Operation `load` als „Modell einfügen“ mit eigenem Dialog neben dem gleichnamigen Befehl | Fehler, Ein Text eine Wirkung | mittel | `test_ui.py::test_the_card_without_a_selection_inserts_a_model_like_the_menu`, `test_selection_operations.py::test_the_window_command_takes_the_place_of_its_operation`, vorher rot | behoben, `add_window_action(replaces=…)` |
 | F10: Ein zur Laufzeit registrierter Baustein fehlte in der Suche bis zum Neustart | Fehler | mittel | `test_selection_operations.py::test_an_operation_registered_later_is_found`, vorher rot | behoben, Zeilen aus dem Register von jetzt |
 | F2: *Funktion suchen* hatte keinen Fenstertest | Testlücke | mittel | drei Tests in `test_ui.py` (Lage, Startbildschirm, Zeichnung und Reiterfenster) und *Im Handbuch suchen* | behoben |
@@ -209,3 +209,12 @@ schweren. Die Kennungen sind die des Berichts.
 | F9: Am Körper mit lauter Sperren „steht oben bei den Maßen“ (seit 0.6.0) | Fehler, Regel 17 | leicht | `test_a_body_with_every_action_locked_says_why`, vorher rot | behoben, Grund an jeder Stufe |
 | F11: Return in der Trefferliste lief an die Vorfahren weiter | Fehler | leicht | `test_return_in_the_hit_list_ends_there`, vorher rot | behoben, `_HitList` nimmt die Taste |
 | F12: Regel `oberflaeche.md`, Zitat in `make_workshop_videos.py`, eine Testmeldung | Unterlage | leicht | Bericht | behoben |
+
+Die Nachprüfung der Fixe fand vier weitere.
+
+| Fund | Art | Schwere | Beleg | Stand |
+|---|---|---|---|---|
+| N1: Bei gleicher bester Güte entschied das Alphabet — „Tornillo“ wählte spanisch das *Agujero para tornillo* vor, „Wandhalter“ den Zwilling ohne Kundenwort | Fehler | mittel | `test_among_equal_hits_the_place_then_the_whole_title_then_the_word_decides` (fünf Sprachen, drei Lagen), Vorauswahl im Test zu F6, vorher rot | behoben: `ranked` bricht den Gleichstand nach Lage (auch Felder des Merkmalfensters), Freigabe, ganzem Titel, Kundenwort |
+| N2: Der Fix zu F7 hielt auch die selbsttätige Vorauswahl über einen Auswahlwechsel fest („hinlegen“, dann Körper: Return richtete die Szene aus) | Fehler, Rückschritt aus F7 | mittel | `test_the_preselection_follows_a_new_selection_unless_chosen_by_hand`, vorher rot; Fenstersonde 437 Wörter, drei Wechsel, keiner mit alter Wahl | behoben, nur eine Wahl von Hand bleibt |
+| N3: `main_window.py` zieht 17 Byte unter der Grenze Unterlagen nach | Risiko | leicht | `test_no_source_file_pulls_more_than_its_budget` | ohne Zuwachs gehalten; der Raum entsteht mit der Codestruktur (RM-722 ff.) |
+| N4: Fehlendes Leerzeichen im Zitat von `make_workshop_videos.py` | Text | leicht | Bericht | behoben |

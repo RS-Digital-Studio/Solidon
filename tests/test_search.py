@@ -709,6 +709,12 @@ def test_whoever_types_a_whole_title_gets_that_row_first(language: str) -> None:
     als die, deren Namen man getippt hatte (Review RM-735, F6). Gleich gut
     darf eine andere sein („Verschieben“ und *Merkmal verschieben*): Dann
     entscheidet, was an der Auswahl steht.
+
+    **Gezählt wird die Vorauswahl, nicht nur die Güte.** Bei gleicher Güte
+    entschied das Alphabet: „Tornillo“ wählte das *Agujero para tornillo* vor,
+    „Schraube“ den Baustein — je Sprache eine andere Handlung (Nachprüfung
+    RM-735, N1). Ohne Auswahl steht keine Zeile an der Lage; dann gewinnt der
+    ganze Titel.
     """
     from app.core.registry.search import rank
     from app.i18n import set_language, tr
@@ -729,6 +735,10 @@ def test_whoever_types_a_whole_title_gets_that_row_first(language: str) -> None:
             for andere in zeilen:
                 if str(andere.title) != titel and rank(andere, titel) < eigene:
                     daneben.append(f"„{titel}“ -> {andere.name} vor {zeile.name}")
+            hits, _loosened = ranked(zeilen, titel)
+            gewaehlt = hits[first_choice(hits, titel)]
+            if str(gewaehlt.title) != titel:
+                daneben.append(f"„{titel}“ wählt {gewaehlt.name} vor statt {zeile.name}")
         assert not daneben, f"{language}: " + "; ".join(daneben[:10])
     finally:
         install_language("de")

@@ -732,6 +732,11 @@ class SelectionOperationsPanel(QWidget):
         und verworfen, sobald sich Auswahl, Freigabe oder Register ändern."""
         self._rows_from: tuple[OperationSpec, ...] = ()
         """Der Registerstand, aus dem :attr:`_rows` gebaut ist."""
+        self._rows_here: frozenset[str] = frozenset()
+        """Welche Zeilen der Suche an dieser Auswahl stehen — sie gehen bei
+        gleicher Güte vor (:func:`~app.core.registry.search.ranked`)."""
+        self._chosen_by_itself: str | None = None
+        """Was die Trefferliste zuletzt selbst vorgewählt hat (:meth:`_show_hits`)."""
         self._hits: list[SearchEntry] = []
         """Was die Trefferliste gerade zeigt, in ihrer Reihenfolge."""
         self._hits_for = ""
@@ -1706,12 +1711,18 @@ class SelectionOperationsPanel(QWidget):
         Treffer stehen trotzdem in der Liste, denn Return und die Pfeiltasten
         arbeiten auf ihr.
         """
-        hits, loosened = ranked(self._search_rows(), wanted)
-        # **Die gewählte Zeile bleibt bei demselben Wort** (Review RM-735, F7):
-        # Das Fenster meldet die Lage nach jeder fertigen Auswertung neu, und
-        # die Wahl mit den Pfeiltasten fiel dabei auf den ersten Treffer zurück.
+        rows = self._search_rows()
+        hits, loosened = ranked(rows, wanted, self._rows_here)
+        # **Eine Wahl mit den Pfeiltasten bleibt bei demselben Wort** (Review
+        # RM-735, F7): Das Fenster meldet die Lage nach jeder fertigen
+        # Auswertung neu, und die Wahl fiel dabei auf den ersten Treffer zurück.
+        # **Die selbsttätige Vorauswahl dagegen rechnet neu** (Nachprüfung N2):
+        # „hinlegen“ ohne Auswahl wählt *Druckoptimal ausrichten*; nach dem
+        # Klick auf einen Körper muss Return ihn hinlegen, nicht die Szene
+        # ausrichten.
         current = self.hits.currentItem() if wanted == self._hits_for else None
-        kept = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
+        named = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
+        kept = named if named != self._chosen_by_itself else None
         self._hits = hits
         self._hits_for = wanted
         self.scroller.setVisible(False)
@@ -1736,7 +1747,9 @@ class SelectionOperationsPanel(QWidget):
         for entry in hits:
             self.hits.addItem(self._hit_item(entry))
         names = [entry.name for entry in hits]
-        choice = names.index(kept) if kept in names else first_choice(hits, wanted)
+        itself = first_choice(hits, wanted)
+        self._chosen_by_itself = names[itself]
+        choice = names.index(kept) if kept in names else itself
         self.hits.setCurrentRow(choice + int(loosened))
         self.hits.setVisible(True)
         self.hits.updateGeometry()
@@ -1816,11 +1829,30 @@ class SelectionOperationsPanel(QWidget):
             rows = sorted(
                 [*operations, *self._commands()], key=lambda entry: sort_key(str(entry.title))
             )
-            standing = {entry.name for entry in rows if self._stands_here(entry.name)}
+            standing = frozenset(entry.name for entry in rows if self._stands_here(entry.name))
+            self._rows_here = standing | frozenset(
+                entry.name for entry in rows if entry.available and self._as_a_field(entry.name)
+            )
             self._rows = sorted(
                 rows, key=lambda entry: (not entry.available, entry.name not in standing)
             )
         return self._rows
+
+    def _as_a_field(self, name: str) -> bool:
+        """Ob die Handlung dem gewählten Merkmal gilt und als Feld im Merkmalfenster
+        darüber steht statt in der Karte (*Merkmal verschieben* an einer Bohrung).
+
+        Für die Suche gilt sie der Auswahl wie eine Zeile der Karte: „Verschieben“
+        an einer Bohrung verschiebt das Merkmal, nicht den Körper (Nachprüfung
+        RM-735, N1).
+        """
+        return (
+            bool(self._feature_kind)
+            and name in _shown_as_fields()
+            and name not in self._left_out
+            and (self._only is None or name in self._only)
+            and self._feature_kind in self._at_which_kind.get(name, frozenset())
+        )
 
     def _stands_here(self, name: str) -> bool:
         """Ob die ruhende Karte diese Handlung an der aktuellen Auswahl zeigt."""

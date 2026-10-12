@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from functools import lru_cache
 from typing import TYPE_CHECKING, Final
 
@@ -747,6 +747,18 @@ def word_hits(entry: SearchEntry, query: str) -> int:
     )
 
 
+def _whole_title(title: str, typed: str) -> bool:
+    """Ob die Anfrage der ganze Titel ist, Wort für Wort — „…“ und Doppelpunkt zählen nicht."""
+    return re.findall(r"\w+", title) == re.findall(r"\w+", typed)
+
+
+def _in_phrase(name: str, parts: Sequence[str]) -> bool:
+    """Ob alle Wörter der Anfrage am Wortanfang in **einer** Kundenwendung stehen."""
+    return any(
+        all(starts_a_word(part, phrase) for part in parts) for phrase in customer_phrases(name)
+    )
+
+
 def rank(entry: SearchEntry, query: str) -> int:
     """Wie gut ein Eintrag zur Anfrage passt — kleiner ist besser.
 
@@ -781,20 +793,17 @@ def rank(entry: SearchEntry, query: str) -> int:
     # *einer* Kundenwendung stehen, nicht verstreut über alle: „Loch machen“
     # fand sonst *Bohrung ändern* vor *Bohrung setzen*, und „move hole“ fand
     # *Bohrung verschließen*, weil „move“ in „remove hole“ steckt.
-    phrases = customer_phrases(str(entry.name))
     typed = " ".join(parts)
-    said_exactly = typed in phrases
-    in_phrase = said_exactly or any(
-        all(starts_a_word(part, phrase) for part in parts) for phrase in phrases
-    )
+    said_exactly = typed in customer_phrases(str(entry.name))
+    in_phrase = said_exactly or _in_phrase(str(entry.name), parts)
     # **Titel *und* Kundenwort schlägt Titel allein.** Seit beide Filament-
     # Handlungen das Wort im Titel tragen („Filament zuweisen“, „Filament auf
     # eine Fläche“), bricht das Kundenwort den Gleichstand. **Der ganze Titel
     # zählt genauso:** „Wiederholen“ ist der Titel des Befehls und ein
     # Kundenwort von *Kopien in Reihe oder Kreis*; mit dem Kundenwort vorn
     # startete Return eine andere Handlung als die beim Namen genannte
-    # (Review RM-735, F6). Bei gleicher Güte entscheidet die Auswahl.
-    if at_title_start and (in_phrase or re.findall(r"\w+", title) == re.findall(r"\w+", typed)):
+    # (Review RM-735, F6). Den Gleichstand bricht :func:`ranked`.
+    if at_title_start and (in_phrase or _whole_title(title, typed)):
         return 0
     # **Genau gesagt vor jedem Titelwort einer anderen Zeile** (RM-734):
     # „Differenz“ ist ein Kundenwort des *Abziehens* und der Anfang der
@@ -834,12 +843,22 @@ def _fields_of(texts: tuple[tuple[str, str, str], ...]) -> dict[str, dict[str, s
     return search_fields(texts)
 
 
-def ranked(entries: Sequence[SearchEntry], query: str) -> tuple[list[SearchEntry], bool]:
+def ranked(
+    entries: Sequence[SearchEntry], query: str, here: Collection[str] = frozenset()
+) -> tuple[list[SearchEntry], bool]:
     """Die Treffer der Suche in ihrer Rangfolge — und ob die letzte Runde gelockert hat.
 
     Stabil nach Güte (:func:`rank`): Titel vor Name vor Beschreibung, und
     innerhalb derselben Güte bleibt die Reihenfolge der ``entries`` stehen —
     der Aufrufer stellt dort vorn hin, was an der Auswahl geht.
+
+    **Bei gleicher Güte zuerst die Lage** (``here``: die Namen, die an der
+    Auswahl stehen), **dann der ganze Titel, dann das Kundenwort — nie das
+    Alphabet.** Ganzer Titel und „Titel und Kundenwort“ teilen die beste Güte;
+    den Rest entschied die Sortierung nach Titel, und „Tornillo“ wählte
+    spanisch das *Agujero para tornillo* vor statt des Bausteins *Tornillo*,
+    „Wandhalter“ den Zwilling ohne Kundenwort (Nachprüfung RM-735, N1).
+    „Verschieben“ verschiebt am Körper den Körper, an der Bohrung das Merkmal.
 
     **Der Zwilling zuletzt, bei gleicher Güte.** Wer „quader“ tippt, bekommt
     die Normalform vor der Sonderform; die Grundliste zeigt den Zwilling gar
@@ -858,15 +877,24 @@ def ranked(entries: Sequence[SearchEntry], query: str) -> tuple[list[SearchEntry
     texts = tuple((str(entry.name), _texts_of(entry.title), str(entry.doc)) for entry in entries)
     scores = dict(rank_entries([query], _fields_of(texts)))
     hidden = hidden_from_the_menu()
+    parts = fold(query).split()
+    typed = " ".join(parts)
 
-    def order(entry: SearchEntry) -> tuple[float, int, int, bool, float]:
+    def order(entry: SearchEntry) -> tuple[float, int, int, bool, bool, bool, bool, bool, float]:
         good = rank(entry, query)
         score = scores.get(str(entry.name), 0.0)
+        best = good == 0
         return (
             -score if loosened else 0.0,
             -word_hits(entry, query) if loosened else 0,
             good,
+            entry.name not in here,
             entry.name in hidden,
+            # Frei vor gesperrt, wie die Reihenfolge der ``entries`` — sonst
+            # stünde ein gesperrtes Kundenwort über einem freien Titel.
+            best and not entry.available,
+            best and not _whole_title(fold(str(entry.title)), typed),
+            best and not _in_phrase(str(entry.name), parts),
             -score if good >= LOOSE_RANK else 0.0,
         )
 

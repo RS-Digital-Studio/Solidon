@@ -1347,6 +1347,72 @@ def test_a_new_report_of_the_selection_keeps_the_hit_chosen_by_arrow(
     )
 
 
+def test_the_preselection_follows_a_new_selection_unless_chosen_by_hand(
+    qt_app: QApplication,
+) -> None:
+    """Die Vorauswahl der Suche rechnet für die neue Auswahl neu — nur eine Wahl
+    mit den Pfeiltasten bleibt.
+
+    „hinlegen“ ohne Auswahl wählt *Druckoptimal ausrichten* (ganze Szene) vor;
+    wer dann einen Körper wählt, bekommt *Auf das Bett setzen* oben, und Return
+    muss diesen Körper hinlegen, nicht die Szene ausrichten. Der Fix zu F7
+    hielt auch die selbsttätige Vorauswahl fest (Nachprüfung RM-735, N2).
+    """
+    from app.core.registry.search import first_choice
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(0, _availability(0))
+    panel.search.setText("hinlegen")
+    before = panel.hits.currentItem().data(Qt.ItemDataRole.UserRole)
+    panel.set_context(1, _availability(1))
+    wanted = panel._hits[first_choice(panel._hits, "hinlegen")].name
+    assert wanted != before, "die neue Lage wählt nichts anderes — Test prüft nichts"
+    assert panel.hits.currentItem().data(Qt.ItemDataRole.UserRole) == wanted
+
+
+@pytest.mark.parametrize(
+    ("language", "kind", "typed", "meant"),
+    [
+        ("de", "", "Verschieben", {"translate_object"}),
+        ("de", "hole", "Verschieben", {"move_feature"}),
+        ("de", "face", "Verschieben", {"translate_object"}),
+        ("de", "face", "Wandhalter", {"insert_wall_mount"}),
+        ("es", "", "Tornillo", {"create_printed_screw", "insert_printed_screw"}),
+        ("fr", "", "Vis", {"create_printed_screw", "insert_printed_screw"}),
+        ("it", "", "Vite", {"create_printed_screw", "insert_printed_screw"}),
+        ("pt", "face", "Parafuso", {"create_printed_screw", "insert_printed_screw"}),
+    ],
+)
+def test_among_equal_hits_the_place_then_the_whole_title_then_the_word_decides(
+    qt_app: QApplication, language: str, kind: str, typed: str, meant: set[str]
+) -> None:
+    """Bei gleicher Güte entscheidet zuerst, was an der Auswahl steht, dann der
+    ganze Titel, dann das Kundenwort — nie das Alphabet.
+
+    „Verschieben“ am Körper verschiebt ihn, an der Bohrung das Merkmal. Der ganze
+    Titel „Tornillo“ wählt den Baustein *Tornillo*, nicht das *Agujero para
+    tornillo*, das spanisch nach dem Alphabet vorn stand; bei zwei Zeilen
+    gleichen Titels („Wandhalter“) entscheidet das Kundenwort, nicht der
+    Registername (Nachprüfung RM-735, N1).
+    """
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+
+    load_operations()
+    install_language(language)
+    set_language(language)
+    try:
+        panel = SelectionOperationsPanel(REGISTRY.all())
+        panel.set_context(1, _availability(1), feature_kind=kind)
+        panel.search.setText(typed)
+        chosen = panel.hits.currentItem().data(Qt.ItemDataRole.UserRole)
+        assert chosen in meant, f"„{typed}“ ({language}, {kind or 'Körper'}) wählt {chosen}"
+    finally:
+        install_language("de")
+        set_language("de")
+
+
 def test_return_in_the_hit_list_ends_there(qt_app: QApplication) -> None:
     """Return in der Trefferliste führt aus und läuft nicht an die Vorfahren weiter.
 
