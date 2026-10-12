@@ -217,6 +217,13 @@ vorbereitete Sitzung braucht, überschreibt nur `session`. Aus `conftest`
 importiert kein Test: pytest lädt es als Plugin, und ein zweiter Import führte
 es noch einmal aus.
 
+Die übrigen Helfer in `ui_helpers.py`: `shown_window` für ein gezeigtes Fenster
+ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur,
+`on_the_bore_wall` für einen Klick auf eine Bohrungswand, `wait_until` für
+zugestellte Qt-Ereignisse, `wait_for_export` und `wait_for_print_findings` für
+Arbeiter, die `wait_for_idle` nicht sieht, sowie `PlacementItem`,
+`PlacementViewport` und `scene_with_a_hole_and_a_fillet` für Platzierungsfälle.
+
 ## Stolperfallen
 
 *Früher unter „Die Fahrweise steht einmal — in `CLAUDE.md`“.*

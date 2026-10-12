@@ -125,7 +125,10 @@ rechts (bei gewähltem Körper) → Titel“. Die Regeln stehen in `grenzen.md`
 („Wo eine Operation steht“). Eine eigenständige Prüfkörperkachel umfasst
 ihren `create_`-Zugang und das kompatible `insert_`; beide nennen denselben
 Katalogort, erzeugen keinen zusätzlichen Menüeintrag, und die Kachel startet
-`creation_name()`.
+`creation_name()`. `menu_place(spec)` in `surfaces.py` nennt die Art des Orts
+(`menue`, `karte`, `katalog`), nach der `menu_path` verzweigt; der
+Funktionsdurchgang fragt sie für Prüfpunkt 17, statt die Verzweigung
+nachzubauen.
 
 ## Was ein Eintrag mitbringen muss
 
