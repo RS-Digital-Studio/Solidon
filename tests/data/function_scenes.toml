@@ -242,6 +242,20 @@ op = "drill_hole"
 inputs = ["obj_1"]
 params = { diameter = 5.0, z = 20.0 }
 
+[scene."gleiche_bohrungen.exakt"]
+summary = "Der exakte Quader mit drei gleichen Bohrungen Ø 4 mm im Abstand 10 mm."
+kernel = "exakt"
+base = "quader.exakt"
+promises = { objects = 1, kinds = ["hole"] }
+[[scene."gleiche_bohrungen.exakt".ops]]
+op = "drill_hole"
+inputs = ["obj_1"]
+params = { diameter = 4.0, x = -10.0, z = 20.0 }
+[[scene."gleiche_bohrungen.exakt".ops]]
+op = "pattern_feature"
+inputs = ["obj_1"]
+params = { at_features = ["hole_1"], count = 3, spacing = 10.0, dx = 1.0 }
+
 [scene."merkmal.cone.exakt"]
 summary = "Der exakte Quader mit Senkung Ø 8,4 mm, 90°, von oben."
 kernel = "exakt"

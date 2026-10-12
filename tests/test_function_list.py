@@ -192,6 +192,33 @@ def test_every_fixed_target_has_a_row_and_every_table_line_is_used(rows: list[fl
     assert set(fl.TARGET_SURFACES) <= set(found), "Tabellenzeile ohne erzeugte Zeile"
 
 
+def test_the_feature_window_rows_come_from_the_action_keys(rows: list[fl.Row]) -> None:
+    """Die Handlungen des Merkmalfensters ohne eigene Operation sind Zeilen unter dem
+    Schlüssel, den ``FeatureAction.key`` trägt — Baustein in D2, Textur und Kantenvariante
+    mit ihrer Operation (Konzept §6)."""
+    from app.core.perceive.actions import EDGE_VARIANT_KEYS, PART_ACTION_KEYS, TEXTURE_ACTION_KEYS
+
+    found = _by_id(rows)
+    for key in PART_ACTION_KEYS:
+        assert found[f"feature:{key}"].package == "D2"
+        assert found[f"feature:{key}"].start_scene.startswith("baustein.")
+    for key in TEXTURE_ACTION_KEYS:
+        assert found[f"feature:{key}"].package == found["apply_texture"].package
+        assert found[f"feature:{key}"].start_scene == "merkmal.pattern.netz"
+    assert EDGE_VARIANT_KEYS
+    for key in EDGE_VARIANT_KEYS:
+        row = found[f"edge:{key}"]
+        assert row.package == found[key.split(".")[0]].package and row.requirement == "kante"
+
+
+def test_every_surface_row_names_a_target_of_the_vocabulary(rows: list[fl.Row]) -> None:
+    """Jede Zeile zeigt auf ein Ziel des Wortschatzes — sonst findet der Prüfstand sie nicht."""
+    from app.core.guides import is_target
+
+    wrong = [row.id for row in rows if not is_target(row.target)]
+    assert wrong == []
+
+
 def test_the_history_entries_come_from_the_context_menu(ui_sources: dict[str, str]) -> None:
     """Die Verlaufszeilen kommen aus den Objektnamen ``history.*`` — die vier, unter denen
     die Bildanleitungen sie schon finden, sind dabei."""
@@ -410,6 +437,41 @@ def test_a_row_without_a_spec_stays_green(
     assert all(row.spec is None for row in fl.rows())
 
 
+def test_the_probe_rows_cover_every_kind(rows: list[fl.Row]) -> None:
+    """Je Art eine Probezeile (Bauplan D0 §1.2): Operation in D4, Befundhandlung in D8,
+    Fensterbefehl in D10 — jede mit Beispielziel, Suchproben und Erwartung."""
+    specs = fl.load_specs()
+    assert {"resize_hole", "finding.action:place_on_bed", "Bearbeiten/Parameter anlegen …"} <= set(
+        specs
+    )
+    found = _by_id(rows)
+    assert found["resize_hole"].kind == "operation" and specs["resize_hole"]["package"] == "D4"
+    assert found["finding.action:place_on_bed"].package == "D8"
+    assert specs["Bearbeiten/Parameter anlegen …"]["package"] == "D10"
+    for spec in specs.values():
+        assert spec["example_goal"] and spec["search_probes"] and spec["expectation"], spec
+
+
+def test_a_spec_with_an_unknown_field_or_target_turns_red(rows: list[fl.Row]) -> None:
+    """Gegenprobe: ein Feld, das die Operation nicht hat, ein Ziel außerhalb des Wortschatzes,
+    eine Szene, die es nicht gibt, ein Menüpfad, den die Quelle nicht kennt."""
+    bad = {
+        "resize_hole": {
+            "package": "D4",
+            "file": "d04.toml",
+            "start_scene": "gibt_es_nicht",
+            "example_goal": "x",
+            "inputs": {"feature.field:resize_hole.durchmesser": 8.0, "Feld:Durchmesser": 1.0},
+        },
+        "Bearbeiten/Gibt es nicht …": {"package": "D10", "file": "d10.toml"},
+    }
+    found = fl.validate_specs(rows, bad, fl.load_scenes())
+    assert any("durchmesser" in issue for issue in found)
+    assert any("Feld:Durchmesser" in issue for issue in found)
+    assert any("gibt_es_nicht" in issue for issue in found)
+    assert any("Gibt es nicht" in issue and "Menüpfad" in issue for issue in found)
+
+
 # --- Wortliste und Kundenziele -------------------------------------------------------
 
 
@@ -476,6 +538,8 @@ def _goals() -> list[dict[str, Any]]:
 
 def test_the_common_goals_name_what_exists() -> None:
     """Jedes Kundenziel nennt eine Szene, eine Auswahl und ein Ziel, das es gibt."""
+    from app.core.guides import is_target
+
     goals = _goals()
     scenes = _scenes()
     assert len(goals) >= 15
@@ -490,6 +554,7 @@ def test_the_common_goals_name_what_exists() -> None:
         kind, _colon, name = goal["target"].partition(":")
         assert kind in {"operation", "feature", "edge"}, goal
         assert REGISTRY.has(name.split(".")[0]), goal
+        assert is_target(goal["target"]), goal
 
 
 def test_no_customer_id_reaches_the_corpus() -> None:

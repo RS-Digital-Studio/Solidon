@@ -1,0 +1,16 @@
+# Zeilenspezifikationen für D8 — Druckvorbereitung samt Prüfbericht (RM-744).
+# Format: Bauplan D0 §2.4. Eine Zeile ohne Eintrag hier ist „ungeprüft“.
+
+[row."finding.action:place_on_bed"]
+start_scene = "unter_dem_bett.netz"
+route = [{ target = "finding:arrange.below_bed", button = "left" }]
+example_goal = "Den Würfel, der halb unter dem Druckbett steckt, auf das Bett setzen."
+search_probes = [
+  { word = "Druckbett", origin = "slicer" },
+  { word = "auf Grundebene setzen", origin = "cad" },
+]
+questions = ["Wie setze ich das Teil auf die Druckplatte?"]
+
+[row."finding.action:place_on_bed".expectation]
+"bounds.z_min" = { value = 0.0, tolerance = 0.000001, origin = "Konstruktion: Würfel 20 mm um den Ursprung (cube_clean.stl), aufgesetzt liegt seine Unterseite bei 0" }
+volume = { value = 8000.0, tolerance = 0.001, origin = "Korpus: cube_clean.stl ist ein Würfel 20 mm, 20³ mm³" }

@@ -206,6 +206,19 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "transform.values": ("D3", "koerper:1"),
     "toolbar.draw": ("D7", "leer"),
     "sketch.done": ("D7", "leer"),
+    # Übernehmen, *Im Bild einstellen* und *Auf alle N gleichartigen anwenden*
+    # im Merkmalfenster: erkannte Merkmale ändern ist D4.
+    "feature.apply": ("D4", "merkmal:hole"),
+    "feature.in_view": ("D4", "merkmal:hole"),
+    "feature.every": ("D4", "gleichartig"),
+    # *Bezug ändern* in der Maßgruppe: Sie setzt Erzeuger und Bausteine auf eine
+    # Fläche, und alle Operationen mit Flächenbindung sind D2.
+    "measure.reference": ("D2", "merkmal:face"),
+    "search": ("D11", "koerper:1"),
+    "toolbar.search": ("D11", "leer"),
+    # *Abbrechen* steht nur während einer langen Rechnung.
+    "progress.cancel": ("D12", "langsam"),
+    "preview.banner": ("D11", "koerper:1"),
 }
 
 #: Wortschatznamen mit Art, die Zeilen tragen: Präfix → Paket und Anforderung.
@@ -268,6 +281,12 @@ REQUIREMENT_SCENES: Final[dict[str, str]] = {
     "zustand:cavity": "hohlraum.{kernel}",
     "baustein": "baustein.{kernel}",
     "befund": "unter_dem_bett.netz",
+    # Die Handlungen einer Textur gibt es nur an einem Schritt *Textur aufbringen*,
+    # und der macht aus jedem Körper ein Netz.
+    "textur": "merkmal.pattern.netz",
+    "langsam": "langsam_2s",
+    # *Auf alle N gleichartigen anwenden* steht erst ab zwei gleichen Merkmalen.
+    "gleichartig": "gleiche_bohrungen.exakt",
 }
 FEATURE_REQUIREMENT: Final = "merkmal:"
 FEATURE_SCENE: Final = "merkmal.{kind}.{kernel}"
@@ -436,11 +455,6 @@ def ui_sources(root: Path = UI) -> dict[str, str]:
     if len(found) < 50:
         raise FunctionListError([f"nur {len(found)} Module unter {root} — dann prüft das nichts"])
     return found
-
-
-def window_classes(root: Path = UI) -> dict[str, tuple[str, ...]]:
-    """Die Dialog- und Fensterklassen der Oberfläche (:func:`window_classes_in`)."""
-    return window_classes_in(ui_sources(root))
 
 
 def snake(name: str) -> str:
@@ -715,6 +729,77 @@ def surface_rows(
     return list(rows.values())
 
 
+#: Schlüsselfamilien des Merkmalfensters ohne eigene Operation: Paket und Anforderung.
+#: Die Bausteinhandlungen gelten jedem Baustein, und alle Bausteine sind D2.
+FEATURE_KEY_SURFACES: Final[dict[str, tuple[str, str]]] = {
+    "part": ("D2", "baustein"),
+}
+
+#: Schlüsselfamilien, die genau einer Operation dienen (Konzept §6): Sie gehen mit
+#: ihr in deren Paket.
+FEATURE_KEY_OPERATIONS: Final[dict[str, tuple[str, str]]] = {
+    "texture": ("apply_texture", "textur"),
+}
+
+
+def feature_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
+    """Die Handlungen des Merkmalfensters ohne eigene Operation (Konzept §3).
+
+    Bausteinhandlungen (``PART_ACTION_KEYS``), Texturhandlungen
+    (``TEXTURE_ACTION_KEYS``) und die Kantenvarianten (``EDGE_VARIANT_KEYS``,
+    ``<op>.<mode>``) — die Schlüssel, die ``FeatureAction.key`` trägt. Eine
+    Handlung mit eigener Operation steht als deren Zeile in der Liste.
+    """
+    from app.core.perceive.actions import (
+        EDGE_VARIANT_KEYS,
+        PART_ACTION_KEYS,
+        TEXTURE_ACTION_KEYS,
+    )
+
+    problems: list[str] = []
+    rows: list[Row] = []
+    for key in (*PART_ACTION_KEYS, *TEXTURE_ACTION_KEYS):
+        family = key.split(".")[0]
+        if family in FEATURE_KEY_OPERATIONS:
+            operation, requirement = FEATURE_KEY_OPERATIONS[family]
+            package = package_of_operation(source.get(operation))
+        elif family in FEATURE_KEY_SURFACES:
+            package, requirement = FEATURE_KEY_SURFACES[family]
+        else:
+            problems.append(f"feature:{key}: Schlüsselfamilie {family!r} ohne Paket")
+            continue
+        rows.append(
+            Row(
+                id=f"feature:{key}",
+                kind="bedienflaeche",
+                source="merkmalfenster",
+                package=package,
+                requirement=requirement,
+                start_scene=_start_scene(requirement, kernel_of(None, requirement), scenes),
+                target=f"feature:{key}",
+            )
+        )
+    for key in EDGE_VARIANT_KEYS:
+        operation = key.split(".")[0]
+        if not source.has(operation):
+            problems.append(f"edge:{key}: Operation {operation!r} fehlt im Register")
+            continue
+        rows.append(
+            Row(
+                id=f"edge:{key}",
+                kind="bedienflaeche",
+                source="merkmalfenster",
+                package=package_of_operation(source.get(operation)),
+                requirement="kante",
+                start_scene=_start_scene("kante", EXACT, scenes),
+                target=f"edge:{key}",
+            )
+        )
+    if problems:
+        raise FunctionListError(problems)
+    return rows
+
+
 # --- Fensterbefehle --------------------------------------------------------------
 
 
@@ -742,34 +827,42 @@ def command_package(entry: MenuEntry) -> str:
 def command_rows(
     entries: Iterable[MenuEntry], source: Registry, scenes: Mapping[str, Scene]
 ) -> list[Row]:
-    """Die Fensterbefehle aus der Menüleiste; Operationen darin haben ihre Zeile schon."""
+    """Die Fensterbefehle aus der Menüleiste; Operationen darin haben ihre Zeile schon.
+
+    Eine Aktion an zwei Orten der Leiste (*Bausteinkatalog …* unter *Datei* und
+    unter *Erzeugen*) ist **eine** Funktion: eine Zeile mit dem ersten Pfad als
+    Kennung, ``menu_path`` nennt beide Orte.
+    """
     titles = {str(spec.title) for spec in source.all()}
     problems: list[str] = []
-    rows: list[Row] = []
+    rows: dict[str, Row] = {}
     for entry in entries:
         if not entry.path or entry.path[-1] in titles:
+            continue
+        place = " → ".join(entry.path)
+        if entry.object_name in rows:
+            known = rows[entry.object_name]
+            rows[entry.object_name] = replace(known, menu_path=f"{known.menu_path}; {place}")
             continue
         try:
             package = command_package(entry)
         except FunctionListError as error:
             problems.extend(error.problems)
             continue
-        rows.append(
-            Row(
-                id="/".join(entry.path),
-                kind="fensterbefehl",
-                source="menueleiste",
-                package=package,
-                requirement="leer",
-                start_scene=_start_scene("leer", EXACT, scenes),
-                target=f"menu:{entry.object_name}",
-                menu_path=" → ".join(entry.path),
-                shortcut=entry.shortcut,
-            )
+        rows[entry.object_name] = Row(
+            id="/".join(entry.path),
+            kind="fensterbefehl",
+            source="menueleiste",
+            package=package,
+            requirement="leer",
+            start_scene=_start_scene("leer", EXACT, scenes),
+            target=f"menu:{entry.object_name}",
+            menu_path=place,
+            shortcut=entry.shortcut,
         )
     if problems:
         raise FunctionListError(problems)
-    return rows
+    return list(rows.values())
 
 
 def read_menubar(path: Path) -> list[MenuEntry]:
@@ -805,6 +898,7 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
         lambda: operation_rows(source, scenes),
         lambda: dialog_rows(scan.classes, source, scenes),
         lambda: surface_rows(TARGETS, scan.history, finding_action_ids(), scenes),
+        lambda: feature_rows(source, scenes),
         lambda: command_rows(menubar, source, scenes),
     )
     for build in builders:
