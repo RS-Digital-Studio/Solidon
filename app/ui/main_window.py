@@ -485,6 +485,11 @@ RECENT_WAIT_S = 0.05
 #: Wie oft danach nachgesehen wird, ob die Prüfung zurück ist.
 RECENT_POLL_MS = 100
 
+#: Wie groß das Hauptfenster beim ersten Öffnen ist, in Logikpunkten (Breite,
+#: Höhe). Eine Quelle für den Aufbau und den Funktionsdurchgang, der die
+#: Textpassung an dieser Größe misst.
+START_SIZE: Final = (1280, 820)
+
 #: Wie lange nach dem letzten Verschieben einer Seitenkarte die Einstellungen
 #: geschrieben werden — lang genug für eine gehaltene Pfeiltaste, kurz genug,
 #: dass ein Absturz danach die Lage nicht verliert.
@@ -3100,7 +3105,7 @@ class MainWindow(QMainWindow):
         session.follow_print_settings(self.effective_print_settings)
         self.setAcceptDrops(True)
         self.setWindowTitle(APP_NAME)
-        self.resize(1280, 820)
+        self.resize(*START_SIZE)
         self._foundation_cache: tuple[tuple[object, ...], manufacturer.Foundation] | None = None
         """Die zuletzt gerechnete Grundlage aus dem Herstellerprofil und wofür."""
         self._foundation_worker: Any = None

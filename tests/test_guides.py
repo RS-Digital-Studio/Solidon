@@ -2074,3 +2074,16 @@ def test_move_before_names_the_numbers_the_history_shows(qt_app: Any) -> None:
     finally:
         window.hide()
         window.release()
+
+
+def test_the_window_opens_at_its_start_size(qt_app: Any) -> None:
+    """Die Startgröße steht als Konstante; der Prüfstand misst an ihr (Kriterium Z6)."""
+    from app.ui.main_window import START_SIZE, MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        assert (window.width(), window.height()) == START_SIZE
+    finally:
+        window.deleteLater()
