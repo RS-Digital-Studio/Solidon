@@ -3137,6 +3137,52 @@ def test_the_metainfo_is_well_formed_and_names_both_licences() -> None:
     assert versions == [APP_VERSION], f"Version im Manifest: {versions}"
 
 
+#: Leser, die vor dem Ende ihrer Eingabe aufhören. Hinter einer Pipe bekommt der
+#: Erzeuger dann SIGPIPE, endet mit 141, und unter ``pipefail`` (``shell: bash``
+#: setzt es) bricht der ganze Schritt ab — gemessen an ``ldconfig -p | awk
+#: '… exit'`` (Review 1, S3).
+_EARLY_READER: Final = re.compile(
+    r"\|\s*(?:head\b"
+    r"|grep\b[^|]*\s(?:-[A-Za-z]*[qm][A-Za-z]*\b|--quiet\b|--max-count\b)"
+    r"|awk\b[^|]*\bexit\b"
+    r"|sed\b[^|]*'[^']*\d*q[^']*')"
+)
+
+
+def _early_readers(text: str) -> list[str]:
+    """Jede ausgeführte Zeile mit einer Pipe in einen früh endenden Leser."""
+    return [
+        line.strip()
+        for line in text.splitlines()
+        if not line.lstrip().startswith("#") and _EARLY_READER.search(line)
+    ]
+
+
+def test_no_pipe_in_the_build_workflow_ends_its_reader_early() -> None:
+    """``| head``, ``| grep -q``, ``| awk '… exit'`` und Verwandte enden mit 141 unter pipefail."""
+    assert _early_readers(WORKFLOW.read_text(encoding="utf-8")) == []
+
+
+@pytest.mark.parametrize(
+    ("line", "early"),
+    [
+        ("cxx=$(ldconfig -p | awk '/libstdc/ {print $NF; exit}')", True),
+        ('echo "$(ldd --version | head -n 1)"', True),
+        ("lipo -archs app | tr ' ' '\\n' | grep -qx 'arm64'", True),
+        ("find . -name x | grep -m 1 y", True),
+        ("seq 9 | sed '1q'", True),
+        ("cxx=$(ldconfig -p | awk '/x/ && !found {print $NF; found = 1}')", False),
+        ('echo "$(ldd --version | sed -n 1p)"', False),
+        ("lipo -archs app | tr ' ' '\\n' | grep -x 'arm64' > /dev/null", False),
+        ("grep -ao 'GLIBCXX' lib | sort -uV | tail -n 1", False),
+        ("# ldconfig -p | head -n 1", False),
+    ],
+)
+def test_the_early_reader_guard_knows_the_pattern(line: str, early: bool) -> None:
+    """Gegenproben: die Zeilen vor der Fixrunde und ihre Ersatzformen."""
+    assert bool(_early_readers(line)) is early
+
+
 #: Was die Linux-Jobs ohne installierte Abhängigkeiten aufrufen: ``linux-flatpak``
 #: (Beschreibungen, Manifest, Grenze, Starttest) und ``linux-release-start``.
 _WITHOUT_PACKAGES: Final = textwrap.dedent(

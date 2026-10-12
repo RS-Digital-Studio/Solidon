@@ -1093,11 +1093,11 @@ jobs:
           [ -n "$appimage" ] && [ -f "$appimage.sha256" ]
           [ "$(sha256sum "$appimage" | awk '{print $1}')" = "$(awk '{print $1}' "$appimage.sha256")" ] || { echo "Geändertes AppImage."; exit 1; }
           chmod +x "$appimage"
-          echo "glibc des Prüfrechners: $(ldd --version | head -n 1)"
+          echo "glibc des Prüfrechners: $(ldd --version | sed -n 1p)"
           # Die libstdc++ kommt vom Rechner. Trägt der Läufer eine neuere aus
           # einer Toolchain-Quelle, verdeckte sie ein zu neues GLIBCXX im
           # Paket; die Obergrenze hält check_glibc_floor ohnehin statisch.
-          cxx=$(ldconfig -p | awk '/libstdc\+\+\.so\.6 .*x86-64/ {print $NF; exit}')
+          cxx=$(ldconfig -p | awk '/libstdc\+\+\.so\.6 .*x86-64/ && !found {print $NF; found = 1}')
           echo "libstdc++ des Prüfrechners: $cxx, höchstens $(grep -ao 'GLIBCXX_3\.4\.[0-9]*' "$cxx" | sort -uV | tail -n 1)"
           xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/check_frozen_start.py --executable "$appimage"
 
@@ -1484,7 +1484,7 @@ jobs:
           [ "$(plutil -extract CFBundleName raw "$plist")" = "Solidon3D" ]
           version=$(plutil -extract CFBundleShortVersionString raw "$plist")
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          lipo -archs app-stage/Solidon3D.app/Contents/MacOS/Solidon3D | tr ' ' '\n' | grep -qx '${{ matrix.machine_arch }}'
+          lipo -archs app-stage/Solidon3D.app/Contents/MacOS/Solidon3D | tr ' ' '\n' | grep -x '${{ matrix.machine_arch }}' > /dev/null
           printf 'ARTIFACT_APP=%s\n' "$PWD/app-stage/Solidon3D.app" >> "$GITHUB_ENV"
 
       - name: App mit Developer-ID signieren und Schlüssel wieder sperren
@@ -1547,7 +1547,7 @@ jobs:
             security find-identity "$keychain" || true
             exit 1
           fi
-          line=$(printf '%s\n' "$lines" | head -n 1)
+          line=$(printf '%s\n' "$lines" | sed -n 1p)
           identity=${line%% *}
           name=${line#* }
           case "$name" in
@@ -1832,7 +1832,7 @@ jobs:
             security find-identity "$keychain" || true
             exit 1
           fi
-          line=$(printf '%s\n' "$lines" | head -n 1)
+          line=$(printf '%s\n' "$lines" | sed -n 1p)
           name=${line#* }
           case "$name" in
             '"Developer ID Installer:'*) ;;
