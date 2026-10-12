@@ -7,7 +7,10 @@ und die äußeren Vorbedingungen über dieselben Nahtstellen wie die Suite
 (:func:`apply_licence`, :func:`apply_preconditions`) — nur im Kindprozess, ohne
 private Schlüssel —, der Platz des Fensters (:func:`place_window`), die eigene
 Kopie jeder Startszene im Fallordner (:func:`case_scene`, :func:`fresh_case`)
-und der Weg einer Zeile (:func:`walk_target`, :func:`route_of`).
+der Weg einer Zeile (:func:`walk_target`, :func:`route_of`) und was die
+Startszene darüber hinaus verlangt (:func:`scene_setup`): ihre Vorbedingungen,
+eigene Bausteine im Nutzerordner (:func:`install_own_parts`) und die Klicks vor
+der Zeile — Einfügemarke, Export, *Automatisch teilen* (:func:`preparation_route`).
 
 Vorbereitung ist nicht die geprüfte Handlung (Konzept §5): Sie darf schreiben,
 was der Kunde nie sieht. Zustandsnamen und Spezifikation kommen von D0-L
@@ -247,6 +250,92 @@ def spec_variants(spec: Mapping[str, Any] | None) -> tuple[dict[str, Any], list[
     return base, others
 
 
+@dataclass(frozen=True, slots=True)
+class SceneSetup:
+    """Was eine Startszene über ihre Datei hinaus verlangt (``function_scenes.Scene``)."""
+
+    key: str = ""
+    preconditions: Mapping[str, str] = field(default_factory=dict)
+    """Gilt für jeden Fall, der in dieser Szene beginnt — ohne Gegenlauf: Ohne sie
+    steht der Befund nicht da, um den es geht."""
+    own_parts: tuple[Path, ...] = ()
+    insert_before: int = 0
+    cause: Mapping[str, str] = field(default_factory=dict)
+
+
+def scene_setup(key: str) -> SceneSetup:
+    """Die Angaben der Startszene ``key`` aus dem Szenenkatalog; leer ohne Szene."""
+    from tools.function_scenes import DATA, load_scenes
+
+    scene = load_scenes().get(key)
+    if scene is None:
+        return SceneSetup(key)
+    return SceneSetup(
+        key=key,
+        preconditions=dict(scene.preconditions),
+        own_parts=tuple(DATA / relative for relative in scene.own_parts),
+        insert_before=scene.insert_before,
+        cause=dict(scene.cause),
+    )
+
+
+def install_own_parts(setup: SceneSetup) -> list[Path]:
+    """Legt die eigenen Bausteine der Szene in den Nutzerordner des Falls.
+
+    Vor dem Start der Anwendung, die sie dort lädt — wie ein Rezept, das der
+    Kunde früher gespeichert hat. Der Dateiname ist der Name des Rezepts.
+    """
+    import json
+
+    from app.core.knowledge.parts import recipe
+
+    if not setup.own_parts:
+        return []
+    folder = recipe.recipes_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    placed: list[Path] = []
+    for source in setup.own_parts:
+        name = str(json.loads(source.read_text(encoding="utf-8"))["name"])
+        target = folder / f"{name}.json"
+        target.write_bytes(source.read_bytes())
+        placed.append(target)
+    return placed
+
+
+def preparation_route(setup: SceneSetup, folder: Path) -> list[dict[str, str]]:
+    """Die Klicks, Eingaben und Tasten, die nach dem Öffnen den Zustand der Szene herstellen.
+
+    Einträge mit ``target`` (und ``button``) sind Klicks wie im Weg einer Zeile,
+    ``type`` tippt ins Feld mit dem Fokus, ``key`` drückt eine Taste. Die
+    Einfügemarke setzt das Kontextmenü des Verlaufs, *Automatisch teilen* der Befehl
+    am gewählten Körper, der Export der Befehl samt Dateidialog: ein Pfad im
+    Fallordner mit der Endung des Formats.
+    """
+    from app.core.export.writer import FORMAT_SUFFIX
+
+    route: list[dict[str, str]] = []
+    if setup.insert_before:
+        route += [
+            {"target": f"history.row:{setup.insert_before}", "button": "right"},
+            {"target": "history:insert"},
+        ]
+    kind = setup.cause.get("kind")
+    if kind == "auto_split":
+        route += [
+            {"target": f"tree.row:{setup.cause['object']}"},
+            {"target": "command:edit.auto_split"},
+        ]
+    elif kind == "export":
+        suffix = FORMAT_SUFFIX[setup.cause["format"]]  # type: ignore[index]
+        route += [
+            {"target": "command:file.export"},
+            {"key": "Ctrl+A"},
+            {"type": str(folder / f"szene{suffix}")},
+            {"key": "Return"},
+        ]
+    return route
+
+
 def parse_size(text: str) -> tuple[int, int] | None:
     """``"1280x820"`` → ``(1280, 820)``; alles andere ``None``."""
     width, separator, height = text.lower().partition("x")
@@ -402,6 +491,12 @@ def apply_preconditions(preconditions: Mapping[str, str]) -> dict[str, str]:
                 llm.backends = tuple  # type: ignore[assignment]
             elif name == "comfyui":
                 _comfyui_unreachable()
+            elif name == "opencascade":
+                from app.core.brep import kernel
+
+                # Dieselbe Nahtstelle wie die Suite (``tests/test_threads.py``):
+                # Exakte Schritte sagen ab und bieten *Zusätzliche Programme* an.
+                kernel.available = lambda: False
             applied[name] = "fehlt"
             continue
         applied[name] = state if _present(name) else "fehlt (Maschine)"
@@ -457,6 +552,10 @@ def _present(name: str) -> bool:
         return any(bool(backend.available) for backend in llm.backends())
     if name == "comfyui":
         return mesh.reachable(mesh.DEFAULT_COMFY_URL)
+    if name == "opencascade":
+        from app.core.brep import kernel
+
+        return kernel.available()
     return True
 
 

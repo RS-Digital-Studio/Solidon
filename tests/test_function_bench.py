@@ -608,6 +608,46 @@ def test_the_surface_of_a_surface_set_counts_as_the_rows_own_window() -> None:
     assert pictures == ["flaeche-zoll"]
 
 
+def test_the_preparation_of_a_scene_walks_its_route_and_waits_for_its_cause(
+    qt_app: object, tmp_path: Path
+) -> None:
+    """Nach dem Öffnen stellt der Fall den Zustand der Szene her: Klicks über den Weg,
+    Tippen in den Dateidialog, Tasten, und vor dem Export wartet er auf die Rückfrage
+    und bricht sie ab. Eine Szene ohne Angaben hat keine Vorbereitung."""
+    walked: list[tuple[str, str]] = []
+
+    class Walker:
+        def step(self, name: str, button: str = "left") -> function_machine.Step:
+            walked.append((name, button))
+            return function_machine.Step(f"weg {name}", lambda machine: None)
+
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.folder = tmp_path
+    flow.walker = Walker()  # type: ignore[assignment]
+    names: dict[str, list[str]] = {}
+    for key in ("export_gemischt", "geschuetzte_leiste.netz", "einfuegen.netz", "quader.netz"):
+        walked.clear()
+        flow.setup = function_setup.scene_setup(key)
+        names[key] = [step.name for step in flow.preparation_steps()]
+        names[f"{key} weg"] = [f"{target} {button}" for target, button in walked]
+    assert names["export_gemischt"] == [
+        "weg command:file.export",
+        "taste Ctrl+A",
+        "tippen dateiname",
+        "taste Return",
+        "rückfrage vor dem export",
+        "rückfrage abbrechen",
+        "vorbereitung steht",
+    ]
+    assert names["geschuetzte_leiste.netz weg"] == [
+        "tree.row:obj_1 left",
+        "command:edit.auto_split left",
+    ]
+    assert names["einfuegen.netz weg"] == ["history.row:2 right", "history:insert left"]
+    assert names["einfuegen.netz"][-1] == "vorbereitung steht"
+    assert names["quader.netz"] == []
+
+
 def test_every_phase_starts_at_its_scene_and_runs_only_if_it_got_there() -> None:
     """Review M5: Vor jeder Phase ein Rücksetzen, auch nach einer Ausnahme; misslingt es, ruht sie.
 

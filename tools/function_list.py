@@ -675,62 +675,16 @@ ERROR_DIALOG_ACTIONS: Final[dict[str, str]] = {
 
 #: Befundhandlungen ohne Startszene, je mit dem Grund. Jede andere beginnt in einer
 #: Szene, deren Befund sie trägt (``promises.actions``); der Test hält beide Mengen
-#: gegeneinander.
+#: gegeneinander. Hier steht nur, was keine Eingabe erreicht — ein Fund der Art
+#: Aufräumen, über dessen Entfernen der Koordinator entscheidet.
 FINDING_ACTIONS_WITHOUT_SCENE: Final[dict[str, str]] = {
-    "adopt_printer": "Befund beim Öffnen eines Projekts, das einen hier nicht eingerichteten "
-    "Drucker mitbringt (profiles.carried_findings); eine Szene aus Operationen trägt keinen.",
-    "calibrate_material": "Druckrat an einer Szene mit Passungen (settings.uncalibrated_material); "
-    "das Szenenformat kennt keine Passungen.",
-    "change_creating_step": "Absage des Deckelscharniers an seinem Erzeugerschritt "
-    "(geom.lid_hinge); kein erprobtes Rezept löst sie aus.",
-    "check_updates": "Befund parts.missing: ein Projekt mit einem Baustein, den diese "
-    "Installation nicht hat — History.apply nimmt die unbekannte Operation nicht an.",
-    "choose_another_file": "Absage beim Lesen einer Datei; load_step an einer falschen Datei "
-    "meldet sich als Eingabefehler (correct_input), nicht mit dieser Handlung.",
-    "decimate_and_retry": "Zu feines Verfeinern an einem Netz, das sich vorher ausdünnen lässt "
-    "(mesh_ops._thinning); an den erprobten Körpern bot die Absage nur use_reachable.",
-    "export_as_mesh": "Befund export.needs_solid entsteht beim Export nach STEP, nicht in der "
-    "Auswertung.",
-    "generate_again": "Befund an einem KI-erzeugten Schritt (evaluate, Generator); braucht "
-    "ComfyUI.",
-    "give_thickness": "Befund repair.no_thickness an einer Fläche ohne Dicke; der Korpus hat "
-    "kein solches Netz.",
-    "install": "Absage ohne OpenCASCADE (BRepUnavailable); die Prüfumgebung hat den Kern.",
-    "keep_saved_parts": "Befund parts.own_changed: eigene Bausteine im Nutzerordner, die sich "
-    "seit dem Speichern geändert haben.",
-    "mesh_and_retry": "Befund edges.exact_group_skipped (Rundung an einem Teil der Kanten); "
-    "an den erprobten exakten Quadern gelang jede Rundung.",
-    "mesh_to_exact": "Befund export.needs_solid entsteht beim Export nach STEP.",
-    "reactivate_step": "Befund an einem ausgeschalteten Schritt; das Szenenformat schaltet "
-    "keinen Schritt aus.",
-    "release_protection": "Befund split.blocked_by_protection entsteht bei Automatisch "
-    "teilen, einem Fensterablauf ohne Operation.",
-    "resize_the_widening": "Befund resize.widening_swallowed; eine gebohrte Aufweitung "
-    "erkennt die Auswertung als zweite Bohrung, aufgeweitet entsteht "
-    "resize.cavity_sections_kept.",
-    "show_details": "Befunde export.needs_solid und split.* entstehen bei Export und "
-    "Automatisch teilen.",
-    "show_feature": "Befund an einer Passung ohne ihr Merkmal (scene.fits); das Szenenformat "
-    "kennt keine Passungen.",
-    "show_history": "Befunde evaluate.unknown_operation, fit.missing_feature und "
-    "agent.undo_sweeps: alte Datei, Passungen oder Agent.",
-    "show_layers": "Befund perceive.voids_unreadable; kein erprobtes Rezept erzeugt "
-    "unlesbare Hohlräume.",
-    "show_step_values": "Befund evaluate.unknown_operation an einem Schritt, den diese "
-    "Version nicht kennt; History.apply nimmt ihn nicht an.",
-    "sketch.pick_plane": "Absage an einer unlesbaren gespeicherten Zeichenebene; ein Rezept "
-    "schreibt keine kaputte Ebene.",
-    "split_along_line": "Befunde split.* entstehen bei Automatisch teilen, einem Fensterablauf.",
-    "split_and_retry": "Absage, wenn ein Körper nur in Teilen auf das Bett passt "
-    "(prepare_ops); an den erprobten Körpern passte das Ganze oder keines.",
-    "stop_inserting": "Befund history.inserting entsteht in der Sitzung bei gesetzter "
-    "Einfügemarke (Prüfpunkt 15), nicht in einer Szene.",
-    "suppress_step": "Befund an einem ausgeschalteten Schritt; das Szenenformat schaltet "
-    "keinen Schritt aus.",
-    "take_back_stroke": "Absage, wenn eine Formsitzung das Netz aufreißt; braucht "
-    "aufgezeichnete Züge.",
-    "use_voxel_stage": "Absage der Booleschen Rückfallkette vor der Voxelstufe; kein "
-    "erprobtes Rezept erreicht sie.",
+    "use_voxel_stage": "Im Fenster nie an einem Befund: Hält die kurze Kette an, rechnet "
+    "dieselbe Auswertung den Schritt mit der vollen Kette samt Voxelstufe nach "
+    "(scene.evaluate._FullChain), und deren Absage trägt den Vorschlag nicht mehr "
+    "(errors.BooleanFailedError). Übrig bleiben Boolesche mit ausdrücklich nur der "
+    "direkten Stufe (Musterentfernung, Textur), die nur bei einem Kernversagen an einer "
+    "selbst gebauten Form absagen — und dort hülfe der Knopf nicht, weil der Aufruf die "
+    "Stufen festlegt.",
 }
 
 
@@ -1399,9 +1353,22 @@ def problems(menubar: Iterable[MenuEntry] = ()) -> list[str]:
         return list(error.problems)
     issues = missing_scenes(found)
     issues += missing_selections(found)
-    issues += validate_scenes(load_scenes())
-    issues += validate_specs(found, load_specs(), load_scenes())
+    scenes = load_scenes()
+    issues += validate_scenes(scenes)
+    issues += scene_precondition_problems(scenes)
+    issues += validate_specs(found, load_specs(), scenes)
     return issues
+
+
+def scene_precondition_problems(scenes: Mapping[str, Scene]) -> list[str]:
+    """Vorbedingungen einer Szene gibt es nur aus :data:`PRECONDITIONS`, ohne Lizenz
+    und Druckart — die gehören der Zeile, nicht ihrer Startszene."""
+    return [
+        f"Szene {key}: Vorbedingung {name} = {state!r} gibt es nicht"
+        for key, scene in scenes.items()
+        for name, state in scene.preconditions.items()
+        if name in ("licence", "printer") or state not in PRECONDITIONS.get(name, ())
+    ]
 
 
 # --- Zeilenspezifikationen (Bauplan D0 §2.4) -----------------------------------
@@ -1484,6 +1451,8 @@ PRECONDITIONS: Final[dict[str, tuple[str, ...]]] = {
     "ki": ("vorhanden", "fehlt"),
     "comfyui": ("vorhanden", "fehlt"),
     "slicer": ("vorhanden", "fehlt"),
+    # Der zweite Kern; ohne ihn sagen exakte Schritte ab (``brep.kernel.BRepUnavailable``).
+    "opencascade": ("vorhanden", "fehlt"),
     # Alle Zustände; welche ein Lauf erreicht, hängt am Paket (:func:`licence_states`).
     "licence": (*LICENCE_STATES, STARTUP_LICENCE),
     "printer": ("filament", "resin"),
