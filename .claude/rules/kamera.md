@@ -221,7 +221,10 @@ Operation.
   merken keinen Unterschied. Angemeldet mit dem Platzhalter wie FreeCAD und
   Blender, gelesen nur, was an Solidons Client-Kennung geht. `default_reader`:
   Mac mit Treiber → Treiber (HID als Rückfall), sonst HID; die Plattform ist ein
-  Parameter, damit der Mac-Zweig überall prüfbar bleibt. **Am Gerät gemessen ist
+  Parameter, damit der Mac-Zweig überall prüfbar bleibt. Das Framework trägt
+  die Team-ID von 3Dconnexion; die signierte App lädt es nur dank
+  `disable-library-validation` (`auslieferung.md`), und ein Ladefehler steht
+  als Warnung mit dem Grund von dyld im Protokoll. **Am Gerät gemessen ist
   nur Windows**; der Mac-Weg wartet auf die Rückmeldung eines Kunden.
 
 ## Was die Suite prüft und was nur das echte Fenster

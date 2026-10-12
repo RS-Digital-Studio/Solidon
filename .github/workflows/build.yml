@@ -1399,20 +1399,31 @@ jobs:
             '"Developer ID Application:'*) ;;
             *) echo "Im Schlüsselbund liegt $name — erwartet wird ein Developer-ID-Application-Zertifikat."; exit 1 ;;
           esac
-          # **Hardened Runtime mit genau einer Ausnahme: ausführbarer
-          # Schreibspeicher, und nur für das Hauptprogramm.** CPythons `_ctypes`
-          # legt schon beim Laden eine libffi-Closure an (`_ctypes_mod_exec`),
-          # jeder ctypes- und cffi-Rückruf wieder; geladen wird es schon in
-          # PyInstallers Bootstrap. Apples libffi holt dafür auf x86_64
-          # anonymen Speicher mit PROT_EXEC; ohne diese Berechtigung verweigert
-          # ihn die Hardened Runtime, und der Ausweichweg über Temp-Dateien
-          # kreist auf macOS 26 endlos. So hing das Intel-Paket auf den Macs
-          # eines Kunden vor dem ersten Fenster, ad hoc signiert lief es
-          # (RM-104). ARM nimmt Apples Trampolintabelle; ein Rezept für beide
+          # **Hardened Runtime mit genau zwei Ausnahmen, nur für das
+          # Hauptprogramm.**
+          # 1. `allow-unsigned-executable-memory`: CPythons `_ctypes` legt
+          #    schon beim Laden eine libffi-Closure an (`_ctypes_mod_exec`),
+          #    jeder ctypes- und cffi-Rückruf wieder; geladen wird es schon in
+          #    PyInstallers Bootstrap. Apples libffi holt dafür auf x86_64
+          #    anonymen Speicher mit PROT_EXEC; ohne diese Berechtigung
+          #    verweigert ihn die Hardened Runtime, und der Ausweichweg über
+          #    Temp-Dateien kreist auf macOS 26 endlos. So hing das
+          #    Intel-Paket auf den Macs eines Kunden vor dem ersten Fenster, ad
+          #    hoc signiert lief es (RM-104). `allow-jit` hülfe nicht, libffi
+          #    fordert kein MAP_JIT an.
+          # 2. `disable-library-validation`: Die 3D-Maus spricht auf dem Mac
+          #    über das Framework des Herstellers
+          #    (/Library/Frameworks/3DconnexionClient.framework, per ctypes
+          #    geladen, app/ui/spacemouse.py), und das trägt die Team-ID von
+          #    3Dconnexion. Mit Bibliotheksprüfung lehnt dyld es ab, und weil
+          #    3DxWare das Gerät exklusiv hält, bleibt die Maus tot. Apple
+          #    nennt Hardware mit Hersteller-Plug-in als Grund für genau diese
+          #    Ausnahme („Notarizing macOS software before distribution“).
+          # ARM nimmt für libffi Apples Trampolintabelle; ein Rezept für beide
           # Architekturen ist trotzdem einfacher zu prüfen als zwei. Die Runner
-          # zeigen den Fehler nicht. `allow-jit` hülfe nicht, libffi fordert
-          # kein MAP_JIT an. Die Bibliotheken erben nichts — `--deep` mit
-          # `--entitlements` hängte die Liste an jede Datei, deshalb zwei Läufe.
+          # zeigen beide Fehler nicht (SIP aus). Die Bibliotheken erben nichts
+          # — `--deep` mit `--entitlements` hängte die Liste an jede Datei,
+          # deshalb zwei Läufe.
           entitlements="$RUNNER_TEMP/solidon-app.entitlements"
           cat > "$entitlements" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -1421,6 +1432,8 @@ jobs:
           <dict>
               <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
               <true/>
+              <key>com.apple.security.cs.disable-library-validation</key>
+              <true/>
           </dict>
           </plist>
           PLIST
@@ -1428,13 +1441,20 @@ jobs:
           codesign --force --deep --options runtime --timestamp --keychain "$keychain" --sign "$identity" "$ARTIFACT_APP"
           codesign --force --options runtime --timestamp --entitlements "$entitlements" --keychain "$keychain" --sign "$identity" "$ARTIFACT_APP"
           codesign --verify --deep --strict --verbose=2 "$ARTIFACT_APP"
-          # Zurückgelesen, nicht vorausgesetzt — Schlüssel und Wert: Ohne die
-          # Berechtigung am Hauptprogramm hängt das Intel-Paket auf macOS 26.
+          # Zurückgelesen, nicht vorausgesetzt — beide Schlüssel mit Wert und
+          # keiner mehr: Ohne die erste hängt das Intel-Paket auf macOS 26,
+          # ohne die zweite ist die 3D-Maus tot, jede weitere ist ungeprüft.
           granted=$(codesign -d --entitlements - --xml "$ARTIFACT_APP" 2>/dev/null | tr -d '[:space:]') || granted=""
           case "$granted" in
             *'<key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>'*) ;;
             *) echo "Die signierte App trägt die Berechtigung für ausführbaren Speicher nicht (RM-104)."; exit 1 ;;
           esac
+          case "$granted" in
+            *'<key>com.apple.security.cs.disable-library-validation</key><true/>'*) ;;
+            *) echo "Die signierte App trägt die Ausnahme von der Bibliotheksprüfung nicht — der 3D-Maus-Treiber lüde nicht."; exit 1 ;;
+          esac
+          keys=$(printf '%s' "$granted" | { grep -o '<key>' || true; } | wc -l | tr -d ' ')
+          [ "$keys" = 2 ] || { echo "Die signierte App trägt $keys Berechtigungen statt genau zwei."; exit 1; }
 
       - name: Signierte App bei Apple notarisieren
         if: env.MACOS_SIGNING_MODE == 'notarized'

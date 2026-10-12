@@ -201,13 +201,16 @@ Signiergeheimnisse gehören nicht in den Baujob. Eine prüfsummengebundene
 Übergabe trennt Bauen, Freigeben und Signieren; auf Windows geht der Weg bis
 auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
 
-- **Die Mac-App läuft mit Hardened Runtime und genau einer Ausnahme**,
-  `com.apple.security.cs.allow-unsigned-executable-memory`, nur am
-  Hauptprogramm und mit einem Rezept für beide Architekturen: erst tief
-  signieren, dann das Bundle ohne `--deep` mit der Liste. Ohne sie kreist auf
+- **Die Mac-App läuft mit Hardened Runtime und genau zwei Ausnahmen**, nur
+  am Hauptprogramm und mit einem Rezept für beide Architekturen: erst tief
+  signieren, dann das Bundle ohne `--deep` mit der Liste.
+  `com.apple.security.cs.allow-unsigned-executable-memory`, weil sonst auf
   Intel-Macs mit macOS 26 schon das `import ctypes` in PyInstallers Bootstrap
-  in Apples libffi. Der Signierschritt liest Schlüssel und Wert zurück,
-  `test_supply_chain.py` hält den Text (RM-104).
+  in Apples libffi kreist (RM-104);
+  `com.apple.security.cs.disable-library-validation`, weil das Framework des
+  3D-Maus-Treibers die Team-ID von 3Dconnexion trägt und dyld es sonst
+  ablehnt. Der Signierschritt liest beide Schlüssel mit Wert zurück und bricht
+  bei einem dritten ab; `test_supply_chain.py` hält den Text.
 - **Ein neuer Release-Schlüssel reist aus, bevor er unterschreibt**: ans Ende
   von `updates.RELEASE_PUBLIC_KEYS`, die Versionsdatei dieser Version
   unterschreibt noch der alte, Ablauf in `Signierung/README.md`. Eine

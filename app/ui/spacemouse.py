@@ -755,7 +755,12 @@ def load_driver(path: str = DRIVER_FRAMEWORK) -> Any | None:
         library.CleanupConnexionHandlers.argtypes = []
         library.CleanupConnexionHandlers.restype = None
     except (OSError, AttributeError) as problem:
-        _log.debug("3D mouse driver not loaded: %s", problem)
+        # Eine Warnung, kein Dialog: Das Framework liegt da und lädt nicht —
+        # auf dem Mac meist die Bibliotheksprüfung der Hardened Runtime
+        # (fremde Team-ID), und dyld nennt den Grund in ``problem``. Ohne
+        # diese Zeile sähe ein Kundenprotokoll nur eine Maus, die nichts tut.
+        # Je Sitzung höchstens einmal: ``DriverReader`` merkt sich den Ausfall.
+        _log.warning("3D mouse driver present but not loaded from %s: %s", path, problem)
         return None
     return library
 

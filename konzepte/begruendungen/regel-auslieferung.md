@@ -77,8 +77,8 @@ Absturzdatei noch Protokoll. Umgehen lässt sich ctypes nicht: Bootstrap,
 `app/core/process.py` und numpy laden es. libffis `dlmmap` holt anonymen Speicher
 mit `PROT_EXEC` und ohne `MAP_JIT`; scheitert das mit EPERM, weicht es auf
 Temp-Dateien aus, und dieser Weg kreist. `allow-jit` erlaubt nur `MAP_JIT` und
-hülfe nicht; `disable-library-validation` braucht der Developer-ID-Bau nicht,
-alle Bibliotheken tragen dieselbe Team-ID. ARM nimmt Apples Trampolintabelle.
+hülfe nicht. Die eigenen Bibliotheken tragen alle dieselbe Team-ID; ARM
+nimmt Apples Trampolintabelle.
 Gefahren am 06.10.2026 mit dem wörtlich aus `build.yml` geschnittenen
 Signierteil, ad hoc statt Developer ID, am veröffentlichten 0.5.3: Liste am
 Hauptprogramm, keine an `Python.framework` und `_cffi_backend` (Lauf
@@ -91,6 +91,24 @@ Wirkung spricht eine Probe von Hand am Intel-Mac eines Kunden mit macOS 26.5:
 ad hoc mit Hardened Runtime signiert hing es ohne die Berechtigung und
 startete mit ihr. Der Start des
 notarisierten Pakets dort steht aus (RM-104).
+
+Warum die zweite Ausnahme, `disable-library-validation` (Recherche
+12.10.2026): `app/ui/spacemouse.py` lädt
+`/Library/Frameworks/3DconnexionClient.framework` per `ctypes.CDLL`, und das
+Framework ist von 3Dconnexion signiert. Unter Hardened Runtime lädt ein
+Prozess nur Code von Apple oder mit der eigenen Team-ID; dyld lehnt das
+Framework ab, `load_driver` gab still `None` zurück, und weil 3DxWare das
+Gerät exklusiv hält, bekam auch der HID-Rückfall nichts — nach Apples Regel
+und dem Code war die Maus in jedem notarisierten Mac-Paket seit 0.4.1 tot,
+am Runner (SIP aus) unsichtbar; an einem Gerät gemessen ist das nicht.
+Apple nennt genau diesen Fall als Grund für die Ausnahme: „If your app works
+with this kind of hardware, be sure to declare the
+com.apple.security.cs.disable-library-validation to load the corresponding
+plug-ins“
+(<https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution>);
+Briefcase setzt sie für jede App, Blender ebenso. Die Liste bleibt sonst
+geschlossen: `allow-jit`, `allow-dyld-environment-variables` und
+`get-task-allow` öffneten Wege, die Solidon nicht braucht.
 
 ## Was der Kunde bekommt, ist geprüft — und zwar die verteilte Menge
 

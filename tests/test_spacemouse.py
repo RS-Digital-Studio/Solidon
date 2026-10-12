@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import logging
 import math
 import struct
 import subprocess
@@ -1531,6 +1532,42 @@ def test_without_the_framework_the_driver_reader_is_silent() -> None:
 
 def test_load_driver_answers_none_where_the_framework_is_absent(tmp_path: Path) -> None:
     assert load_driver(str(tmp_path / "3DconnexionClient")) is None
+
+
+def test_a_driver_that_is_there_but_does_not_load_says_why_in_the_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Liegt das Framework da und lädt nicht, steht der Grund im Kundenprotokoll.
+
+    Auf dem Mac lehnt dyld es unter der Bibliotheksprüfung ab (fremde Team-ID);
+    ohne Zeile auf Warnstufe sähe ein Protokoll nur eine Maus, die nichts tut.
+    Hier steht eine Datei, die keine Bibliothek ist — ``CDLL`` scheitert auf
+    jeder Plattform mit einem ``OSError``, der den Grund des Laders trägt.
+    """
+    framework = tmp_path / "3DconnexionClient"
+    framework.write_bytes(b"keine Bibliothek")
+
+    with caplog.at_level(logging.INFO, logger="app.ui.spacemouse"):
+        assert load_driver(str(framework)) is None
+
+    warnings = [entry for entry in caplog.records if entry.levelno >= logging.WARNING]
+    assert len(warnings) == 1, caplog.records
+    message = warnings[0].getMessage()
+    assert "not loaded" in message and str(framework) in message
+    assert message.split(f"{framework}: ", 1)[1].strip(), "der Grund des Laders fehlt"
+
+
+def test_the_driver_reader_tries_a_failing_driver_once_per_session() -> None:
+    """Die Warnung oben kommt je Sitzung höchstens einmal, nicht je Suche."""
+    calls = []
+
+    def loader() -> None:
+        calls.append(1)
+
+    reader = DriverReader(loader=loader)
+    for _ in range(5):
+        assert not reader.open()
+    assert len(calls) == 1
 
 
 def test_the_default_reader_takes_the_driver_only_on_a_mac_that_has_it() -> None:
