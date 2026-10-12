@@ -67,8 +67,19 @@ INSTALLER_SCRIPT: Final = ROOT / "packaging" / "solidon3d.iss"
 WORKFLOW: Final = ROOT / ".github" / "workflows" / "build.yml"
 ICNS: Final = ROOT / "packaging" / "solidon3d.icns"
 ICO: Final = ROOT / "packaging" / "solidon3d.ico"
-#: Das Ubuntu, dessen Systembibliotheken das Linux-Paket mitnimmt.
+#: Das Ubuntu, auf dem Linux geprüft wird (Suite, Fensterverträge, Auswahlen).
 LINUX_RUNNER: Final = "ubuntu-24.04"
+#: Das Ubuntu, dessen Systembibliotheken das Linux-Paket mitnimmt: das älteste
+#: unterstützte System, dessen glibc die Untergrenze des Pakets ist
+#: (``tools/check_glibc_floor.OLDEST_GLIBC``). Gebaut wird dort, geprüft auf
+#: :data:`LINUX_RUNNER` — dieselbe Plattform, Linux x86_64.
+LINUX_PACKAGE_RUNNER: Final = "ubuntu-22.04"
+
+
+def _as_tested(runner: str) -> str:
+    """Der Prüfläufer derselben Plattform: Linux wird auf 22.04 gebaut, auf 24.04 geprüft."""
+    return LINUX_RUNNER if runner == LINUX_PACKAGE_RUNNER else runner
+
 
 #: Was beim Suchen nach Datenverzeichnissen nicht zählt.
 IGNORED: Final = ("__pycache__", ".pyc", ".pyo", "CLAUDE.md")
@@ -460,7 +471,7 @@ def test_the_workflow_packages_every_delivered_platform() -> None:
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
     matrix = next(line for line in job_block(workflow, "package").splitlines() if "os: [" in line)
-    for runner in ("windows-latest", LINUX_RUNNER, "macos-latest"):
+    for runner in ("windows-latest", LINUX_PACKAGE_RUNNER, "macos-latest"):
         assert runner in matrix, f"{runner} fehlt in der Paket-Matrix"
     assert "-intel" in matrix, f"kein Intel-Mac in der Paket-Matrix: {matrix.strip()}"
 
@@ -470,10 +481,20 @@ def test_linux_builds_on_the_ubuntu_its_licence_tables_name() -> None:
 
     Das Linux-Paket nimmt die Systembibliotheken des Bauservers mit. Ihre
     Fassungen stehen in der Lizenzbeilage, und die glibc des Servers ist die
-    Untergrenze, auf der das AppImage startet. ``ubuntu-latest`` wandert ab dem
-    19.10.2026 auf Ubuntu 26 und höbe beides ohne Commit an; ein Wechsel muss
-    diese Konstante, die Lizenztexte und die Untergrenze gemeinsam bewegen.
+    Untergrenze, auf der AppImage und Archiv starten. ``ubuntu-latest`` wandert
+    ab dem 19.10.2026 auf Ubuntu 26 und höbe beides ohne Commit an; ein Wechsel
+    muss diese Konstante, die Lizenztexte und die Untergrenze gemeinsam
+    bewegen. Die Releaseakte startet das AppImage auf dem Bauläufer und auf dem
+    Prüfläufer.
     """
+    from tools import check_glibc_floor
+
+    package = job_block(WORKFLOW.read_text(encoding="utf-8"), "package")
+    matrix = next(line for line in package.splitlines() if "os: [" in line)
+    assert LINUX_PACKAGE_RUNNER in matrix and LINUX_RUNNER not in matrix
+    assert check_glibc_floor.OLDEST_GLIBC == (2, 35), "Ubuntu 22.04 trägt glibc 2.35"
+    started = job_block(WORKFLOW.read_text(encoding="utf-8"), "linux-release-start")
+    assert f"os: [{LINUX_PACKAGE_RUNNER}, {LINUX_RUNNER}]" in started
     workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
     assert workflows, "keine Workflows gefunden — dann prüft dieser Test nichts"
     drifting = [
@@ -485,7 +506,67 @@ def test_linux_builds_on_the_ubuntu_its_licence_tables_name() -> None:
     assert not drifting, f"ubuntu-latest statt {LINUX_RUNNER} in: {drifting}"
     assert LINUX_RUNNER in WORKFLOW.read_text(encoding="utf-8")
     tables = ROOT / "app" / "core" / "knowledge" / "data" / "third_party_licenses.toml"
-    assert "Ubuntu " + LINUX_RUNNER.removeprefix("ubuntu-") in tables.read_text("utf-8")
+    text = tables.read_text("utf-8")
+    assert "Ubuntu " + LINUX_PACKAGE_RUNNER.removeprefix("ubuntu-") in text
+    assert "Ubuntu " + LINUX_RUNNER.removeprefix("ubuntu-") not in text, (
+        "die Lizenztexte nennen noch den Prüfläufer statt des Bauservers"
+    )
+
+
+def _assert_linux_floor_is_checked(workflow: str) -> None:
+    """Die Linux-Grenze hält jeden Baum, bevor er eingepackt oder ausgeliefert wird."""
+    package = job_block(workflow, "package")
+    step = step_block(package, "Linux-Grenze prüfen (glibc und Bibliotheken des Rechners)")
+    assert "        if: runner.os == 'Linux'\n" in step
+    assert "run: python tools/check_glibc_floor.py dist/Solidon3D\n" in step
+    assert "continue-on-error" not in step
+    names = re.findall(r"(?m)^      - name: (.+)$", package)
+    floor = names.index("Linux-Grenze prüfen (glibc und Bibliotheken des Rechners)")
+    for later in ("Archiv packen (Linux)", "AppImage bauen (Linux)"):
+        assert floor < names.index(later), f"{later} packt einen ungeprüften Baum"
+    flatpak = job_block(workflow, "linux-flatpak")
+    assert "python tools/check_glibc_floor.py dist/Solidon3D\n" in step_block(
+        flatpak, "Gebauten Baum auspacken"
+    )
+    release = step_block(
+        job_block(workflow, "linux-release-check"), "Releasebelege fail-closed prüfen"
+    )
+    # Ein Kommentar sichert nichts zu — nur ausgeführte Zeilen zählen.
+    release = "".join(
+        line for line in release.splitlines(keepends=True) if not line.lstrip().startswith("#")
+    )
+    assert 'python tools/check_glibc_floor.py "$artifact"\n' in release
+    assert "python tools/check_glibc_floor.py appimage-content/squashfs-root\n" in release
+    assert "continue-on-error" not in job_block(workflow, "linux-release-check")
+
+
+def test_the_linux_floor_is_checked_on_the_tree_and_on_every_shell() -> None:
+    """Baum im Paketjob, derselbe Baum vor dem Flatpak, Archiv und AppImage in der Releaseakte."""
+    _assert_linux_floor_is_checked(WORKFLOW.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        ("        run: python tools/check_glibc_floor.py dist/Solidon3D\n", "        run: true\n"),
+        (
+            '          python tools/check_glibc_floor.py "$artifact"\n',
+            '          # python tools/check_glibc_floor.py "$artifact"\n',
+        ),
+        ("          python tools/check_glibc_floor.py appimage-content/squashfs-root\n", ""),
+        ("          python tools/check_glibc_floor.py dist/Solidon3D\n", ""),
+        (
+            "- name: Linux-Grenze prüfen (glibc und Bibliotheken des Rechners)\n",
+            "- name: Linux ansehen\n",
+        ),
+    ],
+)
+def test_the_linux_floor_guard_rejects_a_weakened_workflow(before: str, after: str) -> None:
+    """Gegenproben: Schritt leer, Prüfung auskommentiert, eine Hülle ausgelassen, umbenannt."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert before in workflow
+    with pytest.raises((AssertionError, ValueError)):
+        _assert_linux_floor_is_checked(workflow.replace(before, after, 1))
 
 
 def test_a_tests_only_dispatch_excludes_every_packaging_and_signing_job() -> None:
@@ -530,7 +611,12 @@ def test_a_tests_only_dispatch_excludes_every_packaging_and_signing_job() -> Non
     package_matrix = next(
         line for line in job_block(workflow, "package").splitlines() if "os: [" in line
     )
-    packaged = package_matrix.split("[", 1)[1].split("]", 1)[0].replace(" ", "").split(",")
+    # Linux baut auf dem ältesten System und wird auf dem Prüfläufer geprüft —
+    # dieselbe Plattform (:func:`_as_tested`).
+    packaged = [
+        _as_tested(runner)
+        for runner in package_matrix.split("[", 1)[1].split("]", 1)[0].replace(" ", "").split(",")
+    ]
     assert len(tested) == len(set(tested)), "ein Prüfsystem steht doppelt in der Matrix"
     # **Jede angebotene Architektur braucht ihren echten Testlauf** — mit einer
     # benannten Ausnahme, und nur mit dieser. Der Intel-Mac ist am 07.09.2026
@@ -930,6 +1016,8 @@ _ONLY_AT_RELEASE: Final = frozenset(
         "windows",
         "latest",
         "package",
+        "linux-flatpak",
+        "linux-release-start",
         "linux-release-check",
         "windows-installer",
         "windows-release-check",
@@ -1111,7 +1199,7 @@ def _assert_main_push(workflow: str, shell: str, folder: Path) -> None:
             given = _consumer_inputs(workflow, job, outputs)
             expected = windows if _SELECTION_CONSUMERS[job] == "window" else slicers
             assert given.get("tests") == expected, f"{job} bekommt {given}"
-    packaged = set(_release_runners(job_block(workflow, "package")))
+    packaged = {_as_tested(runner) for runner in _release_runners(job_block(workflow, "package"))}
     for job in ("suite", "window-contracts"):
         runners = set(job_runners(job_block(workflow, job), MAIN_PUSH))
         if job == "window-contracts":
@@ -1811,7 +1899,9 @@ def _assert_rendering_runs_everywhere(workflow: str, shell: str, folder: Path) -
     required = _release_gates(workflow)
     steps = _test_scripts(workflow, [*required, "latest"])
     calls = _calls_of(steps, shell, folder)
-    platforms = _release_runners(job_block(workflow, "package"))
+    platforms = tuple(
+        _as_tested(runner) for runner in _release_runners(job_block(workflow, "package"))
+    )
     gaps = _rendering_gaps(steps, calls, required, platforms)
     assert not gaps, "Rendererfälle ohne Pflichtjob am Tag: " + "; ".join(gaps)
     latest = _release_runners(job_block(workflow, "latest"))
@@ -1837,7 +1927,9 @@ def _assert_rendering_runs_on_main(workflow: str, shell: str, folder: Path) -> N
     testing = [job for job in jobs if "\n    uses: " not in job_block(workflow, job)]
     steps = _test_scripts(workflow, testing, MAIN_PUSH)
     calls = _calls_of(steps, shell, folder)
-    platforms = _release_runners(job_block(workflow, "package"))
+    platforms = tuple(
+        _as_tested(runner) for runner in _release_runners(job_block(workflow, "package"))
+    )
     gaps = _rendering_gaps(steps, calls, testing, platforms)
     assert not gaps, "Rendererfälle ohne Lauf beim Push nach main: " + "; ".join(gaps)
 
@@ -1924,7 +2016,11 @@ _PLATFORM_STEP: Final = f"      - name: {_CONTRACT_STEP}\n"
         ),
         # Der Intel-Mac fehlt, oder seine Prüfung hält keine Releaseakte mehr an.
         ("window-contracts-intel", "runs-on: macos-26-intel", "runs-on: macos-latest"),
-        ("linux-release-check", "needs: [package, window-contracts-intel]", "needs: package"),
+        (
+            "linux-release-check",
+            "needs: [package, linux-flatpak, linux-release-start, window-contracts-intel]",
+            "needs: [package, linux-flatpak, linux-release-start]",
+        ),
         (
             "macos-release-check",
             "      needs.window-contracts-intel.result == 'success' &&\n",
@@ -2016,6 +2112,23 @@ def _apt_packages(block: str) -> set[str]:
 #: fällt einer heraus, prüfte er womöglich eine leere Menge.
 _XVFB_JOBS: Final = frozenset({"suite", "window-contracts", "latest", "package"})
 
+#: Linux-Jobs, die ein fertiges Paket starten statt Tests aus der Umgebung. Das
+#: AppImage bringt die xcb-Bibliotheken selbst mit — installiert verdeckten sie
+#: eine Lücke im Paket —, das Flatpak läuft in seiner Laufzeit. Bildschirm und
+#: beim AppImage Vulkan-Lader und Adapter kommen vom Rechner.
+_PACKAGE_START_JOBS: Final = frozenset({"linux-release-start", "linux-flatpak"})
+
+#: Die Bibliotheken der nativen xcb-Canvas, die PySide6 vom Rechner erwartet.
+_XCB_CANVAS_LIBRARIES: Final = (
+    "libxkbcommon-x11-0",
+    "libxcb-cursor0",
+    "libxcb-icccm4",
+    "libxcb-image0",
+    "libxcb-keysyms1",
+    "libxcb-render-util0",
+    "libxcb-xkb1",
+)
+
 
 def _assert_drawing_linux_jobs_have_a_graphics_stack(
     workflow: str, shell: str, folder: Path
@@ -2035,7 +2148,7 @@ def _assert_drawing_linux_jobs_have_a_graphics_stack(
     steps = [step for step in _test_scripts(workflow, testing) if _runner_os(step[1]) == "Linux"]
     calls = _calls_of(steps, shell, folder)
     cases = _rendering_cases(call for made in calls for call in made)
-    drawing = {"package"} | {
+    drawing = {"package", "linux-release-start"} | {
         job
         for (job, _label, _script), made in zip(steps, calls, strict=True)
         if any(_selects(call, *case) for call in made for case in cases)
@@ -2051,19 +2164,16 @@ def _assert_drawing_linux_jobs_have_a_graphics_stack(
             continue
         checked.add(job)
         installed = _apt_packages(block)
-        for dependency in (
-            "xvfb",
-            "xauth",
-            "libxkbcommon-x11-0",
-            "libxcb-cursor0",
-            "libxcb-icccm4",
-            "libxcb-image0",
-            "libxcb-keysyms1",
-            "libxcb-render-util0",
-            "libxcb-xkb1",
-        ):
+        assert {"xvfb", "xauth"} <= installed, f"{job} hat keinen virtuellen Bildschirm"
+        if job in _PACKAGE_START_JOBS:
+            masked = installed & set(_XCB_CANVAS_LIBRARIES)
+            assert not masked, f"{job} verdeckt mit {sorted(masked)} eine Lücke im Paket"
+            continue
+        for dependency in _XCB_CANVAS_LIBRARIES:
             assert dependency in installed, f"{job} fehlt {dependency} für die native xcb-Canvas"
-    assert checked >= _XVFB_JOBS, f"ohne xvfb-run: {sorted(_XVFB_JOBS - checked)}"
+    assert checked >= _XVFB_JOBS | _PACKAGE_START_JOBS, (
+        f"ohne xvfb-run: {sorted((_XVFB_JOBS | _PACKAGE_START_JOBS) - checked)}"
+    )
     return drawing
 
 
@@ -2319,12 +2429,15 @@ def test_the_frozen_helper_check_fails_without_a_package(
 
 #: Die Schritte, die ein fertiges Kundenpaket starten (``tools/check_frozen_start.py``):
 #: Paketjob auf allen vier Runnern, die Linux-Formate, das finale Mac-Paket und
-#: das Windows-Setup.
+#: das Windows-Setup; das AppImage zusätzlich auf frischen Läufern mit dem
+#: ältesten und dem geprüften Ubuntu.
 _START_STEPS: Final = (
     ("package", "Anwendung im Paket starten"),
-    ("package", "AppImage und Flatpak starten (Linux)"),
+    ("package", "AppImage starten (Linux)"),
     ("windows-installer", "Installer still installieren und starten"),
     ("macos-release-check", "Installiertes Paket starten"),
+    ("linux-flatpak", "Flatpak starten"),
+    ("linux-release-start", "AppImage auf frischem System starten"),
 )
 
 #: Ohne Bildschirm darf nur der Intel-Mac starten — sein Runner hat einen
@@ -2348,7 +2461,16 @@ def _assert_start_steps(workflow: str, installer_workflow: str) -> None:
     assert start.count("python tools/check_frozen_start.py dist") == 2
     formats = step_block(package, _START_STEPS[1][1])
     assert 'check_frozen_start.py --executable "$appimage"' in formats
-    assert 'check_frozen_start.py --flatpak "$app_id"' in formats
+    flatpak = step_block(job_block(workflow, _START_STEPS[4][0]), _START_STEPS[4][1])
+    assert 'check_frozen_start.py --flatpak "$app_id"' in flatpak
+    fresh = job_block(workflow, _START_STEPS[5][0])
+    assert 'check_frozen_start.py --executable "$appimage"' in step_block(fresh, _START_STEPS[5][1])
+    release = job_block(workflow, "linux-release-check")
+    gate = re.search(r"(?m)^    needs: \[([^\]]+)\]$", release)
+    assert gate is not None
+    assert {"linux-flatpak", "linux-release-start"} <= {
+        name.strip() for name in gate.group(1).split(",")
+    }, "die Linux-Pakete erscheinen, ohne gestartet zu sein"
     for job_name, name, later in (
         (
             "windows-installer",
@@ -2946,10 +3068,13 @@ def test_the_workflow_builds_both_linux_formats() -> None:
     assert "make_linux_packages.py" in workflow, "die CI ruft das Werkzeug nicht"
     assert ".AppImage" in workflow, "das AppImage wird nicht mitgenommen"
     assert ".flatpak" in workflow, "das Flatpak wird nicht mitgenommen"
-    step = workflow.split("- name: AppImage und Flatpak bauen (Linux)", 1)[1].split(
-        "\n      - name:", 1
-    )[0]
-    assert "continue-on-error" not in step, "ein fehlendes öffentliches Paket bliebe grün"
+    for job, name, flag in (
+        ("package", "AppImage bauen (Linux)", "--appimage"),
+        ("linux-flatpak", "Flatpak bauen", "--flatpak"),
+    ):
+        step = step_block(job_block(workflow, job), name)
+        assert f"make_linux_packages.py {flag}" in step, f"{name} baut nicht"
+        assert "continue-on-error" not in step, "ein fehlendes öffentliches Paket bliebe grün"
     assert "Öffentliche Linux-Pakete prüfen" in workflow
 
 
@@ -4121,6 +4246,10 @@ def test_the_linux_bundle_leaves_host_libraries_and_the_gtk_theme_behind() -> No
         ("libreadline.so.8", "/lib/x86_64-linux-gnu/libreadline.so.8", "BINARY"),
         ("libxcb-cursor.so.0", "/usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0", "BINARY"),
         ("libgssapi_krb5.so.2", "/usr/lib/x86_64-linux-gnu/libgssapi_krb5.so.2", "BINARY"),
+        # Gebraucht und trotzdem draußen: Der Rechner hat dieselbe oder eine
+        # neuere Fassung, und eine ältere bräche seinen Grafiktreiber.
+        ("libstdc++.so.6", "/lib/x86_64-linux-gnu/libstdc++.so.6", "BINARY"),
+        ("libgcc_s.so.1", "/lib/x86_64-linux-gnu/libgcc_s.so.1", "BINARY"),
         (
             "pillow.libs/libjpeg-31e2ca52.so.62.4.0",
             "/site-packages/pillow.libs/libjpeg-31e2ca52.so.62.4.0",
@@ -4748,7 +4877,10 @@ def test_the_selections_before_a_merge_run_where_packages_run() -> None:
     Windows deckt für Slicer das lokale Tor; Linux und macOS gibt es an keinem
     Arbeitsplatz, und genau dort sah bisher niemand einen echten Slicer.
     """
-    packaged = _matrix_of(job_block(WORKFLOW.read_text(encoding="utf-8"), "package"))
+    packaged = [
+        _as_tested(runner)
+        for runner in _matrix_of(job_block(WORKFLOW.read_text(encoding="utf-8"), "package"))
+    ]
     windows = _matrix_of(job_block(_WINDOW_SELECTION.read_text(encoding="utf-8"), "selection"))
     slicers = _matrix_of(job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection"))
 

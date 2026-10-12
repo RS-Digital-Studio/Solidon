@@ -68,8 +68,9 @@ Release-Lauf. `tools/check_frozen_start.py` startet wie ein erster Kunde
 Ende mit 0, keinen Absturz im Absturzprotokoll, keinen überlebenden Hilfsprozess und
 einen unveränderten Paketbaum; die Anwendung steht dafür
 `start_check.SECONDS` lang und schließt sich selbst (`app/ui/start_check.py`).
-Gestartet wird der gebaute Baum im Paketjob aller vier Runner, AppImage und
-Flatpak, das installierte Windows-Setup in `build.yml` und in
+Gestartet wird der gebaute Baum im Paketjob aller vier Runner, das AppImage
+dort und auf frischen Läufern mit Ubuntu 22.04 und 24.04, das Flatpak in
+`linux-flatpak`, das installierte Windows-Setup in `build.yml` und in
 `windows-signed-installer.yml` und das finale Mac-Paket nach Quarantäne,
 Installer und Gatekeeper. Grund: Suite, Bau, Signatur und Notarisierung können
 grün sein, während das Paket beim Kunden nach Sekunden endet. Eine Ausnahme,
@@ -194,6 +195,16 @@ wörtlich; im Paket heißt das zusätzlich:
   begründet (`make_linux_packages.ORPHANED_LIBRARIES`); die Rechnung prüft nur
   die Gegenrichtung gegen den eingecheckten Korpus, und eine offene Kante ist
   ein Fehler. „Ist überall vorhanden" ist keine Messung.
+- **Linux baut auf dem ältesten unterstützten System, `ubuntu-22.04`**: Jede
+  ELF-Datei des Baums verlangt höchstens glibc 2.35, sonst starten AppImage
+  und Archiv auf Ubuntu 22.04, Debian 12 und Mint 21 nicht
+  (`tools/check_glibc_floor.py` im Paketjob und in der Releaseakte). Ein
+  Wechsel des Bauservers bewegt `OLDEST_GLIBC`, die Lizenztexte der
+  Systembibliotheken und die Startprüfung gemeinsam.
+- **`libstdc++` und `libgcc_s` reisen nicht mit** (`HOST_LIBRARIES`), obwohl
+  sie gebraucht werden: Jeder Kundenrechner hat dieselbe oder eine neuere
+  Fassung, und eine mitgereiste ältere lädt vor der des Rechners und bricht
+  dessen Grafiktreiber (Mesa, LLVM), der neuere `GLIBCXX`-Symbole verlangt.
 
 ## Signieren ist ein eigener Vertrauensraum
 

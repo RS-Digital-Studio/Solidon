@@ -387,6 +387,7 @@ def test_every_sbom_runtime_family_has_an_explicit_notice_policy() -> None:
         "openblas-scipy",
         "opencascade-technology",
         "openssl",
+        "pcre",
         "pcre2",
         "pyinstaller-bootloader",
         "qt",

@@ -49,6 +49,7 @@ from app.branding import (
     WEBSITE_URL,
 )
 from tools import asset_rights
+from tools.check_glibc_floor import is_host_library
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "dist" / APP_NAME
@@ -166,11 +167,20 @@ def trim_linux_binaries(binaries: Iterable[tuple[str, str, str]]) -> list[tuple[
     die Ersparnis wäre ein paar Megabyte, der Preis ein Paket, das auf einem
     fremden System nicht startet. Welche Bibliotheken das sind und woran sie
     hängen, prüft ``test_the_linux_bundle_leaves_no_dependency_open``.
+
+    **Die eine Ausnahme sind ``libstdc++`` und ``libgcc_s``**
+    (``check_glibc_floor.HOST_LIBRARIES``): Sie werden gebraucht und reisen
+    trotzdem nicht mit. Der Bauserver ist das älteste unterstützte System,
+    jeder Kundenrechner hat dieselbe oder eine neuere Fassung, und eine
+    mitgereiste ältere bräche den Grafiktreiber des Rechners, der eine neuere
+    ``GLIBCXX``-Fassung verlangt.
     """
     kept: list[tuple[str, str, str]] = []
     for entry in binaries:
         target = str(entry[0]).replace("\\", "/")
         if Path(target).name in ORPHANED_LIBRARIES:
+            continue
+        if "/" not in target and is_host_library(target):
             continue
         if any(target.endswith(plugin) for plugin in DROPPED_QT_PLUGINS):
             continue

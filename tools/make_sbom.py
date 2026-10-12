@@ -95,6 +95,9 @@ LINUX_LIBRARY_FAMILIES: Final = (
         ("libglib-2.0.", "libgio-2.0.", "libgobject-2.0.", "libgmodule-2.0.", "libgthread-2.0."),
     ),
     ("pcre2", ("libpcre2-",)),
+    # PCRE 8, an dem GLib 2.72 aus Ubuntu 22.04 noch hängt. Der Punkt trennt
+    # es von ``libpcre2-``.
+    ("pcre", ("libpcre.",)),
     ("dbus", ("libdbus-1.",)),
     ("systemd", ("libsystemd.",)),
     ("libgcrypt", ("libgcrypt.",)),
@@ -162,6 +165,7 @@ LINUX_FAMILY_COMPONENTS: Final = {
     "freetype": ("FreeType", "FTL", "https://gitlab.freedesktop.org/freetype/freetype"),
     "glib": ("GLib", "LGPL-2.1-or-later", "https://gitlab.gnome.org/GNOME/glib"),
     "pcre2": ("PCRE2", "BSD-3-Clause", "https://github.com/PCRE2Project/pcre2"),
+    "pcre": ("PCRE", "BSD-3-Clause", "https://www.pcre.org/"),
     "dbus": ("D-Bus", "AFL-2.1", "https://gitlab.freedesktop.org/dbus/dbus"),
     "systemd": ("systemd", "LGPL-2.1-or-later", "https://github.com/systemd/systemd"),
     "libgcrypt": ("Libgcrypt", "LGPL-2.1-or-later", "https://gnupg.org/software/libgcrypt/"),

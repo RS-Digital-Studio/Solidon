@@ -65,6 +65,21 @@ Kunde suchte ihn sonst bei sich."
 Warum die Stückliste aus dem Kundenartefakt kommt: „Eine SBOM aus der
 Entwicklungsumgebung ist eine Vorschau."
 
+Warum Linux auf 22.04 baut (Forensik und Messung 12.10.2026): Das Archiv von
+0.6.0, gebaut auf 24.04, verlangte in 30 von 486 ELF-Dateien glibc 2.38,
+darunter `libpython3.14.so.1.0` (`fmod`, libm) — auf Ubuntu 22.04, Debian 12
+und Mint 21 lud nicht einmal Python. Alle Befunde waren Systembibliotheken von
+24.04 und CPython aus `setup-python`; keine Rad-Datei verlangte mehr als 2.34,
+und jedes festgeschriebene Paket hat ein Linux-Rad für glibc ≤ 2.34 (PyPI,
+abgefragt am selben Tag). Die Hülle der Systembibliotheken in jammy ist aus
+den Paketen selbst gemessen (Launchpad, `.deb` ausgepackt, `DT_NEEDED`
+gelesen): gleiche Familien plus PCRE 8, an dem GLib 2.72 noch hängt. Das
+Flatpak bleibt auf 24.04, weil jammy nur flatpak 1.12.7 und flatpak-builder
+1.2.2 trägt. `libstdc++`/`libgcc_s` stehen in der Ausschlussliste des
+AppImage-Projekts (`pkg2appimage/excludelist`) aus genau dem Grund
+`GLIBCXX_… not found`; mit dem ältesten System als Bauserver ist jede
+mitgereiste Fassung die älteste im Feld.
+
 ## Signieren ist ein eigener Vertrauensraum
 
 Warum genau diese eine Berechtigung (RM-104): CPython legt seit

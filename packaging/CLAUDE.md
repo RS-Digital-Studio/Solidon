@@ -58,7 +58,10 @@ die lokale Fassung für den KI-Hinweis, ohne Webabruf gelesen.
   der Type-2-Laufzeitkern 20251108 kommen aus festen Veröffentlichungen, gegen
   SHA-256 geprüft und über `APPIMAGETOOL_RUNTIME_FILE` verbunden. Das
   Flatpak-Bundle nimmt `flatpak install` unmittelbar, **ohne Repo**, und
-  `flatpak run` startet es. Das tar.gz bleibt ein Bauartefakt.
+  `flatpak run` startet es. Das tar.gz bleibt ein Bauartefakt. Gebaut wird
+  der Baum, Archiv und AppImage auf `ubuntu-22.04`; das Flatpak entsteht aus
+  demselben Archiv im Job `linux-flatpak` auf `ubuntu-24.04` (Grund im
+  Kommentar der Paketmatrix in `build.yml`).
 
 ## Signieren
 
@@ -127,8 +130,9 @@ die lokale Fassung für den KI-Hinweis, ohne Webabruf gelesen.
   `pkg-config`; die Microsoft-Laufzeit trägt die `FileVersion`-Menge aller
   PE-Dateien. Die CI prüft auf macOS nur die `.app`.
 - **Linux nimmt Systembibliotheken nur mit Familie mit**: draußen bleiben das
-  GTK-Erscheinungsbild samt Stapel (`make_linux_packages.ORPHANED_LIBRARIES`)
-  und `readline`/`curses` (GPL-3, Regel 15); alles andere reist mit.
+  GTK-Erscheinungsbild samt Stapel (`make_linux_packages.ORPHANED_LIBRARIES`),
+  `readline`/`curses` (GPL-3, Regel 15) sowie `libstdc++` und `libgcc_s`
+  (`check_glibc_floor.HOST_LIBRARIES`); alles andere reist mit.
   `make_sbom.LINUX_LIBRARY_FAMILIES` ordnet jeden Soname einer Familie zu,
   `dpkg-query` liest die Fassung vom Bauserver; Symlinks zählen nicht,
   `lib-dynload` gehört CPython, `<name>.libs` seiner Distribution. Eine Datei

@@ -589,14 +589,21 @@ jobs:
         # fällt die Intel-Version — dann sagt die Website das, statt eine
         # Version anzubieten, die niemand mehr baut.
         #
-        # **Linux steht bewusst fest auf `ubuntu-24.04`**, und auch diese
-        # Zeile muss bis zur Ausmusterung von 24.04 nachgesehen werden. Das
-        # Linux-Paket nimmt die Systembibliotheken des Bauservers mit: ihre
-        # Fassungen stehen in der Lizenzbeilage (`third_party_licenses.toml`),
-        # und die glibc des Servers ist die Untergrenze, auf der das AppImage
-        # startet. `ubuntu-latest` wandert ab dem 19.10.2026 auf Ubuntu 26 und
-        # höbe beides still an; ein Wechsel ist eine eigene Entscheidung.
-        os: [windows-latest, ubuntu-24.04, macos-26-intel, macos-latest]
+        # **Linux baut bewusst fest auf `ubuntu-22.04`, dem ältesten
+        # unterstützten System.** Das Linux-Paket nimmt die Systembibliotheken
+        # des Bauservers mit, ihre Fassungen stehen in der Lizenzbeilage
+        # (`third_party_licenses.toml`), und die glibc des Servers ist die
+        # Untergrenze, auf der AppImage und Archiv starten: 2.35, also Ubuntu
+        # 22.04, Debian 12 und Mint 21 (`tools/check_glibc_floor.py` hält sie an
+        # jeder ELF-Datei). Auf 24.04 gebaut verlangte 0.6.0 glibc 2.38. Geprüft
+        # wird Linux weiter auf `ubuntu-24.04` (Suite, Fensterverträge); die
+        # Releaseakte startet das AppImage auf beiden. Das Flatpak entsteht aus
+        # demselben Baum im Job `linux-flatpak` auf 24.04: jammy bringt nur
+        # flatpak 1.12 und flatpak-builder 1.2, und die Laufzeit bringt ihre
+        # eigene glibc mit. Diese Zeile muss bis zur Ausmusterung von 22.04
+        # nachgesehen werden; ein Wechsel bewegt Lizenztexte, Untergrenze und
+        # `check_glibc_floor.OLDEST_GLIBC` gemeinsam.
+        os: [windows-latest, ubuntu-22.04, macos-26-intel, macos-latest]
     env:
       # Keine Geheimnisse: Der Modus ist eine gewöhnliche Repository-Variable.
       # Schutz kommt ausschließlich von der Produktionsumgebung an den
@@ -732,6 +739,15 @@ jobs:
         if: runner.os == 'macOS' && runner.arch == 'X64'
         run: python tools/fix_unwind_info.py --check --package dist
 
+      - name: Linux-Grenze prüfen (glibc und Bibliotheken des Rechners)
+        # Jede ELF-Datei des Baums höchstens glibc 2.35, und weder
+        # libstdc++ noch libgcc_s im Baum: Eine mitgereiste ältere bräche den
+        # Grafiktreiber eines neueren Rechners (tools/check_glibc_floor.py).
+        # Vor jeder Hülle, damit Archiv, AppImage und Flatpak denselben
+        # geprüften Baum bekommen.
+        if: runner.os == 'Linux'
+        run: python tools/check_glibc_floor.py dist/Solidon3D
+
       - name: Laufzeit-Stückliste gegen CycloneDX 1.6 prüfen
         # Das JSON Schema ist die Referenzimplementierung von CycloneDX. Der
         # Abruf ist auf den offiziellen Release-Commit 1.6 festgeschrieben;
@@ -827,15 +843,13 @@ jobs:
 
       - name: Paketierwerkzeuge holen (Linux)
         # appimagetool kommt als AppImage und wird selbst nicht installiert;
-        # flatpak-builder liegt in jeder Distribution. Beide sind externe
-        # Programme — Solidon liefert keines mit (§36). Werkzeug und der
-        # Laufzeitkern, der später Teil der Kundendatei wird, kommen von festen
-        # Veröffentlichungen und laufen erst nach erfolgreicher SHA-256-Prüfung.
+        # es ist ein externes Programm — Solidon liefert es nicht mit (§36).
+        # Werkzeug und der Laufzeitkern, der später Teil der Kundendatei wird,
+        # kommen von festen Veröffentlichungen und laufen erst nach
+        # erfolgreicher SHA-256-Prüfung. Das Flatpak baut `linux-flatpak`.
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder
           tool="$RUNNER_TEMP/appimagetool-x86_64.AppImage"
           runtime="$RUNNER_TEMP/runtime-x86_64"
           curl -fsSL --retry 3 -o "$tool" \
@@ -847,45 +861,37 @@ jobs:
           sudo install -m 755 "$tool" /usr/local/bin/appimagetool
           sudo install -m 644 "$runtime" /usr/local/lib/appimage-runtime-x86_64
           echo "APPIMAGETOOL_RUNTIME_FILE=/usr/local/lib/appimage-runtime-x86_64" >> "$GITHUB_ENV"
-          flatpak remote-add --if-not-exists --user flathub \
-            https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y flathub \
-            org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08
 
-      - name: AppImage und Flatpak bauen (Linux)
-        # Beide sind ab der nächsten Version öffentliche Pakete. Ein Fehlschlag
-        # macht deshalb den Linux-Zweig rot; ``fail-fast: false`` lässt Windows
-        # und beide Mac-Bauten trotzdem zu Ende laufen.
+      - name: AppImage bauen (Linux)
+        # Ein öffentliches Paket. Ein Fehlschlag macht deshalb den Linux-Zweig
+        # rot; ``fail-fast: false`` lässt Windows und beide Mac-Bauten
+        # trotzdem zu Ende laufen.
         if: runner.os == 'Linux'
         env:
           # appimagetool ist selbst ein AppImage und braucht sonst FUSE 2, das
-          # Ubuntu seit 24.04 nicht mehr mitbringt. Mit dieser Variable packt
-          # es sich vorher aus, statt sich einzuhängen — der Fehler wäre sonst
+          # nicht jeder Runner mitbringt. Mit dieser Variable packt es sich
+          # vorher aus, statt sich einzuhängen — der Fehler wäre sonst
           # „dlopen(): error loading libfuse.so.2", und der sagt niemandem,
           # dass eine Variable fehlt.
           APPIMAGE_EXTRACT_AND_RUN: '1'
-        run: python tools/make_linux_packages.py --appimage --flatpak
+        run: python tools/make_linux_packages.py --appimage
 
       - name: Öffentliche Linux-Pakete prüfen
         if: runner.os == 'Linux'
-        run: |
-          ls dist/*.AppImage >/dev/null
-          ls dist/*.flatpak >/dev/null
+        run: ls dist/*.AppImage >/dev/null
 
-      - name: AppImage und Flatpak starten (Linux)
+      - name: AppImage starten (Linux)
         # Jedes Format ist eine eigene Hülle um denselben Baum, mit eigener
         # Umgebung: Der Wayland-Absturz eines Kunden war im Flatpak behoben
         # und kam mit AppImage und Archiv zurück. Deshalb startet jedes
-        # ausgelieferte Format für sich. Das Flatpak bekommt eine eigene
-        # Sitzungsbus-Instanz, wie auf einem Desktop.
+        # ausgelieferte Format für sich — das AppImage hier auf dem Bauserver,
+        # in der Releaseakte auf frischen Läufern mit 22.04 und 24.04
+        # (`linux-release-start`), das Flatpak in `linux-flatpak`.
         if: runner.os == 'Linux'
         timeout-minutes: 20
         run: |
           appimage=$(ls dist/*.AppImage)
           xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/check_frozen_start.py --executable "$appimage"
-          app_id=$(python -c "from app.branding import APP_ID; print(APP_ID)")
-          flatpak install --user -y --noninteractive "$(ls dist/*.flatpak)"
-          dbus-run-session -- xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/check_frozen_start.py --flatpak "$app_id"
 
       - name: Bundle prüfen (macOS)
         # Der Bau bricht nicht ab, wenn BUNDLE ausbleibt — er liefert dann
@@ -917,10 +923,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cd dist
-          # Auch für die beiden Pakete, und mit ``|| true`` je Muster: Wer nur
-          # das tar.gz hat, weil ein Paketierschritt scheiterte, soll dessen
+          # Auch für das AppImage, und mit ``continue`` je Muster: Wer nur das
+          # tar.gz hat, weil ein Paketierschritt scheiterte, soll dessen
           # Prüfsumme trotzdem bekommen.
-          for pattern in "*-linux-x86_64.tar.gz" "*.AppImage" "*.flatpak"; do
+          for pattern in "*-linux-x86_64.tar.gz" "*.AppImage"; do
             for archive in $pattern; do
               test -f "$archive" || continue
               sha256sum "$archive" | tee "$archive.sha256"
@@ -937,11 +943,10 @@ jobs:
             dist/*-linux-x86_64.tar.gz.sha256
             dist/*.AppImage
             dist/*.AppImage.sha256
-            dist/*.flatpak
-            dist/*.flatpak.sha256
-          # Der Bau darüber verlangt AppImage und Flatpak ausdrücklich. Dieses
-          # private Zwischenartefakt trägt zusätzlich den App-Baum; öffentlich
-          # werden erst die zwei Pakete nach dem Releasecheck darunter.
+          # Der Bau darüber verlangt das AppImage ausdrücklich. Dieses private
+          # Zwischenartefakt trägt zusätzlich den App-Baum, aus dem
+          # `linux-flatpak` das Flatpak baut; öffentlich werden erst die zwei
+          # Pakete nach dem Releasecheck darunter.
           if-no-files-found: error
           retention-days: 1
 
@@ -956,9 +961,140 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  linux-flatpak:
+    name: Flatpak (ubuntu-24.04)
+    # Das Flatpak packt denselben Baum, den der Paketjob auf 22.04 gebaut und
+    # geprüft hat, um die Laufzeit org.freedesktop.Platform 26.08. Gebaut wird
+    # auf 24.04, weil jammy nur flatpak 1.12 und flatpak-builder 1.2 trägt und
+    # eine fremde Paketquelle ungepinnt wäre; die glibc-Untergrenze gilt hier
+    # nicht, die Laufzeit bringt ihre eigene mit. libstdc++ und libgcc_s fehlen
+    # dem Baum auch hier: Die Laufzeit liefert die neueren, mit denen ihr
+    # Mesa gebaut ist.
+    needs: package
+    if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+      - name: Linux-Baum laden
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: solidon3d-linux-release-input
+          path: linux-input
+      - name: Gebauten Baum auspacken
+        # Derselbe Baum wie in Archiv und AppImage, gebunden über die
+        # Prüfsumme des Archivs; Pfade werden vor dem Auspacken geprüft.
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=$(find linux-input -maxdepth 1 -type f -name 'Solidon3D-*-linux-x86_64.tar.gz')
+          [ -n "$archive" ] && [ -f "$archive.sha256" ]
+          [ "$(sha256sum "$archive" | awk '{print $1}')" = "$(awk '{print $1}' "$archive.sha256")" ] || { echo "Geändertes Linux-Archiv."; exit 1; }
+          while IFS= read -r entry; do
+            trimmed=${entry%/}
+            case "/$trimmed/" in *'/../'*|*'/./'*|*'//'*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
+            case "$trimmed" in /*|*\\*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
+          done < <(tar -tzf "$archive")
+          mkdir -p unpacked dist
+          tar -xzf "$archive" -C unpacked
+          tree=$(find unpacked -mindepth 2 -maxdepth 2 -type d -name Solidon3D)
+          [ -n "$tree" ] || { echo "Solidon3D-App-Baum fehlt im Linux-Archiv."; exit 1; }
+          mv "$tree" dist/Solidon3D
+          python tools/check_glibc_floor.py dist/Solidon3D
+      - name: Paketierwerkzeuge holen (Flatpak)
+        # flatpak-builder liegt in jeder Distribution und ist ein externes
+        # Programm — Solidon liefert es nicht mit (§36).
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder xvfb xauth
+          flatpak remote-add --if-not-exists --user flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub \
+            org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08
+      - name: Flatpak bauen
+        run: python tools/make_linux_packages.py --flatpak
+      - name: Flatpak starten
+        # Mit eigener Sitzungsbus-Instanz, wie auf einem Desktop.
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          app_id=$(python -c "from app.branding import APP_ID; print(APP_ID)")
+          flatpak install --user -y --noninteractive "$(ls dist/*.flatpak)"
+          dbus-run-session -- xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/check_frozen_start.py --flatpak "$app_id"
+      - name: Prüfsumme (Flatpak)
+        run: |
+          set -euo pipefail
+          cd dist
+          for bundle in *.flatpak; do sha256sum "$bundle" | tee "$bundle.sha256"; done
+      - name: Flatpak intern übergeben
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: solidon3d-linux-flatpak-input
+          path: |
+            dist/*.flatpak
+            dist/*.flatpak.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  linux-release-start:
+    name: AppImage starten (${{ matrix.os }})
+    # Die Untergrenze gemessen statt behauptet: das fertige AppImage auf einem
+    # frischen 22.04 (glibc 2.35, älteste zugesagte Fassung) und auf 24.04,
+    # dessen neueres Mesa (lavapipe über libLLVM) die libstdc++ des Rechners
+    # braucht — eine mitgereiste ältere bräche dort die 3D-Ansicht.
+    needs: package
+    if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+      - name: Grafik und Bildschirm des Prüfrechners
+        # Was ein Linux-Desktop selbst mitbringt und der Runner nicht:
+        # GL/EGL über glvnd, Vulkan-Lader und lavapipe, ein virtueller
+        # Bildschirm. Nichts davon reist im AppImage.
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libvulkan1 mesa-vulkan-drivers xvfb xauth
+      - name: AppImage laden
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: solidon3d-linux-release-input
+          path: linux-input
+      - name: AppImage auf frischem System starten
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          appimage=$(find linux-input -maxdepth 1 -type f -name '*.AppImage')
+          [ -n "$appimage" ] && [ -f "$appimage.sha256" ]
+          [ "$(sha256sum "$appimage" | awk '{print $1}')" = "$(awk '{print $1}' "$appimage.sha256")" ] || { echo "Geändertes AppImage."; exit 1; }
+          chmod +x "$appimage"
+          echo "glibc des Prüfrechners: $(ldd --version | head -n 1)"
+          xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/check_frozen_start.py --executable "$appimage"
+
   linux-release-check:
     name: Linux-Releaseakte prüfen
-    needs: [package, window-contracts-intel]
+    needs: [package, linux-flatpak, linux-release-start, window-contracts-intel]
     if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -984,6 +1120,11 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: solidon3d-linux-release-input
+          path: release-download
+      - name: Flatpak laden
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: solidon3d-linux-flatpak-input
           path: release-download
       - name: Releasebelege fail-closed prüfen
         shell: bash
@@ -1030,6 +1171,11 @@ jobs:
           [ -d "$appimage_root" ] || { echo "Der App-Baum fehlt im ausgepackten AppImage."; exit 1; }
           appimage_sbom=$(find "$appimage_root" -type f -name Solidon3D.cdx.json)
           [ "$(printf '%s\n' "$appimage_sbom" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { echo "Die Stückliste des AppImage fehlt oder ist mehrdeutig."; exit 1; }
+          # Die Linux-Grenze an den ausgelieferten Hüllen, nicht nur am Baum
+          # des Paketjobs: Archiv und AppImage samt AppRun höchstens glibc
+          # 2.35, ohne libstdc++ und libgcc_s (tools/check_glibc_floor.py).
+          python tools/check_glibc_floor.py "$artifact"
+          python tools/check_glibc_floor.py appimage-content/squashfs-root
           # Die Evidenz entsteht hier, wo äußere Pakete und SBOM zusammenliegen,
           # und wird gleich danach geprüft: Hashes der Pakete, Quellenangebote je
           # LGPL-Familie, Frist. Sie kommt aus der Stückliste des AppImage, der
