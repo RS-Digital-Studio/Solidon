@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import io
 import math
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -2007,8 +2008,13 @@ def _evaluation(
     profile: Profile,
     *,
     quality: Quality = "fine",
+    then: Sequence[tuple[str, dict[str, Any]]] = (),
 ) -> tuple[Any, Any]:
-    """Auswertung und geprüfter Schritt, ohne Urteil — auch für eine erwartete Absage."""
+    """Auswertung und geprüfter Schritt, ohne Urteil — auch für eine erwartete Absage.
+
+    ``then`` sind Folgeschritte, jeder am ersten Ausgang des Schritts davor;
+    zurück kommt dann der letzte.
+    """
     load_operations()
     project = new_project("centauri-carbon-2", "petg")
     registry = Registry()
@@ -2040,6 +2046,9 @@ def _evaluation(
             )
         ],
     )
+    for follow, values in then:
+        body = project.document.ops[-1].outputs[0]
+        history.apply(follow, [OperationDraft(op=follow, inputs=(body,), params=values, seed=1234)])
     operation = project.document.ops[-1]
     result = evaluate(
         project.document,
@@ -3408,47 +3417,6 @@ def _faces_at(
     ]
 
 
-def _evaluated_chain(
-    steps: list[tuple[str, dict[str, Any]]], inputs: list[SceneObject], profile: Profile
-) -> Any:
-    """Vorbereitete Eingaben und mehrere Schritte am ersten Körper durch die Auswertung."""
-    load_operations()
-    project = new_project("centauri-carbon-2", "petg")
-    registry = Registry()
-    for spec in REGISTRY.all():
-        registry.register(spec)
-
-    def seed(ctx: OpContext) -> OpResult:
-        """Die Referenzkörper betreten den echten Auswertungsweg."""
-        return OpResult(outputs=[dataclasses.replace(entry, id="") for entry in inputs])
-
-    registry.register(
-        OperationSpec(
-            name="matrix_input",
-            title="Referenzkörper",
-            category="primitive",
-            params=BaseParams,
-            fn=seed,
-            consumes=0,
-            produces=len(inputs),
-        )
-    )
-    history = History(project.document, registry=registry)
-    history.apply("Referenzkörper", [OperationDraft(op="matrix_input")])
-    body = project.document.ops[-1].outputs[0]
-    for op, params in steps:
-        history.apply(op, [OperationDraft(op=op, inputs=(body,), params=params, seed=1234)])
-        body = project.document.ops[-1].outputs[0]
-    result = evaluate(
-        project.document,
-        profile,
-        registry=registry,
-        sources=ProjectSources(project),
-        ask=_unexpected_question,
-    )
-    return result, result.scene.objects.get(body)
-
-
 @pytest.mark.parametrize("mode", ["raised", "engraved"])
 def test_text_keeps_the_features_of_its_body_under_their_names_on_both_kernels(
     mode: str, profile: Profile
@@ -3507,15 +3475,18 @@ def test_a_later_step_still_finds_its_face_after_text_on_both_kernels(profile: P
             if float(feature.params["normal"][0]) > 0.99
         )
         (labelled,) = _evaluated("label_text", label, [entry], profile)
-        result, pushed = _evaluated_chain(
-            [("label_text", label), ("push_face", {"face": right, "distance": 2.0})],
+        result, step = _evaluation(
+            "label_text",
+            label,
             [entry],
             profile,
+            then=[("push_face", {"face": right, "distance": 2.0})],
         )
         assert result.complete, (
             kind,
             [(finding.code, str(finding.message)) for finding in result.scene.report.findings],
         )
+        pushed = result.scene.objects[step.outputs[0]]
         assert pushed.kind == kind
         assert pushed.mesh.volume == pytest.approx(labelled.mesh.volume + 1200.0, abs=1e-6)
         assert pushed.mesh.bounds.maximum[0] == pytest.approx(22.0, abs=1e-6)
@@ -3547,6 +3518,68 @@ def test_an_inlay_and_its_carrier_carry_their_features_on_both_kernels(profile: 
         assert sum(float(face.params["area"]) for face in flush) == pytest.approx(
             ink, abs=tolerance
         ), kind
+
+
+@pytest.mark.parametrize(
+    ("op", "params", "extra"),
+    [
+        ("label_text", {"text": "OS", "size": 12.0, "depth": 1.0, "z": 20.0}, False),
+        ("inlay_text", {"text": "OS", "size": 12.0, "depth": 1.0, "z": 20.0, "slot": 1}, False),
+        ("cut_counter_form", {"axis": "z", "clearance": 0.4}, True),
+    ],
+)
+def test_a_step_that_lays_no_helix_reads_no_thread_on_a_body_without_one(
+    op: str, params: dict[str, Any], extra: bool, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Schrift oder Tasche legt kein Gewinde an: ohne Gewinde keine Gewindelesung.
+
+    Wie *Fase* und *Verrunden* (RM-435, ``brep.features.threads_to_read``).
+    Die Lesung lief nach jedem dieser Schritte am ganzen neuen Körper und
+    kostete an echten Modellen ohne Gewinde bis zu 0,7 s je Schritt, ohne je
+    eines zu finden. Gezählt wird der Aufruf, nicht die Zeit.
+    """
+    exact_kernel()
+    import app.core.brep.thread as thread_module
+
+    # Die Eingänge zuerst: ``_object`` erkennt sie selbst, samt Gewindelesung.
+    inputs = [_object(_native_box(40.0, 30.0, 20.0), "brep")]
+    if extra:
+        inputs = [
+            _object(_native_box(60.0, 40.0, 20.0), "brep"),
+            _object(_native_box(20.0, 10.0, 10.0, (0.0, 0.0, 12.0)), "brep", 2),
+        ]
+    read: list[int] = []
+    real = thread_module.thread_features
+
+    def counted(solid: Any, **values: Any) -> Any:
+        read.append(1)
+        return real(solid, **values)
+
+    monkeypatch.setattr(thread_module, "thread_features", counted)
+    outputs = _evaluated(op, params, inputs, profile)
+    assert all(entry.features for entry in outputs if entry.kind == "brep")
+    assert not read, f"{op} las {len(read)}-mal Gewinde an einem Körper ohne Gewinde"
+
+
+def test_text_on_a_threaded_body_keeps_the_thread(profile: Profile) -> None:
+    """Die Gegenrichtung: Trägt der Körper ein Gewinde, liest das Ergebnis es weiter.
+
+    Bolzen M10 × 1,5, 8 mm lang, aus *Gewinde exakt*; ein „I“ in 3 mm auf
+    seiner Stirnfläche bei z = 8. Danach steht genau ein Gewinde da, mit
+    Durchmesser und Steigung wie vorher.
+    """
+    exact_kernel()
+    (bolt,) = _evaluated(
+        "thread_exact", {"diameter": 10.0, "pitch": 1.5, "length": 8.0}, [], profile
+    )
+    before = [feature for feature in bolt.features.values() if feature.kind == "thread"]
+    assert len(before) == 1
+    label = {"text": "I", "size": 3.0, "depth": 0.4, "z": 8.0}
+    (labelled,) = _evaluated("label_text", label, [bolt], profile)
+    threads = [feature for feature in labelled.features.values() if feature.kind == "thread"]
+    assert len(threads) == 1, sorted(labelled.features)
+    assert threads[0].params["diameter"] == pytest.approx(before[0].params["diameter"])
+    assert threads[0].params["pitch"] == pytest.approx(before[0].params["pitch"])
 
 
 def test_a_counter_form_keeps_the_features_of_its_insert_on_both_kernels(

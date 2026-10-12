@@ -240,6 +240,7 @@ def cut_counter_form(ctx: OpContext) -> OpResult:
     features: dict[str, Feature] = {}
     if exact:
         from app.core.brep import edit
+        from app.core.brep.features import threads_to_read
         from app.core.geom.prepare_ops import _exact_features_after
 
         body: Any = cast(Any, insert.mesh)
@@ -248,8 +249,13 @@ def cut_counter_form(ctx: OpContext) -> OpResult:
         ]
         ctx.cancelled.raise_if_cancelled()
         result: Any = edit.unified(edit.boolean("difference", [body, *tools_exact]))
+        # Eine Tasche legt keine Wendel an: Gewinde liest nur, wer eines trug.
         features, _continued, _lost = _exact_features_after(
-            insert, result, expected=None, cancelled=ctx.cancelled
+            insert,
+            result,
+            expected=None,
+            cancelled=ctx.cancelled,
+            known_threads=threads_to_read(insert.features),
         )
     else:
         mesh = as_mesh_data(insert.mesh)

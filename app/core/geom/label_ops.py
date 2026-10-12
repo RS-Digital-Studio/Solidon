@@ -1166,6 +1166,7 @@ def _label_exact(ctx: OpContext, params: LabelParams, source: SceneObject) -> Op
     anzuklicken, und ein Schritt an einer Seite hielt an.
     """
     from app.core.brep import edit
+    from app.core.brep.features import threads_to_read
     from app.core.geom.prepare_ops import _exact_features_after
 
     mode = cast(Placement, params.mode)
@@ -1192,8 +1193,13 @@ def _label_exact(ctx: OpContext, params: LabelParams, source: SceneObject) -> Op
     apart = _fell_apart(body, result, mode)
     buried = _buried(_Letters(sum(tool.volume for tool in tools)), body, result, mode)
     fine = _too_fine(params.text, params.size, params.font, params.style, ctx.profile)
+    # Eine Schrift legt keine Wendel an: Gewinde liest nur, wer eines trug.
     features, _continued, _lost = _exact_features_after(
-        source, result, expected=None, cancelled=ctx.cancelled
+        source,
+        result,
+        expected=None,
+        cancelled=ctx.cancelled,
+        known_threads=threads_to_read(source.features),
     )
     _log.info("labelled an exact body with %r, %s", params.text, mode)
     return OpResult(
@@ -1489,7 +1495,7 @@ def inlay_text(ctx: OpContext) -> OpResult:
     inlay_features: dict[str, Feature] = {}
     if exact:
         from app.core.brep import edit
-        from app.core.brep.features import features_of
+        from app.core.brep.features import features_of, threads_to_read
         from app.core.geom.prepare_ops import _exact_features_after
 
         tools, answered, _missing, faceted = _exact_tools(
@@ -1503,10 +1509,11 @@ def inlay_text(ctx: OpContext) -> OpResult:
         if inlay.volume <= EPS_GEOM:
             raise _no_inlay()
         inlay = dataclasses.replace(inlay, face_slots=(params.slot,) * inlay.face_count)
+        threads = threads_to_read(source.features)
         carrier_features, _continued, _lost = _exact_features_after(
-            source, carrier, expected=None, cancelled=ctx.cancelled
+            source, carrier, expected=None, cancelled=ctx.cancelled, known_threads=threads
         )
-        inlay_features = features_of(inlay, cancelled=ctx.cancelled)
+        inlay_features = features_of(inlay, cancelled=ctx.cancelled, known_threads=threads)
     else:
         mesh_tools, answered, _missing = _mesh_tools(params, source, "engraved", both_sides=False)
         body_mesh = as_mesh_data(source.mesh)
