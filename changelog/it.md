@@ -30,6 +30,8 @@ scrive in `website/version.json`.
 - Anche quando nulla si sovrappone, *Controlla sovrapposizioni* ora dà una risposta.
 - Se a una funzione manca un secondo corpo nella scena, il motivo indica *Duplica oggetto* come via.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
+- Lo screenshot allegato a un riscontro ora mostra anche il modello su Windows. Con alcune schede grafiche prima mostrava un'immagine vecchia, come la schermata di caricamento.
+- Su macOS una finestra di dialogo aperta, ad esempio per creare una vite dal catalogo dei blocchi, resta sopra la finestra principale. Prima un clic nella finestra la spingeva dietro.
 
 ### Stampare e passare allo slicer
 
@@ -38,6 +40,9 @@ scrive in `website/version.json`.
 ### Modificare e disegnare
 
 - Un corpo esatto ora conserva le sue caratteristiche dopo *Applica testo*, *Intarsia testo* e *Ricava controforma*. Nella versione 0.6.0 dopo non si poteva più fare clic su nessuna faccia.
+- Un corpo filettato dal catalogo dei blocchi si può di nuovo spostare, ruotare, specchiare, scalare e appoggiare sul piano. Nella versione 0.6.0 la catena si fermava con un errore del programma.
+- Nella scheda *Selezione*, un diametro sotto il limite in *Cambia foro* rimanda ora a *Rimuovi caratteristica*, che rimuove il foro del tutto, con la sua svasatura se vuoi.
+- La ricostruzione (*Ricostruisci modello*) non suggerisce più altri limiti quando nessun valore consentito basterebbe, e mostra le proposte uguali una sola volta.
 
 ## 0.6.0
 

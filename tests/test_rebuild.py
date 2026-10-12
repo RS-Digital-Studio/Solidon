@@ -552,6 +552,50 @@ def test_rounded_edge_is_rebuilt_from_support_planes_and_a_registered_fillet(
     assert chosen.result.mesh.volume == pytest.approx(expected, abs=0.001)
 
 
+def test_the_mesh_form_beside_the_exact_one_only_proposes_what_explains_its_lost_rounds(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+):
+    """Neben dem P4.0-Körper läuft das Netz nur für die Rundformen, die er verlor.
+
+    Am gebogenen Griff einer Kundenmeldung (0.6.0) standen zwei gleich lautende
+    Quadervorschläge untereinander: einer aus dem exakten Körper, einer aus dem
+    Netz, das nur wegen einer verlorenen Rundung mitlief. Nachgestellt, indem
+    der exakte Körper hier seine Verrundung verliert: Der Quader kommt einmal,
+    die Verrundung aus dem Netz bleibt ein Vorschlag und besteht.
+    """
+    from dataclasses import replace
+
+    from app.core.brep import features as exact_features
+    from app.core.scene.rebuild import RebuildBudget, propose
+
+    original = exact_features.features_of
+
+    def without_fillets(*args, **kwargs):
+        found = original(*args, **kwargs)
+        return {name: feature for name, feature in found.items() if feature.kind != "fillet"}
+
+    monkeypatch.setattr(exact_features, "features_of", without_fillets)
+    project = imported("block_with_rounded_edge.stl")
+    proposal = propose(
+        project.document,
+        "obj_1",
+        profile,
+        sources=ProjectSources(project),
+        budget=RebuildBudget(0.1, 0.01),
+    )
+    boxes = [
+        entry
+        for entry in proposal.candidates
+        if [draft.op for draft in entry.drafts] == ["create_brep_box"]
+    ]
+    assert len(boxes) == 1, [replace(entry.check) for entry in boxes]
+    assert proposal.accepted, [entry.check.reason for entry in proposal.candidates]
+    assert [draft.op for draft in proposal.accepted[0].drafts] == [
+        "create_brep_box",
+        "fillet_edges",
+    ]
+
+
 @pytest.mark.parametrize("local_mm, accepted", ((0.1, False), (0.3, True)))
 def test_a_body_with_multiple_attached_primitives_is_rebuilt_as_their_union(
     profile: Profile, local_mm: float, accepted: bool

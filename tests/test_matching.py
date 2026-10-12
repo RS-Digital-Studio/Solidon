@@ -2102,6 +2102,97 @@ def test_affine_feature_normals_follow_the_plane_and_opening() -> None:
     assert feature.params["centre"] == (1.0, 2.0, 3.0)
 
 
+@pytest.mark.parametrize(
+    ("matrix", "keeps_the_size"),
+    [
+        (translation((14.0, -4.9, 0.0)), True),
+        (np.diag([-1.0, 1.0, 1.0, 1.0]), True),
+        (np.diag([2.0, 2.0, 2.0, 1.0]), False),
+        (np.diag([2.0, 1.0, 1.0, 1.0]), False),
+    ],
+)
+def test_a_table_thread_keeps_its_size_name_only_while_it_keeps_its_form(
+    matrix: Any, keeps_the_size: bool
+) -> None:
+    """Eine Tabellengröße ist ein Name, keine Ausdehnung (RM-544).
+
+    Starr bewegt bleibt der Name (``table_size``); vergrößert oder gestreckt ist
+    das Gewinde keines aus der Tabelle mehr und verliert ihn mit dem Nennmaß.
+    """
+    from app.core.geom.ops import as_transform
+    from app.core.perceive.matching import transformed_features
+
+    feature = Feature(
+        id="thread_1",
+        kind="thread",
+        provenance="generated",
+        created_by=1,
+        params={
+            "centre": (0.0, 0.0, 10.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 19.8,
+            "pitch": 2.5,
+            "length": 20.0,
+            "nominal": 20.0,
+            "table_size": "M20",
+        },
+        measure_sources={"nominal": "parameter", "diameter": "parameter"},
+    )
+    result = transformed_features({feature.id: feature}, as_transform(np.asarray(matrix)))
+    moved = result.candidates[feature.id]
+    if keeps_the_size:
+        assert moved.params["table_size"] == "M20"
+        assert moved.params["nominal"] == pytest.approx(20.0)
+    else:
+        assert "table_size" not in moved.params
+        assert "nominal" not in moved.params
+    assert feature.params["table_size"] == "M20"
+
+
+@pytest.mark.parametrize(
+    ("op", "params"),
+    [
+        ("translate_object", {"dx": 14.0, "dy": -4.9, "dz": 0.0, "keep_on_bed": True}),
+        ("scale_object", {"factor": 2.0}),
+    ],
+)
+def test_a_printed_screw_from_the_catalogue_moves_and_scales_without_a_halt(
+    profile: Any, op: str, params: dict[str, Any]
+) -> None:
+    """Kundenmeldung 0.6.0: Eine gedruckte M20-Schraube hielt beim Verschieben an.
+
+    Ihr Gewinde nannte seine Tabellengröße als ``size="M20"``, und das
+    Nachführen der Merkmale streckte jedes ``size`` als Ausdehnung eines
+    Hohlraums: „could not convert string to float: 'M'“ bei jedem Verschieben,
+    Drehen, Spiegeln, Skalieren und Aufs-Bett-Setzen. Der Name heißt jetzt
+    ``table_size``; ``size`` bleibt die Ausdehnung eines Hohlraums.
+    """
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Schraube",
+        [OperationDraft(op="create_printed_screw", params={"size": "M20", "length": 20.0})],
+    )
+    history.apply("Bewegen", [OperationDraft(op=op, inputs=("obj_1",), params=params)])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [finding.code for finding in result.scene.report.findings]
+    thread = next(
+        feature
+        for feature in result.scene.objects["obj_1"].features.values()
+        if feature.kind == "thread"
+    )
+    if op == "translate_object":
+        assert thread.params["table_size"] == "M20"
+    else:
+        assert "table_size" not in thread.params
+    assert "size" not in thread.params
+
+
 def test_anisotropic_face_diameter_is_not_an_exact_circular_fit() -> None:
     """Ein ebener Deckelsitz bleibt eben, sein Kreis wird bei Querstreckung elliptisch."""
     from app.core.geom.ops import as_transform

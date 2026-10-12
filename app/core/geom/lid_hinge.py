@@ -561,7 +561,9 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     # 9: Zoll- und Rohrgewinde, Links-, mehrgängige und kegelige Gewinde (RM-544).
     # 10: Die Gewindegröße hängt nicht mehr an den gezeigten Reihen, und der Kegel
     # nennt sein Nennmaß in der Bezugsebene (Review GEW, M2 und H1).
-    cache_version="10",
+    # 11: Der Tabellenname des Gewindes heißt am Merkmal ``table_size``; ``size``
+    # bleibt die Ausdehnung eines Hohlraums (Kundenmeldung 0.6.0).
+    cache_version="11",
     doc=_(
         "Baut einen losen Stift, der in diese Bohrung passt, samt Senkkopf, Zylinderkopf oder "
         "Gewinde. Er ist um das Spiel aus dem Materialprofil kleiner. Am Klappdeckel mit Stift "
@@ -917,13 +919,13 @@ def _matched_pin(
             # Das Nennmaß in der Bezugsebene (``types.thread_at_gauge``).
             extra["gauge_nominal"] = zone.nominal
         if zone.values.get("size") != CUSTOM_SIZE:
-            extra["size"] = zone.values.get("size")
+            extra["table_size"] = zone.values.get("size")
         features[key] = dataclasses.replace(
             made,
             params={**made.params, **extra},
             measure_sources={
                 **made.measure_sources,
-                **dict.fromkeys((name for name in extra if name != "size"), "parameter"),
+                **dict.fromkeys((name for name in extra if name != "table_size"), "parameter"),
             },
         )
     findings.insert(0, _made(cavity, zone, smooth, top - bottom))

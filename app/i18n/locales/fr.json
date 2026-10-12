@@ -4174,6 +4174,7 @@
   "GLB und GLTF verwenden Y nach oben. Ältere Projekte und rohe Generatorquellen behalten ihre bisherige Lage.": "GLB et GLTF utilisent Y comme axe vertical. Les anciens projets et les sources brutes du générateur conservent leur orientation.",
   "Gangzahl": "Filets",
   "Ganz gut": "Plutôt bien",
+  "Ganz weg geht es mit „{action}“.": "Pour le supprimer entièrement, utilisez « {action} ».",
   "Ganze Datei als ein Körper · bisherige Auswahl": "Fichier entier en un seul corps · sélection précédente",
   "Ganze Körper: {count}.": "Corps entiers : {count}.",
   "Ganzer Hohlraum": "Cavité entière",

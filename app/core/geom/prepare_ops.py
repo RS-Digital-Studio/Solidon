@@ -19177,7 +19177,7 @@ def _resize_thread(
                 "uncertainty",
                 "nominal",
                 "gauge_nominal",
-                "size",
+                "table_size",
                 *(() if thread.starts > 1 else ("starts",)),
             )
         },
