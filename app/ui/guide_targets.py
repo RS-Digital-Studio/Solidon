@@ -266,6 +266,73 @@ def _filament_picker(window: MainWindow) -> QWidget:
     return window.quick_filament.picker
 
 
+def marked_widgets(window: MainWindow, name: str) -> list[QWidget]:
+    """Jedes Widget, das ``name`` als Kennzeichen trägt (``guides.TARGET_PROPERTY``).
+
+    Gesucht wird im Fenster und in jedem offenen Fenster ohne Elternteil — ein
+    Dialog über ``exec()`` hängt nicht immer am Hauptfenster. Sichtbare stehen
+    vorn, sonst gilt die Reihenfolge, in der sie entstanden sind.
+    """
+    roots: list[QWidget] = [window]
+    roots.extend(
+        widget
+        for widget in QApplication.topLevelWidgets()
+        if widget is not window and widget.isVisible() and widget.parentWidget() is None
+    )
+    found: list[QWidget] = []
+    for root in roots:
+        if root.property(guides.TARGET_PROPERTY) == name:
+            found.append(root)
+        found.extend(
+            widget
+            for widget in root.findChildren(QWidget)
+            if widget.property(guides.TARGET_PROPERTY) == name
+        )
+    return sorted(found, key=lambda widget: not widget.isVisible())
+
+
+def _marked(name: str) -> Callable[[MainWindow], QWidget]:
+    """Ein Finder für ein Ziel, das sein Widget als Kennzeichen trägt."""
+
+    def find(window: MainWindow) -> QWidget:
+        found = marked_widgets(window, name)
+        if not found:
+            raise MissingTargetError(f"{name}: kein Bedienelement trägt dieses Kennzeichen")
+        return found[0]
+
+    return find
+
+
+def _rebuild_button(window: MainWindow) -> QWidget:
+    """*Modell nachbauen* in der Auswahlkarte — er steht nur an einem Netzkörper."""
+    button: QWidget = window.selection_operations.rebuild_button
+    return button
+
+
+def _search_field(window: MainWindow) -> QWidget:
+    """Das Suchfeld der Auswahlkarte (RM-735)."""
+    field: QWidget = window.selection_operations.search
+    return field
+
+
+def _toolbar_search(window: MainWindow) -> QWidget:
+    """*Funktion suchen …* oben in der Werkzeugleiste."""
+    button: QWidget = window.function_search
+    return button
+
+
+def _progress_cancel(window: MainWindow) -> QWidget:
+    """*Abbrechen* in der Statusleiste — er steht nur, solange etwas läuft."""
+    button: QWidget = window.cancel_button
+    return button
+
+
+def _preview_banner(window: MainWindow) -> QWidget:
+    """Das Vorschauband über der Ansicht — es steht nur, solange eine Vorschau läuft."""
+    banner: QWidget = window.viewport.banner
+    return banner
+
+
 _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "filament.section": _filament_section,
     "filament.picker": _filament_picker,
@@ -282,6 +349,15 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "parameters.first": _first_parameter,
     "toolbar.draw": _draw_button,
     "sketch.done": _sketch_done,
+    "feature.apply": _marked("feature.apply"),
+    "feature.in_view": _marked("feature.in_view"),
+    "feature.every": _marked("feature.every"),
+    "measure.reference": _marked("measure.reference"),
+    "search": _search_field,
+    "toolbar.search": _toolbar_search,
+    "progress.cancel": _progress_cancel,
+    "preview.banner": _preview_banner,
+    "selection.rebuild": _rebuild_button,
 }
 
 #: Die Namen, die keinen eigenen Widget haben, nur einen Ort.
