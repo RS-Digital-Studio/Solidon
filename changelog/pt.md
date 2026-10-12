@@ -31,6 +31,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se a uma função faltar um segundo corpo na cena, o motivo indica *Duplicar objeto* como caminho.
 - A lista de atalhos de teclado nomeia *Modelar*, *Esqueleto* e *Desenhar* uma única vez.
 
+### Editar e esboçar
+
+- Um corpo exato mantém agora as suas características depois de *Aplicar texto*, *Incrustar texto* e *Rebaixar contraforma*. Na versão 0.6.0 já não era possível clicar em nenhuma face a seguir.
+
 ## 0.6.0
 
 - A demo funciona agora até 30 de novembro de 2026. O Solidon3D 1.0 deverá sair a 1 de dezembro e os seus projetos mantêm-se.

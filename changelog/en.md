@@ -31,6 +31,10 @@ it into `website/version.json`.
 - If a function lacks a second body in the scene, the reason names *Duplicate object* as the way.
 - The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
 
+### Editing and sketching
+
+- An exact body now keeps its features after *Put text on*, *Inlay text* and *Cut counter-form*. In version 0.6.0 no face could be clicked afterwards.
+
 ## 0.6.0
 
 - The demo now runs until 30 November 2026. Solidon3D 1.0 is expected on 1 December, and your projects are kept.
