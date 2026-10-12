@@ -3,10 +3,11 @@
 Stand: main `ee6b810fe`, 11.10.2026. Auftrag Robert: „ein Konzept zur
 Abarbeitung aller Funktionen und zum Testen für dich, alles über die
 Bedienoberfläche, zum sauber Abhaken, mit Befund und Optimierung und
-Einfachheit sowie Verständlichkeit.“ Nur Konzept; Ablage später als
-`konzepte/konzept-funktionsdurchgang-2026-10.md`. Geprüft von `bedienlogik` und
-`konzept`, dazu eine Nachprüfung; alle Funde sind eingearbeitet (Berichte unter
-`.claude/.state/drache-2026-10-08/berichte-2026-10-10/funktionsdurchgang-*.md`).
+Einfachheit sowie Verständlichkeit.“ Geprüft von `bedienlogik` und
+`konzept`, dazu eine Nachprüfung; alle Funde sind eingearbeitet (Berichte in
+[`nachweise-funktionsdurchgang-2026-10/`](nachweise-funktionsdurchgang-2026-10/README.md)).
+Abgelegt am 12.10.2026 nach der Landung von 0.6.1; das Programm ist
+[RM-736](../ROADMAP.md#rm-736), die Pakete D0 bis D12 sind RM-737 bis RM-749.
 
 ## 1 Ziel
 
