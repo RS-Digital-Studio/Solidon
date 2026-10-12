@@ -111,6 +111,7 @@ class SealPathField(QWidget):
         self.button.clicked.connect(self.choiceRequested)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACE)
         layout.addWidget(self.summary, 1)
         layout.addWidget(self.button)
         self.setFocusProxy(self.button)

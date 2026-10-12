@@ -76,6 +76,7 @@ class OrganizerLayoutField(QWidget):
         self.button.clicked.connect(self.choiceRequested)
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(SPACE)
         row.addWidget(self.summary, 1)
         row.addWidget(self.button)
         self.setFocusProxy(self.button)
