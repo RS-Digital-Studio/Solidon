@@ -855,12 +855,71 @@ def feature_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
 
 @dataclass(frozen=True, slots=True)
 class MenuEntry:
-    """Eine Zeile der Menüleiste, wie der Prüfstand sie am Fenster liest."""
+    """Eine Zeile der Menüleiste, wie der Prüfstand sie am Fenster liest.
+
+    Das Format von ``menubar.json`` gehört hierher (:meth:`to_json`,
+    :meth:`from_json`, :func:`write_menubar`, :func:`read_menubar`); Prüfstand und
+    Urteile importieren es, statt es nachzubauen.
+    """
 
     object_name: str
     path: tuple[str, ...]
-    """Die Texte in der Quellsprache, vom Hauptmenü bis zur Zeile."""
+    """Die Texte in der Quellsprache, vom Hauptmenü **bis zur Zeile selbst** — ohne die
+    Zeile bekäme jeder Fensterbefehl die Kennung seines Menüs."""
     shortcut: str = ""
+    """Das Kürzel in Qts ``PortableText``, leer ohne Kürzel."""
+
+    def to_json(self) -> dict[str, Any]:
+        """``{object_name, path, shortcut}``, ``path`` als Liste."""
+        return {"object_name": self.object_name, "path": list(self.path), "shortcut": self.shortcut}
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any]) -> MenuEntry:
+        """Die Umkehrung von :meth:`to_json`; ein anderes Format hält an."""
+        if set(data) - {"object_name", "path", "shortcut"} or not {"object_name", "path"} <= set(
+            data
+        ):
+            raise FunctionListError(
+                [
+                    f"menubar.json: Zeile {dict(data)} hat nicht das Format "
+                    "{object_name, path, shortcut}"
+                ]
+            )
+        path = tuple(str(part) for part in data["path"])
+        if not path:
+            raise FunctionListError([f"menubar.json: {data['object_name']} ohne Weg"])
+        return cls(
+            object_name=str(data["object_name"]),
+            path=path,
+            shortcut=str(data.get("shortcut", "")),
+        )
+
+
+def menubar_of(window: Any) -> list[MenuEntry]:
+    """Die Menüleiste eines gebauten Fensters, gelesen über W's
+    ``guide_targets.menubar_entries`` — der Weg bis zur Zeile samt ihrem Text.
+
+    Gerufen im Prozess, der das Fenster schon hat (Prüfstand, Fenstertest); die
+    Liste selbst baut keines.
+    """
+    from app.ui.guide_targets import menubar_entries
+
+    return [
+        MenuEntry(
+            object_name=name,
+            path=(*menus, action.text()),
+            shortcut=action.shortcut().toString(),
+        )
+        for name, menus, action in menubar_entries(window)
+    ]
+
+
+def write_menubar(path: Path, entries: Iterable[MenuEntry]) -> None:
+    """``menubar.json``: eine Liste von :meth:`MenuEntry.to_json`, UTF-8, eingerückt."""
+    path.write_text(
+        json.dumps([entry.to_json() for entry in entries], ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def command_package(entry: MenuEntry) -> str:
@@ -944,16 +1003,9 @@ def window_action_rows(keys: Iterable[str], scenes: Mapping[str, Scene]) -> list
 
 
 def read_menubar(path: Path) -> list[MenuEntry]:
-    """Die Menüleiste aus einer Datei des Prüfstands: ``[{object_name, path, shortcut}]``."""
+    """Die Menüleiste aus :func:`write_menubar` zurück."""
     data = json.loads(path.read_text(encoding="utf-8"))
-    return [
-        MenuEntry(
-            object_name=str(item["object_name"]),
-            path=tuple(str(part) for part in item["path"]),
-            shortcut=str(item.get("shortcut", "")),
-        )
-        for item in data
-    ]
+    return [MenuEntry.from_json(item) for item in data]
 
 
 # --- Die ganze Liste -------------------------------------------------------------

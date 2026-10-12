@@ -667,24 +667,26 @@ def test_the_list_is_built_without_a_window() -> None:
 # --- Fensterbefehle am gebauten Fenster (Fenster-CI) -------------------------------
 
 
-def test_every_menubar_line_becomes_a_row_with_a_package(qt_app: Any) -> None:
+def test_every_menubar_line_becomes_a_row_with_a_package(qt_app: Any, tmp_path: Path) -> None:
     """Am gebauten Fenster: Jede Zeile der Menüleiste, die keine Operation ist, wird
     eine Fensterbefehlszeile mit Paket, und jede Spezifikation mit Menüpfad trifft eine.
 
     Die Leiste entsteht erst in ``_build_menus``; gelesen wird sie über
     ``guide_targets.menubar_entries``, wie der Prüfstand sie liest.
     """
-    from app.ui.guide_targets import menubar_entries
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
     window = MainWindow(Session(), UiSettings())
-    entries = [
-        fl.MenuEntry(object_name=name, path=(*menus, action.text()))
-        for name, menus, action in menubar_entries(window)
-    ]
-    assert len(entries) >= 60, f"nur {len(entries)} Zeilen in der Menüleiste"
+    written = fl.menubar_of(window)
+    assert len(written) >= 60, f"nur {len(written)} Zeilen in der Menüleiste"
+    # Der Weg reicht bis zur Zeile selbst, und das Kürzel reist mit.
+    assert ("Bearbeiten", "Parameter anlegen …") in {entry.path for entry in written}
+    assert any(entry.shortcut for entry in written)
+    fl.write_menubar(tmp_path / "menubar.json", written)
+    entries = fl.read_menubar(tmp_path / "menubar.json")
+    assert entries == written
 
     found = fl.rows(entries)
     commands = [row for row in found if row.source == "menueleiste"]
@@ -700,3 +702,25 @@ def test_every_menubar_line_becomes_a_row_with_a_package(qt_app: Any) -> None:
     used = {row.id.rsplit("/", 1)[-1] for row in commands}
     assert set(fl.COMMAND_PACKAGES) <= used, "Ausnahme ohne Menüzeile"
     assert {row.id.split("/")[0] for row in commands} <= set(fl.MENU_PACKAGES)
+
+
+def test_the_menubar_format_has_one_shape(tmp_path: Path) -> None:
+    """``menubar.json`` schreibt und liest eine Stelle; ein anderes Format — der Weg nur
+    bis zum Menü unter ``name`` — hält an, statt still falsche Kennungen zu geben."""
+    entries = [
+        fl.MenuEntry("menubar.parameter_anlegen", ("Bearbeiten", "Parameter anlegen …")),
+        fl.MenuEntry("menubar.speichern", ("Datei", "Speichern"), "Ctrl+S"),
+    ]
+    fl.write_menubar(tmp_path / "menubar.json", entries)
+    assert fl.read_menubar(tmp_path / "menubar.json") == entries
+    assert json.loads((tmp_path / "menubar.json").read_text(encoding="utf-8"))[1] == {
+        "object_name": "menubar.speichern",
+        "path": ["Datei", "Speichern"],
+        "shortcut": "Ctrl+S",
+    }
+
+    (tmp_path / "alt.json").write_text(
+        json.dumps([{"name": "menubar.speichern", "path": ["Datei"]}]), encoding="utf-8"
+    )
+    with pytest.raises(fl.FunctionListError):
+        fl.read_menubar(tmp_path / "alt.json")
