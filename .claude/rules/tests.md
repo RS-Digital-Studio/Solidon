@@ -17,8 +17,8 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 ## Entwicklung und Release
 
 - **Je Schritt die betroffenen Tests, vor jedem Merge oder Commit auf main das Entwicklungstor,
-  Fenster, Renderer und Leistung lokal ausschließlich beim Release** — auch nicht als gezielte
-  Teilmenge (`CLAUDE.md`, `/pruefen`). Ein grüner Entwicklungslauf ist kein
+  Fenster, Renderer und Leistung lokal ausschließlich beim Release** — außer den zwei
+  Ausnahmen in `AGENTS.md` („Arbeitsweise“). Ein grüner Entwicklungslauf ist kein
   Release-Nachweis.
 - **Der Push nach main fährt alle Prüfungen, ein Zweig keine** (Entscheidung
   Robert; CI-09): Kern und Renderer auf allen vier Paketplattformen, dazu die
