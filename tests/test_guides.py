@@ -2091,3 +2091,157 @@ def test_the_window_opens_at_its_start_size(qt_app: Any) -> None:
         assert (window.width(), window.height()) == START_SIZE
     finally:
         window.deleteLater()
+
+
+#: Der Kindprozess des Abrisstests: Anwendung wie beim Kunden, Szene vom
+#: Startbildschirm öffnen, die Zeile über den Wortschatz suchen und bis zum Ende
+#: der Runde halten, dann neu öffnen. ``SOLIDON_PROBE_ITERATOR=1`` setzt die
+#: frühere Suche über ``QTreeWidgetItemIterator`` ein — die Gegenprobe.
+_TREE_ROUNDS = r"""
+import os
+import sys
+import time
+from pathlib import Path
+import app.ui
+from app.core.bootstrap import load_operations
+load_operations()
+from app.ui.app import build_application
+from app.ui import guide_targets
+application, window = build_application([])
+window.resize(1280, 820)
+window.show()
+if os.environ.get('SOLIDON_PROBE_ITERATOR'):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QTreeWidgetItemIterator
+    original = guide_targets._row
+
+    def _row(window, kind, rest, name):
+        if kind != 'tree.row':
+            return original(window, kind, rest, name)
+        tree = window.object_tree.tree
+        object_id, feature_id = guide_targets._object_and_feature(rest)
+        iterator = QTreeWidgetItemIterator(tree)
+        while (item := iterator.value()) is not None:
+            if item.data(0, Qt.ItemDataRole.UserRole) == object_id and (
+                item.data(1, Qt.ItemDataRole.UserRole) == feature_id
+            ):
+                return tree, item
+            iterator += 1
+        raise guide_targets.MissingTargetError(name)
+
+    guide_targets._row = _row
+
+
+def settle(seconds):
+    until = time.monotonic() + seconds
+    while time.monotonic() < until:
+        application.processEvents()
+        time.sleep(0.005)
+
+
+scene = Path(sys.argv[1])
+if sys.argv[2] == 'build':
+    from app.core.scene.history import OperationDraft
+    window._show_start_screen(False)
+    assert window.session.apply('Quader mit Bohrung', [
+        OperationDraft(op='create_brep_box'),
+        OperationDraft(op='drill_hole', inputs=('obj_1',), params={'diameter': 5.0, 'z': 12.0}),
+    ])
+    assert window.session.wait_for_idle(60000)
+    window.session.save_project(scene)
+    print('built', flush=True)
+    os._exit(0)
+for round in range(5):
+    previous = window.session.last_result
+    window.session.forget_changes()
+    window.open_path(scene)
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        settle(0.01)
+        result = window.session.last_result
+        if result is not None and result is not previous and not window.session.busy:
+            break
+    settle(0.5)
+    held = guide_targets._row(window, 'tree.row', 'obj_1.hole_1', 'tree.row:obj_1.hole_1')
+    guide_targets.next_click(window, 'tree.row:obj_1.hole_1')
+    settle(0.8)
+    held = None
+print('tree survived', flush=True)
+os._exit(0)
+"""
+
+
+def _tree_rounds(scene: Path, mode: str, extra: dict[str, str] | None = None) -> Any:
+    import os
+    import subprocess
+    import sys
+
+    return subprocess.run(
+        [sys.executable, "-X", "faulthandler", "-c", _TREE_ROUNDS, str(scene), mode],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", **(extra or {})},
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+
+
+def test_the_tree_survives_new_scenes_after_a_row_was_found(qt_app: Any, tmp_path: Path) -> None:
+    """Nach der Suche einer Baumzeile riss ein späteres ``ObjectTree.show_scene``
+    beim Leeren des Baums ab (Zugriffsverletzung in ``tree.clear()``), solange
+    ``_row`` sie mit ``QTreeWidgetItemIterator`` suchte (Fund D0-P: 8 von 12
+    Läufen des Prüfstands). Im eigenen Prozess, damit ein Abriss ein roter Fall
+    ist und nicht die Suite beendet; sechs Prozesse zu je fünf Öffnungen, weil
+    er nicht jedes Mal kommt (Gegenprobe mit dem Iterator: 3 von 8 Prozessen)."""
+    del qt_app
+    scene = tmp_path / "szene.p3d"
+    built = _tree_rounds(scene, "build")
+    assert built.returncode == 0 and "built" in built.stdout, built.stderr[-3000:]
+    for attempt in range(6):
+        done = _tree_rounds(scene, "rounds")
+        assert done.returncode == 0, (attempt, done.returncode, done.stderr[-4000:])
+        assert "tree survived" in done.stdout
+
+
+def tree_iterator_uses(source: str) -> list[int]:
+    """Die Zeilen, in denen ``QTreeWidgetItemIterator`` als Name vorkommt — Import,
+    Aufruf oder Attribut, nicht im Kommentar."""
+    import ast
+
+    lines: set[int] = set()
+    for node in ast.walk(ast.parse(source)):
+        named = (
+            node.id
+            if isinstance(node, ast.Name)
+            else node.attr
+            if isinstance(node, ast.Attribute)
+            else node.name
+            if isinstance(node, ast.alias)
+            else ""
+        )
+        if named == "QTreeWidgetItemIterator":
+            lines.add(getattr(node, "lineno", 0))
+    return sorted(lines)
+
+
+def test_no_tree_item_iterator_in_the_application() -> None:
+    """``QTreeWidgetItemIterator`` hinterlässt in PySide Zeilenhüllen, an denen ein
+    späteres ``QTreeWidget.clear()`` abreißt (Fund D0-P); Zeilen werden über
+    ``topLevelItem``/``child`` gesucht. Rekursiv über ``app/`` (W4)."""
+    root = Path(__file__).resolve().parents[1] / "app"
+    found = [
+        f"{path.relative_to(root.parent).as_posix()}:{number}"
+        for path in sorted(root.rglob("*.py"))
+        for number in tree_iterator_uses(path.read_text(encoding="utf-8"))
+    ]
+    assert found == []
+
+
+def test_a_tree_item_iterator_turns_the_guard_red() -> None:
+    source = (
+        "from PySide6.QtWidgets import QTreeWidgetItemIterator\n"
+        "# QTreeWidgetItemIterator im Kommentar zählt nicht\n"
+        "def walk(tree):\n"
+        "    return QtWidgets.QTreeWidgetItemIterator(tree)\n"
+    )
+    assert tree_iterator_uses(source) == [1, 4]
