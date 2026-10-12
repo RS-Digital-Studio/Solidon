@@ -202,7 +202,7 @@ def sample_protocol() -> dict[str, Any]:
             "main_gap_ms": 40.0,
             "budget_s": 1.0,
         },
-        "frames": {"drag_ms": [12.0, 18.0], "reference_factor": 1.0},
+        "frames": {"raw_drag_ms": [12.0, 18.0], "reference_factor": 1.0},
         "modals": [],
         "raw_windows": [],
         "windows": [{"class": "OperationDialog", "title": "Bohrung"}],
@@ -826,7 +826,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(
         "Z1",
         "50 ms umgerechnet",
-        change=_set("frames", {"drag_ms": [25.0], "reference_factor": 2.0}),
+        change=_set("frames", {"raw_drag_ms": [25.0], "reference_factor": 2.0}),
     ),
     BrokenSample(
         "Z2",
@@ -991,7 +991,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(
         "Z1",
         "Ereignisse ohne Bild",
-        change=_set("frames.drag_ms", [None, None]),
+        change=_set("frames.raw_drag_ms", [None, None]),
         expect="nicht_gelaufen",
     ),
     BrokenSample(14, "Rechenzeit null", change=_set("abort.eval_s", None), expect="nicht_gelaufen"),

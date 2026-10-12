@@ -1276,7 +1276,7 @@ def test_the_report_reads_null_as_not_measured(tmp_path: Path) -> None:
     """Die Werte, die der Prüfstand nach einem Fehlschlag schreibt, ergeben eine Liste (S4)."""
     protocol = sample_protocol()
     protocol["timing"]["total_s"] = None
-    protocol["frames"]["drag_ms"] = [None, 12.0]
+    protocol["frames"]["raw_drag_ms"] = [None, 12.0]
     protocol["abort"]["eval_s"] = None
     assert validate_protocol(protocol) == []
     out = _run_folder(tmp_path, [protocol])
@@ -1544,3 +1544,92 @@ def test_the_agent_place_is_the_branch_menu_path_takes() -> None:
         places["drill_hole"],
         menu_path(REGISTRY.get("drill_hole")),
     )
+
+
+# --- Ergänzung aus dem Review von P: Urteile nur hier ---------------------------
+
+
+def test_the_raw_bases_are_the_counted_classes_and_the_file_dialog() -> None:
+    """P nimmt rohe Fenster über ``RAW_BASES`` auf; gezählt wird nur ``RAW_CLASSES``.
+
+    Der Systemdateidialog ist roh, aber erlaubt (Z5) — der Prüfstand nimmt ihn
+    auf, das Urteil zählt ihn nicht (Review P, M9: eine Liste statt einer Abschrift).
+    """
+    from tools.function_checks import RAW_ALLOWED, RAW_BASES, RAW_CLASSES
+
+    assert (*RAW_CLASSES, RAW_ALLOWED) == RAW_BASES
+    assert f"`{RAW_ALLOWED}`" in CRITERIA["Z5"].threshold
+
+    def file_dialog(protocol: dict[str, Any]) -> None:
+        protocol["raw_windows"] = [{"class": RAW_ALLOWED, "title": "Öffnen", "allowed": False}]
+
+    assert _judged(file_dialog).criteria["Z5"].verdict == "erfuellt"
+
+
+def test_the_tab_chain_ends_before_it_wraps_or_leaves() -> None:
+    """Der Umlauf zum Anfang und das Glied aus dem Dialog hinaus sind kein Rücksprung.
+
+    So schreibt P die Kette (``function_capture.tab_chain``): Sie endet mit dem
+    Widget, das wiederkommt, oder mit dem, das ``root`` verlässt
+    (``inside: false``). Ein Rücksprung mitten in der Kette bleibt ein Fund.
+    """
+
+    def wraps(protocol: dict[str, Any]) -> None:
+        chain = protocol["tab_chain"]
+        chain.append(dict(chain[0]))
+
+    def leaves(protocol: dict[str, Any]) -> None:
+        protocol["tab_chain"].append(
+            {"name": "Objektbaum", "rect": [-400, 0, 200, 600], "inside": False}
+        )
+
+    def jumps_then_wraps(protocol: dict[str, Any]) -> None:
+        chain = protocol["tab_chain"]
+        chain[1], chain[2] = chain[2], chain[1]
+        chain.append(dict(chain[0]))
+
+    assert validate_protocol(_protocol_with(leaves)) == []
+    assert _judged(wraps).points[10].verdict == "erfuellt"
+    assert _judged(leaves).points[10].verdict == "erfuellt"
+    jumped = _judged(jumps_then_wraps).points[10]
+    assert jumped.verdict == "fund"
+    assert [issue.text for issue in jumped.issues] == [
+        "Rücksprung in der Tab-Kette: Übernehmen → Tiefe"
+    ]
+
+
+def test_a_state_image_not_taken_is_not_measured() -> None:
+    """Fehlt ein Zustand im Protokoll, ist er nicht gemessen — kein Fund an G5."""
+
+    def no_focus(protocol: dict[str, Any]) -> None:
+        for entry in protocol["state_images"]:
+            entry["states"].pop("focus", None)
+
+    outcome = _judged(no_focus).criteria["G5"]
+    assert outcome.verdict == "nicht_gelaufen", outcome
+    assert not outcome.issues
+
+
+def test_the_drag_delay_is_raw_and_converted_once() -> None:
+    """``frames.raw_drag_ms`` ist roh, ``frames.reference_factor`` rechnet einmal um.
+
+    P schreibt die rohe Messung und den Faktor (Review P, M3); das alte Feld
+    ``drag_ms``, in dem P schon umgerechnet hatte, ist ungültig.
+    """
+
+    def raw(protocol: dict[str, Any]) -> None:
+        protocol["frames"] = {"raw_drag_ms": [20.0], "reference_factor": 1.5}
+
+    outcome = _judged(raw).criteria["Z1"]
+    assert outcome.verdict == "erfuellt"
+    assert outcome.measurement["worst_ms"] == 30.0
+    old = _protocol_with(
+        lambda protocol: protocol.update(frames={"drag_ms": [30.0], "reference_factor": 1.5})
+    )
+    assert any("drag_ms" in problem for problem in validate_protocol(old))
+
+
+def _protocol_with(change: Any) -> dict[str, Any]:
+    protocol = copy.deepcopy(sample_protocol())
+    change(protocol)
+    return protocol

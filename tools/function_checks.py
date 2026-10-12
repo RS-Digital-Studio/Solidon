@@ -171,7 +171,12 @@ NOT_FOUND: Final = "nicht auffindbar"
 BENCH_FINDINGS: Final = (COVERED, NOT_FOUND)
 
 #: Rohe Qt-Fenster, die im Kundenweg nicht erscheinen (Z5).
-RAW_CLASSES: Final = frozenset({"QMessageBox", "QInputDialog", "QColorDialog"})
+RAW_CLASSES: Final = ("QMessageBox", "QInputDialog", "QColorDialog")
+#: Der Systemdateidialog ist roh, aber erlaubt (Z5).
+RAW_ALLOWED: Final = "QFileDialog"
+#: Was der Prüfstand als rohes Fenster aufnimmt (``function_capture``): die
+#: gezählten Klassen und der erlaubte Dateidialog. Gezählt wird hier.
+RAW_BASES: Final = (*RAW_CLASSES, RAW_ALLOWED)
 
 #: Das Handbuchfenster: Muss der Kunde es öffnen, ist V6 verletzt.
 MANUAL_WINDOW: Final = ManualWindow.__name__
@@ -344,7 +349,11 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
             "budget_s",
         ),
     ),
-    "frames": ProtocolField("tabelle", _keys("drag_ms", "reference_factor")),
+    # Z1: ``raw_drag_ms`` ist die rohe Zeit je Ziehereignis bis zum nächsten
+    # gemalten Bild auf diesem Rechner, ``reference_factor`` Referenzzeit
+    # durch Zeit hier (``function_capture.reference_factor``). Umgerechnet
+    # wird einmal, im Urteil.
+    "frames": ProtocolField("tabelle", _keys("raw_drag_ms", "reference_factor")),
     "modals": ProtocolField("liste", _keys("class", "title", "allowed", "question")),
     "raw_windows": ProtocolField("liste", _keys("class", "title", "allowed")),
     "windows": ProtocolField("liste", _keys("class", "title")),
@@ -353,7 +362,9 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     "fields": ProtocolField(
         "liste", _keys("label", "accessible_name", "description", "tooltip", "front")
     ),
-    "tab_chain": ProtocolField("liste", _keys("name", "rect")),
+    # Die Kette, wie Tab sie geht; ihr letztes Glied ist das Widget, das
+    # wiederkommt, oder das, das den Dialog verlässt (``inside: false``).
+    "tab_chain": ProtocolField("liste", _keys("name", "rect", "inside")),
     "names": ProtocolField("texte"),
     "focus_return": ProtocolField("wahr"),
     "matrix": ProtocolField("tabelle", frozenset(SELECTION_STAGES)),
@@ -399,6 +410,10 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         _keys("way", "opened", "fields", "params", "history_before", "history_after"),
         {"way": REVISE_WAYS},
     ),
+    # Prüfpunkt 14: ``eval_s`` ist die Dauer der Rechnung, die abgebrochen
+    # wird, roh auf diesem Rechner (aus einem Lauf ohne Abbruch an derselben
+    # Szene), nicht die Ladezeit der Startszene — *Abbrechen* erscheint nach
+    # der Uhr dieses Rechners.
     "abort": ProtocolField("tabelle", _keys("eval_s", "cancel_shown_s", "clicked")),
     "findings": ProtocolField(
         "liste", _keys("phase", "kind", "target", "detail"), {"kind": BENCH_FINDINGS}
@@ -813,7 +828,7 @@ CRITERIA: Final[dict[str, Criterion]] = {
         _criterion(
             "Z5",
             "Rohe Qt-Fenster im Kundenweg",
-            f"{MAX_RAW_WINDOWS}, außer `QFileDialog`",
+            f"{MAX_RAW_WINDOWS}, außer `{RAW_ALLOWED}`",
             (MAX_RAW_WINDOWS,),
             "A",
             ("raw_windows",),
