@@ -29,7 +29,7 @@ Text oder Darstellung (Konzept §4, „Urteil und Schwere“).
 
 - Art: Fehler
 - Schwere: schwer
-- Funktion: `operation:label_text`
+- Funktion: `label_text`
 - Prüfpunkt: 4
 - Beleg: exakter Quader 40 × 30 × 20, *Text aufbringen* „OS“ 12 mm auf der Deckfläche, durch Verlauf und Auswertung: 6 Merkmale vorher, 0 danach, kein Befund; `features_of` am selben Körper findet 15 (`output/konsolidierung-2026-10-12/fix-schrift-merkmale.md`, Reproduktion)
 - Ursache: Der exakte Zweig gab seinen Körper mit leerem `features` aus (`label_ops.py`, seit v0.5.0), und der exakte Zweig der Auswertung meldet keinen Verlust.
@@ -41,7 +41,7 @@ Text oder Darstellung (Konzept §4, „Urteil und Schwere“).
 
 - Art: Fehler
 - Schwere: schwer
-- Funktion: `operation:inlay_text`
+- Funktion: `inlay_text`
 - Prüfpunkt: 4
 - Beleg: Zwillingssuche zu FD-1, statisch und über jede exakte Variante der Falltabelle; Träger und Einlage ohne Merkmale (`fix-schrift-merkmale.md`)
 - Ursache: derselbe leere Ausgang wie FD-1, seit v0.5.2.
@@ -53,10 +53,197 @@ Text oder Darstellung (Konzept §4, „Urteil und Schwere“).
 
 - Art: Fehler
 - Schwere: schwer
-- Funktion: `operation:cut_counter_form`
+- Funktion: `cut_counter_form`
 - Prüfpunkt: 4
 - Beleg: Zwillingssuche zu FD-1, statisch und über jede exakte Variante der Falltabelle; Ausgang ohne Merkmale (`fix-schrift-merkmale.md`)
 - Ursache: derselbe leere Ausgang wie FD-1, seit v0.5.2.
 - Vorschlag: wie FD-1.
 - Wirkung beim Kunden: wie FD-1, am Körper mit der Aussparung.
 - Stand: behoben `e871f6062`
+
+### Probelauf am echten Fenster
+
+Aus dem Probelauf am echten Fenster (51 Fälle, Lauf `F:\tmp-suche\probelauf-d0`,
+Auswertung `output/konsolidierung-2026-10-12/auswertung-probelauf-d0.md`; FD-4 bis
+FD-6 folgen mit ihrem Fix). Leichte Funde einer Zeile behebt ihr Paket; mittlere und
+die systemischen leichten behebt D0.
+
+### FD-7 Materialtoleranz ist ein Fachwort
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `drill_hole`
+- Kriterium: V1
+- Beleg: „Materialtoleranz“ im doc von *Bohrung setzen* und im Feld „Materialtoleranz berücksichtigen“, ebenso an `plug_hole`; Lauf, Fall 040, `surfaces/drill_hole-*.json`
+- Ursache: `app/core/geom/prepare_ops.py` (doc und Feldtitel), `field_ops.py`; das Wort steht im eingefrorenen Bestand von `tests/data/customer_vocabulary.json`.
+- Vorschlag: Slicer-Wort, etwa „Spiel des Materials einrechnen“, in allen Sprachen neu übersetzt; Bestand schrumpft.
+- Wirkung beim Kunden: Wer aus dem Slicer kommt, versteht nicht, warum die Bohrung größer wird als getippt.
+- Stand: offen RM-741
+
+### FD-8 Der Kalibrierstand heißt „Startwert“
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Kriterium: V1
+- Beleg: Überschrift „PETG — Startwert“; Fall 034, `flaeche-sprachen-dialog.png`
+- Ursache: `app/ui/dialogs.py` (`tr("Startwert", context="Kalibrierstand")`).
+- Vorschlag: „noch nicht kalibriert“ oder „Werkswerte“.
+- Wirkung beim Kunden: Das Wort sagt nicht, dass noch nicht gemessen wurde.
+- Stand: offen RM-747
+
+### FD-9 Die Beschreibung von Schriftzug anlegen ist zu lang
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `create_label`
+- Kriterium: V2
+- Beleg: steht im eingefrorenen Bestand zu langer Texte; Fall 034, `surfaces/create_label-*.json`
+- Ursache: `app/core/geom/label_ops.py` (doc).
+- Vorschlag: ein Satz, etwa „Legt einen Schriftzug als eigenes Objekt an — zum Aufkleben oder für zwei Farben.“; Eintrag in `tests/data/text_lengths/` streichen.
+- Wirkung beim Kunden: Ein zu langer Satz über dem ersten Feld wird übersprungen.
+- Stand: offen RM-747
+
+### FD-10 Die Messfelder der Kalibrierung erklären sich nicht
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Kriterium: V3
+- Beleg: fünf Messfelder ohne Kurzhilfe und Beschreibung; Fall 034, `surfaces/Bearbeiten_Material_kalibrieren-*.json`
+- Ursache: `app/ui/dialogs.py` (Messfelder ohne `setToolTip`/`setAccessibleDescription`).
+- Vorschlag: je Feld ein Satz, wo am Prüfkörper gemessen wird und was die Zahl bewirkt.
+- Wirkung beim Kunden: Er weiß nicht, welche Zahl vom Prüfkörper in welches Feld gehört.
+- Stand: offen RM-747
+
+### FD-11 Die Felder von Parameter anlegen erklären sich nicht
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `Bearbeiten/Parameter anlegen …`
+- Kriterium: V3
+- Beleg: Name, Einheit, Unter- und Obergrenze ohne Kurzhilfe und Beschreibung; Fall 003, `02-flaeche-dialog.png`
+- Ursache: `app/ui/dialogs.py` (`ParameterDialog`, Felder ohne Satz).
+- Vorschlag: je Feld ein Satz, etwa „So heißt das Maß in Ausdrücken, etwa @breite.“
+- Wirkung beim Kunden: Wofür Ober- und Untergrenze gut sind, muss er raten.
+- Stand: offen RM-747
+
+### FD-12 Am Drehfeld eines Zahlenfelds fehlt die Beschreibung für Hilfsmittel
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `drill_hole`
+- Kriterium: V3
+- Beleg: in jedem Operationsdialog fehlen dem fokussierbaren Drehfeld und dem Haken „Ganzer Körper“ Name und Beschreibung, mit der Maus ist der Satz da; Fall 040, 13 Drehfelder
+- Ursache: `app/ui/op_dialog.py` (`_explain` an den Behälter, nicht an `ValueField.spin` und `FeatureSetField.whole`).
+- Vorschlag: `_explain` gibt den Satz auch an das innere Feld.
+- Wirkung beim Kunden: Ein Bildschirmleser liest am fokussierten Zahlenfeld keine Erklärung.
+- Stand: offen RM-737
+
+### FD-13 Material kalibrieren zeigt vorn neun Felder und zwei Absätze
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Kriterium: E5
+- Beleg: 9 Felder vorn (erlaubt 4), 41 Wörter über dem ersten Feld (erlaubt 25), übersetzt 49–61 (erlaubt 35); Fall 034
+- Ursache: `app/ui/dialogs.py` (Überschrift, zwei Absätze, fünf Messwerte, zwei Haken alle vorn).
+- Vorschlag: ein Satz, vorn nur, was der Prüfkörper liefert; der Rest unter *Weitere Einstellungen*.
+- Wirkung beim Kunden: Wer nur sein Spiel nachtragen will, liest drei Absätze und sieht neun Felder.
+- Stand: offen RM-737
+
+### FD-14 Zahlen stehen linksbündig
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `Bearbeiten/Material kalibrieren …`
+- Kriterium: G3
+- Beleg: kein Zahlenfeld der Anwendung ist rechtsbündig; Fall 034
+- Ursache: Drehfeldklassen in `app/ui/labels.py` und `NumberSpin` ohne `setAlignment`.
+- Vorschlag: rechtsbündig zentral in den Drehfeldklassen.
+- Wirkung beim Kunden: Zahlen untereinander stehen nicht Stelle unter Stelle.
+- Stand: offen RM-737
+
+### FD-15 Operationsdialoge halten das 4er-Raster nicht
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `drill_hole`
+- Kriterium: G2
+- Beleg: Abstand 6 px im Inhalt und in beiden Formularen jedes Operationsdialogs; Fall 040, `surfaces/drill_hole-*.json`
+- Ursache: `app/ui/op_dialog.py` (Formulare und Inhalt ohne gesetzten Abstand, Qt-Vorgabe 6).
+- Vorschlag: `NORMAL` setzen wie im Kalibrierdialog.
+- Wirkung beim Kunden: Der meistbenutzte Dialog wirkt minimal unruhig.
+- Stand: offen RM-737
+
+### FD-16 Zwei Hauptknöpfe in der Auswahlkarte bei gewähltem Merkmal
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `feature.apply`
+- Kriterium: G1
+- Beleg: „Passende Bausteine …“ und „Übernehmen“ beide in Akzentfarbe; Fall 040, `flaeche-sprachen.png`
+- Ursache: `app/ui/selection_operations.py` (`make_primary` am Katalogknopf) neben `panels.py` (*Übernehmen*).
+- Vorschlag: Katalogknopf gewöhnlich, solange das Merkmalfenster *Übernehmen* zeigt.
+- Wirkung beim Kunden: Er muss lesen, welcher Knopf seine Änderung übernimmt.
+- Stand: offen RM-741
+
+### FD-17 Die Suche findet Auf das Bett setzen und Parameter anlegen mit Kundenwörtern nicht vorn
+
+- Art: Verständlichkeit
+- Schwere: mittel
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: 1
+- Beleg: „Druckbett“ bringt *Auf das Bett setzen* auf Rang 7; „Variable“ und „Benutzerparameter“ finden *Parameter anlegen* nicht; Fälle 002 und 003, `function.json#search`
+- Ursache: `app/core/registry/search.py` (Treffer in der Beschreibung gleich gewertet; Kundenwörter fehlen).
+- Vorschlag: Kundenwörter „Druckbett“, „aufs Bett“, „Grundebene“ an `place_on_bed`, „Variable“, „Benutzerparameter“ an *Parameter anlegen*; Rang mit Gegenprobe.
+- Wirkung beim Kunden: Wer „Druckbett“ tippt, bekommt Grundkörper statt der Handlung.
+- Stand: offen RM-737
+
+### FD-18 Fragen in eigenen Worten führen zu Mausbelegungen
+
+- Art: Gestaltung
+- Schwere: Vorschlag
+- Funktion: `finding.action:place_on_bed`
+- Kriterium: I6
+- Beleg: „Wie setze ich das Teil auf die Druckplatte?“ bringt die Handlung auf Rang 7, vorn fünf Mausschemata; „Wie lege ich ein Maß an, das ich mehrfach verwende?“ Rang 9
+- Ursache: `app/core/registry/search.py` (`request_terms` behält Fragewörter).
+- Vorschlag: Frage- und Füllwörter je Sprache aus der Anfrage nehmen.
+- Wirkung beim Kunden: Eine Frage führt zu Mausbelegungen statt zur Handlung.
+- Stand: offen RM-737
+
+### FD-19 Filament und Druck liegt zugeklappt am Ende der Auswahlkarte
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `filament.picker`
+- Kriterium: Z3
+- Beleg: bei gewähltem Körper unter rund 40 Handlungen, erst nach Rollen und Aufklappen; Fälle 040 und 046
+- Ursache: `app/ui/selection_operations.py` (`collapsible(..., open_now=False)`).
+- Vorschlag: Zuweisung oben als Zeile mit Farbe, oder offen, solange kein Filament zugewiesen ist.
+- Wirkung beim Kunden: Mehrfarbdruck ist ein häufiges Ziel, seine Zuweisung liegt am Ende der längsten Liste.
+- Stand: offen RM-747
+
+### FD-20 Die Maßspalte im Objektbaum schneidet krumme Maße ab
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `finding.action:scale_to_fit`
+- Prüfpunkt: 9
+- Beleg: „253,44 × 190,08 × 12,67 mm“ in 117 px bei 152 px Bedarf; Fall 046
+- Ursache: `app/ui/panels.py` (`_size_columns`, Spalte auf `MEASURE_SHARE` gedeckelt).
+- Vorschlag: Spalte nach dem Inhalt der sichtbaren Zeilen statt nach festem Anteil.
+- Wirkung beim Kunden: Ein eingelesenes Modell mit krummen Maßen zeigt das Maß abgeschnitten.
+- Stand: offen RM-748
+
+### FD-21 Jede Fehlermeldung ist ein rohes Systemfenster
+
+- Art: Gestaltung
+- Schwere: mittel
+- Funktion: `finding.action:place_on_bed`
+- Kriterium: Z5
+- Beleg: Meldungen eines `AppError` erscheinen als `QMessageBox` mit Windows-Warnsymbol und Titel „Das hat so nicht funktioniert“; Fälle 028, 029, 046–051
+- Ursache: `app/ui/dialogs.py` (`show_error` baut `QMessageBox` mit `setIcon(Warning)`).
+- Vorschlag: eigener Meldungsdialog im Hausstil — Titel, Ursache, Handlungen als Knöpfe, Symbol aus dem eigenen Satz.
+- Wirkung beim Kunden: Ein Systemfenster mit Warndreieck bricht den Stil; Z5 erlaubt im Kundenweg keines.
+- Stand: offen RM-737
