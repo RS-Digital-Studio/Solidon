@@ -2132,7 +2132,7 @@ def _feature_click(
     depth = float(feature.params["depth"])
     world = (centre[0] + diameter / 2.0, centre[1], centre[2] + depth / 4.0)
     viewport = window.viewport
-    display = viewport._display_of(world)
+    display = viewport.display_of(world)
     interactor = viewport.renderer.widget
     if display is None:
         raise SystemExit("Die Bohrung ließ sich nicht ins Videobild projizieren")
@@ -3706,7 +3706,7 @@ def _world_to_window(window: Any, world: tuple[float, float, float]) -> tuple[fl
     from PySide6.QtCore import QPoint
 
     interactor = window.viewport.renderer.widget
-    display = window.viewport._display_of(world)
+    display = window.viewport.display_of(world)
     if display is None:
         raise SystemExit(f"Der Punkt {world} ließ sich nicht ins Bild projizieren")
     ratio = float(interactor.devicePixelRatioF()) or 1.0
