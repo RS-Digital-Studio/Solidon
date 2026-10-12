@@ -686,6 +686,11 @@ def _g4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     return _result("G4", issues, f"{len(fonts)} Schriften", {"fonts": len(fonts)})
 
 
+#: Die Zustände, die der Prüfstand an jedem Widget aufnimmt
+#: (``function_capture.state_images``); die übrigen nur, wo es sie gibt.
+_TAKEN_STATES: Final = ("rest", "hover", "focus", "pressed")
+
+
 def _g5(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     images = _list(protocol, "state_images")
     if images is None:
@@ -710,8 +715,10 @@ def _g5(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
                     )
                 )
             seen.setdefault(digest, state)
-        if "rest" in states and "focus" not in states:
-            issues.append(Issue(f"{entry.get('widget')}: Fokus nicht aufgenommen", "leicht", "G5"))
+        missing = [state for state in _TAKEN_STATES if state not in states]
+        if missing:
+            # Nicht aufgenommen ist nicht gemessen, kein Fund.
+            absent.append(f"state_images {entry.get('widget')}: {', '.join(missing)}")
     return _settled(
         "G5", issues, absent, f"{len(images)} Widgets", {"widgets": len(images)}, judged=True
     )
@@ -833,12 +840,13 @@ def _z1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
             if "Z1" not in (_spec(protocol).get("criteria") or ())
             else _missing("Z1", "frames")
         )
-    measured = [_number(value) for value in frames.get("drag_ms") or ()]
+    measured = [_number(value) for value in frames.get("raw_drag_ms") or ()]
     delays = [value for value in measured if value is not None]
     factor = _number(frames.get("reference_factor"))
     if not delays or factor is None:
         # Kein Bild nach dem Ziehen oder kein Referenzfaktor: nichts gemessen.
-        return _missing("Z1", "frames.drag_ms", "frames.reference_factor")
+        return _missing("Z1", "frames.raw_drag_ms", "frames.reference_factor")
+    # Roh gemessen, einmal auf die Referenz umgerechnet.
     worst = max(delays) * factor
     notes = (
         [f"{len(measured) - len(delays)} Ereignisse ohne Bild danach"]
@@ -1516,6 +1524,24 @@ def _reading_order_jumps(chain: Sequence[tuple[str, tuple[float, ...]]]) -> list
     return jumps
 
 
+def _within_chain(chain: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Die Kette ohne ihr Schlussglied, wenn es sie schließt oder hinausführt.
+
+    Der Prüfstand drückt Tab, bis ein Widget wiederkommt oder der Fokus den
+    Dialog verlässt, und schreibt dieses Glied mit; ein Sprung dorthin ist
+    das Ende der Kette, kein Rücksprung gegen die Lesefolge.
+    """
+    if not chain:
+        return []
+    last, before = chain[-1], chain[:-1]
+    closes = any(_same_link(last, entry) for entry in before)
+    return list(before) if closes or last.get("inside") is False else list(chain)
+
+
+def _same_link(first: Mapping[str, Any], second: Mapping[str, Any]) -> bool:
+    return first.get("name") == second.get("name") and first.get("rect") == second.get("rect")
+
+
 def _point_10(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
@@ -1526,7 +1552,7 @@ def _point_10(
         return _missing(10, "tab_chain", "names", "focus_return")
     issues = []
     absent = []
-    placed = [(str(entry.get("name")), _rect(entry)) for entry in chain]
+    placed = [(str(entry.get("name")), _rect(entry)) for entry in _within_chain(chain)]
     if any(rect is None for _name, rect in placed):
         absent.append("tab_chain.rect")
     else:
