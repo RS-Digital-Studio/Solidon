@@ -61,6 +61,20 @@ das Konzept.
 
 ## Verlauf
 
+- 12.10.2026, 07:45, Phase 1 gelandet: 0.6.1 (RM-734, RM-735) per
+  `--no-ff` auf main und gepusht; kein Release, keine Version. Review in drei
+  Durchgängen (Berichte örtlich unter
+  `F:\3D Druck\output\review\rm-734-735-2026-10-11\`), achtzehn Funde, keiner
+  schwer, alle behoben (`4fc557327`, `d330cb7f0`, `76faa9be7`; Tabelle im
+  Konzept). Tor gepinnt auf `76faa9be7`: 28 120 bestanden, 137 übersprungen,
+  Exit 0. Offen allein die Abnahme am echten Fenster beim Release (RM-213).
+  Worktree `F:\sl-suche` und Zweig `061/suche-und-palette` werden nach dem
+  Merge abgebaut. **Als Nächstes Phase 2, Schritt 1:** Funktionsdurchgang nach
+  `LIESMICH.md` auf `origin/doc/funktionsdurchgang` ablegen (Konzept nach
+  `konzepte/konzept-funktionsdurchgang-2026-10.md`, Berichte nach
+  `konzepte/nachweise-funktionsdurchgang-2026-10/`, Indexzeile, RM-736 und
+  RM-737 bis RM-749 ins Register — die Nummern sind auf origin/main frei),
+  dann D0, dann Codestruktur Schritt 0.
 - 12.10.2026, 05:45, Phase 1, angehalten auf Wunsch Robert (Wechsel in die
   Desktop-App): Changelog `## 0.6.1` in sechs Sprachen steht (`1543a076f`).
   **Offen vor main, in dieser Reihenfolge:** (1) Review mit `solidon3d-review`
