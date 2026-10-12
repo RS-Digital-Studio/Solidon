@@ -837,6 +837,26 @@ def test_an_invalid_protocol_is_invalid_input(tmp_path: Path) -> None:
     assert _write(out, tmp_path / "state", package="D4") == 1
 
 
+def test_a_language_case_surface_reaches_the_row_of_its_function(tmp_path: Path) -> None:
+    """Ein Sprachfall legt je Fläche ein Protokoll ab; Prüfpunkt 9 sieht es an der Zeile."""
+    out = _run_folder(tmp_path, [sample_protocol()])
+    french = sample_protocol()
+    french["variant"]["language"] = "fr"
+    french["texts"][1]["need_px"] = 140
+    surfaces = out / "cases" / "2" / "surfaces"
+    surfaces.mkdir(parents=True)
+    (surfaces / "drill_hole.json").write_text(json.dumps(french), encoding="utf-8")
+    state = tmp_path / "state"
+    assert _write(out, state, package="D4") == 0
+    line = next(
+        line
+        for line in (state / "abhakliste-d04.md").read_text(encoding="utf-8").splitlines()
+        if line.startswith("| drill_hole")
+    )
+    cells = [cell.strip() for cell in line.strip("|").split("|")]
+    assert cells[3 + 8] == "Fund", cells
+
+
 # --- Wächter: Skill, Startgröße, Satz der groben Vorschau ------------------------
 
 

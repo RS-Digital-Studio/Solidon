@@ -1154,27 +1154,34 @@ def is_red(sample: BrokenSample) -> tuple[bool, str]:
 # --- Bericht ------------------------------------------------------------------
 
 
+#: Wo ein Fall seine Protokolle ablegt: ein Funktionsfall ``function.json``,
+#: ein Sprachfall je Fläche ``surfaces/<zeile>.json`` — beide nach demselben
+#: Schema (``function_checks.PROTOCOL_SCHEMA``), damit Prüfpunkt 9 die Sprachen
+#: an der Zeile sieht.
+PROTOCOL_FILES: Final = ("function.json", "surfaces/*.json")
+
+
 def read_protocols(out: Path) -> tuple[list[dict[str, Any]], list[str]]:
     """Die Messprotokolle eines Laufs in Fallfolge, dazu was an ihnen ungültig ist."""
     protocols: list[dict[str, Any]] = []
     problems: list[str] = []
-    paths = sorted(
-        (out / "cases").glob("*/function.json"),
-        key=lambda path: (
-            int(path.parent.name) if path.parent.name.isdigit() else 0,
-            path.parent.name,
-        ),
+    cases = sorted(
+        (folder for folder in (out / "cases").glob("*") if folder.is_dir()),
+        key=lambda folder: (int(folder.name) if folder.name.isdigit() else 0, folder.name),
     )
-    for path in paths:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as problem:
-            problems.append(f"{path.parent.name}: nicht lesbar ({problem})")
-            continue
-        if not isinstance(data, dict):
-            problems.append(f"{path.parent.name}: kein Protokoll")
-            continue
-        protocols.append(data)
+    for folder in cases:
+        for pattern in PROTOCOL_FILES:
+            for path in sorted(folder.glob(pattern)):
+                where = path.relative_to(out / "cases").as_posix()
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError) as problem:
+                    problems.append(f"{where}: nicht lesbar ({problem})")
+                    continue
+                if not isinstance(data, dict):
+                    problems.append(f"{where}: kein Protokoll")
+                    continue
+                protocols.append(data)
     return protocols, problems
 
 
