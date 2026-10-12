@@ -286,13 +286,13 @@ from app.ui.ai_disclosure import (
     target_for_backend,
 )
 from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
+from app.ui.calibration_dialog import CalibrationDialog
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
 from app.ui.dialogs import (
     AboutDialog,
     ActivationDialog,
     AskDialog,
-    CalibrationDialog,
     DonationDialog,
     KeyDialog,
     ParameterDialog,

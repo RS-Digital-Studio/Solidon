@@ -31,11 +31,9 @@ from PySide6.QtGui import QDesktopServices, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
-    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -81,9 +79,9 @@ from app.core.errors import (
     InstallationDamaged,
     InternalError,
 )
-from app.core.knowledge import calibration, licences, profiles
+from app.core.knowledge import licences
 from app.core.log import get_logger
-from app.core.types import Finding, Profile
+from app.core.types import Finding
 from app.core.units import UNIT_NAMES
 from app.i18n import format_decimal, get_language, tr
 from app.ui.ai_disclosure import (
@@ -100,7 +98,6 @@ from app.ui.labels import (
     demo_days,
     fill_parameter_units,
     localised_value,
-    printer_title,
     trial_days,
     unit_of,
     value_line,
@@ -386,219 +383,6 @@ class AskDialog(QDialog):
     def chosen(self) -> str | None:
         item = self.list.currentItem()
         return str(item.data(Qt.ItemDataRole.UserRole)) if item is not None else None
-
-
-class CalibrationDialog(QDialog):
-    """Gemessene Werte eintragen (Bauplan §28.3).
-
-    Schritt zwei von dreien: den Prüfkörper drucken, ihn messen, und die Zahlen
-    kommen hier hinein. Sie landen im Materialprofil, nicht in einem Modell —
-    und weil Toleranzen im Stapel Verweise sind (§12), folgt danach jedes
-    bestehende Projekt. Der Dialog sagt das, denn es ist der Teil, der Leute
-    überrascht.
-    """
-
-    def __init__(
-        self, material: str, parent: QWidget | None = None, *, process: Profile | None = None
-    ) -> None:
-        super().__init__(parent)
-        self.material = material
-        self.process = process
-        self.setWindowTitle(tr("Material kalibrieren"))
-        self.setMinimumWidth(420)
-
-        current = profiles.material(material)
-        state = (
-            tr("kalibriert") if current.calibrated else tr("Startwert", context="Kalibrierstand")
-        )
-        # Der Titel, den der Kunde überall sonst liest — nicht die Kennung des
-        # Profils („resin — Startwert" über einem „Standardharz").
-        # **Was kalibriert wird, ist die Überschrift** — es stand als erste
-        # Zeile im Fließtext, so laut wie der Satz darunter.
-        heading = QLabel(f"{current.title} — {state}", self)
-        heading.setWordWrap(True)
-        set_level(heading, "section")
-        explanation = QLabel(
-            tr(
-                "Gemessene Werte gehören ins Materialprofil, nicht ins Modell. "
-                "Alle bestehenden Projekte rechnen danach mit den neuen Werten.\n\n"
-                "Gemessen wird an einem gedruckten Prüfkörper: der Toleranz-Testkörper "
-                "aus dem Bausteinkatalog bringt Zapfen und Bohrungen mit gestaffeltem "
-                "Spiel auf zwei steckbare Messleisten."
-            ),
-            self,
-        )
-        explanation.setWordWrap(True)
-
-        self.editors: dict[str, QDoubleSpinBox] = {}
-        self.measured_fields: dict[str, QCheckBox] = {}
-        self._original_values: dict[str, float] = {}
-        self._edited_fields: set[str] = set()
-        form = QFormLayout()
-        form.setHorizontalSpacing(NORMAL)
-        form.setVerticalSpacing(NORMAL)
-        for name, title in (
-            ("clearance", tr("Spiel für Schiebesitz")),
-            ("press", tr("Übermaß für Presssitz")),
-            ("hole_compensation", tr("Lochkorrektur")),
-            ("elephant_foot", tr("Elefantenfuß")),
-            ("shrinkage", tr("Schwindung")),
-        ):
-            editor = NumberSpin(self)
-            # Die Schwindung ist ein Anteil, kein Maß: „0,004" trug deshalb
-            # als Einziges keine Einheit und sagte niemandem etwas. Als
-            # Prozentwert liest sie sich — 0,4 % ist eine Zahl, die man aus
-            # einem Datenblatt kennt.
-            percent = name == "shrinkage"
-            editor.setDecimals(2 if percent else 3)
-            editor.setRange(-100.0 if percent else -1.0, 500.0 if percent else 5.0)
-            editor.setSingleStep(0.1 if percent else 0.01)
-            editor.setSuffix(" %" if percent else " mm")
-            value = float(getattr(current, name))
-            self._original_values[name] = value
-            editor.setValue(value * 100.0 if percent else value)
-            self.editors[name] = editor
-            form.addRow(title, editor)
-
-        for name, title, suffix, maximum in (
-            ("minimum_wall", tr("Mindestwand übernehmen"), " mm", 50.0),
-            ("overhang_angle", tr("Überhangwinkel übernehmen"), " °", 89.9),
-        ):
-            checkbox = QCheckBox(title, self)
-            checkbox.setEnabled(process is not None)
-            editor = NumberSpin(self)
-            editor.setDecimals(2)
-            editor.setRange(0.01, maximum)
-            editor.setSuffix(suffix)
-            editor.setAccessibleName(title)
-            value = getattr(current, name)
-            applies = process is not None and process.has_process_calibration and value is not None
-            default = (
-                process.minimum_wall_thickness
-                if name == "minimum_wall" and process is not None
-                else process.overhang_limit_degrees
-                if process is not None
-                else 1.0
-            )
-            self._original_values[name] = float(value) if applies else default
-            editor.setValue(self._original_values[name])
-            editor.setEnabled(applies)
-            checkbox.setChecked(applies)
-            checkbox.toggled.connect(editor.setEnabled)
-            explanation_text = tr(
-                "Nur aktivieren, wenn Sie die Probe gedruckt und geprüft haben. "
-                "Der Überhangwinkel wird von der Senkrechten aus gemessen. "
-                "Ohne Auswahl bleiben gespeicherte Messwerte unverändert."
-            )
-            for widget in (checkbox, editor):
-                widget.setToolTip(explanation_text)
-                widget.setAccessibleDescription(explanation_text)
-            self.editors[name] = editor
-            self.measured_fields[name] = checkbox
-            form.addRow(checkbox, editor)
-
-        # Erst nach der Vorbelegung beobachten: Qt rundet schon bei setValue.
-        # Auch bewusstes Neueintippen derselben sichtbaren Zahl ist eine Änderung.
-        for name, observed_editor in self.editors.items():
-            observed_editor.valueChanged.connect(
-                lambda _value, field=name: self._edited_fields.add(field)
-            )
-            line = observed_editor.lineEdit()
-            if line is not None:
-                line.textEdited.connect(lambda _text, field=name: self._edited_fields.add(field))
-
-        process_note = QLabel(self)
-        process_note.setWordWrap(True)
-        if process is not None:
-            printer = process.printer
-            # Der Prozess des Verfahrens: Bei Resin gibt es keine Düse und
-            # keine Bahn — dort sind es Schichthöhe und Bildpunkt (RM-071).
-            conditions = (
-                tr("Schichthöhe")
-                + f" {format_decimal(printer.layer_height)} mm · "
-                + tr("Pixelgröße")
-                + f" {format_decimal(printer.pixel_size)} mm"
-                if printer.is_resin
-                else tr("Düse")
-                + f" {format_decimal(printer.nozzle_diameter)} mm · "
-                + tr("Schichthöhe")
-                + f" {format_decimal(printer.layer_height)} mm · "
-                + tr("Bahnbreite")
-                + f" {format_decimal(printer.extrusion_width)} mm"
-            )
-            process_note.setText(
-                tr("Wand und Überhang gelten nur für diese Druckbedingungen:")
-                + "\n"
-                + f"{printer_title(printer)} · {current.title}\n"
-                + conditions
-            )
-        else:
-            process_note.setText(tr("Wählen Sie zuerst den Drucker der Probe im Projekt aus."))
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
-        )
-        button_layout = buttons.layout()
-        assert button_layout is not None
-        button_layout.setSpacing(SPACE)
-        # Die gemessenen Werte zu übernehmen ist die Handlung dieses Fensters.
-        # Den Akzent trug der Knopf schon — Qt vergibt ihn beim ersten
-        # ``show()`` an den ersten autoDefault-Knopf —, aber ohne die
-        # halbfette Schrift daneben (Regel 18).
-        save = buttons.button(QDialogButtonBox.StandardButton.Save)
-        if save is not None:
-            make_primary(save)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-
-        content = QWidget(self)
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(heading)
-        layout.addWidget(explanation)
-        layout.addLayout(form)
-        layout.addWidget(process_note)
-        layout.setSpacing(NORMAL)
-        layout.addStretch(1)
-        scroll = DialogScrollArea(self)
-        scroll.setWidget(content)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
-        outer.setSpacing(NORMAL)
-        outer.addWidget(scroll, 1)
-        outer.addWidget(buttons)
-        for measurement in self.editors.values():
-            wheel_needs_focus(measurement)
-
-    def measured(self) -> calibration.Calibration:
-        """Was eingetragen wurde, als anwendungsfertige Kalibrierung.
-
-        Die Schwindung steht im Feld als Prozentwert und im Profil als Anteil —
-        umgerechnet wird hier, an der einen Stelle, an der beide sich treffen.
-
-        **Nur was eingetragen wurde** (RM-589): Ein unberührtes Feld ist keine
-        Messung. Es behält im Profil seinen Wert, aber nicht das Kennzeichen
-        „gemessen“ — sonst bliebe nach einer reinen Spielmessung der
-        Startwert des Elefantenfußes als gemessen stehen, und der Druckrat
-        nähme dem Slicer seinen Einzug nicht ab. Wand und Überhang zählen, wenn
-        ihr Haken steht.
-        """
-        return calibration.from_measurements(
-            self.material,
-            **{
-                name: self._original_values[name]
-                if name not in self._edited_fields
-                else editor.value() / 100.0
-                if name == "shrinkage"
-                else editor.value()
-                for name, editor in self.editors.items()
-                if (
-                    self.measured_fields[name].isChecked()
-                    if name in self.measured_fields
-                    else name in self._edited_fields
-                )
-            },
-        )
 
 
 class _ParameterValueSpin(NumberSpin):

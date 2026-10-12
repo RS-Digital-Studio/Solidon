@@ -1025,13 +1025,13 @@ def _the_dialogues_of_the_surface() -> list[tuple[str, object]]:
     """
     from app.core.knowledge import profiles
     from app.ui.ai_disclosure import LocalPrivacyDialog
+    from app.ui.calibration_dialog import CalibrationDialog
     from app.ui.catalog import PartCatalog
     from app.ui.changes_dialog import ChangesDialog
     from app.ui.comfy_dialog import ComfySetupDialog
     from app.ui.dialogs import (
         AboutDialog,
         ActivationDialog,
-        CalibrationDialog,
         DonationDialog,
         KeyDialog,
         OfflineActivationDialog,
@@ -2637,7 +2637,7 @@ def test_every_number_field_stands_right_aligned(qt_app: QApplication) -> None:
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QDoubleSpinBox, QSpinBox
 
-    from app.ui.dialogs import CalibrationDialog
+    from app.ui.calibration_dialog import CalibrationDialog
     from app.ui.labels import BoundedLengthSpin, BoundedSpin, LengthSpin, NumberSpin
     from app.ui.theme import apply_theme, current_theme
     from tools.function_capture import layout_entries

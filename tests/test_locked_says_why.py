@@ -33,6 +33,7 @@ from app.core.knowledge.profiles import DEFAULT_MATERIAL
 from app.core.registry import REGISTRY
 from app.core.types import MaterialSlot
 from app.ui.ai_disclosure import AiDisclosureDialog, AiDisclosureTarget, LocalPrivacyDialog
+from app.ui.calibration_dialog import CalibrationDialog
 from app.ui.catalog import PartCatalog
 from app.ui.changes_dialog import ChangesDialog
 from app.ui.comfy_dialog import ComfySetupDialog
@@ -40,7 +41,6 @@ from app.ui.dialogs import (
     AboutDialog,
     ActivationDialog,
     AskDialog,
-    CalibrationDialog,
     DonationDialog,
     KeyDialog,
     OfflineActivationDialog,
