@@ -21,6 +21,9 @@ Szene aus ``tests/data/function_scenes.toml`` (Bauplan D0 §2.5). Eine Zeile,
 die keinem Paket zugeordnet werden kann, und eine Operation, deren Anforderung
 keine Szene hat, sind Fehler: Sie halten die Liste an, statt still zu fehlen.
 
+Den Quelltext der Oberfläche liest ``tools/function_scan.py``, den Szenenkatalog
+liest, baut und prüft ``tools/function_scenes.py``.
+
     python tools/function_list.py --paket D4 --format md
     python tools/function_list.py --check
     python tools/function_list.py --szenen --out <ordner außerhalb des Baums> [--schwer]
@@ -31,11 +34,11 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 import sys
 import tomllib
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import asdict, dataclass, field, replace
-from functools import cache
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -43,14 +46,27 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.function_scan import UiScan, scan_ui, statements  # noqa: E402
+from tools.function_scenes import (  # noqa: E402
+    DATA,
+    EXACT,
+    MESH,
+    FunctionListError,
+    Scene,
+    load_scenes,
+    registry,
+    save_scenes,
+    validate_scenes,
+)
+
 if TYPE_CHECKING:
     from app.core.registry import OperationSpec, Registry
-    from app.core.scene.evaluate import EvaluationResult
-    from app.core.scene.project import Project
 
 UI: Final = ROOT / "app" / "ui"
-DATA: Final = ROOT / "tests" / "data"
-SCENES: Final = DATA / "function_scenes.toml"
+#: Klassen, deren Module eine Suche unter ``app/ui`` finden muss: das Hauptfenster, die
+#: Ansicht und ein Dialog. Fehlt eines, prüft die Liste nichts — eine Zählprobe bliebe
+#: dabei grün, auch wenn gerade die größte Datei fehlt.
+UI_CLASSES: Final[tuple[str, ...]] = ("MainWindow", "Viewport", "SettingsDialog")
 ROW_SPECS: Final = DATA / "function_rows"
 
 PACKAGES: Final[tuple[str, ...]] = tuple(f"D{number}" for number in range(1, 13))
@@ -65,7 +81,16 @@ ROW_SOURCES: Final[tuple[str, ...]] = (
     "verlauf",
     "fensteraktion",
     "startablauf",
+    "werkzeugzeile",
+    "kontextmenue",
+    "einstellungen",
+    "meldungsfenster",
 )
+
+#: Quellen, deren Zeilen heute kein Ziel im Wortschatz haben (Bericht D0-L, „braucht
+#: W“): rohe Meldungsfenster ohne Klasse und Abschnitte der Einstellungen. Jede andere
+#: Zeile trägt ein Ziel.
+SOURCES_WITHOUT_TARGET: Final[frozenset[str]] = frozenset({"meldungsfenster", "einstellungen"})
 
 #: Die Zeile, die für alle Kacheln des Bausteinkatalogs steht (Konzept §3).
 CATALOGUE_ROW: Final = "part:*"
@@ -185,7 +210,7 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "header": ("D12", "leer"),
     "statusbar": ("D12", "leer"),
     "parameters": ("D10", "leer"),
-    "parameters.first": ("D10", "leer"),
+    "parameters.first": ("D10", "parameter"),
     "report": ("D8", "koerper:1"),
     "report.action": ("D8", "befund"),
     # Der letzte Meter steht im Bericht und gehört zur Übergabe an den Slicer.
@@ -259,6 +284,8 @@ COMMAND_PACKAGES: Final[dict[str, str]] = {
     "Varianten erzeugen …": "D2",
     "Gegenstücke setzen …": "D10",
     "Chat einrichten …": "D12",
+    # Konzept §6 nennt die Beispiele bei D1 (Datei und Projekt).
+    "Beispiele": "D1",
 }
 
 #: Fensteraktionen in der Auswahlkarte (``SelectionOperationsPanel.add_window_action``):
@@ -269,19 +296,74 @@ WINDOW_ACTION_PACKAGES: Final[dict[str, str]] = {
     "edit.auto_split": "D8",
 }
 
-#: Bedienflächen des Startablaufs, die vor dem Hauptfenster stehen und dann die
-#: Anwendung beenden: Kennung → Paket, die Funktion in ``app/ui``, die sie zeigt,
-#: und der Name in ``app/ui/app.py``, der sie ruft. „Demo abgelaufen“ (``over``)
-#: startet die Anwendung nicht — eine eigene Zeile und kein Lauf je Funktion.
-STARTUP_SURFACES: Final[dict[str, tuple[str, str, str]]] = {
-    "startup.expired_demo": ("D12", "app.ui.dialogs", "show_expired_demo"),
+#: Die Werkzeuge der Zeile unter der Ansicht (``….tools.add("<schlüssel>", …)``) nach
+#: Paket. Bewegen dient Verschieben, Drehen und Skalieren (D3); Teilen, Analyse und
+#: Schichten (Schichtanalyse, §22) sind Druckvorbereitung (D8); Schnitt, Messen und
+#: Explosion sind Ansicht (D11).
+TOOL_PACKAGES: Final[dict[str, str]] = {
+    "section": "D11",
+    "measure": "D11",
+    "transform": "D3",
+    "analysis": "D8",
+    "layers": "D8",
+    "explode": "D11",
+    "split": "D8",
 }
 
-# --- Anforderung und Szene (Bauplan D0 §2.5) ----------------------------------
+#: Benannte Kontextaktionen von Baum und Parameterleiste (W's Objektnamen) nach
+#: Paket und Anforderung. *Auf dieser Fläche zeichnen* führt in den Zeichenmodus (D7).
+CONTEXT_PACKAGES: Final[dict[str, tuple[str, str]]] = {
+    # *Diesen Schritt ändern* steht an einem erzeugten Merkmal (panels: Baumkontext).
+    "tree.step": ("D11", "merkmal:hole"),
+    "tree.sketch": ("D7", "merkmal:face"),
+    "tree.visibility": ("D11", "koerper:1"),
+    "tree.isolate": ("D11", "koerper:2"),
+    "parameters.edit": ("D10", "parameter"),
+}
 
-EXACT: Final = "exakt"
-MESH: Final = "netz"
-KERNELS: Final[tuple[str, ...]] = (EXACT, MESH)
+SETTINGS_PACKAGE: Final = "D12"
+
+
+#: Funktionen, die ein rohes Meldungsfenster bauen, beim Namen (Zeile ``meldung:<name>``;
+#: eine Kennung nennt die Sache, nie ihr Modul), nach Paket und Anforderung. Konzept §6:
+#: Wiederherstellen und Speicherfrage in D1, die Löschnachfrage im Verlauf (Ausnahme zu
+#: Regel 19) in D11.
+RAW_WINDOW_PACKAGES: Final[dict[str, tuple[str, str]]] = {
+    "open_link": ("D12", "leer"),
+    "show_expired_demo": ("D12", "start"),
+    "show_error": ("D12", "leer"),
+    "show_details": ("D12", "leer"),
+    "confirm_unsaved": ("D1", "koerper:1"),
+    # Die Vorabfrage mit Befunden vor Export und Übergabe (confirm_export,
+    # confirm_handover); der Export ist D1, die Übergabe prüft D9 am Druckdialog.
+    "_go_on_despite": ("D1", "koerper:1"),
+    "confirm_generation_loss": ("D2", "leer"),
+    "confirm_discard": ("D11", "koerper:1"),
+    "_save_request": ("D12", "leer"),
+    "_open_page": ("D12", "leer"),
+    "_import_answer": ("D12", "leer"),
+    "_remember": ("D12", "leer"),
+    "_online_completed": ("D12", "leer"),
+    "_deactivation_completed": ("D12", "leer"),
+    "_pick_colour": ("D10", "koerper:1"),
+    "_replacement_slot": ("D10", "koerper:1"),
+    "_choose_address": ("D12", "leer"),
+    "_show_details": ("D12", "leer"),
+    "action_import_url": ("D1", "leer"),
+    "remove_history_operations": ("D11", "koerper:1"),
+    "_assign_inventory_spool": ("D9", "koerper:1"),
+    "action_counterpart": ("D10", "koerper:2"),
+    "_ask_recovery": ("D1", "start"),
+    "_choose": ("D9", "koerper:1"),
+    "_show_slicer_output": ("D9", "koerper:1"),
+    "change_constraint_value": ("D7", "leer"),
+}
+#: Kennungen, die nicht ``meldung:<name>`` heißen. „Demo abgelaufen“ (``over``)
+#: startet die Anwendung nicht — eine eigene Zeile des Startablaufs, kein Lauf je
+#: Funktion; U liest sie unter diesem Namen.
+RAW_WINDOW_IDS: Final[dict[str, str]] = {"show_expired_demo": "startup.expired_demo"}
+
+# --- Anforderung und Szene (Bauplan D0 §2.5) ----------------------------------
 
 #: Merkmalsarten, die es nur am Netz gibt: Ein exakter Körper ist immer
 #: geschlossen, eine offene Randkante hat er nicht.
@@ -304,6 +386,11 @@ REQUIREMENT_SCENES: Final[dict[str, str]] = {
     "zustand:cavity": "hohlraum.{kernel}",
     "baustein": "baustein.{kernel}",
     "befund": "unter_dem_bett.netz",
+    # Netzoperationen (Glätten, Ausdünnen, Formen, Skelett) an einem fein vernetzten
+    # Körper statt an zwölf Dreiecken.
+    "netzkoerper": "kugel.netz",
+    # Parameterleiste und ihr Kontextmenü brauchen ein Maß im Projekt.
+    "parameter": "parameter.{kernel}",
     # Die Handlungen einer Textur gibt es nur an einem Schritt *Textur aufbringen*,
     # und der macht aus jedem Körper ein Netz.
     "textur": "merkmal.pattern.netz",
@@ -313,20 +400,6 @@ REQUIREMENT_SCENES: Final[dict[str, str]] = {
 }
 FEATURE_REQUIREMENT: Final = "merkmal:"
 FEATURE_SCENE: Final = "merkmal.{kind}.{kernel}"
-
-#: Was eine Szene zusagen darf (``promises``).
-PROMISE_KEYS: Final[frozenset[str]] = frozenset(
-    {"objects", "kinds", "body", "findings", "stops", "triangles_over", "seconds_over"}
-)
-BODY_STATES: Final[tuple[str, ...]] = ("closed", "open", "parts", "cavity")
-
-
-class FunctionListError(Exception):
-    """Die Liste lässt sich nicht vollständig zuordnen — mit allen Fundstellen."""
-
-    def __init__(self, problems: Sequence[str]) -> None:
-        super().__init__("\n".join(problems))
-        self.problems = tuple(problems)
 
 
 @dataclass(frozen=True, slots=True)
@@ -352,181 +425,37 @@ class Row:
     """Die Zeilenspezifikation aus ``tests/data/function_rows/`` — leer heißt ungeprüft."""
 
 
-# --- Dialogklassen ---------------------------------------------------------------
-
-#: Qt-Klassen, deren Unterklassen ein eigenes Fenster sind. ``QMessageBox`` und
-#: die übrigen Standarddialoge erben von ``QDialog``; wer von ihnen ableitet,
-#: baut ebenfalls einen Dialog.
-QT_WINDOW_BASES: Final[frozenset[str]] = frozenset(
-    {
-        "QDialog",
-        "QMainWindow",
-        "QMessageBox",
-        "QFileDialog",
-        "QInputDialog",
-        "QColorDialog",
-        "QFontDialog",
-        "QProgressDialog",
-        "QErrorMessage",
-        "QWizard",
-    }
-)
-
-
-def _base_names(node: ast.ClassDef) -> tuple[str, ...]:
-    names: list[str] = []
-    for base in node.bases:
-        if isinstance(base, ast.Name):
-            names.append(base.id)
-        elif isinstance(base, ast.Attribute):
-            names.append(base.attr)
-    return tuple(names)
-
-
-def _statements(tree: ast.Module) -> Iterator[ast.stmt]:
-    """Jede Anweisung, auch in Funktionen, Klassen, Verzweigungen und Ausnahmen.
-
-    Eine Klasse ist immer eine Anweisung; Ausdrücke brauchen ihre Suche nicht
-    zu sehen, und ohne sie ist der Gang ein Bruchteil von ``ast.walk``.
-    """
-    pending: list[ast.stmt] = list(tree.body)
-    while pending:
-        node = pending.pop()
-        yield node
-        for name in ("body", "orelse", "finalbody"):
-            pending.extend(
-                child for child in getattr(node, name, ()) if isinstance(child, ast.stmt)
-            )
-        for handler in getattr(node, "handlers", ()):
-            pending.extend(handler.body)
-        for case in getattr(node, "cases", ()):
-            pending.extend(case.body)
-
-
-def _texts(node: ast.AST) -> tuple[str, ...]:
-    """Die Zeichenketten, die ein Ausdruck ergeben kann: eine Konstante oder beide
-    Zweige eines ``a if b else c`` (``"history.up" if upwards else "history.down"``)."""
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return (node.value,)
-    if isinstance(node, ast.IfExp):
-        return (*_texts(node.body), *_texts(node.orelse))
-    return ()
-
-
-def _history_names(node: ast.AST) -> tuple[str, ...]:
-    """``x.setObjectName("history.<name>")`` → ``(<name>,)``; sonst leer."""
-    if (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "setObjectName"
-        and node.args
-    ):
-        return tuple(
-            text.removeprefix("history.")
-            for text in _texts(node.args[0])
-            if text.startswith("history.")
-        )
-    return ()
-
-
-def _window_action(node: ast.AST) -> str | None:
-    """``….add_window_action("edit.auto_split", …)`` → ``edit.auto_split``, sonst ``None``."""
-    if (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "add_window_action"
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and isinstance(node.args[0].value, str)
-    ):
-        return node.args[0].value
-    return None
-
-
-@dataclass(frozen=True, slots=True)
-class UiScan:
-    """Was ein Gang durch die Quelltexte der Oberfläche findet."""
-
-    classes: Mapping[str, tuple[str, ...]]
-    """Klassenname → Module, für jede Dialog- oder Fensterklasse."""
-    history: tuple[str, ...]
-    """Die Einträge des Kontextmenüs im Verlauf (Objektnamen ``history.<x>``)."""
-    window_actions: tuple[str, ...] = ()
-    """Die Kennungen, unter denen ``add_window_action`` Befehle in die Auswahlkarte hängt."""
-
-
-def scan_ui(sources: Mapping[str, str]) -> UiScan:
-    """Ein Gang je Modul: Dialog- und Fensterklassen und die Verlaufseinträge.
-
-    ``sources`` ordnet einen Modulpfad seinem Quelltext zu. Basen werden über
-    die eigenen Klassen aufgelöst, gleich in welchem Modul sie stehen, auch
-    verschachtelte Klassen zählen.
-    """
-    bases: dict[str, set[tuple[str, ...]]] = {}
-    modules: dict[str, list[str]] = {}
-    history: set[str] = set()
-    window_actions: set[str] = set()
-    for module, text in sources.items():
-        tree = ast.parse(text, filename=module)
-        for node in _statements(tree):
-            if isinstance(node, ast.ClassDef):
-                bases.setdefault(node.name, set()).add(_base_names(node))
-                modules.setdefault(node.name, []).append(module)
-        # Ausdrücke nur dort durchgehen, wo ein gesuchter Aufruf überhaupt steht.
-        if "history." in text or "add_window_action(" in text:
-            for expression in ast.walk(tree):
-                history.update(_history_names(expression))
-                if (key := _window_action(expression)) is not None:
-                    window_actions.add(key)
-
-    @cache
-    def is_window(name: str, seen: frozenset[str] = frozenset()) -> bool:
-        if name in QT_WINDOW_BASES:
-            return True
-        if name in seen or name not in bases:
-            return False
-        return any(is_window(base, seen | {name}) for variant in bases[name] for base in variant)
-
-    classes = {name: tuple(sorted(modules[name])) for name in bases if is_window(name)}
-    return UiScan(
-        classes=classes,
-        history=tuple(sorted(history)),
-        window_actions=tuple(sorted(window_actions)),
-    )
-
-
-def window_classes_in(sources: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
-    """Klassenname → Module, für jede Klasse, die (transitiv) einen Dialog oder ein Fenster baut."""
-    return dict(scan_ui(sources).classes)
-
-
-def history_entries(sources: Mapping[str, str]) -> tuple[str, ...]:
-    """Die Objektnamen ``history.<x>`` aus ``setObjectName``-Aufrufen — die Einträge
-    des Kontextmenüs im Verlauf, unter denen Anleitung und Prüfstand sie finden."""
-    return scan_ui(sources).history
-
-
 def ui_sources(root: Path = UI) -> dict[str, str]:
     """Jede Python-Datei unter ``app/ui``, rekursiv — auch in Unterpaketen."""
     found = {
         path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8")
         for path in sorted(root.rglob("*.py"))
     }
-    if len(found) < 50:
-        raise FunctionListError([f"nur {len(found)} Module unter {root} — dann prüft das nichts"])
+    _require_definitions(found, UI_CLASSES, root)
     return found
 
 
+def missing_definitions(sources: Mapping[str, str], names: Iterable[str]) -> list[str]:
+    """Die genannten Klassen, die in keinem der Quelltexte definiert sind."""
+    defined: set[str] = set()
+    for text in sources.values():
+        defined.update(re.findall(r"^[ \t]*class[ \t]+(\w+)", text, flags=re.MULTILINE))
+    return [name for name in names if name not in defined]
+
+
+def _require_definitions(sources: Mapping[str, str], names: Iterable[str], root: Path) -> None:
+    """Hält an, wenn die Suche unter ``root`` das Modul einer der Klassen nicht fand."""
+    if missing := missing_definitions(sources, names):
+        raise FunctionListError(
+            [
+                f"{name}: keine Definition unter {root} — die Suche fand ihr Modul nicht, "
+                "dann prüft die Liste nichts"
+                for name in missing
+            ]
+        )
+
+
 # --- Operationen -----------------------------------------------------------------
-
-
-def registry() -> Registry:
-    """Das geladene Register der Anwendung."""
-    from app.core.bootstrap import load_operations
-    from app.core.registry import REGISTRY
-
-    load_operations()
-    return REGISTRY
 
 
 def package_of_operation(spec: OperationSpec) -> str:
@@ -570,6 +499,8 @@ def requirement_of(spec: OperationSpec) -> str:
         return f"{FEATURE_REQUIREMENT}{spec.applies_to[0]}"
     if spec.name in _edge_operations():
         return "kante"
+    if spec.category == "mesh" and spec.requires_kind != "brep" and needed == 1:
+        return "netzkoerper"
     return "koerper:1"
 
 
@@ -705,38 +636,187 @@ def surface_of(name: str) -> tuple[str, str] | None:
     return None
 
 
-def finding_action_ids() -> tuple[str, ...]:
-    """Die Handlungen, die der Prüfbericht an Befunden anbietet (``panels.FINDING_ACTIONS``),
-    dazu *Eingabe korrigieren*, das jeder Befund aus einer Operation trägt (``actions_for``)."""
-    from app.core.errors import CORRECT_INPUT
+KERNEL: Final = ROOT / "app" / "core"
+#: Klassen, deren Module die Suche nach Handlungen unter ``app/core`` finden muss: die
+#: Handlung selbst, der Verlauf und das Register.
+KERNEL_CLASSES: Final[tuple[str, ...]] = ("Action", "History", "Registry")
+
+#: Handler des Fensters, die nur ein Fehlerdialog anbietet — nie ein Befund im Bericht.
+#: Sie sind der Fehlerweg (Prüfpunkt 7) der Zeilen, deren Fehler sie tragen, und
+#: gehören dem Paket ihres Bereichs (Konzept §6). Ein Handler, der weder hier steht
+#: noch an einem Befund ankommen kann, hält die Liste an.
+ERROR_DIALOG_ACTIONS: Final[dict[str, str]] = {
+    # Aktivierung: Lizenzfehler wirft ``activation.require`` vor jeder Auswertung.
+    "activate_offline": "D12",
+    "activate_online": "D12",
+    "buy_licence": "D12",
+    "enter_licence_key": "D12",
+    "deactivate_device": "D12",
+    # Chat (``backends.llm``), Update (``updates``), Fehlerbericht.
+    "set_up_chat": "D12",
+    "try_key_again": "D12",
+    "open_download_page": "D12",
+    "report_error": "D12",
+    # Speichern: Erneut und Anderer Ort gibt es nur nach einem gescheiterten
+    # Schreiben; *Im Browser öffnen* nur beim Laden aus dem Netz.
+    "save_elsewhere": "D1",
+    "retry": "D1",
+    "open_in_browser": "D1",
+    # Übergabe an den Slicer (``export.handover``, ``slice.gcode``).
+    "check_profile": "D9",
+    "choose_slicer": "D9",
+    "export_only": "D9",
+    "show_output": "D9",
+    "open_settings": "D9",
+    # Eine laufende Teilung und das Ausschalten mit abhängigen Schritten im Verlauf.
+    "cancel_split": "D8",
+    "suppress_along": "D11",
+}
+
+#: Befundhandlungen ohne Startszene, je mit dem Grund. Jede andere beginnt in einer
+#: Szene, deren Befund sie trägt (``promises.actions``); der Test hält beide Mengen
+#: gegeneinander.
+FINDING_ACTIONS_WITHOUT_SCENE: Final[dict[str, str]] = {
+    "adopt_printer": "Befund beim Öffnen eines Projekts, das einen hier nicht eingerichteten "
+    "Drucker mitbringt (profiles.carried_findings); eine Szene aus Operationen trägt keinen.",
+    "calibrate_material": "Druckrat an einer Szene mit Passungen (settings.uncalibrated_material); "
+    "das Szenenformat kennt keine Passungen.",
+    "change_creating_step": "Absage des Deckelscharniers an seinem Erzeugerschritt "
+    "(geom.lid_hinge); kein erprobtes Rezept löst sie aus.",
+    "check_updates": "Befund parts.missing: ein Projekt mit einem Baustein, den diese "
+    "Installation nicht hat — History.apply nimmt die unbekannte Operation nicht an.",
+    "choose_another_file": "Absage beim Lesen einer Datei; load_step an einer falschen Datei "
+    "meldet sich als Eingabefehler (correct_input), nicht mit dieser Handlung.",
+    "decimate_and_retry": "Zu feines Verfeinern an einem Netz, das sich vorher ausdünnen lässt "
+    "(mesh_ops._thinning); an den erprobten Körpern bot die Absage nur use_reachable.",
+    "export_as_mesh": "Befund export.needs_solid entsteht beim Export nach STEP, nicht in der "
+    "Auswertung.",
+    "generate_again": "Befund an einem KI-erzeugten Schritt (evaluate, Generator); braucht "
+    "ComfyUI.",
+    "give_thickness": "Befund repair.no_thickness an einer Fläche ohne Dicke; der Korpus hat "
+    "kein solches Netz.",
+    "install": "Absage ohne OpenCASCADE (BRepUnavailable); die Prüfumgebung hat den Kern.",
+    "keep_saved_parts": "Befund parts.own_changed: eigene Bausteine im Nutzerordner, die sich "
+    "seit dem Speichern geändert haben.",
+    "mesh_and_retry": "Befund edges.exact_group_skipped (Rundung an einem Teil der Kanten); "
+    "an den erprobten exakten Quadern gelang jede Rundung.",
+    "mesh_to_exact": "Befund export.needs_solid entsteht beim Export nach STEP.",
+    "reactivate_step": "Befund an einem ausgeschalteten Schritt; das Szenenformat schaltet "
+    "keinen Schritt aus.",
+    "release_protection": "Befund split.blocked_by_protection entsteht bei Automatisch "
+    "teilen, einem Fensterablauf ohne Operation.",
+    "resize_the_widening": "Befund resize.widening_swallowed; eine gebohrte Aufweitung "
+    "erkennt die Auswertung als zweite Bohrung, aufgeweitet entsteht "
+    "resize.cavity_sections_kept.",
+    "show_details": "Befunde export.needs_solid und split.* entstehen bei Export und "
+    "Automatisch teilen.",
+    "show_feature": "Befund an einer Passung ohne ihr Merkmal (scene.fits); das Szenenformat "
+    "kennt keine Passungen.",
+    "show_history": "Befunde evaluate.unknown_operation, fit.missing_feature und "
+    "agent.undo_sweeps: alte Datei, Passungen oder Agent.",
+    "show_layers": "Befund perceive.voids_unreadable; kein erprobtes Rezept erzeugt "
+    "unlesbare Hohlräume.",
+    "show_step_values": "Befund evaluate.unknown_operation an einem Schritt, den diese "
+    "Version nicht kennt; History.apply nimmt ihn nicht an.",
+    "sketch.pick_plane": "Absage an einer unlesbaren gespeicherten Zeichenebene; ein Rezept "
+    "schreibt keine kaputte Ebene.",
+    "split_along_line": "Befunde split.* entstehen bei Automatisch teilen, einem Fensterablauf.",
+    "split_and_retry": "Absage, wenn ein Körper nur in Teilen auf das Bett passt "
+    "(prepare_ops); an den erprobten Körpern passte das Ganze oder keines.",
+    "stop_inserting": "Befund history.inserting entsteht in der Sitzung bei gesetzter "
+    "Einfügemarke (Prüfpunkt 15), nicht in einer Szene.",
+    "suppress_step": "Befund an einem ausgeschalteten Schritt; das Szenenformat schaltet "
+    "keinen Schritt aus.",
+    "take_back_stroke": "Absage, wenn eine Formsitzung das Netz aufreißt; braucht "
+    "aufgezeichnete Züge.",
+    "use_voxel_stage": "Absage der Booleschen Rückfallkette vor der Voxelstufe; kein "
+    "erprobtes Rezept erreicht sie.",
+}
+
+
+def kernel_action_ids(root: Path = KERNEL) -> frozenset[str]:
+    """Jede Handlung, die der Kern einem Befund oder Fehler mitgeben kann: jedes
+    ``Action("<id>", …)`` und ``Action(id="<id>", …)`` unter ``app/core`` (rekursiv)."""
+    found: set[str] = set()
+    texts: dict[str, str] = {}
+    for path in sorted(root.rglob("*.py")):
+        text = texts[path.as_posix()] = path.read_text(encoding="utf-8")
+        if "Action(" not in text:
+            continue
+        for node in ast.walk(ast.parse(text, filename=str(path))):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "Action"
+            ):
+                continue
+            first = node.args[0] if node.args else None
+            named = next((item.value for item in node.keywords if item.arg == "id"), None)
+            for value in (first, named):
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    found.add(value.value)
+    _require_definitions(texts, KERNEL_CLASSES, root)
+    return frozenset(found)
+
+
+def report_handlers(sources: Mapping[str, str] | None = None) -> frozenset[str]:
+    """Die Handlungen, die das Hauptfenster ausführt: die Schlüssel des Wörterbuchs in
+    ``MainWindow.error_handlers``, ohne Fenster gelesen. Was dort fehlt, bietet weder
+    der Prüfbericht noch ein Fehlerdialog an (``panels.handled_actions``)."""
+    found: set[str] = set()
+    for module, text in (sources if sources is not None else ui_sources()).items():
+        if "def error_handlers" not in text:
+            continue
+        for node in statements(ast.parse(text, filename=module)):
+            if isinstance(node, ast.ClassDef) and node.name == "MainWindow":
+                for method in node.body:
+                    if isinstance(method, ast.FunctionDef) and method.name == "error_handlers":
+                        for inner in ast.walk(method):
+                            if isinstance(inner, ast.Dict):
+                                found.update(
+                                    key.value
+                                    for key in inner.keys
+                                    if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                                )
+    if not found:
+        raise FunctionListError(["MainWindow.error_handlers nicht gefunden"])
+    return frozenset(found)
+
+
+def finding_action_ids(sources: Mapping[str, str] | None = None) -> tuple[str, ...]:
+    """Die Handlungen an Befunden: was ``panels.FINDING_ACTIONS`` nennt und was Befunde
+    und Fehler des Kerns mitbringen — soweit das Fenster sie ausführt und sie nicht nur
+    ein Fehlerdialog anbietet (:data:`ERROR_DIALOG_ACTIONS`).
+
+    Ein Handler, der keines davon ist, und ein Eintrag der Fehlerdialogtabelle ohne
+    Handler halten an.
+    """
     from app.ui.panels import FINDING_ACTIONS
 
-    found = {action.id for actions in FINDING_ACTIONS.values() for action in actions}
-    found.add(CORRECT_INPUT.id)
-    return tuple(sorted(found))
-
-
-def offered_at(code: str) -> frozenset[str]:
-    """Die Handlungen, die der Prüfbericht an einem Befund dieser Kennung zeigt.
-
-    Gefragt wird ``panels.actions_for`` selbst — dieselbe Auskunft wie im
-    Bericht, samt der Regel für Befunde aus einer Operation (``op.…``).
-    """
-    from app.core.types import Finding
-    from app.ui.panels import actions_for
-
-    probe = Finding(code=code, severity="warning", message="", object_id="obj_1", op_id=1)
-    return frozenset(action.id for action in actions_for(probe))
+    table = {action.id for actions in FINDING_ACTIONS.values() for action in actions}
+    handled = report_handlers(sources)
+    known = kernel_action_ids() | table
+    dialog_only = set(ERROR_DIALOG_ACTIONS)
+    problems = [
+        f"{name}: Handler des Fensters ohne Einordnung — Befundhandlung des Kerns oder "
+        "ERROR_DIALOG_ACTIONS"
+        for name in sorted(handled - known - dialog_only)
+    ]
+    problems += [
+        f"{name}: steht in ERROR_DIALOG_ACTIONS, das Fenster führt ihn nicht aus"
+        for name in sorted(dialog_only - handled)
+    ]
+    if problems:
+        raise FunctionListError(problems)
+    return tuple(sorted((known & handled) - dialog_only))
 
 
 def _scene_offering(action: str, scenes: Mapping[str, Scene]) -> str:
-    """Die erste Szene, deren zugesagter Befund diese Handlung anbietet — eine
-    leichte vor einer schweren."""
+    """Die erste Szene, die zusagt, dass ihr Bericht diese Handlung anbietet
+    (``promises.actions``) — eine leichte vor einer schweren."""
     for heavy in (False, True):
         for key, scene in scenes.items():
-            if scene.heavy != heavy:
-                continue
-            if any(action in offered_at(code) for code in scene.promises.get("findings", ())):
+            if scene.heavy == heavy and action in scene.promises.get("actions", {}):
                 return key
     return ""
 
@@ -757,11 +837,8 @@ def surface_rows(
     named.append((RECENT_ROW, "wortschatz"))
     named += [(f"history:{entry}", "verlauf") for entry in history]
     named += [(f"finding.action:{entry}", "befundhandlung") for entry in actions]
-    # *Modell nachbauen* ist keine Operation, sondern eine Hauptaktion der
-    # Auswahlkarte (``selection_operations.REBUILD``, ein Dialog).
-    named.append((REBUILD_ROW, "merkmalfenster"))
     problems: list[str] = []
-    rows: dict[str, Row] = {}
+    rows: list[Row] = []
     for name, origin in named:
         found = surface_of(name)
         if found is None:
@@ -775,20 +852,20 @@ def surface_rows(
             start = _scene_offering(name.removeprefix("finding.action:"), scenes)
         else:
             start = _start_scene(requirement, kernel_of(None, requirement), scenes)
-        if name in rows:
-            continue
-        rows[name] = Row(
-            id=name,
-            kind="bedienflaeche",
-            source=origin,
-            package=package,
-            requirement=requirement,
-            start_scene=start,
-            target=name,
+        rows.append(
+            Row(
+                id=name,
+                kind="bedienflaeche",
+                source=origin,
+                package=package,
+                requirement=requirement,
+                start_scene=start,
+                target=name,
+            )
         )
     if problems:
         raise FunctionListError(problems)
-    return list(rows.values())
+    return rows
 
 
 #: Schlüsselfamilien des Merkmalfensters ohne eigene Operation: Paket und Anforderung.
@@ -812,11 +889,8 @@ def feature_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
     ``<op>.<mode>``) — die Schlüssel, die ``FeatureAction.key`` trägt. Eine
     Handlung mit eigener Operation steht als deren Zeile in der Liste.
     """
-    from app.core.perceive.actions import (
-        EDGE_VARIANT_KEYS,
-        PART_ACTION_KEYS,
-        TEXTURE_ACTION_KEYS,
-    )
+    from app.core.guides import action_key, action_target
+    from app.core.perceive.actions import PART_ACTION_KEYS, TEXTURE_ACTION_KEYS, edge_actions
 
     problems: list[str] = []
     rows: list[Row] = []
@@ -841,20 +915,20 @@ def feature_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
                 target=f"feature:{key}",
             )
         )
-    for key in EDGE_VARIANT_KEYS:
-        operation = key.split(".")[0]
-        if not source.has(operation):
-            problems.append(f"edge:{key}: Operation {operation!r} fehlt im Register")
+    # Die Zeilen an einer angeklickten Kante, wie das Merkmalfenster sie benennt
+    # (``guides.action_target``); die mit eigener Operation stehen als deren Zeile.
+    for action in edge_actions("probe"):
+        if action_key(action) == action.op or action.op is None:
             continue
         rows.append(
             Row(
-                id=f"edge:{key}",
+                id=action_target(action),
                 kind="bedienflaeche",
                 source="merkmalfenster",
-                package=package_of_operation(source.get(operation)),
+                package=package_of_operation(source.get(action.op)),
                 requirement="kante",
                 start_scene=_start_scene("kante", EXACT, scenes),
-                target=f"edge:{key}",
+                target=action_target(action),
             )
         )
     if problems:
@@ -914,6 +988,15 @@ def menubar_of(window: Any) -> list[MenuEntry]:
     Gerufen im Prozess, der das Fenster schon hat (Prüfstand, Fenstertest); die
     Liste selbst baut keines.
     """
+    from app.i18n import SOURCE_LANGUAGE, get_language
+
+    if get_language() != SOURCE_LANGUAGE:
+        raise FunctionListError(
+            [
+                f"menubar_of: Sprache {get_language()!r} — der Weg einer Menüzeile ist ihre "
+                f"Quelle, gelesen wird nur in {SOURCE_LANGUAGE!r}"
+            ]
+        )
     from app.ui.guide_targets import menubar_entries
 
     return [
@@ -934,8 +1017,29 @@ def write_menubar(path: Path, entries: Iterable[MenuEntry]) -> None:
     )
 
 
+def variant_group_package(title: str) -> str | None:
+    """Das Paket der Variantengruppe mit diesem Menütitel (``registry.VARIANT_GROUPS``):
+    das ihrer Operationen — ``None``, wenn keine Gruppe so heißt."""
+    from app.core.registry import VARIANT_GROUPS
+
+    source = registry()
+    for group in VARIANT_GROUPS:
+        if group.title.msgid != title:
+            continue
+        packages = {package_of_operation(source.get(name)) for name in group.members}
+        if len(packages) != 1:
+            raise FunctionListError(
+                [f"{title}: Variantengruppe über mehrere Pakete {sorted(packages)}"]
+            )
+        return packages.pop()
+    return None
+
+
 def command_package(entry: MenuEntry) -> str:
-    """Paket eines Fensterbefehls: Ausnahme nach der Zeile, sonst das Hauptmenü."""
+    """Paket eines Fensterbefehls: eine Variantengruppe nach ihren Operationen, eine
+    Ausnahme nach der Zeile, sonst das Hauptmenü."""
+    if entry.path and (grouped := variant_group_package(entry.path[-1])) is not None:
+        return grouped
     if entry.path and entry.path[-1] in COMMAND_PACKAGES:
         return COMMAND_PACKAGES[entry.path[-1]]
     if entry.path and entry.path[0] in MENU_PACKAGES:
@@ -952,7 +1056,9 @@ def command_rows(
 
     Eine Aktion an zwei Orten der Leiste (*Bausteinkatalog …* unter *Datei* und
     unter *Erzeugen*) ist **eine** Funktion: eine Zeile mit dem ersten Pfad als
-    Kennung, ``menu_path`` nennt beide Orte.
+    Kennung, ``menu_path`` nennt beide Orte. Zwei Zeilen unter einem Namen mit
+    verschiedenem Text sind zwei Funktionen — das hält an, ebenso eine Zeile ohne
+    Namen.
     """
     titles = {str(spec.title) for spec in source.all()}
     problems: list[str] = []
@@ -961,8 +1067,17 @@ def command_rows(
         if not entry.path or entry.path[-1] in titles:
             continue
         place = " → ".join(entry.path)
+        if not entry.object_name:
+            problems.append(f"{'/'.join(entry.path)}: Menüzeile ohne Objektnamen")
+            continue
         if entry.object_name in rows:
             known = rows[entry.object_name]
+            if known.id.rsplit("/", 1)[-1] != entry.path[-1]:
+                problems.append(
+                    f"menu:{entry.object_name}: zwei Zeilen ({known.id}, {'/'.join(entry.path)})"
+                    " unter einem Namen"
+                )
+                continue
             rows[entry.object_name] = replace(known, menu_path=f"{known.menu_path}; {place}")
             continue
         try:
@@ -1014,28 +1129,116 @@ def window_action_rows(keys: Iterable[str], scenes: Mapping[str, Scene]) -> list
     return rows
 
 
-def startup_rows(scenes: Mapping[str, Scene]) -> list[Row]:
-    """Was der Start zeigt, bevor es ein Fenster gibt (:data:`STARTUP_SURFACES`).
+def tool_rows(keys: Iterable[str], scenes: Mapping[str, Scene]) -> list[Row]:
+    """Die Werkzeuge unter der Ansicht als Zeilen ``tool:<schlüssel>``."""
+    problems: list[str] = []
+    rows: list[Row] = []
+    for key in keys:
+        if key not in TOOL_PACKAGES:
+            problems.append(f"tool:{key}: Werkzeug ohne Paket (TOOL_PACKAGES)")
+            continue
+        rows.append(
+            Row(
+                id=f"tool:{key}",
+                kind="bedienflaeche",
+                source="werkzeugzeile",
+                package=TOOL_PACKAGES[key],
+                requirement="koerper:1",
+                start_scene=_start_scene("koerper:1", EXACT, scenes),
+                target=f"tool:{key}",
+            )
+        )
+    if problems:
+        raise FunctionListError(problems)
+    return rows
 
-    Ein rohes Meldungsfenster ohne eigene Klasse; sein Ziel ist das Kennzeichen,
-    das es selbst trägt (``dialogs.EXPIRED_DEMO_TARGET``). Der Prüfstand startet
-    es mit der Vorbedingung ``licence = abgelaufen``.
+
+def context_rows(names: Iterable[str], scenes: Mapping[str, Scene]) -> list[Row]:
+    """Die benannten Kontextaktionen von Baum und Parameterleiste als Zeilen ``menu:``."""
+    problems: list[str] = []
+    rows: list[Row] = []
+    for name in names:
+        if name not in CONTEXT_PACKAGES:
+            problems.append(f"menu:{name}: Kontextaktion ohne Paket (CONTEXT_PACKAGES)")
+            continue
+        package, requirement = CONTEXT_PACKAGES[name]
+        rows.append(
+            Row(
+                id=f"menu:{name}",
+                kind="bedienflaeche",
+                source="kontextmenue",
+                package=package,
+                requirement=requirement,
+                start_scene=_start_scene(requirement, kernel_of(None, requirement), scenes),
+                target=f"menu:{name}",
+            )
+        )
+    if problems:
+        raise FunctionListError(problems)
+    return rows
+
+
+def settings_rows(
+    titles: Iterable[str], targets: Mapping[str, str], scenes: Mapping[str, Scene]
+) -> list[Row]:
+    """Konzept §3: eine Zeile je Abschnitt der Einstellungen, mit dem Ziel, das sein
+    Abschnittsbauer setzt (``function_scan._settings_sections``) — sonst ohne Ziel.
+
+    Die Kennung ist ``setting.section:<name>`` aus dem Titel (``guides.name_part``),
+    wie das Ziel, das ein Abschnitt trägt — ohne Modul und Klasse.
     """
-    from app.ui.dialogs import EXPIRED_DEMO_TARGET
+    from app.core.guides import name_part
 
-    targets = {"startup.expired_demo": EXPIRED_DEMO_TARGET}
     return [
         Row(
-            id=key,
+            id=f"setting.section:{name_part(title)}",
             kind="bedienflaeche",
-            source="startablauf",
-            package=package,
-            requirement="start",
-            start_scene=_start_scene("start", EXACT, scenes),
-            target=targets[key],
+            source="einstellungen",
+            package=SETTINGS_PACKAGE,
+            requirement="leer",
+            start_scene=_start_scene("leer", EXACT, scenes),
+            target=targets.get(title, ""),
         )
-        for key, (package, _module, _function) in STARTUP_SURFACES.items()
+        for title in titles
     ]
+
+
+def raw_window_rows(scan: UiScan, scenes: Mapping[str, Scene]) -> list[Row]:
+    """Jede Funktion, die ein rohes Meldungsfenster baut, als Zeile — Wiederherstellen,
+    Speicherfrage, Löschnachfrage, der Start nach abgelaufener Demo und die übrigen.
+
+    Ein rohes Fenster hat keine eigene Klasse; sein Ziel ist das Kennzeichen, das
+    seine Funktion im Quelltext setzt (``function_scan._own_target``), sonst hat es
+    keines. Die Kennung ist der Funktionsname; zwei gleichnamige Meldungsfunktionen
+    halten an, statt sich eine Zeile zu teilen.
+    """
+    problems = [
+        f"meldung:{name}: zwei Meldungsfunktionen heißen so ({', '.join(places)}) — eine "
+        "umbenennen, die Kennung nennt nur den Namen"
+        for name, places in sorted(scan.raw_places.items())
+        if len(places) > 1
+    ]
+    targets = scan.raw_targets
+    rows: list[Row] = []
+    for key in scan.raw_windows:
+        if key not in RAW_WINDOW_PACKAGES:
+            problems.append(f"{key}: Meldungsfenster ohne Paket (RAW_WINDOW_PACKAGES)")
+            continue
+        package, requirement = RAW_WINDOW_PACKAGES[key]
+        rows.append(
+            Row(
+                id=RAW_WINDOW_IDS.get(key, f"meldung:{key}"),
+                kind="bedienflaeche",
+                source="startablauf" if key in RAW_WINDOW_IDS else "meldungsfenster",
+                package=package,
+                requirement=requirement,
+                start_scene=_start_scene(requirement, kernel_of(None, requirement), scenes),
+                target=targets.get(key, ""),
+            )
+        )
+    if problems:
+        raise FunctionListError(problems)
+    return rows
 
 
 def read_menubar(path: Path) -> list[MenuEntry]:
@@ -1066,7 +1269,10 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
         lambda: surface_rows(TARGETS, scan.history, finding_action_ids(), scenes),
         lambda: feature_rows(source, scenes),
         lambda: window_action_rows(scan.window_actions, scenes),
-        lambda: startup_rows(scenes),
+        lambda: tool_rows(scan.tools, scenes),
+        lambda: context_rows(scan.context_actions, scenes),
+        lambda: settings_rows(scan.settings_sections, scan.settings_targets, scenes),
+        lambda: raw_window_rows(scan, scenes),
         lambda: command_rows(menubar, source, scenes),
     )
     for build in builders:
@@ -1074,25 +1280,34 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
             collected.extend(build())
         except FunctionListError as error:
             issues.extend(error.problems)
-    seen: dict[str, Row] = {}
-    for row in collected:
-        if row.id in seen:
-            issues.append(f"{row.id}: zwei Zeilen mit derselben Kennung")
-        seen[row.id] = row
+    issues += duplicate_ids(collected)
     if issues:
         raise FunctionListError(issues)
     collected = [replace(row, route=selection_route(row, scenes)) for row in collected]
     if not with_specs:
         return collected
     specs = load_specs()
-    return [replace(row, spec=specs.get(row.id)) for row in collected]
+    return [
+        replace(row, spec=specs[row.id].values if row.id in specs else None) for row in collected
+    ]
+
+
+def duplicate_ids(found: Iterable[Row]) -> list[str]:
+    """Jede Kennung, die mehr als eine Zeile trägt — gemeldet, nie still aussortiert."""
+    seen: set[str] = set()
+    issues: list[str] = []
+    for row in found:
+        if row.id in seen:
+            issues.append(f"{row.id}: zwei Zeilen mit derselben Kennung")
+        seen.add(row.id)
+    return issues
 
 
 #: Anforderungen, deren Auswahl ein Merkmal ist — gewählt wird ``Scene.select``.
 FEATURE_SELECTIONS: Final[frozenset[str]] = frozenset({"baustein", "textur", "gleichartig"})
 #: Anforderungen, deren Auswahl der erste Körper ist.
 BODY_SELECTIONS: Final[frozenset[str]] = frozenset(
-    {"kante", "zustand:open", "zustand:parts", "zustand:cavity"}
+    {"kante", "zustand:open", "zustand:parts", "zustand:cavity", "netzkoerper"}
 )
 
 
@@ -1111,16 +1326,28 @@ def selection_route(row: Row, scenes: Mapping[str, Scene]) -> tuple[dict[str, st
     Kante nennt die Spezifikation. Ohne Auswahl (leer, Startbildschirm, ganze
     Szene) ist der Weg leer.
     """
-    scene = scenes.get(row.start_scene)
+    action = row.id.removeprefix("finding.action:") if row.id.startswith("finding.") else ""
+    return route_for(row.requirement, row.start_scene, scenes, action)
+
+
+def route_for(
+    requirement: str, scene_key: str, scenes: Mapping[str, Scene], action: str = ""
+) -> tuple[dict[str, str], ...]:
+    """:func:`selection_route` für eine Anforderung und eine Szene — auch für die
+    Kundenziele (``common_goals.toml``), die dieselben Wörter benutzen.
+
+    Bei einem Befund ist es der Befund, an dem die Szene die Handlung ``action``
+    zusagt (``promises.actions``), ohne Handlung der erste zugesagte Befund.
+    """
+    scene = scenes.get(scene_key)
     if scene is None:
         return ()
-    requirement = row.requirement
     if requirement == "befund":
-        action = row.id.removeprefix("finding.action:") if row.id.startswith("finding.") else ""
-        for code in scene.promises.get("findings", ()):
-            if not action or action in offered_at(code):
-                return (_click(f"finding:{code}"),)
-        return ()
+        offered: Mapping[str, str] = scene.promises.get("actions", {})
+        if action:
+            return (_click(f"finding:{offered[action]}"),) if action in offered else ()
+        findings = scene.promises.get("findings", ())
+        return (_click(f"finding:{findings[0]}"),) if findings else ()
     if requirement.startswith(FEATURE_REQUIREMENT) or requirement in FEATURE_SELECTIONS:
         return (_click(f"tree.row:{scene.select}"),) if scene.select else ()
     if requirement.startswith("koerper:"):
@@ -1177,266 +1404,11 @@ def problems(menubar: Iterable[MenuEntry] = ()) -> list[str]:
     return issues
 
 
-# --- Szenenkatalog ---------------------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class SceneStep:
-    """Ein Schritt eines Szenenrezepts: eine Operation mit Eingängen und Werten."""
-
-    op: str
-    inputs: tuple[str, ...] = ()
-    params: Mapping[str, Any] = field(default_factory=dict)
-    title: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class Scene:
-    """Ein Rezept aus ``tests/data/function_scenes.toml`` (Bauplan D0 §2.5)."""
-
-    key: str
-    summary: str
-    ops: tuple[SceneStep, ...] = ()
-    base: str = ""
-    sources: Mapping[str, str] = field(default_factory=dict)
-    """Quellkennung → Pfad relativ zu ``tests/data``."""
-    kernel: str = ""
-    heavy: bool = False
-    project: bool = True
-    """``False`` heißt: kein Projekt, der Startbildschirm."""
-    promises: Mapping[str, Any] = field(default_factory=dict)
-    select: str = ""
-    """Das Merkmal, das eine Zeile mit Merkmalsanforderung wählt: ``obj_<n>.<merkmal>``."""
-
-
-SCENE_KEYS: Final[frozenset[str]] = frozenset(
-    {"summary", "ops", "base", "sources", "kernel", "heavy", "project", "promises", "select"}
-)
-STEP_KEYS: Final[frozenset[str]] = frozenset({"op", "inputs", "params", "title"})
-
-
-def load_scenes(path: Path = SCENES) -> dict[str, Scene]:
-    """Der Szenenkatalog in seiner Reihenfolge. Unbekannte Schlüssel halten an."""
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
-    problems: list[str] = []
-    scenes: dict[str, Scene] = {}
-    for key, entry in data.get("scene", {}).items():
-        unknown = set(entry) - SCENE_KEYS
-        if unknown:
-            problems.append(f"Szene {key}: unbekannte Schlüssel {sorted(unknown)}")
-        steps: list[SceneStep] = []
-        for step in entry.get("ops", []):
-            extra = set(step) - STEP_KEYS
-            if extra or "op" not in step:
-                problems.append(f"Szene {key}: Schritt {step} mit {sorted(extra) or 'ohne op'}")
-                continue
-            steps.append(
-                SceneStep(
-                    op=step["op"],
-                    inputs=tuple(step.get("inputs", ())),
-                    params=dict(step.get("params", {})),
-                    title=step.get("title", ""),
-                )
-            )
-        scenes[key] = Scene(
-            key=key,
-            summary=entry.get("summary", ""),
-            ops=tuple(steps),
-            base=entry.get("base", ""),
-            sources=dict(entry.get("sources", {})),
-            kernel=entry.get("kernel", ""),
-            heavy=bool(entry.get("heavy", False)),
-            project=bool(entry.get("project", True)),
-            promises=dict(entry.get("promises", {})),
-            select=entry.get("select", ""),
-        )
-    if problems:
-        raise FunctionListError(problems)
-    return scenes
-
-
-def recipe(key: str, scenes: Mapping[str, Scene]) -> tuple[dict[str, str], list[SceneStep]]:
-    """Quellen und Schritte einer Szene samt ihrer Basis, die Basis zuerst."""
-    chain: list[Scene] = []
-    current: str = key
-    while current:
-        if current not in scenes:
-            raise FunctionListError([f"Szene {key}: Basis {current!r} gibt es nicht"])
-        if any(entry.key == current for entry in chain):
-            raise FunctionListError([f"Szene {key}: Basis im Kreis über {current!r}"])
-        chain.append(scenes[current])
-        current = scenes[current].base
-    sources: dict[str, str] = {}
-    steps: list[SceneStep] = []
-    for scene in reversed(chain):
-        sources.update(scene.sources)
-        steps.extend(scene.ops)
-    return sources, steps
-
-
-def validate_scenes(scenes: Mapping[str, Scene]) -> list[str]:
-    """Was an den Rezepten nicht stimmt, ohne zu rechnen: Basis, Operationen,
-    Quellen, Kern, Zusagen."""
-    from app.core.registry import FEATURE_KINDS
-
-    source = registry()
-    issues: list[str] = []
-    for key, scene in scenes.items():
-        if not scene.summary:
-            issues.append(f"Szene {key}: ohne summary")
-        if scene.kernel not in ("", *KERNELS):
-            issues.append(f"Szene {key}: Kern {scene.kernel!r} unbekannt")
-        for suffix in KERNELS:
-            if key.endswith(f".{suffix}") and scene.kernel != suffix:
-                issues.append(f"Szene {key}: der Name sagt {suffix}, kernel sagt {scene.kernel!r}")
-        try:
-            sources, steps = recipe(key, scenes)
-        except FunctionListError as error:
-            issues.extend(error.problems)
-            continue
-        for name, relative in sources.items():
-            if not (DATA / relative).is_file():
-                issues.append(f"Szene {key}: Quelle {name} → {relative} fehlt in tests/data")
-        for step in steps:
-            if not source.has(step.op):
-                issues.append(f"Szene {key}: Operation {step.op!r} gibt es nicht")
-        if not scene.project and steps:
-            issues.append(f"Szene {key}: ohne Projekt, aber mit Schritten")
-        unknown = set(scene.promises) - PROMISE_KEYS
-        if unknown:
-            issues.append(f"Szene {key}: unbekannte Zusagen {sorted(unknown)}")
-        for kind in scene.promises.get("kinds", ()):
-            if kind not in FEATURE_KINDS:
-                issues.append(f"Szene {key}: Merkmalsart {kind!r} gibt es nicht")
-        body = scene.promises.get("body")
-        if body is not None and body not in BODY_STATES:
-            issues.append(f"Szene {key}: Körperzustand {body!r} unbekannt")
-        if scene.heavy and not ({"triangles_over", "seconds_over"} & set(scene.promises)):
-            issues.append(f"Szene {key}: schwer, aber ohne Zusage zu Dreiecken oder Sekunden")
-    return issues
-
-
-def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
-    """Das Projekt einer Szene, aus ihrem Rezept über die Operationen gebaut.
-
-    Jeder Schritt ist eine Transaktion über ``History.apply`` — derselbe Weg wie
-    ``tools/make_examples.py``; ``apply`` prüft Kennungen und Werte, bevor
-    etwas geschrieben ist. Gerechnet wird hier nicht.
-    """
-    from app.core.scene import History, OperationDraft
-    from app.core.scene.project import new_project
-    from app.core.types import Source
-
-    catalogue = scenes if scenes is not None else load_scenes()
-    if not catalogue[key].project:
-        raise FunctionListError([f"Szene {key}: der Startbildschirm hat kein Projekt"])
-    source = registry()
-    sources, steps = recipe(key, catalogue)
-    project = new_project()
-    for name, relative in sources.items():
-        project.document.sources[name] = Source(
-            id=name, kind="import", path=f"sources/{Path(relative).name}", sha256=""
-        )
-        project.sources[name] = (DATA / relative).read_bytes()
-    history = History(project.document)
-    for step in steps:
-        title = step.title or source.get(step.op).title
-        history.apply(
-            title, [OperationDraft(op=step.op, inputs=step.inputs, params=dict(step.params))]
-        )
-    return project
-
-
-def evaluate_scene(project: Project) -> EvaluationResult:
-    """Das Ergebnis einer gebauten Szene mit dem Vorgabeprofil der Beispiele."""
-    from app.core.knowledge import profiles
-    from app.core.scene import evaluate
-    from app.core.scene.project import ProjectSources
-
-    document = project.document
-    profile = profiles.make_profile(
-        document.printer or "centauri-carbon-2", document.material or "petg"
-    )
-    return evaluate(document, profile, sources=ProjectSources(project))
-
-
-def broken_promises(scene: Scene, result: EvaluationResult) -> list[str]:
-    """Was die gerechnete Szene von ihren Zusagen nicht hält — leer, wenn alles stimmt."""
-    from app.core.geom.mesh import as_mesh_data
-
-    objects = list(result.scene.objects.values())
-    promises = scene.promises
-    issues: list[str] = []
-    stops = bool(promises.get("stops", False))
-    if stops != (result.stopped_at is not None):
-        issues.append(f"hält an: {result.stopped_at!r}, zugesagt {stops}")
-    if "objects" in promises and len(objects) != promises["objects"]:
-        issues.append(f"{len(objects)} Körper, zugesagt {promises['objects']}")
-    wanted_kind = {"exakt": "brep", "netz": "mesh"}.get(scene.kernel)
-    if wanted_kind is not None:
-        wrong = [entry.id for entry in objects if entry.kind != wanted_kind]
-        if wrong:
-            issues.append(f"Kern {scene.kernel}, aber {wrong} sind es nicht")
-    shown = {feature.kind for entry in objects for feature in entry.features.values()}
-    missing = sorted(set(promises.get("kinds", ())) - shown)
-    if missing:
-        issues.append(f"Merkmalsarten {missing} fehlen, erkannt {sorted(shown)}")
-    body = promises.get("body")
-    if body is not None:
-        meshes = [as_mesh_data(entry.mesh).raw for entry in objects]
-        states = {
-            "closed": all(mesh.is_watertight for mesh in meshes),
-            "open": any(not mesh.is_watertight for mesh in meshes),
-            "parts": any(len(mesh.split(only_watertight=False)) > 1 for mesh in meshes),
-            "cavity": "void" in shown,
-        }
-        if not states[body]:
-            issues.append(f"Körperzustand {body} nicht erfüllt")
-    codes = {finding.code for finding in result.scene.report.findings}
-    missing_findings = sorted(set(promises.get("findings", ())) - codes)
-    if missing_findings:
-        issues.append(f"Befunde {missing_findings} fehlen, gemeldet {sorted(codes)}")
-    if scene.select:
-        object_id, _dot, feature_id = scene.select.partition(".")
-        chosen = result.scene.objects.get(object_id)
-        feature = chosen.features.get(feature_id) if chosen is not None else None
-        wanted = scene.key.split(".")[1] if scene.key.startswith("merkmal.") else None
-        if feature is None:
-            issues.append(f"gewähltes Merkmal {scene.select} gibt es nicht")
-        elif wanted is not None and feature.kind != wanted:
-            issues.append(f"gewähltes Merkmal {scene.select} ist {feature.kind}, nicht {wanted}")
-    if "triangles_over" in promises:
-        largest = max((len(as_mesh_data(entry.mesh).raw.faces) for entry in objects), default=0)
-        if largest <= promises["triangles_over"]:
-            issues.append(f"{largest} Dreiecke, zugesagt über {promises['triangles_over']}")
-    return issues
-
-
-def save_scenes(out: Path, *, heavy: bool = False) -> list[Path]:
-    """Baut die Szenen und speichert sie als Projekt nach ``out`` — nie in den Baum."""
-    from app.core.scene.project import save
-
-    target = out.resolve()
-    if target == ROOT or ROOT in target.parents:
-        raise FunctionListError(
-            [f"{out}: Erzeugtes wird nicht im Baum abgelegt (tests/data/CLAUDE.md)"]
-        )
-    target.mkdir(parents=True, exist_ok=True)
-    catalogue = load_scenes()
-    written: list[Path] = []
-    for key, scene in catalogue.items():
-        if not scene.project or (scene.heavy and not heavy):
-            continue
-        path = target / f"{key}.p3d"
-        save(build_scene(key, catalogue), path)
-        written.append(path)
-    return written
-
-
 # --- Zeilenspezifikationen (Bauplan D0 §2.4) -----------------------------------
 
 SPEC_KEYS: Final[frozenset[str]] = frozenset(
     {
+        "criteria",
         "start_scene",
         "route",
         "example_goal",
@@ -1456,28 +1428,110 @@ BUTTONS: Final[tuple[str, ...]] = ("left", "right", "double")
 MODIFIERS: Final[tuple[str, ...]] = ("", "ctrl", "shift")
 #: Welche Absage ein erzwungener Fehlfall erwartet (Prüfpunkt 7).
 FAULT_KINDS: Final[tuple[str, ...]] = ("sperrgrund", "grenzablehnung", "befund", "meldung")
+#: Die Schlüssel eines Fehlfalls: Weg und Eingaben wie in der Spezifikation, eine
+#: eigene Startszene, wenn der Fehlfall einen anderen Stand braucht, und ``during``:
+#: wann die Handlung geklickt wird — ``rechnung`` heißt, während die nach Weg und
+#: Eingaben angestoßene Rechnung läuft.
+FAULT_KEYS: Final[frozenset[str]] = frozenset(
+    {"start_scene", "route", "inputs", "during", "expected"}
+)
+FAULT_MOMENTS: Final[tuple[str, ...]] = ("", "rechnung")
+#: Die Prüfpunkte des Konzepts (§4), als Schlüssel von ``not_applicable`` geschrieben
+#: wie ``"4"``.
+CHECKPOINT_NUMBERS: Final[tuple[int, ...]] = tuple(range(1, 20))
+#: Die 35 Kriterien (Konzept §4: Einfachheit, Verständlichkeit, Gestaltung, zeitgemäß,
+#: innovativ). Werte von ``criteria`` und Schlüssel von ``not_applicable``.
+CRITERION_IDS: Final[tuple[str, ...]] = (
+    *(f"E{number}" for number in range(1, 8)),
+    *(f"V{number}" for number in range(1, 7)),
+    *(f"G{number}" for number in range(1, 10)),
+    *(f"Z{number}" for number in range(1, 8)),
+    *(f"I{number}" for number in range(1, 7)),
+)
+#: Die geschlossene Liste der Gründe für *entfällt* (Konzept §4, „Urteil und
+#: Schwere“). Ein anderer Grund ist eine ungültige Spezifikation.
+NOT_APPLICABLE_REASONS: Final[dict[str, str]] = {
+    "ohne_rechnung": "Operation ohne Rechnung",
+    "ohne_auswahlbezug": "ohne Auswahlbezug",
+    "ohne_dialog": "ohne Dialog",
+    "ohne_agentenwerkzeug": "ohne Agentenwerkzeug",
+    "nur_stufe_c": "nur Stufe C",
+}
+#: Die Lizenzzustände eines Laufs: Eigenschaften von ``app.core.activation.Activation``,
+#: deren Namen die Zustände sind. ``over`` (Demo abgelaufen) ist kein Lauf je
+#: Funktion, sondern die Vorbedingung der Startzeile ``startup.expired_demo``.
+LICENCE_STATES: Final[tuple[str, ...]] = (
+    "sale_without_trial",
+    "needs_activation",
+    "licensed",
+    "expired",
+)
+STARTUP_LICENCE: Final = "over"
+#: Die eine Zeile, an der ``over`` als Vorbedingung gilt.
+STARTUP_ROW: Final = "startup.expired_demo"
+
+
+def licence_states() -> tuple[str, ...]:
+    """Die erreichbaren Zustände: ohne ``store.TRIAL_FROM`` (Verkaufsversion) gibt es
+    keinen Testlauf und also keinen abgelaufenen, mit ihm keine Verkaufsversion ohne Test."""
+    from app.core.activation.store import TRIAL_FROM
+
+    first = "sale_without_trial" if TRIAL_FROM is None else "expired"
+    return (first, "needs_activation", "licensed")
+
+
 PRECONDITIONS: Final[dict[str, tuple[str, ...]]] = {
     "ki": ("vorhanden", "fehlt"),
     "comfyui": ("vorhanden", "fehlt"),
     "slicer": ("vorhanden", "fehlt"),
-    "licence": ("demo", "gekauft", "abgelaufen"),
+    # Alle Zustände; welche ein Lauf erreicht, hängt am Paket (:func:`licence_states`).
+    "licence": (*LICENCE_STATES, STARTUP_LICENCE),
     "printer": ("filament", "resin"),
 }
-CHECK_POINTS: Final = range(1, 20)
 
 
-def load_specs(directory: Path = ROW_SPECS) -> dict[str, dict[str, Any]]:
-    """Kennung → Spezifikation, mit dem Paket der Datei als ``"package"``."""
-    found: dict[str, dict[str, Any]] = {}
-    for path in sorted(directory.glob("d*.toml")):
-        package = f"D{int(path.stem.removeprefix('d'))}"
-        for row_id, spec in tomllib.loads(path.read_text(encoding="utf-8")).get("row", {}).items():
-            found[row_id] = {**spec, "package": package, "file": path.name}
+@dataclass(frozen=True, slots=True)
+class SpecEntry:
+    """Eine Zeilenspezifikation mit ihrer Herkunft: Paket und Datei getrennt von den
+    Werten, die die Zeile trägt (``Row.spec``)."""
+
+    package: str
+    file: str
+    values: Mapping[str, Any]
+
+
+_SPEC_FILE: Final = re.compile(r"d(\d+)\.toml")
+
+
+def load_specs(directory: Path = ROW_SPECS) -> dict[str, SpecEntry]:
+    """Kennung → Spezifikation aus ``function_rows/d<N>.toml``. Ein anderer Dateiname
+    und dieselbe Kennung in zwei Dateien halten an."""
+    found: dict[str, SpecEntry] = {}
+    problems: list[str] = []
+    for path in sorted(directory.glob("*.toml")):
+        match = _SPEC_FILE.fullmatch(path.name)
+        if match is None:
+            problems.append(f"{path.name}: heißt nicht d<N>.toml")
+            continue
+        package = f"D{int(match.group(1))}"
+        for row_id, values in (
+            tomllib.loads(path.read_text(encoding="utf-8")).get("row", {}).items()
+        ):
+            if row_id in found:
+                problems.append(f"{row_id}: in {found[row_id].file} und {path.name}")
+                continue
+            found[row_id] = SpecEntry(package, path.name, dict(values))
+    if problems:
+        raise FunctionListError(problems)
     return found
 
 
 def _field_problem(name: str, source: Registry) -> str | None:
-    """``feature.field:<schlüssel>.<feld>`` und ``field:<feld>`` gegen das Register."""
+    """``feature.field:<schlüssel>.<feld>`` gegen die Parameter der Operation des Schlüssels.
+
+    ``field:<feld>`` prüft hier nur das Muster des Wortschatzes; ob ein offener Dialog
+    das Feld trägt, zeigt erst der Prüfstand.
+    """
     if not name.startswith("feature.field:"):
         return None
     key, _dot, field_name = name.removeprefix("feature.field:").rpartition(".")
@@ -1491,7 +1545,7 @@ def _field_problem(name: str, source: Registry) -> str | None:
 
 
 def validate_specs(
-    found: Sequence[Row], specs: Mapping[str, Mapping[str, Any]], scenes: Mapping[str, Scene]
+    found: Sequence[Row], specs: Mapping[str, SpecEntry], scenes: Mapping[str, Scene]
 ) -> list[str]:
     """Jede Spezifikation trifft eine erzeugte Zeile ihres Pakets, Ziele aus dem
     Wortschatz, Szenen aus dem Katalog und Felder des Registers.
@@ -1507,8 +1561,9 @@ def validate_specs(
     have_commands = any(row.source == "menueleiste" for row in found)
     texts = command_texts() if not have_commands else frozenset()
     issues: list[str] = []
-    for row_id, spec in specs.items():
-        where = f"{spec['file']} [{row_id}]"
+    for row_id, entry in specs.items():
+        spec = entry.values
+        where = f"{entry.file} [{row_id}]"
         row = by_id.get(row_id)
         if row is None and "/" in row_id and not have_commands:
             parts = row_id.split("/")
@@ -1520,9 +1575,9 @@ def validate_specs(
             continue
         else:
             package = row.package
-        if package != spec["package"]:
-            issues.append(f"{where}: gehört zu {package}, steht aber in {spec['file']}")
-        unknown = set(spec) - SPEC_KEYS - {"package", "file"}
+        if package != entry.package:
+            issues.append(f"{where}: gehört zu {package}, steht aber in {entry.file}")
+        unknown = set(spec) - SPEC_KEYS
         if unknown:
             issues.append(f"{where}: unbekannte Schlüssel {sorted(unknown)}")
         start = spec.get("start_scene", row.start_scene if row is not None else "")
@@ -1548,44 +1603,67 @@ def validate_specs(
                 issues.append(f"{where}: Suchprobe {probe} ohne Wort oder Herkunft")
         for measure, expected in spec.get("expectation", {}).items():
             if not {"value", "tolerance", "origin"} <= set(expected):
-                issues.append(f"{where}: Erwartung {measure} ohne value, tolerance oder origin")
+                issues.append(f"{where}: Erwartung {measure} ohne value, tolerance oder Herkunft")
+            elif not float(expected["tolerance"]) > 0.0:
+                # Regel 6: kein Gleitkommavergleich mit ==.
+                issues.append(f"{where}: Erwartung {measure} mit Toleranz {expected['tolerance']}")
         fault = spec.get("fault_case")
         if fault is not None:
+            extra = set(fault) - FAULT_KEYS
+            if extra:
+                issues.append(f"{where}: Fehlfall mit unbekannten Schlüsseln {sorted(extra)}")
             if fault.get("expected") not in FAULT_KINDS:
                 issues.append(f"{where}: Fehlfall erwartet {fault.get('expected')!r}")
+            if fault.get("during", "") not in FAULT_MOMENTS:
+                issues.append(f"{where}: Fehlfall während {fault.get('during')!r} unbekannt")
+            if "start_scene" in fault and fault["start_scene"] not in scenes:
+                issues.append(
+                    f"{where}: Fehlfall-Startszene {fault['start_scene']!r} gibt es nicht"
+                )
+            for step in fault.get("route", ()):
+                if not is_target(str(step.get("target", ""))):
+                    issues.append(f"{where}: Fehlfall-Weg zu {step.get('target')!r} ist kein Ziel")
+                if step.get("modifier", "") not in MODIFIERS:
+                    issues.append(
+                        f"{where}: Fehlfall-Zusatztaste {step.get('modifier')!r} unbekannt"
+                    )
+                if step.get("button", "left") not in BUTTONS:
+                    issues.append(f"{where}: Fehlfall-Taste {step.get('button')!r} unbekannt")
             for name in fault.get("inputs", {}):
                 if not is_target(name):
                     issues.append(f"{where}: Fehlfall-Eingabe {name!r} ist kein Ziel")
         for key, value in spec.get("preconditions", {}).items():
-            if value not in PRECONDITIONS.get(key, ()):
+            if key == "licence":
+                reachable = licence_states() + ((STARTUP_LICENCE,) if row_id == STARTUP_ROW else ())
+                if value not in reachable:
+                    issues.append(
+                        f"{where}: Vorbedingung licence: Lizenzzustand {value!r} ist hier nicht "
+                        f"erreichbar (erreichbar: {', '.join(reachable)})"
+                    )
+            elif value not in PRECONDITIONS.get(key, ()):
                 issues.append(f"{where}: Vorbedingung {key} = {value!r} unbekannt")
-        for point in spec.get("not_applicable", {}):
-            if not point.isdigit() or int(point) not in CHECK_POINTS:
-                issues.append(f"{where}: Prüfpunkt {point!r} gibt es nicht")
+        for point, reason in spec.get("not_applicable", {}).items():
+            known = point in CRITERION_IDS or (point.isdigit() and int(point) in CHECKPOINT_NUMBERS)
+            if not known:
+                issues.append(f"{where}: Prüfpunkt oder Kriterium {point!r} gibt es nicht")
+            if reason not in NOT_APPLICABLE_REASONS:
+                issues.append(f"{where}: Grund {reason!r} steht nicht in der geschlossenen Liste")
+        for criterion in spec.get("criteria", ()):
+            if criterion not in CRITERION_IDS:
+                issues.append(f"{where}: Kriterium {criterion!r} gibt es nicht")
         if "budget_s" in spec and not spec.get("budget_ref"):
             issues.append(f"{where}: Budget ohne Beleg aus §31")
     return issues
 
 
 def command_texts() -> frozenset[str]:
-    """Die übersetzbaren Texte, die ``main_window`` an Menüzeilen gibt — ohne Fenster.
+    """Die übersetzbaren Texte der Oberfläche — ohne Fenster.
 
-    Gelesen werden die Zeichenketten in ``tr(…)`` und ``_(…)`` des Moduls; ein
+    Gelesen werden die Zeichenketten in ``tr(…)`` und ``_(…)`` aller Module unter
+    ``app/ui`` (ein Umzug von ``main_window.py`` in ein Paket ändert nichts); ein
     Menüpfad einer Spezifikation muss dort seinen letzten Text finden.
     """
-    path = UI / "main_window.py"
-    found: set[str] = set()
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id in {"tr", "_"}
-            and node.args
-            and isinstance(node.args[0], ast.Constant)
-            and isinstance(node.args[0].value, str)
-        ):
-            found.add(node.args[0].value)
-    return frozenset(found)
+    return scan_ui(ui_sources()).texts
 
 
 # --- Ausgabe ---------------------------------------------------------------------
@@ -1625,10 +1703,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--schwer", dest="heavy", action="store_true", help="auch schwere Szenen")
     parser.add_argument("--out", type=Path, help="Ordner außerhalb des Baums für --szenen")
     args = parser.parse_args(argv)
+    if args.scenes and args.out is None:
+        parser.error("--szenen braucht --out")
+    try:
+        return _run(args)
+    except FunctionListError as error:
+        for issue in error.problems:
+            print(issue, file=sys.stderr)
+        return 1
+
+
+def _run(args: argparse.Namespace) -> int:
+    """Der Rumpf von :func:`main`; jede :class:`FunctionListError` endet dort als Meldung."""
     menubar = read_menubar(args.menubar) if args.menubar else []
     if args.scenes:
-        if args.out is None:
-            parser.error("--szenen braucht --out")
         for path in save_scenes(args.out, heavy=args.heavy):
             print(path)
         return 0
@@ -1637,14 +1725,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for issue in issues:
             print(issue)
         return 1 if issues else 0
-    try:
-        selected = [
-            row for row in rows(menubar) if args.package is None or row.package == args.package
-        ]
-    except FunctionListError as error:
-        for issue in error.problems:
-            print(issue, file=sys.stderr)
-        return 1
+    selected = [row for row in rows(menubar) if args.package is None or row.package == args.package]
     if args.output == "json":
         print(json.dumps(list(_iter_json(selected)), ensure_ascii=False, indent=2))
     else:

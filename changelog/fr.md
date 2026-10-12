@@ -32,6 +32,10 @@ dans `website/version.json`.
 - S'il manque à une fonction un second corps dans la scène, la raison indique *Dupliquer l'objet* comme solution.
 - La liste des raccourcis clavier ne nomme plus qu'une fois *Sculpter*, *Squelette* et *Dessiner*.
 
+### Modifier et esquisser
+
+- Un corps exact garde désormais ses caractéristiques après *Appliquer du texte*, *Incruster du texte* et *Creuser la contre-forme*. En version 0.6.0, plus aucune face ne pouvait ensuite être cliquée.
+
 ## 0.6.0
 
 - La démo fonctionne désormais jusqu'au 30 novembre 2026. Solidon3D 1.0 est prévu pour le 1er décembre, et vos projets sont conservés.

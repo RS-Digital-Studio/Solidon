@@ -26,7 +26,7 @@ zusammen, nachdem jede Fläche für sich beschrieben ist.
 from __future__ import annotations
 
 import math
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -126,6 +126,19 @@ class _ThroughQuestion:
 # ``match_tolerance`` für die Radien: Die ist ein halbes Prozent der
 # Modelldiagonale und hielte an einer Platte von 108 mm Ø 6 und Ø 7 für
 # dasselbe Loch.
+
+
+def threads_to_read(features: Mapping[FeatureId, Feature]) -> Sequence[Feature] | None:
+    """``known_threads`` für einen Schritt, der keine Wendel anlegt.
+
+    Eine Rundung, eine Fase, eine Schrift oder eine Tasche legt kein Gewinde
+    an: Trug der Eingang keines, liest :func:`features_of` am Ergebnis keines
+    (``()``), sonst wie immer (``None``). Die Lesung passte an
+    ``pegboard-gs-100-v2.step`` nach „alle Kanten“ R 0,5 66 Achsen an
+    Rundungsränder an, über die Hälfte der Auswertung (RM-435); an Körpern ohne
+    Gewinde kostet sie nach einer Schrift bis zu 0,7 s je Schritt.
+    """
+    return None if any(feature.kind == "thread" for feature in features.values()) else ()
 
 
 def features_of(

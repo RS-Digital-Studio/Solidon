@@ -14,4 +14,4 @@ questions = ["Wie lege ich ein Maß an, das ich mehrfach verwende?"]
 fault_case = { inputs = { "field:name" = "breite außen" }, expected = "sperrgrund" }
 
 [row."Bearbeiten/Parameter anlegen …".expectation]
-"parameter.breite" = { value = 40.0, tolerance = 0.0, origin = "Konstruktion: getippte 40 mm" }
+"parameter.breite" = { value = 40.0, tolerance = 0.0005, origin = "Konstruktion: getippte 40 mm; Toleranz = halbe letzte Stelle des Wertfelds (drei Nachkommastellen, dialogs.ParameterDialog)" }

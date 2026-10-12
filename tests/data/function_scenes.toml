@@ -15,7 +15,8 @@
 #   project   false heißt Startbildschirm, kein Projekt
 #   select    das Merkmal, das eine Zeile mit Merkmalsanforderung wählt (obj_<n>.<merkmal>)
 #   promises  objects, kinds (Merkmalsarten), body (closed, open, parts, cavity),
-#             findings (Befundkennungen), stops, triangles_over, seconds_over
+#             findings (Befundkennungen), actions (Handlung → Befund, an dem der
+#             Bericht sie anbietet), stops, triangles_over, seconds_over
 #
 # Maße: Quader 40 × 30 × 20 mm, Unterseite auf z = 0 (Vorgabe `anchor = "centre"`).
 
@@ -69,6 +70,14 @@ promises = { objects = 4, body = "closed" }
 op = "create_profile_clamp_set"
 params = { clamp_material = "petg", liner_material = "tpu-95a" }
 
+[scene."kugel.netz"]
+summary = "Eine Netzkugel Ø 30 mm aus 64 Segmenten: ein fein vernetzter Körper für Glätten, Ausdünnen, Formen und Skelett."
+kernel = "netz"
+promises = { objects = 1, kinds = ["sphere"], body = "closed", triangles_over = 1000 }
+[[scene."kugel.netz".ops]]
+op = "create_sphere"
+params = { diameter = 30.0, segments = 64 }
+
 [scene."kante.exakt"]
 summary = "Der exakte Quader; angeklickt wird eine seiner Kanten."
 kernel = "exakt"
@@ -103,7 +112,7 @@ params = { diameter = 20.0, height = 20.0 }
 summary = "Ein geladener Würfel um den Ursprung: Er steckt zur Hälfte unter dem Druckbett."
 kernel = "netz"
 sources = { src_1 = "meshes/cube_clean.stl" }
-promises = { objects = 1, body = "closed", findings = ["arrange.below_bed"] }
+promises = { objects = 1, body = "closed", findings = ["arrange.below_bed"], actions = { place_on_bed = "arrange.below_bed" } }
 [[scene."unter_dem_bett.netz".ops]]
 op = "load"
 params = { source = "src_1", unit = "mm" }
@@ -111,7 +120,7 @@ params = { source = "src_1", unit = "mm" }
 [scene."zu_gross.netz"]
 summary = "Eine Platte 400 × 300 × 20 mm: größer als der Bauraum des Vorgabedruckers."
 kernel = "netz"
-promises = { objects = 1, findings = ["arrange.out_of_build_volume"] }
+promises = { objects = 1, findings = ["arrange.out_of_build_volume"], actions = { split_model = "arrange.out_of_build_volume", scale_to_fit = "arrange.out_of_build_volume", choose_printer = "arrange.out_of_build_volume" } }
 [[scene."zu_gross.netz".ops]]
 op = "create_box"
 params = { width = 400.0, depth = 300.0, height = 20.0 }
@@ -120,7 +129,7 @@ params = { width = 400.0, depth = 300.0, height = 20.0 }
 summary = "Zwei gleiche Netzquader genau übereinander."
 kernel = "netz"
 base = "quader.netz"
-promises = { objects = 2, findings = ["arrange.bodies_in_one_place"] }
+promises = { objects = 2, findings = ["arrange.bodies_in_one_place"], actions = { arrange_on_bed = "arrange.bodies_in_one_place" } }
 [[scene."deckungsgleich.netz".ops]]
 op = "create_box"
 params = { width = 40.0, depth = 30.0, height = 20.0 }
@@ -129,7 +138,7 @@ params = { width = 40.0, depth = 30.0, height = 20.0 }
 summary = "Ein Netzquader, dessen Verrundung mit 40 mm scheitert; die Bohrung danach rechnet nicht mehr."
 kernel = "netz"
 base = "quader.netz"
-promises = { objects = 1, stops = true, findings = ["op.fillet_edges.GeometryError"] }
+promises = { objects = 1, stops = true, findings = ["op.fillet_edges.GeometryError"], actions = { correct_input = "op.fillet_edges.GeometryError", change_selection = "op.fillet_edges.GeometryError" } }
 [[scene.halt.ops]]
 op = "fillet_edges"
 inputs = ["obj_1"]
@@ -147,13 +156,84 @@ promises = { objects = 1, body = "closed" }
 op = "create_box"
 params = { width = 10.0, depth = 10.0, height = 10.0 }
 
+# --- Befunde mit Handlungen --------------------------------------------------------
+
+[scene."zu_fein.netz"]
+summary = "Ein offener Würfel in Zentimetern, auf 0,05 mm verfeinert: das Verfeinern sagt ab."
+kernel = "netz"
+sources = { src_1 = "meshes/broken_open.stl" }
+promises = { objects = 1, stops = true, findings = ["op.remesh_mesh.ValidationError", "ingest.not_watertight"], actions = { use_reachable = "op.remesh_mesh.ValidationError", repair_before_and_retry = "op.remesh_mesh.ValidationError" } }
+[[scene."zu_fein.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "cm", mend = false, wide_holes = false }
+[[scene."zu_fein.netz".ops]]
+op = "remesh_mesh"
+inputs = ["obj_1"]
+params = { edge = 0.05 }
+
+[scene."geglaettet.netz"]
+summary = "Ein Netzquader, fünfzigmal geglättet: er schrumpft, und seine Wände werden zu dünn für die Düse."
+kernel = "netz"
+base = "quader.netz"
+promises = { objects = 1, findings = ["mesh.smooth_shrank", "settings.wall_below_nozzle"], actions = { remesh_and_retry = "mesh.smooth_shrank", open_print_settings = "settings.wall_below_nozzle" } }
+[[scene."geglaettet.netz".ops]]
+op = "smooth_mesh"
+inputs = ["obj_1"]
+params = { iterations = 50 }
+
+[scene."kreuzend.netz"]
+summary = "Drei Körper, zwei davon durchdringen sich; das Zerlegen in vier Körper sagt ab."
+kernel = "netz"
+sources = { src_1 = "meshes/crossing_and_apart.stl" }
+promises = { stops = true, findings = ["ingest.multiple_components", "op.split_bodies.ValidationError", "slice.large_overhang"], actions = { resolve_intersections = "ingest.multiple_components", split_bodies = "ingest.multiple_components", recount_and_retry = "op.split_bodies.ValidationError", orient_for_print = "slice.large_overhang", show_support_need = "slice.large_overhang" } }
+[[scene."kreuzend.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm" }
+[[scene."kreuzend.netz".ops]]
+op = "split_bodies"
+inputs = ["obj_1"]
+params = { count = 4 }
+
+[scene."offen_repariert.netz"]
+summary = "Ein teilweise offenes Netz, repariert: das weite Loch wird geschlossen und gemeldet."
+kernel = "netz"
+sources = { src_1 = "meshes/partially_open.stl" }
+promises = { objects = 1, findings = ["repair.wide_hole_filled"], actions = { show_location = "repair.wide_hole_filled", leave_open = "repair.wide_hole_filled" } }
+[[scene."offen_repariert.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm", mend = false, wide_holes = false }
+[[scene."offen_repariert.netz".ops]]
+op = "repair"
+inputs = ["obj_1"]
+params = {}
+
+# --- Projektparameter --------------------------------------------------------------
+
+[scene."parameter.exakt"]
+summary = "Ein exakter Quader, dessen Breite am Projektparameter breite = 40 mm hängt."
+kernel = "exakt"
+parameters = { breite = { value = 40.0, unit = "mm", title = "Breite" } }
+promises = { objects = 1, body = "closed" }
+[[scene."parameter.exakt".ops]]
+op = "create_brep_box"
+params = { width = "@breite", depth = 30.0, height = 20.0 }
+
+[scene."parameter.netz"]
+summary = "Ein Netzquader, dessen Breite am Projektparameter breite = 40 mm hängt."
+kernel = "netz"
+parameters = { breite = { value = 40.0, unit = "mm", title = "Breite" } }
+promises = { objects = 1, body = "closed" }
+[[scene."parameter.netz".ops]]
+op = "create_box"
+params = { width = "@breite", depth = 30.0, height = 20.0 }
+
 # --- Körperzustände --------------------------------------------------------------
 
 [scene."offen.netz"]
 summary = "Ein Würfel ohne drei Dreiecke, ohne Flicken geladen: offen, mit einem Randzug."
 kernel = "netz"
 sources = { src_1 = "meshes/broken_open.stl" }
-promises = { objects = 1, kinds = ["edge_loop"], body = "open", findings = ["ingest.not_watertight", "arrange.below_bed"] }
+promises = { objects = 1, kinds = ["edge_loop"], body = "open", findings = ["ingest.not_watertight", "arrange.below_bed"], actions = { repair_and_retry = "ingest.not_watertight", show_locations = "ingest.not_watertight" } }
 [[scene."offen.netz".ops]]
 op = "load"
 params = { source = "src_1", unit = "mm", mend = false, wide_holes = false }
@@ -162,7 +242,7 @@ params = { source = "src_1", unit = "mm", mend = false, wide_holes = false }
 summary = "Ein Würfel mit einem winzigen Bruchstück daneben: ein Körper aus zwei Schalen."
 kernel = "netz"
 sources = { src_1 = "meshes/two_components.stl" }
-promises = { objects = 1, body = "parts", findings = ["ingest.multiple_components", "ingest.small_components"] }
+promises = { objects = 1, body = "parts", findings = ["ingest.multiple_components", "ingest.small_components"], actions = { split_bodies = "ingest.multiple_components", remove_small_parts = "ingest.small_components" } }
 [[scene."mehrteilig.netz".ops]]
 op = "load"
 params = { source = "src_1", unit = "mm" }
@@ -183,7 +263,7 @@ inputs = ["obj_1", "obj_2"]
 summary = "Ein Netzquader, geschlossen ausgehöhlt (Wand 2 mm, ohne Entlüftung)."
 kernel = "netz"
 base = "quader.netz"
-promises = { objects = 1, kinds = ["void"], body = "cavity" }
+promises = { objects = 1, kinds = ["void"], body = "cavity", findings = ["hollow.done"], actions = { change_step = "hollow.done" } }
 [[scene."hohlraum.netz".ops]]
 op = "hollow_object"
 inputs = ["obj_1"]
@@ -530,7 +610,7 @@ params = { edge = 2.0 }
 summary = "Derselbe Quader auf 0,7 mm Kantenlänge verfeinert: über FEATURE_LIMIT_TRIANGLES (§21.1)."
 kernel = "netz"
 heavy = true
-promises = { objects = 1, triangles_over = 1500000, findings = ["perceive.too_large"] }
+promises = { objects = 1, triangles_over = 1500000, findings = ["perceive.too_large"], actions = { recognize_fully = "perceive.too_large", recognize_local = "perceive.too_large", decimate_mesh = "perceive.too_large" } }
 [[scene.ueber_erkennungsgrenze.ops]]
 op = "create_box"
 params = { width = 200.0, depth = 200.0, height = 100.0 }
@@ -561,6 +641,33 @@ params = { edge = 0.22 }
 [[scene.langsam_2s.ops]]
 op = "subtract_objects"
 inputs = ["obj_1", "obj_2"]
+
+[scene.unter_dem_bett_langsam]
+summary = "Der Würfel unter dem Bett neben zwei fein vernetzten Kugeln, die voneinander abgezogen werden: Ein geänderter Wert rechnet Sekunden, nicht aus dem Zwischenspeicher."
+kernel = "netz"
+heavy = true
+sources = { src_1 = "meshes/cube_clean.stl" }
+promises = { objects = 2, seconds_over = 2, findings = ["arrange.below_bed"], actions = { place_on_bed = "arrange.below_bed" } }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "load"
+params = { source = "src_1", unit = "mm" }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "create_sphere"
+params = { diameter = 40.0, segments = 128, x = 60.0 }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "create_sphere"
+params = { diameter = 40.0, segments = 128, x = 75.0 }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "remesh_mesh"
+inputs = ["obj_2"]
+params = { edge = 0.15 }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "remesh_mesh"
+inputs = ["obj_3"]
+params = { edge = 0.15 }
+[[scene.unter_dem_bett_langsam.ops]]
+op = "subtract_objects"
+inputs = ["obj_2", "obj_3"]
 
 [scene.langsam_10s]
 summary = "Dieselben Kugeln auf 0,15 mm verfeinert, voneinander abgezogen: rechnet über 10 s."

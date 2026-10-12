@@ -1,29 +1,52 @@
-"""Native Einzeldateiabnahme: jeder Fall im echten Fenster, jeder Schritt mit Bild (RM-184).
+"""Native Einzeldatei- und Funktionsabnahme: jeder Fall im echten Fenster, jeder Schritt mit Bild.
 
     .venv\\Scripts\\python.exe tools/file_acceptance.py inventory --manifest <json> --out <ordner>
     .venv\\Scripts\\python.exe tools/file_acceptance.py inventory --source <bestand> --out <ordner>
+    .venv\\Scripts\\python.exe tools/file_acceptance.py inventory --functions --out <ordner>
+        [--package D4] [--rows <kennung>,…] [--phases main,escape]
+        [--variants basis,sprachen,zoll,lizenz,skalierung,dunkel]
     .venv\\Scripts\\python.exe tools/file_acceptance.py run --out <ordner> [--first 1] [--last 9]
+        [--again] [--timeout <s>] [--screen <name oder nummer>]
     .venv\\Scripts\\python.exe tools/file_acceptance.py report --out <ordner>
+        [--package D4] [--verdicts <toml>] [--checklist <md>]
 
 ``--manifest`` nimmt das Manifest des Dateiaudits
 (``ui-audit/2026-09-15-files/manifest.json``: 187 Fälle in seiner Zählung),
-``--source`` einen Ordner wie ``F:\\3D Dateien``.
+``--source`` einen Ordner wie ``F:\\3D Dateien`` (RM-184). ``--functions`` legt
+die Funktionsfälle des Funktionsdurchgangs an (RM-737, Konzept
+``konzept-funktionsdurchgang-2026-10.md`` §5): je Zeile der erzeugten
+Funktionsliste (``tools/function_list.py``) und Variante ein Fall, je Sprache
+und Paket ein Sprachfall; dazu die Startszenen nach ``<ordner>/scenes/`` und die
+Menüleiste des gebauten Fensters nach ``<ordner>/menubar.json``. Gefahren
+werden sie vom Prüfstand (``tools/function_bench.py`` und seine Nachbarn) —
+dieses Werkzeug bleibt der eine Einstieg (Konzept §12: kein drittes
+Fensterwerkzeug).
+
+**Jede geprüfte Handlung ist ein Eingabeereignis** (Bauplan D0 B5): Auswahl per
+Klick auf die Baumzeile, Zahlen getippt mit dem Dezimalzeichen der Sprache,
+*Übernehmen* geklickt, Rückgängig und Wiederholen über ihre Tasten — jeder Klick
+an der Stelle, die ``guide_targets.next_click`` nennt, mit der Probe, ob dort
+wirklich das Ziel liegt (``function_walk.Walk``). Nur die Startszene entsteht
+über ``open_path``. Der Kindprozess setzt ``AA_DontUseNativeDialogs``: Den
+Systemdialog prüft nur Stufe C.
 
 Gebaut aus dem Serienlauf des Dateiaudits vom 15.09.2026 (``audit.py``: ein
 frischer Prozess je Datei, das echte Fenster, ein eigenes Nutzerprofil je
-Fall) und seinem Kundenweg an der Bohrung (``detail_ui.py``). Je Fall:
+Fall) und seinem Kundenweg an der Bohrung (``detail_ui.py``). Je Dateifall:
 
 1. **Import** über ``MainWindow.open_path`` — der Weg von Menü, Zuletzt-Liste
-   und Ziehen; der Systemdialog gehört dem Betriebssystem.
+   und Ziehen; der Systemdialog gehört dem Betriebssystem. Eine Rückfrage
+   beantwortet der Hauptknopf ihres Dialogs.
 2. **Erkennung**: Merkmale je Körper nach Art, dazu die funktionalen Gruppen.
 3. **Maßänderung** an einem repräsentativen Merkmal (Bohrung vor Langloch vor
-   Gewinde vor Kegel vor Zapfen vor Fläche): gewählt mit einem Klick in den
-   Objektbaum, geändert am ersten Längenfeld des Merkmalfensters, das ein Maß
-   und keine Lage nennt — gesetzt über das Feld wie im Kundenweg des Audits
-   (``detail_ui.py``), nicht getippt; ob das Tippen dasselbe tut, gehört zur
-   Fensterabnahme.
-4. **Vorschau**, **Übernehmen** (der Knopf des Merkmalfensters),
-   **Rückgängig**, **Wiederholen**.
+   Gewinde vor Kegel vor Zapfen vor Fläche): gewählt mit einem Klick auf seine
+   Zeile im Objektbaum (``tree.row:``), geändert am ersten Längenfeld des
+   Merkmalfensters, das ein Maß und keine Lage nennt — hineingeklickt, alles
+   markiert, die neue Zahl getippt.
+4. **Vorschau**, **Übernehmen** (``feature.apply``), **Rückgängig** und
+   **Wiederholen** über die Tasten aus ``shortcut_schemes``. Ob die Vorschau
+   steht oder abgesagt ist, liest der Lauf ab, wo der Kunde es sieht: Band mit
+   Legende, gesperrtes *Übernehmen* mit seinem Grund.
 
 Je Schritt ein Bild des Fensters und je Körper ein Netzabdruck (SHA-256 über
 Ecken und Dreiecke, ein exakter Körper über seine Vernetzung im selben
@@ -40,7 +63,8 @@ nächsten Lauf übersprungen (``--again`` fährt ihn neu).
 
 Kein Testlauf und nicht im Tor: Der Lauf braucht ein echtes Fenster und
 dauert. Seine Logik — Bestand, Wahl des Merkmals, neue Zahl, Abgleich der
-Abdrücke, Bericht — prüft ``tests/test_file_acceptance.py`` ohne Fenster.
+Abdrücke, Bericht — prüft ``tests/test_file_acceptance.py`` ohne Fenster, die
+der Funktionsfälle ``tests/test_function_bench.py`` und ihre Nachbarn.
 """
 
 from __future__ import annotations
@@ -56,7 +80,7 @@ import time
 import traceback
 import zipfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -126,7 +150,31 @@ WRITE_ATTEMPTS = 20
 #: Wie lange ein einzelner Schritt im Fenster warten darf (Sekunden).
 STEP_TIMEOUT = 180.0
 
-#: Das Messprofil des Audits: kein Materialurteil, nur ein fester Rahmen.
+#: Dasselbe für einen Funktionsfall: Sein Grundsatz geht dieselbe Zeile in
+#: zwölf Phasen ab, jede von der Startszene aus (``function_bench.FunctionFlow``).
+FUNCTION_CASE_TIMEOUT = 1800.0
+
+#: Und für einen Sprachfall, der die Flächen aller Zeilen eines Pakets abgeht —
+#: wieder aufnehmbar je Fläche, also verliert ein Abbruch nur die eine.
+LANGUAGE_CASE_TIMEOUT = 3600.0
+
+#: Wie lange der Kindprozess braucht, um die Menüleiste am Fenster zu zählen (Sekunden).
+MENUBAR_TIMEOUT = 600.0
+
+#: Alle wie viel Sekunden ein Fall die Stapel seiner Fäden nach ``stderr.log`` schreibt.
+HANG_DUMP_S = 300.0
+
+#: Die Arten eines Falls: eine Datei (RM-184), eine Zeile der Funktionsliste,
+#: eine Sprache über die Flächen eines Pakets, der Start einer Zeile des
+#: Startablaufs über ``app.ui.app.main`` (RM-737).
+CASE_KINDS: tuple[str, ...] = ("file", "function", "language", "start")
+
+#: Die Quelle der Zeilen, die vor dem Hauptfenster stehen (``function_list.startup_rows``):
+#: Sie laufen als Startfall, nicht als Funktionsfall.
+STARTUP_SOURCE = "startablauf"
+
+#: Das Messprofil des Audits: kein Materialurteil, nur ein fester Rahmen —
+#: auch der Filamentdrucker der Funktionsfälle (``function_setup.PRINTERS``).
 PRINTER = "centauri-carbon-2"
 MATERIAL = "petg"
 
@@ -142,13 +190,22 @@ STEPS: tuple[str, ...] = (
 
 @dataclass(frozen=True, slots=True)
 class Case:
-    """Ein Fall der Abnahme: eine Datei oder ein Archivmitglied."""
+    """Ein Fall der Abnahme: eine Datei, ein Archivmitglied, eine Funktion oder eine Sprache.
+
+    ``kind`` ist einer aus :data:`CASE_KINDS`; ``row`` die Kennung der Zeile
+    (beim Sprachfall das Paket), ``variant`` die Bedingungen des Laufs
+    (``function_setup.Variant``). Alte ``cases.json`` ohne diese Felder sind
+    Dateifälle und bleiben lesbar.
+    """
 
     number: int
     relative: str
     path: str
     suffix: str
     bores: bool = False
+    kind: str = "file"
+    row: str = ""
+    variant: dict[str, Any] = field(default_factory=dict)
 
 
 # --- Bestand -----------------------------------------------------------------
@@ -263,6 +320,260 @@ def write_json(path: Path, data: object, attempts: int = WRITE_ATTEMPTS) -> None
 
 def read_cases(out: Path) -> list[Case]:
     return [Case(**entry) for entry in json.loads((out / "cases.json").read_text(encoding="utf-8"))]
+
+
+#: Die Nutzerordner, die ein Fall auf sein Profil legt. Nie ``HOME`` oder
+#: ``USERPROFILE``: Grafiktreiber und ihre Zwischenspeicher hängen daran, und die
+#: Adapterfrage der Ansicht hing dann (Erinnerung „sonden-bauen“).
+PROFILE_VARIABLES: tuple[str, ...] = (
+    "APPDATA",
+    "LOCALAPPDATA",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+)
+
+
+def isolate(profile: Path) -> None:
+    """Legt die Nutzerordner dieses Prozesses auf ``profile``, vor dem ersten ``import app``."""
+    profile.mkdir(parents=True, exist_ok=True)
+    for key in PROFILE_VARIABLES:
+        os.environ[key] = str(profile)
+
+
+# --- Funktionsfälle (RM-737) -----------------------------------------------------
+
+
+def function_cases(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    packages: Sequence[str] = (),
+    row_ids: Sequence[str] = (),
+    variant_sets: Sequence[str] = ("basis",),
+    languages: Sequence[str] | None = None,
+    phases: Sequence[str] = (),
+    first_number: int = 1,
+) -> list[Case]:
+    """Die Fälle zu Zeilen der Funktionsliste: je Zeile und Variante, je Sprache und Paket.
+
+    ``rows`` sind die Zeilen aus ``tools/function_list.py`` (Plan D0, Abschnitt 2.3).
+    ``packages`` und ``row_ids`` schränken ein; eine Kennung, die keine Zeile
+    trifft, ist ein Fehler — ein Lauf, der still nichts prüft, sähe aus wie einer,
+    der nichts fand. ``sprachen`` faltet nicht je Zeile aus: Ein Prozess je
+    Sprache und Paket geht die Flächen aller Zeilen ab (``tools/CLAUDE.md``,
+    sechs Sprachen in einem Prozess brechen ab). ``phases`` beschränkt jeden
+    Funktionsfall auf diese Phasen (``function_setup.PHASES``) — für die
+    Nachprüfung einer Zeile nach einem Fix.
+
+    Was die Spezifikation an Lizenz und Vorbedingungen nennt, gilt für jeden Fall
+    der Zeile; eine Vorbedingung mit zwei Zuständen bekommt im Satz ``basis``
+    einen Lauf im anderen Zustand dazu, denn „fehlt“ ist der Fehlerweg
+    (``function_setup.spec_variants``). Die Läufe von ``lizenz`` liest
+    ``function_setup.variant_sets`` jetzt an der Fassung. Eine Zeile des
+    Startablaufs (:data:`STARTUP_SOURCE`) wird im Satz ``basis`` ein Startfall
+    im Zustand „Demo abgelaufen“ und in keinem anderen Satz gefahren — sie hat
+    kein Fenster, an dem eine Phase liefe. ``phases`` gilt nur für Sätze, die
+    sie haben; ein Satz ohne eine davon fällt weg.
+    """
+    from app.i18n.catalog import available_languages
+    from tools.function_list import STARTUP_LICENCE
+    from tools.function_setup import PHASES, Variant, spec_variants
+    from tools.function_setup import variant_sets as known_sets
+
+    sets = known_sets()
+    unknown_sets = sorted(set(variant_sets) - set(sets))
+    if unknown_sets:
+        raise ValueError(
+            f"unbekannte Variantensätze: {', '.join(unknown_sets)} — bekannt: {', '.join(sets)}"
+        )
+    unknown_phases = sorted(
+        set(phases) - {phase for name in variant_sets for phase in PHASES.get(name, ())}
+    )
+    if unknown_phases:
+        raise ValueError(f"Phasen {unknown_phases} gibt es in {list(variant_sets)} nicht")
+    known = {str(row["id"]) for row in rows}
+    missing = sorted(set(row_ids) - known)
+    if missing:
+        raise ValueError(f"keine Zeile mit der Kennung: {', '.join(missing)}")
+    chosen = [
+        row
+        for row in rows
+        if (not packages or row.get("package") in packages)
+        and (not row_ids or str(row["id"]) in row_ids)
+    ]
+    cases: list[Case] = []
+    number = first_number
+    for name in variant_sets:
+        own = tuple(phase for phase in phases if phase in PHASES[name])
+        if phases and not own:
+            continue
+        for row in chosen if name != "sprachen" else ():
+            if row.get("source") == STARTUP_SOURCE:
+                if name == "basis" and not phases:
+                    variant = Variant.of({"set": "start", "licence": STARTUP_LICENCE})
+                    cases.append(
+                        Case(
+                            number,
+                            f"{row['id']} [{STARTUP_LICENCE}]",
+                            "",
+                            "",
+                            kind="start",
+                            row=str(row["id"]),
+                            variant=variant.as_dict(),
+                        )
+                    )
+                    number += 1
+                continue
+            scene = str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "")
+            base, others = spec_variants(row.get("spec"))
+            entries = [{**base, **entry, "phases": own} for entry in sets[name]]
+            if name == "basis" and not phases:
+                entries += [{**base, "set": "basis", **other} for other in others]
+            for entry in entries:
+                variant = Variant.of(entry)
+                label = ", ".join(
+                    f"{key}={value}"
+                    for key, value in entry.items()
+                    if key not in ("set", "phases") and value
+                )
+                cases.append(
+                    Case(
+                        number,
+                        f"{row['id']} [{label or name}]",
+                        f"scenes/{scene}.p3d" if scene else "",
+                        "",
+                        kind="function",
+                        row=str(row["id"]),
+                        variant=variant.as_dict(),
+                    )
+                )
+                number += 1
+    if "sprachen" in variant_sets:
+        spoken = tuple(languages) if languages is not None else available_languages()
+        for package in sorted({str(row.get("package")) for row in chosen}):
+            for language in spoken:
+                variant = Variant.of({"set": "sprachen", "language": language})
+                cases.append(
+                    Case(
+                        number,
+                        f"{package} [{language}]",
+                        "",
+                        "",
+                        kind="language",
+                        row=package,
+                        variant=variant.as_dict(),
+                    )
+                )
+                number += 1
+    return cases
+
+
+def read_rows(out: Path) -> dict[str, dict[str, Any]]:
+    """Die Zeilen eines Funktionslaufs, wie das Inventar sie abgelegt hat (``rows.json``)."""
+    path = out / "rows.json"
+    if not path.is_file():
+        return {}
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return {str(row["id"]): row for row in loaded}
+
+
+def function_inventory(
+    out: Path,
+    *,
+    packages: Sequence[str],
+    row_ids: Sequence[str],
+    variant_sets: Sequence[str],
+    phases: Sequence[str] = (),
+) -> list[Case]:
+    """``inventory --functions``: Menüleiste, Zeilen, Fälle und Startszenen ablegen.
+
+    Zuerst zählt ein Kindprozess am gebauten Fenster die Menüleiste
+    (``menubar.json``, :func:`menubar`) — die Fensterbefehle entstehen erst mit
+    dem Fenster (Konzept §3). Dann baut ``tools/function_list.py`` (D0-L) daraus
+    und aus Register, Dialogklassen und Wortschatz die Zeilen; ``rows.json``
+    trägt sie für Kindprozesse und Bericht (D0-U liest dieselbe Datei). Die
+    Startszenen speichert ``function_scenes.save_scenes`` nach ``scenes/``: alle
+    leichten, und die schweren dazu, sobald eine gewählte Zeile in einer
+    schweren beginnt — L baut die Szenen nur als Ganzes. Jeder Fall öffnet
+    davon seine eigene Kopie (``function_bench.FunctionFlow.scene_path``).
+    """
+    from dataclasses import asdict as as_dict
+
+    from tools import function_list, function_scenes
+
+    entries = function_list.read_menubar(menubar(out))
+    rows = [as_dict(row) for row in function_list.rows(entries)]
+    cases = function_cases(
+        rows, packages=packages, row_ids=row_ids, variant_sets=variant_sets, phases=phases
+    )
+    chosen = {case.row for case in cases if case.kind in ("function", "start")}
+    languages = {case.row for case in cases if case.kind == "language"}
+    kept = [row for row in rows if str(row["id"]) in chosen or row.get("package") in languages]
+    write_json(out / "rows.json", kept)
+    catalogue = function_scenes.load_scenes()
+    wanted = {
+        str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "")
+        for row in kept
+    }
+    heavy = any(catalogue[key].heavy for key in wanted if key in catalogue)
+    function_scenes.save_scenes(out / "scenes", heavy=heavy)
+    return cases
+
+
+def menubar(out: Path) -> Path:
+    """Die Fensterbefehle des gebauten Fensters nach ``menubar.json`` — in einem Kindprozess.
+
+    Offscreen genügt: Gezählt werden Einträge und ihre Kennungen, nicht ihr Bild.
+    Ein eigener Prozess, weil das Inventar selbst kein Fenster baut und ein
+    Fenster im selben Prozess die Fälle danach nicht stören soll.
+    """
+    target = out / "menubar.json"
+    try:
+        finished = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve()), "menubar", "--out", str(out)],
+            cwd=ROOT,
+            env={**os.environ, "PYTHONUTF8": "1", "QT_QPA_PLATFORM": "offscreen"},
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=MENUBAR_TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as expired:
+        # Eine Meldung statt eines Stapels (Review L6).
+        raise RuntimeError(
+            f"Die Menüleiste ließ sich nicht zählen: Der Kindprozess antwortete"
+            f" nach {MENUBAR_TIMEOUT:.0f} s nicht."
+        ) from expired
+    if finished.returncode != 0 or not target.is_file():
+        raise RuntimeError(f"Die Menüleiste ließ sich nicht zählen:\n{finished.stderr[-4000:]}")
+    return target
+
+
+def menubar_child(out: Path) -> int:
+    """Kindprozess von :func:`menubar`: Fenster bauen, Menüleiste lesen, schreiben.
+
+    Das Profil steht auf der Quellsprache: Die Kennungen der Fensterbefehle sind
+    die deutschen Menüpfade (``function_list.MenuEntry``), gleich welche
+    Sprache das System spricht.
+    """
+    isolate(out / "menubar-profile")
+    sys.path.insert(0, str(ROOT))
+    from tools import function_setup
+
+    function_setup.write_profile(function_setup.Variant())
+    from app.core.bootstrap import load_operations
+    from app.ui.app import build_application
+    from tools import function_list
+    from tools.window_bench import shutdown_window
+
+    load_operations()
+    application, window = build_application([])
+    try:
+        function_list.write_menubar(out / "menubar.json", function_list.menubar_of(window))
+    finally:
+        shutdown_window(window, application)
+    return 0
 
 
 # --- Wahl und Abgleich ----------------------------------------------------------
@@ -477,13 +788,47 @@ def case_stage(record: Mapping[str, Any]) -> str:
 # --- Bericht ----------------------------------------------------------------------
 
 
+def function_summary(case: Case, folder: Path, process: Mapping[str, Any]) -> dict[str, Any]:
+    """Ein Funktions- oder Sprachfall in der Übersicht: wie weit er kam, was ihn aufhielt.
+
+    Geurteilt wird hier nicht — das tut ``function_report`` aus dem Protokoll und
+    den Urteilen. Die Übersicht sagt, ob der Lauf durchkam, wie die
+    Dateiabnahme es für ihre Fälle sagt.
+    """
+    state = _read(folder / "bench.json")
+    protocols = (
+        [_read(folder / "function.json")]
+        if case.kind in ("function", "start")
+        else [_read(path) for path in sorted((folder / "surfaces").glob("*.json"))]
+    )
+    return {
+        "number": case.number,
+        "relative": case.relative,
+        "kind": case.kind,
+        "row": case.row,
+        "variant": case.variant.get("set", ""),
+        "stage": state.get("stage", "nicht gelaufen"),
+        "exit_code": process.get("exit_code"),
+        "timeout": process.get("timeout"),
+        "seconds": process.get("wall_s"),
+        "findings": sum(len(protocol.get("findings") or []) for protocol in protocols),
+        "unmeasured": sum(len(protocol.get("unmeasured") or {}) for protocol in protocols),
+        "errors": [error for protocol in protocols for error in protocol.get("errors") or []]
+        + ([state["harness_exception"]] if "harness_exception" in state else []),
+    }
+
+
 def summary(out: Path, cases: Sequence[Case]) -> dict[str, Any]:
     """Alle Fälle in einer Übersicht — geschrieben als ``summary.json`` und ``summary.md``."""
     rows: list[dict[str, Any]] = []
+    functions: list[dict[str, Any]] = []
     for case in cases:
         folder = out / "cases" / f"{case.number:03d}"
-        result = _read(folder / "result.json")
         process = _read(folder / "process.json")
+        if case.kind != "file":
+            functions.append(function_summary(case, folder, process))
+            continue
+        result = _read(folder / "result.json")
         row = {
             "number": case.number,
             "relative": case.relative,
@@ -512,6 +857,12 @@ def summary(out: Path, cases: Sequence[Case]) -> dict[str, Any]:
         "bores": sum(len(row["bores"]) for row in rows),
         "bores_passed": sum(1 for row in rows for bore in row["bores"] if bore["passed"]),
         "rows": rows,
+        "function_cases": len(functions),
+        "function_ran": sum(1 for row in functions if row["exit_code"] is not None),
+        "function_complete": sum(
+            1 for row in functions if row["exit_code"] == 0 and row["stage"] == "done"
+        ),
+        "functions": functions,
     }
     write_json(out / "summary.json", data)
     (out / "summary.md").write_text(markdown(data), encoding="utf-8")
@@ -569,7 +920,33 @@ def markdown(data: Mapping[str, Any]) -> str:
             f"| {row['number']} | {bore['feature']} | {mark(bore['passed'])} |"
             for row, bore in bores
         ]
-    failures = [row for row in data["rows"] if row["errors"]]
+    functions = data.get("functions") or []
+    if functions:
+        lines += [
+            "",
+            "## Funktions- und Sprachfälle",
+            "",
+            f"Fälle: {data['function_cases']} · gelaufen: {data['function_ran']}"
+            f" · durchgekommen: {data['function_complete']}",
+            "",
+            "| Nr. | Zeile | Art | Variante | Stufe | Exit | Sekunden | Funde | Ungemessen |",
+            "|---:|---|---|---|---|---:|---:|---:|---:|",
+        ]
+        for row in functions:
+            seconds = row.get("seconds")
+            cells = [
+                row["number"],
+                str(row["relative"]).replace("|", "/"),
+                row["kind"],
+                row["variant"] or "-",
+                row["stage"],
+                "-" if row["exit_code"] is None else row["exit_code"],
+                "-" if seconds is None else f"{float(seconds):.1f}",
+                row["findings"],
+                row["unmeasured"],
+            ]
+            lines.append("| " + " | ".join(str(cell) for cell in cells) + " |")
+    failures = [row for row in [*data["rows"], *functions] if row["errors"]]
     if failures:
         lines += ["", "## Fehler", ""]
         for row in failures:
@@ -581,43 +958,78 @@ def markdown(data: Mapping[str, Any]) -> str:
 # --- Lauf --------------------------------------------------------------------------
 
 
-def run(out: Path, first: int, last: int, again: bool, timeout: float) -> int:
-    """Je Fall ein frischer Prozess mit eigenem Profil — wie im Audit."""
+def resumes(case: Case, process: Mapping[str, Any]) -> bool:
+    """Ob ein schon gelaufener Fall beim nächsten ``run`` weiterläuft, ohne ``--again``.
+
+    Nur ein abgebrochener Sprachfall: Er nimmt seine Flächen einzeln wieder auf
+    (``function_language.LanguageFlow``) und verliert durch einen Abbruch nur die
+    eine, an der er stand. Jeder andere Fall läuft nur mit ``--again`` neu.
+    """
+    return case.kind == "language" and (
+        process.get("exit_code") != 0 or bool(process.get("timeout"))
+    )
+
+
+def case_timeout(case: Case, timeout: float) -> float:
+    """Wie lange der Prozess eines Falls laufen darf: ``--timeout``, mindestens seine Frist."""
+    if case.bores:
+        return max(timeout, BORE_CASE_TIMEOUT)
+    if case.kind == "function":
+        return max(timeout, FUNCTION_CASE_TIMEOUT)
+    if case.kind == "language":
+        return max(timeout, LANGUAGE_CASE_TIMEOUT)
+    return timeout
+
+
+def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: str = "") -> int:
+    """Je Fall ein frischer Prozess mit eigenem Profil — wie im Audit.
+
+    ``screen`` legt das Fenster auf einen Schirm (Nummer oder Name); ohne Angabe
+    nimmt der Fall den ersten, der nicht der Hauptschirm ist. Mit Funktionsfällen
+    misst der Lauf zuerst einmal den Referenzfaktor (§31, Entscheidung
+    Koordinator 12.10.); alle Fälle dieses Laufs lesen ihn aus ``reference.json``.
+    """
     cases = read_cases(out)
+    if any(case.kind in ("function", "language") for case in cases):
+        sys.path.insert(0, str(ROOT))
+        from tools.function_capture import measure_reference
+
+        print(f"Referenzfaktor {measure_reference(out):.3f}", flush=True)
     failures = 0
     for case in cases:
         if not first <= case.number <= last:
             continue
         folder = out / "cases" / f"{case.number:03d}"
         status = folder / "process.json"
-        if status.exists() and not again:
+        if status.exists() and not again and not resumes(case, _read(status)):
             continue
         folder.mkdir(parents=True, exist_ok=True)
         print(f"START [{case.number:03d}] {case.relative}", flush=True)
         began = time.perf_counter()
+        command = [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "child",
+            "--out",
+            str(out),
+            "--case",
+            str(case.number),
+        ]
+        if screen:
+            command += ["--screen", screen]
         with (
             (folder / "stdout.log").open("w", encoding="utf-8") as stdout,
             (folder / "stderr.log").open("w", encoding="utf-8") as stderr,
         ):
             process = subprocess.Popen(
-                [
-                    sys.executable,
-                    str(Path(__file__).resolve()),
-                    "child",
-                    "--out",
-                    str(out),
-                    "--case",
-                    str(case.number),
-                ],
+                command,
                 stdout=stdout,
                 stderr=stderr,
                 cwd=ROOT,
                 env={**os.environ, "PYTHONUTF8": "1"},
             )
             try:
-                code = process.wait(
-                    timeout=max(timeout, BORE_CASE_TIMEOUT) if case.bores else timeout
-                )
+                code = process.wait(timeout=case_timeout(case, timeout))
                 timed_out = False
             except subprocess.TimeoutExpired:
                 process.kill()
@@ -639,17 +1051,24 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float) -> int:
     return 1 if failures else 0
 
 
-def child(out: Path, number: int) -> int:
-    """Ein Fall im echten Fenster: Import, Erkennung, Änderung, Vorschau, Übernehmen, Undo, Redo."""
+def child(out: Path, number: int, screen: str = "") -> int:
+    """Ein Fall im echten Fenster — eine Datei hier, eine Funktion oder Sprache im Prüfstand."""
     case = next(entry for entry in read_cases(out) if entry.number == number)
     folder = out / "cases" / f"{number:03d}"
     folder.mkdir(parents=True, exist_ok=True)
-    for key in ("APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"):
-        os.environ[key] = str(folder / "profile")
+    # Vor dem ersten Import von ``app``: Die Anwendung liest die Nutzerordner beim Import.
+    isolate(folder / "profile")
     sys.path.insert(0, str(ROOT))
     import faulthandler
 
     faulthandler.enable()
+    # Steht ein Fall, sagt ``stderr.log`` wo: alle HANG_DUMP_S die Stapel aller
+    # Fäden — ohne py-spy (Erinnerung „abrisse-haenger-und-lebensdauer“).
+    faulthandler.dump_traceback_later(HANG_DUMP_S, repeat=True)
+    if case.kind == "start":
+        return start_child(out, case, folder)
+    if case.kind != "file":
+        return function_child(out, case, folder, screen)
     data: dict[str, Any] = {
         "case": asdict(case),
         "stage": "start",
@@ -657,24 +1076,31 @@ def child(out: Path, number: int) -> int:
         "questions": [],
         "dialogs": [],
         "states": {},
+        "steps": [],
     }
 
     def persist() -> None:
         write_json(folder / "result.json", data)
 
     persist()
-    # Erst nach dem Umbiegen der Nutzerordner: Die Anwendung liest sie beim Import.
     # Das Register füllt sonst ``main`` vor dem Fenster — wie im Audit hier.
     from app.core.bootstrap import load_operations
     from app.ui.app import build_application
+    from tools import function_setup
     from tools.window_bench import shutdown_window
 
-    load_operations()
-    application, window = build_application([])
-    session = window.session
-    flow = WindowFlow(application, window, session, folder, data, persist)
     exit_code = 0
+    application: Any = None
+    window: Any = None
     try:
+        # Der feste Rahmen der Abnahme (RM-184): Das neue Projekt, das *Neues
+        # Projekt* anlegt, nimmt Drucker und Material aus dem Profil
+        # (:data:`PRINTER`, :data:`MATERIAL`), und die Ersteinrichtung ist erledigt.
+        function_setup.write_profile(function_setup.Variant())
+        load_operations()
+        no_native_dialogs()
+        application, window = build_application([])
+        flow = WindowFlow(application, window, window.session, folder, data, persist)
         flow.prepare()
         flow.run(case)
     except Exception:
@@ -682,15 +1108,179 @@ def child(out: Path, number: int) -> int:
         persist()
         exit_code = 1
     finally:
-        session.forget_changes()
-        shutdown_window(window, application)
+        if window is not None:
+            window.session.forget_changes()
+            shutdown_window(window, application)
         data["shutdown_complete"] = True
         persist()
     return exit_code
 
 
+def no_native_dialogs() -> None:
+    """Qt-Dialoge statt der des Systems (B7): Systemdialoge lassen sich nicht bedienen.
+
+    Den echten Systemdialog prüft Stufe C von Hand; so bleibt der Rest des Wegs in
+    Stufe A, und ein Fall hängt nicht an einem Fenster, das kein Ereignis erreicht.
+    """
+    from PySide6.QtCore import QCoreApplication, Qt
+
+    QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs, True)
+
+
+def version_info() -> dict[str, str]:
+    """Commit und Anwendungsversion für das Protokoll (``version``: ``commit``, ``app``)."""
+    from app.branding import APP_VERSION
+
+    finished = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    return {"commit": finished.stdout.strip(), "app": APP_VERSION}
+
+
+def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
+    """Ein Funktions- oder Sprachfall: Profil, Lizenz, Vorbedingungen, Fenster, Prüfstand.
+
+    Die Reihenfolge ist die Aussage: Das Profil liegt vor dem Bau des Fensters,
+    denn die Anwendung liest Sprache, Thema, Einheit und Drucker beim Start;
+    Skalierung und Bewegung stehen vor der ``QApplication``; Lizenz und
+    Vorbedingungen über die Nahtstellen der Suite nach dem Laden des Registers
+    und vor dem Fenster.
+
+    Zwei Dateien: ``function.json`` ist das Messprotokoll nach dem Schema von
+    D0-U, ``bench.json`` hält, was nur den Lauf betrifft (Phase, Ausnahme,
+    Abbau, erledigte Flächen). Ein Sprachfall schreibt kein ``function.json``,
+    sondern je Fläche ein Protokoll unter ``surfaces/``.
+    """
+    from tools import function_bench, function_language, function_protocol, function_setup
+
+    variant = function_setup.Variant.of({**case.variant, **({"screen": screen} if screen else {})})
+    if variant.scale != 1.0:
+        os.environ["QT_SCALE_FACTOR"] = f"{variant.scale:g}"
+    if not variant.motion:
+        os.environ["SOLIDON3D_MOTION"] = "aus"
+    rows = read_rows(out)
+    scenes = out / "scenes"
+    # Ein neuer Lauf beginnt ohne die Kopien und Sicherungen des vorigen (Review N2).
+    state: dict[str, Any] = {
+        "case": asdict(case),
+        "stage": "start",
+        "cleared": function_setup.fresh_case(folder),
+    }
+    version = version_info()
+
+    def keep() -> None:
+        write_json(folder / "bench.json", state)
+
+    keep()
+    data: dict[str, Any] | None = None
+    if case.kind == "function":
+        row = rows.get(case.row) or {"id": case.row}
+        data = function_protocol.empty_protocol(row, variant.protocol(None, (0, 0)), version)
+
+    def persist() -> None:
+        if data is not None:
+            write_json(folder / "function.json", data)
+        keep()
+
+    persist()
+    from app.core.bootstrap import load_operations
+    from app.ui.app import build_application
+    from tools.function_capture import run_reference_factor
+    from tools.window_bench import shutdown_window
+
+    exit_code = 0
+    application: Any = None
+    window: Any = None
+    try:
+        # Vorbereitung im ``try``: Scheitert Profil, Lizenz oder eine
+        # Vorbedingung, steht der Grund in ``bench.json`` und in der Übersicht.
+        second = function_setup.case_scene(folder, scenes, function_setup.SECOND_SCENE)
+        function_setup.write_profile(variant, recent=[second] if second is not None else [])
+        load_operations()
+        no_native_dialogs()
+        function_setup.apply_licence(variant.licence)
+        state["preconditions_applied"] = function_setup.apply_preconditions(variant.preconditions)
+        state["reference_factor"] = run_reference_factor(out)
+        application, window = build_application([])
+        flow: Any
+        if data is None:
+            package_rows = [row for row in rows.values() if row.get("package") == case.row]
+            flow = function_language.LanguageFlow(
+                application, window, folder, state, keep, package_rows, variant, scenes, version
+            )
+        else:
+            flow = function_bench.FunctionFlow(
+                application, window, folder, data, persist, row, variant, scenes, state, out
+            )
+            flow.prepare()
+        flow.run()
+        state["stage"] = "done"
+    except Exception:
+        state["harness_exception"] = traceback.format_exc()
+        persist()
+        exit_code = 1
+    finally:
+        if window is not None:
+            window.session.forget_changes()
+            shutdown_window(window, application)
+        state["shutdown_complete"] = True
+        persist()
+    return exit_code
+
+
+def start_child(out: Path, case: Case, folder: Path) -> int:
+    """Ein Startfall: Profil, Zustand „Demo abgelaufen“, dann ``app.ui.app.main`` selbst.
+
+    Kein ``build_application``: Das Starttor steht in ``main`` vor dem Fenster
+    (``function_start.StartFlow``). ``function.json`` ist das Protokoll nach dem
+    Schema von D0-U, ``bench.json`` der Lauf samt Ausgang von ``main``.
+    """
+    from tools import function_protocol, function_setup, function_start
+
+    variant = function_setup.Variant.of(case.variant)
+    row = read_rows(out).get(case.row) or {"id": case.row}
+    state: dict[str, Any] = {
+        "case": asdict(case),
+        "stage": "start",
+        "cleared": function_setup.fresh_case(folder),
+    }
+    data = function_protocol.empty_protocol(row, variant.protocol(None, (0, 0)), version_info())
+
+    def persist() -> None:
+        write_json(folder / "function.json", data)
+        write_json(folder / "bench.json", state)
+
+    persist()
+    exit_code = 0
+    try:
+        function_setup.write_profile(variant)
+        function_setup.apply_licence(variant.licence)
+        no_native_dialogs()
+        state["main_exit_code"] = function_start.StartFlow(data, persist).run()
+        state["stage"] = "done"
+    except Exception:
+        state["harness_exception"] = traceback.format_exc()
+        exit_code = 1
+    finally:
+        state["shutdown_complete"] = True
+        persist()
+    return exit_code
+
+
 class WindowFlow:
-    """Die Schritte eines Falls am Fenster; jeder schreibt sein Bild und seine Abdrücke."""
+    """Die Schritte eines Dateifalls am Fenster; jeder schreibt sein Bild und seine Abdrücke.
+
+    Jede Handlung ist ein Eingabeereignis über ``function_walk.Walk`` — Klick
+    mit Probe an der Stelle, die ``next_click`` nennt, Tippen, Taste (B5). Was
+    hier direkt am Fenster gelesen wird — Abdrücke, Merkmale, Feldwerte —, ist
+    Ablesen; ``tests/test_function_guard.py`` hält per AST, dass diese Klasse
+    keine Bedienung umgeht.
+    """
 
     def __init__(
         self,
@@ -701,12 +1291,18 @@ class WindowFlow:
         data: dict[str, Any],
         persist: Callable[[], None],
     ) -> None:
+        from tools.function_walk import QtPorts, Walk
+
         self.application = application
         self.window = window
         self.session = session
         self.folder = folder
         self.data = data
         self.persist = persist
+        self.began = time.perf_counter()
+        self.ports = QtPorts(window, self.began)
+        self.walker = Walk(self.ports, data.setdefault("steps", []), self.began)
+        self._answering = False
 
     # Warten und Aufnehmen ---------------------------------------------------------
 
@@ -720,7 +1316,6 @@ class WindowFlow:
         began = time.perf_counter()
         while time.perf_counter() - began < timeout:
             self.application.processEvents()
-            self._sweep()
             if done():
                 self.pump()
                 self.data.setdefault("events", []).append(
@@ -733,6 +1328,25 @@ class WindowFlow:
             time.sleep(0.01)
         raise TimeoutError(label)
 
+    def drive(self, label: str, steps: Sequence[Any], timeout: float = STEP_TIMEOUT) -> None:
+        """Fährt Schritte über den Automaten; ein Fund oder Fehler bricht den Fall ab."""
+        self.walker.phase = label
+        from tools.function_machine import StepMachine, drive, qt_schedule
+
+        machine = StepMachine(
+            qt_schedule,
+            time.perf_counter,
+            unstick=self._escape,
+            on_stuck=lambda: self._stuck(label),
+        )
+        drive(machine, steps, lambda: self.pump(0.005), time.perf_counter, timeout)
+        if machine.finding is not None:
+            raise RuntimeError(f"{label}: {machine.finding}")
+        if machine.error is not None:
+            if "Zeitgrenze" in machine.error:
+                raise TimeoutError(f"{label}: {machine.error}")
+            raise RuntimeError(f"{label}: {machine.error}")
+
     def new_result(self, previous: Any, label: str) -> None:
         self.wait_for(
             lambda: (
@@ -743,23 +1357,68 @@ class WindowFlow:
             label,
         )
 
-    def _sweep(self) -> None:
-        from PySide6.QtWidgets import QDialog, QLabel, QPushButton
+    def _escape(self) -> None:
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QApplication
 
-        modal = self.application.activeModalWidget()
-        if modal is None:
+        widget = QApplication.activePopupWidget() or QApplication.activeModalWidget()
+        if widget is not None:
+            QTest.keyClick(widget, Qt.Key.Key_Escape)
+
+    def _stuck(self, label: str) -> None:
+        """Escape schloss das Fenster nicht: welches es war, steht im Ergebnis (Review L12)."""
+        from PySide6.QtWidgets import QApplication
+
+        widget = QApplication.activePopupWidget() or QApplication.activeModalWidget()
+        if widget is not None:
+            self.data["errors"].append(
+                f"{label}: {type(widget).__name__} „{widget.windowTitle()}“ ließ sich"
+                " nicht mit Escape schließen"
+            )
+            self.persist()
+
+    def _sweep(self) -> None:
+        """Ein modales Fenster: die Rückfrage mit ihrem Hauptknopf beantworten, sonst Escape.
+
+        **Ein Zeitgeber**, wie im Audit: Ein ``exec()`` aus einem Ereignis heraus
+        läuft in einer eigenen Schleife, und die Warteschleife hier käme erst
+        nach seinem Ende wieder dran. Mit Riegel: Der Klick läuft selbst durch
+        Ereignisse, und ein zweiter Durchgang bediente dasselbe Fenster zweimal.
+        """
+        from PySide6.QtWidgets import QApplication, QLabel, QListWidget, QPushButton
+
+        modal = QApplication.activeModalWidget()
+        if modal is None or self._answering:
             return
-        self.data["dialogs"].append(
-            {
+        self._answering = True
+        try:
+            record: dict[str, Any] = {
+                "class": type(modal).__name__,
                 "title": modal.windowTitle(),
                 "text": [label.text() for label in modal.findChildren(QLabel)],
                 "buttons": [button.text() for button in modal.findChildren(QPushButton)],
             }
-        )
-        if isinstance(modal, QDialog):
-            modal.reject()
-        else:
-            modal.close()
+            self.data["dialogs"].append(record)
+            if type(modal).__name__ == "AskDialog":
+                lists = modal.findChildren(QListWidget)
+                choices = (
+                    [lists[0].item(row).text() for row in range(lists[0].count())] if lists else []
+                )
+                current = lists[0].currentItem() if lists else None
+                answer = current.text() if current is not None else ""
+                self.data["questions"].append(
+                    {"question": " ".join(record["text"]), "choices": choices, "answer": answer}
+                )
+                try:
+                    self.walker.click_once("dialog.accept")
+                except Exception as problem:
+                    self.data["errors"].append(f"Rückfrage nicht beantwortet: {problem}")
+                    self._escape()
+                return
+            self._escape()
+        finally:
+            self._answering = False
 
     def shot(self, label: str) -> dict[str, str]:
         """Bild des Fensters und Abdruck je Körper für diesen Schritt."""
@@ -777,36 +1436,39 @@ class WindowFlow:
     # Die Schritte -----------------------------------------------------------------
 
     def prepare(self) -> None:
+        """Wache anlegen, Fenster zeigen, *Neues Projekt* klicken."""
+        from PySide6.QtCore import QTimer
+
+        from tools.function_machine import Step
+
         self.session.failed.connect(
             lambda error: self.data["errors"].append(str(error)), self.window
         )
         self.session.importFailed.connect(
             lambda error: self.data["errors"].append(str(error)), self.window
         )
-        self.session.askRequested.disconnect(self.window._on_ask)
-
-        def answer(request: Any) -> None:
-            choices = list(request.choices)
-            selected = "mm" if "mm" in choices else (choices[0] if choices else "")
-            self.data["questions"].append(
-                {"question": str(request.question), "choices": choices, "answer": selected}
-            )
-            request.reply(selected)
-
-        self.session.askRequested.connect(answer, self.window)
-        # **Ein Zeitgeber räumt modale Fenster ab**, wie im Audit: Ein
-        # ``exec()`` aus einem Ereignis heraus läuft in einer eigenen Schleife,
-        # und die Warteschleife hier käme erst nach seinem Ende wieder dran.
-        from PySide6.QtCore import QTimer
-
         self.sweeper = QTimer(self.window)
         self.sweeper.timeout.connect(self._sweep)
         self.sweeper.start(250)
         self.window.showMaximized()
         self.pump()
-        self.session.start_new(PRINTER, MATERIAL)
-        self.window._show_start_screen(False)
-        self.new_result(None, "Neues Projekt")
+        previous = self.session.last_result
+        self.drive(
+            "Neues Projekt",
+            [
+                self.walker.step("start.new"),
+                Step(
+                    "neues Projekt steht",
+                    lambda machine: None,
+                    ready=lambda: (
+                        self.session.last_result is not None
+                        and self.session.last_result is not previous
+                        and not self.session.busy
+                    ),
+                    timeout_s=STEP_TIMEOUT,
+                ),
+            ],
+        )
         self.session.forget_changes()
 
     def run(self, case: Case) -> None:
@@ -817,7 +1479,6 @@ class WindowFlow:
         self.window.open_path(Path(case.path))
         self.new_result(previous, "Import")
         self.data["import_s"] = time.perf_counter() - began
-        self.window.viewport.reset_camera(follow_selection=False)
         self.shot("01-import")
         self.data["stage"] = "recognition"
         self.data["objects"] = self._recognition()
@@ -886,40 +1547,39 @@ class WindowFlow:
             )
         return found
 
-    def _cycle(
-        self, object_id: str, feature_id: str, prefix: str, *, restore: bool
-    ) -> dict[str, Any]:
-        """Auswahl, Maßänderung, Vorschau, Übernehmen, Rückgängig, Wiederholen an einem Merkmal."""
-        from PySide6.QtCore import Qt
-        from PySide6.QtTest import QTest
-
+    def _fields(self) -> list[Any]:
+        """Die sichtbaren, freien Längenfelder des Merkmalfensters, in ihrer Folge."""
         from app.ui.labels import LengthSpin
 
-        record: dict[str, Any] = {"object": object_id, "feature": feature_id}
-        states: dict[str, dict[str, str]] = {}
-        states["01-import"] = self.shot(f"{prefix}01-import")
-        self.window.object_tree.select_feature(object_id, feature_id)
-        self.pump()
-        tree = self.window.object_tree.tree
-        current = tree.currentItem()
-        if current is not None:
-            QTest.mouseClick(
-                tree.viewport(),
-                Qt.MouseButton.LeftButton,
-                pos=tree.visualItemRect(current).center(),
-            )
-        self.pump(0.5)
-        states["02-selection"] = self.shot(f"{prefix}02-selection")
-        fields = [
+        return [
             spin
             for spin in self.window.feature_panel.findChildren(LengthSpin)
             if spin.isVisible() and spin.isEnabled()
         ]
+
+    def _cycle(
+        self, object_id: str, feature_id: str, prefix: str, *, restore: bool
+    ) -> dict[str, Any]:
+        """Auswahl, Maßänderung, Vorschau, Übernehmen, Rückgängig, Wiederholen an einem Merkmal."""
+        from app.core.guides import TARGET_PROPERTY
+
+        record: dict[str, Any] = {"object": object_id, "feature": feature_id}
+        states: dict[str, dict[str, str]] = {}
+        states["01-import"] = self.shot(f"{prefix}01-import")
+        self.drive(f"{prefix}Auswahl", [self.walker.step(f"tree.row:{object_id}.{feature_id}")])
+        self.pump(0.5)
+        states["02-selection"] = self.shot(f"{prefix}02-selection")
+        fields = self._fields()
         record["selection"] = {
             "object": object_id,
             "feature": feature_id,
             "fields": [
-                {"name": spin.accessibleName(), "value": spin.value_mm()} for spin in fields
+                {
+                    "name": spin.accessibleName(),
+                    "value": spin.value_mm(),
+                    "target": str(spin.property(TARGET_PROPERTY) or ""),
+                }
+                for spin in fields
             ],
         }
         if not fields:
@@ -931,29 +1591,37 @@ class WindowFlow:
             }
             record["note"] = NO_LENGTH_FIELD
             return record
-        spin = fields[size_field_first([spin.accessibleName() for spin in fields])]
-        before = spin.value_mm()
+        chosen = record["selection"]["fields"][
+            size_field_first([spin.accessibleName() for spin in fields])
+        ]
+        if not chosen["target"]:
+            raise RuntimeError(
+                f"{prefix}Feld „{chosen['name']}“ trägt kein Wortschatzkennzeichen"
+                " — ohne Ziel kein Klick (Plan D0, Abschnitt 2.1, feature.field:)"
+            )
+        before = float(chosen["value"])
         preview: dict[str, str] | None = None
         taken: float | None = None
         refusals: list[dict[str, Any]] = []
         for after in values_to_try(before):
-            spin.setFocus()
-            outcome, detail = self._previewed(spin, after, f"{prefix}Vorschau {after}")
+            outcome, detail = self._previewed(chosen["target"], after, f"{prefix}Vorschau {after}")
             if outcome == "shown":
                 taken, preview = after, detail
                 break
             refusals.append({"value": after, "reason": detail})
         record["selection"]["changed"] = {
-            "name": spin.accessibleName(),
+            "name": chosen["name"],
+            "target": chosen["target"],
             "before": before,
             "after": taken,
         }
         if refusals:
             record["refusals"] = refusals
         if taken is None:
-            # Keine Zahl trägt: zurück zum gemessenen Wert, und das nächste
-            # Merkmal ist dran (:func:`first_with_a_length_field`).
-            spin.set_value_mm(before)
+            # Keine Zahl trägt: zurück zum gemessenen Wert, getippt wie jede
+            # andere, und das nächste Merkmal ist dran
+            # (:func:`first_with_a_length_field`).
+            self.drive(f"{prefix}zurück", self._typing(chosen["target"], before))
             self.pump(0.5)
             record["checks"] = {
                 "changed": None,
@@ -965,15 +1633,15 @@ class WindowFlow:
             return record
         states["03-preview"] = self.shot(f"{prefix}03-preview")
         previous = self.session.last_result
-        QTest.mouseClick(self.window.feature_panel._apply, Qt.MouseButton.LeftButton)
+        self.drive(f"{prefix}Übernehmen", [self.walker.step("feature.apply")])
         self.new_result(previous, f"{prefix}Übernehmen")
         states["04-applied"] = self.shot(f"{prefix}04-applied")
         previous = self.session.last_result
-        self.window.action_undo()
+        self.drive(f"{prefix}Rückgängig", [self._key(self._undo_keys(), "Rückgängig")])
         self.new_result(previous, f"{prefix}Rückgängig")
         states["05-undo"] = self.shot(f"{prefix}05-undo")
         previous = self.session.last_result
-        self.window.action_redo()
+        self.drive(f"{prefix}Wiederholen", [self._key(self._redo_keys(), "Wiederholen")])
         self.new_result(previous, f"{prefix}Wiederholen")
         states["06-redo"] = self.shot(f"{prefix}06-redo")
         record["states"] = states
@@ -981,40 +1649,108 @@ class WindowFlow:
         record["checks"] = compared(states, preview)
         if restore:
             previous = self.session.last_result
-            self.window.action_undo()
+            self.drive(f"{prefix}zurück zum Import", [self._key(self._undo_keys(), "Rückgängig")])
             self.new_result(previous, f"{prefix}zurück zum Import")
         return record
 
-    def _previewed(self, spin: Any, value: float, label: str) -> tuple[str, Any]:
-        """Eine Zahl ins Feld und warten, bis die Vorschau sie zeigt oder absagt.
+    def _undo_keys(self) -> Any:
+        from PySide6.QtGui import QKeySequence
 
-        ``("shown", Abdrücke)`` mit einem neuen Bild ohne Problem,
-        ``("refused", Satz)`` mit dem Satz, den die Freigabe trägt
-        (``MainWindow._preview_approval.problem``), ``("none", …)`` ohne beides
-        bis :data:`STEP_TIMEOUT`. Gewartet wird auf eine **neue** Freigabe:
-        Die Absage der vorigen Zahl gilt nicht für diese.
+        return QKeySequence(QKeySequence.StandardKey.Undo)
+
+    def _redo_keys(self) -> Any:
+        """Die Wiederholen-Taste, die im Menü steht (``shortcut_schemes.redo_keys``)."""
+        from PySide6.QtGui import QKeySequence
+
+        from app.ui.shortcut_schemes import redo_keys
+
+        return redo_keys(sys.platform, QKeySequence(QKeySequence.StandardKey.Redo))[0]
+
+    def _key(self, sequence: Any, label: str) -> Any:
+        from tools.function_machine import SETTLE_MS, Step
+
+        def act(machine: Any) -> None:
+            self.walker.record({"target": label, "key": sequence.toString()})
+            self.ports.keys(sequence)
+
+        return Step(f"Taste {label}", act, settle_ms=SETTLE_MS)
+
+    def _typing(self, target: str, value: float) -> list[Any]:
+        """Ins Feld klicken, alles markieren, die Zahl in der Anzeigeeinheit tippen.
+
+        Markiert und getippt wird nur, wenn der Fokus im Feld liegt
+        (``function_walk.focus_check``, Review M13).
         """
+        from PySide6.QtGui import QKeySequence
+
+        from app.ui import guide_targets
+        from app.ui.labels import display_unit
+        from tools.function_machine import SETTLE_MS, Step
+        from tools.function_walk import focus_check, typed_number
+
+        text = typed_number(value, display_unit())
+
+        def field() -> Any:
+            try:
+                return guide_targets.widget_for(self.window, target)
+            except LookupError:
+                return None
+
+        def mark(machine: Any) -> None:
+            focus_check(field(), target)
+            keys = QKeySequence(QKeySequence.StandardKey.SelectAll)
+            self.walker.record({"target": "alles markieren", "key": keys.toString()})
+            self.ports.keys(keys)
+
+        def type_it(machine: Any) -> None:
+            focus_check(field(), target)
+            self.walker.record({"target": target, "typed": text})
+            self.ports.type_text(text)
+
+        return [
+            self.walker.step(target),
+            Step("alles markieren", mark, settle_ms=SETTLE_MS),
+            Step(f"tippen {text}", type_it, settle_ms=SETTLE_MS),
+        ]
+
+    def _previewed(self, target: str, value: float, label: str) -> tuple[str, Any]:
+        """Eine Zahl ins Feld tippen und warten, bis die Vorschau sie zeigt oder absagt.
+
+        Abgelesen, wo der Kunde es sieht: ``("shown", Abdrücke)``, wenn das Band
+        die Legende einer **neuen** Differenz trägt; ``("refused", Satz)``, wenn
+        *Übernehmen* gesperrt ist und seinen Grund nennt (Kurzhilfe und
+        zugängliche Beschreibung, dieselbe Stelle, an der auch die Grenzablehnung
+        eines Feldes steht); ``("none", …)`` ohne beides bis :data:`STEP_TIMEOUT`.
+        Die Absage der vorigen Zahl gilt nicht für diese: Mit dem Tippen fällt sie,
+        bevor das Warten beginnt.
+        """
+        from app.ui import guide_targets
+
         viewport = self.window.viewport
         shown = viewport.difference
-        before = getattr(self.window, "_preview_approval", None)
         heard: dict[str, str] = {}
 
         def settled() -> bool:
-            approval = getattr(self.window, "_preview_approval", None)
-            fresh = approval is not None and approval is not before
-            problem = str(getattr(approval, "problem", "") or "") if fresh else ""
-            if fresh and problem and not getattr(approval, "computing", False):
-                heard["refused"] = problem
+            try:
+                button = guide_targets.widget_for(self.window, "feature.apply")
+                banner = guide_targets.widget_for(self.window, "preview.banner")
+            except LookupError:
+                return False
+            reason = button.accessibleDescription() or button.toolTip()
+            if not button.isEnabled() and reason:
+                heard["refused"] = reason
                 return True
             difference = viewport.difference
+            legend = getattr(banner, "legend", None)
             return (
                 difference is not None
                 and difference is not shown
-                and not viewport._difference_pending
-                and not problem
+                and banner.isVisible()
+                and legend is not None
+                and legend.isVisible()
             )
 
-        spin.set_value_mm(value)
+        self.drive(f"{label} tippen", self._typing(target, value))
         try:
             self.wait_for(settled, label, STEP_TIMEOUT)
         except TimeoutError:
@@ -1040,18 +1776,34 @@ def main(argv: Iterable[str] | None = None) -> int:
     origin = inventory.add_mutually_exclusive_group(required=True)
     origin.add_argument("--manifest", type=Path)
     origin.add_argument("--source", type=Path)
+    origin.add_argument("--functions", action="store_true")
+    inventory.add_argument("--package", action="append", default=[])
+    inventory.add_argument("--rows", default="")
+    inventory.add_argument("--variants", default="basis")
+    inventory.add_argument("--phases", default="")
     running = commands.add_parser("run")
     running.add_argument("--out", required=True, type=Path)
     running.add_argument("--first", type=int, default=1)
     running.add_argument("--last", type=int, default=10**6)
     running.add_argument("--again", action="store_true")
     running.add_argument("--timeout", type=float, default=CASE_TIMEOUT)
+    running.add_argument("--screen", default="")
     one = commands.add_parser("child")
     one.add_argument("--out", required=True, type=Path)
     one.add_argument("--case", required=True, type=int)
+    one.add_argument("--screen", default="")
+    bar = commands.add_parser("menubar")
+    bar.add_argument("--out", required=True, type=Path)
     reporting = commands.add_parser("report")
     reporting.add_argument("--out", required=True, type=Path)
+    reporting.add_argument("--package", action="append", default=[])
+    reporting.add_argument("--verdicts", type=Path, default=None)
+    reporting.add_argument("--checklist", type=Path, default=None)
     arguments = parser.parse_args(list(argv) if argv is not None else None)
+    # Dieser Baum vorn: Als Skript steht sonst ``tools/`` an erster Stelle, und
+    # ``import app`` träfe die Installation der ``.venv`` — womöglich ein
+    # anderer Arbeitsbaum (Erinnerung „sonden-bauen“).
+    sys.path.insert(0, str(ROOT))
     out = outside_the_repository(arguments.out)
     if arguments.command == "inventory":
         # **Ein leerer Bestand ist keine Abnahme**: Mit ``--source`` auf
@@ -1065,27 +1817,71 @@ def main(argv: Iterable[str] | None = None) -> int:
                 flush=True,
             )
             return 2
-        cases = (
-            cases_from_manifest(arguments.manifest)
-            if arguments.manifest
-            else cases_from_source(arguments.source, out)
-        )
+        if arguments.functions:
+            try:
+                cases = function_inventory(
+                    out,
+                    packages=arguments.package,
+                    row_ids=[entry for entry in arguments.rows.split(",") if entry],
+                    variant_sets=[entry for entry in arguments.variants.split(",") if entry],
+                    phases=[entry for entry in arguments.phases.split(",") if entry],
+                )
+            except ValueError as problem:
+                print(str(problem), file=sys.stderr, flush=True)
+                return 2
+        else:
+            cases = (
+                cases_from_manifest(arguments.manifest)
+                if arguments.manifest
+                else cases_from_source(arguments.source, out)
+            )
         if not cases:
             print("Kein Fall gefunden — der Bestand ist leer.", file=sys.stderr, flush=True)
             return 1
         write_json(out / "cases.json", [asdict(case) for case in cases])
+        kinds = {kind: sum(case.kind == kind for case in cases) for kind in CASE_KINDS}
+        counted = ", ".join(f"{kind} {count}" for kind, count in kinds.items() if count)
         print(
-            f"{len(cases)} Fälle, davon {sum(case.bores for case in cases)} mit jeder Bohrung",
+            f"{len(cases)} Fälle ({counted}),"
+            f" davon {sum(case.bores for case in cases)} mit jeder Bohrung",
             flush=True,
         )
         return 0
     if arguments.command == "run":
-        return run(out, arguments.first, arguments.last, arguments.again, arguments.timeout)
+        return run(
+            out,
+            arguments.first,
+            arguments.last,
+            arguments.again,
+            arguments.timeout,
+            arguments.screen,
+        )
     if arguments.command == "child":
-        return child(out, arguments.case)
-    data = summary(out, read_cases(out))
-    print(f"{data['passed']} von {data['cases']} Fällen bestanden", flush=True)
-    return 0
+        return child(out, arguments.case, arguments.screen)
+    if arguments.command == "menubar":
+        return menubar_child(out)
+    cases = read_cases(out)
+    data = summary(out, cases)
+    print(f"{data['passed']} von {data['cases']} Dateifällen bestanden", flush=True)
+    if not any(case.kind != "file" for case in cases):
+        return 0
+    from tools import function_report
+
+    # Ausgang 1 nur bei ungültigen Eingaben (Plan D0, Abschnitt 2.13) — ein
+    # Urteil ohne Bild, ein fremder Grund, ein ungültiges Protokoll; Funde
+    # nicht. write sagt es über seinen Rückgabewert, je Paket oder für alle.
+    if (arguments.verdicts or arguments.checklist) and len(arguments.package) != 1:
+        print(
+            "--verdicts und --checklist verlangen genau ein --package.", file=sys.stderr, flush=True
+        )
+        return 1
+    codes = [
+        function_report.write(
+            out, package=package, verdicts=arguments.verdicts, checklist=arguments.checklist
+        )
+        for package in (arguments.package or [None])
+    ]
+    return 1 if any(codes) else 0
 
 
 if __name__ == "__main__":

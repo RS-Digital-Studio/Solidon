@@ -183,7 +183,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `print_findings_flow.py` | die Befunde der Schichtanalyse nach jeder Auswertung im Arbeiter (§2.8, §22); ein neuer Stand löst den laufenden ab |
-| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Slicer vor Drucker, Erhebung aus `first_run` (`_PrinterSurvey`, `printers_on_offer`, `SlicerPrinters`); Düsenvariante nach Profilidentität, Modell und Hersteller; am Resin-Drucker nur, was gilt (`_reduce_for_resin`); `PlateRun.meshes`: Netze je Platte |
+| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Slicer vor Drucker, Erhebung aus `first_run`; am Resin-Drucker nur, was gilt (`_reduce_for_resin`); `PlateRun.meshes`: Netze je Platte |
 | `print_disclosure.py` | der Hinweis vor der ersten Arbeit mit Druckeinstellungen (§29): Er sperrt nichts; die Wahl darunter entscheidet, ob die Erfahrungswerte mit einer 3MF mitreisen |
 
 Druckfelder, ihre Herkunft und Suchtreffer: `druckerwahl.md`.
@@ -243,7 +243,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | Datei | Zweck |
 |---|---|
 | `manual_window.py` | Suche in `core/manual_search.py`; F1-Anker nur für geprüfte `MarkdownNoHTML`-Überschriften (`core/manual.py`) |
-| `guide_targets.py` | Ziele für Tour und `tools/make_guides.py`: `widget_for`, `area_for`, `action_for`; fehlend: `MissingTargetError` |
+| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`; fehlend: `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
 | `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac; `native_key`: die Taste in der Schreibweise der Plattform |

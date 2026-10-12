@@ -503,6 +503,14 @@ def test_a_case_runs_in_its_own_process_from_inventory_to_report(tmp_path: Path)
     assert (
         (out / "summary.md").read_text(encoding="utf-8").startswith("# Native Einzeldateiabnahme")
     )
+    # Review D0-P M7: Der feste Rahmen der Abnahme steht im Profil des Falls —
+    # Neues Projekt nimmt Drucker und Material daraus (centauri-carbon-2/petg).
+    from tools.file_acceptance import MATERIAL, PRINTER
+
+    (profile,) = (out / "cases" / "001" / "profile").rglob("settings.json")
+    written = json.loads(profile.read_text(encoding="utf-8"))
+    assert (written["printer"], written["material"]) == (PRINTER, MATERIAL)
+    assert written["first_run_done"] is True
 
 
 def test_the_output_folder_stays_outside_the_repository(tmp_path: Path) -> None:

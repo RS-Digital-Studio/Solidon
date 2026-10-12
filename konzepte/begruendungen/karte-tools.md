@@ -167,6 +167,25 @@ mitrechnet, findet ein Leck, das keines ist. Es teilt Messprofil,
 Arbeitssatzmessung und Abbaureihenfolge mit `window_bench.py`, statt sie zu
 wiederholen. Ohne Bildschirm und wgpu-Adapter misst es nichts und sagt es.
 
+`file_acceptance.py`, die Einzeldateiabnahme, geht je Fall in einem Prozess
+mit eigenem Profil durch das echte Fenster: Import, Erkennung samt Gruppen,
+Maßänderung (sagt die Vorschau ab, ein kleinerer Wert, dann das nächste
+Merkmal), Vorschau, Übernehmen, Undo, Redo; je Schritt Bild und Netzabdruck,
+am Drillholder jede Bohrung. Der Bestand kommt aus dem Audit-Manifest oder
+einem Ordner. Dieselbe Hülle fährt die Fälle des Funktionsdurchgangs
+(`inventory --functions` mit `--package`, `--rows`, `--variants`, `--phases`;
+`run --screen`; `menubar`; `report`), die Schritte dazu kommen aus
+`function_bench.py` und `function_capture.py`.
+
+`function_list.py` stellt die Liste des Funktionsdurchgangs ohne Fenster auf, je
+Zeile Paket, Startszene und Weg: `--paket`, `--format md|json`, `--menueleiste
+<menubar.json>`, `--check` (Ausgang 1 bei Befund) und `--szenen --out <ordner>
+[--schwer]`, das die Startszenen nur außerhalb des Baums ablegt.
+`function_scan.py` liest den Quelltext unter `app/ui`, `function_scenes.py` liest,
+baut und prüft den Szenenkatalog `tests/data/function_scenes.toml`. Beide
+importieren kein anderes `function_*`-Modul; so bleibt die Liste ohne Kreis mit den
+Urteilsmodulen, die aus ihr importieren.
+
 ## Erzeugen
 
 *HEAD-Fassung, früher unter „Die Familien“.*

@@ -774,9 +774,12 @@ Sperrklinke kürzer als heute.
 3. **Einfach, an der Wurzel, kein Workaround** für jeden Schritt und jeden Fix
    (3.1, Regel 9). Daraus folgte die Entscheidung für Komponenten statt Mixins
    (3.3).
-4. **Vorrang bis zum 25.11.:** Die Kundenpakete des Funktionsdurchgangs
+4. **Vorrang der Kundenpakete:** Die Kundenpakete des Funktionsdurchgangs
    (`konzept-funktionsdurchgang`, D0, D1, D9, D8, D3, D4) gehen vor die
    Schritte 4b bis 5 dieses Programms (Komponenten von `MainWindow`); Schritt 0
-   bis 3 können daneben laufen.
+   bis 3 können daneben laufen. Ohne Datum: Beide Programme laufen in vier
+   Phasen direkt hintereinander, jede sauber bis zu Ende, kein Schritt wird für
+   einen Termin gekürzt (Robert, 12.10.; vorher galt der Vorrang bis zum
+   25.11.).
 
 Ohne Rückfrage festgelegt: Schritt 0 kommt zuerst und landet vor Schritt 1.

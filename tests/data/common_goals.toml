@@ -9,7 +9,8 @@
 #   goal       das Ziel in den Worten des Kunden
 #   origin     bauplan oder fragebogen; ref nennt die Stelle bzw. den Wunsch
 #   scene      Startszene aus function_scenes.toml
-#   selection  was gewählt ist: koerper, koerper:2, kante oder merkmal:<art>
+#   selection  was gewählt ist, in den Wörtern der Anforderungen der Funktionsliste:
+#              koerper:1, koerper:2, kante oder merkmal:<art>
 #   target     wo das Ziel stehen soll: operation:<op> als Hauptaktion,
 #              feature:<schlüssel> oder edge:<op> als Feld oben
 
@@ -127,7 +128,7 @@ goal = "Einen Körper aushöhlen, um Material zu sparen."
 origin = "fragebogen"
 ref = "Wunsch nach Aushöhlen direkt am gewählten Teil"
 scene = "quader.exakt"
-selection = "koerper"
+selection = "koerper:1"
 target = "operation:hollow_object"
 
 [[goal]]
@@ -136,7 +137,7 @@ goal = "Ein zu großes Teil teilen, damit es auf das Bett passt."
 origin = "bauplan"
 ref = "§2.2 Weg 3: gegebenenfalls teilen und verstiften"
 scene = "quader.exakt"
-selection = "koerper"
+selection = "koerper:1"
 target = "operation:split_pinned"
 
 [[goal]]
@@ -163,7 +164,7 @@ goal = "Ein Netz gleichmäßig machen, bevor es von Hand geformt wird."
 origin = "bauplan"
 ref = "§2.2 Weg 4: gleichmäßig vernetzen"
 scene = "quader.netz"
-selection = "koerper"
+selection = "koerper:1"
 target = "operation:remesh_uniform"
 
 [[goal]]
@@ -190,5 +191,5 @@ goal = "Einen gewählten Körper entfernen."
 origin = "fragebogen"
 ref = "Wunsch, dass Entf am gewählten Merkmal oder Körper löscht"
 scene = "quader.exakt"
-selection = "koerper"
+selection = "koerper:1"
 target = "operation:delete_object"
