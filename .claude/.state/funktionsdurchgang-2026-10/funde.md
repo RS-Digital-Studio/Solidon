@@ -210,7 +210,7 @@ die systemischen leichten behebt D0.
 - Ursache: `app/core/registry/search.py` (Treffer in der Beschreibung gleich gewertet; Kundenwörter fehlen).
 - Vorschlag: Kundenwörter „Druckbett“, „aufs Bett“, „Grundebene“ an `place_on_bed`, „Variable“, „Benutzerparameter“ an *Parameter anlegen*; Rang mit Gegenprobe.
 - Wirkung beim Kunden: Wer „Druckbett“ tippt, bekommt Grundkörper statt der Handlung.
-- Stand: offen RM-737
+- Stand: behoben `8f2c5c4d6`
 
 ### FD-18 Fragen in eigenen Worten führen zu Mausbelegungen
 
@@ -222,7 +222,7 @@ die systemischen leichten behebt D0.
 - Ursache: `app/core/registry/search.py` (`request_terms` behält Fragewörter).
 - Vorschlag: Frage- und Füllwörter je Sprache aus der Anfrage nehmen.
 - Wirkung beim Kunden: Eine Frage führt zu Mausbelegungen statt zur Handlung.
-- Stand: offen RM-737
+- Stand: behoben `8f2c5c4d6`
 
 ### FD-19 Filament und Druck liegt zugeklappt am Ende der Auswahlkarte
 
