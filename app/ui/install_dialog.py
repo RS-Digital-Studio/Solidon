@@ -39,18 +39,18 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QMenu,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
-from app.core import discover, guides, install, tools
+from app.core import discover, install, tools
 from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.labels import UNEXPECTED_CRASH
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
+from app.ui.message_dialog import MessageDialog
 from app.ui.style import NORMAL, TIGHT, WIDE, DialogScrollArea, make_primary
 from app.ui.window_names import raw_window
 
@@ -1068,17 +1068,21 @@ class InstallDialog(QDialog):
 
     def _show_details(self) -> None:
         """Das Protokoll, für den der es weitergeben will (§33.2)."""
-        box = QMessageBox(self)
-        box.setProperty(guides.TARGET_PROPERTY, "message:install_details")
-        box.setWindowTitle(tr("Einzelheiten"))
         # Beim Start eines Dienstes hat keine Paketverwaltung etwas gemeldet —
-        # dort stehen Aufruf und Adresse.
-        box.setText(
-            tr("Womit Solidon den Dienst zu starten versucht hat:")
+        # dort stehen Aufruf und Adresse. Im Hausstil, das Protokoll lesbar und
+        # kopierbar darunter (FD-21).
+        box = MessageDialog(
+            self,
+            title=tr("Einzelheiten"),
+            headline=tr("Womit Solidon den Dienst zu starten versucht hat:")
             if self._running_action == "start"
-            else tr("Was die Paketverwaltung gemeldet hat:")
+            else tr("Was die Paketverwaltung gemeldet hat:"),
+            details=self._details,
+            target="message:install_details",
         )
-        box.setDetailedText(self._details)
+        copy = box.add_action(tr("Kopieren"), "message.button:install_details.copy", closes=False)
+        copy.clicked.connect(weak_slot(box, MessageDialog.copy_text))
+        box.add_exit(tr("Schließen"), "message.button:install_details.close")
         box.exec()
 
     def _finished(self, result: object) -> None:

@@ -455,12 +455,13 @@ def test_the_release_page_without_a_browser_leaves_its_address(
 ) -> None:
     """*Seite öffnen* ohne Browser verpuffte; jetzt liegt die Adresse bereit."""
     from PySide6.QtGui import QDesktopServices
-    from PySide6.QtWidgets import QMessageBox
+
+    from app.ui import dialogs
 
     monkeypatch.setattr(QDesktopServices, "openUrl", lambda _address: False)
     said: list[str] = []
     monkeypatch.setattr(
-        QMessageBox, "information", lambda _parent, _title, text, *_rest: said.append(text) or 0
+        dialogs, "inform", lambda _parent, _title, text, **_rest: said.append(text) or 0
     )
     qt_app.clipboard().setText("")
     dialog = UpdateDialog(release(url="https://solidon3d.de/neu.html"))

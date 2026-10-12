@@ -23003,6 +23003,10 @@ def test_a_missing_selection_is_said_not_put_in_a_box(
         raise AssertionError("no modal box for a missing selection")
 
     monkeypatch.setattr(QMessageBox, "information", no_box)
+    # Und auch keine Meldung im Hausstil (FD-21): Der Satz gehört in die Ansage.
+    from app.ui.message_dialog import MessageDialog
+
+    monkeypatch.setattr(MessageDialog, "exec", no_box)
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
     window.object_tree.tree.clearSelection()

@@ -1256,22 +1256,22 @@ def test_the_window_opens_at_its_start_size(qt_app: Any) -> None:
 
 
 def test_the_expired_demo_and_the_parameter_dialog_resolve(qt_app: Any, monkeypatch) -> None:
-    """Das Fenster nach abgelaufener Demo (ein ``QMessageBox`` ohne eigene Klasse)
-    heißt ``dialog:expired_demo``; im Dialog für Projektparameter lösen Name, Wert,
-    Einheit, Grenzen und Ausdruck als ``field:`` auf (Funde D0-L)."""
-    from PySide6.QtWidgets import QMessageBox
-
+    """Das Fenster nach abgelaufener Demo (eine Meldung ohne eigene Klasse)
+    heißt ``dialog:expired_demo``, sein Knopf ``message.button:expired_demo.website``;
+    im Dialog für Projektparameter lösen Name, Wert, Einheit, Grenzen und
+    Ausdruck als ``field:`` auf (Funde D0-L)."""
     from app.core import activation
     from app.ui import dialogs, guide_targets
     from app.ui.dialogs import EXPIRED_DEMO_TARGET, ParameterDialog
     from app.ui.main_window import MainWindow
+    from app.ui.message_dialog import MessageDialog
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
     window = MainWindow(Session(), UiSettings())
     seen: list[Any] = []
 
-    class ShownBox(QMessageBox):
+    class ShownBox(MessageDialog):
         """Zeigt sich, statt modal zu warten, und hält fest, was der Wortschatz findet."""
 
         def exec(self) -> int:  # type: ignore[override]
@@ -1279,14 +1279,17 @@ def test_the_expired_demo_and_the_parameter_dialog_resolve(qt_app: Any, monkeypa
             _settle(qt_app, 3)
             seen.append(guide_targets.widget_for(window, EXPIRED_DEMO_TARGET))
             seen.append(self)
+            seen.append(
+                guide_targets.widget_for(window, "message.button:expired_demo.website").window()
+            )
             self.hide()
             return 0
 
-    monkeypatch.setattr(dialogs, "QMessageBox", ShownBox)
+    monkeypatch.setattr(dialogs, "MessageDialog", ShownBox)
     try:
         assert guides.is_target(EXPIRED_DEMO_TARGET)
         dialogs.show_expired_demo(activation.Activation())
-        assert seen and seen[0] is seen[1]
+        assert seen and seen[0] is seen[1] is seen[2]
 
         dialog = ParameterDialog({}, window)
         dialog.show()
@@ -1386,6 +1389,16 @@ def raw_window_names(source: str) -> tuple[list[str], list[str]]:
             and isinstance(func.value, ast.Name)
             and (func.value.id, func.attr) in _RAW_STATIC
         )
+        # Eine Meldung im Hausstil (FD-21) nennt ihr Kennzeichen im Aufruf.
+        house = isinstance(func, ast.Name) and func.id in {"MessageDialog", "inform"}
+        if house:
+            given_here = [word.value for word in node.keywords if word.arg == "target"]
+            if not given_here:
+                missing.append(f"{func.id} (Zeile {node.lineno})")
+            names.extend(
+                str(value.value) for value in given_here[:1] if isinstance(value, ast.Constant)
+            )
+            continue
         if not (instance or static):
             continue
         chain = []

@@ -26,6 +26,9 @@ SETTINGS_CLASS: Final = "SettingsDialog"
 
 #: Rohe Qt-Fenster: Klassen und die Fabrikfunktionen, die eines bauen.
 RAW_CLASSES: Final[frozenset[str]] = frozenset({"QMessageBox", "QInputDialog", "QColorDialog"})
+#: Was eine Meldung im Hausstil baut (``app/ui/message_dialog.py``). Das Modul, das
+#: sie definiert, zählt nicht: ``inform`` ist ein Baustein, kein Fenster des Kunden.
+MESSAGE_BUILDERS: Final[frozenset[str]] = frozenset({"MessageDialog", "inform"})
 RAW_FACTORIES: Final[frozenset[str]] = frozenset(
     {
         "about",
@@ -153,13 +156,15 @@ def _section_title(node: ast.AST, builders: Iterable[str] = ("collapsible",)) ->
     return ""
 
 
-def _builds_raw_window(node: ast.AST) -> bool:
-    """``QMessageBox(…)`` oder ``QInputDialog.getItem(…)`` — ein rohes Qt-Fenster."""
+def _builds_raw_window(node: ast.AST, *, messages: bool = True) -> bool:
+    """``QMessageBox(…)`` oder ``QInputDialog.getItem(…)`` — ein rohes Qt-Fenster —, oder
+    eine Meldung im Hausstil (``MessageDialog(…)``, ``inform(…)``): Auch sie ist ein
+    Meldungsfenster, das seine Zeile in der Funktionsliste braucht (FD-21)."""
     if not isinstance(node, ast.Call):
         return False
     func = node.func
     if isinstance(func, ast.Name):
-        return func.id in RAW_CLASSES
+        return func.id in RAW_CLASSES or (messages and func.id in MESSAGE_BUILDERS)
     return (
         isinstance(func, ast.Attribute)
         and isinstance(func.value, ast.Name)
@@ -256,7 +261,10 @@ def _scan(items: tuple[tuple[str, str], ...]) -> UiScan:
     texts: set[str] = set()
     for module, text in items:
         tree = ast.parse(text, filename=module)
-        raw_here = any(name in text for name in RAW_CLASSES)
+        builds_messages = "class MessageDialog(" not in text
+        raw_here = any(name in text for name in RAW_CLASSES) or (
+            builds_messages and any(name in text for name in MESSAGE_BUILDERS)
+        )
         constants = _module_texts(tree)
         for node in statements(tree):
             if isinstance(node, ast.ClassDef):
@@ -265,7 +273,10 @@ def _scan(items: tuple[tuple[str, str], ...]) -> UiScan:
             elif (
                 raw_here
                 and isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
-                and any(_builds_raw_window(inner) for inner in _own_nodes(node))
+                and any(
+                    _builds_raw_window(inner, messages=builds_messages)
+                    for inner in _own_nodes(node)
+                )
             ):
                 raw.setdefault(node.name, []).append(module)
                 if marked := _own_target(node, constants):
@@ -348,8 +359,12 @@ def _own_target(
     function: ast.FunctionDef | ast.AsyncFunctionDef, constants: Mapping[str, str]
 ) -> str:
     """Das Kennzeichen, das ein Meldungsfenster selbst setzt — ``box.setProperty(…TARGET_
-    PROPERTY, X)`` oder ``with raw_window(X)`` —, sonst leer."""
+    PROPERTY, X)``, ``with raw_window(X)`` oder ``MessageDialog(…, target=X)`` —, sonst leer."""
     for node in _own_nodes(function):
+        if isinstance(node, ast.Call) and _called_name(node) in MESSAGE_BUILDERS:
+            for word in node.keywords:
+                if word.arg == "target" and (found := _text_of(word.value, constants)):
+                    return found
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)

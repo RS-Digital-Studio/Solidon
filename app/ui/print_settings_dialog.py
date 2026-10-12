@@ -48,7 +48,6 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QSizePolicy,
@@ -167,6 +166,7 @@ from app.ui.labels import (
 )
 from app.ui.labels import slicer_title as _slicer_title
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
+from app.ui.message_dialog import MessageDialog
 from app.ui.palette import ROLES
 from app.ui.panels import align_forms, collapsible, even_fields
 from app.ui.print_contract import handoff_receipt
@@ -5124,12 +5124,17 @@ class PrintSettingsDialog(QDialog):
         mehrzeiliger Text hingehört.
         """
         written = str(error.values.get("output", "") or "")
-        box = QMessageBox(self)
-        box.setProperty(guides.TARGET_PROPERTY, "message:slicer_output")
-        box.setIcon(QMessageBox.Icon.Information)
-        box.setWindowTitle(tr("Ausgabe des Slicers"))
-        box.setText(str(error.title))
-        box.setDetailedText(written or tr("Der Slicer hat nichts geschrieben."))
+        # Im Hausstil, das Protokoll lesbar und kopierbar darunter (FD-21).
+        box = MessageDialog(
+            self,
+            title=tr("Ausgabe des Slicers"),
+            headline=str(error.title),
+            details=written or tr("Der Slicer hat nichts geschrieben."),
+            target="message:slicer_output",
+        )
+        copy = box.add_action(tr("Kopieren"), "message.button:slicer_output.copy", closes=False)
+        copy.clicked.connect(weak_slot(box, MessageDialog.copy_text))
+        box.add_exit(tr("Schließen"), "message.button:slicer_output.close")
         box.exec()
 
     def _show_slicer_box(self, wanted: bool) -> None:

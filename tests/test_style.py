@@ -2170,10 +2170,11 @@ def test_the_error_dialog_accents_the_action_and_never_the_way_out(qt_app: objec
     """
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QFont
-    from PySide6.QtWidgets import QMessageBox, QPushButton
+    from PySide6.QtWidgets import QPushButton
 
     from app.core.errors import ARRANGE_ON_BED, CANCEL, CHOOSE_PRINTER, AppError
     from app.ui import dialogs
+    from app.ui.message_dialog import MessageDialog
 
     fehler = AppError(
         title="Probe", detail="x", suggestions=(ARRANGE_ON_BED, CHOOSE_PRINTER, CANCEL)
@@ -2183,17 +2184,17 @@ def test_the_error_dialog_accents_the_action_and_never_the_way_out(qt_app: objec
     # diese Liste räumt Python die erste Box ab, sobald die zweite entsteht —
     # und der Zugriff auf ihre Knöpfe endet mit „Internal C++ object already
     # deleted". Die Python-Hülle hält das C++-Objekt, nicht umgekehrt.
-    am_leben: list[QMessageBox] = []
+    am_leben: list[MessageDialog] = []
 
     def gezeigt(handlers: dict[str, object]) -> list[QPushButton]:
         """Fängt die Box ab, bevor sie modal wird, und zeigt sie unsichtbar."""
-        echt = QMessageBox.exec
-        gefangen: list[QMessageBox] = []
-        QMessageBox.exec = lambda self: (gefangen.append(self), 0)[1]  # type: ignore[method-assign]
+        echt = MessageDialog.exec
+        gefangen: list[MessageDialog] = []
+        MessageDialog.exec = lambda self: (gefangen.append(self), 0)[1]  # type: ignore[method-assign]
         try:
             dialogs.show_error(fehler, handlers=handlers)  # type: ignore[arg-type]
         finally:
-            QMessageBox.exec = echt  # type: ignore[method-assign]
+            MessageDialog.exec = echt  # type: ignore[method-assign]
         assert gefangen, "show_error hat keine Box gebaut"
         box = gefangen[0]
         am_leben.append(box)
@@ -2428,7 +2429,13 @@ def test_a_hint_never_brings_a_second_primary_into_a_window() -> None:
     """
     leading = set()
     for file, function in _functions_of_the_surface():
-        if not _called(function, "make_primary"):
+        # Ein Meldungsdialog macht seinen Knopf über ``add_action(lead=…)`` zum
+        # Hauptknopf (``message_dialog``, FD-21) — dieselbe Tür wie ``make_primary``.
+        opens_the_lead = _called(function, "make_primary") or any(
+            isinstance(node, ast.Call) and any(word.arg == "lead" for word in node.keywords)
+            for node in ast.walk(function)
+        )
+        if not opens_the_lead:
             continue
         reads = any(
             isinstance(node, ast.Attribute) and node.attr == "primary"
@@ -2493,21 +2500,22 @@ def test_an_error_with_two_recommended_ways_still_has_one_primary(
 ) -> None:
     """Zwei Handlungen mit ``primary`` im Fehlerdialog: Hauptknopf wird die erste."""
     from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QMessageBox, QPushButton
+    from PySide6.QtWidgets import QPushButton
 
     from app.core.errors import CHANGE_THIS_STEP, RETRY, AppError
     from app.ui import dialogs
+    from app.ui.message_dialog import MessageDialog
 
-    caught: list[QMessageBox] = []
-    real = QMessageBox.exec
-    QMessageBox.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
+    caught: list[MessageDialog] = []
+    real = MessageDialog.exec
+    MessageDialog.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
     try:
         dialogs.show_error(
             AppError(title="Probe", detail="x", suggestions=(RETRY, CHANGE_THIS_STEP)),
             handlers={RETRY.id: lambda _e: None, CHANGE_THIS_STEP.id: lambda _e: None},
         )
     finally:
-        QMessageBox.exec = real  # type: ignore[method-assign]
+        MessageDialog.exec = real  # type: ignore[method-assign]
     (box,) = caught
     try:
         box.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
@@ -2571,22 +2579,23 @@ def test_an_error_without_a_recommendation_still_gets_a_drawn_lead(
     Halbfett (Regel 18). Jetzt führt die erste, mit beiden Kodierungen."""
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QFont
-    from PySide6.QtWidgets import QMessageBox, QPushButton
+    from PySide6.QtWidgets import QPushButton
 
     from app.core.errors import CHOOSE_PRINTER, SCALE_TO_FIT, AppError
     from app.ui import dialogs
+    from app.ui.message_dialog import MessageDialog
 
     assert not SCALE_TO_FIT.primary and not CHOOSE_PRINTER.primary
-    caught: list[QMessageBox] = []
-    real = QMessageBox.exec
-    QMessageBox.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
+    caught: list[MessageDialog] = []
+    real = MessageDialog.exec
+    MessageDialog.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
     try:
         dialogs.show_error(
             AppError(title="Probe", detail="x", suggestions=(SCALE_TO_FIT, CHOOSE_PRINTER)),
             handlers={SCALE_TO_FIT.id: lambda _e: None, CHOOSE_PRINTER.id: lambda _e: None},
         )
     finally:
-        QMessageBox.exec = real  # type: ignore[method-assign]
+        MessageDialog.exec = real  # type: ignore[method-assign]
     (box,) = caught
     try:
         box.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)

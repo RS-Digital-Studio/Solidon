@@ -527,10 +527,10 @@ def test_the_details_of_a_start_do_not_blame_the_package_manager(
 ) -> None:
     """„Was die Paketverwaltung gemeldet hat:" stand auch über dem Aufruf eines
     Dienststarts — dort hat keine Paketverwaltung etwas gemeldet."""
-    from PySide6.QtWidgets import QMessageBox
+    from app.ui.message_dialog import MessageDialog
 
     shown: list[str] = []
-    monkeypatch.setattr(QMessageBox, "exec", lambda box: shown.append(box.text()) or 0)
+    monkeypatch.setattr(MessageDialog, "exec", lambda box: shown.append(box.headline.text()) or 0)
     dialog = settled(InstallDialog(), qt_app)
     try:
         dialog._running_action = "start"
