@@ -306,7 +306,7 @@ die systemischen leichten behebt D0.
 - Ursache: `app/ui/panels.py` (Layouts der Karten ohne gesetzten Abstand).
 - Vorschlag: Raster setzen und die Höhenrechnung von `OverlayHost` und `natural_height` mitziehen; Ausnahme im Wächter streichen.
 - Wirkung beim Kunden: Die Karten wirken neben den Dialogen minimal unruhiger.
-- Stand: offen RM-737
+- Stand: behoben `26d8aefb8`
 
 ### FD-24 Erfolgsmeldungen der Freischaltung sind modal
 
@@ -318,4 +318,16 @@ die systemischen leichten behebt D0.
 - Ursache: `app/ui/dialogs.py` (Erfolgsmeldungen der Freischaltung über `inform`, modal).
 - Vorschlag: Erfolg nicht-modal am Ort oder in der Statusleiste, im Hausstil; was der Kunde danach tun kann, als Handlung dabei.
 - Wirkung beim Kunden: Ein Erfolg hält das Fenster an, bis er weggeklickt ist.
+- Stand: offen RM-737
+
+### FD-25 Der Objektbaum verlangt mit einem Körper mehr Mindesthöhe, als er braucht
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Prüfpunkt: 9
+- Beleg: am echten Fenster mit einem Körper Mindesthöhe 183 gegen Wunschhöhe 81 Punkte; die Karte zeigt Leere unter dem Körper; gemeldet beim Fix von FD-23 (`fix-karten-raster.md`)
+- Ursache: Die Mindestzeilenzahl des Objektbaums gilt auch, wenn weniger Zeilen da sind; `fenster.md` verlangt, dass die Mindesthöhe einer Karte ihre Wunschhöhe nie übersteigt.
+- Vorschlag: Mindesthöhe aus den vorhandenen Zeilen, höchstens die Wunschhöhe; Test an einem und an vielen Körpern.
+- Wirkung beim Kunden: Leere Fläche im Objektbaum, die der Ansicht Platz nimmt.
 - Stand: offen RM-737
