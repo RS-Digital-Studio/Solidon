@@ -32,6 +32,9 @@ from tools.function_checks import (
     COARSE_NOTE,
     CRITERIA,
     GOOD_OVER_FINDING,
+    SMALLEST_SCREEN,
+    SMALLEST_WINDOW,
+    TASKBAR_HEIGHT,
     Checkpoint,
     skill_mismatches,
     skill_rows,
@@ -1052,17 +1055,20 @@ def test_threshold_numbers_read_like_a_reader() -> None:
     assert threshold_numbers("nur die vier Stufen aus `LEVELS`") == {4.0}
     assert threshold_numbers("0, außer den Ausnahmen aus Z2 und Konzept §4") == {0.0}
     assert threshold_numbers("100 %; höchstens die Hälfte") == {100.0, 50.0}
-    assert threshold_numbers("1280 × 820 und 1366 × 728") == {1280.0, 820.0, 1366.0, 728.0}
+    assert threshold_numbers("1920 × 1080 und 3840 × 2160") == {1920.0, 1080.0, 3840.0, 2160.0}
 
 
-def test_the_start_size_is_the_one_the_window_opens_with() -> None:
-    """Z6 misst bei der Startgröße, die das Fenster selbst nimmt — eine Quelle.
+def test_z6_names_the_smallest_screen_and_not_the_start_size() -> None:
+    """Z6 misst an der kleinsten Fläche, 1920 × 1080 logisch (Festlegung Robert).
 
-    ``main_window.START_SIZE`` öffnet das Fenster; das Prüfschema hält keine
-    zweite Zahl, und die Schwelle von Z6 nennt genau diese Größe.
+    ``main_window.START_SIZE`` ist nur die Größe beim Verkleinern; Z6 nennt sie
+    nicht mehr. Die kleinste Fensterfläche ist der kleinste Schirm ohne
+    Taskleiste, und die Schwelle von Z6 nennt genau diesen Schirm.
     """
-    assert vars(function_checks)["START_SIZE"] is START_SIZE
-    assert set(START_SIZE) <= set(CRITERIA["Z6"].numbers)
+    assert set(SMALLEST_SCREEN) <= set(CRITERIA["Z6"].numbers)
+    assert not set(START_SIZE) & set(CRITERIA["Z6"].numbers)
+    assert (SMALLEST_SCREEN[0], SMALLEST_SCREEN[1] - TASKBAR_HEIGHT) == SMALLEST_WINDOW
+    assert "LAPTOP_SIZE" not in vars(function_checks)
 
 
 def test_the_coarse_preview_sentence_is_the_one_the_window_shows() -> None:
@@ -1684,39 +1690,47 @@ def _at_size(size: tuple[int, int], bars: list[dict[str, Any]]) -> dict[str, Any
     return _protocol_with(change)
 
 
-def test_z6_is_judged_once_per_row_over_both_window_sizes() -> None:
-    """P fährt je Fenstergröße einen Fall; Z6 urteilt einmal je Zeile über beide (N1).
+def test_z6_is_judged_once_per_row_at_the_smallest_area() -> None:
+    """P fährt je Fenstergröße einen Fall; Z6 urteilt einmal je Zeile (N1, Befund C).
 
-    Eine Größe gilt als gemessen, wenn ein Fall in ihr lief — auch mit leerer
-    Liste der Rollleisten. Fehlt eine, ist die Zeile nicht gelaufen, und
-    Prüfpunkt 19 mit ihr.
+    Verlangt ist die kleinste Fläche (``SMALLEST_WINDOW``, 1920 × 1080 logisch
+    maximiert); eine größere zählt mit, allein genügt sie nicht. Eine Größe gilt
+    als gemessen, wenn ein Fall in ihr lief — auch mit leerer Liste der
+    Rollleisten. Eine Rollleiste vorn an der kleinsten Fläche ist ein Fund,
+    unterhalb von ihr keiner.
     """
-    from tools.function_checks import LAPTOP_SIZE
-
-    start, laptop = _at_size(START_SIZE, []), _at_size(LAPTOP_SIZE, [])
-    cases = [judge_case(protocol, sample_context()) for protocol in (start, laptop)]
-    assert [case.criteria["Z6"].verdict for case in cases] == ["erfuellt", "erfuellt"]
-    merged = merge_cases(cases, [start, laptop])
+    larger = (2560, 1392)
+    smallest, wide = _at_size(SMALLEST_WINDOW, []), _at_size(larger, [])
+    cases = [judge_case(protocol, sample_context()) for protocol in (smallest, wide)]
+    assert cases[0].criteria["Z6"].verdict == "erfuellt"
+    merged = merge_cases(cases, [smallest, wide])
     assert merged.criteria["Z6"].verdict == "erfuellt"
     assert merged.points[19].verdict == "stufe_b"
-    alone = merge_cases(cases[:1], [start])
+    alone = merge_cases(cases[1:], [wide])
     assert alone.criteria["Z6"].verdict == "nicht_gelaufen"
-    assert f"{LAPTOP_SIZE[0]} x {LAPTOP_SIZE[1]}" in alone.criteria["Z6"].reason
+    assert f"{SMALLEST_WINDOW[0]} x {SMALLEST_WINDOW[1]}" in alone.criteria["Z6"].reason
     assert alone.points[19].verdict == "nicht_gelaufen"
-    shown = _at_size(
-        LAPTOP_SIZE,
-        [
-            {
-                "surface": "OperationDialog",
-                "window_size": list(LAPTOP_SIZE),
-                "front": True,
-                "vertical": True,
-            }
-        ],
-    )
-    found = merge_cases([cases[0], judge_case(shown, sample_context())], [start, shown])
+
+    def bar_at(size: tuple[int, int]) -> dict[str, Any]:
+        return _at_size(
+            SMALLEST_WINDOW,
+            [
+                {
+                    "surface": "OperationDialog",
+                    "window_size": list(size),
+                    "front": True,
+                    "vertical": True,
+                }
+            ],
+        )
+
+    shown = bar_at(SMALLEST_WINDOW)
+    found = merge_cases([judge_case(shown, sample_context()), cases[1]], [shown, wide])
     assert found.criteria["Z6"].verdict == "fund"
     assert found.points[19].verdict == "fund"
+    below = bar_at((1366, 728))
+    quiet = merge_cases([judge_case(below, sample_context()), cases[1]], [below, wide])
+    assert quiet.criteria["Z6"].verdict == "erfuellt", "unter der Untergrenze kein Fund"
 
 
 def test_the_judges_stay_under_the_size_limit() -> None:

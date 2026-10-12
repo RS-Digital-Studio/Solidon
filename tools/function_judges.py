@@ -29,13 +29,11 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from itertools import dropwhile, pairwise
 from typing import Any, Final
 
-from app.ui.main_window import START_SIZE
 from app.ui.motion import ACCENT_MS, MEDIUM_MS
 from app.ui.op_dialog import MAX_FRONT_FIELDS, MAX_LEAD_WORDS, MAX_LEAD_WORDS_TRANSLATED
 from app.ui.style import LEVELS, SPACE
 from app.ui.theme import contrast_ratio
 from tools.function_checks import (
-    LAPTOP_SIZE,
     MAIN_PHASES,
     MANUAL_WINDOW,
     MAX_ACCENTS,
@@ -53,6 +51,7 @@ from tools.function_checks import (
     NOT_FOUND,
     RAW_CLASSES,
     REFERENCE_FACTOR_AT,
+    SMALLEST_WINDOW,
     Context,
     Issue,
     Outcome,
@@ -940,11 +939,14 @@ def judge_sizes(protocols: Iterable[Mapping[str, Any]], *, complete: bool) -> Ou
     Der Prüfstand fährt je Fenstergröße einen Fall. Eine Größe gilt als
     gemessen, wenn ein Fall in ihr lief (``variant.window_size``) und seine
     Rollleisten aufnahm — auch als leere Liste — oder ein Eintrag sie nennt.
-    ``complete`` verlangt Startgröße und Laptop: So urteilt
-    ``function_report.merge_cases`` einmal je Zeile. Ein einzelner Fall muss in
-    einer der beiden gelaufen sein. ``None``, wenn kein Fall etwas aufnahm.
+    Verlangt ist die kleinste Fensterfläche (``SMALLEST_WINDOW``); größere
+    Flächen zählen mit, eine kleinere ist kein Fall, und eine Rollleiste dort
+    kein Fund (Festlegung Robert: 1920 x 1080 logisch, drunter nie). So urteilt
+    ``function_report.merge_cases`` einmal je Zeile (``complete``); ein
+    einzelner Fall muss in ihr gelaufen sein. ``None``, wenn kein Fall etwas
+    aufnahm.
     """
-    sizes = {START_SIZE, LAPTOP_SIZE}
+    sizes = {SMALLEST_WINDOW}
     issues = []
     run: set[tuple[int, int]] = set()
     surfaces = 0
@@ -963,7 +965,8 @@ def judge_sizes(protocols: Iterable[Mapping[str, Any]], *, complete: bool) -> Ou
                 continue
             run.add(size)
             if (
-                size in sizes
+                size[0] >= SMALLEST_WINDOW[0]
+                and size[1] >= SMALLEST_WINDOW[1]
                 and entry.get("front")
                 and (entry.get("vertical") or entry.get("horizontal"))
             ):

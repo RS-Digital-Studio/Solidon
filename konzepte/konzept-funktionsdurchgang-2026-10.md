@@ -179,7 +179,7 @@ Vorgaben, Vorschau, Aufklappen und Suche.
 | Z3 | Am Objekt: Nach dem Klick auf die Stelle ist die Handlung ohne Menü und ohne Suche da, als Feld oben im Merkmalfenster oder als Hauptaktion im Reiter *Auswahl* (§2.6); der Rechtsklick führt keine aus (§18.5) | ja je Zeile mit Merkmals- oder Körperbezug |
 | Z4 | Leere Zustände führen weiter (ergänzt E7, das den fehlenden Satz zählt) | hat ein leerer Zustand eine nächste Handlung — leere Szene, leerer Verlauf, leeres Lager —, steht sie als Knopf dabei; gewollt leere Karten und ein Prüfbericht ohne Befund ausgenommen |
 | Z5 | Rohe Qt-Fenster im Kundenweg: Instanzen von `QMessageBox`, `QInputDialog`, `QColorDialog` | 0, außer `QFileDialog` und den Ausnahmen aus Z2 |
-| Z6 | Größen und Skalierungen (Kontrast steht in G6, abgeschnittener Text in Prüfpunkt 9) | bei 1280 × 820 (Startgröße) und 1366 × 728 (Laptop mit Taskleiste) braucht keine Vorderseite eine Rollleiste; Symbole bei 100, 150 und 200 % ohne Unschärfe; hell und dunkel mit denselben Flächen und Akzenten |
+| Z6 | Größen und Skalierungen (Kontrast steht in G6, abgeschnittener Text in Prüfpunkt 9) | auf der kleinsten Arbeitsfläche, 1920 × 1080 logisch (Bauplan §19.3: maximiert, Taskleiste abgezogen), braucht keine Vorderseite eine Rollleiste; Symbole bei 100, 150 und 200 % ohne Unschärfe, solange die logische Fläche nicht unter 1920 × 1080 fällt; was darunter liegt, ist kein Fall; hell und dunkel mit denselben Flächen und Akzenten |
 | Z7 | Die ersten fünf Minuten (§2.3): vom Start bis zum ersten übernommenen Schritt an einem eigenen Modell | Schritte und Fehlklicks aus dem Protokoll von Stufe C, ohne Handbuch; jeder Fehlklick ist ein Fund |
 
 *Innovativ (urteilt Stufe B, an den genannten Zeilen):*
@@ -425,7 +425,7 @@ Konzepte verweisen.
   wird in jeder Sprache gemessen, Bilder entstehen gezielt.
 - **Alles von Hand am Fenster**: zu langsam für 300 Zeilen, nicht wiederholbar.
 
-## 13 Entscheidungen Robert (11.10.2026)
+## 13 Entscheidungen Robert (11. und 12.10.2026)
 
 1. **Fenstertest je Fund lokal: ja.** Je Fund läuft die eine reproduzierende
    Fenstertestdatei lokal — vorher rot, nachher grün —; die übrigen
@@ -439,3 +439,8 @@ Konzepte verweisen.
    laufen. Ein Termin bindet das nicht: Alle vier Phasen laufen ohne Datum
    hintereinander, jede sauber bis zu Ende (Robert, 12.10.; vorher galt der
    Vorrang bis zum 25.11.).
+3. **Kleinste Arbeitsfläche 1920 × 1080 logisch (12.10.).** Gestaltet und
+   geprüft wird ab Full HD bei 100 %; eine kleinere Fläche, auch eine höhere
+   Auflösung mit stärkerer Skalierung, ist kein Fall und ihr Befund kein Fund
+   (Bauplan §19.3). Die Startgröße beim Verkleinern (`START_SIZE`) und der
+   Laptop mit 1366 × 728 fallen damit aus Z6.

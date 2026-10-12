@@ -334,8 +334,10 @@ def place_of(steps: Sequence[Mapping[str, Any]], target: str) -> dict[str, Any]:
     Rechtsklick auf dem Weg, ``menue`` bei einem Menü, ``werkzeugleiste`` am
     Kopf des Fensters, sonst ``karte``. ``path`` sind die sichtbaren Texte der
     Klicks bis zum Ziel. Kam der Weg nicht an, steht der Grund in ``error``.
+    Gelesen wird der ganze Hauptweg: Wirkt der Klick auf das Ziel selbst, fällt
+    er in der Phase Übernehmen (``FunctionFlow.phase_main``).
     """
-    walked = [step for step in steps if step.get("phase") == PATH_PHASE]
+    walked = [step for step in steps if step.get("phase") in (PATH_PHASE, APPLY_PHASE)]
     upto: list[Mapping[str, Any]] = []
     for step in walked:
         upto.append(step)
@@ -612,6 +614,16 @@ class QtPorts:
             "middle": Qt.MouseButton.MiddleButton,
         }[button]
         QTest.mouseClick(widget, mouse, modifiers, local)
+        if button == "right":
+            # Ein Rechtsklick des Kunden bringt nach dem Loslassen auch das
+            # Kontextmenüereignis; QTest schickt nur die Maus (Probelauf,
+            # Befund B: ``menu:history.edit`` fand nie ein offenes Menü).
+            # Öffnet der Empfänger sein Menü mit ``exec()``, kehrt das erst
+            # nach dessen Ende zurück — der Automat läuft darin weiter.
+            from PySide6.QtGui import QContextMenuEvent
+
+            context = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, local, point, modifiers)
+            QApplication.sendEvent(widget, context)
 
     def move(self, point: Any) -> None:
         """Die Maus an eine Stelle, ohne zu klicken — Überfahren für I1."""
@@ -634,11 +646,30 @@ class QtPorts:
             QTest.keyClick(target, combination.key(), combination.keyboardModifiers())
 
     def type_text(self, text: str) -> None:
+        """Tippt ``text`` Zeichen für Zeichen in das Widget mit dem Fokus, wie eine Tastatur.
+
+        ``QTest.keyClicks`` kennt nur ASCII: An ö, ß oder € bricht Qt mit einem
+        ASSERT in ``qasciikey.cpp`` den ganzen Prozess ab, ohne eine Zeile in
+        ``stderr.log`` (Probelauf, Befund A: die Suchprobe „Bohrung vergrößern“).
+        Jedes Zeichen geht deshalb als Tastendruck mit seinem Text hinaus — mit
+        der Taste, die Qt für ein Zeichen aus Latin-1 kennt (der Code des
+        Großbuchstabens, ß selbst), sonst ``Key_unknown``; eingefügt wird der Text.
+        """
+        from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QApplication
 
-        target = QApplication.focusWidget() or self.window
-        QTest.keyClicks(target, text)
+        for character in text:
+            target = QApplication.focusWidget() or self.window
+            upper = character.upper()
+            code = ord(upper) if len(upper) == 1 and ord(upper) < 256 else ord(character)
+            try:
+                key = Qt.Key(code) if code < 256 else Qt.Key.Key_unknown
+            except ValueError:
+                key = Qt.Key.Key_unknown
+            QTest.sendKeyEvent(
+                QTest.KeyAction.Click, target, key, character, Qt.KeyboardModifier.NoModifier
+            )
 
     def describe(self, widget: Any, point: Any = None) -> dict[str, Any]:
         """Klasse, Name, Kennzeichen und der sichtbare Text an der Stelle des Klicks.

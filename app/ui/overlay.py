@@ -58,6 +58,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QFrame,
+    QListView,
     QMenu,
     QScrollArea,
     QSizePolicy,
@@ -872,8 +873,17 @@ def rows_height(view: QAbstractItemView) -> int:
         als eine Null. Deshalb der größere der beiden Werte.
         """
         total = 0
+        listing = view if isinstance(view, QListView) else None
         for row in range(model.rowCount(parent)):
             index = model.index(row, 0, parent)
+            # Eine versteckte Zeile steht nicht da und braucht keinen Platz: Der
+            # Verlauf versteckt die Teilschritte eines eingeklappten
+            # Sammelschritts, und mit ihrer Wunschhöhe gezählt meldete die linke
+            # Karte zwei Zeilen zu viel (Fund D0-P).
+            if (tree is not None and tree.isRowHidden(row, parent)) or (
+                listing is not None and listing.isRowHidden(row)
+            ):
+                continue
             if tree is not None:
                 total += tree.rowHeight(index)
                 if tree.isExpanded(index):
@@ -940,7 +950,24 @@ class CurrentPageTabs(DetachableTabs):
         return self.findChild(QStackedWidget, "qt_tabwidget_stackedwidget")
 
     def _chrome_height(self, whole: QSize, stack: QStackedWidget) -> int:
-        return max(whole.height() - stack.sizeHint().height(), 0)
+        """Reiterleiste und Rand: Qts Wunsch ohne die Seite, aus der er ihn rechnete.
+
+        ``QTabWidget.sizeHint`` nimmt die höchste Wunschhöhe der sichtbaren
+        Reiter. ``stack.sizeHint()`` taugt nicht als Gegenstück: Hat die vordere
+        Seite eine Breitenhöhe, meldet der Stapel die höchste Breitenhöhe, und
+        eine Seite ohne fehlt darin. Der Rollbereich der Auswahl, der jede
+        Funktion wünscht, stand so als Rahmen im Prüfbericht — leer in voller
+        Spaltenhöhe, und nachkommende Befunde ließen die Karte nicht wachsen.
+        """
+        tallest = max(
+            (
+                page.sizeHint().height()
+                for index in range(stack.count())
+                if self.isTabVisible(index) and (page := stack.widget(index)) is not None
+            ),
+            default=0,
+        )
+        return max(whole.height() - tallest, 0)
 
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
         whole = super().sizeHint()
@@ -1170,6 +1197,14 @@ def natural_height(zone: QWidget, width: int | None = None) -> int:
         wanted += current_height - tallest
     for view in living(zone, QAbstractItemView):
         if not view.isVisibleTo(zone):
+            continue
+        # Der Spaltenkopf eines Baums ist selbst eine ``QAbstractItemView``,
+        # gehört aber zur Höhe seines Baums: ``rows_height`` zählt ihn dort
+        # schon mit. Hier noch einmal gerechnet, zog er seine Wunschhöhe ein
+        # zweites Mal ab, die Karte stand 9 Punkte zu niedrig, und der
+        # aufgeklappte Objektbaum ragte über seinen Abschnitt — auch in der
+        # Startgröße (Fund D0-P).
+        if isinstance(view.parentWidget(), QAbstractItemView):
             continue
         # Eine gesetzte Mindesthöhe ist eine Aussage über den Zweck und nicht
         # über den Inhalt: der Gesprächsverlauf des Chats ist ein

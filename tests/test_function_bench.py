@@ -658,6 +658,7 @@ def test_every_phase_starts_at_its_scene_and_runs_only_if_it_got_there() -> None
     answers = iter([True, False, True])
     flow = object.__new__(function_bench.FunctionFlow)
     flow.variant = function_setup.Variant.of({"phases": ["escape", "main", "revise"]})
+    flow.not_a_case = ""
     flow.bench = {}
     flow.data = {"errors": []}
     flow.persist = lambda: None

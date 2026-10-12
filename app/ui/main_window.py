@@ -471,6 +471,7 @@ from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
 from app.ui.viewport import DisplayMode, Projection, SketchSelectionBadge, Viewport
+from app.ui.window_names import name_button, raw_window
 
 _log = get_logger(__name__)
 
@@ -8123,12 +8124,13 @@ class MainWindow(QMainWindow):
         except AppError as error:
             suggestion = pasted if error.values.get("constraint") == "web_page" else ""
 
-        url, accepted = QInputDialog.getText(
-            self,
-            tr("Modell aus dem Netz"),
-            tr("Adresse der Modelldatei oder Modellseite:"),
-            text=suggestion,
-        )
+        with raw_window("message:model_address"):
+            url, accepted = QInputDialog.getText(
+                self,
+                tr("Modell aus dem Netz"),
+                tr("Adresse der Modelldatei oder Modellseite:"),
+                text=suggestion,
+            )
         if accepted and url.strip():
             self.download_model(url.strip())
 
@@ -9097,8 +9099,11 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.NoButton,
             self,
         )
+        box.setProperty(guides.TARGET_PROPERTY, "message:remove_steps")
         remove = box.addButton(tr("Löschen"), QMessageBox.ButtonRole.DestructiveRole)
         cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+        name_button(remove, "message.button:remove_steps.remove")
+        name_button(cancel, "message.button:remove_steps.cancel")
         # Rot, und Enter löscht nicht: Die Nachfrage steht nur hier, weil das
         # Löschen abhängige Schritte und den Redo-Zweig mitnimmt. Abbrechen
         # bleibt ein Ausgang ohne Akzent — Escape nimmt ihn (RM-512).
@@ -9674,17 +9679,19 @@ class MainWindow(QMainWindow):
                         )
                         for slot in body.material_slots
                     ]
-                    chosen, accepted = QInputDialog.getItem(
-                        self,
-                        tr("Filament ersetzen"),
-                        tr(
-                            "Alle acht Filamente sind belegt. Welches soll auch auf seinen "
-                            "bisherigen Flächen ersetzt werden? Strg+Z nimmt die Zuweisung zurück."
-                        ),
-                        choices,
-                        0,
-                        False,
-                    )
+                    with raw_window("message:inventory_spool"):
+                        chosen, accepted = QInputDialog.getItem(
+                            self,
+                            tr("Filament ersetzen"),
+                            tr(
+                                "Alle acht Filamente sind belegt. Welches soll auch auf "
+                                "seinen bisherigen Flächen ersetzt werden? "
+                                "Strg+Z nimmt die Zuweisung zurück."
+                            ),
+                            choices,
+                            0,
+                            False,
+                        )
                     if not accepted:
                         return
                     slot_index = body.material_slots[choices.index(chosen)].index
@@ -11774,9 +11781,10 @@ class MainWindow(QMainWindow):
                     if not asked or size is not None or not choices:
                         show_error(error, self)
                         return
-                    picked, accepted = QInputDialog.getItem(
-                        self, tr("Gegenstück zum Gewinde"), str(error.detail), choices, 0, False
-                    )
+                    with raw_window("message:thread_counterpart"):
+                        picked, accepted = QInputDialog.getItem(
+                            self, tr("Gegenstück zum Gewinde"), str(error.detail), choices, 0, False
+                        )
                     if not accepted:
                         return
                     size = str(picked)
@@ -29284,6 +29292,7 @@ class MainWindow(QMainWindow):
         zwischen den beiden Fällen ist der Text, nicht der Aufbau.
         """
         box = QMessageBox(self)
+        box.setProperty(guides.TARGET_PROPERTY, "message:recovery")
         box.setWindowTitle(tr("Wiederherstellung"))
         box.setText(question)
         lines = [tr("Sicherung: {backup}").format(backup=self._when(candidate))]
@@ -29296,7 +29305,9 @@ class MainWindow(QMainWindow):
         lines.append(tr("Wird die Sicherung nicht geöffnet, wird sie verworfen."))
         box.setInformativeText("\n".join(lines))
         restore = box.addButton(tr("Sicherung öffnen"), QMessageBox.ButtonRole.AcceptRole)
-        box.addButton(decline, QMessageBox.ButtonRole.RejectRole)
+        refuse = box.addButton(decline, QMessageBox.ButtonRole.RejectRole)
+        name_button(restore, "message.button:recovery.restore")
+        name_button(refuse, "message.button:recovery.decline")
         # Akzent und halbfette Schrift, nicht nur der Default (Regel 18).
         make_primary(restore)
         box.setDefaultButton(restore)

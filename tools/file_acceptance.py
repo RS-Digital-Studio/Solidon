@@ -161,8 +161,21 @@ LANGUAGE_CASE_TIMEOUT = 3600.0
 #: Wie lange der Kindprozess braucht, um die Menüleiste am Fenster zu zählen (Sekunden).
 MENUBAR_TIMEOUT = 600.0
 
-#: Alle wie viel Sekunden ein Fall die Stapel seiner Fäden nach ``stderr.log`` schreibt.
+#: Alle wie viel Sekunden ein Fall die Stapel seiner Fäden nach :data:`STACK_LOG` schreibt.
 HANG_DUMP_S = 300.0
+
+#: Wohin ein Fall die Stapel seiner Fäden schreibt: bei einem Absturz und alle
+#: :data:`HANG_DUMP_S`, solange er steht (``faulthandler``).
+STACK_LOG = "stapel.log"
+
+#: Wohin ein Fall jede Meldung von Qt schreibt. Ein ``qFatal`` — ein ASSERT in Qt —
+#: endet ohne Python-Stapel und ohne Zeile in ``stderr.log``, denn unter Windows
+#: geht die Meldung eines Fensterprozesses an den Debugger (Probelauf, Befund A).
+QT_LOG = "qt.log"
+
+#: Was ein Fall bis zu seinem Ende offen halten muss: die Datei der Stapel, die
+#: Datei der Qt-Meldungen und deren Empfänger.
+_HELD: list[Any] = []
 
 #: Die Arten eines Falls: eine Datei (RM-184), eine Zeile der Funktionsliste,
 #: eine Sprache über die Flächen eines Pakets, der Start einer Zeile des
@@ -820,7 +833,8 @@ def function_summary(case: Case, folder: Path, process: Mapping[str, Any]) -> di
         "findings": sum(len(protocol.get("findings") or []) for protocol in protocols),
         "unmeasured": sum(len(protocol.get("unmeasured") or {}) for protocol in protocols),
         "errors": [error for protocol in protocols for error in protocol.get("errors") or []]
-        + ([state["harness_exception"]] if "harness_exception" in state else []),
+        + ([state["harness_exception"]] if "harness_exception" in state else [])
+        + ([process["crash"]] if process.get("crash") else []),
     }
 
 
@@ -853,7 +867,8 @@ def summary(out: Path, cases: Sequence[Case]) -> dict[str, Any]:
                 for bore in result.get("bores", [])
             ],
             "errors": result.get("errors", [])
-            + ([result["harness_exception"]] if "harness_exception" in result else []),
+            + ([result["harness_exception"]] if "harness_exception" in result else [])
+            + ([process["crash"]] if process.get("crash") else []),
         }
         rows.append(row)
     data = {
@@ -1048,6 +1063,7 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
                 "timeout": timed_out,
                 "wall_s": time.perf_counter() - began,
                 "pid": process.pid,
+                "crash": crash_note(folder) if code != 0 or timed_out else "",
             },
         )
         failures += int(code != 0 or timed_out)
@@ -1065,12 +1081,7 @@ def child(out: Path, number: int, screen: str = "") -> int:
     # Vor dem ersten Import von ``app``: Die Anwendung liest die Nutzerordner beim Import.
     isolate(folder / "profile")
     sys.path.insert(0, str(ROOT))
-    import faulthandler
-
-    faulthandler.enable()
-    # Steht ein Fall, sagt ``stderr.log`` wo: alle HANG_DUMP_S die Stapel aller
-    # Fäden — ohne py-spy (Erinnerung „abrisse-haenger-und-lebensdauer“).
-    faulthandler.dump_traceback_later(HANG_DUMP_S, repeat=True)
+    crash_records(folder)
     if case.kind == "start":
         return start_child(out, case, folder)
     if case.kind != "file":
@@ -1120,6 +1131,45 @@ def child(out: Path, number: int, screen: str = "") -> int:
         data["shutdown_complete"] = True
         persist()
     return exit_code
+
+
+def crash_records(folder: Path) -> None:
+    """Ein abbrechender Fall nennt, wo und warum — in Dateien im Fallordner.
+
+    :data:`STACK_LOG` trägt die Stapel aller Fäden bei einem Absturz und alle
+    :data:`HANG_DUMP_S`, wenn der Fall steht — ohne py-spy (Erinnerung
+    „abrisse-haenger-und-lebensdauer“). :data:`QT_LOG` trägt jede Meldung von Qt,
+    Zeile für Zeile auf die Platte; dort steht ein ``qFatal``, das ``faulthandler``
+    nicht sieht. Beides lebt bis zum Ende des Prozesses.
+    """
+    import faulthandler
+
+    from PySide6.QtCore import qInstallMessageHandler
+
+    stacks = (folder / STACK_LOG).open("w", encoding="utf-8", buffering=1)
+    faulthandler.enable(file=stacks, all_threads=True)
+    faulthandler.dump_traceback_later(HANG_DUMP_S, repeat=True, file=stacks)
+    messages = (folder / QT_LOG).open("w", encoding="utf-8", buffering=1)
+
+    def note(kind: Any, context: Any, message: str) -> None:
+        messages.write(f"{kind.name} {message}\n")
+        messages.flush()
+
+    _HELD.extend([stacks, messages, note])
+    qInstallMessageHandler(note)
+
+
+def crash_note(folder: Path) -> str:
+    """Was ein abgebrochener Fall zuletzt sagte: das letzte ``qFatal``, sonst sein Absturzstapel."""
+    qt = folder / QT_LOG
+    lines = qt.read_text(encoding="utf-8", errors="replace").splitlines() if qt.is_file() else []
+    fatal = [line for line in lines if line.startswith(("QtFatalMsg", "QtCriticalMsg"))]
+    if fatal:
+        return fatal[-1]
+    stacks = folder / STACK_LOG
+    text = stacks.read_text(encoding="utf-8", errors="replace") if stacks.is_file() else ""
+    start = max(text.rfind("Fatal Python error"), text.rfind("Windows fatal exception"))
+    return text[start:].strip()[:2000] if start >= 0 else ""
 
 
 def no_native_dialogs() -> None:

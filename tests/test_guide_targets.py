@@ -3,8 +3,8 @@
 Was ``app/ui/guide_targets.py`` aus einem Namen macht: Widget, Ort, der nächste
 Klick des Kunden (``next_click``), die Stelle im Bild (``point_for``), die Probe
 (``widget_under``), die Zone; dazu die Namen der Menüleiste und der
-Kontextmenüs, die Kennzeichen der Dialoge und die Fensterfunde, die der
-Prüfstand dabei fand (Abriss des Objektbaums, Überstand der linken Karte).
+Kontextmenüs und die Kennzeichen der Dialoge. Die Fensterfunde, die der
+Prüfstand dabei fand, stehen in ``tests/test_bench_findings.py``.
 Getrennt von ``tests/test_guides.py``, das die Bildanleitungen selbst prüft:
 eine Testart, eine Datei.
 """
@@ -70,6 +70,7 @@ def test_a_dialog_is_named_after_its_class(class_name: str, expected: str) -> No
 NEW_RESOLVERS = (
     "marked_widgets",
     "_marked",
+    "_message_button",
     "_rebuild_button",
     "_search_field",
     "_toolbar_search",
@@ -109,6 +110,7 @@ NEW_RESOLVERS = (
     "_visible_row_click",
     "_expander_click",
     "_row_scroll",
+    "_can_roll",
     "_tile_click",
     "_command_click",
     "_actions_below",
@@ -172,7 +174,7 @@ def prepared_window(qt_app: Any) -> Iterator[Any]:
 
     window = MainWindow(Session(), UiSettings())
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.resize(1400, 900)
+    window.resize(1920, 1032)
     window.show()
     window._show_start_screen(False)
     assert window.session.apply(
@@ -470,6 +472,13 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
             assert guide_targets.widget_for(window, f"print:{field.path}") is not None, field.path
         assert widget("dialog:settings_dialog") is settings
         assert widget("dialog:print_settings_dialog") is printing
+        for name in (
+            "setting.section:anwendung",
+            "setting.section:weitere_einstellungen",
+            "setting.section:vorgaben_fuer_neue_projekte",
+        ):
+            heading = widget(name)
+            assert heading.objectName() == "sectionHeading", name
     finally:
         settings.close()
         printing.close()
@@ -477,7 +486,8 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     # Stelle im Bild und Griffe brauchen Projektion und Pick; sie prüfen die
     # zwei Fälle darunter an der Attrappe und der native Fall am echten Bild.
     # „Zuletzt geöffnet“ steht auf dem Startbildschirm: eigener Fall darunter.
-    seen.update({"view", "start.recent"})
+    # Die rohen Meldungsfenster und ihre Knöpfe gehen modal auf: eigene Fälle darunter.
+    seen.update({"view", "start.recent", "message", "message.button"})
     assert seen >= NEW_KINDS, sorted(NEW_KINDS - seen)
 
 
@@ -760,7 +770,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 window = MainWindow(Session(), UiSettings())
-window.resize(1400, 900)
+window.resize(1920, 1032)
 window.show()
 assert QTest.qWaitForWindowExposed(window)
 window._show_start_screen(False)
@@ -822,7 +832,7 @@ def test_the_recent_projects_and_the_dialog_fields_resolve(qt_app: Any, tmp_path
     from app.ui.settings import UiSettings
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1200, 800)
+    window.resize(1920, 1032)
     window.show()
     try:
         first, second = tmp_path / "eins.p3d", tmp_path / "zwei.p3d"
@@ -859,7 +869,7 @@ def test_a_menu_hidden_from_the_bar_has_no_way(qt_app: Any) -> None:
     from app.ui.settings import UiSettings
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1200, 800)
+    window.resize(1920, 1032)
     window.show()
     _settle(qt_app)
     try:
@@ -1176,7 +1186,7 @@ def test_move_before_names_the_numbers_the_history_shows(qt_app: Any) -> None:
     from app.ui.settings import UiSettings
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1400, 900)
+    window.resize(1920, 1032)
     window.show()
     window._show_start_screen(False)
     try:
@@ -1243,306 +1253,6 @@ def test_the_window_opens_at_its_start_size(qt_app: Any) -> None:
         assert (window.width(), window.height()) == START_SIZE
     finally:
         window.deleteLater()
-
-
-#: Der Kindprozess des Abrisstests: Anwendung wie beim Kunden, Szene vom
-#: Startbildschirm öffnen, die Zeile über den Wortschatz suchen und bis zum Ende
-#: der Runde halten, dann neu öffnen. ``SOLIDON_PROBE_ITERATOR=1`` setzt die
-#: frühere Suche über ``QTreeWidgetItemIterator`` ein — die Gegenprobe.
-_TREE_ROUNDS = r"""
-import os
-import sys
-import time
-from pathlib import Path
-import app.ui
-from app.core.bootstrap import load_operations
-load_operations()
-from app.ui.app import build_application
-from app.ui import guide_targets
-application, window = build_application([])
-window.resize(1280, 820)
-window.show()
-if os.environ.get('SOLIDON_PROBE_ITERATOR'):
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QTreeWidgetItemIterator
-    original = guide_targets._row
-
-    def _row(window, kind, rest, name):
-        if kind != 'tree.row':
-            return original(window, kind, rest, name)
-        tree = window.object_tree.tree
-        object_id, feature_id = guide_targets._object_and_feature(rest)
-        iterator = QTreeWidgetItemIterator(tree)
-        while (item := iterator.value()) is not None:
-            if item.data(0, Qt.ItemDataRole.UserRole) == object_id and (
-                item.data(1, Qt.ItemDataRole.UserRole) == feature_id
-            ):
-                return tree, item
-            iterator += 1
-        raise guide_targets.MissingTargetError(name)
-
-    guide_targets._row = _row
-
-
-def settle(seconds):
-    until = time.monotonic() + seconds
-    while time.monotonic() < until:
-        application.processEvents()
-        time.sleep(0.005)
-
-
-scene = Path(sys.argv[1])
-if sys.argv[2] == 'build':
-    from app.core.scene.history import OperationDraft
-    window._show_start_screen(False)
-    assert window.session.apply('Quader mit Bohrung', [
-        OperationDraft(op='create_brep_box'),
-        OperationDraft(op='drill_hole', inputs=('obj_1',), params={'diameter': 5.0, 'z': 12.0}),
-    ])
-    assert window.session.wait_for_idle(60000)
-    window.session.save_project(scene)
-    print('built', flush=True)
-    os._exit(0)
-for round in range(5):
-    previous = window.session.last_result
-    window.session.forget_changes()
-    window.open_path(scene)
-    deadline = time.monotonic() + 120
-    while time.monotonic() < deadline:
-        settle(0.01)
-        result = window.session.last_result
-        if result is not None and result is not previous and not window.session.busy:
-            break
-    settle(0.5)
-    held = guide_targets._row(window, 'tree.row', 'obj_1.hole_1', 'tree.row:obj_1.hole_1')
-    guide_targets.next_click(window, 'tree.row:obj_1.hole_1')
-    settle(0.8)
-    held = None
-print('tree survived', flush=True)
-window.session.forget_changes()
-from tools.window_bench import shutdown_window
-shutdown_window(window, application)
-"""
-
-
-def _tree_rounds(scene: Path, mode: str, extra: dict[str, str] | None = None) -> Any:
-    import os
-    import subprocess
-    import sys
-
-    return subprocess.run(
-        [sys.executable, "-X", "faulthandler", "-c", _TREE_ROUNDS, str(scene), mode],
-        cwd=Path(__file__).resolve().parents[1],
-        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", **(extra or {})},
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-
-
-def test_the_tree_survives_new_scenes_after_a_row_was_found(qt_app: Any, tmp_path: Path) -> None:
-    """Nach der Suche einer Baumzeile riss ein späteres ``ObjectTree.show_scene``
-    beim Leeren des Baums ab (Zugriffsverletzung in ``tree.clear()``), solange
-    ``_row`` sie mit ``QTreeWidgetItemIterator`` suchte (Fund D0-P: 8 von 12
-    Läufen des Prüfstands). Im eigenen Prozess, damit ein Abriss ein roter Fall
-    ist und nicht die Suite beendet; sechs Prozesse zu je fünf Öffnungen, weil
-    er nicht jedes Mal kommt (Gegenprobe mit dem Iterator: 3 von 8 Prozessen)."""
-    del qt_app
-    scene = tmp_path / "szene.p3d"
-    built = _tree_rounds(scene, "build")
-    assert built.returncode == 0 and "built" in built.stdout, built.stderr[-3000:]
-    for attempt in range(6):
-        done = _tree_rounds(scene, "rounds")
-        assert done.returncode == 0, (attempt, done.returncode, done.stderr[-4000:])
-        assert "tree survived" in done.stdout
-
-
-def tree_iterator_uses(source: str) -> list[int]:
-    """Die Zeilen, in denen ``QTreeWidgetItemIterator`` als Name vorkommt — Import,
-    Aufruf oder Attribut, nicht im Kommentar."""
-    import ast
-
-    lines: set[int] = set()
-    for node in ast.walk(ast.parse(source)):
-        named = (
-            node.id
-            if isinstance(node, ast.Name)
-            else node.attr
-            if isinstance(node, ast.Attribute)
-            else node.name
-            if isinstance(node, ast.alias)
-            else ""
-        )
-        if named == "QTreeWidgetItemIterator":
-            lines.add(getattr(node, "lineno", 0))
-    return sorted(lines)
-
-
-def test_no_tree_item_iterator_in_the_application() -> None:
-    """``QTreeWidgetItemIterator`` hinterlässt in PySide Zeilenhüllen, an denen ein
-    späteres ``QTreeWidget.clear()`` abreißt (Fund D0-P); Zeilen werden über
-    ``topLevelItem``/``child`` gesucht. Rekursiv über ``app/`` und ``tools/``
-    (W4): Prüfstand und Aufnahmen laufen im Prozess der Anwendung, ein Iterator
-    dort risse denselben Baum ab (Nachprüfung D0-W, N4)."""
-    root = Path(__file__).resolve().parents[1]
-    found = [
-        f"{path.relative_to(root).as_posix()}:{number}"
-        for folder in ("app", "tools")
-        for path in sorted((root / folder).rglob("*.py"))
-        for number in tree_iterator_uses(path.read_text(encoding="utf-8"))
-    ]
-    assert found == []
-
-
-def test_a_tree_item_iterator_turns_the_guard_red() -> None:
-    source = (
-        "from PySide6.QtWidgets import QTreeWidgetItemIterator\n"
-        "# QTreeWidgetItemIterator im Kommentar zählt nicht\n"
-        "def walk(tree):\n"
-        "    return QtWidgets.QTreeWidgetItemIterator(tree)\n"
-    )
-    assert tree_iterator_uses(source) == [1, 4]
-
-
-#: Der Kindprozess des Überstandstests: Anwendung wie beim Kunden (mit Stilblatt
-#: und Einstellungen — im nackten Fenster stand *Vorher/Nachher* nicht da), ein
-#: Körper mit Bohrung, aufgeklappt, dann Fensterhöhen von 820 bis 640 Punkten.
-#: ``SOLIDON_PROBE_OLD_HISTORY=1`` setzt die frühere Höhenmeldung des Verlaufs
-#: ohne den Abstand ein — die Gegenprobe.
-_SECTIONS = r"""
-import os
-import time
-import app.ui
-from PySide6.QtCore import QPoint
-from PySide6.QtWidgets import QWidget
-from app.core.bootstrap import load_operations
-load_operations()
-from app.ui.app import build_application
-application, window = build_application([])
-from app.core.scene.history import OperationDraft
-from app.ui.overlay import extra_height, is_room_taker, living
-from app.ui.panels import HistoryPanel
-if os.environ.get('SOLIDON_PROBE_OLD_HISTORY'):
-    def _old(self):
-        if self.compare.isHidden():
-            return 0
-        return self.compare.sizeHint().height() + (
-            self.timeline.sizeHint().height() if self.compare.isChecked() else 0
-        )
-    HistoryPanel._timeline_height = _old
-
-
-def settle(seconds):
-    until = time.monotonic() + seconds
-    while time.monotonic() < until:
-        application.processEvents()
-        time.sleep(0.005)
-
-
-window.resize(800, 800)
-window.show()
-window._show_start_screen(False)
-assert window.session.apply('Quader mit Bohrung', [
-    OperationDraft(op='create_box'),
-    OperationDraft(op='drill_hole', inputs=('obj_1',), params={'diameter': 5.0, 'z': 12.0}),
-])
-assert window.session.wait_for_idle(60000)
-tree = window.object_tree.tree
-tree.topLevelItem(0).setExpanded(True)
-zone = window.overlay.left
-section = window.object_tree.parentWidget()
-checked = 0
-problems = []
-for height in range(820, 640, -12):
-    window.resize(800, height)
-    settle(0.4)
-    takers = [
-        child for child in living(zone, QWidget)
-        if is_room_taker(child) and child.isVisibleTo(zone)
-    ]
-    floors = sum(child.least_height() for child in takers)
-    if extra_height(zone) + floors > window.overlay.card_room():
-        continue
-    checked += 1
-    for child in takers:
-        holder = child.parentWidget()
-        if holder.height() < holder.minimumSizeHint().height():
-            least = holder.minimumSizeHint().height()
-            problems.append((height, type(child).__name__, holder.height(), least))
-    bottom = tree.mapTo(section, QPoint(0, tree.height())).y()
-    if bottom > section.height():
-        problems.append((height, 'Baum', bottom, section.height()))
-print('geprüft', checked, flush=True)
-print('probleme', problems, flush=True)
-window.session.forget_changes()
-from tools.window_bench import shutdown_window
-shutdown_window(window, application)
-"""
-
-
-def _sections(extra: dict[str, str] | None = None) -> Any:
-    import os
-    import subprocess
-    import sys
-
-    return subprocess.run(
-        [sys.executable, "-X", "faulthandler", "-c", _SECTIONS],
-        cwd=Path(__file__).resolve().parents[1],
-        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", **(extra or {})},
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-
-
-def test_the_object_tree_stays_inside_its_section_when_the_card_is_tight(qt_app: Any) -> None:
-    """Die linke Karte teilt ihre Höhe auf Baum, Parameter und Verlauf; passt das
-    Ganze, ragt kein Abschnitt über seinen Platz. Der Verlauf nahm den Abstand
-    zwischen *Vorher/Nachher* und seiner Liste, ohne ihn zu melden — der Baum ragte
-    um diese Punkte über seinen Abschnitt, und seine letzte Zeile war
-    abgeschnitten (Fund D0-P, 800 × 800). Im eigenen Prozess, weil die Anwendung
-    wie beim Kunden gebaut sein muss."""
-    del qt_app
-    done = _sections()
-    assert done.returncode == 0, done.stderr[-3000:]
-    assert "probleme []" in done.stdout, done.stdout
-    checked = int(done.stdout.split("geprüft", 1)[1].split()[0])
-    assert checked >= 5, done.stdout
-
-
-def test_a_row_cut_off_by_its_parent_is_reached_by_scrolling(qt_app: Any) -> None:
-    """Eine Zeile, deren Liste über ihren Elternteil ragt, ist nur halb zu sehen;
-    gefragt wird der sichtbare Teil der Liste, nicht ihr ganzes Rechteck (Fund
-    D0-P: die letzte Baumzeile hieß „ziel“, obwohl 8 Punkte abgeschnitten waren)."""
-    from PySide6.QtWidgets import QListWidget, QWidget
-
-    from app.ui import guide_targets
-
-    host = QWidget()
-    host.resize(240, 100)
-    listing = QListWidget(host)
-    listing.setGeometry(0, 0, 240, 300)
-    for number in range(12):
-        listing.addItem(f"Zeile {number}")
-    host.show()
-    _settle(qt_app, 5)
-    try:
-        visible = listing.viewport().visibleRegion().boundingRect()
-        cut = next(
-            listing.item(row)
-            for row in range(listing.count())
-            if listing.visualItemRect(listing.item(row)).bottom() > visible.bottom()
-            and listing.visualItemRect(listing.item(row)).top() <= visible.bottom()
-        )
-        step = guide_targets._visible_row_click(listing, cut, "history.row:1", "ziel")
-        assert (step.why, step.direction) == ("rollen", 1)
-        whole = listing.item(0)
-        assert guide_targets._visible_row_click(listing, whole, "history.row:1", "ziel").why == (
-            "ziel"
-        )
-    finally:
-        host.close()
-        host.deleteLater()
 
 
 def test_the_expired_demo_and_the_parameter_dialog_resolve(qt_app: Any, monkeypatch) -> None:
@@ -1628,3 +1338,404 @@ def test_a_field_of_the_modal_dialog_comes_first(qt_app: Any) -> None:
             dialog.close()
             dialog.deleteLater()
         window.deleteLater()
+
+
+#: Woran ein rohes Meldungsfenster zu erkennen ist: ``QMessageBox(…)`` oder ein
+#: statischer Aufruf (``QMessageBox.information``, ``QInputDialog.getText``,
+#: ``QColorDialog.getColor``).
+_RAW_STATIC = {
+    ("QMessageBox", "information"),
+    ("QMessageBox", "question"),
+    ("QMessageBox", "warning"),
+    ("QMessageBox", "critical"),
+    ("QMessageBox", "about"),
+    ("QInputDialog", "getItem"),
+    ("QInputDialog", "getText"),
+    ("QInputDialog", "getInt"),
+    ("QInputDialog", "getDouble"),
+    ("QInputDialog", "getMultiLineText"),
+    ("QColorDialog", "getColor"),
+}
+
+
+def raw_window_names(source: str) -> tuple[list[str], list[str]]:
+    """Die rohen Meldungsfenster einer Datei: die ohne Kennzeichen und die Namen.
+
+    Ein statischer Aufruf steht in ``with raw_window("message:<sache>")``; ein
+    ``QMessageBox(…)`` bekommt in derselben Funktion ``setProperty`` mit
+    ``guides.TARGET_PROPERTY`` und einem Namen (oder einer Konstanten wie
+    ``EXPIRED_DEMO_TARGET``). Die Funktion ist die innerste, die den Aufruf trägt.
+    """
+    import ast
+
+    tree = ast.parse(source)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    missing: list[str] = []
+    names: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        instance = isinstance(func, ast.Name) and func.id in {
+            "QMessageBox",
+            "QInputDialog",
+            "QColorDialog",
+        }
+        static = (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and (func.value.id, func.attr) in _RAW_STATIC
+        )
+        if not (instance or static):
+            continue
+        chain = []
+        probe: ast.AST = node
+        while probe in parents:
+            probe = parents[probe]
+            chain.append(probe)
+        function = next(
+            (item for item in chain if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef)),
+            None,
+        )
+        given: list[ast.expr] = []
+        if static:
+            given = [
+                entry.context_expr.args[0]
+                for item in chain
+                if isinstance(item, ast.With)
+                for entry in item.items
+                if isinstance(entry.context_expr, ast.Call)
+                and ast.unparse(entry.context_expr.func) == "raw_window"
+            ]
+        elif function is not None:
+            given = [
+                call.args[1]
+                for call in ast.walk(function)
+                if isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "setProperty"
+                and len(call.args) == 2
+                and ast.unparse(call.args[0]) == "guides.TARGET_PROPERTY"
+                and (
+                    isinstance(call.args[1], ast.Name)
+                    or (
+                        isinstance(call.args[1], ast.Constant)
+                        and str(call.args[1].value).startswith("message:")
+                    )
+                )
+            ]
+        if not given:
+            label = function.name if function else "<modul>"
+            missing.append(f"{label} (Zeile {node.lineno})")
+        names.extend(str(value.value) for value in given[:1] if isinstance(value, ast.Constant))
+    return missing, names
+
+
+def test_every_raw_message_window_carries_its_name() -> None:
+    """Jedes rohe Meldungsfenster unter ``app/ui`` trägt ``message:<sache>`` (Nachtrag
+    D0-W): Sonst findet der Prüfstand Wiederherstellen, Speicherfrage und
+    Löschnachfrage nur als „irgendein Meldungsfenster“. Jeder Name ist gültig und
+    gehört genau einem Fenster."""
+    root = Path(__file__).resolve().parents[1] / "app" / "ui"
+    missing: list[str] = []
+    names: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        if path.name == "window_names.py":
+            continue
+        lacking, named = raw_window_names(path.read_text(encoding="utf-8"))
+        missing.extend(f"{path.relative_to(root).as_posix()}: {entry}" for entry in lacking)
+        names.extend(sorted(set(named)))
+    assert missing == []
+    assert [name for name in names if not guides.is_target(name)] == []
+    assert sorted(name for name in set(names) if names.count(name) > 1) == []
+    assert len(names) >= 25, "die Suche nach rohen Fenstern greift nicht mehr"
+
+
+def test_an_unnamed_raw_window_turns_the_guard_red() -> None:
+    source = (
+        "def ask(parent):\n"
+        "    return QMessageBox.question(parent, 'a', 'b')\n"
+        "def named(parent):\n"
+        "    with raw_window('message:sample_named'):\n"
+        "        return QInputDialog.getText(parent, 'a', 'b')\n"
+        "def boxed(parent):\n"
+        "    box = QMessageBox(parent)\n"
+        "    return box.exec()\n"
+    )
+    assert raw_window_names(source) == (
+        ["ask (Zeile 2)", "boxed (Zeile 7)"],
+        ["message:sample_named"],
+    )
+
+
+def test_a_raw_message_window_resolves_while_it_is_open(qt_app: Any) -> None:
+    """Ein rohes Fenster, statisch oder mit Objekt, heißt im Wortschatz nach seiner
+    Funktion, solange es offen ist — geprüft aus dem Lauf des modalen Fensters."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox
+
+    from app.ui import dialogs, guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from app.ui.window_names import raw_window
+
+    window = MainWindow(Session(), UiSettings())
+    window.show()
+    found: dict[str, Any] = {}
+
+    def look(name: str) -> None:
+        def inside() -> None:
+            modal = qt_app.activeModalWidget()
+            try:
+                found[name] = (guide_targets.widget_for(window, name), modal)
+                found[name + "/why"] = guide_targets.next_click(window, name).why
+            except guide_targets.MissingTargetError as problem:
+                found[name] = (problem, modal)
+            finally:
+                # Erst schließen, dann prüfen: Ein offenes modales Fenster hielte
+                # den Test an, statt ihn rot zu machen.
+                if isinstance(modal, QDialog):
+                    modal.reject()
+
+        QTimer.singleShot(50, inside)
+
+    try:
+        look("message:sample_text")
+        with raw_window("message:sample_text"):
+            QInputDialog.getText(window, "Probe", "Name")
+        look("message:sample_box")
+        with raw_window("message:sample_box"):
+            QMessageBox.information(window, "Probe", "Satz")
+        look("message:unsaved_changes")
+        dialogs.confirm_unsaved("Probe", window)
+        for name in (
+            "message:sample_text",
+            "message:sample_box",
+            "message:unsaved_changes",
+        ):
+            widget, modal = found[name]
+            assert widget is modal and modal is not None, name
+            assert found.get(name + "/why") == "ziel", name
+    finally:
+        window.hide()
+        window.release()
+
+
+def unnamed_message_buttons(source: str) -> list[str]:
+    """Jeder Knopf eines rohen ``QMessageBox(…)``, der keinen Namen bekommt.
+
+    In einer Funktion, die ein ``QMessageBox`` baut, steht jedes ``addButton`` in
+    einer Zuweisung, und derselbe Knopf geht an ``name_button``
+    (``message.button:<sache>.<knopf>``, ``app/ui/window_names.py``) — ein Knopf
+    mit Text wie ein Standardknopf: Der Prüfstand drückt ihn über seinen Namen,
+    nicht über die Beschriftung, die mit der Sprache wechselt."""
+    import ast
+
+    tree = ast.parse(source)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    missing: list[str] = []
+    for function in ast.walk(tree):
+        if not isinstance(function, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        calls = [node for node in ast.walk(function) if isinstance(node, ast.Call)]
+        if not any(
+            isinstance(call.func, ast.Name) and call.func.id == "QMessageBox" for call in calls
+        ):
+            continue
+        named = {
+            ast.unparse(call.args[0])
+            for call in calls
+            if isinstance(call.func, ast.Name) and call.func.id == "name_button" and call.args
+        }
+        for call in calls:
+            if not (isinstance(call.func, ast.Attribute) and call.func.attr == "addButton"):
+                continue
+            holder = parents.get(call)
+            target = (
+                ast.unparse(holder.targets[0])
+                if isinstance(holder, ast.Assign) and len(holder.targets) == 1
+                else None
+            )
+            if target is None or target not in named:
+                missing.append(f"{function.name} (Zeile {call.lineno})")
+    return missing
+
+
+def test_every_button_of_a_raw_message_window_carries_its_name() -> None:
+    """Die Speicherfrage, die Löschnachfrage und die Handlungen einer Fehlermeldung
+    haben Knöpfe mit Namen (``message.button:<sache>.<knopf>``); die Knöpfe
+    statischer Aufrufe heißen nach ihrem Standardknopf."""
+    root = Path(__file__).resolve().parents[1] / "app" / "ui"
+    found = [
+        f"{path.relative_to(root).as_posix()}: {entry}"
+        for path in sorted(root.rglob("*.py"))
+        for entry in unnamed_message_buttons(path.read_text(encoding="utf-8"))
+    ]
+    assert found == []
+    counted = sum(
+        source.count('"message.button:') + source.count('f"message.button:')
+        for source in (path.read_text(encoding="utf-8") for path in root.rglob("*.py"))
+    )
+    assert counted >= 15, "die Suche nach Knöpfen greift nicht mehr"
+
+
+def test_an_unnamed_message_button_turns_the_guard_red() -> None:
+    source = (
+        "def ask(parent):\n"
+        "    box = QMessageBox(parent)\n"
+        "    keep = box.addButton('a', role)\n"
+        "    name_button(keep, 'message.button:sample_ask.keep')\n"
+        "    box.addButton(QMessageBox.StandardButton.Close)\n"
+        "    other = box.addButton('b', role)\n"
+        "    return box.exec()\n"
+        "def outside(dialog):\n"
+        "    return dialog.buttons.addButton('b', role)\n"
+    )
+    assert unnamed_message_buttons(source) == ["ask (Zeile 5)", "ask (Zeile 6)"]
+
+
+#: Die Stämme der Module unter ``app/ui`` — ein Ziel nennt keinen davon als Ort.
+_UI_STEMS = frozenset(
+    path.stem
+    for path in (Path(__file__).resolve().parents[1] / "app" / "ui").rglob("*.py")
+    if path.stem != "__init__"
+)
+
+
+def placed_in_a_module(name: str) -> bool:
+    """Ob ``name`` einen Modulstamm als Ort nennt: als Glied, auf das noch etwas
+    folgt (``message:dialogs.confirm_unsaved``). Ein Name, der selbst wie ein
+    Modul heißt (``tour``, ``dialog:settings_dialog`` nach der Klasse), nennt die
+    Sache und nicht ihren Ort."""
+    import re
+
+    parts = [part for part in re.split(r"[:.]", name) if part]
+    return any(part in _UI_STEMS for part in parts[:-1])
+
+
+def _names_in_the_sources() -> list[str]:
+    """Jeder Zielname, der als Text im Quelltext von ``app/`` und ``tools/`` steht,
+    dazu die festen Ziele; aus einem f-String der feste Anfang."""
+    import ast
+
+    root = Path(__file__).resolve().parents[1]
+    found: set[str] = set(guides.TARGETS)
+    kinds = tuple(f"{kind}:" for kind in guides.TARGET_KINDS)
+    for folder in ("app", "tools"):
+        for path in sorted((root / folder).rglob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    if guides.is_target(node.value):
+                        found.add(node.value)
+                elif isinstance(node, ast.JoinedStr) and node.values:
+                    head = node.values[0]
+                    if (
+                        isinstance(head, ast.Constant)
+                        and isinstance(head.value, str)
+                        and head.value.startswith(kinds)
+                    ):
+                        found.add(head.value + "x")
+    return sorted(found)
+
+
+def test_no_target_names_the_module_it_lives_in() -> None:
+    """Ein Ziel nennt die Sache, nie Datei oder Modul: Die Codestruktur teilt
+    ``dialogs.py`` und ``main_window.py`` auf, und ein Name mit Modul verlöre
+    Tour, Anleitungen und Funktionsdurchgang (Koordinator D0, L stellte seine
+    Kennungen ebenso um)."""
+    names = _names_in_the_sources()
+    assert len(names) >= 100, "die Suche nach Zielnamen greift nicht mehr"
+    assert [name for name in names if placed_in_a_module(name)] == []
+
+
+def test_a_target_with_a_module_turns_the_guard_red() -> None:
+    assert placed_in_a_module("message:dialogs.confirm_unsaved")
+    assert placed_in_a_module("message.button:main_window.recovery.restore")
+    assert placed_in_a_module("menu:panels.history.up")
+    assert not placed_in_a_module("message:unsaved_changes")
+    assert not placed_in_a_module("message.button:unsaved_changes.save")
+    assert not placed_in_a_module("tour")
+    assert not placed_in_a_module("dialog:print_settings_dialog")
+
+
+def test_the_buttons_of_a_message_window_resolve_while_it_is_open(qt_app: Any) -> None:
+    """Speicherfrage, Fehlermeldung mit Handlung und ein statischer Aufruf: Jeder
+    Knopf ist über seinen Namen zu finden, solange sein Fenster offen ist, und
+    ist dann selbst der nächste Klick."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QAbstractButton, QDialog, QMessageBox
+
+    from app.core.errors import RETRY, AppError
+    from app.ui import dialogs, guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from app.ui.window_names import raw_window
+
+    window = MainWindow(Session(), UiSettings())
+    window.show()
+    found: dict[str, Any] = {}
+
+    def look(*names: str) -> None:
+        def inside() -> None:
+            modal = qt_app.activeModalWidget()
+            try:
+                for name in names:
+                    try:
+                        widget = guide_targets.widget_for(window, name)
+                        why = guide_targets.next_click(window, name).why
+                        # Gelesen, solange das Fenster lebt: Ein statischer
+                        # Aufruf löscht seine Knöpfe beim Schließen.
+                        found[name] = (
+                            isinstance(widget, QAbstractButton) and widget.window() is modal,
+                            why,
+                            widget.text() if isinstance(widget, QAbstractButton) else repr(widget),
+                        )
+                    except guide_targets.MissingTargetError as problem:
+                        found[name] = (False, "", str(problem))
+            finally:
+                if isinstance(modal, QDialog):
+                    modal.reject()
+
+        QTimer.singleShot(50, inside)
+
+    unsaved = tuple(
+        f"message.button:unsaved_changes.{key}" for key in ("save", "discard", "cancel")
+    )
+    failed = ("message.button:error.retry", "message.button:error.cancel")
+    asked = ("message.button:sample_ask.yes", "message.button:sample_ask.no")
+    try:
+        look(*unsaved)
+        dialogs.confirm_unsaved("Probe", window)
+        look(*failed)
+        dialogs.show_error(
+            AppError("Probe", suggestions=(RETRY,)), window, handlers={"retry": lambda error: None}
+        )
+        look(*asked)
+        with raw_window("message:sample_ask"):
+            QMessageBox.question(window, "Probe", "Satz")
+        for name in (*unsaved, *failed, *asked):
+            inside_modal, why, label = found[name]
+            assert inside_modal, (name, label)
+            assert why == "ziel", name
+        assert found[failed[0]][2] == str(RETRY.label)
+    finally:
+        window.hide()
+        window.release()
+
+
+def test_chat_and_tour_are_pages_of_the_right_card(prepared_window: Any, qt_app: Any) -> None:
+    """*Chat* und *Tour* sind feste Ziele; hinter einem anderen Reiter ist der Reiter
+    der nächste Klick."""
+    from app.ui import guide_targets
+
+    window = prepared_window
+    window.right.setCurrentIndex(0)
+    _settle(qt_app)
+    for name, page in (("chat", window.chat), ("tour", window.tour)):
+        assert guide_targets.widget_for(window, name) is page
+        index = window.right.indexOf(page)
+        if index >= 0 and not window.right.tabBar().isTabVisible(index):
+            continue
+        assert guide_targets.next_click(window, name).why == "reiter", name
