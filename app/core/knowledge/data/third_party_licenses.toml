@@ -524,7 +524,7 @@ sha256 = "08c135755dd589039470f1fdbb400daaabaaa50d0b366d19cebff4d22986baa1"
 
 [[text]]
 path = "third_party_licenses/LGPL-2.1.txt"
-runtime = ["glib", "systemd", "libgcrypt", "libgpg-error", "util-linux"]
+runtime = ["glib", "systemd", "libgcrypt", "libgpg-error", "util-linux", "hidapi-libudev", "hidapi-libattr"]
 source = "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt"
 sha256 = "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9"
 
@@ -607,6 +607,90 @@ runtime = ["zlib"]
 # „Copyright notice“ der README, den 1.3 als LICENSE führt.
 source = "https://raw.githubusercontent.com/madler/zlib/v1.2.11/README"
 sha256 = "fefeb20bf292c34f1e8d5114731308aac188d65aa3dc5f85bb2e9b0d007b7ab8"
+
+# ---------------------------------------------------------------------------
+# Was das Linux-Rad von hidapi in ``hidapi.libs/`` mitbringt (``make_sbom.WHEEL_LIBRARIES``):
+# Das Modul ``hidraw`` der 3D-Maus hängt an libudev, das an libcap/libattr und
+# libdw (elfutils, dazu libelf, liblzma, libbz2). Gebaut hat sie auditwheel auf
+# CentOS 7; die Fassungen stehen in der Stückliste des Rads
+# (``hidapi-0.15.0.dist-info/sboms/auditwheel.cdx.json``) und sind hier gepinnt,
+# damit ein neues Rad die Texte erneut prüfen lässt. Doppellizenzen tragen die
+# gewählte: elfutils LGPL-3.0-or-later (statt GPL-2.0-or-later), libcap
+# BSD-3-Clause (statt GPL-2.0); die LGPL-Teile verlangen ein Quellenangebot
+# wie keyutils. libusb hing nur am Modul ``hid``, das unter Linux nicht mehr
+# mitreist, und steht deshalb nicht hier.
+# ---------------------------------------------------------------------------
+
+[[runtime]]
+id = "hidapi-libudev"
+name = "libudev (systemd, in hidapi)"
+source = "https://github.com/systemd/systemd/tree/v219"
+source_delivery = true
+versions = ["219"]
+
+[[runtime]]
+id = "hidapi-elfutils"
+name = "elfutils libdw/libelf (in hidapi)"
+source = "https://sourceware.org/git/?p=elfutils.git;a=tree;hb=elfutils-0.176"
+source_delivery = true
+versions = ["0.176"]
+
+[[runtime]]
+id = "hidapi-libattr"
+name = "libattr (in hidapi)"
+source = "https://git.savannah.nongnu.org/cgit/attr.git/tree/?h=v2.4.46"
+source_delivery = true
+versions = ["2.4.46"]
+
+[[runtime]]
+id = "hidapi-libcap"
+name = "libcap (in hidapi)"
+source = "https://git.kernel.org/pub/scm/libs/libcap/libcap.git/tree/?h=libcap-2.22"
+versions = ["2.22"]
+
+[[runtime]]
+id = "hidapi-xz"
+name = "XZ Utils liblzma (in hidapi)"
+source = "https://github.com/tukaani-project/xz/tree/v5.2.2"
+versions = ["5.2.2"]
+
+[[runtime]]
+id = "hidapi-bzip2"
+name = "bzip2 (in hidapi)"
+source = "https://sourceware.org/git/?p=bzip2.git;a=tree;hb=bzip2-1.0.6"
+versions = ["1.0.6"]
+
+# LGPL 3 ergänzt die GPL 3 um Erlaubnisse; beide Texte gehören dazu.
+[[text]]
+path = "third_party_licenses/LGPL-3.0.txt"
+runtime = ["hidapi-elfutils"]
+source = "https://www.gnu.org/licenses/lgpl-3.0.txt"
+sha256 = "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
+
+[[text]]
+path = "third_party_licenses/GPL-3.0.txt"
+runtime = ["hidapi-elfutils"]
+source = "https://www.gnu.org/licenses/gpl-3.0.txt"
+sha256 = "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+
+# Bytegleich mit dem Text von 2.44 (Tarball verglichen).
+[[text]]
+path = "third_party_licenses/libcap-2.22.txt"
+runtime = ["hidapi-libcap"]
+source = "https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.22.tar.xz#libcap-2.22/License"
+sha256 = "088cabde4662b4121258d298b0b2967bc1abffa134457ed9bc4a359685ab92bc"
+
+[[text]]
+path = "third_party_licenses/xz-5.2.2.txt"
+runtime = ["hidapi-xz"]
+source = "https://raw.githubusercontent.com/tukaani-project/xz/v5.2.2/COPYING"
+sha256 = "48398016e20f91676c11e50d5066d2668afda3c161a75dcfd47311f52f220f14"
+
+[[text]]
+path = "third_party_licenses/bzip2-1.0.6.txt"
+runtime = ["hidapi-bzip2"]
+source = "https://sourceware.org/git/?p=bzip2.git;a=blob_plain;f=LICENSE;hb=bzip2-1.0.6"
+sha256 = "01c5ea784da676b8138406f99436abbb8d366a096d4f2403070188a40bda578b"
 
 [[text]]
 path = "third_party_licenses/wgpu-native-29.0.1.1-MIT.txt"

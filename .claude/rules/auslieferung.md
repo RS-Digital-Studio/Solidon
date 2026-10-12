@@ -205,6 +205,12 @@ wörtlich; im Paket heißt das zusätzlich:
   (`tools/check_glibc_floor.py` im Paketjob und in der Releaseakte). Ein
   Wechsel des Bauservers bewegt `OLDEST_GLIBC`, die Lizenztexte der
   Systembibliotheken und die Startprüfung gemeinsam.
+- **Auch eine Laufzeitfamilie braucht eine freigegebene Lizenz**: Die
+  Releaseakte hält jeden SPDX-Ausdruck der Stückliste gegen `licences.toml`,
+  bei Doppellizenzen steht die gewählte. Was ein Rad ohne eigene Lizenztexte
+  in `<rad>.libs/` mitbringt (hidapi), führt `make_sbom.WHEEL_LIBRARIES` je
+  Familie mit Fassung aus der auditwheel-Stückliste; eine Datei ohne Zeile
+  hält die Stückliste an.
 - **`libstdc++` und `libgcc_s` reisen nicht mit** (`HOST_LIBRARIES`), obwohl
   sie gebraucht werden: Jeder Kundenrechner hat dieselbe oder eine neuere
   Fassung, und eine mitgereiste ältere lädt vor der des Rechners und bricht
