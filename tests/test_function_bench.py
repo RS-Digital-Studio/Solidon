@@ -23,7 +23,7 @@ import heapq
 import itertools
 import json
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -2079,6 +2079,174 @@ def test_the_probe_finds_a_list_or_the_view_over_a_real_target(window: Any) -> N
     assert hit is view or view.isAncestorOf(hit), hit
     assert not ports.covers(click(spot, name), hit), "die Ansicht an der Stelle des Ziels"
     assert ports.covers(click(spot, "viewport"), hit), "die Ansicht als eigenes Ziel"
+
+
+@pytest.fixture
+def box_window(qt_app: Any) -> Any:
+    """Ein gezeigtes Fenster mit einem Quader samt Bohrung, ohne Startbildschirm.
+
+    Gebaut wie ``prepared_window`` von D0-W: Die Attrappe des Renderers gibt der
+    Ansicht eine Projektion. Das ist Vorbereitung, nicht der geprüfte Weg.
+    """
+    from PySide6.QtWidgets import QMenu
+
+    from app.core.scene.history import OperationDraft
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from tests.render_fakes import RecordingRenderer
+
+    window = MainWindow(Session(), UiSettings())
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.resize(1400, 900)
+    window.show()
+    window._show_start_screen(False)
+    assert window.session.apply(
+        "Quader mit Bohrung",
+        [
+            OperationDraft(op="create_box"),
+            OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}),
+        ],
+    )
+    assert window.session.wait_for_idle(60_000)
+    _settle(qt_app)
+    try:
+        yield window
+    finally:
+        for menu in [*window.findChildren(QMenu), *qt_app.topLevelWidgets()]:
+            if isinstance(menu, QMenu) and menu.isVisible():
+                menu.hide()
+        window.hide()
+        window.release()
+        window.viewport.renderer = None
+
+
+def _settle(qt_app: Any, rounds: int = 20) -> None:
+    for _ in range(rounds):
+        qt_app.processEvents()
+
+
+def _walk_to(qt_app: Any, ports: Any, name: str) -> Any:
+    """Die Wegklicks zu ``name`` über ``QtPorts.press``, jeder mit Probe; der Zielklick nicht.
+
+    Gibt den Zielklick und den Treffer der Probe an seiner Mitte zurück.
+    """
+    for _step in range(6):
+        click = ports.next_click(name)
+        point = ports.centre(click.rect)
+        hit = ports.widget_under(point)
+        if click.why == bench.TARGET_REASON:
+            return click, hit
+        assert hit is not None and ports.covers(click, hit), (name, click.why, hit)
+        ports.press(hit, point, "left")
+        _settle(qt_app)
+    raise AssertionError(f"{name}: kein Ziel nach sechs Wegklicks")
+
+
+def test_an_operation_that_stands_only_in_the_menu_is_its_menu_line(
+    box_window: Any, qt_app: Any
+) -> None:
+    """Review N1: Eine Operation ohne Kartenknopf steht als Zeile im offenen Menü.
+
+    Der Weg geht über Menütitel und Untermenü der Leiste; am Ziel liegt unter der
+    Mitte das Menü mit genau dieser Zeile — gedeckt. Vorher galt dort „verdeckt“,
+    denn die Operation hat kein eigenes Widget. Die Ansicht an derselben Stelle
+    bleibt verdeckt.
+    """
+    from PySide6.QtWidgets import QMenu
+
+    ports = bench.QtPorts(box_window, 0.0)
+    name = next(
+        f"operation:{op}"
+        for op in ("field_cut", "inlay_text", "label_text")
+        if (button := box_window.selection_operations.button_for(op)) is None
+        or not button.isVisible()
+    )
+    click, hit = _walk_to(qt_app, ports, name)
+    assert isinstance(hit, QMenu), hit
+    assert ports.covers(click, hit), name
+    assert not ports.covers(click, box_window.viewport), "die Ansicht ist nicht die Menüzeile"
+
+
+def test_an_operation_found_by_the_search_is_its_row_in_the_hits(
+    box_window: Any, qt_app: Any
+) -> None:
+    """Review N1: Ein Suchtreffer einer Operation ist ihre Zeile in der Trefferliste.
+
+    Vorher nahm die Probe den Kartenknopf oder ein Rechteck und meldete
+    „verdeckt“. Gedeckt ist nur die Zeile **dieser** Operation: Derselbe Ort für
+    einen anderen Treffer ist es nicht.
+    """
+    from app.ui import guide_targets
+
+    box_window.right.setCurrentIndex(0)
+    box_window.selection_operations.search.setText("e")
+    _settle(qt_app)
+    ports = bench.QtPorts(box_window, 0.0)
+    found = [hit for hit in guide_targets.search_hits(box_window) if hit.startswith("operation:")]
+    assert len(found) >= 2, found
+    name, other = found[0], found[1]
+    click, hit = _walk_to(qt_app, ports, name)
+    hits = box_window.selection_operations.hits
+    assert hit is hits or hits.isAncestorOf(hit), hit
+    assert ports.covers(click, hit), name
+    elsewhere = replace(click, target=other)
+    assert not ports.covers(elsewhere, hit), "die Zeile einer anderen Operation"
+    box_window.selection_operations.search.setText("")
+
+
+def test_a_part_is_its_tile_in_the_open_catalog(box_window: Any, qt_app: Any) -> None:
+    """Review N1: Ein Baustein (``part:``) ist seine Kachel in der Liste des Katalogs.
+
+    Vorher warf ``widget_for`` für ``part:``, die Probe nahm ein Rechteck und
+    meldete an jeder Kachel „verdeckt“. Die Ansicht des Fensters unter dem
+    Katalog ist es nicht.
+    """
+    from PySide6.QtCore import Qt
+
+    from app.ui.catalog import PartCatalog
+
+    catalog = PartCatalog(box_window)
+    catalog.setModal(True)
+    catalog.show()
+    _settle(qt_app)
+    try:
+        # Überschriften der Gruppen tragen keinen Namen, nur die Kacheln.
+        names = [
+            str(named)
+            for row in range(catalog.list.count())
+            if (named := catalog.list.item(row).data(Qt.ItemDataRole.UserRole))
+        ]
+        assert names, "der Katalog zeigt keine Kachel"
+        ports = bench.QtPorts(box_window, 0.0)
+        click, hit = _walk_to(qt_app, ports, f"part:{names[0]}")
+        assert hit is catalog.list or catalog.list.isAncestorOf(hit), hit
+        assert ports.covers(click, hit)
+        assert not ports.covers(click, box_window.viewport), "die Ansicht unter dem Katalog"
+    finally:
+        catalog.hide()
+        catalog.deleteLater()
+        _settle(qt_app)
+
+
+def test_a_bar_over_the_view_is_its_own_widget_not_the_view(box_window: Any, qt_app: Any) -> None:
+    """Review N1: ``handle:bar.*`` ist die Leiste in der Werkzeugzeile, nicht die Ansicht.
+
+    Das Werkzeug *Schnitt* wird per Klick geöffnet; dann steht die Schnittleiste.
+    Vorher nahm die Probe für jeden ``handle:`` die Ansicht und meldete an jeder
+    der sieben Leisten „verdeckt“. Ein Griff im Bild bleibt bei der Ansicht.
+    """
+    ports = bench.QtPorts(box_window, 0.0)
+    click, hit = _walk_to(qt_app, ports, "tool:section")
+    ports.press(hit, ports.centre(click.rect), "left")
+    _settle(qt_app, 60)
+    bar = box_window.section_bar
+    assert bar.isVisible()
+    click, hit = _walk_to(qt_app, ports, "handle:bar.section")
+    assert hit is bar or bar.isAncestorOf(hit), hit
+    assert not box_window.viewport.isAncestorOf(hit)
+    assert ports.covers(click, hit)
+    assert not ports.covers(click, box_window.viewport), "die Ansicht ist nicht die Leiste"
 
 
 def test_a_scroll_click_covers_its_scroll_area_and_not_a_list_over_it(qt_app: Any) -> None:

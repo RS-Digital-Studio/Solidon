@@ -46,6 +46,7 @@ Zeilen und Startszenen kommen aus ``tools/function_list.py`` (D0-L).
 from __future__ import annotations
 
 import ast
+import contextlib
 import hashlib
 import json
 import sys
@@ -1367,12 +1368,16 @@ class QtPorts:
         ``Click`` nennt eine Fläche, kein Widget. Ein Behälter zählt nur, wenn er
         der Behälter **dieses** Ziels ist (Review S2, :meth:`receiver`): beim
         Rollen die Liste der Zeile oder die Rollfläche mit genau diesem Rechteck
-        oder diesem sichtbaren Teil (so nennt W sie), bei Reiter, Menü und
-        Untermenü die Reiterleiste oder das offene Menü, bei einer Zeile ihre
-        Liste oder ihr Baum, bei ``view:``, ``handle:`` und ``viewport`` die
-        Ansicht, sonst das Widget hinter dem Namen (``widget_for``) oder das
-        mit genau diesem Rechteck. Liegt an der Stelle etwas anderes — eine
-        Liste, eine Karte, die Ansicht, ein Dialog —, ist das der Fund „verdeckt“.
+        oder diesem sichtbaren Teil (so nennt W sie), beim Reiter die
+        Reiterleiste, bei Menütitel, Untermenü und Menüzeile das Menü oder die
+        Leiste mit genau dieser Zeile, bei einer Zeile ihre Liste, ihr Baum oder
+        der Katalog, bei ``view:``, einem Griff und ``viewport`` die Ansicht,
+        bei einer Operation oder einem Befehl der Ort, an dem
+        ``guide_targets.next_click`` sie nennt (:meth:`shows_command`), sonst
+        das Widget hinter dem Namen (``widget_for``, auch eine Leiste über der
+        Ansicht) oder das mit genau diesem Rechteck. Liegt an der Stelle etwas
+        anderes — eine Liste, eine Karte, die Ansicht, ein Dialog —, ist das
+        der Fund „verdeckt“.
         """
         from PySide6.QtCore import QPoint, QRect
 
@@ -1380,6 +1385,8 @@ class QtPorts:
         rect = click.rect
         if receiver is not None:
             return bool(hit is receiver or receiver.isAncestorOf(hit))
+        if kind == "befehl":
+            return self.shows_command(click, hit)
         probe = hit
         while probe is not None:
             area = QRect(probe.mapToGlobal(QPoint(0, 0)), probe.size())
@@ -1387,8 +1394,10 @@ class QtPorts:
                 return True
             if kind == "rollfläche" and _scrolls(probe) and rect in (area, _shown(probe)):
                 return True
+            if kind == "menüzeile" and _carries_line(probe, rect):
+                return True
             if (
-                kind not in ("rechteck", "rollfläche")
+                kind not in ("rechteck", "rollfläche", "menüzeile")
                 and isinstance(probe, kind)
                 and area.contains(rect.center())
             ):
@@ -1401,12 +1410,15 @@ class QtPorts:
     def receiver(self, click: ClickLike) -> tuple[Any, Any]:
         """Wer diesen Klick empfangen soll: ``(Art, Widget)``.
 
-        Ein Widget, wenn es eines gibt; sonst ``("rechteck", None)`` — das Widget
-        mit genau dem Rechteck des Klicks (Klappe) —, ``("rollfläche", None)`` —
-        eine Rollfläche mit genau diesem Rechteck oder sichtbaren Teil — oder eine
-        Widgetklasse, deren Fläche die Mitte enthält (Reiterleiste, Menü).
+        Ein Widget, wenn es eines gibt; sonst eine Art: ``"rechteck"`` — das
+        Widget mit genau dem Rechteck des Klicks (Klappe) —, ``"rollfläche"`` —
+        eine Rollfläche mit genau diesem Rechteck oder sichtbaren Teil —,
+        ``"menüzeile"`` — ein Menü oder die Menüleiste mit einer Zeile genau an
+        diesem Rechteck —, ``"befehl"`` (:meth:`shows_command`) oder die Klasse
+        der Reiterleiste. Die Art folgt dem, was ``next_click`` je Zielart
+        nennt (Review N1): Ein Ziel ohne eigenes Widget ist kein Rechteck.
         """
-        from PySide6.QtWidgets import QMenu, QMenuBar, QTabBar
+        from PySide6.QtWidgets import QTabBar
 
         from app.ui import guide_targets
 
@@ -1423,32 +1435,90 @@ class QtPorts:
         if why == "reiter":
             return QTabBar, None
         if why in ("menue", "untermenue") or kind in ("menu", "history"):
-            return (QMenu, QMenuBar), None
+            return "menüzeile", None
         view = self.row_view(kind, name)
         if view is not None:
             return None, view
         if why != TARGET_REASON:
             return "rechteck", None
-        if kind == "command":
-            # Ein Fensterbefehl steht als Treffer in der Liste der Auswahl, als
-            # Zeile im offenen Menü oder als Knopf — je nachdem, wo der Klick liegt.
-            hits = getattr(self.window.selection_operations, "hits", None)
-            if hits is not None and hits.isVisible() and self.holds(hits, click.rect.center()):
-                return None, hits
-            if self.open_menu() is not None:
-                return (QMenu, QMenuBar), None
+        if kind in ("command", "operation"):
+            return "befehl", None
         try:
             return None, guide_targets.widget_for(self.window, name)
         except LookupError:
             return "rechteck", None
 
+    def shows_command(self, click: ClickLike, hit: Any) -> bool:
+        """Ob der Treffer eine Operation oder einen Befehl dort zeigt, wo ``next_click`` sie nennt.
+
+        In dieser Folge sucht W sie (``guide_targets._command_click``): ihre Zeile
+        in der Trefferliste der Suche, ihr Knopf in der Karte, das Werkzeug eines
+        ``command:tool.*``, ein Knopf der Werkzeugleiste mit genau dem Rechteck,
+        sonst ihre Zeile in einem offenen Menü oder der Menüleiste. Liegt die
+        Trefferliste an der Stelle, zählt nur die Zeile **dieses** Namens.
+        """
+        from PySide6.QtCore import QPoint, QRect, Qt
+
+        from app.ui import guide_targets
+
+        name = str(getattr(click, "target", "") or "")
+        kind, _separator, entry = name.partition(":")
+        rect = click.rect
+        operations = self.window.selection_operations
+        hits = operations.hits
+        if hits.isVisible() and (hit is hits or hits.isAncestorOf(hit)):
+            row = hits.itemAt(hits.viewport().mapFromGlobal(rect.center()))
+            return row is not None and row.data(Qt.ItemDataRole.UserRole) == entry
+        places = [operations.button_for(entry)]
+        if kind == "command" and entry.startswith("tool."):
+            with contextlib.suppress(LookupError):
+                places.append(
+                    guide_targets.widget_for(self.window, f"tool:{entry.removeprefix('tool.')}")
+                )
+        for place in places:
+            if (
+                place is not None
+                and place.isVisible()
+                and (hit is place or place.isAncestorOf(hit))
+            ):
+                return True
+        probe = hit
+        while probe is not None:
+            if QRect(probe.mapToGlobal(QPoint(0, 0)), probe.size()) == rect:
+                return True
+            if _carries_line(probe, rect):
+                return True
+            if probe.isWindow():
+                return False
+            probe = probe.parentWidget()
+        return False
+
     def row_view(self, kind: str, name: str) -> Any:
-        """Die Liste oder der Baum, in dem eine Zeile dieses Namens steht — oder die Ansicht."""
+        """Das Widget, das ein Ziel ohne eigenes Widget trägt, oder ``None``.
+
+        Die Liste oder der Baum einer Zeile, die Liste des offenen Katalogs für
+        ``part:``, die Ansicht für ``view:``, ``viewport`` und einen Griff im
+        Bild; eine Leiste über der Ansicht (``handle:bar.*``) ist ihr eigenes
+        Widget und liegt in der Werkzeugzeile, nicht in der Ansicht (Review N1).
+        """
+        from PySide6.QtWidgets import QApplication
+
+        from app.ui import guide_targets
+        from app.ui.catalog import PartCatalog
+
         window = self.window
         if window is None:
             return None
-        if kind in ("view", "handle") or name == "viewport":
+        if kind == "view" or name == "viewport":
             return window.viewport
+        if kind == "handle":
+            try:
+                return guide_targets.widget_for(window, name)
+            except LookupError:
+                return window.viewport
+        if kind == "part":
+            catalog = QApplication.activeModalWidget()
+            return catalog.list if isinstance(catalog, PartCatalog) else None
         if kind == "tree.row":
             return window.object_tree.tree
         if kind == "history.row" or name == "history.last":
@@ -1458,18 +1528,6 @@ class QtPorts:
         if kind == "finding":
             return window.report.list
         return None
-
-    def holds(self, widget: Any, point: Any) -> bool:
-        """Ob ``point`` (global) in der Fläche von ``widget`` liegt."""
-        from PySide6.QtCore import QPoint, QRect
-
-        return bool(QRect(widget.mapToGlobal(QPoint(0, 0)), widget.size()).contains(point))
-
-    def open_menu(self) -> Any:
-        from PySide6.QtWidgets import QApplication, QMenu
-
-        popup = QApplication.activePopupWidget()
-        return popup if isinstance(popup, QMenu) else None
 
     def centre(self, rect: Any) -> Any:
         return rect.center()
@@ -1601,6 +1659,20 @@ def _scrolls(widget: Any) -> bool:
 
     parent = widget.parentWidget()
     return isinstance(widget, QAbstractScrollArea) or isinstance(parent, QAbstractScrollArea)
+
+
+def _carries_line(widget: Any, rect: Any) -> bool:
+    """Ob ``widget`` ein Menü oder die Menüleiste ist und eine Zeile genau an ``rect`` trägt."""
+    from PySide6.QtCore import QRect
+    from PySide6.QtWidgets import QMenu, QMenuBar
+
+    if not isinstance(widget, (QMenu, QMenuBar)):
+        return False
+    for action in widget.actions():
+        place = widget.actionGeometry(action)
+        if not place.isEmpty() and QRect(widget.mapToGlobal(place.topLeft()), place.size()) == rect:
+            return True
+    return False
 
 
 def _shown(widget: Any) -> Any:
