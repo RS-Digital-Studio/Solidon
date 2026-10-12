@@ -5089,11 +5089,18 @@ class HistoryPanel(QWidget):
             self.previewInsertRequested.emit(target)
 
     def _timeline_height(self) -> int:
+        """Was über der Liste steht: *Vorher/Nachher*, die Zeitleiste, und je ein
+        Abstand des Layouts dahinter — der fehlte, und der Verlauf nahm sechs
+        Punkte mehr, als er der Karte meldete; der Objektbaum darüber ragte um
+        sie über seinen Abschnitt (Fund D0-P)."""
         if self.compare.isHidden():
             return 0
-        return self.compare.sizeHint().height() + (
-            self.timeline.sizeHint().height() if self.compare.isChecked() else 0
-        )
+        layout = self.layout()
+        gap = max(layout.spacing(), 0) if layout is not None else 0
+        height = self.compare.sizeHint().height() + gap
+        if self.compare.isChecked():
+            height += self.timeline.sizeHint().height() + gap
+        return height
 
     def wanted_height(self) -> int:
         """Die Höhe, bei der jeder Schritt zu sehen wäre."""

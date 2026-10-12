@@ -245,13 +245,7 @@ def test_every_surface_row_names_a_target_of_the_vocabulary(rows: list[fl.Row]) 
     from app.core.guides import is_target
 
     wrong = [row.id for row in rows if not is_target(row.target)]
-    # ``guides.dialog_name`` lässt den führenden Unterstrich von ``_PanelWindow``
-    # stehen, und ``dialog:`` verlangt einen Buchstaben vorn: Das abgelöste
-    # Kartenfenster hat damit kein Ziel (Bericht D0-L, gemeldet an W). Behebt W
-    # es, wird diese Zeile rot und fällt weg.
-    # Das Meldungsfenster nach abgelaufener Demo hat keine Klasse und keinen Namen
-    # im Wortschatz (Bericht D0-L, gemeldet an W).
-    assert sorted(wrong) == ["dialog:_panel_window", "startup.expired_demo"]
+    assert wrong == []
 
 
 def test_window_actions_outside_the_menu_bar_have_rows(

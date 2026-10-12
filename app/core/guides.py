@@ -181,6 +181,9 @@ TARGET_KINDS: Final[tuple[str, ...]] = (
     "start.recent",
 )
 
+#: Das erste Glied jedes Namens einer Zeile der Menüleiste (:func:`menubar_name`).
+MENUBAR: Final = "menubar"
+
 #: Der Name einer Widget-Eigenschaft, die ein Bedienelement als Ziel ausweist.
 #:
 #: Widgets tragen ihr Ziel als dynamische Eigenschaft und nicht als
@@ -243,7 +246,7 @@ def menubar_name(msgid: str, context: str | None = None) -> str:
     parts = [name_part(text) for text in (context, msgid) if text]
     if not parts or not all(parts):
         raise ValueError(f"menubar_name: aus {msgid!r} entsteht kein Name")
-    return ".".join(("menubar", *parts))
+    return ".".join((MENUBAR, *parts))
 
 
 def menubar_name_of(text: TranslatableText | str) -> str:
@@ -259,12 +262,13 @@ def menubar_name_of(text: TranslatableText | str) -> str:
 
 def dialog_name(class_name: str) -> str:
     """Der Name hinter ``dialog:`` für eine Fensterklasse: ``PrintSettingsDialog``
-    heißt ``print_settings_dialog``, ``LLMKeyDialog`` ``llm_key_dialog``.
+    heißt ``print_settings_dialog``, ``LLMKeyDialog`` ``llm_key_dialog``; ein
+    führender Unterstrich fällt weg (``_PanelWindow`` → ``panel_window``).
 
     Eine Quelle für die Funktionsliste, die die Klassen im Quelltext findet,
     und die Auflösung, die das offene Fenster sucht.
     """
-    spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", class_name)
+    spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", class_name.lstrip("_"))
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", spaced).lower()
 
 

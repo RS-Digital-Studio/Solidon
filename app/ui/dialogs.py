@@ -68,7 +68,7 @@ from app.branding import (
     WEBSITE_URL,
     website_page_url,
 )
-from app.core import activation, expressions, licence_service, tools
+from app.core import activation, expressions, guides, licence_service, tools
 from app.core.activation import certificate as activation_certificate
 from app.core.activation import store as activation_store
 from app.core.backends import keys, llm, machine, needs
@@ -705,6 +705,17 @@ class ParameterDialog(QDialog):
         self.maximum_field.setPlaceholderText(tr("optional — leer heißt: keine"))
         self.expression_field = QLineEdit(content)
         self.expression_field.setPlaceholderText(tr("zum Beispiel =@breite/2"))
+        # Die Felder als Ziele im Wortschatz (``field:<feld>``), unter den
+        # Namen der Felder eines Projektparameters (RM-737).
+        for key, editor in (
+            ("name", self.name_field),
+            ("value", self.value_field),
+            ("unit", self.unit_field),
+            ("minimum", self.minimum_field),
+            ("maximum", self.maximum_field),
+            ("expression", self.expression_field),
+        ):
+            editor.setProperty(guides.TARGET_PROPERTY, f"field:{key}")
 
         # Die zwei sichtbaren Werkzeuge entsprechen dem Operationsdialog:
         # ``fx`` schaltet eine Formel ein, ``@`` nimmt einen vorhandenen Namen.
@@ -3182,6 +3193,12 @@ def expired_demo_text(state: activation.Activation, now: datetime | None = None)
     return "\n\n".join(str(line) for line in lines)
 
 
+#: Der Name des Fensters nach abgelaufener Demo im Wortschatz. Es ist ein
+#: ``QMessageBox`` ohne eigene Klasse; der Name hängt deshalb als Kennzeichen
+#: am Fenster, nicht an einem Klassennamen.
+EXPIRED_DEMO_TARGET: Final = "dialog:expired_demo"
+
+
 def show_expired_demo(state: activation.Activation) -> None:
     """Die Verabschiedung der Demo, mit einem Weg nach vorn.
 
@@ -3189,6 +3206,7 @@ def show_expired_demo(state: activation.Activation) -> None:
     geschieht, sucht den Fehler bei sich oder hält das Programm für kaputt.
     """
     box = QMessageBox()
+    box.setProperty(guides.TARGET_PROPERTY, EXPIRED_DEMO_TARGET)
     box.setWindowTitle(tr("Die Demo ist beendet"))
     box.setIcon(QMessageBox.Icon.Information)
     box.setText(expired_demo_text(state))

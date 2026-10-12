@@ -1014,10 +1014,13 @@ def window_action_rows(keys: Iterable[str], scenes: Mapping[str, Scene]) -> list
 def startup_rows(scenes: Mapping[str, Scene]) -> list[Row]:
     """Was der Start zeigt, bevor es ein Fenster gibt (:data:`STARTUP_SURFACES`).
 
-    Ein rohes Meldungsfenster ohne eigene Klasse und ohne Wortschatznamen: Die
-    Zeile trägt kein Ziel, bis der Wortschatz eines hat; der Prüfstand startet
-    sie mit der Vorbedingung ``licence = abgelaufen``.
+    Ein rohes Meldungsfenster ohne eigene Klasse; sein Ziel ist das Kennzeichen,
+    das es selbst trägt (``dialogs.EXPIRED_DEMO_TARGET``). Der Prüfstand startet
+    es mit der Vorbedingung ``licence = abgelaufen``.
     """
+    from app.ui.dialogs import EXPIRED_DEMO_TARGET
+
+    targets = {"startup.expired_demo": EXPIRED_DEMO_TARGET}
     return [
         Row(
             id=key,
@@ -1026,7 +1029,7 @@ def startup_rows(scenes: Mapping[str, Scene]) -> list[Row]:
             package=package,
             requirement="start",
             start_scene=_start_scene("start", EXACT, scenes),
-            target="",
+            target=targets[key],
         )
         for key, (package, _module, _function) in STARTUP_SURFACES.items()
     ]
