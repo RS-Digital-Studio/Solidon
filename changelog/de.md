@@ -56,6 +56,10 @@ Nutzen da und sonst nichts.
 - Fehlt einer Funktion ein zweiter Körper in der Szene, nennt der Grund *Objekt duplizieren* als Weg.
 - Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
 
+### Bearbeiten und Zeichnen
+
+- Ein exakter Körper behält jetzt nach *Text aufbringen*, *Schrift einlegen* und *Gegenform einlassen* seine Merkmale. In Version 0.6.0 ließ sich danach keine Fläche mehr anklicken.
+
 ## 0.6.0
 
 - Die Demo läuft jetzt bis zum 30. November 2026. Solidon3D 1.0 erscheint voraussichtlich am 1. Dezember, Ihre Projekte bleiben erhalten.

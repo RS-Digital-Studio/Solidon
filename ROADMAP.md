@@ -28,8 +28,9 @@ Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.1
 der Prüfstand [RM-737](#rm-737)) und das Programm Codestruktur ([RM-722](#rm-722),
 Konzepte in `konzepte/`); 0.6.1 mit auffindbaren Booleschen Operationen und ohne
 Befehlspalette steht auf main ([RM-734](#rm-734), [RM-735](#rm-735), der Release
-entscheidet Robert). Bis zum 25.11. gehen die Kundenpakete des
-Funktionsdurchgangs vor die Komponenten von `MainWindow`. Mit 0.6.0 beim Kunden abzunehmen:
+entscheidet Robert). Beide Programme laufen in vier Phasen ohne Datum hintereinander
+(Robert, 12.10.); die Kundenpakete des Funktionsdurchgangs kommen darin vor die Komponenten
+von `MainWindow`. Mit 0.6.0 beim Kunden abzunehmen:
 der Start auf echten Intel-Macs (RM-104) und Cura unter Linux (RM-521); offen bleibt die
 Antwort an den Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis 15.10. (RM-092),
 Verkaufskandidat bis 25.11., Demo bis 30.11., Start am 01.12.2026 um 10:00 Uhr (RM-061).
@@ -121,6 +122,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-778 — Kleine Teile entfernen schließt auch bewusst offene Öffnungen](#rm-778) | Geometrie, Erkennung und Druckvorbereitung | Nachstellen am Kundenweg, dann Öffnungen mit Absicht von Löchern im Netz trennen |
 | [RM-780 — *Weich verschmelzen* warnt „unverbunden“, wenn ein Eingang schon aus zwei Körpern besteht](#rm-780) | Geometrie, Erkennung und Druckvorbereitung | Review Blend (G2), vorbestehend: `blend.still_apart` vergleicht mit einem Körper statt mit den Körpern der Eingänge |
 | [RM-781 — Ein Eingang mit falsch gewickeltem Hohlraum wird beim Verschmelzen zur Kugel in einem neuen Hohlraum](#rm-781) | Geometrie, Erkennung und Druckvorbereitung | Review Blend (G3), vorbestehend: `blend._grid` hält die mehrdeutige Lage nicht an (Regel 21) |
+| [RM-787 — Am exakten Körper verliert eine berührte oder geteilte Fläche ihren Namen, und der Verlust bleibt ohne Befund](#rm-787) | Geometrie, Erkennung und Druckvorbereitung | Gemessen an *Abziehen*, *Fase*, *Verrunden*, *Formschräge*, *Tasche* (`top` → `face_6`, danach fragt *Fläche versetzen*); eine Stelle für beide Kerne (`_exact_features_after` oder Zuordnung im exakten Zweig der Auswertung, samt `_divided_partners`), dann `perceive.orphaned` auch exakt; Wächter über die Falltabelle |
 | [RM-718 — SuperSlicer stützt den Deckel eines gesperrten Bechers nicht](#rm-718) | Geometrie, Erkennung und Druckvorbereitung | Ursache in SuperSlicer eingrenzen; Hybridstütze neben einem Sperrkörper messen |
 | [RM-717 — Probedruck: flache Decken, die nach RM-585 ohne Stütze bleiben](#rm-717) | Geometrie, Erkennung und Druckvorbereitung | Probedruck (Robert) |
 | [RM-716 — Die Druckzeitschätzung braucht an echten Modellen bis zu zwei Minuten](#rm-716) | Geometrie, Erkennung und Druckvorbereitung | Messung und Bündelung (Leistung, mit RM-281) |
@@ -171,20 +173,20 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-733 — `PlacementFlow` greift über `Any` und Zeichenketten aufs Fenster](#rm-733) | Bedienung und Darstellung | Fensterseite als Vertrag typisieren wie bei `DrawFlow`, vor Schritt 4 des Programms |
 | [RM-734 — Wer „boolesch“ tippt, findet die Booleschen Operationen nicht](#rm-734) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-735 — Zwei Suchen: Befehlspalette und Suchfeld der Karte](#rm-735) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
-| [RM-736 — Funktionsdurchgang: jede Funktion einmal über die Oberfläche benutzt, geprüft und abgehakt](#rm-736) | Bedienung und Darstellung | Konzept abgelegt; D0 (RM-737) zuerst, dann die Kundenpakete D1, D9, D8, D3, D4 bis zum 25.11. |
+| [RM-736 — Funktionsdurchgang: jede Funktion einmal über die Oberfläche benutzt, geprüft und abgehakt](#rm-736) | Bedienung und Darstellung | Konzept abgelegt; D0 (RM-737) zuerst, dann die Kundenpakete D1, D9, D8, D3, D4 (Phase 3), die übrigen in Phase 4 |
 | [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | Zuschnitt in Teilpakete, dann Prüfstand auf `tools/file_acceptance.py`, Wortschatz in `guides`, Funktionsliste, Szenenkatalog, Profile, Listen für Stufe B |
 | [RM-738 — Funktionsdurchgang D1: Datei und Projekt](#rm-738) | Bedienung und Darstellung | wartet auf D0; danach neue Schätzung an Robert |
-| [RM-739 — Funktionsdurchgang D2: Erzeugen](#rm-739) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
+| [RM-739 — Funktionsdurchgang D2: Erzeugen](#rm-739) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-740 — Funktionsdurchgang D3: Verbinden und Abziehen, Transformation, Formgebung](#rm-740) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
 | [RM-741 — Funktionsdurchgang D4: Merkmale](#rm-741) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
-| [RM-742 — Funktionsdurchgang D5: Netz und Reparatur](#rm-742) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
-| [RM-743 — Funktionsdurchgang D6: Formen und Skelett](#rm-743) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
-| [RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze](#rm-744) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
+| [RM-742 — Funktionsdurchgang D5: Netz und Reparatur](#rm-742) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
+| [RM-743 — Funktionsdurchgang D6: Formen und Skelett](#rm-743) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
+| [RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze](#rm-744) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-745 — Funktionsdurchgang D8: Druckvorbereitung](#rm-745) | Bedienung und Darstellung | wartet auf D0; Folge D1, D9, D8 |
 | [RM-746 — Funktionsdurchgang D9: Druckeinstellungen, Übergabe an den Slicer, Filamentlager](#rm-746) | Bedienung und Darstellung | wartet auf D0; Folge D1, D9, D8 |
-| [RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes](#rm-747) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
-| [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; nach dem Start am 01.12. |
-| [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; nach dem Start am 01.12. |
+| [RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes](#rm-747) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
+| [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4 |
+| [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -213,6 +215,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-729 — Gegenproben der Oberflächensuche zählen nur Dateien](#rm-729) | Tests und Entwicklungswerkzeuge | Gegenproben verlangen die Definitionsmodule von `MainWindow`, `Viewport` und der Merkmalserkennung |
 | [RM-730 — `tools/matrix_unit.py` läuft in keiner Suite](#rm-730) | Tests und Entwicklungswerkzeuge | Rauchtest, der das Modul importiert und seine Aliaszugriffe auflöst |
 | [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
+| [RM-788 — Ein Slicertest bleibt im parallelen Lauf ohne CPU stehen](#rm-788) | Tests und Entwicklungswerkzeuge | Hänger nachstellen und zuordnen (Prozessstart der frisch geschriebenen Programmdatei?), dann beheben |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -2363,6 +2366,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   aller sechs Körper, eingebetteter Quellen und Projektinhalte ohne monotonen Zähler.
   Alle 260 erfassten Quellen und das Original bleiben unverändert.
   [Fachnachweis und tatsächliche Grenzen](konzepte/nachweise-release-0.5.1/reports/rm218-kundenpassung-2026-10-02.md).
+  **Seit 12.10.2026** (`fix/schrift-merkmale`): Eine eindeutige Zuordnung in der Operation, die
+  den Körper neu baut (`prepare_ops._exact_features_after`), belegt auch eine berührte Fläche
+  (§21.2); der Frage-/Haltweg oben gilt der Fortführung durch die Auswertung selbst. Begründung:
+  `konzepte/begruendungen/regel-operationen.md`, „Der Neubau gibt seine Merkmale mit“.
   **Offen:** allein die Fensterabnahme beim Release (RM-213); Code und Tor mit `d907d6036`
   in v0.5.2.
 
@@ -3987,6 +3994,48 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   der ganz verkehrt gewickelte Eingang bekommt den passenden Titel, Gegenprobe am Stand davor rot,
   druckgleich an den Beispielprojekten.
 
+<a id="rm-787"></a>
+
+- [ ] **RM-787 — Am exakten Körper verliert eine berührte oder geteilte Fläche ihren Namen, und der Verlust bleibt ohne Befund.**
+  Gefunden beim Fix „Text, Einlage und Gegenform behalten am exakten Körper ihre Merkmale“
+  (Funktionsdurchgang D0, `fix/schrift-merkmale`) und in seinem Review. Dieselbe Auskunft, der
+  Name einer Fläche nach einem exakten Neubau, entsteht an zwei Stellen verschieden (§21.2:
+  „eindeutig unter Schwelle: ID bleibt“; Entscheidung in
+  `konzepte/begruendungen/regel-operationen.md`, „Der Neubau gibt seine Merkmale mit“).
+  **Berührt:** Exakte Operationen, die ihren Ausgang allein über `features_of` benennen, geben
+  eine berührte Fläche unter neuem Namen aus, das Netz behält ihn. Gemessen am Quader
+  40 × 30 × 20, beide Kerne durch Verlauf und Auswertung: Nach *Abziehen* (Block 10 × 10 von
+  oben), *Fase* und *Verrunden* der senkrechten Kanten (1 mm), *Formschräge* (3°) und *Tasche*
+  (8 × 6 × 3) heißt die Deckfläche exakt `face_6`, am Netz weiter `top`; ein folgendes *Fläche
+  versetzen* an `top` fragt am exakten Körper „Welches Merkmal entspricht top?“, am Netz rechnet
+  es durch. Statisch derselbe Weg: *Fläche versetzen* ohne gewählte Fläche (`face_ops.py`),
+  *Versiegeln* (`seal_ops.py`), `brep/ops._replaced`, die Skizzenwege in `sketch/ops.py` und
+  Wege in `prepare_ops.py`, je zu prüfen, ob sie aus einem Eingang neu bauen. *Text aufbringen*,
+  *Schrift einlegen* und *Gegenform einlassen* behalten den Namen seit dem Fix
+  (`_exact_features_after`); in derselben Kategorie „boolean“ behält ihn damit *Gegenform
+  einlassen*, *Abziehen* nicht.
+  **Geteilt:** Teilt ein Schritt eine Fläche, behält am Netz das größte Stück ihren Namen
+  (`_divided_partners`), am exakten Körper bekommt es einen neuen, auch über
+  `_exact_features_after`. Beispiele: *Gegenform einlassen* mit großer Tasche, ein „Q“ in 18 mm
+  auf einer Fläche von 25 × 25 mm.
+  **Ohne Befund:** Ein Merkmalsverlust ohne Verweis bleibt am exakten Körper still (der exakte
+  Zweig von `evaluate._with_features` kehrt vor der Meldung zurück), am Netz meldet
+  `perceive.orphaned` ihn; so blieb der Fehler unbemerkt, bei *Text aufbringen* seit 0.5.0, bei
+  Einlage und Gegenform seit 0.5.2. Solange berührte Flächen umbenannt werden, wäre die Meldung Lärm; danach ist sie die
+  fehlende Auskunft.
+  Der Kunde merkt es, sobald er vor einem Schritt an einer Fläche einen Schritt einfügt oder
+  ändert, der diese Fläche berührt: Am exakten Körper kommt eine Frage, am Netz nicht.
+  **Nächster Schritt:** eine Stelle für beide Kerne — jeder exakte Neubau aus einem Eingang über
+  `_exact_features_after`, oder die eindeutige Zuordnung samt geteilter Fläche im exakten Zweig
+  der Auswertung —, danach `perceive.orphaned` auch am exakten Körper. Jeder dieser Neubauten
+  liest Gewinde nur über `brep.features.threads_to_read`; *Formschräge* und *Fläche versetzen*
+  ohne gewählte Fläche lesen sie heute bei jedem Schritt (0,4 bis 0,7 s an Clip und Lochplatte).
+  **Abnahme:** Wächter über die Falltabelle von `tests/test_exact_body_parity.py`: Was das Netz in
+  einem Tabellenfall unter seinem Namen behält, behält auch der exakte Körper. Die Fälle oben
+  (*Abziehen*, *Fase*, *Verrunden*, *Formschräge*, *Tasche*, geteilte Fläche) rechnen *Fläche
+  versetzen* an `top` an beiden Kernen ohne Rückfrage durch, vorher rot; ein Verlust ohne Verweis
+  meldet an beiden Kernen denselben Befund; druckgleich an den Beispielprojekten.
+
 <a id="rm-700"></a>
 
 - [ ] **RM-700 — Schichtanalyse und Kanalfrage brauchen an großen Figuren Minuten.**
@@ -5530,7 +5579,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   RM-749); Funde als `FD-<n>` in `.claude/.state/funktionsdurchgang-2026-10/funde.md`, je
   Paket eine Abhakliste daneben (Konzept §7). Entscheidungen Robert (Konzept §13): je Fund läuft
   die eine reproduzierende Fenstertestdatei lokal; die Kundenpakete D0, D1, D9, D8, D3 und D4
-  gehen bis zum 25.11. vor die Komponenten von `MainWindow` aus der Codestruktur (RM-722).
+  gehen vor die Komponenten von `MainWindow` aus der Codestruktur (RM-722); alle Phasen laufen
+  ohne Datum hintereinander (Robert, 12.10.).
   Parallel höchstens zwei Pakete. Stufe C (von Hand am laufenden Fenster) braucht Roberts
   Bildschirm und Freigabe.
   **Nächster Schritt:** D0 (RM-737).
@@ -5597,8 +5647,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-739 — Funktionsdurchgang D2: Erzeugen.**
   Grundkörper, Bausteinkatalog (eine Zeile mit einem Lauf über alle Kacheln), Organizer, Text,
-  Bild, KI, Varianten, Nachbauen (Kategorien `primitive`, `parts`, `variants`). Nach dem Start
-  am 01.12. (Programmplan, Konzept §9). Weg 3 und KI nur mit lokal laufendem Generator und
+  Bild, KI, Varianten, Nachbauen (Kategorien `primitive`, `parts`, `variants`). In Phase 4
+  (Programmplan, Konzept §9). Weg 3 und KI nur mit lokal laufendem Generator und
   Modell.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
@@ -5606,7 +5656,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-740 — Funktionsdurchgang D3: Verbinden und Abziehen, Transformation, Formgebung.**
   Kategorien `boolean`, `transform`, `shaping` und `surface`, damit auch Verrunden, Fase und
-  Fläche versetzen (Konzept §6). Kundenpaket bis zum 25.11., nach D1, D9 und D8.
+  Fläche versetzen (Konzept §6). Kundenpaket in Phase 3, nach D1, D9 und D8.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-741"></a>
@@ -5614,41 +5664,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-741 — Funktionsdurchgang D4: Merkmale.**
   Bohrung, Langloch, Senkung, Gewinde, Muster, erkannte Merkmale ändern und entfernen, örtliche
   Erkennung (Kategorie `holes` und die Zeilen des Merkmalfensters ihrer Operationen).
-  Kundenpaket bis zum 25.11., mit D3 nach D1, D9 und D8.
+  Kundenpaket in Phase 3, mit D3 nach D1, D9 und D8.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-742"></a>
 
 - [ ] **RM-742 — Funktionsdurchgang D5: Netz und Reparatur.**
-  Kategorien `repair` und `mesh` außer den Operationen mit Gestenparameter (D6). Nach dem Start
-  am 01.12. (Programmplan, Konzept §9).
+  Kategorien `repair` und `mesh` außer den Operationen mit Gestenparameter (D6). In Phase 4
+  (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-743"></a>
 
 - [ ] **RM-743 — Funktionsdurchgang D6: Formen und Skelett.**
   Weg 4 mit eigenen Leisten, eigenem Rückgängig und eigenen Gesten (Operationen mit den
-  Parametern `strokes` und `armature`). Nach dem Start am 01.12. (Programmplan, Konzept §9).
+  Parametern `strokes` und `armature`). In Phase 4 (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-744"></a>
 
 - [ ] **RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze.**
-  Kategorie `sketch`. Nach dem Start am 01.12. (Programmplan, Konzept §9).
+  Kategorie `sketch`. In Phase 4 (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-745"></a>
 
 - [ ] **RM-745 — Funktionsdurchgang D8: Druckvorbereitung.**
   Ausrichten, Teilen, Anordnen, Stützen, Dichtung samt Dichtweg, Prüfbericht samt seinen
-  Handlungen (Kategorien `scene` und `prepare`). Kundenpaket bis zum 25.11., in der Folge D1,
+  Handlungen (Kategorien `scene` und `prepare`). Kundenpaket in Phase 3, in der Folge D1,
   D9, D8 (Programmplan, Konzept §9); höchstens zwei Pakete zugleich.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-746"></a>
 
 - [ ] **RM-746 — Funktionsdurchgang D9: Druckeinstellungen, Übergabe an den Slicer, Filamentlager.**
-  Weg 1 bis zum Slicer. Kundenpaket bis zum 25.11., in der Folge D1, D9, D8 (Programmplan,
+  Weg 1 bis zum Slicer. Kundenpaket in Phase 3, in der Folge D1, D9, D8 (Programmplan,
   Konzept §9); höchstens zwei Pakete zugleich.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
@@ -5656,15 +5706,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes.**
   Filament und Farbe, Beschriftung, Passungen, Parameter, Zahlen binden, Gegenstücke, Als
-  Baustein speichern (Kategorien `colour`, `label`, `fits`, `parameters`). Nach dem Start am
-  01.12. (Programmplan, Konzept §9).
+  Baustein speichern (Kategorien `colour`, `label`, `fits`, `parameters`). In Phase 4
+  (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-748"></a>
 
 - [ ] **RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung.**
   Kamera, Griffe, Objektbaum, Auswahl, Verlauf und Vorher/Nachher, Karten verschieben, Suche.
-  Nach dem Start am 01.12., nach den Komponenten der Klassen, die es berührt: `MainWindow` und
+  In Phase 4, nach den Komponenten der Klassen, die es berührt: `MainWindow` und
   für Kamera und Griffe `Viewport` (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
@@ -5673,7 +5723,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-749 — Funktionsdurchgang D12: Rahmen.**
   Einstellungen, Ersteinrichtung, Aktivierung, Update, Handbuch, Tour, Chat, Kürzel,
   Rückmeldung und Fehlerbericht, KI- und Druckhinweis, Einladungen, Statusleiste,
-  Über-Dialog. Nach dem Start am 01.12., nach den Komponenten von `MainWindow`, die es berührt
+  Über-Dialog. In Phase 4, nach den Komponenten von `MainWindow`, die es berührt
   (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
@@ -6266,7 +6316,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert.**
   Erster Schritt des Programms aus dem [Konzept
   Codestruktur](konzepte/konzept-codestruktur-2026-10.md) (4.1); das Programm beginnt nach der
-  Veröffentlichung von 0.6.0 (Entscheidung Robert, 11.10.2026, Konzept 7). W1 Sperrklinke für
+  Veröffentlichung von 0.6.0 (Entscheidung Robert, 11.10.2026, Konzept 7), Schritt 0 direkt nach
+  D0, alle Phasen ohne Datum hintereinander (Robert, 12.10.). W1 Sperrklinke für
   Dateigrößen (die Zahl der Definitionen einer gelisteten Datei steigt nie), W2 Patch-Ziele, W3
   Registerabzug, W4 rekursive Quelltextprüfungen, W5 statisch auflösbare Importe in `app/`,
   `tools/` und `tests/`, W6 Namenslisten lösen auf; dazu das Verschiebewerkzeug
@@ -6373,6 +6424,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `konzepte/konzept-ci-testlaufzeiten-2026-09.md` und `tests/test_packaging.py` ziehen nach.
   **Abnahme:** Ein Tag auf einem Commit mit grünem main-Lauf baut Pakete ohne zweite Suite; ohne
   grünen main-Lauf läuft sie wie heute; Wächter mit Gegenprobe.
+
+<a id="rm-788"></a>
+
+- [ ] **RM-788 — Ein Slicertest bleibt im parallelen Lauf ohne CPU stehen.**
+  Beim Lauf der betroffenen Tests für `fix/schrift-merkmale` (12.10.2026, rund 27 500 Tests
+  parallel) blieb
+  `tests/test_print_settings.py::test_a_slicer_that_cannot_start_is_an_answer` stehen, ohne CPU;
+  einzeln lief er sechsmal grün in rund einer Sekunde. Vermutung, nicht belegt: Etwas hält den
+  Start der frisch geschriebenen Programmdatei fest (Virenscanner). Im zweiten Lauf desselben
+  Tages (dieselbe Auswahl, `-n 6 --dist worksteal`) hing er wieder, wieder im Arbeiter `gw3` nach
+  rund 27 500 bestandenen Tests — zwei von zwei Läufen. Ebenso möglich, ebenso unbelegt: ein
+  Zustand, den ein früherer Test desselben Arbeiters hinterlässt.
+  **Nächster Schritt:** unter Last nachstellen, den hängenden Prozess mit Stapel aufnehmen und
+  zuordnen; ist es der Prozessstart, braucht der Test eine Frist mit klarer Meldung statt eines
+  stillen Hängers.
+  **Abnahme:** zwanzig parallele Läufe ohne Hänger, oder ein Hänger endet nach der Frist rot mit
+  Ursache.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 

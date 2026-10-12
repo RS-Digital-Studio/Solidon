@@ -15007,6 +15007,7 @@ def _exact_features_after(
     gone: Sequence[str] = (),
     cancelled: CancelToken,
     mouths: frozenset[str] = frozenset(),
+    known_threads: Sequence[Feature] | None = None,
 ) -> tuple[dict[str, Feature], tuple[tuple[str, str], ...], tuple[str, ...]]:
     """Die Merkmale des neu gebauten exakten Körpers unter ihren fortgeführten Namen.
 
@@ -15018,12 +15019,14 @@ def _exact_features_after(
     nennt, was die Operation entfernt hat. Zurück kommen die Merkmale, die
     belegten Übergänge und die Namen der erwarteten Merkmale, die **nicht**
     wiederzufinden waren. ``mouths`` sind die äußeren Zylinder einer Kette
-    (:func:`_chain_mouths`).
+    (:func:`_chain_mouths`). ``known_threads`` geht an
+    :func:`~app.core.brep.features.features_of`; wer keine Wendel anlegt, gibt
+    ``threads_to_read`` des Eingangs mit.
     """
     from app.core.brep.features import features_of
     from app.core.perceive.matching import apply_mapping, match, settled_twins
 
-    detected = features_of(solid, cancelled=cancelled)
+    detected = features_of(solid, cancelled=cancelled, known_threads=known_threads)
     previous = {name: entry for name, entry in source.features.items() if name not in gone}
     bounds = solid.bounds
     intended: dict[str, str] = {}

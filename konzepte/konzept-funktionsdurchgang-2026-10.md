@@ -304,9 +304,8 @@ RM-735 (Befehlspalette entfernen) gehen voraus.
 | D11 | Ansicht und Bedienung: Kamera, Griffe, Objektbaum, Auswahl, Verlauf und Vorher/Nachher, Karten verschieben, Suche |
 | D12 | Rahmen: Einstellungen, Ersteinrichtung, Aktivierung, Update, Handbuch, Tour, Chat, Kürzel, Rückmeldung und Fehlerbericht, KI- und Druckhinweis, Einladungen, Statusleiste, Über-Dialog |
 
-**Reihenfolge nach Kundenwirkung**, wegen Verkaufskandidat am 25.11. und
-Start am 01.12.: D0; dann D1, D9 und D8 — Weg 1 bis zum Slicer —; dann D3 und
-D4; danach der Rest. Parallel höchstens zwei Pakete.
+**Reihenfolge nach Kundenwirkung:** D0; dann D1, D9 und D8 — Weg 1 bis zum
+Slicer —; dann D3 und D4; danach der Rest. Parallel höchstens zwei Pakete.
 
 ## 7 Befunde, Optimierung, Abhaken
 
@@ -365,15 +364,15 @@ Schritt in `/erzeugen` und ein `rendered`-Test wie die Handbuchbilder.
   dass der reproduzierende Test ein Fenstertest ist; diese eine Datei läuft
   lokal (Entscheidung Robert, §13).
 - **Kapazität:** Codestruktur und Durchgang beginnen beide nach 0.6.0. Die
-  Kundenpakete (D0, D1, D9, D8, D3, D4) gehen bis zum 25.11. vor die
-  Komponenten von `MainWindow` (Entscheidung Robert, §13).
-- **Programmplan (Auftrag Robert, 11.10.2026):** D0, dann Codestruktur Schritt
-  0. Bis zum Verkaufskandidaten am 25.11.: D1, D9 und D8 (Weg 1 bis zum
-  Slicer), dann die Codestruktur-Schritte 1, 2 und 3, dann D3 und D4.
-  Kundenpakete haben Vorrang; wird es eng, werden Codestruktur-Schritte
-  gekürzt, nicht die Kundenpakete. Nach dem Start am 01.12.: D2, D5, D6, D7 und
-  D10, D11 und D12 jeweils nach den Komponenten der Klassen, die sie berühren
-  (`MainWindow`, für D11 auch `Viewport`: Kamera und Griffe).
+  Kundenpakete (D0, D1, D9, D8, D3, D4) gehen vor die Komponenten von
+  `MainWindow` (Entscheidung Robert, §13).
+- **Programmplan (Auftrag Robert, 11. und 12.10.2026):** vier Phasen ohne
+  Datum direkt hintereinander, jede sauber bis zu Ende; nichts wird für einen
+  Termin gekürzt. D0, dann Codestruktur Schritt 0. Dann D1, D9 und D8 (Weg 1
+  bis zum Slicer), die Codestruktur-Schritte 1, 2 und 3, dann D3 und D4.
+  Danach D2, D5, D6, D7 und D10, D11 und D12 jeweils nach den Komponenten der
+  Klassen, die sie berühren (`MainWindow`, für D11 auch `Viewport`: Kamera und
+  Griffe).
 
 ## 10 Abnahme
 
@@ -434,7 +433,9 @@ Konzepte verweisen.
    lokal nur beim Release“ nur für diesen Zweck; sie kommt mit D0 in denselben
    Satz in `AGENTS.md` („Arbeitsweise“) wie die Ausnahme der Codestruktur, und
    `.claude/rules/tests.md` verweist darauf.
-2. **Vorrang bis zum 25.11.: ja.** Die Kundenpakete D0, D1, D9, D8, D3 und D4
+2. **Vorrang der Kundenpakete: ja.** Die Kundenpakete D0, D1, D9, D8, D3 und D4
    gehen vor die Komponenten von `MainWindow` aus dem Programm Codestruktur
    (dort Schritte 4b bis 5); Schritt 0 bis 3 der Codestruktur können daneben
-   laufen.
+   laufen. Ein Termin bindet das nicht: Alle vier Phasen laufen ohne Datum
+   hintereinander, jede sauber bis zu Ende (Robert, 12.10.; vorher galt der
+   Vorrang bis zum 25.11.).

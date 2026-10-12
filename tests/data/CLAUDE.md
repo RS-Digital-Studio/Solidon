@@ -12,6 +12,7 @@ hat ihre Zeile in `README.md`**: Inhalt, erwartete Kennzahlen, Test —
 | `step/` | Sechs STEP-Baugruppen aus Konstruktionsmaßen (`make_step_assembly_corpus.py`): Instanzen mit Lage und Instanzfarbe, verschachtelt mit SHUO und Spiegelung, ein Teil mit mehreren Körpern, ohne Namen, in Zoll, Flächenmodell — die Sollwerte stehen im Erzeuger, `--check` vergleicht den XCAF-Baum |
 | `threads/` | STEP-Gewindekörper aus Konstruktionsmaßen (`make_thread_corpus.py`): M6, M10, M8 innen, zwei- und dreigängig, innen zweigängig, kegelig und eine Naht ohne Rille — die Basis der Fallmatrix in `test_thread_import.py`; alles Abgeleitete baut der Test selbst |
 | `recipes/` · `linux/` · `spacemouse/` | Ein altes Bausteinrezept (`test_part_file.py`) · der Abhängigkeitskorpus eines Linux-Pakets (`test_packaging.py`) · eine SpaceMouse-Aufzeichnung (`test_spacemouse.py`) |
+| `function_rows/` | Die Spezifikation der Funktionsdurchgangszeilen je Paket (`dNN.toml`, Konzept `konzept-funktionsdurchgang-2026-10.md` D0); daneben `function_scenes.toml`, der Rezeptkatalog der Startszenen, deren Projekte `tools/function_list.py --szenen` baut und nie hier ablegt, und `common_goals.toml`, die Kundenziele zu I3 (`test_function_list.py`) |
 | `text_lengths/` | Je Textart der eingefrorene Bestand über der Längengrenze (`test_text_length.py`, RM-509): sortiert, darf nur schrumpfen; wer einen Text kürzt, streicht ihn hier und senkt `FROZEN_COUNTS` |
 
 Daneben liegen Referenzwerte einzelner Tests als `*.json` (und
