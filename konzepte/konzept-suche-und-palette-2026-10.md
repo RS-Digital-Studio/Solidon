@@ -1,19 +1,16 @@
-# Vorbereitung 0.6.1: Boolesche Operationen finden, Befehlspalette entfernen
+# 0.6.1: Boolesche Operationen finden, Befehlspalette entfernen
 
-**Ablage:** nach dem Release als `konzepte/konzept-suche-und-palette-2026-10.md`,
-die Inventur als `konzepte/nachweise-palette-2026-10/inventur.md`, beide im
-Index von `konzepte/README.md` und verlinkt aus RM-734 und RM-735; das Konzept
-Funktionsdurchgang (§9, Prüfpunkt 1) verweist hierher.
+**Stand 12.10.2026: umgesetzt für 0.6.1**, auf main mit dem Merge des Zweigs
+`061/suche-und-palette` — [RM-734](../ROADMAP.md#rm-734) (`ddd82fb9b`,
+`5ca7f94cb`) und [RM-735](../ROADMAP.md#rm-735) (`ea1caaf24` bis `023c9c703`).
+Offen allein die Abnahme am echten Fenster beim Release (RM-213). Inventur,
+Messung des Tastendrucks und die Berichte von `bedienlogik` und
+`oberflaechentexte` liegen unter
+[`nachweise-palette-2026-10/`](nachweise-palette-2026-10/README.md).
 
-Stand: main `ee6b810fe`, 11.10.2026. Auftrag Robert: beides in 0.6.1, jetzt
-vorbereiten. Nummern reserviert von der Koordinationssitzung: **RM-734**
-(Boolesche Operationen auffindbar) und **RM-735** (Befehlspalette entfernen);
-RM-722 bis RM-733 gehören der Codestruktur. Ablauf: Erst wenn die
-Koordinationssitzung „veröffentlicht“ meldet — zwischen Tag `v0.6.0` und
-signiertem Installer bewegt sich main nicht —, trage ich beide auf einem
-eigenen Zweig von main ins Register ein und beginne. Changelog unter
-`## 0.6.1` über `## 0.6.0`, Gruppen wie in 0.6.0; den Kopf legt die
-Koordinationssitzung an und meldet den Commit.
+Entstanden am 11.10.2026 als Vorbereitung am Stand main `ee6b810fe`; Auftrag
+Robert: beides in 0.6.1. Der Text darunter ist der Plan jenes Tages, ergänzt
+um Roberts Entscheidung und die Funde unterwegs.
 
 ## Anlass
 
@@ -114,7 +111,7 @@ Vorher zu prüfen, Punkt für Punkt:
 - `.claude/rules/grenzen.md` (Abschnitt Suche) und `app/ui/CLAUDE.md`
   nachziehen.
 
-### Inventur (gemessen am gebauten Fenster, `inventur-061-palette.md`)
+### Inventur (gemessen am gebauten Fenster, [`nachweise-palette-2026-10/inventur.md`](nachweise-palette-2026-10/inventur.md))
 
 Die Palette hat 273 Zeilen: 189 Operationen, 84 Fensterbefehle. Ohne sie:
 
@@ -192,5 +189,5 @@ Auswahlpanel und Suche) wird mit RM-735 entsprechend neu gefasst.
 | Ein Wort unter vier Zeichen ohne genauen Treffer fand in der Stammrunde **alle** 273 Zeilen, ohne Lockerungszeile; Return startete die vorgewählte | Fehler, aus der Palette übernommen | mittel | `tests/test_search.py::test_a_short_word_that_matches_nothing_finds_nothing` („qqq“, „qj“, „xq“), vorher rot | behoben, `registry.search.stems_in` |
 | Die Kürzelübersicht nannte *Formen*, *Skelett* und *Zeichnen* zweimal — zwei Schleifen über die obere Leiste aus zwei Sitzungen vom 08.10. | Zwilling | leicht | `tests/test_interface_limits.py::test_the_shortcut_list_names_every_row_once`, vorher rot | behoben, eine Schleife |
 | Die Trefferliste brach jede zweite Zeile je Tastendruck rund zehnmal neu um | Leistung | leicht | Profil und Messung C4 (`nachweise-palette-2026-10/leistung-tastendruck.md`): Höchstwert 31,5 → 22,7 ms | behoben, Merker im Zeilenzeichner |
-| Bei Suchtext rechnete `_filter` die verdeckte Karte je Tastendruck mit | Leistung | leicht | gepaarte Messung an `_filter`, 720 Paare: Median −0,42 ms, schneller in 394/720 | behoben, früher Ausstieg; `test_the_card_rests_while_searching_and_comes_back_at_the_new_level` |
+| Bei Suchtext rechnete `_filter` die verdeckte Karte je Tastendruck mit | Leistung | leicht | gepaarte Messung an `_filter`, je 720 Paare: Median −0,42 ms, schneller in 394/720; zweiter Lauf −0,20 ms, 469/720 | behoben, früher Ausstieg; `test_the_card_rests_while_searching_and_comes_back_at_the_new_level` |
 | `test_orient.py` erwartete für *Druckoptimal ausrichten* noch die Kategorie `transform` | Test zog nicht mit | leicht | Tor vom 11.10., gepinnt nachgestellt | behoben im RM-735-Commit |

@@ -47,7 +47,10 @@ Fenster doppelt so langsam: Median 14,9 gegen 16,1 ms, Rauschen), also
 gezielt: `_filter` allein im gebauten Fenster, beide Fassungen im Wechsel
 aus demselben Ausgangszustand, 720 Paare. Gepaart im Median 0,42 ms und im
 Mittel 0,6 ms weniger, schneller in 394 von 720 (Vorzeichentest z ≈ 2,5);
-die Treffer gleich. Klein, aber belegt, also umgesetzt. Ein Test hält fest,
+die Treffer gleich. Ein zweiter Lauf mit der abgelegten Sonde am 12.10. bei
+ruhigerer Maschine: Median 8,55 gegen 8,31 ms, gepaart 0,20 ms weniger,
+schneller in 469 von 720 (z ≈ 8). Klein, aber belegt, also umgesetzt
+(`023c9c703`). Ein Test hält fest,
 dass ein Stufenwechsel während der Suche nach dem Leeren dieselbe Karte
 zeigt wie eine frische; gegen eine Fassung ohne Nachrechnung beim Leeren
 fiel er. Sonde: `sonden/sonde_filter.py <baum> <ausgabe>`.

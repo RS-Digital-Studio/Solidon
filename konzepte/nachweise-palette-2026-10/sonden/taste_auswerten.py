@@ -1,9 +1,22 @@
-"""Fasst Tastendruckmessungen zusammen. Aufruf: <ordner> <name>=<datei>,<datei> ..."""
+"""Fasst die Messungen von ``sonde_tastendruck.py`` zusammen.
+
+Aufruf: python taste_auswerten.py <ordner> <name>=<datei>,<datei> ...
+
+Je Name: Öffnen, erster Tastendruck (baut die Zeilen), die übrigen und jedes
+Wort für sich, als Median und Höchstwert in Millisekunden.
+"""
 
 import json
 import statistics
 import sys
 from pathlib import Path
+
+
+def summary(label: str, times: list[float]) -> str:
+    """Eine Zeile: Median und Höchstwert in Millisekunden."""
+    median = statistics.median(times) * 1000
+    return f"  {label:12} Median {median:7.1f} ms  max {max(times) * 1000:7.1f} ms"
+
 
 folder = Path(sys.argv[1])
 for spec in sys.argv[2:]:
@@ -28,9 +41,8 @@ for spec in sys.argv[2:]:
                     rest.extend(times)
                 per_word.setdefault(word, []).extend(times)
     print(f"== {label}")
-    print(f"  Öffnen       Median {statistics.median(opens) * 1000:7.1f} ms  max {max(opens) * 1000:7.1f} ms")
-    print(f"  1. Zeichen   Median {statistics.median(firsts) * 1000:7.1f} ms  max {max(firsts) * 1000:7.1f} ms")
-    print(f"  übrige       Median {statistics.median(rest) * 1000:7.1f} ms  max {max(rest) * 1000:7.1f} ms  (n={len(rest)})")
-    print(f"               Summe  {sum(rest) * 1000:7.1f} ms")
+    print(summary("Öffnen", opens))
+    print(summary("1. Zeichen", firsts))
+    print(summary("übrige", rest) + f"  (n={len(rest)}, Summe {sum(rest) * 1000:.1f} ms)")
     for word, times in per_word.items():
-        print(f"    {word:10} Median {statistics.median(times) * 1000:7.1f} ms  max {max(times) * 1000:7.1f} ms")
+        print("  " + summary(word, times))

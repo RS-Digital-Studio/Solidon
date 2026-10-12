@@ -1,12 +1,16 @@
 """Misst die Zeit je Tastendruck in der Suche — Palette (vorher) oder Suchfeld (nachher).
 
-Aufruf: python sonde_tastendruck.py <baum> <art: palette|feld> <ausgabe.json>
+Aufruf: python sonde_tastendruck.py <baum> <art: palette|feld|feld-frueh> <ausgabe.json>
 
 Gemessen wird am gebauten Fenster (offscreen) mit einem Körper aus dem Korpus,
 gewählt wie nach einem Klick. Je Wort wird Zeichen für Zeichen getippt; die
 Zeit je Zeichen umfasst ``setText`` und das Abarbeiten der Ereignisse. Der
 erste Tastendruck baut die Zeilen (beide Fassungen bauen sie dort), er steht
 getrennt. Drei Durchgänge, jeweils frisch geöffnet.
+
+``palette`` braucht einen Baum vor RM-735 (``d2f8d4916``). ``feld-frueh``
+setzt den frühen Ausstieg aus ``023c9c703`` vor ``_filter`` und ist nur an
+einem Baum davor ein Vergleich; ab dort hat ``feld`` ihn schon.
 """
 
 import json
@@ -21,7 +25,7 @@ KIND = sys.argv[2]
 OUT = Path(sys.argv[3])
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
-home = Path(tempfile.mkdtemp(prefix="sonde-taste-", dir="F:/tmp-suche"))
+home = Path(tempfile.mkdtemp(prefix="sonde-taste-"))
 for name in ("APPDATA", "LOCALAPPDATA"):
     os.environ[name] = str(home / name)
     (home / name).mkdir()
@@ -49,6 +53,7 @@ if KIND == "feld-frueh":
     full_filter = SelectionOperationsPanel._filter
 
     def early_filter(self, query=None):
+        """Der frühe Ausstieg aus ``023c9c703`` vor der Fassung des Baums."""
         if query is not None:
             self._query = query
         wanted = self._query.strip()

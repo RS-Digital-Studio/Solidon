@@ -10,7 +10,7 @@ Drei Konzepte in fester Reihenfolge, jedes bis zu seiner Abnahme (Abschnitt
 
 | Konzept | Unterlagen |
 |---|---|
-| 0.6.1 (RM-734, RM-735) | Zweig `061/suche-und-palette`, `.claude/.state/rm-734-735/AUFTRAG.md`, `plan.md`, `inventur.md` |
+| 0.6.1 (RM-734, RM-735) | `konzepte/konzept-suche-und-palette-2026-10.md`, `konzepte/nachweise-palette-2026-10/`; Auftrag und Einzelstand in der Git-Historie (`git log --diff-filter=D -- .claude/.state/rm-734-735`) |
 | Funktionsdurchgang | Zweig `doc/funktionsdurchgang`, `.claude/.state/funktionsdurchgang-2026-10/konzept.md`, `LIESMICH.md`, Prüfberichte |
 | Codestruktur | `konzepte/konzept-codestruktur-2026-10.md`, `konzept-codestruktur-funde-2026-10.md` (auf main, sobald main steht, vorher `origin/nach/0.6.0`); RM-722 bis RM-733 |
 
@@ -61,11 +61,14 @@ das Konzept.
 
 ## Verlauf
 
+- 12.10.2026, Phase 1: „main steht“ (Robert). origin/main hereingeholt
+  (`21d1407e4`), RM-734 und RM-735 im Register (`[~]`, offen die Abnahme am
+  echten Fenster, RM-213), Konzept und Nachweise unter `konzepte/`,
+  Zustandsordner entfernt. Als Nächstes Changelog `## 0.6.1`, Review, Tor,
+  Merge nach main.
 - 12.10.2026, Phase 1: RM-734 und RM-735 auf dem Zweig fertig und gepusht
-  (bis `023c9c703`); die fünf Funde unterwegs sind behoben (Tabelle in
-  `.claude/.state/rm-734-735/plan.md`). Wartet auf
-  „main steht“; dann Merge origin/main, Register, Konzept und Nachweise
-  ablegen, Changelog `## 0.6.1`, Review, Tor, Merge nach main.
+  (bis `023c9c703`); die fünf Funde unterwegs sind behoben (Tabelle am Ende
+  von `konzepte/konzept-suche-und-palette-2026-10.md`).
 - 11.10.2026, Phase 1: RM-734 auf dem Zweig fertig (`ddd82fb9b`, `5ca7f94cb`),
   RM-735 in Arbeit (Suchfeld der Karte ersetzt die Befehlspalette). Nichts auf
   main. Einzelstand in `.claude/.state/rm-734-735/STAND.md`.

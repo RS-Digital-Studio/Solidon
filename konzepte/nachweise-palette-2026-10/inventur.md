@@ -1,7 +1,8 @@
 # Inventur 0.6.1: Was heute nur über die Befehlspalette erreichbar ist
 
 Stand: main `ee6b810fe`, 11.10.2026. Nur gelesen und gemessen, im Repository
-nichts geändert. Gehört zu `vorbereitung-061-boolesch-und-palette.md`, Teil B.
+nichts geändert. Gehört zu `../konzept-suche-und-palette-2026-10.md`, Teil B
+(Entwurfsname damals `vorbereitung-061-boolesch-und-palette.md`).
 
 ## Messweg
 

@@ -24,7 +24,8 @@ stehen mit Nachweis im Archiv.
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
 Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.1**.
-**Als Nächstes:** 0.6.1 mit auffindbaren Booleschen Operationen und ohne Befehlspalette,
+**Als Nächstes:** 0.6.1 mit auffindbaren Booleschen Operationen und ohne Befehlspalette
+([RM-734](#rm-734), [RM-735](#rm-735), auf main, der Release entscheidet Robert),
 danach der Funktionsdurchgang durch die Oberfläche und das Programm Codestruktur
 ([RM-722](#rm-722), Konzepte in `konzepte/`); bis zum 25.11. gehen die Kundenpakete des
 Funktionsdurchgangs vor die Komponenten von `MainWindow`. Mit 0.6.0 beim Kunden abzunehmen:
@@ -167,6 +168,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-784 — Versetzen sehr großer Auswahlen hält das Fenster kurz an](#rm-784) | Bedienung und Darstellung | Versetzen im Arbeitsfaden rechnen oder die verbleibende Zeit am Profil finden |
 | [RM-731 — `_BoundedBehavior` überspringt Überschreibungen von `LengthSpin`](#rm-731) | Bedienung und Darstellung | Begrenzen in die Klassenlinie: `NumberSpin` kooperativ über `super()` |
 | [RM-733 — `PlacementFlow` greift über `Any` und Zeichenketten aufs Fenster](#rm-733) | Bedienung und Darstellung | Fensterseite als Vertrag typisieren wie bei `DrawFlow`, vor Schritt 4 des Programms |
+| [RM-734 — Wer „boolesch“ tippt, findet die Booleschen Operationen nicht](#rm-734) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
+| [RM-735 — Zwei Suchen: Befehlspalette und Suchfeld der Karte](#rm-735) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -5463,6 +5466,42 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   übernimmt nicht mehr. [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-16.
   **Abnahme:** kein `Any` und kein `getattr` auf das Fenster in `placement_flow.py`; mypy sieht
   jeden Zugriff.
+
+<a id="rm-734"></a>
+
+- [~] **RM-734 — Wer „boolesch“ tippt, findet die Booleschen Operationen nicht.**
+  Fragebogen S-20261011-8c5705 (0.5.3, macOS): „Boolesche Operationen wären toll.“ Es gab sie
+  längst, aber der Fachbegriff, „Boolean“, „subtrahieren“ und „Differenz“ fanden nichts, und an
+  einem gewählten Körper wies nichts auf sie hin.
+  [Konzept](konzepte/konzept-suche-und-palette-2026-10.md).
+  **Gebaut (`ddd82fb9b`, `5ca7f94cb`):** Kundenwörter der drei in sechs Sprachen; ein genau
+  gesagtes Kundenwort steht vor dem Titelwort einer anderen Zeile (sonst zeigte „Differenz“ die
+  Differenzansicht). An einem gewählten Körper mit einem zweiten in der Szene nennt eine Zeile
+  der Karte den Weg (Umschalt oder Strg und Klick). Die Funktionsseite der Website nennt den
+  Begriff in sechs Sprachen. Handbuchquote vorher und nachher 37 von 38 unter den ersten drei.
+  **Offen** allein die Abnahme am echten Fenster beim Release (RM-213): „boolesch“, „Boolean“
+  und „Differenz“ ins Suchfeld, die Zeile an einem gewählten Körper, in beiden Themen.
+
+<a id="rm-735"></a>
+
+- [~] **RM-735 — Zwei Suchen: Befehlspalette und Suchfeld der Karte.**
+  Die Befehlspalette (Strg+Umschalt+P) fand alle 273 Funktionen, das Suchfeld der Auswahlkarte
+  nur die 81 der aktuellen Stufe und ohne Auswahl nichts; *Überschneidungen prüfen* stand nur
+  in der Palette. Entscheidung Robert (11.10.2026): Die Palette geht ganz, das Suchfeld steht
+  immer. [Konzept](konzepte/konzept-suche-und-palette-2026-10.md), Inventur und Messung unter
+  `konzepte/nachweise-palette-2026-10/`.
+  **Gebaut (`ea1caaf24` bis `023c9c703`):** Das Suchfeld steht an jeder Stufe und ohne Auswahl
+  und findet jede Operation und jeden Fensterbefehl, mit der Rangfolge der Palette, Kürzel und
+  erstem Satz; ein gesperrter Treffer nennt seinen Grund. *Funktion suchen* und Strg+Umschalt+P
+  setzen den Cursor hinein, Escape und Return gehören dem Feld. Ohne Auswahl stehen alle
+  Handlungen für alle Körper und die Erzeuger. Jeder Tastendruck unter 43 ms (Grenze 0,2 s).
+  Unterwegs behoben: Ein kurzes Wort ohne Treffer fand alle 273 Zeilen (aus der Palette), und
+  die Kürzelübersicht nannte drei Werkzeuge doppelt.
+  **Offen** allein die Abnahme am echten Fenster beim Release (RM-213): Strg+Umschalt+P ohne
+  Auswahl, ein Wort tippen, Return startet den Treffer, Escape leert das Feld und gibt die
+  Ansicht zurück, ein gesperrter Treffer nennt seinen Grund, ohne Treffer *Im Handbuch suchen*
+  — in beiden Themen und am Mac mit ⌘. Das Website-Handbuch nennt die Palette, bis der nächste
+  Paketbau es neu erzeugt.
 
 ## KI und Generatoren
 
