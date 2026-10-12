@@ -121,6 +121,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-778 — Kleine Teile entfernen schließt auch bewusst offene Öffnungen](#rm-778) | Geometrie, Erkennung und Druckvorbereitung | Nachstellen am Kundenweg, dann Öffnungen mit Absicht von Löchern im Netz trennen |
 | [RM-780 — *Weich verschmelzen* warnt „unverbunden“, wenn ein Eingang schon aus zwei Körpern besteht](#rm-780) | Geometrie, Erkennung und Druckvorbereitung | Review Blend (G2), vorbestehend: `blend.still_apart` vergleicht mit einem Körper statt mit den Körpern der Eingänge |
 | [RM-781 — Ein Eingang mit falsch gewickeltem Hohlraum wird beim Verschmelzen zur Kugel in einem neuen Hohlraum](#rm-781) | Geometrie, Erkennung und Druckvorbereitung | Review Blend (G3), vorbestehend: `blend._grid` hält die mehrdeutige Lage nicht an (Regel 21) |
+| [RM-787 — Am exakten Körper verliert eine geteilte Fläche ihren Namen](#rm-787) | Geometrie, Erkennung und Druckvorbereitung | Die Namensregel des Netzes (`_divided_partners`: der Name bleibt am größten Stück) für exakte Operationen übernehmen, mit Wächter über die Falltabelle |
 | [RM-718 — SuperSlicer stützt den Deckel eines gesperrten Bechers nicht](#rm-718) | Geometrie, Erkennung und Druckvorbereitung | Ursache in SuperSlicer eingrenzen; Hybridstütze neben einem Sperrkörper messen |
 | [RM-717 — Probedruck: flache Decken, die nach RM-585 ohne Stütze bleiben](#rm-717) | Geometrie, Erkennung und Druckvorbereitung | Probedruck (Robert) |
 | [RM-716 — Die Druckzeitschätzung braucht an echten Modellen bis zu zwei Minuten](#rm-716) | Geometrie, Erkennung und Druckvorbereitung | Messung und Bündelung (Leistung, mit RM-281) |
@@ -213,6 +214,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-729 — Gegenproben der Oberflächensuche zählen nur Dateien](#rm-729) | Tests und Entwicklungswerkzeuge | Gegenproben verlangen die Definitionsmodule von `MainWindow`, `Viewport` und der Merkmalserkennung |
 | [RM-730 — `tools/matrix_unit.py` läuft in keiner Suite](#rm-730) | Tests und Entwicklungswerkzeuge | Rauchtest, der das Modul importiert und seine Aliaszugriffe auflöst |
 | [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
+| [RM-788 — Ein Slicertest bleibt im parallelen Lauf ohne CPU stehen](#rm-788) | Tests und Entwicklungswerkzeuge | Hänger nachstellen und zuordnen (Prozessstart der frisch geschriebenen Programmdatei?), dann beheben |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -3987,6 +3989,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   der ganz verkehrt gewickelte Eingang bekommt den passenden Titel, Gegenprobe am Stand davor rot,
   druckgleich an den Beispielprojekten.
 
+<a id="rm-787"></a>
+
+- [ ] **RM-787 — Am exakten Körper verliert eine geteilte Fläche ihren Namen.**
+  Gefunden beim Fix „Text, Einlage und Gegenform behalten am exakten Körper ihre Merkmale“
+  (Funktionsdurchgang D0, `fix/schrift-merkmale`): Teilt ein Schritt eine Fläche, behält am Netz
+  das größte Stück ihren Namen (`_divided_partners`), am exakten Körper bekommt es einen neuen.
+  Beispiele: *Gegenform einlassen* mit großer Tasche, ein „Q“ in 18 mm auf einer Fläche von
+  25 × 25 mm. Ein Schritt, der an dieser Fläche hing, verliert damit seinen Bezug (§21.2: „ID
+  bleibt“). Die Regel gilt für alle exakten Operationen, nicht nur für Text.
+  **Nächster Schritt:** die Zuordnung geteilter Flächen am exakten Körper an dieselbe Regel wie am
+  Netz binden (eine Stelle, beide Kerne), mit einem Wächter über die Falltabelle von
+  `tests/test_exact_body_parity.py`.
+  **Abnahme:** Test am exakten Körper mit geteilter Fläche, vorher rot; beide Kerne vergeben
+  denselben Namen an das größte Stück; druckgleich an den Beispielprojekten.
+
 <a id="rm-700"></a>
 
 - [ ] **RM-700 — Schichtanalyse und Kanalfrage brauchen an großen Figuren Minuten.**
@@ -6373,6 +6390,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `konzepte/konzept-ci-testlaufzeiten-2026-09.md` und `tests/test_packaging.py` ziehen nach.
   **Abnahme:** Ein Tag auf einem Commit mit grünem main-Lauf baut Pakete ohne zweite Suite; ohne
   grünen main-Lauf läuft sie wie heute; Wächter mit Gegenprobe.
+
+<a id="rm-788"></a>
+
+- [ ] **RM-788 — Ein Slicertest bleibt im parallelen Lauf ohne CPU stehen.**
+  Beim Lauf der betroffenen Tests für `fix/schrift-merkmale` (12.10.2026, rund 27 500 Tests
+  parallel) blieb
+  `tests/test_print_settings.py::test_a_slicer_that_cannot_start_is_an_answer` stehen, ohne CPU;
+  einzeln lief er sechsmal grün in rund einer Sekunde. Vermutung, nicht belegt: Etwas hält den
+  Start der frisch geschriebenen Programmdatei fest (Virenscanner).
+  **Nächster Schritt:** unter Last nachstellen, den hängenden Prozess mit Stapel aufnehmen und
+  zuordnen; ist es der Prozessstart, braucht der Test eine Frist mit klarer Meldung statt eines
+  stillen Hängers.
+  **Abnahme:** zwanzig parallele Läufe ohne Hänger, oder ein Hänger endet nach der Frist rot mit
+  Ursache.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 
