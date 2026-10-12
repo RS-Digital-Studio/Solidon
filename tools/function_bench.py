@@ -59,6 +59,7 @@ from pathlib import Path
 from typing import Any, Final, Protocol
 
 from app.ui.main_window import START_SIZE
+from app.ui.motion import ACCENT_MS, MEDIUM_MS, SHORT_MS
 from tools.file_acceptance import MATERIAL, PRINTER
 from tools.function_capture import run_reference_factor
 from tools.function_checks import (
@@ -119,6 +120,11 @@ STABLE_S: Final = 0.1
 #: Klappe. Ein Kunde sieht diesen Zwischenstand nicht; was nach einer Sekunde
 #: noch deckt, sieht er.
 COVERED_S: Final = 1.0
+
+#: Wie lange eine Fläche stillstehen muss, bevor sie aufgenommen wird (Sekunden):
+#: die längste Bewegung der Oberfläche (``app.ui.motion``) und ein Takt mehr — eine
+#: Aufnahme mitten im Übergang mäße Breiten und Rollleisten vom halben Weg.
+STILL_S: Final = max(SHORT_MS, MEDIUM_MS, ACCENT_MS) / 1000 + STABLE_S
 
 #: Ruhe nach dem Tippen einer Suchprobe, bevor die Treffer gelesen werden: Die
 #: Suche filtert bei jedem Zeichen, und die Liste baut sich danach in einer
@@ -1025,6 +1031,9 @@ class Walk:
         #: Die Phase der nächsten Einträge. Der Hauptweg heißt ``weg`` und
         #: ``übernehmen`` (``function_checks.MAIN_PHASES``); nur er zählt für E1 bis E4.
         self.phase = ""
+        #: Wird gerufen, bevor ein Klick auf ein Ziel (nicht einen Wegklick) fällt,
+        #: mit dessen Namen — so merkt sich der Fall den Fokus vor dem Öffnen.
+        self.before_target: Callable[[str], None] | None = None
 
     def record(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Ein Eintrag in ``steps``, mit Phase und Zeit seit dem Start des Falls."""
@@ -1128,6 +1137,8 @@ class Walk:
                 name,
                 f"an {record['point']} liegt {record['widget_at']}, nicht das Ziel des Klicks",
             )
+        if why == TARGET_REASON and self.before_target is not None:
+            self.before_target(name)
         self.ports.press(hit, point, record["button"])
         return why
 
@@ -1254,39 +1265,99 @@ class QtPorts:
     def covers(self, click: ClickLike, hit: Any) -> bool:
         """Ob der Treffer der Probe das ist, was der Klick meint — das Ziel oder ein Kind davon.
 
-        ``Click`` nennt eine Fläche, kein Widget. Gemeint ist das Widget, dessen
-        Rechteck genau diese Fläche ist (Knopf, Klappe, Feld, Reiter als Knopf),
-        oder der Behälter, in dem die Fläche als Zeile liegt: Liste und Baum,
-        Menü und Menüleiste, Reiterleiste, die Ansicht, beim Rollen die
-        Rollfläche. Ein Treffer gilt, wenn er selbst oder ein Vorfahr innerhalb
-        seines Fensters das ist; eine Einladung, eine Karte oder ein Dialog
-        darüber ist es nicht — der Fund „verdeckt“.
+        ``Click`` nennt eine Fläche, kein Widget. Ein Behälter zählt nur, wenn er
+        der Behälter **dieses** Ziels ist (Review S2, :meth:`receiver`): beim
+        Rollen die Rollfläche mit genau diesem Rechteck, bei Reiter, Menü und
+        Untermenü die Reiterleiste oder das offene Menü, bei einer Zeile ihre
+        Liste oder ihr Baum, bei ``view:``, ``handle:`` und ``viewport`` die
+        Ansicht, sonst das Widget hinter dem Namen (``widget_for``) oder das
+        mit genau diesem Rechteck. Liegt an der Stelle etwas anderes — eine
+        Liste, eine Karte, die Ansicht, ein Dialog —, ist das der Fund „verdeckt“.
         """
         from PySide6.QtCore import QPoint, QRect
-        from PySide6.QtWidgets import (
-            QAbstractItemView,
-            QAbstractScrollArea,
-            QMenu,
-            QMenuBar,
-            QTabBar,
-        )
 
-        holders: tuple[type, ...] = (QAbstractItemView, QMenu, QMenuBar, QTabBar)
-        if str(click.why) == "rollen":
-            holders = (*holders, QAbstractScrollArea)
+        kind, receiver = self.receiver(click)
         rect = click.rect
+        if receiver is not None:
+            return bool(hit is receiver or receiver.isAncestorOf(hit))
         probe = hit
         while probe is not None:
             area = QRect(probe.mapToGlobal(QPoint(0, 0)), probe.size())
-            if area == rect:
+            if kind == "rechteck" and area == rect:
                 return True
-            holder = isinstance(probe, holders) or probe is self.window.viewport
-            if holder and area.contains(rect.center()):
+            if kind != "rechteck" and isinstance(probe, kind) and area.contains(rect.center()):
                 return True
             if probe.isWindow():
                 return False
             probe = probe.parentWidget()
         return False
+
+    def receiver(self, click: ClickLike) -> tuple[Any, Any]:
+        """Wer diesen Klick empfangen soll: ``(Art, Widget)``.
+
+        Ein Widget, wenn es eines gibt; sonst ``("rechteck", None)`` — das Widget
+        mit genau dem Rechteck des Klicks (Rollfläche, Klappe) — oder eine
+        Widgetklasse, deren Fläche die Mitte enthält (Reiterleiste, Menü).
+        """
+        from PySide6.QtWidgets import QMenu, QMenuBar, QTabBar
+
+        from app.ui import guide_targets
+
+        name = str(getattr(click, "target", "") or "")
+        why = str(click.why)
+        kind = name.partition(":")[0]
+        if why in ("rollen", "klappe"):
+            return "rechteck", None
+        if why == "reiter":
+            return QTabBar, None
+        if why in ("menue", "untermenue") or kind in ("menu", "history"):
+            return (QMenu, QMenuBar), None
+        view = self.row_view(kind, name)
+        if view is not None:
+            return None, view
+        if why != TARGET_REASON:
+            return "rechteck", None
+        if kind == "command":
+            # Ein Fensterbefehl steht als Treffer in der Liste der Auswahl, als
+            # Zeile im offenen Menü oder als Knopf — je nachdem, wo der Klick liegt.
+            hits = getattr(self.window.selection_operations, "hits", None)
+            if hits is not None and hits.isVisible() and self.holds(hits, click.rect.center()):
+                return None, hits
+            if self.open_menu() is not None:
+                return (QMenu, QMenuBar), None
+        try:
+            return None, guide_targets.widget_for(self.window, name)
+        except LookupError:
+            return "rechteck", None
+
+    def row_view(self, kind: str, name: str) -> Any:
+        """Die Liste oder der Baum, in dem eine Zeile dieses Namens steht — oder die Ansicht."""
+        window = self.window
+        if window is None:
+            return None
+        if kind in ("view", "handle") or name == "viewport":
+            return window.viewport
+        if kind == "tree.row":
+            return window.object_tree.tree
+        if kind == "history.row" or name == "history.last":
+            return window.history_panel.list
+        if kind == "start.recent":
+            return window.start_screen.recent_list
+        if kind == "finding":
+            return window.report.list
+        return None
+
+    def holds(self, widget: Any, point: Any) -> bool:
+        """Ob ``point`` (global) in der Fläche von ``widget`` liegt."""
+        from PySide6.QtCore import QPoint, QRect
+
+        return bool(QRect(widget.mapToGlobal(QPoint(0, 0)), widget.size()).contains(point))
+
+    def open_menu(self) -> Any:
+        from PySide6.QtWidgets import QApplication, QMenu
+
+        popup = QApplication.activePopupWidget()
+        return popup if isinstance(popup, QMenu) else None
 
     def centre(self, rect: Any) -> Any:
         return rect.center()
@@ -1484,6 +1555,10 @@ LATE_WINDOW_S: Final = 3.0
 #: Wie lange nach einem Klick auf eine Handlung auf ihre Wirkung gewartet wird.
 EFFECT_WINDOW_S: Final = 2.0
 
+#: I1: Wie lange nach der Suchfrist der Ansicht (``viewport.HOVER_DELAY_MS``) auf ihren
+#: Hinweis gewartet wird — ein Bild und die Suche unter dem Zeiger (Sekunden).
+HOVER_READ_S: Final = 1.0
+
 #: Z1: Bewegungen eines Zugs und ihr Takt — 60 je Sekunde wie eine Hand an der
 #: Maus (Review L11), nicht so schnell, wie die Schleife sie senden kann.
 DRAG_MOVES: Final = 20
@@ -1510,6 +1585,68 @@ RECENT_KIND: Final = "start.recent"
 
 #: Ein Szenenschlüssel, wie er im Dateinamen steht.
 _STEP_NUMBER: Final = re.compile(r"\b(\d+)\b")
+
+
+def until_step(
+    name: str, condition: Callable[[], bool], at_most_s: float, clock: Callable[[], float]
+) -> Step:
+    """Warten, bis ``condition`` gilt — höchstens ``at_most_s``, dann geht es ohne weiter.
+
+    Die Ruhe eines Schritts (``settle_ms``) liegt **nach** ihm (Review M1): Ein
+    Leseschritt mit Ruhe liest sofort und wartet danach. Wer lesen will, stellt
+    diesen Schritt davor. Kein Fehler, wenn die Frist verstreicht: Was dann zu
+    lesen ist, ist die Antwort (etwa „keine Wirkung“).
+    """
+    since: dict[str, float | None] = {"t": None}
+
+    def ready() -> bool:
+        now = clock()
+        if since["t"] is None:
+            since["t"] = now
+        return condition() or now - since["t"] >= at_most_s
+
+    return Step(name, lambda machine: None, ready=ready, timeout_s=at_most_s + STEP_TIMEOUT_S)
+
+
+def hover_steps(
+    move: Callable[[], None],
+    tooltip: Callable[[], str],
+    sink: list[str],
+    clock: Callable[[], float],
+    delay_s: float,
+) -> list[Step]:
+    """I1 an einer Art: hinfahren, auf den Hinweis der Ansicht warten, ihn lesen (Review S3).
+
+    ``move`` fährt die Maus über das Merkmal, ``tooltip`` liest den Hinweis der
+    Ansicht. Gelesen wird, wenn er steht — frühestens dann, und spätestens
+    ``delay_s`` (Suchfrist der Ansicht) plus :data:`HOVER_READ_S` nach dem
+    Hinfahren; ``sink`` bekommt den Text.
+    """
+
+    def read(machine: StepMachine) -> None:
+        sink[:] = [tooltip()]
+
+    return [
+        Step("hin", lambda machine: move()),
+        until_step("hinweis", lambda: bool(tooltip()), delay_s + HOVER_READ_S, clock),
+        Step("lesen", read),
+    ]
+
+
+def surface_signature(root: Any) -> tuple[Any, ...]:
+    """Wo eine Fläche und ihre sichtbaren Kinder gerade stehen — für ``still_step``."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QWidget
+
+    if root is None:
+        return ()
+
+    def place(widget: Any) -> tuple[int, int, int, int]:
+        corner = widget.mapToGlobal(QPoint(0, 0))
+        return (corner.x(), corner.y(), widget.width(), widget.height())
+
+    shown = tuple(place(widget) for widget in root.findChildren(QWidget) if widget.isVisible())
+    return (id(root), place(root), shown)
 
 
 def case_scene(folder: Path, scenes: Path, key: str) -> Path | None:
@@ -1793,6 +1930,37 @@ class FunctionFlow:
         self, name: str, ready: Callable[[], bool], timeout_s: float = STEP_TIMEOUT_S
     ) -> Step:
         return Step(name, lambda machine: None, ready=ready, timeout_s=timeout_s)
+
+    def until_step(
+        self, name: str, condition: Callable[[], bool], at_most_s: float = EFFECT_WINDOW_S
+    ) -> Step:
+        """:func:`until_step` an der Uhr des Fensters."""
+        return until_step(name, condition, at_most_s, time.perf_counter)
+
+    def still_step(self, name: str, root: Callable[[], Any], at_most_s: float = 10.0) -> Step:
+        """Warten, bis die Fläche :data:`STILL_S` lang stillsteht — Übergänge sind vorbei (M1).
+
+        Still heißt: dieselbe Fläche, und sie und ihre sichtbaren Kinder haben
+        dieselben Rechtecke (:func:`surface_signature`). Nach ``at_most_s`` geht es
+        auch ohne Stillstand weiter; der Grund steht dann in ``unmeasured``.
+        """
+        seen: dict[str, Any] = {"key": None, "since": 0.0, "began": None}
+
+        def ready() -> bool:
+            now = time.perf_counter()
+            if seen["began"] is None:
+                seen["began"] = now
+            key = surface_signature(root())
+            if key != seen["key"]:
+                seen["key"], seen["since"] = key, now
+            if now - seen["since"] >= STILL_S:
+                return True
+            if now - seen["began"] >= at_most_s:
+                unmeasured(self.data, f"still:{name}", f"nach {at_most_s:.0f} s nicht still")
+                return True
+            return False
+
+        return Step(name, lambda machine: None, ready=ready, timeout_s=at_most_s + STEP_TIMEOUT_S)
 
     def do_step(self, name: str, action: Callable[[], object], settle_ms: int = TICK_MS) -> Step:
         return Step(name, lambda machine: action(), settle_ms=settle_ms)
@@ -2228,10 +2396,15 @@ class FunctionFlow:
 
         inputs = self.spec.get("inputs") or {}
         target = walk_target(self.row)
-        focus_before = QApplication.focusWidget()
         self.snapshot("before")
         self.picture("01-vorher")
-        surface: dict[str, Any] = {}
+        # Fokus vor dem Öffnen der Fläche: unmittelbar vor dem Klick auf das Ziel
+        # (Review S4), nicht vor dem ganzen Weg.
+        focus: dict[str, Any] = {"before": None, "taken": False}
+
+        def remember_focus(name: str) -> None:
+            if name == target and not focus["taken"]:
+                focus["before"], focus["taken"] = QApplication.focusWidget(), True
 
         def take_surface(machine: StepMachine) -> None:
             root = self.surface()
@@ -2239,29 +2412,43 @@ class FunctionFlow:
             self.capture_surface(root)
             self.data["messages"] = capture.message_entries(self.window)
             apply_button = self.widget(self.apply_target) if self.apply_target else None
+            # Erst die Kette, ab dem ersten Feld, in das Tab den Fokus bringt
+            # (Review S4); erreicht sie den Hauptknopf, ist das sein Bild „Fokus“.
+            focused: dict[str, str] = {}
+
+            def on_focus(widget: Any) -> None:
+                if apply_button is not None and widget is apply_button:
+                    focused["digest"] = capture.picture_digest(apply_button)
+
+            chain = capture.tab_chain(root, lambda: self.ports.keys("Tab"), on_focus=on_focus)
+            self.data["tab_chain"] = chain
+            self.data["names"] = [entry["name"] for entry in chain if entry["inside"]]
+            if not chain:
+                unmeasured(self.data, "tab_chain", "Tab brachte den Fokus nicht in die Fläche")
             if apply_button is not None and apply_button.isVisible():
                 self.data["state_images"] = [
                     {
                         "surface": type(root).__name__,
                         "widget": capture.name_of(apply_button),
-                        "states": capture.state_images(apply_button),
+                        "states": capture.state_images(apply_button, focused.get("digest")),
                     }
                 ]
-            chain = capture.tab_chain(root, lambda: self.ports.keys("Tab"))
-            self.data["tab_chain"] = chain
-            self.data["names"] = [entry["name"] for entry in chain]
-            surface["root"] = type(root).__name__
             self.picture("02-flaeche")
 
-        self.run_steps(
-            PATH_PHASE,
-            [
-                *self.path_steps(),
-                *self.input_steps(inputs),
-                *(self.preview_steps() if inputs else [self.wait_step("ruhe", self.idle)]),
-                Step("fläche aufnehmen", take_surface),
-            ],
-        )
+        self.walker.before_target = remember_focus
+        try:
+            self.run_steps(
+                PATH_PHASE,
+                [
+                    *self.path_steps(),
+                    *self.input_steps(inputs),
+                    *(self.preview_steps() if inputs else [self.wait_step("ruhe", self.idle)]),
+                    self.still_step("fläche steht still", self.surface),
+                    Step("fläche aufnehmen", take_surface),
+                ],
+            )
+        finally:
+            self.walker.before_target = None
         self.data["place"] = place_of(self.data["steps"], target)
         self.data["spot"] = self.spot()
         if inputs:
@@ -2272,11 +2459,15 @@ class FunctionFlow:
             return
         self.apply_and_measure()
         after = QApplication.focusWidget()
-        self.data["focus_return"] = (
-            None
-            if focus_before is None or after is None
-            else capture.name_of(after) == capture.name_of(focus_before)
-        )
+        if focus["before"] is None or after is None:
+            unmeasured(
+                self.data,
+                "focus_return",
+                "kein Fokus vor dem Öffnen" if focus["before"] is None else "kein Fokus danach",
+            )
+        else:
+            # Dasselbe Widget, nicht nur derselbe Name (Review S4).
+            self.data["focus_return"] = after is focus["before"]
         self.undo_and_redo()
 
     def spot(self) -> dict[str, Any] | None:
@@ -2508,7 +2699,10 @@ class FunctionFlow:
                 f"nachträglich {way}",
                 [
                     *(self.walker.step(name, button) for name, button in route),
-                    Step("felder lesen", read, settle_ms=SETTLE_MS * 2),
+                    # Erst geöffnet und still, dann lesen (Review M1).
+                    self.until_step("geöffnet", lambda: self.surface() is not self.window),
+                    self.still_step("fläche steht still", self.surface),
+                    Step("felder lesen", read),
                 ],
             )
             numeric = [
@@ -2665,17 +2859,27 @@ class FunctionFlow:
         difference = self.window.viewport.difference
         opened: dict[str, bool] = {}
 
-        def look(machine: StepMachine) -> None:
-            opened["modal"] = capture.modal_now() is not None
-            opened["surface"] = self.surface() is not self.window
-            opened["preview"] = self.window.viewport.difference is not difference
-            opened["result"] = self.session.last_result is not result_before
+        def effects() -> dict[str, bool]:
+            return {
+                "modal": capture.modal_now() is not None,
+                "surface": self.surface() is not self.window,
+                "preview": self.window.viewport.difference is not difference,
+                "result": self.session.last_result is not result_before,
+            }
 
+        def look(machine: StepMachine) -> None:
+            opened.update(effects())
+
+        # Erst warten, bis eine Wirkung da ist oder die Frist um ist, dann lesen
+        # (Review M1): Vorschau und Ergebnis kommen später als ein Klick.
         self.run_steps(
             f"{label} klick",
             [
                 self.walker.step(target),
-                Step("wirkung", look, settle_ms=int(EFFECT_WINDOW_S * 1000)),
+                self.until_step(
+                    "wirkung", lambda: any(effects().values()) and not self.session.busy
+                ),
+                Step("wirkung lesen", look),
             ],
         )
         after = self.scene_now()
@@ -2732,12 +2936,7 @@ class FunctionFlow:
         from tools import function_capture as capture
 
         if self.scene_key == "halt":
-            texts = [entry["text"] for entry in capture.message_entries(self.window)]
-            texts += capture.visible_texts(self.window.object_tree)
-            reason = next(
-                (text for text in texts if step_number(text) is not None), texts[0] if texts else ""
-            )
-            self.data["halt"] = {"text": reason, "step": step_number(reason)}
+            self.read_halt()
         else:
             unmeasured(self.data, "halt", "Startszene ohne angehaltene Kette")
         length = len(self.session.project.document.ops)
@@ -2746,6 +2945,17 @@ class FunctionFlow:
             return
         previous = self.session.last_result
         record: dict[str, Any] = {"outcome": None, "text": "", "actions": []}
+        began: dict[str, float | None] = {"t": None}
+
+        def answered() -> bool:
+            # Gelesen wird erst, wenn die Sitzung nicht mehr rechnet und ein
+            # Ergebnis da ist — oder nach der Frist ohne eines (Review M1).
+            now = time.perf_counter()
+            if began["t"] is None:
+                began["t"] = now
+            if self.session.busy:
+                return False
+            return self.session.last_result is not previous or now - began["t"] >= EFFECT_WINDOW_S
 
         def read(machine: StepMachine) -> None:
             messages = capture.message_entries(self.window)
@@ -2765,12 +2975,44 @@ class FunctionFlow:
                 *self.path_steps(),
                 *self.input_steps(self.spec.get("inputs") or {}),
                 *([self.walker.step(self.apply_target)] if self.apply_target else []),
-                Step("antwort lesen", read, settle_ms=int(EFFECT_WINDOW_S * 1000)),
+                Step("antwort", lambda machine: None, ready=answered),
+                Step("antwort lesen", read),
             ],
         )
         self.data["insertion"] = record if record["outcome"] is not None else None
         if record["outcome"] is None:
             unmeasured(self.data, "insertion", "der Weg zur Einfügemarke kam nicht an")
+
+    def read_halt(self) -> None:
+        """Der Haltgrund dort, wo die Anwendung ihn zeigt (Review M10).
+
+        Hält die Kette, nennt der Prüfbericht den Grund am angehaltenen Schritt
+        (der Befund mit ``op_id == stopped_at``). Gelesen wird der Text seiner
+        Zeile, wie der Kunde ihn liest; ``step`` ist die Nummer, die der Verlauf
+        dem Schritt gibt (``labels.step_number``) — U prüft, ob der Text sie
+        nennt. Gibt es den Befund nicht, ist der Halt nicht gemessen; ein
+        beliebiger Text mit einer Zahl ist kein Ersatz.
+        """
+        from PySide6.QtCore import Qt
+
+        from app.ui.labels import step_number as shown_number
+
+        result = self.session.last_result
+        stopped = getattr(result, "stopped_at", None)
+        if stopped is None:
+            unmeasured(self.data, "halt", "die Startszene hält nicht an")
+            return
+        listing = self.window.report.list
+        for row in range(listing.count()):
+            item = listing.item(row)
+            finding = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+            if item is not None and getattr(finding, "op_id", None) == stopped:
+                self.data["halt"] = {
+                    "text": item.text(),
+                    "step": shown_number(self.session.project.document, stopped),
+                }
+                return
+        unmeasured(self.data, "halt", "der Prüfbericht nennt keinen Befund am angehaltenen Schritt")
 
     def recent_number(self, stem: str) -> int | None:
         """Die Stelle eines Projekts unter „Zuletzt geöffnet“ (ab 1), abgelesen an der Liste."""
@@ -2939,12 +3181,24 @@ class FunctionFlow:
             raise BenchFinding(COVERED, "Verwerfen", "der Knopf liegt unter etwas anderem")
 
     def phase_hover(self) -> None:
-        """I1: Name und Maß beim Überfahren je erkannter Art (``view:``), ohne Klick."""
-        from tools import function_capture as capture
+        """I1: Name und Maß beim Überfahren je erkannter Art (``view:``), ohne Klick (Review S3).
+
+        Die Ansicht sucht das Merkmal unter dem Zeiger erst nach
+        ``viewport.HOVER_DELAY_MS`` und nur mit Renderer; Name und Maß stehen dann
+        in ihrem Tooltip (``Viewport._refresh_feature_hint``) — keine Beschriftung
+        als ``QLabel``. Gelesen wird also der Tooltip der Ansicht, und erst, wenn
+        er steht oder :data:`HOVER_READ_S` nach der Frist der Ansicht vergangen
+        ist. Ohne Renderer gibt es nichts zu überfahren: ungemessen statt leer.
+        """
+        from app.ui.viewport import HOVER_DELAY_MS
 
         result = self.session.last_result
         if result is None or not any(entry.features for entry in result.scene.objects.values()):
             unmeasured(self.data, "hover_labels", "die Startszene trägt kein Merkmal")
+            return
+        view = self.window.viewport
+        if getattr(view, "renderer", None) is None:
+            unmeasured(self.data, "hover_labels", "kein Renderer — die Ansicht sucht nichts")
             return
         labels: list[dict[str, Any]] = []
         seen: set[str] = set()
@@ -2956,19 +3210,28 @@ class FunctionFlow:
                 target = f"view:{key}.{name}"
                 texts: list[str] = []
 
-                def hover(machine: StepMachine, target: str = target) -> None:
+                def hover(target: str = target) -> None:
                     click = self.ports.next_click(target)
                     self.ports.move(self.ports.centre(click.rect))
 
-                def read(machine: StepMachine, texts: list[str] = texts) -> None:
-                    texts[:] = capture.visible_texts(self.window.viewport)
-
                 self.run_steps(
                     f"überfahren {target}",
-                    [Step("hin", hover), Step("lesen", read, settle_ms=SETTLE_MS * 4)],
+                    [
+                        Step("weg vom bild", lambda machine: self.ports.move(self.away_point())),
+                        self.until_step("ohne hinweis", lambda: not view.toolTip()),
+                        *hover_steps(
+                            hover, view.toolTip, texts, time.perf_counter, HOVER_DELAY_MS / 1000
+                        ),
+                    ],
                 )
                 labels.append({"kind": feature.kind, "label": " ".join(texts)})
         self.data["hover_labels"] = labels
+
+    def away_point(self) -> Any:
+        """Eine Stelle außerhalb der Ansicht, damit ein neuer Hinweis neu entsteht."""
+        from PySide6.QtCore import QPoint
+
+        return self.window.mapToGlobal(QPoint(2, 2))
 
     def phase_drag(self) -> None:
         """Z1: ein Zug am Griff der Zeile, je Bewegung die rohe Zeit bis zum nächsten Bild."""
@@ -3059,11 +3322,20 @@ class FunctionFlow:
         """Zoll, Skalierung, Thema, Bewegung: Weg bis zur offenen Fläche, dann ihre Aufnahmen."""
 
         def take(machine: StepMachine) -> None:
-            self.capture_surface(self.surface())
+            root = self.surface()
+            # Die eigene Fläche der Zeile ist kein fremdes Fenster (Review L13).
+            self.watch.own.add(type(root).__name__)
+            self.capture_surface(root)
             self.picture(f"flaeche-{self.variant.set}")
 
         self.run_steps(
-            PATH_PHASE, [*self.path_steps(), Step("aufnehmen", take, settle_ms=SETTLE_MS * 2)]
+            PATH_PHASE,
+            [
+                *self.path_steps(),
+                # Aufgenommen wird nach dem letzten Übergang (Review M1).
+                self.still_step("fläche steht still", self.surface),
+                Step("aufnehmen", take),
+            ],
         )
 
 

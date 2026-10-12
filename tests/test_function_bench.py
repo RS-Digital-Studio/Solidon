@@ -430,6 +430,82 @@ def test_a_click_waits_until_its_place_stands_still() -> None:
     assert steps[-1]["t"] >= bench.STABLE_S
 
 
+def test_a_reading_waits_for_its_state_before_it_reads() -> None:
+    """Review M1: Die Ruhe eines Schritts liegt nach ihm — gelesen wird nach einem Warteschritt.
+
+    Gegenprobe: Ein Leseschritt mit ``settle_ms`` liest sofort (bei 0 s), auch
+    wenn die Wirkung erst nach 0,5 s kommt. Mit ``until_step`` davor liest er
+    danach; kommt sie nie, nach der Frist und ohne Fehler.
+    """
+    timer = FakeTimer()
+    read_at: list[float] = []
+
+    def read(machine: bench.StepMachine) -> None:
+        read_at.append(timer.now)
+
+    run_machine(timer, [bench.Step("lesen", read, settle_ms=2000)])
+    assert read_at == [0.0], "so las der Prüfstand vor der Fixrunde"
+    timer = FakeTimer()
+    read_at.clear()
+    machine = run_machine(
+        timer,
+        [
+            bench.until_step("wirkung", lambda: timer.now >= 0.5, 2.0, timer.clock),
+            bench.Step("lesen", read),
+        ],
+    )
+    assert machine.error is None and 0.5 <= read_at[0] < 0.6
+    timer = FakeTimer()
+    read_at.clear()
+    machine = run_machine(
+        timer,
+        [bench.until_step("nie", lambda: False, 2.0, timer.clock), bench.Step("lesen", read)],
+    )
+    assert machine.error is None and 2.0 <= read_at[0] < 2.1
+
+
+def test_the_hover_label_is_read_once_the_view_shows_it() -> None:
+    """Review S3: Name und Maß stehen erst nach der Suchfrist der Ansicht in ihrem Tooltip.
+
+    Die Ansicht sucht 90 ms nach dem Hinfahren (``viewport.HOVER_DELAY_MS``).
+    Gelesen wird danach, nicht 15 ms nach dem Hinfahren — so las der Prüfstand
+    vorher, und jede Art stand ohne Namen da.
+    """
+    from app.ui.viewport import HOVER_DELAY_MS
+
+    timer = FakeTimer()
+    moved: dict[str, float] = {}
+
+    def tooltip() -> str:
+        shown = "t" in moved and timer.now >= moved["t"] + HOVER_DELAY_MS / 1000
+        return "Bohrung 1\nØ5,20 mm" if shown else ""
+
+    early: list[str] = []
+    run_machine(
+        timer,
+        [
+            bench.Step("hin", lambda machine: moved.setdefault("t", timer.now)),
+            bench.Step("lesen", lambda machine: early.append(tooltip()), settle_ms=480),
+        ],
+    )
+    assert early == [""], "so las der Prüfstand vor der Fixrunde"
+    timer = FakeTimer()
+    moved.clear()
+    sink: list[str] = []
+    machine = run_machine(
+        timer,
+        bench.hover_steps(
+            lambda: moved.setdefault("t", timer.now) and None,
+            tooltip,
+            sink,
+            timer.clock,
+            HOVER_DELAY_MS / 1000,
+        ),
+    )
+    assert machine.error is None
+    assert sink == ["Bohrung 1\nØ5,20 mm"]
+
+
 def test_a_scroll_click_turns_the_wheel_in_its_direction() -> None:
     """``rollen`` dreht das Rad, wohin ``Click.direction`` zeigt (1 nach unten, -1 nach oben)."""
     timer = FakeTimer()
@@ -1525,6 +1601,85 @@ def test_the_probe_row_runs_in_its_own_process_from_inventory_to_report(tmp_path
     assert (report["function_cases"], report["function_complete"]) == (1, 1)
 
 
+def test_the_probe_finds_a_list_or_the_view_over_a_real_target(window: Any) -> None:
+    """Review S2 an echten Widgets: Liste oder 3D-Ansicht über dem Ziel ergeben „verdeckt“.
+
+    Ein Behälter zählt nur, wenn er der Behälter **dieses** Ziels ist. Ziel ist
+    das Suchfeld des Fensters (``search``). Kontrollfall: frei, getroffen. Eine
+    ``QListWidget`` darüber — vorher hielt die Probe ihre Fläche für „eine
+    Liste, also ein Behälter“. Die Ansicht an der Stelle des Ziels — vorher
+    galt ``window.viewport`` für jedes Ziel als Behälter. Die Ansicht als
+    eigenes Ziel (``viewport``) bleibt getroffen.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QPoint, QRect, QSize, Qt
+    from PySide6.QtWidgets import QApplication, QListWidget
+
+    from app.ui import guide_targets
+
+    def settle() -> None:
+        for _ in range(20):
+            QApplication.processEvents()
+
+    def global_rect(widget: Any) -> QRect:
+        return QRect(widget.mapToGlobal(QPoint(0, 0)), widget.size())
+
+    def click(rect: QRect, target: str) -> Any:
+        return SimpleNamespace(
+            rect=rect, why="ziel", target=target, button=Qt.MouseButton.LeftButton, direction=0
+        )
+
+    window.resize(1280, 820)
+    window.show()
+    settle()
+    ports = bench.QtPorts(window, 0.0)
+    # Was gerade dasteht: der Startbildschirm mit *Neues Projekt* oder das Suchfeld.
+    name, field = next(
+        (name, widget)
+        for name in ("start.new", "search")
+        if (widget := guide_targets.widget_for(window, name)).isVisible()
+    )
+    rect = global_rect(field)
+    free = ports.widget_under(rect.center())
+    assert ports.covers(click(rect, name), free), "Kontrollfall: das freie Ziel"
+
+    cover = QListWidget(window)
+    cover.addItem("darüber")
+    cover.setGeometry(
+        QRect(window.mapFromGlobal(rect.topLeft()) - QPoint(10, 10), rect.size() + QSize(20, 20))
+    )
+    cover.raise_()
+    cover.show()
+    settle()
+    try:
+        hit = ports.widget_under(rect.center())
+        assert hit is cover or cover.isAncestorOf(hit), hit
+        assert not ports.covers(click(rect, name), hit), "Liste über dem Ziel"
+    finally:
+        cover.hide()
+        cover.deleteLater()
+        settle()
+
+    if window.stack.currentWidget() is window.start_screen:
+        # Die Ansicht steht erst mit einem Projekt da — *Neues Projekt*, geklickt.
+        from PySide6.QtTest import QTest
+
+        start = guide_targets.widget_for(window, "start.new")
+        QTest.mouseClick(start, Qt.MouseButton.LeftButton)
+        for _ in range(200):
+            settle()
+            if window.stack.currentWidget() is not window.start_screen:
+                break
+    view = window.viewport
+    centre = view.mapToGlobal(view.rect().center())
+    spot = QRect(centre - QPoint(50, 10), QSize(100, 20))
+    hit = ports.widget_under(spot.center())
+    assert hit is view or view.isAncestorOf(hit), hit
+    assert not ports.covers(click(spot, name), hit), "die Ansicht an der Stelle des Ziels"
+    assert ports.covers(click(spot, "viewport"), hit), "die Ansicht als eigenes Ziel"
+
+
 def _run_acceptance(out: Path, *arguments: list[str]) -> None:
     """``tools/file_acceptance.py`` in eigenen Prozessen, offscreen, je Aufruf ein Prozess."""
     import os
@@ -1664,22 +1819,55 @@ def test_the_captures_read_a_small_dialog_without_acting_on_it(qt_app: Any) -> N
         assert protocol["layout"][0]["primary"] == 1
         assert any(entry["vertical"] for entry in protocol["scrollbars"])
         assert any("Noch kein Eintrag" in entry["sentence"] for entry in protocol["empty_states"])
-        spin.setFocus(Qt.FocusReason.TabFocusReason)
+        # Review S4: Der Fokus steht am Hauptknopf, wie früher nach den
+        # Zustandsbildern. Die Kette beginnt trotzdem am ersten Feld, läuft in
+        # Lesefolge und endet mit dem Glied, das wiederkommt — U zählt es nicht.
+        QTest.mouseClick(accept, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
         QApplication.processEvents()
+        clicked.clear()
+        assert QApplication.focusWidget() is accept
 
         def press_tab() -> None:
             focus = QApplication.focusWidget()
             assert focus is not None
             QTest.keyClick(focus, Qt.Key.Key_Tab)
 
-        chain = capture.tab_chain(dialog, press_tab, limit=12)
+        focused: dict[str, str] = {}
+
+        def on_focus(widget: Any) -> None:
+            if widget is accept:
+                focused["digest"] = capture.picture_digest(accept)
+
+        chain = capture.tab_chain(dialog, press_tab, limit=12, on_focus=on_focus)
         assert chain[0]["name"] == "Bohrung ändern — Durchmesser" and len(chain) >= 3
+        assert all(entry["inside"] for entry in chain)
+        assert chain[-1]["name"] == chain[0]["name"], "das Schlussglied kommt wieder"
+        from tools.function_judges import _reading_order_jumps, _within_chain
+
+        within = _within_chain(chain)
+        assert len(within) == len(chain) - 1
+        assert (
+            _reading_order_jumps([(entry["name"], tuple(entry["rect"])) for entry in within]) == []
+        )
         protocol["tab_chain"] = chain
+        # Review L2: „Fokus“ ist das Bild, das die Kette am Knopf aufnahm.
+        assert focused["digest"]
         protocol["state_images"] = [
-            {"surface": "QDialog", "widget": "Übernehmen", "states": capture.state_images(accept)}
+            {
+                "surface": "QDialog",
+                "widget": "Übernehmen",
+                "states": capture.state_images(accept, focused["digest"]),
+            }
         ]
         assert set(protocol["state_images"][0]["states"]) == set(capture.STATES)
+        assert protocol["state_images"][0]["states"]["focus"] == focused["digest"]
         assert clicked == [], "der Druck für das Bild löste den Knopf aus"
+        reacting = QPushButton("Halten", dialog)
+        reacting.pressed.connect(lambda: clicked.append(False))
+        reacting.show()
+        QApplication.processEvents()
+        assert "pressed" not in capture.state_images(reacting), "Drücken hätte ausgelöst"
+        assert clicked == []
         notice.show()
         QApplication.processEvents()
         watch.poll()

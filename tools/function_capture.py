@@ -551,48 +551,104 @@ def field_values(root: Any) -> dict[str, Any]:
 # --- Tab-Kette (Prüfpunkt 10) ---------------------------------------------------------------
 
 
+def _inside(widget: Any, root: Any) -> bool:
+    return bool(widget is not None and (root is widget or root.isAncestorOf(widget)))
+
+
 def focus_entry(widget: Any, root: Any) -> dict[str, Any]:
-    """Das Fokuswidget als Kettenglied: Name und Rechteck relativ zu ``root``."""
+    """Das Fokuswidget als Kettenglied: Name, Rechteck relativ zu ``root``, drinnen oder nicht.
+
+    Auch ein Glied außerhalb steht in Koordinaten von ``root`` (Review S4) —
+    sonst verglichen die Urteile Lagen aus zwei Bezugssystemen.
+    """
     from PySide6.QtCore import QPoint
 
-    inside = root is widget or root.isAncestorOf(widget)
-    corner = widget.mapTo(root, QPoint(0, 0)) if inside and root is not widget else QPoint(0, 0)
-    if not inside:
-        corner = widget.mapToGlobal(QPoint(0, 0))
+    corner = root.mapFromGlobal(widget.mapToGlobal(QPoint(0, 0)))
     return {
         "name": widget.accessibleName() or name_of(widget),
         "rect": [corner.x(), corner.y(), widget.width(), widget.height()],
+        "inside": _inside(widget, root),
     }
 
 
+def first_tab_stop(root: Any) -> Any:
+    """Das erste Widget der Fläche, das Tab erreicht — nur gelesen, nicht fokussiert.
+
+    Folgt Qts Fokuskette ab ``root`` (``nextInFocusChain``) bis zum ersten
+    sichtbaren, bedienbaren Kind, das Tab annimmt; ``None``, wenn es keines gibt.
+    """
+    from PySide6.QtCore import Qt
+
+    probe = root.nextInFocusChain()
+    for _ in range(MOST_TABS * 4):
+        if probe is None or probe is root:
+            return None
+        if (
+            root.isAncestorOf(probe)
+            and probe.isVisible()
+            and probe.isEnabled()
+            and probe.focusPolicy() & Qt.FocusPolicy.TabFocus
+        ):
+            return probe
+        probe = probe.nextInFocusChain()
+    return None
+
+
 def tab_chain(
-    root: Any, press_tab: Callable[[], None], limit: int = MOST_TABS
+    root: Any,
+    press_tab: Callable[[], None],
+    limit: int = MOST_TABS,
+    on_focus: Callable[[Any], None] | None = None,
 ) -> list[dict[str, Any]]:
-    """Die Tab-Kette ab dem Fokus: je Druck das Fokuswidget, bis sie sich schließt.
+    """Die Tab-Kette der Fläche ``root``: zum ersten Feld mit Tab, dann je Druck das Fokuswidget.
 
     ``press_tab`` drückt Tab am Fokuswidget (``QtPorts.keys``) — die Kette wird
     gedrückt, nicht aus ``nextInFocusChain`` gelesen: Gemessen wird, was die
-    Tastatur tut. Die Kette endet, wenn ein Widget wiederkommt oder der Fokus
-    ``root`` verlässt; das Glied, das hinausführt, steht noch darin.
+    Tastatur tut. Beginnen soll sie am ersten Feld der Fläche
+    (:func:`first_tab_stop`, Review S4): Steht der Fokus woanders — außerhalb
+    oder am Hauptknopf —, drückt der Prüfstand Tab, bis er dort ankommt, wie ein
+    Kunde; kommt er nie dort an, beginnt die Kette, wo er in der Fläche steht.
+    Sie endet mit dem Glied, das wiederkommt, oder mit dem, das die Fläche verlässt
+    (``inside`` falsch) — dieses Schlussglied steht darin, und D0-U zählt es
+    nicht mit (``function_judges._within_chain``). ``on_focus`` sieht jedes
+    Fokuswidget, solange es da ist — für das Zustandsbild „Fokus“ (G5).
     """
     from PySide6.QtWidgets import QApplication
 
-    chain: list[dict[str, Any]] = []
-    seen: set[int] = set()
-    first = QApplication.focusWidget()
-    if first is not None:
-        seen.add(id(first))
-        chain.append(focus_entry(first, root))
-    for _ in range(limit):
+    def step() -> Any:
         press_tab()
         QApplication.processEvents()
-        current = QApplication.focusWidget()
-        if current is None:
-            break
-        chain.append(focus_entry(current, root))
-        if id(current) in seen or not (root is current or root.isAncestorOf(current)):
+        return QApplication.focusWidget()
+
+    first = first_tab_stop(root)
+    current = QApplication.focusWidget()
+    presses = 0
+
+    def arrived(widget: Any) -> bool:
+        if first is None or widget is None:
+            return _inside(widget, root)
+        # Ein Zahlenfeld nimmt den Fokus über seine Textzeile an.
+        return bool(widget is first or first.isAncestorOf(widget) or widget.isAncestorOf(first))
+
+    while not arrived(current) and presses < limit:
+        current = step()
+        presses += 1
+    if not _inside(current, root):
+        return []
+    chain: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    while presses <= limit:
+        entry = focus_entry(current, root)
+        chain.append(entry)
+        if id(current) in seen or not entry["inside"]:
             break
         seen.add(id(current))
+        if on_focus is not None:
+            on_focus(current)
+        current = step()
+        presses += 1
+        if current is None:
+            break
     return chain
 
 
@@ -799,32 +855,52 @@ def _picture_digest(widget: Any) -> str:
     return hashlib.sha256(bytes(image.constBits())).hexdigest()[:16]
 
 
-def state_images(widget: Any) -> dict[str, str]:
-    """Ein Bildabdruck je Zustand, hergestellt über gesendete Ereignisse (G5).
+def picture_digest(widget: Any) -> str:
+    """Der Abdruck des Bilds, das ein Widget gerade zeigt."""
+    return _picture_digest(widget)
 
-    Darüber: die Maus fährt hinein. Fokus: wie ein Tab. Gedrückt: die Taste
-    unten, dann außerhalb losgelassen — so löst der Knopf nicht aus. Gleiche
-    Abdrücke zweier Zustände heißen: nicht unterscheidbar.
+
+def _reacts_to_pressing(widget: Any) -> bool:
+    """Ob an ``pressed`` etwas hängt — dann löste schon das Drücken eine Handlung aus."""
+    from PySide6.QtCore import SIGNAL
+
+    return bool(widget.receivers(SIGNAL("pressed()")) > 0)
+
+
+def state_images(widget: Any, focus: str | None = None) -> dict[str, str]:
+    """Ein Bildabdruck je Zustand, hergestellt über gesendete Ereignisse (G5, Plan 3.3).
+
+    Ruhe: die Maus außerhalb. Darüber: die Maus fährt hinein. Fokus: der
+    Abdruck, den die Tab-Kette aufnahm, als Tab den Knopf erreichte
+    (``focus``, :func:`tab_chain` mit ``on_focus``) — nicht ``setFocus``
+    (Review L2). Gedrückt: die Taste unten, dann außerhalb losgelassen — so
+    löst der Knopf nicht aus; hängt schon an ``pressed`` eine Handlung, wird
+    nicht gedrückt. Was nicht aufgenommen ist, fehlt im Ergebnis, und D0-U nennt
+    es ungemessen.
     """
     from PySide6.QtCore import QPoint, Qt
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
 
+    outside = QPoint(-widget.width(), -widget.height())
+    QTest.mouseMove(widget, outside)
+    QApplication.processEvents()
     images: dict[str, str] = {"rest": _picture_digest(widget)}
     centre = widget.rect().center()
     QTest.mouseMove(widget, centre)
     QApplication.processEvents()
     images["hover"] = _picture_digest(widget)
-    widget.setFocus(Qt.FocusReason.TabFocusReason)
-    QApplication.processEvents()
-    images["focus"] = _picture_digest(widget)
-    QTest.mousePress(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, centre)
-    QApplication.processEvents()
-    images["pressed"] = _picture_digest(widget)
-    outside = QPoint(-widget.width(), -widget.height())
-    QTest.mouseMove(widget, outside)
-    QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, outside)
-    QApplication.processEvents()
+    if focus:
+        images["focus"] = focus
+    if not _reacts_to_pressing(widget):
+        QTest.mousePress(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, centre)
+        QApplication.processEvents()
+        images["pressed"] = _picture_digest(widget)
+        QTest.mouseMove(widget, outside)
+        QTest.mouseRelease(
+            widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, outside
+        )
+        QApplication.processEvents()
     return images
 
 
