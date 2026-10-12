@@ -170,6 +170,33 @@ def test_every_broken_sample_turns_red(sample: Any) -> None:
     assert red, f"{sample.subject} {sample.title}: blieb grün ({detail})"
 
 
+JUDGED_SAMPLES = [s for s in BROKEN_SAMPLES if s.kind in {"verdict", "finding"}]
+
+
+def test_every_verdict_and_finding_sample_names_its_reason() -> None:
+    """Rot aus irgendeinem Grund belegt nichts: Jede solche Gegenprobe nennt ihren."""
+    assert JUDGED_SAMPLES
+    assert all(sample.reason for sample in JUDGED_SAMPLES), [
+        f"{s.subject} {s.title}" for s in JUDGED_SAMPLES if not s.reason
+    ]
+
+
+@pytest.mark.parametrize(
+    "sample",
+    [s for s in JUDGED_SAMPLES if s.kind == "verdict" and s.change is not None],
+    ids=lambda s: f"{s.subject}-{s.title}",
+)
+def test_a_verdict_sample_is_accepted_without_its_break(sample: Any) -> None:
+    """Die Gegenseite: Dasselbe Urteil am heilen Muster wird angenommen.
+
+    Erst dann liegt das Rot der Gegenprobe an ihrer verdorbenen Stelle und nicht
+    an einem Urteil, das ohnehin abgewiesen würde.
+    """
+    case = _judged()
+    checked = check_verdicts([sample.verdict], outcomes={case.row_id: case})
+    assert checked.rejected == (), checked.rejected
+
+
 def test_every_checkpoint_and_criterion_has_a_broken_sample() -> None:
     """Je Prüfpunkt und Kriterium mindestens ein Rotfall (Konzept §10)."""
     assert len(BROKEN_SAMPLES) >= len(CHECKPOINTS) + len(CRITERIA)

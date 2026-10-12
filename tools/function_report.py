@@ -1134,11 +1134,13 @@ def is_red(sample: BrokenSample) -> tuple[bool, str]:
         assert sample.verdict is not None
         checked = check_verdicts([sample.verdict], outcomes={case.row_id: case})
         reasons = [reason for _entry, why in checked.rejected for reason in why]
-        return bool(reasons), "; ".join(reasons)
+        # Rot zählt nur aus dem genannten Grund: Ein Urteil, das an etwas
+        # anderem scheitert, belegt die Gegenprobe nicht.
+        return any(sample.reason in reason for reason in reasons), "; ".join(reasons)
     if sample.kind == "finding":
         findings, problems = parse_findings(sample.finding or "")
         problems += check_findings(findings)
-        return bool(problems), "; ".join(problems)
+        return any(sample.reason in problem for problem in problems), "; ".join(problems)
     if sample.kind == "share":
         if sample.subject == "E2":
             share = input_share(int(value) for value in sample.values)

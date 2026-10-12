@@ -438,6 +438,9 @@ class BrokenSample:
     verdict: Mapping[str, Any] | None = None
     finding: str | None = None
     values: tuple[Any, ...] = ()
+    #: Bei Urteil und Fund: der Grund, aus dem abgewiesen werden muss — rot aus
+    #: einem anderen Grund prüfte etwas anderes, als die Gegenprobe behauptet.
+    reason: str = ""
 
 
 def _set(path: str, value: Any) -> Callable[[dict[str, Any]], None]:
@@ -616,6 +619,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         kind="verdict",
         change=_set("texts.0.text", "Rechnet mit Voxeln."),
         verdict=_verdict(point=8),
+        reason="„gut“ gegen einen Fund der Stufe A",
     ),
     BrokenSample(9, "Bedarf über Platz", change=_set("texts.1.need_px", 120)),
     BrokenSample(
@@ -630,7 +634,11 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(10, "Fokus kommt nicht zurück", change=_set("focus_return", False)),
     BrokenSample(11, "Operation ohne Handbuchstelle", context={"manual_place": lambda row: None}),
     BrokenSample(
-        11, "B-Urteil ohne Bild oder Stelle", kind="verdict", verdict=_verdict(point=11, image=None)
+        11,
+        "B-Urteil ohne Bild oder Stelle",
+        kind="verdict",
+        verdict=_verdict(point=11, image=None),
+        reason="ohne Bild oder Stelle",
     ),
     BrokenSample(12, "Verlauf gewachsen", change=_set("revise.0.history_after", 3)),
     BrokenSample(
@@ -766,7 +774,11 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     ),
     BrokenSample("V3", "Satz gleich Titel", change=_set("fields.0.description", "Durchmesser")),
     BrokenSample(
-        "V4", "V4-Urteil ohne Vorhersage", kind="verdict", verdict=_verdict(criterion="V4")
+        "V4",
+        "V4-Urteil ohne Vorhersage",
+        kind="verdict",
+        verdict=_verdict(criterion="V4"),
+        reason="V4 ohne vorher geschriebene Vorhersage",
     ),
     BrokenSample("V5", "Meldung ohne Handlung", change=_set("messages.0.actions", [])),
     BrokenSample(
@@ -808,6 +820,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         "G9 als „mittel“",
         kind="finding",
         finding=_FINDING.format(severity="mittel", subject="G9"),
+        reason="G9 ist höchstens leicht",
     ),
     BrokenSample(
         "Z1",
@@ -828,6 +841,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         kind="verdict",
         change=lambda p: p["steps"].insert(2, click_step("feature.more", "dialog", "klappe")),
         verdict=_verdict(criterion="Z3", design_judgement=True),
+        reason="„gut“ gegen einen Fund der Stufe A",
     ),
     BrokenSample(
         "Z4",
@@ -835,6 +849,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         kind="verdict",
         change=_set("empty_states.0.button", None),
         verdict=_verdict(criterion="Z4", design_judgement=True),
+        reason="„gut“ gegen einen Fund der Stufe A",
     ),
     BrokenSample(
         "Z5",
@@ -848,6 +863,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         "Protokoll ohne Fehlklickzahl",
         kind="verdict",
         verdict=_verdict(criterion="Z7", reviewer="stufe_c", steps=14),
+        reason="Z7-Protokoll ohne Zahl misclicks",
     ),
     BrokenSample(
         "I1",
@@ -855,6 +871,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         kind="verdict",
         change=_set("hover_labels.0.label", ""),
         verdict=_verdict(criterion="I1", design_judgement=True),
+        reason="„gut“ gegen einen Fund der Stufe A",
     ),
     BrokenSample(
         "I2",
@@ -877,6 +894,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         kind="verdict",
         change=_all(_set("spec.criteria", ["I5"]), _set("place.error", "MissingTargetError")),
         verdict=_verdict(criterion="I5", design_judgement=True),
+        reason="„gut“ gegen einen Fund der Stufe A",
     ),
     BrokenSample("I6", "Rang 5", change=_set("search.Loch machen.rank", 5)),
 )
