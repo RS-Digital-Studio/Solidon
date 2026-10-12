@@ -115,6 +115,20 @@ _SEAL_PATH_COMPANIONS = frozenset({"support_feature", "opening_signature", "coun
 #: Der Dialog hält sie auch beim Vorholen entschiedener Werte (``_promoted_fields``).
 MAX_FRONT_FIELDS: Final = 4
 
+#: Welcher Anteil der Operationen vorn höchstens drei Felder zugleich zeigt
+#: (RM-513). Hier und nicht im Test, weil der Funktionsdurchgang dieselbe
+#: Schwelle misst (``tools/function_checks.py``, Kriterium E5).
+USUAL_FRONT_SHARE: Final = 0.9
+
+#: Wie viele Wörter über dem ersten Feld eines Operationsdialogs stehen dürfen
+#: (RM-513): Platzierungssatz, Einleitungssatz und die Überschrift der Grenze.
+#: Deutsch ist die Quelle; die übrigen Sprachen laufen bis rund ein Viertel
+#: länger, gemessen an Französisch und Portugiesisch. Geprüft von
+#: ``tests/test_interface_limits.py`` über den Bestand und vom
+#: Funktionsdurchgang am offenen Dialog (E5).
+MAX_LEAD_WORDS: Final = 25
+MAX_LEAD_WORDS_TRANSLATED: Final = 35
+
 #: Wie viele Feldnamen die zugeklappten „Weitere Einstellungen“ nennen.
 ADVANCED_NAMES_SHOWN: Final = 3
 
