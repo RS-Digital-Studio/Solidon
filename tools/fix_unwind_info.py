@@ -67,6 +67,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
+# Als Skript gestartet (``python tools/fix_unwind_info.py``) steht nur
+# ``tools/`` im Suchpfad; ``package_root`` holt ``tools.make_sbom`` aus der Wurzel.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 DESCRIPTION: Final = (
     "Abwicklungsinformation der OpenCASCADE-Bibliotheken auf macOS Intel korrigieren"
 )

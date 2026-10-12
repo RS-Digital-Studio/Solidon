@@ -1,11 +1,11 @@
 # ROADMAP — Arbeitsliste
 
 Der ursprüngliche Bauplan-Abgleich vom 08.09.2026 und seine Fortschreibungen stehen im
-[Archiv](ROADMAP-ARCHIV.md). Der Veröffentlichungsstand ist **0.5.3**, veröffentlicht
-am **06.10.2026** (`website/version.json`, `d5a485a7a`). Der Tag `v0.5.3` zeigt auf
-`34e1b3364`; der [Taglauf 37409338027](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37409338027)
-ist im zweiten Versuch abgeschlossen, rot nur im meldenden Versionswächter (RM-350); das
-Windows-Setup kommt aus dem Installerlauf 37418052743 und ist lokal signiert. Die Website
+[Archiv](ROADMAP-ARCHIV.md). Der Veröffentlichungsstand ist **0.6.0**, veröffentlicht
+am **11.10.2026** (`website/version.json`). Der Tag `v0.6.0` zeigt auf `ed27f155c`; der
+[Taglauf 38170638968](https://github.com/RS-Digital-Studio/Solidon/actions/runs/38170638968)
+ist grün, rot nur im meldenden Versionswächter (ICN001 der neuesten ruff, behoben); das
+Windows-Setup kommt aus dem Installerlauf 38175499836 und ist lokal signiert. Die Website
 bietet Windows-Setup, Linux-AppImage, Linux-Flatpak und die beiden Mac-Pakete an. Die offenen Aufgaben darunter führen ihre verbleibende
 Arbeit oder Abnahme; ein veröffentlichter Build ersetzt keinen Feldnachweis.
 
@@ -23,14 +23,14 @@ stehen mit Nachweis im Archiv.
 
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
-Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.0**, ein
-0.5.4 gibt es nicht (Entscheidung Robert, `tools/bump_version.py --minor`).
-**Als Nächstes:** die Kundenblocker nach
-0.5.3 — das signierte Paket startet auf echten Intel-Macs nicht (RM-104; Ursache eingegrenzt,
-am Kundengerät von Hand gegengeprobt, Signierschritt korrigiert, kommt mit dem nächsten Tag),
-Cura unter Linux (RM-521, gebaut, Abnahme beim Kunden mit dem nächsten Paket) — und die mit
-0.5.3 fällige Antwort an den Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis
-15.10. (RM-092), Verkaufskandidat bis 25.11., Demo ab 0.6.0 bis 30.11., Start am 01.12.2026 um 10:00 Uhr (RM-061).
+Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.1**.
+**Als Nächstes:** 0.6.1 mit auffindbaren Booleschen Operationen und ohne Befehlspalette,
+danach der Funktionsdurchgang durch die Oberfläche und das Programm Codestruktur
+([RM-722](#rm-722), Konzepte in `konzepte/`); bis zum 25.11. gehen die Kundenpakete des
+Funktionsdurchgangs vor die Komponenten von `MainWindow`. Mit 0.6.0 beim Kunden abzunehmen:
+der Start auf echten Intel-Macs (RM-104) und Cura unter Linux (RM-521); offen bleibt die
+Antwort an den Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis 15.10. (RM-092),
+Verkaufskandidat bis 25.11., Demo bis 30.11., Start am 01.12.2026 um 10:00 Uhr (RM-061).
 Daneben bleiben die Mac-/Linux-Nachweise und die CRA-Betriebsvorbereitung offen — deren Frist
 ist am 11.09.2026 **abgelaufen**, die Meldepflicht aus Art. 14 gilt seither (RM-091).
 Eine zurückgestellte
@@ -59,6 +59,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-768 — Die Abwicklungstabelle im Intel-Mac-Rad von OCP ist falsch kodiert](#rm-768) | Plattformen, Pakete und Grafik | Seit 0.6.0 korrigiert `tools/fix_unwind_info.py` sie nach jeder Installation und prüft das Paket; gemeldet als [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67), die Korrektur entfällt mit einem behobenen Rad |
 | [RM-777 — Schwalbenschwanz, Sechskant und Stiftkopf rechnen mit den Winkeln der Plattform](#rm-777) | Plattformen, Pakete und Grafik | Umstellen auf `units.exact_*`, druckgleich gegen Beispiele und Korpus, danach Bereichsnachweis aller 50 (`shapes.py` und `exact.py` stehen in jedem Abdruck) |
 | [RM-714 — Die Untergrenze von shapely passt nicht zum Kern](#rm-714) | Plattformen, Pakete und Grafik | Untergrenze in `pyproject.toml` auf 2.1 heben |
+| [RM-732 — Fenster ohne geordneten Abbau reißen den Prozess](#rm-732) | Plattformen, Pakete und Grafik | Jeden Abbauweg der Anwendung auf `release` prüfen: Sprachwechsel, zweites Fenster, eigenständiger Viewport, elternlose Dialoge mit Arbeitern |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z3 (Z2 bis auf die Drehachse durch RM-559). Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Restentscheidung offen. Gelöst (09.10., Claude): PrusaSlicer ohne Bündel schätzte mit 1500 mm/s² (`ignore` und Dialekt `reprap`), jetzt `marlin` mit den angeforderten Werten als Grenze, dazu `extra_perimeters`/`solid_infill_below_area = 0` und die Materialart der Spule; Gewürzregal am CC2 407 → 292 min, gegen ElegooSlicer mit denselben Wänden 280 min (+4,5 %, Material −4,2 %), SuperSlicer 527 → 381 min. Offen: Solidons Tabelle druckt „Standard“ mit drei Wänden und vier Bodenschichten, die Standardprozesse von Elegoo, Bambu, Creality und Prusa (MK4S) mit zwei und drei (232 gegen 292 min, 128 gegen 154 g) — Entscheidung, ob die Tabelle dem Standardprozess des Druckers folgt |
@@ -164,6 +165,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-711 — Eine Zeile zur Stützart schlägt in Orca vor, was die Datei schon tut](#rm-711) | Bedienung und Darstellung | Zeilen zu je Teil übernommenen Pfaden nur, wo Übernehmen die Datei ändert (wie `_cura_prints_alike`) |
 | [RM-783 — Die Einleitung der Tour wird in sehr kleinen Fenstern gestaucht](#rm-783) | Bedienung und Darstellung | Titel, Einleitung und Schritte in einen gemeinsamen Rollbereich |
 | [RM-784 — Versetzen sehr großer Auswahlen hält das Fenster kurz an](#rm-784) | Bedienung und Darstellung | Versetzen im Arbeitsfaden rechnen oder die verbleibende Zeit am Profil finden |
+| [RM-731 — `_BoundedBehavior` überspringt Überschreibungen von `LengthSpin`](#rm-731) | Bedienung und Darstellung | Begrenzen in die Klassenlinie: `NumberSpin` kooperativ über `super()` |
+| [RM-733 — `PlacementFlow` greift über `Any` und Zeichenketten aufs Fenster](#rm-733) | Bedienung und Darstellung | Fensterseite als Vertrag typisieren wie bei `DrawFlow`, vor Schritt 4 des Programms |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -182,6 +185,16 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
 | [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
 | [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
+| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | RM-723 und RM-726 bis RM-729 und die 25 `raising=False` beheben, dann W1 bis W6 und `tools/move_names.py` |
+| [RM-723 — Quelltextprüfungen lesen `app/ui/` flach und übersehen `render/`](#rm-723) | Tests und Entwicklungswerkzeuge | Je Stelle rekursiv lesen oder den Geltungsbereich mit Grund nennen |
+| [RM-724 — Späte Importe in `tools/` prüft niemand](#rm-724) | Tests und Entwicklungswerkzeuge | Statische Importprüfung (W5) vorziehen, `_feature_item` öffentlich machen |
+| [RM-725 — `affected_tests` erkennt `glob(` nicht als Baumleser](#rm-725) | Tests und Entwicklungswerkzeuge | `glob` in `_TREE_READERS` aufnehmen, mit Test |
+| [RM-726 — Zwei Patches in der Suite sind wirkungslos](#rm-726) | Tests und Entwicklungswerkzeuge | Patch auf das lesende Modul mit Gegenprobe; `_cost_matrix` entfernen oder benutzen |
+| [RM-727 — Namenslisten überspringen fehlende Module stumm](#rm-727) | Tests und Entwicklungswerkzeuge | Jeder Name löst auf und trägt bei, sonst Fehler (W6 vorziehen) |
+| [RM-728 — Kopfkopien entziehen sich Patches](#rm-728) | Tests und Entwicklungswerkzeuge | Je Paar prüfen, über das Modul zugreifen oder den Patch umsetzen |
+| [RM-729 — Gegenproben der Oberflächensuche zählen nur Dateien](#rm-729) | Tests und Entwicklungswerkzeuge | Gegenproben verlangen die Definitionsmodule von `MainWindow`, `Viewport` und der Merkmalserkennung |
+| [RM-730 — `tools/matrix_unit.py` läuft in keiner Suite](#rm-730) | Tests und Entwicklungswerkzeuge | Rauchtest, der das Modul importiert und seine Aliaszugriffe auflöst |
+| [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -1028,6 +1041,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `shapely.dwithin`. `constraints.txt` pinnt 2.2.0, die CI ist also sicher, eine Installation
   gegen 2.0 nicht. Aus dem Review von RM-629 (10.10.2026).
   **Abnahme:** Untergrenze 2.1, `tools/check_env.py` grün.
+
+<a id="rm-732"></a>
+
+- [ ] **RM-732 — Fenster ohne geordneten Abbau reißen den Prozess.**
+  `tests/conftest.py` pinnt `MainWindow`, `Viewport` und elternlose Dialoge mit `WorkerLeash`
+  bis zum Testende, weil ein Fenster, das ohne geordnetes `release` stirbt, den Prozess mit
+  0xc0000374 reißt. Offen ist die Produktseite: ob die Anwendung einen Abbau ohne `release`
+  ausschließt. [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-15.
+  **Abnahme:** je Weg ein Test ohne Pin; wo einer ohne `release` abbaut, ruft der Weg `release`,
+  an der Wurzel statt über einen Pin.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -5419,6 +5442,28 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Abnahme:** Versetzen von 2000 Linien lässt das Fenster bedienbar oder dauert unter
   0,3 s; Ergebnis bitgleich zum heutigen.
 
+<a id="rm-731"></a>
+
+- [ ] **RM-731 — `_BoundedBehavior` überspringt Überschreibungen von `LengthSpin`.**
+  Das einzige Mixin in `app/` (`app/ui/labels.py`) schreibt `self: Any` und ruft acht Methoden
+  fest als `NumberSpin.<methode>(self, …)`. An `BoundedLengthSpin` überspringen sie jede
+  Überschreibung von `LengthSpin`; `showEvent` ist deshalb von Hand nachgebaut, und die nächste
+  Überschreibung in `LengthSpin` fiele still aus.
+  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-14.
+  **Abnahme:** kein `self: Any` und kein Nachbau von `showEvent`; ein Test belegt, dass eine
+  Überschreibung in `LengthSpin` an `BoundedLengthSpin` wirkt.
+
+<a id="rm-733"></a>
+
+- [ ] **RM-733 — `PlacementFlow` greift über `Any` und Zeichenketten aufs Fenster.**
+  `PlacementFlow.__init__(dialog, window: Any, …)` spricht das Fenster über
+  `getattr(self.window, "<name>", None)` an (`slot_drag_takes_the_accept`, `announce`,
+  `_apply_placed_feature`, `overlay`) und ruft dreimal `self.window._clear_preview()`. Wird eine
+  dieser Methoden umbenannt, liefert `getattr` still `None`, und ein wartender Langlochzug
+  übernimmt nicht mehr. [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-16.
+  **Abnahme:** kein `Any` und kein `getattr` auf das Fenster in `placement_flow.py`; mypy sieht
+  jeden Zugriff.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -5999,6 +6044,118 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   einmal rot, einzeln dreimal grün; nicht durch RM-588 verursacht. Aus dem Review von
   RM-588 (11.10.2026).
   **Abnahme:** zwanzig Läufe mit `-n 4` grün.
+
+<a id="rm-722"></a>
+
+- [ ] **RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert.**
+  Erster Schritt des Programms aus dem [Konzept
+  Codestruktur](konzepte/konzept-codestruktur-2026-10.md) (4.1); das Programm beginnt nach der
+  Veröffentlichung von 0.6.0 (Entscheidung Robert, 11.10.2026, Konzept 7). W1 Sperrklinke für
+  Dateigrößen (die Zahl der Definitionen einer gelisteten Datei steigt nie), W2 Patch-Ziele, W3
+  Registerabzug, W4 rekursive Quelltextprüfungen, W5 statisch auflösbare Importe in `app/`,
+  `tools/` und `tests/`, W6 Namenslisten lösen auf; dazu das Verschiebewerkzeug
+  `tools/move_names.py` mit `ast`-Beweis. Mit Schritt 0 kommt die Ausnahme „Fenstertests lokal
+  vor Oberflächenschritten“ in `AGENTS.md` und `/liefern` (Konzept 7, Punkt 2).
+  **Nächster Schritt:** CS-2, CS-9, CS-10, CS-11 und CS-12 (RM-723, RM-726 bis RM-729) und die
+  25 `raising=False` auf `app.*` beheben, dann W1 bis W6 und das Werkzeug mit Test an einer
+  Paket-Attrappe.
+  **Abnahme:** alle sechs Wächter grün über dem Bestand, je Wächter eine Gegenprobe rot; das
+  Werkzeug verschiebt an der Attrappe mit Beweis; Review. Erst danach Schritt 1
+  (`geom/prepare_ops.py`).
+
+<a id="rm-723"></a>
+
+- [ ] **RM-723 — Quelltextprüfungen lesen `app/ui/` flach und übersehen `render/`.**
+  17 Stellen in sieben Testdateien lesen `app/ui/*.py` oder `perceive/*.py` über `glob("*.py")`;
+  die über `app/ui/` sehen `app/ui/render/` (11 Dateien) nicht, fast alle sind Verbotsprüfungen
+  (`assert not culprits`). Stellen und Beleg:
+  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-2.
+  **Nächster Schritt:** je Stelle entscheiden, ob `render/` absichtlich fehlt; sonst rekursiv
+  lesen.
+  **Abnahme:** kein flaches `glob` über `app/` in `tests/` und `tools/`; eine Gegenprobe mit
+  einem Verstoß unter `render/` ist rot.
+
+<a id="rm-724"></a>
+
+- [ ] **RM-724 — Späte Importe in `tools/` prüft niemand.**
+  mypy prüft nur `app`; späte Importe in Erzeugern brechen erst beim Release in `/erzeugen`.
+  `make_video.py` und `make_workshop_videos.py` holen das private `app.ui.panels._feature_item`,
+  mindestens neun Werkzeuge holen `MainWindow` in Funktionen.
+  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-3.
+  **Abnahme:** ein umbenannter Name, den nur ein später Import in `tools/` liest, macht einen
+  Test rot.
+
+<a id="rm-725"></a>
+
+- [ ] **RM-725 — `affected_tests` erkennt `glob(` nicht als Baumleser.**
+  `tools/affected_tests.py` kennt `rglob`, `walk_packages`, `iterdir` und `iter_modules`, aber
+  nicht `glob(`. Eine Testdatei, die den Baum über `glob` liest, wird bei einer Änderung nur
+  gewählt, wenn sie das Modul auch importiert.
+  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-6.
+  **Abnahme:** eine Testdatei, die `app/` nur über `glob` liest, wird bei einer Änderung
+  darunter gewählt; Gegenprobe rot.
+
+<a id="rm-726"></a>
+
+- [ ] **RM-726 — Zwei Patches in der Suite sind wirkungslos.**
+  `tests/test_first_run.py` ersetzt `filament_picker.configured_spools` und sichert
+  `assert_not_called()` zu; der einzige Aufrufer hält eine Kopfkopie
+  (`app/ui/filament_inventory.py`), die Zusicherung ist immer grün.
+  `tests/test_spatial_matching.py` verbietet `matching._cost_matrix`, die niemand ruft.
+  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-9.
+  **Abnahme:** beide Prüfungen sind rot, wenn der verbotene Aufruf erreicht wird; eine
+  Gegenprobe belegt, dass er ohne Patch erreicht wird.
+
+<a id="rm-727"></a>
+
+- [ ] **RM-727 — Namenslisten überspringen fehlende Module stumm.**
+  `scene/evaluate.py` `_step_ways` überspringt ein fehlendes Modul aus `_STEP_WAY_MODULES` ohne
+  Meldung, der Merkschlüssel eines Schritts verlöre still Funktionen. `tests/conftest.py`
+  `_pin_ui_widgets` überspringt ein Modul ohne `MainWindow`; ohne Pin droht der native Abriss.
+  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-10.
+  **Abnahme:** ein fehlender oder leerer Eintrag in jeder dieser Listen ist ein Fehler, mit
+  Test.
+
+<a id="rm-728"></a>
+
+- [ ] **RM-728 — Kopfkopien entziehen sich Patches.**
+  In 54 Fällen hält ein Modul per `from M import N` eine eigene Kopie eines Namens, den Tests an
+  `M` patchen, etwa `features.detect` in `scene/evaluate.py`; der Patch erreicht die Kopie
+  nicht. [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-11.
+  **Abnahme:** keine Kopfkopie eines gepatchten Namens mehr; W2 (RM-722) macht neue Fälle rot.
+
+<a id="rm-729"></a>
+
+- [ ] **RM-729 — Gegenproben der Oberflächensuche zählen nur Dateien.**
+  `tests/test_leash.py` `test_the_sweep_over_the_surface_finds_files_to_read` verlangt 20 oder
+  mehr Dateien unter `app/ui/` (der Kommentar nennt 52, heute 86), `test_features.py` zehn unter
+  `perceive/`. Wird `main_window.py` ein Paket, bleiben beide grün, obwohl die größte Datei
+  fehlt. [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-12.
+  **Abnahme:** fehlt eines der Definitionsmodule in der Suche, sind die Gegenproben rot.
+
+<a id="rm-730"></a>
+
+- [ ] **RM-730 — `tools/matrix_unit.py` läuft in keiner Suite.**
+  Das Werkzeug greift über Modulaliasse zu (`handover.detect` und weitere); bräche ein Name,
+  fiele es erst beim nächsten Matrixlauf auf.
+  [Funddatei](konzepte/konzept-codestruktur-funde-2026-10.md), CS-13.
+  **Abnahme:** ein Test importiert das Modul und löst seine Aliaszugriffe auf; ein umbenannter
+  Name macht ihn rot.
+
+<a id="rm-786"></a>
+
+- [ ] **RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat.**
+  Beim Release 0.6.0 lief die Kernsuite auf allen vier Plattformen zweimal über denselben
+  Commit, im main-Lauf und im Tag-Lauf (`build.yml`, Job `suite` ohne Bedingung). Das kostet am
+  Tag eine halbe bis eine Stunde und Mac-Plätze, ohne etwas Neues zu prüfen. Aus Roberts Frage
+  beim Release 0.6.0 (11.10.2026).
+  **Nächster Schritt:** im Tag-Lauf den grünen main-Lauf zum selben Commit über die GitHub-API
+  suchen (wie `tools/ci_selection.py --checked-base`) und die Suite dann auslassen; die
+  Paketfreigabe zählt den main-Lauf als Nachweis. Gehen Commit und Tag zusammen hinaus, wird der
+  main-Lauf abgebrochen, und die Suite läuft am Tag wie heute.
+  `konzepte/konzept-ci-testlaufzeiten-2026-09.md` und `tests/test_packaging.py` ziehen nach.
+  **Abnahme:** Ein Tag auf einem Commit mit grünem main-Lauf baut Pakete ohne zweite Suite; ohne
+  grünen main-Lauf läuft sie wie heute; Wächter mit Gegenprobe.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 

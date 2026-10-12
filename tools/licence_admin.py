@@ -28,6 +28,7 @@ import json
 import os
 import re
 import stat
+import sys
 import tempfile
 import threading
 from collections.abc import Callable
@@ -39,6 +40,10 @@ from typing import Any, Final, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, build_opener
+
+# Als Skript gestartet steht nur ``tools/`` im Suchpfad, der Kopf holt
+# ``tools.licence_archive`` aus der Wurzel.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.activation import certificate, key
 from app.core.http import (

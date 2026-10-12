@@ -1,297 +1,293 @@
 {
-  "version": "0.5.3",
+  "version": "0.6.0",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.5.3.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.5.3.exe",
-      "size": 168805088,
-      "sha256": "ccbeee491b33af520ce43d603f78625d667fce294137fbc86e57a09a6ce2ed93"
+      "file": "Solidon3D-Setup-0.6.0.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.6.0.exe",
+      "size": 170036160,
+      "sha256": "0f1fbbd280aa685fb87406bd0b215820d87f17439b8905884f20711a502e8458"
     },
     "linux": {
-      "file": "Solidon3D-0.5.3-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.5.3-x86_64.flatpak",
-      "size": 188490208,
-      "sha256": "997319c8994028718ad216a75ddb058f8bd6aab09276f7070dedb982becdb185"
+      "file": "Solidon3D-0.6.0-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.6.0-x86_64.flatpak",
+      "size": 189651576,
+      "sha256": "8baa35fb99a87530cafac4f2886bbc8b750203ed748774ab3d9be9b252e38826"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.5.3-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.5.3-macos-arm64.pkg",
-      "size": 191258668,
-      "sha256": "0e0b26d99aa7dda290453e22de1e1fdc4ed265b3102076b4487383ad2c5458b7"
+      "file": "Solidon3D-0.6.0-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.6.0-macos-arm64.pkg",
+      "size": 192662150,
+      "sha256": "d02970cee0654ed79378d5252618bad506ad40f654cdedaed52b47a95cb9f157"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.5.3-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.5.3-macos-x86_64.pkg",
-      "size": 207011314,
-      "sha256": "be78adc4a463c68aefb826a6dea9c697b985a248a36acc733d2d7d8dfbc8f67a"
+      "file": "Solidon3D-0.6.0-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.6.0-macos-x86_64.pkg",
+      "size": 208653786,
+      "sha256": "a5e4d09f99a45a0f02d982e759e7bde5d4ad9045310a5da8aac1baedac8770d8"
     }
   },
   "changes": {
     "de": [
-      "Rechts steht eine Karte mit den Reitern *Auswahl*, *Prüfbericht* und *Chat*. Neue Warnungen holen den Prüfbericht nicht mehr nach vorn, sein Reiter zeigt sie mit Zeichen und Zahl.",
-      "Oben im Fenster finden Sie jede Funktion über *Funktion suchen* (Strg+Umschalt+P). Die Karte der Funktionen ist geordnet wie die Menüleiste.",
-      "In der Auswahl ist an einem Merkmal eine Handlung zur Zeit offen. Die übrigen nennen zugeklappt ihre Werte.",
-      "Operationsdialoge zeigen vorn höchstens vier Felder und einen Satz. Selten geänderte Werte stehen unter *Weitere Einstellungen*, Grenzen unter *Wann nicht?*.",
-      "Eine Null mit Bedeutung heißt im Feld, was sie bewirkt, etwa „automatisch“, „ohne“ oder „aus dem Material“.",
-      "Alle Dialoge haben dieselbe Form mit flachen Abschnitten und einer gemeinsamen Kante für die Beschriftungen, auch Einstellungen, KI-Dialog und Freischaltung.",
-      "Der Prüfbericht zeigt zuerst die Befunde, darüber eine Zeile mit Status und Zählern. *Exportieren …* steht neben *An den Slicer übergeben …*.",
-      "Befunde, Tourschritte und Hinweise sind kürzer. Wo ein Knopf die Handlung anbietet, wiederholt der Satz sie nicht.",
-      "Die Handlung *Modell nachbauen* steht am gewählten Körper.",
-      "Der Startbildschirm zeigt die vier Einstiege groß oben. *Erste Schritte* fragt Sprache, Slicer und Drucker und klappt den Rest zu.",
-      "Der Bausteinkatalog zeigt je Kachel Bild und Titel. An einer Bohrung zeigt *Passende Bausteine …* nur, was in eine Bohrung gehört.",
-      "Neu ist Anycubic Slicer Next mit allen 39 Anycubic-Druckern, unter Windows, macOS und Linux.",
-      "Unter Linux findet Solidon OrcaSlicer, Bambu Studio und PrusaSlicer als Flatpak samt Ihren Druckern und Profilen, auch aus Solidons eigenem Flatpak.",
-      "Slicer als AppImage bieten unter Linux auch ihre eingerichteten Herstellerdrucker an.",
-      "Auf dem Mac erzeugt Solidon die Druckdatei jetzt auch mit Cura. Bisher fand es nur Curas Fenster.",
-      "Creality Print 7 bringt seine eigenen Drucker und den zuletzt gewählten mit.",
-      "Die Druckerlisten nennen jeden Drucker einmal, ohne Düsenvarianten. Die Düse wählen Sie im Druckdialog.",
-      "Eine im Druckdialog gewählte Düse bleibt erhalten, wenn Sie danach die Einstellungen speichern.",
-      "Wechseln Sie für PrusaSlicer oder SuperSlicer die Düse, bekommt der Slicer das passende Druckerprofil dazu.",
-      "Solidon bietet mehr Drucker an, auch solche, deren Profil Bett oder Düse nicht nennt, etwa Creality CR-20 und Anycubic i3 Mega in PrusaSlicer.",
-      "Der Druckdialog zeigt vorn Slicer, Drucker, Düse, Filamente, Qualität, Fülldichte und Stützen, der Rest steht unter *Weitere Einstellungen*.",
-      "Jeder Grund eines Vorschlags im Druckdialog passt in eine Zeile. *Druckdatei speichern* erscheint, sobald es eine Druckdatei gibt.",
-      "Ein Gewinde oder eine Einpressbuchse in einer gewählten Bohrung hält nicht mehr mit „außerhalb der Fläche“ an. Ist die Bohrung zu weit, nennt Solidon passende Größen.",
-      "An einer gewählten Bohrung stehen im Bild nur Durchmesser, Tiefe und zwei Kantenmaße. Bezüge heißen nach ihrer Seite, etwa „Außenkante links“.",
-      "In Zoll nennt der Satz über einer Bohrung ihr Maß in Zoll.",
-      "Das Vorschauband nennt in einer Zeile, was sich ändert, Längen in Ihrer Anzeigeeinheit.",
-      "Halter und Platten mit Bohrungen, Senkungen und Schrift baut *Modell nachbauen* jetzt als Umriss mit abgezogenen Taschen nach. Findet es keinen Aufbau, sagt es das.",
-      "Übernehmen Sie beim Zeichnen den Schnitt eines umgewandelten Körpers, kommen seine Kreise und Bögen als Kreise und Bögen an.",
-      "Lässt sich ein Teil nicht in Flächen und Kanten umwandeln, nennt Solidon Grund und Ausweg, statt mit einem unerwarteten Fehler zu enden.",
-      "Der KI-Hinweis sagt je Ziel in zwei Sätzen, was gesendet wird. Weil sich der Text geändert hat, bestätigen Sie ihn einmal neu.",
-      "Die Beschreibungen der empfohlenen lokalen Modelle sind kürzer."
+      "Am Mac braucht Solidon jetzt macOS 14 oder neuer. Jeder Mac ab 2018 bekommt macOS 14 kostenlos.",
+      "Auf Intel-Macs mit macOS 26 startet Solidon jetzt. Version 0.5.3 blieb dort beim Start hängen.",
+      "Auf Intel-Macs meldet Solidon jetzt, wenn sich eine Verrundung oder Fase am exakten Körper nicht bauen lässt. Version 0.5.3 beendete sich dabei.",
+      "Die Karten links und rechts lassen sich am Griff verschieben, an den Rand legen oder schweben lassen. *Ansicht → Karten an ihren Platz* legt sie zurück.",
+      "Die Karten lassen sich auch unten links, unten rechts und am unteren Rand anordnen.",
+      "Ein gespeichertes Projekt mit einem großen Modell ist nach einem Neustart in ein, zwei Sekunden offen statt nach einer halben Minute: Die erkannten Merkmale bleiben gemerkt.",
+      "Große Modelle laden spürbar schneller und brauchen weniger Arbeitsspeicher, auch mit langem Verlauf und auf Rechnern mit 8 GB.",
+      "Ein gespeichertes Projekt mit vielen Schritten an einem großen Modell öffnet mit deutlich weniger Arbeitsspeicher.",
+      "Ein Modell, das Sie gleich nach dem Programmstart öffnen, ist bis zu ein Viertel schneller bearbeitbar.",
+      "Der Druckdialog bietet die Drucker des gewählten Slicers an, wie *Erste Schritte* und *Einstellungen*. Ein so übernommener Drucker bleibt bei seinem Slicer.",
+      "Im Druckdialog lässt sich der Slicer wechseln wie in *Erste Schritte*, auch über *Programm wählen …* für einen, den Solidon nicht selbst findet.",
+      "Ein Drucker aus Solidons Liste und derselbe aus dem Slicer gelten als ein Gerät. Der Druckdialog wählt das Slicerprofil mit der richtigen Düse, und die Druckdatei trägt den Startcode.",
+      "Ohne gemerktes Slicerprofil nehmen Export und Hauptfenster, was der Druckdialog für den Drucker vorschlägt, samt Maschine und Prozess des Herstellers.",
+      "Gewinde gibt es jetzt in jedem Durchmesser bis 1000 mm, ob mit *Druckbares Gewinde*, in einer Bohrung, mit *Schraube erstellen* oder *Drehdeckel erzeugen*.",
+      "Auch normale Bohrungen lassen sich jetzt bis 1000 mm Durchmesser anlegen und wieder verschließen. Große Bohrungen und Senkungen behalten ihre runde Form.",
+      "Schrauben, Muttern und Scheiben gibt es nach ISO von M1,6 bis M64. Für andere Größen leitet *Eigenes Maß* die Maße aus den Nachbargrößen ab und sagt das.",
+      "Mit *Passend zur Bohrung* baut *Stift für Bohrung* das Gegenstück: in eine Senkung einen bündigen Senkkopf, in ein Innengewinde ein Außengewinde gleicher Größe und Steigung.",
+      "Bausteine, die für sich ein Teil sind, etwa Kabelclip, Rippe oder Mutter, entstehen ohne Auswahl als eigener Körper auf einer freien Stelle der Druckplatte, auch im leeren Projekt.",
+      "Auch eigene Bausteine entstehen so als eigener Körper und hängen nicht an einem Körper, der schon im Projekt liegt.",
+      "Mit *Auswahl als Baustein speichern* kommt der gewählte Körper mit genau den Schritten, die ihn bauen. Käme ein zweiter Körper mit, sagt der Dialog es vor dem Speichern.",
+      "Wandhalter, Rohrschellen, Profilklemmen und Halter nehmen jede Schraube von M3 bis M64. Passt eine Größe nicht zu den übrigen Maßen, sagt der Baustein, was zu ändern ist.",
+      "Mit *Merkmal verschieben* reist das Material des Merkmals mit, wie es ist, und die alte Stelle wird sauber gefüllt. Wo das nicht geht, sagt es die Auswahl gleich.",
+      "An Wulst und Kehle bietet die Auswahl nur noch an, was die Operation auch ausführt.",
+      "Liegt neben einer Wand eine Verrundung, sagt *Formschräge anstellen* vor der Rechnung, dass sie im Weg ist, und nennt *Merkmal entfernen* als Ausweg.",
+      "Schneiden Sie einen Teil des Körpers weg, verschwinden auch Fasen, Gewinde und Mutterntaschen von Bausteinen, die darin lagen.",
+      "Der Erzeugen-Dialog rechnet lokal mit TRELLIS.2 und FLUX.2 [klein] statt mit TripoSG und SDXL. Aus Text entsteht zuerst ein Bild und daraus das Modell.",
+      "Die Einrichtung nennt vor dem Laden Lizenzen und Größen der Modelle. Sie entfernt Solidons alte TripoSG-Einrichtung und sagt vorher, welche Ordner das sind und wie groß.",
+      "Dünne Wände, etwa an einer Vase, kommen geschlossen und mit Dicke an.",
+      "Der Assistent antwortet in der Sprache, in der Sie schreiben."
     ],
     "en": [
-      "On the right, a card holds the tabs *Selection*, *Report* and *Chat*. New warnings no longer bring the report to the front; its tab shows them with a symbol and a count.",
-      "At the top of the window, *Search functions* (Ctrl+Shift+P) finds any function. The map of functions follows the order of the menu bar.",
-      "In the selection, a feature has one action open at a time. The others stay collapsed and show their values.",
-      "Operation dialogs show at most four fields and one sentence up front. Rarely changed values are under *More settings*, limits under *When to avoid it?*.",
-      "A zero with a meaning says in the field what it does, such as “automatic”, “none” or “from material”.",
-      "All dialogs share one layout with flat sections and a common edge for the labels, including the settings, the AI dialog and activation.",
-      "The report shows the findings first, with a line of status and counters above them. *Export …* sits next to *Hand over to the slicer …*.",
-      "Findings, tour steps and hints are shorter. Where a button offers the action, the sentence no longer repeats it.",
-      "The *Rebuild model* action sits on the selected body.",
-      "The start screen shows the four ways to begin in large at the top. *First steps* asks for language, slicer and printer and collapses the rest.",
-      "The part catalogue shows a picture and a title on each tile. On a hole, *Matching parts …* shows only what belongs in a hole.",
-      "New is Anycubic Slicer Next with all 39 Anycubic printers, on Windows, macOS and Linux.",
-      "On Linux, Solidon finds OrcaSlicer, Bambu Studio and PrusaSlicer installed as Flatpak, with your printers and profiles, also from Solidon's own Flatpak.",
-      "Slicers installed as AppImage on Linux also offer the vendor printers you have set up in them.",
-      "On the Mac, Solidon now also creates the print file with Cura. Until now it only found Cura's window.",
-      "Creality Print 7 brings its own printers and the one you selected last.",
-      "The printer lists name each printer once, without nozzle variants. You choose the nozzle in the print dialog.",
-      "A nozzle chosen in the print dialog is kept when you save the settings afterwards.",
-      "If you change the nozzle for PrusaSlicer or SuperSlicer, the slicer gets the matching printer profile with it.",
-      "Solidon offers more printers, including ones whose profile names neither bed nor nozzle, such as the Creality CR-20 and Anycubic i3 Mega in PrusaSlicer.",
-      "The print dialog shows slicer, printer, nozzle, filaments, quality, infill density and supports up front; the rest is under *More settings*.",
-      "Each reason for a suggestion in the print dialog fits on one line. *Save print file* appears as soon as there is a print file.",
-      "A thread or heat-set insert in a selected hole no longer stops with “outside the surface”. If the hole is too wide, Solidon names suitable sizes.",
-      "On a selected hole, the view shows only diameter, depth and two edge distances. References are named after their side, such as “Outer edge left”.",
-      "In inches, the sentence above a hole gives its size in inches.",
-      "The preview strip says in one line what changes, with lengths in your display unit.",
-      "For holders and plates with holes, countersinks and lettering, *Rebuild model* now builds an outline with pockets cut away. If it finds no structure, it says so.",
-      "If you take the section of a converted body into a sketch, its circles and arcs arrive as circles and arcs.",
-      "If a part cannot be converted to faces and edges, Solidon names the reason and a way out instead of ending with an unexpected error.",
-      "The AI notice says in two sentences per destination what is sent. Because the text has changed, you confirm it once more.",
-      "The descriptions of the recommended local models are shorter."
+      "On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on gets macOS 14 for free.",
+      "Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.",
+      "On Intel Macs, Solidon now reports when a fillet or chamfer on an exact body cannot be built. Version 0.5.3 quit at that point.",
+      "The left and right panels can be moved by their handle, docked to an edge or left floating. *View → Panels back to their place* puts them back.",
+      "Panels can also be placed at the bottom left, bottom right and along the bottom edge.",
+      "A saved project with a large model now opens in a second or two after a restart instead of half a minute: the recognised features are kept.",
+      "Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.",
+      "A saved project with many steps on a large model opens with much less memory.",
+      "A model you open right after starting the program is ready to edit up to a quarter sooner.",
+      "The print dialog offers the printers of the selected slicer, like *First steps* and *Settings*. A printer taken over this way stays with its slicer.",
+      "In the print dialog you can switch the slicer as in *First steps*, also via *Choose program …* for one that Solidon does not find by itself.",
+      "A printer from Solidon's list and the same one from the slicer count as one device. The print dialog picks the slicer profile with the right nozzle, and the print file carries the start code.",
+      "Without a saved slicer profile, export and main window use what the print dialog suggests for the printer, including the manufacturer's machine and process.",
+      "Threads now come in any diameter up to 1000 mm, whether with *Printable thread*, in a hole, with *Create screw* or *Create screw lid*.",
+      "Regular holes can now be created and plugged again at diameters up to 1000 mm. Large holes and countersinks keep their round shape.",
+      "Screws, nuts and washers are available to ISO from M1.6 to M64. For other sizes, *Custom size* derives the dimensions from the neighbouring sizes and says so.",
+      "With *To fit the hole*, *Pin for hole* builds the counterpart: a flush countersunk head for a countersink, an external thread of the same size and pitch for an internal thread.",
+      "Parts that are a piece on their own, such as cable clips, ribs or nuts, are created without a selection as a body of their own on a free spot of the build plate, even in an empty project.",
+      "Your own parts are created as a body of their own in the same way and do not attach to a body already in the project.",
+      "With *Save selection as a part*, the selected body comes with exactly the steps that build it. If a second body would come along, the dialog says so before saving.",
+      "Wall mounts, pipe clamps, profile clamps and holders take every screw from M3 to M64. If a size does not fit the other dimensions, the part says what to change.",
+      "With *Move feature*, the feature's material travels along as it is and the old spot is filled cleanly. Where that is not possible, the selection says so straight away.",
+      "On beads and grooves, the selection offers only what the operation can actually do.",
+      "If a fillet sits next to a wall, *Apply draft angle* says before calculating that it is in the way and names *Remove feature* as the way out.",
+      "When you cut away part of a body, chamfers, threads and nut pockets of parts that lay inside it go too.",
+      "The generate dialog works locally with TRELLIS.2 and FLUX.2 [klein] instead of TripoSG and SDXL. Text first becomes an image, and the image becomes the model.",
+      "Before downloading, the setup names the licences and sizes of the models. It removes Solidon's old TripoSG setup and says beforehand which folders those are and how large.",
+      "Thin walls, for example on a vase, arrive closed and with thickness.",
+      "The assistant replies in the language you write in."
     ],
     "es": [
-      "A la derecha hay una tarjeta con las pestañas *Selección*, *Informe de comprobación* y *Chat*. Los avisos nuevos ya no traen el informe al frente; su pestaña los indica con un símbolo y un número.",
-      "Arriba en la ventana, *Buscar función* (Ctrl+Mayús+P) encuentra cualquier función. El mapa de funciones sigue el orden de la barra de menús.",
-      "En la selección, cada característica tiene una sola acción abierta a la vez. Las demás quedan plegadas y muestran sus valores.",
-      "Los diálogos de operación muestran delante como mucho cuatro campos y una frase. Lo que rara vez se cambia está en *Más ajustes*, los límites en *¿Cuándo evitarla?*.",
-      "Un cero con significado dice en el campo lo que hace, por ejemplo «automático», «sin» o «del material».",
-      "Todos los diálogos tienen la misma forma, con secciones planas y un borde común para las etiquetas, también los ajustes, el diálogo de IA y la activación.",
-      "El informe de comprobación muestra primero los hallazgos, con una línea de estado y contadores encima. *Exportar …* está junto a *Entregar al slicer …*.",
-      "Hallazgos, pasos del recorrido y avisos son más cortos. Donde un botón ofrece la acción, la frase ya no la repite.",
-      "La acción *Reconstruir modelo* está en el cuerpo seleccionado.",
-      "La pantalla de inicio muestra arriba, en grande, las cuatro formas de empezar. *Primeros pasos* pregunta idioma, slicer e impresora y pliega el resto.",
-      "El catálogo de bloques muestra imagen y título en cada ficha. En un taladro, *Bloques adecuados …* muestra solo lo que va en un taladro.",
-      "Se añade Anycubic Slicer Next, con las 39 impresoras de Anycubic, en Windows, macOS y Linux.",
-      "En Linux, Solidon encuentra OrcaSlicer, Bambu Studio y PrusaSlicer instalados como Flatpak, con sus impresoras y perfiles, también desde el propio Flatpak de Solidon.",
-      "En Linux, los slicers en AppImage también ofrecen las impresoras de fabricante que tenga configuradas en ellos.",
-      "En el Mac, Solidon ahora también genera el archivo de impresión con Cura. Hasta ahora solo encontraba la ventana de Cura.",
-      "Creality Print 7 aporta sus propias impresoras y la última que eligió.",
-      "Las listas de impresoras nombran cada impresora una sola vez, sin variantes de boquilla. La boquilla se elige en los ajustes de impresión.",
-      "La boquilla elegida en los ajustes de impresión se mantiene aunque después guarde los ajustes del programa.",
-      "Si cambia la boquilla para PrusaSlicer o SuperSlicer, el slicer recibe también el perfil de impresora que corresponde.",
-      "Solidon ofrece más impresoras, también aquellas cuyo perfil no indica placa ni boquilla, como la Creality CR-20 y la Anycubic i3 Mega en PrusaSlicer.",
-      "Los ajustes de impresión muestran delante slicer, impresora, boquilla, filamentos, calidad, densidad de relleno y soportes; el resto está en *Más ajustes*.",
-      "Cada motivo de una sugerencia en los ajustes de impresión cabe en una línea. *Guardar archivo de impresión* aparece en cuanto hay un archivo de impresión.",
-      "Una rosca o un inserto termofijado en un taladro seleccionado ya no se detiene con «fuera de la superficie». Si el taladro es demasiado ancho, Solidon indica tamaños adecuados.",
-      "En un taladro seleccionado, la vista muestra solo diámetro, profundidad y dos cotas a aristas. Las referencias se nombran por su lado, por ejemplo «Arista exterior izquierda».",
-      "En pulgadas, la frase sobre un taladro da su medida en pulgadas.",
-      "La franja de vista previa dice en una línea qué cambia, con las longitudes en su unidad de visualización.",
-      "En soportes y placas con taladros, avellanados y texto, *Reconstruir modelo* crea ahora un contorno con alojamientos restados. Si no encuentra una estructura, lo dice.",
-      "Si al dibujar toma la sección de un cuerpo convertido, sus círculos y arcos llegan como círculos y arcos.",
-      "Si una pieza no se puede convertir en caras y aristas, Solidon indica el motivo y una salida en lugar de terminar con un error inesperado.",
-      "El aviso de IA explica en dos frases por destino qué se envía. Como el texto ha cambiado, tendrá que confirmarlo una vez más.",
-      "Las descripciones de los modelos locales recomendados son más cortas."
+      "En el Mac, Solidon necesita ahora macOS 14 o más reciente. Cualquier Mac desde 2018 recibe macOS 14 gratis.",
+      "Solidon ya arranca en los Mac con Intel y macOS 26. La versión 0.5.3 se quedaba colgada allí al iniciar.",
+      "En los Mac con Intel, Solidon avisa ahora cuando un redondeo o un chaflán en un cuerpo exacto no se puede construir. La versión 0.5.3 se cerraba en ese momento.",
+      "Los paneles de la izquierda y la derecha se mueven por su asa, se acoplan a un borde o quedan flotando. *Vista → Paneles a su sitio* los devuelve.",
+      "Los paneles también se pueden colocar abajo a la izquierda, abajo a la derecha y en el borde inferior.",
+      "Un proyecto guardado con un modelo grande se abre tras un reinicio en uno o dos segundos en lugar de medio minuto: las características reconocidas se conservan.",
+      "Los modelos grandes se cargan notablemente más rápido y necesitan menos memoria, también con un historial largo y en equipos con 8 GB.",
+      "Un proyecto guardado con muchos pasos sobre un modelo grande se abre con mucha menos memoria.",
+      "Un modelo que abre justo después de iniciar el programa se puede editar hasta una cuarta parte antes.",
+      "El diálogo de impresión ofrece las impresoras del slicer elegido, como *Primeros pasos* y *Ajustes*. Una impresora adoptada así se queda con su slicer.",
+      "En el diálogo de impresión se puede cambiar el slicer como en *Primeros pasos*, también con *Elegir programa …* para uno que Solidon no encuentra por sí mismo.",
+      "Una impresora de la lista de Solidon y la misma del slicer cuentan como un solo equipo. El diálogo elige el perfil con la boquilla correcta y el archivo lleva el código de inicio.",
+      "Sin un perfil del slicer guardado, la exportación y la ventana principal usan lo que el diálogo de impresión propone para la impresora, con la máquina y el proceso del fabricante.",
+      "Las roscas admiten ahora cualquier diámetro hasta 1000 mm, ya sea con *Rosca imprimible*, en un taladro, con *Crear tornillo* o *Generar tapa roscada*.",
+      "Los taladros normales también se pueden crear y volver a tapar con diámetros de hasta 1000 mm. Los taladros grandes y los avellanados mantienen su forma redonda.",
+      "Tornillos, tuercas y arandelas están disponibles según ISO de M1,6 a M64. Para otros tamaños, *Medida propia* deriva las medidas de los tamaños vecinos y lo indica.",
+      "Con *Ajustado al taladro*, *Pasador para taladro* construye la contrapieza: una cabeza avellanada enrasada para un avellanado, una rosca exterior del mismo tamaño y paso para una interior.",
+      "Los bloques que son una pieza por sí solos, como clips para cable, nervaduras o tuercas, se crean sin selección como cuerpo propio en un sitio libre de la placa, también en un proyecto vacío.",
+      "Sus propios bloques también se crean así como cuerpo propio y no se unen a un cuerpo que ya está en el proyecto.",
+      "Con *Guardar la selección como bloque* se guarda el cuerpo seleccionado con exactamente los pasos que lo construyen. Si viniera un segundo cuerpo, el diálogo lo indica antes.",
+      "Soportes de pared, abrazaderas de tubo y de perfil y soportes admiten cualquier tornillo de M3 a M64. Si un tamaño no encaja con las demás medidas, el bloque indica qué cambiar.",
+      "Con *Mover característica*, el material de la característica viaja tal como está y el sitio anterior se rellena limpiamente. Donde no es posible, la selección lo dice de entrada.",
+      "En cordones y gargantas, la selección solo ofrece lo que la operación puede hacer de verdad.",
+      "Si junto a una pared hay un redondeo, *Aplicar ángulo de desmoldeo* avisa antes de calcular de que estorba y propone *Quitar característica* como salida.",
+      "Al recortar una parte de un cuerpo, desaparecen también los chaflanes, roscas y alojamientos de tuerca de los bloques que había en ella.",
+      "El diálogo de generación calcula en local con TRELLIS.2 y FLUX.2 [klein] en lugar de TripoSG y SDXL. Un texto se convierte primero en imagen y la imagen, en el modelo.",
+      "Antes de descargar, la configuración indica licencias y tamaños de los modelos. Quita la antigua configuración de TripoSG de Solidon y dice antes qué carpetas son y cuánto ocupan.",
+      "Las paredes finas, por ejemplo de un jarrón, llegan cerradas y con grosor.",
+      "El asistente responde en el idioma en que usted escribe."
     ],
     "fr": [
-      "À droite, une carte porte les onglets *Sélection*, *Rapport de contrôle* et *Chat*. Un nouvel avertissement ne fait plus passer le rapport devant ; son onglet l'indique par un symbole et un nombre.",
-      "En haut de la fenêtre, *Rechercher une fonction* (Ctrl+Maj+P) trouve chaque fonction. La carte des fonctions suit l'ordre de la barre de menus.",
-      "Dans la sélection, une seule action est ouverte à la fois sur une caractéristique. Les autres restent repliées et affichent leurs valeurs.",
-      "Les dialogues d'opération montrent au plus quatre champs et une phrase à l'avant. Les valeurs rarement changées sont sous *Autres réglages*, les limites sous *Quand l'éviter ?*.",
-      "Un zéro qui a un sens dit dans le champ ce qu'il fait, par exemple « automatique », « sans » ou « selon le matériau ».",
-      "Toutes les boîtes de dialogue ont la même forme, avec des sections plates et un bord commun pour les libellés, y compris les réglages, le dialogue IA et le déverrouillage.",
-      "Le rapport de contrôle montre d'abord les constats, avec au-dessus une ligne d'état et des compteurs. *Exporter …* se trouve à côté de *Transmettre au slicer …*.",
-      "Constats, étapes de la visite et indications sont plus courts. Quand un bouton propose l'action, la phrase ne la répète plus.",
-      "L'action *Reconstruire le modèle* se trouve sur le corps sélectionné.",
-      "L'écran d'accueil montre en grand, en haut, les quatre façons de commencer. *Premiers pas* demande langue, slicer et imprimante et replie le reste.",
-      "Le catalogue de blocs montre une image et un titre par vignette. Sur un perçage, *Blocs adaptés …* ne montre que ce qui va dans un perçage.",
-      "Nouveau : Anycubic Slicer Next, avec les 39 imprimantes Anycubic, sous Windows, macOS et Linux.",
-      "Sous Linux, Solidon trouve OrcaSlicer, Bambu Studio et PrusaSlicer installés en Flatpak, avec vos imprimantes et profils, y compris depuis le Flatpak de Solidon.",
-      "Sous Linux, les slicers en AppImage proposent aussi les imprimantes de fabricant que vous y avez configurées.",
-      "Sur Mac, Solidon crée désormais aussi le fichier d'impression avec Cura. Jusqu'ici, il ne trouvait que la fenêtre de Cura.",
-      "Creality Print 7 apporte ses propres imprimantes et la dernière que vous avez choisie.",
-      "Les listes d'imprimantes nomment chaque imprimante une seule fois, sans variantes de buse. La buse se choisit dans les réglages d'impression.",
-      "Une buse choisie dans les réglages d'impression est conservée si vous enregistrez ensuite les réglages de l'application.",
-      "Si vous changez de buse pour PrusaSlicer ou SuperSlicer, le slicer reçoit aussi le profil d'imprimante correspondant.",
-      "Solidon propose plus d'imprimantes, y compris celles dont le profil n'indique ni plateau ni buse, comme la Creality CR-20 et l'Anycubic i3 Mega dans PrusaSlicer.",
-      "Les réglages d'impression montrent d'abord slicer, imprimante, buse, filaments, qualité, densité de remplissage et supports ; le reste est sous *Autres réglages*.",
-      "Chaque raison d'une suggestion dans les réglages d'impression tient sur une ligne. *Enregistrer le fichier d'impression* apparaît dès qu'un fichier d'impression existe.",
-      "Un filetage ou un insert à chaud dans un perçage sélectionné ne s'arrête plus sur « hors de la surface ». Si le perçage est trop large, Solidon indique des tailles adaptées.",
-      "Sur un perçage sélectionné, la vue n'affiche que diamètre, profondeur et deux cotes d'arête. Les références portent le nom de leur côté, par exemple « Arête extérieure à gauche ».",
-      "En pouces, la phrase au-dessus d'un perçage donne sa taille en pouces.",
-      "Le bandeau d'aperçu dit en une ligne ce qui change, avec les longueurs dans votre unité d'affichage.",
-      "Pour les supports et plaques avec perçages, fraisures et texte, *Reconstruire le modèle* crée désormais un contour dont les logements sont retirés. S'il ne trouve aucune structure, il le dit.",
-      "Si vous reprenez dans une esquisse la coupe d'un corps converti, ses cercles et ses arcs arrivent comme cercles et arcs.",
-      "Si une pièce ne peut pas être convertie en faces et arêtes, Solidon donne la raison et une issue au lieu de finir sur une erreur inattendue.",
-      "L'information sur l'IA dit en deux phrases, pour chaque destination, ce qui est envoyé. Le texte ayant changé, vous la confirmez une nouvelle fois.",
-      "Les descriptions des modèles locaux recommandés sont plus courtes."
+      "Sur Mac, Solidon demande désormais macOS 14 ou plus récent. Tout Mac à partir de 2018 reçoit macOS 14 gratuitement.",
+      "Solidon démarre désormais sur les Mac Intel sous macOS 26. La version 0.5.3 y restait bloquée au démarrage.",
+      "Sur les Mac Intel, Solidon signale désormais qu'un congé ou un chanfrein sur un corps exact ne peut pas être construit. La version 0.5.3 se fermait à ce moment-là.",
+      "Les panneaux de gauche et de droite se déplacent par leur poignée, s'ancrent à un bord ou flottent librement. *Vue → Panneaux à leur place* les remet en place.",
+      "Les panneaux se placent aussi en bas à gauche, en bas à droite et le long du bord inférieur.",
+      "Un projet enregistré avec un grand modèle s'ouvre après un redémarrage en une ou deux secondes au lieu d'une demi-minute : les caractéristiques reconnues sont conservées.",
+      "Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.",
+      "Un projet enregistré avec de nombreuses étapes sur un grand modèle s’ouvre avec beaucoup moins de mémoire.",
+      "Un modèle ouvert juste après le démarrage du programme est modifiable jusqu'à un quart plus tôt.",
+      "La boîte de dialogue d'impression propose les imprimantes du slicer choisi, comme *Premiers pas* et *Réglages*. Une imprimante reprise ainsi reste liée à son slicer.",
+      "Dans la boîte de dialogue d'impression, le slicer se change comme dans *Premiers pas*, aussi via *Choisir le programme …* pour un slicer que Solidon ne trouve pas seul.",
+      "Une imprimante de la liste de Solidon et la même issue du slicer sont un seul appareil. La boîte de dialogue choisit le profil à la bonne buse, et le fichier contient le code de démarrage.",
+      "Sans profil du slicer mémorisé, l'export et la fenêtre principale prennent ce que la boîte d'impression propose pour l'imprimante, machine et processus du fabricant compris.",
+      "Les filetages acceptent désormais tout diamètre jusqu'à 1000 mm, avec *Filetage imprimable*, dans un perçage, avec *Créer une vis* ou *Créer un couvercle vissé*.",
+      "Les perçages ordinaires peuvent aussi être créés et rebouchés jusqu’à 1000 mm de diamètre. Les grands perçages et fraisures conservent leur forme ronde.",
+      "Vis, écrous et rondelles existent selon ISO de M1,6 à M64. Pour d'autres tailles, *Taille personnalisée* déduit les cotes des tailles voisines et le signale.",
+      "Avec *Ajustée au perçage*, *Goupille pour perçage* construit la contrepartie : une tête fraisée affleurante pour une fraisure, un filetage extérieur de même taille et même pas pour un intérieur.",
+      "Les blocs qui forment une pièce à eux seuls, comme les clips de câble, nervures ou écrous, se créent sans sélection comme corps à part sur un endroit libre du plateau, même dans un projet vide.",
+      "Vos propres blocs se créent aussi ainsi comme corps à part et ne s'attachent pas à un corps déjà présent dans le projet.",
+      "Avec *Enregistrer la sélection comme bloc*, le corps sélectionné vient avec exactement les étapes qui le construisent. Si un second corps venait avec, le dialogue le dit avant.",
+      "Supports muraux, colliers de tube, colliers de profilé et supports acceptent toute vis de M3 à M64. Si une taille ne convient pas aux autres cotes, le bloc indique quoi changer.",
+      "Avec *Déplacer la caractéristique*, sa matière suit telle quelle et l'ancien emplacement est comblé proprement. Là où c'est impossible, la sélection le dit d'emblée.",
+      "Sur un bourrelet ou une gorge, la sélection ne propose plus que ce que l'opération sait faire.",
+      "Si un congé borde une paroi, *Appliquer une dépouille* indique avant le calcul qu'il gêne et propose *Supprimer la caractéristique* comme issue.",
+      "Quand vous découpez une partie d'un corps, les chanfreins, filetages et logements d'écrou des blocs qui s'y trouvaient disparaissent aussi.",
+      "La boîte de dialogue de génération calcule en local avec TRELLIS.2 et FLUX.2 [klein] au lieu de TripoSG et SDXL. Un texte devient d'abord une image, puis l'image devient le modèle.",
+      "Avant le téléchargement, l'installation indique les licences et tailles des modèles. Elle retire l'ancienne installation TripoSG de Solidon et dit d'abord quels dossiers et quelle taille.",
+      "Les parois minces, par exemple d'un vase, arrivent fermées et avec une épaisseur.",
+      "L'assistant répond dans la langue dans laquelle vous écrivez."
     ],
     "it": [
-      "A destra c'è una scheda con le linguette *Selezione*, *Rapporto di verifica* e *Chat*. I nuovi avvisi non portano più il rapporto in primo piano; la sua linguetta li mostra con un simbolo e un numero.",
-      "In alto nella finestra trovi ogni funzione con *Cerca funzione* (Ctrl+Maiusc+P). La mappa delle funzioni segue l'ordine della barra dei menu.",
-      "Nella selezione, su una caratteristica è aperta una sola azione alla volta. Le altre restano chiuse e mostrano i loro valori.",
-      "Le finestre delle operazioni mostrano davanti al massimo quattro campi e una frase. I valori cambiati di rado stanno in *Altre impostazioni*, i limiti in *Quando evitarla?*.",
-      "Uno zero con un significato dice nel campo cosa fa, per esempio «automatico», «senza» o «dal materiale».",
-      "Tutte le finestre di dialogo hanno la stessa forma, con sezioni piatte e un bordo comune per le etichette, anche impostazioni, finestra dell'IA e sblocco.",
-      "Il rapporto di verifica mostra prima i rilievi, con sopra una riga di stato e contatori. *Esporta …* sta accanto a *Passa allo slicer …*.",
-      "Rilievi, passi del tour e suggerimenti sono più brevi. Dove un pulsante offre l'azione, la frase non la ripete più.",
-      "L'azione *Ricostruisci modello* si trova sul corpo selezionato.",
-      "La schermata iniziale mostra in grande, in alto, i quattro modi per cominciare. *Primi passi* chiede lingua, slicer e stampante e chiude il resto.",
-      "Il catalogo dei blocchi mostra immagine e titolo in ogni riquadro. Su un foro, *Blocchi adatti …* mostra solo ciò che va in un foro.",
-      "Novità: Anycubic Slicer Next con tutte le 39 stampanti Anycubic, su Windows, macOS e Linux.",
-      "Su Linux Solidon trova OrcaSlicer, Bambu Studio e PrusaSlicer installati come Flatpak, con le tue stampanti e i tuoi profili, anche dal Flatpak di Solidon.",
-      "Su Linux anche gli slicer in AppImage offrono le stampanti dei produttori che vi hai configurato.",
-      "Su Mac Solidon ora crea il file di stampa anche con Cura. Prima trovava solo la finestra di Cura.",
-      "Creality Print 7 porta con sé le sue stampanti e l'ultima che hai scelto.",
-      "Gli elenchi delle stampanti nominano ogni stampante una sola volta, senza varianti di ugello. L'ugello lo scegli nelle impostazioni di stampa.",
-      "Un ugello scelto nelle impostazioni di stampa resta anche se poi salvi le impostazioni del programma.",
-      "Se cambi ugello per PrusaSlicer o SuperSlicer, lo slicer riceve anche il profilo di stampante adatto.",
-      "Solidon offre più stampanti, anche quelle il cui profilo non indica piano o ugello, come la Creality CR-20 e la Anycubic i3 Mega in PrusaSlicer.",
-      "Le impostazioni di stampa mostrano davanti slicer, stampante, ugello, filamenti, qualità, densità di riempimento e supporti; il resto sta in *Altre impostazioni*.",
-      "Ogni motivo di un suggerimento nelle impostazioni di stampa sta in una riga. *Salva file di stampa* compare appena c'è un file di stampa.",
-      "Una filettatura o un inserto a caldo in un foro selezionato non si ferma più con «fuori dalla superficie». Se il foro è troppo largo, Solidon indica le misure adatte.",
-      "Su un foro selezionato la vista mostra solo diametro, profondità e due quote dai bordi. I riferimenti prendono il nome dal loro lato, per esempio «Bordo esterno a sinistra».",
-      "In pollici, la frase sopra un foro ne indica la misura in pollici.",
-      "La fascia dell'anteprima dice in una riga cosa cambia, con le lunghezze nella tua unità di visualizzazione.",
-      "Per supporti e piastre con fori, svasature e scritte, *Ricostruisci modello* ora crea un contorno con le sedi sottratte. Se non trova una struttura, lo dice.",
-      "Se in uno schizzo riprendi la sezione di un corpo convertito, i suoi cerchi e archi arrivano come cerchi e archi.",
-      "Se un pezzo non si può convertire in facce e spigoli, Solidon indica il motivo e una via d'uscita invece di finire con un errore imprevisto.",
-      "L'avviso sull'IA dice in due frasi, per ogni destinazione, cosa viene inviato. Dato che il testo è cambiato, lo confermi ancora una volta.",
-      "Le descrizioni dei modelli locali consigliati sono più brevi."
+      "Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi riceve macOS 14 gratuitamente.",
+      "Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.",
+      "Sui Mac Intel, Solidon ora segnala quando un raccordo o uno smusso su un corpo esatto non si può costruire. La versione 0.5.3 si chiudeva in quel momento.",
+      "I pannelli a sinistra e a destra si spostano con la maniglia, si agganciano a un bordo o restano sospesi. *Vista → Pannelli al loro posto* li rimette a posto.",
+      "I pannelli si possono disporre anche in basso a sinistra, in basso a destra e lungo il bordo inferiore.",
+      "Un progetto salvato con un modello grande si apre dopo un riavvio in uno o due secondi invece di mezzo minuto: le caratteristiche riconosciute restano memorizzate.",
+      "I modelli grandi si caricano molto più velocemente e richiedono meno memoria, anche con una cronologia lunga e su computer con 8 GB.",
+      "Un progetto salvato con molti passaggi su un modello grande si apre con molta meno memoria.",
+      "Un modello aperto subito dopo l'avvio del programma è modificabile fino a un quarto prima.",
+      "La finestra di stampa offre le stampanti dello slicer scelto, come *Primi passi* e *Impostazioni*. Una stampante ripresa così resta legata al suo slicer.",
+      "Nella finestra di stampa lo slicer si cambia come in *Primi passi*, anche con *Scegli programma …* per uno che Solidon non trova da solo.",
+      "Una stampante dell'elenco di Solidon e la stessa dello slicer contano come un solo apparecchio. La finestra sceglie il profilo con l'ugello giusto e il file porta il codice di avvio.",
+      "Senza un profilo dello slicer memorizzato, esportazione e finestra principale usano quanto la finestra di stampa propone per la stampante, con macchina e processo del produttore.",
+      "Le filettature accettano ora qualsiasi diametro fino a 1000 mm, con *Filettatura stampabile*, in un foro, con *Crea vite* o *Crea coperchio a vite*.",
+      "Anche i fori normali possono essere creati e richiusi con diametri fino a 1000 mm. I fori grandi e le svasature mantengono la forma rotonda.",
+      "Viti, dadi e rondelle ci sono secondo ISO da M1,6 a M64. Per altre misure, *Misura personalizzata* ricava le dimensioni dalle misure vicine e lo dice.",
+      "Con *Adatto al foro*, *Perno per foro* costruisce la controparte: una testa svasata a filo per una svasatura, una filettatura esterna di pari misura e passo per una interna.",
+      "I blocchi che sono un pezzo a sé, come clip per cavo, nervature o dadi, nascono senza selezione come corpo a sé in un punto libero del piatto, anche in un progetto vuoto.",
+      "Anche i tuoi blocchi nascono così come corpo a sé e non si attaccano a un corpo già presente nel progetto.",
+      "Con *Salva la selezione come blocco* il corpo selezionato arriva con esattamente i passi che lo costruiscono. Se arrivasse anche un secondo corpo, la finestra lo dice prima.",
+      "Supporti a parete, fascette per tubo, morsetti per profilo e supporti accettano ogni vite da M3 a M64. Se una misura non si accorda con le altre, il blocco dice cosa cambiare.",
+      "Con *Sposta caratteristica* il materiale della caratteristica si sposta così com'è e il punto di prima viene riempito in modo pulito. Dove non si può, la selezione lo dice subito.",
+      "Su cordoni e gole, la selezione offre solo ciò che l'operazione sa davvero fare.",
+      "Se accanto a una parete c'è un raccordo, *Applica l'angolo di sformo* dice prima del calcolo che è d'intralcio e indica *Rimuovi caratteristica* come via d'uscita.",
+      "Quando tagli via una parte di un corpo, spariscono anche smussi, filettature e sedi per dadi dei blocchi che vi si trovavano.",
+      "La finestra di generazione calcola in locale con TRELLIS.2 e FLUX.2 [klein] invece di TripoSG e SDXL. Da un testo nasce prima un'immagine, e dall'immagine il modello.",
+      "Prima del download, la configurazione indica licenze e dimensioni dei modelli. Rimuove la vecchia configurazione TripoSG di Solidon e dice prima quali cartelle sono e quanto occupano.",
+      "Le pareti sottili, per esempio di un vaso, arrivano chiuse e con uno spessore.",
+      "L'assistente risponde nella lingua in cui scrivi."
     ],
     "pt": [
-      "À direita há um cartão com os separadores *Seleção*, *Relatório de verificação* e *Chat*. Os avisos novos já não trazem o relatório para a frente; o separador mostra-os com um símbolo e um número.",
-      "No topo da janela encontra qualquer função em *Pesquisar função* (Ctrl+Shift+P). O mapa de funções segue a ordem da barra de menus.",
-      "Na seleção, cada característica tem uma só ação aberta de cada vez. As outras ficam recolhidas e mostram os seus valores.",
-      "Os diálogos de operação mostram à frente no máximo quatro campos e uma frase. Os valores raramente alterados estão em *Mais definições*, os limites em *Quando evitar?*.",
-      "Um zero com significado diz no campo o que faz, por exemplo «automático», «sem» ou «do material».",
-      "Todos os diálogos têm a mesma forma, com secções planas e uma margem comum para as etiquetas, também as definições, o diálogo de IA e a ativação.",
-      "O relatório de verificação mostra primeiro as constatações e, por cima, uma linha com estado e contadores. *Exportar …* fica ao lado de *Entregar ao slicer …*.",
-      "Constatações, passos da visita guiada e indicações são mais curtos. Onde um botão oferece a ação, a frase já não a repete.",
-      "A ação *Reconstruir modelo* está no corpo selecionado.",
-      "O ecrã inicial mostra em grande, no topo, as quatro formas de começar. *Primeiros passos* pergunta idioma, slicer e impressora e recolhe o resto.",
-      "O catálogo de blocos mostra imagem e título em cada mosaico. Num furo, *Blocos adequados …* mostra só o que cabe num furo.",
-      "Novidade: Anycubic Slicer Next com as 39 impressoras Anycubic, no Windows, macOS e Linux.",
-      "No Linux, o Solidon encontra OrcaSlicer, Bambu Studio e PrusaSlicer instalados como Flatpak, com as suas impressoras e perfis, também a partir do Flatpak do próprio Solidon.",
-      "No Linux, os slicers em AppImage também oferecem as impressoras de fabricante que neles configurou.",
-      "No Mac, o Solidon passa a criar o ficheiro de impressão também com o Cura. Até agora só encontrava a janela do Cura.",
-      "O Creality Print 7 traz as suas próprias impressoras e a última que escolheu.",
-      "As listas de impressoras indicam cada impressora uma só vez, sem variantes de bico. O bico escolhe-se nas definições de impressão.",
-      "Um bico escolhido nas definições de impressão mantém-se quando depois guarda as definições do programa.",
-      "Se mudar o bico para o PrusaSlicer ou o SuperSlicer, o slicer recebe também o perfil de impressora correspondente.",
-      "O Solidon oferece mais impressoras, também aquelas cujo perfil não indica mesa nem bico, como a Creality CR-20 e a Anycubic i3 Mega no PrusaSlicer.",
-      "As definições de impressão mostram à frente slicer, impressora, bico, filamentos, qualidade, densidade de preenchimento e suportes; o resto está em *Mais definições*.",
-      "Cada motivo de uma sugestão nas definições de impressão cabe numa linha. *Guardar o ficheiro de impressão* aparece assim que existe um ficheiro de impressão.",
-      "Uma rosca ou uma bucha de inserção a quente num furo selecionado já não para com «fora da superfície». Se o furo for demasiado largo, o Solidon indica tamanhos adequados.",
-      "Num furo selecionado, a vista mostra só diâmetro, profundidade e duas cotas às arestas. As referências têm o nome do seu lado, por exemplo «Aresta exterior à esquerda».",
-      "Em polegadas, a frase sobre um furo indica a sua medida em polegadas.",
-      "A faixa de pré-visualização diz numa linha o que muda, com os comprimentos na sua unidade de apresentação.",
-      "Em suportes e placas com furos, escareamentos e texto, *Reconstruir modelo* cria agora um contorno com alojamentos subtraídos. Se não encontrar uma estrutura, di-lo.",
-      "Se num esboço aproveitar o corte de um corpo convertido, os seus círculos e arcos chegam como círculos e arcos.",
-      "Se uma peça não puder ser convertida em faces e arestas, o Solidon indica o motivo e uma saída em vez de terminar com um erro inesperado.",
-      "O aviso de IA diz em duas frases, por destino, o que é enviado. Como o texto mudou, confirma-o mais uma vez.",
-      "As descrições dos modelos locais recomendados são mais curtas."
+      "No Mac, o Solidon precisa agora do macOS 14 ou mais recente. Qualquer Mac a partir de 2018 recebe o macOS 14 gratuitamente.",
+      "O Solidon arranca agora nos Mac Intel com macOS 26. A versão 0.5.3 ficava aí bloqueada no arranque.",
+      "Nos Mac Intel, o Solidon indica agora quando um arredondamento ou um chanfro num corpo exato não pode ser construído. A versão 0.5.3 fechava-se nesse momento.",
+      "Os painéis da esquerda e da direita movem-se pela pega, encaixam num rebordo ou ficam a flutuar. *Vista → Painéis para o seu lugar* repõe-nos.",
+      "Os painéis também podem ficar em baixo à esquerda, em baixo à direita e ao longo do rebordo inferior.",
+      "Um projeto guardado com um modelo grande abre após um reinício em um ou dois segundos em vez de meio minuto: as características reconhecidas ficam guardadas.",
+      "Os modelos grandes carregam visivelmente mais depressa e precisam de menos memória, também com um histórico longo e em computadores com 8 GB.",
+      "Um projeto guardado com muitos passos num modelo grande abre com muito menos memória.",
+      "Um modelo que abre logo após iniciar o programa fica editável até um quarto mais cedo.",
+      "O diálogo de impressão oferece as impressoras do slicer escolhido, como *Primeiros passos* e *Definições*. Uma impressora assim adotada fica ligada ao seu slicer.",
+      "No diálogo de impressão, o slicer muda-se como em *Primeiros passos*, também com *Escolher programa …* para um que o Solidon não encontra sozinho.",
+      "Uma impressora da lista do Solidon e a mesma do slicer contam como um só aparelho. O diálogo escolhe o perfil com o bico certo e o ficheiro leva o código de início.",
+      "Sem um perfil do slicer guardado, a exportação e a janela principal usam o que o diálogo de impressão propõe para a impressora, com a máquina e o processo do fabricante.",
+      "As roscas aceitam agora qualquer diâmetro até 1000 mm, com *Rosca imprimível*, num furo, com *Criar parafuso* ou *Criar tampa de rosca*.",
+      "Os furos normais também podem ser criados e novamente tapados com diâmetros até 1000 mm. Os furos grandes e os escareados mantêm a forma redonda.",
+      "Parafusos, porcas e anilhas existem segundo ISO de M1,6 a M64. Para outros tamanhos, *Medida própria* deriva as medidas dos tamanhos vizinhos e indica-o.",
+      "Com *Ajustado ao furo*, *Pino para furo* constrói a contrapeça: uma cabeça escareada à face para um escareamento, uma rosca externa do mesmo tamanho e passo para uma interna.",
+      "Os blocos que são uma peça por si só, como clipes de cabo, nervuras ou porcas, surgem sem seleção como corpo próprio num sítio livre da placa, também num projeto vazio.",
+      "Os seus próprios blocos também surgem assim como corpo próprio e não se prendem a um corpo que já está no projeto.",
+      "Com *Guardar a seleção como bloco*, o corpo selecionado vem com exatamente os passos que o constroem. Se viesse um segundo corpo, o diálogo diz isso antes de guardar.",
+      "Suportes de parede, abraçadeiras de tubo e de perfil e suportes aceitam qualquer parafuso de M3 a M64. Se um tamanho não combina com as outras medidas, o bloco diz o que mudar.",
+      "Com *Mover característica*, o material da característica vai tal como está e o lugar antigo fica bem preenchido. Onde não for possível, a seleção di-lo logo.",
+      "Em cordões e gargantas, a seleção só oferece o que a operação consegue fazer.",
+      "Se houver um arredondamento junto a uma parede, *Aplicar o ângulo de saída* diz antes do cálculo que está a atrapalhar e indica *Remover característica* como saída.",
+      "Ao cortar uma parte de um corpo, desaparecem também chanfros, roscas e alojamentos de porcas dos blocos que lá estavam.",
+      "O diálogo de geração calcula localmente com TRELLIS.2 e FLUX.2 [klein] em vez de TripoSG e SDXL. Um texto passa primeiro a imagem, e a imagem a modelo.",
+      "Antes de descarregar, a configuração indica as licenças e tamanhos dos modelos. Remove a antiga configuração TripoSG do Solidon e diz antes que pastas são e quanto ocupam.",
+      "As paredes finas, por exemplo de um vaso, chegam fechadas e com espessura.",
+      "O assistente responde na língua em que escreve."
     ]
   },
   "notes_by_language": {
-    "de": "Auswahl, Prüfbericht und Chat stehen rechts jetzt in einer Karte, und jede Funktion finden Sie oben über „Funktion suchen“. Dialoge zeigen vorn nur noch das Wichtigste. Neu ist Anycubic Slicer Next, und unter Linux findet Solidon Slicer als Flatpak und AppImage samt Ihren Druckern. Gewinde und Einpressbuchsen lassen sich wieder in eine gewählte Bohrung setzen.",
-    "en": "Selection, Report and Chat now share one card on the right, and “Search functions” at the top finds any function. Dialogs show only what matters up front. Anycubic Slicer Next is new, and on Linux Solidon finds slicers installed as Flatpak or AppImage together with your printers. Threads and heat-set inserts go into a selected hole again.",
-    "es": "Selección, Informe de comprobación y Chat están ahora en una sola tarjeta a la derecha, y «Buscar función», arriba, encuentra cualquier función. Los diálogos muestran delante solo lo esencial. Se añade Anycubic Slicer Next, y en Linux Solidon encuentra slicers instalados como Flatpak o AppImage junto con sus impresoras. Las roscas y los insertos termofijados vuelven a colocarse en un taladro seleccionado.",
-    "fr": "Sélection, Rapport de contrôle et Chat sont désormais réunis dans une carte à droite, et « Rechercher une fonction », en haut, trouve chaque fonction. Les dialogues ne montrent plus à l'avant que l'essentiel. Nouveau : Anycubic Slicer Next, et sous Linux Solidon trouve les slicers installés en Flatpak ou AppImage avec vos imprimantes. Filetages et inserts à chaud se placent de nouveau dans un perçage sélectionné.",
-    "it": "Selezione, Rapporto di verifica e Chat stanno ora in un'unica scheda a destra, e con «Cerca funzione», in alto, trovi ogni funzione. Le finestre di dialogo mostrano davanti solo l'essenziale. Novità: Anycubic Slicer Next, e su Linux Solidon trova gli slicer installati come Flatpak o AppImage insieme alle tue stampanti. Filettature e inserti a caldo si mettono di nuovo in un foro selezionato.",
-    "pt": "Seleção, Relatório de verificação e Chat estão agora num só cartão à direita, e «Pesquisar função», no topo, encontra qualquer função. Os diálogos mostram à frente só o essencial. Novidade: Anycubic Slicer Next, e no Linux o Solidon encontra slicers instalados como Flatpak ou AppImage com as suas impressoras. Roscas e buchas de inserção a quente voltam a ser colocadas num furo selecionado."
+    "de": "Die Demo läuft jetzt bis zum 30. November 2026. Solidon3D 1.0 erscheint voraussichtlich am 1. Dezember, Ihre Projekte bleiben erhalten.",
+    "en": "The demo now runs until 30 November 2026. Solidon3D 1.0 is expected on 1 December, and your projects are kept.",
+    "es": "La demo funciona ahora hasta el 30 de noviembre de 2026. Solidon3D 1.0 saldrá previsiblemente el 1 de diciembre y sus proyectos se conservan.",
+    "fr": "La démo fonctionne désormais jusqu'au 30 novembre 2026. Solidon3D 1.0 est prévu pour le 1er décembre, et vos projets sont conservés.",
+    "it": "La demo ora funziona fino al 30 novembre 2026. Solidon3D 1.0 dovrebbe uscire il 1º dicembre e i tuoi progetti restano.",
+    "pt": "A demo funciona agora até 30 de novembro de 2026. O Solidon3D 1.0 deverá sair a 1 de dezembro e os seus projetos mantêm-se."
   },
   "groups": {
     "de": [
       {
         "title": "Bedienung und System",
         "points": [
-          "Rechts steht eine Karte mit den Reitern *Auswahl*, *Prüfbericht* und *Chat*. Neue Warnungen holen den Prüfbericht nicht mehr nach vorn, sein Reiter zeigt sie mit Zeichen und Zahl.",
-          "Oben im Fenster finden Sie jede Funktion über *Funktion suchen* (Strg+Umschalt+P). Die Karte der Funktionen ist geordnet wie die Menüleiste.",
-          "In der Auswahl ist an einem Merkmal eine Handlung zur Zeit offen. Die übrigen nennen zugeklappt ihre Werte.",
-          "Operationsdialoge zeigen vorn höchstens vier Felder und einen Satz. Selten geänderte Werte stehen unter *Weitere Einstellungen*, Grenzen unter *Wann nicht?*.",
-          "Eine Null mit Bedeutung heißt im Feld, was sie bewirkt, etwa „automatisch“, „ohne“ oder „aus dem Material“.",
-          "Alle Dialoge haben dieselbe Form mit flachen Abschnitten und einer gemeinsamen Kante für die Beschriftungen, auch Einstellungen, KI-Dialog und Freischaltung.",
-          "Der Prüfbericht zeigt zuerst die Befunde, darüber eine Zeile mit Status und Zählern. *Exportieren …* steht neben *An den Slicer übergeben …*.",
-          "Befunde, Tourschritte und Hinweise sind kürzer. Wo ein Knopf die Handlung anbietet, wiederholt der Satz sie nicht.",
-          "Die Handlung *Modell nachbauen* steht am gewählten Körper.",
-          "Der Startbildschirm zeigt die vier Einstiege groß oben. *Erste Schritte* fragt Sprache, Slicer und Drucker und klappt den Rest zu.",
-          "Der Bausteinkatalog zeigt je Kachel Bild und Titel. An einer Bohrung zeigt *Passende Bausteine …* nur, was in eine Bohrung gehört."
+          "Am Mac braucht Solidon jetzt macOS 14 oder neuer. Jeder Mac ab 2018 bekommt macOS 14 kostenlos.",
+          "Auf Intel-Macs mit macOS 26 startet Solidon jetzt. Version 0.5.3 blieb dort beim Start hängen.",
+          "Auf Intel-Macs meldet Solidon jetzt, wenn sich eine Verrundung oder Fase am exakten Körper nicht bauen lässt. Version 0.5.3 beendete sich dabei.",
+          "Die Karten links und rechts lassen sich am Griff verschieben, an den Rand legen oder schweben lassen. *Ansicht → Karten an ihren Platz* legt sie zurück.",
+          "Die Karten lassen sich auch unten links, unten rechts und am unteren Rand anordnen."
+        ]
+      },
+      {
+        "title": "Schneller und sparsamer",
+        "points": [
+          "Ein gespeichertes Projekt mit einem großen Modell ist nach einem Neustart in ein, zwei Sekunden offen statt nach einer halben Minute: Die erkannten Merkmale bleiben gemerkt.",
+          "Große Modelle laden spürbar schneller und brauchen weniger Arbeitsspeicher, auch mit langem Verlauf und auf Rechnern mit 8 GB.",
+          "Ein gespeichertes Projekt mit vielen Schritten an einem großen Modell öffnet mit deutlich weniger Arbeitsspeicher.",
+          "Ein Modell, das Sie gleich nach dem Programmstart öffnen, ist bis zu ein Viertel schneller bearbeitbar."
         ]
       },
       {
         "title": "Drucken und Übergabe an den Slicer",
         "points": [
-          "Neu ist Anycubic Slicer Next mit allen 39 Anycubic-Druckern, unter Windows, macOS und Linux.",
-          "Unter Linux findet Solidon OrcaSlicer, Bambu Studio und PrusaSlicer als Flatpak samt Ihren Druckern und Profilen, auch aus Solidons eigenem Flatpak.",
-          "Slicer als AppImage bieten unter Linux auch ihre eingerichteten Herstellerdrucker an.",
-          "Auf dem Mac erzeugt Solidon die Druckdatei jetzt auch mit Cura. Bisher fand es nur Curas Fenster.",
-          "Creality Print 7 bringt seine eigenen Drucker und den zuletzt gewählten mit.",
-          "Die Druckerlisten nennen jeden Drucker einmal, ohne Düsenvarianten. Die Düse wählen Sie im Druckdialog.",
-          "Eine im Druckdialog gewählte Düse bleibt erhalten, wenn Sie danach die Einstellungen speichern.",
-          "Wechseln Sie für PrusaSlicer oder SuperSlicer die Düse, bekommt der Slicer das passende Druckerprofil dazu.",
-          "Solidon bietet mehr Drucker an, auch solche, deren Profil Bett oder Düse nicht nennt, etwa Creality CR-20 und Anycubic i3 Mega in PrusaSlicer.",
-          "Der Druckdialog zeigt vorn Slicer, Drucker, Düse, Filamente, Qualität, Fülldichte und Stützen, der Rest steht unter *Weitere Einstellungen*.",
-          "Jeder Grund eines Vorschlags im Druckdialog passt in eine Zeile. *Druckdatei speichern* erscheint, sobald es eine Druckdatei gibt."
+          "Der Druckdialog bietet die Drucker des gewählten Slicers an, wie *Erste Schritte* und *Einstellungen*. Ein so übernommener Drucker bleibt bei seinem Slicer.",
+          "Im Druckdialog lässt sich der Slicer wechseln wie in *Erste Schritte*, auch über *Programm wählen …* für einen, den Solidon nicht selbst findet.",
+          "Ein Drucker aus Solidons Liste und derselbe aus dem Slicer gelten als ein Gerät. Der Druckdialog wählt das Slicerprofil mit der richtigen Düse, und die Druckdatei trägt den Startcode.",
+          "Ohne gemerktes Slicerprofil nehmen Export und Hauptfenster, was der Druckdialog für den Drucker vorschlägt, samt Maschine und Prozess des Herstellers."
         ]
       },
       {
-        "title": "Bohrungen, Langlöcher und Teilen",
+        "title": "Gewinde, Bohrungen und Normteile",
         "points": [
-          "Ein Gewinde oder eine Einpressbuchse in einer gewählten Bohrung hält nicht mehr mit „außerhalb der Fläche“ an. Ist die Bohrung zu weit, nennt Solidon passende Größen.",
-          "An einer gewählten Bohrung stehen im Bild nur Durchmesser, Tiefe und zwei Kantenmaße. Bezüge heißen nach ihrer Seite, etwa „Außenkante links“.",
-          "In Zoll nennt der Satz über einer Bohrung ihr Maß in Zoll.",
-          "Das Vorschauband nennt in einer Zeile, was sich ändert, Längen in Ihrer Anzeigeeinheit."
+          "Gewinde gibt es jetzt in jedem Durchmesser bis 1000 mm, ob mit *Druckbares Gewinde*, in einer Bohrung, mit *Schraube erstellen* oder *Drehdeckel erzeugen*.",
+          "Auch normale Bohrungen lassen sich jetzt bis 1000 mm Durchmesser anlegen und wieder verschließen. Große Bohrungen und Senkungen behalten ihre runde Form.",
+          "Schrauben, Muttern und Scheiben gibt es nach ISO von M1,6 bis M64. Für andere Größen leitet *Eigenes Maß* die Maße aus den Nachbargrößen ab und sagt das.",
+          "Mit *Passend zur Bohrung* baut *Stift für Bohrung* das Gegenstück: in eine Senkung einen bündigen Senkkopf, in ein Innengewinde ein Außengewinde gleicher Größe und Steigung."
         ]
       },
       {
-        "title": "Formen, Schrift und Zeichnen",
+        "title": "Bausteine",
         "points": [
-          "Halter und Platten mit Bohrungen, Senkungen und Schrift baut *Modell nachbauen* jetzt als Umriss mit abgezogenen Taschen nach. Findet es keinen Aufbau, sagt es das.",
-          "Übernehmen Sie beim Zeichnen den Schnitt eines umgewandelten Körpers, kommen seine Kreise und Bögen als Kreise und Bögen an.",
-          "Lässt sich ein Teil nicht in Flächen und Kanten umwandeln, nennt Solidon Grund und Ausweg, statt mit einem unerwarteten Fehler zu enden."
+          "Bausteine, die für sich ein Teil sind, etwa Kabelclip, Rippe oder Mutter, entstehen ohne Auswahl als eigener Körper auf einer freien Stelle der Druckplatte, auch im leeren Projekt.",
+          "Auch eigene Bausteine entstehen so als eigener Körper und hängen nicht an einem Körper, der schon im Projekt liegt.",
+          "Mit *Auswahl als Baustein speichern* kommt der gewählte Körper mit genau den Schritten, die ihn bauen. Käme ein zweiter Körper mit, sagt der Dialog es vor dem Speichern.",
+          "Wandhalter, Rohrschellen, Profilklemmen und Halter nehmen jede Schraube von M3 bis M64. Passt eine Größe nicht zu den übrigen Maßen, sagt der Baustein, was zu ändern ist."
+        ]
+      },
+      {
+        "title": "Bearbeiten und Zeichnen",
+        "points": [
+          "Mit *Merkmal verschieben* reist das Material des Merkmals mit, wie es ist, und die alte Stelle wird sauber gefüllt. Wo das nicht geht, sagt es die Auswahl gleich.",
+          "An Wulst und Kehle bietet die Auswahl nur noch an, was die Operation auch ausführt.",
+          "Liegt neben einer Wand eine Verrundung, sagt *Formschräge anstellen* vor der Rechnung, dass sie im Weg ist, und nennt *Merkmal entfernen* als Ausweg.",
+          "Schneiden Sie einen Teil des Körpers weg, verschwinden auch Fasen, Gewinde und Mutterntaschen von Bausteinen, die darin lagen."
         ]
       },
       {
         "title": "Erzeugen mit KI",
         "points": [
-          "Der KI-Hinweis sagt je Ziel in zwei Sätzen, was gesendet wird. Weil sich der Text geändert hat, bestätigen Sie ihn einmal neu.",
-          "Die Beschreibungen der empfohlenen lokalen Modelle sind kürzer."
+          "Der Erzeugen-Dialog rechnet lokal mit TRELLIS.2 und FLUX.2 [klein] statt mit TripoSG und SDXL. Aus Text entsteht zuerst ein Bild und daraus das Modell.",
+          "Die Einrichtung nennt vor dem Laden Lizenzen und Größen der Modelle. Sie entfernt Solidons alte TripoSG-Einrichtung und sagt vorher, welche Ordner das sind und wie groß.",
+          "Dünne Wände, etwa an einer Vase, kommen geschlossen und mit Dicke an.",
+          "Der Assistent antwortet in der Sprache, in der Sie schreiben."
         ]
       }
     ],
@@ -299,57 +295,65 @@
       {
         "title": "Operation and system",
         "points": [
-          "On the right, a card holds the tabs *Selection*, *Report* and *Chat*. New warnings no longer bring the report to the front; its tab shows them with a symbol and a count.",
-          "At the top of the window, *Search functions* (Ctrl+Shift+P) finds any function. The map of functions follows the order of the menu bar.",
-          "In the selection, a feature has one action open at a time. The others stay collapsed and show their values.",
-          "Operation dialogs show at most four fields and one sentence up front. Rarely changed values are under *More settings*, limits under *When to avoid it?*.",
-          "A zero with a meaning says in the field what it does, such as “automatic”, “none” or “from material”.",
-          "All dialogs share one layout with flat sections and a common edge for the labels, including the settings, the AI dialog and activation.",
-          "The report shows the findings first, with a line of status and counters above them. *Export …* sits next to *Hand over to the slicer …*.",
-          "Findings, tour steps and hints are shorter. Where a button offers the action, the sentence no longer repeats it.",
-          "The *Rebuild model* action sits on the selected body.",
-          "The start screen shows the four ways to begin in large at the top. *First steps* asks for language, slicer and printer and collapses the rest.",
-          "The part catalogue shows a picture and a title on each tile. On a hole, *Matching parts …* shows only what belongs in a hole."
+          "On the Mac, Solidon now needs macOS 14 or later. Every Mac from 2018 on gets macOS 14 for free.",
+          "Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.",
+          "On Intel Macs, Solidon now reports when a fillet or chamfer on an exact body cannot be built. Version 0.5.3 quit at that point.",
+          "The left and right panels can be moved by their handle, docked to an edge or left floating. *View → Panels back to their place* puts them back.",
+          "Panels can also be placed at the bottom left, bottom right and along the bottom edge."
+        ]
+      },
+      {
+        "title": "Faster and lighter on memory",
+        "points": [
+          "A saved project with a large model now opens in a second or two after a restart instead of half a minute: the recognised features are kept.",
+          "Large models load noticeably faster and need less memory, even with a long history and on computers with 8 GB.",
+          "A saved project with many steps on a large model opens with much less memory.",
+          "A model you open right after starting the program is ready to edit up to a quarter sooner."
         ]
       },
       {
         "title": "Printing and slicer handover",
         "points": [
-          "New is Anycubic Slicer Next with all 39 Anycubic printers, on Windows, macOS and Linux.",
-          "On Linux, Solidon finds OrcaSlicer, Bambu Studio and PrusaSlicer installed as Flatpak, with your printers and profiles, also from Solidon's own Flatpak.",
-          "Slicers installed as AppImage on Linux also offer the vendor printers you have set up in them.",
-          "On the Mac, Solidon now also creates the print file with Cura. Until now it only found Cura's window.",
-          "Creality Print 7 brings its own printers and the one you selected last.",
-          "The printer lists name each printer once, without nozzle variants. You choose the nozzle in the print dialog.",
-          "A nozzle chosen in the print dialog is kept when you save the settings afterwards.",
-          "If you change the nozzle for PrusaSlicer or SuperSlicer, the slicer gets the matching printer profile with it.",
-          "Solidon offers more printers, including ones whose profile names neither bed nor nozzle, such as the Creality CR-20 and Anycubic i3 Mega in PrusaSlicer.",
-          "The print dialog shows slicer, printer, nozzle, filaments, quality, infill density and supports up front; the rest is under *More settings*.",
-          "Each reason for a suggestion in the print dialog fits on one line. *Save print file* appears as soon as there is a print file."
+          "The print dialog offers the printers of the selected slicer, like *First steps* and *Settings*. A printer taken over this way stays with its slicer.",
+          "In the print dialog you can switch the slicer as in *First steps*, also via *Choose program …* for one that Solidon does not find by itself.",
+          "A printer from Solidon's list and the same one from the slicer count as one device. The print dialog picks the slicer profile with the right nozzle, and the print file carries the start code.",
+          "Without a saved slicer profile, export and main window use what the print dialog suggests for the printer, including the manufacturer's machine and process."
         ]
       },
       {
-        "title": "Holes, slots and splitting",
+        "title": "Threads, holes and standard parts",
         "points": [
-          "A thread or heat-set insert in a selected hole no longer stops with “outside the surface”. If the hole is too wide, Solidon names suitable sizes.",
-          "On a selected hole, the view shows only diameter, depth and two edge distances. References are named after their side, such as “Outer edge left”.",
-          "In inches, the sentence above a hole gives its size in inches.",
-          "The preview strip says in one line what changes, with lengths in your display unit."
+          "Threads now come in any diameter up to 1000 mm, whether with *Printable thread*, in a hole, with *Create screw* or *Create screw lid*.",
+          "Regular holes can now be created and plugged again at diameters up to 1000 mm. Large holes and countersinks keep their round shape.",
+          "Screws, nuts and washers are available to ISO from M1.6 to M64. For other sizes, *Custom size* derives the dimensions from the neighbouring sizes and says so.",
+          "With *To fit the hole*, *Pin for hole* builds the counterpart: a flush countersunk head for a countersink, an external thread of the same size and pitch for an internal thread."
         ]
       },
       {
-        "title": "Sculpting, text and sketching",
+        "title": "Parts",
         "points": [
-          "For holders and plates with holes, countersinks and lettering, *Rebuild model* now builds an outline with pockets cut away. If it finds no structure, it says so.",
-          "If you take the section of a converted body into a sketch, its circles and arcs arrive as circles and arcs.",
-          "If a part cannot be converted to faces and edges, Solidon names the reason and a way out instead of ending with an unexpected error."
+          "Parts that are a piece on their own, such as cable clips, ribs or nuts, are created without a selection as a body of their own on a free spot of the build plate, even in an empty project.",
+          "Your own parts are created as a body of their own in the same way and do not attach to a body already in the project.",
+          "With *Save selection as a part*, the selected body comes with exactly the steps that build it. If a second body would come along, the dialog says so before saving.",
+          "Wall mounts, pipe clamps, profile clamps and holders take every screw from M3 to M64. If a size does not fit the other dimensions, the part says what to change."
+        ]
+      },
+      {
+        "title": "Editing and sketching",
+        "points": [
+          "With *Move feature*, the feature's material travels along as it is and the old spot is filled cleanly. Where that is not possible, the selection says so straight away.",
+          "On beads and grooves, the selection offers only what the operation can actually do.",
+          "If a fillet sits next to a wall, *Apply draft angle* says before calculating that it is in the way and names *Remove feature* as the way out.",
+          "When you cut away part of a body, chamfers, threads and nut pockets of parts that lay inside it go too."
         ]
       },
       {
         "title": "Generating with AI",
         "points": [
-          "The AI notice says in two sentences per destination what is sent. Because the text has changed, you confirm it once more.",
-          "The descriptions of the recommended local models are shorter."
+          "The generate dialog works locally with TRELLIS.2 and FLUX.2 [klein] instead of TripoSG and SDXL. Text first becomes an image, and the image becomes the model.",
+          "Before downloading, the setup names the licences and sizes of the models. It removes Solidon's old TripoSG setup and says beforehand which folders those are and how large.",
+          "Thin walls, for example on a vase, arrive closed and with thickness.",
+          "The assistant replies in the language you write in."
         ]
       }
     ],
@@ -357,57 +361,65 @@
       {
         "title": "Manejo y sistema",
         "points": [
-          "A la derecha hay una tarjeta con las pestañas *Selección*, *Informe de comprobación* y *Chat*. Los avisos nuevos ya no traen el informe al frente; su pestaña los indica con un símbolo y un número.",
-          "Arriba en la ventana, *Buscar función* (Ctrl+Mayús+P) encuentra cualquier función. El mapa de funciones sigue el orden de la barra de menús.",
-          "En la selección, cada característica tiene una sola acción abierta a la vez. Las demás quedan plegadas y muestran sus valores.",
-          "Los diálogos de operación muestran delante como mucho cuatro campos y una frase. Lo que rara vez se cambia está en *Más ajustes*, los límites en *¿Cuándo evitarla?*.",
-          "Un cero con significado dice en el campo lo que hace, por ejemplo «automático», «sin» o «del material».",
-          "Todos los diálogos tienen la misma forma, con secciones planas y un borde común para las etiquetas, también los ajustes, el diálogo de IA y la activación.",
-          "El informe de comprobación muestra primero los hallazgos, con una línea de estado y contadores encima. *Exportar …* está junto a *Entregar al slicer …*.",
-          "Hallazgos, pasos del recorrido y avisos son más cortos. Donde un botón ofrece la acción, la frase ya no la repite.",
-          "La acción *Reconstruir modelo* está en el cuerpo seleccionado.",
-          "La pantalla de inicio muestra arriba, en grande, las cuatro formas de empezar. *Primeros pasos* pregunta idioma, slicer e impresora y pliega el resto.",
-          "El catálogo de bloques muestra imagen y título en cada ficha. En un taladro, *Bloques adecuados …* muestra solo lo que va en un taladro."
+          "En el Mac, Solidon necesita ahora macOS 14 o más reciente. Cualquier Mac desde 2018 recibe macOS 14 gratis.",
+          "Solidon ya arranca en los Mac con Intel y macOS 26. La versión 0.5.3 se quedaba colgada allí al iniciar.",
+          "En los Mac con Intel, Solidon avisa ahora cuando un redondeo o un chaflán en un cuerpo exacto no se puede construir. La versión 0.5.3 se cerraba en ese momento.",
+          "Los paneles de la izquierda y la derecha se mueven por su asa, se acoplan a un borde o quedan flotando. *Vista → Paneles a su sitio* los devuelve.",
+          "Los paneles también se pueden colocar abajo a la izquierda, abajo a la derecha y en el borde inferior."
+        ]
+      },
+      {
+        "title": "Más rápido y con menos memoria",
+        "points": [
+          "Un proyecto guardado con un modelo grande se abre tras un reinicio en uno o dos segundos en lugar de medio minuto: las características reconocidas se conservan.",
+          "Los modelos grandes se cargan notablemente más rápido y necesitan menos memoria, también con un historial largo y en equipos con 8 GB.",
+          "Un proyecto guardado con muchos pasos sobre un modelo grande se abre con mucha menos memoria.",
+          "Un modelo que abre justo después de iniciar el programa se puede editar hasta una cuarta parte antes."
         ]
       },
       {
         "title": "Imprimir y entregar al slicer",
         "points": [
-          "Se añade Anycubic Slicer Next, con las 39 impresoras de Anycubic, en Windows, macOS y Linux.",
-          "En Linux, Solidon encuentra OrcaSlicer, Bambu Studio y PrusaSlicer instalados como Flatpak, con sus impresoras y perfiles, también desde el propio Flatpak de Solidon.",
-          "En Linux, los slicers en AppImage también ofrecen las impresoras de fabricante que tenga configuradas en ellos.",
-          "En el Mac, Solidon ahora también genera el archivo de impresión con Cura. Hasta ahora solo encontraba la ventana de Cura.",
-          "Creality Print 7 aporta sus propias impresoras y la última que eligió.",
-          "Las listas de impresoras nombran cada impresora una sola vez, sin variantes de boquilla. La boquilla se elige en los ajustes de impresión.",
-          "La boquilla elegida en los ajustes de impresión se mantiene aunque después guarde los ajustes del programa.",
-          "Si cambia la boquilla para PrusaSlicer o SuperSlicer, el slicer recibe también el perfil de impresora que corresponde.",
-          "Solidon ofrece más impresoras, también aquellas cuyo perfil no indica placa ni boquilla, como la Creality CR-20 y la Anycubic i3 Mega en PrusaSlicer.",
-          "Los ajustes de impresión muestran delante slicer, impresora, boquilla, filamentos, calidad, densidad de relleno y soportes; el resto está en *Más ajustes*.",
-          "Cada motivo de una sugerencia en los ajustes de impresión cabe en una línea. *Guardar archivo de impresión* aparece en cuanto hay un archivo de impresión."
+          "El diálogo de impresión ofrece las impresoras del slicer elegido, como *Primeros pasos* y *Ajustes*. Una impresora adoptada así se queda con su slicer.",
+          "En el diálogo de impresión se puede cambiar el slicer como en *Primeros pasos*, también con *Elegir programa …* para uno que Solidon no encuentra por sí mismo.",
+          "Una impresora de la lista de Solidon y la misma del slicer cuentan como un solo equipo. El diálogo elige el perfil con la boquilla correcta y el archivo lleva el código de inicio.",
+          "Sin un perfil del slicer guardado, la exportación y la ventana principal usan lo que el diálogo de impresión propone para la impresora, con la máquina y el proceso del fabricante."
         ]
       },
       {
-        "title": "Taladros, ranuras y división",
+        "title": "Roscas, taladros y piezas normalizadas",
         "points": [
-          "Una rosca o un inserto termofijado en un taladro seleccionado ya no se detiene con «fuera de la superficie». Si el taladro es demasiado ancho, Solidon indica tamaños adecuados.",
-          "En un taladro seleccionado, la vista muestra solo diámetro, profundidad y dos cotas a aristas. Las referencias se nombran por su lado, por ejemplo «Arista exterior izquierda».",
-          "En pulgadas, la frase sobre un taladro da su medida en pulgadas.",
-          "La franja de vista previa dice en una línea qué cambia, con las longitudes en su unidad de visualización."
+          "Las roscas admiten ahora cualquier diámetro hasta 1000 mm, ya sea con *Rosca imprimible*, en un taladro, con *Crear tornillo* o *Generar tapa roscada*.",
+          "Los taladros normales también se pueden crear y volver a tapar con diámetros de hasta 1000 mm. Los taladros grandes y los avellanados mantienen su forma redonda.",
+          "Tornillos, tuercas y arandelas están disponibles según ISO de M1,6 a M64. Para otros tamaños, *Medida propia* deriva las medidas de los tamaños vecinos y lo indica.",
+          "Con *Ajustado al taladro*, *Pasador para taladro* construye la contrapieza: una cabeza avellanada enrasada para un avellanado, una rosca exterior del mismo tamaño y paso para una interior."
         ]
       },
       {
-        "title": "Modelar, texto y dibujo",
+        "title": "Bloques",
         "points": [
-          "En soportes y placas con taladros, avellanados y texto, *Reconstruir modelo* crea ahora un contorno con alojamientos restados. Si no encuentra una estructura, lo dice.",
-          "Si al dibujar toma la sección de un cuerpo convertido, sus círculos y arcos llegan como círculos y arcos.",
-          "Si una pieza no se puede convertir en caras y aristas, Solidon indica el motivo y una salida en lugar de terminar con un error inesperado."
+          "Los bloques que son una pieza por sí solos, como clips para cable, nervaduras o tuercas, se crean sin selección como cuerpo propio en un sitio libre de la placa, también en un proyecto vacío.",
+          "Sus propios bloques también se crean así como cuerpo propio y no se unen a un cuerpo que ya está en el proyecto.",
+          "Con *Guardar la selección como bloque* se guarda el cuerpo seleccionado con exactamente los pasos que lo construyen. Si viniera un segundo cuerpo, el diálogo lo indica antes.",
+          "Soportes de pared, abrazaderas de tubo y de perfil y soportes admiten cualquier tornillo de M3 a M64. Si un tamaño no encaja con las demás medidas, el bloque indica qué cambiar."
+        ]
+      },
+      {
+        "title": "Editar y dibujar",
+        "points": [
+          "Con *Mover característica*, el material de la característica viaja tal como está y el sitio anterior se rellena limpiamente. Donde no es posible, la selección lo dice de entrada.",
+          "En cordones y gargantas, la selección solo ofrece lo que la operación puede hacer de verdad.",
+          "Si junto a una pared hay un redondeo, *Aplicar ángulo de desmoldeo* avisa antes de calcular de que estorba y propone *Quitar característica* como salida.",
+          "Al recortar una parte de un cuerpo, desaparecen también los chaflanes, roscas y alojamientos de tuerca de los bloques que había en ella."
         ]
       },
       {
         "title": "Generar con IA",
         "points": [
-          "El aviso de IA explica en dos frases por destino qué se envía. Como el texto ha cambiado, tendrá que confirmarlo una vez más.",
-          "Las descripciones de los modelos locales recomendados son más cortas."
+          "El diálogo de generación calcula en local con TRELLIS.2 y FLUX.2 [klein] en lugar de TripoSG y SDXL. Un texto se convierte primero en imagen y la imagen, en el modelo.",
+          "Antes de descargar, la configuración indica licencias y tamaños de los modelos. Quita la antigua configuración de TripoSG de Solidon y dice antes qué carpetas son y cuánto ocupan.",
+          "Las paredes finas, por ejemplo de un jarrón, llegan cerradas y con grosor.",
+          "El asistente responde en el idioma en que usted escribe."
         ]
       }
     ],
@@ -415,57 +427,65 @@
       {
         "title": "Utilisation et système",
         "points": [
-          "À droite, une carte porte les onglets *Sélection*, *Rapport de contrôle* et *Chat*. Un nouvel avertissement ne fait plus passer le rapport devant ; son onglet l'indique par un symbole et un nombre.",
-          "En haut de la fenêtre, *Rechercher une fonction* (Ctrl+Maj+P) trouve chaque fonction. La carte des fonctions suit l'ordre de la barre de menus.",
-          "Dans la sélection, une seule action est ouverte à la fois sur une caractéristique. Les autres restent repliées et affichent leurs valeurs.",
-          "Les dialogues d'opération montrent au plus quatre champs et une phrase à l'avant. Les valeurs rarement changées sont sous *Autres réglages*, les limites sous *Quand l'éviter ?*.",
-          "Un zéro qui a un sens dit dans le champ ce qu'il fait, par exemple « automatique », « sans » ou « selon le matériau ».",
-          "Toutes les boîtes de dialogue ont la même forme, avec des sections plates et un bord commun pour les libellés, y compris les réglages, le dialogue IA et le déverrouillage.",
-          "Le rapport de contrôle montre d'abord les constats, avec au-dessus une ligne d'état et des compteurs. *Exporter …* se trouve à côté de *Transmettre au slicer …*.",
-          "Constats, étapes de la visite et indications sont plus courts. Quand un bouton propose l'action, la phrase ne la répète plus.",
-          "L'action *Reconstruire le modèle* se trouve sur le corps sélectionné.",
-          "L'écran d'accueil montre en grand, en haut, les quatre façons de commencer. *Premiers pas* demande langue, slicer et imprimante et replie le reste.",
-          "Le catalogue de blocs montre une image et un titre par vignette. Sur un perçage, *Blocs adaptés …* ne montre que ce qui va dans un perçage."
+          "Sur Mac, Solidon demande désormais macOS 14 ou plus récent. Tout Mac à partir de 2018 reçoit macOS 14 gratuitement.",
+          "Solidon démarre désormais sur les Mac Intel sous macOS 26. La version 0.5.3 y restait bloquée au démarrage.",
+          "Sur les Mac Intel, Solidon signale désormais qu'un congé ou un chanfrein sur un corps exact ne peut pas être construit. La version 0.5.3 se fermait à ce moment-là.",
+          "Les panneaux de gauche et de droite se déplacent par leur poignée, s'ancrent à un bord ou flottent librement. *Vue → Panneaux à leur place* les remet en place.",
+          "Les panneaux se placent aussi en bas à gauche, en bas à droite et le long du bord inférieur."
+        ]
+      },
+      {
+        "title": "Plus rapide et plus économe",
+        "points": [
+          "Un projet enregistré avec un grand modèle s'ouvre après un redémarrage en une ou deux secondes au lieu d'une demi-minute : les caractéristiques reconnues sont conservées.",
+          "Les grands modèles se chargent nettement plus vite et demandent moins de mémoire, même avec un long historique et sur des ordinateurs de 8 Go.",
+          "Un projet enregistré avec de nombreuses étapes sur un grand modèle s’ouvre avec beaucoup moins de mémoire.",
+          "Un modèle ouvert juste après le démarrage du programme est modifiable jusqu'à un quart plus tôt."
         ]
       },
       {
         "title": "Imprimer et transmettre au slicer",
         "points": [
-          "Nouveau : Anycubic Slicer Next, avec les 39 imprimantes Anycubic, sous Windows, macOS et Linux.",
-          "Sous Linux, Solidon trouve OrcaSlicer, Bambu Studio et PrusaSlicer installés en Flatpak, avec vos imprimantes et profils, y compris depuis le Flatpak de Solidon.",
-          "Sous Linux, les slicers en AppImage proposent aussi les imprimantes de fabricant que vous y avez configurées.",
-          "Sur Mac, Solidon crée désormais aussi le fichier d'impression avec Cura. Jusqu'ici, il ne trouvait que la fenêtre de Cura.",
-          "Creality Print 7 apporte ses propres imprimantes et la dernière que vous avez choisie.",
-          "Les listes d'imprimantes nomment chaque imprimante une seule fois, sans variantes de buse. La buse se choisit dans les réglages d'impression.",
-          "Une buse choisie dans les réglages d'impression est conservée si vous enregistrez ensuite les réglages de l'application.",
-          "Si vous changez de buse pour PrusaSlicer ou SuperSlicer, le slicer reçoit aussi le profil d'imprimante correspondant.",
-          "Solidon propose plus d'imprimantes, y compris celles dont le profil n'indique ni plateau ni buse, comme la Creality CR-20 et l'Anycubic i3 Mega dans PrusaSlicer.",
-          "Les réglages d'impression montrent d'abord slicer, imprimante, buse, filaments, qualité, densité de remplissage et supports ; le reste est sous *Autres réglages*.",
-          "Chaque raison d'une suggestion dans les réglages d'impression tient sur une ligne. *Enregistrer le fichier d'impression* apparaît dès qu'un fichier d'impression existe."
+          "La boîte de dialogue d'impression propose les imprimantes du slicer choisi, comme *Premiers pas* et *Réglages*. Une imprimante reprise ainsi reste liée à son slicer.",
+          "Dans la boîte de dialogue d'impression, le slicer se change comme dans *Premiers pas*, aussi via *Choisir le programme …* pour un slicer que Solidon ne trouve pas seul.",
+          "Une imprimante de la liste de Solidon et la même issue du slicer sont un seul appareil. La boîte de dialogue choisit le profil à la bonne buse, et le fichier contient le code de démarrage.",
+          "Sans profil du slicer mémorisé, l'export et la fenêtre principale prennent ce que la boîte d'impression propose pour l'imprimante, machine et processus du fabricant compris."
         ]
       },
       {
-        "title": "Perçages, trous oblongs et découpe",
+        "title": "Filetages, perçages et pièces normalisées",
         "points": [
-          "Un filetage ou un insert à chaud dans un perçage sélectionné ne s'arrête plus sur « hors de la surface ». Si le perçage est trop large, Solidon indique des tailles adaptées.",
-          "Sur un perçage sélectionné, la vue n'affiche que diamètre, profondeur et deux cotes d'arête. Les références portent le nom de leur côté, par exemple « Arête extérieure à gauche ».",
-          "En pouces, la phrase au-dessus d'un perçage donne sa taille en pouces.",
-          "Le bandeau d'aperçu dit en une ligne ce qui change, avec les longueurs dans votre unité d'affichage."
+          "Les filetages acceptent désormais tout diamètre jusqu'à 1000 mm, avec *Filetage imprimable*, dans un perçage, avec *Créer une vis* ou *Créer un couvercle vissé*.",
+          "Les perçages ordinaires peuvent aussi être créés et rebouchés jusqu’à 1000 mm de diamètre. Les grands perçages et fraisures conservent leur forme ronde.",
+          "Vis, écrous et rondelles existent selon ISO de M1,6 à M64. Pour d'autres tailles, *Taille personnalisée* déduit les cotes des tailles voisines et le signale.",
+          "Avec *Ajustée au perçage*, *Goupille pour perçage* construit la contrepartie : une tête fraisée affleurante pour une fraisure, un filetage extérieur de même taille et même pas pour un intérieur."
         ]
       },
       {
-        "title": "Sculpter, texte et esquisse",
+        "title": "Blocs",
         "points": [
-          "Pour les supports et plaques avec perçages, fraisures et texte, *Reconstruire le modèle* crée désormais un contour dont les logements sont retirés. S'il ne trouve aucune structure, il le dit.",
-          "Si vous reprenez dans une esquisse la coupe d'un corps converti, ses cercles et ses arcs arrivent comme cercles et arcs.",
-          "Si une pièce ne peut pas être convertie en faces et arêtes, Solidon donne la raison et une issue au lieu de finir sur une erreur inattendue."
+          "Les blocs qui forment une pièce à eux seuls, comme les clips de câble, nervures ou écrous, se créent sans sélection comme corps à part sur un endroit libre du plateau, même dans un projet vide.",
+          "Vos propres blocs se créent aussi ainsi comme corps à part et ne s'attachent pas à un corps déjà présent dans le projet.",
+          "Avec *Enregistrer la sélection comme bloc*, le corps sélectionné vient avec exactement les étapes qui le construisent. Si un second corps venait avec, le dialogue le dit avant.",
+          "Supports muraux, colliers de tube, colliers de profilé et supports acceptent toute vis de M3 à M64. Si une taille ne convient pas aux autres cotes, le bloc indique quoi changer."
+        ]
+      },
+      {
+        "title": "Modifier et esquisser",
+        "points": [
+          "Avec *Déplacer la caractéristique*, sa matière suit telle quelle et l'ancien emplacement est comblé proprement. Là où c'est impossible, la sélection le dit d'emblée.",
+          "Sur un bourrelet ou une gorge, la sélection ne propose plus que ce que l'opération sait faire.",
+          "Si un congé borde une paroi, *Appliquer une dépouille* indique avant le calcul qu'il gêne et propose *Supprimer la caractéristique* comme issue.",
+          "Quand vous découpez une partie d'un corps, les chanfreins, filetages et logements d'écrou des blocs qui s'y trouvaient disparaissent aussi."
         ]
       },
       {
         "title": "Générer avec l'IA",
         "points": [
-          "L'information sur l'IA dit en deux phrases, pour chaque destination, ce qui est envoyé. Le texte ayant changé, vous la confirmez une nouvelle fois.",
-          "Les descriptions des modèles locaux recommandés sont plus courtes."
+          "La boîte de dialogue de génération calcule en local avec TRELLIS.2 et FLUX.2 [klein] au lieu de TripoSG et SDXL. Un texte devient d'abord une image, puis l'image devient le modèle.",
+          "Avant le téléchargement, l'installation indique les licences et tailles des modèles. Elle retire l'ancienne installation TripoSG de Solidon et dit d'abord quels dossiers et quelle taille.",
+          "Les parois minces, par exemple d'un vase, arrivent fermées et avec une épaisseur.",
+          "L'assistant répond dans la langue dans laquelle vous écrivez."
         ]
       }
     ],
@@ -473,57 +493,65 @@
       {
         "title": "Uso e sistema",
         "points": [
-          "A destra c'è una scheda con le linguette *Selezione*, *Rapporto di verifica* e *Chat*. I nuovi avvisi non portano più il rapporto in primo piano; la sua linguetta li mostra con un simbolo e un numero.",
-          "In alto nella finestra trovi ogni funzione con *Cerca funzione* (Ctrl+Maiusc+P). La mappa delle funzioni segue l'ordine della barra dei menu.",
-          "Nella selezione, su una caratteristica è aperta una sola azione alla volta. Le altre restano chiuse e mostrano i loro valori.",
-          "Le finestre delle operazioni mostrano davanti al massimo quattro campi e una frase. I valori cambiati di rado stanno in *Altre impostazioni*, i limiti in *Quando evitarla?*.",
-          "Uno zero con un significato dice nel campo cosa fa, per esempio «automatico», «senza» o «dal materiale».",
-          "Tutte le finestre di dialogo hanno la stessa forma, con sezioni piatte e un bordo comune per le etichette, anche impostazioni, finestra dell'IA e sblocco.",
-          "Il rapporto di verifica mostra prima i rilievi, con sopra una riga di stato e contatori. *Esporta …* sta accanto a *Passa allo slicer …*.",
-          "Rilievi, passi del tour e suggerimenti sono più brevi. Dove un pulsante offre l'azione, la frase non la ripete più.",
-          "L'azione *Ricostruisci modello* si trova sul corpo selezionato.",
-          "La schermata iniziale mostra in grande, in alto, i quattro modi per cominciare. *Primi passi* chiede lingua, slicer e stampante e chiude il resto.",
-          "Il catalogo dei blocchi mostra immagine e titolo in ogni riquadro. Su un foro, *Blocchi adatti …* mostra solo ciò che va in un foro."
+          "Su Mac, Solidon richiede ora macOS 14 o successivo. Ogni Mac dal 2018 in poi riceve macOS 14 gratuitamente.",
+          "Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.",
+          "Sui Mac Intel, Solidon ora segnala quando un raccordo o uno smusso su un corpo esatto non si può costruire. La versione 0.5.3 si chiudeva in quel momento.",
+          "I pannelli a sinistra e a destra si spostano con la maniglia, si agganciano a un bordo o restano sospesi. *Vista → Pannelli al loro posto* li rimette a posto.",
+          "I pannelli si possono disporre anche in basso a sinistra, in basso a destra e lungo il bordo inferiore."
+        ]
+      },
+      {
+        "title": "Più veloce e con meno memoria",
+        "points": [
+          "Un progetto salvato con un modello grande si apre dopo un riavvio in uno o due secondi invece di mezzo minuto: le caratteristiche riconosciute restano memorizzate.",
+          "I modelli grandi si caricano molto più velocemente e richiedono meno memoria, anche con una cronologia lunga e su computer con 8 GB.",
+          "Un progetto salvato con molti passaggi su un modello grande si apre con molta meno memoria.",
+          "Un modello aperto subito dopo l'avvio del programma è modificabile fino a un quarto prima."
         ]
       },
       {
         "title": "Stampare e passare allo slicer",
         "points": [
-          "Novità: Anycubic Slicer Next con tutte le 39 stampanti Anycubic, su Windows, macOS e Linux.",
-          "Su Linux Solidon trova OrcaSlicer, Bambu Studio e PrusaSlicer installati come Flatpak, con le tue stampanti e i tuoi profili, anche dal Flatpak di Solidon.",
-          "Su Linux anche gli slicer in AppImage offrono le stampanti dei produttori che vi hai configurato.",
-          "Su Mac Solidon ora crea il file di stampa anche con Cura. Prima trovava solo la finestra di Cura.",
-          "Creality Print 7 porta con sé le sue stampanti e l'ultima che hai scelto.",
-          "Gli elenchi delle stampanti nominano ogni stampante una sola volta, senza varianti di ugello. L'ugello lo scegli nelle impostazioni di stampa.",
-          "Un ugello scelto nelle impostazioni di stampa resta anche se poi salvi le impostazioni del programma.",
-          "Se cambi ugello per PrusaSlicer o SuperSlicer, lo slicer riceve anche il profilo di stampante adatto.",
-          "Solidon offre più stampanti, anche quelle il cui profilo non indica piano o ugello, come la Creality CR-20 e la Anycubic i3 Mega in PrusaSlicer.",
-          "Le impostazioni di stampa mostrano davanti slicer, stampante, ugello, filamenti, qualità, densità di riempimento e supporti; il resto sta in *Altre impostazioni*.",
-          "Ogni motivo di un suggerimento nelle impostazioni di stampa sta in una riga. *Salva file di stampa* compare appena c'è un file di stampa."
+          "La finestra di stampa offre le stampanti dello slicer scelto, come *Primi passi* e *Impostazioni*. Una stampante ripresa così resta legata al suo slicer.",
+          "Nella finestra di stampa lo slicer si cambia come in *Primi passi*, anche con *Scegli programma …* per uno che Solidon non trova da solo.",
+          "Una stampante dell'elenco di Solidon e la stessa dello slicer contano come un solo apparecchio. La finestra sceglie il profilo con l'ugello giusto e il file porta il codice di avvio.",
+          "Senza un profilo dello slicer memorizzato, esportazione e finestra principale usano quanto la finestra di stampa propone per la stampante, con macchina e processo del produttore."
         ]
       },
       {
-        "title": "Fori, asole e divisione",
+        "title": "Filettature, fori e componenti normalizzati",
         "points": [
-          "Una filettatura o un inserto a caldo in un foro selezionato non si ferma più con «fuori dalla superficie». Se il foro è troppo largo, Solidon indica le misure adatte.",
-          "Su un foro selezionato la vista mostra solo diametro, profondità e due quote dai bordi. I riferimenti prendono il nome dal loro lato, per esempio «Bordo esterno a sinistra».",
-          "In pollici, la frase sopra un foro ne indica la misura in pollici.",
-          "La fascia dell'anteprima dice in una riga cosa cambia, con le lunghezze nella tua unità di visualizzazione."
+          "Le filettature accettano ora qualsiasi diametro fino a 1000 mm, con *Filettatura stampabile*, in un foro, con *Crea vite* o *Crea coperchio a vite*.",
+          "Anche i fori normali possono essere creati e richiusi con diametri fino a 1000 mm. I fori grandi e le svasature mantengono la forma rotonda.",
+          "Viti, dadi e rondelle ci sono secondo ISO da M1,6 a M64. Per altre misure, *Misura personalizzata* ricava le dimensioni dalle misure vicine e lo dice.",
+          "Con *Adatto al foro*, *Perno per foro* costruisce la controparte: una testa svasata a filo per una svasatura, una filettatura esterna di pari misura e passo per una interna."
         ]
       },
       {
-        "title": "Modellare, testo e schizzo",
+        "title": "Blocchi",
         "points": [
-          "Per supporti e piastre con fori, svasature e scritte, *Ricostruisci modello* ora crea un contorno con le sedi sottratte. Se non trova una struttura, lo dice.",
-          "Se in uno schizzo riprendi la sezione di un corpo convertito, i suoi cerchi e archi arrivano come cerchi e archi.",
-          "Se un pezzo non si può convertire in facce e spigoli, Solidon indica il motivo e una via d'uscita invece di finire con un errore imprevisto."
+          "I blocchi che sono un pezzo a sé, come clip per cavo, nervature o dadi, nascono senza selezione come corpo a sé in un punto libero del piatto, anche in un progetto vuoto.",
+          "Anche i tuoi blocchi nascono così come corpo a sé e non si attaccano a un corpo già presente nel progetto.",
+          "Con *Salva la selezione come blocco* il corpo selezionato arriva con esattamente i passi che lo costruiscono. Se arrivasse anche un secondo corpo, la finestra lo dice prima.",
+          "Supporti a parete, fascette per tubo, morsetti per profilo e supporti accettano ogni vite da M3 a M64. Se una misura non si accorda con le altre, il blocco dice cosa cambiare."
+        ]
+      },
+      {
+        "title": "Modificare e disegnare",
+        "points": [
+          "Con *Sposta caratteristica* il materiale della caratteristica si sposta così com'è e il punto di prima viene riempito in modo pulito. Dove non si può, la selezione lo dice subito.",
+          "Su cordoni e gole, la selezione offre solo ciò che l'operazione sa davvero fare.",
+          "Se accanto a una parete c'è un raccordo, *Applica l'angolo di sformo* dice prima del calcolo che è d'intralcio e indica *Rimuovi caratteristica* come via d'uscita.",
+          "Quando tagli via una parte di un corpo, spariscono anche smussi, filettature e sedi per dadi dei blocchi che vi si trovavano."
         ]
       },
       {
         "title": "Generare con l'IA",
         "points": [
-          "L'avviso sull'IA dice in due frasi, per ogni destinazione, cosa viene inviato. Dato che il testo è cambiato, lo confermi ancora una volta.",
-          "Le descrizioni dei modelli locali consigliati sono più brevi."
+          "La finestra di generazione calcola in locale con TRELLIS.2 e FLUX.2 [klein] invece di TripoSG e SDXL. Da un testo nasce prima un'immagine, e dall'immagine il modello.",
+          "Prima del download, la configurazione indica licenze e dimensioni dei modelli. Rimuove la vecchia configurazione TripoSG di Solidon e dice prima quali cartelle sono e quanto occupano.",
+          "Le pareti sottili, per esempio di un vaso, arrivano chiuse e con uno spessore.",
+          "L'assistente risponde nella lingua in cui scrivi."
         ]
       }
     ],
@@ -531,62 +559,70 @@
       {
         "title": "Utilização e sistema",
         "points": [
-          "À direita há um cartão com os separadores *Seleção*, *Relatório de verificação* e *Chat*. Os avisos novos já não trazem o relatório para a frente; o separador mostra-os com um símbolo e um número.",
-          "No topo da janela encontra qualquer função em *Pesquisar função* (Ctrl+Shift+P). O mapa de funções segue a ordem da barra de menus.",
-          "Na seleção, cada característica tem uma só ação aberta de cada vez. As outras ficam recolhidas e mostram os seus valores.",
-          "Os diálogos de operação mostram à frente no máximo quatro campos e uma frase. Os valores raramente alterados estão em *Mais definições*, os limites em *Quando evitar?*.",
-          "Um zero com significado diz no campo o que faz, por exemplo «automático», «sem» ou «do material».",
-          "Todos os diálogos têm a mesma forma, com secções planas e uma margem comum para as etiquetas, também as definições, o diálogo de IA e a ativação.",
-          "O relatório de verificação mostra primeiro as constatações e, por cima, uma linha com estado e contadores. *Exportar …* fica ao lado de *Entregar ao slicer …*.",
-          "Constatações, passos da visita guiada e indicações são mais curtos. Onde um botão oferece a ação, a frase já não a repete.",
-          "A ação *Reconstruir modelo* está no corpo selecionado.",
-          "O ecrã inicial mostra em grande, no topo, as quatro formas de começar. *Primeiros passos* pergunta idioma, slicer e impressora e recolhe o resto.",
-          "O catálogo de blocos mostra imagem e título em cada mosaico. Num furo, *Blocos adequados …* mostra só o que cabe num furo."
+          "No Mac, o Solidon precisa agora do macOS 14 ou mais recente. Qualquer Mac a partir de 2018 recebe o macOS 14 gratuitamente.",
+          "O Solidon arranca agora nos Mac Intel com macOS 26. A versão 0.5.3 ficava aí bloqueada no arranque.",
+          "Nos Mac Intel, o Solidon indica agora quando um arredondamento ou um chanfro num corpo exato não pode ser construído. A versão 0.5.3 fechava-se nesse momento.",
+          "Os painéis da esquerda e da direita movem-se pela pega, encaixam num rebordo ou ficam a flutuar. *Vista → Painéis para o seu lugar* repõe-nos.",
+          "Os painéis também podem ficar em baixo à esquerda, em baixo à direita e ao longo do rebordo inferior."
+        ]
+      },
+      {
+        "title": "Mais rápido e com menos memória",
+        "points": [
+          "Um projeto guardado com um modelo grande abre após um reinício em um ou dois segundos em vez de meio minuto: as características reconhecidas ficam guardadas.",
+          "Os modelos grandes carregam visivelmente mais depressa e precisam de menos memória, também com um histórico longo e em computadores com 8 GB.",
+          "Um projeto guardado com muitos passos num modelo grande abre com muito menos memória.",
+          "Um modelo que abre logo após iniciar o programa fica editável até um quarto mais cedo."
         ]
       },
       {
         "title": "Imprimir e entregar ao slicer",
         "points": [
-          "Novidade: Anycubic Slicer Next com as 39 impressoras Anycubic, no Windows, macOS e Linux.",
-          "No Linux, o Solidon encontra OrcaSlicer, Bambu Studio e PrusaSlicer instalados como Flatpak, com as suas impressoras e perfis, também a partir do Flatpak do próprio Solidon.",
-          "No Linux, os slicers em AppImage também oferecem as impressoras de fabricante que neles configurou.",
-          "No Mac, o Solidon passa a criar o ficheiro de impressão também com o Cura. Até agora só encontrava a janela do Cura.",
-          "O Creality Print 7 traz as suas próprias impressoras e a última que escolheu.",
-          "As listas de impressoras indicam cada impressora uma só vez, sem variantes de bico. O bico escolhe-se nas definições de impressão.",
-          "Um bico escolhido nas definições de impressão mantém-se quando depois guarda as definições do programa.",
-          "Se mudar o bico para o PrusaSlicer ou o SuperSlicer, o slicer recebe também o perfil de impressora correspondente.",
-          "O Solidon oferece mais impressoras, também aquelas cujo perfil não indica mesa nem bico, como a Creality CR-20 e a Anycubic i3 Mega no PrusaSlicer.",
-          "As definições de impressão mostram à frente slicer, impressora, bico, filamentos, qualidade, densidade de preenchimento e suportes; o resto está em *Mais definições*.",
-          "Cada motivo de uma sugestão nas definições de impressão cabe numa linha. *Guardar o ficheiro de impressão* aparece assim que existe um ficheiro de impressão."
+          "O diálogo de impressão oferece as impressoras do slicer escolhido, como *Primeiros passos* e *Definições*. Uma impressora assim adotada fica ligada ao seu slicer.",
+          "No diálogo de impressão, o slicer muda-se como em *Primeiros passos*, também com *Escolher programa …* para um que o Solidon não encontra sozinho.",
+          "Uma impressora da lista do Solidon e a mesma do slicer contam como um só aparelho. O diálogo escolhe o perfil com o bico certo e o ficheiro leva o código de início.",
+          "Sem um perfil do slicer guardado, a exportação e a janela principal usam o que o diálogo de impressão propõe para a impressora, com a máquina e o processo do fabricante."
         ]
       },
       {
-        "title": "Furos, furos oblongos e divisão",
+        "title": "Roscas, furos e peças normalizadas",
         "points": [
-          "Uma rosca ou uma bucha de inserção a quente num furo selecionado já não para com «fora da superfície». Se o furo for demasiado largo, o Solidon indica tamanhos adequados.",
-          "Num furo selecionado, a vista mostra só diâmetro, profundidade e duas cotas às arestas. As referências têm o nome do seu lado, por exemplo «Aresta exterior à esquerda».",
-          "Em polegadas, a frase sobre um furo indica a sua medida em polegadas.",
-          "A faixa de pré-visualização diz numa linha o que muda, com os comprimentos na sua unidade de apresentação."
+          "As roscas aceitam agora qualquer diâmetro até 1000 mm, com *Rosca imprimível*, num furo, com *Criar parafuso* ou *Criar tampa de rosca*.",
+          "Os furos normais também podem ser criados e novamente tapados com diâmetros até 1000 mm. Os furos grandes e os escareados mantêm a forma redonda.",
+          "Parafusos, porcas e anilhas existem segundo ISO de M1,6 a M64. Para outros tamanhos, *Medida própria* deriva as medidas dos tamanhos vizinhos e indica-o.",
+          "Com *Ajustado ao furo*, *Pino para furo* constrói a contrapeça: uma cabeça escareada à face para um escareamento, uma rosca externa do mesmo tamanho e passo para uma interna."
         ]
       },
       {
-        "title": "Modelar, texto e esboço",
+        "title": "Blocos",
         "points": [
-          "Em suportes e placas com furos, escareamentos e texto, *Reconstruir modelo* cria agora um contorno com alojamentos subtraídos. Se não encontrar uma estrutura, di-lo.",
-          "Se num esboço aproveitar o corte de um corpo convertido, os seus círculos e arcos chegam como círculos e arcos.",
-          "Se uma peça não puder ser convertida em faces e arestas, o Solidon indica o motivo e uma saída em vez de terminar com um erro inesperado."
+          "Os blocos que são uma peça por si só, como clipes de cabo, nervuras ou porcas, surgem sem seleção como corpo próprio num sítio livre da placa, também num projeto vazio.",
+          "Os seus próprios blocos também surgem assim como corpo próprio e não se prendem a um corpo que já está no projeto.",
+          "Com *Guardar a seleção como bloco*, o corpo selecionado vem com exatamente os passos que o constroem. Se viesse um segundo corpo, o diálogo diz isso antes de guardar.",
+          "Suportes de parede, abraçadeiras de tubo e de perfil e suportes aceitam qualquer parafuso de M3 a M64. Se um tamanho não combina com as outras medidas, o bloco diz o que mudar."
+        ]
+      },
+      {
+        "title": "Editar e esboçar",
+        "points": [
+          "Com *Mover característica*, o material da característica vai tal como está e o lugar antigo fica bem preenchido. Onde não for possível, a seleção di-lo logo.",
+          "Em cordões e gargantas, a seleção só oferece o que a operação consegue fazer.",
+          "Se houver um arredondamento junto a uma parede, *Aplicar o ângulo de saída* diz antes do cálculo que está a atrapalhar e indica *Remover característica* como saída.",
+          "Ao cortar uma parte de um corpo, desaparecem também chanfros, roscas e alojamentos de porcas dos blocos que lá estavam."
         ]
       },
       {
         "title": "Gerar com IA",
         "points": [
-          "O aviso de IA diz em duas frases, por destino, o que é enviado. Como o texto mudou, confirma-o mais uma vez.",
-          "As descrições dos modelos locais recomendados são mais curtas."
+          "O diálogo de geração calcula localmente com TRELLIS.2 e FLUX.2 [klein] em vez de TripoSG e SDXL. Um texto passa primeiro a imagem, e a imagem a modelo.",
+          "Antes de descarregar, a configuração indica as licenças e tamanhos dos modelos. Remove a antiga configuração TripoSG do Solidon e diz antes que pastas são e quanto ocupam.",
+          "As paredes finas, por exemplo de um vaso, chegam fechadas e com espessura.",
+          "O assistente responde na língua em que escreve."
         ]
       }
     ]
   },
-  "changes_total": 47,
-  "notes_version": "0.5.3",
-  "signature": "3c69adaf6db0e760a7994373921f3bcac7e65b33175fe01535fa708bf9d6669c2ae00cf14dcca340c67beecfdc8275b1a6c55815ff5c568dd7ecd18a9501ad04"
+  "changes_total": 199,
+  "notes_version": "0.6.0",
+  "signature": "7edb15fb74ed4879a9fb3b0c2349578339fbc4cb973c0e2ef54b3c99428d96227cbfc897bf7c9039c8d96fa631cbe80cb8a848f5cfd7dca134ff003c938c8309"
 }
