@@ -331,3 +331,63 @@ die systemischen leichten behebt D0.
 - Vorschlag: Mindesthöhe aus den vorhandenen Zeilen, höchstens die Wunschhöhe; Test an einem und an vielen Körpern.
 - Wirkung beim Kunden: Leere Fläche im Objektbaum, die der Ansicht Platz nimmt.
 - Stand: offen RM-737
+
+### FD-26 Parameter anlegen bleibt ohne Freischaltung offen
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `Bearbeiten/Parameter anlegen …`
+- Prüfpunkt: 18
+- Beleg: in `sale_without_trial` und `needs_activation` offen, der Klick endet in einer Absage; Nachmessung D0-P2, Fälle `nach-lizenz` 007 und 008, Bild `n3/008-MessageDialog.png`
+- Ursache: `main_window.py` behält die Aktion nicht, `_update_actions` kann sie nicht sperren; `action_add_parameter` fragt `change_lock` nicht. FD-5 erfasste diesen Fensterbefehl nicht.
+- Vorschlag: Fensterbefehle, die ändern, fragen dieselbe Quelle `change_lock`; ein Wächter über alle ändernden Fensterbefehle.
+- Wirkung beim Kunden: Ein Menübefehl, der in der Demo erst nach dem Klick absagt.
+- Stand: offen RM-737
+
+### FD-27 Eine graue Befundhandlung beschreibt sich mit ihrer Nebenwirkung statt mit dem Sperrgrund
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Kriterium: V3
+- Beleg: während der Rechnung grau, die zugängliche Beschreibung trägt den Nebenwirkungstext; `probe_fault_lock.json` (D0-P2)
+- Ursache: `panels.py` setzt bei der Sperre nur die Kurzhilfe, nicht die Beschreibung.
+- Vorschlag: Sperrgrund als Kurzhilfe und Beschreibung, solange gesperrt.
+- Wirkung beim Kunden: Ein Bildschirmleser liest, was der Knopf täte, nicht warum er nicht geht.
+- Stand: offen RM-737
+
+### FD-28 Die Maßgruppe nimmt ohne Freischaltung Eingaben an
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Prüfpunkt: 18
+- Beleg: in beiden gesperrten Zuständen bleibt das Feld der Maßgruppe offen, erst *Übernehmen* ist grau; bei `needs_activation` nennt der Satz keinen Menüweg (D0-P2, Bild `q8-nach-uebernehmen.png`)
+- Ursache: `placement_flow.py` sperrt nur *Übernehmen*, nicht den Eingang.
+- Vorschlag: Eingang und Übernehmen sperren mit Grund und Ausweg aus `change_lock`.
+- Wirkung beim Kunden: Er tippt ein Maß, das nicht übernommen werden kann.
+- Stand: offen RM-737
+
+### FD-29 Am echten Fenster fehlen an einer gesetzten Bohrung Bohrung ändern und Zum Langloch ziehen
+
+- Art: Fehler
+- Schwere: schwer
+- Funktion: `resize_hole`
+- Prüfpunkt: 1
+- Beleg: am echten Fenster verborgen, ohne Fenster sichtbar (`n5-echt.out`, `n5-offscreen.out`, D0-P2); Schwere vorläufig nach Konzept §4 („nicht auffindbar“), bis die Ursache feststeht
+- Ursache: offen — Unterschied zwischen echtem Fenster und offscreen.
+- Vorschlag: am echten Fenster nachstellen, Ursache zuordnen, beheben; Fenstertest an der kleinsten Arbeitsfläche.
+- Wirkung beim Kunden: Er findet an seiner Bohrung die Handlung nicht, die sie ändert.
+- Stand: offen RM-737
+
+### FD-30 Zwei Sperrgründe nennen keinen Ausweg
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: `finding.action:place_on_bed`
+- Kriterium: V5
+- Beleg: „Aktivieren Sie diesen Rechner einmal online …“ und „Erst nach der Berechnung …“ nennen keine bedienbare Menüzeile und keinen offenen Knopf (D0-P2)
+- Ursache: Sätze der Sperre ohne Weg.
+- Vorschlag: den Weg nennen, etwa die Menüzeile der Freischaltung; in allen Sprachen neu übersetzt.
+- Wirkung beim Kunden: Er liest, dass es nicht geht, aber nicht, was er tun kann.
+- Stand: offen RM-737
