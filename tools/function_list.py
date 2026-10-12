@@ -63,6 +63,10 @@ if TYPE_CHECKING:
     from app.core.registry import OperationSpec, Registry
 
 UI: Final = ROOT / "app" / "ui"
+#: Klassen, deren Module eine Suche unter ``app/ui`` finden muss: das Hauptfenster, die
+#: Ansicht und ein Dialog. Fehlt eines, prüft die Liste nichts — eine Zählprobe bliebe
+#: dabei grün, auch wenn gerade die größte Datei fehlt.
+UI_CLASSES: Final[tuple[str, ...]] = ("MainWindow", "Viewport", "SettingsDialog")
 ROW_SPECS: Final = DATA / "function_rows"
 
 PACKAGES: Final[tuple[str, ...]] = tuple(f"D{number}" for number in range(1, 13))
@@ -424,9 +428,28 @@ def ui_sources(root: Path = UI) -> dict[str, str]:
         path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8")
         for path in sorted(root.rglob("*.py"))
     }
-    if len(found) < 50:
-        raise FunctionListError([f"nur {len(found)} Module unter {root} — dann prüft das nichts"])
+    _require_definitions(found, UI_CLASSES, root)
     return found
+
+
+def missing_definitions(sources: Mapping[str, str], names: Iterable[str]) -> list[str]:
+    """Die genannten Klassen, die in keinem der Quelltexte definiert sind."""
+    defined: set[str] = set()
+    for text in sources.values():
+        defined.update(re.findall(r"^[ \t]*class[ \t]+(\w+)", text, flags=re.MULTILINE))
+    return [name for name in names if name not in defined]
+
+
+def _require_definitions(sources: Mapping[str, str], names: Iterable[str], root: Path) -> None:
+    """Hält an, wenn die Suche unter ``root`` das Modul einer der Klassen nicht fand."""
+    if missing := missing_definitions(sources, names):
+        raise FunctionListError(
+            [
+                f"{name}: keine Definition unter {root} — die Suche fand ihr Modul nicht, "
+                "dann prüft die Liste nichts"
+                for name in missing
+            ]
+        )
 
 
 # --- Operationen -----------------------------------------------------------------
@@ -611,6 +634,9 @@ def surface_of(name: str) -> tuple[str, str] | None:
 
 
 KERNEL: Final = ROOT / "app" / "core"
+#: Klassen, deren Module die Suche nach Handlungen unter ``app/core`` finden muss: die
+#: Handlung selbst, der Verlauf und das Register.
+KERNEL_CLASSES: Final[tuple[str, ...]] = ("Action", "History", "Registry")
 
 #: Handler des Fensters, die nur ein Fehlerdialog anbietet — nie ein Befund im Bericht.
 #: Sie sind der Fehlerweg (Prüfpunkt 7) der Zeilen, deren Fehler sie tragen, und
@@ -709,8 +735,9 @@ def kernel_action_ids(root: Path = KERNEL) -> frozenset[str]:
     """Jede Handlung, die der Kern einem Befund oder Fehler mitgeben kann: jedes
     ``Action("<id>", …)`` und ``Action(id="<id>", …)`` unter ``app/core`` (rekursiv)."""
     found: set[str] = set()
+    texts: dict[str, str] = {}
     for path in sorted(root.rglob("*.py")):
-        text = path.read_text(encoding="utf-8")
+        text = texts[path.as_posix()] = path.read_text(encoding="utf-8")
         if "Action(" not in text:
             continue
         for node in ast.walk(ast.parse(text, filename=str(path))):
@@ -725,8 +752,7 @@ def kernel_action_ids(root: Path = KERNEL) -> frozenset[str]:
             for value in (first, named):
                 if isinstance(value, ast.Constant) and isinstance(value.value, str):
                     found.add(value.value)
-    if len(found) < 50:
-        raise FunctionListError([f"nur {len(found)} Handlungen im Kern — dann prüft das nichts"])
+    _require_definitions(texts, KERNEL_CLASSES, root)
     return frozenset(found)
 
 

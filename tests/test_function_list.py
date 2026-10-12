@@ -386,6 +386,29 @@ def test_every_raw_message_window_is_a_row(rows: list[fl.Row], ui_sources: dict[
     assert "meldung:show_expired_demo" not in found
 
 
+def test_the_searches_find_the_modules_of_their_key_classes(
+    ui_sources: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Statt einer Zählprobe (Bauart CS-12): Die Suche unter ``app/ui`` findet die Module
+    von Hauptfenster, Ansicht und Einstellungsdialog, die unter ``app/core`` die von
+    Handlung, Verlauf und Register. Fehlt eines, ist die Liste rot."""
+    assert fl.missing_definitions(ui_sources, fl.UI_CLASSES) == []
+    for name in fl.UI_CLASSES:
+        without = {
+            module: text
+            for module, text in ui_sources.items()
+            if fl.missing_definitions({module: text}, [name])
+        }
+        assert fl.missing_definitions(without, fl.UI_CLASSES) == [name]
+    assert fl.kernel_action_ids()
+    monkeypatch.setattr(fl, "UI_CLASSES", (*fl.UI_CLASSES, "GibtEsNicht"))
+    with pytest.raises(fscenes.FunctionListError, match="GibtEsNicht"):
+        fl.ui_sources()
+    monkeypatch.setattr(fl, "KERNEL_CLASSES", ("Action", "GibtEsAuchNicht"))
+    with pytest.raises(fscenes.FunctionListError, match="GibtEsAuchNicht"):
+        fl.kernel_action_ids()
+
+
 def test_two_message_functions_of_one_name_turn_red(cached_sources: dict[str, str]) -> None:
     """Die Kennung eines Meldungsfensters ist sein Funktionsname. Heißen zwei so, hält
     die Liste an und nennt beide Orte — sie teilen sich keine Zeile."""
