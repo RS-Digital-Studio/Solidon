@@ -21,6 +21,9 @@ Szene aus ``tests/data/function_scenes.toml`` (Bauplan D0 §2.5). Eine Zeile,
 die keinem Paket zugeordnet werden kann, und eine Operation, deren Anforderung
 keine Szene hat, sind Fehler: Sie halten die Liste an, statt still zu fehlen.
 
+Den Quelltext der Oberfläche liest ``tools/function_scan.py``, den Szenenkatalog
+liest, baut und prüft ``tools/function_scenes.py``.
+
     python tools/function_list.py --paket D4 --format md
     python tools/function_list.py --check
     python tools/function_list.py --szenen --out <ordner außerhalb des Baums> [--schwer]
@@ -35,8 +38,7 @@ import re
 import sys
 import tomllib
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import asdict, dataclass, field, replace
-from functools import cache, lru_cache
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -44,15 +46,23 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.function_scan import scan_ui, statements  # noqa: E402
+from tools.function_scenes import (  # noqa: E402
+    DATA,
+    EXACT,
+    MESH,
+    FunctionListError,
+    Scene,
+    load_scenes,
+    registry,
+    save_scenes,
+    validate_scenes,
+)
+
 if TYPE_CHECKING:
     from app.core.registry import OperationSpec, Registry
-    from app.core.scene.evaluate import EvaluationResult
-    from app.core.scene.project import Project
-    from app.core.types import Finding
 
 UI: Final = ROOT / "app" / "ui"
-DATA: Final = ROOT / "tests" / "data"
-SCENES: Final = DATA / "function_scenes.toml"
 ROW_SPECS: Final = DATA / "function_rows"
 
 PACKAGES: Final[tuple[str, ...]] = tuple(f"D{number}" for number in range(1, 13))
@@ -295,7 +305,6 @@ TOOL_PACKAGES: Final[dict[str, str]] = {
 
 #: Benannte Kontextaktionen von Baum und Parameterleiste (W's Objektnamen) nach
 #: Paket und Anforderung. *Auf dieser Fläche zeichnen* führt in den Zeichenmodus (D7).
-CONTEXT_PREFIXES: Final[tuple[str, ...]] = ("tree.", "parameters.")
 CONTEXT_PACKAGES: Final[dict[str, tuple[str, str]]] = {
     # *Diesen Schritt ändern* steht an einem erzeugten Merkmal (panels: Baumkontext).
     "tree.step": ("D11", "merkmal:hole"),
@@ -305,26 +314,8 @@ CONTEXT_PACKAGES: Final[dict[str, tuple[str, str]]] = {
     "parameters.edit": ("D10", "parameter"),
 }
 
-#: Das Modul der Einstellungen; ein Abschnitt ist dort ein ``collapsible(tr("…"), …)``.
-SETTINGS_MODULE: Final = "app/ui/settings_dialog.py"
 SETTINGS_PACKAGE: Final = "D12"
 
-#: Rohe Qt-Fenster: Klassen und die Fabrikfunktionen, die eines bauen.
-RAW_CLASSES: Final[frozenset[str]] = frozenset({"QMessageBox", "QInputDialog", "QColorDialog"})
-RAW_FACTORIES: Final[frozenset[str]] = frozenset(
-    {
-        "about",
-        "critical",
-        "information",
-        "question",
-        "warning",
-        "getColor",
-        "getDouble",
-        "getInt",
-        "getItem",
-        "getText",
-    }
-)
 
 #: Funktionen, die ein rohes Meldungsfenster bauen (``<modul>.<funktion>``), nach Paket
 #: und Anforderung. Konzept §6: Wiederherstellen und Speicherfrage in D1, die
@@ -366,10 +357,6 @@ RAW_WINDOW_IDS: Final[dict[str, str]] = {"dialogs.show_expired_demo": "startup.e
 
 # --- Anforderung und Szene (Bauplan D0 §2.5) ----------------------------------
 
-EXACT: Final = "exakt"
-MESH: Final = "netz"
-KERNELS: Final[tuple[str, ...]] = (EXACT, MESH)
-
 #: Merkmalsarten, die es nur am Netz gibt: Ein exakter Körper ist immer
 #: geschlossen, eine offene Randkante hat er nicht.
 MESH_ONLY_KINDS: Final[frozenset[str]] = frozenset({"edge_loop"})
@@ -406,29 +393,6 @@ REQUIREMENT_SCENES: Final[dict[str, str]] = {
 FEATURE_REQUIREMENT: Final = "merkmal:"
 FEATURE_SCENE: Final = "merkmal.{kind}.{kernel}"
 
-#: Was eine Szene zusagen darf (``promises``).
-PROMISE_KEYS: Final[frozenset[str]] = frozenset(
-    {
-        "objects",
-        "kinds",
-        "body",
-        "findings",
-        "actions",
-        "stops",
-        "triangles_over",
-        "seconds_over",
-    }
-)
-BODY_STATES: Final[tuple[str, ...]] = ("closed", "open", "parts", "cavity")
-
-
-class FunctionListError(Exception):
-    """Die Liste lässt sich nicht vollständig zuordnen — mit allen Fundstellen."""
-
-    def __init__(self, problems: Sequence[str]) -> None:
-        super().__init__("\n".join(problems))
-        self.problems = tuple(problems)
-
 
 @dataclass(frozen=True, slots=True)
 class Row:
@@ -453,419 +417,6 @@ class Row:
     """Die Zeilenspezifikation aus ``tests/data/function_rows/`` — leer heißt ungeprüft."""
 
 
-# --- Dialogklassen ---------------------------------------------------------------
-
-#: Qt-Klassen, deren Unterklassen ein eigenes Fenster sind. ``QMessageBox`` und
-#: die übrigen Standarddialoge erben von ``QDialog``; wer von ihnen ableitet,
-#: baut ebenfalls einen Dialog.
-QT_WINDOW_BASES: Final[frozenset[str]] = frozenset(
-    {
-        "QDialog",
-        "QMainWindow",
-        "QMessageBox",
-        "QFileDialog",
-        "QInputDialog",
-        "QColorDialog",
-        "QFontDialog",
-        "QProgressDialog",
-        "QErrorMessage",
-        "QWizard",
-    }
-)
-
-
-def _base_names(node: ast.ClassDef) -> tuple[str, ...]:
-    names: list[str] = []
-    for base in node.bases:
-        if isinstance(base, ast.Name):
-            names.append(base.id)
-        elif isinstance(base, ast.Attribute):
-            names.append(base.attr)
-    return tuple(names)
-
-
-def _statements(tree: ast.Module) -> Iterator[ast.stmt]:
-    """Jede Anweisung, auch in Funktionen, Klassen, Verzweigungen und Ausnahmen.
-
-    Eine Klasse ist immer eine Anweisung; Ausdrücke brauchen ihre Suche nicht
-    zu sehen, und ohne sie ist der Gang ein Bruchteil von ``ast.walk``.
-    """
-    pending: list[ast.stmt] = list(tree.body)
-    while pending:
-        node = pending.pop()
-        yield node
-        for name in ("body", "orelse", "finalbody"):
-            pending.extend(
-                child for child in getattr(node, name, ()) if isinstance(child, ast.stmt)
-            )
-        for handler in getattr(node, "handlers", ()):
-            pending.extend(handler.body)
-        for case in getattr(node, "cases", ()):
-            pending.extend(case.body)
-
-
-def _texts(node: ast.AST) -> tuple[str, ...]:
-    """Die Zeichenketten, die ein Ausdruck ergeben kann: eine Konstante oder beide
-    Zweige eines ``a if b else c`` (``"history.up" if upwards else "history.down"``)."""
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return (node.value,)
-    if isinstance(node, ast.IfExp):
-        return (*_texts(node.body), *_texts(node.orelse))
-    return ()
-
-
-def _object_names(node: ast.AST) -> tuple[str, ...]:
-    """``x.setObjectName("<name>")`` → die Namen, die der Aufruf setzen kann."""
-    if (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "setObjectName"
-        and node.args
-    ):
-        return _texts(node.args[0])
-    return ()
-
-
-def _tool_key(node: ast.AST) -> str | None:
-    """``….tools.add("section", …)`` → ``section``, sonst ``None``."""
-    if (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "add"
-        and isinstance(node.func.value, ast.Attribute)
-        and node.func.value.attr == "tools"
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and isinstance(node.args[0].value, str)
-    ):
-        return node.args[0].value
-    return None
-
-
-def _section_title(node: ast.AST, builders: Iterable[str] = ("collapsible",)) -> str:
-    """``collapsible(tr("Anwendung"), …)`` → ``Anwendung``, sonst leer; ebenso der
-    Aufruf eines der genannten Abschnittsbauer."""
-    if (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id in builders
-        and node.args
-    ):
-        title = node.args[0]
-        if (
-            isinstance(title, ast.Call)
-            and isinstance(title.func, ast.Name)
-            and title.func.id in {"tr", "_"}
-            and title.args
-        ):
-            title = title.args[0]
-        if isinstance(title, ast.Constant) and isinstance(title.value, str):
-            return title.value
-    return ""
-
-
-def _builds_raw_window(node: ast.AST) -> bool:
-    """``QMessageBox(…)`` oder ``QInputDialog.getItem(…)`` — ein rohes Qt-Fenster."""
-    if not isinstance(node, ast.Call):
-        return False
-    func = node.func
-    if isinstance(func, ast.Name):
-        return func.id in RAW_CLASSES
-    return (
-        isinstance(func, ast.Attribute)
-        and isinstance(func.value, ast.Name)
-        and func.value.id in RAW_CLASSES
-        and func.attr in RAW_FACTORIES
-    )
-
-
-def _history_names(node: ast.AST) -> tuple[str, ...]:
-    """``x.setObjectName("history.<name>")`` → ``(<name>,)``; sonst leer."""
-    if (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "setObjectName"
-        and node.args
-    ):
-        return tuple(
-            text.removeprefix("history.")
-            for text in _texts(node.args[0])
-            if text.startswith("history.")
-        )
-    return ()
-
-
-def _window_action(node: ast.AST) -> str | None:
-    """``….add_window_action("edit.auto_split", …)`` → ``edit.auto_split``, sonst ``None``."""
-    if (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "add_window_action"
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and isinstance(node.args[0].value, str)
-    ):
-        return node.args[0].value
-    return None
-
-
-@dataclass(frozen=True, slots=True)
-class UiScan:
-    """Was ein Gang durch die Quelltexte der Oberfläche findet."""
-
-    classes: Mapping[str, tuple[str, ...]]
-    """Klassenname → Module, für jede Dialog- oder Fensterklasse."""
-    history: tuple[str, ...]
-    """Die Einträge des Kontextmenüs im Verlauf (Objektnamen ``history.<x>``)."""
-    window_actions: tuple[str, ...] = ()
-    """Die Kennungen, unter denen ``add_window_action`` Befehle in die Auswahlkarte hängt."""
-    tools: tuple[str, ...] = ()
-    """Die Schlüssel der Werkzeuge unter der Ansicht (``….tools.add``)."""
-    context_actions: tuple[str, ...] = ()
-    """Die Objektnamen benannter Kontextaktionen (:data:`CONTEXT_PREFIXES`)."""
-    settings_sections: tuple[str, ...] = ()
-    """Die Abschnitte der Einstellungen, in ihrer Folge im Dialog."""
-    raw_windows: tuple[str, ...] = ()
-    """Die Funktionen, die ein rohes Meldungsfenster bauen, als ``<modul>.<funktion>``."""
-    raw_targets: Mapping[str, str] = field(default_factory=dict)
-    """Das Ziel, das ein Meldungsfenster selbst setzt (``setProperty(…TARGET_PROPERTY, …)``
-    oder ``raw_window("…")``), je ``<modul>.<funktion>``."""
-    settings_targets: Mapping[str, str] = field(default_factory=dict)
-    """Das Ziel eines Einstellungsabschnitts, den sein Abschnittsbauer kennzeichnet."""
-    texts: frozenset[str] = frozenset()
-    """Jeder übersetzbare Text in ``tr(…)`` oder ``_(…)`` (:func:`command_texts`)."""
-
-
-def scan_ui(sources: Mapping[str, str]) -> UiScan:
-    """Ein Gang je Modul: Dialog- und Fensterklassen, Verlaufseinträge, Fensteraktionen,
-    Werkzeuge, Kontextaktionen, Einstellungsabschnitte, rohe Meldungsfenster und Texte.
-
-    ``sources`` ordnet einen Modulpfad seinem Quelltext zu. Basen werden über
-    die eigenen Klassen aufgelöst, gleich in welchem Modul sie stehen, auch
-    verschachtelte Klassen zählen. Das Ergebnis wird je Quelltextstand gemerkt:
-    Derselbe Inhalt wird in einem Prozess nur einmal gelesen.
-    """
-    return _scan(tuple(sorted(sources.items())))
-
-
-@lru_cache(maxsize=4)
-def _scan(items: tuple[tuple[str, str], ...]) -> UiScan:
-    bases: dict[str, set[tuple[str, ...]]] = {}
-    modules: dict[str, list[str]] = {}
-    history: set[str] = set()
-    window_actions: set[str] = set()
-    tools: set[str] = set()
-    contexts: set[str] = set()
-    sections: list[str] = []
-    raw: set[str] = set()
-    raw_targets: dict[str, str] = {}
-    settings_targets: dict[str, str] = {}
-    texts: set[str] = set()
-    for module, text in items:
-        tree = ast.parse(text, filename=module)
-        stem = Path(module).stem
-        raw_here = any(name in text for name in RAW_CLASSES)
-        constants = _module_texts(tree)
-        for node in _statements(tree):
-            if isinstance(node, ast.ClassDef):
-                bases.setdefault(node.name, set()).add(_base_names(node))
-                modules.setdefault(node.name, []).append(module)
-            elif (
-                raw_here
-                and isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
-                and any(_builds_raw_window(inner) for inner in _own_nodes(node))
-            ):
-                raw.add(f"{stem}.{node.name}")
-                if marked := _own_target(node, constants):
-                    raw_targets[f"{stem}.{node.name}"] = marked
-        if module == SETTINGS_MODULE:
-            titles, targets = _settings_sections(tree)
-            sections.extend(titles)
-            settings_targets.update(targets)
-        for expression in ast.walk(tree):
-            if not isinstance(expression, ast.Call):
-                continue
-            texts.update(_source_text(expression))
-            history.update(_history_names(expression))
-            if (key := _window_action(expression)) is not None:
-                window_actions.add(key)
-            if (tool := _tool_key(expression)) is not None:
-                tools.add(tool)
-            contexts.update(
-                name for name in _object_names(expression) if name.startswith(CONTEXT_PREFIXES)
-            )
-
-    @cache
-    def is_window(name: str, seen: frozenset[str] = frozenset()) -> bool:
-        if name in QT_WINDOW_BASES:
-            return True
-        if name in seen or name not in bases:
-            return False
-        return any(is_window(base, seen | {name}) for variant in bases[name] for base in variant)
-
-    classes = {name: tuple(sorted(modules[name])) for name in bases if is_window(name)}
-    return UiScan(
-        classes=classes,
-        history=tuple(sorted(history)),
-        window_actions=tuple(sorted(window_actions)),
-        tools=tuple(sorted(tools)),
-        context_actions=tuple(sorted(contexts)),
-        settings_sections=tuple(dict.fromkeys(sections)),
-        raw_windows=tuple(sorted(raw)),
-        raw_targets=raw_targets,
-        settings_targets=settings_targets,
-        texts=frozenset(texts),
-    )
-
-
-def _module_texts(tree: ast.Module) -> dict[str, str]:
-    """Die Textkonstanten der obersten Ebene eines Moduls (``NAME = "…"``)."""
-    found: dict[str, str] = {}
-    for node in tree.body:
-        value = node.value if isinstance(node, ast.Assign | ast.AnnAssign) else None
-        if not (isinstance(value, ast.Constant) and isinstance(value.value, str)):
-            continue
-        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-        found.update({name.id: value.value for name in targets if isinstance(name, ast.Name)})
-    return found
-
-
-def _text_of(node: ast.AST, constants: Mapping[str, str]) -> str:
-    """Eine Zeichenkette oder der Name einer Textkonstante des Moduls — sonst leer."""
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
-    if isinstance(node, ast.Name):
-        return constants.get(node.id, "")
-    return ""
-
-
-def _is_target_property(node: ast.AST) -> bool:
-    """``TARGET_PROPERTY`` oder ``guides.TARGET_PROPERTY``."""
-    name = node.attr if isinstance(node, ast.Attribute) else getattr(node, "id", "")
-    return name == "TARGET_PROPERTY"
-
-
-def _own_target(
-    function: ast.FunctionDef | ast.AsyncFunctionDef, constants: Mapping[str, str]
-) -> str:
-    """Das Kennzeichen, das ein Meldungsfenster selbst setzt — ``box.setProperty(…TARGET_
-    PROPERTY, X)`` oder ``with raw_window(X)`` —, sonst leer."""
-    for node in _own_nodes(function):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "setProperty"
-            and len(node.args) == 2
-            and _is_target_property(node.args[0])
-            and (found := _text_of(node.args[1], constants))
-        ):
-            return found
-        if isinstance(node, ast.With | ast.AsyncWith):
-            for item in node.items:
-                call = item.context_expr
-                if (
-                    isinstance(call, ast.Call)
-                    and _called_name(call) == "raw_window"
-                    and call.args
-                    and (found := _text_of(call.args[0], constants))
-                ):
-                    return found
-    return ""
-
-
-def _called_name(call: ast.Call) -> str:
-    """``f(…)`` → ``f``, ``modul.f(…)`` → ``f``, sonst leer."""
-    if isinstance(call.func, ast.Attribute):
-        return call.func.attr
-    return call.func.id if isinstance(call.func, ast.Name) else ""
-
-
-def _settings_sections(tree: ast.Module) -> tuple[list[str], dict[str, str]]:
-    """Die Abschnitte der Einstellungen und ihre Ziele.
-
-    Ein Abschnitt ist ein ``collapsible(tr("…"))`` oder der Aufruf eines Abschnittsbauers
-    — einer Funktion des Moduls, die ``collapsible`` ruft. Setzt der Bauer sein
-    Kennzeichen als ``f"<präfix>{guides.<name>(title.msgid)}"``, ist das Ziel des
-    Abschnitts dieser Ausdruck über seinem Titel.
-    """
-    from app.core import guides
-
-    builders: dict[str, tuple[str, Any]] = {}
-    for node in tree.body:
-        if not isinstance(node, ast.FunctionDef):
-            continue
-        calls = [item for item in _own_nodes(node) if isinstance(item, ast.Call)]
-        if not any(_called_name(item) == "collapsible" for item in calls):
-            continue
-        builders[node.name] = ("", None)
-        for item in calls:
-            if not (
-                isinstance(item.func, ast.Attribute)
-                and item.func.attr == "setProperty"
-                and len(item.args) == 2
-                and _is_target_property(item.args[0])
-                and isinstance(item.args[1], ast.JoinedStr)
-            ):
-                continue
-            parts = item.args[1].values
-            if (
-                len(parts) == 2
-                and isinstance(parts[0], ast.Constant)
-                and isinstance(parts[1], ast.FormattedValue)
-                and isinstance(parts[1].value, ast.Call)
-                and isinstance(parts[1].value.func, ast.Attribute)
-            ):
-                transform = getattr(guides, parts[1].value.func.attr, None)
-                builders[node.name] = (str(parts[0].value), transform)
-    titles: list[str] = []
-    targets: dict[str, str] = {}
-    callers = {"collapsible", *builders}
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and (title := _section_title(node, callers))):
-            continue
-        titles.append(title)
-        prefix, transform = builders.get(_called_name(node), ("", None))
-        if prefix and callable(transform):
-            targets[title] = f"{prefix}{transform(title)}"
-    return titles, targets
-
-
-def _own_nodes(function: ast.FunctionDef | ast.AsyncFunctionDef) -> Iterator[ast.AST]:
-    """Die Knoten einer Funktion ohne die ihrer eingeschachtelten Funktionen — die
-    stehen selbst als Anweisung da und werden für sich gezählt."""
-    pending: list[ast.AST] = list(function.body)
-    while pending:
-        node = pending.pop()
-        yield node
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
-            continue
-        pending.extend(ast.iter_child_nodes(node))
-
-
-def _source_text(node: ast.Call) -> tuple[str, ...]:
-    """``tr("…")`` oder ``_("…")`` → der Text, sonst leer."""
-    if (
-        isinstance(node.func, ast.Name)
-        and node.func.id in {"tr", "_"}
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and isinstance(node.args[0].value, str)
-    ):
-        return (node.args[0].value,)
-    return ()
-
-
-def window_classes_in(sources: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
-    """Klassenname → Module, für jede Klasse, die (transitiv) einen Dialog oder ein Fenster baut."""
-    return dict(scan_ui(sources).classes)
-
-
-def history_entries(sources: Mapping[str, str]) -> tuple[str, ...]:
-    """Die Objektnamen ``history.<x>`` aus ``setObjectName``-Aufrufen — die Einträge
-    des Kontextmenüs im Verlauf, unter denen Anleitung und Prüfstand sie finden."""
-    return scan_ui(sources).history
-
-
 def ui_sources(root: Path = UI) -> dict[str, str]:
     """Jede Python-Datei unter ``app/ui``, rekursiv — auch in Unterpaketen."""
     found = {
@@ -878,15 +429,6 @@ def ui_sources(root: Path = UI) -> dict[str, str]:
 
 
 # --- Operationen -----------------------------------------------------------------
-
-
-def registry() -> Registry:
-    """Das geladene Register der Anwendung."""
-    from app.core.bootstrap import load_operations
-    from app.core.registry import REGISTRY
-
-    load_operations()
-    return REGISTRY
 
 
 def package_of_operation(spec: OperationSpec) -> str:
@@ -1195,7 +737,7 @@ def report_handlers(sources: Mapping[str, str] | None = None) -> frozenset[str]:
     for module, text in (sources if sources is not None else ui_sources()).items():
         if "def error_handlers" not in text:
             continue
-        for node in _statements(ast.parse(text, filename=module)):
+        for node in statements(ast.parse(text, filename=module)):
             if isinstance(node, ast.ClassDef) and node.name == "MainWindow":
                 for method in node.body:
                     if isinstance(method, ast.FunctionDef) and method.name == "error_handlers":
@@ -1818,360 +1360,6 @@ def problems(menubar: Iterable[MenuEntry] = ()) -> list[str]:
     issues += validate_scenes(load_scenes())
     issues += validate_specs(found, load_specs(), load_scenes())
     return issues
-
-
-# --- Szenenkatalog ---------------------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class SceneStep:
-    """Ein Schritt eines Szenenrezepts: eine Operation mit Eingängen und Werten."""
-
-    op: str
-    inputs: tuple[str, ...] = ()
-    params: Mapping[str, Any] = field(default_factory=dict)
-    title: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class Scene:
-    """Ein Rezept aus ``tests/data/function_scenes.toml`` (Bauplan D0 §2.5)."""
-
-    key: str
-    summary: str
-    ops: tuple[SceneStep, ...] = ()
-    base: str = ""
-    sources: Mapping[str, str] = field(default_factory=dict)
-    """Quellkennung → Pfad relativ zu ``tests/data``."""
-    kernel: str = ""
-    heavy: bool = False
-    project: bool = True
-    """``False`` heißt: kein Projekt, der Startbildschirm."""
-    promises: Mapping[str, Any] = field(default_factory=dict)
-    select: str = ""
-    """Das Merkmal, das eine Zeile mit Merkmalsanforderung wählt: ``obj_<n>.<merkmal>``."""
-    parameters: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
-    """Projektparameter vor dem ersten Schritt: Name → ``{value, unit, title}``."""
-
-
-SCENE_KEYS: Final[frozenset[str]] = frozenset(
-    {
-        "summary",
-        "ops",
-        "base",
-        "sources",
-        "kernel",
-        "heavy",
-        "project",
-        "promises",
-        "select",
-        "parameters",
-    }
-)
-PARAMETER_KEYS: Final[frozenset[str]] = frozenset({"value", "unit", "title"})
-STEP_KEYS: Final[frozenset[str]] = frozenset({"op", "inputs", "params", "title"})
-
-
-def load_scenes(path: Path = SCENES) -> dict[str, Scene]:
-    """Der Szenenkatalog in seiner Reihenfolge. Unbekannte Schlüssel halten an."""
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
-    problems: list[str] = []
-    scenes: dict[str, Scene] = {}
-    for key, entry in data.get("scene", {}).items():
-        unknown = set(entry) - SCENE_KEYS
-        if unknown:
-            problems.append(f"Szene {key}: unbekannte Schlüssel {sorted(unknown)}")
-        steps: list[SceneStep] = []
-        for step in entry.get("ops", []):
-            extra = set(step) - STEP_KEYS
-            if extra or "op" not in step:
-                problems.append(f"Szene {key}: Schritt {step} mit {sorted(extra) or 'ohne op'}")
-                continue
-            steps.append(
-                SceneStep(
-                    op=step["op"],
-                    inputs=tuple(step.get("inputs", ())),
-                    params=dict(step.get("params", {})),
-                    title=step.get("title", ""),
-                )
-            )
-        scenes[key] = Scene(
-            key=key,
-            summary=entry.get("summary", ""),
-            ops=tuple(steps),
-            base=entry.get("base", ""),
-            sources=dict(entry.get("sources", {})),
-            kernel=entry.get("kernel", ""),
-            heavy=bool(entry.get("heavy", False)),
-            project=bool(entry.get("project", True)),
-            promises=dict(entry.get("promises", {})),
-            select=entry.get("select", ""),
-            parameters={name: dict(values) for name, values in entry.get("parameters", {}).items()},
-        )
-    if problems:
-        raise FunctionListError(problems)
-    return scenes
-
-
-def recipe(key: str, scenes: Mapping[str, Scene]) -> tuple[dict[str, str], list[SceneStep]]:
-    """Quellen und Schritte einer Szene samt ihrer Basis, die Basis zuerst."""
-    chain: list[Scene] = []
-    current: str = key
-    while current:
-        if current not in scenes:
-            raise FunctionListError([f"Szene {key}: Basis {current!r} gibt es nicht"])
-        if any(entry.key == current for entry in chain):
-            raise FunctionListError([f"Szene {key}: Basis im Kreis über {current!r}"])
-        chain.append(scenes[current])
-        current = scenes[current].base
-    sources: dict[str, str] = {}
-    steps: list[SceneStep] = []
-    for scene in reversed(chain):
-        sources.update(scene.sources)
-        steps.extend(scene.ops)
-    return sources, steps
-
-
-def parameters_of(key: str, scenes: Mapping[str, Scene]) -> dict[str, Mapping[str, Any]]:
-    """Die Projektparameter einer Szene samt ihrer Basis."""
-    chain: list[Scene] = []
-    current = key
-    while current and current in scenes and scenes[current] not in chain:
-        chain.append(scenes[current])
-        current = scenes[current].base
-    found: dict[str, Mapping[str, Any]] = {}
-    for scene in reversed(chain):
-        found.update(scene.parameters)
-    return found
-
-
-def validate_scenes(scenes: Mapping[str, Scene]) -> list[str]:
-    """Was an den Rezepten nicht stimmt, ohne zu rechnen: Basis, Operationen,
-    Quellen, Kern, Zusagen."""
-    from app.core import expressions
-    from app.core.errors import AppError
-    from app.core.registry import FEATURE_KINDS, validate
-
-    source = registry()
-    issues: list[str] = []
-    for key, scene in scenes.items():
-        if not scene.summary:
-            issues.append(f"Szene {key}: ohne summary")
-        if scene.kernel not in ("", *KERNELS):
-            issues.append(f"Szene {key}: Kern {scene.kernel!r} unbekannt")
-        for suffix in KERNELS:
-            if key.endswith(f".{suffix}") and scene.kernel != suffix:
-                issues.append(f"Szene {key}: der Name sagt {suffix}, kernel sagt {scene.kernel!r}")
-        try:
-            sources, steps = recipe(key, scenes)
-        except FunctionListError as error:
-            issues.extend(error.problems)
-            continue
-        for name, relative in sources.items():
-            if not (DATA / relative).is_file():
-                issues.append(f"Szene {key}: Quelle {name} → {relative} fehlt in tests/data")
-        parameters = parameters_of(key, scenes)
-        for name, values in parameters.items():
-            if set(values) - PARAMETER_KEYS or not isinstance(values.get("value"), int | float):
-                issues.append(f"Szene {key}: Parameter {name} braucht value, unit, title")
-        numbers = {name: float(values.get("value", 0.0)) for name, values in parameters.items()}
-        for step in steps:
-            if not source.has(step.op):
-                issues.append(f"Szene {key}: Operation {step.op!r} gibt es nicht")
-                continue
-            # Grenzen und Arten wie beim Rechnen: ``History.apply`` prüft nur
-            # Kennungen und Namen, ein Wert außerhalb des Bereichs käme durch.
-            try:
-                resolved = expressions.resolve_params(dict(step.params), numbers)
-                validate(source.get(step.op).params, resolved)
-            except AppError as error:
-                issues.append(f"Szene {key}: {step.op} — {error.detail or error.title}")
-        if not scene.project and steps:
-            issues.append(f"Szene {key}: ohne Projekt, aber mit Schritten")
-        unknown = set(scene.promises) - PROMISE_KEYS
-        if unknown:
-            issues.append(f"Szene {key}: unbekannte Zusagen {sorted(unknown)}")
-        for kind in scene.promises.get("kinds", ()):
-            if kind not in FEATURE_KINDS:
-                issues.append(f"Szene {key}: Merkmalsart {kind!r} gibt es nicht")
-        body = scene.promises.get("body")
-        if body is not None and body not in BODY_STATES:
-            issues.append(f"Szene {key}: Körperzustand {body!r} unbekannt")
-        if scene.heavy and not ({"triangles_over", "seconds_over"} & set(scene.promises)):
-            issues.append(f"Szene {key}: schwer, aber ohne Zusage zu Dreiecken oder Sekunden")
-        for action, code in scene.promises.get("actions", {}).items():
-            if code not in scene.promises.get("findings", ()):
-                issues.append(f"Szene {key}: Handlung {action} an {code}, der nicht zugesagt ist")
-    return issues
-
-
-def needs_exact_kernel(key: str, scenes: Mapping[str, Scene]) -> bool:
-    """Ob ein Schritt der Szene eine Operation des zweiten Kerns ist (``app.core.brep``) —
-    dann braucht auch eine Netzszene OpenCASCADE (``merkmal.thread.netz``)."""
-    source = registry()
-    _sources, steps = recipe(key, scenes)
-    return any(
-        getattr(source.get(step.op).fn, "__module__", "").startswith("app.core.brep")
-        for step in steps
-    )
-
-
-def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
-    """Das Projekt einer Szene, aus ihrem Rezept über die Operationen gebaut.
-
-    Jeder Schritt ist eine Transaktion über ``History.apply`` — derselbe Weg wie
-    ``tools/make_examples.py``; ``apply`` prüft Kennungen und Parameternamen,
-    Wertebereiche prüft :func:`validate_scenes`. Gerechnet wird hier nicht.
-    """
-    from app.core.scene import History, OperationDraft
-    from app.core.scene.project import new_project
-    from app.core.types import Parameter, Source
-
-    catalogue = scenes if scenes is not None else load_scenes()
-    if not catalogue[key].project:
-        raise FunctionListError([f"Szene {key}: der Startbildschirm hat kein Projekt"])
-    source = registry()
-    sources, steps = recipe(key, catalogue)
-    project = new_project()
-    for name, relative in sources.items():
-        project.document.sources[name] = Source(
-            id=name, kind="import", path=f"sources/{Path(relative).name}", sha256=""
-        )
-        project.sources[name] = (DATA / relative).read_bytes()
-    for name, values in parameters_of(key, catalogue).items():
-        project.document.parameters[name] = Parameter(
-            name=name,
-            value=float(values["value"]),
-            unit=str(values.get("unit", "mm")),
-            title=values.get("title"),
-        )
-    history = History(project.document)
-    for step in steps:
-        title = step.title or source.get(step.op).title
-        history.apply(
-            title, [OperationDraft(op=step.op, inputs=step.inputs, params=dict(step.params))]
-        )
-    return project
-
-
-def evaluate_scene(project: Project) -> EvaluationResult:
-    """Das Ergebnis einer gebauten Szene mit dem Profil, das die Anwendung einem
-    Projekt ohne Druckerwahl gibt (``profiles.scene_profile``)."""
-    from app.core.knowledge import profiles
-    from app.core.scene import evaluate
-    from app.core.scene.project import ProjectSources
-
-    document = project.document
-    profile = profiles.scene_profile(document.printer, document.material)
-    return evaluate(document, profile, sources=ProjectSources(project))
-
-
-def broken_promises(scene: Scene, result: EvaluationResult) -> list[str]:
-    """Was die gerechnete Szene von ihren Zusagen nicht hält — leer, wenn alles stimmt.
-
-    ``seconds_over`` prüft hier niemand: Eine Dauer hängt an der Maschine; der
-    Prüfstand misst sie auf die Referenzmaschine umgerechnet und wertet eine zu
-    schnelle Szene als „nicht prüfbar“ (Bauplan D0 §4.2, Prüfpunkt 14).
-    """
-    from app.core.geom.mesh import as_mesh_data
-    from app.ui.panels import actions_for
-
-    objects = list(result.scene.objects.values())
-    promises = scene.promises
-    issues: list[str] = []
-    stops = bool(promises.get("stops", False))
-    if stops != (result.stopped_at is not None):
-        issues.append(f"hält an: {result.stopped_at!r}, zugesagt {stops}")
-    if "objects" in promises and len(objects) != promises["objects"]:
-        issues.append(f"{len(objects)} Körper, zugesagt {promises['objects']}")
-    wanted_kind = {"exakt": "brep", "netz": "mesh"}.get(scene.kernel)
-    if wanted_kind is not None:
-        wrong = [entry.id for entry in objects if entry.kind != wanted_kind]
-        if wrong:
-            issues.append(f"Kern {scene.kernel}, aber {wrong} sind es nicht")
-    shown = {feature.kind for entry in objects for feature in entry.features.values()}
-    missing = sorted(set(promises.get("kinds", ())) - shown)
-    if missing:
-        issues.append(f"Merkmalsarten {missing} fehlen, erkannt {sorted(shown)}")
-    body = promises.get("body")
-    if body is not None:
-        meshes = [as_mesh_data(entry.mesh).raw for entry in objects]
-        states = {
-            "closed": all(mesh.is_watertight for mesh in meshes),
-            "open": any(not mesh.is_watertight for mesh in meshes),
-            "parts": any(len(mesh.split(only_watertight=False)) > 1 for mesh in meshes),
-            "cavity": "void" in shown,
-        }
-        if not states[body]:
-            issues.append(f"Körperzustand {body} nicht erfüllt")
-    findings = list(result.scene.report.findings)
-    codes = {finding.code for finding in findings}
-    wanted_codes = set(promises.get("findings", ())) | set(promises.get("actions", {}).values())
-    if wanted_codes - codes:
-        # Die Befunde der Druckprüfung (Schichtanalyse, Druckrat) stellt das Fenster
-        # nach der Auswertung in denselben Bericht — gerechnet wie dort.
-        findings += _print_findings(result)
-        codes = {finding.code for finding in findings}
-    missing_findings = sorted(set(promises.get("findings", ())) - codes)
-    if missing_findings:
-        issues.append(f"Befunde {missing_findings} fehlen, gemeldet {sorted(codes)}")
-    # Die Handlungen am echten Befund — samt denen, die er selbst mitbringt.
-    for action, code in promises.get("actions", {}).items():
-        offered = {
-            entry.id
-            for finding in findings
-            if finding.code == code
-            for entry in actions_for(finding)
-        }
-        if action not in offered:
-            issues.append(f"Handlung {action} fehlt an {code}, angeboten {sorted(offered)}")
-    if scene.select:
-        object_id, _dot, feature_id = scene.select.partition(".")
-        chosen = result.scene.objects.get(object_id)
-        feature = chosen.features.get(feature_id) if chosen is not None else None
-        wanted = scene.key.split(".")[1] if scene.key.startswith("merkmal.") else None
-        if feature is None:
-            issues.append(f"gewähltes Merkmal {scene.select} gibt es nicht")
-        elif wanted is not None and feature.kind != wanted:
-            issues.append(f"gewähltes Merkmal {scene.select} ist {feature.kind}, nicht {wanted}")
-    for name in parameters_of(scene.key, {scene.key: scene}):
-        if name not in result.scene.parameters:
-            issues.append(f"Projektparameter {name} fehlt in der Szene")
-    if "triangles_over" in promises:
-        largest = max((len(as_mesh_data(entry.mesh).raw.faces) for entry in objects), default=0)
-        if largest <= promises["triangles_over"]:
-            issues.append(f"{largest} Dreiecke, zugesagt über {promises['triangles_over']}")
-    return issues
-
-
-def _print_findings(result: EvaluationResult) -> list[Finding]:
-    """Die Befunde der Druckprüfung einer gerechneten Szene (``slice.findings``)."""
-    from app.core.knowledge import print_settings, profiles
-    from app.core.slice.findings import print_findings
-
-    profile = result.scene.profile or profiles.scene_profile("", "")
-    return print_findings(result.scene, profile, print_settings.resolve(profile))
-
-
-def save_scenes(out: Path, *, heavy: bool = False) -> list[Path]:
-    """Baut die Szenen und speichert sie als Projekt nach ``out`` — nie in den Baum."""
-    from app.core.scene.project import save
-
-    target = out.resolve()
-    if target == ROOT or ROOT in target.parents:
-        raise FunctionListError(
-            [f"{out}: Erzeugtes wird nicht im Baum abgelegt (tests/data/CLAUDE.md)"]
-        )
-    target.mkdir(parents=True, exist_ok=True)
-    catalogue = load_scenes()
-    written: list[Path] = []
-    for key, scene in catalogue.items():
-        if not scene.project or (scene.heavy and not heavy):
-            continue
-        path = target / f"{key}.p3d"
-        save(build_scene(key, catalogue), path)
-        written.append(path)
-    return written
 
 
 # --- Zeilenspezifikationen (Bauplan D0 §2.4) -----------------------------------

@@ -31,6 +31,8 @@ from app.core.registry import CATEGORIES, FEATURE_KINDS, REGISTRY
 from app.core.registry.surfaces import catalogue_operations
 from tests.helpers import exact_kernel
 from tools import function_list as fl
+from tools import function_scan as fscan
+from tools import function_scenes as fscenes
 
 DATA = Path(__file__).resolve().parent / "data"
 VOCABULARY = DATA / "customer_vocabulary.json"
@@ -80,7 +82,7 @@ def test_the_list_finds_enough_to_mean_something(
     """
     load_operations()
     operations = list(REGISTRY.all())
-    classes = fl.window_classes_in(ui_sources)
+    classes = fscan.window_classes_in(ui_sources)
     assert len(operations) >= 150, f"nur {len(operations)} Operationen im Register"
     assert len(classes) >= 40, f"nur {len(classes)} Dialogklassen unter app/ui"
     assert len(TARGETS) >= 30, f"nur {len(TARGETS)} feste Ziele im Wortschatz"
@@ -160,7 +162,7 @@ def test_every_dialog_class_has_a_row_with_its_package(
 ) -> None:
     """Jede Dialog- und Fensterklasse unter ``app/ui`` hat eine Zeile; die Tabellen tragen
     keine Klasse, die es nicht mehr gibt, und keine steht in beiden."""
-    classes = fl.window_classes_in(ui_sources)
+    classes = fscan.window_classes_in(ui_sources)
     found = _by_id(rows)
     for name in classes:
         row = found[f"dialog:{dialog_name(name)}"]
@@ -269,7 +271,7 @@ def test_window_actions_outside_the_menu_bar_have_rows(
 ) -> None:
     """Was das Fenster nur in die Auswahlkarte hängt (*Automatisch teilen*), ist eine
     Zeile; die Tabelle trägt keine Kennung, die es nicht mehr gibt."""
-    keys = fl.scan_ui(ui_sources).window_actions
+    keys = fscan.scan_ui(ui_sources).window_actions
     assert "edit.auto_split" in keys
     assert set(fl.WINDOW_ACTION_PACKAGES) == set(keys)
     assert _by_id(rows)["command:edit.auto_split"].package == "D8"
@@ -328,7 +330,7 @@ def test_an_unknown_handler_turns_red(cached_sources: dict[str, str]) -> None:
 def test_the_tools_under_the_view_are_rows(rows: list[fl.Row], ui_sources: dict[str, str]) -> None:
     """Jedes Werkzeug der Zeile unter der Ansicht (``tools.add``) ist eine Zeile ``tool:``,
     gelesen aus dem Quelltext; die Pakettabelle trägt keinen toten Schlüssel."""
-    tools = fl.scan_ui(ui_sources).tools
+    tools = fscan.scan_ui(ui_sources).tools
     assert {"section", "measure", "transform", "analysis", "layers", "explode", "split"} <= set(
         tools
     )
@@ -340,7 +342,7 @@ def test_the_tools_under_the_view_are_rows(rows: list[fl.Row], ui_sources: dict[
 
 def test_the_named_context_actions_are_rows(rows: list[fl.Row], ui_sources: dict[str, str]) -> None:
     """Die benannten Kontextaktionen von Baum und Parameterleiste sind Zeilen ``menu:``."""
-    names = fl.scan_ui(ui_sources).context_actions
+    names = fscan.scan_ui(ui_sources).context_actions
     assert {
         "tree.step",
         "tree.sketch",
@@ -357,7 +359,7 @@ def test_the_named_context_actions_are_rows(rows: list[fl.Row], ui_sources: dict
 
 def test_every_settings_section_is_a_row(rows: list[fl.Row], ui_sources: dict[str, str]) -> None:
     """Konzept §3: Die Einstellungen sind eine Zeile je Abschnitt des Dialogs."""
-    sections = fl.scan_ui(ui_sources).settings_sections
+    sections = fscan.scan_ui(ui_sources).settings_sections
     assert {"Anwendung", "Vorgaben für neue Projekte", "Weitere Einstellungen"} <= set(sections)
     found = _by_id(rows)
     for title in sections:
@@ -367,7 +369,7 @@ def test_every_settings_section_is_a_row(rows: list[fl.Row], ui_sources: dict[st
 def test_every_raw_message_window_is_a_row(rows: list[fl.Row], ui_sources: dict[str, str]) -> None:
     """Jede Funktion, die ein rohes Meldungsfenster baut, ist eine Zeile — darunter
     Wiederherstellen und Speicherfrage (D1) und die Löschnachfrage im Verlauf (D11)."""
-    windows = fl.scan_ui(ui_sources).raw_windows
+    windows = fscan.scan_ui(ui_sources).raw_windows
     assert {
         "dialogs.confirm_unsaved",
         "main_window._ask_recovery",
@@ -412,7 +414,7 @@ def test_targets_of_raw_windows_and_sections_come_from_the_source(
     import ast
 
     assert _by_id(rows)["startup.expired_demo"].target == "dialog:expired_demo"
-    scan = fl.scan_ui(ui_sources)
+    scan = fscan.scan_ui(ui_sources)
     assert scan.raw_targets["dialogs.show_expired_demo"] == "dialog:expired_demo"
     marked = ("TARGET_PROPERTY", "raw_window(")
     for row in rows:
@@ -434,7 +436,7 @@ def test_a_marked_surface_without_its_target_turns_red() -> None:
     """Gegenprobe: Jede Form, in der eine Fläche ihr Kennzeichen setzt, kommt als Ziel an —
     ein Meldungsfenster mit ``setProperty`` (auch über eine Modulkonstante), ein statischer
     Aufruf in ``raw_window`` und ein Abschnitt über den Abschnittsbauer der Einstellungen."""
-    windows = fl.scan_ui(
+    windows = fscan.scan_ui(
         {
             "app/ui/extra.py": (
                 "NAME = 'message:extra.ask_named'\n"
@@ -450,7 +452,7 @@ def test_a_marked_surface_without_its_target_turns_red() -> None:
                 "def bare(parent):\n"
                 "    QMessageBox(parent)\n"
             ),
-            fl.SETTINGS_MODULE: (
+            fscan.SETTINGS_MODULE: (
                 "def section(title, content, **options):\n"
                 "    wrapper = collapsible(str(title), content, **options)\n"
                 "    heading.setProperty(\n"
@@ -485,11 +487,11 @@ def test_a_marked_surface_without_its_target_turns_red() -> None:
 def test_the_history_entries_come_from_the_context_menu(ui_sources: dict[str, str]) -> None:
     """Die Verlaufszeilen kommen aus den Objektnamen ``history.*`` — die vier, unter denen
     die Bildanleitungen sie schon finden, sind dabei."""
-    entries = fl.history_entries(ui_sources)
+    entries = fscan.history_entries(ui_sources)
     assert {"edit", "insert", "switch", "delete", "up", "down"} <= set(entries)
     # Ein Name aus einem bedingten Ausdruck zählt mit beiden Zweigen.
     probe = 'a.setObjectName("history.up" if x else "history.down")\nb.setObjectName(name)\n'
-    assert fl.history_entries({"probe.py": probe}) == ("down", "up")
+    assert fscan.history_entries({"probe.py": probe}) == ("down", "up")
 
 
 # --- Anforderung und Szene --------------------------------------------------------
@@ -528,7 +530,7 @@ def test_surfaces_start_where_their_target_stands(rows: list[fl.Row]) -> None:
 
 def test_every_operation_has_a_start_scene(rows: list[fl.Row]) -> None:
     """Jede Anforderung einer Operation hat eine Szene im Katalog (§2.5)."""
-    scenes = fl.load_scenes()
+    scenes = fscenes.load_scenes()
     assert fl.missing_scenes(rows) == []
     for row in rows:
         if row.kind == "operation":
@@ -538,7 +540,7 @@ def test_every_operation_has_a_start_scene(rows: list[fl.Row]) -> None:
 def test_a_duplicate_surface_is_reported_not_dropped() -> None:
     """L4: Zweimal derselbe Name ergibt zwei Zeilen, und die Prüfung der ganzen Liste meldet
     die doppelte Kennung."""
-    doubled = fl.surface_rows(["tree", "tree"], (), (), fl.load_scenes())
+    doubled = fl.surface_rows(["tree", "tree"], (), (), fscenes.load_scenes())
     assert [row.id for row in doubled].count("tree") == 2
     assert fl.duplicate_ids(doubled) == ["tree: zwei Zeilen mit derselben Kennung"]
 
@@ -587,7 +589,7 @@ def test_a_class_name_twice_is_not_guessed(cached_sources: dict[str, str]) -> No
 
 def test_the_dialog_search_follows_qt_dialog_subclasses() -> None:
     """Ein ``QMessageBox`` ist ein Dialog; eine Klasse ohne Fensterbasis nicht."""
-    found = fl.window_classes_in(
+    found = fscan.window_classes_in(
         {
             "a.py": "class Box(QtWidgets.QMessageBox):\n    pass\n",
             "c.py": "class Plain(QWidget):\n    pass\n",
@@ -600,8 +602,8 @@ def test_the_dialog_search_follows_qt_dialog_subclasses() -> None:
 # --- Szenen ------------------------------------------------------------------------
 
 
-def _scenes() -> dict[str, fl.Scene]:
-    return fl.load_scenes()
+def _scenes() -> dict[str, fscenes.Scene]:
+    return fscenes.load_scenes()
 
 
 def _light(kernel: str) -> list[str]:
@@ -614,7 +616,7 @@ def _light(kernel: str) -> list[str]:
 
 def test_the_recipes_are_valid() -> None:
     """Basis, Operationen, Quellen, Kern und Zusagen jeder Szene, ohne zu rechnen."""
-    assert fl.validate_scenes(_scenes()) == []
+    assert fscenes.validate_scenes(_scenes()) == []
 
 
 def test_every_feature_kind_has_a_scene_on_both_kernels() -> None:
@@ -622,47 +624,47 @@ def test_every_feature_kind_has_a_scene_on_both_kernels() -> None:
     Art ohne exakten Körper (offener Rand) nur am Netz."""
     scenes = _scenes()
     for kind in FEATURE_KINDS:
-        for kernel in fl.KERNELS:
+        for kernel in fscenes.KERNELS:
             key = f"merkmal.{kind}.{kernel}"
-            if kernel == fl.EXACT and kind in fl.MESH_ONLY_KINDS:
+            if kernel == fscenes.EXACT and kind in fl.MESH_ONLY_KINDS:
                 assert key not in scenes
                 continue
             assert key in scenes, key
             assert kind in scenes[key].promises["kinds"], key
 
 
-@pytest.mark.parametrize("key", _light(fl.MESH))
+@pytest.mark.parametrize("key", _light(fscenes.MESH))
 def test_a_light_mesh_scene_keeps_its_promises(key: str) -> None:
     """Die leichte Szene rechnet und hält, was sie zusagt: Körper, Bauart, Merkmalsarten,
     Körperzustand, Befunde, Halt."""
     scenes = _scenes()
-    if fl.needs_exact_kernel(key, scenes):
+    if fscenes.needs_exact_kernel(key, scenes):
         exact_kernel()
-    result = fl.evaluate_scene(fl.build_scene(key, scenes))
-    assert fl.broken_promises(scenes[key], result) == []
+    result = fscenes.evaluate_scene(fscenes.build_scene(key, scenes))
+    assert fscenes.broken_promises(scenes[key], result) == []
 
 
 def test_a_mesh_scene_built_by_the_exact_kernel_knows_it() -> None:
     """L3: ``merkmal.thread.netz`` entsteht über ``thread_exact`` — ohne OpenCASCADE wird
     der Fall übersprungen statt rot; ein reiner Netzquader braucht den Kern nicht."""
     scenes = _scenes()
-    assert fl.needs_exact_kernel("merkmal.thread.netz", scenes)
-    assert not fl.needs_exact_kernel("quader.netz", scenes)
+    assert fscenes.needs_exact_kernel("merkmal.thread.netz", scenes)
+    assert not fscenes.needs_exact_kernel("quader.netz", scenes)
 
 
-@pytest.mark.parametrize("key", _light(fl.EXACT))
+@pytest.mark.parametrize("key", _light(fscenes.EXACT))
 def test_a_light_exact_scene_keeps_its_promises(key: str) -> None:
     """Dasselbe am exakten Kern — lokal nur mit OpenCASCADE, in der CI Pflicht."""
     exact_kernel()
     scenes = _scenes()
-    result = fl.evaluate_scene(fl.build_scene(key, scenes))
-    assert fl.broken_promises(scenes[key], result) == []
+    result = fscenes.evaluate_scene(fscenes.build_scene(key, scenes))
+    assert fscenes.broken_promises(scenes[key], result) == []
 
 
 def test_there_are_light_scenes_on_both_kernels() -> None:
     """Die Parametrisierung darüber ist nicht leer."""
-    assert len(_light(fl.MESH)) >= 15
-    assert len(_light(fl.EXACT)) >= 15
+    assert len(_light(fscenes.MESH)) >= 15
+    assert len(_light(fscenes.EXACT)) >= 15
 
 
 @pytest.mark.parametrize("key", [key for key, scene in _scenes().items() if scene.heavy])
@@ -670,8 +672,8 @@ def test_a_heavy_scene_is_a_valid_stack(key: str) -> None:
     """Schwere Szenen rechnet nur der Werkzeuglauf; hier nimmt ``History.apply`` jeden
     Schritt an, und die Zusage nennt Dreiecke oder Sekunden."""
     scenes = _scenes()
-    project = fl.build_scene(key, scenes)
-    _sources, steps = fl.recipe(key, scenes)
+    project = fscenes.build_scene(key, scenes)
+    _sources, steps = fscenes.recipe(key, scenes)
     assert len(project.document.ops) == len(steps) >= 2
     assert {"triangles_over", "seconds_over"} & set(scenes[key].promises)
 
@@ -689,9 +691,9 @@ def test_the_promise_check_sees_a_broken_promise() -> None:
         scenes["quader.netz"],
         promises={"objects": 2, "kinds": ["hole"], "stops": True, "findings": ["x.y"]},
     )
-    result = fl.evaluate_scene(fl.build_scene("quader.netz", scenes))
+    result = fscenes.evaluate_scene(fscenes.build_scene("quader.netz", scenes))
 
-    broken = fl.broken_promises(scene, result)
+    broken = fscenes.broken_promises(scene, result)
 
     assert len(broken) == 4, broken
 
@@ -701,35 +703,35 @@ def test_the_promise_check_sees_a_broken_promise() -> None:
         halt,
         promises={**halt.promises, "actions": {"arrange_on_bed": "op.fillet_edges.GeometryError"}},
     )
-    stopped = fl.evaluate_scene(fl.build_scene("halt", scenes))
-    assert fl.broken_promises(halt, stopped) == []
-    broken = fl.broken_promises(wrong, stopped)
+    stopped = fscenes.evaluate_scene(fscenes.build_scene("halt", scenes))
+    assert fscenes.broken_promises(halt, stopped) == []
+    broken = fscenes.broken_promises(wrong, stopped)
     assert len(broken) == 1 and "arrange_on_bed" in broken[0], broken
 
 
 def test_a_broken_recipe_is_named() -> None:
     """Gegenprobe der Rezeptprüfung: unbekannte Operation, fehlende Quelle, Basis im Kreis."""
     scenes = {
-        "a": fl.Scene(key="a", summary="a", base="b"),
-        "b": fl.Scene(key="b", summary="b", base="a"),
-        "c.netz": fl.Scene(
+        "a": fscenes.Scene(key="a", summary="a", base="b"),
+        "b": fscenes.Scene(key="b", summary="b", base="a"),
+        "c.netz": fscenes.Scene(
             key="c.netz",
             summary="c",
             kernel="netz",
             sources={"src_1": "meshes/gibt_es_nicht.stl"},
-            ops=(fl.SceneStep(op="gibt_es_nicht"),),
+            ops=(fscenes.SceneStep(op="gibt_es_nicht"),),
         ),
     }
-    scenes["d.netz"] = fl.Scene(
+    scenes["d.netz"] = fscenes.Scene(
         key="d.netz",
         summary="d",
         kernel="netz",
         ops=(
-            fl.SceneStep(op="create_box"),
-            fl.SceneStep(op="remesh_mesh", inputs=("obj_1",), params={"edge": -1.0}),
+            fscenes.SceneStep(op="create_box"),
+            fscenes.SceneStep(op="remesh_mesh", inputs=("obj_1",), params={"edge": -1.0}),
         ),
     )
-    found = fl.validate_scenes(scenes)
+    found = fscenes.validate_scenes(scenes)
     assert any("d.netz" in issue and "remesh_mesh" in issue for issue in found), found
     assert any("Kreis" in issue for issue in found)
     assert any("gibt_es_nicht.stl" in issue for issue in found)
@@ -738,10 +740,10 @@ def test_a_broken_recipe_is_named() -> None:
 
 def test_generated_scenes_never_land_in_the_tree(tmp_path: Path) -> None:
     """Die Datei aus einem Rezept wird nicht abgelegt (``tests/data/CLAUDE.md``)."""
-    with pytest.raises(fl.FunctionListError):
-        fl.save_scenes(DATA / "erzeugt")
+    with pytest.raises(fscenes.FunctionListError):
+        fscenes.save_scenes(DATA / "erzeugt")
     assert not (DATA / "erzeugt").exists()
-    written = fl.save_scenes(tmp_path)
+    written = fscenes.save_scenes(tmp_path)
     assert len(written) >= 30
     assert all(path.suffix == ".p3d" and path.stat().st_size > 0 for path in written)
     # Prüfpunkt 16 wechselt aus einer Rechnung in ein zweites Projekt; der
@@ -783,9 +785,9 @@ def test_a_feature_scene_without_its_selection_turns_red(
 ) -> None:
     """Gegenprobe: Nennt eine Merkmalsszene kein gewähltes Merkmal, fehlt allen Zeilen
     darauf der Auswahlweg — das ist rot, nicht still leer."""
-    scenes = fl.load_scenes()
+    scenes = fscenes.load_scenes()
     scenes["merkmal.hole.exakt"] = dataclasses.replace(scenes["merkmal.hole.exakt"], select="")
-    monkeypatch.setattr(fl, "load_scenes", lambda path=fl.SCENES: scenes)
+    monkeypatch.setattr(fl, "load_scenes", lambda path=fscenes.SCENES: scenes)
 
     found = fl.problems()
 
@@ -794,12 +796,12 @@ def test_a_feature_scene_without_its_selection_turns_red(
 
 def test_the_promise_check_sees_a_wrong_selection() -> None:
     """Gegenprobe: Ein gewähltes Merkmal, das es nicht gibt oder das die falsche Art hat."""
-    scenes = fl.load_scenes()
-    result = fl.evaluate_scene(fl.build_scene("merkmal.hole.netz", scenes))
+    scenes = fscenes.load_scenes()
+    result = fscenes.evaluate_scene(fscenes.build_scene("merkmal.hole.netz", scenes))
     missing = dataclasses.replace(scenes["merkmal.hole.netz"], select="obj_1.hole_9")
     wrong = dataclasses.replace(scenes["merkmal.hole.netz"], select="obj_1.face_1")
-    assert any("gibt es nicht" in issue for issue in fl.broken_promises(missing, result))
-    assert any("nicht hole" in issue for issue in fl.broken_promises(wrong, result))
+    assert any("gibt es nicht" in issue for issue in fscenes.broken_promises(missing, result))
+    assert any("nicht hole" in issue for issue in fscenes.broken_promises(wrong, result))
 
 
 # --- Zeilenspezifikationen ---------------------------------------------------------
@@ -861,14 +863,14 @@ def test_a_valid_spec_without_calculation_stays_green(rows: list[fl.Row]) -> Non
         "not_applicable": {"4": "ohne_rechnung", "E5": "ohne_dialog"},
         "criteria": ["Z1"],
     }
-    assert fl.validate_specs(rows, _spec(values), fl.load_scenes()) == []
+    assert fl.validate_specs(rows, _spec(values), fscenes.load_scenes()) == []
 
 
 def test_the_spec_format_is_closed(rows: list[fl.Row]) -> None:
     """M5, L7, L11: Prüfpunkte 1–19 und die Kriterien als Schlüssel von ``not_applicable``,
     nur Gründe der geschlossenen Liste, ``criteria`` nur aus den 35 Kennungen, Paket der
     Datei, Erwartung mit Herkunft und Toleranz über null, bekannte Vorbedingungen."""
-    scenes = fl.load_scenes()
+    scenes = fscenes.load_scenes()
     assert len(fl.CRITERION_IDS) == 35 and len(fl.CHECKPOINT_NUMBERS) == 19
     assert set(fl.NOT_APPLICABLE_REASONS) == {
         "ohne_rechnung",
@@ -903,7 +905,7 @@ def test_a_fault_case_is_checked_like_a_spec(rows: list[fl.Row]) -> None:
     gesperrt und nennt den Grund (RM-534) — eine Startszene, deren Neuberechnung nicht
     aus dem Zwischenspeicher kommt.
     """
-    scenes = fl.load_scenes()
+    scenes = fscenes.load_scenes()
     good = {
         "start_scene": "leer",
         "fault_case": {
@@ -960,7 +962,7 @@ def test_a_licence_state_must_be_reachable(
 
     from app.core.activation import store
 
-    scenes = fl.load_scenes()
+    scenes = fscenes.load_scenes()
 
     def issues(state: str, row_id: str = "dialog:about_dialog") -> list[str]:
         values = {"start_scene": "leer", "preconditions": {"licence": state}}
@@ -984,11 +986,11 @@ def test_spec_files_are_read_strictly(tmp_path: Path) -> None:
     (tmp_path / "d05.toml").write_text(
         '[row."resize_hole"]\nexample_goal = "b"\n', encoding="utf-8"
     )
-    with pytest.raises(fl.FunctionListError):
+    with pytest.raises(fscenes.FunctionListError):
         fl.load_specs(tmp_path)
     (tmp_path / "d05.toml").unlink()
     (tmp_path / "dx.toml").write_text("", encoding="utf-8")
-    with pytest.raises(fl.FunctionListError):
+    with pytest.raises(fscenes.FunctionListError):
         fl.load_specs(tmp_path)
 
 
@@ -1000,7 +1002,7 @@ def test_a_menu_path_is_checked_against_every_ui_module(
     cached_sources["app/ui/window/menus.py"] = "x = _('Ganz neu …')\n"
     values = {"start_scene": "leer", "example_goal": "x"}
     specs = {"Datei/Ganz neu …": fl.SpecEntry("D1", "d01.toml", values)}
-    assert fl.validate_specs(rows, specs, fl.load_scenes()) == []
+    assert fl.validate_specs(rows, specs, fscenes.load_scenes()) == []
 
 
 def test_the_menubar_is_read_in_the_source_language_only() -> None:
@@ -1010,7 +1012,7 @@ def test_the_menubar_is_read_in_the_source_language_only() -> None:
 
     set_language("en")
     try:
-        with pytest.raises(fl.FunctionListError):
+        with pytest.raises(fscenes.FunctionListError):
             fl.menubar_of(object())
     finally:
         set_language("de")
@@ -1031,7 +1033,7 @@ def test_a_spec_with_an_unknown_field_or_target_turns_red(rows: list[fl.Row]) ->
         ),
         "Bearbeiten/Gibt es nicht …": fl.SpecEntry("D10", "d10.toml", {}),
     }
-    found = fl.validate_specs(rows, bad, fl.load_scenes())
+    found = fl.validate_specs(rows, bad, fscenes.load_scenes())
     assert any("durchmesser" in issue for issue in found)
     assert any("Feld:Durchmesser" in issue for issue in found)
     assert any("gibt_es_nicht" in issue for issue in found)
@@ -1114,7 +1116,7 @@ def test_the_common_goals_name_what_exists() -> None:
         assert goal["origin"] in {"bauplan", "fragebogen"} and goal["ref"], goal
         assert goal["scene"] in scenes, goal
         selection = goal["selection"]
-        assert fl.scene_for(selection, fl.EXACT), goal
+        assert fl.scene_for(selection, fscenes.EXACT), goal
         assert fl.route_for(selection, goal["scene"], scenes), goal
         kind, _colon, name = goal["target"].partition(":")
         assert kind in {"operation", "feature", "edge"}, goal
@@ -1124,7 +1126,7 @@ def test_the_common_goals_name_what_exists() -> None:
 
 def test_no_customer_id_reaches_the_corpus() -> None:
     """Der Korpus wird veröffentlicht: keine Kennung eines Fragebogens in den neuen Dateien."""
-    files = [VOCABULARY, GOALS, fl.SCENES, *sorted(fl.ROW_SPECS.glob("*.toml"))]
+    files = [VOCABULARY, GOALS, fscenes.SCENES, *sorted(fl.ROW_SPECS.glob("*.toml"))]
     for path in files:
         assert not CUSTOMER_ID.search(path.read_text(encoding="utf-8")), path
 
@@ -1162,15 +1164,16 @@ def test_the_command_line_reports_instead_of_tracing(
 def test_the_scenes_compute_with_the_profile_of_the_application() -> None:
     """L9: kein dritter fest geschriebener Drucker im Werkzeug — die Szene rechnet mit dem
     Profil, das die Anwendung einem Projekt ohne Wahl gibt (``profiles.scene_profile``)."""
-    source = Path(fl.__file__).read_text(encoding="utf-8")
+    source = Path(fscenes.__file__).read_text(encoding="utf-8")
     assert "centauri-carbon-2" not in source and "scene_profile" in source
 
 
 def test_the_list_is_built_without_a_window() -> None:
-    """Die Liste baut kein Widget: kein ``QApplication``, kein ``show`` im Werkzeug."""
-    source = Path(fl.__file__).read_text(encoding="utf-8")
-    assert "QApplication" not in source
-    assert ".show(" not in source and ".exec(" not in source
+    """Die Liste baut kein Widget: kein ``QApplication``, kein ``show`` in ihren Modulen."""
+    for module in (fl, fscan, fscenes):
+        source = Path(module.__file__ or "").read_text(encoding="utf-8")
+        assert "QApplication" not in source, module.__name__
+        assert ".show(" not in source and ".exec(" not in source, module.__name__
 
 
 # --- Fensterbefehle am gebauten Fenster (Fenster-CI) -------------------------------
@@ -1216,7 +1219,7 @@ def test_every_menubar_line_becomes_a_row_with_a_package(qt_app: Any, tmp_path: 
         if "/" in row_id:
             assert row_id in by_id, f"{spec.file}: {row_id} ist keine Zeile der Menüleiste"
             assert by_id[row_id].package == spec.package
-    assert fl.validate_specs(found, fl.load_specs(), fl.load_scenes()) == []
+    assert fl.validate_specs(found, fl.load_specs(), fscenes.load_scenes()) == []
     used = {row.id.rsplit("/", 1)[-1] for row in commands}
     assert set(fl.COMMAND_PACKAGES) <= used, "Ausnahme ohne Menüzeile"
     assert {row.id.split("/")[0] for row in commands} == set(fl.MENU_PACKAGES)
@@ -1232,15 +1235,15 @@ def test_a_window_command_lands_in_the_package_of_its_area() -> None:
 def test_same_name_different_line_is_not_merged() -> None:
     """Gegenprobe L1: Zwei Zeilen unter einem Objektnamen mit verschiedenem Text sind zwei
     Funktionen, keine — das hält an; ebenso eine Zeile ohne Namen."""
-    source = fl.registry()
-    scenes = fl.load_scenes()
+    source = fscenes.registry()
+    scenes = fscenes.load_scenes()
     twice = [
         fl.MenuEntry("menubar.neu", ("Datei", "Neu")),
         fl.MenuEntry("menubar.neu", ("Hilfe", "Neuerungen …")),
     ]
-    with pytest.raises(fl.FunctionListError):
+    with pytest.raises(fscenes.FunctionListError):
         fl.command_rows(twice, source, scenes)
-    with pytest.raises(fl.FunctionListError):
+    with pytest.raises(fscenes.FunctionListError):
         fl.command_rows([fl.MenuEntry("", ("Datei", "Speichern"))], source, scenes)
     same = [
         fl.MenuEntry("menubar.bausteinkatalog", ("Datei", "Bausteinkatalog …")),
@@ -1267,5 +1270,5 @@ def test_the_menubar_format_has_one_shape(tmp_path: Path) -> None:
     (tmp_path / "alt.json").write_text(
         json.dumps([{"name": "menubar.speichern", "path": ["Datei"]}]), encoding="utf-8"
     )
-    with pytest.raises(fl.FunctionListError):
+    with pytest.raises(fscenes.FunctionListError):
         fl.read_menubar(tmp_path / "alt.json")
