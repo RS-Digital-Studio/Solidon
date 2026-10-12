@@ -4514,6 +4514,26 @@ LINUX_BASE_SYSTEM = frozenset(
 )
 
 
+#: Was die Spec über ``excludes`` gar nicht erst einsammelt (GPL-3, Regel 15).
+_EXCLUDED_MODULES: Final = ("readline.cpython", "_curses.cpython", "_curses_panel.cpython")
+
+
+def _stays_in_linux_bundle(path: str) -> bool:
+    """Bleibt eine Datei des Korpus im Linux-Paket? Gefragt wird die Quelle selbst.
+
+    ``make_linux_packages.trim_linux_binaries`` entscheidet über verwaiste
+    Bibliotheken, ausgebaute Qt-Plugins und die Bibliotheken des Rechners
+    (``HOST_LIBRARIES``); ein Nachbau hier hatte die letzten vergessen
+    (Review 1, G2). Die Zielnamen der Spec stehen ohne ``_internal/``.
+    """
+    from tools import make_linux_packages as tool
+
+    target = path.removeprefix("_internal/")
+    if Path(target).name.startswith(_EXCLUDED_MODULES):
+        return False
+    return bool(tool.trim_linux_binaries([(target, path, "BINARY")]))
+
+
 def test_the_linux_bundle_leaves_no_dependency_open() -> None:
     """Was im Linux-Paket bleibt, muss seine Abhängigkeiten finden können.
 
@@ -4528,20 +4548,14 @@ def test_the_linux_bundle_leaves_no_dependency_open() -> None:
     eine andere Datei im Paket zeigen oder auf den Grundbestand jedes Linux.
     Bleibt eine Kante offen, fehlt dem Kunden eine Datei.
     """
-    from tools import make_linux_packages as tool
 
     karte: dict[str, list[str]] = json.loads(LINUX_DEPENDENCIES.read_text(encoding="utf-8"))
-    dropped_modules = ("readline.cpython", "_curses.cpython", "_curses_panel.cpython")
-
-    def bleibt(pfad: str) -> bool:
-        name = Path(pfad).name
-        if name in tool.ORPHANED_LIBRARIES:
-            return False
-        if any(pfad.endswith(plugin) for plugin in tool.DROPPED_QT_PLUGINS):
-            return False
-        return not any(name.startswith(modul) for modul in dropped_modules)
+    bleibt = _stays_in_linux_bundle
 
     im_paket = {Path(pfad).name for pfad in karte if bleibt(pfad)}
+    assert not im_paket & {"libstdc++.so.6", "libgcc_s.so.1"}, (
+        "die Bibliotheken des Rechners reisen nicht mit"
+    )
     assert len(im_paket) > 500, "der Korpus ist leer oder der Filter nimmt alles"
 
     offen: dict[str, list[str]] = {}
@@ -4567,15 +4581,7 @@ def test_every_dropped_linux_library_is_really_orphaned() -> None:
     from tools import make_linux_packages as tool
 
     karte: dict[str, list[str]] = json.loads(LINUX_DEPENDENCIES.read_text(encoding="utf-8"))
-    dropped_modules = ("readline.cpython", "_curses.cpython", "_curses_panel.cpython")
-
-    def bleibt(pfad: str) -> bool:
-        name = Path(pfad).name
-        if name in tool.ORPHANED_LIBRARIES:
-            return False
-        if any(pfad.endswith(plugin) for plugin in tool.DROPPED_QT_PLUGINS):
-            return False
-        return not any(name.startswith(modul) for modul in dropped_modules)
+    bleibt = _stays_in_linux_bundle
 
     noch_gebraucht: dict[str, list[str]] = {}
     for pfad, gebraucht in karte.items():
