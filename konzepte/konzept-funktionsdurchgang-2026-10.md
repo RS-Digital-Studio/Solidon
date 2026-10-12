@@ -3,7 +3,8 @@
 Stand: main `ee6b810fe`, 11.10.2026. Auftrag Robert: „ein Konzept zur
 Abarbeitung aller Funktionen und zum Testen für dich, alles über die
 Bedienoberfläche, zum sauber Abhaken, mit Befund und Optimierung und
-Einfachheit sowie Verständlichkeit.“ Geprüft von `bedienlogik` und
+Einfachheit sowie Verständlichkeit.“ Nach der Landung von 0.6.1 am 12.10.
+nachgezogen in §3, §6, §7 und §9. Geprüft von `bedienlogik` und
 `konzept`, dazu eine Nachprüfung; alle Funde sind eingearbeitet (Berichte in
 [`nachweise-funktionsdurchgang-2026-10/`](nachweise-funktionsdurchgang-2026-10/README.md)).
 Abgelegt am 12.10.2026 nach der Landung von 0.6.1; das Programm ist
@@ -46,8 +47,9 @@ Erzeugt, nicht geschrieben, mit stabilen Kennungen:
 | Fensterbefehle | Menüleiste des Fensters, aus den unübersetzten Quelltexten | Menüpfad, z. B. `Datei/Speichern unter` |
 | Bedienflächen | Dialogklassen unter `app/ui/` (`*dialog*.py` und Fenster), Wortschatz der Ziele, `panels.FINDING_ACTIONS`, die Merkmalfenster-Handlungen ohne Operation — erzeugt aus `perceive.actions` und `selection_operations`, heute u. a. *Auf alle N gleichartigen anwenden*, *Bezug ändern*, *Im Bild einstellen*, *Als Muster zusammenfassen* —, Kontextmenü des Verlaufs | fester Name aus dem Wortschatz |
 
-Nicht aus `window_commands`: Das ist das Gerüst der Befehlspalette, nummeriert
-Menüzeilen nach ihrer Lage und fällt mit RM-735. Die Einstellungen sind eine
+Nicht aus `window_commands`: Es nummeriert Menüzeilen nach ihrer Lage
+(`menu.<n>`) und speist seit RM-735 die Suche — eine stabile Kennung ist das
+nicht. Die Einstellungen sind eine
 Zeile je Abschnitt des Dialogs. Der Bausteinkatalog — 83 Kacheln, dahinter
 50 Bausteine — ist **eine** Zeile mit einem Lauf über alle; ihre Texte prüft
 Stufe B, ihren Maßbereich hält `check_part_ranges`.
@@ -273,8 +275,13 @@ Jede Operation gehört genau einem Paket, hergeleitet aus dem Register:
 `transform`, `shaping`, `surface` → D3; `holes` → D4; `repair`, `mesh` → D5,
 außer den Operationen mit Gestenparameter (`strokes`, `armature`: Formen und
 Skelett), die D6 gehören; `sketch` → D7; `scene`, `prepare` → D8; `colour`,
-`label`, `fits`, `parameters` → D10. Fensterbefehle und Bedienflächen ordnet
-die Tabelle nach ihrem Bereich zu.
+`label`, `fits`, `parameters` → D10. Ein Dialog oder eine Zeile des
+Merkmalfensters, die zu genau einer Operation gehört, geht mit ihr in deren
+Paket; die Tabelle ordnet nur, was keine eigene Operation hat — Fensterbefehle
+und übrige Bedienflächen — nach seinem Bereich. Ohne Ausnahme außer D6:
+*Verrunden*, *Fase* und *Fläche versetzen* (`shaping`) prüft D3, auch wenn der
+Kunde sie an einer Kante oder Fläche findet; wo er sie findet, misst Prüfpunkt
+1 in jedem Paket.
 
 Registerpunkte: das Programm RM-736, die Pakete D0 bis D12 RM-737 bis RM-749,
 eingetragen mit der Ablage dieses Konzepts; RM-734 (Boolesche auffindbar) und
@@ -283,16 +290,16 @@ RM-735 (Befehlspalette entfernen) gehen voraus.
 | Paket | Bereich |
 |---|---|
 | D0 | Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter, Funddatei, Skills `ux-review` und `ui-design` |
-| D1 | Datei und Projekt: Startseite, Laden, Speichern, Import, Export, Beispiele, Wiederherstellen, Speicherfrage |
-| D2 | Erzeugen: Grundkörper, Bausteinkatalog, Text, Bild, KI, Varianten, Nachbauen |
-| D3 | Verbinden und Abziehen, Transformation, Formgebung |
-| D4 | Merkmale: Bohrung, Langloch, Senkung, Gewinde, Muster, Verrunden, Fase, Fläche versetzen, örtliche Erkennung |
-| D5 | Netz und Reparatur, Dichtweg |
+| D1 | Datei und Projekt: Startseite, Laden, Speichern, Import samt Konturauswahl, Export, Beispiele, Wiederherstellen, Speicherfrage |
+| D2 | Erzeugen: Grundkörper, Bausteinkatalog, Organizer, Text, Bild, KI, Varianten, Nachbauen |
+| D3 | Verbinden und Abziehen, Transformation, Formgebung samt Verrunden, Fase und Fläche versetzen |
+| D4 | Merkmale: Bohrung, Langloch, Senkung, Gewinde, Muster, erkannte Merkmale ändern und entfernen, örtliche Erkennung |
+| D5 | Netz und Reparatur |
 | D6 | Weg 4: Formen und Skelett (eigene Leisten, eigenes Rückgängig, eigene Gesten) |
-| D7 | Zeichnen und Skizze, Konturauswahl |
-| D8 | Druckvorbereitung: Ausrichten, Teilen, Anordnen, Stützen, Prüfbericht samt seinen Handlungen |
+| D7 | Zeichnen und Skizze |
+| D8 | Druckvorbereitung: Ausrichten, Teilen, Anordnen, Stützen, Dichtung samt Dichtweg, Prüfbericht samt seinen Handlungen |
 | D9 | Druckeinstellungen und Übergabe an den Slicer, Filamentlager |
-| D10 | Filament und Farbe, Beschriftung, Passungen, Parameter, Zahlen binden, Organizer, Gegenstücke, Als Baustein speichern |
+| D10 | Filament und Farbe, Beschriftung, Passungen, Parameter, Zahlen binden, Gegenstücke, Als Baustein speichern |
 | D11 | Ansicht und Bedienung: Kamera, Griffe, Objektbaum, Auswahl, Verlauf und Vorher/Nachher, Karten verschieben, Suche |
 | D12 | Rahmen: Einstellungen, Ersteinrichtung, Aktivierung, Update, Handbuch, Tour, Chat, Kürzel, Rückmeldung und Fehlerbericht, KI- und Druckhinweis, Einladungen, Statusleiste, Über-Dialog |
 
@@ -325,8 +332,8 @@ ist — nur Text; Bilder und Rohdaten liegen außerhalb des Baums (`--out`). Der
 Prüfstand erzeugt sie aus seinen Messungen und `urteile-<paket>.toml`; von Hand
 wird sie nicht bearbeitet. Eine Datei je Paket, damit zwei parallele Pakete
 keine erzeugte Datei mergen müssen. „Offen“ gibt es nur mit RM-Nummer — das
-Register bleibt der einzige Ort offener Arbeit. Am Schluss ziehen Konzept,
-Funddatei und Ergebnisse nach `konzepte/`, der Zustandsordner geht.
+Register bleibt der einzige Ort offener Arbeit. Am Schluss ziehen Funddatei und
+Ergebnisse zum Konzept nach `konzepte/`, der Zustandsordner geht.
 
 ## 8 Wiederholung
 
@@ -340,24 +347,30 @@ Schritt in `/erzeugen` und ein `rendered`-Test wie die Handbuchbilder.
 ## 9 Reihenfolge und Abhängigkeiten
 
 - **RM-735 vor Prüfpunkt 1, RM-734 vor den Booleschen:** Erst ohne Palette ist
-  die Erreichbarkeit am richtigen Stand gemessen; Bauplan §2.6 und §19.2 nennen
-  die Palette noch, RM-735 zieht sie nach. Plan und Inventur dazu stehen in §2;
-  die Inventur ist zugleich die erste Erreichbarkeitsmessung für D11.
+  die Erreichbarkeit am richtigen Stand gemessen. Beide sind mit 0.6.1 auf main,
+  Bauplan §2.6 und §19.2 sind nachgezogen. Plan und Inventur stehen in §2; die
+  Inventur ist zugleich die erste Erreichbarkeitsmessung für D11.
 - **Der Prüfstand früh auf main**, damit die Verschiebewerkzeuge der
   Codestruktur (W5) ihn mit umschreiben.
 - **Keine Sperre:** Fixe landen wie jede andere Arbeit; die Codestruktur
   erzeugt ihren Schnitt auf jedem Stand neu. Ab deren Schritt 0 gilt für jeden
-  Fix die Sperrklinke W1 mit Regel 6: Eine gelistete Datei bekommt keine neue
-  Definition, neuer Code geht in ein neues Modul. Zeilen in bestehenden Rümpfen
-  bleiben frei; eine neue Handlung am Fenster wird eine Komponente nach
-  Codestruktur 3.3 — eine bestehende Methode um einen fremden Fall zu
-  verlängern, damit W1 grün bleibt, ist ein Workaround (Regel 9).
+  Fix die Sperrklinke W1 mit der Ordnungsregel 6 der Codestruktur (3.1): Eine
+  gelistete Datei bekommt keine neue Definition, neuer Code geht in ein neues
+  Modul. Zeilen in bestehenden Rümpfen bleiben frei; eine neue Handlung am
+  Fenster wird eine Komponente nach Codestruktur 3.3 — eine bestehende Methode
+  um einen fremden Fall zu verlängern, damit W1 grün bleibt, ist ein Workaround
+  (Codestruktur 3.1, Ordnungsregel 9).
 - **Fenstertests beim Fix:** „Test zuerst“ heißt bei einem Oberflächenfehler,
   dass der reproduzierende Test ein Fenstertest ist; diese eine Datei läuft
   lokal (Entscheidung Robert, §13).
 - **Kapazität:** Codestruktur und Durchgang beginnen beide nach 0.6.0. Die
   Kundenpakete (D0, D1, D9, D8, D3, D4) gehen bis zum 25.11. vor die
   Komponenten von `MainWindow` (Entscheidung Robert, §13).
+- **Programmplan (Auftrag Robert, 11.10.2026):** D0, dann D1, D9 und D8 (Weg 1
+  bis zum Slicer), daneben die Codestruktur-Schritte 1 bis 3, dann D3 und D4 —
+  bis zum Verkaufskandidaten am 25.11.; nach dem Start am 01.12. D2, D5, D6, D7
+  und D10, D11 und D12 jeweils nach den Komponenten der Klassen, die sie
+  berühren (`MainWindow`, für D11 auch `Viewport`: Kamera und Griffe).
 
 ## 10 Abnahme
 

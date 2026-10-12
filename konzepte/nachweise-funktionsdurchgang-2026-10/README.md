@@ -9,7 +9,7 @@ Programm [RM-736](../../ROADMAP.md#rm-736). Zeilenangaben gelten für ihren Stic
 | `pruefung-bedienlogik.md` | `bedienlogik` zum Entwurf: Kennungen, Funktionsliste, Prüfschema, Prüfstand am echten Fenster |
 | `pruefung-gestaltung.md` | `bedienlogik` zu den Gestaltungskriterien Z1–Z6 und I1–I6 |
 | `pruefung-konzept.md` | `konzept` zum Entwurf: Bestand, Abgrenzung, Kosten, Reihenfolge |
-| `nachpruefung.md` | `konzept` zur überarbeiteten Fassung: N1–N7, Urteil abgabefähig |
+| `nachpruefung.md` | `konzept` zur überarbeiteten Fassung: N1–N11 und Kleines; Urteil: nach N1–N7 abgabefähig |
 
 Die Abhakliste je Paket und die Funddatei entstehen mit D0 unter
 `.claude/.state/funktionsdurchgang-2026-10/` (Konzept §7) und ziehen am Schluss hierher.
