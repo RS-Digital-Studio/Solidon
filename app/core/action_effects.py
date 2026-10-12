@@ -173,7 +173,6 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
         "Macht aus dem Netz einen Körper mit Flächen und Kanten; was keine erkannte Form "
         "hat, bleibt aus ebenen Dreiecken."
     ),
-    "use_voxel_stage": _("Rechnet auf einem Raster; Maße und Kanten werden gerundet."),
     "recount_and_retry": _STEP_CHANGES,
     # Schritte
     "resize_the_widening": _("Ändert die Senkung im selben Verhältnis wie die Bohrung."),

@@ -9804,8 +9804,7 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
 
     **Die Liste der Ausnahmen ist auf drei geschrumpft**, und jede trägt ihren
     Grund: ``cancel`` ist das Schließen und kein Vorschlag; ``choose`` fragt der
-    Kern über ``ctx.ask``, bevor er wirft; ``use_voxel_stage`` ist eine Stufe
-    der Rückfallkette und kein Parameter, den ein Dialog setzen könnte (§17.2).
+    Kern über ``ctx.ask``, bevor er wirft.
     ``correct_input`` und ``choose_printer`` standen hier, bis ihr Weg gebaut
     war — der erste öffnet den Schritt, der zweite führt in die
     Druckeinstellungen. ``retry`` und ``save_elsewhere`` sind verdrahtet, stehen
@@ -9817,7 +9816,6 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
     # und stehen darum nicht immer in ``known`` — angeboten werden sie genau
     # dann, wenn sie wirken können (``_WriteFailure``).
     postponed = {
-        "use_voxel_stage",
         "choose",
         "cancel",
         "retry",
@@ -10908,38 +10906,6 @@ def test_correcting_puts_the_cursor_in_the_field_that_failed(window: MainWindow)
         assert inner.hasFocus(), "der Cursor steht nicht im Feld, um das es geht"
     finally:
         dialog.reject()
-
-
-def test_a_boolean_that_failed_in_draft_can_go_the_full_chain(window: MainWindow) -> None:
-    """Der Rat zeigte ins Leere, und zwar an der häufigsten Stelle (§17.2, §31).
-
-    Im Fenster läuft die kurze Rückfallkette; *Voxelstufe erzwingen* ist damit
-    der richtige nächste Schritt — und war ein Satz ohne Knopf. Jetzt rechnet
-    er einmal mit der vollen Kette, und danach ist die Sitzung wieder so
-    schnell wie vorher.
-    """
-    from app.ui.dialogs import offered_actions
-
-    handlers = window.error_handlers()
-    entwurf = errors.BooleanFailedError(attempted=("direct", "welded"))
-    assert "use_voxel_stage" in {a.id for a in offered_actions(entwurf, handlers)}
-
-    session = window.session
-    handlers["use_voxel_stage"](entwurf)
-    # Die Güte legt der Start des Arbeiters fest (RM-426), nicht mehr dessen Lauf.
-    assert session._worker is not None and session._worker.quality == "fine", (
-        "der Lauf bleibt im Entwurf"
-    )
-    assert session.wait_for_idle(30_000)
-    QApplication.processEvents()
-    assert session.last_quality == "fine"
-    session.evaluate_async()
-    assert session._worker is not None and session._worker.quality == "draft", (
-        "und der nächste ist wieder Entwurf"
-    )
-    assert session.wait_for_idle(30_000)
-    QApplication.processEvents()
-    assert session.last_quality == "draft"
 
 
 def test_correcting_is_not_offered_where_there_is_no_step(window: MainWindow) -> None:

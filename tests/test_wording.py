@@ -724,13 +724,13 @@ SATZMUSTER: dict[str, re.Pattern[str]] = {
 #: Überarbeitung; sie zu erhöhen ist eine Entscheidung, kein Nachtrag. Mit
 #: Review P2 N5 stieg sie einmal, weil der Wächter seitdem jeden Katalogtext
 #: liest und nicht nur die nach Aufrufort eingeordneten.
-MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Semikolon": 329, "Nur-Formel": 11}
+MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Semikolon": 328, "Nur-Formel": 11}
 
 MUSTER_DATEI = Path(__file__).resolve().parent / "data" / "text_patterns.json"
 
 #: Je Sprache, wie viele Übersetzungen ein Semikolon tragen, das ihre deutsche
 #: Quelle nicht hat. Die Zahl darf nur sinken (Review P2 N5).
-UEBERSETZT_BESTAND: dict[str, int] = {"en": 86, "es": 185, "fr": 93, "it": 57, "pt": 109}
+UEBERSETZT_BESTAND: dict[str, int] = {"en": 86, "es": 184, "fr": 93, "it": 57, "pt": 109}
 
 UEBERSETZT_DATEI = Path(__file__).resolve().parent / "data" / "translated_semicolons.json"
 

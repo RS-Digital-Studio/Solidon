@@ -30,6 +30,7 @@ scrive in `website/version.json`.
 - Anche quando nulla si sovrappone, *Controlla sovrapposizioni* ora dà una risposta.
 - Se a una funzione manca un secondo corpo nella scena, il motivo indica *Duplica oggetto* come via.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
+- Il pulsante *Calcolare in modo più grossolano* non c'è più: Solidon prosegue da solo con il calcolo completo. Nella versione 0.6.0 compariva anche dove non cambiava nulla.
 
 ### Modificare e disegnare
 

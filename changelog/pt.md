@@ -30,6 +30,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Mesmo quando nada se sobrepõe, *Verificar sobreposições* dá agora uma resposta.
 - Se a uma função faltar um segundo corpo na cena, o motivo indica *Duplicar objeto* como caminho.
 - A lista de atalhos de teclado nomeia *Modelar*, *Esqueleto* e *Desenhar* uma única vez.
+- O botão *Calcular de forma mais aproximada* deixa de existir: o Solidon continua sozinho com o cálculo completo. Na versão 0.6.0 aparecia também onde não mudava nada.
 
 ### Editar e esboçar
 

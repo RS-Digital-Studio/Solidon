@@ -31,6 +31,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Aunque nada se solape, *Comprobar solapamientos* da ahora una respuesta.
 - Si a una función le falta un segundo cuerpo en la escena, el motivo indica *Duplicar objeto* como camino.
 - La lista de atajos de teclado nombra *Modelar*, *Esqueleto* y *Dibujar* una sola vez.
+- Desaparece el botón *Calcular de forma más aproximada*: Solidon sigue solo con el cálculo completo. En la versión 0.6.0 aparecía también donde no cambiaba nada.
 
 ### Editar y dibujar
 

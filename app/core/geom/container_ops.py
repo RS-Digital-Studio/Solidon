@@ -9,7 +9,7 @@ from typing import Any, cast
 
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationError
 from app.core.geom import transform
-from app.core.geom.boolean import BOOLEAN_OVERLAP, DRAFT_CHAIN, boolean, deepest
+from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest
 from app.core.geom.lid import (
     CAP_THREAD_FEATURE,
     CAVITY_FEATURE,
@@ -368,9 +368,11 @@ class _Build:
             result = boolean(
                 cast(Any, kind),
                 [as_mesh_data(form) for form in forms],
+                # Die Güte kürzt die Kette, nicht der Aufruf: Dieselben Stufen
+                # wie ``DRAFT_CHAIN``, aber als ``cut_short`` — dann rechnet die
+                # Auswertung im Fenster einen gescheiterten Schritt voll nach (FD-6).
                 quality=self.ctx.quality,
                 seed=self.seed,
-                stages=DRAFT_CHAIN if self.ctx.quality == "draft" else None,
                 cancelled=self.ctx.cancelled,
             )
             self.solvers.append(result.solver)
