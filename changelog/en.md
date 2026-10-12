@@ -20,6 +20,8 @@ it into `website/version.json`.
 ### Operation and system
 
 - The search finds *Unite*, *Subtract* and *Intersection* under “boolean” too, and *Subtract* also under “difference”.
+- The search also finds the function for a question like “How do I put the part on the build plate?” and knows words from slicers and CAD such as “print bed” or “variable”.
+- The search in the manual also finds the right page for a question in your own words.
 - With one body selected and a second in the scene, the *Selection* tab says how to add the second for *Unite*, *Subtract* and *Intersection*.
 - The search field in the *Selection* tab is now always there, even with nothing selected, and finds every function and command along with its shortcut.
 - The command palette is gone, because the search field finds the same. *Search functions* and Ctrl+Shift+P put the cursor into it.
@@ -30,6 +32,11 @@ it into `website/version.json`.
 - Even when nothing overlaps, *Check overlaps* now gives an answer.
 - If a function lacks a second body in the scene, the reason names *Duplicate object* as the way.
 - The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
+- The *Compute more coarsely* button is gone, as Solidon carries on with the full calculation by itself. In version 0.6.0 it also appeared where it changed nothing.
+- Error messages, details and notices now appear in Solidon's own style, with the actions as buttons. Ctrl+C copies the whole message.
+- The *Calibrate material* dialog now shows only clearance, interference and hole compensation up front. Elephant foot, shrinkage, wall and overhang are under *More settings*.
+- Numbers are right-aligned in every field, digit under digit.
+- A screen reader now reads the name and explanation of every number field in a dialog.
 
 ### Editing and sketching
 

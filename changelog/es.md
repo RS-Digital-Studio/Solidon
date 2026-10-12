@@ -21,6 +21,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Manejo y sistema
 
 - La búsqueda encuentra *Unir*, *Sustraer* e *Intersección* también como «booleano», y *Sustraer* también como «diferencia».
+- La búsqueda encuentra la función también para una pregunta como «¿Cómo pongo la pieza en la cama de impresión?» y conoce palabras de slicers y CAD como «variable».
+- También la búsqueda en el manual encuentra la página adecuada para una pregunta con sus propias palabras.
 - Con un cuerpo seleccionado y un segundo en la escena, la pestaña *Selección* indica cómo añadir el segundo para *Unir*, *Sustraer* e *Intersección*.
 - El campo de búsqueda de la pestaña *Selección* está ahora siempre, también sin selección, y encuentra cada función y cada comando con su atajo.
 - La paleta de comandos desaparece, porque el campo de búsqueda encuentra lo mismo. *Buscar función* y Ctrl+Mayús+P ponen el cursor en él.
@@ -31,6 +33,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Aunque nada se solape, *Comprobar solapamientos* da ahora una respuesta.
 - Si a una función le falta un segundo cuerpo en la escena, el motivo indica *Duplicar objeto* como camino.
 - La lista de atajos de teclado nombra *Modelar*, *Esqueleto* y *Dibujar* una sola vez.
+- Desaparece el botón *Calcular de forma más aproximada*: Solidon sigue solo con el cálculo completo. En la versión 0.6.0 aparecía también donde no cambiaba nada.
+- Los mensajes de error, los detalles y los avisos aparecen ahora con el estilo de Solidon, con las acciones como botones. Ctrl+C copia el mensaje entero.
+- El diálogo *Calibrar material* muestra delante solo la holgura, el apriete y la compensación de agujeros. Pata de elefante, contracción, pared y voladizo están en *Más ajustes*.
+- Los números quedan alineados a la derecha en todos los campos, cifra bajo cifra.
+- Un lector de pantalla lee el nombre y la explicación de cada campo numérico de un diálogo.
 
 ### Editar y dibujar
 

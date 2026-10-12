@@ -102,14 +102,17 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 
 ## Rückfragen
 
+**Eine Meldung ist kein `QMessageBox`** (Z5), sondern `message_dialog`; nur
+die Fragen hier bleiben eins (`test_message_dialog`).
+
 Die gewollten Ausnahmen von Regel 19, und was sie davon abhält, zur Blockade zu
 werden:
 
 - **Löschen im Verlauf:** Die Nachfrage nennt mitbetroffene Schritte beim
   Namen, mit Nummer und Titel wie im Verlauf (`history.named_steps`: bis vier
-  alle, sonst drei und „und N weitere“), und den Rückweg über Strg+Z. Titel
-  aus `history.step_titles`, derselben Quelle wie die Zeilen und der
-  Löschtitel; ein gelöschter Schritt trägt keine Nummer mehr.
+  alle, sonst drei und „und N weitere“), und den Rückweg über Strg+Z.
+- **Wiederherstellen nach einem Absturz** und **Verlust einer Generierung**
+  fragen: Beides ist ohne Frage unwiderruflich weg.
 - **Die lange Merkmalserkennung wird angeboten** (§21.1): Oberhalb der
   automatischen Grenze nennt die Frage Dauer und Speicherbedarf; die
   Alternative, auch das Schließen, lädt mit begrenzter Erkennung. Der Befund
@@ -374,7 +377,8 @@ Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
 zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
-(`panels.align_forms`, gerahmte Reiter über `apart`), gleich breite Felder
+(`panels.align_forms`, gerahmte Reiter über `apart`), jedes Layout mit eigenem
+Abstand (nie Qts 6), gleich breite Felder
 (`panels.even_fields`, `op_dialog.even_value_fields`); eine Zeile aus Feld und
 Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt, keine zweimal
 im Dialog. **Hat der Dialog eine Rückseite, setzen die Zeilen vorn, die

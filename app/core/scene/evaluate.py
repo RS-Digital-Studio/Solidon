@@ -46,7 +46,6 @@ from app.core.errors import (
     SHOW_LOCATIONS,
     SHOW_STEP_VALUES,
     SUPPRESS_STEP,
-    USE_VOXEL_STAGE,
     AmbiguityError,
     AppError,
     BooleanFailedError,
@@ -1877,11 +1876,9 @@ def _only_the_short_chain(error: BooleanFailedError) -> bool:
 
     Gekürzt haben muss die Güte, nicht der Aufrufer: Ein Schritt, der
     ausdrücklich nur eine Stufe oder die Entwurfskette verlangt, bekommt mit
-    der vollen Güte nichts anderes (``BooleanFailedError.cut_short``). Und die
-    Ausnahme muss selbst *Voxelstufe erzwingen* anbieten — eine zweite
-    Entscheidung derselben Frage liefe auseinander.
+    der vollen Güte nichts anderes (``BooleanFailedError.cut_short``).
     """
-    return error.cut_short and any(action.id == USE_VOXEL_STAGE.id for action in error.suggestions)
+    return error.cut_short
 
 
 def _announce_full_chain(

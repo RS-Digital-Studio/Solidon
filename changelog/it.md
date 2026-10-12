@@ -20,6 +20,8 @@ scrive in `website/version.json`.
 ### Uso e sistema
 
 - La ricerca trova *Unisci*, *Sottrai* e *Intersezione* anche come «booleano», e *Sottrai* anche come «differenza».
+- La ricerca trova la funzione anche per una domanda come «Come appoggio il pezzo sul piano?» e conosce parole di slicer e CAD come «piano di stampa» o «variabile».
+- Anche la ricerca nel manuale trova la pagina giusta per una domanda con parole proprie.
 - Con un corpo selezionato e un secondo nella scena, la linguetta *Selezione* dice come aggiungere il secondo per *Unisci*, *Sottrai* e *Intersezione*.
 - Il campo di ricerca della linguetta *Selezione* ora c'è sempre, anche senza selezione, e trova ogni funzione e ogni comando con la sua scorciatoia.
 - La palette dei comandi non c'è più, perché il campo di ricerca trova lo stesso. *Cerca funzione* e Ctrl+Maiusc+P vi portano il cursore.
@@ -30,6 +32,11 @@ scrive in `website/version.json`.
 - Anche quando nulla si sovrappone, *Controlla sovrapposizioni* ora dà una risposta.
 - Se a una funzione manca un secondo corpo nella scena, il motivo indica *Duplica oggetto* come via.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
+- Il pulsante *Calcolare in modo più grossolano* non c'è più: Solidon prosegue da solo con il calcolo completo. Nella versione 0.6.0 compariva anche dove non cambiava nulla.
+- Messaggi di errore, dettagli e avvisi ora appaiono nello stile di Solidon, con le azioni come pulsanti. Ctrl+C copia l'intero messaggio.
+- La finestra *Calibra il materiale* mostra davanti solo gioco, interferenza e compensazione dei fori. Piede d'elefante, ritiro, parete e sbalzo sono in *Altre impostazioni*.
+- I numeri sono allineati a destra in tutti i campi, cifra sotto cifra.
+- Uno screen reader legge il nome e la spiegazione di ogni campo numerico di una finestra di dialogo.
 
 ### Modificare e disegnare
 

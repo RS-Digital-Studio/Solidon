@@ -29,7 +29,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Sagt eine tangierende Schnittebene vor den Stiften ab, während offene Eingänge und getrennte Schalen ihre eigene Diagnose behalten? Findet Auto Split eine gültige Folgeebene? | `test_tangent_cuts.py` — Korpusplatte, beide Güten und gemeinsame Schnittwege |
 | Sammelparameter-Ops über das Register | `test_gesture_ops.py` |
 | Öffnen alte Projektdateien? Halten die Korpusdateien, was sie belegen? | `test_project.py` mit `data/projects/` · `test_corpus.py` (§34) |
-| Trägt jede Ausnahme einen Vorschlag? | `test_errors.py` |
+| Trägt jede Ausnahme einen Vorschlag? | `test_errors.py`, `test_message_dialog.py` |
 | Erreichen Helfer- und Stopfehler den Kundenweg unverändert? | `test_prepare.py` · `test_difference.py` · `test_missing_ops.py` · `test_repair.py` · `test_threemf_native_materials.py` |
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Umschalter, vier Felder vorn? | `test_theme_and_palette.py` · `test_interface_limits.py` |

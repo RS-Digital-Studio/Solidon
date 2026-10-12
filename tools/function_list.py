@@ -169,8 +169,11 @@ DIALOG_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "UpdateDialog": ("D12", "leer"),
     "ChangesDialog": ("D12", "leer"),
     "DonationDialog": ("D12", "leer"),
-    # Ein ``QMessageBox`` mit eigenem Ausweg (Zahlungslink kopieren).
+    # Eine Meldung mit eigenem Ausweg (Zahlungslink kopieren).
     "DonationOpenErrorDialog": ("D12", "leer"),
+    # Die Meldung im Hausstil (FD-21): Fehler, Einzelheiten, Hinweise. Ihre
+    # Fenster tragen ``message:<sache>`` wie zuvor die rohen.
+    "MessageDialog": ("D12", "leer"),
     "AboutDialog": ("D12", "leer"),
     "PartCatalog": ("D2", "leer"),
     "GenerateDialog": ("D2", "leer"),
@@ -326,8 +329,9 @@ CONTEXT_PACKAGES: Final[dict[str, tuple[str, str]]] = {
 SETTINGS_PACKAGE: Final = "D12"
 
 
-#: Funktionen, die ein rohes Meldungsfenster bauen, beim Namen (Zeile ``meldung:<name>``;
-#: eine Kennung nennt die Sache, nie ihr Modul), nach Paket und Anforderung. Konzept §6:
+#: Funktionen, die ein Meldungsfenster bauen — roh oder im Hausstil (``MessageDialog``) —,
+#: beim Namen (Zeile ``meldung:<name>``; eine Kennung nennt die Sache, nie ihr Modul),
+#: nach Paket und Anforderung. Konzept §6:
 #: Wiederherstellen und Speicherfrage in D1, die Löschnachfrage im Verlauf (Ausnahme zu
 #: Regel 19) in D11.
 RAW_WINDOW_PACKAGES: Final[dict[str, tuple[str, str]]] = {
@@ -712,19 +716,11 @@ ERROR_DIALOG_ACTIONS: Final[dict[str, str]] = {
     "suppress_along": "D11",
 }
 
-#: Befundhandlungen ohne Startszene, je mit dem Grund. Jede andere beginnt in einer
-#: Szene, deren Befund sie trägt (``promises.actions``); der Test hält beide Mengen
-#: gegeneinander. Hier steht nur, was keine Eingabe erreicht — ein Fund der Art
-#: Aufräumen, über dessen Entfernen der Koordinator entscheidet.
-FINDING_ACTIONS_WITHOUT_SCENE: Final[dict[str, str]] = {
-    "use_voxel_stage": "Im Fenster nie an einem Befund: Hält die kurze Kette an, rechnet "
-    "dieselbe Auswertung den Schritt mit der vollen Kette samt Voxelstufe nach "
-    "(scene.evaluate._FullChain), und deren Absage trägt den Vorschlag nicht mehr "
-    "(errors.BooleanFailedError). Übrig bleiben Boolesche mit ausdrücklich nur der "
-    "direkten Stufe (Musterentfernung, Textur), die nur bei einem Kernversagen an einer "
-    "selbst gebauten Form absagen — und dort hülfe der Knopf nicht, weil der Aufruf die "
-    "Stufen festlegt.",
-}
+#: Befundhandlungen ohne Startszene, je mit dem Grund — leer, und der Test hält es so:
+#: Jede Befundhandlung beginnt in einer Szene, deren Befund sie trägt
+#: (``promises.actions``). Hierher käme nur eine Handlung, die keine Eingabe erreicht,
+#: bis über ihr Entfernen entschieden ist.
+FINDING_ACTIONS_WITHOUT_SCENE: Final[dict[str, str]] = {}
 
 
 def kernel_action_ids(root: Path = KERNEL) -> frozenset[str]:

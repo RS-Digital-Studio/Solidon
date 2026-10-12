@@ -21,6 +21,8 @@ dans `website/version.json`.
 ### Utilisation et système
 
 - La recherche trouve *Réunir*, *Soustraire* et *Intersection* aussi sous « booléen », et *Soustraire* aussi sous « différence ».
+- La recherche trouve aussi la fonction pour une question comme « Comment poser la pièce sur le plateau ? » et connaît des mots des slicers et de la CAO comme « variable ».
+- La recherche dans le manuel trouve aussi la bonne page pour une question posée avec vos propres mots.
 - Avec un corps sélectionné et un second dans la scène, l'onglet *Sélection* indique comment ajouter le second pour *Réunir*, *Soustraire* et *Intersection*.
 - Le champ de recherche de l'onglet *Sélection* est désormais toujours là, même sans sélection, et trouve chaque fonction et chaque commande avec son raccourci.
 - La palette de commandes disparaît, car le champ de recherche trouve la même chose. *Rechercher une fonction* et Ctrl+Maj+P y placent le curseur.
@@ -31,6 +33,11 @@ dans `website/version.json`.
 - Même quand rien ne se recouvre, *Vérifier les recouvrements* donne désormais une réponse.
 - S'il manque à une fonction un second corps dans la scène, la raison indique *Dupliquer l'objet* comme solution.
 - La liste des raccourcis clavier ne nomme plus qu'une fois *Sculpter*, *Squelette* et *Dessiner*.
+- Le bouton *Calculer plus grossièrement* disparaît : Solidon poursuit seul avec le calcul complet. Dans la version 0.6.0, il apparaissait aussi là où il ne changeait rien.
+- Les messages d'erreur, les détails et les avis s'affichent désormais dans le style de Solidon, avec les actions sous forme de boutons. Ctrl+C copie tout le message.
+- Le dialogue *Calibrer le matériau* n'affiche plus devant que le jeu, la surcote et la compensation des trous. Pied d'éléphant, retrait, paroi et surplomb sont sous *Autres réglages*.
+- Les nombres sont alignés à droite dans tous les champs, chiffre sous chiffre.
+- Un lecteur d'écran lit le nom et l'explication de chaque champ numérique d'un dialogue.
 
 ### Modifier et esquisser
 

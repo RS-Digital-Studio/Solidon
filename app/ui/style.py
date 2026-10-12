@@ -1793,6 +1793,11 @@ QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabl
     color: {disabled};
     background: {window};
 }}
+/* Zahlen stehen Stelle unter Stelle (G3): rechtsbündig mit ihrer Einheit, an
+   jedem Drehfeld — auch am nackten ``QSpinBox`` einer Leiste. */
+QSpinBox, QDoubleSpinBox {{
+    qproperty-alignment: 'AlignRight | AlignVCenter';
+}}
 
 /* --- Die Pfeile am Zahlenfeld ------------------------------------------
    Sobald ein Stylesheet an einem ``QSpinBox`` eine Rahmeneigenschaft setzt,

@@ -45,6 +45,8 @@ Nutzen da und sonst nichts.
 ### Bedienung und System
 
 - Die Suche findet *Vereinigen*, *Abziehen* und *Schnittmenge* auch unter „boolesch“ und „Boolean“, *Abziehen* auch unter „Differenz“.
+- Die Suche findet die Funktion auch zu einer Frage wie „Wie setze ich das Teil auf die Druckplatte?“ und kennt Wörter aus Slicer und CAD wie „Druckbett“ oder „Variable“.
+- Auch die Suche im Handbuch findet zu einer Frage in eigenen Worten die passende Seite.
 - Ist ein Körper gewählt und liegt ein zweiter in der Szene, sagt der Reiter *Auswahl*, wie man den zweiten für *Vereinigen*, *Abziehen* und *Schnittmenge* dazuwählt.
 - Das Suchfeld im Reiter *Auswahl* steht jetzt immer, auch ohne Auswahl, und findet jede Funktion und jeden Befehl samt Tastenkürzel.
 - Die Befehlspalette entfällt, denn das Suchfeld findet dasselbe. *Funktion suchen* und Strg+Umschalt+P setzen den Cursor hinein.
@@ -55,6 +57,11 @@ Nutzen da und sonst nichts.
 - Auch wenn sich nichts überschneidet, gibt *Überschneidungen prüfen* jetzt eine Antwort.
 - Fehlt einer Funktion ein zweiter Körper in der Szene, nennt der Grund *Objekt duplizieren* als Weg.
 - Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
+- Der Knopf *Gröber rechnen* entfällt, denn Solidon rechnet von selbst vollständig weiter. In Version 0.6.0 stand er auch dort, wo er nichts änderte.
+- Fehlermeldungen, Einzelheiten und Hinweise stehen jetzt im Stil von Solidon, mit den Handlungen als Knöpfen. Strg+C kopiert die ganze Meldung.
+- Der Dialog *Material kalibrieren* zeigt vorn nur Spiel, Übermaß und Lochkorrektur. Elefantenfuß, Schwindung, Wand und Überhang stehen unter *Weitere Einstellungen*.
+- Zahlen stehen in allen Feldern rechtsbündig, Stelle unter Stelle.
+- Ein Bildschirmleser liest an jedem Zahlenfeld eines Dialogs Namen und Erklärung vor.
 
 ### Bearbeiten und Zeichnen
 

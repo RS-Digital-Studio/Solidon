@@ -727,6 +727,7 @@ class RecipeDialog(QDialog):
         naming_row.addWidget(group_label)
         naming_row.addWidget(self.group)
         head = QFormLayout()
+        head.setSpacing(NORMAL)
         _one_line(head)
         head.addRow(tr("Name"), naming)
 
@@ -820,6 +821,7 @@ class RecipeDialog(QDialog):
         self.stop_check.clicked.connect(self._stop_check)
         waiting = QHBoxLayout()
         waiting.setContentsMargins(0, 0, 0, 0)
+        waiting.setSpacing(TIGHT)
         waiting.addWidget(self.progress, 1)
         waiting.addWidget(self.percent)
         waiting.addWidget(self.stop_check)
@@ -939,6 +941,7 @@ class RecipeDialog(QDialog):
             column.addWidget(empty)
             return box
         form = QFormLayout()
+        form.setSpacing(NORMAL)
         _one_line(form)
         column.addLayout(form)
         for row in self._params:
@@ -1024,6 +1027,7 @@ class RecipeDialog(QDialog):
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(NORMAL)
         about = QFormLayout()
+        about.setSpacing(NORMAL)
         _one_line(about)
         about.addRow(tr("Beschreibung"), self.doc)
         about.addRow(tr("Lizenz"), self.licence)
@@ -1032,6 +1036,7 @@ class RecipeDialog(QDialog):
         for row in self._params:
             column.addWidget(row.heading)
             form = QFormLayout()
+            form.setSpacing(NORMAL)
             _one_line(form)
             form.addRow(tr("Beschriftung", context="Feld"), row.title)
             form.addRow(tr("Einheit"), row.unit)
@@ -1046,6 +1051,7 @@ class RecipeDialog(QDialog):
         if self._features:
             column.addWidget(_section(tr("Namen der Stellen"), box))
             names = QFormLayout()
+            names.setSpacing(NORMAL)
             _one_line(names)
             for feature in self._features:
                 names.addRow(feature.label, feature.name)

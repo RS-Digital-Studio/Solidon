@@ -23,8 +23,7 @@ erhöht, begründet es im Commit (`tests/test_interface_limits.py`).
 **Nichts ist endgültig.** Jede Handlung ist eine Op, jede Op rücknehmbar, jeder
 Wert nachträglich änderbar — keine Bestätigungsdialoge vor rücknehmbaren
 Handlungen, kein „Möchten Sie wirklich“, keine Sackgassen (Regel 19). Die
-gewollten Ausnahmen stehen in `fenster.md` unter „Rückfragen“. Wer nur
-hinsieht, wird nie gefragt.
+gewollten Ausnahmen stehen in `fenster.md` unter „Rückfragen“.
 
 ## Eine Auskunft, eine Quelle
 
@@ -64,8 +63,8 @@ hier Sätze gibt: die Druckeinstellungen über `note`, jeder Parameter jeder
 Operation über seinen `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
 den Titel noch einmal, und hängt an **beiden** Hälften der Zeile — man zeigt
 auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
-`_explain` über `QFormLayout.labelForField`). Ist eine Zeile gesperrt, tragen
-beide Hälften den *Grund* statt des Satzes. Dazu `accessibleDescription`
+`_explain` über `QFormLayout.labelForField`, samt Innenfeld).
+Ist eine Zeile gesperrt, tragen beide Hälften den *Grund* statt des Satzes. Dazu `accessibleDescription`
 (Regel 18); ein eigener Tooltip bleibt, der Satz kommt dahinter. **Einen
 `statusTip` tragen nur Menüaktionen** (Entscheidung Robert, RM-509): An Feldern
 und Knöpfen wiederholte er den Tooltip.
@@ -159,11 +158,6 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
 - **Gewonnene Druckzeit als Anteil** (Entscheidung Robert): „rund 40 Prozent
   kürzer“ — „rund“, wenn an einem Modell gemessen —, nicht die Stunden eines
   fremden Modells. Rechenzeiten bleiben in Sekunden.
-- **Die Neuerungen-Seite ist das Gestaltungsvorbild der Website** und wird
-  nicht umgebaut, nur mitgeprüft (Entscheidung Robert;
-  `tools/make_changelog.py`). Neue Abschnitte messen sich an ihr: Karten einer
-  Reihe gleich hoch, Akzentrand für die Karte, die handeln lässt, keine halbe
-  letzte Reihe, ein Gedanke je Karte, jeder Gedanke einmal.
 
 ## Zahlen
 
@@ -175,6 +169,8 @@ tauscht **jeden** Punkt — um Pfade, Adressen und Versionsnummern nimmt man
 `localised_value`. Der Quelltextwächter sieht `"%.2f" %`, `.format()` und ein
 nacktes `f"{wert}"` nicht; die fängt erst der Fenstertest über jeden
 sichtbaren Text.
+
+**Zahlen stehen rechtsbündig** — gesetzt im Stylesheet (`style.py`), nie am Feld.
 
 **Die Einheit gehört in den Wert**, nicht in Satz, Beschriftung oder
 Katalogtext: Länge, Volumen und Fläche folgen der Umschaltung (§19.3) über

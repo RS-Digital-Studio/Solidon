@@ -74,6 +74,7 @@ class CounterpartDialog(QDialog):
         set_level(self.note, "caption")
 
         self.form = QFormLayout()
+        self.form.setSpacing(NORMAL)
         self._fields: dict[str, NumberSpin | QComboBox] = {}
 
         buttons = QDialogButtonBox(
@@ -94,6 +95,7 @@ class CounterpartDialog(QDialog):
         layout.setSpacing(NORMAL)
         layout.addWidget(self.places)
         head = QFormLayout()
+        head.setSpacing(NORMAL)
         head.addRow(tr("Paar"), self.pairs)
         layout.addLayout(head)
         layout.addWidget(self.note)

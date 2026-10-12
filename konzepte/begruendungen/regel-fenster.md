@@ -103,6 +103,11 @@ Aus der Durchsicht zu RM-538 (`output/review/punkte-0.5.3-2026-10-06/`):
 
 ## Rückfragen
 
+*Aus `fenster.md` verschoben (Ladelast von `main_window.py`, 12.10.2026):*
+Die Titel der Löschnachfrage kommen aus `history.step_titles`, derselben
+Quelle wie die Zeilen und der Löschtitel; ein gelöschter Schritt trägt keine
+Nummer mehr.
+
 *Aus `fenster.md` verschoben (Ladelast von `main_window.py`, 09.10.2026):*
 
 **Die lange Merkmalserkennung ist kein abgebrochener Import und keine

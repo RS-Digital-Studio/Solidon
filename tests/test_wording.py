@@ -724,19 +724,20 @@ SATZMUSTER: dict[str, re.Pattern[str]] = {
 #: Überarbeitung; sie zu erhöhen ist eine Entscheidung, kein Nachtrag. Mit
 #: Review P2 N5 stieg sie einmal, weil der Wächter seitdem jeden Katalogtext
 #: liest und nicht nur die nach Aufrufort eingeordneten.
-MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Semikolon": 329, "Nur-Formel": 11}
+MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Semikolon": 328, "Nur-Formel": 11}
 
 MUSTER_DATEI = Path(__file__).resolve().parent / "data" / "text_patterns.json"
 
 #: Je Sprache, wie viele Übersetzungen ein Semikolon tragen, das ihre deutsche
 #: Quelle nicht hat. Die Zahl darf nur sinken (Review P2 N5).
-UEBERSETZT_BESTAND: dict[str, int] = {"en": 86, "es": 185, "fr": 93, "it": 57, "pt": 109}
+UEBERSETZT_BESTAND: dict[str, int] = {"en": 86, "es": 184, "fr": 93, "it": 57, "pt": 109}
 
 UEBERSETZT_DATEI = Path(__file__).resolve().parent / "data" / "translated_semicolons.json"
 
 
 def suchwoerter() -> frozenset[str]:
-    """Die Katalogschlüssel der Kundenwörter (``registry.search.CUSTOMER_WORDS``).
+    """Die Katalogschlüssel der Kundenwörter (``registry.search.CUSTOMER_WORDS``)
+    und der Fragewörter der Suche (``QUESTION_WORDS``, ``REQUEST_WORDS``).
 
     **Eine Wortliste, kein Kundentext:** Der Kunde liest sie nie, er tippt sie,
     und die Suche trennt ihre Wendungen am Semikolon. Ein Fachwort darin ist
@@ -744,11 +745,11 @@ def suchwoerter() -> frozenset[str]:
     nichts. Bis dahin standen diese Listen im eingefrorenen Bestand der
     Musterwächter, mit jedem neuen Kundenwort ein Eintrag mehr.
     """
-    from app.core.registry.search import CUSTOMER_WORDS
+    from app.core.registry.search import CUSTOMER_WORDS, QUESTION_WORDS, REQUEST_WORDS
 
     return frozenset(
         f"{text.context}\x04{text.msgid}" if text.context else text.msgid
-        for text in CUSTOMER_WORDS.values()
+        for text in (*CUSTOMER_WORDS.values(), QUESTION_WORDS, REQUEST_WORDS)
     )
 
 

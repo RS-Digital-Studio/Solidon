@@ -551,11 +551,7 @@ def test_confirmed_deactivation_never_claims_that_an_unremovable_key_is_gone(
     shown: list[object] = []
     notices: list[object] = []
     monkeypatch.setattr(dialogs, "show_error", lambda error, *_args: shown.append(error))
-    monkeypatch.setattr(
-        dialogs.QMessageBox,
-        "information",
-        lambda *_args, **_kwargs: notices.append(object()),
-    )
+    monkeypatch.setattr(dialogs, "inform", lambda *_args, **_kwargs: notices.append(object()))
 
     dialog = ActivationDialog()
     previous = dialog.field.toPlainText()

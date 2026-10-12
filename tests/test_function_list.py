@@ -313,14 +313,15 @@ def test_the_finding_actions_come_from_the_kernel_and_the_table(rows: list[fl.Ro
 def test_every_finding_action_has_a_scene_or_a_named_reason(rows: list[fl.Row]) -> None:
     """Jede Befundhandlung beginnt in einer Szene, deren Befund sie trägt — oder sie steht
     mit Grund in ``FINDING_ACTIONS_WITHOUT_SCENE``. Beides zugleich ist ein Widerspruch,
-    eine neue Handlung ohne beides fällt auf."""
+    eine neue Handlung ohne beides fällt auf. Die Tabelle ist leer (Konzept §10, FD-6):
+    Keine Zeile bleibt ungeprüft."""
     without = {
         row.id.removeprefix("finding.action:")
         for row in rows
         if row.source == "befundhandlung" and not row.start_scene
     }
     assert without == set(fl.FINDING_ACTIONS_WITHOUT_SCENE)
-    assert all(reason.strip() for reason in fl.FINDING_ACTIONS_WITHOUT_SCENE.values())
+    assert fl.FINDING_ACTIONS_WITHOUT_SCENE == {}
 
 
 def test_an_unknown_handler_turns_red(cached_sources: dict[str, str]) -> None:

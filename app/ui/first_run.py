@@ -403,6 +403,7 @@ class FirstRunDialog(QDialog):
         self.slicer_file.setAccessibleDescription(self.slicer_file.toolTip())
         self.slicer_file.clicked.connect(self._choose_slicer_file)
         slicer_row = QHBoxLayout()
+        slicer_row.setSpacing(TIGHT)
         slicer_row.addWidget(self.slicer, 1)
         slicer_row.addWidget(self.slicer_file)
         self.printer_state = _StateLine(self)
@@ -434,6 +435,7 @@ class FirstRunDialog(QDialog):
         self.custom_printer = QWidget(self)
         custom_form = QFormLayout(self.custom_printer)
         custom_form.setContentsMargins(0, 0, 0, 0)
+        custom_form.setSpacing(NORMAL)
         # **Beschriftung neben dem Feld, nie darüber** (``fenster.md``): Mit
         # ``WrapLongRows`` brach der Bauraum unter seine Beschriftung, und das
         # Formular hatte keine gemeinsame Kante (C4).
@@ -553,6 +555,7 @@ class FirstRunDialog(QDialog):
         self.basics = basics
         form = QFormLayout(basics)
         form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(NORMAL)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         form.addRow(tr("Sprache"), self.language)
         form.addRow(tr("Slicer"), slicer_row)
@@ -587,6 +590,7 @@ class FirstRunDialog(QDialog):
         # ein Feld, in das man etwas eintragen soll.
         filaments = QHBoxLayout()
         filaments.setContentsMargins(0, 0, 0, 0)
+        filaments.setSpacing(TIGHT)
         filaments.addWidget(self.inventory_button)
         filaments.addStretch(1)
         form.addRow(tr("Filamente"), filaments)

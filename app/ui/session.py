@@ -1896,7 +1896,7 @@ class Session(QObject):
         """Entwurf, solange gearbeitet wird; Export und Abschlussbericht schalten
         auf fein (§31)."""
         self._quality_once: Quality | None = None
-        """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`.
+        """Die Qualität für **einen** Lauf — siehe :meth:`request_fine`.
         Verbraucht wird sie beim Start des Arbeiters, nicht in seinem Lauf:
         Ein Arbeiter, der noch am Stand davor rechnet, nähme sie sonst dem
         Nachlauf weg, für den sie bestellt war."""
@@ -5506,19 +5506,6 @@ class Session(QObject):
         if self._insert_before is not None:
             extra.append(inserting_finding(self.project.document, self._insert_before))
         return _with_findings(result, extra)
-
-    def recompute_fully(self) -> None:
-        """Einmal mit der vollen Rückfallkette rechnen (§17.2).
-
-        Im Fenster läuft die kurze Kette — direkt und verschweißt —, weil sie
-        beim Arbeiten schnell sein muss; die Stufen *Störung* und *Voxel* laufen
-        erst beim Export (§31). Scheitert eine Boolesche Operation, ist der
-        nächste sinnvolle Schritt genau der: dieselbe Kette einmal zu Ende
-        gehen. Bis hierher war das ein Ratschlag ohne Knopf — *Voxelstufe
-        erzwingen* stand im Fehlerdialog, und nichts führte ihn aus.
-        """
-        self._quality_once = "fine"
-        self.evaluate_async()
 
     @property
     def fine_current(self) -> bool:

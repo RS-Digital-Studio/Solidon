@@ -286,13 +286,13 @@ from app.ui.ai_disclosure import (
     target_for_backend,
 )
 from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
+from app.ui.calibration_dialog import CalibrationDialog
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
 from app.ui.dialogs import (
     AboutDialog,
     ActivationDialog,
     AskDialog,
-    CalibrationDialog,
     DonationDialog,
     KeyDialog,
     ParameterDialog,
@@ -27294,10 +27294,10 @@ class MainWindow(QMainWindow):
         war der fehlende Draht. Was hier nicht steht, wird auch nicht
         angeboten; ein Knopf, der nichts tut, ist schlimmer als keiner.
 
-        Nicht dabei und bewusst: ``use_voxel_stage`` (die Stufe ist kein
-        Parameter, den ein Dialog setzen könnte), ``choose`` (der Kern fragt
-        dafür über ``ctx.ask``, bevor er wirft) und ``choose_printer`` — das
-        kommt mit dem Einstellungsdialog.
+        Nicht dabei und bewusst: ``choose`` (der Kern fragt dafür über
+        ``ctx.ask``, bevor er wirft) und ``choose_printer`` — das kommt mit dem
+        Einstellungsdialog. *Gröber rechnen* gibt es nicht mehr (FD-6): Die
+        Auswertung rechnet eine gekürzte Kette selbst zu Ende.
         """
         return {
             "report_error": lambda error: self.report_error(error),
@@ -27464,12 +27464,6 @@ class MainWindow(QMainWindow):
             # bleibt der Weg, den es vor dem Update in der Anwendung als
             # einzigen gab (§37.2).
             "open_download_page": lambda _error: open_website(),
-            # **Der Rat, der die ganze Zeit ins Leere zeigte.** Im Fenster läuft
-            # die kurze Rückfallkette (§31); *Voxelstufe erzwingen* ist deshalb
-            # der richtige nächste Schritt und war doch nur ein Satz. Angeboten
-            # wird er nur, wenn die Voxelstufe noch nicht dran war — das
-            # entscheidet ``BooleanFailedError`` an seinen versuchten Stufen.
-            "use_voxel_stage": lambda _error: self.session.recompute_fully(),
             # **Nur wo es etwas zu wiederholen gibt.** Nach einem gescheiterten
             # Schreiben sind das die zwei Antworten, die wirklich helfen: die
             # Datei freigeben und *erneut* schreiben, oder einen *anderen Ort*
