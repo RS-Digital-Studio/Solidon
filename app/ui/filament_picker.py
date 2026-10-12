@@ -129,6 +129,7 @@ from app.ui.style import (
     set_level,
 )
 from app.ui.theme import current_theme, slot_colour, viewport_colours
+from app.ui.window_names import raw_window
 
 _log = logging.getLogger(__name__)
 
@@ -1257,9 +1258,10 @@ class NewFilamentDialog(QDialog):
             QWidget.setTabOrder(previous, self.location)
 
     def _pick_colour(self, number: int = 0) -> None:
-        chosen = QColorDialog.getColor(
-            QColor(self._colours[number]), self, tr("Farbe des Filaments")
-        )
+        with raw_window("message:filament_colour"):
+            chosen = QColorDialog.getColor(
+                QColor(self._colours[number]), self, tr("Farbe des Filaments")
+            )
         if not chosen.isValid():
             return
         self._colours[number] = chosen.name()
@@ -1719,18 +1721,19 @@ class FilamentField(QComboBox):
         labels = [
             self._label(slot.index, str(slot.name), str(slot.material_type or "")) for slot in slots
         ]
-        chosen, accepted = QInputDialog.getItem(
-            self,
-            tr("Filament ersetzen"),
-            tr(
-                "Alle Filamente dieses Körpers sind belegt. Welches soll ersetzt werden? "
-                "Die bisherigen Flächen dieses Filaments bekommen die neue Spule. "
-                "Strg+Z nimmt die Zuweisung zurück."
-            ),
-            labels,
-            0,
-            False,
-        )
+        with raw_window("message:filament_slot"):
+            chosen, accepted = QInputDialog.getItem(
+                self,
+                tr("Filament ersetzen"),
+                tr(
+                    "Alle Filamente dieses Körpers sind belegt. Welches soll ersetzt werden? "
+                    "Die bisherigen Flächen dieses Filaments bekommen die neue Spule. "
+                    "Strg+Z nimmt die Zuweisung zurück."
+                ),
+                labels,
+                0,
+                False,
+            )
         return slots[labels.index(chosen)].index if accepted and chosen in labels else None
 
     def _make_one(self, position: int) -> None:

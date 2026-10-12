@@ -126,10 +126,10 @@ def test_a_drag_counts_only_if_the_view_noticed_the_grip(qt_app: Any) -> None:
 
 def _probe_row(scenes: Path) -> dict[str, Any]:
     """Die Zeile ``resize_hole`` aus der erzeugten Liste, Startszenen wie im Inventar."""
-    from tools import function_list
+    from tools import function_list, function_scenes
 
     rows = {row.id: asdict(row) for row in function_list.rows()}
-    function_list.save_scenes(scenes)
+    function_scenes.save_scenes(scenes)
     return rows[PROBE_ROW]
 
 

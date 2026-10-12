@@ -106,6 +106,9 @@ TARGETS: Final[frozenset[str]] = frozenset(
         "progress.cancel",
         "preview.banner",
         "selection.rebuild",
+        # Die Seiten *Chat* und *Tour* der rechten Karte
+        "chat",
+        "tour",
     }
 )
 
@@ -153,7 +156,20 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``dialog:print_settings_dialog`` — ein offener Dialog dieser Klasse;
 #: * ``start.recent:1`` — ein Eintrag unter „Zuletzt geöffnet“ auf dem
 #:   Startbildschirm, gezählt ab 1 in der Folge der Liste. Eine Menüzeile
-#:   dafür gibt es nicht.
+#:   dafür gibt es nicht;
+#: * ``message:unsaved_changes`` — ein rohes Meldungsfenster (``QMessageBox``,
+#:   ``QInputDialog``, ``QColorDialog``) über ein Wort für seine Frage
+#:   (``app/ui/window_names.raw_window``);
+#: * ``message.button:unsaved_changes.save`` — ein Knopf darin; bei einer
+#:   Fehlermeldung ist der Knopf die Kennung der Handlung
+#:   (``message.button:error.retry``), in einem statischen Aufruf der
+#:   Standardknopf (``yes``, ``ok``);
+#: * ``setting.section:weitere_einstellungen`` — die Kopfzeile eines Abschnitts
+#:   der Einstellungen, gebildet aus seinem Titel (:func:`name_part`).
+#:
+#: **Ein Name nennt die Sache, nie Datei oder Modul:** Die Oberfläche wird
+#: aufgeteilt, und ein Name mit Modul verlöre Tour, Anleitung und
+#: Funktionsdurchgang (``tests/test_guide_targets.py`` hält es).
 TARGET_KINDS: Final[tuple[str, ...]] = (
     "command",
     "operation",
@@ -179,6 +195,9 @@ TARGET_KINDS: Final[tuple[str, ...]] = (
     "view",
     "dialog",
     "start.recent",
+    "message",
+    "message.button",
+    "setting.section",
 )
 
 #: Das erste Glied jedes Namens einer Zeile der Menüleiste (:func:`menubar_name`).
@@ -208,6 +227,8 @@ _PATTERNS: Final[dict[str, re.Pattern[str]]] = {
     "history.row": re.compile(r"[1-9][0-9]*"),
     "start.recent": re.compile(r"[1-9][0-9]*"),
     "dialog": re.compile(r"[a-z][a-z0-9_]*"),
+    "message": re.compile(_WORD),
+    "message.button": re.compile(rf"{_WORD}\.{_DOTTED}"),
 }
 
 #: Die Umlaute in einem Namen aus der deutschen Quelle.

@@ -1791,8 +1791,9 @@ def test_the_z1_message_names_the_factor_where_the_schema_puts_it(
 def test_the_spec_format_and_the_licence_names_come_from_the_function_list() -> None:
     """Eine Quelle: L führt Schlüssel, Gründe und Lizenznamen, U importiert sie.
 
-    ``function_list`` darf ``function_checks`` nicht importieren — sonst wäre
-    es ein Kreis.
+    ``function_list`` und die Module, die es lädt (``function_scan``,
+    ``function_scenes``), importieren keines der Urteilsmodule — sonst wäre es
+    ein Kreis.
     """
     import ast
 
@@ -1806,13 +1807,30 @@ def test_the_spec_format_and_the_licence_names_come_from_the_function_list() -> 
     assert "LICENCE_STATES" not in getattr(function_checks, "__all__", ())
     assert function_checks.VARIANT_LICENCES is function_list.PRECONDITIONS["licence"]
     assert set(function_checks.LICENCE_UNLOCKED) == set(function_list.LICENCE_STATES)
-    source = Path(function_list.__file__ or "").read_text(encoding="utf-8")
-    imported = {
-        node.module
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.ImportFrom) and node.module
-    }
-    assert not {name for name in imported if name.startswith("tools.function_")}
+    own = {"function_list", "function_scan", "function_scenes"}
+    folder = Path(function_list.__file__ or "").parent
+    seen: set[str] = set()
+    todo = ["function_list"]
+    while todo:
+        module = todo.pop()
+        if module in seen:
+            continue
+        seen.add(module)
+        tree = ast.parse((folder / f"{module}.py").read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if node.module == "tools":
+                names = [alias.name for alias in node.names]
+            elif (node.module or "").startswith("tools."):
+                names = [(node.module or "").removeprefix("tools.")]
+            else:
+                continue
+            for name in names:
+                if name.startswith("function_"):
+                    assert name in own, f"{module} importiert {name}"
+                    todo.append(name)
+    assert seen == own, seen
 
 
 def test_a_row_without_a_drag_does_not_miss_z1() -> None:

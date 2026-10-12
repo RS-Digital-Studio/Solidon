@@ -46,12 +46,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import discover, install, tools
+from app.core import discover, guides, install, tools
 from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.labels import UNEXPECTED_CRASH
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import NORMAL, TIGHT, WIDE, DialogScrollArea, make_primary
+from app.ui.window_names import raw_window
 
 if TYPE_CHECKING:
     from app.ui.settings import UiSettings
@@ -431,12 +432,13 @@ class _Row(QWidget):
         problem = ""
         entered = self.tool.remote_address() or self.tool.url
         while True:
-            entered, accepted = QInputDialog.getText(
-                self,
-                str(self.tool.title),
-                self._address_question(problem),
-                text=entered,
-            )
+            with raw_window("message:service_address"):
+                entered, accepted = QInputDialog.getText(
+                    self,
+                    str(self.tool.title),
+                    self._address_question(problem),
+                    text=entered,
+                )
             if not accepted:
                 return
             trouble = discover.unusable_address(entered)
@@ -1067,6 +1069,7 @@ class InstallDialog(QDialog):
     def _show_details(self) -> None:
         """Das Protokoll, für den der es weitergeben will (§33.2)."""
         box = QMessageBox(self)
+        box.setProperty(guides.TARGET_PROPERTY, "message:install_details")
         box.setWindowTitle(tr("Einzelheiten"))
         # Beim Start eines Dienstes hat keine Paketverwaltung etwas gemeldet —
         # dort stehen Aufruf und Adresse.

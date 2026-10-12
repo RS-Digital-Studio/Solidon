@@ -114,6 +114,7 @@ from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES, text_colour
 from app.ui.shortcut_schemes import delete_keys, deletes, redo_keys
 from app.ui.viewport import MEASURE_GAP
+from app.ui.window_names import raw_window
 
 #: Was eine widersprüchliche Bedingung in der Liste anschreibt.
 #:
@@ -8315,9 +8316,10 @@ class SketchPanel(QWidget):
                 shown = f"{circle_shown(float(entry.value)):.9f}".rstrip("0").rstrip(".")
             except ValueError:
                 shown = str(entry.value)
-        value, agreed = QInputDialog.getText(
-            self, str(tr("Maß ändern")), tr("{name}:", name=caption), text=shown
-        )
+        with raw_window("message:constraint_value"):
+            value, agreed = QInputDialog.getText(
+                self, str(tr("Maß ändern")), tr("{name}:", name=caption), text=shown
+            )
         if agreed and value.strip():
             entered = value.strip()
             if as_circle and (typed := read_number(entered)) is not None:

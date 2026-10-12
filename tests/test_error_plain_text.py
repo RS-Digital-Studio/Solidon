@@ -23,6 +23,7 @@ def test_show_error_passes_user_names_as_explicit_plain_text(monkeypatch, error_
                 setAutoDefault=lambda value: None,
                 setDefault=lambda value: None,
                 setText=lambda value: calls.__setitem__("exit", value),
+                setProperty=lambda name, value: None,
             )
             return SimpleNamespace(
                 setTextFormat=lambda value: calls.__setitem__("format", value),
@@ -30,6 +31,7 @@ def test_show_error_passes_user_names_as_explicit_plain_text(monkeypatch, error_
                 setInformativeText=lambda value: calls.__setitem__("detail", value),
                 setIcon=lambda value: None,
                 setWindowTitle=lambda value: None,
+                setProperty=lambda name, value: None,
                 addButton=lambda *args: button,
                 clickedButton=lambda: None,
                 exec=lambda: None,
