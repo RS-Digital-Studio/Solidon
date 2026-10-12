@@ -22,6 +22,7 @@ from PySide6.QtWidgets import QMenu, QScrollArea, QToolButton
 from app.core import guides
 from app.core.bootstrap import load_operations
 from app.i18n import SOURCE_LANGUAGE
+from tools.function_scan import MESSAGE_BUILDERS
 
 load_operations()
 
@@ -1362,20 +1363,8 @@ _RAW_STATIC = {
 
 
 #: Was eine Meldung oder Eingabe im Hausstil baut und ihr Kennzeichen als ``target=``
-#: nimmt — dieselbe Liste wie ``tools/function_scan.MESSAGE_BUILDERS``.
-HOUSE_BUILDERS = frozenset(
-    {
-        "MessageDialog",
-        "inform",
-        "InputDialog",
-        "ask_text",
-        "ask_choice",
-        "ColourPopup",
-        "choose_colour",
-        "ValuePopup",
-        "edit_value",
-    }
-)
+#: nimmt — aus der Funktionsliste, damit beide dieselben Fenster kennen.
+HOUSE_BUILDERS = MESSAGE_BUILDERS
 
 
 def raw_window_names(source: str) -> tuple[list[str], list[str]]:
