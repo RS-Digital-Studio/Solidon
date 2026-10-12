@@ -29,7 +29,12 @@ from PySide6.QtWidgets import QApplication, QMenu, QToolButton, QWidgetAction
 from app.core.bootstrap import load_operations
 from app.core.registry import REGISTRY, VARIANT_GROUPS, catalogue_operations, search_entries
 from app.ui.main_window import MENU_GROUPS, MainWindow
-from app.ui.op_dialog import MAX_LEAD_WORDS, MAX_LEAD_WORDS_TRANSLATED, USUAL_FRONT_SHARE
+from app.ui.op_dialog import (
+    MAX_FRONT_FIELDS,
+    MAX_LEAD_WORDS,
+    MAX_LEAD_WORDS_TRANSLATED,
+    USUAL_FRONT_SHARE,
+)
 from app.ui.selection_operations import OPEN_UP_TO, SelectionOperationsPanel
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -49,18 +54,13 @@ MAX_MENUS = 9
 #: eine Leiste will, verdrängt eine andere — oder sie ist keine wert.
 MAX_TOOLS = 8
 
-#: Felder auf der **Vorderseite** eines Operationsdialogs. Was darüber
-#: hinausgeht, gehört hinter „Weitere Einstellungen" (§2.5, `placement`).
-#: Dieselbe Zahl wie ``MAX_FRONT_FIELDS`` im Dialog — geprüft in
-#: ``test_the_dialog_and_the_test_agree_on_the_front``. Bauplan §2.4 sagt
-#: „zwei bis drei“; vier ist die harte Grenze (Entscheidung Robert, RM-513),
-#: drei die Regel für neun von zehn Operationen (:data:`USUAL_FRONT_SHARE`).
-MAX_FRONT_PARAMS = 4
-
+# Die Felder auf der Vorderseite eines Operationsdialogs (``MAX_FRONT_FIELDS``,
+# was darüber hinausgeht, gehört hinter „Weitere Einstellungen“, §2.5),
 # ``USUAL_FRONT_SHARE``, ``MAX_LEAD_WORDS`` und ``MAX_LEAD_WORDS_TRANSLATED``
-# stehen in ``app/ui/op_dialog.py``: Der Funktionsdurchgang misst dieselben
-# Schwellen am offenen Dialog (``tools/function_checks.py``, E5), und eine
-# Zahl hat eine Quelle. Gezählt werden die Wörter mit derselben Funktion.
+# stehen in ``app/ui/op_dialog.py``: Der Dialog legt die Vorderseite damit an,
+# der Funktionsdurchgang misst dieselben Schwellen am offenen Dialog
+# (``tools/function_checks.py``, E5), und eine Zahl hat eine Quelle.
+# Gezählt werden die Wörter mit derselben Funktion.
 
 #: Einträge in einem Untermenü. Darüber liest niemand mehr, er sucht — und
 #: dafür gibt es das Suchfeld im Reiter *Auswahl*.
@@ -262,9 +262,9 @@ def test_no_operation_floods_the_front_of_its_dialog() -> None:
     """
     counted = {spec.name: _most_front_fields_shown_at_once(spec) for spec in REGISTRY.all()}
     assert len(counted) > 100, "das Register ist leer — erst load_operations()"
-    over = {name: count for name, count in counted.items() if count > MAX_FRONT_PARAMS}
+    over = {name: count for name, count in counted.items() if count > MAX_FRONT_FIELDS}
     assert not over, (
-        f"Diese Operationen zeigen mehr als {MAX_FRONT_PARAMS} Felder zugleich auf der "
+        f"Diese Operationen zeigen mehr als {MAX_FRONT_FIELDS} Felder zugleich auf der "
         f"Vorderseite: {over}. Setze die selteneren auf placement='advanced'."
     )
 
@@ -278,8 +278,8 @@ def test_nine_of_ten_operations_show_at_most_three_fields_in_front() -> None:
     """
     counted = {spec.name: _most_front_fields_shown_at_once(spec) for spec in REGISTRY.all()}
     assert len(counted) > 100, "das Register ist leer — erst load_operations()"
-    usual = sum(1 for count in counted.values() if count <= MAX_FRONT_PARAMS - 1)
-    four = sorted(name for name, count in counted.items() if count >= MAX_FRONT_PARAMS)
+    usual = sum(1 for count in counted.values() if count <= MAX_FRONT_FIELDS - 1)
+    four = sorted(name for name, count in counted.items() if count >= MAX_FRONT_FIELDS)
     assert usual >= USUAL_FRONT_SHARE * len(counted), (
         f"nur {usual} von {len(counted)} Operationen zeigen höchstens drei Felder vorn; "
         f"vier zeigen: {four}"
@@ -2280,18 +2280,6 @@ def test_a_heading_names_only_what_belongs_to_it(window: MainWindow) -> None:
         "kein Menü mit Untermenü gefunden — dann prüft dieser Test seine Zuordnung "
         "und nicht die Anordnung"
     )
-
-
-def test_the_dialog_and_the_test_agree_on_the_front() -> None:
-    """Der Dialog legt die Vorderseite mit derselben Zahl an, die hier geprüft wird.
-
-    ``op_dialog._MAX_FRONT_FIELDS`` stand ohne Bindung neben
-    ``MAX_FRONT_PARAMS`` (Review Fenster #15, 21.09.2026) — dasselbe Muster
-    wie ``OPEN_UP_TO`` eine Prüfung darüber, nur ohne die Prüfung.
-    """
-    from app.ui.op_dialog import MAX_FRONT_FIELDS
-
-    assert MAX_FRONT_FIELDS == MAX_FRONT_PARAMS, "zwei Grenzen für dieselbe Frage"
 
 
 def test_the_search_names_the_key_the_menu_really_uses(window: MainWindow) -> None:

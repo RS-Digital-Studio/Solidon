@@ -108,10 +108,9 @@ _SEAL_PATH_COMPANIONS = frozenset({"support_feature", "opening_signature", "coun
 #: Entscheidung Robert, RM-513: vier als harte Grenze, neun von zehn
 #: Operationen mit höchstens drei).
 #:
-#: Dieselbe Zahl wie ``MAX_FRONT_PARAMS`` in ``tests/test_interface_limits.py``,
-#: und der Test hält beide zusammen (Muster ``OPEN_UP_TO``): Wer hier fünf
-#: erlaubt, während die Prüfung vier verlangt, hat zwei Grenzen für dieselbe
-#: Frage — und die Oberfläche wächst an der Stelle mit, die niemand misst.
+#: ``tests/test_interface_limits.py`` und der Funktionsdurchgang
+#: (``tools/function_checks.py``, E5) prüfen gegen genau diese Zahl — eine
+#: Grenze, eine Quelle.
 #: Der Dialog hält sie auch beim Vorholen entschiedener Werte (``_promoted_fields``).
 MAX_FRONT_FIELDS: Final = 4
 
