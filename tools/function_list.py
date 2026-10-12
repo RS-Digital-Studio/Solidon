@@ -31,7 +31,6 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import re
 import sys
 import tomllib
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -64,10 +63,14 @@ ROW_SOURCES: Final[tuple[str, ...]] = (
     "befundhandlung",
     "merkmalfenster",
     "verlauf",
+    "fensteraktion",
 )
 
 #: Die Zeile, die für alle Kacheln des Bausteinkatalogs steht (Konzept §3).
 CATALOGUE_ROW: Final = "part:*"
+#: Der erste Eintrag unter „Zuletzt geöffnet“ auf dem Startbildschirm — eine Zeile
+#: für die Liste (``start.recent:<n>``).
+RECENT_ROW: Final = "start.recent:1"
 #: Die Hauptaktion *Modell nachbauen* (``selection_operations.REBUILD``).
 REBUILD_ROW: Final = "selection.rebuild"
 
@@ -198,6 +201,7 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "start.model": ("D1", "start"),
     "start.project": ("D1", "start"),
     "start.manual": ("D1", "start"),
+    RECENT_ROW: ("D1", "start"),
     "dialog": ("D12", "koerper:1"),
     "dialog.accept": ("D12", "koerper:1"),
     "dialog.naming": ("D12", "koerper:1"),
@@ -243,7 +247,6 @@ COMMAND_PACKAGES: Final[dict[str, str]] = {
     "Einstellungen …": "D12",
     "Parameter anlegen …": "D10",
     "Material kalibrieren …": "D10",
-    "Automatisch teilen …": "D8",
     "G-Code gegenprüfen …": "D9",
     "An den Slicer übergeben …": "D9",
     "Filamentlager …": "D9",
@@ -252,6 +255,14 @@ COMMAND_PACKAGES: Final[dict[str, str]] = {
     "Varianten erzeugen …": "D2",
     "Gegenstücke setzen …": "D10",
     "Chat einrichten …": "D12",
+}
+
+#: Fensteraktionen in der Auswahlkarte (``SelectionOperationsPanel.add_window_action``):
+#: Befehle ohne Registereintrag, die nicht in der Menüleiste stehen, nach ihrer
+#: Kennung aus ``window_commands``. *Automatisch teilen* ist ein Ablauf über
+#: mehrere Operationen und steht unter *Vorbereiten*.
+WINDOW_ACTION_PACKAGES: Final[dict[str, str]] = {
+    "edit.auto_split": "D8",
 }
 
 # --- Anforderung und Szene (Bauplan D0 §2.5) ----------------------------------
@@ -380,18 +391,43 @@ def _statements(tree: ast.Module) -> Iterator[ast.stmt]:
             pending.extend(case.body)
 
 
-def _history_name(node: ast.AST) -> str | None:
-    """``x.setObjectName("history.<name>")`` → ``<name>``, sonst ``None``."""
+def _texts(node: ast.AST) -> tuple[str, ...]:
+    """Die Zeichenketten, die ein Ausdruck ergeben kann: eine Konstante oder beide
+    Zweige eines ``a if b else c`` (``"history.up" if upwards else "history.down"``)."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return (node.value,)
+    if isinstance(node, ast.IfExp):
+        return (*_texts(node.body), *_texts(node.orelse))
+    return ()
+
+
+def _history_names(node: ast.AST) -> tuple[str, ...]:
+    """``x.setObjectName("history.<name>")`` → ``(<name>,)``; sonst leer."""
     if (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and node.func.attr == "setObjectName"
         and node.args
+    ):
+        return tuple(
+            text.removeprefix("history.")
+            for text in _texts(node.args[0])
+            if text.startswith("history.")
+        )
+    return ()
+
+
+def _window_action(node: ast.AST) -> str | None:
+    """``….add_window_action("edit.auto_split", …)`` → ``edit.auto_split``, sonst ``None``."""
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "add_window_action"
+        and node.args
         and isinstance(node.args[0], ast.Constant)
         and isinstance(node.args[0].value, str)
-        and node.args[0].value.startswith("history.")
     ):
-        return node.args[0].value.removeprefix("history.")
+        return node.args[0].value
     return None
 
 
@@ -403,6 +439,8 @@ class UiScan:
     """Klassenname → Module, für jede Dialog- oder Fensterklasse."""
     history: tuple[str, ...]
     """Die Einträge des Kontextmenüs im Verlauf (Objektnamen ``history.<x>``)."""
+    window_actions: tuple[str, ...] = ()
+    """Die Kennungen, unter denen ``add_window_action`` Befehle in die Auswahlkarte hängt."""
 
 
 def scan_ui(sources: Mapping[str, str]) -> UiScan:
@@ -415,17 +453,19 @@ def scan_ui(sources: Mapping[str, str]) -> UiScan:
     bases: dict[str, set[tuple[str, ...]]] = {}
     modules: dict[str, list[str]] = {}
     history: set[str] = set()
+    window_actions: set[str] = set()
     for module, text in sources.items():
         tree = ast.parse(text, filename=module)
         for node in _statements(tree):
             if isinstance(node, ast.ClassDef):
                 bases.setdefault(node.name, set()).add(_base_names(node))
                 modules.setdefault(node.name, []).append(module)
-        # Ausdrücke nur dort durchgehen, wo ein Verlaufsname überhaupt steht.
-        if "history." in text:
-            history.update(
-                name for node in ast.walk(tree) if (name := _history_name(node)) is not None
-            )
+        # Ausdrücke nur dort durchgehen, wo ein gesuchter Aufruf überhaupt steht.
+        if "history." in text or "add_window_action(" in text:
+            for expression in ast.walk(tree):
+                history.update(_history_names(expression))
+                if (key := _window_action(expression)) is not None:
+                    window_actions.add(key)
 
     @cache
     def is_window(name: str, seen: frozenset[str] = frozenset()) -> bool:
@@ -436,7 +476,11 @@ def scan_ui(sources: Mapping[str, str]) -> UiScan:
         return any(is_window(base, seen | {name}) for variant in bases[name] for base in variant)
 
     classes = {name: tuple(sorted(modules[name])) for name in bases if is_window(name)}
-    return UiScan(classes=classes, history=tuple(sorted(history)))
+    return UiScan(
+        classes=classes,
+        history=tuple(sorted(history)),
+        window_actions=tuple(sorted(window_actions)),
+    )
 
 
 def window_classes_in(sources: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
@@ -459,11 +503,6 @@ def ui_sources(root: Path = UI) -> dict[str, str]:
     if len(found) < 50:
         raise FunctionListError([f"nur {len(found)} Module unter {root} — dann prüft das nichts"])
     return found
-
-
-def snake(name: str) -> str:
-    """``PrintSettingsDialog`` → ``print_settings_dialog``; ein führender Unterstrich fällt."""
-    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name.lstrip("_")).lower()
 
 
 # --- Operationen -----------------------------------------------------------------
@@ -594,7 +633,13 @@ def operation_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
 def dialog_rows(
     classes: Mapping[str, Sequence[str]], source: Registry, scenes: Mapping[str, Scene]
 ) -> list[Row]:
-    """Je Dialog- oder Fensterklasse eine Zeile ``dialog:<klasse>``."""
+    """Je Dialog- oder Fensterklasse eine Zeile ``dialog:<name>``.
+
+    Der Name kommt aus ``guides.dialog_name`` — derselben Quelle, mit der die
+    Auflösung das offene Fenster sucht.
+    """
+    from app.core.guides import dialog_name
+
     problems: list[str] = []
     rows: list[Row] = []
     for name in sorted(classes):
@@ -624,13 +669,13 @@ def dialog_rows(
             continue
         rows.append(
             Row(
-                id=f"dialog:{snake(name)}",
+                id=f"dialog:{dialog_name(name)}",
                 kind="bedienflaeche",
                 source="dialogklasse",
                 package=package,
                 requirement=requirement,
                 start_scene=_start_scene(requirement, kernel, scenes),
-                target=f"dialog:{snake(name)}",
+                target=f"dialog:{dialog_name(name)}",
             )
         )
     if problems:
@@ -697,6 +742,7 @@ def surface_rows(
     leer, und die Spezifikation der Zeile nennt sie.
     """
     named: list[tuple[str, str]] = [(name, "wortschatz") for name in sorted(targets)]
+    named.append((RECENT_ROW, "wortschatz"))
     named += [(f"history:{entry}", "verlauf") for entry in history]
     named += [(f"finding.action:{entry}", "befundhandlung") for entry in actions]
     # *Modell nachbauen* ist keine Operation, sondern eine Hauptaktion der
@@ -809,12 +855,71 @@ def feature_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
 
 @dataclass(frozen=True, slots=True)
 class MenuEntry:
-    """Eine Zeile der Menüleiste, wie der Prüfstand sie am Fenster liest."""
+    """Eine Zeile der Menüleiste, wie der Prüfstand sie am Fenster liest.
+
+    Das Format von ``menubar.json`` gehört hierher (:meth:`to_json`,
+    :meth:`from_json`, :func:`write_menubar`, :func:`read_menubar`); Prüfstand und
+    Urteile importieren es, statt es nachzubauen.
+    """
 
     object_name: str
     path: tuple[str, ...]
-    """Die Texte in der Quellsprache, vom Hauptmenü bis zur Zeile."""
+    """Die Texte in der Quellsprache, vom Hauptmenü **bis zur Zeile selbst** — ohne die
+    Zeile bekäme jeder Fensterbefehl die Kennung seines Menüs."""
     shortcut: str = ""
+    """Das Kürzel in Qts ``PortableText``, leer ohne Kürzel."""
+
+    def to_json(self) -> dict[str, Any]:
+        """``{object_name, path, shortcut}``, ``path`` als Liste."""
+        return {"object_name": self.object_name, "path": list(self.path), "shortcut": self.shortcut}
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any]) -> MenuEntry:
+        """Die Umkehrung von :meth:`to_json`; ein anderes Format hält an."""
+        if set(data) - {"object_name", "path", "shortcut"} or not {"object_name", "path"} <= set(
+            data
+        ):
+            raise FunctionListError(
+                [
+                    f"menubar.json: Zeile {dict(data)} hat nicht das Format "
+                    "{object_name, path, shortcut}"
+                ]
+            )
+        path = tuple(str(part) for part in data["path"])
+        if not path:
+            raise FunctionListError([f"menubar.json: {data['object_name']} ohne Weg"])
+        return cls(
+            object_name=str(data["object_name"]),
+            path=path,
+            shortcut=str(data.get("shortcut", "")),
+        )
+
+
+def menubar_of(window: Any) -> list[MenuEntry]:
+    """Die Menüleiste eines gebauten Fensters, gelesen über W's
+    ``guide_targets.menubar_entries`` — der Weg bis zur Zeile samt ihrem Text.
+
+    Gerufen im Prozess, der das Fenster schon hat (Prüfstand, Fenstertest); die
+    Liste selbst baut keines.
+    """
+    from app.ui.guide_targets import menubar_entries
+
+    return [
+        MenuEntry(
+            object_name=name,
+            path=(*menus, action.text()),
+            shortcut=action.shortcut().toString(),
+        )
+        for name, menus, action in menubar_entries(window)
+    ]
+
+
+def write_menubar(path: Path, entries: Iterable[MenuEntry]) -> None:
+    """``menubar.json``: eine Liste von :meth:`MenuEntry.to_json`, UTF-8, eingerückt."""
+    path.write_text(
+        json.dumps([entry.to_json() for entry in entries], ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def command_package(entry: MenuEntry) -> str:
@@ -869,17 +974,38 @@ def command_rows(
     return list(rows.values())
 
 
-def read_menubar(path: Path) -> list[MenuEntry]:
-    """Die Menüleiste aus einer Datei des Prüfstands: ``[{object_name, path, shortcut}]``."""
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return [
-        MenuEntry(
-            object_name=str(item["object_name"]),
-            path=tuple(str(part) for part in item["path"]),
-            shortcut=str(item.get("shortcut", "")),
+def window_action_rows(keys: Iterable[str], scenes: Mapping[str, Scene]) -> list[Row]:
+    """Befehle, die das Fenster nur in die Auswahlkarte hängt (``add_window_action``).
+
+    Sie stehen in keiner Menüzeile und in keinem Register; ohne diese Zeilen
+    fehlte *Automatisch teilen* in der Liste.
+    """
+    problems: list[str] = []
+    rows: list[Row] = []
+    for key in keys:
+        if key not in WINDOW_ACTION_PACKAGES:
+            problems.append(f"command:{key}: Fensteraktion ohne Paket (WINDOW_ACTION_PACKAGES)")
+            continue
+        rows.append(
+            Row(
+                id=f"command:{key}",
+                kind="fensterbefehl",
+                source="fensteraktion",
+                package=WINDOW_ACTION_PACKAGES[key],
+                requirement="koerper:1",
+                start_scene=_start_scene("koerper:1", EXACT, scenes),
+                target=f"command:{key}",
+            )
         )
-        for item in data
-    ]
+    if problems:
+        raise FunctionListError(problems)
+    return rows
+
+
+def read_menubar(path: Path) -> list[MenuEntry]:
+    """Die Menüleiste aus :func:`write_menubar` zurück."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return [MenuEntry.from_json(item) for item in data]
 
 
 # --- Die ganze Liste -------------------------------------------------------------
@@ -903,6 +1029,7 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
         lambda: dialog_rows(scan.classes, source, scenes),
         lambda: surface_rows(TARGETS, scan.history, finding_action_ids(), scenes),
         lambda: feature_rows(source, scenes),
+        lambda: window_action_rows(scan.window_actions, scenes),
         lambda: command_rows(menubar, source, scenes),
     )
     for build in builders:
@@ -1340,7 +1467,7 @@ def validate_specs(
 
     source = registry()
     by_id = {row.id: row for row in found}
-    have_commands = any(row.kind == "fensterbefehl" for row in found)
+    have_commands = any(row.source == "menueleiste" for row in found)
     texts = command_texts() if not have_commands else frozenset()
     issues: list[str] = []
     for row_id, spec in specs.items():

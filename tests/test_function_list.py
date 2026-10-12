@@ -26,7 +26,7 @@ from typing import Any
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.guides import TARGETS
+from app.core.guides import TARGETS, dialog_name
 from app.core.registry import CATEGORIES, FEATURE_KINDS, REGISTRY
 from app.core.registry.surfaces import catalogue_operations
 from tests.helpers import exact_kernel
@@ -89,7 +89,8 @@ def test_the_list_finds_enough_to_mean_something(
     sources = Counter(row.source for row in rows)
     assert kinds["operation"] == len(operations) - len(catalogue_operations()) + 1
     assert sources["dialogklasse"] == len(classes)
-    assert sources["wortschatz"] == len(TARGETS)
+    assert sources["wortschatz"] == len(TARGETS) + 1, "dazu start.recent:1"
+    assert sources["fensteraktion"] >= 1
     assert sources["befundhandlung"] >= 15
     assert sources["verlauf"] >= 4
     assert {row.package for row in rows} == set(fl.PACKAGES), "jedes Paket hat Zeilen"
@@ -159,7 +160,7 @@ def test_every_dialog_class_has_a_row_with_its_package(
     classes = fl.window_classes_in(ui_sources)
     found = _by_id(rows)
     for name in classes:
-        row = found[f"dialog:{fl.snake(name)}"]
+        row = found[f"dialog:{dialog_name(name)}"]
         assert row.source == "dialogklasse" and row.package in fl.PACKAGES
     assert not set(fl.DIALOG_OPERATIONS) & set(fl.DIALOG_SURFACES)
     assert set(fl.DIALOG_OPERATIONS) | set(fl.DIALOG_SURFACES) == set(classes)
@@ -174,7 +175,7 @@ def test_a_dialog_of_one_operation_goes_with_it(rows: list[fl.Row]) -> None:
     found = _by_id(rows)
     for name, operation in fl.DIALOG_OPERATIONS.items():
         assert REGISTRY.has(operation), name
-        dialog = found[f"dialog:{fl.snake(name)}"]
+        dialog = found[f"dialog:{dialog_name(name)}"]
         assert dialog.package == found[operation].package, name
         assert dialog.requirement == found[operation].requirement, name
     organizers = [
@@ -216,14 +217,32 @@ def test_every_surface_row_names_a_target_of_the_vocabulary(rows: list[fl.Row]) 
     from app.core.guides import is_target
 
     wrong = [row.id for row in rows if not is_target(row.target)]
-    assert wrong == []
+    # ``guides.dialog_name`` lässt den führenden Unterstrich von ``_PanelWindow``
+    # stehen, und ``dialog:`` verlangt einen Buchstaben vorn: Das abgelöste
+    # Kartenfenster hat damit kein Ziel (Bericht D0-L, gemeldet an W). Behebt W
+    # es, wird diese Zeile rot und fällt weg.
+    assert wrong == ["dialog:_panel_window"]
+
+
+def test_window_actions_outside_the_menu_bar_have_rows(
+    rows: list[fl.Row], ui_sources: dict[str, str]
+) -> None:
+    """Was das Fenster nur in die Auswahlkarte hängt (*Automatisch teilen*), ist eine
+    Zeile; die Tabelle trägt keine Kennung, die es nicht mehr gibt."""
+    keys = fl.scan_ui(ui_sources).window_actions
+    assert "edit.auto_split" in keys
+    assert set(fl.WINDOW_ACTION_PACKAGES) == set(keys)
+    assert _by_id(rows)["command:edit.auto_split"].package == "D8"
 
 
 def test_the_history_entries_come_from_the_context_menu(ui_sources: dict[str, str]) -> None:
     """Die Verlaufszeilen kommen aus den Objektnamen ``history.*`` — die vier, unter denen
     die Bildanleitungen sie schon finden, sind dabei."""
     entries = fl.history_entries(ui_sources)
-    assert {"edit", "insert", "switch", "delete"} <= set(entries)
+    assert {"edit", "insert", "switch", "delete", "up", "down"} <= set(entries)
+    # Ein Name aus einem bedingten Ausdruck zählt mit beiden Zweigen.
+    probe = 'a.setObjectName("history.up" if x else "history.down")\nb.setObjectName(name)\n'
+    assert fl.history_entries({"probe.py": probe}) == ("down", "up")
 
 
 # --- Anforderung und Szene --------------------------------------------------------
@@ -643,3 +662,65 @@ def test_the_list_is_built_without_a_window() -> None:
     source = Path(fl.__file__).read_text(encoding="utf-8")
     assert "QApplication" not in source
     assert ".show(" not in source and ".exec(" not in source
+
+
+# --- Fensterbefehle am gebauten Fenster (Fenster-CI) -------------------------------
+
+
+def test_every_menubar_line_becomes_a_row_with_a_package(qt_app: Any, tmp_path: Path) -> None:
+    """Am gebauten Fenster: Jede Zeile der Menüleiste, die keine Operation ist, wird
+    eine Fensterbefehlszeile mit Paket, und jede Spezifikation mit Menüpfad trifft eine.
+
+    Die Leiste entsteht erst in ``_build_menus``; gelesen wird sie über
+    ``guide_targets.menubar_entries``, wie der Prüfstand sie liest.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    written = fl.menubar_of(window)
+    assert len(written) >= 60, f"nur {len(written)} Zeilen in der Menüleiste"
+    # Der Weg reicht bis zur Zeile selbst, und das Kürzel reist mit.
+    assert ("Bearbeiten", "Parameter anlegen …") in {entry.path for entry in written}
+    assert any(entry.shortcut for entry in written)
+    fl.write_menubar(tmp_path / "menubar.json", written)
+    entries = fl.read_menubar(tmp_path / "menubar.json")
+    assert entries == written
+
+    found = fl.rows(entries)
+    commands = [row for row in found if row.source == "menueleiste"]
+    assert len(commands) >= 30, f"nur {len(commands)} Fensterbefehle"
+    assert {row.package for row in commands} >= {"D1", "D2", "D11", "D12"}
+    assert len({row.target for row in commands}) == len(commands), "ein Name, zwei Zeilen"
+    by_id = {row.id: row for row in found}
+    for row_id, spec in fl.load_specs().items():
+        if "/" in row_id:
+            assert row_id in by_id, f"{spec['file']}: {row_id} ist keine Zeile der Menüleiste"
+            assert by_id[row_id].package == spec["package"]
+    assert fl.validate_specs(found, fl.load_specs(), fl.load_scenes()) == []
+    used = {row.id.rsplit("/", 1)[-1] for row in commands}
+    assert set(fl.COMMAND_PACKAGES) <= used, "Ausnahme ohne Menüzeile"
+    assert {row.id.split("/")[0] for row in commands} <= set(fl.MENU_PACKAGES)
+
+
+def test_the_menubar_format_has_one_shape(tmp_path: Path) -> None:
+    """``menubar.json`` schreibt und liest eine Stelle; ein anderes Format — der Weg nur
+    bis zum Menü unter ``name`` — hält an, statt still falsche Kennungen zu geben."""
+    entries = [
+        fl.MenuEntry("menubar.parameter_anlegen", ("Bearbeiten", "Parameter anlegen …")),
+        fl.MenuEntry("menubar.speichern", ("Datei", "Speichern"), "Ctrl+S"),
+    ]
+    fl.write_menubar(tmp_path / "menubar.json", entries)
+    assert fl.read_menubar(tmp_path / "menubar.json") == entries
+    assert json.loads((tmp_path / "menubar.json").read_text(encoding="utf-8"))[1] == {
+        "object_name": "menubar.speichern",
+        "path": ["Datei", "Speichern"],
+        "shortcut": "Ctrl+S",
+    }
+
+    (tmp_path / "alt.json").write_text(
+        json.dumps([{"name": "menubar.speichern", "path": ["Datei"]}]), encoding="utf-8"
+    )
+    with pytest.raises(fl.FunctionListError):
+        fl.read_menubar(tmp_path / "alt.json")
