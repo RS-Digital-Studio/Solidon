@@ -1134,11 +1134,13 @@ def is_red(sample: BrokenSample) -> tuple[bool, str]:
         assert sample.verdict is not None
         checked = check_verdicts([sample.verdict], outcomes={case.row_id: case})
         reasons = [reason for _entry, why in checked.rejected for reason in why]
-        return bool(reasons), "; ".join(reasons)
+        # Rot zählt nur aus dem genannten Grund: Ein Urteil, das an etwas
+        # anderem scheitert, belegt die Gegenprobe nicht.
+        return any(sample.reason in reason for reason in reasons), "; ".join(reasons)
     if sample.kind == "finding":
         findings, problems = parse_findings(sample.finding or "")
         problems += check_findings(findings)
-        return bool(problems), "; ".join(problems)
+        return any(sample.reason in problem for problem in problems), "; ".join(problems)
     if sample.kind == "share":
         if sample.subject == "E2":
             share = input_share(int(value) for value in sample.values)
@@ -1154,33 +1156,40 @@ def is_red(sample: BrokenSample) -> tuple[bool, str]:
 # --- Bericht ------------------------------------------------------------------
 
 
+#: Wo ein Fall seine Protokolle ablegt: ein Funktionsfall ``function.json``,
+#: ein Sprachfall je Fläche ``surfaces/<zeile>.json`` — beide nach demselben
+#: Schema (``function_checks.PROTOCOL_SCHEMA``), damit Prüfpunkt 9 die Sprachen
+#: an der Zeile sieht.
+PROTOCOL_FILES: Final = ("function.json", "surfaces/*.json")
+
+
 def read_protocols(out: Path) -> tuple[list[dict[str, Any]], list[str]]:
     """Die Messprotokolle eines Laufs in Fallfolge, dazu was an ihnen ungültig ist."""
     protocols: list[dict[str, Any]] = []
     problems: list[str] = []
-    paths = sorted(
-        (out / "cases").glob("*/function.json"),
-        key=lambda path: (
-            int(path.parent.name) if path.parent.name.isdigit() else 0,
-            path.parent.name,
-        ),
+    cases = sorted(
+        (folder for folder in (out / "cases").glob("*") if folder.is_dir()),
+        key=lambda folder: (int(folder.name) if folder.name.isdigit() else 0, folder.name),
     )
-    for path in paths:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as problem:
-            problems.append(f"{path.parent.name}: nicht lesbar ({problem})")
-            continue
-        if not isinstance(data, dict):
-            problems.append(f"{path.parent.name}: kein Protokoll")
-            continue
-        protocols.append(data)
+    for folder in cases:
+        for pattern in PROTOCOL_FILES:
+            for path in sorted(folder.glob(pattern)):
+                where = path.relative_to(out / "cases").as_posix()
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError) as problem:
+                    problems.append(f"{where}: nicht lesbar ({problem})")
+                    continue
+                if not isinstance(data, dict):
+                    problems.append(f"{where}: kein Protokoll")
+                    continue
+                protocols.append(data)
     return protocols, problems
 
 
 def _rows_of(out: Path, protocols: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Die Zeilen des Laufs: ``function_rows.json`` des Inventars, sonst aus den Protokollen."""
-    listed = out / "function_rows.json"
+    """Die Zeilen des Laufs: ``rows.json`` des Inventars (Paket P), sonst aus den Protokollen."""
+    listed = out / "rows.json"
     if listed.is_file():
         return [dict(row) for row in json.loads(listed.read_text(encoding="utf-8"))]
     rows: dict[str, dict[str, Any]] = {}
