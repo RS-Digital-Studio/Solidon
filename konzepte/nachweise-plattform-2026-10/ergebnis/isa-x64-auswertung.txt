@@ -3,7 +3,7 @@ Dateien: 382  Befehle: 71,622,615  Code-Bytes: 279,449,059
 == Dateien mit Befehlen, die Coffee Lake nicht kann ==
 - Frameworks/libcrypto.3.dylib (5.8 MB)
     {'avx512': 95230, 'evex': 95218, 'sha': 512, 'xop': 88, 'vaes256': 360, 'vpclmul256': 46, 'avxifma': 616}  Funktionen: {'avx512': 22, 'evex': 22, 'sha': 6, 'xop': 3, 'vaes256': 4, 'vpclmul256': 3, 'avxifma': 6} von 13163; cpuid=10 xgetbv=1
-    Funktionen mit Kennung (V4/AVX512/SKX…): 11, ohne Kennung: 17
+    Funktionen mit Kennung (V4/AVX512/SKXâ€¦): 11, ohne Kennung: 17
        ohne Kennung: ChaCha20_4xop
        ohne Kennung: _ossl_extract_multiplier_2x20_win5
        ohne Kennung: _ossl_extract_multiplier_2x30_win5
@@ -24,7 +24,7 @@ Dateien: 382  Befehle: 71,622,615  Code-Bytes: 279,449,059
     cpuid in: ['_OPENSSL_ia32_cpuid']
 - Frameworks/numpy/_core/_multiarray_umath.cpython-314-darwin.so (6.9 MB)
     {'avx512': 77566, 'evex': 75854}  Funktionen: {'avx512': 328, 'evex': 328} von 8680; cpuid=5 xgetbv=1
-    Funktionen mit Kennung (V4/AVX512/SKX…): 105, ohne Kennung: 223
+    Funktionen mit Kennung (V4/AVX512/SKXâ€¦): 105, ohne Kennung: 223
        ohne Kennung: __ZL10argselect_I10ymm_vectorIiE10zmm_vectorImEiEvPKT1_Pmmmmm
        ohne Kennung: __ZL10argselect_I10ymm_vectorIjE10zmm_vectorImEjEvPKT1_Pmmmmm
        ohne Kennung: __ZL10argselect_I10zmm_vectorIdES0_ImEdEvPKT1_Pmmmmm
@@ -68,7 +68,7 @@ Dateien: 382  Befehle: 71,622,615  Code-Bytes: 279,449,059
     cpuid in: ['_npy_cpu_init']
 - Frameworks/PIL/__dot__dylibs/libavif.16.4.2.dylib (4.7 MB)
     {'avx512': 36084, 'evex': 36005, 'gfni': 60, 'avxvnni': 1919}  Funktionen: {'avx512': 1789, 'evex': 1787, 'gfni': 17, 'avxvnni': 297} von 14998; cpuid=19 xgetbv=9
-    Funktionen mit Kennung (V4/AVX512/SKX…): 0, ohne Kennung: 1789
+    Funktionen mit Kennung (V4/AVX512/SKXâ€¦): 0, ohne Kennung: 1789
        ohne Kennung: sub_1088a
        ohne Kennung: sub_10a82
        ohne Kennung: sub_116f0
@@ -112,7 +112,7 @@ Dateien: 382  Befehle: 71,622,615  Code-Bytes: 279,449,059
     cpuid in: ['sub_18c1aa', 'sub_1a3c8e', 'sub_1a66e6', 'sub_1a9d8e', 'sub_1a9e20', 'sub_f30']
 - Frameworks/OCP/__dot__dylibs/libopenjph.0.31.0.dylib (0.6 MB)
     {'avx512': 2326, 'evex': 2310}  Funktionen: {'avx512': 16, 'evex': 16} von 459; cpuid=3 xgetbv=2
-    Funktionen mit Kennung (V4/AVX512/SKX…): 12, ohne Kennung: 4
+    Funktionen mit Kennung (V4/AVX512/SKXâ€¦): 12, ohne Kennung: 4
        ohne Kennung: __ZN4ojph5localL16proc_mel_encode1EPNS0_10mel_structERDv8_xS4_S3_jS3_
        ohne Kennung: __ZN4ojph5localL16proc_mel_encode2EPNS0_10mel_structERDv8_xS4_S3_jS3_
        ohne Kennung: __ZN4ojph5localL8proc_cq1EjPDv8_xRS1_S1_
@@ -120,7 +120,7 @@ Dateien: 382  Befehle: 71,622,615  Code-Bytes: 279,449,059
     cpuid in: ['__ZN4ojph18init_cpu_ext_levelERi', '__ZN4ojph9run_cpuidEjjPj']
 - Frameworks/PIL/__dot__dylibs/libz.1.3.1.zlib-ng.dylib (0.2 MB)
     {'avx512': 426, 'evex': 423, 'avxvnni': 18}  Funktionen: {'avx512': 13, 'evex': 13, 'avxvnni': 2} von 225; cpuid=3 xgetbv=1
-    Funktionen mit Kennung (V4/AVX512/SKX…): 9, ohne Kennung: 4
+    Funktionen mit Kennung (V4/AVX512/SKXâ€¦): 9, ohne Kennung: 4
        ohne Kennung: _crc32_fold_vpclmulqdq
        ohne Kennung: _crc32_fold_vpclmulqdq_copy
        ohne Kennung: _crc32_fold_vpclmulqdq_final
@@ -128,12 +128,12 @@ Dateien: 382  Befehle: 71,622,615  Code-Bytes: 279,449,059
     cpuid in: ['_x86_check_features']
 - Frameworks/OCP/__dot__dylibs/libdeflate.0.dylib (0.1 MB)
     {'avx512': 215, 'evex': 215, 'vpclmul256': 92, 'avxvnni': 34}  Funktionen: {'avx512': 4, 'evex': 4, 'vpclmul256': 3, 'avxvnni': 2} von 56; cpuid=4 xgetbv=1
-    Funktionen mit Kennung (V4/AVX512/SKX…): 4, ohne Kennung: 1
+    Funktionen mit Kennung (V4/AVX512/SKXâ€¦): 4, ohne Kennung: 1
        ohne Kennung: _crc32_x86_vpclmulqdq_avx2
     cpuid in: ['_libdeflate_init_x86_cpu_features']
 - Frameworks/PySide6/Qt/lib/QtCore.framework/Versions/A/QtCore (6.7 MB)
     {'avx512': 10, 'evex': 10, 'vaes256': 52}  Funktionen: {'avx512': 4, 'evex': 4, 'vaes256': 4} von 14950; cpuid=8 xgetbv=2
-    Funktionen mit Kennung (V4/AVX512/SKX…): 0, ohne Kennung: 6
+    Funktionen mit Kennung (V4/AVX512/SKXâ€¦): 0, ohne Kennung: 6
        ohne Kennung: sub_7040
        ohne Kennung: sub_7190
        ohne Kennung: sub_7530
@@ -143,16 +143,16 @@ Dateien: 382  Befehle: 71,622,615  Code-Bytes: 279,449,059
     cpuid in: ['sub_3c6620', 'sub_6030']
 - Frameworks/wgpu/resources/libwgpu_native-release.dylib (7.4 MB)
     {'fma4': 1}  Funktionen: {'fma4': 1} von 8312; cpuid=6 xgetbv=1
-    Funktionen mit Kennung (V4/AVX512/SKX…): 0, ohne Kennung: 1
+    Funktionen mit Kennung (V4/AVX512/SKXâ€¦): 0, ohne Kennung: 1
        ohne Kennung: __ZN4libm4math4arch3x863fma14fmaf_with_fma417hfce70140ccd27d94E
     cpuid in: ['__ZN4libm4math4arch3x866detect17load_x86_features17hb1f9062ad08691f6E']
 - Frameworks/manifold3d.cpython-314-darwin.so (2.9 MB)
     {'waitpkg': 1}  Funktionen: {'waitpkg': 1} von 4508; cpuid=1 xgetbv=0
-    Funktionen mit Kennung (V4/AVX512/SKX…): 0, ohne Kennung: 1
+    Funktionen mit Kennung (V4/AVX512/SKXâ€¦): 0, ohne Kennung: 1
        ohne Kennung: sub_1a5b90
     cpuid in: ['sub_1b2160']
 
-== Verbreitung AVX2/FMA/BMI (x86-64-v3) — größte Anteile an Funktionen ==
+== Verbreitung AVX2/FMA/BMI (x86-64-v3) â€” grÃ¶ÃŸte Anteile an Funktionen ==
    29.1% von  14998 Fkt  avx2= 57509 fma=     0 bmi1=    0 bmi2=  437 avx= 43360 cpuid=19  Frameworks/PIL/__dot__dylibs/libavif.16.4.2.dylib
    14.3% von     56 Fkt  avx2=   168 fma=     0 bmi1=    0 bmi2=   36 avx=   406 cpuid=4  Frameworks/OCP/__dot__dylibs/libdeflate.0.dylib
     9.3% von    225 Fkt  avx2=   192 fma=     0 bmi1=    0 bmi2=   47 avx=   805 cpuid=3  Frameworks/PIL/__dot__dylibs/libz.1.3.1.zlib-ng.dylib
@@ -167,7 +167,7 @@ Dateien: 382  Befehle: 71,622,615  Code-Bytes: 279,449,059
     0.2% von  21082 Fkt  avx2=  1007 fma=     0 bmi1=    0 bmi2=    0 avx=  1156 cpuid=0  Frameworks/PySide6/Qt/lib/QtGui.framework/Versions/A/QtGui
     0.1% von  14950 Fkt  avx2=    53 fma=     0 bmi1=    0 bmi2=    4 avx=   137 cpuid=8  Frameworks/PySide6/Qt/lib/QtCore.framework/Versions/A/QtCore
 
-== Große Bibliotheken (>1 MB) im Überblick ==
+== GroÃŸe Bibliotheken (>1 MB) im Ãœberblick ==
    137.5 MB  insn=27,501,878 skip=  1317  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/OCP.cpython-314-darwin.so
     30.4 MB  insn=    8,978 skip=    95  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  MacOS/Solidon3D
      9.5 MB  insn=1,914,282 skip= 15827  avx512=     0 avx2=  1007 fma=     0 bmi2=    0 v3-Fkt= 0.2%  cpuid=0  Frameworks/PySide6/Qt/lib/QtGui.framework/Versions/A/QtGui

@@ -1,4 +1,4 @@
-cpio-Eintr‰ge: 2009 Zip-Eintr‰ge (ohne __MACOSX): 2008
+cpio-Eintr√§ge: 2009 Zip-Eintr√§ge (ohne __MACOSX): 2008
 nur in cpio: 1 ['Solidon3D.app/Contents/MacOS/._THIRD-PARTY-NOTICES.md']
 nur im Zip: 0 []
 gleich: 1744

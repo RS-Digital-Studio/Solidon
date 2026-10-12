@@ -176,11 +176,6 @@ wörtlich; im Paket heißt das zusätzlich:
   [ocp-build-system#67](https://github.com/CadQuery/ocp-build-system/issues/67)), entfallen Werkzeug, Workflowschritte,
   Abschnitt der Lizenzbeilage und `pedigree` der Stückliste, sonst kommt seine
   Zählung nach `EXPECTED`.
-- **wgpu-native über 29 hinaus erst nach einem Start mit 3D-Ansicht auf einem
-  Intel-Mac mit macOS 26**: Ab 30 wählt der Metal-Zweig die Shadersprache nach
-  der macOS-Version, und fremde Anwendungen scheiterten damit auf Intel- und
-  AMD-Treibern schon beim Anlegen des Geräts; kein Runner zeigt das
-  (`konzepte/nachweise-plattform-2026-10/bericht-web.md`, Abschnitt D).
 - **Die Stückliste kommt aus dem Kundenartefakt**, nicht aus `pip`:
   `tools/make_sbom.py` liest PyInstallers Zielanalyse und das fertige Paket;
   jede native Kundendatei hat einen ausgewiesenen Besitzer, Bauwerkzeuge

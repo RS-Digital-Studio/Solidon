@@ -6,12 +6,13 @@ keinen Rückfall auf eine Datei oder eine Umgebungsvariable: Beides ließe sich
 zusammen mit dem Geräte-Zertifikat kopieren und machte aus der Bindung nur
 eine zweite Datei.
 
-Der Programmstart erzeugt nichts. Ohne abgelegten Lizenzschlüssel öffnet er
-auch keinen Schlüsselbund; mit einem liest er über :func:`public_key` den
-Geräteteil, bevor das Fenster steht (``activation.state()`` →
-``certificate.load_for``) — am Mac fragt das System dabei nach, wenn eine
-anders signierte Kopie den Eintrag angelegt hat (RM-808). Erst eine
-Aktivierungsanforderung ruft :func:`ensure_public_key` oder :func:`sign` auf.
+Der Programmstart erzeugt keine Geräteidentität. Den Geräteteil liest er nur,
+wenn sich ein abgelegter Lizenzschlüssel lesen lässt: dann über
+:func:`public_key`, bevor das Fenster steht (``activation.state()`` →
+``certificate.load_for``). Ein gesperrter Schlüsselbund oder ein Eintrag, den
+eine anders signierte Kopie angelegt hat, hält den Start dort mit einer
+Systemabfrage an (RM-808). Erst eine Aktivierungsanforderung ruft
+:func:`ensure_public_key` oder :func:`sign` auf.
 Eine bereits aktivierte Installation liest den privaten Teil lokal; sie fragt
 niemals den Aktivierungsdienst.
 """

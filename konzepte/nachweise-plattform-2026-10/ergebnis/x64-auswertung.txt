@@ -10,7 +10,7 @@
   CFBundleShortVersionString: '0.6.0'
   LSMinimumSystemVersion: '14.0'
   NSHighResolutionCapable: True
-  NSHumanReadableCopyright: 'Copyright © 2026 RS Digital'
+  NSHumanReadableCopyright: 'Copyright Â© 2026 RS Digital'
   UTExportedTypeDeclarations: [{'UTTypeConformsTo': ['public.data', 'public.zip-archive'], 'UTTypeDescription': 'Solidon3D project', 'UTTypeIdentifier': 'de.rsdigital.solidon3d.project', 'UTTypeTagSpecification': {'public.filename-extension': ['p3d']}}, {'UTTypeConformsTo': ['public.data', 'public.json'], 'UTTypeDescription': 'Solidon3D part', 'UTTypeIdentifier': 'de.rsdigital.solidon3d.part', 'UTTypeTagSpecification': {'public.filename-extension': ['solidon-part'], 'public.mime-type': 'application/vnd.solidon.part+json'}}]
 == Hauptprogramm Spezialslots == {'x86_64/sha256': {'info_plist_slot': 'ok', 'coderesources_slot': 'ok'}}
 == Zahl == 382 Mach-O
@@ -18,7 +18,7 @@
 == Dateitypen == {8: 260, 6: 121, 2: 1}
 == minos == [(('LC_VERSION_MIN_MACOSX', '10.9.0'), 7), (('LC_VERSION_MIN_MACOSX', '10.13.0'), 2), (('LC_BUILD_VERSION', '10.15.0'), 144), (('LC_BUILD_VERSION', '11.0.0'), 23), (('LC_BUILD_VERSION', '11.1.0'), 52), (('LC_BUILD_VERSION', '14.0.0'), 105), (('LC_BUILD_VERSION', '14.4.0'), 39), (('LC_BUILD_VERSION', '26.0.0'), 10)]
 == SDK == [('10.9.0', 3), ('11.0.0', 22), ('12.3.0', 1), ('14.0.0', 1), ('14.5.0', 2), ('15.5.0', 212), ('26.0.0', 49), ('26.2.0', 1), ('26.5.0', 91)]
-== über LSMinimumSystemVersion 14.0 == 154
+== Ã¼ber LSMinimumSystemVersion 14.0 == 154
     ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtCore.framework/Versions/A/QtCore', 'x86_64', '14.4.0')
     ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtDBus.framework/Versions/A/QtDBus', 'x86_64', '14.4.0')
     ('Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtGui.framework/Versions/A/QtGui', 'x86_64', '14.4.0')
@@ -82,7 +82,7 @@
 </plist>
 
       DER: cEICAQGwPTA7DDZjb20uYXBwbGUuc2VjdXJpdHkuY3MuYWxsb3ctdW5zaWduZWQtZXhlY3V0YWJsZS1tZW1vcnkBAf8=
-== fehlende Abhängigkeiten == 0
+== fehlende AbhÃ¤ngigkeiten == 0
 == Fehler == []
 == CodeResources ==
    files2: 1655

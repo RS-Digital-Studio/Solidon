@@ -1,2 +1,2 @@
 Mach-O: 382 Fixup-Art: {'chained': 40, 'dyld_info': 342, 'keine': 0}
-Auff‰llig (Header-Flags, W+X-Segment, LC_DYSYMTAB-Relokationen, Rebase in r-x): 0
+Auff√§llig (Header-Flags, W+X-Segment, LC_DYSYMTAB-Relokationen, Rebase in r-x): 0

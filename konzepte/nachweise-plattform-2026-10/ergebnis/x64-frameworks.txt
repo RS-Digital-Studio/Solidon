@@ -1,4 +1,4 @@
-Verschachtelte Bundles im äußeren Siegel: 17
+Verschachtelte Bundles im Ã¤uÃŸeren Siegel: 17
   Frameworks/PySide6/Qt/lib/QtCore.framework | cdhash ok; req=identifier "org.qt-project.QtCore" and anchor apple generic and certificate 1[field.1.2.84; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
   Frameworks/PySide6/Qt/lib/QtDBus.framework | cdhash ok; req=identifier "org.qt-project.QtDBus" and anchor apple generic and certificate 1[field.1.2.84; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
   Frameworks/PySide6/Qt/lib/QtGui.framework | cdhash ok; req=identifier "org.qt-project.QtGui" and anchor apple generic and certificate 1[field.1.2.840; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
@@ -16,7 +16,7 @@ Verschachtelte Bundles im äußeren Siegel: 17
   Frameworks/PySide6/Qt/lib/QtVirtualKeyboardQml.framework | cdhash ok; req=identifier "org.qt-project.QtVirtualKeyboardQml" and anchor apple generic and certificate ; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
   Frameworks/PySide6/Qt/lib/QtWidgets.framework | cdhash ok; req=identifier "org.qt-project.QtWidgets" and anchor apple generic and certificate 1[field.1.2; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
   Frameworks/Python.framework | cdhash ok; req=identifier "org.python.python" and anchor apple generic and certificate 1[field.1.2.840.11; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
-Nicht versiegelt (weder außen noch in einem Framework): 52
+Nicht versiegelt (weder auÃŸen noch in einem Framework): 52
     Solidon3D.app/Contents/CodeResources datei
     Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtCore.framework/QtCore link->Versions/Current/QtCore
     Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtCore.framework/Resources link->Versions/Current/Resources

@@ -1,5 +1,5 @@
 ELF-Dateien: 486
-== Höchste benötigte Symbolversion je Familie (über alle Dateien) ==
+== HÃ¶chste benÃ¶tigte Symbolversion je Familie (Ã¼ber alle Dateien) ==
   ATTR_1.0  <- usr/bin/_internal/hidapi.libs/libcap-79733b59.so.2.22 (aus libattr-4f2a9577.so.1.1.0)
   BLKID_2.17  <- usr/bin/_internal/libmount.so.1 (aus libblkid.so.1)
   CXXABI_1.3.13  <- usr/bin/_internal/PySide6/Qt/lib/libQt6Core.so.6 (aus libstdc++.so.6)
@@ -25,7 +25,7 @@ ELF-Dateien: 486
   V_0.5.0  <- usr/bin/_internal/libxkbcommon-x11.so.0 (aus libxkbcommon.so.0)
   XZ_5.0  <- usr/bin/_internal/libsystemd.so.0 (aus liblzma.so.5)
   ZLIB_1.2.9  <- usr/bin/_internal/cadquery_ocp_novtk.libs/libpng16-ebd1fa42.so.16.34.0 (aus libz.so.1)
-== Die 15 Dateien mit dem höchsten GLIBC-Bedarf ==
+== Die 15 Dateien mit dem hÃ¶chsten GLIBC-Bedarf ==
   GLIBC_2.38  usr/bin/_internal/python3.14/lib-dynload/pyexpat.cpython-314-x86_64-linux-gnu.so
   GLIBC_2.38  usr/bin/_internal/python3.14/lib-dynload/math.cpython-314-x86_64-linux-gnu.so
   GLIBC_2.38  usr/bin/_internal/python3.14/lib-dynload/_pickle.cpython-314-x86_64-linux-gnu.so

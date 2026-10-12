@@ -3,7 +3,7 @@
 Anlass: der Verdacht, dass Solidon 0.6.0 auf echten Intel-Macs mit macOS 26
 weiter nicht startet. Drei unabhängige Aufnahmen, je von einem eigenen Agenten,
 am Stand `cedc42b75` (main) und am Tag-Lauf v0.6.0 (38170638968). Daraus
-entstanden RM-800 bis RM-809 und die Nachträge an RM-070, RM-104 und RM-770
+entstanden RM-800 bis RM-810 und die Nachträge an RM-070, RM-104 und RM-770
 in `ROADMAP.md`.
 
 | Datei | Inhalt |
@@ -17,5 +17,5 @@ in `ROADMAP.md`.
 **Ergebnis in einem Satz:** Die Ursache des Intel-Hängers bis 0.5.3 ist am
 Quelltext belegt, und das ausgelieferte 0.6.0 trägt die Korrektur ohne einen
 Befund, der den Start verhindert; dass es auf einem echten Intel-Mac startet,
-belegt erst ein Gerät. Nebenbei kamen die Fehler heraus, die RM-800 bis RM-809
+belegt erst ein Gerät. Nebenbei kamen die Fehler heraus, die RM-800 bis RM-810
 führen.
