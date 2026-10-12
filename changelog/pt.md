@@ -32,6 +32,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A lista de atalhos de teclado nomeia *Modelar*, *Esqueleto* e *Desenhar* uma única vez.
 - O botão *Calcular de forma mais aproximada* deixa de existir: o Solidon continua sozinho com o cálculo completo. Na versão 0.6.0 aparecia também onde não mudava nada.
 - As mensagens de erro, os detalhes e os avisos aparecem agora no estilo do Solidon, com as ações como botões. Ctrl+C copia a mensagem inteira.
+- A cor de uma bobina escolhe-se com o seletor de cores do Solidon junto ao botão, com cores nomeadas e o valor exato. A caixa de cores do Windows desaparece.
+- Uma cota do desenho altera-se agora num campo no próprio lugar. Os endereços e a escolha do filamento a substituir são pedidos no estilo do Solidon.
+- Depois de ativar ou desativar, a confirmação aparece no próprio diálogo, sem uma janela que seja preciso fechar.
 - A caixa *Calibrar material* mostra à frente apenas a folga, a interferência e a compensação de furos. Pé de elefante, contração, parede e saliência ficam em *Mais definições*.
 - Os números ficam alinhados à direita em todos os campos, algarismo sob algarismo.
 - Um leitor de ecrã lê o nome e a explicação de cada campo numérico de uma caixa de diálogo.

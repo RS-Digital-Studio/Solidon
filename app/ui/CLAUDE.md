@@ -159,7 +159,9 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 |---|---|
 | `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle*, hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
-| `message_dialog.py` | Meldungen statt `QMessageBox` |
+| `message_dialog.py` | Meldungen statt `QMessageBox`, Quittung am Ort (`acknowledge`) |
+| `input_dialog.py` | Eingaben ohne Ort (`ask_text`, `ask_choice`) |
+| `place_popup.py` | Eingabe am Ort: Farbwähler, Wertfeld (`PlacePopup`) |
 | `calibration_dialog.py` | Material kalibrieren (§28.3) |
 | `outline_dialog.py` | SVG-/DXF-Konturen wählen und ihre echte Extrusion sehen (§19.2); `values()` liefert nur `load_outline`-Werte |
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |

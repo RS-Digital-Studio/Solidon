@@ -32,6 +32,9 @@ scrive in `website/version.json`.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
 - Il pulsante *Calcolare in modo più grossolano* non c'è più: Solidon prosegue da solo con il calcolo completo. Nella versione 0.6.0 compariva anche dove non cambiava nulla.
 - Messaggi di errore, dettagli e avvisi ora appaiono nello stile di Solidon, con le azioni come pulsanti. Ctrl+C copia l'intero messaggio.
+- Il colore di una bobina si sceglie con il selettore di Solidon direttamente sul pulsante, con colori nominati e il valore esatto. La finestra colori di Windows non c'è più.
+- Una quota del disegno ora si modifica in un campo sul posto. Indirizzi e la scelta del filamento da sostituire vengono chiesti nello stile di Solidon.
+- Dopo l'attivazione o la disattivazione la conferma compare nella finestra stessa, senza un'altra finestra da chiudere.
 - La finestra *Calibra il materiale* mostra davanti solo gioco, interferenza e compensazione dei fori. Piede d'elefante, ritiro, parete e sbalzo sono in *Altre impostazioni*.
 - I numeri sono allineati a destra in tutti i campi, cifra sotto cifra.
 - Uno screen reader legge il nome e la spiegazione di ogni campo numerico di una finestra di dialogo.
