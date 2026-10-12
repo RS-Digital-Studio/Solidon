@@ -490,23 +490,38 @@ def test_no_customer_text_names_a_window_the_application_does_not_have() -> None
 
 # --- Konstrukteurswörter (RM-088) -------------------------------------------
 
+#: Die Wortliste des Kunden (V1 des Funktionsdurchgangs): Die Wächter hier und
+#: der Prüfstand lesen dieselbe Datei, damit es keine zweite Liste gibt.
+WORTLISTE = Path(__file__).resolve().parent / "data" / "customer_vocabulary.json"
+
+
+def bewachte_muster(waechter: str) -> list[str]:
+    """Die Suchmuster der Wörter, die ``waechter`` hält, in der Reihenfolge der Liste.
+
+    Leer wäre jeder Wächter darüber grün, ohne etwas zu prüfen — deshalb hält
+    die Funktion selbst an.
+    """
+    eintraege = json.loads(WORTLISTE.read_text(encoding="utf-8"))["negative"]
+    muster = [eintrag["pattern"] for eintrag in eintraege if eintrag["guarded"] == waechter]
+    assert len(muster) >= 5, f"nur {len(muster)} Wörter für {waechter} — dann prüft das nichts"
+    return muster
+
+
 #: Wörter, die ein Konstrukteur kennt und ein Slicer-Nutzer nicht. Maßstab ist
 #: der Slicer (Cura, PrusaSlicer, Orca): „Brim“, „Stützen“, „Infill“, „Netz“
 #: stehen dort, „Normale“, „Facette“ oder „verschweißen“ nicht. Kuratiert wie
 #: ``ABGELEGT`` oben — „verschweißt“ bleibt erlaubt, denn eine Stütze, die am
-#: Teil verschweißt, beschreibt den Druck und nicht das Netz.
+#: Teil verschweißt, beschreibt den Druck und nicht das Netz. Die Wörter stehen
+#: in :data:`WORTLISTE` (``guarded = "konstrukteurswort"``).
 KONSTRUKTEURSWORT = re.compile(
-    r"(?<![A-Za-zÄÖÜäöüß])(Flächennormalen?|Normalen\w*|Normale\b(?! Wandstärke)"
-    r"|[Mm]anifold|B-Rep|Tessell\w*|Facette\w*|Vertex|Vertices|Voxel\w*"
-    r"|[Ww]asserdicht\w*|[Bb]oolesch\w*|[Dd]eterministisch\w*|[Ee]ntartet\w*"
-    r"|[Dd]ezimier\w*|[Uu]ngeschweißt\w*|[Vv]erschweißen|Freiheitsgrad\w*)"
+    r"(?<![A-Za-zÄÖÜäöüß])(" + "|".join(bewachte_muster("konstrukteurswort")) + ")"
 )
 
 #: Dieselbe Frage an der englischen Übersetzung — dort stehen die Wörter auch
 #: dann, wenn die deutsche Quelle sie meidet („Eckpunkt“ wurde „vertex“).
+#: Aus :data:`WORTLISTE` (``guarded = "designer_word"``).
 DESIGNER_WORD = re.compile(
-    r"\b(normals?|manifold|tessellat\w*|facets?|vertex|vertices|voxels?|watertight|welding|welded"
-    r"|decimat\w*|degrees? of freedom)\b",
+    r"\b(" + "|".join(bewachte_muster("designer_word")) + r")\b",
     re.IGNORECASE,
 )
 
@@ -694,10 +709,8 @@ def test_the_sketch_figure_says_the_word_of_the_status_line(language: str) -> No
 #: Wörter aus der Datenhaltung, die ein Kunde nicht sucht (Durchsicht 0.5.2,
 #: D13). Einige sind heute Feldnamen („Startwert“, „Materialtoleranz
 #: berücksichtigen“) — der Bestand ist eingefroren, ein neues Vorkommen nicht.
-FACHWORT = re.compile(
-    r"Mindestbahnbreite|im Rahmen des Rasters|Maßherkunft|Bereichstest|Startwert\w*"
-    r"|Materialtoleranz|exakte[nr]? Körper|Rezept\w*"
-)
+#: Aus :data:`WORTLISTE` (``guarded = "fachwort"``).
+FACHWORT = re.compile("|".join(bewachte_muster("fachwort")))
 
 #: Satzmuster, die nach Sprachmodell klingen (D14): das Semikolon und die
 #: Formel „Nur …:“ / „Nicht …:“ am Anfang.
