@@ -5805,7 +5805,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   dowels, inserts, free_shape, handrail_bend, drill_on_feature) enden lokal weiter am Limit;
   qwen3:14b bündelt trotz Prompt-Version 9 kaum (1,0 Aufrufe je Schritt). Nächster Schritt:
   an zwei dieser Fälle nachsehen, wofür die Schritte verbraucht werden (Nachforderungen,
-  ungültige Aufrufe, Wiederholungen).
+  ungültige Aufrufe, Wiederholungen). Ein ungeprüfter Zwischenstand vom 09.10. liegt auf dem
+  Zweig `claude/bk-251` (`724a153f2`: lokales Budget nach dem, was Ollama rechnete, gleicher
+  Auftragsanfang je Schritt, Schritte ohne Wirkung aus dem Vorschlag); wer weitermacht, merged
+  origin/main herein und prüft ihn.
 
 <a id="rm-016"></a>
 
