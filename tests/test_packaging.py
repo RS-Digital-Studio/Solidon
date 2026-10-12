@@ -921,7 +921,8 @@ def test_a_red_latest_job_leaves_the_release_run_green() -> None:
     latest = job_block(workflow, "latest")
     assert re.search(r"(?m)^    continue-on-error: true$", latest)
     assert not re.search(r"(?m)^    needs:.*\blatest\b", workflow)
-    without = workflow.replace("    continue-on-error: true\n", "", 1)
+    # Auf Jobebene (vier Leerzeichen), nicht in einem eingerückten Schritt.
+    without = re.sub(r"(?m)^    continue-on-error: true\n", "", workflow, count=1)
     assert without != workflow
     assert not re.search(r"(?m)^    continue-on-error: true$", job_block(without, "latest"))
 
@@ -2590,6 +2591,49 @@ def _start_report(**changes: Any) -> dict[str, Any]:
     }
     report.update(changes)
     return report
+
+
+def test_the_intel_mac_tries_a_start_with_a_window_after_the_icon_service_is_gone() -> None:
+    """Erprobung: Symboldienst aushängen, dann Start mit Fenster und 3D-Ansicht.
+
+    Nur auf dem Intel-Mac, nach dem Pflichtstart ohne Bildschirm, und bis zwei
+    Läufe grün waren mit ``continue-on-error``; die Zeile „Ergebnis:“ landet in
+    der Zusammenfassung des Laufs.
+    """
+    job = job_block(WORKFLOW.read_text(encoding="utf-8"), "macos-release-check")
+    name = "Installiertes Paket mit Fenster starten (Intel-Mac, Erprobung)"
+    step = step_block(job, name)
+    names = re.findall(r"(?m)^      - name: (.+)$", job)
+    assert names.index("Installiertes Paket starten") < names.index(name)
+    assert "        if: matrix.os == 'macos-26-intel'\n" in step
+    assert "        continue-on-error: true\n" in step
+    code = [line.strip() for line in step.splitlines() if not line.strip().startswith("#")]
+    bootout = code.index(
+        'launchctl bootout "gui/$UID/com.apple.iconservices.iconservicesagent" || true'
+    )
+    start = next(i for i, line in enumerate(code) if "check_frozen_start.py" in line)
+    assert bootout < start
+    assert "--executable /Applications/Solidon3D.app" in code[start]
+    assert "--offscreen" not in code[start], "die Erprobung gilt dem Fenster"
+    assert any("GITHUB_STEP_SUMMARY" in line and "^Ergebnis:" in line for line in code)
+
+
+def test_the_start_check_says_in_one_line_how_far_the_start_came() -> None:
+    """Die Erprobung mit Fenster auf dem Intel-Mac darf rot werden; ihre Zeile sagt, warum."""
+    from tools.check_frozen_start import outcome
+
+    drawn = outcome(_start_report(platform="cocoa"))
+    assert drawn == (
+        "Ergebnis: Plattform cocoa · Fenster sichtbar ja · 3D-Ansicht ja (GfxRenderer, "
+        "hellster Wert 74)"
+    )
+    missing = outcome(_start_report(platform="cocoa", renderer={"present": False}))
+    assert "3D-Ansicht nein" in missing
+    hidden = outcome(_start_report(window={"visible": False}))
+    assert "Fenster sichtbar nein" in hidden
+    broken = _start_report(renderer={"present": True, "error": "Metal lost"})
+    assert "Fehler: Metal lost" in outcome(broken)
+    assert outcome(None).startswith("Ergebnis: kein Bericht")
 
 
 def test_the_start_check_judges_crash_hang_black_view_and_leftovers() -> None:

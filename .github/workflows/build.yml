@@ -1984,6 +1984,28 @@ jobs:
             spctl --assess --type execute --verbose=2 /Applications/Solidon3D.app
           fi
           python tools/check_frozen_start.py --executable /Applications/Solidon3D.app ${{ matrix.os == 'macos-26-intel' && '--offscreen' || '' }}
+      - name: Installiertes Paket mit Fenster starten (Intel-Mac, Erprobung)
+        # **Erprobung, darf rot werden.** Der Symboldienst des Intel-Runners
+        # stürzt in Metal ab, und jede Symbolanfrage wartete dann für immer;
+        # deshalb startet der Schritt darüber ohne Bildschirm, und auf keinem
+        # Intel-Lauf lud je das Cocoa-Plugin, ein NSWindow oder Metal für wgpu.
+        # Ist der Dienst ausgehängt, fallen Symbolanfragen sofort auf ein
+        # Ersatzsymbol zurück (actions/runner-images#14751). Der Start hier
+        # verlangt wie auf ARM Fenster und gezeichnete 3D-Ansicht; ob die
+        # paravirtualisierte GPU (Metal 2, 64 MB) das trägt, ist ungemessen —
+        # die Zeile „Ergebnis:“ sagt es. `continue-on-error`, bis zwei Läufe
+        # grün waren; dann wird der Schritt scharf und `--offscreen` darüber
+        # fällt weg (Registerpunkt des Koordinators).
+        if: matrix.os == 'macos-26-intel'
+        continue-on-error: true
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          launchctl bootout "gui/$UID/com.apple.iconservices.iconservicesagent" || true
+          launchctl disable "gui/$UID/com.apple.iconservices.iconservicesagent" || true
+          python tools/check_frozen_start.py --executable /Applications/Solidon3D.app | tee start-window.txt
+          grep '^Ergebnis:' start-window.txt >> "$GITHUB_STEP_SUMMARY" || true
       - name: Geprüften Mac-Bau veröffentlichen
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

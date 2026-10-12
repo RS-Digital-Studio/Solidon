@@ -81,7 +81,11 @@ Python-Zustand (Treiber) zählt als Absturz.
 
 - **Ohne Bildschirm (`--offscreen`) nur der Intel-Mac-Runner**: Sein
   Symboldienst (`iconservicesagent`) stürzt in Metal ab, jedes Fenster wartet
-  dann auf ein Symbol. Eine neue Ausnahme braucht einen solchen Beleg.
+  dann auf ein Symbol. Eine neue Ausnahme braucht einen solchen Beleg. **In
+  Erprobung**: Die Releaseakte startet dort zusätzlich mit Fenster, nachdem
+  der Dienst per `launchctl bootout` ausgehängt ist; der Schritt darf rot
+  werden, bis zwei Läufe grün waren, dann fällt die Ausnahme. In einem
+  Pflichtjob mit Rendererfällen ist ein solcher Schritt nicht zulässig.
 - `tests/test_packaging.py` hält die Schritte samt Gegenproben; ein neues
   Paketformat bekommt seinen Start, bevor es ausgeliefert wird.
 - **Das Windows-Setup wird bei jedem Release über die veröffentlichte Version
