@@ -53,26 +53,42 @@ MOST_TABS: Final = 60
 STATES: Final[tuple[str, ...]] = ("rest", "hover", "focus", "pressed")
 
 #: Dialogklassen, die als Fenster erlaubt sind (Konzept §4, Z2 und Z5): die
-#: Dateidialoge, der KI- und der Druckhinweis und die Rückfrage nach Regel 21
-#: (``AskDialog``, auch die Frage vor der Vollerkennung, Regel 19).
+#: Dateidialoge und der KI- und der Druckhinweis. Eine Rückfrage über
+#: ``ctx.ask`` (``AskDialog``) ist keine Ausnahme — nur die vor der Vollerkennung
+#: (:data:`FULL_RECOGNITION_ANSWER`).
 ALLOWED_CLASSES: Final[frozenset[str]] = frozenset(
-    {"QFileDialog", "AiDisclosureDialog", "PrintDisclosureDialog", "AskDialog"}
+    {"QFileDialog", "AiDisclosureDialog", "PrintDisclosureDialog"}
 )
 
-#: Funktionen, aus denen eine Rückfrage erlaubt ist (Regel 19 und ihre Ausnahmen,
-#: ``fenster.md`` „Rückfragen“): Speicherfrage, verworfene Schritte, Export,
-#: Übergabe, Löschen im Verlauf. Erkannt am Aufrufstapel des ``exec()`` — so
-#: hängt die Zuordnung an keiner Übersetzung. Ein Wächter hält, dass jede
-#: dieser Funktionen in ``app/ui`` steht.
+#: Funktionen, aus denen eine Rückfrage erlaubt ist — die Rückfragen aus
+#: ``fenster.md`` und die Speicherfrage, wie Konzept Z2 sie nennt: Löschen im
+#: Verlauf, Export und Übergabe trotz Befunden, Verwerfen zurückgenommener
+#: Schritte, Wiederherstellen nach einem Absturz, Verlust einer Generierung,
+#: Speicherfrage. Erkannt am Aufrufstapel des ``exec()`` — so hängt die
+#: Zuordnung an keiner Übersetzung. Ein Wächter hält, dass jede dieser
+#: Funktionen in ``app/ui`` steht.
 ALLOWED_CALLERS: Final[frozenset[str]] = frozenset(
     {
-        "confirm_unsaved",
-        "confirm_discard",
+        "remove_history_operations",
         "confirm_export",
         "confirm_handover",
-        "remove_history_operations",
+        "confirm_discard",
+        "_ask_recovery",
+        "confirm_generation_loss",
+        "confirm_unsaved",
     }
 )
+
+#: Die Frage vor der Vollerkennung (§21.1) stellt der Kern im Arbeiter über
+#: ``ctx.ask``; im Aufrufstapel des Dialogs steht er nicht. Erkannt wird sie an
+#: ihrer Antwort (``scene.evaluate._asked_about_recognition``), übersetzt wie im
+#: Fenster. Ein Wächter hält, dass die Anwendung den Satz noch führt.
+FULL_RECOGNITION_ANSWER: Final = "Mit Merkmalserkennung laden"
+
+#: Meldungen und Fragen sind nie die Bedienfläche einer Zeile: die Meldung im
+#: Hausstil (``message_dialog.MessageDialog``, FD-21) und die Rückfrage
+#: (``AskDialog``); dazu die rohen Qt-Fenster (``function_checks.RAW_CLASSES``).
+MESSAGE_CLASSES: Final[frozenset[str]] = frozenset({"MessageDialog", "AskDialog"})
 
 
 def _raw_bases() -> tuple[str, ...]:
@@ -234,14 +250,40 @@ def callers() -> list[str]:
     return names
 
 
-def modal_allowed(classes: Sequence[str], stack: Sequence[str]) -> bool:
-    """Ob ein Fenster zu den erlaubten gehört: Klasse oder öffnende Funktion (Z2, E6)."""
-    return bool(ALLOWED_CLASSES & set(classes)) or bool(ALLOWED_CALLERS & set(stack))
+def modal_allowed(
+    classes: Sequence[str], stack: Sequence[str], buttons: Sequence[str] = ()
+) -> bool:
+    """Ob ein Fenster zu den erlaubten gehört (Konzept Z2, E6).
+
+    Erlaubt nach Klasse (Dateidialog, KI- und Druckhinweis), nach öffnender
+    Funktion (:data:`ALLOWED_CALLERS`) oder als die Frage vor der Vollerkennung,
+    an ihrer Antwort erkannt. Jede andere modale Frage ist ein Fund.
+    """
+    from app.i18n import tr
+
+    if ALLOWED_CLASSES & set(classes) or ALLOWED_CALLERS & set(stack):
+        return True
+    answer = str(tr(FULL_RECOGNITION_ANSWER))
+    return "AskDialog" in classes and any(text.replace("&", "") == answer for text in buttons)
 
 
 def is_question(class_name: str, buttons: Sequence[str]) -> bool:
-    """Eine Nachfrage (E6) statt einer Meldung (Z2): eine Wahl zwischen mindestens zwei Knöpfen."""
+    """Eine Nachfrage (E6) statt einer Meldung (Z2): eine Wahl zwischen mindestens zwei Knöpfen.
+
+    Die Meldung im Hausstil (``MessageDialog``) ist nie eine Frage, auch mit
+    Handlung und Ausgang: Fragen bleiben ``QMessageBox`` oder ``AskDialog``
+    (``fenster.md``, „Rückfragen“).
+    """
+    if class_name == "MessageDialog":
+        return False
     return class_name == "AskDialog" or len([text for text in buttons if text]) >= 2
+
+
+def message_window(widget: Any) -> bool:
+    """Ob ein Fenster eine Meldung oder Frage ist — roh oder im Hausstil, nie eine Fläche."""
+    from tools.function_checks import RAW_CLASSES
+
+    return bool(set(_classes(widget)) & (MESSAGE_CLASSES | set(RAW_CLASSES)))
 
 
 def _classes(widget: Any) -> list[str]:
@@ -291,8 +333,8 @@ class ModalWatch:
         if widget is not None and id(widget) not in self._seen:
             self._seen.add(id(widget))
             classes = _classes(widget)
-            allowed = modal_allowed(classes, stack) or type(widget).__name__ in self.own
             buttons = _buttons(widget)
+            allowed = modal_allowed(classes, stack, buttons) or type(widget).__name__ in self.own
             self.modals.append(
                 {
                     "class": type(widget).__name__,
@@ -324,7 +366,7 @@ class ModalWatch:
                     {
                         "class": raw,
                         "title": widget.windowTitle(),
-                        "allowed": modal_allowed(classes, stack),
+                        "allowed": modal_allowed(classes, stack, _buttons(widget)),
                         "own_class": type(widget).__name__,
                     }
                 )
@@ -466,7 +508,13 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
         pieces = [word for line in lines for word in line.split()] if wraps else lines
         need = max((metrics.horizontalAdvance(piece) for piece in pieces), default=0)
         width = widget.contentsRect().width()
-        if isinstance(widget, QAbstractButton):
+        contents = _indicator_contents(widget)
+        if contents is not None:
+            # Ein Haken gibt seinem Text, was sein Stil ihm lässt (F-16: vorher
+            # rechnete der Prüfstand das Kästchen selbst und kam 2 px zu breit).
+            icon = widget.iconSize().width() + 4 if not widget.icon().isNull() else 0
+            need, width = need + icon, contents
+        elif isinstance(widget, QAbstractButton):
             need, width = _button_need(widget, need), widget.width()
         bottom = _top(widget, root) + widget.height()
         found.append(
@@ -484,6 +532,9 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
             continue
         metrics = bar.fontMetrics()
         for index in range(bar.count()):
+            if not bar.isTabVisible(index):
+                # Ein verborgener Reiter hat kein Rechteck — nicht abgeschnitten (F-14).
+                continue
             text = bar.tabText(index).replace("&", "")
             width = bar.tabRect(index).width()
             need = metrics.horizontalAdvance(text)
@@ -514,6 +565,25 @@ def _plain(text: str) -> str:
     document = QTextDocument()
     document.setHtml(text)
     return str(document.toPlainText())
+
+
+def _indicator_contents(button: Any) -> int | None:
+    """Die Breite, die ein Haken oder Optionsknopf seinem Text gibt; sonst ``None``.
+
+    Aus dem Stil (``SE_CheckBoxContents``, ``SE_RadioButtonContents``): Er weiß,
+    wo Kästchen und Abstand enden — auch unter dem Stylesheet.
+    """
+    from PySide6.QtWidgets import QCheckBox, QRadioButton, QStyle, QStyleOptionButton
+
+    if isinstance(button, QCheckBox):
+        element = QStyle.SubElement.SE_CheckBoxContents
+    elif isinstance(button, QRadioButton):
+        element = QStyle.SubElement.SE_RadioButtonContents
+    else:
+        return None
+    option = QStyleOptionButton()
+    button.initStyleOption(option)
+    return int(button.style().subElementRect(element, option, button).width())
 
 
 def _button_need(button: Any, text_px: int) -> int:
@@ -571,6 +641,9 @@ def _item_texts(root: Any) -> list[dict[str, Any]]:
         area = view.viewport().rect()
         metrics = view.fontMetrics()
         margin = 2 * (view.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1)
+        # Eine Liste, die umbricht, braucht für ihre Zeile nur das längste Wort
+        # (F-15: die Befundliste des Prüfberichts, ``setWordWrap(True)``).
+        wraps = bool(getattr(view, "wordWrap", lambda: False)())
         pending = [QModelIndex()]
         while pending and len(found) < MOST_ITEM_TEXTS:
             parent = pending.pop(0)
@@ -582,7 +655,11 @@ def _item_texts(root: Any) -> list[dict[str, Any]]:
                     if not text or cell.isEmpty() or not area.intersects(cell):
                         continue
                     icon = index.data(Qt.ItemDataRole.DecorationRole)
-                    need = metrics.horizontalAdvance(text.splitlines()[0]) + margin
+                    pieces = text.split() if wraps else text.splitlines()[:1]
+                    need = (
+                        max((metrics.horizontalAdvance(piece) for piece in pieces), default=0)
+                        + margin
+                    )
                     if icon is not None and not (hasattr(icon, "isNull") and icon.isNull()):
                         need += view.iconSize().width() + 4
                     # Zu sehen ist die Zelle nur, soweit sie in der Sichtfläche liegt;
@@ -624,20 +701,40 @@ def field_entries(root: Any) -> list[dict[str, Any]]:
     """Jedes Eingabefeld unter ``root``: Beschriftung, Name, Beschreibung, Kurzhilfe, vorn.
 
     *Vorn* heißt sichtbar, ohne eine Klappe zu öffnen — E5 zählt diese Felder.
-    Die Beschriftung kommt aus dem Formular, in dem das Feld steht; ein Haken
-    beschriftet sich selbst.
+    Die Beschriftung kommt aus dem Formular, in dem das Feld oder sein Behälter
+    steht (``ValueField``, ``FeatureSetField``: gefunden wird das Drehfeld darin);
+    ein Haken beschriftet sich selbst. Die Kurzhilfe ist die, die Qt zeigt: die
+    eigene, sonst die des nächsten Elternteils bis zur Fläche (Probelauf F-9).
+    Die zugängliche Beschreibung bleibt die des Felds selbst — die liest ein
+    Bildschirmleser am fokussierten Feld.
     """
     from PySide6.QtWidgets import QCheckBox
 
     captions = _caption_map(root)
+
+    def holders(widget: Any) -> list[Any]:
+        chain = [widget]
+        while chain[-1] is not root and chain[-1].parentWidget() is not None:
+            if chain[-1].isWindow():
+                break
+            chain.append(chain[-1].parentWidget())
+        return chain
+
+    def caption(widget: Any) -> str:
+        found = next(
+            (captions[id(holder)] for holder in holders(widget) if id(holder) in captions), ""
+        )
+        return found or (_text_of(widget) if isinstance(widget, QCheckBox) else "")
+
+    def tooltip(widget: Any) -> str:
+        return next((str(holder.toolTip()) for holder in holders(widget) if holder.toolTip()), "")
+
     return [
         {
-            "label": captions.get(
-                id(widget), _text_of(widget) if isinstance(widget, QCheckBox) else ""
-            ),
+            "label": caption(widget),
             "accessible_name": widget.accessibleName(),
             "description": widget.accessibleDescription(),
-            "tooltip": widget.toolTip(),
+            "tooltip": tooltip(widget),
             "front": bool(widget.isVisible()),
         }
         for widget in _input_widgets(root)
@@ -782,7 +879,14 @@ def layout_entries(root: Any) -> list[dict[str, Any]]:
     """Hauptknöpfe und Akzente (G1), Abstände je Gruppe (G2), Kanten der Formulare (G3)."""
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QFont
-    from PySide6.QtWidgets import QAbstractSpinBox, QFormLayout, QLayout, QPushButton, QWidget
+    from PySide6.QtWidgets import (
+        QAbstractSpinBox,
+        QFormLayout,
+        QGridLayout,
+        QLayout,
+        QPushButton,
+        QWidget,
+    )
 
     surface = type(root).__name__
     buttons = [button for button in root.findChildren(QPushButton) if _visible(button)]
@@ -799,21 +903,29 @@ def layout_entries(root: Any) -> list[dict[str, Any]]:
         }
     ]
     # Jedes Layout, auch die geschachtelten: widget.layout() nennt nur das
-    # oberste eines Widgets, ein Formular steht meist darin.
+    # oberste eines Widgets, ein Formular steht meist darin. Qts eigene Layouts
+    # (Hauptfenster, Leisten, Statuszeile, Reiterstapel) gestaltet nicht die
+    # Anwendung (Probelauf F-8).
     layouts: list[Any] = []
     for widget in [root, *root.findChildren(QWidget)]:
         top = widget.layout()
-        if isinstance(top, QLayout) and _visible(widget):
+        if isinstance(top, QLayout) and _visible(widget) and not _qt_own_layout(top, widget):
             layouts += [top, *(item for item in top.findChildren(QLayout) if item not in layouts)]
-    for layout in dict.fromkeys(layouts):
+    for number, layout in enumerate(dict.fromkeys(layouts), 1):
         widget = layout.parentWidget() or root
         margins = layout.contentsMargins()
+        grid = isinstance(layout, (QFormLayout, QGridLayout))
         found.append(
             {
                 "kind": "spacing",
                 "surface": surface,
-                "group": mark_of(widget) or type(widget).__name__,
-                "spacing": layout.spacing(),
+                # Die Gruppe ist das eine Layout, nicht der Name seines Widgets: Alle
+                # namenlosen hießen „QWidget“, und ein Zahlenfeld trägt zwei (F-6).
+                "group": f"{mark_of(widget) or type(widget).__name__}#{number}",
+                # Raster und Formular: senkrecht und waagerecht getrennt (F-7).
+                "spacing": layout.verticalSpacing() if grid else layout.spacing(),
+                "horizontal": layout.horizontalSpacing() if grid else None,
+                "items": _shown_items(layout),
                 "margins": [margins.left(), margins.top(), margins.right(), margins.bottom()],
             }
         )
@@ -847,17 +959,60 @@ def layout_entries(root: Any) -> list[dict[str, Any]]:
     return found
 
 
+#: Was Qt an Layouts selbst baut und die Anwendung nicht gestaltet: Hauptfenster,
+#: Leisten, Andockflächen — benannt nach ihrer Klasse im Metaobjekt.
+QT_LAYOUTS: Final[frozenset[str]] = frozenset(
+    {"QMainWindowLayout", "QToolBarLayout", "QDockAreaLayout", "QDockWidgetLayout"}
+)
+
+
+def _qt_own_layout(layout: Any, widget: Any) -> bool:
+    """Ob ein Layout Qt gehört: eine eigene Klasse von Qt, das Layout einer
+    Statuszeile, eines Stapels oder Reiters oder eines Widgets mit ``qt_``-Namen."""
+    from PySide6.QtWidgets import QStackedWidget, QStatusBar, QToolBar
+
+    return (
+        layout.metaObject().className() in QT_LAYOUTS
+        or isinstance(widget, (QStatusBar, QStackedWidget, QToolBar))
+        or widget.objectName().startswith("qt_")
+    )
+
+
+def _shown_items(layout: Any) -> int:
+    """Wie viele Elemente eines Layouts zu sehen sind — Widgets und Layouts mit solchen."""
+    count = 0
+    for index in range(layout.count()):
+        item = layout.itemAt(index)
+        widget = item.widget() if item is not None else None
+        inner = item.layout() if item is not None else None
+        if (widget is not None and widget.isVisible()) or (
+            inner is not None and _shown_items(inner)
+        ):
+            count += 1
+    return count
+
+
 def font_entries(root: Any) -> list[dict[str, Any]]:
-    """Stufe und Stylesheet je Textträger (G4)."""
-    from PySide6.QtWidgets import QAbstractButton, QLabel
+    """Stufe, wirksame Schrift und Stylesheet je Textträger (G4).
+
+    ``points`` und ``weight`` sind die Schrift, mit der der Text gezeichnet
+    wird, ``base_points`` die Grundgröße der Anwendung, aus der
+    ``style.type_scale`` die vier Stufen rechnet. Ohne gesetzte Eigenschaft
+    ``level`` ist das die Grundschrift — keine fehlende Stufe (Probelauf F-4).
+    """
+    from PySide6.QtWidgets import QAbstractButton, QApplication, QLabel
 
     surface = type(root).__name__
+    base = QApplication.font().pointSize()
     return [
         {
             "surface": surface,
             "widget": name_of(widget),
             "level": str(widget.property("level") or ""),
             "stylesheet": widget.styleSheet(),
+            "points": round(float(widget.font().pointSizeF()), 2),
+            "weight": int(widget.font().weight().value),
+            "base_points": base,
         }
         for widget in root.findChildren(QLabel) + root.findChildren(QAbstractButton)
         if _visible(widget) and _text_of(widget).strip()
@@ -867,18 +1022,26 @@ def font_entries(root: Any) -> list[dict[str, Any]]:
 def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
     """Schrift gegen Hintergrund je Textträger als ``#rrggbb`` (G6).
 
-    Die Farben kommen aus der Palette des Trägers, die das Stylesheet beim
-    Polieren setzt; das Verhältnis rechnet U mit ``theme.contrast_ratio``. Bei
-    einem Symbolknopf ist die Vordergrundfarbe die des Symbols selbst — die
-    häufigste deckende Farbe seines Bilds (:func:`_icon_colour`, Review L3).
-    ``large`` ist große Schrift nach WCAG: ab 18 pt, fett ab 14 pt.
+    Die Schrift kommt aus der Palette des Trägers, die das Stylesheet beim
+    Polieren setzt; der Grund aus dem Bild, das der Kunde sieht — die häufigste
+    Farbe am Rand des Trägers im gerenderten Fenster (:func:`_shown_background`).
+    Die Palette nannte bei ``background: transparent`` Schwarz ohne Deckung, und
+    ``.name()`` warf die Deckung weg: Kontrast 1,28 an jedem durchsichtigen
+    Träger (Probelauf F-1, F-3). Das Verhältnis rechnet U mit
+    ``theme.contrast_ratio``. Bei einem Symbolknopf ist die Vordergrundfarbe die
+    des Symbols selbst — die häufigste deckende Farbe seines Bilds
+    (:func:`_icon_colour`, Review L3). Gesperrte Bedienelemente fehlen: WCAG
+    1.4.3 nimmt sie aus (F-2). ``large`` ist große Schrift nach WCAG: ab 18 pt,
+    fett ab 14 pt.
     """
     from PySide6.QtWidgets import QAbstractButton, QLabel
 
     surface = type(root).__name__
+    top = root.window()
+    picture = top.grab().toImage()
     found: list[dict[str, Any]] = []
     for widget in root.findChildren(QLabel) + root.findChildren(QAbstractButton):
-        if not _visible(widget):
+        if not _visible(widget) or not widget.isEnabled():
             continue
         text = _text_of(widget).strip()
         symbol = not text and isinstance(widget, QAbstractButton) and not widget.icon().isNull()
@@ -887,8 +1050,13 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
         palette = widget.palette()
         font = widget.font()
         size = font.pointSizeF()
+        background = _shown_background(picture, top, widget) or _opaque(
+            palette.color(widget.backgroundRole()), None
+        )
         foreground = (
-            _icon_colour(widget) if symbol else palette.color(widget.foregroundRole()).name()
+            _icon_colour(widget)
+            if symbol
+            else _opaque(palette.color(widget.foregroundRole()), background)
         )
         found.append(
             {
@@ -896,12 +1064,59 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
                 "widget": name_of(widget),
                 "theme": theme,
                 "foreground": foreground,
-                "background": palette.color(widget.backgroundRole()).name(),
+                "background": background,
                 "large": size >= LARGE_POINTS or (size >= LARGE_BOLD_POINTS and font.bold()),
                 "symbol": symbol,
             }
         )
     return found
+
+
+def _opaque(colour: Any, under: str | None) -> str:
+    """Eine Farbe als ``#rrggbb``, über ``under`` gelegt, wenn sie durchscheint."""
+    from PySide6.QtGui import QColor
+
+    if colour.alpha() >= 255 or under is None:
+        return str(colour.name())
+    below = QColor(under)
+    share = colour.alphaF()
+    mixed = QColor(
+        round(colour.red() * share + below.red() * (1 - share)),
+        round(colour.green() * share + below.green() * (1 - share)),
+        round(colour.blue() * share + below.blue() * (1 - share)),
+    )
+    return str(mixed.name())
+
+
+def _shown_background(picture: Any, top: Any, widget: Any) -> str | None:
+    """Die Farbe, die am Rand von ``widget`` im gerenderten Fenster am häufigsten steht.
+
+    Gelesen wird ein Ring knapp innerhalb des Trägers, nur wo er sichtbar ist —
+    dort liegt Grund, nicht Schrift. ``None``, wenn nichts davon zu sehen ist.
+    """
+    from collections import Counter
+
+    from PySide6.QtCore import QPoint
+
+    ratio = float(picture.devicePixelRatio()) or 1.0
+    width, height = widget.width(), widget.height()
+    inset = max(0, min(2, width // 4, height // 4))
+    shown = widget.visibleRegion()
+    corner = widget.mapTo(top, QPoint(0, 0))
+    points = [(x, inset) for x in range(inset, width - inset)]
+    points += [(x, height - 1 - inset) for x in range(inset, width - inset)]
+    points += [(inset, y) for y in range(inset, height - inset)]
+    points += [(width - 1 - inset, y) for y in range(inset, height - inset)]
+    counted: Counter[int] = Counter()
+    for x, y in points:
+        if not shown.contains(QPoint(x, y)):
+            continue
+        px, py = int((corner.x() + x) * ratio), int((corner.y() + y) * ratio)
+        if 0 <= px < picture.width() and 0 <= py < picture.height():
+            counted[picture.pixelColor(px, py).rgb() & 0xFFFFFF] += 1
+    if not counted:
+        return None
+    return f"#{counted.most_common(1)[0][0]:06x}"
 
 
 #: Große Schrift nach WCAG 2.2 (1.4.3): ab 18 Punkt, fett ab 14 Punkt.
@@ -928,28 +1143,37 @@ def _icon_colour(button: Any) -> str:
 def icon_entries(root: Any) -> list[dict[str, Any]]:
     """Bedienelemente ohne Text: Symbol, Kurzhilfe, Kürzel, Bildschärfe (G7, Z6).
 
-    Ob ein Symbol aus dem eigenen Satz stammt und welchen Stil es hat, sieht man
-    einem ``QIcon`` nicht an — ``own`` und ``style`` bleiben offen für Stufe B.
+    ``own`` ist wahr, wenn das Bild eines der eigenen Symbole ist
+    (``icons.ThemedIcon``, verglichen am gerasterten Bild), falsch bei einem
+    Symbol aus dem Thema des Systems, sonst offen für Stufe B; ``style`` bleibt
+    offen. Kein Symbolknopf ist ein Haken oder Optionsknopf ohne Text und ein
+    Knopf, der seinen Inhalt selbst zeigt — Beschriftungen darin oder eigenes
+    Zeichnen (Probelauf F-12: ``RowCheckBox``, der Zahlenknopf in ``facts``).
     """
     from PySide6.QtWidgets import QAbstractButton, QToolButton
 
     surface = type(root).__name__
     found: list[dict[str, Any]] = []
     for button in root.findChildren(QAbstractButton):
-        if not _visible(button) or _text_of(button).strip():
+        if not _visible(button) or _text_of(button).strip() or _shows_itself(button):
             continue
         icon = button.icon()
         ratio = float(button.devicePixelRatioF())
         pixmap = icon.pixmap(button.iconSize(), ratio) if not icon.isNull() else None
         action = button.defaultAction() if isinstance(button, QToolButton) else None
         shortcut = action.shortcut().toString() if action is not None else ""
+        own: bool | None = None
+        if pixmap is not None:
+            known = _own_symbols(button.iconSize().width(), button.iconSize().height(), ratio)
+            digest = _pixmap_digest(pixmap)
+            own = True if digest and digest in known else (False if icon.name() else None)
         found.append(
             {
                 "surface": surface,
                 "widget": button.accessibleName() or mark_of(button) or type(button).__name__,
                 "text": "",
                 "icon": "" if icon.isNull() else (icon.name() or "eigen"),
-                "own": None,
+                "own": own,
                 "tooltip": button.toolTip(),
                 "shortcut": shortcut,
                 "style": None,
@@ -960,14 +1184,75 @@ def icon_entries(root: Any) -> list[dict[str, Any]]:
     return found
 
 
+def _shows_itself(button: Any) -> bool:
+    """Ob ein Knopf ohne Text kein Symbolknopf ist: Haken, Optionsknopf, Beschriftungen
+    darin oder ein eigenes ``paintEvent`` in der Anwendung."""
+    from PySide6.QtWidgets import QCheckBox, QLabel, QRadioButton
+
+    if isinstance(button, (QCheckBox, QRadioButton)):
+        return True
+    if any(_visible(label) and _text_of(label).strip() for label in button.findChildren(QLabel)):
+        return True
+    return button.icon().isNull() and any(
+        "paintEvent" in vars(cls)
+        for cls in type(button).__mro__
+        if not cls.__module__.startswith(("PySide6", "shiboken6", "builtins"))
+    )
+
+
+def _pixmap_digest(pixmap: Any) -> str:
+    """Der Abdruck eines Bilds; leer, wenn es keines ist."""
+    image = pixmap.toImage()
+    if image.isNull():
+        return ""
+    return hashlib.sha256(bytes(image.constBits())).hexdigest()[:16]
+
+
+_OWN_SYMBOLS: dict[tuple[int, int, float, str], frozenset[str]] = {}
+
+
+def _own_symbols(width: int, height: int, ratio: float) -> frozenset[str]:
+    """Die Abdrücke aller eigenen Symbole in dieser Größe und Farbe — einmal gerastert."""
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QIcon
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.icons import ThemedIcon, known
+
+    colour = QApplication.palette().windowText().color().name()
+    key = (width, height, ratio, colour)
+    if key not in _OWN_SYMBOLS:
+        digests = {
+            _pixmap_digest(QIcon(ThemedIcon(name)).pixmap(QSize(width, height), ratio))
+            for name in known()
+        }
+        _OWN_SYMBOLS[key] = frozenset(digests - {""})
+    return _OWN_SYMBOLS[key]
+
+
 def animation_entries(root: Any) -> list[dict[str, Any]]:
-    """Übergänge unter ``root`` mit ihrer Dauer (G8)."""
-    from PySide6.QtCore import QAbstractAnimation
+    """Übergänge unter ``root`` mit Dauer, Ziel und Eigenschaft (G8).
+
+    Ohne die Geometrie, die Qts Hauptfenster selbst animiert, wenn es Mittelteil,
+    Leisten und Andockflächen neu legt (``QWidgetAnimator``, Dauer 0 ohne
+    Animation): Sie ist kein Zustandswechsel der Anwendung (Probelauf F-13).
+    """
+    from PySide6.QtCore import QAbstractAnimation, QPropertyAnimation
+    from PySide6.QtWidgets import QDockWidget, QMainWindow, QToolBar
 
     surface = type(root).__name__
     found: list[dict[str, Any]] = []
     for animation in root.findChildren(QAbstractAnimation):
         owner = animation.parent()
+        target = animation.targetObject() if isinstance(animation, QPropertyAnimation) else None
+        prop = bytes(animation.propertyName()).decode() if target is not None else ""
+        holder = target.parentWidget() if callable(getattr(target, "parentWidget", None)) else None
+        laid_out_by_qt = prop == "geometry" and (
+            isinstance(target, (QDockWidget, QToolBar))
+            or (isinstance(holder, QMainWindow) and target is holder.centralWidget())
+        )
+        if laid_out_by_qt:
+            continue
         found.append(
             {
                 "surface": surface,
@@ -975,6 +1260,8 @@ def animation_entries(root: Any) -> list[dict[str, Any]]:
                 if hasattr(owner, "accessibleName")
                 else type(owner).__name__,
                 "duration_ms": float(animation.duration()),
+                "target": type(target).__name__ if target is not None else "",
+                "property": prop,
             }
         )
     return found
@@ -1130,9 +1417,41 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
             }
         )
     for button in window.findChildren(QPushButton):
-        reason = button.accessibleDescription() or button.toolTip()
+        # Die Kurzhilfe zuerst, wie ``function_surface.grey_reason``: Sie zeigt der
+        # graue Knopf dem Kunden; die Beschreibung kann vom offenen stammen (F-34).
+        reason = button.toolTip() or button.accessibleDescription()
         if _visible(button) and not button.isEnabled() and reason:
             found.append({"text": reason, "actions": []})
+    return [*found, *_house_messages()]
+
+
+def _house_messages() -> list[dict[str, Any]]:
+    """Offene Meldungen im Hausstil (``MessageDialog``, FD-21) mit ihren Handlungen.
+
+    Gelesen über das, was der Dialog öffentlich führt: ``text()`` wie Strg+C,
+    ``buttons()`` und ihre Rolle. Der Ausgang (*Schließen*, Escape) ist keine
+    Handlung, die das Problem löst — er zählte sonst als „ohne Wirkung“ (V5).
+    """
+    from PySide6.QtWidgets import QApplication, QDialogButtonBox
+
+    found: list[dict[str, Any]] = []
+    for dialog in QApplication.topLevelWidgets():
+        if "MessageDialog" not in _classes(dialog) or not dialog.isVisible():
+            continue
+        exits = QDialogButtonBox.ButtonRole.RejectRole
+        actions = [
+            {
+                "label": _text_of(button),
+                "target": vocabulary_name(button),
+                "clicked": False,
+                "effect": None,
+            }
+            for button in dialog.buttons()
+            if _visible(button)
+            and button.isEnabled()
+            and dialog.button_box.buttonRole(button) != exits
+        ]
+        found.append({"text": dialog.text(), "actions": actions})
     return found
 
 

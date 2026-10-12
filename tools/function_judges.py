@@ -23,6 +23,7 @@ Parameter aus derselben Quelle. Messwerte dagegen nur über :func:`_close`.
 
 from __future__ import annotations
 
+import functools
 import math
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -139,7 +140,11 @@ def _leading_selection(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any
     """Wie viele Schritte am Anfang die Startauswahl herstellen (Konzept §4).
 
     Trägt die Zeile ihren Auswahlweg (``route``), endet die Startauswahl mit dem
-    Schritt, der dessen letztes Ziel klickt. Sonst sind es die führenden
+    Klick, der dessen letztes Ziel **trifft** (``why`` ``ziel``): Die Wegklicks
+    davor — Reiter, Klappe, Rollen — tragen dasselbe Ziel, und mit dem ersten
+    von ihnen zu enden zählte den Rest der Auswahl als Klicks danach (Probelauf,
+    F-17: drei Klicks nach der Auswahl an einer Befundhandlung). Ohne Treffer
+    endet sie am letzten Schritt mit diesem Ziel. Sonst sind es die führenden
     Auswahlklicks. Ein Klick ins Bild mitten im Weg (*Im Bild einstellen*, eine
     platzierende Operation) oder ein zweiter Eingang ist ein Schritt des Kunden
     und zählt mit.
@@ -147,9 +152,11 @@ def _leading_selection(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any
     route = _route_targets(row)
     if route:
         last = route[-1]
-        return next(
-            (index + 1 for index, step in enumerate(steps) if step.get("target") == last), 0
-        )
+        aimed = [index for index, step in enumerate(steps) if step.get("target") == last]
+        hit = [index for index in aimed if steps[index].get("why") == "ziel"]
+        if hit:
+            return hit[0] + 1
+        return aimed[-1] + 1 if aimed else 0
     count = 0
     for step in steps:
         if not _is_selection(step):
@@ -169,7 +176,10 @@ def _selected_feature(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]
     """Gilt die Zeile einem Merkmal oder einer Kante (E1: höchstens zwei Klicks danach)?
 
     Aus der Anforderung der Zeile (``function_list``: ``merkmal:<art>``, die
-    Merkmalsauswahlen, ``kante``) oder, wo sie fehlt, aus der Startauswahl.
+    Merkmalsauswahlen, ``kante``) oder, wo sie fehlt, aus der Startauswahl: ein
+    Merkmal ist eine Baumzeile oder Stelle im Bild mit Merkmal
+    (``tree.row:obj_1.hole_1``). Ein Befund ist keines, auch wenn sein Code
+    einen Punkt trägt (``finding:arrange.below_bed``, Probelauf F-17).
     """
     requirement = str(row.get("requirement") or "")
     if requirement.startswith(FEATURE_REQUIREMENT) or requirement in FEATURE_SELECTIONS:
@@ -177,7 +187,10 @@ def _selected_feature(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]
     if requirement == "kante":
         return True
     chosen = [str(step.get("target")) for step in steps[: _leading_selection(steps, row)]]
-    return bool(chosen) and "." in chosen[-1].split(":", 1)[-1]
+    if not chosen:
+        return False
+    kind, _separator, rest = chosen[-1].partition(":")
+    return kind in ("tree.row", "view") and "." in rest
 
 
 def _has_selection_relation(row: Mapping[str, Any]) -> bool:
@@ -280,6 +293,21 @@ def _missing(subject: int | str, *fields: str, stage: str = "A") -> Outcome:
     )
 
 
+def _input_clicks(steps: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Klicks in ein Feld, in das danach getippt wird — Eingaben, die E2 zählt.
+
+    E1 zählt Klicks „mit den Vorgaben“ (Konzept §4); wer eine Zahl tippt,
+    weicht von der Vorgabe ab, und den Klick ins Feld zählte E1 sonst doppelt
+    mit der Eingabe (Probelauf F-18: *Parameter anlegen* mit vier Klicks).
+    """
+    typed = {str(step.get("target")) for step in steps if step.get("typed")}
+    return [
+        step
+        for step in _clicks(steps)
+        if step.get("why") == "ziel" and str(step.get("target")) in typed
+    ]
+
+
 def _e1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     steps = _path(protocol)
     if steps is None:
@@ -287,7 +315,9 @@ def _e1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     row = _row(protocol)
     at_feature = _selected_feature(steps, row)
     limit = MAX_CLICKS_AT_FEATURE if at_feature else MAX_CLICKS
-    counted = len(_clicks(_after_selection(steps, row)))
+    after = _after_selection(steps, row)
+    inputs = {id(step) for step in _input_clicks(after)}
+    counted = len([step for step in _clicks(after) if id(step) not in inputs])
     issues = []
     if counted > limit:
         where = "nach der Auswahl am Merkmal" if at_feature else "bis zum Ergebnis"
@@ -439,9 +469,20 @@ def _v1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         # Die Liste führt für diese Sprache keine Wörter: V1 gilt hier nicht,
         # die Quellsprache trägt die Prüfung.
         return None
+    # Was die Szene selbst benennt — Projekt und Körper nach ihren Dateien —, hat
+    # der Kunde geschrieben, nicht die Anwendung (Probelauf F-10: ``cube_clean``
+    # traf das Muster für Bezeichner).
+    names = sorted(
+        (str(name) for name in (_map(protocol, "scene") or {}).get("names") or () if name),
+        key=len,
+        reverse=True,
+    )
     issues: list[Issue] = []
     for entry in texts:
-        hits = _negative_hits(str(entry.get("text") or ""), patterns)
+        text = str(entry.get("text") or "")
+        for name in names:
+            text = text.replace(name, " ")
+        hits = _negative_hits(text, patterns)
         issues.extend(Issue(f"„{hit}“ in „{entry.get('text')}“", "leicht", "V1") for hit in hits)
     return _result("V1", issues, f"{len(issues)} Treffer", {"hits": len(issues)})
 
@@ -579,10 +620,18 @@ def _g2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     for entry in entries:
         spacing = _number(entry.get("spacing"))
         margins = [_number(value) for value in entry.get("margins") or ()]
-        if spacing is None or any(value is None for value in margins):
+        items = _number(entry.get("items"))
+        # Ein Abstand liegt erst zwischen zwei sichtbaren Elementen (Probelauf
+        # F-6): Ein Layout mit einem zeigt nur seine Ränder.
+        between = items is None or items >= 2
+        if (between and spacing is None) or any(value is None for value in margins):
             absent.append(f"layout.spacing an {entry.get('surface')}")
             continue
-        values = [spacing, *(value for value in margins if value is not None)]
+        # Raster und Formular haben zwei Abstände, senkrecht und waagerecht
+        # (Probelauf F-7: Qts ``spacing()`` sagte dort -1).
+        horizontal = _number(entry.get("horizontal"))
+        gaps = [value for value in (spacing, horizontal) if between and value is not None]
+        values = [*gaps, *(value for value in margins if value is not None)]
         off = sorted({value for value in values if value % SPACE})
         if off:
             issues.append(
@@ -592,15 +641,13 @@ def _g2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
                     "G2",
                 )
             )
-        if entry.get("group"):
+        if entry.get("group") and between and spacing is not None:
             key = (str(entry.get("surface")), str(entry.get("group")))
             groups.setdefault(key, set()).add(spacing)
-    for (surface, group), spacings in sorted(groups.items()):
-        if len(spacings) > 1:
+    for (surface, group), found in sorted(groups.items()):
+        if len(found) > 1:
             issues.append(
-                Issue(
-                    f"Gruppe {group} in {surface} mit Abständen {sorted(spacings)}", "leicht", "G2"
-                )
+                Issue(f"Gruppe {group} in {surface} mit Abständen {sorted(found)}", "leicht", "G2")
             )
     return _settled("G2", issues, absent, f"{len(entries)} Layouts", {"layouts": len(entries)})
 
@@ -647,7 +694,59 @@ def _g3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
 
 
 _STYLE_SIZE: Final = re.compile(r"font(?:-size)?\s*:", re.IGNORECASE)
-_STYLE_COLOUR: Final = re.compile(r"#[0-9a-f]{3,8}\b|rgba?\s*\(", re.IGNORECASE)
+#: Eine Schriftfarbe im Stylesheet: ``color:`` (nicht ``background-color:``) und ihr Wert.
+_STYLE_TEXT_COLOUR: Final = re.compile(r"(?<![\w-])color\s*:\s*([^;}]+)", re.IGNORECASE)
+
+
+@functools.cache
+def design_text_colours() -> frozenset[str]:
+    """Die Schriftfarben der Gestaltungswerte: beide Themen, die Rollen und die Feldschrift.
+
+    Was ein Stylesheet aus ``THEMES``, ``palette.ROLES*`` oder ``readable_on``
+    setzt, ist eine Gestaltungsfarbe, keine fest gesetzte (Probelauf F-5: die
+    Warnmarken, die Legende der Analyse, die Auswahlquittung).
+    """
+    from app.ui import palette
+    from app.ui.theme import THEMES
+
+    found: set[str] = set()
+    for colours in THEMES.values():
+        found.update(str(value) for value in colours.values() if str(value).startswith("#"))
+    for table in (palette.ROLES, palette.ROLES_ON_LIGHT, palette.ROLES_ON_DARK):
+        found.update(table.values())
+    found.update((palette.ON_LIGHT_FIELD, palette.ON_DARK_FIELD))
+    return frozenset(colour.lower() for colour in found)
+
+
+def _foreign_text_colours(sheet: str) -> list[str]:
+    """Schriftfarben eines Stylesheets, die keine Gestaltungsfarbe sind."""
+    found = []
+    for match in _STYLE_TEXT_COLOUR.finditer(sheet):
+        value = match.group(1).strip().lower()
+        if value.startswith("#") and value in design_text_colours():
+            continue
+        if value.startswith(("#", "rgb")):
+            found.append(value)
+    return found
+
+
+def _effective_level(entry: Mapping[str, Any]) -> str | None:
+    """Die Stufe, die die wirksame Schrift trägt, aus Punkten und Gewicht.
+
+    ``type_scale`` der Grundgröße (``style.apply_style``) nennt je Stufe Größe
+    und Gewicht; eine Schrift ohne gesetzte Eigenschaft ist die Grundschrift
+    und damit ``body`` (Probelauf F-4). ``None``, wenn sie keiner Stufe
+    entspricht; ``""`` ohne Messung der Schrift.
+    """
+    from app.ui.style import type_scale
+
+    points, weight, base = (_number(entry.get(key)) for key in ("points", "weight", "base_points"))
+    if points is None or weight is None or base is None or points <= 0 or base <= 0:
+        return ""
+    for level, (size, bold) in type_scale(int(base)).items():
+        if abs(points - size) < 0.05 and int(weight) == bold:
+            return level
+    return None
 
 
 def _g4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
@@ -657,19 +756,36 @@ def _g4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         # (wie ``contrast: []`` bei G6).
         return _missing("G4", "fonts" if fonts is None else "fonts (keine Schriften)")
     issues = []
+    absent = []
     for entry in fonts:
-        if entry.get("level") not in LEVELS:
-            issues.append(Issue(f"Schrift ohne Stufe an {entry.get('widget')}", "leicht", "G4"))
+        widget = entry.get("widget")
+        if "points" in entry:
+            level = _effective_level(entry)
+            if level == "":
+                absent.append(f"fonts.points an {widget}")
+            elif level is None:
+                issues.append(
+                    Issue(
+                        f"Schrift {entry.get('points')} pt, Gewicht {entry.get('weight')} an "
+                        f"{widget} ist keine Stufe aus {list(LEVELS)}",
+                        "leicht",
+                        "G4",
+                    )
+                )
+        elif entry.get("level") not in LEVELS:
+            # Ein Protokoll ohne wirksame Schrift: nur die gesetzte Stufe.
+            issues.append(Issue(f"Schrift ohne Stufe an {widget}", "leicht", "G4"))
         sheet = str(entry.get("stylesheet") or "")
-        if _STYLE_SIZE.search(sheet) or _STYLE_COLOUR.search(sheet):
+        foreign = _foreign_text_colours(sheet)
+        if _STYLE_SIZE.search(sheet) or foreign:
             issues.append(
                 Issue(
-                    f"Größe oder Farbe im Stylesheet an {entry.get('widget')}: {sheet}",
+                    f"Größe oder Farbe im Stylesheet an {widget}: {sheet}",
                     "leicht",
                     "G4",
                 )
             )
-    return _result("G4", issues, f"{len(fonts)} Schriften", {"fonts": len(fonts)})
+    return _settled("G4", issues, absent, f"{len(fonts)} Schriften", {"fonts": len(fonts)})
 
 
 #: Die Zustände, die der Prüfstand an jedem Widget aufnimmt
@@ -754,14 +870,20 @@ def _g7(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     if icons is None:
         return _missing("G7", "icons")
     issues = []
+    notes = []
     for entry in icons:
         if entry.get("text"):
             continue
         name = entry.get("widget")
-        if not entry.get("icon") or not entry.get("own"):
+        # ``own`` ``None`` heißt: Die Herkunft ließ sich am Bild nicht belegen —
+        # ein Vermerk für Stufe B, kein Fund (Probelauf F-12). Ein Fund ist ein
+        # Knopf ohne Symbol oder mit einem fremden.
+        if not entry.get("icon") or entry.get("own") is False:
             issues.append(
                 Issue(f"Symbolknopf {name} ohne Symbol aus dem eigenen Satz", "leicht", "G7")
             )
+        elif entry.get("own") is None:
+            notes.append(f"Herkunft des Symbols an {name} nicht belegt")
         tooltip = str(entry.get("tooltip") or "")
         if not tooltip.strip():
             issues.append(Issue(f"Symbolknopf {name} ohne Tooltip", "leicht", "G7"))
@@ -774,7 +896,7 @@ def _g7(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     styles = {str(entry.get("style")) for entry in icons if entry.get("own") and entry.get("style")}
     if len(styles) > 1:
         issues.append(Issue(f"Symbole in mehreren Stilen: {sorted(styles)}", "leicht", "G7"))
-    return _result("G7", issues, f"{len(icons)} Symbole", {"icons": len(icons)})
+    return _result("G7", issues, f"{len(icons)} Symbole", {"icons": len(icons)}, notes=notes)
 
 
 def _g8(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
@@ -981,7 +1103,15 @@ def judge_sizes(protocols: Iterable[Mapping[str, Any]], *, complete: bool) -> Ou
             taken = True
         for entry in icons or []:
             scale, ratio = _number(entry.get("scale")), _number(entry.get("pixmap_ratio"))
-            if scale is not None and ratio is not None and not _close(scale, ratio):
+            # Unscharf ist nur ein Bild mit weniger Punkten als der Schirm: Die
+            # Symbole rastern absichtlich doppelt (``icons.OVERSAMPLING``), und
+            # ein Bild mit mehr Punkten ist schärfer (Probelauf F-11).
+            if (
+                scale is not None
+                and ratio is not None
+                and ratio < scale
+                and not _close(scale, ratio)
+            ):
                 issues.append(
                     Issue(
                         f"Symbol {entry.get('widget')} bei {scale * 100:.0f} % "
@@ -1027,7 +1157,13 @@ def _i1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         if not str(entry.get("label") or "").strip()
         or not re.search(r"\d", str(entry.get("label")))
     ]
-    return _result("I1", issues, f"{len(labels)} Arten", {"kinds": len(labels)}, judged=True)
+    # Eine Art ohne zugewandte Stelle oder ein gescheitertes Überfahren ist nicht
+    # gemessen, kein Fund (Probelauf F-28) — der Vermerk sagt, welche.
+    missed = (_map(protocol, "unmeasured") or {}).get("hover_labels")
+    notes = [f"nicht gemessen: {missed}"] if missed else []
+    return _result(
+        "I1", issues, f"{len(labels)} Arten", {"kinds": len(labels)}, judged=True, notes=notes
+    )
 
 
 def _i2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:

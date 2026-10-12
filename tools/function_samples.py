@@ -26,6 +26,7 @@ from tools.function_checks import (
     CRITERIA,
     GOOD_OVER_FINDING,
     MANUAL_WINDOW,
+    NO_RESPONSE,
     NOT_APPLICABLE_OVER_FINDING,
     NOT_FOUND,
     SMALLEST_WINDOW,
@@ -605,6 +606,24 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         6,
         "Lauf von 3 s ohne sichtbares Abbrechen",
         change=_all(_set("timing.total_s", 3.0), _set("timing.progress_shown_s", 2.0)),
+    ),
+    BrokenSample(
+        6,
+        "Wartefrist ohne fertiges Ergebnis ist keine Rückmeldung",
+        change=_all(
+            _set("timing.total_s", None),
+            _set(
+                "findings",
+                [
+                    {
+                        "phase": "übernehmen",
+                        "kind": NO_RESPONSE,
+                        "target": "feature.apply",
+                        "detail": "nach 180 s kein fertiges Ergebnis",
+                    }
+                ],
+            ),
+        ),
     ),
     BrokenSample(7, "Meldung ohne Handlung", change=_set("messages.0.actions", [])),
     BrokenSample(7, "Handlung ohne Wirkung", change=_set("messages.0.actions.0.effect", False)),

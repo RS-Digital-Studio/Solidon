@@ -716,13 +716,19 @@ def default_apply_target(row: Mapping[str, Any]) -> str | None:
     """Womit eine Zeile übernommen wird.
 
     Handlungen des Merkmalfensters und Kantenzeilen mit *Übernehmen* dort,
-    Operationen mit dem Hauptknopf ihres Dialogs; ein Fensterbefehl und eine
-    Bedienfläche wirken mit ihrem Klick selbst.
+    Operationen mit dem Hauptknopf ihres Dialogs. Ein Fensterbefehl wirkt mit
+    seinem Klick selbst — außer er fragt Eingaben ab: Dann tippt der Kunde sie
+    in den Dialog, den der Befehl öffnet, und schließt ihn mit dessen
+    Hauptknopf (*Parameter anlegen* → *Anlegen*; Probelauf F-25, vorher klickte
+    der Prüfstand nie *Anlegen*). Eine Bedienfläche wirkt mit ihrem Klick.
     """
     target = walk_target(row)
     if target.startswith(("feature:", "edge:")):
         return "feature.apply"
     if target.startswith(("operation:", "dialog:")):
+        return "dialog.accept"
+    inputs = (row.get("spec") or {}).get("inputs") or {}
+    if row.get("kind") == "fensterbefehl" and inputs:
         return "dialog.accept"
     return None
 

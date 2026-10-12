@@ -169,12 +169,24 @@ def test_a_window_is_allowed_by_its_class_or_the_function_that_opened_it() -> No
     jede genannte Funktion in ``app/ui`` steht — sonst erkennte die Wache nach
     einer Umbenennung nichts mehr.
     """
-    assert capture.modal_allowed(["AskDialog", "QDialog"], [])
+    # Konzept Z2 wie ``fenster.md`` (welle4 ``89e7f5819``): Eine Rückfrage über
+    # ``ctx.ask`` ist nur vor der Vollerkennung ausgenommen, erkannt an der Antwort.
+    assert not capture.modal_allowed(["AskDialog", "QDialog"], [])
+    assert not capture.modal_allowed(["AskDialog", "QDialog"], [], ["Oben", "Unten"])
+    assert capture.modal_allowed(
+        ["AskDialog", "QDialog"], [], ["Sofort laden", capture.FULL_RECOGNITION_ANSWER]
+    )
     assert capture.modal_allowed(["QMessageBox", "QDialog"], ["poll", "confirm_unsaved", "x"])
+    assert capture.modal_allowed(["QMessageBox", "QDialog"], ["poll", "_ask_recovery"])
+    assert capture.modal_allowed(["QMessageBox", "QDialog"], ["poll", "confirm_generation_loss"])
     assert not capture.modal_allowed(["QMessageBox", "QDialog"], ["poll", "show_error"])
     assert capture.is_question("QMessageBox", ["Speichern", "Verwerfen", "Abbrechen"])
     assert not capture.is_question("QMessageBox", ["OK"])
     assert capture.is_question("AskDialog", ["OK"])
+    # Die Meldung im Hausstil ist nie eine Frage, auch mit Handlung und Ausgang (FD-21).
+    assert not capture.is_question("MessageDialog", ["Rückgängig", "Schließen"])
+    sources = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "app").rglob("*.py"))
+    assert f'"{capture.FULL_RECOGNITION_ANSWER}"' in sources
     defined = {
         node.name
         for path in (ROOT / "app" / "ui").rglob("*.py")

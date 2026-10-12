@@ -90,6 +90,8 @@ class FakePorts:
         self.pressed: list[tuple[str, tuple[int, int], str]] = []
         self.keys_sent: list[str] = []
         self.typed: list[str] = []
+        #: Bis wann das Fenster sagt, dass etwas kommt (``Ports.pending``).
+        self.pending_until = 0.0
         self._last: FakeClick | None = None
         self._last_name = ""
 
@@ -139,6 +141,12 @@ class FakePorts:
 
     def now(self) -> float:
         return self.timer.now
+
+    def pending(self) -> bool:
+        return self.timer.now < self.pending_until
+
+    def aim(self, click: FakeClick, point: tuple[int, int]) -> tuple[int, int]:
+        return point
 
 
 def run_machine(

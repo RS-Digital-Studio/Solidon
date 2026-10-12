@@ -89,7 +89,11 @@ def test_the_list_finds_enough_to_mean_something(
 
     kinds = Counter(row.kind for row in rows)
     sources = Counter(row.source for row in rows)
-    assert kinds["operation"] == len(operations) - len(catalogue_operations()) + 1
+    # Eine Zeile je Operation, der Katalog als eine, und was im Dialog einer
+    # anderen steht, in deren Zeile (``SAME_ENTRY``, Probelauf F-21).
+    assert kinds["operation"] == len(operations) - len(catalogue_operations()) + 1 - len(
+        fl.SAME_ENTRY
+    )
     assert sources["dialogklasse"] == len(classes)
     assert sources["wortschatz"] == len(TARGETS) + 1, "dazu start.recent:1"
     assert sources["fensteraktion"] >= 1
@@ -132,7 +136,9 @@ def test_every_operation_belongs_to_exactly_one_package(rows: list[fl.Row]) -> N
     assert set(covered) == names
     assert all(count == 1 for count in covered.values()), covered.most_common(3)
     for spec in REGISTRY.all():
-        row = found.get(spec.name, found[fl.CATALOGUE_ROW])
+        row = found.get(spec.name) or next(
+            row for row in rows if row.kind == "operation" and spec.name in row.covers
+        )
         assert row.package == fl.package_of_operation(spec)
 
 
@@ -912,7 +918,10 @@ def test_every_selecting_row_carries_its_selection_clicks(rows: list[fl.Row]) ->
     assert targets("mirror_object") == [("tree.row:obj_1", "")]
     assert targets("finding.action:place_on_bed") == [("finding:arrange.below_bed", "")]
     assert targets("feature:part.move") == [("tree.row:obj_1.screw_hole_bore_1", "")]
-    assert targets("create_box") == [] and targets("arrange_bed") == []
+    assert targets("create_box") == []
+    # Eine Operation über die ganze Szene steht in der Karte am gewählten Körper
+    # (Probelauf F-32: ohne Auswahl fand der Sprachfall sie nicht).
+    assert targets("arrange_bed") == [("tree.row:obj_1", "")]
     steps = [step for row in rows for step in row.route]
     assert len(steps) >= 100
     assert all(is_target(step["target"]) and step["button"] == "left" for step in steps)

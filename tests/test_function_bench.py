@@ -29,6 +29,7 @@ from tests.bench_fakes import (
 )
 from tools import (
     function_bench,
+    function_gestures,
     function_language,
     function_machine,
     function_setup,
@@ -424,7 +425,7 @@ def test_the_hover_label_is_read_once_the_view_shows_it() -> None:
     sink: list[str] = []
     machine = run_machine(
         timer,
-        function_bench.hover_steps(
+        function_gestures.hover_steps(
             lambda: moved.setdefault("t", timer.now) and None,
             tooltip,
             sink,
@@ -588,6 +589,7 @@ def test_the_surface_of_a_surface_set_counts_as_the_rows_own_window() -> None:
 
     flow = object.__new__(function_bench.FunctionFlow)
     flow.variant = function_setup.Variant.of({"set": "zoll", "unit": "in"})
+    flow.row = {"id": "Bearbeiten/Parameter anlegen …"}
     flow.watch = capture.ModalWatch(0.0)
     for name in ("ParameterDialog", "FremderDialog"):
         flow.watch.modals.append(

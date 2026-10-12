@@ -16,6 +16,7 @@ from typing import Any
 from tools.function_bench import FunctionFlow
 from tools.function_protocol import empty_protocol, safe_name, unmeasured
 from tools.function_setup import Variant, place_window
+from tools.function_surface import without_way
 
 
 class LanguageFlow:
@@ -72,6 +73,15 @@ class LanguageFlow:
                 done.append(crashed)
                 self.bench["surface_started"] = None
                 self.persist()
+                continue
+            unreachable = without_way(row)
+            if unreachable:
+                # Ohne Szene, die ihren Befund trägt, oder ohne Klick, der ihr Fenster
+                # öffnet, erreicht der Fall die Fläche nicht: nicht gelaufen, kein
+                # Fund (Probelauf F-32).
+                unmeasured(protocol, "texts", unreachable)
+                write_json(path, protocol)
+                done.append(str(row.get("id")))
                 continue
             # Vor jeder Fläche ein Anfangsvermerk; ohne Ergebnis danach war es ein Absturz.
             self.bench["surface_started"] = str(row.get("id"))

@@ -1164,16 +1164,14 @@ def test_a_question_to_the_manual_finds_what_its_words_find() -> None:
             assert gefragt == bloss, f"„{frage}“ -> {gefragt} statt {bloss}"
 
 
-#: Unter welchem Namen die Suche die Funktion einer Probezeile führt — die Kennung
-#: der Zeile (Befundhandlung, Menüweg) ist nicht die der Suche.
-_SEARCHED_AS: dict[str, str] = {
-    "resize_hole": "resize_hole",
-    "finding.action:place_on_bed": "place_on_bed",
-    "Bearbeiten/Parameter anlegen …": "edit.add_parameter",
-}
+def _probing_rows() -> list[str]:
+    """Die Zeilen mit Suchproben, wie die Spezifikationen sie führen."""
+    from tools.function_list import load_specs
+
+    return sorted(name for name, spec in load_specs().items() if spec.values.get("search_probes"))
 
 
-@pytest.mark.parametrize("row", sorted(_SEARCHED_AS))
+@pytest.mark.parametrize("row", _probing_rows())
 def test_the_search_probes_of_the_function_walk_find_their_row(
     qt_app: QApplication, tmp_path: Path, row: str
 ) -> None:
@@ -1182,22 +1180,23 @@ def test_the_search_probes_of_the_function_walk_find_their_row(
     die ersten drei (Prüfpunkt 1, I6; FD-17, FD-18).
 
     Gelesen werden die Treffer, wie sie dastehen (``guide_targets.search_hits``),
-    nach dem Tippen ins Suchfeld der Karte.
+    nach dem Tippen ins Suchfeld der Karte. Welche Treffer die Funktion der Zeile
+    meinen, sagt der Prüfstand selbst (``function_surface.search_names``, F-27):
+    Die Kennung der Zeile — Befundhandlung, Menüweg — ist nicht die der Suche.
     """
     import time
+    from dataclasses import asdict
 
     from app.core.scene.project import save
     from app.ui import guide_targets
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from tools import function_list, function_surface
     from tools.function_checks import MAX_RANK
-    from tools.function_list import load_specs
     from tools.function_scenes import build_scene, load_scenes, scene_environment
 
-    specs = load_specs()
-    probing = {name for name, spec in specs.items() if spec.values.get("search_probes")}
-    assert probing == set(_SEARCHED_AS), "eine Probezeile ohne Suchnamen — hier nachtragen"
+    specs = function_list.load_specs()
     spec = specs[row].values
     words = [str(probe["word"]) for probe in spec["search_probes"]]
     words += [str(question) for question in spec.get("questions", ())]
@@ -1217,15 +1216,22 @@ def test_the_search_probes_of_the_function_walk_find_their_row(
         while time.monotonic() < ende:
             qt_app.processEvents()
         window.right.setCurrentIndex(0)
-        searched = _SEARCHED_AS[row]
-        wanted = f"{'operation' if REGISTRY.has(searched) else 'command'}:{searched}"
+        # Die Zeilen, wie das Inventar sie dem Prüfstand ablegt (``rows.json``).
+        found = {
+            entry.id: asdict(entry)
+            for entry in function_list.rows(function_list.menubar_of(window))
+        }
         daneben: list[str] = []
         for word in words:
             window.selection_operations.search.setText(word)
             qt_app.processEvents()
             hits = guide_targets.search_hits(window)
-            if wanted not in hits[:MAX_RANK]:
-                daneben.append(f"„{word}“ -> {hits[:5]}")
+            # Wie ``FunctionFlow.phase_search``: nach dem Tippen gefragt, denn
+            # zu einer Menüzeile zählt der Befehl, der unter den Treffern steht.
+            wanted = function_surface.search_names(window, found[row])
+            rank = function_surface.search_rank(hits, wanted)
+            if rank is None or rank > MAX_RANK:
+                daneben.append(f"„{word}“ -> {hits[:5]}, gesucht {sorted(wanted)}")
         window.selection_operations.search.setText("")
         assert not daneben, f"{row}: " + "; ".join(daneben)
     finally:

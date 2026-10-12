@@ -31,6 +31,7 @@ from typing import Any, Final, Protocol
 from tools.function_checks import (
     COVERED,
     MAIN_PHASES,
+    NO_RESPONSE,
     NOT_FOUND,
     PLACES,
     WHY,
@@ -69,7 +70,15 @@ COVERED_S: Final = 1.0
 #: Wie lange ein Ziel ohne Weg sein darf, bevor es „nicht auffindbar“ ist
 #: (Sekunden): so lange wie die Frist, in der eine Handlung wirkt — ein Dialog
 #: nach einer Rechnung kommt nach dem Klick, der sie startete (Review M14).
+#: Gezählt wird erst, wenn das Fenster nicht mehr sagt, dass etwas kommt
+#: (``Ports.pending``): Das Merkmalfenster ermittelt seine Zeilen im Arbeiter,
+#: und nach zwei Sekunden hieß *Bohrung ändern* „nicht auffindbar“, obwohl es
+#: danach dastand (Probelauf F-20).
 MISSING_S: Final = 2.0
+
+#: Wie lange das Fenster sagen darf, dass etwas kommt, bevor das Ausbleiben der
+#: Fund „keine Rückmeldung“ ist (Sekunden, Prüfpunkt 6).
+PENDING_S: Final = 60.0
 
 
 def typed_number(value_mm: float, unit: str = "mm") -> str:
@@ -120,6 +129,8 @@ class Ports(Protocol):
     def rect_data(self, rect: Any) -> list[int]: ...
     def point_data(self, point: Any) -> list[int]: ...
     def now(self) -> float: ...
+    def pending(self) -> bool: ...
+    def aim(self, click: ClickLike, point: Any) -> Any: ...
 
 
 def button_name(button: Any) -> str:
@@ -179,8 +190,12 @@ class Walk:
         """
         counter = {"way": 0}
         way: list[tuple[Any, ...]] = []
+        waited: dict[str, str] = {}
 
         def act(machine: StepMachine) -> None:
+            if waited.get("silent"):
+                self.record({"target": name, "finding": NO_RESPONSE, "detail": waited["silent"]})
+                raise BenchFinding(NO_RESPONSE, name, waited["silent"])
             why = self.click_once(name, button)
             if why == TARGET_REASON:
                 return
@@ -202,12 +217,12 @@ class Walk:
                     )
                 raise BenchFinding(NOT_FOUND, name, detail)
             machine.insert(
-                [Step(f"weg zu {name}", act, ready=self.stable(name), settle_ms=SETTLE_MS)]
+                [Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)]
             )
 
-        return Step(f"weg zu {name}", act, ready=self.stable(name), settle_ms=SETTLE_MS)
+        return Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)
 
-    def stable(self, name: str) -> Callable[[], bool]:
+    def stable(self, name: str, waited: dict[str, str] | None = None) -> Callable[[], bool]:
         """Ob der nächste Klick zu ``name`` fallen kann.
 
         Er muss seit :data:`STABLE_S` derselbe sein, und an seiner Mitte liegt
@@ -215,18 +230,39 @@ class Walk:
         Klick „verdeckt“. Ohne Weg wartet er :data:`MISSING_S` — ein Dialog nach
         einer Rechnung, der Startbildschirm nach *Neu* erscheinen später als der
         Klick davor (Review M14) —, dann meldet der Klick „nicht auffindbar“.
+        Solange das Fenster sagt, dass etwas kommt (``Ports.pending``), zählt die
+        Frist nicht; sagt es das länger als :data:`PENDING_S`, steht in
+        ``waited`` der Grund, und der Klick meldet „keine Rückmeldung“.
         """
-        seen: dict[str, Any] = {"key": None, "since": 0.0, "covered": None, "missing": None}
+        seen: dict[str, Any] = {
+            "key": None,
+            "since": 0.0,
+            "covered": None,
+            "missing": None,
+            "pending": None,
+        }
 
         def ready() -> bool:
             now = self.ports.now()
             try:
                 click = self.ports.next_click(name)
             except LookupError:
+                if self.ports.pending():
+                    seen["missing"] = None
+                    if seen["pending"] is None:
+                        seen["pending"] = now
+                    if now - seen["pending"] < PENDING_S:
+                        return False
+                    if waited is not None:
+                        waited["silent"] = (
+                            f"nach {PENDING_S:.0f} s sagt das Fenster noch, dass es ermittelt"
+                        )
+                    return True
+                seen["pending"] = None
                 if seen["missing"] is None:
                     seen["missing"] = now
                 return bool(now - seen["missing"] >= MISSING_S)
-            seen["missing"] = None
+            seen["missing"] = seen["pending"] = None
             key = (str(click.why), tuple(self.ports.rect_data(click.rect)))
             if key != seen["key"]:
                 seen["key"], seen["since"], seen["covered"] = key, now, None
@@ -250,7 +286,7 @@ class Walk:
         except LookupError as error:
             self.record({"target": name, "finding": NOT_FOUND, "detail": str(error)})
             raise BenchFinding(NOT_FOUND, name, str(error)) from error
-        point = self.ports.centre(click.rect)
+        point = self.ports.aim(click, self.ports.centre(click.rect))
         hit = self.ports.widget_under(point)
         why = str(click.why)
         if why == "rollen":
@@ -590,6 +626,21 @@ class QtPorts:
                     "shift": Qt.KeyboardModifier.ShiftModifier,
                     "alt": Qt.KeyboardModifier.AltModifier,
                 }[name]
+        top = widget.window()
+        if top is not QApplication.activeWindow() and top.windowType() != Qt.WindowType.Popup:
+            # Ein Klick des Kunden holt sein Fenster nach vorn; ``QTest`` schickt
+            # nur das Ereignis. Ohne das blieb der Fokus nach dem Klick in ein
+            # Feld des nichtmodalen Operationsdialogs im Hauptfenster, und
+            # getippt wurde nicht (Probelauf F-34).
+            top.activateWindow()
+            # Am echten Schirm kommt die Aktivierung Runden später, und mit ihr
+            # setzt das Fenster seinen alten Fokus — erst danach fällt der Klick.
+            for _round in range(50):
+                QApplication.processEvents()
+                if QApplication.activeWindow() is top:
+                    break
+                time.sleep(0.01)
+            QApplication.processEvents()
         QTest.mouseMove(widget, local)
         if button in ("wheel_up", "wheel_down"):
             step = 120 if button == "wheel_up" else -120
@@ -606,6 +657,12 @@ class QtPorts:
             QApplication.sendEvent(widget, event)
             return
         if button == "double":
+            # Ein Doppelklick des Kunden ist erst ein Klick, dann der zweite
+            # Druck: ``mouseDClick`` allein schickt nur das Doppelklickereignis,
+            # und eine Liste meldet ``itemDoubleClicked`` nur an der Zeile, die
+            # vorher gedrückt war — kein Doppelklick des Prüfstands öffnete je
+            # einen Verlaufsschritt (Probelauf F-34, Prüfpunkt 12).
+            QTest.mouseClick(widget, Qt.MouseButton.LeftButton, modifiers, local)
             QTest.mouseDClick(widget, Qt.MouseButton.LeftButton, modifiers, local)
             return
         mouse = {
@@ -721,6 +778,40 @@ class QtPorts:
 
     def now(self) -> float:
         return time.perf_counter()
+
+    def aim(self, click: ClickLike, point: Any) -> Any:
+        """Wohin der Kunde bei einem Feld klickt: in sein Eingabefeld, nicht in den Behälter.
+
+        Ein Zahlenfeld des Operationsdialogs (``ValueField``) ist breiter als
+        sein Kästchen; die Mitte des Behälters lag am echten Schirm im leeren Teil
+        daneben, und der Fokus blieb im Rollbereich des Dialogs (Probelauf F-34).
+        """
+        from PySide6.QtCore import QPoint, QRect
+        from PySide6.QtWidgets import QAbstractSpinBox, QComboBox, QLineEdit
+
+        from app.ui import guide_targets
+
+        name = str(getattr(click, "target", "") or "")
+        if name.partition(":")[0] not in ("field", "feature.field", "measure.field"):
+            return point
+        try:
+            holder = guide_targets.widget_for(self.window, name)
+        except LookupError:
+            return point
+        kinds = (QAbstractSpinBox, QComboBox, QLineEdit)
+        if isinstance(holder, kinds):
+            return point
+        boxes = [box for kind in kinds for box in holder.findChildren(kind) if box.isVisible()]
+        hit = self.widget_under(point)
+        if not boxes or any(hit is box or box.isAncestorOf(hit) for box in boxes):
+            return point
+        return QRect(boxes[0].mapToGlobal(QPoint(0, 0)), boxes[0].size()).center()
+
+    def pending(self) -> bool:
+        """Ob das Fenster sagt, dass gleich etwas kommt (``function_surface.pending``)."""
+        from tools.function_surface import pending
+
+        return self.window is not None and pending(self.window)
 
 
 def _scrolls(widget: Any) -> bool:

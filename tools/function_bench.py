@@ -30,13 +30,17 @@ from pathlib import Path
 from typing import Any, Final
 
 from app.ui.motion import ACCENT_MS, MEDIUM_MS, SHORT_MS
+from tools import function_surface as surfaces
 from tools.function_capture import run_reference_factor
 from tools.function_checks import (
-    COVERED,
+    FAULT_PHASE,
     MATRIX_UNREACHABLE,
-    NOT_FOUND,
+    NO_RESPONSE,
     SELECTION_STAGES,
+    STEP_WITHOUT_VALUES,
+    WITHOUT_DIALOG,
 )
+from tools.function_gestures import GesturePhases
 from tools.function_machine import (
     MOST_UNSTICKS,
     PHASE_TIMEOUT_S,
@@ -56,7 +60,6 @@ from tools.function_protocol import (
     cli_arguments,
     cli_command,
     compare_prints,
-    drag_frames,
     result_metrics,
     scene_print,
     unmeasured,
@@ -64,7 +67,6 @@ from tools.function_protocol import (
 from tools.function_setup import (
     EMPTY_SCENE,
     PHASES,
-    SECOND_SCENE,
     SLOW_SCENES,
     START_SCREEN,
     Variant,
@@ -78,6 +80,7 @@ from tools.function_setup import (
     selected_feature,
     walk_target,
 )
+from tools.function_switch import LATE_WINDOW_S, SwitchPhase
 from tools.function_walk import (
     APPLY_PHASE,
     PATH_PHASE,
@@ -87,8 +90,8 @@ from tools.function_walk import (
     click_button,
     focus_check,
     place_of,
-    search_rank,
     typed_number,
+    with_modifier,
 )
 
 #: Wie lange eine Fläche stillstehen muss, bevor sie aufgenommen wird (Sekunden):
@@ -101,65 +104,8 @@ STILL_S: Final = max(SHORT_MS, MEDIUM_MS, ACCENT_MS) / 1000 + STABLE_S
 #: Ereignisrunde; eine Sekunde trägt beides auch unter Fremdlast.
 SEARCH_SETTLE_MS: Final = 1000
 
-#: Wie lange nach einem Abbruch oder Projektwechsel auf späte Ereignisse gewartet wird.
-LATE_WINDOW_S: Final = 3.0
-
 #: Wie lange nach einem Klick auf eine Handlung auf ihre Wirkung gewartet wird.
 EFFECT_WINDOW_S: Final = 2.0
-
-#: I1: Wie lange nach der Suchfrist der Ansicht (``viewport.HOVER_DELAY_MS``) auf ihren
-#: Hinweis gewartet wird — ein Bild und die Suche unter dem Zeiger (Sekunden).
-HOVER_READ_S: Final = 1.0
-
-#: Z1: Bewegungen eines Zugs und ihr Takt — 60 je Sekunde wie eine Hand an der
-#: Maus (Review L11), nicht so schnell, wie die Schleife sie senden kann.
-DRAG_MOVES: Final = 20
-
-DRAG_TICK_S: Final = 1 / 60
-
-#: Die Meldungen der Ansicht während eines Zugs am Griff: Geist, Zahl am Zeiger,
-#: verschobener Körper. Kommt keine, hat der Zug den Griff nicht gefasst.
-DRAG_SIGNALS: Final[tuple[str, ...]] = (
-    "transformDragged",
-    "placementDragged",
-    "previewDragged",
-    "gizmoStatus",
-    "featureMoved",
-    "featureMoveProposed",
-    "faceDragged",
-    "scaleDragged",
-    "slotDragged",
-)
-
-#: Die Einträge unter „Zuletzt geöffnet“ auf dem Startbildschirm (Prüfpunkt 16):
-#: ``start.recent:<n>``, n ab 1 in der Folge der Liste. Ein Menü dafür gibt es
-#: nicht; zum Startbildschirm führt *Datei → Neu* (``MainWindow.new_action``).
-RECENT_KIND: Final = "start.recent"
-
-
-def hover_steps(
-    move: Callable[[], None],
-    tooltip: Callable[[], str],
-    sink: list[str],
-    clock: Callable[[], float],
-    delay_s: float,
-) -> list[Step]:
-    """I1 an einer Art: hinfahren, auf den Hinweis der Ansicht warten, ihn lesen (Review S3).
-
-    ``move`` fährt die Maus über das Merkmal, ``tooltip`` liest den Hinweis der
-    Ansicht. Gelesen wird, wenn er steht — frühestens dann, und spätestens
-    ``delay_s`` (Suchfrist der Ansicht) plus :data:`HOVER_READ_S` nach dem
-    Hinfahren; ``sink`` bekommt den Text.
-    """
-
-    def read(machine: StepMachine) -> None:
-        sink[:] = [tooltip()]
-
-    return [
-        Step("hin", lambda machine: move()),
-        until_step("hinweis", lambda: bool(tooltip()), delay_s + HOVER_READ_S, clock),
-        Step("lesen", read),
-    ]
 
 
 def surface_signature(root: Any) -> tuple[Any, ...]:
@@ -178,7 +124,7 @@ def surface_signature(root: Any) -> tuple[Any, ...]:
     return (id(root), place(root), shown)
 
 
-class FunctionFlow:
+class FunctionFlow(GesturePhases, SwitchPhase):
     """Ein Funktionsfall am echten Fenster: Phasen nach der Variante, jede mit Abdruck.
 
     Jede Phase beginnt an der Startszene (:meth:`reset`) und endet ohne offenes
@@ -418,12 +364,10 @@ class FunctionFlow:
         return printed
 
     def picture(self, label: str) -> None:
-        """Bild des Fensters und eines offenen Dialogs für Stufe B, relativ zu ``--out``."""
-        from PySide6.QtWidgets import QApplication
-
-        for suffix, widget in (("", self.window), ("-dialog", QApplication.activeModalWidget())):
-            if widget is None:
-                continue
+        """Bild des Fensters und jedes offenen Dialogs, auch nichtmodal, relativ zu ``--out``."""
+        shown = surfaces.windows_to_picture(self.window)
+        for number, widget in enumerate([self.window, *shown]):
+            suffix = "" if not number else "-dialog" if number == 1 else f"-dialog-{number}"
             picture = widget.screen().grabWindow(int(widget.winId()))
             path = self.folder / f"{label}{suffix}.png"
             if picture.save(str(path)):
@@ -439,12 +383,8 @@ class FunctionFlow:
             return None
 
     def surface(self) -> Any:
-        """Die offene Fläche: der Dialog, sonst die Karte der Auswahl, sonst das Fenster."""
-        for name in ("dialog", "selection"):
-            widget = self.widget(name)
-            if widget is not None and widget.isVisible():
-                return widget
-        return self.window
+        """Die Fläche der Zeile nach der Art ihres Ziels (``function_surface.surface_for``)."""
+        return surfaces.surface_for(self.window, walk_target(self.row))
 
     def window_size(self) -> list[int]:
         return [self.window.width(), self.window.height()]
@@ -570,7 +510,23 @@ class FunctionFlow:
                 "triangles": triangles,
                 "build_s": None,
                 "eval_s": round(time.perf_counter() - began, 3),
+                # Körper und Projekt benennt die Szene, nicht die Anwendung (F-10).
+                "names": surfaces.scene_names(self.session),
             }
+        return ok
+
+    def fault_scene(self, key: str) -> bool:
+        """Die eigene Startszene des Fehlfalls, wenn er eine nennt (``fault_case.start_scene``)."""
+        if not key or key == self.scene_key:
+            return True
+        main = (self.scene_key, self.setup)
+        self.scene_key, self.setup = key, scene_setup(key)
+        try:
+            ok = self.reset()
+        finally:
+            self.scene_key, self.setup = main
+        if not ok:
+            self.data["errors"].append(f"{FAULT_PHASE}: Startszene {key} nicht herstellbar")
         return ok
 
     def preparation_steps(self) -> list[Step]:
@@ -625,17 +581,86 @@ class FunctionFlow:
     # --- Wege, Eingaben, Vorschau --------------------------------------------------------------
 
     def path_steps(self) -> list[Step]:
-        return [self.walker.step(target, button) for target, button in route_of(self.row)]
+        target = walk_target(self.row)
+        return [
+            self.action_step(name)
+            if name == target and name.startswith("feature:")
+            else self.walker.step(name, button)
+            for name, button in route_of(self.row)
+        ]
+
+    def action_step(self, target: str) -> Step:
+        """Die Handlung am Merkmal: ihr Kopf im Merkmalfenster — oder schon offen im Bild.
+
+        Mit Bild rückt das Fenster *Bohrung ändern* nach der Auswahl in die
+        Maßgruppe über der Ansicht, und der Kopf im Merkmalfenster ist verborgen;
+        der Kunde tippt dort, ohne zu klicken (Probelauf F-20: nach zwei
+        Sekunden „nicht auffindbar“, offscreen ohne Bild war die Zeile da). Der
+        Schritt steht dann ohne Klick als Ziel in ``steps``, Zone ``ansicht``.
+        """
+        inputs = list(self.spec.get("inputs") or {})
+        since: dict[str, float] = {}
+
+        def ready() -> bool:
+            head = self.widget(target)
+            waited = time.perf_counter() - since.setdefault("t", time.perf_counter())
+            shown = head is not None and head.isVisible()
+            return shown or surfaces.in_view(self.window, inputs) or waited >= EFFECT_WINDOW_S
+
+        def act(machine: StepMachine) -> None:
+            if not surfaces.in_view(self.window, inputs):
+                machine.insert([self.walker.step(target)])
+                return
+            if self.walker.before_target is not None:
+                self.walker.before_target(target)
+            detail = "steht nach der Auswahl in der Maßgruppe im Bild"
+            self.walker.record(
+                {"target": target, "why": "ziel", "button": None, "hit": True, "zone": "ansicht"}
+                | {"decision": False, "detail": detail}
+            )
+
+        return Step(f"handlung {target}", act, ready=ready, settle_ms=SETTLE_MS)
+
+    def apply_step(self) -> Step:
+        """Übernehmen: der Hauptknopf — steht die Handlung im Bild, die Eingabetaste im Feld.
+
+        Die Maßgruppe im Bild übernimmt mit der Eingabetaste wie mit ihrem Knopf
+        (``placement_flow``, „Die Eingabetaste im Maßfeld wartet wie der Knopf“);
+        ihr Knopf trägt keinen Namen im Wortschatz (Bericht D0-P2, neuer Punkt).
+        """
+        inputs = list(self.spec.get("inputs") or {})
+
+        def act(machine: StepMachine) -> None:
+            if self.apply_target == "feature.apply" and surfaces.in_view(self.window, inputs):
+                machine.insert([self.key_step("Return", "übernehmen im bild")])
+            elif self.apply_target is not None:
+                machine.insert([self.walker.step(self.apply_target)])
+
+        return Step("übernehmen", act)
 
     def input_steps(self, inputs: Mapping[str, Any]) -> list[Step]:
         """Je Feld: hinklicken, alles markieren, tippen; ohne Mitschreiben mit Tab bestätigen.
 
         Ein Haken wird geklickt; ein Text, der keine Zahl ist, ist eine Wahl
-        (``decision``, E3) — getippt wie jede Eingabe.
+        (``decision``, E3) — getippt wie jede Eingabe. Welches Feld es ist,
+        entscheidet sich erst, wenn es dran ist: im Merkmalfenster oder in der
+        Maßgruppe im Bild (``function_surface.field_name``).
         """
 
         steps: list[Step] = []
         for target, value in inputs.items():
+            if not isinstance(value, bool):
+                number = isinstance(value, (int, float))
+                text = typed_number(float(value), self.variant.unit) if number else str(value)
+                steps.append(
+                    Step(
+                        f"feld {target}",
+                        lambda machine, target=target, text=text, number=number: machine.insert(
+                            self.typed_steps(surfaces.field_name(self.window, target), text, number)
+                        ),
+                    )
+                )
+                continue
             steps.append(self.walker.step(target))
             if isinstance(value, bool):
                 steps.append(
@@ -647,20 +672,19 @@ class FunctionFlow:
                         settle_ms=SETTLE_MS,
                     )
                 )
-                continue
-            number = isinstance(value, (int, float))
-            text = typed_number(float(value), self.variant.unit) if number else str(value)
-            steps.append(self.mark_all_step(target))
-            steps.append(
-                Step(
-                    f"tippen {target}",
-                    lambda machine, target=target, text=text, number=number: self._type(
-                        target, text, decision=not number
-                    ),
-                    settle_ms=SETTLE_MS,
-                )
-            )
         return steps
+
+    def typed_steps(self, target: str, text: str, number: bool) -> list[Step]:
+        """Hinklicken, alles markieren, tippen — in das Feld, das jetzt dasteht."""
+        return [
+            self.walker.step(target),
+            self.mark_all_step(target),
+            Step(
+                f"tippen {target}",
+                lambda machine: self._type(target, text, decision=not number),
+                settle_ms=SETTLE_MS,
+            ),
+        ]
 
     def _tick_box(self, machine: StepMachine, target: str, value: bool) -> None:
         """Der Weg hat den Haken einmal geklickt; steht er falsch, kommt ein zweiter Klick."""
@@ -710,8 +734,12 @@ class FunctionFlow:
 
         Steht: das Band zeigt die Legende einer neuen Differenz. Abgesagt: der
         Übernehmen-Knopf ist gesperrt und nennt seinen Grund (Tooltip und
-        zugängliche Beschreibung). Beides sieht der Kunde.
+        zugängliche Beschreibung). Beides sieht der Kunde. Eine Zeile ohne
+        Vorschau — ein Fensterbefehl mit eigenem Dialog wie *Parameter anlegen* —
+        wartet nur auf Ruhe; vorher wartete sie 180 s auf ein Band, das nie kam.
         """
+        if not self.expects_preview():
+            return [self.wait_step("ruhe", self.idle)]
         shown = {"difference": self.window.viewport.difference}
 
         def remember(machine: StepMachine) -> None:
@@ -736,6 +764,11 @@ class FunctionFlow:
             return not self.apply_target and self.idle()
 
         return [Step("vorschau merken", remember), self.wait_step("vorschau steht", settled)]
+
+    def expects_preview(self) -> bool:
+        """Ob die Zeile eine Vorschau zeigt: eine Operation, eine Handlung des Merkmalfensters."""
+        target = walk_target(self.row)
+        return self.row.get("kind") == "operation" or target.startswith(("feature:", "edge:"))
 
     def preview_record(self) -> dict[str, Any]:
         """Band, Differenz und Kennzahlen der Vorschau (Prüfpunkt 3, I2; Schema ``preview``)."""
@@ -816,14 +849,17 @@ class FunctionFlow:
         if not probes:
             unmeasured(self.data, "search", "Spezifikation ohne Suchproben")
             return
-        target = str(self.row.get("target") or "")
         found: dict[str, Any] = {}
         for probe in probes:
             word = str(probe["word"])
             hits: list[str] = []
+            # Gleichwertige Treffer zählen (F-27): die Operation einer
+            # Befundhandlung, der Befehl hinter einer Menüzeile.
+            meant: set[str] = set()
 
-            def read(machine: StepMachine, hits: list[str] = hits) -> None:
+            def read(machine: StepMachine, hits: list[str] = hits, meant: set[str] = meant) -> None:
                 hits[:] = list(guide_targets.search_hits(self.window))  # type: ignore[attr-defined]
+                meant.update(surfaces.search_names(self.window, self.row))
 
             ok = self.run_steps(
                 f"suche {word}",
@@ -840,7 +876,7 @@ class FunctionFlow:
                 ],
             )
             found[word] = {
-                "rank": search_rank(hits, target) if ok else None,
+                "rank": surfaces.search_rank(hits, frozenset(meant)) if ok else None,
                 "hits": hits[:10],
                 "origin": probe.get("origin"),
                 "question": bool(probe["question"]),
@@ -879,7 +915,7 @@ class FunctionFlow:
         self.picture("01-vorher")
         # Fokus vor dem Öffnen der Fläche: unmittelbar vor dem Klick auf das Ziel
         # (Review S4), nicht vor dem ganzen Weg.
-        focus: dict[str, Any] = {"before": None, "taken": False}
+        focus: dict[str, Any] = {"before": None, "taken": False, "dialog": False}
 
         def remember_focus(name: str) -> None:
             if name == target and not focus["taken"]:
@@ -887,7 +923,9 @@ class FunctionFlow:
 
         def take_surface(machine: StepMachine) -> None:
             root = self.surface()
-            self.watch.own.add(type(root).__name__)
+            # Zurückkehren kann der Fokus nur aus einem Dialog (F-29).
+            focus["dialog"] = surfaces.open_dialog(self.window) is not None
+            self.claim_surface(root)
             self.capture_surface(root)
             self.data["messages"] = capture.message_entries(self.window)
             apply_button = self.widget(self.apply_target) if self.apply_target else None
@@ -923,12 +961,22 @@ class FunctionFlow:
         acting: Step | None = None
         direct = self.apply_target is None and not inputs and bool(route)
         if self.apply_target is not None:
-            acting = self.walker.step(self.apply_target)
+            acting = self.apply_step()
         elif direct:
             route, acting = route[:-1], route[-1]
+
+        def before_apply(machine: StepMachine) -> None:
+            self.data["spot"] = self.spot()
+            if inputs and self.expects_preview():
+                self.data["preview"] = self.preview_record()
+                self.snapshot("preview")
+            elif inputs:
+                unmeasured(self.data, "preview", "die Zeile zeigt keine Vorschau")
+
+        applying, finish = self.apply_steps(acting)
         self.walker.before_target = remember_focus
         try:
-            walked = self.run_steps(
+            self.run_steps(
                 PATH_PHASE,
                 [
                     *route,
@@ -936,23 +984,21 @@ class FunctionFlow:
                     *(self.preview_steps() if inputs else [self.wait_step("ruhe", self.idle)]),
                     self.still_step("fläche steht still", self.surface),
                     Step("fläche aufnehmen", take_surface),
+                    Step("vor dem übernehmen", before_apply),
+                    *applying,
                 ],
             )
-            reached = walked if direct else place_of(self.data["steps"], target)["error"] is None
-            if reached:
-                self.data["spot"] = self.spot()
-                if inputs:
-                    self.data["preview"] = self.preview_record()
-                    self.snapshot("preview")
-                self.apply_and_measure(acting)
+            finish()
         finally:
             self.walker.before_target = None
         self.data["place"] = place_of(self.data["steps"], target)
-        if not reached or self.data["place"]["error"] is not None:
+        if self.data["place"]["error"] is not None:
             unmeasured(self.data, "result", "der Hauptweg kam nicht an")
             return
         after = QApplication.focusWidget()
-        if focus["before"] is None or after is None:
+        if not focus["dialog"]:
+            unmeasured(self.data, "focus_return", WITHOUT_DIALOG)
+        elif focus["before"] is None or after is None:
             unmeasured(
                 self.data,
                 "focus_return",
@@ -983,7 +1029,6 @@ class FunctionFlow:
     def effect_steps(
         self,
         label: str,
-        previous: Any,
         observe: Callable[[], None] | None = None,
         timeout_s: float = STEP_TIMEOUT_S,
     ) -> tuple[list[Step], dict[str, Any]]:
@@ -995,39 +1040,61 @@ class FunctionFlow:
         ruht und ein neues Ergebnis trägt (``settled``, ``done`` die Uhrzeit).
         Läuft dessen Frist ab, bleibt ``settled`` falsch; der Aufrufer schreibt
         den Grund ins Protokoll (Probelauf, Befund B: vorher stand die Frist nur
-        als Fehler da). ``observe`` läuft in jedem Takt mit.
+        als Fehler da). ``observe`` läuft in jedem Takt mit. „Neu“ heißt: anders
+        als das Ergebnis, das stand, als die Schritte begannen — nicht als beim
+        Bauen der Schritte (Weg und Übernehmen laufen in einem Automaten).
         """
-        state: dict[str, Any] = {"effect": False, "settled": False, "done": None}
+        state: dict[str, Any] = {"effect": False, "settled": False, "done": None, "was": None}
+
+        def remember(machine: StepMachine) -> None:
+            state["was"] = self.session.last_result
 
         def started() -> bool:
             if observe is not None:
                 observe()
-            return bool(self.session.busy or self.session.last_result is not previous)
+            return bool(self.session.busy or self.session.last_result is not state["was"])
 
         def landed() -> bool:
             if observe is not None:
                 observe()
-            if self.idle() and self.session.last_result is not previous:
+            if self.idle() and self.session.last_result is not state["was"]:
                 state["settled"], state["done"] = True, time.perf_counter()
             return bool(state["settled"])
+
+        def silent() -> BenchFinding:
+            # Eine Frist ohne fertiges Ergebnis ist ein Fund an Prüfpunkt 6
+            # (Entscheidung Koordinator), kein Fehler des Prüfstands.
+            return BenchFinding(
+                NO_RESPONSE, label, f"nach {timeout_s:.0f} s kein fertiges Ergebnis"
+            )
 
         def follow(machine: StepMachine) -> None:
             state["effect"] = started()
             if state["effect"]:
-                machine.insert([self.wait_step(f"{label} steht", landed, timeout_s=timeout_s)])
+                waiting = self.wait_step(f"{label} steht", landed, timeout_s=timeout_s)
+                waiting.on_timeout = silent
+                machine.insert([waiting])
 
-        steps = [self.until_step(f"{label} wirkt", started), Step(f"{label} prüfen", follow)]
+        steps = [
+            Step(f"{label} merken", remember),
+            self.until_step(f"{label} wirkt", started),
+            Step(f"{label} prüfen", follow),
+        ]
         return steps, state
 
-    def apply_and_measure(self, acting: Step | None) -> None:
+    def apply_steps(self, acting: Step | None) -> tuple[list[Step], Callable[[], None]]:
         """Übernehmen mit Herzschlag und Zeiten (Prüfpunkt 6), dann Ergebnis und Kommandozeile.
 
         ``acting`` ist der Klick, der übernimmt: der Übernehmen-Knopf, oder bei
-        einer Zeile, deren Ziel selbst wirkt, der Klick auf das Ziel.
+        einer Zeile, deren Ziel selbst wirkt, der Klick auf das Ziel. Die
+        Schritte laufen im selben Automaten wie der Weg: Ein modaler Dialog, den
+        der Weg öffnete, schlösse ein Ende des Automaten mit Escape, und
+        *Anlegen* fände ihn nicht mehr (Probelauf F-25). Der Abschluss danach
+        schreibt Zeiten, Abdruck, Ergebnis und Kommandozeile.
         """
         from PySide6.QtWidgets import QApplication, QProgressBar
 
-        previous = self.session.last_result
+        previous: dict[str, Any] = {"result": None}
         timing: dict[str, Any] = {
             "total_s": None,
             "first_feedback_s": None,
@@ -1040,6 +1107,8 @@ class FunctionFlow:
         moment = {"t0": 0.0}
 
         def start(machine: StepMachine) -> None:
+            self.walker.phase = APPLY_PHASE
+            previous["result"] = self.session.last_result
             moment["t0"] = time.perf_counter()
             self.heartbeat.open(moment["t0"])
 
@@ -1049,7 +1118,7 @@ class FunctionFlow:
                 QApplication.overrideCursor() is not None
                 or self.session.busy
                 or self.window.statusBar().currentMessage() != status_before
-                or self.session.last_result is not previous
+                or self.session.last_result is not previous["result"]
             ):
                 timing["first_feedback_s"] = elapsed
             if timing["progress_shown_s"] is None and any(
@@ -1060,11 +1129,21 @@ class FunctionFlow:
             if timing["cancel_shown_s"] is None and cancel is not None and cancel.isVisible():
                 timing["cancel_shown_s"] = elapsed
 
-        effect, state = self.effect_steps("ergebnis", previous, observe)
-        self.run_steps(APPLY_PHASE, [Step("uhr", start), *([acting] if acting else []), *effect])
+        effect, state = self.effect_steps("ergebnis", observe)
+        steps = [Step("uhr", start), effect[0], *([acting] if acting else []), *effect[1:]]
+
+        def finish() -> None:
+            if not moment["t0"]:
+                return
+            self.measured_apply(timing, state, moment["t0"])
+
+        return steps, finish
+
+    def measured_apply(self, timing: dict[str, Any], state: Mapping[str, Any], t0: float) -> None:
+        """Nach dem Übernehmen ins Protokoll: Zeiten, Abdruck, Ergebnis, Kommandozeile."""
         timing["main_gap_ms"] = self.heartbeat.close(time.perf_counter())
         if state["settled"]:
-            timing["total_s"] = round(state["done"] - moment["t0"], 3)
+            timing["total_s"] = round(state["done"] - t0, 3)
         elif not state["effect"]:
             unmeasured(
                 self.data,
@@ -1101,8 +1180,8 @@ class FunctionFlow:
             # Wirkt die Taste nicht, ist das die Messung — der Abdruck sagt es
             # (Prüfpunkt 5), und gewartet wird nicht. Rechnet sie und wird nicht
             # fertig, steht der Grund im Protokoll.
-            effect, state = self.effect_steps(label, self.session.last_result, timeout_s=60.0)
-            self.run_steps(label, [self.key_step(keys, label), *effect])
+            effect, state = self.effect_steps(label, timeout_s=60.0)
+            self.run_steps(label, [effect[0], self.key_step(keys, label), *effect[1:]])
             if state["effect"] and not state["settled"]:
                 unmeasured(
                     self.data,
@@ -1186,15 +1265,22 @@ class FunctionFlow:
 
         Je Weg öffnet der Klick den übernommenen Schritt; Felder und Parameter
         stehen nebeneinander, dann eine neue Zahl ins erste Zahlenfeld des
-        Schritts, Übernehmen, und die Verlaufslänge danach.
+        Schritts, Übernehmen, und die Verlaufslänge danach. Gemessen wird nur,
+        wenn die Zeile einen Schritt anlegt, und „geöffnet“ heißt: sein Dialog
+        steht offen — nicht die Karte der Auswahl, die immer da ist (F-23). Ein
+        Schritt ohne Wert hat keinen Dialog (:data:`STEP_WITHOUT_VALUES`).
         """
         from app.core.scene.serialise import operation_to_data
         from tools import function_capture as capture
         from tools.file_acceptance import changed_value
 
-        applied = self.data["states"].get("redo") or self.data["states"].get("applied")
+        states = self.data["states"]
+        applied = states.get("redo") or states.get("applied")
         if not applied or not applied.get("ops"):
             unmeasured(self.data, "revise", "kein übernommener Schritt")
+            return
+        if len(applied["ops"]) <= len((states.get("before") or {}).get("ops") or ()):
+            unmeasured(self.data, "revise", "die Zeile legt keinen Schritt im Verlauf an")
             return
         number = len(applied["ops"])
         entries: list[dict[str, Any]] = []
@@ -1206,7 +1292,7 @@ class FunctionFlow:
             self.run_steps(
                 f"übernehmen für {way}",
                 [*self.path_steps(), *self.input_steps(self.spec.get("inputs") or {})]
-                + ([self.walker.step(self.apply_target)] if self.apply_target else [])
+                + ([self.apply_step()] if self.apply_target else [])
                 + [self.wait_step("übernommen", self.idle)],
             )
             document = self.session.project.document
@@ -1223,6 +1309,10 @@ class FunctionFlow:
                 )
                 continue
             params = dict(operation_to_data(document.ops[-1]).get("params") or {})
+            if not params:
+                self.data["revise"] = []
+                unmeasured(self.data, "revise", STEP_WITHOUT_VALUES)
+                return
             record: dict[str, Any] = {
                 "way": way,
                 "opened": False,
@@ -1233,17 +1323,22 @@ class FunctionFlow:
             }
 
             def read(machine: StepMachine, record: dict[str, Any] = record) -> None:
-                root = self.surface()
-                record["opened"] = root is not self.window
-                record["fields"] = capture.field_values(root)
+                dialog = surfaces.open_dialog(self.window)
+                record["opened"] = dialog is not None
+                record["fields"] = capture.field_values(dialog) if dialog is not None else {}
+
+            def dialog_or_window() -> Any:
+                return surfaces.open_dialog(self.window) or self.window
 
             self.run_steps(
                 f"nachträglich {way}",
                 [
                     *(self.walker.step(name, button) for name, button in route),
                     # Erst geöffnet und still, dann lesen (Review M1).
-                    self.until_step("geöffnet", lambda: self.surface() is not self.window),
-                    self.still_step("fläche steht still", self.surface),
+                    self.until_step(
+                        "geöffnet", lambda: surfaces.open_dialog(self.window) is not None
+                    ),
+                    self.still_step("fläche steht still", dialog_or_window),
                     Step("felder lesen", read),
                 ],
             )
@@ -1282,20 +1377,92 @@ class FunctionFlow:
         if not fault:
             unmeasured(self.data, "messages", "Spezifikation ohne Fehlfall")
             return
+        if not self.fault_scene(str(fault.get("start_scene") or "")):
+            return
         messages: list[dict[str, Any]] = []
+        shown: dict[str, set[str]] = {"before": set()}
+
+        def in_dialog() -> list[dict[str, Any]]:
+            # Ein Dialog sagt ab, wo er steht (``ParameterDialog.problem``): neu
+            # sichtbarer Text nach dem Hauptknopf ist seine Meldung (F-24). Eine
+            # Meldung im Hausstil liest ``message_entries`` samt Handlungen.
+            dialog = surfaces.open_dialog(self.window)
+            new = (
+                [t for t in capture.visible_texts(dialog) if t not in shown["before"]]
+                if dialog is not None and "MessageDialog" not in surfaces.classes_of(dialog)
+                else []
+            )
+            return [{"text": " ".join(new), "actions": []}] if new else []
+
+        def remember(machine: StepMachine) -> None:
+            dialog = surfaces.open_dialog(self.window)
+            shown["before"] = set(capture.visible_texts(dialog)) if dialog is not None else set()
 
         def read(machine: StepMachine) -> None:
-            messages.extend(capture.message_entries(self.window))
+            messages.extend([*capture.message_entries(self.window), *in_dialog()])
+
+        computed = {"seen": False}
+
+        def busy() -> bool:
+            computed["seen"] = computed["seen"] or surfaces.computing(self.window)
+            return computed["seen"]
+
+        def start(machine: StepMachine) -> None:
+            if not computed["seen"] and surfaces.open_dialog(self.window) is not None:
+                machine.insert(
+                    [self.walker.step("dialog.accept"), self.until_step("rechnet", busy, 10.0)]
+                )
+
+        def seen_busy(machine: StepMachine) -> None:
+            if not computed["seen"]:
+                # Ohne sichtbare Rechnung ist „während der Rechnung“ nicht hergestellt
+                # — Prüfpunkt 7 heißt dann nicht gelaufen, nicht „keine Meldung“.
+                raise RuntimeError("keine sichtbare Rechnung nach den Eingaben des Fehlfalls")
 
         inputs = fault.get("inputs") or {}
-        self.run_steps(
-            "fehlfall",
-            [
-                *self.path_steps(),
+        own = [
+            self.walker.step(
+                name,
+                with_modifier(str(entry.get("button") or "left"), str(entry.get("modifier") or "")),
+            )
+            for entry in fault.get("route") or ()
+            if (name := str(entry["target"]))
+        ]
+        if fault.get("during") == "rechnung":
+            # Weg und Eingaben stoßen eine Rechnung an; während sie läuft, klickt
+            # der Kunde die Handlung der Zeile (F-34: vorher fuhr der Prüfstand
+            # Weg und Startszene des Fehlfalls gar nicht).
+            steps = [
+                *own,
                 *self.input_steps(inputs),
-                *(self.preview_steps() if inputs else []),
+                Step("dialog merken", remember),
+                # Was der Kunde von der Rechnung sieht: Sitzung, Zeiger, Balken,
+                # *Abbrechen* oder das Vorschauband (function_surface.computing).
+                # Rechnet die Eingabe nur eine Schätzung, stößt der Hauptknopf des
+                # offenen Dialogs die Rechnung an.
+                self.until_step("rechnet", busy),
+                Step("anstoßen", start),
+                Step("rechnung gesehen", seen_busy),
+                *self.path_steps(),
+            ]
+        else:
+            steps = [
+                *(own or self.path_steps()),
+                *self.input_steps(inputs),
+                Step("dialog merken", remember),
+            ]
+            if self.apply_target is not None and inputs:
+                steps.append(self.apply_step())
+            elif inputs:
+                steps += self.preview_steps()
+        self.run_steps(
+            FAULT_PHASE,
+            [
+                *steps,
                 # Die Meldung kommt nach der Absage — erst sie, dann lesen (Review M1).
-                self.until_step("meldung", lambda: bool(capture.message_entries(self.window))),
+                self.until_step(
+                    "meldung", lambda: bool(capture.message_entries(self.window) or in_dialog())
+                ),
                 Step("meldung lesen", read),
             ],
         )
@@ -1323,7 +1490,7 @@ class FunctionFlow:
             action["effect"] = (
                 compare_prints(before, after)["same"] is False
                 or len(self.watch.modals) > modal_before
-                or self.surface() is not self.window
+                or surfaces.open_dialog(self.window) is not None
             )
         self.data["messages"] = [*(self.data.get("messages") or []), *messages]
 
@@ -1391,28 +1558,28 @@ class FunctionFlow:
             self.ports.next_click(target)
         except LookupError as error:
             return {"state": "fehlt", "reason": str(error), "effective": None}
-        widget = self.widget(target)
-        if widget is not None and not widget.isEnabled():
-            return {
-                "state": "grau",
-                "reason": widget.accessibleDescription() or widget.toolTip(),
-                "effective": None,
-            }
+        grey = surfaces.grey_reason(self.window, target)
+        if grey is not None:
+            return {"state": "grau", "reason": grey, "effective": None}
         before = self.scene_now()
         result_before = self.session.last_result
         difference = self.window.viewport.difference
+        shown = surface_signature(self.surface())
         opened: dict[str, bool] = {}
 
         def effects() -> dict[str, bool]:
             return {
                 "modal": capture.modal_now() is not None,
-                "surface": self.surface() is not self.window,
+                "dialog": surfaces.open_dialog(self.window) is not None,
+                # Was der Kunde an seiner Fläche sieht: Felder klappen auf (F-23).
+                "surface": surface_signature(self.surface()) != shown,
                 "preview": self.window.viewport.difference is not difference,
                 "result": self.session.last_result is not result_before,
             }
 
         def look(machine: StepMachine) -> None:
             opened.update(effects())
+            self.mark_own(machine)
 
         # Erst warten, bis eine Wirkung da ist oder die Frist um ist, dann lesen
         # (Review M1): Vorschau und Ergebnis kommen später als ein Klick.
@@ -1429,6 +1596,18 @@ class FunctionFlow:
         after = self.scene_now()
         effective = any(opened.values()) or compare_prints(before, after)["same"] is False
         return {"state": "angeboten", "reason": "", "effective": effective}
+
+    def mark_own(self, machine: StepMachine) -> None:
+        """Der offene Dialog der Zeile ist ihre Fläche, keine fremde Nachfrage (F-26)."""
+        dialog = surfaces.open_dialog(self.window)
+        if dialog is not None:
+            self.claim_surface(dialog)
+
+    def claim_surface(self, root: Any) -> None:
+        """Die Fläche der Zeile zählt nicht als fremdes Fenster — eine Meldung oder Frage
+        schon, außer die Zeile ist sie selbst (``function_surface.own_surface``)."""
+        if surfaces.own_surface(self.row, root):
+            self.watch.own.add(type(root).__name__)
 
     def phase_abort(self) -> None:
         """Prüfpunkt 14: *Abbrechen* während der Rechnung, danach der Stand von vorher."""
@@ -1451,7 +1630,7 @@ class FunctionFlow:
 
         steps = [*self.path_steps(), *self.input_steps(inputs), Step("uhr", start)]
         if self.apply_target:
-            steps.append(self.walker.step(self.apply_target))
+            steps.append(self.apply_step())
         steps += [
             self.wait_step("abbrechen sichtbar", cancel_visible, timeout_s=30.0),
             self.walker.step("progress.cancel"),
@@ -1514,7 +1693,7 @@ class FunctionFlow:
                 self.walker.step("menu:history.insert"),
                 *self.path_steps(),
                 *self.input_steps(self.spec.get("inputs") or {}),
-                *([self.walker.step(self.apply_target)] if self.apply_target else []),
+                *([self.apply_step()] if self.apply_target else []),
                 Step("antwort", lambda machine: None, ready=answered),
                 Step("antwort lesen", read),
             ],
@@ -1554,316 +1733,77 @@ class FunctionFlow:
                 return
         unmeasured(self.data, "halt", "der Prüfbericht nennt keinen Befund am angehaltenen Schritt")
 
-    def recent_number(self, stem: str) -> int | None:
-        """Die Stelle eines Projekts unter „Zuletzt geöffnet“ (ab 1), abgelesen an der Liste."""
-        listing = self.window.start_screen.recent_list
-        for row in range(listing.count()):
-            item = listing.item(row)
-            if item is not None and stem in f"{item.text()} {item.toolTip()}":
-                return row + 1
-        return None
-
-    def phase_switch(self) -> None:
-        """Prüfpunkt 16: Projektwechsel während Vorschau, Entwurf und Rechnung (Konzept §4).
-
-        Der Weg des Kunden: *Datei → Neu* führt zum Startbildschirm, dort steht
-        „Zuletzt geöffnet“ (``start.recent:<n>``); die Stelle des zweiten Projekts
-        wird an der Liste abgelesen, wenn sie dasteht. Eine Speicherfrage
-        beantwortet der Prüfstand mit *Verwerfen* (:meth:`answer_discard`). Je
-        Lage (``function_checks.SWITCH_PHASES``):
-
-        * ``vorschau`` — Eingaben getippt, die Vorschau steht;
-        * ``entwurf`` — Eingaben getippt, gewechselt wird sofort, ohne auf die
-          Vorschau zu warten;
-        * ``rechnung`` — *Übernehmen* geklickt, gewechselt wird, während die
-          Sitzung rechnet. War die Rechnung beim ersten Wechselklick schon vorbei,
-          ist diese Lage nicht gemessen.
-
-        Spät heißt: Nach dem Wechsel, wenn das neue Projekt steht, kommt binnen
-        :data:`LATE_WINDOW_S` noch ein Fenster, eine neue Meldung oder eine
-        Änderung am Abdruck des neuen Projekts.
-        """
-        from tools.function_checks import SWITCH_PHASES
-
-        inputs = self.spec.get("inputs") or {}
-        if self.scene_path(SECOND_SCENE) is None:
-            unmeasured(self.data, "switch", f"Szene {SECOND_SCENE} fehlt")
-            return
-        new_line = self.new_project_line()
-        if not new_line:
-            unmeasured(self.data, "switch", "Datei → Neu trägt keinen Namen im Wortschatz")
-            return
-        measured: list[str] = []
-        late: list[dict[str, Any]] = []
-        notes: list[str] = []
-        for number, situation in enumerate(SWITCH_PHASES):
-            if number and not self.reset():
-                notes.append(f"{situation}: Startszene nicht herstellbar")
-                continue
-            if situation in ("vorschau", "entwurf") and not inputs:
-                notes.append(f"{situation}: keine Eingaben, kein {situation}")
-                continue
-            outcome = self.switch_once(situation, inputs, new_line)
-            if isinstance(outcome, str):
-                notes.append(f"{situation}: {outcome}")
-                continue
-            measured.append(situation)
-            late += outcome
-            if situation == SWITCH_PHASES[0]:
-                self.snapshot("after_switch")
-        if notes:
-            unmeasured(self.data, "switch", "; ".join(notes))
-        if measured:
-            self.data["switch"] = {"phases": measured, "late_events": late}
-
-    def switch_once(
-        self, situation: str, inputs: Mapping[str, Any], new_line: str
-    ) -> list[dict[str, Any]] | str:
-        """Ein Wechsel in einer Lage: die späten Ereignisse, oder warum er nicht gemessen ist."""
-        from tools import function_capture as capture
-
-        project = self.session.project
-        computing: dict[str, bool | None] = {"busy": None}
-
-        def to_the_recent(machine: StepMachine) -> None:
-            number = self.recent_number(SECOND_SCENE)
-            if number is None:
-                raise BenchFinding(
-                    NOT_FOUND,
-                    f"{RECENT_KIND}:?",
-                    f"{SECOND_SCENE} steht nicht unter „Zuletzt geöffnet“",
-                )
-            machine.insert([self.walker.step(f"{RECENT_KIND}:{number}")])
-
-        def note_busy(machine: StepMachine) -> None:
-            computing["busy"] = bool(self.session.busy)
-
-        steps = [*self.path_steps(), *self.input_steps(inputs)]
-        if situation == "vorschau":
-            steps += self.preview_steps()
-        elif situation == "rechnung":
-            if inputs:
-                steps += self.preview_steps()
-            if self.apply_target:
-                steps.append(self.walker.step(self.apply_target))
-            steps.append(Step("rechnet sie?", note_busy))
-        # Die Speicherfrage kann vor dem Startbildschirm kommen (*Datei → Neu*)
-        # oder erst beim Öffnen aus „Zuletzt geöffnet“ — beide Stellen bekommen
-        # einen Schritt, der sie beantwortet, wenn sie dasteht.
-        steps += [
-            self.walker.step(f"menu:{new_line}"),
-            Step(
-                "rückfrage vor dem neuen",
-                self.answer_discard,
-                ready=lambda: capture.modal_now() is not None or self.on_start_screen(),
-            ),
-            self.wait_step("startbildschirm", self.on_start_screen),
-            Step("liste lesen", to_the_recent, settle_ms=SETTLE_MS),
-            Step(
-                "rückfrage beim öffnen",
-                self.answer_discard,
-                ready=lambda: (
-                    capture.modal_now() is not None or self.session.project is not project
-                ),
-            ),
-            self.wait_step(
-                "anderes projekt", lambda: self.session.project is not project and self.idle()
-            ),
-        ]
-        if not self.run_steps(f"wechsel {situation}", steps):
-            return "der Wechsel kam nicht an"
-        if situation == "rechnung" and not computing["busy"]:
-            # Rechnet die Operation schneller als der Weg zum ersten Wechselklick,
-            # gibt es keine Rechnung, in die gewechselt würde — nicht gemessen.
-            return "die Rechnung war vor dem ersten Wechselklick fertig"
-        self.watch.poll()
-        modals_before = len(self.watch.modals)
-        print_before = self.scene_now()
-        texts_before = {entry["text"] for entry in capture.message_entries(self.window)}
-        # Das Spätfenster läuft im Automaten: Ein spätes Fenster bleibt so nicht
-        # in einer Schleife ohne Takt hängen, es wird notiert und mit Escape geschlossen.
-        self.run_steps(
-            f"spät {situation}",
-            [self.until_step("spätfenster", lambda: False, at_most_s=LATE_WINDOW_S)],
-        )
-        self.watch.poll()
-        events = [
-            {"kind": "fenster", "text": entry["title"], "phase": situation}
-            for entry in self.watch.modals[modals_before:]
-        ]
-        events += [
-            {"kind": "meldung", "text": entry["text"], "phase": situation}
-            for entry in capture.message_entries(self.window)
-            if entry["text"] and entry["text"] not in texts_before
-        ]
-        changed = compare_prints(print_before, self.scene_now())
-        if changed["same"] is False:
-            events.append(
-                {
-                    "kind": "abdruck",
-                    "text": f"das neue Projekt änderte sich danach: {changed['differs']}",
-                    "phase": situation,
-                }
-            )
-        return events
-
-    def on_start_screen(self) -> bool:
-        return bool(self.window.stack.currentWidget() is self.window.start_screen)
-
-    def answer_discard(self, machine: StepMachine) -> None:
-        """Steht die Speicherfrage, klickt der Prüfstand *Verwerfen* — wie der Kunde, der wechselt.
-
-        Die Frage (``confirm_unsaved``, ``confirm_discard``) trägt keinen
-        Wortschatznamen (Lücke für W); geklickt wird der Knopf mit der Rolle
-        „verwerfen“, mit Probe (:func:`click_button`).
-        """
-        from PySide6.QtWidgets import QApplication, QMessageBox
-
-        box = QApplication.activeModalWidget()
-        if not isinstance(box, QMessageBox):
-            return
-        discard = next(
-            (
-                button
-                for button in box.buttons()
-                if box.buttonRole(button) == QMessageBox.ButtonRole.DestructiveRole
-            ),
-            None,
-        )
-        if discard is None:
-            raise RuntimeError(f"Rückfrage „{box.windowTitle()}“ ohne Knopf zum Verwerfen")
-        if not click_button(self.ports, self.walker, discard, "Verwerfen"):
-            raise BenchFinding(COVERED, "Verwerfen", "der Knopf liegt unter etwas anderem")
-
-    def phase_hover(self) -> None:
-        """I1: Name und Maß beim Überfahren je erkannter Art (``view:``), ohne Klick (Review S3).
-
-        Die Ansicht sucht das Merkmal unter dem Zeiger erst nach
-        ``viewport.HOVER_DELAY_MS`` und nur mit Renderer; Name und Maß stehen dann
-        in ihrem Tooltip (``Viewport._refresh_feature_hint``) — keine Beschriftung
-        als ``QLabel``. Gelesen wird also der Tooltip der Ansicht, und erst, wenn
-        er steht oder :data:`HOVER_READ_S` nach der Frist der Ansicht vergangen
-        ist. Ohne Renderer gibt es nichts zu überfahren: ungemessen statt leer.
-        """
-        from app.ui.viewport import HOVER_DELAY_MS
-
-        result = self.session.last_result
-        if result is None or not any(entry.features for entry in result.scene.objects.values()):
-            unmeasured(self.data, "hover_labels", "die Startszene trägt kein Merkmal")
-            return
-        view = self.window.viewport
-        if getattr(view, "renderer", None) is None:
-            unmeasured(self.data, "hover_labels", "kein Renderer — die Ansicht sucht nichts")
-            return
-        labels: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for key, entry in result.scene.objects.items():
-            for name, feature in entry.features.items():
-                if feature.kind in seen:
-                    continue
-                seen.add(feature.kind)
-                target = f"view:{key}.{name}"
-                texts: list[str] = []
-
-                def hover(target: str = target) -> None:
-                    click = self.ports.next_click(target)
-                    self.ports.move(self.ports.centre(click.rect))
-
-                self.run_steps(
-                    f"überfahren {target}",
-                    [
-                        Step("weg vom bild", lambda machine: self.ports.move(self.away_point())),
-                        self.until_step("ohne hinweis", lambda: not view.toolTip()),
-                        *hover_steps(
-                            hover, view.toolTip, texts, time.perf_counter, HOVER_DELAY_MS / 1000
-                        ),
-                    ],
-                )
-                labels.append({"kind": feature.kind, "label": " ".join(texts)})
-        self.data["hover_labels"] = labels
-
-    def away_point(self) -> Any:
-        """Eine Stelle außerhalb der Ansicht, damit ein neuer Hinweis neu entsteht."""
-        from PySide6.QtCore import QPoint
-
-        return self.window.mapToGlobal(QPoint(2, 2))
-
-    def phase_drag(self) -> None:
-        """Z1: ein Zug am Griff der Zeile, je Bewegung die rohe Zeit bis zum nächsten Bild."""
-        from PySide6.QtCore import QPoint, Qt
-        from PySide6.QtTest import QTest
-
-        target = walk_target(self.row)
-        if not target.startswith("handle:") and "Z1" not in (self.spec.get("criteria") or ()):
-            unmeasured(self.data, "frames.raw_drag_ms", "kein Griff an dieser Zeile")
-            return
-        if not self.frames_wrapped:
-            unmeasured(self.data, "frames.raw_drag_ms", "kein Renderer, kein Bildzähler")
-            return
-        moves: list[float] = []
-        gripped = {"signals": 0}
-
-        def noticed(*_values: object) -> None:
-            gripped["signals"] += 1
-
-        # Gefasst ist der Griff, wenn die Ansicht während des Zugs einen ihrer
-        # Zugwerte meldet — Geist, Zahl am Zeiger, verschobener Körper (Review L11).
-        listened = [
-            getattr(self.window.viewport, name)
-            for name in DRAG_SIGNALS
-            if hasattr(self.window.viewport, name)
-        ]
-        for signal in listened:
-            signal.connect(noticed)
-
-        def pull(machine: StepMachine) -> None:
-            click = self.ports.next_click(target)
-            point = self.ports.centre(click.rect)
-            hit = self.ports.widget_under(point)
-            if hit is None or not self.ports.covers(click, hit):
-                raise BenchFinding(COVERED, target, "der Griff liegt unter etwas anderem")
-            local = hit.mapFromGlobal(point)
-            QTest.mousePress(hit, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, local)
-            for number in range(1, DRAG_MOVES + 1):
-                moves.append(time.perf_counter())
-                QTest.mouseMove(hit, local + QPoint(4 * number, 0))
-                # Im Takt einer Hand an der Maus, nicht so schnell die Schleife kann.
-                until = time.perf_counter() + DRAG_TICK_S
-                while time.perf_counter() < until:
-                    self.application.processEvents()
-            QTest.mouseRelease(
-                hit, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, local
-            )
-
-        try:
-            self.run_steps(
-                "zug", [*self.path_steps()[:-1], Step("ziehen", pull, settle_ms=SETTLE_MS)]
-            )
-        finally:
-            for signal in listened:
-                signal.disconnect(noticed)
-        if not gripped["signals"]:
-            unmeasured(self.data, "frames.raw_drag_ms", "der Zug fasste keinen Griff")
-            return
-        self.data["frames"] = drag_frames(self.frames.latencies(moves), self.reference_factor)
-
     def phase_licence(self) -> None:
-        """Prüfpunkt 18: Wie das Ziel im Lizenzzustand dasteht, und ob Schreiben gesperrt ist."""
+        """Prüfpunkt 18: Wie das Ziel im Lizenzzustand dasteht, und ob Schreiben gesperrt ist.
+
+        Steht das Ziel offen, geht der Kunde den ganzen Weg — Eingaben,
+        Übernehmen —, denn erst dort zeigt sich, ob die Funktion schreibt: Sie
+        ändert das Dokument, oder der Kern lehnt an der Lizenzgrenze ab
+        (``function_surface.licence_refusal``). Vorher klickte der Lauf nur das
+        Ziel, und eine Befundhandlung, deren Absage als Meldungsfenster kam,
+        galt als lesend (Probelauf F-35).
+        """
         target = walk_target(self.row)
+        inputs = list(self.spec.get("inputs") or {})
         before = self.scene_now()
+        refused: list[str] = []
+
+        def note(error: object) -> None:
+            if surfaces.licence_refusal(error):
+                refused.append(type(error).__name__)
+
+        def standing() -> bool:
+            head = self.widget(target)
+            return (head is not None and head.isVisible()) or surfaces.in_view(self.window, inputs)
+
         selection = [
             self.walker.step(name, button) for name, button in route_of(self.row) if name != target
         ]
-        self.run_steps(PATH_PHASE, selection)
-        state = self.offer_state(target, "lizenz")
-        writes = self.row.get("kind") == "operation" or (
-            compare_prints(before, self.scene_now())["same"] is False
+        if target.startswith("feature:"):
+            # Die Handlung am Merkmal steht nach der Auswahl erst im Fenster oder
+            # im Bild — gefragt wird danach, nicht im selben Augenblick (F-20).
+            selection.append(self.until_step("handlung steht", standing))
+        self.session.failed.connect(note)
+        try:
+            self.run_steps(PATH_PHASE, selection)
+            # Mit Bild steht die Handlung in der Maßgruppe; ihr Feld ist dann, was
+            # offen oder grau dasteht, der Kopf im Merkmalfenster ist verborgen
+            # (F-20: vorher „fehlt“ in jedem Lizenzzustand, auch „licensed“).
+            probe = (
+                surfaces.field_name(self.window, inputs[0])
+                if target.startswith("feature:") and surfaces.in_view(self.window, inputs)
+                else target
+            )
+            grey = surfaces.grey_reason(self.window, probe)
+            try:
+                self.ports.next_click(probe)
+                state, reason = ("grau", grey) if grey is not None else ("angeboten", "")
+            except LookupError as error:
+                state, reason = "fehlt", str(error)
+            if state == "angeboten":
+                acting = [
+                    self.action_step(target)
+                    if target.startswith("feature:")
+                    else self.walker.step(target),
+                    Step("eigene fläche", self.mark_own),
+                    *self.input_steps(self.spec.get("inputs") or {}),
+                ]
+                if self.apply_target is not None:
+                    acting.append(self.apply_step())
+                effect, _done = self.effect_steps("lizenz")
+                self.run_steps("lizenz", [effect[0], *acting, *effect[1:]])
+        finally:
+            self.session.failed.disconnect(note)
+        writes = (
+            self.row.get("kind") == "operation"
+            or bool(refused)
+            or compare_prints(before, self.scene_now())["same"] is False
         )
         self.data["licence_runs"] = {
             self.variant.licence: {
                 "writes": writes,
-                "enabled": state["state"] == "angeboten",
-                "reason": state.get("reason", ""),
+                "enabled": state == "angeboten",
+                "reason": reason,
             }
         }
 
@@ -1873,9 +1813,12 @@ class FunctionFlow:
         def take(machine: StepMachine) -> None:
             root = self.surface()
             # Die eigene Fläche der Zeile ist kein fremdes Fenster (Review L13).
-            self.watch.own.add(type(root).__name__)
+            self.claim_surface(root)
             self.capture_surface(root)
-            self.picture(f"flaeche-{self.variant.set}")
+            # Ein Bild je Fläche, im Sprachfall mit Sprache und Zeile (F-31).
+            self.picture(
+                surfaces.picture_label(self.variant, str(self.row.get("id") or ""), "flaeche")
+            )
 
         self.run_steps(
             PATH_PHASE,
