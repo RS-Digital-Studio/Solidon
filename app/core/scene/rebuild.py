@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Sequence, Set
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from itertools import pairwise, product
@@ -2079,6 +2079,11 @@ def _rounded(
     return pending
 
 
+def _explains_a_kind(form: SceneObject, explained: Set[str], kinds: Set[str]) -> bool:
+    """Ob ein Plan wenigstens ein Merkmal einer dieser Arten erklärt."""
+    return any(name in form.features and form.features[name].kind in kinds for name in explained)
+
+
 #: Welcher Anteil der Oberfläche sich selbst durchdringen darf, ohne dass der
 #: Nachbau anhält. Aus CAD exportierte Netze kreuzen sich oft an einer Naht in
 #: vier bis achtzig Dreiecken; am Korpus hielt das 16 Körper an, darunter
@@ -2173,13 +2178,19 @@ def propose(
     recovered_kinds = Counter(
         feature.kind for feature in forms[0].features.values() if feature.kind != "face"
     )
-    if recovered_source is not None and original_kinds - recovered_kinds:
+    lost = set(original_kinds - recovered_kinds)
+    if recovered_source is not None and lost:
         # P4.0 kann einen erkannten Träger wegen seiner Randkurve als Facetten
         # behalten. Der ursprüngliche Fit bleibt ein weiterer Kandidat; nur
         # die unabhängige vollständige Formprüfung darf ihn freigeben.
         forms.append(source)
     plans: list[tuple[list[OperationDraft], set[str], SceneObject]] = []
     for form in forms:
+        # Der Netzweg neben dem P4.0-Körper ist für dessen verlorene Rundformen
+        # da. Ein Plan, der keine davon erklärt, wiederholt den ersten bis auf
+        # das Rauschen der Fits: Am gebogenen Griff einer Kundenmeldung (0.6.0)
+        # standen zwei gleich lautende Quadervorschläge untereinander.
+        repeats = recovered_source is not None and form is source
         # Ein Rundteil allein ist nur ein Vorschlag, wenn es das ganze Teil
         # ist. Neben weiteren Merkmalen fällt es an der Formprüfung immer
         # durch und kostet eine Auswertung: Am Besenhalter aus Roberts Test
@@ -2188,11 +2199,13 @@ def propose(
         if len(rounds) == 1 and (step := _single(rounds[0])) is not None:
             plans.append(([step], {rounds[0].id}, form))
         drafts, explained = _boxed(form, budget.local_mm)
-        plans.append((drafts, explained, form))
+        if not repeats or _explains_a_kind(form, explained, lost):
+            plans.append((drafts, explained, form))
         basis = _oriented_basis(form)
         if basis is not None:
             drafts, explained = _boxed(form, budget.local_mm, basis)
-            plans.append((drafts, explained, form))
+            if not repeats or _explains_a_kind(form, explained, lost):
+                plans.append((drafts, explained, form))
     candidates: list[RebuildCandidate] = []
     failures: list[Finding] = []
 

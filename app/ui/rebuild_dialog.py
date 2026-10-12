@@ -322,7 +322,7 @@ class RebuildDialog(QDialog):
             self.candidates.setVisible(bool(result.candidates))
             if result.accepted:
                 verdict = tr("Wählen Sie einen Vorschlag und vergleichen Sie die Formen.")
-            elif any(item.check.reason in LIMIT_REASONS for item in result.candidates):
+            elif any(self._a_limit_would_help(item) for item in result.candidates):
                 verdict = tr(
                     "Kein Vorschlag besteht Ihre Grenzen. Behalten Sie das ursprüngliche Modell "
                     "oder ändern Sie die Grenzen bewusst."
@@ -357,6 +357,24 @@ class RebuildDialog(QDialog):
             self.status.setText(tr("Vergleichen Sie den Nachbau mit dem ursprünglichen Modell."))
             self._preview()
         self._update_ready()
+
+    def _a_limit_would_help(self, candidate: RebuildCandidate) -> bool:
+        """Ob eine Grenze, die dieses Fenster annimmt, den Vorschlag bestehen ließe.
+
+        Ein Quader für einen gebogenen Griff wich um 310 % im Volumen ab
+        (Kundenmeldung 0.6.0), und der Dialog riet, die Grenzen bewusst zu
+        ändern — die Volumengrenze endet hier unter 100 %. Wer über der
+        weitesten Grenze liegt, ist an der Form gescheitert, nicht an der Zahl.
+        """
+        check = candidate.check
+        if check.reason not in LIMIT_REASONS:
+            return False
+        widest = self.volume_limit.maximum() / 100.0
+        return not (
+            check.reason == "volume"
+            and math.isfinite(check.volume_relative)
+            and check.volume_relative > widest
+        )
 
     def _choose(self, index: int) -> None:
         self._stop()

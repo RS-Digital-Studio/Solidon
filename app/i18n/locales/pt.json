@@ -4172,6 +4172,7 @@
   "GLB und GLTF verwenden Y nach oben. Ältere Projekte und rohe Generatorquellen behalten ihre bisherige Lage.": "GLB e GLTF usam Y como eixo vertical. Os projetos anteriores e as fontes em bruto do gerador mantêm a sua orientação.",
   "Gangzahl": "Entradas",
   "Ganz gut": "Bastante bem",
+  "Ganz weg geht es mit „{action}“.": "Para o remover por completo, use «{action}».",
   "Ganze Datei als ein Körper · bisherige Auswahl": "Ficheiro inteiro como um só corpo · seleção anterior",
   "Ganze Körper: {count}.": "Corpos inteiros: {count}.",
   "Ganzer Hohlraum": "Cavidade inteira",

@@ -4172,6 +4172,7 @@
   "GLB und GLTF verwenden Y nach oben. Ältere Projekte und rohe Generatorquellen behalten ihre bisherige Lage.": "GLB e GLTF usano Y come asse verticale. I progetti precedenti e le sorgenti grezze del generatore mantengono il loro orientamento.",
   "Gangzahl": "Principi",
   "Ganz gut": "Abbastanza bene",
+  "Ganz weg geht es mit „{action}“.": "Per rimuoverlo del tutto, usa «{action}».",
   "Ganze Datei als ein Körper · bisherige Auswahl": "Intero file come un solo corpo · selezione precedente",
   "Ganze Körper: {count}.": "Corpi interi: {count}.",
   "Ganzer Hohlraum": "Cavità intera",

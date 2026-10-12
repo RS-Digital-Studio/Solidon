@@ -62,7 +62,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-777 — Schwalbenschwanz, Sechskant und Stiftkopf rechnen mit den Winkeln der Plattform](#rm-777) | Plattformen, Pakete und Grafik | Umstellen auf `units.exact_*`, druckgleich gegen Beispiele und Korpus, danach Bereichsnachweis aller 50 (`shapes.py` und `exact.py` stehen in jedem Abdruck) |
 | [RM-714 — Die Untergrenze von shapely passt nicht zum Kern](#rm-714) | Plattformen, Pakete und Grafik | Untergrenze in `pyproject.toml` auf 2.1 heben |
 | [RM-732 — Fenster ohne geordneten Abbau reißen den Prozess](#rm-732) | Plattformen, Pakete und Grafik | Jeden Abbauweg der Anwendung auf `release` prüfen: Sprachwechsel, zweites Fenster, eigenständiger Viewport, elternlose Dialoge mit Arbeitern |
-| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
+| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release, die Wiederholung der berichtigten Zahlenanzeige am Fenster und der Profilkörper mit Umriss quer dazu (gebogener Halter, Kundenmeldung 12.10.) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z3 (Z2 bis auf die Drehachse durch RM-559). Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Restentscheidung offen. Gelöst (09.10., Claude): PrusaSlicer ohne Bündel schätzte mit 1500 mm/s² (`ignore` und Dialekt `reprap`), jetzt `marlin` mit den angeforderten Werten als Grenze, dazu `extra_perimeters`/`solid_infill_below_area = 0` und die Materialart der Spule; Gewürzregal am CC2 407 → 292 min, gegen ElegooSlicer mit denselben Wänden 280 min (+4,5 %, Material −4,2 %), SuperSlicer 527 → 381 min. Offen: Solidons Tabelle druckt „Standard“ mit drei Wänden und vier Bodenschichten, die Standardprozesse von Elegoo, Bambu, Creality und Prusa (MK4S) mit zwei und drei (232 gegen 292 min, 128 gegen 154 g) — Entscheidung, ob die Tabelle dem Standardprozess des Druckers folgt |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
@@ -1287,6 +1287,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   diesen Stand, fünf Teile über 600 s (darunter `pista+biglie.3mf`), die Fensterabnahme beim
   Release. Tests: `test_rebuild.py` (Wandhalter, Gravur, Schichtvergleich, Tasche),
   `test_sketch_traced.py`, `test_difference.py::test_a_cell_beside_a_facet_is_bounded_without_dividing`.
+
+  **Kundenmeldung 12.10.2026 (0.6.0, Fragebogen: „noch nicht geschafft, ein Modell nachbauen zu
+  lassen“).** Am Modell des Kunden, einem Halter 23,8 × 45,7 × 100 mm (Platte mit zwei
+  Senkbohrungen Ø 5/7, Steg, gebogene Schale R 21,7/24,7 um Z, deren Enden quer dazu mit R 15,75
+  gerundet sind), kommt nur Quader plus zwei Bohrungen mit +310 % Volumen; `_prismatic` längs Z
+  scheitert an den gerundeten Schalenenden. Gebraucht wird ein Profilkörper längs Z, geschnitten
+  mit einem Umriss quer dazu. Am selben Tag behoben: Der Dialog riet bei +310 % zu anderen
+  Grenzen, und der Quader stand doppelt da (Netzweg neben P4.0 nur noch für verlorene
+  Rundformen). Das Kundenmodell bleibt ohne Freigabe außerhalb des Repositorys; ein Prüfteil
+  lässt sich aus den Maßen oben bauen.
 
 <a id="rm-209"></a>
 
