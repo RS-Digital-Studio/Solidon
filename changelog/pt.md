@@ -19,6 +19,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Utilização e sistema
 
+- No Mac, o Solidon pode agora carregar o controlador da 3Dconnexion (3DxWare) para o rato 3D. Da versão 0.4.1 à 0.6.0, o macOS não o permitia.
+- No Mac, o pacote de instalação coloca agora o Solidon sempre em *Aplicações*. Se havia outra cópia noutro lugar, até agora substituía essa, e em *Aplicações* ficava a versão antiga.
+- No Linux, o AppImage arranca agora também no Ubuntu 22.04, no Linux Mint 21 e no Debian 12. Na versão 0.6.0, aí só funcionava o Flatpak.
+- No Linux, o Solidon pode agora aceder ao rato 3D também como Flatpak. A regra udev do manual continua a ser necessária.
 - A pesquisa encontra *Unir*, *Subtrair* e *Interseção* também como «booleano», e *Subtrair* também como «diferença».
 - Com um corpo selecionado e um segundo na cena, o separador *Seleção* indica como acrescentar o segundo para *Unir*, *Subtrair* e *Interseção*.
 - O campo de pesquisa do separador *Seleção* está agora sempre presente, também sem seleção, e encontra cada função e cada comando com o seu atalho.
