@@ -53,8 +53,9 @@ Entwicklungsstand danach.
 Solidon läuft unter Windows 10 ab Version 1809 und Windows 11 auf x64, unter
 macOS ab Version 14 und unter Linux auf x64 mit X11 oder Xwayland; das
 AppImage braucht Ubuntu 22.04, Linux Mint 21, Debian 12 oder neuer (glibc
-2.35), das Flatpak läuft auf jeder Distribution mit Flatpak. Auf x64 setzt
-Solidon einen Prozessor mit SSE4.2 voraus. Die 3D-Ansicht braucht eine Grafik mit Direct3D 12, Vulkan oder Metal. Findet
+2.35), das Flatpak läuft auf seiner eigenen Laufzeit und ist an diese Grenze
+nicht gebunden. Auf x64 setzt Solidon einen Prozessor mit SSE4.2 voraus. Die
+3D-Ansicht braucht eine Grafik mit Direct3D 12, Vulkan oder Metal. Findet
 Solidon keine passende, startet es ohne 3D-Ansicht; `SOLIDON3D_NO_VIEWPORT=1`
 lässt sie ausdrücklich weg. Arbeitsspeicher, Speicherplatz und
 Bildschirmgröße nennt die Website unter
