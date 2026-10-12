@@ -249,6 +249,8 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     # *Bezug ändern* in der Maßgruppe: Sie setzt Erzeuger und Bausteine auf eine
     # Fläche, und alle Operationen mit Flächenbindung sind D2.
     "measure.reference": ("D2", "merkmal:face"),
+    # *Übernehmen* derselben Maßgruppe (D0, N2).
+    "measure.apply": ("D2", "merkmal:face"),
     "search": ("D11", "koerper:1"),
     # Chat und Tour, die Seiten der rechten Karte neben Auswahl und Bericht.
     "chat": ("D12", "leer"),

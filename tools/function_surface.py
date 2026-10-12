@@ -106,6 +106,20 @@ def own_surface(row: Mapping[str, Any], widget: Any) -> bool:
     )
 
 
+def report_findings(session: Any) -> dict[str, str]:
+    """Die Befunde des letzten Ergebnisses, je Kennung mit ihrem Satz (Prüfpunkt 7, ``befund``).
+
+    Kennung heißt hier Code und Körper: Derselbe Befund an einem zweiten Körper
+    ist ein neuer.
+    """
+    result = getattr(session, "last_result", None)
+    report = getattr(getattr(result, "scene", None), "report", None)
+    return {
+        f"{finding.code}@{getattr(finding, 'object_id', '') or ''}": str(finding.message)
+        for finding in getattr(report, "findings", ()) or ()
+    }
+
+
 def classes_of(widget: Any) -> set[str]:
     """Die Klassennamen eines Fensters samt Basisklassen."""
     return {cls.__name__ for cls in type(widget).__mro__}
@@ -285,15 +299,30 @@ def field_name(window: Any, name: str) -> str:
     Mit Bild rückt das Fenster die Handlung einer gewählten Bohrung in die
     Maßgruppe über der Ansicht: Ihre Felder heißen dort ``measure.field:<feld>``,
     und die Zeile im Merkmalfenster ist verborgen. Ohne Bild (offscreen) bleibt
-    sie dort. Gefragt wird, was zu sehen ist.
+    sie dort. Gefragt wird, was zu sehen ist — und **welche** Handlung dort
+    steht (:func:`op_in_view`): An einer gesetzten Bohrung trägt die Maßgruppe
+    *Bohrung im ursprünglichen Schritt ändern* (``drill_hole``), nicht *Bohrung
+    ändern*; deren Felder heißen gleich (N5).
     """
     kind, _separator, rest = name.partition(":")
     if kind != "feature.field":
         return name
-    moved = f"measure.field:{rest.partition('.')[2]}"
-    if _shown(window, name) is None and _shown(window, moved) is not None:
+    op, _dot, field = rest.partition(".")
+    moved = f"measure.field:{field}"
+    if (
+        _shown(window, name) is None
+        and _shown(window, moved) is not None
+        and op_in_view(window) == op
+    ):
         return moved
     return name
+
+
+def op_in_view(window: Any) -> str | None:
+    """Die Handlung, deren Maße die Gruppe im Bild trägt: die scharfe der Merkmalskarte."""
+    panel = getattr(window, "feature_panel", None)
+    armed = panel.preview_values() if panel is not None else None
+    return str(armed[0]) if armed else None
 
 
 def in_view(window: Any, inputs: Sequence[str]) -> bool:

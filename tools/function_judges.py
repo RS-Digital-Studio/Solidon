@@ -545,6 +545,20 @@ def _v5(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         return _missing("V5", "messages")
     issues = []
     for entry in messages:
+        kind = entry.get("kind")
+        if kind in ("sperrgrund", "grenzablehnung"):
+            # Ein Sperrgrund am grauen Bedienelement ist keine Meldung und braucht
+            # keinen Knopf, er nennt aber den Ausweg (Entscheidung Koordinator);
+            # die Grenzablehnung nennt die Grenze.
+            if entry.get("way_out") is False:
+                issues.append(
+                    Issue(f"Sperrgrund ohne Ausweg: „{entry.get('text', '')}“", "mittel", "V5")
+                )
+            continue
+        if kind == "befund":
+            # Ein Befund trägt seine Handlungen im Prüfbericht; die prüfen die
+            # Zeilen der Befundhandlungen (D8), nicht dieser Fehlfall.
+            continue
         actions = entry.get("actions") or []
         if not actions:
             issues.append(

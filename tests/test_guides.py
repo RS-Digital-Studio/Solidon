@@ -793,6 +793,7 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "feature.in_view",
         "feature.every",
         "measure.reference",
+        "measure.apply",
         *printing,
     }
     window = MainWindow(Session(), UiSettings())

@@ -494,15 +494,33 @@ def _point_7(
     messages = _list(protocol, "messages")
     if messages is None:
         return _missing(7, "messages")
-    own = [] if messages else [Issue("der Fehlfall ergab keine Meldung", "mittel")]
-    return _combine(
+    # Gezählt wird, was der Fehlfall meldete — die Meldungen der Fläche davor
+    # tragen keine Phase (``FunctionFlow.phase_fault``).
+    entries = [m for m in messages if isinstance(m, Mapping)]
+    if any("phase" in m for m in entries):
+        entries = [m for m in entries if m.get("phase") == FAULT_PHASE]
+    own: list[Issue] = []
+    notes: list[str] = []
+    expected = str(fault.get("expected") or "")
+    kinds = sorted({str(m["kind"]) for m in entries if m.get("kind")})
+    if not entries:
+        own.append(Issue("der Fehlfall ergab keine Meldung", "mittel"))
+    elif expected and kinds and expected not in kinds:
+        # Die Absage ist eine andere als die, die die Spezifikation erwartet
+        # (Entscheidung Koordinator): ein Sperrgrund statt einer Grenzablehnung
+        # ist ein anderer Weg für den Kunden.
+        own.append(Issue(f"erwartet {expected}, gemessen {', '.join(kinds)}", "mittel"))
+    elif expected and not kinds:
+        notes.append(f"Art der Absage nicht gemessen, erwartet {expected}")
+    outcome = _combine(
         7,
         [criteria.get("V5")],
         own=own,
         measured=True,
         judged=True,
-        summary=f"{len(messages)} Meldungen",
+        summary=f"{len(entries)} Meldungen",
     )
+    return replace(outcome, notes=(*outcome.notes, *notes)) if notes else outcome
 
 
 def _point_8(

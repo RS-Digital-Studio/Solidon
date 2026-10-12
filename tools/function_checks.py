@@ -51,7 +51,14 @@ from app.ui.op_dialog import (
     MAX_LEAD_WORDS_TRANSLATED,
 )
 from app.ui.style import LEVELS, SPACE
-from tools.function_list import LICENCE_STATES, PRECONDITIONS, ROW_KINDS, SPEC_KEYS, Row
+from tools.function_list import (
+    FAULT_KINDS,
+    LICENCE_STATES,
+    PRECONDITIONS,
+    ROW_KINDS,
+    SPEC_KEYS,
+    Row,
+)
 
 # --- Wertebereiche --------------------------------------------------------
 
@@ -350,7 +357,14 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     "modals": ProtocolField("liste", _keys("class", "title", "allowed", "question")),
     "raw_windows": ProtocolField("liste", _keys("class", "title", "allowed")),
     "windows": ProtocolField("liste", _keys("class", "title")),
-    "messages": ProtocolField("liste", _keys("text", "actions")),
+    # ``kind`` ist die Art der Absage wie ``fault_case.expected`` (Prüfpunkt 7),
+    # ``way_out`` sagt bei einem Sperrgrund, ob er einen Ausweg nennt (V5),
+    # ``phase`` steht an den Meldungen des Fehlfalls.
+    "messages": ProtocolField(
+        "liste",
+        _keys("text", "actions", "kind", "way_out", "phase"),
+        {"kind": FAULT_KINDS},
+    ),
     "texts": ProtocolField("liste", _keys("text", "carrier", "need_px", "width_px", "cut", "lead")),
     "fields": ProtocolField(
         "liste", _keys("label", "accessible_name", "description", "tooltip", "front")
