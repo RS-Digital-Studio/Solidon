@@ -2635,6 +2635,97 @@ def test_a_shortcut_search_without_a_hit_says_so(qt_app: QApplication) -> None:
         bar.deleteLater()
 
 
+#: Die Layoutarten, deren Abstand Qt sonst mit 6 vorgibt — kein Vielfaches des Rasters.
+_LAYOUTS = frozenset({"QVBoxLayout", "QHBoxLayout", "QFormLayout", "QGridLayout"})
+
+#: Module mit Dialogklasse, die der Wächter unten nicht prüft: ``panels.py`` trägt
+#: die Karten des Hauptfensters (mit ``BodyChoiceDialog`` nur nebenbei), und deren
+#: Höhen teilt ``OverlayHost._share_room`` — ein eigener Schritt mit eigener Messung.
+_SPACING_ELSEWHERE = frozenset({"panels.py"})
+
+
+def _layouts_without_spacing(source: str) -> list[str]:
+    """Layouts einer Datei, die ihren Abstand nicht selbst setzen (Funktion:Zeile).
+
+    Gesetzt heißt ``setSpacing`` oder beide Richtungen, am Namen selbst oder an
+    der Schleifenvariablen, über die er läuft (``for form in (front, back)``).
+    """
+    found: list[str] = []
+    for function in ast.walk(ast.parse(source)):
+        if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        made: dict[str, int] = {}
+        spaced: dict[str, set[str]] = {}
+        alias: dict[str, str] = {}
+        for node in ast.walk(function):
+            if (
+                isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Name)
+                and node.value.func.id in _LAYOUTS
+            ):
+                made[ast.unparse(node.targets[0])] = node.lineno
+            if isinstance(node, ast.For) and isinstance(node.iter, (ast.Tuple, ast.List)):
+                for element in node.iter.elts:
+                    alias[ast.unparse(element)] = ast.unparse(node.target)
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("setSpacing", "setHorizontalSpacing", "setVerticalSpacing")
+            ):
+                spaced.setdefault(ast.unparse(node.func.value), set()).add(node.func.attr)
+        for name, line in made.items():
+            calls = spaced.get(name, set()) | spaced.get(alias.get(name, ""), set())
+            if (
+                "setSpacing" not in calls
+                and not {
+                    "setHorizontalSpacing",
+                    "setVerticalSpacing",
+                }
+                <= calls
+            ):
+                found.append(f"{function.name}:{line} {name}")
+    return found
+
+
+def test_every_layout_of_a_dialog_keeps_the_grid() -> None:
+    """Jedes Layout eines Dialogs setzt seinen Abstand selbst (G2, FD-15).
+
+    Qt gibt 6 Punkte vor, kein Vielfaches des Rasters: Inhalt und beide
+    Formulare des Operationsdialogs standen damit neben dem Kalibrierdialog,
+    der ``NORMAL`` setzt, und in 19 weiteren Dialogmodulen ebenso. Ohne Fenster,
+    am Quelltext jedes Moduls mit einer Dialogklasse.
+    """
+    modules = [
+        path
+        for path in sorted(UI.glob("*.py"))
+        if path.name not in _SPACING_ELSEWHERE
+        and re.search(r"^class \w+\(.*QDialog\b", path.read_text(encoding="utf-8"), re.MULTILINE)
+    ]
+    assert len(modules) > 20, f"nur {len(modules)} Dialogmodule — die Suche greift nicht"
+    missing = [
+        f"{path.name}:{entry}"
+        for path in modules
+        for entry in _layouts_without_spacing(path.read_text(encoding="utf-8"))
+    ]
+    assert not missing, "Layouts mit Qts Abstand 6:\n" + "\n".join(missing)
+
+
+def test_the_spacing_guard_sees_a_layout_without_spacing() -> None:
+    """Gegenprobe: ein Layout ohne Abstand fällt auf, eines in der Schleife nicht."""
+    source = (
+        "def build(self):\n"
+        "    bare = QVBoxLayout(self)\n"
+        "    front = QFormLayout()\n"
+        "    back = QFormLayout()\n"
+        "    for form in (front, back):\n"
+        "        form.setSpacing(8)\n"
+        "    grid = QGridLayout()\n"
+        "    grid.setHorizontalSpacing(4)\n"
+    )
+    assert _layouts_without_spacing(source) == ["build:2 bare", "build:7 grid"]
+
+
 def test_every_number_field_stands_right_aligned(qt_app: QApplication) -> None:
     """Zahlen stehen Stelle unter Stelle (G3, FD-14): jedes Zahlenfeld rechtsbündig.
 

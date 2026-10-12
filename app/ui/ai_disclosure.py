@@ -802,6 +802,7 @@ class _NoticeLink(QCommandLinkButton):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(WIDE * 3, ROOMY, ROOMY, ROOMY)
+        layout.setSpacing(TIGHT)
         layout.addLayout(text_layout)
         self.clicked.connect(self._activate)
 

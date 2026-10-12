@@ -431,6 +431,7 @@ class SlicerFilamentDialog(QDialog):
         layout.setSpacing(NORMAL)
 
         form = QFormLayout()
+        form.setSpacing(NORMAL)
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("etwa „PLA Matte“"))
         self.search.setClearButtonEnabled(True)
@@ -757,6 +758,7 @@ class NewFilamentDialog(QDialog):
         stock = QWidget(self)
         stock_layout = QVBoxLayout(stock)
         stock_layout.setContentsMargins(0, 0, 0, 0)
+        stock_layout.setSpacing(NORMAL)
         self.stock_known = QCheckBox(tr("Restmenge bekannt"), stock)
         self.remaining = NumberSpin(stock)
         self.remaining.setRange(0, 1000000)
@@ -2102,6 +2104,7 @@ class FilamentPopup(QFrame):
         self.panel = FilamentPanel(self)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.panel)
         self._anchor: QWidget | None = None
 

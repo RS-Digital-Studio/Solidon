@@ -35,7 +35,7 @@ from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, w
 from app.ui.outline_dialog import _ProfileView
 from app.ui.panels import align_forms
 from app.ui.sketch_editor import SketchEditorDialog, Surroundings
-from app.ui.style import NORMAL, SPACE, WIDE, make_primary, no_primary
+from app.ui.style import NORMAL, SPACE, TIGHT, WIDE, make_primary, no_primary
 
 _FIELDS = ("path_sketch", "support_feature", "opening_signature", "counterface")
 
@@ -300,6 +300,7 @@ class SealPathDialog(QDialog):
         self.sketch_button = QPushButton(tr("Dichtweg zeichnen …"), self)
         self.sketch_button.clicked.connect(self._draw)
         form = QFormLayout()
+        form.setSpacing(NORMAL)
         form.addRow(tr("Dichtweg aus"), self.mode)
         form.addRow(tr("Trägerfläche"), self.support)
         form.addRow(tr("Zeichnung"), self.sketch_button)
@@ -307,6 +308,7 @@ class SealPathDialog(QDialog):
         # **Die Gegenfläche nach den Öffnungen**: Welche Öffnung abgedichtet
         # wird, folgt aus der Trägerfläche, und erst dann ist die Frage, wogegen.
         counter_form = QFormLayout()
+        counter_form.setSpacing(NORMAL)
         counter_form.addRow(tr("Gegenfläche"), self.counterface)
         for field, owner in (
             (self.mode, form),
@@ -319,6 +321,7 @@ class SealPathDialog(QDialog):
                 field.setAccessibleName(caption.text())
         layout.addLayout(form)
         row = QHBoxLayout()
+        row.setSpacing(TIGHT)
         self.contours = QListWidget(self)
         self.contours.setAccessibleName(tr("Erkannte Öffnungen"))
         self.contours.setMinimumWidth(220)

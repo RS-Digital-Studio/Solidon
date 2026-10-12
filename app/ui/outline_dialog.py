@@ -40,7 +40,7 @@ from app.i18n import tr
 from app.ui.dialogs import ErrorNotice
 from app.ui.labels import LengthSpin, area, length
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
-from app.ui.style import ROOMY, SPACE, WIDE, make_primary, no_primary, set_level
+from app.ui.style import NORMAL, ROOMY, SPACE, TIGHT, WIDE, make_primary, no_primary, set_level
 from app.ui.theme import Theme, current_theme
 
 
@@ -257,7 +257,9 @@ class OutlineDialog(QDialog):
         note.setWordWrap(True)
         layout.addWidget(note)
         middle = QHBoxLayout()
+        middle.setSpacing(TIGHT)
         left = QVBoxLayout()
+        left.setSpacing(NORMAL)
         title = QLabel(tr("Konturen"), self)
         set_level(title, "section")
         left.addWidget(title)
@@ -270,6 +272,7 @@ class OutlineDialog(QDialog):
         self.profiles.currentRowChanged.connect(self._current_changed)
         left.addWidget(self.profiles, 1)
         selection = QHBoxLayout()
+        selection.setSpacing(TIGHT)
         self.select_all = QPushButton(tr("Alle gültigen"), self)
         self.select_none = QPushButton(tr("Keine"), self)
         self.select_all.clicked.connect(self._all)
@@ -285,9 +288,11 @@ class OutlineDialog(QDialog):
         # standen unter allen drei Spalten, zwei tausend Punkte breit gezogen,
         # hinter der Vorschau, die ihnen folgt.
         self._size_form = QFormLayout()
+        self._size_form.setSpacing(NORMAL)
         left.addLayout(self._size_form)
         middle.addLayout(left, 1)
         images = QVBoxLayout()
+        images.setSpacing(NORMAL)
         # Jede Spalte mit einer Überschrift derselben Stufe: „Konturen“ stand
         # halbfett neben zwei Überschriften in Fließtextgröße.
         contour_title = QLabel(tr("Konturvorschau"), self)
@@ -298,6 +303,7 @@ class OutlineDialog(QDialog):
         images.addWidget(self.contour_view, 1)
         middle.addLayout(images, 1)
         preview = QVBoxLayout()
+        preview.setSpacing(NORMAL)
         result_title = QLabel(tr("So sieht Ihr Teil aus"), self)
         set_level(result_title, "section")
         preview.addWidget(result_title)

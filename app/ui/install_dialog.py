@@ -238,6 +238,7 @@ class _Row(QWidget):
 
         head = QHBoxLayout()
         head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(TIGHT)
         head.addWidget(self.state)
         head.addWidget(title, stretch=1)
         head.addWidget(self.action)

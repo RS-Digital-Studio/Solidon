@@ -51,7 +51,7 @@ from app.ui.dialogs import ErrorNotice, problem_text
 from app.ui.labels import length
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.panels import align_forms
-from app.ui.style import NORMAL, SPACE, WIDE, make_primary, no_primary, set_level
+from app.ui.style import NORMAL, SPACE, TIGHT, WIDE, make_primary, no_primary, set_level
 from app.ui.theme import Theme, current_theme
 
 if TYPE_CHECKING:
@@ -286,6 +286,7 @@ class OrganizerDialog(QDialog):
         # gezogen sah das Feld aus wie das Hauptfeld der Seite.
         self.name_field.setMaximumWidth(self.name_field.fontMetrics().averageCharWidth() * 40)
         naming = QFormLayout()
+        naming.setSpacing(NORMAL)
         naming.addRow(name_label, self.name_field)
         layout.addLayout(naming)
         self.basis = QComboBox(self)
@@ -301,10 +302,12 @@ class OrganizerDialog(QDialog):
         self.basis.setAccessibleName(tr("Welche Maße fest bleiben"))
         self.basis.currentIndexChanged.connect(self._basis_changed)
         basis_row = QHBoxLayout()
+        basis_row.setSpacing(TIGHT)
         basis_row.addWidget(self.basis)
         basis_row.addStretch(1)
         layout.addLayout(basis_row)
         dimensions = QHBoxLayout()
+        dimensions.setSpacing(TIGHT)
         first, second = QFormLayout(), QFormLayout()
         for index, entry in enumerate(
             e
@@ -363,6 +366,7 @@ class OrganizerDialog(QDialog):
         scroll.setWidgetResizable(True)
         self.editor = QWidget(scroll)
         self.editor_form = QFormLayout(self.editor)
+        self.editor_form.setSpacing(NORMAL)
         self.editor_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         scroll.setWidget(self.editor)
         left_layout.addWidget(scroll, 1)
