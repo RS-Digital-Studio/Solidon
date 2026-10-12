@@ -38,6 +38,7 @@ from tools.file_acceptance import (
 from tools.function_checks import (
     MAIN_PHASES,
     PROTOCOL_SCHEMA,
+    SMALLEST_WINDOW,
     validate_protocol,
 )
 from tools.function_list import STARTUP_LICENCE
@@ -185,6 +186,99 @@ def test_the_probe_row_runs_through_input_events_in_the_window(window: Any, tmp_
     _assert_the_main_way(data)
 
 
+def test_a_finding_action_applies_with_its_own_click_and_is_timed(
+    window: Any, tmp_path: Path
+) -> None:
+    """Probelauf, Befund B: *Auf das Bett setzen* wirkt mit seinem Klick — das ist das Übernehmen.
+
+    Vorher fiel der Klick auf die Befundhandlung in den Weg; das Übernehmen
+    merkte sich danach das schon neue Ergebnis, klickte nichts und wartete die
+    vollen 180 s auf ein weiteres. Jetzt fällt der Klick in der Phase
+    Übernehmen, die Zeit steht da, der Ort stimmt, und Rückgängig wartet nicht
+    auf eine Wirkung, die ausbleibt.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from tools import function_list, function_scenes
+
+    scenes = tmp_path / "scenes"
+    function_scenes.save_scenes(scenes)
+    row = {item.id: asdict(item) for item in function_list.rows()}["finding.action:place_on_bed"]
+    variant = function_setup.Variant.of({"phases": ["main", "revise"]})
+    data = function_protocol.empty_protocol(
+        row, variant.protocol(None, (0, 0)), {"commit": "", "app": ""}
+    )
+    folder = tmp_path / "cases" / "001"
+    folder.mkdir(parents=True)
+    flow = function_bench.FunctionFlow(
+        QApplication.instance(),
+        window,
+        folder,
+        data,
+        lambda: None,
+        row,
+        variant,
+        scenes,
+        out=tmp_path,
+    )
+    flow.prepare()
+    flow.run()
+    assert not any("Zeitgrenze" in error for error in data["errors"]), data["errors"]
+    assert "timing" not in data["unmeasured"], data["unmeasured"]
+    assert data["timing"]["total_s"] is not None and data["timing"]["total_s"] < 60
+    acting = [
+        step
+        for step in data["steps"]
+        if step.get("target") == "finding.action:place_on_bed"
+        and step.get("why") == "ziel"
+        and step.get("phase") in MAIN_PHASES
+    ]
+    assert [step["phase"] for step in acting] == [MAIN_PHASES[1]], data["steps"]
+    assert data["place"]["error"] is None
+    states = data["states"]
+    assert function_protocol.compare_prints(states["before"], states["applied"])["same"] is False
+    # Rückgängig und Wiederholen sind gemessen, ohne auf eine Wirkung zu warten,
+    # die nicht kommt; ob sie zurückkehren, urteilt D0-U (Prüfpunkt 5).
+    assert {"undo", "redo"} <= set(states)
+    # Der Rechtsklick auf die Verlaufszeile öffnet ihr Kontextmenü; vorher fand
+    # ``menu:history.edit`` nie ein offenes Menü (Befund B, Phase „nachträglich“).
+    edit = [found for found in data["findings"] if found["target"] == "menu:history.edit"]
+    assert edit == [], edit
+    assert [entry["way"] for entry in data["revise"]] == ["menue", "doppelklick"]
+    assert validate_protocol(data) == []
+
+
+def test_a_right_click_brings_the_context_menu_event(qt_app: Any) -> None:
+    """Ein Rechtsklick über ``QtPorts.press`` erreicht das Kontextmenü des Widgets.
+
+    ``QTest.mouseClick`` mit der rechten Taste schickt nur die Maus; das
+    Kontextmenüereignis, das der Kunde mit dem Loslassen bekommt, blieb aus
+    (Befund B). Eine Liste mit eigenem Kontextmenü meldet es an der Stelle.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidget
+
+    listing = QListWidget()
+    listing.addItem("Schritt 1")
+    listing.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+    asked: list[Any] = []
+    listing.customContextMenuRequested.connect(asked.append)
+    listing.show()
+    qt_app.processEvents()
+    try:
+        place = listing.visualItemRect(listing.item(0)).center()
+        point = listing.viewport().mapToGlobal(place)
+        ports = function_walk.QtPorts(None, 0.0)
+        hit = ports.widget_under(point)
+        assert hit is listing.viewport(), hit
+        ports.press(hit, point, "right")
+        assert asked == [place]
+    finally:
+        listing.close()
+        listing.deleteLater()
+        qt_app.processEvents()
+
+
 @pytest.mark.windowed
 def test_the_probe_row_runs_in_its_own_process_from_inventory_to_report(tmp_path: Path) -> None:
     """Der ganze Weg eines Funktionsfalls: Inventar, eigener Prozess mit Profil, Protokoll, Bericht.
@@ -288,7 +382,7 @@ def test_the_probe_finds_a_list_or_the_view_over_a_real_target(window: Any) -> N
             rect=rect, why="ziel", target=target, button=Qt.MouseButton.LeftButton, direction=0
         )
 
-    window.resize(1280, 820)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     settle()
     ports = function_walk.QtPorts(window, 0.0)
@@ -355,7 +449,7 @@ def box_window(qt_app: Any) -> Any:
 
     window = MainWindow(Session(), UiSettings())
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.resize(1400, 900)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     window._show_start_screen(False)
     assert window.session.apply(
@@ -638,6 +732,54 @@ def test_text_needs_count_box_symbol_padding_rich_text_and_list_cells(qt_app: An
     root.deleteLater()
 
 
+#: Tippt im eigenen Prozess Umlaute, ß und Zeichen außerhalb von Latin-1 über
+#: ``QtPorts.type_text`` in eine Zeile und gibt deren Text aus.
+_TYPING = """
+import sys
+sys.path.insert(0, sys.argv[1])
+from PySide6.QtWidgets import QApplication, QLineEdit
+from tools.function_walk import QtPorts
+application = QApplication([])
+line = QLineEdit()
+line.show()
+line.activateWindow()
+line.setFocus()
+for _ in range(10):
+    application.processEvents()
+QtPorts(None, 0.0).type_text(sys.argv[2])
+application.processEvents()
+print(line.text(), flush=True)
+"""
+
+
+@pytest.mark.windowed
+def test_typing_umlauts_and_signs_reaches_the_field_without_aborting_qt(tmp_path: Path) -> None:
+    """Probelauf, Befund A: Die Suchprobe „Bohrung vergrößern“ brach den Fall nativ ab.
+
+    ``QTest.keyClicks`` kennt nur ASCII; an ö und ß endet Qt mit einem ASSERT in
+    ``qasciikey.cpp`` (Ausgang 0xC0000409), ohne eine Zeile in ``stderr.log``.
+    Im eigenen Prozess, denn vorher riss der Abbruch den Testlauf mit.
+    """
+    import os
+    import subprocess
+    import sys
+
+    text = "Bohrung vergrößern 5,0 € É"
+    script = tmp_path / "tippen.py"
+    script.write_text(_TYPING, encoding="utf-8")
+    finished = subprocess.run(
+        [sys.executable, str(script), str(ROOT), text],
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONUTF8": "1"},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+        check=False,
+    )
+    assert finished.returncode == 0, (hex(finished.returncode & 0xFFFFFFFF), finished.stderr)
+    assert finished.stdout.strip() == text
+
+
 def test_typing_needs_the_focus_in_the_field_and_actions_need_a_vocabulary_name(
     qt_app: Any,
 ) -> None:
@@ -872,7 +1014,7 @@ def test_the_captures_read_a_small_dialog_without_acting_on_it(qt_app: Any) -> N
             "texts": capture.text_entries(dialog),
             "fields": capture.field_entries(dialog),
             "empty_states": capture.empty_states(dialog),
-            **capture.sheet_snapshot(dialog, "light", (1280, 820)),
+            **capture.sheet_snapshot(dialog, "light", SMALLEST_WINDOW),
         }
         texts = {entry["text"]: entry for entry in protocol["texts"]}
         assert {"Durchmesser", "Durchgehend", "Übernehmen", "Noch kein Eintrag"} <= set(texts)

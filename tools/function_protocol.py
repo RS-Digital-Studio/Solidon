@@ -268,6 +268,16 @@ def cli_arguments(operation: Mapping[str, Any]) -> list[str] | None:
     return arguments
 
 
+def cli_command(arguments: Sequence[str], path: str) -> list[str]:
+    """Der Aufruf von ``app.cli.main`` für :func:`cli_arguments` — die Datei gleich nach der Op.
+
+    ``--on`` nimmt beliebig viele Namen (``nargs="*"``): Stand die Datei am Ende,
+    las argparse sie als weiteren Körper und vermisste ``path`` (Probelauf,
+    Befund B: *Auf das Bett setzen* mit ``--on obj_1``).
+    """
+    return ["run", arguments[0], path, *arguments[1:]]
+
+
 def bodies_digest(bodies: Mapping[str, str]) -> str:
     """Ein Abdruck über die Abdrücke aller Körper — ``result.digest``, ``cli.digest``."""
     return _digest(dict(sorted(bodies.items())))

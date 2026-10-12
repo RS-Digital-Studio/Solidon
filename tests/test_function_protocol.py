@@ -35,6 +35,7 @@ from tools.function_checks import (
     PROTOCOL_FIELDS,
     PROTOCOL_SCHEMA,
     SELECTION_STAGES,
+    SMALLEST_WINDOW,
     validate_protocol,
 )
 
@@ -235,13 +236,13 @@ def test_an_assembled_protocol_is_valid_against_the_schema_of_u() -> None:
     Gegenprobe: ein Feld außerhalb des Schemas und ein Schritt ohne Phase werden
     abgewiesen — die Prüfung von U greift also an dem, was hier entsteht.
     """
-    variant = function_setup.Variant().protocol({"screen": "MSI"}, (1280, 820))
+    variant = function_setup.Variant().protocol({"screen": "MSI"}, SMALLEST_WINDOW)
     protocol = function_protocol.empty_protocol(ROWS[0], variant, {"commit": "abc", "app": "0.6.1"})
     assert set(protocol) == set(PROTOCOL_SCHEMA)
     assert set(protocol["row"]) <= set(PROTOCOL_SCHEMA["row"].keys or ())
     # Z6 je Zeile über alle Fälle (D0-U): jeder Fall trägt seine Fenstergröße
     # und eine Liste der Rollleisten, auch leer — gültig schon im Gerüst.
-    assert protocol["variant"]["window_size"] == [1280, 820]
+    assert protocol["variant"]["window_size"] == list(SMALLEST_WINDOW)
     assert protocol["scrollbars"] == []
     assert validate_protocol(protocol) == []
     print_ = {
@@ -351,6 +352,26 @@ def test_the_reference_factor_is_measured_once_per_run_with_the_calibration_of_s
     monkeypatch.setattr(recognition_time, "calibrate", lambda: 0.009)
     assert capture.run_reference_factor(elsewhere) == pytest.approx(2.0)
     assert (elsewhere / capture.REFERENCE_FILE).is_file()
+
+
+def test_the_command_line_names_the_file_before_the_bodies() -> None:
+    """Probelauf, Befund B: ``run place_on_bed --on obj_1 <datei>`` lehnte die Kommandozeile ab.
+
+    ``--on`` nimmt beliebig viele Namen; die Datei am Ende wurde ein weiterer
+    Körper, und ``path`` fehlte. Gelesen mit dem Parser der Anwendung selbst.
+    """
+    from app.cli.main import build_parser
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    arguments = function_protocol.cli_arguments(
+        {"op": "place_on_bed", "in": ["obj_1"], "params": {}}
+    )
+    assert arguments is not None
+    parsed = build_parser().parse_args(function_protocol.cli_command(arguments, "x.p3d"))
+    assert (parsed.op, parsed.path, parsed.on) == ("place_on_bed", "x.p3d", ["obj_1"])
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["run", *arguments, "x.p3d"])  # die alte Reihenfolge
 
 
 def test_the_aborted_computation_lasts_as_long_as_the_main_way() -> None:

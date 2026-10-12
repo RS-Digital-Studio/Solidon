@@ -43,7 +43,6 @@ from typing import Any, Final, get_args
 from app.core.units import DISPLAY_UNITS
 from app.ui.guide_targets import ClickReason, Zone
 from app.ui.loading import BAR_AFTER_MS, DELAY_MS
-from app.ui.main_window import START_SIZE
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import ACCENT_MS, MEDIUM_MS
 from app.ui.op_dialog import (
@@ -201,10 +200,18 @@ MAX_DRAG_MS: Final = 33
 #: Zeiten und Bilder (Entscheidung Koordinator). Die endgültige Stelle legt
 #: P fest; umgestellt wird nur hier.
 REFERENCE_FACTOR_AT: Final = ("frames", "reference_factor")
-#: Z6: Die Startgröße des Fensters steht in ``main_window.START_SIZE`` (eine
-#: Quelle für Aufbau und Messung); dazu der Laptop mit Taskleiste und die
-#: Skalierungen.
-LAPTOP_SIZE: Final = (1366, 728)
+#: Z6: Die kleinste Arbeitsfläche, für die Solidon gebaut ist (Festlegung Robert):
+#: 1920 x 1080 logische Punkte — Full HD bei 100 % oder 3840 x 2160 bei 200 %.
+#: Darunter wird weder geprüft noch gestaltet; ein Fund darunter ist keiner.
+#: ``main_window.START_SIZE`` ist nur die Größe beim Verkleinern.
+SMALLEST_SCREEN: Final = (1920, 1080)
+#: Die Taskleiste von Windows 11 bei 100 %, in logischen Punkten.
+TASKBAR_HEIGHT: Final = 48
+#: Z6: Die kleinste Fensterfläche — maximiert auf dem kleinsten Schirm, die
+#: Taskleiste ab. Der Prüfstand stellt sie auf jedem größeren Schirm nach.
+SMALLEST_WINDOW: Final = (SMALLEST_SCREEN[0], SMALLEST_SCREEN[1] - TASKBAR_HEIGHT)
+#: Z6: Die Skalierungen — eine ist nur ein Fall, solange die logische Fläche
+#: des Schirms dabei mindestens :data:`SMALLEST_WINDOW` bleibt.
 SCALES: Final = (1.0, 1.5, 2.0)
 #: I3: Anteil der häufigsten Kundenziele, die ohne Suche dastehen.
 GOAL_SHARE: Final = 0.8
@@ -809,10 +816,11 @@ CRITERIA: Final[dict[str, Criterion]] = {
         _criterion(
             "Z6",
             "Größen und Skalierungen",
-            f"{START_SIZE[0]} x {START_SIZE[1]} und {LAPTOP_SIZE[0]} x {LAPTOP_SIZE[1]} "
+            f"{SMALLEST_SCREEN[0]} x {SMALLEST_SCREEN[1]} logisch (maximiert, Taskleiste ab) "
             "ohne Rollleiste vorn; Symbole scharf bei "
-            + ", ".join(f"{scale:.0%}" for scale in SCALES),
-            (*START_SIZE, *LAPTOP_SIZE, *(s * 100 for s in SCALES)),
+            + ", ".join(f"{scale:.0%}" for scale in SCALES)
+            + f", solange ≥ {SMALLEST_SCREEN[0]} x {SMALLEST_SCREEN[1]} logisch",
+            (*SMALLEST_SCREEN, *(s * 100 for s in SCALES)),
             "A",
             ("scrollbars", "icons"),
         ),

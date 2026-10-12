@@ -174,7 +174,7 @@ def prepared_window(qt_app: Any) -> Iterator[Any]:
 
     window = MainWindow(Session(), UiSettings())
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.resize(1400, 900)
+    window.resize(1920, 1032)
     window.show()
     window._show_start_screen(False)
     assert window.session.apply(
@@ -770,7 +770,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 window = MainWindow(Session(), UiSettings())
-window.resize(1400, 900)
+window.resize(1920, 1032)
 window.show()
 assert QTest.qWaitForWindowExposed(window)
 window._show_start_screen(False)
@@ -832,7 +832,7 @@ def test_the_recent_projects_and_the_dialog_fields_resolve(qt_app: Any, tmp_path
     from app.ui.settings import UiSettings
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1200, 800)
+    window.resize(1920, 1032)
     window.show()
     try:
         first, second = tmp_path / "eins.p3d", tmp_path / "zwei.p3d"
@@ -869,7 +869,7 @@ def test_a_menu_hidden_from_the_bar_has_no_way(qt_app: Any) -> None:
     from app.ui.settings import UiSettings
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1200, 800)
+    window.resize(1920, 1032)
     window.show()
     _settle(qt_app)
     try:
@@ -1186,7 +1186,7 @@ def test_move_before_names_the_numbers_the_history_shows(qt_app: Any) -> None:
     from app.ui.settings import UiSettings
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1400, 900)
+    window.resize(1920, 1032)
     window.show()
     window._show_start_screen(False)
     try:

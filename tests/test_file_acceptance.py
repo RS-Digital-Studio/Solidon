@@ -518,3 +518,72 @@ def test_the_output_folder_stays_outside_the_repository(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         outside_the_repository(ROOT / "tmp" / "abnahme")
     assert outside_the_repository(tmp_path) == tmp_path.resolve()
+
+
+#: Ein Kindprozess, der seine Absturzdateien anlegt und dann abbricht — an
+#: einem ``qFatal`` in Qt oder an einem Speicherfehler.
+_ABORTS = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from tools.file_acceptance import crash_records
+crash_records(Path(sys.argv[2]))
+if sys.argv[3] == "qt":
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QLineEdit
+    application = QApplication([])
+    QTest.keyClicks(QLineEdit(), "\u00f6")
+else:
+    import faulthandler
+    faulthandler._sigsegv()
+"""
+
+
+@pytest.mark.windowed
+@pytest.mark.parametrize("how", ["qt", "speicher"])
+def test_a_case_that_aborts_names_why_in_its_folder(tmp_path: Path, how: str) -> None:
+    """Probelauf, Befund A: Ein nativer Abbruch hinterließ ein leeres ``stderr.log``.
+
+    Ein ``qFatal`` (hier das ASSERT, an dem Fall 1 starb) steht jetzt in
+    ``qt.log``, ein Speicherfehler mit Stapel in ``stapel.log``; ``crash_note``
+    liest daraus, was ``process.json`` und die Übersicht nennen.
+    """
+    import os
+    import subprocess
+    import sys
+
+    from tools.file_acceptance import crash_note
+
+    script = tmp_path / "abbruch.py"
+    script.write_text(_ABORTS, encoding="utf-8")
+    folder = tmp_path / "fall"
+    folder.mkdir()
+    finished = subprocess.run(
+        [sys.executable, str(script), str(ROOT), str(folder), how],
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONUTF8": "1"},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+        check=False,
+    )
+    assert finished.returncode != 0
+    note = crash_note(folder)
+    if how == "qt":
+        assert note.startswith("QtFatalMsg") and "qasciikey" in note, note
+    else:
+        assert "Windows fatal exception" in note or "Fatal Python error" in note, note
+        assert "abbruch.py" in note, note
+
+
+def test_the_overview_names_why_a_case_aborted(tmp_path: Path) -> None:
+    """Der Grund eines Abbruchs steht in ``process.json`` und in den Fehlern der Übersicht."""
+    from tools.file_acceptance import function_summary
+
+    folder = tmp_path / "001"
+    folder.mkdir()
+    case = Case(1, "resize_hole [basis]", "scenes/x.p3d", "", kind="function", row="resize_hole")
+    note = "QtFatalMsg ASSERT: false in qasciikey.cpp"
+    row = function_summary(case, folder, {"exit_code": 3221226505, "crash": note})
+    assert note in row["errors"]
+    assert function_summary(case, folder, {"exit_code": 0, "crash": ""})["errors"] == []
