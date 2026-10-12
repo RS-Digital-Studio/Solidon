@@ -64,7 +64,6 @@ from tools.function_capture import run_reference_factor
 from tools.function_checks import (
     COVERED,
     LAPTOP_SIZE,
-    LICENCE_STATES,
     MAIN_PHASES,
     MATRIX_UNREACHABLE,
     NOT_FOUND,
@@ -72,9 +71,12 @@ from tools.function_checks import (
     PROTOCOL_SCHEMA,
     SCALES,
     SELECTION_STAGES,
-    STARTUP_LICENCE,
     WHY,
-    licence_runs,
+)
+from tools.function_list import (
+    LICENCE_STATES,
+    STARTUP_LICENCE,
+    licence_states,
 )
 from tools.function_list import PRECONDITIONS as SPEC_PRECONDITIONS
 
@@ -265,26 +267,19 @@ def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tup
 
 
 def spec_licence(word: str) -> str:
-    """Ein Lizenzwort der Zeilenspezifikation als Zustand des Protokolls.
+    """Der Lizenzzustand aus der Zeilenspezifikation, wenn die Fassung ihn erreicht.
 
-    Die Wörter gehören D0-L (``function_list.PRECONDITIONS``), die Zustände D0-U
-    (``function_checks.LICENCE_STATES``); hier steht nur die Übersetzung.
-    „gekauft“ ist ``licensed``, „abgelaufen“ der gesperrte Lauf, den die
-    ausgelieferte Fassung erreicht — der erste aus ``licence_runs()``:
-    ``expired`` mit ``store.TRIAL_FROM``, sonst ``sale_without_trial``. „demo“
-    hat seit der Entscheidung vom 12.10. keinen Lauf mehr: Eine abgelaufene Demo
-    startet nicht (der Startfall), eine laufende ist kein eigener Zustand.
+    Spezifikation und Zustandsnamen gehören D0-L (``function_list.PRECONDITIONS``,
+    ``LICENCE_STATES``, ``licence_states()``) — der Prüfstand übersetzt nichts.
+    Ein Zustand, den die ausgelieferte Fassung nicht erreicht (``expired`` ohne
+    ``store.TRIAL_FROM``), ist ein Fehler, kein anderer Lauf (Regel 21); ``over``
+    ist der Startfall, kein Lauf je Funktion.
     """
-    if word in licence_runs():
-        # L stellt seine Wörter auf die Namen aus ``app.core.activation`` um.
+    if word in licence_states():
         return word
-    if word == "gekauft":
-        return "licensed"
-    if word == "abgelaufen":
-        return licence_runs()[0]
     raise ValueError(
-        f"Lizenzwort {word!r} hat keinen Lauf in der ausgelieferten Fassung"
-        f" — erreichbar sind {licence_runs()} (Spezifikation mit D0-L klären)"
+        f"Lizenzzustand {word!r} hat keinen Lauf in der ausgelieferten Fassung"
+        f" — erreichbar sind {licence_states()}, {STARTUP_LICENCE!r} ist der Startfall"
     )
 
 
@@ -446,13 +441,13 @@ def variant_sets() -> dict[str, tuple[dict[str, Any], ...]]:
     """Alle Variantensätze, ``lizenz`` mit den Läufen dieser Fassung (Prüfpunkt 18).
 
     Welche Zustände erreichbar sind, hängt an ``store.TRIAL_FROM`` der
-    Auslieferung (``function_checks.licence_runs``) und wird deshalb zur
+    Auslieferung (``function_list.licence_states``) und wird deshalb zur
     Inventarzeit gelesen, nicht beim Import. ``over`` ist kein Lauf: Eine
     abgelaufene Demo startet nicht, das misst der Startfall der D12-Zeile.
     """
     return {
         **FIXED_VARIANT_SETS,
-        "lizenz": tuple({"set": "lizenz", "licence": state} for state in licence_runs()),
+        "lizenz": tuple({"set": "lizenz", "licence": state} for state in licence_states()),
     }
 
 
@@ -535,7 +530,7 @@ def write_profile(variant: Variant, recent: Sequence[Path] = ()) -> Path:
 
 
 def licence_activation(state: str, today: date) -> Any:
-    """Der Freischaltzustand zu einem Lauf (``function_checks.LICENCE_STATES``) oder ``over``.
+    """Der Freischaltzustand zu einem Lauf (``function_list.LICENCE_STATES``) oder ``over``.
 
     Die Namen sind Eigenschaften von ``activation.Activation``; gebaut wird je
     ein Zustand, an dem genau diese Eigenschaft gilt — ohne private Schlüssel,
@@ -599,7 +594,7 @@ def apply_licence(state: str, today: date | None = None) -> Any:
         elif state == "expired" and store.TRIAL_FROM is None:
             raise ValueError(
                 "„expired“ gibt es nur, wenn die Fassung einen Testlauf anbietet"
-                f" (store.TRIAL_FROM) — erreichbar sind {licence_runs()}"
+                f" (store.TRIAL_FROM) — erreichbar sind {licence_states()}"
             )
     others = [name for name in (*LICENCE_STATES, STARTUP_LICENCE) if name != state]
     if not getattr(cached, state) or any(getattr(cached, name) for name in others):
@@ -1151,10 +1146,17 @@ class Walk:
             way.append((last.get("why"), tuple(last.get("rect") or ())))
             if counter["way"] > MOST_WAY_CLICKS:
                 detail = f"nach {MOST_WAY_CLICKS} Wegklicks noch nicht am Ziel"
-                if len(set(way)) == 1 and way[0][0] == "rollen":
-                    # Jedes Rollen an derselben Stelle, und der Weg nennt danach
+                same = len(way) - next(
+                    (index + 1 for index in range(len(way) - 1, -1, -1) if way[index] != way[-1]),
+                    0,
+                )
+                if way[-1][0] == "rollen" and same > 1:
+                    # Zuletzt jedes Mal dasselbe Rollen, und der Weg nennt danach
                     # wieder dasselbe: Die Liste bringt das Ziel nicht ins Bild.
-                    detail += " — jedes Rollen an derselben Stelle, das Ziel kam nicht ins Bild"
+                    detail += (
+                        f" — die letzten {same} Klicks rollten an derselben Stelle,"
+                        " das Ziel kam nicht ins Bild"
+                    )
                 raise BenchFinding(NOT_FOUND, name, detail)
             machine.insert(
                 [Step(f"weg zu {name}", act, ready=self.stable(name), settle_ms=SETTLE_MS)]

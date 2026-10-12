@@ -45,17 +45,15 @@ from tools.file_acceptance import (
 )
 from tools.function_checks import (
     CHECKPOINTS,
-    LICENCE_STATES,
     LICENCE_UNLOCKED,
     MAIN_PHASES,
     PROTOCOL_FIELDS,
     PROTOCOL_SCHEMA,
     SELECTION_STAGES,
-    STARTUP_LICENCE,
     WHY,
-    licence_runs,
     validate_protocol,
 )
+from tools.function_list import LICENCE_STATES, STARTUP_LICENCE, licence_states
 
 BENCH = ROOT / "tools" / "function_bench.py"
 CAPTURE = ROOT / "tools" / "function_capture.py"
@@ -457,15 +455,22 @@ def test_a_list_that_scrolls_in_vain_is_named_in_the_finding() -> None:
     """
     timer = FakeTimer()
     area = FakeWidget("rollfläche")
+    arrow = FakeWidget("pfeil")
     ports = FakePorts(
         timer,
-        {"tree.row:obj_1.hole_1": [FakeClick((4, 130, 262, 206), "none", "rollen", area, 1)]},
+        {
+            "tree.row:obj_1.hole_1": [
+                FakeClick((4, 130, 20, 50), "left", "aufklappen", arrow),
+                FakeClick((4, 130, 262, 206), "none", "rollen", area, 1),
+            ]
+        },
     )
     steps: list[dict[str, Any]] = []
     machine = run_machine(timer, [bench.Walk(ports, steps, 0.0).step("tree.row:obj_1.hole_1")])
     assert machine.finding is not None and machine.finding.kind == bench.NOT_FOUND
-    assert "jedes Rollen an derselben Stelle" in machine.finding.detail
-    assert {button for _name, _point, button in ports.pressed} == {"wheel_down"}
+    rolled = bench.MOST_WAY_CLICKS
+    assert f"die letzten {rolled} Klicks rollten an derselben Stelle" in machine.finding.detail
+    assert [button for _name, _point, button in ports.pressed] == ["left"] + ["wheel_down"] * rolled
 
 
 def test_a_click_waits_until_its_place_stands_still() -> None:
@@ -916,7 +921,7 @@ def test_each_licence_run_of_the_shipped_version_is_set_through_the_suites_seam(
     monkeypatch.setattr(activation, "_cached", activation._cached)
     monkeypatch.setattr(store, "DEMO_UNTIL", store.DEMO_UNTIL)
     monkeypatch.setattr(store, "TRIAL_FROM", trial_from)
-    runs = licence_runs()
+    runs = licence_states()
     assert ("expired" in runs) is (trial_from is not None)
     assert {entry["licence"] for entry in bench.variant_sets()["lizenz"]} == set(runs)
     for state in runs:
@@ -952,7 +957,7 @@ def test_the_expired_demo_is_the_start_case_and_no_run(monkeypatch: pytest.Monke
     cached = bench.apply_licence(STARTUP_LICENCE, date(2026, 10, 12))
     assert cached.over is True and cached.unlocked is False
     assert store.DEMO_UNTIL == cached.deadline == date(2026, 10, 11)
-    assert STARTUP_LICENCE not in licence_runs()
+    assert STARTUP_LICENCE not in licence_states()
     with pytest.raises(ValueError, match="Startfall"):
         bench.Variant.of({"licence": STARTUP_LICENCE})
     with pytest.raises(ValueError, match="Startfall"):
@@ -1034,25 +1039,28 @@ def test_present_ai_and_a_missing_comfyui_are_read_the_way_the_application_reads
 def test_the_spec_sets_licence_and_preconditions_and_both_states_run() -> None:
     """Die Spezifikation legt Lizenz und Vorbedingungen fest; „fehlt“ und „vorhanden“ laufen beide.
 
-    Die Lizenzwörter der Spezifikation (L) werden die Zustände des Protokolls (U):
-    „abgelaufen“ ist der gesperrte Lauf der Fassung, „gekauft“ ``licensed``; „demo“
-    hat seit der Entscheidung vom 12.10. keinen Lauf und ist ein Fehler.
+    Die Spezifikation nennt Lizenzzustände mit den Namen von D0-L; der Prüfstand
+    übersetzt nichts. Was die Fassung nicht erreicht, ist ein Fehler: das alte
+    Wort „demo“, ein deutsches Wort, ``over`` (der Startfall) und der gesperrte
+    Zustand, den diese Fassung nicht hat.
     """
+    locked = licence_states()[0]
     base, others = bench.spec_variants(
-        {"preconditions": {"licence": "abgelaufen", "slicer": "vorhanden", "printer": "resin"}}
+        {"preconditions": {"licence": locked, "slicer": "vorhanden", "printer": "resin"}}
     )
     assert base == {
-        "licence": licence_runs()[0],
+        "licence": locked,
         "preconditions": {"slicer": "vorhanden", "printer": "resin"},
     }
     assert others == [
         {"preconditions": {"slicer": "fehlt", "printer": "resin"}, "phases": ["main"]}
     ]
     assert bench.spec_variants(None) == ({}, [])
-    assert bench.spec_licence("gekauft") == "licensed"
-    assert bench.spec_licence("abgelaufen") in LICENCE_STATES
-    with pytest.raises(ValueError, match="keinen Lauf"):
-        bench.spec_licence("demo")
+    assert bench.spec_licence("licensed") == "licensed"
+    unreachable = next(state for state in LICENCE_STATES if state not in licence_states())
+    for word in ("demo", "gekauft", STARTUP_LICENCE, unreachable):
+        with pytest.raises(ValueError, match="keinen Lauf"):
+            bench.spec_licence(word)
 
 
 def test_a_variant_takes_only_states_the_bench_can_make() -> None:
@@ -1079,7 +1087,7 @@ def test_a_variant_takes_only_states_the_bench_can_make() -> None:
     assert bench.Variant.of(variant.as_dict()) == variant
     sets = bench.variant_sets()
     assert set(bench.PHASES) == {*sets, "start"}
-    assert {entry.get("licence") for entry in sets["lizenz"]} == set(licence_runs())
+    assert {entry.get("licence") for entry in sets["lizenz"]} == set(licence_states())
     assert {entry.get("window_size") for entry in sets["skalierung"]} >= set(bench.WINDOW_SIZES)
     assert sets["bewegung"] == ({"set": "bewegung", "motion": False},)
 
@@ -1148,7 +1156,7 @@ def test_function_cases_unfold_rows_variants_and_languages() -> None:
     assert [case.number for case in cases] == list(range(5, 5 + len(cases)))
     # basis: resize_hole einmal, drill_hole zweimal (Slicer vorhanden und fehlt); lizenz: je
     # einer je Lauf der Fassung.
-    assert len(function) == 1 + 2 + 2 * len(licence_runs())
+    assert len(function) == 1 + 2 + 2 * len(licence_states())
     slicer = [case.variant["preconditions"] for case in function if case.row == "drill_hole"]
     assert {"slicer": "vorhanden"} in slicer and {"slicer": "fehlt"} in slicer
     assert [(case.row, case.variant["language"]) for case in language] == [
@@ -1158,7 +1166,7 @@ def test_function_cases_unfold_rows_variants_and_languages() -> None:
     first = function[0]
     assert first.path == "scenes/merkmal.hole.exakt.p3d" and first.variant["set"] == "basis"
     assert {case.variant["licence"] for case in function if case.variant["set"] == "lizenz"} == set(
-        licence_runs()
+        licence_states()
     )
     assert function_cases(ROWS, row_ids=["finding.action:place_on_bed"])[0].row == (
         "finding.action:place_on_bed"

@@ -377,13 +377,13 @@ def function_cases(
     from app.i18n.catalog import available_languages
     from tools.function_bench import (
         PHASES,
-        STARTUP_LICENCE,
         Variant,
         spec_variants,
     )
     from tools.function_bench import (
         variant_sets as known_sets,
     )
+    from tools.function_list import STARTUP_LICENCE
 
     sets = known_sets()
     unknown_sets = sorted(set(variant_sets) - set(sets))
