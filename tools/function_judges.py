@@ -1157,7 +1157,13 @@ def _i1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         if not str(entry.get("label") or "").strip()
         or not re.search(r"\d", str(entry.get("label")))
     ]
-    return _result("I1", issues, f"{len(labels)} Arten", {"kinds": len(labels)}, judged=True)
+    # Eine Art ohne zugewandte Stelle oder ein gescheitertes Überfahren ist nicht
+    # gemessen, kein Fund (Probelauf F-28) — der Vermerk sagt, welche.
+    missed = (_map(protocol, "unmeasured") or {}).get("hover_labels")
+    notes = [f"nicht gemessen: {missed}"] if missed else []
+    return _result(
+        "I1", issues, f"{len(labels)} Arten", {"kinds": len(labels)}, judged=True, notes=notes
+    )
 
 
 def _i2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:

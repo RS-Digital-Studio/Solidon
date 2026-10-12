@@ -11,7 +11,17 @@ search_probes = [
   { word = "Benutzerparameter", origin = "cad" },
 ]
 questions = ["Wie lege ich ein Maß an, das ich mehrfach verwende?"]
-fault_case = { inputs = { "field:name" = "breite außen" }, expected = "sperrgrund" }
+fault_case = { inputs = { "field:name" = "breite außen" }, expected = "meldung" }
 
 [row."Bearbeiten/Parameter anlegen …".expectation]
 "parameter.breite" = { value = 40.0, tolerance = 0.0005, origin = "Konstruktion: getippte 40 mm; Toleranz = halbe letzte Stelle des Wertfelds (drei Nachkommastellen, dialogs.ParameterDialog)" }
+
+# Gegenstücke brauchen zwei markierte Stellen an zwei Teilen
+# (``MainWindow._counterpart_targets``); in der leeren Szene ist der Eintrag grau,
+# und der Sprachfall maß eine Fläche, die nie aufging (Probelauf F-32).
+[row."Erzeugen/Bausteine/Gegenstücke setzen …"]
+start_scene = "zwei_koerper.exakt"
+route = [
+  { target = "tree.row:obj_1.face_1" },
+  { target = "tree.row:obj_2.face_1", modifier = "ctrl" },
+]

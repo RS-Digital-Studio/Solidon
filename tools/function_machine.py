@@ -67,6 +67,9 @@ class Step:
     ready: Callable[[], bool] | None = None
     settle_ms: int = TICK_MS
     timeout_s: float = STEP_TIMEOUT_S
+    #: Was eine abgelaufene Frist bedeutet, wenn sie ein Fund ist und kein Fehler
+    #: des Prüfstands — „keine Rückmeldung“ nach dem Übernehmen (Prüfpunkt 6).
+    on_timeout: Callable[[], BenchFinding] | None = None
 
 
 class StepMachine:
@@ -169,6 +172,9 @@ class StepMachine:
             if not ready:
                 if now - self._waiting_since > step.timeout_s:
                     self.log.append({"step": step.name, "event": "timeout", "t": now})
+                    if step.on_timeout is not None:
+                        self.stop(finding=step.on_timeout())
+                        return
                     self.stop(
                         error=f"{step.name}: Zeitgrenze von {step.timeout_s:.0f} s überschritten"
                     )

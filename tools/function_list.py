@@ -212,8 +212,8 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "parameters": ("D10", "leer"),
     "parameters.first": ("D10", "parameter"),
     # Der Prüfbericht ist eine Ansicht der Szene, keine Handlung an einer Auswahl:
-    # Er braucht Körper mit Befunden, aber keinen gewählten (Probelauf F-33, Z3).
-    "report": ("D8", "szene"),
+    # Er braucht einen Körper, aber keinen gewählten (Probelauf F-33, Z3).
+    "report": ("D8", "ansicht"),
     "report.action": ("D8", "befund"),
     # Der letzte Meter steht im Bericht und gehört zur Übergabe an den Slicer.
     "report.slicer": ("D9", "koerper:1"),
@@ -377,6 +377,8 @@ REQUIREMENT_SCENES: Final[dict[str, str]] = {
     "start": "startbildschirm",
     "leer": "leer",
     "szene": "zwei_koerper.{kernel}",
+    # Eine Ansicht der Szene ohne Auswahl (der Prüfbericht).
+    "ansicht": "quader.{kernel}",
     "koerper:1": "quader.{kernel}",
     "koerper:2": "zwei_koerper.{kernel}",
     # Vier Eingänge nimmt nur *Einlagen für neues Profil*: die zwei Schalen und
@@ -418,7 +420,8 @@ class Row:
     menu_path: str = ""
     shortcut: str = ""
     covers: tuple[str, ...] = ()
-    """Die Operationen hinter einer Sammelzeile (``part:*``), sonst leer."""
+    """Die Operationen hinter einer Sammelzeile (``part:*``) oder einer Zeile, deren
+    Eingang eine zweite Operation mitträgt (:data:`SAME_ENTRY`), sonst leer."""
     route: tuple[Mapping[str, str], ...] = ()
     """Die Klicks, die die Auswahl der Anforderung herstellen (:func:`selection_route`) —
     ``{target, button, modifier}``; ``next_click`` wählt nichts aus, er nennt nur den
@@ -531,14 +534,45 @@ def _start_scene(requirement: str, kernel: str, scenes: Mapping[str, Scene]) -> 
     return key if key in scenes else ""
 
 
+#: Operationen ohne eigenen Eingang: Sie stehen im Dialog ihrer Gastgeberin, und
+#: der Körper entscheidet, welche rechnet. Eine Zeile mit beiden (``covers``).
+SAME_ENTRY: Final[dict[str, str]] = {"drill_brep_hole": "drill_hole"}
+
+
+def operation_target(name: str) -> str:
+    """Wo der Kunde eine Operation bedient — das Ziel ihrer Zeile (Probelauf F-21).
+
+    Eine Handlung des Merkmalfensters (``perceive.actions.ACTION_ORDER``) ist
+    seine Zeile ``feature:<op>``, eine Färbung der Filamentwähler
+    (``selection_operations.PICKER_HANDLES``), sonst der Knopf oder die
+    Menüzeile ``operation:<op>``. Vorher hieß jede ``operation:<op>``, und an
+    *Merkmal versetzen* fand der Sprachfall „kein Knopf … gilt an dieser
+    Auswahl nicht“.
+    """
+    from app.core.perceive.actions import ACTION_ORDER
+    from app.ui.selection_operations import PICKER_HANDLES
+
+    if any(name in group for group in ACTION_ORDER):
+        return f"feature:{name}"
+    if name in PICKER_HANDLES:
+        return "filament.picker"
+    return f"operation:{name}"
+
+
 def operation_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
     """Je Operation eine Zeile, die Katalogkacheln als eine (``part:*``)."""
     from app.core.registry.surfaces import catalogue_operations, menu_path
 
     catalogue = catalogue_operations()
+    guests: dict[str, list[str]] = {}
+    for guest, host in SAME_ENTRY.items():
+        if source.has(guest) and source.has(host):
+            guests.setdefault(host, []).append(guest)
     rows: list[Row] = []
     for spec in sorted(source.all(), key=lambda entry: entry.name):
-        if spec.name in catalogue:
+        if spec.name in catalogue or (
+            spec.name in SAME_ENTRY and source.has(SAME_ENTRY[spec.name])
+        ):
             continue
         requirement = requirement_of(spec)
         kernel = kernel_of(spec, requirement)
@@ -550,9 +584,12 @@ def operation_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
                 package=package_of_operation(spec),
                 requirement=requirement,
                 start_scene=_start_scene(requirement, kernel, scenes),
-                target=f"operation:{spec.name}",
+                target=operation_target(spec.name),
                 menu_path=menu_path(spec, source),
                 shortcut=spec.shortcut or "",
+                covers=tuple(sorted({spec.name, *guests[spec.name]}))
+                if spec.name in guests
+                else (),
             )
         )
     covered = tuple(sorted(name for name in catalogue if source.has(name)))
@@ -1279,8 +1316,9 @@ def selection_route(row: Row, scenes: Mapping[str, Scene]) -> tuple[dict[str, st
     Baumzeile, die die Szene in ``select`` nennt, ein Befund seine Zeile im
     Bericht — bei einer Befundhandlung der Befund, an dem sie steht. Eine Kante
     wählt nur ein Klick ins Bild; hier steht der Körper davor, den Klick auf die
-    Kante nennt die Spezifikation. Ohne Auswahl (leer, Startbildschirm, ganze
-    Szene) ist der Weg leer.
+    Kante nennt die Spezifikation. Eine Operation über die ganze Szene steht am
+    gewählten ersten Körper. Ohne Auswahl (leer, Startbildschirm, Ansicht) ist
+    der Weg leer.
     """
     action = row.id.removeprefix("finding.action:") if row.id.startswith("finding.") else ""
     return route_for(row.requirement, row.start_scene, scenes, action)
@@ -1313,6 +1351,11 @@ def route_for(
             for number in range(1, count + 1)
         )
     if requirement in BODY_SELECTIONS:
+        return (_click("tree.row:obj_1"),)
+    if requirement == "szene":
+        # Eine Operation über die ganze Szene steht in der Karte am gewählten
+        # Körper (selection_operations.body_operations) — ohne Auswahl fand
+        # der Sprachfall *Druckoptimal ausrichten* nicht (Probelauf F-32).
         return (_click("tree.row:obj_1"),)
     return ()
 

@@ -530,9 +530,15 @@ def function_inventory(
     kept = [row for row in rows if str(row["id"]) in chosen or row.get("package") in languages]
     write_json(out / "rows.json", kept)
     catalogue = function_scenes.load_scenes()
+    # Auch die Startszene des Fehlfalls (``fault_case.start_scene``): Sie fehlte,
+    # und der Fehlfall von *Auf das Bett setzen* lief nie (Probelauf F-34).
     wanted = {
-        str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "")
+        str(key)
         for row in kept
+        for key in (
+            (row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "",
+            ((row.get("spec") or {}).get("fault_case") or {}).get("start_scene") or "",
+        )
     }
     heavy = any(catalogue[key].heavy for key in wanted if key in catalogue)
     function_scenes.save_scenes(out / "scenes", heavy=heavy)

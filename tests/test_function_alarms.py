@@ -16,7 +16,15 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
-from tools import function_list, function_scenes
+from tests.bench_fakes import FakeClick, FakePorts, FakeTimer, FakeWidget, run_machine
+from tools import (
+    function_bench,
+    function_list,
+    function_machine,
+    function_scenes,
+    function_setup,
+    function_walk,
+)
 from tools.function_checks import (
     FAULT_PHASE,
     MAIN_PHASES,
@@ -429,3 +437,464 @@ def test_the_report_is_a_view_without_a_selection() -> None:
         )
     )
     assert CRITERION_JUDGES["Z3"](protocol, sample_context()) is None
+
+
+# --- Der Prüfstand: Weg, Übernehmen, Fehlfall, Lizenz, Zeilen (F-20 bis F-35) ------------------
+
+
+def test_a_target_the_window_still_works_out_is_awaited_not_lost() -> None:
+    """F-20: Solange das Fenster sagt, dass es ermittelt, ist ein fehlendes Ziel nicht verloren.
+
+    Das Merkmalfenster rechnet seine Zeilen im Arbeiter; nach zwei Sekunden hieß
+    *Bohrung ändern* „nicht auffindbar“, obwohl es danach dastand. Hier steht
+    der Kopf erst nach fünf Sekunden da, und bis dahin sagt das Fenster, dass
+    es ermittelt.
+    """
+    timer = FakeTimer()
+    head = FakeWidget("kopf")
+
+    class Late(FakePorts):
+        def next_click(self, name: str) -> FakeClick:
+            if timer.now < 5.0:
+                raise LookupError(f"{name}: noch nicht da")
+            self._last, self._last_name = FakeClick((0, 0, 80, 20), "left", "ziel", head), name
+            return self._last
+
+    ports = Late(timer, {})
+    ports.pending_until = 5.0
+    steps: list[dict[str, Any]] = []
+    machine = run_machine(
+        timer, [function_walk.Walk(ports, steps, 0.0).step("feature:resize_hole")]
+    )
+    assert machine.done and machine.finding is None and machine.error is None
+    assert ports.pressed == [("kopf", (40, 10), "left")]
+
+
+def test_a_window_that_works_out_forever_is_the_finding_no_response() -> None:
+    """Neue Fundart: Ermittelt das Fenster länger als ``PENDING_S``, ist das ein Fund."""
+    timer = FakeTimer()
+    ports = FakePorts(timer, {})
+    ports.pending_until = 10 * function_walk.PENDING_S
+    steps: list[dict[str, Any]] = []
+    machine = run_machine(
+        timer, [function_walk.Walk(ports, steps, 0.0).step("feature:resize_hole")]
+    )
+    assert machine.finding is not None and machine.finding.kind == NO_RESPONSE, machine.finding
+    assert steps[-1]["finding"] == NO_RESPONSE
+    assert function_walk.PENDING_S <= steps[-1]["t"] < function_walk.PENDING_S + 1
+
+
+def test_a_wait_for_an_effect_that_never_lands_is_the_finding_no_response() -> None:
+    """Neue Fundart am Automaten: Eine Frist mit ``on_timeout`` endet als Fund, nicht als Fehler."""
+    timer = FakeTimer()
+    waiting = function_machine.Step("ergebnis steht", lambda machine: None, ready=lambda: False)
+    waiting.timeout_s = 5.0
+    waiting.on_timeout = lambda: function_machine.BenchFinding(NO_RESPONSE, "ergebnis", "nach 5 s")
+    machine = run_machine(timer, [waiting])
+    assert machine.error is None
+    assert machine.finding is not None and machine.finding.kind == NO_RESPONSE
+
+
+def test_a_window_command_with_inputs_is_taken_over_with_its_dialog() -> None:
+    """F-25: *Parameter anlegen* tippt in den Dialog des Befehls und klickt *Anlegen*."""
+    row = {
+        "kind": "fensterbefehl",
+        "target": "menu:menubar.parameter_anlegen",
+        "spec": {"inputs": {"field:name": "breite", "field:value": 40.0}},
+    }
+    assert function_setup.default_apply_target(row) == "dialog.accept"
+    assert function_setup.default_apply_target({**row, "spec": {}}) is None
+
+
+def test_an_operation_row_aims_where_the_customer_works_it() -> None:
+    """F-21: Merkmalshandlungen heißen ``feature:<op>``, Färben der Filamentwähler.
+
+    *Bohrung setzen* am exakten Körper ist kein eigener Eingang, sondern
+    derselbe Dialog — eine Zeile für beide.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    rows = {
+        row.id: row for row in function_list.operation_rows(REGISTRY, function_scenes.load_scenes())
+    }
+    for name in ("move_feature", "rotate_feature", "resize_hole", "slot_hole", "push_face"):
+        assert rows[name].target == f"feature:{name}", rows[name]
+    for name in ("assign_slot", "clear_filament", "paint_slot"):
+        assert rows[name].target == "filament.picker", rows[name]
+    assert "drill_brep_hole" not in rows
+    assert rows["drill_hole"].covers == ("drill_brep_hole", "drill_hole")
+    assert rows["drill_hole"].target == "operation:drill_hole"
+
+
+def test_the_search_counts_every_name_of_the_same_function() -> None:
+    """F-27: *Auf Grundebene setzen* findet die Operation — das ist die Befundhandlung.
+
+    Verglichen wurde die genaue Kennung: ``operation:place_on_bed`` auf Rang 1
+    hieß an der Zeile ``finding.action:place_on_bed`` „nicht gefunden“.
+    """
+    from tools import function_surface
+
+    hits = ["operation:create_sphere", "operation:place_on_bed"]
+    finding_row = {"id": "finding.action:place_on_bed", "target": "finding.action:place_on_bed"}
+    names = function_surface.search_names(None, finding_row)
+    assert function_surface.search_rank(hits, names) == 2
+    feature_row = {"id": "resize_hole", "kind": "operation", "target": "feature:resize_hole"}
+    names = function_surface.search_names(None, feature_row)
+    assert function_surface.search_rank(["operation:resize_hole"], names) == 1
+
+
+def test_a_licence_refusal_is_writing_that_was_stopped() -> None:
+    """F-35: Eine Absage an der Lizenzgrenze heißt, die Handlung wollte schreiben."""
+    from app.core import activation
+    from app.core.errors import ValidationError
+    from tools import function_surface
+
+    assert function_surface.licence_refusal(activation.LicenceRequired(action="change"))
+    assert function_surface.licence_refusal(activation.DeviceActivationRequired(action="change"))
+    assert not function_surface.licence_refusal(ValidationError(field="name", detail="x"))
+
+
+def test_a_language_case_names_each_surface_picture_after_its_row() -> None:
+    """F-31: Im Sprachfall trägt jedes Flächenbild Sprache und Zeile."""
+    from tools import function_surface
+
+    variant = function_setup.Variant.of({"set": "sprachen", "language": "fr"})
+    first = function_surface.picture_label(variant, "drill_hole", "flaeche")
+    second = function_surface.picture_label(variant, "plug_hole", "flaeche")
+    assert first != second and first.startswith("flaeche-fr-drill_hole")
+    zoll = function_setup.Variant.of({"set": "zoll", "unit": "in"})
+    assert function_surface.picture_label(zoll, "drill_hole", "flaeche") == "flaeche-zoll"
+
+
+def test_rows_without_a_way_to_their_surface_are_not_run() -> None:
+    """F-32: Ohne Szene mit ihrem Befund oder ohne Klick, der ihr Fenster öffnet, kein Lauf."""
+    from tools import function_surface
+
+    assert function_surface.without_way({"target": "finding.action:x", "start_scene": ""})
+    assert function_surface.without_way({"target": "dialog:about_dialog", "start_scene": "leer"})
+    assert function_surface.without_way({"target": "meldung:show_error", "start_scene": "leer"})
+    opened = {
+        "target": "dialog:about_dialog",
+        "start_scene": "leer",
+        "spec": {"route": [{"target": "menu:menubar.ueber_solidon"}]},
+    }
+    assert function_surface.without_way(opened) == ""
+    assert (
+        function_surface.without_way({"target": "operation:drill_hole", "start_scene": "q"}) == ""
+    )
+
+
+def _flow(spec: dict[str, Any], states: dict[str, Any] | None = None) -> Any:
+    """Ein Funktionsfall ohne Fenster: nur, was die Phase bis zu ihren Schritten braucht."""
+    from tools.function_protocol import empty_protocol
+
+    flow = object.__new__(function_bench.FunctionFlow)
+    row = {"id": "finding.action:place_on_bed", "target": "finding.action:place_on_bed"}
+    flow.row = {**row, "spec": spec}
+    flow.spec = spec
+    flow.scene_key = "unter_dem_bett.netz"
+    flow.apply_target = None
+    flow.data = empty_protocol(flow.row, {}, {})
+    flow.data["states"] = states or {}
+    flow.walker = function_walk.Walk(FakePorts(FakeTimer(), {}), [], 0.0)
+    return flow
+
+
+def test_the_revision_needs_a_new_step_with_values() -> None:
+    """F-23: Nur eine Zeile, die einen Schritt mit Werten anlegt, wird nachträglich geändert.
+
+    *Parameter anlegen* legt keinen Schritt an; vorher änderte der Prüfstand den
+    letzten Schritt der Szene und hielt die Karte der Auswahl für den Dialog.
+    """
+    same = {"before": {"ops": ["create_brep_box"]}, "applied": {"ops": ["create_brep_box"]}}
+    flow = _flow({}, same)
+    flow.reset = lambda: (_ for _ in ()).throw(AssertionError("kein Lauf ohne neuen Schritt"))
+    flow.phase_revise()
+    assert flow.data["unmeasured"]["revise"] == "die Zeile legt keinen Schritt im Verlauf an"
+    assert flow.data["revise"] is None
+
+
+def test_the_fault_case_walks_its_own_scene_and_way() -> None:
+    """F-34, F-24: Der Fehlfall fährt seine Startszene, seinen Weg und klickt während der Rechnung.
+
+    Vorher nahm der Prüfstand den Weg der Zeile und suchte ``field:edge`` im
+    Prüfbericht — „nicht auffindbar“, und Prüfpunkt 7 hieß „keine Meldung“.
+    """
+    fault = {
+        "start_scene": "unter_dem_bett_langsam",
+        "route": [{"target": "history.row:4", "button": "double"}],
+        "inputs": {"field:edge": 0.14},
+        "during": "rechnung",
+        "expected": "sperrgrund",
+    }
+    flow = _flow({"fault_case": fault})
+    scenes: list[str] = []
+    walked: list[str] = []
+    flow.fault_scene = lambda key: scenes.append(key) or True
+    flow.path_steps = lambda: [function_machine.Step("weg zu finding.action:place_on_bed", None)]
+    flow.input_steps = lambda inputs: [
+        function_machine.Step(f"tippen {name}", None) for name in inputs
+    ]
+    flow.run_steps = lambda label, steps: walked.extend(step.name for step in steps) or True
+    flow.picture = lambda label: None
+    flow.phase_fault()
+    assert scenes == ["unter_dem_bett_langsam"]
+    # Die Rechnung muss zu sehen sein, bevor die Handlung geklickt wird; stößt
+    # die Eingabe keine an, tut es der Hauptknopf des offenen Dialogs.
+    assert walked[:7] == [
+        "weg zu history.row:4",
+        "tippen field:edge",
+        "dialog merken",
+        "rechnet",
+        "anstoßen",
+        "rechnung gesehen",
+        "weg zu finding.action:place_on_bed",
+    ], walked
+
+
+def test_the_surface_follows_the_kind_of_target(monkeypatch: Any) -> None:
+    """F-30: Die Fläche einer Befundhandlung ist der Prüfbericht, eines Werkzeugs seine Leiste.
+
+    Vorher war sie für jede Zeile ohne Dialog die Karte der Auswahl oder das
+    ganze Hauptfenster — Wörter über dem ersten Feld, Hauptknöpfe und Abstände
+    des ganzen Fensters standen an jeder Befundhandlung. Ein offener Dialog geht
+    vor.
+    """
+    from app.ui import guide_targets
+    from tools import function_surface
+
+    class Shown:
+        def isVisible(self) -> bool:  # noqa: N802 - Qts Name
+            return True
+
+    shown: dict[str, Any] = {
+        "report": Shown(),
+        "handle:bar.split": Shown(),
+        "selection": Shown(),
+    }
+
+    def widget_for(window: Any, name: str) -> Any:
+        if name in shown:
+            return shown[name]
+        raise guide_targets.MissingTargetError(name)
+
+    monkeypatch.setattr(guide_targets, "widget_for", widget_for)
+    window = object()
+    surface = function_surface.surface_for
+    assert surface(window, "finding.action:place_on_bed") is shown["report"]
+    assert surface(window, "report") is shown["report"]
+    assert surface(window, "tool:split") is shown["handle:bar.split"]
+    assert surface(window, "feature:resize_hole") is shown["selection"]
+    shown["dialog"] = Shown()
+    assert surface(window, "finding.action:place_on_bed") is shown["dialog"]
+
+
+def test_a_grey_button_gives_the_reason_its_tooltip_shows(monkeypatch: Any) -> None:
+    """F-34: Der Sperrgrund ist die Kurzhilfe des grauen Knopfs, nicht seine alte Beschreibung.
+
+    Im Fehlfall von *Auf das Bett setzen* sperrt der Bericht die Handlung während
+    der Rechnung und nennt den Grund in der Kurzhilfe; die Beschreibung trägt
+    weiter die Nebenfolge des offenen Knopfs. Der Prüfstand las die Nebenfolge
+    als Meldung.
+    """
+    from app.ui import guide_targets
+    from tools import function_surface
+
+    class Grey:
+        def isEnabled(self) -> bool:  # noqa: N802 - Qts Name
+            return False
+
+        def toolTip(self) -> str:  # noqa: N802 - Qts Name
+            return "Erst nach der Berechnung — der Befund gehört zum vorigen Stand."
+
+        def accessibleDescription(self) -> str:  # noqa: N802 - Qts Name
+            return "Nebenfolge: Senkt den Körper bis auf das Bett."
+
+    monkeypatch.setattr(guide_targets, "widget_for", lambda window, name: Grey())
+    reason = function_surface.grey_reason(object(), "finding.action:place_on_bed")
+    assert reason == "Erst nach der Berechnung — der Befund gehört zum vorigen Stand."
+
+
+def test_hovering_takes_a_facing_feature_per_kind_and_names_what_it_missed() -> None:
+    """F-28: Je Art ein Merkmal mit zugewandter Stelle; ohne eines ist die Art nicht gemessen.
+
+    Vorher fuhr der Prüfstand das erste Merkmal jeder Art an; lag es abgewandt,
+    scheiterte das Überfahren, und der leere Hinweis hieß „Art face ohne Name
+    und Maß“.
+    """
+    from types import SimpleNamespace
+
+    def feature(kind: str) -> Any:
+        return SimpleNamespace(kind=kind)
+
+    objects = {
+        "obj_1": SimpleNamespace(
+            features={
+                "face_1": feature("face"),
+                "face_2": feature("face"),
+                "hole_1": feature("hole"),
+            }
+        )
+    }
+
+    def next_click(name: str) -> Any:
+        if name != "view:obj_1.face_2":
+            raise LookupError(f"{name}: keine zugewandte Stelle")
+        return SimpleNamespace(rect=None, why="ziel", target=name)
+
+    hovered: list[str] = []
+    flow = object.__new__(function_bench.FunctionFlow)
+    flow.session = SimpleNamespace(
+        last_result=SimpleNamespace(scene=SimpleNamespace(objects=objects))
+    )
+    flow.window = SimpleNamespace(viewport=SimpleNamespace(renderer=object(), toolTip=lambda: ""))
+    flow.ports = SimpleNamespace(next_click=next_click)
+    flow.data = {"unmeasured": {}}
+    flow.run_steps = lambda label, steps: hovered.append(label) or True  # type: ignore[method-assign]
+    flow.phase_hover()
+    assert hovered == ["überfahren view:obj_1.face_2"]
+    assert flow.data["hover_labels"] == [{"kind": "face", "label": ""}]
+    assert "hole" in flow.data["unmeasured"]["hover_labels"]
+
+
+def test_an_action_shown_in_the_view_is_typed_there_and_taken_with_return(
+    monkeypatch: Any,
+) -> None:
+    """F-20: Steht die Handlung im Bild, klickt der Fall keinen Kopf im Merkmalfenster.
+
+    Er schreibt den Schritt als Ziel in der Zone ``ansicht``, tippt ins Maßfeld
+    (``measure.field:<feld>``) und übernimmt mit der Eingabetaste. Steht sie im
+    Merkmalfenster, geht der Weg wie bisher über den Kopf und *Übernehmen*.
+    """
+    from tools import function_surface
+
+    shown = {"in_view": True}
+    monkeypatch.setattr(function_surface, "in_view", lambda window, inputs: shown["in_view"])
+    monkeypatch.setattr(
+        function_surface,
+        "field_name",
+        lambda window, name: "measure.field:diameter" if shown["in_view"] else name,
+    )
+    flow = _flow({"inputs": {"feature.field:resize_hole.diameter": 8.0}})
+    flow.row = {**flow.row, "target": "feature:resize_hole", "route": []}
+    flow.apply_target = "feature.apply"
+    flow.window = None
+    flow.widget = lambda name: None  # type: ignore[method-assign]
+    flow.variant = function_setup.Variant.of({})
+    # Ohne Anwendung keine Tastenfolge (QKeySequence): Der Weg allein zählt hier.
+    flow.mark_all_step = lambda target: function_machine.Step(  # type: ignore[method-assign]
+        f"alles markieren {target}", lambda machine: None
+    )
+    machine = function_machine.StepMachine(FakeTimer().schedule, FakeTimer().clock)
+    for case in (True, False):
+        shown["in_view"] = case
+        flow.walker.steps.clear()
+        names: list[str] = []
+        (head,) = flow.path_steps()
+        typed = flow.input_steps(flow.spec["inputs"])
+        for step in (head, typed[0], flow.apply_step()):
+            machine.queue, machine.index = [], 0
+            step.act(machine)
+            names += [inserted.name for inserted in machine.queue]
+        if case:
+            assert flow.walker.steps[-1]["zone"] == "ansicht"
+            assert flow.walker.steps[-1]["target"] == "feature:resize_hole"
+            assert names == [
+                "weg zu measure.field:diameter",
+                "alles markieren measure.field:diameter",
+                "tippen measure.field:diameter",
+                "taste übernehmen im bild",
+            ], names
+        else:
+            assert names == [
+                "weg zu feature:resize_hole",
+                "weg zu feature.field:resize_hole.diameter",
+                "alles markieren feature.field:resize_hole.diameter",
+                "tippen feature.field:resize_hole.diameter",
+                "weg zu feature.apply",
+            ], names
+
+
+def test_the_licence_run_finds_an_action_shown_in_the_view(monkeypatch: Any) -> None:
+    """F-20: Im Lizenzlauf steht *Bohrung ändern* mit Bild offen in der Maßgruppe.
+
+    Der Lauf fragte den Kopf im Merkmalfenster gleich nach der Auswahl; mit Bild
+    ist er verborgen, und jeder Lizenzzustand, auch „licensed“, hieß „fehlt“ —
+    Prüfpunkt 18 meldete eine Sperre, die es nicht gab. Gefragt wird jetzt das
+    Feld im Bild, und der Weg geht wie im Hauptlauf.
+    """
+    from tools import function_surface
+
+    monkeypatch.setattr(function_surface, "in_view", lambda window, inputs: True)
+    monkeypatch.setattr(
+        function_surface, "field_name", lambda window, name: "measure.field:diameter"
+    )
+    monkeypatch.setattr(function_surface, "grey_reason", lambda window, name: None)
+
+    class Signal:
+        def connect(self, slot: Any) -> None:
+            pass
+
+        def disconnect(self, slot: Any) -> None:
+            pass
+
+    field = FakeWidget("measure.field:diameter")
+    flow = _flow({"inputs": {"feature.field:resize_hole.diameter": 8.0}})
+    flow.row = {**flow.row, "kind": "operation", "target": "feature:resize_hole", "route": []}
+    flow.walker = function_walk.Walk(
+        FakePorts(
+            FakeTimer(),
+            {"measure.field:diameter": [FakeClick((0, 0, 9, 9), "left", "ziel", field)]},
+        ),
+        [],
+        0.0,
+    )
+    flow.ports = flow.walker.ports
+    flow.window = None
+    flow.session = type("Session", (), {"failed": Signal()})()
+    flow.variant = function_setup.Variant.of({})
+    flow.widget = lambda name: None  # type: ignore[method-assign]
+    flow.scene_now = lambda: {"ops": ["create_brep_box", "drill_hole"]}  # type: ignore[method-assign]
+    flow.mark_all_step = lambda target: function_machine.Step(  # type: ignore[method-assign]
+        f"alles markieren {target}", lambda machine: None
+    )
+    flow.effect_steps = lambda label: (  # type: ignore[method-assign]
+        [function_machine.Step(f"{label} merken", lambda machine: None)],
+        lambda: True,
+    )
+    ran: list[list[str]] = []
+    flow.run_steps = lambda phase, steps: ran.append([step.name for step in steps]) or True  # type: ignore[method-assign]
+    flow.phase_licence()
+    run = flow.data["licence_runs"][flow.variant.licence]
+    assert run["enabled"] is True, run
+    assert "handlung feature:resize_hole" in ran[-1], ran
+
+
+def test_a_whole_scene_operation_starts_at_a_chosen_body() -> None:
+    """F-32: *Druckoptimal ausrichten* steht in der Karte am gewählten Körper, nicht ohne Auswahl.
+
+    Vorher war der Weg einer Operation über die ganze Szene leer, und der
+    Sprachfall fand „keinen Knopf und keine Menüzeile“. Der Prüfbericht als
+    Ansicht bleibt ohne Auswahl (F-33).
+    """
+    scenes = function_scenes.load_scenes()
+    route = function_list.route_for("szene", "zwei_koerper.exakt", scenes)
+    assert [step["target"] for step in route] == ["tree.row:obj_1"]
+    assert function_list.route_for("ansicht", "quader.exakt", scenes) == ()
+
+
+def test_the_scene_names_are_its_bodies_and_its_project() -> None:
+    """F-10: Was die Szene benennt — Körper aus Dateien, das Projekt nach seiner Datei."""
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from tools import function_surface
+
+    objects = {"obj_1": SimpleNamespace(name="cube_clean"), "obj_2": SimpleNamespace(name="")}
+    session = SimpleNamespace(
+        last_result=SimpleNamespace(scene=SimpleNamespace(objects=objects)),
+        path=Path("F:/fall/scenes/unter_dem_bett.netz.p3d"),
+    )
+    assert function_surface.scene_names(session) == ["cube_clean", "unter_dem_bett.netz"]

@@ -25,6 +25,8 @@ from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
 from tools import (
     function_bench,
+    function_checks,
+    function_gestures,
     function_machine,
     function_protocol,
     function_setup,
@@ -117,12 +119,15 @@ def test_a_drag_counts_only_if_the_view_noticed_the_grip(qt_app: Any) -> None:
 
     data, moves = drag(answers=True)
     assert data["frames"] == {
-        "raw_drag_ms": [5.0] * function_bench.DRAG_MOVES,
+        "raw_drag_ms": [5.0] * function_gestures.DRAG_MOVES,
         "reference_factor": 1.5,
     }
     assert "frames.raw_drag_ms" not in data["unmeasured"]
     gaps = [later - earlier for earlier, later in itertools.pairwise(moves)]
-    assert len(moves) == function_bench.DRAG_MOVES and min(gaps) >= function_bench.DRAG_TICK_S * 0.9
+    assert (
+        len(moves) == function_gestures.DRAG_MOVES
+        and min(gaps) >= function_gestures.DRAG_TICK_S * 0.9
+    )
 
 
 def _probe_row(scenes: Path) -> dict[str, Any]:
@@ -240,12 +245,202 @@ def test_a_finding_action_applies_with_its_own_click_and_is_timed(
     # Rückgängig und Wiederholen sind gemessen, ohne auf eine Wirkung zu warten,
     # die nicht kommt; ob sie zurückkehren, urteilt D0-U (Prüfpunkt 5).
     assert {"undo", "redo"} <= set(states)
-    # Der Rechtsklick auf die Verlaufszeile öffnet ihr Kontextmenü; vorher fand
-    # ``menu:history.edit`` nie ein offenes Menü (Befund B, Phase „nachträglich“).
-    edit = [found for found in data["findings"] if found["target"] == "menu:history.edit"]
-    assert edit == [], edit
-    assert [entry["way"] for entry in data["revise"]] == ["menue", "doppelklick"]
+    # *Auf das Bett setzen* hat keinen Wert: Es gibt keinen Dialog, den Ändern
+    # öffnen könnte — der Prüfstand sagt das, statt „öffnet nicht“ zu messen
+    # (Probelauf F-23). Den Rechtsklick ins Kontextmenü des Verlaufs prüft
+    # ``test_a_right_click_brings_the_context_menu_event``.
+    assert data["revise"] == []
+    assert data["unmeasured"]["revise"] == function_checks.STEP_WITHOUT_VALUES
     assert validate_protocol(data) == []
+
+
+def _command_row(window: Any, row_id: str) -> dict[str, Any]:
+    """Eine Zeile der Fensterbefehle, gelesen an der Menüleiste des Fensters."""
+    from tools import function_list
+
+    rows = {row.id: asdict(row) for row in function_list.rows(function_list.menubar_of(window))}
+    return rows[row_id]
+
+
+def _run_flow(
+    window: Any, tmp_path: Path, row: dict[str, Any], entry: dict[str, Any], number: str
+) -> dict[str, Any]:
+    from PySide6.QtWidgets import QApplication
+
+    variant = function_setup.Variant.of(entry)
+    data = function_protocol.empty_protocol(
+        row, variant.protocol(None, (0, 0)), {"commit": "", "app": ""}
+    )
+    folder = tmp_path / "cases" / number
+    folder.mkdir(parents=True)
+    flow = function_bench.FunctionFlow(
+        QApplication.instance(),
+        window,
+        folder,
+        data,
+        lambda: None,
+        row,
+        variant,
+        tmp_path / "scenes",
+        out=tmp_path,
+    )
+    flow.prepare()
+    flow.run()
+    return data
+
+
+def test_a_window_command_with_inputs_creates_and_tries_to_write_when_locked(
+    window: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-25, F-26, F-35, F-36: *Parameter anlegen* legt an — gesperrt nicht still „lesend“.
+
+    Vorher tippte der Prüfstand Name und Wert und klickte nie *Anlegen*: Nichts
+    entstand, Prüfpunkt 5 stand auf „ja“ (F-36), und der Lizenzlauf öffnete nur
+    den Dialog — sein Dialog galt als fremde Nachfrage (F-26), und „schreibt“
+    blieb falsch (F-35). Jetzt legt der Hauptweg das Maß an, und der gesperrte
+    Lauf geht denselben Weg: grau mit Grund oder eine Absage an der
+    Lizenzgrenze, die das Schreiben belegt.
+    """
+    from app.core import activation
+    from app.core.activation import store
+    from tools import function_scenes
+
+    function_scenes.save_scenes(tmp_path / "scenes")
+    row = _command_row(window, "Bearbeiten/Parameter anlegen …")
+    assert function_setup.default_apply_target(row) == "dialog.accept"
+    data = _run_flow(window, tmp_path, row, {"phases": ["main"]}, "001")
+    assert not data["errors"], data["errors"]
+    states = data["states"]
+    assert function_protocol.compare_prints(states["before"], states["applied"])["differs"] == [
+        "project_params"
+    ]
+    assert data["result"]["metrics"]["parameter.breite"] == pytest.approx(40.0)
+    assert all(entry["allowed"] for entry in data["modals"] or ()), data["modals"]
+    for name in ("_cached", "DEMO_UNTIL", "TRIAL_FROM"):
+        holder = activation if name == "_cached" else store
+        monkeypatch.setattr(holder, name, getattr(holder, name))
+    function_setup.apply_licence("needs_activation")
+    locked = _run_flow(
+        window,
+        tmp_path,
+        row,
+        {"set": "lizenz", "licence": "needs_activation"},
+        "002",
+    )
+    run = locked["licence_runs"]["needs_activation"]
+    assert (not run["enabled"] and run["reason"]) or run["writes"], run
+    assert all(
+        entry["allowed"] for entry in locked["modals"] or () if entry["class"] == "ParameterDialog"
+    ), locked["modals"]
+
+
+@pytest.mark.usefixtures("require_graphics_adapter")
+def test_a_hole_is_changed_where_the_real_window_shows_it(
+    tmp_path: Path, native_window_platform: str
+) -> None:
+    """F-20 am echten Fenster: Mit Bild steht *Bohrung ändern* nach der Auswahl in der Maßgruppe.
+
+    Offscreen gibt es kein Bild, und die Handlung bleibt im Merkmalfenster; am
+    echten Fenster rückt sie in die Maßgruppe über der Ansicht, der Kopf im
+    Merkmalfenster ist verborgen. Vorher hieß das nach zwei Sekunden „nicht
+    auffindbar“ (Probelauf, Fälle 004 bis 027). Jetzt tippt der Fall dort und
+    übernimmt mit der Eingabetaste, wie der Kunde.
+    """
+    import os
+    import subprocess
+    import sys
+
+    out = tmp_path / "abnahme"
+    environment = {**os.environ, "QT_QPA_PLATFORM": native_window_platform, "PYTHONUTF8": "1"}
+    for arguments, limit in (
+        (["inventory", "--functions", "--rows", "resize_hole", "--phases", "main"], 600),
+        (["run"], 900),
+    ):
+        done = subprocess.run(
+            [sys.executable, str(ACCEPTANCE), *arguments, "--out", str(out)],
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=limit,
+        )
+        assert done.returncode == 0, done.stdout + done.stderr
+    data = json.loads((out / "cases" / "001" / "function.json").read_text(encoding="utf-8"))
+    assert data["findings"] == [], data["findings"]
+    assert data["place"]["error"] is None, data["place"]
+    assert data["result"]["metrics"]["hole.diameter"] is not None
+    assert validate_protocol(data) == []
+
+
+def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
+    """F-34, F-23: Der Doppelklick über ``QtPorts.press`` öffnet eine Zeile wie der des Kunden.
+
+    ``QTest.mouseDClick`` allein schickt nur das Doppelklickereignis; eine
+    Liste meldet ``itemDoubleClicked`` aber nur an der Zeile, die vorher
+    gedrückt war. Kein Doppelklick des Prüfstands öffnete so je einen Schritt
+    im Verlauf — der Fehlfall von *Auf das Bett setzen* fand sein Feld nie.
+    """
+    from PySide6.QtWidgets import QListWidget
+
+    listing = QListWidget()
+    listing.addItems(["1  Quader anlegen", "2  Bohrung setzen"])
+    opened: list[str] = []
+    listing.itemDoubleClicked.connect(lambda item: opened.append(item.text()))
+    listing.show()
+    qt_app.processEvents()
+    try:
+        place = listing.visualItemRect(listing.item(1)).center()
+        point = listing.viewport().mapToGlobal(place)
+        ports = function_walk.QtPorts(None, 0.0)
+        ports.press(ports.widget_under(point), point, "double")
+        qt_app.processEvents()
+        assert opened == ["2  Bohrung setzen"]
+    finally:
+        listing.close()
+        listing.deleteLater()
+        qt_app.processEvents()
+
+
+def test_a_click_into_a_field_lands_in_its_box_not_beside_it(
+    qt_app: Any, monkeypatch: Any
+) -> None:
+    """F-34: Ein Feld, breiter als sein Kästchen, wird im Kästchen geklickt.
+
+    Ein Zahlenfeld des Operationsdialogs (``ValueField``) ist ein Behälter mit
+    dem Kästchen links; seine Mitte lag am echten Schirm im leeren Teil
+    daneben, der Fokus blieb im Rollbereich, und der Fehlfall tippte ins Leere.
+    """
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QWidget
+
+    from app.ui import guide_targets
+
+    holder = QWidget()
+    holder.resize(420, 40)
+    row = QHBoxLayout(holder)
+    box = QDoubleSpinBox(holder)
+    box.setFixedWidth(80)
+    row.addWidget(box)
+    row.addStretch(1)
+    holder.show()
+    qt_app.processEvents()
+    monkeypatch.setattr(
+        guide_targets,
+        "widget_for",
+        lambda window, name: holder if name == "field:edge" else None,
+    )
+    try:
+        ports = function_walk.QtPorts(holder, 0.0)
+        centre = QRect(holder.mapToGlobal(QPoint(0, 0)), holder.size()).center()
+        assert ports.widget_under(centre) is not box
+        click = type("Click", (), {"target": "field:edge"})()
+        aimed = ports.aim(click, centre)
+        hit = ports.widget_under(aimed)
+        assert hit is box or box.isAncestorOf(hit), hit
+    finally:
+        holder.close()
+        holder.deleteLater()
+        qt_app.processEvents()
 
 
 def test_a_right_click_brings_the_context_menu_event(qt_app: Any) -> None:
