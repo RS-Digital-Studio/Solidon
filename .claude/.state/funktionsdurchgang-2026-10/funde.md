@@ -10,7 +10,7 @@ Felder je Fund, in dieser Reihenfolge:
 | Feld | Werte |
 |---|---|
 | Art | Leistung, Stabilität, Fehler, Zwillinge, Aufräumen, Einfachheit, Verständlichkeit, Gestaltung |
-| Schwere | schwer, mittel, leicht, Vorschlag (I ohne Bauplanzusage; G9 höchstens leicht) |
+| Schwere | schwer, mittel, leicht, Vorschlag (I ohne Bauplanzusage, der Chatweg zu I6 gehört an Prüfpunkt 17; G9 höchstens leicht) |
 | Funktion | Kennung der Zeile aus der Funktionsliste |
 | Prüfpunkt | 1–19 oder Kriterium (E1 … I6) |
 | Beleg | Bild, Kennzahl, Schrittfolge |

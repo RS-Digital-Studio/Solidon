@@ -61,7 +61,8 @@ A misst der Prüfstand, B urteilt am Bild, C von Hand. Die Zahlen hält
 `tools/function_checks.py`, ein Test hält beide gleich. Ein Fix aus Z oder I
 zählt nur, wenn E und V an derselben Zeile nicht schlechter werden und er im
 gewöhnlichen Weg sichtbar ist. G9 ist höchstens *leicht*; I1, I5 und der
-Chatweg zu I6 sagt der Bauplan zu, ihr Fehlen ist ein Fund.
+Chatweg zu I6 sagt der Bauplan zu, ihr Fehlen ist ein Fund; den Chatweg führt
+Prüfpunkt 17, Vorschlag ist bei I6 nur die Suche mit Frageformen.
 
 | Kennung | Zählgröße | Schwelle | Stufe | Messung |
 |---|---|---|---|---|

@@ -167,6 +167,16 @@ mitrechnet, findet ein Leck, das keines ist. Es teilt Messprofil,
 Arbeitssatzmessung und Abbaureihenfolge mit `window_bench.py`, statt sie zu
 wiederholen. Ohne Bildschirm und wgpu-Adapter misst es nichts und sagt es.
 
+`file_acceptance.py`, die Einzeldateiabnahme, geht je Fall in einem Prozess
+mit eigenem Profil durch das echte Fenster: Import, Erkennung samt Gruppen,
+Maßänderung (sagt die Vorschau ab, ein kleinerer Wert, dann das nächste
+Merkmal), Vorschau, Übernehmen, Undo, Redo; je Schritt Bild und Netzabdruck,
+am Drillholder jede Bohrung. Der Bestand kommt aus dem Audit-Manifest oder
+einem Ordner. Dieselbe Hülle fährt die Fälle des Funktionsdurchgangs
+(`inventory --functions` mit `--package`, `--rows`, `--variants`, `--phases`;
+`run --screen`; `menubar`; `report`), die Schritte dazu kommen aus
+`function_bench.py` und `function_capture.py`.
+
 ## Erzeugen
 
 *HEAD-Fassung, früher unter „Die Familien“.*
