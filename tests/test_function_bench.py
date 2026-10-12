@@ -1461,6 +1461,147 @@ def test_route_apply_target_and_command_line_come_from_the_row() -> None:
     assert bench.bodies_digest({"b": "2", "a": "1"}) == bench.bodies_digest({"a": "1", "b": "2"})
 
 
+def test_drag_times_stay_raw_and_d0_u_converts_them_once() -> None:
+    """Review M3: P schreibt roh, U rechnet einmal um — P's Ausgabe durch U's Urteil.
+
+    Vorher schrieb der Prüfstand ``Messwert × Faktor`` **und** den Faktor; U
+    rechnete noch einmal, der Faktor wirkte quadratisch (40 ms hier wären 80 ms).
+    """
+    from tools.function_judges import _z1
+    from tools.function_samples import sample_context, sample_protocol
+
+    protocol = sample_protocol()
+    protocol["frames"] = bench.drag_frames([10.0, None, 20.0, None], 2.0)
+    assert protocol["frames"] == {"raw_drag_ms": [10.0, None, 20.0, None], "reference_factor": 2.0}
+    assert validate_protocol(protocol) == []
+    outcome = _z1(protocol, sample_context())
+    assert outcome is not None and outcome.measurement["worst_ms"] == pytest.approx(40.0)
+
+
+def test_the_aborted_computation_lasts_as_long_as_the_main_way() -> None:
+    """Review M4: ``abort.eval_s`` ist die Rechendauer aus dem Hauptweg, nicht die Ladezeit."""
+    data = bench.empty_protocol(ROWS[0], bench.Variant().protocol(None, (0, 0)), {})
+    data["scene"] = {"key": "langsam_2s", "triangles": 1, "build_s": None, "eval_s": 0.4}
+    data["timing"] = {"total_s": 3.2}
+    assert bench.abort_entry(data, 0.9, True) == {
+        "eval_s": 3.2,
+        "cancel_shown_s": 0.9,
+        "clicked": True,
+    }
+    data["timing"] = None
+    assert bench.abort_entry(data, None, False)["eval_s"] is None
+    assert "abort.eval_s" in data["unmeasured"]
+
+
+def test_every_phase_starts_at_its_scene_and_runs_only_if_it_got_there() -> None:
+    """Review M5: Vor jeder Phase ein Rücksetzen, auch nach einer Ausnahme; misslingt es, ruht sie.
+
+    Der Fall ist ohne Fenster nachgestellt: ``reset`` und die Phasen sind
+    Attrappen, ``run`` ist der echte Ablauf.
+    """
+    calls: list[str] = []
+    answers = iter([True, False, True])
+    flow = object.__new__(bench.FunctionFlow)
+    flow.variant = bench.Variant.of({"phases": ["escape", "main", "revise"]})
+    flow.bench = {}
+    flow.data = {"errors": []}
+    flow.persist = lambda: None
+    flow.finish = lambda: calls.append("finish")  # type: ignore[method-assign]
+
+    def reset() -> bool:
+        calls.append("reset")
+        return next(answers)
+
+    def broken() -> None:
+        calls.append("escape")
+        raise RuntimeError("Phase stürzt")
+
+    flow.reset = reset  # type: ignore[method-assign]
+    flow.phase_escape = broken  # type: ignore[method-assign]
+    flow.phase_main = lambda: calls.append("main")  # type: ignore[method-assign]
+    flow.phase_revise = lambda: calls.append("revise")  # type: ignore[method-assign]
+    flow.run()
+    assert calls == ["reset", "escape", "reset", "reset", "revise", "finish"]
+    assert any("Phase stürzt" in error for error in flow.data["errors"])
+    assert any(error.startswith("main: Startszene") for error in flow.data["errors"])
+
+
+def test_each_case_opens_its_own_copy_of_a_shared_scene(tmp_path: Path) -> None:
+    """Review M6: Die gemeinsame Szene unter ``<out>/scenes`` wird nie selbst geöffnet."""
+    scenes = tmp_path / "scenes"
+    scenes.mkdir()
+    (scenes / "quader.exakt.p3d").write_bytes(b"szene")
+    folder = tmp_path / "cases" / "007"
+    copy = bench.case_scene(folder, scenes, "quader.exakt")
+    assert copy == folder / "scenes" / "quader.exakt.p3d" and copy.read_bytes() == b"szene"
+    copy.write_bytes(b"geaendert")
+    assert bench.case_scene(folder, scenes, "quader.exakt") == copy
+    assert copy.read_bytes() == b"geaendert", "einmal angelegt, dann die eigene"
+    assert (scenes / "quader.exakt.p3d").read_bytes() == b"szene"
+    assert bench.case_scene(folder, scenes, "gibt_es_nicht") is None
+
+
+def test_a_language_case_skips_the_surface_its_last_run_died_at(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review M14: Eine Fläche, an der der Prozess starb, kommt im nächsten Lauf nicht wieder dran.
+
+    Vor jeder Fläche steht ein Anfangsvermerk in ``bench.json``; ein Vermerk ohne
+    Ergebnis heißt Absturz. Die Fläche bekommt ein Protokoll mit dem Fehler,
+    der Rest des Pakets läuft weiter.
+    """
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(bench, "place_window", lambda application, window, variant: {})
+    state: dict[str, Any] = {"surface_started": "D4.abgestuerzt"}
+    window = SimpleNamespace(width=lambda: 800, height=lambda: 600)
+    rows = [{"id": "D4.abgestuerzt", "kind": "operation", "package": "D4"}]
+    flow = bench.LanguageFlow(
+        None,
+        window,
+        tmp_path,
+        state,
+        lambda: None,
+        rows,
+        bench.Variant.of({"set": "sprachen"}),
+        tmp_path / "scenes",
+        {"commit": "", "app": ""},
+    )
+    flow.run()
+    (written,) = (tmp_path / "surfaces").glob("*.json")
+    protocol = json.loads(written.read_text(encoding="utf-8"))
+    assert protocol["errors"] == ["Die Fläche brach im vorigen Lauf den Prozess ab"]
+    assert validate_protocol(protocol) == []
+    assert state["surfaces_done"] == ["D4.abgestuerzt"] and state["surface_started"] is None
+
+
+def test_a_failed_preparation_lands_in_the_case_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review L8: Scheitert Lizenz oder Vorbedingung, steht der Grund in ``bench.json``.
+
+    Vorher standen Profil, Lizenz, Vorbedingungen und Fensterbau vor dem
+    ``try`` — ``bench.json`` blieb auf ``start``, die Übersicht nannte keinen Grund.
+    """
+    from tools import file_acceptance
+
+    monkeypatch.setattr(file_acceptance, "version_info", lambda: {"commit": "", "app": ""})
+
+    def refuses(state: str, today: Any = None) -> Any:
+        raise RuntimeError("Lizenz ließ sich nicht setzen")
+
+    monkeypatch.setattr(bench, "apply_licence", refuses)
+    out = tmp_path / "lauf"
+    write_json(out / "rows.json", [ROWS[0]])
+    case = function_cases(ROWS, row_ids=["resize_hole"])[0]
+    folder = out / "cases" / "001"
+    folder.mkdir(parents=True)
+    code = file_acceptance.function_child(out, case, folder, "")
+    state = json.loads((folder / "bench.json").read_text(encoding="utf-8"))
+    assert code == 1 and state["stage"] == "start" and state["shutdown_complete"] is True
+    assert "Lizenz ließ sich nicht setzen" in state["harness_exception"]
+
+
 # --- Wächter: keine Abkürzung, kein eigener Einstieg ---------------------------------------------
 
 
@@ -1926,6 +2067,73 @@ def test_a_menubar_child_that_never_answers_is_a_message(
     monkeypatch.setattr(file_acceptance.subprocess, "run", hangs)
     with pytest.raises(RuntimeError, match="antwortete"):
         file_acceptance.menubar(tmp_path)
+
+
+def test_the_halt_reason_is_read_where_the_report_shows_it(window: Any, tmp_path: Path) -> None:
+    """Review M10: Der Haltgrund ist die Zeile des Prüfberichts am angehaltenen Schritt.
+
+    Die Szene ``halt`` hält ihre Kette an. Gelesen wird der Text der
+    Berichtszeile, deren Befund am angehaltenen Schritt steht, und als Nummer
+    die, die der Verlauf dem Schritt gibt — nicht „der erste Text mit einer Zahl“.
+    Ob der Text die Nummer nennt, urteilt U (Prüfpunkt 15).
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.labels import step_number
+
+    scenes = tmp_path / "scenes"
+    row = {**_probe_row(scenes), "start_scene": "halt", "spec": {"start_scene": "halt"}}
+    variant = bench.Variant.of({"phases": ["halt"]})
+    data = bench.empty_protocol(row, variant.protocol(None, (0, 0)), {"commit": "", "app": ""})
+    folder = tmp_path / "cases" / "001"
+    folder.mkdir(parents=True)
+    flow = bench.FunctionFlow(
+        QApplication.instance(), window, folder, data, lambda: None, row, variant, scenes,
+        out=tmp_path,
+    )  # fmt: skip
+    flow.prepare()
+    assert flow.reset(), data["errors"]
+    result = window.session.last_result
+    assert result is not None and result.stopped_at is not None, "die Szene hält an"
+    flow.read_halt()
+    halt = data["halt"]
+    assert halt is not None, data["unmeasured"]
+    assert halt["step"] == step_number(window.session.project.document, result.stopped_at)
+    shown = [
+        window.report.list.item(row).text()
+        for row in range(window.report.list.count())
+        if getattr(window.report.list.item(row).data(Qt.ItemDataRole.UserRole), "op_id", None)
+        == result.stopped_at
+    ]
+    assert halt["text"] in shown
+    flow.finish()
+
+
+@pytest.mark.windowed
+def test_the_project_switch_runs_in_preview_draft_and_computation(tmp_path: Path) -> None:
+    """Prüfpunkt 16 (Koordinator, Konzept §4): Wechsel während Vorschau, Entwurf und Rechnung.
+
+    Die Probezeile im eigenen Prozess, nur die Phase ``switch``. Vorschau und
+    Entwurf werden gemessen; die Rechnung, wenn sie beim ersten Wechselklick
+    noch läuft — sonst steht der Grund in ``unmeasured``. Keine Phase endet in
+    einem Fehler, und das Protokoll ist gültig.
+    """
+    out = tmp_path / "wechsel"
+    _run_acceptance(
+        out,
+        ["inventory", "--functions", "--rows", PROBE_ROW, "--phases", "switch"],
+        ["run", "--timeout", "900"],
+    )
+    protocol = json.loads((out / "cases" / "001" / "function.json").read_text(encoding="utf-8"))
+    assert validate_protocol(protocol) == []
+    assert protocol["errors"] == [], protocol["errors"]
+    switch = protocol["switch"]
+    assert switch is not None, protocol["unmeasured"]
+    assert {"vorschau", "entwurf"} <= set(switch["phases"]), switch
+    if "rechnung" not in switch["phases"]:
+        assert "rechnung" in protocol["unmeasured"].get("switch", ""), protocol["unmeasured"]
+    assert all(event["phase"] in switch["phases"] for event in switch["late_events"])
 
 
 def _run_acceptance(out: Path, *arguments: list[str]) -> None:

@@ -1726,6 +1726,31 @@ def hover_steps(
     ]
 
 
+def drag_frames(latencies: Sequence[float | None], factor: float) -> dict[str, Any]:
+    """Z1 fürs Protokoll: die Ziehzeiten roh und der Referenzfaktor des Laufs (Review M3).
+
+    Umgerechnet wird einmal, bei D0-U (``max(raw_drag_ms) * reference_factor``);
+    schriebe der Prüfstand schon umgerechnete Zeiten, wirkte der Faktor doppelt.
+    """
+    return {
+        "raw_drag_ms": [None if value is None else round(value, 1) for value in latencies],
+        "reference_factor": factor,
+    }
+
+
+def abort_entry(data: dict[str, Any], shown: float | None, clicked: bool) -> dict[str, Any]:
+    """Prüfpunkt 14 fürs Protokoll: wie lange die abgebrochene Rechnung ohne Abbruch dauert.
+
+    Die Dauer kommt aus dem Hauptweg an derselben Szene (``timing.total_s``, roh),
+    nicht aus der Ladezeit der Startszene (Review M4). Lief der Hauptweg nicht
+    durch, ist sie ungemessen.
+    """
+    total = (data.get("timing") or {}).get("total_s")
+    if total is None:
+        unmeasured(data, "abort.eval_s", "der Hauptweg ohne Abbruch lief nicht durch")
+    return {"eval_s": total, "cancel_shown_s": shown, "clicked": clicked}
+
+
 def focus_check(field: Any, target: str) -> None:
     """Ob der Fokus im Feld des Ziels liegt — sonst wird nicht getippt (Review M13).
 
@@ -3089,22 +3114,18 @@ class FunctionFlow:
             self.wait_step("ruhe", lambda: not self.session.busy, timeout_s=60.0),
         ]
         clicked = self.run_steps("abbruch", steps)
-        settle_until = time.perf_counter() + LATE_WINDOW_S
-        while time.perf_counter() < settle_until:
-            self.pump()
+        # Späte Ereignisse nach dem Abbruch abwarten — im Automaten, damit ein
+        # spätes Fenster mit Escape geschlossen wird, statt die Schleife zu halten.
+        self.run_steps(
+            "nach dem abbruch",
+            [self.until_step("spätfenster", lambda: False, at_most_s=LATE_WINDOW_S)],
+        )
         self.data["states"].setdefault("before", before)
         self.snapshot("aborted")
         # Wie lange die Rechnung dauert, die hier abgebrochen wurde: aus dem Lauf
         # ohne Abbruch an derselben Szene — dem Hauptweg (Review M4) —, roh auf
         # diesem Rechner; nicht die Ladezeit der Startszene.
-        timing = self.data.get("timing") or {}
-        if timing.get("total_s") is None:
-            unmeasured(self.data, "abort.eval_s", "der Hauptweg ohne Abbruch lief nicht durch")
-        self.data["abort"] = {
-            "eval_s": timing.get("total_s"),
-            "cancel_shown_s": moment["shown"],
-            "clicked": clicked,
-        }
+        self.data["abort"] = abort_entry(self.data, moment["shown"], clicked)
 
     def phase_halt(self) -> None:
         """Prüfpunkt 15: Haltgrund mit Schrittnummer; Einfügen vor dem letzten Schritt."""
@@ -3239,8 +3260,8 @@ class FunctionFlow:
                 notes.append(f"{situation}: keine Eingaben, kein {situation}")
                 continue
             outcome = self.switch_once(situation, inputs, new_line)
-            if outcome is None:
-                notes.append(f"{situation}: der Wechsel kam nicht an oder fiel nicht in die Lage")
+            if isinstance(outcome, str):
+                notes.append(f"{situation}: {outcome}")
                 continue
             measured.append(situation)
             late += outcome
@@ -3253,8 +3274,8 @@ class FunctionFlow:
 
     def switch_once(
         self, situation: str, inputs: Mapping[str, Any], new_line: str
-    ) -> list[dict[str, Any]] | None:
-        """Ein Wechsel in einer Lage; die späten Ereignisse, oder ``None`` ohne Messung."""
+    ) -> list[dict[str, Any]] | str:
+        """Ein Wechsel in einer Lage: die späten Ereignisse, oder warum er nicht gemessen ist."""
         from tools import function_capture as capture
 
         project = self.session.project
@@ -3282,30 +3303,45 @@ class FunctionFlow:
             if self.apply_target:
                 steps.append(self.walker.step(self.apply_target))
             steps.append(Step("rechnet sie?", note_busy))
+        # Die Speicherfrage kann vor dem Startbildschirm kommen (*Datei → Neu*)
+        # oder erst beim Öffnen aus „Zuletzt geöffnet“ — beide Stellen bekommen
+        # einen Schritt, der sie beantwortet, wenn sie dasteht.
         steps += [
             self.walker.step(f"menu:{new_line}"),
             Step(
-                "rückfrage",
+                "rückfrage vor dem neuen",
                 self.answer_discard,
                 ready=lambda: capture.modal_now() is not None or self.on_start_screen(),
             ),
             self.wait_step("startbildschirm", self.on_start_screen),
             Step("liste lesen", to_the_recent, settle_ms=SETTLE_MS),
+            Step(
+                "rückfrage beim öffnen",
+                self.answer_discard,
+                ready=lambda: (
+                    capture.modal_now() is not None or self.session.project is not project
+                ),
+            ),
             self.wait_step(
                 "anderes projekt", lambda: self.session.project is not project and self.idle()
             ),
         ]
         if not self.run_steps(f"wechsel {situation}", steps):
-            return None
+            return "der Wechsel kam nicht an"
         if situation == "rechnung" and not computing["busy"]:
-            return None
+            # Rechnet die Operation schneller als der Weg zum ersten Wechselklick,
+            # gibt es keine Rechnung, in die gewechselt würde — nicht gemessen.
+            return "die Rechnung war vor dem ersten Wechselklick fertig"
         self.watch.poll()
         modals_before = len(self.watch.modals)
         print_before = self.scene_now()
         texts_before = {entry["text"] for entry in capture.message_entries(self.window)}
-        until = time.perf_counter() + LATE_WINDOW_S
-        while time.perf_counter() < until:
-            self.pump()
+        # Das Spätfenster läuft im Automaten: Ein spätes Fenster bleibt so nicht
+        # in einer Schleife ohne Takt hängen, es wird notiert und mit Escape geschlossen.
+        self.run_steps(
+            f"spät {situation}",
+            [self.until_step("spätfenster", lambda: False, at_most_s=LATE_WINDOW_S)],
+        )
         self.watch.poll()
         events = [
             {"kind": "fenster", "text": entry["title"], "phase": situation}
@@ -3465,13 +3501,7 @@ class FunctionFlow:
         if not gripped["signals"]:
             unmeasured(self.data, "frames.raw_drag_ms", "der Zug fasste keinen Griff")
             return
-        # Roh, wie gemessen; umgerechnet wird einmal, bei D0-U (Review M3).
-        self.data["frames"] = {
-            "raw_drag_ms": [
-                None if value is None else round(value, 1) for value in self.frames.latencies(moves)
-            ],
-            "reference_factor": self.reference_factor,
-        }
+        self.data["frames"] = drag_frames(self.frames.latencies(moves), self.reference_factor)
 
     def phase_licence(self) -> None:
         """Prüfpunkt 18: Wie das Ziel im Lizenzzustand dasteht, und ob Schreiben gesperrt ist."""

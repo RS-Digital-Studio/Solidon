@@ -160,6 +160,9 @@ LANGUAGE_CASE_TIMEOUT = 3600.0
 #: Wie lange der Kindprozess braucht, um die Menüleiste am Fenster zu zählen (Sekunden).
 MENUBAR_TIMEOUT = 600.0
 
+#: Alle wie viel Sekunden ein Fall die Stapel seiner Fäden nach ``stderr.log`` schreibt.
+HANG_DUMP_S = 300.0
+
 #: Die Arten eines Falls: eine Datei (RM-184), eine Zeile der Funktionsliste,
 #: eine Sprache über die Flächen eines Pakets, der Start einer Zeile des
 #: Startablaufs über ``app.ui.app.main`` (RM-737).
@@ -1064,6 +1067,9 @@ def child(out: Path, number: int, screen: str = "") -> int:
     import faulthandler
 
     faulthandler.enable()
+    # Steht ein Fall, sagt ``stderr.log`` wo: alle HANG_DUMP_S die Stapel aller
+    # Fäden — ohne py-spy (Erinnerung „abrisse-haenger-und-lebensdauer“).
+    faulthandler.dump_traceback_later(HANG_DUMP_S, repeat=True)
     if case.kind == "start":
         return start_child(out, case, folder)
     if case.kind != "file":
