@@ -391,19 +391,30 @@ def _statements(tree: ast.Module) -> Iterator[ast.stmt]:
             pending.extend(case.body)
 
 
-def _history_name(node: ast.AST) -> str | None:
-    """``x.setObjectName("history.<name>")`` → ``<name>``, sonst ``None``."""
+def _texts(node: ast.AST) -> tuple[str, ...]:
+    """Die Zeichenketten, die ein Ausdruck ergeben kann: eine Konstante oder beide
+    Zweige eines ``a if b else c`` (``"history.up" if upwards else "history.down"``)."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return (node.value,)
+    if isinstance(node, ast.IfExp):
+        return (*_texts(node.body), *_texts(node.orelse))
+    return ()
+
+
+def _history_names(node: ast.AST) -> tuple[str, ...]:
+    """``x.setObjectName("history.<name>")`` → ``(<name>,)``; sonst leer."""
     if (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and node.func.attr == "setObjectName"
         and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and isinstance(node.args[0].value, str)
-        and node.args[0].value.startswith("history.")
     ):
-        return node.args[0].value.removeprefix("history.")
-    return None
+        return tuple(
+            text.removeprefix("history.")
+            for text in _texts(node.args[0])
+            if text.startswith("history.")
+        )
+    return ()
 
 
 def _window_action(node: ast.AST) -> str | None:
@@ -452,9 +463,8 @@ def scan_ui(sources: Mapping[str, str]) -> UiScan:
         # Ausdrücke nur dort durchgehen, wo ein gesuchter Aufruf überhaupt steht.
         if "history." in text or "add_window_action(" in text:
             for expression in ast.walk(tree):
-                if (name := _history_name(expression)) is not None:
-                    history.add(name)
-                elif (key := _window_action(expression)) is not None:
+                history.update(_history_names(expression))
+                if (key := _window_action(expression)) is not None:
                     window_actions.add(key)
 
     @cache

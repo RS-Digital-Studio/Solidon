@@ -239,7 +239,10 @@ def test_the_history_entries_come_from_the_context_menu(ui_sources: dict[str, st
     """Die Verlaufszeilen kommen aus den Objektnamen ``history.*`` — die vier, unter denen
     die Bildanleitungen sie schon finden, sind dabei."""
     entries = fl.history_entries(ui_sources)
-    assert {"edit", "insert", "switch", "delete"} <= set(entries)
+    assert {"edit", "insert", "switch", "delete", "up", "down"} <= set(entries)
+    # Ein Name aus einem bedingten Ausdruck zählt mit beiden Zweigen.
+    probe = 'a.setObjectName("history.up" if x else "history.down")\nb.setObjectName(name)\n'
+    assert fl.history_entries({"probe.py": probe}) == ("down", "up")
 
 
 # --- Anforderung und Szene --------------------------------------------------------
