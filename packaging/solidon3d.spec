@@ -367,6 +367,11 @@ if sys.platform == "darwin":
         version=APP_VERSION,
         info_plist={
             "CFBundleShortVersionString": APP_VERSION,
+            # Die Bauversion, gleich der angezeigten: Apples Installer, die
+            # Versionsprüfung von LaunchServices und Aktualisierer vergleichen
+            # diesen Schlüssel, nicht die angezeigte Nummer. PyInstallers
+            # `version=` setzt nur CFBundleShortVersionString.
+            "CFBundleVersion": APP_VERSION,
             "NSHumanReadableCopyright": COPYRIGHT,
             # Fehlt das, rendert Qt auf einem Retina-Bildschirm in halber
             # Auflösung und das Fenster sieht unscharf aus — eine Ursache,

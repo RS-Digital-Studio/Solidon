@@ -3726,6 +3726,39 @@ def test_the_windows_installer_registers_only_the_branded_part_extension() -> No
     assert 'ValueName: ".json"' not in script
 
 
+def _macos_info_plist() -> dict[str, str]:
+    """Die Schlüssel der Info.plist aus dem ``BUNDLE``-Aufruf, je mit ihrem Ausdruck."""
+    tree = ast.parse(SPEC.read_text(encoding="utf-8"))
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "BUNDLE"
+    ]
+    assert len(calls) == 1, "genau ein BUNDLE in der Spec"
+    plist = next(word.value for word in calls[0].keywords if word.arg == "info_plist")
+    assert isinstance(plist, ast.Dict)
+    return {
+        key.value: ast.unparse(value)
+        for key, value in zip(plist.keys, plist.values, strict=True)
+        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+    }
+
+
+def test_the_macos_bundle_carries_its_build_version() -> None:
+    """``CFBundleVersion`` fehlte im Paket 0.6.0 (Forensik M3).
+
+    Apples Installer und LaunchServices vergleichen Bundles über diesen
+    Schlüssel; PyInstallers ``version=`` setzt nur die angezeigte Nummer. Beide
+    kommen aus derselben Quelle, damit sie nie auseinanderlaufen.
+    """
+    plist = _macos_info_plist()
+
+    assert plist.get("CFBundleShortVersionString") == "APP_VERSION"
+    assert plist.get("CFBundleVersion") == "APP_VERSION"
+
+
 def test_the_bundle_owns_the_project_type_on_macos() -> None:
     """Das Bundle meldet den Dokumenttyp an — und erklärt ihn auch.
 
