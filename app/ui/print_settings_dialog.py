@@ -191,6 +191,7 @@ from app.ui.style import (
     set_level,
 )
 from app.ui.theme import THEMES, current_theme
+from app.ui.window_names import raw_window
 
 _log = get_logger(__name__)
 
@@ -506,7 +507,8 @@ class _ColourButton(QPushButton):
         self.setStyleSheet(f"background-color: {self._value}; color: {readable};")
 
     def _choose(self) -> None:
-        chosen = QColorDialog.getColor(QColor(self._value), self, tr("Filamentfarbe"))
+        with raw_window("message:print_settings_dialog._choose"):
+            chosen = QColorDialog.getColor(QColor(self._value), self, tr("Filamentfarbe"))
         if chosen.isValid():
             self.set_value(chosen.name())
             self.changed.emit(self._value)
@@ -5123,6 +5125,7 @@ class PrintSettingsDialog(QDialog):
         """
         written = str(error.values.get("output", "") or "")
         box = QMessageBox(self)
+        box.setProperty(guides.TARGET_PROPERTY, "message:print_settings_dialog._show_slicer_output")
         box.setIcon(QMessageBox.Icon.Information)
         box.setWindowTitle(tr("Ausgabe des Slicers"))
         box.setText(str(error.title))

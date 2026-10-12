@@ -136,6 +136,7 @@ from app.ui.style import (
     set_level,
     set_role,
 )
+from app.ui.window_names import raw_window
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort. Der Name ist englisch wie jeder andere in
@@ -2310,14 +2311,15 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        QMessageBox.information(
-            self,
-            tr("Aktivierungsanfrage gespeichert"),
-            tr(
-                "Übertragen Sie die Datei auf ein Gerät mit Internet und öffnen Sie dort "
-                "die Aktivierungsseite."
-            ),
-        )
+        with raw_window("message:dialogs._save_request"):
+            QMessageBox.information(
+                self,
+                tr("Aktivierungsanfrage gespeichert"),
+                tr(
+                    "Übertragen Sie die Datei auf ein Gerät mit Internet und öffnen Sie dort "
+                    "die Aktivierungsseite."
+                ),
+            )
 
     def _open_page(self) -> None:
         target = QUrl(self.PAGE_URL)
@@ -2326,14 +2328,15 @@ class OfflineActivationDialog(QDialog):
         target.setQuery(query)
         if QDesktopServices.openUrl(target) is False:
             self._copy_page()
-            QMessageBox.information(
-                self,
-                tr("2 · Aktivierungsseite öffnen"),
-                tr(
-                    "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; "
-                    "öffnen Sie sie auf einem Gerät mit Internet."
-                ),
-            )
+            with raw_window("message:dialogs._open_page"):
+                QMessageBox.information(
+                    self,
+                    tr("2 · Aktivierungsseite öffnen"),
+                    tr(
+                        "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; "
+                        "öffnen Sie sie auf einem Gerät mit Internet."
+                    ),
+                )
 
     def _copy_page(self) -> None:
         """Kopiert den bewusst sichtbaren Weg für das Gerät mit Internet."""
@@ -2369,11 +2372,12 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        QMessageBox.information(
-            self,
-            tr("Solidon ist freigeschaltet"),
-            tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
-        )
+        with raw_window("message:dialogs._import_answer"):
+            QMessageBox.information(
+                self,
+                tr("Solidon ist freigeschaltet"),
+                tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+            )
         self.accept()
 
 
@@ -2812,14 +2816,15 @@ class ActivationDialog(QDialog):
             show_error(problem, self)
             return
         if activation.read_key() is None:
-            QMessageBox.information(
-                self,
-                tr("Solidon freischalten"),
-                tr(
-                    "Der Schlüssel gilt für diese Sitzung, ließ sich aber nicht "
-                    "ablegen — beim nächsten Start wird er wieder gebraucht."
-                ),
-            )
+            with raw_window("message:dialogs._remember"):
+                QMessageBox.information(
+                    self,
+                    tr("Solidon freischalten"),
+                    tr(
+                        "Der Schlüssel gilt für diese Sitzung, ließ sich aber nicht "
+                        "ablegen — beim nächsten Start wird er wieder gebraucht."
+                    ),
+                )
         self._show_state()
         self._follow_field()
         self.device_name.setFocus()
@@ -2889,11 +2894,12 @@ class ActivationDialog(QDialog):
         except AppError as problem:
             show_error(problem, self)
             return
-        QMessageBox.information(
-            self,
-            tr("Solidon ist freigeschaltet"),
-            tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
-        )
+        with raw_window("message:dialogs._online_completed"):
+            QMessageBox.information(
+                self,
+                tr("Solidon ist freigeschaltet"),
+                tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+            )
         self._show_state()
 
     def _online_failed(self, problem: object) -> None:
@@ -2977,14 +2983,15 @@ class ActivationDialog(QDialog):
             self._show_state()
             return
         self.field.clear()
-        QMessageBox.information(
-            self,
-            tr("Rechner deaktiviert"),
-            tr(
-                "Die lokale Freischaltung und der Lizenzschlüssel wurden entfernt. "
-                "Der Geräteplatz ist jetzt für einen anderen Rechner frei."
-            ),
-        )
+        with raw_window("message:dialogs._deactivation_completed"):
+            QMessageBox.information(
+                self,
+                tr("Rechner deaktiviert"),
+                tr(
+                    "Die lokale Freischaltung und der Lizenzschlüssel wurden entfernt. "
+                    "Der Geräteplatz ist jetzt für einen anderen Rechner frei."
+                ),
+            )
         self._show_state()
 
     def _deactivation_failed(self, problem: object) -> None:
@@ -3083,13 +3090,14 @@ def open_link(address: str, parent: QWidget | None = None) -> bool:
     """
     if open_or_copy(QUrl(address), address):
         return True
-    QMessageBox.information(
-        parent,
-        tr("Der Browser ließ sich nicht öffnen"),
-        tr("Die Adresse ist kopiert — fügen Sie sie in einen Browser ein:\n{address}").replace(
-            "{address}", address
-        ),
-    )
+    with raw_window("message:dialogs.open_link"):
+        QMessageBox.information(
+            parent,
+            tr("Der Browser ließ sich nicht öffnen"),
+            tr("Die Adresse ist kopiert — fügen Sie sie in einen Browser ein:\n{address}").replace(
+                "{address}", address
+            ),
+        )
     return False
 
 
@@ -3605,6 +3613,7 @@ def show_error(
     offered = offered_actions(error, known)
 
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs.show_error")
     box.setTextFormat(Qt.TextFormat.PlainText)
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr("Das hat so nicht funktioniert"))
@@ -3672,6 +3681,7 @@ def show_details(error: AppError, parent: QWidget | None = None) -> None:
         lines.append(tr("Operation: {op_id}", op_id=error.op_id))
 
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs.show_details")
     box.setIcon(QMessageBox.Icon.Information)
     box.setWindowTitle(tr("Einzelheiten"))
     box.setText(str(error.title))
@@ -4236,6 +4246,7 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     Gibt ``save``, ``discard`` oder ``cancel`` zurück.
     """
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs.confirm_unsaved")
     box.setIcon(QMessageBox.Icon.Question)
     box.setWindowTitle(tr("Ungesicherte Änderungen"))
     box.setText(tr("Dieses Projekt hat Änderungen, die noch nicht gespeichert sind."))
@@ -4325,6 +4336,7 @@ def _go_on_despite(
 ) -> bool:
     """Die Befunde in fünf Zeilen, dazu Weitergehen als Vorgabe und Abbrechen."""
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs._go_on_despite")
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(title)
     box.setText(text)
@@ -4351,6 +4363,7 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
     ``close`` zurück.
     """
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs.confirm_generation_loss")
     box.setIcon(QMessageBox.Icon.Question)
     lost = ""
     if tries == 1:
@@ -4426,6 +4439,7 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     if count <= 1:
         return True
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:dialogs.confirm_discard")
     box.setWindowTitle(tr("Abgeschnittene Schritte verwerfen?"))
     box.setText(
         tr("Diese Änderung verwirft {count} zurückgenommene Schritte.").replace(

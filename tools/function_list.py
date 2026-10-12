@@ -220,6 +220,9 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     # Fläche, und alle Operationen mit Flächenbindung sind D2.
     "measure.reference": ("D2", "merkmal:face"),
     "search": ("D11", "koerper:1"),
+    # Chat und Tour, die Seiten der rechten Karte neben Auswahl und Bericht.
+    "chat": ("D12", "leer"),
+    "tour": ("D12", "leer"),
     "toolbar.search": ("D11", "leer"),
     # *Abbrechen* steht nur während einer langen Rechnung.
     "progress.cancel": ("D12", "langsam"),

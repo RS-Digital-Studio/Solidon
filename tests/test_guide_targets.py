@@ -470,6 +470,13 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
             assert guide_targets.widget_for(window, f"print:{field.path}") is not None, field.path
         assert widget("dialog:settings_dialog") is settings
         assert widget("dialog:print_settings_dialog") is printing
+        for name in (
+            "setting.section:anwendung",
+            "setting.section:weitere_einstellungen",
+            "setting.section:vorgaben_fuer_neue_projekte",
+        ):
+            heading = widget(name)
+            assert heading.objectName() == "sectionHeading", name
     finally:
         settings.close()
         printing.close()
@@ -477,7 +484,8 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     # Stelle im Bild und Griffe brauchen Projektion und Pick; sie prüfen die
     # zwei Fälle darunter an der Attrappe und der native Fall am echten Bild.
     # „Zuletzt geöffnet“ steht auf dem Startbildschirm: eigener Fall darunter.
-    seen.update({"view", "start.recent"})
+    # Die rohen Meldungsfenster gehen modal auf: eigener Fall darunter.
+    seen.update({"view", "start.recent", "message"})
     assert seen >= NEW_KINDS, sorted(NEW_KINDS - seen)
 
 
@@ -1628,3 +1636,195 @@ def test_a_field_of_the_modal_dialog_comes_first(qt_app: Any) -> None:
             dialog.close()
             dialog.deleteLater()
         window.deleteLater()
+
+
+#: Woran ein rohes Meldungsfenster zu erkennen ist: ``QMessageBox(…)`` oder ein
+#: statischer Aufruf (``QMessageBox.information``, ``QInputDialog.getText``,
+#: ``QColorDialog.getColor``).
+_RAW_STATIC = {
+    ("QMessageBox", "information"),
+    ("QMessageBox", "question"),
+    ("QMessageBox", "warning"),
+    ("QMessageBox", "critical"),
+    ("QMessageBox", "about"),
+    ("QInputDialog", "getItem"),
+    ("QInputDialog", "getText"),
+    ("QInputDialog", "getInt"),
+    ("QInputDialog", "getDouble"),
+    ("QInputDialog", "getMultiLineText"),
+    ("QColorDialog", "getColor"),
+}
+
+
+def unnamed_raw_windows(module: str, source: str) -> list[str]:
+    """Jedes rohe Meldungsfenster einer Datei, das kein Kennzeichen bekommt.
+
+    Ein statischer Aufruf steht in ``with raw_window("message:<modul>.<funktion>")``;
+    ein ``QMessageBox(…)`` bekommt in derselben Funktion ``setProperty`` mit
+    ``guides.TARGET_PROPERTY`` und diesem Namen (oder einer Konstanten wie
+    ``EXPIRED_DEMO_TARGET``). Die Funktion ist die innerste, die den Aufruf trägt.
+    """
+    import ast
+
+    tree = ast.parse(source)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    missing: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        instance = isinstance(func, ast.Name) and func.id in {
+            "QMessageBox",
+            "QInputDialog",
+            "QColorDialog",
+        }
+        static = (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and (func.value.id, func.attr) in _RAW_STATIC
+        )
+        if not (instance or static):
+            continue
+        chain = []
+        probe: ast.AST = node
+        while probe in parents:
+            probe = parents[probe]
+            chain.append(probe)
+        function = next(
+            (item for item in chain if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef)),
+            None,
+        )
+        name = f"message:{module}.{function.name if function else '<modul>'}"
+        if static:
+            named = any(
+                isinstance(item, ast.With)
+                and any(
+                    isinstance(entry.context_expr, ast.Call)
+                    and ast.unparse(entry.context_expr.func) == "raw_window"
+                    and ast.literal_eval(entry.context_expr.args[0]) == name
+                    for entry in item.items
+                )
+                for item in chain
+            )
+        else:
+            named = function is not None and any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "setProperty"
+                and len(call.args) == 2
+                and ast.unparse(call.args[0]) == "guides.TARGET_PROPERTY"
+                and (
+                    (isinstance(call.args[1], ast.Constant) and call.args[1].value == name)
+                    or isinstance(call.args[1], ast.Name)
+                )
+                for call in ast.walk(function)
+            )
+        if not named:
+            missing.append(f"{name} (Zeile {node.lineno})")
+    return missing
+
+
+def test_every_raw_message_window_carries_its_name() -> None:
+    """Jedes rohe Meldungsfenster unter ``app/ui`` trägt ``message:<modul>.<funktion>``
+    (Nachtrag D0-W): Sonst findet der Prüfstand Wiederherstellen, Speicherfrage
+    und Löschnachfrage nur als „irgendein Meldungsfenster“."""
+    root = Path(__file__).resolve().parents[1] / "app" / "ui"
+    found = [
+        f"{path.relative_to(root).as_posix()}: {entry}"
+        for path in sorted(root.rglob("*.py"))
+        if path.name != "window_names.py"
+        for entry in unnamed_raw_windows(path.stem, path.read_text(encoding="utf-8"))
+    ]
+    assert found == []
+    counted = sum(
+        source.count("QMessageBox(") + source.count('raw_window("message:')
+        for source in (path.read_text(encoding="utf-8") for path in root.rglob("*.py"))
+    )
+    assert counted >= 25, "die Suche nach rohen Fenstern greift nicht mehr"
+
+
+def test_an_unnamed_raw_window_turns_the_guard_red() -> None:
+    source = (
+        "def ask(parent):\n"
+        "    return QMessageBox.question(parent, 'a', 'b')\n"
+        "def named(parent):\n"
+        "    with raw_window('message:sample.named'):\n"
+        "        return QInputDialog.getText(parent, 'a', 'b')\n"
+        "def boxed(parent):\n"
+        "    box = QMessageBox(parent)\n"
+        "    return box.exec()\n"
+    )
+    assert unnamed_raw_windows("sample", source) == [
+        "message:sample.ask (Zeile 2)",
+        "message:sample.boxed (Zeile 7)",
+    ]
+
+
+def test_a_raw_message_window_resolves_while_it_is_open(qt_app: Any) -> None:
+    """Ein rohes Fenster, statisch oder mit Objekt, heißt im Wortschatz nach seiner
+    Funktion, solange es offen ist — geprüft aus dem Lauf des modalen Fensters."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QDialog, QInputDialog, QMessageBox
+
+    from app.ui import dialogs, guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from app.ui.window_names import raw_window
+
+    window = MainWindow(Session(), UiSettings())
+    window.show()
+    found: dict[str, Any] = {}
+
+    def look(name: str) -> None:
+        def inside() -> None:
+            modal = qt_app.activeModalWidget()
+            try:
+                found[name] = (guide_targets.widget_for(window, name), modal)
+                found[name + "/why"] = guide_targets.next_click(window, name).why
+            except guide_targets.MissingTargetError as problem:
+                found[name] = (problem, modal)
+            finally:
+                # Erst schließen, dann prüfen: Ein offenes modales Fenster hielte
+                # den Test an, statt ihn rot zu machen.
+                if isinstance(modal, QDialog):
+                    modal.reject()
+
+        QTimer.singleShot(50, inside)
+
+    try:
+        look("message:sample.text")
+        with raw_window("message:sample.text"):
+            QInputDialog.getText(window, "Probe", "Name")
+        look("message:sample.box")
+        with raw_window("message:sample.box"):
+            QMessageBox.information(window, "Probe", "Satz")
+        look("message:dialogs.confirm_unsaved")
+        dialogs.confirm_unsaved("Probe", window)
+        for name in (
+            "message:sample.text",
+            "message:sample.box",
+            "message:dialogs.confirm_unsaved",
+        ):
+            widget, modal = found[name]
+            assert widget is modal and modal is not None, name
+            assert found.get(name + "/why") == "ziel", name
+    finally:
+        window.hide()
+        window.release()
+
+
+def test_chat_and_tour_are_pages_of_the_right_card(prepared_window: Any, qt_app: Any) -> None:
+    """*Chat* und *Tour* sind feste Ziele; hinter einem anderen Reiter ist der Reiter
+    der nächste Klick."""
+    from app.ui import guide_targets
+
+    window = prepared_window
+    window.right.setCurrentIndex(0)
+    _settle(qt_app)
+    for name, page in (("chat", window.chat), ("tour", window.tour)):
+        assert guide_targets.widget_for(window, name) is page
+        index = window.right.indexOf(page)
+        if index >= 0 and not window.right.tabBar().isTabVisible(index):
+            continue
+        assert guide_targets.next_click(window, name).why == "reiter", name

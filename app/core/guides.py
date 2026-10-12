@@ -106,6 +106,9 @@ TARGETS: Final[frozenset[str]] = frozenset(
         "progress.cancel",
         "preview.banner",
         "selection.rebuild",
+        # Die Seiten *Chat* und *Tour* der rechten Karte
+        "chat",
+        "tour",
     }
 )
 
@@ -153,7 +156,12 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``dialog:print_settings_dialog`` — ein offener Dialog dieser Klasse;
 #: * ``start.recent:1`` — ein Eintrag unter „Zuletzt geöffnet“ auf dem
 #:   Startbildschirm, gezählt ab 1 in der Folge der Liste. Eine Menüzeile
-#:   dafür gibt es nicht.
+#:   dafür gibt es nicht;
+#: * ``message:dialogs.confirm_unsaved`` — ein rohes Meldungsfenster
+#:   (``QMessageBox``, ``QInputDialog``, ``QColorDialog``) über ``<modul>.<funktion>``
+#:   der Funktion, die es baut (``app/ui/window_names.raw_window``);
+#: * ``setting.section:weitere_einstellungen`` — die Kopfzeile eines Abschnitts
+#:   der Einstellungen, gebildet aus seinem Titel (:func:`name_part`).
 TARGET_KINDS: Final[tuple[str, ...]] = (
     "command",
     "operation",
@@ -179,6 +187,8 @@ TARGET_KINDS: Final[tuple[str, ...]] = (
     "view",
     "dialog",
     "start.recent",
+    "message",
+    "setting.section",
 )
 
 #: Das erste Glied jedes Namens einer Zeile der Menüleiste (:func:`menubar_name`).

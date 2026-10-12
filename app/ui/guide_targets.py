@@ -325,6 +325,18 @@ def _marked(name: str) -> Callable[[MainWindow], QWidget]:
     return find
 
 
+def _chat_page(window: MainWindow) -> QWidget:
+    """Die Seite *Chat* der rechten Karte."""
+    page: QWidget = window.chat
+    return page
+
+
+def _tour_page(window: MainWindow) -> QWidget:
+    """Die Seite *Tour* der rechten Karte."""
+    page: QWidget = window.tour
+    return page
+
+
 def _rebuild_button(window: MainWindow) -> QWidget:
     """*Modell nachbauen* in der Auswahlkarte — er steht nur an einem Netzkörper."""
     button: QWidget = window.selection_operations.rebuild_button
@@ -380,6 +392,8 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "progress.cancel": _progress_cancel,
     "preview.banner": _preview_banner,
     "selection.rebuild": _rebuild_button,
+    "chat": _chat_page,
+    "tour": _tour_page,
 }
 
 #: Die Namen, die keinen eigenen Widget haben, nur einen Ort.
@@ -818,6 +832,8 @@ _MARKED_KINDS: Final = frozenset(
         "finding.action",
         "print",
         "setting",
+        "message",
+        "setting.section",
     }
 )
 
@@ -882,6 +898,8 @@ RESOLVED_KINDS: Final[frozenset[str]] = frozenset(
         "view",
         "dialog",
         "start.recent",
+        "message",
+        "setting.section",
     }
 )
 
