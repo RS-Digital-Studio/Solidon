@@ -70,7 +70,9 @@ from tools.function_setup import (
     case_scene,
     default_apply_target,
     place_window,
+    preparation_route,
     route_of,
+    scene_setup,
     selected_feature,
     walk_target,
 )
@@ -221,6 +223,7 @@ class FunctionFlow:
         self.watch = ModalWatch(self.began)
         self._timers: list[Any] = []
         self.scene_key = str(self.spec.get("start_scene") or row.get("start_scene") or EMPTY_SCENE)
+        self.setup = scene_setup(self.scene_key)
         self.apply_target = default_apply_target(self.row)
         self.selected = selected_feature(self.row)
         #: Ein Referenzfaktor je Lauf (Bauplan §31, Entscheidung Koordinator 12.10.):
@@ -551,6 +554,8 @@ class FunctionFlow:
             )
         )
         ok = self.run_steps(f"startszene {self.scene_key}", steps)
+        if ok:
+            ok = self.run_steps(f"vorbereitung {self.scene_key}", self.preparation_steps())
         self.session.forget_changes()
         if ok and self.data.get("scene") is None:
             result = self.session.last_result
@@ -562,6 +567,55 @@ class FunctionFlow:
                 "eval_s": round(time.perf_counter() - began, 3),
             }
         return ok
+
+    def preparation_steps(self) -> list[Step]:
+        """Was nach dem Öffnen den Zustand der Szene herstellt (``preparation_route``).
+
+        Klicks, Tippen und Tasten wie jeder Weg; danach wartet der Prüfstand, bis
+        der Auslöser fertig ist. Die Rückfrage vor dem Export bricht er ab — der
+        Bericht trägt die Befunde schon, und geschrieben werden soll nichts.
+        """
+        from PySide6.QtGui import QKeySequence
+        from PySide6.QtWidgets import QApplication
+
+        steps: list[Step] = []
+        for entry in preparation_route(self.setup, self.folder / "ausloeser"):
+            if "type" in entry:
+                steps.append(self.typing_step(entry["type"]))
+            elif "key" in entry:
+                steps.append(self.key_step(QKeySequence(entry["key"]), entry["key"]))
+            else:
+                steps.append(self.walker.step(entry["target"], entry.get("button", "left")))
+        kind = self.setup.cause.get("kind")
+        if kind == "export":
+            steps += [
+                self.wait_step(
+                    "rückfrage vor dem export",
+                    lambda: QApplication.activeModalWidget() is not None,
+                ),
+                self.do_step("rückfrage abbrechen", self.escape_modal, settle_ms=SETTLE_MS),
+            ]
+        if steps:
+            steps.append(
+                self.wait_step(
+                    "vorbereitung steht",
+                    lambda: (
+                        QApplication.activeModalWidget() is None
+                        and not self.session.split_running
+                        and self.idle()
+                    ),
+                )
+            )
+        return steps
+
+    def typing_step(self, text: str) -> Step:
+        """Tippt in das Feld mit dem Fokus — den Dateinamen im Dateidialog."""
+
+        def act(machine: StepMachine) -> None:
+            self.walker.record({"target": "fokus", "typed": text, "button": None})
+            self.ports.type_text(text)
+
+        return Step("tippen dateiname", act, settle_ms=SETTLE_MS)
 
     # --- Wege, Eingaben, Vorschau --------------------------------------------------------------
 

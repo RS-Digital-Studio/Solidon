@@ -1,0 +1,9 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('ohne Geometrie'),'2;1');
+FILE_NAME('no_geometry.step','2026-10-12T00:00:00',(''),(''),'','','');
+FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));
+ENDSEC;
+DATA;
+ENDSEC;
+END-ISO-10303-21;

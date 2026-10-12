@@ -141,6 +141,7 @@ from app.core.split import (
 )
 from app.core.types import (
     CheckState,
+    Document,
     DocumentChange,
     Feature,
     FeatureId,
@@ -1669,6 +1670,25 @@ def _unresolvable(parameters: Mapping[str, Parameter]) -> AppError | None:
     except AppError as error:
         return error
     return None
+
+
+def inserting_finding(document: Document, before: OpId) -> Finding:
+    """Dass der Bericht einem Zwischenstand gilt (P7.1), solange die Einfügemarke steht.
+
+    Ein Teil vor Schritt 5 ist nicht das fertige, auch wenn nichts daran fehlt.
+    Eine Funktion und kein Satz in :meth:`Session.run_evaluation`, damit die
+    Szene des Funktionsdurchgangs denselben Befund prüft (``tools/function_scenes``).
+    """
+    return Finding(
+        code="history.inserting",
+        severity="info",
+        message=_(
+            "Zu sehen ist der Stand vor Schritt {number}. Neue Schritte kommen hierhin.",
+            number=step_number(document, before),
+        ),
+        op_id=before,
+        suggestions=(STOP_INSERTING,),
+    )
 
 
 def _with_findings(result: EvaluationResult, extra: list[Finding]) -> EvaluationResult:
@@ -5484,21 +5504,7 @@ class Session(QObject):
         # der Ersatz liefe still weiter.
         extra = list(profiles.carried_findings(document.printer, document.material))
         if self._insert_before is not None:
-            # Und dass der Bericht einem Zwischenstand gilt (P7.1): Ein Teil vor
-            # Schritt 5 ist nicht das fertige, auch wenn nichts daran fehlt.
-            extra.append(
-                Finding(
-                    code="history.inserting",
-                    severity="info",
-                    message=_(
-                        "Zu sehen ist der Stand vor Schritt {number}. "
-                        "Neue Schritte kommen hierhin.",
-                        number=step_number(self.project.document, self._insert_before),
-                    ),
-                    op_id=self._insert_before,
-                    suggestions=(STOP_INSERTING,),
-                )
-            )
+            extra.append(inserting_finding(self.project.document, self._insert_before))
         return _with_findings(result, extra)
 
     def recompute_fully(self) -> None:

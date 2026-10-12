@@ -366,7 +366,8 @@ def function_cases(
     Nachprüfung einer Zeile nach einem Fix.
 
     Was die Spezifikation an Lizenz und Vorbedingungen nennt, gilt für jeden Fall
-    der Zeile; eine Vorbedingung mit zwei Zuständen bekommt im Satz ``basis``
+    der Zeile, ebenso die Vorbedingungen ihrer Startszene
+    (``function_setup.scene_setup``); eine Vorbedingung mit zwei Zuständen bekommt im Satz ``basis``
     einen Lauf im anderen Zustand dazu, denn „fehlt“ ist der Fehlerweg
     (``function_setup.spec_variants``). Die Läufe von ``lizenz`` liest
     ``function_setup.variant_sets`` jetzt an der Fassung. Eine Zeile des
@@ -377,7 +378,7 @@ def function_cases(
     """
     from app.i18n.catalog import available_languages
     from tools.function_list import STARTUP_LICENCE
-    from tools.function_setup import PHASES, Variant, spec_variants
+    from tools.function_setup import PHASES, Variant, scene_setup, spec_variants
     from tools.function_setup import variant_sets as known_sets
 
     sets = known_sets()
@@ -426,6 +427,11 @@ def function_cases(
                 continue
             scene = str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "")
             base, others = spec_variants(row.get("spec"))
+            # Was die Startszene verlangt (OpenCASCADE fehlt, Generator läuft), gilt
+            # für jeden Fall der Zeile — ohne Gegenlauf, sonst fehlte ihr Befund.
+            needed = dict(scene_setup(scene).preconditions) if scene else {}
+            if needed:
+                base = {**base, "preconditions": {**base.get("preconditions", {}), **needed}}
             entries = [{**base, **entry, "phases": own} for entry in sets[name]]
             if name == "basis" and not phases:
                 entries += [{**base, "set": "basis", **other} for other in others]
@@ -1201,6 +1207,15 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         # Vorbedingung, steht der Grund in ``bench.json`` und in der Übersicht.
         second = function_setup.case_scene(folder, scenes, function_setup.SECOND_SCENE)
         function_setup.write_profile(variant, recent=[second] if second is not None else [])
+        if data is not None:
+            # Eigene Bausteine der Startszene liegen im Nutzerordner, bevor die
+            # Anwendung ihn liest (``function_setup.install_own_parts``).
+            spec = row.get("spec") or {}
+            key = str(spec.get("start_scene") or row.get("start_scene") or "")
+            state["own_parts"] = [
+                str(path)
+                for path in function_setup.install_own_parts(function_setup.scene_setup(key))
+            ]
         load_operations()
         no_native_dialogs()
         function_setup.apply_licence(variant.licence)

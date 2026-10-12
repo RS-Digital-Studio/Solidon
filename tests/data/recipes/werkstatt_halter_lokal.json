@@ -1,0 +1,77 @@
+{
+  "dependencies": {},
+  "doc": "Derselbe Halter, im Nutzerordner neu beschrieben.",
+  "document": {
+    "app_version": "corpus",
+    "chat": [],
+    "export": {
+      "format": "",
+      "scheme": ""
+    },
+    "fits": [],
+    "format_version": 52,
+    "libs": {
+      "own_part:werkstatt_halter": "1ac66d32c23d"
+    },
+    "numbering": {
+      "object": 0,
+      "op": 0,
+      "transaction": 0
+    },
+    "ops": [
+      {
+        "id": 1,
+        "in": [],
+        "op": "create_box",
+        "out": [
+          "obj_1"
+        ],
+        "params": {
+          "anchor": "corner",
+          "depth": 20.0,
+          "height": 8.0,
+          "width": "@w"
+        }
+      }
+    ],
+    "parameters": {
+      "w": {
+        "unit": "mm",
+        "value": 30.0
+      }
+    },
+    "parts_version": "0",
+    "print_settings": null,
+    "protected": {},
+    "scene": {
+      "material": "",
+      "printer": ""
+    },
+    "sources": {},
+    "transactions": []
+  },
+  "exposed": [
+    {
+      "default": 30.0,
+      "doc": "",
+      "maximum": 90.0,
+      "minimum": 10.0,
+      "name": "w",
+      "placement": "front",
+      "title": "Breite",
+      "unit": "mm"
+    }
+  ],
+  "features": {
+    "top": "face_top"
+  },
+  "format_version": 2,
+  "group": "structure",
+  "name": "werkstatt_halter",
+  "payloads": {},
+  "range_report": {
+    "checked": 2,
+    "failures": []
+  },
+  "title": "Werkstatthalter"
+}
