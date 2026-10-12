@@ -46,7 +46,6 @@ from PySide6.QtWidgets import (
     QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
-    QTreeWidgetItemIterator,
     QWidget,
 )
 
@@ -931,14 +930,22 @@ def _row(
     if kind == "tree.row":
         tree = window.object_tree.tree
         object_id, feature_id = _object_and_feature(rest)
-        iterator = QTreeWidgetItemIterator(tree)
-        while (item := iterator.value()) is not None:
+        # **Über ``topLevelItem`` und ``child``, nicht über
+        # ``QTreeWidgetItemIterator``**: Nach dem Iterator riss ein späteres
+        # ``tree.clear()`` in ``ObjectTree.show_scene`` mit einer
+        # Zugriffsverletzung ab (PySide 6.12, Fund D0-P). Dieselbe Folge wie
+        # der Iterator: jede Zeile vor ihren Kindern.
+        pending = [tree.topLevelItem(index) for index in range(tree.topLevelItemCount())]
+        while pending:
+            item = pending.pop(0)
+            if item is None:
+                continue
             if item.data(0, Qt.ItemDataRole.UserRole) == object_id and (
                 (feature_id is None and item.parent() is None)
                 or (feature_id is not None and item.data(1, Qt.ItemDataRole.UserRole) == feature_id)
             ):
                 return tree, item
-            iterator += 1
+            pending[0:0] = [item.child(index) for index in range(item.childCount())]
         raise MissingTargetError(f"{name}: der Baum zeigt keine solche Zeile")
     if kind == "history.row":
         from app.ui.labels import step_number
