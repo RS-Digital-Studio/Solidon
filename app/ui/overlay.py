@@ -950,7 +950,24 @@ class CurrentPageTabs(DetachableTabs):
         return self.findChild(QStackedWidget, "qt_tabwidget_stackedwidget")
 
     def _chrome_height(self, whole: QSize, stack: QStackedWidget) -> int:
-        return max(whole.height() - stack.sizeHint().height(), 0)
+        """Reiterleiste und Rand: Qts Wunsch ohne die Seite, aus der er ihn rechnete.
+
+        ``QTabWidget.sizeHint`` nimmt die höchste Wunschhöhe der sichtbaren
+        Reiter. ``stack.sizeHint()`` taugt nicht als Gegenstück: Hat die vordere
+        Seite eine Breitenhöhe, meldet der Stapel die höchste Breitenhöhe, und
+        eine Seite ohne fehlt darin. Der Rollbereich der Auswahl, der jede
+        Funktion wünscht, stand so als Rahmen im Prüfbericht — leer in voller
+        Spaltenhöhe, und nachkommende Befunde ließen die Karte nicht wachsen.
+        """
+        tallest = max(
+            (
+                page.sizeHint().height()
+                for index in range(stack.count())
+                if self.isTabVisible(index) and (page := stack.widget(index)) is not None
+            ),
+            default=0,
+        )
+        return max(whole.height() - tallest, 0)
 
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
         whole = super().sizeHint()
