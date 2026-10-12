@@ -4019,14 +4019,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   auf einer Fläche von 25 × 25 mm.
   **Ohne Befund:** Ein Merkmalsverlust ohne Verweis bleibt am exakten Körper still (der exakte
   Zweig von `evaluate._with_features` kehrt vor der Meldung zurück), am Netz meldet
-  `perceive.orphaned` ihn; so blieb der Fehler von Text, Einlage und Gegenform zwei Versionen
-  unbemerkt. Solange berührte Flächen umbenannt werden, wäre die Meldung Lärm; danach ist sie die
+  `perceive.orphaned` ihn; so blieb der Fehler unbemerkt, bei *Text aufbringen* seit 0.5.0, bei
+  Einlage und Gegenform seit 0.5.2. Solange berührte Flächen umbenannt werden, wäre die Meldung Lärm; danach ist sie die
   fehlende Auskunft.
   Der Kunde merkt es, sobald er vor einem Schritt an einer Fläche einen Schritt einfügt oder
   ändert, der diese Fläche berührt: Am exakten Körper kommt eine Frage, am Netz nicht.
   **Nächster Schritt:** eine Stelle für beide Kerne — jeder exakte Neubau aus einem Eingang über
   `_exact_features_after`, oder die eindeutige Zuordnung samt geteilter Fläche im exakten Zweig
-  der Auswertung —, danach `perceive.orphaned` auch am exakten Körper.
+  der Auswertung —, danach `perceive.orphaned` auch am exakten Körper. Jeder dieser Neubauten
+  liest Gewinde nur über `brep.features.threads_to_read`; *Formschräge* und *Fläche versetzen*
+  ohne gewählte Fläche lesen sie heute bei jedem Schritt (0,4 bis 0,7 s an Clip und Lochplatte).
   **Abnahme:** Wächter über die Falltabelle von `tests/test_exact_body_parity.py`: Was das Netz in
   einem Tabellenfall unter seinem Namen behält, behält auch der exakte Körper. Die Fälle oben
   (*Abziehen*, *Fase*, *Verrunden*, *Formschräge*, *Tasche*, geteilte Fläche) rechnen *Fläche
