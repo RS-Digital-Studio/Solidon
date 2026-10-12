@@ -1019,6 +1019,10 @@ jobs:
             https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y flathub \
             org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08
+          # Welche Flatpak-Fassung die Laufzeit voraussetzt (Website: „jede
+          # Distribution mit Flatpak“) — gelesen statt behauptet.
+          echo "Flatpak des Bauservers: $(flatpak --version)"
+          flatpak info --user --show-metadata org.freedesktop.Platform//26.08 | grep -i 'required-flatpak' || echo "Die Laufzeit 26.08 nennt keine Mindestfassung von Flatpak."
       - name: Flatpak bauen
         run: python tools/make_linux_packages.py --flatpak
       - name: Flatpak starten
@@ -1090,6 +1094,11 @@ jobs:
           [ "$(sha256sum "$appimage" | awk '{print $1}')" = "$(awk '{print $1}' "$appimage.sha256")" ] || { echo "Geändertes AppImage."; exit 1; }
           chmod +x "$appimage"
           echo "glibc des Prüfrechners: $(ldd --version | head -n 1)"
+          # Die libstdc++ kommt vom Rechner. Trägt der Läufer eine neuere aus
+          # einer Toolchain-Quelle, verdeckte sie ein zu neues GLIBCXX im
+          # Paket; die Obergrenze hält check_glibc_floor ohnehin statisch.
+          cxx=$(ldconfig -p | awk '/libstdc\+\+\.so\.6 .*x86-64/ {print $NF; exit}')
+          echo "libstdc++ des Prüfrechners: $cxx, höchstens $(grep -ao 'GLIBCXX_3\.4\.[0-9]*' "$cxx" | sort -uV | tail -n 1)"
           xvfb-run -a --server-args="-screen 0 1920x1080x24" python tools/check_frozen_start.py --executable "$appimage"
 
   linux-release-check:
