@@ -321,6 +321,10 @@ class Row:
     shortcut: str = ""
     covers: tuple[str, ...] = ()
     """Die Operationen hinter einer Sammelzeile (``part:*``), sonst leer."""
+    route: tuple[Mapping[str, str], ...] = ()
+    """Die Klicks, die die Auswahl der Anforderung herstellen (:func:`selection_route`) —
+    ``{target, button, modifier}``; ``next_click`` wählt nichts aus, er nennt nur den
+    nächsten Klick zum Ziel. Eine Spezifikation ergänzt ihren ``route`` danach."""
     spec: Mapping[str, Any] | None = None
     """Die Zeilenspezifikation aus ``tests/data/function_rows/`` — leer heißt ungeprüft."""
 
@@ -913,10 +917,73 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
         seen[row.id] = row
     if issues:
         raise FunctionListError(issues)
+    collected = [replace(row, route=selection_route(row, scenes)) for row in collected]
     if not with_specs:
         return collected
     specs = load_specs()
     return [replace(row, spec=specs.get(row.id)) for row in collected]
+
+
+#: Anforderungen, deren Auswahl ein Merkmal ist — gewählt wird ``Scene.select``.
+FEATURE_SELECTIONS: Final[frozenset[str]] = frozenset({"baustein", "textur", "gleichartig"})
+#: Anforderungen, deren Auswahl der erste Körper ist.
+BODY_SELECTIONS: Final[frozenset[str]] = frozenset(
+    {"kante", "zustand:open", "zustand:parts", "zustand:cavity"}
+)
+
+
+def _click(target: str, modifier: str = "") -> dict[str, str]:
+    return {"target": target, "button": "left", "modifier": modifier}
+
+
+def selection_route(row: Row, scenes: Mapping[str, Scene]) -> tuple[dict[str, str], ...]:
+    """Die Klicks, mit denen der Kunde in der Startszene wählt, was die Anforderung verlangt.
+
+    Abgeleitet aus der Anforderung, nicht je Zeile geschrieben: ein Körper ist
+    seine Baumzeile, mehrere Körper die Baumzeilen mit Strg dazu, ein Merkmal die
+    Baumzeile, die die Szene in ``select`` nennt, ein Befund seine Zeile im
+    Bericht — bei einer Befundhandlung der Befund, an dem sie steht. Eine Kante
+    wählt nur ein Klick ins Bild; hier steht der Körper davor, den Klick auf die
+    Kante nennt die Spezifikation. Ohne Auswahl (leer, Startbildschirm, ganze
+    Szene) ist der Weg leer.
+    """
+    scene = scenes.get(row.start_scene)
+    if scene is None:
+        return ()
+    requirement = row.requirement
+    if requirement == "befund":
+        action = row.id.removeprefix("finding.action:") if row.id.startswith("finding.") else ""
+        for code in scene.promises.get("findings", ()):
+            if not action or action in offered_at(code):
+                return (_click(f"finding:{code}"),)
+        return ()
+    if requirement.startswith(FEATURE_REQUIREMENT) or requirement in FEATURE_SELECTIONS:
+        return (_click(f"tree.row:{scene.select}"),) if scene.select else ()
+    if requirement.startswith("koerper:"):
+        count = int(requirement.removeprefix("koerper:"))
+        return tuple(
+            _click(f"tree.row:obj_{number}", "" if number == 1 else "ctrl")
+            for number in range(1, count + 1)
+        )
+    if requirement in BODY_SELECTIONS:
+        return (_click("tree.row:obj_1"),)
+    return ()
+
+
+def missing_selections(found: Iterable[Row]) -> list[str]:
+    """Zeilen, deren Anforderung eine Auswahl verlangt, ohne Auswahlweg — die Szene nennt
+    kein ``select`` oder keinen passenden Befund."""
+    selecting = ("koerper:", FEATURE_REQUIREMENT, "zustand:")
+    return [
+        f"{row.id}: Anforderung {row.requirement!r} in {row.start_scene}, aber kein Auswahlweg"
+        for row in found
+        if row.start_scene
+        and not row.route
+        and (
+            row.requirement.startswith(selecting)
+            or row.requirement in FEATURE_SELECTIONS | BODY_SELECTIONS | {"befund"}
+        )
+    ]
 
 
 def missing_scenes(found: Iterable[Row]) -> list[str]:
@@ -940,6 +1007,7 @@ def problems(menubar: Iterable[MenuEntry] = ()) -> list[str]:
     except FunctionListError as error:
         return list(error.problems)
     issues = missing_scenes(found)
+    issues += missing_selections(found)
     issues += validate_scenes(load_scenes())
     issues += validate_specs(found, load_specs(), load_scenes())
     return issues
@@ -973,10 +1041,12 @@ class Scene:
     project: bool = True
     """``False`` heißt: kein Projekt, der Startbildschirm."""
     promises: Mapping[str, Any] = field(default_factory=dict)
+    select: str = ""
+    """Das Merkmal, das eine Zeile mit Merkmalsanforderung wählt: ``obj_<n>.<merkmal>``."""
 
 
 SCENE_KEYS: Final[frozenset[str]] = frozenset(
-    {"summary", "ops", "base", "sources", "kernel", "heavy", "project", "promises"}
+    {"summary", "ops", "base", "sources", "kernel", "heavy", "project", "promises", "select"}
 )
 STEP_KEYS: Final[frozenset[str]] = frozenset({"op", "inputs", "params", "title"})
 
@@ -1014,6 +1084,7 @@ def load_scenes(path: Path = SCENES) -> dict[str, Scene]:
             heavy=bool(entry.get("heavy", False)),
             project=bool(entry.get("project", True)),
             promises=dict(entry.get("promises", {})),
+            select=entry.get("select", ""),
         )
     if problems:
         raise FunctionListError(problems)
@@ -1161,6 +1232,15 @@ def broken_promises(scene: Scene, result: EvaluationResult) -> list[str]:
     missing_findings = sorted(set(promises.get("findings", ())) - codes)
     if missing_findings:
         issues.append(f"Befunde {missing_findings} fehlen, gemeldet {sorted(codes)}")
+    if scene.select:
+        object_id, _dot, feature_id = scene.select.partition(".")
+        chosen = result.scene.objects.get(object_id)
+        feature = chosen.features.get(feature_id) if chosen is not None else None
+        wanted = scene.key.split(".")[1] if scene.key.startswith("merkmal.") else None
+        if feature is None:
+            issues.append(f"gewähltes Merkmal {scene.select} gibt es nicht")
+        elif wanted is not None and feature.kind != wanted:
+            issues.append(f"gewähltes Merkmal {scene.select} ist {feature.kind}, nicht {wanted}")
     if "triangles_over" in promises:
         largest = max((len(as_mesh_data(entry.mesh).raw.faces) for entry in objects), default=0)
         if largest <= promises["triangles_over"]:
@@ -1209,6 +1289,7 @@ SPEC_KEYS: Final[frozenset[str]] = frozenset(
 )
 PROBE_ORIGINS: Final[tuple[str, ...]] = ("slicer", "cad", "fragebogen")
 BUTTONS: Final[tuple[str, ...]] = ("left", "right", "double")
+MODIFIERS: Final[tuple[str, ...]] = ("", "ctrl", "shift")
 #: Welche Absage ein erzwungener Fehlfall erwartet (Prüfpunkt 7).
 FAULT_KINDS: Final[tuple[str, ...]] = ("sperrgrund", "grenzablehnung", "befund", "meldung")
 PRECONDITIONS: Final[dict[str, tuple[str, ...]]] = {
@@ -1286,6 +1367,8 @@ def validate_specs(
         for step in spec.get("route", ()):
             if not is_target(str(step.get("target", ""))):
                 issues.append(f"{where}: Weg zu {step.get('target')!r} ist kein Ziel")
+            if step.get("modifier", "") not in MODIFIERS:
+                issues.append(f"{where}: Zusatztaste {step.get('modifier')!r} unbekannt")
             if step.get("button", "left") not in BUTTONS:
                 issues.append(f"{where}: Taste {step.get('button')!r} unbekannt")
         if "inputs" in spec and not spec.get("example_goal"):

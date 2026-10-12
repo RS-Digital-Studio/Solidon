@@ -3,7 +3,6 @@
 
 [row."finding.action:place_on_bed"]
 start_scene = "unter_dem_bett.netz"
-route = [{ target = "finding:arrange.below_bed", button = "left" }]
 example_goal = "Den Würfel, der halb unter dem Druckbett steckt, auf das Bett setzen."
 search_probes = [
   { word = "Druckbett", origin = "slicer" },

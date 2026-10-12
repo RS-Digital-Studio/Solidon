@@ -408,6 +408,62 @@ def test_generated_scenes_never_land_in_the_tree(tmp_path: Path) -> None:
     written = fl.save_scenes(tmp_path)
     assert len(written) >= 30
     assert all(path.suffix == ".p3d" and path.stat().st_size > 0 for path in written)
+    # Prüfpunkt 16 wechselt aus einer Rechnung in ein zweites Projekt; der
+    # Prüfstand öffnet beide als Datei.
+    names = {path.name for path in written}
+    assert {"leer.p3d", "zweites_projekt.p3d", "merkmal.hole.exakt.p3d"} <= names
+    assert not any(name.startswith(("startbildschirm", "langsam_")) for name in names)
+
+
+# --- Auswahlweg --------------------------------------------------------------------
+
+
+def test_every_selecting_row_carries_its_selection_clicks(rows: list[fl.Row]) -> None:
+    """``next_click`` wählt nichts aus; den Auswahlklick trägt die Zeile, abgeleitet aus
+    ihrer Anforderung — Körper, mehrere Körper mit Strg, Merkmal, Befund."""
+    from app.core.guides import is_target
+
+    assert fl.missing_selections(rows) == []
+    found = _by_id(rows)
+
+    def targets(row_id: str) -> list[tuple[str, str]]:
+        return [(step["target"], step["modifier"]) for step in found[row_id].route]
+
+    assert targets("resize_hole") == [("tree.row:obj_1.hole_1", "")]
+    assert targets("drill_hole") == [("tree.row:obj_1.face_6", "")]
+    assert targets("repair") == [("tree.row:obj_1.edge_loop_1", "")]
+    assert targets("union_objects") == [("tree.row:obj_1", ""), ("tree.row:obj_2", "ctrl")]
+    assert targets("mirror_object") == [("tree.row:obj_1", "")]
+    assert targets("finding.action:place_on_bed") == [("finding:arrange.below_bed", "")]
+    assert targets("feature:part.move") == [("tree.row:obj_1.screw_hole_bore_1", "")]
+    assert targets("create_box") == [] and targets("arrange_bed") == []
+    steps = [step for row in rows for step in row.route]
+    assert len(steps) >= 100
+    assert all(is_target(step["target"]) and step["button"] == "left" for step in steps)
+
+
+def test_a_feature_scene_without_its_selection_turns_red(
+    monkeypatch: pytest.MonkeyPatch, cached_sources: dict[str, str]
+) -> None:
+    """Gegenprobe: Nennt eine Merkmalsszene kein gewähltes Merkmal, fehlt allen Zeilen
+    darauf der Auswahlweg — das ist rot, nicht still leer."""
+    scenes = fl.load_scenes()
+    scenes["merkmal.hole.exakt"] = dataclasses.replace(scenes["merkmal.hole.exakt"], select="")
+    monkeypatch.setattr(fl, "load_scenes", lambda path=fl.SCENES: scenes)
+
+    found = fl.problems()
+
+    assert any(issue.startswith("resize_hole:") and "Auswahlweg" in issue for issue in found)
+
+
+def test_the_promise_check_sees_a_wrong_selection() -> None:
+    """Gegenprobe: Ein gewähltes Merkmal, das es nicht gibt oder das die falsche Art hat."""
+    scenes = fl.load_scenes()
+    result = fl.evaluate_scene(fl.build_scene("merkmal.hole.netz", scenes))
+    missing = dataclasses.replace(scenes["merkmal.hole.netz"], select="obj_1.hole_9")
+    wrong = dataclasses.replace(scenes["merkmal.hole.netz"], select="obj_1.face_1")
+    assert any("gibt es nicht" in issue for issue in fl.broken_promises(missing, result))
+    assert any("nicht hole" in issue for issue in fl.broken_promises(wrong, result))
 
 
 # --- Zeilenspezifikationen ---------------------------------------------------------

@@ -13,6 +13,7 @@
 #   kernel    "exakt" oder "netz"; jeder Körper der gerechneten Szene hat diese Bauart
 #   heavy     schwer: im Tor nur als gültiger Stapel geprüft, nie gerechnet
 #   project   false heißt Startbildschirm, kein Projekt
+#   select    das Merkmal, das eine Zeile mit Merkmalsanforderung wählt (obj_<n>.<merkmal>)
 #   promises  objects, kinds (Merkmalsarten), body (closed, open, parts, cavity),
 #             findings (Befundkennungen), stops, triangles_over, seconds_over
 #
@@ -193,6 +194,7 @@ summary = "Der exakte Quader mit eingesetztem Schraubloch M4 (Baustein) oben."
 kernel = "exakt"
 base = "quader.exakt"
 promises = { objects = 1, kinds = ["hole", "cone"] }
+select = "obj_1.screw_hole_bore_1"
 [[scene."baustein.exakt".ops]]
 op = "insert_screw_hole"
 inputs = ["obj_1"]
@@ -203,6 +205,7 @@ summary = "Der Netzquader mit eingesetztem Schraubloch M4 (Baustein) oben."
 kernel = "netz"
 base = "quader.netz"
 promises = { objects = 1, kinds = ["hole", "cone"] }
+select = "obj_1.screw_hole_bore_1"
 [[scene."baustein.netz".ops]]
 op = "insert_screw_hole"
 inputs = ["obj_1"]
@@ -215,18 +218,21 @@ summary = "Der exakte Quader: sechs ebene Flächen."
 kernel = "exakt"
 base = "quader.exakt"
 promises = { objects = 1, kinds = ["face"] }
+select = "obj_1.face_6"
 
 [scene."merkmal.face.netz"]
 summary = "Der Netzquader: sechs ebene Flächen."
 kernel = "netz"
 base = "quader.netz"
 promises = { objects = 1, kinds = ["face"] }
+select = "obj_1.face_top"
 
 [scene."merkmal.hole.exakt"]
 summary = "Der exakte Quader mit durchgehender Bohrung Ø 5 mm von oben."
 kernel = "exakt"
 base = "quader.exakt"
 promises = { objects = 1, kinds = ["hole"] }
+select = "obj_1.hole_1"
 [[scene."merkmal.hole.exakt".ops]]
 op = "drill_hole"
 inputs = ["obj_1"]
@@ -237,6 +243,7 @@ summary = "Der Netzquader mit durchgehender Bohrung Ø 5 mm von oben."
 kernel = "netz"
 base = "quader.netz"
 promises = { objects = 1, kinds = ["hole"] }
+select = "obj_1.hole_1"
 [[scene."merkmal.hole.netz".ops]]
 op = "drill_hole"
 inputs = ["obj_1"]
@@ -247,6 +254,7 @@ summary = "Der exakte Quader mit drei gleichen Bohrungen Ø 4 mm im Abstand 10 m
 kernel = "exakt"
 base = "quader.exakt"
 promises = { objects = 1, kinds = ["hole"] }
+select = "obj_1.hole_1"
 [[scene."gleiche_bohrungen.exakt".ops]]
 op = "drill_hole"
 inputs = ["obj_1"]
@@ -261,6 +269,7 @@ summary = "Der exakte Quader mit Senkung Ø 8,4 mm, 90°, von oben."
 kernel = "exakt"
 base = "quader.exakt"
 promises = { objects = 1, kinds = ["cone"] }
+select = "obj_1.cone_1"
 [[scene."merkmal.cone.exakt".ops]]
 op = "countersink_hole"
 inputs = ["obj_1"]
@@ -271,6 +280,7 @@ summary = "Der Netzquader mit Senkung Ø 8,4 mm, 90°, von oben."
 kernel = "netz"
 base = "quader.netz"
 promises = { objects = 1, kinds = ["cone"] }
+select = "obj_1.cone_1"
 [[scene."merkmal.cone.netz".ops]]
 op = "countersink_hole"
 inputs = ["obj_1"]
@@ -281,6 +291,7 @@ summary = "Der exakte Quader mit Langloch Ø 5 mm, 15 mm lang, von oben."
 kernel = "exakt"
 base = "quader.exakt"
 promises = { objects = 1, kinds = ["slot"] }
+select = "obj_1.slot_1"
 [[scene."merkmal.slot.exakt".ops]]
 op = "drill_hole"
 inputs = ["obj_1"]
@@ -291,6 +302,7 @@ summary = "Der Netzquader mit Langloch Ø 5 mm, 15 mm lang, von oben."
 kernel = "netz"
 base = "quader.netz"
 promises = { objects = 1, kinds = ["slot"] }
+select = "obj_1.slot_1"
 [[scene."merkmal.slot.netz".ops]]
 op = "drill_hole"
 inputs = ["obj_1"]
@@ -301,6 +313,7 @@ summary = "Der exakte Quader mit 3 mm verrundeten senkrechten Kanten."
 kernel = "exakt"
 base = "quader.exakt"
 promises = { objects = 1, kinds = ["fillet"] }
+select = "obj_1.fillet_1"
 [[scene."merkmal.fillet.exakt".ops]]
 op = "fillet_edges"
 inputs = ["obj_1"]
@@ -311,6 +324,7 @@ summary = "Der Netzquader mit 3 mm verrundeten senkrechten Kanten."
 kernel = "netz"
 base = "quader.netz"
 promises = { objects = 1, kinds = ["fillet"] }
+select = "obj_1.fillet_1"
 [[scene."merkmal.fillet.netz".ops]]
 op = "fillet_edges"
 inputs = ["obj_1"]
@@ -321,18 +335,21 @@ summary = "Der exakte Quader mit eingeschlossenem Hohlraum."
 kernel = "exakt"
 base = "hohlraum.exakt"
 promises = { objects = 1, kinds = ["void"] }
+select = "obj_1.void_1"
 
 [scene."merkmal.void.netz"]
 summary = "Der geschlossen ausgehöhlte Netzquader."
 kernel = "netz"
 base = "hohlraum.netz"
 promises = { objects = 1, kinds = ["void"] }
+select = "obj_1.void_1"
 
 [scene."merkmal.pattern.exakt"]
 summary = "Der exakte Quader mit neun gleichen Taschen 3 × 3 × 1 mm im Raster 6 mm: ein Muster."
 kernel = "exakt"
 base = "quader.exakt"
 promises = { objects = 1, kinds = ["pattern"] }
+select = "obj_1.pattern_1"
 [[scene."merkmal.pattern.exakt".ops]]
 op = "sketch_pocket"
 inputs = ["obj_1"]
@@ -375,6 +392,7 @@ summary = "Der Netzquader mit Rippentextur auf der Oberseite: ein Muster."
 kernel = "netz"
 base = "quader.netz"
 promises = { objects = 1, kinds = ["pattern"] }
+select = "obj_1.texture_2"
 [[scene."merkmal.pattern.netz".ops]]
 op = "apply_texture"
 inputs = ["obj_1"]
@@ -384,6 +402,7 @@ params = { coverage = "whole_face", face = "face_top", pattern = "rib" }
 summary = "Eine exakte Kugel Ø 20 mm."
 kernel = "exakt"
 promises = { objects = 1, kinds = ["sphere"], body = "closed" }
+select = "obj_1.sphere_1"
 [[scene."merkmal.sphere.exakt".ops]]
 op = "create_brep_sphere"
 params = { diameter = 20.0 }
@@ -392,6 +411,7 @@ params = { diameter = 20.0 }
 summary = "Eine Netzkugel Ø 20 mm."
 kernel = "netz"
 promises = { objects = 1, kinds = ["sphere"], body = "closed" }
+select = "obj_1.sphere_1"
 [[scene."merkmal.sphere.netz".ops]]
 op = "create_sphere"
 params = { diameter = 20.0 }
@@ -400,6 +420,7 @@ params = { diameter = 20.0 }
 summary = "Ein exakter Ring (Wulst) Ø 40 mm, Rohr Ø 8 mm."
 kernel = "exakt"
 promises = { objects = 1, kinds = ["torus"], body = "closed" }
+select = "obj_1.torus_1"
 [[scene."merkmal.torus.exakt".ops]]
 op = "create_brep_torus"
 
@@ -407,6 +428,7 @@ op = "create_brep_torus"
 summary = "Ein Netzring (Wulst) Ø 40 mm, Rohr Ø 8 mm."
 kernel = "netz"
 promises = { objects = 1, kinds = ["torus"], body = "closed" }
+select = "obj_1.torus_1"
 [[scene."merkmal.torus.netz".ops]]
 op = "create_torus"
 
@@ -414,6 +436,7 @@ op = "create_torus"
 summary = "Ein exakter Gewindebolzen M10 × 1,5, 12 mm lang."
 kernel = "exakt"
 promises = { objects = 1, kinds = ["thread"], body = "closed" }
+select = "obj_1.thread_1"
 [[scene."merkmal.thread.exakt".ops]]
 op = "thread_exact"
 
@@ -421,6 +444,7 @@ op = "thread_exact"
 summary = "Derselbe Gewindebolzen, als Dreiecksnetz weitergegeben."
 kernel = "netz"
 promises = { objects = 1, kinds = ["thread"], body = "closed" }
+select = "obj_1.thread_1"
 [[scene."merkmal.thread.netz".ops]]
 op = "thread_exact"
 [[scene."merkmal.thread.netz".ops]]
@@ -432,6 +456,7 @@ summary = "Der exakte Quader mit aufgesetztem Zapfen Ø 6 × 10 mm."
 kernel = "exakt"
 base = "quader.exakt"
 promises = { objects = 1, kinds = ["pin"] }
+select = "obj_1.pin_1"
 [[scene."merkmal.pin.exakt".ops]]
 op = "create_brep_cylinder"
 params = { diameter = 6.0, height = 10.0, z = 20.0 }
@@ -444,6 +469,7 @@ summary = "Der Netzquader mit aufgesetztem Zapfen Ø 6 × 10 mm."
 kernel = "netz"
 base = "quader.netz"
 promises = { objects = 1, kinds = ["pin"] }
+select = "obj_1.pin_1"
 [[scene."merkmal.pin.netz".ops]]
 op = "create_cylinder"
 params = { diameter = 6.0, height = 10.0, z = 20.0 }
@@ -459,6 +485,7 @@ summary = "Der exakte Quader, senkrechte Kanten verrundet von 2 auf 6 mm: gerund
 kernel = "exakt"
 base = "quader.exakt"
 promises = { objects = 1, kinds = ["curved_face"] }
+select = "obj_1.curve_1"
 [[scene."merkmal.curved_face.exakt".ops]]
 op = "fillet_edges"
 inputs = ["obj_1"]
@@ -469,6 +496,7 @@ summary = "Der Netzquader mit erhabener Schrift „OS“ oben: die Bögen der Bu
 kernel = "netz"
 base = "quader.netz"
 promises = { objects = 1, kinds = ["curved_face"] }
+select = "obj_1.curve_1"
 [[scene."merkmal.curved_face.netz".ops]]
 op = "label_text"
 inputs = ["obj_1"]
@@ -479,6 +507,7 @@ summary = "Der offene Würfel: sein Rand ist ein offener Randzug."
 kernel = "netz"
 base = "offen.netz"
 promises = { objects = 1, kinds = ["edge_loop"] }
+select = "obj_1.edge_loop_1"
 
 # --- Schwere Szenen: nur Werkzeuglauf; das Tor prüft den Stapel ------------------
 # Auf dem i9 der Entwicklung gemessen (Bericht D0-L): der Prüfstand belegt Dauer
