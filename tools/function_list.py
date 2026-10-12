@@ -31,7 +31,6 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import re
 import sys
 import tomllib
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -64,10 +63,14 @@ ROW_SOURCES: Final[tuple[str, ...]] = (
     "befundhandlung",
     "merkmalfenster",
     "verlauf",
+    "fensteraktion",
 )
 
 #: Die Zeile, die für alle Kacheln des Bausteinkatalogs steht (Konzept §3).
 CATALOGUE_ROW: Final = "part:*"
+#: Der erste Eintrag unter „Zuletzt geöffnet“ auf dem Startbildschirm — eine Zeile
+#: für die Liste (``start.recent:<n>``).
+RECENT_ROW: Final = "start.recent:1"
 #: Die Hauptaktion *Modell nachbauen* (``selection_operations.REBUILD``).
 REBUILD_ROW: Final = "selection.rebuild"
 
@@ -198,6 +201,7 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "start.model": ("D1", "start"),
     "start.project": ("D1", "start"),
     "start.manual": ("D1", "start"),
+    RECENT_ROW: ("D1", "start"),
     "dialog": ("D12", "koerper:1"),
     "dialog.accept": ("D12", "koerper:1"),
     "dialog.naming": ("D12", "koerper:1"),
@@ -243,7 +247,6 @@ COMMAND_PACKAGES: Final[dict[str, str]] = {
     "Einstellungen …": "D12",
     "Parameter anlegen …": "D10",
     "Material kalibrieren …": "D10",
-    "Automatisch teilen …": "D8",
     "G-Code gegenprüfen …": "D9",
     "An den Slicer übergeben …": "D9",
     "Filamentlager …": "D9",
@@ -252,6 +255,14 @@ COMMAND_PACKAGES: Final[dict[str, str]] = {
     "Varianten erzeugen …": "D2",
     "Gegenstücke setzen …": "D10",
     "Chat einrichten …": "D12",
+}
+
+#: Fensteraktionen in der Auswahlkarte (``SelectionOperationsPanel.add_window_action``):
+#: Befehle ohne Registereintrag, die nicht in der Menüleiste stehen, nach ihrer
+#: Kennung aus ``window_commands``. *Automatisch teilen* ist ein Ablauf über
+#: mehrere Operationen und steht unter *Vorbereiten*.
+WINDOW_ACTION_PACKAGES: Final[dict[str, str]] = {
+    "edit.auto_split": "D8",
 }
 
 # --- Anforderung und Szene (Bauplan D0 §2.5) ----------------------------------
@@ -395,6 +406,20 @@ def _history_name(node: ast.AST) -> str | None:
     return None
 
 
+def _window_action(node: ast.AST) -> str | None:
+    """``….add_window_action("edit.auto_split", …)`` → ``edit.auto_split``, sonst ``None``."""
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "add_window_action"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    ):
+        return node.args[0].value
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class UiScan:
     """Was ein Gang durch die Quelltexte der Oberfläche findet."""
@@ -403,6 +428,8 @@ class UiScan:
     """Klassenname → Module, für jede Dialog- oder Fensterklasse."""
     history: tuple[str, ...]
     """Die Einträge des Kontextmenüs im Verlauf (Objektnamen ``history.<x>``)."""
+    window_actions: tuple[str, ...] = ()
+    """Die Kennungen, unter denen ``add_window_action`` Befehle in die Auswahlkarte hängt."""
 
 
 def scan_ui(sources: Mapping[str, str]) -> UiScan:
@@ -415,17 +442,20 @@ def scan_ui(sources: Mapping[str, str]) -> UiScan:
     bases: dict[str, set[tuple[str, ...]]] = {}
     modules: dict[str, list[str]] = {}
     history: set[str] = set()
+    window_actions: set[str] = set()
     for module, text in sources.items():
         tree = ast.parse(text, filename=module)
         for node in _statements(tree):
             if isinstance(node, ast.ClassDef):
                 bases.setdefault(node.name, set()).add(_base_names(node))
                 modules.setdefault(node.name, []).append(module)
-        # Ausdrücke nur dort durchgehen, wo ein Verlaufsname überhaupt steht.
-        if "history." in text:
-            history.update(
-                name for node in ast.walk(tree) if (name := _history_name(node)) is not None
-            )
+        # Ausdrücke nur dort durchgehen, wo ein gesuchter Aufruf überhaupt steht.
+        if "history." in text or "add_window_action(" in text:
+            for expression in ast.walk(tree):
+                if (name := _history_name(expression)) is not None:
+                    history.add(name)
+                elif (key := _window_action(expression)) is not None:
+                    window_actions.add(key)
 
     @cache
     def is_window(name: str, seen: frozenset[str] = frozenset()) -> bool:
@@ -436,7 +466,11 @@ def scan_ui(sources: Mapping[str, str]) -> UiScan:
         return any(is_window(base, seen | {name}) for variant in bases[name] for base in variant)
 
     classes = {name: tuple(sorted(modules[name])) for name in bases if is_window(name)}
-    return UiScan(classes=classes, history=tuple(sorted(history)))
+    return UiScan(
+        classes=classes,
+        history=tuple(sorted(history)),
+        window_actions=tuple(sorted(window_actions)),
+    )
 
 
 def window_classes_in(sources: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
@@ -459,11 +493,6 @@ def ui_sources(root: Path = UI) -> dict[str, str]:
     if len(found) < 50:
         raise FunctionListError([f"nur {len(found)} Module unter {root} — dann prüft das nichts"])
     return found
-
-
-def snake(name: str) -> str:
-    """``PrintSettingsDialog`` → ``print_settings_dialog``; ein führender Unterstrich fällt."""
-    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name.lstrip("_")).lower()
 
 
 # --- Operationen -----------------------------------------------------------------
@@ -594,7 +623,13 @@ def operation_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
 def dialog_rows(
     classes: Mapping[str, Sequence[str]], source: Registry, scenes: Mapping[str, Scene]
 ) -> list[Row]:
-    """Je Dialog- oder Fensterklasse eine Zeile ``dialog:<klasse>``."""
+    """Je Dialog- oder Fensterklasse eine Zeile ``dialog:<name>``.
+
+    Der Name kommt aus ``guides.dialog_name`` — derselben Quelle, mit der die
+    Auflösung das offene Fenster sucht.
+    """
+    from app.core.guides import dialog_name
+
     problems: list[str] = []
     rows: list[Row] = []
     for name in sorted(classes):
@@ -624,13 +659,13 @@ def dialog_rows(
             continue
         rows.append(
             Row(
-                id=f"dialog:{snake(name)}",
+                id=f"dialog:{dialog_name(name)}",
                 kind="bedienflaeche",
                 source="dialogklasse",
                 package=package,
                 requirement=requirement,
                 start_scene=_start_scene(requirement, kernel, scenes),
-                target=f"dialog:{snake(name)}",
+                target=f"dialog:{dialog_name(name)}",
             )
         )
     if problems:
@@ -697,6 +732,7 @@ def surface_rows(
     leer, und die Spezifikation der Zeile nennt sie.
     """
     named: list[tuple[str, str]] = [(name, "wortschatz") for name in sorted(targets)]
+    named.append((RECENT_ROW, "wortschatz"))
     named += [(f"history:{entry}", "verlauf") for entry in history]
     named += [(f"finding.action:{entry}", "befundhandlung") for entry in actions]
     # *Modell nachbauen* ist keine Operation, sondern eine Hauptaktion der
@@ -869,6 +905,34 @@ def command_rows(
     return list(rows.values())
 
 
+def window_action_rows(keys: Iterable[str], scenes: Mapping[str, Scene]) -> list[Row]:
+    """Befehle, die das Fenster nur in die Auswahlkarte hängt (``add_window_action``).
+
+    Sie stehen in keiner Menüzeile und in keinem Register; ohne diese Zeilen
+    fehlte *Automatisch teilen* in der Liste.
+    """
+    problems: list[str] = []
+    rows: list[Row] = []
+    for key in keys:
+        if key not in WINDOW_ACTION_PACKAGES:
+            problems.append(f"command:{key}: Fensteraktion ohne Paket (WINDOW_ACTION_PACKAGES)")
+            continue
+        rows.append(
+            Row(
+                id=f"command:{key}",
+                kind="fensterbefehl",
+                source="fensteraktion",
+                package=WINDOW_ACTION_PACKAGES[key],
+                requirement="koerper:1",
+                start_scene=_start_scene("koerper:1", EXACT, scenes),
+                target=f"command:{key}",
+            )
+        )
+    if problems:
+        raise FunctionListError(problems)
+    return rows
+
+
 def read_menubar(path: Path) -> list[MenuEntry]:
     """Die Menüleiste aus einer Datei des Prüfstands: ``[{object_name, path, shortcut}]``."""
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -903,6 +967,7 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
         lambda: dialog_rows(scan.classes, source, scenes),
         lambda: surface_rows(TARGETS, scan.history, finding_action_ids(), scenes),
         lambda: feature_rows(source, scenes),
+        lambda: window_action_rows(scan.window_actions, scenes),
         lambda: command_rows(menubar, source, scenes),
     )
     for build in builders:
@@ -1340,7 +1405,7 @@ def validate_specs(
 
     source = registry()
     by_id = {row.id: row for row in found}
-    have_commands = any(row.kind == "fensterbefehl" for row in found)
+    have_commands = any(row.source == "menueleiste" for row in found)
     texts = command_texts() if not have_commands else frozenset()
     issues: list[str] = []
     for row_id, spec in specs.items():
