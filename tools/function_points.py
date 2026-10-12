@@ -27,12 +27,10 @@ from tools.function_checks import (
     CRITERIA,
     DESIGN_PARTS,
     FEEDBACK_AFTER_S,
-    LICENCE_STATES,
     LICENCE_UNLOCKED,
     MAIN_GAP_MS,
     MAIN_PHASES,
     MATRIX_UNREACHABLE,
-    NOT_APPLICABLE,
     NOT_FOUND,
     REVISE_WAYS,
     SELECTION_STAGES,
@@ -41,7 +39,6 @@ from tools.function_checks import (
     Context,
     Issue,
     Outcome,
-    licence_runs,
     validate_protocol,
 )
 from tools.function_judges import (
@@ -64,6 +61,7 @@ from tools.function_judges import (
     _settled,
     _spec,
 )
+from tools.function_list import LICENCE_STATES, NOT_APPLICABLE_REASONS, licence_states
 
 # --- Prüfpunkte -----------------------------------------------------------
 
@@ -770,7 +768,7 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
 
     Gesperrt (``LOCKED_STATES``) heißt: Schreibendes grau mit Grund, Lesendes
     frei; freigeschaltet heißt: alles frei. ``complete`` verlangt jeden Lauf aus
-    :func:`licence_runs` — so urteilt ``function_report.merge_cases`` einmal je
+    ``function_list.licence_states`` — so urteilt ``function_report.merge_cases`` einmal je
     Zeile über die Läufe aller ihrer Fälle; ein fehlender Lauf ist dann nicht
     gemessen. Ein einzelner Fall trägt nur seinen Lauf und wird nur an ihm
     gemessen.
@@ -778,7 +776,7 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
     issues = []
     absent = []
     if complete:
-        absent += [f"Lizenzlauf {state}" for state in licence_runs() if state not in runs]
+        absent += [f"Lizenzlauf {state}" for state in licence_states() if state not in runs]
     for state in LICENCE_STATES:
         entry = runs.get(state)
         if entry is None:
@@ -875,7 +873,7 @@ def _apply_not_applicable(outcome: Outcome, reasons: Mapping[str, str]) -> Outco
     reason = reasons.get(str(outcome.subject))
     if reason is None:
         return outcome
-    if reason not in NOT_APPLICABLE:
+    if reason not in NOT_APPLICABLE_REASONS:
         return Outcome(
             outcome.subject,
             outcome.stage,
@@ -892,7 +890,11 @@ def _apply_not_applicable(outcome: Outcome, reasons: Mapping[str, str]) -> Outco
             ),
         )
     return Outcome(
-        outcome.subject, outcome.stage, "entfaellt", NOT_APPLICABLE[reason], reason=reason
+        outcome.subject,
+        outcome.stage,
+        "entfaellt",
+        NOT_APPLICABLE_REASONS[reason],
+        reason=reason,
     )
 
 

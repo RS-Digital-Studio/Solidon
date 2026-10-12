@@ -9,6 +9,10 @@ search_probes = [
   { word = "auf Grundebene setzen", origin = "cad" },
 ]
 questions = ["Wie setze ich das Teil auf die Druckplatte?"]
+# Der Fehlweg: Während einer Neuberechnung gehört der Befund zum vorigen Stand, der
+# Knopf ist gesperrt und nennt den Grund (panels.ReportPanel, RM-534). Angestoßen
+# über einen geänderten Wert im Verlauf, damit nichts aus dem Zwischenspeicher kommt.
+fault_case = { start_scene = "unter_dem_bett_langsam", route = [{ target = "history.row:4", button = "double" }], inputs = { "field:edge" = 0.14 }, during = "rechnung", expected = "sperrgrund" }
 
 [row."finding.action:place_on_bed".expectation]
 "bounds.z_min" = { value = 0.0, tolerance = 0.000001, origin = "Konstruktion: Würfel 20 mm um den Ursprung (cube_clean.stl), aufgesetzt liegt seine Unterseite bei 0" }

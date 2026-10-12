@@ -51,7 +51,6 @@ from tools.function_checks import (
     GOOD_OVER_FINDING,
     INPUT_SHARE,
     MAX_INPUTS,
-    NOT_APPLICABLE,
     NOT_APPLICABLE_OVER_FINDING,
     SECOND_REVIEW_SHARE,
     SEVERITIES,
@@ -62,7 +61,7 @@ from tools.function_checks import (
     Outcome,
 )
 from tools.function_judges import compare_themes, judge_sizes
-from tools.function_list import ROW_KINDS
+from tools.function_list import NOT_APPLICABLE_REASONS, ROW_KINDS
 from tools.function_points import judge_case, judge_design, judge_licence
 from tools.function_samples import BrokenSample, sample_context, sample_protocol
 
@@ -454,7 +453,7 @@ def _verdict_problems(
         problems.append("ohne Bild oder Stelle")
     if verdict == "offen" and not _RM.search(str(entry.get("rm") or "")):
         problems.append("offen ohne RM-Nummer")
-    if verdict == "entfaellt" and entry.get("not_applicable") not in NOT_APPLICABLE:
+    if verdict == "entfaellt" and entry.get("not_applicable") not in NOT_APPLICABLE_REASONS:
         problems.append(f"fremder entfällt-Grund: {entry.get('not_applicable')}")
     if verdict != "entfaellt" and "not_applicable" in entry:
         problems.append("Grund für entfällt ohne Urteil entfällt")

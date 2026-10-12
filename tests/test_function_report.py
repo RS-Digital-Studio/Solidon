@@ -59,15 +59,6 @@ from tools.function_samples import BROKEN_SAMPLES, sample_context, sample_protoc
 
 ROOT = Path(__file__).resolve().parents[1]
 
-#: Alle 35 Kennungen aus Konzept §4 — gegen die Tabelle in ``function_checks``.
-ALL_CRITERIA = (
-    *(f"E{n}" for n in range(1, 8)),
-    *(f"V{n}" for n in range(1, 7)),
-    *(f"G{n}" for n in range(1, 10)),
-    *(f"Z{n}" for n in range(1, 8)),
-    *(f"I{n}" for n in range(1, 7)),
-)
-
 
 def _judged(change: Any = None) -> Any:
     protocol = copy.deepcopy(sample_protocol())
@@ -125,8 +116,11 @@ def _finding(**values: Any) -> str:
 
 def test_the_schema_has_nineteen_checkpoints_and_the_thirty_five_criteria() -> None:
     """Konzept §4: neunzehn Prüfpunkte, dazu E1–E7, V1–V6, G1–G9, Z1–Z7, I1–I6."""
-    assert sorted(CHECKPOINTS) == list(range(1, 20))
-    assert set(CRITERIA) == set(ALL_CRITERIA)
+    from tools.function_list import CHECKPOINT_NUMBERS, CRITERION_IDS
+
+    # Die Kennungen führt L (Spezifikationsformat); hier stehen ihre Definitionen.
+    assert tuple(CHECKPOINTS) == CHECKPOINT_NUMBERS
+    assert tuple(CRITERIA) == CRITERION_IDS
     assert len(CRITERIA) == 35
 
 
@@ -321,9 +315,9 @@ def test_the_expired_demo_row_carries_its_licence_state() -> None:
 
     from app.core import activation
     from tools.function_checks import STARTUP_LICENCE
-    from tools.function_list import STARTUP_SURFACES
+    from tools.function_list import RAW_WINDOW_IDS
 
-    assert "startup.expired_demo" in STARTUP_SURFACES
+    assert "startup.expired_demo" in RAW_WINDOW_IDS.values()
     reached = activation.Activation(days_left=0, deadline=date(2026, 1, 1))
     assert getattr(reached, STARTUP_LICENCE) is True and not reached.unlocked
     protocol = sample_protocol()
@@ -1791,3 +1785,29 @@ def test_the_z1_message_names_the_factor_where_the_schema_puts_it(
     outcome = _judged().criteria["Z1"]
     assert outcome.verdict == "nicht_gelaufen"
     assert "timing.reference_factor" in outcome.reason
+
+
+def test_the_spec_format_and_the_licence_names_come_from_the_function_list() -> None:
+    """Eine Quelle: L führt Schlüssel, Gründe und Lizenznamen, U importiert sie.
+
+    ``function_list`` darf ``function_checks`` nicht importieren — sonst wäre
+    es ein Kreis.
+    """
+    import ast
+
+    from tools import function_checks, function_list
+
+    assert function_checks.PROTOCOL_SCHEMA["spec"].keys is function_list.SPEC_KEYS
+    assert not hasattr(function_checks, "NOT_APPLICABLE")
+    assert function_checks.LICENCE_STATES is function_list.LICENCE_STATES
+    assert function_checks.STARTUP_LICENCE is function_list.STARTUP_LICENCE
+    assert function_checks.licence_runs is function_list.licence_states
+    assert function_checks.VARIANT_LICENCES is function_list.PRECONDITIONS["licence"]
+    assert set(function_checks.LICENCE_UNLOCKED) == set(function_list.LICENCE_STATES)
+    source = Path(function_list.__file__ or "").read_text(encoding="utf-8")
+    imported = {
+        node.module
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert not {name for name in imported if name.startswith("tools.function_")}
