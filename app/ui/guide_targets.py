@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final, Literal
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
@@ -448,10 +448,11 @@ def area_for(window: MainWindow, name: str) -> QRect:
         return _spot(point_for(window, *_object_and_feature(rest)))
     if kind == "handle" and rest not in _BARS:
         return _spot(_grip_point(window, rest, name))
-    if kind == "operation":
+    if kind in ("command", "operation"):
         # **Erst der Knopf, dann das Menü** (RM-737, B3): Die Hälfte der
         # Operationen hat gar keine Menüzeile; vorher scheiterte sie hier,
-        # bevor nach ihrem Knopf gefragt war.
+        # bevor nach ihrem Knopf gefragt war. Ein Fensterbefehl mit Knopf in
+        # der Karte (*Automatisch teilen*, *Modell einfügen*) ebenso.
         button = window.selection_operations.button_for(rest)
         if button is not None and not button.isVisible():
             _reveal(button)
@@ -1271,19 +1272,8 @@ def next_click(window: MainWindow, name: str) -> Click:
         if action is None:
             raise MissingTargetError(f"{name}: kein offenes Menü und keine Leiste trägt die Zeile")
         return _menu_click(window, action, name)
-    if kind == "command":
-        hit = _hit_row(window, rest)
-        if hit is not None:
-            return _visible_row_click(window.selection_operations.hits, hit, name, "ziel")
-        if rest.startswith("tool."):
-            return next_click(window, f"tool:{rest.removeprefix('tool.')}")
-        action = _action_for(window, kind, rest)
-        shown = _shown_in_toolbar(window, action)
-        if shown is not None:
-            return Click(_global(shown), Qt.MouseButton.LeftButton, "ziel", name)
-        return _menu_click(window, action, name)
-    if kind == "operation":
-        return _operation_click(window, rest, name)
+    if kind in ("command", "operation"):
+        return _command_click(window, kind, rest, name)
     if kind == "part":
         return _tile_click(rest, name)
     if kind in _ROW_KINDS:
@@ -1437,20 +1427,24 @@ def _tile_click(part: str, name: str) -> Click:
     raise MissingTargetError(f"{name}: der Katalog zeigt keinen Baustein dieses Namens")
 
 
-def _operation_click(window: MainWindow, operation: str, name: str) -> Click:
-    """Eine Operation: ihr Treffer in der Suche, ihr Knopf, sonst ihre Menüzeile (B3)."""
-    hit = _hit_row(window, operation)
+def _command_click(window: MainWindow, kind: str, entry: str, name: str) -> Click:
+    """Eine Operation oder ein Fensterbefehl: der Treffer in der Suche, der Knopf in
+    der Karte, ein Knopf der Werkzeugleiste, sonst die Menüzeile (B3)."""
+    hit = _hit_row(window, entry)
     if hit is not None:
         return _visible_row_click(window.selection_operations.hits, hit, name, "ziel")
-    button = window.selection_operations.button_for(operation)
+    button = window.selection_operations.button_for(entry)
     if button is not None:
         obstacles = _obstacles(button)
         if obstacles:
             return _obstacle_click(obstacles[0], name)
         if button.isVisible():
             return _widget_click(button, name, Qt.MouseButton.LeftButton)
+    if kind == "command" and entry.startswith("tool."):
+        found = next_click(window, f"tool:{entry.removeprefix('tool.')}")
+        return replace(found, target=name)
     try:
-        action = _action_for(window, "operation", operation)
+        action = _action_for(window, kind, entry)
     except MissingTargetError:
         raise MissingTargetError(f"{name}: weder ein Knopf noch eine Menüzeile steht da") from None
     shown = _shown_in_toolbar(window, action)
@@ -1467,11 +1461,20 @@ def _open_menus() -> list[QMenu]:
     ]
 
 
+def _actions_below(menu: QWidget) -> Iterator[QAction]:
+    """Jede Aktion eines Menüs, auch die Titel seiner Untermenüs und deren Zeilen."""
+    for action in menu.actions():
+        yield action
+        sub = action.menu()
+        if isinstance(sub, QMenu):
+            yield from _actions_below(sub)
+
+
 def _menu_action_named(window: MainWindow, object_name: str) -> QAction | None:
-    """Die Aktion mit diesem ``objectName``: in einem offenen Menü, in der Leiste,
-    oder der Titel eines benannten Menüs der Leiste."""
+    """Die Aktion mit diesem ``objectName``: in einem offenen Menü samt seinen
+    Untermenüs, in der Leiste, oder der Titel eines benannten Menüs der Leiste."""
     for menu in _open_menus():
-        for action in menu.actions():
+        for action in _actions_below(menu):
             if action.objectName() == object_name:
                 return action
     for entry_name, _menus, action in menubar_entries(window):
@@ -1484,7 +1487,7 @@ def _menu_action_named(window: MainWindow, object_name: str) -> QAction | None:
 
 
 def _menubar_chain(container: QWidget, action: QAction, path: list[QMenu]) -> list[QMenu] | None:
-    """Die Menüs von der Leiste bis zu dem, das ``action`` trägt — ``None`` außerhalb."""
+    """Die Menüs von ``container`` bis zu dem, das ``action`` trägt — ``None`` außerhalb."""
     for entry in container.actions():
         if entry is action:
             return path
@@ -1496,22 +1499,33 @@ def _menubar_chain(container: QWidget, action: QAction, path: list[QMenu]) -> li
     return None
 
 
+def _in_the_bar(name: str) -> MissingTargetError:
+    return MissingTargetError(f"{name}: das Menü steht gerade nicht in der Leiste")
+
+
 def _menu_click(window: MainWindow, action: QAction, name: str) -> Click:
-    """Die Zeile in einem offenen Menü — oder der Menütitel und die Untermenüs davor."""
+    """Die Zeile in einem offenen Menü — oder der Menütitel und die Untermenüs davor.
+
+    Ein offenes Menü wird mit seinen Untermenüs gelesen: *Verschieben vor* im
+    Verlaufsmenü ist ein Schritt wie ein Untermenü der Leiste. Was die Leiste
+    gerade verbirgt — die Arbeitsmenüs am Startbildschirm —, hat keinen Weg.
+    """
     for menu in _open_menus():
-        if action in menu.actions() and action.isVisible():
-            place = menu.actionGeometry(action)
-            return Click(
-                QRect(menu.mapToGlobal(place.topLeft()), place.size()),
-                Qt.MouseButton.LeftButton,
-                "ziel",
-                name,
-            )
+        chain = _menubar_chain(menu, action, [menu])
+        if chain is not None:
+            return _chain_click(chain, action, name)
     bar = window.menuBar()
     chain = _menubar_chain(bar, action, [])
     if chain is None:
-        raise MissingTargetError(f"{name}: das Kontextmenü ist zu — erst der Rechtsklick")
+        if any(isinstance(owner, QMenu) for owner in action.associatedObjects()):
+            raise MissingTargetError(f"{name}: das Kontextmenü ist zu — erst der Rechtsklick")
+        raise MissingTargetError(
+            f"{name}: kein Knopf zu sehen und keine Menüzeile — "
+            "die Handlung gilt an dieser Auswahl nicht"
+        )
     if not chain:
+        if not action.isVisible():
+            raise _in_the_bar(name)
         place = bar.actionGeometry(action)
         own = action.menu()
         why: ClickReason = "menue" if isinstance(own, QMenu) and not own.isVisible() else "ziel"
@@ -1523,6 +1537,8 @@ def _menu_click(window: MainWindow, action: QAction, name: str) -> Click:
         )
     top = chain[0]
     if not top.isVisible():
+        if not top.menuAction().isVisible():
+            raise _in_the_bar(name)
         place = bar.actionGeometry(top.menuAction())
         return Click(
             QRect(bar.mapToGlobal(place.topLeft()), place.size()),
@@ -1530,8 +1546,16 @@ def _menu_click(window: MainWindow, action: QAction, name: str) -> Click:
             "menue",
             name,
         )
+    return _chain_click(chain, action, name)
+
+
+def _chain_click(chain: list[QMenu], action: QAction, name: str) -> Click:
+    """Der Weg durch eine Kette offener Menüs: das erste zugeklappte Untermenü,
+    sonst die Zeile selbst. ``chain[0]`` ist offen."""
     for outer, inner in itertools.pairwise(chain):
         if not inner.isVisible():
+            if not inner.menuAction().isVisible():
+                raise MissingTargetError(f"{name}: das Untermenü steht gerade nicht da")
             place = outer.actionGeometry(inner.menuAction())
             return Click(
                 QRect(outer.mapToGlobal(place.topLeft()), place.size()),
@@ -1539,4 +1563,13 @@ def _menu_click(window: MainWindow, action: QAction, name: str) -> Click:
                 "untermenue",
                 name,
             )
-    raise MissingTargetError(f"{name}: das Menü ist offen, aber die Zeile steht nicht darin")
+    last = chain[-1]
+    if not action.isVisible():
+        raise MissingTargetError(f"{name}: das Menü ist offen, aber die Zeile steht nicht darin")
+    place = last.actionGeometry(action)
+    return Click(
+        QRect(last.mapToGlobal(place.topLeft()), place.size()),
+        Qt.MouseButton.LeftButton,
+        "ziel",
+        name,
+    )

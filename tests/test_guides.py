@@ -951,7 +951,10 @@ NEW_RESOLVERS = (
     "_visible_row_click",
     "_expander_click",
     "_tile_click",
-    "_operation_click",
+    "_command_click",
+    "_actions_below",
+    "_in_the_bar",
+    "_chain_click",
     "_open_menus",
     "_menu_action_named",
     "_menubar_chain",
@@ -1673,3 +1676,98 @@ def test_the_recent_projects_and_the_dialog_fields_resolve(qt_app: Any, tmp_path
             window._op_dialog.reject()
         window.hide()
         window.release()
+
+
+def test_a_menu_hidden_from_the_bar_has_no_way(qt_app: Any) -> None:
+    """Auf dem Startbildschirm stehen die Arbeitsmenüs nicht in der Leiste: kein
+    Rechteck am Ursprung der Leiste, sondern ``MissingTargetError`` (Review M1)."""
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window.resize(1200, 800)
+    window.show()
+    _settle(qt_app)
+    try:
+        assert window.start_screen.isVisible()
+        for name in ("menu:menubar.vorne", "menu:menubar.einpassen", "menu:menubar.ansicht"):
+            with pytest.raises(guide_targets.MissingTargetError, match="nicht in der Leiste"):
+                guide_targets.next_click(window, name)
+        assert guide_targets.next_click(window, "menu:menubar.oeffnen").why == "menue"
+    finally:
+        window.hide()
+        window.release()
+
+
+def test_a_window_command_goes_over_its_button_in_the_card(
+    prepared_window: Any, qt_app: Any
+) -> None:
+    """Ein Fensterbefehl mit Knopf in der Karte: erst der Knopf, dann das Menü (Review M4)."""
+    from app.ui import guide_targets
+
+    window = prepared_window
+    window.right.setCurrentIndex(0)
+    window.object_tree.select_object("obj_1")
+    _settle(qt_app)
+    button = window.selection_operations.button_for("edit.auto_split")
+    assert button is not None and button.isVisible(), "Automatisch teilen steht nicht da"
+    expected = QRect(button.mapToGlobal(QPoint(0, 0)), button.size())
+    step = guide_targets.next_click(window, "command:edit.auto_split")
+    assert (step.why, step.rect) == ("ziel", expected)
+    assert guide_targets.area_for(window, "command:edit.auto_split") == expected
+
+
+def test_an_operation_that_does_not_apply_here_says_so(prepared_window: Any, qt_app: Any) -> None:
+    """Ohne Knopf und ohne Menüzeile nennt die Meldung den Grund, nicht ein
+    geschlossenes Kontextmenü (Review L4)."""
+    from app.ui import guide_targets
+
+    window = prepared_window
+    window.right.setCurrentIndex(0)
+    window.object_tree.select_object(None)
+    _settle(qt_app)
+    button = window.selection_operations.button_for("hollow_object")
+    assert button is None or not button.isVisible()
+    with pytest.raises(guide_targets.MissingTargetError, match="gilt an dieser Auswahl nicht"):
+        guide_targets.next_click(window, "operation:hollow_object")
+
+
+def test_a_closed_submenu_of_an_open_context_menu_is_a_step(
+    prepared_window: Any, qt_app: Any
+) -> None:
+    """*Verschieben vor* im offenen Verlaufsmenü: erst das Untermenü, dann die Zeile
+    (Review L5)."""
+    from app.core.scene.history import OperationDraft
+    from app.ui import guide_targets
+
+    window = prepared_window
+    assert window.session.apply("Zweiter Quader", [OperationDraft(op="create_box")])
+    assert window.session.wait_for_idle(60_000)
+    _settle(qt_app)
+    listing = window.history_panel.list
+    menu = window.history_panel.context_menu(listing.item(listing.count() - 1))
+    further = next(
+        action for action in menu.actions() if action.objectName() == "history.move_before"
+    )
+    entry = further.menu().actions()[0].objectName()
+    assert entry.startswith("history.move_before.")
+    _popup(qt_app, menu)
+    try:
+        step = guide_targets.next_click(window, f"menu:{entry}")
+        place = menu.actionGeometry(further)
+        assert (step.why, step.rect) == (
+            "untermenue",
+            QRect(menu.mapToGlobal(place.topLeft()), place.size()),
+        )
+    finally:
+        menu.hide()
+
+
+def test_a_command_of_a_tool_keeps_its_own_name(prepared_window: Any) -> None:
+    """``command:tool.section`` antwortet unter seinem eigenen Namen (Review L10)."""
+    from app.ui import guide_targets
+
+    step = guide_targets.next_click(prepared_window, "command:tool.section")
+    assert step.target == "command:tool.section"
