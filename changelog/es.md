@@ -39,6 +39,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los números quedan alineados a la derecha en todos los campos, cifra bajo cifra.
 - Un lector de pantalla lee el nombre y la explicación de cada campo numérico de un diálogo.
 
+### Imprimir y entregar al slicer
+
+- Si el slicer elegido no es un programa, Solidon lo indica ahora al momento. En la versión 0.6.0 un aviso de Windows sobre una aplicación de 16 bits detenía el slicer hasta que alguien lo cerraba.
+
 ### Editar y dibujar
 
 - Un cuerpo exacto conserva ahora sus características tras *Aplicar texto*, *Incrustar texto* y *Rebajar contraforma*. En la versión 0.6.0 después ya no se podía hacer clic en ninguna cara.

@@ -39,6 +39,10 @@ dans `website/version.json`.
 - Les nombres sont alignés à droite dans tous les champs, chiffre sous chiffre.
 - Un lecteur d'écran lit le nom et l'explication de chaque champ numérique d'un dialogue.
 
+### Imprimer et transmettre au slicer
+
+- Si le slicer choisi n'est pas un programme, Solidon le signale désormais aussitôt. En version 0.6.0, un message Windows sur une application 16 bits bloquait le slicer jusqu'à ce qu'on le ferme.
+
 ### Modifier et esquisser
 
 - Un corps exact garde désormais ses caractéristiques après *Appliquer du texte*, *Incruster du texte* et *Creuser la contre-forme*. En version 0.6.0, plus aucune face ne pouvait ensuite être cliquée.

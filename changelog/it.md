@@ -38,6 +38,10 @@ scrive in `website/version.json`.
 - I numeri sono allineati a destra in tutti i campi, cifra sotto cifra.
 - Uno screen reader legge il nome e la spiegazione di ogni campo numerico di una finestra di dialogo.
 
+### Stampare e passare allo slicer
+
+- Se lo slicer scelto non è un programma, Solidon ora lo segnala subito. Nella versione 0.6.0 un messaggio di Windows su un'applicazione a 16 bit bloccava lo slicer finché qualcuno non lo chiudeva.
+
 ### Modificare e disegnare
 
 - Un corpo esatto ora conserva le sue caratteristiche dopo *Applica testo*, *Intarsia testo* e *Ricava controforma*. Nella versione 0.6.0 dopo non si poteva più fare clic su nessuna faccia.

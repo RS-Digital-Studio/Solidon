@@ -63,6 +63,10 @@ Nutzen da und sonst nichts.
 - Zahlen stehen in allen Feldern rechtsbündig, Stelle unter Stelle.
 - Ein Bildschirmleser liest an jedem Zahlenfeld eines Dialogs Namen und Erklärung vor.
 
+### Drucken und Übergabe an den Slicer
+
+- Ist als Slicer eine Datei gewählt, die kein Programm ist, meldet Solidon das jetzt sofort. In Version 0.6.0 hielt eine Windows-Meldung zur 16-Bit-Anwendung das Slicen an, bis jemand sie schloss.
+
 ### Bearbeiten und Zeichnen
 
 - Ein exakter Körper behält jetzt nach *Text aufbringen*, *Schrift einlegen* und *Gegenform einlassen* seine Merkmale. In Version 0.6.0 ließ sich danach keine Fläche mehr anklicken.

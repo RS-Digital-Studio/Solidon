@@ -38,6 +38,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os números ficam alinhados à direita em todos os campos, algarismo sob algarismo.
 - Um leitor de ecrã lê o nome e a explicação de cada campo numérico de uma caixa de diálogo.
 
+### Imprimir e entregar ao slicer
+
+- Se o slicer escolhido não for um programa, o Solidon indica-o agora de imediato. Na versão 0.6.0 uma mensagem do Windows sobre uma aplicação de 16 bits parava o slicer até alguém a fechar.
+
 ### Editar e esboçar
 
 - Um corpo exato mantém agora as suas características depois de *Aplicar texto*, *Incrustar texto* e *Rebaixar contraforma*. Na versão 0.6.0 já não era possível clicar em nenhuma face a seguir.
