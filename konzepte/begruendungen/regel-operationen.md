@@ -2195,15 +2195,29 @@ waren es fünf, vier davon in `tests/test_agent_suite.py`.
   exakten Quader 0 statt 15 Merkmale, ohne Befund, keine Fläche mehr
   anzuklicken, und ein späterer Schritt an einer Seite hielt mit
   `NativeReferenceLost` an. Seitdem verlangt die Falltabelle in
-  `test_exact_body_parity.py` an jedem exakten Ausgang jeder Operation
-  Merkmale. **Welcher Weg:** Mit `features_of` allein führt die Auswertung
-  nur bis auf Rechenrauschen unveränderte Merkmale unter ihrem Namen fort
-  (`_unchanged_continuations`); die beschriftete Deckfläche bekäme einen
-  neuen Namen, obwohl `match` sie eindeutig zuordnet und das Netz sie behält
-  (§21.2: „eindeutig unter Schwelle: ID bleibt“). Wer einen Körper aus einem
-  Eingang neu baut, führt die Namen deshalb über
-  `prepare_ops._exact_features_after` fort — wie *Fläche versetzen* und die
-  exakten Merkmalshandlungen.
+  `test_exact_body_parity.py` Merkmale am exakten Ausgang ihres Falls je
+  Operation; andere Zweige derselben Operation fährt sie nicht.
+
+  **Entscheidung (12.10.2026): Eine eindeutige Zuordnung in der Operation
+  belegt auch eine berührte Fläche**, wie am Netz (§21.2: „eindeutig unter
+  Schwelle: ID bleibt“). Wer einen Körper aus einem Eingang neu baut, benennt
+  ihn über `prepare_ops._exact_features_after`: `match` gegen die Merkmale
+  des Eingangs, Zwillinge nach der Lage ihrer Oberfläche, `apply_mapping` mit
+  den alten Namen — ohne `expected` stellt sie keinen Übergang aus, sie
+  benennt nur. Die Auswertung prüft das mit ihrer eigenen Zuordnung nach; es
+  ist der Beleg „eindeutige Zuordnung auf denselben Namen“ von oben
+  (`_unproven_native_references`). Die beschriftete Deckfläche (1200 →
+  1118,18 mm²) behält so ihren Namen; mit `features_of` allein bekäme sie
+  einen neuen. Das löst die Sätze darüber auf, statt ihnen zu widersprechen:
+  **„Unverändert heißt unberührt“** gilt der Fortführung, die die Auswertung
+  selbst ausstellt (`_unchanged_continuations`), nicht der Zuordnung der
+  Operation. **„Nie die Auswertung“** bleibt: Sie errät nichts, und was
+  mehrdeutig oder ohne Partner ist, wählt weiter der Kunde. RM-218
+  („geänderte oder mehrdeutige Merkmale bleiben im Frage-/Haltweg“)
+  beschreibt dieselbe Fortführung der Auswertung und gilt für sie weiter.
+  Exakte Neubauten, die ihren Ausgang noch allein über `features_of`
+  benennen (*Abziehen*, *Fase*, *Verrunden* und andere), geben eine berührte
+  Fläche unter neuem Namen aus: RM-787.
 - **Ein Kantenfeld wird vor dem Cache gebunden, und die gebundene Auswahl
   geht in den Schlüssel des Verbrauchers** (20.09.2026, P1.4c.4b). Ein
   Kantenschlüssel ist eine gerundete Lage; zwei Kanten können denselben

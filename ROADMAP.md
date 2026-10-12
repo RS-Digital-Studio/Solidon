@@ -121,7 +121,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-778 — Kleine Teile entfernen schließt auch bewusst offene Öffnungen](#rm-778) | Geometrie, Erkennung und Druckvorbereitung | Nachstellen am Kundenweg, dann Öffnungen mit Absicht von Löchern im Netz trennen |
 | [RM-780 — *Weich verschmelzen* warnt „unverbunden“, wenn ein Eingang schon aus zwei Körpern besteht](#rm-780) | Geometrie, Erkennung und Druckvorbereitung | Review Blend (G2), vorbestehend: `blend.still_apart` vergleicht mit einem Körper statt mit den Körpern der Eingänge |
 | [RM-781 — Ein Eingang mit falsch gewickeltem Hohlraum wird beim Verschmelzen zur Kugel in einem neuen Hohlraum](#rm-781) | Geometrie, Erkennung und Druckvorbereitung | Review Blend (G3), vorbestehend: `blend._grid` hält die mehrdeutige Lage nicht an (Regel 21) |
-| [RM-787 — Am exakten Körper verliert eine geteilte Fläche ihren Namen](#rm-787) | Geometrie, Erkennung und Druckvorbereitung | Die Namensregel des Netzes (`_divided_partners`: der Name bleibt am größten Stück) für exakte Operationen übernehmen, mit Wächter über die Falltabelle |
+| [RM-787 — Am exakten Körper verliert eine berührte oder geteilte Fläche ihren Namen, und der Verlust bleibt ohne Befund](#rm-787) | Geometrie, Erkennung und Druckvorbereitung | Gemessen an *Abziehen*, *Fase*, *Verrunden*, *Formschräge*, *Tasche* (`top` → `face_6`, danach fragt *Fläche versetzen*); eine Stelle für beide Kerne (`_exact_features_after` oder Zuordnung im exakten Zweig der Auswertung, samt `_divided_partners`), dann `perceive.orphaned` auch exakt; Wächter über die Falltabelle |
 | [RM-718 — SuperSlicer stützt den Deckel eines gesperrten Bechers nicht](#rm-718) | Geometrie, Erkennung und Druckvorbereitung | Ursache in SuperSlicer eingrenzen; Hybridstütze neben einem Sperrkörper messen |
 | [RM-717 — Probedruck: flache Decken, die nach RM-585 ohne Stütze bleiben](#rm-717) | Geometrie, Erkennung und Druckvorbereitung | Probedruck (Robert) |
 | [RM-716 — Die Druckzeitschätzung braucht an echten Modellen bis zu zwei Minuten](#rm-716) | Geometrie, Erkennung und Druckvorbereitung | Messung und Bündelung (Leistung, mit RM-281) |
@@ -2365,6 +2365,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   aller sechs Körper, eingebetteter Quellen und Projektinhalte ohne monotonen Zähler.
   Alle 260 erfassten Quellen und das Original bleiben unverändert.
   [Fachnachweis und tatsächliche Grenzen](konzepte/nachweise-release-0.5.1/reports/rm218-kundenpassung-2026-10-02.md).
+  **Seit 12.10.2026** (`fix/schrift-merkmale`): Eine eindeutige Zuordnung in der Operation, die
+  den Körper neu baut (`prepare_ops._exact_features_after`), belegt auch eine berührte Fläche
+  (§21.2); der Frage-/Haltweg oben gilt der Fortführung durch die Auswertung selbst. Begründung:
+  `konzepte/begruendungen/regel-operationen.md`, „Der Neubau gibt seine Merkmale mit“.
   **Offen:** allein die Fensterabnahme beim Release (RM-213); Code und Tor mit `d907d6036`
   in v0.5.2.
 
@@ -3991,18 +3995,43 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 <a id="rm-787"></a>
 
-- [ ] **RM-787 — Am exakten Körper verliert eine geteilte Fläche ihren Namen.**
+- [ ] **RM-787 — Am exakten Körper verliert eine berührte oder geteilte Fläche ihren Namen, und der Verlust bleibt ohne Befund.**
   Gefunden beim Fix „Text, Einlage und Gegenform behalten am exakten Körper ihre Merkmale“
-  (Funktionsdurchgang D0, `fix/schrift-merkmale`): Teilt ein Schritt eine Fläche, behält am Netz
-  das größte Stück ihren Namen (`_divided_partners`), am exakten Körper bekommt es einen neuen.
-  Beispiele: *Gegenform einlassen* mit großer Tasche, ein „Q“ in 18 mm auf einer Fläche von
-  25 × 25 mm. Ein Schritt, der an dieser Fläche hing, verliert damit seinen Bezug (§21.2: „ID
-  bleibt“). Die Regel gilt für alle exakten Operationen, nicht nur für Text.
-  **Nächster Schritt:** die Zuordnung geteilter Flächen am exakten Körper an dieselbe Regel wie am
-  Netz binden (eine Stelle, beide Kerne), mit einem Wächter über die Falltabelle von
-  `tests/test_exact_body_parity.py`.
-  **Abnahme:** Test am exakten Körper mit geteilter Fläche, vorher rot; beide Kerne vergeben
-  denselben Namen an das größte Stück; druckgleich an den Beispielprojekten.
+  (Funktionsdurchgang D0, `fix/schrift-merkmale`) und in seinem Review. Dieselbe Auskunft, der
+  Name einer Fläche nach einem exakten Neubau, entsteht an zwei Stellen verschieden (§21.2:
+  „eindeutig unter Schwelle: ID bleibt“; Entscheidung in
+  `konzepte/begruendungen/regel-operationen.md`, „Der Neubau gibt seine Merkmale mit“).
+  **Berührt:** Exakte Operationen, die ihren Ausgang allein über `features_of` benennen, geben
+  eine berührte Fläche unter neuem Namen aus, das Netz behält ihn. Gemessen am Quader
+  40 × 30 × 20, beide Kerne durch Verlauf und Auswertung: Nach *Abziehen* (Block 10 × 10 von
+  oben), *Fase* und *Verrunden* der senkrechten Kanten (1 mm), *Formschräge* (3°) und *Tasche*
+  (8 × 6 × 3) heißt die Deckfläche exakt `face_6`, am Netz weiter `top`; ein folgendes *Fläche
+  versetzen* an `top` fragt am exakten Körper „Welches Merkmal entspricht top?“, am Netz rechnet
+  es durch. Statisch derselbe Weg: *Fläche versetzen* ohne gewählte Fläche (`face_ops.py`),
+  *Versiegeln* (`seal_ops.py`), `brep/ops._replaced`, die Skizzenwege in `sketch/ops.py` und
+  Wege in `prepare_ops.py`, je zu prüfen, ob sie aus einem Eingang neu bauen. *Text aufbringen*,
+  *Schrift einlegen* und *Gegenform einlassen* behalten den Namen seit dem Fix
+  (`_exact_features_after`); in derselben Kategorie „boolean“ behält ihn damit *Gegenform
+  einlassen*, *Abziehen* nicht.
+  **Geteilt:** Teilt ein Schritt eine Fläche, behält am Netz das größte Stück ihren Namen
+  (`_divided_partners`), am exakten Körper bekommt es einen neuen, auch über
+  `_exact_features_after`. Beispiele: *Gegenform einlassen* mit großer Tasche, ein „Q“ in 18 mm
+  auf einer Fläche von 25 × 25 mm.
+  **Ohne Befund:** Ein Merkmalsverlust ohne Verweis bleibt am exakten Körper still (der exakte
+  Zweig von `evaluate._with_features` kehrt vor der Meldung zurück), am Netz meldet
+  `perceive.orphaned` ihn; so blieb der Fehler von Text, Einlage und Gegenform zwei Versionen
+  unbemerkt. Solange berührte Flächen umbenannt werden, wäre die Meldung Lärm; danach ist sie die
+  fehlende Auskunft.
+  Der Kunde merkt es, sobald er vor einem Schritt an einer Fläche einen Schritt einfügt oder
+  ändert, der diese Fläche berührt: Am exakten Körper kommt eine Frage, am Netz nicht.
+  **Nächster Schritt:** eine Stelle für beide Kerne — jeder exakte Neubau aus einem Eingang über
+  `_exact_features_after`, oder die eindeutige Zuordnung samt geteilter Fläche im exakten Zweig
+  der Auswertung —, danach `perceive.orphaned` auch am exakten Körper.
+  **Abnahme:** Wächter über die Falltabelle von `tests/test_exact_body_parity.py`: Was das Netz in
+  einem Tabellenfall unter seinem Namen behält, behält auch der exakte Körper. Die Fälle oben
+  (*Abziehen*, *Fase*, *Verrunden*, *Formschräge*, *Tasche*, geteilte Fläche) rechnen *Fläche
+  versetzen* an `top` an beiden Kernen ohne Rückfrage durch, vorher rot; ein Verlust ohne Verweis
+  meldet an beiden Kernen denselben Befund; druckgleich an den Beispielprojekten.
 
 <a id="rm-700"></a>
 
@@ -6398,7 +6427,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   parallel) blieb
   `tests/test_print_settings.py::test_a_slicer_that_cannot_start_is_an_answer` stehen, ohne CPU;
   einzeln lief er sechsmal grün in rund einer Sekunde. Vermutung, nicht belegt: Etwas hält den
-  Start der frisch geschriebenen Programmdatei fest (Virenscanner).
+  Start der frisch geschriebenen Programmdatei fest (Virenscanner). Im zweiten Lauf desselben
+  Tages (dieselbe Auswahl, `-n 6 --dist worksteal`) hing er wieder, wieder im Arbeiter `gw3` nach
+  rund 27 500 bestandenen Tests — zwei von zwei Läufen. Ebenso möglich, ebenso unbelegt: ein
+  Zustand, den ein früherer Test desselben Arbeiters hinterlässt.
   **Nächster Schritt:** unter Last nachstellen, den hängenden Prozess mit Stapel aufnehmen und
   zuordnen; ist es der Prozessstart, braucht der Test eine Frist mit klarer Meldung statt eines
   stillen Hängers.

@@ -464,9 +464,9 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
 - **Ein Verweis folgt seinem Körper durch den Stapel** (`orphans.lineage`); ein
   Operationsverweis (`kind="feature"`) bleibt bei `inputs[0]`. Vergebene
   Kennungen bleiben reserviert (`reserved_feature_ids`).
-- **Wer einen exakten Körper neu baut, gibt seine Merkmale mit**
-  (`features_of`; dort erkennt die Auswertung nicht nach) **und belegt die
-  Bezüge, die danach noch jemand braucht — oder die Kette hält an.** Beleg: Durchreichen, eindeutige
+- **Wer einen exakten Körper neu baut, gibt seine Merkmale mit** (aus einem
+  Eingang über `_exact_features_after`, ohne Vorgänger `features_of`) **und
+  belegt die Bezüge, die danach noch jemand braucht — oder die Kette hält an.** Beleg: Durchreichen, eindeutige
   Zuordnung auf denselben Namen, ein unberührtes Merkmal
   (`_unchanged_continuations`) oder ein geometrisch nachgewiesener Übergang
   (`OpResult.feature_continuations`) — nie aus Namen, `created_by` oder
