@@ -778,7 +778,7 @@ def _run_folder(tmp_path: Path, protocols: list[dict[str, Any]]) -> Path:
         (case / "function.json").write_text(
             json.dumps(protocol, ensure_ascii=False), encoding="utf-8"
         )
-    (out / "function_rows.json").write_text(json.dumps(ROWS, ensure_ascii=False), encoding="utf-8")
+    (out / "rows.json").write_text(json.dumps(ROWS, ensure_ascii=False), encoding="utf-8")
     return out
 
 
@@ -1075,7 +1075,7 @@ def test_the_menu_bar_matches_the_window_commands_of_every_checklist(window: Mai
     checklists = read_checklists(STATE)
     assert checklists, f"keine Abhakliste unter {STATE} — der Prüfstand lief noch nie"
     entries = [
-        MenuEntry(name, tuple(path), action.shortcut().toString())
+        MenuEntry(name, (*path, action.text()), action.shortcut().toString())
         for name, path, action in menubar_entries(window)
     ]
     rows = command_rows(entries, registry(), load_scenes())

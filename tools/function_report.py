@@ -1186,8 +1186,8 @@ def read_protocols(out: Path) -> tuple[list[dict[str, Any]], list[str]]:
 
 
 def _rows_of(out: Path, protocols: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Die Zeilen des Laufs: ``function_rows.json`` des Inventars, sonst aus den Protokollen."""
-    listed = out / "function_rows.json"
+    """Die Zeilen des Laufs: ``rows.json`` des Inventars (Paket P), sonst aus den Protokollen."""
+    listed = out / "rows.json"
     if listed.is_file():
         return [dict(row) for row in json.loads(listed.read_text(encoding="utf-8"))]
     rows: dict[str, dict[str, Any]] = {}
