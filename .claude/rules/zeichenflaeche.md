@@ -45,7 +45,7 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
   denselben Schritt ohne neuen Klick, *Stellen zeigen* lässt ihn stehen,
   Escape nimmt ihn samt Reparaturzügen zurück und legt den Umriss ab.
 * **Die gewählte Art gilt** (`intent`): Tasche und Anfügen aus Menü oder
-  Palette nehmen das Bett nicht an und sagen es (Regel 21).
+  Suche nehmen das Bett nicht an und sagen es (Regel 21).
 * **Escape nimmt nur Unfertiges** (das offene Maßfeld, dann den Entwurf),
   **Strg+Z im Entwurf den letzten Klick** (`DrawDraft.back`), danach den
   Schritt; ohne Klick sagt es den Weg. Ein Umriss aus dem Editor ist kein

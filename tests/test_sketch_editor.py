@@ -1176,7 +1176,7 @@ def test_every_drawing_tool_wears_its_key(qt_app: QApplication) -> None:
     lesen als ein Bild. Seitdem tragen sie nur das Zeichen.
 
     §19.2 steht dem nicht entgegen: er verlangt ein eindeutiges Kürzel je
-    Operation und die Befehlspalette als Universalzugang, nicht ein Wort neben
+    Operation und die Suche als Universalzugang, nicht ein Wort neben
     dem Knopf. Beides gilt weiter — hier wird geprüft, dass das Kürzel
     dennoch am Werkzeug selbst ablesbar bleibt.
     """

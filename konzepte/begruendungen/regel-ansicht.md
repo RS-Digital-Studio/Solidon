@@ -112,7 +112,7 @@ beim ersten Anlauf offen und kamen aus dem Review, keines aus der Suite:
   Gruppen im Dialog („alle senkrechten“) trafen selten genau seine. Die
   zuletzt geklickte führt (Fasenmarken, Titel), ein Fehlklick mit Taste wirft
   die Sammlung nicht weg, und rechts auf eine der gewählten bleibt die Gruppe,
-  wie bei mehreren Körpern. Menü und Befehlspalette belegen den Dialog mit
+  wie bei mehreren Körpern. Menü und Suche belegen den Dialog mit
   denselben Kanten vor, sonst rundete OK still die Vorgabegruppe. Und das
   Merkmalfenster behält beim Dazunehmen, was schon eingetragen ist
   (`FeaturePanel.show_edge`): Wer zuerst den Radius tippt und dann die nächste

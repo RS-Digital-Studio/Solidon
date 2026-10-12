@@ -122,7 +122,7 @@ def load_user_parts() -> tuple[Finding, ...]:
         _user_operations = importlib.import_module(f"{_PART_MODULE}.ops").register_all()
     # Die Rezepte danach (§24.5, seit dem 24.08.2026): eigene Bausteine als
     # Daten, aus demselben Nutzerordner. Sie registrieren sich einzeln —
-    # Katalog und Palette lesen das Register, die Menüleiste lässt
+    # Katalog und Suche lesen das Register, die Menüleiste lässt
     # ``user_operations()`` aus, und beides gilt für Rezepte wie für ``.py``s.
     recipes = importlib.import_module(f"{_PART_MODULE}.recipe").load_all()
     if recipes.loaded:
@@ -142,7 +142,7 @@ def user_operations() -> tuple[str, ...]:
     Leer, solange :func:`load_user_parts` nicht gelaufen ist — in der Suite
     also immer, und das ist Absicht (§38).
 
-    **Wofür:** Sie gehören in Katalog und Befehlspalette, aber nicht in die
+    **Wofür:** Sie gehören in Katalog und Suche, aber nicht in die
     Menüleiste. Jeder eigene Baustein wird eine Operation und damit ein
     Menüeintrag; zwanzig eigene Teile machen aus einem Menü eine Liste zum
     Absuchen. Die Grenze aus ``tests/test_interface_limits.py`` kann das nie

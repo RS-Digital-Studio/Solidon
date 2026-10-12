@@ -1903,7 +1903,27 @@ def test_the_collision_check_only_reports(document: Document, profile: Profile) 
 
     assert result.complete
     assert "arrange.collision" in {finding.code for finding in result.scene.report.findings}
+    assert "arrange.no_collision" not in {finding.code for finding in result.scene.report.findings}
     assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(8000.0)
+
+
+def test_the_collision_check_says_so_when_nothing_collides(
+    document: Document, profile: Profile
+) -> None:
+    """Ohne Überschneidung entstand ein Verlaufsschritt und sonst nichts — ein
+    Klick ohne sichtbare Antwort wirkt kaputt (§2.8; Befund F5 zu RM-735, seit
+    die Prüfung ohne Auswahl in der Karte steht). Ein Hinweis sagt es."""
+    project, history = loaded(document, count=1)
+    history.apply(
+        _("Prüfen"),
+        [OperationDraft(op="check_collisions", inputs=("obj_1",))],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    found = [f for f in result.scene.report.findings if f.code == "arrange.no_collision"]
+    assert len(found) == 1 and found[0].severity == "info", result.scene.report.findings
 
 
 # --- die Abstandsanfrage --------------------------------------------------------

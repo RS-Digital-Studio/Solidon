@@ -38,7 +38,7 @@ Fokus beim Erscheinen, und sie gehen erst auf einen Klick. Vier Zusagen:
 
 **Wer auf dem Startbildschirm zu arbeiten beginnt, beginnt das leere
 Projekt.** Der Startbildschirm verbirgt die Arbeitsmenüs, nicht die Kürzel
-und nicht die Befehlspalette — *Quader anlegen* oder *Zeichnen* ist von dort
+und nicht die Suche — *Quader anlegen* oder *Zeichnen* ist von dort
 erreichbar, und die Sitzung dahinter ist noch nie ausgewertet worden. Seit
 Übernehmen auf die aktuelle dargestellte Vorschau wartet (20.09.2026), gibt
 es die nur zu einem ausgewerteten Stand: Ein Dialog über dem Startbildschirm
@@ -199,7 +199,7 @@ operation ausführe"). Zwei Stellen halten das, und beide sind nötig:
   `repair_and_retry`, `split_and_retry`, `recount_and_retry`,
   `decimate_and_retry`, `remesh_and_retry`).
 * **Die Oberfläche sagt es vorher** (`_halt_reason`, die erste Frage in
-  `_reason_locked`): Aktion, Palette, Karte und Zwillingshaken tragen den
+  `_reason_locked`): Aktion, Suche, Karte und Zwillingshaken tragen den
   Grund mit Schrittnummer und Titel, dazu Automatisch teilen, Einfügen,
   Erzeugen, Zeichnen, Formen, Skelett und der Filamentwähler — dieselbe
   Bauart wie die Lizenzsperre und die Gestensperre daneben. Die Werkzeugzeile
@@ -952,8 +952,8 @@ Wer einen Bereich aufklappt, will ihn beim nächsten Mal wieder offen sehen:
 `remember=` schreibt den Zustand in `UiSettings.open_sections`, gebunden über
 `panels.keep_sections_in` an die Einstellungen des Fensters, damit jedes
 Speichern ihn mitnimmt — auch aus Dialogen, die eine Kopie bearbeiten. Die
-Befehlspalette findet jede Zeile der Einstellungen unter ihrem Namen
-(`settings_dialog.option_titles`, eine Quelle für Formular und Palette) und
+Suche findet jede Zeile der Einstellungen unter ihrem Namen
+(`settings_dialog.option_titles`, eine Quelle für Formular und Suche) und
 öffnet den Dialog dort; ein gesperrtes Feld gibt den Fokus an den Haken, der
 es freigibt.
 

@@ -15,6 +15,22 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.6.1
+
+### Operation and system
+
+- The search finds *Unite*, *Subtract* and *Intersection* under “boolean” too, and *Subtract* also under “difference”.
+- With one body selected and a second in the scene, the *Selection* tab says how to add the second for *Unite*, *Subtract* and *Intersection*.
+- The search field in the *Selection* tab is now always there, even with nothing selected, and finds every function and command along with its shortcut.
+- The command palette is gone, because the search field finds the same. *Search functions* and Ctrl+Shift+P put the cursor into it.
+- A match that does not work on the selection gives its reason. With no match, *Search the manual* takes you further.
+- Esc clears the search field first, and the selection stays. Enter starts the preselected match.
+- A short word that matches nothing now reports *No match*. Version 0.6.0 listed every function then.
+- With nothing selected, the *Selection* tab holds all actions for the whole scene and the functions for creating, among them *Check overlaps*.
+- Even when nothing overlaps, *Check overlaps* now gives an answer.
+- If a function lacks a second body in the scene, the reason names *Duplicate object* as the way.
+- The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
+
 ## 0.6.0
 
 - The demo now runs until 30 November 2026. Solidon3D 1.0 is expected on 1 December, and your projects are kept.

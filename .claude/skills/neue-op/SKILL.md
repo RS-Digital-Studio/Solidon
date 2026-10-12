@@ -34,7 +34,7 @@ Checkliste sind nur die Grundfelder: `requires_kind`, `reads_other_bodies`,
 `reads_process`, `touches_features`, `features_complete` (wer schneidet und
 dabei bewegt), `material_params` und `cache_version` bewusst setzen oder
 bewusst weglassen. Aufrufer und Einstiege bestimmen — Menü, Auswahlfenster am
-Merkmal, Befehlspalette, Agent, Kommandozeile.
+Merkmal, Suche, Agent, Kommandozeile.
 
 ## Je Schritt
 

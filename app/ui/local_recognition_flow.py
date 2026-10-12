@@ -67,7 +67,7 @@ class LocalRecognitionFlow(QObject):
         return tr("Hier liegt keine Oberfläche des Modells. Zielen Sie auf das Modell.")
 
     def arm(self, *, object_ids: tuple[str, ...] = ()) -> None:
-        """Menü und Palette sammeln denselben Originaltreffer wie der Rechtsklick."""
+        """Menü und Suche sammeln denselben Originaltreffer wie der Rechtsklick."""
         if not self.view._quiet_command_allowed():
             return
         result = self.view.session.last_result

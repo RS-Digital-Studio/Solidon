@@ -87,7 +87,7 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 - Arbeitsbeginn auf der Startseite ersetzt das leere/offene Projekt über
   `_begin_from_the_start_screen` mit `_may_discard`; `start_empty` meldet Erfolg.
   `run_operation`/`start_sketch` sowie Einfügen/Download wechseln so in den
-  Arbeitsbereich; Kürzel/Palette bleiben erreichbar, Vorschau liegt nicht
+  Arbeitsbereich; Kürzel und Suche bleiben erreichbar, Vorschau liegt nicht
   hinter der Startseite.
 - Eine Geste baut das Fenster einmal: `_on_tree_selection` überlässt Menübau
   dem Merkmalsignal; `_fields_this_round` merkt Merkmal und `FeaturePanel.serial`
@@ -176,7 +176,7 @@ Stellen halten das, beide sind nötig:
   Verlaufs (`change_params`, `repair_and_retry`, `split_and_retry`,
   `recount_and_retry`, `decimate_and_retry`, `remesh_and_retry`).
 - **Die Oberfläche sagt es vorher** (`_halt_reason`, die erste Frage in
-  `_reason_locked`): Aktion, Palette und Karte tragen den Grund mit
+  `_reason_locked`): Aktion, Suche und Karte tragen den Grund mit
   Schrittnummer und Titel, ebenso Automatisch teilen, Einfügen, Erzeugen,
   Zeichnen, Formen, Skelett und der Filamentwähler — dieselbe Bauart wie Lizenz-
   und Gestensperre. Die Werkzeugzeile bleibt frei — Messen, Analyse, Schichten

@@ -15,6 +15,22 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.6.1
+
+### Utilização e sistema
+
+- A pesquisa encontra *Unir*, *Subtrair* e *Interseção* também como «booleano», e *Subtrair* também como «diferença».
+- Com um corpo selecionado e um segundo na cena, o separador *Seleção* indica como acrescentar o segundo para *Unir*, *Subtrair* e *Interseção*.
+- O campo de pesquisa do separador *Seleção* está agora sempre presente, também sem seleção, e encontra cada função e cada comando com o seu atalho.
+- A paleta de comandos desaparece, porque o campo de pesquisa encontra o mesmo. *Pesquisar função* e Ctrl+Shift+P põem o cursor nele.
+- Um resultado que não funciona com a seleção indica o motivo. Sem resultados, *Pesquisar no manual* leva mais longe.
+- Esc esvazia primeiro o campo de pesquisa, e a seleção mantém-se. Enter inicia o resultado pré-selecionado.
+- Uma palavra curta que não corresponde a nada indica agora *Sem resultados*. A versão 0.6.0 listava então todas as funções.
+- Sem seleção, o separador *Seleção* reúne todas as ações para a cena inteira e as funções para criar, entre elas *Verificar sobreposições*.
+- Mesmo quando nada se sobrepõe, *Verificar sobreposições* dá agora uma resposta.
+- Se a uma função faltar um segundo corpo na cena, o motivo indica *Duplicar objeto* como caminho.
+- A lista de atalhos de teclado nomeia *Modelar*, *Esqueleto* e *Desenhar* uma única vez.
+
 ## 0.6.0
 
 - A demo funciona agora até 30 de novembro de 2026. O Solidon3D 1.0 deverá sair a 1 de dezembro e os seus projetos mantêm-se.

@@ -191,7 +191,7 @@ def test_the_page_opens_at_the_first_place_that_fits_or_at_the_top() -> None:
 
 
 def test_a_keyboard_without_umlauts_finds_the_same() -> None:
-    """Dieselbe Faltung wie in der Befehlspalette: „aushoehlen" meint *Aushöhlen*."""
+    """Dieselbe Faltung wie in der Suche: „aushoehlen" meint *Aushöhlen*."""
     source = _pages(("Formen", "Aushöhlen lässt eine Wand stehen."))
     assert _keys(manual_search.search("aushoehlen", source)) == ["p0"]
 

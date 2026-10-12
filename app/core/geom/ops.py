@@ -1281,7 +1281,7 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     # *Skalieren* ist der Fall: S gehört dem Speichern und Umschalt+S dem
     # Speichern unter, und ein erfundener Buchstabe wäre schlechter als keiner.
     #
-    # Warum überhaupt mehr: §19.2 nennt die Befehlspalette den Universalzugang,
+    # Warum überhaupt mehr: §19.2 nennt die Suche den Universalzugang,
     # und dort steht das Kürzel neben dem Titel — „so lernt man sie nebenbei".
     # Bei sechs von sechsundachtzig war nebenbei wenig zu lernen.
     shortcut="Ctrl+Shift+V",

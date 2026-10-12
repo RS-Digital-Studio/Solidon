@@ -412,7 +412,7 @@ def headline(message: str) -> str:
     die gewählte Zeile steht ganz da, ihre Handlungen darunter.
 
     Wo ein Satz endet, sagt :func:`~app.core.registry.surfaces.first_sentence`,
-    dieselbe Regel, mit der Menü, Palette und der Längenwächter schneiden
+    dieselbe Regel, mit der Menü, Suche und der Längenwächter schneiden
     (RM-509): Eine eigene hier schnitt hinter „ca.“ und „Nr.“ und ließ einen
     Folgesatz in Anführungszeichen stehen (Durchsicht 0.5.3, Fund 6).
     """
@@ -7769,7 +7769,7 @@ class ReportPanel(QWidget):
             entry.setEnabled(not self._previous(item))
             chosen[entry] = action
         # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
-        # None. Dieselbe Notlüge wie bei ``currentItem`` in der Palette.
+        # None — ``QMenu.exec`` gibt dann nichts zurück.
         picked = cast(QAction | None, menu.exec(self.list.viewport().mapToGlobal(position)))
         # Erst nachschlagen, dann wegräumen: Die gewählte Aktion gehört dem
         # Menü, und ``deleteLater`` lässt ihr die Runde, in der sie gelesen
@@ -9072,7 +9072,7 @@ class FeaturePanel(QWidget):
         """Warum Felder und Knöpfe gerade nichts annehmen — oder leer.
 
         Gesetzt vom Fenster über :meth:`set_locked`, aus derselben Auskunft,
-        mit der es Menü, Werkzeugzeile und Befehlspalette sperrt."""
+        mit der es Menü, Werkzeugzeile und Suche sperrt."""
         self._apply_blocked_reason: str | None = None
         self.preview_check: Callable[[], bool] | None = None
         self.preview_defer: Callable[[], None] | None = None
@@ -10139,7 +10139,7 @@ class FeaturePanel(QWidget):
     def set_locked(self, reason: str) -> None:
         """Warum hier gerade nichts angenommen wird — oder leer für „es geht".
 
-        **Dasselbe Wort wie an Menü, Werkzeugzeile und Befehlspalette**
+        **Dasselbe Wort wie an Menü, Werkzeugzeile und Suche**
         (`MainWindow._update_actions`). Hält die Kette an einem Schritt an,
         nimmt die Sitzung keinen neuen dahinter an (§15.3); bis zum 13.09.2026
         blieben Felder und Knöpfe hier trotzdem bedienbar, und der Versuch

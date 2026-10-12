@@ -1,6 +1,6 @@
 """Das Register der Operationen (Bauplan §10).
 
-Eine Operation wird genau einmal deklariert; Menü, Kontextmenü, Palette,
+Eine Operation wird genau einmal deklariert; Menü, Kontextmenü, Suche,
 Kommandozeile, Agenten-Werkzeugschema und Dokumentation entstehen aus dieser
 Deklaration (§1, Leitprinzip 3). Eine unvollständige Registrierung scheitert
 hier, beim Import, nicht später in einer Oberfläche.
@@ -124,7 +124,7 @@ MENU_GROUPS: Final[tuple[tuple[TranslatableText, tuple[str, ...]], ...]] = (
 #: Die Kategorien, deren Handlungen **rechts im Fenster** stehen und nicht in
 #: der Menüleiste: alles, was einer Auswahl gilt. Eine Gruppe aus
 #: :data:`MENU_GROUPS`, deren Kategorien alle hier stehen, bekommt kein Menü;
-#: ihre Aktionen bleiben am Fenster, damit Kürzel und Befehlspalette weiter
+#: ihre Aktionen bleiben am Fenster, damit Kürzel und Suche weiter
 #: greifen. Was hier **nicht** steht, braucht keine Auswahl — Grundkörper,
 #: Skizzen, Importe, Beschriftungen — oder ist ein Baustein und steht damit
 #: unter *Erzeugen*.
@@ -264,7 +264,7 @@ def menu_twins() -> dict[str, str]:
 
     **Neue Grundkörper entstehen exakt** (Konzept §10.1, Entscheidung 4 vom
     17.09.2026: die vier Kernwahl-Haken fallen): Sichtbar ist der exakte
-    Erzeuger, versteckt der Netz-Zwilling — erreichbar über die Befehlspalette
+    Erzeuger, versteckt der Netz-Zwilling — erreichbar über die Suche
     und über den Verlauf, und gespeicherte Schritte behalten ihren Namen. Ohne
     den exakten Kern bleibt der Netz-Erzeuger sichtbar: ein erklärter
     verfügbarer Weg, kein stilles Scheitern. **Bearbeitungen** haben keinen
@@ -292,7 +292,7 @@ if TYPE_CHECKING:
     #: Die Ops bleiben im Register getrennt (Verlauf und Provenienz brauchen
     #: das); zusammengelegt ist nur die Bedienung. Schlüssel ist der versteckte
     #: Zwilling, Wert der sichtbare Eintrag — welcher das ist, sagt
-    #: :func:`menu_twins`. Erreichbar bleiben beide — über die Befehlspalette
+    #: :func:`menu_twins`. Erreichbar bleiben beide — über die Suche
     #: und über den Verlauf (``History.change_kernel``).
     #:
     #: **Faul, weil die Antwort OpenCASCADE lädt** (Review, 21.09.2026): 334
@@ -376,7 +376,7 @@ def kernel_switch_label(name: str) -> TranslatableText | None:
 
 
 def twin_way(hidden: str) -> TranslatableText:
-    """Wie der versteckte Zwilling erreicht wird: Erzeuger über die Palette, Bearbeitung
+    """Wie der versteckte Zwilling erreicht wird: Erzeuger über den Verlaufsschritt, Bearbeitung
     über den Körper."""
     names = {mesh for mesh, _brep in PRIMITIVE_TWINS} | {brep for _mesh, brep in PRIMITIVE_TWINS}
     return TWIN_WAYS["primitive" if hidden in names else "edit"]
@@ -462,7 +462,7 @@ class VariantGroup:
 
 
 #: Die zusammengefassten Handlungen. Ihre Mitglieder bekommen **keinen**
-#: eigenen Menüeintrag — erreichbar bleiben sie über Befehlspalette und
+#: eigenen Menüeintrag — erreichbar bleiben sie über Suche und
 #: Verlauf, wie die versteckten Zwillinge auch.
 VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
     VariantGroup(

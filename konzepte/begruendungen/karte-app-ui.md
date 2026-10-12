@@ -1098,7 +1098,7 @@ wiederhergestellt; ein verzögerter Scroll-Aufruf hält keine alten Baumzeiger.
 `set_locked(grund)` sperrt Felder und beide Knöpfe und schreibt den Grund in
 eine sichtbare Zeile der Knopfzeile **und** in Kurzhilfe, Statuszeile und
 zugängliche Beschreibung (Regel 18). Gerufen wird sie aus `_update_actions`
-mit demselben `_halt_reason`, der Menü, Werkzeugzeile und Befehlspalette
+mit demselben `_halt_reason`, der Menü, Werkzeugzeile und Suche
 sperrt; sie überlebt den Neuaufbau der Zeilen und fällt nach einem Undo ohne
 Neuauswahl.
 
@@ -1198,7 +1198,7 @@ bekommt einen Knopf. An einer angeklickten Kante stehen neben den
 `EDGE_OPERATIONS` die `EDGE_VARIANTS` des Kerns (*Verrunden mit Verlauf*). **Das Auswahlfeld ist für diese Handlungen der einzige Ort**
 (`PANEL_CATEGORIES`, `.claude/rules/oberflaeche.md`): Die Menüleiste trägt
 nur noch, was keine Auswahl braucht, und das Kontextmenü an Körper und Merkmal
-keine Operationen. Sie verwenden dieselbe Freigabe wie Menü und Palette und
+keine Operationen. Sie verwenden dieselbe Freigabe wie Menü und Suche und
 gehen ausnahmslos durch `MainWindow.launch_operation`, damit Gesten-Editoren
 und Undo erhalten bleiben. Seine Gruppen sind einklappbare Abschnitte
 (`panels.collapsible`), sein Knopf *Bausteine* ein Hauptknopf.
@@ -1913,7 +1913,7 @@ Passung mit. Ein Undo nimmt beide Hälften und die Passung zusammen zurück.
 **Der Menüeintrag beantwortet die Frage selbst**, statt sie nach dem Klick als
 Dialog zu stellen: Ohne zwei markierte Stellen an zwei Teilen ist er gesperrt
 und trägt den Grund. Beide Stellen — Riegel und Fehlerdialog für den Weg über
-Palette und Kürzel — lesen ihn aus `main_window.counterpart_needs_two()`; zwei
+Suche und Kürzel — lesen ihn aus `main_window.counterpart_needs_two()`; zwei
 Formulierungen derselben Auskunft laufen auseinander, und hier stünden sie
 nacheinander vor demselben Kunden. Zurückgestellt wird der eigene
 Erklärungssatz über `_pick_hint`, dieselbe Bauart wie bei *Formen* und
@@ -2148,11 +2148,11 @@ Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
 *Früher unter „§29 — was die Datei mitnimmt › Hilfe und Bedienung“, HEAD-Fassung.*
 
 `manual_window.py` · `tour.py` · `shortcuts_window.py` ·
-`shortcut_schemes.py` (zwei Belegungen, eine Quelle) · `command_palette.py`
+`shortcut_schemes.py` (zwei Belegungen, eine Quelle) · `selection_operations.py` (Trefferliste)
 
 *Früher unter „§29 — was die Datei mitnimmt › Hilfe und Bedienung“.*
 
-Die Befehlspalette trennt Titel und Kürzel nur in der ersten Zeile. Ein
+Die Trefferliste der Suche (`_HitRows`, aus der Befehlspalette übernommen) trennt Titel und Kürzel nur in der ersten Zeile. Ein
 Sperrgrund oder erklärender Satz bleibt darunter in der Titelspalte; das
 rechtsbündige Kürzel behält die Höhe der ersten Zeile.
 

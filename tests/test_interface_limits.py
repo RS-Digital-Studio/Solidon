@@ -27,7 +27,7 @@ from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QApplication, QMenu, QToolButton, QWidgetAction
 
 from app.core.bootstrap import load_operations
-from app.core.registry import REGISTRY, VARIANT_GROUPS, catalogue_operations, palette_entries
+from app.core.registry import REGISTRY, VARIANT_GROUPS, catalogue_operations, search_entries
 from app.ui.main_window import MENU_GROUPS, MainWindow
 from app.ui.selection_operations import OPEN_UP_TO, SelectionOperationsPanel
 from app.ui.session import Session
@@ -66,7 +66,7 @@ MAX_LEAD_WORDS = 25
 MAX_LEAD_WORDS_TRANSLATED = 35
 
 #: Einträge in einem Untermenü. Darüber liest niemand mehr, er sucht — und
-#: dafür gibt es die Befehlspalette.
+#: dafür gibt es das Suchfeld im Reiter *Auswahl*.
 MAX_SUBMENU_ENTRIES = 12
 
 
@@ -374,7 +374,7 @@ def test_the_bore_sentence_of_a_part_stays_short_in_every_language() -> None:
 
 def test_the_lead_is_the_first_sentence_and_names_the_limit_briefly() -> None:
     """Der Dialog zeigt den ersten Satz, die Grenze nur als Überschrift (RM-513, C2)."""
-    from app.ui.command_palette import first_sentence
+    from app.core.registry.surfaces import first_sentence
     from app.ui.op_dialog import lead_sentence, lead_texts, placement_hint
 
     spec = REGISTRY.get("hollow_object")
@@ -740,25 +740,37 @@ def test_every_operation_has_an_icon_and_every_icon_exists() -> None:
     )
 
 
-def test_the_palette_puts_what_fits_the_selection_first() -> None:
+def test_the_search_puts_what_fits_the_selection_first(qt_app: QApplication) -> None:
     """Wer eine Bohrung angeklickt hat, sucht Senken — nicht das, was vorn im
     Register steht (Konzept P15 §5, E13).
 
     Und es bleibt eine Reihenfolge: die Zahl der Zeilen ändert sich nicht.
-    Eine Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen.
+    Eine Suche, die aussortiert, wäre eine Betriebsart mit anderem Namen.
+    Vorn steht, was die Karte an dieser Auswahl zeigt (RM-735).
     """
-    plain = palette_entries()
-    sorted_for_hole = palette_entries(for_feature="hole")
-    assert len(plain) == len(sorted_for_hole)
-    assert {entry.name for entry in plain} == {entry.name for entry in sorted_for_hole}
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, lambda _name: (True, ""))
+    at_a_body = panel._search_rows()
+    panel.set_context(1, lambda _name: (True, ""), feature_kind="hole")
+    at_a_hole = panel._search_rows()
+    assert len(at_a_body) == len(at_a_hole)
+    assert {entry.name for entry in at_a_body} == {entry.name for entry in at_a_hole}
 
-    for_hole = {spec.name for spec in REGISTRY.all() if "hole" in spec.applies_to}
-    assert for_hole, "keine Operation deklariert sich für Bohrungen — Test wertlos"
-    leading = {entry.name for entry in sorted_for_hole[: len(for_hole)]}
+    for_hole = {entry.name for entry in at_a_hole if panel._stands_here(entry.name)}
+    assert for_hole, "an einer Bohrung steht nichts — Test wertlos"
+    leading = {entry.name for entry in at_a_hole[: len(for_hole)]}
     assert leading == for_hole, (
         f"Diese Operationen sollten bei ausgewählter Bohrung vorn stehen: "
         f"{sorted(for_hole)}, vorn stehen aber {sorted(leading)}."
     )
+    # **Und gegen eine Herkunft von außen** (Review RM-735, F4): Sollwert und
+    # Sortierung lesen beide ``_stands_here``; ein falsches gäbe beiden
+    # dieselbe Antwort. Was an einer Bohrung gilt, sagt das Register; *Bohrung
+    # ändern* steht dort als Feld im Merkmalfenster, nicht in der Karte.
+    at_holes = {spec.name for spec in REGISTRY.all() if "hole" in spec.applies_to}
+    assert {"countersink_hole", "plug_hole"} <= at_holes, "das Register sagt es anders"
+    assert {"countersink_hole", "plug_hole"} <= leading
+    assert "union_objects" not in leading, "eine Körperhandlung steht an der Bohrung vorn"
 
 
 def _menu_entries(menu: QMenu) -> list[str]:
@@ -792,7 +804,7 @@ def test_every_operation_has_exactly_one_menu_entry(window: MainWindow) -> None:
     assert not twice, (
         f"Diese Operationen stehen mehrfach in der Menüleiste: {twice}. "
         "Eine Operation, ein Eintrag — alles Weitere ist Kontextmenü, "
-        "Palette oder Kürzel."
+        "Suche oder Kürzel."
     )
 
 
@@ -842,7 +854,7 @@ def test_the_shortcut_list_is_generated_from_the_menu_bar(window: MainWindow) ->
 
     assert all(shortcut for _group, _title, shortcut in found), (
         "was kein Kürzel hat, gehört nicht in eine Kürzelübersicht — "
-        "die Liste aller Befehle ist die Palette"
+        "die Liste aller Befehle findet *Funktion suchen*"
     )
 
 
@@ -878,23 +890,43 @@ def test_the_shortcut_list_writes_keys_the_way_the_menu_does(window: MainWindow)
         )
 
 
-def test_the_note_names_the_key_that_opens_the_palette(window: MainWindow) -> None:
+def test_the_shortcut_list_names_the_key_of_the_function_search(window: MainWindow) -> None:
     """Eine Übersicht über Tastenkürzel, die ein falsches nennt, ist schlimmer
     als keine.
 
-    Unter der Liste stand „Strg+G" — das öffnet *Modell erzeugen*. Die Palette
-    liegt auf Strg+Umschalt+P, und die Zeile holt sich die Taste jetzt von der
-    Aktion selbst.
+    Unter der Liste stand „Strg+G" — das öffnet *Modell erzeugen*. *Funktion
+    suchen* liegt auf Strg+Umschalt+P, ohne Menüzeile seit RM-735; die
+    Übersicht holt Name und Taste von der Aktion selbst.
     """
     from PySide6.QtGui import QKeySequence
 
-    expected = QKeySequence("Ctrl+Shift+P").toString(QKeySequence.SequenceFormat.NativeText)
+    from app.i18n import tr
+    from app.ui.shortcuts_window import entries
 
-    assert window._palette_action.shortcut() == QKeySequence("Ctrl+Shift+P")
-    assert (
-        window._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
-        == expected
-    )
+    expected = QKeySequence("Ctrl+Shift+P").toString(QKeySequence.SequenceFormat.NativeText)
+    assert window.search_action.shortcut() == QKeySequence("Ctrl+Shift+P")
+    assert not window.search_action.associatedObjects() or not any(
+        isinstance(owner, QMenu) for owner in window.search_action.associatedObjects()
+    ), "keine Menüzeile mehr"
+    rows = {(title, key) for _group, title, key in entries(window.menuBar(), window)}
+    assert (tr("Funktion suchen"), expected) in rows
+
+
+def test_the_shortcut_list_names_every_row_once(window: MainWindow) -> None:
+    """Jede Zeile der Kürzelübersicht steht einmal.
+
+    Die Werkzeuge der oberen Leiste (*Formen*, *Skelett*, *Zeichnen*) kamen am
+    08.10.2026 aus zwei Sitzungen zugleich in die Übersicht — zwei Schleifen
+    über dieselbe Leiste, und weil die Leiste „Werkzeuge“ heißt, stand jede
+    Zeile zweimal gleich da.
+    """
+    from collections import Counter
+
+    from app.ui.shortcuts_window import entries
+
+    found = entries(window.menuBar(), window)
+    twice = sorted(row for row, count in Counter(found).items() if count > 1)
+    assert not twice, f"doppelt in der Kürzelübersicht: {twice}"
 
 
 # --- die zweite Kürzelbelegung (Konzept P15 §7 Etappe 8, E7) --------------------
@@ -1328,9 +1360,9 @@ def test_reopening_an_operation_keeps_its_advanced_section(qt_app: object) -> No
         )
 
 
-def test_the_palette_knows_every_line_of_the_menu_bar(qt_app: object) -> None:
-    """§19.2 verlangt die Palette als Universalzugang — alles über sie
-    erreichbar, und die Kürzel lernen sich daneben.
+def test_the_search_knows_every_line_of_the_menu_bar(qt_app: object) -> None:
+    """§19.2 verlangt einen Universalzugang — seit RM-735 das Suchfeld im Reiter
+    *Auswahl*: alles über ihn erreichbar, und die Kürzel lernen sich daneben.
 
     Sie war es nicht: Das Wörterbuch der Fensterbefehle wurde von Hand
     geführt, und von Hand heißt driften. Gemessen fehlten **39 von 136
@@ -1339,9 +1371,9 @@ def test_the_palette_knows_every_line_of_the_menu_bar(qt_app: object) -> None:
     nachzutragen hätte den nächsten Eintrag wieder vergessen lassen; gelesen
     wird deshalb die Leiste selbst.
 
-    Zwei Zeilen bleiben mit Absicht draußen, und dieser Test nennt sie: In
+    Eine Zeile bleibt mit Absicht draußen, und dieser Test nennt sie: In
     einer Liste, durch die man tippt, ist *Beenden* ein Klick zu nah am
-    Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
+    Verlust der Arbeit.
     """
 
     from app.ui.main_window import MainWindow, _menu_lines
@@ -1353,7 +1385,7 @@ def test_the_palette_knows_every_line_of_the_menu_bar(qt_app: object) -> None:
         commands = window.window_commands()
         titles = {title for title, _shortcut, _slot in commands.values()}
         operations = set(window._op_actions.values())
-        gewollt_draussen = {window._quit_action, window._palette_action}
+        gewollt_draussen = {window._quit_action}
 
         missing = []
         for path, action in _menu_lines(window.menuBar()):
@@ -1364,8 +1396,8 @@ def test_the_palette_knows_every_line_of_the_menu_bar(qt_app: object) -> None:
                 missing.append(full)
 
         assert not missing, (
-            f"{len(missing)} Menüzeilen sind über die Befehlspalette nicht erreichbar: "
-            f"{missing}. Die Palette liest die Leiste — wer hier landet, hat sie umgangen."
+            f"{len(missing)} Menüzeilen sind über die Suche nicht erreichbar: "
+            f"{missing}. Die Suche liest die Leiste — wer hier landet, hat sie umgangen."
         )
     finally:
         window.close()
@@ -1433,11 +1465,12 @@ def test_the_shortcut_list_knows_every_key_the_window_holds(window: MainWindow) 
     )
 
 
-def test_the_palette_greys_out_what_the_menu_greys_out(window: MainWindow) -> None:
-    """Die 60 Fensterbefehle der Palette standen alle gleich da.
+def test_the_search_greys_out_what_the_menu_greys_out(window: MainWindow) -> None:
+    """Die 60 Fensterbefehle der Befehlspalette standen alle gleich da — die Suche
+    der Karte, die sie seit RM-735 führt, liest dieselbe Sperre.
 
     Die Operationen lesen ihre Verfügbarkeit aus den Menü-Actions
-    (``_palette_availability``), die Fensterbefehle taten es nicht: „Rückgängig"
+    (``_operation_availability``), die Fensterbefehle taten es nicht: „Rückgängig"
     ohne Verlauf nahm den Klick an und tat nichts — ein ``trigger()`` auf eine
     gesperrte Action ist ein Klick ins Leere. Bei leerem Projekt sind das fünf
     von 60: Exportieren, Rückgängig, Wiederholen, Automatisch teilen, Varianten.
@@ -1466,10 +1499,10 @@ def test_the_palette_greys_out_what_the_menu_greys_out(window: MainWindow) -> No
     # Die vier aus der Handtabelle sind dabei — sie waren der schwierige Teil.
     titles = {commands[key][0] for key in blocked}
     assert any("Rückgängig" in title for title in titles), (
-        f"Rückgängig ist ohne Verlauf gesperrt, die Palette sieht es nicht: {sorted(titles)}"
+        f"Rückgängig ist ohne Verlauf gesperrt, die Suche sieht es nicht: {sorted(titles)}"
     )
     # *Automatisch teilen* steht seit RM-507 in keinem Menü mehr, nur noch in
-    # der Auswahlkarte — die Palette sperrt es trotzdem mit Grund.
+    # der Auswahlkarte — die Suche sperrt es trotzdem mit Grund.
     assert "edit.auto_split" in blocked, f"Automatisch teilen ohne Sperre: {sorted(titles)}"
 
     # Und was geht, sagt nichts: ein Grund an einem offenen Eintrag wäre eine
@@ -1479,33 +1512,34 @@ def test_the_palette_greys_out_what_the_menu_greys_out(window: MainWindow) -> No
     assert all(not window._extra_availability(key)[1] for key in open_keys)
 
 
-def test_the_palette_teaches_the_keys_of_the_active_scheme(qt_app: QApplication) -> None:
-    """Die Palette zeigte die Tasten des Registers, das Menü daneben die der
-    Belegung.
+def test_the_search_teaches_the_keys_of_the_active_scheme(qt_app: QApplication) -> None:
+    """Die Befehlspalette zeigte die Tasten des Registers, das Menü daneben die
+    der Belegung — die Suche der Karte zeigt die der Belegung (RM-735).
 
     Der Kern liefert das Kürzel, das im Register steht — er kennt die Belegung
     nicht und darf sie nicht kennen, sie ist eine Einstellung der Oberfläche.
-    Ungefiltert weitergereicht lehrte die Palette im Schema „Wie Fusion und
+    Ungefiltert weitergereicht lehrte die Liste im Schema „Wie Fusion und
     Onshape" drei falsche Tasten und verschwieg sieben, die es dort gibt:
     ``translate_object`` stand auf „Strg+T" statt „M", ``sketch_extrude`` auf
-    gar nichts statt „E". Wer die Palette benutzt, um Tasten zu lernen — und
+    gar nichts statt „E". Wer die Suche benutzt, um Tasten zu lernen — und
     dafür ist sie da (§2.6) —, lernte die falschen.
     """
     from app.ui.shortcut_schemes import FUSION, shortcut_for
 
     window = MainWindow(Session(), UiSettings(shortcut_scheme="fusion"))
     try:
-        shown = {entry.name: entry.shortcut for entry in window.palette_rows()}
+        rows = window.selection_operations._search_rows()
+        shown = {entry.name: entry.shortcut for entry in rows}
 
         wrong = {name: (shown[name], key) for name, key in FUSION.items() if shown.get(name) != key}
         assert not wrong, (
-            f"Die Palette nennt {len(wrong)} Tasten anders als die Belegung: {wrong}. "
+            f"Die Suche nennt {len(wrong)} Tasten anders als die Belegung: {wrong}. "
             "Gezeigt wird, was shortcut_for sagt — nicht das rohe Registerkürzel."
         )
 
         # Und die Gegenprobe: Was die Belegung nicht anfasst, behält sein
         # Kürzel aus dem Register. Sonst wäre der Fix eine zweite Wahrheit.
-        for entry in window.palette_rows():
+        for entry in rows:
             expected = shortcut_for(entry.name, entry.shortcut, "fusion")
             assert entry.shortcut == expected, f"{entry.name}: {entry.shortcut} statt {expected}"
     finally:
@@ -1689,8 +1723,8 @@ def test_a_part_of_the_users_own_never_reaches_the_menu_bar(
             f"(§2.6): {sorted(in_bar)}"
         )
         assert victim not in in_menu, "der eigene Baustein steht in der Menüleiste"
-        assert victim in {entry.name for entry in palette_entries()}, (
-            "und er muss über die Befehlspalette weiter erreichbar sein"
+        assert victim in {entry.name for entry in search_entries()}, (
+            "und er muss über die Suche weiter erreichbar sein"
         )
     finally:
         release = getattr(type(window), "release", None)
@@ -2121,13 +2155,13 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
     # „Handlungen rechts (…) → Titel", und die Karte muss den Knopf tragen.
     # Alles andere liegt in der Leiste, und dort, wo der Kern es nennt.
     from app.core.registry import in_the_menu_bar
-    from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD
+    from app.i18n import tr
 
     in_the_panel = set(window.selection_operations._buttons)
-    in_the_palette = {entry.name for entry in window.palette_rows()}
+    in_the_search = {entry.name for entry in window.selection_operations._search_rows()}
     verglichen = 0
     rechts = 0
-    palette = 0
+    ohne_auswahl = 0
     from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
 
     for name, action in window._op_actions.items():
@@ -2138,28 +2172,28 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
             # einfügen …* steht in *Datei* und *Erzeugen* als eine Aktion; der
             # Weg nennt den Titel der Operation, das Menü trägt die
             # Auslassungspunkte des Dialogs.
-            action = window._palette_actions[WINDOW_COMMAND_OPERATIONS[name]]
+            action = window._command_actions[WINDOW_COMMAND_OPERATIONS[name]]
             assert action in gebaut, f"{name}: kein Menüweg"
             # Dieselbe Aktion in zwei Menüs: ``gebaut`` hält die zuletzt gebaute
             # Stelle, und *Erzeugen* kommt nach *Datei*.
             assert gebaut[action].removesuffix(" …") == genannt, (
                 f"{name}: nennt „{genannt}“, im Menü „{gebaut[action]}“"
             )
-            assert name not in in_the_palette, f"{name}: zweite Palettenzeile neben dem Befehl"
+            assert name not in in_the_search, f"{name}: zweite Suchzeile neben dem Befehl"
             verglichen += 1
             continue
         if not in_the_menu_bar(spec.category):
             assert action not in gebaut, f"{name}: steht rechts und trotzdem in der Leiste"
-            if spec.takes_whole_scene and name not in SCENE_ACTIONS_IN_THE_CARD:
-                # **Der dritte Ort** (RM-506): Eine Handlung für alle Körper
-                # steht nur ohne Auswahl, und dort trägt die Karte allein
-                # ``SCENE_ACTIONS_IN_THE_CARD`` — die übrigen nennt der Weg als
-                # Befehlspalette, und dort muss ihre Zeile stehen.
-                assert genannt == f"Befehlspalette → {blank(str(spec.title))}", (
+            if spec.takes_whole_scene:
+                # **Ohne Auswahl** (RM-506, RM-735): Eine Handlung für alle
+                # Körper steht in der Karte, wenn nichts gewählt ist — alle
+                # drei, seit die Befehlspalette fiel, in der zwei von ihnen
+                # allein standen.
+                assert genannt.startswith(f"Handlungen rechts ({blank(tr('ohne Auswahl'))})"), (
                     f"{name}: nennt „{genannt}“"
                 )
-                assert name in in_the_palette, f"{name}: in der Palette genannt, dort keine Zeile"
-                palette += 1
+                assert name in in_the_panel and name in in_the_search, name
+                ohne_auswahl += 1
                 continue
             assert genannt.startswith("Handlungen rechts"), f"{name}: nennt „{genannt}“"
             assert genannt.endswith(f"→ {blank(str(spec.title))}"), f"{name}: „{genannt}“"
@@ -2173,8 +2207,8 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
         )
         verglichen += 1
     assert rechts, "keine Handlung rechts — dann prüft dieser Test die zweite Hälfte nicht"
-    assert palette, (
-        "keine Handlung nur in der Palette — dann prüft dieser Test den dritten Ort nicht"
+    assert ohne_auswahl, (
+        "keine Handlung für alle Körper — dann prüft dieser Test den dritten Ort nicht"
     )
 
     # **Kein Schwellenwert, sondern die Zusage selbst** (8b, 29.08.2026). Hier
@@ -2268,12 +2302,13 @@ def test_the_dialog_and_the_test_agree_on_the_front() -> None:
     assert MAX_FRONT_FIELDS == MAX_FRONT_PARAMS, "zwei Grenzen für dieselbe Frage"
 
 
-def test_the_palette_names_the_key_the_menu_really_uses(window: MainWindow) -> None:
-    """Die Palette nannte für *Wiederholen* „Strg+Y", gleich was das Menü band.
+def test_the_search_names_the_key_the_menu_really_uses(window: MainWindow) -> None:
+    """Die Befehlspalette nannte für *Wiederholen* „Strg+Y", gleich was das Menü
+    band — die Suche der Karte liest dieselbe Tabelle der Fensterbefehle.
 
     Das Menü setzt ``StandardKey.Redo`` — auf macOS ⌘⇧Z, unter GNOME und KDE
     Strg+Umschalt+Z. Die Tabelle der Fensterbefehle trug ihre eigene Zeichenkette
-    daneben, und die Palette zeigte dort eine Taste, die nichts tat (Review
+    daneben, und die Liste zeigte dort eine Taste, die nichts tat (Review
     Fenster 0.5.0, 22.09.2026). Nachgestellt wird die fremde Plattform, indem
     die Action eine andere Belegung bekommt.
     """

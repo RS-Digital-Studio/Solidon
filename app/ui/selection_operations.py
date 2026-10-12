@@ -16,19 +16,46 @@ gefiltert. Beides beantwortet :func:`quick_names`.
 
 from __future__ import annotations
 
+import math
+import sys
 from collections.abc import Callable, Iterable
+from dataclasses import replace
 from typing import Final, override
 
-from PySide6.QtCore import QEvent, QObject, Qt, Signal
-from PySide6.QtGui import QAction, QResizeEvent
+from PySide6.QtCore import (
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    QRect,
+    QSize,
+    Qt,
+    Signal,
+)
+from PySide6.QtGui import (
+    QAction,
+    QFont,
+    QFontMetrics,
+    QFontMetricsF,
+    QKeyEvent,
+    QPainter,
+    QPalette,
+    QResizeEvent,
+)
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -41,20 +68,24 @@ from app.core.registry import (
     MENU_GROUPS,
     REGISTRY,
     OperationSpec,
-    PaletteEntry,
+    SearchEntry,
     catalogue_operations,
     caveat_line,
     folded_categories,
     group_title,
+    search_entries,
     shown_of_twins,
+    variant_members,
 )
-from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD, menu_rank
+from app.core.registry.search import first_choice, ranked
+from app.core.registry.surfaces import first_sentence, menu_rank
 from app.i18n import sort_key, tr
-from app.ui.command_palette import fold, found_in_rounds
 from app.ui.icons import icon, icon_name_for
+from app.ui.labels import adding_key
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.overlay import ContentScroller
 from app.ui.panels import collapsible
+from app.ui.shortcut_schemes import native_key, return_opens
 from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_large_target, make_primary, set_level
 
 QUICK_BODIES = ("union_objects", "subtract_objects", "intersect_objects")
@@ -95,8 +126,8 @@ QUICK_FEATURES: dict[str, tuple[str, ...]] = {
 Nur wo die Art eine eigene Antwort hat. Stift und Kugel bieten die
 generischen Merkmalshandlungen **mit** an — nicht genau sie: Am Register
 gemessen (07.09.2026) trägt `pin` sieben Operationen und `sphere` vier, die
-aus :data:`QUICK_FEATURE` sind darunter. Der Rest steht in der Suchliste,
-im Menü und in der Befehlspalette. *Merkmal vervielfachen* (P6.7) steht an
+aus :data:`QUICK_FEATURE` sind darunter. Der Rest steht in der Liste
+darunter und im Suchfeld. *Merkmal vervielfachen* (P6.7) steht an
 jeder Art, die es annimmt, mit vorn: Es hat keine Zeile im Merkmalfenster.
 
 **Der Kegel hat seit dem 09.09.2026 eine eigene Zeile**, und der Grund ist ein
@@ -271,7 +302,7 @@ def quick_names(
     gewähltes Merkmal zurück, sobald mehrere Zeilen markiert sind.
 
     Eine **Empfehlung, keine Aufzählung**: Was hier fehlt, steht in der
-    Suchliste darunter, im Menü und in der Befehlspalette. Deshalb ist eine
+    Liste darunter und im Suchfeld über alles. Deshalb ist eine
     unvollständige Liste hier kein Fehler, anders als bei einer Angabe, die
     eine Fähigkeit ausspricht — dort gehört sie ins Register.
 
@@ -326,8 +357,8 @@ def body_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]
     """Körperoperationen, ohne den getrennten Bausteinweg.
 
     Versteckte Rechenkern-Zwillinge sind keine zweite Handlung. Erzeuger ohne
-    Eingang gehören ebenfalls nicht an eine Auswahl; sie bleiben im Menü und
-    in der Befehlspalette.
+    Eingang gehören ebenfalls nicht an eine Auswahl; sie stehen auf der Stufe
+    ohne Auswahl (:func:`scene_creators`).
 
     **Draußen bleibt die Kachel, nicht die Kategorie** (11.09.2026). Hier stand
     dazu ``_SEPARATE_CATEGORIES = {"parts"}``, und das nahm zwei Operationen
@@ -368,7 +399,7 @@ def feature_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, .
 
     **Und dieselbe Erzeuger-Schranke wie bei :func:`body_operations`.** Ein
     Erzeuger ohne Eingang gehört an keine Auswahl, gleich ob sie einen Körper
-    oder ein Merkmal meint; er bleibt im Menü und in der Befehlspalette. Am
+    oder ein Merkmal meint; er steht auf der Stufe ohne Auswahl. Am
     Register trifft die Bedingung heute keinen Eintrag mit ``applies_to`` —
     sie steht hier, damit die beiden Filter dieselbe Regel tragen und nicht der
     nächste Eintrag durch die Lücke fällt.
@@ -382,6 +413,238 @@ def feature_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, .
         and spec.name not in catalogue
     )
 
+
+def scene_creators(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]:
+    """Was ohne Auswahl einen neuen Körper anlegt — Grundformen, Schriftzug, Import.
+
+    Sie standen bis RM-735 nur im Menü *Erzeugen* und in der Befehlspalette;
+    die Einladung der leeren Szene zeigt zwei von ihnen und verschwindet mit
+    dem ersten Körper — genau dann, wenn man einen zweiten anlegen will. Jetzt
+    stehen sie rechts, wenn nichts gewählt ist (Entscheidung Robert,
+    11.10.2026: alles über das Auswahlpanel oder in der Ansicht).
+
+    **Dieselben Schranken wie die Menüleiste:** keine Kachel des Katalogs, kein
+    versteckter Zwilling (:func:`~app.core.registry.shown_of_twins`), keine
+    Art einer Variantengruppe — *Zeichnen* ist ein Eintrag mit Art im Schritt
+    und steht oben in der Werkzeugleiste.
+    """
+    catalogue = catalogue_operations()
+    members = variant_members()
+    return shown_of_twins(
+        spec
+        for spec in specs
+        if spec.consumes == 0
+        and not spec.takes_whole_scene
+        and spec.name not in catalogue
+        and spec.name not in members
+    )
+
+
+#: Wie weit die Tastenspalte der Trefferliste vom rechten Rand einrückt.
+SHORTCUT_MARGIN: Final = 12
+
+#: Wie viele Zeilen die zweite Zeile eines Treffers höchstens umbricht. Die
+#: Karte ist schmaler als der Dialog der Befehlspalette, und ein Sperrgrund,
+#: der nach drei Wörtern abbricht, sagt nicht mehr, was fehlt.
+DETAIL_LINES: Final = 3
+
+#: Wie viele Treffer die Liste zeigt, bevor sie in sich rollt.
+HITS_SHOWN: Final = 12
+
+#: Wie viele gemessene Umbrüche der Zeilenzeichner behält: alle Zeilen der
+#: Suche in einigen Breiten, und mehr wird es auch nach vielen Größenwechseln
+#: nicht.
+MEASURED_KEPT: Final = 2048
+
+
+class _HitRows(QStyledItemDelegate):
+    """Zeichnet je Treffer den Titel links, das Kürzel **rechtsbündig** in einer
+    Spalte und darunter Beschreibung oder Sperrgrund.
+
+    Aus der Befehlspalette übernommen (RM-735): Mit einem Tabulator am Titel
+    begann die Taste bei jedem Titel an einer anderen Stelle, und wer die
+    Kürzel nebenbei lernen soll (§19.2), muss sie untereinander finden. Die
+    zweite Zeile bricht in der schmalen Karte um (:data:`DETAIL_LINES`); der
+    vorgewählte Treffer steht halbfett — die zweite Kodierung neben der
+    Markierungsfarbe (Regel 18).
+    """
+
+    def __init__(self, view: QListWidget) -> None:
+        super().__init__(view)
+        self._view = view
+        self._measured: dict[tuple[int, str, str], int] = {}
+
+    def _parts(self, index: QModelIndex | QPersistentModelIndex) -> tuple[str, str, str]:
+        """Titel, Kürzel und zweite Zeile aus dem unveränderten Modelltext."""
+        text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
+        first_line, _separator, detail = text.partition("\n")
+        title, _tab, shortcut = first_line.partition("\t")
+        return title, shortcut, " ".join(detail.split())
+
+    @staticmethod
+    def _detail_lines(width: int, detail: str, metrics: QFontMetrics) -> int:
+        """Wie viele Zeilen die zweite Zeile bei dieser Breite braucht."""
+        if not detail or width <= 0:
+            return 0
+        line = max(1, metrics.height())
+        bound = metrics.boundingRect(
+            QRect(0, 0, width, line * (DETAIL_LINES + 1)), int(Qt.TextFlag.TextWordWrap), detail
+        )
+        return min(DETAIL_LINES, max(1, math.ceil(bound.height() / line)))
+
+    def _lines_of(self, width: int, detail: str, plain: QStyleOptionViewItem) -> int:
+        """:meth:`_detail_lines`, gemerkt je Breite, Schrift und Text.
+
+        Qt fragt die Höhe einer Zeile je Tastendruck mehrmals ab — Wunschhöhe
+        der Liste, Layout, Rollbereich, gemessen rund zehnmal je Zeile —, und
+        das Umbrechen ist das Teure daran.
+        """
+        key = (width, plain.font.key(), detail)
+        lines = self._measured.get(key)
+        if lines is None:
+            if len(self._measured) >= MEASURED_KEPT:
+                self._measured.clear()
+            lines = self._detail_lines(width, detail, plain.fontMetrics)
+            self._measured[key] = lines
+        return lines
+
+    @override
+    def sizeHint(
+        self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex
+    ) -> QSize:
+        plain = QStyleOptionViewItem(option)
+        self.initStyleOption(plain, index)
+        _title, _shortcut, detail = self._parts(index)
+        line = plain.fontMetrics.height()
+        width = self._view.viewport().width() - NORMAL - SHORTCUT_MARGIN
+        lines = 1 + self._lines_of(width, detail, plain)
+        # Die Liste gibt die Breite vor, der Text darf sie nicht aufziehen.
+        return QSize(0, lines * line + (lines - 1) * TIGHT + 2 * TIGHT)
+
+    @override
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        plain = QStyleOptionViewItem(option)
+        self.initStyleOption(plain, index)
+        title, shortcut, detail = self._parts(index)
+        plain.text = ""
+        widget = option.widget or self._view
+        widget.style().drawControl(QStyle.ControlElement.CE_ItemViewItem, plain, painter, widget)
+
+        painter.save()
+        painter.setClipRect(option.rect)
+        group = (
+            QPalette.ColorGroup.Disabled
+            if not plain.state & QStyle.StateFlag.State_Enabled
+            else plain.palette.currentColorGroup()
+        )
+        chosen = bool(plain.state & QStyle.StateFlag.State_Selected)
+        role = QPalette.ColorRole.HighlightedText if chosen else QPalette.ColorRole.Text
+        painter.setPen(plain.palette.color(group, role))
+        area = option.rect.adjusted(NORMAL, TIGHT, -SHORTCUT_MARGIN, -TIGHT)
+        metrics = plain.fontMetrics
+        line = metrics.height()
+        # **Eine Kopie:** ``plain.font`` ist in PySide6 eine Referenz auf das
+        # Feld, und halbfett stand sonst auch Kürzel und zweite Zeile — normal
+        # umbrochen, halbfett zu breit, ihre letzte Zeile abgeschnitten.
+        title_font = QFont(plain.font)
+        if chosen:
+            title_font.setBold(True)
+        painter.setFont(title_font)
+        title_area = QRect(area.left(), area.top(), area.width(), line)
+        # **Gebrochen gemessen und aufgerundet.** ``QFontMetrics`` gibt ganze
+        # Pixel, das Kürzen rechnet mit der echten Breite: Mit Cocoas
+        # gebrochenen Metriken stand „Ctrl+B“ als „Ctrl…“ da (RM-531).
+        shortcut_width = (
+            min(math.ceil(QFontMetricsF(plain.font).horizontalAdvance(shortcut)), area.width() // 2)
+            if shortcut
+            else 0
+        )
+        if shortcut_width:
+            title_area.setWidth(max(0, title_area.width() - shortcut_width - NORMAL))
+        flags = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        shown = painter.fontMetrics().elidedText(
+            title, Qt.TextElideMode.ElideRight, title_area.width()
+        )
+        painter.drawText(title_area, flags, shown)
+        painter.setFont(plain.font)
+        if shortcut:
+            painter.drawText(
+                QRect(area.right() - shortcut_width + 1, area.top(), shortcut_width, line),
+                int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
+                metrics.elidedText(shortcut, Qt.TextElideMode.ElideRight, shortcut_width),
+            )
+        lines = self._lines_of(area.width(), detail, plain)
+        if lines:
+            painter.drawText(
+                QRect(area.left(), area.top() + line + TIGHT, area.width(), lines * line),
+                int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+                | int(Qt.TextFlag.TextWordWrap),
+                detail,
+            )
+        painter.restore()
+
+
+class _HitList(QListWidget):
+    """Die Treffer der Suche — so hoch, wie die ersten :data:`HITS_SHOWN` verlangen.
+
+    Ohne eigene Wunschhöhe nimmt die Liste Qts feste 192 Punkte: drei Treffer
+    in einem großen leeren Feld oder zwanzig in einem Schlitz. Die Karte
+    deckelt am Fenster, und darüber rollt die Liste in sich.
+    """
+
+    @override
+    def sizeHint(self) -> QSize:
+        rows = min(self.count(), HITS_SHOWN)
+        height = sum(self.sizeHintForRow(row) for row in range(rows))
+        return QSize(super().sizeHint().width(), height + 2 * self.frameWidth())
+
+    @override
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """Eine andere Breite bricht die zweiten Zeilen anders um."""
+        super().resizeEvent(event)
+        self.doItemsLayout()
+        self.updateGeometry()
+
+    @override
+    def event(self, event: QEvent) -> bool:
+        """Return gehört der Liste, nicht einem Kürzel des Fensters (:meth:`keyPressEvent`)."""
+        if (
+            event.type() == QEvent.Type.ShortcutOverride
+            and isinstance(event, QKeyEvent)
+            and event.key() in _CHOOSE_KEYS
+        ):
+            event.accept()
+            return True
+        return super().event(event)
+
+    @override
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """**Return führt aus und endet hier** (Review RM-735, F11).
+
+        Qt meldet die Aktivierung und reicht das Ereignis danach an die
+        Vorfahren weiter — an den Filter einer laufenden Platzierung in
+        derselben Spalte, der auf Return seine Werte übernimmt. Im Suchfeld
+        nimmt :meth:`SelectionOperationsPanel._search_key` die Taste ab.
+        """
+        super().keyPressEvent(event)
+        if event.key() in _CHOOSE_KEYS:
+            event.accept()
+
+
+#: Die Tasten, mit denen die Trefferliste ausführt.
+_CHOOSE_KEYS: Final = frozenset({Qt.Key.Key_Return, Qt.Key.Key_Enter})
+
+
+#: Die Tasten, die im Suchfeld ihm gehören und nicht dem Fenster
+#: (:meth:`SelectionOperationsPanel._search_key`).
+_SEARCH_KEYS: Final = frozenset(
+    {Qt.Key.Key_Escape, Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Up, Qt.Key.Key_Down}
+)
 
 #: Die Ereignisse, nach denen die Klappe „Filament und Druck“ neu bewertet wird.
 _SHOWN_OR_HIDDEN: Final = (QEvent.Type.ShowToParent, QEvent.Type.HideToParent)
@@ -422,8 +685,13 @@ class SelectionOperationsPanel(QWidget):
     catalogRequested = Signal()
     matchingPartsRequested = Signal(str)
     """Der Katalog, gefiltert auf diese Merkmalsart (:data:`MATCHING_PARTS_AT`)."""
-    paletteRequested = Signal(str)
-    """Die Befehlspalette mit diesem Suchtext — „In allen Funktionen suchen“."""
+    searchChosen = Signal(str)
+    """Ein Treffer der Suche soll laufen — eine Operation oder ein Fensterbefehl,
+    beim Namen genannt. Das Fenster prüft die Freigabe ein zweites Mal."""
+    searchLeft = Signal()
+    """Der Fokus geht vom Suchfeld zurück in die Ansicht (Escape, Ausführen)."""
+    manualRequested = Signal(str)
+    """*Im Handbuch suchen* mit dem Wort, das hier nichts fand."""
     rebuildRequested = Signal()
     """*Modell nachbauen* am gewählten Körper (:data:`REBUILD`)."""
 
@@ -440,9 +708,40 @@ class SelectionOperationsPanel(QWidget):
         # Eine Handlung an beiden Stufen (``also_on_body``) steht in beiden
         # Filtern und bekommt trotzdem nur einen Knopf.
         by_name = {
-            spec.name: spec for spec in (*body_operations(specs), *feature_operations(specs))
+            spec.name: spec
+            for spec in (
+                *body_operations(specs),
+                *feature_operations(specs),
+                *scene_creators(specs),
+            )
         }
         operations = tuple(by_name.values())
+        self._creators = frozenset(spec.name for spec in scene_creators(specs))
+        """Was ohne Auswahl einen Körper anlegt (:func:`scene_creators`) — es steht
+        auf der Stufe ohne Auswahl und auf keiner anderen."""
+        self._commands: Callable[[], list[SearchEntry]] = list
+        """Die Befehle des Fensters als Zeilen der Suche (:meth:`set_search_sources`)."""
+        self._key_of: Callable[[str, str | None], str | None] = lambda _name, declared: declared
+        """Die Taste einer Operation in der eingestellten Belegung."""
+        self._as_commands: frozenset[str] = frozenset()
+        """Operationen, die die Suche als Fensterbefehl zeigt (*Modell einfügen*)."""
+        self._availability: Callable[[str], tuple[bool, str]] = lambda _name: (True, "")
+        """Die Freigabe aus dem letzten :meth:`set_context` — auch für die Suche."""
+        self._rows: list[SearchEntry] | None = None
+        """Die Zeilen der Suche zu dieser Auswahl, gebaut beim ersten Zeichen
+        und verworfen, sobald sich Auswahl, Freigabe oder Register ändern."""
+        self._rows_from: tuple[OperationSpec, ...] = ()
+        """Der Registerstand, aus dem :attr:`_rows` gebaut ist."""
+        self._rows_here: frozenset[str] = frozenset()
+        """Welche Zeilen der Suche an dieser Auswahl stehen — sie gehen bei
+        gleicher Güte vor (:func:`~app.core.registry.search.ranked`)."""
+        self._chosen_by_itself: str | None = None
+        """Was die Trefferliste zuletzt selbst vorgewählt hat (:meth:`_show_hits`)."""
+        self._hits: list[SearchEntry] = []
+        """Was die Trefferliste gerade zeigt, in ihrer Reihenfolge."""
+        self._hits_for = ""
+        """Für welchen Suchtext die Trefferliste gebaut ist — bei demselben
+        bleibt die gewählte Zeile (:meth:`_show_hits`)."""
         self._at_a_feature = frozenset(spec.name for spec in feature_operations(specs))
         """Welche Handlungen einem **Merkmal** gelten.
 
@@ -502,15 +801,6 @@ class SelectionOperationsPanel(QWidget):
         self._query = ""
         """Der zuletzt eingegebene Suchtext — ein Stufenwechsel darf ihn nicht
         vergessen."""
-        self._entries = {
-            spec.name: PaletteEntry(
-                name=spec.name, title=spec.title, category=spec.category, doc=spec.doc
-            )
-            for spec in operations
-        }
-        """Je Handlung die Zeile, gegen die gesucht wird — wie in der Palette
-        (:func:`~app.ui.command_palette.found_in_rounds`): Titel, Name,
-        Beschreibung und Kundenwörter, gefaltet."""
         self._wrapped_for: tuple[int, int, tuple[str, ...], tuple[int, ...]] | None = None
         """Für welche Breiten und Hauptaktionen die Beschriftungen zuletzt
         umbrochen wurden (:meth:`_wrap_labels`)."""
@@ -583,31 +873,57 @@ class SelectionOperationsPanel(QWidget):
         self._quick_buttons[REBUILD] = rebuild
         self.rebuild_button = rebuild
 
+        # **Der Weg zu den Booleschen bei einem gewählten Körper** (RM-734): Wer
+        # aus Fusion kommt, sucht erst das Werkzeug; hier stehen die drei oben,
+        # sobald zwei Körper gewählt sind. Die Zeile sagt, wie der zweite
+        # dazukommt (:meth:`_say_how_to_pair`).
+        self.pairing_hint = QLabel(self)
+        self.pairing_hint.setWordWrap(True)
+        set_level(self.pairing_hint, "caption")
+        self.pairing_hint.setVisible(False)
+
+        # **Ein Suchfeld, immer da, über alles** (RM-735, Entscheidung Robert
+        # 11.10.2026): Es ersetzt die Befehlspalette. Gesucht wird über jede
+        # Operation jeder Stufe, die Bausteine des Katalogs und die Befehle des
+        # Fensters; was an der Auswahl geht, steht vorn, was nicht, nennt den
+        # Grund. Das Wort heißt wie der Knopf oben, der hierher führt
+        # (:meth:`set_search_words`).
         self.search = QLineEdit(self)
         self.search.setClearButtonEnabled(True)
         self.search.setMinimumHeight(TARGET_SIZE)
-        self.search.setPlaceholderText(tr("Weitere Operationen durchsuchen"))
-        self.search.setAccessibleName(tr("Operationen durchsuchen"))
+        self.search.setPlaceholderText(tr("Funktion suchen …"))
+        self.search.setAccessibleName(tr("Funktion suchen"))
         self.search.textChanged.connect(self._filter)
+        # Escape, Return und die Pfeiltasten gehören dem Feld
+        # (:meth:`eventFilter`): Escape war eine Fensteraktion und hob an einem
+        # Merkmal die Auswahl samt Entwurf auf; Return lief an eine laufende
+        # Platzierung in derselben Spalte weiter.
+        self.search.installEventFilter(self)
 
-        # **Steht nichts in der Liste, wird nicht zum Durchsuchen eingeladen**
-        # (Befund Robert, 18.09.2026: „weitere Optionen durchsuchen steht da,
-        # wenn es keine Operationen für die Auswahl gibt"). Das Feld stand
-        # fest im Layout und war immer sichtbar; an einer Auswahl mit leerer
-        # Karte — einem Langloch, einer Kante — versprach es etwas zu finden,
-        # wo es nichts gibt. Der Satz nennt stattdessen, wo die Handlungen
-        # dieser Auswahl stehen.
         self._nothing = QLabel(self)
         self._nothing.setWordWrap(True)
         set_level(self._nothing, "caption")
         self._nothing.setVisible(False)
-        # **Ohne Treffer weiter in allen Funktionen** (RM-506): Die Suche hier
-        # kennt nur, was zur Auswahl passt; wer „gewinde“ an einem Körper
-        # sucht, findet nichts, obwohl es das gibt. Der Knopf öffnet die
-        # Befehlspalette mit demselben Wort.
-        self._everywhere = QPushButton(tr("In allen Funktionen suchen"), self)
-        self._everywhere.setVisible(False)
-        self._everywhere.clicked.connect(self._search_everywhere)
+        # **Ohne Treffer weiter ins Handbuch** (§2.7): Es kennt Wörter, die
+        # keine Operation sind, und sucht mit denselben Kundenwörtern.
+        self._manual = QPushButton(tr("Im Handbuch suchen"), self)
+        self._manual.setVisible(False)
+        self._manual.clicked.connect(self._search_the_manual)
+
+        self.hits = _HitList(self)
+        self.hits.setObjectName("searchHits")
+        self.hits.setAccessibleName(tr("Gefundene Funktionen"))
+        self.hits.setItemDelegate(_HitRows(self.hits))
+        self.hits.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.hits.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.hits.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.hits.setVisible(False)
+        # Ein Klick führt aus wie jeder Knopf der Karte, Return in der Liste
+        # ebenso — am Mac über :func:`return_opens`. Ein Doppelklick führt
+        # einmal aus: Der erste Klick leert die Liste.
+        self.hits.itemClicked.connect(self._choose_item)
+        self.hits.itemActivated.connect(self._choose_item)
+        return_opens(self.hits, sys.platform)
 
         content = QWidget(self)
         content_layout = QVBoxLayout(content)
@@ -732,9 +1048,11 @@ class SelectionOperationsPanel(QWidget):
         layout.setSpacing(TIGHT)
         layout.addWidget(self.summary)
         layout.addLayout(quick)
+        layout.addWidget(self.pairing_hint)
         layout.addWidget(self.search)
         layout.addWidget(self._nothing)
-        layout.addWidget(self._everywhere)
+        layout.addWidget(self._manual)
+        layout.addWidget(self.hits, 1)
         layout.addWidget(self.scroller, 1)
         layout.addLayout(separate)
         layout.addWidget(self.print_section)
@@ -779,11 +1097,106 @@ class SelectionOperationsPanel(QWidget):
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if stop_watching_the_dying(self, watched, event):
             return False
+        if watched is self.search and isinstance(event, QKeyEvent):
+            return self._search_key(event)
         if (watched is self._print_widget and event.type() in _SHOWN_OR_HIDDEN) or (
             watched is self._print_box and event.type() in _CAME_OR_WENT
         ):
             self._settle_print_section()
         return super().eventFilter(watched, event)
+
+    def _search_key(self, event: QKeyEvent) -> bool:
+        """Was das Suchfeld mit Escape, Return und den Pfeiltasten tut — und dass
+        sie ihm gehören.
+
+        **Escape geht eine Stufe zurück, im Feld zuerst** (§18.5): Mit Text
+        leert es das Feld, ohne Text gibt es den Fokus an die Ansicht. Bis
+        RM-735 lief es an die Fensteraktion und hob an einem Merkmal mit Maßen
+        im Bild die Auswahl samt Entwurf auf. **Return führt den vorgewählten
+        Treffer aus** und läuft nicht an eine laufende Platzierung in derselben
+        Spalte weiter (``placement_flow``). Die Pfeiltasten bewegen die
+        Vorauswahl, wie in jeder Suchliste.
+        """
+        key = Qt.Key(event.key())
+        if key not in _SEARCH_KEYS:
+            return False
+        if event.type() == QEvent.Type.ShortcutOverride:
+            event.accept()
+            return True
+        if event.type() != QEvent.Type.KeyPress:
+            return False
+        if key == Qt.Key.Key_Escape:
+            if self.search.text():
+                self.search.clear()
+            else:
+                self.searchLeft.emit()
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            item = self.hits.currentItem() if self.hits.isVisible() else None
+            if item is not None:
+                self._choose_item(item)
+        else:
+            self._step_through_hits(1 if key == Qt.Key.Key_Down else -1)
+        return True
+
+    def _step_through_hits(self, step: int) -> None:
+        """Die Vorauswahl einen Treffer weiter — über die Kopfzeile der Lockerung hinweg."""
+        row = self.hits.currentRow()
+        while 0 <= row + step < self.hits.count():
+            row += step
+            item = self.hits.item(row)
+            if item is not None and item.flags() & Qt.ItemFlag.ItemIsSelectable:
+                self.hits.setCurrentRow(row)
+                return
+
+    def _choose_item(self, item: QListWidgetItem) -> None:
+        """Ein Treffer soll laufen.
+
+        **Ausführbar: Feld leer, Fokus in die Ansicht, dann die Handlung** —
+        in dieser Reihenfolge. Bliebe der Fokus im Feld, nähme Strg+Z das Tippen
+        zurück statt des Schritts, und ein Dialog gibt beim Schließen den Fokus
+        dorthin zurück, wo er vorher war. **Gesperrt:** Das Fenster nennt den
+        Grund, Text und Fokus bleiben, damit Wort oder Auswahl nachzubessern sind.
+        """
+        if not isValid(item) or self.hits.row(item) < 0:
+            return
+        name = item.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(name, str):
+            return
+        if item.flags() & Qt.ItemFlag.ItemIsEnabled:
+            self.search.clear()
+            self.searchLeft.emit()
+        self.searchChosen.emit(name)
+
+    def _search_the_manual(self, _checked: bool = False) -> None:
+        """*Im Handbuch suchen* — mit dem Wort, das hier nichts fand."""
+        self.manualRequested.emit(self._query.strip())
+
+    def set_search_words(self, words: str) -> None:
+        """Was im leeren Feld steht — dasselbe wie am Knopf *Funktion suchen* oben."""
+        self.search.setPlaceholderText(words)
+
+    def set_search_sources(
+        self,
+        commands: Callable[[], list[SearchEntry]],
+        key_of: Callable[[str, str | None], str | None],
+        as_commands: frozenset[str],
+    ) -> None:
+        """Was die Suche außer den Operationen kennt — die Befehle des Fensters.
+
+        ``commands`` liefert sie mit Freigabe und Kürzel, ``key_of`` die Taste
+        einer Operation in der eingestellten Belegung, ``as_commands`` die
+        Operationen, die dort schon als Befehl stehen (*Modell einfügen*).
+        Gefragt wird erst beim ersten Zeichen (:meth:`_search_rows`).
+        """
+        self._commands = commands
+        self._key_of = key_of
+        self._as_commands = as_commands
+        self._rows = None
+
+    def focus_search(self) -> None:
+        """Der Cursor ins Suchfeld, vorhandener Text markiert (*Funktion suchen*)."""
+        self.search.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.search.selectAll()
 
     def _operation_button(
         self, spec: OperationSpec, parent: QWidget | None = None, *, twin: bool = False
@@ -814,7 +1227,9 @@ class SelectionOperationsPanel(QWidget):
         (self._list_twins if twin else self._buttons)[spec.name] = button
         return button
 
-    def add_window_action(self, name: str, category: str, action: QAction) -> bool:
+    def add_window_action(
+        self, name: str, category: str, action: QAction, *, replaces: str = ""
+    ) -> bool:
         """Eine Handlung des Fensters als Zeile der Gruppe ihrer Kategorie.
 
         *Automatisch teilen* ist ein Ablauf über mehreren Operationen und kein
@@ -822,7 +1237,13 @@ class SelectionOperationsPanel(QWidget):
         den übrigen Wegen, ein Teil zu teilen (RM-507). Hier steht es bei
         ihnen, am gewählten Körper, sortiert wie die Registerzeilen. Freigabe
         und Grund liest :meth:`_take_availability` von der Aktion — dieselbe,
-        die Palette und Kürzel auslösen.
+        die Suche und Kürzel auslösen.
+
+        ``replaces`` nennt die Operation, deren Platz die Aktion einnimmt
+        (``WINDOW_COMMAND_OPERATIONS``): Ihr Knopf geht, und die Aktion steht
+        auf ihrer Stufe. Ohne Auswahl stand sonst die Operation ``load`` als
+        „Modell einfügen“ mit eigenem Dialog neben dem Befehl gleichen Namens,
+        der die Dateiauswahl öffnet (Review RM-735, F8).
 
         ``False``, wenn es die Gruppe nicht gibt (keine Operation der Kategorie
         im Register): Dann sucht sich der Aufrufer einen anderen Platz — ein
@@ -832,6 +1253,16 @@ class SelectionOperationsPanel(QWidget):
         if title not in self._groups:
             return False
         section, toggle, buttons = self._groups[title]
+        replaced = self._buttons.pop(replaces, None) if replaces else None
+        if replaced is not None:
+            buttons = tuple(button for button in buttons if button is not replaced)
+            replaced.hide()
+            replaced.deleteLater()
+            self._states.pop(replaces, None)
+            if replaces in self._creators:
+                self._creators = (self._creators - {replaces}) | {name}
+            if replaces in self._for_all_bodies:
+                self._for_all_bodies = (self._for_all_bodies - {replaces}) | {name}
         grid = self._grids[title]
         box = grid.parentWidget()
         button = QToolButton(box)
@@ -856,6 +1287,7 @@ class SelectionOperationsPanel(QWidget):
         )
         self._groups[title] = (section, toggle, tuple(ordered))
         self._arranged.pop(title, None)
+        self._rows = None
         self._filter()
         return True
 
@@ -1072,12 +1504,17 @@ class SelectionOperationsPanel(QWidget):
         left_out: frozenset[str] = frozenset(),
         features: int = 0,
         rebuild: bool = False,
+        pairing: bool = False,
     ) -> None:
         """Auswahl, Lage und Freigaben nachführen, ohne die Liste neu zu bauen.
 
         ``rebuild`` sagt, ob *Modell nachbauen* am gewählten Körper geht
         (``MainWindow._rebuild_allowed``); die Hauptaktion steht an genau einem
         Körper ohne gewähltes Merkmal.
+
+        ``pairing`` sagt, ob sich ein zweiter Körper dazuwählen ließe
+        (``MainWindow._pairing_possible``): Dann nennt an genau einem gewählten
+        Körper eine Zeile den Weg zu den Booleschen (RM-734).
 
         ``features`` ist die Zahl markierter Merkmale am gewählten Körper, wenn
         kein einzelnes gewählt ist (:func:`quick_names`).
@@ -1119,9 +1556,15 @@ class SelectionOperationsPanel(QWidget):
             if part_selected and feature_kind
             else frozenset()
         )
-        self.setVisible(not part_selected or bool(only))
-        if part_selected and not only:
-            return
+        # **Die Karte steht immer, mit dem Suchfeld** (RM-735): An einem
+        # Bausteinmerkmal ohne eigene Handlung war sie bis dahin ganz verborgen;
+        # jetzt steht dort das Feld und der Satz, wo die Handlungen stehen.
+        self.setVisible(True)
+        self._availability = availability
+        self._rows = None
+        self._say_how_to_pair(
+            pairing and selected == 1 and not feature_kind and features <= 1 and not part_selected
+        )
         self._only = only if part_selected else None
         self._nothing_chosen = selected <= 0
         if self._nothing_chosen:
@@ -1188,13 +1631,26 @@ class SelectionOperationsPanel(QWidget):
         self._lay_out_quick(tuple(quick))
         self._filter()
 
-    def _search_everywhere(self) -> None:
-        """*In allen Funktionen suchen*: die Befehlspalette mit demselben Wort.
+    def _say_how_to_pair(self, shown: bool) -> None:
+        """Die Zeile zu den Booleschen bei einem gewählten Körper (RM-734).
 
-        Eine Methode statt eines Lambdas: Am eigenen Kind hielte es die Karte
-        stark (``wartezeit.md``, „Ein Rückruf an ein eigenes Kind hält schwach“).
+        Reiner Text, kein grauer Knopf (Entscheidung Robert, 07.09.2026): Ein
+        Klick müsste raten, welcher zweite Körper gemeint ist. Die Titel kommen
+        aus dem Register (:data:`QUICK_BODIES`), die Taste je Plattform.
         """
-        self.paletteRequested.emit(self._query.strip())
+        if shown:
+            first, second, third = (str(REGISTRY.get(name).title) for name in QUICK_BODIES)
+            self.pairing_hint.setText(
+                tr(
+                    "Für „{first}“, „{second}“ und „{third}“ ein zweites Objekt mit Umschalt"
+                    " oder {key} und Klick hinzuwählen.",
+                    first=first,
+                    second=second,
+                    third=third,
+                    key=adding_key(),
+                )
+            )
+        self.pairing_hint.setVisible(shown)
 
     def _filter(self, query: str | None = None) -> None:
         """Nur die Darstellung filtern; Registereinträge und Knöpfe bleiben bestehen.
@@ -1205,98 +1661,205 @@ class SelectionOperationsPanel(QWidget):
         ausgeblendet hat. Ohne Argument gilt der zuletzt eingegebene Suchtext;
         so kann ein Stufenwechsel dieselbe Rechnung anstoßen wie eine
         Eingabe.
+
+        **Bei Suchtext ruht die Karte:** Sie ist verdeckt, und ihre Gruppen
+        nachzurechnen kostete jeden Tastendruck. Das Leeren des Felds läuft
+        hierher und rechnet sie für die Auswahl von dann.
         """
         if query is not None:
             self._query = query
-        # Ohne Auswahl ist das Suchfeld verborgen; ein Suchtext von der
-        # letzten Auswahl filterte sonst unsichtbar die Handlungen weg.
-        wanted = "" if self._nothing_chosen else self._query.strip()
-        hits = self._search_hits(wanted)
-        # Ein getroffener Hauptknopf oben ist ein Treffer — sonst sagte die
-        # Liste „Kein Treffer“ unter dem Knopf, der gesucht war.
-        found = sum(1 for name in self._quick_shown if name in hits) if wanted else 0
+        wanted = self._query.strip()
+        if wanted:
+            self._show_hits(wanted)
+            self._wrap_labels()
+            return
+        found = 0
         for title, (section, toggle, buttons) in self._groups.items():
             shown = 0
             for button in buttons:
                 name = str(button.property("operationName"))
                 visible = (
-                    (not wanted or name in hits)
-                    and self._fits_the_level(name)
+                    self._fits_the_level(name)
                     and button.isEnabled()
                     and name not in self._quick_shown
                 )
                 button.setVisible(visible)
                 shown += visible
             section.setVisible(shown > 0)
-            if wanted and shown and not toggle.isChecked():
-                # Ein Treffer öffnet seine Gruppe: Wer sucht, will sehen, was
-                # er gefunden hat — nicht erst aufklappen.
-                toggle.setChecked(True)
-            elif not wanted and title not in self._folded_by_hand:
-                # Ohne Suchtext gilt die Grenze (:data:`OPEN_UP_TO`): Was ein
-                # Menü nicht mehr zeigte, beginnt hier zugeklappt — an einem
-                # Körper „Ändern" mit 24, an einer Fläche dieselbe Gruppe mit
-                # zweien offen. Gerechnet wird an der Stufe, nicht am Bestand.
+            if title not in self._folded_by_hand:
+                # Die Grenze (:data:`OPEN_UP_TO`): Was ein Menü nicht mehr
+                # zeigte, beginnt hier zugeklappt — an einem Körper „Ändern"
+                # mit 24, an einer Fläche dieselbe Gruppe mit zweien offen.
+                # Gerechnet wird an der Stufe, nicht am Bestand.
                 toggle.setChecked(shown <= OPEN_UP_TO)
             found += shown
-        self._say_there_is_nothing(found, bool(wanted), self._needs_another_choice(hits))
+        self._say_there_is_nothing(found)
         # Welche Knöpfe dastehen, hat sich gerade geändert — und ob ihre
         # Beschriftung in die Spalte passt, ist eine Frage je Knopf.
         self._arrange_groups()
         self._wrap_labels()
 
-    def _search_hits(self, wanted: str) -> frozenset[str]:
-        """Welche Handlungen der Suchtext trifft — wie in der Befehlspalette.
+    def _show_hits(self, wanted: str) -> None:
+        """Bei Suchtext tritt die Karte zurück, und die Treffer stehen da (RM-735).
 
-        Titel, Name, Beschreibung und Kundenwörter, gefaltet, in den Runden
-        von :func:`~app.ui.command_palette.found_in_rounds`: „verschmelzen“
-        findet *Vereinigen*, „aushoehlen“ das *Aushöhlen*, „löschen“ das
-        *Objekt entfernen*. Bis zum 06.10.2026 verglich die Karte nur Titel
-        und Gruppe und fand keines davon (Fragebogen zu 0.5.3). **Eine
-        getroffene Gruppe** nimmt ihre Handlungen mit, wie bisher: „formgebung“
-        zeigt die ganze Gruppe.
+        **Die Rangfolge der Suche** (:func:`~app.core.registry.search.ranked`):
+        Güte zuerst, denn das Wort ist die Absicht; bei gleicher Güte vorn, was
+        an dieser Auswahl geht (:meth:`_search_rows`). **Was nicht geht, steht
+        mit seinem Grund da** und ist nicht wählbar — eine Antwort auf eine
+        Frage, kein grauer Knopf in der ruhenden Karte. Die Hauptaktionen oben
+        bleiben stehen, damit das Feld nicht unter dem Cursor springt; ihre
+        Treffer stehen trotzdem in der Liste, denn Return und die Pfeiltasten
+        arbeiten auf ihr.
         """
-        if not wanted:
-            return frozenset()
-        found, _loosened = found_in_rounds(tuple(self._entries.values()), wanted)
-        parts = fold(wanted).split()
-        in_a_group = {
-            str(button.property("operationName"))
-            for title, (_section, _toggle, buttons) in self._groups.items()
-            if all(part in fold(title) for part in parts)
-            for button in buttons
-        }
-        return frozenset(str(entry.name) for entry in found) | in_a_group
+        rows = self._search_rows()
+        hits, loosened = ranked(rows, wanted, self._rows_here)
+        # **Eine Wahl mit den Pfeiltasten bleibt bei demselben Wort** (Review
+        # RM-735, F7): Das Fenster meldet die Lage nach jeder fertigen
+        # Auswertung neu, und die Wahl fiel dabei auf den ersten Treffer zurück.
+        # **Die selbsttätige Vorauswahl dagegen rechnet neu** (Nachprüfung N2):
+        # „hinlegen“ ohne Auswahl wählt *Druckoptimal ausrichten*; nach dem
+        # Klick auf einen Körper muss Return ihn hinlegen, nicht die Szene
+        # ausrichten.
+        current = self.hits.currentItem() if wanted == self._hits_for else None
+        named = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
+        kept = named if named != self._chosen_by_itself else None
+        self._hits = hits
+        self._hits_for = wanted
+        self.scroller.setVisible(False)
+        self.hits.clear()
+        if not hits:
+            self.hits.setVisible(False)
+            self._nothing.setText(tr("Kein Treffer — versuchen Sie ein anderes Wort."))
+            self._nothing.setVisible(True)
+            self._manual.setVisible(True)
+            return
+        self._nothing.setVisible(False)
+        self._manual.setVisible(False)
+        if loosened:
+            # Nicht wählbar und ohne Namen: Die Vorauswahl übergeht sie, und
+            # Return löst über sie nichts aus.
+            heading = QListWidgetItem(
+                tr("Keine Funktion passt auf alle Wörter — das Folgende passt auf einzelne.")
+            )
+            heading.setFlags(Qt.ItemFlag.NoItemFlags)
+            heading.setToolTip(heading.text())
+            self.hits.addItem(heading)
+        for entry in hits:
+            self.hits.addItem(self._hit_item(entry))
+        names = [entry.name for entry in hits]
+        itself = first_choice(hits, wanted)
+        self._chosen_by_itself = names[itself]
+        choice = names.index(kept) if kept in names else itself
+        self.hits.setCurrentRow(choice + int(loosened))
+        self.hits.setVisible(True)
+        self.hits.updateGeometry()
 
-    def _needs_another_choice(self, hits: frozenset[str]) -> str:
-        """Der Satz zu einem Treffer, der an dieser Auswahl nicht geht — oder nichts.
+    @staticmethod
+    def _hit_item(entry: SearchEntry) -> QListWidgetItem:
+        """Eine Zeile der Trefferliste: Titel, Kürzel, darunter Satz oder Grund."""
+        title = str(entry.title)
+        key = native_key(entry.shortcut or "")
+        label = f"{title}\t{key}" if key else title
+        detail = first_sentence(str(entry.doc)).strip()
+        # Fensterbefehle tragen ihren Titel als Beschreibung; dieselbe Zeile
+        # zweimal wäre keine Auskunft.
+        if detail == title.strip():
+            detail = ""
+        if not entry.available and entry.reason:
+            # **Gesperrt sagt die zweite Zeile nur den Grund** (Regel 18): Das
+            # Grau allein wäre die halbe Antwort.
+            detail = str(entry.reason).strip()
+        if detail:
+            label = f"{label}\n{detail}"
+        item = QListWidgetItem(label)
+        item.setData(Qt.ItemDataRole.UserRole, entry.name)
+        lines: list[str] = []
+        where = str(entry.where).strip()
+        for text in (
+            title,
+            str(entry.reason) if not entry.available else "",
+            str(entry.doc),
+            # Der Ort, wie das Kürzel: nebenbei gelernt (RM-506).
+            tr("Ort: {place}", place=where) if where else "",
+        ):
+            text = text.strip()
+            if text and text not in lines:
+                lines.append(text)
+        item.setToolTip("\n".join(lines))
+        # Ein Vorleser liest den Titel mit Taste, nicht den Tabulator der Anzeige.
+        item.setData(Qt.ItemDataRole.AccessibleTextRole, f"{title}, {key}" if key else title)
+        item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, "\n".join(lines[1:]))
+        if not entry.available:
+            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+        return item
 
-        Wer an einem Körper „verschmelzen“ sucht, meint *Vereinigen*, und das
-        braucht zwei. Ein „Kein Treffer“ wäre falsch und eine Sackgasse; der
-        Grund aus der Freigabe (:meth:`_take_availability`) sagt, wie das
-        zweite Objekt dazukommt. Genannt wird der erste Treffer in der
-        Reihenfolge des Titels, der einen Grund trägt.
+    def _search_rows(self) -> list[SearchEntry]:
+        """Was die Suche durchsucht — in der Reihenfolge, die bei gleicher Güte gilt.
+
+        **Jede Operation jeder Stufe** (auch die Bausteine des Katalogs, die
+        Erzeuger und die Handlungen für alle Körper) **und jeder Befehl des
+        Fensters** (:meth:`set_search_sources`): dieselbe Menge, die die
+        Befehlspalette hatte. Bis RM-735 fand das Feld nur 81 der 273, und
+        ohne Auswahl war es verborgen.
+
+        **Vorn steht, was die ruhende Karte an dieser Auswahl zeigt**, dann was
+        sonst geht, zuletzt das Gesperrte, je nach Titel. Gebaut beim ersten
+        Zeichen und verworfen, sobald sich Auswahl oder Freigabe ändern
+        (:meth:`set_context`) — ein Tastendruck rechnet nur die Rangfolge.
+
+        **Aus dem Register von jetzt**, nicht aus dem beim Bau der Karte: Ein
+        eingelesener oder im Rezeptdialog gespeicherter Baustein kommt zur
+        Laufzeit dazu und fand bis zum Neustart „Kein Treffer“ (Review RM-735,
+        F10). Der Vergleich kostet einen Zeigervergleich je Operation.
         """
-        locked = [
-            name
-            for name in hits
-            if name in self._buttons
-            and self._states.get(name, (True, ""))[1]
-            and not self._states.get(name, (True, ""))[0]
-        ]
-        if not locked:
-            return ""
+        operations_now = REGISTRY.all()
+        if self._rows is None or operations_now != self._rows_from:
+            self._rows_from = operations_now
+            operations = [
+                replace(
+                    entry,
+                    available=usable,
+                    reason=reason,
+                    shortcut=self._key_of(entry.name, entry.shortcut),
+                )
+                for entry in search_entries()
+                if entry.name not in self._as_commands
+                for usable, reason in (self._availability(entry.name),)
+            ]
+            rows = sorted(
+                [*operations, *self._commands()], key=lambda entry: sort_key(str(entry.title))
+            )
+            standing = frozenset(entry.name for entry in rows if self._stands_here(entry.name))
+            self._rows_here = standing | frozenset(
+                entry.name for entry in rows if entry.available and self._as_a_field(entry.name)
+            )
+            self._rows = sorted(
+                rows, key=lambda entry: (not entry.available, entry.name not in standing)
+            )
+        return self._rows
 
-        # Der Titel steht am Knopf: Eine Fensterhandlung (*Automatisch teilen*,
-        # :meth:`add_window_action`) hat keinen Registereintrag in ``_entries``.
-        # Ihr Knopf trägt die Menübeschriftung mit Auslassung („…“, öffnet
-        # einen Dialog); im Satz ist sie ein Name, und vor dem Doppelpunkt
-        # stünde sie falsch.
-        def title(entry: str) -> str:
-            return str(self._buttons[entry].property("operationTitle")).removesuffix(" …")
+    def _as_a_field(self, name: str) -> bool:
+        """Ob die Handlung dem gewählten Merkmal gilt und als Feld im Merkmalfenster
+        darüber steht statt in der Karte (*Merkmal verschieben* an einer Bohrung).
 
-        name = min(locked, key=lambda entry: sort_key(title(entry)))
-        return tr("{name}: {value}", name=title(name), value=self._states[name][1])
+        Für die Suche gilt sie der Auswahl wie eine Zeile der Karte: „Verschieben“
+        an einer Bohrung verschiebt das Merkmal, nicht den Körper (Nachprüfung
+        RM-735, N1).
+        """
+        return (
+            bool(self._feature_kind)
+            and name in _shown_as_fields()
+            and name not in self._left_out
+            and (self._only is None or name in self._only)
+            and self._feature_kind in self._at_which_kind.get(name, frozenset())
+        )
+
+    def _stands_here(self, name: str) -> bool:
+        """Ob die ruhende Karte diese Handlung an der aktuellen Auswahl zeigt."""
+        if name in self._quick_shown:
+            return True
+        button = self._buttons.get(name)
+        return button is not None and button.isEnabled() and self._fits_the_level(name)
 
     def button_for(self, name: str) -> QToolButton | None:
         """Der Knopf, an dem die Handlung gerade steht — oben oder ihre Zeile in der Liste.
@@ -1343,14 +1906,14 @@ class SelectionOperationsPanel(QWidget):
                 shown.setAccessibleDescription(tip)
 
     def _without_a_selection(self, availability: Callable[[str], tuple[bool, str]]) -> None:
-        """Ohne Auswahl: die Handlungen für alle Körper und der Weg zu den Bausteinen.
+        """Ohne Auswahl: die Handlungen für alle Körper, die Erzeuger, die Suche
+        und der Weg zu den Bausteinen.
 
-        Keine Hauptaktionen und keine Suche — beides gilt einer Auswahl, und
-        die gibt es nicht. Was dasteht, sind die Handlungen, die ohnehin jeden
-        Körper nehmen (:attr:`_for_all_bodies`), freigegeben wie an jeder
-        anderen Stelle, und der Knopf zum Katalog. Ist die Szene leer, bleiben
-        der Knopf und ein Satz, der sagt, woran es liegt
-        (:meth:`_say_there_is_nothing`).
+        Keine Hauptaktionen — sie gelten einer Auswahl, und die gibt es nicht.
+        Was dasteht, sind die Handlungen, die ohnehin jeden Körper nehmen
+        (:attr:`_for_all_bodies`), und was einen neuen anlegt
+        (:attr:`_creators`), freigegeben wie an jeder anderen Stelle, dazu der
+        Knopf zum Katalog und das Suchfeld über alles (RM-735).
         """
         # **Die Hauptaktionen gehen über ihren eigenen Weg weg, nicht über
         # ``setVisible``.** `_lay_out_quick` kürzt ab, wenn dieselbe Liste
@@ -1375,67 +1938,44 @@ class SelectionOperationsPanel(QWidget):
         else:
             self.catalogRequested.emit()
 
-    def _say_there_is_nothing(self, found: int, searching: bool, elsewhere: str = "") -> None:
-        """Die leere Liste sagt, warum sie leer ist — und lädt nicht zum Suchen ein.
+    def _say_there_is_nothing(self, found: int) -> None:
+        """Die ruhende Karte ohne Suchtext — und ein Satz, wenn ihre Liste leer ist.
 
-        Zwei verschiedene Leeren, und sie brauchen zwei Sätze: Wer **sucht**,
-        hat nichts gefunden und soll es anders versuchen; wer **nicht** sucht,
-        steht an einer Auswahl, deren Handlungen woanders stehen — am
-        Langloch und an der Kante oben im Merkmalfenster, und das ist die
-        richtige Antwort und kein Mangel.
+        **Das Suchfeld bleibt immer stehen** (Entscheidung Robert,
+        11.10.2026): Es sucht über alles, auch dort, wo die Karte selbst nichts
+        anbietet. Bis RM-735 verschwand es mit der Liste, denn es versprach nur
+        die Handlungen dieser Auswahl (Befund Robert, 18.09.2026).
 
-        Das Suchfeld verschwindet im zweiten Fall mit: Ein Feld, das
-        „Weitere Operationen durchsuchen" verspricht, während die Liste
-        darunter leer ist und leer bleibt, stellt eine Frage, auf die es
-        keine Antwort gibt (Befund Robert, 18.09.2026).
-
-        ``elsewhere`` ist der Satz zu einem Treffer, der eine andere Auswahl
-        braucht (:meth:`_needs_another_choice`) — er tritt an die Stelle von
-        „Kein Treffer“, denn es gibt einen, nur nicht hier.
+        Leer ist die Liste an einer Auswahl, deren Handlungen oben im
+        Merkmalfenster stehen — am Langloch, an der Kante —, und ohne Auswahl
+        nur, wenn alles gesperrt ist: Dann nennt der Satz den Grund, statt
+        Handlungen zuzusagen, die gerade nicht gehen.
         """
-        if self._nothing_chosen:
-            # Ohne Auswahl gibt es nichts zu durchsuchen: Was dasteht, sind
-            # die wenigen Handlungen für alle Körper, und der Satz sagt das.
-            if found > 0:
-                self.search.setVisible(False)
-                self.scroller.setVisible(True)
-                self._nothing.setText(tr("Gilt für alle Körper."))
-                self._nothing.setVisible(True)
-            else:
-                self._only_this_sentence(
-                    tr("Wählen Sie einen Körper oder eine Fläche — Bausteine gehen auch so.")
-                )
-            return
-        self._everywhere.setVisible(searching and found == 0 and not self._nothing_chosen)
+        self.hits.clear()
+        self.hits.setVisible(False)
+        self._hits = []
+        self._hits_for = ""
+        self._manual.setVisible(False)
+        self.scroller.setVisible(found > 0)
         if found > 0:
-            self.search.setVisible(True)
-            self.scroller.setVisible(True)
             self._nothing.setVisible(False)
             return
-        if searching:
-            # Wer sucht, behält sein Feld: Dort ist es die Ursache der leeren
-            # Liste und zugleich der Weg zurück.
-            self.search.setVisible(True)
-            self.scroller.setVisible(False)
-            self._nothing.setText(elsewhere or tr("Kein Treffer — versuchen Sie ein anderes Wort."))
-            self._nothing.setVisible(True)
-            return
-        self._only_this_sentence(tr("Was sich hier tun lässt, steht oben bei den Maßen."))
-
-    def _only_this_sentence(self, text: str) -> None:
-        """Statt Suchfeld und Liste steht ein Satz da — an **einer** Stelle.
-
-        Zwei Leeren enden hier: keine Auswahl und eine Auswahl, deren
-        Handlungen oben im Merkmalfenster stehen. Sie sagen Verschiedenes und
-        verbergen dasselbe, und wer beides getrennt setzt, setzt es beim
-        nächsten Nachbessern abwechselnd — dieselbe Falle, die
-        :meth:`_empty_but_for_the_catalogue` schon bei den Hauptaktionen
-        beschreibt.
-        """
-        self.search.setVisible(False)
-        self.scroller.setVisible(False)
+        # **Gesperrt nennt den Grund, an jeder Stufe** (Review RM-735, F9): Am
+        # Körper mit abgelaufener Lizenz stand „steht oben bei den Maßen“, und
+        # oben stehen am Körper keine. Den Satz zu den Maßen gibt es nur, wo die
+        # Stufe selbst keine Handlungen hat.
+        here = sorted(
+            name
+            for name in self._buttons
+            if self._fits_the_level(name) and name not in self._quick_shown
+        )
+        if here:
+            reasons = (self._states.get(name, (True, ""))[1] for name in here)
+            text = next((reason for reason in reasons if reason), "")
+        else:
+            text = tr("Was sich hier tun lässt, steht oben bei den Maßen.")
         self._nothing.setText(text)
-        self._nothing.setVisible(True)
+        self._nothing.setVisible(bool(text))
 
     def _folded_by_a_click(self, title: str) -> None:
         """Eine von Hand bewegte Klappe bleibt, wie sie ist (:data:`OPEN_UP_TO`)."""
@@ -1458,11 +1998,11 @@ class SelectionOperationsPanel(QWidget):
         """
         if name in PICKER_HANDLES:
             return False
-        # Die Handlungen für alle Körper gehören zur Stufe ohne Auswahl und zu
-        # keiner anderen (:attr:`_for_all_bodies`); ohne Auswahl steht nichts
-        # sonst da.
-        if name in self._for_all_bodies:
-            return self._nothing_chosen and name in SCENE_ACTIONS_IN_THE_CARD
+        # Die Handlungen für alle Körper und die Erzeuger gehören zur Stufe ohne
+        # Auswahl und zu keiner anderen (:attr:`_for_all_bodies`,
+        # :attr:`_creators`); ohne Auswahl steht nichts sonst da.
+        if name in self._for_all_bodies or name in self._creators:
+            return self._nothing_chosen
         if self._nothing_chosen:
             return False
         if self._feature_kind:

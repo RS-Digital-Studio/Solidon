@@ -4,7 +4,7 @@
 |----------------------------|---------------------------------------|
 | Menüeintrag und Dialog     | title, category, Parameterschema      |
 | Kontextmenü                | applies_to                            |
-| Palette und Kürzel         | title, doc, shortcut                  |
+| Suche und Kürzel           | title, doc, shortcut                  |
 | Kommandozeile              | name, Parameterschema                 |
 | Agenten-Werkzeugschema     | name, doc, JSON-Schema                |
 | Dokumentationsabschnitt    | alles davon                           |
@@ -448,7 +448,7 @@ def menu_tree(
     """Das Menü, in der Reihenfolge des Katalogs (§25).
 
     ``skip`` lässt Operationen aus der Menüleiste heraus, ohne sie aus dem
-    Register zu nehmen — sie bleiben über Katalog, Befehlspalette und
+    Register zu nehmen — sie bleiben über Katalog, Suche und
     Kontextmenü erreichbar.
 
     **Die Entscheidung, *wen* das trifft, gehört nicht hierher.** Der Kern
@@ -699,33 +699,23 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
     return " → ".join(steps)
 
 
-#: Welche Handlungen für alle Körper rechts stehen, wenn nichts gewählt ist.
-#:
-#: Robert, 05.10.2026: „Eigentlich reicht hier druckoptimal ausrichten, machen
-#: ja alle ziemlich das gleiche und nur ohne Auswahl.“ *Druckoptimal
-#: ausrichten* ordnet das Bett danach neu; *Auf dem Bett anordnen* (Kürzel)
-#: und *Überschneidungen prüfen* bleiben über die Befehlspalette erreichbar.
-#: Die Karte rechts und :func:`menu_path` lesen dieselbe Menge.
-SCENE_ACTIONS_IN_THE_CARD: Final = frozenset({"orient_for_print"})
-
-
 def _panel_place(spec: OperationSpec) -> str:
     """Der Ort einer Handlung rechts im Fenster, mit der Auswahl, die sie braucht.
 
     **Eine Handlung für alle Körper steht ohne Auswahl** (RM-506): Der Weg
     nannte „bei gewähltem Körper“, und genau dort steht sie seit dem
-    27.09.2026 nicht mehr.
+    27.09.2026 nicht mehr. Seit RM-735 stehen alle drei dort; die
+    Befehlspalette, in der zwei von ihnen bis dahin allein standen, gibt es
+    nicht mehr.
     """
     if spec.takes_whole_scene:
-        if spec.name in SCENE_ACTIONS_IN_THE_CARD:
-            return f"{_('Handlungen rechts')} ({_('ohne Auswahl')})"
-        return str(_("Befehlspalette"))
+        return f"{_('Handlungen rechts')} ({_('ohne Auswahl')})"
     if spec.applies_to:
         kinds = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to if kind)
         if spec.also_on_body:
             # **Beide Stellen, der Körper zuerst** (``also_on_body``): Oben am
             # gewählten Körper ist die Hauptstelle. Wer nur das Merkmal nennt,
-            # schickt Palette, Agent und Handbuch an die Nebenstelle.
+            # schickt Suche, Agent und Handbuch an die Nebenstelle.
             selection = _("bei gewähltem Körper oder Merkmal: {kinds}", kinds=kinds)
         else:
             selection = _("bei gewähltem Merkmal: {kinds}", kinds=kinds)
@@ -808,9 +798,10 @@ def context_menu(feature_kind: str, registry: Registry | None = None) -> tuple[O
 
 
 @dataclass(frozen=True, slots=True)
-class PaletteEntry:
-    """Eine Zeile der Befehlspalette. Das Kürzel steht daneben, so lernt man
-    es nebenbei.
+class SearchEntry:
+    """Eine Zeile der Suche im Reiter *Auswahl* (*Funktion suchen*, RM-735) —
+    eine Operation oder ein Befehl des Fensters. Das Kürzel steht daneben, so
+    lernt man es nebenbei.
     """
 
     name: str
@@ -819,8 +810,8 @@ class PaletteEntry:
     doc: TranslatableText | str
     shortcut: str | None = None
     available: bool = True
-    """Ob der Eintrag jetzt ausführbar ist — die Palette zeigt ihn trotzdem:
-    sie ist eine Reihenfolge, keine Auswahl."""
+    """Ob der Eintrag jetzt ausführbar ist — die Suche zeigt ihn trotzdem: Sie
+    ist eine Reihenfolge, keine Auswahl."""
     reason: TranslatableText | str = ""
     """Warum nicht, wenn nicht — dieselbe Auskunft, die das Menü im
     Hinweistext trägt (Regel 18: der Grund ist die zweite Kodierung neben
@@ -830,45 +821,30 @@ class PaletteEntry:
     nebenbei wie das Kürzel (RM-506)."""
 
 
-def palette_entries(
-    registry: Registry | None = None, *, for_feature: str | None = None
-) -> tuple[PaletteEntry, ...]:
-    """Alle Operationen als Palettenzeilen.
-
-    Ist ein Merkmal ausgewählt, stehen die Operationen vorn, die dafür
-    deklariert sind (``applies_to``, §10). Wer eine Bohrung angeklickt hat,
-    sucht Senken und Verschließen — und nicht das, was zufällig vorn im
-    Alphabet steht.
+def search_entries(registry: Registry | None = None) -> tuple[SearchEntry, ...]:
+    """Alle Operationen als Zeilen der Suche, nach dem Titel.
 
     Es ist eine **Reihenfolge, keine Auswahl**: alles bleibt erreichbar. Eine
-    Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen, und die
-    stehen auf der Nicht-bauen-Liste.
+    Suche, die aussortiert, wäre eine Betriebsart mit anderem Namen, und die
+    stehen auf der Nicht-bauen-Liste. Was an der Auswahl geht, stellt die
+    Karte der Handlungen vor die übrigen (``SelectionOperationsPanel``).
     """
     source = registry or REGISTRY
     specs = list(source.all())
     # **Nach dem Titel, nicht nach dem Namen.** ``Registry.all()`` sortiert nach
-    # dem internen englischen Bezeichner, und die Palette gab das ungefiltert
-    # weiter: „An Merkmal ausrichten", „Textur aufbringen", „Auf dem Bett
-    # anordnen", „Slot zuweisen" — für einen deutschen Leser eine Zufallsfolge,
-    # während die Menüleiste daneben nach Titel sortiert (``by_category``, mit
-    # genau dieser Begründung im Docstring).
-    #
-    # Zuerst nach Titel, dann stabil nach ``applies_to``: Python sortiert
-    # stabil, also steht die passende Gruppe vorn und innerhalb jeder Gruppe
-    # alphabetisch.
+    # dem internen englischen Bezeichner: „An Merkmal ausrichten", „Textur
+    # aufbringen", „Auf dem Bett anordnen" — für einen deutschen Leser eine
+    # Zufallsfolge, während die Menüleiste nach Titel sortiert (``by_category``).
     #
     # Über ``sort_key``, denselben Schlüssel wie ``by_category`` in der
     # Menüleiste — nicht bloß ``str``: 23 der 85 Titel tragen einen Umlaut, und
     # nach Codepunkt verglichen landet „Überhangfächer" hinter allem anderen,
-    # weil „Ü" hinter „z" steht. Nicht zu verwechseln mit der Suchfaltung der
-    # Palette (``registry.search.fold``, „ä" → „ae"): hier zählt „ä" wie „a"
-    # nach DIN 5007-1, dort wie es auf einer Tastatur ohne Umlaute geschrieben
-    # wird.
+    # weil „Ü" hinter „z" steht. Nicht zu verwechseln mit der Suchfaltung
+    # (``registry.search.fold``, „ä" → „ae"): hier zählt „ä" wie „a" nach DIN
+    # 5007-1, dort wie es auf einer Tastatur ohne Umlaute geschrieben wird.
     specs.sort(key=lambda spec: sort_key(spec.title))
-    if for_feature:
-        specs.sort(key=lambda spec: for_feature not in spec.applies_to)
     return tuple(
-        PaletteEntry(
+        SearchEntry(
             name=spec.name,
             title=spec.title,
             category=spec.category,
@@ -952,7 +928,7 @@ def sentences(text: str) -> list[str]:
 
     Ein Satz endet an Punkt, Ausrufe- oder Fragezeichen, wenn danach etwas
     beginnt, das kein Kleinbuchstabe ist; eine Abkürzung wie „z. B.“ beendet
-    keinen, eine Zahl wie „1.5“ auch nicht. Menü, Statuszeile, Palette und der
+    keinen, eine Zahl wie „1.5“ auch nicht. Menü, Statuszeile, Suche und der
     Längenwächter schneiden mit dieser einen Regel — zwei Regeln hießen, der
     Wächter misst etwas anderes, als der Kunde liest.
     """
@@ -971,7 +947,7 @@ def sentences(text: str) -> list[str]:
 
 
 def first_sentence(text: str) -> str:
-    """Der erste Satz eines Kundentexts — was Menü, Statuszeile und Palette zeigen."""
+    """Der erste Satz eines Kundentexts — was Menü, Statuszeile und Suche zeigen."""
     parts = sentences(text)
     return parts[0] if parts else ""
 

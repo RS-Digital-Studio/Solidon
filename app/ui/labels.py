@@ -2292,7 +2292,7 @@ def feature_requirement(spec: Any, feature_kinds: Collection[str]) -> str | None
     nichts anfangen. Ohne diesen Satz öffnete das Menü einen Dialog, dessen
     Pflicht-Auswahl leer ist — die Sackgasse aus Regel 19, nur ein Feld
     später. Der Satz steht hier, weil dieselbe Auskunft über
-    ``_reason_locked`` an Menü, Kontextmenü, Palette und Zwillingshaken geht.
+    ``_reason_locked`` an Menü, Kontextmenü, Suche und Zwillingshaken geht.
 
     Welche Art passt, sagt ``applies_to`` — die Zuordnung, über die auch das
     Auswahlfenster am Merkmal die Operation findet (§18.5). Eine Operation ohne

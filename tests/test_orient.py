@@ -230,10 +230,12 @@ def test_the_orientation_operation_takes_the_whole_scene() -> None:
     10.09.2026: „druckoptimal ausrichten alle körper").
 
     Dieselbe Bauart wie *Auf dem Bett anordnen*: ``consumes=0`` und
-    ``whole_scene``, und jede Oberfläche gibt die Szene hinein.
+    ``whole_scene``, und jede Oberfläche gibt die Szene hinein. Seit RM-735
+    auch dieselbe Kategorie: Sie steht ohne Auswahl bei den Handlungen für die
+    Szene, nicht bei den Transformationen eines Körpers.
     """
     spec = REGISTRY.get("orient_for_print")
-    assert spec.category == "transform"
+    assert spec.category == REGISTRY.get("arrange_bed").category == "scene"
     assert (spec.consumes, spec.produces) == (0, VARIABLE)
     assert spec.takes_whole_scene, "die Oberfläche muss ihr die ganze Szene geben"
     assert spec.takes_whole_scene == REGISTRY.get("arrange_bed").takes_whole_scene

@@ -179,7 +179,6 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
     from app.ui.analysis_bar import AnalysisBar, LayerBar
     from app.ui.catalog import PartCatalog
     from app.ui.chat import ChatPanel
-    from app.ui.command_palette import CommandPalette
     from app.ui.dialogs import AskDialog, CalibrationDialog, KeyDialog, ParameterDialog
     from app.ui.explode_bar import ExplodeBar
     from app.ui.filament_picker import NewFilamentDialog
@@ -282,7 +281,6 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
         ("MeasureBar", MeasureBar),
         ("ExplodeBar", ExplodeBar),
         ("ToolStrip", ToolStrip),
-        ("CommandPalette", CommandPalette),
         ("ObjectTree", ObjectTree),
         ("ParameterPanel", ParameterPanel),
         ("HistoryPanel", HistoryPanel),
@@ -757,17 +755,10 @@ def _openers() -> list[tuple[str, str, Callable[[object], None]]]:
     def open_generator(window: object) -> None:
         window._generate(None)  # type: ignore[attr-defined]
 
-    def open_palette(window: object) -> None:
-        # Über *Funktion suchen …* oben, seit RM-506 der häufigste Weg.
-        window.function_search.click()  # type: ignore[attr-defined]
-
     return [
         ("Bausteinkatalog", "app.ui.catalog.PartCatalog.exec", open_catalogue),
         # Nichtmodal (RM-371): gezeigt mit ``show``, geschlossen wie vom Kunden.
         ("Erzeugen-Dialog", "app.ui.generate_dialog.GenerateDialog.show", open_generator),
-        # Jede geschlossene Palette blieb als Kind am Fenster stehen, mit allen
-        # ihren Zeilen (Durchsicht 0.5.3, Fund 9).
-        ("Befehlspalette", "app.ui.command_palette.CommandPalette.exec", open_palette),
     ]
 
 

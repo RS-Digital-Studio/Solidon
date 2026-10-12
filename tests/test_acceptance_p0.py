@@ -21,7 +21,7 @@ from app.core.registry import (
     cli_commands,
     context_menu,
     menu_tree,
-    palette_entries,
+    search_entries,
     tool_schemas,
 )
 from app.core.scene import History, OperationDraft, ResultCache, evaluate
@@ -49,12 +49,12 @@ def project_with(name: str, unit: str = "auto"):
 
 
 def test_operations_are_visible_in_every_surface(qt_app: object) -> None:
-    """§40: at least two operations, visible in menu, palette, context menu, CLI, tools."""
+    """§40: at least two operations, visible in menu, search, context menu, CLI, tools."""
     names = {spec.name for spec in REGISTRY.all()}
     assert len(names) >= 2
 
     assert {spec.name for section in menu_tree() for spec in section.entries} == names
-    assert {entry.name for entry in palette_entries()} == names
+    assert {entry.name for entry in search_entries()} == names
     assert {command.name for command in cli_commands()} == names
     assert {schema["name"] for schema in tool_schemas()} == names
 

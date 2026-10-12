@@ -151,9 +151,9 @@ Auswahl, die aussortiert — eine Operation, die der Agent nicht mehr sieht,
 wäre eine Betriebsart mit anderem Namen (§2.6).
 
 - **Ausführlich** stehen die Treffer von `registry.search.rank_operations`
-  über Anfrage und letzte Nutzerbeiträge — **dieselbe** Wortsuche wie die
-  Befehlspalette, kein zweites Ranking (`zwillinge.md`), aber **ohne die
-  Kundenwörter der Palette** (`CUSTOMER_WORDS`, `customer_words=False`,
+  über Anfrage und letzte Nutzerbeiträge — **dieselbe** Wortsuche wie das
+  Suchfeld der Karte, kein zweites Ranking (`zwillinge.md`), aber **ohne die
+  Kundenwörter der Suche** (`CUSTOMER_WORDS`, `customer_words=False`,
   `grenzen.md`) —, am gewählten Merkmal seine Handlungen aus `ACTION_ORDER`, in
   leerer Szene die sichtbaren Grundkörper, und was das Modell im Zug
   angefordert oder über `find_part` gefunden hat. Von sich aus höchstens

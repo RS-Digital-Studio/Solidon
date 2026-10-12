@@ -607,7 +607,7 @@ def test_up_to_preselection_preserves_the_selected_body(qt_app: QApplication) ->
 def test_requested_variant_is_selected_and_applied(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, name: str
 ) -> None:
-    """Befehlspalette und Menü behalten die ausdrücklich gewählte Bauart."""
+    """Suche und Menü behalten die ausdrücklich gewählte Bauart."""
     drafts = []
     monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
     monkeypatch.setattr(

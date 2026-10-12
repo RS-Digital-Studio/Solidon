@@ -268,7 +268,7 @@ def test_the_changes_window_writes_the_keys_of_the_set_platform() -> None:
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="Qt schreibt NativeText nur auf dem Mac so")
 def test_the_mac_writing_is_the_one_qt_uses_there(qt_app: object) -> None:
-    """Auf dem Mac selbst: dieselben Zeichen, die Menüs und Palette von Qt bekommen."""
+    """Auf dem Mac selbst: dieselben Zeichen, die Menüs und Suche von Qt bekommen."""
     from PySide6.QtGui import QKeySequence
 
     native = QKeySequence.SequenceFormat.NativeText
@@ -337,15 +337,16 @@ def test_return_opens_the_current_entry_exactly_once(qt_app: object, platform: s
         view.deleteLater()
 
 
-@pytest.mark.parametrize("where", ["start", "palette", "report"])
+@pytest.mark.parametrize("where", ["start", "search", "report"])
 def test_every_list_that_opens_on_activation_opens_on_return_at_the_mac(
     qt_app: object, where: str
 ) -> None:
-    """Der Anschluss zu ``return_opens``: Startfläche, Befehlspalette, Prüfbericht.
+    """Der Anschluss zu ``return_opens``: Startfläche, Treffer der Suche, Prüfbericht.
 
     Der Test darüber hält den Filter an einer leeren Liste; ob die drei Listen,
     die über ``itemActivated`` öffnen, ihn tragen, hielt keiner. Fiel die Zeile
-    in Palette oder Prüfbericht weg, blieb jeder Lauf grün, auch am Mac
+    in der Befehlspalette (heute die Treffer der Suche, RM-735) oder im
+    Prüfbericht weg, blieb jeder Lauf grün, auch am Mac
     (Review 06.10.2026, U2-N1). Hier hängt genau ein Filter an der echten
     Liste; er wird auf den Mac gestellt und nimmt die Taste dann selbst, und
     Return öffnet den aktuellen Eintrag genau einmal — auf jeder Plattform.
@@ -354,10 +355,11 @@ def test_every_list_that_opens_on_activation_opens_on_return_at_the_mac(
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QListWidget, QWidget
 
-    from app.core.registry import PaletteEntry
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY, SearchEntry
     from app.core.types import Finding
-    from app.ui.command_palette import CommandPalette
     from app.ui.panels import ReportPanel
+    from app.ui.selection_operations import SelectionOperationsPanel
     from app.ui.shortcut_schemes import ReturnOpens
     from app.ui.start_screen import StartScreen
 
@@ -369,11 +371,15 @@ def test_every_list_that_opens_on_activation_opens_on_return_at_the_mac(
         screen.show_recent([Path("a.p3d"), Path("b.p3d")])
         screen.openRequested.connect(opened.append)
         owner, view = screen, screen.recent_list
-    elif where == "palette":
-        entry = PaletteEntry(name="return_sample", title="Würfel", category="create", doc="Würfel.")
-        palette = CommandPalette([entry])
-        palette.accepted.connect(lambda: opened.append(palette.chosen()))
-        owner, view = palette, palette.list
+    elif where == "search":
+        entry = SearchEntry(name="return_sample", title="Würfel", category="create", doc="Würfel.")
+        load_operations()
+        card = SelectionOperationsPanel(REGISTRY.all())
+        card.set_search_sources(lambda: [entry], lambda _name, key: key, frozenset())
+        card.set_context(1, lambda _name: (True, ""))
+        card.searchChosen.connect(opened.append)
+        card.search.setText("Würfel")
+        owner, view = card, card.hits
     else:
         panel = ReportPanel()
         panel.add_findings(
