@@ -1734,12 +1734,16 @@ def test_a_window_command_goes_over_its_button_in_the_card(
     button = window.selection_operations.button_for("edit.auto_split")
     assert button is not None and button.isVisible(), "Automatisch teilen steht nicht da"
     # area_for rollt den Knopf in den Blick; danach steht er dort, wo next_click ihn nennt.
-    area = guide_targets.area_for(window, "command:edit.auto_split")
+
+    def where() -> QRect:
+        return QRect(button.mapToGlobal(QPoint(0, 0)), button.size())
+
+    # area_for rollt den Knopf in den Blick (auch um ein paar Punkte zur Seite);
+    # verglichen wird je Antwort mit dem Ort des Knopfes in diesem Augenblick.
+    assert guide_targets.area_for(window, "command:edit.auto_split") == where()
     _settle(qt_app)
-    expected = QRect(button.mapToGlobal(QPoint(0, 0)), button.size())
     step = guide_targets.next_click(window, "command:edit.auto_split")
-    assert area == expected
-    assert (step.why, step.rect) == ("ziel", expected)
+    assert (step.why, step.rect) == ("ziel", where())
 
 
 def test_an_operation_that_does_not_apply_here_says_so(prepared_window: Any, qt_app: Any) -> None:
