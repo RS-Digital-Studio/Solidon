@@ -334,8 +334,10 @@ def place_of(steps: Sequence[Mapping[str, Any]], target: str) -> dict[str, Any]:
     Rechtsklick auf dem Weg, ``menue`` bei einem Menü, ``werkzeugleiste`` am
     Kopf des Fensters, sonst ``karte``. ``path`` sind die sichtbaren Texte der
     Klicks bis zum Ziel. Kam der Weg nicht an, steht der Grund in ``error``.
+    Gelesen wird der ganze Hauptweg: Wirkt der Klick auf das Ziel selbst, fällt
+    er in der Phase Übernehmen (``FunctionFlow.phase_main``).
     """
-    walked = [step for step in steps if step.get("phase") == PATH_PHASE]
+    walked = [step for step in steps if step.get("phase") in (PATH_PHASE, APPLY_PHASE)]
     upto: list[Mapping[str, Any]] = []
     for step in walked:
         upto.append(step)
@@ -612,6 +614,16 @@ class QtPorts:
             "middle": Qt.MouseButton.MiddleButton,
         }[button]
         QTest.mouseClick(widget, mouse, modifiers, local)
+        if button == "right":
+            # Ein Rechtsklick des Kunden bringt nach dem Loslassen auch das
+            # Kontextmenüereignis; QTest schickt nur die Maus (Probelauf,
+            # Befund B: ``menu:history.edit`` fand nie ein offenes Menü).
+            # Öffnet der Empfänger sein Menü mit ``exec()``, kehrt das erst
+            # nach dessen Ende zurück — der Automat läuft darin weiter.
+            from PySide6.QtGui import QContextMenuEvent
+
+            context = QContextMenuEvent(QContextMenuEvent.Reason.Mouse, local, point, modifiers)
+            QApplication.sendEvent(widget, context)
 
     def move(self, point: Any) -> None:
         """Die Maus an eine Stelle, ohne zu klicken — Überfahren für I1."""

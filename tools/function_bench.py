@@ -54,6 +54,7 @@ from tools.function_protocol import (
     abort_entry,
     bodies_digest,
     cli_arguments,
+    cli_command,
     compare_prints,
     drag_frames,
     result_metrics,
@@ -849,29 +850,43 @@ class FunctionFlow:
                 ]
             self.picture("02-flaeche")
 
+        # Wirkt der Klick auf das Ziel selbst — ohne Übernehmen-Knopf und ohne
+        # Eingaben, etwa eine Befundhandlung oder ein Fensterbefehl —, ist dieser
+        # Klick das Übernehmen: Er fällt in der Phase Übernehmen, mit Uhr und
+        # Herzschlag. Vorher stand er im Weg, und das Übernehmen wartete danach
+        # auf ein Ergebnis, das schon da war (Probelauf, Befund B).
+        route = self.path_steps()
+        acting: Step | None = None
+        direct = self.apply_target is None and not inputs and bool(route)
+        if self.apply_target is not None:
+            acting = self.walker.step(self.apply_target)
+        elif direct:
+            route, acting = route[:-1], route[-1]
         self.walker.before_target = remember_focus
         try:
-            self.run_steps(
+            walked = self.run_steps(
                 PATH_PHASE,
                 [
-                    *self.path_steps(),
+                    *route,
                     *self.input_steps(inputs),
                     *(self.preview_steps() if inputs else [self.wait_step("ruhe", self.idle)]),
                     self.still_step("fläche steht still", self.surface),
                     Step("fläche aufnehmen", take_surface),
                 ],
             )
+            reached = walked if direct else place_of(self.data["steps"], target)["error"] is None
+            if reached:
+                self.data["spot"] = self.spot()
+                if inputs:
+                    self.data["preview"] = self.preview_record()
+                    self.snapshot("preview")
+                self.apply_and_measure(acting)
         finally:
             self.walker.before_target = None
         self.data["place"] = place_of(self.data["steps"], target)
-        self.data["spot"] = self.spot()
-        if inputs:
-            self.data["preview"] = self.preview_record()
-            self.snapshot("preview")
-        if self.data["place"]["error"] is not None:
+        if not reached or self.data["place"]["error"] is not None:
             unmeasured(self.data, "result", "der Hauptweg kam nicht an")
             return
-        self.apply_and_measure()
         after = QApplication.focusWidget()
         if focus["before"] is None or after is None:
             unmeasured(
@@ -901,8 +916,51 @@ class FunctionFlow:
             "covered_by": type(hit.window()).__name__ if covered and hit is not None else None,
         }
 
-    def apply_and_measure(self) -> None:
-        """Übernehmen mit Herzschlag und Zeiten (Prüfpunkt 6), dann Ergebnis und Kommandozeile."""
+    def effect_steps(
+        self,
+        label: str,
+        previous: Any,
+        observe: Callable[[], None] | None = None,
+        timeout_s: float = STEP_TIMEOUT_S,
+    ) -> tuple[list[Step], dict[str, Any]]:
+        """Erst die Wirkung, dann das Ergebnis — eine Handlung ohne Wirkung wartet keine Frist ab.
+
+        Wirkung heißt: Die Sitzung rechnet, oder ein neues Ergebnis steht. Kommt
+        binnen :data:`EFFECT_WINDOW_S` keine, ist das die Antwort
+        (``effect`` falsch). Sonst wartet ein zweiter Schritt, bis die Sitzung
+        ruht und ein neues Ergebnis trägt (``settled``, ``done`` die Uhrzeit).
+        Läuft dessen Frist ab, bleibt ``settled`` falsch; der Aufrufer schreibt
+        den Grund ins Protokoll (Probelauf, Befund B: vorher stand die Frist nur
+        als Fehler da). ``observe`` läuft in jedem Takt mit.
+        """
+        state: dict[str, Any] = {"effect": False, "settled": False, "done": None}
+
+        def started() -> bool:
+            if observe is not None:
+                observe()
+            return bool(self.session.busy or self.session.last_result is not previous)
+
+        def landed() -> bool:
+            if observe is not None:
+                observe()
+            if self.idle() and self.session.last_result is not previous:
+                state["settled"], state["done"] = True, time.perf_counter()
+            return bool(state["settled"])
+
+        def follow(machine: StepMachine) -> None:
+            state["effect"] = started()
+            if state["effect"]:
+                machine.insert([self.wait_step(f"{label} steht", landed, timeout_s=timeout_s)])
+
+        steps = [self.until_step(f"{label} wirkt", started), Step(f"{label} prüfen", follow)]
+        return steps, state
+
+    def apply_and_measure(self, acting: Step | None) -> None:
+        """Übernehmen mit Herzschlag und Zeiten (Prüfpunkt 6), dann Ergebnis und Kommandozeile.
+
+        ``acting`` ist der Klick, der übernimmt: der Übernehmen-Knopf, oder bei
+        einer Zeile, deren Ziel selbst wirkt, der Klick auf das Ziel.
+        """
         from PySide6.QtWidgets import QApplication, QProgressBar
 
         previous = self.session.last_result
@@ -921,7 +979,7 @@ class FunctionFlow:
             moment["t0"] = time.perf_counter()
             self.heartbeat.open(moment["t0"])
 
-        def watched() -> bool:
+        def observe() -> None:
             elapsed = round(time.perf_counter() - moment["t0"], 3)
             if timing["first_feedback_s"] is None and (
                 QApplication.overrideCursor() is not None
@@ -937,16 +995,25 @@ class FunctionFlow:
             cancel = self.widget("progress.cancel")
             if timing["cancel_shown_s"] is None and cancel is not None and cancel.isVisible():
                 timing["cancel_shown_s"] = elapsed
-            return self.idle() and self.session.last_result is not previous
 
-        steps = [Step("uhr", start)]
-        if self.apply_target:
-            steps.append(self.walker.step(self.apply_target))
-        steps.append(self.wait_step("ergebnis", watched))
-        ok = self.run_steps(APPLY_PHASE, steps)
+        effect, state = self.effect_steps("ergebnis", previous, observe)
+        self.run_steps(APPLY_PHASE, [Step("uhr", start), *([acting] if acting else []), *effect])
         timing["main_gap_ms"] = self.heartbeat.close(time.perf_counter())
-        if ok:
-            timing["total_s"] = round(time.perf_counter() - moment["t0"], 3)
+        if state["settled"]:
+            timing["total_s"] = round(state["done"] - moment["t0"], 3)
+        elif not state["effect"]:
+            unmeasured(
+                self.data,
+                "timing",
+                f"keine Wirkung binnen {EFFECT_WINDOW_S:g} s nach dem Klick — "
+                "weder Rechnung noch neues Ergebnis",
+            )
+        else:
+            unmeasured(
+                self.data,
+                "timing",
+                f"keine Rückmeldung: nach {STEP_TIMEOUT_S:.0f} s kein fertiges Ergebnis",
+            )
         self.data["timing"] = timing
         # Z2: Ein Fenster, das nach dem Übernehmen offen steht, hat die Wache
         # schon in modals notiert; hier steht es zum Lauf dazu.
@@ -967,20 +1034,17 @@ class FunctionFlow:
     def undo_and_redo(self) -> None:
         """Rückgängig und Wiederholen über ihre Tasten (Prüfpunkt 5)."""
         for label, keys in (("undo", self.undo_keys()), ("redo", self.redo_keys())):
-            previous = self.session.last_result
-            self.run_steps(
-                label,
-                [
-                    self.key_step(keys, label),
-                    self.wait_step(
-                        f"{label} steht",
-                        lambda previous=previous: (
-                            self.idle() and self.session.last_result is not previous
-                        ),
-                        timeout_s=60.0,
-                    ),
-                ],
-            )
+            # Wirkt die Taste nicht, ist das die Messung — der Abdruck sagt es
+            # (Prüfpunkt 5), und gewartet wird nicht. Rechnet sie und wird nicht
+            # fertig, steht der Grund im Protokoll.
+            effect, state = self.effect_steps(label, self.session.last_result, timeout_s=60.0)
+            self.run_steps(label, [self.key_step(keys, label), *effect])
+            if state["effect"] and not state["settled"]:
+                unmeasured(
+                    self.data,
+                    f"states.{label}",
+                    "keine Rückmeldung: nach 60 s kein fertiges Ergebnis",
+                )
             self.snapshot(label)
 
     def compare_with_cli(self) -> dict[str, Any] | None:
@@ -1016,7 +1080,7 @@ class FunctionFlow:
         copy = self.folder / "cli.p3d"
         shutil.copyfile(scene, copy)
         finished = subprocess.run(
-            [sys.executable, "-m", "app.cli.main", "run", *arguments, str(copy)],
+            [sys.executable, "-m", "app.cli.main", *cli_command(arguments, str(copy))],
             capture_output=True,
             text=True,
             encoding="utf-8",

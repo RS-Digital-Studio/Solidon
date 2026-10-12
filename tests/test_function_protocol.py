@@ -353,6 +353,26 @@ def test_the_reference_factor_is_measured_once_per_run_with_the_calibration_of_s
     assert (elsewhere / capture.REFERENCE_FILE).is_file()
 
 
+def test_the_command_line_names_the_file_before_the_bodies() -> None:
+    """Probelauf, Befund B: ``run place_on_bed --on obj_1 <datei>`` lehnte die Kommandozeile ab.
+
+    ``--on`` nimmt beliebig viele Namen; die Datei am Ende wurde ein weiterer
+    Körper, und ``path`` fehlte. Gelesen mit dem Parser der Anwendung selbst.
+    """
+    from app.cli.main import build_parser
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    arguments = function_protocol.cli_arguments(
+        {"op": "place_on_bed", "in": ["obj_1"], "params": {}}
+    )
+    assert arguments is not None
+    parsed = build_parser().parse_args(function_protocol.cli_command(arguments, "x.p3d"))
+    assert (parsed.op, parsed.path, parsed.on) == ("place_on_bed", "x.p3d", ["obj_1"])
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["run", *arguments, "x.p3d"])  # die alte Reihenfolge
+
+
 def test_the_aborted_computation_lasts_as_long_as_the_main_way() -> None:
     """Review M4: ``abort.eval_s`` ist die Rechendauer aus dem Hauptweg, nicht die Ladezeit."""
     data = function_protocol.empty_protocol(
