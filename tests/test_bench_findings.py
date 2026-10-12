@@ -382,6 +382,146 @@ def test_the_object_tree_stays_inside_its_section_when_the_card_is_tight(qt_app:
     assert checked >= 4
 
 
+#: Der Kindprozess des Teilschritttests: Anwendung wie beim Kunden, je
+#: Sammelschritt mehrere Quader in einer Transaktion — der Verlauf zeigt eine
+#: Zeile und versteckt die Teilschritte, der Objektbaum zeigt jeden Quader.
+#: ``SOLIDON_PROBE_OLD_HIDDEN_ROWS=1`` zählt die versteckten Zeilen wieder mit,
+#: in ``HistoryPanel.wanted_height``, ``HistoryPanel._fit`` und
+#: ``overlay.rows_height`` — die Gegenprobe.
+_HIDDEN_STEPS = r"""
+import os
+import sys
+import time
+import app.ui
+from PySide6.QtWidgets import QListView
+from app.core.bootstrap import load_operations
+load_operations()
+from app.ui.app import build_application
+from app.core.scene.history import OperationDraft
+from app.ui import overlay
+from app.ui.panels import HistoryPanel, fit_to_rows, row_height_of, view_chrome
+if os.environ.get('SOLIDON_PROBE_OLD_HIDDEN_ROWS'):
+    def _wanted(self):
+        return (
+            self._timeline_height()
+            + view_chrome(self.list)
+            + self.list.count() * row_height_of(self.list)
+        )
+
+    def _fit(self):
+        empty = self.list.count() == 0
+        self._empty.setVisible(empty)
+        self.list.setVisible(not empty)
+        room = None if self._room is None else max(0, self._room - self._timeline_height())
+        fit_to_rows(self.list, self.list.count(), room=room)
+        self.setMinimumHeight(self.sizeHint().height())
+        self.updateGeometry()
+
+    _rows = overlay.rows_height
+
+    def _with_hidden(view):
+        total = _rows(view)
+        if isinstance(view, QListView):
+            total += sum(
+                view.sizeHintForRow(row)
+                for row in range(view.model().rowCount())
+                if view.isRowHidden(row)
+            )
+        return total
+
+    HistoryPanel.wanted_height = _wanted
+    HistoryPanel._fit = _fit
+    overlay.rows_height = _with_hidden
+application, window = build_application([])
+
+
+def settle(seconds):
+    until = time.monotonic() + seconds
+    while time.monotonic() < until:
+        application.processEvents()
+        time.sleep(0.005)
+
+
+width, height, transactions, per = (int(value) for value in sys.argv[1:5])
+window.resize(width, height)
+window.show()
+window._show_start_screen(False)
+for number in range(transactions):
+    drafts = [
+        OperationDraft(op='create_box', params={'width': 10.0 + number + part})
+        for part in range(per)
+    ]
+    assert window.session.apply(f'Quader {number + 1}', drafts)
+    assert window.session.wait_for_idle(60000)
+settle(1.5)
+listing = window.history_panel.list
+tree = window.object_tree.tree
+hidden = sum(listing.isRowHidden(row) for row in range(listing.count()))
+shown = [row for row in range(listing.count()) if not listing.isRowHidden(row)]
+used = sum(listing.visualRect(listing.model().index(row, 0)).height() for row in shown)
+print('versteckt', hidden, flush=True)
+print('leer', listing.viewport().height() - used, row_height_of(listing), flush=True)
+print('rollt', tree.verticalScrollBar().maximum(), flush=True)
+window.session.forget_changes()
+from tools.window_bench import shutdown_window
+shutdown_window(window, application)
+"""
+
+
+def _hidden_steps(size: tuple[int, int], scene: tuple[int, int], old: bool) -> dict[str, list[int]]:
+    import os
+    import subprocess
+    import sys
+
+    extra = {"SOLIDON_PROBE_OLD_HIDDEN_ROWS": "1"} if old else {}
+    done = subprocess.run(
+        [sys.executable, "-X", "faulthandler", "-c", _HIDDEN_STEPS, *map(str, (*size, *scene))],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", **extra},
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert done.returncode == 0, done.stderr[-3000:]
+    return {
+        line.split()[0]: [int(value) for value in line.split()[1:]]
+        for line in done.stdout.splitlines()
+        if line.split() and line.split()[0] in ("versteckt", "leer", "rollt")
+    }
+
+
+#: Je zulässige Fläche ein Verlauf, der in den neuen Stand gerade passt: Quader
+#: je Sammelschritt mal Sammelschritte, gemessen ohne Fenster mit DejaVu Sans.
+_HIDDEN_CASES = (((1920, 1032), (4, 2)), ((2560, 1392), (6, 2)))
+
+
+@pytest.mark.parametrize(("size", "scene"), _HIDDEN_CASES, ids=["1920x1032", "2560x1392"])
+def test_folded_steps_take_no_room_from_the_object_tree(
+    qt_app: Any, size: tuple[int, int], scene: tuple[int, int]
+) -> None:
+    """Eingeklappte Teilschritte stehen nicht da und nehmen keinen Platz (Fund D0-P).
+
+    Gezählt mit, meldete der Verlauf Höhe für jede versteckte Zeile: Er stand
+    mit fünf bis neun leeren Zeilen da, und der Objektbaum darüber rollte. Die
+    Gegenprobe setzt die alte Zählung ein und muss an derselben Fläche genau
+    diesen Schaden zeigen; sonst prüft der Fall nichts. Gemessen wird an den
+    kleinsten zulässigen Flächen und einer größeren — darunter nie.
+    """
+    del qt_app
+    now = _hidden_steps(size, scene, old=False)
+    assert now["versteckt"][0] >= scene[0], (
+        "keine eingeklappten Teilschritte — der Fall greift nicht"
+    )
+    blank, row = now["leer"]
+    assert blank < row, f"der Verlauf steht mit {blank} px Leere da"
+    assert now["rollt"] == [0], "der Objektbaum rollt, obwohl der Platz reichte"
+
+    before = _hidden_steps(size, scene, old=True)
+    assert before["leer"][0] >= 3 * before["leer"][1] and before["rollt"][0] > 0, (
+        f"die Gegenprobe zeigt den Schaden nicht: {before}"
+    )
+
+
 def test_a_row_cut_off_by_its_parent_is_reached_by_scrolling(qt_app: Any) -> None:
     """Eine Zeile, deren Liste über ihren Elternteil ragt, ist nur halb zu sehen;
     gefragt wird der sichtbare Teil der Liste, nicht ihr ganzes Rechteck (Fund
