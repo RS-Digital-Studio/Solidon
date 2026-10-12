@@ -28,8 +28,9 @@ Auflagen werden daneben rechtzeitig bearbeitet. Die nächste Version ist **0.6.1
 der Prüfstand [RM-737](#rm-737)) und das Programm Codestruktur ([RM-722](#rm-722),
 Konzepte in `konzepte/`); 0.6.1 mit auffindbaren Booleschen Operationen und ohne
 Befehlspalette steht auf main ([RM-734](#rm-734), [RM-735](#rm-735), der Release
-entscheidet Robert). Bis zum 25.11. gehen die Kundenpakete des
-Funktionsdurchgangs vor die Komponenten von `MainWindow`. Mit 0.6.0 beim Kunden abzunehmen:
+entscheidet Robert). Beide Programme laufen in vier Phasen ohne Datum hintereinander
+(Robert, 12.10.); die Kundenpakete des Funktionsdurchgangs kommen darin vor die Komponenten
+von `MainWindow`. Mit 0.6.0 beim Kunden abzunehmen:
 der Start auf echten Intel-Macs (RM-104) und Cura unter Linux (RM-521); offen bleibt die
 Antwort an den Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis 15.10. (RM-092),
 Verkaufskandidat bis 25.11., Demo bis 30.11., Start am 01.12.2026 um 10:00 Uhr (RM-061).
@@ -172,20 +173,20 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-733 — `PlacementFlow` greift über `Any` und Zeichenketten aufs Fenster](#rm-733) | Bedienung und Darstellung | Fensterseite als Vertrag typisieren wie bei `DrawFlow`, vor Schritt 4 des Programms |
 | [RM-734 — Wer „boolesch“ tippt, findet die Booleschen Operationen nicht](#rm-734) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-735 — Zwei Suchen: Befehlspalette und Suchfeld der Karte](#rm-735) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
-| [RM-736 — Funktionsdurchgang: jede Funktion einmal über die Oberfläche benutzt, geprüft und abgehakt](#rm-736) | Bedienung und Darstellung | Konzept abgelegt; D0 (RM-737) zuerst, dann die Kundenpakete D1, D9, D8, D3, D4 bis zum 25.11. |
+| [RM-736 — Funktionsdurchgang: jede Funktion einmal über die Oberfläche benutzt, geprüft und abgehakt](#rm-736) | Bedienung und Darstellung | Konzept abgelegt; D0 (RM-737) zuerst, dann die Kundenpakete D1, D9, D8, D3, D4 (Phase 3), die übrigen in Phase 4 |
 | [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | Zuschnitt in Teilpakete, dann Prüfstand auf `tools/file_acceptance.py`, Wortschatz in `guides`, Funktionsliste, Szenenkatalog, Profile, Listen für Stufe B |
 | [RM-738 — Funktionsdurchgang D1: Datei und Projekt](#rm-738) | Bedienung und Darstellung | wartet auf D0; danach neue Schätzung an Robert |
-| [RM-739 — Funktionsdurchgang D2: Erzeugen](#rm-739) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
+| [RM-739 — Funktionsdurchgang D2: Erzeugen](#rm-739) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-740 — Funktionsdurchgang D3: Verbinden und Abziehen, Transformation, Formgebung](#rm-740) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
 | [RM-741 — Funktionsdurchgang D4: Merkmale](#rm-741) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
-| [RM-742 — Funktionsdurchgang D5: Netz und Reparatur](#rm-742) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
-| [RM-743 — Funktionsdurchgang D6: Formen und Skelett](#rm-743) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
-| [RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze](#rm-744) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
+| [RM-742 — Funktionsdurchgang D5: Netz und Reparatur](#rm-742) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
+| [RM-743 — Funktionsdurchgang D6: Formen und Skelett](#rm-743) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
+| [RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze](#rm-744) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-745 — Funktionsdurchgang D8: Druckvorbereitung](#rm-745) | Bedienung und Darstellung | wartet auf D0; Folge D1, D9, D8 |
 | [RM-746 — Funktionsdurchgang D9: Druckeinstellungen, Übergabe an den Slicer, Filamentlager](#rm-746) | Bedienung und Darstellung | wartet auf D0; Folge D1, D9, D8 |
-| [RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes](#rm-747) | Bedienung und Darstellung | wartet auf D0; nach dem Start am 01.12. |
-| [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; nach dem Start am 01.12. |
-| [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; nach dem Start am 01.12. |
+| [RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes](#rm-747) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
+| [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4 |
+| [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
@@ -5578,7 +5579,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   RM-749); Funde als `FD-<n>` in `.claude/.state/funktionsdurchgang-2026-10/funde.md`, je
   Paket eine Abhakliste daneben (Konzept §7). Entscheidungen Robert (Konzept §13): je Fund läuft
   die eine reproduzierende Fenstertestdatei lokal; die Kundenpakete D0, D1, D9, D8, D3 und D4
-  gehen bis zum 25.11. vor die Komponenten von `MainWindow` aus der Codestruktur (RM-722).
+  gehen vor die Komponenten von `MainWindow` aus der Codestruktur (RM-722); alle Phasen laufen
+  ohne Datum hintereinander (Robert, 12.10.).
   Parallel höchstens zwei Pakete. Stufe C (von Hand am laufenden Fenster) braucht Roberts
   Bildschirm und Freigabe.
   **Nächster Schritt:** D0 (RM-737).
@@ -5645,8 +5647,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-739 — Funktionsdurchgang D2: Erzeugen.**
   Grundkörper, Bausteinkatalog (eine Zeile mit einem Lauf über alle Kacheln), Organizer, Text,
-  Bild, KI, Varianten, Nachbauen (Kategorien `primitive`, `parts`, `variants`). Nach dem Start
-  am 01.12. (Programmplan, Konzept §9). Weg 3 und KI nur mit lokal laufendem Generator und
+  Bild, KI, Varianten, Nachbauen (Kategorien `primitive`, `parts`, `variants`). In Phase 4
+  (Programmplan, Konzept §9). Weg 3 und KI nur mit lokal laufendem Generator und
   Modell.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
@@ -5654,7 +5656,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-740 — Funktionsdurchgang D3: Verbinden und Abziehen, Transformation, Formgebung.**
   Kategorien `boolean`, `transform`, `shaping` und `surface`, damit auch Verrunden, Fase und
-  Fläche versetzen (Konzept §6). Kundenpaket bis zum 25.11., nach D1, D9 und D8.
+  Fläche versetzen (Konzept §6). Kundenpaket in Phase 3, nach D1, D9 und D8.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-741"></a>
@@ -5662,41 +5664,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-741 — Funktionsdurchgang D4: Merkmale.**
   Bohrung, Langloch, Senkung, Gewinde, Muster, erkannte Merkmale ändern und entfernen, örtliche
   Erkennung (Kategorie `holes` und die Zeilen des Merkmalfensters ihrer Operationen).
-  Kundenpaket bis zum 25.11., mit D3 nach D1, D9 und D8.
+  Kundenpaket in Phase 3, mit D3 nach D1, D9 und D8.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-742"></a>
 
 - [ ] **RM-742 — Funktionsdurchgang D5: Netz und Reparatur.**
-  Kategorien `repair` und `mesh` außer den Operationen mit Gestenparameter (D6). Nach dem Start
-  am 01.12. (Programmplan, Konzept §9).
+  Kategorien `repair` und `mesh` außer den Operationen mit Gestenparameter (D6). In Phase 4
+  (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-743"></a>
 
 - [ ] **RM-743 — Funktionsdurchgang D6: Formen und Skelett.**
   Weg 4 mit eigenen Leisten, eigenem Rückgängig und eigenen Gesten (Operationen mit den
-  Parametern `strokes` und `armature`). Nach dem Start am 01.12. (Programmplan, Konzept §9).
+  Parametern `strokes` und `armature`). In Phase 4 (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-744"></a>
 
 - [ ] **RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze.**
-  Kategorie `sketch`. Nach dem Start am 01.12. (Programmplan, Konzept §9).
+  Kategorie `sketch`. In Phase 4 (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-745"></a>
 
 - [ ] **RM-745 — Funktionsdurchgang D8: Druckvorbereitung.**
   Ausrichten, Teilen, Anordnen, Stützen, Dichtung samt Dichtweg, Prüfbericht samt seinen
-  Handlungen (Kategorien `scene` und `prepare`). Kundenpaket bis zum 25.11., in der Folge D1,
+  Handlungen (Kategorien `scene` und `prepare`). Kundenpaket in Phase 3, in der Folge D1,
   D9, D8 (Programmplan, Konzept §9); höchstens zwei Pakete zugleich.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-746"></a>
 
 - [ ] **RM-746 — Funktionsdurchgang D9: Druckeinstellungen, Übergabe an den Slicer, Filamentlager.**
-  Weg 1 bis zum Slicer. Kundenpaket bis zum 25.11., in der Folge D1, D9, D8 (Programmplan,
+  Weg 1 bis zum Slicer. Kundenpaket in Phase 3, in der Folge D1, D9, D8 (Programmplan,
   Konzept §9); höchstens zwei Pakete zugleich.
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
@@ -5704,15 +5706,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes.**
   Filament und Farbe, Beschriftung, Passungen, Parameter, Zahlen binden, Gegenstücke, Als
-  Baustein speichern (Kategorien `colour`, `label`, `fits`, `parameters`). Nach dem Start am
-  01.12. (Programmplan, Konzept §9).
+  Baustein speichern (Kategorien `colour`, `label`, `fits`, `parameters`). In Phase 4
+  (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-748"></a>
 
 - [ ] **RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung.**
   Kamera, Griffe, Objektbaum, Auswahl, Verlauf und Vorher/Nachher, Karten verschieben, Suche.
-  Nach dem Start am 01.12., nach den Komponenten der Klassen, die es berührt: `MainWindow` und
+  In Phase 4, nach den Komponenten der Klassen, die es berührt: `MainWindow` und
   für Kamera und Griffe `Viewport` (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
@@ -5721,7 +5723,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-749 — Funktionsdurchgang D12: Rahmen.**
   Einstellungen, Ersteinrichtung, Aktivierung, Update, Handbuch, Tour, Chat, Kürzel,
   Rückmeldung und Fehlerbericht, KI- und Druckhinweis, Einladungen, Statusleiste,
-  Über-Dialog. Nach dem Start am 01.12., nach den Komponenten von `MainWindow`, die es berührt
+  Über-Dialog. In Phase 4, nach den Komponenten von `MainWindow`, die es berührt
   (Programmplan, Konzept §9).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
@@ -6314,7 +6316,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert.**
   Erster Schritt des Programms aus dem [Konzept
   Codestruktur](konzepte/konzept-codestruktur-2026-10.md) (4.1); das Programm beginnt nach der
-  Veröffentlichung von 0.6.0 (Entscheidung Robert, 11.10.2026, Konzept 7). W1 Sperrklinke für
+  Veröffentlichung von 0.6.0 (Entscheidung Robert, 11.10.2026, Konzept 7), Schritt 0 direkt nach
+  D0, alle Phasen ohne Datum hintereinander (Robert, 12.10.). W1 Sperrklinke für
   Dateigrößen (die Zahl der Definitionen einer gelisteten Datei steigt nie), W2 Patch-Ziele, W3
   Registerabzug, W4 rekursive Quelltextprüfungen, W5 statisch auflösbare Importe in `app/`,
   `tools/` und `tests/`, W6 Namenslisten lösen auf; dazu das Verschiebewerkzeug
