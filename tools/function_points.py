@@ -26,15 +26,19 @@ from tools.function_checks import (
     COVERED,
     CRITERIA,
     DESIGN_PARTS,
+    FAULT_PHASE,
     FEEDBACK_AFTER_S,
     LICENCE_UNLOCKED,
     MAIN_GAP_MS,
     MAIN_PHASES,
     MATRIX_UNREACHABLE,
+    NO_RESPONSE,
     NOT_FOUND,
     REVISE_WAYS,
     SELECTION_STAGES,
+    STEP_WITHOUT_VALUES,
     SWITCH_PHASES,
+    WITHOUT_DIALOG,
     CaseOutcome,
     Context,
     Issue,
@@ -124,17 +128,22 @@ def _point_1(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
     place = _map(protocol, "place")
-    if place is None:
-        return _missing(1, "place")
     issues = []
-    if place.get("error"):
-        issues.append(Issue(f"nicht auffindbar ({place.get('error')})", "schwer"))
     for found in _bench_findings(protocol, NOT_FOUND):
         if found.get("phase") in MAIN_PHASES:
             # Auf dem Hauptweg heißt „kein Weg“: Der Kunde findet die Funktion nicht.
             issues.append(
                 Issue(f"nicht auffindbar: {found.get('target')} ({found.get('detail')})", "schwer")
             )
+    if place is None:
+        # Ein Fall, der nur bis zur Fläche geht (Zoll, Skalierung, Thema), misst
+        # keinen Ort — sein „nicht auffindbar“ auf dem Weg dorthin bleibt ein
+        # Fund (Probelauf F-37), nur der Ort fehlt.
+        if issues:
+            return _settled(1, issues, ["place"], "nicht auffindbar", {"where": None})
+        return _missing(1, "place")
+    if place.get("error"):
+        issues.insert(0, Issue(f"nicht auffindbar ({place.get('error')})", "schwer"))
     probes = _probes(protocol, question=False)
     issues.extend(_rank_issues(probes, "mittel", None))
     # Suchproben sind Pflicht für Prüfpunkt 1 (Zeilenspezifikation): ohne sie
@@ -330,6 +339,17 @@ def _point_5(
         # ohne ihn ist der Rückweg nur zur Hälfte gemessen.
         return _missing(5, *(f"states.{key}" for key in required))
     before, applied = states["before"], states["applied"]
+    if _print_without_view(before) == _print_without_view(applied):
+        # Hat das Übernehmen nichts geändert, gibt es nichts zurückzunehmen:
+        # Rückgängig, Wiederholen und Escape stünden alle „gleich“, und der
+        # Rückweg hieße erfüllt, ohne gelaufen zu sein (Probelauf F-36).
+        return Outcome(
+            5,
+            "A",
+            "nicht_gelaufen",
+            "nicht gemessen",
+            reason="Übernehmen änderte den Stand nicht — kein Rückweg zu messen",
+        )
     issues = []
     notes = []
     checks = [
@@ -368,9 +388,21 @@ def _point_6(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
     timing = _map(protocol, "timing")
+    # Eine Wartefrist ohne fertiges Ergebnis ist ein Fund, auch wenn die Zeiten
+    # dann fehlen (Entscheidung Koordinator, 12.10.: „keine Rückmeldung“).
+    silent = [
+        Issue(
+            f"keine Rückmeldung in Phase {found.get('phase')}: {found.get('target')} "
+            f"({found.get('detail')})",
+            "schwer",
+        )
+        for found in _bench_findings(protocol, NO_RESPONSE)
+    ]
     if timing is None:
+        if silent:
+            return _settled(6, silent, ["timing"], "keine Rückmeldung", {})
         return _missing(6, "timing")
-    issues = []
+    issues = list(silent)
     notes = []
     gap, total = _number(timing.get("main_gap_ms")), _number(timing.get("total_s"))
     absent = [
@@ -438,6 +470,27 @@ def _point_7(
     fault = _spec(protocol).get("fault_case")
     if not fault:
         return _missing(7, "spec.fault_case")
+    # Kam der Prüfstand nicht bis zum Fehlfall — ein Fund oder Fehler in seiner
+    # Phase —, ist der Fehlerweg nicht gemessen; „keine Meldung“ hieße sonst,
+    # die Anwendung schwiege (Probelauf F-24, F-34).
+    stopped = [
+        f"{found.get('kind')}: {found.get('target')}"
+        for found in _list(protocol, "findings") or ()
+        if isinstance(found, Mapping) and found.get("phase") == FAULT_PHASE
+    ]
+    stopped += [
+        str(error).partition("\n")[0]
+        for error in _list(protocol, "errors") or ()
+        if str(error).startswith(f"{FAULT_PHASE}:")
+    ]
+    if stopped:
+        return Outcome(
+            7,
+            "A",
+            "nicht_gelaufen",
+            "Fehlfall nicht hergestellt",
+            reason="der Fehlfall kam nicht zustande: " + "; ".join(stopped),
+        )
     messages = _list(protocol, "messages")
     if messages is None:
         return _missing(7, "messages")
@@ -541,7 +594,10 @@ def _point_10(
     chain = _list(protocol, "tab_chain")
     names = _list(protocol, "names")
     focus = protocol.get("focus_return")
-    if chain is None or names is None or not isinstance(focus, bool):
+    # Ohne Dialog gibt es nichts, wohin der Fokus zurückkehren müsste (Probelauf
+    # F-29: an einer Befundhandlung gemessen); das sagt der Prüfstand selbst.
+    without_dialog = (_map(protocol, "unmeasured") or {}).get("focus_return") == WITHOUT_DIALOG
+    if chain is None or names is None or not (isinstance(focus, bool) or without_dialog):
         return _missing(10, "tab_chain", "names", "focus_return")
     issues = []
     absent = []
@@ -559,7 +615,10 @@ def _point_10(
     doubled = sorted({name for name in shown if name.strip() and shown.count(name) > 1})
     if doubled:
         issues.append(Issue(f"doppelte Namen: {doubled}", "mittel"))
-    if not focus:
+    notes = ["Bildschirmleser: ungeprüft"]
+    if without_dialog and not isinstance(focus, bool):
+        notes.append(f"Fokusrückkehr entfällt: {WITHOUT_DIALOG}")
+    elif not focus:
         issues.append(Issue("der Fokus kehrt nach dem Dialog nicht zurück", "mittel"))
     return _settled(
         10,
@@ -567,7 +626,7 @@ def _point_10(
         absent,
         f"{len(chain)} Tab-Schritte",
         {"chain": len(chain), "names": len(shown)},
-        notes=["Bildschirmleser: ungeprüft"],
+        notes=notes,
     )
 
 
@@ -593,6 +652,13 @@ def _point_12(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
     ways = _list(protocol, "revise")
+    if not ways and (_map(protocol, "unmeasured") or {}).get("revise") == STEP_WITHOUT_VALUES:
+        # Ein Schritt ohne Wert (*Auf das Bett setzen*) hat keinen Dialog, der
+        # aufginge — der Prüfstand sagt es, statt „öffnet nicht“ zu messen
+        # (Probelauf F-23).
+        return Outcome(
+            12, "A", "entfaellt", NOT_APPLICABLE_REASONS["ohne_dialog"], reason="ohne_dialog"
+        )
     if ways is None:
         return _missing(12, "revise")
     issues = []
@@ -777,11 +843,19 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
     absent = []
     if complete:
         absent += [f"Lizenzlauf {state}" for state in licence_states() if state not in runs]
+    # Ob eine Funktion schreibt, ist ihre Eigenschaft, nicht die eines Laufs: Was
+    # freigeschaltet das Dokument ändert, schreibt auch im gesperrten Lauf, wo
+    # nichts geändert werden konnte (Probelauf F-35).
+    writing = any(
+        isinstance(entry, Mapping) and entry.get("writes") is True for entry in runs.values()
+    )
     for state in LICENCE_STATES:
         entry = runs.get(state)
         if entry is None:
             continue
         writes = entry.get("writes") if isinstance(entry, Mapping) else None
+        if writing and isinstance(writes, bool):
+            writes = True
         enabled = entry.get("enabled") if isinstance(entry, Mapping) else None
         if not isinstance(writes, bool) or not isinstance(enabled, bool):
             absent.append(f"licence_runs.{state}")

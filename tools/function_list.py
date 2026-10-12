@@ -211,7 +211,9 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "statusbar": ("D12", "leer"),
     "parameters": ("D10", "leer"),
     "parameters.first": ("D10", "parameter"),
-    "report": ("D8", "koerper:1"),
+    # Der Prüfbericht ist eine Ansicht der Szene, keine Handlung an einer Auswahl:
+    # Er braucht Körper mit Befunden, aber keinen gewählten (Probelauf F-33, Z3).
+    "report": ("D8", "szene"),
     "report.action": ("D8", "befund"),
     # Der letzte Meter steht im Bericht und gehört zur Übergabe an den Slicer.
     "report.slicer": ("D9", "koerper:1"),

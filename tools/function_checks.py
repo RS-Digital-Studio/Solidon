@@ -134,12 +134,25 @@ SWITCH_PHASES: Final = ("vorschau", "entwurf", "rechnung")
 #: Fehlfall und die übrigen Phasen klicken auch, aber nicht auf dem Weg des
 #: Kunden (Festlegung Koordinator).
 MAIN_PHASES: Final = ("weg", "übernehmen")
+#: Die Phase des erzwungenen Fehlfalls (Prüfpunkt 7). Endet sie mit einem Fund
+#: oder Fehler des Prüfstands, ist der Fehlerweg nicht gemessen.
+FAULT_PHASE: Final = "fehlfall"
 
 #: Was der Prüfstand unterwegs findet (``findings[].kind``): ein Klickziel, über
-#: dem etwas anderes liegt, und ein Ziel, zu dem kein Weg führt (Konzept §5).
+#: dem etwas anderes liegt, ein Ziel, zu dem kein Weg führt (Konzept §5), und
+#: eine Handlung, nach deren Wartefrist kein fertiges Ergebnis dasteht — ein Fund
+#: an Prüfpunkt 6, kein bloß Ungemessenes (Entscheidung Koordinator, 12.10.).
 COVERED: Final = "verdeckt"
 NOT_FOUND: Final = "nicht auffindbar"
-BENCH_FINDINGS: Final = (COVERED, NOT_FOUND)
+NO_RESPONSE: Final = "keine Rückmeldung"
+BENCH_FINDINGS: Final = (COVERED, NOT_FOUND, NO_RESPONSE)
+
+#: Gründe in ``unmeasured``, mit denen der Prüfstand sagt, dass etwas an dieser
+#: Zeile nicht gilt — kein fehlender Lauf: Die Zeile öffnet keinen Dialog, zu
+#: dem der Fokus zurückkehren müsste (Prüfpunkt 10), und ihr Schritt hat keinen
+#: Wert, den man nachträglich ändern könnte (Prüfpunkt 12, *entfällt* ohne Dialog).
+WITHOUT_DIALOG: Final = "die Zeile öffnet keinen Dialog"
+STEP_WITHOUT_VALUES: Final = "der Schritt hat keinen Wert, der sich ändern ließe"
 
 #: Rohe Qt-Fenster, die im Kundenweg nicht erscheinen (Z5).
 RAW_CLASSES: Final = ("QMessageBox", "QInputDialog", "QColorDialog")
@@ -304,7 +317,9 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         required=True,
     ),
     "version": ProtocolField("tabelle", _keys("commit", "app"), required=True),
-    "scene": ProtocolField("tabelle", _keys("key", "triangles", "build_s", "eval_s")),
+    # ``names``: was die Szene selbst benennt (Projekt, Körper aus ihren Dateien) —
+    # Text des Kunden, nicht der Anwendung; V1 nimmt es aus der Prüfung.
+    "scene": ProtocolField("tabelle", _keys("key", "triangles", "build_s", "eval_s", "names")),
     "steps": ProtocolField(
         "liste",
         _keys(
@@ -349,15 +364,24 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     "search": ProtocolField("tabelle"),
     "place": ProtocolField("tabelle", _keys("where", "path", "error"), {"where": PLACES}),
     "spot": ProtocolField("tabelle", _keys("point", "covered_by")),
+    # G2: ``group`` ist das eine Layout, ``items`` zählt seine sichtbaren
+    # Elemente — ein Abstand gilt erst zwischen zweien. ``spacing`` ist bei
+    # Raster und Formular der senkrechte Abstand, ``horizontal`` der waagerechte
+    # (Qts ``spacing()`` sagt dort -1, sobald beide verschieden sind).
     "layout": ProtocolField(
         "liste",
         _keys(
             "kind", "surface", "primary", "accents", "group", "spacing", "margins",
-            "label_edges", "field_edges", "values",
+            "label_edges", "field_edges", "values", "items", "horizontal",
         ),
         {"kind": ("primary", "spacing", "form")},
     ),
-    "fonts": ProtocolField("liste", _keys("surface", "widget", "level", "stylesheet")),
+    # G4: die wirksame Schrift in Punkten und Gewicht und die Grundgröße der
+    # Anwendung; ``level`` ist die gesetzte Stufe, falls es eine gibt.
+    "fonts": ProtocolField(
+        "liste",
+        _keys("surface", "widget", "level", "stylesheet", "points", "weight", "base_points"),
+    ),
     "state_images": ProtocolField("liste", _keys("surface", "widget", "states")),
     "contrast": ProtocolField(
         "liste",
@@ -373,7 +397,9 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
             "pixmap_ratio",
         ),
     ),
-    "animations": ProtocolField("liste", _keys("surface", "widget", "duration_ms")),
+    "animations": ProtocolField(
+        "liste", _keys("surface", "widget", "duration_ms", "target", "property")
+    ),
     "scrollbars": ProtocolField(
         "liste", _keys("surface", "window_size", "front", "vertical", "horizontal")
     ),
