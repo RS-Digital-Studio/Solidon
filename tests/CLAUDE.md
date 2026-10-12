@@ -34,7 +34,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Umschalter, vier Felder vorn? | `test_theme_and_palette.py` · `test_interface_limits.py` |
 | Findet die Suche, was der Kunde tippt? | `test_search.py`; das Suchfeld der Karte in `test_selection_operations.py` |
-| Funktionsdurchgang: Zeilen, Pakete, Szenen · Urteile und Gegenproben · der Prüfstand am Fenster · der Wortschatz der Ziele, aufgelöst am Fenster | `test_function_list.py` · `test_function_report.py` · `test_function_bench.py` · `test_guide_targets.py`; Bildanleitungen und Wortschatz im Kern in `test_guides.py` |
+| Funktionsdurchgang: Zeilen, Pakete, Szenen · Urteile und Gegenproben · der Prüfstand am Fenster · der Wortschatz der Ziele, aufgelöst am Fenster | `test_function_*.py` (Attrappen in `bench_fakes.py`) · `test_guide_targets.py`; Bildanleitungen und Wortschatz im Kern in `test_guides.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Erkennt der druckgleich-Vergleich (§11.2) jede Verletzung? | `test_print_equal.py` |
 | Verhindert eine abweisende Nachprüfung das Schreiben einer Vergleichsmarke und bleibt sie außerhalb der API-Zeit? | `test_performance_marks.py` — nachgestellte Prüfablehnungen, gestellte Uhr, eigene temporäre Marken; keine Leistungsmessung |
@@ -75,6 +75,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Erkennungsarbeiter bitgleich, abbrechbar? | `test_perceive_workers.py` |
 | Ersetzt eine örtlich erkannte Textur die alten Einzelzellen auch nach Import, Speichern und Undo? | `test_local_detection.py` — echte Bereichssuche, reservierte Zellkennungen, leerer Cache und Plattencache; alte Zellbezüge halten mit Rückweg an |
 | Bleibt der exakte Körper bei Merkmalshandlungen exakt — Volumen, Kennungen, STEP-Umlauf? | `test_exact_feature_ops.py` |
+| Ein Fall je Operation an beiden Kernen; trägt sein exakter Ausgang Merkmale? | `test_exact_body_parity.py` |
 | Wulst und Kehle · Gewinde ändern und verschließen · Filament an Ringen und Gewinden, jeweils in beiden Kernen | `test_torus_feature_ops.py` · `test_thread_feature_ops.py` · `test_filament_on_rings_and_threads.py` |
 | Bekommt ein Gewinde sein Gegenstück am anderen Teil, im Tabellenmaß und als ein Schritt? | `test_thread_counterpart.py`; das Fenster ohne Dialog in `test_counterpart_ui.py` |
 | Baut *Stift für Bohrung* das Gegenstück zu Senkung, Ansenkung und Gewinde — Kopf, Gewinde, Abstand, beide Kerne, Absagen, alte Projektdatei? | `test_bore_pin.py` |
