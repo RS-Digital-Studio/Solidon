@@ -694,8 +694,7 @@ def test_a_light_mesh_scene_keeps_its_promises(key: str) -> None:
     scenes = _scenes()
     if fscenes.needs_exact_kernel(key, scenes):
         exact_kernel()
-    result = fscenes.evaluate_scene(fscenes.build_scene(key, scenes))
-    assert fscenes.broken_promises(scenes[key], result) == []
+    assert fscenes.check_scene(key, scenes) == []
 
 
 def test_a_mesh_scene_built_by_the_exact_kernel_knows_it() -> None:
@@ -710,9 +709,7 @@ def test_a_mesh_scene_built_by_the_exact_kernel_knows_it() -> None:
 def test_a_light_exact_scene_keeps_its_promises(key: str) -> None:
     """Dasselbe am exakten Kern — lokal nur mit OpenCASCADE, in der CI Pflicht."""
     exact_kernel()
-    scenes = _scenes()
-    result = fscenes.evaluate_scene(fscenes.build_scene(key, scenes))
-    assert fscenes.broken_promises(scenes[key], result) == []
+    assert fscenes.check_scene(key, _scenes()) == []
 
 
 def test_there_are_light_scenes_on_both_kernels() -> None:
@@ -761,6 +758,92 @@ def test_the_promise_check_sees_a_broken_promise() -> None:
     assert fscenes.broken_promises(halt, stopped) == []
     broken = fscenes.broken_promises(wrong, stopped)
     assert len(broken) == 1 and "arrange_on_bed" in broken[0], broken
+
+
+def test_what_the_window_adds_is_part_of_the_promise() -> None:
+    """Gegenprobe zu ``window_findings``: Ohne Auslöser, Einfügemarke, mitgebrachten
+    Drucker oder geschützte Flächen fehlt der Befund, den die Szene zusagt — die
+    Zusage wird also am Befund des Fensters geprüft und nicht geschenkt."""
+    scenes = _scenes()
+    for key, emptied in (
+        ("export_gemischt", {"cause": {}}),
+        ("einfuegen.netz", {"insert_before": 0}),
+        ("fremder_drucker.netz", {"printer": "", "printer_like": ""}),
+        ("geschuetzte_leiste.netz", {"protected": {}}),
+    ):
+        changed = {**scenes, key: dataclasses.replace(scenes[key], **emptied)}
+        broken = fscenes.check_scene(key, changed)
+        assert any("fehlen" in issue for issue in broken), (key, broken)
+        assert fscenes.check_scene(key, scenes) == [], key
+
+
+def test_a_scene_leaves_nothing_behind() -> None:
+    """Eigene Bausteine, mitgereiste Rezepte, mitgebrachte Drucker und ein fehlendes
+    OpenCASCADE gelten nur, solange die Szene gebaut und gerechnet wird."""
+    from app.core.brep import kernel
+    from app.core.knowledge import profiles
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    scenes = _scenes()
+    fscenes.registry()
+    parts = {spec.name for spec in PARTS.all()}
+    operations = {spec.name for spec in REGISTRY.all()}
+    available = kernel.available
+    for key in ("baustein_geaendert.netz", "ohne_opencascade.exakt", "fremder_drucker.netz"):
+        assert fscenes.check_scene(key, scenes) == [], key
+        assert {spec.name for spec in PARTS.all()} == parts, key
+        assert {spec.name for spec in REGISTRY.all()} == operations, key
+        assert kernel.available is available, key
+        assert profiles.only_carried() == (), key
+    # Gegenprobe: Ohne den eigenen Baustein im Nutzerordner rechnet das Projekt mit
+    # seinem mitgereisten Stand, und es gibt nichts anzubieten.
+    alone = {**scenes, "x": dataclasses.replace(scenes["baustein_geaendert.netz"], own_parts=())}
+    assert any("parts.own_changed" in issue for issue in fscenes.check_scene("x", alone))
+
+
+def test_the_setting_of_a_scene_is_checked_without_computing() -> None:
+    """Gegenprobe: Datei, Drucker, Material, erzeugte Quelle, Einfügemarke und Auslöser
+    werden geprüft, bevor gerechnet wird."""
+    base = _scenes()["quader.netz"]
+    wrong = {
+        "a": dataclasses.replace(base, key="a", opens="projects/gibt_es_nicht.p3d"),
+        "b": dataclasses.replace(base, key="b", printer="centauri-carbon-2", printer_like="x"),
+        "c": dataclasses.replace(base, key="c", material="kein_material"),
+        "d": dataclasses.replace(base, key="d", generated=("src_9",)),
+        "e": dataclasses.replace(base, key="e", insert_before=5),
+        "f": dataclasses.replace(base, key="f", cause={"kind": "drucken"}),
+        "g": dataclasses.replace(base, key="g", cause={"kind": "export", "format": "dwg"}),
+        "h": dataclasses.replace(base, key="h", own_parts=("recipes/gibt_es_nicht.json",)),
+    }
+    issues = fscenes.validate_scenes({"quader.netz": base, **wrong})
+    for key in wrong:
+        assert any(issue.startswith(f"Szene {key}:") for issue in issues), (key, issues)
+    assert fl.scene_precondition_problems(
+        {
+            "a": dataclasses.replace(base, preconditions={"opencascade": "fehlt"}),
+            "b": dataclasses.replace(base, preconditions={"licence": "licensed"}),
+            "c": dataclasses.replace(base, preconditions={"comfyui": "kaputt"}),
+        }
+    ) == [
+        "Szene b: Vorbedingung licence = 'licensed' gibt es nicht",
+        "Szene c: Vorbedingung comfyui = 'kaputt' gibt es nicht",
+    ]
+
+
+def test_a_scene_from_a_file_is_saved_as_it_is(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Korpusdatei, an der die Szene nichts ändert, kommt bytegleich in den Ordner
+    des Laufs: Neu gespeichert trüge sie den Abdruck der Bausteine von heute, und der
+    geänderte eigene Baustein wäre keiner mehr."""
+    scenes = _scenes()
+    chosen = {key: scenes[key] for key in ("baustein_geaendert.netz", "passung_pla.netz")}
+    monkeypatch.setattr(fscenes, "load_scenes", lambda path=fscenes.SCENES: chosen)
+    written = fscenes.save_scenes(tmp_path / "szenen")
+    copied, saved = written
+    assert copied.read_bytes() == (fscenes.DATA / "projects" / "own_part_v52.p3d").read_bytes()
+    assert saved.read_bytes() != (fscenes.DATA / "projects" / "assembly_fit.p3d").read_bytes()
 
 
 def test_a_broken_recipe_is_named() -> None:

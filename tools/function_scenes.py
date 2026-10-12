@@ -7,6 +7,14 @@ ihre Handlungen. Hier wird der Katalog gelesen und geprüft, jede Szene über
 ``History.apply`` gebaut, gerechnet, gegen ihre Zusagen gehalten und als
 Projektdatei außerhalb des Baums gespeichert.
 
+Was eine Szene über das Rezept hinaus braucht, steht in ihr und wirkt beim Prüfen
+wie im Fenster (:func:`check_scene`): eine Projektdatei aus dem Korpus als
+Anfang, Drucker und Material samt mitgebrachtem Drucker, erzeugte Quellen,
+ausgeschaltete Schritte, geschützte Flächen, eigene Bausteine im Nutzerordner,
+äußere Vorbedingungen, die Einfügemarke der Sitzung und ein Auslöser (Export,
+*Automatisch teilen*), den der Prüfstand vor der Zeile fährt
+(``function_setup.scene_setup``).
+
 Die unterste Schicht der Funktionsliste: :class:`FunctionListError` und das geladene
 Register stehen hier, damit ``function_list`` darauf aufbaut und kein Kreis entsteht.
 """
@@ -14,8 +22,9 @@ Register stehen hier, damit ``function_list`` darauf aufbaut und kein Kreis ents
 from __future__ import annotations
 
 import tomllib
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -50,6 +59,18 @@ PROMISE_KEYS: Final[frozenset[str]] = frozenset(
 )
 BODY_STATES: Final[tuple[str, ...]] = ("closed", "open", "parts", "cavity")
 
+#: Was der Prüfstand vor der Zeile auslöst und :func:`check_scene` im Kern
+#: nachrechnet: ``export`` mit ``format``, ``auto_split`` mit ``object``.
+CAUSE_KEYS: Final[dict[str, frozenset[str]]] = {
+    "export": frozenset({"kind", "format"}),
+    "auto_split": frozenset({"kind", "object"}),
+}
+
+#: Die Vorbedingung, die im Kern dieses Prozesses herstellbar ist: OpenCASCADE
+#: fehlt (``brep.kernel.available``). Die übrigen (KI, ComfyUI, Slicer)
+#: stellt der Prüfstand her; den Befund einer Szene ändern sie nicht.
+MISSING_KERNEL: Final = ("opencascade", "fehlt")
+
 
 class FunctionListError(Exception):
     """Die Liste lässt sich nicht vollständig zuordnen — mit allen Fundstellen."""
@@ -79,6 +100,9 @@ class SceneStep:
     inputs: tuple[str, ...] = ()
     params: Mapping[str, Any] = field(default_factory=dict)
     title: str = ""
+    suppressed: bool = False
+    """Ausgeschaltet, so wie die Projektdatei es speichert (``Suppression``) — ohne
+    die Schritte mitzunehmen, die auf ihm aufbauen."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +124,25 @@ class Scene:
     """Das Merkmal, das eine Zeile mit Merkmalsanforderung wählt: ``obj_<n>.<merkmal>``."""
     parameters: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     """Projektparameter vor dem ersten Schritt: Name → ``{value, unit, title}``."""
+    opens: str = ""
+    """Eine Projektdatei aus ``tests/data`` als Anfang, geöffnet wie im Fenster."""
+    printer: str = ""
+    material: str = ""
+    printer_like: str = ""
+    """Der Drucker ``printer`` ist hier nicht eingerichtet; das Projekt bringt seine
+    Beschreibung mit, gleich der des mitgelieferten Druckers dieser Kennung."""
+    generated: tuple[str, ...] = ()
+    """Quellen, die ein Generator geliefert hat (Weg 3, ``Source.kind`` ``generated``)."""
+    protected: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    """Merkmale, die vor Trennnähten geschützt sind (``Document.protected``)."""
+    own_parts: tuple[str, ...] = ()
+    """Rezepte aus ``tests/data``, die im Nutzerordner liegen, bevor das Projekt öffnet."""
+    preconditions: Mapping[str, str] = field(default_factory=dict)
+    """Äußere Vorbedingungen der Szene (``function_list.PRECONDITIONS``)."""
+    insert_before: int = 0
+    """Die Einfügemarke der Sitzung vor diesem Schritt (sichtbare Nummer), sonst 0."""
+    cause: Mapping[str, str] = field(default_factory=dict)
+    """Was vor der Zeile ausgelöst wird (:data:`CAUSE_KEYS`)."""
 
 
 SCENE_KEYS: Final[frozenset[str]] = frozenset(
@@ -114,10 +157,20 @@ SCENE_KEYS: Final[frozenset[str]] = frozenset(
         "promises",
         "select",
         "parameters",
+        "opens",
+        "printer",
+        "material",
+        "printer_like",
+        "generated",
+        "protected",
+        "own_parts",
+        "preconditions",
+        "insert_before",
+        "cause",
     }
 )
 PARAMETER_KEYS: Final[frozenset[str]] = frozenset({"value", "unit", "title"})
-STEP_KEYS: Final[frozenset[str]] = frozenset({"op", "inputs", "params", "title"})
+STEP_KEYS: Final[frozenset[str]] = frozenset({"op", "inputs", "params", "title", "suppressed"})
 
 
 def load_scenes(path: Path = SCENES) -> dict[str, Scene]:
@@ -141,6 +194,7 @@ def load_scenes(path: Path = SCENES) -> dict[str, Scene]:
                     inputs=tuple(step.get("inputs", ())),
                     params=dict(step.get("params", {})),
                     title=step.get("title", ""),
+                    suppressed=bool(step.get("suppressed", False)),
                 )
             )
         scenes[key] = Scene(
@@ -155,6 +209,18 @@ def load_scenes(path: Path = SCENES) -> dict[str, Scene]:
             promises=dict(entry.get("promises", {})),
             select=entry.get("select", ""),
             parameters={name: dict(values) for name, values in entry.get("parameters", {}).items()},
+            opens=entry.get("opens", ""),
+            printer=entry.get("printer", ""),
+            material=entry.get("material", ""),
+            printer_like=entry.get("printer_like", ""),
+            generated=tuple(entry.get("generated", ())),
+            protected={
+                name: tuple(features) for name, features in entry.get("protected", {}).items()
+            },
+            own_parts=tuple(entry.get("own_parts", ())),
+            preconditions=dict(entry.get("preconditions", {})),
+            insert_before=int(entry.get("insert_before", 0)),
+            cause=dict(entry.get("cause", {})),
         )
     if problems:
         raise FunctionListError(problems)
@@ -250,6 +316,51 @@ def validate_scenes(scenes: Mapping[str, Scene]) -> list[str]:
         for action, code in scene.promises.get("actions", {}).items():
             if code not in scene.promises.get("findings", ()):
                 issues.append(f"Szene {key}: Handlung {action} an {code}, der nicht zugesagt ist")
+        issues += [f"Szene {key}: {issue}" for issue in _setting_problems(scene, sources, steps)]
+    return issues
+
+
+def _setting_problems(
+    scene: Scene, sources: Mapping[str, str], steps: Sequence[SceneStep]
+) -> list[str]:
+    """Was an den Angaben über das Rezept hinaus nicht stimmt (Anfang, Drucker, Auslöser …)."""
+    from app.core.export.writer import FORMAT_SUFFIX
+    from app.core.knowledge import profiles
+
+    issues: list[str] = []
+    files = ([scene.opens] if scene.opens else []) + list(scene.own_parts)
+    issues += [
+        f"{relative} fehlt in tests/data" for relative in files if not (DATA / relative).is_file()
+    ]
+    if scene.opens and scene.base:
+        issues.append("beginnt mit einer Datei und hat zugleich eine Basis")
+    known = profiles.printer_profiles()
+    if scene.printer_like and (not scene.printer or scene.printer in known):
+        issues.append(
+            f"printer_like braucht einen Drucker, den es hier nicht gibt, nicht {scene.printer!r}"
+        )
+    if scene.printer_like and scene.printer_like not in known:
+        issues.append(f"printer_like {scene.printer_like!r} ist kein mitgelieferter Drucker")
+    if scene.printer and not scene.printer_like and scene.printer not in known:
+        issues.append(f"Drucker {scene.printer!r} gibt es nicht")
+    if scene.material and scene.material not in profiles.material_profiles():
+        issues.append(f"Material {scene.material!r} gibt es nicht")
+    issues += [
+        f"erzeugte Quelle {name} fehlt in sources"
+        for name in scene.generated
+        if name not in sources
+    ]
+    if scene.insert_before and not (scene.opens or 1 <= scene.insert_before <= len(steps)):
+        issues.append(f"Einfügemarke vor Schritt {scene.insert_before}, es gibt {len(steps)}")
+    if scene.cause:
+        kind = scene.cause.get("kind", "")
+        wanted = CAUSE_KEYS.get(kind)
+        if wanted is None:
+            issues.append(f"Auslöser {kind!r} unbekannt")
+        elif set(scene.cause) != wanted:
+            issues.append(f"Auslöser {kind} braucht {sorted(wanted)}")
+        elif kind == "export" and scene.cause["format"] not in FORMAT_SUFFIX:
+            issues.append(f"Exportformat {scene.cause['format']!r} gibt es nicht")
     return issues
 
 
@@ -272,18 +383,30 @@ def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
     Wertebereiche prüft :func:`validate_scenes`. Gerechnet wird hier nicht.
     """
     from app.core.scene import History, OperationDraft
-    from app.core.scene.project import new_project
-    from app.core.types import Parameter, Source
+    from app.core.scene.project import load, new_project
+    from app.core.types import Parameter, Source, Suppression
 
     catalogue = scenes if scenes is not None else load_scenes()
-    if not catalogue[key].project:
+    scene = catalogue[key]
+    if not scene.project:
         raise FunctionListError([f"Szene {key}: der Startbildschirm hat kein Projekt"])
     source = registry()
     sources, steps = recipe(key, catalogue)
-    project = new_project()
+    project = load(DATA / scene.opens) if scene.opens else new_project()
+    document = project.document
+    document.printer = scene.printer or document.printer
+    document.material = scene.material or document.material
+    if scene.printer_like:
+        document.carried_profiles = {
+            **document.carried_profiles,
+            "printers": {scene.printer: _carried_printer(scene.printer_like)},
+        }
     for name, relative in sources.items():
         project.document.sources[name] = Source(
-            id=name, kind="import", path=f"sources/{Path(relative).name}", sha256=""
+            id=name,
+            kind="generated" if name in scene.generated else "import",
+            path=f"sources/{Path(relative).name}",
+            sha256="",
         )
         project.sources[name] = (DATA / relative).read_bytes()
     for name, values in parameters_of(key, catalogue).items():
@@ -294,12 +417,31 @@ def build_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> Project:
             title=values.get("title"),
         )
     history = History(project.document)
+    resting: set[int] = set()
     for step in steps:
         title = step.title or source.get(step.op).title
         history.apply(
             title, [OperationDraft(op=step.op, inputs=step.inputs, params=dict(step.params))]
         )
+        if step.suppressed:
+            resting.add(document.ops[-1].id)
+    # Erst nach dem letzten Schritt, so wie die Datei es speichert, und ohne die
+    # Schritte, die auf ihm aufbauen — der Zustand einer von Hand bearbeiteten
+    # Datei. Vorher nähme ``apply`` den nächsten Schritt nicht an.
+    document.ops = [
+        replace(entry, suppressed=Suppression()) if entry.id in resting else entry
+        for entry in document.ops
+    ]
+    document.protected = {name: tuple(found) for name, found in scene.protected.items()}
     return project
+
+
+def _carried_printer(like: str) -> dict[str, Any]:
+    """Die Beschreibung eines Druckers, die ein Projekt mitbringt — gleich der eines
+    mitgelieferten, unter eigenem Titel (``profiles.carry``)."""
+    from app.core.knowledge import profiles
+
+    return {**profiles.printer_definition(profiles.printer(like)), "title": "Werkstattdrucker"}
 
 
 def evaluate_scene(project: Project) -> EvaluationResult:
@@ -314,7 +456,116 @@ def evaluate_scene(project: Project) -> EvaluationResult:
     return evaluate(document, profile, sources=ProjectSources(project))
 
 
-def broken_promises(scene: Scene, result: EvaluationResult) -> list[str]:
+@contextmanager
+def scene_environment(scene: Scene) -> Iterator[None]:
+    """Was um eine Szene herum gilt, solange sie gebaut und gerechnet wird.
+
+    Eigene Bausteine stehen im Katalog, wie aus dem Nutzerordner geladen; fehlt
+    OpenCASCADE (:data:`MISSING_KERNEL`), antwortet ``brep.kernel.available`` mit
+    nein. Danach ist alles wie vorher: die Bausteine und Operationen, die dazukamen
+    — auch die mitgereisten eines geöffneten Projekts —, sind wieder weg, die
+    mitgebrachten Drucker ebenso.
+    """
+    import json
+
+    from app.core.brep import kernel
+    from app.core.knowledge import profiles
+    from app.core.knowledge.parts import recipe as part_recipes
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    registry()  # erst laden: Was danach dazukommt, gehört der Szene
+    parts_before = {spec.name for spec in PARTS.all()}
+    ops_before = {spec.name for spec in REGISTRY.all()}
+    probe = kernel.available
+    try:
+        name, missing = MISSING_KERNEL
+        if scene.preconditions.get(name) == missing:
+            # Dieselbe Nahtstelle wie die Suite (``tests/test_threads.py``) und der
+            # Prüfstand (``function_setup.apply_preconditions``).
+            kernel.available = lambda: False
+        for relative in scene.own_parts:
+            stored = json.loads((DATA / relative).read_text(encoding="utf-8"))
+            part_recipes.register(part_recipes.from_data(stored))
+        yield
+    finally:
+        kernel.available = probe
+        for name in {spec.name for spec in REGISTRY.all()} - ops_before:
+            REGISTRY.remove(name)
+        for name in {spec.name for spec in PARTS.all()} - parts_before:
+            PARTS.remove(name)
+        profiles.carry(None)
+
+
+def check_scene(key: str, scenes: Mapping[str, Scene] | None = None) -> list[str]:
+    """Baut und rechnet eine Szene wie das Fenster und nennt, was sie nicht hält.
+
+    Wie beim Öffnen gelten die mitgebrachten Drucker (``profiles.carry``); die
+    Befunde des Fensters über die Auswertung hinaus prüft :func:`broken_promises`
+    mit dem Projekt.
+    """
+    from app.core.knowledge import profiles
+
+    catalogue = scenes if scenes is not None else load_scenes()
+    scene = catalogue[key]
+    with scene_environment(scene):
+        project = build_scene(key, catalogue)
+        profiles.carry(project.document.carried_profiles)
+        result = evaluate_scene(project)
+        return broken_promises(scene, result, project)
+
+
+def window_findings(scene: Scene, project: Project, result: EvaluationResult) -> list[Finding]:
+    """Was das Fenster neben der Auswertung in den Bericht stellt, für diese Szene.
+
+    Den mitgebrachten oder fehlenden Drucker (``profiles.carried_findings``), beim
+    Öffnen einer Datei die Prüfung ihrer Bausteine und ihrer Herkunft, den Satz
+    zur Einfügemarke (``session.inserting_finding``) und die Befunde des Auslösers:
+    die Prüfung vor dem Export (``writer.check_before_export``) oder die Suche von
+    *Automatisch teilen* (``split.plan_split``) samt geschützten Flächen.
+    """
+    from app.core.export.writer import check_before_export
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge import profiles
+    from app.core.knowledge.parts import check as part_check
+    from app.core.scene.foreign import findings_for
+    from app.core.split import plan_split, protected_patches
+    from app.ui.session import inserting_finding
+
+    document = project.document
+    found = list(profiles.carried_findings(document.printer, document.material))
+    if scene.opens:
+        found += [*findings_for(document), *part_check.check(document)]
+    if scene.insert_before:
+        found.append(inserting_finding(document, document.ops[scene.insert_before - 1].id))
+    profile = result.scene.profile or profiles.scene_profile(document.printer, document.material)
+    kind = scene.cause.get("kind")
+    if kind == "export":
+        found += check_before_export(
+            list(result.scene.objects.values()),
+            profile,
+            dict(document.sources),
+            scene.cause["format"],  # type: ignore[arg-type]
+            scene=result.scene,
+            document=document,
+            evaluated=result.scene.report.findings,
+        )
+    elif kind == "auto_split":
+        entry = result.scene.objects[scene.cause["object"]]
+        plan = plan_split(
+            as_mesh_data(entry.mesh),
+            entry.id,
+            profiles.for_object(profile, entry),
+            features=entry.features,
+            protect=protected_patches(entry, document.protected.get(entry.id, ())),
+        )
+        found += plan.outcome.findings
+    return found
+
+
+def broken_promises(
+    scene: Scene, result: EvaluationResult, project: Project | None = None
+) -> list[str]:
     """Was die gerechnete Szene von ihren Zusagen nicht hält — leer, wenn alles stimmt.
 
     ``seconds_over`` prüft hier niemand: Eine Dauer hängt an der Maschine; der
@@ -353,6 +604,8 @@ def broken_promises(scene: Scene, result: EvaluationResult) -> list[str]:
         if not states[body]:
             issues.append(f"Körperzustand {body} nicht erfüllt")
     findings = list(result.scene.report.findings)
+    if project is not None:
+        findings += window_findings(scene, project, result)
     codes = {finding.code for finding in findings}
     wanted_codes = set(promises.get("findings", ())) | set(promises.get("actions", {}).values())
     if wanted_codes - codes:
@@ -417,6 +670,26 @@ def save_scenes(out: Path, *, heavy: bool = False) -> list[Path]:
         if not scene.project or (scene.heavy and not heavy):
             continue
         path = target / f"{key}.p3d"
-        save(build_scene(key, catalogue), path)
+        if _opened_as_is(scene):
+            # Unverändert geöffnet heißt: dieselbe Datei. Neu gespeichert bekäme
+            # sie den Abdruck ihrer Bausteine von heute (``parts.check.stamp``),
+            # und der Befund, um den es geht, wäre weg.
+            path.write_bytes((DATA / scene.opens).read_bytes())
+        else:
+            with scene_environment(scene):
+                save(build_scene(key, catalogue), path)
         written.append(path)
     return written
+
+
+def _opened_as_is(scene: Scene) -> bool:
+    """Ob die Szene eine Korpusdatei ist, an der sie nichts ändert."""
+    return bool(scene.opens) and not (
+        scene.ops
+        or scene.sources
+        or scene.parameters
+        or scene.printer
+        or scene.material
+        or scene.printer_like
+        or scene.protected
+    )

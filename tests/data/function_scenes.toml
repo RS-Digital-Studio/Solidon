@@ -207,6 +207,398 @@ op = "repair"
 inputs = ["obj_1"]
 params = {}
 
+# --- Befunde aus Datei, Fenster und Umgebung ---------------------------------------
+# Jede Befundhandlung beginnt in einer Szene, deren Befund sie trägt (Konzept §10).
+# Was über das Rezept hinausgeht — eine Korpusdatei als Anfang, Drucker, ausgeschaltete
+# Schritte, Einfügemarke, Auslöser, Vorbedingungen —, steht in der Szene und wirkt beim
+# Prüfen wie im Fenster (``function_scenes.check_scene``).
+
+[scene."duenne_huelse.netz"]
+summary = "Ein Netzzylinder Ø 8 mit einer Bohrung Ø 7,4: um die Bohrung bleibt weniger Wand, als der Drucker legt."
+kernel = "netz"
+promises = { objects = 1, findings = ["perceive.thin_wall"], actions = { show_history = "perceive.thin_wall", show_details = "perceive.thin_wall" } }
+[[scene."duenne_huelse.netz".ops]]
+op = "create_cylinder"
+params = { diameter = 8.0, height = 20.0 }
+[[scene."duenne_huelse.netz".ops]]
+op = "drill_hole"
+inputs = ["obj_1"]
+params = { diameter = 7.4, z = 20.0 }
+
+[scene."duenne_huelse.exakt"]
+summary = "Derselbe Zylinder exakt."
+kernel = "exakt"
+promises = { objects = 1, findings = ["perceive.thin_wall"], actions = { show_history = "perceive.thin_wall", show_details = "perceive.thin_wall" } }
+[[scene."duenne_huelse.exakt".ops]]
+op = "create_brep_cylinder"
+params = { diameter = 8.0, height = 20.0 }
+[[scene."duenne_huelse.exakt".ops]]
+op = "drill_hole"
+inputs = ["obj_1"]
+params = { diameter = 7.4, z = 20.0 }
+
+[scene."schale_am_netz.netz"]
+summary = "Ein Netzquader, an dem das exakte Aushöhlen absagt: Es braucht Flächen und Kanten."
+kernel = "netz"
+base = "quader.netz"
+promises = { objects = 1, stops = true, findings = ["op.shell_exact.NeedsSolidError"], actions = { mesh_to_exact = "op.shell_exact.NeedsSolidError" } }
+[[scene."schale_am_netz.netz".ops]]
+op = "shell_exact"
+inputs = ["obj_1"]
+params = {}
+
+[scene.export_gemischt]
+summary = "Ein exakter Quader und ein Netzquader; der Export nach STEP sagt, dass das Netz keine Flächen hat."
+cause = { kind = "export", format = "step" }
+promises = { objects = 2, findings = ["export.needs_solid"], actions = { export_as_mesh = "export.needs_solid", mesh_to_exact = "export.needs_solid", show_details = "export.needs_solid" } }
+[[scene.export_gemischt.ops]]
+op = "create_brep_box"
+params = { width = 40.0, depth = 30.0, height = 20.0 }
+[[scene.export_gemischt.ops]]
+op = "create_box"
+params = { width = 40.0, depth = 30.0, height = 20.0, x = 60.0 }
+
+[scene."geschuetzte_leiste.netz"]
+summary = "Eine Leiste 600 mm, Unterseite, Oberseite und Längsseiten geschützt; Automatisch teilen findet daneben keine Ebene."
+kernel = "netz"
+protected = { obj_1 = ["face_1", "face_3", "face_4", "face_top"] }
+cause = { kind = "auto_split", object = "obj_1" }
+promises = { objects = 1, findings = ["split.blocked_by_protection"], actions = { release_protection = "split.blocked_by_protection", split_along_line = "split.blocked_by_protection" } }
+[[scene."geschuetzte_leiste.netz".ops]]
+op = "create_box"
+params = { width = 600.0, depth = 30.0, height = 20.0 }
+
+[scene."geschuetzte_leiste.exakt"]
+summary = "Dieselbe Leiste exakt."
+kernel = "exakt"
+protected = { obj_1 = ["face_3", "face_4", "face_5", "face_6"] }
+cause = { kind = "auto_split", object = "obj_1" }
+promises = { objects = 1, findings = ["split.blocked_by_protection"], actions = { release_protection = "split.blocked_by_protection", split_along_line = "split.blocked_by_protection" } }
+[[scene."geschuetzte_leiste.exakt".ops]]
+op = "create_brep_box"
+params = { width = 600.0, depth = 30.0, height = 20.0 }
+
+[scene."ausgeschaltet.netz"]
+summary = "Ein Netzquader mit einer Bohrung, deren Schritt ausgeschaltet ist."
+kernel = "netz"
+base = "quader.netz"
+promises = { objects = 1, findings = ["history.step_off"], actions = { reactivate_step = "history.step_off" } }
+[[scene."ausgeschaltet.netz".ops]]
+op = "drill_hole"
+inputs = ["obj_1"]
+params = { diameter = 5.0, z = 20.0 }
+suppressed = true
+
+[scene."ausgeschaltet.exakt"]
+summary = "Dasselbe am exakten Quader."
+kernel = "exakt"
+base = "quader.exakt"
+promises = { objects = 1, findings = ["history.step_off"], actions = { reactivate_step = "history.step_off" } }
+[[scene."ausgeschaltet.exakt".ops]]
+op = "drill_hole"
+inputs = ["obj_1"]
+params = { diameter = 5.0, z = 20.0 }
+suppressed = true
+
+[scene."ruhender_eingang.netz"]
+summary = "Der Quader ist ausgeschaltet, die Bohrung darauf nicht — eine von Hand bearbeitete Datei."
+kernel = "netz"
+promises = { stops = true, findings = ["evaluate.needs_resting_step"], actions = { reactivate_step = "evaluate.needs_resting_step", suppress_step = "evaluate.needs_resting_step" } }
+[[scene."ruhender_eingang.netz".ops]]
+op = "create_box"
+params = { width = 40.0, depth = 30.0, height = 20.0 }
+suppressed = true
+[[scene."ruhender_eingang.netz".ops]]
+op = "drill_hole"
+inputs = ["obj_1"]
+params = { diameter = 5.0, z = 20.0 }
+
+[scene."ruhender_eingang.exakt"]
+summary = "Dasselbe am exakten Quader."
+kernel = "exakt"
+promises = { stops = true, findings = ["evaluate.needs_resting_step"], actions = { reactivate_step = "evaluate.needs_resting_step", suppress_step = "evaluate.needs_resting_step" } }
+[[scene."ruhender_eingang.exakt".ops]]
+op = "create_brep_box"
+params = { width = 40.0, depth = 30.0, height = 20.0 }
+suppressed = true
+[[scene."ruhender_eingang.exakt".ops]]
+op = "drill_hole"
+inputs = ["obj_1"]
+params = { diameter = 5.0, z = 20.0 }
+
+[scene."einfuegen.netz"]
+summary = "Ein Netzquader mit Bohrung; die Einfügemarke steht vor der Bohrung."
+kernel = "netz"
+base = "quader.netz"
+insert_before = 2
+promises = { objects = 1, findings = ["history.inserting"], actions = { stop_inserting = "history.inserting" } }
+[[scene."einfuegen.netz".ops]]
+op = "drill_hole"
+inputs = ["obj_1"]
+params = { diameter = 5.0, z = 20.0 }
+
+[scene."gewinde_zu_kurz.netz"]
+summary = "Ein gedrucktes M6 von 2 mm in einer Bohrung Ø 5; der Stift dafür bekäme zu wenig Gewinde."
+kernel = "netz"
+base = "quader.netz"
+promises = { stops = true, findings = ["op.pin_for_bore.ValidationError"], actions = { change_creating_step = "op.pin_for_bore.ValidationError" } }
+[[scene."gewinde_zu_kurz.netz".ops]]
+op = "drill_hole"
+inputs = ["obj_1"]
+params = { diameter = 5.0, z = 20.0 }
+[[scene."gewinde_zu_kurz.netz".ops]]
+op = "insert_printed_thread"
+inputs = ["obj_1"]
+params = { size = "M6", length = 2.0, internal = true, at_feature = "hole_1" }
+[[scene."gewinde_zu_kurz.netz".ops]]
+op = "pin_for_bore"
+inputs = ["obj_1"]
+params = { at_feature = "printed_thread_thread_1" }
+
+[scene."gewinde_zu_kurz.exakt"]
+summary = "Dasselbe am exakten Quader."
+kernel = "exakt"
+base = "quader.exakt"
+promises = { stops = true, findings = ["op.pin_for_bore.ValidationError"], actions = { change_creating_step = "op.pin_for_bore.ValidationError" } }
+[[scene."gewinde_zu_kurz.exakt".ops]]
+op = "drill_hole"
+inputs = ["obj_1"]
+params = { diameter = 5.0, z = 20.0 }
+[[scene."gewinde_zu_kurz.exakt".ops]]
+op = "insert_printed_thread"
+inputs = ["obj_1"]
+params = { size = "M6", length = 2.0, internal = true, at_feature = "hole_1" }
+[[scene."gewinde_zu_kurz.exakt".ops]]
+op = "pin_for_bore"
+inputs = ["obj_1"]
+params = { at_feature = "printed_thread_thread_1" }
+
+[scene."duenner_stab.netz"]
+summary = "Ein Stab Ø 0,5 × 500 mm aus 256 Segmenten: Auf 0,05 mm verfeinert gäbe er zu viele Dreiecke, verringert ginge es."
+kernel = "netz"
+promises = { objects = 1, stops = true, findings = ["op.remesh_mesh.ValidationError"], actions = { decimate_and_retry = "op.remesh_mesh.ValidationError" } }
+[[scene."duenner_stab.netz".ops]]
+op = "create_cylinder"
+params = { diameter = 0.5, height = 500.0, segments = 256 }
+[[scene."duenner_stab.netz".ops]]
+op = "remesh_mesh"
+inputs = ["obj_1"]
+params = { edge = 0.05 }
+
+[scene."offen_gelassen.netz"]
+summary = "Ein teilweise offenes Netz, repariert ohne das weite Loch zu schließen: Die Öffnung bleibt."
+kernel = "netz"
+sources = { src_1 = "meshes/partially_open.stl" }
+promises = { objects = 1, findings = ["repair.wide_hole_kept"], actions = { give_thickness = "repair.wide_hole_kept" } }
+[[scene."offen_gelassen.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm", mend = false, wide_holes = false }
+[[scene."offen_gelassen.netz".ops]]
+op = "repair"
+inputs = ["obj_1"]
+params = { wide_holes = false }
+
+[scene."kasten_runden.exakt"]
+summary = "Ein exakter Kasten mit 3 mm Wänden, alle Kanten R 2: Eine Kante trägt OpenCASCADE nicht mit."
+kernel = "exakt"
+promises = { objects = 1, findings = ["edges.exact_group_skipped"], actions = { mesh_and_retry = "edges.exact_group_skipped" } }
+[[scene."kasten_runden.exakt".ops]]
+op = "create_brep_box"
+params = { width = 40.0, depth = 30.0, height = 20.0 }
+[[scene."kasten_runden.exakt".ops]]
+op = "create_brep_box"
+params = { width = 34.0, depth = 24.0, height = 20.0, x = 3.0, y = 3.0, z = 3.0 }
+[[scene."kasten_runden.exakt".ops]]
+op = "subtract_objects"
+inputs = ["obj_1", "obj_2"]
+params = {}
+[[scene."kasten_runden.exakt".ops]]
+op = "fillet_edges"
+inputs = ["obj_1"]
+params = { radius = 2.0, edges = "all" }
+
+[scene."senkung_vergroessern.netz"]
+summary = "Die Platte mit Senkbohrung, die Bohrung auf 6,5 mm vergrößert: Die Senkung bleibt im alten Maß."
+kernel = "netz"
+sources = { src_1 = "meshes/plate_countersunk.stl" }
+promises = { objects = 1, findings = ["resize.widening_kept"], actions = { resize_the_widening = "resize.widening_kept" } }
+[[scene."senkung_vergroessern.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm" }
+[[scene."senkung_vergroessern.netz".ops]]
+op = "resize_hole"
+inputs = ["obj_1"]
+params = { at_feature = "hole_1", diameter = 6.5 }
+
+[scene."senkung_vergroessern.exakt"]
+summary = "Dieselbe Platte in Flächen und Kanten umgewandelt, die Bohrung auf 6,5 mm vergrößert."
+kernel = "exakt"
+sources = { src_1 = "meshes/plate_countersunk.stl" }
+promises = { objects = 1, findings = ["resize.widening_kept"], actions = { resize_the_widening = "resize.widening_kept" } }
+[[scene."senkung_vergroessern.exakt".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm" }
+[[scene."senkung_vergroessern.exakt".ops]]
+op = "mesh_to_exact"
+inputs = ["obj_1"]
+params = {}
+[[scene."senkung_vergroessern.exakt".ops]]
+op = "resize_hole"
+inputs = ["obj_1"]
+params = { at_feature = "hole_1", diameter = 6.5 }
+
+[scene."kammer_unlesbar.netz"]
+summary = "Ein Quader, dessen Kammer sich selbst kreuzt, geladen ohne Angleichen der Außenseiten: Die Hohlraumsuche kann sie nicht lesen."
+kernel = "netz"
+sources = { src_1 = "meshes/void_shell_crossing.stl" }
+promises = { objects = 1, findings = ["perceive.voids_unreadable"], actions = { show_layers = "perceive.voids_unreadable" } }
+[[scene."kammer_unlesbar.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm", mend = false, wide_holes = false, unify_normals = false }
+
+[scene."ebene_durch_linie.netz"]
+summary = "Eine Tasche auf einer Ebene durch drei Punkte, die auf einer Linie liegen."
+kernel = "netz"
+base = "quader.netz"
+promises = { objects = 1, stops = true, findings = ["op.sketch_pocket.ValidationError"], actions = { "sketch.pick_plane" = "op.sketch_pocket.ValidationError" } }
+[[scene."ebene_durch_linie.netz".ops]]
+op = "sketch_pocket"
+inputs = ["obj_1"]
+params = { depth = 2.0, sketch = '{"plane": "through:0,0,20;10,0,20;20,0,20", "elements": [{"kind": "line", "points": [[0, 0], [20, 0]]}, {"kind": "line", "points": [[20, 0], [20, 10]]}, {"kind": "line", "points": [[20, 10], [0, 10]]}, {"kind": "line", "points": [[0, 10], [0, 0]]}], "constraints": []}' }
+
+[scene."ebene_durch_linie.exakt"]
+summary = "Dasselbe am exakten Quader."
+kernel = "exakt"
+base = "quader.exakt"
+promises = { objects = 1, stops = true, findings = ["op.sketch_pocket.ValidationError"], actions = { "sketch.pick_plane" = "op.sketch_pocket.ValidationError" } }
+[[scene."ebene_durch_linie.exakt".ops]]
+op = "sketch_pocket"
+inputs = ["obj_1"]
+params = { depth = 2.0, sketch = '{"plane": "through:0,0,20;10,0,20;20,0,20", "elements": [{"kind": "line", "points": [[0, 0], [20, 0]]}, {"kind": "line", "points": [[20, 0], [20, 10]]}, {"kind": "line", "points": [[20, 10], [0, 10]]}, {"kind": "line", "points": [[0, 10], [0, 0]]}], "constraints": []}' }
+
+[scene."lose_teile.netz"]
+summary = "Zwei Würfel 20 mm, 600 mm auseinander, zu einem Körper vereint: Als Ganzes passt er in keiner Lage, einzeln schon."
+kernel = "netz"
+promises = { objects = 1, stops = true, findings = ["op.orient_for_print.NoFittingOrientationError"], actions = { split_and_retry = "op.orient_for_print.NoFittingOrientationError" } }
+[[scene."lose_teile.netz".ops]]
+op = "create_box"
+params = { width = 20.0, depth = 20.0, height = 20.0, x = -300.0 }
+[[scene."lose_teile.netz".ops]]
+op = "create_box"
+params = { width = 20.0, depth = 20.0, height = 20.0, x = 300.0 }
+[[scene."lose_teile.netz".ops]]
+op = "union_objects"
+inputs = ["obj_1", "obj_2"]
+params = {}
+[[scene."lose_teile.netz".ops]]
+op = "orient_for_print"
+inputs = ["obj_1"]
+params = {}
+
+[scene."lose_teile.exakt"]
+summary = "Dasselbe aus exakten Würfeln."
+kernel = "exakt"
+promises = { objects = 1, stops = true, findings = ["op.orient_for_print.NoFittingOrientationError"], actions = { split_and_retry = "op.orient_for_print.NoFittingOrientationError" } }
+[[scene."lose_teile.exakt".ops]]
+op = "create_brep_box"
+params = { width = 20.0, depth = 20.0, height = 20.0, x = -300.0 }
+[[scene."lose_teile.exakt".ops]]
+op = "create_brep_box"
+params = { width = 20.0, depth = 20.0, height = 20.0, x = 300.0 }
+[[scene."lose_teile.exakt".ops]]
+op = "union_objects"
+inputs = ["obj_1", "obj_2"]
+params = {}
+[[scene."lose_teile.exakt".ops]]
+op = "orient_for_print"
+inputs = ["obj_1"]
+params = {}
+
+[scene."durchstochen.netz"]
+summary = "Eine 4-mm-Platte, fein vernetzt; ein Abtragzug drückt die Oberseite durch die Unterseite."
+kernel = "netz"
+promises = { objects = 1, findings = ["sculpt.pierced"], actions = { take_back_stroke = "sculpt.pierced" } }
+[[scene."durchstochen.netz".ops]]
+op = "create_box"
+params = { width = 40.0, depth = 40.0, height = 4.0 }
+[[scene."durchstochen.netz".ops]]
+op = "remesh_uniform"
+inputs = ["obj_1"]
+params = { edge = 0.8 }
+[[scene."durchstochen.netz".ops]]
+op = "sculpt_strokes"
+inputs = ["obj_1"]
+params = { strokes = '[{"p":[0.0,0.0,4.0],"n":[0.0,0.0,1.0],"r":6.0,"s":6.0,"t":"carve","y":0,"c":false}]' }
+
+[scene."fremder_drucker.netz"]
+summary = "Ein Netzquader für einen Drucker, der hier nicht eingerichtet ist; das Projekt bringt seine Beschreibung mit."
+kernel = "netz"
+base = "quader.netz"
+printer = "werkstatt-drucker"
+printer_like = "centauri-carbon-2"
+promises = { objects = 1, findings = ["profile.carried_printer"], actions = { adopt_printer = "profile.carried_printer" } }
+
+[scene."passung.netz"]
+summary = "Platte und Deckel mit Stift und Passung in PETG (projects/assembly_fit.p3d): Die Toleranzen des Materials sind Startwerte."
+kernel = "netz"
+opens = "projects/assembly_fit.p3d"
+promises = { objects = 2, findings = ["settings.uncalibrated_material"], actions = { calibrate_material = "settings.uncalibrated_material" } }
+
+[scene."passung_pla.netz"]
+summary = "Dieselbe Passung in PLA: Ob sie hält, lässt sich am Netz nicht sicher messen."
+kernel = "netz"
+opens = "projects/assembly_fit.p3d"
+material = "pla"
+promises = { objects = 2, findings = ["fit.mesh_uncertain"], actions = { show_feature = "fit.mesh_uncertain" } }
+
+[scene."alter_farbschritt.netz"]
+summary = "Ein Projekt im Format 13 mit einem Farbschritt um einen Punkt (projects/painted_v13.p3d): Er wird nicht mehr gerechnet."
+kernel = "netz"
+opens = "projects/painted_v13.p3d"
+promises = { stops = true, findings = ["evaluate.legacy_point_paint"], actions = { show_step_values = "evaluate.legacy_point_paint", show_history = "evaluate.legacy_point_paint" } }
+
+[scene."baustein_fehlt.netz"]
+summary = "Ein Projekt, das einen Baustein einsetzt, den es hier nicht gibt (projects/missing_part_v52.p3d)."
+kernel = "netz"
+opens = "projects/missing_part_v52.p3d"
+promises = { stops = true, findings = ["parts.missing", "evaluate.unknown_operation"], actions = { check_updates = "parts.missing" } }
+
+[scene."baustein_geaendert.netz"]
+summary = "Ein Projekt mit eigenem Baustein, dessen Stand im Nutzerordner sich seit dem Speichern geändert hat."
+kernel = "netz"
+opens = "projects/own_part_v52.p3d"
+own_parts = ["recipes/werkstatt_halter_lokal.json"]
+promises = { objects = 1, findings = ["parts.own_changed"], actions = { keep_saved_parts = "parts.own_changed" } }
+
+[scene."ohne_opencascade.exakt"]
+summary = "Ein exakter Quader auf einer Maschine ohne OpenCASCADE."
+kernel = "exakt"
+preconditions = { opencascade = "fehlt" }
+promises = { stops = true, findings = ["op.create_brep_box.BRepUnavailable"], actions = { install = "op.create_brep_box.BRepUnavailable" } }
+[[scene."ohne_opencascade.exakt".ops]]
+op = "create_brep_box"
+params = { width = 40.0, depth = 30.0, height = 20.0 }
+
+[scene."erzeugte_haut.netz"]
+summary = "Ein erzeugtes Modell, das nur eine Haut von 0,3 mm ist (Weg 3, Generator läuft)."
+kernel = "netz"
+sources = { src_1 = "meshes/generated_thin_cup.stl" }
+generated = ["src_1"]
+preconditions = { comfyui = "vorhanden" }
+promises = { objects = 1, findings = ["scene.thin_skin"], actions = { generate_again = "scene.thin_skin" } }
+[[scene."erzeugte_haut.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm" }
+
+[scene."step_ohne_geometrie.exakt"]
+summary = "Eine STEP-Datei ohne einen einzigen Körper."
+kernel = "exakt"
+sources = { src_1 = "step/no_geometry.step" }
+promises = { stops = true, findings = ["op.load_step.ValidationError"], actions = { choose_another_file = "op.load_step.ValidationError" } }
+[[scene."step_ohne_geometrie.exakt".ops]]
+op = "load_step"
+params = { source = "src_1" }
+
 # --- Projektparameter --------------------------------------------------------------
 
 [scene."parameter.exakt"]

@@ -283,3 +283,62 @@ def test_a_hidden_saved_window_is_kept_until_its_page_is_shown(tabs):
     tabs.setTabVisible(tabs.indexOf(second), True)
     assert second.window() is not tabs.window()
     assert second.window().isVisible()
+
+
+def _tab_card(pages):
+    window = QMainWindow()
+    tabs = CurrentPageTabs(window)
+    tabs.setTabBar(SignalTabBar(tabs))
+    window.setCentralWidget(tabs)
+    for key, page in pages.items():
+        tabs.addTab(page, key)
+    tabs.configure_pages(pages, {})
+    tabs.setCurrentIndex(0)
+    window.resize(400, 300)
+    window.show()
+    QApplication.processEvents()
+    return window, tabs
+
+
+def _close_card(window, tabs):
+    tabs.shutdown_windows()
+    window.close()
+    window.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def test_a_tall_page_behind_does_not_raise_the_card(qt_app):
+    """Eine hohe Seite dahinter macht die Karte nicht höher als die vordere.
+
+    Qt misst die Wunschhöhe des Reiterwidgets an der höchsten Seite. Der
+    Stapel darin meldet dagegen eine Breitenhöhe, sobald die vordere Seite
+    eine hat, und die ist das Höchste der Seiten *mit* Breitenhöhe — ein
+    Rollbereich ohne fehlt dort. Der Rahmen, gerechnet als Unterschied der
+    beiden, enthielt so die ganze hohe Seite: Seit das Suchfeld der Auswahl
+    jede Funktion listet, stand der leere Prüfbericht in voller Spaltenhöhe,
+    und nachkommende Befunde ließen die Karte nicht mehr wachsen.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.overlay import ContentScroller
+
+    def wrapped() -> QLabel:
+        label = QLabel("Ein umbrechender Satz, der eine Breitenhöhe meldet.")
+        label.setWordWrap(True)
+        return label
+
+    # Wie der Reiter Auswahl: ein Rollbereich, der seinen ganzen Inhalt
+    # wünscht, klein sein darf und keine Breitenhöhe meldet.
+    tall = ContentScroller()
+    tall.setWidgetResizable(True)
+    tall.setWidget(QLabel("\n".join(f"Zeile {number}" for number in range(60))))
+    window, tabs = _tab_card({"front": wrapped(), "tall": tall})
+    alone_window, alone = _tab_card({"front": wrapped()})
+    try:
+        assert tall.sizeHint().height() > 600, "die Seite dahinter ist wirklich hoch"
+        assert tabs.sizeHint().height() == alone.sizeHint().height()
+        width = tabs.width()
+        assert tabs.heightForWidth(width) == alone.heightForWidth(width)
+    finally:
+        _close_card(window, tabs)
+        _close_card(alone_window, alone)

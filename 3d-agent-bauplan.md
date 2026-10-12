@@ -1518,7 +1518,10 @@ und Redo gelten überall, auch im Chat.
 
 ### 19.3 Anzeige
 HiDPI-tauglich, skalierbare Schriftgröße, ausreichender Kontrast in hellem und
-dunklem Thema. **Anzeigeeinheit umschaltbar** zwischen Millimeter und Zoll —
+dunklem Thema. **Kleinste Arbeitsfläche 1920 × 1080 logische Punkte**, also Full
+HD bei 100 % oder 3840 × 2160 bei 200 %. Darunter wird weder gestaltet noch
+geprüft, auch nicht bei einer höheren Auflösung mit stärkerer Skalierung
+(Robert, 12.10.2026; Systemvoraussetzung der Website). **Anzeigeeinheit umschaltbar** zwischen Millimeter und Zoll —
 der Kern bleibt bei Millimeter (§11.1).
 
 ---

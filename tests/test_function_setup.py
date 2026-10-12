@@ -202,6 +202,100 @@ def test_present_ai_and_a_missing_comfyui_are_read_the_way_the_application_reads
     assert asked == ["http://127.0.0.1:11434"]
 
 
+def test_a_missing_exact_kernel_goes_through_the_suites_seam(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """„OpenCASCADE fehlt“ wie in der Suite (``brep.kernel.available``): Ein exakter Schritt
+    sagt danach mit *Zusätzliche Programme* ab; „vorhanden“ liest dieselbe Probe."""
+    from app.core.brep import kernel
+
+    monkeypatch.setattr(kernel, "available", kernel.available)
+    present = kernel.available()
+    assert function_setup.apply_preconditions({"opencascade": "vorhanden"}) == {
+        "opencascade": "vorhanden" if present else "fehlt (Maschine)"
+    }
+    assert function_setup.apply_preconditions({"opencascade": "fehlt"}) == {"opencascade": "fehlt"}
+    assert kernel.available() is False
+    with pytest.raises(kernel.BRepUnavailable) as caught:
+        kernel.require()
+    assert caught.value.suggestions[0].id == "install"
+
+
+def test_a_scene_says_what_the_bench_prepares_before_the_row() -> None:
+    """Vorbedingungen, eigene Bausteine und die Klicks vor der Zeile kommen aus der Szene.
+
+    Die Einfügemarke setzt das Kontextmenü des Verlaufs, *Automatisch teilen* der
+    Befehl am Körper, der Export der Befehl samt Dateiname mit der Endung des
+    Formats — jedes Ziel steht im Wortschatz.
+    """
+    from app.core.guides import is_target
+    from tools.function_scenes import DATA
+
+    assert function_setup.scene_setup("gibt_es_nicht") == function_setup.SceneSetup("gibt_es_nicht")
+    assert function_setup.scene_setup("ohne_opencascade.exakt").preconditions == {
+        "opencascade": "fehlt"
+    }
+    assert function_setup.scene_setup("erzeugte_haut.netz").preconditions == {
+        "comfyui": "vorhanden"
+    }
+    assert function_setup.scene_setup("baustein_geaendert.netz").own_parts == (
+        DATA / "recipes" / "werkstatt_halter_lokal.json",
+    )
+    folder = Path("fall") / "ausloeser"
+    routes = {
+        key: function_setup.preparation_route(function_setup.scene_setup(key), folder)
+        for key in ("einfuegen.netz", "geschuetzte_leiste.netz", "export_gemischt", "quader.netz")
+    }
+    assert routes["einfuegen.netz"] == [
+        {"target": "history.row:2", "button": "right"},
+        {"target": "history:insert"},
+    ]
+    assert routes["geschuetzte_leiste.netz"] == [
+        {"target": "tree.row:obj_1"},
+        {"target": "command:edit.auto_split"},
+    ]
+    assert routes["export_gemischt"] == [
+        {"target": "command:file.export"},
+        {"key": "Ctrl+A"},
+        {"type": str(folder / "szene.step")},
+        {"key": "Return"},
+    ]
+    assert routes["quader.netz"] == []
+    for route in routes.values():
+        assert all(is_target(entry["target"]) for entry in route if "target" in entry)
+
+
+def test_own_parts_lie_in_the_user_folder_before_the_application_starts() -> None:
+    """Das Rezept der Szene liegt unter seinem Namen im Nutzerordner des Falls
+    (``tests/conftest.py`` legt ihn in einen Temp-Ordner)."""
+    from app.core.knowledge.parts import recipe
+
+    setup = function_setup.scene_setup("baustein_geaendert.netz")
+    (placed,) = function_setup.install_own_parts(setup)
+    assert placed == recipe.recipes_dir() / "werkstatt_halter.json"
+    assert placed.read_bytes() == setup.own_parts[0].read_bytes()
+    assert function_setup.install_own_parts(function_setup.SceneSetup("quader.netz")) == []
+
+
+def test_a_row_starting_in_a_scene_with_preconditions_runs_only_in_them() -> None:
+    """Was die Startszene verlangt, gilt für jeden Fall der Zeile — ohne Gegenlauf:
+    Ohne fehlendes OpenCASCADE gäbe es den Befund nicht, um den es geht."""
+    row = {
+        "id": "finding.action:install",
+        "kind": "bedienflaeche",
+        "source": "befundhandlung",
+        "package": "D12",
+        "start_scene": "ohne_opencascade.exakt",
+    }
+    cases = function_cases([row])
+    assert cases and all(
+        case.variant["preconditions"] == {"opencascade": "fehlt"} for case in cases
+    )
+    assert (
+        function_cases([{**row, "start_scene": "quader.exakt"}])[0].variant["preconditions"] == {}
+    )
+
+
 def test_the_spec_sets_licence_and_preconditions_and_both_states_run() -> None:
     """Die Spezifikation legt Lizenz und Vorbedingungen fest; „fehlt“ und „vorhanden“ laufen beide.
 
