@@ -3240,6 +3240,10 @@ def test_the_workflow_builds_both_linux_formats() -> None:
         assert f"make_linux_packages.py {flag}" in step, f"{name} baut nicht"
         assert "continue-on-error" not in step, "ein fehlendes öffentliches Paket bliebe grün"
     assert "Öffentliche Linux-Pakete prüfen" in workflow
+    # flatpak-builder trennt die Debug-Information mit ``eu-strip`` (elfutils);
+    # ``--no-install-recommends`` ließe es weg (Review 1, S4).
+    tools = _apt_packages(job_block(workflow, "linux-flatpak"))
+    assert {"flatpak", "flatpak-builder", "elfutils"} <= tools, tools
 
 
 def test_the_appimage_build_refuses_an_unpinned_runtime(

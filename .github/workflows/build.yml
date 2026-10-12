@@ -1010,11 +1010,13 @@ jobs:
           python tools/check_glibc_floor.py dist/Solidon3D
       - name: Paketierwerkzeuge holen (Flatpak)
         # flatpak-builder liegt in jeder Distribution und ist ein externes
-        # Programm — Solidon liefert es nicht mit (§36).
+        # Programm — Solidon liefert es nicht mit (§36). `elfutils` ausdrücklich:
+        # flatpak-builder trennt die Debug-Information mit `eu-strip`, und mit
+        # `--no-install-recommends` kommt es sonst nicht mit.
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder xvfb xauth
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder elfutils xvfb xauth
           flatpak remote-add --if-not-exists --user flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y flathub \
