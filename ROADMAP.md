@@ -215,7 +215,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-729 — Gegenproben der Oberflächensuche zählen nur Dateien](#rm-729) | Tests und Entwicklungswerkzeuge | Gegenproben verlangen die Definitionsmodule von `MainWindow`, `Viewport` und der Merkmalserkennung |
 | [RM-730 — `tools/matrix_unit.py` läuft in keiner Suite](#rm-730) | Tests und Entwicklungswerkzeuge | Rauchtest, der das Modul importiert und seine Aliaszugriffe auflöst |
 | [RM-786 — Der Tag-Lauf wiederholt die Kernsuite, die der main-Lauf zum selben Commit bestanden hat](#rm-786) | Tests und Entwicklungswerkzeuge | Am Tag die Suite auslassen, wenn der main-Lauf zum Tag-Commit grün ist; Vertrag und Wächter nachziehen |
-| [RM-788 — Ein Slicertest bleibt im parallelen Lauf ohne CPU stehen](#rm-788) | Tests und Entwicklungswerkzeuge | Hänger nachstellen und zuordnen (Prozessstart der frisch geschriebenen Programmdatei?), dann beheben |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -6424,23 +6423,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `konzepte/konzept-ci-testlaufzeiten-2026-09.md` und `tests/test_packaging.py` ziehen nach.
   **Abnahme:** Ein Tag auf einem Commit mit grünem main-Lauf baut Pakete ohne zweite Suite; ohne
   grünen main-Lauf läuft sie wie heute; Wächter mit Gegenprobe.
-
-<a id="rm-788"></a>
-
-- [ ] **RM-788 — Ein Slicertest bleibt im parallelen Lauf ohne CPU stehen.**
-  Beim Lauf der betroffenen Tests für `fix/schrift-merkmale` (12.10.2026, rund 27 500 Tests
-  parallel) blieb
-  `tests/test_print_settings.py::test_a_slicer_that_cannot_start_is_an_answer` stehen, ohne CPU;
-  einzeln lief er sechsmal grün in rund einer Sekunde. Vermutung, nicht belegt: Etwas hält den
-  Start der frisch geschriebenen Programmdatei fest (Virenscanner). Im zweiten Lauf desselben
-  Tages (dieselbe Auswahl, `-n 6 --dist worksteal`) hing er wieder, wieder im Arbeiter `gw3` nach
-  rund 27 500 bestandenen Tests — zwei von zwei Läufen. Ebenso möglich, ebenso unbelegt: ein
-  Zustand, den ein früherer Test desselben Arbeiters hinterlässt.
-  **Nächster Schritt:** unter Last nachstellen, den hängenden Prozess mit Stapel aufnehmen und
-  zuordnen; ist es der Prozessstart, braucht der Test eine Frist mit klarer Meldung statt eines
-  stillen Hängers.
-  **Abnahme:** zwanzig parallele Läufe ohne Hänger, oder ein Hänger endet nach der Frist rot mit
-  Ursache.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 
