@@ -1,7 +1,7 @@
 """Urteile, Gegenproben, Abhakliste und Funddatei des Funktionsdurchgangs (RM-737, D0-U).
 
 Der Prüfstand misst am echten Fenster; hier wird ohne Fenster geprüft, ob
-seine Messungen richtig beurteilt werden. Jede Gegenprobe aus Plan D0, Abschnitt 3
+seine Messungen richtig beurteilt werden. Jede Gegenprobe (Konzept §10)
 ist ein absichtlich kaputtes Protokoll, Urteil oder Fund und muss rot werden
 (``tools/function_samples.py``). Ein Prüfpunkt ohne Gegenprobe macht diese
 Datei rot, ebenso ein Urteil, das abgewiesen gehört, eine Funddatei mit
@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from app.ui.main_window import MainWindow
+from app.ui.main_window import START_SIZE, MainWindow
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
 from tools import function_checks, function_report
@@ -31,11 +31,10 @@ from tools.function_checks import (
     CHECKPOINTS,
     COARSE_NOTE,
     CRITERIA,
-    START_SIZE,
+    GOOD_OVER_FINDING,
     Checkpoint,
     skill_mismatches,
     skill_rows,
-    start_size_in_window,
     threshold_numbers,
     validate_protocol,
     words,
@@ -165,7 +164,7 @@ def test_the_sample_protocol_has_nothing_to_find() -> None:
     "sample", BROKEN_SAMPLES, ids=[f"{s.subject}-{s.title}" for s in BROKEN_SAMPLES]
 )
 def test_every_broken_sample_turns_red(sample: Any) -> None:
-    """Jede Gegenprobe aus Plan D0, Abschnitt 3 wird rot — ohne Fenster."""
+    """Jede Gegenprobe (Konzept §10) wird rot — ohne Fenster."""
     red, detail = is_red(sample)
     assert red, f"{sample.subject} {sample.title}: blieb grün ({detail})"
 
@@ -214,7 +213,7 @@ def test_a_new_checkpoint_without_a_broken_sample_turns_the_suite_red(
 def test_only_a_different_selection_after_undo_is_a_note_not_a_finding() -> None:
     """Prüfpunkt 5: Nur die Auswahl verschieden ist ein Vermerk, nie rot.
 
-    Plan D0, Abschnitt 3.1.
+    Konzept §4, Prüfpunkt 5.
     """
 
     def other_selection(protocol: dict[str, Any]) -> None:
@@ -249,22 +248,86 @@ def test_a_click_outside_the_main_path_does_not_count_for_e1_to_e4() -> None:
     assert _judged(clicks_in("weg")).criteria["E1"].verdict == "fund"
 
 
-def test_the_licence_states_are_the_ones_the_application_reads() -> None:
-    """Die Lizenzzustände tragen die Namen der Eigenschaften von ``Activation``.
+def _activation_in(state: str) -> Any:
+    """Ein Freischaltzustand, wie die Suite ihn über ``activation._cached`` setzt."""
+    from app.core import activation
+    from app.core.activation import key
 
-    Die Anwendung führt keine Aufzählung; sie liest den Zustand an diesen
-    Eigenschaften ab, und der Prüfstand setzt ihn wie die Suite über
-    ``activation._cached``. Eine umbenannte Eigenschaft macht das hier rot.
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=activation.DEVICE_ACTIVATION_FROM,
+        order="A-1234",
+        holder="kaeufer@beispiel.de",
+    )
+    certificate = activation.ActivationCertificate(
+        licence_digest="test-licence",
+        device_public=b"\x01" * 32,
+        device_name="Prüfrechner",
+        activation_id="test-activation",
+        issued_on=activation.DEVICE_ACTIVATION_FROM,
+    )
+    built = {
+        "sale_without_trial": lambda: activation.Activation(days_left=0),
+        "expired": lambda: activation.Activation(days_left=0),
+        "needs_activation": lambda: activation.Activation(licence=licence),
+        "licensed": lambda: activation.Activation(licence=licence, certificate=certificate),
+    }
+    return built[state]()
+
+
+@pytest.mark.parametrize("trial_from", [None, "2026-12-01"])
+def test_the_licence_states_are_the_ones_the_application_reads(
+    monkeypatch: pytest.MonkeyPatch, trial_from: str | None
+) -> None:
+    """Jeder verlangte Lizenzlauf ist in der Fassung erreichbar und bedeutet das Erwartete.
+
+    Die Anwendung führt keine Aufzählung; sie liest den Zustand an Eigenschaften
+    von ``Activation`` ab. Geprüft wird je Lauf, dass ein Zustand, wie die Suite
+    ihn setzt, genau diese Eigenschaft wahr macht, keine der anderen, und dass
+    ``unlocked`` sagt, was ``LICENCE_UNLOCKED`` erwartet. Ohne ``TRIAL_FROM``
+    (Verkaufsversion) ist der Testlauf unerreichbar, mit ihm die lesende
+    Verkaufsversion; ``over`` startet die Anwendung gar nicht und ist kein Lauf.
     """
-    from app.core.activation import Activation
-    from tools.function_checks import EXPIRED_RUNS, LICENCE_RUNS, LICENCE_STATES
+    from datetime import date
 
-    for state in LICENCE_STATES:
-        assert isinstance(getattr(Activation, state, None), property), state
-    assert set(LICENCE_RUNS) <= set(LICENCE_STATES)
-    assert set(LICENCE_RUNS) >= EXPIRED_RUNS
-    expired = Activation(days_left=0, deadline=None)
-    assert not expired.unlocked
+    from app.core.activation import store
+    from tools.function_checks import LICENCE_STATES, LICENCE_UNLOCKED, licence_runs
+
+    monkeypatch.setattr(
+        store, "TRIAL_FROM", None if trial_from is None else date.fromisoformat(trial_from)
+    )
+    runs = licence_runs()
+    assert {"needs_activation", "licensed"} <= set(runs)
+    assert ("expired" in runs) is (trial_from is not None)
+    assert ("sale_without_trial" in runs) is (trial_from is None)
+    assert "over" not in LICENCE_STATES
+    for state in runs:
+        reached = _activation_in(state)
+        assert getattr(reached, state) is True, state
+        others = [name for name in LICENCE_STATES if name != state and getattr(reached, name)]
+        assert others == [], (state, others)
+        assert reached.unlocked is LICENCE_UNLOCKED[state], state
+
+
+def test_the_expired_demo_row_carries_its_licence_state() -> None:
+    """``over`` ist kein Lauf je Funktion, aber der Zustand der D12-Zeile von L.
+
+    Die Zeile ``startup.expired_demo`` startet die Anwendung im Zustand „Demo
+    abgelaufen“; ihr Protokoll muss ihn tragen dürfen, und die Anwendung muss
+    ihn so lesen: ``over`` wahr, nichts frei.
+    """
+    from datetime import date
+
+    from app.core import activation
+    from tools.function_checks import STARTUP_LICENCE
+    from tools.function_list import STARTUP_SURFACES
+
+    assert "startup.expired_demo" in STARTUP_SURFACES
+    reached = activation.Activation(days_left=0, deadline=date(2026, 1, 1))
+    assert getattr(reached, STARTUP_LICENCE) is True and not reached.unlocked
+    protocol = sample_protocol()
+    protocol["variant"]["licence"] = STARTUP_LICENCE
+    assert validate_protocol(protocol) == []
 
 
 def test_the_display_unit_is_the_one_the_application_writes() -> None:
@@ -283,6 +346,43 @@ def test_a_purchased_licence_that_still_greys_out_is_a_finding() -> None:
         protocol["licence_runs"]["licensed"] = {"writes": True, "enabled": False, "reason": "x"}
 
     assert _judged(locked).points[18].verdict == "fund"
+
+
+def test_the_licence_point_is_judged_once_per_row_over_all_runs() -> None:
+    """Der Prüfstand fährt je Lizenzzustand einen Fall mit einem Lauf (Review S3).
+
+    Geurteilt wird einmal je Zeile über alle Läufe ihrer Fälle: Jeder Fall für
+    sich ist kein Fund, weil ihm die übrigen Läufe fehlen; zusammengeführt ist
+    die Zeile erfüllt, und erst ein fehlender Lauf über alle Fälle ist einer.
+    """
+    from tools.function_checks import LICENCE_UNLOCKED, licence_runs
+
+    base = sample_protocol()
+    base.pop("licence_runs")
+    # Die Läufe, die diese Fassung verlangt — die Suite setzt ``TRIAL_FROM``.
+    runs = {
+        state: {
+            "writes": True,
+            "enabled": LICENCE_UNLOCKED[state],
+            "reason": "" if LICENCE_UNLOCKED[state] else "Ändern braucht eine Lizenz.",
+        }
+        for state in licence_runs()
+    }
+    single = []
+    for state, entry in runs.items():
+        protocol = sample_protocol()
+        protocol["licence_runs"] = {state: entry}
+        protocol["variant"]["licence"] = state
+        single.append(protocol)
+    cases = [judge_case(p, sample_context()) for p in [base, *single]]
+    assert all(case.points[18].verdict != "fund" for case in cases), [
+        case.points[18].issues for case in cases
+    ]
+    assert merge_cases(cases, [base, *single]).points[18].verdict == "erfuellt"
+    partial = merge_cases(cases[:-1], [base, *single[:-1]]).points[18]
+    # Ein Lauf, den es über alle Fälle nicht gab, ist nicht gemessen — nie gut.
+    assert partial.verdict == "nicht_gelaufen"
+    assert "Lizenzlauf" in partial.reason
 
 
 def test_a_selection_the_bench_could_not_build_is_a_note_not_a_finding() -> None:
@@ -394,7 +494,7 @@ def test_the_sample_protocol_carries_every_field_of_the_schema() -> None:
 def test_a_row_without_specification_is_valid_but_not_measured() -> None:
     """Eine Zeile ohne Spezifikation ist „ungeprüft“, kein ungültiges Protokoll.
 
-    Plan D0, Abschnitt 2.3: Eine leere Spezifikation heißt ungeprüft.
+    Konzept §3: Eine leere Spezifikation heißt ungeprüft.
     """
     protocol = sample_protocol()
     protocol["spec"] = None
@@ -425,18 +525,18 @@ def test_a_function_nobody_can_find_is_a_heavy_finding() -> None:
     assert [issue.severity for issue in outcome.issues] == ["schwer"]
 
 
-def test_the_contrast_sample_is_the_one_the_plan_names() -> None:
+def test_the_contrast_sample_lies_just_below_the_threshold() -> None:
     """Die Gegenprobe von G6 trägt 3,9 bei normaler Schrift, nicht irgendeinen Wert.
 
-    Plan D0, Abschnitt 3.3.
+    Konzept §4, G6: Die Probe liegt knapp unter der Schwelle von 4,5.
     """
     from app.ui.theme import contrast_ratio
 
     assert round(contrast_ratio("#818181", "#ffffff"), 1) == 3.9
 
 
-def test_every_result_names_its_evidence_as_in_the_plan() -> None:
-    """Je Ergebnis Stufe, Messung, Urteil, Grund und Beleg (Plan D0, Abschnitt 2.8).
+def test_every_result_names_its_evidence() -> None:
+    """Je Ergebnis Stufe, Messung, Urteil, Grund und Beleg (Konzept §4).
 
     Der Beleg sind die Bilder des Falls und die gelesenen Stellen im Protokoll.
     """
@@ -452,7 +552,7 @@ def test_every_result_names_its_evidence_as_in_the_plan() -> None:
 
 
 def test_good_verdicts_are_accepted() -> None:
-    """Die Gegenseite: Was Plan D0, Abschnitt 2.9 erfüllt, wird angenommen."""
+    """Die Gegenseite: Was Konzept §5, Stufe B erfüllt, wird angenommen."""
     case = _judged()
     findings, problems = parse_findings(_finding(subject="1", kind="Einfachheit"))
     assert not problems
@@ -506,7 +606,7 @@ REJECTED = {
 def test_a_verdict_against_the_rules_is_rejected(name: str) -> None:
     """Urteile ohne Bild oder Stelle, offen ohne RM, fremder Grund … werden abgewiesen.
 
-    Plan D0, Abschnitt 4.4.
+    Konzept §5 (Stufe B: mit Bild und Stelle) und §7 („Offen“ nur mit RM-Nummer).
     """
     entry, reason = REJECTED[name]
     case = _judged()
@@ -544,7 +644,8 @@ def test_fine_against_a_stage_a_finding_is_rejected() -> None:
     case = _judged(two_primaries)
     for entry in (_verdict(criterion="G1"), _verdict(point=19)):
         checked = check_verdicts([entry], outcomes={case.row_id: case})
-        assert checked.rejected, entry
+        reasons = [why for _entry, whys in checked.rejected for why in whys]
+        assert GOOD_OVER_FINDING in reasons, (entry, reasons)
 
 
 def test_a_second_verdict_of_the_same_stage_is_rejected() -> None:
@@ -572,16 +673,20 @@ def test_a_good_finding_file_has_no_problems() -> None:
             subject="I3",
             kind="Gestaltung",
             severity="Vorschlag",
-            stand="gut nach Fix `lauf-12`",
+            stand="gut nach Fix `a280ee8f5`, Lauf `lauf-12`",
         )
+        + "\n"
+        # I6 ohne Chat ist die Suche mit Frageformen — die darf Vorschlag sein.
+        + _finding(number=4, subject="I6", kind="Gestaltung", severity="Vorschlag")
     )
     findings, problems = parse_findings(text)
-    assert [f.number for f in findings] == [1, 2, 3]
+    assert [f.number for f in findings] == [1, 2, 3, 4]
     assert problems + check_findings(findings) == []
     assert findings[1].subjects == (4,)
 
 
 BAD_FINDINGS = {
+    "gut nach Fix ohne Commit": (_finding(stand="gut nach Fix `lauf-12`"), "Stand"),
     "doppelte Nummer": (_finding() + _finding(), "mehrfach"),
     "Art nicht aus der Liste": (_finding(kind="Schönheit"), "Art Schönheit"),
     "Schwere nicht aus der Liste": (_finding(severity="kritisch"), "Schwere kritisch"),
@@ -592,6 +697,15 @@ BAD_FINDINGS = {
         "Vorschlag nur",
     ),
     "Vorschlag bei einem Fehler": (_finding(subject="4", severity="Vorschlag"), "Vorschlag nur"),
+    # Der Chatweg zu I6 ist eine Bauplanzusage (Konzept §4: „für den Chat gilt
+    # Prüfpunkt 17“) — als Vorschlag ginge er an der Abnahme vorbei (L13).
+    "Vorschlag am Chatweg": (
+        _finding(subject="I6", severity="Vorschlag").replace(
+            "Der Dialog setzt make_primary zweimal.",
+            "Der Chat versteht „Loch größer machen“ nicht.",
+        ),
+        "Prüfpunkt 17",
+    ),
     "kein Prüfpunkt": (_finding(subject="Q9"), "weder Prüfpunkt noch Kriterium"),
     "Feld fehlt": (
         _finding().replace("**Ursache:** Der Dialog setzt make_primary zweimal.\n", ""),
@@ -604,7 +718,7 @@ BAD_FINDINGS = {
 def test_a_finding_file_against_the_rules_is_rejected(name: str) -> None:
     """Funddatei mit doppelter Nummer, fremder Art oder Schwere, ohne Stand → rot.
 
-    Plan D0, Abschnitt 2.11.
+    Konzept §7.
     """
     text, expected = BAD_FINDINGS[name]
     findings, problems = parse_findings(text)
@@ -681,7 +795,7 @@ def _b_verdicts() -> list[dict[str, Any]]:
 
 
 def test_the_checklist_is_deterministic() -> None:
-    """Gleiche Eingaben, gleiche Bytes — auch in anderer Reihenfolge (Plan D0, Abschnitt 4.4)."""
+    """Gleiche Eingaben, gleiche Bytes — auch in anderer Reihenfolge (Konzept §7)."""
     first = _checklist(_b_verdicts())
     assert first == _checklist(_b_verdicts())
     assert first == _checklist(list(reversed(_b_verdicts())), rows=list(reversed(ROWS[:2])))
@@ -707,7 +821,7 @@ def test_a_row_is_fine_only_when_every_checkpoint_is_settled() -> None:
 def test_more_than_one_decision_stays_open_in_the_checklist() -> None:
     """E3: mehr als eine Entscheidung ohne B-Urteil ist „B offen“, nie „gut“.
 
-    Plan D0, Abschnitt 3.2.
+    Konzept §4, E3.
     """
 
     def decide(protocol: dict[str, Any]) -> None:
@@ -799,6 +913,7 @@ def test_a_finding_in_one_language_is_a_finding_of_the_row() -> None:
 
 def _run_folder(tmp_path: Path, protocols: list[dict[str, Any]]) -> Path:
     out = tmp_path / "lauf"
+    out.mkdir(parents=True, exist_ok=True)
     for number, protocol in enumerate(protocols, 1):
         case = out / "cases" / str(number)
         case.mkdir(parents=True)
@@ -824,7 +939,10 @@ def _write(out: Path, state: Path, **values: Any) -> int:
 def test_the_report_writes_one_deterministic_checklist_per_package(tmp_path: Path) -> None:
     """``report``: je Paket eine Abhakliste, beim zweiten Lauf dieselben Bytes."""
     state = tmp_path / "state"
-    out = _run_folder(tmp_path, [sample_protocol()])
+    command = sample_protocol()
+    command["row"] = {**ROWS[2], "requirement": "leer", "target": "menu:x"}
+    command["kind"], command["package"] = "fensterbefehl", "D10"
+    out = _run_folder(tmp_path, [sample_protocol(), command])
     assert _write(out, state) == 0
     written = sorted(path.name for path in state.glob("abhakliste-*.md"))
     assert written == ["abhakliste-d04.md", "abhakliste-d10.md"]
@@ -841,7 +959,7 @@ def test_the_report_writes_one_deterministic_checklist_per_package(tmp_path: Pat
 def test_the_report_rejects_invalid_input_with_exit_one(tmp_path: Path) -> None:
     """Ausgang 1 nur bei ungültigen Eingaben; die Abhakliste nennt die Abweisung.
 
-    Plan D0, Abschnitt 2.13.
+    Die Kommandozeile des Prüfstands (``file_acceptance.py report``) liest den Ausgang.
     """
     state = tmp_path / "state"
     state.mkdir()
@@ -897,7 +1015,7 @@ SKILLS = {
 def test_the_criteria_tables_in_the_skills_match_the_constants(skill: str) -> None:
     """Skill-Text und Konstante sind ein gehaltener Zwilling (``zwillinge.md``).
 
-    Plan D0, Abschnitt 2.12.
+    Konzept §4.
 
     Das Skill ist die Quelle für Menschen, ``function_checks`` die für den
     Prüfstand. Verglichen werden die Kennungen, die Zahlen jeder Schwelle,
@@ -942,12 +1060,13 @@ def test_threshold_numbers_read_like_a_reader() -> None:
 
 
 def test_the_start_size_is_the_one_the_window_opens_with() -> None:
-    """Z6 misst bei der Startgröße; sie steht in ``MainWindow.__init__`` (gehaltener Zwilling)."""
-    source = (ROOT / "app" / "ui" / "main_window.py").read_text(encoding="utf-8")
-    assert start_size_in_window(source) == START_SIZE
-    assert start_size_in_window(
-        "class MainWindow:\n    def __init__(self):\n        self.resize(1, 2)\n"
-    ) == (1, 2)
+    """Z6 misst bei der Startgröße, die das Fenster selbst nimmt — eine Quelle.
+
+    ``main_window.START_SIZE`` öffnet das Fenster; das Prüfschema hält keine
+    zweite Zahl, und die Schwelle von Z6 nennt genau diese Größe.
+    """
+    assert vars(function_checks)["START_SIZE"] is START_SIZE
+    assert set(START_SIZE) <= set(CRITERIA["Z6"].numbers)
 
 
 def test_the_coarse_preview_sentence_is_the_one_the_window_shows() -> None:
@@ -959,8 +1078,11 @@ def test_the_coarse_preview_sentence_is_the_one_the_window_shows() -> None:
     """
     from app.i18n.catalog import available_languages, read_catalog
 
-    source = (ROOT / "app" / "ui" / "main_window.py").read_text(encoding="utf-8")
-    assert COARSE_NOTE in source
+    # Gesucht über den ganzen Baum: Zieht der Satz mit dem Code um
+    # (Codestruktur), bleibt der Wächter grün, solange es ihn gibt.
+    sources = sorted((ROOT / "app").rglob("*.py"))
+    assert len(sources) > 100
+    assert any(COARSE_NOTE in source.read_text(encoding="utf-8") for source in sources)
     for language in available_languages()[1:]:
         assert read_catalog(language).get(COARSE_NOTE), language
 
@@ -993,11 +1115,11 @@ def test_the_agent_and_the_manual_know_a_real_operation() -> None:
 
     load_operations()
     row = {"id": "drill_hole", "kind": "operation"}
-    assert function_report._manual_place(row)
-    where, path = function_report._agent_place(row) or ("", "")
+    assert function_report.manual_place(row)
+    where, path = function_report.agent_place(row) or ("", "")
     assert where in {"menue", "karte", "katalog"} and path
-    assert function_report._manual_place({"id": "erfunden", "kind": "operation"}) is None
-    assert function_report._agent_place({"id": "Datei/Speichern", "kind": "fensterbefehl"}) is None
+    assert function_report.manual_place({"id": "erfunden", "kind": "operation"}) is None
+    assert function_report.agent_place({"id": "Datei/Speichern", "kind": "fensterbefehl"}) is None
 
 
 def test_the_vocabulary_reader_takes_patterns_and_languages(tmp_path: Path) -> None:
@@ -1088,35 +1210,337 @@ def test_the_window_command_comparison_finds_missing_and_stale_rows() -> None:
 
 @pytest.mark.rendered
 def test_the_menu_bar_matches_the_window_commands_of_every_checklist(window: MainWindow) -> None:
-    """Die Fensterbefehle entstehen erst am gebauten Fenster (Konzept Plan D0, Abschnitt 3).
+    """Die Fensterbefehle entstehen erst am gebauten Fenster (Konzept Funktionsdurchgang §3).
 
-    Ihre Vollständigkeit hält dieser Test: Jede Zeile der Menüleiste steht in
-    der Abhakliste ihres Pakets, und keine Abhakliste nennt einen Befehl, den
-    es nicht mehr gibt. Rot heißt: ``tools/file_acceptance.py inventory
-    --functions`` und ``report`` für das Paket neu fahren, kein Codefix.
+    Ihre Vollständigkeit hält dieser Test: Jeder Fensterbefehl — Menüzeile oder
+    Aktion der Auswahlkarte wie ``command:edit.auto_split`` — steht in der
+    Abhakliste seines Pakets, und keine Abhakliste nennt einen, den es nicht
+    mehr gibt. Rot heißt: ``tools/file_acceptance.py inventory --functions`` und
+    ``report`` für das Paket neu fahren, kein Codefix.
     """
-    from tools.function_list import MenuEntry, command_rows, load_scenes, registry  # D0-L
-
-    from app.ui.guide_targets import menubar_entries  # Teilpaket D0-W
-
     checklists = read_checklists(STATE)
     assert checklists, f"keine Abhakliste unter {STATE} — der Prüfstand lief noch nie"
-    entries = [
-        MenuEntry(name, (*path, action.text()), action.shortcut().toString())
-        for name, path, action in menubar_entries(window)
-    ]
-    rows = command_rows(entries, registry(), load_scenes())
-    assert rows, "keine Fensterbefehle an der Menüleiste"
     comparison = compare_window_commands(
-        {row.id: row.package for row in rows},
+        function_report.window_commands_of(window),
         {package: listed.window_commands for package, listed in checklists.items()},
     )
     assert not comparison.missing, f"in keiner Abhakliste: {comparison.missing}"
     assert not comparison.stale, f"nicht mehr in der Menüleiste: {comparison.stale}"
 
 
+def test_the_menu_bar_and_the_function_list_meet_at_the_window(window: MainWindow) -> None:
+    """Die Erwartung des ``rendered``-Tests entsteht wie im Prüfstand (Review M3).
+
+    Menüleiste über ``function_list.menubar_of``, Fensterbefehle über
+    ``function_list.rows`` — die Fensteraktionen der Auswahlkarte gehören dazu
+    und stehen in ihrem Paket. Eine Abhakliste aus genau diesen Zeilen ist
+    vollständig und ohne Veraltetes.
+    """
+    expected = function_report.window_commands_of(window)
+    assert len(expected) > 20, sorted(expected)
+    assert expected.get("command:edit.auto_split") == "D8"
+    lists: dict[str, set[str]] = {}
+    for command, package in expected.items():
+        lists.setdefault(package, set()).add(command)
+    comparison = compare_window_commands(expected, lists)
+    assert comparison.missing == () and comparison.stale == ()
+
+
 def test_function_checks_reads_no_window() -> None:
     """Das Urteil braucht kein Fenster: kein Widget, keine QApplication in den Werkzeugen."""
-    for module in (function_checks, function_report):
-        source = Path(module.__file__).read_text(encoding="utf-8")
+    from tools import function_judges, function_samples
+
+    for module in (function_checks, function_judges, function_samples, function_report):
+        source = Path(str(module.__file__)).read_text(encoding="utf-8")
         assert "QApplication(" not in source and "QWidget(" not in source, module.__name__
+
+
+# --- Fixrunde nach dem Review D0-U ------------------------------------------
+
+
+def test_the_report_survives_a_case_it_cannot_judge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Scheitert das Urteil an einem Fall, ist das eine ungültige Eingabe, kein Absturz (S4)."""
+
+    def broken(*args: Any, **kwargs: Any) -> Any:
+        raise TypeError("float() argument must be a string or a real number, not 'NoneType'")
+
+    monkeypatch.setattr(function_report, "judge_case", broken)
+    out = _run_folder(tmp_path, [sample_protocol()])
+    assert _write(out, tmp_path / "state", package="D4") == 1
+    assert "ungültig: 1/function.json: TypeError" in capsys.readouterr().out
+
+
+def test_the_report_reads_null_as_not_measured(tmp_path: Path) -> None:
+    """Die Werte, die der Prüfstand nach einem Fehlschlag schreibt, ergeben eine Liste (S4)."""
+    protocol = sample_protocol()
+    protocol["timing"]["total_s"] = None
+    protocol["frames"]["drag_ms"] = [None, 12.0]
+    protocol["abort"]["eval_s"] = None
+    assert validate_protocol(protocol) == []
+    out = _run_folder(tmp_path, [protocol])
+    assert _write(out, tmp_path / "state", package="D4") == 0
+
+
+def test_an_empty_run_writes_nothing(tmp_path: Path) -> None:
+    """Ohne Protokoll bleibt die Abhakliste, wie sie ist, und der Ausgang ist 1 (M4)."""
+    state = tmp_path / "state"
+    state.mkdir()
+    kept = state / "abhakliste-d04.md"
+    kept.write_text("alt\n", encoding="utf-8")
+    out = _run_folder(tmp_path, [])
+    assert _write(out, state, package="D4") == 1
+    assert kept.read_text(encoding="utf-8") == "alt\n"
+    assert not (out / "function_results.json").exists()
+
+
+def test_only_packages_with_a_case_get_a_checklist(tmp_path: Path) -> None:
+    """Ein Paket ohne einen Fall bekommt keine neue Abhakliste (L16)."""
+    state = tmp_path / "state"
+    out = _run_folder(tmp_path, [sample_protocol()])
+    assert _write(out, state) == 0
+    assert sorted(path.name for path in state.glob("abhakliste-*.md")) == ["abhakliste-d04.md"]
+
+
+def test_i3_judges_only_the_rows_of_common_goals() -> None:
+    """Der Menüklick eines Fensterbefehls ist kein Fund an Prüfpunkt 19 (M2)."""
+    from tools.function_samples import click_step
+
+    def menu_row(protocol: dict[str, Any]) -> None:
+        protocol["row"].update(
+            {"id": "Datei/Speichern unter …", "kind": "fensterbefehl", "requirement": "leer"}
+        )
+        protocol["row"]["target"] = "menu:menubar.datei.speichern_unter"
+        protocol["kind"] = "fensterbefehl"
+        protocol["steps"] = [
+            click_step("menu:menubar.datei", "menue", "menue"),
+            click_step("menu:menubar.datei.speichern_unter", "menue", phase="übernehmen"),
+        ]
+
+    case = _judged(menu_row)
+    assert "I3" not in case.criteria
+    assert case.points[19].verdict != "fund", case.points[19].issues
+    goal = _judged()
+    assert goal.criteria["I3"].measurement["way_clicks"] == 0
+
+
+def test_the_e5_share_stands_in_the_package_values() -> None:
+    """Drei vorn bei neun von zehn: der Anteil steht in den Paketwerten (M6)."""
+    text = _checklist([])
+    assert "| E5-Anteil | 100% (1 von 1) | ≥ 90% | erfüllt |" in text
+
+
+def test_a_verdict_sample_rejected_for_another_reason_stays_green() -> None:
+    """Rot zählt nur aus dem eigenen Grund (L1): ein fremder Mangel macht keine Gegenprobe rot."""
+    v4 = next(s for s in BROKEN_SAMPLES if s.subject == "V4" and s.kind == "verdict")
+    other = replace(
+        v4, verdict={**(v4.verdict or {}), "prediction": "Ein Loch von 5 mm", "image": ""}
+    )
+    red, detail = is_red(other)
+    assert not red and "ohne Bild oder Stelle" in detail
+    g9 = next(s for s in BROKEN_SAMPLES if s.subject == "G9" and s.kind == "finding")
+    assert g9.finding is not None
+    healed = replace(g9, finding=g9.finding.replace("mittel", "leicht").replace("RM-800", "RM"))
+    red, detail = is_red(healed)
+    assert not red and "Stand" in detail
+
+
+def test_the_skill_guard_wants_every_field_the_judge_reads() -> None:
+    """Felder in beide Richtungen (L2): Nennt das Skill weniger, als das Urteil liest, rot."""
+    row = "| E4 | x | ≤ 2; kein Dialog verdeckt die bearbeitete Stelle | A | `steps[].zone` |"
+    table = "| Kennung | Zählgröße | Schwelle | Stufe | Messung |\n|---|---|---|---|---|\n" + row
+    assert any(
+        "E4" in problem and "spot" in problem for problem in skill_mismatches("ux-review", table)
+    )
+
+
+def test_the_thresholds_without_a_code_source_match_the_concept() -> None:
+    """Hauptfadenlücke, Übereinstimmung und Anteil des Zweitprüfers wie im Konzept (L3)."""
+    import re
+
+    from tools.function_checks import AGREEMENT, MAIN_GAP_MS, SECOND_REVIEW_SHARE
+
+    concept = (ROOT / "konzepte" / "konzept-funktionsdurchgang-2026-10.md").read_text(
+        encoding="utf-8"
+    )
+    flat = " ".join(concept.split())
+    gap = re.search(r"Lücke im Hauptfaden ≤ (\d+) ms", flat)
+    second = re.search(r"prüft ein zweiter Agent (\d+) % der Zeilen", flat)
+    agree = re.search(r"Stimmen weniger als (\d+) % der Urteile", flat)
+    assert gap and second and agree, "die Sätze im Konzept haben sich geändert"
+    assert int(gap.group(1)) == MAIN_GAP_MS
+    assert int(second.group(1)) == round(SECOND_REVIEW_SHARE * 100)
+    assert int(agree.group(1)) == round(AGREEMENT * 100)
+
+
+def test_the_references_point_into_the_concept_that_stays() -> None:
+    """Verweise zeigen aufs Konzept, nicht in den Plan im Zustandsordner (L10).
+
+    Der Zustandsordner geht am Ende (Konzept §7); ein Verweis dorthin führt
+    dann ins Leere. Jeder Verweis „Konzept §n“ trifft einen Abschnitt.
+    """
+    import re
+
+    concept = (ROOT / "konzepte" / "konzept-funktionsdurchgang-2026-10.md").read_text(
+        encoding="utf-8"
+    )
+    sections = set(re.findall(r"^## (\d+) ", concept, flags=re.MULTILINE))
+    plan = "Plan " + "D0"
+    files = [
+        "tools/function_checks.py",
+        "tools/function_judges.py",
+        "tools/function_samples.py",
+        "tools/function_report.py",
+        "tests/test_function_report.py",
+    ]
+    stale: list[str] = []
+    for name in files:
+        text = (ROOT / name).read_text(encoding="utf-8")
+        stale += [f"{name}: {plan}" for _ in range(text.count(plan))]
+        stale += [
+            f"{name}: Konzept §{number}"
+            for number in re.findall(r"Konzept(?: Funktionsdurchgang)? §(\d+)", text)
+            if number not in sections
+        ]
+    assert not stale, stale
+
+
+def test_the_value_lists_are_the_ones_the_application_and_the_finding_file_use() -> None:
+    """Zwillinge mit Bindung (L4): Wortschatz von W, Handbuchfenster, Arten und Schwere."""
+    import re
+    from typing import get_args
+
+    from app.ui.guide_targets import ClickReason, Zone
+    from app.ui.manual_window import ManualWindow
+    from tools.function_checks import (
+        FINDING_KINDS,
+        MANUAL_WINDOW,
+        PROTOCOL_SCHEMA,
+        SEVERITIES,
+        WHY,
+        ZONES,
+    )
+    from tools.function_list import ROW_KINDS as LISTED_KINDS
+
+    assert get_args(ClickReason) == WHY
+    assert get_args(Zone) == ZONES
+    assert ManualWindow.__name__ == MANUAL_WINDOW
+    assert PROTOCOL_SCHEMA["kind"].choices is LISTED_KINDS
+    table = (STATE / "funde.md").read_text(encoding="utf-8")
+    kinds = re.search(r"^\| Art \| (.+) \|$", table, flags=re.MULTILINE)
+    severities = re.search(r"^\| Schwere \| (.+?) \(", table, flags=re.MULTILINE)
+    assert kinds and severities
+    assert tuple(part.strip() for part in kinds.group(1).split(",")) == FINDING_KINDS
+    assert tuple(part.strip() for part in severities.group(1).split(",")) == SEVERITIES
+
+
+def test_motion_that_was_not_measured_is_not_motion_off() -> None:
+    """``variant.motion = null`` heißt nicht gemessen, nicht „Bewegung aus“ (L6)."""
+
+    def unknown(protocol: dict[str, Any]) -> None:
+        protocol["variant"]["motion"] = None
+
+    assert _judged(unknown).criteria["G8"].verdict == "erfuellt"
+
+
+@pytest.mark.parametrize("order", ["b_zuerst", "c_zuerst"])
+def test_two_stages_on_one_point_settle_on_the_open_one(order: str) -> None:
+    """Urteile der Stufen B und C an einem Punkt: „offen“ vor „gut“, in jeder Folge (L7)."""
+    entries = [v for v in _b_verdicts() if v["point"] != 1] + [
+        _verdict(point=1),
+        _verdict(point=1, reviewer="stufe_c", verdict="offen", rm="RM-805"),
+    ]
+    if order == "c_zuerst":
+        entries.reverse()
+    line = next(
+        line for line in _checklist(entries).splitlines() if line.startswith("| drill_hole")
+    )
+    cells = [cell.strip() for cell in line.strip("|").split("|")]
+    assert cells[3] == "offen" and "RM-805" in cells[-2]
+
+
+def test_the_coarse_preview_follows_the_bench_not_the_scene_sum() -> None:
+    """Grob ist, was der Prüfstand am Fall sah (``preview.coarse``), nicht die Summe (L11)."""
+
+    def many_triangles(protocol: dict[str, Any]) -> None:
+        protocol["scene"]["triangles"] = 2 * 100_000
+
+    assert _judged(many_triangles).points[3].verdict == "erfuellt"
+
+
+def test_an_open_finding_keeps_a_fulfilled_point_open() -> None:
+    """Ein offener Fund aus der Funddatei lässt die Zeile nicht „gut“ werden (L18)."""
+    findings, _problems = parse_findings(_finding(subject="1", kind="Einfachheit"))
+    case = _judged()
+    cases = {case.row_id: case}
+    checked = check_verdicts(_b_verdicts(), outcomes=cases)
+    values = package_values(cases, checked.accepted, common_goals={}, solutions=SOLUTIONS)
+    text = render_checklist(
+        "D4",
+        rows=ROWS[:1],
+        cases=cases,
+        verdicts=checked,
+        findings={f.key: f for f in findings},
+        values=values,
+        commit="a280ee8f5",
+        date="2026-10-12",
+        out="F:/tmp-suche/lauf",
+    )
+    line = next(line for line in text.splitlines() if line.startswith("| drill_hole"))
+    assert "| offen RM-800 |" in line
+
+
+def test_evidence_names_the_file_of_the_case() -> None:
+    """Belege zeigen auf die Datei des Falls, auch bei Sprachfällen (L19)."""
+    case = judge_case(sample_protocol(), sample_context(), source="2/surfaces/drill_hole.json")
+    assert "2/surfaces/drill_hole.json#texts" in case.points[9].evidence
+
+
+def test_a_hand_edited_checklist_is_noticed() -> None:
+    """Die Abhakliste trägt eine Prüfsumme; eine Änderung von Hand fällt auf (L20)."""
+    text = _checklist(_b_verdicts())
+    assert function_report.checklist_intact(text)
+    assert not function_report.checklist_intact(text.replace("| gut |", "| gut nach Fix |", 1))
+
+
+def test_every_checked_in_checklist_is_untouched() -> None:
+    """Der Wächter im Tor: Jede Abhakliste im Zustandsordner ist erzeugt, nicht bearbeitet."""
+    found = sorted(STATE.glob("abhakliste-*.md"))
+    if not found:
+        pytest.skip("noch keine Abhakliste — der Probelauf schreibt die ersten")
+    tampered = [
+        p.name for p in found if not function_report.checklist_intact(p.read_text(encoding="utf-8"))
+    ]
+    assert tampered == []
+
+
+def test_light_and_dark_compare_the_cases_that_measured_the_layout() -> None:
+    """Hell gegen dunkel nimmt die Fälle mit Hauptknöpfen, nicht den ersten hellen (L21)."""
+    licence = sample_protocol()
+    licence.pop("layout")
+    licence["variant"]["set"] = "lizenz"
+    basis = sample_protocol()
+    basis["variant"]["set"] = "basis"
+    dark = sample_protocol()
+    dark["variant"]["theme"] = "dark"
+    protocols = [licence, basis, dark]
+    cases = [judge_case(p, sample_context()) for p in protocols]
+    assert merge_cases(cases, protocols).criteria["Z6"].verdict == "erfuellt"
+
+
+def test_the_agent_place_is_the_branch_menu_path_takes() -> None:
+    """Der Ort des Agenten kommt aus derselben Verzweigung wie sein Menüpfad (L14)."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY, catalogue_operations, menu_path, menu_place
+
+    load_operations()
+    places = {spec.name: menu_place(spec) for spec in REGISTRY.all()}
+    assert {"menue", "karte", "katalog"} == set(places.values())
+    for name in catalogue_operations():
+        assert places[name] == "katalog"
+    row = {"id": "drill_hole", "kind": "operation"}
+    assert function_report.agent_place(row) == (
+        places["drill_hole"],
+        menu_path(REGISTRY.get("drill_hole")),
+    )

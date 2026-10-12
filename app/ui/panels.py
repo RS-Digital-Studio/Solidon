@@ -5714,9 +5714,13 @@ class HistoryPanel(QWidget):
             further = menu.addMenu(tr("Verschieben vor"))
             further.menuAction().setObjectName("history.move_before")
             for before in valid:
-                label = tr("Ans Ende") if before is None else f"{before}  {self._title_of(before)}"
+                # **Die Nummer, die der Verlauf zeigt, nicht die Kennung** (U1):
+                # Nach einem Verschieben stand hier „5 Zylinder“ neben einer
+                # Liste, in der derselbe Schritt die 3 trägt.
+                shown = self._positions.get(before) if before is not None else None
+                label = tr("Ans Ende") if before is None else f"{shown}  {self._title_of(before)}"
                 target = further.addAction(label)
-                target.setObjectName(f"history.move_before.{'end' if before is None else before}")
+                target.setObjectName(f"history.move_before.{'end' if before is None else shown}")
                 target.triggered.connect(
                     lambda _checked=False, chosen=op_ids, where=before: self.moveRequested.emit(
                         chosen, where
@@ -12127,18 +12131,17 @@ def open_section(content: QWidget) -> None:
     also um eine Kopfzeile, unter der nichts steht.
 
     Gesucht wird unter den **direkten** Kindern des Wrappers: Der Inhalt hat
-    eigene Knöpfe, und einer davon wäre sonst der erste Treffer. Steckt das
-    Widget in keinem Abschnitt — der Prüfbericht sitzt in einem Reiter —,
-    geschieht nichts.
+    eigene Knöpfe, und einer davon wäre sonst der erste Treffer. Steht die
+    Überschrift in einer fremden Zeile, trägt der Wrapper sie als Eigenschaft.
+    Die Auskunft gibt ``guide_targets.section_heading``, dieselbe, nach der
+    der Wortschatz seine Klappen nennt. Steckt das Widget in keinem
+    Abschnitt, geschieht nichts.
     """
-    wrapper = content.parentWidget()
-    if wrapper is None:
-        return
-    for child in wrapper.children():
-        if isinstance(child, QToolButton) and child.objectName() == "sectionHeading":
-            if not child.isChecked():
-                child.setChecked(True)
-            return
+    from app.ui.guide_targets import section_heading
+
+    heading = section_heading(content)
+    if heading is not None and not heading.isChecked():
+        heading.setChecked(True)
 
 
 def least_number_width(spin: QDoubleSpinBox) -> int:

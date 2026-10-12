@@ -1,8 +1,9 @@
 """Die Urteile des Funktionsdurchgangs je Prüfpunkt und Kriterium (RM-737, Paket D0-U).
 
-Liest das Messprotokoll eines Falls (``cases/<nr>/function.json``, Bauplan D0
-Plan D0, Abschnitt 2.7) und gibt je Prüfpunkt und je geltendem Kriterium ein
-:class:`~tools.function_checks.Outcome` nach Plan D0, Abschnitt 2.8 (:func:`judge_case`).
+Liest das Messprotokoll eines Falls (``cases/<nr>/function.json``, Schema in
+:data:`~tools.function_checks.PROTOCOL_SCHEMA`) und gibt je Prüfpunkt und je
+geltendem Kriterium ein :class:`~tools.function_checks.Outcome` (Konzept §4,
+:func:`judge_case`).
 Schema, Schwellen und Datenmodell stehen in ``tools/function_checks.py``, die
 Gegenproben in ``tools/function_samples.py``.
 
@@ -27,9 +28,9 @@ from dataclasses import replace
 from itertools import pairwise
 from typing import Any, Final
 
+from app.ui.main_window import START_SIZE
 from app.ui.motion import ACCENT_MS, MEDIUM_MS
 from app.ui.op_dialog import MAX_FRONT_FIELDS, MAX_LEAD_WORDS, MAX_LEAD_WORDS_TRANSLATED
-from app.ui.session import COARSE_PREVIEW_ABOVE
 from app.ui.style import LEVELS, SPACE
 from app.ui.theme import contrast_ratio
 from tools.function_checks import (
@@ -38,11 +39,10 @@ from tools.function_checks import (
     COVERED,
     CRITERIA,
     DESIGN_PARTS,
-    EXPIRED_RUNS,
     FEEDBACK_AFTER_S,
     LAPTOP_SIZE,
-    LICENCE_RUNS,
     LICENCE_STATES,
+    LICENCE_UNLOCKED,
     MAIN_GAP_MS,
     MAIN_PHASES,
     MANUAL_WINDOW,
@@ -62,15 +62,18 @@ from tools.function_checks import (
     NOT_APPLICABLE,
     NOT_FOUND,
     RAW_CLASSES,
+    REVISE_WAYS,
     SELECTION_STAGES,
-    START_SIZE,
+    SWITCH_PHASES,
     CaseOutcome,
     Context,
     Issue,
     Outcome,
+    licence_runs,
     validate_protocol,
     words,
 )
+from tools.function_list import BODY_SELECTIONS, FEATURE_REQUIREMENT, FEATURE_SELECTIONS
 
 # --- Hilfen über dem Protokoll --------------------------------------------
 
@@ -80,7 +83,7 @@ def _word_set(text: str) -> set[str]:
 
 
 def _row(protocol: Mapping[str, Any]) -> Mapping[str, Any]:
-    """Die Zeile nach Plan D0, Abschnitt 2.3; eine bloße Kennung wird zur Zeile mit ``id``."""
+    """Die Zeile nach Konzept §3; eine bloße Kennung wird zur Zeile mit ``id``."""
     row = protocol.get("row")
     if isinstance(row, Mapping):
         return row
@@ -139,35 +142,118 @@ def _is_selection(step: Mapping[str, Any]) -> bool:
     return target.startswith(("tree.row:", "view:"))
 
 
-def _after_selection(steps: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-    """Die Schritte nach der letzten Auswahl — der Startzustand ist die Auswahl (Konzept §4)."""
-    last = max((index for index, step in enumerate(steps) if _is_selection(step)), default=-1)
-    return list(steps[last + 1 :])
+def _route_targets(row: Mapping[str, Any]) -> list[str]:
+    """Die Ziele des Auswahlwegs der Zeile (``Row.route`` aus ``function_list``)."""
+    return [
+        str(click.get("target"))
+        for click in row.get("route") or ()
+        if isinstance(click, Mapping) and click.get("target")
+    ]
+
+
+def _leading_selection(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]) -> int:
+    """Wie viele Schritte am Anfang die Startauswahl herstellen (Konzept §4).
+
+    Trägt die Zeile ihren Auswahlweg (``route``), endet die Startauswahl mit dem
+    Schritt, der dessen letztes Ziel klickt. Sonst sind es die führenden
+    Auswahlklicks. Ein Klick ins Bild mitten im Weg (*Im Bild einstellen*, eine
+    platzierende Operation) oder ein zweiter Eingang ist ein Schritt des Kunden
+    und zählt mit.
+    """
+    route = _route_targets(row)
+    if route:
+        last = route[-1]
+        return next(
+            (index + 1 for index, step in enumerate(steps) if step.get("target") == last), 0
+        )
+    count = 0
+    for step in steps:
+        if not _is_selection(step):
+            break
+        count += 1
+    return count
+
+
+def _after_selection(
+    steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]
+) -> list[Mapping[str, Any]]:
+    """Die Schritte nach der Startauswahl."""
+    return list(steps[_leading_selection(steps, row) :])
 
 
 def _selected_feature(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]) -> bool:
-    """Gilt die Zeile einem Merkmal oder einer Kante (E1: höchstens zwei Klicks danach)?"""
+    """Gilt die Zeile einem Merkmal oder einer Kante (E1: höchstens zwei Klicks danach)?
+
+    Aus der Anforderung der Zeile (``function_list``: ``merkmal:<art>``, die
+    Merkmalsauswahlen, ``kante``) oder, wo sie fehlt, aus der Startauswahl.
+    """
     requirement = str(row.get("requirement") or "")
-    if requirement.startswith(("merkmal", "kante")):
+    if requirement.startswith(FEATURE_REQUIREMENT) or requirement in FEATURE_SELECTIONS:
         return True
-    chosen = [str(step.get("target")) for step in steps if _is_selection(step)]
-    return bool(chosen) and "." in chosen[-1].split(":", 1)[1]
+    if requirement == "kante":
+        return True
+    chosen = [str(step.get("target")) for step in steps[: _leading_selection(steps, row)]]
+    return bool(chosen) and "." in chosen[-1].split(":", 1)[-1]
 
 
 def _has_selection_relation(row: Mapping[str, Any]) -> bool:
-    """Z3 gilt an Zeilen mit Merkmals- oder Körperbezug.
+    """Z3 und die Stelle von E4 gelten an Zeilen mit Merkmals- oder Körperbezug.
 
-    Abgelesen an der Anforderung der Zeile (Plan D0, Abschnitt 2.5).
+    Abgelesen am Auswahlweg der Zeile (eine Baumzeile darin) oder an ihrer
+    Anforderung nach ``function_list``: Körper, Merkmal, Kante, Körperzustand.
     """
+    if any(target.startswith("tree.row:") for target in _route_targets(row)):
+        return True
     requirement = str(row.get("requirement") or "")
-    return requirement.startswith(("merkmal", "kante", "koerper"))
+    return (
+        requirement.startswith((FEATURE_REQUIREMENT, "koerper:"))
+        or requirement in FEATURE_SELECTIONS
+        or requirement in BODY_SELECTIONS
+    )
 
 
-def _way_clicks(steps: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-    """Wegklicks nach der Auswahl: alles, was nicht die Handlung selbst ist."""
+def _number(value: Any) -> float | None:
+    """Ein Messwert als Zahl; ``None``, wo der Prüfstand nichts gemessen hat.
+
+    ``null`` im Protokoll heißt nicht gemessen (``validate_protocol``) — nie
+    Null und nie ein Absturz.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _settled(
+    subject: int | str,
+    issues: Sequence[Issue],
+    absent: Sequence[str],
+    summary: str,
+    measurement: Mapping[str, Any],
+    *,
+    judged: bool = False,
+    notes: Sequence[str] = (),
+) -> Outcome:
+    """Fund bleibt Fund, auch wenn eine zweite Messung fehlt; sonst fehlt sie.
+
+    Ein gemessener Verstoß geht nicht verloren, weil daneben etwas nicht
+    gemessen wurde — das Fehlende steht als Vermerk dabei. Ohne Verstoß heißt
+    ein fehlender Teil „nicht gelaufen“, nie „erfüllt“.
+    """
+    if issues:
+        extra = [f"fehlt: {', '.join(absent)}"] if absent else []
+        return _result(subject, issues, summary, measurement, notes=(*notes, *extra))
+    if absent:
+        return _missing(subject, *absent)
+    return _result(subject, issues, summary, measurement, judged=judged, notes=notes)
+
+
+def _way_clicks(
+    steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]
+) -> list[Mapping[str, Any]]:
+    """Wegklicks nach der Startauswahl: alles, was nicht die Handlung selbst ist."""
     return [
         step
-        for step in _clicks(_after_selection(steps))
+        for step in _clicks(_after_selection(steps, row))
         if step.get("why") != "ziel"
         or str(step.get("target") or "") in {"search", "toolbar.search"}
     ]
@@ -217,7 +303,7 @@ def _e1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     row = _row(protocol)
     at_feature = _selected_feature(steps, row)
     limit = MAX_CLICKS_AT_FEATURE if at_feature else MAX_CLICKS
-    counted = len(_clicks(_after_selection(steps)))
+    counted = len(_clicks(_after_selection(steps, row)))
     issues = []
     if counted > limit:
         where = "nach der Auswahl am Merkmal" if at_feature else "bis zum Ergebnis"
@@ -267,9 +353,13 @@ def _e4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     covered = spot.get("covered_by") if spot else None
     if covered:
         issues.append(Issue(f"{covered} verdeckt die bearbeitete Stelle", "mittel", "E4"))
-    return _result(
+    # „Kein Dialog verdeckt die Stelle“ ist nur gemessen, wo es eine Stelle gibt:
+    # an Zeilen mit Auswahl muss der Prüfstand sie nachsehen.
+    absent = ["spot"] if spot is None and _has_selection_relation(_row(protocol)) else []
+    return _settled(
         "E4",
         issues,
+        absent,
         f"{glances} Blickwechsel",
         {"glances": glances, "zones": zones, "covered_by": covered},
     )
@@ -319,8 +409,12 @@ def _e7(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     matrix = _map(protocol, "matrix")
     empty = _list(protocol, "empty_states")
     messages = _list(protocol, "messages")
-    if matrix is None and empty is None and messages is None:
-        return _missing("E7", "matrix", "empty_states", "messages")
+    # Drei Arten Sackgasse, drei Messungen: Fehlt eine, ist E7 nicht gemessen.
+    absent = [
+        name
+        for name, value in (("matrix", matrix), ("empty_states", empty), ("messages", messages))
+        if value is None
+    ]
     issues = []
     for stage, entry in sorted((matrix or {}).items()):
         if (
@@ -337,7 +431,7 @@ def _e7(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
             issues.append(
                 Issue(f"Meldung ohne Handlung: „{entry.get('text', '')}“", "schwer", "E7")
             )
-    return _result("E7", issues, f"{len(issues)} Sackgassen", {"dead_ends": len(issues)})
+    return _settled("E7", issues, absent, f"{len(issues)} Sackgassen", {"dead_ends": len(issues)})
 
 
 def _negative_hits(text: str, patterns: Iterable[tuple[str, str]]) -> list[str]:
@@ -361,7 +455,7 @@ def _v1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         # Die Liste führt für diese Sprache keine Wörter: V1 gilt hier nicht,
         # die Quellsprache trägt die Prüfung.
         return None
-    issues = []
+    issues: list[Issue] = []
     for entry in texts:
         hits = _negative_hits(str(entry.get("text") or ""), patterns)
         issues.extend(Issue(f"„{hit}“ in „{entry.get('text')}“", "leicht", "V1") for hit in hits)
@@ -384,25 +478,33 @@ def _v3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     if fields_ is None:
         return _missing("V3", "fields")
     issues = []
+    lacking = set()
+    # Konzept §4: „Kurzhilfe und zugängliche Beschreibung“ — beide Sätze, und
+    # jeder sagt mehr als der Titel.
     for entry in fields_:
         label = str(entry.get("label") or "")
-        sentence = str(entry.get("description") or entry.get("tooltip") or "").strip()
-        if not sentence:
-            issues.append(Issue(f"Feld „{label}“ ohne eigenen Satz", "leicht", "V3"))
-            continue
-        said = _word_set(sentence)
-        shared = len(said & _word_set(label)) / len(said) if said else 1.0
-        if shared > MAX_TITLE_OVERLAP:
-            issues.append(
-                Issue(
-                    f"Feld „{label}“: der Satz wiederholt den Titel („{sentence}“)", "leicht", "V3"
+        for key, title in (("tooltip", "Kurzhilfe"), ("description", "Beschreibung")):
+            sentence = str(entry.get(key) or "").strip()
+            if not sentence:
+                issues.append(Issue(f"Feld „{label}“ ohne {title}", "leicht", "V3"))
+                lacking.add(label)
+                continue
+            said = _word_set(sentence)
+            shared = len(said & _word_set(label)) / len(said) if said else 1.0
+            if shared > MAX_TITLE_OVERLAP:
+                issues.append(
+                    Issue(
+                        f"Feld „{label}“: {title} wiederholt den Titel („{sentence}“)",
+                        "leicht",
+                        "V3",
+                    )
                 )
-            )
-    with_sentence = len(fields_) - len(issues)
+                lacking.add(label)
+    with_sentence = len(fields_) - len(lacking)
     return _result(
         "V3",
         issues,
-        f"{with_sentence} von {len(fields_)} Feldern mit eigenem Satz",
+        f"{with_sentence} von {len(fields_)} Feldern mit eigenen Sätzen",
         {"fields": len(fields_), "own_sentence": with_sentence},
     )
 
@@ -465,31 +567,38 @@ def _layout(protocol: Mapping[str, Any], kind: str) -> list[Mapping[str, Any]] |
 
 def _g1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     entries = _layout(protocol, "primary")
-    if entries is None:
-        return _missing("G1", "layout")
+    if not entries:
+        return _missing("G1", "layout (primary)")
     issues = []
+    absent = []
     for entry in entries:
-        if int(entry.get("primary", 0)) > MAX_PRIMARY:
+        primary, accents = _number(entry.get("primary")), _number(entry.get("accents"))
+        if primary is None or accents is None:
+            absent.append(f"layout.primary an {entry.get('surface')}")
+            continue
+        if primary > MAX_PRIMARY:
             issues.append(
-                Issue(
-                    f"{entry.get('primary')} Hauptknöpfe in {entry.get('surface')}", "leicht", "G1"
-                )
+                Issue(f"{primary:g} Hauptknöpfe in {entry.get('surface')}", "leicht", "G1")
             )
-        if int(entry.get("accents", 0)) > MAX_ACCENTS:
-            issues.append(
-                Issue(f"{entry.get('accents')} Akzente in {entry.get('surface')}", "leicht", "G1")
-            )
-    return _result("G1", issues, f"{len(entries)} Flächen", {"surfaces": len(entries)})
+        if accents > MAX_ACCENTS:
+            issues.append(Issue(f"{accents:g} Akzente in {entry.get('surface')}", "leicht", "G1"))
+    return _settled("G1", issues, absent, f"{len(entries)} Flächen", {"surfaces": len(entries)})
 
 
 def _g2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     entries = _layout(protocol, "spacing")
-    if entries is None:
-        return _missing("G2", "layout")
+    if not entries:
+        return _missing("G2", "layout (spacing)")
     issues = []
-    groups: dict[tuple[str, str], set[int]] = {}
+    absent = []
+    groups: dict[tuple[str, str], set[float]] = {}
     for entry in entries:
-        values = [int(entry.get("spacing", 0)), *(int(v) for v in entry.get("margins") or ())]
+        spacing = _number(entry.get("spacing"))
+        margins = [_number(value) for value in entry.get("margins") or ()]
+        if spacing is None or any(value is None for value in margins):
+            absent.append(f"layout.spacing an {entry.get('surface')}")
+            continue
+        values = [spacing, *(value for value in margins if value is not None)]
         off = sorted({value for value in values if value % SPACE})
         if off:
             issues.append(
@@ -501,7 +610,7 @@ def _g2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
             )
         if entry.get("group"):
             key = (str(entry.get("surface")), str(entry.get("group")))
-            groups.setdefault(key, set()).add(int(entry.get("spacing", 0)))
+            groups.setdefault(key, set()).add(spacing)
     for (surface, group), spacings in sorted(groups.items()):
         if len(spacings) > 1:
             issues.append(
@@ -509,7 +618,7 @@ def _g2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
                     f"Gruppe {group} in {surface} mit Abständen {sorted(spacings)}", "leicht", "G2"
                 )
             )
-    return _result("G2", issues, f"{len(entries)} Layouts", {"layouts": len(entries)})
+    return _settled("G2", issues, absent, f"{len(entries)} Layouts", {"layouts": len(entries)})
 
 
 def _g3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
@@ -517,21 +626,29 @@ def _g3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     if entries is None:
         return _missing("G3", "layout")
     issues = []
+    absent = []
     for entry in entries:
         for name, edges in (
             ("Beschriftungen", entry.get("label_edges")),
             ("Felder", entry.get("field_edges")),
         ):
-            if edges and len(set(edges)) > 1:
+            read = [_number(edge) for edge in edges or ()]
+            numbers = [number for number in read if number is not None]
+            if len(numbers) != len(read):
+                absent.append(f"layout.form an {entry.get('surface')}")
+                continue
+            if len(set(numbers)) > 1:
                 issues.append(
                     Issue(
-                        f"{name} in {entry.get('surface')} nicht bündig: {sorted(set(edges))}",
+                        f"{name} in {entry.get('surface')} nicht bündig: {sorted(set(numbers))}",
                         "leicht",
                         "G3",
                     )
                 )
         for value in entry.get("values") or ():
-            if value.get("alignment") != "right" or not value.get("unit"):
+            if not isinstance(value, Mapping):
+                absent.append(f"layout.form.values an {entry.get('surface')}")
+            elif value.get("alignment") != "right" or not value.get("unit"):
                 issues.append(
                     Issue(
                         f"Wert in {entry.get('surface')} nicht rechtsbündig mit Einheit",
@@ -539,7 +656,10 @@ def _g3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
                         "G3",
                     )
                 )
-    return _result("G3", issues, f"{len(entries)} Formulare", {"forms": len(entries)})
+    notes = [] if entries else ["kein Formular am Fall"]
+    return _settled(
+        "G3", issues, absent, f"{len(entries)} Formulare", {"forms": len(entries)}, notes=notes
+    )
 
 
 _STYLE_SIZE: Final = re.compile(r"font(?:-size)?\s*:", re.IGNORECASE)
@@ -571,10 +691,16 @@ def _g5(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     if images is None:
         return _missing("G5", "state_images")
     issues = []
+    absent = []
     for entry in images:
         states = dict(entry.get("states") or {})
+        unseen = sorted(state for state, digest in states.items() if not digest)
+        if unseen:
+            absent.append(f"state_images {entry.get('widget')}: {', '.join(unseen)}")
         seen: dict[str, str] = {}
         for state, digest in sorted(states.items()):
+            if not digest:
+                continue
             if digest in seen:
                 issues.append(
                     Issue(
@@ -586,7 +712,12 @@ def _g5(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
             seen.setdefault(digest, state)
         if "rest" in states and "focus" not in states:
             issues.append(Issue(f"{entry.get('widget')}: Fokus nicht aufgenommen", "leicht", "G5"))
-    return _result("G5", issues, f"{len(images)} Widgets", {"widgets": len(images)}, judged=True)
+    return _settled(
+        "G5", issues, absent, f"{len(images)} Widgets", {"widgets": len(images)}, judged=True
+    )
+
+
+_COLOUR: Final = re.compile(r"#[0-9a-fA-F]{6}")
 
 
 def _g6(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
@@ -594,9 +725,14 @@ def _g6(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     if pairs is None:
         return _missing("G6", "contrast")
     issues = []
+    absent = []
     lowest = math.inf
     for entry in pairs:
-        ratio = contrast_ratio(str(entry["foreground"]), str(entry["background"]))
+        colours = (entry.get("foreground"), entry.get("background"))
+        if not all(isinstance(c, str) and _COLOUR.fullmatch(c) for c in colours):
+            absent.append(f"contrast an {entry.get('widget')}")
+            continue
+        ratio = contrast_ratio(str(colours[0]), str(colours[1]))
         lowest = min(lowest, ratio)
         limit = MIN_CONTRAST_LARGE if entry.get("large") or entry.get("symbol") else MIN_CONTRAST
         if ratio < limit:
@@ -608,12 +744,15 @@ def _g6(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
                     "G6",
                 )
             )
-    summary = f"kleinster Kontrast {lowest:.2f}" if pairs else "keine Paare"
-    return _result(
+    if not pairs:
+        absent.append("contrast (keine Paare)")
+    summary = "keine Paare" if math.isinf(lowest) else f"kleinster Kontrast {lowest:.2f}"
+    return _settled(
         "G6",
         issues,
+        absent,
         summary,
-        {"pairs": len(pairs), "lowest": None if not pairs else round(lowest, 3)},
+        {"pairs": len(pairs), "lowest": None if math.isinf(lowest) else round(lowest, 3)},
     )
 
 
@@ -650,11 +789,17 @@ def _g8(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     if animations is None:
         return _missing("G8", "animations")
     variant = _map(protocol, "variant") or {}
-    motion = variant.get("motion", True)
+    # Abgeschaltet ist die Bewegung nur bei ``False``; ``null`` heißt nicht
+    # gemessen, und dann gilt der gewöhnliche Lauf mit Bewegung.
+    motion_off = variant.get("motion") is False
     issues = []
+    absent = []
     for entry in animations:
-        duration = float(entry.get("duration_ms", 0))
-        if not motion and duration > 0:
+        duration = _number(entry.get("duration_ms"))
+        if duration is None:
+            absent.append(f"animations an {entry.get('widget')}")
+            continue
+        if motion_off and duration > 0:
             issues.append(
                 Issue(
                     f"Bewegung trotz abgeschalteter Bewegung an {entry.get('widget')}",
@@ -662,7 +807,7 @@ def _g8(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
                     "G8",
                 )
             )
-        elif motion and not ACCENT_MS <= duration <= MEDIUM_MS:
+        elif not motion_off and not ACCENT_MS <= duration <= MEDIUM_MS:
             issues.append(
                 Issue(
                     f"Übergang {duration:g} ms an {entry.get('widget')}, "
@@ -671,7 +816,9 @@ def _g8(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
                     "G8",
                 )
             )
-    return _result("G8", issues, f"{len(animations)} Übergänge", {"animations": len(animations)})
+    return _settled(
+        "G8", issues, absent, f"{len(animations)} Übergänge", {"animations": len(animations)}
+    )
 
 
 def _g9(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
@@ -686,11 +833,18 @@ def _z1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
             if "Z1" not in (_spec(protocol).get("criteria") or ())
             else _missing("Z1", "frames")
         )
-    delays = [float(value) for value in frames.get("drag_ms") or ()]
-    if not delays:
-        return _missing("Z1", "frames")
-    factor = float(frames.get("reference_factor", 1.0))
+    measured = [_number(value) for value in frames.get("drag_ms") or ()]
+    delays = [value for value in measured if value is not None]
+    factor = _number(frames.get("reference_factor"))
+    if not delays or factor is None:
+        # Kein Bild nach dem Ziehen oder kein Referenzfaktor: nichts gemessen.
+        return _missing("Z1", "frames.drag_ms", "frames.reference_factor")
     worst = max(delays) * factor
+    notes = (
+        [f"{len(measured) - len(delays)} Ereignisse ohne Bild danach"]
+        if len(delays) < len(measured)
+        else []
+    )
     issues = (
         [
             Issue(
@@ -702,7 +856,13 @@ def _z1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         if worst > MAX_DRAG_MS
         else []
     )
-    return _result("Z1", issues, f"{worst:.0f} ms", {"worst_ms": round(worst, 1), "factor": factor})
+    return _result(
+        "Z1",
+        issues,
+        f"{worst:.0f} ms",
+        {"worst_ms": round(worst, 1), "factor": factor},
+        notes=notes,
+    )
 
 
 def _z2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
@@ -724,7 +884,7 @@ def _z3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     steps = _path(protocol)
     if steps is None:
         return _missing("Z3", "steps")
-    way = _way_clicks(steps)
+    way = _way_clicks(steps, row)
     issues = [
         Issue(
             f"Wegklick nach der Auswahl: {step.get('why')} auf {step.get('target')}", "leicht", "Z3"
@@ -767,8 +927,10 @@ def _z6(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         return _missing("Z6", "scrollbars", "icons")
     sizes = {START_SIZE, LAPTOP_SIZE}
     issues = []
+    seen: set[tuple[int, ...]] = set()
     for entry in bars or []:
-        size = tuple(int(v) for v in entry.get("window_size") or ())
+        size = tuple(int(n) for n in (_number(v) for v in entry.get("window_size") or ()) if n)
+        seen.add(size)
         if (
             size in sizes
             and entry.get("front")
@@ -782,18 +944,24 @@ def _z6(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
                 )
             )
     for entry in icons or []:
-        scale = entry.get("scale")
-        ratio = entry.get("pixmap_ratio")
+        scale, ratio = _number(entry.get("scale")), _number(entry.get("pixmap_ratio"))
         if scale is not None and ratio is not None and not _close(scale, ratio):
             issues.append(
                 Issue(
-                    f"Symbol {entry.get('widget')} bei {float(scale) * 100:.0f} % "
-                    f"mit Pixmap {float(ratio):g}",
+                    f"Symbol {entry.get('widget')} bei {scale * 100:.0f} % mit Pixmap {ratio:g}",
                     "leicht",
                     "Z6",
                 )
             )
-    return _result("Z6", issues, f"{len(bars or [])} Flächen", {"surfaces": len(bars or [])})
+    # Beide Größen gehören gemessen: die Startgröße und der Laptop mit Taskleiste.
+    absent = [
+        f"scrollbars bei {width} x {height}"
+        for width, height in sorted(sizes)
+        if (width, height) not in seen
+    ]
+    return _settled(
+        "Z6", issues, absent, f"{len(bars or [])} Flächen", {"surfaces": len(bars or [])}
+    )
 
 
 def _z7(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
@@ -830,14 +998,25 @@ def _i2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
 
 
 def _i3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
+    row = _row(protocol)
+    # I3 ist ein Anteil an einer vorab festgelegten Liste der häufigsten
+    # Kundenziele (Konzept §4): gemessen nur an deren Zeilen, und auch dort
+    # kein Fund je Zeile — die Schwelle gilt dem Paket (``package_values``).
+    if str(row.get("target") or "") not in context.common_goal_targets:
+        return None
     steps = _path(protocol)
     if steps is None:
         return _missing("I3", "steps")
-    way = _way_clicks(steps)
-    # Ein einzelnes verfehltes Ziel ist ein Vorschlag; die Schwelle gilt dem
-    # Paket (``function_report.package_values``).
-    issues = [Issue(f"Ziel erst nach {len(way)} Wegklicks da", "Vorschlag", "I3")] if way else []
-    return _result("I3", issues, f"{len(way)} Wegklicks", {"way_clicks": len(way)})
+    way = _way_clicks(steps, row)
+    notes = [f"Ziel erst nach {len(way)} Wegklicks da — zählt im Paketanteil"] if way else []
+    return _result(
+        "I3",
+        [],
+        f"{len(way)} Wegklicks",
+        {"way_clicks": len(way)},
+        judged=bool(way),
+        notes=notes,
+    )
 
 
 def _i4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
@@ -848,20 +1027,17 @@ def _i4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
 def _i5(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     if "I5" not in (_spec(protocol).get("criteria") or ()):
         return None
-    place = _map(protocol, "place")
     steps = _path(protocol)
-    if place is None or steps is None:
-        return _missing("I5", "place", "steps")
+    if steps is None:
+        return _missing("I5", "steps")
     issues = []
-    if place.get("error"):
+    clicks = len(_clicks(steps))
+    # Kein Weg zum Ziel steht am Schritt, an dem der Prüfstand aufgab.
+    if any(step.get("finding") == NOT_FOUND for step in steps):
         issues.append(Issue("Vorher und nachher nicht erreichbar", "mittel", "I5"))
-    elif len(_clicks(steps)) > 1:
-        issues.append(
-            Issue(f"Vorher und nachher erst nach {len(_clicks(steps))} Klicks", "mittel", "I5")
-        )
-    return _result(
-        "I5", issues, place.get("where", "?"), {"clicks": len(_clicks(steps))}, judged=True
-    )
+    elif clicks > 1:
+        issues.append(Issue(f"Vorher und nachher erst nach {clicks} Klicks", "mittel", "I5"))
+    return _result("I5", issues, f"{clicks} Klicks", {"clicks": clicks}, judged=True)
 
 
 def _bench_findings(protocol: Mapping[str, Any], kind: str) -> list[Mapping[str, Any]]:
@@ -887,9 +1063,10 @@ def _rank_issues(
 ) -> list[Issue]:
     issues = []
     for word, entry in sorted(probes.items()):
-        rank = entry.get("rank")
-        if rank is None or int(rank) > MAX_RANK:
-            shown = "nicht gefunden" if rank is None else f"Rang {rank}"
+        # ``rank = null`` heißt: Die Probe fand das Ziel unter keinem Treffer.
+        rank = _number(entry.get("rank"))
+        if rank is None or rank > MAX_RANK:
+            shown = "nicht gefunden" if rank is None else f"Rang {rank:g}"
             issues.append(Issue(f"Suche „{word}“: {shown}", severity, criterion))
     return issues
 
@@ -915,7 +1092,14 @@ def _combine(
     summary: str = "",
     measurement: Mapping[str, Any] | None = None,
 ) -> Outcome:
-    """Ein Prüfpunkt aus seinen Kriterien: Fund vor Urteil vor erfüllt."""
+    """Ein Prüfpunkt aus seinen Kriterien: Fund vor nicht prüfbar vor nicht gelaufen vor Urteil.
+
+    Ein Kriterium, das an der Zeile nicht gilt, kommt als ``None`` und zählt
+    nicht. Ein geltendes, aber nicht gemessenes lässt den Prüfpunkt höchstens
+    „nicht gelaufen“ werden — nie „Stufe B“, die ein Urteil „gut“ schließen
+    könnte. Was an einer Zeile nicht gilt, steht als *entfällt* mit Grund in der
+    Spezifikation.
+    """
     present = [part for part in parts if part is not None]
     issues = [*own]
     for part in present:
@@ -936,13 +1120,20 @@ def _combine(
         return Outcome(
             subject, "A", "nicht_pruefbar", summary, data, notes=tuple(notes), reason=notes[0]
         )
-    ran = [part for part in present if part.verdict != "nicht_gelaufen"]
-    if not measured and not ran:
-        reasons = ", ".join(part.reason for part in present if part.reason) or "keine Messung"
-        return Outcome(subject, "A", "nicht_gelaufen", "nicht gemessen", data, reason=reasons)
+    unmeasured = [part for part in present if part.verdict == "nicht_gelaufen"]
+    if unmeasured or (not measured and not present):
+        reasons = "; ".join(f"{part.subject} {part.reason}" for part in unmeasured)
+        return Outcome(
+            subject,
+            "A",
+            "nicht_gelaufen",
+            "nicht gemessen",
+            data,
+            reason=reasons or "keine Messung",
+        )
     if judged or any(part.verdict == "stufe_b" for part in present):
-        return Outcome(subject, "B", "stufe_b", summary, data, notes=tuple(notes))
-    return Outcome(subject, "A", "erfuellt", summary, data, notes=tuple(notes))
+        return Outcome(subject, "B", "stufe_b", summary, data)
+    return Outcome(subject, "A", "erfuellt", summary, data)
 
 
 def _point_1(
@@ -962,11 +1153,14 @@ def _point_1(
             )
     probes = _probes(protocol, question=False)
     issues.extend(_rank_issues(probes, "mittel", None))
-    notes = [] if probes else ["keine Suchproben gemessen"]
+    # Suchproben sind Pflicht für Prüfpunkt 1 (Zeilenspezifikation): ohne sie
+    # ist die Hälfte von „auffindbar“ nicht gemessen.
+    absent = [] if probes else ["search (Suchproben)"]
     where = place.get("where", "?")
-    return _result(
+    return _settled(
         1,
         issues,
+        absent,
         f"{where}, {len(probes)} Suchproben",
         {
             "where": where,
@@ -974,7 +1168,6 @@ def _point_1(
             "probes": {w: e.get("rank") for w, e in probes.items()},
         },
         judged=True,
-        notes=notes,
     )
 
 
@@ -1024,33 +1217,60 @@ def _point_3(
     preview = _map(protocol, "preview")
     if preview is None:
         return _missing(3, "preview")
-    scene = _map(protocol, "scene") or {}
     variant = _map(protocol, "variant") or {}
-    coarse = int(scene.get("triangles", 0)) > COARSE_PREVIEW_ABOVE or bool(preview.get("coarse"))
-    issues = []
+    # Grob entscheidet die Anwendung je Körper (``Session``); der Prüfstand sieht
+    # es am Fall. Die Dreieckssumme der Szene wäre eine zweite, falsche Regel.
+    coarse = preview.get("coarse")
+    if not isinstance(coarse, bool):
+        return _missing(3, "preview.coarse")
     if coarse:
+        banner = preview.get("banner_text")
+        if banner is None:
+            return _missing(3, "preview.banner_text")
         note = context.coarse_note(str(variant.get("language") or "de"))
-        if note not in str(preview.get("banner_text") or ""):
-            issues.append(Issue("grobe Vorschau ohne ihren Satz im Vorschauband", "mittel"))
+        issues = (
+            []
+            if note in str(banner)
+            else [Issue("grobe Vorschau ohne ihren Satz im Band", "mittel")]
+        )
         return _result(3, issues, "grobe Vorschau", {"coarse": True})
     states = _map(protocol, "states") or {}
-    applied = states.get("applied")
+    applied, before = states.get("applied"), states.get("before")
     result = _map(protocol, "result")
-    if not isinstance(applied, Mapping) or result is None:
-        return _missing(3, "states.applied", "result")
-    shown = dict(preview.get("bodies") or {})
+    if not isinstance(applied, Mapping) or not isinstance(before, Mapping) or result is None:
+        return _missing(3, "states.applied", "states.before", "result")
+    issues = []
+    absent = []
     kept = dict(applied.get("bodies") or {})
-    differ = sorted(key for key, digest in shown.items() if kept.get(key) != digest)
-    if differ:
-        issues.append(Issue(f"Vorschau zeigt andere Körper als übernommen: {differ}", "schwer"))
+    changed = {
+        key: digest
+        for key, digest in kept.items()
+        if (before.get("bodies") or {}).get(key) != digest
+    }
+    shown = preview.get("bodies")
+    if not isinstance(shown, Mapping):
+        absent.append("preview.bodies")
+    else:
+        differ = sorted(key for key, digest in shown.items() if kept.get(key) != digest)
+        if differ:
+            issues.append(Issue(f"Vorschau zeigt andere Körper als übernommen: {differ}", "schwer"))
+        unshown = sorted(set(changed) - set(shown))
+        if unshown:
+            issues.append(Issue(f"Vorschau zeigt geänderte Körper nicht: {unshown}", "schwer"))
     metrics = dict(result.get("metrics") or {})
     for key, title in (("volume", "Volumen"), ("extent", "Außenmaß")):
-        if key in preview and key in metrics and not _close(preview[key], metrics[key]):
+        if preview.get(key) is None or metrics.get(key) is None:
+            absent.append(f"{key} in Vorschau und Ergebnis")
+        elif not _close(preview[key], metrics[key]):
             issues.append(
                 Issue(f"{title} der Vorschau {preview[key]} ≠ Ergebnis {metrics[key]}", "schwer")
             )
-    return _result(
-        3, issues, f"{len(shown)} Körper verglichen", {"bodies": len(shown), "coarse": False}
+    return _settled(
+        3,
+        issues,
+        absent,
+        f"{len(changed)} geänderte Körper verglichen",
+        {"bodies": len(changed), "coarse": False},
     )
 
 
@@ -1063,41 +1283,56 @@ def _point_4(
     expectation = _spec(protocol).get("expectation")
     if not isinstance(expectation, Mapping) or not expectation:
         return _missing(4, "spec.expectation")
-    without = sorted(
+    # Eine Erwartung ohne Herkunft oder ohne Wert ist ein Fehler der
+    # Spezifikation: nicht prüfbar, bis sie berichtigt ist.
+    unusable = sorted(
         key
         for key, entry in expectation.items()
-        if not isinstance(entry, Mapping) or not str(entry.get("origin") or "").strip()
+        if not isinstance(entry, Mapping)
+        or not str(entry.get("origin") or "").strip()
+        or _number(entry.get("value")) is None
     )
-    if without:
+    if unusable:
         return Outcome(
-            4, "A", "nicht_pruefbar", "Erwartung ohne Herkunft", reason=f"ohne Herkunft: {without}"
+            4,
+            "A",
+            "nicht_pruefbar",
+            "Erwartung ohne Herkunft oder Wert",
+            reason=f"ohne Herkunft oder Wert: {unusable}",
         )
     metrics = dict(result.get("metrics") or {})
     issues = []
+    absent = []
     for key, entry in sorted(expectation.items()):
-        if key not in metrics:
-            issues.append(Issue(f"{key} nicht gemessen", "schwer"))
+        measured = _number(metrics.get(key))
+        if measured is None:
+            absent.append(f"result.metrics.{key}")
             continue
-        value, tolerance = float(entry["value"]), float(entry.get("tolerance", 0.0))
-        if abs(float(metrics[key]) - value) > tolerance:
-            issues.append(Issue(f"{key} {metrics[key]} statt {value} ± {tolerance}", "schwer"))
+        value = float(entry["value"])
+        tolerance = _number(entry.get("tolerance")) or 0.0
+        if abs(measured - value) > tolerance:
+            issues.append(Issue(f"{key} {measured:g} statt {value:g} ± {tolerance:g}", "schwer"))
     cli = _map(protocol, "cli")
-    if cli is None:
-        return _missing(4, "cli")
-    if not cli.get("print_equal"):
+    equal = cli.get("print_equal") if cli is not None else None
+    if not isinstance(equal, bool):
+        # Fehlt der Vergleich mit der Kommandozeile, bleibt ein Fund an den
+        # Kennzahlen trotzdem ein Fund (Vermerk statt Verlust).
+        absent.append("cli.print_equal")
+    elif not equal:
         issues.append(
             Issue(
                 "Kommandozeile nicht druckgleich "
-                f"(größte Abweichung {cli.get('max_deviation_mm')} mm)",
+                f"(größte Abweichung {(cli or {}).get('max_deviation_mm')} mm)",
                 "schwer",
             )
         )
-    said = "druckgleich" if cli.get("print_equal") else "abweichend"
-    return _result(
+    said = "nicht verglichen" if equal is None else "druckgleich" if equal else "abweichend"
+    return _settled(
         4,
         issues,
+        absent,
         f"{len(expectation)} Kennzahlen, Kommandozeile {said}",
-        {"metrics": metrics, "cli_deviation_mm": cli.get("max_deviation_mm")},
+        {"metrics": metrics, "cli_deviation_mm": (cli or {}).get("max_deviation_mm")},
     )
 
 
@@ -1105,19 +1340,23 @@ def _point_5(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
     states = _map(protocol, "states")
-    if states is None or not all(
-        isinstance(states.get(key), Mapping) for key in ("before", "applied", "undo", "redo")
-    ):
-        return _missing(5, "states.before", "states.applied", "states.undo", "states.redo")
+    required = ("before", "applied", "undo", "redo", "escape")
+    if states is None or not all(isinstance(states.get(key), Mapping) for key in required):
+        # Escape verwirft den Entwurf an jeder Zeile (Konzept §4, Prüfpunkt 5);
+        # ohne ihn ist der Rückweg nur zur Hälfte gemessen.
+        return _missing(5, *(f"states.{key}" for key in required))
     before, applied = states["before"], states["applied"]
     issues = []
     notes = []
-    checks = [("undo", before, "Rückgängig"), ("redo", applied, "Wiederholen")]
-    checks += [
-        (key, before, title)
-        for key, title in (("escape", "Escape"), ("cancelled", "Abbrechen"))
-        if isinstance(states.get(key), Mapping)
+    checks = [
+        ("undo", before, "Rückgängig"),
+        ("redo", applied, "Wiederholen"),
+        ("escape", before, "Escape"),
     ]
+    if isinstance(states.get("cancelled"), Mapping):
+        checks.append(("cancelled", before, "Abbrechen"))
+    else:
+        notes.append("Abbrechen im Dialog nicht gemessen (Zeile ohne Dialog?)")
     for key, expected, title in checks:
         got = states[key]
         if _print_without_view(got) != _print_without_view(expected):
@@ -1135,6 +1374,12 @@ def _point_5(
     )
 
 
+#: Wie spät eine Rückmeldung nach ihrer Schwelle kommen darf: eine Lücke im
+#: Hauptfaden. Ein Zeitgeber, der bei 0,2 s feuern soll, kommt höchstens so spät,
+#: wie der Hauptfaden blockiert sein darf (Prüfpunkt 6).
+_LATE_S: Final = MAIN_GAP_MS / 1000
+
+
 def _point_6(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
@@ -1143,30 +1388,44 @@ def _point_6(
         return _missing(6, "timing")
     issues = []
     notes = []
-    gap = float(timing.get("main_gap_ms", 0.0))
-    total = float(timing.get("total_s", 0.0))
-    if gap > MAIN_GAP_MS:
+    gap, total = _number(timing.get("main_gap_ms")), _number(timing.get("total_s"))
+    absent = [
+        f"timing.{key}"
+        for key, value in (("main_gap_ms", gap), ("total_s", total))
+        if value is None
+    ]
+    if gap is not None and gap > MAIN_GAP_MS:
         issues.append(
             Issue(f"Hauptfaden {gap:.0f} ms ohne Ereignis, erlaubt {MAIN_GAP_MS}", "mittel")
         )
-    if total >= FEEDBACK_AFTER_S and timing.get("first_feedback_s") is None:
-        issues.append(Issue(f"{total:.1f} s ohne Zeiger oder Statuszeile", "mittel"))
-    if total >= BAR_AFTER_S:
-        if timing.get("progress_shown_s") is None:
-            issues.append(Issue(f"{total:.1f} s ohne Fortschrittsbalken", "mittel"))
-        if timing.get("cancel_shown_s") is None:
-            issues.append(Issue(f"{total:.1f} s ohne sichtbares Abbrechen", "mittel"))
-    budget = timing.get("budget_s")
+    # Ab 0,2 s Zeiger, ab 2 s Balken und *Abbrechen* — und zwar dann, nicht
+    # irgendwann (Konzept §4, Prüfpunkt 6; Schwellen aus ``app.ui.loading``).
+    due: list[tuple[str, str, float]] = []
+    if total is not None and total >= FEEDBACK_AFTER_S:
+        due.append(("first_feedback_s", "Zeiger oder Statuszeile", FEEDBACK_AFTER_S))
+    if total is not None and total >= BAR_AFTER_S:
+        due.append(("progress_shown_s", "Fortschrittsbalken", BAR_AFTER_S))
+        due.append(("cancel_shown_s", "sichtbares Abbrechen", BAR_AFTER_S))
+    for key, title, after in due:
+        shown = _number(timing.get(key))
+        if shown is None:
+            issues.append(Issue(f"{total:.1f} s ohne {title}", "mittel"))
+        elif shown > after + _LATE_S:
+            issues.append(
+                Issue(f"{title} erst nach {shown:.2f} s, fällig ab {after:g} s", "mittel")
+            )
+    budget = _number(timing.get("budget_s"))
     if budget is None:
         notes.append("kein Budget")
-    elif total > float(budget):
+    elif total is not None and total > budget:
         # Eine Überschreitung ist ein Verdacht, den ``window_bench.py`` oder
         # die Leistungstests bestätigen (Konzept §4, Prüfpunkt 6).
-        notes.append(f"Verdacht: {total:.2f} s über dem Budget von {float(budget):.2f} s")
-    return _result(
+        notes.append(f"Verdacht: {total:.2f} s über dem Budget von {budget:.2f} s")
+    return _settled(
         6,
         issues,
-        f"{total:.2f} s, Lücke {gap:.0f} ms",
+        absent,
+        f"{total or 0:.2f} s, Lücke {gap or 0:.0f} ms",
         {"total_s": total, "main_gap_ms": gap, "budget_s": budget},
         notes=notes,
     )
@@ -1228,20 +1487,32 @@ def _point_9(
     )
 
 
-def _reading_order_jumps(chain: Sequence[Mapping[str, Any]]) -> list[str]:
+def _rect(entry: Mapping[str, Any]) -> tuple[float, float, float, float] | None:
+    """Ein Rechteck ``[x, y, b, h]`` aus dem Protokoll, ``None`` ohne Messung."""
+    values = entry.get("rect")
+    if not isinstance(values, list) or len(values) != 4:
+        return None
+    numbers = [_number(value) for value in values]
+    if any(number is None for number in numbers):
+        return None
+    x, y, width, height = (float(number or 0.0) for number in numbers)
+    return x, y, width, height
+
+
+def _reading_order_jumps(chain: Sequence[tuple[str, tuple[float, ...]]]) -> list[str]:
     """Rücksprünge der Tab-Kette gegen die Lesefolge.
 
     Ein Rücksprung ist ein Schritt in eine Zeile darüber oder nach links in
     derselben Zeile. Die Kette endet vor ihrem Umlauf zum ersten Element.
     """
     jumps = []
-    for before, after in pairwise(chain):
-        bx, by, _bw, bh = (int(v) for v in before["rect"])
-        ax, ay, _aw, ah = (int(v) for v in after["rect"])
+    for (before_name, before), (after_name, after) in pairwise(chain):
+        bx, by, _bw, bh = before
+        ax, ay, _aw, ah = after
         above = ay + ah <= by
         same_row = ay < by + bh and by < ay + ah
         if above or (same_row and ax < bx):
-            jumps.append(f"{before.get('name')} → {after.get('name')}")
+            jumps.append(f"{before_name} → {after_name}")
     return jumps
 
 
@@ -1250,23 +1521,31 @@ def _point_10(
 ) -> Outcome:
     chain = _list(protocol, "tab_chain")
     names = _list(protocol, "names")
-    if chain is None or names is None or "focus_return" not in protocol:
+    focus = protocol.get("focus_return")
+    if chain is None or names is None or not isinstance(focus, bool):
         return _missing(10, "tab_chain", "names", "focus_return")
-    issues = [
-        Issue(f"Rücksprung in der Tab-Kette: {jump}", "mittel")
-        for jump in _reading_order_jumps(chain)
-    ]
+    issues = []
+    absent = []
+    placed = [(str(entry.get("name")), _rect(entry)) for entry in chain]
+    if any(rect is None for _name, rect in placed):
+        absent.append("tab_chain.rect")
+    else:
+        issues += [
+            Issue(f"Rücksprung in der Tab-Kette: {jump}", "mittel")
+            for jump in _reading_order_jumps([(name, rect) for name, rect in placed if rect])
+        ]
     shown = [str(name) for name in names]
     if any(not name.strip() for name in shown):
         issues.append(Issue("Bedienelement ohne zugänglichen Namen", "mittel"))
     doubled = sorted({name for name in shown if name.strip() and shown.count(name) > 1})
     if doubled:
         issues.append(Issue(f"doppelte Namen: {doubled}", "mittel"))
-    if not protocol.get("focus_return"):
+    if not focus:
         issues.append(Issue("der Fokus kehrt nach dem Dialog nicht zurück", "mittel"))
-    return _result(
+    return _settled(
         10,
         issues,
+        absent,
         f"{len(chain)} Tab-Schritte",
         {"chain": len(chain), "names": len(shown)},
         notes=["Bildschirmleser: ungeprüft"],
@@ -1298,12 +1577,20 @@ def _point_12(
     if ways is None:
         return _missing(12, "revise")
     issues = []
+    absent = []
+    # Beide Wege gehören gemessen: *Diesen Schritt ändern* und der Doppelklick
+    # im Verlauf (Konzept §4, Prüfpunkt 12).
+    taken = {str(way.get("way")) for way in ways if isinstance(way, Mapping)}
+    absent += [f"revise ({way})" for way in REVISE_WAYS if way not in taken]
     for way in ways:
         title = way.get("way", "?")
         if not way.get("opened"):
             issues.append(Issue(f"Schritt ändern über {title} öffnet nicht", "schwer"))
             continue
-        if int(way.get("history_after", 0)) != int(way.get("history_before", 0)):
+        after, before = _number(way.get("history_after")), _number(way.get("history_before"))
+        if after is None or before is None:
+            absent.append(f"revise ({title}): Verlaufslänge")
+        elif after != before:
             issues.append(Issue(f"Verlauf gewachsen beim Ändern über {title}", "schwer"))
         fields_ = dict(way.get("fields") or {})
         params = dict(way.get("params") or {})
@@ -1314,7 +1601,7 @@ def _point_12(
         )
         if wrong:
             issues.append(Issue(f"Feld ≠ Parameter über {title}: {wrong}", "schwer"))
-    return _result(12, issues, f"{len(ways)} Wege", {"ways": [w.get("way") for w in ways]})
+    return _settled(12, issues, absent, f"{len(ways)} Wege", {"ways": [w.get("way") for w in ways]})
 
 
 def _point_13(
@@ -1325,10 +1612,11 @@ def _point_13(
         return _missing(13, "matrix")
     issues = []
     notes = []
+    absent = []
     for stage in SELECTION_STAGES:
         entry = matrix.get(stage)
         if not isinstance(entry, Mapping):
-            issues.append(Issue(f"Auswahlstufe {stage} nicht gemessen", "mittel"))
+            absent.append(f"matrix.{stage}")
             continue
         state = entry.get("state")
         if state == MATRIX_UNREACHABLE:
@@ -1339,9 +1627,10 @@ def _point_13(
             issues.append(Issue(f"grau ohne Grund bei {stage}", "schwer"))
         elif state == "angeboten" and entry.get("effective") is False:
             issues.append(Issue(f"angeboten ohne Wirkung bei {stage}", "schwer"))
-    return _result(
+    return _settled(
         13,
         issues,
+        absent,
         "sechs Auswahlstufen",
         {stage: (matrix.get(stage) or {}).get("state") for stage in SELECTION_STAGES},
         judged=True,
@@ -1356,7 +1645,9 @@ def _point_14(
     states = _map(protocol, "states") or {}
     if abort is None:
         return _missing(14, "abort")
-    seconds = float(abort.get("eval_s", 0.0))
+    seconds = _number(abort.get("eval_s"))
+    if seconds is None:
+        return _missing(14, "abort.eval_s")
     if seconds < BAR_AFTER_S:
         return Outcome(
             14,
@@ -1366,16 +1657,18 @@ def _point_14(
             reason=f"Szene unter {BAR_AFTER_S:g} s",
         )
     issues = []
-    if abort.get("cancel_shown_s") is None:
+    absent = []
+    if _number(abort.get("cancel_shown_s")) is None:
         issues.append(Issue("kein Abbrechen sichtbar", "schwer"))
     elif not abort.get("clicked"):
         issues.append(Issue("Abbrechen nicht geklickt", "mittel"))
     after, before = states.get("aborted"), states.get("before")
     if not isinstance(after, Mapping) or not isinstance(before, Mapping):
-        return _missing(14, "states.aborted", "states.before")
-    if _print_without_view(after) != _print_without_view(before):
+        # Der Stand danach fehlt — ein schon gemessener Fund bleibt (Vermerk).
+        absent.append("states.aborted")
+    elif _print_without_view(after) != _print_without_view(before):
         issues.append(Issue("Stand nach dem Abbruch ≠ vorher", "schwer"))
-    return _result(14, issues, f"Abbruch nach {seconds:.1f} s", {"eval_s": seconds})
+    return _settled(14, issues, absent, f"Abbruch nach {seconds:.1f} s", {"eval_s": seconds})
 
 
 def _point_15(
@@ -1386,19 +1679,23 @@ def _point_15(
     if halt is None or insertion is None:
         return _missing(15, "halt", "insertion")
     issues = []
-    step = halt.get("step")
-    if step is None or not re.search(rf"(?<!\d){int(step)}(?!\d)", str(halt.get("text") or "")):
+    absent = []
+    step = _number(halt.get("step"))
+    if step is None:
+        # Ohne die Schrittnummer, an der die Kette hält, lässt sich nicht prüfen,
+        # ob der Grund sie nennt.
+        absent.append("halt.step")
+    elif not re.search(rf"(?<!\d){int(step)}(?!\d)", str(halt.get("text") or "")):
         issues.append(Issue(f"Haltegrund ohne Schrittnummer: „{halt.get('text')}“", "mittel"))
     if insertion.get("outcome") == "absage" and not insertion.get("actions"):
         issues.append(Issue("Absage an der Einfügemarke ohne Handlung", "mittel"))
     elif insertion.get("outcome") not in {"absage", "ergebnis"}:
-        issues.append(
-            Issue(f"Einfügemarke ohne Ergebnis oder Absage ({insertion.get('outcome')})", "mittel")
-        )
-    return _result(
+        absent.append("insertion.outcome")
+    return _settled(
         15,
         issues,
-        f"Halt bei Schritt {step}",
+        absent,
+        f"Halt bei Schritt {step:g}" if step is not None else "Halt ohne Schrittnummer",
         {"step": step, "insertion": insertion.get("outcome")},
     )
 
@@ -1409,16 +1706,17 @@ def _point_16(
     switch = _map(protocol, "switch")
     if switch is None:
         return _missing(16, "switch")
-    late = list(switch.get("late_events") or ())
+    late = [event for event in switch.get("late_events") or () if isinstance(event, Mapping)]
     issues = [
         Issue(f"nach dem Wechsel: {event.get('kind')} „{event.get('text', '')}“", "schwer")
         for event in late
     ]
     phases = sorted(set(switch.get("phases") or ()))
-    missing = sorted({"vorschau", "entwurf", "rechnung"} - set(phases))
-    notes = [f"Wechsel nicht geprüft während: {missing}"] if missing else []
-    return _result(
-        16, issues, f"{len(phases)} Wechsel", {"phases": phases, "late": len(late)}, notes=notes
+    # Gewechselt wird während Vorschau, Entwurf und Rechnung (Konzept §4,
+    # Prüfpunkt 16); fehlt eine Phase, ist der Punkt nicht ganz gemessen.
+    absent = [f"switch ({phase})" for phase in SWITCH_PHASES if phase not in phases]
+    return _settled(
+        16, issues, absent, f"{len(phases)} Wechsel", {"phases": phases, "late": len(late)}
     )
 
 
@@ -1446,35 +1744,58 @@ def _point_17(
     return _result(17, issues, path, {"agent": path, "found": where})
 
 
+def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
+    """Prüfpunkt 18 über die Lizenzläufe einer Zeile.
+
+    Gesperrt (``LOCKED_STATES``) heißt: Schreibendes grau mit Grund, Lesendes
+    frei; freigeschaltet heißt: alles frei. ``complete`` verlangt jeden Lauf aus
+    :func:`licence_runs` — so urteilt ``function_report.merge_cases`` einmal je
+    Zeile über die Läufe aller ihrer Fälle; ein fehlender Lauf ist dann nicht
+    gemessen. Ein einzelner Fall trägt nur seinen Lauf und wird nur an ihm
+    gemessen.
+    """
+    issues = []
+    absent = []
+    if complete:
+        absent += [f"Lizenzlauf {state}" for state in licence_runs() if state not in runs]
+    for state in LICENCE_STATES:
+        entry = runs.get(state)
+        if entry is None:
+            continue
+        writes = entry.get("writes") if isinstance(entry, Mapping) else None
+        enabled = entry.get("enabled") if isinstance(entry, Mapping) else None
+        if not isinstance(writes, bool) or not isinstance(enabled, bool):
+            absent.append(f"licence_runs.{state}")
+            continue
+        should = LICENCE_UNLOCKED[state] or not writes
+        if not enabled and not str(entry.get("reason") or "").strip():
+            issues.append(Issue(f"grau ohne Grund bei {state}", "schwer"))
+        if enabled and not should:
+            issues.append(Issue(f"schreibendes Ziel frei trotz {state}", "schwer"))
+        if not enabled and should:
+            # Gekauft schaltet frei, und Lesendes bleibt in jedem Zustand offen
+            # (``Activation.unlocked``, Lizenzgrenze in ``kern.md``).
+            issues.append(Issue(f"gesperrt, obwohl {state} es offen lässt", "schwer"))
+    return _settled(
+        18,
+        issues,
+        absent,
+        f"{len(runs)} Lizenzläufe",
+        {
+            state: (runs.get(state) or {}).get("enabled")
+            for state in LICENCE_STATES
+            if state in runs
+        },
+    )
+
+
 def _point_18(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
     runs = _map(protocol, "licence_runs")
-    if runs is None:
+    if not runs:
         return _missing(18, "licence_runs")
-    issues = [
-        Issue(f"Lizenzlauf {state} fehlt", "mittel")
-        for state in LICENCE_RUNS
-        if not isinstance(runs.get(state), Mapping)
-    ]
-    for state in LICENCE_STATES:
-        entry = runs.get(state)
-        if not isinstance(entry, Mapping):
-            continue
-        if not entry.get("enabled") and not str(entry.get("reason") or "").strip():
-            issues.append(Issue(f"grau ohne Grund bei {state}", "schwer"))
-        if state in EXPIRED_RUNS and entry.get("writes") and entry.get("enabled"):
-            issues.append(Issue(f"schreibendes Ziel frei trotz {state}", "schwer"))
-        if state not in EXPIRED_RUNS and not entry.get("enabled"):
-            # Gekauft, laufende Demo und laufender Testlauf schalten frei
-            # (``Activation.unlocked``): grau ist dort eine Sperre zu viel.
-            issues.append(Issue(f"gesperrt, obwohl {state} freischaltet", "schwer"))
-    return _result(
-        18,
-        issues,
-        f"{len(runs)} Lizenzläufe",
-        {state: (runs.get(state) or {}).get("enabled") for state in LICENCE_STATES},
-    )
+    return judge_licence(runs, complete=False)
 
 
 def _point_19(
@@ -1528,7 +1849,7 @@ CRITERION_JUDGES: Final[dict[str, JudgeCriterion]] = {
     "I6": _i6,
 }
 
-#: Die 19 Prüfpunkte (Konzept §4, Plan D0, Abschnitt 3.1).
+#: Die 19 Prüfpunkte (Konzept §4).
 
 POINT_JUDGES: Final[dict[int, JudgePoint]] = {
     1: _point_1,
@@ -1590,16 +1911,23 @@ def _apply_not_applicable(outcome: Outcome, reasons: Mapping[str, str]) -> Outco
     )
 
 
-def judge_case(protocol: Mapping[str, Any], context: Context) -> CaseOutcome:
-    """Alle Prüfpunkte und die geltenden Kriterien eines Falls."""
+def judge_case(
+    protocol: Mapping[str, Any], context: Context, source: str = "function.json"
+) -> CaseOutcome:
+    """Alle Prüfpunkte und die geltenden Kriterien eines Falls.
+
+    ``source`` ist die Datei des Protokolls, relativ zu ``<out>/cases``
+    (``1/function.json``, ``2/surfaces/drill_hole.json``) — auf sie zeigen die
+    Belege.
+    """
     problems = tuple(validate_protocol(protocol))
     reasons = _not_applicable(_spec(protocol))
     images = tuple(str(image) for image in _list(protocol, "images") or ())
 
     def evidence(outcome: Outcome, fields: Iterable[str]) -> Outcome:
-        # Beleg nach Plan D0, Abschnitt 2.8: die Bilder des Falls und die Stellen im Protokoll,
-        # die das Urteil gelesen hat.
-        read = tuple(f"function.json#{name}" for name in fields if name in protocol)
+        # Beleg (Konzept §5, „mit Bild und Stelle“): die Bilder des Falls und
+        # die Stellen im Protokoll, die das Urteil gelesen hat.
+        read = tuple(f"{source}#{name}" for name in fields if name in protocol)
         return replace(outcome, evidence=(*images, *read))
 
     criteria: dict[str, Outcome] = {}
@@ -1618,9 +1946,9 @@ def judge_case(protocol: Mapping[str, Any], context: Context) -> CaseOutcome:
 def compare_themes(light: Mapping[str, Any], dark: Mapping[str, Any]) -> list[Issue]:
     """Z6: hell und dunkel zeigen dieselben Flächen mit derselben Zahl Akzente."""
 
-    def accents(protocol: Mapping[str, Any]) -> dict[str, int]:
+    def accents(protocol: Mapping[str, Any]) -> dict[str, float | None]:
         return {
-            str(entry.get("surface")): int(entry.get("accents", 0))
+            str(entry.get("surface")): _number(entry.get("accents"))
             for entry in _layout(protocol, "primary") or []
         }
 

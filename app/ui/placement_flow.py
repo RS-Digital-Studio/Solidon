@@ -4239,7 +4239,11 @@ class PlacementFlow(QObject):
         pick.setObjectName("measure.reference.pick")
         pick.setData(_PICK_IN_MODEL)
         for label, data in entries:
-            menu.addAction(label).setData(data)
+            entry = menu.addAction(label)
+            entry.setData(data)
+            # Der Bezug als Ziel im Wortschatz (``menu:measure.reference.<bezug>``).
+            reference = data[0] if isinstance(data, tuple) else data
+            entry.setObjectName(f"measure.reference.{guides.name_part(str(reference))}")
         menu.triggered.connect(
             lambda action, slot=index: self._reference_selected(slot, action.data())
         )

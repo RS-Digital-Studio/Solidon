@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Collection, Container
 from dataclasses import dataclass, replace
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from app.core import figures, markup
 from app.core.errors import AppError
@@ -609,6 +609,30 @@ def folded_categories(category: str, registry: Registry | None = None) -> frozen
     )
 
 
+#: Wo eine Operation steht: in der Menüleiste, rechts in der Karte der Auswahl
+#: oder im Bausteinkatalog.
+MenuPlace = Literal["menue", "karte", "katalog"]
+
+
+def menu_place(spec: OperationSpec, registry: Registry | None = None) -> MenuPlace:
+    """Wo eine Operation steht — die Verzweigung, der :func:`menu_path` folgt.
+
+    Eine Stelle für die Frage, damit der Agentenweg (``menu_path``) und wer
+    den Ort vergleicht (Funktionsdurchgang, Prüfpunkt 17) nicht zwei
+    Fassungen derselben Regel pflegen. Ein zusammengelegter Zwilling steht, wo
+    sein Partner steht.
+    """
+    source = registry or REGISTRY
+    twins = menu_twins()
+    if spec.name in twins:
+        return menu_place(source.get(twins[spec.name]), source)
+    if spec.name in catalogue_operations():
+        return "katalog"
+    if not in_the_menu_bar(spec.category):
+        return "karte"
+    return "menue"
+
+
 def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
     """Der tatsächliche Ort einer Operation aus denselben Daten wie die Oberfläche.
 
@@ -635,7 +659,8 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         twin = source.get(twins[spec.name])
         where = menu_path(twin, source)
         return f"{where} ({twin_way(spec.name)})"
-    if spec.name in catalogue_operations():
+    place = menu_place(spec, source)
+    if place == "katalog":
         # **Ein Baustein nennt den Ort, den er wirklich hat.**
         # Die Bausteine der Bibliothek stehen seit dem 29.08.2026 nur noch im
         # Katalog; ein Weg „Bausteine → Mechanik → Filmscharnier" schickte
@@ -658,7 +683,7 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         # Ebenen wird — die Leiste faltet höchstens eine Ebene, tiefer *kann*
         # keiner sein.
         return _catalogue_path(spec)
-    if not in_the_menu_bar(spec.category):
+    if place == "karte":
         # **Was einer Auswahl gilt, steht rechts im Fenster** — seit dem
         # 11.09.2026 nicht mehr in der Leiste. Der Weg nennt den Ort und die
         # Auswahl, die es braucht: Ohne gewählten Körper steht dort nichts,
