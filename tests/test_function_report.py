@@ -39,7 +39,8 @@ from tools.function_checks import (
     validate_protocol,
     words,
 )
-from tools.function_judges import CRITERION_JUDGES, POINT_JUDGES, judge_case
+from tools.function_judges import CRITERION_JUDGES
+from tools.function_points import POINT_JUDGES, judge_case
 from tools.function_report import (
     STATE,
     check_findings,
@@ -1248,9 +1249,10 @@ def test_the_menu_bar_and_the_function_list_meet_at_the_window(window: MainWindo
 
 def test_function_checks_reads_no_window() -> None:
     """Das Urteil braucht kein Fenster: kein Widget, keine QApplication in den Werkzeugen."""
-    from tools import function_judges, function_samples
+    from tools import function_judges, function_points, function_samples
 
-    for module in (function_checks, function_judges, function_samples, function_report):
+    modules = (function_checks, function_judges, function_points, function_samples)
+    for module in (*modules, function_report):
         source = Path(str(module.__file__)).read_text(encoding="utf-8")
         assert "QApplication(" not in source and "QWidget(" not in source, module.__name__
 
@@ -1390,6 +1392,7 @@ def test_the_references_point_into_the_concept_that_stays() -> None:
     files = [
         "tools/function_checks.py",
         "tools/function_judges.py",
+        "tools/function_points.py",
         "tools/function_samples.py",
         "tools/function_report.py",
         "tests/test_function_report.py",
@@ -1673,3 +1676,118 @@ def test_times_and_images_read_one_reference_factor() -> None:
     case = _judged(factor)
     assert case.criteria["Z1"].measurement["factor"] == 2.0
     assert case.points[6].measurement["reference_factor"] == 2.0
+
+
+# --- Nachprüfung der Fixrunde (N1 bis N5) ---------------------------------------
+
+
+def _at_size(size: tuple[int, int], bars: list[dict[str, Any]]) -> dict[str, Any]:
+    def change(protocol: dict[str, Any]) -> None:
+        protocol["variant"]["window_size"] = list(size)
+        protocol["scrollbars"] = bars
+
+    return _protocol_with(change)
+
+
+def test_z6_is_judged_once_per_row_over_both_window_sizes() -> None:
+    """P fährt je Fenstergröße einen Fall; Z6 urteilt einmal je Zeile über beide (N1).
+
+    Eine Größe gilt als gemessen, wenn ein Fall in ihr lief — auch mit leerer
+    Liste der Rollleisten. Fehlt eine, ist die Zeile nicht gelaufen, und
+    Prüfpunkt 19 mit ihr.
+    """
+    from tools.function_checks import LAPTOP_SIZE
+
+    start, laptop = _at_size(START_SIZE, []), _at_size(LAPTOP_SIZE, [])
+    cases = [judge_case(protocol, sample_context()) for protocol in (start, laptop)]
+    assert [case.criteria["Z6"].verdict for case in cases] == ["erfuellt", "erfuellt"]
+    merged = merge_cases(cases, [start, laptop])
+    assert merged.criteria["Z6"].verdict == "erfuellt"
+    assert merged.points[19].verdict == "stufe_b"
+    alone = merge_cases(cases[:1], [start])
+    assert alone.criteria["Z6"].verdict == "nicht_gelaufen"
+    assert f"{LAPTOP_SIZE[0]} x {LAPTOP_SIZE[1]}" in alone.criteria["Z6"].reason
+    assert alone.points[19].verdict == "nicht_gelaufen"
+    shown = _at_size(
+        LAPTOP_SIZE,
+        [
+            {
+                "surface": "OperationDialog",
+                "window_size": list(LAPTOP_SIZE),
+                "front": True,
+                "vertical": True,
+            }
+        ],
+    )
+    found = merge_cases([cases[0], judge_case(shown, sample_context())], [start, shown])
+    assert found.criteria["Z6"].verdict == "fund"
+    assert found.points[19].verdict == "fund"
+
+
+def test_the_judges_stay_under_the_size_limit() -> None:
+    """Keine Datei des Pakets über 2 000 Zeilen — die Grenze W1 der Codestruktur (N2)."""
+    import tools
+
+    folder = Path(next(iter(tools.__path__)))
+    files = [
+        "function_checks.py",
+        "function_judges.py",
+        "function_points.py",
+        "function_samples.py",
+        "function_report.py",
+        "../tests/test_function_report.py",
+    ]
+    long = {}
+    for name in files:
+        path = folder / name
+        assert path.exists(), name
+        lines = len(path.read_text(encoding="utf-8").splitlines())
+        if lines > 2000:
+            long[name] = lines
+    assert not long, long
+
+
+def test_empty_fonts_are_not_measured_like_empty_contrast() -> None:
+    """``fonts: []`` heißt: nichts aufgenommen — wie ``contrast: []`` (N3).
+
+    ``icons: []`` dagegen kann stimmen: eine Fläche ohne Symbolknopf.
+    """
+
+    def empty(protocol: dict[str, Any]) -> None:
+        protocol["fonts"] = []
+        protocol["contrast"] = []
+        protocol["icons"] = []
+
+    case = _judged(empty)
+    assert case.criteria["G4"].verdict == "nicht_gelaufen"
+    assert case.criteria["G6"].verdict == "nicht_gelaufen"
+    assert case.criteria["G7"].verdict == "erfuellt"
+
+
+def test_a_drag_event_without_a_picture_is_the_longest_delay() -> None:
+    """Bleibt nach einem Ziehereignis das Bild aus, ist das ein Fund; am Ende ein Vermerk (N4)."""
+
+    def middle(protocol: dict[str, Any]) -> None:
+        protocol["frames"]["raw_drag_ms"] = [12.0, None, 14.0]
+
+    def end(protocol: dict[str, Any]) -> None:
+        protocol["frames"]["raw_drag_ms"] = [12.0, 14.0, None]
+
+    stalled = _judged(middle).criteria["Z1"]
+    assert stalled.verdict == "fund"
+    assert any("ohne Bild" in issue.text for issue in stalled.issues)
+    last = _judged(end).criteria["Z1"]
+    assert last.verdict == "erfuellt"
+    assert any("ohne Bild" in note for note in last.notes)
+
+
+def test_the_z1_message_names_the_factor_where_the_schema_puts_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Meldung nennt die Stelle aus ``REFERENCE_FACTOR_AT``, keine feste (N5)."""
+    from tools import function_judges
+
+    monkeypatch.setattr(function_judges, "REFERENCE_FACTOR_AT", ("timing", "reference_factor"))
+    outcome = _judged().criteria["Z1"]
+    assert outcome.verdict == "nicht_gelaufen"
+    assert "timing.reference_factor" in outcome.reason

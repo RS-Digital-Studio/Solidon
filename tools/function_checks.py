@@ -7,11 +7,12 @@ beurteilt wird: die 19 Prüfpunkte (:data:`CHECKPOINTS`), die 35 Kriterien E1
 bis I6 (:data:`CRITERIA`) mit Stufe, Schwelle und Quelle, die Wertebereiche
 der Urteile und das Schema des Protokolls (:data:`PROTOCOL_SCHEMA`).
 
-Drei Module teilen sich die Arbeit, damit keines die Größengrenze der
+Vier Module teilen sich die Arbeit, damit keines die Größengrenze der
 Codestruktur (2 000 Zeilen, W1) reißt:
 
 * hier das Schema und das Datenmodell,
-* ``tools/function_judges.py`` die Urteilsfunktion je Prüfpunkt und Kriterium,
+* ``tools/function_judges.py`` die Urteilsfunktion je Kriterium,
+* ``tools/function_points.py`` die je Prüfpunkt und ``judge_case``,
 * ``tools/function_samples.py`` die Gegenproben (``BROKEN_SAMPLES``).
 
 **Was gemessen werden kann, wird gemessen; was ein Urteil ist, bleibt Stufe
@@ -391,6 +392,8 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         _keys("surface", "widget", "theme", "foreground", "background", "large", "symbol"),
         {"theme": ("light", "dark")},
     ),
+    # ``icons: []`` heißt: die Fläche hat keinen Symbolknopf (G7 erfüllt);
+    # ``fonts: []`` und ``contrast: []`` heißen: nichts aufgenommen.
     "icons": ProtocolField(
         "liste",
         _keys(
