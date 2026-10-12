@@ -11,8 +11,11 @@ Drei Konzepte in fester Reihenfolge, jedes bis zu seiner Abnahme (Abschnitt
 | Konzept | Unterlagen |
 |---|---|
 | 0.6.1 (RM-734, RM-735) | `konzepte/konzept-suche-und-palette-2026-10.md`, `konzepte/nachweise-palette-2026-10/`; Auftrag und Einzelstand in der Git-Historie (`git log --diff-filter=D -- .claude/.state/rm-734-735`) |
-| Funktionsdurchgang | Zweig `doc/funktionsdurchgang`, `.claude/.state/funktionsdurchgang-2026-10/konzept.md`, `LIESMICH.md`, Prüfberichte |
-| Codestruktur | `konzepte/konzept-codestruktur-2026-10.md`, `konzept-codestruktur-funde-2026-10.md` (auf main, sobald main steht, vorher `origin/nach/0.6.0`); RM-722 bis RM-733 |
+| Funktionsdurchgang | `konzepte/konzept-funktionsdurchgang-2026-10.md`, `konzepte/nachweise-funktionsdurchgang-2026-10/`; RM-736 bis RM-749; Funddatei und Abhakliste entstehen mit D0 unter `.claude/.state/funktionsdurchgang-2026-10/` |
+| Codestruktur | `konzepte/konzept-codestruktur-2026-10.md`, `konzepte/konzept-codestruktur-funde-2026-10.md`; RM-722 bis RM-733 |
+
+Koordination der laufenden Pakete (örtlich, nicht versioniert):
+`F:\3D Druck\output\konsolidierung-2026-10-12\KOORDINATION.md`.
 
 **Nach main** erst, wenn Robert „main steht“ sagt; dann `origin/main` per
 Merge hereinholen. Den Kopf `## 0.6.1` im Changelog legt diese Arbeit selbst
@@ -61,6 +64,20 @@ das Konzept.
 
 ## Verlauf
 
+- 12.10.2026, 08:40, Phase 2, Schritt 1: Funktionsdurchgang abgelegt
+  (Konzept und Prüfberichte unter `konzepte/`, RM-736 bis RM-749 im Register,
+  Programmplan als Beleg der Termine in Konzept §9; Paketzuordnung nach §6
+  ohne Ausnahme außer D6 — Verrunden, Fase, Fläche versetzen prüft D3).
+  Review mit drei mittleren und elf leichten Funden, alle behoben, Nachprüfung
+  vor dem Merge. Aufgeräumt: `welle2` (in main) abgebaut; der Worktree
+  `F:\solidon-bk-251` trug ungesicherte Arbeit zu RM-251, gesichert als
+  `724a153f2` auf `claude/bk-251`, Worktree abgebaut (Vermerk an RM-251). Die
+  CI auf main startet nicht, solange das Repository privat ist (Normalzustand,
+  Robert 12.10.); ihre Fenstertests laufen in der Release-Phase. **Als
+  Nächstes:** D0 (RM-737) nach dem Zuschnitt in
+  `.claude/.state/funktionsdurchgang-2026-10/plan-d0.md` (entsteht gerade, der
+  beschlossene Zuschnitt kommt danach in RM-737), über den Integrationszweig
+  `welle4`; danach Codestruktur Schritt 0 (RM-722).
 - 12.10.2026, 07:45, Phase 1 gelandet: 0.6.1 (RM-734, RM-735) per
   `--no-ff` auf main und gepusht; kein Release, keine Version. Review in drei
   Durchgängen (Berichte örtlich unter
