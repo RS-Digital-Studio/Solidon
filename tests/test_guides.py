@@ -17,7 +17,7 @@ from typing import Any, get_args
 
 import pytest
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtWidgets import QMenu, QToolButton
+from PySide6.QtWidgets import QMenu, QScrollArea, QToolButton
 
 from app.branding import APP_VERSION
 from app.core import figures, guides, manual, tour
@@ -150,7 +150,8 @@ def test_the_vocabulary_accepts_named_kinds_and_nothing_else() -> None:
         ("feature.field:diameter", False),
         ("measure.field:diameter", True),
         ("measure.field:hole.diameter", False),
-        ("menu:menubar.datei.speichern_unter", True),
+        ("menu:menubar.speichern_unter", True),
+        ("menu:menubar.kamera.rechts", True),
         ("menu:history.edit", True),
         ("menu:Speichern", False),
         ("menu:menubar..datei", False),
@@ -178,6 +179,8 @@ def test_the_vocabulary_accepts_named_kinds_and_nothing_else() -> None:
         ("start.recent:0", False),
         ("history:edit", True),
         ("operation:part.move", False),
+        ("field:a.b", False),
+        ("part:a.b", False),
         ("feature.apply", True),
         ("feature.in_view", True),
         ("feature.every", True),
@@ -1302,6 +1305,14 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
         assert widget("print:layers.layer_height") is not None
         assert click("print:layers.layer_height").why in {"ziel", "reiter", "klappe", "rollen"}
         assert widget("setting:language") is not None
+        # Jede Zeile der Einstellungen und jedes Feld des Druckdialogs, nicht nur eines
+        from app.core.knowledge.print_fields import FIELDS
+        from app.ui.settings_dialog import option_titles
+
+        for key in option_titles():
+            assert guide_targets.widget_for(window, f"setting:{key}") is not None, key
+        for field in FIELDS:
+            assert guide_targets.widget_for(window, f"print:{field.path}") is not None, field.path
         assert widget("dialog:settings_dialog") is settings
         assert widget("dialog:print_settings_dialog") is printing
     finally:
@@ -1361,6 +1372,7 @@ def test_next_click_names_each_step_in_order_and_reveals_nothing(
             tuple(tree.topLevelItem(row).isExpanded() for row in range(tree.topLevelItemCount())),
             tuple(menu.isVisible() for menu in window.findChildren(QMenu)),
             window.selection_operations.hits.verticalScrollBar().value(),
+            tuple(area.verticalScrollBar().value() for area in window.findChildren(QScrollArea)),
         )
 
     def ask(name: str) -> Any:
@@ -1855,3 +1867,81 @@ def test_point_for_on_a_coarse_view_takes_only_a_hit_on_its_own_triangle(
         guide_targets.point_for(window, "obj_1", "hole_1")
     monkeypatch.setattr(viewport, "placement_hit", picked(near=True))
     assert guide_targets.point_for(window, "obj_1", "hole_1") is not None
+
+
+def test_the_menu_names_are_the_same_in_another_language(qt_app: Any) -> None:
+    """Die Namen kommen aus der Quelle: auf Englisch gebaut dieselben wie auf Deutsch
+    (Review M3) — auf Deutsch sind Anzeige und Quelle gleich und beweisen nichts."""
+    from app.i18n import _, set_language
+    from app.i18n.catalog import install_language
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    def names() -> tuple[set[str], set[str], set[str]]:
+        window = MainWindow(Session(), UiSettings())
+        try:
+            entries = guide_targets.menubar_entries(window)
+            menus = {
+                menu.objectName()
+                for menu in window.findChildren(QMenu)
+                if menu.objectName().startswith("menubar.")
+            }
+            return (
+                {name for name, _menus, _action in entries},
+                menus,
+                {text for _name, _menus, action in entries if (text := action.text())},
+            )
+        finally:
+            window.deleteLater()
+
+    german, german_menus, german_texts = names()
+    install_language("en")
+    set_language("en")
+    try:
+        english, english_menus, english_texts = names()
+        assert guides.menubar_name_of(_("Öffnen …")) == "menubar.oeffnen"
+    finally:
+        set_language(SOURCE_LANGUAGE)
+    assert english_texts != german_texts, "die englische Leiste ist nicht übersetzt"
+    assert english == german
+    assert english_menus == german_menus
+
+
+def test_a_widget_below_the_visible_part_is_reached_by_scrolling(qt_app: Any) -> None:
+    """Ein Feld unter dem Rand seines Rollbereichs: erst rollen, mit Richtung — und
+    ``next_click`` rollt nicht selbst (Review L7)."""
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    area = QScrollArea()
+    content = QWidget()
+    column = QVBoxLayout(content)
+    column.addSpacing(900)
+    probe = QPushButton("Probe", content)
+    probe.setProperty(guides.TARGET_PROPERTY, "setting:probe")
+    column.addWidget(probe)
+    area.setWidget(content)
+    area.resize(300, 200)
+    area.show()
+    _settle(qt_app)
+    try:
+        bar = area.verticalScrollBar()
+        assert bar.maximum() > 0
+        step = guide_targets.next_click(window, "setting:probe")
+        assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
+        assert step.rect == QRect(area.viewport().mapToGlobal(QPoint(0, 0)), area.viewport().size())
+        assert bar.value() == 0, "next_click hat selbst gerollt"
+        bar.setValue(bar.maximum())
+        _settle(qt_app)
+        assert guide_targets.next_click(window, "setting:probe").why == "ziel"
+    finally:
+        area.close()
+        area.deleteLater()
+        window.deleteLater()

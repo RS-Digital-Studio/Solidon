@@ -137,7 +137,7 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``feature.field:resize_hole.diameter`` — ein Feld einer Handlung, gebildet
 #:   aus Schlüssel und Feldname (:func:`action_field_target`);
 #: * ``measure.field:diameter`` — ein Feld der Maßgruppe im Bild;
-#: * ``menu:menubar.datei.speichern_unter`` — eine Zeile der Menüleiste über
+#: * ``menu:menubar.speichern_unter`` — eine Zeile der Menüleiste über
 #:   ihren ``objectName`` (:func:`menubar_name`) oder eine Zeile eines offenen
 #:   Kontextmenüs (``history.edit``, ``tree.…``, Operationsname,
 #:   ``report.<handlung>``, ``parameters.…``);
