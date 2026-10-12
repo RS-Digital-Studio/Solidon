@@ -59,7 +59,7 @@ SYMBOL_SIZE: Final = 32
 TEXT_WIDTH: Final = 360
 
 #: Wie viele Zeilen der Einzelheiten ohne Rollen dastehen.
-DETAIL_LINES: Final = 14
+UNSCROLLED_DETAIL_LINES: Final = 14
 
 #: Der Name des Symbols je Schwere — das Wort ist die zweite Kodierung neben
 #: Form und Farbe (Regel 18).
@@ -125,13 +125,13 @@ class MessageDialog(QDialog):
         self.details.setReadOnly(True)
         self.details.setPlainText(details)
         self.details.setVisible(bool(details))
-        # So hoch wie sein Text, bis :data:`DETAIL_LINES` Zeilen — zwei Werte
+        # So hoch wie sein Text, bis :data:`UNSCROLLED_DETAIL_LINES` Zeilen — zwei Werte
         # stehen nicht in einem Kasten für zwölf, ein Protokoll rollt.
-        lines = min(max(details.count("\n") + 1, 2), DETAIL_LINES)
+        lines = min(max(details.count("\n") + 1, 2), UNSCROLLED_DETAIL_LINES)
         frame = self.details.frameWidth() * 2 + int(self.details.document().documentMargin() * 2)
         fitted = self.details.fontMetrics().lineSpacing() * lines + frame + NORMAL
         self.details.setMinimumHeight(fitted)
-        if lines < DETAIL_LINES:
+        if lines < UNSCROLLED_DETAIL_LINES:
             self.details.setMaximumHeight(fitted)
         self.details.setAccessibleName(tr("Einzelheiten"))
 
