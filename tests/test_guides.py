@@ -1564,7 +1564,8 @@ def test_widget_under_finds_the_child_and_an_open_menu_first(qt_app: Any) -> Non
 @pytest.mark.usefixtures("require_graphics_adapter")
 def test_a_click_at_point_for_chooses_the_feature(native_window_platform: str) -> None:
     """Am echten Fenster: Klicks an der Stelle aus ``point_for`` wählen erst den
-    Körper, dann die Fläche — die Stelle trifft, was sie verspricht."""
+    Körper, dann die Fläche — die Stelle trifft, was sie verspricht. Danach findet
+    ``handle:move.*`` die Pfeile des Bewegungsgriffs im echten Bild."""
     import os
     import subprocess
     import sys
@@ -1611,6 +1612,14 @@ for click in range(2):
         application.processEvents()
         QTest.qWait(20)
 assert window.object_tree.selected_feature() == 'face_top', window.object_tree.selected_feature()
+window.object_tree.select_object('obj_1')
+window.tools.toggle('transform')
+for _ in range(30):
+    application.processEvents()
+    QTest.qWait(20)
+for role in ('move.x', 'move.y', 'move.z'):
+    step = guide_targets.next_click(window, f'handle:{role}')
+    assert step.why == 'ziel', (role, step)
 window.release()
 print(f'point_for chose the feature after {clicks} clicks', flush=True)
 import os
