@@ -156,6 +156,77 @@ promises = { objects = 1, body = "closed" }
 op = "create_box"
 params = { width = 10.0, depth = 10.0, height = 10.0 }
 
+# --- Befunde mit Handlungen --------------------------------------------------------
+
+[scene."zu_fein.netz"]
+summary = "Ein offener Würfel in Zentimetern, auf 0,05 mm verfeinert: das Verfeinern sagt ab."
+kernel = "netz"
+sources = { src_1 = "meshes/broken_open.stl" }
+promises = { objects = 1, stops = true, findings = ["op.remesh_mesh.ValidationError", "ingest.not_watertight"], actions = { use_reachable = "op.remesh_mesh.ValidationError", repair_before_and_retry = "op.remesh_mesh.ValidationError" } }
+[[scene."zu_fein.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "cm", mend = false, wide_holes = false }
+[[scene."zu_fein.netz".ops]]
+op = "remesh_mesh"
+inputs = ["obj_1"]
+params = { edge = 0.05 }
+
+[scene."geglaettet.netz"]
+summary = "Ein Netzquader, fünfzigmal geglättet: er schrumpft, und seine Wände werden zu dünn für die Düse."
+kernel = "netz"
+base = "quader.netz"
+promises = { objects = 1, findings = ["mesh.smooth_shrank", "settings.wall_below_nozzle"], actions = { remesh_and_retry = "mesh.smooth_shrank", open_print_settings = "settings.wall_below_nozzle" } }
+[[scene."geglaettet.netz".ops]]
+op = "smooth_mesh"
+inputs = ["obj_1"]
+params = { iterations = 50 }
+
+[scene."kreuzend.netz"]
+summary = "Drei Körper, zwei davon durchdringen sich; das Zerlegen in vier Körper sagt ab."
+kernel = "netz"
+sources = { src_1 = "meshes/crossing_and_apart.stl" }
+promises = { stops = true, findings = ["ingest.multiple_components", "op.split_bodies.ValidationError", "slice.large_overhang"], actions = { resolve_intersections = "ingest.multiple_components", split_bodies = "ingest.multiple_components", recount_and_retry = "op.split_bodies.ValidationError", orient_for_print = "slice.large_overhang", show_support_need = "slice.large_overhang" } }
+[[scene."kreuzend.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm" }
+[[scene."kreuzend.netz".ops]]
+op = "split_bodies"
+inputs = ["obj_1"]
+params = { count = 4 }
+
+[scene."offen_repariert.netz"]
+summary = "Ein teilweise offenes Netz, repariert: das weite Loch wird geschlossen und gemeldet."
+kernel = "netz"
+sources = { src_1 = "meshes/partially_open.stl" }
+promises = { objects = 1, findings = ["repair.wide_hole_filled"], actions = { show_location = "repair.wide_hole_filled", leave_open = "repair.wide_hole_filled" } }
+[[scene."offen_repariert.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm", mend = false, wide_holes = false }
+[[scene."offen_repariert.netz".ops]]
+op = "repair"
+inputs = ["obj_1"]
+params = {}
+
+# --- Projektparameter --------------------------------------------------------------
+
+[scene."parameter.exakt"]
+summary = "Ein exakter Quader, dessen Breite am Projektparameter breite = 40 mm hängt."
+kernel = "exakt"
+parameters = { breite = { value = 40.0, unit = "mm", title = "Breite" } }
+promises = { objects = 1, body = "closed" }
+[[scene."parameter.exakt".ops]]
+op = "create_brep_box"
+params = { width = "@breite", depth = 30.0, height = 20.0 }
+
+[scene."parameter.netz"]
+summary = "Ein Netzquader, dessen Breite am Projektparameter breite = 40 mm hängt."
+kernel = "netz"
+parameters = { breite = { value = 40.0, unit = "mm", title = "Breite" } }
+promises = { objects = 1, body = "closed" }
+[[scene."parameter.netz".ops]]
+op = "create_box"
+params = { width = "@breite", depth = 30.0, height = 20.0 }
+
 # --- Körperzustände --------------------------------------------------------------
 
 [scene."offen.netz"]

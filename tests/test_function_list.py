@@ -91,7 +91,7 @@ def test_the_list_finds_enough_to_mean_something(
     assert sources["dialogklasse"] == len(classes)
     assert sources["wortschatz"] == len(TARGETS) + 1, "dazu start.recent:1"
     assert sources["fensteraktion"] >= 1
-    assert sources["befundhandlung"] >= 60
+    assert sources["befundhandlung"] >= 50, "ohne die Handler nur des Fehlerdialogs"
     assert sources["verlauf"] >= 4
     assert sources["werkzeugzeile"] >= 7 and sources["kontextmenue"] >= 5
     assert sources["einstellungen"] >= 3 and sources["meldungsfenster"] >= 20
@@ -276,9 +276,10 @@ def test_window_actions_outside_the_menu_bar_have_rows(
 
 
 def test_the_finding_actions_come_from_the_kernel_and_the_table(rows: list[fl.Row]) -> None:
-    """Die Befundhandlungen sind die Handlungen, die Befunde selbst mitbringen (jede
-    ``Action`` des Kerns) und die ``FINDING_ACTIONS`` nennt — soweit das Fenster sie
-    ausführt (``MainWindow.error_handlers``). Keine nachgebaute Probe."""
+    """Befundhandlung ist, was an einem Befund ankommen kann: ``FINDING_ACTIONS`` und
+    die Vorschläge des Kerns, soweit das Fenster sie ausführt (``MainWindow.error_handlers``)
+    — ohne die Handlungen, die nur ein Fehlerdialog anbietet (Aktivierung, Chat, Update,
+    Speichern, Übergabe). Jeder Handler des Fensters ist genau eines von beiden."""
     from app.ui.panels import FINDING_ACTIONS
 
     found = {
@@ -286,13 +287,42 @@ def test_the_finding_actions_come_from_the_kernel_and_the_table(rows: list[fl.Ro
     }
     handled = fl.report_handlers()
     table = {action.id for actions in FINDING_ACTIONS.values() for action in actions}
-    assert found == (fl.kernel_action_ids() | table) & handled
-    assert len(handled) >= 60 and found == handled
-    assert {"change_selection", "show_layers", "mesh_and_retry", "split_and_retry"} <= found
-    assert {"give_thickness", "resolve_intersections", "use_reachable"} <= found
+    dialog_only = set(fl.ERROR_DIALOG_ACTIONS)
+    assert found == ((fl.kernel_action_ids() | table) & handled) - dialog_only
+    assert found | dialog_only == handled and not found & dialog_only
+    assert len(found) >= 40
+    for name in ("activate_offline", "buy_licence", "set_up_chat", "open_download_page"):
+        assert fl.ERROR_DIALOG_ACTIONS[name] == "D12", name
+    assert fl.ERROR_DIALOG_ACTIONS["save_elsewhere"] == "D1"
+    assert set(fl.ERROR_DIALOG_ACTIONS.values()) <= set(fl.PACKAGES)
     by_id = _by_id(rows)
     assert by_id["finding.action:change_selection"].start_scene == "halt"
     assert by_id["finding.action:correct_input"].start_scene == "halt"
+    assert by_id["finding.action:use_reachable"].start_scene == "zu_fein.netz"
+    assert by_id["finding.action:orient_for_print"].start_scene
+
+
+def test_every_finding_action_has_a_scene_or_a_named_reason(rows: list[fl.Row]) -> None:
+    """Jede Befundhandlung beginnt in einer Szene, deren Befund sie trägt — oder sie steht
+    mit Grund in ``FINDING_ACTIONS_WITHOUT_SCENE``. Beides zugleich ist ein Widerspruch,
+    eine neue Handlung ohne beides fällt auf."""
+    without = {
+        row.id.removeprefix("finding.action:")
+        for row in rows
+        if row.source == "befundhandlung" and not row.start_scene
+    }
+    assert without == set(fl.FINDING_ACTIONS_WITHOUT_SCENE)
+    assert all(reason.strip() for reason in fl.FINDING_ACTIONS_WITHOUT_SCENE.values())
+
+
+def test_an_unknown_handler_turns_red(cached_sources: dict[str, str]) -> None:
+    """Gegenprobe: Ein Handler des Fensters, der weder Befundhandlung noch nur im
+    Fehlerdialog erreichbar ist, hält die Liste an."""
+    cached_sources["app/ui/invented/handlers.py"] = (
+        "class MainWindow:\n    def error_handlers(self):\n        return {'magic_wand': None}\n"
+    )
+    found = fl.problems()
+    assert any("magic_wand" in issue for issue in found), found
 
 
 def test_the_tools_under_the_view_are_rows(rows: list[fl.Row], ui_sources: dict[str, str]) -> None:
@@ -371,6 +401,87 @@ def test_an_invented_tool_context_action_or_message_window_turns_red(
     assert any("extra.ask_twice" in issue for issue in found)
 
 
+def test_targets_of_raw_windows_and_sections_come_from_the_source(
+    rows: list[fl.Row], ui_sources: dict[str, str]
+) -> None:
+    """Das Ziel einer Meldungsfensterzeile und eines Einstellungsabschnitts steht im
+    Quelltext der Fläche — ``setProperty(…TARGET_PROPERTY, …)``, ``raw_window("…")`` oder
+    der Abschnittsbauer der Einstellungen. Kontrollfall: das Demo-Ende trägt
+    ``dialog:expired_demo``. Eine Zeile ohne Ziel gibt es nur, wenn ihre Fläche kein
+    Kennzeichen setzt."""
+    import ast
+
+    assert _by_id(rows)["startup.expired_demo"].target == "dialog:expired_demo"
+    scan = fl.scan_ui(ui_sources)
+    assert scan.raw_targets["dialogs.show_expired_demo"] == "dialog:expired_demo"
+    marked = ("TARGET_PROPERTY", "raw_window(")
+    for row in rows:
+        if row.target or row.source != "meldungsfenster":
+            continue
+        module, _dot, function = row.id.removeprefix("meldung:").partition(".")
+        path = next(name for name in ui_sources if Path(name).stem == module)
+        tree = ast.parse(ui_sources[path])
+        node = next(
+            item
+            for item in ast.walk(tree)
+            if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef) and item.name == function
+        )
+        text = ast.get_source_segment(ui_sources[path], node) or ""
+        assert not any(mark in text for mark in marked), row.id
+
+
+def test_a_marked_surface_without_its_target_turns_red() -> None:
+    """Gegenprobe: Jede Form, in der eine Fläche ihr Kennzeichen setzt, kommt als Ziel an —
+    ein Meldungsfenster mit ``setProperty`` (auch über eine Modulkonstante), ein statischer
+    Aufruf in ``raw_window`` und ein Abschnitt über den Abschnittsbauer der Einstellungen."""
+    windows = fl.scan_ui(
+        {
+            "app/ui/extra.py": (
+                "NAME = 'message:extra.ask_named'\n"
+                "def ask(parent):\n"
+                "    box = QMessageBox(parent)\n"
+                "    box.setProperty(guides.TARGET_PROPERTY, 'message:extra.ask')\n"
+                "def ask_named(parent):\n"
+                "    box = QMessageBox(parent)\n"
+                "    box.setProperty(guides.TARGET_PROPERTY, NAME)\n"
+                "def inform(parent):\n"
+                "    with raw_window('message:extra.inform'):\n"
+                "        QMessageBox.information(parent, 'a', 'b')\n"
+                "def bare(parent):\n"
+                "    QMessageBox(parent)\n"
+            ),
+            fl.SETTINGS_MODULE: (
+                "def section(title, content, **options):\n"
+                "    wrapper = collapsible(str(title), content, **options)\n"
+                "    heading.setProperty(\n"
+                "        guides.TARGET_PROPERTY,\n"
+                "        f'setting.section:{guides.name_part(title.msgid)}',\n"
+                "    )\n"
+                "    return wrapper\n"
+                "def group(self):\n"
+                "    return section(_('Vorgaben für neue Projekte'), box)\n"
+                "def plain(self):\n"
+                "    return collapsible(tr('Ohne Kennzeichen'), box)\n"
+            ),
+        }
+    )
+    assert windows.raw_targets == {
+        "extra.ask": "message:extra.ask",
+        "extra.ask_named": "message:extra.ask_named",
+        "extra.inform": "message:extra.inform",
+    }
+    assert set(windows.raw_windows) == {
+        "extra.ask",
+        "extra.ask_named",
+        "extra.inform",
+        "extra.bare",
+    }
+    assert windows.settings_sections == ("Vorgaben für neue Projekte", "Ohne Kennzeichen")
+    assert windows.settings_targets == {
+        "Vorgaben für neue Projekte": "setting.section:vorgaben_fuer_neue_projekte"
+    }
+
+
 def test_the_history_entries_come_from_the_context_menu(ui_sources: dict[str, str]) -> None:
     """Die Verlaufszeilen kommen aus den Objektnamen ``history.*`` — die vier, unter denen
     die Bildanleitungen sie schon finden, sind dabei."""
@@ -399,6 +510,20 @@ def test_mesh_operations_start_on_a_fine_mesh(rows: list[fl.Row]) -> None:
         scene = scenes[found[name].start_scene]
         assert scene.kernel == "netz" and scene.promises.get("triangles_over", 0) >= 1000, name
     assert found["brep_to_mesh"].start_scene == "quader.exakt"
+
+
+def test_surfaces_start_where_their_target_stands(rows: list[fl.Row]) -> None:
+    """R4: *Diesen Schritt ändern* am Baum steht an einem erzeugten Merkmal; Parameterleiste
+    und ihr Kontextmenü brauchen ein Maß — eine Szene mit Projektparameter an beiden Kernen."""
+    found = _by_id(rows)
+    assert found["menu:tree.step"].requirement == "merkmal:hole"
+    assert found["menu:tree.step"].start_scene == "merkmal.hole.exakt"
+    scenes = _scenes()
+    for row_id in ("menu:parameters.edit", "parameters.first"):
+        assert found[row_id].requirement == "parameter"
+        scene = scenes[found[row_id].start_scene]
+        assert scene.parameters, row_id
+    assert {"parameter.exakt", "parameter.netz"} <= set(scenes)
 
 
 def test_every_operation_has_a_start_scene(rows: list[fl.Row]) -> None:
@@ -569,6 +694,17 @@ def test_the_promise_check_sees_a_broken_promise() -> None:
     broken = fl.broken_promises(scene, result)
 
     assert len(broken) == 4, broken
+
+    # Und eine Handlung, die der Bericht am zugesagten Befund nicht anbietet.
+    halt = scenes["halt"]
+    wrong = dataclasses.replace(
+        halt,
+        promises={**halt.promises, "actions": {"arrange_on_bed": "op.fillet_edges.GeometryError"}},
+    )
+    stopped = fl.evaluate_scene(fl.build_scene("halt", scenes))
+    assert fl.broken_promises(halt, stopped) == []
+    broken = fl.broken_promises(wrong, stopped)
+    assert len(broken) == 1 and "arrange_on_bed" in broken[0], broken
 
 
 def test_a_broken_recipe_is_named() -> None:
@@ -752,6 +888,7 @@ def test_the_spec_format_is_closed(rows: list[fl.Row]) -> None:
             "D12",
         ),
         "Vorbedingung": ({"preconditions": {"licence": "demo"}}, "D12"),
+        "Lizenzzustand 'over'": ({"preconditions": {"licence": "over"}}, "D12"),
     }
     for word, (values, package) in cases.items():
         issues = fl.validate_specs(rows, _spec({"start_scene": "leer", **values}, package), scenes)
@@ -782,14 +919,17 @@ def test_a_fault_case_is_checked_like_a_spec(rows: list[fl.Row]) -> None:
         "start_scene": "leer",
         "fault_case": {
             "start_scene": "gibt_es_nicht",
-            "route": [{"target": "Knopf"}],
+            "route": [
+                {"target": "Knopf"},
+                {"target": "tree.row:obj_1", "button": "mitte", "modifier": "alt"},
+            ],
             "during": "irgendwann",
             "expected": "sperrgrund",
             "wann": "jetzt",
         },
     }
     issues = fl.validate_specs(rows, _spec(bad), scenes)
-    for word in ("gibt_es_nicht", "'Knopf'", "irgendwann", "wann"):
+    for word in ("gibt_es_nicht", "'Knopf'", "irgendwann", "wann", "'mitte'", "'alt'"):
         assert any(word in issue for issue in issues), (word, issues)
     fault = fl.load_specs()["finding.action:place_on_bed"].values["fault_case"]
     assert fault["during"] == "rechnung" and fault["expected"] == "sperrgrund"
@@ -809,6 +949,31 @@ def test_the_licence_preconditions_are_the_states_of_the_application() -> None:
         assert hasattr(Activation, name), name
     assert ("expired" in states) == (TRIAL_FROM is not None)
     assert ("sale_without_trial" in states) == (TRIAL_FROM is None)
+
+
+def test_a_licence_state_must_be_reachable(
+    rows: list[fl.Row], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R2: ``over`` nur an der Startzeile, ``expired`` nur mit Testzeitraum
+    (``store.TRIAL_FROM``); ein erreichbarer Zustand geht durch."""
+    import datetime
+
+    from app.core.activation import store
+
+    scenes = fl.load_scenes()
+
+    def issues(state: str, row_id: str = "dialog:about_dialog") -> list[str]:
+        values = {"start_scene": "leer", "preconditions": {"licence": state}}
+        return fl.validate_specs(rows, _spec(values, row_id=row_id), scenes)
+
+    monkeypatch.setattr(store, "TRIAL_FROM", None)
+    assert issues("licensed") == [] and issues("sale_without_trial") == []
+    assert any("expired" in issue for issue in issues("expired"))
+    assert any("over" in issue for issue in issues("over"))
+    assert issues("over", row_id="startup.expired_demo") == []
+    monkeypatch.setattr(store, "TRIAL_FROM", datetime.date(2026, 1, 1))
+    assert issues("expired") == []
+    assert any("sale_without_trial" in issue for issue in issues("sale_without_trial"))
 
 
 def test_spec_files_are_read_strictly(tmp_path: Path) -> None:
