@@ -64,6 +64,19 @@ das Konzept.
 
 ## Verlauf
 
+- 12.10.2026, 14:31, Phase 2, D0 läuft: Der schwere Fund aus D0 ist auf main
+  (`e871f6062`). *Text aufbringen*, *Schrift einlegen* und *Gegenform
+  einlassen* löschten am exakten Körper alle Merkmale, seit 0.5.0 bzw. 0.5.2.
+  Behoben mit Wächter über die Falltabelle, druckgleich und schneller, mit
+  Changelog. Review, Fixrunde und Nachprüfung sind durch, das Tor gepinnt
+  grün (28 130 bestanden). In der Funddatei stehen FD-1 bis FD-3 auf
+  `welle4`. Die Geschwister mit berührten oder geteilten Flächen führt
+  RM-787, den Slicertest, der unter Volllast hängt, RM-788; beide werden
+  in Phase 2 behoben. D0 steht auf `welle4`: W, L und U sind integriert, die
+  Karten nachgezogen, P und die Folgerunden laufen. **Als Nächstes:** P und
+  W's Nachtrag integrieren, Probelauf am Fenster, Tor, Durchsicht der
+  Merge-Auflösungen, D0 nach main; danach Codestruktur Schritt 0 (RM-722),
+  RM-787, RM-788.
 - 12.10.2026, 08:40, Phase 2, Schritt 1: Funktionsdurchgang abgelegt
   (Konzept und Prüfberichte unter `konzepte/`, RM-736 bis RM-749 im Register,
   Programmplan als Beleg der Termine in Konzept §9; Paketzuordnung nach §6
