@@ -240,7 +240,7 @@ def menubar_name(msgid: str, context: str | None = None) -> str:
     er hängt nicht an der Lage der Zeile — eine neue Zeile darüber ändert ihn
     nicht.
     """
-    parts = [_slug(text) for text in (context, msgid) if text]
+    parts = [name_part(text) for text in (context, msgid) if text]
     if not parts or not all(parts):
         raise ValueError(f"menubar_name: aus {msgid!r} entsteht kein Name")
     return ".".join(("menubar", *parts))
@@ -268,7 +268,9 @@ def dialog_name(class_name: str) -> str:
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", spaced).lower()
 
 
-def _slug(text: str) -> str:
+def name_part(text: str) -> str:
+    """Ein Glied eines Zielnamens aus einem Text: klein, Umlaute ausgeschrieben,
+    alles andere ``_`` (``Speichern unter …`` → ``speichern_unter``)."""
     text = text.replace("…", "").replace("&", "").translate(_UMLAUTS).lower()
     return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
 

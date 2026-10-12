@@ -1983,3 +1983,27 @@ def test_open_section_finds_a_heading_in_a_foreign_row(prepared_window: Any, qt_
     open_section(content)
     _settle(qt_app)
     assert heading.isChecked() and not content.isHidden()
+
+
+def test_every_reference_under_change_reference_carries_a_name(
+    prepared_window: Any, qt_app: Any
+) -> None:
+    """Unter *Bezug ändern* trägt jeder Bezug einen Namen; der Prüfstand öffnet das
+    Menü über ``measure.reference`` und wählt dort (Review L6)."""
+    window = prepared_window
+    window.object_tree.select_object("obj_1")
+    window.object_tree.select_feature("obj_1", "hole_1")
+    _settle(qt_app, 40)
+    flow = window._quiet_placement
+    assert flow is not None
+    menu = flow._reference_menu(0)
+    assert menu is not None
+    try:
+        chosen = [action for action in menu.actions() if action.data() is not None]
+        assert len(chosen) >= 2, [action.text() for action in menu.actions()]
+        names = [action.objectName() for action in chosen]
+        assert all(name.startswith("measure.reference.") for name in names), names
+        assert len(set(names)) == len(names), names
+        assert all(guides.is_target(f"menu:{name}") for name in names), names
+    finally:
+        menu.hide()
