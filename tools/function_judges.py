@@ -1,8 +1,8 @@
 """Die Urteile des Funktionsdurchgangs je Prüfpunkt und Kriterium (RM-737, Paket D0-U).
 
 Liest das Messprotokoll eines Falls (``cases/<nr>/function.json``, Bauplan D0
-§2.7) und gibt je Prüfpunkt und je geltendem Kriterium ein
-:class:`~tools.function_checks.Outcome` nach §2.8 (:func:`judge_case`).
+Plan D0, Abschnitt 2.7) und gibt je Prüfpunkt und je geltendem Kriterium ein
+:class:`~tools.function_checks.Outcome` nach Plan D0, Abschnitt 2.8 (:func:`judge_case`).
 Schema, Schwellen und Datenmodell stehen in ``tools/function_checks.py``, die
 Gegenproben in ``tools/function_samples.py``.
 
@@ -35,14 +35,18 @@ from app.ui.theme import contrast_ratio
 from tools.function_checks import (
     BAR_AFTER_S,
     CHECKPOINTS,
+    COVERED,
     CRITERIA,
     DESIGN_PARTS,
     EXPIRED_RUNS,
     FEEDBACK_AFTER_S,
     LAPTOP_SIZE,
     LICENCE_RUNS,
+    LICENCE_STATES,
     MAIN_GAP_MS,
+    MAIN_PHASES,
     MANUAL_WINDOW,
+    MATRIX_UNREACHABLE,
     MAX_ACCENTS,
     MAX_CLICKS,
     MAX_CLICKS_AT_FEATURE,
@@ -56,6 +60,7 @@ from tools.function_checks import (
     MIN_CONTRAST,
     MIN_CONTRAST_LARGE,
     NOT_APPLICABLE,
+    NOT_FOUND,
     RAW_CLASSES,
     SELECTION_STAGES,
     START_SIZE,
@@ -75,7 +80,7 @@ def _word_set(text: str) -> set[str]:
 
 
 def _row(protocol: Mapping[str, Any]) -> Mapping[str, Any]:
-    """Die Zeile nach §2.3; eine bloße Kennung wird zur Zeile mit ``id``."""
+    """Die Zeile nach Plan D0, Abschnitt 2.3; eine bloße Kennung wird zur Zeile mit ``id``."""
     row = protocol.get("row")
     if isinstance(row, Mapping):
         return row
@@ -95,6 +100,23 @@ def _list(protocol: Mapping[str, Any], key: str) -> list[Any] | None:
 def _map(protocol: Mapping[str, Any], key: str) -> Mapping[str, Any] | None:
     value = protocol.get(key)
     return value if isinstance(value, Mapping) else None
+
+
+def _path(protocol: Mapping[str, Any]) -> list[Mapping[str, Any]] | None:
+    """Die Schritte des Hauptwegs (:data:`MAIN_PHASES`), ``None`` ohne sie.
+
+    Nur sie zählen für Prüfpunkt 2 und E1 bis E4: Suche, Escape, Matrix und die
+    übrigen Phasen des Prüfstands klicken auch, aber nicht auf dem Weg des
+    Kunden zum Beispielziel. Trägt das Protokoll keinen Schritt des Hauptwegs,
+    ist der Weg nicht gemessen — nie „gut“.
+    """
+    steps = _list(protocol, "steps")
+    if steps is None:
+        return None
+    path = [
+        step for step in steps if isinstance(step, Mapping) and step.get("phase") in MAIN_PHASES
+    ]
+    return path or None
 
 
 def _close(first: Any, second: Any) -> bool:
@@ -118,7 +140,7 @@ def _is_selection(step: Mapping[str, Any]) -> bool:
 
 
 def _after_selection(steps: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-    """Die Schritte nach der letzten Auswahl — der Startzustand ist die Auswahl (§4)."""
+    """Die Schritte nach der letzten Auswahl — der Startzustand ist die Auswahl (Konzept §4)."""
     last = max((index for index, step in enumerate(steps) if _is_selection(step)), default=-1)
     return list(steps[last + 1 :])
 
@@ -133,7 +155,10 @@ def _selected_feature(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]
 
 
 def _has_selection_relation(row: Mapping[str, Any]) -> bool:
-    """Z3 gilt an Zeilen mit Merkmals- oder Körperbezug (aus der Anforderung, §2.5)."""
+    """Z3 gilt an Zeilen mit Merkmals- oder Körperbezug.
+
+    Abgelesen an der Anforderung der Zeile (Plan D0, Abschnitt 2.5).
+    """
     requirement = str(row.get("requirement") or "")
     return requirement.startswith(("merkmal", "kante", "koerper"))
 
@@ -186,7 +211,7 @@ def _missing(subject: int | str, *fields: str, stage: str = "A") -> Outcome:
 
 
 def _e1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
-    steps = _list(protocol, "steps")
+    steps = _path(protocol)
     if steps is None:
         return _missing("E1", "steps")
     row = _row(protocol)
@@ -203,7 +228,7 @@ def _e1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
 
 
 def _e2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
-    steps = _list(protocol, "steps")
+    steps = _path(protocol)
     if steps is None:
         return _missing("E2", "steps")
     typed = sum(1 for step in steps if step.get("typed"))
@@ -214,7 +239,7 @@ def _e2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
 
 
 def _e3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
-    steps = _list(protocol, "steps")
+    steps = _path(protocol)
     if steps is None:
         return _missing("E3", "steps")
     decisions = sum(1 for step in steps if step.get("decision"))
@@ -230,7 +255,7 @@ def _e3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
 
 
 def _e4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
-    steps = _list(protocol, "steps")
+    steps = _path(protocol)
     if steps is None:
         return _missing("E4", "steps")
     zones = [str(step.get("zone")) for step in steps if step.get("zone")]
@@ -696,7 +721,7 @@ def _z3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     row = _row(protocol)
     if not _has_selection_relation(row):
         return None
-    steps = _list(protocol, "steps")
+    steps = _path(protocol)
     if steps is None:
         return _missing("Z3", "steps")
     way = _way_clicks(steps)
@@ -805,7 +830,7 @@ def _i2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
 
 
 def _i3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
-    steps = _list(protocol, "steps")
+    steps = _path(protocol)
     if steps is None:
         return _missing("I3", "steps")
     way = _way_clicks(steps)
@@ -824,7 +849,7 @@ def _i5(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     if "I5" not in (_spec(protocol).get("criteria") or ()):
         return None
     place = _map(protocol, "place")
-    steps = _list(protocol, "steps")
+    steps = _path(protocol)
     if place is None or steps is None:
         return _missing("I5", "place", "steps")
     issues = []
@@ -837,6 +862,15 @@ def _i5(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     return _result(
         "I5", issues, place.get("where", "?"), {"clicks": len(_clicks(steps))}, judged=True
     )
+
+
+def _bench_findings(protocol: Mapping[str, Any], kind: str) -> list[Mapping[str, Any]]:
+    """Was der Prüfstand unterwegs fand (``findings``), von einer Art."""
+    return [
+        found
+        for found in _list(protocol, "findings") or ()
+        if isinstance(found, Mapping) and found.get("kind") == kind
+    ]
 
 
 def _probes(protocol: Mapping[str, Any], question: bool) -> dict[str, Mapping[str, Any]]:
@@ -920,6 +954,12 @@ def _point_1(
     issues = []
     if place.get("error"):
         issues.append(Issue(f"nicht auffindbar ({place.get('error')})", "schwer"))
+    for found in _bench_findings(protocol, NOT_FOUND):
+        if found.get("phase") in MAIN_PHASES:
+            # Auf dem Hauptweg heißt „kein Weg“: Der Kunde findet die Funktion nicht.
+            issues.append(
+                Issue(f"nicht auffindbar: {found.get('target')} ({found.get('detail')})", "schwer")
+            )
     probes = _probes(protocol, question=False)
     issues.extend(_rank_issues(probes, "mittel", None))
     notes = [] if probes else ["keine Suchproben gemessen"]
@@ -941,14 +981,28 @@ def _point_1(
 def _point_2(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
-    steps = _list(protocol, "steps")
+    steps = _path(protocol)
     if steps is None:
         return _missing(2, "steps")
     parts = [criteria.get(key) for key in ("E1", "E3", "E4", "E5", "E6", "E7")]
     clicks = _clicks(steps)
-    return _combine(
+    # „Verdeckt“ ist ein Fund in jeder Phase: An der Stelle, die der Kunde
+    # anklicken soll, liegt etwas anderes (Konzept §5). Ein Ziel ohne Weg
+    # außerhalb des Hauptwegs gehört dem Prüfpunkt seiner Phase und steht hier
+    # als Vermerk.
+    own = [
+        Issue(f"verdeckt in Phase {found.get('phase')}: {found.get('detail')}", "mittel")
+        for found in _bench_findings(protocol, COVERED)
+    ]
+    elsewhere = [
+        f"kein Weg zu {found.get('target')} in Phase {found.get('phase')}"
+        for found in _bench_findings(protocol, NOT_FOUND)
+        if found.get("phase") not in MAIN_PHASES
+    ]
+    outcome = _combine(
         2,
         parts,
+        own=own,
         measured=True,
         judged=True,
         summary=f"{len(clicks)} Klicks, {sum(1 for s in steps if s.get('typed'))} Eingaben",
@@ -961,6 +1015,7 @@ def _point_2(
             "zones": [s.get("zone") for s in steps if s.get("zone")],
         },
     )
+    return replace(outcome, notes=(*outcome.notes, *elsewhere))
 
 
 def _point_3(
@@ -1160,7 +1215,9 @@ def _point_9(
             issues.append(
                 Issue(f"„{entry.get('text')}“ braucht {need} px, hat {width} px", "leicht")
             )
-        if variant.get("unit") == "inch" and _MM_VALUE.search(str(entry.get("text") or "")):
+        if variant.get("unit") not in {None, "mm"} and _MM_VALUE.search(
+            str(entry.get("text") or "")
+        ):
             issues.append(Issue(f"mm im Zolllauf: „{entry.get('text')}“", "mittel"))
     return _result(
         9,
@@ -1267,13 +1324,18 @@ def _point_13(
     if matrix is None:
         return _missing(13, "matrix")
     issues = []
+    notes = []
     for stage in SELECTION_STAGES:
         entry = matrix.get(stage)
         if not isinstance(entry, Mapping):
             issues.append(Issue(f"Auswahlstufe {stage} nicht gemessen", "mittel"))
             continue
         state = entry.get("state")
-        if state == "grau" and not str(entry.get("reason") or "").strip():
+        if state == MATRIX_UNREACHABLE:
+            # Der Prüfstand konnte die Auswahl in der Startszene nicht
+            # herstellen: gemessen ist nichts, und das bleibt sichtbar.
+            notes.append(f"Auswahlstufe {stage} nicht herstellbar")
+        elif state == "grau" and not str(entry.get("reason") or "").strip():
             issues.append(Issue(f"grau ohne Grund bei {stage}", "schwer"))
         elif state == "angeboten" and entry.get("effective") is False:
             issues.append(Issue(f"angeboten ohne Wirkung bei {stage}", "schwer"))
@@ -1283,6 +1345,7 @@ def _point_13(
         "sechs Auswahlstufen",
         {stage: (matrix.get(stage) or {}).get("state") for stage in SELECTION_STAGES},
         judged=True,
+        notes=notes,
     )
 
 
@@ -1389,21 +1452,28 @@ def _point_18(
     runs = _map(protocol, "licence_runs")
     if runs is None:
         return _missing(18, "licence_runs")
-    issues = []
-    for state in LICENCE_RUNS:
+    issues = [
+        Issue(f"Lizenzlauf {state} fehlt", "mittel")
+        for state in LICENCE_RUNS
+        if not isinstance(runs.get(state), Mapping)
+    ]
+    for state in LICENCE_STATES:
         entry = runs.get(state)
         if not isinstance(entry, Mapping):
-            issues.append(Issue(f"Lizenzlauf {state} fehlt", "mittel"))
             continue
         if not entry.get("enabled") and not str(entry.get("reason") or "").strip():
             issues.append(Issue(f"grau ohne Grund bei {state}", "schwer"))
         if state in EXPIRED_RUNS and entry.get("writes") and entry.get("enabled"):
             issues.append(Issue(f"schreibendes Ziel frei trotz {state}", "schwer"))
+        if state not in EXPIRED_RUNS and not entry.get("enabled"):
+            # Gekauft, laufende Demo und laufender Testlauf schalten frei
+            # (``Activation.unlocked``): grau ist dort eine Sperre zu viel.
+            issues.append(Issue(f"gesperrt, obwohl {state} freischaltet", "schwer"))
     return _result(
         18,
         issues,
         f"{len(runs)} Lizenzläufe",
-        {state: (runs.get(state) or {}).get("enabled") for state in LICENCE_RUNS},
+        {state: (runs.get(state) or {}).get("enabled") for state in LICENCE_STATES},
     )
 
 
@@ -1458,7 +1528,7 @@ CRITERION_JUDGES: Final[dict[str, JudgeCriterion]] = {
     "I6": _i6,
 }
 
-#: Die 19 Prüfpunkte (Konzept §4, Bauplan D0 §3.1).
+#: Die 19 Prüfpunkte (Konzept §4, Plan D0, Abschnitt 3.1).
 
 POINT_JUDGES: Final[dict[int, JudgePoint]] = {
     1: _point_1,
@@ -1527,7 +1597,7 @@ def judge_case(protocol: Mapping[str, Any], context: Context) -> CaseOutcome:
     images = tuple(str(image) for image in _list(protocol, "images") or ())
 
     def evidence(outcome: Outcome, fields: Iterable[str]) -> Outcome:
-        # Beleg nach §2.8: die Bilder des Falls und die Stellen im Protokoll,
+        # Beleg nach Plan D0, Abschnitt 2.8: die Bilder des Falls und die Stellen im Protokoll,
         # die das Urteil gelesen hat.
         read = tuple(f"function.json#{name}" for name in fields if name in protocol)
         return replace(outcome, evidence=(*images, *read))

@@ -2,7 +2,7 @@
 
 Der Prüfstand (``tools/file_acceptance.py`` mit ``tools/function_bench.py``)
 fährt je Funktion einen Fall am echten Fenster und schreibt das Messprotokoll
-``cases/<nr>/function.json`` (Bauplan D0 §2.7). Hier steht, wonach es
+``cases/<nr>/function.json`` (Plan D0, Abschnitt 2.7). Hier steht, wonach es
 beurteilt wird: die 19 Prüfpunkte (:data:`CHECKPOINTS`), die 35 Kriterien E1
 bis I6 (:data:`CRITERIA`) mit Stufe, Schwelle und Quelle, die Wertebereiche
 der Urteile und das Schema des Protokolls (:data:`PROTOCOL_SCHEMA`).
@@ -39,6 +39,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final
 
+from app.core.units import DISPLAY_UNITS
 from app.ui.loading import BAR_AFTER_MS, DELAY_MS
 from app.ui.motion import ACCENT_MS, MEDIUM_MS
 from app.ui.op_dialog import (
@@ -53,7 +54,7 @@ from app.ui.style import LEVELS, SPACE
 #: Stufen des Prüfschemas (Konzept §5).
 STAGES: Final = ("A", "B", "C")
 
-#: Ergebnis je Prüfpunkt oder Kriterium (Bauplan D0 §2.8). ``nicht_gelaufen``
+#: Ergebnis je Prüfpunkt oder Kriterium (Plan D0, Abschnitt 2.8). ``nicht_gelaufen``
 #: heißt: Das Protokoll trägt die Messung nicht — ist die Stufe C, steht in der
 #: Abhakliste „C“, sonst „?“.
 RESULTS: Final = ("erfuellt", "fund", "entfaellt", "stufe_b", "nicht_gelaufen", "nicht_pruefbar")
@@ -83,11 +84,11 @@ FINDING_KINDS: Final = (
     "Gestaltung",
 )
 
-#: Warum ein Schritt geklickt wurde (``next_click``, Bauplan D0 §2.2). Nur
+#: Warum ein Schritt geklickt wurde (``next_click``, Plan D0, Abschnitt 2.2). Nur
 #: ``ziel`` ist die Handlung selbst; alles andere ist ein Wegklick.
 WHY: Final = ("ziel", "reiter", "klappe", "menue", "untermenue", "aufklappen", "rollen")
 
-#: Bereiche des Fensters für E4 (``zone_of``, Bauplan D0 §2.2).
+#: Bereiche des Fensters für E4 (``zone_of``, Plan D0, Abschnitt 2.2).
 ZONES: Final = ("ansicht", "karte_rechts", "karte_links", "dialog", "statusleiste", "kopf", "menue")
 
 #: Die sechs Auswahlstufen von Prüfpunkt 13 (Konzept §4).
@@ -100,12 +101,36 @@ SELECTION_STAGES: Final = (
     "eine_kante",
 )
 
-#: Wie ein Ziel an einer Auswahlstufe dasteht (Prüfpunkt 13).
-MATRIX_STATES: Final = ("angeboten", "grau", "fehlt")
+#: Wie ein Ziel an einer Auswahlstufe dasteht (Prüfpunkt 13); ``nicht
+#: herstellbar`` heißt, der Prüfstand konnte die Auswahl nicht herstellen —
+#: gemessen ist dann nichts, und das sagt der Vermerk.
+MATRIX_UNREACHABLE: Final = "nicht herstellbar"
+MATRIX_STATES: Final = ("angeboten", "grau", "fehlt", MATRIX_UNREACHABLE)
 
-#: Lizenzläufe von Prüfpunkt 18; abgelaufen heißt: Schreibendes ist gesperrt.
-LICENCE_RUNS: Final = ("demo_abgelaufen", "testlauf_abgelaufen", "gekauft")
-EXPIRED_RUNS: Final = frozenset({"demo_abgelaufen", "testlauf_abgelaufen"})
+#: Die Lizenzzustände eines Falls (Prüfpunkt 18). Die Anwendung führt keine
+#: Aufzählung, sondern liest den Zustand an Eigenschaften von
+#: ``app.core.activation.Activation`` ab; ihre Namen sind die Zustände:
+#: ``in_demo`` (Demo läuft), ``over`` (Demo abgelaufen), ``in_trial``
+#: (Testlauf läuft), ``expired`` (Testlauf abgelaufen), ``licensed`` (gekauft).
+#: Der Prüfstand setzt sie wie die Suite über ``activation._cached``; ein
+#: Wächter hält die Namen gegen die Klasse.
+LICENCE_STATES: Final = ("in_demo", "over", "in_trial", "expired", "licensed")
+#: Die Läufe, die Prüfpunkt 18 verlangt: Demo und Testlauf abgelaufen, gekauft.
+LICENCE_RUNS: Final = ("over", "expired", "licensed")
+#: Abgelaufen heißt: Schreibendes ist gesperrt, nur Lesendes läuft weiter.
+EXPIRED_RUNS: Final = frozenset({"over", "expired"})
+
+#: Die Phasen des Prüfstands, die der Hauptweg zum Beispielziel sind. Nur ihre
+#: Schritte zählen für Prüfpunkt 2 und E1 bis E4; Suche, Escape, Matrix,
+#: Fehlfall und die übrigen Phasen klicken auch, aber nicht auf dem Weg des
+#: Kunden (Festlegung Koordinator).
+MAIN_PHASES: Final = ("weg", "übernehmen")
+
+#: Was der Prüfstand unterwegs findet (``findings[].kind``): ein Klickziel, über
+#: dem etwas anderes liegt, und ein Ziel, zu dem kein Weg führt (Konzept §5).
+COVERED: Final = "verdeckt"
+NOT_FOUND: Final = "nicht auffindbar"
+BENCH_FINDINGS: Final = (COVERED, NOT_FOUND)
 
 #: Rohe Qt-Fenster, die im Kundenweg nicht erscheinen (Z5).
 RAW_CLASSES: Final = frozenset({"QMessageBox", "QInputDialog", "QColorDialog"})
@@ -166,20 +191,20 @@ AGREEMENT: Final = 0.9
 #: Anteil der Zeilen, die ein zweiter Prüfer unabhängig urteilt (Konzept §4).
 SECOND_REVIEW_SHARE: Final = 0.1
 
-#: Prüfpunkt 6 und 14: ab wann Zeiger, ab wann Balken und *Abbrechen* (§2.8,
+#: Prüfpunkt 6 und 14: ab wann Zeiger, ab wann Balken und *Abbrechen* (Bauplan §2.8,
 #: aus ``app.ui.loading``).
 FEEDBACK_AFTER_S: Final = DELAY_MS / 1000
 BAR_AFTER_S: Final = BAR_AFTER_MS / 1000
 
 # --- Das Messprotokoll -------------------------------------------------------
 
-#: Arten einer Funktionszeile (Bauplan D0 §2.3).
+#: Arten einer Funktionszeile (Plan D0, Abschnitt 2.3).
 ROW_KINDS: Final = ("operation", "fensterbefehl", "bedienflaeche")
 
 #: Wo der Kunde eine Funktion findet (``place.where``, Prüfpunkt 1 und 17).
 PLACES: Final = ("karte", "menue", "werkzeugleiste", "kuerzel", "kontext")
 
-#: Die Szenenabdrücke in ``states`` (§2.7); ``aborted`` ist der Stand nach
+#: Die Szenenabdrücke in ``states`` (Plan D0, Abschnitt 2.7); ``aborted`` ist der Stand nach
 #: *Abbrechen* der Rechnung (Prüfpunkt 14), ``cancelled`` der Abbruch im Dialog.
 STATE_KEYS: Final = (
     "before",
@@ -203,7 +228,7 @@ class ProtocolField:
     ``wahr``. ``keys`` sind bei einer Tabelle ihre Schlüssel, bei einer Liste
     die Schlüssel jedes Eintrags; ``None`` heißt frei (Suchproben, Abdrücke).
     ``values`` legt für einzelne Schlüssel die erlaubten Werte fest, ``choices``
-    die eines einzelnen Texts.
+    die eines einzelnen Texts, ``needs`` die Pflichtschlüssel der Einträge.
     """
 
     shape: str
@@ -211,13 +236,15 @@ class ProtocolField:
     values: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     choices: tuple[str, ...] = ()
     required: bool = False
+    #: Schlüssel, die jeder Eintrag einer Liste tragen muss.
+    needs: frozenset[str] = frozenset()
 
 
 def _keys(*names: str) -> frozenset[str]:
     return frozenset(names)
 
 
-#: Das Schema des Messprotokolls ``cases/<nr>/function.json`` (Bauplan D0 §2.7
+#: Das Schema des Messprotokolls ``cases/<nr>/function.json`` (Plan D0, Abschnitt 2.7
 #: mit den Ergänzungen dieses Pakets, Bericht „Schnittstelle“). Es gehört D0-U;
 #: der Prüfstand schreibt danach und prüft sich mit :func:`validate_protocol`.
 #: Ein unbekanntes Feld oder ein unbekannter Schlüssel ist eine ungültige
@@ -246,9 +273,9 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         "tabelle",
         _keys(
             "language", "theme", "unit", "licence", "preconditions", "platform", "screen",
-            "scale", "window_size", "motion",
+            "scale", "window_size", "motion", "set", "phases", "placed",
         ),
-        {"theme": ("light", "dark"), "unit": ("mm", "inch")},
+        {"theme": ("light", "dark"), "unit": DISPLAY_UNITS, "licence": LICENCE_STATES},
         required=True,
     ),
     "version": ProtocolField("tabelle", _keys("commit", "app"), required=True),
@@ -257,9 +284,10 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         "liste",
         _keys(
             "target", "why", "button", "rect", "point", "widget_at", "hit", "zone", "typed",
-            "key", "decision", "t",
+            "key", "decision", "t", "phase", "finding", "detail",
         ),
-        {"why": WHY, "zone": ZONES},
+        {"why": WHY, "zone": ZONES, "finding": BENCH_FINDINGS},
+        needs=_keys("phase"),
     ),
     "states": ProtocolField("tabelle", frozenset(STATE_KEYS)),
     "preview": ProtocolField(
@@ -318,7 +346,7 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     ),
     "hover_labels": ProtocolField("liste", _keys("kind", "label")),
     "empty_states": ProtocolField("liste", _keys("surface", "sentence", "button", "intended")),
-    "licence_runs": ProtocolField("tabelle", frozenset(LICENCE_RUNS)),
+    "licence_runs": ProtocolField("tabelle", frozenset(LICENCE_STATES)),
     "halt": ProtocolField("tabelle", _keys("text", "step")),
     "insertion": ProtocolField(
         "tabelle", _keys("outcome", "text", "actions"), {"outcome": ("ergebnis", "absage")}
@@ -330,6 +358,11 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         {"way": ("menue", "doppelklick")},
     ),
     "abort": ProtocolField("tabelle", _keys("eval_s", "cancel_shown_s", "clicked")),
+    "findings": ProtocolField(
+        "liste", _keys("phase", "kind", "target", "detail"), {"kind": BENCH_FINDINGS}
+    ),
+    "closed_by_escape": ProtocolField("liste", _keys("phase", "times")),
+    "unmeasured": ProtocolField("tabelle"),
     "images": ProtocolField("texte"),
     "errors": ProtocolField("texte"),
 }  # fmt: skip
@@ -354,7 +387,7 @@ class Issue:
 
 @dataclass(frozen=True)
 class Outcome:
-    """Das Ergebnis eines Prüfpunkts oder Kriteriums an einem Fall (§2.8).
+    """Das Ergebnis eines Prüfpunkts oder Kriteriums an einem Fall (Plan D0, Abschnitt 2.8).
 
     ``subject`` ist die Nummer des Prüfpunkts oder die Kennung des
     Kriteriums; :meth:`record` schreibt sie als ``point`` oder ``criterion``.
@@ -372,7 +405,7 @@ class Outcome:
     finding: str | None = None
 
     def record(self) -> dict[str, Any]:
-        """Das Ergebnis als Eintrag nach Bauplan D0 §2.8."""
+        """Das Ergebnis als Eintrag nach Plan D0, Abschnitt 2.8."""
         key = "point" if isinstance(self.subject, int) else "criterion"
         return {
             key: self.subject,
@@ -397,7 +430,7 @@ class Context:
 
     Aus dem Baum gebaut über ``function_report.repository_context``; die
     Gegenproben setzen ihre eigenen Werte (``function_samples.sample_context``).
-    Die Funktionen bekommen die Zeile nach §2.3.
+    Die Funktionen bekommen die Zeile nach Plan D0, Abschnitt 2.3.
     """
 
     #: V1: die Negativliste als (Wort, Sprache, Suchmuster), das Muster nach
@@ -439,7 +472,7 @@ class CaseOutcome:
 
 @dataclass(frozen=True)
 class Checkpoint:
-    """Ein Prüfpunkt des Schemas (Konzept §4, Bauplan D0 §3.1)."""
+    """Ein Prüfpunkt des Schemas (Konzept §4, Plan D0, Abschnitt 3.1)."""
 
     number: int
     title: str
@@ -453,7 +486,7 @@ class Checkpoint:
 
 @dataclass(frozen=True)
 class Criterion:
-    """Ein Kriterium aus Einfachheit, Verständlichkeit oder Gestaltung (§2.12)."""
+    """Ein Kriterium aus Einfachheit, Verständlichkeit oder Gestaltung (Plan D0, Abschnitt 2.12)."""
 
     key: str
     measure: str
@@ -525,8 +558,8 @@ def _criterion(
     )
 
 
-#: Die 35 Kriterien (Konzept §4, Bauplan D0 §3.2 und §3.3) mit Stufe, Schwelle
-#: und Quelle (§2.12). ``numbers`` sind die Zahlen, die die Schwelle im Skill
+#: Die 35 Kriterien (Konzept §4, Plan D0, Abschnitte 3.2 und 3.3) mit Stufe, Schwelle
+#: und Quelle (Plan D0, Abschnitt 2.12). ``numbers`` sind die Zahlen, die die Schwelle im Skill
 #: nennen muss.
 CRITERIA: Final[dict[str, Criterion]] = {
     c.key: c
@@ -885,6 +918,7 @@ def _entry_problems(name: str, entry: Any, spec: ProtocolField) -> list[str]:
         value = entry.get(key)
         if value is not None and value not in allowed:
             problems.append(f"{name}: {key} = {value!r} nicht in {list(allowed)}")
+    problems += [f"{name}: Pflichtschlüssel {key} fehlt" for key in sorted(spec.needs - set(entry))]
     return problems
 
 

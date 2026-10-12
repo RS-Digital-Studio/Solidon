@@ -1,7 +1,7 @@
 """Urteile, Gegenproben, Abhakliste und Funddatei des Funktionsdurchgangs (RM-737, D0-U).
 
 Der Prüfstand misst am echten Fenster; hier wird ohne Fenster geprüft, ob
-seine Messungen richtig beurteilt werden. Jede Gegenprobe aus Bauplan D0 §3
+seine Messungen richtig beurteilt werden. Jede Gegenprobe aus Plan D0, Abschnitt 3
 ist ein absichtlich kaputtes Protokoll, Urteil oder Fund und muss rot werden
 (``tools/function_samples.py``). Ein Prüfpunkt ohne Gegenprobe macht diese
 Datei rot, ebenso ein Urteil, das abgewiesen gehört, eine Funddatei mit
@@ -165,7 +165,7 @@ def test_the_sample_protocol_has_nothing_to_find() -> None:
     "sample", BROKEN_SAMPLES, ids=[f"{s.subject}-{s.title}" for s in BROKEN_SAMPLES]
 )
 def test_every_broken_sample_turns_red(sample: Any) -> None:
-    """Jede Gegenprobe aus Bauplan D0 §3 wird rot — ohne Fenster."""
+    """Jede Gegenprobe aus Plan D0, Abschnitt 3 wird rot — ohne Fenster."""
     red, detail = is_red(sample)
     assert red, f"{sample.subject} {sample.title}: blieb grün ({detail})"
 
@@ -185,7 +185,10 @@ def test_a_new_checkpoint_without_a_broken_sample_turns_the_suite_red(
 
 
 def test_only_a_different_selection_after_undo_is_a_note_not_a_finding() -> None:
-    """Prüfpunkt 5: Nur die Auswahl verschieden ist ein Vermerk, nie rot (§3.1)."""
+    """Prüfpunkt 5: Nur die Auswahl verschieden ist ein Vermerk, nie rot.
+
+    Plan D0, Abschnitt 3.1.
+    """
 
     def other_selection(protocol: dict[str, Any]) -> None:
         protocol["states"]["undo"] = {**protocol["states"]["before"], "selection": []}
@@ -193,6 +196,81 @@ def test_only_a_different_selection_after_undo_is_a_note_not_a_finding() -> None
     outcome = _judged(other_selection).points[5]
     assert outcome.verdict == "erfuellt"
     assert any("Auswahl" in note for note in outcome.notes)
+
+
+def test_a_click_outside_the_main_path_does_not_count_for_e1_to_e4() -> None:
+    """Nur ``weg`` und ``übernehmen`` sind der Hauptweg (Festlegung Koordinator).
+
+    Die Gegenprobe in beide Richtungen: Fünf Klicks in der Phase der Matrix
+    lassen E1 bis E4 unverändert; dieselben fünf auf dem Weg machen E1 rot.
+    """
+    from tools.function_samples import click_step
+
+    def clicks_in(phase: str) -> Any:
+        def change(protocol: dict[str, Any]) -> None:
+            protocol["steps"] += [
+                click_step(f"menu:tree.x{n}", "ansicht", "menue", phase=phase) for n in range(5)
+            ]
+
+        return change
+
+    base = _judged()
+    other = _judged(clicks_in("matrix klick operation:drill_hole"))
+    for key in ("E1", "E2", "E3", "E4"):
+        assert other.criteria[key] == base.criteria[key], key
+    assert other.points[2].verdict == base.points[2].verdict
+    assert _judged(clicks_in("weg")).criteria["E1"].verdict == "fund"
+
+
+def test_the_licence_states_are_the_ones_the_application_reads() -> None:
+    """Die Lizenzzustände tragen die Namen der Eigenschaften von ``Activation``.
+
+    Die Anwendung führt keine Aufzählung; sie liest den Zustand an diesen
+    Eigenschaften ab, und der Prüfstand setzt ihn wie die Suite über
+    ``activation._cached``. Eine umbenannte Eigenschaft macht das hier rot.
+    """
+    from app.core.activation import Activation
+    from tools.function_checks import EXPIRED_RUNS, LICENCE_RUNS, LICENCE_STATES
+
+    for state in LICENCE_STATES:
+        assert isinstance(getattr(Activation, state, None), property), state
+    assert set(LICENCE_RUNS) <= set(LICENCE_STATES)
+    assert set(LICENCE_RUNS) >= EXPIRED_RUNS
+    expired = Activation(days_left=0, deadline=None)
+    assert not expired.unlocked
+
+
+def test_the_display_unit_is_the_one_the_application_writes() -> None:
+    """Die Einheit kommt aus ``app.core.units.DISPLAY_UNITS`` — „in“, nicht „inch“."""
+    protocol = sample_protocol()
+    protocol["variant"]["unit"] = "in"
+    assert validate_protocol(protocol) == []
+    protocol["variant"]["unit"] = "inch"
+    assert any(problem.startswith("variant: unit") for problem in validate_protocol(protocol))
+
+
+def test_a_purchased_licence_that_still_greys_out_is_a_finding() -> None:
+    """Prüfpunkt 18 in der Gegenrichtung: Gekauft und trotzdem grau ist eine Sperre zu viel."""
+
+    def locked(protocol: dict[str, Any]) -> None:
+        protocol["licence_runs"]["licensed"] = {"writes": True, "enabled": False, "reason": "x"}
+
+    assert _judged(locked).points[18].verdict == "fund"
+
+
+def test_a_selection_the_bench_could_not_build_is_a_note_not_a_finding() -> None:
+    """Prüfpunkt 13: „nicht herstellbar“ ist ein Vermerk über die Messung, kein Fund."""
+
+    def unreachable(protocol: dict[str, Any]) -> None:
+        protocol["matrix"]["eine_kante"] = {
+            "state": "nicht herstellbar",
+            "reason": "",
+            "effective": None,
+        }
+
+    outcome = _judged(unreachable).points[13]
+    assert outcome.verdict == "stufe_b"
+    assert any("nicht herstellbar" in note for note in outcome.notes)
 
 
 def test_a_suspected_budget_overrun_is_a_note_for_the_bench() -> None:
@@ -287,7 +365,10 @@ def test_the_sample_protocol_carries_every_field_of_the_schema() -> None:
 
 
 def test_a_row_without_specification_is_valid_but_not_measured() -> None:
-    """Eine Zeile ohne Spezifikation ist „ungeprüft“, kein ungültiges Protokoll (§2.3)."""
+    """Eine Zeile ohne Spezifikation ist „ungeprüft“, kein ungültiges Protokoll.
+
+    Plan D0, Abschnitt 2.3: Eine leere Spezifikation heißt ungeprüft.
+    """
     protocol = sample_protocol()
     protocol["spec"] = None
     assert validate_protocol(protocol) == []
@@ -318,14 +399,20 @@ def test_a_function_nobody_can_find_is_a_heavy_finding() -> None:
 
 
 def test_the_contrast_sample_is_the_one_the_plan_names() -> None:
-    """Die Gegenprobe von G6 trägt 3,9 bei normaler Schrift (§3.3), nicht irgendeinen Wert."""
+    """Die Gegenprobe von G6 trägt 3,9 bei normaler Schrift, nicht irgendeinen Wert.
+
+    Plan D0, Abschnitt 3.3.
+    """
     from app.ui.theme import contrast_ratio
 
     assert round(contrast_ratio("#818181", "#ffffff"), 1) == 3.9
 
 
 def test_every_result_names_its_evidence_as_in_the_plan() -> None:
-    """§2.8: je Ergebnis Stufe, Messung, Urteil, Grund, Beleg (Bilder und Protokollstellen)."""
+    """Je Ergebnis Stufe, Messung, Urteil, Grund und Beleg (Plan D0, Abschnitt 2.8).
+
+    Der Beleg sind die Bilder des Falls und die gelesenen Stellen im Protokoll.
+    """
     case = _judged()
     record = case.points[4].record()
     assert record["point"] == 4 and record["stage"] == "A" and record["verdict"] == "erfuellt"
@@ -338,7 +425,7 @@ def test_every_result_names_its_evidence_as_in_the_plan() -> None:
 
 
 def test_good_verdicts_are_accepted() -> None:
-    """Die Gegenseite: Was §2.9 erfüllt, wird angenommen."""
+    """Die Gegenseite: Was Plan D0, Abschnitt 2.9 erfüllt, wird angenommen."""
     case = _judged()
     findings, problems = parse_findings(_finding(subject="1", kind="Einfachheit"))
     assert not problems
@@ -390,7 +477,10 @@ REJECTED = {
 
 @pytest.mark.parametrize("name", sorted(REJECTED))
 def test_a_verdict_against_the_rules_is_rejected(name: str) -> None:
-    """§4.4: Urteile ohne Bild oder Stelle, offen ohne RM, fremder Grund … abgewiesen."""
+    """Urteile ohne Bild oder Stelle, offen ohne RM, fremder Grund … werden abgewiesen.
+
+    Plan D0, Abschnitt 4.4.
+    """
     entry, reason = REJECTED[name]
     case = _judged()
     findings, _problems = parse_findings(_finding())
@@ -485,7 +575,10 @@ BAD_FINDINGS = {
 
 @pytest.mark.parametrize("name", sorted(BAD_FINDINGS))
 def test_a_finding_file_against_the_rules_is_rejected(name: str) -> None:
-    """§2.11: Funddatei mit doppelter Nummer, fremder Art oder Schwere, ohne Stand → rot."""
+    """Funddatei mit doppelter Nummer, fremder Art oder Schwere, ohne Stand → rot.
+
+    Plan D0, Abschnitt 2.11.
+    """
     text, expected = BAD_FINDINGS[name]
     findings, problems = parse_findings(text)
     problems += check_findings(findings)
@@ -561,7 +654,7 @@ def _b_verdicts() -> list[dict[str, Any]]:
 
 
 def test_the_checklist_is_deterministic() -> None:
-    """Gleiche Eingaben, gleiche Bytes — auch in anderer Reihenfolge (§4.4)."""
+    """Gleiche Eingaben, gleiche Bytes — auch in anderer Reihenfolge (Plan D0, Abschnitt 4.4)."""
     first = _checklist(_b_verdicts())
     assert first == _checklist(_b_verdicts())
     assert first == _checklist(list(reversed(_b_verdicts())), rows=list(reversed(ROWS[:2])))
@@ -585,7 +678,10 @@ def test_a_row_is_fine_only_when_every_checkpoint_is_settled() -> None:
 
 
 def test_more_than_one_decision_stays_open_in_the_checklist() -> None:
-    """E3: mehr als eine Entscheidung ohne B-Urteil ist „B offen“, nie „gut“ (§3.2)."""
+    """E3: mehr als eine Entscheidung ohne B-Urteil ist „B offen“, nie „gut“.
+
+    Plan D0, Abschnitt 3.2.
+    """
 
     def decide(protocol: dict[str, Any]) -> None:
         protocol["steps"][1]["decision"] = True
@@ -716,7 +812,10 @@ def test_the_report_writes_one_deterministic_checklist_per_package(tmp_path: Pat
 
 
 def test_the_report_rejects_invalid_input_with_exit_one(tmp_path: Path) -> None:
-    """Ausgang 1 nur bei ungültigen Eingaben (§2.13); die Abhakliste nennt die Abweisung."""
+    """Ausgang 1 nur bei ungültigen Eingaben; die Abhakliste nennt die Abweisung.
+
+    Plan D0, Abschnitt 2.13.
+    """
     state = tmp_path / "state"
     state.mkdir()
     (state / "urteile-d04.toml").write_text(
@@ -749,7 +848,9 @@ SKILLS = {
 
 @pytest.mark.parametrize("skill", sorted(SKILLS))
 def test_the_criteria_tables_in_the_skills_match_the_constants(skill: str) -> None:
-    """Skill-Text und Konstante sind ein gehaltener Zwilling (§2.12, ``zwillinge.md``).
+    """Skill-Text und Konstante sind ein gehaltener Zwilling (``zwillinge.md``).
+
+    Plan D0, Abschnitt 2.12.
 
     Das Skill ist die Quelle für Menschen, ``function_checks`` die für den
     Prüfstand. Verglichen werden die Kennungen, die Zahlen jeder Schwelle,
@@ -940,7 +1041,7 @@ def test_the_window_command_comparison_finds_missing_and_stale_rows() -> None:
 
 @pytest.mark.rendered
 def test_the_menu_bar_matches_the_window_commands_of_every_checklist(window: MainWindow) -> None:
-    """Die Fensterbefehle entstehen erst am gebauten Fenster (Konzept §3).
+    """Die Fensterbefehle entstehen erst am gebauten Fenster (Konzept Plan D0, Abschnitt 3).
 
     Ihre Vollständigkeit hält dieser Test: Jede Zeile der Menüleiste steht in
     der Abhakliste ihres Pakets, und keine Abhakliste nennt einen Befehl, den

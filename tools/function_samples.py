@@ -1,4 +1,4 @@
-"""Die Gegenproben des Funktionsdurchgangs (RM-737, Paket D0-U, Bauplan D0 §3).
+"""Die Gegenproben des Funktionsdurchgangs (RM-737, Paket D0-U, Plan D0, Abschnitt 3).
 
 Je Prüfpunkt und Kriterium mindestens eine Gegenprobe: ein absichtlich
 kaputtes Protokoll, Urteil oder Fund, das rot werden muss
@@ -23,9 +23,11 @@ from app.ui.session import COARSE_PREVIEW_ABOVE
 from tools.function_checks import (
     CHECKPOINTS,
     COARSE_NOTE,
+    COVERED,
     CRITERIA,
     LAPTOP_SIZE,
     MANUAL_WINDOW,
+    NOT_FOUND,
     START_SIZE,
     Context,
 )
@@ -107,7 +109,7 @@ def sample_protocol() -> dict[str, Any]:
             "language": "de",
             "theme": "light",
             "unit": "mm",
-            "licence": "gekauft",
+            "licence": "licensed",
             "preconditions": {},
             "platform": "windows",
             "screen": "1",
@@ -118,12 +120,25 @@ def sample_protocol() -> dict[str, Any]:
         "version": {"commit": "a280ee8f5", "app": "0.6.1"},
         "scene": {"key": "quader.exakt", "triangles": 12, "build_s": 0.1, "eval_s": 0.2},
         "steps": [
+            # Eine Suche vor dem Weg: Sie klickt und tippt, zählt aber nicht
+            # für E1 bis E4 — nur ``weg`` und ``übernehmen`` sind der Hauptweg.
+            {
+                "target": "search",
+                "why": "ziel",
+                "button": "left",
+                "typed": "bohren",
+                "zone": "karte_rechts",
+                "hit": True,
+                "phase": "suche bohren",
+                "t": 0.05,
+            },
             {
                 "target": "tree.row:body1",
                 "why": "ziel",
                 "button": "left",
                 "zone": "karte_links",
                 "hit": True,
+                "phase": "weg",
                 "t": 0.1,
             },
             {
@@ -132,6 +147,7 @@ def sample_protocol() -> dict[str, Any]:
                 "button": "left",
                 "zone": "karte_rechts",
                 "hit": True,
+                "phase": "weg",
                 "t": 0.4,
             },
             {
@@ -141,6 +157,7 @@ def sample_protocol() -> dict[str, Any]:
                 "typed": "5",
                 "zone": "dialog",
                 "hit": True,
+                "phase": "weg",
                 "t": 0.9,
             },
             {
@@ -149,6 +166,7 @@ def sample_protocol() -> dict[str, Any]:
                 "button": "left",
                 "zone": "dialog",
                 "hit": True,
+                "phase": "übernehmen",
                 "t": 1.2,
             },
         ],
@@ -352,17 +370,17 @@ def sample_protocol() -> dict[str, Any]:
             }
         ],
         "licence_runs": {
-            "demo_abgelaufen": {
+            "over": {
                 "writes": True,
                 "enabled": False,
                 "reason": "Die Demo ist abgelaufen.",
             },
-            "testlauf_abgelaufen": {
+            "expired": {
                 "writes": True,
                 "enabled": False,
                 "reason": "Der Testlauf ist abgelaufen.",
             },
-            "gekauft": {"writes": True, "enabled": True, "reason": ""},
+            "licensed": {"writes": True, "enabled": True, "reason": ""},
         },
         "halt": {
             "text": "Die Kette hält bei Schritt 3: Die Bohrung trifft keinen Körper.",
@@ -393,6 +411,9 @@ def sample_protocol() -> dict[str, Any]:
             },
         ],
         "abort": {"eval_s": 2.4, "cancel_shown_s": 2.0, "clicked": True},
+        "findings": [],
+        "closed_by_escape": [],
+        "unmeasured": {},
         "images": ["cases/1/01-vorher.png"],
         "errors": [],
     }
@@ -451,8 +472,18 @@ def _all(*changes: Callable[[dict[str, Any]], None]) -> Callable[[dict[str, Any]
     return change
 
 
-def _click(target: str, zone: str = "karte_rechts", why: str = "ziel") -> dict[str, Any]:
-    return {"target": target, "why": why, "button": "left", "zone": zone, "hit": True}
+def click_step(
+    target: str, zone: str = "karte_rechts", why: str = "ziel", phase: str = "weg"
+) -> dict[str, Any]:
+    """Ein Linksklick im Protokoll, wie der Prüfstand ihn schreibt (Vorgabe: Hauptweg)."""
+    return {
+        "target": target,
+        "why": why,
+        "button": "left",
+        "zone": zone,
+        "hit": True,
+        "phase": phase,
+    }
 
 
 _GOOD_VERDICT: Final[dict[str, Any]] = {
@@ -489,7 +520,7 @@ _FINDING: Final = """### FD-1 Zwei Hauptknöpfe im Bohrdialog
 """
 
 
-#: Je Prüfpunkt und Kriterium mindestens eine Gegenprobe (Bauplan D0 §3).
+#: Je Prüfpunkt und Kriterium mindestens eine Gegenprobe (Plan D0, Abschnitt 3).
 BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(1, "Suchprobe auf Rang 4", change=_set("search.bohren.rank", 4)),
     BrokenSample(
@@ -501,11 +532,11 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         2,
         "4 Klicks an einer Körperhandlung",
         change=_steps(
-            _click("tree.row:body1", "karte_links"),
-            _click("operation:drill_hole"),
-            _click("feature.in_view"),
-            _click("feature.every"),
-            _click("feature.apply"),
+            click_step("tree.row:body1", "karte_links"),
+            click_step("operation:drill_hole"),
+            click_step("feature.in_view"),
+            click_step("feature.every"),
+            click_step("feature.apply"),
         ),
     ),
     BrokenSample(
@@ -513,6 +544,31 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         "fehlende Schritte ergeben nicht gemessen",
         change=_drop("steps"),
         expect="nicht_gelaufen",
+    ),
+    BrokenSample(
+        2,
+        "Schritte nur außerhalb des Hauptwegs ergeben nicht gemessen",
+        change=_steps(
+            click_step("search", phase="suche bohren"),
+            click_step("feature.apply", phase="fehlfall"),
+        ),
+        expect="nicht_gelaufen",
+    ),
+    BrokenSample(
+        2,
+        "verdeckter Klick in einer Phase",
+        change=_set(
+            "findings",
+            [{"phase": "fehlfall", "kind": COVERED, "target": "feature.apply", "detail": "Dialog"}],
+        ),
+    ),
+    BrokenSample(
+        1,
+        "kein Weg zum Ziel auf dem Hauptweg",
+        change=_set(
+            "findings",
+            [{"phase": "weg", "kind": NOT_FOUND, "target": "operation:drill_hole", "detail": "x"}],
+        ),
     ),
     BrokenSample(3, "ungleiche Abdrücke", change=_set("preview.bodies.body1", "cccc")),
     BrokenSample(
@@ -565,7 +621,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(
         9,
         "mm an einem Längenwert im Zolllauf",
-        change=_all(_set("variant.unit", "inch"), _set("texts.0.text", "Bohrt 5 mm tief.")),
+        change=_all(_set("variant.unit", "in"), _set("texts.0.text", "Bohrt 5 mm tief.")),
     ),
     BrokenSample(
         10, "Rücksprung in der Tab-Kette", change=_set("tab_chain.2.rect", [12, 8, 96, 28])
@@ -614,19 +670,19 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(
         18,
         "schreibendes Ziel frei trotz Ablauf",
-        change=_set("licence_runs.demo_abgelaufen.enabled", True),
+        change=_set("licence_runs.over.enabled", True),
     ),
-    BrokenSample(18, "grau ohne Grund", change=_set("licence_runs.testlauf_abgelaufen.reason", "")),
+    BrokenSample(18, "grau ohne Grund", change=_set("licence_runs.expired.reason", "")),
     BrokenSample(19, "zwei Hauptknöpfe", change=_set("layout.0.primary", 2)),
     BrokenSample(
         "E1",
         "4 Klicks an einer Körperhandlung",
         change=_steps(
-            _click("tree.row:body1", "karte_links"),
-            _click("operation:drill_hole"),
-            _click("feature.in_view"),
-            _click("feature.every"),
-            _click("feature.apply"),
+            click_step("tree.row:body1", "karte_links"),
+            click_step("operation:drill_hole"),
+            click_step("feature.in_view"),
+            click_step("feature.every"),
+            click_step("feature.apply"),
         ),
     ),
     BrokenSample(
@@ -635,10 +691,10 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         change=_all(
             _set("row.requirement", "merkmal:hole"),
             _steps(
-                _click("tree.row:body1.hole1", "karte_links"),
-                _click("feature:resize_hole"),
-                _click("feature.in_view"),
-                _click("feature.apply"),
+                click_step("tree.row:body1.hole1", "karte_links"),
+                click_step("feature:resize_hole"),
+                click_step("feature.in_view"),
+                click_step("feature.apply"),
             ),
         ),
     ),
@@ -658,10 +714,10 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         "E4",
         "3 Blickwechsel",
         change=_steps(
-            _click("tree.row:body1", "karte_links"),
-            _click("operation:drill_hole", "karte_rechts"),
-            _click("feature.in_view", "ansicht"),
-            _click("feature.apply", "dialog"),
+            click_step("tree.row:body1", "karte_links"),
+            click_step("operation:drill_hole", "karte_rechts"),
+            click_step("feature.in_view", "ansicht"),
+            click_step("feature.apply", "dialog"),
         ),
     ),
     BrokenSample(
@@ -770,7 +826,7 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         "Z3",
         "Klappenklick, B sagt ja",
         kind="verdict",
-        change=lambda p: p["steps"].insert(2, _click("feature.more", "dialog", "klappe")),
+        change=lambda p: p["steps"].insert(2, click_step("feature.more", "dialog", "klappe")),
         verdict=_verdict(criterion="Z3", design_judgement=True),
     ),
     BrokenSample(

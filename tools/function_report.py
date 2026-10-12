@@ -2,9 +2,9 @@
 
 Was der Prüfstand gemessen hat (``<out>/cases/<nr>/function.json``), wird hier
 mit ``tools/function_judges.py`` beurteilt und mit den Urteilen der Stufen B
-und C (``urteile-<paket>.toml``, Bauplan D0 §2.9) und der Funddatei
-(``funde.md``, §2.11) zur Abhakliste je Paket zusammengeführt
-(``abhakliste-<paket>.md``, §2.10). Alle drei liegen unter
+und C (``urteile-<paket>.toml``, Plan D0, Abschnitt 2.9) und der Funddatei
+(``funde.md``, Plan D0, Abschnitt 2.11) zur Abhakliste je Paket zusammengeführt
+(``abhakliste-<paket>.md``, Plan D0, Abschnitt 2.10). Alle drei liegen unter
 ``.claude/.state/funktionsdurchgang-2026-10/``; Bilder und Rohdaten bleiben
 außerhalb des Baums.
 
@@ -77,7 +77,7 @@ COMMON_GOALS: Final = ROOT / "tests" / "data" / "common_goals.toml"
 #: Die Website-Seiten, an denen Prüfpunkt 11 die Fundstellen sucht.
 WEBSITE: Final = ROOT / "website"
 
-#: Urteile je Zeile (Bauplan D0 §2.9): Werte und Prüfer.
+#: Urteile je Zeile (Plan D0, Abschnitt 2.9): Werte und Prüfer.
 VERDICTS: Final = ("gut", "gut_nach_fix", "offen", "entfaellt")
 REVIEWERS: Final = ("stufe_b", "zweitpruefer", "stufe_c")
 
@@ -117,7 +117,7 @@ PROPOSALS: Final = frozenset(
     key for key, c in CRITERIA.items() if key[0] == "I" and not c.promised
 ) | {"G9"}
 
-#: Felder eines Funds (§2.11); ``Prüfpunkt`` nimmt auch eine Kennung E1 … I6.
+#: Felder eines Funds (Plan D0, Abschnitt 2.11); ``Prüfpunkt`` nimmt auch eine Kennung E1 … I6.
 FINDING_FIELDS: Final = (
     "Art",
     "Schwere",
@@ -350,7 +350,7 @@ def finding_solutions(app_root: Path = ROOT / "app") -> dict[str, bool]:
     return {code: code in FINDING_ACTIONS for code in sorted(codes)}
 
 
-# --- Urteile (§2.9) ---------------------------------------------------------
+# --- Urteile (Plan D0, Abschnitt 2.9) ---------------------------------------------------------
 
 
 def subject_of(entry: Mapping[str, Any]) -> int | str | None:
@@ -373,7 +373,7 @@ def read_verdicts(path: Path) -> list[dict[str, Any]]:
 
 @dataclass(frozen=True)
 class Finding:
-    """Ein Fund aus der Funddatei (§2.11)."""
+    """Ein Fund aus der Funddatei (Plan D0, Abschnitt 2.11)."""
 
     number: int
     title: str
@@ -496,7 +496,10 @@ def check_verdicts(
     rows: Iterable[str] | None = None,
     findings: Mapping[str, Finding] | None = None,
 ) -> Checked:
-    """Prüft Urteile gegen §2.9, gegen die Messung der Stufe A und gegen die Funddatei."""
+    """Prüft Urteile gegen das Format, die Messung der Stufe A und die Funddatei.
+
+    Das Format steht in Plan D0, Abschnitt 2.9.
+    """
     known = frozenset(rows) if rows is not None else None
     accepted: list[dict[str, Any]] = []
     rejected: list[tuple[dict[str, Any], tuple[str, ...]]] = []
@@ -514,7 +517,7 @@ def check_verdicts(
     return Checked(tuple(accepted), tuple(rejected))
 
 
-# --- Funddatei (§2.11) --------------------------------------------------------
+# --- Funddatei (Plan D0, Abschnitt 2.11) --------------------------------------------------------
 
 
 def parse_findings(text: str) -> tuple[list[Finding], list[str]]:
@@ -555,7 +558,7 @@ def parse_findings(text: str) -> tuple[list[Finding], list[str]]:
 
 
 def check_findings(findings: Sequence[Finding]) -> list[str]:
-    """Nummern eindeutig, Art und Schwere aus der Liste, Stand gesetzt (§2.11)."""
+    """Nummern eindeutig, Art und Schwere aus der Liste, Stand gesetzt (Plan D0, Abschnitt 2.11)."""
     problems = []
     numbers = [finding.number for finding in findings]
     for number in sorted({n for n in numbers if numbers.count(n) > 1}):
@@ -739,7 +742,7 @@ def merge_cases(
     return CaseOutcome(cases[0].row, cases[0].variant, points, criteria, problems)
 
 
-# --- Abhakliste (§2.10) --------------------------------------------------------
+# --- Abhakliste (Plan D0, Abschnitt 2.10) --------------------------------------------------------
 
 
 def package_slug(package: str) -> str:
@@ -749,7 +752,7 @@ def package_slug(package: str) -> str:
 
 
 def package_name(package: str) -> str:
-    """``d04``, ``D04`` oder ``D4`` → ``D4``: der Wert der Zeilen (§2.3)."""
+    """``d04``, ``D04`` oder ``D4`` → ``D4``: der Wert der Zeilen (Plan D0, Abschnitt 2.3)."""
     return f"D{int(re.sub(r'\D', '', package))}"
 
 
@@ -782,7 +785,7 @@ def _cell(
     verdict: Mapping[str, Any] | None,
     findings: Mapping[str, Finding],
 ) -> Cell:
-    """Das Feld eines Prüfpunkts (§2.10): ja, FD-n, —, B, C, ? oder n.p."""
+    """Das Feld eines Prüfpunkts (Plan D0, Abschnitt 2.10): ja, FD-n, —, B, C, ? oder n.p."""
     if outcome is None:
         return Cell("?", "ausstehend")
     known = _finding_for(row, outcome.subject, findings)
@@ -822,7 +825,7 @@ def _row_verdict(cells: Sequence[Cell], ran: bool) -> str:
 
 @dataclass(frozen=True)
 class PackageValues:
-    """Die Paketwerte der Abhakliste (§2.10)."""
+    """Die Paketwerte der Abhakliste (Plan D0, Abschnitt 2.10)."""
 
     inputs: Share
     goals: Share
@@ -949,7 +952,8 @@ def render_checklist(
     lines = [
         f"# Abhakliste {package}",
         "",
-        "Erzeugt von `tools/function_report.py` (Bauplan D0 §2.10); nicht von Hand bearbeiten.",
+        "Erzeugt von `tools/function_report.py` (Plan D0, Abschnitt 2.10); "
+        "nicht von Hand bearbeiten.",
         "",
         "| | |",
         "|---|---|",
@@ -1204,7 +1208,7 @@ def write(
 ) -> int:
     """Beurteilt einen Lauf und schreibt Ergebnisse und Abhakliste je Paket.
 
-    Ausgang 1 nur bei ungültigen Eingaben (Bauplan D0 §2.13): ein unlesbares
+    Ausgang 1 nur bei ungültigen Eingaben (Plan D0, Abschnitt 2.13): ein unlesbares
     oder ungültiges Protokoll, ein abgewiesenes Urteil, eine fehlerhafte
     Funddatei. Die Abhakliste wird auch dann geschrieben — mit den
     abgewiesenen Urteilen in einem eigenen Abschnitt.
@@ -1270,7 +1274,7 @@ def write(
         print(f"{name}: {len(package_rows)} Zeilen, {len(cases)} gemessen -> {target}")
 
     def linked(case: CaseOutcome, outcome: Outcome) -> dict[str, Any]:
-        # §2.8: ``finding`` ist die FD-Nummer, sobald die Funddatei eine vergibt.
+        # Plan D0, Abschnitt 2.8: ``finding`` ist die FD-Nummer, sobald die Funddatei eine vergibt.
         known = _finding_for(case.row_id, outcome.subject, found)
         return replace(outcome, finding=known.key if known else None).record()
 
