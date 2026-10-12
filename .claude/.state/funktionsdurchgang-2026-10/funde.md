@@ -68,6 +68,18 @@ Auswertung `output/konsolidierung-2026-10-12/auswertung-probelauf-d0.md`; FD-4 b
 FD-6 folgen mit ihrem Fix). Leichte Funde einer Zeile behebt ihr Paket; mittlere und
 die systemischen leichten behebt D0.
 
+### FD-6 Gröber rechnen änderte nirgends etwas
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `finding.action:use_voxel_stage`
+- Prüfpunkt: 7
+- Beleg: Für den Vorschlag ließ sich keine Startszene bauen. Im Fenster rechnet eine gekürzte Kette nach ihrer Absage sofort voll, eine volle hat die Voxelstufe schon hinter sich, und festgelegte Stufen (Musterentfernung, Textur) rechnen fein nicht anders. Der Behälterbau setzte seine Kette selbst und lief deshalb nie voll nach (`paket-d0-l.md`, Abschnitt FD-6).
+- Ursache: `BooleanFailedError` bot *Gröber rechnen* unabhängig davon an, ob es etwas ändern konnte; `container_ops` kürzte an `boolean` vorbei.
+- Vorschlag: Vorschlag, Handler und Texte entfernen; `boolean` kürzt auch für den Behälterbau, die Auswertung rechnet voll nach.
+- Wirkung beim Kunden: Ein Knopf in der Absage, der nach dem Klick dasselbe Ergebnis brachte.
+- Stand: behoben `6e9b419ac`
+
 ### FD-7 Materialtoleranz ist ein Fachwort
 
 - Art: Verständlichkeit
