@@ -286,12 +286,13 @@ def test_the_licence_states_are_the_ones_the_application_reads(
     from datetime import date
 
     from app.core.activation import store
-    from tools.function_checks import LICENCE_STATES, LICENCE_UNLOCKED, licence_runs
+    from tools.function_checks import LICENCE_UNLOCKED
+    from tools.function_list import LICENCE_STATES, licence_states
 
     monkeypatch.setattr(
         store, "TRIAL_FROM", None if trial_from is None else date.fromisoformat(trial_from)
     )
-    runs = licence_runs()
+    runs = licence_states()
     assert {"needs_activation", "licensed"} <= set(runs)
     assert ("expired" in runs) is (trial_from is not None)
     assert ("sale_without_trial" in runs) is (trial_from is None)
@@ -314,8 +315,7 @@ def test_the_expired_demo_row_carries_its_licence_state() -> None:
     from datetime import date
 
     from app.core import activation
-    from tools.function_checks import STARTUP_LICENCE
-    from tools.function_list import RAW_WINDOW_IDS
+    from tools.function_list import RAW_WINDOW_IDS, STARTUP_LICENCE
 
     assert "startup.expired_demo" in RAW_WINDOW_IDS.values()
     reached = activation.Activation(days_left=0, deadline=date(2026, 1, 1))
@@ -350,7 +350,8 @@ def test_the_licence_point_is_judged_once_per_row_over_all_runs() -> None:
     sich ist kein Fund, weil ihm die übrigen Läufe fehlen; zusammengeführt ist
     die Zeile erfüllt, und erst ein fehlender Lauf über alle Fälle ist einer.
     """
-    from tools.function_checks import LICENCE_UNLOCKED, licence_runs
+    from tools.function_checks import LICENCE_UNLOCKED
+    from tools.function_list import licence_states
 
     base = sample_protocol()
     base.pop("licence_runs")
@@ -361,7 +362,7 @@ def test_the_licence_point_is_judged_once_per_row_over_all_runs() -> None:
             "enabled": LICENCE_UNLOCKED[state],
             "reason": "" if LICENCE_UNLOCKED[state] else "Ändern braucht eine Lizenz.",
         }
-        for state in licence_runs()
+        for state in licence_states()
     }
     single = []
     for state, entry in runs.items():
@@ -1799,9 +1800,10 @@ def test_the_spec_format_and_the_licence_names_come_from_the_function_list() -> 
 
     assert function_checks.PROTOCOL_SCHEMA["spec"].keys is function_list.SPEC_KEYS
     assert not hasattr(function_checks, "NOT_APPLICABLE")
-    assert function_checks.LICENCE_STATES is function_list.LICENCE_STATES
-    assert function_checks.STARTUP_LICENCE is function_list.STARTUP_LICENCE
-    assert function_checks.licence_runs is function_list.licence_states
+    # Die Übergangsnamen für den Prüfstand sind weg; er nimmt sie von L.
+    for name in ("STARTUP_LICENCE", "licence_runs"):
+        assert not hasattr(function_checks, name), name
+    assert "LICENCE_STATES" not in getattr(function_checks, "__all__", ())
     assert function_checks.VARIANT_LICENCES is function_list.PRECONDITIONS["licence"]
     assert set(function_checks.LICENCE_UNLOCKED) == set(function_list.LICENCE_STATES)
     source = Path(function_list.__file__ or "").read_text(encoding="utf-8")
@@ -1811,3 +1813,23 @@ def test_the_spec_format_and_the_licence_names_come_from_the_function_list() -> 
         if isinstance(node, ast.ImportFrom) and node.module
     }
     assert not {name for name in imported if name.startswith("tools.function_")}
+
+
+def test_a_row_without_a_drag_does_not_miss_z1() -> None:
+    """Steht in ``frames`` nur der Referenzfaktor, gibt es an der Zeile keinen Zug.
+
+    Z1 gilt dann nicht — kein „frames.raw_drag_ms fehlt“. Nennt die Zeile Z1
+    in ihrer Spezifikation, fehlt die Messung wirklich.
+    """
+
+    def factor_only(protocol: dict[str, Any]) -> None:
+        protocol["frames"] = {"reference_factor": 1.0}
+
+    def named(protocol: dict[str, Any]) -> None:
+        factor_only(protocol)
+        protocol["spec"]["criteria"] = ["Z1"]
+
+    assert "Z1" not in _judged(factor_only).criteria
+    missing = _judged(named).criteria["Z1"]
+    assert missing.verdict == "nicht_gelaufen"
+    assert "frames.raw_drag_ms" in missing.reason
