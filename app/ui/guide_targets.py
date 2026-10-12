@@ -989,14 +989,19 @@ def point_of_world(window: MainWindow, world: Sequence[float]) -> QPoint | None:
     zum Qt-Logikpunkt kommt vom Renderer. Dieselbe Rechnung für Wortschatz,
     Prüfstand und Videos (``tools/make_video.py``).
     """
+    display = window.viewport.display_of(world)
+    return None if display is None else _display_to_global(window, display[0], display[1])
+
+
+def _display_to_global(window: MainWindow, x: float, y: float) -> QPoint | None:
+    """Ein Bildpunkt der Ansicht in Gerätepixeln als globaler Qt-Punkt — ``None`` ohne Bild."""
     viewport = window.viewport
     renderer = viewport.renderer
-    display = viewport.display_of(world)
-    if renderer is None or display is None:
+    if renderer is None:
         return None
     surface = renderer.widget if isinstance(renderer.widget, QWidget) else viewport
     ratio = float(renderer.device_ratio()) or 1.0
-    return surface.mapToGlobal(QPoint(round(display[0] / ratio), round(display[1] / ratio)))
+    return surface.mapToGlobal(QPoint(round(x / ratio), round(y / ratio)))
 
 
 def _shows_the_view(window: MainWindow, point: QPoint) -> bool:
@@ -1014,7 +1019,13 @@ def point_for(window: MainWindow, object_id: str, feature_id: str | None = None)
     Mitte eines Durchgangslochs ist leer, die Achse kein Ziel. Probiert werden
     die größten zugewandten Dreiecke; eines gilt, wenn an seiner Mitte die
     Ansicht selbst liegt (:func:`widget_under`) und ihr Pick dasselbe
-    Dreieck, mindestens denselben Körper meldet (``Viewport.placement_hit``).
+    Dreieck meldet (``Viewport.placement_hit``). Zeigt die Ansicht nur ein
+    grobes Netz ohne die Nummern der Dreiecke, muss der getroffene Punkt auf
+    diesem Dreieck liegen — nicht auf einer Fläche davor.
+
+    **Gerechnet wird, wo die Ansicht den Körper zeichnet**: auseinandergezogen
+    oder auf einer zweiten Platte steht er um ``Viewport.view_offset_of``
+    neben seinem Ort in der Szene (§18.8, §25).
     """
     import numpy as np
 
@@ -1036,10 +1047,12 @@ def point_for(window: MainWindow, object_id: str, feature_id: str | None = None)
     facing = faces[raw.face_normals[faces] @ np.asarray(viewport.view_direction()) < 0.0]
     order = facing[np.argsort(-raw.area_faces[facing], kind="stable")][:_POINT_TRIES]
     wanted = {int(face) for face in faces}
+    shift = np.asarray(viewport.view_offset_of(object_id), dtype=float)
     for face in order:
-        centre = tuple(float(value) for value in raw.triangles_center[face])
-        point = point_of_world(window, centre)
+        scene_centre = raw.triangles_center[face]
+        centre = tuple(float(value) for value in scene_centre + shift)
         display = viewport.display_of(centre)
+        point = None if display is None else _display_to_global(window, *display)
         if point is None or display is None or not _shows_the_view(window, point):
             continue
         hit = viewport.placement_hit(int(display[0]), int(display[1]))
@@ -1047,6 +1060,11 @@ def point_for(window: MainWindow, object_id: str, feature_id: str | None = None)
             continue
         if feature_id is not None and hit[2] >= 0 and hit[2] not in wanted:
             continue
+        if feature_id is not None and hit[2] < 0:
+            corners = raw.vertices[raw.faces[face]]
+            spread = float(np.max(np.linalg.norm(corners - scene_centre, axis=1)))
+            if float(np.linalg.norm(np.asarray(hit[1], dtype=float) - scene_centre)) > spread:
+                continue
         return point
     raise MissingTargetError(f"{name}: keine zugewandte Stelle, die ein Klick trifft")
 
@@ -1057,7 +1075,9 @@ def _grip_point(window: MainWindow, role: str, name: str) -> QPoint:
     Wo der Griff sitzt und wie weit er greift, sagt ``Viewport.gizmo_reach``;
     welcher Teil wo liegt, sagt der Renderer, der die Teile unter ihrem Namen
     führt (``gizmo:arrow:0``). Gesucht wird zuerst entlang der Weltachsen und
-    auf den Kreisen um sie, dann auf einem Raster um den Ursprung.
+    auf den Kreisen um sie — rund sechzig Picks —, das Raster um den Ursprung
+    nur, wenn dort nichts lag: Jeder Pick liest das Bild zurück, im
+    Hauptfaden des Prüfstands.
     """
     import math
 
@@ -1098,23 +1118,24 @@ def _grip_point(window: MainWindow, role: str, name: str) -> QPoint:
         )
     projected = [viewport.display_of(world) for world in worlds]
     probes = [spot for spot in projected if spot is not None]
-    span = max((math.dist(spot, centre) for spot in probes), default=0.0) * 1.1
-    probes.extend(
-        (
-            centre[0] + span * ring / 12 * math.cos(turn),
-            centre[1] + span * ring / 12 * math.sin(turn),
-        )
-        for ring in range(1, 13)
-        for turn in (step * math.pi / 24 for step in range(48))
-    )
     hits = [spot for spot in probes if getattr(renderer.pick_item(*spot), "name", None) == wanted]
     if not hits:
+        span = max((math.dist(spot, centre) for spot in probes), default=0.0) * 1.1
+        raster = [
+            (
+                centre[0] + span * ring / 12 * math.cos(turn),
+                centre[1] + span * ring / 12 * math.sin(turn),
+            )
+            for ring in range(1, 13)
+            for turn in (step * math.pi / 24 for step in range(48))
+        ]
+        hits = [
+            spot for spot in raster if getattr(renderer.pick_item(*spot), "name", None) == wanted
+        ]
+    if not hits:
         raise MissingTargetError(f"{name}: der Griff steht nicht im Bild")
-    x, y = hits[len(hits) // 2]
-    surface = renderer.widget if isinstance(renderer.widget, QWidget) else viewport
-    ratio = float(renderer.device_ratio()) or 1.0
-    point = surface.mapToGlobal(QPoint(round(x / ratio), round(y / ratio)))
-    if not _shows_the_view(window, point):
+    point = _display_to_global(window, *hits[len(hits) // 2])
+    if point is None or not _shows_the_view(window, point):
         raise MissingTargetError(f"{name}: über dem Griff liegt ein Bedienelement")
     return point
 

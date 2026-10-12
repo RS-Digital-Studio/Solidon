@@ -936,6 +936,7 @@ NEW_RESOLVERS = (
     "_item_rect",
     "_item_area",
     "point_of_world",
+    "_display_to_global",
     "_shows_the_view",
     "point_for",
     "_grip_point",
@@ -1519,13 +1520,17 @@ def test_a_grip_is_found_by_the_name_the_renderer_gives_it(
     monkeypatch.setattr(viewport, "gizmo_reach", lambda: ((0.0, 0.0, 0.0), 20.0))
     tip = viewport.display_of((8.0, 0.0, 0.0))
     arrow = SimpleNamespace(name="gizmo:arrow:0")
-    monkeypatch.setattr(
-        renderer,
-        "pick_item",
-        lambda x, y: arrow if abs(x - tip[0]) <= 6 and abs(y - tip[1]) <= 3 else None,
-    )
+    picks: list[tuple[float, float]] = []
+
+    def pick(x: float, y: float) -> Any:
+        picks.append((x, y))
+        return arrow if abs(x - tip[0]) <= 6 and abs(y - tip[1]) <= 3 else None
+
+    monkeypatch.setattr(renderer, "pick_item", pick)
     monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
     found = guide_targets.next_click(window, "handle:move.x")
+    # Liegt der Griff auf einer Achse, reicht die erste Runde (Review L9).
+    assert len(picks) < 100, len(picks)
     centre = found.rect.center()
     local = viewport.mapFromGlobal(centre)
     assert abs(local.x() - tip[0]) <= 6 and abs(local.y() - tip[1]) <= 3
@@ -1771,3 +1776,82 @@ def test_a_command_of_a_tool_keeps_its_own_name(prepared_window: Any) -> None:
 
     step = guide_targets.next_click(prepared_window, "command:tool.section")
     assert step.target == "command:tool.section"
+
+
+def test_point_for_follows_the_body_where_the_view_draws_it(
+    prepared_window: Any, monkeypatch
+) -> None:
+    """Auseinandergezogen oder auf einer zweiten Platte steht der Körper im Bild
+    verschoben (``Viewport.view_offset_of``); die Stelle folgt ihm (Review M2)."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.ui import guide_targets
+
+    window = prepared_window
+    viewport = window.viewport
+    entry = window.session.last_result.scene.objects["obj_1"]
+    raw = as_mesh_data(entry.mesh).raw
+    shift = (40.0, 0.0, 0.0)
+    faces = {int(face) for face in entry.features["hole_1"].face_indices}
+    drawn = {
+        index: viewport.display_of(
+            tuple(float(a) + b for a, b in zip(raw.triangles_center[index], shift, strict=True))
+        )
+        for index in faces
+    }
+
+    def picked(x: int, y: int) -> Any:
+        for index, spot in drawn.items():
+            if spot is not None and abs(spot[0] - x) <= 1 and abs(spot[1] - y) <= 1:
+                return ("obj_1", (0.0, 0.0, 0.0), index, None)
+        return None
+
+    monkeypatch.setattr(viewport, "view_offset_of", lambda _object_id: shift)
+    monkeypatch.setattr(viewport, "placement_hit", picked)
+    monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
+    point = guide_targets.point_for(window, "obj_1", "hole_1")
+    local = viewport.mapFromGlobal(point)
+    assert any(
+        spot is not None and abs(spot[0] - local.x()) <= 1 and abs(spot[1] - local.y()) <= 1
+        for spot in drawn.values()
+    )
+
+
+def test_point_for_on_a_coarse_view_takes_only_a_hit_on_its_own_triangle(
+    prepared_window: Any, monkeypatch
+) -> None:
+    """Ohne Dreiecksnummern (grobe Anzeige) gilt ein Pick nur, wenn der getroffene
+    Punkt auf dem probierten Dreieck liegt — nicht auf einer Fläche davor."""
+    import numpy as np
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.ui import guide_targets
+
+    window = prepared_window
+    viewport = window.viewport
+    entry = window.session.last_result.scene.objects["obj_1"]
+    raw = as_mesh_data(entry.mesh).raw
+    faces = [int(face) for face in entry.features["hole_1"].face_indices]
+    centres = {
+        index: (
+            viewport.display_of(tuple(raw.triangles_center[index])),
+            raw.triangles_center[index],
+        )
+        for index in faces
+    }
+    far = np.asarray(raw.bounds[1]) + 50.0
+
+    def picked(near: bool) -> Any:
+        def pick(x: int, y: int) -> Any:
+            for spot, centre in centres.values():
+                if spot is not None and abs(spot[0] - x) <= 1 and abs(spot[1] - y) <= 1:
+                    return ("obj_1", tuple(centre if near else far), -1, None)
+            return None
+
+        return pick
+
+    monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
+    monkeypatch.setattr(viewport, "placement_hit", picked(near=False))
+    with pytest.raises(guide_targets.MissingTargetError):
+        guide_targets.point_for(window, "obj_1", "hole_1")
+    monkeypatch.setattr(viewport, "placement_hit", picked(near=True))
+    assert guide_targets.point_for(window, "obj_1", "hole_1") is not None
