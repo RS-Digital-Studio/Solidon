@@ -46,6 +46,7 @@ from typing import IO, Final
 from app.core import discover
 from app.core.backends.mesh import MINIMUM_COMFYUI, role_candidates
 from app.core.log import get_logger
+from app.core.process import no_error_dialogs
 from app.i18n import TranslatableText, _, format_decimal
 
 _log = get_logger(__name__)
@@ -531,16 +532,18 @@ def _run(
     # und sein Python liegen dort.
     launched = discover.on_host(list(command))
     try:
-        with subprocess.Popen(
-            launched,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-        ) as process:
+        with no_error_dialogs():
+            started = subprocess.Popen(
+                launched,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
+        with started as process:
             assert process.stdout is not None
             sink: queue.Queue[str | None] = queue.Queue()
             reader = threading.Thread(

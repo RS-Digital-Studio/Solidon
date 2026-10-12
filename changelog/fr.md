@@ -43,6 +43,10 @@ dans `website/version.json`.
 - Sans activation, les actions qui modifient le modèle sont grisées avec leur raison dans le *Rapport de contrôle*, *Sélection*, les menus contextuels et le filament. Le refus venait après le clic.
 - Les messages de la barre d'état ne mettent plus de deux-points après une phrase complète.
 
+### Imprimer et transmettre au slicer
+
+- Si le slicer choisi n'est pas un programme, Solidon le signale désormais aussitôt. En version 0.6.0, un message Windows sur une application 16 bits bloquait le slicer jusqu'à ce qu'on le ferme.
+
 ### Modifier et esquisser
 
 - Un corps exact garde désormais ses caractéristiques après *Appliquer du texte*, *Incruster du texte* et *Creuser la contre-forme*. En version 0.6.0, plus aucune face ne pouvait ensuite être cliquée.

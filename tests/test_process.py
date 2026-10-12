@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import os
 import subprocess
@@ -742,3 +743,162 @@ def test_a_process_that_ends_on_its_own_keeps_its_return_code(tmp_path: Path) ->
 
     assert answer.returncode == 0
     assert answer.stdout.decode("utf-8").strip() == "fertig"
+
+
+#: Die Wurzel des Baums, aus dem Kinder ``app`` laden.
+ROOT = Path(__file__).resolve().parents[1]
+
+#: Die Aufrufe, mit denen ``subprocess`` ein Programm startet.
+_STARTS = frozenset({"Popen", "run", "call", "check_call", "check_output"})
+
+
+def _is_start(call: ast.Call) -> bool:
+    """``subprocess.Popen(…)`` und Geschwister."""
+    function = call.func
+    return (
+        isinstance(function, ast.Attribute)
+        and function.attr in _STARTS
+        and isinstance(function.value, ast.Name)
+        and function.value.id == "subprocess"
+    )
+
+
+def _is_shield(expression: ast.expr) -> bool:
+    """``no_error_dialogs()`` oder ``process.no_error_dialogs()``."""
+    if not isinstance(expression, ast.Call):
+        return False
+    function = expression.func
+    name = function.attr if isinstance(function, ast.Attribute) else getattr(function, "id", "")
+    return name == "no_error_dialogs"
+
+
+def _unshielded_starts(source: str) -> tuple[list[int], list[int]]:
+    """Zeilen aller Programmstarts und der Starts außerhalb von ``no_error_dialogs``."""
+    tree = ast.parse(source)
+    shielded: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.With) and any(_is_shield(item.context_expr) for item in node.items):
+            for statement in node.body:
+                shielded.update(id(inner) for inner in ast.walk(statement))
+    starts = [node for node in ast.walk(tree) if isinstance(node, ast.Call) and _is_start(node)]
+    return (
+        sorted(node.lineno for node in starts),
+        sorted(node.lineno for node in starts if id(node) not in shielded),
+    )
+
+
+def test_every_program_start_of_the_application_opens_no_system_window() -> None:
+    """Jeder Start über ``subprocess`` unter ``app/`` steht in ``no_error_dialogs`` (RM-788).
+
+    Ohne den Block öffnet Windows für eine ``.exe``, die kein Programm ist, das
+    Fenster „Nicht unterstützte 16-Bit-Anwendung“ im startenden Faden und
+    wartet auf einen Klick. ``multiprocessing`` startet nur den eigenen
+    Interpreter und zählt nicht.
+    """
+    starts: list[str] = []
+    bare: list[str] = []
+    for path in sorted((ROOT / "app").rglob("*.py")):
+        found, unshielded = _unshielded_starts(path.read_text(encoding="utf-8"))
+        name = path.relative_to(ROOT).as_posix()
+        starts += [f"{name}:{line}" for line in found]
+        bare += [f"{name}:{line}" for line in unshielded]
+    assert len(starts) >= 5, f"die Suche fand die Programmstarts nicht mehr: {starts}"
+    assert not bare, f"Programmstart ohne no_error_dialogs: {bare}"
+
+
+def test_the_start_guard_sees_a_start_outside_the_block() -> None:
+    """Gegenprobe des Wächters: außerhalb des Blocks, im Kopf des Blocks und daneben."""
+    source = (
+        "import subprocess\n"
+        "from app.core import process\n"
+        "subprocess.Popen(['a'])\n"
+        "with process.no_error_dialogs():\n"
+        "    subprocess.Popen(['b'])\n"
+        "with no_error_dialogs():\n"
+        "    started = subprocess.run(['c'])\n"
+        "with subprocess.Popen(['d']) as d, no_error_dialogs():\n"
+        "    pass\n"
+        "with open('e'):\n"
+        "    subprocess.check_output(['e'])\n"
+    )
+    assert _unshielded_starts(source) == ([3, 5, 7, 8, 11], [3, 8, 11])
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Fehlermodus eines Fadens gibt es nur unter Windows")
+def test_the_error_mode_holds_only_inside_the_block() -> None:
+    """Der Modus gilt im Block und ist danach wieder, wie er war — auch verschachtelt."""
+    import ctypes
+
+    windows: Any = ctypes
+    kernel32 = windows.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetThreadErrorMode.restype = ctypes.c_uint32
+    before = kernel32.GetThreadErrorMode()
+    with process.no_error_dialogs():
+        inside = kernel32.GetThreadErrorMode()
+        with process.no_error_dialogs():
+            nested = kernel32.GetThreadErrorMode()
+        assert kernel32.GetThreadErrorMode() == inside, "der innere Block nahm den äußeren mit"
+    assert inside & 0x0001 and nested & 0x0001, "SEM_FAILCRITICALERRORS fehlt im Block"
+    assert kernel32.GetThreadErrorMode() == before
+
+
+@pytest.mark.skipif(
+    os.name != "nt", reason="das Fenster für 16-Bit-Anwendungen gibt es nur unter Windows"
+)
+@pytest.mark.parametrize("start", ["run_limited", "run_stream_limited"])
+def test_a_file_that_is_no_program_fails_at_once_instead_of_waiting_for_a_click(
+    tmp_path: Path, start: str
+) -> None:
+    """Eine ``.exe``, die kein Programm ist, endet sofort im ``OSError`` (RM-788).
+
+    Das Kind startet im Standardfehlermodus (``CREATE_DEFAULT_ERROR_MODE``), wie
+    die Anwendung aus Explorer und Startmenü — aus Git Bash erbte die Suite
+    ``SEM_FAILCRITICALERRORS`` und sähe den Fehler nie. Ohne
+    ``no_error_dialogs`` wartete ``CreateProcess`` dort auf einen Klick in
+    „Nicht unterstützte 16-Bit-Anwendung“; die Frist zählt ab dem Aufruf, nicht
+    ab dem Interpreterstart.
+    """
+    fake = tmp_path / "elegoo-slicer.exe"
+    fake.write_text("kein programm", encoding="utf-8")
+    called = tmp_path / "aufgerufen"
+    extra = ", output_limit=4096, on_line=print" if start == "run_stream_limited" else ""
+    script = (
+        "from app.core import process\n"
+        + _stamp(called)
+        + "try:\n"
+        + f"    process.{start}([{str(fake)!r}], cwd=Path({str(tmp_path)!r}), "
+        + f"timeout={HANG_GUARD}{extra})\n"
+        + "except OSError as problem:\n"
+        + "    print('OSError', problem.winerror, flush=True)\n"
+    )
+    child = subprocess.Popen(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=getattr(subprocess, "CREATE_DEFAULT_ERROR_MODE", 0),
+    )
+    try:
+        until = time.monotonic() + HANG_GUARD
+        while not called.exists() and child.poll() is None and time.monotonic() < until:
+            time.sleep(0.01)
+        try:
+            output, errors = child.communicate(timeout=REACTION)
+        except subprocess.TimeoutExpired:
+            if not called.exists():
+                pytest.fail(f"Das Kind kam in {HANG_GUARD:.0f} s nicht bis zum Aufruf.")
+            pytest.fail(
+                f"Der Start einer .exe, die kein Programm ist, kam {REACTION:.0f} s nach dem "
+                "Aufruf nicht zurück: CreateProcess wartet im Fenster „Nicht unterstützte "
+                "16-Bit-Anwendung“ auf einen Klick — der Start lief nicht in "
+                "process.no_error_dialogs (RM-788)."
+            )
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.communicate()
+    assert child.returncode == 0, output + errors
+    assert output.startswith("OSError"), output + errors

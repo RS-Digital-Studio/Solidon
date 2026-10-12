@@ -42,6 +42,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
 - As mensagens da barra de estado já não colocam dois pontos depois de uma frase completa.
 
+### Imprimir e entregar ao slicer
+
+- Se o slicer escolhido não for um programa, o Solidon indica-o agora de imediato. Na versão 0.6.0 uma mensagem do Windows sobre uma aplicação de 16 bits parava o slicer até alguém a fechar.
+
 ### Editar e esboçar
 
 - Um corpo exato mantém agora as suas características depois de *Aplicar texto*, *Incrustar texto* e *Rebaixar contraforma*. Na versão 0.6.0 já não era possível clicar em nenhuma face a seguir.

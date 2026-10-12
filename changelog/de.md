@@ -67,6 +67,10 @@ Nutzen da und sonst nichts.
 - Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
 - Meldungen in der Statuszeile setzen keinen Doppelpunkt mehr hinter einen ganzen Satz.
 
+### Drucken und Übergabe an den Slicer
+
+- Ist als Slicer eine Datei gewählt, die kein Programm ist, meldet Solidon das jetzt sofort. In Version 0.6.0 hielt eine Windows-Meldung zur 16-Bit-Anwendung das Slicen an, bis jemand sie schloss.
+
 ### Bearbeiten und Zeichnen
 
 - Ein exakter Körper behält jetzt nach *Text aufbringen*, *Schrift einlegen* und *Gegenform einlassen* seine Merkmale. In Version 0.6.0 ließ sich danach keine Fläche mehr anklicken.

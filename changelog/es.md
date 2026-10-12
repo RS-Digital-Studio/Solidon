@@ -43,6 +43,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Sin activación, las acciones que cambian algo en el *Informe de comprobación*, *Selección*, los menús contextuales y el filamento salen en gris con el motivo. Antes el rechazo llegaba tras el clic.
 - Los mensajes de la barra de estado ya no ponen dos puntos detrás de una frase completa.
 
+### Imprimir y entregar al slicer
+
+- Si el slicer elegido no es un programa, Solidon lo indica ahora al momento. En la versión 0.6.0 un aviso de Windows sobre una aplicación de 16 bits detenía el slicer hasta que alguien lo cerraba.
+
 ### Editar y dibujar
 
 - Un cuerpo exacto conserva ahora sus características tras *Aplicar texto*, *Incrustar texto* y *Rebajar contraforma*. En la versión 0.6.0 después ya no se podía hacer clic en ninguna cara.

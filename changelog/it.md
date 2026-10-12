@@ -42,6 +42,10 @@ scrive in `website/version.json`.
 - Senza attivazione, le azioni che modificano qualcosa in *Rapporto di verifica*, *Selezione*, menu contestuali e filamento sono in grigio con il motivo. Prima il rifiuto arrivava dopo il clic.
 - I messaggi nella barra di stato non mettono più i due punti dopo una frase completa.
 
+### Stampare e passare allo slicer
+
+- Se lo slicer scelto non è un programma, Solidon ora lo segnala subito. Nella versione 0.6.0 un messaggio di Windows su un'applicazione a 16 bit bloccava lo slicer finché qualcuno non lo chiudeva.
+
 ### Modificare e disegnare
 
 - Un corpo esatto ora conserva le sue caratteristiche dopo *Applica testo*, *Intarsia testo* e *Ricava controforma*. Nella versione 0.6.0 dopo non si poteva più fare clic su nessuna faccia.

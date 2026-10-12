@@ -10,6 +10,9 @@ neuer Lauf nach einem Absturz wegräumt.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
@@ -275,6 +278,40 @@ def test_own_parts_lie_in_the_user_folder_before_the_application_starts() -> Non
     assert placed == recipe.recipes_dir() / "werkstatt_halter.json"
     assert placed.read_bytes() == setup.own_parts[0].read_bytes()
     assert function_setup.install_own_parts(function_setup.SceneSetup("quader.netz")) == []
+
+
+def test_the_own_part_leaves_the_user_folder_with_its_test() -> None:
+    """Das Rezept des Tests darüber reist nicht in den nächsten Test desselben Prozesses.
+
+    Der Nutzerordner der Suite ist einer je Prozess, und ein Rezept darin hängt
+    jedem folgenden ``results_cache_dir`` ein Kürzel an
+    (``paths._own_parts_stamp``) — auch im gebauten Paket. Im parallelen Lauf
+    war ``test_cache.py::test_a_built_package_needs_no_source_stamp`` deshalb
+    rot, sobald derselbe Arbeiter vorher den Test darüber gefahren hatte.
+    Gefahren wird genau diese Reihenfolge, in einem eigenen Prozess ohne xdist:
+    Ein ``-n`` aus ``PYTEST_ADDOPTS`` verteilte die zwei Tests auf zwei
+    Arbeiter, und die Reihenfolge wäre nicht mehr die geprüfte.
+    """
+    root = Path(__file__).resolve().parent.parent
+    environment = {name: value for name, value in os.environ.items() if name != "PYTEST_ADDOPTS"}
+    done = subprocess.run(
+        [
+            sys.executable,
+            *("-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:xdist"),
+            "tests/test_function_setup.py::"
+            "test_own_parts_lie_in_the_user_folder_before_the_application_starts",
+            "tests/test_cache.py::test_a_built_package_needs_no_source_stamp",
+        ],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=600,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "2 passed" in done.stdout, done.stdout
 
 
 def test_a_row_starting_in_a_scene_with_preconditions_runs_only_in_them() -> None:

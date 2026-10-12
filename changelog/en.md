@@ -42,6 +42,10 @@ it into `website/version.json`.
 - Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
 - Messages in the status bar no longer put a colon after a complete sentence.
 
+### Printing and slicer handover
+
+- If the chosen slicer is a file that is not a program, Solidon now says so at once. In version 0.6.0 a Windows message about a 16-bit application held up slicing until someone closed it.
+
 ### Editing and sketching
 
 - An exact body now keeps its features after *Put text on*, *Inlay text* and *Cut counter-form*. In version 0.6.0 no face could be clicked afterwards.

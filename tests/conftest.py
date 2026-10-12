@@ -997,6 +997,30 @@ def _user_profiles_stay_with_their_test() -> Iterator[None]:
     profiles.reload()
 
 
+@pytest.fixture(autouse=True)
+def _user_parts_stay_with_their_test() -> Iterator[None]:
+    """Ein eigener Baustein, den ein Test ablegt, gilt nur in diesem Test (§24.5).
+
+    Dieselbe Begründung wie bei den Profilen darüber, mit einer Folge mehr:
+    Jede Datei unter ``<Nutzerdaten>/parts/`` hängt ``results_cache_dir`` ein
+    Kürzel an (``paths._own_parts_stamp``), auch im gebauten Paket, und
+    ``bootstrap.load_user_parts`` meldet sie als Operation an.
+    ``test_own_parts_lie_in_the_user_folder_before_the_application_starts``
+    legte so ein Rezept ab, und im parallelen Lauf war
+    ``test_a_built_package_needs_no_source_stamp`` rot, sobald derselbe Arbeiter
+    vorher jenen Test fuhr. Der Ordner fehlt beim Start jedes Prozesses; was ein
+    Test anlegt, geht mit ihm. Bestimmt wird er vor dem Test, aus demselben Grund
+    wie bei den Profilen.
+    """
+    from app.core.paths import user_parts_dir
+
+    folder = user_parts_dir()
+    existed = folder.is_dir()
+    yield
+    if not existed:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
 #: Die Warte-Methoden je Widget-Klasse, einmal ermittelt.
 #:
 #: **``dir()`` je Klasse statt je Widget.** Die Fixture unten geht nach *jedem*
