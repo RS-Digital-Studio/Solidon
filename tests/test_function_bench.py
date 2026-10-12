@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ast
 import heapq
+import itertools
 import json
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -445,6 +446,26 @@ def test_a_way_that_never_reaches_the_target_ends_as_not_found() -> None:
     machine = run_machine(timer, [bench.Walk(ports, steps, 0.0).step("feature:x")])
     assert machine.finding is not None and machine.finding.kind == bench.NOT_FOUND
     assert len(ports.pressed) == bench.MOST_WAY_CLICKS + 1
+    assert "Rollen" not in machine.finding.detail
+
+
+def test_a_list_that_scrolls_in_vain_is_named_in_the_finding() -> None:
+    """Rollt jeder Wegklick an derselben Stelle, ohne dass das Ziel kommt, sagt der Fund das.
+
+    So stand die angeschnittene letzte Zeile des Objektbaums da: Die Liste hat
+    keinen Rollbalken, der Weg nennt trotzdem jedes Mal „rollen“.
+    """
+    timer = FakeTimer()
+    area = FakeWidget("rollfläche")
+    ports = FakePorts(
+        timer,
+        {"tree.row:obj_1.hole_1": [FakeClick((4, 130, 262, 206), "none", "rollen", area, 1)]},
+    )
+    steps: list[dict[str, Any]] = []
+    machine = run_machine(timer, [bench.Walk(ports, steps, 0.0).step("tree.row:obj_1.hole_1")])
+    assert machine.finding is not None and machine.finding.kind == bench.NOT_FOUND
+    assert "jedes Rollen an derselben Stelle" in machine.finding.detail
+    assert {button for _name, _point, button in ports.pressed} == {"wheel_down"}
 
 
 def test_a_click_waits_until_its_place_stands_still() -> None:
@@ -1478,6 +1499,136 @@ def test_drag_times_stay_raw_and_d0_u_converts_them_once() -> None:
     assert outcome is not None and outcome.measurement["worst_ms"] == pytest.approx(40.0)
 
 
+def test_the_reference_factor_is_measured_once_per_run_with_the_calibration_of_section_31(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Faktor ist „18 ms durch die Probe des Laufs“ (``recognition_time``), einmal je Lauf.
+
+    Jeder Fall liest den Faktor seines Laufs, statt neu zu messen; ohne Datei
+    (ein Fall ohne ``run``) misst er selbst und legt sie ab.
+    """
+    from app.core.perceive import recognition_time
+
+    probes = iter([0.036])
+    monkeypatch.setattr(recognition_time, "calibrate", lambda: next(probes))
+    factor = capture.measure_reference(tmp_path)
+    assert factor == pytest.approx(recognition_time.PROBE_REFERENCE_SECONDS / 0.036)
+    assert capture.run_reference_factor(tmp_path) == factor, "gelesen, nicht neu gemessen"
+    elsewhere = tmp_path / "anderer"
+    monkeypatch.setattr(recognition_time, "calibrate", lambda: 0.009)
+    assert capture.run_reference_factor(elsewhere) == pytest.approx(2.0)
+    assert (elsewhere / capture.REFERENCE_FILE).is_file()
+
+
+def test_a_drag_counts_only_if_the_view_noticed_the_grip(qt_app: Any) -> None:
+    """Review L11: Ein Zug, bei dem die Ansicht keinen Zugwert meldet, fasste keinen Griff.
+
+    Griff und Ansicht sind ein echtes Widget. Meldet es bei den Bewegungen
+    nichts, ist Z1 ungemessen — vorher standen auch dann Bildzeiten im
+    Protokoll. Meldet es ``transformDragged`` wie die Ansicht, stehen die
+    rohen Zeiten da, und die Bewegungen kamen im Takt einer Hand
+    (``DRAG_TICK_S``), nicht so schnell die Schleife kann.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QPoint, QRect, QSize, Signal
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    class View(QWidget):
+        transformDragged = Signal(object)  # noqa: N815 - Name des Signals der Ansicht
+
+        def __init__(self, answers: bool) -> None:
+            super().__init__()
+            self.answers = answers
+            self.setMouseTracking(True)
+
+        def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802 - Qt
+            if self.answers:
+                self.transformDragged.emit(event.position())
+
+    def drag(answers: bool) -> tuple[dict[str, Any], list[float]]:
+        view = View(answers)
+        view.resize(300, 200)
+        view.show()
+        QApplication.processEvents()
+        rect = QRect(view.mapToGlobal(QPoint(40, 90)), QSize(20, 20))
+        moves: list[float] = []
+
+        def latencies(events: list[float]) -> list[float | None]:
+            moves.extend(events)
+            return [5.0 for _ in events]
+
+        flow = object.__new__(bench.FunctionFlow)
+        flow.row = {"id": "zug", "target": "handle:move.x"}
+        flow.spec = {"criteria": ["Z1"]}
+        flow.data = {"unmeasured": {}}
+        flow.frames_wrapped = True
+        flow.frames = SimpleNamespace(latencies=latencies)
+        flow.reference_factor = 1.5
+        flow.application = QApplication.instance()
+        flow.window = SimpleNamespace(viewport=view)
+        flow.ports = SimpleNamespace(
+            next_click=lambda target: SimpleNamespace(rect=rect, why="ziel", target=target),
+            centre=lambda area: area.center(),
+            widget_under=lambda point: view,
+            covers=lambda click, hit: True,
+        )
+        flow.path_steps = lambda: [bench.Step("hin", lambda machine: None)]  # type: ignore[method-assign]
+        flow.run_steps = lambda label, steps: all(  # type: ignore[method-assign]
+            step.act(None) or True for step in steps
+        )
+        try:
+            flow.phase_drag()
+        finally:
+            view.close()
+            view.deleteLater()
+            QApplication.processEvents()
+        return flow.data, moves
+
+    data, _moves = drag(answers=False)
+    assert "frames" not in data
+    assert data["unmeasured"]["frames.raw_drag_ms"] == "der Zug fasste keinen Griff"
+
+    data, moves = drag(answers=True)
+    assert data["frames"] == {"raw_drag_ms": [5.0] * bench.DRAG_MOVES, "reference_factor": 1.5}
+    assert "frames.raw_drag_ms" not in data["unmeasured"]
+    gaps = [later - earlier for earlier, later in itertools.pairwise(moves)]
+    assert len(moves) == bench.DRAG_MOVES and min(gaps) >= bench.DRAG_TICK_S * 0.9
+
+
+def test_the_surface_of_a_surface_set_counts_as_the_rows_own_window() -> None:
+    """Review L13: In Zoll, Skalierung, Dunkel und Bewegung ist die Fläche der Zeile erlaubt.
+
+    Ihr modaler Dialog ist die Funktion selbst. Vorher trug ``phase_surface``
+    seine Klasse nicht in ``watch.own`` ein, und der Dialog stand als nicht
+    erlaubtes Fenster im Protokoll. Ein fremder Dialog bleibt nicht erlaubt.
+    """
+
+    class ParameterDialog:
+        """Attrappe der Bedienfläche, die die Zeile öffnet."""
+
+    flow = object.__new__(bench.FunctionFlow)
+    flow.variant = bench.Variant.of({"set": "zoll", "unit": "in"})
+    flow.watch = capture.ModalWatch(0.0)
+    for name in ("ParameterDialog", "FremderDialog"):
+        flow.watch.modals.append(
+            {"class": name, "title": name, "allowed": False, "question": False}
+        )
+    pictures: list[str] = []
+    flow.surface = ParameterDialog  # type: ignore[method-assign]
+    flow.capture_surface = lambda root: None  # type: ignore[method-assign]
+    flow.picture = pictures.append  # type: ignore[method-assign]
+    flow.path_steps = list  # type: ignore[method-assign]
+    flow.still_step = lambda name, root: bench.Step(name, lambda machine: None)  # type: ignore[method-assign]
+    flow.run_steps = lambda label, steps: all(  # type: ignore[method-assign]
+        step.act(None) or True for step in steps
+    )
+    flow.phase_surface()
+    allowed = {entry["class"]: entry["allowed"] for entry in flow.watch.modal_entries()}
+    assert allowed == {"ParameterDialog": True, "FremderDialog": False}
+    assert pictures == ["flaeche-zoll"]
+
+
 def test_the_aborted_computation_lasts_as_long_as_the_main_way() -> None:
     """Review M4: ``abort.eval_s`` ist die Rechendauer aus dem Hauptweg, nicht die Ladezeit."""
     data = bench.empty_protocol(ROWS[0], bench.Variant().protocol(None, (0, 0)), {})
@@ -1818,6 +1969,13 @@ def test_the_probe_row_runs_in_its_own_process_from_inventory_to_report(tmp_path
         ["escape", "main"],
     )
     assert protocol["row"]["id"] == PROBE_ROW and protocol["scene"]["key"]
+    # Ein Referenzfaktor je Lauf (Bauplan §31): ``run`` misst ihn, der Fall
+    # schreibt genau diesen an die Stelle, an der D0-U ihn liest.
+    factor = json.loads((out / capture.REFERENCE_FILE).read_text(encoding="utf-8"))
+    from tools.function_checks import REFERENCE_FACTOR_AT
+
+    section, key = REFERENCE_FACTOR_AT
+    assert protocol[section][key] == factor["reference_factor"] > 0
     # Der Hauptweg ist geprobt: Jeder Klick steht mit Treffer oder Fund da. Ob
     # die Anwendung ihn freigibt, ist ein Befund über sie, nicht über den
     # Prüfstand — ein Fund steht dann vollständig in ``findings``.

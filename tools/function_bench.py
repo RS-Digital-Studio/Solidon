@@ -1140,16 +1140,22 @@ class Walk:
         Was :data:`COVERED_S` lang deckt, bleibt der Fund.
         """
         counter = {"way": 0}
+        way: list[tuple[Any, ...]] = []
 
         def act(machine: StepMachine) -> None:
             why = self.click_once(name, button)
             if why == TARGET_REASON:
                 return
             counter["way"] += 1
+            last = self.steps[-1] if self.steps else {}
+            way.append((last.get("why"), tuple(last.get("rect") or ())))
             if counter["way"] > MOST_WAY_CLICKS:
-                raise BenchFinding(
-                    NOT_FOUND, name, f"nach {MOST_WAY_CLICKS} Wegklicks noch nicht am Ziel"
-                )
+                detail = f"nach {MOST_WAY_CLICKS} Wegklicks noch nicht am Ziel"
+                if len(set(way)) == 1 and way[0][0] == "rollen":
+                    # Jedes Rollen an derselben Stelle, und der Weg nennt danach
+                    # wieder dasselbe: Die Liste bringt das Ziel nicht ins Bild.
+                    detail += " — jedes Rollen an derselben Stelle, das Ziel kam nicht ins Bild"
+                raise BenchFinding(NOT_FOUND, name, detail)
             machine.insert(
                 [Step(f"weg zu {name}", act, ready=self.stable(name), settle_ms=SETTLE_MS)]
             )
