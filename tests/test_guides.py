@@ -2007,3 +2007,70 @@ def test_every_reference_under_change_reference_carries_a_name(
         assert all(guides.is_target(f"menu:{name}") for name in names), names
     finally:
         menu.hide()
+
+
+def test_move_before_names_the_numbers_the_history_shows(qt_app: Any) -> None:
+    """Nach einem Verschieben zeigen Verlauf und *Verschieben vor* dieselben Nummern —
+    das Untermenü nannte die internen Kennungen, und ``history.move_before.<n>``
+    übernahm sie (Review U1)."""
+    from app.core.scene.history import OperationDraft
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    window.resize(1400, 900)
+    window.show()
+    window._show_start_screen(False)
+    try:
+        for title, draft in (
+            ("Quader", OperationDraft(op="create_box")),
+            ("Zylinder", OperationDraft(op="create_cylinder")),
+            ("Kegel", OperationDraft(op="create_cone")),
+            (
+                "Verschieben",
+                OperationDraft(
+                    op="translate_object",
+                    inputs=("obj_1",),
+                    params={"dx": 0.0, "dy": 0.0, "dz": 5.0},
+                ),
+            ),
+        ):
+            assert window.session.apply(title, [draft])
+            assert window.session.wait_for_idle(60_000)
+        _settle(qt_app)
+        listing = window.history_panel.list
+
+        def move_menu() -> Any:
+            return window.history_panel.context_menu(listing.item(listing.count() - 1))
+
+        def entries(menu: Any) -> list[Any]:
+            further = next(
+                action for action in menu.actions() if action.objectName() == "history.move_before"
+            )
+            return [action for action in further.menu().actions() if action.data() is None]
+
+        # Den letzten Schritt vor Schritt 2 legen: Danach weichen Kennung und Nummer ab.
+        target = next(
+            action
+            for action in entries(move_menu())
+            if action.objectName() == "history.move_before.2"
+        )
+        target.trigger()
+        assert window.session.wait_for_idle(60_000)
+        _settle(qt_app)
+        ids = [listing.item(row).data(Qt.ItemDataRole.UserRole) for row in range(listing.count())]
+        assert ids != list(range(1, len(ids) + 1)), f"Kennungen gleich den Nummern: {ids}"
+
+        numbered = [action for action in entries(move_menu()) if action.objectName()[-3:] != "end"]
+        assert numbered
+        for action in numbered:
+            number = action.objectName().rpartition(".")[2]
+            shown, _gap, title = action.text().partition("  ")
+            assert shown == number, (action.text(), action.objectName())
+            _view, row = guide_targets._row(window, "history.row", number, f"history.row:{number}")
+            assert title.strip() in row.text(), (action.text(), row.text())
+    finally:
+        window.hide()
+        window.release()

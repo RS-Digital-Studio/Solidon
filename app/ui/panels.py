@@ -5714,9 +5714,13 @@ class HistoryPanel(QWidget):
             further = menu.addMenu(tr("Verschieben vor"))
             further.menuAction().setObjectName("history.move_before")
             for before in valid:
-                label = tr("Ans Ende") if before is None else f"{before}  {self._title_of(before)}"
+                # **Die Nummer, die der Verlauf zeigt, nicht die Kennung** (U1):
+                # Nach einem Verschieben stand hier „5 Zylinder“ neben einer
+                # Liste, in der derselbe Schritt die 3 trägt.
+                shown = self._positions.get(before) if before is not None else None
+                label = tr("Ans Ende") if before is None else f"{shown}  {self._title_of(before)}"
                 target = further.addAction(label)
-                target.setObjectName(f"history.move_before.{'end' if before is None else before}")
+                target.setObjectName(f"history.move_before.{'end' if before is None else shown}")
                 target.triggered.connect(
                     lambda _checked=False, chosen=op_ids, where=before: self.moveRequested.emit(
                         chosen, where
