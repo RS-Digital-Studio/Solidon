@@ -16,6 +16,22 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.6.1
+
+### Utilisation et système
+
+- La recherche trouve *Réunir*, *Soustraire* et *Intersection* aussi sous « booléen », et *Soustraire* aussi sous « différence ».
+- Avec un corps sélectionné et un second dans la scène, l'onglet *Sélection* indique comment ajouter le second pour *Réunir*, *Soustraire* et *Intersection*.
+- Le champ de recherche de l'onglet *Sélection* est désormais toujours là, même sans sélection, et trouve chaque fonction et chaque commande avec son raccourci.
+- La palette de commandes disparaît, car le champ de recherche trouve la même chose. *Rechercher une fonction* et Ctrl+Maj+P y placent le curseur.
+- Un résultat qui ne fonctionne pas sur la sélection en donne la raison. Sans résultat, *Rechercher dans le manuel* va plus loin.
+- Échap vide d'abord le champ de recherche, et la sélection reste. Entrée lance le résultat présélectionné.
+- Un mot court qui ne correspond à rien affiche désormais *Aucun résultat*. La version 0.6.0 listait alors toutes les fonctions.
+- Sans sélection, l'onglet *Sélection* réunit toutes les actions pour toute la scène et les fonctions de création, dont *Vérifier les recouvrements*.
+- Même quand rien ne se recouvre, *Vérifier les recouvrements* donne désormais une réponse.
+- S'il manque à une fonction un second corps dans la scène, la raison indique *Dupliquer l'objet* comme solution.
+- La liste des raccourcis clavier ne nomme plus qu'une fois *Sculpter*, *Squelette* et *Dessiner*.
+
 ## 0.6.0
 
 - La démo fonctionne désormais jusqu'au 30 novembre 2026. Solidon3D 1.0 est prévu pour le 1er décembre, et vos projets sont conservés.
