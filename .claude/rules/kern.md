@@ -416,15 +416,16 @@ gerade installiert hat (`app/core/discover.py`):
   Flathub-Manifest). Für ein weiteres Programm dort nachlesen, was es lesen
   darf.
 
+**Jeder Start steht in `process.no_error_dialogs()`**, sonst öffnet Windows
+für eine `.exe`, die kein Programm ist, im startenden Faden ein Fenster und
+wartet auf einen Klick (RM-788, Wächter `tests/test_process.py`). Den Slicer
+sagt dann `discover.slicer_start_refused` ab.
+
 ### Im eigenen Flatpak sieht der Rechner anders aus
 
-Von innen fehlen PATH und Installationsordner des Rechners, `subprocess`
-startet im Sandkasten, `is_dir()`/`is_file()` auf Host-Pfade sagt nein (ohne
-Cura-Definition aus `install_root` startet CuraEngine nicht), und
-`XDG_CONFIG_HOME`/`XDG_CACHE_HOME` zeigen in den Sandkasten —
-`--filesystem=home` nimmt `~/.var` aus, der Austauschordner wäre für den
-Slicer unsichtbar. Deshalb: **Jeder neue Startpfad bekommt `discover.on_host`
-davor** (`flatpak-spawn --host`), **jede Existenzprüfung eines Programms geht
+Von innen fehlen PATH, Installationsordner und Host-Pfade, und XDG zeigt in
+den Sandkasten (Folgen: `regel-kern.md`). Deshalb: **Jeder neue Startpfad
+bekommt `discover.on_host` davor** (`flatpak-spawn --host`), **jede Existenzprüfung eines Programms geht
 über `is_file_on_host`/`is_dir_on_host`, und mit XDG ist im Flatpak der
 Rechner gemeint** (`config_home`, `exchange_dir`). Ein Modul, das eine Falle
 richtig benennt, ist gegen sie nicht immun.

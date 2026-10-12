@@ -32,6 +32,10 @@ dans `website/version.json`.
 - S'il manque à une fonction un second corps dans la scène, la raison indique *Dupliquer l'objet* comme solution.
 - La liste des raccourcis clavier ne nomme plus qu'une fois *Sculpter*, *Squelette* et *Dessiner*.
 
+### Imprimer et transmettre au slicer
+
+- Si le slicer choisi n'est pas un programme, Solidon le dit désormais aussitôt et propose d'en choisir un autre. En version 0.6.0, le tranchage attendait qu'on ferme un message de Windows.
+
 ### Modifier et esquisser
 
 - Un corps exact garde désormais ses caractéristiques après *Appliquer du texte*, *Incruster du texte* et *Creuser la contre-forme*. En version 0.6.0, plus aucune face ne pouvait ensuite être cliquée.

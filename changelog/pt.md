@@ -31,6 +31,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se a uma função faltar um segundo corpo na cena, o motivo indica *Duplicar objeto* como caminho.
 - A lista de atalhos de teclado nomeia *Modelar*, *Esqueleto* e *Desenhar* uma única vez.
 
+### Imprimir e entregar ao slicer
+
+- Se o slicer escolhido não for um programa, o Solidon diz-o agora de imediato e propõe escolher outro. Na versão 0.6.0, o fatiamento esperava que alguém fechasse uma mensagem do Windows.
+
 ### Editar e esboçar
 
 - Um corpo exato mantém agora as suas características depois de *Aplicar texto*, *Incrustar texto* e *Rebaixar contraforma*. Na versão 0.6.0 já não era possível clicar em nenhuma face a seguir.

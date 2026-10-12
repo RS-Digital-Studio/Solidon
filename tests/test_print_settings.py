@@ -6782,18 +6782,30 @@ def test_a_slicer_that_says_too_much_is_not_an_error_code(
     }
 
 
-def test_a_slicer_that_cannot_start_is_an_answer(tmp_path: Path) -> None:
+@pytest.mark.parametrize("way", ["slicen", "fenster"])
+def test_a_slicer_that_cannot_start_is_an_answer(tmp_path: Path, way: str) -> None:
     """Eine gewählte Datei kann ``flavour_of`` bestehen und trotzdem kein
-    Programm sein — eine DLL zum Beispiel. Der ``OSError`` beim Start flog
-    roh aus dem Thread."""
+    Programm sein — ein Text, eine DLL. Der ``OSError`` beim Start flog roh aus
+    dem Thread; danach las der Kunde den Windows-Text („Die Version von %1 …“)
+    und *Zusätzliche Programme …* (RM-788). Beide Startwege, Slicen und Fenster,
+    sagen jetzt dasselbe in eigenen Worten und bieten einen anderen Slicer an."""
     fake = tmp_path / "elegoo-slicer.exe"
     fake.write_text("kein programm", encoding="utf-8")
     setup = handover.SlicerSetup(executable=fake, flavour="orca")
+    model = tmp_path / "teil.3mf"
+    model.write_bytes(b"PK")
 
     with pytest.raises(ExternalToolError) as caught:
-        handover._run_slicer([str(fake)], tmp_path, 5.0, setup, None)
+        if way == "slicen":
+            handover._run_slicer([str(fake)], tmp_path, 5.0, setup, None)
+        else:
+            handover.open_in_slicer(model, setup)
 
-    assert caught.value.suggestions
+    refusal = caught.value
+    assert str(refusal.detail) == "Die gewählte Datei ist kein Programm."
+    assert [action.id for action in refusal.suggestions] == ["choose_slicer", "export_only"]
+    assert refusal.values["file"] == "elegoo-slicer.exe"
+    assert not any("%1" in str(value) for value in refusal.values.values())
 
 
 def test_slicing_without_a_model_offers_nothing_to_install(tmp_path: Path) -> None:

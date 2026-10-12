@@ -32,6 +32,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si a una función le falta un segundo cuerpo en la escena, el motivo indica *Duplicar objeto* como camino.
 - La lista de atajos de teclado nombra *Modelar*, *Esqueleto* y *Dibujar* una sola vez.
 
+### Imprimir y entregar al slicer
+
+- Si el slicer elegido no es un programa, Solidon lo dice ahora al momento y ofrece elegir otro. En la versión 0.6.0 el laminado esperaba a que alguien cerrara un aviso de Windows.
+
 ### Editar y dibujar
 
 - Un cuerpo exacto conserva ahora sus características tras *Aplicar texto*, *Incrustar texto* y *Rebajar contraforma*. En la versión 0.6.0 después ya no se podía hacer clic en ninguna cara.

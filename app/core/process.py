@@ -9,11 +9,13 @@ Helfer. Dieses Modul hält die gemeinsame Zusage an einer Stelle:
 * ein ausdrücklicher Arbeitsordner und geschlossene Dateideskriptoren;
 * eine eigene Prozessgruppe für jeden Start;
 * begrenzte Laufzeit und Ausgabe für Aufrufe, auf deren Antwort Solidon wartet;
-* Abbruch der ganzen Prozessgruppe statt nur ihres ersten Prozesses.
+* Abbruch der ganzen Prozessgruppe statt nur ihres ersten Prozesses;
+* kein Systemfenster, das einen Start anhält (:func:`no_error_dialogs`).
 
 Losgelöste Fenster, Dienste und Installationsprogramme benutzen nur Umgebung,
-Arbeitsordner und Prozessgruppe. Sie haben absichtlich keine Zeitgrenze: Mit
-dem Start geht ihre Bedienung an den Nutzer über.
+Arbeitsordner, Prozessgruppe und den Start ohne Systemfenster. Sie haben
+absichtlich keine Zeitgrenze: Mit dem Start geht ihre Bedienung an den Nutzer
+über.
 """
 
 from __future__ import annotations
@@ -28,8 +30,8 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
-from contextlib import suppress
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any, Final, cast
 from urllib.parse import urlsplit, urlunsplit
@@ -141,6 +143,9 @@ PROCESS_KILL_SECONDS: Final = 30.0
 FINISHED_LINGER_SECONDS: Final = 10.0
 _READ_SIZE: Final = 64 * 1024
 _WINDOWS_CREATE_SUSPENDED: Final = 0x00000004
+#: ``SEM_FAILCRITICALERRORS``: Windows gibt einen Fehler beim Start dem
+#: Aufrufer zurück, statt ein Systemfenster zu öffnen (:func:`no_error_dialogs`).
+_WINDOWS_FAIL_CRITICAL_ERRORS: Final = 0x0001
 #: Die Windows-Namen fehlen in den ctypes-Stubs anderer Plattformen. Zur
 #: Laufzeit werden sie ausschließlich hinter ``os.name == "nt"`` benutzt.
 _windows_ctypes: Any = ctypes
@@ -259,6 +264,41 @@ def detached_process_options(
     }
 
 
+@contextmanager
+def no_error_dialogs() -> Iterator[None]:
+    """Ein Programmstart in diesem Faden öffnet kein Systemfenster; er scheitert mit ``OSError``.
+
+    Unter Windows ist eine Datei mit der Endung ``.exe``, die kein Programm ist
+    — eine umbenannte Datei, ein Text —, für ``CreateProcess`` eine
+    16-Bit-Anwendung. Im Standardfehlermodus öffnet ``NtVdm64`` dann im
+    startenden Faden das Fenster „Nicht unterstützte 16-Bit-Anwendung“ und
+    wartet, bis jemand es schließt: Der Slicerlauf stand still, und in der
+    Suite ein Arbeiter ohne CPU (RM-788). Aus Git Bash fiel es nie auf, weil
+    dessen Kinder den Modus ``SEM_FAILCRITICALERRORS`` erben; über
+    ``ShellExecute`` gestartet — so starten Explorer und Startmenü die
+    Anwendung — und über PowerShells ``Start-Process`` jedes Mal.
+
+    Mit dem Modus für diesen Faden kommt sofort ein ``OSError`` zurück
+    (Windows 11: WinError 216), und der Aufrufer meldet es in eigenen Worten.
+    Er gilt nur für den Faden und nur für den Block; das gestartete Programm
+    erbt ihn nicht. Jeder Start über ``subprocess`` unter ``app/`` steht in
+    diesem Block (``tests/test_process.py``).
+    """
+    if os.name != "nt":
+        yield
+        return
+    kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetThreadErrorMode.restype = ctypes.c_uint32
+    kernel32.SetThreadErrorMode.argtypes = (ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32))
+    kernel32.SetThreadErrorMode.restype = ctypes.c_int
+    previous = ctypes.c_uint32(kernel32.GetThreadErrorMode())
+    try:
+        kernel32.SetThreadErrorMode(previous.value | _WINDOWS_FAIL_CRITICAL_ERRORS, None)
+        yield
+    finally:
+        kernel32.SetThreadErrorMode(previous.value, None)
+
+
 def _taskkill(process_id: int, *, force: bool) -> None:
     """Beendet unter Windows einen Prozess samt Nachkommen."""
     system_root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
@@ -267,18 +307,19 @@ def _taskkill(process_id: int, *, force: bool) -> None:
     if force:
         command.append("/F")
     try:
-        subprocess.run(
-            command,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            cwd=trusted_cwd(),
-            env=trusted_environment(),
-            timeout=PROCESS_KILL_SECONDS,
-            check=False,
-            close_fds=True,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
+        with no_error_dialogs():
+            subprocess.run(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=trusted_cwd(),
+                env=trusted_environment(),
+                timeout=PROCESS_KILL_SECONDS,
+                check=False,
+                close_fds=True,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
     except OSError, subprocess.SubprocessError:
         return
 
@@ -809,15 +850,16 @@ def run_limited(
         raise ValueError("linger")
 
     launched = list(command)
-    process = subprocess.Popen(
-        launched,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=cwd,
-        env=trusted_environment(graphical=graphical),
-        **process_group_options(no_window=True, suspended=True),
-    )
+    with no_error_dialogs():
+        process = subprocess.Popen(
+            launched,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=cwd,
+            env=trusted_environment(graphical=graphical),
+            **process_group_options(no_window=True, suspended=True),
+        )
     assert process.stdout is not None
     assert process.stderr is not None
     try:
@@ -920,15 +962,16 @@ def run_stream_limited(
         raise ValueError("output_limit")
 
     launched = list(command)
-    process = subprocess.Popen(
-        launched,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        cwd=cwd,
-        env=trusted_environment(),
-        **process_group_options(no_window=True, suspended=True),
-    )
+    with no_error_dialogs():
+        process = subprocess.Popen(
+            launched,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=cwd,
+            env=trusted_environment(),
+            **process_group_options(no_window=True, suspended=True),
+        )
     assert process.stdout is not None
     try:
         _attach_process_boundary(process)

@@ -2535,6 +2535,8 @@
   "Die gespeicherten Trennwandhöhen sind ungültig. Wählen Sie die Wände erneut.": "The saved divider heights are invalid. Select the walls again.",
   "Die gewählte Bausteindatei ließ sich nicht öffnen. Wählen Sie eine andere Datei oder prüfen Sie deren Zugriffsrechte.": "The selected part file could not be opened. Choose another file or check its access permissions.",
   "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche oder Kante. Verschieben Sie einen der beiden so weit, dass sich die Körper wirklich überlappen.": "The selected operation does not work with these bodies in their current position — usually they only touch at a face or edge. Move one of them far enough for the bodies to actually overlap.",
+  "Die gewählte Datei ist kein Programm.": "The selected file is not a program.",
+  "Die gewählte Datei ist nicht als ausführbar markiert. Erlauben Sie das Ausführen in ihren Eigenschaften und versuchen Sie es erneut.": "The selected file is not marked as executable. Allow running it in its properties and try again.",
   "Die gewählte Datei wird begrenzt in das Projekt aufgenommen.": "The selected file is read with a size limit and added to the project.",
   "Die gewählte G-Code-Datei wird gelesen und ausgewertet.": "The selected G-code file is being read and analysed.",
   "Die gewählte Kante ist nicht eindeutig — wählen Sie sie am Körper neu.": "The selected edge is ambiguous — select it again on the body.",

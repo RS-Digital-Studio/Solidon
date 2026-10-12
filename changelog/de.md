@@ -56,6 +56,10 @@ Nutzen da und sonst nichts.
 - Fehlt einer Funktion ein zweiter Körper in der Szene, nennt der Grund *Objekt duplizieren* als Weg.
 - Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
 
+### Drucken und Übergabe an den Slicer
+
+- Ist als Slicer eine Datei gewählt, die kein Programm ist, sagt Solidon das sofort und bietet einen anderen Slicer an. In Version 0.6.0 wartete das Slicen, bis jemand eine Windows-Meldung schloss.
+
 ### Bearbeiten und Zeichnen
 
 - Ein exakter Körper behält jetzt nach *Text aufbringen*, *Schrift einlegen* und *Gegenform einlassen* seine Merkmale. In Version 0.6.0 ließ sich danach keine Fläche mehr anklicken.
