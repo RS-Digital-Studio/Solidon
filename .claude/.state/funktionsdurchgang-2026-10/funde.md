@@ -294,7 +294,7 @@ die systemischen leichten behebt D0.
 - Ursache: Für Eingabe und Farbwahl gibt es keinen eigenen Dialog im Hausstil; FD-21 deckte nur Meldungen ab.
 - Vorschlag: Eingabe am Ort, wo es geht, sonst ein Eingabedialog im Hausstil auf der Grundlage von `message_dialog`; Farbwahl über den eigenen Farbwähler des Filamentlagers.
 - Wirkung beim Kunden: Mitten im Ablauf ein Systemfenster in anderem Stil, bei der Farbe der Windows-Farbdialog.
-- Stand: offen RM-737
+- Stand: behoben `54464f2be`
 
 ### FD-23 Die Karten halten das 4er-Raster nicht
 
@@ -318,7 +318,7 @@ die systemischen leichten behebt D0.
 - Ursache: `app/ui/dialogs.py` (Erfolgsmeldungen der Freischaltung über `inform`, modal).
 - Vorschlag: Erfolg nicht-modal am Ort oder in der Statusleiste, im Hausstil; was der Kunde danach tun kann, als Handlung dabei.
 - Wirkung beim Kunden: Ein Erfolg hält das Fenster an, bis er weggeklickt ist.
-- Stand: offen RM-737
+- Stand: behoben `54464f2be`
 
 ### FD-25 Der Objektbaum verlangt mit einem Körper mehr Mindesthöhe, als er braucht
 
