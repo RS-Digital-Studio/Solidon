@@ -52,9 +52,7 @@ from app.ui.op_dialog import (
     MAX_LEAD_WORDS_TRANSLATED,
 )
 from app.ui.style import LEVELS, SPACE
-from tools.function_list import LICENCE_STATES as LICENCE_STATES
-from tools.function_list import PRECONDITIONS, ROW_KINDS, SPEC_KEYS, Row, licence_states
-from tools.function_list import STARTUP_LICENCE as STARTUP_LICENCE
+from tools.function_list import LICENCE_STATES, PRECONDITIONS, ROW_KINDS, SPEC_KEYS, Row
 
 # --- Wertebereiche --------------------------------------------------------
 
@@ -109,11 +107,10 @@ MATRIX_STATES: Final = ("angeboten", "grau", "fehlt", MATRIX_UNREACHABLE)
 
 #: Die Lizenzzustände eines Laufs (Prüfpunkt 18) führt L im
 #: Spezifikationsformat (``function_list.LICENCE_STATES``, die Namen der
-#: Eigenschaften von ``app.core.activation.Activation``); ``licence_runs`` ist
-#: ``function_list.licence_states`` (die erreichbaren), ``VARIANT_LICENCES``
-#: die Werte von ``variant.licence`` samt ``over`` für die Startzeile
-#: ``startup.expired_demo``. Die Namen bleiben hier ausgeführt, weil der
-#: Prüfstand sie von hier nimmt — es sind dieselben Objekte.
+#: Eigenschaften von ``app.core.activation.Activation``; die erreichbaren
+#: nennt ``function_list.licence_states``). ``VARIANT_LICENCES`` sind die
+#: Werte von ``variant.licence`` samt ``over`` für die Startzeile
+#: ``startup.expired_demo``.
 #:
 #: Hier steht nur, was ein Zustand bedeuten muss: ob Schreibendes offensteht
 #: (``Activation.unlocked``). Ein Wächter setzt jeden Zustand wie die Suite
@@ -123,7 +120,6 @@ LICENCE_UNLOCKED: Final[dict[str, bool]] = {state: state in _UNLOCKING for state
 VARIANT_LICENCES: Final = PRECONDITIONS["licence"]
 #: Gesperrt heißt: Schreibendes ist grau mit Grund, nur Lesendes läuft weiter.
 LOCKED_STATES: Final = frozenset(state for state, open_ in LICENCE_UNLOCKED.items() if not open_)
-licence_runs: Final = licence_states
 
 
 #: Die zwei Wege zum Ändern eines Schritts (Prüfpunkt 12): *Diesen Schritt

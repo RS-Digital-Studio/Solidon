@@ -827,11 +827,13 @@ def _reference_factor(protocol: Mapping[str, Any]) -> float | None:
 
 def _z1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     frames = _map(protocol, "frames")
-    if frames is None:
+    # Ohne Zug an der Zeile gilt Z1 nicht — ``frames`` kann dann allein den
+    # Referenzfaktor tragen. Nennt die Spezifikation Z1, fehlt die Messung.
+    if frames is None or "raw_drag_ms" not in frames:
         return (
             None
             if "Z1" not in (_spec(protocol).get("criteria") or ())
-            else _missing("Z1", "frames")
+            else _missing("Z1", "frames.raw_drag_ms")
         )
     measured = [_number(value) for value in frames.get("raw_drag_ms") or ()]
     delays = [value for value in measured if value is not None]
