@@ -784,6 +784,17 @@ Atemzug gelöscht wird"), `SketchEditor.take_constraint_list` die falsch
 aufgelösten Tastenkürzel („`plane:xy` statt `plane:xz`"), und
 `ReportPanel._show_offers` tat es trotzdem. Ein Kommentar an zwei Stellen ist keine Regel.
 
+**Ein Dialog gibt sich nach `exec` frei.** `exec` hält ihn nur bis zum Schließen;
+danach hängt er verborgen am Elternteil, samt allem, was er hält. Nach drei Aufrufen
+von *Offline aktivieren …* hingen drei Dialoge am Freischaltdialog, und über
+vierzig Stellen unter `app/ui` taten es ebenso (Durchsicht welle4, A-L1 und
+Nachprüfung). Die
+Bauart steht in `ask_text`: lesen, was der Dialog liefert, im `try`, freigeben im
+`finally`. Ein Dialog, der offen bleibt (`open`, `show`), gibt sich über
+`finished.connect(x.deleteLater)`, `WA_DeleteOnClose` oder den Rückruf frei, an den
+sein Ende geht. `tests/test_dialog_lifetime.py` liest jede Dialogklasse samt
+Fabriken, Hilfen und Unterklassen und zählt, was er geprüft hat.
+
 ## Die automatische Sicherung
 
 Sie ist für den **Absturz** da (§38) und nie dafür, eine Entscheidung des

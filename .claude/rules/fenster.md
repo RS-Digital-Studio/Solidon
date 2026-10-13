@@ -110,6 +110,8 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 nur die Fragen hier bleiben `QMessageBox`. Erfolg und Hinweis quittiert der
 Dialog selbst (`acknowledge`, Z2), `inform` nur ein Scheitern (`test_input_dialog`);
 eine Fehlermeldung mit Handlung (`show_error`) darf modal sein (Z2-Ausnahme).
+Fehler, Warnung, `inform` und eine Quittung ohne Knopf sagen sich dem
+Bildschirmleser an (`QAccessibleAnnouncementEvent`), eine Eingabe nicht.
 
 Die gewollten Ausnahmen von Regel 19, und was sie davon abhält, zur Blockade zu
 werden:
@@ -343,7 +345,7 @@ Ansichtsseite steht in `griffe.md`.
 
 ## Der Hauptknopf
 
-Warum, mit Anlässen: `regel-fenster.md`, „Der Hauptknopf“; Wächter `test_style.py`.
+Wächter `test_style.py`.
 
 - Hauptknopf nur über `style.make_primary` (Akzent und Halbfett), abgeben mit
   `leading=False`, nie `setDefault(True)`; wer führt, sagt `leading_action`.
@@ -357,8 +359,8 @@ Warum, mit Anlässen: `regel-fenster.md`, „Der Hauptknopf“; Wächter `test_s
   in Schriftfarbe (`test_resting_state.py`).
 - Fokus verschiebt keinen Akzent (`_FocusTakesNoAccent`); Enter gehört dem per
   Tab gewählten Knopf (`test_enter_key.py`).
-- Stylesheets an einen `objectName`: Typloses `background` am Vorfahren nimmt
-  allen Knöpfen darunter die Farbe. Klicktests belegen keine Knopffarbe.
+- Stylesheets an einen `objectName`, nie typlos an einen Vorfahren. Klicktests
+  belegen keine Knopffarbe.
 - Umschalter nennen das Werkzeug, Knöpfe die Handlung; `test_interface_limits.py`.
 
 ## Ein Dialog, der höher ist als sein Inhalt
@@ -418,9 +420,9 @@ Für Druckerwahl und Druckdialog gilt `druckerwahl.md`.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 
-Weggeräumt wird mit `hide()` und `deleteLater()`, nie über den Elternteil:
-`takeAt` nimmt es aus dem Layout, `hide` aus dem Bild, der Elternteil trägt es
-bis zum Löschen.
+Weggeräumt wird mit `hide()` und `deleteLater()`, nie über den Elternteil. Ein
+Dialog gibt sich nach `exec` im `finally` frei, ein offener über `finished` oder
+`WA_DeleteOnClose` (`test_dialog_lifetime.py`).
 
 ## Die automatische Sicherung
 

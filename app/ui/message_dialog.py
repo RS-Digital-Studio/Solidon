@@ -30,7 +30,14 @@ from __future__ import annotations
 from typing import Final, Literal
 
 from PySide6.QtCore import SIGNAL, Qt, QTimer
-from PySide6.QtGui import QAccessible, QAccessibleEvent, QGuiApplication, QKeySequence, QShortcut
+from PySide6.QtGui import (
+    QAccessible,
+    QAccessibleAnnouncementEvent,
+    QAccessibleEvent,
+    QGuiApplication,
+    QKeySequence,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QAbstractButton,
     QDialog,
@@ -100,6 +107,9 @@ class MessageDialog(QDialog):
     Mitnehmen (Protokoll, Werte), der lesbar und kopierbar darunter steht.
     Knöpfe kommen über :meth:`add_action` und :meth:`add_exit`; welcher
     geklickt wurde, sagt :meth:`clicked_button` nach ``exec``.
+
+    ``announce`` sagt die Meldung beim Zeigen an; ohne Angabe tun das Fehler
+    und Warnung, ein Hinweis nicht — um ihn hat der Kunde meist gebeten.
     """
 
     def __init__(
@@ -112,6 +122,7 @@ class MessageDialog(QDialog):
         details: str = "",
         kind: MessageKind = "info",
         target: str = "",
+        announce: bool | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
@@ -120,6 +131,7 @@ class MessageDialog(QDialog):
         self._clicked: QPushButton | None = None
         self._buttons: list[QPushButton] = []
         self._kind = kind
+        self._announce = kind != "info" if announce is None else announce
 
         self.symbol = QLabel(self)
         background = self.palette().window().color().name()
@@ -127,7 +139,7 @@ class MessageDialog(QDialog):
         self.symbol.setPixmap(svg_pixmap(svg_source(f"severity-{kind}", colour), SYMBOL_SIZE))
         self.symbol.setFixedSize(SYMBOL_SIZE, SYMBOL_SIZE)
         # Das Wort ist die zweite Kodierung neben Form und Farbe (Regel 18), aus
-        # derselben Quelle wie im Prüfbericht.
+        # derselben Quelle wie im Prüfbericht und im Chat.
         word = tr(SEVERITY_ENCODING[kind].label_key)
         self.symbol.setAccessibleName(word)
         # Ein ``QMessageBox`` meldet sich als ``AlertMessage`` mit Text und
@@ -244,7 +256,10 @@ class MessageDialog(QDialog):
         return self._clicked
 
     def text(self) -> str:
-        """Der ganze Text, wie Strg+C ihn kopiert: Titel, Meldung, Einzelheiten."""
+        """Der ganze Text, wie der Knopf *Kopieren* ihn ablegt: Titel, Meldung, Einzelheiten.
+
+        Strg+C nimmt ihn nur ohne Markierung (:meth:`copy_marked`).
+        """
         parts = [self.windowTitle(), self.headline.text()]
         if self.body.text():
             parts.append(self.body.text())
@@ -262,23 +277,25 @@ class MessageDialog(QDialog):
         """Strg+C: was markiert ist, sonst der ganze Text — wie ein ``QMessageBox`` (A-L2).
 
         Wer eine Zeile des Protokolls markiert, will diese Zeile weitergeben,
-        nicht die Meldung drumherum.
+        nicht die Meldung drumherum. Zuerst das Feld mit dem Fokus, dann Kopfzeile
+        und Satz, zuletzt die Einzelheiten: Eine Zeile verliert ihre Markierung
+        mit dem Fokus, die Einzelheiten behalten sie — eine ältere Markierung
+        dort schlüge sonst die jüngere in der Kopfzeile.
         """
-        if self.details.textCursor().hasSelection():
-            self.details.copy()
-            return
-        marked = next(
-            (
-                label.selectedText()
-                for label in (self.headline, self.body)
-                if label.hasSelectedText()
-            ),
-            "",
-        )
+        labels = (self.headline, self.body)
+        focused = self.focusWidget()
+        order = [focused] if focused in (*labels, self.details) else []
+        for widget in (*labels, self.details):
+            if widget not in order:
+                order.append(widget)
         clipboard = QGuiApplication.clipboard()
-        if marked and clipboard is not None:
-            clipboard.setText(marked)
-            return
+        for widget in order:
+            if widget is self.details and self.details.textCursor().hasSelection():
+                self.details.copy()
+                return
+            if isinstance(widget, QLabel) and widget.hasSelectedText() and clipboard is not None:
+                clipboard.setText(widget.selectedText())
+                return
         self.copy_text()
 
     def showEvent(self, event: object) -> None:  # noqa: N802 — Qt-Name
@@ -286,13 +303,16 @@ class MessageDialog(QDialog):
 
         Ein Fehler und eine Warnung melden sich dem Bildschirmleser wie ein
         ``QMessageBox`` mit einem ``Alert`` (A-M2) — sonst liest er nur, dass ein
-        Dialog aufging.
+        Dialog aufging. Dazu die Ansage mit Vorrang: UIA und AT-SPI reichen das
+        ``Alert`` vermutlich nicht weiter, eine Ansage schon.
         """
         if not any(button.isDefault() for button in self._buttons):
             no_primary(self)
         super().showEvent(event)  # type: ignore[arg-type]
         if self._kind != "info":
             QAccessible.updateAccessibility(QAccessibleEvent(self, QAccessible.Event.Alert))
+        if self._announce:
+            _announce(self, self.accessibleDescription(), urgent=self._kind != "info")
         lead = next((button for button in self._buttons if button.isDefault()), None)
         first = lead or (self._buttons[0] if self._buttons else None)
         if first is not None:
@@ -316,13 +336,20 @@ def acknowledge(
     Bildschirmleser sie mit dem Knopf vorliest. Steht die Zeile in einem
     Rollbereich, wächst der Dialog um sie (:func:`_make_room`). Zurück nimmt
     sie :func:`withdraw`.
+
+    Eine neue Quittung ersetzt die vorige ganz, samt ihrer Beschreibung am
+    Knopf. Ohne ``then`` bewegt sich kein Fokus: Dann sagt sie sich an, eine
+    Warnung mit Vorrang — beides war vorher ein ``QMessageBox.information``,
+    das sich von selbst meldete.
     """
+    _release_button(line)
     said = "\n".join(part for part in (headline, text) if part)
     set_role(line, role, said)
     line.setProperty(_SAID, said)
     line.show()
     _make_room(line)
     if then is None:
+        _announce(line, line.accessibleDescription(), urgent=role == "warning")
         return
     for button in then.window().findChildren(QPushButton):
         if button is not then and button.isDefault():
@@ -339,15 +366,31 @@ def withdraw(line: QLabel) -> None:
     Bildschirmleser las „Solidon ist freigeschaltet“ noch zu einem Schritt, der
     gerade scheiterte.
     """
-    said = line.property(_SAID)
-    line.setProperty(_SAID, None)
+    _release_button(line)
     set_role(line, str(line.property("role") or "ok"), "")
     line.hide()
+
+
+def _release_button(line: QLabel) -> None:
+    """Nimmt die Beschreibung zurück, die die letzte Quittung an ``line`` auf einen Knopf legte."""
+    said = line.property(_SAID)
+    line.setProperty(_SAID, None)
     if not said:
         return
     for button in line.window().findChildren(QPushButton):
         if button.accessibleDescription() == said:
             button.setAccessibleDescription("")
+
+
+def _announce(source: QWidget, message: str, *, urgent: bool) -> None:
+    """Sagt ``message`` dem Bildschirmleser an — mit Vorrang, wenn ``urgent``."""
+    event = QAccessibleAnnouncementEvent(source, message)
+    event.setPoliteness(
+        QAccessible.AnnouncementPoliteness.Assertive
+        if urgent
+        else QAccessible.AnnouncementPoliteness.Polite
+    )
+    QAccessible.updateAccessibility(event)
 
 
 def _make_room(line: QLabel) -> None:
@@ -383,8 +426,14 @@ def inform(
     target: str,
     kind: MessageKind = "info",
 ) -> None:
-    """Ein Hinweis mit einem Knopf *Schließen* — der Ersatz für ``QMessageBox.information``."""
-    dialog = MessageDialog(parent, title=title, headline=title, body=text, kind=kind, target=target)
+    """Ein Hinweis mit einem Knopf *Schließen* — der Ersatz für ``QMessageBox.information``.
+
+    Er sagt sich an wie jener: Der Kunde hat ihn nicht erbeten, er meldet ein
+    Scheitern (der Browser ging nicht auf).
+    """
+    dialog = MessageDialog(
+        parent, title=title, headline=title, body=text, kind=kind, target=target, announce=True
+    )
     holder = target.partition(":")[2] or "message"
     dialog.add_exit(tr("Schließen"), f"message.button:{holder}.close")
     try:

@@ -19,6 +19,11 @@ it into `website/version.json`.
 
 ### Operation and system
 
+- On the Mac, Solidon may now load the 3Dconnexion driver (3DxWare) for the 3D mouse. From version 0.4.1 to 0.6.0, macOS did not allow this.
+- On the Mac, the installer now always puts Solidon in *Applications*. If Solidon was not there, the installer used to update a copy somewhere else.
+- After updating on the Mac, start Solidon from *Applications*. Delete old app copies outside this folder and replace the Dock shortcut if needed.
+- On Linux, the AppImage now also starts on Ubuntu 22.04, Linux Mint 21 and Debian 12. Version 0.6.0 ran there only as a Flatpak.
+- On Linux, Solidon now reads the 3D mouse through the access that the udev rule from the manual grants, in the Flatpak too. Up to version 0.6.0, the rule was not enough for this.
 - The search finds *Unite*, *Subtract* and *Intersection* under “boolean” too, and *Subtract* also under “difference”.
 - The search also finds the function for a question like “How do I put the part on the build plate?” and knows words from slicers and CAD such as “print bed” or “variable”.
 - The search in the manual also finds the right page for a question in your own words.
@@ -34,7 +39,7 @@ it into `website/version.json`.
 - If a function lacks a second body in the scene, the reason names *Duplicate object* as the way.
 - The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
 - The *Compute more coarsely* button is gone, as Solidon carries on with the full calculation by itself. In version 0.6.0 it also appeared where it changed nothing.
-- Error messages, details and notices now appear in Solidon's own style, with the actions as buttons. Ctrl+C copies the whole message.
+- Error messages, details and notices now appear in Solidon's own style, with the actions as buttons. Ctrl+C copies the selection, otherwise the whole message.
 - A spool's colour is chosen with Solidon's own colour picker right at the button, with named shelf colours and the exact colour value. The system colour dialog is gone.
 - A sketch dimension now changes in a field right where it is. Addresses and the choice of which filament to replace are asked in Solidon's own style.
 - After activating or deactivating, the confirmation appears in the dialog itself, without an extra window you have to click away.

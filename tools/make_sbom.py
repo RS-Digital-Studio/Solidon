@@ -16,7 +16,6 @@ deklarierten Laufzeitmenge. Sie ist ausdrücklich kein Kundenartefakt.
 from __future__ import annotations
 
 import argparse
-import ctypes
 import hashlib
 import json
 import platform
@@ -49,6 +48,15 @@ SPDX_ALIASES: Final = {"LGPL-3.0": "LGPL-3.0-only"}
 NON_SPDX_LICENCES: Final = {
     "PSF-based",
     "Microsoft Visual Studio Runtime license",
+}
+#: Feste SPDX-Ausdrücke der Laufzeitfamilien außerhalb der nativen Haupt-,
+#: Linux- und Radtabellen. Erzeuger und Freigabewächter lesen dieselbe Quelle.
+RUNTIME_LICENCES: Final = {
+    "cpython": "PSF-2.0",
+    "openssl": "Apache-2.0",
+    "libffi": "MIT",
+    "openblas": "BSD-3-Clause",
+    "gcc-runtime": "GPL-3.0-or-later WITH GCC-exception-3.1",
 }
 # CPython-Tags: PCbuild/python.props setzt in jedem dieser Windows-Bauten 3.4.4.
 WINDOWS_LIBFFI_VERSIONS: Final = {
@@ -95,6 +103,9 @@ LINUX_LIBRARY_FAMILIES: Final = (
         ("libglib-2.0.", "libgio-2.0.", "libgobject-2.0.", "libgmodule-2.0.", "libgthread-2.0."),
     ),
     ("pcre2", ("libpcre2-",)),
+    # PCRE 8, an dem GLib 2.72 aus Ubuntu 22.04 noch hängt. Der Punkt trennt
+    # es von ``libpcre2-``.
+    ("pcre", ("libpcre.",)),
     ("dbus", ("libdbus-1.",)),
     ("systemd", ("libsystemd.",)),
     ("libgcrypt", ("libgcrypt.",)),
@@ -162,6 +173,7 @@ LINUX_FAMILY_COMPONENTS: Final = {
     "freetype": ("FreeType", "FTL", "https://gitlab.freedesktop.org/freetype/freetype"),
     "glib": ("GLib", "LGPL-2.1-or-later", "https://gitlab.gnome.org/GNOME/glib"),
     "pcre2": ("PCRE2", "BSD-3-Clause", "https://github.com/PCRE2Project/pcre2"),
+    "pcre": ("PCRE", "BSD-3-Clause", "https://www.pcre.org/"),
     "dbus": ("D-Bus", "AFL-2.1", "https://gitlab.freedesktop.org/dbus/dbus"),
     "systemd": ("systemd", "LGPL-2.1-or-later", "https://github.com/systemd/systemd"),
     "libgcrypt": ("Libgcrypt", "LGPL-2.1-or-later", "https://gnupg.org/software/libgcrypt/"),
@@ -176,7 +188,9 @@ LINUX_FAMILY_COMPONENTS: Final = {
         "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
     ),
     "lz4": ("LZ4", "BSD-2-Clause", "https://github.com/lz4/lz4"),
-    "xz": ("XZ Utils", "0BSD", "https://github.com/tukaani-project/xz"),
+    # liblzma ist in den mitreisenden Fassungen gemeinfrei (``COPYING`` von
+    # 5.2.x und 5.4.x: „liblzma is in the public domain“); 0BSD gilt erst ab 5.6.
+    "xz": ("XZ Utils", "LicenseRef-xz-public-domain", "https://github.com/tukaani-project/xz"),
     "zstd": ("Zstandard", "BSD-3-Clause", "https://github.com/facebook/zstd"),
     "brotli": ("Brotli", "MIT", "https://github.com/google/brotli"),
     "bzip2": ("bzip2", "bzip2-1.0.6", "https://sourceware.org/bzip2/"),
@@ -194,6 +208,138 @@ LINUX_FAMILY_COMPONENTS: Final = {
     "libpng": ("libpng", "libpng-2.0", "https://github.com/pnggroup/libpng"),
     "zlib": ("zlib", "Zlib", "https://github.com/madler/zlib"),
 }
+
+#: Was das Linux-Rad von hidapi in ``hidapi.libs/`` mitbringt und unter Linux
+#: mitreist: das Modul ``hidraw`` hängt an libudev (systemd), das an libcap
+#: (libattr) und libdw (elfutils, dazu libelf, liblzma, libbz2). Je Familie
+#: eine Laufzeitkomponente, Fassung aus der auditwheel-Stückliste des Rads
+#: (``sboms/auditwheel.cdx.json``, Paket des CentOS-7-Bauservers). Bei
+#: Doppellizenzen steht die gewählte: elfutils LGPL-3.0-or-later statt
+#: GPL-2.0-or-later, libcap BSD-3-Clause statt GPL-2.0 (Regel 15). libusb
+#: (``libusbx``) fehlt mit Absicht: Es hing nur am Modul ``hid``, das unter
+#: Linux nicht mehr mitreist.
+#: (Dateipräfix, Familie, Name, Paket der auditwheel-Stückliste, Lizenz, Quelle)
+WHEEL_LIBRARIES: Final = {
+    "hidapi": (
+        (
+            "libudev-",
+            "hidapi-libudev",
+            "libudev (systemd, in hidapi)",
+            "systemd-libs",
+            "LGPL-2.1-or-later",
+            "https://github.com/systemd/systemd",
+        ),
+        (
+            "libdw-",
+            "hidapi-elfutils",
+            "elfutils libdw/libelf (in hidapi)",
+            "elfutils-libs",
+            "LGPL-3.0-or-later",
+            "https://sourceware.org/elfutils/",
+        ),
+        (
+            "libelf-",
+            "hidapi-elfutils",
+            "elfutils libdw/libelf (in hidapi)",
+            "elfutils-libelf",
+            "LGPL-3.0-or-later",
+            "https://sourceware.org/elfutils/",
+        ),
+        (
+            "libcap-",
+            "hidapi-libcap",
+            "libcap (in hidapi)",
+            "libcap",
+            "BSD-3-Clause",
+            "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
+        ),
+        (
+            "libattr-",
+            "hidapi-libattr",
+            "libattr (in hidapi)",
+            "libattr",
+            "LGPL-2.1-or-later",
+            "https://savannah.nongnu.org/projects/attr",
+        ),
+        (
+            "liblzma-",
+            "hidapi-xz",
+            "XZ Utils liblzma (in hidapi)",
+            "xz-libs",
+            "LicenseRef-xz-public-domain",
+            "https://github.com/tukaani-project/xz",
+        ),
+        (
+            "libbz2-",
+            "hidapi-bzip2",
+            "bzip2 (in hidapi)",
+            "bzip2-libs",
+            "bzip2-1.0.6",
+            "https://sourceware.org/bzip2/",
+        ),
+    ),
+}
+
+
+def _auditwheel_versions(distribution: str) -> dict[str, str]:
+    """Fassungen der mitgebrachten Bibliotheken laut auditwheel-Stückliste des Rads.
+
+    ``systemd-libs`` → ``219``: der Teil vor dem ersten Bindestrich der
+    RPM-Fassung, also die des Projekts. Fehlt die Stückliste, ist das Ergebnis
+    leer — die Komponente trägt dann ``unbekannt``, und die Releaseakte hält an.
+    """
+    try:
+        text = metadata.distribution(distribution).read_text("sboms/auditwheel.cdx.json")
+    except metadata.PackageNotFoundError:
+        return {}
+    if not text:
+        return {}
+    versions: dict[str, str] = {}
+    for component in json.loads(text).get("components", []):
+        purl = str(component.get("purl", ""))
+        if purl.startswith("pkg:rpm/"):
+            versions[str(component.get("name"))] = str(component.get("version", "")).split("-", 1)[
+                0
+            ]
+    return versions
+
+
+def wheel_library_components(
+    entries: Iterable[ArtifactFile],
+    versions_of: Callable[[str], Mapping[str, str]] = _auditwheel_versions,
+) -> list[dict[str, Any]]:
+    """Je Familie aus ``WHEEL_LIBRARIES`` eine Komponente, wenn ihre Datei mitreist.
+
+    Eine Datei in ``<rad>.libs/`` eines hier geführten Rads, die keine Zeile
+    kennt, ist ein Fehler: Ihre Lizenz stünde sonst nirgends.
+    """
+    components: dict[str, dict[str, Any]] = {}
+    for distribution, libraries in WHEEL_LIBRARIES.items():
+        folder = f"/{distribution}.libs/"
+        shipped = [entry for entry in entries if folder in f"/{entry.path}".casefold()]
+        if not shipped:
+            continue
+        versions = versions_of(distribution)
+        for entry in shipped:
+            name = Path(entry.path).name
+            row = next((row for row in libraries if name.startswith(row[0])), None)
+            if row is None:
+                raise ValueError(
+                    f"{entry.path} aus dem Rad {distribution} hat keine Zeile in "
+                    "make_sbom.WHEEL_LIBRARIES — Lizenz und Fassung eintragen."
+                )
+            _prefix, family, title, package, licence, website = row
+            if family not in components:
+                components[family] = _runtime_component(
+                    family,
+                    title,
+                    versions.get(package, "unbekannt"),
+                    licence,
+                    website,
+                    f"auditwheel-Stückliste des Rads {distribution} ({package})",
+                )
+    return [components[family] for family in sorted(components)]
+
 
 DistributionLookup = Callable[[str], metadata.Distribution]
 
@@ -693,76 +839,6 @@ def _msvc_runtime_version(entries: Iterable[ArtifactFile]) -> str:
     return ",".join(sorted({entry.binary_version for entry in selected}))
 
 
-def _asked_library(family: str, path: Path) -> tuple[str, str] | None:
-    """Fragt die gebündelte Bibliothek nach ihrer eigenen Fassung.
-
-    **Der Rückfall für alles ohne dpkg.** ``_dpkg_version`` liest die Fassung
-    aus dem Paket des Bauservers; auf Windows und macOS gibt es das nicht, und
-    die Familie bliebe ``unbekannt`` — was die Releaseakte zu Recht abweist.
-    Wo eine Bibliothek ihre Fassung selbst ausgibt, ist das die bessere
-    Quelle: Sie beschreibt die Datei, die mitreist, und nicht das Paket, aus
-    dem sie einmal kam.
-
-    Bisher kennt diese Funktion einen Weg — FreeType über
-    ``FT_Library_Version``. Andere Familien geben ``None`` zurück und behalten
-    ihre bisherige Angabe.
-
-    **Das ist kein fremder Quelltext im Sinne von Regel 11.** Geladen wird
-    genau die Bibliothek, die im eigenen Paket liegt und die die Anwendung
-    beim Start ohnehin lädt; gefragt wird eine Zahl.
-    """
-    if family != "freetype":
-        return None
-
-    # **Erst die Datei selbst, dann der Wrapper.** Die gebündelte Bibliothek ist
-    # die genauere Quelle — sie ist die, die mitreist. Ließe sie sich nicht
-    # laden (auf dem Intel-Mac lief genau das ins Leere), bleibt `freetype-py`:
-    # Es bringt seine eigene Bibliothek mit, auf macOS als `universal2`-Wheel,
-    # und **das** ist die Datei, die hier gefunden wurde. Seine `version()`
-    # ruft denselben `FT_Library_Version` auf, nur aus einer Bibliothek, die
-    # der Interpreter schon geladen hat.
-    #
-    # **Und ein Fehlschlag sagt, warum.** Der erste Anlauf gab stumm `None`
-    # zurück; der Paketjob scheiterte danach mit demselben Satz wie ohne ihn,
-    # und im Protokoll stand nichts, woran man es festmachen konnte.
-    attempts: list[tuple[str, Callable[[], tuple[int, int, int]]]] = [
-        (f"FT_Library_Version der gebündelten Datei ({path.name})", lambda: _ft_of_file(path)),
-        ("FT_Library_Version über freetype-py", _ft_of_wrapper),
-    ]
-    for source, ask in attempts:
-        try:
-            major, minor, patch = ask()
-        except (OSError, AttributeError, ImportError, ValueError) as problem:
-            print(f"Hinweis: {source} ging nicht — {type(problem).__name__}: {problem}")
-            continue
-        if major:
-            return f"{major}.{minor}.{patch}", source
-        print(f"Hinweis: {source} gab keine Fassung zurück.")
-    return None
-
-
-def _ft_of_file(path: Path) -> tuple[int, int, int]:
-    """``FT_Library_Version`` aus einer Bibliotheksdatei."""
-    library = ctypes.CDLL(str(path))
-    handle = ctypes.c_void_p()
-    if library.FT_Init_FreeType(ctypes.byref(handle)) != 0:
-        raise ValueError("FT_Init_FreeType hat abgelehnt")
-    major, minor, patch = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
-    library.FT_Library_Version(
-        handle, ctypes.byref(major), ctypes.byref(minor), ctypes.byref(patch)
-    )
-    library.FT_Done_FreeType(handle)
-    return major.value, minor.value, patch.value
-
-
-def _ft_of_wrapper() -> tuple[int, int, int]:
-    """Dieselbe Zahl über ``freetype-py``, dessen Bibliothek hier mitreist."""
-    import freetype
-
-    major, minor, patch = freetype.version()
-    return int(major), int(minor), int(patch)
-
-
 def _dpkg_version(soname: str) -> tuple[str, str]:
     """Belegt die Quellversion einer gebündelten Systembibliothek über das
     Paket des Bauservers — ``dpkg-query -S`` nennt das Paket, ``-W`` seine
@@ -826,7 +902,7 @@ def runtime_components(
                 "cpython",
                 "CPython runtime",
                 python_version or platform.python_version(),
-                "PSF-2.0",
+                RUNTIME_LICENCES["cpython"],
                 "https://www.python.org/psf/license/",
                 "laufender Build-Interpreter",
             )
@@ -848,7 +924,7 @@ def runtime_components(
                 "openssl",
                 "OpenSSL",
                 _openssl_version(),
-                "Apache-2.0",
+                RUNTIME_LICENCES["openssl"],
                 "https://www.openssl.org/source/license.html",
                 "ssl.OPENSSL_VERSION",
             )
@@ -860,7 +936,7 @@ def runtime_components(
                 "libffi",
                 "libffi",
                 version,
-                "MIT",
+                RUNTIME_LICENCES["libffi"],
                 "https://github.com/libffi/libffi",
                 version_source,
             )
@@ -872,15 +948,21 @@ def runtime_components(
                     f"openblas-{owner}",
                     f"OpenBLAS ({owner})",
                     _openblas_version(owner),
-                    "BSD-3-Clause",
+                    RUNTIME_LICENCES["openblas"],
                     "https://www.openblas.net/",
                     f"{owner}.__config__",
                 )
             )
-    if "gcc-runtime" in owners or any(
-        Path(path).name.startswith(("libgcc", "libgfortran", "libquadmath", "libstdc++"))
-        for path in paths
-    ):
+    # **Nur Dateien, die der GCC-Laufzeit selbst gehören** — die vom Bauserver
+    # (``_runtime_owner``). Seit Linux auf 22.04 baut, reisen libgcc_s und
+    # libstdc++ nicht mehr mit (``check_glibc_floor.HOST_LIBRARIES``); was
+    # bleibt, sind libgfortran und libquadmath in ``numpy.libs/`` und
+    # ``scipy.libs/``. Die gehören ihrem Rad, dessen ``LICENSE.txt`` den Text der
+    # GCC-Laufzeit samt Ausnahme mitbringt, und sie sind gestrippt: kein
+    # ``.comment``, nur scipy nennt in seiner auditwheel-Stückliste eine Fassung.
+    # Eine Familie aus ihnen hätte nur die Compilerangabe des Interpreters, und
+    # die Releaseakte weist sie zu Recht ab (Review 1, S2).
+    if "gcc-runtime" in owners:
         # **Die Fassung kommt aus dem Paket des Bauservers, nicht aus dem
         # Interpreter** (03.09.2026). `platform.python_compiler()` nennt den
         # Compiler, mit dem CPython gebaut wurde — nicht die Bibliothek, die
@@ -892,9 +974,7 @@ def runtime_components(
         # `dpkg-query` sagt, aus welchem Paket die Datei stammt und in welcher
         # Fassung. Wo es kein dpkg gibt — macOS —, bleibt es bei der alten
         # Angabe; dort greift die Prüfung nicht.
-        gcc_files = [
-            entry for entry in entries if Path(entry.path).name.startswith(("libgcc", "libstdc++"))
-        ]
+        gcc_files = [entry for entry in entries if entry.owner == "gcc-runtime"]
         if gcc_files and shutil.which("dpkg-query") is not None:
             gcc_version, gcc_source = _dpkg_version(Path(gcc_files[0].path).name)
         else:
@@ -905,7 +985,7 @@ def runtime_components(
                 "gcc-runtime",
                 "GCC Runtime Libraries",
                 gcc_version,
-                "GPL-3.0-or-later WITH GCC-exception-3.1",
+                RUNTIME_LICENCES["gcc-runtime"],
                 "https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html",
                 gcc_source,
             )
@@ -923,17 +1003,13 @@ def runtime_components(
                 "PE FileVersion der gebündelten Laufzeitdateien",
             )
         )
+    components.extend(wheel_library_components(entries))
     for family, _prefixes in LINUX_LIBRARY_FAMILIES:
         members = [entry for entry in entries if entry.owner == family]
         if not members:
             continue
         name, licence, website = LINUX_FAMILY_COMPONENTS[family]
         version, version_source = _dpkg_version(Path(members[0].path).name)
-        if version == "unbekannt":
-            # Ohne dpkg — Windows, macOS — bleibt nur die Datei selbst.
-            asked = _asked_library(family, Path(members[0].path))
-            if asked is not None:
-                version, version_source = asked
         components.append(
             _runtime_component(family, name, version, licence, website, version_source)
         )

@@ -75,12 +75,15 @@ def qpa_platform(platform: str, environ: Mapping[str, str]) -> str | None:
 
     **In einer Wayland-Sitzung steht Wayland hinter X11 in der Liste.** Qt
     geht sie der Reihe nach durch (``init_platform``) und bricht erst ab, wenn
-    jeder Name scheitert. Das X11-Plugin braucht neun Bibliotheken vom
-    System, die das Linux-Paket nicht mitbringt — ``libxcb-cursor0`` fehlt auf
+    jeder Name scheitert. Das X11-Plugin braucht Bibliotheken, die nicht jedes
+    System hat. AppImage und Archiv bringen die xcb-util-Bibliotheken samt
+    ``libxcb-cursor`` und ``libxkbcommon-x11`` mit (Forensik 0.6.0); vom
+    Rechner kommen ``libxcb``, ``libGL`` und ``libEGL``, und wer aus dem
+    Quellbaum startet, braucht alle vom System — dort fehlt ``libxcb-cursor0``
     einem Ubuntu-GNOME regelmäßig, und Qt sagt es seit 6.5 in einer eigenen
-    Warnung. Mit ``xcb`` allein hieße das „no Qt platform plugin could be
-    initialized" und kein Start; mit Wayland dahinter startet die Anwendung
-    ohne 3D-Ansicht, und der Hinweis nennt die Bibliothek.
+    Warnung. Mit ``xcb`` allein hieße eine fehlende Bibliothek „no Qt platform
+    plugin could be initialized" und kein Start; mit Wayland dahinter startet
+    die Anwendung ohne 3D-Ansicht, und der Hinweis nennt die Bibliothek.
     """
     if not platform.startswith("linux"):
         return None

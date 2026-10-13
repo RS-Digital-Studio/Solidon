@@ -47,6 +47,7 @@ from app.i18n import tr
 from app.ui.dialogs import licence_lock_line
 
 if TYPE_CHECKING:
+    from app.ui.panels import HistoryPanel
     from app.ui.tool_strip import ToolStrip
 
 #: Handlungen des Kerns, die nichts ändern und nichts herausgeben: zeigen,
@@ -207,17 +208,20 @@ def say_refusal(target: QWidget | QAction, reason: str) -> None:
     gilt der neue. Freigeben und Sperren der Bedienung bleibt beim Aufrufer.
     """
     if reason:
-        if target.toolTip() != reason:
+        previous = target.property(_SAID)
+        if target.toolTip() != previous:
             target.setProperty(_TIP, target.toolTip())
-        if _second_text(target) != reason:
+        if _second_text(target) != previous:
             target.setProperty(_SECOND, _second_text(target))
-        target.setProperty(_SAID, True)
+        target.setProperty(_SAID, reason)
         target.setToolTip(reason)
         _set_second_text(target, reason)
         return
     if target.property(_SAID) is not None:
-        target.setToolTip(str(target.property(_TIP) or ""))
-        _set_second_text(target, str(target.property(_SECOND) or ""))
+        if target.toolTip() == target.property(_SAID):
+            target.setToolTip(str(target.property(_TIP) or ""))
+        if _second_text(target) == target.property(_SAID):
+            _set_second_text(target, str(target.property(_SECOND) or ""))
         for name in (_SAID, _TIP, _SECOND):
             target.setProperty(name, None)
 
@@ -307,17 +311,16 @@ def close_commands(window: QMainWindow) -> list[QAction]:
     """Gesperrt: jeden ändernden Fensterbefehl grau stellen — zurück kommen sie (FD-26).
 
     Läuft am Ende von ``MainWindow._update_actions``, nach den eigenen
-    Bedingungen der Einträge. Zurück kommen die, die erst hier grau wurden —
-    ihnen schreibt der Aufrufer den Grund dazu; die übrigen hat ihre eigene
-    Zeile schon gesperrt und benannt. Ohne Sperre geschieht nichts.
+    Bedingungen der Einträge. Zurück kommen alle gesperrten Änderungen: Auch
+    ein bereits grauer Eintrag braucht den aktuellen Grund. Ohne Sperre
+    geschieht nichts.
     """
     if not change_refusal():
         return []
     closed = []
     for action in changing_commands(window):
-        if action.isEnabled():
-            closed.append(action)
-            action.setEnabled(False)
+        closed.append(action)
+        action.setEnabled(False)
         action.setProperty(_CLOSED, True)
     window.setProperty(_HOLDING, True)
     return closed
@@ -338,6 +341,22 @@ def reopen_commands(window: QMainWindow) -> list[QAction]:
         action.setEnabled(True)
         action.setProperty(_CLOSED, None)
     return reopened
+
+
+def hold_history_preview(panel: HistoryPanel) -> None:
+    """Der Vorschauknopf sperrt Änderungen, lässt den letzten Stand als Rückweg frei.
+
+    Die Zielmenge des Verlaufs ist die Quelle: ``None`` beendet nur eine
+    Einfügemarke. Zielwechsel und neue Freischaltung führen denselben Knopf
+    nach, ohne die laufende Vergleichsvorschau neu anzufordern.
+    """
+    count = panel.timeline_slider.value()
+    if not 1 <= count <= len(panel._timeline_targets):
+        return
+    before = panel._timeline_targets[count - 1]
+    reason = change_refusal() if before is not None else ""
+    panel.timeline_insert.setEnabled(not reason)
+    say_refusal(panel.timeline_insert, reason)
 
 
 def close_tools(strip: ToolStrip) -> None:

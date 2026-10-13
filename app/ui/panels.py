@@ -1143,12 +1143,12 @@ def as_error(
 
 
 def _severity_label(severity: str) -> str:
-    """Der Schweregrad als Wort — die Filterzeile zeigt beides (Regel 18)."""
-    return {
-        "error": tr("Fehler"),
-        "warning": tr("Warnung"),
-        "info": tr("Hinweis"),
-    }.get(severity, severity)
+    """Der Schweregrad als Wort — die Filterzeile zeigt beides (Regel 18).
+
+    Aus ``SEVERITY_ENCODING`` wie das Zeichen daneben und das Wort der Meldung.
+    """
+    encoding = SEVERITY_ENCODING.get(severity)
+    return tr(encoding.label_key) if encoding is not None else severity
 
 
 def origin_label(source: str) -> str:
@@ -5107,6 +5107,9 @@ class HistoryPanel(QWidget):
     def _timeline_changed(self, count: int) -> None:
         if not self.compare.isChecked() or not 1 <= count <= len(self._timeline_titles):
             return
+        from app.ui.change_lock import hold_history_preview
+
+        hold_history_preview(self)
         self.timeline_label.setText(
             tr("Stand {number} von {count}: {title}").format(
                 number=count,
@@ -5120,6 +5123,8 @@ class HistoryPanel(QWidget):
         count = self.timeline_slider.value()
         if 1 <= count <= len(self._timeline_targets):
             target = self._timeline_targets[count - 1]
+            if target is not None and change_refusal():
+                return
             self.compare.setChecked(False)
             self.previewInsertRequested.emit(target)
 

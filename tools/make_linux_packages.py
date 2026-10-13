@@ -49,6 +49,7 @@ from app.branding import (
     WEBSITE_URL,
 )
 from tools import asset_rights
+from tools.check_glibc_floor import is_host_library
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "dist" / APP_NAME
@@ -166,11 +167,20 @@ def trim_linux_binaries(binaries: Iterable[tuple[str, str, str]]) -> list[tuple[
     die Ersparnis wäre ein paar Megabyte, der Preis ein Paket, das auf einem
     fremden System nicht startet. Welche Bibliotheken das sind und woran sie
     hängen, prüft ``test_the_linux_bundle_leaves_no_dependency_open``.
+
+    **Die eine Ausnahme sind ``libstdc++`` und ``libgcc_s``**
+    (``check_glibc_floor.HOST_LIBRARIES``): Sie werden gebraucht und reisen
+    trotzdem nicht mit. Der Bauserver ist das älteste unterstützte System,
+    jeder Kundenrechner hat dieselbe oder eine neuere Fassung, und eine
+    mitgereiste ältere bräche den Grafiktreiber des Rechners, der eine neuere
+    ``GLIBCXX``-Fassung verlangt.
     """
     kept: list[tuple[str, str, str]] = []
     for entry in binaries:
         target = str(entry[0]).replace("\\", "/")
         if Path(target).name in ORPHANED_LIBRARIES:
+            continue
+        if "/" not in target and is_host_library(target):
             continue
         if any(target.endswith(plugin) for plugin in DROPPED_QT_PLUGINS):
             continue
@@ -577,10 +587,15 @@ def flatpak_manifest() -> str:
       sucht, und erspart Qt den ersten Fehlversuch, denn
       ``XDG_SESSION_TYPE=wayland`` reist ebenfalls mit und lässt Qt 6 Wayland
       vor xcb probieren. Flathub macht es bei FreeCAD genauso.
-    * ``--device=dri`` — der Viewport rechnet über wgpu auf der Grafikkarte
-      (§18). Die Freigabe gibt ``/dev/dri`` frei; den Vulkan-Loader und
-      seinen Treiber bringt die Laufzeit mit (Mesa), nicht dieses Paket.
-      Bis zum 06.09.2026 stand hier OpenGL — das galt für den VTK-Viewport.
+    * ``--device=all`` — zwei Geräte: Der Viewport rechnet über wgpu auf der
+      Grafikkarte (§18, ``/dev/dri``; den Vulkan-Loader und seinen Treiber
+      bringt die Laufzeit mit, Mesa), und die 3D-Maus liest unter Linux
+      ``/dev/hidraw*`` (``spacemouse.hid_module_name``). Für hidraw hat
+      Flatpak kein engeres Recht — ``--device=input`` deckt nur
+      ``/dev/input`` —, und mit ``--device=dri`` allein blieb die Maus im
+      Flatpak tot. Zugreifen darf der Prozess trotzdem nur, was die udev-Regel
+      des Handbuchs dem Benutzer freigibt; einen Socket braucht es nicht,
+      Solidon liest das Gerät selbst und nicht über spacenavd.
     * ``--filesystem=home`` — Modelle liegen beim Nutzer, und ein Dateidialog,
       der nur in einen Sandkasten sehen darf, ist kein Dateidialog. Portale
       wären der feinere Weg; sie setzen voraus, dass jeder Öffnen- und
@@ -609,7 +624,7 @@ def flatpak_manifest() -> str:
       bekam deshalb keinen seiner Drucker angeboten. Mit den Exporten findet
       Solidon den Slicer auch von selbst, und der Dateidialog gibt den echten
       Pfad statt einer Portalkopie zurück. Freigegeben wird nur, was
-      :data:`app.core.tools.SLICER_FLATPAKS` nennt, nicht ``~/.var/app`` im
+      :data:`app.core.discover.SLICER_FLATPAKS` nennt, nicht ``~/.var/app`` im
       Ganzen; dieselben Installationsordner liest Flatseal.
     * ``--talk-name=org.fcitx.Fcitx5`` und ``--talk-name=org.freedesktop.portal.Fcitx``
       — die Eingabemethode. Derselbe Kunde meldete: „So muss ich diesen Text in
@@ -647,7 +662,7 @@ def flatpak_manifest() -> str:
     Entscheidung Robert, 27.08.2026: „jede plattform sollte das gleiche haben
     und alles funktionieren."
     """
-    from app.core.tools import SLICER_FLATPAKS
+    from app.core.discover import SLICER_FLATPAKS
 
     permissions = "\n".join(
         f"  - {entry}"
@@ -656,7 +671,7 @@ def flatpak_manifest() -> str:
             "--env=QT_QPA_PLATFORM=xcb",
             "--share=ipc",
             "--share=network",
-            "--device=dri",
+            "--device=all",
             "--filesystem=home",
             "--filesystem=/var/lib/flatpak/app:ro",
             "--filesystem=/var/lib/flatpak/exports/bin:ro",

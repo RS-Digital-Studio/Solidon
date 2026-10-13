@@ -10,7 +10,7 @@ finish-args:
   - --env=QT_QPA_PLATFORM=xcb
   - --share=ipc
   - --share=network
-  - --device=dri
+  - --device=all
   - --filesystem=home
   - --filesystem=/var/lib/flatpak/app:ro
   - --filesystem=/var/lib/flatpak/exports/bin:ro

@@ -19,6 +19,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Utilização e sistema
 
+- No Mac, o Solidon pode agora carregar o controlador da 3Dconnexion (3DxWare) para o rato 3D. Da versão 0.4.1 à 0.6.0, o macOS não o permitia.
+- No Mac, o pacote de instalação coloca agora o Solidon sempre em *Aplicações*. Se o Solidon não estava lá, até agora o pacote atualizava uma cópia noutro lugar.
+- Após atualizar no Mac, abrir o Solidon a partir de *Aplicações*. Apagar as cópias antigas da app fora desta pasta e voltar a adicioná-la ao Dock, se necessário.
+- No Linux, o AppImage arranca agora também no Ubuntu 22.04, no Linux Mint 21 e no Debian 12. Na versão 0.6.0, aí só funcionava o Flatpak.
+- No Linux, o Solidon lê agora o rato 3D através do acesso que a regra udev do manual concede, também no Flatpak. Até à versão 0.6.0, a regra não bastava para isso.
 - A pesquisa encontra *Unir*, *Subtrair* e *Interseção* também como «booleano», e *Subtrair* também como «diferença».
 - A pesquisa encontra a função também para uma pergunta como «Como ponho a peça na mesa de impressão?» e conhece palavras de slicers e CAD como «variável».
 - Também a pesquisa no manual encontra a página certa para uma pergunta com as suas palavras.
@@ -34,7 +39,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se a uma função faltar um segundo corpo na cena, o motivo indica *Duplicar objeto* como caminho.
 - A lista de atalhos de teclado nomeia *Modelar*, *Esqueleto* e *Desenhar* uma única vez.
 - O botão *Calcular de forma mais aproximada* deixa de existir: o Solidon continua sozinho com o cálculo completo. Na versão 0.6.0 aparecia também onde não mudava nada.
-- As mensagens de erro, os detalhes e os avisos aparecem agora no estilo do Solidon, com as ações como botões. Ctrl+C copia a mensagem inteira.
+- As mensagens de erro, os detalhes e os avisos aparecem agora no estilo do Solidon, com as ações como botões. Ctrl+C copia a seleção ou, se não houver nenhuma, a mensagem inteira.
 - A cor de uma bobina escolhe-se com o seletor de cores do Solidon junto ao botão, com cores nomeadas e o valor exato. A caixa de cores do sistema desaparece.
 - Uma cota do desenho altera-se agora num campo no próprio lugar. Os endereços e a escolha do filamento a substituir são pedidos no estilo do Solidon.
 - Depois de ativar ou desativar, a confirmação aparece no próprio diálogo, sem uma janela que seja preciso fechar.

@@ -29,7 +29,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Sagt eine tangierende Schnittebene vor den Stiften ab, während offene Eingänge und getrennte Schalen ihre eigene Diagnose behalten? Findet Auto Split eine gültige Folgeebene? | `test_tangent_cuts.py` — Korpusplatte, beide Güten und gemeinsame Schnittwege |
 | Sammelparameter-Ops über das Register | `test_gesture_ops.py` |
 | Öffnen alte Projektdateien? Halten die Korpusdateien, was sie belegen? | `test_project.py` mit `data/projects/` · `test_corpus.py` (§34) |
-| Trägt jede Ausnahme einen Vorschlag? Meldung und Eingabe im Hausstil? | `test_errors.py`, `test_message_dialog.py`, `test_input_dialog.py` |
+| Trägt jede Ausnahme einen Vorschlag? Meldung und Eingabe im Hausstil? Gibt sich jeder Dialog frei? | `test_errors.py`, `test_message_dialog.py`, `test_input_dialog.py` · `test_dialog_lifetime.py` |
 | Erreichen Helfer- und Stopfehler den Kundenweg unverändert? | `test_prepare.py` · `test_difference.py` · `test_missing_ops.py` · `test_repair.py` · `test_threemf_native_materials.py` |
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Umschalter, vier Felder vorn? | `test_theme_and_palette.py` · `test_interface_limits.py` |
@@ -101,7 +101,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Steht im Register jeder Umschalter vor den Feldern, die er schaltet, und nie hinter der Klappe eines Vorderfelds? | `test_dependency_order.py`; die Folge des Druckdialogs in `test_print_settings_ui.py` |
 | Bleiben Käuferzuordnung und Betreiberzugang aus dem Server? Halten die PHP-Endpunkte ihre Missbrauchsgrenzen? | `test_licence_admin.py`, `test_activation_server.py` · `test_public_php_security.py`; ohne PHP ein Skip, in der Linux-CI ein Fehler (`php_probe.py`) |
 | Website: tote Verweise, Stempel, Paketgrößen, „nichts von außen“, Sprachfassungen | `test_website.py` — Außenlinks getrennt von eingebundenen Ressourcen |
-| CI: vollständige Partitionen, Fenster-/Renderergrenze, adapterfreie Sammlung, Prozessisolation, Berichte · Workflowblöcke und Paketfreigabe · Abwicklungskorrektur | `test_ci_runner.py` · `test_packaging.py` mit `workflow_helpers.py` · `test_fix_unwind_info.py` |
+| CI: vollständige Partitionen, Fenster-/Renderergrenze, adapterfreie Sammlung, Prozessisolation, Berichte · Workflowblöcke und Paketfreigabe · Abwicklungskorrektur · Linux-Grenze | `test_ci_runner.py` · `test_packaging.py` mit `workflow_helpers.py` · `test_fix_unwind_info.py` · `test_check_glibc_floor.py` |
 | Wählt `tools/affected_tests.py` richtig? Findet `tools/twin_scan.py` seine Zwillinge? | `test_affected_tests.py` · `test_twin_scan.py` |
 | Zählt die Einzeldateiabnahme wie das Audit, wählt sie dasselbe Merkmal, geht sie über eine abgesagte Zahl hinweg, liest sie die Abdrücke richtig — und gehen ihre Fensterwege an Lochplatte und dünnwandigem Kasten durch? | `test_file_acceptance.py` (die Fensterwege offscreen, also beim Release) |
 | Arbeitsliste und Archiv: Register, Sprungmarken und fortsetzbare Belege | `test_roadmap.py` — offene Punkte einschließlich Fortsetzungszeilen dürfen keine ausschließlich lokalen Nachweispfade führen; geschlossene Historie bleibt datiert |
@@ -110,7 +110,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Überleben zwei gleichzeitig schreibende Sitzungen in `MEMORY.md`? | `test_memory_index.py` — zwei echte Prozesse |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? Halten harte Regeln am Quelltext — kein `eval`, keine Ja/Nein-Frage, kein `==` mit Unendlich? | `test_hard_rules.py` |
 | Kommt ein Backslash in einem Pfad als Backslash an? | `test_source_escapes.py` |
-| Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen und mit dem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte und nachgestellte Hilfsprozesse, die Fälle einzeln in `konzepte/begruendungen/karte-tests.md`; das gebaute Paket startet `tools/check_frozen_helper.py` im Paketjob, geprüft in `test_packaging.py` |
+| Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen und mit dem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte und nachgestellte Hilfsprozesse, die Fälle einzeln in `konzepte/begruendungen/karte-tests.md` |
 | Endet ein rechnender Helfer mit seinem hart beendeten Elternprozess, und hat er nach normalem Start niedrigere OS-Priorität? | `test_kernel_process_lifecycle.py` |
 
 ## Helfer
@@ -162,8 +162,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
   steht in `.claude/rules/wartezeit.md` unter „Loslassen allein räumt nicht
   auf“.
 - **`test_widget_lifetime.py` ordnet `installEventFilter(self)` seiner Klasse
-  zu** und verlangt dort den Abmeldegriff im eigenen `eventFilter`. Bei
-  modalen Dialogen des Hauptfensters prüft es zuerst die native Kindlöschung
-  bei lebendem Elternfenster; `release()` allein ersetzt sie nicht.
+  zu** und verlangt dort den Abmeldegriff im eigenen `eventFilter`; die
+  Kindlöschung modaler Dialoge steht in `karte-tests.md`.
 - **`test_suite_script.py`**: Erfolgreiche Teilstücke nach der Halbierung
   löschen den ursprünglichen Abbruch nicht, der Gesamtlauf endet mit Exit 1.

@@ -6,10 +6,15 @@ keinen Rückfall auf eine Datei oder eine Umgebungsvariable: Beides ließe sich
 zusammen mit dem Geräte-Zertifikat kopieren und machte aus der Bindung nur
 eine zweite Datei.
 
-Der Programmstart erzeugt nichts und öffnet auch keinen Schlüsselbund. Erst
-eine Aktivierungsanforderung ruft :func:`ensure_public_key` oder :func:`sign`
-auf. Eine bereits aktivierte Installation liest den privaten Teil lokal; sie
-fragt niemals den Aktivierungsdienst.
+Der Programmstart erzeugt keine Geräteidentität. Den Geräteteil liest er nur,
+wenn sich ein abgelegter Lizenzschlüssel lesen lässt: dann über
+:func:`public_key`, bevor das Fenster steht (``activation.state()`` →
+``certificate.load_for``). Ein gesperrter Schlüsselbund oder ein Eintrag, den
+eine anders signierte Kopie angelegt hat, hält den Start dort mit einer
+Systemabfrage an (RM-808). Erst eine Aktivierungsanforderung ruft
+:func:`ensure_public_key` oder :func:`sign` auf.
+Eine bereits aktivierte Installation liest den privaten Teil lokal; sie fragt
+niemals den Aktivierungsdienst.
 """
 
 from __future__ import annotations

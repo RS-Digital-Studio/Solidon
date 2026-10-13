@@ -68,8 +68,9 @@ Release-Lauf. `tools/check_frozen_start.py` startet wie ein erster Kunde
 Ende mit 0, keinen Absturz im Absturzprotokoll, keinen überlebenden Hilfsprozess und
 einen unveränderten Paketbaum; die Anwendung steht dafür
 `start_check.SECONDS` lang und schließt sich selbst (`app/ui/start_check.py`).
-Gestartet wird der gebaute Baum im Paketjob aller vier Runner, AppImage und
-Flatpak, das installierte Windows-Setup in `build.yml` und in
+Gestartet wird der gebaute Baum im Paketjob aller vier Runner, das AppImage
+dort und auf frischen Läufern mit Ubuntu 22.04 und 24.04, das Flatpak in
+`linux-flatpak`, das installierte Windows-Setup in `build.yml` und in
 `windows-signed-installer.yml` und das finale Mac-Paket nach Quarantäne,
 Installer und Gatekeeper. Grund: Suite, Bau, Signatur und Notarisierung können
 grün sein, während das Paket beim Kunden nach Sekunden endet. Eine Ausnahme,
@@ -80,7 +81,11 @@ Python-Zustand (Treiber) zählt als Absturz.
 
 - **Ohne Bildschirm (`--offscreen`) nur der Intel-Mac-Runner**: Sein
   Symboldienst (`iconservicesagent`) stürzt in Metal ab, jedes Fenster wartet
-  dann auf ein Symbol. Eine neue Ausnahme braucht einen solchen Beleg.
+  dann auf ein Symbol. Eine neue Ausnahme braucht einen solchen Beleg. **In
+  Erprobung**: Die Releaseakte startet dort zusätzlich mit Fenster, nachdem
+  der Dienst per `launchctl bootout` ausgehängt ist; der Schritt darf rot
+  werden, bis zwei Läufe grün waren, dann fällt die Ausnahme. In einem
+  Pflichtjob mit Rendererfällen ist ein solcher Schritt nicht zulässig.
 - `tests/test_packaging.py` hält die Schritte samt Gegenproben; ein neues
   Paketformat bekommt seinen Start, bevor es ausgeliefert wird.
 - **Das Windows-Setup wird bei jedem Release über die veröffentlichte Version
@@ -200,6 +205,22 @@ wörtlich; im Paket heißt das zusätzlich:
   begründet (`make_linux_packages.ORPHANED_LIBRARIES`); die Rechnung prüft nur
   die Gegenrichtung gegen den eingecheckten Korpus, und eine offene Kante ist
   ein Fehler. „Ist überall vorhanden" ist keine Messung.
+- **Linux baut auf dem ältesten unterstützten System, `ubuntu-22.04`**: Jede
+  ELF-Datei des Baums verlangt höchstens glibc 2.35, sonst starten AppImage
+  und Archiv auf Ubuntu 22.04, Debian 12 und Mint 21 nicht
+  (`tools/check_glibc_floor.py` im Paketjob und in der Releaseakte). Ein
+  Wechsel des Bauservers bewegt `OLDEST_GLIBC`, die Lizenztexte der
+  Systembibliotheken und die Startprüfung gemeinsam.
+- **Auch eine Laufzeitfamilie braucht eine freigegebene Lizenz**: Die
+  Releaseakte hält jeden SPDX-Ausdruck der Stückliste gegen `licences.toml`,
+  bei Doppellizenzen steht die gewählte. Was ein Rad ohne eigene Lizenztexte
+  in `<rad>.libs/` mitbringt (hidapi), führt `make_sbom.WHEEL_LIBRARIES` je
+  Familie mit Fassung aus der auditwheel-Stückliste; eine Datei ohne Zeile
+  hält die Stückliste an.
+- **`libstdc++` und `libgcc_s` reisen nicht mit** (`HOST_LIBRARIES`), obwohl
+  sie gebraucht werden: Jeder Kundenrechner hat dieselbe oder eine neuere
+  Fassung, und eine mitgereiste ältere lädt vor der des Rechners und bricht
+  dessen Grafiktreiber (Mesa, LLVM), der neuere `GLIBCXX`-Symbole verlangt.
 
 ## Signieren ist ein eigener Vertrauensraum
 
@@ -207,13 +228,16 @@ Signiergeheimnisse gehören nicht in den Baujob. Eine prüfsummengebundene
 Übergabe trennt Bauen, Freigeben und Signieren; auf Windows geht der Weg bis
 auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
 
-- **Die Mac-App läuft mit Hardened Runtime und genau einer Ausnahme**,
-  `com.apple.security.cs.allow-unsigned-executable-memory`, nur am
-  Hauptprogramm und mit einem Rezept für beide Architekturen: erst tief
-  signieren, dann das Bundle ohne `--deep` mit der Liste. Ohne sie kreist auf
+- **Die Mac-App läuft mit Hardened Runtime und genau zwei Ausnahmen**, nur
+  am Hauptprogramm und mit einem Rezept für beide Architekturen: erst tief
+  signieren, dann das Bundle ohne `--deep` mit der Liste.
+  `com.apple.security.cs.allow-unsigned-executable-memory`, weil sonst auf
   Intel-Macs mit macOS 26 schon das `import ctypes` in PyInstallers Bootstrap
-  in Apples libffi. Der Signierschritt liest Schlüssel und Wert zurück,
-  `test_supply_chain.py` hält den Text (RM-104).
+  in Apples libffi kreist (RM-104);
+  `com.apple.security.cs.disable-library-validation`, weil das Framework des
+  3D-Maus-Treibers die Team-ID von 3Dconnexion trägt und dyld es sonst
+  ablehnt. Der Signierschritt liest beide Schlüssel mit Wert zurück und bricht
+  bei einem dritten ab; `test_supply_chain.py` hält den Text.
 - **Ein neuer Release-Schlüssel reist aus, bevor er unterschreibt**: ans Ende
   von `updates.RELEASE_PUBLIC_KEYS`, die Versionsdatei dieser Version
   unterschreibt noch der alte, Ablauf in `Signierung/README.md`. Eine
@@ -248,6 +272,12 @@ auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
   Fehler reist in den anderen Formaten weiter. Die Regel gehört in den
   Startpfad (`app/ui/qt_platform.py` ist das Muster); das Manifest trägt sie
   zusätzlich.
+- **Das macOS-Paket ist nicht umziehbar und ohne Versionssperre**
+  (`make_macos_package.COMPONENT_SETTINGS`, gebaut über `pkgbuild --root` mit
+  Komponentenliste): Sonst aktualisiert Apples Installer eine Kopie gleicher
+  Kennung anderswo oder überspringt das Bundle still, und der Kunde startet aus
+  `/Applications` weiter die alte Version. Die Releaseakte liest die
+  `PackageInfo` des signierten Pakets und installiert neben einer Kopie.
 - **Wer täglich baut, sieht den Cache-Fehler nie**: Der Ergebniscache trägt
   den Code-Hash im Pfad, der Kunde fährt denselben Stand wochenlang. Bei
   Verdacht den Cache absichtlich warm fahren — dieselbe Lage zweimal, mit einer

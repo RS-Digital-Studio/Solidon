@@ -252,12 +252,13 @@ VIRIDIS: tuple[str, ...] = (
     "#fde725",
 )
 
-#: Zeichen für die Schweregrade. Der Prüfbericht zeigt sie neben dem Text,
-#: nie als Farbe allein.
+#: Zeichen und Wort für die Schweregrade. Der Prüfbericht zeigt sie neben dem
+#: Text, nie als Farbe allein; Meldung, Bericht und Chat nehmen das Wort von
+#: hier (``tr(encoding.label_key)``), angemeldet wie die Legende oben.
 SEVERITY_ENCODING: dict[str, Encoding] = {
-    "info": Encoding(ROLES["info"], "solid", "·", "Hinweis"),
-    "warning": Encoding(ROLES["warning"], "dots", "!", "Warnung"),
-    "error": Encoding(ROLES["error"], "backward", "X", "Fehler"),
+    "info": Encoding(ROLES["info"], "solid", "·", _("Hinweis").msgid),
+    "warning": Encoding(ROLES["warning"], "dots", "!", _("Warnung").msgid),
+    "error": Encoding(ROLES["error"], "backward", "X", _("Fehler").msgid),
 }
 
 #: Das Zeichen je Bedeutung, die eine **Zeile der Oberfläche** tragen kann —

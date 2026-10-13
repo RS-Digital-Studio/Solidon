@@ -1082,7 +1082,11 @@ class FirstRunDialog(QDialog):
         """§36: was fehlt, lässt sich von hier holen, statt aus einem README."""
         from app.ui.install_dialog import InstallDialog
 
-        InstallDialog(self, settings=self.settings).exec()
+        dialog = InstallDialog(self, settings=self.settings)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
         self.look()
 
     def _setup_chat(self) -> None:
@@ -1095,7 +1099,11 @@ class FirstRunDialog(QDialog):
         """
         from app.ui.dialogs import KeyDialog
 
-        KeyDialog(parent=self, settings=self.settings).exec()
+        dialog = KeyDialog(parent=self, settings=self.settings)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
         self.look()
 
     def _open(self) -> None:

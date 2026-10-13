@@ -44,6 +44,11 @@ Nutzen da und sonst nichts.
 
 ### Bedienung und System
 
+- Am Mac darf Solidon für die 3D-Maus jetzt den Treiber von 3Dconnexion (3DxWare) laden. Von Version 0.4.1 bis 0.6.0 ließ macOS das nicht zu.
+- Am Mac installiert das Paket Solidon jetzt immer in *Programme*. Lag Solidon bisher nicht dort, aktualisierte das Paket eine Kopie an einem anderen Ort.
+- Nach dem Mac-Update Solidon aus *Programme* starten. Alte App-Kopien außerhalb dieses Ordners löschen und den Dock-Eintrag bei Bedarf neu anlegen.
+- Unter Linux startet das AppImage jetzt auch auf Ubuntu 22.04, Linux Mint 21 und Debian 12. Version 0.6.0 lief dort nur als Flatpak.
+- Unter Linux liest Solidon die 3D-Maus jetzt über den Zugang, den die udev-Regel aus dem Handbuch freigibt, auch im Flatpak. Bis Version 0.6.0 reichte die Regel dafür nicht.
 - Die Suche findet *Vereinigen*, *Abziehen* und *Schnittmenge* auch unter „boolesch“ und „Boolean“, *Abziehen* auch unter „Differenz“.
 - Die Suche findet die Funktion auch zu einer Frage wie „Wie setze ich das Teil auf die Druckplatte?“ und kennt Wörter aus Slicer und CAD wie „Druckbett“ oder „Variable“.
 - Auch die Suche im Handbuch findet zu einer Frage in eigenen Worten die passende Seite.
@@ -59,7 +64,7 @@ Nutzen da und sonst nichts.
 - Fehlt einer Funktion ein zweiter Körper in der Szene, nennt der Grund *Objekt duplizieren* als Weg.
 - Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
 - Der Knopf *Gröber rechnen* entfällt, denn Solidon rechnet von selbst vollständig weiter. In Version 0.6.0 stand er auch dort, wo er nichts änderte.
-- Fehlermeldungen, Einzelheiten und Hinweise stehen jetzt im Stil von Solidon, mit den Handlungen als Knöpfen. Strg+C kopiert die ganze Meldung.
+- Fehlermeldungen, Einzelheiten und Hinweise stehen jetzt im Stil von Solidon, mit den Handlungen als Knöpfen. Strg+C kopiert die Markierung, sonst die ganze Meldung.
 - Die Farbe einer Spule wählt ein eigener Farbwähler direkt am Knopf, mit benannten Regalfarben und dem genauen Farbwert. Der Farbdialog des Systems entfällt.
 - Ein Maß der Zeichnung ändert sich in einem Feld an Ort und Stelle. Adressen und die Wahl, welches Filament ersetzt wird, fragt Solidon im eigenen Stil.
 - Nach dem Freischalten und nach dem Deaktivieren steht die Bestätigung im Dialog selbst, ohne ein Fenster, das man erst wegklicken muss.

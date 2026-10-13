@@ -247,6 +247,20 @@ Bytes.
 
 ## Bauen, signieren, ausliefern
 
+Die Stückliste stammt aus PyInstallers Analyse und dem fertigen Paket, nicht
+aus `pip freeze`. Die Lizenzbeilage verwendet genau diese SBOM;
+`--release-check` prüft fail-closed.
+
+Die festen Laufzeitausdrücke von `make_sbom.py` und `make_licence_notices.py`
+stehen in `RUNTIME_LICENCES`. Der Freigabewächter liest sie zusammen mit den
+nativen Haupt-, Linux- und Radtabellen und dem AppImage-Kern.
+
+`check_glibc_floor.py` prüft die Linux-Grenze am gebauten Baum: Es liest jede
+ELF-Datei wie der Lader über Programmköpfe und `DT_VERNEED`, verlangt höchstens
+`OLDEST_GLIBC` und keine `HOST_LIBRARIES` (`libstdc++`, `libgcc_s`). Es nutzt nur
+die Standardbibliothek und läuft im Paketjob, in `linux-flatpak` und in der
+Linux-Releaseakte. Die einzuhaltende Regel steht in `auslieferung.md`.
+
 *Früher unter „Die Familien“.*
 
 Nach einem Python-Wechsel wird `build_slice_core.py` mit dem aktuellen

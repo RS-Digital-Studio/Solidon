@@ -19,6 +19,11 @@ scrive in `website/version.json`.
 
 ### Uso e sistema
 
+- Su Mac, Solidon ora può caricare il driver di 3Dconnexion (3DxWare) per il mouse 3D. Dalla versione 0.4.1 alla 0.6.0 macOS non lo consentiva.
+- Su Mac, il pacchetto di installazione mette ora Solidon sempre in *Applicazioni*. Se Solidon non era lì, finora il pacchetto aggiornava una copia in un altro posto.
+- Dopo l'aggiornamento su Mac, avvia Solidon da *Applicazioni*. Elimina le vecchie copie dell'app fuori da questa cartella e ricrea il collegamento nel Dock se necessario.
+- Su Linux, l'AppImage ora si avvia anche su Ubuntu 22.04, Linux Mint 21 e Debian 12. Con la versione 0.6.0 lì funzionava solo il Flatpak.
+- Su Linux, Solidon ora legge il mouse 3D attraverso l'accesso che concede la regola udev del manuale, anche nel Flatpak. Fino alla versione 0.6.0 la regola non bastava.
 - La ricerca trova *Unisci*, *Sottrai* e *Intersezione* anche come «booleano», e *Sottrai* anche come «differenza».
 - La ricerca trova la funzione anche per una domanda come «Come appoggio il pezzo sul piano?» e conosce parole di slicer e CAD come «piano di stampa» o «variabile».
 - Anche la ricerca nel manuale trova la pagina giusta per una domanda con parole proprie.
@@ -34,7 +39,7 @@ scrive in `website/version.json`.
 - Se a una funzione manca un secondo corpo nella scena, il motivo indica *Duplica oggetto* come via.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
 - Il pulsante *Calcolare in modo più grossolano* non c'è più: Solidon prosegue da solo con il calcolo completo. Nella versione 0.6.0 compariva anche dove non cambiava nulla.
-- Messaggi di errore, dettagli e avvisi ora appaiono nello stile di Solidon, con le azioni come pulsanti. Ctrl+C copia l'intero messaggio.
+- Messaggi di errore, dettagli e avvisi ora appaiono nello stile di Solidon, con le azioni come pulsanti. Ctrl+C copia la selezione, altrimenti l'intero messaggio.
 - Il colore di una bobina si sceglie con il selettore di Solidon direttamente sul pulsante, con colori nominati e il valore esatto. La finestra colori del sistema non c'è più.
 - Una quota del disegno ora si modifica in un campo sul posto. Indirizzi e la scelta del filamento da sostituire vengono chiesti nello stile di Solidon.
 - Dopo l'attivazione o la disattivazione la conferma compare nella finestra stessa, senza un'altra finestra da chiudere.

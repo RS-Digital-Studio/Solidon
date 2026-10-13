@@ -76,6 +76,11 @@ ui = [
   # wgpu und rendercanvas kommen mit pygfx, ``app/ui/render`` importiert aber
   # beide selbst (Adapterfrage, Leinwand im Widget und ohne Fenster); die
   # Untergrenzen sind die von pygfx 0.17. BSD-2.
+  # Ein wgpu mit wgpu-native 30 oder neuer (der Pin 0.32.0 bringt 29) erst
+  # nach einem Start mit 3D-Ansicht auf einem Intel-Mac mit macOS 26: Ab 30
+  # nimmt der Metal-Zweig dort die Shadersprache 4.0, und ob Intel- und
+  # AMD-Treiber sie annehmen, belegt kein Runner (RM-805,
+  # konzepte/nachweise-plattform-2026-10/bericht-web.md, Abschnitt D).
   "wgpu>=0.30.1",
   "rendercanvas>=2.6.1",
   # Die 3D-Maus (SpaceMouse) direkt über HID, ohne Herstellertreiber (§2.9,
@@ -198,7 +203,8 @@ target-version = "py314"
 # läuft ohnehin nur über `files = ["app"]`. Dasselbe gilt für die Sonden der
 # Release-Durchsichten und der CAD-Durchsicht, die unverändert unter
 # `konzepte/nachweise-release-*/` und `konzepte/nachweise-cad-durchsicht-2026-09/`
-# liegen, und für die Sonden des Konzepts zur örtlichen Neuerkennung.
+# liegen, für die Sonden des Konzepts zur örtlichen Neuerkennung und für die
+# Messskripte der Paketforensik in `konzepte/nachweise-plattform-2026-10/`.
 #
 # Und die Druckprojekte werden es auch nicht.
 #
@@ -212,6 +218,7 @@ extend-exclude = [
   "konzepte/nachweise-cad-durchsicht-2026-09/",
   "konzepte/nachweise-oertliche-erkennung-2026-10/konzept-sonden/",
   "konzepte/nachweise-oertliche-erkennung-2026-10/p5/",
+  "konzepte/nachweise-plattform-2026-10/skripte/",
 ]
 
 [tool.ruff.per-file-target-version]

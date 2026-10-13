@@ -550,3 +550,119 @@ def test_the_keys_and_the_drag_in_the_history_say_why(
     assert shown == [], f"ein Meldungsfenster kam doch: {shown}"
     assert [entry.id for entry in window.session.project.document.ops] == steps
     assert window.session.inserting is None, "die Einfügemarke ging trotz Sperre auf"
+
+
+def test_changing_lock_reasons_return_the_own_text(
+    qt_app: QApplication, below_the_bed: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M1: A → B → frei erhält eigene Sätze, auch während der Sperre geänderte."""
+    window = below_the_bed
+    button = QPushButton("Prüfknopf", window)
+    button.setToolTip("Eigene Kurzhilfe")
+    button.setAccessibleDescription("Eigene Beschreibung")
+    action = next(
+        a for name, _, a in menubar_entries(window) if name == "menubar.parameter_anlegen"
+    )
+    original = action.toolTip()
+    for state in LOCKED:
+        reason = _set_licence(monkeypatch, state)
+        window._update_actions()
+        change_lock.hold_inputs(button, reason)
+        assert button.toolTip() == reason and button.accessibleDescription() == reason
+        assert action.toolTip() == reason and action.statusTip() == reason
+    change_lock.hold_inputs(button, "")
+    assert button.isEnabled()
+    assert button.toolTip() == "Eigene Kurzhilfe"
+    assert button.accessibleDescription() == "Eigene Beschreibung"
+    change_lock.hold_inputs(button, reason)
+    button.setToolTip("Neue Kurzhilfe")
+    button.setAccessibleDescription("Neue Beschreibung")
+    change_lock.hold_inputs(button, reason)
+    change_lock.hold_inputs(button, "")
+    assert button.toolTip() == "Neue Kurzhilfe"
+    assert button.accessibleDescription() == "Neue Beschreibung"
+    _set_licence(monkeypatch, "licensed")
+    window._update_actions()
+    assert action.isEnabled() and action.toolTip() == original
+
+
+def test_history_preview_preserves_comparison_while_changes_are_locked(
+    qt_app: QApplication, below_the_bed: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M2: Älterer Stand sperrt vor dem Klick; Freigabe und lesender Rückweg bleiben."""
+    window = below_the_bed
+    assert window.session.apply("Quader", [OperationDraft(op="create_box", params={})])
+    assert window.session.wait_for_idle(60_000)
+    history = window.history_panel
+    for state in LOCKED:
+        reason = _set_licence(monkeypatch, state)
+        window._update_actions()
+        history.compare.setChecked(True)
+        assert window.session.wait_for_idle(60_000)
+        history.timeline_slider.setValue(1)
+        assert window.session.wait_for_idle(60_000)
+        assert not history.timeline_insert.isEnabled()
+        assert history.timeline_insert.toolTip() == reason
+        assert history.timeline_insert.accessibleDescription() == reason
+        history.timeline_insert.click()
+        history._insert_at_preview()  # Der direkte Signalweg darf den Vergleich auch nicht räumen.
+        assert history.compare.isChecked() and window.session.inserting is None
+        history.timeline_slider.setValue(history.timeline_slider.maximum())
+        assert window.session.wait_for_idle(60_000)
+        assert history.timeline_insert.isEnabled(), "der letzte Stand ist ein lesender Rückweg"
+        history.timeline_insert.click()
+        assert not history.compare.isChecked()
+    history.compare.setChecked(True)
+    assert window.session.wait_for_idle(60_000)
+    history.timeline_slider.setValue(1)
+    assert window.session.wait_for_idle(60_000)
+    _set_licence(monkeypatch, "licensed")
+    window._update_actions()
+    assert history.timeline_insert.isEnabled() and not history.timeline_insert.toolTip()
+    history.timeline_insert.click()
+    assert window.session.wait_for_idle(60_000)
+    assert not history.compare.isChecked() and window.session.inserting is not None
+
+
+def test_search_shows_the_licence_reason_once_and_preserves_other_reasons(
+    qt_app: QApplication, below_the_bed: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L1: Gemeinsamer Grund bleibt einmal; eigene Gründe und Lesendes bleiben erreichbar."""
+    from app.core.registry.surfaces import SearchEntry
+    from app.ui.selection_operations import SelectionOperationsPanel
+
+    window = below_the_bed
+    panel = window.selection_operations
+    reason = _set_licence(monkeypatch, "needs_activation")
+    window._update_actions()
+    panel._filter("Quader")
+    assert len(panel._hits) >= 2, "mehrere gesperrte Treffer sind die Voraussetzung"
+    assert panel._nothing.text() == reason and not panel._nothing.isHidden()
+    for index in range(panel.hits.count()):
+        item = panel.hits.item(index)
+        assert reason not in item.text()
+        assert reason in item.toolTip()
+        assert reason in item.data(Qt.ItemDataRole.AccessibleDescriptionRole)
+        assert not item.flags() & Qt.ItemFlag.ItemIsEnabled
+    panel._filter("Speichern")
+    assert any(
+        panel.hits.item(i).flags() & Qt.ItemFlag.ItemIsEnabled for i in range(panel.hits.count())
+    )
+    own = "Zuerst einen Körper wählen."
+    entry = SearchEntry(
+        name="eigene_handlung",
+        title="Eigene Handlung",
+        category="",
+        doc="",
+        available=False,
+        reason=own,
+    )
+    item = SelectionOperationsPanel._hit_item(entry)
+    assert own in item.text() and own in item.toolTip()
+    _set_licence(monkeypatch, "licensed")
+    window._update_actions()
+    panel._filter("Quader")
+    assert panel._nothing.isHidden()
+    assert any(
+        panel.hits.item(i).flags() & Qt.ItemFlag.ItemIsEnabled for i in range(panel.hits.count())
+    )

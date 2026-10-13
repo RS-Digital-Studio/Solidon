@@ -4632,6 +4632,7 @@
   "Im Bild wählen": "Elegir en la vista",
   "Im Chat beschreiben": "Describir en el chat",
   "Im Fenster rechnet der Übergang in Entwurfsauflösung, damit das Formen flüssig bleibt. Export und Druckvorbereitung rechnen fein.": "En la ventana la transición se calcula con resolución de borrador para que el modelado siga fluido. La exportación y la preparación de impresión la calculan con precisión.",
+  "Im Flatpak gilt dieselbe Regel: Legen Sie sie im Terminal Ihres Rechners an, nicht im Flatpak.": "En el Flatpak se aplica la misma regla: créela en el terminal de su equipo, no dentro del Flatpak.",
   "Im Geräte-Zertifikat fehlt eine signierte Angabe.": "Falta un dato firmado en el certificado del dispositivo.",
   "Im Handbuch suchen": "Buscar en el manual",
   "Im Katalog liegt schon ein Baustein „{existing}“. Er bleibt, wie er ist. Soll der neue „{title}“ als eigener Eintrag dazukommen?": "En el catálogo ya hay un bloque «{existing}». Se queda como está. ¿Debe añadirse el nuevo «{title}» como entrada propia?",

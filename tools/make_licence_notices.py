@@ -337,9 +337,21 @@ def _runtime_texts(policy: RuntimePolicy, version: str) -> tuple[NoticeText, ...
     return tuple(sorted(unique.values(), key=lambda text: (text.name.casefold(), text.sha256)))
 
 
+def _runtime_licence_allowed(expression: str, approval: licences.Policy) -> bool:
+    """Freigegeben: wörtlich in ``allowed_with`` oder als zugelassener SPDX-Ausdruck."""
+    approved = {value.casefold() for value in approval.allowed_with}
+    if expression.casefold() in approved:
+        return True
+    try:
+        return licences.licence_allowed(expression, approval)
+    except ValueError:
+        return False
+
+
 def collect_artifact_components(sbom: dict[str, Any]) -> tuple[ComponentNotice, ...]:
     """Erweitert die Wheel-Akte um jede generische Familie des Endartefakts."""
     policies = _runtime_policies()
+    approval = licences.load_policy()
     components = list(collect_components())
     seen_names = {licences.normalise(component.name) for component in components}
     for entry in sbom.get("components", []):
@@ -381,6 +393,18 @@ def collect_artifact_components(sbom: dict[str, Any]) -> tuple[ComponentNotice, 
             )
         if licences.normalise(name) in seen_names:
             raise RuntimeError(f"Doppelte Komponente {name} in Wheel- und Laufzeitakte.")
+        # Auch eine Laufzeitfamilie braucht eine freigegebene Lizenz (Regel 15
+        # und 22) — bis zu den Bibliotheken des hidapi-Rads prüfte das nur die
+        # Wheel-Akte. Lizenznamen ohne SPDX-Ausdruck (MSVC, Bootloader)
+        # sind in der Freigabeliste als Name geführt und bleiben außen vor.
+        choice = entry.get("licenses", [{}])[0]
+        if "expression" in choice and not _runtime_licence_allowed(
+            str(choice["expression"]), approval
+        ):
+            raise RuntimeError(
+                f"{name} {version}: {choice['expression']} ist nicht freigegeben. "
+                "Die Wahl einer Doppellizenz ausweisen oder die Bibliothek ersetzen (Regel 15)."
+            )
         components.append(
             ComponentNotice(
                 name=name,

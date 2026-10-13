@@ -806,6 +806,8 @@ def test_first_steps_refreshes_the_existing_filament_rack_when_skipped(
         def __init__(self, *_args: object, **_kwargs: object) -> None:
             self.importRequested = mock.Mock()
             self.inventoryRequested = mock.Mock()
+            # Das Fenster gibt den Dialog nach ``exec`` frei.
+            self.deleteLater = mock.Mock()
 
         def exec(self) -> int:
             return int(self.DialogCode.Rejected)
