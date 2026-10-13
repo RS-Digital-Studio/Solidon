@@ -559,3 +559,58 @@ def test_a_lock_reason_names_its_way_out_and_a_field_names_its_limit(qt_app: Any
     }, entries
     limits = [entry for entry in entries if entry["kind"] == "grenzablehnung"]
     assert len(limits) == 1 and limits[0]["text"], entries
+
+
+def test_a_lock_reason_may_name_an_open_field_of_its_own_surface(qt_app: Any) -> None:
+    """FD-31, Entscheidung Koordinator: Ein Sperrgrund, der ein offenes Eingabefeld seiner
+    Fläche beim Titel nennt („Erst „Durchmesser“ ändern, dann übernehmen.“), nennt den
+    Ausweg — *Übernehmen* der Maßgruppe ist vor der ersten Eingabe grau.
+
+    Gegenprobe im selben Fall: Derselbe Satz an einem grauen Feld oder an einem Feld
+    einer anderen Fläche bleibt ein Sperrgrund ohne Ausweg.
+    """
+    from PySide6.QtWidgets import (
+        QDoubleSpinBox,
+        QFormLayout,
+        QFrame,
+        QMainWindow,
+        QPushButton,
+        QVBoxLayout,
+        QWidget,
+    )
+
+    def card(parent: QWidget, title: str, reason: str, *, open_field: bool) -> QFrame:
+        frame = QFrame(parent)
+        frame.setAutoFillBackground(True)
+        form = QFormLayout(frame)
+        field = QDoubleSpinBox(frame)
+        field.setEnabled(open_field)
+        form.addRow(f"{title}:", field)
+        accept = QPushButton("Übernehmen", frame)
+        accept.setToolTip(reason)
+        accept.setEnabled(False)
+        form.addRow(accept)
+        return frame
+
+    main = QMainWindow()
+    body = QWidget()
+    column = QVBoxLayout(body)
+    own = "Erst „Durchmesser“ ändern, dann übernehmen."
+    grey = "Erst „Breite“ ändern, dann übernehmen."
+    foreign = "Erst „Tiefe“ ändern, dann übernehmen."
+    column.addWidget(card(body, "Durchmesser", own, open_field=True))
+    column.addWidget(card(body, "Breite", grey, open_field=False))
+    column.addWidget(card(body, "Tiefe", "Tiefe angeben.", open_field=True))
+    column.addWidget(card(body, "Höhe", foreign, open_field=True))
+    main.setCentralWidget(body)
+    main.show()
+    _settle(qt_app)
+    try:
+        entries = capture.message_entries(main)
+    finally:
+        main.close()
+        main.deleteLater()
+        _settle(qt_app)
+    locks = {entry["text"]: entry["way_out"] for entry in entries if entry["kind"] == "sperrgrund"}
+    assert locks[own] is True, locks
+    assert locks[grey] is False and locks[foreign] is False, locks

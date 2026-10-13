@@ -1261,12 +1261,19 @@ def test_p7_reads_the_lock_reason_of_the_target_of_the_row(monkeypatch: Any) -> 
     Kurzhilfe stand. Jetzt liest der Fehlfall ``grey_reason`` an den Zielen der
     Zeile; die übrigen Meldungen der Oberfläche bleiben.
     """
+    from app.ui import guide_targets
     from tools import function_capture, function_surface
 
     foreign = {"text": "Fremder Knopf gesperrt.", "actions": [], "kind": "sperrgrund"}
     status = {"text": "Berechnet …", "actions": [], "kind": "meldung"}
     monkeypatch.setattr(function_capture, "message_entries", lambda window: [foreign, status])
-    monkeypatch.setattr(function_capture, "way_out", lambda window, reason: True)
+    # Der Ausweg wird am grauen Element selbst gefragt — die Felder seiner Fläche
+    # zählen (FD-31).
+    element = object()
+    monkeypatch.setattr(guide_targets, "widget_for", lambda window, name: element)
+    monkeypatch.setattr(
+        function_capture, "way_out", lambda window, reason, widget=None: widget is element
+    )
     reasons = {"finding.action:place_on_bed": None}
     monkeypatch.setattr(function_surface, "grey_reason", lambda window, name: reasons.get(name))
     targets = ["finding.action:place_on_bed"]
@@ -1402,3 +1409,17 @@ def test_a_surface_that_never_stood_still_is_not_measured(monkeypatch: Any) -> N
         time.sleep(0.005)
     flow.capture_surface(None)
     assert flow.data["layout"] == entries["layout"] and flow.data["texts"] == [{"text": "t"}]
+
+
+def test_v5_the_title_of_an_open_field_of_the_surface_is_a_way_out() -> None:
+    """FD-31, Entscheidung Koordinator: *Übernehmen* der Maßgruppe ist vor der ersten
+    Eingabe grau und sagt „Erst „<Feldtitel>“ ändern, dann übernehmen.“ — das Feld ist
+    der Ausweg, als ganzes Wort genannt. Welche Felder offen auf derselben Fläche
+    stehen, liest ``surface_field_titles`` (Fenstertest); hier die Urteilsregel.
+    """
+    from tools.function_capture import names_a_way_out
+
+    reason = "Erst „Durchmesser“ ändern, dann übernehmen."
+    assert names_a_way_out(reason, [], [], fields=["Durchmesser:"])
+    assert not names_a_way_out(reason, [], [])
+    assert not names_a_way_out("Erst die Durchmessers ändern.", [], [], fields=["Durchmesser"])

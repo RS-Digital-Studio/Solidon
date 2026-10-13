@@ -196,6 +196,7 @@ def fault_messages(window: Any, targets: Sequence[str]) -> list[dict[str, Any]]:
     stand (Durchsicht welle4 C-L1). Gefragt wird :func:`grey_reason` an
     ``targets`` — dem Ziel der Zeile und dem, womit sie übernommen wird.
     """
+    from app.ui import guide_targets
     from tools import function_capture as capture
 
     found = [
@@ -203,15 +204,22 @@ def fault_messages(window: Any, targets: Sequence[str]) -> list[dict[str, Any]]:
     ]
     for target in dict.fromkeys(targets):
         reason = grey_reason(window, target)
-        if reason:
-            found.append(
-                {
-                    "text": reason,
-                    "actions": [],
-                    "kind": "sperrgrund",
-                    "way_out": capture.way_out(window, reason),
-                }
-            )
+        if not reason:
+            continue
+        # Das graue Element selbst, damit die Felder seiner Fläche als Ausweg
+        # zählen (FD-31); eine Menüzeile hat keins.
+        try:
+            widget = guide_targets.widget_for(window, target)
+        except LookupError:
+            widget = None
+        found.append(
+            {
+                "text": reason,
+                "actions": [],
+                "kind": "sperrgrund",
+                "way_out": capture.way_out(window, reason, widget),
+            }
+        )
     return found
 
 

@@ -1467,15 +1467,21 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
         # graue Knopf dem Kunden; die Beschreibung kann vom offenen stammen (F-34).
         reason = button.toolTip() or button.accessibleDescription()
         if _visible(button) and not button.isEnabled() and reason:
-            way = names_a_way_out(reason, menus, buttons, phrases=phrases)
+            fields = surface_field_titles(button)
+            way = names_a_way_out(reason, menus, buttons, phrases=phrases, fields=fields)
             found.append({"text": reason, "actions": [], "kind": "sperrgrund", "way_out": way})
     return [*found, *_field_refusals(), *_house_messages()]
 
 
-def way_out(window: Any, reason: str) -> bool:
-    """Ob ein Sperrgrund am offenen Fenster einen Ausweg nennt (:func:`names_a_way_out`)."""
+def way_out(window: Any, reason: str, widget: Any = None) -> bool:
+    """Ob ein Sperrgrund am offenen Fenster einen Ausweg nennt (:func:`names_a_way_out`).
+
+    ``widget`` ist das graue Bedienelement; die Titel der offenen Eingabefelder
+    seiner Fläche zählen als Ausweg (:func:`surface_field_titles`).
+    """
     menus, buttons, phrases = _ways(window)
-    return names_a_way_out(reason, menus, buttons, phrases=phrases)
+    fields = surface_field_titles(widget) if widget is not None else []
+    return names_a_way_out(reason, menus, buttons, phrases=phrases, fields=fields)
 
 
 def _ways(window: Any) -> tuple[list[tuple[str, ...]], list[str], list[str]]:
@@ -1508,19 +1514,71 @@ def _ways(window: Any) -> tuple[list[tuple[str, ...]], list[str], list[str]]:
     return menus, buttons, [computing_refusal()]
 
 
+def surface_field_titles(widget: Any) -> list[str]:
+    """Die Titel der offenen Eingabefelder auf der Fläche eines grauen Bedienelements.
+
+    Entscheidung Koordinator (FD-31): *Übernehmen* der Maßgruppe ist vor der
+    ersten Eingabe grau und sagt „Erst „<Feldtitel>“ ändern, dann übernehmen.“ —
+    das Feld ist der Ausweg. Die Fläche ist der nächste Behälter des Elements,
+    der Eingabefelder trägt (die Maßgruppe, ein Dialog). Gesucht wird nicht über
+    eine Karte hinaus (eigener Hintergrund, ``autoFillBackground``) und nie im
+    Hauptfenster selbst: Dort stehen die Felder anderer Flächen. Ein graues Feld
+    ist kein Ausweg. Der Titel ist die Beschriftung im Formular, die
+    Beschriftung mit dem Feld als Partner oder der zugängliche Name.
+    """
+    from PySide6.QtWidgets import (
+        QAbstractSpinBox,
+        QComboBox,
+        QFormLayout,
+        QLabel,
+        QLineEdit,
+        QMainWindow,
+    )
+
+    def inputs(root: Any) -> list[Any]:
+        return [
+            field
+            for kind in (QAbstractSpinBox, QComboBox, QLineEdit)
+            for field in root.findChildren(kind)
+            if _visible(field)
+            and not isinstance(field.parentWidget(), (QAbstractSpinBox, QComboBox))
+        ]
+
+    surface = widget.parentWidget()
+    while surface is not None and not inputs(surface):
+        if surface.isWindow() or surface.autoFillBackground():
+            return []
+        surface = surface.parentWidget()
+    if surface is None or isinstance(surface, QMainWindow):
+        return []
+    titles: list[str] = []
+    for field in inputs(surface):
+        if not field.isEnabled() or (isinstance(field, QLineEdit) and field.isReadOnly()):
+            continue
+        titles.append(field.accessibleName())
+        for form in surface.findChildren(QFormLayout):
+            caption = form.labelForField(field)
+            if isinstance(caption, QLabel):
+                titles.append(caption.text())
+        titles += [label.text() for label in surface.findChildren(QLabel) if label.buddy() is field]
+    return [title for title in titles if title]
+
+
 def names_a_way_out(
     reason: str,
     menus: Sequence[Sequence[str]],
     buttons: Sequence[str],
     *,
     phrases: Sequence[str] = (),
+    fields: Sequence[str] = (),
 ) -> bool:
     """Ob ein Sperrgrund den Ausweg nennt (Konzept V5, Entscheidung Koordinator).
 
     Ein Sperrgrund braucht keinen Knopf, er muss aber den Weg nennen — als
     Menüweg „Menü → Zeile“ (mindestens die letzten zwei Glieder, etwa
     „Hilfe → Solidon freischalten …“), mit den ganzen Wörtern eines offenen
-    Knopfs oder mit einem Satz, der selbst der Weg ist (``phrases``). Ein
+    Knopfs, mit einem Satz, der selbst der Weg ist (``phrases``), oder mit dem
+    Titel eines offenen Eingabefelds derselben Fläche (``fields``, FD-31). Ein
     Teilstring genügt nicht (Durchsicht welle4 C-L2): „Dateien“ nennt den Knopf
     *Datei* nicht, und eine Menüzeile ohne ihr Menü findet der Kunde nicht.
     Kürzelzeichen, Doppelpunkt und Auslassungspunkte zählen nicht mit; ein Knopf
@@ -1540,7 +1598,9 @@ def names_a_way_out(
             continue
         if any(named(" → ".join(parts[start:])) for start in range(len(parts) - 1)):
             return True
-    return any(len(text) >= 4 and named(text) for text in map(clean, [*buttons, *phrases]))
+    if any(len(text) >= 4 and named(text) for text in map(clean, [*buttons, *phrases])):
+        return True
+    return any(text and named(text) for text in map(clean, fields))
 
 
 def _field_refusals() -> list[dict[str, Any]]:
