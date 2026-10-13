@@ -370,3 +370,31 @@ def test_window_deactivation_restores_the_living_card(qt_app, card):
     assert box.pos() == before
     assert drag.placed_rect() is None
     assert qt_app.overrideCursor() is None
+
+
+@pytest.mark.parametrize(
+    "growth",
+    [(308, 12, 1311, 895), (308, 12, 1124, 1050), (12, 12, 1420, 895), (308, 0, 1124, 907)],
+    ids=["width", "height", "left", "top"],
+)
+def test_late_room_growth_keeps_the_dropped_anchor(qt_app, card, growth):
+    """Der EN-Flow legt richtig ab; erst die spätere freie Fläche wächst."""
+    box, title, drag, _ = card
+    box.resize(321, 237)
+    room = QRect(308, 12, 1124, 895)
+    target = QPoint(960, 90)
+    drag.update_room(room)
+    end = _begin(title, target - box.pos())
+    _drop(title, end)
+    assert box.pos() == target
+
+    larger = QRect(*growth)
+    drag.update_room(larger)
+    assert drag.placed_rect().topLeft() == target
+
+    smaller = QRect(room.left(), room.top(), 900, 895)
+    drag.update_room(smaller)
+    assert smaller.contains(drag.placed_rect())
+    assert drag.placed_rect().left() < target.x()
+    drag.update_room(larger)
+    assert drag.placed_rect().topLeft() == target

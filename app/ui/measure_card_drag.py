@@ -42,6 +42,7 @@ class MeasureCardDrag(QObject):
         self._room = QRect()
         self._place: CardPlace | None = None
         self._placed_width = card.width()
+        self._placed_room = QRect()
         self._pressed: QPoint | None = None
         self._start = QRect()
         self._moving: QRect | None = None
@@ -60,12 +61,16 @@ class MeasureCardDrag(QObject):
         if self._place is None or self._room.isEmpty():
             return None
         size = self._card.size()
+        room = self._room
         if not self._place.edge:
             # Beim freien Platz bleibt auch links der abgelegte Anker stehen,
             # wenn ein neuer Feldinhalt die Karte breiter macht.
             size = QSize(self._placed_width, size.height())
-        rect = card_rect(self._place, self._room.width(), self._room.height(), size)
-        rect.translate(self._room.topLeft())
+            # Ein später freigewordener Bildstreifen verschiebt den abgelegten
+            # Anker nicht. Der aktuelle Raum begrenzt ihn erst darunter.
+            room = self._placed_room
+        rect = card_rect(self._place, room.width(), room.height(), size)
+        rect.translate(room.topLeft())
         # Die Maßgruppe rollt bereits in ihrem eigenen Größenweg. Ihre gesamte
         # Karte bleibt erreichbar; der Kartenhelfer kürzt hier keinen Inhalt.
         return self._bounded(QRect(rect.topLeft(), self._card.size()))
@@ -137,6 +142,7 @@ class MeasureCardDrag(QObject):
             rect = self._bounded(moving).translated(-self._room.topLeft())
             self._place = dropped_place(rect, self._room.width(), self._room.height())
             self._placed_width = self._card.width()
+            self._placed_room = QRect(self._room)
         elif restore:
             self._card.move(self._start.topLeft())
         if notify:
