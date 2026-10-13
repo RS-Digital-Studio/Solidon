@@ -24,7 +24,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Zweimal ausgewertet = identisch? | `test_evaluation.py` |
 | Bleibt eine selbst aufgebrachte Textur eine Auswahl durch Bearbeiten, Undo/Redo, Projektdatei, Cache, Bewegung, Schnitt und Körperumwandlung? | `test_texture_lifecycle.py`; Stile, Feldgrenzen, Auswahl und Merkmalshandlungen in `test_texture_ops.py` |
 | Bestätigt eine synchrone Auswertung zuerst das alte Arbeiterende, und bleiben überholte Fragen nach dem Reset ungültig? | `test_evaluation.py` — echte Session-Methoden an Namespace, Ereignis/Faden, keine Qt-Instanz |
-| Jede Rückfallstufe einmal erzwungen? | `test_boolean.py` |
+| Rückfallkette, Zugabe der dritten Stufe und leeres Boolesches Ergebnis? | `test_boolean.py`, `test_boolean_stage3.py`, `test_boolean_empty_result.py`, `test_evaluation_container_chain.py` |
 | Wählt die schnelle FDM-Ausrichtung eine tragfähige Lage und lässt sie ohne Stand die Szene mit Befund weiterlaufen? | `test_fast_orientation_standing.py` — Korpusring, beide Güten, Profil, Abbruch, gleiche Körper und Resin-Ausnahme |
 | Sagt eine tangierende Schnittebene vor den Stiften ab, während offene Eingänge und getrennte Schalen ihre eigene Diagnose behalten? Findet Auto Split eine gültige Folgeebene? | `test_tangent_cuts.py` — Korpusplatte, beide Güten und gemeinsame Schnittwege |
 | Sammelparameter-Ops über das Register | `test_gesture_ops.py` |
@@ -34,6 +34,8 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Umschalter, vier Felder vorn? | `test_theme_and_palette.py` · `test_interface_limits.py` |
 | Findet die Suche, was der Kunde tippt? | `test_search.py`; das Suchfeld der Karte in `test_selection_operations.py` |
+| Bleiben Änderungswege gesperrt, Gründe aktuell und Fokus nach Befundhandlung im Bericht? | `test_change_lock.py`, `test_licence_lock_offers.py`, `test_finding_action_focus.py` |
+| Systemdialoge bei externen Starts; Maßhandlung im Bild; gültiges Maßfeldbeispiel? | `test_process.py`, `test_in_view_arming.py`, `test_sketch_editor_measure_field.py` |
 | Funktionsdurchgang: Zeilen, Pakete, Szenen · Urteile und Gegenproben · der Prüfstand am Fenster · der Wortschatz der Ziele, aufgelöst am Fenster | `test_function_*.py` (Attrappen in `bench_fakes.py`) · `test_guide_targets.py`, `test_bench_findings.py`; Bildanleitungen und Wortschatz im Kern in `test_guides.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Erkennt der druckgleich-Vergleich (§11.2) jede Verletzung? | `test_print_equal.py` |
@@ -44,7 +46,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Meldet die Übergabe-Gegenprobe verworfene Schlüssel und geänderte Aufzählungen, während belegte Umbenennungen still bleiben? | `test_slicer_verify.py` — Prusa-/Orca-Konfigurationsblöcke und Anschluss beim Schneiden |
 | Bleibt die eigene Wahl der Platte neben einem übernommenen Vorschlag je Teil — Datei, Projekt, Zurücksetzen? | `test_plate_choice.py`; die Anzeige am Feld in `test_print_settings_ui.py` |
 | Folgen Objektwerte den gemessenen Fähigkeiten des Zielprogramms und bleiben andere Teile unverändert? | `test_slicer_part_settings.py` — Rollen, Familiengrenzen, Cura-Erstschichtbreite und fehlende Herstellerketten |
-| Nimmt jeder unterstützte Slicer, echt installiert, Solidons Platte an und gibt eine gemessene Druckdatei zurück? Kommen Stützabstand oben und unten und die untere Trennschicht unter Gitter und Baum an, wie Solidons Tabellen sagen? Fragt ein Test die Maschine nur über `installed_slicer`? | `test_real_slicers.py` (`slicer`-Marker, beim Push nach main auf Linux und macOS; die Kontaktmessung dort auch synthetisch) · `test_slicer_selection.py` — Auswahl für die Läufer und Wächter |
+| Nehmen installierte Slicer die Platte an, stimmen Druckdatei und Stützkontakt? | `test_real_slicers.py`, `test_slicer_selection.py`; Fälle und Läuferzuordnung in `karte-tests.md` |
 | Kennt der nächste Export einen im Slicer angelegten Drucker? | `test_slicer_profiles.py`, `test_export.py`, `test_export_background.py` |
 | Liest Solidon den Bestand eines AppImage, ohne es zu starten, und übersteht ein beschädigtes Abbild? | `test_appimage_profiles.py` (Leser, Orca), `test_cura_machine.py` (Cura); am echten AppImage `test_real_slicers.py` |
 | Bleibt Curas Lüfterkurve (unteres Ende, Schwelle) bei seiner Definition, in Dialog, Konsole, Spule und Fensterprofil? | `test_cura_fan_curve.py` |
@@ -110,22 +112,24 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Überleben zwei gleichzeitig schreibende Sitzungen in `MEMORY.md`? | `test_memory_index.py` — zwei echte Prozesse |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? Halten harte Regeln am Quelltext — kein `eval`, keine Ja/Nein-Frage, kein `==` mit Unendlich? | `test_hard_rules.py` |
 | Kommt ein Backslash in einem Pfad als Backslash an? | `test_source_escapes.py` |
-| Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen und mit dem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte und nachgestellte Hilfsprozesse, die Fälle einzeln in `konzepte/begruendungen/karte-tests.md` |
+| Rechnet der Netzkern im Hilfsprozess bitgleich, mit Abbruch, Elternende und vollständiger Rückfallkette? | `test_kernel_process.py`; Fälle und Paketprüfung in `karte-tests.md` |
 | Endet ein rechnender Helfer mit seinem hart beendeten Elternprozess, und hat er nach normalem Start niedrigere OS-Priorität? | `test_kernel_process_lifecycle.py` |
 
 ## Helfer
 
 | Datei | Rolle |
 |---|---|
-| `conftest.py` | Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`). Unter `CI` endet der Lauf in `pytest_sessionstart`, wenn der exakte Kern fehlt — lokal bleibt das ein Skip |
-| `helpers.py` | Gemeinsame, nicht fenstergebundene Helfer unter öffentlichen Namen (`exact_kernel`, `FakeMesh`, `FakeCodec`, `make_object`, `ridged_shaft`, `the_torus`, `CountingToken`, `stop_after`, `two_cubes`, `NavigationLog`, `SOURCE`, `rectangle`, `blind_cylinder`, `bore_seed`, `STUD_CENTRES`, `cube` für 3MF und `cube_surface` für Renderer …) und die Fixture `project`; keine privaten Querimporte aus `test_*.py` und nie aus `conftest` |
-| `ui_helpers.py` | Qt-gebundene gemeinsame Helfer der Fenstertests: die Fixtures `window` und `session`, je Test frisch, eingebunden mit `from tests.ui_helpers import window as window`; dazu `shown_window`, `with_a_body`, `wait_until`, `wait_for_export` und Platzierungsfälle — jeder mit Zweck in `karte-tests.md`, „Helfer“ |
+| `conftest.py` | Einstellungen, Profile und eigene Bausteine je Test zurückstellen; Abbaufehler sind rot. Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`). Unter `CI` endet der Lauf in `pytest_sessionstart`, wenn der exakte Kern fehlt — lokal bleibt das ein Skip |
+| `helpers.py` | Öffentliche Helfer ohne Fenster und Fixture `project`; Namen/Zwecke in `karte-tests.md`, „Helfer“. Keine privaten Querimporte aus `test_*.py` oder `conftest` |
+| `ui_helpers.py` | Fenster und Sitzung je Test frisch; Fixtures über `from tests.ui_helpers import window as window`. Weitere Helfer in `karte-tests.md`, „Helfer“ |
 | `cura_fakes.py` | Nachgebaute Cura 5.13 (`cura_installation`), ihr AppDir, Flatpak-Starter und AppImage als Abbild des AppDir mit nachgestelltem Einhängen für den Lauf — für `test_cura_machine.py` und die Cura-Fälle des Druckdialogs |
 | `squashfs_fakes.py` | AppImages vom Typ 2 nach dem SquashFS-4.0-Aufbau (`appimage_file`, `tree_of`, `Link`) — für `test_appimage_profiles.py` und `cura_fakes.py` |
 | `print_equal.py` | Druckgleich (§11.2): `shot`, `save`/`load`, `compare`; zwei Codestände: `tools/check_print_equal.py` |
 | `gcode_contact.py` | Stützkontakt im G-Code (`support_contact`): Abstand und Trennschichten je Rasterzelle; `support_in_box`: Stütze im Quader — nur für `test_real_slicers.py` |
 | `render_fakes.py` | Renderer-Doppel der Ansichtstests: schreibt Aktoren, Stile, Beschriftungen und Kamera mit, statt zu zeichnen — wer das Bild misst, nimmt den echten Renderer ohne Fenster |
 | `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel (`REAL_PUBLIC_KEYS`) samt Abdruck des ersten und Besitzproben (`KEY_PROOFS`) prüfen `test_the_published_version_file_is_signed` und `test_the_shipped_release_keys_are_proven` |
+| `qt_roots.py` | Qt-Wurzeln am Testende geordnet abbauen; im Modul `roots = qt_roots.roots` |
+| `evaluation_helpers.py` | `window_evaluation`, `short_chain_finds_nothing`: volle Rückfallkette und erzwungene Absage der kurzen Kette |
 | `workflow_helpers.py` | Grenzt Jobs und Schritte der Workflows ab, ohne allgemeiner YAML-Parser zu sein |
 | `php_probe.py` | Entscheidet für alle Endpunkttests über Skip oder Fehler und liefert die Befehlsbasis (`php_command()`, ohne OPcache: `WITHOUT_OPCACHE`) |
 | `native_window_probe.py` | Zeigt je Prozess einmal ein leeres natives Fenster vor und entscheidet für die Fixture `native_window_platform` über Lauf, Skip oder Fehler — überspringen darf in der CI nur der Intel-Mac; der Grund steht am Ende des Laufs |
@@ -149,7 +153,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
   in Helfern, die bisher nur geschützte Tests rufen.
 - **Testdateien importieren keine privaten Namen voneinander.** Gemeinsame
   Daten und Konstruktoren liegen unter öffentlichen Namen in `helpers.py`
-  oder `ui_helpers.py`; der AST-Wächter samt Gegenprobe steht in
+  oder passenden kleinen Helfermodulen; der AST-Wächter samt Gegenprobe steht in
   `test_toolchain.py` und prüft auch eingebettete Python-Skripte für
   Kindprozesse.
 - **Eine Testdatei definiert jede Funktion einmal**: Eine zweite Fassung

@@ -25,6 +25,37 @@ und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 
 ## Was wo geprüft wird
 
+Der Funktionsdurchgang verteilt seine Zusicherungen: `test_function_list.py`
+prüft das Inventar und die Ziele, `test_function_report.py` die Berichte,
+`test_function_alarms.py` die Urteile und Gegenproben,
+`test_function_captures_window.py` die Erhebung am Fenster.
+`test_function_guard.py` und `test_function_guard_aliases.py` halten die
+erlaubten Eingabewege einschließlich lexikalischer Aliase;
+`test_function_licence_measurement.py` fährt Lizenzmessungen mit `Walk`,
+`StepMachine` und den Attrappen aus `bench_fakes.py`, ohne ein Qt-Fenster.
+`test_process.py` hält externe Starts ohne Systemfehlerdialog, auch mit einer
+defekten ausführbaren Datei. `test_in_view_arming.py` hält dieselbe Handlung
+an Knopf und Maßgruppe; `test_sketch_editor_measure_field.py` wertet den
+Beispielausdruck des Maßfelds in jeder Sprache aus. `test_dialog_lifetime.py`
+prüft Dialogfreigaben über Klassen, Fabriken, Attribute, Hilfsaufrufe und
+zeitversetzte Einstiege; `test_widget_lifetime.py` behält sein eigenes Gebiet.
+
+`test_boolean_stage3.py` bindet den Jitter der dritten Stufe an die Zugabe,
+axial und schräg; `test_boolean_empty_result.py` prüft leere Ergebnisse und
+Meldungen für die drei Verknüpfungen an beiden Kernen.
+`test_evaluation_container_chain.py` prüft die vollständige Kette beim
+Behälter und ihre Qualitätswahl. Sperr- und Fokusfälle liegen in
+`test_change_lock.py`, `test_licence_lock_offers.py` und
+`test_finding_action_focus.py`: wechselnde Gründe, Freigabe ohne Neuauswahl,
+lesender Rückweg aus der Verlaufsvorschau und Fokus im Prüfbericht.
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen und mit dem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte und nachgestellte Hilfsprozesse, die Fälle einzeln in `konzepte/begruendungen/karte-tests.md` |
+| Nimmt jeder unterstützte Slicer, echt installiert, Solidons Platte an und gibt eine gemessene Druckdatei zurück? Kommen Stützabstand oben und unten und die untere Trennschicht unter Gitter und Baum an, wie Solidons Tabellen sagen? Fragt ein Test die Maschine nur über `installed_slicer`? | `test_real_slicers.py` (`slicer`-Marker, beim Push nach main auf Linux und macOS; die Kontaktmessung dort auch synthetisch) · `test_slicer_selection.py` — Auswahl für die Läufer und Wächter |
+
 Die Tabelle der HEAD-Fassung trägt zu jeder Datei ausführlich, woran sie
 prüft; die Karte nennt nur noch Frage und Datei.
 
@@ -191,6 +222,28 @@ von weiterhin zwei unabhängigen Bauten für den Determinismusvergleich.
 | Findet die Suche, was der Kunde tippt? | `test_search.py` — drei Runden, Güte, Vorauswahl und Kundenwörter in jeder Sprache, ohne Fenster; das Suchfeld der Karte mit Trefferliste, Tasten und Hinweiszeile in `test_selection_operations.py` |
 
 ## Helfer
+
+`qt_roots.py` hält die ohne Elternteil gebauten Qt-Wurzeln eines Tests.
+Einbindung: `from tests import qt_roots`, danach `roots = qt_roots.roots`.
+Die Fixture schließt sie, merkt `deleteLater` vor und stellt `DeferredDelete`
+zu, solange die Python-Hüllen noch gehalten werden; kein Querimport aus
+`conftest`, keine zusätzliche globale Fixture.
+
+`evaluation_helpers.py` teilt `window_evaluation` und
+`short_chain_finds_nothing` zwischen `test_evaluation.py` und
+`test_evaluation_container_chain.py`. Der erste Helfer wertet wie Fenster,
+Verlaufsumbau und Agent in Entwurfsqualität mit voller Kette bei ergebnisloser
+kurzer Kette aus; Vorschauen bleiben davon getrennt. Der zweite erzwingt die
+Absage der kurzen und auf Wunsch auch der vollen Kette und meldet die
+aufgerufenen Stufen. Das gemeinsame Wissen liegt unter öffentlichen Namen,
+nicht in einem privaten Querimport zwischen Testdateien.
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `helpers.py` | Gemeinsame, nicht fenstergebundene Helfer unter öffentlichen Namen (`exact_kernel`, `FakeMesh`, `FakeCodec`, `make_object`, `ridged_shaft`, `the_torus`, `CountingToken`, `stop_after`, `two_cubes`, `NavigationLog`, `SOURCE`, `rectangle`, `blind_cylinder`, `bore_seed`, `STUD_CENTRES`, `cube` für 3MF und `cube_surface` für Renderer …) und die Fixture `project`; keine privaten Querimporte aus `test_*.py` und nie aus `conftest` |
+| `ui_helpers.py` | Qt-gebundene gemeinsame Helfer der Fenstertests: die Fixtures `window` und `session`, je Test frisch, eingebunden mit `from tests.ui_helpers import window as window`; dazu `shown_window`, `with_a_body`, `wait_until`, `wait_for_export` und Platzierungsfälle — jeder mit Zweck in `karte-tests.md`, „Helfer“ |
 
 *HEAD-Fassung, früher unter „`conftest.py` tut vier Dinge, die leicht zu übersehen sind“.*
 

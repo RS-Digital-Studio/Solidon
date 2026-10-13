@@ -99,6 +99,24 @@ Testdatei, kein Sonderfall im Code.
 
 ## Isolation ist Teil des Tests
 
+Der Temp-Ordner je Prozess trennt Arbeiter, aber nicht die Tests desselben
+Arbeiters. `conftest.py` stellt deshalb resultatrelevante Dateien je Test
+zurück. `_user_profiles_stay_with_their_test` liest die vorherigen Dateibytes,
+stellt sie wieder her und verwirft bei Änderung den Profilcache.
+`_user_parts_stay_with_their_test` stellt den rekursiven Abdruck samt vorheriger
+Existenz des Ordners wieder her; `_user_settings_stay_with_their_test` nimmt
+auch die Zwischendatei des atomaren Speicherns auf. Die letzten beiden prüfen
+den wiederhergestellten Abdruck ausdrücklich; misslungener Abbau wird nicht
+verschluckt. Die Pfade werden vor dem Test bestimmt, weil ein Test `os.name`
+ändern kann und sein Abbau trotzdem die ursprüngliche Pfadart braucht.
+
+Unter Windows unterbindet `core.process.no_error_dialogs` unsichtbare
+Systemfehlerfenster externer Starts. Die Betriebslage gehört zum Prozessstart;
+die Fehlerursache bleibt als Startfehler lesbar. `test_process.py` enthält
+die Gegenprobe mit einer defekten ausführbaren Datei. Wenn ein Lauf trotzdem
+steht, trennt `py-spy --native` einen fremden `MessageBoxW` vom Python-Warten;
+dieser Diagnoseweg ersetzt nicht den Fehlernachweis.
+
 *Ursprünglich unter „Und bei einer Farbe hängt es immer an ihr — die Suite
 fährt ohne Stylesheet“*
 

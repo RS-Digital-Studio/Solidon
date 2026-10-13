@@ -67,6 +67,65 @@ jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 
 ## Prüfen und messen — keines davon ist ein Testlauf
 
+### Funktionsdurchgang: Ablauf, Messung und Urteil
+
+Der einzige Einstieg am Fenster ist `file_acceptance.py`; `function_bench`
+stellt den Fall zusammen, `function_machine`/`function_walk` führen ihn,
+`function_setup`/`function_start` bereiten ihn vor, `function_protocol` schreibt
+das Protokoll und `function_language` prüft die Sprache. `function_gestures`
+fährt Zeigen und Ziehen, `function_switch` den Projektwechsel. Die Schritte
+gehen über echte Eingabeereignisse und `guide_targets.next_click`; die
+Ereignisschleife läuft dabei weiter. `until_step` wartet auf eine Bedingung,
+`still_step` auf Stillstand vor dem Messen; `settle_ms` bestimmt die zusätzliche
+Beruhigungszeit. Bleibt eine Fläche unruhig, werden ihre Größen ausdrücklich
+ungemessen protokolliert, auch eine leere Rollleistenliste ist dann kein Beleg.
+
+`function_surface` bestimmt die Fläche der Zeile, ihren Zustand und Wartehinweis,
+Sperrgründe (`grey_reason`) sowie Befunde (`shown_findings`, `require_findings`)
+und Absagen (`fault_messages`). Ein fremdes modales Frage- oder Fehlerfenster
+wird nicht als die Fläche der Zeile vermessen. `op_in_view` liest
+`FeaturePanel.measure_op`: Gleichnamige Maßfelder allein beweisen nicht, dass
+die richtige Handlung im Bild steht. `function_scenes.row_scenes` liefert die
+Startszenen eines Falls einschließlich Fehlfall; zugesagte Befunde müssen vor
+der Handlung angekommen sein. Fehlfallszene und Hauptszene dürfen keine
+widersprüchlichen Vorbedingungen einführen.
+
+`function_capture.error_proposal` erhebt das Fehlerangebot. Die Herkunft
+entscheidet, welche modalen Fragen zulässig sind (`ALLOWED_CALLERS/CLASSES`,
+`ASK_CALLERS/HOSTS`), auch bei `ctx.ask`; eine passende Zeichenkette reicht
+nicht. `names_a_way_out(reason, menus, buttons, *, phrases=(), fields=())` und
+`way_out(window, reason, widget=None)` prüfen Auswege. `surface_field_titles`
+nimmt nur offene Felder auf derselben Fläche, nicht die einer anderen Karte
+oder des gesamten Hauptfensters. Ein graues Feld ist kein Ausweg.
+
+Lizenzläufe tragen `state` mit `angeboten`, `grau` oder `fehlt`; `reason`
+stammt aus `grey_reason`, zuerst aus der Kurzhilfe, dann aus der zugänglichen
+Beschreibung. Die Startauswahl und bei angebotenem Ziel der vollständige
+Handlungsweg müssen erfolgreich durchgelaufen sein. Scheitert ein Schritt,
+steht der Grund unter
+`unmeasured.licence_runs.<zustand>`; ein beobachtetes Angebot, vorhandener Name,
+Nullwert oder beschädigter Eintrag ist keine erfolgreiche Lizenzmessung.
+`judge_licence` verwendet für sein Urteil und den Vergleich nur gültige
+Messwerte, einschließlich booleschem `writes`, bekanntem Zustand und Textgrund.
+
+`function_guard.BENCH_MODULES` umfasst auch `function_surface`,
+`function_gestures` und `function_switch`; `WindowFlow` in `file_acceptance`
+wird eigens geprüft. `FORBIDDEN_CALLS` verbietet Umwege über Wertsetzer,
+Signal-/Aktionsaufrufe, Kernzugriffe, Ereignismethoden und private fremde Namen,
+auch als importierte Namen oder über `getattr`, `invokeMethod` und Variablen.
+Sitzungs- und Methodenaliase werden in ihrer lexikalischen Bindung verfolgt:
+äußere Namen bleiben innen sichtbar, Parameter und Neubelegungen verdecken sie.
+Schon das Abgreifen einer gebundenen `session.apply` ist ein Umweg. Eigene
+dynamische Phasen und reines Lesen bleiben zulässig. Die Grenze des Wächters
+bleibt die Namensanalyse; sie beweist keine Laufzeittypen.
+
+`function_scan.message_builders(sources)` erhebt Meldungsbauer samt transitiven
+Unterklassen und festen oder weitergereichten Zielen. `raw_window_names` nimmt
+diese erhobene Menge an, statt eine zweite Klassenliste zu führen.
+`function_checks` hält Schema und Schwellen, `function_points` und
+`function_judges` urteilen; `function_samples` liefert Gegenproben,
+`function_report` Funde, Abhakliste und die Übereinstimmung der Urteile.
+
 *HEAD-Fassung, früher unter „Die Familien“.*
 
 Die CI benutzt `run_suite_isolated.py --release --ci-group contracts|windowed|rendering`;

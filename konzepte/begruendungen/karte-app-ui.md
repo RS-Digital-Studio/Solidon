@@ -68,6 +68,12 @@ Vorschaukörper weg, Band „Vorschau abgebrochen — …", Dialog offen.
 
 ### Rahmen und Einstieg
 
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export samt `_warm_the_slicer`, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
+
 *Früher unter „Die Karte › Rahmen und Einstieg“, HEAD-Fassung.*
 
 `app.py` (Einstiegspunkt, §38) · `qt_platform.py` (welche Qt-Plattform die
@@ -542,6 +548,12 @@ Eine unveränderte Auswahl startet keine neue Animation.
 
 ### Platzierung und Griffe
 
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `placement_flow.py` | Flächenplatzierung (§18.5): `_settle` setzt, `_begin_depth` steuert Tiefe, Escape ruft `step_back`. `PlacementHost` verbindet Dialog/`QuietHost`, `Session.placement_async` Fläche/Werkzeug, `_Dimensions` die Maße. Mündung zuerst, `0`=Durchgang. Alt-`measured_frame`: `operationen.md`. |
+
 *Früher unter „Kopf der Karte“.*
 
 `PlacementFlow` bietet den Wechsel echter Kanten, Mitten und belegter Achsen
@@ -1014,6 +1026,26 @@ verschobene Felder ihren Maßpfeilen zugeordnet.
 
 ### Panels und Leisten
 
+`FeaturePanel.measure_op` nennt die Handlung der aktiven Maßgruppe und wird
+in `set_measuring` gesetzt. `request_in_view` schärft dieselbe Handlung über
+den Knopfweg; eine schon scharfe Handlung mit eigenem Bildweg hat Vorrang.
+Gleich benannte Felder sind kein Ersatz für diese Handlungskennung.
+
+`change_lock.hold_history_preview` führt den Vorschauknopf bei Zielwechsel
+und neuer Freischaltung nach. `None` bezeichnet den lesenden Rückweg zum
+letzten Stand; vor dem schreibenden Rückweg wird die Sperre erneut geprüft.
+`say_refusal` trennt den zuletzt selbst gesetzten Grund vom ursprünglichen
+Text des Widgets, damit neue Sperrgründe und externe Textänderungen erhalten
+bleiben. Suchtreffer zeigen den allgemeinen Lizenzgrund nur unter dem
+Suchfeld; Kurzhilfe und zugängliche Beschreibung behalten ihn je Treffer.
+Andere Treffergründe bleiben sichtbar und lesende Treffer ausführbar.
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `selection_operations.py` | Auswahlhandlungen im Reiter Auswahl, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES`; `add_window_action`; Suchfeld mit Trefferliste (`set_search_sources`, `_HitList`) |
+
 *Früher unter „Die Karte › Panels und Leisten“, HEAD-Fassung.*
 
 `panels.py` (die drei Panels links, Prüfbericht rechts, §2.5) ·
@@ -1315,6 +1347,13 @@ ungebrochene Titel steht als `operationTitle` am Knopf, weil `text()` sich
   als unbeantwortbare Frage formuliert.
 
 ### Dialoge
+
+`MessageDialog(..., announce=None)` lässt den Aufrufer eine Ansage anfordern.
+Fehler und Warnung senden neben dem Alert eine dringliche Ansage, `inform`
+eine höfliche; eine Eingabe kündigt sich nicht als Meldung an. Eine neue
+Quittung entfernt zuerst die alte Beschreibung am nächsten Knopf; fehlt ein
+solcher Knopf, spricht `QAccessibleAnnouncementEvent`. Die Lebensdauerregel
+steht in `fenster.md`; der Quellenwächter ist `test_dialog_lifetime.py`.
 
 *Früher unter „Die Karte › Dialoge“, HEAD-Fassung.*
 
@@ -2145,6 +2184,28 @@ Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
 
 ### Hilfe und Bedienung
 
+`guide_targets` teilt `widget_under`, `zone_of`, `search_hits`,
+`menubar_entries`, `point_for` und `next_click` zwischen Tour, Bildanleitungen
+und Prüfstand. `area_for` deckt die Zielfläche einschließlich verschachtelter
+Rollbereiche auf; `next_click` geht den tatsächlichen Kundenweg ohne solches
+Aufdecken. Vor dem Messen legt `_settle_cards` die Kartenhöhe fest.
+`view.edge:<körper>` wird nach der Körperauswahl über `edge_point_for`
+aufgelöst: Eine vom echten Pick bestätigte bearbeitbare Kante kommt aus
+`geom.edges.edges_in_kernel`/`points_in_kernel`. Sie wird nicht als Merkmal
+nachgebaut; eine Kantenoperation hat das Ziel `edge:<op>`.
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError` |
+
+Die ausführlichen Zuordnungen der kompakten Karte:
+
+| Ort / Frage | Vertrag |
+|---|---|
+| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac; `native_key`: die Taste in der Schreibweise der Plattform; `nothing_to_take_back`: Strg+Z/Y ans Fenster, wenn das Feld nichts zurückzunehmen hat |
+
 *Früher unter „§29 — was die Datei mitnimmt › Hilfe und Bedienung“, HEAD-Fassung.*
 
 `manual_window.py` · `tour.py` · `shortcuts_window.py` ·
@@ -2307,6 +2368,11 @@ zurückgegebene Gruppe mit einer frisch gebauten Zustand für Zustand
 (`test_feature_panel.py`, `_measure_group_state`).
 
 ## Stolperfallen
+
+Für Qt-Baumzeilen über `topLevelItem` und `child` gehen. Ein im Prüfstand
+verwendeter `QTreeWidgetItemIterator` führte beim nachfolgenden nativen Abbau
+zum Fehler; das sagt nichts über die Sichtbarkeit der gezählten Zeilen.
+Die Gegenprobe liegt in `tests/test_bench_findings.py`.
 
 *Früher unter „Was an `session.py` überrascht“.*
 

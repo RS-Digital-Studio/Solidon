@@ -169,13 +169,11 @@ Auskunft, `cavity_chain_state_at` trägt den Grund (`operationen.md`).
 
 ## Die Auskunft für das Merkmalspanel
 
-`actions.py` ist die eine Stelle, die sagt, welche Handlung für welche Art
-gilt — **abgeleitet aus `applies_to`**, keine Tabelle daneben (`actions_for`);
-die Oberfläche fragt die Art nicht, sie rendert die Liste. Der Kern fragt
-dasselbe (`reason_against`, gerufen von `geom/prepare_ops.py`), `instead_of`
-nennt die Schwester einer Zeile;
-`tests/test_features.py::test_the_operation_refuses_exactly_what_the_panel_greys_out`
-hält beide Wege zusammen.
+`actions_for` leitet Handlungen aus `applies_to` ab; UI und Kern teilen
+`reason_against`, `instead_of` nennt die Schwester. `test_features` hält
+beide Wege gleich. `FeatureAction.key` nennt die Handlung stabil; Quellen:
+`PART_ACTION_KEYS`, `TEXTURE_ACTION_KEYS`, `EDGE_VARIANT_KEYS`. Einzelheiten
+in `karte-app-core-perceive.md`.
 
 - **Was nicht gilt, steht trotzdem da** (`op=None` mit Satz), und **jedes Feld
   trägt seinen gemessenen Wert** — eine andere Vorgabe wäre eine stille
