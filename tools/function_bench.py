@@ -64,6 +64,7 @@ from tools.function_protocol import (
     scene_print,
     unmeasured,
 )
+from tools.function_scenes import load_scenes
 from tools.function_setup import (
     EMPTY_SCENE,
     PHASES,
@@ -106,6 +107,25 @@ SEARCH_SETTLE_MS: Final = 1000
 
 #: Wie lange nach einem Klick auf eine Handlung auf ihre Wirkung gewartet wird.
 EFFECT_WINDOW_S: Final = 2.0
+
+#: Was eine Aufnahme der Fläche ins Protokoll schreibt (:meth:`FunctionFlow.capture_surface`):
+#: die Felder aus ``function_capture.sheet_snapshot`` und Texte, Felder, leere Zustände.
+SURFACE_FIELDS: Final = (
+    "layout",
+    "fonts",
+    "contrast",
+    "icons",
+    "animations",
+    "scrollbars",
+    "texts",
+    "fields",
+    "empty_states",
+)
+
+#: Wie lange die Vorbereitung einer Szene auf ihre zugesagten Befunde im
+#: Prüfbericht wartet: Die Berichtsanalyse liefert nach der Ruhe nach
+#: (``tests.md``, ``wait_for_print_findings``), unter Fremdlast in Sekunden.
+PREPARATION_S: Final = 60.0
 
 
 def surface_signature(root: Any) -> tuple[Any, ...]:
@@ -176,6 +196,8 @@ class FunctionFlow(GesturePhases, SwitchPhase):
         self.setup = scene_setup(self.scene_key)
         self.apply_target = default_apply_target(self.row)
         self.selected = selected_feature(self.row)
+        #: Warum die Fläche zuletzt nicht stillstand, sonst ``None`` (:meth:`still_step`).
+        self.restless: str | None = None
         #: Ein Referenzfaktor je Lauf (Bauplan §31, Entscheidung Koordinator 12.10.):
         #: aus dem Lauf (``reference.json``), sonst hier gemessen.
         self.reference_factor = float(
@@ -294,7 +316,9 @@ class FunctionFlow(GesturePhases, SwitchPhase):
 
         Still heißt: dieselbe Fläche, und sie und ihre sichtbaren Kinder haben
         dieselben Rechtecke (:func:`surface_signature`). Nach ``at_most_s`` geht es
-        auch ohne Stillstand weiter; der Grund steht dann in ``unmeasured``.
+        auch ohne Stillstand weiter; der Grund steht dann in ``unmeasured``, und
+        die nächste Aufnahme der Fläche bleibt ungemessen (:attr:`restless`,
+        :meth:`capture_surface`; Durchsicht welle4 C-L10).
         """
         seen: dict[str, Any] = {"key": None, "since": 0.0, "began": None}
 
@@ -302,13 +326,15 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             now = time.perf_counter()
             if seen["began"] is None:
                 seen["began"] = now
+                self.restless = None
             key = surface_signature(root())
             if key != seen["key"]:
                 seen["key"], seen["since"] = key, now
             if now - seen["since"] >= STILL_S:
                 return True
             if now - seen["began"] >= at_most_s:
-                unmeasured(self.data, f"still:{name}", f"nach {at_most_s:.0f} s nicht still")
+                self.restless = f"nach {at_most_s:.0f} s nicht still"
+                unmeasured(self.data, f"still:{name}", self.restless)
                 return True
             return False
 
@@ -567,6 +593,22 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                     ),
                 )
             )
+            # Mit Nachweis: Die zugesagten Befunde stehen im Prüfbericht, sonst
+            # ist die Vorbereitung nicht hergestellt — kein Fund an der Anwendung
+            # (Durchsicht welle4 C-L3).
+            scene = load_scenes().get(self.setup.key)
+            promised = tuple(scene.promises.get("findings", ())) if scene is not None else ()
+            steps += [
+                self.until_step(
+                    "befunde der vorbereitung",
+                    lambda: set(promised) <= surfaces.shown_findings(self.window),
+                    PREPARATION_S,
+                ),
+                Step(
+                    "vorbereitung geprüft",
+                    lambda machine: surfaces.require_findings(self.window, promised),
+                ),
+            ]
         return steps
 
     def typing_step(self, text: str) -> Step:
@@ -803,9 +845,20 @@ class FunctionFlow(GesturePhases, SwitchPhase):
         }
 
     def capture_surface(self, root: Any) -> None:
-        """G1 bis G8, Texte, Felder und Tab-Kette der offenen Fläche ins Protokoll."""
+        """G1 bis G8, Texte, Felder und Tab-Kette der offenen Fläche ins Protokoll.
+
+        Stand die Fläche nicht still (:meth:`still_step`), bleiben die Felder
+        ungemessen — eine Aufnahme mitten im Übergang ist keine Messung; leere
+        Rollleisten zählten sonst die Fenstergröße als gemessen (Z6).
+        """
         from tools import function_capture as capture
 
+        if self.restless:
+            for name in SURFACE_FIELDS:
+                unmeasured(self.data, name, f"ohne Stillstand: {self.restless}")
+            if not self.data.get("scrollbars"):
+                self.data["scrollbars"] = None
+            return
         theme = self.variant.theme
         for name, entries in capture.sheet_snapshot(root, theme, self.window_size()).items():
             self.data[name] = [*(self.data.get(name) or []), *entries]
@@ -1020,10 +1073,22 @@ class FunctionFlow(GesturePhases, SwitchPhase):
         self.undo_and_redo()
 
     def spot(self) -> dict[str, Any] | None:
-        """E4: liegt über der bearbeiteten Stelle ein Fenster? Über ``view:`` und die Probe."""
-        if self.selected is None:
+        """E4: liegt über der bearbeiteten Stelle ein Fenster? Über ``view:`` und die Probe.
+
+        Die bearbeitete Stelle ist das gewählte Merkmal oder die gewählte Kante
+        (``view.edge:`` im Auswahlweg der Zeile, Durchsicht welle4 C-M4).
+        """
+        edges = [
+            str(step.get("target"))
+            for step in self.row.get("route") or ()
+            if str(step.get("target") or "").startswith("view.edge:")
+        ]
+        if self.selected is not None:
+            name = f"view:{self.selected[0]}.{self.selected[1]}"
+        elif edges:
+            name = edges[-1]
+        else:
             return None
-        name = f"view:{self.selected[0]}.{self.selected[1]}"
         try:
             click = self.ports.next_click(name)
         except LookupError:
@@ -1298,7 +1363,11 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             ("menue", [(f"history.row:{number}", "right"), ("menu:history.edit", "left")]),
             ("doppelklick", [(f"history.row:{number}", "double")]),
         ):
-            self.reset()
+            if not self.reset():
+                # Kein Weg ohne Startszene (Durchsicht welle4 C-L15): Er änderte
+                # sonst, was die vorige Phase liegen ließ.
+                self.data["errors"].append(f"nachträglich {way}: Startszene nicht herstellbar")
+                continue
             self.run_steps(
                 f"übernehmen für {way}",
                 [*self.path_steps(), *self.input_steps(self.spec.get("inputs") or {})]
@@ -1409,8 +1478,14 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             dialog = surfaces.open_dialog(self.window)
             shown["before"] = set(capture.visible_texts(dialog)) if dialog is not None else set()
 
+        # Als Sperrgrund zählt nur der Grund an den Zielen der Zeile (C-L1).
+        targets = [walk_target(self.row), *([self.apply_target] if self.apply_target else [])]
+
+        def said() -> list[dict[str, Any]]:
+            return [*surfaces.fault_messages(self.window, targets), *in_dialog()]
+
         def read(machine: StepMachine) -> None:
-            messages.extend([*capture.message_entries(self.window), *in_dialog()])
+            messages.extend(said())
             messages.extend(
                 {"text": text, "actions": [], "kind": "befund"}
                 for code, text in surfaces.report_findings(self.session).items()
@@ -1476,9 +1551,7 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             [
                 *steps,
                 # Die Meldung kommt nach der Absage — erst sie, dann lesen (Review M1).
-                self.until_step(
-                    "meldung", lambda: bool(capture.message_entries(self.window) or in_dialog())
-                ),
+                self.until_step("meldung", lambda: bool(said())),
                 Step("meldung lesen", read),
             ],
         )
@@ -1522,7 +1595,17 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             for name, feature in entry.features.items()
         ]
         bodies = [str(key) for key, _entry in objects]
-        edges = [entry for entry in features if entry[2] == "edge"]
+        # Eine Kante ist kein Merkmal, sondern eine Stelle im Bild: erst der
+        # Körper, dann der Klick auf seine Kante (gestufte Tiefe, §18.5). Ohne
+        # sichtbare Kante hat die Szene dafür zu wenig — kein Klick ins Leere,
+        # der „nicht auffindbar“ gegen die Anwendung schriebe (Durchsicht
+        # welle4 C-M4: vorher suchte die Matrix Merkmale der Art ``edge``).
+        edge = f"view.edge:{bodies[0]}" if bodies else ""
+        try:
+            if edge:
+                self.ports.next_click(edge)
+        except LookupError:
+            edge = ""
         clicks: dict[str, list[tuple[str, str]] | None] = {
             "ohne": [],
             "ein_koerper": [(f"tree.row:{bodies[0]}", "left")] if bodies else None,
@@ -1542,7 +1625,7 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                 if len(features) > 1
                 else None
             ),
-            "eine_kante": [(f"view:{edges[0][0]}.{edges[0][1]}", "left")] if edges else None,
+            "eine_kante": [(f"tree.row:{bodies[0]}", "left"), (edge, "left")] if edge else None,
         }
         assert tuple(clicks) == tuple(SELECTION_STAGES)
         target = walk_target(self.row)
@@ -1555,9 +1638,24 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                     "effective": None,
                 }
                 continue
-            self.reset()
+            if not self.reset():
+                # Ohne Startszene stünde die Stufe an dem, was die vorige liegen
+                # ließ — eine andere Lage (Durchsicht welle4 C-L15).
+                matrix[stage] = {
+                    "state": MATRIX_UNREACHABLE,
+                    "reason": "die Startszene ließ sich nicht herstellen",
+                    "effective": None,
+                }
+                continue
             selection = [self.key_step("Escape", "auswahl leeren")] if not route else []
             selection += [self.walker.step(name, button) for name, button in route]
+            # Gelesen wird, wenn das Ziel steht oder so lange ohne Weg blieb wie
+            # auf dem Hauptweg (``Walk.stable``): Die Kantenzeilen baut das
+            # Merkmalfenster nach dem Klick, und sofort gefragt hieß die Zeile an
+            # der gewählten Kante „fehlt“ (Prüfstandlauf zu C-M4, Fall 002).
+            selection.append(
+                Step(f"{target} steht", lambda machine: None, ready=self.walker.stable(target))
+            )
             if not self.run_steps(f"matrix {stage} auswahl", selection):
                 matrix[stage] = {
                     "state": MATRIX_UNREACHABLE,
@@ -1760,6 +1858,9 @@ class FunctionFlow(GesturePhases, SwitchPhase):
         (``function_surface.licence_refusal``). Vorher klickte der Lauf nur das
         Ziel, und eine Befundhandlung, deren Absage als Meldungsfenster kam,
         galt als lesend (Probelauf F-35).
+
+        Der Lauf trägt ``state`` — ``angeboten``, ``grau`` oder ``fehlt``
+        (``function_points.LICENCE_RUN_STATES``) — und den Grund des grauen Ziels.
         """
         target = walk_target(self.row)
         inputs = list(self.spec.get("inputs") or {})
@@ -1792,12 +1893,17 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                 if target.startswith("feature:") and surfaces.in_view(self.window, inputs)
                 else target
             )
+            # Der Grund kommt nur aus dem grauen Ziel. Fehlt es, ist das kein Grund,
+            # sondern ein eigener Zustand: Der Text der eigenen ``LookupError`` als
+            # Grund machte aus einem versteckten Ziel „grau mit Grund“ (Durchsicht
+            # welle4 C-S1).
             grey = surfaces.grey_reason(self.window, probe)
             try:
                 self.ports.next_click(probe)
+            except LookupError:
+                state, reason = "fehlt", ""
+            else:
                 state, reason = ("grau", grey) if grey is not None else ("angeboten", "")
-            except LookupError as error:
-                state, reason = "fehlt", str(error)
             if state == "angeboten":
                 acting = [
                     self.action_step(target)
@@ -1818,11 +1924,7 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             or compare_prints(before, self.scene_now())["same"] is False
         )
         self.data["licence_runs"] = {
-            self.variant.licence: {
-                "writes": writes,
-                "enabled": state == "angeboten",
-                "reason": reason,
-            }
+            self.variant.licence: {"writes": writes, "state": state, "reason": reason}
         }
 
     def phase_surface(self) -> None:

@@ -18,7 +18,7 @@ oder öffentlich führt — kein privater Name, keine Abkürzung (``function_gua
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
@@ -120,6 +120,33 @@ def report_findings(session: Any) -> dict[str, str]:
     }
 
 
+def shown_findings(window: Any) -> set[str]:
+    """Die Befundkennungen, die der Prüfbericht gerade als Zeilen zeigt."""
+    from PySide6.QtCore import Qt
+
+    listing = window.report.list
+    return {
+        str(getattr(finding, "code", ""))
+        for row in range(listing.count())
+        if (item := listing.item(row)) is not None
+        and (finding := item.data(Qt.ItemDataRole.UserRole)) is not None
+    }
+
+
+def require_findings(window: Any, promised: Iterable[str]) -> None:
+    """Hält an, wenn der Prüfbericht einen zugesagten Befund der Vorbereitung nicht zeigt.
+
+    Nach Einfügemarke, Export oder *Automatisch teilen* gibt die Szene ihre
+    Befunde zu (``promises.findings``); fehlt einer, ist die Vorbereitung nicht
+    hergestellt — kein Fund an der Anwendung (Durchsicht welle4 C-L3).
+    """
+    missing = sorted(set(promised) - shown_findings(window))
+    if missing:
+        raise RuntimeError(
+            f"Vorbereitung nicht hergestellt: der Prüfbericht zeigt {', '.join(missing)} nicht"
+        )
+
+
 def classes_of(widget: Any) -> set[str]:
     """Die Klassennamen eines Fensters samt Basisklassen."""
     return {cls.__name__ for cls in type(widget).__mro__}
@@ -158,6 +185,42 @@ def grey_reason(window: Any, target: str) -> str | None:
     text = action.text().replace("&", "")
     plain = {text, text.rstrip(".…").strip()}
     return tip if tip and tip not in plain else str(action.statusTip())
+
+
+def fault_messages(window: Any, targets: Sequence[str]) -> list[dict[str, Any]]:
+    """Was der Fehlfall meldet: die Meldungen der Oberfläche, als Sperrgrund aber nur der
+    Grund, mit dem die Ziele der Zeile grau stehen (Prüfpunkt 7, V5).
+
+    ``function_capture.message_entries`` nennt jeden grauen Knopf mit Kurzhilfe;
+    „erwartet Sperrgrund“ war damit erfüllt, sobald irgendein fremder Knopf grau
+    stand (Durchsicht welle4 C-L1). Gefragt wird :func:`grey_reason` an
+    ``targets`` — dem Ziel der Zeile und dem, womit sie übernommen wird.
+    """
+    from app.ui import guide_targets
+    from tools import function_capture as capture
+
+    found = [
+        entry for entry in capture.message_entries(window) if entry.get("kind") != "sperrgrund"
+    ]
+    for target in dict.fromkeys(targets):
+        reason = grey_reason(window, target)
+        if not reason:
+            continue
+        # Das graue Element selbst, damit die Felder seiner Fläche als Ausweg
+        # zählen (FD-31); eine Menüzeile hat keins.
+        try:
+            widget = guide_targets.widget_for(window, target)
+        except LookupError:
+            widget = None
+        found.append(
+            {
+                "text": reason,
+                "actions": [],
+                "kind": "sperrgrund",
+                "way_out": capture.way_out(window, reason, widget),
+            }
+        )
+    return found
 
 
 def windows_to_picture(window: Any) -> list[Any]:
