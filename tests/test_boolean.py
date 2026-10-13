@@ -2165,6 +2165,43 @@ def test_an_empty_result_names_the_cause_its_kind_allows(
         assert "Maß und Lage" not in detail, f"die Vereinigung schickt zu den Maßen: {detail!r}"
 
 
+@pytest.mark.parametrize(
+    ("stages", "quality", "quick"),
+    [(("direct",), "fine", False), (("direct", "welded"), "draft", False), (None, "draft", True)],
+)
+def test_only_a_chain_the_quality_cut_short_is_called_the_quick_one(
+    monkeypatch: pytest.MonkeyPatch,
+    stages: tuple[str, ...] | None,
+    quality: str,
+    quick: bool,
+) -> None:
+    """Der Titel „Mit der schnellen Rechnung …“ gehört der gekürzten Kette.
+
+    Er sagt, dass eine vollständige Rechnung noch folgt. Hat der Aufrufer seine
+    Stufen festgelegt, folgt keine (FD-6) — eine leere Vereinigung beim
+    Umlaufen einer Textur trug ihn trotzdem, weil der Titel nur fragte, ob die
+    Voxelstufe dran war (Durchsicht über fix/review-kern, Beobachtung). Dort
+    gilt der Titel der Klasse: Auf keinem Weg, den der Schritt zulässt.
+    """
+    from app.core.geom import boolean as boolean_module
+
+    plate = MeshData.of(trimesh.creation.box(extents=(80.0, 50.0, 8.0)))
+    tool = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    monkeypatch.setattr(
+        boolean_module, "_run_stage", lambda *args, **kwargs: MeshData.of(trimesh.Trimesh())
+    )
+
+    with pytest.raises(BooleanFailedError) as caught:
+        boolean("union", [plate, tool], stages=stages, quality=quality)  # type: ignore[arg-type]
+
+    title = str(caught.value.title)
+    assert caught.value.cut_short is quick
+    if quick:
+        assert "schnellen Rechnung" in title, title
+    else:
+        assert title == str(BooleanFailedError.default_title), title
+
+
 def test_an_empty_union_in_the_preview_blames_no_size(monkeypatch: pytest.MonkeyPatch) -> None:
     """Auch in der schnellen Vorschau: Eine leere Vereinigung liegt nie an den Maßen.
 
