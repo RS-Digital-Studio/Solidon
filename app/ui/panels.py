@@ -11732,17 +11732,19 @@ class FeaturePanel(QWidget):
         form = QFormLayout(box)
         form.setContentsMargins(0, 0, 0, 0)
         form.setSpacing(TIGHT)
+        form.setVerticalSpacing(NORMAL)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         title = QLabel(str(action.title), box)
         title.setWordWrap(True)
-        set_level(title, "caption")
+        set_level(title, "section")
         form.addRow(title)
         current: QLabel | None = None
         if feature is not None:
             current = QLabel(box)
             current.setObjectName("feature-measure-source")
             current.setWordWrap(True)
+            set_level(current, "caption")
             form.addRow(current)
         note: QLabel | None = None
         if action.note:

@@ -70,6 +70,7 @@ from app.ui.change_lock import change_refusal, hold_inputs
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
+from app.ui.measure_card_drag import MeasureCardDrag
 from app.ui.overlay import MEASURE_CARD, _round_corners
 from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, Renderer, SurfaceStyle
@@ -1874,6 +1875,8 @@ class PlacementFlow(QObject):
                 self._field_targets.remove(target)
         self._measure_targets = []
         previous = self._measure_scroll.takeWidget()
+        if previous is not group:
+            self._measure_drag.reset()
         if previous is not None and previous is not group:
             _release_measure_group(previous, self._measure_release)
         self._measure_group = group
@@ -2837,6 +2840,12 @@ class PlacementFlow(QObject):
         Jede Verbindung zu diesem Fluss steht in :attr:`_links`.
         """
         link = self._links.append
+        measure_drag = self._measure_box.findChild(MeasureCardDrag)
+        if measure_drag is None:
+            measure_drag = MeasureCardDrag(self._measure_box)
+        self._measure_drag = measure_drag
+        measure_drag.reset()
+        link(measure_drag.positionChanged.connect(self.redraw))
         # Von einer gesperrten Maßgruppe übernommen, beginnen die Maße frei; ein
         # stiller Fluss sperrt sie beim ersten Zeichnen wieder (FD-28).
         for field in (*self._measures, self._depth_measure, *self._centre_measures):
@@ -5548,6 +5557,8 @@ class PlacementFlow(QObject):
             measure_room.setBottom(self._bar.geometry().top() - NORMAL - 1)
         self._refresh_measure_actions()
         self._size_measure_fields(measure_room)
+        self._measure_drag.update_room(measure_room)
+        user_rect = self._measure_drag.placed_rect() if self._measure_group is not None else None
         surface = self._surface
         renderer = self.viewport.renderer
         valid = (
@@ -5610,10 +5621,16 @@ class PlacementFlow(QObject):
             # Eine wartende Karte bleibt, wo sie ist: auch ``raise_`` malt über
             # der Grafikfläche das ganze Fenster sofort (:attr:`_seat_waits`).
             if self._measure_group is not None and not self._seat_is_coming():
-                self._measure_box.move(
-                    max(measure_room.left(), measure_room.right() - self._measure_box.width() + 1),
-                    measure_room.top(),
-                )
+                if user_rect is not None:
+                    self._measure_box.move(user_rect.topLeft())
+                else:
+                    self._measure_box.move(
+                        max(
+                            measure_room.left(),
+                            measure_room.right() - self._measure_box.width() + 1,
+                        ),
+                        measure_room.top(),
+                    )
                 self._measure_box.show()
                 self._measure_box.raise_()
             self.viewport.grip_placement(None)
@@ -5751,7 +5768,7 @@ class PlacementFlow(QObject):
             anchor = (start + end) / 2
             pending.append((widget, anchor, anchor))
 
-        if self._measure_group is not None:
+        if self._measure_group is not None and user_rect is None:
             place(self._measure_box, screen(surface.point), screen(surface.point))
 
         if self._deepening and valid:
@@ -5919,6 +5936,8 @@ class PlacementFlow(QObject):
             1,
         ).adjusted(-reach, -reach, reach, reach)
         occupied: list[QRect] = [blocked]
+        if user_rect is not None:
+            occupied.append(user_rect)
         # **Der Bewegungsgriff bleibt frei.** Er hängt am selben Merkmal und
         # greift weiter als das Werkzeug; ein Feld darüber nimmt die
         # Zeigerereignisse an, und dann sind Pfeile und Ringe sichtbar und tot
@@ -5966,6 +5985,8 @@ class PlacementFlow(QObject):
             occupied.append(banner.geometry())
         obstacles = list(occupied)
         ink: list[tuple[QPointF, QPointF]] = list(self._canvas.lines)
+        if user_rect is not None:
+            ink.append((QPointF(user_rect.center()), screen(surface.point)))
 
         def find_places(
             targets: Sequence[tuple[QWidget, QPointF, QPointF]],
@@ -6090,6 +6111,20 @@ class PlacementFlow(QObject):
                 if x > bounds.left() and x + pending_widget.width() > bounds.right() + 1:
                     x, y, row_height = bounds.left(), y + row_height + SPACE, 0
                 slot = QRect(x, y, pending_widget.width(), pending_widget.height())
+                # Die Nutzerkarte bleibt auch nach zwei erfolglosen Suchen
+                # ausgespart. Eine Zeile läuft links oder rechts an ihr vorbei;
+                # passt dort kein Feld mehr, beginnt die nächste darunter.
+                if user_rect is not None:
+                    reserved = user_rect.adjusted(-SPACE, -SPACE, SPACE, SPACE)
+                    while slot.intersects(reserved):
+                        beside = reserved.right() + 1
+                        if beside + slot.width() <= bounds.right() + 1:
+                            x = beside
+                        elif row_height:
+                            x, y, row_height = bounds.left(), y + row_height + SPACE, 0
+                        else:
+                            x, y = bounds.left(), reserved.bottom() + 1
+                        slot.moveTopLeft(QPoint(x, y))
                 # **Auch die Notlage weicht dem Setzpunkt aus — solange danach
                 # noch Platz ist.** Sonst gälte die Zusage „man sieht, wohin
                 # man setzt" genau dort nicht, wo es eng wird. Die Grenze ist
@@ -6100,8 +6135,10 @@ class PlacementFlow(QObject):
                 # y = 20009 bei 600 px Höhe). Dann ist Überdecken das kleinere
                 # Übel — ein Feld außerhalb des Bildes ist keines.
                 below = blocked.bottom() + SPACE + 1
-                if slot.intersects(blocked) and (
-                    below + pending_widget.height() - 1 <= bounds.bottom()
+                if (
+                    user_rect is None
+                    and slot.intersects(blocked)
+                    and (below + pending_widget.height() - 1 <= bounds.bottom())
                 ):
                     x, y, row_height = bounds.left(), below, 0
                     slot = QRect(x, y, pending_widget.width(), pending_widget.height())
@@ -6111,6 +6148,10 @@ class PlacementFlow(QObject):
             return rows
 
         fresh = find_places(pending, occupied, ink)
+        if fresh is None and user_rect is not None:
+            # In der Notlage dürfen Maße über dem Körper stehen, aber nicht
+            # unter der vom Kunden verschobenen Karte verschwinden.
+            fresh = find_places(pending, [user_rect], ())
         if fresh is None:
             positions = emergency_rows()
         else:
@@ -6147,6 +6188,10 @@ class PlacementFlow(QObject):
                     if _crossings(merged, pending) <= _crossings(fresh, pending):
                         positions = merged
         self._field_slots = dict(positions)
+        if user_rect is not None:
+            anchor = screen(surface.point)
+            pending.append((self._measure_box, anchor, anchor))
+            positions[self._measure_box] = user_rect
         for widget, _wanted, anchor in pending:
             rect = positions[widget]
             widget.move(rect.topLeft())
