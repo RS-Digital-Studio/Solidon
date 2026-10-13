@@ -63,7 +63,9 @@ from app.core.units import (
 )
 from app.i18n import source_text, tr
 from app.ui.change_lock import change_refusal
+from app.ui.dialog_footer import DialogFooter
 from app.ui.dialogs import ErrorNotice, align_to_the_front
+from app.ui.feature_list import FeatureList
 from app.ui.labels import (
     BoundedSpin,
     LengthSpin,
@@ -93,6 +95,7 @@ from app.ui.style import (
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
+    WrappedNote,
     expanded_width,
     make_primary,
     set_level,
@@ -1789,10 +1792,8 @@ class FeatureSetField(QWidget):
         self.whole.setChecked(not selected and empty is not None)
         self.whole.setVisible(empty is not None)
         layout.addWidget(self.whole)
-        self.list = QListWidget(self)
+        self.list = FeatureList(self)
         self.list.setAccessibleName(tr("Flächen auswählen"))
-        self.list.setMinimumHeight(96)
-        self.list.setMaximumHeight(210)
         for identifier in dict.fromkeys((*choices, *selected)):
             item = QListWidgetItem(choices.get(identifier, identifier), self.list)
             item.setData(Qt.ItemDataRole.UserRole, identifier)
@@ -2255,6 +2256,9 @@ class OperationDialog(QDialog):
         # Das Raster statt Qts Vorgabe von 6 (G2, FD-15), wie die Formulare.
         layout.setSpacing(NORMAL)
         self._scroll.setWidget(contents)
+        self._scroll.contentSizeChanged.connect(
+            weak_slot(self, OperationDialog._queue_refit, "passive")
+        )
         outer.addWidget(self._scroll, 1)
         # **Wer im Bild zielen muss, erfährt es im Dialog — als erste Zeile**
         # (Befund Robert, 18.09.2026: „keine Info dass es über den Viewport
@@ -2276,8 +2280,8 @@ class OperationDialog(QDialog):
 
         self._description: QLabel | None = None
         if spec.doc:
-            description = QLabel(lead_sentence(spec), self)
-            description.setWordWrap(True)
+            description = WrappedNote(self)
+            description.setText(lead_sentence(spec))
             # So hoch wie sein Text, nicht so hoch wie der übrige Platz.
             #
             # Ohne das teilt das senkrechte Layout die freie Höhe unter seinen
@@ -2535,9 +2539,10 @@ class OperationDialog(QDialog):
 
         # Überschuss erst nach allen Feldern, nicht vor der aufklappbaren Tiefe.
         layout.addStretch(1)
-        buttons = QDialogButtonBox(
+        buttons = DialogFooter(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        self._footer = buttons
         button_layout = buttons.layout()
         assert button_layout is not None
         button_layout.setSpacing(SPACE)
@@ -2573,6 +2578,7 @@ class OperationDialog(QDialog):
         self._refit.setSingleShot(True)
         self._refit_intent: ContentFitIntent = "passive"
         self._refit.timeout.connect(self._run_queued_refit)
+        buttons.geometryChanged.connect(weak_slot(self, OperationDialog._queue_refit, "passive"))
         self._couple_dependent_fields()
         self._couple_surface_binding()
         self._install_rotation_centre(given)
@@ -3158,6 +3164,7 @@ class OperationDialog(QDialog):
             return
         self._refusal.set_error(problem, handlers)
         self._refusal.setVisible(bool(self._refusal.text()))
+        self._queue_refit("passive")
 
     def take_value(self, name: str, value: Any) -> bool:
         """Einen Wert in ein Zahlenfeld schreiben, als hätte der Kunde ihn getippt.
@@ -4685,18 +4692,25 @@ class OperationDialog(QDialog):
         if layout is None:
             return
         content = self._scroll.widget()
+        if isinstance(self._description, WrappedNote):
+            self._description.claim_height()
         content_layout = content.layout() if content is not None else None
         if content_layout is not None:
             content_layout.activate()
         self._scroll.updateGeometry()
         layout.activate()
-        natural_width = expanded_width(self._scroll, self._advanced_form)
+        natural_width = max(
+            expanded_width(self._scroll, self._advanced_form),
+            self._footer.natural_width + 2 * WIDE,
+        )
         self._height.fit(
             self,
             self._scroll,
             grow_width=intent == "initial",
             intent=intent,
-            natural_width=natural_width if intent == "initial" else 0,
+            natural_width=(
+                natural_width if intent == "initial" else self._footer.natural_width + 2 * WIDE
+            ),
         )
 
     def _fill_filament_fields(
