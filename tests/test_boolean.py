@@ -1483,6 +1483,56 @@ def test_the_jitter_stage_leaves_no_skin_where_a_tool_reaches_past() -> None:
     assert not skins, "Haut über der Öffnung: " + "; ".join(skins)
 
 
+def test_the_jitter_limit_holds_the_overlap_along_any_normal() -> None:
+    """Die Grenze der dritten Stufe hält die Zugabe auch längs einer schrägen Normale.
+
+    Je Koordinate bewegt der Stups einen Eckpunkt höchstens um die Grenze r.
+    Längs einer Achse rücken zwei Eckpunkte um höchstens 2r aufeinander zu,
+    längs (1, 1, 1)/√3 aber um 2·√3·r, denn alle drei Koordinaten dürfen voll
+    ausschlagen (Durchsicht über fix/review-kern, L4). Zufallsfrei gesagt.
+    """
+    from app.core.geom import boolean as chain
+
+    closest = 2 * math.sqrt(3.0) * chain.JITTER_REACH_LIMIT
+    assert closest < chain.BOOLEAN_OVERLAP, (
+        f"zwei Eckpunkte rücken bis {closest:.5f} mm zusammen, die Zugabe ist "
+        f"{chain.BOOLEAN_OVERLAP} mm"
+    )
+
+
+@pytest.mark.parametrize(
+    "normal", [(0.0, 0.0, 1.0), (1.0, 1.0, 1.0)], ids=["achsparallel", "schraeg"]
+)
+def test_the_farthest_jitter_keeps_a_slanted_bore_open(normal: tuple[float, float, float]) -> None:
+    """Der äußerste Stups, den die Grenze zulässt, schließt keine Mündung — auch schräg.
+
+    Zufallsfrei nachgestellt: Platte 80 × 50 × 8 mit Bohrung Ø 5, das Werkzeug
+    um ``BOOLEAN_OVERLAP`` über beiden Flächen, gedreht, bis die Plattennormale
+    ``normal`` ist. Die Platte rückt je Achse um +r, das Werkzeug um −r — so
+    weit, wie Stufe 3 jeden Eckpunkt höchstens bewegt —, gerechnet über
+    *direkt*. Schräg sind das 0,87 der Zugabe; schon r = 2,9 µm schloss die
+    Mündung ganz (19,58 mm², Durchsicht über fix/review-kern, L4).
+    """
+    from app.core.geom import boolean as chain
+
+    reach = chain.JITTER_REACH_LIMIT
+    turn = trimesh.geometry.align_vectors([0.0, 0.0, 1.0], list(normal))
+    plate = trimesh.creation.box(extents=(80.0, 50.0, 8.0))
+    bore = trimesh.creation.cylinder(
+        radius=2.5, height=8.0 + 2 * chain.BOOLEAN_OVERLAP, sections=48
+    )
+    for part, sign in ((plate, 1.0), (bore, -1.0)):
+        part.apply_transform(turn)
+        part.apply_translation((sign * reach, sign * reach, sign * reach))
+
+    result = boolean("difference", [MeshData.of(plate), MeshData.of(bore)], stages=("direct",))
+    back = result.mesh.raw.copy()
+    back.apply_transform(np.linalg.inv(turn))
+
+    area = _opening_skin(MeshData.of(back), lambda c: np.hypot(c[:, 0], c[:, 1]) < 2.4)
+    assert area == 0.0, f"Haut über der Mündung: {area:.2f} mm²"
+
+
 def test_draft_quality_stops_after_the_second_stage() -> None:
     """§31: das Iterieren bleibt schnell, der Entwurf gibt also keine Zeit für
     Voxel aus.

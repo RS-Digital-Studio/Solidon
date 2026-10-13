@@ -156,9 +156,14 @@ MAX_VOXEL_CELLS: Final = 50_000_000
 BOOLEAN_OVERLAP = 0.01
 
 #: Höchstens so weit bewegt Stufe 3 einen Eckpunkt je Koordinate, gleich wie
-#: groß der Körper ist: ein Viertel von :data:`BOOLEAN_OVERLAP`. Zwei
-#: Eckpunkte rücken so höchstens um die halbe Zugabe aufeinander zu, und ein
-#: Werkzeug, das um sie über eine Fläche reicht, bleibt darüber.
+#: groß der Körper ist: ein Viertel von :data:`BOOLEAN_OVERLAP`. Längs einer
+#: Achse rücken zwei Eckpunkte so um höchstens zweimal die Grenze aufeinander
+#: zu, die halbe Zugabe; **längs einer schrägen Normale um bis zu 2·√3-mal**,
+#: denn jede der drei Koordinaten darf voll ausschlagen — an (1, 1, 1)/√3 sind
+#: das 0,87 der Zugabe. Ein Werkzeug, das um die Zugabe über eine Fläche
+#: reicht, bleibt also in jeder Lage darüber, mit 13 % Reserve; schon 2,9 µm
+#: schlössen die schräge Mündung (Durchsicht über fix/review-kern, L4). Was
+#: weniger übersteht, schützt diese Grenze nicht.
 #:
 #: **Ohne Grenze wuchs der Stups mit der Diagonale** und schob Werkzeuge unter
 #: die Fläche, über die sie reichen (Durchsicht welle4-b, Beobachtung): am
