@@ -36,7 +36,7 @@ dans `website/version.json`.
 - La liste des raccourcis clavier ne nomme plus qu'une fois *Sculpter*, *Squelette* et *Dessiner*.
 - Le bouton *Calculer plus grossièrement* disparaît : Solidon poursuit seul avec le calcul complet. Dans la version 0.6.0, il apparaissait aussi là où il ne changeait rien.
 - Les messages d'erreur, les détails et les avis s'affichent désormais dans le style de Solidon, avec les actions sous forme de boutons. Ctrl+C copie tout le message.
-- La couleur d'une bobine se choisit avec le sélecteur de Solidon, juste à côté du bouton, avec des couleurs nommées et la valeur exacte. Le dialogue de couleur de Windows disparaît.
+- La couleur d'une bobine se choisit avec le sélecteur de Solidon, juste à côté du bouton, avec des couleurs nommées et la valeur exacte. Le dialogue de couleur du système disparaît.
 - Une cote du dessin se modifie désormais dans un champ, sur place. Les adresses et le choix du filament à remplacer sont demandés dans le style de Solidon.
 - Après l'activation ou la désactivation, la confirmation s'affiche dans le dialogue même, sans fenêtre à fermer.
 - Le dialogue *Calibrer le matériau* n'affiche plus devant que le jeu, la surcote et la compensation des trous. Pied d'éléphant, retrait, paroi et surplomb sont sous *Autres réglages*.

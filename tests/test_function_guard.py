@@ -112,6 +112,100 @@ def test_the_guard_finds_every_known_detour() -> None:
         function_guard.forbidden_calls("x = 1\n", within_class="WindowFlow")
 
 
+#: Die zwanzig Umwege der Durchsicht welle4 (C-M3, Sonde ``guard_probe.py``):
+#: Keinen fand der Wächter. Jeder steht für sich, damit ein Treffer an einer
+#: Nachbarzeile keinen anderen verdeckt.
+UNSEEN_DETOURS = {
+    "Sitzung über einen Alias": "s = self.window.session\ns.apply('x', [])",
+    "Rückgängig über die Sitzung": "self.window.session.undo()",
+    "Rückgängig über den Verlauf": "self.window.history_panel.undo()",
+    "area_for als Name": (
+        "from app.ui.guide_targets import area_for\narea_for(window, 'feature.apply')"
+    ),
+    "select_feature als Name": (
+        "from app.ui.panels import select_feature\nselect_feature(tree, 'hole_1')"
+    ),
+    "QAction.activate": "action.activate(QAction.ActionEvent.Trigger)",
+    "setattr privat": "setattr(window, '_busy', False)",
+    "vars privat": "vars(window)['_busy'] = False",
+    "__dict__ privat": "window.__dict__['_busy'] = False",
+    "getattr mit Variable": "name = 'click'\ngetattr(button, name)()",
+    "methodcaller": "import operator\noperator.methodcaller('click')(button)",
+    "setPlainText": "editor.setPlainText('5')",
+    "insert in Zeile": "line.insert('5')",
+    "setEditText": "combo.setEditText('PLA')",
+    "setCheckState": "box.setCheckState(Qt.CheckState.Checked)",
+    "Ereignismethode direkt": "spin.keyPressEvent(event)",
+    "Slot direkt": "window.action_save_as()",
+    "invokeMethod mit Variable": "slot = 'click'\nQMetaObject.invokeMethod(button, slot)",
+    "invokeMethod privat": "QMetaObject.invokeMethod(window, '_on_apply')",
+    "QTimer mit Lambda auf öffentliche Methode": (
+        "QTimer.singleShot(0, lambda: panel.apply_action('x'))"
+    ),
+}
+
+#: Was der Prüfstand heute so schreibt und schreiben darf: eigene Methoden an
+#: ``self``, der Automat, Lesezugriffe, Eingabeereignisse über Qt.
+ALLOWED_FORMS = (
+    "machine.insert([self.walker.step(target)])",
+    "listing.insert(0, entry)",
+    "self.apply_step()",
+    "self.action_step(name)",
+    "guide_targets.action_for(window, hit)",
+    "self.history.apply('erlaubt', [])",
+    "getattr(cached, state)",
+    "phase = getattr(self, f'phase_{name}')\nphase()",
+    "signals = [getattr(view, name) for name in DRAG_SIGNALS]",
+    "found = 'paintEvent' in vars(cls)",
+    "QApplication.sendEvent(widget, event)",
+    "QTest.sendKeyEvent(QTest.KeyAction.Click, target, key, text, modifier)",
+    "top.activateWindow()",
+    "super().eventFilter(watched, event)",
+    "self.session.forget_changes()",
+    "result = self.session.last_result",
+)
+
+
+@pytest.mark.parametrize("label", sorted(UNSEEN_DETOURS))
+def test_the_guard_finds_the_detours_the_review_found(label: str) -> None:
+    """Jede der zwanzig Formen der Durchsicht welle4 ist ein Fund (C-M3).
+
+    Aufrufe über importierte Namen und Aliasse, Undo/Redo an Sitzung und
+    Verlauf, Werteinstellung über ``setPlainText``/``setEditText``/
+    ``setCheckState``/``insert``, Ereignismethoden und öffentliche Slots direkt,
+    dazu ``setattr``, ``vars``, ``__dict__``, ``methodcaller`` und
+    ``invokeMethod`` mit privatem Namen oder einer Variablen wie ``getattr``.
+    """
+    assert function_guard.forbidden_calls(UNSEEN_DETOURS[label]) != [], label
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "def run(button, name):\n    getattr(button, name)()",
+        "def run(window, name):\n    setattr(window, name, False)",
+        "def run(button, slot):\n    QMetaObject.invokeMethod(button, slot)",
+        "def run(button, name):\n    operator.methodcaller(name)(button)",
+        "def run(window, key):\n    vars(window)[key]",
+        "from app.ui.main_window import action_save as save",
+    ],
+)
+def test_a_name_only_the_run_knows_is_a_detour_once_it_acts(source: str) -> None:
+    """Ein Name, den erst die Laufzeit kennt, ist ein Fund, sobald er bedient (C-M3).
+
+    ``getattr`` mit einem solchen Namen darf lesen; wer das Ergebnis aufruft,
+    setzt, eine Methode über Qt auslöst oder ``vars`` mit offenem Schlüssel
+    liest, wird gefunden. Ein umbenannter Import zählt wie der Name selbst.
+    """
+    assert function_guard.forbidden_calls(source) != [], source
+
+
+@pytest.mark.parametrize("source", ALLOWED_FORMS)
+def test_the_guard_leaves_the_benchs_own_ways_alone(source: str) -> None:
+    """Die Gegenseite: Was der Prüfstand heute rechtmäßig schreibt, bleibt frei."""
+    assert function_guard.forbidden_calls(source) == [], source
+
+
 def _imports(path: Path) -> set[str]:
     """Die Module unter ``tools``, die eine Datei importiert, als Namen ohne Paket."""
     found: set[str] = set()

@@ -64,7 +64,8 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   und markiert Ungesehenes; `_focus_report` nur auf Bitte (Statuszähler,
   *Prüfbericht*, Exportprüfung, Slicen, G-Code).
 - Eine neue Auswahl holt den Reiter Auswahl; Verlassen gilt bis zum Wechsel.
-  Nicht aus dem Bericht (`_SelectionPage.held`), nicht über eine Tour.
+  Nicht aus dem Bericht und nicht beim Wiederherstellen nach einer Auswertung
+  (`_SelectionPage.held`), nicht über eine Tour.
   Ein Zug im Bild, der Werte in eine Handlung legt (`FeaturePanel.valuesTaken`),
   holt ihn immer: Sein *Übernehmen* steht dort.
 - `MainWindow.announce` ergänzt die Statuszeile um eine passive Overlayquittung:
@@ -229,7 +230,9 @@ Stellen halten das, beide sind nötig:
   korrigieren* mit Rat als Tooltip; der Fehlerdialog zeigt Räte über
   `dialogs.unhandled_advice` als Sätze. Knopfzeile, Kontextmenü und Vorwahl
   benutzen denselben Abgleich.
-- Vorgewählt werden nur Fehler und Warnungen mit Handlung (`_preselect`).
+- Vorgewählt werden nur Fehler und Warnungen mit Handlung (`_preselect`). Nach
+  einer Befundhandlung bleibt der Fokus im Bericht (`_focus_parked`): an der
+  nächsten Befundzeile, sonst an der Übergabe.
 - Lokale Erkennung behält die Zielkörper des Befunds; erst der Originaltreffer
   bestimmt einen. Baumauswahl ersetzt dieses Ziel nicht. Maus und Tastatur
   verwenden denselben Treffer.
@@ -415,9 +418,9 @@ Für Druckerwahl und Druckdialog gilt `druckerwahl.md`.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 
-Ein Widget ohne Elternteil **ist** ein Top-Level-Fenster. Weggeräumt wird mit
-`hide()` und `deleteLater()`, nie über den Elternteil: `takeAt` nimmt es aus
-dem Layout, `hide` aus dem Bild, der Elternteil trägt es bis zum Löschen.
+Weggeräumt wird mit `hide()` und `deleteLater()`, nie über den Elternteil:
+`takeAt` nimmt es aus dem Layout, `hide` aus dem Bild, der Elternteil trägt es
+bis zum Löschen.
 
 ## Die automatische Sicherung
 

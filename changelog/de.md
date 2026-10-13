@@ -60,7 +60,7 @@ Nutzen da und sonst nichts.
 - Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
 - Der Knopf *Gröber rechnen* entfällt, denn Solidon rechnet von selbst vollständig weiter. In Version 0.6.0 stand er auch dort, wo er nichts änderte.
 - Fehlermeldungen, Einzelheiten und Hinweise stehen jetzt im Stil von Solidon, mit den Handlungen als Knöpfen. Strg+C kopiert die ganze Meldung.
-- Die Farbe einer Spule wählt ein eigener Farbwähler direkt am Knopf, mit benannten Regalfarben und dem genauen Farbwert. Der Farbdialog von Windows entfällt.
+- Die Farbe einer Spule wählt ein eigener Farbwähler direkt am Knopf, mit benannten Regalfarben und dem genauen Farbwert. Der Farbdialog des Systems entfällt.
 - Ein Maß der Zeichnung ändert sich in einem Feld an Ort und Stelle. Adressen und die Wahl, welches Filament ersetzt wird, fragt Solidon im eigenen Stil.
 - Nach dem Freischalten und nach dem Deaktivieren steht die Bestätigung im Dialog selbst, ohne ein Fenster, das man erst wegklicken muss.
 - Der Dialog *Material kalibrieren* zeigt vorn nur Spiel, Übermaß und Lochkorrektur. Elefantenfuß, Schwindung, Wand und Überhang stehen unter *Weitere Einstellungen*.

@@ -103,6 +103,105 @@ def test_the_guard_sees_a_message_box_that_only_informs(tmp_path: Path, monkeypa
     assert sorted(entry.split(":")[1] for entry in found) == ["Own", "shown", "tell"], found
 
 
+def _message_dialogs_left_standing() -> list[str]:
+    """Jede Meldung im Hausstil unter ``app/ui``, die nach ``exec`` am Elternteil liegen bleibt.
+
+    ``exec`` gibt den Dialog nicht frei: Ohne ``deleteLater`` im ``finally`` hängt
+    nach jeder Meldung ein verborgener Dialog mehr am Fenster (A-L1), wie es
+    ``ask_text`` vormacht. Gesucht wird ``x = MessageDialog(…)`` oder eine
+    Unterklasse samt ``x.exec()``, und ``MessageDialog(…).exec()`` ohne Namen.
+    """
+    trees = {path: ast.parse(path.read_text(encoding="utf-8")) for path in sorted(UI.rglob("*.py"))}
+    builders = {"MessageDialog"} | {
+        node.name
+        for tree in trees.values()
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef)
+        and any(isinstance(base, ast.Name) and base.id == "MessageDialog" for base in node.bases)
+    }
+
+    def built(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in builders
+        )
+
+    found: list[str] = []
+    for path, tree in trees.items():
+        where = path.relative_to(UI).as_posix()
+        for function in ast.walk(tree):
+            if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            names = {
+                node.targets[0].id
+                for node in ast.walk(function)
+                if isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and built(node.value)
+            }
+            freed = {
+                (call.func.value.id, run.lineno)
+                for guard in ast.walk(function)
+                if isinstance(guard, ast.Try)
+                for done in guard.finalbody
+                for call in ast.walk(done)
+                if isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "deleteLater"
+                and isinstance(call.func.value, ast.Name)
+                for statement in guard.body
+                for run in ast.walk(statement)
+                if isinstance(run, ast.Call)
+                and isinstance(run.func, ast.Attribute)
+                and run.func.attr == "exec"
+            }
+            for call in ast.walk(function):
+                if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
+                    continue
+                if call.func.attr != "exec":
+                    continue
+                if built(call.func.value):
+                    found.append(f"{where}:{function.name}:{call.lineno} exec ohne Namen")
+                elif (
+                    isinstance(call.func.value, ast.Name)
+                    and call.func.value.id in names
+                    and (call.func.value.id, call.lineno) not in freed
+                ):
+                    found.append(f"{where}:{function.name}:{call.lineno} ohne deleteLater")
+    return found
+
+
+def test_a_message_is_freed_after_exec() -> None:
+    """Jede Meldung im Hausstil gibt sich nach ``exec`` frei (A-L1)."""
+    found = _message_dialogs_left_standing()
+    assert not found, "Meldungen, die am Elternteil liegen bleiben:\n" + "\n".join(found)
+
+
+def test_the_guard_sees_a_message_left_standing(tmp_path: Path, monkeypatch) -> None:
+    """Gegenprobe: ohne Namen, ohne ``finally`` und eine Unterklasse fallen auf."""
+    (tmp_path / "probe.py").write_text(
+        "class Own(MessageDialog):\n"
+        "    pass\n"
+        "def bare(parent):\n"
+        "    MessageDialog(parent).exec()\n"
+        "def kept(parent):\n"
+        "    box = Own(parent)\n"
+        "    box.exec()\n"
+        "def freed(parent):\n"
+        "    box = MessageDialog(parent)\n"
+        "    try:\n"
+        "        box.exec()\n"
+        "    finally:\n"
+        "        box.deleteLater()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys.modules[__name__], "UI", tmp_path, raising=True)
+    found = _message_dialogs_left_standing()
+    assert sorted(entry.split(":")[1] for entry in found) == ["bare", "kept"], found
+
+
 def _caught(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     """Fängt jeden Meldungsdialog vor ``exec`` und gibt die Liste zurück."""
     from app.ui.message_dialog import MessageDialog
@@ -262,3 +361,161 @@ def test_the_symbol_reads_on_both_themes(qt_app: QApplication, theme: str) -> No
         apply_theme(qt_app, previous)
         qt_app.setPalette(previous_palette)
         qt_app.setStyleSheet(previous_sheet)
+
+
+def test_the_severity_word_comes_from_the_palette(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Wort zum Symbol hat eine Quelle: ``palette.SEVERITY_ENCODING`` (A-L3)."""
+    from dataclasses import replace
+
+    from app.ui import palette
+    from app.ui.message_dialog import MessageDialog
+
+    renamed = replace(palette.SEVERITY_ENCODING["error"], label_key="Probewort")
+    monkeypatch.setitem(palette.SEVERITY_ENCODING, "error", renamed)
+    dialog = MessageDialog(title="T", headline="H", kind="error")
+    try:
+        assert dialog.symbol.accessibleName() == "Probewort"
+    finally:
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("kind", ["error", "warning", "info"])
+def test_a_screen_reader_hears_what_went_wrong(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Schwere, Kopfzeile und Ursache erreichen einen Bildschirmleser (A-M2).
+
+    Ein ``QMessageBox`` meldet sich als ``AlertMessage`` mit Text und Ursache; ein
+    eigener Dialog hat die Rolle ``Dialog`` und sagt von sich aus nichts. Seine
+    Beschreibung trägt deshalb Wort, Kopfzeile und Satz, und ein Fehler oder eine
+    Warnung meldet sich beim Zeigen mit einem ``Alert``.
+    """
+    from PySide6.QtGui import QAccessible, QAccessibleEvent
+
+    from app.i18n import tr
+    from app.ui.message_dialog import MessageDialog
+    from app.ui.palette import SEVERITY_ENCODING
+
+    sent: list[QAccessible.Event] = []
+    real = QAccessible.updateAccessibility
+
+    def spy(event: QAccessibleEvent) -> None:
+        sent.append(event.type())
+        real(event)
+
+    monkeypatch.setattr(QAccessible, "updateAccessibility", spy)
+    dialog = MessageDialog(
+        title="Das hat so nicht funktioniert",
+        headline="Platte zu klein",
+        body="Das Teil misst 300 mm.",
+        kind=kind,  # type: ignore[arg-type]
+        target="message:error",
+    )
+    dialog.add_exit("Schließen", "message.button:error.cancel")
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    dialog.show()
+    try:
+        qt_app.processEvents()
+        face = QAccessible.queryAccessibleInterface(dialog)
+        assert face is not None
+        described = face.text(QAccessible.Text.Description)
+        assert tr(SEVERITY_ENCODING[kind].label_key) in described
+        assert "Platte zu klein" in described and "300 mm" in described
+        assert (QAccessible.Event.Alert in sent) == (kind != "info"), sent
+    finally:
+        dialog.hide()
+        dialog.deleteLater()
+
+
+def test_a_message_leaves_no_window_behind(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach ``exec`` hängt keine Meldung mehr am Elternteil (A-L1)."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QWidget
+
+    from app.core.errors import RETRY, AppError
+    from app.ui import dialogs, message_dialog
+    from app.ui.message_dialog import MessageDialog
+
+    monkeypatch.setattr(MessageDialog, "exec", lambda dialog: dialog.reject() or 0)
+    monkeypatch.setattr("app.ui.dialogs.QDesktopServices.openUrl", lambda _url: False)
+    parent = QWidget()
+    try:
+        for _ in range(3):
+            error = AppError("Probe", "x", suggestions=(RETRY,))
+            dialogs.show_error(error, parent, handlers={RETRY.id: lambda _error: None})
+            dialogs.show_details(AppError("Probe", "x"), parent)
+            message_dialog.inform(parent, "T", "Satz", target="message:browser_failed")
+            dialogs.open_donation(parent)
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert parent.findChildren(MessageDialog) == []
+    finally:
+        parent.deleteLater()
+
+
+def test_copy_takes_the_marked_part_first(qt_app: QApplication) -> None:
+    """Strg+C kopiert eine Markierung, sonst den ganzen Text — wie ``QMessageBox`` (A-L2)."""
+    from PySide6.QtGui import QTextCursor
+    from PySide6.QtTest import QTest
+
+    from app.ui.message_dialog import MessageDialog
+
+    dialog = MessageDialog(
+        title="Titel",
+        headline="Kopfzeile",
+        details="Zeile eins\nZeile zwei",
+        target="message:probe",
+    )
+    dialog.add_exit("Schließen", "message.button:probe.close")
+    previous = qt_app.clipboard().text()
+    dialog.show()
+    try:
+        qt_app.processEvents()
+        dialog.details.setFocus()
+        cursor = dialog.details.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfLine, QTextCursor.MoveMode.KeepAnchor)
+        dialog.details.setTextCursor(cursor)
+        qt_app.clipboard().setText("")
+        QTest.keyClick(dialog.details, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+        assert qt_app.clipboard().text() == "Zeile eins"
+
+        cursor.clearSelection()
+        dialog.details.setTextCursor(cursor)
+        dialog.headline.setSelection(0, 4)
+        QTest.keyClick(dialog.details, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+        assert qt_app.clipboard().text() == "Kopf"
+
+        dialog.headline.setSelection(0, 0)
+        QTest.keyClick(dialog.details, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+        assert qt_app.clipboard().text() == dialog.text()
+    finally:
+        qt_app.clipboard().setText(previous)
+        dialog.hide()
+        dialog.deleteLater()
+
+
+def test_a_withdrawn_receipt_leaves_nothing_at_the_button(qt_app: QApplication) -> None:
+    """Weicht die Quittung, weicht auch ihre Beschreibung am Knopf (A-L4).
+
+    ``acknowledge`` legt den Satz als Beschreibung auf den nächsten Knopf, damit
+    ein Bildschirmleser ihn mitliest. Der Freischaltdialog verbarg beim nächsten
+    Schritt nur die Zeile, und *Schließen* las weiter „Solidon ist freigeschaltet“.
+    """
+    from app.ui.dialogs import ActivationDialog
+    from app.ui.message_dialog import acknowledge
+
+    dialog = ActivationDialog()
+    try:
+        acknowledge(dialog.receipt, "Gespeichert", "Satz", then=dialog.close_button)
+        assert dialog.close_button.accessibleDescription()
+        dialog.field.setPlainText("")
+        dialog._remember()
+        assert dialog.receipt.isHidden()
+        assert dialog.receipt.accessibleDescription() == ""
+        assert dialog.close_button.accessibleDescription() == ""
+    finally:
+        dialog.deleteLater()

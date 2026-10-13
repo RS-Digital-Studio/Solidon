@@ -1088,7 +1088,10 @@ class InstallDialog(QDialog):
         copy = box.add_action(tr("Kopieren"), "message.button:install_details.copy", closes=False)
         copy.clicked.connect(weak_slot(box, MessageDialog.copy_text))
         box.add_exit(tr("Schließen"), "message.button:install_details.close")
-        box.exec()
+        try:
+            box.exec()
+        finally:
+            box.deleteLater()
 
     def _finished(self, result: object) -> None:
         assert isinstance(result, install.InstallResult)

@@ -341,7 +341,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `main_window.py` behält die Aktion nicht, `_update_actions` kann sie nicht sperren; `action_add_parameter` fragt `change_lock` nicht. FD-5 erfasste diesen Fensterbefehl nicht.
 - Vorschlag: Fensterbefehle, die ändern, fragen dieselbe Quelle `change_lock`; ein Wächter über alle ändernden Fensterbefehle.
 - Wirkung beim Kunden: Ein Menübefehl, der in der Demo erst nach dem Klick absagt.
-- Stand: offen RM-737
+- Stand: behoben `660501d8f`
 
 ### FD-27 Eine graue Befundhandlung beschreibt sich mit ihrer Nebenwirkung statt mit dem Sperrgrund
 
@@ -353,7 +353,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `panels.py` setzt bei der Sperre nur die Kurzhilfe, nicht die Beschreibung.
 - Vorschlag: Sperrgrund als Kurzhilfe und Beschreibung, solange gesperrt.
 - Wirkung beim Kunden: Ein Bildschirmleser liest, was der Knopf täte, nicht warum er nicht geht.
-- Stand: offen RM-737
+- Stand: behoben `660501d8f`
 
 ### FD-28 Die Maßgruppe nimmt ohne Freischaltung Eingaben an
 
@@ -365,7 +365,7 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: `placement_flow.py` sperrt nur *Übernehmen*, nicht den Eingang.
 - Vorschlag: Eingang und Übernehmen sperren mit Grund und Ausweg aus `change_lock`.
 - Wirkung beim Kunden: Er tippt ein Maß, das nicht übernommen werden kann.
-- Stand: offen RM-737
+- Stand: behoben `660501d8f`
 
 ### FD-29 Am echten Fenster fehlen an einer gesetzten Bohrung Bohrung ändern und Zum Langloch ziehen
 
@@ -389,4 +389,40 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Ursache: Sätze der Sperre ohne Weg.
 - Vorschlag: den Weg nennen, etwa die Menüzeile der Freischaltung; in allen Sprachen neu übersetzt.
 - Wirkung beim Kunden: Er liest, dass es nicht geht, aber nicht, was er tun kann.
+- Stand: behoben `660501d8f`
+
+### FD-31 Übernehmen der Maßgruppe ist vor der ersten Eingabe grau ohne Grund
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Kriterium: E7
+- Beleg: freigeschaltet, nach der Auswahl einer Bohrung; *Übernehmen* grau, ohne Kurzhilfe und Beschreibung (Fix FD-26 bis FD-30, `fix-sperre-vollstaendig.md`)
+- Ursache: Der Knopf wartet auf eine Änderung und sagt es nicht.
+- Vorschlag: ein Satz, der das erste Feld als Weg nennt; der Prüfstand zählt einen offenen Feldtitel derselben Fläche als Ausweg (Entscheidung Koordinator).
+- Wirkung beim Kunden: Ein grauer Knopf ohne Satz sieht aus wie gesperrt.
+- Stand: offen RM-737
+
+### FD-32 Der Sperrgrund steht im Reiter Auswahl zweimal
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Kriterium: E5
+- Beleg: ohne Freischaltung unter dem Suchfeld und im Merkmalfenster derselbe Satz (Fix FD-26 bis FD-30)
+- Ursache: FD-5 setzte den Satz an beiden Flächen.
+- Vorschlag: die Zeile unter dem Suchfeld gilt für den Reiter; das Merkmalfenster trägt den Grund nur an seinen grauen Elementen.
+- Wirkung beim Kunden: Derselbe Satz zweimal lenkt vom Weg ab.
+- Stand: offen RM-737
+
+### FD-33 Jede Aktualisierung der Fensterbefehle fragt nach dem exakten Kern
+
+- Art: Leistung
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: 6
+- Beleg: im Profil 3,5 von 9,3 ms je `_update_actions` in `importlib.find_spec` über `exact_kernel_present()` (Fix FD-26 bis FD-30)
+- Ursache: Die Anwesenheit des Kerns wird bei jedem Aufruf neu gesucht, obwohl sie sich im Prozess nicht ändert.
+- Vorschlag: je Prozess einmal ermitteln, an der Quelle; Messung vorher und nachher.
+- Wirkung beim Kunden: Jede Auswahl und jede Handlung kostet unnötig Zeit im Hauptfaden.
 - Stand: offen RM-737

@@ -33,9 +33,8 @@ Die Zahlen hält `tests/test_interface_limits.py`, die Breitengrenze
 | Breite des Skizzenbereichs, der Werkzeug- und der Bedingungszeile | je ≤ 900 Bildpunkte |
 | Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben im Dialog ihres Partners, erreichbar über Suche und Verlauf |
 
-Wer eine Zahl erhöhen will, tut es mit Absicht und begründet es im Commit. Der
-achte Platz der Werkzeugzeile ist keine Einladung: Eine Funktion, die eine
-Leiste will, verdrängt eine andere oder ist keine wert (`MAX_TOOLS`).
+Wer eine Zahl erhöhen will, tut es mit Absicht und begründet es im Commit; der
+achte Platz der Werkzeugzeile ist keine Einladung (`MAX_TOOLS`).
 
 **Gefaltet wird je Kategorie und nur so weit, bis der Rest passt:**
 `folded_categories` (`registry/surfaces.py`, auch für `menu_path`) nimmt die
@@ -50,10 +49,9 @@ gefalteten, getrennt durch einen nackten Trennstrich.
   `in_the_menu_bar`, und `_build_menus` legt dafür kein Menü an. Die Aktionen
   entstehen trotzdem am Fenster (Kürzel und Suche über `_op_actions`,
   Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum,
-  Ansicht und Reiter *Auswahl*** (`_scope_shortcut`), sonst läge Entf über *Schritt löschen*, und
-  zwei Aktionen auf einer Taste führt Qt beide nicht aus. Text- und Zahlenfelder
-  behalten Entf. Sperren Halt oder Lizenz das Entfernen, sagt die Taste den
-  Grund (`_DeleteRefusal`, Titel aus `_removal_entry`, still beim Messen in der Ansicht) — ein
+  Ansicht und Reiter *Auswahl*** (`_scope_shortcut`), nicht über *Schritt
+  löschen*. Text- und Zahlenfelder behalten Entf. Sperren Halt oder Lizenz das
+  Entfernen, sagt die Taste den Grund (`_DeleteRefusal`, Titel aus `_removal_entry`, still beim Messen in der Ansicht) — ein
   gesperrtes Kürzel schweigt sonst.
 - **In der Leiste bleibt, was keine Auswahl braucht:** *Datei*, *Bearbeiten*,
   *Erzeugen* samt *Bausteine* (Katalog, Gegenstücke, Deckel ohne Kachel),
@@ -73,8 +71,7 @@ gefalteten, getrennt durch einen nackten Trennstrich.
 - **Der Katalog führt aus seiner Sperre hinaus:** Bei genau einem Körper gilt
   ein Baustein ihm, auch ohne Auswahl, wie die Suche (`MainWindow._lone_body`); in der leeren
   Szene stehen unter dem Satz die Wege, die er nennt (`PartCatalog.offer_ways`:
-  *Quader anlegen*, *Modell einfügen …*). Ein modaler Katalog, der „wählen Sie
-  im Objektbaum“ sagt, ist eine Sackgasse (RM-356).
+  *Quader anlegen*, *Modell einfügen …*; RM-356).
 - **Das Kontextmenü an Körper und Merkmal trägt keine Liste der Operationen**
   (Entscheidung Robert), nur *Diesen Schritt ändern*, *Auf dieser Fläche
   zeichnen*, die Sichtbarkeit, *Entfernen* (heißt, was Entf tut) und bei
@@ -331,12 +328,10 @@ Stellen; die Werkzeugzeile unter dem Viewport bleibt beschriftet.
 *Bohrung setzen* Strg+B, *Drehen* Strg+R, *Aushöhlen* Strg+H; Kürzel stehen im
 Register, eine Übersetzung ändert sie nicht. Ist der Buchstabe belegt, kommt
 Umschalt dazu (*Vereinigen* Strg+Umschalt+V, *Abziehen* Strg+Umschalt+A); ist
-auch das belegt, **bleibt die Operation ohne Kürzel** — *Skalieren*: S und
-Umschalt+S gehören dem Speichern, und ein erfundener Buchstabe wäre schlechter
-als keiner. Wer eine Taste vergibt, prüft vorher am gebauten Fenster gegen die
-Kürzel, die nicht aus dem Register kommen (Ansichten, Werkzeugzeile,
-Dateibefehle, Navigation): Eine doppelt belegte Taste führt keine der beiden
-Aktionen aus. `tests/test_ui.py`
+auch das belegt, **bleibt die Operation ohne Kürzel** (*Skalieren*). Wer eine
+Taste vergibt, prüft vorher am gebauten Fenster gegen die Kürzel, die nicht aus
+dem Register kommen (Ansichten, Werkzeugzeile, Dateibefehle, Navigation):
+`tests/test_ui.py`
 (`test_no_two_shortcuts_in_the_window_collide`) hält das,
 `tests/test_registry_consistency.py` sieht nur das Register.
 
@@ -346,6 +341,10 @@ Aktionen aus. `tests/test_ui.py`
 Qts Strg+Umschalt+Z die Taste Strg+Y, die Tour und Texte nennen. Wer eine
 dieser Handlungen bindet oder eine Taste dafür abfängt, fragt dort; beim
 Messen nimmt die Ansicht die Rücktaste vor dem Kürzel an (letztes Maß).
+
+**Strg+Z und Strg+Y gehen an einem Feld vorbei ans Fenster, wenn es nichts
+zurückzunehmen hat** (`nothing_to_take_back`, §19.2). Wer ein Feld per Code
+leert, nimmt `setText("")`: `clear()` ist selbst rücknehmbar und behielte die Taste.
 
 **Eine Liste, die über `itemActivated` öffnet, trägt `return_opens`:** Am Mac
 bearbeitet Qt mit Return den Eintrag, statt ihn zu öffnen; der Filter meldet

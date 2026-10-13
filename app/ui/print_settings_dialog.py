@@ -5150,7 +5150,10 @@ class PrintSettingsDialog(QDialog):
         copy = box.add_action(tr("Kopieren"), "message.button:slicer_output.copy", closes=False)
         copy.clicked.connect(weak_slot(box, MessageDialog.copy_text))
         box.add_exit(tr("Schließen"), "message.button:slicer_output.close")
-        box.exec()
+        try:
+            box.exec()
+        finally:
+            box.deleteLater()
 
     def _show_slicer_box(self, wanted: bool) -> None:
         """Den Kasten *Profile des Slicers* zeigen oder verbergen — nie an Harz.
