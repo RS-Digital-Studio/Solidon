@@ -15,6 +15,7 @@ unbekannten Kennung.
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import json
 import re
 import tomllib
@@ -673,6 +674,15 @@ def _light(kernel: str) -> list[str]:
         for key, scene in _scenes().items()
         if scene.project and not scene.heavy and (scene.kernel or "netz") == kernel
     ]
+
+
+def test_the_catalogue_header_names_every_key() -> None:
+    """C-L8: Der Kopf von ``function_scenes.toml`` nennt jeden Schlüssel, den der Leser
+    annimmt — Szene und Schritt. Sonst veraltet er still, sobald einer dazukommt."""
+    lines = fscenes.SCENES.read_text(encoding="utf-8").splitlines()
+    header = "\n".join(itertools.takewhile(lambda line: line.startswith("#"), lines))
+    words = set(re.findall(r"\w+", header))
+    assert sorted((fscenes.SCENE_KEYS | fscenes.STEP_KEYS) - words) == []
 
 
 def test_the_recipes_are_valid() -> None:

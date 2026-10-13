@@ -5,18 +5,31 @@
 # Rezept wird nicht abgelegt (`tests/data/CLAUDE.md`); `--szenen --out` baut sie
 # außerhalb des Baums.
 #
-# Schlüssel je Szene:
-#   summary   was sie zeigt
-#   base      eine andere Szene, deren Schritte zuerst laufen
-#   sources   Quellkennung → Datei relativ zu tests/data
-#   ops       Schritte {op, inputs, params, title}
-#   kernel    "exakt" oder "netz"; jeder Körper der gerechneten Szene hat diese Bauart
-#   heavy     schwer: im Tor nur als gültiger Stapel geprüft, nie gerechnet
-#   project   false heißt Startbildschirm, kein Projekt
-#   select    das Merkmal, das eine Zeile mit Merkmalsanforderung wählt (obj_<n>.<merkmal>)
-#   promises  objects, kinds (Merkmalsarten), body (closed, open, parts, cavity),
-#             findings (Befundkennungen), actions (Handlung → Befund, an dem der
-#             Bericht sie anbietet), stops, triangles_over, seconds_over
+# Schlüssel je Szene (``tools/function_scenes.py``, ``SCENE_KEYS``):
+#   summary       was sie zeigt
+#   base          eine andere Szene, deren Schritte zuerst laufen
+#   sources       Quellkennung → Datei relativ zu tests/data
+#   ops           Schritte {op, inputs, params, title, suppressed}; suppressed = true
+#                 schaltet den Schritt nach dem letzten aus, wie die Datei es speichert
+#   kernel        "exakt" oder "netz"; jeder Körper der gerechneten Szene hat diese Bauart
+#   heavy         schwer: im Tor nur als gültiger Stapel geprüft, nie gerechnet
+#   project       false heißt Startbildschirm, kein Projekt
+#   select        das Merkmal, das eine Zeile mit Merkmalsanforderung wählt (obj_<n>.<merkmal>)
+#   parameters    Projektparameter vor dem ersten Schritt: Name → {value, unit, title}
+#   opens         eine Projektdatei aus tests/data als Anfang, geöffnet wie im Fenster
+#   printer, material   Drucker und Material des Projekts
+#   printer_like  der Drucker ist hier nicht eingerichtet; das Projekt bringt die
+#                 Beschreibung des mitgelieferten Druckers dieser Kennung mit
+#   generated     Quellen, die ein Generator geliefert hat (Weg 3)
+#   protected     vor Trennnähten geschützte Merkmale: Körper → [Merkmal, …]
+#   own_parts     Rezepte aus tests/data, die vor dem Öffnen im Nutzerordner liegen
+#   preconditions äußere Vorbedingungen (``function_list.PRECONDITIONS``)
+#   insert_before die Einfügemarke der Sitzung vor diesem Schritt (sichtbare Nummer)
+#   cause         was der Prüfstand vor der Zeile auslöst: {kind = "export", format}
+#                 oder {kind = "auto_split", object}
+#   promises      objects, kinds (Merkmalsarten), body (closed, open, parts, cavity),
+#                 findings (Befundkennungen), actions (Handlung → Befund, an dem der
+#                 Bericht sie anbietet), stops, triangles_over, seconds_over
 #
 # Maße: Quader 40 × 30 × 20 mm, Unterseite auf z = 0 (Vorgabe `anchor = "centre"`).
 
