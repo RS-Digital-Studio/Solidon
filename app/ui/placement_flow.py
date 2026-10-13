@@ -1948,13 +1948,25 @@ class PlacementFlow(QObject):
         if pulled:
             reason = None
             begun = True
-        # Ohne Freischaltung trägt *Übernehmen* den Satz aus ``change_lock``,
-        # der den Weg zur Freischaltung nennt, auch vor einem Langlochzug
-        # (FD-28); die Felder hält :meth:`redraw`. Ein Operationsdialog sperrt
-        # sein *Übernehmen* selbst (FD-5).
+        # **Ohne Freischaltung nimmt die Maßgruppe nichts an** (FD-28): Bis
+        # hierher war nur *Übernehmen* grau, die Felder nahmen Zahlen an, die
+        # nie übernommen wurden. Eingang und Knopf tragen den Satz aus
+        # ``change_lock``, auch vor einem Langlochzug, und er nennt den Weg zur
+        # Freischaltung. Ein Operationsdialog bleibt zum Ansehen bedienbar und
+        # sperrt sein *Übernehmen* selbst (FD-5); die Maße im Bild, die er von
+        # einer Maßgruppe übernimmt, gibt :meth:`_wire_floating` frei.
         refusal = change_refusal() if isinstance(host, QuietHost) else ""
         if refusal:
             reason = refusal
+        if isinstance(host, QuietHost):
+            for root in (
+                self._measure_scroll,
+                self._measure_scope_box,
+                *self._measures,
+                *self._centre_measures,
+                self._depth_measure,
+            ):
+                hold_inputs(root, refusal)
         # **Ein Werkzeug, das gerade neu gebaut wird, sperrt nicht** (Durchsicht
         # 0.5.1, Kunde Weg b): Nach jeder getippten Zahl baut der Fluss das
         # Werkzeug neu, der Knopf war so lange grau, und ein Klick gleich nach
@@ -2804,6 +2816,10 @@ class PlacementFlow(QObject):
         Jede Verbindung zu diesem Fluss steht in :attr:`_links`.
         """
         link = self._links.append
+        # Von einer gesperrten Maßgruppe übernommen, beginnen die Maße frei; ein
+        # stiller Fluss sperrt sie beim ersten Zeichnen wieder (FD-28).
+        for field in (*self._measures, self._depth_measure, *self._centre_measures):
+            hold_inputs(field, "")
         self._title.setText(str(self.spec_of().title))
         self._note.setText(tr("Auf eine Oberfläche zeigen."))
         self._tool_legend.clear()
@@ -5501,21 +5517,6 @@ class PlacementFlow(QObject):
         if self._bar.isVisibleTo(self.viewport):
             measure_room.setBottom(self._bar.geometry().top() - NORMAL - 1)
         self._refresh_measure_actions()
-        # **Ohne Freischaltung nimmt die Maßgruppe nichts an** (FD-28): Bis
-        # hierher war nur *Übernehmen* grau, die Felder nahmen Zahlen an, die
-        # nie übernommen wurden. Gruppe, Geltungsbereich und die Maße im Bild
-        # tragen den Satz aus ``change_lock``. Ein Operationsdialog bleibt zum
-        # Ansehen bedienbar (FD-5); die Felder, die er von einer Maßgruppe
-        # übernimmt, gibt der leere Grund wieder frei.
-        refusal = change_refusal() if isinstance(self.dialog, QuietHost) else ""
-        for root in (
-            self._measure_scroll,
-            self._measure_scope_box,
-            *self._measures,
-            *self._centre_measures,
-            self._depth_measure,
-        ):
-            hold_inputs(root, refusal)
         self._size_measure_fields(measure_room)
         surface = self._surface
         renderer = self.viewport.renderer
