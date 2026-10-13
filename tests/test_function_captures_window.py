@@ -419,12 +419,14 @@ def test_a_message_in_house_style_is_modal_but_neither_raw_nor_a_question(qt_app
 
     Mit Handlung und Ausgang hat er zwei Knöpfe; vorher hätte die Wache ihn
     deshalb als Nachfrage gezählt. Und der Klick, nach dem er aufgeht, macht ihn
-    nicht zur Fläche der Zeile (``function_surface.own_surface``).
+    nicht zur Fläche der Zeile (``function_surface.own_surface``). Ein Hinweis
+    erscheint nie als Meldungsfenster — auch mit Handlung bleibt er ein Z2-Fund;
+    ausgenommen ist nur die Fehlermeldung mit Handlungsvorschlag (Fall darunter).
     """
     from app.ui.message_dialog import MessageDialog
     from tools import function_surface
 
-    dialog = MessageDialog(None, title="Fehler", headline="Das ging nicht", kind="error")
+    dialog = MessageDialog(None, title="Hinweis", headline="Das ging", kind="info")
     dialog.add_action("Rückgängig", "message.button:probe.undo", lead=True)
     dialog.add_exit("Schließen", "message.button:probe.close")
     assert not function_surface.own_surface({"target": "operation:drill_hole"}, dialog)
@@ -434,6 +436,51 @@ def test_a_message_in_house_style_is_modal_but_neither_raw_nor_a_question(qt_app
     assert (entry["class"], entry["allowed"], entry["question"]) == ("MessageDialog", False, False)
     assert watch.raw_entries() == []
     assert _judged(watch, "Z2") and _judged(watch, "Z5") == [] and _judged(watch, "E6") == []
+
+
+def _shown_error(qt_app: Any, handlers: dict[str, Any]) -> Any:
+    """``dialogs.show_error`` am Werk, die Wache in der Schleife seines ``exec()``."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
+
+    from app.core.errors import RETRY, AppError
+    from app.ui.dialogs import show_error
+
+    watch = capture.ModalWatch(0.0)
+    rounds = {"left": 50}
+
+    def look() -> None:
+        dialog = QApplication.activeModalWidget()
+        rounds["left"] -= 1
+        if dialog is None and rounds["left"] > 0:
+            QTimer.singleShot(100, look)
+            return
+        watch.poll()
+        if dialog is not None:
+            dialog.reject()
+
+    QTimer.singleShot(100, look)
+    show_error(AppError("Das ging nicht", suggestions=(RETRY,)), None, handlers)
+    _settle(qt_app)
+    return watch
+
+
+def test_an_error_with_a_proposal_is_the_exception_to_z2(qt_app: Any) -> None:
+    """Durchsicht welle4 D-M2, Entscheidung Koordinator: Die Fehlermeldung nach Regel 17
+    mit mindestens einer Handlung antwortet auf eine Handlung des Kunden und darf modal sein.
+
+    Gefahren wird ``dialogs.show_error`` selbst. Vorher war jeder Fehlfall mit
+    ``AppError`` ein Z2-Fund, und „Z2 ohne offenen Fund“ war nicht erreichbar.
+    Gegenprobe: Dieselbe Meldung ohne einlösbare Handlung — nur *Schließen* —
+    bleibt ein Z2-Fund (und an ihrer Meldung E7/V5); der Hinweis darüber ebenso.
+    """
+    offered = _shown_error(qt_app, {"retry": lambda error: None})
+    entry = offered.modal_entries()[0]
+    assert (entry["class"], entry["allowed"]) == ("MessageDialog", True), entry
+    assert _judged(offered, "Z2") == []
+    bare = _shown_error(qt_app, {})
+    assert bare.modal_entries()[0]["allowed"] is False, bare.modal_entries()
+    assert _judged(bare, "Z2")
 
 
 def test_a_message_in_house_style_is_read_with_its_actions(qt_app: Any) -> None:

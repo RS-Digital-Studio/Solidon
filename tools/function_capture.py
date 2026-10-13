@@ -97,6 +97,10 @@ ASK_HOSTS: Final[frozenset[str]] = frozenset({"LocalRecognitionDialog"})
 #: (``AskDialog``); dazu die rohen Qt-Fenster (``function_checks.RAW_CLASSES``).
 MESSAGE_CLASSES: Final[frozenset[str]] = frozenset({"MessageDialog", "AskDialog"})
 
+#: Der Name der Fehlermeldung nach Regel 17 im Wortschatz: ``dialogs.show_error``
+#: zeigt sie als ``MessageDialog`` mit diesem Kennzeichen.
+ERROR_MESSAGE: Final = "message:error"
+
 
 def _raw_bases() -> tuple[str, ...]:
     """Die rohen Qt-Fensterklassen, die aufgenommen werden — aus D0-U (``RAW_BASES``).
@@ -271,6 +275,18 @@ def modal_allowed(classes: Sequence[str], stack: Sequence[str], hosts: Sequence[
     return "AskDialog" in classes and bool(ASK_CALLERS & set(stack) or ASK_HOSTS & set(hosts))
 
 
+def error_proposal(classes: Sequence[str], target: str, actions: int) -> bool:
+    """Ob ein Meldungsfenster die Fehlermeldung mit Handlungsvorschlag ist — die Z2-Ausnahme.
+
+    Entscheidung Koordinator (Durchsicht welle4 D-M2): Eine Fehlermeldung nach
+    Regel 17 (``dialogs.show_error``, Kennzeichen :data:`ERROR_MESSAGE`) mit
+    mindestens einer Handlung antwortet auf eine Handlung des Kunden und darf
+    modal sein. Erfolg und Hinweis erscheinen nie als Meldungsfenster, und eine
+    Fehlermeldung ohne Handlung bleibt ein Fund (E7, V5) — auch in Z2.
+    """
+    return "MessageDialog" in classes and target == ERROR_MESSAGE and actions > 0
+
+
 def is_question(class_name: str, buttons: Sequence[str]) -> bool:
     """Eine Nachfrage (E6) statt einer Meldung (Z2): eine Wahl zwischen mindestens zwei Knöpfen.
 
@@ -300,6 +316,16 @@ def _buttons(widget: Any) -> list[str]:
     return [button.text() for button in widget.findChildren(QAbstractButton) if button.text()]
 
 
+def _offers_a_way(widget: Any, classes: Sequence[str]) -> bool:
+    """:func:`error_proposal` am offenen Fenster: Kennzeichen und Handlungen gelesen."""
+    if "MessageDialog" not in classes:
+        return False
+    from app.core.guides import TARGET_PROPERTY
+
+    target = str(widget.property(TARGET_PROPERTY) or "")
+    return error_proposal(classes, target, len(_house_actions(widget)))
+
+
 def _hosts(widget: Any) -> list[str]:
     """Die Klassen des Fensters, in dem ein Dialog steht — leer ohne Elternteil."""
     parent = widget.parentWidget()
@@ -322,7 +348,8 @@ class ModalWatch:
     Nur lesend: Die Wache schließt nichts. Was ein Fall öffnet und bedient,
     bedient er selbst über Eingabeereignisse; was liegen bleibt, räumt der Fall
     am Ende seiner Phase mit Escape ab. ``own`` nennt Klassen, die die Zeile
-    selbst öffnet (ihre Bedienfläche) — sie zählen als erlaubt.
+    selbst öffnet (ihre Bedienfläche) — sie zählen als erlaubt, ebenso die
+    Fehlermeldung mit Handlungsvorschlag (:func:`error_proposal`).
     """
 
     def __init__(self, began: float) -> None:
@@ -345,7 +372,9 @@ class ModalWatch:
             classes = _classes(widget)
             buttons = _buttons(widget)
             allowed = (
-                modal_allowed(classes, stack, _hosts(widget)) or type(widget).__name__ in self.own
+                modal_allowed(classes, stack, _hosts(widget))
+                or type(widget).__name__ in self.own
+                or _offers_a_way(widget, classes)
             )
             self.modals.append(
                 {
@@ -1508,27 +1537,31 @@ def _house_messages() -> list[dict[str, Any]]:
     ``buttons()`` und ihre Rolle. Der Ausgang (*Schließen*, Escape) ist keine
     Handlung, die das Problem löst — er zählte sonst als „ohne Wirkung“ (V5).
     """
-    from PySide6.QtWidgets import QApplication, QDialogButtonBox
+    from PySide6.QtWidgets import QApplication
 
     found: list[dict[str, Any]] = []
     for dialog in QApplication.topLevelWidgets():
         if "MessageDialog" not in _classes(dialog) or not dialog.isVisible():
             continue
-        exits = QDialogButtonBox.ButtonRole.RejectRole
-        actions = [
-            {
-                "label": _text_of(button),
-                "target": vocabulary_name(button),
-                "clicked": False,
-                "effect": None,
-            }
-            for button in dialog.buttons()
-            if _visible(button)
-            and button.isEnabled()
-            and dialog.button_box.buttonRole(button) != exits
-        ]
-        found.append({"text": dialog.text(), "actions": actions, "kind": "meldung"})
+        found.append({"text": dialog.text(), "actions": _house_actions(dialog), "kind": "meldung"})
     return found
+
+
+def _house_actions(dialog: Any) -> list[dict[str, Any]]:
+    """Die Handlungen einer Meldung im Hausstil: ihre bedienbaren Knöpfe ohne den Ausgang."""
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    exits = QDialogButtonBox.ButtonRole.RejectRole
+    return [
+        {
+            "label": _text_of(button),
+            "target": vocabulary_name(button),
+            "clicked": False,
+            "effect": None,
+        }
+        for button in dialog.buttons()
+        if _visible(button) and button.isEnabled() and dialog.button_box.buttonRole(button) != exits
+    ]
 
 
 def visible_texts(root: Any) -> list[str]:

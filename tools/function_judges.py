@@ -1008,6 +1008,9 @@ def _z1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
 
 
 def _z2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
+    # ``allowed`` setzt die Wache: die Ausnahmen aus Konzept Z2, die eigene
+    # Fläche der Zeile und die Fehlermeldung mit Handlungsvorschlag nach Regel 17
+    # (``function_capture.error_proposal``, Durchsicht welle4 D-M2).
     modals = _list(protocol, "modals")
     if modals is None:
         return _missing("Z2", "modals")
