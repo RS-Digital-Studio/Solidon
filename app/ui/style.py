@@ -258,7 +258,11 @@ class DialogScrollArea(QScrollArea):
         wanted = content.sizeHint().expandedTo(content.minimumSizeHint())
         layout = content.layout()
         if layout is not None and layout.hasHeightForWidth():
-            width = self.viewport().width() if self.isVisible() else wanted.width()
+            # Der Wunsch gilt dem vollständig sichtbaren Inhalt. Eine nur
+            # vorläufig nötige senkrechte Leiste verschwindet beim Einpassen;
+            # ihre alte Ausschnittbreite ergäbe zusätzliche Umbruchzeilen.
+            # Qt berücksichtigt dabei weiterhin dauerhaft gesetzte Leisten.
+            width = self.maximumViewportSize().width() if self.isVisible() else wanted.width()
             wanted.setHeight(
                 max(content.minimumSizeHint().height(), layout.totalHeightForWidth(width))
             )
@@ -554,7 +558,17 @@ def _hidden_height(scroll: QScrollArea) -> int:
     if layout is not None and layout.hasHeightForWidth():
         width = max(content.width(), scroll.viewport().width())
         needed = max(content.minimumSizeHint().height(), layout.totalHeightForWidth(width))
-    return max(0, needed - scroll.viewport().height())
+    available = scroll.viewport().height()
+    horizontal = scroll.horizontalScrollBar()
+    if (
+        scroll.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        and horizontal.maximum() == horizontal.minimum()
+    ):
+        # Eine bereits rollbereichslose Querleiste kann bis zum nächsten
+        # Qt-Umlauf noch Platz belegen. Ihre alte Geometrie ist kein verdeckter
+        # Inhalt; eine dauernde oder wirklich benötigte Leiste bleibt dagegen.
+        available = max(available, scroll.maximumViewportSize().height())
+    return max(0, needed - available)
 
 
 class ContentHeight:
