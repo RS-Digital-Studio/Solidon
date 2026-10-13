@@ -837,4 +837,40 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Der vorhandene PlacementFlow-Gruppenfilter verarbeitet den geänderten Größenbedarf nach LayoutRequest nicht. Die feste Höhe und ScrollBarAlwaysOff bleiben vom geschlossenen Zustand erhalten, auch nach weiteren Qt-Ereignisrunden.
 - Vorschlag: Größenbedarfsänderungen über den bestehenden Gruppenfilter nach dem Qt-Layoutschritt an die vorhandene Größenrechnung anschließen; selbst ausgelöste Layoutschleifen, Gruppentausch und Abbau berücksichtigen. Aufklappen und Zuklappen gegenprüfen, bei echtem Platzmangel erreichbar rollen und Fußaktionen sichtbar halten.
 - Wirkung beim Kunden: Die Rückseite lässt sich öffnen, ihre Werte sind aber verdeckt und mit dem Zeiger nicht erreichbar. Eine Vergrößerung auf pauschale Maße würde unnötig Modellfläche verdecken.
-- Stand: offen RM-741; nativer Gegenbeleg und Ursache liegen vor, enger Vorwärtsfix und neue Testdatei werden vorbereitet. Noch kein grüner Fixnachweis, keine Lieferung oder Integration. Beide ursprünglichen roten Maßgruppenläufe bleiben erhalten; kein Umgehen der verdeckten Felder im Prüfablauf.
+- Stand: offen RM-741; Größenfix als f6b0f53f2e61b18d7436940e830604aa80ce0ca1 geliefert und als 4521cf8ff0d4f623c070feda6b67cb937b0cb7a7 auf welle4 integriert, vollständiger Baum identisch. Neun gehärtete Fälle in sechs vor Fensterbau eingestellten Sprachen einschließlich echter Klappen-/Fußtexte und Lebensdauer grün; Statik und enge Durchsicht ohne offenen Produktfund. Der bestehende hohe-Karten-Reihenfolgefall besteht auf Original und Fix allein und scheitert auf beiden nach demselben Dark-Vorgänger; keine neue Regression behauptet. Nativer Nachherbeleg und gemeinsamer D0-Lauf bleiben offen. Beide ursprünglichen roten Maßgruppenläufe bleiben erhalten; kein Umgehen der verdeckten Felder im Prüfablauf.
+
+### FD-68 Druckbett-Raster verschwindet im hellen Thema
+
+- Art: Gestaltung
+- Schwere: mittel
+- Funktion: Druckbett in der 3D-Ansicht
+- Prüfpunkt: 19
+- Beleg: Nutzerhinweis und tatsächliche Vorheraufnahme F:/tmp-suche/fix-bettraster-hell-codex/native-before-v3/01-hell.png auf 4521cf8ff0d4f623c070feda6b67cb937b0cb7a7. Root und Autor haben das Bild gelesen: beleuchtete Bettfläche #B8C0C9 gegen Rasterpixel #BBC3CE, Linien kaum erkennbar. Identische Szene, Kamera, Fenster und Skalierung im Nachherordner native-after-v3; Haupt- und Nebenlinien deutlich sichtbar. Keine behauptete Textkontrast-Normverletzung.
+- Ursache: Raster und Bettkante nutzten dieselbe sehr helle Farbrolle; 0,35 Deckkraft nähert die Linienfarbe zusätzlich an die beleuchtete Bettfläche an. Themenweitergabe und Tiefenabstand sind vorhanden; kein belegter Tiefenfehler. Die Linien hatten keine getrennte Gewichtung zur Orientierung.
+- Vorschlag: Bestehende Rasterlinien mit eigener bed_grid-Farbrolle und disjunkten Haupt-/Nebenlinien alle fünf Abstände zeichnen. Positionen, Zeichenraster, Bauraum und Treffverhalten erhalten; Hell/Dunkel/Hell am echten Fenster vergleichen.
+- Wirkung beim Kunden: Auf dem hellen Druckbett fehlt eine verlässlich erkennbare räumliche Orientierung. Die Korrektur lässt das Raster erkennen und hält den Körper visuell im Vordergrund.
+- Stand: offen RM-737; fünf Pfade als bc4fe912a828cbe072f51011910d36dfd2ea5dec normal geliefert und als 438efade21e7e3ad42ca7da993a631118607cb66 auf welle4 integriert, vollständiger Baum identisch. Sieben gezielte Fälle, Ruff/Format/mypy und enge Durchsicht grün. Native V3-Vorher- und Nachherfolge jeweils regulär Exit 0, alle sechs Aufnahmen vom Autor, beide Hell-/Dunkelpaare zusätzlich vom Root gelesen; eigene Prozesse beendet. Sechs Profile vor Appimport umgebogen, kein separater Hashvergleich aller echten Nutzerprofile. Die zwei früheren roten Scratchfolgen bleiben erhalten. Automatische breite Auswahl von 261 Dateien nicht ausgeführt und bis zum gemeinsamen Entwicklungstor ausstehend; endgültiger D0-Nachweis offen.
+
+### FD-69 Bettmaßzahlen bleiben im hellen Thema äußerst blass
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: Maßbeschriftung des Druckbetts
+- Prüfpunkt: 19
+- Beleg: F:/tmp-suche/fix-bettraster-hell-codex/native-after-v3/01-hell.png. Root und unabhängiger Bildprüfer sehen 100 bei etwa 1049/158, 50 bei 769/232 und 0 bei 429/324 nur äußerst schwach auf dem hellen Grund. Das neue Raster behebt die Zahlenfarbe nicht. Die genaue Kontrastquote wurde hier nicht gemessen.
+- Ursache: Viewport._draw_one_bed verwendet für LabelStyle.text_colour weiterhin _bed_colour, also die Farbe der Bettkante (#bfcad8 im hellen Thema). Der bestehende Labelrenderer passt den Kontrast nicht automatisch an. Im dunklen Thema läuft derselbe Pfad mit #5a6472.
+- Vorschlag: Ausschließlich die Maßzahlen über eine geeignete vorhandene Textrolle zeichnen und im Themenwechsel erneuern; Bauraumfarbe, Texte, Geometrie und Positionen erhalten. Hell und Dunkel am selben nativen Zustand nachlesen.
+- Wirkung beim Kunden: Die Orientierungslinien sind sichtbar, die zugehörigen Maßzahlen bleiben aber schwer lesbar.
+- Stand: offen RM-737; Bild- und Quellbefund bestätigt. Die vorhandene Textrolle _sketch_label_colour ersetzt ausschließlich die Bettzahlenfarbe. Original zwei falsche Textrollen rot/sechs Rasterkontrollen grün, nach Korrektur acht Fälle grün; Hell/Dunkel/Rückweg sowie unveränderte Positionen, Größe und Bauraumfarbe. Enge Erstlesung ohne Fund. Finalstatik und reguläre Lieferung werden abgeschlossen; native Lesbarkeit und gemeinsamer Nachweis bleiben offen. Keine behauptete numerische Normverletzung.
+
+### FD-70 Griff- und Vorschauflächen verdecken die gewählte Bohrung
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: resize_hole im Bild
+- Prüfpunkt: 19, G9
+- Beleg: design-d0-oberflaeche-codex.md, tatsächliches helles Bild F:/tmp-suche/fix-massgruppe-front-codex/native-runner-v3/runs/run-20261013T173601513Z/de/003-resize-rueckseite-vor-hover.png und dunkler Originalfall016. Orange Griffkörper, flächige Markierung und Achspfeile überdecken die gewählte Öffnung stärker als die übrigen Bohrungen; Bildurteil mit begründeter Sichtprüfung, kein gemessener Kontrastwert.
+- Ursache: Zwei gefüllte pickbare SlotHandle-Zylinder mit Deckkraft 1,0, zusätzliche nicht pickbare face-handle-Scheibe mit 0,6 und Merkmalsfüllung mit 0,45 liegen in der gewählten Öffnung übereinander. outlined bezeichnet die Schnittkontur und entfernt die Griffkörper nicht. Die vorhandene Größenbegrenzung der Zylinder verhindert diese perspektivische Überdeckung nicht.
+- Vorschlag: Ruhende Füllungen gezielt zurücknehmen, überfahrene/gehaltene Griffe und wirkliche laufende oder wartende Entwürfe klar erhalten. Bestehende Netze, Bezugspunkte und positive Deckkraft im Pickpfad bewahren. Direkten take_press ohne Hover, wiederverwendeten Vorschauaktor, Abbruch und Wiederaufbau prüfen; keine kleineren Trefferflächen als Gestaltungstrick.
+- Wirkung beim Kunden: Gerade die zu bearbeitende Öffnung lässt sich schlechter erkennen als die ungewählten. Die Gestaltung soll Lochrand und Änderung zugleich sichtbar halten, bei unverändert gut treffbaren Griffen.
+- Stand: offen RM-741; als 48adcd982f5f0f72b37da4d4f9fbdada76ad03d8 normal geliefert, drei eigene Pfade. Original zehn Fälle rot/eine Positivkontrolle grün; enge Erstlesung fand GL-01: Außenrelease hielt den Griff kräftig, der alte Test verdeckte es durch ein zweites Leave. Neue Außenfälle vorher zweimal rot, nach Korrektur der Zustandsübernahme am tatsächlichen Loslasspunkt fünfzehn Fälle grün, einschließlich Innenrelease, direktem Lochdruck, echten Gizmoschritten und Abbau. Ruff/Format/mypy grün; keine neue Definition im Viewport. Native Sicht und Treffbarkeit, vollständiger Escapeweg sowie Integration auf welle4 bleiben offen. Die Schwere folgt der ausdrücklichen G9-Grenze leicht; der erste rote Fundleser wegen mittel bleibt erhalten.
