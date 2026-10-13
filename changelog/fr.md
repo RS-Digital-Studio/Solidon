@@ -35,6 +35,9 @@ dans `website/version.json`.
 - La liste des raccourcis clavier ne nomme plus qu'une fois *Sculpter*, *Squelette* et *Dessiner*.
 - Le bouton *Calculer plus grossièrement* disparaît : Solidon poursuit seul avec le calcul complet. Dans la version 0.6.0, il apparaissait aussi là où il ne changeait rien.
 - Les messages d'erreur, les détails et les avis s'affichent désormais dans le style de Solidon, avec les actions sous forme de boutons. Ctrl+C copie tout le message.
+- La couleur d'une bobine se choisit avec le sélecteur de Solidon, juste à côté du bouton, avec des couleurs nommées et la valeur exacte. Le dialogue de couleur de Windows disparaît.
+- Une cote du dessin se modifie désormais dans un champ, sur place. Les adresses et le choix du filament à remplacer sont demandés dans le style de Solidon.
+- Après l'activation ou la désactivation, la confirmation s'affiche dans le dialogue même, sans fenêtre à fermer.
 - Le dialogue *Calibrer le matériau* n'affiche plus devant que le jeu, la surcote et la compensation des trous. Pied d'éléphant, retrait, paroi et surplomb sont sous *Autres réglages*.
 - Les nombres sont alignés à droite dans tous les champs, chiffre sous chiffre.
 - Un lecteur d'écran lit le nom et l'explication de chaque champ numérique d'un dialogue.
@@ -44,10 +47,12 @@ dans `website/version.json`.
 - Sans activation, *Créer un paramètre …*, *Déplacer*, *Diviser* et les cotes dans la vue sont aussi grisés. Chaque raison indique la voie, comme *Aide → Déverrouiller Solidon …*.
 - Quand une action du *Rapport de contrôle* attend le calcul en cours, elle indique qu'elle redevient disponible ensuite, aussi pour les lecteurs d'écran.
 - Les messages de la barre d'état ne mettent plus de deux-points après une phrase complète.
+- Avec un seul corps, l'arbre des objets est aussi haut que son contenu, de même que l'historique avec une seule étape. La version 0.6.0 laissait un vide en dessous.
+- L'étape la plus récente reste visible dans l'historique quand de nouveaux corps agrandissent l'arbre des objets. Dans la version 0.6.0, elle glissait sous le bord du panneau.
 
 ### Imprimer et transmettre au slicer
 
-- Si le slicer choisi n'est pas un programme, Solidon le signale désormais aussitôt. En version 0.6.0, un message Windows sur une application 16 bits bloquait le slicer jusqu'à ce qu'on le ferme.
+- Si le slicer choisi n'est pas un programme, Solidon le dit désormais aussitôt et propose d'en choisir un autre. En version 0.6.0, le tranchage attendait qu'on ferme un message de Windows.
 
 ### Modifier et esquisser
 

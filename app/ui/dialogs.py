@@ -110,7 +110,7 @@ from app.ui.leash import (
     stop_watching_the_dying,
     weak_slot,
 )
-from app.ui.message_dialog import MessageDialog, inform
+from app.ui.message_dialog import MessageDialog, acknowledge, inform
 from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
@@ -2036,6 +2036,13 @@ class OfflineActivationDialog(QDialog):
         make_primary(save)
         website = QPushButton(tr("2 · Aktivierungsseite öffnen"), self)
         website.clicked.connect(self._open_page)
+        self.page_button = website
+        # Was ein Schritt erreicht hat, steht hier und nicht in einem Fenster
+        # obenauf (Z2): gespeichert, oder warum die Seite nicht aufging.
+        self.receipt = QLabel(self)
+        self.receipt.setWordWrap(True)
+        self.receipt.setTextFormat(Qt.TextFormat.PlainText)
+        self.receipt.hide()
         self.page_address = QLineEdit(self.PAGE_URL, self)
         self.page_address.setReadOnly(True)
         self.page_address.setAccessibleName(website.text())
@@ -2051,6 +2058,7 @@ class OfflineActivationDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(explanation)
         layout.addWidget(save)
+        layout.addWidget(self.receipt)
         page_actions = QHBoxLayout()
         page_actions.setSpacing(NORMAL)
         page_actions.addWidget(website)
@@ -2096,14 +2104,15 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        inform(
-            self,
+        # Der nächste Schritt wird Hauptknopf: die Seite öffnen (FD-24).
+        acknowledge(
+            self.receipt,
             tr("Aktivierungsanfrage gespeichert"),
             tr(
                 "Übertragen Sie die Datei auf ein Gerät mit Internet und öffnen Sie dort "
                 "die Aktivierungsseite."
             ),
-            target="message:activation_request_saved",
+            then=self.page_button,
         )
 
     def _open_page(self) -> None:
@@ -2113,14 +2122,14 @@ class OfflineActivationDialog(QDialog):
         target.setQuery(query)
         if QDesktopServices.openUrl(target) is False:
             self._copy_page()
-            inform(
-                self,
-                tr("2 · Aktivierungsseite öffnen"),
+            # Die Adresse steht darunter im Feld — der Hinweis gehört dazu.
+            acknowledge(
+                self.receipt,
                 tr(
                     "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; "
                     "öffnen Sie sie auf einem Gerät mit Internet."
                 ),
-                target="message:activation_page",
+                role="warning",
             )
 
     def _copy_page(self) -> None:
@@ -2157,12 +2166,7 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        inform(
-            self,
-            tr("Solidon ist freigeschaltet"),
-            tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
-            target="message:activated_offline",
-        )
+        # Die Quittung steht im Freischaltdialog, zu dem es zurückgeht (FD-24).
         self.accept()
 
 
@@ -2198,6 +2202,12 @@ class ActivationDialog(QDialog):
         self.state_label = QLabel(self)
         self.state_label.setWordWrap(True)
         self.state_label.setTextFormat(Qt.TextFormat.PlainText)
+        # Erfolg und Hinweis eines Schritts stehen hier, nie als Meldungsfenster
+        # (Z2, FD-24); der nächste Schritt beginnt mit leerer Zeile.
+        self.receipt = QLabel(self)
+        self.receipt.setWordWrap(True)
+        self.receipt.setTextFormat(Qt.TextFormat.PlainText)
+        self.receipt.hide()
 
         introduction = QLabel(
             tr(
@@ -2309,6 +2319,9 @@ class ActivationDialog(QDialog):
         device_layout.addWidget(completion)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        close = buttons.button(QDialogButtonBox.StandardButton.Close)
+        assert close is not None
+        self.close_button = close
         buttons.addButton(self.forget_button, QDialogButtonBox.ButtonRole.DestructiveRole)
         make_danger(self.forget_button)
         button_layout = buttons.layout()
@@ -2320,6 +2333,7 @@ class ActivationDialog(QDialog):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.state_label)
+        layout.addWidget(self.receipt)
         layout.addWidget(introduction)
         # Zwei Schritte als flache Abschnitte wie in jedem Dialog (RM-518).
         from app.ui.panels import collapsible
@@ -2547,6 +2561,11 @@ class ActivationDialog(QDialog):
         self.online_button.setEnabled(pending_activation and named and not busy)
         self.offline_button.setEnabled(pending_activation and named and not busy)
         self.buy_button.setEnabled(not damaged and not locked_locally and not busy)
+        if self.online_button.isEnabled() and not self.online_button.isDefault():
+            # Nach einer Quittung führte *Schließen* (``acknowledge``); steht wieder
+            # eine Aktivierung an, führt wieder ihr kurzer Weg.
+            make_primary(self.close_button, leading=False)
+            make_primary(self.online_button)
         self.forget_button.setEnabled(
             (activation.read_key() is not None or state.licence is not None or pending_deactivation)
             and not busy
@@ -2587,6 +2606,7 @@ class ActivationDialog(QDialog):
         self.forget_button.setAccessibleDescription(forget_hint)
 
     def _remember(self) -> None:
+        self.receipt.hide()
         text = self.field.toPlainText().strip()
         if not text:
             # Erreichbar bleibt das über die Tastatur; geschlossen wird deshalb
@@ -2600,22 +2620,22 @@ class ActivationDialog(QDialog):
             # des Fehlers sind die halbe Regel 17.
             show_error(problem, self)
             return
+        self._show_state()
+        self._follow_field()
+        self.device_name.setFocus()
         if activation.read_key() is None:
-            inform(
-                self,
-                tr("Solidon freischalten"),
+            acknowledge(
+                self.receipt,
                 tr(
                     "Der Schlüssel gilt für diese Sitzung, ließ sich aber nicht "
                     "ablegen — beim nächsten Start wird er wieder gebraucht."
                 ),
-                target="message:activation_reminder",
+                role="warning",
             )
-        self._show_state()
-        self._follow_field()
-        self.device_name.setFocus()
 
     def _forget(self) -> None:
         """Nimmt den abgelegten Schlüssel weg — vor dem Verkauf des Rechners."""
+        self.receipt.hide()
         if (
             activation.state().certificate is not None
             or activation.pending_deactivation_request() is not None
@@ -2642,6 +2662,7 @@ class ActivationDialog(QDialog):
 
     def _activation_request(self) -> str | None:
         """Prüft Feld und Gerätename und erzeugt genau eine signierte Anfrage."""
+        self.receipt.hide()
         try:
             activation.remember(self.field.toPlainText().strip())
             return activation.create_activation_request(self.device_name.text())
@@ -2669,9 +2690,17 @@ class ActivationDialog(QDialog):
         request = self._activation_request()
         if request is None:
             return
-        OfflineActivationDialog(request, self).exec()
+        answered = OfflineActivationDialog(request, self).exec()
         self._show_state()
         self._follow_field()
+        if answered == QDialog.DialogCode.Accepted:
+            # Angenommen heißt eingelesen und eingetragen (``_import_answer``).
+            acknowledge(
+                self.receipt,
+                tr("Solidon ist freigeschaltet"),
+                tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+                then=self.close_button,
+            )
 
     def _online_completed(self, answer: str) -> None:
         try:
@@ -2679,13 +2708,14 @@ class ActivationDialog(QDialog):
         except AppError as problem:
             show_error(problem, self)
             return
-        inform(
-            self,
+        self._show_state()
+        # Am Ort und ohne Fenster obenauf (Z2, FD-24); weiter geht es mit Schließen.
+        acknowledge(
+            self.receipt,
             tr("Solidon ist freigeschaltet"),
             tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
-            target="message:activated_online",
+            then=self.close_button,
         )
-        self._show_state()
 
     def _online_failed(self, problem: object) -> None:
         if isinstance(problem, AppError):
@@ -2768,16 +2798,16 @@ class ActivationDialog(QDialog):
             self._show_state()
             return
         self.field.clear()
-        inform(
-            self,
+        self._show_state()
+        acknowledge(
+            self.receipt,
             tr("Rechner deaktiviert"),
             tr(
                 "Die lokale Freischaltung und der Lizenzschlüssel wurden entfernt. "
                 "Der Geräteplatz ist jetzt für einen anderen Rechner frei."
             ),
-            target="message:deactivated",
+            then=self.close_button,
         )
-        self._show_state()
 
     def _deactivation_failed(self, problem: object) -> None:
         detail = (

@@ -441,6 +441,7 @@ entfernt hat.
 | 2026-09-08 | [Bauplan v12 — vollständiger Abgleich (08.09.2026)](#bauplan-v12--vollständiger-abgleich-08092026) |
 | 2026-10-11 | [RM-782: Die Lochfeld-Öffnung bleibt Wabe, auch im Quadratraster (11.10.2026)](#rm-782-die-lochfeld-öffnung-bleibt-wabe-auch-im-quadratraster-11102026) |
 | 2026-10-12 | [RM-788: Ein Slicertest wartete auf ein Windows-Fenster, das niemand sah (12.10.2026)](#rm-788-ein-slicertest-wartete-auf-ein-windows-fenster-das-niemand-sah-12102026) |
+| 2026-10-12 | [RM-789: Die Einrichtung von ComfyUI startet hinter der gemeinsamen Prozessgrenze (12.10.2026)](#rm-789-die-einrichtung-von-comfyui-startet-hinter-der-gemeinsamen-prozessgrenze-12102026) |
 | ohne Datum | [Gegen echte Modelle geprüft](#gegen-echte-modelle-geprüft) |
 | ohne Datum | [Referenzkorpus und Passungen vervollständigt](#referenzkorpus-und-passungen-vervollständigt) |
 | ohne Datum | [Durchsicht nach P12 — was noch offen ist](#durchsicht-nach-p12--was-noch-offen-ist) |
@@ -48476,12 +48477,19 @@ PowerShells `Start-Process` — so starteten beide — hingen jedes Mal, nachges
 fünf. `gw3` war nur der Arbeiter, in dessen Anfangsblock die Datei liegt. Dasselbe trifft die
 Anwendung, die Explorer und Startmenü über `ShellExecute` im Standardfehlermodus starten, wenn
 der Kunde als Slicer eine Datei wählt, die kein Programm ist.
-**Behoben (Zweig `fix/testisolation`, `e6eea822d`):** `process.no_error_dialogs()` setzt
-`SEM_FAILCRITICALERRORS` nur für den startenden Faden und nur für den Start; das Programm erbt
-ihn nicht. Jeder `subprocess`-Start unter `app/` steht darin: `run_limited`,
-`run_stream_limited`, `_taskkill`, das Slicerfenster, der Dienststart, die ComfyUI-Einrichtung,
-der Installer und das Einhängen eines AppImage. Changelog 0.6.1 unter *Drucken und Übergabe an
-den Slicer*.
+**Behoben (Zweig `fix/rm-788-main`, `b6f973f8d`; auf `fix/testisolation` als `e6eea822d`):**
+`process.no_error_dialogs()` setzt `SEM_FAILCRITICALERRORS` nur für den startenden Faden und nur
+für den Start; das Programm erbt ihn nicht. Jeder `subprocess`-Start unter `app/` steht darin:
+`run_limited`, `run_stream_limited`, `_taskkill`, das Slicerfenster, der Dienststart, die
+ComfyUI-Einrichtung, der Installer und das Einhängen eines AppImage. **Nach dem Review
+(`f41e18fcf`, `940fc9496`):** Statt des Windows-Texts „Die Version von %1 …“ liest der Kunde
+„Die gewählte Datei ist kein Programm.“ mit dem Dateinamen, *Einen anderen Slicer auswählen*
+zuerst und *Nur exportieren* danach; Slicen und Fenster fragen dieselbe Stelle
+(`discover.slicer_start_refused`: Windows 193 und 216, POSIX `ENOEXEC`; einer Datei ohne
+Ausführungsrecht nennt `EACCES` das und den Weg, sonst bleibt „Permission denied“). Der
+Wächter sieht auch Aliase, Direktimporte, `os.startfile`, `os.system`, `os.spawn*`, `os.exec*`,
+`asyncio` und `QProcess`; Regel (`kern.md`, `tests.md`) und Karte nennen den Vertrag.
+Changelog 0.6.1 unter *Drucken und Übergabe an den Slicer*.
 **Nachweis:** `test_process.py::test_a_file_that_is_no_program_fails_at_once_instead_of_waiting_for_a_click`
 startet `run_limited` und `run_stream_limited` in einem Kind mit `CREATE_DEFAULT_ERROR_MODE`
 und endet nach der Frist ab dem Aufruf rot mit der Ursache in der Meldung;
@@ -48490,4 +48498,28 @@ jedem Start, mit Gegenprobe. Am Stand davor rot (acht Starts ohne Block, beide L
 10 s), danach grün. Abnahme im Standardfehlermodus, gepinnt: 20 gleichzeitige Läufe von
 `test_print_settings.py` und `test_process.py` mit je 938 bestandenen Fällen, der Slicertest
 höchstens 0,05 s; vier gleichzeitige Nachstellungen der Testfolge von `gw3` mit je 2 390
-bestandenen Fällen; in keinem Lauf ein Hänger oder ein Systemfenster.
+bestandenen Fällen; in keinem Lauf ein Hänger oder ein Systemfenster. Die Absage prüft
+`test_print_settings.py::test_a_slicer_that_cannot_start_is_an_answer` an beiden Startwegen,
+am Stand davor rot; `ENOEXEC`, `EACCES` ohne Datei und einen fehlenden Pfad
+`test_discover.py::test_a_start_that_finds_no_program_is_said_in_own_words_everywhere`, die
+Datei ohne Ausführungsrecht `test_a_slicer_without_execute_permission_says_how_to_allow_it`.
+
+## RM-789: Die Einrichtung von ComfyUI startet hinter der gemeinsamen Prozessgrenze (12.10.2026)
+
+<a id="rm-789-die-einrichtung-von-comfyui-startet-hinter-der-gemeinsamen-prozessgrenze-12102026"></a>
+<a id="rm-789"></a>
+
+**RM-789 — `comfy_setup._run` startete ohne die gemeinsame Prozessgrenze (§32).** Gefunden im
+Review zu RM-788: Das Python von ComfyUI bekam die ganze Umgebung von Solidon samt gesetzter
+API-Schlüssel und Python-Suchpfade, den Arbeitsordner des Aufrufers und keine eigene
+Prozessgruppe; unter Windows ging dazu ein Konsolenfenster auf, und Abbruch oder Frist trafen
+mit `process.kill()` nur das direkte Kind.
+**Behoben (Zweig `fix/rm-788-main`, `879d12c01`):** Start mit `trusted_environment`,
+`trusted_cwd` und `process_group_options(no_window=True)`, Abbruch und Frist über
+`terminate_process_tree`. Was der Download von Hugging Face liest, reist mit: `HF_*` (Spiegel,
+Cache, Zugang) und `HUGGING_FACE_HUB_TOKEN` — der Schlüssel gehört zu genau diesem Programm.
+Proxy-Adressen reisen ohne Zugangsdaten, wie bei pip und winget (§32, im Review entschieden).
+**Nachweis:** `test_process.py::test_the_comfyui_setup_starts_behind_the_shared_boundary`
+(kein fremder Schlüssel, kein `PYTHONPATH`, `HF_ENDPOINT` da, Arbeitsordner `trusted_cwd`) und
+`test_a_cancelled_comfyui_step_ends_its_whole_tree` (ein Enkel endet mit dem Abbruch), am Stand
+davor beide rot — der Enkel schlief seine vier Minuten zu Ende.

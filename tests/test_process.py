@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import contextlib
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -748,19 +749,44 @@ def test_a_process_that_ends_on_its_own_keeps_its_return_code(tmp_path: Path) ->
 #: Die Wurzel des Baums, aus dem Kinder ``app`` laden.
 ROOT = Path(__file__).resolve().parents[1]
 
-#: Die Aufrufe, mit denen ``subprocess`` ein Programm startet.
-_STARTS = frozenset({"Popen", "run", "call", "check_call", "check_output"})
+
+def _starts_a_program(module: str, name: str) -> bool:
+    """Ob ``<module>.<name>(…)`` ein Programm startet — über ``subprocess`` und daran vorbei."""
+    if module == "subprocess":
+        return name in {"Popen", "run", "call", "check_call", "check_output"}
+    if module == "asyncio":
+        return name in {"create_subprocess_exec", "create_subprocess_shell"}
+    if module == "os":
+        return name in {"startfile", "system", "popen"} or name.startswith(
+            ("spawn", "exec", "posix_spawn")
+        )
+    return False
 
 
-def _is_start(call: ast.Call) -> bool:
-    """``subprocess.Popen(…)`` und Geschwister."""
-    function = call.func
-    return (
-        isinstance(function, ast.Attribute)
-        and function.attr in _STARTS
-        and isinstance(function.value, ast.Name)
-        and function.value.id == "subprocess"
-    )
+#: Was eine Datei tragen muss, damit sie einen Start enthalten kann: den Namen
+#: des Moduls oder der Startfunktion, auch hinter einem Alias. Eine Datei ohne
+#: Treffer wird nicht geparst; das Parsen aller Dateien unter ``app/`` war fast
+#: die ganze Laufzeit des Wächters. Zuerst feste Wörter, die Python ohne
+#: Muster sucht; nur ``system`` und ``popen`` stehen auch in gewöhnlichem Text
+#: und brauchen das Muster.
+_START_WORDS = (
+    "subprocess",
+    "startfile",
+    "QProcess",
+    "spawnl",
+    "spawnv",
+    "posix_spawn",
+    "execl",
+    "execv",
+)
+_SYSTEM_OR_POPEN = re.compile(r"\b(?:system|popen)\s*\(|import[^\n]*\b(?:system|popen)\b")
+
+
+def _may_start(source: str) -> bool:
+    """Ob ``source`` einen Start enthalten kann (verlustfrei gegenüber :func:`_scan`)."""
+    if any(word in source for word in _START_WORDS):
+        return True
+    return ("system" in source or "popen" in source) and bool(_SYSTEM_OR_POPEN.search(source))
 
 
 def _is_shield(expression: ast.expr) -> bool:
@@ -772,38 +798,96 @@ def _is_shield(expression: ast.expr) -> bool:
     return name == "no_error_dialogs"
 
 
-def _unshielded_starts(source: str) -> tuple[list[int], list[int]]:
-    """Zeilen aller Programmstarts und der Starts außerhalb von ``no_error_dialogs``."""
+def _scan(source: str) -> tuple[list[int], list[int], list[int]]:
+    """Zeilen aller Programmstarts, der Starts außerhalb von ``no_error_dialogs``
+    und jeder Nennung von ``QProcess``.
+
+    Ein Start ist ``subprocess.Popen(…)`` und seine Geschwister, auch über
+    ``import subprocess as …`` und ``from subprocess import …``, dazu die Wege
+    an ``subprocess`` vorbei (``os.startfile``, ``os.system``, ``os.popen``,
+    ``os.spawn*``, ``os.exec*``, ``os.posix_spawn*``,
+    ``asyncio.create_subprocess_*``). ``QProcess`` steht für sich: Sein
+    ``start`` läuft später als der Bau, kein Block schützt ihn, und unter
+    ``app/`` wird es gar nicht verwendet.
+    """
     tree = ast.parse(source)
+    modules: dict[str, str] = {}
+    direct: set[str] = set()
+    forbidden: list[int] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.partition(".")[0] in {"subprocess", "asyncio", "os"}:
+                    modules[alias.asname or alias.name.partition(".")[0]] = alias.name.partition(
+                        "."
+                    )[0]
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if node.module and _starts_a_program(node.module, alias.name):
+                    direct.add(alias.asname or alias.name)
+                if alias.name == "QProcess":
+                    forbidden.append(node.lineno)
+        elif (isinstance(node, ast.Name) and node.id == "QProcess") or (
+            isinstance(node, ast.Attribute) and node.attr == "QProcess"
+        ):
+            forbidden.append(node.lineno)
+
+    def is_start(call: ast.Call) -> bool:
+        function = call.func
+        if isinstance(function, ast.Name):
+            return function.id in direct
+        return (
+            isinstance(function, ast.Attribute)
+            and isinstance(function.value, ast.Name)
+            and _starts_a_program(modules.get(function.value.id, ""), function.attr)
+        )
+
     shielded: set[int] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.With) and any(_is_shield(item.context_expr) for item in node.items):
             for statement in node.body:
                 shielded.update(id(inner) for inner in ast.walk(statement))
-    starts = [node for node in ast.walk(tree) if isinstance(node, ast.Call) and _is_start(node)]
+    starts = [node for node in ast.walk(tree) if isinstance(node, ast.Call) and is_start(node)]
     return (
         sorted(node.lineno for node in starts),
         sorted(node.lineno for node in starts if id(node) not in shielded),
+        sorted(forbidden),
     )
 
 
-def test_every_program_start_of_the_application_opens_no_system_window() -> None:
-    """Jeder Start über ``subprocess`` unter ``app/`` steht in ``no_error_dialogs`` (RM-788).
+def _unshielded_starts(source: str) -> tuple[list[int], list[int], list[int]]:
+    """:func:`_scan` hinter dem Vorfilter :func:`_may_start`."""
+    return _scan(source) if _may_start(source) else ([], [], [])
 
-    Ohne den Block öffnet Windows für eine ``.exe``, die kein Programm ist, das
-    Fenster „Nicht unterstützte 16-Bit-Anwendung“ im startenden Faden und
-    wartet auf einen Klick. ``multiprocessing`` startet nur den eigenen
-    Interpreter und zählt nicht.
+
+def test_every_program_start_of_the_application_opens_no_system_window() -> None:
+    """Jeder Start unter ``app/`` steht in ``no_error_dialogs`` (RM-788), und
+    ``QProcess`` gibt es dort nicht.
+
+    Gezählt wird jeder Startweg aus :func:`_scan`: ``subprocess`` (auch hinter
+    Alias oder Direktimport), ``os.startfile``, ``os.system``, ``os.popen``,
+    ``os.spawn*``, ``os.exec*``, ``os.posix_spawn*`` und
+    ``asyncio.create_subprocess_*``. Ohne den Block öffnet Windows für eine
+    ``.exe``, die kein Programm ist, das Fenster „Nicht unterstützte
+    16-Bit-Anwendung“ im startenden Faden und wartet auf einen Klick.
+    ``multiprocessing`` startet nur den eigenen Interpreter und zählt nicht.
     """
     starts: list[str] = []
     bare: list[str] = []
+    qprocess: list[str] = []
     for path in sorted((ROOT / "app").rglob("*.py")):
-        found, unshielded = _unshielded_starts(path.read_text(encoding="utf-8"))
+        found, unshielded, named = _unshielded_starts(path.read_text(encoding="utf-8"))
         name = path.relative_to(ROOT).as_posix()
         starts += [f"{name}:{line}" for line in found]
         bare += [f"{name}:{line}" for line in unshielded]
+        qprocess += [f"{name}:{line}" for line in named]
     assert len(starts) >= 5, f"die Suche fand die Programmstarts nicht mehr: {starts}"
     assert not bare, f"Programmstart ohne no_error_dialogs: {bare}"
+    assert not qprocess, (
+        "QProcess wird unter app/ nicht verwendet: Sein start läuft nach dem Bau, kein "
+        "no_error_dialogs schützt ihn. Über process.run_limited oder subprocess starten: "
+        f"{qprocess}"
+    )
 
 
 def test_the_start_guard_sees_a_start_outside_the_block() -> None:
@@ -821,12 +905,74 @@ def test_the_start_guard_sees_a_start_outside_the_block() -> None:
         "with open('e'):\n"
         "    subprocess.check_output(['e'])\n"
     )
-    assert _unshielded_starts(source) == ([3, 5, 7, 8, 11], [3, 8, 11])
+    assert _unshielded_starts(source) == ([3, 5, 7, 8, 11], [3, 8, 11], [])
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(
+            "import subprocess as sp\nsp.Popen(['a'])\n"
+            "with no_error_dialogs():\n    sp.run(['b'])\n",
+            ([2, 4], [2], []),
+            id="import-subprocess-as",
+        ),
+        pytest.param(
+            "from subprocess import Popen as P, PIPE\nP(['a'], stdout=PIPE)\n"
+            "with no_error_dialogs():\n    P(['b'])\n",
+            ([2, 4], [2], []),
+            id="from-subprocess-import",
+        ),
+        pytest.param(
+            "import os\nos.startfile('a.exe')\nwith no_error_dialogs():\n    os.startfile('b')\n",
+            ([2, 4], [2], []),
+            id="os-startfile",
+        ),
+        pytest.param(
+            "import os as o\no.system('a')\no.spawnv(0, 'b', [])\no.execv('c', [])\n"
+            "o.popen('d')\no.path.join('e')\n",
+            ([2, 3, 4, 5], [2, 3, 4, 5], []),
+            id="os-system-spawn-exec-popen",
+        ),
+        pytest.param(
+            "from os import startfile\nstartfile('a')\n",
+            ([2], [2], []),
+            id="from-os-import",
+        ),
+        pytest.param(
+            "import asyncio\nasyncio.create_subprocess_exec('a')\n",
+            ([2], [2], []),
+            id="asyncio",
+        ),
+        pytest.param(
+            "from PySide6.QtCore import QProcess\nwith no_error_dialogs():\n"
+            "    QProcess.startDetached('a')\n",
+            ([], [], [1, 3]),
+            id="qprocess",
+        ),
+        pytest.param(
+            "import os\nos.makedirs('a')\nrun(['b'])\n",
+            ([], [], []),
+            id="nothing-that-starts",
+        ),
+    ],
+)
+def test_the_start_guard_sees_every_way_to_start_a_program(
+    source: str, expected: tuple[list[int], list[int], list[int]]
+) -> None:
+    """Gegenprobe je Form (N3): Alias, Direktimport und die Wege an ``subprocess`` vorbei.
+
+    Jede Form geht durch denselben Vorfilter wie der Wächter; was er wegließe,
+    fände der Fall hier nicht. ``QProcess`` steht in der dritten Liste, auch im
+    Block — der Wächter meldet es mit eigenem Satz.
+    """
+    assert _unshielded_starts(source) == expected
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Fehlermodus eines Fadens gibt es nur unter Windows")
 def test_the_error_mode_holds_only_inside_the_block() -> None:
-    """Der Modus gilt im Block und ist danach wieder, wie er war — auch verschachtelt."""
+    """Der Modus gilt im Block und ist danach wieder, wie er war — verschachtelt und
+    nach einer Ausnahme, wie sie ein gescheiterter Start wirft."""
     import ctypes
 
     windows: Any = ctypes
@@ -840,6 +986,9 @@ def test_the_error_mode_holds_only_inside_the_block() -> None:
         assert kernel32.GetThreadErrorMode() == inside, "der innere Block nahm den äußeren mit"
     assert inside & 0x0001 and nested & 0x0001, "SEM_FAILCRITICALERRORS fehlt im Block"
     assert kernel32.GetThreadErrorMode() == before
+    with pytest.raises(OSError, match="Start"), process.no_error_dialogs():
+        raise OSError("Start gescheitert")
+    assert kernel32.GetThreadErrorMode() == before, "nach der Ausnahme blieb der Modus stehen"
 
 
 @pytest.mark.skipif(
@@ -862,8 +1011,11 @@ def test_a_file_that_is_no_program_fails_at_once_instead_of_waiting_for_a_click(
     fake.write_text("kein programm", encoding="utf-8")
     called = tmp_path / "aufgerufen"
     extra = ", output_limit=4096, on_line=print" if start == "run_stream_limited" else ""
+    # Die Umgebung einmal vor der Marke: Ihr erster Aufruf lädt ``discover``,
+    # und das gehört nicht in die Frist ab dem Aufruf.
     script = (
         "from app.core import process\n"
+        + "process.trusted_environment()\n"
         + _stamp(called)
         + "try:\n"
         + f"    process.{start}([{str(fake)!r}], cwd=Path({str(tmp_path)!r}), "
@@ -901,4 +1053,61 @@ def test_a_file_that_is_no_program_fails_at_once_instead_of_waiting_for_a_click(
             child.kill()
             child.communicate()
     assert child.returncode == 0, output + errors
-    assert output.startswith("OSError"), output + errors
+    # 216 für einen Text oder einen MZ-Kopf ohne Programm, 193 für eine leere
+    # Datei oder eine DLL; ein verrutschter Pfad (2) erreichte den 16-Bit-Weg nie.
+    assert output.split()[:2] in (["OSError", "216"], ["OSError", "193"]), output + errors
+
+
+def test_the_comfyui_setup_starts_behind_the_shared_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Einrichtung von ComfyUI startet wie jedes externe Werkzeug (§32, RM-789).
+
+    Ihr Python bekam die ganze Umgebung von Solidon — gesetzte API-Schlüssel und
+    Python-Suchpfade eingeschlossen — und den Arbeitsordner des Aufrufers. Was
+    der Download von Hugging Face liest (``HF_*``: Spiegel, Cache, Zugang),
+    reist weiter mit; es gehört zu genau diesem Programm.
+    """
+    import json
+
+    from app.core.backends import comfy_setup
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "geheim")
+    monkeypatch.setenv("PYTHONPATH", "fremd")
+    monkeypatch.setenv("HF_ENDPOINT", "https://spiegel.example")
+    output = comfy_setup._run(
+        [
+            sys.executable,
+            "-c",
+            "import json, os; print(json.dumps([sorted(os.environ), os.getcwd()]))",
+        ],
+        "Umgebung",
+        comfy_setup._silent,
+    )
+
+    names, folder = json.loads(output.splitlines()[-1])
+    assert "ANTHROPIC_API_KEY" not in names, "ein fremder Schlüssel reiste mit"
+    assert "PYTHONPATH" not in names, "Solidons Suchpfad reiste mit"
+    assert "HF_ENDPOINT" in names, "der Spiegel von Hugging Face fehlt dem Download"
+    assert Path(folder).resolve() == process.trusted_cwd()
+
+
+def test_a_cancelled_comfyui_step_ends_its_whole_tree(tmp_path: Path) -> None:
+    """Abbrechen beendet auch, was der Schritt gestartet hat (§32, RM-789).
+
+    ``process.kill()`` traf nur das direkte Kind; ein Enkel lief weiter. Der
+    Abbruch greift, sobald der Enkel läuft.
+    """
+    from app.core.backends import comfy_setup
+
+    parent, alive = _parent_of_a_sleeper(tmp_path, then=f"time.sleep({SLEEP})\n")
+
+    with pytest.raises(comfy_setup.Cancelled):
+        comfy_setup._run(
+            [sys.executable, "-c", parent],
+            "Ein Schritt mit Enkel",
+            comfy_setup._silent,
+            alive.exists,
+        )
+
+    _assert_the_sleeper_is_gone(alive, "der Enkel überlebte den Abbruch der Einrichtung")

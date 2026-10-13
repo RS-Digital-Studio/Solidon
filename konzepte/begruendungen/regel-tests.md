@@ -537,6 +537,21 @@ zweiten Prozess 3000 Meldungen auf diesem Weg und öffnet jede, sobald ihr Name
 erscheint: In drei von acht Läufen lehnte Windows 2 bis 30 Öffnungen mit einer
 Freigabeverletzung (32) ab, in fünf keine (`elternende-umbenennen.txt`).
 
+**Eine Zeitgrenze zählt ab dem Zustand (RM-635).** Ein frischer Interpreter
+braucht unter Last Sekunden bis zu seiner ersten Zeile, und eine Frist ab dem
+Start entschied dann den Fall statt der Sache, die er prüfen sollte.
+
+**Der Fehlermodus gehört zur Betriebslage (RM-788).** Git Bash setzt
+`SEM_FAILCRITICALERRORS` und vererbt ihn (`GetErrorMode() == 0x3`); über
+PowerShells `Start-Process` und über `ShellExecute`, so wie Explorer und
+Startmenü Solidon starten, beginnt ein Prozess mit 0. Im Standardmodus öffnete
+der Start einer `.exe`, die kein Programm ist, das Fenster „Nicht unterstützte
+16 Bit-Anwendung“ und wartete auf einen Klick; aus Git Bash kam derselbe Start
+nach Millisekunden mit WinError 216 zurück. Zwei Torläufe über `Start-Process`
+hingen deshalb jedes Mal am selben Slicertest, während Läufe aus Git Bash grün
+blieben. Ein Test, der das Fenster prüft, startet sein Kind mit
+`CREATE_DEFAULT_ERROR_MODE` und sieht so dieselbe Lage wie der Kunde.
+
 ### Wenn ein Lauf steht: py-spy
 
 Ein Testlauf, der bei 0,00 CPU-Sekunden über ein Intervall steht, sagt nicht,

@@ -1006,21 +1006,24 @@ def test_the_address_question_shows_an_example_and_where_it_comes_from(
 
 
 def test_a_folder_never_reaches_the_settings(qt_app: QApplication, monkeypatch) -> None:
-    """Der Dialog fragt noch einmal, statt Unsinn zu speichern — und der Grund
-    steht dann über demselben Feld."""
+    """Der Dialog nimmt keinen Ordner, statt Unsinn zu speichern — der Grund steht
+    unter dem Feld desselben Dialogs (``InputDialog``, ``check``), und wer abbricht,
+    speichert nichts."""
     from app.ui import install_dialog
     from app.ui.install_dialog import _Row
 
-    gefragt: list[str] = []
+    ordner = r"C:\Users\Jemand\.ollama\models"
+    abgelehnt: list[str] = []
     gespeichert: list[tuple[str, str]] = []
 
-    def antworten(*args: object, **kwargs: object) -> tuple[str, bool]:
-        # Erst der Ordner, dann der Abbruch: ein echter Nutzer korrigiert oder
-        # gibt auf, und beides darf nichts speichern.
-        gefragt.append(str(args[2]) if len(args) > 2 else "")
-        return (r"C:\Users\Jemand\.ollama\models", len(gefragt) == 1)
+    def antworten(_parent: object, *, check: object, target: str, **_rest: object) -> None:
+        # Der Ordner wird abgelehnt, dann bricht der Nutzer ab.
+        assert callable(check)
+        assert target == "message:service_address"
+        abgelehnt.append(check(ordner))
+        return None
 
-    monkeypatch.setattr(install_dialog.QInputDialog, "getText", antworten)
+    monkeypatch.setattr(install_dialog, "ask_text", antworten)
     monkeypatch.setattr(
         install_dialog.tools,
         "set_address",
@@ -1034,8 +1037,9 @@ def test_a_folder_never_reaches_the_settings(qt_app: QApplication, monkeypatch) 
         row.deleteLater()
 
     assert gespeichert == [], "ein Ordner ist keine Adresse und wird nicht gemerkt"
-    assert len(gefragt) == 2, "es wird erneut gefragt, nicht stillschweigend verworfen"
-    assert "Ordner" in gefragt[1], "beim zweiten Mal steht der Grund über dem Feld"
+    assert len(abgelehnt) == 1 and "Ordner" in abgelehnt[0], "der Grund nennt den Fehlgriff"
+    assert install_dialog.address_problem("") == "", "leer heißt: wieder die Vorgabe"
+    assert install_dialog.address_problem("http://localhost:11434") == ""
 
 
 @pytest.mark.parametrize("present", [False, True])

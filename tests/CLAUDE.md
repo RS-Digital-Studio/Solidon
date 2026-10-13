@@ -29,7 +29,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Sagt eine tangierende Schnittebene vor den Stiften ab, während offene Eingänge und getrennte Schalen ihre eigene Diagnose behalten? Findet Auto Split eine gültige Folgeebene? | `test_tangent_cuts.py` — Korpusplatte, beide Güten und gemeinsame Schnittwege |
 | Sammelparameter-Ops über das Register | `test_gesture_ops.py` |
 | Öffnen alte Projektdateien? Halten die Korpusdateien, was sie belegen? | `test_project.py` mit `data/projects/` · `test_corpus.py` (§34) |
-| Trägt jede Ausnahme einen Vorschlag? | `test_errors.py`, `test_message_dialog.py` |
+| Trägt jede Ausnahme einen Vorschlag? Meldung und Eingabe im Hausstil? | `test_errors.py`, `test_message_dialog.py`, `test_input_dialog.py` |
 | Erreichen Helfer- und Stopfehler den Kundenweg unverändert? | `test_prepare.py` · `test_difference.py` · `test_missing_ops.py` · `test_repair.py` · `test_threemf_native_materials.py` |
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Umschalter, vier Felder vorn? | `test_theme_and_palette.py` · `test_interface_limits.py` |
@@ -69,7 +69,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Fällt weg, was ein Schnitt wegnimmt — auch ein Bausteinmerkmal, das die Erkennung nicht sieht —, behält ein Passungsprüfstück seine Passungsmerkmale, und folgt der Rest einem abgelegten Prüfstück? | `test_cut_features.py` |
 | Bleiben Musteränderung und -entfernung auf STL-gerundeten Zylinderfacetten dicht und frei von Selbstschnitten? | `test_pattern_features.py`; gegen Plattformrauschen `test_platform_identity.py` |
 | Wird ein kleines Feld unter den Schwellen ausdrücklich ein Muster — mit Absagen für Bohrungen, Träger und zwei Seiten, durch Verlauf, Projektdatei, Cache und Undo? | `test_pattern_grouping.py` |
-| Erkennt die Gruppenerkennung Kammer, Nut, Kanal, Gewinde, Verschluss, Scharnier, Schrift und Aufnahme samt Gegenproben und Korpus, und ändert *Kammer ändern* eine Kammer als Ganzes? Ändert *Verschluss ändern* Spiel und Drehweg aller Stellungen genau um ihren Umriss? | `test_functional_groups.py` · `test_chamber_ops.py` · `test_closure_ops.py` (Rohr mit L-Wegen, Plattendeckel als STL, Bausteinaufnahme); Baum und Merkmalfenster in `test_feature_panel.py`; der Kasten dazu ist `helpers.walled_bin` |
+| Erkennt die Gruppenerkennung Kammer, Nut, Kanal, Gewinde, Verschluss, Scharnier, Schrift und Aufnahme samt Gegenproben und Korpus, und ändert *Kammer ändern* eine Kammer als Ganzes? Ändert *Verschluss ändern* Spiel und Drehweg aller Stellungen genau um ihren Umriss? | `test_functional_groups.py` · `test_chamber_ops.py` · `test_closure_ops.py`; Baum und Merkmalfenster in `test_feature_panel.py`; der Kasten dazu ist `helpers.walled_bin` |
 | Findet die Bindungshilfe feste Zahlen, die zu Projektmaßen passen, wählt sie nur Sicheres vor, und folgt das gebundene Puppenhaus seinen Maßen? Zählt der Plattenwähler die Körper, und rahmt die Plattenwahl einmal? | `test_parameter_binding.py` · `test_parameter_binding_ui.py`; Platten in `test_plates.py`; das Puppenhaus ist `helpers.dollhouse_document` |
 | Liest der exakte Körper dieselben Muster wie sein STL-Zwilling? | `test_exact_patterns.py` — STEP und binäre STL derselben Konstruktion über den echten Einleseweg |
 | Erkennungsarbeiter bitgleich, abbrechbar? | `test_perceive_workers.py` |

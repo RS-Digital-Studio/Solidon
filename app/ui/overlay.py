@@ -1501,12 +1501,14 @@ class OverlayHost(QWidget):
         jedes Bild.
         """
         running = self._moves.get(id(zone))
-        if running is not None and running.endValue() == target:
+        if moving and running is not None and running.endValue() == target:
             # Schon auf dem Weg genau dorthin. Sie abzubrechen und neu zu
             # starten hieße, bei jedem eingehenden ``LayoutRequest`` wieder
             # von vorn zu beginnen — die Karte käme nie an, und weil sie
             # unterwegs ist, stimmt ihre Geometrie auch nie mit dem Ziel
-            # überein, was den nächsten Neustart auslöst.
+            # überein, was den nächsten Neustart auslöst. **Ein Setzen ohne
+            # Bewegung** (Fenstergröße, ``reflow``) springt dagegen ans Ziel:
+            # Wer danach misst, liest sonst eine Zone unterwegs.
             return
         running = self._moves.pop(id(zone), None)
         if running is not None:

@@ -2847,7 +2847,9 @@ zwischen Leuten. Eine fremde Datei darf nichts ausführen.
   Zusage steht als **Sperre** für jeden künftigen Weg — wer einen baut, baut
   die Prüfung mit
 - **Jedes externe Werkzeug benutzt die gemeinsame Prozessgrenze**:
-  ausdrücklicher Arbeitsordner, getrimmte Umgebung und eigene Prozessgruppe.
+  ausdrücklicher Arbeitsordner, getrimmte Umgebung und eigene Prozessgruppe;
+  der Start selbst öffnet kein Systemfenster des Betriebssystems, eine
+  ungültige Programmdatei wird eine Absage mit Ausweg (RM-788).
   Für Aufrufe, auf deren Antwort Solidon wartet, gelten Zeit- und
   Ausgabegrenzen; Abbruch beendet den Prozessbaum. An den Nutzer übergebene
   Slicerfenster, Dienste und Installer dürfen nach dem Start weiterlaufen

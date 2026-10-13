@@ -34,6 +34,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A lista de atalhos de teclado nomeia *Modelar*, *Esqueleto* e *Desenhar* uma única vez.
 - O botão *Calcular de forma mais aproximada* deixa de existir: o Solidon continua sozinho com o cálculo completo. Na versão 0.6.0 aparecia também onde não mudava nada.
 - As mensagens de erro, os detalhes e os avisos aparecem agora no estilo do Solidon, com as ações como botões. Ctrl+C copia a mensagem inteira.
+- A cor de uma bobina escolhe-se com o seletor de cores do Solidon junto ao botão, com cores nomeadas e o valor exato. A caixa de cores do Windows desaparece.
+- Uma cota do desenho altera-se agora num campo no próprio lugar. Os endereços e a escolha do filamento a substituir são pedidos no estilo do Solidon.
+- Depois de ativar ou desativar, a confirmação aparece no próprio diálogo, sem uma janela que seja preciso fechar.
 - A caixa *Calibrar material* mostra à frente apenas a folga, a interferência e a compensação de furos. Pé de elefante, contração, parede e saliência ficam em *Mais definições*.
 - Os números ficam alinhados à direita em todos os campos, algarismo sob algarismo.
 - Um leitor de ecrã lê o nome e a explicação de cada campo numérico de uma caixa de diálogo.
@@ -43,10 +46,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Sem ativação, também *Criar parâmetro …*, *Mover*, *Dividir* e as medidas na vista ficam a cinzento. Cada motivo indica o caminho, como *Ajuda → Desbloquear o Solidon …*.
 - Quando uma ação do *Relatório de verificação* espera pelo cálculo em curso, indica que depois volta a ficar disponível, também para leitores de ecrã.
 - As mensagens da barra de estado já não colocam dois pontos depois de uma frase completa.
+- Com um só corpo, a árvore de objetos tem a altura do seu conteúdo, e o histórico com um só passo também. Na versão 0.6.0 ficava espaço vazio por baixo.
+- O passo mais recente continua visível no histórico quando novos corpos fazem crescer a árvore de objetos. Na versão 0.6.0 deslizava para baixo do limite do painel.
 
 ### Imprimir e entregar ao slicer
 
-- Se o slicer escolhido não for um programa, o Solidon indica-o agora de imediato. Na versão 0.6.0 uma mensagem do Windows sobre uma aplicação de 16 bits parava o slicer até alguém a fechar.
+- Se o slicer escolhido não for um programa, o Solidon diz-o agora de imediato e propõe escolher outro. Na versão 0.6.0, o fatiamento esperava que alguém fechasse uma mensagem do Windows.
 
 ### Editar e esboçar
 

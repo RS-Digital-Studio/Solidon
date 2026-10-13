@@ -36,7 +36,6 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QMenu,
     QProgressBar,
@@ -48,11 +47,11 @@ from PySide6.QtWidgets import (
 from app.core import discover, install, tools
 from app.core.log import get_logger
 from app.i18n import tr
+from app.ui.input_dialog import ask_text
 from app.ui.labels import UNEXPECTED_CRASH
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.message_dialog import MessageDialog
 from app.ui.style import NORMAL, TIGHT, WIDE, DialogScrollArea, make_primary
-from app.ui.window_names import raw_window
 
 if TYPE_CHECKING:
     from app.ui.settings import UiSettings
@@ -386,9 +385,9 @@ class _Row(QWidget):
         else:
             self._choose_file()
 
-    def _address_question(self, problem: str = "") -> str:
-        """Die Frage über dem Feld — mit einem Beispiel, und im zweiten Anlauf
-        mit dem Grund.
+    def _address_question(self) -> str:
+        """Die Frage über dem Feld — mit einem Beispiel. Der Grund nach einem
+        Fehlgriff steht unter dem Feld (:func:`address_problem`).
 
         **Bis zum 24.08.2026 stand hier ein Satz und sonst nichts:** „Adresse,
         unter der es erreichbar ist." Wer noch nie eine Dienstadresse
@@ -419,35 +418,30 @@ class _Row(QWidget):
                 "Programm beim Start selbst nennt.\n"
                 "Leer lassen heißt: wieder die Vorgabe benutzen."
             ).format(example=example)
-        return f"{problem}\n\n{sentence}" if problem else sentence
+        return sentence
 
     def _choose_address(self) -> None:
         """Fragt, bis die Antwort eine Adresse ist — oder der Nutzer abbricht.
 
-        Eine Schleife und kein zweiter Dialog: Der Grund steht über demselben
-        Feld, die getippte Eingabe bleibt stehen, und wer abbricht, bricht ab.
-        Ein Fehlerfenster dazwischen wäre ein Klick mehr für dieselbe Auskunft.
+        Derselbe Dialog bleibt offen: Der Grund steht unter dem Feld, die
+        getippte Eingabe bleibt stehen, und wer abbricht, bricht ab. Ein
+        Fehlerfenster dazwischen wäre ein Klick mehr für dieselbe Auskunft.
         """
         if self.tool is None:
             return
-        problem = ""
-        entered = self.tool.remote_address() or self.tool.url
-        while True:
-            with raw_window("message:service_address"):
-                entered, accepted = QInputDialog.getText(
-                    self,
-                    str(self.tool.title),
-                    self._address_question(problem),
-                    text=entered,
-                )
-            if not accepted:
-                return
-            trouble = discover.unusable_address(entered)
-            if trouble is None:
-                tools.set_address(self.tool.id, entered.strip())
-                self.locationChanged.emit()
-                return
-            problem = str(trouble)
+        entered = ask_text(
+            self,
+            title=str(self.tool.title),
+            sentence=self._address_question(),
+            target="message:service_address",
+            accept=tr("Übernehmen"),
+            text=self.tool.remote_address() or self.tool.url,
+            check=address_problem,
+        )
+        if entered is None:
+            return
+        tools.set_address(self.tool.id, entered.strip())
+        self.locationChanged.emit()
 
     def _choose_file(self) -> None:
         assert self.tool is not None
@@ -472,6 +466,16 @@ class _Row(QWidget):
 
 #: Wo ein Knopf seinen eigenen Satz ablegt, solange er einen Wartegrund trägt.
 _OWN_TIP = "solidon_own_tip"
+
+
+def address_problem(entered: str) -> str:
+    """Warum ``entered`` keine Dienstadresse ist — oder ein leerer Satz.
+
+    Die Prüfung des Kerns (``discover.unusable_address``); leer bleibt gültig,
+    das heißt: wieder die Vorgabe.
+    """
+    trouble = discover.unusable_address(entered)
+    return "" if trouble is None else str(trouble)
 
 
 def _explain_while_busy(button: QPushButton, busy: str) -> None:

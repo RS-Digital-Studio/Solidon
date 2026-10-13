@@ -26,9 +26,23 @@ SETTINGS_CLASS: Final = "SettingsDialog"
 
 #: Rohe Qt-Fenster: Klassen und die Fabrikfunktionen, die eines bauen.
 RAW_CLASSES: Final[frozenset[str]] = frozenset({"QMessageBox", "QInputDialog", "QColorDialog"})
-#: Was eine Meldung im Hausstil baut (``app/ui/message_dialog.py``). Das Modul, das
-#: sie definiert, zählt nicht: ``inform`` ist ein Baustein, kein Fenster des Kunden.
-MESSAGE_BUILDERS: Final[frozenset[str]] = frozenset({"MessageDialog", "inform"})
+#: Was eine Meldung oder Eingabe im Hausstil baut: ``app/ui/message_dialog.py``,
+#: ``app/ui/input_dialog.py`` und die Eingabe am Ort aus ``app/ui/place_popup.py``
+#: (FD-21, FD-22). Ein Modul, das einen davon definiert, zählt nicht: ``inform`` ist
+#: ein Baustein, kein Fenster des Kunden.
+MESSAGE_BUILDERS: Final[frozenset[str]] = frozenset(
+    {
+        "MessageDialog",
+        "inform",
+        "InputDialog",
+        "ask_text",
+        "ask_choice",
+        "ColourPopup",
+        "choose_colour",
+        "ValuePopup",
+        "edit_value",
+    }
+)
 RAW_FACTORIES: Final[frozenset[str]] = frozenset(
     {
         "about",
@@ -158,8 +172,8 @@ def _section_title(node: ast.AST, builders: Iterable[str] = ("collapsible",)) ->
 
 def _builds_raw_window(node: ast.AST, *, messages: bool = True) -> bool:
     """``QMessageBox(…)`` oder ``QInputDialog.getItem(…)`` — ein rohes Qt-Fenster —, oder
-    eine Meldung im Hausstil (``MessageDialog(…)``, ``inform(…)``): Auch sie ist ein
-    Meldungsfenster, das seine Zeile in der Funktionsliste braucht (FD-21)."""
+    eine Meldung oder Eingabe im Hausstil (:data:`MESSAGE_BUILDERS`): Auch sie ist ein
+    Meldungsfenster, das seine Zeile in der Funktionsliste braucht (FD-21, FD-22)."""
     if not isinstance(node, ast.Call):
         return False
     func = node.func
@@ -227,7 +241,7 @@ class UiScan:
     zweideutig (``function_list.raw_window_rows`` hält dann an)."""
     raw_targets: Mapping[str, str] = field(default_factory=dict)
     """Das Ziel, das ein Meldungsfenster selbst setzt (``setProperty(…TARGET_PROPERTY, …)``
-    oder ``raw_window("…")``), je Funktionsname."""
+    oder ``target=`` am Bauer im Hausstil), je Funktionsname."""
     settings_targets: Mapping[str, str] = field(default_factory=dict)
     """Das Ziel eines Einstellungsabschnitts, den sein Abschnittsbauer kennzeichnet."""
     texts: frozenset[str] = frozenset()
@@ -261,7 +275,9 @@ def _scan(items: tuple[tuple[str, str], ...]) -> UiScan:
     texts: set[str] = set()
     for module, text in items:
         tree = ast.parse(text, filename=module)
-        builds_messages = "class MessageDialog(" not in text
+        builds_messages = not any(
+            f"class {name}(" in text or f"def {name}(" in text for name in MESSAGE_BUILDERS
+        )
         raw_here = any(name in text for name in RAW_CLASSES) or (
             builds_messages and any(name in text for name in MESSAGE_BUILDERS)
         )
@@ -359,7 +375,8 @@ def _own_target(
     function: ast.FunctionDef | ast.AsyncFunctionDef, constants: Mapping[str, str]
 ) -> str:
     """Das Kennzeichen, das ein Meldungsfenster selbst setzt — ``box.setProperty(…TARGET_
-    PROPERTY, X)``, ``with raw_window(X)`` oder ``MessageDialog(…, target=X)`` —, sonst leer."""
+    PROPERTY, X)`` oder der Aufruf eines Bauers im Hausstil mit ``target=X``
+    (:data:`MESSAGE_BUILDERS`) —, sonst leer."""
     for node in _own_nodes(function):
         if isinstance(node, ast.Call) and _called_name(node) in MESSAGE_BUILDERS:
             for word in node.keywords:
@@ -374,16 +391,6 @@ def _own_target(
             and (found := _text_of(node.args[1], constants))
         ):
             return found
-        if isinstance(node, ast.With | ast.AsyncWith):
-            for item in node.items:
-                call = item.context_expr
-                if (
-                    isinstance(call, ast.Call)
-                    and _called_name(call) == "raw_window"
-                    and call.args
-                    and (found := _text_of(call.args[0], constants))
-                ):
-                    return found
     return ""
 
 

@@ -34,6 +34,9 @@ scrive in `website/version.json`.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
 - Il pulsante *Calcolare in modo più grossolano* non c'è più: Solidon prosegue da solo con il calcolo completo. Nella versione 0.6.0 compariva anche dove non cambiava nulla.
 - Messaggi di errore, dettagli e avvisi ora appaiono nello stile di Solidon, con le azioni come pulsanti. Ctrl+C copia l'intero messaggio.
+- Il colore di una bobina si sceglie con il selettore di Solidon direttamente sul pulsante, con colori nominati e il valore esatto. La finestra colori di Windows non c'è più.
+- Una quota del disegno ora si modifica in un campo sul posto. Indirizzi e la scelta del filamento da sostituire vengono chiesti nello stile di Solidon.
+- Dopo l'attivazione o la disattivazione la conferma compare nella finestra stessa, senza un'altra finestra da chiudere.
 - La finestra *Calibra il materiale* mostra davanti solo gioco, interferenza e compensazione dei fori. Piede d'elefante, ritiro, parete e sbalzo sono in *Altre impostazioni*.
 - I numeri sono allineati a destra in tutti i campi, cifra sotto cifra.
 - Uno screen reader legge il nome e la spiegazione di ogni campo numerico di una finestra di dialogo.
@@ -43,10 +46,12 @@ scrive in `website/version.json`.
 - Senza attivazione sono in grigio anche *Crea parametro …*, *Sposta*, *Dividi* e le misure nella vista. Ogni motivo indica la strada, come *Aiuto → Sblocca Solidon …*.
 - Se un'azione del *Rapporto di verifica* attende il calcolo in corso, dice che poi torna disponibile, anche ai lettori di schermo.
 - I messaggi nella barra di stato non mettono più i due punti dopo una frase completa.
+- Con un solo corpo l'albero degli oggetti è alto quanto il suo contenuto, e così la cronologia con un solo passo. Nella versione 0.6.0 sotto restava spazio vuoto.
+- Il passo più recente resta visibile nella cronologia quando nuovi corpi fanno crescere l'albero degli oggetti. Nella versione 0.6.0 scivolava sotto il bordo del pannello.
 
 ### Stampare e passare allo slicer
 
-- Se lo slicer scelto non è un programma, Solidon ora lo segnala subito. Nella versione 0.6.0 un messaggio di Windows su un'applicazione a 16 bit bloccava lo slicer finché qualcuno non lo chiudeva.
+- Se lo slicer scelto non è un programma, Solidon ora lo dice subito e propone di sceglierne un altro. Nella versione 0.6.0 lo slicing aspettava che qualcuno chiudesse un messaggio di Windows.
 
 ### Modificare e disegnare
 

@@ -34,6 +34,9 @@ it into `website/version.json`.
 - The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
 - The *Compute more coarsely* button is gone, as Solidon carries on with the full calculation by itself. In version 0.6.0 it also appeared where it changed nothing.
 - Error messages, details and notices now appear in Solidon's own style, with the actions as buttons. Ctrl+C copies the whole message.
+- A spool's colour is chosen with Solidon's own colour picker right at the button, with named shelf colours and the exact colour value. The Windows colour dialog is gone.
+- A sketch dimension now changes in a field right where it is. Addresses and the choice of which filament to replace are asked in Solidon's own style.
+- After activating or deactivating, the confirmation appears in the dialog itself, without an extra window you have to click away.
 - The *Calibrate material* dialog now shows only clearance, interference and hole compensation up front. Elephant foot, shrinkage, wall and overhang are under *More settings*.
 - Numbers are right-aligned in every field, digit under digit.
 - A screen reader now reads the name and explanation of every number field in a dialog.
@@ -43,10 +46,12 @@ it into `website/version.json`.
 - Without activation, *Create parameter …*, *Move*, *Split* and the dimensions in the view are greyed out too. Every reason names the way, such as *Help → Unlock Solidon …*.
 - When an action in the *Report* waits for the running calculation, it says that it becomes available afterwards, to screen readers as well.
 - Messages in the status bar no longer put a colon after a complete sentence.
+- With a single body the object tree is only as tall as its content, and so is the history with one step. Version 0.6.0 left empty space below.
+- The newest step stays visible in the history when new bodies make the object tree grow. In version 0.6.0 it slipped below the edge of the panel.
 
 ### Printing and slicer handover
 
-- If the chosen slicer is a file that is not a program, Solidon now says so at once. In version 0.6.0 a Windows message about a 16-bit application held up slicing until someone closed it.
+- If the chosen slicer is a file that is not a program, Solidon now says so at once and offers to choose another slicer. In version 0.6.0 slicing waited until someone closed a Windows message.
 
 ### Editing and sketching
 

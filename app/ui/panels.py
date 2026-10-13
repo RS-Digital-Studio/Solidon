@@ -2801,10 +2801,14 @@ class ObjectTree(QWidget):
         return max(view_chrome(self.tree), rows_height(self.tree))
 
     def least_height(self) -> int:
-        """Und die, unter die diese Karte nicht geht (siehe ``fit_to_rows``)."""
+        """Und die, unter die diese Karte nicht geht (siehe ``fit_to_rows``).
+
+        Nie über dem Wunsch: Drei mal die Körperzeile mit Vorschaubild hieß
+        mit einem Körper 183 Punkte Boden bei 81 Wunsch (FD-25).
+        """
         if self.tree.topLevelItemCount() == 0:
             return least_empty_height(self._empty)
-        return least_height_of(self.tree)
+        return min(least_height_of(self.tree), self.wanted_height())
 
     def set_room(self, pixels: int) -> None:
         """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
@@ -2910,7 +2914,8 @@ class ObjectTree(QWidget):
             if self._room is not None
             else view_chrome(self.tree) + MAX_ROWS * row_height_of(self.tree)
         )
-        self.tree.setFixedHeight(max(least_height_of(self.tree), min(wanted, ceiling)))
+        floor = min(least_height_of(self.tree), wanted)
+        self.tree.setFixedHeight(max(floor, min(wanted, ceiling)))
         self._size_columns()
         self.setMinimumHeight(self.sizeHint().height())
         self.updateGeometry()
@@ -5158,14 +5163,24 @@ class HistoryPanel(QWidget):
         """
         if self.list.count() == 0:
             return least_empty_height(self._empty)
-        return self._timeline_height() + least_height_of(self.list)
+        # Nie über dem Wunsch: ein Schritt ist eine Zeile, nicht drei (FD-25).
+        return min(self._timeline_height() + least_height_of(self.list), self.wanted_height())
 
     def set_room(self, pixels: int) -> None:
-        """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
+        """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``).
+
+        Wer am Ende stand, bleibt am Ende: ``show_document`` rollt dorthin,
+        und schrumpft die Zuteilung danach, lag der neueste Schritt sonst unter
+        der Kante (bei 1920x1080 und zwölf Körpern).
+        """
         if pixels == self._room:
             return
         self._room = pixels
+        bar = self.list.verticalScrollBar()
+        at_end = bar.value() >= bar.maximum()
         self._fit()
+        if at_end:
+            self.list.scrollToBottom()
 
     def _fit(self) -> None:
         """So hoch wie der Inhalt, höchstens so hoch wie zugeteilt."""
@@ -8048,7 +8063,7 @@ def fit_to_rows(view: QAbstractItemView, rows: int, *, room: int | None = None) 
     row_height = row_height_of(view)
     wanted = chrome + max(rows, 0) * row_height
     ceiling = room if room is not None else chrome + MAX_ROWS * row_height
-    view.setFixedHeight(max(least_height_of(view), min(wanted, ceiling)))
+    view.setFixedHeight(max(min(least_height_of(view), wanted), min(wanted, ceiling)))
 
 
 def least_height_of(view: QAbstractItemView) -> int:
@@ -8060,6 +8075,10 @@ def least_height_of(view: QAbstractItemView) -> int:
     Boden ihr hundertzwölf gab. Die Summe der Zuteilungen lag danach über dem
     Platz, den es gab, und die Karte darüber wurde vom Layout zusammengedrückt,
     bis Zeilen außerhalb lagen.
+
+    **Drei Zeilen, nicht mehr, als da sind:** Jeder Aufrufer schneidet die Zahl
+    an seinem Wunsch ab (``fit_to_rows``, ``ObjectTree``, ``HistoryPanel``) —
+    mit einer Zeile wären es sonst zwei leere darunter (FD-25).
     """
     return view_chrome(view) + MIN_ROWS * row_height_of(view)
 

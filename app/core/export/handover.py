@@ -6387,15 +6387,9 @@ def _run_slicer(
         )
     except OSError as problem:
         # Eine gewählte Datei kann `flavour_of` bestehen und trotzdem kein
-        # Programm sein — eine DLL zum Beispiel.
-        raise ExternalToolError(
-            tool=setup.name,
-            detail=_("Der Slicer ließ sich nicht starten."),
-            values={"reason": str(problem)},
-            suggestions=(
-                INSTALL_MISSING,
-                EXPORT_ONLY,
-            ),
+        # Programm sein — ein Text, eine DLL. Dieselbe Absage wie am Fenster.
+        raise discover.slicer_start_refused(
+            setup.name, setup.executable, problem, otherwise=(INSTALL_MISSING, EXPORT_ONLY)
         ) from problem
     except ProcessCancelled:
         raise OperationCancelled from None
@@ -8038,11 +8032,8 @@ def open_in_slicer(model: Path, setup: SlicerSetup) -> None:
         with no_error_dialogs():
             subprocess.Popen(command, **detached_process_options(graphical=True))
     except OSError as problem:
-        raise ExternalToolError(
-            tool=setup.name,
-            detail=_("Der Slicer ließ sich nicht starten."),
-            values={"reason": str(problem)},
-            suggestions=(CHOOSE_SLICER, INSTALL_MISSING, EXPORT_ONLY),
+        raise discover.slicer_start_refused(
+            setup.name, program, problem, otherwise=(CHOOSE_SLICER, INSTALL_MISSING, EXPORT_ONLY)
         ) from problem
     _log.info("opened %s in %s", model.name, program.name)
 
