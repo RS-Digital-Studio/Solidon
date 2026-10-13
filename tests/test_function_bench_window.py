@@ -329,7 +329,7 @@ def test_a_window_command_with_inputs_creates_and_tries_to_write_when_locked(
         "002",
     )
     run = locked["licence_runs"]["needs_activation"]
-    assert (not run["enabled"] and run["reason"]) or run["writes"], run
+    assert (run["state"] == "grau" and run["reason"]) or run["writes"], run
     assert all(
         entry["allowed"] for entry in locked["modals"] or () if entry["class"] == "ParameterDialog"
     ), locked["modals"]

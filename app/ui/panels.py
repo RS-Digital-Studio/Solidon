@@ -10353,7 +10353,10 @@ class FeaturePanel(QWidget):
         control_reason = field_refusal or reason
         self._apply.setEnabled(self._apply_allowed())
         self._lock_note.setText(control_reason or "")
-        _set_shown(self._lock_note, bool(control_reason) and bool(self._built))
+        _set_shown(
+            self._lock_note,
+            bool(control_reason) and bool(self._built) and control_reason != change_refusal(),
+        )
         if control_reason:
             self._apply.setToolTip(control_reason)
             self._apply.setAccessibleDescription(control_reason)
@@ -10493,8 +10496,12 @@ class FeaturePanel(QWidget):
         self._lock_note.setText(reason)
         # Ohne Zeilen gibt es nichts, was der Satz erklären könnte: Über dem
         # leeren Zustand („Kein Merkmal gewählt …") stünde eine Absage auf
-        # eine Frage, die niemand gestellt hat.
-        _set_shown(self._lock_note, bool(reason) and bool(self._built))
+        # eine Frage, die niemand gestellt hat. **Die Freischaltung sagt die
+        # Zeile unter dem Suchfeld**, für den ganzen Reiter; hier stünde sie
+        # ein zweites Mal (FD-32). Grau und Grund bleiben an jedem Element.
+        _set_shown(
+            self._lock_note, bool(reason) and bool(self._built) and reason != change_refusal()
+        )
         if reason:
             for button in (self._in_view, self._apply, self._cancel):
                 button.setToolTip(reason)

@@ -426,3 +426,15 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Vorschlag: je Prozess einmal ermitteln, an der Quelle; Messung vorher und nachher.
 - Wirkung beim Kunden: Jede Auswahl und jede Handlung kostet unnötig Zeit im Hauptfaden.
 - Stand: offen RM-737
+
+### FD-34 Eine erkannte Bohrung holt Bohrung ändern ins Bild, rechts bleibt Merkmal verschieben scharf
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Prüfpunkt: 1
+- Beleg: am echten Fenster nach der Auswahl einer erkannten Bohrung (`fix-zeile-bohrung.md`, neuer Punkt 1)
+- Ursache: `request_in_view` holt die Maßgruppe ins Bild, ohne ihre Handlung scharf zu machen, wie es der Knopf *Im Bild einstellen* tut.
+- Vorschlag: ein Weg für Auswahl und Knopf; die Handlung im Bild ist auch rechts die scharfe.
+- Wirkung beim Kunden: Rechts steht offen eine andere Handlung als die, deren Maße er im Bild sieht.
+- Stand: offen RM-737

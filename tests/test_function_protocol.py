@@ -302,7 +302,7 @@ def test_an_assembled_protocol_is_valid_against_the_schema_of_u() -> None:
                 stage: {"state": "nicht herstellbar", "reason": "x", "effective": None}
                 for stage in SELECTION_STAGES
             },
-            "licence_runs": {"licensed": {"writes": True, "enabled": True, "reason": ""}},
+            "licence_runs": {"licensed": {"writes": True, "state": "angeboten", "reason": ""}},
             "findings": [{"phase": "weg", "kind": COVERED, "target": "x", "detail": "y"}],
             "closed_by_escape": [{"phase": "weg", "times": 1}],
             "revise": [

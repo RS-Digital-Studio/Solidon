@@ -410,12 +410,103 @@ def test_p18_a_function_that_writes_unlocked_writes_in_every_run() -> None:
     schreibt.
     """
     runs = {
-        "needs_activation": {"writes": False, "enabled": True, "reason": ""},
-        "licensed": {"writes": True, "enabled": True, "reason": ""},
+        "needs_activation": {"writes": False, "state": "angeboten", "reason": ""},
+        "licensed": {"writes": True, "state": "angeboten", "reason": ""},
     }
     outcome = judge_licence(runs, complete=True)
     assert outcome.verdict == "fund", outcome
     assert any("needs_activation" in text for text in _texts(outcome))
+
+
+def _licence_run(monkeypatch: Any, licence: str, *, missing: bool, grey: str | None) -> Any:
+    """Ein Lizenzlauf des Prüfstands an einer nachgestellten Oberfläche.
+
+    ``missing``: ``next_click`` findet das Ziel nicht (``LookupError``);
+    ``grey``: der Grund, mit dem es grau steht, ``None`` heißt offen.
+    """
+    from tools import function_surface
+
+    monkeypatch.setattr(function_surface, "in_view", lambda window, inputs: False)
+    monkeypatch.setattr(function_surface, "grey_reason", lambda window, name: grey)
+
+    class Signal:
+        def connect(self, slot: Any) -> None:
+            pass
+
+        def disconnect(self, slot: Any) -> None:
+            pass
+
+    button = FakeWidget("operation:drill_hole")
+    script = (
+        {}
+        if missing
+        else {"operation:drill_hole": [FakeClick((0, 0, 9, 9), "left", "ziel", button)]}
+    )
+    flow = _flow({})
+    flow.row = {**flow.row, "kind": "operation", "target": "operation:drill_hole", "route": []}
+    flow.walker = function_walk.Walk(FakePorts(FakeTimer(), script), [], 0.0)
+    flow.ports = flow.walker.ports
+    flow.window = None
+    flow.session = type("Session", (), {"failed": Signal()})()
+    flow.variant = function_setup.Variant.of({"set": "lizenz", "licence": licence})
+    flow.widget = lambda name: None  # type: ignore[method-assign]
+    flow.scene_now = lambda: {"ops": ["create_brep_box"]}  # type: ignore[method-assign]
+    flow.effect_steps = lambda label: (  # type: ignore[method-assign]
+        [function_machine.Step(f"{label} merken", lambda machine: None)],
+        lambda: True,
+    )
+    flow.run_steps = lambda phase, steps: True  # type: ignore[method-assign]
+    flow.phase_licence()
+    return flow.data["licence_runs"][licence]
+
+
+def test_p18_a_target_missing_in_a_locked_run_is_no_grey_with_a_reason(monkeypatch: Any) -> None:
+    """Durchsicht welle4 C-S1: „fehlt“ im gesperrten Lauf ist kein „grau mit Grund“.
+
+    Fand ``next_click`` das Ziel im gesperrten Lauf nicht, schrieb der Lauf den
+    Text der eigenen ``LookupError`` als Grund, und Prüfpunkt 18 las „nicht
+    offen, Grund nicht leer“ als erfüllt — auch dann, wenn die Oberfläche eine
+    schreibende Funktion in der Demo versteckt, statt sie auszugrauen
+    (``kern.md``, „Die Lizenzgrenze“). Der Grund kommt nur noch aus dem grauen
+    Ziel; fehlt es gesperrt und steht es freigeschaltet da, ist das ein Fund.
+    """
+    locked = _licence_run(monkeypatch, "needs_activation", missing=True, grey=None)
+    offered = _licence_run(monkeypatch, "licensed", missing=False, grey=None)
+    assert locked["reason"] == "", locked
+    outcome = judge_licence({"needs_activation": locked, "licensed": offered}, complete=False)
+    assert outcome.verdict == "fund", outcome
+    assert any("needs_activation" in text and "fehlt" in text for text in _texts(outcome))
+    assert {issue.severity for issue in outcome.issues} == {"mittel"}, outcome.issues
+    # Fehlt es auch freigeschaltet, oder fehlt der freigeschaltete Lauf, ist nichts
+    # gemessen: Dann erreichte der Prüfstand das Ziel gar nicht.
+    lost = _licence_run(monkeypatch, "licensed", missing=True, grey=None)
+    for runs in ({"needs_activation": locked}, {"needs_activation": locked, "licensed": lost}):
+        assert judge_licence(runs, complete=False).verdict == "nicht_gelaufen", runs
+    # Grau mit dem Grund aus der Kurzhilfe bleibt erfüllt.
+    greyed = _licence_run(monkeypatch, "needs_activation", missing=False, grey="Ändern braucht")
+    assert greyed["reason"] == "Ändern braucht", greyed
+    outcome = judge_licence({"needs_activation": greyed, "licensed": offered}, complete=False)
+    assert outcome.verdict == "erfuellt", outcome
+
+
+def test_p18_a_writing_target_open_while_locked_is_a_rule_violation() -> None:
+    """Durchsicht welle4 D-L3: „Schreibendes Ziel frei“ ist *mittel*, nicht *schwer*.
+
+    Konzept §4: Schwer ist falsches Ergebnis, Datenverlust, Sackgasse, nicht
+    auffindbar; ein offenes schreibendes Ziel trotz Sperre ist ein Regelverstoß
+    (Lizenzgrenze, ``kern.md``) — und der Kern lehnt am Ende ohnehin ab, also
+    ein Umweg. Die Funddatei führt FD-5, FD-26 und FD-28 ebenso; die
+    Abhakliste entsteht aus dem Prüfstand. „Sperrgrund ohne Ausweg“ (V5) bleibt
+    *mittel*: ein Fehlerweg ohne Handlung.
+    """
+    offered = {"writes": True, "state": "angeboten", "reason": ""}
+    outcome = judge_licence({"needs_activation": offered, "licensed": offered}, complete=False)
+    assert [(issue.text, issue.severity) for issue in outcome.issues] == [
+        ("schreibendes Ziel frei trotz needs_activation", "mittel")
+    ]
+    locked = {"text": "Gesperrt.", "actions": [], "kind": "sperrgrund", "way_out": False}
+    protocol = _protocol(lambda data: data.update(messages=[locked]))
+    assert [issue.severity for issue in _criterion("V5", protocol).issues] == ["mittel"]
 
 
 # --- Zeilen: Z3 am Prüfbericht (F-33) --------------------------------------------------------
@@ -870,7 +961,7 @@ def test_the_licence_run_finds_an_action_shown_in_the_view(monkeypatch: Any) -> 
     flow.run_steps = lambda phase, steps: ran.append([step.name for step in steps]) or True  # type: ignore[method-assign]
     flow.phase_licence()
     run = flow.data["licence_runs"][flow.variant.licence]
-    assert run["enabled"] is True, run
+    assert run["state"] == "angeboten", run
     assert "handlung feature:resize_hole" in ran[-1], ran
 
 
@@ -1015,3 +1106,327 @@ def test_the_measure_group_counts_only_for_the_action_it_carries(monkeypatch: An
     assert function_surface.field_name(window, name) == "measure.field:diameter"
     assert function_surface.in_view(window, [name])
     assert function_surface.op_in_view(window) == "resize_hole"
+
+
+# --- Prüfpunkt 13: eine Kante (Durchsicht welle4 C-M4) ---------------------------------------
+
+
+def _matrix_flow(script: dict[str, list[FakeClick]]) -> Any:
+    """Ein Fall für die Matrix: ein Quader mit einer Fläche, die Oberfläche als Drehbuch."""
+    from types import SimpleNamespace
+
+    body = SimpleNamespace(features={"face_top": SimpleNamespace(kind="face")})
+    flow = _flow({})
+    flow.row = {**flow.row, "target": "edge:fillet_edges"}
+    flow.session = SimpleNamespace(
+        last_result=SimpleNamespace(scene=SimpleNamespace(objects={"obj_1": body}))
+    )
+    flow.walker = function_walk.Walk(FakePorts(FakeTimer(), script), [], 0.0)
+    flow.ports = flow.walker.ports
+    flow.reset = lambda: True
+    flow.offer_state = lambda target, label: {"state": "angeboten", "reason": "", "effective": True}
+    return flow
+
+
+def test_the_matrix_chooses_an_edge_in_the_view_after_its_body() -> None:
+    """Durchsicht welle4 C-M4: Die Stufe „eine Kante“ lief nie.
+
+    Die Matrix suchte Merkmale der Art ``edge``, die die Erkennung nicht
+    liefert; eine Kante ist kein Merkmal, sondern eine Stelle im Bild
+    (``view.edge:<körper>``). Gewählt wird sie wie vom Kunden: erst der
+    Körper, dann der Klick auf seine Kante (gestufte Tiefe, §18.5). Hat der
+    Körper keine sichtbare Kante, ist die Stufe nicht herstellbar — ohne Klick
+    ins Leere, der „nicht auffindbar“ gegen die Anwendung schriebe.
+    """
+    edge = FakeWidget("viewport", zone="ansicht")
+    flow = _matrix_flow({"view.edge:obj_1": [FakeClick((0, 0, 5, 5), "left", "ziel", edge)]})
+    walked: dict[str, list[str]] = {}
+
+    def run_steps(label: str, steps: list[Any]) -> bool:
+        walked[label] = [step.name for step in steps]
+        return True
+
+    flow.run_steps = run_steps
+    flow.phase_matrix()
+    assert flow.data["matrix"]["eine_kante"]["state"] == "angeboten", flow.data["matrix"]
+    # Gelesen wird erst, wenn die Zeile an der Kante steht oder so lange ohne Weg
+    # blieb wie auf dem Hauptweg — sofort gefragt hieß sie „fehlt“.
+    assert walked["matrix eine_kante auswahl"] == [
+        "weg zu tree.row:obj_1",
+        "weg zu view.edge:obj_1",
+        "edge:fillet_edges steht",
+    ], walked
+    plain = _matrix_flow({})
+    plain.run_steps = run_steps
+    plain.phase_matrix()
+    assert plain.data["matrix"]["eine_kante"]["state"] == "nicht herstellbar", plain.data["matrix"]
+
+
+def test_e1_counts_an_edge_in_the_view_as_part_of_the_selection() -> None:
+    """Durchsicht welle4 C-M4: Der Klick auf die Kante im Bild gehört zur Startauswahl.
+
+    Ohne Auswahlweg in der Zeile liest E1 die Startauswahl aus den führenden
+    Auswahlklicks; ``view.edge:`` war keiner, und die Kante zählte als Klick
+    danach, an der Grenze für einen Körper (drei) statt für eine Stelle (zwei).
+    """
+    steps = [
+        click_step("tree.row:obj_1", "baum"),
+        click_step("view.edge:obj_1", "ansicht"),
+        click_step("edge:fillet_edges"),
+        click_step("feature.apply", phase=APPLY),
+    ]
+    row = {"id": "edge:fillet_edges", "kind": "bedienflaeche", "target": "edge:fillet_edges"}
+    protocol = _protocol(lambda data: data.update(row=row, steps=steps))
+    assert _criterion("E1", protocol).measurement == {"clicks": 2, "limit": 2}
+
+
+def test_an_edge_operation_row_aims_at_its_row_at_the_edge() -> None:
+    """Durchsicht welle4 C-M4 am Prüfstand: An der gewählten Kante steht *Verrunden* als
+    Kantenzeile im Merkmalfenster (``edge:fillet_edges``), nicht als Knopf der Karte.
+
+    Wie F-21 für die Merkmalshandlungen: Mit dem Kantenklick im Auswahlweg suchte
+    der Hauptweg ``operation:fillet_edges`` und fand „kein Knopf zu sehen und keine
+    Menüzeile“ — „nicht auffindbar“ gegen die Anwendung (Prüfstandlauf am
+    13.10.2026, Fall 001). Die Suche zählt den Treffer ``operation:<op>`` weiter
+    (``function_surface.search_names``).
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.guides import action_key
+    from app.core.perceive.actions import edge_actions
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    rows = {
+        row.id: row for row in function_list.operation_rows(REGISTRY, function_scenes.load_scenes())
+    }
+    own = {action.op for action in edge_actions("probe") if action_key(action) == action.op}
+    assert own >= {"fillet_edges", "chamfer_edges"}, own
+    for name in own:
+        assert rows[name].target == f"edge:{name}", rows[name]
+        assert rows[name].requirement == "kante", rows[name]
+
+
+# --- Rücksetzen vor jeder Messung (Durchsicht welle4 C-L15) ---------------------------------
+
+
+def test_the_matrix_measures_nothing_where_the_start_scene_was_not_made() -> None:
+    """C-L15: ``phase_matrix`` las den Ausgang von ``reset()`` nicht.
+
+    Misslang das Zurücksetzen, maß die Stufe an dem, was die vorige liegen ließ —
+    eine andere Lage. Jetzt ist sie nicht herstellbar, mit Grund.
+    """
+    edge = FakeWidget("viewport", zone="ansicht")
+    flow = _matrix_flow({"view.edge:obj_1": [FakeClick((0, 0, 5, 5), "left", "ziel", edge)]})
+    flow.reset = lambda: False
+    flow.run_steps = lambda label, steps: True
+    flow.phase_matrix()
+    states = {stage: entry["state"] for stage, entry in flow.data["matrix"].items()}
+    assert set(states.values()) == {"nicht herstellbar"}, states
+    assert (
+        flow.data["matrix"]["ein_koerper"]["reason"] == "die Startszene ließ sich nicht herstellen"
+    )
+
+
+def test_the_revision_measures_no_way_whose_start_scene_was_not_made() -> None:
+    """C-L15: ``phase_revise`` las den Ausgang von ``reset()`` nicht — kein Weg ohne Startszene."""
+    applied = {"ops": ["create_brep_box", "drill_hole"]}
+    flow = _flow({}, {"before": {"ops": ["create_brep_box"]}, "applied": applied})
+    flow.reset = lambda: False
+    flow.run_steps = lambda label, steps: (_ for _ in ()).throw(
+        AssertionError(f"{label} lief ohne Startszene")
+    )
+    flow.phase_revise()
+    assert flow.data["revise"] in (None, []), flow.data["revise"]
+    assert any("Startszene" in error for error in flow.data["errors"]), flow.data["errors"]
+
+
+# --- Sperrgrund im Fehlfall (Durchsicht welle4 C-L1, C-L2) ----------------------------------
+
+
+def test_v5_a_way_out_is_a_menu_way_or_the_whole_words_of_a_button() -> None:
+    """C-L2: Ein Ausweg ist ein Menüweg „Menü → Zeile“ oder ein offener Knopf mit ganzen Wörtern.
+
+    Vorher genügte ein Teilstring irgendeines offenen Knopf- oder Menütexts:
+    „Dateien“ nannte den Knopf *Datei*, und ein Satz mit „Öffnen“ den Menüeintrag
+    *Öffnen* ohne sein Menü — beides kein Weg, den der Kunde findet.
+    """
+    from tools.function_capture import names_a_way_out
+
+    menus = [("&Hilfe", "Solidon freischalten …"), ("&Datei", "Öffnen …")]
+    buttons = ["Datei", "Abbrechen", "OK"]
+    named = "Dafür braucht Solidon einen Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+    assert names_a_way_out(named, menus, buttons)
+    assert names_a_way_out("Wählen Sie Abbrechen und dann neu.", menus, buttons)
+    for reason in ("Dateien fehlen noch.", "Öffnen geht hier nicht.", "OK geht nicht."):
+        assert not names_a_way_out(reason, menus, buttons), reason
+
+
+def test_p7_reads_the_lock_reason_of_the_target_of_the_row(monkeypatch: Any) -> None:
+    """C-L1: Im Fehlfall zählt der Sperrgrund des Ziels der Zeile, nicht jeder graue Knopf.
+
+    „Erwartet Sperrgrund“ war erfüllt, sobald irgendein fremder Knopf grau mit
+    Kurzhilfe stand. Jetzt liest der Fehlfall ``grey_reason`` an den Zielen der
+    Zeile; die übrigen Meldungen der Oberfläche bleiben.
+    """
+    from app.ui import guide_targets
+    from tools import function_capture, function_surface
+
+    foreign = {"text": "Fremder Knopf gesperrt.", "actions": [], "kind": "sperrgrund"}
+    status = {"text": "Berechnet …", "actions": [], "kind": "meldung"}
+    monkeypatch.setattr(function_capture, "message_entries", lambda window: [foreign, status])
+    # Der Ausweg wird am grauen Element selbst gefragt — die Felder seiner Fläche
+    # zählen (FD-31).
+    element = object()
+    monkeypatch.setattr(guide_targets, "widget_for", lambda window, name: element)
+    monkeypatch.setattr(
+        function_capture, "way_out", lambda window, reason, widget=None: widget is element
+    )
+    reasons = {"finding.action:place_on_bed": None}
+    monkeypatch.setattr(function_surface, "grey_reason", lambda window, name: reasons.get(name))
+    targets = ["finding.action:place_on_bed"]
+    assert function_surface.fault_messages(None, targets) == [status]
+    reasons["finding.action:place_on_bed"] = "Während der Neuberechnung gesperrt."
+    assert function_surface.fault_messages(None, targets) == [
+        status,
+        {
+            "text": "Während der Neuberechnung gesperrt.",
+            "actions": [],
+            "kind": "sperrgrund",
+            "way_out": True,
+        },
+    ]
+
+
+def test_the_fault_case_asks_for_the_lock_reason_at_its_own_targets(monkeypatch: Any) -> None:
+    """C-L1 am Prüfstand: ``phase_fault`` liest die Meldungen über ``fault_messages`` an den
+    Zielen der Zeile — ihrem Ziel und dem, womit sie übernommen wird."""
+    from types import SimpleNamespace
+
+    from tools import function_surface
+
+    asked: list[list[str]] = []
+    lock = {"text": "Gesperrt.", "actions": [], "kind": "sperrgrund", "way_out": True}
+
+    def told(window: Any, targets: Any) -> list[dict[str, Any]]:
+        asked.append(list(targets))
+        return [lock]
+
+    monkeypatch.setattr(function_surface, "fault_messages", told)
+    monkeypatch.setattr(function_surface, "open_dialog", lambda window: None)
+    monkeypatch.setattr(function_surface, "report_findings", lambda session: {})
+    fault = {"route": [{"target": "history.row:4"}], "expected": "sperrgrund"}
+    flow = _flow({"fault_case": fault})
+    flow.fault_scene = lambda key: True
+    flow.apply_target = "dialog.accept"
+    flow.input_steps = lambda inputs: []
+    flow.picture = lambda label: None
+    flow.session = SimpleNamespace(last_result=None)
+    flow.window = None
+
+    def run_steps(label: str, steps: list[Any]) -> bool:
+        for step in steps:
+            if step.name == "meldung lesen":
+                step.act(None)
+        return True
+
+    flow.run_steps = run_steps
+    flow.phase_fault()
+    assert asked and asked[-1] == ["finding.action:place_on_bed", "dialog.accept"], asked
+    assert flow.data["messages"] == [{**lock, "phase": FAULT_PHASE}], flow.data["messages"]
+
+
+# --- Vorbereitung mit Nachweis (Durchsicht welle4 C-L3) --------------------------------------
+
+
+def test_a_preparation_waits_for_the_findings_its_scene_promises(
+    monkeypatch: Any, tmp_path: Any
+) -> None:
+    """C-L3: Nach Einfügemarke, Export oder *Automatisch teilen* prüfte niemand, ob die
+    zugesagten Befunde im Prüfbericht stehen; ein Fehlschlag landete als „nicht
+    auffindbar“ bei der Anwendung. Jetzt wartet die Vorbereitung auf
+    ``promises.findings`` und hält sonst mit „Vorbereitung nicht hergestellt“ an.
+    """
+    from tools import function_surface
+
+    flow = _flow({})
+    flow.setup = function_setup.scene_setup("export_gemischt")
+    flow.folder = tmp_path
+    steps = flow.preparation_steps()
+    names = [step.name for step in steps]
+    assert names[-2:] == ["befunde der vorbereitung", "vorbereitung geprüft"], names
+    shown: set[str] = set()
+    monkeypatch.setattr(function_surface, "shown_findings", lambda window: shown)
+    flow.window = None
+    try:
+        steps[-1].act(None)
+    except RuntimeError as error:
+        assert "Vorbereitung nicht hergestellt" in str(error) and "export.needs_solid" in str(error)
+    else:
+        raise AssertionError("ohne den zugesagten Befund ging die Vorbereitung durch")
+    shown.add("export.needs_solid")
+    steps[-1].act(None)
+    plain = _flow({})
+    plain.setup = function_setup.scene_setup("quader.exakt")
+    plain.folder = tmp_path
+    assert plain.preparation_steps() == []
+
+
+# --- Aufnahme nur im Stillstand (Durchsicht welle4 C-L10) ------------------------------------
+
+
+def test_a_surface_that_never_stood_still_is_not_measured(monkeypatch: Any) -> None:
+    """C-L10: Stand die Fläche nach der Frist nicht still, wurde trotzdem aufgenommen und
+    geurteilt; den Vermerk ``still:`` las kein Urteil. Jetzt bleiben die Aufnahmefelder
+    ungemessen — auch die Rollleisten, die sonst die Fenstergröße als gemessen zählten.
+    """
+    import itertools
+    import time
+
+    from tools import function_capture
+
+    ticks = itertools.count()
+    monkeypatch.setattr(function_bench, "surface_signature", lambda root: (next(ticks),))
+    entries = {"layout": [{"group": "g"}], "scrollbars": [{"surface": "s"}]}
+    monkeypatch.setattr(function_capture, "sheet_snapshot", lambda root, theme, size: dict(entries))
+    monkeypatch.setattr(function_capture, "text_entries", lambda root: [{"text": "t"}])
+    monkeypatch.setattr(function_capture, "field_entries", lambda root: [{"field": "f"}])
+    monkeypatch.setattr(function_capture, "empty_states", lambda window: [])
+    flow = _flow({})
+    flow.window = None
+    flow.variant = function_setup.Variant.of({})
+    flow.window_size = lambda: (1920, 1009)  # type: ignore[method-assign]
+    flow.restless = None
+    step = flow.still_step("fläche steht still", lambda: None, at_most_s=0.05)
+    assert step.ready is not None
+    for _ in range(200):
+        if step.ready():
+            break
+        time.sleep(0.005)
+    flow.capture_surface(None)
+    assert flow.data["layout"] is None and flow.data["texts"] is None, flow.data
+    assert flow.data["scrollbars"] is None, flow.data["scrollbars"]
+    assert "ohne Stillstand" in flow.data["unmeasured"]["layout"], flow.data["unmeasured"]
+    # Steht sie still, wird aufgenommen.
+    monkeypatch.setattr(function_bench, "surface_signature", lambda root: ("still",))
+    calm = flow.still_step("fläche steht still", lambda: None, at_most_s=5.0)
+    assert calm.ready is not None
+    for _ in range(400):
+        if calm.ready():
+            break
+        time.sleep(0.005)
+    flow.capture_surface(None)
+    assert flow.data["layout"] == entries["layout"] and flow.data["texts"] == [{"text": "t"}]
+
+
+def test_v5_the_title_of_an_open_field_of_the_surface_is_a_way_out() -> None:
+    """FD-31, Entscheidung Koordinator: *Übernehmen* der Maßgruppe ist vor der ersten
+    Eingabe grau und sagt „Erst „<Feldtitel>“ ändern, dann übernehmen.“ — das Feld ist
+    der Ausweg, als ganzes Wort genannt. Welche Felder offen auf derselben Fläche
+    stehen, liest ``surface_field_titles`` (Fenstertest); hier die Urteilsregel.
+    """
+    from tools.function_capture import names_a_way_out
+
+    reason = "Erst „Durchmesser“ ändern, dann übernehmen."
+    assert names_a_way_out(reason, [], [], fields=["Durchmesser:"])
+    assert not names_a_way_out(reason, [], [])
+    assert not names_a_way_out("Erst die Durchmessers ändern.", [], [], fields=["Durchmesser"])

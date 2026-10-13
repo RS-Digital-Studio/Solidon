@@ -114,7 +114,10 @@ def test_every_row_carries_its_fields(rows: list[fl.Row]) -> None:
         assert row.source in fl.ROW_SOURCES, row
         assert row.package in fl.PACKAGES, row
         assert row.requirement, row
-        assert row.target or row.source in fl.SOURCES_WITHOUT_TARGET, row
+        # Jede Zeile trägt ein Ziel — auch Meldungsfenster und Einstellungsabschnitte
+        # (Durchsicht welle4 D-L6: die Duldung ohne Ziel war leer und verdeckte
+        # eine Zeile, die ihr Ziel verliert).
+        assert row.target, row
         assert row.spec is None or not {"package", "file"} & set(row.spec), row
 
 
@@ -265,12 +268,8 @@ def test_every_surface_row_names_a_target_of_the_vocabulary(rows: list[fl.Row]) 
     """Jede Zeile zeigt auf ein Ziel des Wortschatzes — sonst findet der Prüfstand sie nicht."""
     from app.core.guides import is_target
 
-    wrong = [row.id for row in rows if row.target and not is_target(row.target)]
+    wrong = [row.id for row in rows if not is_target(row.target)]
     assert wrong == []
-    # Ohne Ziel bleiben nur Flächen, für die der Wortschatz noch keinen Namen hat
-    # (Bericht D0-L, „braucht W“): rohe Meldungsfenster und Einstellungsabschnitte.
-    missing = {row.source for row in rows if not row.target}
-    assert missing <= fl.SOURCES_WITHOUT_TARGET
     assert _by_id(rows)["startup.expired_demo"].target == "dialog:expired_demo"
 
 
@@ -474,27 +473,11 @@ def test_targets_of_raw_windows_and_sections_come_from_the_source(
     """Das Ziel einer Meldungsfensterzeile und eines Einstellungsabschnitts steht im
     Quelltext der Fläche — ``setProperty(…TARGET_PROPERTY, …)``, ``target=`` am Bauer im
     Hausstil oder der Abschnittsbauer der Einstellungen. Kontrollfall: das Demo-Ende trägt
-    ``dialog:expired_demo``. Eine Zeile ohne Ziel gibt es nur, wenn ihre Fläche kein
-    Kennzeichen setzt."""
-    import ast
-
+    ``dialog:expired_demo``. Eine Zeile ohne Ziel gibt es nicht
+    (``test_every_row_carries_its_fields``)."""
     assert _by_id(rows)["startup.expired_demo"].target == "dialog:expired_demo"
     scan = fscan.scan_ui(ui_sources)
     assert scan.raw_targets["show_expired_demo"] == "dialog:expired_demo"
-    marked = ("TARGET_PROPERTY", "target=")
-    for row in rows:
-        if row.target or row.source != "meldungsfenster":
-            continue
-        function = row.id.removeprefix("meldung:")
-        (path,) = scan.raw_places[function]
-        tree = ast.parse(ui_sources[path])
-        node = next(
-            item
-            for item in ast.walk(tree)
-            if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef) and item.name == function
-        )
-        text = ast.get_source_segment(ui_sources[path], node) or ""
-        assert not any(mark in text for mark in marked), row.id
 
 
 def test_a_marked_surface_without_its_target_turns_red() -> None:
@@ -932,6 +915,17 @@ def test_every_selecting_row_carries_its_selection_clicks(rows: list[fl.Row]) ->
     # Eine Operation über die ganze Szene steht in der Karte am gewählten Körper
     # (Probelauf F-32: ohne Auswahl fand der Sprachfall sie nicht).
     assert targets("arrange_bed") == [("tree.row:obj_1", "")]
+    # Eine Kante wählt ein Klick ins Bild, nachdem der Körper gewählt ist
+    # (gestufte Tiefe, §18.5) — vorher wählte der Weg nur den Körper, und keine
+    # Kantenzeile lief an einer Kante (Durchsicht welle4 C-M4).
+    edge_way = [("tree.row:obj_1", ""), ("view.edge:obj_1", "")]
+    for row_id in (
+        "fillet_edges",
+        "chamfer_edges",
+        "bead_edges",
+        "edge:fillet_edges.variable_radius",
+    ):
+        assert targets(row_id) == edge_way, row_id
     steps = [step for row in rows for step in row.route]
     assert len(steps) >= 100
     assert all(is_target(step["target"]) and step["button"] == "left" for step in steps)
@@ -1144,14 +1138,29 @@ def test_a_fault_case_is_checked_like_a_spec(rows: list[fl.Row]) -> None:
             "during": "irgendwann",
             "expected": "sperrgrund",
             "wann": "jetzt",
+            # Dieselbe Feldprüfung wie die Eingaben der Spezifikation (C-L13).
+            "inputs": {"feature.field:resize_hole.nirgends": 1.0},
         },
     }
     issues = fl.validate_specs(rows, _spec(bad), scenes)
-    for word in ("gibt_es_nicht", "'Knopf'", "irgendwann", "wann", "'mitte'", "'alt'"):
+    words = ("gibt_es_nicht", "'Knopf'", "irgendwann", "wann", "'mitte'", "'alt'", "'nirgends'")
+    for word in words:
         assert any(word in issue for issue in issues), (word, issues)
     fault = fl.load_specs()["finding.action:place_on_bed"].values["fault_case"]
     assert fault["during"] == "rechnung" and fault["expected"] == "sperrgrund"
     assert scenes[fault["start_scene"]].heavy
+
+
+def test_the_scenes_of_a_case_must_agree_on_their_preconditions(rows: list[fl.Row]) -> None:
+    """Durchsicht welle4 C-L4: Startszene und Szene des Fehlfalls laufen in einem Fall,
+    ihre Vorbedingungen gelten zusammen — verlangen sie Verschiedenes, hält es an."""
+    scenes = fscenes.load_scenes()
+    scenes["leer"] = dataclasses.replace(scenes["leer"], preconditions={"opencascade": "vorhanden"})
+    values = {"start_scene": "leer", "fault_case": {"start_scene": "ohne_opencascade.exakt"}}
+    issues = fl.validate_specs(rows, _spec(values), scenes)
+    assert any("verlangt opencascade anders" in issue for issue in issues), issues
+    agreeing = {"start_scene": "quader.exakt", "fault_case": values["fault_case"]}
+    assert not any("anders" in issue for issue in fl.validate_specs(rows, _spec(agreeing), scenes))
 
 
 def test_the_licence_preconditions_are_the_states_of_the_application() -> None:
