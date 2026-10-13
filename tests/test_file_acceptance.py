@@ -610,3 +610,30 @@ def test_a_crash_is_named_by_its_stack_not_by_an_earlier_critical_message(tmp_pa
     (tmp_path / QT_LOG).write_text(f"{critical}\n", encoding="utf-8")
     (tmp_path / STACK_LOG).unlink()
     assert crash_note(tmp_path) == critical
+
+
+def test_the_scene_of_the_fault_case_brings_its_preconditions_to_the_case() -> None:
+    """Durchsicht welle4 C-L4: Der Fehlfall läuft im selben Fall wie der Hauptweg.
+
+    Was seine eigene Startszene verlangt (hier: OpenCASCADE fehlt), muss vor dem
+    Start des Falls stehen; vorher galten nur die Vorbedingungen der Startszene
+    der Zeile. ``function_scenes.row_scenes`` nennt beide Szenen — dieselbe
+    Quelle für Vorbedingungen, eigene Bausteine und die gespeicherten Szenen.
+    """
+    from tools.file_acceptance import function_cases
+    from tools.function_scenes import row_scenes
+
+    row = {
+        "id": "finding.action:install",
+        "kind": "bedienflaeche",
+        "source": "befundhandlung",
+        "package": "D12",
+        "start_scene": "leer",
+        "spec": {"fault_case": {"start_scene": "ohne_opencascade.exakt"}},
+    }
+    assert row_scenes(row) == ("leer", "ohne_opencascade.exakt")
+    assert row_scenes({**row, "spec": {"fault_case": {"start_scene": "leer"}}}) == ("leer",)
+    cases = function_cases([row])
+    assert cases and all(
+        case.variant["preconditions"] == {"opencascade": "fehlt"} for case in cases
+    ), [case.variant for case in cases]

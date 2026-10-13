@@ -1082,6 +1082,18 @@ def test_a_fault_case_is_checked_like_a_spec(rows: list[fl.Row]) -> None:
     assert scenes[fault["start_scene"]].heavy
 
 
+def test_the_scenes_of_a_case_must_agree_on_their_preconditions(rows: list[fl.Row]) -> None:
+    """Durchsicht welle4 C-L4: Startszene und Szene des Fehlfalls laufen in einem Fall,
+    ihre Vorbedingungen gelten zusammen — verlangen sie Verschiedenes, hält es an."""
+    scenes = fscenes.load_scenes()
+    scenes["leer"] = dataclasses.replace(scenes["leer"], preconditions={"opencascade": "vorhanden"})
+    values = {"start_scene": "leer", "fault_case": {"start_scene": "ohne_opencascade.exakt"}}
+    issues = fl.validate_specs(rows, _spec(values), scenes)
+    assert any("verlangt opencascade anders" in issue for issue in issues), issues
+    agreeing = {"start_scene": "quader.exakt", "fault_case": values["fault_case"]}
+    assert not any("anders" in issue for issue in fl.validate_specs(rows, _spec(agreeing), scenes))
+
+
 def test_the_licence_preconditions_are_the_states_of_the_application() -> None:
     """Die Lizenzzustände einer Vorbedingung sind Eigenschaften von ``Activation``; ``expired``
     gibt es nur mit Testzeitraum (``TRIAL_FROM``)."""

@@ -1647,6 +1647,17 @@ def validate_specs(
                 issues.append(
                     f"{where}: Fehlfall-Startszene {fault['start_scene']!r} gibt es nicht"
                 )
+            elif "start_scene" in fault and start in scenes:
+                # Beide Szenen laufen in einem Fall (``function_scenes.row_scenes``):
+                # Ihre Vorbedingungen müssen zusammen gelten (C-L4).
+                mine = scenes[start].preconditions
+                theirs = scenes[fault["start_scene"]].preconditions
+                clash = sorted(key for key in set(mine) & set(theirs) if mine[key] != theirs[key])
+                if clash:
+                    issues.append(
+                        f"{where}: Fehlfall-Startszene verlangt {', '.join(clash)} anders"
+                        " als die Startszene"
+                    )
             for step in fault.get("route", ()):
                 if not is_target(str(step.get("target", ""))):
                     issues.append(f"{where}: Fehlfall-Weg zu {step.get('target')!r} ist kein Ziel")
