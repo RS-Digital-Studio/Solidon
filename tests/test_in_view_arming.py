@@ -5,6 +5,8 @@ nimmt denselben Weg wie der Knopf *Im Bild einstellen*: Die Handlung der Maßgru
 wird auch im Merkmalfenster scharf. An einer erkannten Bohrung blieb bis dahin
 *Merkmal verschieben* scharf und rechts offen, während im Bild die Maße von
 *Bohrung ändern* standen — genau der Zustand, den der Knopf schon vermied.
+Dazu, was die Maßgruppe trägt (``FeaturePanel.measure_op``), denn danach fragt
+der Prüfstand.
 """
 
 from __future__ import annotations
@@ -72,6 +74,25 @@ def test_the_selection_takes_the_way_of_the_button(
 
     assert selected == clicked == ["resize_hole"]
     assert by_selection.preview_values()[0] == by_button.preview_values()[0] == "resize_hole"
+
+
+def test_the_panel_names_the_action_whose_measures_stand_in_the_view(
+    qt_app: QApplication, roots: Callable[[Any], Any]
+) -> None:
+    """``measure_op`` nennt die Handlung der Maßgruppe im Bild (FD-29).
+
+    Der Prüfstand fragt danach, welche Handlung im Bild zu bedienen ist; die
+    scharfe sagte es an einer erkannten Bohrung nicht (FD-34). ``set_measuring``
+    allein schärft nichts — das tut der Weg ins Bild.
+    """
+    panel, _asked = _panel_at_the_hole(roots)
+    armed = panel.preview_values()
+    assert panel.measure_op is None
+    panel.set_measuring(True, op="resize_hole")
+    assert panel.measure_op == "resize_hole"
+    assert panel.preview_values() == armed, "scharf bleibt, was es war"
+    panel.set_measuring(False)
+    assert panel.measure_op is None
 
 
 def test_the_armed_action_still_comes_first(

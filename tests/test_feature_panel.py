@@ -4677,32 +4677,6 @@ def test_the_original_bore_block_leaves_the_panel_while_its_measures_stand_in_th
         panel.deleteLater()
 
 
-def test_the_panel_names_the_action_whose_measures_stand_in_the_view(
-    qt_app: QApplication,
-) -> None:
-    """``measured_op`` nennt die Handlung der Maßgruppe im Bild, nicht die scharfe (FD-29).
-
-    Der Prüfstand fragt danach, welche Handlung im Bild zu bedienen ist; die
-    scharfe sagte es an einer erkannten Bohrung nicht (FD-34). ``set_measuring``
-    allein schärft nichts — das tut der Weg ins Bild.
-    """
-    load_operations()
-    identifier, feature = a_hole()
-    panel = FeaturePanel()
-    try:
-        panel.show_feature(identifier, feature)
-        armed = panel.preview_values()
-        assert panel.measured_op is None
-        panel.set_measuring(True, op="resize_hole")
-        assert panel.measured_op == "resize_hole"
-        assert panel.preview_values() == armed, "scharf bleibt, was es war"
-        panel.set_measuring(False)
-        assert panel.measured_op is None
-    finally:
-        panel.close()
-        panel.deleteLater()
-
-
 def test_the_twin_beside_the_measures_drops_the_fields_the_view_already_carries(
     qt_app: QApplication,
 ) -> None:

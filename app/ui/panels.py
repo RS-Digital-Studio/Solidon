@@ -9283,8 +9283,10 @@ class FeaturePanel(QWidget):
         """Ob die Maße des gezeigten Merkmals gerade im Bild stehen — dann
         trägt die Maßgruppe Übernehmen und Abbrechen, und die Knöpfe hier
         unten gehen mit (``set_measuring``)."""
-        self._measure_op: str | None = None
-        """Welche Handlung im Bild steht — ihr Block rechts geht mit (RM-199)."""
+        self.measure_op: str | None = None
+        """Welche Handlung im Bild steht — ihr Block rechts geht mit (RM-199).
+        Öffentlich, weil der Prüfstand fragt, was die Maßgruppe trägt
+        (``function_surface.op_in_view``); gesetzt nur von ``set_measuring``."""
         self._measure_begun = False
         """Ob die Maßgruppe schon einen Zug oder eine Zahl gesehen hat — dann
         sind auch die übrigen Handlungen gesperrt, bis sie endet."""
@@ -10479,7 +10481,7 @@ class FeaturePanel(QWidget):
                 continue
             entry = self._runs.get(child.property("handlingKey"))
             in_measure = self._measuring and (
-                self._measure_begun or (entry is not None and entry.op == self._measure_op)
+                self._measure_begun or (entry is not None and entry.op == self.measure_op)
             )
             child.setEnabled(not reason and not in_measure)
             # Feld und Knopf der Zeile nennen den Grund, nicht ihren eigenen
@@ -11000,7 +11002,7 @@ class FeaturePanel(QWidget):
         Änderungsumfang —, bleibt stehen; ein Klick hinein holt ihn ins Bild
         (``MainWindow._hand_the_measures_over``).
         """
-        op = self._measure_op
+        op = self.measure_op
         if (
             not self._measuring
             or op is None
@@ -11824,15 +11826,6 @@ class FeaturePanel(QWidget):
         """Ob gerade Maße im Bild stehen (:meth:`set_measuring`)."""
         return self._measuring
 
-    @property
-    def measured_op(self) -> str | None:
-        """Die Handlung, deren Maßgruppe im Bild steht — ohne Messen keine.
-
-        Was im Bild steht, sagt die Gruppe selbst; die scharfe Handlung meint
-        dasselbe, seit eine Auswahl ins Bild auch schärft (FD-34).
-        """
-        return self._measure_op
-
     def set_measuring(self, active: bool, *, op: str | None = None, begun: bool = False) -> None:
         """Während der Maßgruppe gibt es deren Felder und Abschluss genau einmal.
 
@@ -11841,7 +11834,7 @@ class FeaturePanel(QWidget):
         (``_settle_lock``).
         """
         self._measuring = bool(active)
-        self._measure_op = op if active else None
+        self.measure_op = op if active else None
         self._measure_begun = bool(active and begun)
         self._settle_lock()
         _set_shown(
@@ -11860,9 +11853,9 @@ class FeaturePanel(QWidget):
                 self._measuring
                 and entry is not None
                 and (
-                    entry.op == self._measure_op
+                    entry.op == self.measure_op
                     or (
-                        self._measure_op in {"drill_hole", "drill_brep_hole"}
+                        self.measure_op in {"drill_hole", "drill_brep_hole"}
                         and entry.op in LEADS_INTO_THE_VIEW
                     )
                 )

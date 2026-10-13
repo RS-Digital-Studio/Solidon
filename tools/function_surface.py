@@ -319,14 +319,14 @@ def field_name(window: Any, name: str) -> str:
 
 
 def op_in_view(window: Any) -> str | None:
-    """Die Handlung, deren Maße die Gruppe im Bild trägt (``FeaturePanel.measured_op``).
+    """Die Handlung, deren Maße die Gruppe im Bild trägt (``FeaturePanel.measure_op``).
 
     Nicht die scharfe der Merkmalskarte: Die beiden fielen an einer erkannten
     Bohrung auseinander (FD-34, *Merkmal verschieben* scharf, *Bohrung ändern*
     im Bild), und der Prüfstand fand die Zeile dort nicht (FD-29).
     """
     panel = getattr(window, "feature_panel", None)
-    measured = getattr(panel, "measured_op", None)
+    measured = getattr(panel, "measure_op", None)
     return str(measured) if measured else None
 
 
