@@ -192,7 +192,8 @@ Stellen halten das, beide sind nötig:
   (`FeaturePanel.set_locked`): graue Knöpfe **und** der Grund als sichtbare
   Zeile, dazu in Kurzhilfe, Statuszeile und zugänglicher Beschreibung; die
   Sperre überlebt den Neuaufbau der Zeilen und fällt nach einem Undo
-  (`test_a_halted_chain_takes_no_new_step_and_names_the_way_on`).
+  (`test_a_halted_chain_takes_no_new_step_and_names_the_way_on`). Die
+  Freischaltung sagt sichtbar nur die Zeile unter dem Suchfeld (FD-32).
 
 ## Der Prüfbericht
 
