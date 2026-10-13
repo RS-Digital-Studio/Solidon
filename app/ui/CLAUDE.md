@@ -160,7 +160,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 |---|---|
 | `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle*, hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
-| `message_dialog.py` | Meldungen statt `QMessageBox`, Quittung am Ort (`acknowledge`) |
+| `message_dialog.py` | Meldungen statt `QMessageBox`, Quittung am Ort (`acknowledge`, `withdraw`), Knopfnamen (`name_button`) |
 | `input_dialog.py` | Eingaben ohne Ort (`ask_text`, `ask_choice`) |
 | `place_popup.py` | Eingabe am Ort: Farbwähler, Wertfeld (`PlacePopup`) |
 | `calibration_dialog.py` | Material kalibrieren (§28.3) |
@@ -248,10 +248,10 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | Datei | Zweck |
 |---|---|
 | `manual_window.py` | Suche in `core/manual_search.py`; F1-Anker nur für geprüfte `MarkdownNoHTML`-Überschriften (`core/manual.py`) |
-| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `window_names`; fehlend: `MissingTargetError` |
+| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
-| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac; `native_key`: die Taste in der Schreibweise der Plattform |
+| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac; `native_key`: die Taste in der Schreibweise der Plattform; `nothing_to_take_back`: Strg+Z/Y ans Fenster, wenn das Feld nichts zurückzunehmen hat |
 
 ### Einstellungen und Rückmeldung
 

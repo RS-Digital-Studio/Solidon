@@ -8294,7 +8294,7 @@ class SketchPanel(QWidget):
         (Regel 19). Vorbelegt mit dem alten — wer nur eine Ziffer tauschen will,
         tippt eine Ziffer.
 
-        Der Wert bleibt Text, weil er einer ist: „30" ebenso wie „breite/2".
+        Der Wert bleibt Text, weil er einer ist: „30" ebenso wie „@breite/2".
         Eine Zahleneingabe nähme dem Kunden die Ausdrücke weg, für die es die
         Projektparameter gibt (§13).
         """
@@ -8323,7 +8323,7 @@ class SketchPanel(QWidget):
                 title=str(tr("Maß ändern")),
                 caption=str(caption),
                 text=shown,
-                note=str(tr("Eine Zahl oder ein Ausdruck mit Projektparametern, etwa breite/2.")),
+                note=str(tr("Eine Zahl oder ein Ausdruck mit Projektparametern, etwa @breite/2.")),
                 target="message:constraint_value",
             )
             popup.submitted.connect(

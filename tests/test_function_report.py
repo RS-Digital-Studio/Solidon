@@ -28,6 +28,7 @@ from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
 from tools import function_checks, function_report
 from tools.function_checks import (
+    CAPTION_HEIGHT,
     CHECKPOINTS,
     COARSE_NOTE,
     CRITERIA,
@@ -1062,12 +1063,20 @@ def test_z6_names_the_smallest_screen_and_not_the_start_size() -> None:
     """Z6 misst an der kleinsten Fläche, 1920 × 1080 logisch (Festlegung Robert).
 
     ``main_window.START_SIZE`` ist nur die Größe beim Verkleinern; Z6 nennt sie
-    nicht mehr. Die kleinste Fensterfläche ist der kleinste Schirm ohne
-    Taskleiste, und die Schwelle von Z6 nennt genau diesen Schirm.
+    nicht mehr. Die kleinste Fensterfläche ist die Innenfläche des maximierten
+    Fensters auf dem kleinsten Schirm: Taskleiste und Titelleiste ab. Am
+    maximierten Solidon-Fenster bei 100 % gemessen (Durchsicht welle4, C-M1):
+    innen so breit wie die verfügbare Fläche und 23 Punkte niedriger — auf
+    1920 x 1080 mit 48er-Taskleiste also 1920 x 1009, nicht 1920 x 1032. Die
+    Schwelle von Z6 nennt den Schirm.
     """
     assert set(SMALLEST_SCREEN) <= set(CRITERIA["Z6"].numbers)
     assert not set(START_SIZE) & set(CRITERIA["Z6"].numbers)
-    assert (SMALLEST_SCREEN[0], SMALLEST_SCREEN[1] - TASKBAR_HEIGHT) == SMALLEST_WINDOW
+    assert SMALLEST_WINDOW == (1920, 1009)
+    assert (
+        SMALLEST_SCREEN[0],
+        SMALLEST_SCREEN[1] - TASKBAR_HEIGHT - CAPTION_HEIGHT,
+    ) == SMALLEST_WINDOW
     assert "LAPTOP_SIZE" not in vars(function_checks)
 
 

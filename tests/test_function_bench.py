@@ -611,11 +611,12 @@ def test_the_surface_of_a_surface_set_counts_as_the_rows_own_window() -> None:
 
 
 def test_the_preparation_of_a_scene_walks_its_route_and_waits_for_its_cause(
-    qt_app: object, tmp_path: Path
+    tmp_path: Path,
 ) -> None:
     """Nach dem Öffnen stellt der Fall den Zustand der Szene her: Klicks über den Weg,
     Tippen in den Dateidialog, Tasten, und vor dem Export wartet er auf die Rückfrage
-    und bricht sie ab. Eine Szene ohne Angaben hat keine Vorbereitung."""
+    und bricht sie ab; danach wartet er auf die zugesagten Befunde (Durchsicht welle4
+    C-L3). Eine Szene ohne Angaben hat keine Vorbereitung."""
     walked: list[tuple[str, str]] = []
 
     class Walker:
@@ -640,13 +641,19 @@ def test_the_preparation_of_a_scene_walks_its_route_and_waits_for_its_cause(
         "rückfrage vor dem export",
         "rückfrage abbrechen",
         "vorbereitung steht",
+        "befunde der vorbereitung",
+        "vorbereitung geprüft",
     ]
     assert names["geschuetzte_leiste.netz weg"] == [
         "tree.row:obj_1 left",
         "command:edit.auto_split left",
     ]
     assert names["einfuegen.netz weg"] == ["history.row:2 right", "history:insert left"]
-    assert names["einfuegen.netz"][-1] == "vorbereitung steht"
+    assert names["einfuegen.netz"][-3:] == [
+        "vorbereitung steht",
+        "befunde der vorbereitung",
+        "vorbereitung geprüft",
+    ]
     assert names["quader.netz"] == []
 
 
