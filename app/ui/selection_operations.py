@@ -845,6 +845,9 @@ class SelectionOperationsPanel(QWidget):
         quick.setVerticalSpacing(TIGHT)
         quick.setColumnStretch(0, 1)
         quick.setColumnStretch(1, 1)
+        from app.ui.card_width import prefer_pairs
+
+        prefer_pairs(quick, quick=True)
         self._quick = quick
         for name in all_quick_names():
             spec = by_name.get(name)
@@ -958,6 +961,7 @@ class SelectionOperationsPanel(QWidget):
             box_layout.setContentsMargins(0, TIGHT, 0, 0)
             box_layout.setHorizontalSpacing(TIGHT)
             box_layout.setVerticalSpacing(0)
+            prefer_pairs(box_layout)
             self._grids[title] = box_layout
             buttons: list[QToolButton] = []
             for spec in sorted(grouped[title], key=lambda entry: sort_key(entry.title)):
@@ -1421,7 +1425,18 @@ class SelectionOperationsPanel(QWidget):
             (inner - self._quick.horizontalSpacing()) // 2 if self._quick_columns == 2 else inner
         )
         room = self.scroller.viewport().width()
-        columns = tuple(self.columns_of(title) for title in self._groups)
+        spans = {}
+        for name in self._quick_shown:
+            index = self._quick.indexOf(self._quick_buttons[name])
+            # Beim Umhängen kann ein Größenereignis schon eintreffen, während
+            # ein Knopf noch außerhalb des Rasters steht. Diesen Zwischenstand
+            # weder umbrechen noch als erledigte Messung merken.
+            if index < 0:
+                return
+            position = self._quick.getItemPosition(index)
+            assert isinstance(position, tuple)
+            spans[name] = position[3]
+        columns = tuple(spans.values()) + tuple(self.columns_of(title) for title in self._groups)
         # **Nur, wenn sich eine Breite oder die Hauptaktionen geändert haben.**
         # Jeder Merkmalklick änderte die Höhe der Karte darüber, und jede
         # Höhenänderung lief hierher: gut hundert Knöpfe, jeder zweimal neu
@@ -1434,7 +1449,8 @@ class SelectionOperationsPanel(QWidget):
             return
         self._wrapped_for = key
         for name in self._quick_shown:
-            self._wrap_label(self._quick_buttons[name], share)
+            button = self._quick_buttons[name]
+            self._wrap_label(button, inner if spans[name] == self._quick_columns else share)
         for title, (_section, _toggle, buttons) in self._groups.items():
             grid = self._grids.get(title)
             spacing = grid.horizontalSpacing() if grid is not None else 0
@@ -1444,14 +1460,9 @@ class SelectionOperationsPanel(QWidget):
 
     def _natural_width(self, button: QToolButton) -> int:
         """Wie breit der Knopf mit seinem ungebrochenen Titel sein will."""
-        title = str(button.property("operationTitle") or button.text())
-        shown = button.text()
-        if shown == title:
-            return button.sizeHint().width()
-        button.setText(title)
-        width = button.sizeHint().width()
-        button.setText(shown)
-        return width
+        from app.ui.card_width import button_width
+
+        return button_width(button)
 
     def _arrange_groups(self) -> None:
         """Die Zeilen jeder Gruppe zu zweit, wo jeder Titel in die halbe Breite passt.
