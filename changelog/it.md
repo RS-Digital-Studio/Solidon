@@ -22,6 +22,7 @@ scrive in `website/version.json`.
 - La ricerca trova *Unisci*, *Sottrai* e *Intersezione* anche come «booleano», e *Sottrai* anche come «differenza».
 - La ricerca trova la funzione anche per una domanda come «Come appoggio il pezzo sul piano?» e conosce parole di slicer e CAD come «piano di stampa» o «variabile».
 - Anche la ricerca nel manuale trova la pagina giusta per una domanda con parole proprie.
+- Chi scrive «foro» o «buco» nella ricerca ottiene *Pratica un foro* su un corpo e *Cambia foro* su un foro selezionato, in tutte le lingue.
 - Con un corpo selezionato e un secondo nella scena, la linguetta *Selezione* dice come aggiungere il secondo per *Unisci*, *Sottrai* e *Intersezione*.
 - Il campo di ricerca della linguetta *Selezione* ora c'è sempre, anche senza selezione, e trova ogni funzione e ogni comando con la sua scorciatoia.
 - La palette dei comandi non c'è più, perché il campo di ricerca trova lo stesso. *Cerca funzione* e Ctrl+Maiusc+P vi portano il cursore.
@@ -54,6 +55,7 @@ scrive in `website/version.json`.
 ### Modificare e disegnare
 
 - Un corpo esatto ora conserva le sue caratteristiche dopo *Applica testo*, *Intarsia testo* e *Ricava controforma*. Nella versione 0.6.0 dopo non si poteva più fare clic su nessuna faccia.
+- Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
 
 ## 0.6.0
 

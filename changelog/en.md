@@ -22,6 +22,7 @@ it into `website/version.json`.
 - The search finds *Unite*, *Subtract* and *Intersection* under “boolean” too, and *Subtract* also under “difference”.
 - The search also finds the function for a question like “How do I put the part on the build plate?” and knows words from slicers and CAD such as “print bed” or “variable”.
 - The search in the manual also finds the right page for a question in your own words.
+- Typing “hole” or “bore” in the search offers *Drill a bore* on a body and *Change bore* on a selected bore, in every language.
 - With one body selected and a second in the scene, the *Selection* tab says how to add the second for *Unite*, *Subtract* and *Intersection*.
 - The search field in the *Selection* tab is now always there, even with nothing selected, and finds every function and command along with its shortcut.
 - The command palette is gone, because the search field finds the same. *Search functions* and Ctrl+Shift+P put the cursor into it.
@@ -54,6 +55,7 @@ it into `website/version.json`.
 ### Editing and sketching
 
 - An exact body now keeps its features after *Put text on*, *Inlay text* and *Cut counter-form*. In version 0.6.0 no face could be clicked afterwards.
+- If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
 
 ## 0.6.0
 
