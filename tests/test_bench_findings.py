@@ -262,6 +262,107 @@ def test_the_history_claims_the_timeline_as_it_stands_in_the_column(qt_app: Any)
         panel.deleteLater()
 
 
+def test_the_newest_step_stays_in_view_when_the_history_loses_room(qt_app: Any) -> None:
+    """Wer am Ende des Verlaufs stand, bleibt dort, wenn die Spalte ihn kleiner legt.
+
+    ``show_document`` rollt ans Ende, danach teilt die Überlagerung die Spalte
+    neu: Bei 1920 × 1080 und zwölf Körpern zeigte der Verlauf die Schritte 4
+    bis 11, der neueste lag unter der Kante. Wer nach oben gerollt hat, bleibt
+    dagegen, wo er ist."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    from app.ui.panels import HistoryPanel, row_height_of, view_chrome
+
+    panel = HistoryPanel()
+    try:
+        for number in range(1, 13):
+            panel.list.addItem(f"{number}  Quader {number}")
+        panel.resize(298, 800)
+        panel.show()
+        panel.set_room(panel.wanted_height())
+        _settle(qt_app, 6)
+        panel.list.scrollToBottom()
+        small = panel._timeline_height() + view_chrome(panel.list) + 5 * row_height_of(panel.list)
+        panel.set_room(small)
+        _settle(qt_app, 6)
+        last = panel.list.visualItemRect(panel.list.item(panel.list.count() - 1))
+        assert last.isValid() and last.bottom() < panel.list.viewport().height(), (
+            f"der neueste Schritt liegt unter der Kante: {last} im Sichtfeld "
+            f"{panel.list.viewport().height()}"
+        )
+
+        panel.list.scrollToTop()
+        panel.set_room(small - row_height_of(panel.list))
+        _settle(qt_app, 6)
+        assert panel.list.verticalScrollBar().value() == 0, "wer oben las, bleibt oben"
+    finally:
+        panel.close()
+        panel.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+def test_a_card_with_few_rows_asks_no_floor_above_its_wish(qt_app: Any) -> None:
+    """Der Boden einer Liste sind drei Zeilen, aber nie mehr, als da sind (FD-25).
+
+    Gerechnet wurde drei mal die erste Zeile, und im Objektbaum ist das die
+    Körperzeile mit Vorschaubild: Mit einem Körper verlangte er am echten
+    Fenster 183 Punkte bei einer Wunschhöhe von 81 und stand mit Leere unter
+    dem Körper da; der Verlauf mit einem Schritt ebenso drei Zeilen für eine.
+    ``fenster.md``: Jede Karte nennt ihren Boden, nie über ihrem Wunsch. Mit
+    vielen Zeilen bleibt der Boden, wie er war."""
+    from PySide6.QtCore import QSize
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.ui.panels import MIN_ROWS, HistoryPanel, ObjectTree, least_height_of
+
+    def tree_with(bodies: int) -> ObjectTree:
+        tree = ObjectTree()
+        for number in range(bodies):
+            # Die Körperzeile trägt das Vorschaubild und ist doppelt so hoch
+            # wie ihre Merkmale, die zugeklappt darunter stehen.
+            body = QTreeWidgetItem(tree.tree, [f"Quader {number}", "40 × 30 × 20 mm"])
+            body.setSizeHint(0, QSize(0, 48))
+            for side in ("Linke Seite", "Vorderseite", "Oberseite"):
+                QTreeWidgetItem(body, [side, "600 mm²"])
+        tree.resize(300, 800)
+        tree.show()
+        tree._fit()
+        _settle(qt_app, 6)
+        return tree
+
+    one = tree_with(1)
+    many = tree_with(MIN_ROWS + 5)
+    panel = HistoryPanel()
+    try:
+        assert one.least_height() <= one.wanted_height(), (
+            f"ein Körper: Boden {one.least_height()} über dem Wunsch {one.wanted_height()}"
+        )
+        assert one.tree.height() <= one.wanted_height(), "keine Leere unter dem Körper"
+        assert one.tree.verticalScrollBar().maximum() == 0, "und nichts rollt"
+        assert many.least_height() == least_height_of(many.tree) < many.wanted_height(), (
+            "mit vielen Körpern bleibt der Boden drei Zeilen"
+        )
+
+        panel.list.addItem("1  Quader anlegen")
+        panel.show()
+        panel.set_room(800)
+        _settle(qt_app, 6)
+        assert panel.least_height() <= panel.wanted_height(), (
+            f"ein Schritt: Boden {panel.least_height()} über dem Wunsch {panel.wanted_height()}"
+        )
+        assert panel.list.height() <= panel.wanted_height() - panel._timeline_height()
+    finally:
+        from PySide6.QtCore import QCoreApplication, QEvent
+
+        for card in (one, many, panel):
+            card.close()
+            card.deleteLater()
+        # Abgebaut wird hier, nicht im nächsten Sammlerlauf: Drei Karten ohne
+        # Elternteil starben sonst mitten im Bau eines späteren Tests, und der
+        # Lauf mit ``test_overlay.py`` brach nativ ab (``-p gcoff`` grün).
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 #: Der Kindprozess des Überstandstests: Anwendung wie beim Kunden (mit Stilblatt
 #: und Einstellungen — im nackten Fenster stand *Vorher/Nachher* nicht da), erst
 #: die Fenstergröße, dann ein Körper mit Bohrung, aufgeklappt per Klick.

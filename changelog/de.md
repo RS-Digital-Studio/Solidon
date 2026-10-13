@@ -69,6 +69,8 @@ Nutzen da und sonst nichts.
 - Strg+Z und Strg+Y wirken auch, wenn der Cursor in einem leeren Feld steht, etwa im Suchfeld. Wer dort getippt hat, nimmt zuerst sein Tippen zurück.
 - Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
 - Meldungen in der Statuszeile setzen keinen Doppelpunkt mehr hinter einen ganzen Satz.
+- Mit nur einem Körper ist der Objektbaum so hoch wie sein Inhalt, ebenso der Verlauf mit einem Schritt. In Version 0.6.0 blieb darunter leerer Platz.
+- Der neueste Schritt bleibt im Verlauf zu sehen, wenn neue Körper den Objektbaum wachsen lassen. In Version 0.6.0 rutschte er unter den Rand der Karte.
 
 ### Drucken und Übergabe an den Slicer
 

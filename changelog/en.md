@@ -44,6 +44,8 @@ it into `website/version.json`.
 - Ctrl+Z and Ctrl+Y also work when the cursor sits in an empty field, such as the search field. If you typed there, your typing is undone first.
 - Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
 - Messages in the status bar no longer put a colon after a complete sentence.
+- With a single body the object tree is only as tall as its content, and so is the history with one step. Version 0.6.0 left empty space below.
+- The newest step stays visible in the history when new bodies make the object tree grow. In version 0.6.0 it slipped below the edge of the panel.
 
 ### Printing and slicer handover
 

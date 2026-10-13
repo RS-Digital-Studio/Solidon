@@ -44,6 +44,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ctrl+Z e Ctrl+Y funcionam também com o cursor num campo vazio, por exemplo no campo de pesquisa. Se escreveu algo ali, primeiro é desfeito o que escreveu.
 - Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
 - As mensagens da barra de estado já não colocam dois pontos depois de uma frase completa.
+- Com um só corpo, a árvore de objetos tem a altura do seu conteúdo, e o histórico com um só passo também. Na versão 0.6.0 ficava espaço vazio por baixo.
+- O passo mais recente continua visível no histórico quando novos corpos fazem crescer a árvore de objetos. Na versão 0.6.0 deslizava para baixo do limite do painel.
 
 ### Imprimir e entregar ao slicer
 

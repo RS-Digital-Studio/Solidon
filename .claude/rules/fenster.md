@@ -442,10 +442,10 @@ Zeilen rollen (`FittedScroller`). Ungleiche Zeilen misst `rows_height`, und
 `wanted_height` fragt dieselbe Quelle; was unter der Liste steht, gehört in
 beide Rechnungen.
 
-**Gesetzt wird einmal je Ereignisdurchlauf** (`_place_later`, Nullzeitgeber;
-`resizeEvent` und `reflow` sofort) — Tests brauchen mehrere Runden
-`processEvents`. **Wer Inhalt wachsen lässt, sagt es bis zur Zone**
-(`tell_the_zone`, dann `reflow`), sonst wächst die Karte in zwei Zügen.
+**Gesetzt wird einmal je Durchlauf** (`_place_later`, gleitend; `resizeEvent`
+und `reflow` sofort, auch im Gleiten); wer misst, legt fest
+(`guide_targets._settle_cards`). **Wer Inhalt wachsen lässt, sagt es bis zur
+Zone** (`tell_the_zone`, dann `reflow`), sonst wächst sie zweimal.
 
 ## Rückmeldung und Fehlerbericht
 
