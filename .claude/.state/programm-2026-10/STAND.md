@@ -67,6 +67,25 @@ das Konzept.
 
 ## Verlauf
 
+- 13.10.2026, 10:50, Phase 2 weiterhin D0: Die alten Fixpakete und die
+  Plattformwelle von main sind in `welle4`; letzter integrierter Fix ist
+  FD-36 (`f80741556`, Entfernen-Hinweis mit zuerst erreichbarem Abbrechen).
+  Karten sind nachgezogen. Der zweite native Probelauf auf `dca24076f`
+  lieferte echte Funde und drei native Prüfstandsabbrüche; er ist rot und
+  unverändert gesichert. Stufe-B-Urteile und unabhängige Zweitprobe sind
+  versiegelt, acht Unterschiede haben eine präzisierte gemeinsame
+  Kriterienauslegung ausgelöst. Robert verlangt ausdrücklich alle Kriterien,
+  auch notwendige Breite/Höhe, Leerraum und verbleibende Modellfläche.
+  Die neuen Fixeinheiten FD-35 bis FD-52 werden auf eigenen Zweigen gebaut
+  und geprüft; aktuelle Spitzen, Zuständigkeiten und Nachweise stehen in
+  `KOORDINATION.md` und den dort verlinkten Berichten. Keine bestandene
+  Gesamtmessung oder Endtor-Abnahme behauptet. **Als Nächstes:** neue
+  Fixrunden und erforderliche Nachprüfungen abschließen, integrieren,
+  frischer vollständiger Probelauf samt V4 und unabhängigen Bildurteilen,
+  gesammelter Kartennachtrag, gepinntes Tor und Merge-Durchsicht, main/CI.
+  Codestruktur R (`ceb161a9f`) und W13 (`367142bee`) sind auf ihren Zweigen
+  fertig; Integration und die übrigen Pakete von Schritt 0 folgen nach D0
+  auf main gemäß `plan-cs0.md`. Website-Upload wartet weiter auf Robert.
 - 13.10.2026, 03:50, Phase 2, D0 läuft, Codestruktur Schritt 0 daneben: Die
   Durchsicht über `welle4` vor main ist durch (vier Teile, Berichte in
   `output/konsolidierung-2026-10-12/review-welle4-{a,b,c,d}.md`): ein schwerer
