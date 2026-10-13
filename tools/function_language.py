@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from tools.function_bench import FunctionFlow
+from tools.function_machine import MOST_UNSTICKS, SETTLE_MS, Step
 from tools.function_protocol import empty_protocol, safe_name, unmeasured
 from tools.function_setup import Variant, place_window
 from tools.function_surface import without_way
@@ -100,10 +101,51 @@ class LanguageFlow:
             )
             if flow.reset():
                 flow.phase_surface()
+            cleaned = self.close_surfaces(flow)
             write_json(path, protocol)
             done.append(str(row.get("id")))
             self.bench["surfaces_done"] = done
             self.bench["surface_started"] = None
             self.persist()
+            if not cleaned:
+                self.bench["surface_cleanup_failed"] = str(row.get("id"))
+                self.persist()
+                raise RuntimeError("Fenster der vorigen Fläche blieb offen; den Rückweg prüfen")
         self.bench["surfaces_done"] = done
         self.persist()
+
+    def close_surfaces(self, flow: FunctionFlow) -> bool:
+        """Rückweg vor dem nächsten Projekt, auch aus nichtmodalen Fenstern.
+
+        Der Schrittautomat löst nur noch laufende modale Aufrufe mit Escape.
+        Ein nichtmodaler Generator kehrt sofort zurück und blieb deshalb über
+        Projektwechsel sichtbar. Er wird über dieselbe Kundentaste geschlossen;
+        bleibt ein Fenster stehen, beginnt keine weitere Messung darin.
+        """
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        from tools.function_surface import windows_to_picture
+
+        for _attempt in range(MOST_UNSTICKS):
+            opened = windows_to_picture(self.window)
+            if not opened:
+                return True
+            widget = opened[-1]
+
+            def escape(machine: Any, widget: Any = widget) -> None:
+                flow.walker.record(
+                    {"target": type(widget).__name__, "key": "Escape", "button": None}
+                )
+                QTest.keyClick(widget, Qt.Key.Key_Escape)
+
+            if not flow.run_steps(
+                "rückweg fläche", [Step("fenster verlassen", escape, settle_ms=SETTLE_MS)]
+            ):
+                break
+        remaining = windows_to_picture(self.window)
+        if not remaining:
+            return True
+        names = ", ".join(type(widget).__name__ for widget in remaining)
+        flow.data["errors"].append(f"Rückweg der Fläche: Fenster bleibt offen ({names})")
+        return False

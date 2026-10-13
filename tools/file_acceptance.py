@@ -818,11 +818,8 @@ def function_summary(case: Case, folder: Path, process: Mapping[str, Any]) -> di
     Dateiabnahme es für ihre Fälle sagt.
     """
     state = _read(folder / "bench.json")
-    protocols = (
-        [_read(folder / "function.json")]
-        if case.kind in ("function", "start")
-        else [_read(path) for path in sorted((folder / "surfaces").glob("*.json"))]
-    )
+    protocols = [_read(folder / "function.json")] if case.kind in ("function", "start") else []
+    protocols += [_read(path) for path in sorted((folder / "surfaces").glob("*.json"))]
     return {
         "number": case.number,
         "relative": case.relative,

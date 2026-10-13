@@ -177,7 +177,13 @@ class Walk:
         self.steps.append(entry)
         return entry
 
-    def step(self, name: str, button: str = "left") -> Step:
+    def step(
+        self,
+        name: str,
+        button: str = "left",
+        *,
+        stop_before_target: bool | Callable[[], bool] = False,
+    ) -> Step:
         """Ein Schritt, der bis zum Ziel wächst: jeder Wegklick reiht den nächsten ein.
 
         Geklickt wird erst, wenn der nächste Klick :data:`STABLE_S` lang derselbe
@@ -196,7 +202,7 @@ class Walk:
             if waited.get("silent"):
                 self.record({"target": name, "finding": NO_RESPONSE, "detail": waited["silent"]})
                 raise BenchFinding(NO_RESPONSE, name, waited["silent"])
-            why = self.click_once(name, button)
+            why = self.click_once(name, button, stop_before_target=stop_before_target)
             if why == TARGET_REASON:
                 return
             counter["way"] += 1
@@ -279,7 +285,13 @@ class Walk:
 
         return ready
 
-    def click_once(self, name: str, button: str = "left") -> str:
+    def click_once(
+        self,
+        name: str,
+        button: str = "left",
+        *,
+        stop_before_target: bool | Callable[[], bool] = False,
+    ) -> str:
         """Ein Klick auf dem Weg zu ``name``; gibt seinen Grund zurück."""
         try:
             click = self.ports.next_click(name)
@@ -315,6 +327,15 @@ class Walk:
                 name,
                 f"an {record['point']} liegt {record['widget_at']}, nicht das Ziel des Klicks",
             )
+        if why == TARGET_REASON and (
+            stop_before_target() if callable(stop_before_target) else stop_before_target
+        ):
+            # Die Fläche einer Soforthandlung muss vor ihrer Wirkung stehen.
+            # Wegklicks und Trefferprüfung bleiben vollständig; nur der letzte
+            # Klick entfällt, und das Protokoll behauptet keinen solchen.
+            record["button"] = None
+            record["detail"] = "Ziel vor der Handlung erreicht"
+            return why
         if why == TARGET_REASON and self.before_target is not None:
             self.before_target(name)
         self.ports.press(hit, point, record["button"])
@@ -602,8 +623,7 @@ class QtPorts:
         return rect.center()
 
     def press(self, widget: Any, point: Any, button: str) -> None:
-        from PySide6.QtCore import QPoint, QPointF, Qt
-        from PySide6.QtGui import QWheelEvent
+        from PySide6.QtCore import QPoint, Qt
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QApplication
 
@@ -635,18 +655,19 @@ class QtPorts:
             QApplication.processEvents()
         QTest.mouseMove(widget, local)
         if button in ("wheel_up", "wheel_down"):
+            if not hasattr(QTest, "wheelEvent"):
+                raise RuntimeError(
+                    "Der Prüfstand braucht QTest.wheelEvent ab Qt 6.8. "
+                    "Die gepinnte Umgebung über tools/check_env.py prüfen und "
+                    "mit --install gegen constraints.txt herstellen."
+                )
             step = 120 if button == "wheel_up" else -120
-            event = QWheelEvent(
-                QPointF(local),
-                QPointF(point),
-                QPoint(0, 0),
-                QPoint(0, step),
-                Qt.MouseButton.NoButton,
-                modifiers,
-                Qt.ScrollPhase.NoScrollPhase,
-                False,
+            # Der Qt-Eingabepfad reicht ignorierte Radereignisse an die Eltern
+            # weiter. Direktes sendEvent bleibt dagegen beim getroffenen Kind.
+            handle = top.windowHandle()
+            QTest.wheelEvent(
+                handle, handle.mapFromGlobal(point), QPoint(0, step), stateKey=modifiers
             )
-            QApplication.sendEvent(widget, event)
             return
         if button == "double":
             # Ein Doppelklick des Kunden ist erst ein Klick, dann der zweite

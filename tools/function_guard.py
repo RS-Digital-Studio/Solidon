@@ -41,6 +41,7 @@ BENCH_MODULES: Final[tuple[str, ...]] = (
     "function_bench",
     "function_gestures",
     "function_switch",
+    "function_revision",
     "function_surface",
     "function_start",
     "function_language",
@@ -102,7 +103,9 @@ CALL_ONLY: Final[frozenset[str]] = frozenset({"done"})
 #: Aufrufe, die einen verbotenen Namen tragen und doch keiner sind:
 #: ``machine.insert`` reiht Schritte in den Automaten ein,
 #: ``guide_targets.action_for`` liest die Handlung zu einem Ziel nur nach.
-ALLOWED_CALLS: Final[frozenset[str]] = frozenset({"machine.insert", "guide_targets.action_for"})
+ALLOWED_CALLS: Final[frozenset[str]] = frozenset(
+    {"machine.insert", "guide_targets.action_for", "QTest.wheelEvent"}
+)
 
 #: Private Namen fremder Objekte, die der Prüfstand berühren darf: die
 #: Nahtstellen der Suite für die Vorbereitung (``tests/conftest.py``) und der

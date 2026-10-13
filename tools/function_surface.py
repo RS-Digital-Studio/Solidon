@@ -48,8 +48,34 @@ def _shown(window: Any, name: str) -> Any | None:
 
 
 def open_dialog(window: Any) -> Any | None:
-    """Der offene Dialog — Operationsdialog oder modales Fenster —, sonst ``None``."""
-    return _shown(window, "dialog")
+    """Offene Bedienfläche, auch ein nichtmodaler Generator ohne Operationswortschatz."""
+    from PySide6.QtWidgets import QApplication
+
+    dialog = _shown(window, "dialog")
+    if dialog is not None:
+        return dialog
+    opened = windows_to_picture(window)
+    active = QApplication.activeWindow()
+    if active in opened:
+        return active
+    if len(opened) > 1:
+        raise RuntimeError("Mehrere offene Bedienflächen ohne eindeutiges aktives Fenster")
+    return opened[0] if opened else None
+
+
+def immediate_feature(window: Any, target: str) -> bool:
+    """Ob die sichtbare Merkmalshandlung sofort wirkt statt ihre Felder aufzuklappen."""
+    heading = _shown(window, target)
+    return heading is not None and not heading.isCheckable()
+
+
+def feature_in_view(window: Any, target: str) -> bool:
+    """Die Zielhandlung steht sichtbar im Bild, auch ohne Eingaben in der Sprachspezifikation."""
+    return (
+        target.startswith("feature:")
+        and op_in_view(window) == target.partition(":")[2]
+        and _shown(window, "measure.apply") is not None
+    )
 
 
 def surface_for(window: Any, target: str) -> Any:
@@ -77,7 +103,39 @@ def surface_for(window: Any, target: str) -> Any:
         bar = _shown(window, f"handle:bar.{rest}") or _shown(window, "tools")
         if bar is not None:
             return bar
+    if kind == "feature":
+        # Nur die Maßgruppe dieser Handlung gehört zur Zeile. Daneben kann
+        # eine andere Handlung im Bild bleiben, während ihre Zeile aufgeht.
+        if op_in_view(window) == rest:
+            accept = _shown(window, "measure.apply")
+            if accept is not None:
+                return accept.parentWidget()
+        heading = _shown(window, target)
+        if heading is not None:
+            return heading.parentWidget()
     return _shown(window, "selection") or window
+
+
+def surface_parts(window: Any, target: str, root: Any) -> tuple[Any, ...]:
+    """Eigene Merkmalzeile samt sichtbarem Footer; keine fremde Maßgruppe.
+
+    Der Footer steht außerhalb der rollenden Zeile. Nur deren aufgeklappter
+    Kopf ordnet ihn dieser Handlung zu; die Maßgruppe enthält alles selbst.
+    """
+    if target.startswith("feature:"):
+        heading = _shown(window, target)
+        if (
+            heading is not None
+            and heading.parentWidget() is root
+            and heading.isCheckable()
+            and heading.isChecked()
+        ):
+            accept = _shown(window, "feature.apply")
+            if accept is not None:
+                footer = accept.parentWidget()
+                if footer is not root and not root.isAncestorOf(footer):
+                    return root, footer
+    return (root,)
 
 
 #: Woher Zeilen stammen, deren Fläche selbst eine Meldung ist (``function_list``).
@@ -145,6 +203,14 @@ def require_findings(window: Any, promised: Iterable[str]) -> None:
         raise RuntimeError(
             f"Vorbereitung nicht hergestellt: der Prüfbericht zeigt {', '.join(missing)} nicht"
         )
+
+
+def require_full_export_scope(window: Any) -> None:
+    """Der Auslöser exportiert die ganze Szene, keine geerbte Teilauswahl (FD53)."""
+    selected = set(window.object_tree.selected_objects())
+    result = window.session.last_result
+    if result is None or (selected and selected != set(result.scene.objects)):
+        raise RuntimeError("Vorbereitung nicht hergestellt: Export umfasst nicht die ganze Szene")
 
 
 def classes_of(widget: Any) -> set[str]:

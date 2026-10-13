@@ -438,7 +438,10 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
     "switch": ProtocolField("tabelle", _keys("phases", "late_events")),
     "revise": ProtocolField(
         "liste",
-        _keys("way", "opened", "fields", "params", "history_before", "history_after"),
+        _keys(
+            "way", "opened", "fields", "params", "history_before", "history_after",
+            "typed_values", "params_after",
+        ),
         {"way": REVISE_WAYS},
     ),
     # Prüfpunkt 14: ``eval_s`` ist die Dauer der Rechnung, die abgebrochen

@@ -788,22 +788,26 @@ def field_values(root: Any) -> dict[str, Any]:
     Längen in Millimetern über ``value_mm``, wie der Kern sie hat; andere Zahlen
     über ``value``, Haken als wahr oder falsch, Auswahl und Text als Text.
     """
-    from PySide6.QtWidgets import QAbstractSpinBox, QCheckBox, QComboBox, QLineEdit
+    from PySide6.QtWidgets import QCheckBox, QComboBox, QLineEdit, QWidget
 
     values: dict[str, Any] = {}
-    for widget in _input_widgets(root):
+    # ValueField trägt das Wortschatzkennzeichen am Behälter. Seine innere
+    # Zahl besitzt keines; nur sie zu lesen ließ sämtliche Längen verschwinden.
+    marked = [widget for widget in root.findChildren(QWidget) if vocabulary_name(widget)]
+    for widget in [*marked, *_input_widgets(root)]:
         name = mark_of(widget)
         if not name:
             continue
         name = name.partition(":")[2] if ":" in name else name
         if callable(getattr(widget, "value_mm", None)):
             values[name] = round(float(widget.value_mm()), 4)
-        elif isinstance(widget, QAbstractSpinBox) and callable(getattr(widget, "value", None)):
+        elif callable(getattr(widget, "value", None)):
             values[name] = widget.value()
         elif isinstance(widget, QCheckBox):
             values[name] = bool(widget.isChecked())
         elif isinstance(widget, QComboBox):
-            values[name] = widget.currentText()
+            selected = widget.currentData()
+            values[name] = selected if selected is not None else widget.currentText()
         elif isinstance(widget, QLineEdit):
             values[name] = widget.text()
     return values
@@ -1075,11 +1079,19 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
     1.4.3 nimmt sie aus (F-2). ``large`` ist große Schrift nach WCAG: ab 18 pt,
     fett ab 14 pt.
     """
-    from PySide6.QtWidgets import QAbstractButton, QLabel
+    from PySide6.QtWidgets import QAbstractButton, QApplication, QLabel
 
     surface = type(root).__name__
     top = root.window()
-    picture = top.grab().toImage()
+    # Wie die native Aufnahme in FunctionFlow.picture: Die Bildschirmfläche
+    # lesen, nicht das Hauptfenster samt nativer 3D-Fläche erneut rendern.
+    # Offscreen hat kein Schirmbild und keinen nativen Renderer; dort prüfen
+    # die Widgettests weiterhin ihr Qt-Bild.
+    picture = (
+        top.grab()
+        if QApplication.platformName() == "offscreen"
+        else top.screen().grabWindow(int(top.winId()))
+    ).toImage()
     found: list[dict[str, Any]] = []
     for widget in root.findChildren(QLabel) + root.findChildren(QAbstractButton):
         if not _visible(widget) or not widget.isEnabled():
@@ -1091,9 +1103,9 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
         palette = widget.palette()
         font = widget.font()
         size = font.pointSizeF()
-        background = _shown_background(picture, top, widget) or _opaque(
-            palette.color(widget.backgroundRole()), None
-        )
+        # Ohne abgetastete Pixel bleibt die Messung offen. Eine Palette sagt
+        # nicht, welchen Hintergrund der Kunde tatsächlich gesehen hat.
+        background = _shown_background(picture, top, widget)
         foreground = (
             _icon_colour(widget)
             if symbol
@@ -1228,11 +1240,27 @@ def icon_entries(root: Any) -> list[dict[str, Any]]:
 def _shows_itself(button: Any) -> bool:
     """Ob ein Knopf ohne Text kein Symbolknopf ist: Haken, Optionsknopf, Beschriftungen
     darin oder ein eigenes ``paintEvent`` in der Anwendung."""
-    from PySide6.QtWidgets import QCheckBox, QLabel, QRadioButton
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QCheckBox, QLabel, QRadioButton, QToolButton
 
     if isinstance(button, (QCheckBox, QRadioButton)):
         return True
     if any(_visible(label) and _text_of(label).strip() for label in button.findChildren(QLabel)):
+        return True
+    parent = button.parentWidget()
+    if (
+        isinstance(button, QToolButton)
+        and button.isCheckable()
+        and button.arrowType() != Qt.ArrowType.NoArrow
+        and button.accessibleName().strip()
+        and parent is not None
+        and any(
+            label.parentWidget() is parent
+            and _visible(label)
+            and _text_of(label).strip() == button.accessibleName().strip()
+            for label in parent.findChildren(QLabel)
+        )
+    ):
         return True
     return button.icon().isNull() and any(
         "paintEvent" in vars(cls)
