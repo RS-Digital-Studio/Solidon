@@ -15348,11 +15348,16 @@ class Viewport(QWidget):
             base.copy(),
             texts,
             name="gizmo_labels",
-            # In der Körperfarbe des Themas: hell im dunklen, dunkel im
-            # hellen. Die Kantenfarbe war für Text auf dem Hintergrund zu
-            # leise — im Bild kaum zu lesen.
+            # Auf eigenem Grund bleiben Maße und Griffbuchstaben auch über
+            # einem hellen Körper oder dessen Flächenhervorhebung lesbar.
             style=LabelStyle(
-                text_colour=self._object_colour, font_size=13, bold=True, always_visible=True
+                text_colour=self._sketch_label_colour,
+                font_size=13,
+                bold=True,
+                always_visible=True,
+                background=self._sketch_label_background,
+                background_opacity=1.0,
+                margin=4,
             ),
         )
 

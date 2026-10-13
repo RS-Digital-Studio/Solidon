@@ -12,9 +12,12 @@ from app.core.bootstrap import load_operations
 from app.core.geom.transform import TransformSteps
 from app.core.types import Feature, FeatureKind
 from app.ui.render.api import PointerEvent
+from app.ui.render.gizmo import Gizmo
+from app.ui.scale_widget import ScaleHandle
 from app.ui.slot_handle import SlotHandle
+from app.ui.theme import THEMES, Theme
 from app.ui.viewport import Viewport
-from tests.render_fakes import RecordingRenderer
+from tests.render_fakes import RecordingItem, RecordingLabels, RecordingRenderer
 
 
 def make_handle(
@@ -219,3 +222,58 @@ def test_typed_slot_values_show_the_proposal_and_cancel_clears_the_opening(
     assert actor in view.renderer.removed and face in view.renderer.removed
     view._face_handle(feature)
     assert not view._shape_actor.visible() and not view._face_actor.visible()
+
+
+@pytest.mark.parametrize("first_theme", ["light", "dark"])
+@pytest.mark.parametrize("slotted", [False, True])
+def test_grip_letters_and_length_keep_their_text_field_on_update_and_rebuild(
+    feature_view: Viewport, first_theme: Theme, slotted: bool
+) -> None:
+    from app.ui.render import shapes
+
+    view = feature_view
+    renderer = view.renderer
+    assert isinstance(renderer, RecordingRenderer)
+    vertices, _faces = shapes.cube((0.0, 0.0, 5.0), 10.0)
+    actor = RecordingItem("object:obj_1", vertices, "#b9c4d0")
+    other: Theme = "dark" if first_theme == "light" else "light"
+    initial_points = None
+    for theme in (first_theme, other, first_theme):
+        view.set_theme(theme)
+        view._gizmo = Gizmo(renderer, actor)
+        if slotted:
+            view._slot_handle = make_handle(renderer)
+        else:
+            view._scale_handle = ScaleHandle(
+                renderer, actor, scale=0.15, colour="#ff9f1c", release_callback=lambda value: None
+            )
+        view._label_gizmo(actor)
+        labels = view._gizmo_labels
+        assert isinstance(labels, RecordingLabels)
+        assert labels.texts == (["X", "Y", "Z", "L", "L", ""] if slotted else ["X", "Y", "Z", "S"])
+        if initial_points is None:
+            initial_points = labels.points.copy()
+        else:
+            np.testing.assert_array_equal(labels.points, initial_points)
+        assert labels.style.text_colour == THEMES[theme]["text"]
+        assert labels.style.background == THEMES[theme]["window"]
+        assert labels.style.background_opacity == pytest.approx(1.0)
+        assert labels.style.margin == 4
+        assert labels.style.font_size == 13 and labels.style.bold and labels.style.always_visible
+        # Das Doppel hält den Stil; sein allgemeines Item-Pickflag bildet
+        # LabelStyle.pickable nicht ab. Geprüft wird der Rendererauftrag.
+        assert not labels.style.pickable
+        if slotted:
+            handle = view._slot_handle
+            assert handle is not None
+            knobs = tuple(handle._knobs)
+            handle.set_values(16.0, 20.0)
+            view._update_slot_labels()
+            assert view._gizmo_labels is labels
+            assert labels.texts[:5] == ["X", "Y", "Z", "L", "L"]
+            assert labels.texts[-1] == view._slot_length_text() and labels.texts[-1]
+            assert not np.array_equal(labels.points[3:], initial_points[3:])
+            assert tuple(handle._knobs) == knobs
+            assert all(knob.pickable and knob.visible() for knob in knobs)
+        view._detach_gizmo()
+        assert labels in renderer.removed and view._gizmo_labels is None
