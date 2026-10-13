@@ -171,8 +171,10 @@ jobs:
             # Die Lizenzabfrage mancher Abbilder will ein „Y“; yes endet am
             # geschlossenen Rohr, und pipefail zählte das als Fehler.
             { yes || true; } | hdiutil attach "$RUNNER_TEMP/slicer.dmg" -nobrowse -noverify -mountpoint /Volumes/slicer > /dev/null
-            # PrusaSlicer legt sein Bündel eine Ebene tiefer ab.
-            bundle=$(find /Volumes/slicer -maxdepth 2 -name '*.app' -prune | head -1)
+            # PrusaSlicer legt sein Bündel eine Ebene tiefer ab. find hört
+            # selbst beim ersten Treffer auf; ein `| head` endete unter
+            # pipefail mit 141, sobald find danach noch schrieb.
+            bundle=$(find /Volumes/slicer -maxdepth 2 -name '*.app' -prune -print -quit)
             if [ -z "$bundle" ]; then
               ls -la /Volumes/slicer
               echo "::error::Kein Programmbündel im Abbild."
@@ -201,7 +203,7 @@ jobs:
                 sudo flatpak update -y --noninteractive \
                   --commit=bf3534e4ffc688bbaf625206f27f9333b1b8820d3425dae19d3083b47e08ce79 com.prusa3d.PrusaSlicer
                 test "$(flatpak info --show-commit com.prusa3d.PrusaSlicer)" = bf3534e4ffc688bbaf625206f27f9333b1b8820d3425dae19d3083b47e08ce79
-                flatpak info com.prusa3d.PrusaSlicer | head -12 ;;
+                flatpak info com.prusa3d.PrusaSlicer | sed -n 1,12p ;;
               macOS/prusaslicer)
                 dmg $gh/prusa3d/PrusaSlicer/releases/download/version_2.9.6/PrusaSlicer-2.9.6.dmg \
                   94fd7b8a9f87c9631e1c71739b15b184fc5f4c0ceabd69072f1c78f229a4fe40 ;;

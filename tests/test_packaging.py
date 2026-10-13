@@ -3193,9 +3193,18 @@ def _early_readers(text: str) -> list[str]:
     ]
 
 
-def test_no_pipe_in_the_build_workflow_ends_its_reader_early() -> None:
-    """``| head``, ``| grep -q``, ``| awk '… exit'`` und Verwandte enden mit 141 unter pipefail."""
-    assert _early_readers(WORKFLOW.read_text(encoding="utf-8")) == []
+def test_no_pipe_in_any_workflow_ends_its_reader_early() -> None:
+    """``| head``, ``| grep -q``, ``| awk '… exit'`` und Verwandte enden mit 141 unter pipefail.
+
+    Jeder Workflow, nicht nur ``build.yml``: ``shell: bash`` heißt bei GitHub
+    ``-eo pipefail``, und ``slicer-auswahl.yml`` trug dieselbe Bauart.
+    """
+    found = [
+        f"{path.name}: {line}"
+        for path in sorted(WORKFLOW.parent.glob("*.yml"))
+        for line in _early_readers(path.read_text(encoding="utf-8"))
+    ]
+    assert found == []
 
 
 @pytest.mark.parametrize(
