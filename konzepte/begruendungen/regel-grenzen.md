@@ -89,6 +89,11 @@ und hat sie eine Kachel im Katalog.**
   dem Verlauf, wo *Schritt löschen* dieselbe Taste hat, und zwei Aktionen auf
   einer Taste führt Qt beide nicht aus.
 
+* **Der Katalog führt aus seiner Sperre hinaus** (RM-356): Ein modaler
+  Katalog, der „wählen Sie im Objektbaum“ sagt, ist eine Sackgasse. Deshalb
+  gilt ein Baustein bei genau einem Körper diesem, und die leere Szene nennt
+  unter dem Satz die Wege, die er meint.
+
 * **In der Leiste bleibt, was keine Auswahl braucht**: *Datei*, *Bearbeiten*
   (dort auch *Automatisch teilen*, ein Ablauf über mehreren Operationen),
   *Erzeugen* mit Grundkörpern, Importen, Skizzen, Beschriftungen — und dem

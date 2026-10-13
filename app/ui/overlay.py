@@ -934,9 +934,10 @@ class CurrentPageTabs(DetachableTabs):
     Fenster bei Full HD rund 530 Punkte Karte für 225 Punkte Inhalt.
 
     Gerechnet wird der Rahmen (Reiterleiste, Rand) als Unterschied zwischen
-    Qts Wunsch für das Ganze und dem für den Stapel, und dazu die vordere
-    Seite. Die Breitenhöhe meldet es immer, weil die Karte darüber ihre Höhe
-    aus ihr liest; eine Seite ohne eigene nimmt ihre Wunschhöhe.
+    Qts Wunsch für das Ganze und der höchsten Wunschhöhe der sichtbaren Seiten
+    (:meth:`_chrome_height`), und dazu die vordere Seite. Die Breitenhöhe
+    meldet es immer, weil die Karte darüber ihre Höhe aus ihr liest; eine Seite
+    ohne eigene nimmt ihre Wunschhöhe.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
