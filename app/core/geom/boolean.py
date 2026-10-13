@@ -326,7 +326,14 @@ def boolean(
             findings=[*united, *_findings_for(stage, kind, meshes, result)],
         )
 
-    if emptied and cut_short:
+    # **„Nichts übrig" spricht nur dort über die Maße, wo sie es erklären**
+    # (Durchsicht welle4-b, L3): Eine Differenz ist leer, wenn das Werkzeug den
+    # Körper deckt, eine Schnittmenge, wenn es ihn verfehlt. Eine Vereinigung
+    # zweier Körper ist nie leer; liefert eine Stufe trotzdem nichts, hat der
+    # Kern aufgegeben, und es gilt der Satz ganz unten mit *Reparieren* — wie
+    # beim Umlaufen einer Textur, wo es gar kein Werkzeug gibt.
+    about_size = emptied and kind != "union"
+    if about_size and cut_short:
         # **„Nichts übrig" ist keine Aussage über die Maße, solange die Kette
         # noch Stufen hätte.** Genau das stand hier — „Kein Rückfall hilft
         # gegen Maße" —, und es ist widerlegt: Am Mast des Piratenschiffs
@@ -358,7 +365,7 @@ def boolean(
             cut_short=cut_short,
             transient=transient,
         )
-    if emptied:
+    if about_size:
         # Hier ist die Kette wirklich zu Ende, und dann sagt „nichts übrig"
         # etwas über die Maße. Die Handlung dazu ist eine andere als beim
         # Kernversagen: nicht reparieren, sondern nachrechnen.
@@ -371,7 +378,7 @@ def boolean(
             # liest, sucht einen Netzfehler; die Antwort liegt bei den Maßen, und
             # genau dorthin schicken die Vorschläge.
             title=NOTHING_LEFT_TITLE,
-            detail=NOTHING_LEFT_DETAIL,
+            detail=NOTHING_LEFT_DETAIL if kind == "difference" else NOTHING_SHARED_DETAIL,
             suggestions=(CORRECT_INPUT, CANCEL),
             attempted=tuple(attempted),
             seed=seed,
@@ -1140,6 +1147,11 @@ NOTHING_LEFT_TITLE: Final = _("Es bleibt kein Körper übrig.")
 NOTHING_LEFT_DETAIL: Final = _(
     "Von dem Körper bleibt nichts übrig — das Werkzeug deckt ihn "
     "vollständig ab. Prüfen Sie Maß und Lage."
+)
+#: Derselbe Fall an einer Schnittmenge: Leer heißt dort, dass das Werkzeug den
+#: Körper verfehlt — „deckt ihn ab" sagte das Gegenteil.
+NOTHING_SHARED_DETAIL: Final = _(
+    "Von dem Körper bleibt nichts übrig — das Werkzeug trifft ihn nicht. Prüfen Sie Maß und Lage."
 )
 
 

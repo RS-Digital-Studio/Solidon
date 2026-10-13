@@ -1965,6 +1965,82 @@ def test_fixed_stages_offer_no_coarser_calculation(
     assert "vollständige" not in str(emptied.value.detail), str(emptied.value.detail)
 
 
+@pytest.mark.parametrize(
+    ("kind", "said", "offered"),
+    [
+        ("difference", "deckt ihn vollständig ab", "correct_input"),
+        ("intersection", "trifft ihn nicht", "correct_input"),
+        ("union", "Reparieren", "repair_and_retry"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("stages", "quality"), [(("direct",), "fine"), (("direct", "welded"), "draft"), (None, "fine")]
+)
+def test_an_empty_result_names_the_cause_its_kind_allows(
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+    said: str,
+    offered: str,
+    stages: tuple[str, ...] | None,
+    quality: str,
+) -> None:
+    """Durchsicht welle4-b, L3: „Nichts übrig“ nennt nur, was die Art erklären kann.
+
+    Seit FD-6 bekam jeder Aufruf mit festgelegten Stufen bei leerem Ergebnis
+    „das Werkzeug deckt ihn vollständig ab. Prüfen Sie Maß und Lage“ — auch die
+    Vereinigung beim Umlaufen einer Textur, die gar kein Werkzeug hat, und die
+    Schnittmenge, deren leeres Ergebnis heißt, dass das Werkzeug den Körper
+    verfehlt. Eine Vereinigung zweier Körper ist nie leer: Liefert jede Stufe
+    nichts, hat der Kern aufgegeben, und *Reparieren* ist der Weg. Dasselbe am
+    Ende der vollen Kette.
+    """
+    from app.core.geom import boolean as boolean_module
+
+    plate = MeshData.of(trimesh.creation.box(extents=(80.0, 50.0, 8.0)))
+    tool = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    monkeypatch.setattr(
+        boolean_module, "_run_stage", lambda *args, **kwargs: MeshData.of(trimesh.Trimesh())
+    )
+
+    with pytest.raises(BooleanFailedError) as caught:
+        boolean(kind, [plate, tool], stages=stages, quality=quality)  # type: ignore[arg-type]
+
+    detail = str(caught.value.detail)
+    assert said in detail, f"{kind}: {detail!r}"
+    assert offered in {action.id for action in caught.value.suggestions}, caught.value.suggestions
+    if kind == "union":
+        assert "Maß und Lage" not in detail, f"die Vereinigung schickt zu den Maßen: {detail!r}"
+
+
+def test_an_empty_union_in_the_preview_blames_no_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Auch in der schnellen Vorschau: Eine leere Vereinigung liegt nie an den Maßen.
+
+    Differenz und Schnittmenge sagen dort, dass erst die vollständige Rechnung
+    zwischen Maß und schneller Rechnung entscheidet; die Vereinigung bekommt
+    den Satz mit *Reparieren* und bleibt eine gekürzte Kette, die das Fenster
+    selbst zu Ende rechnet (``cut_short``).
+    """
+    from app.core.geom import boolean as boolean_module
+
+    plate = MeshData.of(trimesh.creation.box(extents=(80.0, 50.0, 8.0)))
+    tool = MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    monkeypatch.setattr(
+        boolean_module, "_run_stage", lambda *args, **kwargs: MeshData.of(trimesh.Trimesh())
+    )
+
+    caught = {}
+    for kind in ("difference", "intersection", "union"):
+        with pytest.raises(BooleanFailedError) as error:
+            boolean(kind, [plate, tool], quality="draft")  # type: ignore[arg-type]
+        caught[kind] = error.value
+
+    for kind in ("difference", "intersection"):
+        assert "Rechenstufen" in str(caught[kind].detail), str(caught[kind].detail)
+    assert "Reparieren" in str(caught["union"].detail), str(caught["union"].detail)
+    assert "Maßen" not in str(caught["union"].detail), str(caught["union"].detail)
+    assert all(error.cut_short for error in caught.values()), "das Fenster rechnet selbst weiter"
+
+
 def test_the_voxel_stage_refuses_a_grid_it_cannot_afford(caplog: pytest.LogCaptureFixture) -> None:
     """Gesamtreview 05.09.2026, G-13: Die Rasterweite folgt der größten
     Einzeldiagonale, die Ausdehnung dem gemeinsamen Hüllquader. Zwei
