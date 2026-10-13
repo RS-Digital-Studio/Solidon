@@ -371,14 +371,14 @@ die systemischen leichten behebt D0.
 ### FD-29 Am echten Fenster fehlen an einer gesetzten Bohrung Bohrung ändern und Zum Langloch ziehen
 
 - Art: Fehler
-- Schwere: schwer
+- Schwere: leicht
 - Funktion: `resize_hole`
 - Prüfpunkt: 1
-- Beleg: am echten Fenster verborgen, ohne Fenster sichtbar (`n5-echt.out`, `n5-offscreen.out`, D0-P2); Schwere vorläufig nach Konzept §4 („nicht auffindbar“), bis die Ursache feststeht
-- Ursache: offen — Unterschied zwischen echtem Fenster und offscreen.
-- Vorschlag: am echten Fenster nachstellen, Ursache zuordnen, beheben; Fenstertest an der kleinsten Arbeitsfläche.
-- Wirkung beim Kunden: Er findet an seiner Bohrung die Handlung nicht, die sie ändert.
-- Stand: offen RM-737
+- Beleg: am echten Fenster verborgen, ohne Fenster sichtbar (`n5-echt.out`, `n5-offscreen.out`, D0-P2); am echten Fenster nachgestellt und zugeordnet in `output/konsolidierung-2026-10-12/fix-bohrung-sichtbar.md`
+- Ursache: gewollt nach RM-199; die Zeile startete an einer gesetzten Bohrung.
+- Vorschlag: die Zeile an einer erkannten Bohrung beginnen lassen (`erkannte_bohrung.netz`); der Prüfstand fragt die Maßgruppe im Bild nach ihrer Handlung.
+- Wirkung beim Kunden: Keine Sackgasse: Die Maße der Bohrung stehen nach dem Klick im Bild, *Bohrung ändern* findet die Suche der Karte.
+- Stand: behoben `67058d32d`, Prüfstand `0b1e61346`
 
 ### FD-30 Zwei Sperrgründe nennen keinen Ausweg
 
