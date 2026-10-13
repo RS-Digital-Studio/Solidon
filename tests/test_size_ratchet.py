@@ -134,10 +134,18 @@ def test_a_tree_that_keeps_the_ratchet_is_green() -> None:
         ({"app/big.py": _module(LIMIT + 1, 4)}, {"app/big.py": 3}, "new_definition"),
         ({"tools/new.py": _module(LIMIT + 1, 1)}, {}, "too_long"),
         ({"app/big.py": _module(LIMIT - 1, 3)}, {"app/big.py": 3}, "release"),
+        ({"app/big.py": _module(LIMIT, 3)}, {"app/big.py": 3}, "release"),
         ({}, {"app/big.py": 3}, "release"),
         ({"app/big.py": _module(LIMIT + 1, 2)}, {"app/big.py": 3}, "not_lowered"),
     ],
-    ids=["neue Definition", "ungelistet 2001", "gelistet 1999", "Datei fehlt", "nicht gesenkt"],
+    ids=[
+        "neue Definition",
+        "ungelistet 2001",
+        "gelistet 1999",
+        "gelistet 2000",
+        "Datei fehlt",
+        "nicht gesenkt",
+    ],
 )
 def test_every_kind_of_violation_is_red(
     sources: dict[str, str], listed: dict[str, int], kind: str
@@ -444,6 +452,43 @@ def test_a_tree_without_a_single_file_stops(tmp_path: Path) -> None:
         size_ratchet.measure(tmp_path)
 
 
+def test_a_lone_carriage_return_is_no_line(tmp_path: Path) -> None:
+    """Gelesen wird ohne Zeilenumbruch-Übersetzung: ``\\r\\n`` zählt einmal, ein loses ``\\r``
+    gar nicht — wie ``wc -l`` (Durchsicht W13, Fund 5)."""
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "cr.py").write_bytes(b"a = 1\rb = 2\n")
+    (tmp_path / "app" / "crlf.py").write_bytes(b"a = 1\r\nb = 2\r\n")
+
+    sizes = size_ratchet.measure(tmp_path)
+
+    assert sizes["app/cr.py"].lines == 1
+    assert sizes["app/crlf.py"].lines == 2
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["--raise auf gelöschte Datei", "Syntaxfehler", "kein UTF-8"],
+)
+def test_a_file_the_tool_cannot_read_stops_with_exit_two(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], case: str
+) -> None:
+    """Was das Werkzeug nicht lesen kann, ist „nicht geprüft“ (Exit 2) und nie ein Verstoß
+    (Exit 1) — vorher fiel es als Ausnahme heraus (Durchsicht W13, Fund 8)."""
+    _repo(tmp_path, {"app/big.py": _module(LIMIT + 1, 3), "app/small.py": "x = 1\n"})
+    size_ratchet.write_list(tmp_path / LIST, {"app/big.py": 3})
+    run = ["--root", str(tmp_path)]
+    if case == "--raise auf gelöschte Datei":
+        (tmp_path / "app" / "big.py").unlink()
+        run += ["--raise", "app/big.py", "1", "--sections", "f9"]
+    elif case == "Syntaxfehler":
+        _write(tmp_path, {"app/big.py": _module(LIMIT + 1, 3) + "def (:\n"})
+    else:
+        (tmp_path / "app" / "big.py").write_bytes(b"x = '\xff'\n" * (LIMIT + 1))
+
+    assert size_ratchet.main(run) == 2
+    assert "nicht geprüft" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     "text",
     [
@@ -452,6 +497,7 @@ def test_a_tree_without_a_single_file_stops(tmp_path: Path) -> None:
         '"website/big.py" = 3\n',
         '"app/big.txt" = 3\n',
         '"app\\\\big.py" = 3\n',
+        '"app/sub\\\\big.py" = 3\n',
         '"app/../big.py" = 3\n',
         "kein toml\n",
     ],

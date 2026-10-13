@@ -236,7 +236,9 @@ def measure(root: Path) -> dict[str, Size]:
             f"unter {root} liegt keine *.py in {', '.join(AREAS)} — "
             "das Werkzeug zählt den Baum, in dem es liegt; einen anderen Ordner gibt --root"
         )
-    return measure_sources({name: _source(root / name) for name in names})
+    # Datei für Datei: Den ganzen Baum auf einmal im Speicher zu halten kostete
+    # gut das Doppelte an Spitze, bei gleichem Ergebnis (Durchsicht W13, Fund 9).
+    return {name: size_of(_source(root / name), name) for name in names}
 
 
 def _source(path: Path) -> str:
@@ -599,6 +601,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _report(sizes, after, changes(listed, after))
     except RatchetError as error:
         print(f"size_ratchet: {error}", file=sys.stderr)
+        return 2
+    except (OSError, UnicodeDecodeError, SyntaxError) as error:
+        # Eine Datei, die sich nicht lesen oder nicht parsen lässt, ist nicht
+        # geprüft — Exit 1 hieße „Verstoß“, und das wäre eine Behauptung.
+        print(
+            f"size_ratchet: {type(error).__name__}: {error} — nicht geprüft (Exit 2); die "
+            "Datei lesbar, als UTF-8 und als gültiges Python ablegen, dann erneut prüfen",
+            file=sys.stderr,
+        )
         return 2
 
 
