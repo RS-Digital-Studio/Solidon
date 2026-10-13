@@ -755,16 +755,36 @@ def _effective_level(entry: Mapping[str, Any]) -> str | None:
     ``type_scale`` der Grundgröße (``style.apply_style``) nennt je Stufe Größe
     und Gewicht; eine Schrift ohne gesetzte Eigenschaft ist die Grundschrift
     und damit ``body`` (Probelauf F-4). ``None``, wenn sie keiner Stufe
-    entspricht; ``""`` ohne Messung der Schrift.
+    entspricht; ``""`` ohne Messung der Schrift. Die belegte Primärrolle darf
+    die Grundschrift halbfett betonen, aber weder Größe noch Familie ändern.
     """
+    from PySide6.QtGui import QFont
+
     from app.ui.style import type_scale
 
     points, weight, base = (_number(entry.get(key)) for key in ("points", "weight", "base_points"))
     if points is None or weight is None or base is None or points <= 0 or base <= 0:
         return ""
-    for level, (size, bold) in type_scale(int(base)).items():
+    family, base_family = entry.get("family"), entry.get("base_family")
+    if family is not None or base_family is not None:
+        if (
+            not isinstance(family, str)
+            or not family
+            or not isinstance(base_family, str)
+            or not base_family
+        ):
+            return ""
+        if family != base_family:
+            return None
+    sizes = type_scale(int(base))
+    for level, (size, bold) in sizes.items():
         if abs(points - size) < 0.05 and int(weight) == bold:
             return level
+    if entry.get("primary") is True:
+        if not family or not base_family:
+            return ""
+        if abs(points - sizes["body"][0]) < 0.05 and int(weight) == QFont.Weight.DemiBold.value:
+            return "body"
     return None
 
 
@@ -781,7 +801,7 @@ def _g4(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         if "points" in entry:
             level = _effective_level(entry)
             if level == "":
-                absent.append(f"fonts.points an {widget}")
+                absent.append(f"fonts.points/Familie an {widget}")
             elif level is None:
                 issues.append(
                     Issue(

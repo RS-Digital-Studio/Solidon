@@ -1044,11 +1044,15 @@ def font_entries(root: Any) -> list[dict[str, Any]]:
     wird, ``base_points`` die Grundgröße der Anwendung, aus der
     ``style.type_scale`` die vier Stufen rechnet. Ohne gesetzte Eigenschaft
     ``level`` ist das die Grundschrift — keine fehlende Stufe (Probelauf F-4).
+    ``primary`` belegt den wirklichen Hauptknopf. Seine halbfette Grundschrift
+    bleibt an die gemessene Familie der Anwendung gebunden.
     """
-    from PySide6.QtWidgets import QAbstractButton, QApplication, QLabel
+    from PySide6.QtGui import QFontInfo
+    from PySide6.QtWidgets import QAbstractButton, QApplication, QLabel, QPushButton
 
     surface = type(root).__name__
     base = QApplication.font().pointSize()
+    family = QFontInfo(QApplication.font()).family()
     return [
         {
             "surface": surface,
@@ -1058,6 +1062,9 @@ def font_entries(root: Any) -> list[dict[str, Any]]:
             "points": round(float(widget.font().pointSizeF()), 2),
             "weight": int(widget.font().weight().value),
             "base_points": base,
+            "primary": isinstance(widget, QPushButton) and widget.isDefault(),
+            "family": QFontInfo(widget.font()).family(),
+            "base_family": family,
         }
         for widget in root.findChildren(QLabel) + root.findChildren(QAbstractButton)
         if _visible(widget) and _text_of(widget).strip()
@@ -1067,9 +1074,11 @@ def font_entries(root: Any) -> list[dict[str, Any]]:
 def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
     """Schrift gegen Hintergrund je Textträger als ``#rrggbb`` (G6).
 
-    Die Schrift kommt aus der Palette des Trägers, die das Stylesheet beim
-    Polieren setzt; der Grund aus dem Bild, das der Kunde sieht — die häufigste
-    Farbe am Rand des Trägers im gerenderten Fenster (:func:`_shown_background`).
+    Die Schrift kommt aus der Palette des Trägers, beim Hauptknopf aus Qts
+    zustandsabhängiger Beschriftung; die Palette allein kennt dessen
+    ``:default``-Farbe nicht. Der Grund kommt aus dem Bild, das der Kunde sieht:
+    die häufigste Farbe am Rand des Trägers im gerenderten Fenster
+    (:func:`_shown_background`).
     Die Palette nannte bei ``background: transparent`` Schwarz ohne Deckung, und
     ``.name()`` warf die Deckung weg: Kontrast 1,28 an jedem durchsichtigen
     Träger (Probelauf F-1, F-3). Das Verhältnis rechnet U mit
@@ -1079,7 +1088,7 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
     1.4.3 nimmt sie aus (F-2). ``large`` ist große Schrift nach WCAG: ab 18 pt,
     fett ab 14 pt.
     """
-    from PySide6.QtWidgets import QAbstractButton, QApplication, QLabel
+    from PySide6.QtWidgets import QAbstractButton, QApplication, QLabel, QPushButton
 
     surface = type(root).__name__
     top = root.window()
@@ -1106,11 +1115,13 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
         # Ohne abgetastete Pixel bleibt die Messung offen. Eine Palette sagt
         # nicht, welchen Hintergrund der Kunde tatsächlich gesehen hat.
         background = _shown_background(picture, top, widget)
-        foreground = (
-            _icon_colour(widget)
-            if symbol
-            else _opaque(palette.color(widget.foregroundRole()), background)
-        )
+        foreground: str | None
+        if symbol:
+            foreground = _icon_colour(widget)
+        elif isinstance(widget, QPushButton) and widget.isDefault():
+            foreground = _button_text_colour(widget) if background is not None else None
+        else:
+            foreground = _opaque(palette.color(widget.foregroundRole()), background)
         found.append(
             {
                 "surface": surface,
@@ -1123,6 +1134,49 @@ def contrast_entries(root: Any, theme: str) -> list[dict[str, Any]]:
             }
         )
     return found
+
+
+def _button_text_colour(button: Any) -> str | None:
+    """Die tatsächliche Zustandsfarbe der Knopfschrift ohne Palette oder Themenvorgabe.
+
+    Qt zeichnet nur die Beschriftung auf eine transparente Hilfsfläche, nicht
+    das Fenster oder den Renderer. Damit greifen dieselben zustandsabhängigen
+    Stilregeln, auch eine absichtlich falsche Farbe. Ein Symbol ist kein
+    Schriftbeleg. Ohne eindeutig voll gedeckte Schriftpixel bleibt die Farbe
+    offen; der echte Kundenhintergrund wird weiterhin unabhängig abgetastet.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QIcon, QImage, QPainter
+    from PySide6.QtWidgets import QStyle, QStyleOptionButton
+
+    option = QStyleOptionButton()
+    button.initStyleOption(option)
+    option.icon = QIcon()
+    ratio = float(button.devicePixelRatioF())
+    image = QImage(
+        round(button.width() * ratio),
+        round(button.height() * ratio),
+        QImage.Format.Format_RGBA8888,
+    )
+    if image.isNull():
+        return None
+    image.setDevicePixelRatio(ratio)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    try:
+        painter.setFont(button.font())
+        button.style().drawControl(
+            QStyle.ControlElement.CE_PushButtonLabel, option, painter, button
+        )
+    finally:
+        painter.end()
+    data = image.constBits()
+    colours = {
+        (data[index] << 16) | (data[index + 1] << 8) | data[index + 2]
+        for index in range(0, image.sizeInBytes(), 4)
+        if data[index + 3] == 255
+    }
+    return f"#{next(iter(colours)):06x}" if len(colours) == 1 else None
 
 
 def _opaque(colour: Any, under: str | None) -> str:
