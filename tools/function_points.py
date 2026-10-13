@@ -913,7 +913,9 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
         if not enabled and not str(entry.get("reason") or "").strip():
             issues.append(Issue(f"grau ohne Grund bei {state}", "schwer"))
         if enabled and not should:
-            issues.append(Issue(f"schreibendes Ziel frei trotz {state}", "schwer"))
+            # Regelverstoß und Umweg (Konzept §4, *mittel*): Der Kern lehnt an der
+            # Lizenzgrenze ab, die Oberfläche hätte grau sein sollen (D-L3).
+            issues.append(Issue(f"schreibendes Ziel frei trotz {state}", "mittel"))
         if not enabled and should:
             # Gekauft schaltet frei, und Lesendes bleibt in jedem Zustand offen
             # (``Activation.unlocked``, Lizenzgrenze in ``kern.md``).

@@ -489,6 +489,26 @@ def test_p18_a_target_missing_in_a_locked_run_is_no_grey_with_a_reason(monkeypat
     assert outcome.verdict == "erfuellt", outcome
 
 
+def test_p18_a_writing_target_open_while_locked_is_a_rule_violation() -> None:
+    """Durchsicht welle4 D-L3: „Schreibendes Ziel frei“ ist *mittel*, nicht *schwer*.
+
+    Konzept §4: Schwer ist falsches Ergebnis, Datenverlust, Sackgasse, nicht
+    auffindbar; ein offenes schreibendes Ziel trotz Sperre ist ein Regelverstoß
+    (Lizenzgrenze, ``kern.md``) — und der Kern lehnt am Ende ohnehin ab, also
+    ein Umweg. Die Funddatei führt FD-5, FD-26 und FD-28 ebenso; die
+    Abhakliste entsteht aus dem Prüfstand. „Sperrgrund ohne Ausweg“ (V5) bleibt
+    *mittel*: ein Fehlerweg ohne Handlung.
+    """
+    offered = {"writes": True, "state": "angeboten", "reason": ""}
+    outcome = judge_licence({"needs_activation": offered, "licensed": offered}, complete=False)
+    assert [(issue.text, issue.severity) for issue in outcome.issues] == [
+        ("schreibendes Ziel frei trotz needs_activation", "mittel")
+    ]
+    locked = {"text": "Gesperrt.", "actions": [], "kind": "sperrgrund", "way_out": False}
+    protocol = _protocol(lambda data: data.update(messages=[locked]))
+    assert [issue.severity for issue in _criterion("V5", protocol).issues] == ["mittel"]
+
+
 # --- Zeilen: Z3 am Prüfbericht (F-33) --------------------------------------------------------
 
 
