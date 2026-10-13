@@ -135,7 +135,7 @@ _CLOSED: Final = "change_lock_closed"
 _HELD: Final = "change_lock_enabled"
 """Ob ein Eingabefeld vor der Sperre bedienbar war (:func:`hold_inputs`)."""
 _HOLDING: Final = "change_lock_holding"
-"""Merker an Wurzel und Fenster: Es gibt Gesperrtes zurückzugeben."""
+"""Merker am Fenster: Es gibt gesperrte Fensterbefehle zurückzugeben."""
 _SAID: Final = "change_lock_said"
 _TIP: Final = "change_lock_tip"
 _SECOND: Final = "change_lock_second"
@@ -241,12 +241,11 @@ def hold_inputs(root: QWidget, reason: str) -> None:
     Parameterleiste nahmen ohne Freischaltung Eingaben an, die erst beim
     Übernehmen scheiterten. Gemerkt wird, ob ein Feld vorher bedienbar war;
     eine Beschriftung mit Partnerfeld bekommt den Grund als Satz. Rollbalken
-    bleiben, damit sich Gesperrtes weiter ansehen lässt. Frei und nie gesperrt
-    kostet der Aufruf nichts — er läuft mit jeder Aktualisierung des Fensters.
+    bleiben, damit sich Gesperrtes weiter ansehen lässt. Gefragt wird jedes
+    Kind und nicht ein Merker an ``root``: Die Felder der Maßgruppe wandern
+    zwischen Merkmalfenster und Bild (``keep_measure_group``) und kämen sonst
+    unter einer neuen Wurzel gesperrt an.
     """
-    if not reason and root.property(_HOLDING) is None:
-        return
-    root.setProperty(_HOLDING, True if reason else None)
     for widget in (root, *root.findChildren(QWidget)):
         if isinstance(widget, QLabel):
             if widget.buddy() is not None:
