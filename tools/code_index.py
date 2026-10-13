@@ -42,8 +42,8 @@ Kopie, kein Leser — ein Patch danach erreicht es nicht, außer der Test lädt 
 derselben Funktion mit ``importlib.reload`` neu (``test_advise.py``, B12).
 
 **Zwischenspeicher.** Die Auszüge liegen nach SHA-256 des Inhalts und dem Stand von
-``code_facts.py`` in ``tools/__pycache__/code_index.pickle`` und werden bei jedem Bau gegen die
-Dateien geprüft; kalt und warm liefern dasselbe (``tests/test_code_index.py``).
+``code_facts.py`` und dem Datenformat in ``tools/__pycache__/code_index.data``. Jeder Bau prüft
+sie gegen die Dateien; kalt und warm liefern dasselbe (``tests/test_code_index.py``).
 """
 
 from __future__ import annotations
@@ -53,12 +53,10 @@ import ast
 import builtins
 import functools
 import hashlib
-import itertools
 import sys
 import time
 from collections.abc import Callable, Iterable
 from pathlib import Path, PurePosixPath
-from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -69,6 +67,7 @@ from tools.code_facts import (  # noqa: E402
     CHECKING,
     INDEXED,
     IR,
+    RUNTIME,
     Add,
     Attr,
     Call,
@@ -99,6 +98,7 @@ from tools.code_facts import (  # noqa: E402
     Unknown,
     Unpack,
     Use,
+    effective,
     extract,
     inside,
     live,
@@ -132,7 +132,7 @@ __all__ = [
 #: Zeile still, und ein fehlendes Ziel sieht aus wie ein geprüftes.
 MAX_ROWS = 4096
 
-CACHE = Path("tools") / "__pycache__" / "code_index.pickle"
+CACHE = Path("tools") / "__pycache__" / "code_index.data"
 
 #: Tiefenmarke ohne Schnitt (siehe :meth:`Index._cached`).
 _NO_CYCLE = 1 << 30
@@ -182,120 +182,21 @@ _REF_KINDS = {"attr": "attribute", "store": "store", "del": "delete"}
 # --------------------------------------------------------------------------- öffentliche Werte
 
 
-class Val(NamedTuple):
-    """Was ein Ausdruck statisch bedeutet.
-
-    ``kind`` ist eines von ``module`` (Modul oder Paket unter ``app``, ``tools``, ``tests``;
-    ``ref`` ist der Punktname), ``ext`` (Modul oder Name außerhalb, etwa ``numpy.linalg``),
-    ``def`` und ``class`` (``ref`` ist ``modul:qualname``), ``const`` (``data`` ist der Wert),
-    ``seq`` und ``map`` (``data`` sind die Elemente bzw. Paare), ``obj`` (ein Objekt, das kein
-    Modul ist), ``missing`` (ein Modul oder Name in den eigenen Bereichen, den es nicht gibt;
-    ``data`` ist ``(modul, name)``), ``request`` (das ``request`` einer Fixture) und
-    ``unknown`` (statisch nicht auflösbar, ``ref`` nennt den Grund).
-    """
-
-    kind: str
-    ref: str
-    data: object = None
-
-
-class PatchTarget(NamedTuple):
-    """Ein aufgelöstes Ziel einer Patch-Stelle, je Zeile der Konstantenfaltung eines.
-
-    ``status``: ``module`` (Modul aus ``app``/``tools``), ``tests`` (Testmodul), ``foreign``
-    (fremdes Modul oder Objekt darin), ``object`` (kein Modul), ``missing`` (Modulpfad in den
-    eigenen Bereichen, den es nicht gibt) oder ``unknown`` (statisch nicht auflösbar).
-    ``module`` ist der Punktname des Zielmoduls (bei ``unknown``/``object`` der Grund),
-    ``name`` der gefaltete Attributname oder ``None``, wenn er sich nicht falten ließ.
-    """
-
-    status: str
-    module: str
-    name: str | None
-
-
-class PatchSite(NamedTuple):
-    """Eine Patch-Stelle in ``tests/``: ``monkeypatch.setattr``/``delattr`` (auch mit Pfad als
-    Text), ``mock.patch`` (Aufruf, Dekorator, ``with``) und ``mock.patch.object``."""
-
-    path: str
-    line: int
-    col: int
-    scope: str
-    form: str
-    text: str
-    raising: bool | None
-    targets: tuple[PatchTarget, ...]
-
-
-class Reader(NamedTuple):
-    """Wer ``M.N`` zur Aufrufzeit erreicht: ``kind`` ist ``global`` (Funktion in ``M``, die ``N``
-    als Global liest), ``attribute`` (``M.N`` über einen Modulalias), ``getattr`` oder
-    ``import`` (später ``from M import N`` in einer Funktion)."""
-
-    module: str
-    qualname: str
-    path: str
-    line: int
-    kind: str
-
-
-class HeadCopy(NamedTuple):
-    """Eine Kopfkopie: ``from M import N`` (``kind == "from"``) oder ``x = M.N``
-    (``kind == "assign"``) zur Importzeit in ``app/`` oder ``tools/``, außerhalb von
-    ``TYPE_CHECKING``. ``chain`` führt von ``(M, N)`` über Rückexporte bis zum Ursprung."""
-
-    holder: str
-    path: str
-    line: int
-    bound: str
-    module: str
-    name: str
-    chain: tuple[tuple[str, str], ...]
-    kind: str
-
-
-class Reference(NamedTuple):
-    """Ein aufgelöster Bezug auf ``module.name`` an einer Stelle des Baums.
-
-    ``kind``: ``import`` (``import M``, dann ist ``name`` leer), ``from``, ``import_module``,
-    ``attribute``, ``store``, ``delete``, ``getattr`` oder ``patch``. ``runtime`` sagt, ob der
-    Bezug zur Aufrufzeit (in einer Funktion) läuft, ``checking``, ob er unter ``TYPE_CHECKING``
-    steht.
-    """
-
-    path: str
-    line: int
-    col: int
-    kind: str
-    module: str
-    name: str
-    runtime: bool
-    checking: bool
-
-
-class Unresolved(NamedTuple):
-    """Ein Bezug auf ``app``/``tools``, der sich nicht auflöst (W5)."""
-
-    path: str
-    line: int
-    col: int
-    kind: str
-    module: str
-    name: str
-    text: str
-
-
-class Finding(NamedTuple):
-    """Ein Verstoß gegen eine Regel von W2 (``rule`` ist ``a`` bis ``e``, Plan 2.2)."""
-
-    rule: str
-    path: str
-    line: int
-    module: str
-    name: str
-    detail: str
-
+from tools.code_values import (  # noqa: E402
+    Finding,
+    HeadCopy,
+    PatchSite,
+    PatchTarget,
+    Reader,
+    Reference,
+    Unresolved,
+    Val,
+    keyword_arguments,
+    sequence,
+    unordered_items,
+)
+from tools.code_values import constant as _const  # noqa: E402
+from tools.code_values import elements as _elements  # noqa: E402
 
 #: Eine Zeile der Faltung: je Quelle (Schleife, ``parametrize``, Aufrufstelle) der Zeilenindex.
 Env = tuple[tuple[str, int], ...]
@@ -316,19 +217,6 @@ def _merge(first: Env, second: Env) -> Env | None:
         elif known != row:
             return None
     return tuple(sorted(merged.items()))
-
-
-def _elements(value: Val) -> tuple[Val, ...] | None:
-    if value.kind == "seq" and isinstance(value.data, tuple):
-        return value.data
-    if value.kind == "map" and isinstance(value.data, tuple):
-        return tuple(pair[0] for pair in value.data)
-    return None
-
-
-def _const(value: object) -> Val:
-    """Eine gefaltete Konstante; ``ref`` trägt den Typ, damit ``False`` nicht ``0`` gleicht."""
-    return Val("const", type(value).__name__, value)
 
 
 def _text(value: Val) -> str | None:
@@ -482,7 +370,7 @@ class Index:
         if name in facts.exports or name in facts.dynamic_names:
             return True
         binds = facts.scopes[0].binds.get(name)
-        if binds and (checking or live(binds, facts.stub)):
+        if effective(binds, facts.stub, checking):
             return True
         return name in _MODULE_DUNDERS or (name == "__path__" and facts.package)
 
@@ -518,35 +406,36 @@ class Index:
                 submodule, name = facts.exports[name]
                 module = f"{module}.{submodule}"
                 continue
-            found = live(facts.scopes[0].binds.get(name), facts.stub)
+            found = effective(facts.scopes[0].binds.get(name), facts.stub)
             if len(found) == 1 and isinstance(found[0].value, FromRef):
                 source = found[0].value
-                if self.module_exists(f"{source.module}.{source.name}"):
+                if any(
+                    v.kind == "module" for _e, v in self._module_attr(source.module, source.name)
+                ):
                     break
                 module, name = source.module, source.name
                 continue
             break
         return tuple(chain)
 
-    def _module_attr(self, module: str, name: str) -> Res:
-        return self._cached(("@", module, name), lambda: self._module_attr_new(module, name))
+    def _module_attr(self, module: str, name: str, checking: bool = False) -> Res:
+        return self._cached(
+            ("@", module, name, checking), lambda: self._module_attr_new(module, name, checking)
+        )
 
-    def _module_attr_new(self, module: str, name: str) -> Res:
+    def _module_attr_new(self, module: str, name: str, checking: bool = False) -> Res:
         facts = self.modules.get(module)
         qualified = f"{module}.{name}"
         result: Res = []
-        found = live(facts.scopes[0].binds.get(name), facts.stub) if facts else []
+        found = effective(facts.scopes[0].binds.get(name), facts.stub, checking) if facts else []
         if facts is not None and name in facts.exports:
             submodule, attribute = facts.exports[name]
-            result = self._attr(self._module_value(f"{module}.{submodule}"), attribute)
+            result = self._attr(self._module_value(f"{module}.{submodule}"), attribute, checking)
         elif facts is not None and found:
-            # Was eine Bindung des Moduls hält, ist da; ist ihr Wert nicht faltbar, bleibt es
-            # ein Objekt — ein Modul entstünde nur aus einem Import, und der faltet.
+            # Unbekannte Modulwerte bleiben unbekannt; ihr Ursprung kann ein Import sein.
             for bind in found:
                 for env, value in self._fold(facts, bind.value):
-                    result.append(
-                        (env, Val("obj", qualified) if value.kind == "unknown" else value)
-                    )
+                    result.append((env, value))
         elif facts is not None and name in facts.dynamic_names:
             result = [((), Val("obj", qualified))]
         elif self.module_exists(qualified):
@@ -561,10 +450,10 @@ class Index:
             result = [((), Val("missing", qualified, (module, name)))]
         return result
 
-    def _attr(self, base: Val, name: str) -> Res:
+    def _attr(self, base: Val, name: str, checking: bool = False) -> Res:
         kind = base.kind
         if kind == "module":
-            return self._module_attr(base.ref, name)
+            return self._module_attr(base.ref, name, checking)
         if kind == "ext":
             return [((), Val("ext", f"{base.ref}.{name}"))]
         if kind in ("unknown", "missing"):
@@ -629,7 +518,7 @@ class Index:
         if isinstance(ir, Attr):
             out: Res = []
             for env, base in self._fold(facts, ir.base):
-                for env2, value in self._attr(base, ir.attr):
+                for env2, value in self._attr(base, ir.attr, ir.checking):
                     merged = _merge(env, env2)
                     if merged is not None:
                         out.append((merged, value))
@@ -639,11 +528,19 @@ class Index:
         if isinstance(ir, ModRef):
             return [((), self._module_value(ir.module))]
         if isinstance(ir, FromRef):
-            return self._attr(self._module_value(ir.module), ir.name)
+            return self._attr(self._module_value(ir.module), ir.name, ir.checking)
         if isinstance(ir, Seq):
             if any(isinstance(item, Star) for item in ir.items):
                 return self._fold_starred(facts, ir)
-            return self._combine(facts, ir.items, lambda values: Val("seq", "", values))
+            return self._combine(
+                facts,
+                ir.items,
+                lambda values: Val(
+                    "seq",
+                    "unordered" if ir.unordered else "",
+                    unordered_items(values) if ir.unordered else values,
+                ),
+            )
         if isinstance(ir, (Comp, Grown)):
             return self._fold_open(facts, ir)
         if isinstance(ir, Table):
@@ -705,7 +602,7 @@ class Index:
         der der Bindung gehen in die Zeile ein — so gilt eine Bindung aus dem ``else`` nicht
         im ``if``, und zwei Namen aus demselben Zweig bleiben gepaart."""
         at = (ir.line, ir.col)
-        binds = lookup(facts.scopes, ir.scope, ir.name, at)
+        binds = lookup(facts.scopes, ir.scope, ir.name, at, checking=ir.checking)
         if binds is None:
             if ir.name == "__name__":
                 # Als Skript gestartet heißt jedes Modul ``__main__``.
@@ -765,7 +662,7 @@ class Index:
         out: Res = []
         for env, value in self._fold(facts, ir.value):
             items = _elements(value)
-            if value.kind == "seq" and value.ref == "open" and items is not None:
+            if value.kind == "seq" and value.ref in ("open", "unordered") and items is not None:
                 out.extend((env, item) for item in items or (Val("obj", "Element"),))
             elif items is not None and -len(items) <= ir.position < len(items):
                 out.append((env, items[ir.position]))
@@ -801,7 +698,9 @@ class Index:
                 else:
                     items.extend(inner)
                 open_ = open_ or inner is None or value.ref == "open"
-            out.append((env, Val("seq", "open" if open_ else "", tuple(items))))
+            order = "unordered" if ir.unordered else "open" if open_ else ""
+            folded_items = unordered_items(tuple(items)) if ir.unordered else tuple(items)
+            out.append((env, Val("seq", order, folded_items)))
         return out
 
     def _fold_open(self, facts: Facts, ir: Comp | Grown) -> Res:
@@ -810,9 +709,15 @@ class Index:
         per Index, ``setdefault`` oder ``update`` wächst, bleibt eine (offene) Tabelle."""
         items: list[Val] = []
         if isinstance(ir, Comp) and ir.table:
+            folded = self._fold(facts, ir.element)
+            unknown = [
+                (env, value) for env, value in folded if value.kind in ("unknown", "missing")
+            ]
+            if unknown:
+                return unknown
             pairs = [
                 value.data
-                for _env, value in self._fold(facts, ir.element)
+                for _env, value in folded
                 if value.kind == "seq" and isinstance(value.data, tuple)
             ]
             return [((), Val("map", "open", tuple(dict.fromkeys(pairs))))]
@@ -820,6 +725,8 @@ class Index:
             items.extend(value for _env, value in self._fold(facts, ir.element))
         else:
             bases = [base for _env, base in self._fold(facts, ir.base)]
+            if any(base.kind in ("unknown", "missing") for base in bases):
+                return [((), base) for base in bases if base.kind in ("unknown", "missing")]
             if any(base.kind == "map" for base in bases) or any(
                 how in ("setitem", "update") for how, _ in ir.added
             ):
@@ -829,7 +736,7 @@ class Index:
             for how, added in ir.added:
                 for _env, value in self._fold(facts, added):
                     inner = _elements(value) if how == "extend" else None
-                    if how != "extend":
+                    if how != "extend" or value.kind in ("unknown", "missing"):
                         items.append(value)
                     elif inner is not None:
                         items.extend(inner)
@@ -861,10 +768,14 @@ class Index:
     def _open_map(self, facts: Facts, bases: list[Val], added: tuple[tuple[str, IR], ...]) -> Val:
         pairs: list[tuple[Val, Val]] = []
         for base in bases:
+            if base.kind in ("unknown", "missing"):
+                return base
             if base.kind == "map" and isinstance(base.data, tuple):
                 pairs.extend(base.data)
         for how, value in added:
             for _env, item in self._fold(facts, value):
+                if item.kind in ("unknown", "missing"):
+                    return item
                 if how == "setitem" and item.kind == "seq" and isinstance(item.data, tuple):
                     key, entry = item.data
                     pairs.append((key, entry))
@@ -926,7 +837,7 @@ class Index:
         if base.kind == "seq" and isinstance(base.data, tuple):
             items: tuple[Val, ...] = base.data
             position = index.data if index.kind == "const" else None
-            if base.ref == "open" or not isinstance(position, int):
+            if base.ref in ("open", "unordered") or not isinstance(position, int):
                 return list(items) or [Val("obj", "Element")]
             if -len(items) <= position < len(items):
                 return [items[position]]
@@ -982,7 +893,7 @@ class Index:
                     if final is not None:
                         out.append((final, value))
             return out
-        arguments = self._rows(facts, ir.args)
+        arguments = self._rows(facts, (*ir.args, *(value for _name, value in ir.keywords)))
         if arguments is None:
             return [((), Val("unknown", "zu viele Zeilen"))]
         for env, function in functions:
@@ -990,7 +901,10 @@ class Index:
                 merged = _merge(env, env2)
                 if merged is None:
                     continue
-                for env3, value in self._apply(function, values):
+                keywords = dict(
+                    zip((name for name, _value in ir.keywords), values[len(ir.args) :], strict=True)
+                )
+                for env3, value in self._apply(function, values[: len(ir.args)], keywords):
                     final = _merge(merged, env3)
                     if final is not None:
                         out.append((final, value))
@@ -1000,6 +914,9 @@ class Index:
         """``.items()``, ``.keys()`` und ``.values()`` einer gefalteten Tabelle."""
         out: Res = []
         for env, base in self._fold(facts, func.base):
+            if base.kind in ("unknown", "missing"):
+                out.append((env, base))
+                continue
             if base.kind != "map" or not isinstance(base.data, tuple):
                 out.append((env, Val("obj", f"{func.attr}()")))
                 continue
@@ -1014,7 +931,9 @@ class Index:
             out.append((env, Val("seq", base.ref, items)))
         return out
 
-    def _apply(self, function: Val, values: tuple[Val, ...]) -> Res:
+    def _apply(
+        self, function: Val, values: tuple[Val, ...], keywords: dict[str, Val] | None = None
+    ) -> Res:
         kind, ref = function.kind, function.ref
         if kind == "ext":
             if ref in ("importlib.import_module", "pytest.importorskip") and values:
@@ -1038,7 +957,9 @@ class Index:
                 own = target.kind == "module" and self.exists(target.ref, name)
                 return [((), _const(own))]
             if ref in _SEQUENCE_CALLS | {"builtins.enumerate", "builtins.zip"} and values:
-                return [((), self._sequence(ref, values))]
+                return [((), self._sequence(ref, values, keywords))]
+            if keywords:
+                return [((), Val("unknown", f"Schlüsselwörter von {ref}"))]
             if ref == "pytest.param":
                 return [((), Val("seq", "pytest.param", values))]
             if ref == "builtins.str" and len(values) == 1 and values[0].kind == "const":
@@ -1062,40 +983,10 @@ class Index:
             return [((), function)]
         return [((), Val("obj", "Aufrufergebnis"))]
 
-    def _sequence(self, ref: str, values: tuple[Val, ...]) -> Val:
-        """``sorted``, ``tuple``, ``enumerate``, ``zip`` und Co. Eine offene Folge (aus einer
-        Abstraktion, gefüllt oder aus einem Objekt) bleibt offen: Ihre Länge, damit auch jeder
-        Zähler von ``enumerate``, steht erst zur Laufzeit fest."""
-        if any(value.kind in ("unknown", "missing") for value in values):
-            return next(value for value in values if value.kind in ("unknown", "missing"))
-        columns = [_elements(value) for value in values]
-        open_ = any(
-            column is None or (value.kind in ("seq", "map") and value.ref == "open")
-            for column, value in zip(columns, values, strict=True)
-        )
-        filled = [
-            column if column is not None else (Val("obj", f"Element von {value.ref}"),)
-            for column, value in zip(columns, values, strict=True)
-        ]
-        if ref == "builtins.enumerate":
-            counter = [Val("obj", "Zähler")] if open_ else None
-            items = tuple(
-                Val("seq", "", (counter[0] if counter else _const(number), item))
-                for number, item in enumerate(filled[0])
-            )
-        elif ref == "builtins.zip":
-            if open_:
-                combos = list(itertools.islice(itertools.product(*filled), MAX_ROWS))
-            else:
-                combos = list(zip(*filled, strict=False))
-            items = tuple(Val("seq", "", combo) for combo in combos)
-        else:
-            items = filled[0]
-            if not open_ and ref == "builtins.sorted" and all(i.kind == "const" for i in items):
-                items = tuple(sorted(items, key=lambda i: (type(i.data).__name__, str(i.data))))
-            elif not open_ and ref == "builtins.reversed":
-                items = items[::-1]
-        return Val("seq", "open" if open_ else "", items)
+    def _sequence(
+        self, ref: str, values: tuple[Val, ...], keywords: dict[str, Val] | None = None
+    ) -> Val:
+        return sequence(ref, values, keywords or {}, MAX_ROWS)
 
     def _spec(self, path: Val) -> Val:
         """``spec_from_file_location(…, pfad)`` für eine Datei des Baums."""
@@ -1142,12 +1033,12 @@ class Index:
                 return [((), Val("request", f"{facts.module}:{fn.qualname}"))]
             return self._fixture(facts, ir.name)
         out: Res = []
-        if ir.name in fn.defaults:
-            out.extend(self._fold(facts, fn.defaults[ir.name]))
         if facts.area != "tests":
             # Wer eine Funktion in app/ oder tools/ ruft, sieht der Auszug nicht: Der Wert ist
             # offen, die Vorgabe nur einer davon. Ohne das schnitte eine Bedingung wie
             # ``if jacobian is None`` den anderen Zweig weg.
+            if ir.name in fn.defaults:
+                out.extend(self._fold(facts, fn.defaults[ir.name]))
             out.append(((), Val("unknown", f"Parameter {ir.name}")))
             return out
         out.extend(self._call_values(facts, fn, ir.name))
@@ -1233,15 +1124,70 @@ class Index:
         position = fn.params.index(name) if name in fn.params else -1
         out: Res = []
         for number, (site_facts, site) in enumerate(self._call_sites().get(ref, [])):
-            argument: IR | None = dict(site.keywords).get(name)
-            if 0 <= position < len(site.args):
-                argument = site.args[position]
-            if argument is None:
-                continue
-            for env, value in self._fold(site_facts, argument):
-                merged = _merge(env, ((f"{ref}:call", number),))
-                if merged is not None:
-                    out.append((merged, value))
+            rows = self._arguments(site_facts, site.args, site.keywords, {position}, {name})
+            for env, args, keywords, open_, optional in rows:
+                values: Res
+                if 0 <= position < len(args):
+                    value = (
+                        args[position]
+                        if name not in keywords
+                        else Val("unknown", "doppeltes Argument")
+                    )
+                    values = [((), value)]
+                elif name in keywords:
+                    values = [((), keywords[name])]
+                elif open_:
+                    values = [((), Val("unknown", "offene Schlüsselworterweiterung"))]
+                elif name in fn.defaults:
+                    values = self._fold(facts, fn.defaults[name])
+                else:
+                    values = [((), Val("unknown", f"fehlendes Argument {name}"))]
+                if name in optional and not 0 <= position < len(args):
+                    values += (
+                        self._fold(facts, fn.defaults[name])
+                        if name in fn.defaults
+                        else [((), Val("unknown", f"möglicherweise fehlendes Argument {name}"))]
+                    )
+                for inner, value in values:
+                    merged = _merge(env, inner)
+                    merged = (
+                        _merge(merged, ((f"{ref}:call", number),)) if merged is not None else None
+                    )
+                    if merged is not None:
+                        out.append((merged, value))
+        return out
+
+    def _arguments(
+        self,
+        facts: Facts,
+        args: tuple[IR, ...],
+        keywords: tuple[tuple[str, IR], ...],
+        positions: set[int] | None = None,
+        names: set[str] | None = None,
+    ) -> list[tuple[Env, tuple[Val, ...], dict[str, Val], bool, frozenset[str]]]:
+        """Aufrufform und ** vollständig; Werte nur für die abgefragten Parameter falten.
+
+        Unbenutzte Argumente tragen keine zusätzlichen Helferzeilen ein. Ihre Positionen
+        und Namen bleiben für die Bindung erhalten; jede **-Tabelle wird erhoben.
+        """
+        parts = (
+            *(
+                value if positions is None or i in positions else Obj("anderes Argument")
+                for i, value in enumerate(args)
+            ),
+            *(
+                value if name == "**" or names is None or name in names else Obj("anderes Argument")
+                for name, value in keywords
+            ),
+        )
+        rows = self._rows(facts, parts)
+        if rows is None:
+            return [((), (), {}, True, frozenset())]
+        out = []
+        keyword_names = tuple(name for name, _value in keywords)
+        for env, values in rows:
+            named, open_, optional = keyword_arguments(keyword_names, values[len(args) :])
+            out.append((env, values[: len(args)], named, open_, optional))
         return out
 
     def _call_rest(self, facts: Facts, fn: Fn, keywords: bool) -> Res:
@@ -1251,34 +1197,27 @@ class Index:
         named = {*fn.params, *fn.kwonly}
         out: Res = []
         for number, (site_facts, site) in enumerate(self._call_sites().get(ref, [])):
-            if keywords:
-                rest = [(name, value) for name, value in site.keywords if name not in named]
-                parts = tuple(value for _name, value in rest)
-            else:
-                parts = site.args[len(fn.params) :]
-            rows = self._rows(site_facts, parts)
-            if rows is None:
-                out.append(((), Val("unknown", "zu viele Zeilen")))
-                continue
-            for env, values in rows:
+            positions = set() if keywords else set(range(len(fn.params), len(site.args)))
+            names = (
+                {name for name, _value in site.keywords if name not in named} if keywords else set()
+            )
+            rows = self._arguments(site_facts, site.args, site.keywords, positions, names)
+            for env, args, supplied, open_, optional in rows:
                 merged = _merge(env, ((f"{ref}:call", number),))
                 if merged is None:
                     continue
                 if keywords:
-                    pairs: list[tuple[Val, Val]] = []
-                    open_ = False
-                    for (name, _ir), value in zip(rest, values, strict=True):
-                        if name != "**":
-                            pairs.append((_const(name), value))
-                        elif value.kind == "map" and isinstance(value.data, tuple):
-                            pairs.extend(value.data)
-                            open_ = open_ or value.ref == "open"
-                        else:
-                            pairs.append((Val("obj", "Schlüssel"), Val("obj", "Wert")))
-                            open_ = True
-                    out.append((merged, Val("map", "open" if open_ else "args", tuple(pairs))))
+                    pairs = [
+                        (_const(name), value)
+                        for name, value in supplied.items()
+                        if name not in named
+                    ]
+                    if open_:
+                        pairs.append((Val("unknown", "Schlüssel"), Val("unknown", "Wert")))
+                    partial = open_ or bool(optional - named)
+                    out.append((merged, Val("map", "open" if partial else "args", tuple(pairs))))
                 else:
-                    out.append((merged, Val("seq", "args", values)))
+                    out.append((merged, Val("seq", "args", args[len(fn.params) :])))
         return out
 
     def _call_sites(self) -> dict[str, list[tuple[Facts, Site]]]:
@@ -1417,18 +1356,20 @@ class Index:
                     if value.kind != "module":
                         continue
                     module = value.ref
-                    if not self.exists(module, attr):
+                    if not self.exists(module, attr, checking=ref.checking):
                         text = _chain_text(ref.base, ref.attrs[: number + 1])
                         self._unresolvable(facts, (ref.line, ref.col), label, module, attr, text)
                         continue
                     where = (facts.path, ref.line, ref.col)
                     self._refer(Reference(*where, label, module, attr, ref.runtime, ref.checking))
-                    if label == "attribute" and indexed_file:
+                    if label == "attribute" and indexed_file and not ref.checking:
                         owner = self._owner(module, attr)
                         self._read(owner, facts, ref.scope, ref.line, "attribute")
                     if number < last:
                         following.update(
-                            v for _e, v in self._module_attr(module, attr) if v.kind == "module"
+                            v
+                            for _e, v in self._module_attr(module, attr, ref.checking)
+                            if v.kind == "module"
                         )
                 values = following
                 if not values:
@@ -1443,7 +1384,7 @@ class Index:
             name = _text(name_value)
             if target.kind != "module" or name is None:
                 continue
-            if not self.exists(target.ref, name):
+            if not self.exists(target.ref, name, checking=ref.checking):
                 if ref.kind == "getattr":
                     text = f"getattr({target.ref}, {name!r})"
                     at = (ref.line, ref.col)
@@ -1455,16 +1396,16 @@ class Index:
                 continue
             where = (facts.path, ref.line, ref.col)
             self._refer(Reference(*where, "getattr", target.ref, name, ref.runtime, ref.checking))
-            if indexed_file:
+            if indexed_file and not ref.checking:
                 self._read(self._owner(target.ref, name), facts, ref.scope, ref.line, "getattr")
 
     def _scan_globals(self, facts: Facts) -> None:
         module_binds = facts.scopes[0].binds
         for name in facts.import_reads:
-            if live(module_binds.get(name), facts.stub):
+            if effective(module_binds.get(name), facts.stub):
                 self._import_readers.setdefault((facts.module, name), set()).add(facts.module)
         for name, users in facts.global_reads.items():
-            if not live(module_binds.get(name), facts.stub):
+            if not effective(module_binds.get(name), facts.stub):
                 continue
             readers = self._readers.setdefault((facts.module, name), {})
             for qualname, line in users:
@@ -1474,7 +1415,10 @@ class Index:
         for imp in facts.imports:
             if imp.kind != "from" or imp.scope or imp.checking:
                 continue
-            if self.module_exists(f"{imp.module}.{imp.name}"):
+            if not any(
+                bind.line == imp.end_line
+                for bind in effective(facts.scopes[0].binds.get(imp.bound), facts.stub)
+            ):
                 continue
             if not self.exists(imp.module, imp.name):
                 continue
@@ -1484,14 +1428,12 @@ class Index:
             copy = (facts.module, facts.path, imp.line, imp.bound, imp.module, imp.name, chain)
             self._heads.append(HeadCopy(*copy, "from"))
         for bound, binds in facts.scopes[0].binds.items():
-            for bind in binds:
-                if bind.flags & CHECKING or not isinstance(bind.value, Attr):
+            for bind in effective(binds, facts.stub):
+                if bind.flags & (CHECKING | RUNTIME) or not isinstance(bind.value, Attr):
                     continue
                 attr = bind.value.attr
                 for _env, base in self._fold(facts, bind.value.base):
                     if base.kind != "module" or not self.exists(base.ref, attr):
-                        continue
-                    if self.module_exists(f"{base.ref}.{attr}"):
                         continue
                     if any(v.kind == "module" for _e, v in self._module_attr(base.ref, attr)):
                         continue
@@ -1500,36 +1442,69 @@ class Index:
                     self._heads.append(HeadCopy(*copy, "assign"))
 
     def _patch_site(self, facts: Facts, patch: Patch) -> PatchSite | None:
-        if patch.func is not None:
-            functions = {value.ref for _env, value in self._fold(facts, patch.func)}
-            if "unittest.mock.patch" not in functions:
-                return None
-        keywords = dict(patch.keywords)
-        args = patch.args
-        if patch.form == "delattr":
-            path_form = len(args) == 1 and "name" not in keywords
-        else:
-            path_form = patch.form == "patch" or (
-                patch.form == "setattr" and len(args) + ("value" in keywords) == 2
-            )
-        targets = self._path_targets(facts, args, keywords) if path_form else []
-        if not path_form:
-            targets = self._object_targets(facts, patch.form, args, keywords)
+        forms = {"unittest.mock.patch": "patch", "unittest.mock.patch.object": "patch.object"}
+        if patch.func is not None and not any(
+            value.ref in forms for _env, value in self._fold(facts, patch.func)
+        ):
+            return None
+        parts = patch.args if patch.func is None else (patch.func, *patch.args)
+        targets: list[PatchTarget] = []
+        false_targets: list[PatchTarget] = []
+        raising_values: set[Val] = set()
+        used_forms: set[str] = set()
+        positions = (
+            {0, 1, 2} if patch.func is not None else {0, 1, 2 if patch.form == "delattr" else 3}
+        )
+        names = {"target", "name", "attribute", "raising"}
+        argument_rows = self._arguments(facts, parts, patch.keywords, positions, names)
+        for _env, args, keywords, open_, optional in argument_rows:
+            form = patch.form
+            if patch.func is not None:
+                function = args[0] if args else Val("unknown", "zu viele Zeilen")
+                form = forms.get(function.ref, "")
+                args = args[1:]
+                if not form:
+                    if function.kind in ("unknown", "missing"):
+                        targets.append(PatchTarget("unknown", "Patch-Aufrufer nicht faltbar", None))
+                    continue
+            used_forms.add(form)
+            row_targets = self._target_values(form, args, keywords)
+            targets.extend(row_targets)
+            if open_ or optional & names:
+                targets.append(PatchTarget("unknown", "offene Schlüsselworterweiterung", None))
+            raising = keywords.get("raising")
+            position = 2 if form == "delattr" else 3
+            if form in ("setattr", "delattr") and len(args) > position:
+                raising = args[position]
+            if raising is not None:
+                raising_values.add(raising)
+                if raising == _const(False):
+                    false_targets.extend(row_targets)
         if not targets:
             targets.append(PatchTarget("unknown", "keine Zeile", None))
-        raising: bool | None = None
-        if "raising" in keywords:
-            folded = {value.data for _env, value in self._fold(facts, keywords["raising"])}
-            only = next(iter(folded)) if len(folded) == 1 else None
-            raising = only if isinstance(only, bool) else None
-        scope = facts.scopes[patch.scope]
-        self._reloaded[(facts.path, patch.line, patch.col)] = frozenset(
-            value.ref
-            for number, line, col, argument in facts.reloads
-            if number == patch.scope and (line, col) > (patch.line, patch.col)
-            for _env, value in self._fold(facts, argument)
-            if value.kind == "module"
+        raising_summary = (
+            False
+            if _const(False) in raising_values
+            else True
+            if raising_values == {_const(True)}
+            else None
         )
+        patch = patch._replace(form="|".join(sorted(used_forms)) or patch.form)
+        scope = facts.scopes[patch.scope]
+        reloaded: set[str] = set()
+        for number, line, col, argument, function_ir in facts.reloads:
+            if number != patch.scope or not self._reload_reaches(facts, patch, (line, col)):
+                continue
+            rows = self._rows(facts, (function_ir, argument))
+            if not rows or any(
+                fn.ref != "importlib.reload" or module.kind != "module"
+                for _env, (fn, module) in rows
+            ):
+                continue
+            modules = {module.ref for _env, (_fn, module) in rows}
+            if len(modules) == 1:
+                reloaded.update(modules)
+        self._reloaded[(facts.path, patch.line, patch.col)] = frozenset(reloaded)
         site = PatchSite(
             facts.path,
             patch.line,
@@ -1537,8 +1512,9 @@ class Index:
             scope.qualname,
             patch.form,
             patch.text,
-            raising,
+            raising_summary,
             tuple(dict.fromkeys(targets)),
+            tuple(dict.fromkeys(false_targets)),
         )
         for target in site.targets:
             if target.status in ("module", "loaded", "tests") and target.name is not None:
@@ -1548,40 +1524,77 @@ class Index:
                 )
         return site
 
-    def _path_targets(
-        self, facts: Facts, args: tuple[IR, ...], keywords: dict[str, IR]
-    ) -> list[PatchTarget]:
-        """Ziele eines Pfads als Text (``setattr("a.b.N", v)``, ``mock.patch("a.b.N")``)."""
-        path_ir = args[0] if args else keywords.get("target")
-        if path_ir is None:
-            return [PatchTarget("unknown", "Aufruf ohne Ziel", None)]
-        targets: list[PatchTarget] = []
-        for _env, value in self._fold(facts, path_ir):
-            text = _text(value)
-            if text is None or "." not in text:
-                targets.append(PatchTarget("unknown", "Pfad nicht faltbar", None))
+    def _reload_reaches(self, facts: Facts, patch: Patch, at: tuple[int, int]) -> bool:
+        """Ein Reload zählt nur im nachgewiesenen Pfad vor dem Abbau des Patches."""
+        if patch.form not in ("setattr", "delattr") and patch.until is None:
+            # Der Aufruf erzeugt nur einen Patcher. Erst ein aktiver Kontext belegt,
+            # dass der Reload den Ersatz tatsächlich sieht.
+            return False
+        start = (patch.line, patch.col)
+        if at <= start or (patch.until is not None and at > patch.until):
+            return False
+        if any(
+            number == patch.scope and start < (line, col) < at for number, line, col in facts.resets
+        ):
+            return False
+        scope = facts.scopes[patch.scope]
+        if any(inside(span, at) for span in scope.uncertain):
+            return False
+        for line, col, limit in scope.exits:
+            if (line, col) >= at or (limit is not None and not inside(limit, at)):
                 continue
-            owner, _, attr = text.rpartition(".")
-            targets.extend(self._classify(found, attr) for found in self._path(owner))
-        return targets
+            unreachable = False
+            for _key, branch, span, test in scope.regions:
+                if test is None or not inside(span, (line, col)):
+                    continue
+                values = self._fold(facts, test)
+                if values and all(
+                    value.kind == "const" and bool(value.data) != (branch == 0)
+                    for _env, value in values
+                ):
+                    unreachable = True
+            if not unreachable:
+                return False
+        for _key, branch, span, test in scope.regions:
+            if not inside(span, at) or inside(span, start):
+                continue
+            if test is None:
+                return False
+            values = self._fold(facts, test)
+            if not values or any(
+                value.kind != "const" or bool(value.data) != (branch == 0) for _env, value in values
+            ):
+                return False
+        return True
 
-    def _object_targets(
-        self, facts: Facts, form: str, args: tuple[IR, ...], keywords: dict[str, IR]
+    def _target_values(
+        self, form: str, args: tuple[Val, ...], keywords: dict[str, Val]
     ) -> list[PatchTarget]:
-        """Ziele von ``setattr(ziel, "N", …)``, ``delattr(ziel, "N")``, ``patch.object``."""
-        target_ir = args[0] if args else keywords.get("target")
-        name_key = "attribute" if form == "patch.object" else "name"
-        name_ir = args[1] if len(args) > 1 else keywords.get(name_key)
-        if target_ir is None or name_ir is None:
+        """Ein Ziel aus genau einer normalisierten Zeile, nach ihrer eigenen Aufrufform."""
+        target = args[0] if args else keywords.get("target")
+        if target is None:
             return [PatchTarget("unknown", "Aufruf ohne Ziel", None)]
-        targets: list[PatchTarget] = []
-        for _env, pair in self._fold(facts, Seq((target_ir, name_ir))):
-            if not isinstance(pair.data, tuple):
-                targets.append(PatchTarget("unknown", pair.ref, None))
-                continue
-            target, name = pair.data
-            targets.append(self._classify(target, _text(name)))
-        return targets
+        path_form = (
+            form == "patch"
+            or (form == "delattr" and len(args) < 2 and "name" not in keywords)
+            or (
+                form == "setattr"
+                and len(args) < 3
+                and "value" not in keywords
+                and _text(target) is not None
+            )
+        )
+        if path_form:
+            text = _text(target)
+            if text is None or "." not in text:
+                return [PatchTarget("unknown", "Pfad nicht faltbar", None)]
+            owner, _, name = text.rpartition(".")
+            return [self._classify(value, name) for value in self._path(owner)]
+        key = "attribute" if form == "patch.object" else "name"
+        name_value = args[1] if len(args) > 1 else keywords.get(key)
+        if name_value is None:
+            return [PatchTarget("unknown", "Aufruf ohne Namen", None)]
+        return [self._classify(target, _text(name_value))]
 
     def _path(self, dotted: str) -> list[Val]:
         """Ein Pfad als Text, aufgelöst wie ``monkeypatch``: Teil für Teil, Untermodule
@@ -1625,7 +1638,13 @@ class Index:
         for number, candidate in enumerate(facts.scopes):
             if number and inside(candidate.span, at) and not inside(candidate.hole, at):
                 scope = number
-        return frozenset(value for _env, value in self._fold(facts, to_ir(node, scope)))
+        scope, checking = facts.contexts.get(at, (scope, False))
+        return frozenset(
+            value
+            for _env, value in self._fold(
+                facts, to_ir(node, scope, comps=facts.comprehensions, checking=checking)
+            )
+        )
 
     def patch_sites(self) -> tuple[PatchSite, ...]:
         """Alle Patch-Stellen in ``tests/``, nach Pfad und Zeile sortiert."""
@@ -1685,7 +1704,7 @@ class Index:
                     module = "" if rule == "e" and target.status == "unknown" else target.module
                     name = target.name or ""
                     found[rule].append(Finding(rule, site.path, site.line, module, name, detail))
-            module_targets = [t for t in site.targets if t.status in ("module", "loaded")]
+            module_targets = [t for t in site.false_targets if t.status in ("module", "loaded")]
             if site.raising is False and module_targets:
                 first = module_targets[0]
                 detail = "raising=False"

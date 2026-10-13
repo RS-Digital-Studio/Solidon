@@ -20,7 +20,6 @@ hält.
 from __future__ import annotations
 
 import ast
-import pickle
 import textwrap
 from pathlib import Path
 
@@ -653,9 +652,9 @@ def test_the_cache_gives_the_same_index_cold_and_warm(tmp_path: Path) -> None:
     # Ein Speicher aus einem anderen Stand von ``code_facts.py`` gilt nicht: Sonst hielte ein
     # geänderter Auszug alte Ergebnisse für neue.
     cache = root / code_index.CACHE
-    stored = pickle.loads(cache.read_bytes())
-    stored["stamp"] = "ein älterer Stand"
-    cache.write_bytes(pickle.dumps(stored))
+    cache.write_bytes(
+        cache.read_bytes().replace(code_index.stamp().encode("ascii"), b"alter-Stand", 1)
+    )
     assert Index.build(root).counts["extracted"] == len(FAKE)
 
 

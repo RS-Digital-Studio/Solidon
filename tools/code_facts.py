@@ -30,7 +30,6 @@ from __future__ import annotations
 import ast
 import hashlib
 import os
-import pickle
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,6 +43,8 @@ AREAS = ("app", "tools", "tests")
 COND = 1  # unter if/try/Schleife/match: kann fehlen
 CHECKING = 2  # unter TYPE_CHECKING: bindet zur Laufzeit nicht
 ANNOTATED = 4  # nur annotiert, ohne Wert
+RUNTIME = 8  # globaler Schreibzugriff erst bei einem späteren Aufruf
+DELETED = 16  # del name entfernt die bisherige Bindung
 
 
 # ------------------------------------------------------------ Ausdrücke ohne Syntaxbaum (IR)
@@ -72,17 +73,20 @@ class Use(NamedTuple):
     line: int
     col: int
     tag: str = "n"
+    checking: bool = False
 
 
 class Attr(NamedTuple):
     base: IR
     attr: str
+    checking: bool = False
     tag: str = "a"
 
 
 class Seq(NamedTuple):
     items: tuple[IR, ...]
     tag: str = "t"
+    unordered: bool = False
 
 
 class Table(NamedTuple):
@@ -154,6 +158,7 @@ class FromRef(NamedTuple):
     module: str
     name: str
     tag: str = "from"
+    checking: bool = False
 
 
 class Unpack(NamedTuple):
@@ -257,6 +262,10 @@ class Scope:
     )
     #: Lage jeder Schleife: Was in ihr später gebunden wird, gilt im nächsten Durchlauf vorn.
     loops: list[tuple[int, int, int, int]] = field(default_factory=list)
+    #: Nicht bewiesene Ausführung: Schleifen und Ausnahme-/Erfolgsarme eines try.
+    uncertain: list[tuple[int, int, int, int]] = field(default_factory=list)
+    #: Abbrüche; break/continue wirken nur bis zum Ende der betreffenden Schleife.
+    exits: list[tuple[int, int, tuple[int, int, int, int] | None]] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -298,6 +307,7 @@ class Imp(NamedTuple):
     arg: IR | None
     runtime: bool
     checking: bool
+    end_line: int = 0
 
 
 class Patch(NamedTuple):
@@ -309,6 +319,7 @@ class Patch(NamedTuple):
     keywords: tuple[tuple[str, IR], ...]
     func: IR | None
     text: str
+    until: tuple[int, int] | None = None
 
 
 class Site(NamedTuple):
@@ -338,9 +349,13 @@ class Facts:
     #: ``importlib.reload`` liest sie neu.
     import_reads: dict[str, int] = field(default_factory=dict)
     #: ``importlib.reload(…)`` in Tests: Bereich, Zeile, Spalte, Argument.
-    reloads: list[tuple[int, int, int, IR]] = field(default_factory=list)
+    reloads: list[tuple[int, int, int, IR, IR]] = field(default_factory=list)
+    resets: list[tuple[int, int, int]] = field(default_factory=list)
     exports: dict[str, tuple[str, str]] = field(default_factory=dict)
     dynamic_names: tuple[str, ...] = ()
+    comprehensions: dict[tuple[int, int], int] = field(default_factory=dict)
+    #: Abweichender Typ-/Headerkontext für öffentliche Abfragen an eigenen AST-Knoten.
+    contexts: dict[tuple[int, int], tuple[int, bool]] = field(default_factory=dict)
 
 
 def to_ir(
@@ -348,6 +363,7 @@ def to_ir(
     scope: int,
     depth: int = 0,
     comps: dict[tuple[int, int], int] | None = None,
+    checking: bool = False,
 ) -> IR:
     """Ein Ausdruck als speicherbare Form; Namen tragen ihren Bereich und ihre Lage.
 
@@ -358,7 +374,7 @@ def to_ir(
     if depth > 24:
         return Unknown("zu tief verschachtelt")
     if isinstance(node, ast.Name):
-        return Use(node.id, scope, node.lineno, node.col_offset)
+        return Use(node.id, scope, node.lineno, node.col_offset, checking=checking)
     if isinstance(node, ast.Constant):
         value = node.value
         if isinstance(value, str) and len(value) > 512:
@@ -368,24 +384,28 @@ def to_ir(
         return Unknown("Konstante")
     d = depth + 1
     if isinstance(node, ast.Attribute):
-        return Attr(to_ir(node.value, scope, d, comps), node.attr)
+        return Attr(to_ir(node.value, scope, d, comps, checking), node.attr, checking)
     if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
         if len(node.elts) > 256:
             return Unknown("großes Literal")
         return Seq(
             tuple(
-                Star(to_ir(e.value, scope, d, comps))
+                Star(to_ir(e.value, scope, d, comps, checking))
                 if isinstance(e, ast.Starred)
-                else to_ir(e, scope, d, comps)
+                else to_ir(e, scope, d, comps, checking)
                 for e in node.elts
-            )
+            ),
+            unordered=isinstance(node, ast.Set),
         )
     if isinstance(node, ast.Dict):
         if len(node.keys) > 256 or any(k is None for k in node.keys):
             return Unknown("Tabelle")
         pairs = zip(node.keys, node.values, strict=True)
         return Table(
-            tuple((to_ir(k, scope, d, comps), to_ir(v, scope, d, comps)) for k, v in pairs)
+            tuple(
+                (to_ir(k, scope, d, comps, checking), to_ir(v, scope, d, comps, checking))
+                for k, v in pairs
+            )
         )
     if isinstance(node, ast.Call):
         if any(isinstance(a, ast.Starred) for a in node.args) or any(
@@ -393,12 +413,17 @@ def to_ir(
         ):
             return Unknown("entpackter Aufruf")
         return Call(
-            to_ir(node.func, scope, d, comps),
-            tuple(to_ir(a, scope, d, comps) for a in node.args),
-            tuple((k.arg, to_ir(k.value, scope, d, comps)) for k in node.keywords if k.arg),
+            to_ir(node.func, scope, d, comps, checking),
+            tuple(to_ir(a, scope, d, comps, checking) for a in node.args),
+            tuple(
+                (k.arg, to_ir(k.value, scope, d, comps, checking)) for k in node.keywords if k.arg
+            ),
         )
     if isinstance(node, ast.Subscript):
-        return Sub(to_ir(node.value, scope, d, comps), to_ir(node.slice, scope, d, comps))
+        return Sub(
+            to_ir(node.value, scope, d, comps, checking),
+            to_ir(node.slice, scope, d, comps, checking),
+        )
     if isinstance(node, ast.JoinedStr):
         parts: list[IR] = []
         for part in node.values:
@@ -409,22 +434,31 @@ def to_ir(
                 and part.format_spec is None
                 and part.conversion in (-1, 115)
             ):
-                parts.append(to_ir(part.value, scope, d, comps))
+                parts.append(to_ir(part.value, scope, d, comps, checking))
             else:
                 return Unknown("formatierter Text")
         return Fstr(tuple(parts))
     if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Div)):
-        left, right = to_ir(node.left, scope, d, comps), to_ir(node.right, scope, d, comps)
+        left, right = (
+            to_ir(node.left, scope, d, comps, checking),
+            to_ir(node.right, scope, d, comps, checking),
+        )
         return Add(left, right) if isinstance(node.op, ast.Add) else Div(left, right)
     if isinstance(node, ast.IfExp):
-        test, body = to_ir(node.test, scope, d, comps), to_ir(node.body, scope, d, comps)
-        return IfExp(test, body, to_ir(node.orelse, scope, d, comps))
+        test, body = (
+            to_ir(node.test, scope, d, comps, checking),
+            to_ir(node.body, scope, d, comps, checking),
+        )
+        return IfExp(test, body, to_ir(node.orelse, scope, d, comps, checking))
     if isinstance(node, ast.Compare) and len(node.ops) == 1:
-        left, right = to_ir(node.left, scope, d, comps), to_ir(node.comparators[0], scope, d, comps)
+        left, right = (
+            to_ir(node.left, scope, d, comps, checking),
+            to_ir(node.comparators[0], scope, d, comps, checking),
+        )
         return Cmp(type(node.ops[0]).__name__, left, right)
     if isinstance(node, ast.UnaryOp):
         if isinstance(node.op, ast.Not):
-            return Not(to_ir(node.operand, scope, d, comps))
+            return Not(to_ir(node.operand, scope, d, comps, checking))
         operand = node.operand
         if (
             isinstance(node.op, ast.USub)
@@ -437,10 +471,15 @@ def to_ir(
     if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)) and comps:
         inner = comps.get((node.lineno, node.col_offset))
         if inner is not None and isinstance(node, ast.DictComp):
-            pair = Seq((to_ir(node.key, inner, d, comps), to_ir(node.value, inner, d, comps)))
+            pair = Seq(
+                (
+                    to_ir(node.key, inner, d, comps, checking),
+                    to_ir(node.value, inner, d, comps, checking),
+                )
+            )
             return Comp(pair, True)
         if inner is not None and not isinstance(node, ast.DictComp):
-            return Comp(to_ir(node.elt, inner, d, comps))
+            return Comp(to_ir(node.elt, inner, d, comps, checking))
     return Unknown(type(node).__name__)
 
 
@@ -523,6 +562,8 @@ class _Extractor:
         self.branch: tuple[tuple[str, int], ...] = ()
         self.comps: dict[tuple[int, int], int] = {}
         self.grows: list[tuple[int, str, tuple[int, int], str, IR]] = []
+        self.patch_until: tuple[int, int] | None = None
+        self.contexts: dict[str, tuple[int, int]] = {}
 
     # ---- Bereiche und Bindungen
 
@@ -572,12 +613,39 @@ class _Extractor:
         flags = extra | (COND if self.cond else 0) | (CHECKING if self.checking else 0)
         if self.scope and name in scope.globals:
             scope = scopes[0]
-            flags |= COND
+            flags |= COND | RUNTIME
         branch = self.branch if scope is scopes[self.scope] else ()
         scope.binds.setdefault(name, []).append(Bind(at[0], at[1], value, flags, branch))
 
     def ir(self, node: ast.expr | None) -> IR:
-        return to_ir(node, self.scope, comps=self.comps)
+        return to_ir(node, self.scope, comps=self.comps, checking=self.checking)
+
+    def annotation(self, node: ast.expr | None) -> None:
+        """Typbezüge werden geprüft, erzeugen aber keine Laufzeitleser."""
+        if node is not None:
+            saved = self.checking
+            self.checking = True
+            self.expr(node)
+            self.checking = saved
+
+    def type_scope(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.TypeAlias
+    ) -> tuple[int, bool, int, tuple[tuple[str, int], ...]] | None:
+        """Typparameter binden im eigenen Bereich, auch in Bounds und Vorgaben."""
+        if not node.type_params:
+            return None
+        outer = self.f.scopes[self.scope]
+        saved = self.enter("typeparams", "", _span(node, node), False)
+        self.f.scopes[self.scope].qualname = outer.qualname
+        for param in node.type_params:
+            assert isinstance(param, (ast.TypeVar, ast.TypeVarTuple, ast.ParamSpec))
+            self.bind(param.name, Obj("Typparameter"), (0, 0))
+        for param in node.type_params:
+            assert isinstance(param, (ast.TypeVar, ast.TypeVarTuple, ast.ParamSpec))
+            if isinstance(param, ast.TypeVar):
+                self.annotation(param.bound)
+            self.annotation(param.default_value)
+        return saved
 
     # ---- Anweisungen
 
@@ -586,6 +654,13 @@ class _Extractor:
             self.stmt(statement)
 
     def stmt(self, node: ast.stmt) -> None:
+        if isinstance(node, (ast.Return, ast.Raise, ast.Break, ast.Continue)):
+            scope = self.f.scopes[self.scope]
+            at = (node.lineno, node.col_offset)
+            limit = None
+            if isinstance(node, (ast.Break, ast.Continue)):
+                limit = next((span for span in reversed(scope.loops) if inside(span, at)), None)
+            scope.exits.append((*at, limit))
         if isinstance(node, ast.Expr):
             self.expr(node.value)
         elif isinstance(node, ast.Assign):
@@ -605,6 +680,7 @@ class _Extractor:
             self.expr(node.iter)
             row = Row(f"{self.f.path}:for@{node.lineno}:{node.col_offset}", self.ir(node.iter))
             self.f.scopes[self.scope].loops.append(_span(node, node))
+            self.f.scopes[self.scope].uncertain.append(_span(node, node))
             self.cond += 1
             self.target(node.target, row, _end(node.target))
             self.body(node.body)
@@ -618,6 +694,7 @@ class _Extractor:
                 self.imported("import", node, alias.name, "", bound, None)
                 self.bind(bound, ModRef(alias.name if alias.asname else bound), _end(node))
         elif isinstance(node, ast.AnnAssign):
+            self.annotation(node.annotation)
             if node.value is not None:
                 self.expr(node.value)
                 self.target(node.target, self.ir(node.value), _end(node))
@@ -626,21 +703,31 @@ class _Extractor:
             else:
                 self.expr(node.target)
         elif isinstance(node, (ast.With, ast.AsyncWith)):
+            saved_contexts = self.contexts.copy()
             for item in node.items:
+                saved_until = self.patch_until
+                self.patch_until = _end(node)
                 self.expr(item.context_expr)
+                self.patch_until = saved_until
                 if item.optional_vars is not None:
                     self.target(item.optional_vars, Unknown("with"), _end(item.optional_vars))
+                    if isinstance(item.optional_vars, ast.Name):
+                        self.contexts[item.optional_vars.id] = _end(node)
             self.body(node.body)
+            self.contexts = saved_contexts
         elif isinstance(node, (ast.Try, ast.TryStar)):
             self.cond += 1
             self.body(node.body)
             for handler in node.handlers:
+                self.f.scopes[self.scope].uncertain.append(_span(handler.body[0], handler.body[-1]))
                 if handler.type is not None:
                     self.expr(handler.type)
                 if handler.name:
                     at = (handler.lineno, handler.col_offset)
                     self.bind(handler.name, Unknown("except"), at)
                 self.body(handler.body)
+            if node.orelse:
+                self.f.scopes[self.scope].uncertain.append(_span(node.orelse[0], node.orelse[-1]))
             self.body(node.orelse)
             self.body(node.finalbody)
             self.cond -= 1
@@ -656,19 +743,26 @@ class _Extractor:
         elif isinstance(node, ast.While):
             self.expr(node.test)
             self.f.scopes[self.scope].loops.append(_span(node, node))
+            self.f.scopes[self.scope].uncertain.append(_span(node, node))
             self.cond += 1
             self.body(node.body)
             self.body(node.orelse)
             self.cond -= 1
         elif isinstance(node, ast.Delete):
             for target in node.targets:
-                if isinstance(target, (ast.Attribute, ast.Subscript)):
+                if isinstance(target, ast.Name):
+                    self.bind(target.id, Unknown("gelöscht"), _end(node), DELETED)
+                elif isinstance(target, (ast.Attribute, ast.Subscript)):
                     self.target(target, Unknown("del"), _end(node))
         elif isinstance(node, ast.Global):
             self.f.scopes[self.scope].globals.update(node.names)
         elif isinstance(node, ast.Match):
             self.match(node)
         elif isinstance(node, ast.TypeAlias):
+            saved_types = self.type_scope(node)
+            self.annotation(node.value)
+            if saved_types is not None:
+                self.leave(saved_types)
             self.bind(node.name.id, Obj("type"), _end(node))
         elif not isinstance(node, ast.Nonlocal):
             for child in ast.iter_child_nodes(node):
@@ -731,7 +825,7 @@ class _Extractor:
                 continue
             bound = alias.asname or alias.name
             self.imported("from", node, module, alias.name, bound, None)
-            self.bind(bound, FromRef(module, alias.name), _end(node))
+            self.bind(bound, FromRef(module, alias.name, checking=self.checking), _end(node))
 
     def imported(
         self,
@@ -744,16 +838,42 @@ class _Extractor:
     ) -> None:
         at = (node.lineno, node.col_offset)
         self.f.imports.append(
-            Imp(kind, self.scope, *at, module, name, bound, arg, self.runtime, self.checking)
+            Imp(
+                kind,
+                self.scope,
+                *at,
+                module,
+                name,
+                bound,
+                arg,
+                self.runtime,
+                self.checking,
+                node.end_lineno or node.lineno,
+            )
         )
 
     def function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         for decorator in node.decorator_list:
             self.expr(decorator)
+        saved_types = self.type_scope(node)
+        type_scope = self.scope if saved_types is not None else None
         args = node.args
+        for arg in (*args.posonlyargs, *args.args, *args.kwonlyargs, args.vararg, args.kwarg):
+            if arg is not None:
+                self.annotation(arg.annotation)
+        self.annotation(node.returns)
+        if saved_types is not None:
+            self.leave(saved_types)
         for default in (*args.defaults, *args.kw_defaults):
             if default is not None:
                 self.expr(default)
+                if type_scope is not None:
+                    for part in ast.walk(default):
+                        if isinstance(part, ast.expr):
+                            self.f.contexts[(part.lineno, part.col_offset)] = (
+                                self.scope,
+                                self.checking,
+                            )
         outer = self.f.scopes[self.scope]
         qualname = f"{outer.qualname}.{node.name}" if outer.qualname else node.name
         self.bind(node.name, DefRef(f"{self.f.module}:{qualname}", "def"), _end(node))
@@ -777,6 +897,8 @@ class _Extractor:
         if self.scope == 0 and node.name == "__getattr__" and params:
             self.f.dynamic_names = tuple(sorted(_compared_names(node, params[0])))
         saved = self.enter("function", node.name, _span(node.body[0], node), True)
+        if type_scope is not None:
+            self.f.scopes[self.scope].parent = type_scope
         every = [*params, *(a.arg for a in args.kwonlyargs)]
         every += [a.arg for a in (args.vararg, args.kwarg) if a is not None]
         for name in every:
@@ -809,14 +931,20 @@ class _Extractor:
     def class_(self, node: ast.ClassDef) -> None:
         for decorator in node.decorator_list:
             self.expr(decorator)
+        saved_types = self.type_scope(node)
+        type_scope = self.scope if saved_types is not None else None
         for base in node.bases:
             self.expr(base)
         for keyword in node.keywords:
             self.expr(keyword.value)
+        if saved_types is not None:
+            self.leave(saved_types)
         outer = self.f.scopes[self.scope]
         qualname = f"{outer.qualname}.{node.name}" if outer.qualname else node.name
         self.bind(node.name, DefRef(f"{self.f.module}:{qualname}", "class"), _end(node))
         saved = self.enter("class", node.name, _span(node.body[0], node), self.runtime)
+        if type_scope is not None:
+            self.f.scopes[self.scope].parent = type_scope
         self.fns.append(None)
         self.body(node.body)
         self.fns.pop()
@@ -850,12 +978,14 @@ class _Extractor:
     # ---- Ausdrücke
 
     def load(self, name: str, line: int) -> None:
-        if self.keep_loads:
+        if self.keep_loads and not self.checking:
             loads = self.f.scopes[self.scope].loads
             if name not in loads:
                 loads[name] = line
 
     def expr(self, node: ast.expr) -> None:
+        if self.checking or self.f.scopes[self.scope].kind == "typeparams":
+            self.f.contexts[(node.lineno, node.col_offset)] = self.scope, self.checking
         if isinstance(node, ast.Name):
             if isinstance(node.ctx, ast.Load):
                 self.load(node.id, node.lineno)
@@ -874,7 +1004,11 @@ class _Extractor:
             saved = self.scope
             while self.f.scopes[self.scope].kind == "comprehension":
                 self.scope = self.f.scopes[self.scope].parent
-            self.bind(node.target.id, to_ir(node.value, saved, comps=self.comps), _end(node))
+            self.bind(
+                node.target.id,
+                to_ir(node.value, saved, comps=self.comps, checking=self.checking),
+                _end(node),
+            )
             self.scope = saved
         elif isinstance(node, (ast.Yield, ast.YieldFrom)):
             if node.value is not None:
@@ -902,7 +1036,9 @@ class _Extractor:
             kind = "del"
         if isinstance(current, ast.Name):
             self.load(current.id, current.lineno)
-            base: IR = Use(current.id, self.scope, current.lineno, current.col_offset)
+            base: IR = Use(
+                current.id, self.scope, current.lineno, current.col_offset, checking=self.checking
+            )
         else:
             self.expr(current)
             if not isinstance(current, (ast.Call, ast.Subscript)):
@@ -957,7 +1093,9 @@ class _Extractor:
             self.installs = True
         elif last == "reload" and self.in_tests and len(node.args) == 1:
             at = (node.lineno, node.col_offset)
-            self.f.reloads.append((self.scope, *at, self.ir(node.args[0])))
+            self.f.reloads.append((self.scope, *at, self.ir(node.args[0]), self.ir(func)))
+        elif last in ("undo", "stop", "stopall") and self.in_tests:
+            self.f.resets.append((self.scope, node.lineno, node.col_offset))
 
     def patch_call(self, node: ast.Call) -> None:
         func = node.func
@@ -965,24 +1103,22 @@ class _Extractor:
         patch_func: IR | None = None
         if isinstance(func, ast.Attribute) and func.attr in ("setattr", "delattr"):
             form = func.attr
-        elif (isinstance(func, ast.Name) and func.id == "patch") or (
-            isinstance(func, ast.Attribute) and func.attr == "patch"
-        ):
-            form, patch_func = "patch", self.ir(func)
-        elif isinstance(func, ast.Attribute) and func.attr == "object":
-            inner = func.value
-            if (isinstance(inner, ast.Name) and inner.id == "patch") or (
-                isinstance(inner, ast.Attribute) and inner.attr == "patch"
-            ):
-                form, patch_func = "patch.object", self.ir(inner)
+        elif isinstance(func, (ast.Name, ast.Attribute)):
+            # Die Schreibweise des Alias sagt nichts über den wirklichen Aufrufer.
+            form, patch_func = "candidate", self.ir(func)
         if not form:
             return
         text = ast.unparse(node)
         args = tuple(self.ir(a) for a in node.args)
-        keywords = tuple((k.arg, self.ir(k.value)) for k in node.keywords if k.arg)
+        keywords = tuple((k.arg or "**", self.ir(k.value)) for k in node.keywords)
         at = (node.lineno, node.col_offset)
         short = text if len(text) <= 160 else text[:157] + "..."
-        self.f.patches.append(Patch(form, self.scope, *at, args, keywords, patch_func, short))
+        until = self.patch_until
+        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+            until = until or self.contexts.get(func.value.id)
+        self.f.patches.append(
+            Patch(form, self.scope, *at, args, keywords, patch_func, short, until)
+        )
 
     def lambda_(self, node: ast.Lambda) -> None:
         args = node.args
@@ -1015,7 +1151,12 @@ class _Extractor:
         for number, generator in enumerate(generators):
             if number:
                 self.expr(generator.iter)
-            iterable = to_ir(generator.iter, outer if number == 0 else self.scope, comps=self.comps)
+            iterable = to_ir(
+                generator.iter,
+                outer if number == 0 else self.scope,
+                comps=self.comps,
+                checking=self.checking,
+            )
             key = f"{self.f.path}:comp@{generator.iter.lineno}:{generator.iter.col_offset}"
             self.target(generator.target, Row(key, iterable), (0, 0))
             for condition in generator.ifs:
@@ -1031,6 +1172,7 @@ class _Extractor:
 
     def finish(self) -> None:
         facts = self.f
+        facts.comprehensions = self.comps
         if self.installs:
             for bind in facts.scopes[0].binds.get("_EXPORTS", ()):
                 if isinstance(bind.value, Table):
@@ -1140,23 +1282,39 @@ def inside(span: tuple[int, int, int, int] | None, at: tuple[int, int]) -> bool:
     return (span[0], span[1]) <= at <= (span[2], span[3])
 
 
-def live(binds: list[Bind] | None, stub: bool = False) -> list[Bind]:
+def live(binds: list[Bind] | None, stub: bool = False, checking: bool = False) -> list[Bind]:
     """Die Bindungen, die zur Laufzeit gelten; in einem Stub zählt auch die Annotation."""
     if not binds:
         return []
-    mask = CHECKING if stub else CHECKING | ANNOTATED
+    mask = 0 if checking else CHECKING if stub else CHECKING | ANNOTATED
     return [b for b in binds if not b.flags & mask]
 
 
-def _values(binds: list[Bind] | None) -> list[Bind] | None:
-    found = live(binds)
+def effective(binds: list[Bind] | None, stub: bool = False, checking: bool = False) -> list[Bind]:
+    """Modulzustand nach dem Import plus mögliche spätere globale Schreiber."""
+    candidates = live(binds, stub, checking)
+    found = [bind for bind in candidates if bind.flags & RUNTIME]
+    for bind in reversed(candidates):
+        if bind.flags & RUNTIME:
+            continue
+        if not bind.flags & DELETED:
+            found.append(bind)
+        if not bind.flags & COND:
+            break
+    return found
+
+
+def _values(binds: list[Bind] | None, checking: bool = False) -> list[Bind] | None:
+    found = effective(binds, checking=checking)
     return found or None
 
 
 _WITHOUT_VALUE = Bind(0, 0, Unknown("ohne Wert gebunden"), 0)
 
 
-def lookup(scopes: list[Scope], number: int, name: str, at: tuple[int, int]) -> list[Bind] | None:
+def lookup(
+    scopes: list[Scope], number: int, name: str, at: tuple[int, int], checking: bool = False
+) -> list[Bind] | None:
     """Die Werte, die ``name`` an der Stelle ``at`` im Bereich ``number`` haben kann.
 
     Im eigenen Bereich die letzte Bindung vor ``at`` samt den bedingten davor bis zur ersten
@@ -1168,10 +1326,10 @@ def lookup(scopes: list[Scope], number: int, name: str, at: tuple[int, int]) -> 
     """
     scope = scopes[number]
     if number and name in scope.globals:
-        return _values(scopes[0].binds.get(name))
+        return _values(scopes[0].binds.get(name), checking)
     binds = scope.binds.get(name)
     if binds is not None:
-        found = live(binds)
+        found = live(binds, checking=checking)
         if not found:
             return [_WITHOUT_VALUE]
         if len(found) == 1 and not scope.loops:
@@ -1200,10 +1358,13 @@ def lookup(scopes: list[Scope], number: int, name: str, at: tuple[int, int]) -> 
         if enclosing.kind != "class" and name in enclosing.binds:
             if name in enclosing.globals:
                 break
-            return _values(enclosing.binds[name]) or [_WITHOUT_VALUE]
+            # Eine äußere Funktion ist beim Aufruf des inneren Helfers noch nicht
+            # zwingend an ihrer letzten Zuweisung angekommen. Ohne konkreten
+            # Aufrufbeweis bleiben alle erreichbaren Closure-Bindungen erhalten.
+            return live(enclosing.binds[name], checking=checking) or [_WITHOUT_VALUE]
         outer = enclosing.parent
     if number:
-        return _values(scopes[0].binds.get(name))
+        return _values(scopes[0].binds.get(name), checking)
     return None
 
 
@@ -1252,7 +1413,9 @@ def source_files(root: Path) -> list[tuple[str, Path]]:
 #: Der Stand beim Import, nicht beim Bau: Ein Prozess, der den alten Code geladen hat, während
 #: die Datei schon neu ist, schrieb sonst alte Auszüge unter dem neuen Stand (gemessen: ein
 #: Lauf ohne ``import_reads`` unter dem Stand mit).
-_STAMP = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+_STAMP = hashlib.sha256(
+    Path(__file__).read_bytes() + Path(__file__).with_name("code_cache.py").read_bytes()
+).hexdigest()
 
 
 def stamp() -> str:
@@ -1262,13 +1425,9 @@ def stamp() -> str:
 
 def load_cache(path: Path, current: str) -> dict[str, tuple[str, Facts]]:
     """Die gespeicherten Auszüge je Pfad mit ihrem Inhaltshash; leer bei anderem Stand."""
-    if not path.is_file():
-        return {}
-    stored = pickle.loads(path.read_bytes())
-    if not isinstance(stored, dict) or stored.get("stamp") != current:
-        return {}
-    files = stored.get("files")
-    return files if isinstance(files, dict) else {}
+    from tools.code_cache import decode
+
+    return decode(path, current)
 
 
 def save_cache(path: Path, current: str, files: dict[str, tuple[str, Facts]]) -> None:
@@ -1277,7 +1436,9 @@ def save_cache(path: Path, current: str, files: dict[str, tuple[str, Facts]]) ->
     Einträge sind nach Inhaltshash ebenso gültig, fehlende zieht der nächste Bau nach."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    data = pickle.dumps({"stamp": current, "files": files}, protocol=pickle.HIGHEST_PROTOCOL)
+    from tools.code_cache import encode
+
+    data = encode(current, files)
     temporary.write_bytes(data)
     for _attempt in range(20):
         try:
