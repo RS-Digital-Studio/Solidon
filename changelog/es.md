@@ -61,7 +61,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Un cuerpo exacto conserva ahora sus características tras *Aplicar texto*, *Incrustar texto* y *Rebajar contraforma*. En la versión 0.6.0 después ya no se podía hacer clic en ninguna cara.
 - Un cuerpo con rosca del catálogo de bloques vuelve a poder moverse, girarse, reflejarse, escalarse y colocarse sobre la placa. En la versión 0.6.0 la cadena se detenía con un error del programa.
-- En la pestaña *Selección*, un diámetro bajo el límite en *Cambiar orificio* remite ahora a *Quitar característica*, que quita el orificio entero, con su avellanado si se desea.
+- En la pestaña *Selección*, un diámetro bajo el límite en *Cambiar taladro* remite ahora a *Quitar característica*, que quita el taladro entero, con su avellanado si se desea.
 - La reconstrucción (*Reconstruir modelo*) ya no aconseja otros límites cuando ningún valor permitido bastaría, y muestra las propuestas iguales una sola vez.
 - Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
 
