@@ -159,6 +159,17 @@ erhobenen Auswegen ein positives Urteil, nicht aus einem allgemeinen
 Meldungskennzeichen. `field_values` liest markierte `ValueField`-Träger über
 deren öffentlichen Wert und Auswahlfelder über ihre tatsächlichen Daten.
 
+Beim Hauptknopf liest die Schriftmessung die aktuelle zustandsabhängige
+Qt-Beschriftung. Nur eindeutig voll gedeckte Textpixel belegen eine Farbe;
+Symbolpixel zählen nicht mit. Fehlende oder mehrdeutige Schriftpixel bleiben
+ungemessen. Der Hintergrund stammt weiterhin aus dem wirklichen Fensterbild.
+`fonts.primary` hält die öffentliche Hauptknopfrolle fest; `family` und
+`base_family` nennen die tatsächlich aufgelösten Schriftfamilien. Das Schema
+prüft vorhandene Rollen als bool und Familien als str. Die halbfette
+Grundschrift ist nur mit belegter Hauptknopfrolle und passender Anwendungsfamilie
+erlaubt; fremde Größe oder Familie bleiben Befunde. Alte Protokolle ohne die
+optionalen Schlüssel bleiben lesbar und erhalten keine erfundene Primärrolle.
+
 `function_revision.RevisionPhase` trägt die abgeschlossene Verlaufsphase von
 `FunctionFlow`; die Rückrichtung bleibt ein Typimport. Beide Bedienwege,
 Kontextmenü und Doppelklick, erfassen `revise.typed_values` und

@@ -743,3 +743,87 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Wirkung beim Kunden: Ein abgebrochener Prüffall endet nur scheinbar vollständig. Zurückgebliebene Interpreter oder Helfer können nachfolgende Fälle und Prozessnachweise verunreinigen. Das ist ein Prüfstandfehler; hieraus wird kein Fehler des Produkt-Exportwegs oder der eigentlichen Anwendung abgeleitet.
 - Stand: offen RM-737; FD59 und mittlere Schwere vom Koordinator vergeben. Eng korrigiert und geliefert als bc376abc0868141a10c1f5edad26798993f38f6d, integriert auf welle4/origin als c9505aac22bc4cb213a7ebe64980c1f41de0d59d. Beide Pins bytegleich zum Manifest bc6dbce3961d165b1a6fb4b420e210887d01d2f47a504432fbab532d02f53d47; keine Merge-Auflösung. Paket und Root jeweils 142 bestanden/5 Fensterfälle abgewählt, Statik und Ausgänge Exit 0. Vier echte Ketten/0 sichtbare Fenster/0 Konsole belegt, eigene Restprozesse leer. Die automatische 97-Dateien-Auswahl ist nur protokolliert; übrige unveränderte C-Nachweise werden ausdrücklich wiederverwendet. Kein neuer breiter Lauf und keine dritte C-Durchsicht. Gemeinsamer frischer D0-Nachweis und vollständiges Endtor bleiben offen; D10 inzwischen als 11f44ba88f6b1af704f15df45597aa7ea92ee23a geliefert, inzwischen als e68ca22cbf84417e3b2dea2bff473627e647927f auf welle4/origin integriert; gemeinsame native Gesamtabnahme und Endtor offen; keine vorgezogene Gesamtfreigabe.
 
+### FD-60 Native Zugriffsverletzungen brechen den frischen Fensterlauf ab
+
+- Art: Stabilität
+- Schwere: schwer
+- Funktion: resize_hole, place_on_bed und die zugehörigen Sprachflächen
+- Prüfpunkt: 9, 16
+- Beleg: F:/tmp-suche/probelauf-d0-frisch-codex auf 6d063ef064: 48 Fälle, 41 Prozesse Exit 0, sieben Zugriffsverletzungen in 001, 002, 032, 038, 039, 042 und 047. Originaldaten und alle drei Stufe-A-Berichte unverändert erhalten. fix-projektwechsel-crash-codex.md und fd60-binding-codex.md binden die nachfolgenden einzelnen CDB-Sonden und die unabhängige Quellenlesung.
+- Ursache: Zwei begrenzte Debuggerläufe halten in PySide::SignalManager::retrieveMetaObject+0x24 bei einem NULL-Zugriff. Einer meldet vorher einen nach Freigabe veränderten Heapblock. Die nächste Typ-Sonde weist QWidgetItem als falschen Nicht-QObject-Wrapper nach. Ein enger Lebenszyklusgegenfall zeigt: Widget.deleteLater und DeferredDelete bei weiterlebendem Layout lassen den Itemwrapper gültig, obwohl Widget und natives Layoutitem gelöscht sind; explizites Python-removeWidget invalidiert den gehaltenen Wrapper. Die konkrete ursächliche Abbaustelle des Originalfalls und der Fixnachweis bleiben offen; kein Hardwareurteil.
+- Vorschlag: Die belegte Wrapperabweichung am unveränderten Originalfall mit eng begrenzten Typ-/Zeigerlesungen unterscheiden, dann den ursächlichen Lebenszyklus korrigieren und die ursprüngliche Folge erneut prüfen. Keine spekulative Zusatzreferenz, globale Invalidierung oder bloße Unterdrückung des Absturzes.
+- Wirkung beim Kunden: Der echte Anwendungsprozess endet ohne nutzbaren Rückweg. Die fehlenden Folgeaufnahmen und Urteile sind kein bestandenes Ergebnis; der Gesamtlauf kann nicht abgenommen werden.
+- Stand: offen RM-737; Diagnose auf eigener unveränderter Originalbasis, enger Abbau-Fix wird vorbereitet. Debugger-Exit 0 nach angefordertem Abbruch ist kein Fallgrün; ein späterer abgebrochener Zusatzbefehl lässt den tatsächlich gesicherten Typbeleg gültig, erzeugt aber keinen neuen Dump. Drei getrennte erfolgreiche V4-Proben widerlegen die sieben Abstürze nicht. Konkrete Korrektur und Wiederholungsnachweis bleiben vor der D0-Landung offen.
+
+### FD-61 Lagebefund zeigt Millimeter trotz gewählter Zollanzeige
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: place_on_bed
+- Prüfpunkt: 9
+- Beleg: F:/tmp-suche/probelauf-d0-frisch-codex/cases/005/flaeche-zoll.png und function.json: Kopf, Objektbaum und Status in Zoll; ausgewählter Befund zeigt Überstand 10,00 mm. fix-befund-einheiten-codex.md bindet die Diagnose, ursprüngliche 48 roten Umrechnungsfälle und weitere 30 rote Auswahl-/Previous-Gegenfälle aus dem Reviewfund BE-01.
+- Ursache: Kanonische geometrische Werte excess/gap/needed werden bereits im Kern als vollständiger mm-Text geliefert und später nicht als Anzeigegröße formatiert. Bei synthetischen Befundgruppen enthielt außerdem die Auswahlidentität bereits formatierte Mitgliedstexte und wechselte mit der Einheit.
+- Vorschlag: Ausschließlich vollständige kanonische geometrische mm-Werte über den bestehenden Längenformatter anzeigen; beim Einheitenwechsel den Bericht über seinen öffentlichen Pfad erneuern. Auswahl, Details und Voriger-Stand-Zuordnung an rohe vollständige Mitgliedsidentitäten einschließlich Duplikaten binden. Freitext, Versionszahlen und Slicerwerte unverändert behandeln.
+- Wirkung beim Kunden: Der Bericht widerspricht der gewählten Maßeinheit. Ein unvollständiger Fix würde zusätzlich die ausgewählte Sammelzeile und ihren Bearbeitungszustand verlieren.
+- Stand: offen RM-745; eigener Fixstand mit 192 bestandenen engen Fällen, 1.627 bestandenen kopflosen Anschlüssen und grüner Statik belegt. Enger Review-Fix BE-01, sieben bestehende Qt-Anschlüsse und echter sechssprachiger Einheitenwechsel werden getrennt nachgewiesen. Noch kein Liefercommit, keine Integration und keine native Gesamtfreigabe.
+
+### FD-62 Kontrastmessung liest am Hauptknopf die falsche Textfarbe
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Prüfstand für Hauptaktionen
+- Prüfpunkt: G6
+- Beleg: fix-farbmessung-codex.md und review-farbmessung-codex.md; gleiche 13 Kontrastgegenfälle am Ausgang 9 rot / 4 grün, am Fix 13 grün. Die ursprünglichen Aufnahmen und Urteile des frischen D0-Laufs bleiben unverändert.
+- Ursache: Die generische Farbrolle des Widgets entspricht bei einem über den Qt-Stil gezeichneten Hauptknopf nicht zwingend der tatsächlich verwendeten Beschriftungsfarbe und ihrem aktuellen Zustand.
+- Vorschlag: Die tatsächliche zustandsabhängige Qt-Beschriftung messen; nur eindeutig deckende Textpixel übernehmen. Fehlende oder mehrdeutige Messung offen lassen. Den Hintergrund weiterhin am echten Bildschirm lesen, keine gute Themenfarbe als Ersatz für eine schlechte Eigenfarbe einsetzen.
+- Wirkung beim Kunden: Die Abnahme kann ausreichenden Kontrast falsch beanstanden oder einen tatsächlichen Kontrastfehler verdecken. Der Produktstil und die Kontrastschwelle dürfen durch die Messkorrektur nicht verändert werden.
+- Stand: offen RM-737; geliefert als 599526b10e930381a17e734a00708c0c130f27db und konfliktfrei auf welle4/origin als f08927d636f88bca0d31517ec3722e28ef3869f6 integriert. Vollständiger Baum und fünf Quellpins stimmen mit der geprüften Lieferung überein. 1.831 Anschlussfälle bestanden, 2 übersprungen, 41 abgewählt; Ruff, Format, Projekt-Mypy und unabhängige Durchsicht grün. Zusätzlicher direkter Werkzeug-Mypy behält acht basisgleiche Altfehler. Gemeinsamer nativer Messnachweis und Endtor offen.
+
+### FD-63 Maßgruppe zeigt fünf eigenständige Vorderseitenfelder
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: resize_hole
+- Prüfpunkt: 2, E5
+- Beleg: F:/tmp-suche/probelauf-d0-frisch-codex/cases/001/02-flaeche.png sowie Fälle 004 und 007 mit Zoll und Skalierung. Jeweils Durchmesser, Änderungsumfang, Tiefe, Materialtoleranz und separater Sammelhaken vorne. Originalbilder und Feldlisten in fix-massgruppe-front-codex.md gebunden.
+- Ursache: Der Adapter der Merkmalsfelder verliert die Vorder-/Rückseitenzuordnung des Operationsschemas. Die Maßgruppe stellt außer Koordinaten alle Felder nach vorn und zählt den zusätzlichen Sammelhaken nicht gegen das Feldbudget.
+- Vorschlag: Schemametadaten durch die gemeinsame Feldauskunft transportieren und rechts wie im Bild verwenden. Gewöhnliche Bohrung mit Durchmesser, Tiefe und gegebenenfalls Sammelhaken; Druckkorrektur und gewöhnlicher Änderungsumfang hinten. Fachlich vorbelegtes Mitnehmen des Einlaufs bleibt als bewusste vierte Eingabe sichtbar. Werte, Bedingungen, Wiederverwendung und Undo erhalten.
+- Wirkung beim Kunden: Fünf gleichrangige Eingaben überladen die Maßgruppe und verletzen die Vorderseitengrenze. Ein pauschales Verstecken könnte dagegen eine wirksame Vorbelegung oder die Reichweite der Sammeländerung verschleiern.
+- Stand: offen RM-741; im gemeinsamen Fixpaket mit FD7, FD16 und FD64. Gleiche 43 enge Fälle am Ursprung 38 rot / 5 grün, am Fix 43 grün, Statik grün. Erstes Review fand genau MG-M1 im Test-Theme-Abbau; lesend behoben, neuer Gegenfall noch offen. Keine neue Definition in den vier großen Altdateien. Lieferung, Integration, bestehende Anschlüsse und native Nachherbelege bleiben offen.
+
+### FD-64 Maßgruppenfelder verlieren die Wirkungshilfe ihres Schemas
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: resize_hole
+- Prüfpunkt: 8, V3
+- Beleg: Dieselben frischen Maßgruppenbilder und Feldprotokolle wie FD63; Änderungsumfang und Materialtoleranz ohne Tooltip und zugängliche Beschreibung, Sammelhaken ohne Tooltip, Durchmesser/Tiefe nur mit Maßherkunft. Diagnose und genaue Adapterstellen in fix-massgruppe-front-codex.md.
+- Ursache: ActionField transportiert die Schemahilfe nicht. Der gemeinsame Feldkonfigurator ersetzt die Feldhilfe durch Herkunft; Beschriftungen übernehmen diesen unvollständigen Stand. Erklärung einzelner Auswahlwerte ersetzt keinen Wirkungssatz des Feldes.
+- Vorschlag: Die gemeinsame Schemahilfe durchreichen und bei Wiederverwendung an Beschriftung, Editor und fokussierte Innenfelder binden; Herkunft ergänzend erhalten. Beide Sammelhaken bekommen dieselbe übersetzte Wirkungshilfe. Die unklare Materialbezeichnung bleibt dem bereits bestehenden FD7 zugeordnet.
+- Wirkung beim Kunden: Direkt am Eingabefeld fehlen die Erklärung der Änderung und entsprechende Auskünfte für Hilfstechnik. Der Nutzer sieht teilweise nur, woher das Maß stammt, nicht was seine Änderung bewirkt.
+- Stand: offen RM-741; gemeinsames Paket und Prüfgrenzen wie FD63. Vier gemeinsame neue Textschlüssel sind in allen fünf Katalogen vorhanden. Enge Fälle und Statik grün; bestehende Anschlüsse, native Nachherbelege, Lieferung und Integration ausstehend. Kein weiterer Fund für den bereits unter FD7 erfassten Begriff.
+
+### FD-65 Schriftprüfung lehnt die vertragliche Primärschrift ab
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Prüfstand für Hauptaktionen
+- Prüfpunkt: G4
+- Beleg: fix-farbmessung-codex.md und die neue test_function_primary_fonts.py: gleiche 31 Schrift-/Schemafälle am Ursprung 26 rot / 5 grün, am Fix 31 grün; bestehender Schriftaufnahmeanschluss zusätzlich grün. Tatsächliche gebündelte Fontfamilien und Metriken sind zugesichert.
+- Ursache: Die Prüfung unterschied die ausdrücklich erlaubte halbfette Grundschrift des tatsächlichen Hauptknopfs nicht hinreichend von beliebigen Schriftabweichungen. Die Primärrolle und reale Anwendungsfamilie fehlten als typgeprüfte Messwerte.
+- Vorschlag: Optionale boolesche Primärrolle und reale Schriftfamilien kompatibel erfassen. Nur nachgewiesene Primärbeschriftung in der tatsächlichen Grundfamilie und vereinbarten Größe/Gewichtung entlasten; gewöhnliche Knöpfe, fremde Familien und falsche Größen bleiben Gegenfälle. Alte Protokolle weiter lesen.
+- Wirkung beim Kunden: Die Abnahme fordert eine Änderung an einer bereits vertraglichen Hervorhebung oder verdeckt echte Schriftabweichungen durch eine zu breite Ausnahme.
+- Stand: offen RM-737; gemeinsam mit FD62 als 599526b10e930381a17e734a00708c0c130f27db geliefert und als f08927d636f88bca0d31517ec3722e28ef3869f6 integriert. Derselbe gebundene Anschluss, Statik und unabhängige Durchsicht. Gemeinsame native Messung und Endtor bleiben offen; keine nachträgliche Umwertung der versiegelten Alturteile.
+
+### FD-66 Gegenstückdialog behält unnötige Anfangshöhe
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: Erzeugen/Bausteine/Gegenstücke setzen …
+- Prüfpunkt: 19, Z6
+- Beleg: Frische FR-/IT-Sprachflächen und fd66-diagnose-codex.md. Native FR-Originalfolge bei gleichem Inhalt und gleicher Breite: anfangs 341 × 353, nach einmal Auf-/Zuklappen 341 × 322; user durchgehend None und keine notwendige Rollleiste. Root hat beide tatsächlichen Bildschirmbilder gelesen; Sichtbeleg root-viewed-fd66-original.json unter F:/tmp-suche/koord-codex.
+- Ursache: Die Anfangsmessung liest eine durch vorübergehende AsNeeded-Rollleisten noch auf 297 statt 309 Pixel reduzierte Viewportbreite. Herkunft und Hinweis werden damit unnötig höher gemessen. Die spätere passive Größenregel bewahrt die bereits zu groß gewählte Höhe korrekt. Keine irrtümliche Erkennung einer Nutzergröße.
+- Vorschlag: Im bestehenden natürlichen Größenwunsch die nach Abbau vorübergehender Rollleisten tatsächlich verfügbare Breite zugrunde legen; keine feste 31-Pixel-Korrektur. Gleichen geschlossenen Inhalt vor und nach Klappzyklus vergleichen, manuelle Größe, echte große Schrift und tatsächlich nötige Rollleisten erhalten.
+- Wirkung beim Kunden: Der Dialog verdeckt mehr Modellfläche als sein vorhandener Inhalt benötigt. Die zusätzliche echte Herkunftszeile in FR ist notwendiger Inhalt und bleibt erhalten.
+- Stand: offen RM-747; enger sizeHint-Fix vorbereitet. Erste vollständige 51-Fall-Fassung am Ursprung 27 rot / 24 grün, am Fix 26 rot / 25 grün. Die Fixfehler betreffen eine zu pauschale Testannahme zur Nullreserve; präzisierte Inhalts-/Wiederzuklappprüfung noch nicht gefahren. Kein grüner Fixnachweis. Ein früherer Offscreen-Absturz beim Übersetzerabbau bleibt mit ungeklärter Ursache erhalten. Native Fixprobe, Statik, Anschluss, Review und Lieferung offen.
+

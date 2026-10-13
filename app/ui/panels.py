@@ -12,6 +12,7 @@ import dataclasses
 import math
 import sys
 import weakref
+from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from functools import partial
@@ -184,6 +185,7 @@ from app.ui.change_lock import (
     say_refusal,
 )
 from app.ui.dialogs import ADDRESS_VALUES, NEEDS_OP, handlers_of, unhandled_advice
+from app.ui.feature_editing import advanced_fields, configure_scope, explain_value_help
 from app.ui.icons import icon, icon_name_for, svg_pixmap
 from app.ui.labels import (
     BoundedLengthSpin,
@@ -217,6 +219,7 @@ from app.ui.labels import (
     volume,
     wheel_needs_focus,
 )
+from app.ui.layout_lifetime import detach_from_layout
 from app.ui.leash import Worker, WorkerLeash, weak_slot
 from app.ui.loading import DELAY_MS
 from app.ui.overlay import (
@@ -407,6 +410,11 @@ _TONE_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 #: Die Zeile eines Befunds kurz und ganz: erster Satz und vollständige Meldung
 #: (:func:`headline`). Die gewählte Zeile steht ganz da (RM-508).
 _LINE_ROLE = int(Qt.ItemDataRole.UserRole) + 7
+
+#: Die vollständigen rohen Mitglieder einer Zeile, unabhängig von Maßtexten.
+#: Auswahl und voriger Stand verwenden denselben Schlüssel; synthetische
+#: Sammelwerte enthalten dagegen bereits übersetzte und umgerechnete Anzeigen.
+_IDENTITY_ROLE = int(Qt.ItemDataRole.UserRole) + 8
 
 
 def headline(message: str) -> str:
@@ -2235,8 +2243,19 @@ class ObjectTree(QWidget):
         """§19.3: Millimeter oder Zoll in der Maße-Spalte."""
         if unit == self._unit:
             return
+        # Dieselben Körper erhalten nur neue Beschriftungen. Ihre vom Kunden
+        # geöffneten oder geschlossenen Knoten sind keine neue Auswahl.
+        expanded = {
+            item.data(0, Qt.ItemDataRole.UserRole): item.isExpanded()
+            for index in range(self.tree.topLevelItemCount())
+            if (item := self.tree.topLevelItem(index)) is not None
+        }
         self._unit = unit
         self.show_scene(self._result, self._document)
+        for index in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(index)
+            if item is not None:
+                item.setExpanded(expanded[item.data(0, Qt.ItemDataRole.UserRole)])
 
     def set_theme(self, theme: str) -> None:
         """Ein anderes Thema heißt andere Vorschaubilder.
@@ -6352,8 +6371,8 @@ class ReportPanel(QWidget):
         :data:`DELAY_MS` (§2.8) — ein Lauf aus dem Cache bleibt ruhig."""
         self._stale = False
         """Siehe :meth:`set_stale`."""
-        self._previous_keys: frozenset[tuple[Any, ...]] = frozenset()
-        """Die Befunde, die beim Beginn des Laufzustands dastanden (:func:`_identity`).
+        self._previous_keys: frozenset[frozenset[tuple[Any, ...]]] = frozenset()
+        """Die Zeilen, die beim Beginn des Laufzustands dastanden (:data:`_IDENTITY_ROLE`).
 
         Was währenddessen dazukommt — die Sätze eines Teilungsplans über
         ``add_findings`` —, gehört zum neuen Stand und steht ohne Vorsatz da.
@@ -6904,9 +6923,7 @@ class ReportPanel(QWidget):
 
     def _previous(self, item: QListWidgetItem) -> bool:
         """Ob die Zeile gerade als voriger Stand dasteht (RM-534, :attr:`_previous_keys`)."""
-        return self._running and (
-            _identity(item.data(Qt.ItemDataRole.UserRole)) in self._previous_keys
-        )
+        return self._running and item.data(_IDENTITY_ROLE) in self._previous_keys
 
     def _paint_row(self, item: QListWidgetItem) -> None:
         """Eine Zeile als aktueller oder voriger Stand, an Ort und Stelle (RM-534).
@@ -7213,9 +7230,7 @@ class ReportPanel(QWidget):
         Historie, sondern Irreführung.
         """
         selected = self.list.selectedItems()
-        selected_key = (
-            _identity(selected[0].data(Qt.ItemDataRole.UserRole)) if len(selected) == 1 else None
-        )
+        selected_key = selected[0].data(_IDENTITY_ROLE) if len(selected) == 1 else None
         if replacing_source is not None:
             self._findings = [entry for entry in self._findings if entry.source != replacing_source]
         # Je Identität der Befund, nicht nur die Menge: Derselbe Sachverhalt
@@ -7251,10 +7266,7 @@ class ReportPanel(QWidget):
         if selected_key is not None:
             for row in range(self.list.count()):
                 item = self.list.item(row)
-                if (
-                    not item.isHidden()
-                    and _identity(item.data(Qt.ItemDataRole.UserRole)) == selected_key
-                ):
+                if not item.isHidden() and item.data(_IDENTITY_ROLE) == selected_key:
                     self.list.setCurrentRow(row)
                     break
         self._preselect()
@@ -7384,6 +7396,29 @@ class ReportPanel(QWidget):
         :data:`_BUNDLE_ROLE`, damit ein Kernbefund mit eigenem ``count``-Wert
         weiter als eine Zeile zählt.
         """
+        # Vor den synthetischen Anzeige-Findings: Einheiten ändern deren
+        # Werte, aber nicht die zugrunde liegenden Befunde. Auch gleiche
+        # Körper an anderen Orten, Schritten oder Auswegen bleiben getrennt.
+        # Der Zähler erhält Mehrfachvorkommen, die Menge ignoriert nur ihre
+        # Reihenfolge. Die rohe Entdoppelung in _identity bleibt unverändert.
+        row_key = frozenset(
+            Counter(
+                (
+                    _identity(one),
+                    one.severity,
+                    one.op_id,
+                    one.source,
+                    one.feature_ids,
+                    one.location,
+                    one.outline,
+                    one.object_ids,
+                    tuple(
+                        (action.id, str(action.label), action.primary) for action in one.suggestions
+                    ),
+                )
+                for one in (members or [finding])
+            ).items()
+        )
         if members:
             names = ", ".join(self._member_label(one) for one in members[:15])
             if len(members) > 15:
@@ -7561,6 +7596,7 @@ class ReportPanel(QWidget):
         # Dreieck bleibt ein Dreieck, auch wo die Farbe nicht ankommt.
         item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
         item.setData(Qt.ItemDataRole.UserRole, finding)
+        item.setData(_IDENTITY_ROLE, row_key)
         # **Der Satz bleibt Fließtext, die Farbe steht am Symbol.** Ein ganzer
         # eingefärbter Satz war die lauteste Auszeichnung des Fensters für
         # eine Auskunft, die ohnehin schon eine hat — und ausgerechnet die
@@ -7720,10 +7756,7 @@ class ReportPanel(QWidget):
             return
         self._running = running
         self._previous_keys = (
-            frozenset(
-                _identity(self.list.item(row).data(Qt.ItemDataRole.UserRole))
-                for row in range(self.list.count())
-            )
+            frozenset(self.list.item(row).data(_IDENTITY_ROLE) for row in range(self.list.count()))
             if running
             else frozenset()
         )
@@ -8228,10 +8261,19 @@ def feature_field(
     if entry is not None:
         from app.ui.op_dialog import ValueField
 
-        editor: QWidget = ValueField(entry, field.value, parameter_values, parent)
-        _explain_source(editor, field)
-        return editor
+        value_editor = ValueField(entry, field.value, parameter_values, parent)
+        _explain_source(value_editor, field)
+        hint = value_editor.toolTip()
+        text = value_editor.text
+        text.setAccessibleDescription(f"{hint}\n{text.accessibleDescription()}")
+        explain_value_help(value_editor)
+        text.textChanged.connect(weak_slot(value_editor, explain_value_help))
+        value_editor.toggle.toggled.connect(weak_slot(value_editor, explain_value_help))
+        value_editor.spin.valueRefused.connect(weak_slot(value_editor, explain_value_help))
+        value_editor.spin.lineEdit().textEdited.connect(weak_slot(value_editor, explain_value_help))
+        return value_editor
     kind = str(field.kind)
+    editor: QWidget
     if kind == "bool":
         editor = RowCheckBox(parent)
     elif kind == "choice":
@@ -8338,13 +8380,15 @@ def configure_feature_field(editor: QWidget, field: Any) -> None:
 
 
 def _explain_source(editor: QWidget, field: Any) -> None:
-    """Die Herkunft gehört zum unveränderten Ausgangswert, nicht zur neuen Eingabe."""
+    """Erst die Wirkung der Eingabe, danach die Herkunft ihres Ausgangswerts."""
     status = getattr(field, "measurement", None)
-    if status is None:
-        return
-    source = str(measure_explanation(status))
-    qualifier = measure_qualifier(status)
-    if isinstance(field.value, (int, float)) and not isinstance(field.value, bool):
+    source = str(measure_explanation(status)) if status is not None else ""
+    qualifier = measure_qualifier(status) if status is not None else None
+    if (
+        status is not None
+        and isinstance(field.value, (int, float))
+        and not isinstance(field.value, bool)
+    ):
         value = (
             length(float(field.value))
             if field.kind == "length"
@@ -8355,14 +8399,18 @@ def _explain_source(editor: QWidget, field: Any) -> None:
         source = tr("Ausgangswert: {value}. {source}").format(value=value, source=source)
     elif qualifier is not None:
         source = f"{qualifier}. {source}"
-    current = editor.toolTip()
-    hint = f"{current}\n{source}" if current else source
+    meaning = str(getattr(field, "doc", "") or "")
+    hint = "\n".join(part for part in (meaning, source) if part)
     editor.setToolTip(hint)
     editor.setAccessibleDescription(hint)
     inner = getattr(editor, "spin", None)
     if isinstance(inner, QWidget):
         inner.setToolTip(hint)
         inner.setAccessibleDescription(hint)
+    spin = inner if isinstance(inner, QAbstractSpinBox) else editor
+    if isinstance(spin, QAbstractSpinBox):
+        spin.lineEdit().setToolTip(hint)
+        spin.lineEdit().setAccessibleDescription(hint)
 
 
 def feature_reference(op: str | None) -> str:
@@ -8671,6 +8719,8 @@ class _ActionRow:
     """Die Felder, die gerade weichen, weil die Maßgruppe im Bild sie trägt."""
     coordinates: list[_CoordinateRow] = dataclasses.field(default_factory=list)
     """Die Zeilen, in denen X, Y und Z einer Stelle nebeneinander stehen."""
+    more: QWidget | None = None
+    """Die hinteren Fachfelder, mit derselben Einordnung wie in der Maßgruppe."""
 
 
 def _removes_its_step(row: _ActionRow) -> bool:
@@ -8925,13 +8975,24 @@ def _focus_stops(row: QWidget) -> list[QWidget]:
     Feld, und die Tabulatortaste lief an ihm vorbei (22.09.2026).
     """
     home = row.window()
-    return [
+    stops = [
         child
         for child in (row, *row.findChildren(QWidget))
         if child.focusPolicy() != Qt.FocusPolicy.NoFocus
         and not isinstance(child, QLineEdit)
         and child.window() is home
     ]
+    more = row.findChild(QWidget, "feature-row-more")
+    if more is not None:
+        heading = more.findChild(QToolButton, "sectionHeading")
+        # Die Rückseite entstand vor den vorderen Feldern. Der Tastaturweg
+        # folgt trotzdem der sichtbaren Reihenfolge: vorn, Klappe, dahinter.
+        stops = (
+            [child for child in stops if not more.isAncestorOf(child)]
+            + ([heading] if heading in stops else [])
+            + [child for child in stops if child is not heading and more.isAncestorOf(child)]
+        )
+    return stops
 
 
 def _leads_into_the_view(op: str, kind: str | None = None) -> bool:
@@ -9134,6 +9195,8 @@ class FeaturePanel(QWidget):
     #: Tab). Wer zuhört, bindet den Auftrag der neuen Handlung und entwertet
     #: die Freigabe der alten — gerechnet wird erst bei einem echten Wert.
     handlingArmed = Signal(str, dict)
+    editingOffered = Signal(bool)
+    """Ob ein Bearbeitungsauftrag den Hauptknopf besitzt — rechts oder im Bild."""
 
     #: Ein Zug im Bild hat Werte in eine Handlung gelegt (:meth:`take_values`).
     #: Das Fenster zeigt daraufhin den Reiter, in dem ihr *Übernehmen* steht.
@@ -9432,6 +9495,7 @@ class FeaturePanel(QWidget):
         """
         self._serial += 1
         for widget in self._built:
+            detach_from_layout(widget)
             widget.hide()
             widget.deleteLater()
         self._built.clear()
@@ -9462,6 +9526,7 @@ class FeaturePanel(QWidget):
         self._every.setChecked(False)
         if rebuilding:
             return
+        self.editingOffered.emit(self._measuring)
         for widget in (self._apply, self._in_view, self._cancel, self._armed_title):
             _set_shown(widget, False)
         # Der Sperrgrund selbst **bleibt** (``_locked``) — die Kette hält ja
@@ -10460,6 +10525,8 @@ class FeaturePanel(QWidget):
             else (reason or editor.toolTip())
         )
         editor.setAccessibleDescription(description)
+        editor.lineEdit().setAccessibleDescription(description)
+        editor.lineEdit().setToolTip(description)
         return reason
 
     def _refresh_row_refusal(
@@ -10492,6 +10559,7 @@ class FeaturePanel(QWidget):
         unangetastet; zwei Stellen, die denselben Knopf schalten, gewinnen
         abwechselnd.
         """
+        self.editingOffered.emit(self._measuring or self._armed in self._runs)
         reason = self._locked
         for child in self._keyed:
             if not isValid(child):
@@ -10735,10 +10803,12 @@ class FeaturePanel(QWidget):
                 return None
             choices = tuple((value, str(text)) for value, text in field.choices or ())
             fields.append((str(field.name), str(field.kind), choices))
-        return (str(action.op), tuple(fields))
+        return (str(action.op), tuple(fields), tuple(sorted(advanced_fields(action))))
 
     def _new_row(self, action: Any, signature: tuple[Any, ...] | None) -> _ActionRow:
         """Baut die Widgets einer Handlungszeile — Werte schreibt :meth:`_fill_row`."""
+        from app.ui.op_dialog import advanced_summary
+
         box = QWidget(self)
         layout = QVBoxLayout(box)
         layout.setContentsMargins(0, 0, 0, TIGHT)
@@ -10815,10 +10885,19 @@ class FeaturePanel(QWidget):
             form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
             form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
             names = [str(field.name) for field in action.fields]
+            behind = advanced_fields(action)
+            more_content = QWidget(body) if behind else None
+            more_form = QFormLayout(more_content) if more_content is not None else None
+            if more_form is not None:
+                more_form.setContentsMargins(0, 0, 0, 0)
+                more_form.setSpacing(TIGHT)
+                more_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+                more_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
             pending: list[tuple[QLabel, QWidget]] = []
             waiting: list[QLabel] = []
             for field in action.fields:
                 name = str(field.name)
+                target = more_form if more_form is not None and name in behind else form
                 editor = self._build_field(field, box, action)
                 row.widgets[name] = editor
                 row.inner[name] = tuple(editor.findChildren(QLineEdit))
@@ -10849,7 +10928,7 @@ class FeaturePanel(QWidget):
                 if together:
                     pending.append((label, editor))
                 else:
-                    form.addRow(label, editor)
+                    target.addRow(label, editor)
                 if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
                     refusal = QLabel(box)
                     refusal.setObjectName(f"feature-field-refusal-{name}")
@@ -10859,7 +10938,7 @@ class FeaturePanel(QWidget):
                     if together:
                         waiting.append(refusal)
                     else:
-                        form.addRow(refusal)
+                        target.addRow(refusal)
                     editor.valueRefused.connect(
                         partial(self._refresh_row_refusal, editor, refusal, row)
                     )
@@ -10872,11 +10951,25 @@ class FeaturePanel(QWidget):
                 if len(pending) == len(COORDINATE_FIELDS):
                     coordinates = _CoordinateRow(pending, box)
                     row.coordinates.append(coordinates)
-                    form.addRow(coordinates)
+                    target.addRow(coordinates)
                     for refusal in waiting:
-                        form.addRow(refusal)
+                        target.addRow(refusal)
                     pending, waiting = [], []
+            if more_content is not None:
+                more = collapsible(
+                    tr("Weitere Werte"),
+                    more_content,
+                    open_now=False,
+                    contents=advanced_summary(
+                        [str(field.label) for field in action.fields if str(field.name) in behind]
+                    ),
+                )
+                more.setObjectName("feature-row-more")
+                row.more = more
+                form.addRow(more)
             layout.addWidget(body)
+            for first, second in pairwise(_focus_stops(box)):
+                QWidget.setTabOrder(first, second)
         else:
             button = QPushButton(str(action.title), box)
             button.clicked.connect(partial(self._run_row, row))
@@ -10895,6 +10988,10 @@ class FeaturePanel(QWidget):
         from app.ui.op_dialog import ValueField
 
         box = row.box
+        if row.more is not None:
+            heading = row.more.findChild(QToolButton, "sectionHeading")
+            if heading is not None:
+                heading.setChecked(False)
         # Das Ziel im Wortschatz (``feature:<schlüssel>``, an einer Kante
         # ``edge:``) — als Eigenschaft, denn den ``objectName`` des Kopfes
         # führt das Stylesheet (``actionHeading``).
@@ -11009,6 +11106,11 @@ class FeaturePanel(QWidget):
                 _set_shown(refusal, active and bool(refusal.text()))
         for coordinates in row.coordinates:
             coordinates.follow_fields()
+        if row.more is not None:
+            _set_shown(
+                row.more,
+                any(not row.widgets[name].isHidden() for name in advanced_fields(row.action)),
+            )
 
     def _in_the_view(self, row: _ActionRow) -> frozenset[str]:
         """Die Felder dieser Zeile, die die Maßgruppe im Bild gerade selbst trägt.
@@ -11075,6 +11177,12 @@ class FeaturePanel(QWidget):
         if row.body is not None and row.body.isHidden():
             self._arm(row.key)
         editor = row.widgets[name]
+        if editor.isHidden() or not editor.isEnabled():
+            return False
+        if row.more is not None and row.more.isAncestorOf(editor):
+            heading = row.more.findChild(QToolButton, "sectionHeading")
+            if heading is not None:
+                heading.setChecked(True)
         if not editor.isVisibleTo(self) or not editor.isEnabled():
             return False
         getattr(editor, "spin", editor).setFocus(Qt.FocusReason.OtherFocusReason)
@@ -11448,11 +11556,7 @@ class FeaturePanel(QWidget):
         _set_shown(self._apply, not self._measuring)
         applies_to_all = entry.members > 1
         if applies_to_all:
-            promise = str(tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück."))
-            self._every.setText(
-                str(tr("Auf alle {count} gleichartigen anwenden")).format(count=entry.members)
-            )
-            self._every.setAccessibleDescription(promise)
+            configure_scope(self._every, entry.members)
         else:
             # **Ein Haken, der nicht gilt, wird auch nicht gehalten.** Sonst
             # stünde er ausgeblendet auf „an" und griffe wieder, sobald jemand
@@ -11651,10 +11755,10 @@ class FeaturePanel(QWidget):
         # **Die Stelle steht über die Kantenmaße im Bild** (RM-516): X, Y und Z
         # derselben Stelle stehen dahinter, unter „Weitere Werte“ — erreichbar,
         # aber nicht als zweite Zahlenreihe für dieselbe Lage.
-        coordinates = _coordinate_fields(action)
+        behind = advanced_fields(action, _coordinate_fields(action))
         more_form: QFormLayout | None = None
         more_content: QWidget | None = None
-        if coordinates:
+        if behind:
             more_content = QWidget(box)
             more_form = QFormLayout(more_content)
             more_form.setContentsMargins(0, 0, 0, 0)
@@ -11662,7 +11766,7 @@ class FeaturePanel(QWidget):
             more_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
             more_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         for field in action.fields:
-            target = more_form if more_form is not None and str(field.name) in coordinates else form
+            target = more_form if more_form is not None and str(field.name) in behind else form
             editor = self._build_field(field, box, action)
             label = QLabel(str(field.label), box)
             label.setWordWrap(True)
@@ -11698,7 +11802,7 @@ class FeaturePanel(QWidget):
                 editor.valueChanged.connect(box.conditionsChanged)
         more: QWidget | None = None
         if more_content is not None:
-            names = [str(field.label) for field in action.fields if str(field.name) in coordinates]
+            names = [str(field.label) for field in action.fields if str(field.name) in behind]
             more = collapsible(
                 tr("Weitere Werte"),
                 more_content,
@@ -11827,6 +11931,7 @@ class FeaturePanel(QWidget):
         }
         for child in box.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly):
             if id(child) not in own:
+                detach_from_layout(child)
                 child.hide()
                 child.deleteLater()
         previous = self._spare_measures.pop(group.signature, None)
