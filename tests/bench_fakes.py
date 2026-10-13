@@ -90,6 +90,7 @@ class FakePorts:
         self.pressed: list[tuple[str, tuple[int, int], str]] = []
         self.keys_sent: list[str] = []
         self.typed: list[str] = []
+        self.moved: list[tuple[int, int]] = []
         #: Bis wann das Fenster sagt, dass etwas kommt (``Ports.pending``).
         self.pending_until = 0.0
         self._last: FakeClick | None = None
@@ -123,6 +124,9 @@ class FakePorts:
 
     def keys(self, sequence: Any) -> None:
         self.keys_sent.append(str(sequence))
+
+    def move(self, point: tuple[int, int]) -> None:
+        self.moved.append(point)
 
     def type_text(self, text: str) -> None:
         self.typed.append(text)
