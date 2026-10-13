@@ -20,6 +20,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manejo y sistema
 
+- Se ha corregido un posible cierre inesperado al cambiar de característica o proyecto.
 - La explicación de «Colocar sobre la placa» ahora también sirve para cuerpos situados debajo de la placa.
 - Las listas de acciones sobre características usan íntegramente el idioma elegido.
 - En el Mac, Solidon ya puede cargar el controlador de 3Dconnexion (3DxWare) para el ratón 3D. Desde la versión 0.4.1 hasta la 0.6.0, macOS no lo permitía.
@@ -50,6 +51,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los números quedan alineados a la derecha en todos los campos, cifra bajo cifra.
 - Un lector de pantalla lee el nombre y la explicación de cada campo numérico de un diálogo.
 - Tras una acción en el *Informe de comprobación*, el informe sigue delante y Ctrl+Z la deshace al momento. Hasta ahora saltaba al frente la pestaña *Selección*.
+- Los avisos de cama y adhesión usan la unidad elegida. Al cambiar mm/pulgadas se conservan aviso seleccionado, detalles abiertos, pestaña y estado desplegado de los cuerpos.
 - Ctrl+Z y Ctrl+Y funcionan también con el cursor en un campo vacío, por ejemplo en el campo de búsqueda. Si escribió algo allí, primero se deshace lo escrito.
 - Sin activación, las acciones que cambian algo en el *Informe de comprobación*, *Selección*, los menús contextuales y el filamento salen en gris con el motivo. Antes el rechazo llegaba tras el clic.
 - Sin activación, también *Crear parámetro …*, *Mover*, *Dividir*, las teclas del historial y las medidas en la vista salen en gris. Cada motivo indica el camino, como *Ayuda → Desbloquear Solidon …*.
@@ -60,8 +62,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La captura de pantalla de un comentario muestra ahora también el modelo en Windows. Con algunas tarjetas gráficas aparecía antes una imagen antigua, como la pantalla de carga.
 - En macOS un diálogo abierto, por ejemplo al crear un tornillo desde el catálogo de bloques, queda sobre la ventana principal. Antes, un clic en la ventana lo dejaba detrás.
 - Las listas de características y diálogos breves ocupan menos. Tras cambiar la letra siguen legibles y accesibles la explicación y corrección del plano no válido, la introducción y los botones.
-- La tarjeta de selección ajusta su anchura al contenido y la letra. Conserva líneas y columnas de acciones; las ventanas de pestañas separadas mantienen su tamaño.
-- Los elementos correspondientes piden primero par y tamaño. Forma y ajuste están en «Más ajustes»; el selector explica ambas mitades.
+- La tarjeta de selección sigue contenido y letra, conservando texto y columnas. Las pestañas separadas mantienen su tamaño. Si se ofrece editar una característica, «Aplicar» es la acción principal.
+- Los elementos correspondientes piden par y tamaño y explican ambas mitades. Forma y ajuste están en «Más ajustes». La altura inicial del diálogo se adapta al contenido.
 - Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
 
 ### Imprimir y entregar al slicer
@@ -75,7 +77,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si el diámetro es inferior al límite, el aviso indica *Quitar característica*, con avellanado si se desea. Al editar cotas en la vista, indica primero *Cancelar*.
 - La reconstrucción (*Reconstruir modelo*) ya no aconseja otros límites cuando ningún valor permitido bastaría, y muestra las propuestas iguales una sola vez.
 - Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
-- Al elegir un taladro de un modelo cargado, la vista y la pestaña *Selección* indican ahora la misma acción, *Cambiar taladro*. En la versión 0.6.0 allí quedaba abierto *Mover característica*.
+- En agujeros, vista y *Selección* muestran el mismo cambio. Medida, profundidad y entrada vinculada están delante; compensación de impresión y ajustes finos, en «Más valores».
+- Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
 
 ## 0.6.0
 

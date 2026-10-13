@@ -81,6 +81,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Einfügemarke, Fragen des Kerns (`AskRequest`), `one_step` (mehrere `apply` als eine Transaktion); `evaluation_profile` (Profil der Auswertung samt Stützschwelle, `druckrat.md`), `evaluation_follows` (spät gelesene Grundlage wertet neu aus) |
 | `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; `collect_in_main_thread`, GC-Zähler mit Zustandswahrung; `stop_watching_the_dying` für Filter, die ihr Objekt überleben; `configure_gil_switching`, 1-ms-Takt in `Worker.run`; `RightOfWay`: Vortritt fürs Bild |
 | `app_events.py` | der eine Ereignisfilter an der Anwendung; Zuhörer melden dort ihre Ereignisarten an (`listen`), wer es tut, sagt der Modul-Docstring |
+| `layout_lifetime.py` | `detach_from_layout`: Widget aus seinem haltenden Layout lösen, auch verschachtelt oder an externem Host; Elternschaft und wiederverwendete Widgets bleiben erhalten |
 | `change_lock.py` | ob geändert werden darf, für jeden Zugang |
 | `loading.py` | Ladeanzeige über der Ansicht (§2.8); `ProgressTiming` führt je Auswertung eine Uhr und einen Zeittext für Statuszeile und Schleier |
 
@@ -108,6 +109,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
+| `feature_editing.py` | `advanced_fields` für Maßgruppe und rechte Zeile; `configure_scope`, `explain_value_help`; panelgebundene Hauptaktionspriorität `FeatureEditPriority` |
 | `card_width.py` | Natürliche Breite des eingebetteten Auswahlreiters (§2.5), Paar- und Koordinatenraster; Schnittstellen in `karte-app-ui.md` |
 | `selection_operations.py` | Auswahlhandlungen aus dem Register und Suchfeld mit Trefferliste; Auswahlregeln und Schnittstellen in `karte-app-ui.md` |
 | `tool_strip.py` | Werkzeugzeile unter der Ansicht (§2.4, §2.5) |
@@ -209,7 +211,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
 | `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht; Zuordnungen folgen `tabMoved` |
 | `tab_windows.py` | Reiter mit stabiler Inhaltshülle, Umordnung, eigenen OS-Fenstern und Rückweg; lokale Anordnung über `UiSettings.tab_layout`, vorhandene Bildschirme begrenzen die Geometrie |
-| `labels.py` | Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `group_summary`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
+| `labels.py` | Befundwerte über `value_text` in Anzeigeeinheiten; Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `group_summary`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
 
 ### Hilfe und Bedienung
 
@@ -244,7 +246,9 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   (`_blocks`, `LEADS_INTO_THE_VIEW`, `_in_the_view`); Fußknöpfe bleiben beim
   Neuaufbau verborgen. `measure_op` nennt die Handlung der Maßgruppe;
   `request_in_view` schärft über den Knopfweg, eigene scharfe Bildwege gehen vor.
-  `handlingArmed` ändert keine Werte.
+  `handlingArmed` ändert keine Werte. Feldhilfe nennt zuerst `ActionField.doc`,
+  danach die Maßherkunft; Ausdrucksinnenfelder behalten Grammatik und Ablehnung.
+  `editingOffered` meldet den Auftrag unabhängig von vorübergehenden Sperren.
 - **Wiederverwendung:** `FeaturePanel` und `PlacementFlow` erhalten Zeilen,
   Maßgruppen und schwebende Bedienelemente; Signaturen, Zustandsvergleich und
   Abschluss in `karte-app-ui.md`, „Muster“.

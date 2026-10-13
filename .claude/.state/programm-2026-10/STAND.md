@@ -67,6 +67,24 @@ das Konzept.
 
 ## Verlauf
 
+- 13.10.2026, 19:08, Schlussfixes von D0 integriert: `welle4` auf
+  `a100dd99f9d960b5164c12231459c788221207c3`. FD60, FD61, FD7/16/63/64 und FD66
+  sind zusammengeführt; FD62/65 war bereits enthalten. Der gemeinsame
+  Anschluss mit 126 Fällen ist vollständig grün und an denselben Baum
+  gebunden. FD60 hat zusätzlich 14.717 Kernfälle und Original001 am echten
+  Fenster bestanden; FD61 222 enge Fälle, das Maßgruppenpaket 44 enge und
+  2.861 Kernfälle. FD66 hat 54 Gegenfälle, 142 bestehende Größenfälle und
+  FR/IT am echten Fenster grün; der einzige Fehler im breiten 14.777er-Lauf
+  lag in einem alten Scroll-Testdouble und ist eng behoben. Historische
+  rote Läufe und Originalurteile bleiben erhalten. Die Karten, Regeln und
+  sechs Changelogs werden jetzt gesammelt angeschlossen. Noch offen sind
+  native FD61-/Maßgruppenfolgen in sechs Sprachen, der ganze 48-Fall-Lauf
+  mit den sieben früheren Absturzfällen zuerst, gepinntes Endtor und der
+  Schlussanschluss der Merge-Durchsicht. D0 ist noch nicht auf main.
+  Danach Codestruktur Schritt 0 vollständig nach plan-cs0.md; R und W13
+  sind vorbereitet. Alle Kriterien bleiben gleichrangig, einschließlich
+  notwendiger Dialog-/Panelgröße und Modellfläche. Website-Upload nur nach
+  Roberts Freigabe. Aktuelle Prozess- und Übergabebelege: KOORDINATION.md.
 - 13.10.2026, nach Roberts „mach noch weiter soweit du kommst“ wiederaufgenommen:
   Phase 2 bleibt im D0-Abschluss. `welle4`/origin steht auf `f08927d636`;
   main bleibt `6fbe6154f`. Die Korrektur der tatsächlichen Knopffarbe und

@@ -29,13 +29,13 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Sagt eine tangierende Schnittebene vor den Stiften ab, während offene Eingänge und getrennte Schalen ihre eigene Diagnose behalten? Findet Auto Split eine gültige Folgeebene? | `test_tangent_cuts.py` — Korpusplatte, beide Güten und gemeinsame Schnittwege |
 | Sammelparameter-Ops über das Register | `test_gesture_ops.py` |
 | Öffnen alte Projektdateien? Halten die Korpusdateien, was sie belegen? | `test_project.py` mit `data/projects/` · `test_corpus.py` (§34) |
-| Trägt jede Ausnahme einen Vorschlag? Meldung und Eingabe im Hausstil? Gibt sich jeder Dialog frei? | `test_errors.py`, `test_message_dialog.py`, `test_input_dialog.py` · `test_dialog_lifetime.py` |
+| Ausnahmen mit Ausweg, Meldung/Eingabe im Hausstil, Dialog- und Layoutabbau? | `test_errors.py`, `test_message_dialog.py`, `test_input_dialog.py` · `test_dialog_lifetime.py`, `test_feature_layout_lifetime.py` |
 | Erreichen Helfer- und Stopfehler den Kundenweg unverändert? | `test_prepare.py` · `test_difference.py` · `test_missing_ops.py` · `test_repair.py` · `test_threemf_native_materials.py` |
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Umschalter, vier Felder vorn? | `test_theme_and_palette.py` · `test_interface_limits.py` |
 | Findet die Suche, was der Kunde tippt? | `test_search.py`; das Suchfeld der Karte in `test_selection_operations.py` |
 | Bleiben Änderungswege gesperrt, Gründe aktuell und Fokus nach Befundhandlung im Bericht? | `test_change_lock.py`, `test_licence_lock_offers.py`, `test_finding_action_focus.py` |
-| Systemdialoge bei externen Starts; Maßhandlung im Bild; gültiges Maßfeldbeispiel? | `test_process.py`, `test_in_view_arming.py`, `test_sketch_editor_measure_field.py` |
+| Externe Systemdialoge, Maßhandlung/Vorderseite/Feldhilfe, gültiges Maßfeldbeispiel? | `test_process.py`, `test_in_view_arming.py`, `test_sketch_editor_measure_field.py`, `test_feature_front_contract.py` |
 | Funktionsdurchgang: Zeilen, Pakete, Szenen · Urteile und Gegenproben · der Prüfstand am Fenster · der Wortschatz der Ziele, aufgelöst am Fenster | `test_function_*.py` (Attrappen in `bench_fakes.py`) · `test_guide_targets.py`, `test_bench_findings.py`; Bildanleitungen und Wortschatz im Kern in `test_guides.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Erkennt der druckgleich-Vergleich (§11.2) jede Verletzung? | `test_print_equal.py` |
@@ -94,12 +94,12 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Filamentlager, Buchungen und Verbrauch · im Fenster | `test_filament_inventory.py`, `test_filament_usage.py` · `test_filament_inventory_ui.py`, `test_filament_assignment.py`, `test_filament_usage_ui.py`, `test_filament_workflow.py` — isolierte Lagerdateien, nie der Nutzerbestand |
 | Zeichnet der Renderer, was der Vertrag verspricht? | `test_render_contract.py`, `test_render_gizmo.py`, `test_render_gfx_regressions.py`, `test_render_factory.py`, `test_feature_label_layout.py` (`rendering`, nur beim Release; ohne Adapter ein Skip mit Grund); `test_render_shapes.py`, `test_navigator.py` ohne echten Renderer |
 | Deckt der Crash-Wächter auch Arbeiter aus Fabriken und Helfern, und teilen überlappende `undisturbed`-Aufrufe ihren GC-Schutz? | `test_leash.py` — Quellenprüfung und Mehrfaden-Gegenprobe |
-| Druckziel, Übergabestatus, Befundkarte, Änderungserklärung und Beleg (RM-090) · Liest die Gegenprobe jede geschriebene Datei zurück? · Nennt jede Handlung ihre Nebenfolge? | `test_print_contract.py`, `test_print_contract_ui.py` · `test_export_readback.py` · `test_action_effects.py` |
+| Druckziel/-übergabe, Befundkarte, Änderungserklärung und Beleg (RM-090); Dateirücklesen, Handlungsfolgen, Anzeigeeinheiten? | `test_print_contract.py`, `test_print_contract_ui.py` · `test_export_readback.py` · `test_action_effects.py` · `test_finding_display_units.py` |
 | Mehrfachimport am Fenster: Dialogabbruch, Einfügen, Rückfrage, Gestensperre · Spulendatum per Tastatur und zurück auf „Unbekannt“ | `test_batch_import_ui.py` · `test_date_field.py` |
 | Nachbau im Prüfbericht: Kandidaten, Vergleich, Verluste, Abbruch/Projektwechsel, Undo/Redo und Dateirundreise | `test_rebuild_ui.py`; Geometrievertrag in `test_rebuild.py` |
 | Karten unten andocken, Reiter umordnen und verlustfrei in eigene Fenster ziehen? | `test_tab_windows.py`: reine Platz- und Bildschirmrechnung im Tor; Inhalte, Reiterkennungen und OS-Fenster in der Fenster-CI |
 | Kundenwege im Fenster | `test_ui.py`; Teilbereiche in `test_ui_dialogs.py`, `test_ui_export.py`, `test_ui_licensing.py`, `test_ui_remote.py`; `test_operation_ui.py` mit leerem Fenster, wo keine Geometrie nötig ist |
-| Größenwechsel: Inhalt und Abschluss erreichbar, Nutzergröße erhalten? | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`, `test_ui_settings.py`; Zusatzfälle in `karte-tests.md` |
+| Größenwechsel: Inhalt und Abschluss erreichbar, Nutzergröße erhalten? | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`, `test_ui_settings.py`, `test_counterpart_initial_height_ui.py`; Zusatzfälle in `karte-tests.md` |
 | Steht im Register jeder Umschalter vor den Feldern, die er schaltet, und nie hinter der Klappe eines Vorderfelds? | `test_dependency_order.py`; die Folge des Druckdialogs in `test_print_settings_ui.py` |
 | Bleiben Käuferzuordnung und Betreiberzugang aus dem Server? Halten die PHP-Endpunkte ihre Missbrauchsgrenzen? | `test_licence_admin.py`, `test_activation_server.py` · `test_public_php_security.py`; ohne PHP ein Skip, in der Linux-CI ein Fehler (`php_probe.py`) |
 | Website: tote Verweise, Stempel, Paketgrößen, „nichts von außen“, Sprachfassungen | `test_website.py` — Außenlinks getrennt von eingebundenen Ressourcen |

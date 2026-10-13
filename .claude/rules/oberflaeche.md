@@ -382,7 +382,14 @@ Vorrang.
   dieselbe Nachricht in Millimetern; `valueChanged` nur, wo man den Wert fallen
   lässt und `value_mm()` liest.
 - **Ein Einheitenwechsel meldet nichts:** `refresh_unit` tauscht unter
-  `blockSignals`.
+  `blockSignals`. Der Bericht wird aus seinen Rohbefunden neu beschriftet;
+  Befundauswahl, Einzelheiten, gelesener Reiter und offene Körperknoten bleiben.
+  Zeilenidentität beruht auf rohen Mitgliedern samt Mehrfachvorkommen, nicht
+  auf übersetzten Sammeltexten.
+- **Eindeutige alte mm-Texte bleiben Rohdaten:** `labels.value_text` rechnet
+  `excess`, `gap` und `needed` erst zur Anzeige um, nur bei vollständig passender
+  numerischer mm-Form. Nackte Slicerwerte und Freitext bleiben unverändert;
+  Anzeigewechsel ändern weder Befundidentität noch Cache-/Projektformat.
 - **Ein Satz trägt keine Einheit im Katalogtext:** Die Zahl kommt mit ihrer
   Einheit (`labels.length`, im Kern `format_length(…, display_unit())`) —
   sonst liest sich „misst {measure} mm“ in Zoll als „0.2047 mm“ (RM-516).

@@ -44,6 +44,7 @@ Nutzen da und sonst nichts.
 
 ### Bedienung und System
 
+- Ein möglicher Absturz beim Wechseln von Merkmalen oder Projekten ist behoben.
 - Der Hinweis bei „Auf das Bett setzen“ passt jetzt auch zu Körpern, die unter dem Bett liegen.
 - Aufzählungen von Merkmalshandlungen verwenden durchgehend die gewählte Sprache.
 - Am Mac darf Solidon für die 3D-Maus jetzt den Treiber von 3Dconnexion (3DxWare) laden. Von Version 0.4.1 bis 0.6.0 ließ macOS das nicht zu.
@@ -74,6 +75,7 @@ Nutzen da und sonst nichts.
 - Zahlen stehen in allen Feldern rechtsbündig, Stelle unter Stelle.
 - Ein Bildschirmleser liest an jedem Zahlenfeld eines Dialogs Namen und Erklärung vor.
 - Nach einer Handlung im Prüfbericht bleibt der Bericht vorn, und Strg+Z nimmt sie gleich zurück. Bisher sprang der Reiter *Auswahl* nach vorn.
+- Hinweise zu Druckbett und Haftung nutzen die gewählte Einheit. Beim Wechsel mm/Zoll bleiben Befundauswahl, offene Details, Reiter und der Klappzustand der Körper erhalten.
 - Strg+Z und Strg+Y wirken auch, wenn der Cursor in einem leeren Feld steht, etwa im Suchfeld. Wer dort getippt hat, nimmt zuerst sein Tippen zurück.
 - Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
 - Ohne Freischaltung sind auch *Parameter anlegen …*, *Bewegen*, *Teilen*, die Tasten im Verlauf und die Maße im Bild grau. Jeder Grund nennt den Weg, etwa *Hilfe → Solidon freischalten …*.
@@ -84,8 +86,8 @@ Nutzen da und sonst nichts.
 - Das Bildschirmfoto einer Rückmeldung zeigt unter Windows jetzt auch das Modell. Auf manchen Grafikkarten stand dort vorher ein altes Bild, etwa der Ladebildschirm.
 - Unter macOS bleibt ein offener Dialog, etwa beim Anlegen einer Schraube aus dem Bausteinkatalog, über dem Hauptfenster. Ein Klick ins Fenster schob ihn vorher dahinter.
 - Merkmalslisten und kurze Dialoge sparen Platz. Erklärung und Auswege bei ungültiger Zeichenebene sowie Einleitung und Knöpfe bleiben auch nach Schriftwechseln vollständig lesbar und erreichbar.
-- Die Auswahlkarte passt ihre Breite an Inhalt und Schrift an. Textzeilen und Handlungsspalten bleiben erhalten; eigene Reiterfenster behalten ihre Größe.
-- Gegenstücke fragen zuerst nach Paar und Größe. Form und Passungsdetails stehen unter „Weitere Einstellungen“; die Paarauswahl erklärt beide Hälften.
+- Die Auswahlkarte folgt Inhalt und Schrift; Text und Handlungsspalten bleiben erhalten. Freie Reiterfenster behalten ihre Größe. Bei angebotener Merkmaländerung ist „Übernehmen“ die Hauptaktion.
+- Gegenstücke fragen zuerst nach Paar und Größe; die Auswahl erklärt beide Hälften. Form und Passung stehen unter „Weitere Einstellungen“. Die Anfangshöhe passt zum Inhalt.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
 
 ### Drucken und Übergabe an den Slicer
@@ -99,7 +101,8 @@ Nutzen da und sonst nichts.
 - Bei einem Bohrungsdurchmesser unter der Grenze nennt der Hinweis *Merkmal entfernen*, auf Wunsch samt Senkung. Wurde die Maßänderung im Bild begonnen, führt er zuerst über *Abbrechen*.
 - Der Nachbau (*Modell nachbauen*) rät nicht mehr zu anderen Grenzen, wenn kein erlaubter Wert reichen würde, und zeigt gleiche Vorschläge nur einmal.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
-- Wählt man in einem geladenen Modell eine Bohrung, meinen die Maße im Bild und der Reiter *Auswahl* dieselbe Handlung, *Bohrung ändern*. In Version 0.6.0 stand dort *Merkmal verschieben* offen.
+- Bei Bohrungen zeigen Bild und *Auswahl* dieselbe Änderung. Zielmaß, Tiefe und mitgehender Einlauf stehen vorn; Druckkorrektur und Feinwerte unter „Weitere Werte“.
+- Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
 
 ## 0.6.0
 

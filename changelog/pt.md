@@ -19,6 +19,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Utilização e sistema
 
+- Corrigido um possível encerramento inesperado ao mudar de característica ou de projeto.
 - A explicação de «Pousar na mesa» também se aplica a corpos que se encontram abaixo da mesa.
 - As listas de ações sobre características usam inteiramente o idioma escolhido.
 - No Mac, o Solidon pode agora carregar o controlador da 3Dconnexion (3DxWare) para o rato 3D. Da versão 0.4.1 à 0.6.0, o macOS não o permitia.
@@ -49,6 +50,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os números ficam alinhados à direita em todos os campos, algarismo sob algarismo.
 - Um leitor de ecrã lê o nome e a explicação de cada campo numérico de uma caixa de diálogo.
 - Depois de uma ação no *Relatório de verificação*, o relatório fica à frente e Ctrl+Z desfá-la logo. Até agora, o separador *Seleção* passava para a frente.
+- Os avisos de plataforma e adesão usam a unidade escolhida. Mudar mm/polegadas mantém a observação escolhida, detalhes abertos, separador e estado expandido dos corpos.
 - Ctrl+Z e Ctrl+Y funcionam também com o cursor num campo vazio, por exemplo no campo de pesquisa. Se escreveu algo ali, primeiro é desfeito o que escreveu.
 - Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
 - Sem ativação, também *Criar parâmetro …*, *Mover*, *Dividir*, as teclas do histórico e as medidas na vista ficam a cinzento. Cada motivo indica o caminho, como *Ajuda → Desbloquear o Solidon …*.
@@ -59,8 +61,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A captura de ecrã de um comentário mostra agora também o modelo no Windows. Com algumas placas gráficas aparecia antes uma imagem antiga, como o ecrã de carregamento.
 - No macOS, uma caixa de diálogo aberta, por exemplo ao criar um parafuso do catálogo de blocos, fica por cima da janela principal. Antes, um clique na janela empurrava-a para trás.
 - Listas de características e diálogos curtos ocupam menos. Após mudar a letra, explicações e correções do plano inválido, introdução e botões continuam legíveis e acessíveis.
-- O painel de seleção adapta a largura ao conteúdo e à letra. Mantém linhas e colunas de ações; as janelas dos separadores destacados conservam o tamanho.
-- Os elementos correspondentes pedem primeiro par e tamanho. Forma e ajuste ficam em «Mais definições»; a seleção explica as duas metades.
+- O painel de seleção segue conteúdo e letra, mantendo texto e colunas. Os separadores destacados conservam o tamanho. Se houver uma alteração proposta, «Aplicar» é a ação principal.
+- Os elementos correspondentes pedem par e tamanho e explicam ambas as metades. Forma e ajuste ficam em «Mais definições». A altura inicial do diálogo adapta-se ao conteúdo.
 - Após a recusa de uma pré-visualização, os textos da seguinte continuam totalmente legíveis.
 
 ### Imprimir e entregar ao slicer
@@ -74,7 +76,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Para um diâmetro de furo abaixo do limite, o aviso indica *Remover característica*, com o escareamento se quiser. Se a edição das cotas na vista já começou, indica primeiro *Cancelar*.
 - A reconstrução (*Reconstruir modelo*) já não aconselha outros limites quando nenhum valor permitido bastaria, e mostra as propostas iguais uma só vez.
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
-- Ao escolher um furo num modelo carregado, as medidas na vista e o separador *Seleção* indicam agora a mesma ação, *Alterar furo*. Na versão 0.6.0 ficava ali aberto *Mover característica*.
+- Nos furos, vista e *Seleção* mostram a mesma alteração. Dimensão, profundidade e entrada associada ficam à frente; compensação de impressão e ajustes finos, em «Mais valores».
+- Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
 
 ## 0.6.0
 

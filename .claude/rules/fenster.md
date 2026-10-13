@@ -14,6 +14,8 @@ paths:
   - "app/ui/card_width.py"
   - "app/ui/feature_list.py"
   - "app/ui/panels.py"
+  - "app/ui/layout_lifetime.py"
+  - "app/ui/feature_editing.py"
 ---
 
 # Regeln für Fenster und Dialoge
@@ -357,7 +359,8 @@ Wächter `test_style.py`.
   Abbrechen/Schließen. Rückfragen vor Verwerfen oder Löschen: `no_primary`,
   Fokus und Escape auf Abbrechen.
 - Ruhezustand: nur *Bausteinkatalog …* im Akzent, Kartenrand in `line`, aktiver Reiter
-  in Schriftfarbe (`test_resting_state.py`).
+  in Schriftfarbe (`test_resting_state.py`). Ein angebotener Merkmalauftrag
+  führt auch gesperrt; `FeatureEditPriority` ändert dabei keinen Fokus.
 - Fokus verschiebt keinen Akzent (`_FocusTakesNoAccent`); Enter gehört dem per
   Tab gewählten Knopf (`test_enter_key.py`).
 - Stylesheets an einen `objectName`, nie typlos an einen Vorfahren. Klicktests
@@ -386,7 +389,10 @@ Viewport-Minimum: Der innere Rollbereich gibt Platz an die Knopfleiste ab.
 Beim Öffnen, Monitorwechsel, geänderter nutzbarer Fläche oder logischer DPI
 sichern `DialogScrollArea` und `fit_dialog_to_screen` die Erreichbarkeit.
 Anfangsbreite samt zugeklappten Teilen und Rollbalken rechnet allein
-`style.expanded_width` (RM-342 D-N5).
+`style.expanded_width` (RM-342 D-N5). Im sichtbaren Rollbereich zählt für die Wunschhöhe
+`maximumViewportSize`, nicht vorläufige Rollbalkenenge. `_hidden_height`
+zieht eine rangefreie AsNeeded-Querleiste nicht ab; nötige und dauernde
+Leisten bleiben berücksichtigt.
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
@@ -423,7 +429,9 @@ Für Druckerwahl und Druckdialog gilt `druckerwahl.md`.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 
-Weggeräumt wird mit `hide()` und `deleteLater()`, nie über den Elternteil.
+Vor Einzelabbau aus weiterlebendem Layout löst `layout_lifetime.detach_from_layout`
+das Widget; `removeWidget` entwertet gehaltene Itemhüllen. Weggeräumt wird mit
+`hide()` und `deleteLater()`, nie über den Elternteil.
 Nach `exec` Rückgabewerte im `try` lesen, den Dialog im `finally` freigeben.
 Nichtmodale Dialoge geben sich am `finished`, über `WA_DeleteOnClose` oder
 im Endrückruf frei (`test_dialog_lifetime.py`).

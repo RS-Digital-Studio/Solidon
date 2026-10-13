@@ -19,6 +19,7 @@ it into `website/version.json`.
 
 ### Operation and system
 
+- Fixed a crash that could occur when switching features or projects.
 - The note for “Place on the bed” now also applies to bodies below the bed.
 - Lists of feature actions now stay entirely in the selected language.
 - On the Mac, Solidon may now load the 3Dconnexion driver (3DxWare) for the 3D mouse. From version 0.4.1 to 0.6.0, macOS did not allow this.
@@ -49,6 +50,7 @@ it into `website/version.json`.
 - Numbers are right-aligned in every field, digit under digit.
 - A screen reader now reads the name and explanation of every number field in a dialog.
 - After an action in the *Report*, the report stays in front, and Ctrl+Z takes it back straight away. Until now the *Selection* tab jumped to the front.
+- Bed and adhesion messages use the chosen unit. Switching mm/in keeps the selected finding, open details, tab and body expansion state.
 - Ctrl+Z and Ctrl+Y also work when the cursor sits in an empty field, such as the search field. If you typed there, your typing is undone first.
 - Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
 - Without activation, *Create parameter …*, *Move*, *Split*, the history keys and the dimensions in the view are greyed out too. Every reason names the way, such as *Help → Unlock Solidon …*.
@@ -59,8 +61,8 @@ it into `website/version.json`.
 - The screenshot attached to feedback now shows the model on Windows too. On some graphics cards it used to show an old picture, such as the loading screen.
 - On macOS an open dialog, for example when creating a screw from the part catalogue, stays above the main window. A click into the window used to push it behind.
 - Feature lists and short dialogs save space. Invalid plane explanations and remedies, introductory text and buttons stay fully readable and accessible after font changes.
-- The selection card adjusts its width to its content and font. Text lines and action columns are preserved; detached tab windows keep their size.
-- Counterparts ask for pair and size first. Shape and fit details are under “More settings”; the pair selector explains both halves.
+- The selection card follows content and font, preserving text and action columns. Detached tabs keep their size. When a feature edit is offered, “Apply” is the primary action.
+- Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
 
 ### Printing and slicer handover
@@ -74,7 +76,8 @@ it into `website/version.json`.
 - For a hole diameter below the limit, the hint points to *Remove feature*, including the countersink if wanted. If editing the dimensions in the view has begun, it first points to *Cancel*.
 - Rebuilding (*Rebuild model*) no longer suggests other limits when no allowed value would be enough, and shows identical proposals only once.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
-- When you select a bore in a loaded model, the measures in the view and the *Selection* tab now mean the same action, *Change bore*. In version 0.6.0 *Move feature* was open there.
+- For holes, the view and *Selection* show the same edit. Size, depth and a linked entrance stay in front; print compensation and fine settings are under “More values”.
+- Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
 
 ## 0.6.0
 

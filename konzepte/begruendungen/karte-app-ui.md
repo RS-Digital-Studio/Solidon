@@ -1125,8 +1125,13 @@ Loch — bestätigt wird im Merkmalfenster) ·
 
 *Früher unter „Kopf der Karte“.*
 
-Nachlaufende Befunde erhalten die gewählte Zeile des Prüfberichts über die
-gemeinsame Befundidentität, auch wenn neue Fehler die Reihenfolge ändern.
+Nachlaufende Befunde erhalten die gewählte Zeile des Prüfberichts auch bei
+geänderter Reihenfolge. `_IDENTITY_ROLE` zählt rohe Mitglieder einschließlich
+Mehrfachvorkommen, unabhängig von ihren übersetzten Sammeltexten. Auswahl und
+Kennzeichnung des vorigen Stands lesen denselben Schlüssel. Einheitenwechsel
+beschriften über `report.add_findings([])` neu, erhalten offene Einzelheiten
+und halten den gelesenen Reiter mit `feature_dock.held()`; `ObjectTree.set_unit`
+stellt offene und geschlossene Körperknoten nach dem Beschriften wieder her.
 Nur wenn die bisherige Zeile entfällt oder ausgefiltert wird, gilt die
 bestehende Vorauswahl einer angebotenen Handlung. Prüfungen lesen die
 aktuellen Handlungsknöpfe aus dem Layout; ausgebaute Qt-Kinder können bis
@@ -2432,8 +2437,8 @@ gemischt) — Regel 19 gilt auch dort.
 
 `FeaturePanel.show_feature` und `show_edge` halten die Zeilen des vorigen
 Merkmals zurück (`_keep_rows_for_reuse`) und vergeben sie an Handlungen
-derselben Signatur (`_row_signature`: Operation, Feldnamen, -arten und
-Auswahlwerte; nie bei Schritt, `elsewhere` oder Ausdrucksfeld). Eine Zeile ist
+derselben Signatur (`_row_signature`: Operation, Feldnamen, -arten, Auswahlwerte und
+Vorderseitenzuordnung; nie bei Schritt, `elsewhere` oder Ausdrucksfeld). Eine Zeile ist
 ein `_ActionRow`; ihre Wege (`_run_row`, `_take_row`, `_row_in_view`,
 `_row_values`) lesen Schlüssel, Operation und Felder beim Aufruf aus der Zeile,
 nicht beim Bau. Werte, Grenzen und Herkunft schreibt

@@ -175,9 +175,10 @@ beide Wege gleich. `FeatureAction.key` nennt die Handlung stabil; Quellen:
 `PART_ACTION_KEYS`, `TEXTURE_ACTION_KEYS`, `EDGE_VARIANT_KEYS`. Einzelheiten
 in `karte-app-core-perceive.md`.
 
-- **Was nicht gilt, steht trotzdem da** (`op=None` mit Satz), und **jedes Feld
-  trägt seinen gemessenen Wert** — eine andere Vorgabe wäre eine stille
-  Änderung. `ActionField.measurement` ist der Ausgangswert.
+- **Nicht Angebotenes bleibt sichtbar** (`op=None` mit Satz). Maßvorgaben sind
+  gemessen; `ActionField.measurement` trägt die Herkunft, `doc`/`placement`
+  Wirkung und Einordnung aus dem Schema. Ein fachlich vorbelegter Einlauf
+  wird ausdrücklich nach vorn geholt (`placement="front"`).
 - **Jede Zeile fragt eine Funktion**: `action_refusal(op, …)` ist die Zeile
   der Operation (`actions_for(only=)`); jede Merkmalshandlung sagt mit ihrem
   Satz ab, ohne Ausnahme (`prepare_ops._refuse_like_the_card`), der Griff liest

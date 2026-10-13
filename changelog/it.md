@@ -19,6 +19,7 @@ scrive in `website/version.json`.
 
 ### Uso e sistema
 
+- Risolto un possibile arresto anomalo passando da una caratteristica o da un progetto all’altro.
 - La spiegazione di «Appoggia sul piano» ora vale anche per i corpi che si trovano sotto il piano.
 - Gli elenchi delle azioni sulle caratteristiche usano interamente la lingua scelta.
 - Su Mac, Solidon ora può caricare il driver di 3Dconnexion (3DxWare) per il mouse 3D. Dalla versione 0.4.1 alla 0.6.0 macOS non lo consentiva.
@@ -49,6 +50,7 @@ scrive in `website/version.json`.
 - I numeri sono allineati a destra in tutti i campi, cifra sotto cifra.
 - Uno screen reader legge il nome e la spiegazione di ogni campo numerico di una finestra di dialogo.
 - Dopo un'azione nel *Rapporto di verifica* il rapporto resta in primo piano e Ctrl+Z la annulla subito. Finora passava davanti la scheda *Selezione*.
+- Gli avvisi su piano e adesione usano l’unità scelta. Il cambio mm/pollici conserva segnalazione scelta, dettagli aperti, scheda e stato espanso dei corpi.
 - Ctrl+Z e Ctrl+Y funzionano anche con il cursore in un campo vuoto, per esempio nel campo di ricerca. Se lì ha scritto qualcosa, viene annullato prima il testo digitato.
 - Senza attivazione, le azioni che modificano qualcosa in *Rapporto di verifica*, *Selezione*, menu contestuali e filamento sono in grigio con il motivo. Prima il rifiuto arrivava dopo il clic.
 - Senza attivazione sono in grigio anche *Crea parametro …*, *Sposta*, *Dividi*, i tasti della cronologia e le misure nella vista. Ogni motivo indica la strada, come *Aiuto → Sblocca Solidon …*.
@@ -59,8 +61,8 @@ scrive in `website/version.json`.
 - Lo screenshot allegato a un riscontro ora mostra anche il modello su Windows. Con alcune schede grafiche prima mostrava un'immagine vecchia, come la schermata di caricamento.
 - Su macOS una finestra di dialogo aperta, ad esempio per creare una vite dal catalogo dei blocchi, resta sopra la finestra principale. Prima un clic nella finestra la spingeva dietro.
 - Elenchi di caratteristiche e finestre brevi occupano meno spazio. Dopo un cambio di carattere, spiegazioni e rimedi per piani non validi, introduzione e pulsanti restano leggibili e accessibili.
-- La scheda di selezione adatta la larghezza a contenuto e carattere. Righe e colonne di azioni restano invariate; le finestre delle schede separate mantengono le dimensioni.
-- Le controparti chiedono prima coppia e dimensioni. Forma e accoppiamento sono in «Altre impostazioni»; il selettore spiega entrambe le metà.
+- La scheda di selezione segue contenuto e carattere, mantenendo testo e colonne. Le schede separate mantengono le dimensioni. Se è proposta una modifica, «Applica» è l’azione principale.
+- Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
 
 ### Stampare e passare allo slicer
@@ -74,7 +76,8 @@ scrive in `website/version.json`.
 - Per un diametro del foro sotto il limite, l'avviso indica *Rimuovi caratteristica*, con la svasatura se vuoi. Se hai iniziato a modificare le quote nella vista, indica prima *Annulla*.
 - La ricostruzione (*Ricostruisci modello*) non suggerisce più altri limiti quando nessun valore consentito basterebbe, e mostra le proposte uguali una sola volta.
 - Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
-- Scegliendo un foro in un modello caricato, le misure nella vista e la scheda *Selezione* indicano ora la stessa azione, *Cambia foro*. Nella versione 0.6.0 lì restava aperto *Sposta caratteristica*.
+- Per i fori, vista e *Selezione* mostrano la stessa modifica. Misura, profondità e imbocco collegato sono davanti; compensazione di stampa e regolazioni fini, in «Altri valori».
+- I campi del foro e la casella per modificare insieme elementi uguali spiegano il loro effetto. «Compensare gli scostamenti di stampa» chiarisce la correzione del profilo del materiale.
 
 ## 0.6.0
 

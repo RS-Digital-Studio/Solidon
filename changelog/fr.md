@@ -20,6 +20,7 @@ dans `website/version.json`.
 
 ### Utilisation et système
 
+- Correction d’un plantage possible lors du changement de caractéristique ou de projet.
 - L'explication de «Poser sur le plateau» convient aussi aux corps situés sous le plateau.
 - Les listes d'actions sur les caractéristiques utilisent entièrement la langue choisie.
 - Sur Mac, Solidon peut désormais charger le pilote de 3Dconnexion (3DxWare) pour la souris 3D. De la version 0.4.1 à la 0.6.0, macOS ne l'autorisait pas.
@@ -50,6 +51,7 @@ dans `website/version.json`.
 - Les nombres sont alignés à droite dans tous les champs, chiffre sous chiffre.
 - Un lecteur d'écran lit le nom et l'explication de chaque champ numérique d'un dialogue.
 - Après une action dans le *Rapport de contrôle*, le rapport reste au premier plan, et Ctrl+Z l'annule aussitôt. Jusqu'ici, l'onglet *Sélection* passait devant.
+- Les avis de plateau et d’adhérence suivent l’unité choisie. Passer de mm à pouces conserve constat sélectionné, détails ouverts, onglet et état déplié des corps.
 - Ctrl+Z et Ctrl+Y fonctionnent aussi quand le curseur se trouve dans un champ vide, par exemple le champ de recherche. Si vous y avez tapé du texte, c'est d'abord la saisie qui est annulée.
 - Sans activation, les actions qui modifient le modèle sont grisées avec leur raison dans le *Rapport de contrôle*, *Sélection*, les menus contextuels et le filament. Le refus venait après le clic.
 - Sans activation, *Créer un paramètre …*, *Déplacer*, *Diviser*, les touches de l'historique et les cotes dans la vue sont grisés. Chaque raison indique la voie, comme *Aide → Déverrouiller Solidon …*.
@@ -60,8 +62,8 @@ dans `website/version.json`.
 - La capture d'écran jointe à un retour montre désormais aussi le modèle sous Windows. Avec certaines cartes graphiques, elle montrait auparavant une image ancienne, comme l'écran de chargement.
 - Sous macOS, une boîte de dialogue ouverte, par exemple pour créer une vis du catalogue de blocs, reste au-dessus de la fenêtre principale. Un clic dans la fenêtre la passait derrière.
 - Listes de caractéristiques et petits dialogues sont plus compacts. Après un changement de police, explication du plan invalide, corrections, introduction et boutons restent lisibles et accessibles.
-- La carte de sélection adapte sa largeur au contenu et à la police. Lignes et colonnes d'actions sont préservées ; les fenêtres d'onglets détachés gardent leur taille.
-- Les contreparties demandent d'abord paire et taille. Forme et ajustement sont dans « Autres réglages » ; le sélecteur explique les deux moitiés.
+- La carte de sélection suit contenu et police, gardant textes et colonnes. Les onglets détachés gardent leur taille. Si une modification est proposée, « Appliquer » est l’action principale.
+- Les contreparties demandent paire et taille et expliquent les deux moitiés. Forme et ajustement sont dans « Autres réglages ». La hauteur initiale du dialogue suit le contenu.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
 
 ### Imprimer et transmettre au slicer
@@ -75,7 +77,8 @@ dans `website/version.json`.
 - Un diamètre inférieur à la limite renvoie à *Supprimer la caractéristique*, fraisure au choix. Si les cotes sont en cours de modification dans la vue, le message indique d’abord *Annuler*.
 - La reconstruction (*Reconstruire le modèle*) ne conseille plus d'autres limites quand aucune valeur permise ne suffirait, et n'affiche qu'une fois les propositions identiques.
 - Si un perçage ou un récipient ne réussit qu'avec des sommets déplacés d'un rien, l'ouverture reste libre. En version 0.6.0, une peau très fine pouvait rester par-dessus.
-- Quand on choisit un trou d'un modèle chargé, la vue et l'onglet *Sélection* désignent la même action, *Modifier le trou*. En version 0.6.0, *Déplacer la caractéristique* y restait ouvert.
+- Pour les trous, vue et *Sélection* montrent la même action. Dimension, profondeur et entrée liée sont devant ; compensation d’impression et réglages fins, dans « Autres valeurs ».
+- Les champs du perçage et la case de modification simultanée des éléments similaires expliquent leur effet. « Compenser les écarts d'impression » précise la correction issue du profil du matériau.
 
 ## 0.6.0
 
