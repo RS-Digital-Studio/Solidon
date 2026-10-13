@@ -63,6 +63,7 @@ scrive in `website/version.json`.
 - Nella scheda *Selezione*, un diametro sotto il limite in *Cambia foro* rimanda ora a *Rimuovi caratteristica*, che rimuove il foro del tutto, con la sua svasatura se vuoi.
 - La ricostruzione (*Ricostruisci modello*) non suggerisce più altri limiti quando nessun valore consentito basterebbe, e mostra le proposte uguali una sola volta.
 - Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
+- Scegliendo un foro in un modello caricato, le misure nella vista e la scheda *Selezione* indicano ora la stessa azione, *Cambia foro*. Nella versione 0.6.0 lì restava aperto *Sposta caratteristica*.
 
 ## 0.6.0
 

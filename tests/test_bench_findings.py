@@ -8,55 +8,26 @@ des Wortschatzes selbst prüft ``tests/test_guide_targets.py``.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 import pytest
 
 from app.core.bootstrap import load_operations
+from tests import qt_roots
 from tools.function_checks import SMALLEST_WINDOW
 
 load_operations()
 
-_Root = TypeVar("_Root")
+#: Baut die Karten ohne Elternteil ab (``tests/qt_roots.py``); pytest sammelt die
+#: Fixture unter diesem Namen im Modul.
+roots = qt_roots.roots
 
 
 def _settle(qt_app: Any, rounds: int = 20) -> None:
     for _ in range(rounds):
         qt_app.processEvents()
-
-
-@pytest.fixture
-def roots(qt_app: Any) -> Iterator[Callable[[_Root], _Root]]:
-    """Nimmt die Karten und Listen eines Tests, die ohne Elternteil entstehen, und baut
-    sie am Testende ab.
-
-    Ein Widget ohne Elternteil ist eine Qt-Wurzel. Dem Sammler überlassen stirbt
-    sie in dessen nächstem Lauf, mitten im Bau eines späteren Tests: Mit
-    ``test_overlay.py`` und ``test_tab_windows.py`` im selben Prozess brach der
-    Lauf nativ ab, mit abgeschaltetem Sammler (``-p gcoff``) nicht. Abgebaut wird
-    wie in den Fixtures der Suite (``tests/CLAUDE.md``, „Stolperfallen“):
-    schließen, ``deleteLater`` vormerken und ``DeferredDelete`` zustellen,
-    solange die Hüllen hier noch gehalten werden.
-    """
-    from PySide6.QtCore import QCoreApplication, QEvent
-    from shiboken6 import isValid
-
-    built: list[Any] = []
-
-    def keep(widget: _Root) -> _Root:
-        built.append(widget)
-        return widget
-
-    yield keep
-    for widget in built:
-        if isValid(widget):
-            widget.close()
-            widget.deleteLater()
-    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    qt_app.processEvents()
-    built.clear()
 
 
 #: Der Kindprozess des Abrisstests: Anwendung wie beim Kunden, Szene vom
@@ -74,6 +45,7 @@ load_operations()
 from app.ui.app import build_application
 from app.ui import guide_targets
 from tools.function_checks import SMALLEST_WINDOW
+from tools.window_bench import shutdown_window
 application, window = build_application([])
 window.resize(*SMALLEST_WINDOW)
 window.show()
@@ -116,8 +88,12 @@ if sys.argv[2] == 'build':
     ])
     assert window.session.wait_for_idle(60000)
     window.session.save_project(scene)
+    # Auch der Szenenbau beendet die Arbeiter vor dem Prozess. Der harte
+    # Exit riss sie mitten in ihrer Arbeit ab, teils sogar mit Exit-Code 0.
+    window.session.forget_changes()
+    shutdown_window(window, application)
     print('built', flush=True)
-    os._exit(0)
+    raise SystemExit(0)
 for round in range(5):
     previous = window.session.last_result
     window.session.forget_changes()
@@ -135,7 +111,6 @@ for round in range(5):
     held = None
 print('tree survived', flush=True)
 window.session.forget_changes()
-from tools.window_bench import shutdown_window
 shutdown_window(window, application)
 """
 
@@ -165,10 +140,12 @@ def test_the_tree_survives_new_scenes_after_a_row_was_found(qt_app: Any, tmp_pat
     del qt_app
     scene = tmp_path / "szene.p3d"
     built = _tree_rounds(scene, "build")
-    assert built.returncode == 0 and "built" in built.stdout, built.stderr[-3000:]
+    assert built.returncode == 0 and "built" in built.stdout, built.stderr
+    assert "Windows fatal exception:" not in built.stderr, built.stderr
     for attempt in range(6):
         done = _tree_rounds(scene, "rounds")
-        assert done.returncode == 0, (attempt, done.returncode, done.stderr[-4000:])
+        assert done.returncode == 0, (attempt, done.returncode, done.stderr)
+        assert "Windows fatal exception:" not in done.stderr, (attempt, done.stderr)
         assert "tree survived" in done.stdout
 
 
