@@ -1,4 +1,4 @@
-"""Vordergrund mischt geordnet, Raumtransparenz bleibt gewichtet — ohne GPU."""
+"""Vordergrundmaterial und Beschriftungsfelder halten ihren Vertrag ohne GPU."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from app.ui.render.api import SurfaceStyle
-from app.ui.render.gfx_renderer import OVERLAY_QUEUE, GfxItem, GfxRenderer
+from app.ui.render.api import LabelStyle, SurfaceStyle
+from app.ui.render.gfx_renderer import OVERLAY_QUEUE, GfxItem, GfxLabels, GfxRenderer
 
 
 class MaterialRenderer(GfxRenderer):
@@ -122,3 +122,58 @@ def test_opacity_changes_keep_front_order_and_explicit_opaque_override(
             expected = "auto" if effective == 1.0 else ("blend" if in_front else "weighted_blend")
             assert obj.material.opacity == pytest.approx(effective)
             assert obj.material.alpha_mode == ("solid" if force_opaque else expected)
+
+
+@pytest.mark.parametrize("background", [None, "#343b46"])
+def test_empty_label_fields_stay_hidden_through_updates_visibility_and_reuse(
+    material_renderer: MaterialRenderer, background: str | None
+) -> None:
+    """Der leere Längenplatz bleibt erhalten, ohne neben echten Buchstaben einen Fleck zu zeigen."""
+    gfx = material_renderer._gfx
+    style = LabelStyle(background=background, margin=4)
+    item = GfxLabels("gizmo_labels", gfx.Group(), style)
+    anchors = np.arange(18, dtype=float).reshape(6, 3)
+    neighbours = ["X", "Y", "Z", "L", "L"]
+    pairs: dict[str, tuple[Any, Any | None]] = {}
+    fixed = None
+    for text in ("", "16,03 mm", "", "16,03 mm"):
+        item.update_labels(anchors, [*neighbours, text])
+        assert item.labels == [*neighbours, text]
+        assert len(item.texts) == 6 and len(item.fields) == (6 if background else 0)
+        np.testing.assert_array_equal(item.anchors, anchors)
+        for label, anchor in zip(item.texts, anchors, strict=True):
+            np.testing.assert_array_equal(label.local.position, anchor)
+        if fixed is None:
+            fixed = tuple(item.texts[:5])
+        assert tuple(item.texts[:5]) == fixed
+        field = item.fields[-1] if background else None
+        pair = (item.texts[-1], field)
+        if text in pairs:
+            assert pair == pairs[text], "ruhende Paare werden über _wake wiederverwendet"
+        pairs[text] = pair
+        for visible in (False, True):
+            item.set_visible(visible)
+            assert item.visible() is visible
+            assert all(label.visible for label in item.texts)
+            if background:
+                assert all(part.visible for part in item.fields[:5])
+                assert field.visible is bool(text)
+        anchors = anchors + 1.0
+    # Derselbe Übernahmepfad wie add_labels bei einem abgeräumten Item.
+    successor = GfxLabels("gizmo_labels", item.root, style)
+    successor.adopt(item)
+    item.root = gfx.Group()
+    assert item.labels == item.texts == item.fields == []
+    for text in ("", "16,03 mm", ""):
+        successor.build(anchors, [*neighbours, text])
+        assert tuple(successor.texts[:5]) == fixed
+        assert successor.texts[-1] is pairs[text][0]
+        np.testing.assert_array_equal(successor.anchors, anchors)
+        successor.set_visible(False)
+        successor.set_visible(True)
+        assert all(label.visible for label in successor.texts)
+        if background:
+            assert successor.fields[-1] is pairs[text][1]
+            assert [field.visible for field in successor.fields] == [True] * 5 + [bool(text)]
+        else:
+            assert successor.fields == []

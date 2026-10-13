@@ -806,6 +806,7 @@ class GfxLabels(GfxItem, LabelsItem):
                 label, field = self._new_label(anchor, text)
             label.local.position = anchor
             if field is not None:
+                field.visible = bool(text)
                 fields.append(field)
                 objects.append(field)
             label_objects.append(label)
