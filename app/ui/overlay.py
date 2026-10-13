@@ -1887,9 +1887,14 @@ class OverlayHost(QWidget):
         die Zone selbst — höchstens bis an den Fensterrand. Ansicht und Zonen
         lesen dieselbe Zahl (:meth:`_tell_the_view_about_the_zones`).
         """
+        from app.ui.card_width import selection_card_width
+
         card = card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
         if self.right is None:
             return card
+        measured = selection_card_width(self.right, card)
+        if measured is not None:
+            card = min(measured, width - 2 * EDGE)
         least = self.right.minimumSizeHint().width()
         return max(card, min(least, width - 2 * EDGE))
 

@@ -8733,6 +8733,9 @@ class _CoordinateRow(QWidget):
         self._grid.setContentsMargins(0, 0, 0, 0)
         self._grid.setHorizontalSpacing(TIGHT)
         self._grid.setVerticalSpacing(TIGHT)
+        from app.ui.card_width import prefer_row
+
+        prefer_row(self._grid, _compact_width)
         self._across: bool | None = None
         self._arrange(across=True)
 
@@ -8741,20 +8744,21 @@ class _CoordinateRow(QWidget):
         return bool(self._across)
 
     def _fit_fields(self) -> None:
-        """Jedem Drehfeld seine knappe Mindestbreite — gemessen am geltenden Stil."""
+        """Jedem Drehfeld seine knappen Mindestmaße — gemessen am geltenden Stil."""
         for _label, editor in self._pairs:
             if isinstance(editor, QAbstractSpinBox):
                 compact = _compact_width(editor)
                 if editor.minimumWidth() != compact:
                     editor.setMinimumWidth(compact)
+                height = editor.sizeHint().height()
+                if editor.minimumHeight() != height:
+                    editor.setMinimumHeight(height)
 
     def _needed(self) -> int:
         """Wie breit die Zeile sein muss, damit kein Feld unter sein Mindestmaß fällt."""
-        widths = sum(
-            label.sizeHint().width() + (editor.minimumWidth() or editor.minimumSizeHint().width())
-            for label, editor in self._pairs
-        )
-        return widths + self._grid.horizontalSpacing() * (2 * len(self._pairs) - 1)
+        from app.ui.card_width import row_width
+
+        return row_width(self._grid)
 
     def _arrange(self, *, across: bool) -> None:
         if across == self._across:
