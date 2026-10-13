@@ -29,7 +29,8 @@ RAW_CLASSES: Final[frozenset[str]] = frozenset({"QMessageBox", "QInputDialog", "
 #: Was eine Meldung oder Eingabe im Hausstil baut: ``app/ui/message_dialog.py``,
 #: ``app/ui/input_dialog.py`` und die Eingabe am Ort aus ``app/ui/place_popup.py``
 #: (FD-21, FD-22). Ein Modul, das einen davon definiert, zählt nicht: ``inform`` ist
-#: ein Baustein, kein Fenster des Kunden.
+#: ein Baustein, kein Fenster des Kunden. Ihre Unterklassen (``DonationOpenErrorDialog``)
+#: bauen ebenfalls Meldungsfenster; die findet :func:`message_builders`.
 MESSAGE_BUILDERS: Final[frozenset[str]] = frozenset(
     {
         "MessageDialog",
@@ -170,15 +171,66 @@ def _section_title(node: ast.AST, builders: Iterable[str] = ("collapsible",)) ->
     return ""
 
 
-def _builds_raw_window(node: ast.AST, *, messages: bool = True) -> bool:
+def message_builders(sources: Iterable[str]) -> dict[str, str]:
+    """Die Bauer im Hausstil samt ihrer Unterklassen, transitiv: Name → eigenes Kennzeichen.
+
+    Eine Unterklasse, die ``target="message:…"`` an ``super().__init__`` gibt, baut ein
+    Fenster mit diesem Ziel, auch ohne ``target=`` im Aufruf. Reicht sie ``target`` nur
+    weiter oder setzt keins, ist der Wert leer — dann nennt es der Aufruf, oder es fehlt.
+    """
+    classes: dict[str, tuple[set[str], str]] = {}
+    for source in sources:
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.ClassDef):
+                bases = {
+                    base.id if isinstance(base, ast.Name) else getattr(base, "attr", "")
+                    for base in node.bases
+                }
+                classes[node.name] = (bases, _super_target(node))
+    found: dict[str, str] = dict.fromkeys(MESSAGE_BUILDERS, "")
+    grown = True
+    while grown:
+        grown = False
+        for name, (bases, target) in classes.items():
+            inherited = next((found[base] for base in sorted(bases) if base in found), None)
+            if name not in found and inherited is not None:
+                found[name] = target or inherited
+                grown = True
+    return found
+
+
+def _super_target(cls: ast.ClassDef) -> str:
+    """Das Kennzeichen, das eine Klasse in ``super().__init__(…, target="…")`` setzt."""
+    for node in ast.walk(cls):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "__init__"
+            and isinstance(node.func.value, ast.Call)
+            and _called_name(node.func.value) == "super"
+        ):
+            for word in node.keywords:
+                if (
+                    word.arg == "target"
+                    and isinstance(word.value, ast.Constant)
+                    and isinstance(word.value.value, str)
+                ):
+                    return word.value.value
+    return ""
+
+
+def _builds_raw_window(
+    node: ast.AST, *, messages: bool = True, builders: Iterable[str] = MESSAGE_BUILDERS
+) -> bool:
     """``QMessageBox(…)`` oder ``QInputDialog.getItem(…)`` — ein rohes Qt-Fenster —, oder
-    eine Meldung oder Eingabe im Hausstil (:data:`MESSAGE_BUILDERS`): Auch sie ist ein
-    Meldungsfenster, das seine Zeile in der Funktionsliste braucht (FD-21, FD-22)."""
+    eine Meldung oder Eingabe im Hausstil (:data:`MESSAGE_BUILDERS` und ihre Unterklassen):
+    Auch sie ist ein Meldungsfenster, das seine Zeile in der Funktionsliste braucht (FD-21,
+    FD-22)."""
     if not isinstance(node, ast.Call):
         return False
     func = node.func
     if isinstance(func, ast.Name):
-        return func.id in RAW_CLASSES or (messages and func.id in MESSAGE_BUILDERS)
+        return func.id in RAW_CLASSES or (messages and func.id in builders)
     return (
         isinstance(func, ast.Attribute)
         and isinstance(func.value, ast.Name)
@@ -273,13 +325,14 @@ def _scan(items: tuple[tuple[str, str], ...]) -> UiScan:
     raw_targets: dict[str, str] = {}
     settings_targets: dict[str, str] = {}
     texts: set[str] = set()
+    builders = message_builders(text for _module, text in items)
     for module, text in items:
         tree = ast.parse(text, filename=module)
         builds_messages = not any(
             f"class {name}(" in text or f"def {name}(" in text for name in MESSAGE_BUILDERS
         )
         raw_here = any(name in text for name in RAW_CLASSES) or (
-            builds_messages and any(name in text for name in MESSAGE_BUILDERS)
+            builds_messages and any(name in text for name in builders)
         )
         constants = _module_texts(tree)
         for node in statements(tree):
@@ -290,12 +343,12 @@ def _scan(items: tuple[tuple[str, str], ...]) -> UiScan:
                 raw_here
                 and isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
                 and any(
-                    _builds_raw_window(inner, messages=builds_messages)
+                    _builds_raw_window(inner, messages=builds_messages, builders=builders)
                     for inner in _own_nodes(node)
                 )
             ):
                 raw.setdefault(node.name, []).append(module)
-                if marked := _own_target(node, constants):
+                if marked := _own_target(node, constants, builders):
                     raw_targets[node.name] = marked
         if any(
             isinstance(node, ast.ClassDef) and node.name == SETTINGS_CLASS for node in tree.body
@@ -372,16 +425,22 @@ def _is_target_property(node: ast.AST) -> bool:
 
 
 def _own_target(
-    function: ast.FunctionDef | ast.AsyncFunctionDef, constants: Mapping[str, str]
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+    constants: Mapping[str, str],
+    builders: Mapping[str, str] | None = None,
 ) -> str:
     """Das Kennzeichen, das ein Meldungsfenster selbst setzt — ``box.setProperty(…TARGET_
-    PROPERTY, X)`` oder der Aufruf eines Bauers im Hausstil mit ``target=X``
-    (:data:`MESSAGE_BUILDERS`) —, sonst leer."""
+    PROPERTY, X)``, der Aufruf eines Bauers im Hausstil mit ``target=X``
+    (:data:`MESSAGE_BUILDERS`) oder einer Unterklasse, die ihr Kennzeichen selbst setzt
+    (:func:`message_builders`) —, sonst leer."""
+    known = dict.fromkeys(MESSAGE_BUILDERS, "") if builders is None else builders
     for node in _own_nodes(function):
-        if isinstance(node, ast.Call) and _called_name(node) in MESSAGE_BUILDERS:
+        if isinstance(node, ast.Call) and _called_name(node) in known:
             for word in node.keywords:
                 if word.arg == "target" and (found := _text_of(word.value, constants)):
                     return found
+            if own := known[_called_name(node)]:
+                return own
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)

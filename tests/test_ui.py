@@ -9009,21 +9009,28 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
 
     window.action_theme(theme)
     panel = window.selection_operations
-    # **Die Karte steht auch ohne Auswahl, aber leer bis auf die Bausteine**
-    # (Entscheidung Robert, 18.09.2026). Sie verschwand bis dahin ganz, und
-    # damit der einzige sichtbare Zugang zum Katalog; drei der
-    # siebenundzwanzig Bausteine stehen frei und brauchen keinen Körper.
+    # Ohne Auswahl bleiben Suche, Katalog und Erzeuger erreichbar (RM-735).
+    # Handlungen an einem gewählten Körper gehören nicht in diese Stufe.
     assert not panel.isHidden()
     # ``isHidden`` und nicht ``isVisible``: Die Fixture zeigt das Fenster nie,
     # und offscreen meldet ``isVisible`` dann für **jedes** Widget False — die
     # zwei Zeilen waren bis zum 18.09.2026 trivial wahr (Regel, gemessen in
     # der zweiten Durchsicht).
-    assert panel.search.isHidden(), "ohne Auswahl gibt es nichts zu durchsuchen"
+    assert not panel.search.isHidden(), "die Suche erreicht auch ohne Auswahl jede Funktion"
     # ``isVisibleTo(panel)`` und nicht ``isHidden()``: Die Knöpfe stecken in
     # ihren Abschnitten, und versteckt ist der **Abschnitt** — das Widget
     # selbst meldet ``isHidden() == False``. Gefragt ist „würde es erscheinen,
     # wenn die Karte erschiene".
-    assert not any(button.isVisibleTo(panel) for button in panel._buttons.values())
+    assert any(button.isVisibleTo(panel) for button in panel._buttons.values()), (
+        "die leere Szene bietet Erzeuger an"
+    )
+    assert any(
+        not panel._buttons[name].isHidden()
+        for name in ("create_box", "create_brep_box")
+        if name in panel._buttons
+    ), "ein Quader bleibt ohne Auswahl erreichbar, mit und ohne exakten Kern"
+    assert panel._buttons["drill_hole"].isHidden(), "Bohren braucht einen Körper"
+    assert panel.catalog_button.isVisibleTo(panel), "der Katalog bleibt erreichbar"
     # **Und der Filament-Schnellwähler steht dort nicht.** Sein leerer
     # Zustand („Das Filamentlager ist auch ohne Auswahl erreichbar.") war nie
     # zu sehen, solange die Karte ganz verschwand; seit sie bleibt, stünden
@@ -9372,14 +9379,16 @@ def test_a_divider_of_an_organizer_answers_as_the_organizer(window: MainWindow) 
     geprüft (Funde 1 und 2 der zweiten Durchsicht):
 
     * Das Merkmalfenster zeigt die Handlungen des **Schritts**
-      (``part_step_of`` mit dem Merkmal, damit die Rollenregel greift), und
-      die Karte darunter bleibt leer.
+      (``part_step_of`` mit dem Merkmal, damit die Rollenregel greift).
+      Darunter bleiben Suche und Wegweiser, keine Flächenhandlungen (RM-735).
     * Der Weg zur Fachaufteilung steht als eigener Knopf dabei — sie ist ein
       Sammelparameter und kann kein Zahlenfeld werden.
     * Der **Griff** bleibt der der Fläche: ``_asks_for_the_part`` verlangt
       ``x/y/z`` am Schritt, und ein Organizer hat sie nicht. Ohne diese Frage
       hielte die Auswertung nach dem ersten Zug an.
     """
+    from PySide6.QtTest import QTest
+
     from app.core.scene import OperationDraft
 
     window.session.apply("Organizer", [OperationDraft(op="create_organizer", params={})])
@@ -9404,10 +9413,23 @@ def test_a_divider_of_an_organizer_answers_as_the_organizer(window: MainWindow) 
     window.object_tree.select_feature(body.id, divider)
     QApplication.processEvents()
 
-    # **Das Merkmalfenster spricht für den Schritt, die Karte schweigt.**
-    assert window.selection_operations.isHidden(), (
-        "an einer Trennwand gelten die Handlungen des Bausteins, nicht die der Fläche"
+    # Das Merkmalfenster spricht für den Schritt; die allgemeine Suche bleibt.
+    panel = window.selection_operations
+    assert not panel.isHidden() and not panel.search.isHidden()
+    assert panel._buttons and all(button.isHidden() for button in panel._buttons.values()), (
+        "an einer Trennwand stehen keine einzelnen Flächenhandlungen"
     )
+    assert not panel._nothing.isHidden()
+    assert panel._nothing.text() == tr("Was sich hier tun lässt, steht oben bei den Maßen.")
+    QTest.keyClicks(panel.search, "Quader")
+    QApplication.processEvents()
+    hits = {
+        panel.hits.item(row).data(Qt.ItemDataRole.UserRole) for row in range(panel.hits.count())
+    }
+    assert hits & {"create_box", "create_brep_box"}, "die Suche erreicht die andere Auswahlstufe"
+    panel.search.setText("")
+    QApplication.processEvents()
+    assert panel.scroller.isHidden(), "Leeren bringt keine Flächenhandlungen zurück"
     titles = {
         button.property("operationTitle") or button.text()
         for button in window.feature_panel.findChildren(QtWidgets.QPushButton)
@@ -9646,8 +9668,10 @@ def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -
     window.object_tree.select_object(None)
     QApplication.processEvents()
     assert panel.chosen_level() == "scene", "ohne Auswahl die Stufe der ganzen Szene"
-    assert not panel._buttons["orient_for_print"].isHidden(), "und dort steht die Handlung für alle"
-    assert panel._buttons["arrange_bed"].isHidden(), "von den dreien nur eine (Robert, 05.10.2026)"
+    assert not panel.search.isHidden(), "auch ohne Auswahl bleibt die allgemeine Suche"
+    for name in ("orient_for_print", "arrange_bed", "check_collisions"):
+        assert not panel._buttons[name].isHidden(), f"{name}: jede Szenehandlung steht ohne Auswahl"
+        assert panel._buttons[name].isEnabled(), f"{name}: die geladene Szene ist bearbeitbar"
 
 
 def test_the_selection_panel_uses_the_shared_launch_path() -> None:

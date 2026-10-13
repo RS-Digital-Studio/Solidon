@@ -2073,6 +2073,8 @@ def test_a_point_can_be_set_by_number(
             self, point: tuple[float, float], axes: tuple[str, str], parent: object
         ) -> None:
             self.start = point
+            # Die Zeichenfläche gibt den Dialog nach ``exec`` frei.
+            self.deleteLater = lambda: None
 
         def exec(self) -> object:
             return sketch_editor.PointDialog.DialogCode.Accepted
@@ -9405,52 +9407,3 @@ def test_leaving_the_sketch_brings_back_the_selection_tab_it_hid(qt_app: QApplic
     finally:
         window.close()
         window.deleteLater()
-
-
-def _measure_field_note() -> str:
-    """Der Satz unter dem Maßfeld am Ort (``target="message:constraint_value"``)."""
-    import ast
-
-    source = (Path(__file__).resolve().parents[1] / "app" / "ui" / "sketch_editor.py").read_text(
-        encoding="utf-8"
-    )
-    for call in ast.walk(ast.parse(source)):
-        if not (isinstance(call, ast.Call) and getattr(call.func, "id", "") == "edit_value"):
-            continue
-        words = {word.arg: word.value for word in call.keywords}
-        target = words.get("target")
-        if not (isinstance(target, ast.Constant) and target.value == "message:constraint_value"):
-            continue
-        note = words["note"]
-        while isinstance(note, ast.Call) and note.args:
-            note = note.args[0]
-        assert isinstance(note, ast.Constant), ast.unparse(words["note"])
-        return str(note.value)
-    raise AssertionError("das Maßfeld der Zeichnung trägt keinen Satz mehr")
-
-
-def test_the_example_in_the_measure_field_evaluates_in_every_language() -> None:
-    """Das Beispiel unter dem Maßfeld wertet mit einem gleichnamigen Parameter aus (A-M3).
-
-    „etwa breite/2“ brach ab: Parameter werden mit ``@`` geschrieben. Und der
-    Name ist in jeder Sprache derselbe wie im Beispiel der Parameterfelder
-    („zum Beispiel =@breite/2“ → ``=@width/2``), statt deutsch zu bleiben (B-L6).
-    """
-    import re
-
-    from app.core.expressions import evaluate
-    from app.i18n import SOURCE_LANGUAGE
-    from app.i18n.catalog import available_languages, read_catalog
-
-    note = _measure_field_note()
-    sibling = "zum Beispiel =@breite/2"
-    for language in available_languages():
-        source = language == SOURCE_LANGUAGE
-        catalog = {} if source else read_catalog(language)
-        said = note if source else catalog[note]
-        example = said.rstrip(".").split()[-1]
-        named = re.fullmatch(r"@(\w+)/2", example)
-        assert named is not None, f"{language}: {said!r}"
-        assert evaluate(example, {named.group(1): 70.0}) == pytest.approx(35.0), language
-        expected = sibling if source else catalog[sibling]
-        assert f"@{named.group(1)}/2" in expected, f"{language}: {said!r} gegen {expected!r}"

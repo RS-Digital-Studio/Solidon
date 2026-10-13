@@ -1540,7 +1540,11 @@ class KeyDialog(QDialog):
         if not tools.state_of(tool).installed:
             from app.ui.install_dialog import InstallDialog
 
-            InstallDialog(self, settings=self.settings).exec()
+            dialog = InstallDialog(self, settings=self.settings)
+            try:
+                dialog.exec()
+            finally:
+                dialog.deleteLater()
             self.look()
             return
         self.service_button.setEnabled(False)
@@ -2689,7 +2693,11 @@ class ActivationDialog(QDialog):
         request = self._activation_request()
         if request is None:
             return
-        answered = OfflineActivationDialog(request, self).exec()
+        dialog = OfflineActivationDialog(request, self)
+        try:
+            answered = dialog.exec()
+        finally:
+            dialog.deleteLater()
         self._show_state()
         self._follow_field()
         if answered == QDialog.DialogCode.Accepted:
@@ -2943,6 +2951,7 @@ class DonationOpenErrorDialog(MessageDialog):
                 "Bei Fragen hilft Ihnen {address}."
             ).format(address=SUPPORT_ADDRESS),
             kind="warning",
+            target="message:donation_failed",
         )
         self._url = url
         self.copy_button = self.add_action(
@@ -4094,9 +4103,11 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     make_danger(discard)
     box.setDefaultButton(save)
     as_plain_text(box)
-    box.exec()
-
-    clicked = box.clickedButton()
+    try:
+        box.exec()
+        clicked = box.clickedButton()
+    finally:
+        box.deleteLater()
     if clicked is save:
         return "save"
     return "discard" if clicked is discard else "cancel"
@@ -4186,8 +4197,11 @@ def _go_on_despite(
     make_primary(write)
     box.setDefaultButton(write)
     as_plain_text(box)
-    box.exec()
-    return box.clickedButton() is write
+    try:
+        box.exec()
+        return box.clickedButton() is write
+    finally:
+        box.deleteLater()
 
 
 def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = None) -> str:
@@ -4229,8 +4243,11 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
     make_danger(close)
     box.setDefaultButton(back)
     box.setEscapeButton(back)
-    box.exec()
-    return "close" if box.clickedButton() is close else "back"
+    try:
+        box.exec()
+        return "close" if box.clickedButton() is close else "back"
+    finally:
+        box.deleteLater()
 
 
 def ask_free_part_name(
@@ -4302,5 +4319,8 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     box.setEscapeButton(cancel)
     cancel.setFocus()
     as_plain_text(box)
-    box.exec()
-    return box.clickedButton() is discard
+    try:
+        box.exec()
+        return box.clickedButton() is discard
+    finally:
+        box.deleteLater()

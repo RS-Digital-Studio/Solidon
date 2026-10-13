@@ -39,6 +39,7 @@ from app.core.types import ChatEntry, Document
 from app.i18n import TranslatableText, _, tr
 from app.ui.labels import volume
 from app.ui.leash import stop_watching_the_dying, weak_slot
+from app.ui.palette import SEVERITY_ENCODING
 from app.ui.style import NORMAL, make_primary, set_level
 from app.ui.theme import UNDONE_COLOUR
 
@@ -779,7 +780,9 @@ def _warnings(proposal: Any) -> list[str]:
         # Das Wort davor ist die zweite Kodierung (Regel 18): Die
         # Zusammenfassung ist ein einfarbiges Label, und ohne es wäre eine
         # Warnung von einer Aufzählung nicht zu unterscheiden.
-        marker = tr("Fehler") if finding.severity == "error" else tr("Warnung")
+        marker = tr(
+            SEVERITY_ENCODING["error" if finding.severity == "error" else "warning"].label_key
+        )
         lines.append(tr("{name}: {value}", name=marker, value=finding.message))
     return lines
 

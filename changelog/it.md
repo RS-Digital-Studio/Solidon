@@ -34,7 +34,7 @@ scrive in `website/version.json`.
 - Se a una funzione manca un secondo corpo nella scena, il motivo indica *Duplica oggetto* come via.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
 - Il pulsante *Calcolare in modo più grossolano* non c'è più: Solidon prosegue da solo con il calcolo completo. Nella versione 0.6.0 compariva anche dove non cambiava nulla.
-- Messaggi di errore, dettagli e avvisi ora appaiono nello stile di Solidon, con le azioni come pulsanti. Ctrl+C copia l'intero messaggio.
+- Messaggi di errore, dettagli e avvisi ora appaiono nello stile di Solidon, con le azioni come pulsanti. Ctrl+C copia la selezione, altrimenti l'intero messaggio.
 - Il colore di una bobina si sceglie con il selettore di Solidon direttamente sul pulsante, con colori nominati e il valore esatto. La finestra colori del sistema non c'è più.
 - Una quota del disegno ora si modifica in un campo sul posto. Indirizzi e la scelta del filamento da sostituire vengono chiesti nello stile di Solidon.
 - Dopo l'attivazione o la disattivazione la conferma compare nella finestra stessa, senza un'altra finestra da chiudere.

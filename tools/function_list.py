@@ -336,6 +336,8 @@ SETTINGS_PACKAGE: Final = "D12"
 #: Regel 19) in D11.
 RAW_WINDOW_PACKAGES: Final[dict[str, tuple[str, str]]] = {
     "open_link": ("D12", "leer"),
+    # Der Browser öffnete die Unterstützungsseite nicht (DonationOpenErrorDialog).
+    "open_donation": ("D12", "leer"),
     "show_expired_demo": ("D12", "start"),
     "show_error": ("D12", "leer"),
     "show_details": ("D12", "leer"),

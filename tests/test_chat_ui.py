@@ -2225,7 +2225,8 @@ def test_the_chat_wakes_up_even_when_the_dialog_was_cancelled(
         DialogCode = window_module.KeyDialog.DialogCode
 
         def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
+            # Das Fenster gibt den Dialog nach ``exec`` frei.
+            self.deleteLater = lambda: None
 
         def exec(self) -> object:
             return window_module.KeyDialog.DialogCode.Rejected
