@@ -109,7 +109,7 @@ Nullwert oder beschädigter Eintrag ist keine erfolgreiche Lizenzmessung.
 Messwerte, einschließlich booleschem `writes`, bekanntem Zustand und Textgrund.
 
 `function_guard.BENCH_MODULES` umfasst auch `function_surface`,
-`function_gestures` und `function_switch`; `WindowFlow` in `file_acceptance`
+`function_gestures`, `function_switch` und `function_revision`; `WindowFlow` in `file_acceptance`
 wird eigens geprüft. `FORBIDDEN_CALLS` verbietet Umwege über Wertsetzer,
 Signal-/Aktionsaufrufe, Kernzugriffe, Ereignismethoden und private fremde Namen,
 auch als importierte Namen oder über `getattr`, `invokeMethod` und Variablen.
@@ -125,6 +125,84 @@ diese erhobene Menge an, statt eine zweite Klassenliste zu führen.
 `function_checks` hält Schema und Schwellen, `function_points` und
 `function_judges` urteilen; `function_samples` liefert Gegenproben,
 `function_report` Funde, Abhakliste und die Übereinstimmung der Urteile.
+
+#### Messflächen und nachträgliche Änderung
+
+`function_walk` hält die Fläche vor einer wirksamen Befundhandlung fest und
+führt anschließend den echten Klick aus. Öffnet dieser ein Fenster, bleibt
+der Vorzustand als `surfaces/*-vorher.json` erhalten; der Hauptfall misst das
+geöffnete Fenster. `function_report` und `function_summary` reichen beide
+Flächen getrennt durch; `file_acceptance` zählt sie als Funktionsflächen.
+Ihre Texte und Feldzahlen werden nicht zu einer künstlichen Fläche vereinigt.
+`function_surface.open_dialog` erfasst auch eigene sichtbare nichtmodale
+Fenster; mehrere passende Fenster sind keine Erlaubnis zu raten.
+
+`function_bench.surface_signature` hält die lebende Qt-Hülle im
+Vergleichstupel. Kurzlebige Python-Hüllen eines C++-erzeugten Dateidialogs
+sind keine neuen Flächen; ihre Python-Identitätszahl trägt den Vergleich
+nicht. Tatsächliche Geometrie- oder Flächenwechsel starten die bestehende
+Ruhezeit erneut, ohne deren Zeitbudget zu ändern.
+
+`function_surface.surface_parts` bindet die eigene offene Merkmalszeile und
+ihren sichtbaren gemeinsamen Abschluss zusammen. Eine fremde Zeile oder ein
+verdeckter Abschluss zählt nicht mit. Eine vollständige eigene Maßgruppe
+belegt ihre Handlung über `FeaturePanel.measure_op`; bloß gleichnamige
+Felder genügen nicht. Gemessen und beruhigt wird dieselbe Teilmenge.
+Ein Klapppfeil erhält seinen Namen nur durch die tatsächlich sichtbare
+zugehörige Beschriftung, nicht durch irgendeinen Text daneben.
+
+`function_capture` liest für nativen Kontrast die wirklichen Fensterpixel.
+Ein leeres Bild oder fehlende Bildpunkte bleiben ungemessen; eine gute Palette
+ersetzt sie nicht. Fehlerbild und Fehlerangebot gehören zum selben offenen
+Zustand, vor Escape. Sperr- und Grenzfälle erhalten nur aus ausdrücklich
+erhobenen Auswegen ein positives Urteil, nicht aus einem allgemeinen
+Meldungskennzeichen. `field_values` liest markierte `ValueField`-Träger über
+deren öffentlichen Wert und Auswahlfelder über ihre tatsächlichen Daten.
+
+`function_revision.RevisionPhase` trägt die abgeschlossene Verlaufsphase von
+`FunctionFlow`; die Rückrichtung bleibt ein Typimport. Beide Bedienwege,
+Kontextmenü und Doppelklick, erfassen `revise.typed_values` und
+`revise.params_after`. Prüfpunkt 12 verlangt eine wirkliche Eingabe am
+richtigen Feld, den neuen Wert nach der Auswertung und gleich lange Historie.
+Alte Protokolle ohne diese Felder bleiben lesbar, aber ohne diesen Nachweis.
+`preview_steps` nimmt die auslösenden Schritte mit: Ausgangsstand vor Öffnen
+oder Eingabe, danach die sofortige oder spätere Vorschau desselben Auftrags.
+Ein künstliches Warten ersetzt keinen Auftragsbezug.
+
+`function_language` räumt eigene offene Fenster mit wirklichen Escape-
+Ereignissen über den Automaten, bevor es das nächste Sprachprojekt lädt.
+Der begrenzte Rückweg verwendet `MOST_UNSTICKS`; ein verbleibendes Fenster
+meldet `bench.surface_cleanup_failed` und hält den Wechsel an. Direkter
+Dialogabschluss und nachträgliches Herausfiltern sind kein Bediennachweis.
+`function_machine` erhält Bereitschaftsfehler, Timeout und Fund und plant
+den begrenzten normalen Abbau weiter, auch aus verschachtelten modalen
+Handlungen. Ein Prozessausgang allein ersetzt kein Urteil über den Fall.
+
+`file_acceptance.run` beendet bei Timeout oder Ausnahme seine ganze gestartete
+Prozessgruppe über `terminate_process_tree`, damit hinter dem Launcher kein
+Interpreter weiterläuft.
+
+`function_walk.QtPorts.press` stellt Radereignisse über `QTest.wheelEvent` am Fenster
+zu. Qt übernimmt Kindannahme und Elternweiterleitung; eine Annahme beendet
+die Weiterleitung, auch bei verschachtelten Rollbereichen. Richtungen,
+Modifier und lokale/globale Koordinaten bleiben Teil der Eingabe.
+Die API ist ab [Qt 6.8](https://doc.qt.io/qt-6/qtest.html#wheelEvent) verfügbar
+und Voraussetzung des internen Prüfwerkzeugs. Die gepinnte Prüfumgebung
+steht in `constraints.txt`. Fehlt die API, nennt der Fehler
+`tools/check_env.py` mit `--install` und `constraints.txt` als Rückweg.
+Das allgemeine Anwendungsminimum bleibt davon unberührt.
+`function_guard.ALLOWED_CALLS` erlaubt dafür genau `QTest.wheelEvent` als
+öffentliche Zustellschnittstelle; die API-Vorbedingung wird statisch geprüft.
+Die allgemeine Ereignissperre gilt weiter: direkte Widget-Handler,
+Handleraliase und dynamische `getattr`-Umwege bleiben unzulässig.
+
+Vor einem Export für die ganze Szene stellt der Prüfstand eine leere Auswahl
+über den Kundenweg her; `function_surface.require_full_export_scope` liest
+den tatsächlichen Exportumfang öffentlich zurück. Gleiche Objektkennungen
+nach einem Projektwechsel belegen keine absichtlich ausgewählte Teilmenge.
+Eine erwartete Rückfrage zum Netzkörper
+setzt voraus, dass dieser Körper im Exportumfang liegt.
+
 
 *HEAD-Fassung, früher unter „Die Familien“.*
 

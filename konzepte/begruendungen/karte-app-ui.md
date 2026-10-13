@@ -10,6 +10,32 @@
 
 ## Der Weg durch die Schicht
 
+Modelldownloads binden Fortschritt/Ergebnis an Arbeiteridentität und
+Projektgeneration. Nachfolger brechen Vorgänger ab; Projektwechsel,
+Fensterende und Abbruch verwerfen Antworten. Vor dem Einlesen Gesteneditoren
+erneut prüfen. Modellseiten bleiben als Zwischenablage-Vorbelegung erhalten
+und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
+
+- **Mehrfachimport** — `import_models_async` liest alle Quellen mit
+  `_BatchReadWorker`, erhält ihre Koordinaten und übernimmt genau eine
+  Transaktion. Einheiten ohne Metadaten werden einmal für die Auswahl erfragt;
+  Lese-/Geometriefehler entfernen den ganzen Auftrag samt Quellen.
+
+- **Historische Ansicht** — `history_preview_async` rekonstruiert den
+  Transaktionsstand per Undo auf einer Kopie, mit dessen Profil. Regler und
+  Differenz ändern das Dokument nicht; Projekt-/Transaktionsstempel und die
+  Vorschaugeneration verwerfen verspätete Antworten. „Hier weiterarbeiten“
+  setzt erst nach bewusstem Klick die vorhandene Einfügemarke. Bildwechsel
+  und Rückweg erhalten die Kamera. Bearbeiten verlangt „Aktueller Stand“;
+  offene Gesten-/Maßentwürfe verweigern schon den Vergleich ohne Schließen-Signal.
+
+- **Import** — `import_model_async` → `_ReadWorker`, Plan im Arbeiter →
+  `pictureChanged` (das Modell vor seiner Erkennung), `importConfirmed`,
+  `importRejected`, `importFailed`; STEP-Baugruppen über
+  `stepImportRequested`, Konturen über `outlineImportRequested`.
+  `_SourceReadWorker` liest Quellen als Bytes; `_source_read` schreibt
+  sie im Hauptthread per `Session.embed_model_payload`/`import_image_payload`.
+
 *Früher unter „Kopf der Karte“.*
 
 Beim Laden zeigt die Sitzung das Modell vor seiner Erkennung
@@ -282,6 +308,12 @@ benötigt keine globalen Warnfilter und fängt keine Warnung eines anderen Threa
   Sprachwechsel beendet dieses Eigentum nicht.
 
 ### Ansicht
+
+`Viewport._refresh_preview_banner` stellt die endgültige Sichtbarkeit der
+Legende vor `PreviewBanner.show_preview` und dessen Platzierung her. Nach
+einer Absage zählt wieder sichtbarer Inhalt so zur nächsten Breiten- und
+Höhenmessung. Der gemeinsame Grundsatz „erst vorbereiten, dann zeigen“ bleibt
+in `ansicht.md`; das Band erhält keinen eigenen zweiten Größenvertrag.
 
 *Früher unter „Die Karte › Ansicht“, HEAD-Fassung.*
 
@@ -1026,6 +1058,37 @@ verschobene Felder ihren Maßpfeilen zugeordnet.
 
 ### Panels und Leisten
 
+`card_width.selection_card_width(zone, reference)` misst den eingebetteten,
+aktuell sichtbaren Auswahlreiter. Andere Reiter liefern keinen eigenen
+Breitenvorschlag. Der vorhandene Host begrenzt ihn an harten Minima und
+verfügbarer Fläche. `prefer_pairs` kennzeichnet Handlungsraster;
+`prefer_row` und `row_width` beschreiben die natürliche waagrechte
+Koordinatenzeile unabhängig von ihrer momentanen Faltung. Der bestehende
+`_CoordinateRow._fit_fields` zieht Feldbreite und -höhe aus der aktuellen
+öffentlichen Größenmessung (`sizeHint`) nach; auch beim Rückwechsel zu
+kleinerer Schrift bleibt keine frühere Höhe hängen. `button_width`
+misst Knopftitel ohne vorübergehendes Ändern des Texts und wird auch von
+`selection_operations._natural_width` verwendet. Zeilenvergleich und
+Paaranordnung erhalten die bisherige Inhaltsbreite. Mögliche senkrechte
+Rollbalken zählen mit `PM_ScrollBarExtent` aus dem aktuellen Stil zum
+natürlichen Querbedarf, unabhängig von ihrer momentanen Sichtbarkeit. So
+ändert eine Höhenanimation nicht ihr eigenes Breitenziel. Bei großen Texten
+kann dieser Bedarf über die frühere Fensterquote hinausgehen; die harte
+Grenze ist die verfügbare logische Hostfläche. Eine zusätzliche Mindesthöhe
+entsteht nicht. Die anderen Reiter behalten ihre vorhandene Breitenvorgabe
+(400, 25 % des Fensters, höchstens 540); sie ist kein Auswahlkartenminimum.
+Der Knopfumbruch liest den tatsächlichen Spaltenumfang mit `getItemPosition`
+aus demselben Raster. Ein Knopf über alle Spalten nutzt die gesamte
+Innenbreite; die erste Zeile allein beschreibt seinen Platz nicht.
+Beim Umhängen noch fehlende Rastereinträge werden weder vermessen noch als
+erledigt im Umbruchschlüssel gespeichert. Erst gültige Spaltenumfänge zählen
+zu diesem Schlüssel. Der zugeteilte Platz wird so ohne künstliche Zusatzhöhe
+oder zusätzlichen Rollweg genutzt; der natürliche Kartenbedarf bleibt gleich.
+Bei Schrift-, Inhalts- oder Reiterwechsel wird der Bedarf neu bestimmt.
+Ein abgelöster Reiter und seine gespeicherte Fenstergröße gehören nicht zu
+dieser Messung; `DetachableTabs.currentWidget` allein beweist keine Einbettung.
+Die verbindliche Größenregel steht in `fenster.md`.
+
 `FeaturePanel.measure_op` nennt die Handlung der aktiven Maßgruppe und wird
 in `set_measuring` gesetzt. `request_in_view` schärft dieselbe Handlung über
 den Knopfweg; eine schon scharfe Handlung mit eigenem Bildweg hat Vorrang.
@@ -1348,6 +1411,37 @@ ungebrochene Titel steht als `operationTitle` am Knopf, weil `text()` sich
 
 ### Dialoge
 
+`FeatureSetField` verwendet `feature_list.FeatureList`. Die Liste nimmt für
+kurzen Inhalt die tatsächlichen Zeilen samt Rahmen und sichtbarer Querleiste
+aus `overlay.rows_height`. `FEATURE_ROWS_SHOWN` begrenzt die sichtbare Höhe
+an Zeilen der aktuellen Schrift, nicht die Zahl auswählbarer Merkmale.
+Einfügen, Entfernen, Modellrücksetzung, Text-, Schrift- und Stilwechsel
+werden nach dem Innenlayout zusammengefasst gemessen. Lange Listen rollen
+pixelweise, damit auch eine spätere, höhere Zeile bis zum letzten Textteil
+erreichbar bleibt.
+
+`OperationDialog.show_refusal` meldet den hinzugekommenen Fehlerhinweis
+über `_queue_refit("passive")`; `contentSizeChanged` verbindet verzögerte
+Innenlayoutänderungen mit demselben Größenweg. Die manuelle Fenstergröße und
+die außerhalb des Rollbereichs liegenden Aktionsknöpfe folgen `ContentHeight`
+(`fenster.md`). `DialogScrollArea.minimumSizeHint` reserviert für kurzen
+Inhalt dessen natürlichen Anfangsbedarf. Nach abgeschlossener Anfangsmessung
+übernimmt der aktive Größenvertrag; unverwaltete Rollbereiche behalten ihre
+inhaltsbezogene Untergrenze. Für `points_are_on_one_line`
+verwendet `labels.py` den vorhandenen übersetzten Erklärungssatz; andere
+Fehlergründe bleiben bei ihrer bisherigen Darstellung.
+
+`dialog_footer.DialogFooter` erhält die Qt-Knopfrollen und Tastaturwege.
+`natural_width` meldet die vollständige waagrechte Knopfleiste an
+`ContentHeight`. Bei manueller Breite wird die Leiste nötigenfalls senkrecht;
+ein einzelner überlanger Knopf bricht seinen vollständigen Text um, behält
+aber seinen zugänglichen Originalnamen. Genügend Platz stellt die waagrechte
+Zeile wieder her. Die Einleitung nutzt `WrappedNote`. Als physische
+Höhenuntergrenze zählen die vollständigen äußeren Knöpfe, eine Zeile der
+aktuellen Inhaltsschrift und gegebenenfalls die Querleiste. Nur unter dieser
+Grenze muss eine manuelle Höhe wachsen; darüber gibt der innere Rollbereich
+Platz an die Knopfleiste ab und erhält die gewählte Außenhöhe.
+
 `MessageDialog(..., announce=None)` lässt den Aufrufer eine Ansage anfordern.
 Fehler und Warnung senden neben dem Alert eine dringliche Ansage, `inform`
 eine höfliche; eine Eingabe kündigt sich nicht als Meldung an. Eine neue
@@ -1574,6 +1668,18 @@ Die reine Auswahl verwendet `mark_preview(..., changes=False)`: Der Hinweis
 bleibt sichtbar, Änderungslegende und Vorhervergleich erscheinen erst beim Bearbeiten.
 
 ### Prüfbericht, Export und Druck
+
+- **Druckbewertung**: `print_contract` formatiert streng gelesene Profilgrundlagen
+  und tatsächliche `CheckState`-Nachweise. Leere Befunde belegen keinen Abschluss.
+  Session/`PrintFindingsFlow` verwerfen alte Aufträge; Materialslots liest der
+  Auswertungsarbeiter. `PrintTarget` hält übersetzbare Texte für Sprachwechsel
+  ohne Netzscan. Der Prüfumfang scrollt höhenbegrenzt, nennt sichtbare Körpernamen
+  und wiederholt offene Prüfungen nicht.
+- **Befundkarte**: `finding_meta` als eine Zeile; Nebenfolge `effect_worth_showing`.
+- **Änderung und Übergabe** (Band: `oberflaeche.md`): Belege aus
+  dem eingefrorenen Auftrag, Dateien und Slicerstarts getrennt, Gegenprobe
+  `export.readback` im Arbeiter. Gleiche Importbefunde einer Transaktion werden
+  gebündelt; Originalwerte und Körper bleiben zugänglich.
 
 *Früher unter „Die Karte › Prüfbericht“, HEAD-Fassung.*
 
@@ -1934,6 +2040,19 @@ baut er aus dem **Bausteinschema** (`PartSpec.params.spec()`); welche davon
 gemeinsam sind, sagt `Pair.shared` im Kern. Ein Paarwechsel tauscht sie
 vollständig — was stehenbliebe, verspräche eine Wirkung, die die andere Hälfte
 nicht kennt.
+
+`ParamSpec.placement` trennt die gemeinsamen Maße in Vorder- und Rückseite;
+Form und Passungsdetails stehen beim Passstift hinter der vorhandenen Klappe.
+Diese nennt die Titel des aktuellen Schemas, erhält Werte beim Schließen und
+entfällt ohne Rückseitenfelder. Die Erklärung des Paars stammt einmal aus
+`Pair.doc`: sichtbarer Satz, Kurzhilfe und zugängliche Beschreibung der
+Paarauswahl wechseln gemeinsam. Die kurzen Erklärungen behalten die Zuordnung
+beider Hälften, gemeinsame Maße und die jeweilige Passungsbedeutung.
+`wheel_needs_focus` schützt Paarwahl und sämtliche gemeinsamen Zahlen- und
+Auswahlfelder beim Rollen; ein fokussiertes Feld bleibt mit dem Rad bedienbar.
+`expanded_width`, `ContentHeight` und `DialogScrollArea` teilen den vorhandenen
+Größenvertrag. Die Aktionsleiste bleibt außerhalb des Inhaltsrollbereichs;
+Klappen, Paar- und Schriftwechsel folgen demselben Größenweg wie andere Dialoge.
 
 **Ist eine der zwei Stellen ein Gewinde, bleibt der Dialog zu** (P2.6,
 Entscheidung 15): Das Gegenstück ist das gegengleiche Gewinde am anderen
@@ -2365,7 +2484,8 @@ gleichartigen Handlung: Werte über `configure_feature_field`, Texte über
 dazu Tippmerker zurück. Was der Empfänger hineingehängt hatte (der Haken
 *Auf alle anwenden*), geht mit der Rückgabe. Ein Test vergleicht eine
 zurückgegebene Gruppe mit einer frisch gebauten Zustand für Zustand
-(`test_feature_panel.py`, `_measure_group_state`).
+(`test_feature_panel.py`, `_measure_group_state`). Nach `_lay_out_now` gemäß
+`ansicht.md` bündelt `PlacementFlow.flush_frame` die fertigen Maßbilder.
 
 ## Stolperfallen
 
@@ -2706,10 +2826,30 @@ Dialog und kein stiller zweiter Buchungsversuch.
 
 ## Gebundene Platzierung
 
-`surface_object_for_worker` übergibt Netzen die geteilte Arbeitskopie unter
-`on_the_copy`. Mehrere Netzkopien werden nach ihrer Identität sortiert und
-jeweils genau einmal gesperrt, damit zwei Arbeiter dieselben Kopien nie in
-verschiedener Reihenfolge anfordern.
+Vor Arbeiterstart: `surface_object_for_worker` liefert Netzen die geteilte
+Arbeitskopie unter `on_the_copy`, exakten Körpern eigene Kopien mit gleicher
+Dreiecksfolge/nativer Flächenzuordnung.
+
+`PlacementFlow` übernimmt Lage, Flächenbezug und Kantenabstände gemeinsam aus
+`scene.placement.bound_surface_values`. `placement_fields` trennt Lagefelder von
+gleichnamigen Bausteinmaßen. `bind_surface` öffnet am historischen Eingang mit
+vorbereiteter Fläche, gewählten Kanten und Trägerkennung wieder; Ausdrücke bleiben
+erhalten. Neue Weltkoordinaten lösen den Bezug ausdrücklich. Abbruch, Neuwahl und
+Projektwechsel sperren verspätete Antworten.
+
+Ein Grundkörper an einer ausgewählten Fläche bietet vorn Ansatzpunkt und
+Verbinden. Flächenvorbereitung läuft über `Session.placement_async`; bis zur
+Antwort bleibt Übernehmen unabhängig von einer älteren Vorschau gesperrt.
+Erzeugen und Vereinigung stehen in derselben `_PreviewOrder` und Transaktion.
+`ContainerWizardParams`/`plan_container`: benannte Maße, optionale Einlage und
+Passung als Vorschauauftrag. `plan_container_edit` liefert historisch
+`ContainerEdit.values` und `document_change` gemeinsam für Vorschau/Übernahme.
+`promote_values=False` hält historische Schemaplätze; Ausdrücke holen keine
+Rückseitenfelder nach vorn.
+
+Mehrere Netzkopien werden nach ihrer Identität sortiert und jeweils genau
+einmal gesperrt, damit zwei Arbeiter dieselben Kopien nie in verschiedener
+Reihenfolge anfordern.
 
 Der Mündungsumriss der Flächenplatzierung (`placement_flow.py`) trifft die
 Ebene längs der Werkzeugachse, nicht senkrecht zur Fläche; bei fast

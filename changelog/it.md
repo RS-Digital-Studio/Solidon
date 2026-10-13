@@ -58,6 +58,10 @@ scrive in `website/version.json`.
 - Il passo più recente resta visibile nella cronologia quando nuovi corpi fanno crescere l'albero degli oggetti. Nella versione 0.6.0 scivolava sotto il bordo del pannello.
 - Lo screenshot allegato a un riscontro ora mostra anche il modello su Windows. Con alcune schede grafiche prima mostrava un'immagine vecchia, come la schermata di caricamento.
 - Su macOS una finestra di dialogo aperta, ad esempio per creare una vite dal catalogo dei blocchi, resta sopra la finestra principale. Prima un clic nella finestra la spingeva dietro.
+- Elenchi di caratteristiche e finestre brevi occupano meno spazio. Dopo un cambio di carattere, spiegazioni e rimedi per piani non validi, introduzione e pulsanti restano leggibili e accessibili.
+- La scheda di selezione adatta la larghezza a contenuto e carattere. Righe e colonne di azioni restano invariate; le finestre delle schede separate mantengono le dimensioni.
+- Le controparti chiedono prima coppia e dimensioni. Forma e accoppiamento sono in «Altre impostazioni»; il selettore spiega entrambe le metà.
+- Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
 
 ### Stampare e passare allo slicer
 

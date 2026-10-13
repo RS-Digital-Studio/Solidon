@@ -11,6 +11,8 @@ paths:
   - "app/ui/first_run.py"
   - "app/ui/manual_window.py"
   - "app/ui/overlay.py"
+  - "app/ui/card_width.py"
+  - "app/ui/feature_list.py"
   - "app/ui/panels.py"
 ---
 
@@ -51,8 +53,13 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).
   Linke und rechte Karte liegen bündig an Fensterrand und Leiste
   (`overlay.EDGE`, Entscheidung Robert), rund ist nur die freie Ecke; die
-  rechte ist 400 breit, 25 % des Fensters, höchstens 540, nie schmaler als
-  ihre vordere Seite (RM-488).
+  Auswahlkarte misst Inhalt und Schrift (`card_width.py`); Zeilen und
+  Handlungsspalten sind Maßstab, keine Fensterquote. Mögliche senkrechte
+  Rollbalken zählen mit Stilmaß unabhängig von Sichtbarkeit, ohne neue
+  Mindesthöhe; Grenze ist die logische Hostfläche.
+  XYZ-Querbedarf ist unabhängig von der Rasterform; `_fit_fields` zieht
+  Feldbreite und -höhe mit der aktuellen Schrift nach.
+  Andere Reiter behalten ihre Vorgabe, eigene Reiterfenster ihre Größe.
 - **Die Seitenkarten sind verschiebbar** (Bauplan §2.5): Lage als
   `overlay.CardPlace` in `UiSettings.card_places`; gezogen wird ein Umriss
   (`CardGrip`), ein Rand trägt eine Karte (`settled_places`), passt die
@@ -363,21 +370,23 @@ Wächter `test_style.py`.
 stört, oder ein Widget, das ihn nutzt. Statusmeldungen misst
 `style.WrappedNote`.
 
-**Dialoggröße nach Auslöser:** `ContentHeight` misst die natürliche Geometrie
-des aktuellen Inhalts einmal nach dem Anzeigen, die Höhe erst in der neuen
-Breite (Umbruch). Eine manuell gezogene Breite
-oder Höhe bleibt für die Dialoglebensdauer maßgeblich; Mehrinhalt rollt im
-äußeren Scrollbereich, Aktionsknöpfe bleiben außerhalb. Nur ausdrücklich
-betätigtes Auf- und Zuklappen darf bei automatischer Größe die Höhe anpassen;
-dabei bleibt der Fensteranker, Platz bis zum Bildschirmrand wird genutzt, der
-Rest rollt. Passives (nachgereichte Prüfung, Status, Suche, Reiter, bedingte
-Zeilen) wächst nach der Anfangsmessung um den verdeckten Inhalt bis zur
-Bildschirmhöhe, nach einem Klappen ab dem Anker, und schrumpft nie (RM-487).
-`contentSizeChanged` meldet verzögerte Innenlayoutänderungen.
-Beim Öffnen sowie nach Monitorwechseln, geänderter nutzbarer Fläche oder
-logischer DPI stellt `DialogScrollArea` mit `fit_dialog_to_screen` die
-Erreichbarkeit wieder her. Die Anfangsbreite samt zugeklappter Teile und
-Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
+**Dialoggröße nach Auslöser:** `ContentHeight` misst den natürlichen Inhalt
+einmal nach dem Anzeigen, die Höhe erst bei fertiger Breite (Umbruch).
+Manuelle Breite und Höhe gelten für die Dialoglebensdauer; Mehrinhalt rollt,
+Aktionsknöpfe bleiben außen. Die Höhenuntergrenze sind vollständige äußere
+Knöpfe plus eine aktuelle Inhaltszeile und gegebenenfalls Querleiste; nur
+darunter muss eine Nutzerhöhe wachsen (`dialog_footer`, `karte-app-ui.md`).
+Ausdrückliches Klappen darf die automatische Höhe am festen Fensteranker
+anpassen, bis zum Bildschirmrand, der Rest rollt. Passives (Prüfung, Status,
+Suche, Reiter, bedingte Zeilen) wächst nach der Anfangsmessung um verdeckten
+Inhalt bis zur Bildschirmhöhe, nach Klappen ab dem Anker, und schrumpft nie
+(RM-487). `contentSizeChanged` führt auch Listen- und Schriftwechsel diesem
+passiven Größenweg zu. Kurzer Anfangsbedarf ist kein dauerhaftes
+Viewport-Minimum: Der innere Rollbereich gibt Platz an die Knopfleiste ab.
+Beim Öffnen, Monitorwechsel, geänderter nutzbarer Fläche oder logischer DPI
+sichern `DialogScrollArea` und `fit_dialog_to_screen` die Erreichbarkeit.
+Anfangsbreite samt zugeklappten Teilen und Rollbalken rechnet allein
+`style.expanded_width` (RM-342 D-N5).
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine

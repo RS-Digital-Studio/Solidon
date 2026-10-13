@@ -59,6 +59,10 @@ dans `website/version.json`.
 - L'étape la plus récente reste visible dans l'historique quand de nouveaux corps agrandissent l'arbre des objets. Dans la version 0.6.0, elle glissait sous le bord du panneau.
 - La capture d'écran jointe à un retour montre désormais aussi le modèle sous Windows. Avec certaines cartes graphiques, elle montrait auparavant une image ancienne, comme l'écran de chargement.
 - Sous macOS, une boîte de dialogue ouverte, par exemple pour créer une vis du catalogue de blocs, reste au-dessus de la fenêtre principale. Un clic dans la fenêtre la passait derrière.
+- Listes de caractéristiques et petits dialogues sont plus compacts. Après un changement de police, explication du plan invalide, corrections, introduction et boutons restent lisibles et accessibles.
+- La carte de sélection adapte sa largeur au contenu et à la police. Lignes et colonnes d'actions sont préservées ; les fenêtres d'onglets détachés gardent leur taille.
+- Les contreparties demandent d'abord paire et taille. Forme et ajustement sont dans « Autres réglages » ; le sélecteur explique les deux moitiés.
+- Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
 
 ### Imprimer et transmettre au slicer
 

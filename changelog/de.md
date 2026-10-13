@@ -83,6 +83,10 @@ Nutzen da und sonst nichts.
 - Der neueste Schritt bleibt im Verlauf zu sehen, wenn neue Körper den Objektbaum wachsen lassen. In Version 0.6.0 rutschte er unter den Rand der Karte.
 - Das Bildschirmfoto einer Rückmeldung zeigt unter Windows jetzt auch das Modell. Auf manchen Grafikkarten stand dort vorher ein altes Bild, etwa der Ladebildschirm.
 - Unter macOS bleibt ein offener Dialog, etwa beim Anlegen einer Schraube aus dem Bausteinkatalog, über dem Hauptfenster. Ein Klick ins Fenster schob ihn vorher dahinter.
+- Merkmalslisten und kurze Dialoge sparen Platz. Erklärung und Auswege bei ungültiger Zeichenebene sowie Einleitung und Knöpfe bleiben auch nach Schriftwechseln vollständig lesbar und erreichbar.
+- Die Auswahlkarte passt ihre Breite an Inhalt und Schrift an. Textzeilen und Handlungsspalten bleiben erhalten; eigene Reiterfenster behalten ihre Größe.
+- Gegenstücke fragen zuerst nach Paar und Größe. Form und Passungsdetails stehen unter „Weitere Einstellungen“; die Paarauswahl erklärt beide Hälften.
+- Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
 
 ### Drucken und Übergabe an den Slicer
 

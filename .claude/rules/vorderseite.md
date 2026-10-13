@@ -2,6 +2,7 @@
 description: "Die Vorderseite eines Dialogs und bedingte Felder — zwei bis drei Werte und ein Satz, vorbelegte Werte, die Stelle als Lesezeile, benannte Null, fx, Vorgaben am Körper, Maße als Parameter, Felder, die mit ihrer Bedingung kommen und gehen"
 paths:
   - "app/ui/op_dialog.py"
+  - "app/ui/counterpart_dialog.py"
   - "app/ui/panels.py"
   - "app/ui/dialogs.py"
   - "app/core/registry/params.py"

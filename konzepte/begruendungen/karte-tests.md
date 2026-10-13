@@ -25,6 +25,46 @@ und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 
 ## Was wo geprüft wird
 
+### Dialog-, Karten- und Vorschaugrößen
+
+| Vertrag | Zuständige Testdatei |
+|---|---|
+| Dialoginhalt, Klappen und Aktionsleisten erreichbar, Fenster im Bildschirm; Einstellungen mit eigenem Bedienablauf | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`; Einstellungen in `test_ui_settings.py` |
+| Merkmalmenge leer/ein/sechs/viele, Modell- und Textwechsel, Schrift und Stil, Querleiste, dynamische Ergänzung im offenen Dialog, letzte hohe Zeile mit Tastatur erreichbar | `test_feature_list_ui.py` |
+| Erklärung der ungültigen Drei-Punkte-Ebene in jeder Sprache, spätes Fehlerangebot bei automatischer/manueller Größe, wirklicher Anwendungsschriftwechsel | `test_operation_refusal_layout_ui.py` |
+| Kurzer natürlicher Anfangsbedarf, langer Inhalt mit Rollweg, gewählte Außenhöhe bei wachsender Aktionsleiste oberhalb des physischen Mindestmaßes | `test_short_dialog_ui.py` |
+| Vollständige Einleitung und Knöpfe in sechs Sprachen, echter Schriftwechsel, senkrechte/waagrechte Knopfleiste, Einzelknopfumbruch und zugänglicher Originalname, Return/Escape samt fokussiertem Abbrechen, physische Mindesthöhe bei erhaltener Nutzerbreite | `test_operation_font_layout_ui.py` |
+| Sichtbare Auswahlseite, echte Schrift, Zeilenhöhe und Handlungsspalten, natürlicher XYZ-Bedarf nach schmalem Start, Feldbreite/-höhe bei Schriftwechsel hin und zurück, gleichbleibender Querbedarf bei vorübergehendem senkrechtem Überlauf, ganzzeiliger Knopfumbruch auch beim Rasterwechsel, abgelöster Reiter samt gespeicherter Größe | `test_card_content_width.py` |
+| Schema-Vorderseite aller Paare und Sprachen, Klappe/Werte/Tabfolge, Paarhilfe, Rollen ohne Fokus, fokussierte Radbedienung, Abbruch und Dokumenterhalt, eigene Fenstergröße | `test_counterpart_front.py` |
+| Nach Absage wieder sichtbare Vorschaulegende, kurze und lange Texte in sechs Sprachen und zwei tatsächlichen Anwendungsschriften | `test_preview_banner_layout.py` |
+
+Diese Dateien prüfen die jeweiligen Zusagen; ihre Nennung ist kein Bericht
+über einen bestandenen Lauf oder eine native Darstellung. Die Schriftfälle
+binden Anwendungsschrift und Stylesheet zusammen und lesen die wirksamen
+Schriften der Inhaltswidgets, statt nur den Dialogcontainer umzustellen.
+
+### Messvertrag des Funktionsdurchgangs
+
+| Vertrag | Zuständige Testdatei |
+|---|---|
+| Vorfläche vor Befundklick, Fehlerbild vor Escape, gemessene Auswege und unveränderter Treffertest | `test_function_surface_timing.py` |
+| Eigene Maßgruppe/Merkmalszeile, zugehörige sichtbare Klappbeschriftung, richtiger übernommener Schritt | `test_function_feature_measurement.py` |
+| Wirkliche native Bildquelle, lokale Pixelkoordinaten und Skalierung, fehlende Pixel bleiben ungemessen | `test_function_capture_native_image.py` |
+| Offene eigene Fenster per Escape vor dem nächsten Sprachprojekt abbauen | `test_function_language_cleanup.py` |
+| Sofortige/spätere Vorschau desselben Auftrags, getrennte Vor-/Dialogfläche bis zum Bericht, fehlende Pixel ohne Palettenersatz, echte neue Revisionseingabe, eigener nichtmodaler Generator | `test_function_review_connections.py` |
+| Markierter Wertträger statt unmarkiertem inneren Zahlenfeld | `test_function_revision_fields.py` |
+| Bereitschaftsfehler, Fund und Timeout erreichen den begrenzten modalen Abbau | `test_function_machine_cleanup.py` |
+| Ganze Prozessgruppe des Dateiprüfstands: normaler und nicht erfolgreicher Ausgang, Timeout und Ausnahme in echten Windows-Prozessketten | `test_file_acceptance_process_tree.py` |
+| Szenenexport löst vorherige Auswahl über den Kundenweg; nur unbelegte Teilmenge wird abgewiesen | `test_function_export_preparation.py` |
+| Stabile lebende Qt-Hülle am C++-Dateidialog; echte Geometrie- und Flächenwechsel starten die Ruhezeit neu | `test_function_surface_identity.py` |
+| Qt-Fensterdispatcher: ignorierendes Kind, Annahme und verschachtelte Rollbereiche, Richtungen/Modifier/Koordinaten, klarer Rückweg bei fehlender API | `test_function_wheel_dispatch.py` |
+
+Schema, Urteil und Gegenbeispiele bleiben bei `function_checks`,
+`function_points`/`function_judges` und `function_samples`; die zugehörigen
+Inventar-/Urteilstests stehen im folgenden Überblick.
+
+### Weitere Zuordnungen
+
 Der Funktionsdurchgang verteilt seine Zusicherungen: `test_function_list.py`
 prüft das Inventar und die Ziele, `test_function_report.py` die Berichte,
 `test_function_alarms.py` die Urteile und Gegenproben,

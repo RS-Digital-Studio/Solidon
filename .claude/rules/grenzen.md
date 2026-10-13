@@ -9,6 +9,7 @@ paths:
   - "app/ui/shortcut_schemes.py"
   - "app/ui/catalog.py"
   - "app/ui/selection_operations.py"
+  - "app/ui/card_width.py"
 ---
 
 # Regeln für die Grenzen der Oberfläche

@@ -67,6 +67,22 @@ das Konzept.
 
 ## Verlauf
 
+- 13.10.2026, 14:23, Phase 2 weiterhin D0: Alle Korrekturen bis FD59 sind
+  auf `welle4` integriert, zuletzt Kartenbreite/Schriftwechsel als
+  `e68ca22cb`. Dialoge und Karten richten ihre notwendigen Maße nach Inhalt,
+  aktueller Schrift und den gewählten Größen; die Prüfung umfasst weiterhin
+  alle Kriterien gleichrangig. Die gesammelten Karten, Regeln und sechs
+  Changelogs sind nachgezogen. Paketnachweise und gezielte gemeinsame
+  Anschlüsse sind grün; der erste gemeinsame Kartenlauf ohne geladene
+  DejaVu-Schriften bleibt als roter Umgebungsnachweis erhalten. **Als
+  Nächstes:** frischer vollständiger Fensterlauf auf MSI MAG271CQR mit
+  isolierten Profilen, neue V4-Vorhersagen und unabhängige Bildurteile,
+  danach gepinntes Endtor, Abschluss der Merge-Durchsicht und main/CI.
+  Die Plattformwelle `6fbe6154f` ist enthalten; deren CI startete wegen der
+  von GitHub gemeldeten Zahlungs-/Ausgabenbegrenzung keinen Test. D0 ist noch
+  nicht abgenommen. Danach Codestruktur Schritt 0 vollständig gemäß
+  `plan-cs0.md`; R und W13 sind bereit, M vorbesprochen. Website-Upload
+  bleibt bis zu Roberts Freigabe ausstehend.
 - 13.10.2026, 10:50, Phase 2 weiterhin D0: Die alten Fixpakete und die
   Plattformwelle von main sind in `welle4`; letzter integrierter Fix ist
   FD-36 (`f80741556`, Entfernen-Hinweis mit zuerst erreichbarem Abbrechen).

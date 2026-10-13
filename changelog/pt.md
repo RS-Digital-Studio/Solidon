@@ -58,6 +58,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O passo mais recente continua visível no histórico quando novos corpos fazem crescer a árvore de objetos. Na versão 0.6.0 deslizava para baixo do limite do painel.
 - A captura de ecrã de um comentário mostra agora também o modelo no Windows. Com algumas placas gráficas aparecia antes uma imagem antiga, como o ecrã de carregamento.
 - No macOS, uma caixa de diálogo aberta, por exemplo ao criar um parafuso do catálogo de blocos, fica por cima da janela principal. Antes, um clique na janela empurrava-a para trás.
+- Listas de características e diálogos curtos ocupam menos. Após mudar a letra, explicações e correções do plano inválido, introdução e botões continuam legíveis e acessíveis.
+- O painel de seleção adapta a largura ao conteúdo e à letra. Mantém linhas e colunas de ações; as janelas dos separadores destacados conservam o tamanho.
+- Os elementos correspondentes pedem primeiro par e tamanho. Forma e ajuste ficam em «Mais definições»; a seleção explica as duas metades.
+- Após a recusa de uma pré-visualização, os textos da seguinte continuam totalmente legíveis.
 
 ### Imprimir e entregar ao slicer
 

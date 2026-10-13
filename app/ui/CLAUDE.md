@@ -5,34 +5,13 @@ Abläufe/Messwerte/Anlässe: `konzepte/begruendungen/karte-app-ui.md`, gleiche G
 
 ## Gebundene Platzierung
 
-Vor Arbeiterstart: `surface_object_for_worker` liefert Netzen die geteilte
-Arbeitskopie unter `on_the_copy`, exakten Körpern eigene Kopien mit gleicher
-Dreiecksfolge/nativer Flächenzuordnung.
-
-`PlacementFlow` übernimmt Lage, Flächenbezug und Kantenabstände gemeinsam aus
-`scene.placement.bound_surface_values`. `placement_fields` trennt Lagefelder von
-gleichnamigen Bausteinmaßen. `bind_surface` öffnet am historischen Eingang mit
-vorbereiteter Fläche, gewählten Kanten und Trägerkennung wieder; Ausdrücke bleiben
-erhalten. Neue Weltkoordinaten lösen den Bezug ausdrücklich. Abbruch, Neuwahl und
-Projektwechsel sperren verspätete Antworten.
-
-Ein Grundkörper an einer ausgewählten Fläche bietet vorn Ansatzpunkt und
-Verbinden. Flächenvorbereitung läuft über `Session.placement_async`; bis zur
-Antwort bleibt Übernehmen unabhängig von einer älteren Vorschau gesperrt.
-Erzeugen und Vereinigung stehen in derselben `_PreviewOrder` und Transaktion.
-`ContainerWizardParams`/`plan_container`: benannte Maße, optionale Einlage und
-Passung als Vorschauauftrag. `plan_container_edit` liefert historisch
-`ContainerEdit.values` und `document_change` gemeinsam für Vorschau/Übernahme.
-`promote_values=False` hält historische Schemaplätze; Ausdrücke holen keine
-Rückseitenfelder nach vorn.
+`PlacementFlow` und Containerentwürfe: Werte, Wiederöffnen und Arbeiterbindung
+stehen in `karte-app-ui.md`, „Gebundene Platzierung“.
 
 ## Der Weg durch die Schicht
 
-Modelldownloads binden Fortschritt/Ergebnis an Arbeiteridentität und
-Projektgeneration. Nachfolger brechen Vorgänger ab; Projektwechsel,
-Fensterende und Abbruch verwerfen Antworten. Vor dem Einlesen Gesteneditoren
-erneut prüfen. Modellseiten bleiben als Zwischenablage-Vorbelegung erhalten
-und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
+Modelldownloads und historische Ansichten: Ablauf und Bindung an den
+Projektstand in `karte-app-ui.md`, „Der Weg durch die Schicht“.
 
 `main_window.py` bindet Menüs/Auswahl, `session.py` Stapel/Auswertung/Arbeiter
 (§2.8, `wartezeit.md`); `viewport.py` zeigt das `EvaluationResult`. Einstiege:
@@ -45,17 +24,8 @@ und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
   (Dokumentkopie, Szene davor, Profil) im `_PreviewWorker`; `explained`,
   `progressed` und `coarse` melden Grund, Fortschritt und grobe Stufe →
   `MainWindow._show_preview`, Band `PreviewBanner`.
-- **Mehrfachimport** — `import_models_async` liest alle Quellen mit
-  `_BatchReadWorker`, erhält ihre Koordinaten und übernimmt genau eine
-  Transaktion. Einheiten ohne Metadaten werden einmal für die Auswahl erfragt;
-  Lese-/Geometriefehler entfernen den ganzen Auftrag samt Quellen.
-- **Historische Ansicht** — `history_preview_async` rekonstruiert den
-  Transaktionsstand per Undo auf einer Kopie, mit dessen Profil. Regler und
-  Differenz ändern das Dokument nicht; Projekt-/Transaktionsstempel und die
-  Vorschaugeneration verwerfen verspätete Antworten. „Hier weiterarbeiten“
-  setzt erst nach bewusstem Klick die vorhandene Einfügemarke. Bildwechsel
-  und Rückweg erhalten die Kamera. Bearbeiten verlangt „Aktueller Stand“;
-  offene Gesten-/Maßentwürfe verweigern schon den Vergleich ohne Schließen-Signal.
+- **Mehrfachimport** — `import_models_async`: alle Quellen in einer Transaktion; Ablauf in `karte-app-ui.md`.
+- **Historische Ansicht** — `history_preview_async`: Vergleich auf einer Dokumentkopie, Rückweg ohne Dokumentänderung; Bindung und Einfügemarke in `karte-app-ui.md`.
 - **Nachbau** — `rebuild_dialog.py` bindet Kernprüfung, Grenzen und konkrete Folgen
   an einen Kandidaten. Erst `sceneApplied` gibt frei; `Session.commit_rebuild`
   übernimmt atomar. Projektwechsel verwirft Arbeiterantworten.
@@ -67,12 +37,7 @@ und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
   für Kreis-/Spiegelmuster, Spiegeln und Fügeweg gemeinsam an. `reference_point` löst
   Körper-/Merkmalbezüge vor Vorschau und Übernahme in gespeicherte cx/cy/cz auf.
   Vorhandene Koordinaten und Ausdrücke bleiben beim Wiederöffnen unverändert.
-- **Import** — `import_model_async` → `_ReadWorker`, Plan im Arbeiter →
-  `pictureChanged` (das Modell vor seiner Erkennung), `importConfirmed`,
-  `importRejected`, `importFailed`; STEP-Baugruppen über
-  `stepImportRequested`, Konturen über `outlineImportRequested`.
-  `_SourceReadWorker` liest Quellen als Bytes; `_source_read` schreibt
-  sie im Hauptthread per `Session.embed_model_payload`/`import_image_payload`.
+- **Import** — `import_model_async`: Arbeiter, Einheiten-/Baugruppenauswahl und Quellenablage; Ablauf in `karte-app-ui.md`.
 - **Merkmal** — Baum oder Pick → `FeaturePanel.show_feature`, `show_edge`,
   `show_part` → `operationRequested` (Dialog), `inViewRequested` (Maße im
   Bild über `QuietHost`), `stepChangeRequested` (Baustein).
@@ -143,6 +108,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
+| `card_width.py` | Natürliche Breite des eingebetteten Auswahlreiters (§2.5), Paar- und Koordinatenraster; Schnittstellen in `karte-app-ui.md` |
 | `selection_operations.py` | Auswahlhandlungen aus dem Register und Suchfeld mit Trefferliste; Auswahlregeln und Schnittstellen in `karte-app-ui.md` |
 | `tool_strip.py` | Werkzeugzeile unter der Ansicht (§2.4, §2.5) |
 | `analysis_bar.py` | Analysekarten, Legende und Schichtvorschau (§18.4, §18.10) |
@@ -159,6 +125,8 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle*, hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
+| `feature_list.py` | `FeatureList`: Inhaltshöhe und Pixelrollweg für `FeatureSetField`; Vertrag in `karte-app-ui.md` |
+| `dialog_footer.py` | `DialogFooter`: vollständige Aktionsleiste bei automatischer und manueller Breite; Vertrag in `karte-app-ui.md` |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
 | `message_dialog.py` | Meldung und Ansage (`announce`), Quittung am Ort (`acknowledge`, `withdraw`), Knopfnamen (`name_button`) |
 | `input_dialog.py` | Eingaben ohne Ort (`ask_text`, `ask_choice`) |
@@ -208,7 +176,7 @@ Druckfelder, ihre Herkunft und Suchtreffer: `druckerwahl.md`.
 |---|---|
 | `catalog.py` | Bausteinkatalog (§24.3, §2.6); `show_for_feature` filtert je Merkmalsart, `offer_ways` zum ersten Körper |
 | `recipe_dialog.py` | Auswahl als Baustein speichern; wieder geöffnet: *Baustein ersetzen* |
-| `counterpart_dialog.py` | Gegenstücke: zwei Stellen, Paar/Maße aus Bausteinschema und `Pair.shared` |
+| `counterpart_dialog.py` | Gegenstücke: zwei Stellen, Paar/Maße aus Bausteinschema und `Pair.shared`; Vorderseite/Klappe nach Schemaplatz, Feldhilfe aus `Pair.doc` |
 
 Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 `FeaturePanel.show_part` zeigt `perceive.actions.part_actions`;
@@ -277,14 +245,9 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   Neuaufbau verborgen. `measure_op` nennt die Handlung der Maßgruppe;
   `request_in_view` schärft über den Knopfweg, eigene scharfe Bildwege gehen vor.
   `handlingArmed` ändert keine Werte.
-- **Wiederverwendung:** `FeaturePanel`-Zeilen nach `_row_signature` über
-  `_keep_rows_for_reuse`, Schlüssel/Op/Felder aus aktuellem Aufruf.
-  Maßgruppen über `_release_measure_group`, `bind_measure_group`,
-  `keep_measure_group`, `_measure_signature`, `SPARE_MEASURE_GROUPS`;
-  `PlacementFlow` parkt Leiste/Maßkarte/Tinte über `_park_floating`/`_take_parked_floating`.
-  `test_feature_panel.py` vergleicht frischen und wiederverwendeten Zustand
-  (`_panel_state`, `_measure_group_state`). Abschluss: `_lay_out_now` gemäß
-  `ansicht.md`, dann fertige Maßbilder mit `PlacementFlow.flush_frame` bündeln.
+- **Wiederverwendung:** `FeaturePanel` und `PlacementFlow` erhalten Zeilen,
+  Maßgruppen und schwebende Bedienelemente; Signaturen, Zustandsvergleich und
+  Abschluss in `karte-app-ui.md`, „Muster“.
 - **Angebote aus dem Kern:** `perceive.actions` (`ACTION_ORDER`, `edge_actions`,
   `part_actions`, `not_offered_at`, `protection_of`),
   `placement.supports_surface_placement`, `registry.kernel_switch_label`,
@@ -354,17 +317,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 
 ## Druckbewertung und Übergabe
 
-- **Druckbewertung**: `print_contract` formatiert streng gelesene Profilgrundlagen
-  und tatsächliche `CheckState`-Nachweise. Leere Befunde belegen keinen Abschluss.
-  Session/`PrintFindingsFlow` verwerfen alte Aufträge; Materialslots liest der
-  Auswertungsarbeiter. `PrintTarget` hält übersetzbare Texte für Sprachwechsel
-  ohne Netzscan. Der Prüfumfang scrollt höhenbegrenzt, nennt sichtbare Körpernamen
-  und wiederholt offene Prüfungen nicht.
-- **Befundkarte**: `finding_meta` als eine Zeile; Nebenfolge `effect_worth_showing`.
-- **Änderung und Übergabe** (Band: `oberflaeche.md`): Belege aus
-  dem eingefrorenen Auftrag, Dateien und Slicerstarts getrennt, Gegenprobe
-  `export.readback` im Arbeiter. Gleiche Importbefunde einer Transaktion werden
-  gebündelt; Originalwerte und Körper bleiben zugänglich.
+`print_contract`, `PrintFindingsFlow`, Befundkarte und Übergabebelege:
+Ablauf und Herkunft in `karte-app-ui.md`, „Prüfbericht, Export und Druck“.
 
 ## Testen
 

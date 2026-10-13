@@ -59,6 +59,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El paso más reciente sigue visible en el historial cuando nuevos cuerpos hacen crecer el árbol de objetos. En la versión 0.6.0 quedaba bajo el borde del panel.
 - La captura de pantalla de un comentario muestra ahora también el modelo en Windows. Con algunas tarjetas gráficas aparecía antes una imagen antigua, como la pantalla de carga.
 - En macOS un diálogo abierto, por ejemplo al crear un tornillo desde el catálogo de bloques, queda sobre la ventana principal. Antes, un clic en la ventana lo dejaba detrás.
+- Las listas de características y diálogos breves ocupan menos. Tras cambiar la letra siguen legibles y accesibles la explicación y corrección del plano no válido, la introducción y los botones.
+- La tarjeta de selección ajusta su anchura al contenido y la letra. Conserva líneas y columnas de acciones; las ventanas de pestañas separadas mantienen su tamaño.
+- Los elementos correspondientes piden primero par y tamaño. Forma y ajuste están en «Más ajustes»; el selector explica ambas mitades.
+- Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
 
 ### Imprimir y entregar al slicer
 

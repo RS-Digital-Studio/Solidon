@@ -58,6 +58,10 @@ it into `website/version.json`.
 - The newest step stays visible in the history when new bodies make the object tree grow. In version 0.6.0 it slipped below the edge of the panel.
 - The screenshot attached to feedback now shows the model on Windows too. On some graphics cards it used to show an old picture, such as the loading screen.
 - On macOS an open dialog, for example when creating a screw from the part catalogue, stays above the main window. A click into the window used to push it behind.
+- Feature lists and short dialogs save space. Invalid plane explanations and remedies, introductory text and buttons stay fully readable and accessible after font changes.
+- The selection card adjusts its width to its content and font. Text lines and action columns are preserved; detached tab windows keep their size.
+- Counterparts ask for pair and size first. Shape and fit details are under “More settings”; the pair selector explains both halves.
+- After a preview is refused, the next preview's text remains fully readable.
 
 ### Printing and slicer handover
 
