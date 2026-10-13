@@ -587,3 +587,26 @@ def test_the_overview_names_why_a_case_aborted(tmp_path: Path) -> None:
     row = function_summary(case, folder, {"exit_code": 3221226505, "crash": note})
     assert note in row["errors"]
     assert function_summary(case, folder, {"exit_code": 0, "crash": ""})["errors"] == []
+
+
+def test_a_crash_is_named_by_its_stack_not_by_an_earlier_critical_message(tmp_path: Path) -> None:
+    """Durchsicht welle4 C-L11: ``crash_note`` nennt die Meldung, an der der Fall starb.
+
+    Ein ``QtCriticalMsg`` ist eine Warnung, kein Abbruch — vorher stand die
+    letzte davon als Grund, obwohl ``stapel.log`` den Absturz mit Stapel trug.
+    Ein ``qFatal`` bleibt der Grund vor dem Stapel; ohne beides nennt die
+    kritische Meldung wenigstens, was zuletzt kam.
+    """
+    from tools.file_acceptance import QT_LOG, STACK_LOG, crash_note
+
+    critical = "QtCriticalMsg QWindowsWindow::setGeometry: Unable to set geometry"
+    stack = 'Windows fatal exception: access violation\n\nCurrent thread:\n  File "x.py", line 1'
+    (tmp_path / QT_LOG).write_text(f"QtWarningMsg schon da\n{critical}\n", encoding="utf-8")
+    (tmp_path / STACK_LOG).write_text(f"Stapel alle 30 s\n{stack}\n", encoding="utf-8")
+    assert crash_note(tmp_path).startswith("Windows fatal exception"), crash_note(tmp_path)
+    fatal = "QtFatalMsg ASSERT: false in qasciikey.cpp"
+    (tmp_path / QT_LOG).write_text(f"{critical}\n{fatal}\n", encoding="utf-8")
+    assert crash_note(tmp_path) == fatal
+    (tmp_path / QT_LOG).write_text(f"{critical}\n", encoding="utf-8")
+    (tmp_path / STACK_LOG).unlink()
+    assert crash_note(tmp_path) == critical

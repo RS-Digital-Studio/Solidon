@@ -1166,16 +1166,23 @@ def crash_records(folder: Path) -> None:
 
 
 def crash_note(folder: Path) -> str:
-    """Was ein abgebrochener Fall zuletzt sagte: das letzte ``qFatal``, sonst sein Absturzstapel."""
+    """Was ein abgebrochener Fall zuletzt sagte: das letzte ``qFatal``, sonst sein Absturzstapel.
+
+    Ein ``QtCriticalMsg`` ist eine Warnung, an der kein Fall stirbt; er nennt den
+    Grund nur, wenn es weder ``qFatal`` noch Stapel gibt (Durchsicht welle4 C-L11).
+    """
     qt = folder / QT_LOG
     lines = qt.read_text(encoding="utf-8", errors="replace").splitlines() if qt.is_file() else []
-    fatal = [line for line in lines if line.startswith(("QtFatalMsg", "QtCriticalMsg"))]
+    fatal = [line for line in lines if line.startswith("QtFatalMsg")]
     if fatal:
         return fatal[-1]
     stacks = folder / STACK_LOG
     text = stacks.read_text(encoding="utf-8", errors="replace") if stacks.is_file() else ""
     start = max(text.rfind("Fatal Python error"), text.rfind("Windows fatal exception"))
-    return text[start:].strip()[:2000] if start >= 0 else ""
+    if start >= 0:
+        return text[start:].strip()[:2000]
+    critical = [line for line in lines if line.startswith("QtCriticalMsg")]
+    return critical[-1] if critical else ""
 
 
 def no_native_dialogs() -> None:
