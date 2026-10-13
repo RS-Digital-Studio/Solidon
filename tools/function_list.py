@@ -87,11 +87,6 @@ ROW_SOURCES: Final[tuple[str, ...]] = (
     "meldungsfenster",
 )
 
-#: Quellen, deren Zeilen heute kein Ziel im Wortschatz haben (Bericht D0-L, „braucht
-#: W“): rohe Meldungsfenster ohne Klasse und Abschnitte der Einstellungen. Jede andere
-#: Zeile trägt ein Ziel.
-SOURCES_WITHOUT_TARGET: Final[frozenset[str]] = frozenset({"meldungsfenster", "einstellungen"})
-
 #: Die Zeile, die für alle Kacheln des Bausteinkatalogs steht (Konzept §3).
 CATALOGUE_ROW: Final = "part:*"
 #: Der erste Eintrag unter „Zuletzt geöffnet“ auf dem Startbildschirm — eine Zeile
