@@ -170,7 +170,9 @@ class MeasureCardDrag(QObject):
                 and (watched is self._card or self._card.isAncestorOf(watched))
             ):
                 self._finish(commit=False)
-            if isinstance(event, QMouseEvent):
+            # Qt muss den Fenstertransport erst zustellen und beim Loslassen
+            # seinen Druckempfänger lösen, bevor der Widgetfilter übernimmt.
+            if isinstance(event, QMouseEvent) and isinstance(watched, QWidget):
                 if kind == QEvent.Type.MouseMove:
                     delta = event.globalPosition().toPoint() - self._pressed
                     if self._moving is None:

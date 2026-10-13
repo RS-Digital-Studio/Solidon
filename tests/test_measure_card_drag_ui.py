@@ -54,6 +54,23 @@ class _DeathWatch(QObject):
         self.events.append("move")
 
 
+class _TransportWatch(QObject):
+    """Fenstertransport und tatsächlich weitergeleitete Widgetereignisse trennen."""
+
+    def __init__(self):
+        super().__init__()
+        self.events = []
+
+    def eventFilter(self, watched, event):  # noqa: N802 — Qt-Name
+        if event.type() in (
+            QEvent.Type.MouseButtonPress,
+            QEvent.Type.MouseMove,
+            QEvent.Type.MouseButtonRelease,
+        ):
+            self.events.append((watched, event.type(), event.buttons()))
+        return False
+
+
 @pytest.fixture
 def card(qt_app, roots):
     """Echte Qt-Karte mit freiem Titel, Inhalt und absichtlich versetztem Bildraum."""
@@ -398,3 +415,67 @@ def test_late_room_growth_keeps_the_dropped_anchor(qt_app, card, growth):
     assert drag.placed_rect().left() < target.x()
     drag.update_room(larger)
     assert drag.placed_rect().topLeft() == target
+
+
+@pytest.mark.parametrize("surface", ["title", "blank"])
+def test_window_transport_releases_the_card_before_hovering_another_child(qt_app, card, surface):
+    """Nach dem echten Fenster-Release gehört der nächste freie Zug dem Feldkind."""
+    box, title, drag, room = card
+    combo = QComboBox(box)
+    combo.setGeometry(20, 90, 240, 32)
+    combo.addItems(["Erster Wert", "Zweiter Wert"])
+    combo.setMouseTracking(True)
+    combo.show()
+    drag.update_room(room)
+    view = box.window()
+    view.activateWindow()
+    qt_app.processEvents()
+    handle = view.windowHandle()
+    assert handle is not None
+    if surface == "title":
+        start = title.mapToGlobal(title.rect().center())
+    else:
+        start = box.mapToGlobal(box.rect().bottomRight() - QPoint(10, 10))
+    target = box.pos() + QPoint(-210, 170)
+    end = start + target - box.pos()
+    trace = _TransportWatch()
+    qt_app.installEventFilter(trace)
+    held = False
+    try:
+        QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(start))
+        held = True
+        # Der Produktfilter wird beim Druck global; der Beobachter liest zuerst.
+        qt_app.removeEventFilter(trace)
+        qt_app.installEventFilter(trace)
+        midway = start + QPoint(round((end.x() - start.x()) / 2), round((end.y() - start.y()) / 2))
+        for point in (midway, end):
+            QTest.mouseMove(handle, handle.mapFromGlobal(point))
+            qt_app.processEvents()
+        QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(end))
+        held = False
+        qt_app.processEvents()
+        after_release = len(trace.events)
+        hover = combo.mapToGlobal(combo.rect().center())
+        QTest.mouseMove(handle, handle.mapFromGlobal(hover))
+        qt_app.processEvents()
+        assert box.pos() == target
+        detail = [(type(w).__name__, kind.name, buttons.value) for w, kind, buttons in trace.events]
+        assert (
+            combo,
+            QEvent.Type.MouseMove,
+            Qt.MouseButton.NoButton,
+        ) in trace.events[after_release:], detail
+        widgets = [event for event in trace.events[:after_release] if isinstance(event[0], QWidget)]
+        assert any(kind == QEvent.Type.MouseButtonPress for _, kind, _ in widgets), detail
+        assert any(
+            kind == QEvent.Type.MouseMove and buttons & Qt.MouseButton.LeftButton
+            for _, kind, buttons in widgets
+        ), detail
+        assert any(
+            kind == QEvent.Type.MouseButtonRelease and not buttons for _, kind, buttons in widgets
+        ), detail
+        assert qt_app.overrideCursor() is None
+    finally:
+        if held:
+            QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(end))
+        qt_app.removeEventFilter(trace)
