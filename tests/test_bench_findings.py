@@ -8,55 +8,26 @@ des Wortschatzes selbst prüft ``tests/test_guide_targets.py``.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 import pytest
 
 from app.core.bootstrap import load_operations
+from tests import qt_roots
 from tools.function_checks import SMALLEST_WINDOW
 
 load_operations()
 
-_Root = TypeVar("_Root")
+#: Baut die Karten ohne Elternteil ab (``tests/qt_roots.py``); pytest sammelt die
+#: Fixture unter diesem Namen im Modul.
+roots = qt_roots.roots
 
 
 def _settle(qt_app: Any, rounds: int = 20) -> None:
     for _ in range(rounds):
         qt_app.processEvents()
-
-
-@pytest.fixture
-def roots(qt_app: Any) -> Iterator[Callable[[_Root], _Root]]:
-    """Nimmt die Karten und Listen eines Tests, die ohne Elternteil entstehen, und baut
-    sie am Testende ab.
-
-    Ein Widget ohne Elternteil ist eine Qt-Wurzel. Dem Sammler überlassen stirbt
-    sie in dessen nächstem Lauf, mitten im Bau eines späteren Tests: Mit
-    ``test_overlay.py`` und ``test_tab_windows.py`` im selben Prozess brach der
-    Lauf nativ ab, mit abgeschaltetem Sammler (``-p gcoff``) nicht. Abgebaut wird
-    wie in den Fixtures der Suite (``tests/CLAUDE.md``, „Stolperfallen“):
-    schließen, ``deleteLater`` vormerken und ``DeferredDelete`` zustellen,
-    solange die Hüllen hier noch gehalten werden.
-    """
-    from PySide6.QtCore import QCoreApplication, QEvent
-    from shiboken6 import isValid
-
-    built: list[Any] = []
-
-    def keep(widget: _Root) -> _Root:
-        built.append(widget)
-        return widget
-
-    yield keep
-    for widget in built:
-        if isValid(widget):
-            widget.close()
-            widget.deleteLater()
-    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    qt_app.processEvents()
-    built.clear()
 
 
 #: Der Kindprozess des Abrisstests: Anwendung wie beim Kunden, Szene vom
