@@ -1101,10 +1101,10 @@ def test_no_question_word_is_a_word_of_a_customer_or_a_title(language: str) -> N
                 teile = words.findall(wendung)
                 if teile and opens_a_question(teile[0]):
                     daneben.append(f"{name}: „{wendung}“ beginnt mit einem Fragewort")
+                # Auch ein kurzes Wort („mi“, „me“, „es“) fällt in jeder Frage,
+                # und ``rank`` vergleicht die ganze Wendung (``said_exactly``).
                 daneben += [
-                    f"{name}: „{wendung}“ trägt „{teil}“"
-                    for teil in teile
-                    if len(teil) >= 3 and teil in persoenlich
+                    f"{name}: „{wendung}“ trägt „{teil}“" for teil in teile if teil in persoenlich
                 ]
         for spec in REGISTRY.all():
             teile = words.findall(fold(str(spec.title)))
