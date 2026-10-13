@@ -23,6 +23,7 @@ dans `website/version.json`.
 - La recherche trouve *Réunir*, *Soustraire* et *Intersection* aussi sous « booléen », et *Soustraire* aussi sous « différence ».
 - La recherche trouve aussi la fonction pour une question comme « Comment poser la pièce sur le plateau ? » et connaît des mots des slicers et de la CAO comme « variable ».
 - La recherche dans le manuel trouve aussi la bonne page pour une question posée avec vos propres mots.
+- Qui tape « trou » ou « perçage » dans la recherche obtient *Percer un trou* sur un corps et *Modifier le trou* sur un perçage sélectionné, dans toutes les langues.
 - Avec un corps sélectionné et un second dans la scène, l'onglet *Sélection* indique comment ajouter le second pour *Réunir*, *Soustraire* et *Intersection*.
 - Le champ de recherche de l'onglet *Sélection* est désormais toujours là, même sans sélection, et trouve chaque fonction et chaque commande avec son raccourci.
 - La palette de commandes disparaît, car le champ de recherche trouve la même chose. *Rechercher une fonction* et Ctrl+Maj+P y placent le curseur.
@@ -60,6 +61,7 @@ dans `website/version.json`.
 - Un corps fileté du catalogue de blocs peut de nouveau être déplacé, tourné, mis en miroir, mis à l'échelle et posé sur le plateau. En version 0.6.0, la chaîne s'arrêtait sur une erreur du programme.
 - Dans l'onglet *Sélection*, un diamètre sous la limite dans *Modifier le trou* renvoie désormais à *Supprimer la caractéristique*, qui supprime tout le trou, fraisure comprise si on le veut.
 - La reconstruction (*Reconstruire le modèle*) ne conseille plus d'autres limites quand aucune valeur permise ne suffirait, et n'affiche qu'une fois les propositions identiques.
+- Si un perçage ou un récipient ne réussit qu'avec des sommets déplacés d'un rien, l'ouverture reste libre. En version 0.6.0, une peau très fine pouvait rester par-dessus.
 
 ## 0.6.0
 

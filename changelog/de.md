@@ -47,6 +47,7 @@ Nutzen da und sonst nichts.
 - Die Suche findet *Vereinigen*, *Abziehen* und *Schnittmenge* auch unter „boolesch“ und „Boolean“, *Abziehen* auch unter „Differenz“.
 - Die Suche findet die Funktion auch zu einer Frage wie „Wie setze ich das Teil auf die Druckplatte?“ und kennt Wörter aus Slicer und CAD wie „Druckbett“ oder „Variable“.
 - Auch die Suche im Handbuch findet zu einer Frage in eigenen Worten die passende Seite.
+- Wer in der Suche „Loch“ oder „Bohrung“ tippt, bekommt am Körper *Bohrung setzen* und an einer gewählten Bohrung *Bohrung ändern*, in jeder Sprache.
 - Ist ein Körper gewählt und liegt ein zweiter in der Szene, sagt der Reiter *Auswahl*, wie man den zweiten für *Vereinigen*, *Abziehen* und *Schnittmenge* dazuwählt.
 - Das Suchfeld im Reiter *Auswahl* steht jetzt immer, auch ohne Auswahl, und findet jede Funktion und jeden Befehl samt Tastenkürzel.
 - Die Befehlspalette entfällt, denn das Suchfeld findet dasselbe. *Funktion suchen* und Strg+Umschalt+P setzen den Cursor hinein.
@@ -84,6 +85,7 @@ Nutzen da und sonst nichts.
 - Ein Körper mit Gewinde aus dem Bausteinkatalog lässt sich wieder verschieben, drehen, spiegeln, skalieren und aufs Bett setzen. In Version 0.6.0 hielt die Kette dabei mit einem Programmfehler an.
 - Tippt man im Reiter *Auswahl* bei *Bohrung ändern* einen Durchmesser unter der Grenze ein, nennt der Hinweis jetzt *Merkmal entfernen*. Damit verschwindet die Bohrung ganz, auf Wunsch samt Senkung.
 - Der Nachbau (*Modell nachbauen*) rät nicht mehr zu anderen Grenzen, wenn kein erlaubter Wert reichen würde, und zeigt gleiche Vorschläge nur einmal.
+- Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 
 ## 0.6.0
 

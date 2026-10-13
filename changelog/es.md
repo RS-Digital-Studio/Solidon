@@ -23,6 +23,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La búsqueda encuentra *Unir*, *Sustraer* e *Intersección* también como «booleano», y *Sustraer* también como «diferencia».
 - La búsqueda encuentra la función también para una pregunta como «¿Cómo pongo la pieza en la cama de impresión?» y conoce palabras de slicers y CAD como «variable».
 - También la búsqueda en el manual encuentra la página adecuada para una pregunta con sus propias palabras.
+- Quien escribe «agujero» o «taladro» en la búsqueda obtiene *Hacer un taladro* en un cuerpo y *Cambiar taladro*, antes *Cambiar orificio*, en un taladro seleccionado, en todos los idiomas.
 - Con un cuerpo seleccionado y un segundo en la escena, la pestaña *Selección* indica cómo añadir el segundo para *Unir*, *Sustraer* e *Intersección*.
 - El campo de búsqueda de la pestaña *Selección* está ahora siempre, también sin selección, y encuentra cada función y cada comando con su atajo.
 - La paleta de comandos desaparece, porque el campo de búsqueda encuentra lo mismo. *Buscar función* y Ctrl+Mayús+P ponen el cursor en él.
@@ -60,6 +61,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un cuerpo con rosca del catálogo de bloques vuelve a poder moverse, girarse, reflejarse, escalarse y colocarse sobre la placa. En la versión 0.6.0 la cadena se detenía con un error del programa.
 - En la pestaña *Selección*, un diámetro bajo el límite en *Cambiar orificio* remite ahora a *Quitar característica*, que quita el orificio entero, con su avellanado si se desea.
 - La reconstrucción (*Reconstruir modelo*) ya no aconseja otros límites cuando ningún valor permitido bastaría, y muestra las propuestas iguales una sola vez.
+- Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
 
 ## 0.6.0
 

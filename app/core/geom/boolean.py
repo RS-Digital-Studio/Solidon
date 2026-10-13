@@ -98,7 +98,8 @@ DRAFT_CHAIN: tuple[SolverStage, ...] = ("direct", "welded")
 
 #: Wie weit Stufe 3 die Eckpunkte bewegt — die Standardabweichung je
 #: Koordinate, als Anteil der Modelldiagonale: genug, um ein Zusammenfallen zu
-#: brechen, weit unter allem, was ein Drucker auflösen könnte.
+#: brechen, weit unter allem, was ein Drucker auflösen könnte. Nach oben
+#: begrenzt :data:`JITTER_REACH_LIMIT`.
 JITTER_AMPLITUDE = 1e-4
 
 #: Kantenlänge des Voxelrasters in Stufe 4, relativ zur Modelldiagonale.
@@ -153,6 +154,22 @@ MAX_VOXEL_CELLS: Final = 50_000_000
 #: Entscheidung verschoben; 0,01 ist dort seit je in Gebrauch und anderswo
 #: nachweislich gleichwertig.
 BOOLEAN_OVERLAP = 0.01
+
+#: Höchstens so weit bewegt Stufe 3 einen Eckpunkt je Koordinate, gleich wie
+#: groß der Körper ist: ein Viertel von :data:`BOOLEAN_OVERLAP`. Zwei
+#: Eckpunkte rücken so höchstens um die halbe Zugabe aufeinander zu, und ein
+#: Werkzeug, das um sie über eine Fläche reicht, bleibt darüber.
+#:
+#: **Ohne Grenze wuchs der Stups mit der Diagonale** und schob Werkzeuge unter
+#: die Fläche, über die sie reichen (Durchsicht welle4-b, Beobachtung): am
+#: Behältergehäuse (Diagonale 108 mm) bis 0,019 mm weit, fast das Doppelte der
+#: Zugabe. In 15 von 20 Startwerten blieb über der Öffnung eine Haut stehen,
+#: an einer Platte mit Bohrung Ø 5 in 3 von 20 — einmal die ganze Mündung zu.
+#: Der Steckdeckel stieß darauf und meldete, sein Kragen stoße auf die Wand;
+#: ein Schraubdeckel hätte die Haut still mitgenommen. Ein Viertel der Zugabe
+#: sind 2,5 µm, an einem Körper von zwei Metern noch zwanzig letzte Stellen
+#: von float32 — genug, um ein Zusammenfallen zu brechen.
+JITTER_REACH_LIMIT: Final = BOOLEAN_OVERLAP / 4.0
 
 
 @dataclass(slots=True)
@@ -326,7 +343,14 @@ def boolean(
             findings=[*united, *_findings_for(stage, kind, meshes, result)],
         )
 
-    if emptied and cut_short:
+    # **„Nichts übrig" spricht nur dort über die Maße, wo sie es erklären**
+    # (Durchsicht welle4-b, L3): Eine Differenz ist leer, wenn das Werkzeug den
+    # Körper deckt, eine Schnittmenge, wenn es ihn verfehlt. Eine Vereinigung
+    # zweier Körper ist nie leer; liefert eine Stufe trotzdem nichts, hat der
+    # Kern aufgegeben, und es gilt der Satz ganz unten mit *Reparieren* — wie
+    # beim Umlaufen einer Textur, wo es gar kein Werkzeug gibt.
+    about_size = emptied and kind != "union"
+    if about_size and cut_short:
         # **„Nichts übrig" ist keine Aussage über die Maße, solange die Kette
         # noch Stufen hätte.** Genau das stand hier — „Kein Rückfall hilft
         # gegen Maße" —, und es ist widerlegt: Am Mast des Piratenschiffs
@@ -358,7 +382,7 @@ def boolean(
             cut_short=cut_short,
             transient=transient,
         )
-    if emptied:
+    if about_size:
         # Hier ist die Kette wirklich zu Ende, und dann sagt „nichts übrig"
         # etwas über die Maße. Die Handlung dazu ist eine andere als beim
         # Kernversagen: nicht reparieren, sondern nachrechnen.
@@ -371,7 +395,7 @@ def boolean(
             # liest, sucht einen Netzfehler; die Antwort liegt bei den Maßen, und
             # genau dorthin schicken die Vorschläge.
             title=NOTHING_LEFT_TITLE,
-            detail=NOTHING_LEFT_DETAIL,
+            detail=NOTHING_LEFT_DETAIL if kind == "difference" else NOTHING_SHARED_DETAIL,
             suggestions=(CORRECT_INPUT, CANCEL),
             attempted=tuple(attempted),
             seed=seed,
@@ -876,7 +900,9 @@ def _jitter(mesh: MeshData, seed: int | None, index: int) -> MeshData:
     """
     generator = np.random.default_rng((seed or 0) + index)
     body = mesh.raw.copy()
-    reach = max(mesh.bounds.diagonal, 1.0) * JITTER_AMPLITUDE * math.sqrt(3.0)
+    reach = min(
+        max(mesh.bounds.diagonal, 1.0) * JITTER_AMPLITUDE * math.sqrt(3.0), JITTER_REACH_LIMIT
+    )
     shape = np.asarray(body.vertices).shape
     body.vertices = body.vertices + (generator.random(size=shape) * 2.0 - 1.0) * reach
     return mesh.replacing(body)
@@ -1140,6 +1166,11 @@ NOTHING_LEFT_TITLE: Final = _("Es bleibt kein Körper übrig.")
 NOTHING_LEFT_DETAIL: Final = _(
     "Von dem Körper bleibt nichts übrig — das Werkzeug deckt ihn "
     "vollständig ab. Prüfen Sie Maß und Lage."
+)
+#: Derselbe Fall an einer Schnittmenge: Leer heißt dort, dass das Werkzeug den
+#: Körper verfehlt — „deckt ihn ab" sagte das Gegenteil.
+NOTHING_SHARED_DETAIL: Final = _(
+    "Von dem Körper bleibt nichts übrig — das Werkzeug trifft ihn nicht. Prüfen Sie Maß und Lage."
 )
 
 

@@ -22,6 +22,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A pesquisa encontra *Unir*, *Subtrair* e *Interseção* também como «booleano», e *Subtrair* também como «diferença».
 - A pesquisa encontra a função também para uma pergunta como «Como ponho a peça na mesa de impressão?» e conhece palavras de slicers e CAD como «variável».
 - Também a pesquisa no manual encontra a página certa para uma pergunta com as suas palavras.
+- Quem escreve «furo» ou «buraco» na pesquisa obtém *Abrir furo* num corpo e *Alterar furo* num furo selecionado, em todos os idiomas.
 - Com um corpo selecionado e um segundo na cena, o separador *Seleção* indica como acrescentar o segundo para *Unir*, *Subtrair* e *Interseção*.
 - O campo de pesquisa do separador *Seleção* está agora sempre presente, também sem seleção, e encontra cada função e cada comando com o seu atalho.
 - A paleta de comandos desaparece, porque o campo de pesquisa encontra o mesmo. *Pesquisar função* e Ctrl+Shift+P põem o cursor nele.
@@ -59,6 +60,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um corpo com rosca do catálogo de blocos volta a poder ser movido, rodado, espelhado, escalado e pousado na mesa. Na versão 0.6.0 a cadeia parava com um erro do programa.
 - No separador *Seleção*, um diâmetro abaixo do limite em *Alterar furo* remete agora para *Remover característica*, que remove o furo por completo, com o escareamento se quiser.
 - A reconstrução (*Reconstruir modelo*) já não aconselha outros limites quando nenhum valor permitido bastaria, e mostra as propostas iguais uma só vez.
+- Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 
 ## 0.6.0
 
