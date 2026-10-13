@@ -85,7 +85,9 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 `tests/conftest.py` hält die Maschine aus dem Ergebnis: Offscreen-Qt,
 Nutzerverzeichnisse im Temp-Ordner (§38), kein gefundenes Fremdprogramm, kein
 erreichbares Modell (`_the_network_stays_out_of_it` leert die Liste der
-Backends). Wer diese Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
+Backends). Einstellungen, Profile und eigene Bausteine kehren nach jedem
+Test zum vorherigen Dateiabbild zurück; Abbaufehler bleiben rot. Wer diese
+Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
 
 - **Kein Test öffnet eine echte Netzwerkverbindung.** Erreichbarkeit prüft man
   wie `test_backends.py` an einer selbst gebauten Instanz gegen einen sicher
@@ -335,11 +337,9 @@ in der `.venv` oder `constraints.txt` — es gehört nicht zum Produkt.
 
 ### Wie viele Läufe trägt eine Aussage?
 
-Das hängt an der Basisrate ohne jede Änderung (1/10 in Ruhe bis 5/5 unter
-Fremdlast): Bei 1/10 ist „0 von 10“ kein Beleg, sondern kein Widerspruch —
-sagen, was die Zahl trägt; bei 5/5 ist nichts messbar. **Die Messlatte steht
-vor der Messung.** Eine Rate sagt, dass etwas anders ist, nie was: **Zeigt der
-Verdacht auf eine benennbare Stelle, ist Lesen billiger als Zählen.**
+Basisrate ohne Änderung erheben; **die Messlatte steht vor der Messung**.
+Eine Rate belegt keine Ursache: **Benennbaren Verdacht zuerst lesen.**
+Die Beispiele und ihre Aussagegrenzen stehen in `regel-tests.md`.
 
 ## Was habe ich gerade gemessen?
 

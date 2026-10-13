@@ -102,7 +102,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 |---|---|
 | `app.py` | Einstieg (§38): lokaler Absturzschutz vor Qt nur in `main()`, idempotent; Rendereradapter früh abfragen |
 | `qt_platform.py` | Qt-Plattform der 3D-Ansicht und Eingabemodul — vor der `QGuiApplication`, ohne Qt-Import |
-| `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export samt `_warm_the_slicer`, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
+| `main_window.py` | Menüs, Auswahl, Vorschau, Export, Quittungen, Panel-/Flussverdrahtung (§2.5); Einzelheiten in `karte-app-ui.md` |
 | `splash.py` | Ladebildschirm beim Start (§2.8) |
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten je Modell gruppiert |
@@ -133,7 +133,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 
 | Datei | Zweck |
 |---|---|
-| `placement_flow.py` | Flächenplatzierung (§18.5): `_settle` setzt, `_begin_depth` steuert Tiefe, Escape ruft `step_back`. `PlacementHost` verbindet Dialog/`QuietHost`, `Session.placement_async` Fläche/Werkzeug, `_Dimensions` die Maße. Mündung zuerst, `0`=Durchgang. Alt-`measured_frame`: `operationen.md`. |
+| `placement_flow.py` | Flächenplatzierung und Maße im Bild (§18.5), Dialog/`QuietHost` über `PlacementHost`; Ablauf in `karte-app-ui.md`, `measured_frame` in `operationen.md` |
 | `slot_handle.py` | der Langlochgriff: zwei Knöpfe am gewählten Loch, der Zug gibt Länge und Richtung (`slotDragged`); übernommen wird im Merkmalfenster |
 | `scale_widget.py` | der Skalierwürfel am Gizmo (§18.11) |
 | `transform_bar.py` | die Bewegen-Leiste: drei Rollen, die Zahlen daneben (§18.11) |
@@ -143,7 +143,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
-| `selection_operations.py` | Auswahlhandlungen im Reiter Auswahl, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES`; `add_window_action`; Suchfeld mit Trefferliste (`set_search_sources`, `_HitList`) |
+| `selection_operations.py` | Auswahlhandlungen aus dem Register und Suchfeld mit Trefferliste; Auswahlregeln und Schnittstellen in `karte-app-ui.md` |
 | `tool_strip.py` | Werkzeugzeile unter der Ansicht (§2.4, §2.5) |
 | `analysis_bar.py` | Analysekarten, Legende und Schichtvorschau (§18.4, §18.10) |
 | `section_bar.py` | Schnittebene (§18.2) |
@@ -160,7 +160,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 |---|---|
 | `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle*, hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
-| `message_dialog.py` | Meldungen statt `QMessageBox`, Quittung am Ort (`acknowledge`, `withdraw`), Knopfnamen (`name_button`) |
+| `message_dialog.py` | Meldung und Ansage (`announce`), Quittung am Ort (`acknowledge`, `withdraw`), Knopfnamen (`name_button`) |
 | `input_dialog.py` | Eingaben ohne Ort (`ask_text`, `ask_choice`) |
 | `place_popup.py` | Eingabe am Ort: Farbwähler, Wertfeld (`PlacePopup`) |
 | `calibration_dialog.py` | Material kalibrieren (§28.3) |
@@ -248,10 +248,10 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | Datei | Zweck |
 |---|---|
 | `manual_window.py` | Suche in `core/manual_search.py`; F1-Anker nur für geprüfte `MarkdownNoHTML`-Überschriften (`core/manual.py`) |
-| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError` |
+| `guide_targets.py` | Gemeinsame Ziele für Tour, Anleitungen und Prüfstand: `TARGET_PROPERTY`, Menü-`objectName`, `next_click`; `view.edge:<körper>`/`edge_point_for` wählt eine gepickte Kante. Fehlend: `MissingTargetError`; API in `karte-app-ui.md` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
-| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac; `native_key`: die Taste in der Schreibweise der Plattform; `nothing_to_take_back`: Strg+Z/Y ans Fenster, wenn das Feld nichts zurückzunehmen hat |
+| `shortcut_schemes.py` | Kürzel und Plattformtasten; `nothing_to_take_back`: Strg+Z/Y ans Fenster, wenn das Feld nichts zurückzunehmen hat; weitere Helfer in `karte-app-ui.md` |
 
 ### Einstellungen und Rückmeldung
 
@@ -274,7 +274,9 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 - **Panel und Bild:** `QuietHost`: `feature_field`/`feature_field_values`.
   `set_measuring` übergibt Abschluss an die Maßgruppe; Panelzwillinge aus
   (`_blocks`, `LEADS_INTO_THE_VIEW`, `_in_the_view`); Fußknöpfe bleiben beim
-  Neuaufbau verborgen. `handlingArmed` ändert keine Werte.
+  Neuaufbau verborgen. `measure_op` nennt die Handlung der Maßgruppe;
+  `request_in_view` schärft über den Knopfweg, eigene scharfe Bildwege gehen vor.
+  `handlingArmed` ändert keine Werte.
 - **Wiederverwendung:** `FeaturePanel`-Zeilen nach `_row_signature` über
   `_keep_rows_for_reuse`, Schlüssel/Op/Felder aus aktuellem Aufruf.
   Maßgruppen über `_release_measure_group`, `bind_measure_group`,
@@ -331,6 +333,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   fragt das Ziel. `_run_action_for` und `actionOnBodies` sammeln Schritte in
   einer `Session.one_step`-Transaktion; `_PER_BODY_ACTIONS` verwendet je Körper
   den Befund aus `_MEMBERS_ROLE`.
+- Baumzeilen über `topLevelItem`/`child` gehen; kein langlebiger
+  `QTreeWidgetItemIterator` beim Qt-Abbau (Grund in `karte-app-ui.md`).
 - Baum: Bündel nach Name/Maß (`BUNDLE_FROM`); `relations.cavity_chains` einmal
   je `SceneObject`, als vollständiger Ast. Eine einzelne Bausteinzeile trägt
   selbst den Namen statt eines zusätzlichen Dachs; eine funktionale Gruppe

@@ -102,7 +102,7 @@ hat eine Zählgröße und eine Schwelle (Tabellen unten).
 | 15 | Halt und Einfügemarke | bei angehaltener Kette der Grund mit Schrittnummer; bei gesetzter Einfügemarke Ergebnis am Stand davor oder Absage mit *Einfügen beenden* (`fenster.md`) | je ein erzwungener Fall |
 | 16 | Projektwechsel | Ein Wechsel während Vorschau, Entwurf oder Rechnung räumt alles ab; nichts Spätes meldet ins neue Projekt | „Öffnen während der Rechnung“ |
 | 17 | Agentenweg | Das Agentenwerkzeug nennt denselben Ort (`menu_path` in `tool_schemas()`); ein Undo nimmt einen Vorschlag mit dieser Operation ganz zurück (Regel 16) | Ort offline; der Lauf in der Agenten-Suite |
-| 18 | Lizenzzustand | In der Demo und nach Ablauf grau mit Grund, nur Lesendes läuft weiter (`kern.md`, Lizenzgrenze) | zwei Läufe mit vorbereitetem Profil |
+| 18 | Lizenzzustand | In Demo und nach Ablauf grau mit Grund, nur Lesendes läuft weiter; schreibendes Ziel frei oder versteckt statt grau: jeweils *mittel*. Auswahl und bei offenem Ziel der ganze Handlungsweg müssen gelaufen sein; Nullwerte und beschädigte Einträge sind ungemessen (`kern.md`, Lizenzgrenze) | zwei Läufe mit vorbereitetem Profil |
 | 19 | Gestaltung | Wirkt sie zeitgemäß, ruhig und hochwertig — und bleibt sie dabei einfach? Nutzt sie, was Solidon besser kann, statt eines klassischen Formulars? | G1–G9, Z1–Z7, I1–I6 |
 
 **Szenenabdruck:** Ops, Parameter, Projektparameter, Passungen und der Hash der
@@ -129,7 +129,7 @@ Beispielziel je Zeile vorab festgelegt (etwa „Bohrung auf 5 mm“):
 | V2 | Satzlängen | die Grenzen aus `test_text_length` |
 | V3 | Felder mit eigenem Satz (Kurzhilfe und zugängliche Beschreibung) | 100 %; der Satz teilt höchstens die Hälfte seiner Wörter mit dem Titel |
 | V4 | Vorhersage: Der Prüfer schreibt vor dem Übernehmen aus Titel, erstem Satz und Vorschau auf, was geschehen wird | Abweichung vom Ergebnis ist ein Fund |
-| V5 | Meldungen | jede sagt, was nicht ging, warum und was jetzt; ihre Handlung löst das Problem. Ein Sperrgrund am grauen Bedienelement ist keine Meldung und braucht keinen Knopf, nennt aber den Ausweg (Menüweg oder offener Knopf); ohne Ausweg ist er ein Fund *mittel* |
+| V5 | Meldungen | jede sagt, was nicht ging, warum und was jetzt; ihre Handlung löst das Problem. Ein Sperrgrund am grauen Element braucht keinen Knopf, nennt aber den Ausweg: Menüweg A → B, ganze Wörter eines offenen Knopfs, ein Satz, der selbst der Weg ist (Rechensperre), oder Titel eines offenen Felds derselben Fläche; ohne Ausweg ein Fund *mittel* |
 | V6 | Kurzhilfen, die man bis zum Ziel öffnen muss | ≤ 1; nie das Handbuch |
 
 **Gestaltung** — innovativ und modern, aber einfach bedienbar (Robert,

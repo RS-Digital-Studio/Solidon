@@ -792,6 +792,23 @@ während `_feature_group_topology` sie als unsicher führte (P1.5).
 
 ## Die Auskunft für das Merkmalspanel
 
+`actions.py` ist die eine Stelle, die sagt, welche Handlung für welche Art
+gilt — **abgeleitet aus `applies_to`**, keine Tabelle daneben (`actions_for`);
+die Oberfläche fragt die Art nicht, sie rendert die Liste. Der Kern fragt
+dasselbe (`reason_against`, gerufen von `geom/prepare_ops.py`), `instead_of`
+nennt die Schwester einer Zeile;
+`tests/test_features.py::test_the_operation_refuses_exactly_what_the_panel_greys_out`
+hält beide Wege zusammen.
+
+
+`FeatureAction.key` ist der feste Name für `feature:<key>` und
+`guides.action_key`; leer bedeutet den Operationsnamen. Wo dieser mehrere
+Handlungen bezeichnet oder eine Handlung keine Operation trägt, kommt der
+Schlüssel aus `PART_ACTION_KEYS` beziehungsweise `TEXTURE_ACTION_KEYS`.
+Kantenvarianten heißen `<op>.<mode>` gemäß `EDGE_VARIANT_KEYS`; eine gesperrte
+Zeile behält die Operation, für die sie steht. Es gibt keine zweite
+Kennungstabelle in UI oder Prüfstand.
+
 `actions.py` ist die eine Stelle, an der steht, welche Handlung für welche
 Merkmalsart gilt — **abgeleitet aus `applies_to` im Register**, nicht als
 Liste daneben. Eine zweite Tabelle wüsste beim nächsten Registereintrag die

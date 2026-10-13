@@ -86,7 +86,7 @@ in der Zeilenspezifikation.
 | V2 | Satzlängen | die Grenzen aus `test_text_length` | A | `texts` |
 | V3 | Felder mit eigenem Satz (Kurzhilfe und zugängliche Beschreibung) | 100 %; höchstens die Hälfte der Wörter mit dem Titel geteilt | A | `fields` |
 | V4 | Vorhersage aus Titel, erstem Satz und Vorschau vor dem Übernehmen | Abweichung vom Ergebnis ist ein Fund | B | Urteil mit `prediction` |
-| V5 | Meldungen: was nicht ging, warum, was jetzt | jede Handlung löst das Problem; ein Sperrgrund am grauen Element braucht keinen Knopf, nennt aber den Ausweg | A misst, B urteilt | `messages[].actions` |
+| V5 | Meldungen: was nicht ging, warum, was jetzt | Handlung löst das Problem; Sperrgrund ohne Knopf nennt Menüweg, ganze Wörter eines offenen Knopfs, selbst erklärenden Auswegsatz oder offenen Feldtitel derselben Fläche | A misst, B urteilt | `messages[].actions` |
 | V6 | Kurzhilfen, die man bis zum Ziel öffnen muss | ≤ 1; nie das Handbuch | A misst, B zählt | `windows` (Handbuchfenster) |
 
 ## Vorschlag, Entscheidung, Abnahme

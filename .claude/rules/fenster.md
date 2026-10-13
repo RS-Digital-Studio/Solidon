@@ -73,17 +73,11 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   Texte länger. Neue Quittung ersetzt alte, Fortschritt überschreibt sie nicht.
   Kontextwechsel/Abbau beendet den Timer. Keine neue Zone und kein zweites
   Live-Ereignis für Bildschirmleser.
-- Einladungen stehen über der Ansicht, nie unter Karten: `survey.ViewNotice`
-  für `SurveyNotice` nach 15 aktiven Minuten und `SupportNotice` nach dem
-  dritten erfolgreichen Export/Slicerstart einer Version; nichtmodal,
-  ohne Fokus beim Erscheinen, bis zum Klick sichtbar.
-  `spot` sucht die oberste freie Stelle gegen `keep_clear_of` (Zonen,
-  Ansichtsleiste, Vorschau-/Ziehwertband), zuerst zwischen, sonst unter der
-  kürzeren Karte. Neue Overlays dort anmelden. Nur Unterstützung weicht der
-  Rückfrage aus, nie gegenseitig. Nicht über Startseite/modalem Dialog zeigen
-  (Druckdialog nach `exec`), sonst beim nächsten Ergebnis. Erst Zeigen zählt
-  als gesehen; `_announce_written`/`handedOver` zählen nur erfolgreiche Datei,
-  Slicen oder Öffnen, nie Versuch, Abbruch, Fehler oder Rückfrage.
+- Einladungen (`survey.ViewNotice`) bleiben nichtmodal ohne Fokus über der
+  Ansicht, nie unter Karten. Neue Overlays bei `keep_clear_of` anmelden.
+  Erst Zeigen zählt als gesehen; nur erfolgreiche Datei, Slicen oder Öffnen
+  zählen als Anlass. Schwellen, Platzsuche und Rückfragenvertrag stehen in
+  `regel-fenster.md`, „Fenster“.
 - Die Einladung der leeren Szene steht nicht über Skizze, offenem
   Operationsdialog oder Vorschau: Wer einen dieser Zustände schaltet, ruft
   `_show_invitation`.
@@ -196,7 +190,7 @@ Stellen halten das, beide sind nötig:
   Zeile, dazu in Kurzhilfe, Statuszeile und zugänglicher Beschreibung; die
   Sperre überlebt den Neuaufbau der Zeilen und fällt nach einem Undo
   (`test_a_halted_chain_takes_no_new_step_and_names_the_way_on`). Die
-  Freischaltung sagt sichtbar nur die Zeile unter dem Suchfeld (FD-32).
+  Freischaltung sagt sichtbar nur die Zeile unter dem Suchfeld.
 
 ## Der Prüfbericht
 
@@ -420,9 +414,10 @@ Für Druckerwahl und Druckdialog gilt `druckerwahl.md`.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 
-Weggeräumt wird mit `hide()` und `deleteLater()`, nie über den Elternteil. Ein
-Dialog gibt sich nach `exec` im `finally` frei, ein offener über `finished` oder
-`WA_DeleteOnClose` (`test_dialog_lifetime.py`).
+Weggeräumt wird mit `hide()` und `deleteLater()`, nie über den Elternteil.
+Nach `exec` Rückgabewerte im `try` lesen, den Dialog im `finally` freigeben.
+Nichtmodale Dialoge geben sich am `finished`, über `WA_DeleteOnClose` oder
+im Endrückruf frei (`test_dialog_lifetime.py`).
 
 ## Die automatische Sicherung
 
@@ -448,8 +443,9 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 nicht `natural_height`); abgezogen wird, was nicht den Karten gehört; jede
 Karte nennt ihren Boden (`least_height`, nie über ihrem Wunsch); viele feste
 Zeilen rollen (`FittedScroller`). Ungleiche Zeilen misst `rows_height`, und
-`wanted_height` fragt dieselbe Quelle; was unter der Liste steht, gehört in
-beide Rechnungen.
+`wanted_height` fragt dieselbe Quelle; Inhalt unter der Liste samt Abstand
+gehört in beide Rechnungen. Reiterrahmen: `QTabWidget.sizeHint()` minus
+höchste Wunschhöhe der sichtbaren Seiten, nie minus `stack.sizeHint()`.
 
 **Gesetzt wird einmal je Durchlauf** (`_place_later`, gleitend; `resizeEvent`
 und `reflow` sofort, auch im Gleiten); wer misst, legt fest
