@@ -1627,6 +1627,17 @@ QToolButton:focus {{
     padding: {TIGHT - 1}px {NORMAL - 1}px;
 }}
 
+/* Die beiden Hauptwerkzeugleisten bilden schon eine gemeinsame Fläche.
+   In Ruhe braucht nicht jeder ihrer Knöpfe eine eigene Kante. Nur direkte
+   Kinder: Modusknöpfe in aufgeklappten Werkzeugkarten behalten ihren Rahmen.
+   Rahmenbreite und Innenabstand bleiben auch hier erhalten; Hover, Fokus,
+   Drücken und Auswahl tragen unverändert ihre sichtbaren Zustände. */
+QToolBar#mainTools > QToolButton:!hover:!pressed:!checked:!focus,
+QWidget#mainToolStrip > QToolButton:!hover:!pressed:!checked:!focus {{
+    border-color: transparent;
+    background: transparent;
+}}
+
 /* **Gesperrt war nicht zu erkennen.** Für das Ankreuzfeld gab es gar keine
    Regel; Qt zeichnet das Kästchen dann nativ und in beiden Zuständen
    gleich, während die Beschriftung daneben über die Palette verblasste —
