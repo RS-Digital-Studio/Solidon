@@ -979,7 +979,7 @@ def test_the_bed_is_drawn_in_the_colours_of_the_theme(
     viewport.show_build_volume(profile)
 
     assert renderer.drawn, "die Platte wurde nie gezeichnet"
-    assert renderer.colour_of("bed_0") == viewport._bed_colour, (
+    assert renderer.colour_of("bed_0") == THEMES["light"]["bed_grid"], (
         "das Raster nahm die Farbe des Themas nicht an"
     )
     assert renderer.colour_of("bed_surface_0") == viewport._bed_surface, (
