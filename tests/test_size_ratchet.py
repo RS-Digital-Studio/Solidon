@@ -345,6 +345,77 @@ def test_init_takes_only_what_git_versions(
     assert not (loose / LIST).exists()
 
 
+def _moving_window(root: Path, carried: list[str]) -> None:
+    """Ein Umzug wie Konzept 4.3, Schritt 4b: ``app/big.py`` mit ``Window`` ist HEAD und
+    gelistet, danach liegt ``Window`` mit ``carried`` in ``app/big/window.py``."""
+    _repo(root, {"app/big.py": _window(["m0", "m1", "m2"]), "app/other.py": "x = 1\n"})
+    (root / "app" / "big.py").unlink()
+    _write(root, {"app/big/window.py": _window(carried)})
+
+
+def test_move_carries_a_listed_file_to_its_new_path(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Eine gelistete Datei zieht um, ihre Definitionen mit ihr: Die Liste trägt den neuen Pfad
+    (Durchsicht W13, Fund 2). Vorher blieb nur die Handänderung der Liste."""
+    _moving_window(tmp_path, ["m0", "m1", "m2"])
+    write = size_ratchet.write_list
+    write(tmp_path / LIST, {"app/big.py": 4})
+    run = ["--root", str(tmp_path)]
+
+    assert size_ratchet.main(run) == 1
+    assert "--move" in capsys.readouterr().out
+    assert size_ratchet.main([*run, "--move", "app/big.py", "app/big/window.py"]) == 0
+    assert size_ratchet.read_list(tmp_path / LIST) == {"app/big/window.py": 4}
+
+
+@pytest.mark.parametrize(
+    ("carried", "listed", "targets", "said"),
+    [
+        (["m0", "m1", "m2", "added"], {"app/big.py": 4}, ["app/big/window.py"], "added"),
+        (["m0", "m1", "m2"], {"app/big.py": 4}, ["app/other.py"], "HEAD"),
+        (["m0", "m1", "m2"], {}, ["app/big/window.py"], "nicht in der"),
+        (
+            ["m0", "m1", "m2"],
+            {"app/big.py": 4, "app/big/window.py": 4},
+            ["app/big/window.py"],
+            "gelistet",
+        ),
+        (["m0", "m1", "m2"], {"app/big.py": 4}, ["app/big/missing.py"], "fehlt"),
+    ],
+    ids=["neue Definition", "in vorhandene Datei", "ALT ungelistet", "NEU gelistet", "NEU fehlt"],
+)
+def test_move_refuses_anything_but_a_pure_move(
+    tmp_path: Path,
+    carried: list[str],
+    listed: dict[str, int],
+    targets: list[str],
+    said: str,
+) -> None:
+    """Was am neuen Ort steht, stand an HEAD in der alten Datei — sonst kein Umzug."""
+    _moving_window(tmp_path, carried)
+    _write(tmp_path, {"app/other.py": _window(["m0", "m1", "m2"])})
+
+    with pytest.raises(size_ratchet.RatchetError, match=said):
+        size_ratchet.moved(tmp_path, listed, "app/big.py", targets)
+
+
+def test_move_refuses_while_the_old_file_is_still_long_or_the_new_one_short(
+    tmp_path: Path,
+) -> None:
+    """Ein Umzug lässt die alte Datei unter der Grenze zurück; was kurz ist, braucht keinen
+    Eintrag."""
+    _moving_window(tmp_path, ["m0", "m1", "m2"])
+    _write(tmp_path, {"app/big.py": _window(["m0"])})
+    with pytest.raises(size_ratchet.RatchetError, match="über"):
+        size_ratchet.moved(tmp_path, {"app/big.py": 4}, "app/big.py", ["app/big/window.py"])
+
+    (tmp_path / "app" / "big.py").unlink()
+    _write(tmp_path, {"app/big/window.py": "class Window:\n    pass\n"})
+    with pytest.raises(size_ratchet.RatchetError, match="keinen Eintrag"):
+        size_ratchet.moved(tmp_path, {"app/big.py": 4}, "app/big.py", ["app/big/window.py"])
+
+
 def test_git_counts_new_files_but_not_ignored_or_deleted_ones(tmp_path: Path) -> None:
     """Eine neue Datei ist vor dem Commit rot; ignorierte Kopien und gelöschte zählen nicht."""
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)

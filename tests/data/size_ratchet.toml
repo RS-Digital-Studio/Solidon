@@ -2,7 +2,8 @@
 # unter app/, tools/ und tests/ mit mehr als 2 000 Zeilen und die Zahl ihrer
 # Definitionen (Funktionen, Methoden, Klassen, auch geschachtelte). Die Zahl gilt
 # genau. Geschrieben von tools/size_ratchet.py — --lower senkt und trägt aus,
-# --raise nur für Ordnungsschritte —, nie von Hand.
+# --raise für Ordnungsschritte, --move für Umzüge —, nie von Hand. Fehlt sie oder
+# steht sie im Konflikt: eine Seite aus Git nehmen, dann --lower, nie --init.
 
 "app/core/backends/llm.py" = 118
 "app/core/brep/edit.py" = 136

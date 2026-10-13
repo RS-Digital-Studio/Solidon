@@ -13,12 +13,15 @@ gesenkt. Zeilen in bestehenden Rümpfen bleiben frei, das ist der Fix-Fall.
     python tools/size_ratchet.py --lower       # senkt und trägt aus, hebt nie
     python tools/size_ratchet.py --raise app/ui/main_window.py 2 \\
         --sections MainWindow._build_file_menu MainWindow._build_edit_menu
+    python tools/size_ratchet.py --move app/ui/main_window.py app/ui/main_window/window.py
     python tools/size_ratchet.py --init        # legt die Liste einmal an
 
 ``--raise`` gehört nur Ordnungsschritten (Konzept 4.3, Schritt 4c): Er hebt die
 Zahl einer gelisteten Datei um genau die Abschnitte, die der Commit nennt, und
-verlangt, dass gegenüber HEAD genau sie neu sind; er läuft vor dem Commit des
-Schritts. ``--init`` legt die Liste ein einziges Mal an (Codestruktur
+verlangt, dass gegenüber HEAD genau sie neu sind. ``--move`` trägt einen Umzug
+ein (Schritt 4b): Die alte Datei fällt aus der Liste, die neuen über der Grenze
+kommen hinein, wenn alles an ihnen an HEAD in der alten stand. Beide laufen vor
+dem Commit des Schritts. ``--init`` legt die Liste ein einziges Mal an (Codestruktur
 Schritt 0), nur aus versionierten Dateien, und verweigert sich, sobald Git die
 Liste je gesehen hat: Eine gelöschte Liste neu anzulegen segnete jeden Verstoß
 seit ihrem letzten Stand; fehlt sie, wird sie aus Git zurückgeholt und mit
@@ -30,7 +33,7 @@ Git jede Datei unter den drei Ordnern. Zeilen sind Zeilenumbrüche wie bei
 ``wc -l``, nicht ``str.splitlines()``: Das trennt auch an ``\\x0c`` und
 ``\\u2028`` in Zeichenketten und zählte ``tests/test_recipes.py`` eine Zeile zu
 lang. Exit 0 ohne Verstoß, 1 mit Verstoß, 2, wenn das Werkzeug nicht prüfen
-kann (Liste fehlt oder ist kaputt, falscher Ordner, abgelehnter ``--raise``).
+kann (Liste fehlt oder ist kaputt, falscher Ordner, abgelehnter Schreibweg).
 """
 
 from __future__ import annotations
@@ -74,7 +77,8 @@ HEADER: Final = (
     "# unter app/, tools/ und tests/ mit mehr als 2 000 Zeilen und die Zahl ihrer",
     "# Definitionen (Funktionen, Methoden, Klassen, auch geschachtelte). Die Zahl gilt",
     "# genau. Geschrieben von tools/size_ratchet.py — --lower senkt und trägt aus,",
-    "# --raise nur für Ordnungsschritte —, nie von Hand.",
+    "# --raise für Ordnungsschritte, --move für Umzüge —, nie von Hand. Fehlt sie oder",
+    "# steht sie im Konflikt: eine Seite aus Git nehmen, dann --lower, nie --init.",
 )
 
 Kind = Literal["too_long", "new_definition", "not_lowered", "release"]
@@ -252,7 +256,9 @@ def check(sizes: Mapping[str, Size], listed: Mapping[str, int]) -> list[Violatio
                     "too_long",
                     f"{name}: {size.lines} Zeilen, mehr als {LIMIT}, und nicht in der "
                     f"Sperrklinke. Die Liste wächst nie um eine Datei: teilen, sodass "
-                    f"jedes Modul unter {LIMIT} Zeilen bleibt. {RULES}",
+                    f"jedes Modul unter {LIMIT} Zeilen bleibt. Zieht eine gelistete Datei "
+                    "um (Konzept 4.3, Schritt 4b), trägt `python tools/size_ratchet.py "
+                    f"--move ALT NEU …` den neuen Pfad ein. {RULES}",
                 )
             )
     for name, count in listed.items():
@@ -390,6 +396,79 @@ def raised(
     return {**listed, name: len(now)}
 
 
+def at_head(root: Path, name: str) -> bool:
+    """Hat der Stand HEAD die Datei ``name``?"""
+    try:
+        _git(root, "cat-file", "-e", f"HEAD:{name}")
+    except OSError, subprocess.CalledProcessError:
+        return False
+    return True
+
+
+def moved(
+    root: Path, listed: Mapping[str, int], old: str, targets: Sequence[str]
+) -> dict[str, int]:
+    """Die Liste nach einem Umzug: ``old`` zieht nach ``targets`` (Konzept 4.3, Schritt 4b).
+
+    Ein Umzug trägt nichts Neues mit. Verlangt wird: ``old`` ist gelistet und
+    liegt jetzt nicht mehr über der Grenze oder fehlt; jedes Ziel ist ungelistet,
+    neu gegenüber HEAD und über der Grenze; alle Definitionen der Ziele standen
+    an HEAD in ``old`` (Menge mit Vielfachheit). Dann fällt ``old`` aus der Liste,
+    und jedes Ziel steht mit seiner gezählten Zahl darin. Auch der Weg für das
+    Verschiebewerkzeug (``move_names``), das nach dem Schnitt hierher ruft.
+    """
+    if old not in listed:
+        raise RatchetError(
+            f"{old} steht nicht in der Sperrklinke — --move trägt nur eine gelistete Datei um"
+        )
+    if not targets or len(set(targets)) != len(targets) or old in targets:
+        raise RatchetError(f"--move {old} braucht neue Pfade, jeden einmal und keiner gleich {old}")
+    if (root / old).exists():
+        lines = line_count(_source(root / old))
+        if lines > LIMIT:
+            raise RatchetError(
+                f"{old} hat noch {lines} Zeilen, über der Grenze — ein Umzug lässt die alte "
+                "Datei höchstens mit 2 000 Zeilen zurück oder entfernt sie"
+            )
+    before = head_definitions(root, old)
+    if before is None:
+        raise RatchetError(
+            f"{old} gibt es an HEAD nicht — --move misst gegen den Stand HEAD und läuft vor "
+            "dem Commit des Umzugs"
+        )
+    result = {name: count for name, count in listed.items() if name != old}
+    carried: Counter[str] = Counter()
+    for target in targets:
+        if target in listed:
+            raise RatchetError(f"{target} ist schon gelistet — ein Umzug zieht in neue Dateien")
+        if not is_tree_path(target) or not (root / target).is_file():
+            raise RatchetError(
+                f"{target} fehlt oder ist keine *.py unter {', '.join(AREAS)} — erst "
+                "verschieben, dann --move"
+            )
+        if at_head(root, target):
+            raise RatchetError(
+                f"{target} gibt es schon an HEAD — ein Umzug zieht in neue Dateien, nicht in "
+                f"vorhandene. {RULES}"
+            )
+        source = _source(root / target)
+        if line_count(source) <= LIMIT:
+            raise RatchetError(
+                f"{target} liegt nicht über der Grenze und braucht keinen Eintrag — nur "
+                "Ziele über 2 000 Zeilen nennen"
+            )
+        names = definition_names(source, target)
+        carried += Counter(names)
+        result[target] = len(names)
+    foreign = carried - Counter(before)
+    if foreign:
+        raise RatchetError(
+            f"am neuen Ort stehen Definitionen, die an HEAD nicht in {old} standen: "
+            f"{', '.join(sorted(foreign.elements()))} — ein Umzug trägt nichts Neues mit. {RULES}"
+        )
+    return result
+
+
 def is_tree_path(name: str) -> bool:
     """Ein relativer POSIX-Pfad zu einer ``*.py`` unter einem der drei Ordner."""
     path = PurePosixPath(name)
@@ -474,6 +553,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar=("PFAD", "N"),
         help="Ordnungsschritt: Zahl einer gelisteten Datei um N Abschnitte heben",
     )
+    mode.add_argument(
+        "--move",
+        nargs="+",
+        metavar="PFAD",
+        help="Umzug: ALT NEU …, die gelistete Datei ALT zieht nach NEU",
+    )
     mode.add_argument("--init", action="store_true", help="die Liste einmal anlegen")
     parser.add_argument(
         "--sections", nargs="+", default=[], metavar="ABSCHNITT", help="die Abschnitte zu --raise"
@@ -503,6 +588,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not amount.isdigit():
                 raise RatchetError(f"--raise {name} {amount}: N ist die Zahl der Abschnitte")
             after = raised(root, listed, name, int(amount), args.sections)
+        elif args.move:
+            if len(args.move) < 2:
+                raise RatchetError("--move braucht ALT und mindestens einen neuen Pfad")
+            after = moved(root, listed, args.move[0], args.move[1:])
         else:
             return _report(sizes, listed, [])
         if after != listed:
