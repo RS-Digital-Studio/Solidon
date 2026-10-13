@@ -373,11 +373,11 @@ Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten beheb
 - Schwere: leicht
 - Funktion: `resize_hole`
 - Prüfpunkt: 1
-- Beleg: am echten Fenster verborgen, ohne Fenster sichtbar (`n5-echt.out`, `n5-offscreen.out`, D0-P2); zugeordnet in `fix-bohrung-sichtbar.md` §1 (`7e6b47eb0`)
-- Ursache: gewollt nach RM-199 (`FeaturePanel.set_measuring`): Die Maßgruppe der Handlung steht im Bild, rechts ist ihr Kopf deshalb verborgen; der Prüfstand fand die Handlung nur rechts.
-- Vorschlag: am echten Fenster nachstellen, Ursache zuordnen, beheben; Fenstertest an der kleinsten Arbeitsfläche.
-- Wirkung beim Kunden: Er findet an seiner Bohrung die Handlung nicht, die sie ändert.
-- Stand: offen RM-737
+- Beleg: am echten Fenster verborgen, ohne Fenster sichtbar (`n5-echt.out`, `n5-offscreen.out`, D0-P2); am echten Fenster nachgestellt und zugeordnet in `output/konsolidierung-2026-10-12/fix-bohrung-sichtbar.md`
+- Ursache: gewollt nach RM-199 (`FeaturePanel.set_measuring`): Die Maßgruppe der Handlung steht im Bild, rechts ist ihr Kopf deshalb verborgen; die Zeile startete an einer gesetzten Bohrung, und der Prüfstand fand die Handlung nur rechts.
+- Vorschlag: die Zeile an einer erkannten Bohrung beginnen lassen (`erkannte_bohrung.netz`); der Prüfstand fragt die Maßgruppe im Bild nach ihrer Handlung.
+- Wirkung beim Kunden: Keine Sackgasse: Die Maße der Bohrung stehen nach dem Klick im Bild, *Bohrung ändern* findet die Suche der Karte.
+- Stand: behoben `67058d32d`, Prüfstand `0b1e61346`
 
 ### FD-30 Zwei Sperrgründe nennen keinen Ausweg
 
