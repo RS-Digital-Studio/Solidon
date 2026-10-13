@@ -11751,6 +11751,15 @@ class FeaturePanel(QWidget):
         """Ob gerade Maße im Bild stehen (:meth:`set_measuring`)."""
         return self._measuring
 
+    @property
+    def measured_op(self) -> str | None:
+        """Die Handlung, deren Maßgruppe im Bild steht — ohne Messen keine.
+
+        Nicht immer die scharfe: Nach der Auswahl einer erkannten Bohrung trägt
+        die Gruppe *Bohrung ändern*, scharf bleibt *Merkmal verschieben*.
+        """
+        return self._measure_op
+
     def set_measuring(self, active: bool, *, op: str | None = None, begun: bool = False) -> None:
         """Während der Maßgruppe gibt es deren Felder und Abschluss genau einmal.
 
