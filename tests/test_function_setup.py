@@ -781,6 +781,12 @@ def test_nothing_is_measured_below_the_smallest_screen() -> None:
         def __init__(self) -> None:
             self.calls: list[tuple[str, Any]] = []
 
+        def isMaximized(self) -> bool:  # noqa: N802 - Qts Name
+            return False
+
+        def screen(self) -> None:
+            return None
+
         def resize(self, width: int, height: int) -> None:
             self.calls.append(("resize", (width, height)))
 
@@ -822,6 +828,96 @@ def test_nothing_is_measured_below_the_smallest_screen() -> None:
         function_setup.below_smallest({"geometry": [0, 0, 796, 796]}, function_setup.Variant())
         == ""
     )
+
+
+@pytest.mark.parametrize("next_place", ["same", "other", "sized"])
+def test_window_placement_preserves_maximized_client_and_accepts_new_target(next_place):
+    """FD75: Wiederholung wahrt den Client; Monitor und Größenvariante bleiben wechselbar."""
+    from PySide6.QtCore import QRect
+
+    class Screen:
+        def __init__(self, label, x):
+            self.label, self.area = label, QRect(x, 78, 2560, 1392)
+
+        def name(self):
+            return self.label
+
+        def model(self):
+            return self.label
+
+        def manufacturer(self):
+            return ""
+
+        def availableGeometry(self):  # noqa: N802 - Qts Name
+            return self.area
+
+        def devicePixelRatio(self):  # noqa: N802 - Qts Name
+            return 1.0
+
+    first, second = Screen("Erster", 0), Screen("Zweiter", 3413)
+
+    class Application:
+        def screens(self):
+            return [first, second]
+
+        def primaryScreen(self):  # noqa: N802 - Qts Name
+            return first
+
+    class Window:
+        def __init__(self):
+            self.maximized, self.current = False, first
+            self.calls = []
+            self.size = None
+
+        def isMaximized(self):  # noqa: N802 - Qts Name
+            return self.maximized
+
+        def screen(self):
+            return self.current
+
+        def showNormal(self):  # noqa: N802 - Qts Name
+            self.calls.append(("normal", None))
+            self.maximized = False
+
+        def setGeometry(self, area):  # noqa: N802 - Qts Name
+            self.calls.append(("geometry", self.maximized))
+            self.current = first if area == first.area else second
+
+        def showMaximized(self):  # noqa: N802 - Qts Name
+            self.calls.append(("maximized", None))
+            self.maximized = True
+
+        def resize(self, width, height):
+            self.calls.append(("resize", self.maximized))
+            self.size = (width, height)
+
+        def move(self, point):
+            self.calls.append(("move", None))
+            self.current = first if point == first.area.topLeft() else second
+
+        def show(self):
+            self.calls.append(("show", None))
+
+    window = Window()
+    function_setup.place_window(Application(), window, function_setup.Variant(screen="Erster"))
+    assert window.maximized and window.current is first
+    assert window.calls == [("geometry", False), ("maximized", None)]
+    window.calls.clear()
+    variant = function_setup.Variant(
+        screen="Zweiter" if next_place == "other" else "Erster",
+        window_size="1920x1009" if next_place == "sized" else "",
+    )
+    placed = function_setup.place_window(Application(), window, variant)
+    if next_place == "same":
+        assert window.maximized and window.current is first
+        assert all(name != "geometry" and name != "normal" for name, _ in window.calls)
+    elif next_place == "other":
+        assert window.maximized and window.current is second
+        assert placed["screen"] == "Zweiter"
+        assert window.calls == [("normal", None), ("geometry", False), ("maximized", None)]
+    else:
+        assert not window.maximized and window.size == (1920, 1009)
+        assert window.calls == [("normal", None), ("resize", False), ("move", None), ("show", None)]
     assert function_setup.WINDOW_SIZES == ("1920x1009",)
 
 
