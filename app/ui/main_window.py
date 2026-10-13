@@ -3920,6 +3920,7 @@ class MainWindow(QMainWindow):
         # Werkzeug beim Schließen zurückgenommen wird, steht hier und nicht in
         # den Leisten — verdrahtet wird sowieso an dieser Stelle.
         self.tools = ToolStrip(self)
+        self.tools.setObjectName("mainToolStrip")
         tools_window_ref = weakref.ref(self)
         self.tools.activation_allowed = lambda key: (
             (window := tools_window_ref()) is not None
@@ -5845,6 +5846,7 @@ class MainWindow(QMainWindow):
         )
 
         toolbar = QToolBar(tr("Werkzeuge"), self)
+        toolbar.setObjectName("mainTools")
         self.toolbar = toolbar
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
