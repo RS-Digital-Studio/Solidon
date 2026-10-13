@@ -107,7 +107,8 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 **Eine Meldung ist kein `QMessageBox`, eine Eingabe kein `QInputDialog` oder
 `QColorDialog`** (Z5): `message_dialog`, `input_dialog`, am Ort `place_popup`;
 nur die Fragen hier bleiben `QMessageBox`. Erfolg und Hinweis quittiert der
-Dialog selbst (`acknowledge`, Z2), `inform` nur ein Scheitern (`test_input_dialog`).
+Dialog selbst (`acknowledge`, Z2), `inform` nur ein Scheitern (`test_input_dialog`);
+eine Fehlermeldung mit Handlung (`show_error`) darf modal sein (Z2-Ausnahme).
 
 Die gewollten Ausnahmen von Regel 19, und was sie davon abhält, zur Blockade zu
 werden:

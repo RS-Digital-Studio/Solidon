@@ -129,7 +129,7 @@ Beispielziel je Zeile vorab festgelegt (etwa „Bohrung auf 5 mm“):
 | V2 | Satzlängen | die Grenzen aus `test_text_length` |
 | V3 | Felder mit eigenem Satz (Kurzhilfe und zugängliche Beschreibung) | 100 %; der Satz teilt höchstens die Hälfte seiner Wörter mit dem Titel |
 | V4 | Vorhersage: Der Prüfer schreibt vor dem Übernehmen aus Titel, erstem Satz und Vorschau auf, was geschehen wird | Abweichung vom Ergebnis ist ein Fund |
-| V5 | Meldungen | jede sagt, was nicht ging, warum und was jetzt; ihre Handlung löst das Problem |
+| V5 | Meldungen | jede sagt, was nicht ging, warum und was jetzt; ihre Handlung löst das Problem. Ein Sperrgrund am grauen Bedienelement ist keine Meldung und braucht keinen Knopf, nennt aber den Ausweg (Menüweg oder offener Knopf); ohne Ausweg ist er ein Fund *mittel* |
 | V6 | Kurzhilfen, die man bis zum Ziel öffnen muss | ≤ 1; nie das Handbuch |
 
 **Gestaltung** — innovativ und modern, aber einfach bedienbar (Robert,
@@ -175,11 +175,11 @@ Vorgaben, Vorschau, Aufklappen und Suche.
 | | Zählgröße | Schwelle |
 |---|---|---|
 | Z1 | Unmittelbarkeit beim Ziehen: Griff, Geist und Zahl am Zeiger, gemessen am Bildzähler des Viewports, auf den Referenzrechner umgerechnet wie §31 | im nächsten gemalten Bild nach dem Eingabeereignis, ≤ 33 ms; die Vorschau selbst hält §2.8 und das Budget aus §31 (Prüfpunkt 6) |
-| Z2 | Nicht-modal: `QApplication.activeModalWidget()` nach jeder geprüften Handlung | `None`; ausgenommen nur die Rückfragen aus `fenster.md` (Löschen im Verlauf, Vollerkennung, Export und Übergabe trotz Befunden, Verwerfen zurückgenommener Schritte, Wiederherstellen nach einem Absturz, Verlust einer Generierung), die Mehrdeutigkeitsfragen nach Regel 21 (`ctx.ask`), KI- und Druckhinweis, die Speicherfrage und die Dateidialoge des Systems. Erfolg und Hinweis erscheinen nie als Meldungsfenster |
+| Z2 | Nicht-modal: `QApplication.activeModalWidget()` nach jeder geprüften Handlung | `None`; ausgenommen nur die Rückfragen aus `fenster.md` (Löschen im Verlauf, Vollerkennung, Export und Übergabe trotz Befunden, Verwerfen zurückgenommener Schritte, Wiederherstellen nach einem Absturz, Verlust einer Generierung), die Mehrdeutigkeitsfragen nach Regel 21 (`ctx.ask`), Fehlermeldungen mit Handlungsvorschlag nach Regel 17 (`show_error`), die auf eine Handlung des Kunden antworten, KI- und Druckhinweis, die Speicherfrage und die Dateidialoge des Systems. Erfolg und Hinweis erscheinen nie als Meldungsfenster; eine Fehlermeldung ohne Handlung bleibt ein Fund (E7, V5) |
 | Z3 | Am Objekt: Nach dem Klick auf die Stelle ist die Handlung ohne Menü und ohne Suche da, als Feld oben im Merkmalfenster oder als Hauptaktion im Reiter *Auswahl* (§2.6); der Rechtsklick führt keine aus (§18.5) | ja je Zeile mit Merkmals- oder Körperbezug |
 | Z4 | Leere Zustände führen weiter (ergänzt E7, das den fehlenden Satz zählt) | hat ein leerer Zustand eine nächste Handlung — leere Szene, leerer Verlauf, leeres Lager —, steht sie als Knopf dabei; gewollt leere Karten und ein Prüfbericht ohne Befund ausgenommen |
 | Z5 | Rohe Qt-Fenster im Kundenweg: Instanzen von `QMessageBox`, `QInputDialog`, `QColorDialog` | 0, außer `QFileDialog` und den Ausnahmen aus Z2 |
-| Z6 | Größen und Skalierungen (Kontrast steht in G6, abgeschnittener Text in Prüfpunkt 9) | auf der kleinsten Arbeitsfläche, 1920 × 1080 logisch (Bauplan §19.3: maximiert, Taskleiste abgezogen), braucht keine Vorderseite eine Rollleiste; Symbole bei 100, 150 und 200 % ohne Unschärfe, solange die logische Fläche nicht unter 1920 × 1080 fällt; was darunter liegt, ist kein Fall; hell und dunkel mit denselben Flächen und Akzenten |
+| Z6 | Größen und Skalierungen (Kontrast steht in G6, abgeschnittener Text in Prüfpunkt 9) | auf der kleinsten Arbeitsfläche (Bauplan §19.3; das maximierte Fenster auf 1920 × 1080 logisch, Taskleiste und Titelleiste abgezogen: `function_checks.SMALLEST_WINDOW`) braucht keine Vorderseite eine Rollleiste; Symbole bei 100, 150 und 200 % ohne Unschärfe, solange die logische Fläche nicht unter 1920 × 1080 fällt; was darunter liegt, ist kein Fall; hell und dunkel mit denselben Flächen und Akzenten |
 | Z7 | Die ersten fünf Minuten (§2.3): vom Start bis zum ersten übernommenen Schritt an einem eigenen Modell | Schritte und Fehlklicks aus dem Protokoll von Stufe C, ohne Handbuch; jeder Fehlklick ist ein Fund |
 
 *Innovativ (urteilt Stufe B, an den genannten Zeilen):*

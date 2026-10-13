@@ -64,9 +64,8 @@ Text oder Darstellung (Konzept §4, „Urteil und Schwere“).
 ### Probelauf am echten Fenster
 
 Aus dem Probelauf am echten Fenster (51 Fälle, Lauf `F:\tmp-suche\probelauf-d0`,
-Auswertung `output/konsolidierung-2026-10-12/auswertung-probelauf-d0.md`; FD-4 bis
-FD-6 folgen mit ihrem Fix). Leichte Funde einer Zeile behebt ihr Paket; mittlere und
-die systemischen leichten behebt D0.
+Auswertung `output/konsolidierung-2026-10-12/auswertung-probelauf-d0.md`). Leichte
+Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten behebt D0.
 
 ### FD-4 Strg+Z nimmt nach einer Befundhandlung nichts zurück
 
@@ -123,7 +122,7 @@ die systemischen leichten behebt D0.
 - Funktion: `Bearbeiten/Material kalibrieren …`
 - Kriterium: V1
 - Beleg: Überschrift „PETG — Startwert“; Fall 034, `flaeche-sprachen-dialog.png`
-- Ursache: `app/ui/dialogs.py` (`tr("Startwert", context="Kalibrierstand")`).
+- Ursache: `app/ui/calibration_dialog.py:73` (`tr("Startwert", context="Kalibrierstand")`).
 - Vorschlag: „noch nicht kalibriert“ oder „Werkswerte“.
 - Wirkung beim Kunden: Das Wort sagt nicht, dass noch nicht gemessen wurde.
 - Stand: offen RM-747
@@ -150,7 +149,7 @@ die systemischen leichten behebt D0.
 - Ursache: `app/ui/dialogs.py` (Messfelder ohne `setToolTip`/`setAccessibleDescription`).
 - Vorschlag: je Feld ein Satz, wo am Prüfkörper gemessen wird und was die Zahl bewirkt.
 - Wirkung beim Kunden: Er weiß nicht, welche Zahl vom Prüfkörper in welches Feld gehört.
-- Stand: offen RM-747
+- Stand: behoben `74c183721`
 
 ### FD-11 Die Felder von Parameter anlegen erklären sich nicht
 
@@ -280,7 +279,7 @@ die systemischen leichten behebt D0.
 - Kriterium: Z5
 - Beleg: Meldungen eines `AppError` erscheinen als `QMessageBox` mit Windows-Warnsymbol und Titel „Das hat so nicht funktioniert“; Fälle 028, 029, 046–051
 - Ursache: `app/ui/dialogs.py` (`show_error` baut `QMessageBox` mit `setIcon(Warning)`).
-- Vorschlag: eigener Meldungsdialog im Hausstil — Titel, Ursache, Handlungen als Knöpfe, Symbol aus dem eigenen Satz.
+- Vorschlag: eigener Meldungsdialog im Hausstil — Titel, Ursache, Handlungen als Knöpfe, Symbol aus dem eigenen Satz. Zu Z2 (E-17): Eine Fehlermeldung mit Handlung, die auf eine Kundenhandlung antwortet, darf modal bleiben (Ausnahme in Konzept §4, Entscheidung Koordinator); eine ohne Handlung bleibt ein Fund.
 - Wirkung beim Kunden: Ein Systemfenster mit Warndreieck bricht den Stil; Z5 erlaubt im Kundenweg keines.
 - Stand: behoben `4dee5f9bc`
 
@@ -371,11 +370,11 @@ die systemischen leichten behebt D0.
 ### FD-29 Am echten Fenster fehlen an einer gesetzten Bohrung Bohrung ändern und Zum Langloch ziehen
 
 - Art: Fehler
-- Schwere: schwer
+- Schwere: leicht
 - Funktion: `resize_hole`
 - Prüfpunkt: 1
-- Beleg: am echten Fenster verborgen, ohne Fenster sichtbar (`n5-echt.out`, `n5-offscreen.out`, D0-P2); Schwere vorläufig nach Konzept §4 („nicht auffindbar“), bis die Ursache feststeht
-- Ursache: offen — Unterschied zwischen echtem Fenster und offscreen.
+- Beleg: am echten Fenster verborgen, ohne Fenster sichtbar (`n5-echt.out`, `n5-offscreen.out`, D0-P2); zugeordnet in `fix-bohrung-sichtbar.md` §1 (`7e6b47eb0`)
+- Ursache: gewollt nach RM-199 (`FeaturePanel.set_measuring`): Die Maßgruppe der Handlung steht im Bild, rechts ist ihr Kopf deshalb verborgen; der Prüfstand fand die Handlung nur rechts.
 - Vorschlag: am echten Fenster nachstellen, Ursache zuordnen, beheben; Fenstertest an der kleinsten Arbeitsfläche.
 - Wirkung beim Kunden: Er findet an seiner Bohrung die Handlung nicht, die sie ändert.
 - Stand: offen RM-737
@@ -383,7 +382,7 @@ die systemischen leichten behebt D0.
 ### FD-30 Zwei Sperrgründe nennen keinen Ausweg
 
 - Art: Verständlichkeit
-- Schwere: leicht
+- Schwere: mittel
 - Funktion: `finding.action:place_on_bed`
 - Kriterium: V5
 - Beleg: „Aktivieren Sie diesen Rechner einmal online …“ und „Erst nach der Berechnung …“ nennen keine bedienbare Menüzeile und keinen offenen Knopf (D0-P2)
