@@ -294,6 +294,7 @@ class ProtocolField:
     die Schlüssel jedes Eintrags; ``None`` heißt frei (Suchproben, Abdrücke).
     ``values`` legt für einzelne Schlüssel die erlaubten Werte fest, ``choices``
     die eines einzelnen Texts, ``needs`` die Pflichtschlüssel der Einträge.
+    ``types`` prüft angegebene optionale Messwerte auf ihren tatsächlichen Typ.
     """
 
     shape: str
@@ -303,6 +304,7 @@ class ProtocolField:
     required: bool = False
     #: Schlüssel, die jeder Eintrag einer Liste tragen muss.
     needs: frozenset[str] = frozenset()
+    types: Mapping[str, type] = field(default_factory=dict)
 
 
 def _keys(*names: str) -> frozenset[str]:
@@ -402,10 +404,15 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         {"kind": ("primary", "spacing", "form")},
     ),
     # G4: die wirksame Schrift in Punkten und Gewicht und die Grundgröße der
-    # Anwendung; ``level`` ist die gesetzte Stufe, falls es eine gibt.
+    # Anwendung; ``level`` ist die gesetzte Stufe, falls es eine gibt. Die
+    # optionale Primärrolle und die Familien belegen die erlaubte Betonung.
     "fonts": ProtocolField(
         "liste",
-        _keys("surface", "widget", "level", "stylesheet", "points", "weight", "base_points"),
+        _keys(
+            "surface", "widget", "level", "stylesheet", "points", "weight", "base_points",
+            "primary", "family", "base_family",
+        ),
+        types={"primary": bool, "family": str, "base_family": str},
     ),
     "state_images": ProtocolField("liste", _keys("surface", "widget", "states")),
     "contrast": ProtocolField(
@@ -1013,6 +1020,9 @@ def _entry_problems(name: str, entry: Any, spec: ProtocolField) -> list[str]:
         value = entry.get(key)
         if value is not None and value not in allowed:
             problems.append(f"{name}: {key} = {value!r} nicht in {list(allowed)}")
+    for key, expected_type in spec.types.items():
+        if key in entry and not isinstance(entry[key], expected_type):
+            problems.append(f"{name}: {key} hat nicht den Typ {expected_type.__name__}")
     problems += [f"{name}: Pflichtschlüssel {key} fehlt" for key in sorted(spec.needs - set(entry))]
     return problems
 

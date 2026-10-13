@@ -12,6 +12,7 @@ import dataclasses
 import math
 import sys
 import weakref
+from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from functools import partial
@@ -218,6 +219,7 @@ from app.ui.labels import (
     volume,
     wheel_needs_focus,
 )
+from app.ui.layout_lifetime import detach_from_layout
 from app.ui.leash import Worker, WorkerLeash, weak_slot
 from app.ui.loading import DELAY_MS
 from app.ui.overlay import (
@@ -408,6 +410,11 @@ _TONE_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 #: Die Zeile eines Befunds kurz und ganz: erster Satz und vollständige Meldung
 #: (:func:`headline`). Die gewählte Zeile steht ganz da (RM-508).
 _LINE_ROLE = int(Qt.ItemDataRole.UserRole) + 7
+
+#: Die vollständigen rohen Mitglieder einer Zeile, unabhängig von Maßtexten.
+#: Auswahl und voriger Stand verwenden denselben Schlüssel; synthetische
+#: Sammelwerte enthalten dagegen bereits übersetzte und umgerechnete Anzeigen.
+_IDENTITY_ROLE = int(Qt.ItemDataRole.UserRole) + 8
 
 
 def headline(message: str) -> str:
@@ -2236,8 +2243,19 @@ class ObjectTree(QWidget):
         """§19.3: Millimeter oder Zoll in der Maße-Spalte."""
         if unit == self._unit:
             return
+        # Dieselben Körper erhalten nur neue Beschriftungen. Ihre vom Kunden
+        # geöffneten oder geschlossenen Knoten sind keine neue Auswahl.
+        expanded = {
+            item.data(0, Qt.ItemDataRole.UserRole): item.isExpanded()
+            for index in range(self.tree.topLevelItemCount())
+            if (item := self.tree.topLevelItem(index)) is not None
+        }
         self._unit = unit
         self.show_scene(self._result, self._document)
+        for index in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(index)
+            if item is not None:
+                item.setExpanded(expanded[item.data(0, Qt.ItemDataRole.UserRole)])
 
     def set_theme(self, theme: str) -> None:
         """Ein anderes Thema heißt andere Vorschaubilder.
@@ -6353,8 +6371,8 @@ class ReportPanel(QWidget):
         :data:`DELAY_MS` (§2.8) — ein Lauf aus dem Cache bleibt ruhig."""
         self._stale = False
         """Siehe :meth:`set_stale`."""
-        self._previous_keys: frozenset[tuple[Any, ...]] = frozenset()
-        """Die Befunde, die beim Beginn des Laufzustands dastanden (:func:`_identity`).
+        self._previous_keys: frozenset[frozenset[tuple[Any, ...]]] = frozenset()
+        """Die Zeilen, die beim Beginn des Laufzustands dastanden (:data:`_IDENTITY_ROLE`).
 
         Was währenddessen dazukommt — die Sätze eines Teilungsplans über
         ``add_findings`` —, gehört zum neuen Stand und steht ohne Vorsatz da.
@@ -6905,9 +6923,7 @@ class ReportPanel(QWidget):
 
     def _previous(self, item: QListWidgetItem) -> bool:
         """Ob die Zeile gerade als voriger Stand dasteht (RM-534, :attr:`_previous_keys`)."""
-        return self._running and (
-            _identity(item.data(Qt.ItemDataRole.UserRole)) in self._previous_keys
-        )
+        return self._running and item.data(_IDENTITY_ROLE) in self._previous_keys
 
     def _paint_row(self, item: QListWidgetItem) -> None:
         """Eine Zeile als aktueller oder voriger Stand, an Ort und Stelle (RM-534).
@@ -7214,9 +7230,7 @@ class ReportPanel(QWidget):
         Historie, sondern Irreführung.
         """
         selected = self.list.selectedItems()
-        selected_key = (
-            _identity(selected[0].data(Qt.ItemDataRole.UserRole)) if len(selected) == 1 else None
-        )
+        selected_key = selected[0].data(_IDENTITY_ROLE) if len(selected) == 1 else None
         if replacing_source is not None:
             self._findings = [entry for entry in self._findings if entry.source != replacing_source]
         # Je Identität der Befund, nicht nur die Menge: Derselbe Sachverhalt
@@ -7252,10 +7266,7 @@ class ReportPanel(QWidget):
         if selected_key is not None:
             for row in range(self.list.count()):
                 item = self.list.item(row)
-                if (
-                    not item.isHidden()
-                    and _identity(item.data(Qt.ItemDataRole.UserRole)) == selected_key
-                ):
+                if not item.isHidden() and item.data(_IDENTITY_ROLE) == selected_key:
                     self.list.setCurrentRow(row)
                     break
         self._preselect()
@@ -7385,6 +7396,29 @@ class ReportPanel(QWidget):
         :data:`_BUNDLE_ROLE`, damit ein Kernbefund mit eigenem ``count``-Wert
         weiter als eine Zeile zählt.
         """
+        # Vor den synthetischen Anzeige-Findings: Einheiten ändern deren
+        # Werte, aber nicht die zugrunde liegenden Befunde. Auch gleiche
+        # Körper an anderen Orten, Schritten oder Auswegen bleiben getrennt.
+        # Der Zähler erhält Mehrfachvorkommen, die Menge ignoriert nur ihre
+        # Reihenfolge. Die rohe Entdoppelung in _identity bleibt unverändert.
+        row_key = frozenset(
+            Counter(
+                (
+                    _identity(one),
+                    one.severity,
+                    one.op_id,
+                    one.source,
+                    one.feature_ids,
+                    one.location,
+                    one.outline,
+                    one.object_ids,
+                    tuple(
+                        (action.id, str(action.label), action.primary) for action in one.suggestions
+                    ),
+                )
+                for one in (members or [finding])
+            ).items()
+        )
         if members:
             names = ", ".join(self._member_label(one) for one in members[:15])
             if len(members) > 15:
@@ -7562,6 +7596,7 @@ class ReportPanel(QWidget):
         # Dreieck bleibt ein Dreieck, auch wo die Farbe nicht ankommt.
         item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
         item.setData(Qt.ItemDataRole.UserRole, finding)
+        item.setData(_IDENTITY_ROLE, row_key)
         # **Der Satz bleibt Fließtext, die Farbe steht am Symbol.** Ein ganzer
         # eingefärbter Satz war die lauteste Auszeichnung des Fensters für
         # eine Auskunft, die ohnehin schon eine hat — und ausgerechnet die
@@ -7721,10 +7756,7 @@ class ReportPanel(QWidget):
             return
         self._running = running
         self._previous_keys = (
-            frozenset(
-                _identity(self.list.item(row).data(Qt.ItemDataRole.UserRole))
-                for row in range(self.list.count())
-            )
+            frozenset(self.list.item(row).data(_IDENTITY_ROLE) for row in range(self.list.count()))
             if running
             else frozenset()
         )
@@ -9463,6 +9495,7 @@ class FeaturePanel(QWidget):
         """
         self._serial += 1
         for widget in self._built:
+            detach_from_layout(widget)
             widget.hide()
             widget.deleteLater()
         self._built.clear()
@@ -11898,6 +11931,7 @@ class FeaturePanel(QWidget):
         }
         for child in box.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly):
             if id(child) not in own:
+                detach_from_layout(child)
                 child.hide()
                 child.deleteLater()
         previous = self._spare_measures.pop(group.signature, None)

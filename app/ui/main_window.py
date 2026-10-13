@@ -12430,10 +12430,19 @@ class MainWindow(QMainWindow):
         """
         set_length_unit(unit)  # type: ignore[arg-type]
         self.measurements.set_unit(unit)  # type: ignore[arg-type]
-        self.object_tree.set_unit(unit)  # type: ignore[arg-type]
-        self._on_selection(self.object_tree.selected(), refresh_analysis=False)
+        # Die Auswahl wird nur neu beschriftet. Der gelesene Reiter bleibt
+        # deshalb wie beim Wiederherstellen einer Auswahl nach der Rechnung.
+        with self.feature_dock.held():
+            self.object_tree.set_unit(unit)  # type: ignore[arg-type]
+            self._on_selection(self.object_tree.selected(), refresh_analysis=False)
         self._refresh_map_units()
         self._update_header()
+        # Auch alte und nachträglich ergänzte Befunde lesen ihre Werte neu.
+        # Der öffentliche Nachschubweg erhält Filter und Befundauswahl; die
+        # bereits geöffneten Einzelheiten bleiben ebenfalls offen.
+        details_open = self.report.finding_details_toggle.isChecked()
+        self.report.add_findings([])
+        self.report.finding_details_toggle.setChecked(details_open)
         # Die Merkmalsbeschriftungen in der Überlagerung schreiben Längen ohne
         # eigene Einheit; sie brauchen nur den Anstoß, es neu zu tun.
         self.viewport.refresh_labels()
