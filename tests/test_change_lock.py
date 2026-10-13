@@ -222,5 +222,6 @@ def test_the_computing_lock_names_that_it_lifts_by_itself() -> None:
             return Bar()
 
     ways = function_capture._ways_out(Window())
+    assert "Die Handlung ist wieder frei, sobald die Berechnung fertig ist." in computing_refusal()
     assert any(way in computing_refusal() for way in ways), ways
     assert not any(way in "Der Testzeitraum ist abgelaufen." for way in ways), ways
