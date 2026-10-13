@@ -6313,6 +6313,7 @@ class MainWindow(QMainWindow):
         # Die Tasten des Verlaufs ändern ihn wie sein Kontextmenü: Einfg,
         # Alt+Pfeil und Leertaste gesperrt grau mit Grund (Durchsicht welle4 M1).
         history = self.history_panel
+        change_lock.hold_history_preview(history)
         keys = (history.insert_action, history.up_action, history.down_action)
         for action in (*keys, history.toggle_action):
             action.setEnabled(not locked)

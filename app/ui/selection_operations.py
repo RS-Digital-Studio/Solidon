@@ -1737,7 +1737,9 @@ class SelectionOperationsPanel(QWidget):
             self._nothing.setVisible(True)
             self._manual.setVisible(True)
             return
-        self._nothing.setVisible(False)
+        refusal = change_refusal()
+        self._nothing.setText(refusal)
+        self._nothing.setVisible(bool(refusal))
         self._manual.setVisible(False)
         if loosened:
             # Nicht wählbar und ohne Namen: Die Vorauswahl übergeht sie, und
@@ -1772,7 +1774,8 @@ class SelectionOperationsPanel(QWidget):
         if not entry.available and entry.reason:
             # **Gesperrt sagt die zweite Zeile nur den Grund** (Regel 18): Das
             # Grau allein wäre die halbe Antwort.
-            detail = str(entry.reason).strip()
+            reason = str(entry.reason).strip()
+            detail = "" if reason == change_refusal() else reason
         if detail:
             label = f"{label}\n{detail}"
         item = QListWidgetItem(label)
