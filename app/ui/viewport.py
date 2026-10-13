@@ -13827,12 +13827,12 @@ class Viewport(QWidget):
                     filter(None, (note, tr("Der Ansichtsschnitt ist stellenweise offen.")))
                 )
         if note:
-            self.banner.show_preview(note, self._diff_palette, self._preview_hint)
             self.banner.legend.setVisible(
                 self._preview_changes
                 and not self._difference_pending
                 and not self._difference_failed
             )
+            self.banner.show_preview(note, self._diff_palette, self._preview_hint)
         else:
             self.banner.hide()
 
