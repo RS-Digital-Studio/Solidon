@@ -1659,6 +1659,9 @@ def validate_specs(
             for name in fault.get("inputs", {}):
                 if not is_target(name):
                     issues.append(f"{where}: Fehlfall-Eingabe {name!r} ist kein Ziel")
+                problem = _field_problem(name, source)
+                if problem:
+                    issues.append(f"{where}: Fehlfall: {problem}")
         for key, value in spec.get("preconditions", {}).items():
             if key == "licence":
                 reachable = licence_states() + ((STARTUP_LICENCE,) if row_id == STARTUP_ROW else ())

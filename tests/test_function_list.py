@@ -1069,10 +1069,13 @@ def test_a_fault_case_is_checked_like_a_spec(rows: list[fl.Row]) -> None:
             "during": "irgendwann",
             "expected": "sperrgrund",
             "wann": "jetzt",
+            # Dieselbe Feldprüfung wie die Eingaben der Spezifikation (C-L13).
+            "inputs": {"feature.field:resize_hole.nirgends": 1.0},
         },
     }
     issues = fl.validate_specs(rows, _spec(bad), scenes)
-    for word in ("gibt_es_nicht", "'Knopf'", "irgendwann", "wann", "'mitte'", "'alt'"):
+    words = ("gibt_es_nicht", "'Knopf'", "irgendwann", "wann", "'mitte'", "'alt'", "'nirgends'")
+    for word in words:
         assert any(word in issue for issue in issues), (word, issues)
     fault = fl.load_specs()["finding.action:place_on_bed"].values["fault_case"]
     assert fault["during"] == "rechnung" and fault["expected"] == "sperrgrund"
