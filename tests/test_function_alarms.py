@@ -1355,3 +1355,50 @@ def test_a_preparation_waits_for_the_findings_its_scene_promises(
     plain.setup = function_setup.scene_setup("quader.exakt")
     plain.folder = tmp_path
     assert plain.preparation_steps() == []
+
+
+# --- Aufnahme nur im Stillstand (Durchsicht welle4 C-L10) ------------------------------------
+
+
+def test_a_surface_that_never_stood_still_is_not_measured(monkeypatch: Any) -> None:
+    """C-L10: Stand die Fläche nach der Frist nicht still, wurde trotzdem aufgenommen und
+    geurteilt; den Vermerk ``still:`` las kein Urteil. Jetzt bleiben die Aufnahmefelder
+    ungemessen — auch die Rollleisten, die sonst die Fenstergröße als gemessen zählten.
+    """
+    import itertools
+    import time
+
+    from tools import function_capture
+
+    ticks = itertools.count()
+    monkeypatch.setattr(function_bench, "surface_signature", lambda root: (next(ticks),))
+    entries = {"layout": [{"group": "g"}], "scrollbars": [{"surface": "s"}]}
+    monkeypatch.setattr(function_capture, "sheet_snapshot", lambda root, theme, size: dict(entries))
+    monkeypatch.setattr(function_capture, "text_entries", lambda root: [{"text": "t"}])
+    monkeypatch.setattr(function_capture, "field_entries", lambda root: [{"field": "f"}])
+    monkeypatch.setattr(function_capture, "empty_states", lambda window: [])
+    flow = _flow({})
+    flow.window = None
+    flow.variant = function_setup.Variant.of({})
+    flow.window_size = lambda: (1920, 1009)  # type: ignore[method-assign]
+    flow.restless = None
+    step = flow.still_step("fläche steht still", lambda: None, at_most_s=0.05)
+    assert step.ready is not None
+    for _ in range(200):
+        if step.ready():
+            break
+        time.sleep(0.005)
+    flow.capture_surface(None)
+    assert flow.data["layout"] is None and flow.data["texts"] is None, flow.data
+    assert flow.data["scrollbars"] is None, flow.data["scrollbars"]
+    assert "ohne Stillstand" in flow.data["unmeasured"]["layout"], flow.data["unmeasured"]
+    # Steht sie still, wird aufgenommen.
+    monkeypatch.setattr(function_bench, "surface_signature", lambda root: ("still",))
+    calm = flow.still_step("fläche steht still", lambda: None, at_most_s=5.0)
+    assert calm.ready is not None
+    for _ in range(400):
+        if calm.ready():
+            break
+        time.sleep(0.005)
+    flow.capture_surface(None)
+    assert flow.data["layout"] == entries["layout"] and flow.data["texts"] == [{"text": "t"}]

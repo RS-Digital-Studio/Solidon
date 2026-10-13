@@ -108,6 +108,20 @@ SEARCH_SETTLE_MS: Final = 1000
 #: Wie lange nach einem Klick auf eine Handlung auf ihre Wirkung gewartet wird.
 EFFECT_WINDOW_S: Final = 2.0
 
+#: Was eine Aufnahme der Fläche ins Protokoll schreibt (:meth:`FunctionFlow.capture_surface`):
+#: die Felder aus ``function_capture.sheet_snapshot`` und Texte, Felder, leere Zustände.
+SURFACE_FIELDS: Final = (
+    "layout",
+    "fonts",
+    "contrast",
+    "icons",
+    "animations",
+    "scrollbars",
+    "texts",
+    "fields",
+    "empty_states",
+)
+
 #: Wie lange die Vorbereitung einer Szene auf ihre zugesagten Befunde im
 #: Prüfbericht wartet: Die Berichtsanalyse liefert nach der Ruhe nach
 #: (``tests.md``, ``wait_for_print_findings``), unter Fremdlast in Sekunden.
@@ -182,6 +196,8 @@ class FunctionFlow(GesturePhases, SwitchPhase):
         self.setup = scene_setup(self.scene_key)
         self.apply_target = default_apply_target(self.row)
         self.selected = selected_feature(self.row)
+        #: Warum die Fläche zuletzt nicht stillstand, sonst ``None`` (:meth:`still_step`).
+        self.restless: str | None = None
         #: Ein Referenzfaktor je Lauf (Bauplan §31, Entscheidung Koordinator 12.10.):
         #: aus dem Lauf (``reference.json``), sonst hier gemessen.
         self.reference_factor = float(
@@ -300,7 +316,9 @@ class FunctionFlow(GesturePhases, SwitchPhase):
 
         Still heißt: dieselbe Fläche, und sie und ihre sichtbaren Kinder haben
         dieselben Rechtecke (:func:`surface_signature`). Nach ``at_most_s`` geht es
-        auch ohne Stillstand weiter; der Grund steht dann in ``unmeasured``.
+        auch ohne Stillstand weiter; der Grund steht dann in ``unmeasured``, und
+        die nächste Aufnahme der Fläche bleibt ungemessen (:attr:`restless`,
+        :meth:`capture_surface`; Durchsicht welle4 C-L10).
         """
         seen: dict[str, Any] = {"key": None, "since": 0.0, "began": None}
 
@@ -308,13 +326,15 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             now = time.perf_counter()
             if seen["began"] is None:
                 seen["began"] = now
+                self.restless = None
             key = surface_signature(root())
             if key != seen["key"]:
                 seen["key"], seen["since"] = key, now
             if now - seen["since"] >= STILL_S:
                 return True
             if now - seen["began"] >= at_most_s:
-                unmeasured(self.data, f"still:{name}", f"nach {at_most_s:.0f} s nicht still")
+                self.restless = f"nach {at_most_s:.0f} s nicht still"
+                unmeasured(self.data, f"still:{name}", self.restless)
                 return True
             return False
 
@@ -825,9 +845,20 @@ class FunctionFlow(GesturePhases, SwitchPhase):
         }
 
     def capture_surface(self, root: Any) -> None:
-        """G1 bis G8, Texte, Felder und Tab-Kette der offenen Fläche ins Protokoll."""
+        """G1 bis G8, Texte, Felder und Tab-Kette der offenen Fläche ins Protokoll.
+
+        Stand die Fläche nicht still (:meth:`still_step`), bleiben die Felder
+        ungemessen — eine Aufnahme mitten im Übergang ist keine Messung; leere
+        Rollleisten zählten sonst die Fenstergröße als gemessen (Z6).
+        """
         from tools import function_capture as capture
 
+        if self.restless:
+            for name in SURFACE_FIELDS:
+                unmeasured(self.data, name, f"ohne Stillstand: {self.restless}")
+            if not self.data.get("scrollbars"):
+                self.data["scrollbars"] = None
+            return
         theme = self.variant.theme
         for name, entries in capture.sheet_snapshot(root, theme, self.window_size()).items():
             self.data[name] = [*(self.data.get(name) or []), *entries]
