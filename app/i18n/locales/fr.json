@@ -3564,7 +3564,7 @@
   "Eine Wandleiste, länger als jedes Bett, in Stücke teilen.": "Diviser en morceaux une baguette plus longue que tout plateau.",
   "Eine Wandplatte für den Raumboden. Rückwand mit Nuten für die Seitenwände oder Seitenwand mit Feder zur Rückwand, beide mit Feder zum Boden und wahlweise einem Fenster mit Falz oder einer Tür. Die Scheibe dazu ist der Baustein Fensterscheibe.": "Un panneau de mur pour le plancher de pièce. Mur arrière avec rainures pour les murs latéraux ou mur latéral avec languette vers le mur arrière, les deux avec une languette vers le plancher et, au choix, une fenêtre à feuillure ou une porte. La vitre correspondante est la pièce Vitre.",
   "Eine Zahl an ein Maß binden …": "Lier un nombre à une cote …",
-  "Eine Zahl oder ein Ausdruck mit Projektparametern, etwa breite/2.": "Un nombre ou une expression avec des paramètres de projet, par exemple breite/2.",
+  "Eine Zahl oder ein Ausdruck mit Projektparametern, etwa @breite/2.": "Un nombre ou une expression avec des paramètres de projet, par exemple @largeur/2.",
   "Eine Zahl oder ein Ausdruck — Projektparameter mit @name.": "Un nombre ou une expression — les paramètres de projet avec @nom.",
   "Eine Zelle dieser Breite bleibt bei dieser Teilung nicht übrig.": "Une cellule de cette largeur ne subsiste pas avec cet espacement.",
   "Eine Zylinderfläche anklicken": "Cliquer sur une face cylindrique",

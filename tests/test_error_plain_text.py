@@ -35,6 +35,9 @@ def test_show_error_passes_user_names_as_explicit_plain_text(monkeypatch, error_
         def clicked_button(self):
             return None
 
+        def deleteLater(self):  # noqa: N802 - Qt-Name
+            calls["freed"] = True
+
     monkeypatch.setattr(dialogs, "MessageDialog", MessageDialog)
     monkeypatch.setattr(dialogs, "offered_actions", lambda *args: ())
     monkeypatch.setattr(dialogs, "unhandled_advice", lambda *args: ())
@@ -48,3 +51,24 @@ def test_show_error_passes_user_names_as_explicit_plain_text(monkeypatch, error_
     assert calls["target"] == "message:error"
     # Ohne Handlung gibt es nichts abzubrechen (RM-771): Der Ausgang heißt *Schließen*.
     assert calls["exit"] == dialogs.tr("Schließen")
+    assert calls["freed"], "nach exec gibt show_error den Dialog frei (A-L1)"
+
+
+@pytest.mark.parametrize(
+    ("line", "error_type"),
+    [
+        ("damaged_line", "InstallationDamaged"),
+        ("deactivation_pending_line", "DeviceDeactivationPending"),
+    ],
+)
+def test_a_licence_line_joins_title_and_detail_like_the_error(monkeypatch, line, error_type):
+    """Die Zeilen des Freischaltdialogs fügen Titel und Detail wie ``str(error)`` (B-L7).
+
+    Eine eigene Fügung ``f"{title} {detail}"`` verlor den Doppelpunkt hinter
+    einem Titel ohne Satzzeichen; ``errors.title_and_detail`` ist die eine Quelle.
+    """
+    from app.core import errors
+
+    kind = getattr(errors, error_type)
+    monkeypatch.setattr(kind, "default_title", "Titel ohne Satzzeichen")
+    assert getattr(dialogs, line)() == str(kind())
