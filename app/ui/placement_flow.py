@@ -1730,6 +1730,7 @@ class PlacementFlow(QObject):
         #: zur Werkzeugachse gehört der Stufe, nicht dem Kunden.
         self._camera_before: tuple[Any, Any, Any, float | None] | None = None
         self._measure_group: QWidget | None = None
+        self._measure_hint = QSize()
         self._measure_scope: QWidget | None = None
         self._measure_interpret: Callable[[], bool] | None = None
         self._measure_refresh: Callable[[Mapping[str, Any]], None] | None = None
@@ -1876,6 +1877,7 @@ class PlacementFlow(QObject):
         if previous is not None and previous is not group:
             _release_measure_group(previous, self._measure_release)
         self._measure_group = group
+        self._measure_hint = QSize()
         self._measure_release = release
         previous_scope = self._measure_scope
         if previous_scope is not None and previous_scope is not scope:
@@ -2120,6 +2122,7 @@ class PlacementFlow(QObject):
         # den ``sizeHint`` des Rollbereichs, der die gekürzte Auswahl meint.
         self._measure_box.setMinimumWidth(max(width, 1))
         self._measure_box.adjustSize()
+        self._measure_hint = group.sizeHint()
         # **Gezeigt wird erst an ihrem Platz** (Durchsicht 0.5.1). Die Karte
         # ist ein eigenes Fenster über der Grafikfläche; hier eingeblendet,
         # stand sie von Bohrung zu Bohrung zuerst dort, wo die vorige Bohrung
@@ -5309,6 +5312,15 @@ class PlacementFlow(QObject):
             return False
         if self.active:
             if self.viewport.slot_drag_waits() and self._measure_group is None:
+                return False
+            if watched is self._measure_group and event.type() == QEvent.Type.LayoutRequest:
+                group = self._measure_group
+                if group is not None and (hint := group.sizeHint()) != self._measure_hint:
+                    # Klappen und Bedingungen ändern den Platzbedarf. Erst nach
+                    # Qt anordnen; unsere eigenen Breitenwechsel zählen nicht
+                    # erneut. Der Rückruf hält keine alte Gruppe am Leben.
+                    self._measure_hint = hint
+                    QTimer.singleShot(0, self, self.redraw)
                 return False
             if watched in self._overlay_zones and event.type() in (
                 QEvent.Type.Move,
