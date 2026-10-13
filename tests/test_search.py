@@ -1235,7 +1235,7 @@ def test_the_search_probes_of_the_function_walk_find_their_row(
     from app.ui.session import Session
     from app.ui.settings import UiSettings
     from tools import function_list, function_surface
-    from tools.function_checks import MAX_RANK
+    from tools.function_checks import MAX_RANK, SMALLEST_WINDOW
     from tools.function_scenes import build_scene, load_scenes, scene_environment
 
     specs = function_list.load_specs()
@@ -1249,7 +1249,7 @@ def test_the_search_probes_of_the_function_walk_find_their_row(
         save(build_scene(str(spec["start_scene"]), catalogue), path)
     window = MainWindow(Session(), UiSettings())
     window.show()
-    window.resize(1920, 1032)
+    window.resize(*SMALLEST_WINDOW)
     window._show_start_screen(False)
     try:
         window.open_path(path)
