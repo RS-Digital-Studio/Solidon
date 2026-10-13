@@ -2042,6 +2042,11 @@ _METHOD_NAMES: Final[dict[str, TranslatableText]] = {
 
 def value_text(key: str, value: object) -> str:
     """Der Wert mit seiner Einheit, in der Einheit der Anzeige (§19.3)."""
+    if key == "reason" and isinstance(value, str) and value == "points_are_on_one_line":
+        return tr(
+            "Die drei Punkte liegen auf einer Geraden oder aufeinander — "
+            "sie spannen keine Ebene auf. Einen davon seitlich versetzen."
+        )
     if key == "part_name":
         # Nutzernamen bleiben wörtlich, auch wenn sie wie Zahlen oder Auswahlwerte aussehen.
         return str(value)
