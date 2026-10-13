@@ -4,7 +4,7 @@
 neue Definition, und keine neue Datei wächst über die Grenze. Ein Wächter, der
 zu wenig zählt, schweigt — deshalb zuerst die Zählung an gepflanzten Quellen,
 dann jede Art Verstoß an einem synthetischen Baum (die Gegenproben aus Plan
-2.1), die Schreibwege ``--lower``, ``--raise`` und ``--init`` an einer Attrappe
+2.1), die Schreibwege ``--lower``, ``--raise``, ``--move`` und ``--init`` an einer Attrappe
 in ``tmp_path`` und zuletzt der Baum selbst gegen ``tests/data/size_ratchet.toml``.
 """
 
@@ -351,6 +351,98 @@ def test_init_takes_only_what_git_versions(
     _write(loose, {"app/big.py": _module(LIMIT + 1, 3)})
     assert size_ratchet.main(["--root", str(loose), "--init"]) == 2
     assert not (loose / LIST).exists()
+
+
+@pytest.mark.parametrize("command", ["log", "ls-files"])
+@pytest.mark.parametrize("failure", [OSError, subprocess.CalledProcessError])
+def test_init_refuses_unreadable_history_or_index(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    failure: type[OSError] | type[subprocess.CalledProcessError],
+) -> None:
+    """Nicht gelesen heißt niemals unbekannt: beide Git-Leser halten vor dem Schreiben an."""
+    _repo(tmp_path, {"app/big.py": _module(LIMIT + 1, 3)})
+    original = size_ratchet._git
+
+    def read(root: Path, *arguments: str) -> str:
+        if arguments[0] == command and arguments[-1] == LIST:
+            if failure is OSError:
+                raise OSError("Git ist nicht lesbar")
+            raise subprocess.CalledProcessError(128, ["git", *arguments], stderr="kaputt")
+        return original(root, *arguments)
+
+    monkeypatch.setattr(size_ratchet, "_git", read)
+
+    with pytest.raises(size_ratchet.RatchetError, match="Git"):
+        size_ratchet.list_known(tmp_path)
+    assert size_ratchet.main(["--root", str(tmp_path), "--init"]) == 2
+    assert "erneut" in capsys.readouterr().err
+    assert not (tmp_path / LIST).exists()
+
+
+def test_init_never_replaces_a_list_hidden_by_a_broken_git_reference(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein echter defekter Verweis verbirgt die bekannte Liste nicht vor ihrem Schutz."""
+    _repo(tmp_path, {"app/big.py": _module(LIMIT + 1, 2)})
+    size_ratchet.write_list(tmp_path / LIST, {"app/big.py": 2})
+    _commit(tmp_path)
+    _write(tmp_path, {"app/big.py": _module(LIMIT + 1, 3)})
+    (tmp_path / LIST).unlink()
+    broken = tmp_path / ".git" / "refs" / "heads" / "broken"
+    broken.write_text("f" * 40 + "\n", encoding="ascii")
+
+    assert size_ratchet.main(["--root", str(tmp_path), "--init"]) == 2
+    assert "Git" in capsys.readouterr().err
+    assert not (tmp_path / LIST).exists()
+
+
+def test_init_accepts_a_first_index_without_any_commit(tmp_path: Path) -> None:
+    """Erfolgreich gelesene leere Geschichte bleibt der erlaubte erste Lauf."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _write(tmp_path, {"app/big.py": _module(LIMIT + 1, 3), "tests/data/README.md": "Korpus\n"})
+    subprocess.run(["git", "add", "app/big.py"], cwd=tmp_path, check=True)
+
+    assert size_ratchet.main(["--root", str(tmp_path), "--init"]) == 0
+    assert size_ratchet.read_list(tmp_path / LIST) == {"app/big.py": 3}
+
+
+def _named_module(names: list[str]) -> str:
+    """Eine große Datei mit genau den benannten Funktionen für einen verfolgbaren Umzug."""
+    return "".join(f"def {name}():\n    pass\n" for name in names) + "# Füllzeile\n" * LIMIT
+
+
+@pytest.mark.parametrize("split", [False, True], ids=["ein Ziel", "zwei Ziele"])
+@pytest.mark.parametrize("carried", [2, 3, 4], ids=["gesenkt", "gleich", "über Liste"])
+def test_move_never_raises_the_sum_of_the_listed_definitions(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], split: bool, carried: int
+) -> None:
+    """Ein Umzug erbt keinen an HEAD vorhandenen Verstoß, auch verteilt auf mehrere Ziele."""
+    names = ["alpha", "beta", "gamma", "not_approved"]
+    _repo(tmp_path, {"app/big.py": _named_module(names)})
+    size_ratchet.write_list(tmp_path / LIST, {"app/big.py": 3})
+    unchanged = (tmp_path / LIST).read_bytes()
+    run = ["--root", str(tmp_path)]
+    assert size_ratchet.main(run) == 1
+    assert "4 Definitionen, gelistet 3" in capsys.readouterr().out
+    (tmp_path / "app" / "big.py").unlink()
+    groups = [names[:1], names[1:carried]] if split else [names[:carried]]
+    targets = {f"app/new{index}.py": _named_module(group) for index, group in enumerate(groups)}
+    _write(tmp_path, targets)
+
+    result = size_ratchet.main([*run, "--move", "app/big.py", *targets])
+
+    if carried > 3:
+        assert result == 2
+        assert "gelistet 3" in capsys.readouterr().err
+        assert (tmp_path / LIST).read_bytes() == unchanged
+    else:
+        assert result == 0
+        assert size_ratchet.read_list(tmp_path / LIST) == {
+            target: len(group) for target, group in zip(targets, groups, strict=True)
+        }
 
 
 def _moving_window(root: Path, carried: list[str]) -> None:

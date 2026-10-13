@@ -20,7 +20,8 @@ gesenkt. Zeilen in bestehenden Rümpfen bleiben frei, das ist der Fix-Fall.
 Zahl einer gelisteten Datei um genau die Abschnitte, die der Commit nennt, und
 verlangt, dass gegenüber HEAD genau sie neu sind. ``--move`` trägt einen Umzug
 ein (Schritt 4b): Die alte Datei fällt aus der Liste, die neuen über der Grenze
-kommen hinein, wenn alles an ihnen an HEAD in der alten stand. Beide laufen vor
+kommen hinein, wenn alles an ihnen an HEAD in der alten stand und ihre Summe
+die gelistete Zahl nicht erhöht. Beide laufen vor
 dem Commit des Schritts. ``--init`` legt die Liste ein einziges Mal an (Codestruktur
 Schritt 0), nur aus versionierten Dateien, und verweigert sich, sobald Git die
 Liste je gesehen hat: Eine gelöschte Liste neu anzulegen segnete jeden Verstoß
@@ -192,12 +193,16 @@ def versioned_files(root: Path) -> set[str]:
 
 def list_known(root: Path) -> str | None:
     """Der jüngste Commit auf irgendeinem Zweig, der die Liste berührt hat — ``"Index"``,
-    wenn sie nur vorgemerkt ist, ``None``, wenn Git sie nie gesehen hat."""
+    wenn sie nur vorgemerkt ist, ``None`` nur nach erfolgreichem Lesen beider Quellen."""
     try:
         found = _git(root, "log", "--all", "-1", "--format=%H", "--", LIST).strip()
         staged = _git(root, "ls-files", "--cached", "--", LIST).strip()
-    except OSError, subprocess.CalledProcessError:
-        return None
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise RatchetError(
+            f"Git-Geschichte oder Index von {LIST} nicht lesbar ({error}) — "
+            "Git-Zustand und Zugriff berichtigen, dann erneut prüfen; "
+            "ohne gelesene Herkunft wird keine Liste angelegt"
+        ) from error
     return found or ("Index" if staged else None)
 
 
@@ -415,8 +420,9 @@ def moved(
     Ein Umzug trägt nichts Neues mit. Verlangt wird: ``old`` ist gelistet und
     liegt jetzt nicht mehr über der Grenze oder fehlt; jedes Ziel ist ungelistet,
     neu gegenüber HEAD und über der Grenze; alle Definitionen der Ziele standen
-    an HEAD in ``old`` (Menge mit Vielfachheit). Dann fällt ``old`` aus der Liste,
-    und jedes Ziel steht mit seiner gezählten Zahl darin. Auch der Weg für das
+    an HEAD in ``old`` (Menge mit Vielfachheit), ihre Summe übersteigt die gelistete
+    Zahl nicht. Dann fällt ``old`` aus der Liste, und jedes Ziel steht mit seiner
+    gezählten Zahl darin. Auch der Weg für das
     Verschiebewerkzeug (``move_names``), das nach dem Schnitt hierher ruft.
     """
     if old not in listed:
@@ -467,6 +473,12 @@ def moved(
         raise RatchetError(
             f"am neuen Ort stehen Definitionen, die an HEAD nicht in {old} standen: "
             f"{', '.join(sorted(foreign.elements()))} — ein Umzug trägt nichts Neues mit. {RULES}"
+        )
+    if carried.total() > listed[old]:
+        raise RatchetError(
+            f"{old}: am neuen Ort zusammen {carried.total()} Definitionen, gelistet "
+            f"{listed[old]} — ein Umzug hebt die Sperrklinke nicht; den schon an HEAD "
+            f"vorhandenen Verstoß durch Herauslösen in kleine Module beheben. {RULES}"
         )
     return result
 
