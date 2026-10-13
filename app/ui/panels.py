@@ -218,6 +218,7 @@ from app.ui.labels import (
     volume,
     wheel_needs_focus,
 )
+from app.ui.layout_lifetime import detach_from_layout
 from app.ui.leash import Worker, WorkerLeash, weak_slot
 from app.ui.loading import DELAY_MS
 from app.ui.overlay import (
@@ -9463,6 +9464,7 @@ class FeaturePanel(QWidget):
         """
         self._serial += 1
         for widget in self._built:
+            detach_from_layout(widget)
             widget.hide()
             widget.deleteLater()
         self._built.clear()
@@ -11858,6 +11860,7 @@ class FeaturePanel(QWidget):
         }
         for child in box.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly):
             if id(child) not in own:
+                detach_from_layout(child)
                 child.hide()
                 child.deleteLater()
         previous = self._spare_measures.pop(group.signature, None)

@@ -67,6 +67,49 @@ das Konzept.
 
 ## Verlauf
 
+- 13.10.2026, nach Roberts „mach noch weiter soweit du kommst“ wiederaufgenommen:
+  Phase 2 bleibt im D0-Abschluss. `welle4`/origin steht auf `f08927d636`;
+  main bleibt `6fbe6154f`. Die Korrektur der tatsächlichen Knopffarbe und
+  Primärschrift (FD62/65) ist konfliktfrei integriert, vollständiger Baum
+  identisch zur geprüften Lieferung: 1.831 Anschlüsse bestanden, 2 übersprungen,
+  41 abgewählt, zusätzlich 13 + 31 enge Fälle und ein Aufnahmeanschluss grün.
+  Die neuen Funde FD60–66 stehen jetzt in der Funddatei. FD61 hat 192 enge
+  und 1.627 kopflose Fälle bestanden; sein Review-Fix ist lesend bestätigt,
+  bestehende Qt-Anschlüsse und der echte Einheitenwechsel bleiben offen.
+  Das Maßgruppenpaket FD7/16/63/64 hat 43 enge Fälle und Statik bestanden;
+  der einzelne Theme-Fixture-Fund ist korrigiert, sein neuer Gegenfall und
+  die weiteren Anschlüsse fehlen noch. FD66 besitzt einen konkreten nativen
+  Vorherbeleg für unnötige Anfangshöhe, aber noch keinen grünen Fixnachweis.
+  **FD60 sperrt weiter:** Im nativen Absturz ist jetzt ein `QWidgetItem` als
+  falscher Nicht-QObject-Wrapper nachgewiesen; Entstehung und Korrektur sind
+  noch offen. Keine Hardwareursache aus einem Absturzstapel abgeleitet.
+  B2 ist mit 848 angenommenen Urteilen versiegelt; der anschließende Vergleich
+  über 1.189 Urteile hat 18 Unterschiede, die auf der ursprünglichen Basis
+  eingeordnet werden. Die alte 48-Fall-Probe bleibt rot und unverändert.
+  Nach den laufenden Fixen: gemeinsame native Nachweise, Karten,
+  gepinntes Endtor, Merge-Durchsicht, main/CI, dann Codestruktur Schritt 0.
+  R und W13 bleiben vorbereitet; keine neue CS0-Umsetzung vor D0/main.
+  Aktuelle Ressourcenfreigaben, Einzelberichte und Sicherungen stehen am
+  Ende von `KOORDINATION.md`. Die folgende Pause ist ein historischer Stand,
+  keine aktuelle Halteanweisung. Website-Upload weiterhin nur nach Freigabe.
+- 13.10.2026, Übergabe auf Roberts Wunsch wegen des nahen Nutzungslimits:
+  Keine neue Arbeit, Prüfrunde oder Landung begonnen; alle Agenten angehalten
+  und eigene Sonden beendet. Produkt-/Prüfstandsbasis ist `6d063ef064` auf
+  `welle4`, weiterhin nicht auf main. Der frische Fensterlauf ist rot:
+  48 Fälle, 41 Prozesse Exit 0, sieben native Abstürze; drei getrennte V4-Proben
+  sind erfolgreich. FD60 ist reproduziert, seine Ursache bleibt offen.
+  FD61 und FD62/65 sind als ungetestete Änderungen vorbereitet; FD7/16/63/64
+  ist zusätzlich unvollständig. Die eigenen Worktrees samt vollständigen
+  Patches, neuen Quellen, Ausgangsmodulen und nächsten Befehlen sind gesichert.
+  Primärurteile D4/D8/D10 sind versiegelt; die unabhängige B2-Auswertung und
+  der Prüfervergleich bleiben offen. FD66 ist ein noch nicht diagnostizierter
+  Größenfund. **Wiedereinstieg:** zuerst den letzten Abschnitt „ÜBERGABE an
+  die nächste Sitzung“ in `output/konsolidierung-2026-10-12/KOORDINATION.md`
+  und `WEITER-CODEX-CLAUDE.md` dort lesen; Sicherungsarchiv und Hashmanifest
+  liegen im selben Ordner. Keine vorbereitete Testdatei gilt als geprüft.
+  Nach Wiederaufnahme D0 fertigstellen, gepinntes Tor/Merge-Durchsicht/main/CI,
+  anschließend Codestruktur Schritt 0 vollständig gemäß `plan-cs0.md`.
+  Website-Upload wartet weiter auf Roberts Freigabe.
 - 13.10.2026, 14:23, Phase 2 weiterhin D0: Alle Korrekturen bis FD59 sind
   auf `welle4` integriert, zuletzt Kartenbreite/Schriftwechsel als
   `e68ca22cb`. Dialoge und Karten richten ihre notwendigen Maße nach Inhalt,
