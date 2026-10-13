@@ -1010,9 +1010,11 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
     misst der Lauf zuerst einmal den Referenzfaktor (§31, Entscheidung
     Koordinator 12.10.); alle Fälle dieses Laufs lesen ihn aus ``reference.json``.
     """
+    sys.path.insert(0, str(ROOT))
+    from app.core.process import no_error_dialogs, process_group_options, terminate_process_tree
+
     cases = read_cases(out)
     if any(case.kind in ("function", "language") for case in cases):
-        sys.path.insert(0, str(ROOT))
         from tools.function_capture import measure_reference
 
         print(f"Referenzfaktor {measure_reference(out):.3f}", flush=True)
@@ -1041,6 +1043,7 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
         with (
             (folder / "stdout.log").open("w", encoding="utf-8") as stdout,
             (folder / "stderr.log").open("w", encoding="utf-8") as stderr,
+            no_error_dialogs(),
         ):
             process = subprocess.Popen(
                 command,
@@ -1048,14 +1051,18 @@ def run(out: Path, first: int, last: int, again: bool, timeout: float, screen: s
                 stderr=stderr,
                 cwd=ROOT,
                 env={**os.environ, "PYTHONUTF8": "1"},
+                **process_group_options(no_window=True),
             )
             try:
                 code = process.wait(timeout=case_timeout(case, timeout))
                 timed_out = False
             except subprocess.TimeoutExpired:
-                process.kill()
+                terminate_process_tree(process)
                 code = process.wait()
                 timed_out = True
+            except BaseException:
+                terminate_process_tree(process)
+                raise
         write_json(
             status,
             {
