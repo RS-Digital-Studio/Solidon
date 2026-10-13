@@ -261,7 +261,7 @@ def _rgba(colour: Colour, alpha: float = 1.0) -> tuple[float, float, float, floa
     return (red, green, blue, float(alpha))
 
 
-def _alpha_mode(opacity: float) -> str:
+def _alpha_mode(opacity: float, *, in_front: bool = False) -> str:
     """Durchscheinendes mischt gewichtet und reihenfolgeunabhängig.
 
     pygfx sortiert Objekte nach ihrer Position, und die Körper des Viewports
@@ -270,8 +270,12 @@ def _alpha_mode(opacity: float) -> str:
     am 05.09.2026: der ferne rote Würfel fehlte im Bild). Gewichtete Mischung
     braucht keine Reihenfolge; das ist der Maleralgorithmus, den VTK nicht
     lieferte, hier eingebaut.
+
+    Vordergrund folgt dagegen der festgelegten Zeichenfolge ohne Tiefentest.
+    Geordnete Alphamischung verhindert, dass ein späterer Vordergrundblock
+    bereits aufgelöste Raumgewichte erneut über deckende Griffe legt.
     """
-    return "weighted_blend" if opacity < 1.0 else "auto"
+    return ("blend" if in_front else "weighted_blend") if opacity < 1.0 else "auto"
 
 
 def _normals(positions: np.ndarray, indices: np.ndarray) -> np.ndarray:
@@ -415,7 +419,7 @@ class GfxItem(Item):
                 obj.material.alpha_mode = (
                     "solid"
                     if getattr(obj, "_solidon_force_opaque", False)
-                    else _alpha_mode(opacity)
+                    else _alpha_mode(opacity, in_front=self.in_front)
                 )
         self._changed()
 
@@ -1290,7 +1294,9 @@ class GfxRenderer(Renderer):
         if style.keep_in_front:
             common["depth_test"] = False
             common["render_queue"] = OVERLAY_QUEUE
-        common["alpha_mode"] = "solid" if style.force_opaque else _alpha_mode(opacity)
+        common["alpha_mode"] = (
+            "solid" if style.force_opaque else _alpha_mode(opacity, in_front=style.keep_in_front)
+        )
         if not style.lighting:
             return basic(**common)
         material = phong(**common, shininess=SURFACE_SHININESS)
@@ -1466,7 +1472,11 @@ class GfxRenderer(Renderer):
                     wireframe_thickness=1.0,
                     side=side,
                     opacity=style.opacity,
-                    alpha_mode="solid" if style.force_opaque else _alpha_mode(style.opacity),
+                    alpha_mode="solid"
+                    if style.force_opaque
+                    else _alpha_mode(style.opacity, in_front=style.keep_in_front),
+                    depth_test=not style.keep_in_front,
+                    render_queue=OVERLAY_QUEUE if style.keep_in_front else None,
                     depth_compare="<=",
                     pick_write=False,
                 ),
