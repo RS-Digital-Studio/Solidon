@@ -1169,8 +1169,23 @@ NOTHING_LEFT_DETAIL: Final = _(
 )
 #: Derselbe Fall an einer Schnittmenge: Leer heißt dort, dass das Werkzeug den
 #: Körper verfehlt — „deckt ihn ab" sagte das Gegenteil.
+#:
+#: **Nicht der Satz der Operation *Schnittmenge*** (:data:`NO_COMMON_PART_DETAIL`),
+#: mit Absicht: Dieser spricht über das Werkzeug eines Schritts, das der Kunde nie
+#: gewählt hat — den beschnittenen Kragen am Deckel, den Hohlraum beim
+#: Aushöhlen, den Stopfen eines Musters. Dort gibt es nur seinen einen Körper,
+#: und „die gewählten Körper überschneiden sich nicht" wäre falsch; an zwei
+#: gewählten Körpern gibt es dagegen kein Werkzeug.
 NOTHING_SHARED_DETAIL: Final = _(
     "Von dem Körper bleibt nichts übrig — das Werkzeug trifft ihn nicht. Prüfen Sie Maß und Lage."
+)
+#: Die leere Schnittmenge, die der Kunde selbst gewählt hat: *Schnittmenge*
+#: zweier Körper, an beiden Kernen (``ops._boolean_op``). Ein Satz für beide
+#: Zwillinge; was ihn von :data:`NOTHING_SHARED_DETAIL` trennt, steht dort.
+NO_COMMON_PART_TITLE: Final = _("Die Körper haben keinen gemeinsamen Bereich.")
+NO_COMMON_PART_DETAIL: Final = _(
+    "Die Schnittmenge ist leer — die gewählten Körper überschneiden sich "
+    "nicht. Lage und Maße prüfen, damit sie sich treffen."
 )
 
 

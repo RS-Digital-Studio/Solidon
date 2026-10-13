@@ -12,6 +12,7 @@ import time
 import warnings
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -1645,6 +1646,47 @@ def test_an_intersection_of_two_separate_bodies_says_it_is_empty() -> None:
     said = f"{problem.value.title} {problem.value.detail}"
     assert "gemeinsam" in said.lower(), "der zutreffende Grund, nicht der der Vereinigung"
     assert "deckt" not in said, "nicht die alte, falsche Begründung aus der Rückfallkette"
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_an_empty_intersection_says_one_sentence_on_both_kernels(kernel: str) -> None:
+    """*Schnittmenge* zweier getrennter Körper sagt an beiden Kernen denselben Satz.
+
+    Er stand zweimal wörtlich in ``ops._boolean_op``, und den exakten Weg
+    prüfte kein Test. Er spricht über die gewählten Körper; ein internes
+    Werkzeug, das einen Körper verfehlt, sagt etwas anderes
+    (``NOTHING_SHARED_DETAIL``, Durchsicht über fix/review-kern, L6).
+    """
+    from app.core.geom.boolean import (
+        NO_COMMON_PART_DETAIL,
+        NO_COMMON_PART_TITLE,
+        NOTHING_SHARED_DETAIL,
+    )
+
+    if kernel == "brep":
+        from tests.helpers import exact_kernel
+
+        exact_kernel()
+        from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+        from OCP.gp import gp_Pnt
+
+        from app.core.brep.kernel import Solid
+
+        first: Any = Solid(
+            BRepPrimAPI_MakeBox(gp_Pnt(-10.0, -10.0, -10.0), 20.0, 20.0, 20.0).Shape()
+        )
+        second: Any = Solid(
+            BRepPrimAPI_MakeBox(gp_Pnt(90.0, -10.0, -10.0), 20.0, 20.0, 20.0).Shape()
+        )
+    else:
+        first, second = solid(), box(20.0, (100.0, 0.0, 0.0))
+
+    with pytest.raises(GeometryError) as problem:
+        run_op("intersect_objects", first, second)
+
+    assert str(problem.value.title) == str(NO_COMMON_PART_TITLE), problem.value.title
+    assert str(problem.value.detail) == str(NO_COMMON_PART_DETAIL), problem.value.detail
+    assert str(problem.value.detail) != str(NOTHING_SHARED_DETAIL)
 
 
 # --- Ein falscher Aufruf ist keine Antwort (§33.1) -------------------------------
