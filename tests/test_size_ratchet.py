@@ -183,46 +183,85 @@ def _write(root: Path, sources: dict[str, str]) -> None:
         path.write_text(text, encoding="utf-8", newline="\n")
 
 
-WINDOW = "class Window:\n" + "".join(
-    f"    def m{index}(self):\n        pass\n" for index in range(3)
-)
+def _window(methods: list[str]) -> str:
+    """Eine gelistete Datei: die Klasse ``Window`` mit diesen Methoden, über der Grenze."""
+    body = "".join(f"    def {name}(self):\n        pass\n" for name in methods)
+    return "class Window:\n" + body + "# Füllzeile\n" * LIMIT
 
 
-def _ordered_window(root: Path) -> None:
-    """Ein Ordnungsschritt: zwei neue Abschnitte in einer gelisteten Datei."""
-    extra = "    def build_file(self):\n        pass\n    def build_edit(self):\n        pass\n"
-    _write(root, {"app/window.py": WINDOW + extra + "# Füllzeile\n" * LIMIT})
+def _ordered_window(root: Path, methods: list[str]) -> None:
+    """Ein Ordnungsschritt an ``Window``: der Stand mit ``m0``–``m2`` ist HEAD, danach
+    stehen ``methods`` in der Datei."""
+    _repo(root, {"app/window.py": _window(["m0", "m1", "m2"])})
+    _write(root, {"app/window.py": _window(methods)})
 
 
-def test_raise_lifts_by_exactly_the_named_sections(tmp_path: Path) -> None:
-    """Ein Ordnungsschritt hebt um genau die Abschnitte, die er benennt (Konzept 4.3, 4c)."""
-    _ordered_window(tmp_path)
-    sections = ["Window.build_file", "Window.build_edit"]
-
-    after = size_ratchet.raised(tmp_path, {"app/window.py": 4}, "app/window.py", 2, sections)
-
-    assert after == {"app/window.py": 6}
+ORDERED = ["m0", "m1", "m2", "build_file", "build_edit"]
 
 
 @pytest.mark.parametrize(
-    ("listed", "name", "amount", "sections", "said"),
+    ("methods", "sections", "expected"),
     [
-        ({}, "app/window.py", 2, ["Window.build_file", "Window.build_edit"], "nicht in der"),
-        ({"app/window.py": 4}, "app/window.py", 2, ["Window.build_file"], "Abschnitte"),
-        ({"app/window.py": 4}, "app/window.py", 2, ["Window.m0", "Window.m0"], "Abschnitte"),
-        ({"app/window.py": 4}, "app/window.py", 2, ["Window.build_file", "build"], "keine"),
-        ({"app/window.py": 5}, "app/window.py", 2, ["Window.build_file", "Window.m0"], "ergäbe"),
+        (ORDERED, ["Window.build_file", "Window.build_edit"], 6),
+        (["m0a", "m0b", "m1", "m2"], ["Window.m0a", "Window.m0b"], 5),
     ],
-    ids=["ungelistet", "zu wenig benannt", "doppelt", "kein Abschnitt", "Zahl stimmt nicht"],
+    ids=["zwei neue Abschnitte", "eine Methode in zwei geteilt"],
+)
+def test_raise_lifts_by_exactly_the_named_sections(
+    tmp_path: Path, methods: list[str], sections: list[str], expected: int
+) -> None:
+    """Ein Ordnungsschritt hebt um genau die Abschnitte, die er gegenüber HEAD neu anlegt
+    (Konzept 4.3, 4c); geteilt heißt zwei neue und eine weniger."""
+    _ordered_window(tmp_path, methods)
+
+    after = size_ratchet.raised(tmp_path, {"app/window.py": 4}, "app/window.py", 2, sections)
+
+    assert after == {"app/window.py": expected}
+
+
+@pytest.mark.parametrize(
+    ("listed", "methods", "sections", "said"),
+    [
+        ({}, ORDERED, ["Window.build_file", "Window.build_edit"], "nicht in der"),
+        ({"app/window.py": 4}, ORDERED, ["Window.build_file"], "Abschnitte"),
+        ({"app/window.py": 4}, ORDERED, ["Window.m0", "Window.m0"], "Abschnitte"),
+        ({"app/window.py": 4}, ORDERED, ["Window.build_file", "build"], "neu"),
+        ({"app/window.py": 4}, ORDERED, ["Window.build_file", "Window.m0"], "neu"),
+        ({"app/window.py": 3}, ORDERED, ["Window.build_file", "Window.build_edit"], "HEAD"),
+    ],
+    ids=[
+        "ungelistet",
+        "zu wenig benannt",
+        "doppelt",
+        "kein Abschnitt",
+        "alte Definition genannt",
+        "Liste unter HEAD",
+    ],
 )
 def test_raise_refuses_what_the_step_does_not_name(
-    tmp_path: Path, listed: dict[str, int], name: str, amount: int, sections: list[str], said: str
+    tmp_path: Path, listed: dict[str, int], methods: list[str], sections: list[str], said: str
 ) -> None:
-    """Jede Abweichung zwischen Benennung und Zählung hält ``--raise`` an."""
-    _ordered_window(tmp_path)
+    """Jede Abweichung zwischen Benennung und dem, was gegenüber HEAD neu ist, hält
+    ``--raise`` an — auch eine alte Methode statt einer neuen (Durchsicht W13, Fund 3)."""
+    _ordered_window(tmp_path, methods)
 
     with pytest.raises(size_ratchet.RatchetError, match=said):
-        size_ratchet.raised(tmp_path, listed, name, amount, sections)
+        size_ratchet.raised(tmp_path, listed, "app/window.py", 2, sections)
+
+
+def test_raise_refuses_a_file_that_head_does_not_have(tmp_path: Path) -> None:
+    """Ohne Stand an HEAD gibt es nichts, wogegen „neu“ gemessen würde."""
+    _repo(tmp_path, {"app/other.py": "x = 1\n"})
+    _write(tmp_path, {"app/window.py": _window(ORDERED)})
+
+    with pytest.raises(size_ratchet.RatchetError, match="HEAD"):
+        size_ratchet.raised(
+            tmp_path,
+            {"app/window.py": 4},
+            "app/window.py",
+            2,
+            ["Window.build_file", "Window.build_edit"],
+        )
 
 
 def _commit(root: Path) -> None:

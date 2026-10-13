@@ -17,8 +17,8 @@ gesenkt. Zeilen in bestehenden Rümpfen bleiben frei, das ist der Fix-Fall.
 
 ``--raise`` gehört nur Ordnungsschritten (Konzept 4.3, Schritt 4c): Er hebt die
 Zahl einer gelisteten Datei um genau die Abschnitte, die der Commit nennt, und
-verlangt, dass jeder davon eine Definition der Datei ist und die gezählte Zahl
-danach stimmt. ``--init`` legt die Liste ein einziges Mal an (Codestruktur
+verlangt, dass gegenüber HEAD genau sie neu sind; er läuft vor dem Commit des
+Schritts. ``--init`` legt die Liste ein einziges Mal an (Codestruktur
 Schritt 0), nur aus versionierten Dateien, und verweigert sich, sobald Git die
 Liste je gesehen hat: Eine gelöschte Liste neu anzulegen segnete jeden Verstoß
 seit ihrem letzten Stand; fehlt sie, wird sie aus Git zurückgeholt und mit
@@ -41,6 +41,7 @@ import json
 import subprocess
 import sys
 import tomllib
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -334,10 +335,27 @@ def lowered(sizes: Mapping[str, Size], listed: Mapping[str, int]) -> dict[str, i
     return result
 
 
+def head_definitions(root: Path, name: str) -> list[str] | None:
+    """Die Definitionen von ``name`` am Stand HEAD; ``None``, wenn HEAD die Datei nicht hat."""
+    try:
+        data = subprocess.run(
+            ["git", "show", f"HEAD:{name}"], cwd=root, capture_output=True, check=True
+        ).stdout
+    except OSError, subprocess.CalledProcessError:
+        return None
+    return definition_names(data.decode("utf-8-sig"), f"HEAD:{name}")
+
+
 def raised(
     root: Path, listed: Mapping[str, int], name: str, amount: int, sections: Sequence[str]
 ) -> dict[str, int]:
-    """Die Liste nach einem Ordnungsschritt, der ``sections`` neu anlegt (Konzept 4.3, 4c)."""
+    """Die Liste nach einem Ordnungsschritt, der ``sections`` neu anlegt (Konzept 4.3, 4c).
+
+    „Neu“ heißt gegenüber HEAD, als Menge mit Vielfachheit: Was gegenüber HEAD
+    dazukam, muss genau ``sections`` sein — eine alte Methode statt einer neuen
+    lässt eine ungenannte durch und wird abgelehnt. Eine geteilte Methode ist
+    zwei neue und eine weniger. Die neue Zahl ist die gezählte, höchstens Liste
+    plus ``amount``. Läuft vor dem Commit des Schritts."""
     if name not in listed:
         raise RatchetError(
             f"{name} steht nicht in der Sperrklinke — --raise hebt nur gelistete Dateien; "
@@ -349,20 +367,27 @@ def raised(
             "die Zahl hebt sich um genau die Abschnitte, die der Commit benennt, je einer "
             "mit --sections"
         )
-    present = definition_names(_source(root / name), name)
-    unknown = [section for section in sections if section not in present]
-    if unknown:
+    before = head_definitions(root, name)
+    if before is None:
         raise RatchetError(
-            f"{name} hat keine Definition {', '.join(unknown)} — --sections nennt "
-            "Qualnamen wie MainWindow._build_file_menu"
+            f"{name} gibt es an HEAD nicht — --raise misst „neu“ gegen den Stand HEAD und "
+            "läuft vor dem Commit des Ordnungsschritts"
         )
-    if len(present) != listed[name] + amount:
+    now = definition_names(_source(root / name), name)
+    added = Counter(now) - Counter(before)
+    if added != Counter(sections):
         raise RatchetError(
-            f"{name}: {len(present)} Definitionen, gelistet {listed[name]}, gehoben um "
-            f"{amount} ergäbe {listed[name] + amount} — der Schritt legt mehr oder weniger "
-            "an, als er benennt; erst die Zahl stimmig machen, dann heben"
+            f"{name}: neu gegenüber HEAD sind {sorted(added.elements()) or 'keine'}, genannt "
+            f"{list(sections)} — --sections nennt genau die neuen Abschnitte, als Qualnamen "
+            "wie MainWindow._build_file_menu"
         )
-    return {**listed, name: listed[name] + amount}
+    if len(now) > listed[name] + amount:
+        raise RatchetError(
+            f"{name}: {len(now)} Definitionen, gelistet {listed[name]}, gehoben um {amount} — "
+            f"die Liste lag schon unter dem Stand HEAD ({len(before)}); der Rest ist ein "
+            f"Verstoß, kein Abschnitt. {RULES}"
+        )
+    return {**listed, name: len(now)}
 
 
 def is_tree_path(name: str) -> bool:
