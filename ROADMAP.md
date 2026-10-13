@@ -65,6 +65,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-803 — AppImage und Archiv starten erst ab glibc 2.38](#rm-803) | Plattformen, Pakete und Grafik | Linux-Bau auf Ubuntu 22.04 mit glibc-Wächter und ohne mitgereiste libstdc++ gebaut (Plattformwelle 12.10.); offen der erste Lauf: Wächter grün, Start auf 22.04 und 24.04 |
 | [RM-804 — Das Flatpak erreicht die 3D-Maus nicht](#rm-804) | Plattformen, Pakete und Grafik | Gerätefreigabe gebaut (Plattformwelle 12.10.); offen die Maus am Gerät (RM-070) |
 | [RM-810 — Unter Linux liest die 3D-Maus über libusb statt hidraw](#rm-810) | Plattformen, Pakete und Grafik | Linux nimmt das Modul `hidraw` aus demselben Rad (Plattformwelle 12.10.); offen die Maus am Gerät mit der udev-Regel des Handbuchs (RM-070) |
+| [RM-811 — Die Bibliotheken in den Rädern sind nicht je Datei lizenzbelegt](#rm-811) | Plattformen, Pakete und Grafik | Freigabe Robert für `LGPL-3.0-or-later` und das Quellenangebot der hidapi-Familien; numpys Ausdruck um GCC-Laufzeit und libquadmath ergänzen; die `.libs/` von Pillow, numpy, scipy und OCP je Datei belegen |
 | [RM-805 — Der Intel-Mac startet in der CI nur ohne Bildschirm](#rm-805) | Plattformen, Pakete und Grafik | Start mit Fenster in der Releaseakte zur Erprobung (Plattformwelle 12.10.); nach zwei grünen Läufen scharf schalten |
 | [RM-807 — Das AppImage aktualisiert sich nicht selbst](#rm-807) | Plattformen, Pakete und Grafik | Selbstersatz bauen, wie bei Windows, Mac und Flatpak |
 | [RM-809 — Qt stürzt unter macOS 26 ab, wenn ein Werkzeug die Bedienhilfen liest](#rm-809) | Plattformen, Pakete und Grafik | Die Qt-Fassung mit der Korrektur von QTBUG-149612 übernehmen, sobald sie erscheint |
@@ -1152,6 +1153,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   die Regel also nicht zum Leser. In der Plattformwelle nimmt Linux das Modul `hidraw`,
   Windows und macOS bleiben bei `hid`. **Abnahme:** die Maus unter Linux im AppImage und
   im Flatpak mit der udev-Regel des Handbuchs (RM-070).
+
+<a id="rm-811"></a>
+
+- [ ] **RM-811 — Die Bibliotheken in den Rädern sind nicht je Datei lizenzbelegt.** Das
+  hidapi-Rad brachte unter Linux schon in 0.6.0 sieben Bibliotheken in `hidapi.libs/` mit
+  (libudev, libdw/libelf, libcap, libattr, liblzma, libbz2; dazu libusb, das mit RM-810
+  wegfällt), ohne eigene Einträge in Stückliste und Lizenzbeilage. Die Plattformwelle
+  (12.10.) trägt sie mit Fassung aus der auditwheel-Stückliste des Rads und Lizenz nach
+  (`make_sbom.WHEEL_LIBRARIES`): elfutils mit der Wahl `LGPL-3.0-or-later`, libcap mit
+  `BSD-3-Clause`, xz als `LicenseRef-xz-public-domain`; dafür steht `LGPL-3.0-or-later`
+  neu in der Freigabeliste, und drei weitere LGPL-Familien bekommen das Quellenangebot.
+  Offen: **Freigabe Robert** für beides; numpys Ausdruck in `licences.toml` nennt die
+  GCC-Laufzeit (`GPL-3.0-or-later WITH GCC-exception-3.1`) und libquadmath nicht, die sein
+  Linux-Rad mitbringt (die Texte reisen über die `LICENSE.txt` des Rads); die `.libs/` von
+  Pillow, numpy, scipy und OCP sind nicht je Datei gegen die Lizenzdateien ihres Rads
+  geprüft. **Abnahme:** jede mitreisende Bibliothek eines Rads hat eine Familie mit Fassung
+  und freigegebener Lizenz, oder ein Test belegt, dass die Lizenzdatei des Rads sie nennt.
 
 <a id="rm-805"></a>
 
