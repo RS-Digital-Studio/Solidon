@@ -68,7 +68,7 @@ Nutzen da und sonst nichts.
 - Nach einer Handlung im Prüfbericht bleibt der Bericht vorn, und Strg+Z nimmt sie gleich zurück. Bisher sprang der Reiter *Auswahl* nach vorn.
 - Strg+Z und Strg+Y wirken auch, wenn der Cursor in einem leeren Feld steht, etwa im Suchfeld. Wer dort getippt hat, nimmt zuerst sein Tippen zurück.
 - Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
-- Ohne Freischaltung sind auch *Parameter anlegen …*, *Bewegen*, *Teilen* und die Maße im Bild grau. Jeder Grund nennt den Weg, etwa *Hilfe → Solidon freischalten …*.
+- Ohne Freischaltung sind auch *Parameter anlegen …*, *Bewegen*, *Teilen*, die Tasten im Verlauf und die Maße im Bild grau. Jeder Grund nennt den Weg, etwa *Hilfe → Solidon freischalten …*.
 - Wartet eine Handlung im Prüfbericht auf die laufende Berechnung, sagt sie, dass sie danach wieder frei ist, auch einem Bildschirmleser.
 - Meldungen in der Statuszeile setzen keinen Doppelpunkt mehr hinter einen ganzen Satz.
 - Mit nur einem Körper ist der Objektbaum so hoch wie sein Inhalt, ebenso der Verlauf mit einem Schritt. In Version 0.6.0 blieb darunter leerer Platz.
