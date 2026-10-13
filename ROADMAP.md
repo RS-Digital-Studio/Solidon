@@ -65,7 +65,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-803 — AppImage und Archiv starten erst ab glibc 2.38](#rm-803) | Plattformen, Pakete und Grafik | Linux-Bau auf Ubuntu 22.04 mit glibc-Wächter und ohne mitgereiste libstdc++ gebaut (Plattformwelle 12.10.); offen der erste Lauf: Wächter grün, Start auf 22.04 und 24.04 |
 | [RM-804 — Das Flatpak erreicht die 3D-Maus nicht](#rm-804) | Plattformen, Pakete und Grafik | Gerätefreigabe gebaut (Plattformwelle 12.10.); offen die Maus am Gerät (RM-070) |
 | [RM-810 — Unter Linux liest die 3D-Maus über libusb statt hidraw](#rm-810) | Plattformen, Pakete und Grafik | Linux nimmt das Modul `hidraw` aus demselben Rad (Plattformwelle 12.10.); offen die Maus am Gerät mit der udev-Regel des Handbuchs (RM-070) |
-| [RM-811 — Die Bibliotheken in den Rädern sind nicht je Datei lizenzbelegt](#rm-811) | Plattformen, Pakete und Grafik | Freigabe Robert für `LGPL-3.0-or-later` und das Quellenangebot der hidapi-Familien; numpys Ausdruck um GCC-Laufzeit und libquadmath ergänzen; die `.libs/` von Pillow, numpy, scipy und OCP je Datei belegen |
+| [RM-811 — Die Bibliotheken in den Rädern sind nicht je Datei lizenzbelegt](#rm-811) | Plattformen, Pakete und Grafik | Freigabe Robert für `LGPL-3.0-or-later` und die Quellenangebote aller LGPL-Laufzeitfamilien; numpys Ausdruck um GCC-Laufzeit und libquadmath, scipys um libquadmath ergänzen; für libquadmath fehlen Volltext und Quellenangebot; die `.libs/` von Pillow, numpy, scipy und OCP je Datei belegen |
 | [RM-805 — Der Intel-Mac startet in der CI nur ohne Bildschirm](#rm-805) | Plattformen, Pakete und Grafik | Start mit Fenster in der Releaseakte zur Erprobung (Plattformwelle 12.10.); nach zwei grünen Läufen scharf schalten |
 | [RM-807 — Das AppImage aktualisiert sich nicht selbst](#rm-807) | Plattformen, Pakete und Grafik | Selbstersatz bauen, wie bei Windows, Mac und Flatpak |
 | [RM-809 — Qt stürzt unter macOS 26 ab, wenn ein Werkzeug die Bedienhilfen liest](#rm-809) | Plattformen, Pakete und Grafik | Die Qt-Fassung mit der Korrektur von QTBUG-149612 übernehmen, sobald sie erscheint |
@@ -1129,7 +1129,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   höheren `GLIBC_`-, `GLIBCXX_`-, `CXXABI_`- oder `GCC_`-Versionen ab, das Flatpak entsteht
   getrennt auf 24.04 aus demselben Archiv (jammy trägt nur flatpak 1.12), und die
   Releaseakte startet das AppImage auf frischen Läufern mit 22.04 und 24.04. Die
-  Website nennt die Untergrenze schon; sie stimmt erst ab 0.6.1 und geht deshalb erst mit
+  Systeme RHEL 9, Rocky Linux 9 und AlmaLinux 9 (glibc 2.34) bleiben für AppImage und
+  Archiv unter der Grenze; für sie ist das Flatpak mit eigener Laufzeit vorgesehen.
+  Die Website nennt die Untergrenze schon; sie stimmt erst ab 0.6.1 und geht deshalb erst mit
   dessen Release auf den Server. **Abnahme:** erster Lauf mit grünem Wächter und Start auf
   22.04 und 24.04, dazu die 3D-Ansicht auf einem neueren System mit Mesa (Fedora oder
   Ubuntu 26.04) am Gerät (RM-051).
@@ -1164,12 +1166,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (`make_sbom.WHEEL_LIBRARIES`): elfutils mit der Wahl `LGPL-3.0-or-later`, libcap mit
   `BSD-3-Clause`, xz als `LicenseRef-xz-public-domain`; dafür steht `LGPL-3.0-or-later`
   neu in der Freigabeliste, und drei weitere LGPL-Familien bekommen das Quellenangebot.
-  Offen: **Freigabe Robert** für beides; numpys Ausdruck in `licences.toml` nennt die
-  GCC-Laufzeit (`GPL-3.0-or-later WITH GCC-exception-3.1`) und libquadmath nicht, die sein
-  Linux-Rad mitbringt (die Texte reisen über die `LICENSE.txt` des Rads); die `.libs/` von
+  Offen: **Freigabe Robert** für beides. Numpys und scipys Linux-Räder bringen libgfortran
+  (`GPL-3.0-or-later WITH GCC-exception-3.1`) und libquadmath (`LGPL-2.1-or-later`) mit;
+  numpys Ausdruck in `licences.toml` nennt beides nicht, scipys nicht libquadmath. Ihre
+  `LICENSE.txt` enthalten den vollständigen GCC-Text samt Ausnahme, für libquadmath nur
+  Lizenzkopf und URL; der LGPL-Volltext und ein Quellenangebot fehlen. Die `.libs/` von
   Pillow, numpy, scipy und OCP sind nicht je Datei gegen die Lizenzdateien ihres Rads
-  geprüft. **Abnahme:** jede mitreisende Bibliothek eines Rads hat eine Familie mit Fassung
-  und freigegebener Lizenz, oder ein Test belegt, dass die Lizenzdatei des Rads sie nennt.
+  geprüft (Nachprüfung der Plattformwelle, 13.10.).
+  Auch für die LGPL-Laufzeitfamilien glib, systemd, libgcrypt, libgpg-error und util-linux
+  fehlt `source_delivery`, anders als bei keyutils und den drei hidapi-Familien. Die
+  Entscheidung über ein Quellenangebot oder eine belegte Ausnahme gehört ebenfalls zu
+  **Roberts Freigabe**: `write_release_evidence` erzeugt mit `source_delivery` automatisch
+  eine Zusage von RS Digital über mindestens drei Jahre. Bis zur Entscheidung bleiben
+  die fünf Familien unverändert und dieser Punkt offen; vor dem nächsten Release ist
+  der unterschiedliche Umgang aufzulösen. **Abnahme:** jede mitreisende Bibliothek eines
+  Rads hat eine Familie mit Fassung und freigegebener Lizenz, oder ein Test belegt die
+  vollständige Lizenzabdeckung durch das Rad. Für jede LGPL-Laufzeitfamilie ist das
+  Quellenangebot freigegeben und geprüft oder die Ausnahme mit Grund im Katalog belegt.
 
 <a id="rm-805"></a>
 

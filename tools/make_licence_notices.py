@@ -338,13 +338,8 @@ def _runtime_texts(policy: RuntimePolicy, version: str) -> tuple[NoticeText, ...
 
 
 def _runtime_licence_allowed(expression: str, approval: licences.Policy) -> bool:
-    """Freigegeben: wörtlich in ``allowed_with``, der Bootloader nach Regel 15, oder als Ausdruck.
-
-    Die Bootloader-Ausnahme ist keine SPDX-Kennung; ``make_sbom`` schreibt sie
-    deshalb als Lizenznamen, und freigegeben ist genau dieses eine Paar.
-    """
+    """Freigegeben: wörtlich in ``allowed_with`` oder als zugelassener SPDX-Ausdruck."""
     approved = {value.casefold() for value in approval.allowed_with}
-    approved.add("GPL-2.0-or-later WITH PyInstaller Bootloader Exception".casefold())
     if expression.casefold() in approved:
         return True
     try:
@@ -400,7 +395,7 @@ def collect_artifact_components(sbom: dict[str, Any]) -> tuple[ComponentNotice, 
             raise RuntimeError(f"Doppelte Komponente {name} in Wheel- und Laufzeitakte.")
         # Auch eine Laufzeitfamilie braucht eine freigegebene Lizenz (Regel 15
         # und 22) — bis zu den Bibliotheken des hidapi-Rads prüfte das nur die
-        # Wheel-Akte. Lizenznamen ohne SPDX-Ausdruck (CPython, MSVC, Bootloader)
+        # Wheel-Akte. Lizenznamen ohne SPDX-Ausdruck (MSVC, Bootloader)
         # sind in der Freigabeliste als Name geführt und bleiben außen vor.
         choice = entry.get("licenses", [{}])[0]
         if "expression" in choice and not _runtime_licence_allowed(

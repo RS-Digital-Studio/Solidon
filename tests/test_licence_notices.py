@@ -446,7 +446,7 @@ def test_pyinstaller_uses_the_reviewed_versions_own_wheel_notice(
                 "version": version,
                 "purl": f"pkg:generic/pyinstaller-bootloader@{version}",
                 "licenses": [
-                    {"expression": "GPL-2.0-or-later WITH PyInstaller Bootloader Exception"}
+                    {"license": {"name": "GPL-2.0-or-later WITH PyInstaller Bootloader Exception"}}
                 ],
             }
         ]
@@ -789,19 +789,50 @@ _HIDRAW_LIBRARIES = (
 
 
 def test_every_runtime_family_carries_an_approved_licence() -> None:
-    """Regel 15 und 22 gelten auch für Systembibliotheken und mitgebrachte Rad-Bibliotheken."""
+    """Jede Quelle generischer SPDX-Ausdrücke wird wie in der Releaseakte geprüft."""
     from tools import make_sbom
 
     policy = licences.load_policy()
-    expressions = {
-        name: licence for name, licence, _site in make_sbom.LINUX_FAMILY_COMPONENTS.values()
-    }
+    expressions = [(entry.name, entry.licence) for entry in make_sbom.NATIVE_COMPONENTS]
+    expressions.extend(make_sbom.RUNTIME_LICENCES.items())
+    expressions.extend(
+        (name, licence) for name, licence, _site in make_sbom.LINUX_FAMILY_COMPONENTS.values()
+    )
     for rows in make_sbom.WHEEL_LIBRARIES.values():
-        expressions.update({row[2]: row[4] for row in rows})
-    for name, expression in expressions.items():
-        assert licences.licence_allowed(expression, policy), (name, expression)
-    assert expressions["XZ Utils"] == "LicenseRef-xz-public-domain", "liblzma ist gemeinfrei"
-    assert not licences.licence_allowed("GPL-2.0-or-later", policy)
+        expressions.extend((row[2], row[4]) for row in rows)
+    expressions.append(("AppImage runtime", make_sbom.APPIMAGE_RUNTIME_LICENCE))
+    for name, expression in expressions:
+        assert make_licence_notices._runtime_licence_allowed(expression, policy), (name, expression)
+    assert ("XZ Utils", "LicenseRef-xz-public-domain") in expressions, "liblzma ist gemeinfrei"
+    assert not make_licence_notices._runtime_licence_allowed("GPL-2.0-or-later", policy)
+
+
+@pytest.mark.parametrize("source", ["native", "appimage", "fixed", "linux", "wheel"])
+def test_the_runtime_licence_guard_rejects_an_unapproved_source(
+    source: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Wächter übersieht keine seiner fünf Quellen bei einer nicht freigegebenen Lizenz."""
+    from tools import make_sbom
+
+    expression = "GPL-2.0-or-later"
+    if source == "native":
+        native = make_sbom.NATIVE_COMPONENTS
+        monkeypatch.setattr(
+            make_sbom, "NATIVE_COMPONENTS", (replace(native[0], licence=expression), *native[1:])
+        )
+    elif source == "appimage":
+        monkeypatch.setattr(make_sbom, "APPIMAGE_RUNTIME_LICENCE", expression)
+    elif source == "fixed":
+        monkeypatch.setitem(make_sbom.RUNTIME_LICENCES, "cpython", expression)
+    elif source == "linux":
+        name, _licence, website = make_sbom.LINUX_FAMILY_COMPONENTS["glib"]
+        monkeypatch.setitem(make_sbom.LINUX_FAMILY_COMPONENTS, "glib", (name, expression, website))
+    else:
+        rows = make_sbom.WHEEL_LIBRARIES["hidapi"]
+        changed = (*rows[0][:4], expression, rows[0][5])
+        monkeypatch.setitem(make_sbom.WHEEL_LIBRARIES, "hidapi", (changed, *rows[1:]))
+    with pytest.raises(AssertionError, match=expression):
+        test_every_runtime_family_carries_an_approved_licence()
 
 
 def test_the_hidapi_wheel_libraries_have_families_versions_and_texts() -> None:

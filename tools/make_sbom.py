@@ -49,6 +49,15 @@ NON_SPDX_LICENCES: Final = {
     "PSF-based",
     "Microsoft Visual Studio Runtime license",
 }
+#: Feste SPDX-Ausdrücke der Laufzeitfamilien außerhalb der nativen Haupt-,
+#: Linux- und Radtabellen. Erzeuger und Freigabewächter lesen dieselbe Quelle.
+RUNTIME_LICENCES: Final = {
+    "cpython": "PSF-2.0",
+    "openssl": "Apache-2.0",
+    "libffi": "MIT",
+    "openblas": "BSD-3-Clause",
+    "gcc-runtime": "GPL-3.0-or-later WITH GCC-exception-3.1",
+}
 # CPython-Tags: PCbuild/python.props setzt in jedem dieser Windows-Bauten 3.4.4.
 WINDOWS_LIBFFI_VERSIONS: Final = {
     "3.13.14": "3.4.4",
@@ -893,7 +902,7 @@ def runtime_components(
                 "cpython",
                 "CPython runtime",
                 python_version or platform.python_version(),
-                "PSF-2.0",
+                RUNTIME_LICENCES["cpython"],
                 "https://www.python.org/psf/license/",
                 "laufender Build-Interpreter",
             )
@@ -915,7 +924,7 @@ def runtime_components(
                 "openssl",
                 "OpenSSL",
                 _openssl_version(),
-                "Apache-2.0",
+                RUNTIME_LICENCES["openssl"],
                 "https://www.openssl.org/source/license.html",
                 "ssl.OPENSSL_VERSION",
             )
@@ -927,7 +936,7 @@ def runtime_components(
                 "libffi",
                 "libffi",
                 version,
-                "MIT",
+                RUNTIME_LICENCES["libffi"],
                 "https://github.com/libffi/libffi",
                 version_source,
             )
@@ -939,7 +948,7 @@ def runtime_components(
                     f"openblas-{owner}",
                     f"OpenBLAS ({owner})",
                     _openblas_version(owner),
-                    "BSD-3-Clause",
+                    RUNTIME_LICENCES["openblas"],
                     "https://www.openblas.net/",
                     f"{owner}.__config__",
                 )
@@ -976,7 +985,7 @@ def runtime_components(
                 "gcc-runtime",
                 "GCC Runtime Libraries",
                 gcc_version,
-                "GPL-3.0-or-later WITH GCC-exception-3.1",
+                RUNTIME_LICENCES["gcc-runtime"],
                 "https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html",
                 gcc_source,
             )

@@ -3178,9 +3178,11 @@ def test_the_metainfo_is_well_formed_and_names_both_licences() -> None:
 #: '… exit'`` (Review 1, S3).
 _EARLY_READER: Final = re.compile(
     r"\|\s*(?:head\b"
-    r"|grep\b[^|]*\s(?:-[A-Za-z]*[qm][A-Za-z]*\b|--quiet\b|--max-count\b)"
-    r"|awk\b[^|]*\bexit\b"
-    r"|sed\b[^|]*'[^']*\d*q[^']*')"
+    r"|read\b"
+    r"|grep\b[^|]*\s(?:-[A-Za-z]*[qm][A-Za-z0-9]*\b|--(?:quiet|silent|max-count)\b)"
+    r"|awk\b(?:[^|&;)'\"]|'[^']*'|\"[^\"]*\")*?"
+    r"(?:'[^']*\bexit\b[^']*'|\"[^\"]*\bexit\b[^\"]*\"|\bexit\b)"
+    r"|sed\b[^|]*(?:\s|['\";{])(?:\d+|/[^/]+/)?\s*[qQ](?=\s|['\";}]|$))"
 )
 
 
@@ -3199,12 +3201,23 @@ def test_no_pipe_in_any_workflow_ends_its_reader_early() -> None:
     Jeder Workflow, nicht nur ``build.yml``: ``shell: bash`` heißt bei GitHub
     ``-eo pipefail``, und ``slicer-auswahl.yml`` trug dieselbe Bauart.
     """
+    paths = sorted(WORKFLOW.parent.glob("*.yml"))
+    assert WORKFLOW in paths, "build.yml muss in der geprüften Workflowmenge liegen"
     found = [
         f"{path.name}: {line}"
-        for path in sorted(WORKFLOW.parent.glob("*.yml"))
+        for path in paths
         for line in _early_readers(path.read_text(encoding="utf-8"))
     ]
     assert found == []
+
+
+def test_the_early_reader_guard_rejects_an_empty_workflow_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein falscher Workflowpfad darf nicht bedeuten, dass alle Pipes sicher sind."""
+    monkeypatch.setattr(sys.modules[__name__], "WORKFLOW", tmp_path / "build.yml")
+    with pytest.raises(AssertionError, match=r"build\.yml"):
+        test_no_pipe_in_any_workflow_ends_its_reader_early()
 
 
 @pytest.mark.parametrize(
@@ -3214,9 +3227,32 @@ def test_no_pipe_in_any_workflow_ends_its_reader_early() -> None:
         ('echo "$(ldd --version | head -n 1)"', True),
         ("lipo -archs app | tr ' ' '\\n' | grep -qx 'arm64'", True),
         ("find . -name x | grep -m 1 y", True),
+        ("find . -name x | grep -m1 y", True),
+        ("find . -name x | grep --silent y", True),
+        ("find . -name x | grep --max-count=1 y", True),
+        ("find . -name x | grep -im1 y", True),
         ("seq 9 | sed '1q'", True),
+        ("seq 9 | sed q", True),
+        ("seq 9 | sed Q", True),
+        ("seq 9 | sed 1q", True),
+        ('seq 9 | sed "1q"', True),
+        ("seq 9 | sed '1Q'", True),
+        ('seq 9 | sed "1Q"', True),
+        ("seq 9 | sed -e 3q", True),
+        ("seq 9 | sed -n '1p;3q'", True),
+        ("seq 9 | sed '/3/q'", True),
+        ("seq 9 | read -r value", True),
+        ("seq 9 | awk '$1 == 2 || $1 == 3 {print; exit}'", True),
+        ('seq 9 | awk "$1 == 2 || $1 == 3 {print; exit}"', True),
         ("cxx=$(ldconfig -p | awk '/x/ && !found {print $NF; found = 1}')", False),
+        ("seq 9 | awk '$1 == 2 || $1 == 3 {print}'", False),
+        ("seq 9 | awk '{print}' || exit 1", False),
         ('echo "$(ldd --version | sed -n 1p)"', False),
+        ("printf quote | sed 's/quote/x/'", False),
+        ('printf quote | sed "s/quote/x/"', False),
+        ("find . -name x | grep -c y", False),
+        ("find . -name x | grep -l y", False),
+        ("find . -name x | grep -L y", False),
         ("lipo -archs app | tr ' ' '\\n' | grep -x 'arm64' > /dev/null", False),
         ("grep -ao 'GLIBCXX' lib | sort -uV | tail -n 1", False),
         ("# ldconfig -p | head -n 1", False),
