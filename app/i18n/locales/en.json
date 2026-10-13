@@ -3561,7 +3561,7 @@
   "Eine Wandleiste, länger als jedes Bett, in Stücke teilen.": "Split a wall rail longer than any bed into pieces.",
   "Eine Wandplatte für den Raumboden. Rückwand mit Nuten für die Seitenwände oder Seitenwand mit Feder zur Rückwand, beide mit Feder zum Boden und wahlweise einem Fenster mit Falz oder einer Tür. Die Scheibe dazu ist der Baustein Fensterscheibe.": "A wall panel for the room floor. Back wall with grooves for the side walls or side wall with a tongue to the back wall, both with a tongue to the floor and optionally a window with a rebate or a door. The matching pane is the Window pane part.",
   "Eine Zahl an ein Maß binden …": "Bind one number to a dimension …",
-  "Eine Zahl oder ein Ausdruck mit Projektparametern, etwa breite/2.": "A number or an expression with project parameters, such as breite/2.",
+  "Eine Zahl oder ein Ausdruck mit Projektparametern, etwa @breite/2.": "A number or an expression with project parameters, such as @width/2.",
   "Eine Zahl oder ein Ausdruck — Projektparameter mit @name.": "A number or an expression — project parameters as @name.",
   "Eine Zelle dieser Breite bleibt bei dieser Teilung nicht übrig.": "At this spacing, no cell of this width remains.",
   "Eine Zylinderfläche anklicken": "Click a cylindrical face",

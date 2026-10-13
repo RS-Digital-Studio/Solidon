@@ -3561,7 +3561,7 @@
   "Eine Wandleiste, länger als jedes Bett, in Stücke teilen.": "Dividir en piezas un listón más largo que cualquier placa.",
   "Eine Wandplatte für den Raumboden. Rückwand mit Nuten für die Seitenwände oder Seitenwand mit Feder zur Rückwand, beide mit Feder zum Boden und wahlweise einem Fenster mit Falz oder einer Tür. Die Scheibe dazu ist der Baustein Fensterscheibe.": "Un panel de pared para el suelo de habitación. Pared trasera con ranuras para las paredes laterales o pared lateral con lengüeta hacia la trasera, ambas con lengüeta hacia el suelo y, si se desea, una ventana con rebaje o una puerta. El cristal correspondiente es la pieza Cristal de ventana.",
   "Eine Zahl an ein Maß binden …": "Vincular un número a una medida …",
-  "Eine Zahl oder ein Ausdruck mit Projektparametern, etwa breite/2.": "Un número o una expresión con parámetros del proyecto, como breite/2.",
+  "Eine Zahl oder ein Ausdruck mit Projektparametern, etwa @breite/2.": "Un número o una expresión con parámetros del proyecto, como @ancho/2.",
   "Eine Zahl oder ein Ausdruck — Projektparameter mit @name.": "Un número o una expresión — los parámetros del proyecto con @nombre.",
   "Eine Zelle dieser Breite bleibt bei dieser Teilung nicht übrig.": "Con este paso no queda ninguna celda de este ancho.",
   "Eine Zylinderfläche anklicken": "Pulsar una cara cilíndrica",

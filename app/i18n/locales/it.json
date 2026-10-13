@@ -3561,7 +3561,7 @@
   "Eine Wandleiste, länger als jedes Bett, in Stücke teilen.": "Dividi in pezzi un listello più lungo di ogni piano.",
   "Eine Wandplatte für den Raumboden. Rückwand mit Nuten für die Seitenwände oder Seitenwand mit Feder zur Rückwand, beide mit Feder zum Boden und wahlweise einem Fenster mit Falz oder einer Tür. Die Scheibe dazu ist der Baustein Fensterscheibe.": "Un pannello di parete per il pavimento della stanza. Parete posteriore con scanalature per le pareti laterali o parete laterale con linguetta verso la posteriore, entrambe con linguetta verso il pavimento e, a scelta, una finestra con incasso o una porta. Il vetro corrispondente è il pezzo Vetro della finestra.",
   "Eine Zahl an ein Maß binden …": "Collega un numero a una misura …",
-  "Eine Zahl oder ein Ausdruck mit Projektparametern, etwa breite/2.": "Un numero o un'espressione con parametri di progetto, ad esempio breite/2.",
+  "Eine Zahl oder ein Ausdruck mit Projektparametern, etwa @breite/2.": "Un numero o un'espressione con parametri di progetto, ad esempio @larghezza/2.",
   "Eine Zahl oder ein Ausdruck — Projektparameter mit @name.": "Un numero o un'espressione — i parametri di progetto con @nome.",
   "Eine Zelle dieser Breite bleibt bei dieser Teilung nicht übrig.": "Con questa spaziatura non resta alcuna cella di questa larghezza.",
   "Eine Zylinderfläche anklicken": "Fai clic su una faccia cilindrica",
