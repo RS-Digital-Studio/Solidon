@@ -154,6 +154,8 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #: * ``tree.row:obj_1`` und ``tree.row:obj_1.hole_2`` — eine Zeile im Baum;
 #: * ``history.row:3`` — die Verlaufszeile mit der sichtbaren Nummer 3;
 #: * ``view:obj_1.hole_2`` — eine Stelle im Bild auf diesem Merkmal;
+#: * ``view.edge:obj_1`` — eine Stelle im Bild auf einer bearbeitbaren Kante
+#:   dieses Körpers; am gewählten Körper wählt ein Klick dort die Kante;
 #: * ``dialog:print_settings_dialog`` — ein offener Dialog dieser Klasse;
 #: * ``start.recent:1`` — ein Eintrag unter „Zuletzt geöffnet“ auf dem
 #:   Startbildschirm, gezählt ab 1 in der Folge der Liste. Eine Menüzeile
@@ -194,6 +196,7 @@ TARGET_KINDS: Final[tuple[str, ...]] = (
     "tree.row",
     "history.row",
     "view",
+    "view.edge",
     "dialog",
     "start.recent",
     "message",
@@ -222,6 +225,7 @@ _PATTERNS: Final[dict[str, re.Pattern[str]]] = {
     "part": re.compile(_WORD),
     "field": re.compile(_WORD),
     "edge": re.compile(rf"{_WORD}(?:\.{_WORD})?"),
+    "view.edge": re.compile(_WORD),
     "feature.field": re.compile(rf"{_WORD}(?:\.{_WORD})+"),
     "measure.field": re.compile(_WORD),
     "finding": re.compile(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*"),

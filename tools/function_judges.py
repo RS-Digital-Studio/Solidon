@@ -124,7 +124,7 @@ def _clicks(steps: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
 
 def _is_selection(step: Mapping[str, Any]) -> bool:
     target = str(step.get("target") or "")
-    return target.startswith(("tree.row:", "view:"))
+    return target.startswith(("tree.row:", "view:", "view.edge:"))
 
 
 def _route_targets(row: Mapping[str, Any]) -> list[str]:
@@ -178,7 +178,8 @@ def _selected_feature(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]
     Aus der Anforderung der Zeile (``function_list``: ``merkmal:<art>``, die
     Merkmalsauswahlen, ``kante``) oder, wo sie fehlt, aus der Startauswahl: ein
     Merkmal ist eine Baumzeile oder Stelle im Bild mit Merkmal
-    (``tree.row:obj_1.hole_1``). Ein Befund ist keines, auch wenn sein Code
+    (``tree.row:obj_1.hole_1``), eine Kante ihre Stelle im Bild
+    (``view.edge:obj_1``). Ein Befund ist keines, auch wenn sein Code
     einen Punkt trägt (``finding:arrange.below_bed``, Probelauf F-17).
     """
     requirement = str(row.get("requirement") or "")
@@ -190,7 +191,7 @@ def _selected_feature(steps: Sequence[Mapping[str, Any]], row: Mapping[str, Any]
     if not chosen:
         return False
     kind, _separator, rest = chosen[-1].partition(":")
-    return kind in ("tree.row", "view") and "." in rest
+    return kind == "view.edge" or (kind in ("tree.row", "view") and "." in rest)
 
 
 def _has_selection_relation(row: Mapping[str, Any]) -> bool:

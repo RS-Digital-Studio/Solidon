@@ -574,7 +574,7 @@ class QtPorts:
         """Das Widget, das ein Ziel ohne eigenes Widget trägt, oder ``None``.
 
         Die Liste oder der Baum einer Zeile, die Liste des offenen Katalogs für
-        ``part:``, die Ansicht für ``view:``, ``viewport`` und einen Griff im
+        ``part:``, die Ansicht für ``view:``, ``view.edge:``, ``viewport`` und einen Griff im
         Bild; eine Leiste über der Ansicht (``handle:bar.*``) ist ihr eigenes
         Widget und liegt in der Werkzeugzeile, nicht in der Ansicht (Review N1).
         """
@@ -586,7 +586,7 @@ class QtPorts:
         window = self.window
         if window is None:
             return None
-        if kind == "view" or name == "viewport":
+        if kind in ("view", "view.edge") or name == "viewport":
             return window.viewport
         if kind == "handle":
             try:

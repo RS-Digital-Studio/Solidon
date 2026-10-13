@@ -922,6 +922,17 @@ def test_every_selecting_row_carries_its_selection_clicks(rows: list[fl.Row]) ->
     # Eine Operation über die ganze Szene steht in der Karte am gewählten Körper
     # (Probelauf F-32: ohne Auswahl fand der Sprachfall sie nicht).
     assert targets("arrange_bed") == [("tree.row:obj_1", "")]
+    # Eine Kante wählt ein Klick ins Bild, nachdem der Körper gewählt ist
+    # (gestufte Tiefe, §18.5) — vorher wählte der Weg nur den Körper, und keine
+    # Kantenzeile lief an einer Kante (Durchsicht welle4 C-M4).
+    edge_way = [("tree.row:obj_1", ""), ("view.edge:obj_1", "")]
+    for row_id in (
+        "fillet_edges",
+        "chamfer_edges",
+        "bead_edges",
+        "edge:fillet_edges.variable_radius",
+    ):
+        assert targets(row_id) == edge_way, row_id
     steps = [step for row in rows for step in row.route]
     assert len(steps) >= 100
     assert all(is_target(step["target"]) and step["button"] == "left" for step in steps)

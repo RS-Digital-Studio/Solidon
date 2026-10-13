@@ -542,21 +542,37 @@ def _start_scene(requirement: str, kernel: str, scenes: Mapping[str, Scene]) -> 
 SAME_ENTRY: Final[dict[str, str]] = {"drill_brep_hole": "drill_hole"}
 
 
-def operation_target(name: str) -> str:
+def _edge_rows_of_operations() -> frozenset[str]:
+    """Die Operationen, die an einer angeklickten Kante ihre eigene Zeile haben."""
+    from app.core.guides import action_key
+    from app.core.perceive.actions import edge_actions
+
+    return frozenset(
+        str(action.op) for action in edge_actions("probe") if action_key(action) == action.op
+    )
+
+
+def operation_target(name: str, edged: frozenset[str] | None = None) -> str:
     """Wo der Kunde eine Operation bedient — das Ziel ihrer Zeile (Probelauf F-21).
 
     Eine Handlung des Merkmalfensters (``perceive.actions.ACTION_ORDER``) ist
-    seine Zeile ``feature:<op>``, eine Färbung der Filamentwähler
+    seine Zeile ``feature:<op>``, eine Kantenoperation mit eigener Zeile an der
+    angeklickten Kante (``perceive.actions.edge_actions``) diese Zeile
+    ``edge:<op>``, eine Färbung der Filamentwähler
     (``selection_operations.PICKER_HANDLES``), sonst der Knopf oder die
     Menüzeile ``operation:<op>``. Vorher hieß jede ``operation:<op>``, und an
     *Merkmal versetzen* fand der Sprachfall „kein Knopf … gilt an dieser
-    Auswahl nicht“.
+    Auswahl nicht“ — an der gewählten Kante ebenso *Verrunden* (Durchsicht
+    welle4 C-M4). ``edged`` sind die Operationen mit Kantenzeile, einmal je Liste
+    gerechnet (:func:`_edge_rows_of_operations`).
     """
     from app.core.perceive.actions import ACTION_ORDER
     from app.ui.selection_operations import PICKER_HANDLES
 
     if any(name in group for group in ACTION_ORDER):
         return f"feature:{name}"
+    if name in (edged if edged is not None else _edge_rows_of_operations()):
+        return f"edge:{name}"
     if name in PICKER_HANDLES:
         return "filament.picker"
     return f"operation:{name}"
@@ -572,6 +588,7 @@ def operation_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
         if source.has(guest) and source.has(host):
             guests.setdefault(host, []).append(guest)
     rows: list[Row] = []
+    edged = _edge_rows_of_operations()
     for spec in sorted(source.all(), key=lambda entry: entry.name):
         if spec.name in catalogue or (
             spec.name in SAME_ENTRY and source.has(SAME_ENTRY[spec.name])
@@ -587,7 +604,7 @@ def operation_rows(source: Registry, scenes: Mapping[str, Scene]) -> list[Row]:
                 package=package_of_operation(spec),
                 requirement=requirement,
                 start_scene=_start_scene(requirement, kernel, scenes),
-                target=operation_target(spec.name),
+                target=operation_target(spec.name, edged),
                 menu_path=menu_path(spec, source),
                 shortcut=spec.shortcut or "",
                 covers=tuple(sorted({spec.name, *guests[spec.name]}))
@@ -1293,9 +1310,11 @@ def duplicate_ids(found: Iterable[Row]) -> list[str]:
 
 #: Anforderungen, deren Auswahl ein Merkmal ist — gewählt wird ``Scene.select``.
 FEATURE_SELECTIONS: Final[frozenset[str]] = frozenset({"baustein", "textur", "gleichartig"})
-#: Anforderungen, deren Auswahl der erste Körper ist.
+#: Die Anforderung, deren Auswahl eine Kante ist: erst der Körper, dann ein Klick ins Bild.
+EDGE_SELECTION: Final = "kante"
+#: Anforderungen, deren Auswahl der erste Körper ist — bei der Kante als erster Klick.
 BODY_SELECTIONS: Final[frozenset[str]] = frozenset(
-    {"kante", "zustand:open", "zustand:parts", "zustand:cavity", "netzkoerper"}
+    {EDGE_SELECTION, "zustand:open", "zustand:parts", "zustand:cavity", "netzkoerper"}
 )
 
 
@@ -1310,10 +1329,10 @@ def selection_route(row: Row, scenes: Mapping[str, Scene]) -> tuple[dict[str, st
     seine Baumzeile, mehrere Körper die Baumzeilen mit Strg dazu, ein Merkmal die
     Baumzeile, die die Szene in ``select`` nennt, ein Befund seine Zeile im
     Bericht — bei einer Befundhandlung der Befund, an dem sie steht. Eine Kante
-    wählt nur ein Klick ins Bild; hier steht der Körper davor, den Klick auf die
-    Kante nennt die Spezifikation. Eine Operation über die ganze Szene steht am
-    gewählten ersten Körper. Ohne Auswahl (leer, Startbildschirm, Ansicht) ist
-    der Weg leer.
+    wählt nur ein Klick ins Bild: erst die Baumzeile des Körpers, dann
+    ``view.edge:`` auf eine seiner Kanten. Eine Operation über die ganze Szene
+    steht am gewählten ersten Körper. Ohne Auswahl (leer, Startbildschirm,
+    Ansicht) ist der Weg leer.
     """
     action = row.id.removeprefix("finding.action:") if row.id.startswith("finding.") else ""
     return route_for(row.requirement, row.start_scene, scenes, action)
@@ -1345,6 +1364,10 @@ def route_for(
             _click(f"tree.row:obj_{number}", "" if number == 1 else "ctrl")
             for number in range(1, count + 1)
         )
+    if requirement == EDGE_SELECTION:
+        # Eine Kante wählt der Klick ins Bild am gewählten Körper (§18.5,
+        # ``guide_targets.edge_point_for``; Durchsicht welle4 C-M4).
+        return (_click("tree.row:obj_1"), _click("view.edge:obj_1"))
     if requirement in BODY_SELECTIONS:
         return (_click("tree.row:obj_1"),)
     if requirement == "szene":

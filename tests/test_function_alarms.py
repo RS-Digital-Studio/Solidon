@@ -1079,3 +1079,101 @@ def test_the_measure_group_counts_only_for_the_action_it_carries(monkeypatch: An
     window.feature_panel.armed = ("resize_hole", {})
     assert function_surface.field_name(window, name) == "measure.field:diameter"
     assert function_surface.in_view(window, [name])
+
+
+# --- Prüfpunkt 13: eine Kante (Durchsicht welle4 C-M4) ---------------------------------------
+
+
+def _matrix_flow(script: dict[str, list[FakeClick]]) -> Any:
+    """Ein Fall für die Matrix: ein Quader mit einer Fläche, die Oberfläche als Drehbuch."""
+    from types import SimpleNamespace
+
+    body = SimpleNamespace(features={"face_top": SimpleNamespace(kind="face")})
+    flow = _flow({})
+    flow.row = {**flow.row, "target": "edge:fillet_edges"}
+    flow.session = SimpleNamespace(
+        last_result=SimpleNamespace(scene=SimpleNamespace(objects={"obj_1": body}))
+    )
+    flow.walker = function_walk.Walk(FakePorts(FakeTimer(), script), [], 0.0)
+    flow.ports = flow.walker.ports
+    flow.reset = lambda: True
+    flow.offer_state = lambda target, label: {"state": "angeboten", "reason": "", "effective": True}
+    return flow
+
+
+def test_the_matrix_chooses_an_edge_in_the_view_after_its_body() -> None:
+    """Durchsicht welle4 C-M4: Die Stufe „eine Kante“ lief nie.
+
+    Die Matrix suchte Merkmale der Art ``edge``, die die Erkennung nicht
+    liefert; eine Kante ist kein Merkmal, sondern eine Stelle im Bild
+    (``view.edge:<körper>``). Gewählt wird sie wie vom Kunden: erst der
+    Körper, dann der Klick auf seine Kante (gestufte Tiefe, §18.5). Hat der
+    Körper keine sichtbare Kante, ist die Stufe nicht herstellbar — ohne Klick
+    ins Leere, der „nicht auffindbar“ gegen die Anwendung schriebe.
+    """
+    edge = FakeWidget("viewport", zone="ansicht")
+    flow = _matrix_flow({"view.edge:obj_1": [FakeClick((0, 0, 5, 5), "left", "ziel", edge)]})
+    walked: dict[str, list[str]] = {}
+
+    def run_steps(label: str, steps: list[Any]) -> bool:
+        walked[label] = [step.name for step in steps]
+        return True
+
+    flow.run_steps = run_steps
+    flow.phase_matrix()
+    assert flow.data["matrix"]["eine_kante"]["state"] == "angeboten", flow.data["matrix"]
+    # Gelesen wird erst, wenn die Zeile an der Kante steht oder so lange ohne Weg
+    # blieb wie auf dem Hauptweg — sofort gefragt hieß sie „fehlt“.
+    assert walked["matrix eine_kante auswahl"] == [
+        "weg zu tree.row:obj_1",
+        "weg zu view.edge:obj_1",
+        "edge:fillet_edges steht",
+    ], walked
+    plain = _matrix_flow({})
+    plain.run_steps = run_steps
+    plain.phase_matrix()
+    assert plain.data["matrix"]["eine_kante"]["state"] == "nicht herstellbar", plain.data["matrix"]
+
+
+def test_e1_counts_an_edge_in_the_view_as_part_of_the_selection() -> None:
+    """Durchsicht welle4 C-M4: Der Klick auf die Kante im Bild gehört zur Startauswahl.
+
+    Ohne Auswahlweg in der Zeile liest E1 die Startauswahl aus den führenden
+    Auswahlklicks; ``view.edge:`` war keiner, und die Kante zählte als Klick
+    danach, an der Grenze für einen Körper (drei) statt für eine Stelle (zwei).
+    """
+    steps = [
+        click_step("tree.row:obj_1", "baum"),
+        click_step("view.edge:obj_1", "ansicht"),
+        click_step("edge:fillet_edges"),
+        click_step("feature.apply", phase=APPLY),
+    ]
+    row = {"id": "edge:fillet_edges", "kind": "bedienflaeche", "target": "edge:fillet_edges"}
+    protocol = _protocol(lambda data: data.update(row=row, steps=steps))
+    assert _criterion("E1", protocol).measurement == {"clicks": 2, "limit": 2}
+
+
+def test_an_edge_operation_row_aims_at_its_row_at_the_edge() -> None:
+    """Durchsicht welle4 C-M4 am Prüfstand: An der gewählten Kante steht *Verrunden* als
+    Kantenzeile im Merkmalfenster (``edge:fillet_edges``), nicht als Knopf der Karte.
+
+    Wie F-21 für die Merkmalshandlungen: Mit dem Kantenklick im Auswahlweg suchte
+    der Hauptweg ``operation:fillet_edges`` und fand „kein Knopf zu sehen und keine
+    Menüzeile“ — „nicht auffindbar“ gegen die Anwendung (Prüfstandlauf am
+    13.10.2026, Fall 001). Die Suche zählt den Treffer ``operation:<op>`` weiter
+    (``function_surface.search_names``).
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.guides import action_key
+    from app.core.perceive.actions import edge_actions
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    rows = {
+        row.id: row for row in function_list.operation_rows(REGISTRY, function_scenes.load_scenes())
+    }
+    own = {action.op for action in edge_actions("probe") if action_key(action) == action.op}
+    assert own >= {"fillet_edges", "chamfer_edges"}, own
+    for name in own:
+        assert rows[name].target == f"edge:{name}", rows[name]
+        assert rows[name].requirement == "kante", rows[name]

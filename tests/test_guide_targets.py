@@ -98,6 +98,9 @@ NEW_RESOLVERS = (
     "_display_to_global",
     "_shows_the_view",
     "point_for",
+    "edge_point_for",
+    "_along",
+    "_nudged",
     "_grip_point",
     "widget_under",
     "zone_of",
@@ -490,7 +493,7 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     # zwei Fälle darunter an der Attrappe und der native Fall am echten Bild.
     # „Zuletzt geöffnet“ steht auf dem Startbildschirm: eigener Fall darunter.
     # Die rohen Meldungsfenster und ihre Knöpfe gehen modal auf: eigene Fälle darunter.
-    seen.update({"view", "start.recent", "message", "message.button"})
+    seen.update({"view", "view.edge", "start.recent", "message", "message.button"})
     assert seen >= NEW_KINDS, sorted(NEW_KINDS - seen)
 
 
@@ -752,8 +755,10 @@ def test_widget_under_finds_the_child_and_an_open_menu_first(qt_app: Any) -> Non
 @pytest.mark.usefixtures("require_graphics_adapter")
 def test_a_click_at_point_for_chooses_the_feature(native_window_platform: str) -> None:
     """Am echten Fenster: Klicks an der Stelle aus ``point_for`` wählen erst den
-    Körper, dann die Fläche — die Stelle trifft, was sie verspricht. Danach findet
-    ``handle:move.*`` die Pfeile des Bewegungsgriffs im echten Bild."""
+    Körper, dann die Fläche — die Stelle trifft, was sie verspricht. Am gewählten
+    Körper wählt ein Klick an ``view.edge:obj_1`` eine seiner Kanten (Durchsicht
+    welle4 C-M4). Danach findet ``handle:move.*`` die Pfeile des Bewegungsgriffs im
+    echten Bild."""
     import os
     import subprocess
     import sys
@@ -801,6 +806,21 @@ for click in range(2):
         QTest.qWait(20)
 assert window.object_tree.selected_feature() == 'face_top', window.object_tree.selected_feature()
 window.object_tree.select_object('obj_1')
+for _ in range(10):
+    application.processEvents()
+    QTest.qWait(20)
+assert window.viewport.highlighted_edge() is None
+step = guide_targets.next_click(window, 'view.edge:obj_1')
+assert step.why == 'ziel', step
+under = guide_targets.widget_under(step.rect.center())
+QTest.mouseClick(under, Qt.MouseButton.LeftButton, pos=under.mapFromGlobal(step.rect.center()))
+for _ in range(30):
+    application.processEvents()
+    QTest.qWait(20)
+edge = window.viewport.highlighted_edge()
+assert edge is not None and edge[0] == 'obj_1', edge
+print('view.edge chose an edge', flush=True)
+window.object_tree.select_object('obj_1')
 window.tools.toggle('transform')
 for _ in range(30):
     application.processEvents()
@@ -823,6 +843,7 @@ os._exit(0)
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert "point_for chose the feature" in done.stdout, done.stdout
+    assert "view.edge chose an edge" in done.stdout, done.stdout
 
 
 def test_the_recent_projects_and_the_dialog_fields_resolve(qt_app: Any, tmp_path: Path) -> None:
@@ -1042,6 +1063,50 @@ def test_point_for_on_a_coarse_view_takes_only_a_hit_on_its_own_triangle(
         guide_targets.point_for(window, "obj_1", "hole_1")
     monkeypatch.setattr(viewport, "placement_hit", picked(near=True))
     assert guide_targets.point_for(window, "obj_1", "hole_1") is not None
+
+
+def test_edge_point_for_takes_a_spot_on_an_edge_the_view_offers(
+    prepared_window: Any, monkeypatch
+) -> None:
+    """Durchsicht welle4 C-M4: ``view.edge:obj_1`` ist die Mitte einer Kante, die die
+    Ansicht selbst anklickbar führt (``Viewport._prepared_edges``), vom Pick bestätigt.
+
+    Der Pick ist nachgestellt und trifft den Körper nur an der Mitte einer geraden
+    Kante. Liegt der Treffer weit weg — die Kante steht hinter einer Fläche — oder
+    trifft er nichts, gibt es keine Stelle. Ob der Klick dort am echten Fenster
+    die Kante wählt, prüft der native Fall darüber.
+    """
+    import numpy as np
+
+    from app.ui import guide_targets
+
+    window = prepared_window
+    viewport = window.viewport
+    straight = [points for _key, points in viewport._prepared_edges("obj_1") if len(points) == 2]
+    assert straight, "der Quader hat gerade Kanten"
+    middle = np.asarray(straight[0], dtype=float).mean(axis=0)
+    spot = viewport.display_of(tuple(float(value) for value in middle))
+    assert spot is not None
+
+    def picked(distance: float) -> Any:
+        def pick(x: int, y: int) -> Any:
+            if abs(spot[0] - x) <= 1 and abs(spot[1] - y) <= 1:
+                return ("obj_1", tuple(float(value) for value in middle + distance), -1, None)
+            return None
+
+        return pick
+
+    monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
+    monkeypatch.setattr(viewport, "placement_hit", picked(0.0))
+    point = guide_targets.edge_point_for(window, "obj_1")
+    local = viewport.mapFromGlobal(point)
+    assert abs(local.x() - spot[0]) <= 1 and abs(local.y() - spot[1]) <= 1, (local, spot)
+    step = guide_targets.next_click(window, "view.edge:obj_1")
+    assert (step.why, step.rect.center()) == ("ziel", point)
+    for pick in (picked(100.0), lambda _x, _y: None):
+        monkeypatch.setattr(viewport, "placement_hit", pick)
+        with pytest.raises(guide_targets.MissingTargetError, match="keine sichtbare Kante"):
+            guide_targets.edge_point_for(window, "obj_1")
 
 
 def test_the_menu_names_are_the_same_in_another_language(qt_app: Any) -> None:

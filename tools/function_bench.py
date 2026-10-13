@@ -1020,10 +1020,22 @@ class FunctionFlow(GesturePhases, SwitchPhase):
         self.undo_and_redo()
 
     def spot(self) -> dict[str, Any] | None:
-        """E4: liegt über der bearbeiteten Stelle ein Fenster? Über ``view:`` und die Probe."""
-        if self.selected is None:
+        """E4: liegt über der bearbeiteten Stelle ein Fenster? Über ``view:`` und die Probe.
+
+        Die bearbeitete Stelle ist das gewählte Merkmal oder die gewählte Kante
+        (``view.edge:`` im Auswahlweg der Zeile, Durchsicht welle4 C-M4).
+        """
+        edges = [
+            str(step.get("target"))
+            for step in self.row.get("route") or ()
+            if str(step.get("target") or "").startswith("view.edge:")
+        ]
+        if self.selected is not None:
+            name = f"view:{self.selected[0]}.{self.selected[1]}"
+        elif edges:
+            name = edges[-1]
+        else:
             return None
-        name = f"view:{self.selected[0]}.{self.selected[1]}"
         try:
             click = self.ports.next_click(name)
         except LookupError:
@@ -1522,7 +1534,17 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             for name, feature in entry.features.items()
         ]
         bodies = [str(key) for key, _entry in objects]
-        edges = [entry for entry in features if entry[2] == "edge"]
+        # Eine Kante ist kein Merkmal, sondern eine Stelle im Bild: erst der
+        # Körper, dann der Klick auf seine Kante (gestufte Tiefe, §18.5). Ohne
+        # sichtbare Kante hat die Szene dafür zu wenig — kein Klick ins Leere,
+        # der „nicht auffindbar“ gegen die Anwendung schriebe (Durchsicht
+        # welle4 C-M4: vorher suchte die Matrix Merkmale der Art ``edge``).
+        edge = f"view.edge:{bodies[0]}" if bodies else ""
+        try:
+            if edge:
+                self.ports.next_click(edge)
+        except LookupError:
+            edge = ""
         clicks: dict[str, list[tuple[str, str]] | None] = {
             "ohne": [],
             "ein_koerper": [(f"tree.row:{bodies[0]}", "left")] if bodies else None,
@@ -1542,7 +1564,7 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                 if len(features) > 1
                 else None
             ),
-            "eine_kante": [(f"view:{edges[0][0]}.{edges[0][1]}", "left")] if edges else None,
+            "eine_kante": [(f"tree.row:{bodies[0]}", "left"), (edge, "left")] if edge else None,
         }
         assert tuple(clicks) == tuple(SELECTION_STAGES)
         target = walk_target(self.row)
@@ -1558,6 +1580,13 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             self.reset()
             selection = [self.key_step("Escape", "auswahl leeren")] if not route else []
             selection += [self.walker.step(name, button) for name, button in route]
+            # Gelesen wird, wenn das Ziel steht oder so lange ohne Weg blieb wie
+            # auf dem Hauptweg (``Walk.stable``): Die Kantenzeilen baut das
+            # Merkmalfenster nach dem Klick, und sofort gefragt hieß die Zeile an
+            # der gewählten Kante „fehlt“ (Prüfstandlauf zu C-M4, Fall 002).
+            selection.append(
+                Step(f"{target} steht", lambda machine: None, ready=self.walker.stable(target))
+            )
             if not self.run_steps(f"matrix {stage} auswahl", selection):
                 matrix[stage] = {
                     "state": MATRIX_UNREACHABLE,
