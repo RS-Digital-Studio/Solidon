@@ -258,19 +258,6 @@ def is_supported_slicer(program: Path | str) -> bool:
     return flavour_of(name) is not None or is_resin_slicer(name)
 
 
-#: Die Slicer, die als Flatpak auf Flathub stehen, unter ihrer Kennung — samt
-#: Orcas früherer (``io.github.softfever``), die installiert weiterläuft.
-#: Gefunden wird jeder Slicer an seinem Namen (``discover.flatpak_app``); diese
-#: Liste braucht nur Solidons eigenes Flatpak, das ``~/.var/app/<Kennung>`` je
-#: Anwendung freigeben muss, um dort die Drucker des Kunden zu lesen.
-SLICER_FLATPAKS: Final = (
-    "com.orcaslicer.OrcaSlicer",
-    "io.github.softfever.OrcaSlicer",
-    "com.prusa3d.PrusaSlicer",
-    "com.bambulab.BambuStudio",
-    "com.ultimaker.cura",
-)
-
 TOOLS: Final[tuple[ExternalTool, ...]] = (
     ExternalTool(
         id="slicer",

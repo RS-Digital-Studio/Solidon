@@ -20,6 +20,11 @@ dans `website/version.json`.
 
 ### Utilisation et système
 
+- Sur Mac, Solidon peut désormais charger le pilote de 3Dconnexion (3DxWare) pour la souris 3D. De la version 0.4.1 à la 0.6.0, macOS ne l'autorisait pas.
+- Sur Mac, le paquet d'installation place désormais toujours Solidon dans *Applications*. Si Solidon ne s'y trouvait pas, le paquet mettait jusqu'ici à jour une copie située ailleurs.
+- Après la mise à jour sur Mac, lancer Solidon depuis *Applications*. Supprimer les anciennes copies de l'app hors de ce dossier et recréer le raccourci du Dock si nécessaire.
+- Sous Linux, l'AppImage démarre désormais aussi sur Ubuntu 22.04, Linux Mint 21 et Debian 12. En version 0.6.0, seul le Flatpak y fonctionnait.
+- Sous Linux, Solidon lit désormais la souris 3D par l'accès qu'ouvre la règle udev du manuel, y compris dans le Flatpak. Jusqu'à la version 0.6.0, la règle n'y suffisait pas.
 - La recherche trouve *Réunir*, *Soustraire* et *Intersection* aussi sous « booléen », et *Soustraire* aussi sous « différence ».
 - La recherche trouve aussi la fonction pour une question comme « Comment poser la pièce sur le plateau ? » et connaît des mots des slicers et de la CAO comme « variable ».
 - La recherche dans le manuel trouve aussi la bonne page pour une question posée avec vos propres mots.

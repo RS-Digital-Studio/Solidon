@@ -1,0 +1,13 @@
+Suche im Dateiinventar des signierten Intel-Bundles 0.6.0
+(Artefakt solidon3d-macos-app-signed-X64, Tag-Lauf 38170638968; Inventar
+von skripte/zipinventar.py, Rohdaten nicht abgelegt).
+
+Einträge im Inventar: 2281
+
+FFmpeg (libavcodec, libavformat, libavutil, libswscale, libswresample, ffmpeg): 0 Treffer
+
+libavif: 4 Treffer
+  PIL/.dylibs/libavif.16.4.2.dylib
+  Solidon3D.app/Contents/Frameworks/PIL/__dot__dylibs/libavif.16.4.2.dylib
+  Solidon3D.app/Contents/Frameworks/libavif.16.4.2.dylib
+  Solidon3D.app/Contents/Resources/libavif.16.4.2.dylib

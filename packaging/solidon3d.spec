@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT, PROJECT_SUFFIX  # noqa: E402
 from app.branding import MACOS_MINIMUM, PART_FILE_MIME_TYPE, PART_FILE_SUFFIX  # noqa: E402
 from tools import asset_rights, build_slice_core, make_linux_packages, make_sbom  # noqa: E402
+from tools import make_macos_package  # noqa: E402
 
 # Bilder, Symbole und Schriften sind Teil des Kundenpakets und brauchen vor
 # PyInstaller dieselbe Freigabe auf allen drei Zielsystemen. Website-only-
@@ -223,8 +224,10 @@ hiddenimports = [
     "OCP.Message",
     "vhacdx",
     # Die 3D-Maus liest über hidapi, importiert erst beim Öffnen des Geräts
-    # (app/ui/spacemouse.py) — ein Bau ohne das Modul soll auffallen.
-    "hid",
+    # (app/ui/spacemouse.py) — ein Bau ohne das Modul soll auffallen. Unter
+    # Linux das Modul ``hidraw`` (Kerneltreiber, /dev/hidraw*), sonst ``hid``;
+    # dieselbe Wahl wie ``spacemouse.hid_module_name``.
+    "hidraw" if sys.platform.startswith("linux") else "hid",
     # trimesh fragt xxhash in einem try/except am Modulkopf ab und fällt ohne
     # es still auf blake2b zurück — der Kunde merkt nur, dass jede Auswertung
     # großer Baugruppen langsamer ist. Der Modulgraph findet auch try-Importe;
@@ -276,6 +279,9 @@ analysis = Analysis(
         "curses",
         "_curses",
         "_curses_panel",
+        # Unter Linux liest die 3D-Maus über ``hidraw``; ``hid`` ginge über
+        # libusb, das Recht auf /dev/bus/usb bräuchte und dann nicht mitreist.
+        *(["hid"] if sys.platform.startswith("linux") else []),
     ],
     # Die vier Grenzdateien aus §2 C reisen als Quelltext, nicht im Archiv:
     # integrity.intact() hasht genau die Datei, aus der Python sie lädt —
@@ -331,6 +337,15 @@ if sys.platform == "win32":
 if sys.platform.startswith("linux"):
     analysis.binaries = make_linux_packages.trim_linux_binaries(analysis.binaries)
 
+# macOS: Keine Bibliothek aus dem Homebrew oder MacPorts des Runners. Bringt
+# ein Rad dieselbe mit, fällt die Runner-Kopie weg, sonst hält der Bau an —
+# Grund und Regel an ``make_macos_package.trim_foreign_macos_binaries``.
+if sys.platform == "darwin":
+    try:
+        analysis.binaries = make_macos_package.trim_foreign_macos_binaries(analysis.binaries)
+    except ValueError as problem:
+        raise SystemExit(str(problem)) from problem
+
 pyz = PYZ(analysis.pure)
 
 executable = EXE(
@@ -367,6 +382,11 @@ if sys.platform == "darwin":
         version=APP_VERSION,
         info_plist={
             "CFBundleShortVersionString": APP_VERSION,
+            # Die Bauversion, gleich der angezeigten: Apples Installer, die
+            # Versionsprüfung von LaunchServices und Aktualisierer vergleichen
+            # diesen Schlüssel, nicht die angezeigte Nummer. PyInstallers
+            # `version=` setzt nur CFBundleShortVersionString.
+            "CFBundleVersion": APP_VERSION,
             "NSHumanReadableCopyright": COPYRIGHT,
             # Fehlt das, rendert Qt auf einem Retina-Bildschirm in halber
             # Auflösung und das Fenster sieht unscharf aus — eine Ursache,

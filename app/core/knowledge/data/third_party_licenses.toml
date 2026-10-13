@@ -71,6 +71,15 @@ runtime = ["libffi"]
 source = "https://raw.githubusercontent.com/libffi/libffi/v3.4.4/LICENSE"
 sha256 = "2c9c2acb9743e6b007b91350475308aee44691d96aa20eacef8e199988c8c388"
 
+# Die Linux-Fassung: Ubuntu 22.04 trägt libffi 3.4.2, deren Text sich von
+# 3.4.4 (CPython unter Windows und macOS) nur im Copyright-Jahr unterscheidet.
+# Beide Texte reisen auf jeder Plattform mit.
+[[text]]
+path = "third_party_licenses/libffi-3.4.2.txt"
+runtime = ["libffi"]
+source = "https://raw.githubusercontent.com/libffi/libffi/v3.4.2/LICENSE"
+sha256 = "a61d06e8f7be57928e71e800eb9273b05cb8868c484108afe41e4305bb320dde"
+
 [[text]]
 path = "third_party_licenses/AppImage-type2-runtime-dd6cebe.txt"
 runtime = ["appimage-type2-runtime"]
@@ -157,13 +166,14 @@ name = "OpenSSL"
 # bekommen OpenSSL mit dem CPython-Bau (3.5.9 mit 3.14.8, laut
 # `PCbuild/python.props` und `Mac/BuildScript/build-installer.py` zum Tag;
 # 3.5.7 mit 3.14.7, 3.0.21 mit 3.13), auf Linux reist die Systembibliothek
-# des Bauservers mit — Ubuntu 24.04 trägt 3.0.13. Der erste Linux-Paketlauf,
-# der überhaupt bis zur Releaseakte kam (Tag-Lauf 8, 03.09.2026), ist darüber
-# gestolpert. Alle Fassungen stehen unter Apache-2.0; die Quelle nennt deshalb
-# das Repository und nicht einen einzelnen Baum, denn eine Zeile kann nicht
-# auf mehrere Tags zeigen.
+# des Bauservers mit — Ubuntu 22.04 trägt 3.0.2 (bis 0.6.0 baute Linux auf
+# 24.04 mit 3.0.13; die Fassung bleibt für die Akte der alten Pakete). Der
+# erste Linux-Paketlauf, der überhaupt bis zur Releaseakte kam (Tag-Lauf 8,
+# 03.09.2026), ist darüber gestolpert. Alle Fassungen stehen unter Apache-2.0;
+# die Quelle nennt deshalb das Repository und nicht einen einzelnen Baum, denn
+# eine Zeile kann nicht auf mehrere Tags zeigen.
 source = "https://github.com/openssl/openssl"
-versions = ["3.0.13", "3.0.21", "3.5.7", "3.5.9"]
+versions = ["3.0.2", "3.0.13", "3.0.21", "3.5.7", "3.5.9"]
 
 [[runtime]]
 id = "libffi"
@@ -219,11 +229,12 @@ source_delivery = true
 versions = ["3.13.1", "3.14.1"]
 
 # Systembibliotheken, die das Linux-Paket bewusst mitnimmt (Familien aus
-# ``make_sbom.LINUX_LIBRARY_FAMILIES``, Ausschlussliste in
-# ``make_linux_packages.HOST_PROVIDED_LIBRARIES``). Die Version je Familie liest
+# ``make_sbom.LINUX_LIBRARY_FAMILIES``, Ausschlusslisten in
+# ``make_linux_packages.ORPHANED_LIBRARIES`` und
+# ``check_glibc_floor.HOST_LIBRARIES``). Die Version je Familie liest
 # ``make_sbom`` beim Bau über ``dpkg-query`` aus dem Paket des Bauservers; die
-# Texte hier sind die der Fassungen aus Ubuntu 24.04 und tragen die Fassung im
-# Namen.
+# Texte hier sind die der Fassungen aus Ubuntu 22.04 (jammy, jammy-updates),
+# je am Tag der Fassung aus dem Projektarchiv, und tragen die Fassung im Namen.
 
 [[runtime]]
 id = "libxcb"
@@ -289,9 +300,9 @@ source = "https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git"
 source_delivery = true
 
 [[text]]
-path = "third_party_licenses/libxcb-1.15.txt"
+path = "third_party_licenses/libxcb-1.14.txt"
 runtime = ["libxcb"]
-source = "https://gitlab.freedesktop.org/xorg/lib/libxcb/-/raw/libxcb-1.15/COPYING"
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb/-/raw/libxcb-1.14/COPYING"
 sha256 = "c5ffbfeaa501071ceeb97b7de2c0d703fdaa35de01c0fb6cbac1c28453a3e9fd"
 
 [[text]]
@@ -326,33 +337,33 @@ source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-wm/-/raw/0.4.1/COPYING"
 sha256 = "12ab3559977a4b22ae3030b90c64a386e6ec51ab0e4eab1ff530f81a2639400a"
 
 [[text]]
-path = "third_party_licenses/xcb-util-cursor-0.1.4.txt"
+path = "third_party_licenses/xcb-util-cursor-0.1.1.txt"
 runtime = ["xcb-util-cursor"]
-source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-cursor/-/raw/xcb-util-cursor-0.1.4/COPYING"
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-cursor/-/raw/0.1.1/COPYING"
 sha256 = "0dde91ae1d443105dc9e13cbaed6674c36683b7095836ad9ddfce26be270aad5"
 
 [[text]]
-path = "third_party_licenses/libxkbcommon-1.6.0.txt"
+path = "third_party_licenses/libxkbcommon-1.4.0.txt"
 runtime = ["libxkbcommon"]
-source = "https://raw.githubusercontent.com/xkbcommon/libxkbcommon/xkbcommon-1.6.0/LICENSE"
+source = "https://raw.githubusercontent.com/xkbcommon/libxkbcommon/xkbcommon-1.4.0/LICENSE"
 sha256 = "086caee279449369d41c1157911ec7696e707b93feba7280de757d3c470b2dfb"
 
 [[text]]
-path = "third_party_licenses/krb5-1.20.1.txt"
+path = "third_party_licenses/krb5-1.19.2.txt"
 runtime = ["krb5"]
-source = "https://raw.githubusercontent.com/krb5/krb5/krb5-1.20.1-final/NOTICE"
-sha256 = "cfadcf7b2ead2f3af793c25c00638c9908ac0023b101695f40cb9a03b16811dc"
+source = "https://raw.githubusercontent.com/krb5/krb5/krb5-1.19.2-final/NOTICE"
+sha256 = "1577e0b6ae6fa9801a694b800edbe2ea60bb1d0176ff14406250ad7ee088df32"
 
 [[text]]
-path = "third_party_licenses/e2fsprogs-1.47.0.txt"
+path = "third_party_licenses/e2fsprogs-1.46.5.txt"
 runtime = ["e2fsprogs"]
-source = "https://git.kernel.org/pub/scm/fs/ext2/e2fsprogs.git/plain/NOTICE?h=v1.47.0"
+source = "https://git.kernel.org/pub/scm/fs/ext2/e2fsprogs.git/plain/NOTICE?h=v1.46.5"
 sha256 = "adf8d9020e8499912cf340aaa11020a21d0829134e3ce152473a3dda77d3c4dd"
 
 [[text]]
-path = "third_party_licenses/keyutils-1.6.3.txt"
+path = "third_party_licenses/keyutils-1.6.1.txt"
 runtime = ["keyutils"]
-source = "https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git/plain/LICENCE.LGPL?h=v1.6.3"
+source = "https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git/plain/LICENCE.LGPL?h=v1.6.1"
 sha256 = "0cbf0118e6f56383c7737db04c52c0ec3da0e0787ff4507ed500c336c0fb782a"
 
 # ---------------------------------------------------------------------------
@@ -403,6 +414,14 @@ source = "https://gitlab.gnome.org/GNOME/glib"
 id = "pcre2"
 name = "PCRE2"
 source = "https://github.com/PCRE2Project/pcre2"
+
+# GLib 2.72 aus Ubuntu 22.04 hängt noch an PCRE 8 (``libpcre.so.3``, Paket
+# pcre3 8.39); erst GLib 2.73 zog auf PCRE2 um. Gemessen am .deb
+# ``libglib2.0-0`` 2.72.4-0ubuntu2.10. BSD-Lizenz wie PCRE2.
+[[runtime]]
+id = "pcre"
+name = "PCRE"
+source = "https://sourceforge.net/projects/pcre/files/pcre/8.39/"
 
 [[runtime]]
 id = "dbus"
@@ -480,75 +499,81 @@ name = "zlib"
 source = "https://github.com/madler/zlib"
 
 [[text]]
-path = "third_party_licenses/libX11-1.8.7.txt"
+path = "third_party_licenses/libX11-1.7.5.txt"
 runtime = ["libx11"]
-source = "https://gitlab.freedesktop.org/xorg/lib/libx11/-/raw/libX11-1.8.7/COPYING"
-sha256 = "d99b60c2cb79aada8272dc4fb5a79c886027077968f851287e8fddea793baf7d"
+source = "https://gitlab.freedesktop.org/xorg/lib/libx11/-/raw/libX11-1.7.5/COPYING"
+sha256 = "ebd542b775e774a0975160fd5b743ebbcc5fcd77bda2850c503f227cea4f6b51"
 
 [[text]]
-path = "third_party_licenses/expat-2.6.1.txt"
+path = "third_party_licenses/expat-2.4.7.txt"
 runtime = ["expat"]
-source = "https://raw.githubusercontent.com/libexpat/libexpat/R_2_6_1/expat/COPYING"
-sha256 = "122f2c27000472a201d337b9b31f7eb2b52d091b02857061a8880371612d9534"
+source = "https://raw.githubusercontent.com/libexpat/libexpat/R_2_4_7/expat/COPYING"
+sha256 = "8c6b5b6de8fae20b317f4992729abc0e520bfba4c7606cd1e9eeb87418eebdec"
 
 [[text]]
-path = "third_party_licenses/fontconfig-2.15.0.txt"
+path = "third_party_licenses/fontconfig-2.13.1.txt"
 runtime = ["fontconfig"]
-source = "https://gitlab.freedesktop.org/fontconfig/fontconfig/-/raw/2.15.0/COPYING"
-sha256 = "51a51aa9823704fd90bccc616cdd17ebabb5b2b3e9cbde886ca02c7002288067"
+source = "https://gitlab.freedesktop.org/fontconfig/fontconfig/-/raw/2.13.1/COPYING"
+sha256 = "d3813437daf32bd9b5535480a91b5c8f1cca681588446de67d7ebe13d288f481"
 
 [[text]]
-path = "third_party_licenses/freetype-FTL-2.13.2.txt"
+path = "third_party_licenses/freetype-FTL-2.11.1.txt"
 runtime = ["freetype"]
-source = "https://gitlab.freedesktop.org/freetype/freetype/-/raw/VER-2-13-2/docs/FTL.TXT"
+source = "https://gitlab.freedesktop.org/freetype/freetype/-/raw/VER-2-11-1/docs/FTL.TXT"
 sha256 = "08c135755dd589039470f1fdbb400daaabaaa50d0b366d19cebff4d22986baa1"
 
 [[text]]
 path = "third_party_licenses/LGPL-2.1.txt"
-runtime = ["glib", "systemd", "libgcrypt", "libgpg-error", "util-linux"]
+runtime = ["glib", "systemd", "libgcrypt", "libgpg-error", "util-linux", "hidapi-libudev", "hidapi-libattr"]
 source = "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt"
 sha256 = "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9"
 
 [[text]]
-path = "third_party_licenses/pcre2-10.42.txt"
+path = "third_party_licenses/pcre2-10.39.txt"
 runtime = ["pcre2"]
-source = "https://raw.githubusercontent.com/PCRE2Project/pcre2/pcre2-10.42/LICENCE"
-sha256 = "87d884eceb7fc54611470ce9f74280d28612b0c877adfc767e9676892a638987"
+source = "https://raw.githubusercontent.com/PCRE2Project/pcre2/pcre2-10.39/LICENCE"
+sha256 = "15bc778a1f7e1f857d57abab4181749a06ad1d1f9420d5c9e3c23ef8c991b025"
+
+[[text]]
+path = "third_party_licenses/pcre-8.39.txt"
+runtime = ["pcre"]
+source = "https://sourceforge.net/projects/pcre/files/pcre/8.39/pcre-8.39.tar.bz2#pcre-8.39/LICENCE"
+sha256 = "3441595e1a5f7970adb99286b68962cc20252aa0fb8b5d7d775f97760083d563"
 
 [[text]]
 path = "third_party_licenses/dbus-AFL-2.1.txt"
 runtime = ["dbus"]
-source = "https://gitlab.freedesktop.org/dbus/dbus/-/raw/dbus-1.14.10/COPYING"
-sha256 = "ab16324368f400cba266adeec84f06ff8e01f9bbd647998689b9d782ba30162c"
+source = "https://gitlab.freedesktop.org/dbus/dbus/-/raw/dbus-1.12.20/COPYING"
+sha256 = "86d0261dd7957d1d910699d48835f6d44b14103d61d91128540d7226ff8e82b8"
 
 [[text]]
-path = "third_party_licenses/libcap-2.66.txt"
+path = "third_party_licenses/libcap-2.44.txt"
 runtime = ["libcap"]
-source = "https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.66.tar.xz#libcap-2.66/License"
-sha256 = "f58c80bcce8c929db39a23c32e924876e3311f3ffa54f66076c38056d38fa59b"
+source = "https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.44.tar.xz#libcap-2.44/License"
+sha256 = "088cabde4662b4121258d298b0b2967bc1abffa134457ed9bc4a359685ab92bc"
 
 [[text]]
-path = "third_party_licenses/lz4-1.9.4.txt"
+path = "third_party_licenses/lz4-1.9.3.txt"
 runtime = ["lz4"]
-source = "https://raw.githubusercontent.com/lz4/lz4/v1.9.4/lib/LICENSE"
-sha256 = "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c"
+source = "https://raw.githubusercontent.com/lz4/lz4/v1.9.3/lib/LICENSE"
+sha256 = "d15d99c8dc6b0ec22174c0e563a95bc40f9363ca7f9d9d793bb5c5a8e8d0af71"
 
 [[text]]
-path = "third_party_licenses/xz-5.4.5.txt"
+path = "third_party_licenses/xz-5.2.5.txt"
 runtime = ["xz"]
-source = "https://raw.githubusercontent.com/tukaani-project/xz/v5.4.5/COPYING"
-sha256 = "65c298618c87307368c66e7304f7db4352814135b4f85c347b389162540c259f"
+source = "https://raw.githubusercontent.com/tukaani-project/xz/v5.2.5/COPYING"
+sha256 = "073060d5c1ee43ee909638ed7dba5547161ab264f7859cfddef8a213ef6b67fe"
 
 [[text]]
-path = "third_party_licenses/zstd-1.5.5.txt"
+path = "third_party_licenses/zstd-1.4.8.txt"
 runtime = ["zstd"]
-source = "https://raw.githubusercontent.com/facebook/zstd/v1.5.5/LICENSE"
-sha256 = "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+source = "https://raw.githubusercontent.com/facebook/zstd/v1.4.8/LICENSE"
+sha256 = "2c1a7fa704df8f3a606f6fc010b8b5aaebf403f3aeec339a12048f1ba7331a0b"
 
 [[text]]
-path = "third_party_licenses/brotli-1.1.0.txt"
+path = "third_party_licenses/brotli-1.0.9.txt"
 runtime = ["brotli"]
-source = "https://raw.githubusercontent.com/google/brotli/v1.1.0/LICENSE"
+source = "https://raw.githubusercontent.com/google/brotli/v1.0.9/LICENSE"
 sha256 = "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94"
 
 [[text]]
@@ -560,26 +585,112 @@ sha256 = "67fc67381a47fe66f07b5f6705472d26314e6bcdf949f92c2cdde64521bbfdce"
 [[text]]
 path = "third_party_licenses/libuuid-BSD-3.txt"
 runtime = ["libuuid"]
-source = "https://raw.githubusercontent.com/util-linux/util-linux/v2.39.3/Documentation/licenses/COPYING.BSD-3-Clause"
+source = "https://raw.githubusercontent.com/util-linux/util-linux/v2.37.2/Documentation/licenses/COPYING.BSD-3-Clause"
 sha256 = "9b718a9460fed5952466421235bc79eb49d4e9eacc920d7a9dd6285ab8fd6c6d"
 
 [[text]]
-path = "third_party_licenses/libselinux-3.5.txt"
+path = "third_party_licenses/libselinux-3.3.txt"
 runtime = ["libselinux"]
-source = "https://raw.githubusercontent.com/SELinuxProject/selinux/libselinux-3.5/libselinux/LICENSE"
+source = "https://raw.githubusercontent.com/SELinuxProject/selinux/libselinux-3.3/libselinux/LICENSE"
 sha256 = "86657b4c0fe868d7cbd977cb04c63b6c667e08fa51595a7bc846ad4bed8fc364"
 
 [[text]]
-path = "third_party_licenses/libpng-1.6.43.txt"
+path = "third_party_licenses/libpng-1.6.37.txt"
 runtime = ["libpng"]
-source = "https://raw.githubusercontent.com/pnggroup/libpng/v1.6.43/LICENSE"
-sha256 = "7317e078e2d3b5d7ba5a6159e650945153262b44b76f6700f8e9edb261c5143e"
+source = "https://raw.githubusercontent.com/pnggroup/libpng/v1.6.37/LICENSE"
+sha256 = "bf5e22b9dce8464064ae17a48ea1133c3369ac9e1d80ef9e320e5219aa14ea9b"
 
 [[text]]
-path = "third_party_licenses/zlib-1.3.txt"
+path = "third_party_licenses/zlib-1.2.11.txt"
 runtime = ["zlib"]
-source = "https://raw.githubusercontent.com/madler/zlib/v1.3/LICENSE"
-sha256 = "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+# zlib 1.2.11 hat keine LICENSE-Datei: Der Text ist der Abschnitt
+# „Copyright notice“ der README, den 1.3 als LICENSE führt.
+source = "https://raw.githubusercontent.com/madler/zlib/v1.2.11/README"
+sha256 = "fefeb20bf292c34f1e8d5114731308aac188d65aa3dc5f85bb2e9b0d007b7ab8"
+
+# ---------------------------------------------------------------------------
+# Was das Linux-Rad von hidapi in ``hidapi.libs/`` mitbringt (``make_sbom.WHEEL_LIBRARIES``):
+# Das Modul ``hidraw`` der 3D-Maus hängt an libudev, das an libcap/libattr und
+# libdw (elfutils, dazu libelf, liblzma, libbz2). Gebaut hat sie auditwheel auf
+# CentOS 7; die Fassungen stehen in der Stückliste des Rads
+# (``hidapi-0.15.0.dist-info/sboms/auditwheel.cdx.json``) und sind hier gepinnt,
+# damit ein neues Rad die Texte erneut prüfen lässt. Doppellizenzen tragen die
+# gewählte: elfutils LGPL-3.0-or-later (statt GPL-2.0-or-later), libcap
+# BSD-3-Clause (statt GPL-2.0); die LGPL-Teile verlangen ein Quellenangebot
+# wie keyutils. libusb hing nur am Modul ``hid``, das unter Linux nicht mehr
+# mitreist, und steht deshalb nicht hier.
+# ---------------------------------------------------------------------------
+
+[[runtime]]
+id = "hidapi-libudev"
+name = "libudev (systemd, in hidapi)"
+source = "https://github.com/systemd/systemd/tree/v219"
+source_delivery = true
+versions = ["219"]
+
+[[runtime]]
+id = "hidapi-elfutils"
+name = "elfutils libdw/libelf (in hidapi)"
+source = "https://sourceware.org/git/?p=elfutils.git;a=tree;hb=elfutils-0.176"
+source_delivery = true
+versions = ["0.176"]
+
+[[runtime]]
+id = "hidapi-libattr"
+name = "libattr (in hidapi)"
+source = "https://git.savannah.nongnu.org/cgit/attr.git/tree/?h=v2.4.46"
+source_delivery = true
+versions = ["2.4.46"]
+
+[[runtime]]
+id = "hidapi-libcap"
+name = "libcap (in hidapi)"
+source = "https://git.kernel.org/pub/scm/libs/libcap/libcap.git/tree/?h=libcap-2.22"
+versions = ["2.22"]
+
+[[runtime]]
+id = "hidapi-xz"
+name = "XZ Utils liblzma (in hidapi)"
+source = "https://github.com/tukaani-project/xz/tree/v5.2.2"
+versions = ["5.2.2"]
+
+[[runtime]]
+id = "hidapi-bzip2"
+name = "bzip2 (in hidapi)"
+source = "https://sourceware.org/git/?p=bzip2.git;a=tree;hb=bzip2-1.0.6"
+versions = ["1.0.6"]
+
+# LGPL 3 ergänzt die GPL 3 um Erlaubnisse; beide Texte gehören dazu.
+[[text]]
+path = "third_party_licenses/LGPL-3.0.txt"
+runtime = ["hidapi-elfutils"]
+source = "https://www.gnu.org/licenses/lgpl-3.0.txt"
+sha256 = "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
+
+[[text]]
+path = "third_party_licenses/GPL-3.0.txt"
+runtime = ["hidapi-elfutils"]
+source = "https://www.gnu.org/licenses/gpl-3.0.txt"
+sha256 = "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+
+# Bytegleich mit dem Text von 2.44 (Tarball verglichen).
+[[text]]
+path = "third_party_licenses/libcap-2.22.txt"
+runtime = ["hidapi-libcap"]
+source = "https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.22.tar.xz#libcap-2.22/License"
+sha256 = "088cabde4662b4121258d298b0b2967bc1abffa134457ed9bc4a359685ab92bc"
+
+[[text]]
+path = "third_party_licenses/xz-5.2.2.txt"
+runtime = ["hidapi-xz"]
+source = "https://raw.githubusercontent.com/tukaani-project/xz/v5.2.2/COPYING"
+sha256 = "48398016e20f91676c11e50d5066d2668afda3c161a75dcfd47311f52f220f14"
+
+[[text]]
+path = "third_party_licenses/bzip2-1.0.6.txt"
+runtime = ["hidapi-bzip2"]
+source = "https://sourceware.org/git/?p=bzip2.git;a=blob_plain;f=LICENSE;hb=bzip2-1.0.6"
+sha256 = "01c5ea784da676b8138406f99436abbb8d366a096d4f2403070188a40bda578b"
 
 [[text]]
 path = "third_party_licenses/wgpu-native-29.0.1.1-MIT.txt"

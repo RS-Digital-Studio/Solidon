@@ -26,6 +26,7 @@ bedient oder aufgerufen wird.
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterator
 from typing import Final
 
 #: Die Module des Prüfstands unter ``tools/`` — jedes trägt Bedienung am Fenster
@@ -151,6 +152,15 @@ def _event_method(name: str) -> bool:
     return name.endswith("Event") and name[:1].islower() and name not in EVENT_DELIVERY
 
 
+def _scope_nodes(tree: ast.AST) -> Iterator[ast.AST]:
+    """Ein Namensraum ohne Rümpfe darin definierter Funktionen und Klassen."""
+    yield tree
+    for child in ast.iter_child_nodes(tree):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        yield from _scope_nodes(child)
+
+
 def _string_values(tree: ast.AST) -> dict[str, set[str] | None]:
     """Je Name die Zeichenketten, die ihm zugewiesen werden; ``None``, wenn auch anderes.
 
@@ -158,7 +168,7 @@ def _string_values(tree: ast.AST) -> dict[str, set[str] | None]:
     Schleifenvariable, ein Parameter oder ein berechneter Wert bleibt unbekannt.
     """
     values: dict[str, set[str] | None] = {}
-    for node in ast.walk(tree):
+    for node in _scope_nodes(tree):
         if isinstance(node, ast.Assign):
             pairs = [(target, node.value) for target in node.targets]
         elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)) and node.value is not None:
@@ -190,28 +200,81 @@ def _names_of(argument: ast.expr, values: dict[str, set[str] | None]) -> tuple[l
     return [], True
 
 
-def _session_aliases(tree: ast.AST) -> set[str]:
-    """Namen, die eine Sitzung halten: ``s = self.window.session``."""
-    aliases: set[str] = set()
-    for node in ast.walk(tree):
+class _Bindings:
+    """Lexikalische Bindungen für Aliase, mit Reihenfolge und verdeckenden Parametern.
+
+    Ein Alias erbt den Wert zum Zeitpunkt seiner Zuweisung. Eine spätere
+    Neubelegung der Quelle ändert ihn nicht; gleichnamige Nachbarfunktionen
+    teilen keine Bindung. Innere Funktionen dürfen dagegen äußere Namen lesen.
+    """
+
+    def __init__(self, tree: ast.AST) -> None:
+        self.scopes: dict[ast.AST, ast.AST] = {}
+        self.parents: dict[ast.AST, ast.AST] = {}
+        self.values: dict[ast.AST, dict[str, list[tuple[ast.AST, ast.expr | None]]]] = {}
+        self.collect(tree, tree)
+
+    def collect(self, node: ast.AST, scope: ast.AST) -> None:
+        if node is not scope and isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+        ):
+            self.parents[node] = scope
+            scope = node
+        self.scopes[node] = scope
+        values = self.values.setdefault(scope, {})
+        pairs: list[tuple[ast.AST, ast.expr | None]] = []
         if isinstance(node, ast.Assign):
             pairs = [(target, node.value) for target in node.targets]
-        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)) and node.value is not None:
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
             pairs = [(node.target, node.value)]
-        else:
-            continue
+        elif isinstance(node, (ast.For, ast.comprehension)):
+            pairs = [(node.target, None)]
+        elif isinstance(node, ast.arg):
+            values.setdefault(node.arg, []).append((node, None))
         for target, value in pairs:
-            held = value.attr if isinstance(value, ast.Attribute) else getattr(value, "id", "")
-            if held == "session":
-                aliases.add(ast.unparse(target))
-    return aliases
+            if isinstance(target, ast.Name):
+                values.setdefault(target.id, []).append((target, value))
+        for child in ast.iter_child_nodes(node):
+            self.collect(child, scope)
+
+    def resolve(self, expression: ast.expr) -> ast.expr:
+        """Folgt einer Namenskette zu ihrem Wert; Unbekanntes bleibt ein Name."""
+        seen: set[ast.AST] = set()
+        while isinstance(expression, ast.Name) and expression not in seen:
+            seen.add(expression)
+            scope = self.scopes[expression]
+            before = (expression.lineno, expression.col_offset)
+            while expression.id not in self.values[scope] and scope in self.parents:
+                scope = self.parents[scope]
+                # Klassenattribute sind keine lexikalischen Variablen der Methode.
+                while isinstance(scope, ast.ClassDef) and scope in self.parents:
+                    scope = self.parents[scope]
+                before = (float("inf"), 0)
+            candidates = [
+                (target, value)
+                for target, value in self.values[scope].get(expression.id, [])
+                if (target.lineno, target.col_offset) < before
+            ]
+            if not candidates:
+                break
+            _target, value = max(candidates, key=lambda pair: (pair[0].lineno, pair[0].col_offset))
+            if value is None or value in seen:
+                break
+            expression = value
+        return expression
+
+    def sessions(self, expression: ast.expr) -> set[str]:
+        """Ob der Empfänger direkt oder durch Aliase die Sitzung hält."""
+        value = self.resolve(expression)
+        held = value.attr if isinstance(value, ast.Attribute) else getattr(value, "id", "")
+        return {ast.unparse(expression)} if held == "session" else set()
 
 
 def _imported_forbidden(tree: ast.AST) -> dict[str, str]:
     """Verbotene Namen, die als Name importiert werden: lokaler Name → Original."""
     return {
         alias.asname or alias.name: alias.name
-        for node in ast.walk(tree)
+        for node in _scope_nodes(tree)
         if isinstance(node, ast.ImportFrom)
         for alias in node.names
         if _forbidden_name(alias.name) or _event_method(alias.name)
@@ -225,7 +288,7 @@ def _attribute_detour(node: ast.Attribute, called: set[int], sessions: set[str])
         return False
     own = receiver in OWN
     is_called = id(node) in called
-    core = name == "apply" and is_called and ("session" in receiver.lower() or receiver in sessions)
+    core = name == "apply" and ("session" in receiver.lower() or receiver in sessions)
     shortcut = not own and _forbidden_name(name) and (name not in CALL_ONLY or is_called)
     event = not own and _event_method(name)
     foreign = _private(name) and receiver not in ("self", "cls") and whole not in ALLOWED_PRIVATE
@@ -233,7 +296,11 @@ def _attribute_detour(node: ast.Attribute, called: set[int], sessions: set[str])
 
 
 def _named_access(
-    node: ast.Call, label: str, values: dict[str, set[str] | None], called: set[int]
+    node: ast.Call,
+    label: str,
+    values: dict[str, set[str] | None],
+    called: set[int],
+    sessions: set[str],
 ) -> str | None:
     """``getattr``, ``setattr``, ``invokeMethod`` und Verwandte: Zeichenkette oder Variable."""
     kind = label.rsplit(".", 1)[-1]
@@ -249,7 +316,8 @@ def _named_access(
         for name in names:
             if f"{receiver}.{name}" in ALLOWED_PRIVATE:
                 continue
-            if _forbidden_name(name) or _private(name) or _event_method(name):
+            core = name == "apply" and ("session" in receiver.lower() or receiver in sessions)
+            if core or _forbidden_name(name) or _private(name) or _event_method(name):
                 return f"{label}(…, {name!r})"
         # Ein Name, den erst die Laufzeit kennt: Lesen bleibt Lesen, aber wer
         # das Ergebnis aufruft oder etwas setzt, bedient vielleicht.
@@ -307,17 +375,28 @@ def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tup
         ]
         if not roots:
             raise LookupError(f"Klasse {within_class} steht nicht im Quelltext")
+    scopes = [
+        node
+        for root in roots
+        for node in ast.walk(root)
+        if node is root
+        or isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda))
+    ]
+    bindings = _Bindings(tree)
     called = {
-        id(node.func) for root in roots for node in ast.walk(root) if isinstance(node, ast.Call)
+        id(value)
+        for root in roots
+        for node in ast.walk(root)
+        if isinstance(node, ast.Call)
+        for value in (node.func, bindings.resolve(node.func))
     }
-    values = _string_values(tree)
-    sessions = _session_aliases(tree)
-    imported = _imported_forbidden(tree)
     found: set[tuple[int, str]] = set()
-    for root in roots:
-        for node in ast.walk(root):
+    for scope in scopes:
+        values = _string_values(scope)
+        imported = _imported_forbidden(scope)
+        for node in _scope_nodes(scope):
             if isinstance(node, ast.Attribute):
-                if _attribute_detour(node, called, sessions):
+                if _attribute_detour(node, called, bindings.sessions(node.value)):
                     found.add((node.lineno, f"{ast.unparse(node.value)}.{node.attr}"))
             elif isinstance(node, ast.ImportFrom):
                 for alias in node.names:
@@ -339,7 +418,8 @@ def forbidden_calls(source: str, *, within_class: str | None = None) -> list[tup
                     and ast.unparse(node.func.value) not in OWN
                 ):
                     found.add((node.lineno, label))
-                named = _named_access(node, label, values, called)
+                sessions = bindings.sessions(node.args[0]) if node.args else set()
+                named = _named_access(node, label, values, called, sessions)
                 if named is not None:
                     found.add((node.lineno, named))
     return sorted(found)

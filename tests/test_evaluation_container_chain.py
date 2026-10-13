@@ -15,7 +15,7 @@ import pytest
 
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.types import Profile
-from tests.test_evaluation import _short_chain_finds_nothing, _window
+from tests.evaluation_helpers import short_chain_finds_nothing, window_evaluation
 
 #: Wo die Boolesche des Netzkerns steht, und welche Stufenfolgen ein Aufruf
 #: festlegen darf: ein Tupel aus Stufennamen oder eine der zwei Ketten.
@@ -154,7 +154,7 @@ def _the_first_short_chain_gives_up(monkeypatch: pytest.MonkeyPatch) -> list[str
     Wie ein Kern, der an einer Stelle einmal aufgibt; jeder spätere Aufruf
     rechnet echt. Leert der Test die zurückgegebene Liste, gibt der nächste
     erste Lauf wieder auf. Scheiterten alle verlustfreien Stufen
-    (``_short_chain_finds_nothing``), rechnete auch der Deckel über die
+    (``short_chain_finds_nothing``), rechnete auch der Deckel über die
     Ersatzstufen, und der Test prüfte etwas anderes als die Kette.
     """
     from app.core.geom import boolean as boolean_module
@@ -200,11 +200,11 @@ def test_a_container_goes_the_full_chain_where_the_short_one_ends(
     )
     step = document.ops[-1].id
 
-    plain = _window(document, profile)
+    plain = window_evaluation(document, profile)
     assert plain.complete, [str(finding.message) for finding in plain.scene.report.findings]
 
     failed = _the_first_short_chain_gives_up(monkeypatch)
-    rescued = _window(document, profile)
+    rescued = window_evaluation(document, profile)
     assert failed == ["direct", "welded"], f"Voraussetzung: der erste Schnitt gab auf: {failed}"
     assert rescued.stopped_at is None, [
         str(finding.message) for finding in rescued.scene.report.findings
@@ -247,9 +247,9 @@ def test_a_container_carried_by_the_third_stage_keeps_its_opening(
         ],
     )
     step = document.ops[-1].id
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=False)
 
-    rescued = _window(document, profile)
+    rescued = window_evaluation(document, profile)
 
     assert "jittered" in called, f"Voraussetzung: die dritte Stufe trägt: {called}"
     assert rescued.stopped_at is None, [

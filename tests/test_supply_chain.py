@@ -17,6 +17,7 @@ import sys
 import textwrap
 from itertools import pairwise
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -210,21 +211,32 @@ def _runs_hardened(words: list[str]) -> bool:
     return any("runtime" in value.split(",") for value in flags)
 
 
-def test_the_macos_app_may_map_executable_memory_for_libffi() -> None:
-    """Ohne die Berechtigung hält das Intel-Paket schon beim Bootstrap an (RM-104).
+#: Die Ausnahmen der Hardened Runtime, genau diese und nur am Hauptprogramm:
+#: ausführbarer Schreibspeicher für libffi (RM-104) und das Framework des
+#: 3D-Maus-Treibers mit fremder Team-ID.
+MACOS_ENTITLEMENTS: Final = (
+    "com.apple.security.cs.allow-unsigned-executable-memory",
+    "com.apple.security.cs.disable-library-validation",
+)
+
+
+def test_the_macos_app_carries_exactly_the_two_runtime_exceptions() -> None:
+    """Ohne die erste hält das Intel-Paket beim Bootstrap an, ohne die zweite ist die 3D-Maus tot.
 
     CPythons ``_ctypes`` legt beim Laden eine libffi-Closure an, und PyInstallers
     Bootstrap lädt es vor allem anderen. Apples libffi für x86_64 braucht dafür
     ausführbaren Schreibspeicher, den die Hardened Runtime ohne
     ``allow-unsigned-executable-memory`` verweigert; danach kreist libffi auf
-    macOS 26 endlos. Kein Mac-Runner zeigt das, deshalb hält der Text des
+    macOS 26 endlos (RM-104). Das Framework von 3DxWare trägt eine fremde
+    Team-ID, und ohne ``disable-library-validation`` lehnt dyld es ab. Kein
+    Mac-Runner zeigt beides (SIP aus), deshalb hält der Text des
     Signierschritts die Regel: tief signieren, dann nur das Hauptprogramm mit
-    der Liste, und die Rücklesung bricht ab, wenn Schlüssel oder Wert fehlen.
+    der Liste aus genau diesen zwei Schlüsseln, und die Rücklesung bricht ab,
+    wenn ein Schlüssel oder sein Wert fehlt oder einer dazukommt.
     """
     step = _step(
         _job("macos-app-sign"), "App mit Developer-ID signieren und Schlüssel wieder sperren"
     )
-    key = "com.apple.security.cs.allow-unsigned-executable-memory"
     code = _code(step)
     signing = [(at, words) for at, words in _commands(code, "codesign") if "--force" in words]
     outer = [(at, words) for at, words in signing if _has_option(words, "--entitlements")]
@@ -232,9 +244,9 @@ def test_the_macos_app_may_map_executable_memory_for_libffi() -> None:
 
     listed = re.search(r"<<'PLIST'\n(.*?\n)\s*PLIST\n", code, re.DOTALL)
     assert listed, "die Berechtigungsliste entsteht im Schritt selbst (kein Repositorycode)"
-    assert plistlib.loads(textwrap.dedent(listed.group(1)).encode()) == {key: True}, (
-        "die Liste trägt genau diese eine Ausnahme, eingeschaltet"
-    )
+    assert plistlib.loads(textwrap.dedent(listed.group(1)).encode()) == dict.fromkeys(
+        MACOS_ENTITLEMENTS, True
+    ), "die Liste trägt genau diese zwei Ausnahmen, eingeschaltet, und keine weitere"
     assert len(outer) == 1, "genau ein Signierlauf trägt die Berechtigungsliste"
     assert "--deep" not in outer[0][1], (
         "die Berechtigung gehört an das Hauptprogramm, nicht mit --deep an jede Bibliothek"
@@ -253,17 +265,32 @@ def test_the_macos_app_may_map_executable_memory_for_libffi() -> None:
         r"\b(\w+)=\$\(\s*codesign\b[^\n]*?\s-d\s[^\n]*--entitlements[^\n]*\n", code
     )
     assert readback and readback.start() > outer[0][0], "die signierte App wird zurückgelesen"
-    case = re.search(
-        rf'case\s+"\${readback.group(1)}"\s+in\n(.*?)\n\s*esac', code[readback.end() :], re.DOTALL
+    variable = readback.group(1)
+    after = code[readback.end() :]
+    cases = re.findall(rf'case\s+"\${variable}"\s+in\n(.*?)\n\s*esac', after, re.DOTALL)
+    assert cases, "die Rücklesung entscheidet über das Gelesene"
+    for key in MACOS_ENTITLEMENTS:
+        deciding = []
+        for case in cases:
+            branches = [branch.strip() for branch in case.split(";;") if branch.strip()]
+            granted = [b for b in branches if f"<key>{key}</key><true/>" in b.split(")", 1)[0]]
+            otherwise = [b for b in branches if b.startswith("*)")]
+            if granted:
+                deciding.append((granted, otherwise))
+        assert len(deciding) == 1, f"genau ein case entscheidet über {key}"
+        granted, otherwise = deciding[0]
+        assert len(granted) == 1 and "exit" not in granted[0].split(")", 1)[1], (
+            f"{key} mit Wert true lässt durch"
+        )
+        assert len(otherwise) == 1 and "exit 1" in otherwise[0], (
+            f"ohne {key} bricht die Rücklesung ab"
+        )
+    counted = re.search(
+        rf"\b(\w+)=\$\(printf '%s' \"\${variable}\" \| [^\n]*grep -o '<key>'[^\n]*wc -l[^\n]*\)\n"
+        rf'\s*\[ "\$\1" = {len(MACOS_ENTITLEMENTS)} \] \|\| \{{[^\n]*exit 1; \}}',
+        after,
     )
-    assert case, "die Rücklesung entscheidet über das Gelesene"
-    branches = [branch.strip() for branch in case.group(1).split(";;") if branch.strip()]
-    granted = [b for b in branches if f"<key>{key}</key><true/>" in b.split(")", 1)[0]]
-    otherwise = [b for b in branches if b.startswith("*)")]
-    assert len(granted) == 1 and "exit" not in granted[0].split(")", 1)[1], (
-        "Schlüssel mit Wert true lässt durch"
-    )
-    assert len(otherwise) == 1 and "exit 1" in otherwise[0], "alles andere bricht ab"
+    assert counted, "eine weitere Berechtigung an der signierten App bricht die Rücklesung ab"
 
 
 def test_windows_is_built_here_and_signed_nowhere_in_the_workflow() -> None:

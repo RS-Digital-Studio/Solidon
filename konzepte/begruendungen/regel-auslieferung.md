@@ -65,6 +65,21 @@ Kunde suchte ihn sonst bei sich."
 Warum die Stückliste aus dem Kundenartefakt kommt: „Eine SBOM aus der
 Entwicklungsumgebung ist eine Vorschau."
 
+Warum Linux auf 22.04 baut (Forensik und Messung 12.10.2026): Das Archiv von
+0.6.0, gebaut auf 24.04, verlangte in 30 von 486 ELF-Dateien glibc 2.38,
+darunter `libpython3.14.so.1.0` (`fmod`, libm) — auf Ubuntu 22.04, Debian 12
+und Mint 21 lud nicht einmal Python. Alle Befunde waren Systembibliotheken von
+24.04 und CPython aus `setup-python`; keine Rad-Datei verlangte mehr als 2.34,
+und jedes festgeschriebene Paket hat ein Linux-Rad für glibc ≤ 2.34 (PyPI,
+abgefragt am selben Tag). Die Hülle der Systembibliotheken in jammy ist aus
+den Paketen selbst gemessen (Launchpad, `.deb` ausgepackt, `DT_NEEDED`
+gelesen): gleiche Familien plus PCRE 8, an dem GLib 2.72 noch hängt. Das
+Flatpak bleibt auf 24.04, weil jammy nur flatpak 1.12.7 und flatpak-builder
+1.2.2 trägt. `libstdc++`/`libgcc_s` stehen in der Ausschlussliste des
+AppImage-Projekts (`pkg2appimage/excludelist`) aus genau dem Grund
+`GLIBCXX_… not found`; mit dem ältesten System als Bauserver ist jede
+mitgereiste Fassung die älteste im Feld.
+
 ## Signieren ist ein eigener Vertrauensraum
 
 Warum genau diese eine Berechtigung (RM-104): CPython legt seit
@@ -77,8 +92,8 @@ Absturzdatei noch Protokoll. Umgehen lässt sich ctypes nicht: Bootstrap,
 `app/core/process.py` und numpy laden es. libffis `dlmmap` holt anonymen Speicher
 mit `PROT_EXEC` und ohne `MAP_JIT`; scheitert das mit EPERM, weicht es auf
 Temp-Dateien aus, und dieser Weg kreist. `allow-jit` erlaubt nur `MAP_JIT` und
-hülfe nicht; `disable-library-validation` braucht der Developer-ID-Bau nicht,
-alle Bibliotheken tragen dieselbe Team-ID. ARM nimmt Apples Trampolintabelle.
+hülfe nicht. Die eigenen Bibliotheken tragen alle dieselbe Team-ID; ARM
+nimmt Apples Trampolintabelle.
 Gefahren am 06.10.2026 mit dem wörtlich aus `build.yml` geschnittenen
 Signierteil, ad hoc statt Developer ID, am veröffentlichten 0.5.3: Liste am
 Hauptprogramm, keine an `Python.framework` und `_cffi_backend` (Lauf
@@ -92,7 +107,37 @@ ad hoc mit Hardened Runtime signiert hing es ohne die Berechtigung und
 startete mit ihr. Der Start des
 notarisierten Pakets dort steht aus (RM-104).
 
+Warum die zweite Ausnahme, `disable-library-validation` (Recherche
+12.10.2026): `app/ui/spacemouse.py` lädt
+`/Library/Frameworks/3DconnexionClient.framework` per `ctypes.CDLL`, und das
+Framework ist von 3Dconnexion signiert. Unter Hardened Runtime lädt ein
+Prozess nur Code von Apple oder mit der eigenen Team-ID; dyld lehnt das
+Framework ab, `load_driver` gab still `None` zurück, und weil 3DxWare das
+Gerät exklusiv hält, bekam auch der HID-Rückfall nichts — nach Apples Regel
+und dem Code war die Maus in jedem notarisierten Mac-Paket seit 0.4.1 tot,
+am Runner (SIP aus) unsichtbar; an einem Gerät gemessen ist das nicht.
+Apple nennt genau diesen Fall als Grund für die Ausnahme: „If your app works
+with this kind of hardware, be sure to declare the
+com.apple.security.cs.disable-library-validation to load the corresponding
+plug-ins“
+(<https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution>);
+Briefcase setzt sie für jede App, Blender ebenso. Die Liste bleibt sonst
+geschlossen: `allow-jit`, `allow-dyld-environment-variables` und
+`get-task-allow` öffneten Wege, die Solidon nicht braucht.
+
 ## Was der Kunde bekommt, ist geprüft — und zwar die verteilte Menge
 
 Der Fall, an dem sich die verteilte Menge von der geprüften unterschied: „(die
 AppImage stand in keiner `version.json`)".
+
+Warum das macOS-Paket nicht umziehbar ist (Forensik 0.6.0, 12.10.2026): Die
+`PackageInfo` aus `pkgbuild --component` trug `<relocate>` und
+`<bundle-version>` für `de.rsdigital.solidon3d` — `pkgbuild` setzt
+`BundleIsRelocatable` und `BundleIsVersionChecked` bis macOS 26 von selbst
+(Handbuchseite `pkgbuild(1)`, „COMPONENT PROPERTY LIST“). Ein Kunde mit einer
+zweiten Kopie (etwa einer ad hoc neu signierten Testkopie) hätte nach dem
+Update weiter die alte Version gestartet. Die Releaseakte löschte die
+Prüfkopie bis dahin vor dem Installieren, damit es am Runner nicht auffiel;
+jetzt bleibt sie liegen und belegt den Fall. `BundleOverwriteAction`
+`upgrade` ersetzt das Bundle ganz: Dateien der alten Version blieben sonst im
+versiegelten Bundle liegen.

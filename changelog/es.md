@@ -20,6 +20,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manejo y sistema
 
+- En el Mac, Solidon ya puede cargar el controlador de 3Dconnexion (3DxWare) para el ratón 3D. Desde la versión 0.4.1 hasta la 0.6.0, macOS no lo permitía.
+- En el Mac, el paquete de instalación coloca ahora Solidon siempre en *Aplicaciones*. Si Solidon no estaba allí, antes el paquete actualizaba una copia en otro lugar.
+- Tras actualizar en el Mac, iniciar Solidon desde *Aplicaciones*. Eliminar las copias antiguas de la app fuera de esa carpeta y volver a añadirla al Dock si hace falta.
+- En Linux, el AppImage arranca ahora también en Ubuntu 22.04, Linux Mint 21 y Debian 12. Con la versión 0.6.0, allí solo funcionaba el Flatpak.
+- En Linux, Solidon lee ahora el ratón 3D a través del acceso que concede la regla udev del manual, también en el Flatpak. Hasta la versión 0.6.0, la regla no bastaba para ello.
 - La búsqueda encuentra *Unir*, *Sustraer* e *Intersección* también como «booleano», y *Sustraer* también como «diferencia».
 - La búsqueda encuentra la función también para una pregunta como «¿Cómo pongo la pieza en la cama de impresión?» y conoce palabras de slicers y CAD como «variable».
 - También la búsqueda en el manual encuentra la página adecuada para una pregunta con sus propias palabras.
