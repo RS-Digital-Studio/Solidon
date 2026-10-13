@@ -3,7 +3,7 @@
 Eine Sitzung, die übernimmt, liest zuerst diese Datei und dann das Konzept der
 laufenden Phase. Neueste Zeile oben unter „Verlauf“.
 
-## Auftrag Robert (11. und 12.10.2026), verbindlich
+## Auftrag Robert (11. bis 13.10.2026), verbindlich
 
 Drei Konzepte in fester Reihenfolge, jedes bis zu seiner Abnahme (Abschnitt
 „Abnahme“ im Konzept). Was dort als Entscheidung Robert steht, gilt.
@@ -28,7 +28,14 @@ und RM-737 bis RM-749 (Pakete D0 bis D12) ins Register. Dann D0 (Prüfstand).
 Dann Codestruktur Schritt 0 mit den Funden, die es vorher behebt (CS-2, CS-9,
 CS-10, CS-11, CS-12, die `raising=False`).
 
-**Die vier Phasen laufen ohne Datum direkt hintereinander, jede sauber bis zu
+**Zwischenrelease nach Phase 2** (Robert, 13.10.2026): Nach vollständig
+abgeschlossenem D0 und Codestruktur Schritt 0 wird **Version 0.6.1 erstellt,
+geprüft und veröffentlicht**. Die Veröffentlichung ist ausdrücklich beauftragt;
+Version, Tag und Upload werden erst nach diesen beiden Abschlüssen und den
+Releaseprüfungen aus `/erzeugen` ausgeführt. Danach folgen Phase 3 und 4
+weiterhin vollständig und gründlich.
+
+**Die vier Phasen laufen ohne Datum in ihrer festen Reihenfolge, jede sauber bis zu
 Ende** (Robert, 12.10.2026): Keine Phase wartet auf einen Termin, kein Schritt
 wird für einen Termin gekürzt. Der Verkaufsstart in RM-061 ist ein
 Geschäftstermin und keine Bedingung dieses Programms.
@@ -65,8 +72,31 @@ Schätzung, und vor Stufe C (braucht Roberts Bildschirm und Freigabe). Fragen nu
 Veröffentlichung, Rechten, schwer Umkehrbarem oder einer Alternative größer als
 das Konzept.
 
+**Gestaltung eigenständig prüfen** (Robert, 13.10.2026): Die Oberfläche
+selbstständig auf zeitgemäße Gestaltung prüfen, über die reine Funktion
+hinaus. Maßgeblich sind tatsächlich gelesene Originalbilder im hellen und
+dunklen Thema: Platzbedarf, verbleibende Modellfläche, Schrift und visuelle
+Hierarchie gehören gleichermaßen dazu. Das Raster im hellen Thema ist
+ausdrücklich mitzuprüfen; seine Diagnose liefert `fix_c`. Dafür wird vor
+dem belegten Ergebnis keine zusätzliche Fundnummer vergeben.
+
 ## Verlauf
 
+- 13.10.2026, 19:43, Releaseauftrag ergänzt: Nach D0 und Codestruktur
+  Schritt 0 wird 0.6.1 erstellt, vollständig geprüft und veröffentlicht;
+  danach laufen Phase 3 und 4 weiter. Welle4/origin steht auf
+  ece8988f2bdc60436a7bc327ee1b77e8e794a4b7; die gemeinsamen Unterlagen sind
+  gesichert. FD61 hat den echten mm/in/mm-Weg in allen sechs Sprachen
+  bestanden, zwölf Einstellungswechsel und 18 gelesene Bildschirmbilder.
+  Die Maßgruppenprobe hat FD-67 gefunden: Die aufgeklappte Rückseite wächst
+  nicht mit, Felder liegen unter der Knopfzeile trotz genügend freiem Platz.
+  Robert verlangt zusätzlich, die schwebende Maßgruppe am Titel und freien
+  Flächen verschieben zu können; Eingaben und Aktionsknöpfe bleiben bedienbar.
+  Die gewählte Position bleibt bei Auf-/Zuklappen und Feldänderung erhalten.
+  Enger Vorwärtsfix mit Reproduktion wird auf dem eigenen Maßgruppenzweig
+  gebaut; alle nativen Prozesse beendet. Danach Maßgruppenfolge, ganzer
+  48-Fall-Lauf, endgültige Urteile/Unterlagen, gepinntes Tor und main/CI.
+  Keine D0-Abnahme, kein Versionssprung, Tag oder Upload vorweggenommen.
 - 13.10.2026, 19:08, Schlussfixes von D0 integriert: `welle4` auf
   `a100dd99f9d960b5164c12231459c788221207c3`. FD60, FD61, FD7/16/63/64 und FD66
   sind zusammengeführt; FD62/65 war bereits enthalten. Der gemeinsame
