@@ -330,7 +330,7 @@ die systemischen leichten behebt D0.
 - Ursache: Die Mindestzeilenzahl des Objektbaums gilt auch, wenn weniger Zeilen da sind; `fenster.md` verlangt, dass die Mindesthöhe einer Karte ihre Wunschhöhe nie übersteigt.
 - Vorschlag: Mindesthöhe aus den vorhandenen Zeilen, höchstens die Wunschhöhe; Test an einem und an vielen Körpern.
 - Wirkung beim Kunden: Leere Fläche im Objektbaum, die der Ansicht Platz nimmt.
-- Stand: offen RM-737
+- Stand: behoben `96a4638b3`
 
 ### FD-26 Parameter anlegen bleibt ohne Freischaltung offen
 
