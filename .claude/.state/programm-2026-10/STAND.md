@@ -67,6 +67,24 @@ das Konzept.
 
 ## Verlauf
 
+- 13.10.2026, Übergabe auf Roberts Wunsch wegen des nahen Nutzungslimits:
+  Keine neue Arbeit, Prüfrunde oder Landung begonnen; alle Agenten angehalten
+  und eigene Sonden beendet. Produkt-/Prüfstandsbasis ist `6d063ef064` auf
+  `welle4`, weiterhin nicht auf main. Der frische Fensterlauf ist rot:
+  48 Fälle, 41 Prozesse Exit 0, sieben native Abstürze; drei getrennte V4-Proben
+  sind erfolgreich. FD60 ist reproduziert, seine Ursache bleibt offen.
+  FD61 und FD62/65 sind als ungetestete Änderungen vorbereitet; FD7/16/63/64
+  ist zusätzlich unvollständig. Die eigenen Worktrees samt vollständigen
+  Patches, neuen Quellen, Ausgangsmodulen und nächsten Befehlen sind gesichert.
+  Primärurteile D4/D8/D10 sind versiegelt; die unabhängige B2-Auswertung und
+  der Prüfervergleich bleiben offen. FD66 ist ein noch nicht diagnostizierter
+  Größenfund. **Wiedereinstieg:** zuerst den letzten Abschnitt „ÜBERGABE an
+  die nächste Sitzung“ in `output/konsolidierung-2026-10-12/KOORDINATION.md`
+  und `WEITER-CODEX-CLAUDE.md` dort lesen; Sicherungsarchiv und Hashmanifest
+  liegen im selben Ordner. Keine vorbereitete Testdatei gilt als geprüft.
+  Nach Wiederaufnahme D0 fertigstellen, gepinntes Tor/Merge-Durchsicht/main/CI,
+  anschließend Codestruktur Schritt 0 vollständig gemäß `plan-cs0.md`.
+  Website-Upload wartet weiter auf Roberts Freigabe.
 - 13.10.2026, 14:23, Phase 2 weiterhin D0: Alle Korrekturen bis FD59 sind
   auf `welle4` integriert, zuletzt Kartenbreite/Schriftwechsel als
   `e68ca22cb`. Dialoge und Karten richten ihre notwendigen Maße nach Inhalt,
