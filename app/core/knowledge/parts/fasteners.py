@@ -2071,7 +2071,7 @@ def _thread_feature(
     Das Nennmaß steht als ``nominal`` daneben: Die Passungsprüfung weiß daran,
     dass diese Hälfte das Spiel des Materials trägt (``fits._thread_wanted``),
     und das Gegenstück findet sein Maß (``counterpart.thread_values_for``).
-    Eine Tabellengröße nennt sich dazu selbst (``size``, RM-544) — „G1/2“ ist
+    Eine Tabellengröße nennt sich dazu selbst (``table_size``, RM-544) — „G1/2“ ist
     am Maß allein nicht von einem eigenen Maß mit 14 Gängen je Zoll zu
     unterscheiden. Ein kegeliges Gewinde nennt sein Maß in der Mitte, wie der
     exakte Leser (``brep.thread.thread_features``), und dazu das Nennmaß der
@@ -2094,7 +2094,7 @@ def _thread_feature(
     if slope:
         extra["gauge_nominal"] = dims.nominal
     if dims.size:
-        extra["size"] = dims.size
+        extra["table_size"] = dims.size
     if dims.profile != "flat":
         extra["profile"] = dims.profile
     return identifier, replace(

@@ -63,7 +63,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-777 — Schwalbenschwanz, Sechskant und Stiftkopf rechnen mit den Winkeln der Plattform](#rm-777) | Plattformen, Pakete und Grafik | Umstellen auf `units.exact_*`, druckgleich gegen Beispiele und Korpus, danach Bereichsnachweis aller 50 (`shapes.py` und `exact.py` stehen in jedem Abdruck) |
 | [RM-714 — Die Untergrenze von shapely passt nicht zum Kern](#rm-714) | Plattformen, Pakete und Grafik | Untergrenze in `pyproject.toml` auf 2.1 heben |
 | [RM-732 — Fenster ohne geordneten Abbau reißen den Prozess](#rm-732) | Plattformen, Pakete und Grafik | Jeden Abbauweg der Anwendung auf `release` prüfen: Sprachwechsel, zweites Fenster, eigenständiger Viewport, elternlose Dialoge mit Arbeitern |
-| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
+| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release, die Wiederholung der berichtigten Zahlenanzeige am Fenster und der Profilkörper mit Umriss quer dazu (gebogener Halter, Kundenmeldung 12.10.) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z3 (Z2 bis auf die Drehachse durch RM-559). Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Restentscheidung offen. Gelöst (09.10., Claude): PrusaSlicer ohne Bündel schätzte mit 1500 mm/s² (`ignore` und Dialekt `reprap`), jetzt `marlin` mit den angeforderten Werten als Grenze, dazu `extra_perimeters`/`solid_infill_below_area = 0` und die Materialart der Spule; Gewürzregal am CC2 407 → 292 min, gegen ElegooSlicer mit denselben Wänden 280 min (+4,5 %, Material −4,2 %), SuperSlicer 527 → 381 min. Offen: Solidons Tabelle druckt „Standard“ mit drei Wänden und vier Bodenschichten, die Standardprozesse von Elegoo, Bambu, Creality und Prusa (MK4S) mit zwei und drei (232 gegen 292 min, 128 gegen 154 g) — Entscheidung, ob die Tabelle dem Standardprozess des Druckers folgt |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
@@ -174,18 +174,18 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-734 — Wer „boolesch“ tippt, findet die Booleschen Operationen nicht](#rm-734) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-735 — Zwei Suchen: Befehlspalette und Suchfeld der Karte](#rm-735) | Bedienung und Darstellung | Gebaut für 0.6.1; offen allein die Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-736 — Funktionsdurchgang: jede Funktion einmal über die Oberfläche benutzt, geprüft und abgehakt](#rm-736) | Bedienung und Darstellung | Konzept abgelegt; D0 (RM-737) zuerst, dann die Kundenpakete D1, D9, D8, D3, D4 (Phase 3), die übrigen in Phase 4 |
-| [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | Zuschnitt in Teilpakete, dann Prüfstand auf `tools/file_acceptance.py`, Wortschatz in `guides`, Funktionsliste, Szenenkatalog, Profile, Listen für Stufe B |
+| [RM-737 — Funktionsdurchgang D0: Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Wächter](#rm-737) | Bedienung und Darstellung | auf `welle4`: FD-26 bis FD-30 und die Funde der Durchsicht beheben, zweiter Probelauf und Stufe B, Urteile und Abhaklisten versionieren, Tor, main |
 | [RM-738 — Funktionsdurchgang D1: Datei und Projekt](#rm-738) | Bedienung und Darstellung | wartet auf D0; danach neue Schätzung an Robert |
 | [RM-739 — Funktionsdurchgang D2: Erzeugen](#rm-739) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-740 — Funktionsdurchgang D3: Verbinden und Abziehen, Transformation, Formgebung](#rm-740) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
-| [RM-741 — Funktionsdurchgang D4: Merkmale](#rm-741) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8 |
+| [RM-741 — Funktionsdurchgang D4: Merkmale](#rm-741) | Bedienung und Darstellung | wartet auf D0, D1, D9, D8; dazu aus D0 FD-7 und FD-16 |
 | [RM-742 — Funktionsdurchgang D5: Netz und Reparatur](#rm-742) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-743 — Funktionsdurchgang D6: Formen und Skelett](#rm-743) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-744 — Funktionsdurchgang D7: Zeichnen und Skizze](#rm-744) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
 | [RM-745 — Funktionsdurchgang D8: Druckvorbereitung](#rm-745) | Bedienung und Darstellung | wartet auf D0; Folge D1, D9, D8 |
 | [RM-746 — Funktionsdurchgang D9: Druckeinstellungen, Übergabe an den Slicer, Filamentlager](#rm-746) | Bedienung und Darstellung | wartet auf D0; Folge D1, D9, D8 |
-| [RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes](#rm-747) | Bedienung und Darstellung | wartet auf D0; Phase 4 |
-| [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4 |
+| [RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes](#rm-747) | Bedienung und Darstellung | wartet auf D0; Phase 4; dazu aus D0 FD-8, FD-9, FD-11 und FD-19 |
+| [RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung](#rm-748) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow` und `Viewport`, die es berührt; Phase 4; dazu aus D0 FD-20 |
 | [RM-749 — Funktionsdurchgang D12: Rahmen](#rm-749) | Bedienung und Darstellung | wartet auf D0 und die Komponenten von `MainWindow`, die es berührt; Phase 4 |
 | [RM-790 — Ein nativer Abbruch nach Rückgängig bei gezeigter Maßgruppe, einmal gesehen](#rm-790) | Bedienung und Darstellung | 150 Zyklen unter Last ohne Wiederholung; beim nächsten Auftreten Stapel sichern und zuordnen |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
@@ -193,6 +193,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
 | [RM-772 — Die gemeinsame Spur der lokalen KI kennt ein wartendes ComfyUI nicht](#rm-772) | KI und Generatoren | `local_ai_slot` auch für ein ComfyUI mit geladenem Modell, das gerade nicht rechnet |
+| [RM-791 — Der Agent bekommt eine Frage samt ihren Fragewörtern](#rm-791) | KI und Generatoren | Agenten-Suite vorher und nachher mit `asked` vor `rank_operations`; übernehmen nur ohne Verschlechterung |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Umgesetzt (07.10.): die offenen Helfer und zwölf Kopien der Fenster-Fixtures an einem Ort, 4508 = 4508 gesammelte Fälle; offen die Abnahme im nächsten Release-Tor (Robert, 06.10.) |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
@@ -206,7 +207,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-755 — Ein Texturklick während der Auswertung ist als Fenstertest flatterhaft](#rm-755) | Tests und Entwicklungswerkzeuge | Gefunden in SK: `test_operation_ui.py::test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it` einzeln 1 von 2 rot; Ursache klären wie bei der Formsitzung (Zeitgeber beim Zustellen) |
 | [RM-779 — Ein Fenstertest zum KI-Hinweis wird in einer bestimmten Reihenfolge rot](#rm-779) | Tests und Entwicklungswerkzeuge | Den Vorgänger finden, der Zustand hinterlässt, und ihn aufräumen |
 | [RM-719 — Ein Fenstertest wackelt mit vier Arbeitern](#rm-719) | Tests und Entwicklungswerkzeuge | Ursache des Wettlaufs finden |
-| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | RM-723 und RM-726 bis RM-729 und die 25 `raising=False` beheben, dann W1 bis W6 und `tools/move_names.py` |
+| [RM-722 — Codestruktur Schritt 0: Wächter und Verschiebewerkzeug, bevor eine Zeile wandert](#rm-722) | Tests und Entwicklungswerkzeuge | RM-723 und RM-726 bis RM-729 und die 12 `raising=False` auf `app.*` beheben, dann W1 bis W6 und `tools/move_names.py` |
 | [RM-723 — Quelltextprüfungen lesen `app/ui/` flach und übersehen `render/`](#rm-723) | Tests und Entwicklungswerkzeuge | Je Stelle rekursiv lesen oder den Geltungsbereich mit Grund nennen |
 | [RM-724 — Späte Importe in `tools/` prüft niemand](#rm-724) | Tests und Entwicklungswerkzeuge | Statische Importprüfung (W5) vorziehen, `_feature_item` öffentlich machen |
 | [RM-725 — `affected_tests` erkennt `glob(` nicht als Baumleser](#rm-725) | Tests und Entwicklungswerkzeuge | `glob` in `_TREE_READERS` aufnehmen, mit Test |
@@ -1288,6 +1289,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   diesen Stand, fünf Teile über 600 s (darunter `pista+biglie.3mf`), die Fensterabnahme beim
   Release. Tests: `test_rebuild.py` (Wandhalter, Gravur, Schichtvergleich, Tasche),
   `test_sketch_traced.py`, `test_difference.py::test_a_cell_beside_a_facet_is_bounded_without_dividing`.
+
+  **Kundenmeldung 12.10.2026 (0.6.0, Fragebogen: „noch nicht geschafft, ein Modell nachbauen zu
+  lassen“).** Am Modell des Kunden, einem Halter 23,8 × 45,7 × 100 mm (Platte mit zwei
+  Senkbohrungen Ø 5/7, Steg, gebogene Schale R 21,7/24,7 um Z, deren Enden quer dazu mit R 15,75
+  gerundet sind), kommt nur Quader plus zwei Bohrungen mit +310 % Volumen; `_prismatic` längs Z
+  scheitert an den gerundeten Schalenenden. Gebraucht wird ein Profilkörper längs Z, geschnitten
+  mit einem Umriss quer dazu. Am selben Tag behoben: Der Dialog riet bei +310 % zu anderen
+  Grenzen, und der Quader stand doppelt da (Netzweg neben P4.0 nur noch für verlorene
+  Rundformen). Das Kundenmodell bleibt ohne Freigabe außerhalb des Repositorys; ein Prüfteil
+  lässt sich aus den Maßen oben bauen.
 
 <a id="rm-209"></a>
 
@@ -5628,6 +5639,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
     „Fenster lokal nur beim Release“ (Codestruktur 7.2, Funktionsdurchgang §13.1) und der
     Verweis darauf in `.claude/rules/tests.md`; RM-722 zieht danach nur noch `/liefern` nach.
 
+  **Stand:** Prüfstand, Wortschatz, Funktionsliste, Szenenkatalog, Urteile, Profile und Wächter
+  liegen auf dem Integrationszweig `welle4`; der erste Probelauf am echten Fenster ist
+  ausgewertet, die Funde stehen mit ihrem Stand in
+  `.claude/.state/funktionsdurchgang-2026-10/funde.md`.
+  **Nächster Schritt:** FD-26 bis FD-30 und die Funde der Durchsicht über `welle4` beheben,
+  zweiter Probelauf und Stufe B, Urteile und Abhaklisten versionieren, Tor, Merge nach main.
   Geschätzt acht bis zwölf Arbeitstage.
   **Abnahme:** Wächter grün über dem Bestand; je Prüfpunkt eine Gegenprobe ohne Fenster, die
   rot wird; je eine Zeile der drei Arten der Funktionsliste (Operation, Fensterbefehl,
@@ -5664,7 +5681,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-741 — Funktionsdurchgang D4: Merkmale.**
   Bohrung, Langloch, Senkung, Gewinde, Muster, erkannte Merkmale ändern und entfernen, örtliche
   Erkennung (Kategorie `holes` und die Zeilen des Merkmalfensters ihrer Operationen).
-  Kundenpaket in Phase 3, mit D3 nach D1, D9 und D8.
+  Kundenpaket in Phase 3, mit D3 nach D1, D9 und D8. Dazu aus D0 FD-7 („Materialtoleranz“ ist
+  ein Fachwort) und FD-16 (zwei Hauptknöpfe in der Auswahlkarte bei gewähltem Merkmal).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-742"></a>
@@ -5707,7 +5725,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-747 — Funktionsdurchgang D10: Filament, Beschriftung, Passungen, Parameter und Verwandtes.**
   Filament und Farbe, Beschriftung, Passungen, Parameter, Zahlen binden, Gegenstücke, Als
   Baustein speichern (Kategorien `colour`, `label`, `fits`, `parameters`). In Phase 4
-  (Programmplan, Konzept §9).
+  (Programmplan, Konzept §9). Dazu aus D0 FD-8 (Kalibrierstand „Startwert“), FD-9
+  (Beschreibung von *Schriftzug anlegen*), FD-11 (Felder von *Parameter anlegen*) und FD-19
+  (*Filament und Druck* liegt zugeklappt am Ende der Auswahlkarte).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-748"></a>
@@ -5715,7 +5735,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 - [ ] **RM-748 — Funktionsdurchgang D11: Ansicht und Bedienung.**
   Kamera, Griffe, Objektbaum, Auswahl, Verlauf und Vorher/Nachher, Karten verschieben, Suche.
   In Phase 4, nach den Komponenten der Klassen, die es berührt: `MainWindow` und
-  für Kamera und Griffe `Viewport` (Programmplan, Konzept §9).
+  für Kamera und Griffe `Viewport` (Programmplan, Konzept §9). Dazu aus D0 FD-20
+  (die Maßspalte im Objektbaum schneidet krumme Maße ab).
   **Abnahme:** wie RM-736 für die Zeilen des Pakets.
 
 <a id="rm-749"></a>
@@ -5975,6 +5996,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   oder den Kunden fragen.
   **Abnahme:** Sprachmodell und Bilderzeugung nacheinander auf einer Karte mit 8 GB, ohne
   Speicherfehler und ohne Wartezeit über dem Laden eines Modells.
+
+<a id="rm-791"></a>
+
+- [ ] **RM-791 — Der Agent bekommt eine Frage samt ihren Fragewörtern.**
+  Die Suche kürzt seit FD-18 eine Frage um die Wörter, mit denen sie fragt (`asked`), der
+  Agent nicht: `rank_operations` bekommt „Wie kann ich …?“ ungekürzt. Über die 54 deutschen
+  Kundenwendungen weicht die erste angebotene Operation dabei einmal ab („exakt“); gemessen
+  im Paket Suche (D0, `fix-suche-kundenwoerter`), ohne Änderung.
+  **Nächster Schritt:** Agenten-Suite vorher und nachher mit `asked` vor `rank_operations`
+  (kostet Geld, `agentenschicht.md`), beide Ergebnisse festhalten.
+  **Abnahme:** übernommen, wenn die Quote nicht fällt, sonst mit beiden Messungen verworfen und
+  ins Archiv.
 
 ## Tests und Entwicklungswerkzeuge
 
@@ -6338,7 +6371,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Oberflächenschritten“ (Konzept 7, Punkt 2) kommt mit D0 (RM-737) in den gemeinsamen Satz in
   `AGENTS.md`; Schritt 0 zieht nur noch `/liefern` nach.
   **Nächster Schritt:** CS-2, CS-9, CS-10, CS-11 und CS-12 (RM-723, RM-726 bis RM-729) und die
-  25 `raising=False` auf `app.*` beheben, dann W1 bis W6 und das Werkzeug mit Test an einer
+  12 `raising=False` auf `app.*` beheben, dann W1 bis W6 und das Werkzeug mit Test an einer
   Paket-Attrappe.
   **Abnahme:** alle sechs Wächter grün über dem Bestand, je Wächter eine Gegenprobe rot; das
   Werkzeug verschiebt an der Attrappe mit Beweis; Review. Erst danach Schritt 1

@@ -35,6 +35,11 @@ läuft auseinander. Eine Fähigkeit (`requires_kind`, `applies_to`,
 dieselbe Funktion, und eine Sichtbarkeit oder Sperre setzt **eine** Stelle —
 zwei Stellen gewinnen abwechselnd.
 
+**Ob geändert werden darf, sagt `change_lock` jedem Zugang:** Fensterbefehle
+(offen nur, was `READING_COMMANDS` führt), Werkzeuge, Felder ohne eigene
+Sperre (`hold_inputs`), Griffe. Grau trägt den Grund in Kurzhilfe und
+Beschreibung (`say_refusal`), und der Grund nennt den Weg.
+
 ## Texte
 
 Keine feste Zeichenkette — alles über `tr()`, deutsche Quelle, jeder Katalog
@@ -331,12 +336,8 @@ Parameter mit Vorgabe — PySide reicht `checked` hinein.
 ## Ein Zustand darf die Farbe wechseln, nicht die Rahmenbreite
 
 Ruhe- und Fokusrahmen jedes Eingabefelds sind gleich breit (zwei Punkte); der
-Fokus wechselt auf `accent_line` und wird gestrichelt (`style.py`), denn Regel
-18 verlangt die zweite Kodierung; ein breiterer Fokusrahmen schnitte im
-Aufklappmenü einen halben Eintrag ab. Wächter: `tests/test_style.py`.
-
-**Der Ruherahmen behält die volle Linienfarbe** — er ist die einzige Kante des
-Feldes, gedämpft fiel er unter WCAG 1.4.11.
+Fokus wechselt auf `accent_line` und wird gestrichelt (`style.py`).
+Wächter: `tests/test_style.py`. **Der Ruherahmen behält die volle Linienfarbe.**
 
 ## Eine Auswahl fällt nie still auf etwas Größeres
 
@@ -356,11 +357,8 @@ den Wiederwahlen, nur ohne eigene Handlung seit dem letzten aktuellen Bild.
   kommen vom Kunden (Farbwähler, Filamentkatalog). Die Pinselleiste zeigt
   Farbfeld **und** Name, „neu“ für einen fehlenden Slot.
 - **Ein Hauptknopf entsteht über `style.make_primary()`** (Akzentfarbe **und**
-  halbfett), nie über `setDefault(True)`; einer mit `DestructiveRole` über
-  `style.make_danger()`, ein Fenster ohne Handlung und eine Rückfrage vor
-  Verwerfen nehmen `style.no_primary()`,
-  und ein Stylesheet geht an einen `objectName`, nie typlos (`fenster.md`, „Der
-  Hauptknopf“).
+  halbfett); Gefahr, Fenster ohne Handlung und Stylesheet: `fenster.md`, „Der
+  Hauptknopf“.
 - Differenzansicht Blau/Orange, nicht Rot/Grün; Analysekarten mit
   wahrnehmungsgleicher Palette (Viridis-Art), kein Regenbogen — der erzeugt
   Kanten, wo keine sind.
@@ -371,11 +369,11 @@ den Wiederwahlen, nur ohne eigene Handlung seit dem letzten aktuellen Bild.
 ### Die Anzeigeeinheit ist ein Zustand, wie die Sprache einer ist
 
 `labels.set_display_unit`, `display_unit()` (gehalten in `app.i18n`, auch für
-den Kern) — nicht durch Konstruktoren gereicht, denn `labels.length` rufen
-auch Funktionen ohne Widget; ein übergebenes Argument hat Vorrang.
+den Kern), nicht durch Konstruktoren gereicht; ein übergebenes Argument hat
+Vorrang.
 
 - **Was in ein Eingabefeld geschrieben wird, bleibt in Millimetern**
-  (`measured_expression`; umgerechnet wäre es ein Datenfehler), auch beim
+  (`measured_expression`), auch beim
   Umschalten in den Ausdrucksmodus (`_number()` ist die eine Quelle für Feld
   und Hinweis). Eingabefelder umzustellen heißt Wert **und** Grenzen in beide
   Richtungen umzurechnen, ohne einen Parameterausdruck anzufassen — ein eigener

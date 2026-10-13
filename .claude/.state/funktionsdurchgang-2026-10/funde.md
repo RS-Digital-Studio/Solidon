@@ -64,9 +64,8 @@ Text oder Darstellung (Konzept §4, „Urteil und Schwere“).
 ### Probelauf am echten Fenster
 
 Aus dem Probelauf am echten Fenster (51 Fälle, Lauf `F:\tmp-suche\probelauf-d0`,
-Auswertung `output/konsolidierung-2026-10-12/auswertung-probelauf-d0.md`; FD-4 bis
-FD-6 folgen mit ihrem Fix). Leichte Funde einer Zeile behebt ihr Paket; mittlere und
-die systemischen leichten behebt D0.
+Auswertung `output/konsolidierung-2026-10-12/auswertung-probelauf-d0.md`). Leichte
+Funde einer Zeile behebt ihr Paket; mittlere und die systemischen leichten behebt D0.
 
 ### FD-4 Strg+Z nimmt nach einer Befundhandlung nichts zurück
 
@@ -123,7 +122,7 @@ die systemischen leichten behebt D0.
 - Funktion: `Bearbeiten/Material kalibrieren …`
 - Kriterium: V1
 - Beleg: Überschrift „PETG — Startwert“; Fall 034, `flaeche-sprachen-dialog.png`
-- Ursache: `app/ui/dialogs.py` (`tr("Startwert", context="Kalibrierstand")`).
+- Ursache: `app/ui/calibration_dialog.py:73` (`tr("Startwert", context="Kalibrierstand")`).
 - Vorschlag: „noch nicht kalibriert“ oder „Werkswerte“.
 - Wirkung beim Kunden: Das Wort sagt nicht, dass noch nicht gemessen wurde.
 - Stand: offen RM-747
@@ -150,7 +149,7 @@ die systemischen leichten behebt D0.
 - Ursache: `app/ui/dialogs.py` (Messfelder ohne `setToolTip`/`setAccessibleDescription`).
 - Vorschlag: je Feld ein Satz, wo am Prüfkörper gemessen wird und was die Zahl bewirkt.
 - Wirkung beim Kunden: Er weiß nicht, welche Zahl vom Prüfkörper in welches Feld gehört.
-- Stand: offen RM-747
+- Stand: behoben `74c183721`
 
 ### FD-11 Die Felder von Parameter anlegen erklären sich nicht
 
@@ -280,7 +279,7 @@ die systemischen leichten behebt D0.
 - Kriterium: Z5
 - Beleg: Meldungen eines `AppError` erscheinen als `QMessageBox` mit Windows-Warnsymbol und Titel „Das hat so nicht funktioniert“; Fälle 028, 029, 046–051
 - Ursache: `app/ui/dialogs.py` (`show_error` baut `QMessageBox` mit `setIcon(Warning)`).
-- Vorschlag: eigener Meldungsdialog im Hausstil — Titel, Ursache, Handlungen als Knöpfe, Symbol aus dem eigenen Satz.
+- Vorschlag: eigener Meldungsdialog im Hausstil — Titel, Ursache, Handlungen als Knöpfe, Symbol aus dem eigenen Satz. Zu Z2 (E-17): Eine Fehlermeldung mit Handlung, die auf eine Kundenhandlung antwortet, darf modal bleiben (Ausnahme in Konzept §4, Entscheidung Koordinator); eine ohne Handlung bleibt ein Fund.
 - Wirkung beim Kunden: Ein Systemfenster mit Warndreieck bricht den Stil; Z5 erlaubt im Kundenweg keines.
 - Stand: behoben `4dee5f9bc`
 
@@ -330,7 +329,7 @@ die systemischen leichten behebt D0.
 - Ursache: Die Mindestzeilenzahl des Objektbaums gilt auch, wenn weniger Zeilen da sind; `fenster.md` verlangt, dass die Mindesthöhe einer Karte ihre Wunschhöhe nie übersteigt.
 - Vorschlag: Mindesthöhe aus den vorhandenen Zeilen, höchstens die Wunschhöhe; Test an einem und an vielen Körpern.
 - Wirkung beim Kunden: Leere Fläche im Objektbaum, die der Ansicht Platz nimmt.
-- Stand: offen RM-737
+- Stand: behoben `96a4638b3`
 
 ### FD-26 Parameter anlegen bleibt ohne Freischaltung offen
 
@@ -342,7 +341,7 @@ die systemischen leichten behebt D0.
 - Ursache: `main_window.py` behält die Aktion nicht, `_update_actions` kann sie nicht sperren; `action_add_parameter` fragt `change_lock` nicht. FD-5 erfasste diesen Fensterbefehl nicht.
 - Vorschlag: Fensterbefehle, die ändern, fragen dieselbe Quelle `change_lock`; ein Wächter über alle ändernden Fensterbefehle.
 - Wirkung beim Kunden: Ein Menübefehl, der in der Demo erst nach dem Klick absagt.
-- Stand: offen RM-737
+- Stand: behoben `660501d8f`
 
 ### FD-27 Eine graue Befundhandlung beschreibt sich mit ihrer Nebenwirkung statt mit dem Sperrgrund
 
@@ -354,7 +353,7 @@ die systemischen leichten behebt D0.
 - Ursache: `panels.py` setzt bei der Sperre nur die Kurzhilfe, nicht die Beschreibung.
 - Vorschlag: Sperrgrund als Kurzhilfe und Beschreibung, solange gesperrt.
 - Wirkung beim Kunden: Ein Bildschirmleser liest, was der Knopf täte, nicht warum er nicht geht.
-- Stand: offen RM-737
+- Stand: behoben `660501d8f`
 
 ### FD-28 Die Maßgruppe nimmt ohne Freischaltung Eingaben an
 
@@ -366,7 +365,7 @@ die systemischen leichten behebt D0.
 - Ursache: `placement_flow.py` sperrt nur *Übernehmen*, nicht den Eingang.
 - Vorschlag: Eingang und Übernehmen sperren mit Grund und Ausweg aus `change_lock`.
 - Wirkung beim Kunden: Er tippt ein Maß, das nicht übernommen werden kann.
-- Stand: offen RM-737
+- Stand: behoben `660501d8f`
 
 ### FD-29 Am echten Fenster fehlen an einer gesetzten Bohrung Bohrung ändern und Zum Langloch ziehen
 
@@ -375,7 +374,7 @@ die systemischen leichten behebt D0.
 - Funktion: `resize_hole`
 - Prüfpunkt: 1
 - Beleg: am echten Fenster verborgen, ohne Fenster sichtbar (`n5-echt.out`, `n5-offscreen.out`, D0-P2); am echten Fenster nachgestellt und zugeordnet in `output/konsolidierung-2026-10-12/fix-bohrung-sichtbar.md`
-- Ursache: gewollt nach RM-199; die Zeile startete an einer gesetzten Bohrung.
+- Ursache: gewollt nach RM-199 (`FeaturePanel.set_measuring`): Die Maßgruppe der Handlung steht im Bild, rechts ist ihr Kopf deshalb verborgen; die Zeile startete an einer gesetzten Bohrung, und der Prüfstand fand die Handlung nur rechts.
 - Vorschlag: die Zeile an einer erkannten Bohrung beginnen lassen (`erkannte_bohrung.netz`); der Prüfstand fragt die Maßgruppe im Bild nach ihrer Handlung.
 - Wirkung beim Kunden: Keine Sackgasse: Die Maße der Bohrung stehen nach dem Klick im Bild, *Bohrung ändern* findet die Suche der Karte.
 - Stand: behoben `67058d32d`, Prüfstand `0b1e61346`
@@ -383,11 +382,47 @@ die systemischen leichten behebt D0.
 ### FD-30 Zwei Sperrgründe nennen keinen Ausweg
 
 - Art: Verständlichkeit
-- Schwere: leicht
+- Schwere: mittel
 - Funktion: `finding.action:place_on_bed`
 - Kriterium: V5
 - Beleg: „Aktivieren Sie diesen Rechner einmal online …“ und „Erst nach der Berechnung …“ nennen keine bedienbare Menüzeile und keinen offenen Knopf (D0-P2)
 - Ursache: Sätze der Sperre ohne Weg.
 - Vorschlag: den Weg nennen, etwa die Menüzeile der Freischaltung; in allen Sprachen neu übersetzt.
 - Wirkung beim Kunden: Er liest, dass es nicht geht, aber nicht, was er tun kann.
+- Stand: behoben `660501d8f`
+
+### FD-31 Übernehmen der Maßgruppe ist vor der ersten Eingabe grau ohne Grund
+
+- Art: Einfachheit
+- Schwere: mittel
+- Funktion: `resize_hole`
+- Kriterium: E7
+- Beleg: freigeschaltet, nach der Auswahl einer Bohrung; *Übernehmen* grau, ohne Kurzhilfe und Beschreibung (Fix FD-26 bis FD-30, `fix-sperre-vollstaendig.md`)
+- Ursache: Der Knopf wartet auf eine Änderung und sagt es nicht.
+- Vorschlag: ein Satz, der das erste Feld als Weg nennt; der Prüfstand zählt einen offenen Feldtitel derselben Fläche als Ausweg (Entscheidung Koordinator).
+- Wirkung beim Kunden: Ein grauer Knopf ohne Satz sieht aus wie gesperrt.
+- Stand: offen RM-737
+
+### FD-32 Der Sperrgrund steht im Reiter Auswahl zweimal
+
+- Art: Gestaltung
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Kriterium: E5
+- Beleg: ohne Freischaltung unter dem Suchfeld und im Merkmalfenster derselbe Satz (Fix FD-26 bis FD-30)
+- Ursache: FD-5 setzte den Satz an beiden Flächen.
+- Vorschlag: die Zeile unter dem Suchfeld gilt für den Reiter; das Merkmalfenster trägt den Grund nur an seinen grauen Elementen.
+- Wirkung beim Kunden: Derselbe Satz zweimal lenkt vom Weg ab.
+- Stand: offen RM-737
+
+### FD-33 Jede Aktualisierung der Fensterbefehle fragt nach dem exakten Kern
+
+- Art: Leistung
+- Schwere: leicht
+- Funktion: `resize_hole`
+- Prüfpunkt: 6
+- Beleg: im Profil 3,5 von 9,3 ms je `_update_actions` in `importlib.find_spec` über `exact_kernel_present()` (Fix FD-26 bis FD-30)
+- Ursache: Die Anwesenheit des Kerns wird bei jedem Aufruf neu gesucht, obwohl sie sich im Prozess nicht ändert.
+- Vorschlag: je Prozess einmal ermitteln, an der Quelle; Messung vorher und nachher.
+- Wirkung beim Kunden: Jede Auswahl und jede Handlung kostet unnötig Zeit im Hauptfaden.
 - Stand: offen RM-737

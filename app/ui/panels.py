@@ -176,7 +176,13 @@ from app.core.types import (
 )
 from app.core.units import LengthUnit, is_close
 from app.i18n import TranslatableText, sort_key, tr
-from app.ui.change_lock import action_refusal, change_refusal
+from app.ui.change_lock import (
+    action_refusal,
+    change_refusal,
+    computing_refusal,
+    hold_inputs,
+    say_refusal,
+)
 from app.ui.dialogs import ADDRESS_VALUES, NEEDS_OP, handlers_of, unhandled_advice
 from app.ui.icons import icon, icon_name_for, svg_pixmap
 from app.ui.labels import (
@@ -3488,10 +3494,11 @@ class ObjectTree(QWidget):
         change = menu.addAction(tr("Diesen Schritt ändern"))
         change.setObjectName("tree.step")
         change.setStatusTip(tr("Öffnet den Schritt, der dieses Merkmal erzeugt hat."))
-        # Gesperrt grau mit Grund, wie jede ändernde Handlung (FD-5).
+        # Gesperrt grau mit Grund, wie jede ändernde Handlung (FD-5) — auch in
+        # der Statuszeile, wo sonst der eigene Satz stünde (FD-27).
         refusal = change_refusal()
         change.setEnabled(not refusal)
-        change.setToolTip(refusal)
+        say_refusal(change, refusal)
         change.triggered.connect(lambda _checked=False: self.stepRequested.emit(step))
         menu.addSeparator()
 
@@ -3537,7 +3544,7 @@ class ObjectTree(QWidget):
         draw.setStatusTip(tr("Beginnt eine Skizze auf dieser Fläche statt auf einer Grundebene."))
         refusal = change_refusal()
         draw.setEnabled(not refusal)
-        draw.setToolTip(refusal)
+        say_refusal(draw, refusal)
         draw.triggered.connect(
             lambda _checked=False: self.sketchOnFaceRequested.emit(str(feature_id))
         )
@@ -3892,6 +3899,10 @@ class ParameterPanel(QWidget):
         note = tr("Untergrenze, Obergrenze, Einheit und Ausdruck dieses Maßes — rücknehmbar.")
         entry.setToolTip(note)
         entry.setStatusTip(note)
+        # Gesperrt grau mit Grund wie die Zeile selbst (FD-26).
+        refusal = change_refusal()
+        entry.setEnabled(not refusal)
+        say_refusal(entry, refusal)
         entry.triggered.connect(lambda _checked=False, key=name: self.limitsRequested.emit(key))
         return menu
 
@@ -4256,6 +4267,9 @@ class ParameterPanel(QWidget):
                 editor.setFocus(Qt.FocusReason.OtherFocusReason)
         self._mark_stored_beyond()
         self._show_binding()
+        # Jede Zahl hier ist ein Schritt: ohne Freischaltung grau mit Grund,
+        # auch eine neu gebaute Zeile (FD-26). Das Fenster stellt nach.
+        hold_inputs(self, change_refusal())
 
     def _mark_stored_beyond(self) -> None:
         """Eine gespeicherte Zahl jenseits ihrer Grenze bekommt ihren Satz (RM-447).
@@ -6053,7 +6067,7 @@ class HistoryPanel(QWidget):
             # mit dem Grund der Freischaltung statt des eigenen Satzes.
             for entry in menu.actions():
                 entry.setEnabled(False)
-                entry.setToolTip(refusal)
+                say_refusal(entry, refusal)
         return menu
 
 
@@ -6798,19 +6812,19 @@ class ReportPanel(QWidget):
                 make_primary(button)
             if self._previous(items[0]):
                 # Der Befund gehört zum vorigen Stand (RM-534); eine Handlung
-                # daran träfe ein Teil, das es gleich nicht mehr gibt.
+                # daran träfe ein Teil, das es gleich nicht mehr gibt. Der
+                # Grund steht in Kurzhilfe **und** Beschreibung — sonst las ein
+                # Bildschirmleser die Nebenfolge (FD-27) — und nennt, wann die
+                # Sperre fällt (FD-30).
                 button.setEnabled(False)
-                button.setToolTip(
-                    tr("Erst nach der Berechnung — der Befund gehört zum vorigen Stand.")
-                )
+                say_refusal(button, computing_refusal())
             refusal = action_refusal(action.id)
             if refusal:
                 # **Gesperrt heißt grau mit Grund, vor dem Klick** (FD-5): In
                 # der Demo und ohne Geräteaktivierung endete *Auf das Bett
                 # setzen* sonst im Meldungsfenster. Lesendes bleibt bedienbar.
                 button.setEnabled(False)
-                button.setToolTip(refusal)
-                button.setAccessibleDescription(refusal)
+                say_refusal(button, refusal)
             # ``weak_slot`` und nicht ein Lambda: ``handlers`` hält gebundene
             # Methoden des Fensters, und ein Lambda, das es fängt, schließt
             # den Ring Panel → Knopf → Handler → Fenster — gemessen hielten
@@ -7884,11 +7898,13 @@ class ReportPanel(QWidget):
         for action in offered:
             entry = menu.addAction(str(action.label))
             entry.setObjectName(f"report.{action.id}")
-            # Dieselben Sperren wie an den Knöpfen darunter (RM-534, FD-5).
-            refusal = action_refusal(action.id)
-            entry.setEnabled(not self._previous(item) and not refusal)
-            if refusal:
-                entry.setToolTip(refusal)
+            # Dieselben Sperren wie an den Knöpfen darunter (RM-534, FD-5),
+            # jede mit ihrem Grund (FD-27).
+            refusal = action_refusal(action.id) or (
+                computing_refusal() if self._previous(item) else ""
+            )
+            entry.setEnabled(not refusal)
+            say_refusal(entry, refusal)
             chosen[entry] = action
         # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
         # None — ``QMenu.exec`` gibt dann nichts zurück.
@@ -8649,6 +8665,16 @@ class _ActionRow:
     """Die Felder, die gerade weichen, weil die Maßgruppe im Bild sie trägt."""
     coordinates: list[_CoordinateRow] = dataclasses.field(default_factory=list)
     """Die Zeilen, in denen X, Y und Z einer Stelle nebeneinander stehen."""
+
+
+def _removes_its_step(row: _ActionRow) -> bool:
+    """Ob die Zeile den Schritt ihres Bausteins entfernt (*Baustein entfernen*).
+
+    Eine Handlung mit Schritt und ohne Operation (``part_actions``); gefragt
+    vom Klick (``_run_row``) und vom Hinweis unter einem zu kleinen
+    Durchmesser (``_removal_way``).
+    """
+    return row.step is not None and row.action is not None and row.action.op is None
 
 
 #: Die Felder einer Stelle, die nebeneinander stehen dürfen — in dieser Folge.
@@ -10361,9 +10387,47 @@ class FeaturePanel(QWidget):
                 return str(tr("{name}: {value}", name=name, value=reason))
         return ""
 
+    def _removal_way(self, editor: QWidget) -> str:
+        """Der Weg zum Entfernen, wenn jemand einen Durchmesser unter die Grenze tippt — sonst leer.
+
+        Wer eine Bohrung samt Senkung loswerden wollte, tippte 0 in ihren
+        Durchmesser und las nur „0,0 mm liegt unter der Untergrenze 0,20 mm“
+        (Kundenmeldung 0.6.0). Eine Bohrung unter der Grenze gibt es nicht; was
+        gemeint ist, kann *Merkmal entfernen*, am Baustein *Baustein entfernen*
+        — genannt nur, wo die Karte es gerade anbietet. Der Operationsdialog
+        aus Menü und Suche weiß das für sein Merkmal nicht und nennt deshalb
+        nur die Grenze.
+        """
+        from app.ui.op_dialog import ValueField
+
+        spin = editor.spin if isinstance(editor, ValueField) else editor
+        if (
+            not isinstance(spin, (BoundedSpin, BoundedLengthSpin))
+            or editor.property(FIELD_PROPERTY) != "diameter"
+            or (isinstance(editor, ValueField) and editor.toggle.isChecked())
+        ):
+            return ""
+        refused = spin.refused_value()
+        if refused is None or refused > spin.maximum():
+            return ""
+        removal = next(
+            (
+                row
+                for row in self._shown_rows.values()
+                if row.op == "remove_feature" or _removes_its_step(row)
+            ),
+            None,
+        )
+        if removal is None or removal.action is None:
+            return ""
+        return tr("Ganz weg geht es mit „{action}“.").format(action=str(removal.action.title))
+
     def _set_refusal_label(self, editor: BoundedSpin | BoundedLengthSpin, label: QLabel) -> str:
         """Zeigt die Grenzablehnung direkt am Feld und reicht sie an Vorleser weiter."""
         reason = editor.refusal()
+        way = self._removal_way(editor) if reason else ""
+        if way:
+            reason = f"{reason} {way}"
         if label.text() != reason:
             label.setText(reason)
             if reason:
@@ -10418,6 +10482,9 @@ class FeaturePanel(QWidget):
                 self._measure_begun or (entry is not None and entry.op == self._measure_op)
             )
             child.setEnabled(not reason and not in_measure)
+            # Feld und Knopf der Zeile nennen den Grund, nicht ihren eigenen
+            # Satz (FD-27): „Entfernt ein erkanntes Merkmal …“ stand grau da.
+            say_refusal(child, reason)
         for button in (self._in_view, self._apply, self._cancel):
             button.setEnabled(not reason)
         self._every.setEnabled(not reason and not self._measuring)
@@ -10802,6 +10869,8 @@ class FeaturePanel(QWidget):
         die Handlung finden (:meth:`_mark`). Die Werte der Felder stehen dann
         schon (:func:`configure_feature_field`).
         """
+        from app.ui.op_dialog import ValueField
+
         box = row.box
         # Das Ziel im Wortschatz (``feature:<schlüssel>``, an einer Kante
         # ``edge:``) — als Eigenschaft, denn den ``objectName`` des Kopfes
@@ -10850,6 +10919,10 @@ class FeaturePanel(QWidget):
                     refusal = row.refusals.get(name)
                     if refusal is not None:
                         self._set_refusal_label(editor, refusal)
+                elif isinstance(editor, ValueField):
+                    # Ein Ausdrucksfeld (Bausteinzeile) zeigt seine Ablehnung
+                    # selbst unter dem Feld; der Weg zum Entfernen gehört dazu.
+                    editor.refusal_way = partial(self._removal_way, editor)
                 for target in (editor, *row.inner[name]):
                     self._mark(target, row.key)
         if row.button is not None:
@@ -10996,7 +11069,7 @@ class FeaturePanel(QWidget):
         Schlüsselloch im Verlauf, an derselben Stelle über dem alten.
         """
         if row.step is not None:
-            if row.action is not None and row.action.op is None:
+            if _removes_its_step(row):
                 self.stepRemoveRequested.emit(row.step)
             else:
                 self.stepChangeRequested.emit(row.step, self._row_values(row))

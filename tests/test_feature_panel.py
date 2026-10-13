@@ -1145,6 +1145,80 @@ def test_a_feature_field_keeps_an_out_of_range_number_and_blocks_apply(
     assert not panel._apply.isEnabled(), "nach Eingabekorrektur gilt weiter die Vorschau-Sperre"
 
 
+def test_a_bore_diameter_below_its_limit_names_the_way_to_remove_it(
+    qt_app: QApplication,
+) -> None:
+    """Wer eine Bohrung loswerden will, tippt 0 in ihren Durchmesser.
+
+    Kundenmeldung 0.6.0: Bohrung mit Senkung, *Bohrung ändern*, Durchmesser
+    „0,0 mm“ — darunter stand nur die Untergrenze 0,20 mm. Was gemeint war,
+    kann *Merkmal entfernen*; der Satz nennt es. Über der Obergrenze ist
+    Entfernen kein Weg und steht nicht da.
+    """
+    from PySide6.QtTest import QTest
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    row = panel._shown_rows[row_of(panel, "Bohrung ändern")]
+    removal = next(entry for entry in panel._shown_rows.values() if entry.op == "remove_feature")
+    panel._arm(row.key)
+    editor = row.widgets["diameter"]
+    assert isinstance(editor, BoundedLengthSpin)
+    line = editor.lineEdit()
+    line.setFocus()
+    line.selectAll()
+    QTest.keyClicks(line, editor.textFromValue(0.0))
+
+    refusal = row.refusals["diameter"]
+    assert "Untergrenze" in refusal.text(), refusal.text()
+    assert str(removal.action.title) in refusal.text(), refusal.text()
+    assert not panel._apply.isEnabled()
+
+    line.selectAll()
+    QTest.keyClicks(line, editor.textFromValue(editor.maximum() + 5.0))
+    assert "Obergrenze" in refusal.text(), refusal.text()
+    assert str(removal.action.title) not in refusal.text(), refusal.text()
+
+
+def test_a_part_bore_diameter_below_its_limit_names_removing_the_part(
+    qt_app: QApplication,
+) -> None:
+    """Am Baustein heißt der Weg *Baustein entfernen* (Review L7).
+
+    Seine Entfernen-Zeile ist keine Operation, sondern nimmt den Schritt
+    (``_removes_its_step``). Sein Maß steht in einem Ausdrucksfeld, das seine
+    Ablehnung selbst unter dem Feld zeigt (``ValueField.hint``); dort steht der
+    Weg, am Fußknopf wie bei jeder Grenze nur der Satz zur Zahl.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtTest import QTest
+
+    from app.core.bootstrap import load_operations
+    from app.ui.op_dialog import ValueField
+
+    load_operations()
+    spec = REGISTRY.get("insert_dowel")
+    step = SimpleNamespace(id=5, op="insert_dowel", params={})
+    panel = FeaturePanel()
+    try:
+        panel.show_part(step, spec)
+        row = panel._shown_rows[row_of(panel, "Maße ändern")]
+        panel._arm(row.key)
+        editor = row.widgets["diameter"]
+        assert isinstance(editor, ValueField)
+        line = editor.spin.lineEdit()
+        line.setFocus()
+        line.selectAll()
+        QTest.keyClicks(line, editor.spin.textFromValue(0.0))
+        assert "Untergrenze" in editor.hint.text(), editor.hint.text()
+        assert "Baustein entfernen" in editor.hint.text(), editor.hint.text()
+        assert "Untergrenze" in panel._lock_note.text(), panel._lock_note.text()
+    finally:
+        panel.deleteLater()
+
+
 def test_a_refusal_hides_with_its_field_and_returns_with_it(qt_app: QApplication) -> None:
     """RM-342 D-N1: Verschwindet ein Feld mit abgelehnter Zahl, geht sein Satz mit.
 

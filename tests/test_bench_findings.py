@@ -15,6 +15,7 @@ from typing import Any, TypeVar
 import pytest
 
 from app.core.bootstrap import load_operations
+from tools.function_checks import SMALLEST_WINDOW
 
 load_operations()
 
@@ -72,8 +73,9 @@ from app.core.bootstrap import load_operations
 load_operations()
 from app.ui.app import build_application
 from app.ui import guide_targets
+from tools.function_checks import SMALLEST_WINDOW
 application, window = build_application([])
-window.resize(1920, 1032)
+window.resize(*SMALLEST_WINDOW)
 window.show()
 if os.environ.get('SOLIDON_PROBE_ITERATOR'):
     from PySide6.QtCore import Qt
@@ -514,8 +516,8 @@ def _sections(size: tuple[int, int], body: str, extra: dict[str, str] | None = N
 
 
 #: Die kleinste Fläche (``function_checks.SMALLEST_WINDOW``, 1920 x 1080 logisch
-#: maximiert, Taskleiste ab) und eine größere — darunter wird nie gemessen.
-_SECTION_SIZES = ((1920, 1032), (2560, 1392))
+#: maximiert, Task- und Titelleiste ab) und eine größere — darunter wird nie gemessen.
+_SECTION_SIZES = (SMALLEST_WINDOW, (2560, 1392))
 
 
 def test_the_object_tree_stays_inside_its_section_when_the_card_is_tight(qt_app: Any) -> None:
@@ -647,10 +649,12 @@ def _hidden_steps(size: tuple[int, int], scene: tuple[int, int], old: bool) -> d
 
 #: Je zulässige Fläche ein Verlauf, der in den neuen Stand gerade passt: Quader
 #: je Sammelschritt mal Sammelschritte, gemessen ohne Fenster mit DejaVu Sans.
-_HIDDEN_CASES = (((1920, 1032), (4, 2)), ((2560, 1392), (6, 2)))
+_HIDDEN_CASES = ((SMALLEST_WINDOW, (4, 2)), ((2560, 1392), (6, 2)))
 
 
-@pytest.mark.parametrize(("size", "scene"), _HIDDEN_CASES, ids=["1920x1032", "2560x1392"])
+@pytest.mark.parametrize(
+    ("size", "scene"), _HIDDEN_CASES, ids=[f"{w}x{h}" for (w, h), _scene in _HIDDEN_CASES]
+)
 def test_folded_steps_take_no_room_from_the_object_tree(
     qt_app: Any, size: tuple[int, int], scene: tuple[int, int]
 ) -> None:

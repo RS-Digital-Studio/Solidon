@@ -117,23 +117,27 @@ def test_a_checked_candidate_needs_its_visible_preview_and_specific_loss_accepta
 
 
 @pytest.mark.parametrize(
-    ("reasons", "verdict"),
+    ("reasons", "volume", "verdict"),
     [
-        (("topology", "unexplained"), "Größere Grenzen helfen hier nicht"),
-        (("topology", "surface"), "ändern Sie die Grenzen bewusst"),
+        (("topology", "unexplained"), float("inf"), "Größere Grenzen helfen hier nicht"),
+        (("topology", "surface"), float("inf"), "ändern Sie die Grenzen bewusst"),
+        (("volume", "volume"), 0.05, "ändern Sie die Grenzen bewusst"),
+        (("volume", "volume"), 3.09842, "Größere Grenzen helfen hier nicht"),
     ],
 )
 def test_without_a_passing_candidate_the_verdict_stays_and_nothing_is_preselected(
-    qt_app, rebuilt, monkeypatch, reasons, verdict
+    qt_app, rebuilt, monkeypatch, reasons, volume, verdict
 ):
     """Roberts Test von 0.5.2 am Besenhalter: Alle Vorschläge fielen durch,
     vorgewählt wurde trotzdem der erste, und seine Zeile („Dieser Vorschlag
     wird nicht übernommen“) überschrieb das Urteil über alle. Scheitert jeder
     an der Form, sagt der Dialog, dass größere Grenzen nicht helfen; scheitert
-    einer an einer Grenze, nennt er die Grenzen."""
+    einer an einer Grenze, nennt er die Grenzen. Eine Volumenabweichung über
+    der weitesten Grenze des Feldes (ein Quader für einen gebogenen Griff,
+    +310 %, Kundenmeldung 0.6.0) ist an der Form gescheitert."""
     dialog, _session, proposal, _application, calls = rebuilt
     failing = tuple(
-        RebuildCandidate((), proposal.source, RebuildCheck(False, reason, float("inf")))
+        RebuildCandidate((), proposal.source, RebuildCheck(False, reason, volume))
         for reason in reasons
     )
     none_pass = RebuildProposal(proposal.source, proposal.budget, failing, {})

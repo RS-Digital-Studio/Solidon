@@ -49,6 +49,21 @@ Stellen einzeln — wörtlich unter anderem:
   driften auseinander“ und „Dieselbe Frage, zwei Rechnungen — genau der Grund,
   aus dem die Menütiefe in den Kern gewandert ist.“
 
+**Ob geändert werden darf** (FD-5, FD-26 bis FD-30, RM-737): Jeder Zugang
+fragte den Freischaltzustand für sich oder gar nicht. Nach FD-5 standen ohne
+Freischaltung noch *Parameter anlegen …* (das Fenster hielt die Aktion nicht
+fest, keine Zeile in `_update_actions` kannte sie), *Modell aus dem Netz*,
+*Zeichnen* unter *Erzeugen*, *Zahlen an Maße binden*, Alt+3 und Alt+7, die
+Parameterleiste und die Felder der Maßgruppe offen; der Klick endete im Dialog
+und dann im Meldungsfenster. Deshalb gilt ein Fensterbefehl als ändernd, bis
+`READING_COMMANDS` ihn als lesend führt — eine neue Zeile ist gesperrt lieber
+grau als eine Sackgasse, und `tests/test_change_lock.py` hält die Leseliste an
+den Namen, die das Fenster vergibt. Grau hieß an mehreren Stellen nur
+Kurzhilfe: Ein Bildschirmleser las an der Befundhandlung während der Rechnung
+die Nebenfolge statt des Grundes (FD-27). Und ein Grund ohne Weg ist eine
+halbe Antwort (V5): „Aktivieren Sie diesen Rechner einmal online …“ stammte
+aus der gescheiterten Vorschau der Maßgruppe, nicht aus `change_lock`.
+
 ## Texte
 
 **Eine Tabelle, und Auswahlwerte stehen an zwei Stellen.** Die

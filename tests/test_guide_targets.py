@@ -173,10 +173,11 @@ def prepared_window(qt_app: Any) -> Iterator[Any]:
     from app.ui.session import Session
     from app.ui.settings import UiSettings
     from tests.render_fakes import RecordingRenderer
+    from tools.function_checks import SMALLEST_WINDOW
 
     window = MainWindow(Session(), UiSettings())
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.resize(1920, 1032)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     window._show_start_screen(False)
     assert window.session.apply(
@@ -1529,8 +1530,6 @@ def test_every_raw_message_window_carries_its_name() -> None:
     missing: list[str] = []
     names: list[str] = []
     for path in sorted(root.rglob("*.py")):
-        if path.name == "window_names.py":
-            continue
         lacking, named = raw_window_names(path.read_text(encoding="utf-8"))
         missing.extend(f"{path.relative_to(root).as_posix()}: {entry}" for entry in lacking)
         names.extend(sorted(set(named)))
@@ -1637,7 +1636,7 @@ def unnamed_message_buttons(source: str) -> list[str]:
 
     In einer Funktion, die ein ``QMessageBox`` baut, steht jedes ``addButton`` in
     einer Zuweisung, und derselbe Knopf geht an ``name_button``
-    (``message.button:<sache>.<knopf>``, ``app/ui/window_names.py``) — ein Knopf
+    (``message.button:<sache>.<knopf>``, ``app/ui/message_dialog.py``) — ein Knopf
     mit Text wie ein Standardknopf: Der Prüfstand drückt ihn über seinen Namen,
     nicht über die Beschriftung, die mit der Sprache wechselt."""
     import ast

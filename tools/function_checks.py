@@ -227,11 +227,22 @@ REFERENCE_FACTOR_AT: Final = ("frames", "reference_factor")
 SMALLEST_SCREEN: Final = (1920, 1080)
 #: Die Taskleiste von Windows 11 bei 100 %, in logischen Punkten.
 TASKBAR_HEIGHT: Final = 48
-#: Z6: Die kleinste Fensterfläche — maximiert auf dem kleinsten Schirm, die
-#: Taskleiste ab. Der Prüfstand stellt sie auf jedem größeren Schirm nach.
-SMALLEST_WINDOW: Final = (SMALLEST_SCREEN[0], SMALLEST_SCREEN[1] - TASKBAR_HEIGHT)
+#: Die Titelleiste eines maximierten Fensters unter Windows 11 bei 100 %:
+#: ``GetSystemMetricsForDpi(SM_CYCAPTION, 96)``. Am maximierten Solidon-Fenster
+#: nachgemessen (Durchsicht welle4, C-M1): Innen ist es so breit wie die
+#: verfügbare Fläche und genau diese 23 Punkte niedriger; die Rahmen liegen
+#: maximiert außerhalb des Schirms.
+CAPTION_HEIGHT: Final = 23
+#: Die verfügbare Fläche des kleinsten Schirms, die Taskleiste ab — so viel
+#: bekommt das maximierte Fenster samt Titelleiste.
+SMALLEST_AVAILABLE: Final = (SMALLEST_SCREEN[0], SMALLEST_SCREEN[1] - TASKBAR_HEIGHT)
+#: Z6: Die kleinste Fensterfläche — die Innenfläche des maximierten Fensters
+#: auf dem kleinsten Schirm, Taskleiste und Titelleiste ab (1920 x 1009). Der
+#: Prüfstand stellt sie auf jedem größeren Schirm nach; ``resize`` setzt genau
+#: diese Innenfläche.
+SMALLEST_WINDOW: Final = (SMALLEST_AVAILABLE[0], SMALLEST_AVAILABLE[1] - CAPTION_HEIGHT)
 #: Z6: Die Skalierungen — eine ist nur ein Fall, solange die logische Fläche
-#: des Schirms dabei mindestens :data:`SMALLEST_WINDOW` bleibt.
+#: des Schirms dabei mindestens :data:`SMALLEST_AVAILABLE` bleibt.
 SCALES: Final = (1.0, 1.5, 2.0)
 #: I3: Anteil der häufigsten Kundenziele, die ohne Suche dastehen.
 GOAL_SHARE: Final = 0.8
@@ -856,8 +867,8 @@ CRITERIA: Final[dict[str, Criterion]] = {
         _criterion(
             "Z6",
             "Größen und Skalierungen",
-            f"{SMALLEST_SCREEN[0]} x {SMALLEST_SCREEN[1]} logisch (maximiert, Taskleiste ab) "
-            "ohne Rollleiste vorn; Symbole scharf bei "
+            f"{SMALLEST_SCREEN[0]} x {SMALLEST_SCREEN[1]} logisch "
+            "(maximiert, Task- und Titelleiste ab) ohne Rollleiste vorn; Symbole scharf bei "
             + ", ".join(f"{scale:.0%}" for scale in SCALES)
             + f", solange ≥ {SMALLEST_SCREEN[0]} x {SMALLEST_SCREEN[1]} logisch",
             (*SMALLEST_SCREEN, *(s * 100 for s in SCALES)),
