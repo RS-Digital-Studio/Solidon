@@ -168,17 +168,18 @@ class StepMachine:
             except Exception:
                 self.log.append({"step": step.name, "event": "ready-error", "t": now})
                 self.stop(error=f"{step.name}: {traceback.format_exc()}")
+                self._schedule(self._tick_ms, self._tick)
                 return
             if not ready:
                 if now - self._waiting_since > step.timeout_s:
                     self.log.append({"step": step.name, "event": "timeout", "t": now})
                     if step.on_timeout is not None:
                         self.stop(finding=step.on_timeout())
-                        return
-                    self.stop(
-                        error=f"{step.name}: Zeitgrenze von {step.timeout_s:.0f} s überschritten"
-                    )
-                    return
+                    else:
+                        reason = f"{step.name}: Zeitgrenze von {step.timeout_s:.0f} s überschritten"
+                        self.stop(error=reason)
+                # Auch nach einer Absage tickt der Abbau weiter: Die auslösende
+                # Handlung kann noch in ihrer modalen Schleife stehen.
                 self._schedule(self._tick_ms, self._tick)
                 return
         self.index += 1

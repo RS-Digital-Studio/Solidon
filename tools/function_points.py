@@ -709,6 +709,24 @@ def _point_12(
         )
         if wrong:
             issues.append(Issue(f"Feld ≠ Parameter über {title}: {wrong}", "schwer"))
+        typed = way.get("typed_values")
+        after_params = way.get("params_after")
+        if not isinstance(typed, Mapping) or not typed:
+            absent.append(f"revise ({title}): keine getippte Änderung gemessen")
+        elif not isinstance(after_params, Mapping):
+            absent.append(f"revise ({title}): geänderte Parameter nicht übernommen")
+        else:
+            for name, value in typed.items():
+                if name not in fields_ or name not in params:
+                    issues.append(Issue(f"Fremdes Feld geändert über {title}: {name}", "schwer"))
+                elif _close(value, params[name]) or value == params[name]:
+                    absent.append(f"revise ({title}): Wert blieb unverändert ({name})")
+                elif name not in after_params or not (
+                    value == after_params[name] or _close(value, after_params[name])
+                ):
+                    issues.append(
+                        Issue(f"Änderung nicht übernommen über {title}: {name}", "schwer")
+                    )
     return _settled(12, issues, absent, f"{len(ways)} Wege", {"ways": [w.get("way") for w in ways]})
 
 

@@ -442,6 +442,10 @@ def _e7(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
         if not entry.get("intended") and not str(entry.get("sentence") or "").strip():
             issues.append(Issue(f"leere Fläche ohne Satz: {entry.get('surface')}", "schwer", "E7"))
     for entry in messages or []:
+        if entry.get("kind") in ("sperrgrund", "grenzablehnung") and entry.get("way_out") is True:
+            # Derselbe Vertrag wie V5: Der gemessene Ausweg am gesperrten
+            # Bedienelement ist eine Handlungsmöglichkeit, kein Meldungsknopf.
+            continue
         if not entry.get("actions"):
             issues.append(
                 Issue(f"Meldung ohne Handlung: „{entry.get('text', '')}“", "schwer", "E7")

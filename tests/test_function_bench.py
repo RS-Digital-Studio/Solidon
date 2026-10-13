@@ -628,6 +628,8 @@ def test_the_preparation_of_a_scene_walks_its_route_and_waits_for_its_cause(
         names[key] = [step.name for step in flow.preparation_steps()]
         names[f"{key} weg"] = [f"{target} {button}" for target, button in walked]
     assert names["export_gemischt"] == [
+        "taste auswahl leeren",
+        "vollständige exportauswahl",
         "weg command:file.export",
         "taste Ctrl+A",
         "tippen dateiname",

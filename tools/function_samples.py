@@ -407,6 +407,8 @@ def sample_protocol() -> dict[str, Any]:
                 "params": {"diameter": 5.0},
                 "history_before": 2,
                 "history_after": 2,
+                "typed_values": {"diameter": 6.0},
+                "params_after": {"diameter": 6.0},
             },
             {
                 "way": "doppelklick",
@@ -415,6 +417,8 @@ def sample_protocol() -> dict[str, Any]:
                 "params": {"diameter": 5.0},
                 "history_before": 2,
                 "history_after": 2,
+                "typed_values": {"diameter": 6.0},
+                "params_after": {"diameter": 6.0},
             },
         ],
         "abort": {"eval_s": 2.4, "cancel_shown_s": 2.0, "clicked": True},
