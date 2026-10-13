@@ -21,8 +21,8 @@ import pytest
 
 from app.core.bootstrap import _OPERATION_MODULES, load_operations
 from app.core.knowledge.parts.registry import PARTS, PartSpec
-from app.core.registry.registry import REGISTRY, OperationSpec, Registry
-from app.i18n import Figure, _
+from app.core.registry.registry import REGISTRY, OperationSpec
+from app.i18n import Figure, _, extract
 from tools import registry_dump
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 def live() -> tuple[tuple[OperationSpec, ...], tuple[PartSpec, ...]]:
     """Das gefüllte Register in der Reihenfolge der Registrierung."""
     load_operations()
-    return registry_dump.operations_in_order(REGISTRY), registry_dump.parts_in_order(PARTS)
+    return REGISTRY.in_registration_order(), PARTS.in_registration_order()
 
 
 def _estimate(mesh: object, params: object) -> int:
@@ -104,16 +104,26 @@ def test_a_swapped_order_changes_the_dump(
     ]
 
 
-def test_a_registry_hands_out_its_registration_order() -> None:
-    """Die Folge kommt aus der Registrierung, nicht aus dem Namen wie bei ``Registry.all()``."""
-    load_operations()
-    renamed, deleted = REGISTRY.get("rename_object"), REGISTRY.get("delete_object")
-    registry = Registry()
-    registry.register(renamed)
-    registry.register(deleted)
+def test_the_dump_of_the_registry_follows_its_registration_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``registered()`` liest ``in_registration_order()`` (CS-17), nicht ``all()``.
 
-    assert registry_dump.operations_in_order(registry) == (renamed, deleted)
-    assert registry.all() == (deleted, renamed)
+    Die Methode selbst prüft ``test_registry.py``; hier geht es darum, dass der
+    Abzug sie benutzt. Die Texte bleiben draußen, sie kosten Sekunden und
+    tragen zur Folge nichts bei.
+    """
+    load_operations()
+    monkeypatch.setattr(extract, "message_ids", lambda: ())
+
+    found = registry_dump.sections(registry_dump.registered())
+    names = [name for name in found if name.startswith("op:")]
+
+    assert names == [f"op:{spec.name}" for spec in REGISTRY.in_registration_order()]
+    assert names != [f"op:{spec.name}" for spec in REGISTRY.all()]
+    assert [name for name in found if name.startswith("part:")] == [
+        f"part:{spec.name}" for spec in PARTS.in_registration_order()
+    ]
 
 
 def test_only_a_changed_function_leaves_the_dump_alone(

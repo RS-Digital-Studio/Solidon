@@ -25,10 +25,10 @@ dessen Darstellung eine Speicheradresse trüge, hält den Lauf an, statt einen
 Abzug zu schreiben, der in jedem Prozess anders aussieht. Gelesen wird mit
 eigenem leerem Profil (§38): Der Abzug hängt nicht an der Maschine.
 
-**Registerreihenfolge heißt Reihenfolge der Registrierung.** ``Registry.all()``
-sortiert nach Namen und sähe nicht, dass ein Schnitt die Importfolge aus
-``bootstrap._OPERATION_MODULES`` verschoben hat; die Folge hält nur das
-Wörterbuch des Registers.
+**Registerreihenfolge heißt Reihenfolge der Registrierung**
+(``in_registration_order()`` beider Register). ``all()`` sortiert nach Namen
+und sähe nicht, dass ein Schnitt die Importfolge aus
+``bootstrap._OPERATION_MODULES`` verschoben hat.
 """
 
 from __future__ import annotations
@@ -48,8 +48,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
-    from app.core.knowledge.parts.registry import PartRegistry, PartSpec
-    from app.core.registry.registry import OperationSpec, Registry
+    from app.core.knowledge.parts.registry import PartSpec
+    from app.core.registry.registry import OperationSpec
     from app.core.types import BaseParams
 
 ROOT: Final = Path(__file__).resolve().parent.parent
@@ -176,16 +176,6 @@ def dump(
     return "\n".join(lines) + "\n"
 
 
-def operations_in_order(registry: Registry) -> tuple[OperationSpec, ...]:
-    """Die Operationen in der Reihenfolge ihrer Registrierung, nicht nach Namen."""
-    return tuple(registry._ops.values())
-
-
-def parts_in_order(registry: PartRegistry) -> tuple[PartSpec, ...]:
-    """Die Bausteine in der Reihenfolge ihrer Registrierung, nicht nach Namen."""
-    return tuple(registry._parts.values())
-
-
 def registered() -> str:
     """Der Abzug des Registers, wie ``bootstrap.load_operations`` es füllt."""
     from app.core.bootstrap import load_operations
@@ -194,7 +184,7 @@ def registered() -> str:
     from app.i18n.extract import message_ids
 
     load_operations()
-    return dump(operations_in_order(REGISTRY), parts_in_order(PARTS), message_ids())
+    return dump(REGISTRY.in_registration_order(), PARTS.in_registration_order(), message_ids())
 
 
 def sections(text: str) -> dict[str, list[str]]:
