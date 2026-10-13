@@ -44,6 +44,8 @@ scrive in `website/version.json`.
 - Dopo un'azione nel *Rapporto di verifica* il rapporto resta in primo piano e Ctrl+Z la annulla subito. Finora passava davanti la scheda *Selezione*.
 - Ctrl+Z e Ctrl+Y funzionano anche con il cursore in un campo vuoto, per esempio nel campo di ricerca. Se lì ha scritto qualcosa, viene annullato prima il testo digitato.
 - Senza attivazione, le azioni che modificano qualcosa in *Rapporto di verifica*, *Selezione*, menu contestuali e filamento sono in grigio con il motivo. Prima il rifiuto arrivava dopo il clic.
+- Senza attivazione sono in grigio anche *Crea parametro …*, *Sposta*, *Dividi*, i tasti della cronologia e le misure nella vista. Ogni motivo indica la strada, come *Aiuto → Sblocca Solidon …*.
+- Se un'azione del *Rapporto di verifica* attende il calcolo in corso, dice che poi torna disponibile, anche ai lettori di schermo.
 - I messaggi nella barra di stato non mettono più i due punti dopo una frase completa.
 - Con un solo corpo l'albero degli oggetti è alto quanto il suo contenuto, e così la cronologia con un solo passo. Nella versione 0.6.0 sotto restava spazio vuoto.
 - Il passo più recente resta visibile nella cronologia quando nuovi corpi fanno crescere l'albero degli oggetti. Nella versione 0.6.0 scivolava sotto il bordo del pannello.

@@ -123,6 +123,7 @@ from app.core.units import (
 )
 from app.i18n import tr
 from app.ui import app_events, cursors
+from app.ui.change_lock import change_refusal
 from app.ui.icons import icon
 from app.ui.labels import (
     display_unit,
@@ -14688,6 +14689,13 @@ class Viewport(QWidget):
             self.gizmoStatus.emit("")
             return
         self._detach_gizmo()
+        if change_refusal():
+            # **Ohne Freischaltung kein Griff** (FD-28): Jeder Zug daran legt
+            # einen Schritt an, den der Kern ablehnt. Den Grund nennen Karte,
+            # Merkmalfenster und Maßgruppe; nach dem Freischalten stellt
+            # ``MainWindow._update_actions`` den Griff neu.
+            self.gizmoStatus.emit("")
+            return
         # **Wo er sitzt und was er tut, sind zwei Fragen.** ``gizmo_feature``
         # beantwortet die erste (jedes versetzbare Merkmal), ``gizmo_target``
         # die zweite (nur eine Fläche kennt Press/Pull entlang ihrer Normalen).

@@ -1456,10 +1456,12 @@ def _ways_out(window: Any) -> set[str]:
     V5, Entscheidung Koordinator) — etwa „(Hilfe → Solidon freischalten …)“.
     Genannt ist er, wenn der Satz den Text einer bedienbaren Menüzeile oder eines
     offenen Knopfs trägt, so wie der Kunde ihn in seiner Sprache liest. Kürzer als
-    vier Zeichen zählt nicht, „OK“ ist kein Ausweg.
+    vier Zeichen zählt nicht, „OK“ ist kein Ausweg. Dazu der Satz der Sperre, die
+    mit dem Ende der Rechnung fällt (``change_lock.computing_refusal``).
     """
     from PySide6.QtWidgets import QAbstractButton, QApplication
 
+    from app.ui.change_lock import computing_refusal
     from app.ui.guide_targets import menubar_entries
 
     texts = [
@@ -1472,6 +1474,10 @@ def _ways_out(window: Any) -> set[str]:
                 for button in top.findChildren(QAbstractButton)
                 if _visible(button) and button.isEnabled()
             ]
+    # **Eine Sperre, die von selbst fällt, nennt ihren Weg im Satz** (FD-30):
+    # Die Befundhandlung während der Rechnung sagt, dass sie mit dem Ende der
+    # Berechnung wieder frei ist — dafür gibt es keine Menüzeile.
+    texts.append(computing_refusal())
     cleaned = {text.replace("&", "").rstrip(".… ").strip() for text in texts}
     return {text for text in cleaned if len(text) >= 4}
 
