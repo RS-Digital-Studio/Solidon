@@ -25,6 +25,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No Linux, o AppImage arranca agora também no Ubuntu 22.04, no Linux Mint 21 e no Debian 12. Na versão 0.6.0, aí só funcionava o Flatpak.
 - No Linux, o Solidon lê agora o rato 3D através do acesso que a regra udev do manual concede, também no Flatpak. Até à versão 0.6.0, a regra não bastava para isso.
 - A pesquisa encontra *Unir*, *Subtrair* e *Interseção* também como «booleano», e *Subtrair* também como «diferença».
+- A pesquisa encontra a função também para uma pergunta como «Como ponho a peça na mesa de impressão?» e conhece palavras de slicers e CAD como «variável».
+- Também a pesquisa no manual encontra a página certa para uma pergunta com as suas palavras.
+- Quem escreve «furo» ou «buraco» na pesquisa obtém *Abrir furo* num corpo e *Alterar furo* num furo selecionado, em todos os idiomas.
 - Com um corpo selecionado e um segundo na cena, o separador *Seleção* indica como acrescentar o segundo para *Unir*, *Subtrair* e *Interseção*.
 - O campo de pesquisa do separador *Seleção* está agora sempre presente, também sem seleção, e encontra cada função e cada comando com o seu atalho.
 - A paleta de comandos desaparece, porque o campo de pesquisa encontra o mesmo. *Pesquisar função* e Ctrl+Shift+P põem o cursor nele.
@@ -35,6 +38,22 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Mesmo quando nada se sobrepõe, *Verificar sobreposições* dá agora uma resposta.
 - Se a uma função faltar um segundo corpo na cena, o motivo indica *Duplicar objeto* como caminho.
 - A lista de atalhos de teclado nomeia *Modelar*, *Esqueleto* e *Desenhar* uma única vez.
+- O botão *Calcular de forma mais aproximada* deixa de existir: o Solidon continua sozinho com o cálculo completo. Na versão 0.6.0 aparecia também onde não mudava nada.
+- As mensagens de erro, os detalhes e os avisos aparecem agora no estilo do Solidon, com as ações como botões. Ctrl+C copia a seleção ou, se não houver nenhuma, a mensagem inteira.
+- A cor de uma bobina escolhe-se com o seletor de cores do Solidon junto ao botão, com cores nomeadas e o valor exato. A caixa de cores do sistema desaparece.
+- Uma cota do desenho altera-se agora num campo no próprio lugar. Os endereços e a escolha do filamento a substituir são pedidos no estilo do Solidon.
+- Depois de ativar ou desativar, a confirmação aparece no próprio diálogo, sem uma janela que seja preciso fechar.
+- A caixa *Calibrar material* mostra à frente apenas a folga, a interferência e a compensação de furos. Pé de elefante, contração, parede e saliência ficam em *Mais definições*.
+- Os números ficam alinhados à direita em todos os campos, algarismo sob algarismo.
+- Um leitor de ecrã lê o nome e a explicação de cada campo numérico de uma caixa de diálogo.
+- Depois de uma ação no *Relatório de verificação*, o relatório fica à frente e Ctrl+Z desfá-la logo. Até agora, o separador *Seleção* passava para a frente.
+- Ctrl+Z e Ctrl+Y funcionam também com o cursor num campo vazio, por exemplo no campo de pesquisa. Se escreveu algo ali, primeiro é desfeito o que escreveu.
+- Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
+- Sem ativação, também *Criar parâmetro …*, *Mover*, *Dividir*, as teclas do histórico e as medidas na vista ficam a cinzento. Cada motivo indica o caminho, como *Ajuda → Desbloquear o Solidon …*.
+- Quando uma ação do *Relatório de verificação* espera pelo cálculo em curso, indica que depois volta a ficar disponível, também para leitores de ecrã.
+- As mensagens da barra de estado já não colocam dois pontos depois de uma frase completa.
+- Com um só corpo, a árvore de objetos tem a altura do seu conteúdo, e o histórico com um só passo também. Na versão 0.6.0 ficava espaço vazio por baixo.
+- O passo mais recente continua visível no histórico quando novos corpos fazem crescer a árvore de objetos. Na versão 0.6.0 deslizava para baixo do limite do painel.
 - A captura de ecrã de um comentário mostra agora também o modelo no Windows. Com algumas placas gráficas aparecia antes uma imagem antiga, como o ecrã de carregamento.
 - No macOS, uma caixa de diálogo aberta, por exemplo ao criar um parafuso do catálogo de blocos, fica por cima da janela principal. Antes, um clique na janela empurrava-a para trás.
 
@@ -48,6 +67,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um corpo com rosca do catálogo de blocos volta a poder ser movido, rodado, espelhado, escalado e pousado na mesa. Na versão 0.6.0 a cadeia parava com um erro do programa.
 - No separador *Seleção*, um diâmetro abaixo do limite em *Alterar furo* remete agora para *Remover característica*, que remove o furo por completo, com o escareamento se quiser.
 - A reconstrução (*Reconstruir modelo*) já não aconselha outros limites quando nenhum valor permitido bastaria, e mostra as propostas iguais uma só vez.
+- Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
+- Ao escolher um furo num modelo carregado, as medidas na vista e o separador *Seleção* indicam agora a mesma ação, *Alterar furo*. Na versão 0.6.0 ficava ali aberto *Mover característica*.
 
 ## 0.6.0
 

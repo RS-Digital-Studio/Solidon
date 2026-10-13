@@ -143,6 +143,10 @@ Warum auch einmal je Körper `vertex_rank` gefragt wird:
 
 ## Ein Kernaufruf an einem ganzen Körper rechnet im Hilfsprozess
 
+`manifold3d` hält den GIL in jedem Aufruf (Aufbau aus `Mesh64`, `simplify`,
+`refine_to_length`, Boolesche, `decompose`, `to_mesh64`); ein Arbeiterfaden, der
+ihn ruft, hält das Fenster an (RM-212).
+
 RM-212, Entscheidung Robert vom 27.09.2026: ein Hilfsprozess statt eines Kerns,
 der den GIL hergibt. Gemessen am 27.09.2026 mit einem 2-ms-Takt neben dem
 Aufruf (`konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/gil_kern.py`; die übrigen
@@ -420,6 +424,9 @@ wenig wie die Nachinstallation.
 
 ### Im eigenen Flatpak sieht der Rechner anders aus
 
+Von innen fehlen PATH, Installationsordner und Host-Pfade, und XDG zeigt in den
+Sandkasten; die Folgen zeigt die Tabelle.
+
 Die Überschrift hieß „Und die vierte: Wir sind selbst einer".
 
 > Die drei Absätze oben sprechen über **fremde** Sandkästen. Sie waren
@@ -452,9 +459,19 @@ Die Überschrift hieß „Und die vierte: Wir sind selbst einer".
 > Beleg, dass jemand nachgedacht hat — und genau deshalb prüft die Stelle
 > niemand ein zweites Mal. Siehe `.claude/memory/benannte-falle-schuetzt-nicht.md`.
 
-Zu Curas eigenem Lader unter Linux (RM-521): Der Pfad aus `AppRun.env` geht
-vollständig mit, LIBC-Pfad zuerst, weil ein gekürzter die `libstdc++` des
-Rechners nachzieht und mit ihr eine zu neue glibc.
+Zu Curas eigenem Lader unter Linux (RM-521): Flatpak und AppImage tragen
+dasselbe AppDir aus appimage-builder, und CuraEngine nennt seinen Lader
+relativ — gestartet von außen findet es ihn nicht. Der Pfad aus `AppRun.env`
+geht vollständig mit, LIBC-Pfad zuerst, weil ein gekürzter die `libstdc++` des
+Rechners nachzieht und mit ihr eine zu neue glibc. Das Cura-Flatpak gibt nur
+`home` und Wechselmedien frei, deshalb kommt der Arbeitsordner als
+`--filesystem` dazu. Ein AppImage wird beim Verlassen des Blocks ausgehängt;
+aus Solidons Flatpak legt `TMPDIR=exchange_dir()` den Einhängepunkt dorthin, wo
+beide ihn sehen, und `flatpak-spawn --watch-bus` hängt auch aus, wenn der
+Aufrufer ohne Signal stirbt. Draußen deckt das nur `setpriv --pdeathsig` ab,
+wo es da ist; ohne `setpriv` bleibt die Einhängung nach einem harten Ende von
+Solidon stehen. Der Starter ist kein Rechenweg, denn er öffnet nur Curas
+Fenster und schreibt nichts.
 
 ### Was auf einer Plattform gilt, ist keine Zusage
 
@@ -539,8 +556,7 @@ Die Regel in voller Länge, mit dem Warum:
 **Wo die kurze Kette nur ausgeht, rechnen Fenster, Umbau und Agent weiter;
 eine Vorschau nie** (RM-534, §17.2): Hält ein Schritt mit einem
 `BooleanFailedError`, dessen Kette die Güte gekürzt hat (`cut_short`, nicht
-eine verlangte Stufenfolge) und der *Voxelstufe erzwingen* anbietet, und hat
-er nach der Güte gefragt, rechnet `evaluate` ihn mit `full_chain_when_stuck`
+eine verlangte Stufenfolge), und hat er nach der Güte gefragt, rechnet `evaluate` ihn mit `full_chain_when_stuck`
 im selben Lauf mit der vollen Kette (`_FullChain`). Gesetzt wird es nur in
 `Session.run_evaluation`, `_RevisionWorker` und `AgentSession` — die
 Voxelstufe kostet an einem überdeckenden Werkzeug Sekunden, in einer Vorschau
@@ -557,3 +573,24 @@ Durchlauf (§15.6). Der Agent rechnet mit dem Sitzungscache
 (`AgentSession.cache`). Ein Halt nimmt mit, ob der Schritt nach der Güte
 fragte (`reads_quality`); sonst gilt ein Entwurfshalt als fein, und Export wie
 Slicer rechnen nie nach.
+
+**Darum gibt es keinen Knopf *Gröber rechnen*** (FD-6). Er rechnete einmal fein
+(`Session.recompute_fully`). An einer gekürzten Kette tut das die Auswertung
+schon selbst, an einer vollen war die Voxelstufe schon dran, und wo ein Aufruf
+seine Stufen festlegt (Musterentfernung, Textur, Hohlraummessung), rechnet
+auch die feine Güte nicht anders — der Kunde klickte, und nichts wurde anders.
+Der Behälterbau setzte `stages=DRAFT_CHAIN` je nach Güte; damit war seine Absage
+nicht `cut_short`, und die volle Kette lief nie von selbst. **Am Behälter war
+der Knopf bis 0.6.0 deshalb der einzige Weg zur vollen Kette** — dort änderte
+er etwas (Durchsicht welle4-b). Erst seit der Behälter `boolean` kürzen lässt,
+rechnet die Auswertung auch ihn selbst zu Ende, und erst damit ist der Knopf
+überall wirkungslos. Den Behälter halten
+`test_the_quality_shortens_the_chain_never_the_caller` und
+`test_a_container_goes_the_full_chain_where_the_short_one_ends`. Der Wächter
+war zuerst nur so dicht wie das Wort „quality“ im Ausdruck: eine vorher
+berechnete Variable, ein Schalter, eine Hilfsfunktion, ein Aufruf über das
+Modul oder einen Importalias gingen vorbei (Durchsicht über fix/review-kern,
+L3). Jetzt löst er jeden Aufruf über die Importe der Datei auf und lässt als
+`stages=` nur ein Tupel aus Stufennamen oder `DRAFT_CHAIN`/`FULL_CHAIN` aus
+`boolean.py` zu; alles andere, auch `**kwargs`, ist rot. Der Behälterbau legt
+gar keine fest.

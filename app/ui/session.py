@@ -141,6 +141,7 @@ from app.core.split import (
 )
 from app.core.types import (
     CheckState,
+    Document,
     DocumentChange,
     Feature,
     FeatureId,
@@ -1671,6 +1672,25 @@ def _unresolvable(parameters: Mapping[str, Parameter]) -> AppError | None:
     return None
 
 
+def inserting_finding(document: Document, before: OpId) -> Finding:
+    """Dass der Bericht einem Zwischenstand gilt (P7.1), solange die Einfügemarke steht.
+
+    Ein Teil vor Schritt 5 ist nicht das fertige, auch wenn nichts daran fehlt.
+    Eine Funktion und kein Satz in :meth:`Session.run_evaluation`, damit die
+    Szene des Funktionsdurchgangs denselben Befund prüft (``tools/function_scenes``).
+    """
+    return Finding(
+        code="history.inserting",
+        severity="info",
+        message=_(
+            "Zu sehen ist der Stand vor Schritt {number}. Neue Schritte kommen hierhin.",
+            number=step_number(document, before),
+        ),
+        op_id=before,
+        suggestions=(STOP_INSERTING,),
+    )
+
+
 def _with_findings(result: EvaluationResult, extra: list[Finding]) -> EvaluationResult:
     """Trägt die Befunde der Prüfung in den Bericht, den das Fenster zeigt."""
     if not extra:
@@ -1876,7 +1896,7 @@ class Session(QObject):
         """Entwurf, solange gearbeitet wird; Export und Abschlussbericht schalten
         auf fein (§31)."""
         self._quality_once: Quality | None = None
-        """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`.
+        """Die Qualität für **einen** Lauf — siehe :meth:`request_fine`.
         Verbraucht wird sie beim Start des Arbeiters, nicht in seinem Lauf:
         Ein Arbeiter, der noch am Stand davor rechnet, nähme sie sonst dem
         Nachlauf weg, für den sie bestellt war."""
@@ -5484,35 +5504,8 @@ class Session(QObject):
         # der Ersatz liefe still weiter.
         extra = list(profiles.carried_findings(document.printer, document.material))
         if self._insert_before is not None:
-            # Und dass der Bericht einem Zwischenstand gilt (P7.1): Ein Teil vor
-            # Schritt 5 ist nicht das fertige, auch wenn nichts daran fehlt.
-            extra.append(
-                Finding(
-                    code="history.inserting",
-                    severity="info",
-                    message=_(
-                        "Zu sehen ist der Stand vor Schritt {number}. "
-                        "Neue Schritte kommen hierhin.",
-                        number=step_number(self.project.document, self._insert_before),
-                    ),
-                    op_id=self._insert_before,
-                    suggestions=(STOP_INSERTING,),
-                )
-            )
+            extra.append(inserting_finding(self.project.document, self._insert_before))
         return _with_findings(result, extra)
-
-    def recompute_fully(self) -> None:
-        """Einmal mit der vollen Rückfallkette rechnen (§17.2).
-
-        Im Fenster läuft die kurze Kette — direkt und verschweißt —, weil sie
-        beim Arbeiten schnell sein muss; die Stufen *Störung* und *Voxel* laufen
-        erst beim Export (§31). Scheitert eine Boolesche Operation, ist der
-        nächste sinnvolle Schritt genau der: dieselbe Kette einmal zu Ende
-        gehen. Bis hierher war das ein Ratschlag ohne Knopf — *Voxelstufe
-        erzwingen* stand im Fehlerdialog, und nichts führte ihn aus.
-        """
-        self._quality_once = "fine"
-        self.evaluate_async()
 
     @property
     def fine_current(self) -> bool:

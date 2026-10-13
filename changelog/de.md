@@ -50,6 +50,9 @@ Nutzen da und sonst nichts.
 - Unter Linux startet das AppImage jetzt auch auf Ubuntu 22.04, Linux Mint 21 und Debian 12. Version 0.6.0 lief dort nur als Flatpak.
 - Unter Linux liest Solidon die 3D-Maus jetzt über den Zugang, den die udev-Regel aus dem Handbuch freigibt, auch im Flatpak. Bis Version 0.6.0 reichte die Regel dafür nicht.
 - Die Suche findet *Vereinigen*, *Abziehen* und *Schnittmenge* auch unter „boolesch“ und „Boolean“, *Abziehen* auch unter „Differenz“.
+- Die Suche findet die Funktion auch zu einer Frage wie „Wie setze ich das Teil auf die Druckplatte?“ und kennt Wörter aus Slicer und CAD wie „Druckbett“ oder „Variable“.
+- Auch die Suche im Handbuch findet zu einer Frage in eigenen Worten die passende Seite.
+- Wer in der Suche „Loch“ oder „Bohrung“ tippt, bekommt am Körper *Bohrung setzen* und an einer gewählten Bohrung *Bohrung ändern*, in jeder Sprache.
 - Ist ein Körper gewählt und liegt ein zweiter in der Szene, sagt der Reiter *Auswahl*, wie man den zweiten für *Vereinigen*, *Abziehen* und *Schnittmenge* dazuwählt.
 - Das Suchfeld im Reiter *Auswahl* steht jetzt immer, auch ohne Auswahl, und findet jede Funktion und jeden Befehl samt Tastenkürzel.
 - Die Befehlspalette entfällt, denn das Suchfeld findet dasselbe. *Funktion suchen* und Strg+Umschalt+P setzen den Cursor hinein.
@@ -60,6 +63,22 @@ Nutzen da und sonst nichts.
 - Auch wenn sich nichts überschneidet, gibt *Überschneidungen prüfen* jetzt eine Antwort.
 - Fehlt einer Funktion ein zweiter Körper in der Szene, nennt der Grund *Objekt duplizieren* als Weg.
 - Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
+- Der Knopf *Gröber rechnen* entfällt, denn Solidon rechnet von selbst vollständig weiter. In Version 0.6.0 stand er auch dort, wo er nichts änderte.
+- Fehlermeldungen, Einzelheiten und Hinweise stehen jetzt im Stil von Solidon, mit den Handlungen als Knöpfen. Strg+C kopiert die Markierung, sonst die ganze Meldung.
+- Die Farbe einer Spule wählt ein eigener Farbwähler direkt am Knopf, mit benannten Regalfarben und dem genauen Farbwert. Der Farbdialog des Systems entfällt.
+- Ein Maß der Zeichnung ändert sich in einem Feld an Ort und Stelle. Adressen und die Wahl, welches Filament ersetzt wird, fragt Solidon im eigenen Stil.
+- Nach dem Freischalten und nach dem Deaktivieren steht die Bestätigung im Dialog selbst, ohne ein Fenster, das man erst wegklicken muss.
+- Der Dialog *Material kalibrieren* zeigt vorn nur Spiel, Übermaß und Lochkorrektur. Elefantenfuß, Schwindung, Wand und Überhang stehen unter *Weitere Einstellungen*.
+- Zahlen stehen in allen Feldern rechtsbündig, Stelle unter Stelle.
+- Ein Bildschirmleser liest an jedem Zahlenfeld eines Dialogs Namen und Erklärung vor.
+- Nach einer Handlung im Prüfbericht bleibt der Bericht vorn, und Strg+Z nimmt sie gleich zurück. Bisher sprang der Reiter *Auswahl* nach vorn.
+- Strg+Z und Strg+Y wirken auch, wenn der Cursor in einem leeren Feld steht, etwa im Suchfeld. Wer dort getippt hat, nimmt zuerst sein Tippen zurück.
+- Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
+- Ohne Freischaltung sind auch *Parameter anlegen …*, *Bewegen*, *Teilen*, die Tasten im Verlauf und die Maße im Bild grau. Jeder Grund nennt den Weg, etwa *Hilfe → Solidon freischalten …*.
+- Wartet eine Handlung im Prüfbericht auf die laufende Berechnung, sagt sie, dass sie danach wieder frei ist, auch einem Bildschirmleser.
+- Meldungen in der Statuszeile setzen keinen Doppelpunkt mehr hinter einen ganzen Satz.
+- Mit nur einem Körper ist der Objektbaum so hoch wie sein Inhalt, ebenso der Verlauf mit einem Schritt. In Version 0.6.0 blieb darunter leerer Platz.
+- Der neueste Schritt bleibt im Verlauf zu sehen, wenn neue Körper den Objektbaum wachsen lassen. In Version 0.6.0 rutschte er unter den Rand der Karte.
 - Das Bildschirmfoto einer Rückmeldung zeigt unter Windows jetzt auch das Modell. Auf manchen Grafikkarten stand dort vorher ein altes Bild, etwa der Ladebildschirm.
 - Unter macOS bleibt ein offener Dialog, etwa beim Anlegen einer Schraube aus dem Bausteinkatalog, über dem Hauptfenster. Ein Klick ins Fenster schob ihn vorher dahinter.
 
@@ -73,6 +92,8 @@ Nutzen da und sonst nichts.
 - Ein Körper mit Gewinde aus dem Bausteinkatalog lässt sich wieder verschieben, drehen, spiegeln, skalieren und aufs Bett setzen. In Version 0.6.0 hielt die Kette dabei mit einem Programmfehler an.
 - Tippt man im Reiter *Auswahl* bei *Bohrung ändern* einen Durchmesser unter der Grenze ein, nennt der Hinweis jetzt *Merkmal entfernen*. Damit verschwindet die Bohrung ganz, auf Wunsch samt Senkung.
 - Der Nachbau (*Modell nachbauen*) rät nicht mehr zu anderen Grenzen, wenn kein erlaubter Wert reichen würde, und zeigt gleiche Vorschläge nur einmal.
+- Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
+- Wählt man in einem geladenen Modell eine Bohrung, meinen die Maße im Bild und der Reiter *Auswahl* dieselbe Handlung, *Bohrung ändern*. In Version 0.6.0 stand dort *Merkmal verschieben* offen.
 
 ## 0.6.0
 

@@ -642,7 +642,7 @@ Sechs Dinge hängen daran:
 
 **Und der Griff ist ohne Attrappe nicht prüfbar** (`gripping` in
 `tests/test_viewport_decisions.py`). Offscreen gibt es keinen Renderer, also
-gibt `_display_of` nichts, `grip_reach` unendlich und `sketch_pull_ready`
+gibt `display_of` nichts, `grip_reach` unendlich und `sketch_pull_ready`
 **immer** `False` — auch mit gesetztem Angebot. Der erste Test darüber
 behauptete „ohne Frage kein Griff" und wäre auch bei einem Griff grün geblieben,
 der jede Frage übergeht; `sketchPullBlocked` kam in der ganzen Suite nicht ein

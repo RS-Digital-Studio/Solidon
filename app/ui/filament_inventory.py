@@ -70,7 +70,7 @@ from app.ui.icons import icon
 from app.ui.labels import NumberSpin, calendar_day, local_timestamp, localised
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying, weak_slot
 from app.ui.panels import collapsible
-from app.ui.style import NORMAL, SPACE, WIDE, make_primary, set_level
+from app.ui.style import NORMAL, SPACE, TIGHT, WIDE, make_primary, set_level
 
 _log = get_logger(__name__)
 
@@ -451,6 +451,7 @@ class InventoryView(QWidget):
         outer.setContentsMargins(WIDE, NORMAL, WIDE, NORMAL)
         outer.setSpacing(NORMAL)
         header = QGridLayout()
+        header.setSpacing(NORMAL)
         self.back_button = QPushButton(tr("Lager verlassen"), self)
         self.back_button.setToolTip(tr("Zurück zum Projekt oder zur Startseite."))
         self.back_button.clicked.connect(self.backRequested)
@@ -478,6 +479,7 @@ class InventoryView(QWidget):
         self.filters = QWidget(shelf)
         filters = QHBoxLayout(self.filters)
         filters.setContentsMargins(0, 0, 0, 0)
+        filters.setSpacing(TIGHT)
         self.search = QLineEdit(shelf)
         self.search.setPlaceholderText(tr("Spulen nach Name, Typ oder Lagerort suchen"))
         self.search.setAccessibleName(tr("Spulen suchen"))
@@ -594,6 +596,7 @@ class InventoryView(QWidget):
         self.page_scroll.viewport().installEventFilter(self)
         layout.addWidget(self.page_scroll, 1)
         actions = QHBoxLayout()
+        actions.setSpacing(TIGHT)
         actions.addWidget(self.import_button)
         actions.addStretch(1)
         layout.addLayout(actions)
@@ -864,6 +867,7 @@ class InventoryView(QWidget):
         card.setCursor(Qt.CursorShape.ArrowCursor)
         overview_layout.addWidget(card)
         information = QVBoxLayout()
+        information.setSpacing(NORMAL)
         name = QLabel(entry.name, overview)
         name.setTextFormat(Qt.TextFormat.PlainText)
         name.setWordWrap(True)
@@ -875,6 +879,7 @@ class InventoryView(QWidget):
         set_level(description, "caption")
         information.addWidget(description)
         facts = QGridLayout()
+        facts.setSpacing(NORMAL)
         for row, (label, value) in enumerate(
             (
                 (tr("Restmenge"), stock_label(entry)),

@@ -25,6 +25,9 @@ scrive in `website/version.json`.
 - Su Linux, l'AppImage ora si avvia anche su Ubuntu 22.04, Linux Mint 21 e Debian 12. Con la versione 0.6.0 lì funzionava solo il Flatpak.
 - Su Linux, Solidon ora legge il mouse 3D attraverso l'accesso che concede la regola udev del manuale, anche nel Flatpak. Fino alla versione 0.6.0 la regola non bastava.
 - La ricerca trova *Unisci*, *Sottrai* e *Intersezione* anche come «booleano», e *Sottrai* anche come «differenza».
+- La ricerca trova la funzione anche per una domanda come «Come appoggio il pezzo sul piano?» e conosce parole di slicer e CAD come «piano di stampa» o «variabile».
+- Anche la ricerca nel manuale trova la pagina giusta per una domanda con parole proprie.
+- Chi scrive «foro» o «buco» nella ricerca ottiene *Pratica un foro* su un corpo e *Cambia foro* su un foro selezionato, in tutte le lingue.
 - Con un corpo selezionato e un secondo nella scena, la linguetta *Selezione* dice come aggiungere il secondo per *Unisci*, *Sottrai* e *Intersezione*.
 - Il campo di ricerca della linguetta *Selezione* ora c'è sempre, anche senza selezione, e trova ogni funzione e ogni comando con la sua scorciatoia.
 - La palette dei comandi non c'è più, perché il campo di ricerca trova lo stesso. *Cerca funzione* e Ctrl+Maiusc+P vi portano il cursore.
@@ -35,6 +38,22 @@ scrive in `website/version.json`.
 - Anche quando nulla si sovrappone, *Controlla sovrapposizioni* ora dà una risposta.
 - Se a una funzione manca un secondo corpo nella scena, il motivo indica *Duplica oggetto* come via.
 - L'elenco delle scorciatoie da tastiera nomina *Modella*, *Scheletro* e *Disegna* una sola volta.
+- Il pulsante *Calcolare in modo più grossolano* non c'è più: Solidon prosegue da solo con il calcolo completo. Nella versione 0.6.0 compariva anche dove non cambiava nulla.
+- Messaggi di errore, dettagli e avvisi ora appaiono nello stile di Solidon, con le azioni come pulsanti. Ctrl+C copia la selezione, altrimenti l'intero messaggio.
+- Il colore di una bobina si sceglie con il selettore di Solidon direttamente sul pulsante, con colori nominati e il valore esatto. La finestra colori del sistema non c'è più.
+- Una quota del disegno ora si modifica in un campo sul posto. Indirizzi e la scelta del filamento da sostituire vengono chiesti nello stile di Solidon.
+- Dopo l'attivazione o la disattivazione la conferma compare nella finestra stessa, senza un'altra finestra da chiudere.
+- La finestra *Calibra il materiale* mostra davanti solo gioco, interferenza e compensazione dei fori. Piede d'elefante, ritiro, parete e sbalzo sono in *Altre impostazioni*.
+- I numeri sono allineati a destra in tutti i campi, cifra sotto cifra.
+- Uno screen reader legge il nome e la spiegazione di ogni campo numerico di una finestra di dialogo.
+- Dopo un'azione nel *Rapporto di verifica* il rapporto resta in primo piano e Ctrl+Z la annulla subito. Finora passava davanti la scheda *Selezione*.
+- Ctrl+Z e Ctrl+Y funzionano anche con il cursore in un campo vuoto, per esempio nel campo di ricerca. Se lì ha scritto qualcosa, viene annullato prima il testo digitato.
+- Senza attivazione, le azioni che modificano qualcosa in *Rapporto di verifica*, *Selezione*, menu contestuali e filamento sono in grigio con il motivo. Prima il rifiuto arrivava dopo il clic.
+- Senza attivazione sono in grigio anche *Crea parametro …*, *Sposta*, *Dividi*, i tasti della cronologia e le misure nella vista. Ogni motivo indica la strada, come *Aiuto → Sblocca Solidon …*.
+- Se un'azione del *Rapporto di verifica* attende il calcolo in corso, dice che poi torna disponibile, anche ai lettori di schermo.
+- I messaggi nella barra di stato non mettono più i due punti dopo una frase completa.
+- Con un solo corpo l'albero degli oggetti è alto quanto il suo contenuto, e così la cronologia con un solo passo. Nella versione 0.6.0 sotto restava spazio vuoto.
+- Il passo più recente resta visibile nella cronologia quando nuovi corpi fanno crescere l'albero degli oggetti. Nella versione 0.6.0 scivolava sotto il bordo del pannello.
 - Lo screenshot allegato a un riscontro ora mostra anche il modello su Windows. Con alcune schede grafiche prima mostrava un'immagine vecchia, come la schermata di caricamento.
 - Su macOS una finestra di dialogo aperta, ad esempio per creare una vite dal catalogo dei blocchi, resta sopra la finestra principale. Prima un clic nella finestra la spingeva dietro.
 
@@ -48,6 +67,8 @@ scrive in `website/version.json`.
 - Un corpo filettato dal catalogo dei blocchi si può di nuovo spostare, ruotare, specchiare, scalare e appoggiare sul piano. Nella versione 0.6.0 la catena si fermava con un errore del programma.
 - Nella scheda *Selezione*, un diametro sotto il limite in *Cambia foro* rimanda ora a *Rimuovi caratteristica*, che rimuove il foro del tutto, con la sua svasatura se vuoi.
 - La ricostruzione (*Ricostruisci modello*) non suggerisce più altri limiti quando nessun valore consentito basterebbe, e mostra le proposte uguali una sola volta.
+- Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
+- Scegliendo un foro in un modello caricato, le misure nella vista e la scheda *Selezione* indicano ora la stessa azione, *Cambia foro*. Nella versione 0.6.0 lì restava aperto *Sposta caratteristica*.
 
 ## 0.6.0
 

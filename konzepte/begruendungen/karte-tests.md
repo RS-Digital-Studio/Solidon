@@ -30,6 +30,15 @@ prüft; die Karte nennt nur noch Frage und Datei.
 
 *Früher unter „`tests/` — die Suite“.*
 
+`test_closure_ops.py` prüft *Verschluss ändern* an einem Rohr mit L-Wegen, einem
+Plattendeckel als STL und einer Bausteinaufnahme.
+
+`test_input_dialog.py` hält ohne Fenster, dass im Kundenweg kein `QInputDialog`
+und kein `QColorDialog` mehr steht, dass `inform` nur ein Scheitern meldet und
+dass die Funktionsliste die acht Eingabestellen aus FD-22 unter ihrem alten
+Kennzeichen führt; am Fenster Hausstil, Tastatur, Farbwähler und Wertfeld am
+Ort und die Quittungen der Freischaltung (FD-24).
+
 `test_kernel_process_lifecycle.py` prüft am Windows-Jobobjekt, mit gehaltenen
 Griffen und über eine echte OS-Abfrage, dass ein rechnender Helfer mit seinem
 hart beendeten Elternprozess endet und nach normalem Start niedrigere
@@ -216,6 +225,13 @@ werden mit `from … import name as name` eingebunden; eine Datei, die eine
 vorbereitete Sitzung braucht, überschreibt nur `session`. Aus `conftest`
 importiert kein Test: pytest lädt es als Plugin, und ein zweiter Import führte
 es noch einmal aus.
+
+Die übrigen Helfer in `ui_helpers.py`: `shown_window` für ein gezeigtes Fenster
+ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur,
+`on_the_bore_wall` für einen Klick auf eine Bohrungswand, `wait_until` für
+zugestellte Qt-Ereignisse, `wait_for_export` und `wait_for_print_findings` für
+Arbeiter, die `wait_for_idle` nicht sieht, sowie `PlacementItem`,
+`PlacementViewport` und `scene_with_a_hole_and_a_fillet` für Platzierungsfälle.
 
 ## Stolperfallen
 

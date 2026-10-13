@@ -167,6 +167,25 @@ mitrechnet, findet ein Leck, das keines ist. Es teilt Messprofil,
 Arbeitssatzmessung und Abbaureihenfolge mit `window_bench.py`, statt sie zu
 wiederholen. Ohne Bildschirm und wgpu-Adapter misst es nichts und sagt es.
 
+`file_acceptance.py`, die Einzeldateiabnahme, geht je Fall in einem Prozess
+mit eigenem Profil durch das echte Fenster: Import, Erkennung samt Gruppen,
+Maßänderung (sagt die Vorschau ab, ein kleinerer Wert, dann das nächste
+Merkmal), Vorschau, Übernehmen, Undo, Redo; je Schritt Bild und Netzabdruck,
+am Drillholder jede Bohrung. Der Bestand kommt aus dem Audit-Manifest oder
+einem Ordner. Dieselbe Hülle fährt die Fälle des Funktionsdurchgangs
+(`inventory --functions` mit `--package`, `--rows`, `--variants`, `--phases`;
+`run --screen`; `menubar`; `report`), die Schritte dazu kommen aus
+`function_bench.py` und `function_capture.py`.
+
+`function_list.py` stellt die Liste des Funktionsdurchgangs ohne Fenster auf, je
+Zeile Paket, Startszene und Weg: `--paket`, `--format md|json`, `--menueleiste
+<menubar.json>`, `--check` (Ausgang 1 bei Befund) und `--szenen --out <ordner>
+[--schwer]`, das die Startszenen nur außerhalb des Baums ablegt.
+`function_scan.py` liest den Quelltext unter `app/ui`, `function_scenes.py` liest,
+baut und prüft den Szenenkatalog `tests/data/function_scenes.toml`. Beide
+importieren kein anderes `function_*`-Modul; so bleibt die Liste ohne Kreis mit den
+Urteilsmodulen, die aus ihr importieren.
+
 ## Erzeugen
 
 *HEAD-Fassung, früher unter „Die Familien“.*
@@ -227,6 +246,20 @@ Bildschirmfoto der Seite, hält der Lauf an: Auch ein PDF ohne Bilder ist
 Bytes.
 
 ## Bauen, signieren, ausliefern
+
+Die Stückliste stammt aus PyInstallers Analyse und dem fertigen Paket, nicht
+aus `pip freeze`. Die Lizenzbeilage verwendet genau diese SBOM;
+`--release-check` prüft fail-closed.
+
+Die festen Laufzeitausdrücke von `make_sbom.py` und `make_licence_notices.py`
+stehen in `RUNTIME_LICENCES`. Der Freigabewächter liest sie zusammen mit den
+nativen Haupt-, Linux- und Radtabellen und dem AppImage-Kern.
+
+`check_glibc_floor.py` prüft die Linux-Grenze am gebauten Baum: Es liest jede
+ELF-Datei wie der Lader über Programmköpfe und `DT_VERNEED`, verlangt höchstens
+`OLDEST_GLIBC` und keine `HOST_LIBRARIES` (`libstdc++`, `libgcc_s`). Es nutzt nur
+die Standardbibliothek und läuft im Paketjob, in `linux-flatpak` und in der
+Linux-Releaseakte. Die einzuhaltende Regel steht in `auslieferung.md`.
 
 *Früher unter „Die Familien“.*
 

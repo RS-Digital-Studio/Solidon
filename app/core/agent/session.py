@@ -900,7 +900,7 @@ class AgentSession:
             profiles.material(wanted_material)
         except AppError as error:
             proposal.invalid_calls += 1
-            return f"{error.title} {error.detail or ''}".strip()
+            return str(error)  # Titel und Detail als Satzfolge (``errors.title_and_detail``)
         if (wanted_printer, wanted_material) == (working.printer, working.material):
             return tr("Drucker und Material sind schon so eingestellt.")
         working.printer = wanted_printer

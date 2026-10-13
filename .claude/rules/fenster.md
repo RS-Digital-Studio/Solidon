@@ -64,7 +64,8 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   und markiert Ungesehenes; `_focus_report` nur auf Bitte (Statuszähler,
   *Prüfbericht*, Exportprüfung, Slicen, G-Code).
 - Eine neue Auswahl holt den Reiter Auswahl; Verlassen gilt bis zum Wechsel.
-  Nicht aus dem Bericht (`_SelectionPage.held`), nicht über eine Tour.
+  Nicht aus dem Bericht und nicht beim Wiederherstellen nach einer Auswertung
+  (`_SelectionPage.held`), nicht über eine Tour.
   Ein Zug im Bild, der Werte in eine Handlung legt (`FeaturePanel.valuesTaken`),
   holt ihn immer: Sein *Übernehmen* steht dort.
 - `MainWindow.announce` ergänzt die Statuszeile um eine passive Overlayquittung:
@@ -104,14 +105,22 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 
 ## Rückfragen
 
+**Eine Meldung ist kein `QMessageBox`, eine Eingabe kein `QInputDialog` oder
+`QColorDialog`** (Z5): `message_dialog`, `input_dialog`, am Ort `place_popup`;
+nur die Fragen hier bleiben `QMessageBox`. Erfolg und Hinweis quittiert der
+Dialog selbst (`acknowledge`, Z2), `inform` nur ein Scheitern (`test_input_dialog`);
+eine Fehlermeldung mit Handlung (`show_error`) darf modal sein (Z2-Ausnahme).
+Fehler, Warnung, `inform` und eine Quittung ohne Knopf sagen sich dem
+Bildschirmleser an (`QAccessibleAnnouncementEvent`), eine Eingabe nicht.
+
 Die gewollten Ausnahmen von Regel 19, und was sie davon abhält, zur Blockade zu
 werden:
 
 - **Löschen im Verlauf:** Die Nachfrage nennt mitbetroffene Schritte beim
   Namen, mit Nummer und Titel wie im Verlauf (`history.named_steps`: bis vier
-  alle, sonst drei und „und N weitere“), und den Rückweg über Strg+Z. Titel
-  aus `history.step_titles`, derselben Quelle wie die Zeilen und der
-  Löschtitel; ein gelöschter Schritt trägt keine Nummer mehr.
+  alle, sonst drei und „und N weitere“), und den Rückweg über Strg+Z.
+- **Wiederherstellen nach einem Absturz** und **Verlust einer Generierung**
+  fragen: Beides ist ohne Frage unwiderruflich weg.
 - **Die lange Merkmalserkennung wird angeboten** (§21.1): Oberhalb der
   automatischen Grenze nennt die Frage Dauer und Speicherbedarf; die
   Alternative, auch das Schließen, lädt mit begrenzter Erkennung. Der Befund
@@ -186,7 +195,8 @@ Stellen halten das, beide sind nötig:
   (`FeaturePanel.set_locked`): graue Knöpfe **und** der Grund als sichtbare
   Zeile, dazu in Kurzhilfe, Statuszeile und zugänglicher Beschreibung; die
   Sperre überlebt den Neuaufbau der Zeilen und fällt nach einem Undo
-  (`test_a_halted_chain_takes_no_new_step_and_names_the_way_on`).
+  (`test_a_halted_chain_takes_no_new_step_and_names_the_way_on`). Die
+  Freischaltung sagt sichtbar nur die Zeile unter dem Suchfeld (FD-32).
 
 ## Der Prüfbericht
 
@@ -222,7 +232,9 @@ Stellen halten das, beide sind nötig:
   korrigieren* mit Rat als Tooltip; der Fehlerdialog zeigt Räte über
   `dialogs.unhandled_advice` als Sätze. Knopfzeile, Kontextmenü und Vorwahl
   benutzen denselben Abgleich.
-- Vorgewählt werden nur Fehler und Warnungen mit Handlung (`_preselect`).
+- Vorgewählt werden nur Fehler und Warnungen mit Handlung (`_preselect`). Nach
+  einer Befundhandlung bleibt der Fokus im Bericht (`_focus_parked`): an der
+  nächsten Befundzeile, sonst an der Übergabe.
 - Lokale Erkennung behält die Zielkörper des Befunds; erst der Originaltreffer
   bestimmt einen. Baumauswahl ersetzt dieses Ziel nicht. Maus und Tastatur
   verwenden denselben Treffer.
@@ -333,7 +345,7 @@ Ansichtsseite steht in `griffe.md`.
 
 ## Der Hauptknopf
 
-Warum, mit Anlässen: `regel-fenster.md`, „Der Hauptknopf“; Wächter `test_style.py`.
+Wächter `test_style.py`.
 
 - Hauptknopf nur über `style.make_primary` (Akzent und Halbfett), abgeben mit
   `leading=False`, nie `setDefault(True)`; wer führt, sagt `leading_action`.
@@ -347,8 +359,8 @@ Warum, mit Anlässen: `regel-fenster.md`, „Der Hauptknopf“; Wächter `test_s
   in Schriftfarbe (`test_resting_state.py`).
 - Fokus verschiebt keinen Akzent (`_FocusTakesNoAccent`); Enter gehört dem per
   Tab gewählten Knopf (`test_enter_key.py`).
-- Stylesheets an einen `objectName`: Typloses `background` am Vorfahren nimmt
-  allen Knöpfen darunter die Farbe. Klicktests belegen keine Knopffarbe.
+- Stylesheets an einen `objectName`, nie typlos an einen Vorfahren. Klicktests
+  belegen keine Knopffarbe.
 - Umschalter nennen das Werkzeug, Knöpfe die Handlung; `test_interface_limits.py`.
 
 ## Ein Dialog, der höher ist als sein Inhalt
@@ -376,7 +388,8 @@ Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
 zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
-(`panels.align_forms`, gerahmte Reiter über `apart`), gleich breite Felder
+(`panels.align_forms`, gerahmte Reiter über `apart`), jedes Layout (auch Karten)
+mit Rasterabstand (nie Qts 6), gleich breite Felder
 (`panels.even_fields`, `op_dialog.even_value_fields`); eine Zeile aus Feld und
 Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt, keine zweimal
 im Dialog. **Hat der Dialog eine Rückseite, setzen die Zeilen vorn, die
@@ -407,9 +420,9 @@ Für Druckerwahl und Druckdialog gilt `druckerwahl.md`.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 
-Ein Widget ohne Elternteil **ist** ein Top-Level-Fenster. Weggeräumt wird mit
-`hide()` und `deleteLater()`, nie über den Elternteil: `takeAt` nimmt es aus
-dem Layout, `hide` aus dem Bild, der Elternteil trägt es bis zum Löschen.
+Weggeräumt wird mit `hide()` und `deleteLater()`, nie über den Elternteil. Ein
+Dialog gibt sich nach `exec` im `finally` frei, ein offener über `finished` oder
+`WA_DeleteOnClose` (`test_dialog_lifetime.py`).
 
 ## Die automatische Sicherung
 
@@ -431,39 +444,28 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 ## Wie die Karten ihre Höhe teilen
 
 `OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`
-(`tests/test_overlay.py`): nie mit gerade gesetzten Höhen (`extra_height`,
+(`test_overlay`): nie mit gerade gesetzten Höhen (`extra_height`,
 nicht `natural_height`); abgezogen wird, was nicht den Karten gehört; jede
 Karte nennt ihren Boden (`least_height`, nie über ihrem Wunsch); viele feste
 Zeilen rollen (`FittedScroller`). Ungleiche Zeilen misst `rows_height`, und
 `wanted_height` fragt dieselbe Quelle; was unter der Liste steht, gehört in
 beide Rechnungen.
 
-**Gesetzt wird einmal je Ereignisdurchlauf** (`_place_later`, Nullzeitgeber;
-`resizeEvent` und `reflow` sofort) — Tests brauchen mehrere Runden
-`processEvents`. **Wer Inhalt wachsen lässt, sagt es bis zur Zone**
-(`tell_the_zone`, dann `reflow`), sonst wächst die Karte in zwei Zügen.
+**Gesetzt wird einmal je Durchlauf** (`_place_later`, gleitend; `resizeEvent`
+und `reflow` sofort, auch im Gleiten); wer misst, legt fest
+(`guide_targets._settle_cards`). **Wer Inhalt wachsen lässt, sagt es bis zur
+Zone** (`tell_the_zone`, dann `reflow`), sonst wächst sie zweimal.
 
 ## Rückmeldung und Fehlerbericht
 
-Ein Dialog für beides (`app/ui/support_dialog.py`): *Hilfe → Rückmeldung
-senden* und `report_error` — dort mit `kind=crash`, eigenem Titel und „Das war
-ein Programmfehler, nicht Ihre Schuld“ (§33.1).
-
-- **Von allein geht nichts** (`kern.md`, „Fehler“).
-- **Nichts ungesehen:** Die Vorschau zeigt den ganzen Text samt Anhängen und
-  Gesamtgröße.
-- **Das Bildschirmfoto entsteht vor dem Dialog** (`window_shot(self)` im
-  Fenster), aus vorhandenen Bildpunkten ohne neues Rendern: unter Windows
-  `PrintWindow` (`grabWindow` sieht kein D3D12), sonst `grabWindow`; bleibt
-  das leer, `grab()`. Nur das Solidon-Fenster, nie der Bildschirm.
-- **Der abgelegte Ordner ist ein Weg, kein Notausgang:** *Bericht ablegen* steht
-  dauerhaft in der Knopfleiste (§37.2); *Selbst per E-Mail senden* erscheint
-  erst, wenn ein Versand scheiterte.
-- **Einmal erzeugt, identisch verwendet:** Die Sitzung wird einmal im Arbeiter
-  gespeichert, ebenso die Protokollbytes — Vorschau, Versand und Ablage nehmen
-  dieselben. Bis der Anhang fertig ist, zeigt der Dialog die Vorbereitung und
-  sperrt den Versand; Abwahl und Schließen gehen, ein geschlossener Dialog
-  verwirft späte Antworten.
+Ein Dialog für beides (`support_dialog.py`; `report_error` mit `kind=crash`,
+§33.1). Von allein geht nichts (`kern.md`, „Fehler“); die Vorschau zeigt alles
+samt Anhängen; das Bildschirmfoto entsteht vorher (`window_shot` im Fenster,
+nur das Solidon-Fenster, ohne neues Rendern; unter Windows `PrintWindow`, weil
+`grabWindow` kein D3D12 sieht); *Bericht ablegen* steht immer, *Selbst per
+E-Mail senden* erst nach gescheitertem Versand (§37.2); Sitzung und Protokoll
+entstehen einmal im Arbeiter und gelten für Vorschau, Versand und Ablage, bis
+dahin ist der Versand gesperrt. Warum und wie: `regel-fenster.md`.
 
 
 ### Formen und Skelett: Gesten

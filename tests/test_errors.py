@@ -26,6 +26,8 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
+from app.i18n import install_catalog, set_language
+from app.i18n.catalog import available_languages, read_catalog
 
 
 @pytest.mark.parametrize(
@@ -266,24 +268,23 @@ def test_the_boolean_failure_says_which_stages_really_ran() -> None:
     versucht, und daneben stand als einziger Rat *Voxelstufe erzwingen*: also
     genau die Stufe, die noch offen war. Zwei Sätze, die sich widersprechen.
 
-    Jetzt sagt der Titel, was gilt — und wo die Voxelstufe wirklich dran war,
-    fällt der Rat weg, statt eine Wiederholung anzubieten.
+    Jetzt sagt der Titel, was gilt. *Gröber rechnen* bietet keine Absage mehr
+    an (FD-6): Die gekürzte Kette rechnet die Auswertung selbst zu Ende, und
+    eine volle hat die Voxelstufe schon hinter sich.
 
     Beide Titel nennen seit dem 29.08.2026 die Handlung statt des Verfahrens:
     „boolesch" steht in keinem Menü und in keinem Glossareintrag, und „im
     Entwurf" verwies auf eine Qualitätsstufe, die in der Oberfläche keinen
     Namen trägt — im Skizzenmodus zeichnet der Kunde einen Entwurf.
     """
-    vorschau = BooleanFailedError(attempted=("direct", "welded"))
+    vorschau = BooleanFailedError(attempted=("direct", "welded"), cut_short=True)
     assert "schnellen Rechnung" in str(vorschau.title)
-    assert errors.USE_VOXEL_STAGE in vorschau.suggestions, "hier ist die Stufe noch offen"
 
     voll = BooleanFailedError(attempted=("direct", "welded", "jittered", "voxel"))
     assert "keinem Weg" in str(voll.title)
-    assert errors.USE_VOXEL_STAGE not in voll.suggestions, (
-        "die Voxelstufe war dran — sie zu erzwingen wäre eine Wiederholung"
-    )
-    assert voll.suggestions, "without a suggestion the error ends in a dead end"
+    for error in (vorschau, voll):
+        assert "use_voxel_stage" not in {action.id for action in error.suggestions}
+        assert error.suggestions, "without a suggestion the error ends in a dead end"
 
 
 def test_cancelling_is_not_an_error() -> None:
@@ -980,3 +981,36 @@ def test_only_a_programming_error_falls_back_to_the_bug_report(
         assert REPORT_ERROR.id not in offered, (
             f"{error_class.__name__} ist kein Programmfehler und bekommt doch den Fehlerbericht"
         )
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_a_title_that_is_a_sentence_takes_no_colon_before_its_detail(language: str) -> None:
+    """„aktiviert.: Aktivieren Sie …" stand im Text des Fehlers (FD-5).
+
+    ``str(error)`` setzt Titel und Detail für Protokoll, Statuszeile und
+    Prüfstand zusammen, und ein Titel, der schon ein Satz ist, bekam einen
+    Doppelpunkt dahinter. Geprüft in jeder Sprache, deren Katalog daliegt:
+    Übersetzt ist auch der Satzschluss.
+    """
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    joined = [
+        (error_class.__name__, str(error_class()))
+        for error_class in all_error_classes()
+        if error_class.default_detail is not None
+    ]
+    assert len(joined) > 3, f"nur {len(joined)} Fehler mit Detail — die Prüfung greift nicht"
+    doubled = [f"{name}: {text}" for name, text in joined if re.search(r"[.!?…:]:\s", text)]
+    assert not doubled, "Satzzeichen vor dem Doppelpunkt:\n" + "\n".join(doubled)
+    assert str(errors.DeviceActivationRequired()).startswith(
+        f"{errors.DeviceActivationRequired.default_title} "
+    ), "der Fall aus dem Funktionsdurchgang"
+
+
+def test_a_title_without_a_full_stop_keeps_the_colon() -> None:
+    assert errors.title_and_detail("Datei fehlt", "Wählen Sie eine andere.") == (
+        "Datei fehlt: Wählen Sie eine andere."
+    )
+    assert errors.title_and_detail("Datei fehlt.", "Wählen Sie eine andere.") == (
+        "Datei fehlt. Wählen Sie eine andere."
+    )

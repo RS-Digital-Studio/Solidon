@@ -18,6 +18,7 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import filaments
 from app.core.types import SceneObject
 from app.i18n import tr
+from app.ui.change_lock import change_refusal
 from app.ui.dialogs import ErrorNotice
 from app.ui.filament_picker import (
     colours_of,
@@ -240,11 +241,20 @@ class QuickFilamentPicker(QWidget):
                     row, slot_identity(spool_slot(entry)), int(Qt.ItemDataRole.UserRole) + 1
                 )
             self.picker.setCurrentIndex(0)
-        self.picker.setEnabled(bool(self._objects))
+        # **Eine Zuweisung ist ein Schritt im Verlauf** (FD-5): Ohne
+        # Freischaltung grau mit Grund; das Lager bleibt zum Ansehen offen.
+        refusal = change_refusal()
+        self.picker.setEnabled(bool(self._objects) and not refusal)
+        # Der Grund in Kurzhilfe **und** Beschreibung (FD-27); frei trägt die
+        # Kurzhilfe die Zuweisung, die oben gesetzt wurde.
+        held = refusal if self._objects else ""
+        if held:
+            self.picker.setToolTip(held)
+        self.picker.setAccessibleDescription(held)
         removable = self._has_assigned_selection(occupied)
-        self.clear_button.setEnabled(removable)
+        self.clear_button.setEnabled(removable and not refusal)
         self.clear_button.setVisible(removable)
-        explanation = (
+        explanation = refusal or (
             tr("Entfernt die Zuweisung in der angezeigten Auswahl. Strg+Z stellt sie wieder her.")
             if removable
             else tr("Wählen Sie einen Körper oder eine Fläche mit zugewiesenem Filament.")

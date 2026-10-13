@@ -370,7 +370,6 @@
     "Programme und Apps (*.exe *.com *.AppImage *.app);;Alle Dateien (*)",
     "Punkt oder Element anklicken; mit Strg mehrere auswählen.",
     "Radius der Rundung. Null misst ihn an der angeklickten Stelle; negativ heißt hohl, die Schrift sitzt dann innen in einem Ring.",
-    "Rechnet auf einem Raster; Maße und Kanten werden gerundet.",
     "Rechnet eigene Bausteine so, wie das Projekt gespeichert wurde; Ihre neuere Version bleibt im Bausteinordner.",
     "Richtung, in die die Schrift zeigt. Aus einer angeklickten Fläche kommt sie von selbst; von Hand ist 0/0/1 nach oben.",
     "Runder oder rechteckiger Behälter; alle Außenmaße bleiben veränderbar.",

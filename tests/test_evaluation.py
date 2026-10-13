@@ -34,6 +34,7 @@ from app.core.types import (
 )
 from app.core.units import EPS_GEOM
 from app.i18n import _
+from tests.evaluation_helpers import short_chain_finds_nothing, window_evaluation
 from tests.helpers import FakeMesh, stop_evaluation
 
 RUNS: dict[str, int] = {}
@@ -7584,30 +7585,6 @@ def test_a_hole_change_that_the_first_stage_holds_does_not_ask_for_the_quality()
     assert changed.complete and not changed.reads_quality
 
 
-def _short_chain_finds_nothing(monkeypatch: pytest.MonkeyPatch, *, nor_the_full: bool) -> list[str]:
-    """Die verlustfreien Stufen liefern nichts, wie am Kundenteil (RM-534).
-
-    Mit ``nor_the_full`` auch die übrigen — die volle Kette bestätigt den
-    Halt. Zurück kommt die Liste der gerufenen Stufen.
-    """
-    import trimesh
-
-    from app.core.geom import boolean as boolean_module
-    from app.core.geom.mesh import MeshData
-
-    real = boolean_module._run_stage
-    called: list[str] = []
-
-    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
-        called.append(name)
-        if nor_the_full or name in boolean_module.DRAFT_CHAIN:
-            return MeshData.of(trimesh.Trimesh())
-        return real(kind, meshes, name, seed, cancelled)
-
-    monkeypatch.setattr(boolean_module, "_run_stage", stage)
-    return called
-
-
 def _drilled_box(profile: Profile) -> Any:
     from app.core.bootstrap import load_operations
     from app.core.scene.project import new_project
@@ -7627,14 +7604,6 @@ def _drilled_box(profile: Profile) -> Any:
         ],
     )
     return project.document
-
-
-def _window(document: Document, profile: Profile, **options: Any) -> Any:
-    """Wie Fensterlauf, Verlaufsumbau und Agent: Entwurf, und wo nur die kurze Kette ausgeht, fein.
-
-    Vorschauen rechnen ohne ``full_chain_when_stuck`` (RM-534, §17.2).
-    """
-    return evaluate(document, profile, quality="draft", full_chain_when_stuck=True, **options)
 
 
 def _asking_cut(registry: Registry, *, stages: Any = None) -> None:
@@ -7718,16 +7687,16 @@ def test_a_draft_run_goes_the_full_chain_where_the_short_one_ends(
     Fensterlauf, Verlaufsumbau und Agent tun es, mit oder ohne Cache, und
     der nächste Lauf trifft es im Cache.
     """
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     document = _drilled_box(profile)
     cache = ResultCache()
     drill = document.ops[-1].id
 
-    cold = _window(document, profile)
-    rescued = _window(document, profile, cache=cache)
+    cold = window_evaluation(document, profile)
+    rescued = window_evaluation(document, profile, cache=cache)
     fine = evaluate(document, profile, quality="fine")
     called.clear()
-    again = _window(document, profile, cache=cache)
+    again = window_evaluation(document, profile, cache=cache)
 
     assert rescued.complete, [str(finding.message) for finding in rescued.scene.report.findings]
     assert rescued.solvers[drill].strategy == "jittered", rescued.solvers[drill]
@@ -7751,7 +7720,7 @@ def test_a_rescued_step_is_kept_even_when_a_later_one_stops(
     Ausnahme kostete am Kundenteil jede Änderung an einem späteren,
     anhaltenden Schritt die 17 s des geretteten noch einmal.
     """
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     document = _drilled_box(profile)
     History(document).apply(
         "Bohrung, die es nicht gibt",
@@ -7766,11 +7735,11 @@ def test_a_rescued_step_is_kept_even_when_a_later_one_stops(
     cache = ResultCache()
     rescued = document.ops[-2].id
 
-    first = _window(document, profile, cache=cache)
+    first = window_evaluation(document, profile, cache=cache)
     assert first.stopped_at == document.ops[-1].id, "Voraussetzung: der letzte Schritt hält an"
     assert first.solvers[rescued].strategy == "jittered", "Voraussetzung: der vorige ist gerettet"
     called.clear()
-    second = _window(document, profile, cache=cache)
+    second = window_evaluation(document, profile, cache=cache)
 
     assert second.stopped_at == document.ops[-1].id
     assert "jittered" not in called, f"der gerettete Schritt rechnete noch einmal: {called}"
@@ -7788,19 +7757,19 @@ def test_the_full_chain_says_its_verdict_once_with_the_step_of_today(
     vergeben neue bei gleichem Schlüssel, und ein Befund am alten Schritt
     führte *Eingabe korrigieren* ins Leere.
     """
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=True)
     document = _drilled_box(profile)
     cache = ResultCache()
     drill = document.ops[-1].id
 
-    first = _window(document, profile, cache=cache)
+    first = window_evaluation(document, profile, cache=cache)
     tried = list(called)
     called.clear()
     renumbered = dataclasses.replace(
         document,
         ops=[*document.ops[:-1], dataclasses.replace(document.ops[-1], id=OpId(drill + 1000))],
     )
-    second = _window(renumbered, profile, cache=cache)
+    second = window_evaluation(renumbered, profile, cache=cache)
 
     assert first.stopped_at == drill and second.stopped_at == drill + 1000
     assert "voxel" in tried, f"die volle Kette lief nicht: {tried}"
@@ -7827,7 +7796,7 @@ def test_a_helper_that_died_in_the_full_chain_is_tried_again(
     from app.core.geom import boolean as boolean_module
     from app.core.geom.kernel_process import KernelHelperLostError
 
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     patched = boolean_module._run_stage
     lost = [True]
 
@@ -7841,8 +7810,8 @@ def test_a_helper_that_died_in_the_full_chain_is_tried_again(
     document = _drilled_box(profile)
     cache = ResultCache()
 
-    first = _window(document, profile, cache=cache)
-    second = _window(document, profile, cache=cache)
+    first = window_evaluation(document, profile, cache=cache)
+    second = window_evaluation(document, profile, cache=cache)
 
     assert first.stopped_at == document.ops[-1].id, "Voraussetzung: der Hilfsprozess starb"
     assert second.complete, "der verlorene Hilfsprozess wurde als Urteil gemerkt"
@@ -7857,7 +7826,7 @@ def test_a_question_of_the_step_comes_once_per_run(
     Der zweite Aufruf bekam dasselbe ``ctx.ask``, und im Fenster stand
     dieselbe Frage im selben Lauf zweimal am Bildschirm.
     """
-    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     registry = Registry()
     _asking_cut(registry)
     History(document, registry=registry).apply("Probe", [OperationDraft(op="asking_cut")])
@@ -7867,7 +7836,7 @@ def test_a_question_of_the_step_comes_once_per_run(
         asked.append(question)
         return choices[0]
 
-    result = _window(document, profile, registry=registry, ask=answer)
+    result = window_evaluation(document, profile, registry=registry, ask=answer)
 
     assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
     assert result.solvers[document.ops[-1].id].strategy == "jittered"
@@ -7882,7 +7851,7 @@ def test_a_halt_after_a_question_is_not_kept(
     Die Antwort steht nirgends im Schlüssel; der nächste Lauf fragt wieder,
     und eine andere Wahl kann anders ausgehen.
     """
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=True)
     registry = Registry()
     _asking_cut(registry)
     History(document, registry=registry).apply("Probe", [OperationDraft(op="asking_cut")])
@@ -7893,9 +7862,9 @@ def test_a_halt_after_a_question_is_not_kept(
         return choices[0]
 
     cache = ResultCache()
-    first = _window(document, profile, registry=registry, ask=answer, cache=cache)
+    first = window_evaluation(document, profile, registry=registry, ask=answer, cache=cache)
     called.clear()
-    second = _window(document, profile, registry=registry, ask=answer, cache=cache)
+    second = window_evaluation(document, profile, registry=registry, ask=answer, cache=cache)
 
     assert first.stopped_at == second.stopped_at == document.ops[-1].id
     assert asked == ["Welche Seite?", "Welche Seite?"]
@@ -7915,7 +7884,7 @@ def test_a_move_is_judged_with_the_full_chain_like_the_window(
     from app.core.scene.project import new_project
     from app.core.scene.revision import dependencies, revise
 
-    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     load_operations()
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
@@ -7934,7 +7903,7 @@ def test_a_move_is_judged_with_the_full_chain_like_the_window(
         ],
     )
     cache = ResultCache()
-    window = _window(history.document, profile, cache=cache)
+    window = window_evaluation(history.document, profile, cache=cache)
     assert window.complete, "Voraussetzung: der Entwurf rettet die Bohrung"
     ops = history.operations
     context = dependencies(history.document, window)
@@ -7943,7 +7912,7 @@ def test_a_move_is_judged_with_the_full_chain_like_the_window(
     revision = revise(
         history,
         plan,
-        evaluate=lambda document: _window(document, profile, cache=cache),
+        evaluate=lambda document: window_evaluation(document, profile, cache=cache),
         baseline=window,
         context=context,
     )
@@ -7972,7 +7941,7 @@ def test_the_agent_keeps_a_step_that_only_the_full_chain_carries(
     from app.core.scene.project import ProjectSources, new_project
     from tests.scripted_backend import ScriptedBackend
 
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     load_operations()
     project = new_project("centauri-carbon-2", "petg")
     History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
@@ -8023,12 +7992,12 @@ def test_a_step_that_wants_its_own_stages_gets_no_full_chain(
     dieselbe Absage. Entscheidend ist, ob die Güte gekürzt hat
     (``BooleanFailedError.cut_short``), nicht welche Stufen liefen.
     """
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     registry = Registry()
     _asking_cut(registry, stages=stages)
     History(document, registry=registry).apply("Probe", [OperationDraft(op="asking_cut")])
 
-    result = _window(document, profile, registry=registry, ask=lambda _q, c: c[0])
+    result = window_evaluation(document, profile, registry=registry, ask=lambda _q, c: c[0])
 
     assert result.stopped_at == document.ops[-1].id
     assert called == list(stages), called
@@ -8102,7 +8071,7 @@ def test_a_preview_takes_known_verdicts_but_never_computes_the_full_chain(
     selbst: Kalt hält sie mit ``short_chain_only`` — das sperrt *Übernehmen*
     nicht —, und was der Fensterlauf schon gerettet hat, nimmt sie.
     """
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     document = _drilled_box(profile)
     cache = ResultCache()
 
@@ -8110,7 +8079,7 @@ def test_a_preview_takes_known_verdicts_but_never_computes_the_full_chain(
     assert cold.stopped_at == document.ops[-1].id
     assert cold.short_chain_only, "der Halt der Vorschau ist als schnelle Rechnung gekennzeichnet"
     assert "jittered" not in called and "voxel" not in called, called
-    _window(document, profile, cache=cache)
+    window_evaluation(document, profile, cache=cache)
     called.clear()
     warm = evaluate(document, profile, quality="draft", cache=cache)
 
@@ -8122,10 +8091,10 @@ def test_a_window_halt_is_no_short_chain_halt(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Nach der vollen Kette ist ein Halt ein Urteil, kein Halt der schnellen Rechnung."""
-    _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    short_chain_finds_nothing(monkeypatch, nor_the_full=True)
     document = _drilled_box(profile)
 
-    halted = _window(document, profile)
+    halted = window_evaluation(document, profile)
 
     assert halted.stopped_at == document.ops[-1].id and not halted.short_chain_only
 
@@ -8141,7 +8110,7 @@ def test_a_memory_shortage_in_the_full_chain_is_not_kept(
     """
     from app.core.geom import boolean as boolean_module
 
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=True)
     patched = boolean_module._run_stage
     short = [True]
 
@@ -8155,9 +8124,9 @@ def test_a_memory_shortage_in_the_full_chain_is_not_kept(
     document = _drilled_box(profile)
     cache = ResultCache()
 
-    first = _window(document, profile, cache=cache)
+    first = window_evaluation(document, profile, cache=cache)
     called.clear()
-    second = _window(document, profile, cache=cache)
+    second = window_evaluation(document, profile, cache=cache)
 
     assert first.stopped_at == second.stopped_at == document.ops[-1].id
     assert "voxel" in called, f"der Speichermangel wurde als Urteil gemerkt: {called}"
@@ -8196,11 +8165,11 @@ def test_the_full_chain_says_in_the_progress_why_the_step_takes_longer(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Die Fortschrittszeile nennt den Schritt und warum er jetzt länger rechnet."""
-    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     document = _drilled_box(profile)
     said: list[str] = []
 
-    _window(document, profile, progress=lambda _fraction, text: said.append(text))
+    window_evaluation(document, profile, progress=lambda _fraction, text: said.append(text))
 
     assert any("die vollständige läuft" in text for text in said), said
 
@@ -8214,7 +8183,7 @@ def test_a_rescued_step_that_asked_waits_for_a_complete_run(
     das Ergebnis in den Cache, wie jedes andere. Hält ein späterer Schritt,
     fragt der nächste Lauf wieder.
     """
-    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    called = short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     registry = Registry()
     _asking_cut(registry)
 
@@ -8241,9 +8210,9 @@ def test_a_rescued_step_that_asked_waits_for_a_complete_run(
         return choices[0]
 
     cache = ResultCache()
-    _window(document, profile, registry=registry, ask=answer, cache=cache)
+    window_evaluation(document, profile, registry=registry, ask=answer, cache=cache)
     called.clear()
-    _window(document, profile, registry=registry, ask=answer, cache=cache)
+    window_evaluation(document, profile, registry=registry, ask=answer, cache=cache)
 
     assert asked == ["Welche Seite?", "Welche Seite?"]
     assert "jittered" in called, (

@@ -610,6 +610,16 @@ class FeatureAction:
     Sie stehen hier und nicht in der Oberfläche, weil das Panel die
     Merkmalsarten nicht kennt und nicht kennen soll: Wer ``edges="named"``
     dort hineinschriebe, führte die Tabelle des Registers ein zweites Mal."""
+    key: str = ""
+    """Der feste Name der Handlung, unter dem Wortschatz und Funktionsliste sie
+    führen (``feature:<key>``, ``guides.action_key``).
+
+    Leer heißt: der Name ihrer Operation. Gesetzt wird er, wo die Operation die
+    Handlung nicht eindeutig benennt: an Bausteinen tragen *Maße ändern* und
+    *verschieben* dieselbe Operation und *entfernen* keine
+    (:data:`PART_ACTION_KEYS`), ebenso an Texturen (:data:`TEXTURE_ACTION_KEYS`);
+    eine Kantenvariante heißt ``<op>.<mode>`` (:data:`EDGE_VARIANT_KEYS`), und
+    eine gesperrte Zeile trägt die Operation, für die sie steht."""
 
 
 #: Parameterarten, für die es hier **kein** Feld gibt.
@@ -939,7 +949,9 @@ def actions_for(
         # Zeilen, die für die Senkung gebaut sind, seinen eigenen Satz (R3).
         not_this_cone = cone_reason(feature, (fitting or known[0]).name)
         if fitting is not None and piece_blocked is not None:
-            actions.append(FeatureAction(title=fitting.title, op=None, reason=piece_blocked))
+            actions.append(
+                FeatureAction(title=fitting.title, op=None, key=fitting.name, reason=piece_blocked)
+            )
         elif fitting is not None and (
             (fitting.name == "move_feature" and moving_blocked)
             or (
@@ -949,10 +961,17 @@ def actions_for(
         ):
             # Ein Zapfen oder eine Kuppel als ganzer Körper sperrt auch Ändern,
             # Drehen und Entfernen (RM-548); die übrigen Sätze nur das Versetzen.
-            actions.append(FeatureAction(title=fitting.title, op=None, reason=moving_blocked))
+            actions.append(
+                FeatureAction(title=fitting.title, op=None, key=fitting.name, reason=moving_blocked)
+            )
         elif not_this_cone is not None:
             actions.append(
-                FeatureAction(title=(fitting or known[0]).title, op=None, reason=not_this_cone)
+                FeatureAction(
+                    title=(fitting or known[0]).title,
+                    op=None,
+                    key=(fitting or known[0]).name,
+                    reason=not_this_cone,
+                )
             )
         elif (
             fitting is not None
@@ -961,11 +980,17 @@ def actions_for(
             and not (fitting.name == "slot_hole" and separate_contents)
             and not (fitting.name == "move_feature" and rim_only)
         ):
-            actions.append(FeatureAction(title=fitting.title, op=None, reason=own_body_blocked))
+            actions.append(
+                FeatureAction(
+                    title=fitting.title, op=None, key=fitting.name, reason=own_body_blocked
+                )
+            )
         elif fitting is not None and edge_blocked is not None and fitting.name in _EDGE_OPS:
             # Was die Operation an dieser Rundung ablehnen würde, steht grau —
             # mit ihrem Satz (:func:`fillet_blocked`).
-            actions.append(FeatureAction(title=fitting.title, op=None, reason=edge_blocked))
+            actions.append(
+                FeatureAction(title=fitting.title, op=None, key=fitting.name, reason=edge_blocked)
+            )
         elif (
             fitting is not None
             and fitting.name == "remove_feature"
@@ -976,6 +1001,7 @@ def actions_for(
                 FeatureAction(
                     title=fitting.title,
                     op=None,
+                    key=fitting.name,
                     reason=_(
                         "Diese runde Wand ist keine abgerundete Kante. Ändern Sie "
                         "ihren Radius über „Merkmal ändern“."
@@ -985,7 +1011,9 @@ def actions_for(
         elif fitting is not None and (lipped := narrowing_reason(fitting.name, cavity)):
             # Die Bohrung einer Kette mit Verengung — deren Satz, nicht der
             # über eine Senkung (:func:`narrowing_reason`).
-            actions.append(FeatureAction(title=fitting.title, op=None, reason=lipped))
+            actions.append(
+                FeatureAction(title=fitting.title, op=None, key=fitting.name, reason=lipped)
+            )
         elif fitting is not None and (
             shared := _shares_its_cavity(
                 fitting.name,
@@ -997,11 +1025,15 @@ def actions_for(
                 reason=reason,
             )
         ):
-            actions.append(FeatureAction(title=fitting.title, op=None, reason=shared))
+            actions.append(
+                FeatureAction(title=fitting.title, op=None, key=fitting.name, reason=shared)
+            )
         elif fitting is not None and (
             unsized := _countersink_unsized(fitting.name, feature, features, mesh, cavity)
         ):
-            actions.append(FeatureAction(title=fitting.title, op=None, reason=unsized))
+            actions.append(
+                FeatureAction(title=fitting.title, op=None, key=fitting.name, reason=unsized)
+            )
         elif fitting is not None:
             fields = _fields_of(fitting, feature)
             if fitting.name == "resize_hole" and mesh is not None and features is not None:
@@ -1035,7 +1067,12 @@ def actions_for(
             # Dieselbe Zeile grau wie an jeder Verrundung — nur der Satz ist
             # ein anderer, denn diese Wand hat keine Kante.
             actions.append(
-                FeatureAction(title=known[0].title, op=None, reason=ROUND_WALL_HAS_NO_PLACE)
+                FeatureAction(
+                    title=known[0].title,
+                    op=None,
+                    key=known[0].name,
+                    reason=ROUND_WALL_HAS_NO_PLACE,
+                )
             )
         else:
             # Der Titel der ersten bekannten Operation benennt die Zeile —
@@ -1046,7 +1083,10 @@ def actions_for(
             # über ihre Mitte wäre dort falsch.
             actions.append(
                 FeatureAction(
-                    title=known[0].title, op=None, reason=_no_way(known[0].name, feature.kind)
+                    title=known[0].title,
+                    op=None,
+                    key=known[0].name,
+                    reason=_no_way(known[0].name, feature.kind),
                 )
             )
     if only is not None:
@@ -1262,7 +1302,7 @@ def chamber_action(
         return None
     refusal = reason_against_group(group, features)
     if refusal is not None:
-        return FeatureAction(title=spec.title, op=None, reason=refusal)
+        return FeatureAction(title=spec.title, op=None, key=spec.name, reason=refusal)
     wanted = _CHAMBER_FIELDS.get(group.variant, ("width", "length", "depth"))
     fields = []
     for entry in spec.params.spec():
@@ -1327,7 +1367,7 @@ def closure_action(
         return None
     refusal = reason_against_closure_change(group, features, mesh)
     if refusal is not None:
-        return FeatureAction(title=spec.title, op=None, reason=refusal)
+        return FeatureAction(title=spec.title, op=None, key=spec.name, reason=refusal)
     missing = {
         "play": reason_against_play(group, features, mesh),
         "turn": reason_against_turn(group, features, mesh),
@@ -1842,6 +1882,16 @@ def _spec_or_none(name: str) -> Any:
     return REGISTRY.get(name) if REGISTRY.has(name) else None
 
 
+#: Die Schlüssel der drei Handlungen an einem Baustein, in der Folge von
+#: :func:`part_actions`: Maße, Verschieben, Entfernen. Die Operation benennt sie
+#: nicht — die ersten beiden tragen dieselbe, die dritte keine.
+PART_ACTION_KEYS: Final[tuple[str, str, str]] = ("part.measures", "part.move", "part.remove")
+
+#: Die Schlüssel der zwei Handlungen an einer Textur (:func:`texture_actions`):
+#: Ändern und Entfernen.
+TEXTURE_ACTION_KEYS: Final[tuple[str, str]] = ("texture.change", "texture.remove")
+
+
 def texture_actions(operation: Any, spec: Any) -> list[FeatureAction]:
     """Bearbeitet die vorhandene Textur und bewahrt Ausdrücke sowie ausgeblendete Werte."""
     from app.core.registry.params import inactive_dependency
@@ -1880,8 +1930,11 @@ def texture_actions(operation: Any, spec: Any) -> list[FeatureAction]:
             note=_("Ändert den Schritt, der diese Textur aufgebracht hat."),
             fields=tuple(fields),
             fixed=tuple((name, value) for name, value in saved.items() if name not in shown),
+            key=TEXTURE_ACTION_KEYS[0],
         ),
-        FeatureAction(title=_("Textur entfernen"), op=None, step=operation.id),
+        FeatureAction(
+            title=_("Textur entfernen"), op=None, step=operation.id, key=TEXTURE_ACTION_KEYS[1]
+        ),
     ]
 
 
@@ -2027,6 +2080,7 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
                 title=_("Maße ändern"),
                 op=spec.name,
                 step=operation.id,
+                key=PART_ACTION_KEYS[0],
                 note=_("Ändert den Schritt, der diesen Baustein gesetzt hat."),
                 fields=_saved_fields(schema, values, measures),
                 elsewhere=tuple(schema[name].title for name in collected),
@@ -2038,6 +2092,7 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
                 title=_("Baustein verschieben"),
                 op=spec.name,
                 step=operation.id,
+                key=PART_ACTION_KEYS[1],
                 fields=_saved_fields(schema, values, placement),
             )
         )
@@ -2046,6 +2101,7 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
             title=_("Baustein entfernen"),
             op=None,
             step=operation.id,
+            key=PART_ACTION_KEYS[2],
             note=_("Nimmt den Schritt aus dem Verlauf. Strg+Z holt ihn zurück."),
         )
     )
@@ -2107,6 +2163,13 @@ EDGE_VARIANTS: Final[
     ),
 )
 
+#: Die Schlüssel der Zeilen aus :data:`EDGE_VARIANTS`, gleich geordnet:
+#: ``<op>.<mode>`` (``fillet_edges.variable_radius``). Die Grundzeilen aus
+#: :data:`EDGE_OPERATIONS` heißen wie ihre Operation.
+EDGE_VARIANT_KEYS: Final[tuple[str, ...]] = tuple(
+    f"{name}.{dict(extra)['mode']}" for name, _title, _fields, extra in EDGE_VARIANTS
+)
+
 
 def edge_actions(key: str) -> list[FeatureAction]:
     """Was sich an dieser einen Kante tun lässt — verrunden und fasen.
@@ -2134,8 +2197,9 @@ def edge_actions(key: str) -> list[FeatureAction]:
     rows: list[tuple[str, TranslatableText | None, tuple[str, ...], tuple[tuple[str, Any], ...]]]
     rows = [(name, None, (measure,), ()) for name, measure in EDGE_OPERATIONS]
     rows.extend(EDGE_VARIANTS)
+    keys = [*(name for name, _measure in EDGE_OPERATIONS), *EDGE_VARIANT_KEYS]
     actions: list[FeatureAction] = []
-    for name, title, measures, extra in rows:
+    for (name, title, measures, extra), row_key in zip(rows, keys, strict=True):
         if not REGISTRY.has(name):
             continue
         spec = REGISTRY.get(name)
@@ -2153,6 +2217,7 @@ def edge_actions(key: str) -> list[FeatureAction]:
                 note=spec.doc,
                 fields=tuple(_edge_field(schema[item]) for item in names if item in schema),
                 fixed=(*extra, ("edges", "named"), ("edge_keys", key)),
+                key=row_key,
             )
         )
     return actions

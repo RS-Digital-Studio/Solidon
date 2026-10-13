@@ -155,10 +155,6 @@ In `app/ui` wird keine Geometrie gerechnet; die Ansicht fragt den Kern.
 
 ## Ein Kernaufruf an einem ganzen Körper rechnet im Hilfsprozess
 
-`manifold3d` hält den GIL in jedem Aufruf (Aufbau aus `Mesh64`, `simplify`,
-`refine_to_length`, Boolesche, `decompose`, `to_mesh64`); ein Arbeiterfaden, der
-ihn ruft, hält das Fenster an (RM-212).
-
 - **Jeder `manifold3d`-Aufruf an einem Körper, der groß sein kann, ist eine
   Rechnung in `geom/kernel_jobs.py` und läuft über `kernel_process.run`** —
   ebenso jede andere Bibliothek, die an ganzen Körpern den GIL hält
@@ -310,9 +306,12 @@ rechnet mit `full_chain_when_stuck` im selben Lauf voll (`_FullChain`) —
 gesetzt nur in `Session.run_evaluation`, `_RevisionWorker` und
 `AgentSession`. Eine Vorschau nimmt ein vorliegendes Urteil aus dem Cache,
 hält sonst mit `short_chain_only`, *Übernehmen* bleibt frei.
-`ResultCache.refuse` merkt nur ein Urteil mit gelaufener Voxelstufe und ohne
-`transient`; auf die Platte geht nur ein vollständiger Durchlauf (§15.6). Ein
-Halt nimmt `reads_quality` mit, sonst gälte ein Entwurfshalt als fein.
+`ResultCache.refuse` merkt nur ein Urteil mit gelaufener Voxelstufe ohne
+`transient`, die Platte nur einen vollständigen Durchlauf (§15.6). Ein Halt
+nimmt `reads_quality` mit, sonst gälte ein Entwurfshalt als fein. **Kürzt die
+Güte, kürzt `boolean`** (`cut_short`), nie `stages=DRAFT_CHAIN` je nach Güte:
+Eine festgelegte Stufenfolge rechnet auch fein nicht anders (FD-6,
+`test_the_quality_shortens_the_chain_never_the_caller`).
 
 **Ein Befund über mehrere Körper nennt sie alle** (`Finding.object_ids`;
 `prepare.named_for` setzt sie aus den Indizes, *Fügeweg prüfen* selbst): Die
@@ -423,12 +422,10 @@ sagt dann `discover.slicer_start_refused` ab.
 
 ### Im eigenen Flatpak sieht der Rechner anders aus
 
-Von innen fehlen PATH, Installationsordner und Host-Pfade, und XDG zeigt in
-den Sandkasten (Folgen: `regel-kern.md`). Deshalb: **Jeder neue Startpfad
-bekommt `discover.on_host` davor** (`flatpak-spawn --host`), **jede Existenzprüfung eines Programms geht
-über `is_file_on_host`/`is_dir_on_host`, und mit XDG ist im Flatpak der
-Rechner gemeint** (`config_home`, `exchange_dir`). Ein Modul, das eine Falle
-richtig benennt, ist gegen sie nicht immun.
+**Jeder neue Startpfad bekommt `discover.on_host` davor**
+(`flatpak-spawn --host`), **jede Existenzprüfung eines Programms geht über
+`is_file_on_host`/`is_dir_on_host`, und mit XDG ist im Flatpak der Rechner
+gemeint** (`config_home`, `exchange_dir`).
 
 ### Ein Slicer als Flatpak hat sein Wissen in seinem Sandkasten
 
@@ -449,21 +446,14 @@ lesen, weil das Manifest die Installationsordner, die Exporte und
 ein Slicer, der neu auf Flathub erscheint, kommt dort dazu.
 
 **Cura rechnet unter Linux nur über seinen eigenen Lader** (RM-521,
-`export/cura_linux.py`): Flatpak und AppImage tragen dasselbe AppDir aus
-appimage-builder, CuraEngine nennt seinen Lader relativ. Gestartet wird
-`runtime/compat/<Lader>` mit dem **vollständigen** Pfad aus `AppRun.env`
-(LIBC-Pfad zuerst). Das Cura-Flatpak gibt nur `home` und Wechselmedien frei, der
-Arbeitsordner kommt als `--filesystem` dazu. Ein AppImage bleibt für den Lauf
-eingehängt und wird beim Verlassen des Blocks beendet, auch nach Fehler und
-Abbruch; aus Solidons Flatpak legt `TMPDIR=exchange_dir()` den Einhängepunkt
-dorthin, wo beide ihn sehen, und `flatpak-spawn --watch-bus` hängt auch aus,
-wenn der Aufrufer ohne Signal stirbt. Draußen deckt das nur `setpriv
---pdeathsig` ab, wo es da ist; ohne `setpriv` bleibt die Einhängung nach einem
-harten Ende von Solidon stehen. Die Druckerkopie einer AppImage-Cura legt ein
-Arbeiter an, der Fensterfaden wartet nie darauf (`appimage.never_wait_in`). Kann
-Solidon nicht rechnen, gibt es nur Curas Fenster (`WINDOW_ONLY`, ohne
-behauptete Ursache) — nie den Starter als Rechenweg, der öffnet nur das
-Fenster und schreibt nichts.
+`export/cura_linux.py`): `runtime/compat/<Lader>` mit dem **vollständigen**
+Pfad aus `AppRun.env` (LIBC-Pfad zuerst), beim Cura-Flatpak der Arbeitsordner
+als `--filesystem`. Ein AppImage bleibt nur für den Lauf eingehängt, auch nach
+Fehler und Abbruch — aus Solidons Flatpak über `TMPDIR=exchange_dir()` und
+`flatpak-spawn --watch-bus`, draußen über `setpriv --pdeathsig`, wo es da ist.
+Die Druckerkopie legt ein Arbeiter an (`appimage.never_wait_in`). Kann Solidon
+nicht rechnen, gibt es nur Curas Fenster (`WINDOW_ONLY`, ohne behauptete
+Ursache), nie den Starter als Rechenweg.
 
 ### Was auf einer Plattform gilt, ist keine Zusage
 

@@ -87,7 +87,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from app.core import expressions, manual
+from app.core import expressions, guides, manual
 from app.core.action_effects import effect_worth_showing, side_effect
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
@@ -176,6 +176,13 @@ from app.core.types import (
 )
 from app.core.units import LengthUnit, is_close
 from app.i18n import TranslatableText, sort_key, tr
+from app.ui.change_lock import (
+    action_refusal,
+    change_refusal,
+    computing_refusal,
+    hold_inputs,
+    say_refusal,
+)
 from app.ui.dialogs import ADDRESS_VALUES, NEEDS_OP, handlers_of, unhandled_advice
 from app.ui.icons import icon, icon_name_for, svg_pixmap
 from app.ui.labels import (
@@ -1136,12 +1143,12 @@ def as_error(
 
 
 def _severity_label(severity: str) -> str:
-    """Der Schweregrad als Wort — die Filterzeile zeigt beides (Regel 18)."""
-    return {
-        "error": tr("Fehler"),
-        "warning": tr("Warnung"),
-        "info": tr("Hinweis"),
-    }.get(severity, severity)
+    """Der Schweregrad als Wort — die Filterzeile zeigt beides (Regel 18).
+
+    Aus ``SEVERITY_ENCODING`` wie das Zeichen daneben und das Wort der Meldung.
+    """
+    encoding = SEVERITY_ENCODING.get(severity)
+    return tr(encoding.label_key) if encoding is not None else severity
 
 
 def origin_label(source: str) -> str:
@@ -2201,6 +2208,7 @@ class ObjectTree(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
         layout.addWidget(self._empty)
         layout.addWidget(self.tree)
 
@@ -2793,10 +2801,14 @@ class ObjectTree(QWidget):
         return max(view_chrome(self.tree), rows_height(self.tree))
 
     def least_height(self) -> int:
-        """Und die, unter die diese Karte nicht geht (siehe ``fit_to_rows``)."""
+        """Und die, unter die diese Karte nicht geht (siehe ``fit_to_rows``).
+
+        Nie über dem Wunsch: Drei mal die Körperzeile mit Vorschaubild hieß
+        mit einem Körper 183 Punkte Boden bei 81 Wunsch (FD-25).
+        """
         if self.tree.topLevelItemCount() == 0:
             return least_empty_height(self._empty)
-        return least_height_of(self.tree)
+        return min(least_height_of(self.tree), self.wanted_height())
 
     def set_room(self, pixels: int) -> None:
         """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
@@ -2902,7 +2914,8 @@ class ObjectTree(QWidget):
             if self._room is not None
             else view_chrome(self.tree) + MAX_ROWS * row_height_of(self.tree)
         )
-        self.tree.setFixedHeight(max(least_height_of(self.tree), min(wanted, ceiling)))
+        floor = min(least_height_of(self.tree), wanted)
+        self.tree.setFixedHeight(max(floor, min(wanted, ceiling)))
         self._size_columns()
         self.setMinimumHeight(self.sizeHint().height())
         self.updateGeometry()
@@ -3479,7 +3492,13 @@ class ObjectTree(QWidget):
                 return
             step = feature.created_by
         change = menu.addAction(tr("Diesen Schritt ändern"))
+        change.setObjectName("tree.step")
         change.setStatusTip(tr("Öffnet den Schritt, der dieses Merkmal erzeugt hat."))
+        # Gesperrt grau mit Grund, wie jede ändernde Handlung (FD-5) — auch in
+        # der Statuszeile, wo sonst der eigene Satz stünde (FD-27).
+        refusal = change_refusal()
+        change.setEnabled(not refusal)
+        say_refusal(change, refusal)
         change.triggered.connect(lambda _checked=False: self.stepRequested.emit(step))
         menu.addSeparator()
 
@@ -3521,7 +3540,11 @@ class ObjectTree(QWidget):
         if feature_id is None:
             return
         draw = menu.addAction(tr("Auf dieser Fläche zeichnen"))
+        draw.setObjectName("tree.sketch")
         draw.setStatusTip(tr("Beginnt eine Skizze auf dieser Fläche statt auf einer Grundebene."))
+        refusal = change_refusal()
+        draw.setEnabled(not refusal)
+        say_refusal(draw, refusal)
         draw.triggered.connect(
             lambda _checked=False: self.sketchOnFaceRequested.emit(str(feature_id))
         )
@@ -3544,6 +3567,7 @@ class ObjectTree(QWidget):
         else:
             label = tr("Ausblenden") if wants_hiding else tr("Einblenden")
         hide = menu.addAction(label)
+        hide.setObjectName("tree.visibility")
         hide.triggered.connect(
             lambda _checked=False: self.visibilityRequested.emit(chosen, not wants_hiding)
         )
@@ -3551,6 +3575,7 @@ class ObjectTree(QWidget):
         isolate = menu.addAction(
             tr("Alles andere ausblenden") if not self.isolation_holds(chosen) else tr("Alle zeigen")
         )
+        isolate.setObjectName("tree.isolate")
         isolate.triggered.connect(lambda _checked=False: self.isolateRequested.emit(chosen))
 
 
@@ -3644,6 +3669,7 @@ class ParameterPanel(QWidget):
         super().__init__(parent)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        outer.setSpacing(TIGHT)
         self._room: int | None = None
         """Was die Überlagerung dieser Karte zugeteilt hat, oder nichts.
 
@@ -3661,6 +3687,7 @@ class ParameterPanel(QWidget):
         self._scroll.setWidget(self._sheet)
         self._form = QFormLayout(self._sheet)
         self._form.setContentsMargins(0, 0, 0, 0)
+        self._form.setSpacing(TIGHT)
         self._empty = QLabel(_empty_parameters_text(), self)
         self._empty.setWordWrap(True)
         fit_wrapped(self._empty)
@@ -3766,7 +3793,10 @@ class ParameterPanel(QWidget):
         drei Zeilen wäre Platz, den sie niemandem zeigen kann, während die
         Nachbarn ihn brauchen.
         """
-        rows = LEAST_PARAMETER_ROWS * (self.add_button.sizeHint().height() + TIGHT)
+        # Der Zeilenabstand ist der des Formulars — eine Quelle, kein zweites TIGHT.
+        rows = LEAST_PARAMETER_ROWS * (
+            self.add_button.sizeHint().height() + self._form.verticalSpacing()
+        )
         return min(self._around_the_rows() + rows, self.wanted_height())
 
     def set_room(self, pixels: int) -> None:
@@ -3865,9 +3895,14 @@ class ParameterPanel(QWidget):
         # Satz an und Qt zeigt ihn nie.
         menu.setToolTipsVisible(True)
         entry = menu.addAction(tr("Ändern …"))
+        entry.setObjectName("parameters.edit")
         note = tr("Untergrenze, Obergrenze, Einheit und Ausdruck dieses Maßes — rücknehmbar.")
         entry.setToolTip(note)
         entry.setStatusTip(note)
+        # Gesperrt grau mit Grund wie die Zeile selbst (FD-26).
+        refusal = change_refusal()
+        entry.setEnabled(not refusal)
+        say_refusal(entry, refusal)
         entry.triggered.connect(lambda _checked=False, key=name: self.limitsRequested.emit(key))
         return menu
 
@@ -4232,6 +4267,9 @@ class ParameterPanel(QWidget):
                 editor.setFocus(Qt.FocusReason.OtherFocusReason)
         self._mark_stored_beyond()
         self._show_binding()
+        # Jede Zahl hier ist ein Schritt: ohne Freischaltung grau mit Grund,
+        # auch eine neu gebaute Zeile (FD-26). Das Fenster stellt nach.
+        hold_inputs(self, change_refusal())
 
     def _mark_stored_beyond(self) -> None:
         """Eine gespeicherte Zahl jenseits ihrer Grenze bekommt ihren Satz (RM-447).
@@ -5021,6 +5059,7 @@ class HistoryPanel(QWidget):
         self.timeline = QWidget(self)
         timeline_layout = QVBoxLayout(self.timeline)
         timeline_layout.setContentsMargins(NORMAL, 0, NORMAL, TIGHT)
+        timeline_layout.setSpacing(TIGHT)
         self.timeline_slider = QSlider(Qt.Orientation.Horizontal, self.timeline)
         self.timeline_slider.setAccessibleName(tr("Stand im Verlauf"))
         self.timeline_slider.setSingleStep(1)
@@ -5046,6 +5085,7 @@ class HistoryPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
         layout.addWidget(self.compare)
         layout.addWidget(self.timeline)
         layout.addWidget(self._empty)
@@ -5067,6 +5107,9 @@ class HistoryPanel(QWidget):
     def _timeline_changed(self, count: int) -> None:
         if not self.compare.isChecked() or not 1 <= count <= len(self._timeline_titles):
             return
+        from app.ui.change_lock import hold_history_preview
+
+        hold_history_preview(self)
         self.timeline_label.setText(
             tr("Stand {number} von {count}: {title}").format(
                 number=count,
@@ -5080,22 +5123,40 @@ class HistoryPanel(QWidget):
         count = self.timeline_slider.value()
         if 1 <= count <= len(self._timeline_targets):
             target = self._timeline_targets[count - 1]
+            if target is not None and change_refusal():
+                return
             self.compare.setChecked(False)
             self.previewInsertRequested.emit(target)
 
     def _timeline_height(self) -> int:
+        """Was über der Liste steht: *Vorher/Nachher*, die Zeitleiste, und je ein
+        Abstand des Layouts dahinter — der fehlte, und der Verlauf nahm sechs
+        Punkte mehr, als er der Karte meldete; der Objektbaum darüber ragte um
+        sie über seinen Abschnitt (Fund D0-P)."""
         if self.compare.isHidden():
             return 0
-        return self.compare.sizeHint().height() + (
-            self.timeline.sizeHint().height() if self.compare.isChecked() else 0
-        )
+        layout = self.layout()
+        gap = max(layout.spacing(), 0) if layout is not None else 0
+        height = self.compare.sizeHint().height() + gap
+        if self.compare.isChecked():
+            # An der Breite, die die Spalte ihr gibt: Der Satz unter dem Regler
+            # bricht in Qts Wunschhöhe auf zwei Zeilen um und steht in der
+            # Spalte in einer — der Verlauf verlangte 16 Punkte zu viel (FD-23).
+            timeline = self.timeline.sizeHint().height()
+            if self.isVisible() and self.timeline.hasHeightForWidth():
+                timeline = self.timeline.heightForWidth(self.width())
+            height += timeline + gap
+        return height
 
     def wanted_height(self) -> int:
         """Die Höhe, bei der jeder Schritt zu sehen wäre."""
         return (
             self._timeline_height()
             + view_chrome(self.list)
-            + self.list.count() * row_height_of(self.list)
+            # Gezählt wird, was zu sehen ist: Die Teilschritte eines
+            # eingeklappten Sammelschritts sind versteckte Zeilen.
+            + sum(not self.list.isRowHidden(row) for row in range(self.list.count()))
+            * row_height_of(self.list)
         )
 
     def least_height(self) -> int:
@@ -5107,14 +5168,24 @@ class HistoryPanel(QWidget):
         """
         if self.list.count() == 0:
             return least_empty_height(self._empty)
-        return self._timeline_height() + least_height_of(self.list)
+        # Nie über dem Wunsch: ein Schritt ist eine Zeile, nicht drei (FD-25).
+        return min(self._timeline_height() + least_height_of(self.list), self.wanted_height())
 
     def set_room(self, pixels: int) -> None:
-        """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
+        """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``).
+
+        Wer am Ende stand, bleibt am Ende: ``show_document`` rollt dorthin,
+        und schrumpft die Zuteilung danach, lag der neueste Schritt sonst unter
+        der Kante (bei 1920x1080 und zwölf Körpern).
+        """
         if pixels == self._room:
             return
         self._room = pixels
+        bar = self.list.verticalScrollBar()
+        at_end = bar.value() >= bar.maximum()
         self._fit()
+        if at_end:
+            self.list.scrollToBottom()
 
     def _fit(self) -> None:
         """So hoch wie der Inhalt, höchstens so hoch wie zugeteilt."""
@@ -5122,7 +5193,8 @@ class HistoryPanel(QWidget):
         self._empty.setVisible(empty)
         self.list.setVisible(not empty)
         room = None if self._room is None else max(0, self._room - self._timeline_height())
-        fit_to_rows(self.list, self.list.count(), room=room)
+        shown = sum(not self.list.isRowHidden(row) for row in range(self.list.count()))
+        fit_to_rows(self.list, shown, room=room)
         # Dieselbe Stelle wie im Objektbaum: die Liste ist bemessen, die Karte
         # um sie herum meldete weiter ihre Mindesthöhe und wurde auf zehn Pixel
         # gedrückt.
@@ -5692,6 +5764,7 @@ class HistoryPanel(QWidget):
             (tr("Nach unten", context="Verlauf"), False, self.down_action),
         ):
             entry = menu.addAction(label)
+            entry.setObjectName("history.up" if upwards else "history.down")
             entry.setShortcut(action.shortcut())
             found, before = self._neighbour_target(op_ids, upwards)
             problem = places.get(before) if found else None
@@ -5706,9 +5779,15 @@ class HistoryPanel(QWidget):
         valid = [before for before, problem in places.items() if problem is None]
         if valid:
             further = menu.addMenu(tr("Verschieben vor"))
+            further.menuAction().setObjectName("history.move_before")
             for before in valid:
-                label = tr("Ans Ende") if before is None else f"{before}  {self._title_of(before)}"
+                # **Die Nummer, die der Verlauf zeigt, nicht die Kennung** (U1):
+                # Nach einem Verschieben stand hier „5 Zylinder“ neben einer
+                # Liste, in der derselbe Schritt die 3 trägt.
+                shown = self._positions.get(before) if before is not None else None
+                label = tr("Ans Ende") if before is None else f"{shown}  {self._title_of(before)}"
                 target = further.addAction(label)
+                target.setObjectName(f"history.move_before.{'end' if before is None else shown}")
                 target.triggered.connect(
                     lambda _checked=False, chosen=op_ids, where=before: self.moveRequested.emit(
                         chosen, where
@@ -5732,6 +5811,7 @@ class HistoryPanel(QWidget):
         switch.setObjectName("history.switch")
         if self._inserting is not None:
             stop = menu.addAction(tr("Einfügen beenden"))
+            stop.setObjectName("history.stop_insert")
             stop.setShortcut(self.stop_insert_action.shortcut())
             stop.triggered.connect(lambda _checked=False: self.stopInsertRequested.emit())
 
@@ -5945,6 +6025,7 @@ class HistoryPanel(QWidget):
             # hochziehen, Innenkontur als Tasche — ohne neu zu zeichnen. Der
             # Eintrag steht nur an Schritten, die eine Zeichnung tragen.
             reuse = menu.addAction(tr("Zeichnung weiterverwenden"))
+            reuse.setObjectName("history.reuse_drawing")
             reuse.setToolTip(tr("Öffnet eine Kopie dieser Zeichnung für einen neuen Schritt."))
             menu.setToolTipsVisible(True)
             reuse.triggered.connect(
@@ -5964,6 +6045,7 @@ class HistoryPanel(QWidget):
             # Ohne Auslassungspunkte: Es folgt keine Frage mehr, und Strg+Z
             # nimmt es zurück (``MainWindow.bake_sculpt``).
             frozen = menu.addAction(tr("Stand festschreiben"))
+            frozen.setObjectName("history.bake")
             frozen.setToolTip(
                 tr(
                     "Legt den jetzigen Stand als Körper ab. Die Züge bleiben als Beleg, "
@@ -5984,6 +6066,13 @@ class HistoryPanel(QWidget):
             switch.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.kernelSwitchRequested.emit(chosen)
             )
+        refusal = change_refusal()
+        if refusal:
+            # **Jeder Eintrag hier ändert den Verlauf** (FD-5): gesperrt grau,
+            # mit dem Grund der Freischaltung statt des eigenen Satzes.
+            for entry in menu.actions():
+                entry.setEnabled(False)
+                say_refusal(entry, refusal)
         return menu
 
 
@@ -6236,6 +6325,14 @@ class ReportPanel(QWidget):
         """Der wirklich angehaltene Schritt der gerade gezeigten Auswertung."""
         self._live_objects: Mapping[ObjectId, SceneObject] = {}
         """Die wirklich ausgewerteten Körper, nicht nur geplante Ausgänge."""
+        self._change_refusal = change_refusal()
+        """Der Sperrgrund, mit dem die Knopfzeile zuletzt gebaut wurde (:meth:`follow_export`)."""
+        self._focus_parked = False
+        """Ob der Fokus eines weggeräumten Handlungsknopfs auf der Liste wartet (FD-4).
+
+        Die Knopfzeile entsteht nach einer Handlung neu; Qt reichte den Fokus
+        des versteckten Knopfs sonst irgendwohin weiter. Wohin er gehört,
+        entscheidet :meth:`show_result`, wenn die neuen Zeilen stehen."""
         self._findings: list[Finding] = []
         """Die rohen Befunde hinter den Zeilen. Die Liste im Fenster ist eine
         *Darstellung* davon (gebündelt, sortiert) — wer Zeilen aus Zeilen neu
@@ -6304,6 +6401,7 @@ class ReportPanel(QWidget):
         # Prüfumfang hierher (:meth:`_fit_head`), statt die Zähler zu kürzen.
         self._head_spill = QHBoxLayout()
         self._head_spill.setContentsMargins(0, 0, 0, 0)
+        self._head_spill.setSpacing(TIGHT)
         self._head_spill.addStretch(1)
         layout.addLayout(self._head_spill)
 
@@ -6360,6 +6458,7 @@ class ReportPanel(QWidget):
         self.severity.currentIndexChanged.connect(self._refilter)
         filter_row = QHBoxLayout()
         filter_row.setContentsMargins(0, 0, 0, 0)
+        filter_row.setSpacing(TIGHT)
         filter_row.addWidget(self.search, stretch=1)
         filter_row.addWidget(self.severity)
         findings.addLayout(filter_row)
@@ -6634,7 +6733,16 @@ class ReportPanel(QWidget):
         nachziehen — drei Gelegenheiten für einen Knopf, der das Falsche tut.
         """
         self._unfold_the_chosen()
+        self._change_refusal = change_refusal()
         row = self._offer_row
+        focused = QApplication.focusWidget()
+        if focused is not None and self._offers.isAncestorOf(focused) and self.list.isVisible():
+            # **Der Fokus bleibt im Bericht** (FD-4): Der Knopf, den der Kunde
+            # gedrückt hat, verschwindet gleich. Versteckt gab Qt seinen Fokus
+            # in der Kette weiter, und nach einem Reiterwechsel stand er im
+            # Suchfeld der Auswahl, das Strg+Z für sich nahm.
+            self.list.setFocus(Qt.FocusReason.OtherFocusReason)
+            self._focus_parked = True
         while row.count():
             item = row.takeAt(0)
             widget = item.widget() if item is not None else None
@@ -6689,6 +6797,7 @@ class ReportPanel(QWidget):
         previous: QWidget = self.finding_place
         for action in offered:
             button = QPushButton(str(action.label), self._offers)
+            button.setProperty(guides.TARGET_PROPERTY, f"finding.action:{action.id}")
             button.setToolTip(str(finding.message) if finding is not None else "")
             if finding is not None and action.id == CORRECT_INPUT.id:
                 # Der Rat des Kerns, den kein Knopf einlöst, steht beim Knopf,
@@ -6708,11 +6817,19 @@ class ReportPanel(QWidget):
                 make_primary(button)
             if self._previous(items[0]):
                 # Der Befund gehört zum vorigen Stand (RM-534); eine Handlung
-                # daran träfe ein Teil, das es gleich nicht mehr gibt.
+                # daran träfe ein Teil, das es gleich nicht mehr gibt. Der
+                # Grund steht in Kurzhilfe **und** Beschreibung — sonst las ein
+                # Bildschirmleser die Nebenfolge (FD-27) — und nennt, wann die
+                # Sperre fällt (FD-30).
                 button.setEnabled(False)
-                button.setToolTip(
-                    tr("Erst nach der Berechnung — der Befund gehört zum vorigen Stand.")
-                )
+                say_refusal(button, computing_refusal())
+            refusal = action_refusal(action.id)
+            if refusal:
+                # **Gesperrt heißt grau mit Grund, vor dem Klick** (FD-5): In
+                # der Demo und ohne Geräteaktivierung endete *Auf das Bett
+                # setzen* sonst im Meldungsfenster. Lesendes bleibt bedienbar.
+                button.setEnabled(False)
+                say_refusal(button, refusal)
             # ``weak_slot`` und nicht ein Lambda: ``handlers`` hält gebundene
             # Methoden des Fensters, und ein Lambda, das es fängt, schließt
             # den Ring Panel → Knopf → Handler → Fenster — gemessen hielten
@@ -6812,10 +6929,17 @@ class ReportPanel(QWidget):
         item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
 
     def follow_export(self, allowed: bool, tip: str) -> None:
-        """*Exportieren …* folgt dem Menüeintrag: dieselbe Sperre, derselbe Grund."""
+        """*Exportieren …* folgt dem Menüeintrag: dieselbe Sperre, derselbe Grund.
+
+        Und die Handlungen der Befundzeile folgen der Freischaltung: Das Fenster
+        ruft hier nach jedem Zustandswechsel, auch nach dem Freischaltdialog,
+        und eine gesperrte Zeile wird wieder bedienbar, ohne neue Wahl (FD-5).
+        """
         self.export_button.setEnabled(allowed)
         self.export_button.setToolTip(tip)
         self.export_button.setAccessibleDescription(tip)
+        if change_refusal() != self._change_refusal:
+            self._show_offers()
 
     def _run_bound_bed_action(self, error: AppError, document: Document | None) -> None:
         """Der angezeigte Importumfang bleibt gebunden, der Handler prüft seine Gültigkeit."""
@@ -7056,6 +7180,18 @@ class ReportPanel(QWidget):
         self._grew()
         # Nach dem Filtern, denn eine ausgeblendete Zeile ist keine Antwort.
         self._preselect()
+        focused = QApplication.focusWidget()
+        if self._focus_parked and (focused is None or self.isAncestorOf(focused)):
+            # **Nach einer Handlung arbeitet der Kunde dort weiter, wo der
+            # Bericht ihn hinführt** (FD-4): an der nächsten Befundzeile, oder,
+            # wenn keine mehr dasteht, an der Übergabe, die dann halbfett steht
+            # (:meth:`_emphasise_slicer`). Wer inzwischen woanders hingeklickt
+            # hat, behält seinen Fokus.
+            rows = self.list.isVisibleTo(self) and self.list.count()
+            target = self.list if rows else self.to_slicer
+            if target.isEnabled() and target.isVisibleTo(self):
+                target.setFocus(Qt.FocusReason.OtherFocusReason)
+        self._focus_parked = False
 
     def add_findings(self, findings: list[Finding], *, replacing_source: str | None = None) -> None:
         """Hängt Befunde an, die nicht aus der Auswertung kamen — die
@@ -7762,11 +7898,18 @@ class ReportPanel(QWidget):
         document = self._document
 
         menu = QMenu(self)
+        menu.setToolTipsVisible(True)
         chosen: dict[Any, Any] = {}
         for action in offered:
             entry = menu.addAction(str(action.label))
-            # Dieselbe Sperre wie an den Knöpfen darunter (RM-534).
-            entry.setEnabled(not self._previous(item))
+            entry.setObjectName(f"report.{action.id}")
+            # Dieselben Sperren wie an den Knöpfen darunter (RM-534, FD-5),
+            # jede mit ihrem Grund (FD-27).
+            refusal = action_refusal(action.id) or (
+                computing_refusal() if self._previous(item) else ""
+            )
+            entry.setEnabled(not refusal)
+            say_refusal(entry, refusal)
             chosen[entry] = action
         # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
         # None — ``QMenu.exec`` gibt dann nichts zurück.
@@ -7925,7 +8068,7 @@ def fit_to_rows(view: QAbstractItemView, rows: int, *, room: int | None = None) 
     row_height = row_height_of(view)
     wanted = chrome + max(rows, 0) * row_height
     ceiling = room if room is not None else chrome + MAX_ROWS * row_height
-    view.setFixedHeight(max(least_height_of(view), min(wanted, ceiling)))
+    view.setFixedHeight(max(min(least_height_of(view), wanted), min(wanted, ceiling)))
 
 
 def least_height_of(view: QAbstractItemView) -> int:
@@ -7937,6 +8080,10 @@ def least_height_of(view: QAbstractItemView) -> int:
     Boden ihr hundertzwölf gab. Die Summe der Zuteilungen lag danach über dem
     Platz, den es gab, und die Karte darüber wurde vom Layout zusammengedrückt,
     bis Zeilen außerhalb lagen.
+
+    **Drei Zeilen, nicht mehr, als da sind:** Jeder Aufrufer schneidet die Zahl
+    an seinem Wunsch ab (``fit_to_rows``, ``ObjectTree``, ``HistoryPanel``) —
+    mit einer Zeile wären es sonst zwei leere darunter (FD-25).
     """
     return view_chrome(view) + MIN_ROWS * row_height_of(view)
 
@@ -7989,6 +8136,7 @@ def _folded(actions: Sequence[Any]) -> list[Any]:
             title=_and_then(str(first.title), str(action.title)),
             op=None,
             reason=first.reason,
+            key=guides.action_key(first),
         )
     return folded
 
@@ -9112,15 +9260,18 @@ class FeaturePanel(QWidget):
         self._in_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._in_view.clicked.connect(self._show_armed_in_view)
         self._in_view.setVisible(False)
+        self._in_view.setProperty(guides.TARGET_PROPERTY, "feature.in_view")
         below.addWidget(self._in_view)
         self._every = QCheckBox("", self._footer)
         self._every.setVisible(False)
+        self._every.setProperty(guides.TARGET_PROPERTY, "feature.every")
         self._every.toggled.connect(self._group_changed)
         below.addWidget(self._every)
         self._apply = make_primary(QPushButton(tr("Übernehmen"), self._footer))
         self._apply.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._apply.clicked.connect(self._run_armed)
         self._apply.setVisible(False)
+        self._apply.setProperty(guides.TARGET_PROPERTY, "feature.apply")
         below.addWidget(self._apply)
         # Ein normaler Knopf: Abbrechen verwirft nur eine Vorschau, die das
         # Dokument nie gesehen hat. Rot trägt das unwiederbringliche Verwerfen
@@ -9137,8 +9288,10 @@ class FeaturePanel(QWidget):
         """Ob die Maße des gezeigten Merkmals gerade im Bild stehen — dann
         trägt die Maßgruppe Übernehmen und Abbrechen, und die Knöpfe hier
         unten gehen mit (``set_measuring``)."""
-        self._measure_op: str | None = None
-        """Welche Handlung im Bild steht — ihr Block rechts geht mit (RM-199)."""
+        self.measure_op: str | None = None
+        """Welche Handlung im Bild steht — ihr Block rechts geht mit (RM-199).
+        Öffentlich, weil der Prüfstand fragt, was die Maßgruppe trägt
+        (``function_surface.op_in_view``); gesetzt nur von ``set_measuring``."""
         self._measure_begun = False
         """Ob die Maßgruppe schon einen Zug oder eine Zahl gesehen hat — dann
         sind auch die übrigen Handlungen gesperrt, bis sie endet."""
@@ -9490,6 +9643,7 @@ class FeaturePanel(QWidget):
         form = QFormLayout(box)
         form.setContentsMargins(0, 0, 0, 0)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setSpacing(TIGHT)
         said = evidence_texts()[unit.evidence]
         if unit.suggested:
             said = tr("{sentence} Ein Verdacht, kein Befund.", sentence=said)
@@ -9562,6 +9716,7 @@ class FeaturePanel(QWidget):
                 form = QFormLayout(box)
                 form.setContentsMargins(0, 0, 0, 0)
                 form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+                form.setSpacing(TIGHT)
                 for label, value in (
                     (tr("Innendurchmesser"), sleeve.bore_diameter),
                     (tr("Außendurchmesser"), sleeve.outer_diameter),
@@ -9682,6 +9837,9 @@ class FeaturePanel(QWidget):
             )
             self._rows.insertWidget(self._rows.count() - 1, button)
             self._built.append(button)
+            # Beide legen einen Schritt an: Sie folgen der Sperre wie jede
+            # Handlung (:meth:`_settle_lock`, FD-5).
+            self._keyed.append(button)
 
     def _build_protection(self, feature_id: str, feature: Feature, protected: bool) -> None:
         """Der Umschalter *Vor Trennnähten schützen* — die eine Kundengeste der
@@ -10088,6 +10246,7 @@ class FeaturePanel(QWidget):
         form = QFormLayout(box)
         form.setContentsMargins(0, 0, 0, 0)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setSpacing(TIGHT)
         choice = column_choice(QComboBox(box))
         choice.setAccessibleName(tr("Passungsart"))
         if len(choices) > 1:
@@ -10199,7 +10358,10 @@ class FeaturePanel(QWidget):
         control_reason = field_refusal or reason
         self._apply.setEnabled(self._apply_allowed())
         self._lock_note.setText(control_reason or "")
-        _set_shown(self._lock_note, bool(control_reason) and bool(self._built))
+        _set_shown(
+            self._lock_note,
+            bool(control_reason) and bool(self._built) and control_reason != change_refusal(),
+        )
         if control_reason:
             self._apply.setToolTip(control_reason)
             self._apply.setAccessibleDescription(control_reason)
@@ -10327,17 +10489,24 @@ class FeaturePanel(QWidget):
                 continue
             entry = self._runs.get(child.property("handlingKey"))
             in_measure = self._measuring and (
-                self._measure_begun or (entry is not None and entry.op == self._measure_op)
+                self._measure_begun or (entry is not None and entry.op == self.measure_op)
             )
             child.setEnabled(not reason and not in_measure)
+            # Feld und Knopf der Zeile nennen den Grund, nicht ihren eigenen
+            # Satz (FD-27): „Entfernt ein erkanntes Merkmal …“ stand grau da.
+            say_refusal(child, reason)
         for button in (self._in_view, self._apply, self._cancel):
             button.setEnabled(not reason)
         self._every.setEnabled(not reason and not self._measuring)
         self._lock_note.setText(reason)
         # Ohne Zeilen gibt es nichts, was der Satz erklären könnte: Über dem
         # leeren Zustand („Kein Merkmal gewählt …") stünde eine Absage auf
-        # eine Frage, die niemand gestellt hat.
-        _set_shown(self._lock_note, bool(reason) and bool(self._built))
+        # eine Frage, die niemand gestellt hat. **Die Freischaltung sagt die
+        # Zeile unter dem Suchfeld**, für den ganzen Reiter; hier stünde sie
+        # ein zweites Mal (FD-32). Grau und Grund bleiben an jedem Element.
+        _set_shown(
+            self._lock_note, bool(reason) and bool(self._built) and reason != change_refusal()
+        )
         if reason:
             for button in (self._in_view, self._apply, self._cancel):
                 button.setToolTip(reason)
@@ -10398,6 +10567,7 @@ class FeaturePanel(QWidget):
             name = QLabel(f"{action.title} — {action.reason}", box)
             name.setWordWrap(True)
             name.setAccessibleDescription(str(action.reason))
+            name.setProperty(guides.TARGET_PROPERTY, guides.action_target(action))
             fit_wrapped(name)
             layout.addWidget(name)
             return box
@@ -10716,6 +10886,12 @@ class FeaturePanel(QWidget):
         from app.ui.op_dialog import ValueField
 
         box = row.box
+        # Das Ziel im Wortschatz (``feature:<schlüssel>``, an einer Kante
+        # ``edge:``) — als Eigenschaft, denn den ``objectName`` des Kopfes
+        # führt das Stylesheet (``actionHeading``).
+        for head in (row.toggle, row.button):
+            if head is not None:
+                head.setProperty(guides.TARGET_PROPERTY, guides.action_target(action))
         if row.title is not None and row.dot is not None:
             row.title.setText(str(action.title))
             # Die Erklärung beginnt leer: Eine wiederverwendete Zeile trug
@@ -10752,6 +10928,7 @@ class FeaturePanel(QWidget):
                 # stehen vier Handlungen mit je eigenen Feldern.
                 editor.setAccessibleName(f"{action.title} — {field.label}")
                 editor.setProperty(FIELD_PROPERTY, name)
+                editor.setProperty(guides.TARGET_PROPERTY, guides.action_field_target(action, name))
                 if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
                     refusal = row.refusals.get(name)
                     if refusal is not None:
@@ -10837,7 +11014,7 @@ class FeaturePanel(QWidget):
         Änderungsumfang —, bleibt stehen; ein Klick hinein holt ihn ins Bild
         (``MainWindow._hand_the_measures_over``).
         """
-        op = self._measure_op
+        op = self.measure_op
         if (
             not self._measuring
             or op is None
@@ -11578,6 +11755,7 @@ class FeaturePanel(QWidget):
             label.setAccessibleDescription(editor.accessibleDescription())
             editor.setAccessibleName(f"{action.title} — {field.label}")
             editor.setProperty(FIELD_PROPERTY, name)
+            editor.setProperty(guides.TARGET_PROPERTY, f"measure.field:{name}")
             if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
                 refusal = group.refusals.get(name)
                 if refusal is not None:
@@ -11668,7 +11846,7 @@ class FeaturePanel(QWidget):
         (``_settle_lock``).
         """
         self._measuring = bool(active)
-        self._measure_op = op if active else None
+        self.measure_op = op if active else None
         self._measure_begun = bool(active and begun)
         self._settle_lock()
         _set_shown(
@@ -11687,9 +11865,9 @@ class FeaturePanel(QWidget):
                 self._measuring
                 and entry is not None
                 and (
-                    entry.op == self._measure_op
+                    entry.op == self.measure_op
                     or (
-                        self._measure_op in {"drill_hole", "drill_brep_hole"}
+                        self.measure_op in {"drill_hole", "drill_brep_hole"}
                         and entry.op in LEADS_INTO_THE_VIEW
                     )
                 )
@@ -11734,9 +11912,9 @@ class FeaturePanel(QWidget):
     def request_in_view(self) -> None:
         """Denselben Weg nehmen wie der Knopf *Im Bild einstellen* — wenn er steht.
 
-        Für das Hauptfenster, das die Maße nach einem Übernehmen wieder ins
-        Bild bringt: Es klickt nicht auf ein Widget, es nimmt den Weg, der am
-        Widget hängt. Wo kein Knopf steht, geschieht nichts.
+        Für das Hauptfenster, das die Maße nach einer Auswahl oder einem
+        Übernehmen ins Bild bringt: Es klickt nicht, es nimmt den Weg am Knopf
+        samt Scharfmachen (FD-34). Wo kein Knopf steht, geschieht nichts.
 
         **Die scharfe Handlung hat Vorrang.** Der Knopf steht einmal je
         Merkmal (``_settle_in_view``) und führt zur ersten Handlung mit Weg
@@ -11748,8 +11926,7 @@ class FeaturePanel(QWidget):
         if armed is not None and armed.in_view is not None:
             armed.in_view()
             return
-        if self._into_view is not None:
-            self._into_view()
+        self._show_armed_in_view()
 
     def _group_changed(self, _checked: bool) -> None:
         """Ein geänderter Umfang braucht dieselbe Vorschau wie geänderte Maße."""
@@ -12108,6 +12285,10 @@ def collapsible(
     )
     if inline:
         heading.setProperty("inline", True)
+        # Die Überschrift wandert in die fremde Zeile und ist dann kein Kind
+        # des Wrappers mehr; wer vom Inhalt aus die Klappe sucht
+        # (``guide_targets._obstacles``), findet sie hier.
+        wrapper.setProperty("heading", heading)
     summary: _SectionSummary | None = None
     if contents:
         heading.setToolTip(contents)
@@ -12151,18 +12332,17 @@ def open_section(content: QWidget) -> None:
     also um eine Kopfzeile, unter der nichts steht.
 
     Gesucht wird unter den **direkten** Kindern des Wrappers: Der Inhalt hat
-    eigene Knöpfe, und einer davon wäre sonst der erste Treffer. Steckt das
-    Widget in keinem Abschnitt — der Prüfbericht sitzt in einem Reiter —,
-    geschieht nichts.
+    eigene Knöpfe, und einer davon wäre sonst der erste Treffer. Steht die
+    Überschrift in einer fremden Zeile, trägt der Wrapper sie als Eigenschaft.
+    Die Auskunft gibt ``guide_targets.section_heading``, dieselbe, nach der
+    der Wortschatz seine Klappen nennt. Steckt das Widget in keinem
+    Abschnitt, geschieht nichts.
     """
-    wrapper = content.parentWidget()
-    if wrapper is None:
-        return
-    for child in wrapper.children():
-        if isinstance(child, QToolButton) and child.objectName() == "sectionHeading":
-            if not child.isChecked():
-                child.setChecked(True)
-            return
+    from app.ui.guide_targets import section_heading
+
+    heading = section_heading(content)
+    if heading is not None and not heading.isChecked():
+        heading.setChecked(True)
 
 
 def least_number_width(spin: QDoubleSpinBox) -> int:

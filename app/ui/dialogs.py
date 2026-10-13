@@ -31,11 +31,9 @@ from PySide6.QtGui import QDesktopServices, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
-    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -68,7 +66,7 @@ from app.branding import (
     WEBSITE_URL,
     website_page_url,
 )
-from app.core import activation, expressions, licence_service, tools
+from app.core import activation, expressions, guides, licence_service, tools
 from app.core.activation import certificate as activation_certificate
 from app.core.activation import store as activation_store
 from app.core.backends import keys, llm, machine, needs
@@ -81,9 +79,9 @@ from app.core.errors import (
     InstallationDamaged,
     InternalError,
 )
-from app.core.knowledge import calibration, licences, profiles
+from app.core.knowledge import licences
 from app.core.log import get_logger
-from app.core.types import Finding, Profile
+from app.core.types import Finding
 from app.core.units import UNIT_NAMES
 from app.i18n import format_decimal, get_language, tr
 from app.ui.ai_disclosure import (
@@ -100,7 +98,6 @@ from app.ui.labels import (
     demo_days,
     fill_parameter_units,
     localised_value,
-    printer_title,
     trial_days,
     unit_of,
     value_line,
@@ -113,6 +110,7 @@ from app.ui.leash import (
     stop_watching_the_dying,
     weak_slot,
 )
+from app.ui.message_dialog import MessageDialog, acknowledge, inform, name_button, withdraw
 from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
@@ -387,219 +385,6 @@ class AskDialog(QDialog):
         return str(item.data(Qt.ItemDataRole.UserRole)) if item is not None else None
 
 
-class CalibrationDialog(QDialog):
-    """Gemessene Werte eintragen (Bauplan §28.3).
-
-    Schritt zwei von dreien: den Prüfkörper drucken, ihn messen, und die Zahlen
-    kommen hier hinein. Sie landen im Materialprofil, nicht in einem Modell —
-    und weil Toleranzen im Stapel Verweise sind (§12), folgt danach jedes
-    bestehende Projekt. Der Dialog sagt das, denn es ist der Teil, der Leute
-    überrascht.
-    """
-
-    def __init__(
-        self, material: str, parent: QWidget | None = None, *, process: Profile | None = None
-    ) -> None:
-        super().__init__(parent)
-        self.material = material
-        self.process = process
-        self.setWindowTitle(tr("Material kalibrieren"))
-        self.setMinimumWidth(420)
-
-        current = profiles.material(material)
-        state = (
-            tr("kalibriert") if current.calibrated else tr("Startwert", context="Kalibrierstand")
-        )
-        # Der Titel, den der Kunde überall sonst liest — nicht die Kennung des
-        # Profils („resin — Startwert" über einem „Standardharz").
-        # **Was kalibriert wird, ist die Überschrift** — es stand als erste
-        # Zeile im Fließtext, so laut wie der Satz darunter.
-        heading = QLabel(f"{current.title} — {state}", self)
-        heading.setWordWrap(True)
-        set_level(heading, "section")
-        explanation = QLabel(
-            tr(
-                "Gemessene Werte gehören ins Materialprofil, nicht ins Modell. "
-                "Alle bestehenden Projekte rechnen danach mit den neuen Werten.\n\n"
-                "Gemessen wird an einem gedruckten Prüfkörper: der Toleranz-Testkörper "
-                "aus dem Bausteinkatalog bringt Zapfen und Bohrungen mit gestaffeltem "
-                "Spiel auf zwei steckbare Messleisten."
-            ),
-            self,
-        )
-        explanation.setWordWrap(True)
-
-        self.editors: dict[str, QDoubleSpinBox] = {}
-        self.measured_fields: dict[str, QCheckBox] = {}
-        self._original_values: dict[str, float] = {}
-        self._edited_fields: set[str] = set()
-        form = QFormLayout()
-        form.setHorizontalSpacing(NORMAL)
-        form.setVerticalSpacing(NORMAL)
-        for name, title in (
-            ("clearance", tr("Spiel für Schiebesitz")),
-            ("press", tr("Übermaß für Presssitz")),
-            ("hole_compensation", tr("Lochkorrektur")),
-            ("elephant_foot", tr("Elefantenfuß")),
-            ("shrinkage", tr("Schwindung")),
-        ):
-            editor = NumberSpin(self)
-            # Die Schwindung ist ein Anteil, kein Maß: „0,004" trug deshalb
-            # als Einziges keine Einheit und sagte niemandem etwas. Als
-            # Prozentwert liest sie sich — 0,4 % ist eine Zahl, die man aus
-            # einem Datenblatt kennt.
-            percent = name == "shrinkage"
-            editor.setDecimals(2 if percent else 3)
-            editor.setRange(-100.0 if percent else -1.0, 500.0 if percent else 5.0)
-            editor.setSingleStep(0.1 if percent else 0.01)
-            editor.setSuffix(" %" if percent else " mm")
-            value = float(getattr(current, name))
-            self._original_values[name] = value
-            editor.setValue(value * 100.0 if percent else value)
-            self.editors[name] = editor
-            form.addRow(title, editor)
-
-        for name, title, suffix, maximum in (
-            ("minimum_wall", tr("Mindestwand übernehmen"), " mm", 50.0),
-            ("overhang_angle", tr("Überhangwinkel übernehmen"), " °", 89.9),
-        ):
-            checkbox = QCheckBox(title, self)
-            checkbox.setEnabled(process is not None)
-            editor = NumberSpin(self)
-            editor.setDecimals(2)
-            editor.setRange(0.01, maximum)
-            editor.setSuffix(suffix)
-            editor.setAccessibleName(title)
-            value = getattr(current, name)
-            applies = process is not None and process.has_process_calibration and value is not None
-            default = (
-                process.minimum_wall_thickness
-                if name == "minimum_wall" and process is not None
-                else process.overhang_limit_degrees
-                if process is not None
-                else 1.0
-            )
-            self._original_values[name] = float(value) if applies else default
-            editor.setValue(self._original_values[name])
-            editor.setEnabled(applies)
-            checkbox.setChecked(applies)
-            checkbox.toggled.connect(editor.setEnabled)
-            explanation_text = tr(
-                "Nur aktivieren, wenn Sie die Probe gedruckt und geprüft haben. "
-                "Der Überhangwinkel wird von der Senkrechten aus gemessen. "
-                "Ohne Auswahl bleiben gespeicherte Messwerte unverändert."
-            )
-            for widget in (checkbox, editor):
-                widget.setToolTip(explanation_text)
-                widget.setAccessibleDescription(explanation_text)
-            self.editors[name] = editor
-            self.measured_fields[name] = checkbox
-            form.addRow(checkbox, editor)
-
-        # Erst nach der Vorbelegung beobachten: Qt rundet schon bei setValue.
-        # Auch bewusstes Neueintippen derselben sichtbaren Zahl ist eine Änderung.
-        for name, observed_editor in self.editors.items():
-            observed_editor.valueChanged.connect(
-                lambda _value, field=name: self._edited_fields.add(field)
-            )
-            line = observed_editor.lineEdit()
-            if line is not None:
-                line.textEdited.connect(lambda _text, field=name: self._edited_fields.add(field))
-
-        process_note = QLabel(self)
-        process_note.setWordWrap(True)
-        if process is not None:
-            printer = process.printer
-            # Der Prozess des Verfahrens: Bei Resin gibt es keine Düse und
-            # keine Bahn — dort sind es Schichthöhe und Bildpunkt (RM-071).
-            conditions = (
-                tr("Schichthöhe")
-                + f" {format_decimal(printer.layer_height)} mm · "
-                + tr("Pixelgröße")
-                + f" {format_decimal(printer.pixel_size)} mm"
-                if printer.is_resin
-                else tr("Düse")
-                + f" {format_decimal(printer.nozzle_diameter)} mm · "
-                + tr("Schichthöhe")
-                + f" {format_decimal(printer.layer_height)} mm · "
-                + tr("Bahnbreite")
-                + f" {format_decimal(printer.extrusion_width)} mm"
-            )
-            process_note.setText(
-                tr("Wand und Überhang gelten nur für diese Druckbedingungen:")
-                + "\n"
-                + f"{printer_title(printer)} · {current.title}\n"
-                + conditions
-            )
-        else:
-            process_note.setText(tr("Wählen Sie zuerst den Drucker der Probe im Projekt aus."))
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
-        )
-        button_layout = buttons.layout()
-        assert button_layout is not None
-        button_layout.setSpacing(SPACE)
-        # Die gemessenen Werte zu übernehmen ist die Handlung dieses Fensters.
-        # Den Akzent trug der Knopf schon — Qt vergibt ihn beim ersten
-        # ``show()`` an den ersten autoDefault-Knopf —, aber ohne die
-        # halbfette Schrift daneben (Regel 18).
-        save = buttons.button(QDialogButtonBox.StandardButton.Save)
-        if save is not None:
-            make_primary(save)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-
-        content = QWidget(self)
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(heading)
-        layout.addWidget(explanation)
-        layout.addLayout(form)
-        layout.addWidget(process_note)
-        layout.setSpacing(NORMAL)
-        layout.addStretch(1)
-        scroll = DialogScrollArea(self)
-        scroll.setWidget(content)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
-        outer.setSpacing(NORMAL)
-        outer.addWidget(scroll, 1)
-        outer.addWidget(buttons)
-        for measurement in self.editors.values():
-            wheel_needs_focus(measurement)
-
-    def measured(self) -> calibration.Calibration:
-        """Was eingetragen wurde, als anwendungsfertige Kalibrierung.
-
-        Die Schwindung steht im Feld als Prozentwert und im Profil als Anteil —
-        umgerechnet wird hier, an der einen Stelle, an der beide sich treffen.
-
-        **Nur was eingetragen wurde** (RM-589): Ein unberührtes Feld ist keine
-        Messung. Es behält im Profil seinen Wert, aber nicht das Kennzeichen
-        „gemessen“ — sonst bliebe nach einer reinen Spielmessung der
-        Startwert des Elefantenfußes als gemessen stehen, und der Druckrat
-        nähme dem Slicer seinen Einzug nicht ab. Wand und Überhang zählen, wenn
-        ihr Haken steht.
-        """
-        return calibration.from_measurements(
-            self.material,
-            **{
-                name: self._original_values[name]
-                if name not in self._edited_fields
-                else editor.value() / 100.0
-                if name == "shrinkage"
-                else editor.value()
-                for name, editor in self.editors.items()
-                if (
-                    self.measured_fields[name].isChecked()
-                    if name in self.measured_fields
-                    else name in self._edited_fields
-                )
-            },
-        )
-
-
 class _ParameterValueSpin(NumberSpin):
     """Projektwerte mit mindestens zwei, aber ohne unehrliche Nullstellen.
 
@@ -705,6 +490,17 @@ class ParameterDialog(QDialog):
         self.maximum_field.setPlaceholderText(tr("optional — leer heißt: keine"))
         self.expression_field = QLineEdit(content)
         self.expression_field.setPlaceholderText(tr("zum Beispiel =@breite/2"))
+        # Die Felder als Ziele im Wortschatz (``field:<feld>``), unter den
+        # Namen der Felder eines Projektparameters (RM-737).
+        for key, editor in (
+            ("name", self.name_field),
+            ("value", self.value_field),
+            ("unit", self.unit_field),
+            ("minimum", self.minimum_field),
+            ("maximum", self.maximum_field),
+            ("expression", self.expression_field),
+        ):
+            editor.setProperty(guides.TARGET_PROPERTY, f"field:{key}")
 
         # Die zwei sichtbaren Werkzeuge entsprechen dem Operationsdialog:
         # ``fx`` schaltet eine Formel ein, ``@`` nimmt einen vorhandenen Namen.
@@ -1744,7 +1540,11 @@ class KeyDialog(QDialog):
         if not tools.state_of(tool).installed:
             from app.ui.install_dialog import InstallDialog
 
-            InstallDialog(self, settings=self.settings).exec()
+            dialog = InstallDialog(self, settings=self.settings)
+            try:
+                dialog.exec()
+            finally:
+                dialog.deleteLater()
             self.look()
             return
         self.service_button.setEnabled(False)
@@ -2239,6 +2039,13 @@ class OfflineActivationDialog(QDialog):
         make_primary(save)
         website = QPushButton(tr("2 · Aktivierungsseite öffnen"), self)
         website.clicked.connect(self._open_page)
+        self.page_button = website
+        # Was ein Schritt erreicht hat, steht hier und nicht in einem Fenster
+        # obenauf (Z2): gespeichert, oder warum die Seite nicht aufging.
+        self.receipt = QLabel(self)
+        self.receipt.setWordWrap(True)
+        self.receipt.setTextFormat(Qt.TextFormat.PlainText)
+        self.receipt.hide()
         self.page_address = QLineEdit(self.PAGE_URL, self)
         self.page_address.setReadOnly(True)
         self.page_address.setAccessibleName(website.text())
@@ -2254,6 +2061,7 @@ class OfflineActivationDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(explanation)
         layout.addWidget(save)
+        layout.addWidget(self.receipt)
         page_actions = QHBoxLayout()
         page_actions.setSpacing(NORMAL)
         page_actions.addWidget(website)
@@ -2299,13 +2107,15 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        QMessageBox.information(
-            self,
+        # Der nächste Schritt wird Hauptknopf: die Seite öffnen (FD-24).
+        acknowledge(
+            self.receipt,
             tr("Aktivierungsanfrage gespeichert"),
             tr(
                 "Übertragen Sie die Datei auf ein Gerät mit Internet und öffnen Sie dort "
                 "die Aktivierungsseite."
             ),
+            then=self.page_button,
         )
 
     def _open_page(self) -> None:
@@ -2315,13 +2125,14 @@ class OfflineActivationDialog(QDialog):
         target.setQuery(query)
         if QDesktopServices.openUrl(target) is False:
             self._copy_page()
-            QMessageBox.information(
-                self,
-                tr("2 · Aktivierungsseite öffnen"),
+            # Die Adresse steht darunter im Feld — der Hinweis gehört dazu.
+            acknowledge(
+                self.receipt,
                 tr(
                     "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; "
                     "öffnen Sie sie auf einem Gerät mit Internet."
                 ),
+                role="warning",
             )
 
     def _copy_page(self) -> None:
@@ -2358,11 +2169,7 @@ class OfflineActivationDialog(QDialog):
                 self,
             )
             return
-        QMessageBox.information(
-            self,
-            tr("Solidon ist freigeschaltet"),
-            tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
-        )
+        # Die Quittung steht im Freischaltdialog, zu dem es zurückgeht (FD-24).
         self.accept()
 
 
@@ -2398,6 +2205,12 @@ class ActivationDialog(QDialog):
         self.state_label = QLabel(self)
         self.state_label.setWordWrap(True)
         self.state_label.setTextFormat(Qt.TextFormat.PlainText)
+        # Erfolg und Hinweis eines Schritts stehen hier, nie als Meldungsfenster
+        # (Z2, FD-24); der nächste Schritt beginnt mit leerer Zeile.
+        self.receipt = QLabel(self)
+        self.receipt.setWordWrap(True)
+        self.receipt.setTextFormat(Qt.TextFormat.PlainText)
+        self.receipt.hide()
 
         introduction = QLabel(
             tr(
@@ -2509,6 +2322,9 @@ class ActivationDialog(QDialog):
         device_layout.addWidget(completion)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        close = buttons.button(QDialogButtonBox.StandardButton.Close)
+        assert close is not None
+        self.close_button = close
         buttons.addButton(self.forget_button, QDialogButtonBox.ButtonRole.DestructiveRole)
         make_danger(self.forget_button)
         button_layout = buttons.layout()
@@ -2520,6 +2336,7 @@ class ActivationDialog(QDialog):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.state_label)
+        layout.addWidget(self.receipt)
         layout.addWidget(introduction)
         # Zwei Schritte als flache Abschnitte wie in jedem Dialog (RM-518).
         from app.ui.panels import collapsible
@@ -2747,6 +2564,11 @@ class ActivationDialog(QDialog):
         self.online_button.setEnabled(pending_activation and named and not busy)
         self.offline_button.setEnabled(pending_activation and named and not busy)
         self.buy_button.setEnabled(not damaged and not locked_locally and not busy)
+        if self.online_button.isEnabled() and not self.online_button.isDefault():
+            # Nach einer Quittung führte *Schließen* (``acknowledge``); steht wieder
+            # eine Aktivierung an, führt wieder ihr kurzer Weg.
+            make_primary(self.close_button, leading=False)
+            make_primary(self.online_button)
         self.forget_button.setEnabled(
             (activation.read_key() is not None or state.licence is not None or pending_deactivation)
             and not busy
@@ -2787,6 +2609,7 @@ class ActivationDialog(QDialog):
         self.forget_button.setAccessibleDescription(forget_hint)
 
     def _remember(self) -> None:
+        withdraw(self.receipt)
         text = self.field.toPlainText().strip()
         if not text:
             # Erreichbar bleibt das über die Tastatur; geschlossen wird deshalb
@@ -2800,21 +2623,22 @@ class ActivationDialog(QDialog):
             # des Fehlers sind die halbe Regel 17.
             show_error(problem, self)
             return
+        self._show_state()
+        self._follow_field()
+        self.device_name.setFocus()
         if activation.read_key() is None:
-            QMessageBox.information(
-                self,
-                tr("Solidon freischalten"),
+            acknowledge(
+                self.receipt,
                 tr(
                     "Der Schlüssel gilt für diese Sitzung, ließ sich aber nicht "
                     "ablegen — beim nächsten Start wird er wieder gebraucht."
                 ),
+                role="warning",
             )
-        self._show_state()
-        self._follow_field()
-        self.device_name.setFocus()
 
     def _forget(self) -> None:
         """Nimmt den abgelegten Schlüssel weg — vor dem Verkauf des Rechners."""
+        withdraw(self.receipt)
         if (
             activation.state().certificate is not None
             or activation.pending_deactivation_request() is not None
@@ -2841,6 +2665,7 @@ class ActivationDialog(QDialog):
 
     def _activation_request(self) -> str | None:
         """Prüft Feld und Gerätename und erzeugt genau eine signierte Anfrage."""
+        withdraw(self.receipt)
         try:
             activation.remember(self.field.toPlainText().strip())
             return activation.create_activation_request(self.device_name.text())
@@ -2868,9 +2693,21 @@ class ActivationDialog(QDialog):
         request = self._activation_request()
         if request is None:
             return
-        OfflineActivationDialog(request, self).exec()
+        dialog = OfflineActivationDialog(request, self)
+        try:
+            answered = dialog.exec()
+        finally:
+            dialog.deleteLater()
         self._show_state()
         self._follow_field()
+        if answered == QDialog.DialogCode.Accepted:
+            # Angenommen heißt eingelesen und eingetragen (``_import_answer``).
+            acknowledge(
+                self.receipt,
+                tr("Solidon ist freigeschaltet"),
+                tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+                then=self.close_button,
+            )
 
     def _online_completed(self, answer: str) -> None:
         try:
@@ -2878,12 +2715,14 @@ class ActivationDialog(QDialog):
         except AppError as problem:
             show_error(problem, self)
             return
-        QMessageBox.information(
-            self,
+        self._show_state()
+        # Am Ort und ohne Fenster obenauf (Z2, FD-24); weiter geht es mit Schließen.
+        acknowledge(
+            self.receipt,
             tr("Solidon ist freigeschaltet"),
             tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+            then=self.close_button,
         )
-        self._show_state()
 
     def _online_failed(self, problem: object) -> None:
         if isinstance(problem, AppError):
@@ -2966,15 +2805,16 @@ class ActivationDialog(QDialog):
             self._show_state()
             return
         self.field.clear()
-        QMessageBox.information(
-            self,
+        self._show_state()
+        acknowledge(
+            self.receipt,
             tr("Rechner deaktiviert"),
             tr(
                 "Die lokale Freischaltung und der Lizenzschlüssel wurden entfernt. "
                 "Der Geräteplatz ist jetzt für einen anderen Rechner frei."
             ),
+            then=self.close_button,
         )
-        self._show_state()
 
     def _deactivation_failed(self, problem: object) -> None:
         detail = (
@@ -3072,12 +2912,13 @@ def open_link(address: str, parent: QWidget | None = None) -> bool:
     """
     if open_or_copy(QUrl(address), address):
         return True
-    QMessageBox.information(
+    inform(
         parent,
         tr("Der Browser ließ sich nicht öffnen"),
         tr("Die Adresse ist kopiert — fügen Sie sie in einen Browser ein:\n{address}").replace(
             "{address}", address
         ),
+        target="message:browser_failed",
     )
     return False
 
@@ -3097,27 +2938,27 @@ def copy_donation_url(url: str = DONATION_URL) -> None:
     QApplication.clipboard().setText(url)
 
 
-class DonationOpenErrorDialog(QMessageBox):
-    """Der Browser-Ausfall endet mit einem kopierbaren Ausweg."""
+class DonationOpenErrorDialog(MessageDialog):
+    """Der Browser-Ausfall endet mit einem kopierbaren Ausweg — im Hausstil (FD-21)."""
 
     def __init__(self, parent: QWidget | None = None, *, url: str = DONATION_URL) -> None:
-        super().__init__(parent)
-        self._url = url
-        self.setIcon(QMessageBox.Icon.Warning)
-        self.setWindowTitle(tr("Die Unterstützungsseite ließ sich nicht öffnen"))
-        self.setText(tr("Der Standardbrowser konnte die Unterstützungsseite nicht öffnen."))
-        self.setInformativeText(
-            tr(
+        super().__init__(
+            parent,
+            title=tr("Die Unterstützungsseite ließ sich nicht öffnen"),
+            headline=tr("Der Standardbrowser konnte die Unterstützungsseite nicht öffnen."),
+            body=tr(
                 "Kopieren Sie den Zahlungslink und öffnen Sie ihn selbst. "
                 "Bei Fragen hilft Ihnen {address}."
-            ).format(address=SUPPORT_ADDRESS)
+            ).format(address=SUPPORT_ADDRESS),
+            kind="warning",
+            target="message:donation_failed",
         )
-        self.copy_button = self.addButton(
-            tr("Zahlungslink kopieren"), QMessageBox.ButtonRole.ActionRole
+        self._url = url
+        self.copy_button = self.add_action(
+            tr("Zahlungslink kopieren"), "message.button:donation_failed.copy", lead=True
         )
-        self.copy_button.clicked.connect(self._copy_url)
-        close_button = self.addButton(QMessageBox.StandardButton.Close)
-        close_button.setText(tr("Schließen"))
+        self.copy_button.clicked.connect(weak_slot(self, DonationOpenErrorDialog._copy_url))
+        self.add_exit(tr("Schließen"), "message.button:donation_failed.close")
 
     def _copy_url(self) -> None:
         """Kopiert genau den zuvor gewählten Unterstützungsweg."""
@@ -3128,7 +2969,11 @@ def open_donation(parent: QWidget | None = None, *, url: str = DONATION_URL) -> 
     """Öffnet den gewählten Unterstützungsweg erst nach dem ausdrücklichen Klick."""
     if QDesktopServices.openUrl(QUrl(url)):
         return True
-    DonationOpenErrorDialog(parent, url=url).exec()
+    dialog = DonationOpenErrorDialog(parent, url=url)
+    try:
+        dialog.exec()
+    finally:
+        dialog.deleteLater()
     return False
 
 
@@ -3182,20 +3027,34 @@ def expired_demo_text(state: activation.Activation, now: datetime | None = None)
     return "\n\n".join(str(line) for line in lines)
 
 
+#: Der Name des Fensters nach abgelaufener Demo im Wortschatz. Es ist eine
+#: Meldung ohne eigene Klasse; der Name hängt deshalb als Kennzeichen am
+#: Fenster, nicht an einem Klassennamen.
+EXPIRED_DEMO_TARGET: Final = "dialog:expired_demo"
+
+
 def show_expired_demo(state: activation.Activation) -> None:
     """Die Verabschiedung der Demo, mit einem Weg nach vorn.
 
     Ein Fenster und kein stiller Nichtstart: Wer doppelt klickt und nichts
     geschieht, sucht den Fehler bei sich oder hält das Programm für kaputt.
     """
-    box = QMessageBox()
-    box.setWindowTitle(tr("Die Demo ist beendet"))
-    box.setIcon(QMessageBox.Icon.Information)
-    box.setText(expired_demo_text(state))
-    website = box.addButton(tr("Website öffnen"), QMessageBox.ButtonRole.AcceptRole)
-    box.addButton(QMessageBox.StandardButton.Close)
-    box.exec()
-    if box.clickedButton() is website:
+    title = tr("Die Demo ist beendet")
+    box = MessageDialog(
+        title=title,
+        headline=title,
+        body=expired_demo_text(state),
+        kind="info",
+        target=EXPIRED_DEMO_TARGET,
+    )
+    website = box.add_action(tr("Website öffnen"), "message.button:expired_demo.website", lead=True)
+    box.add_exit(tr("Schließen"), "message.button:expired_demo.close")
+    try:
+        box.exec()
+        chosen = box.clicked_button()
+    finally:
+        box.deleteLater()
+    if chosen is website:
         open_website()
 
 
@@ -3586,11 +3445,8 @@ def show_error(
     known = dict(handlers if handlers is not None else handlers_of(parent))
     offered = offered_actions(error, known)
 
-    box = QMessageBox(parent)
-    box.setTextFormat(Qt.TextFormat.PlainText)
-    box.setIcon(QMessageBox.Icon.Warning)
-    box.setWindowTitle(tr("Das hat so nicht funktioniert"))
-    box.setText(str(error.title))
+    # **Im Hausstil, nicht als Systemfenster** (FD-21, Z5): Symbol aus dem
+    # eigenen Satz, Titel, Ursache, Handlungen als Knöpfe.
     # Erst was nicht ging, dann die Angaben dazu, dann was jetzt möglich ist
     # (§2.7). Der letzte Teil fehlte für jeden Vorschlag ohne Handler — siehe
     # :func:`unhandled_advice`; der mittlere fehlte für jeden Fehler, siehe
@@ -3598,45 +3454,38 @@ def show_error(
     spoken = [str(error.detail)] if error.detail else []
     spoken.extend(spoken_values(error))
     spoken.extend(unhandled_advice(error, known))
-    if spoken:
-        box.setInformativeText("\n".join(spoken))
+    box = MessageDialog(
+        parent,
+        title=tr("Das hat so nicht funktioniert"),
+        headline=str(error.title),
+        body="\n".join(spoken),
+        kind="error",
+        target="message:error",
+    )
 
     buttons: dict[Any, Action] = {}
     # **Genau ein Hauptknopf** (RM-512), gewählt wie überall
     # (``leading_action``): Zwei Akzentknöpfe sagen nicht, welcher gemeint
-    # ist, und ohne gesetzten rät Qt einen — mit Akzent, ohne Halbfett.
+    # ist. Halbfett und Akzent setzt ``add_action`` über ``make_primary`` —
+    # Farbe allein wäre keine zweite Kodierung (Regel 18, Befund D3).
     lead = leading_action(offered)
     for action in offered:
-        role = (
-            QMessageBox.ButtonRole.AcceptRole
-            if action is lead
-            else QMessageBox.ButtonRole.ActionRole
+        button = box.add_action(
+            str(action.label), f"message.button:error.{action.id}", lead=action is lead
         )
-        button = box.addButton(str(action.label), role)
-        # **Welcher Knopf der Hauptknopf ist, stand schon im Datenmodell** —
-        # ``Action.primary`` entscheidet zwei Zeilen darüber die Rolle. Es
-        # fehlte nur das letzte Glied: Ohne ``make_primary`` bekam der Knopf
-        # zwar Qts Akzentfarbe, aber nicht die halbfette Schrift, die neben ihr
-        # die zweite Kodierung ist (Regel 18, Befund D3).
-        if action is lead:
-            make_primary(button)
         buttons[button] = action
-    abbrechen = box.addButton(str(CANCEL.label), QMessageBox.ButtonRole.RejectRole)
+    # Ohne Handlung gibt es nichts abzubrechen — das Fenster schließt nur, und
+    # der Ausgang trägt nie den Akzent, auch nicht als einziger Knopf.
+    box.add_exit(
+        str(CANCEL.label) if offered else tr("Schließen"),
+        f"message.button:error.{CANCEL.id}",
+    )
 
-    # **Bleibt nur „Abbrechen" übrig, trägt niemand den Akzent.** Das
-    # passiert, wenn das Fenster für keinen Vorschlag einen Handler hat
-    # (:func:`offered_actions`) — dann macht Qt den einzigen Knopf zum
-    # Default, und der Ausgang steht im Akzent da. „Schließen ist nie ein
-    # Hauptknopf" gilt auch, wenn er der einzige ist: Der Akzent lädt zu einer
-    # Handlung ein, und Abbrechen ist keine.
-    if not offered:
-        abbrechen.setAutoDefault(False)
-        abbrechen.setDefault(False)
-        # Ohne Handlung gibt es nichts abzubrechen — das Fenster schließt nur.
-        abbrechen.setText(tr("Schließen"))
-
-    box.exec()
-    chosen = buttons.get(box.clickedButton())
+    try:
+        box.exec()
+        chosen = buttons.get(box.clicked_button())
+    finally:
+        box.deleteLater()
     if chosen is not None:
         known[chosen.id](error)
     return chosen
@@ -3653,12 +3502,22 @@ def show_details(error: AppError, parent: QWidget | None = None) -> None:
     if error.op_id is not None:
         lines.append(tr("Operation: {op_id}", op_id=error.op_id))
 
-    box = QMessageBox(parent)
-    box.setIcon(QMessageBox.Icon.Information)
-    box.setWindowTitle(tr("Einzelheiten"))
-    box.setText(str(error.title))
-    box.setDetailedText("\n".join(lines) or tr("Keine weiteren Angaben."))
-    box.exec()
+    box = MessageDialog(
+        parent,
+        title=tr("Einzelheiten"),
+        headline=str(error.title),
+        details="\n".join(lines) or tr("Keine weiteren Angaben."),
+        kind="info",
+        target="message:error_details",
+    )
+    # Die Angaben sind zum Weitergeben da — in eine Rückmeldung, eine Mail.
+    copy = box.add_action(tr("Kopieren"), "message.button:error_details.copy", closes=False)
+    copy.clicked.connect(weak_slot(box, MessageDialog.copy_text))
+    box.add_exit(tr("Schließen"), "message.button:error_details.close")
+    try:
+        box.exec()
+    finally:
+        box.deleteLater()
 
 
 #: Wie breit der Unterstützen-Dialog mindestens ist. Breit genug, dass die zwei
@@ -4092,14 +3951,12 @@ def damaged_line() -> str:
     Ersteinrichtung — die versprach sonst „Die ersten 14 Tage ist alles frei"
     an eine Installation, die schon in der ersten Sekunde nichts freigibt.
     """
-    problem = InstallationDamaged()
-    return f"{problem.title} {problem.detail}"
+    return str(InstallationDamaged())
 
 
 def deactivation_pending_line() -> str:
     """Erklärt die sichere lokale Sperre nach einer unklaren Serverantwort."""
-    problem = activation.DeviceDeactivationPending()
-    return f"{problem.title} {problem.detail}"
+    return str(activation.DeviceDeactivationPending())
 
 
 def licence_lock_line(state: activation.Activation | None = None) -> str:
@@ -4110,12 +3967,21 @@ def licence_lock_line(state: activation.Activation | None = None) -> str:
     beschädigte Installation und ein noch nicht aktivierter Rechner sperren
     zwar dieselben Handlungen, brauchen aber jeweils einen anderen nächsten
     Schritt. Diese eine Quelle hält Wortlaut und Handlung zusammen.
+
+    **Jeder Satz nennt den Weg** (FD-30, V5): die Menüzeile der Freischaltung,
+    an der Schlüssel, Aktivierung und das erneute Senden der Deaktivierung
+    liegen — oder, bei einer beschädigten Installation, die Neuinstallation.
     """
     current = state or activation.state()
     if current.damaged:
         return damaged_line()
     if current.deactivation_pending:
-        return deactivation_pending_line()
+        return str(
+            tr(
+                "Die Deaktivierung dieses Rechners ist noch nicht bestätigt. Senden Sie sie "
+                "erneut (Hilfe → Solidon freischalten …)."
+            )
+        )
     if current.needs_activation:
         return str(
             tr(
@@ -4125,7 +3991,10 @@ def licence_lock_line(state: activation.Activation | None = None) -> str:
         )
     if current.expired:
         return str(
-            tr("Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen Lizenzschlüssel.")
+            tr(
+                "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen "
+                "Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+            )
         )
     return str(
         tr(
@@ -4218,21 +4087,27 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     Gibt ``save``, ``discard`` oder ``cancel`` zurück.
     """
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:unsaved_changes")
     box.setIcon(QMessageBox.Icon.Question)
     box.setWindowTitle(tr("Ungesicherte Änderungen"))
     box.setText(tr("Dieses Projekt hat Änderungen, die noch nicht gespeichert sind."))
     box.setInformativeText(title)
     save = box.addButton(tr("Speichern"), QMessageBox.ButtonRole.AcceptRole)
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
-    box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    name_button(save, "message.button:unsaved_changes.save")
+    name_button(discard, "message.button:unsaved_changes.discard")
+    name_button(cancel, "message.button:unsaved_changes.cancel")
     make_primary(save)
     # Rot, weil nach dem Schließen kein Undo zurückholt, was hier verworfen wird.
     make_danger(discard)
     box.setDefaultButton(save)
     as_plain_text(box)
-    box.exec()
-
-    clicked = box.clickedButton()
+    try:
+        box.exec()
+        clicked = box.clickedButton()
+    finally:
+        box.deleteLater()
     if clicked is save:
         return "save"
     return "discard" if clicked is discard else "cancel"
@@ -4307,6 +4182,7 @@ def _go_on_despite(
 ) -> bool:
     """Die Befunde in fünf Zeilen, dazu Weitergehen als Vorgabe und Abbrechen."""
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:go_on_despite_findings")
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(title)
     box.setText(text)
@@ -4315,12 +4191,17 @@ def _go_on_despite(
         lines.append(tr("Der Rest steht im Prüfbericht."))
     box.setInformativeText(newline.join(lines))
     write = box.addButton(go_on, QMessageBox.ButtonRole.AcceptRole)
-    box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    name_button(write, "message.button:go_on_despite_findings.go_on")
+    name_button(cancel, "message.button:go_on_despite_findings.cancel")
     make_primary(write)
     box.setDefaultButton(write)
     as_plain_text(box)
-    box.exec()
-    return box.clickedButton() is write
+    try:
+        box.exec()
+        return box.clickedButton() is write
+    finally:
+        box.deleteLater()
 
 
 def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = None) -> str:
@@ -4333,6 +4214,7 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
     ``close`` zurück.
     """
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:generation_loss")
     box.setIcon(QMessageBox.Icon.Question)
     lost = ""
     if tries == 1:
@@ -4355,12 +4237,17 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
         box.setText(lost)
     back = box.addButton(tr("Zur Erzeugung"), QMessageBox.ButtonRole.RejectRole)
     close = box.addButton(tr("Trotzdem schließen"), QMessageBox.ButtonRole.DestructiveRole)
+    name_button(back, "message.button:generation_loss.back")
+    name_button(close, "message.button:generation_loss.close")
     make_primary(back)
     make_danger(close)
     box.setDefaultButton(back)
     box.setEscapeButton(back)
-    box.exec()
-    return "close" if box.clickedButton() is close else "back"
+    try:
+        box.exec()
+        return "close" if box.clickedButton() is close else "back"
+    finally:
+        box.deleteLater()
 
 
 def ask_free_part_name(
@@ -4408,6 +4295,7 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     if count <= 1:
         return True
     box = QMessageBox(parent)
+    box.setProperty(guides.TARGET_PROPERTY, "message:discard_undone_steps")
     box.setWindowTitle(tr("Abgeschnittene Schritte verwerfen?"))
     box.setText(
         tr("Diese Änderung verwirft {count} zurückgenommene Schritte.").replace(
@@ -4418,6 +4306,8 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
         box.setInformativeText("\n".join(f"· {name}" for name in names))
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
     cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    name_button(discard, "message.button:discard_undone_steps.discard")
+    name_button(cancel, "message.button:discard_undone_steps.cancel")
     # **Rot und ohne Hauptknopf** (RM-512): Verwerfen ist unwiederbringlich,
     # also kein Akzent, der dazu einlädt, und keine Eingabetaste, die es im
     # Vorbeigehen tut. Abbrechen ist ein Ausgang und kein Hauptknopf; Escape
@@ -4429,5 +4319,8 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     box.setEscapeButton(cancel)
     cancel.setFocus()
     as_plain_text(box)
-    box.exec()
-    return box.clickedButton() is discard
+    try:
+        box.exec()
+        return box.clickedButton() is discard
+    finally:
+        box.deleteLater()

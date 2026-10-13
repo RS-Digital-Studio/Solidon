@@ -1150,7 +1150,7 @@ def _ways_of_the_written_pages() -> dict[str, tuple[list[list[str]], int]]:
 def _menus_of_the_bar() -> set[str]:
     """Die Menüs der Leiste, in der eingestellten Sprache.
 
-    Die festen vier baut das Hauptfenster mit ``self._menu(tr(…))``; gelesen
+    Die festen vier baut das Hauptfenster mit ``self._menu(_(…))``; gelesen
     wird der Quelltext, denn ein Fenster zu bauen ist ein Fenstertest und läuft
     nur beim Release. Dazu die Gruppen des Registers, die es in die Leiste
     schaffen. Was darunter steht, weiß erst das gebaute Fenster:
@@ -1171,7 +1171,7 @@ def _menus_of_the_bar() -> set[str]:
         and node.args
         and isinstance(node.args[0], ast.Call)
         and isinstance(node.args[0].func, ast.Name)
-        and node.args[0].func.id == "tr"
+        and node.args[0].func.id in ("tr", "_")
         and isinstance(node.args[0].args[0], ast.Constant)
     ]
     assert len(fixed) >= 4, f"nur {fixed} als Menü gefunden — das Muster greift nicht mehr"

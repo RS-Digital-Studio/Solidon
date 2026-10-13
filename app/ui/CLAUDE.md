@@ -116,6 +116,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Einfügemarke, Fragen des Kerns (`AskRequest`), `one_step` (mehrere `apply` als eine Transaktion); `evaluation_profile` (Profil der Auswertung samt Stützschwelle, `druckrat.md`), `evaluation_follows` (spät gelesene Grundlage wertet neu aus) |
 | `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; `collect_in_main_thread`, GC-Zähler mit Zustandswahrung; `stop_watching_the_dying` für Filter, die ihr Objekt überleben; `configure_gil_switching`, 1-ms-Takt in `Worker.run`; `RightOfWay`: Vortritt fürs Bild |
 | `app_events.py` | der eine Ereignisfilter an der Anwendung; Zuhörer melden dort ihre Ereignisarten an (`listen`), wer es tut, sagt der Modul-Docstring |
+| `change_lock.py` | ob geändert werden darf, für jeden Zugang |
 | `loading.py` | Ladeanzeige über der Ansicht (§2.8); `ProgressTiming` führt je Auswertung eine Uhr und einen Zeittext für Statuszeile und Schleier |
 
 ### Ansicht
@@ -157,8 +158,12 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 
 | Datei | Zweck |
 |---|---|
-| `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle* (`place_fields`, `place_text`, `aim_again`), hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
+| `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle*, hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
+| `message_dialog.py` | Meldungen statt `QMessageBox`, Quittung am Ort (`acknowledge`, `withdraw`), Knopfnamen (`name_button`) |
+| `input_dialog.py` | Eingaben ohne Ort (`ask_text`, `ask_choice`) |
+| `place_popup.py` | Eingabe am Ort: Farbwähler, Wertfeld (`PlacePopup`) |
+| `calibration_dialog.py` | Material kalibrieren (§28.3) |
 | `outline_dialog.py` | SVG-/DXF-Konturen wählen und ihre echte Extrusion sehen (§19.2); `values()` liefert nur `load_outline`-Werte |
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |
 | `organizer_dialog.py` | Fachaufteilung eines Organizers, die Geometrie im Arbeiter (§19) |
@@ -183,7 +188,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 | Datei | Zweck |
 |---|---|
 | `print_findings_flow.py` | die Befunde der Schichtanalyse nach jeder Auswertung im Arbeiter (§2.8, §22); ein neuer Stand löst den laufenden ab |
-| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Slicer vor Drucker, Erhebung aus `first_run` (`_PrinterSurvey`, `printers_on_offer`, `SlicerPrinters`); Düsenvariante nach Profilidentität, Modell und Hersteller; am Resin-Drucker nur, was gilt (`_reduce_for_resin`); `PlateRun.meshes`: Netze je Platte |
+| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Slicer vor Drucker, Erhebung aus `first_run`; am Resin-Drucker nur, was gilt (`_reduce_for_resin`); `PlateRun.meshes`: Netze je Platte |
 | `print_disclosure.py` | der Hinweis vor der ersten Arbeit mit Druckeinstellungen (§29): Er sperrt nichts; die Wahl darunter entscheidet, ob die Erfahrungswerte mit einer 3MF mitreisen |
 
 Druckfelder, ihre Herkunft und Suchtreffer: `druckerwahl.md`.
@@ -243,10 +248,10 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | Datei | Zweck |
 |---|---|
 | `manual_window.py` | Suche in `core/manual_search.py`; F1-Anker nur für geprüfte `MarkdownNoHTML`-Überschriften (`core/manual.py`) |
-| `guide_targets.py` | Ziele für Tour und `tools/make_guides.py`: `widget_for`, `area_for`, `action_for`; fehlend: `MissingTargetError` |
+| `guide_targets.py` | Name → Ort, einmal für Tour, Anleitungen und Funktionsdurchgang (`widget_for`, `area_for`, `action_for`, `point_for`, `next_click` ohne Aufdecken); ein neues Klickziel trägt `guides.TARGET_PROPERTY`, eine Menüzeile ihren `objectName`, ein Meldungsfenster samt Knöpfen `name_button`; fehlend: `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
-| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac; `native_key`: die Taste in der Schreibweise der Plattform |
+| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac; `native_key`: die Taste in der Schreibweise der Plattform; `nothing_to_take_back`: Strg+Z/Y ans Fenster, wenn das Feld nichts zurückzunehmen hat |
 
 ### Einstellungen und Rückmeldung
 
@@ -359,8 +364,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 
 ## Testen
 
-Fenstertests (`windowed` für `qt_app`) nur beim Release, je Datei in eigenem
-Prozess; Umfang/Aufruf: `/pruefen`, `.claude/rules/tests.md`.
+Fenstertests (`windowed` für `qt_app`) lokal nur nach `AGENTS.md`, je Datei
+in eigenem Prozess (`/pruefen`).
 
 - Sichtbarkeit nativ prüfen (`wartezeit.md`): `QMenu` zeigt gesetzte Tooltips
   nicht zwingend. Widgetwerte allein belegen keine Darstellung.

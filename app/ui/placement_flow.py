@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from app.core import expressions
+from app.core import expressions, guides
 from app.core.errors import AppError, ValidationError
 from app.core.geom.mesh import as_mesh_data, ray_hit_distances
 from app.core.geom.transform import snap_to_marks
@@ -66,6 +66,7 @@ from app.core.sketch.profile import strictly_crossing
 from app.core.types import Feature, SceneObject, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, tr
+from app.ui.change_lock import change_refusal, hold_inputs
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
@@ -348,9 +349,11 @@ class QuietHost(QObject):
         """Der gesetzte Sperrgrund, ohne eine neue Vorschauprüfung auszulösen.
 
         Eine Ablehnung in den Feldern geht vor: Sie nennt, was der Kunde
-        ändern muss, die Vorschau nur, was sie gerade nicht zeigen kann.
+        ändern muss, die Vorschau nur, was sie gerade nicht zeigen kann. Davor
+        steht die Freischaltung (FD-28): Ohne sie nannte der Knopf den Satz,
+        mit dem die Vorschau am Kern scheiterte, und der hatte keinen Weg.
         """
-        return self._field_refusal or self._blocked_reason
+        return change_refusal() or self._field_refusal or self._blocked_reason
 
     def can_accept(self) -> bool:
         """Ob der Träger die aktuellen Werte übernehmen darf."""
@@ -1945,6 +1948,25 @@ class PlacementFlow(QObject):
         if pulled:
             reason = None
             begun = True
+        # **Ohne Freischaltung nimmt die Maßgruppe nichts an** (FD-28): Bis
+        # hierher war nur *Übernehmen* grau, die Felder nahmen Zahlen an, die
+        # nie übernommen wurden. Eingang und Knopf tragen den Satz aus
+        # ``change_lock``, auch vor einem Langlochzug, und er nennt den Weg zur
+        # Freischaltung. Ein Operationsdialog bleibt zum Ansehen bedienbar und
+        # sperrt sein *Übernehmen* selbst (FD-5); die Maße im Bild, die er von
+        # einer Maßgruppe übernimmt, gibt :meth:`_wire_floating` frei.
+        refusal = change_refusal() if isinstance(host, QuietHost) else ""
+        if refusal:
+            reason = refusal
+        if isinstance(host, QuietHost):
+            for root in (
+                self._measure_scroll,
+                self._measure_scope_box,
+                *self._measures,
+                *self._centre_measures,
+                self._depth_measure,
+            ):
+                hold_inputs(root, refusal)
         # **Ein Werkzeug, das gerade neu gebaut wird, sperrt nicht** (Durchsicht
         # 0.5.1, Kunde Weg b): Nach jeder getippten Zahl baut der Fluss das
         # Werkzeug neu, der Knopf war so lange grau, und ein Klick gleich nach
@@ -1971,12 +1993,30 @@ class PlacementFlow(QObject):
             and (not isinstance(host, QuietHost) or not host.committing)
         )
         self._measure_accept.setEnabled(allowed)
+        said = reason or ""
+        # ``begun`` zuerst: Erst ein stiller Träger hat eine Gruppe.
+        if not begun and not allowed and not said and (group := self._measure_group) is not None:
+            # **Vor der ersten Eingabe sagt der Knopf den Weg** (FD-31): Er war
+            # grau ohne Grund. Genannt wird das erste Feld der Gruppe, wie der
+            # Kunde es liest; sein Name endet nach dem Gedankenstrich.
+            first = next(
+                (
+                    target.accessibleName().rsplit(" — ", 1)[-1]
+                    for target in self._measure_targets
+                    if isinstance(target, QAbstractSpinBox | QComboBox)
+                    and group.isAncestorOf(target)
+                    and target.accessibleName()
+                ),
+                "",
+            )
+            if first:
+                said = tr("Erst „{field}“ ändern, dann übernehmen.", field=first)
         for setter in (
             self._measure_accept.setToolTip,
             self._measure_accept.setStatusTip,
             self._measure_accept.setAccessibleDescription,
         ):
-            setter(reason or "")
+            setter(said)
         information = (
             tr(
                 "Die ursprünglichen Maße bleiben bearbeitbar. "
@@ -1999,8 +2039,10 @@ class PlacementFlow(QObject):
         self._measure_note.setText(
             "\n".join(filter(None, (reason, distance, self._reference_message, information)))
         )
+        # Die Sperre steht auch ungefragt da: Grau allein wäre eine Farbe ohne
+        # Wort (Regel 18), und begonnen wird gesperrt nie.
         self._measure_note.setVisible(
-            (bool(reason) and begun)
+            (bool(reason) and (begun or bool(refusal)))
             or bool(distance)
             or bool(self._reference_message)
             or bool(information)
@@ -2118,8 +2160,16 @@ class PlacementFlow(QObject):
         return self._surface is None and self._seat_waits == self._serial
 
     def _begin_edit(self) -> None:
-        """Eine Nutzergeste beginnt den stillen Entwurf, nie seine bloße Anzeige."""
-        if not self._disposed and self.active and isinstance(self.dialog, QuietHost):
+        """Eine Nutzergeste beginnt den stillen Entwurf, nie seine bloße Anzeige.
+
+        Gesperrt beginnt keine (FD-28): Der Entwurf könnte nie übernommen werden.
+        """
+        if (
+            not self._disposed
+            and self.active
+            and isinstance(self.dialog, QuietHost)
+            and not change_refusal()
+        ):
             self.dialog.begin_edit()
 
     def _grip_belongs_to_another_flow(self) -> bool:
@@ -2691,6 +2741,9 @@ class PlacementFlow(QObject):
         measure_actions.addStretch()
         self._measure_accept = QPushButton(tr("Übernehmen"), self._measure_box)
         self._measure_accept.setObjectName("placement_measure_accept")
+        # Ein Name im Wortschatz (``measure.apply``): Der Funktionsdurchgang klickt
+        # ihn, wo die Handlung im Bild steht (D0, N2).
+        self._measure_accept.setProperty(guides.TARGET_PROPERTY, "measure.apply")
         self._measure_accept.setIcon(icon("done", self._measure_accept))
         measure_actions.addWidget(self._measure_accept)
         self._measure_cancel = QPushButton(tr("Abbrechen"), self._measure_box)
@@ -2762,6 +2815,9 @@ class PlacementFlow(QObject):
             box_layout.setSpacing(SPACE)
             box_layout.addWidget(reference_field)
             reference_field.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            # *Bezug ändern* steht im Kontextmenü dieses Maßes; das Maß ist
+            # die Stelle, an der der Kunde es öffnet (``measure.reference``).
+            reference_field.setProperty(guides.TARGET_PROPERTY, "measure.reference")
             box.hide()
         # **Die Tabulatortaste geht denselben Weg wie das Auge** (`oberflaeche.md`):
         # erst die zwei Kantenmaße, dann die Mitten.
@@ -2778,6 +2834,10 @@ class PlacementFlow(QObject):
         Jede Verbindung zu diesem Fluss steht in :attr:`_links`.
         """
         link = self._links.append
+        # Von einer gesperrten Maßgruppe übernommen, beginnen die Maße frei; ein
+        # stiller Fluss sperrt sie beim ersten Zeichnen wieder (FD-28).
+        for field in (*self._measures, self._depth_measure, *self._centre_measures):
+            hold_inputs(field, "")
         self._title.setText(str(self.spec_of().title))
         self._note.setText(tr("Auf eine Oberfläche zeigen."))
         self._tool_legend.clear()
@@ -4233,9 +4293,14 @@ class PlacementFlow(QObject):
             menu.addSeparator()
         menu.addSection(tr("Bezug ändern"))
         pick = menu.addAction(tr("Im Modell wählen"))
+        pick.setObjectName("measure.reference.pick")
         pick.setData(_PICK_IN_MODEL)
         for label, data in entries:
-            menu.addAction(label).setData(data)
+            entry = menu.addAction(label)
+            entry.setData(data)
+            # Der Bezug als Ziel im Wortschatz (``menu:measure.reference.<bezug>``).
+            reference = data[0] if isinstance(data, tuple) else data
+            entry.setObjectName(f"measure.reference.{guides.name_part(str(reference))}")
         menu.triggered.connect(
             lambda action, slot=index: self._reference_selected(slot, action.data())
         )
@@ -5574,14 +5639,19 @@ class PlacementFlow(QObject):
         # zieht die Maus die Tiefe; nicht am vorhandenen Merkmal, dort steht
         # der Griff der Auswahl; und nicht, wo die Werte ohnehin im
         # Merkmalfenster stehen. Frisch angehängt bei jedem Zeichnen, weil der
-        # Körper eben neu gesetzt wurde.
+        # Körper eben neu gesetzt wurde. Ohne Freischaltung trägt die
+        # Maßgruppe keinen Griff: Ihr Entwurf ließe sich nie übernehmen (FD-28).
         gripped = (
             tool_valid
             and self._frozen
             and not self._deepening
             and self._tool is not None
             and (
-                (self._measure_group is not None and self.spec_of().name != "slot_hole")
+                (
+                    self._measure_group is not None
+                    and self.spec_of().name != "slot_hole"
+                    and not change_refusal()
+                )
                 or (not self._seated_at_feature and not self.dialog.values_stand_elsewhere)
             )
         )

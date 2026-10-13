@@ -67,6 +67,20 @@ das Konzept.
 
 ## Verlauf
 
+- 13.10.2026, 03:50, Phase 2, D0 läuft, Codestruktur Schritt 0 daneben: Die
+  Durchsicht über `welle4` vor main ist durch (vier Teile, Berichte in
+  `output/konsolidierung-2026-10-12/review-welle4-{a,b,c,d}.md`): ein schwerer
+  Fund im Prüfstand (Prüfpunkt 18 galt ohne Messung als erfüllt), mittlere in
+  Oberfläche, Kern, Prüfstand und Unterlagen. Sechs Fixagenten beheben sie auf
+  eigenen Zweigen (`fix/sperre-vollstaendig`, `fix/zeile-bohrung`,
+  `fix/review-oberflaeche`, `fix/review-kern`, `fix/pruefstand-urteile`,
+  `fix/pruefstand-flaeche`); die Unterlagenfunde sind auf `welle4`. origin/main
+  `a47ff34fc` ist hereingeholt. Die Website nennt in sechs Sprachen 1920 × 1080
+  bei 100 % (Upload wartet auf Robert). Fehlermeldungen mit Handlung sind eine
+  Z2-Ausnahme. Neben D0 laufen die Pakete R und W13 aus Schritt 0 (nur neue
+  Dateien; Konzept Funktionsdurchgang §13 Nr. 2). **Als Nächstes:** Fixe
+  integrieren, je eine Nachprüfung, zweiter Probelauf, Karten und Regeln in
+  einem Durchgang, Tor, main; dann die übrigen Pakete von Schritt 0.
 - 13.10.2026, 00:52, Phase 2, D0 läuft: RM-788 und RM-789 sind vorgezogen auf
   main (`0742a8c50`). Der hängende Slicertest war ein Windows-Fenster „Nicht
   unterstützte 16 Bit-Anwendung“ beim Start einer Datei, die kein Programm ist,
@@ -97,7 +111,15 @@ das Konzept.
   W's Nachtrag integrieren, Probelauf am Fenster, Tor, Durchsicht der
   Merge-Auflösungen, D0 nach main; danach Codestruktur Schritt 0 (RM-722),
   RM-787, RM-788.
-- 12.10.2026, 08:40, Phase 2, Schritt 1: Funktionsdurchgang abgelegt
+- 12.10.2026, 08:37, Phase 2, D0 begonnen: Zuschnitt in fünf Teilpakete
+  (W Wortschatz, L Liste und Szenen, P Prüfstand, U Urteile, S Unterlagen) in
+  `.claude/.state/funktionsdurchgang-2026-10/plan-d0.md`; Integrationszweig
+  `welle4` (Worktree `F:\sl-welle4`), Teilpakete auf `d0/wortschatz`,
+  `d0/liste`, `d0/urteile`, `d0/pruefstand` (Worktrees `F:\sl-d0w`, `-d0l`,
+  `-d0u`, `-d0p`); S macht der Koordinator. Lizenz „gekauft“ im Prüfstand über
+  die Nahtstelle der Suite, ohne private Schlüssel. Stand je Paket in
+  `F:\3D Druck\output\konsolidierung-2026-10-12\paket-d0-<kürzel>.md`.
+- 12.10.2026, 08:37, Phase 2, Schritt 1 auf main (`31dd59af1`): Funktionsdurchgang abgelegt
   (Konzept und Prüfberichte unter `konzepte/`, RM-736 bis RM-749 im Register,
   Programmplan als Beleg der Termine in Konzept §9; Paketzuordnung nach §6
   ohne Ausnahme außer D6 — Verrunden, Fase, Fläche versetzen prüft D3).

@@ -9009,21 +9009,28 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
 
     window.action_theme(theme)
     panel = window.selection_operations
-    # **Die Karte steht auch ohne Auswahl, aber leer bis auf die Bausteine**
-    # (Entscheidung Robert, 18.09.2026). Sie verschwand bis dahin ganz, und
-    # damit der einzige sichtbare Zugang zum Katalog; drei der
-    # siebenundzwanzig Bausteine stehen frei und brauchen keinen Körper.
+    # Ohne Auswahl bleiben Suche, Katalog und Erzeuger erreichbar (RM-735).
+    # Handlungen an einem gewählten Körper gehören nicht in diese Stufe.
     assert not panel.isHidden()
     # ``isHidden`` und nicht ``isVisible``: Die Fixture zeigt das Fenster nie,
     # und offscreen meldet ``isVisible`` dann für **jedes** Widget False — die
     # zwei Zeilen waren bis zum 18.09.2026 trivial wahr (Regel, gemessen in
     # der zweiten Durchsicht).
-    assert panel.search.isHidden(), "ohne Auswahl gibt es nichts zu durchsuchen"
+    assert not panel.search.isHidden(), "die Suche erreicht auch ohne Auswahl jede Funktion"
     # ``isVisibleTo(panel)`` und nicht ``isHidden()``: Die Knöpfe stecken in
     # ihren Abschnitten, und versteckt ist der **Abschnitt** — das Widget
     # selbst meldet ``isHidden() == False``. Gefragt ist „würde es erscheinen,
     # wenn die Karte erschiene".
-    assert not any(button.isVisibleTo(panel) for button in panel._buttons.values())
+    assert any(button.isVisibleTo(panel) for button in panel._buttons.values()), (
+        "die leere Szene bietet Erzeuger an"
+    )
+    assert any(
+        not panel._buttons[name].isHidden()
+        for name in ("create_box", "create_brep_box")
+        if name in panel._buttons
+    ), "ein Quader bleibt ohne Auswahl erreichbar, mit und ohne exakten Kern"
+    assert panel._buttons["drill_hole"].isHidden(), "Bohren braucht einen Körper"
+    assert panel.catalog_button.isVisibleTo(panel), "der Katalog bleibt erreichbar"
     # **Und der Filament-Schnellwähler steht dort nicht.** Sein leerer
     # Zustand („Das Filamentlager ist auch ohne Auswahl erreichbar.") war nie
     # zu sehen, solange die Karte ganz verschwand; seit sie bleibt, stünden
@@ -9372,14 +9379,16 @@ def test_a_divider_of_an_organizer_answers_as_the_organizer(window: MainWindow) 
     geprüft (Funde 1 und 2 der zweiten Durchsicht):
 
     * Das Merkmalfenster zeigt die Handlungen des **Schritts**
-      (``part_step_of`` mit dem Merkmal, damit die Rollenregel greift), und
-      die Karte darunter bleibt leer.
+      (``part_step_of`` mit dem Merkmal, damit die Rollenregel greift).
+      Darunter bleiben Suche und Wegweiser, keine Flächenhandlungen (RM-735).
     * Der Weg zur Fachaufteilung steht als eigener Knopf dabei — sie ist ein
       Sammelparameter und kann kein Zahlenfeld werden.
     * Der **Griff** bleibt der der Fläche: ``_asks_for_the_part`` verlangt
       ``x/y/z`` am Schritt, und ein Organizer hat sie nicht. Ohne diese Frage
       hielte die Auswertung nach dem ersten Zug an.
     """
+    from PySide6.QtTest import QTest
+
     from app.core.scene import OperationDraft
 
     window.session.apply("Organizer", [OperationDraft(op="create_organizer", params={})])
@@ -9404,10 +9413,23 @@ def test_a_divider_of_an_organizer_answers_as_the_organizer(window: MainWindow) 
     window.object_tree.select_feature(body.id, divider)
     QApplication.processEvents()
 
-    # **Das Merkmalfenster spricht für den Schritt, die Karte schweigt.**
-    assert window.selection_operations.isHidden(), (
-        "an einer Trennwand gelten die Handlungen des Bausteins, nicht die der Fläche"
+    # Das Merkmalfenster spricht für den Schritt; die allgemeine Suche bleibt.
+    panel = window.selection_operations
+    assert not panel.isHidden() and not panel.search.isHidden()
+    assert panel._buttons and all(button.isHidden() for button in panel._buttons.values()), (
+        "an einer Trennwand stehen keine einzelnen Flächenhandlungen"
     )
+    assert not panel._nothing.isHidden()
+    assert panel._nothing.text() == tr("Was sich hier tun lässt, steht oben bei den Maßen.")
+    QTest.keyClicks(panel.search, "Quader")
+    QApplication.processEvents()
+    hits = {
+        panel.hits.item(row).data(Qt.ItemDataRole.UserRole) for row in range(panel.hits.count())
+    }
+    assert hits & {"create_box", "create_brep_box"}, "die Suche erreicht die andere Auswahlstufe"
+    panel.search.setText("")
+    QApplication.processEvents()
+    assert panel.scroller.isHidden(), "Leeren bringt keine Flächenhandlungen zurück"
     titles = {
         button.property("operationTitle") or button.text()
         for button in window.feature_panel.findChildren(QtWidgets.QPushButton)
@@ -9646,8 +9668,10 @@ def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -
     window.object_tree.select_object(None)
     QApplication.processEvents()
     assert panel.chosen_level() == "scene", "ohne Auswahl die Stufe der ganzen Szene"
-    assert not panel._buttons["orient_for_print"].isHidden(), "und dort steht die Handlung für alle"
-    assert panel._buttons["arrange_bed"].isHidden(), "von den dreien nur eine (Robert, 05.10.2026)"
+    assert not panel.search.isHidden(), "auch ohne Auswahl bleibt die allgemeine Suche"
+    for name in ("orient_for_print", "arrange_bed", "check_collisions"):
+        assert not panel._buttons[name].isHidden(), f"{name}: jede Szenehandlung steht ohne Auswahl"
+        assert panel._buttons[name].isEnabled(), f"{name}: die geladene Szene ist bearbeitbar"
 
 
 def test_the_selection_panel_uses_the_shared_launch_path() -> None:
@@ -9804,8 +9828,7 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
 
     **Die Liste der Ausnahmen ist auf drei geschrumpft**, und jede trägt ihren
     Grund: ``cancel`` ist das Schließen und kein Vorschlag; ``choose`` fragt der
-    Kern über ``ctx.ask``, bevor er wirft; ``use_voxel_stage`` ist eine Stufe
-    der Rückfallkette und kein Parameter, den ein Dialog setzen könnte (§17.2).
+    Kern über ``ctx.ask``, bevor er wirft.
     ``correct_input`` und ``choose_printer`` standen hier, bis ihr Weg gebaut
     war — der erste öffnet den Schritt, der zweite führt in die
     Druckeinstellungen. ``retry`` und ``save_elsewhere`` sind verdrahtet, stehen
@@ -9817,7 +9840,6 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
     # und stehen darum nicht immer in ``known`` — angeboten werden sie genau
     # dann, wenn sie wirken können (``_WriteFailure``).
     postponed = {
-        "use_voxel_stage",
         "choose",
         "cancel",
         "retry",
@@ -10908,38 +10930,6 @@ def test_correcting_puts_the_cursor_in_the_field_that_failed(window: MainWindow)
         assert inner.hasFocus(), "der Cursor steht nicht im Feld, um das es geht"
     finally:
         dialog.reject()
-
-
-def test_a_boolean_that_failed_in_draft_can_go_the_full_chain(window: MainWindow) -> None:
-    """Der Rat zeigte ins Leere, und zwar an der häufigsten Stelle (§17.2, §31).
-
-    Im Fenster läuft die kurze Rückfallkette; *Voxelstufe erzwingen* ist damit
-    der richtige nächste Schritt — und war ein Satz ohne Knopf. Jetzt rechnet
-    er einmal mit der vollen Kette, und danach ist die Sitzung wieder so
-    schnell wie vorher.
-    """
-    from app.ui.dialogs import offered_actions
-
-    handlers = window.error_handlers()
-    entwurf = errors.BooleanFailedError(attempted=("direct", "welded"))
-    assert "use_voxel_stage" in {a.id for a in offered_actions(entwurf, handlers)}
-
-    session = window.session
-    handlers["use_voxel_stage"](entwurf)
-    # Die Güte legt der Start des Arbeiters fest (RM-426), nicht mehr dessen Lauf.
-    assert session._worker is not None and session._worker.quality == "fine", (
-        "der Lauf bleibt im Entwurf"
-    )
-    assert session.wait_for_idle(30_000)
-    QApplication.processEvents()
-    assert session.last_quality == "fine"
-    session.evaluate_async()
-    assert session._worker is not None and session._worker.quality == "draft", (
-        "und der nächste ist wieder Entwurf"
-    )
-    assert session.wait_for_idle(30_000)
-    QApplication.processEvents()
-    assert session.last_quality == "draft"
 
 
 def test_correcting_is_not_offered_where_there_is_no_step(window: MainWindow) -> None:
@@ -23003,6 +22993,10 @@ def test_a_missing_selection_is_said_not_put_in_a_box(
         raise AssertionError("no modal box for a missing selection")
 
     monkeypatch.setattr(QMessageBox, "information", no_box)
+    # Und auch keine Meldung im Hausstil (FD-21): Der Satz gehört in die Ansage.
+    from app.ui.message_dialog import MessageDialog
+
+    monkeypatch.setattr(MessageDialog, "exec", no_box)
     window.open_path(MESHES / "cube_clean.stl")
     assert window.session.wait_for_idle(60_000)
     window.object_tree.tree.clearSelection()
@@ -24651,10 +24645,12 @@ def test_model_page_clipboard_survives_url_dialog(window, monkeypatch, accepted)
     project = window.session.project
 
     def answer(*args, **kwargs):
+        # Die Eingabe im Hausstil (FD-22) gibt None für Abbrechen zurück.
         offered.append(kwargs["text"])
-        return url, accepted
+        assert kwargs["target"] == "message:model_address"
+        return url if accepted else None
 
-    monkeypatch.setattr("app.ui.main_window.QInputDialog.getText", answer)
+    monkeypatch.setattr("app.ui.main_window.ask_text", answer)
     monkeypatch.setattr("app.ui.main_window.show_error", lambda error, parent: shown.append(error))
     try:
         window.action_import_url()

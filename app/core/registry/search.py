@@ -21,6 +21,7 @@ from collections.abc import Collection, Iterable, Sequence
 from functools import lru_cache
 from typing import TYPE_CHECKING, Final
 
+from app.core.guides import MENUBAR
 from app.core.registry.registry import Registry, menu_twins, variant_members
 from app.i18n import TranslatableText, _
 
@@ -243,9 +244,15 @@ _READ_IN: Final = _("Modell laden; STL öffnen; importieren; Zoll", context="Suc
 #: dessen genauer Treffer einer anderen Zusicherung den Fall nimmt („bohren"),
 #: und kein Wort, das ein anderes gemeintes Wort enthält, ohne es zu meinen.
 CUSTOMER_WORDS: Final[dict[str, TranslatableText]] = {
+    # „Loch“ allein trägt hier und am Bohren (``drill_hole``): Bei gleicher
+    # Güte entscheidet die Lage — an der Bohrung ihre Änderung, am Körper das
+    # Bohren. Ohne das Wort standen *Lasche mit Loch* und *Lochwand-Einhänger*
+    # auch an einer gewählten Bohrung vorn, und „Bohrung vergrößern“ (CAD)
+    # fand allein *Zum Langloch ziehen* (Suchproben D4).
     "resize_hole": _(
-        "Loch größer; Loch größer machen; Loch kleiner; Loch weiten; "
-        "Bohrung weiter machen; Durchmesser ändern",
+        "Loch; Loch größer; Loch größer machen; Loch kleiner; Loch weiten; Loch vergrößern; "
+        "Bohrung größer; Bohrung größer machen; Bohrung kleiner; Bohrung weiter machen; "
+        "Bohrung vergrößern; Bohrung verkleinern; Durchmesser ändern",
         context="Suchwörter",
     ),
     "scale_object": _(
@@ -271,7 +278,10 @@ CUSTOMER_WORDS: Final[dict[str, TranslatableText]] = {
     "label_text": _(
         "Text drauf; Schrift; Name drauf; Buchstaben; beschriften", context="Suchwörter"
     ),
-    "drill_hole": _("Loch machen; Loch rein; lochen", context="Suchwörter"),
+    # „Bohrung“ steht im Titel, aber erst als Kundenwort gleicht es *Bohrung
+    # ändern* aus, das „Bohrung größer“ trägt: Am Körper wählte „Bohrung“ sonst
+    # die gesperrte Änderung vor statt des Bohrens.
+    "drill_hole": _("Loch; Bohrung; Loch machen; Loch rein; lochen", context="Suchwörter"),
     "fillet_edges": _(
         "Kanten abrunden; Ecken rund; rund machen; runde Kanten", context="Suchwörter"
     ),
@@ -302,7 +312,21 @@ CUSTOMER_WORDS: Final[dict[str, TranslatableText]] = {
     "intersect_objects": _(
         "boolesch; Boolesche Operation; Boolean; kombinieren", context="Suchwörter"
     ),
-    "place_on_bed": _("hinlegen; flach hinlegen", context="Suchwörter"),
+    # **Die Wörter aus Slicer und CAD** (FD-17): Der Titel sagt „Bett“, der
+    # Slicer „Druckbett“ oder „Druckplatte“, das CAD „Grundebene“. Ohne sie
+    # stand *Auf das Bett setzen* bei „Druckbett“ auf Platz sieben, gleichauf
+    # mit jedem Grundkörper, dessen Beschreibung das Druckbett nennt.
+    "place_on_bed": _(
+        "hinlegen; flach hinlegen; Druckbett; Druckplatte; aufs Bett; Grundebene",
+        context="Suchwörter",
+    ),
+    # Ein Fensterbefehl. „Variable“ fand nur *Varianten erzeugen*,
+    # „Benutzerparameter“ (Fusion) gar nichts; wer das Wort Parameter nicht
+    # kennt, beschreibt ein Maß, das er mehrfach verwendet (FD-17, FD-18).
+    "edit.add_parameter": _(
+        "Variable; Benutzerparameter; benanntes Maß; Maß mehrfach verwenden",
+        context="Suchwörter",
+    ),
     "file.open": _("Datei öffnen; Projekt öffnen; laden", context="Suchwörter"),
     "file.save": _("speichern; sichern", context="Suchwörter"),
     "file.export": _(
@@ -385,6 +409,99 @@ def synonyms_for(name: str) -> str:
     return "; ".join(customer_phrases(name))
 
 
+#: Die Wörter, mit denen ein Kunde **fragt**, statt zu sagen, was er sucht —
+#: je Sprache ein Katalogtext wie die Kundenwörter, gesucht in der deutschen
+#: Quelle und in der eingestellten Sprache (:func:`question_words`).
+#:
+#: **Die Zählung erkennt sie nicht** (FD-18). Ein Füllwort fällt heraus, weil
+#: es in jeder sechsten Beschreibung steht (:data:`COMMON_SHARE`); das Register
+#: aber fragt nie und spricht den Kunden mit „Sie“ an. „ich“ steht in keiner
+#: Zeile, „wie“ in den Titeln der vier Mausbelegungen („Wie in Cura …“) — und
+#: wog dort wie ein seltenes Titelwort. „Wie setze ich das Teil auf die
+#: Druckplatte?“ stellte so fünf Mausbelegungen vor *Auf das Bett setzen*, und
+#: weil jedes Wort einer genauen Runde dastehen muss, fand „Wie kann ich
+#: abrunden?“ das *Verrunden* gar nicht mehr.
+#:
+#: **Fragewörter fallen nur am Anfang**, wo sie die Frage eröffnen („Wie“,
+#: „Where can I find“). Mitten im Satz sind sie oft etwas anderes: „como“ in
+#: „guardar como STL“ heißt „als“ und steht in der Kundenwendung von
+#: *Exportieren*. Dazu gehören die kurzen Bindewörter einer Eröffnung („I want
+#: to …“, „Come faccio a …“); ein Wort unter :data:`_SHORTEST_TERM` Buchstaben
+#: eröffnet aber allein keine Frage — „to size“ ist eine Kundenwendung.
+#: Was der Kunde über sich sagt, fällt überall (:data:`REQUEST_WORDS`).
+#: ``tests/test_search.py`` hält fest, dass keine Kundenwendung und kein
+#: Titel eine Frage eröffnet und keine Kundenwendung ein Wort aus
+#: :data:`REQUEST_WORDS` trägt — eine Frage könnte sie sonst nie mehr sagen.
+QUESTION_WORDS: Final = _(
+    "wie; was; wann; warum; wieso; weshalb; welche; welcher; welches; womit; wozu; finde; gibt",
+    context="Suchwörter",
+)
+
+#: Was der Kunde in einer Frage über sich und seinen Wunsch sagt — „ich“,
+#: „kann“, „möchte“, „bitte“ —, je Sprache ein Katalogtext, dazu, was nie eine
+#: Handlung meint und kürzer ist, als dass es allein eine Frage eröffnete
+#: („wo“). In der deutschen Frage steht „ich“ hinter dem Verb („Wie setze ich
+#: …“); diese Wörter fallen deshalb überall, nicht nur am Anfang. Ein Verb,
+#: das etwas tut („machen“, „setzen“), steht in Kundenwendungen und bleibt;
+#: Artikel und Präpositionen fängt die Zählung.
+REQUEST_WORDS: Final = _(
+    "ich; mir; mich; man; es; wo; kann; könnte; muss; soll; will; möchte; würde; bitte",
+    context="Suchwörter",
+)
+
+
+def question_words() -> frozenset[str]:
+    """Die Wörter, die zur Eröffnung einer Frage gehören (:data:`QUESTION_WORDS`
+    und :data:`REQUEST_WORDS`), gefaltet: Quelle und eingestellte Sprache."""
+    return _words_of(QUESTION_WORDS.msgid, str(QUESTION_WORDS)) | request_words()
+
+
+def request_words() -> frozenset[str]:
+    """Die Wörter aus :data:`REQUEST_WORDS`, gefaltet: Quelle und eingestellte Sprache."""
+    return _words_of(REQUEST_WORDS.msgid, str(REQUEST_WORDS))
+
+
+def opens_a_question(word: str) -> bool:
+    """Ob eine Suche, die mit diesem gefalteten Wort beginnt, eine Frage ist.
+
+    Ein Wort aus :data:`REQUEST_WORDS` immer, eines aus :data:`QUESTION_WORDS`
+    ab :data:`_SHORTEST_TERM` Buchstaben: Die kürzeren dort sind Bindewörter
+    („to“), die nur zu einer Eröffnung gehören.
+    """
+    return word in request_words() or (len(word) >= _SHORTEST_TERM and word in question_words())
+
+
+@lru_cache(maxsize=32)
+def _words_of(source: str, shown: str) -> frozenset[str]:
+    """Je Katalog einmal zerlegt; geschlüsselt über den übersetzten Text selbst."""
+    return frozenset(word for text in (source, shown) for word in _WORDS.findall(fold(text)))
+
+
+def asked(words: Sequence[str], text: str) -> list[str]:
+    """Was eine Frage sucht: ihre Wörter ohne die, mit denen sie fragt.
+
+    **Nur eine Frage wird gekürzt** — sie beginnt mit einem Wort, das eine
+    Frage eröffnet (:func:`opens_a_question`), oder endet mit „?“. Wer
+    „Guardar como“ tippt, meint *Speichern unter*; erst „¿Cómo guardo …?“
+    fragt. Weg fallen die Wörter, mit denen sie beginnt (:func:`question_words`),
+    und überall die aus :data:`REQUEST_WORDS`. Bleibt nichts übrig („wie“),
+    gilt die Suche, wie sie getippt ist.
+
+    ``words`` sind die gefalteten Wörter der Suche, ``text`` die Suche selbst.
+    Dieselbe Rechnung kürzt die Suche im Reiter *Auswahl* (:func:`query_parts`)
+    und die des Handbuchs (``core/manual_search.py``).
+    """
+    if not words or not (opens_a_question(words[0]) or text.rstrip().endswith("?")):
+        return list(words)
+    framing = question_words()
+    start = 0
+    while start < len(words) and words[start] in framing:
+        start += 1
+    personal = request_words()
+    content = [word for word in words[start:] if word not in personal]
+    return content or list(words)
+
+
 # --- Rangfolge für eine Anfrage in Sätzen ------------------------------------------
 
 #: Wie viel ein Treffer in welchem Teil einer Operation wiegt.
@@ -394,12 +511,38 @@ def synonyms_for(name: str) -> str:
 #: englische Fassung („drill_hole"), der ``doc``-Satz alles, was die Operation
 #: nebenbei erwähnt; er findet viel und entscheidet deshalb wenig.
 _FIELD_WEIGHTS: Final = (("title", 3.0), ("name", 2.0), ("doc", 1.0))
+_TITLE_WEIGHT: Final = dict(_FIELD_WEIGHTS)["title"]
 
 #: Was ein Kundenwort aus :data:`SYNONYMS` wiegt, wenn die Anfrage es ganz
 #: enthält. **Als Wendung, nicht Wort für Wort:** „leichter machen" meint das
 #: Verringern der Dreiecke nur, wenn beide Wörter dastehen — Wort für Wort
 #: gezählt machte jedes „mach" aus einer Anfrage einen Treffer dort.
 _SYNONYM_SCORE: Final = 6.0
+
+
+def _said_weight(phrase: str, rarities: dict[str, float]) -> float:
+    """Was eine gesagte Kundenwendung in der Suche wiegt: ihre Wörter, als stünden
+    sie im Titel.
+
+    **Eine Zuordnung wiegt nicht weniger als ein Zufall** — so ordnet schon
+    :func:`rank` („Genau gesagt vor jedem Titelwort einer anderen Zeile“,
+    RM-734). In einem Satz galt das nicht: Die Wendung brachte fest
+    :data:`_SYNONYM_SCORE`, ein seltenes Wort im Titel einer anderen Zeile bis
+    zum Dreifachen. „Wie setze ich das Teil auf die Druckplatte?“ fand so
+    *Druckplatte zeigen* vor *Auf das Bett setzen*, obwohl „Druckplatte“ dessen
+    Kundenwort ist (FD-18). Jedes Wort der Wendung zählt mit der Seltenheit
+    des Worts der Anfrage, das es sagt (:func:`_same_word`); ein Füllwort hat
+    keine (``rarities``).
+    """
+    weight = 0.0
+    for word in _WORDS.findall(phrase):
+        if len(word) < _SHORTEST_TERM:
+            continue
+        weight += max(
+            (rarity for term, rarity in rarities.items() if _same_word(term, word)), default=0.0
+        )
+    return _TITLE_WEIGHT * weight
+
 
 #: Ein Treffer über den Wortstamm statt über das ganze Wort zählt weniger —
 #: „bohren" gegen „Bohrung" ist dieselbe Sache, „mitte" gegen „Mitteln" nicht.
@@ -548,7 +691,9 @@ def rank_operations(
     Register: „bohr" trifft zwei Titel und entscheidet, „mit" und „die" stehen
     in fast jedem ``doc``-Satz und wiegen nichts. Eine Liste von Füllwörtern
     je Sprache braucht es damit nicht — wer in sechs Sprachen schreibt,
-    bekommt dieselbe Rechnung.
+    bekommt dieselbe Rechnung. Nur Fragewörter erkennt die Zählung nicht, weil
+    das Register nie fragt; die Suche nimmt sie vorher heraus (:func:`asked`),
+    der Agent bekommt den Satz, wie er ist.
 
     ``favoured`` hebt Operationen, die zur Auswahl passen (``applies_to``), um
     einen festen Betrag: Wer eine Bohrung gewählt hat und „größer" schreibt,
@@ -580,8 +725,10 @@ def rank_entries(
     führt neben den Operationen die Fensterbefehle, und eine mehrwortige Frage
     („Loch größer machen") ordnet sie nach genau dieser Wertung.
     ``customer_words`` zählt die Wendungen aus :data:`CUSTOMER_WORDS` mit (die
-    Suche); ohne sie gilt nur :data:`SYNONYMS` (der Agent,
-    :func:`rank_operations`).
+    Suche) und wertet eine gesagte wie ihre Wörter im Titel (:func:`_said_weight`);
+    ohne sie gilt nur :data:`SYNONYMS` mit der festen Zugabe
+    :data:`_SYNONYM_SCORE` (der Agent, :func:`rank_operations` — gemessen an
+    der Suite, deshalb unverändert).
     """
     terms: list[str] = []
     for text in texts:
@@ -593,6 +740,7 @@ def rank_entries(
     if not total:
         return ()
     scores = dict.fromkeys(fields, 0.0)
+    rarities: dict[str, float] = {}
     for term in terms:
         hits: dict[str, float] = {}
         for name, texts_of_op in fields.items():
@@ -605,18 +753,29 @@ def rank_entries(
         # **Ein Wort, das in jeder sechsten Operation steht, entscheidet
         # nichts** — „das", „die", „mit", „auf". Gezählt statt aufgelistet:
         # eine Liste von Füllwörtern bräuchte es je Sprache, die Zählung nicht.
-        if not hits or spread > total * COMMON_SHARE:
+        # Fragewörter erkennt sie nicht; die nimmt die Suche vorher heraus
+        # (:func:`asked`).
+        if spread > total * COMMON_SHARE:
             continue
         # Die Seltenheit wie in der Textsuche üblich, geglättet: ein Wort in
         # einer Operation wiegt rund 4,5, eines in allen fast nichts.
         rarity = math.log((total + 1) / (spread + 0.5))
+        rarities[term] = rarity
         for name, weight in hits.items():
             scores[name] += rarity * weight
     if terms:
         for name in scores:
-            phrases = customer_phrases(name) if customer_words else SYNONYMS.get(name, ())
-            if any(says(phrase, terms) for phrase in phrases):
-                scores[name] += _SYNONYM_SCORE
+            if not customer_words:
+                if any(says(phrase, terms) for phrase in SYNONYMS.get(name, ())):
+                    scores[name] += _SYNONYM_SCORE
+                continue
+            said = [
+                _said_weight(phrase, rarities)
+                for phrase in customer_phrases(name)
+                if says(phrase, terms)
+            ]
+            if said:
+                scores[name] += max(_SYNONYM_SCORE, *said)
     for name in wanted:
         if name in scores:
             scores[name] += FAVOURED_BONUS
@@ -659,10 +818,51 @@ def hidden_from_the_menu() -> frozenset[str]:
     return frozenset(menu_twins()) | variant_members()
 
 
+#: Satzzeichen am Rand eines Worts der Suche: „Druckplatte?“, „¿Cómo“, „an,“.
+_EDGES: Final = re.compile(r"^\W+|\W+$")
+
+
+def query_parts(query: str) -> tuple[str, ...]:
+    """Die Wörter einer Suche, wie Runden und Güte sie vergleichen.
+
+    Gefaltet, ohne Satzzeichen am Rand und bei einer Frage ohne die Wörter,
+    mit denen sie fragt (:func:`asked`). Ein Stück aus lauter Zeichen („…“,
+    das französische „ ?“) fällt weg, außer die Suche besteht nur daraus. Bis
+    FD-18 verglich jede Runde „druckplatte?“ samt Fragezeichen, und keine
+    genaue Runde fand eine Frage je.
+    """
+    return _query_parts(query, str(QUESTION_WORDS), str(REQUEST_WORDS))
+
+
+@lru_cache(maxsize=256)
+def _query_parts(query: str, _questions: str, _requests: str) -> tuple[str, ...]:
+    """Je Suche und Katalog einmal: Runden und Güte fragen sie je Zeile, gut
+    zweihundertsiebzigmal je Tastendruck. Die Wortlisten im Schlüssel, weil ein
+    Sprachwechsel andere Fragewörter bringt."""
+    typed = fold(query).split()
+    words = [word for word in (_EDGES.sub("", part) for part in typed) if word]
+    return tuple(asked(words, query) if words else typed)
+
+
+def searched_name(entry: SearchEntry) -> str:
+    """Der Name eines Eintrags als Suchtext — außer der Kennung einer Menüzeile.
+
+    ``drill_hole`` und die Handschlüssel der Fensterbefehle (``file.save``,
+    ``settings.updates``) sind englische Wörter, die ein Umsteiger tippt. Die
+    Kennung einer Zeile der Menüleiste ist es nicht: ``menubar.flache_schattierung``
+    ist deutsch in jeder Sprache, „chat“ fand darüber die Schattierung, und ein
+    Wortteil mitten im Titel stieg über die Kundenwendungen (Review D0-W, L1).
+    Allein diese Kennungen suchen über Titel, Satz und Kundenwörter
+    (Nachprüfung N1: „save“ fand sonst *Speichern* nicht mehr).
+    """
+    name = str(entry.name)
+    return "" if name.startswith(f"{MENUBAR}.") else name
+
+
 def _haystack(entry: SearchEntry) -> str:
     """Titel, Name, Beschreibung und Kundenwörter eines Eintrags, gefaltet."""
     return _folded_haystack(
-        str(entry.title), str(entry.name), str(entry.doc), synonyms_for(str(entry.name))
+        str(entry.title), searched_name(entry), str(entry.doc), synonyms_for(str(entry.name))
     )
 
 
@@ -702,7 +902,7 @@ def matches(entry: SearchEntry, query: str, *, stem: bool = False, any_word: boo
     if any_word:
         return word_hits(entry, query) > 0
     haystack = _haystack(entry)
-    parts = fold(query).split()
+    parts = query_parts(query)
     if not stem:
         return all(part in haystack for part in parts)
     return stems_in(parts, haystack)
@@ -727,7 +927,7 @@ def found_in_rounds(entries: Sequence[SearchEntry], query: str) -> tuple[list[Se
     if not found and query.strip():
         found = [entry for entry in entries if matches(entry, query, stem=True)]
     loosened = False
-    if not found and len(query.split()) > 1:
+    if not found and len(query_parts(query)) > 1:
         found = [entry for entry in entries if matches(entry, query, any_word=True)]
         loosened = bool(found)
     return found, loosened
@@ -743,7 +943,7 @@ def word_hits(entry: SearchEntry, query: str) -> int:
     haystack = _haystack(entry)
     return sum(
         part in haystack or (len(part) >= STEM_LENGTH and stem_of(part) in haystack)
-        for part in fold(query).split()
+        for part in query_parts(query)
     )
 
 
@@ -778,11 +978,11 @@ def rank(entry: SearchEntry, query: str) -> int:
     derselben Güte erhalten bleibt: Was an der Auswahl geht, steht weiter vorn
     (Gebietsregel, „Was zur Auswahl passt, steht vorn“).
     """
-    parts = fold(query).split()
+    parts = query_parts(query)
     if not parts:
         return 0
     title = fold(str(entry.title))
-    name = fold(str(entry.name))
+    name = fold(searched_name(entry))
     in_title = all(part in title for part in parts)
     # **Am Wortanfang, nicht mitten im Wort.** „Stützen“ stellte *Hilfe:
     # Solidon3D unterstützen …* vor alles andere, weil das Wort in
@@ -814,7 +1014,7 @@ def rank(entry: SearchEntry, query: str) -> int:
         return 1
     if at_title_start:
         return 2
-    if all(part in name for part in parts):
+    if name and all(part in name for part in parts):
         return 3
     if in_phrase:
         return 4
@@ -833,14 +1033,19 @@ LOOSE_RANK: Final = 4
 
 
 @lru_cache(maxsize=8)
-def _fields_of(texts: tuple[tuple[str, str, str], ...]) -> dict[str, dict[str, str]]:
+def _fields_of(texts: tuple[tuple[str, str, str, bool], ...]) -> dict[str, dict[str, str]]:
     """:func:`search_fields` über die Zeilen einer Suche, einmal je Zeilenbestand.
 
     Gerechnet wird je Tastendruck; gefaltet werden die gut zweihundertsiebzig
     Beschreibungen nur, wenn sich die Zeilen ändern — eine andere Auswahl gibt
-    andere Freigaben, aber dieselben Texte.
+    andere Freigaben, aber dieselben Texte. Das vierte Glied sagt, ob der Name
+    als Text zählt (:func:`searched_name`); sonst bleibt er nur Schlüssel.
     """
-    return search_fields(texts)
+    fields = search_fields((name, title, doc) for name, title, doc, _named in texts)
+    for name, title, doc, named in texts:
+        if not named:
+            fields[name] = {**fields[name], "name": "", "all": fold(f"{title} {doc}")}
+    return fields
 
 
 def ranked(
@@ -853,12 +1058,16 @@ def ranked(
     der Aufrufer stellt dort vorn hin, was an der Auswahl geht.
 
     **Bei gleicher Güte zuerst die Lage** (``here``: die Namen, die an der
-    Auswahl stehen), **dann der ganze Titel, dann das Kundenwort — nie das
-    Alphabet.** Ganzer Titel und „Titel und Kundenwort“ teilen die beste Güte;
-    den Rest entschied die Sortierung nach Titel, und „Tornillo“ wählte
-    spanisch das *Agujero para tornillo* vor statt des Bausteins *Tornillo*,
-    „Wandhalter“ den Zwilling ohne Kundenwort (Nachprüfung RM-735, N1).
-    „Verschieben“ verschiebt am Körper den Körper, an der Bohrung das Merkmal.
+    Auswahl stehen), **dann der ganze Titel, dann das genau gesagte Kundenwort,
+    dann eines, das die Wörter enthält — nie das Alphabet.** Ganzer Titel und
+    „Titel und Kundenwort“ teilen die beste Güte; den Rest entschied die
+    Sortierung nach Titel, und „Tornillo“ wählte spanisch das *Agujero para
+    tornillo* vor statt des Bausteins *Tornillo*, „Wandhalter“ den Zwilling ohne
+    Kundenwort (Nachprüfung RM-735, N1). „Verschieben“ verschiebt am Körper den
+    Körper, an der Bohrung das Merkmal. Italienisch „foro“ an der Bohrung ist
+    der Titel von *Bohrung ändern* und *Bohrung verschließen*; gemeint ist die
+    Zeile, deren Wendung „foro“ heißt, nicht die mit „chiudere foro“ (Durchsicht
+    welle4-b, L2).
 
     **Der Zwilling zuletzt, bei gleicher Güte.** Wer „quader“ tippt, bekommt
     die Normalform vor der Sonderform; die Grundliste zeigt den Zwilling gar
@@ -874,13 +1083,19 @@ def ranked(
     found, loosened = found_in_rounds(entries, query)
     if not query.strip():
         return found, loosened
-    texts = tuple((str(entry.name), _texts_of(entry.title), str(entry.doc)) for entry in entries)
-    scores = dict(rank_entries([query], _fields_of(texts)))
-    hidden = hidden_from_the_menu()
-    parts = fold(query).split()
+    texts = tuple(
+        (str(entry.name), _texts_of(entry.title), str(entry.doc), bool(searched_name(entry)))
+        for entry in entries
+    )
+    parts = query_parts(query)
     typed = " ".join(parts)
+    # Gewertet wird, was die Suche fragt, nicht womit (:func:`asked`).
+    scores = dict(rank_entries([typed], _fields_of(texts)))
+    hidden = hidden_from_the_menu()
 
-    def order(entry: SearchEntry) -> tuple[float, int, int, bool, bool, bool, bool, bool, float]:
+    def order(
+        entry: SearchEntry,
+    ) -> tuple[float, int, int, bool, bool, bool, bool, bool, bool, float]:
         good = rank(entry, query)
         score = scores.get(str(entry.name), 0.0)
         best = good == 0
@@ -897,6 +1112,7 @@ def ranked(
             # stünde ein gesperrtes Kundenwort über einem freien Titel.
             best and not entry.available,
             best and not _whole_title(fold(str(entry.title)), typed),
+            best and typed not in customer_phrases(str(entry.name)),
             best and not _in_phrase(str(entry.name), parts),
             -score if good >= LOOSE_RANK else 0.0,
         )
@@ -916,10 +1132,20 @@ def first_choice(hits: Sequence[SearchEntry], query: str) -> int:
     Ein Klick, der nichts tut, ist ärgerlich; einer, der etwas anderes tut, ist
     schlimmer. Findet sich in der besten Güte nichts Ausführbares, bleibt die
     Wahl auf deren erstem Treffer: Er sagt, was ihm fehlt. ``-1`` ohne Treffer.
+
+    **Ab :data:`LOOSE_RANK` ist die Reihenfolge selbst die Güte**: Dort ordnet
+    die Wortsuche (:func:`ranked`), und bei gleicher Wertung steht das Freie
+    schon vorn. Wer danach kommt, ist schlechter gewertet, nicht gleich gut.
+    Die Vorauswahl übersprang trotzdem jeden gesperrten Treffer: „auf
+    Grundebene setzen“ ohne Auswahl wählte die Ansicht *Hinten* vor, „Wie setze
+    ich das Teil auf die Druckplatte?“ *Druckplatte zeigen* statt des Treffers
+    darüber (FD-18).
     """
     if not hits:
         return -1
     best = rank(hits[0], query)
+    if best >= LOOSE_RANK:
+        return 0
     for index, entry in enumerate(hits):
         if rank(entry, query) != best:
             break

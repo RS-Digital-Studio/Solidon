@@ -47,9 +47,10 @@ Erzeugt, nicht geschrieben, mit stabilen Kennungen:
 | Fensterbefehle | Menüleiste des Fensters, aus den unübersetzten Quelltexten | Menüpfad, z. B. `Datei/Speichern unter` |
 | Bedienflächen | Dialogklassen unter `app/ui/` (`*dialog*.py` und Fenster), Wortschatz der Ziele, `panels.FINDING_ACTIONS`, die Merkmalfenster-Handlungen ohne Operation — erzeugt aus `perceive.actions` und `selection_operations`, heute u. a. *Auf alle N gleichartigen anwenden*, *Bezug ändern*, *Im Bild einstellen* —, Kontextmenü des Verlaufs | fester Name aus dem Wortschatz |
 
-Nicht aus `window_commands`: Es nummeriert Menüzeilen nach ihrer Lage
-(`menu.<n>`) und speist seit RM-735 die Suche — eine stabile Kennung ist das
-nicht. Die Einstellungen sind eine
+Die Menüzeilen trugen in `window_commands` eine Kennung nach ihrer Lage
+(`menu.<n>`) — eine stabile Kennung war das nicht. Seit D0-W heißen sie nach
+ihrer deutschen Quelle (`menubar.<slug>`, `guides.menubar_name`), gleich in
+jeder Sprache; gelesen wird die Leiste über `guide_targets.menubar_entries`. Die Einstellungen sind eine
 Zeile je Abschnitt des Dialogs. Der Bausteinkatalog — 83 Kacheln, dahinter
 50 Bausteine — ist **eine** Zeile mit einem Lauf über alle; ihre Texte prüft
 Stufe B, ihren Maßbereich hält `check_part_ranges`.
@@ -128,7 +129,7 @@ Beispielziel je Zeile vorab festgelegt (etwa „Bohrung auf 5 mm“):
 | V2 | Satzlängen | die Grenzen aus `test_text_length` |
 | V3 | Felder mit eigenem Satz (Kurzhilfe und zugängliche Beschreibung) | 100 %; der Satz teilt höchstens die Hälfte seiner Wörter mit dem Titel |
 | V4 | Vorhersage: Der Prüfer schreibt vor dem Übernehmen aus Titel, erstem Satz und Vorschau auf, was geschehen wird | Abweichung vom Ergebnis ist ein Fund |
-| V5 | Meldungen | jede sagt, was nicht ging, warum und was jetzt; ihre Handlung löst das Problem |
+| V5 | Meldungen | jede sagt, was nicht ging, warum und was jetzt; ihre Handlung löst das Problem. Ein Sperrgrund am grauen Bedienelement ist keine Meldung und braucht keinen Knopf, nennt aber den Ausweg (Menüweg oder offener Knopf); ohne Ausweg ist er ein Fund *mittel* |
 | V6 | Kurzhilfen, die man bis zum Ziel öffnen muss | ≤ 1; nie das Handbuch |
 
 **Gestaltung** — innovativ und modern, aber einfach bedienbar (Robert,
@@ -174,11 +175,11 @@ Vorgaben, Vorschau, Aufklappen und Suche.
 | | Zählgröße | Schwelle |
 |---|---|---|
 | Z1 | Unmittelbarkeit beim Ziehen: Griff, Geist und Zahl am Zeiger, gemessen am Bildzähler des Viewports, auf den Referenzrechner umgerechnet wie §31 | im nächsten gemalten Bild nach dem Eingabeereignis, ≤ 33 ms; die Vorschau selbst hält §2.8 und das Budget aus §31 (Prüfpunkt 6) |
-| Z2 | Nicht-modal: `QApplication.activeModalWidget()` nach jeder geprüften Handlung | `None`; ausgenommen nur die Nachfragen nach Regel 19 (Löschen im Verlauf, Vollerkennung), KI- und Druckhinweis, die Speicherfrage und die Dateidialoge des Systems. Erfolg und Hinweis erscheinen nie als Meldungsfenster |
+| Z2 | Nicht-modal: `QApplication.activeModalWidget()` nach jeder geprüften Handlung | `None`; ausgenommen nur die Rückfragen aus `fenster.md` (Löschen im Verlauf, Vollerkennung, Export und Übergabe trotz Befunden, Verwerfen zurückgenommener Schritte, Wiederherstellen nach einem Absturz, Verlust einer Generierung), die Mehrdeutigkeitsfragen nach Regel 21 (`ctx.ask`), Fehlermeldungen mit Handlungsvorschlag nach Regel 17 (`show_error`), die auf eine Handlung des Kunden antworten, KI- und Druckhinweis, die Speicherfrage und die Dateidialoge des Systems. Erfolg und Hinweis erscheinen nie als Meldungsfenster; eine Fehlermeldung ohne Handlung bleibt ein Fund (E7, V5) |
 | Z3 | Am Objekt: Nach dem Klick auf die Stelle ist die Handlung ohne Menü und ohne Suche da, als Feld oben im Merkmalfenster oder als Hauptaktion im Reiter *Auswahl* (§2.6); der Rechtsklick führt keine aus (§18.5) | ja je Zeile mit Merkmals- oder Körperbezug |
 | Z4 | Leere Zustände führen weiter (ergänzt E7, das den fehlenden Satz zählt) | hat ein leerer Zustand eine nächste Handlung — leere Szene, leerer Verlauf, leeres Lager —, steht sie als Knopf dabei; gewollt leere Karten und ein Prüfbericht ohne Befund ausgenommen |
 | Z5 | Rohe Qt-Fenster im Kundenweg: Instanzen von `QMessageBox`, `QInputDialog`, `QColorDialog` | 0, außer `QFileDialog` und den Ausnahmen aus Z2 |
-| Z6 | Größen und Skalierungen (Kontrast steht in G6, abgeschnittener Text in Prüfpunkt 9) | bei 1280 × 820 (Startgröße) und 1366 × 728 (Laptop mit Taskleiste) braucht keine Vorderseite eine Rollleiste; Symbole bei 100, 150 und 200 % ohne Unschärfe; hell und dunkel mit denselben Flächen und Akzenten |
+| Z6 | Größen und Skalierungen (Kontrast steht in G6, abgeschnittener Text in Prüfpunkt 9) | auf der kleinsten Arbeitsfläche (Bauplan §19.3; das maximierte Fenster auf 1920 × 1080 logisch, Taskleiste und Titelleiste abgezogen: `function_checks.SMALLEST_WINDOW`) braucht keine Vorderseite eine Rollleiste; Symbole bei 100, 150 und 200 % ohne Unschärfe, solange die logische Fläche nicht unter 1920 × 1080 fällt; was darunter liegt, ist kein Fall; hell und dunkel mit denselben Flächen und Akzenten |
 | Z7 | Die ersten fünf Minuten (§2.3): vom Start bis zum ersten übernommenen Schritt an einem eigenen Modell | Schritte und Fehlklicks aus dem Protokoll von Stufe C, ohne Handbuch; jeder Fehlklick ist ein Fund |
 
 *Innovativ (urteilt Stufe B, an den genannten Zeilen):*
@@ -246,7 +247,7 @@ und `finding.action:<id>`, `print:<feld>` aus `print_fields.FIELDS`,
 und `tree.row:<objekt>.<merkmal>`, `history.row:<n>`,
 `feature.field:<op>.<feld>` (Feld im Merkmalfenster) und `measure.field:<feld>`
 (Maßfeld im Bild). Punkte in der Ansicht liefert `point_for(…)` in
-`guide_targets`, gerechnet über `Viewport.projection`;
+`guide_targets`, gerechnet über `Viewport.display_of`;
 `make_video._world_to_window` zieht dorthin. `area_for("operation:…")` nimmt den
 sichtbaren Knopf auch ohne Menüaktion (heute haben 90 von 190 Operationen eine
 Aktion).
@@ -303,9 +304,8 @@ RM-735 (Befehlspalette entfernen) gehen voraus.
 | D11 | Ansicht und Bedienung: Kamera, Griffe, Objektbaum, Auswahl, Verlauf und Vorher/Nachher, Karten verschieben, Suche |
 | D12 | Rahmen: Einstellungen, Ersteinrichtung, Aktivierung, Update, Handbuch, Tour, Chat, Kürzel, Rückmeldung und Fehlerbericht, KI- und Druckhinweis, Einladungen, Statusleiste, Über-Dialog |
 
-**Reihenfolge nach Kundenwirkung**, wegen Verkaufskandidat am 25.11. und
-Start am 01.12.: D0; dann D1, D9 und D8 — Weg 1 bis zum Slicer —; dann D3 und
-D4; danach der Rest. Parallel höchstens zwei Pakete.
+**Reihenfolge nach Kundenwirkung:** D0; dann D1, D9 und D8 — Weg 1 bis zum
+Slicer —; dann D3 und D4; danach der Rest. Parallel höchstens zwei Pakete.
 
 ## 7 Befunde, Optimierung, Abhaken
 
@@ -364,15 +364,15 @@ Schritt in `/erzeugen` und ein `rendered`-Test wie die Handbuchbilder.
   dass der reproduzierende Test ein Fenstertest ist; diese eine Datei läuft
   lokal (Entscheidung Robert, §13).
 - **Kapazität:** Codestruktur und Durchgang beginnen beide nach 0.6.0. Die
-  Kundenpakete (D0, D1, D9, D8, D3, D4) gehen bis zum 25.11. vor die
-  Komponenten von `MainWindow` (Entscheidung Robert, §13).
-- **Programmplan (Auftrag Robert, 11.10.2026):** D0, dann Codestruktur Schritt
-  0. Bis zum Verkaufskandidaten am 25.11.: D1, D9 und D8 (Weg 1 bis zum
-  Slicer), dann die Codestruktur-Schritte 1, 2 und 3, dann D3 und D4.
-  Kundenpakete haben Vorrang; wird es eng, werden Codestruktur-Schritte
-  gekürzt, nicht die Kundenpakete. Nach dem Start am 01.12.: D2, D5, D6, D7 und
-  D10, D11 und D12 jeweils nach den Komponenten der Klassen, die sie berühren
-  (`MainWindow`, für D11 auch `Viewport`: Kamera und Griffe).
+  Kundenpakete (D0, D1, D9, D8, D3, D4) gehen vor die Komponenten von
+  `MainWindow` (Entscheidung Robert, §13).
+- **Programmplan (Auftrag Robert, 11. und 12.10.2026):** vier Phasen ohne
+  Datum direkt hintereinander, jede sauber bis zu Ende; nichts wird für einen
+  Termin gekürzt. D0, dann Codestruktur Schritt 0. Dann D1, D9 und D8 (Weg 1
+  bis zum Slicer), die Codestruktur-Schritte 1, 2 und 3, dann D3 und D4.
+  Danach D2, D5, D6, D7 und D10, D11 und D12 jeweils nach den Komponenten der
+  Klassen, die sie berühren (`MainWindow`, für D11 auch `Viewport`: Kamera und
+  Griffe).
 
 ## 10 Abnahme
 
@@ -425,7 +425,7 @@ Konzepte verweisen.
   wird in jeder Sprache gemessen, Bilder entstehen gezielt.
 - **Alles von Hand am Fenster**: zu langsam für 300 Zeilen, nicht wiederholbar.
 
-## 13 Entscheidungen Robert (11.10.2026)
+## 13 Entscheidungen Robert (11. und 12.10.2026)
 
 1. **Fenstertest je Fund lokal: ja.** Je Fund läuft die eine reproduzierende
    Fenstertestdatei lokal — vorher rot, nachher grün —; die übrigen
@@ -433,7 +433,14 @@ Konzepte verweisen.
    lokal nur beim Release“ nur für diesen Zweck; sie kommt mit D0 in denselben
    Satz in `AGENTS.md` („Arbeitsweise“) wie die Ausnahme der Codestruktur, und
    `.claude/rules/tests.md` verweist darauf.
-2. **Vorrang bis zum 25.11.: ja.** Die Kundenpakete D0, D1, D9, D8, D3 und D4
+2. **Vorrang der Kundenpakete: ja.** Die Kundenpakete D0, D1, D9, D8, D3 und D4
    gehen vor die Komponenten von `MainWindow` aus dem Programm Codestruktur
    (dort Schritte 4b bis 5); Schritt 0 bis 3 der Codestruktur können daneben
-   laufen.
+   laufen. Ein Termin bindet das nicht: Alle vier Phasen laufen ohne Datum
+   hintereinander, jede sauber bis zu Ende (Robert, 12.10.; vorher galt der
+   Vorrang bis zum 25.11.).
+3. **Kleinste Arbeitsfläche 1920 × 1080 logisch (12.10.).** Gestaltet und
+   geprüft wird ab Full HD bei 100 %; eine kleinere Fläche, auch eine höhere
+   Auflösung mit stärkerer Skalierung, ist kein Fall und ihr Befund kein Fund
+   (Bauplan §19.3). Die Startgröße beim Verkleinern (`START_SIZE`) und der
+   Laptop mit 1366 × 728 fallen damit aus Z6.

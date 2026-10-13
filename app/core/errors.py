@@ -183,7 +183,6 @@ SHOW_FEATURE = Action("show_feature", _("Merkmal zeigen"), primary=True)
 #: ``unhandled_advice`` zu einem Satz zum Lesen: Der Kunde bekam den Rat, die
 #: Teilung abzubrechen, und keinen Weg, es zu tun.
 CANCEL_SPLIT = Action("cancel_split", _("Die laufende Teilung abbrechen"), primary=True)
-USE_VOXEL_STAGE = Action("use_voxel_stage", _("Gröber rechnen — Maße werden gerundet"))
 SCALE_TO_FIT = Action("scale_to_fit", _("Auf den Bauraum verkleinern"))
 #: Der Ausweg aus „dieses Format braucht einen exakten Körper": dasselbe
 #: Teil in ein Format schreiben, das Dreiecke kennt. 3MF und nicht STL,
@@ -354,6 +353,24 @@ class QuestionDeclined(OperationCancelled):
     """
 
 
+#: Zeichen, mit denen ein Titel schon als Satz endet — in jeder Sprache der Kataloge.
+_SENTENCE_ENDS = (".", "!", "?", "…", ":")
+
+
+def title_and_detail(title: str, detail: str) -> str:
+    """Titel und Detail in einer Zeile, wie Protokoll und Traceback sie lesen.
+
+    **Ein Titel, der schon ein Satz ist, bekommt keinen Doppelpunkt dahinter**
+    (FD-5): Aus „… noch nicht aktiviert." und dem Detail wurde „aktiviert.:
+    Aktivieren Sie …" — in jeder Sprache, deren Titel mit einem Punkt endet.
+    Ein Titel ohne Satzzeichen behält den Doppelpunkt als Trenner.
+    """
+    head = title.rstrip()
+    if head.endswith(_SENTENCE_ENDS):
+        return f"{head} {detail}"
+    return f"{head}: {detail}"
+
+
 def _with_values(kwargs: dict[str, Any], **extra: Any) -> dict[str, Any]:
     """Vereint die Werte, die eine Unterklasse kennt, mit denen des Aufrufers."""
     kwargs["values"] = {**extra, **(kwargs.pop("values", None) or {})}
@@ -397,7 +414,9 @@ class AppError(Exception):
         # sieht, weiß nichts. Die Oberfläche liest beide Felder einzeln und
         # merkt davon nichts; Protokoll und Traceback zeigen bisher allein
         # diesen Text, und dort ist der Unterschied der ganze Inhalt.
-        super().__init__(f"{self.title}: {self.detail}" if self.detail else str(self.title))
+        super().__init__(
+            title_and_detail(str(self.title), str(self.detail)) if self.detail else str(self.title)
+        )
 
     def as_dict(self) -> dict[str, Any]:
         """Serialisierbare Form für Protokoll, Prüfbericht und
@@ -722,9 +741,14 @@ class BooleanFailedError(GeometryError):
     default_title: ClassVar[TranslatableText] = _(
         "Die Körper ließen sich auf keinem Weg verknüpfen."
     )
+    #: **Kein *Gröber rechnen*** (FD-6): Im Fenster, im Verlaufsumbau und beim
+    #: Agenten rechnet ein Schritt, dessen kurze Kette ausging, sofort mit der
+    #: vollen samt Voxelstufe weiter (``evaluate._FullChain``, an ``cut_short``);
+    #: deren Absage hat die Stufe schon hinter sich. Hat der Aufruf seine Stufen
+    #: selbst festgelegt, rechnet ihn auch die volle Güte nicht anders. In beiden
+    #: Fällen änderte der Knopf nichts — der Kunde klickte, und nichts wurde anders.
     default_suggestions: ClassVar[tuple[Action, ...]] = (
         REPAIR_AND_RETRY,
-        USE_VOXEL_STAGE,
         SHOW_LOCATIONS,
         CANCEL,
     )
@@ -746,18 +770,20 @@ class BooleanFailedError(GeometryError):
         # *Voxelstufe erzwingen*, also genau die Stufe, die noch offen war.
         # Zwei Sätze, die sich widersprechen, und keiner davon anklickbar.
         #
-        # Jetzt sagt der Titel, was gilt: War die Voxelstufe dran, ist sie
-        # ausgereizt und der Rat fällt weg. War sie es nicht, sagt der Titel es
-        # und der Rat bleibt — mit einem Handler dahinter, der einmal mit der
-        # vollen Kette rechnet.
-        if attempted and "voxel" not in attempted:
+        # Jetzt sagt der Titel, was gilt: Hat die Güte die Kette gekürzt, sagt
+        # er es. Einen Knopf dafür gibt es nicht mehr (siehe
+        # ``default_suggestions``): Die gekürzte Kette rechnet die Auswertung
+        # selbst zu Ende, eine festgelegte rechnet nie anders.
+        #
+        # **Nur die gekürzte, nicht jede ohne Voxelstufe** (Durchsicht über
+        # fix/review-kern): Hat der Aufrufer seine Stufen festgelegt, folgt
+        # keine vollständige Rechnung, und „die schnelle Rechnung" verspräche
+        # eine. Dort gilt der Titel der Klasse — auf keinem Weg, den der
+        # Schritt zulässt.
+        if cut_short:
             kwargs.setdefault(
                 "title",
                 _("Mit der schnellen Rechnung ließ sich hier kein sauberes Ergebnis bilden."),
-            )
-        elif "voxel" in attempted and kwargs.get("suggestions") is None:
-            kwargs["suggestions"] = tuple(
-                action for action in self.default_suggestions if action is not USE_VOXEL_STAGE
             )
         super().__init__(
             detail=detail, **_with_values(kwargs, attempted=list(attempted), seed=seed)

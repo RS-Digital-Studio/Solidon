@@ -123,6 +123,7 @@ from app.core.units import (
 )
 from app.i18n import tr
 from app.ui import app_events, cursors
+from app.ui.change_lock import change_refusal
 from app.ui.icons import icon
 from app.ui.labels import (
     display_unit,
@@ -10248,8 +10249,8 @@ class Viewport(QWidget):
             return None
         sideways = sideways / span
         shifted = np.asarray(point, dtype=float) + sideways
-        here = self._display_of(point)
-        there = self._display_of([float(value) for value in shifted])
+        here = self.display_of(point)
+        there = self.display_of([float(value) for value in shifted])
         if here is None or there is None:
             return None
         measured = math.dist(here, there)
@@ -14688,6 +14689,13 @@ class Viewport(QWidget):
             self.gizmoStatus.emit("")
             return
         self._detach_gizmo()
+        if change_refusal():
+            # **Ohne Freischaltung kein Griff** (FD-28): Jeder Zug daran legt
+            # einen Schritt an, den der Kern ablehnt. Den Grund nennen Karte,
+            # Merkmalfenster und Maßgruppe; nach dem Freischalten stellt
+            # ``MainWindow._update_actions`` den Griff neu.
+            self.gizmoStatus.emit("")
+            return
         # **Wo er sitzt und was er tut, sind zwei Fragen.** ``gizmo_feature``
         # beantwortet die erste (jedes versetzbare Merkmal), ``gizmo_target``
         # die zweite (nur eine Fläche kennt Press/Pull entlang ihrer Normalen).
@@ -17832,8 +17840,8 @@ class Viewport(QWidget):
         width, height = self.renderer.view_size()
         if min(width, height) < LEAST_VIEW_PIXELS:
             return FALLBACK_SCALE
-        first = self._display_of(here)
-        second = self._display_of(there)
+        first = self.display_of(here)
+        second = self.display_of(there)
         if first is None or second is None:
             return FALLBACK_SCALE
         span = math.dist(first, second)
@@ -18438,7 +18446,7 @@ class Viewport(QWidget):
 
     # --- Bildpunkte einer Weltstelle ---------------------------------------------
 
-    def _display_of(self, world: Sequence[float]) -> tuple[float, float] | None:
+    def display_of(self, world: Sequence[float]) -> tuple[float, float] | None:
         """Ein Weltpunkt im Bild — in Gerätepixeln, gezählt wie Qt (oben links),
         oder nichts ohne Bild."""
         if self.renderer is None:

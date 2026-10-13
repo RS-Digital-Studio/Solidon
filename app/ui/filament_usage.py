@@ -409,6 +409,7 @@ class UsageDialog(QDialog):
             row.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
             row.setSpacing(NORMAL)
             heading = QHBoxLayout()
+            heading.setSpacing(TIGHT)
             marker = QLabel(card)
             marker.setPixmap(
                 swatch(slot_colours(int(line.slot.index), line.slot), NORMAL * 3).pixmap(
@@ -447,6 +448,7 @@ class UsageDialog(QDialog):
             panel = QWidget(self.content)
             split_layout = QVBoxLayout(panel)
             split_layout.setContentsMargins(0, 0, 0, 0)
+            split_layout.setSpacing(NORMAL)
             add = QPushButton(tr("Weitere Spule"), panel)
             add.clicked.connect(weak_slot(self, UsageDialog._add_allocation, index))
             split_layout.addWidget(add)
@@ -484,6 +486,7 @@ class UsageDialog(QDialog):
         self.reload_button = QPushButton(tr("Lager neu laden"), self)
         self.reload_button.clicked.connect(self._load)
         utilities = QHBoxLayout()
+        utilities.setSpacing(TIGHT)
         utilities.addWidget(self.add_button)
         utilities.addWidget(self.reload_button)
         utilities.addStretch()
@@ -722,6 +725,7 @@ class UsageDialog(QDialog):
         widget = QWidget(panel)
         row = QHBoxLayout(widget)
         row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(TIGHT)
         choice = QComboBox(widget)
         choice.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         choice.setMinimumContentsLength(8)

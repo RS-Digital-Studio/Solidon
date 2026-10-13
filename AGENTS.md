@@ -178,13 +178,13 @@ Dialoge.
   Commit direkt auf main, den `post-commit` sofort pusht (Entscheidung
   Robert). Ein Schritt, der
   seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
-- **Fenster, Renderer und Leistung lokal nur beim Release**; der Push nach main
-  löst im öffentlichen Repository alle Prüfungen selbst aus — Kern und
-  Renderer auf allen vier Plattformen, dazu die betroffenen Fenster- und
-  Slicertests (`/liefern`); ein Push nur aus Unterlagen startet keinen Lauf
-  (Pfadfilter CI-09 in `build.yml`), dann prüft allein das Tor davor. Auf
-  Zweigen läuft keine CI (Entscheidung Robert). Ein grüner Entwicklungslauf
-  ersetzt sie nicht.
+- **Fenster, Renderer und Leistung lokal nur beim Release**, außer
+  (Entscheidungen Robert) vor dem Merge eines Oberflächenschritts der
+  Codestruktur den Fenstertests, die `tools/ci_selection.py` zum Diff nennt,
+  und je Fund des Funktionsdurchgangs seiner reproduzierenden
+  Fenstertestdatei, vorher rot, nachher grün. Den Rest fährt der Push nach
+  main im öffentlichen Repository (`/liefern`), einer nur aus Unterlagen
+  keinen Lauf. Auf Zweigen läuft keine CI.
 - **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat**
   (Weg in `/erzeugen`).
 - **Die CI-Aufteilung hat einen geprüften Vertrag**

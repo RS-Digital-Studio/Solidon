@@ -10,6 +10,7 @@ in ``README.md`` notieren.
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -968,6 +969,185 @@ def clean_figure() -> None:
     write(figure, "clean_figure.stl")
 
 
+def void_shell_crossing() -> None:
+    """Ein Quader mit Durchgangsbohrung und einer Kammer, deren Schale sich selbst kreuzt.
+
+    Die Kammer ist ein nach innen gewendeter Würfel von 1,5 mm bei x = 5, ein
+    Eckpunkt 3 mm in Richtung −x verschoben: Die Schale faltet sich durch sich
+    selbst und reicht in die Bohrung (Radius 3). So ein Netz kommt aus Scannern und
+    Generatoren; die Hohlraumsuche kann das Schalenpaar nicht lesen
+    (``perceive.voids_unreadable``), wenn der Import die Außenseiten nicht
+    angleicht (``unify_normals = false``) — sonst stülpt er die Kammer zu einem
+    losen Teil um.
+    """
+    import manifold3d
+
+    body = manifold3d.Manifold.cube((40.0, 30.0, 20.0), True) - manifold3d.Manifold.cylinder(
+        30.0, 3.0, 3.0, 64
+    ).translate((0.0, 0.0, -15.0))
+    solid = body.to_mesh()
+    outer = trimesh.Trimesh(
+        np.asarray(solid.vert_properties)[:, :3], np.asarray(solid.tri_verts), process=False
+    )
+    cavity = trimesh.creation.box(extents=(1.5, 1.5, 1.5))
+    vertices = cavity.vertices.copy()
+    corner = int(np.argmax(vertices.sum(axis=1)))
+    vertices[corner] += (-3.0, 0.0, 0.0)
+    cavity = trimesh.Trimesh(vertices + np.array((5.0, 0.0, 0.0)), cavity.faces, process=False)
+    cavity.invert()
+    write(trimesh.util.concatenate([outer, cavity]), "void_shell_crossing.stl")
+
+
+def generated_thin_cup() -> None:
+    """Ein oben offener Becher 100 × 100 × 60 mm mit 0,3 mm Wand, geschlossen.
+
+    So liefert ein Generator manchmal eine Haut statt eines Körpers (RM-577):
+    Als erzeugte Quelle geladen meldet die Auswertung ``scene.thin_skin``.
+    """
+    import manifold3d
+
+    outer = manifold3d.Manifold.cube((100.0, 100.0, 60.0))
+    inner = manifold3d.Manifold.cube((99.4, 99.4, 60.0)).translate((0.3, 0.3, 0.3))
+    solid = (outer - inner).to_mesh()
+    cup = trimesh.Trimesh(
+        np.asarray(solid.vert_properties)[:, :3], np.asarray(solid.tri_verts), process=False
+    )
+    write(cup, "generated_thin_cup.stl")
+
+
+def no_geometry_step() -> None:
+    """Eine gültige STEP-Datei ohne einen einzigen Körper (``step/no_geometry.step``)."""
+    target = HERE / "step" / "no_geometry.step"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        "ISO-10303-21;\n"
+        "HEADER;\n"
+        "FILE_DESCRIPTION(('ohne Geometrie'),'2;1');\n"
+        "FILE_NAME('no_geometry.step','2026-10-12T00:00:00',(''),(''),'','','');\n"
+        "FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\n"
+        "ENDSEC;\n"
+        "DATA;\n"
+        "ENDSEC;\n"
+        "END-ISO-10303-21;\n",
+        encoding="ascii",
+        newline="\n",
+    )
+    print("step/no_geometry.step: kein Körper")
+
+
+def _corpus_app() -> None:
+    """Der Anwendungskern für die Projekterzeuger: Pfad und Register."""
+    import sys
+
+    sys.path.insert(0, str(HERE.parent.parent))
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+
+
+def missing_part_project() -> None:
+    """Ein Projekt, das einen Baustein einsetzt, den es hier nicht gibt (``parts.missing``).
+
+    So kommt ein Projekt an, dessen eigener Baustein eine ``.py``-Datei war: Sie
+    reist nie mit (Regel 13). Der Schritt ``insert_werkstatt_klammer`` steht im
+    Stapel, ein Rezept liegt nicht im Container.
+    """
+    _corpus_app()
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.migrations import FORMAT_VERSION
+    from app.core.scene.project import new_project, save
+    from app.core.types import Operation
+
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 20.0})],
+    )
+    project.document.ops.append(
+        Operation(id=2, op="insert_werkstatt_klammer", inputs=("obj_1",), outputs=("obj_1",))
+    )
+    target = HERE / "projects" / f"missing_part_v{FORMAT_VERSION}.p3d"
+    save(project, target)
+    print(f"{target.name}: Schritt 2 setzt einen fehlenden Baustein ein")
+
+
+def own_part_projects() -> None:
+    """Ein Projekt mit eigenem Rezept und ein geänderter Stand desselben Rezepts.
+
+    ``projects/own_part_v<N>.p3d`` setzt das Rezept ``werkstatt_halter`` ein und
+    trägt es samt Abdruck mit (§24.4). ``recipes/werkstatt_halter_lokal.json`` ist
+    derselbe Baustein mit einem anderen Satz — liegt er im Nutzerordner, rechnet
+    das Projekt mit ihm und bietet *Gespeicherten Stand verwenden* an
+    (``parts.own_changed``).
+    """
+    import dataclasses
+
+    _corpus_app()
+    from app.core.knowledge import profiles
+    from app.core.knowledge.parts import recipe
+    from app.core.knowledge.parts.ops import op_name
+    from app.core.scene.migrations import FORMAT_VERSION
+    from app.core.scene.project import Project, save
+    from app.core.types import Document, Operation, Parameter
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    seed = Document(
+        format_version=FORMAT_VERSION,
+        app_version="corpus",
+        parameters={"w": Parameter(name="w", value=30.0)},
+        ops=[
+            Operation(
+                id=1,
+                op="create_box",
+                outputs=("obj_1",),
+                params={"width": "@w", "depth": 20.0, "height": 8.0, "anchor": "corner"},
+            )
+        ],
+    )
+    made = recipe.range_check(
+        recipe.capture(
+            seed,
+            {},
+            name="werkstatt_halter",
+            title="Werkstatthalter",
+            group="structure",
+            op_ids=(1,),
+            exposed=(
+                recipe.ExposedParam(
+                    name="w", title="Breite", default=30.0, minimum=10.0, maximum=90.0
+                ),
+            ),
+            features={"top": "face_top"},
+            profile=profile,
+        ),
+        profile,
+    )
+    recipe.register(made)
+    document = dataclasses.replace(
+        seed,
+        ops=[
+            *seed.ops,
+            Operation(
+                id=2,
+                op=op_name(made.name),
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"at_feature": "face_top"},
+            ),
+        ],
+    )
+    target = HERE / "projects" / f"own_part_v{FORMAT_VERSION}.p3d"
+    save(Project(document=document), target)
+    local = dataclasses.replace(made, doc="Derselbe Halter, im Nutzerordner neu beschrieben.")
+    changed = HERE / "recipes" / "werkstatt_halter_lokal.json"
+    changed.write_bytes(
+        (
+            json.dumps(recipe.file_data(local), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+    )
+    print(f"{target.name} und {changed.name}: ein Rezept, zwei Stände")
+
+
 if __name__ == "__main__":
     cube_clean()
     dense_cylinder()
@@ -1008,3 +1188,8 @@ if __name__ == "__main__":
     island_tower()
     oversized()
     dense_1m()
+    void_shell_crossing()
+    generated_thin_cup()
+    no_geometry_step()
+    missing_part_project()
+    own_part_projects()

@@ -1025,13 +1025,13 @@ def _the_dialogues_of_the_surface() -> list[tuple[str, object]]:
     """
     from app.core.knowledge import profiles
     from app.ui.ai_disclosure import LocalPrivacyDialog
+    from app.ui.calibration_dialog import CalibrationDialog
     from app.ui.catalog import PartCatalog
     from app.ui.changes_dialog import ChangesDialog
     from app.ui.comfy_dialog import ComfySetupDialog
     from app.ui.dialogs import (
         AboutDialog,
         ActivationDialog,
-        CalibrationDialog,
         DonationDialog,
         KeyDialog,
         OfflineActivationDialog,
@@ -2170,10 +2170,11 @@ def test_the_error_dialog_accents_the_action_and_never_the_way_out(qt_app: objec
     """
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QFont
-    from PySide6.QtWidgets import QMessageBox, QPushButton
+    from PySide6.QtWidgets import QPushButton
 
     from app.core.errors import ARRANGE_ON_BED, CANCEL, CHOOSE_PRINTER, AppError
     from app.ui import dialogs
+    from app.ui.message_dialog import MessageDialog
 
     fehler = AppError(
         title="Probe", detail="x", suggestions=(ARRANGE_ON_BED, CHOOSE_PRINTER, CANCEL)
@@ -2183,17 +2184,17 @@ def test_the_error_dialog_accents_the_action_and_never_the_way_out(qt_app: objec
     # diese Liste räumt Python die erste Box ab, sobald die zweite entsteht —
     # und der Zugriff auf ihre Knöpfe endet mit „Internal C++ object already
     # deleted". Die Python-Hülle hält das C++-Objekt, nicht umgekehrt.
-    am_leben: list[QMessageBox] = []
+    am_leben: list[MessageDialog] = []
 
     def gezeigt(handlers: dict[str, object]) -> list[QPushButton]:
         """Fängt die Box ab, bevor sie modal wird, und zeigt sie unsichtbar."""
-        echt = QMessageBox.exec
-        gefangen: list[QMessageBox] = []
-        QMessageBox.exec = lambda self: (gefangen.append(self), 0)[1]  # type: ignore[method-assign]
+        echt = MessageDialog.exec
+        gefangen: list[MessageDialog] = []
+        MessageDialog.exec = lambda self: (gefangen.append(self), 0)[1]  # type: ignore[method-assign]
         try:
             dialogs.show_error(fehler, handlers=handlers)  # type: ignore[arg-type]
         finally:
-            QMessageBox.exec = echt  # type: ignore[method-assign]
+            MessageDialog.exec = echt  # type: ignore[method-assign]
         assert gefangen, "show_error hat keine Box gebaut"
         box = gefangen[0]
         am_leben.append(box)
@@ -2428,7 +2429,13 @@ def test_a_hint_never_brings_a_second_primary_into_a_window() -> None:
     """
     leading = set()
     for file, function in _functions_of_the_surface():
-        if not _called(function, "make_primary"):
+        # Ein Meldungsdialog macht seinen Knopf über ``add_action(lead=…)`` zum
+        # Hauptknopf (``message_dialog``, FD-21) — dieselbe Tür wie ``make_primary``.
+        opens_the_lead = _called(function, "make_primary") or any(
+            isinstance(node, ast.Call) and any(word.arg == "lead" for word in node.keywords)
+            for node in ast.walk(function)
+        )
+        if not opens_the_lead:
             continue
         reads = any(
             isinstance(node, ast.Attribute) and node.attr == "primary"
@@ -2493,21 +2500,22 @@ def test_an_error_with_two_recommended_ways_still_has_one_primary(
 ) -> None:
     """Zwei Handlungen mit ``primary`` im Fehlerdialog: Hauptknopf wird die erste."""
     from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QMessageBox, QPushButton
+    from PySide6.QtWidgets import QPushButton
 
     from app.core.errors import CHANGE_THIS_STEP, RETRY, AppError
     from app.ui import dialogs
+    from app.ui.message_dialog import MessageDialog
 
-    caught: list[QMessageBox] = []
-    real = QMessageBox.exec
-    QMessageBox.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
+    caught: list[MessageDialog] = []
+    real = MessageDialog.exec
+    MessageDialog.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
     try:
         dialogs.show_error(
             AppError(title="Probe", detail="x", suggestions=(RETRY, CHANGE_THIS_STEP)),
             handlers={RETRY.id: lambda _e: None, CHANGE_THIS_STEP.id: lambda _e: None},
         )
     finally:
-        QMessageBox.exec = real  # type: ignore[method-assign]
+        MessageDialog.exec = real  # type: ignore[method-assign]
     (box,) = caught
     try:
         box.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
@@ -2571,22 +2579,23 @@ def test_an_error_without_a_recommendation_still_gets_a_drawn_lead(
     Halbfett (Regel 18). Jetzt führt die erste, mit beiden Kodierungen."""
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QFont
-    from PySide6.QtWidgets import QMessageBox, QPushButton
+    from PySide6.QtWidgets import QPushButton
 
     from app.core.errors import CHOOSE_PRINTER, SCALE_TO_FIT, AppError
     from app.ui import dialogs
+    from app.ui.message_dialog import MessageDialog
 
     assert not SCALE_TO_FIT.primary and not CHOOSE_PRINTER.primary
-    caught: list[QMessageBox] = []
-    real = QMessageBox.exec
-    QMessageBox.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
+    caught: list[MessageDialog] = []
+    real = MessageDialog.exec
+    MessageDialog.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
     try:
         dialogs.show_error(
             AppError(title="Probe", detail="x", suggestions=(SCALE_TO_FIT, CHOOSE_PRINTER)),
             handlers={SCALE_TO_FIT.id: lambda _e: None, CHOOSE_PRINTER.id: lambda _e: None},
         )
     finally:
-        QMessageBox.exec = real  # type: ignore[method-assign]
+        MessageDialog.exec = real  # type: ignore[method-assign]
     (box,) = caught
     try:
         box.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
@@ -2624,3 +2633,149 @@ def test_a_shortcut_search_without_a_hit_says_so(qt_app: QApplication) -> None:
     finally:
         window.deleteLater()
         bar.deleteLater()
+
+
+#: Die Layoutarten, deren Abstand Qt sonst mit 6 vorgibt — kein Vielfaches des Rasters.
+_LAYOUTS = frozenset({"QVBoxLayout", "QHBoxLayout", "QFormLayout", "QGridLayout"})
+
+#: Module der Karten des Hauptfensters: geprüft, auch wenn ihre Dialogklasse
+#: (``BodyChoiceDialog``) einmal umzieht. Ihre Höhen teilt
+#: ``OverlayHost._share_room`` und liest dabei die Abstände der Layouts (FD-23).
+_CARD_MODULES = frozenset({"panels.py"})
+
+
+def _layouts_without_spacing(source: str) -> list[str]:
+    """Layouts einer Datei, die ihren Abstand nicht selbst setzen (Funktion:Zeile).
+
+    Gesetzt heißt ``setSpacing`` oder beide Richtungen, am Namen selbst oder an
+    der Schleifenvariablen, über die er läuft (``for form in (front, back)``).
+    """
+    found: list[str] = []
+    for function in ast.walk(ast.parse(source)):
+        if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        made: dict[str, int] = {}
+        spaced: dict[str, set[str]] = {}
+        alias: dict[str, str] = {}
+        for node in ast.walk(function):
+            if (
+                isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Name)
+                and node.value.func.id in _LAYOUTS
+            ):
+                made[ast.unparse(node.targets[0])] = node.lineno
+            if isinstance(node, ast.For) and isinstance(node.iter, (ast.Tuple, ast.List)):
+                for element in node.iter.elts:
+                    alias[ast.unparse(element)] = ast.unparse(node.target)
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("setSpacing", "setHorizontalSpacing", "setVerticalSpacing")
+            ):
+                spaced.setdefault(ast.unparse(node.func.value), set()).add(node.func.attr)
+        for name, line in made.items():
+            calls = spaced.get(name, set()) | spaced.get(alias.get(name, ""), set())
+            if (
+                "setSpacing" not in calls
+                and not {
+                    "setHorizontalSpacing",
+                    "setVerticalSpacing",
+                }
+                <= calls
+            ):
+                found.append(f"{function.name}:{line} {name}")
+    return found
+
+
+def test_every_layout_of_a_dialog_keeps_the_grid() -> None:
+    """Jedes Layout eines Dialogs und jeder Karte setzt seinen Abstand selbst (G2,
+    FD-15, FD-23).
+
+    Qt gibt 6 Punkte vor, kein Vielfaches des Rasters: Inhalt und beide
+    Formulare des Operationsdialogs standen damit neben dem Kalibrierdialog,
+    der ``NORMAL`` setzt, und in 19 weiteren Dialogmodulen ebenso; in den
+    Karten des Hauptfensters zehn Layouts neben Nachbarn mit ``TIGHT``. Ohne
+    Fenster, am Quelltext jedes Moduls mit einer Dialogklasse und der Karten.
+    """
+    modules = [
+        path
+        for path in sorted(UI.glob("*.py"))
+        if path.name in _CARD_MODULES
+        or re.search(r"^class \w+\(.*QDialog\b", path.read_text(encoding="utf-8"), re.MULTILINE)
+    ]
+    assert len(modules) > 20, f"nur {len(modules)} Dialogmodule — die Suche greift nicht"
+    assert {path.name for path in modules} >= _CARD_MODULES, "die Karten fehlen in der Prüfung"
+    missing = [
+        f"{path.name}:{entry}"
+        for path in modules
+        for entry in _layouts_without_spacing(path.read_text(encoding="utf-8"))
+    ]
+    assert not missing, "Layouts mit Qts Abstand 6:\n" + "\n".join(missing)
+
+
+def test_the_spacing_guard_sees_a_layout_without_spacing() -> None:
+    """Gegenprobe: ein Layout ohne Abstand fällt auf, eines in der Schleife nicht."""
+    source = (
+        "def build(self):\n"
+        "    bare = QVBoxLayout(self)\n"
+        "    front = QFormLayout()\n"
+        "    back = QFormLayout()\n"
+        "    for form in (front, back):\n"
+        "        form.setSpacing(8)\n"
+        "    grid = QGridLayout()\n"
+        "    grid.setHorizontalSpacing(4)\n"
+    )
+    assert _layouts_without_spacing(source) == ["build:2 bare", "build:7 grid"]
+
+
+def test_every_number_field_stands_right_aligned(qt_app: QApplication) -> None:
+    """Zahlen stehen Stelle unter Stelle (G3, FD-14): jedes Zahlenfeld rechtsbündig.
+
+    Gesetzt an einer Stelle, die jedes Drehfeld erreicht — dem Stylesheet —,
+    damit auch ein nacktes ``QSpinBox`` einer Leiste mitgeht. Gemessen wird,
+    was Qt nach dem Polieren meldet, am Kalibrierdialog so, wie der Prüfstand
+    es liest (``function_capture.layout_entries``).
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QDoubleSpinBox, QSpinBox
+
+    from app.ui.calibration_dialog import CalibrationDialog
+    from app.ui.labels import BoundedLengthSpin, BoundedSpin, LengthSpin, NumberSpin
+    from app.ui.theme import apply_theme, current_theme
+    from tools.function_capture import layout_entries
+
+    previous_theme = current_theme()
+    previous_palette = qt_app.palette()
+    previous_sheet = qt_app.styleSheet()
+    dialog = None
+    try:
+        apply_theme(qt_app, "dark")
+        qt_app.setStyleSheet(stylesheet("dark", 10))
+        kinds = (NumberSpin, BoundedSpin, LengthSpin, BoundedLengthSpin, QSpinBox, QDoubleSpinBox)
+        for kind in kinds:
+            field = kind()
+            field.ensurePolished()
+            assert field.alignment() & Qt.AlignmentFlag.AlignRight, (
+                f"{kind.__name__} steht linksbündig"
+            )
+            field.deleteLater()
+        dialog = CalibrationDialog("pla")
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        dialog.show()
+        qt_app.processEvents()
+        values = [
+            value
+            for entry in layout_entries(dialog)
+            if entry["kind"] == "form"
+            for value in entry["values"]
+        ]
+        assert values, "ohne Zahlenfeld im Formular prüft der Dialog nichts"
+        assert {value["alignment"] for value in values} == {"right"}, values
+    finally:
+        if dialog is not None:
+            dialog.hide()
+            dialog.deleteLater()
+        apply_theme(qt_app, previous_theme)
+        qt_app.setPalette(previous_palette)
+        qt_app.setStyleSheet(previous_sheet)

@@ -62,6 +62,8 @@ ANTHROPIC_PRIVACY_URL = "https://www.anthropic.com/legal/privacy"
 ANTHROPIC_COMMERCIAL_TERMS_URL = "https://www.anthropic.com/legal/commercial-terms"
 _LOCAL_PRIVACY_LINK = "solidon:privacy"
 _ALLOWED_EXTERNAL_LINKS = frozenset({ANTHROPIC_PRIVACY_URL, ANTHROPIC_COMMERCIAL_TERMS_URL})
+_LEAST_WIDTH = 300
+"""Schmaler wird der Hinweis nie; ein längeres Wort hebt die Grenze (``_fit_content_width``)."""
 
 _log = get_logger(__name__)
 
@@ -358,7 +360,7 @@ class AiDisclosureDialog(QDialog):
         self.setAccessibleName(_title_text())
         self.setAccessibleDescription(_general_text(target))
         self.setModal(True)
-        self.setMinimumSize(300, 340)
+        self.setMinimumSize(_LEAST_WIDTH, 340)
         self.resize(600, 460)
 
         self.heading = QLabel(_title_text(), self)
@@ -522,6 +524,7 @@ class AiDisclosureDialog(QDialog):
         bar = self.scroll_area.verticalScrollBar()
         reading_position = bar.value() if self._reading_position is None else self._reading_position
         try:
+            self._fit_content_width()
             self._fit_wrapped_paragraphs()
             self._fit_content_height()
             bar.setValue(max(bar.minimum(), min(reading_position, bar.maximum())))
@@ -538,6 +541,31 @@ class AiDisclosureDialog(QDialog):
         except RuntimeError:
             ready = False
         self._content_was_shown = ready
+
+    def _fit_content_width(self) -> None:
+        """Der Hinweis wird nie schmaler als sein längstes Wort, soweit der Bildschirm reicht.
+
+        Bei großer Systemschrift war „Interaktion“ in der Überschrift breiter
+        als die Öffnungsbreite: Der Inhalt rollte quer, die Prüfung auf
+        vollständig lesbaren Inhalt schlug fehl, und *KI-Anfrage fortsetzen*
+        blieb ohne Satz gesperrt. Gesetzt wird die Mindestbreite — sie gilt
+        beim Öffnen wie beim Ziehen, und dieselbe Zahl ein zweites Mal löst
+        keine Größenänderung aus.
+        """
+        layout, screen = self.layout(), self.screen()
+        if layout is None or screen is None:
+            return
+        margins = layout.contentsMargins()
+        chrome = (
+            margins.left()
+            + margins.right()
+            + 2 * self.scroll_area.frameWidth()
+            + self.scroll_area.verticalScrollBar().sizeHint().width()
+        )
+        border = self.frameGeometry().width() - self.width()
+        room = screen.availableGeometry().width() - 2 * NORMAL - border
+        widest = self.content.minimumSizeHint().width() + chrome
+        self.setMinimumWidth(max(_LEAST_WIDTH, min(widest, room)))
 
     def _fit_content_height(self) -> None:
         """Der vollständige Hinweis öffnet sich hoch genug; gezogene Höhen bleiben."""
@@ -802,6 +830,7 @@ class _NoticeLink(QCommandLinkButton):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(WIDE * 3, ROOMY, ROOMY, ROOMY)
+        layout.setSpacing(TIGHT)
         layout.addLayout(text_layout)
         self.clicked.connect(self._activate)
 

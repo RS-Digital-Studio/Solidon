@@ -25,6 +25,9 @@ it into `website/version.json`.
 - On Linux, the AppImage now also starts on Ubuntu 22.04, Linux Mint 21 and Debian 12. Version 0.6.0 ran there only as a Flatpak.
 - On Linux, Solidon now reads the 3D mouse through the access that the udev rule from the manual grants, in the Flatpak too. Up to version 0.6.0, the rule was not enough for this.
 - The search finds *Unite*, *Subtract* and *Intersection* under “boolean” too, and *Subtract* also under “difference”.
+- The search also finds the function for a question like “How do I put the part on the build plate?” and knows words from slicers and CAD such as “print bed” or “variable”.
+- The search in the manual also finds the right page for a question in your own words.
+- Typing “hole” or “bore” in the search offers *Drill a bore* on a body and *Change bore* on a selected bore, in every language.
 - With one body selected and a second in the scene, the *Selection* tab says how to add the second for *Unite*, *Subtract* and *Intersection*.
 - The search field in the *Selection* tab is now always there, even with nothing selected, and finds every function and command along with its shortcut.
 - The command palette is gone, because the search field finds the same. *Search functions* and Ctrl+Shift+P put the cursor into it.
@@ -35,6 +38,22 @@ it into `website/version.json`.
 - Even when nothing overlaps, *Check overlaps* now gives an answer.
 - If a function lacks a second body in the scene, the reason names *Duplicate object* as the way.
 - The keyboard shortcuts list names *Sculpt*, *Armature* and *Draw* only once.
+- The *Compute more coarsely* button is gone, as Solidon carries on with the full calculation by itself. In version 0.6.0 it also appeared where it changed nothing.
+- Error messages, details and notices now appear in Solidon's own style, with the actions as buttons. Ctrl+C copies the selection, otherwise the whole message.
+- A spool's colour is chosen with Solidon's own colour picker right at the button, with named shelf colours and the exact colour value. The system colour dialog is gone.
+- A sketch dimension now changes in a field right where it is. Addresses and the choice of which filament to replace are asked in Solidon's own style.
+- After activating or deactivating, the confirmation appears in the dialog itself, without an extra window you have to click away.
+- The *Calibrate material* dialog now shows only clearance, interference and hole compensation up front. Elephant foot, shrinkage, wall and overhang are under *More settings*.
+- Numbers are right-aligned in every field, digit under digit.
+- A screen reader now reads the name and explanation of every number field in a dialog.
+- After an action in the *Report*, the report stays in front, and Ctrl+Z takes it back straight away. Until now the *Selection* tab jumped to the front.
+- Ctrl+Z and Ctrl+Y also work when the cursor sits in an empty field, such as the search field. If you typed there, your typing is undone first.
+- Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
+- Without activation, *Create parameter …*, *Move*, *Split*, the history keys and the dimensions in the view are greyed out too. Every reason names the way, such as *Help → Unlock Solidon …*.
+- When an action in the *Report* waits for the running calculation, it says that it becomes available afterwards, to screen readers as well.
+- Messages in the status bar no longer put a colon after a complete sentence.
+- With a single body the object tree is only as tall as its content, and so is the history with one step. Version 0.6.0 left empty space below.
+- The newest step stays visible in the history when new bodies make the object tree grow. In version 0.6.0 it slipped below the edge of the panel.
 - The screenshot attached to feedback now shows the model on Windows too. On some graphics cards it used to show an old picture, such as the loading screen.
 - On macOS an open dialog, for example when creating a screw from the part catalogue, stays above the main window. A click into the window used to push it behind.
 
@@ -48,6 +67,8 @@ it into `website/version.json`.
 - A body with a thread from the part catalogue can be moved, rotated, mirrored, scaled and placed on the bed again. In version 0.6.0 the chain stopped there with a program error.
 - Typing a diameter below the limit in *Change bore* on the *Selection* tab now points to *Remove feature*, which removes the bore entirely, with its countersink if you like.
 - Rebuilding (*Rebuild model*) no longer suggests other limits when no allowed value would be enough, and shows identical proposals only once.
+- If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
+- When you select a bore in a loaded model, the measures in the view and the *Selection* tab now mean the same action, *Change bore*. In version 0.6.0 *Move feature* was open there.
 
 ## 0.6.0
 

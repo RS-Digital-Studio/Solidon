@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import get_args
 
 import pytest
+from PySide6.QtCore import QRect
 
 from app.branding import APP_VERSION
 from app.core import figures, guides, manual, tour
@@ -131,6 +132,193 @@ def test_the_vocabulary_accepts_named_kinds_and_nothing_else() -> None:
     assert not guides.is_target("command:")
     assert not guides.is_target("widget:report")
     assert not guides.is_target("field:Durchmesser")
+
+
+@pytest.mark.parametrize(
+    ("name", "valid"),
+    [
+        ("feature:resize_hole", True),
+        ("feature:part.move", True),
+        ("feature:Resize", False),
+        ("edge:fillet_edges", True),
+        ("edge:fillet_edges.variable_radius", True),
+        ("edge:fillet_edges.a.b", False),
+        ("feature.field:resize_hole.diameter", True),
+        ("feature.field:part.move.x", True),
+        ("feature.field:diameter", False),
+        ("measure.field:diameter", True),
+        ("measure.field:hole.diameter", False),
+        ("menu:menubar.speichern_unter", True),
+        ("menu:menubar.kamera.rechts", True),
+        ("menu:history.edit", True),
+        ("menu:Speichern", False),
+        ("menu:menubar..datei", False),
+        ("finding:arrange.below_bed", True),
+        ("finding:op.drill_hole.ValidationError", True),
+        ("finding:op drill", False),
+        ("finding.action:place_on_bed", True),
+        ("finding.action:Place", False),
+        ("print:layers.layer_height", True),
+        ("print:Layers", False),
+        ("setting:language", True),
+        ("handle:move.x", True),
+        ("handle:bar.section", True),
+        ("tree.row:obj_1", True),
+        ("tree.row:obj_1.op5.pin_1", True),
+        ("tree.row:obj_1:hole_2", False),
+        ("history.row:3", True),
+        ("history.row:0", False),
+        ("history.row:three", False),
+        ("view:obj_2.hole_1", True),
+        ("dialog:print_settings_dialog", True),
+        ("dialog:2nd_dialog", False),
+        ("dialog:PrintSettingsDialog", False),
+        ("start.recent:1", True),
+        ("start.recent:0", False),
+        ("message:unsaved_changes", True),
+        ("message:recovery", True),
+        ("message:dialogs.confirm_unsaved", False),
+        ("message:Unsaved", False),
+        ("message.button:unsaved_changes.save", True),
+        ("message.button:error.sketch.pick_plane", True),
+        ("message.button:unsaved_changes", False),
+        ("message.button:unsaved_changes.Save", False),
+        ("setting.section:weitere_einstellungen", True),
+        ("setting.section:Anwendung", False),
+        ("chat", True),
+        ("tour", True),
+        ("history:edit", True),
+        ("operation:part.move", False),
+        ("field:a.b", False),
+        ("part:a.b", False),
+        ("feature.apply", True),
+        ("feature.in_view", True),
+        ("feature.every", True),
+        ("measure.reference", True),
+        ("search", True),
+        ("toolbar.search", True),
+        ("progress.cancel", True),
+        ("preview.banner", True),
+        ("selection.rebuild", True),
+        ("feature", False),
+        ("feature:", False),
+    ],
+)
+def test_every_kind_has_its_own_pattern(name: str, valid: bool) -> None:
+    """Je Art ein Muster: Ein Befundcode trägt Großbuchstaben, eine Verlaufszeile
+    eine Zahl ab 1, eine Kantenvariante höchstens einen Punkt."""
+    assert guides.is_target(name) is valid, name
+
+
+def test_every_kind_has_a_pattern_and_every_pattern_a_kind() -> None:
+    assert set(guides._PATTERNS) == set(guides.TARGET_KINDS)
+    assert len(guides.TARGET_KINDS) == len(set(guides.TARGET_KINDS))
+
+
+@pytest.mark.parametrize(
+    ("msgid", "context", "expected"),
+    [
+        ("Speichern unter …", None, "menubar.speichern_unter"),
+        ("Öffnen …", None, "menubar.oeffnen"),
+        ("Rückgängig", None, "menubar.rueckgaengig"),
+        ("Größe & Maße", None, "menubar.groesse_masse"),
+        ("{app} unterstützen …", None, "menubar.app_unterstuetzen"),
+        ("Massiv mit Kanten", None, "menubar.massiv_mit_kanten"),
+        ("Rechts", "Kamera", "menubar.kamera.rechts"),
+        ("Ändern", "Menü", "menubar.menue.aendern"),
+    ],
+)
+def test_a_menubar_name_comes_from_the_source_text(
+    msgid: str, context: str | None, expected: str
+) -> None:
+    name = guides.menubar_name(msgid, context)
+    assert name == expected
+    assert guides.is_target(f"menu:{name}")
+
+
+def test_a_menubar_name_needs_letters() -> None:
+    with pytest.raises(ValueError, match="kein Name"):
+        guides.menubar_name("…")
+
+
+def test_a_part_offers_its_three_actions_under_their_fixed_keys() -> None:
+    """Maße und Verschieben tragen dieselbe Operation, Entfernen keine (B9):
+    unterschieden werden sie über ``FeatureAction.key``."""
+    from types import SimpleNamespace
+
+    from app.core.perceive.actions import PART_ACTION_KEYS, part_actions
+    from app.core.registry import REGISTRY
+
+    spec = REGISTRY.get("insert_screw_hole")
+    actions = part_actions(SimpleNamespace(id=4, params={}), spec)
+    assert [action.key for action in actions] == list(PART_ACTION_KEYS)
+    assert [guides.action_target(action) for action in actions] == [
+        f"feature:{key}" for key in PART_ACTION_KEYS
+    ]
+    moving = actions[1]
+    assert guides.action_field_target(moving, "x") == "feature.field:part.move.x"
+    assert all(guides.is_target(guides.action_target(action)) for action in actions)
+
+
+def test_a_texture_offers_its_two_actions_under_their_fixed_keys() -> None:
+    from types import SimpleNamespace
+
+    from app.core.perceive.actions import TEXTURE_ACTION_KEYS, texture_actions
+    from app.core.registry import REGISTRY
+
+    spec = REGISTRY.get("apply_texture")
+    actions = texture_actions(SimpleNamespace(id=2, params={}), spec)
+    assert tuple(action.key for action in actions) == TEXTURE_ACTION_KEYS
+
+
+def test_an_action_without_its_own_key_is_named_after_its_operation() -> None:
+    from app.core.perceive.actions import FeatureAction
+
+    plain = FeatureAction(title="Bohrung ändern", op="resize_hole")
+    assert guides.action_key(plain) == "resize_hole"
+    assert guides.action_target(plain) == "feature:resize_hole"
+    assert guides.action_field_target(plain, "diameter") == "feature.field:resize_hole.diameter"
+    blocked = FeatureAction(title="Merkmal drehen", op=None, key="rotate_feature", reason="nein")
+    assert guides.action_target(blocked) == "feature:rotate_feature"
+    nameless = FeatureAction(title="Etwas", op=None, reason="nein")
+    assert guides.action_target(nameless) == ""
+    assert guides.action_field_target(nameless, "x") == ""
+
+
+def test_an_edge_row_is_an_edge_target_and_a_variant_carries_its_mode() -> None:
+    from app.core.perceive.actions import EDGE_OPERATIONS, EDGE_VARIANT_KEYS, edge_actions
+    from app.core.registry import REGISTRY
+
+    assert EDGE_VARIANT_KEYS == ("fillet_edges.variable_radius",)
+    actions = edge_actions("1 2 3 4 5 6")
+    expected = [name for name, _measure in EDGE_OPERATIONS if REGISTRY.has(name)] + [
+        key for key in EDGE_VARIANT_KEYS if REGISTRY.has(key.partition(".")[0])
+    ]
+    assert [action.key for action in actions] == expected
+    for action in actions:
+        target = guides.action_target(action)
+        assert target == f"edge:{action.key}"
+        assert guides.is_target(target), target
+
+
+def test_every_action_of_a_feature_has_a_key_even_when_it_is_refused() -> None:
+    """Eine gesperrte Zeile trägt die Operation, für die sie steht — sonst hätte
+    sie kein Ziel, und ihr Grund ließe sich am Fenster nicht ablesen."""
+    from app.core.perceive.actions import actions_for
+    from app.core.types import Feature
+
+    hole = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 5.0, "depth": 4.0, "axis": (0.0, 0.0, 1.0), "center": (0, 0, 0)},
+        face_indices=(0, 1, 2, 3),
+    )
+    actions = actions_for(hole)
+    assert actions
+    for action in actions:
+        assert guides.action_key(action), action.title
+        assert guides.is_target(guides.action_target(action)), action
 
 
 def test_every_named_operation_and_part_exists() -> None:
@@ -469,7 +657,6 @@ def test_a_film_picture_is_cut_at_least_as_large_as_its_place_in_the_film() -> N
     enthält das Ziel und bleibt im Fenster; ist das Fenster kleiner, bleibt
     es beim ganzen Fenster.
     """
-    from PySide6.QtCore import QRect
 
     from tools import make_guide_video
     from tools.make_guides import BORDER, film_cut
@@ -601,6 +788,12 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "parameters.first",
         "report.action",
         "history.last",
+        # Das Merkmalfenster und die Maßgruppe stehen erst an einer Auswahl
+        "feature.apply",
+        "feature.in_view",
+        "feature.every",
+        "measure.reference",
+        "measure.apply",
         *printing,
     }
     window = MainWindow(Session(), UiSettings())
@@ -680,3 +873,12 @@ def test_capture_protects_visible_dialog_text_and_item_views(qt_app):
     finally:
         dialog.close()
         window.close()
+
+
+def test_a_title_from_the_register_names_its_menu_line_by_its_source() -> None:
+    """Ein übersetzbarer Titel gibt Quelle und Kontext, ein schlichter steht für sich."""
+    from app.i18n import _
+
+    assert guides.menubar_name_of(_("Rechts", context="Kamera")) == "menubar.kamera.rechts"
+    assert guides.menubar_name_of(_("Öffnen …")) == "menubar.oeffnen"
+    assert guides.menubar_name_of("Mein Haken") == "menubar.mein_haken"

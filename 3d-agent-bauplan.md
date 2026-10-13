@@ -1518,7 +1518,11 @@ und Redo gelten überall, auch im Chat.
 
 ### 19.3 Anzeige
 HiDPI-tauglich, skalierbare Schriftgröße, ausreichender Kontrast in hellem und
-dunklem Thema. **Anzeigeeinheit umschaltbar** zwischen Millimeter und Zoll —
+dunklem Thema. **Kleinste Arbeitsfläche 1920 × 1080 logische Punkte**, also Full
+HD bei 100 % oder 3840 × 2160 bei 200 %; maßgeblich ist das maximierte
+Fenster auf diesem Schirm. Darunter wird weder gestaltet noch geprüft, auch
+nicht bei einer höheren Auflösung mit stärkerer Skalierung (Robert,
+12.10.2026). **Anzeigeeinheit umschaltbar** zwischen Millimeter und Zoll —
 der Kern bleibt bei Millimeter (§11.1).
 
 ---
@@ -2844,7 +2848,9 @@ zwischen Leuten. Eine fremde Datei darf nichts ausführen.
   Zusage steht als **Sperre** für jeden künftigen Weg — wer einen baut, baut
   die Prüfung mit
 - **Jedes externe Werkzeug benutzt die gemeinsame Prozessgrenze**:
-  ausdrücklicher Arbeitsordner, getrimmte Umgebung und eigene Prozessgruppe.
+  ausdrücklicher Arbeitsordner, getrimmte Umgebung und eigene Prozessgruppe;
+  der Start selbst öffnet kein Systemfenster des Betriebssystems, eine
+  ungültige Programmdatei wird eine Absage mit Ausweg (RM-788).
   Für Aufrufe, auf deren Antwort Solidon wartet, gelten Zeit- und
   Ausgabegrenzen; Abbruch beendet den Prozessbaum. An den Nutzer übergebene
   Slicerfenster, Dienste und Installer dürfen nach dem Start weiterlaufen

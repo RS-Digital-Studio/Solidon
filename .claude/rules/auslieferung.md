@@ -148,6 +148,12 @@ Hinweis oder wiederholt er den Vorspann nicht, hält `make_download` vor dem
 ersten Schreiben an: Sie fiele auf den deutschen zurück oder behielte den
 Vorspann in der Liste.
 
+**Die Neuerungen-Seite ist das Gestaltungsvorbild der Website** und wird
+nicht umgebaut, nur mitgeprüft (Entscheidung Robert; `tools/make_changelog.py`).
+Neue Abschnitte messen sich an ihr: Karten einer Reihe gleich hoch, Akzentrand
+für die Karte, die handeln lässt, keine halbe letzte Reihe, ein Gedanke je
+Karte, jeder Gedanke einmal.
+
 **Ein Punkt spricht allgemein** (Entscheidung Robert): von dem, was der Kunde
 an seinem eigenen Modell merkt — nicht von Teilen oder Namen der Prüfmodelle,
 an denen gemessen wurde („Kinn und Flügel“, „am Eiffelturm“). Damit kann ein

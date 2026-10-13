@@ -979,7 +979,7 @@ def test_the_dialog_offers_exactly_the_fields_of_the_profile(
     """Was sich messen lässt, ist das, was das Materialprofil hält — sonst
     nichts.
     """
-    from app.ui.dialogs import CalibrationDialog
+    from app.ui.calibration_dialog import CalibrationDialog
 
     assert qt_app is not None
     dialog = CalibrationDialog("petg")
@@ -989,7 +989,7 @@ def test_the_dialog_offers_exactly_the_fields_of_the_profile(
 
 
 def test_the_dialog_starts_from_the_current_values(own_profiles: Path, qt_app: object) -> None:
-    from app.ui.dialogs import CalibrationDialog
+    from app.ui.calibration_dialog import CalibrationDialog
 
     assert qt_app is not None
     current = profiles.material("petg")
@@ -1002,7 +1002,7 @@ def test_the_dialog_saves_only_explicitly_selected_process_measurements(
     own_profiles: Path, qt_app: object
 ) -> None:
     """Vorgabewerte werden erst nach ausdrücklicher Auswahl zu einer Messung."""
-    from app.ui.dialogs import CalibrationDialog
+    from app.ui.calibration_dialog import CalibrationDialog
 
     process = profiles.make_profile("centauri-carbon-2", "petg")
     dialog = CalibrationDialog("petg", process=process)
@@ -1033,7 +1033,7 @@ def test_the_dialog_measures_only_the_fields_that_were_entered(
     obwohl der Fuß der Startwert blieb, der den ganzen Fuß meint."""
     from app.core.knowledge import print_settings
     from app.core.slice import advise
-    from app.ui.dialogs import CalibrationDialog
+    from app.ui.calibration_dialog import CalibrationDialog
 
     assert qt_app is not None
     dialog = CalibrationDialog("petg")
@@ -1075,7 +1075,7 @@ def test_calibration_keeps_unedited_precision_when_saving(
     own_profiles: Path, qt_app: object, edited: str | None, value: float | None
 ) -> None:
     """Anzeigepräzision darf beim Speichern keine anderen Messwerte verändern."""
-    from app.ui.dialogs import CalibrationDialog
+    from app.ui.calibration_dialog import CalibrationDialog
 
     original = {
         "clearance": 0.23456,
@@ -1112,7 +1112,7 @@ def test_calibration_accepts_retyping_the_rounded_percentage(
     """Das bewusste Eintippen des Anzeigewerts ersetzt den exakteren Altwert."""
     from PySide6.QtTest import QTest
 
-    from app.ui.dialogs import CalibrationDialog
+    from app.ui.calibration_dialog import CalibrationDialog
 
     calibration.apply(calibration.from_measurements("petg", shrinkage=0.0045678))
     dialog = CalibrationDialog("petg")
@@ -1303,7 +1303,7 @@ def test_the_dialog_names_the_material_the_way_the_customer_reads_it(
     Dialog, der sonst überall „Standardharz" sagt, „tpu-95a" statt „TPU 95A"."""
     from PySide6.QtWidgets import QLabel
 
-    from app.ui.dialogs import CalibrationDialog
+    from app.ui.calibration_dialog import CalibrationDialog
 
     for material in ("resin", "tpu-95a"):
         dialog = CalibrationDialog(material)
@@ -1312,3 +1312,60 @@ def test_the_dialog_names_the_material_the_way_the_customer_reads_it(
         assert f"{title} — " in texts, texts[:120]
         assert f"{material} — " not in texts, texts[:120]
         dialog.close()
+
+
+def test_the_dialog_shows_in_front_what_the_test_body_delivers(
+    own_profiles: Path, qt_app: object
+) -> None:
+    """Vorn drei Felder und ein Satz, der Rest hinter *Weitere Einstellungen* (FD-13, E5).
+
+    Gezählt wie im Probelauf (``function_capture``, ``function_checks.words``),
+    in jeder Sprache: neun Felder und 41 Wörter über dem ersten Feld standen
+    da, übersetzt bis 61. Jedes Feld vorn trägt Namen und Satz (V3), und die
+    Klappe bringt die übrigen vier Werte samt Druckbedingungen.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QToolButton
+
+    from app.i18n import set_language
+    from app.i18n.catalog import available_languages, install_language
+    from app.ui.calibration_dialog import FRONT_FIELDS, CalibrationDialog
+    from tools.function_capture import field_entries, text_entries
+    from tools.function_checks import (
+        MAX_FRONT_FIELDS,
+        MAX_LEAD_WORDS,
+        MAX_LEAD_WORDS_TRANSLATED,
+        words,
+    )
+
+    application = QApplication.instance()
+    assert qt_app is not None and application is not None
+    process = profiles.make_profile("centauri-carbon-2", "petg")
+    for language in available_languages():
+        install_language(language)
+        set_language(language)
+        dialog = CalibrationDialog("petg", process=process)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        dialog.show()
+        try:
+            application.processEvents()
+            front = [entry for entry in field_entries(dialog) if entry["front"]]
+            assert len(front) <= MAX_FRONT_FIELDS - 1, f"{language}: {len(front)} Felder vorn"
+            assert all(entry["description"] for entry in front), f"{language}: {front}"
+            assert all(entry["accessible_name"] or entry["label"] for entry in front)
+            lead = sum(words(entry["text"]) for entry in text_entries(dialog) if entry["lead"])
+            limit = MAX_LEAD_WORDS if language == "de" else MAX_LEAD_WORDS_TRANSLATED
+            assert lead <= limit, f"{language}: {lead} Wörter über dem ersten Feld"
+            shown = {name for name, editor in dialog.editors.items() if editor.isVisible()}
+            assert shown == set(FRONT_FIELDS), f"{language}: vorn stehen {sorted(shown)}"
+            flap = dialog.findChild(QToolButton, "sectionHeading")
+            assert flap is not None, "ohne Klappe keine Rückseite"
+            flap.setChecked(True)
+            application.processEvents()
+            assert all(editor.isVisible() for editor in dialog.editors.values()), language
+            # Die Klappe merkt sich den Kunden (``remember``); die nächste
+            # Sprache beginnt wieder zugeklappt.
+            flap.setChecked(False)
+        finally:
+            dialog.close()
+            dialog.deleteLater()

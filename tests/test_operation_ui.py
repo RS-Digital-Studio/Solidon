@@ -8986,3 +8986,52 @@ def test_splitting_from_a_part_refusal_without_a_halt_keeps_the_carriers_togethe
         assert bore_id in carriers[0].features, "mit ihrer Bohrung unter ihrem Namen"
     finally:
         window.wait_for_workers()
+
+
+def test_every_operation_dialog_names_its_fields_and_keeps_the_grid(qt_app: QApplication) -> None:
+    """Jedes Eingabefeld trägt Namen und Satz, jedes Layout das 4er-Raster (FD-12, FD-15).
+
+    Gemessen mit den Messungen des Prüfstands (``function_capture``), vorn und
+    mit aufgeklappter Rückseite, an jeder Operation des Registers. Der Satz
+    stand nur am Behälter eines Zahlenfelds und am Rahmen des Flächenwählers;
+    fokussiert wird das Drehfeld darin und der Haken „Ganzer Körper“ — dort
+    las ein Bildschirmleser nichts (V3). Und die Formulare trugen Qts Vorgabe
+    von 6 Punkten zwischen den Zeilen statt des Rasters (G2).
+    """
+    from app.ui.style import SPACE
+    from tools.function_capture import _caption_map, _input_widgets, layout_entries
+
+    bootstrap.load_operations()
+    unnamed: list[str] = []
+    off_grid: list[str] = []
+    for spec in REGISTRY.all():
+        dialog = OperationDialog(spec, {})
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        dialog.show()
+        try:
+            for opened in (False, True):
+                if opened and getattr(dialog, "advanced", None) is not None:
+                    dialog.advanced.setChecked(True)
+                qt_app.processEvents()
+                captions = _caption_map(dialog)
+                for widget in _input_widgets(dialog):
+                    if not widget.isVisible():
+                        continue
+                    named = widget.accessibleName() or captions.get(id(widget))
+                    if not named or not widget.accessibleDescription():
+                        unnamed.append(f"{spec.name}: {type(widget).__name__} {named or ''}")
+                for entry in layout_entries(dialog):
+                    if entry["kind"] != "spacing":
+                        continue
+                    values = [entry["spacing"], *entry["margins"]]
+                    if any(value % SPACE for value in values):
+                        off_grid.append(f"{spec.name}: {entry['group']} {values}")
+        finally:
+            dialog.hide()
+            dialog.deleteLater()
+    assert not unnamed, f"{len(unnamed)} Felder ohne Namen oder Satz:\n" + "\n".join(
+        sorted(set(unnamed))[:40]
+    )
+    assert not off_grid, f"{len(off_grid)} Layouts außerhalb des Rasters:\n" + "\n".join(
+        sorted(set(off_grid))[:40]
+    )

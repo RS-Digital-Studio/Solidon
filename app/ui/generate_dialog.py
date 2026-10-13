@@ -66,6 +66,7 @@ from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
     SPACE,
+    TIGHT,
     WIDE,
     ContentFitIntent,
     ContentHeight,
@@ -455,10 +456,12 @@ class GenerateDialog(QDialog):
         picture_row = QWidget(self)
         picture_line = QHBoxLayout(picture_row)
         picture_line.setContentsMargins(0, 0, 0, 0)
+        picture_line.setSpacing(TIGHT)
         picture_line.addWidget(self.picture_label, 1)
         picture_line.addWidget(self.drop_picture)
 
         form = QFormLayout()
+        form.setHorizontalSpacing(NORMAL)
         form.setVerticalSpacing(NORMAL)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         form.addRow(tr("Beschreibung"), self.prompt)
@@ -471,6 +474,7 @@ class GenerateDialog(QDialog):
         # will, und genau dafür ist er da.
         advanced = QWidget(self)
         advanced_form = QFormLayout(advanced)
+        advanced_form.setHorizontalSpacing(NORMAL)
         advanced_form.setVerticalSpacing(NORMAL)
         advanced_form.setContentsMargins(0, 0, 0, 0)
         advanced_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
@@ -487,6 +491,7 @@ class GenerateDialog(QDialog):
         self._models = QWidget(self)
         self._models_form = QFormLayout(self._models)
         self._models_form.setContentsMargins(0, 0, 0, 0)
+        self._models_form.setSpacing(NORMAL)
         self._models_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         self._models.setVisible(False)
         self._model_fields: dict[str, QComboBox] = {}

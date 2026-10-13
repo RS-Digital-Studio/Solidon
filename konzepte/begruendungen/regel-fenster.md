@@ -103,6 +103,11 @@ Aus der Durchsicht zu RM-538 (`output/review/punkte-0.5.3-2026-10-06/`):
 
 ## Rückfragen
 
+*Aus `fenster.md` verschoben (Ladelast von `main_window.py`, 12.10.2026):*
+Die Titel der Löschnachfrage kommen aus `history.step_titles`, derselben
+Quelle wie die Zeilen und der Löschtitel; ein gelöschter Schritt trägt keine
+Nummer mehr.
+
 *Aus `fenster.md` verschoben (Ladelast von `main_window.py`, 09.10.2026):*
 
 **Die lange Merkmalserkennung ist kein abgebrochener Import und keine
@@ -779,6 +784,17 @@ Atemzug gelöscht wird"), `SketchEditor.take_constraint_list` die falsch
 aufgelösten Tastenkürzel („`plane:xy` statt `plane:xz`"), und
 `ReportPanel._show_offers` tat es trotzdem. Ein Kommentar an zwei Stellen ist keine Regel.
 
+**Ein Dialog gibt sich nach `exec` frei.** `exec` hält ihn nur bis zum Schließen;
+danach hängt er verborgen am Elternteil, samt allem, was er hält. Nach drei Aufrufen
+von *Offline aktivieren …* hingen drei Dialoge am Freischaltdialog, und über
+vierzig Stellen unter `app/ui` taten es ebenso (Durchsicht welle4, A-L1 und
+Nachprüfung). Die
+Bauart steht in `ask_text`: lesen, was der Dialog liefert, im `try`, freigeben im
+`finally`. Ein Dialog, der offen bleibt (`open`, `show`), gibt sich über
+`finished.connect(x.deleteLater)`, `WA_DeleteOnClose` oder den Rückruf frei, an den
+sein Ende geht. `tests/test_dialog_lifetime.py` liest jede Dialogklasse samt
+Fabriken, Hilfen und Unterklassen und zählt, was er geprüft hat.
+
 ## Die automatische Sicherung
 
 Sie ist für den **Absturz** da (§38) und nie dafür, eine Entscheidung des
@@ -981,11 +997,13 @@ Vier Zusagen, alle vier tragend:
   samt Anhängen und Gesamtgröße, bevor gesendet wird.
 * **Das Bildschirmfoto entsteht vor dem Dialog.** Eine Sekunde später zeigt es
   den Dialog statt dessen, was darunter schiefging — `window_shot(self)` steht
-  deshalb im Fenster und nicht im Dialog. Das sichtbare Fenster wird über
-  `screen().grabWindow(winId())` aus vorhandenen Bildpunkten aufgenommen,
-  ohne das möglicherweise defekte Modell erneut zu rendern. Nur wenn diese
-  Aufnahme leer bleibt, folgt `grab()` mit den Viewport-Bildern. Aufgenommen
-  wird ausschließlich das Solidon-Fenster, nie der gesamte Bildschirm.
+  deshalb im Fenster und nicht im Dialog. Das sichtbare Fenster wird aus
+  vorhandenen Bildpunkten aufgenommen, ohne das möglicherweise defekte Modell
+  erneut zu rendern: unter Windows über `PrintWindow` mit vollem Inhalt, weil
+  `screen().grabWindow(winId())` nur GDI liest und bei D3D12 alte Bilder statt
+  der Ansicht zeigt; sonst über `grabWindow`. Nur wenn diese Aufnahme leer
+  bleibt, folgt `grab()` mit den Viewport-Bildern. Aufgenommen wird
+  ausschließlich das Solidon-Fenster, nie der gesamte Bildschirm.
 * **Der abgelegte Ordner ist ein Weg, kein Notausgang.** *Bericht ablegen*
   steht dauerhaft in der Knopfleiste (§37.2); *Selbst per E-Mail senden*
   erscheint erst, wenn ein Versand scheiterte — ein zweiter Weg neben einem
