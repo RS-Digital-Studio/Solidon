@@ -3770,6 +3770,7 @@
   "Erst wenn die laufende Aufgabe fertig ist.": "Only once the running task has finished.",
   "Erst „Dichtweg aus: Zeichnung“ wählen.": "First choose “Seal path from: Drawing”.",
   "Erst „Dichtweg aus: Öffnung am Körper“ wählen.": "First choose “Seal path from: Opening on body”.",
+  "Erst „{field}“ ändern, dann übernehmen.": "Change “{field}” first, then apply.",
   "Erste Art": "First kind",
   "Erste Bedingung": "First constraint",
   "Erste Bedingung entfernen": "Remove the first constraint",
