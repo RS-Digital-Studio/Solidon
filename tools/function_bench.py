@@ -1425,8 +1425,14 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             dialog = surfaces.open_dialog(self.window)
             shown["before"] = set(capture.visible_texts(dialog)) if dialog is not None else set()
 
+        # Als Sperrgrund zählt nur der Grund an den Zielen der Zeile (C-L1).
+        targets = [walk_target(self.row), *([self.apply_target] if self.apply_target else [])]
+
+        def said() -> list[dict[str, Any]]:
+            return [*surfaces.fault_messages(self.window, targets), *in_dialog()]
+
         def read(machine: StepMachine) -> None:
-            messages.extend([*capture.message_entries(self.window), *in_dialog()])
+            messages.extend(said())
             messages.extend(
                 {"text": text, "actions": [], "kind": "befund"}
                 for code, text in surfaces.report_findings(self.session).items()
@@ -1492,9 +1498,7 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             [
                 *steps,
                 # Die Meldung kommt nach der Absage — erst sie, dann lesen (Review M1).
-                self.until_step(
-                    "meldung", lambda: bool(capture.message_entries(self.window) or in_dialog())
-                ),
+                self.until_step("meldung", lambda: bool(said())),
                 Step("meldung lesen", read),
             ],
         )

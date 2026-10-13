@@ -1461,7 +1461,7 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
                 "kind": "meldung",
             }
         )
-    ways = _ways_out(window)
+    menus, buttons = _ways(window)
     for button in window.findChildren(QPushButton):
         # Die Kurzhilfe zuerst, wie ``function_surface.grey_reason``: Sie zeigt der
         # graue Knopf dem Kunden; die Beschreibung kann vom offenen stammen (F-34).
@@ -1472,37 +1472,66 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
                     "text": reason,
                     "actions": [],
                     "kind": "sperrgrund",
-                    "way_out": any(way in reason for way in ways),
+                    "way_out": names_a_way_out(reason, menus, buttons),
                 }
             )
     return [*found, *_field_refusals(), *_house_messages()]
 
 
-def _ways_out(window: Any) -> set[str]:
-    """Wohin ein Sperrgrund den Kunden schicken kann: Menüzeilen und offene Knöpfe.
+def way_out(window: Any, reason: str) -> bool:
+    """Ob ein Sperrgrund am offenen Fenster einen Ausweg nennt (:func:`names_a_way_out`)."""
+    return names_a_way_out(reason, *_ways(window))
 
-    Ein Sperrgrund braucht keinen Knopf, er muss aber den Ausweg nennen (Konzept
-    V5, Entscheidung Koordinator) — etwa „(Hilfe → Solidon freischalten …)“.
-    Genannt ist er, wenn der Satz den Text einer bedienbaren Menüzeile oder eines
-    offenen Knopfs trägt, so wie der Kunde ihn in seiner Sprache liest. Kürzer als
-    vier Zeichen zählt nicht, „OK“ ist kein Ausweg.
-    """
+
+def _ways(window: Any) -> tuple[list[tuple[str, ...]], list[str]]:
+    """Wohin ein Sperrgrund den Kunden schicken kann: die bedienbaren Zeilen der
+    Menüleiste mit ihrem Weg und die offenen Knöpfe aller sichtbaren Fenster, so wie
+    der Kunde sie in seiner Sprache liest."""
     from PySide6.QtWidgets import QAbstractButton, QApplication
 
     from app.ui.guide_targets import menubar_entries
 
-    texts = [
-        action.text() for _name, _menus, action in menubar_entries(window) if action.isEnabled()
+    menus = [
+        (*path, action.text())
+        for _name, path, action in menubar_entries(window)
+        if action.isEnabled()
     ]
-    for top in QApplication.topLevelWidgets():
-        if top.isVisible():
-            texts += [
-                button.text()
-                for button in top.findChildren(QAbstractButton)
-                if _visible(button) and button.isEnabled()
-            ]
-    cleaned = {text.replace("&", "").rstrip(".… ").strip() for text in texts}
-    return {text for text in cleaned if len(text) >= 4}
+    buttons = [
+        button.text()
+        for top in QApplication.topLevelWidgets()
+        if top.isVisible()
+        for button in top.findChildren(QAbstractButton)
+        if _visible(button) and button.isEnabled()
+    ]
+    return menus, buttons
+
+
+def names_a_way_out(reason: str, menus: Sequence[Sequence[str]], buttons: Sequence[str]) -> bool:
+    """Ob ein Sperrgrund den Ausweg nennt (Konzept V5, Entscheidung Koordinator).
+
+    Ein Sperrgrund braucht keinen Knopf, er muss aber den Weg nennen — als
+    Menüweg „Menü → Zeile“ (mindestens die letzten zwei Glieder, etwa
+    „Hilfe → Solidon freischalten …“) oder mit den ganzen Wörtern eines offenen
+    Knopfs. Ein Teilstring genügt nicht (Durchsicht welle4 C-L2): „Dateien“ nennt
+    den Knopf *Datei* nicht, und eine Menüzeile ohne ihr Menü findet der Kunde
+    nicht. Kürzelzeichen und Auslassungspunkte zählen nicht mit; kürzer als vier
+    Zeichen ist kein Ausweg („OK“).
+    """
+    import re
+
+    def clean(text: str) -> str:
+        return text.replace("&", "").rstrip(".… ").strip()
+
+    def named(text: str) -> bool:
+        return re.search(rf"(?<!\w){re.escape(text)}(?!\w)", reason) is not None
+
+    for path in menus:
+        parts = [clean(part) for part in path]
+        if len(parts[-1]) < 4:
+            continue
+        if any(named(" → ".join(parts[start:])) for start in range(len(parts) - 1)):
+            return True
+    return any(len(text) >= 4 and named(text) for text in map(clean, buttons))
 
 
 def _field_refusals() -> list[dict[str, Any]]:

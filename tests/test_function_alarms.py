@@ -1231,3 +1231,91 @@ def test_the_revision_measures_no_way_whose_start_scene_was_not_made() -> None:
     flow.phase_revise()
     assert flow.data["revise"] in (None, []), flow.data["revise"]
     assert any("Startszene" in error for error in flow.data["errors"]), flow.data["errors"]
+
+
+# --- Sperrgrund im Fehlfall (Durchsicht welle4 C-L1, C-L2) ----------------------------------
+
+
+def test_v5_a_way_out_is_a_menu_way_or_the_whole_words_of_a_button() -> None:
+    """C-L2: Ein Ausweg ist ein Menüweg „Menü → Zeile“ oder ein offener Knopf mit ganzen Wörtern.
+
+    Vorher genügte ein Teilstring irgendeines offenen Knopf- oder Menütexts:
+    „Dateien“ nannte den Knopf *Datei*, und ein Satz mit „Öffnen“ den Menüeintrag
+    *Öffnen* ohne sein Menü — beides kein Weg, den der Kunde findet.
+    """
+    from tools.function_capture import names_a_way_out
+
+    menus = [("&Hilfe", "Solidon freischalten …"), ("&Datei", "Öffnen …")]
+    buttons = ["Datei", "Abbrechen", "OK"]
+    named = "Dafür braucht Solidon einen Lizenzschlüssel (Hilfe → Solidon freischalten …)."
+    assert names_a_way_out(named, menus, buttons)
+    assert names_a_way_out("Wählen Sie Abbrechen und dann neu.", menus, buttons)
+    for reason in ("Dateien fehlen noch.", "Öffnen geht hier nicht.", "OK geht nicht."):
+        assert not names_a_way_out(reason, menus, buttons), reason
+
+
+def test_p7_reads_the_lock_reason_of_the_target_of_the_row(monkeypatch: Any) -> None:
+    """C-L1: Im Fehlfall zählt der Sperrgrund des Ziels der Zeile, nicht jeder graue Knopf.
+
+    „Erwartet Sperrgrund“ war erfüllt, sobald irgendein fremder Knopf grau mit
+    Kurzhilfe stand. Jetzt liest der Fehlfall ``grey_reason`` an den Zielen der
+    Zeile; die übrigen Meldungen der Oberfläche bleiben.
+    """
+    from tools import function_capture, function_surface
+
+    foreign = {"text": "Fremder Knopf gesperrt.", "actions": [], "kind": "sperrgrund"}
+    status = {"text": "Berechnet …", "actions": [], "kind": "meldung"}
+    monkeypatch.setattr(function_capture, "message_entries", lambda window: [foreign, status])
+    monkeypatch.setattr(function_capture, "way_out", lambda window, reason: True)
+    reasons = {"finding.action:place_on_bed": None}
+    monkeypatch.setattr(function_surface, "grey_reason", lambda window, name: reasons.get(name))
+    targets = ["finding.action:place_on_bed"]
+    assert function_surface.fault_messages(None, targets) == [status]
+    reasons["finding.action:place_on_bed"] = "Während der Neuberechnung gesperrt."
+    assert function_surface.fault_messages(None, targets) == [
+        status,
+        {
+            "text": "Während der Neuberechnung gesperrt.",
+            "actions": [],
+            "kind": "sperrgrund",
+            "way_out": True,
+        },
+    ]
+
+
+def test_the_fault_case_asks_for_the_lock_reason_at_its_own_targets(monkeypatch: Any) -> None:
+    """C-L1 am Prüfstand: ``phase_fault`` liest die Meldungen über ``fault_messages`` an den
+    Zielen der Zeile — ihrem Ziel und dem, womit sie übernommen wird."""
+    from types import SimpleNamespace
+
+    from tools import function_surface
+
+    asked: list[list[str]] = []
+    lock = {"text": "Gesperrt.", "actions": [], "kind": "sperrgrund", "way_out": True}
+
+    def told(window: Any, targets: Any) -> list[dict[str, Any]]:
+        asked.append(list(targets))
+        return [lock]
+
+    monkeypatch.setattr(function_surface, "fault_messages", told)
+    monkeypatch.setattr(function_surface, "open_dialog", lambda window: None)
+    monkeypatch.setattr(function_surface, "report_findings", lambda session: {})
+    fault = {"route": [{"target": "history.row:4"}], "expected": "sperrgrund"}
+    flow = _flow({"fault_case": fault})
+    flow.fault_scene = lambda key: True
+    flow.apply_target = "dialog.accept"
+    flow.input_steps = lambda inputs: []
+    flow.picture = lambda label: None
+    flow.session = SimpleNamespace(last_result=None)
+    flow.window = None
+
+    def run_steps(label: str, steps: list[Any]) -> bool:
+        for step in steps:
+            if step.name == "meldung lesen":
+                step.act(None)
+        return True
+
+    flow.run_steps = run_steps
+    flow.phase_fault()
+    assert asked and asked[-1] == ["finding.action:place_on_bed", "dialog.accept"], asked
+    assert flow.data["messages"] == [{**lock, "phase": FAULT_PHASE}], flow.data["messages"]

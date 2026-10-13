@@ -160,6 +160,34 @@ def grey_reason(window: Any, target: str) -> str | None:
     return tip if tip and tip not in plain else str(action.statusTip())
 
 
+def fault_messages(window: Any, targets: Sequence[str]) -> list[dict[str, Any]]:
+    """Was der Fehlfall meldet: die Meldungen der Oberfläche, als Sperrgrund aber nur der
+    Grund, mit dem die Ziele der Zeile grau stehen (Prüfpunkt 7, V5).
+
+    ``function_capture.message_entries`` nennt jeden grauen Knopf mit Kurzhilfe;
+    „erwartet Sperrgrund“ war damit erfüllt, sobald irgendein fremder Knopf grau
+    stand (Durchsicht welle4 C-L1). Gefragt wird :func:`grey_reason` an
+    ``targets`` — dem Ziel der Zeile und dem, womit sie übernommen wird.
+    """
+    from tools import function_capture as capture
+
+    found = [
+        entry for entry in capture.message_entries(window) if entry.get("kind") != "sperrgrund"
+    ]
+    for target in dict.fromkeys(targets):
+        reason = grey_reason(window, target)
+        if reason:
+            found.append(
+                {
+                    "text": reason,
+                    "actions": [],
+                    "kind": "sperrgrund",
+                    "way_out": capture.way_out(window, reason),
+                }
+            )
+    return found
+
+
 def windows_to_picture(window: Any) -> list[Any]:
     """Die sichtbaren Fenster neben dem Hauptfenster: Dialoge, auch nichtmodale (F-31).
 
