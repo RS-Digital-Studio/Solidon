@@ -686,7 +686,8 @@ def _settle_cards(widget: QWidget) -> None:
     (``OverlayHost._place_later``). Gemessen nach einer Runde stand das Ziel
     je nach Takt vor, während oder nach dem Gleiten: Unter Last lag eine
     aufgeklappte Verlaufszeile 5 bis 23 Punkte tiefer, als :func:`area_for` sie
-    nannte, und ein Rahmen der Tour hätte daneben gezeigt. Jede Runde läuft
+    nannte, und ein Rahmen einer Bildanleitung (``tools/make_guides.py``)
+    hätte daneben gezeigt. Jede Runde läuft
     die Ereignisse ab und setzt die Zonen ohne Gleiten an ihr Ziel
     (``reflow``), bis Ziel und Zonen eine Runde lang stillstehen.
     """
