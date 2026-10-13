@@ -8034,6 +8034,124 @@ def test_a_step_that_wants_its_own_stages_gets_no_full_chain(
     assert called == list(stages), called
 
 
+def test_the_quality_shortens_the_chain_never_the_caller() -> None:
+    """FD-6: Kürzt die Güte, kürzt ``boolean`` (``cut_short``) — nie der Aufrufer je nach Güte.
+
+    Der Behälterbau gab ``stages=DRAFT_CHAIN if … == "draft" else None`` mit.
+    Seine Absage war damit keine gekürzte, die volle Kette lief im Fenster nie
+    von selbst, und *Gröber rechnen* war dort der einzige Weg zu ihr. Eine
+    Stufenfolge, die an der Güte hängt, rechnet fein wie im Entwurf nur, was der
+    Aufrufer zulässt. Geprüft wird jeder Aufruf von ``boolean`` im Kern, und der
+    Behälterbau legt gar keine fest.
+    """
+    import ast
+
+    root = Path(__file__).resolve().parents[1]
+
+    def names(node: ast.AST) -> set[str]:
+        return {
+            part.id if isinstance(part, ast.Name) else part.attr
+            for part in ast.walk(node)
+            if isinstance(part, ast.Name | ast.Attribute)
+        }
+
+    calls = 0
+    fixed: list[str] = []
+    by_quality: list[str] = []
+    for path in sorted((root / "app" / "core").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        place = path.relative_to(root).as_posix()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            called = node.func.id if isinstance(node.func, ast.Name) else None
+            if called != "boolean":
+                continue
+            calls += 1
+            for keyword in node.keywords:
+                if keyword.arg != "stages":
+                    continue
+                if path.name == "container_ops.py":
+                    fixed.append(f"{place}:{node.lineno}")
+                if "quality" in names(keyword.value):
+                    by_quality.append(f"{place}:{node.lineno}")
+    assert calls > 20, f"nur {calls} Aufrufe von boolean gefunden — die Suche greift nicht"
+    assert not by_quality, f"Stufen je nach Güte statt cut_short: {by_quality}"
+    assert not fixed, f"der Behälterbau legt seine Stufen fest: {fixed}"
+
+
+def _the_first_short_chain_gives_up(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Nur der erste kurze Kettenlauf gibt auf: *direkt* und *verschweißt* des ersten Schnitts.
+
+    Wie ein Kern, der an einer Stelle einmal aufgibt; jeder spätere Aufruf
+    rechnet echt. Leert der Test die zurückgegebene Liste, gibt der nächste
+    erste Lauf wieder auf. Scheiterten alle verlustfreien Stufen
+    (``_short_chain_finds_nothing``), rechnete auch der Deckel über die
+    Ersatzstufen, und der Test prüfte etwas anderes als die Kette.
+    """
+    from app.core.geom import boolean as boolean_module
+
+    real = boolean_module._run_stage
+    failed: list[str] = []
+
+    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        if name in boolean_module.DRAFT_CHAIN and len(failed) < len(boolean_module.DRAFT_CHAIN):
+            failed.append(name)
+            raise RuntimeError("Kern gibt auf")
+        return real(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", stage)
+    return failed
+
+
+def test_a_container_goes_the_full_chain_where_the_short_one_ends(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FD-6, RM-534: Am Behälter kürzt die Güte die Kette, und das Fenster rechnet weiter.
+
+    Gab der erste Schnitt im Entwurf auf, hielt der Behälter an Schritt 1 mit
+    *Gröber rechnen* als Ausweg — sein Aufruf legte die Entwurfskette selbst
+    fest, und die Absage galt nicht als gekürzt. Jetzt rechnet der Fensterlauf
+    den Schritt mit der vollen Kette zu Ende, eine Vorschau hält als schnelle
+    Rechnung (*Übernehmen* bleibt frei), und ein gelungener Entwurf fragt die
+    Güte gar nicht: Druck und Export rechnen ihn nicht noch einmal (RM-494).
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    document = new_project("centauri-carbon-2", "petg").document
+    History(document).apply(
+        "Behälter",
+        [
+            OperationDraft(
+                op="create_container",
+                params={"shape": "rectangular", "lid": "push", "kernel": "mesh"},
+            )
+        ],
+    )
+    step = document.ops[-1].id
+
+    plain = _window(document, profile)
+    assert plain.complete, [str(finding.message) for finding in plain.scene.report.findings]
+
+    failed = _the_first_short_chain_gives_up(monkeypatch)
+    rescued = _window(document, profile)
+    assert failed == ["direct", "welded"], f"Voraussetzung: der erste Schnitt gab auf: {failed}"
+    assert rescued.stopped_at is None, [
+        str(finding.message) for finding in rescued.scene.report.findings
+    ]
+    assert rescued.reads_quality, "ein fein nachgerechneter Schritt fragt nach der Güte"
+    assert rescued.object_hashes == plain.object_hashes, "die volle Kette baut denselben Behälter"
+
+    failed.clear()
+    preview = evaluate(document, profile, quality="draft")
+    assert preview.stopped_at == step, "Voraussetzung: die Vorschau rechnet die volle Kette nie"
+    assert preview.short_chain_only, "der Halt der Vorschau sperrt Übernehmen"
+    assert preview.reads_quality
+    assert not plain.reads_quality, "ein gelungener Entwurf ist schon die feine Rechnung"
+
+
 def test_window_revision_and_agent_go_the_full_chain_and_previews_do_not() -> None:
     """RM-534, Anschluss: Wer den Schalter setzt, steht im Quelltext fest (§17.2).
 
