@@ -32,10 +32,10 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Ausnahmen mit Ausweg, Meldung/Eingabe im Hausstil, Dialog- und Layoutabbau? | `test_errors.py`, `test_message_dialog.py`, `test_input_dialog.py` · `test_dialog_lifetime.py`, `test_feature_layout_lifetime.py` |
 | Erreichen Helfer- und Stopfehler den Kundenweg unverändert? | `test_prepare.py` · `test_difference.py` · `test_missing_ops.py` · `test_repair.py` · `test_threemf_native_materials.py` |
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
-| Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Umschalter, vier Felder vorn? | `test_theme_and_palette.py` · `test_interface_limits.py` |
+| Zweitkodierung, Menü-/Feldgrenzen, ruhende Werkzeugleisten? | `test_theme_and_palette.py` · `test_interface_limits.py` · `test_toolbar_rest_style.py` |
 | Findet die Suche, was der Kunde tippt? | `test_search.py`; das Suchfeld der Karte in `test_selection_operations.py` |
 | Bleiben Änderungswege gesperrt, Gründe aktuell und Fokus nach Befundhandlung im Bericht? | `test_change_lock.py`, `test_licence_lock_offers.py`, `test_finding_action_focus.py` |
-| Externe Systemdialoge, Maßhandlung/Vorderseite/Feldhilfe, gültiges Maßfeldbeispiel? | `test_process.py`, `test_in_view_arming.py`, `test_sketch_editor_measure_field.py`, `test_feature_front_contract.py` |
+| Systemdialoge, Maßkarten und Feldhilfe? | `test_process.py`, `test_in_view_arming.py`, `test_sketch_editor_measure_field.py`, `test_feature_front_contract.py`, `test_measure_group_layout.py`, `test_measure_card_drag_ui.py`, `test_measure_card_placement.py` |
 | Funktionsdurchgang: Zeilen, Pakete, Szenen · Urteile und Gegenproben · der Prüfstand am Fenster · der Wortschatz der Ziele, aufgelöst am Fenster | `test_function_*.py` (Attrappen in `bench_fakes.py`) · `test_guide_targets.py`, `test_bench_findings.py`; Bildanleitungen und Wortschatz im Kern in `test_guides.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Erkennt der druckgleich-Vergleich (§11.2) jede Verletzung? | `test_print_equal.py` |
@@ -92,7 +92,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Prüfen Boolesche Läufe ihre Teile vollständig auf Durchdringungen und Flächenkontakt, und bleibt die Suche abbrechbar? | `test_repair.py` · `test_boolean.py` · `test_slot_features.py` |
 | Analytische Geometriefälle an den registrierten Kundenwegen · Flächenplatzierung mit gleichem Werkzeugkörper in Vorschau und Operation | `test_geometry_review_regressions.py` · `test_surface_placement.py` |
 | Filamentlager, Buchungen und Verbrauch · im Fenster | `test_filament_inventory.py`, `test_filament_usage.py` · `test_filament_inventory_ui.py`, `test_filament_assignment.py`, `test_filament_usage_ui.py`, `test_filament_workflow.py` — isolierte Lagerdateien, nie der Nutzerbestand |
-| Zeichnet der Renderer, was der Vertrag verspricht? | `test_render_contract.py`, `test_render_gizmo.py`, `test_render_gfx_regressions.py`, `test_render_factory.py`, `test_feature_label_layout.py` (`rendering`, nur beim Release; ohne Adapter ein Skip mit Grund); `test_render_shapes.py`, `test_navigator.py` ohne echten Renderer |
+| Renderervertrag? | `test_render_contract.py`, `test_render_gizmo.py`, `test_render_gfx_regressions.py`, `test_render_factory.py`, `test_feature_label_layout.py` (`rendering`, nur beim Release; ohne Adapter ein Skip mit Grund); `test_render_shapes.py`, `test_navigator.py`, `test_bed_grid_visibility.py`, `test_feature_grip_readability.py`, `test_front_overlay_alpha.py` ohne GPU |
 | Deckt der Crash-Wächter auch Arbeiter aus Fabriken und Helfern, und teilen überlappende `undisturbed`-Aufrufe ihren GC-Schutz? | `test_leash.py` — Quellenprüfung und Mehrfaden-Gegenprobe |
 | Druckziel/-übergabe, Befundkarte, Änderungserklärung und Beleg (RM-090); Dateirücklesen, Handlungsfolgen, Anzeigeeinheiten? | `test_print_contract.py`, `test_print_contract_ui.py` · `test_export_readback.py` · `test_action_effects.py` · `test_finding_display_units.py` |
 | Mehrfachimport am Fenster: Dialogabbruch, Einfügen, Rückfrage, Gestensperre · Spulendatum per Tastatur und zurück auf „Unbekannt“ | `test_batch_import_ui.py` · `test_date_field.py` |

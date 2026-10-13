@@ -20,6 +20,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manejo y sistema
 
+- Las tarjetas de medidas se mueven y crecen al abrir campos. Títulos y cotas de la base más claros, barras y tiradores discretos y una cuadrícula visible en tema claro facilitan la vista del modelo.
 - Se ha corregido un posible cierre inesperado al cambiar de característica o proyecto.
 - La explicación de «Colocar sobre la placa» ahora también sirve para cuerpos situados debajo de la placa.
 - Las listas de acciones sobre características usan íntegramente el idioma elegido.

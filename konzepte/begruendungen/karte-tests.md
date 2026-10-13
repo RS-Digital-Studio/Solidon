@@ -41,6 +41,13 @@ und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 | Layoutitem-Hüllen vor verzögertem Widgetabbau entwerten, verschachtelte Layouts und externe Hosts; Nachbarn und zurückgegebene Maßfelder erhalten | `test_feature_layout_lifetime.py` |
 | Echte Lage-/Abstandsbefunde und warme Daten bei mm/in/mm, sechs Sprachen, Auswahl/Einzelheiten/Nachschub, rohe Gruppenidentität samt vorigem Stand, gelesener Reiter und offene/geschlossene Körperknoten; Slicerwerte und Freitext als Gegenfälle | `test_finding_display_units.py` |
 | Nach Absage wieder sichtbare Vorschaulegende, kurze und lange Texte in sechs Sprachen und zwei tatsächlichen Anwendungsschriften | `test_preview_banner_layout.py` |
+| Maßgruppe nach Auf-/Zuklappen neu bemessen, ohne Layoutschleife; vorgemerkte Antwort bei Gruppentausch und Abschluss | `test_measure_group_layout.py` |
+| Maßkarte an Titel/freiem Grund ziehen; Felder, Knöpfe und Klappen bedienbar; Nutzerort bei Größenwechsel, Grenzen, Abbruch und Rückrufabbau; Globalfilter erst an QWidget, QWindow-Maustransport durchlassen, damit Qt beim Release seinen impliziten Druckempfänger löst | `test_measure_card_drag_ui.py` |
+| Echter Maßfluss: Nutzerort bei Klappen, Werten und fehlender Fläche; Gruppenwechsel/Abbruch, Seiten-/Bodenkarten und freie Maßfelder auch im Rückfall | `test_measure_card_placement.py` |
+| Bettrasterfarbe und Hauptlinien getrennt von Bauraum/Zeichnung; unveränderte Linienpositionen/Tiefe, Themenwechsel und Sichtbarkeit; Bettmaßzahlen aus der Textrolle, Bauraumfarbe unverändert | `test_bed_grid_visibility.py` |
+| Nur direkte gewöhnliche Werkzeugknöpfe in Ruhe ohne Rahmenfarbe; Geometrie und Hover/Fokus/Wahl sowie fremde Eingaben und Hauptaktion erhalten | `test_toolbar_rest_style.py` |
+| Ruhende Knöpfe durchscheinend, geschlossene Hilfsflächen verborgen; bestehendes Neuzeichnen wertet Vorschlag/held/waiting aus (held-Fall ruft es selbst auf); bewegter Zug/Feldentwurf und wartender Entwurf sichtbar, Abbruch/Wiederaufbau ohne Entwurf verborgen; Hover, Halten, Leave/Release und direkter Lochdruck bei gleichen Bounds/Geometrie/Picks; Griffbuchstaben/Maße: Text/Fensterpaar, Anker, Schrift und Pickauftrag bei Themenwechsel, Update/Neuaufbau; L-Felder außerhalb projizierter Knopfhüllen bei Aufbau, Kamera/Zoom, DPR und Maßänderung; vollständige endliche Anker ohne Projektion/Nahplatz, kein Update bei gleichen Punkten/Texten und kein Rücksetzen der Gizmo-Zugmatrix durch den Kameratimer | `test_feature_grip_readability.py` |
+| Raum-/Vordergrundmischung bei Erstellung und set_opacity für Vorder-/Rückseite/Kanten, wirksame Deckkraft 0/1/teiltransparent und force_opaque, Tiefentest/Queue; leere Beschriftungsfelder bei Textwechsel, Sichtbarkeit, _wake und adopt/build mit erhaltenen Nachbarpaaren/Listenplätzen; Materialzustände ohne Qt/GPU | `test_front_overlay_alpha.py` |
 
 Diese Dateien prüfen die jeweiligen Zusagen; ihre Nennung ist kein Bericht
 über einen bestandenen Lauf oder eine native Darstellung. Die Schriftfälle
@@ -64,6 +71,7 @@ Schriften der Inhaltswidgets, statt nur den Dialogcontainer umzustellen.
 | Szenenexport löst vorherige Auswahl über den Kundenweg; nur unbelegte Teilmenge wird abgewiesen | `test_function_export_preparation.py` |
 | Stabile lebende Qt-Hülle am C++-Dateidialog; echte Geometrie- und Flächenwechsel starten die Ruhezeit neu | `test_function_surface_identity.py` |
 | Qt-Fensterdispatcher: ignorierendes Kind, Annahme und verschachtelte Rollbereiche, Richtungen/Modifier/Koordinaten, klarer Rückweg bei fehlender API | `test_function_wheel_dispatch.py` |
+| Zweiphasige Knopfbereitschaft: öffentliche Zeigerfahrt vor frischer Ziel-/Rechteck-/Freigabe-/Trefferprüfung; Tooltip weicht durch Bewegung, bleibende Überdeckung bleibt Fund; Zieltausch/Verschieben/Verbergen/Sperren/Abbau und letzter Direktklick-Guard; Fensterplatzierung: Wiederholung am maximierten Zielschirm ohne neue Clientgeometrie, Ziel-/Größenwechsel normalisiert vor Geometrie/Resize; echte Qt-Client-/Fensterhüllengröße und bestehende Mindestgröße | `test_function_bench_window.py`, `test_function_setup.py` |
 
 Schema, Urteil und Gegenbeispiele bleiben bei `function_checks`,
 `function_points`/`function_judges` und `function_samples`; die zugehörigen

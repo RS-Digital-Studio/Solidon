@@ -20,6 +20,7 @@ dans `website/version.json`.
 
 ### Utilisation et système
 
+- Les cartes de mesures se déplacent et suivent les champs ouverts. Titres et cotes du plateau plus nets, barres et poignées plus sobres et grille visible en thème clair facilitent la vue du modèle.
 - Correction d’un plantage possible lors du changement de caractéristique ou de projet.
 - L'explication de «Poser sur le plateau» convient aussi aux corps situés sous le plateau.
 - Les listes d'actions sur les caractéristiques utilisent entièrement la langue choisie.

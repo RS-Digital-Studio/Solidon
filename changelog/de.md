@@ -44,6 +44,7 @@ Nutzen da und sonst nichts.
 
 ### Bedienung und System
 
+- Maßkarten sind verschiebbar und wachsen mit offenen Feldern. Klarere Handlungstitel und Bettmaße, ruhigere Leisten und Griffe sowie ein deutlicheres helles Raster erleichtern den Blick aufs Modell.
 - Ein möglicher Absturz beim Wechseln von Merkmalen oder Projekten ist behoben.
 - Der Hinweis bei „Auf das Bett setzen“ passt jetzt auch zu Körpern, die unter dem Bett liegen.
 - Aufzählungen von Merkmalshandlungen verwenden durchgehend die gewählte Sprache.

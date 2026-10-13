@@ -5,6 +5,7 @@ paths:
   - "app/ui/render/**/*.py"
   - "app/ui/qt_platform.py"
   - "app/ui/placement_flow.py"
+  - "app/ui/measure_card_drag.py"
   - "app/ui/overlay.py"
   - "app/ui/cursors.py"
   - "app/ui/analysis_bar.py"
@@ -363,9 +364,10 @@ der Fehler nicht auf.
   Maßgruppe (`MainWindow._place_from_feature_panel`), Layouts gelegt
   (`_lay_out_now`, `LAYOUT_HOPS`); eine Karte ohne fertigen Platz bleibt samt
   `raise_` verborgen (`PlacementFlow._seat_waits`).
-* **Ein `QScrollArea` fragt seinen Inhalt nur einmal** — wechselnder Inhalt
-  braucht einen Rollbereich, der neu fragt und Umbauten meldet
-  (`selection_operations._ListScroller`).
+* **`QScrollArea` nach Umbauten neu messen** (`selection_operations._ListScroller`).
+  Maßgruppen melden `LayoutRequest` im vorhandenen Filter; geänderten
+  `sizeHint` nach Qt über `redraw` einpassen, eigene Layoutantworten nicht
+  erneut bestellen.
 * **Gemessen an `Paint`-Ereignissen, nicht an Bildschirmfotos** — eine Aufnahme
   verschiebt die Folge, die sie aufnehmen soll.
 

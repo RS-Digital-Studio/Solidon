@@ -19,6 +19,7 @@ scrive in `website/version.json`.
 
 ### Uso e sistema
 
+- Le schede delle misure si spostano e crescono con i campi aperti. Titoli e quote del piano più chiari, barre e maniglie più sobrie e griglia più visibile nel tema chiaro aiutano a vedere il modello.
 - Risolto un possibile arresto anomalo passando da una caratteristica o da un progetto all’altro.
 - La spiegazione di «Appoggia sul piano» ora vale anche per i corpi che si trovano sotto il piano.
 - Gli elenchi delle azioni sulle caratteristiche usano interamente la lingua scelta.

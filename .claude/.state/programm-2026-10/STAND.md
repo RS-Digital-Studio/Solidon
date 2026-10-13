@@ -82,6 +82,28 @@ ein neues Bild wird nach einer Korrektur erneut tatsächlich gelesen.
 
 ## Verlauf
 
+- 13.10.2026, Maßkarten und sichtbare Schlussfixe: `welle4`/origin steht auf
+  `9dc38e79f253a92efde6df55e1dec3c79d64a9f6`. FD69–75 sind normal integriert,
+  jeweils ohne manuelle Merge-Auflösung und mit grünen normalen Hooks.
+  Maßkarten in DE/EN/ES/FR/IT/PT regulär je 62/62 Bedingungen bestanden:
+  zwölf gehaltene Kartenzüge, 18 echte Feldhilfen und vollständiger
+  Abbrechen-/Einzel-/Sammel-/Undo-Weg. Alle 192 Originalbilder unabhängig
+  einzeln gelesen, 51 eigene Prozessidentitäten beendet. Die dabei sichtbare
+  abgeschnittene Statuszeile ist unter FD75 kausal behoben: Original/Fix je
+  zwei native Aufbauten, vier gelesene Bilder; der korrigierte Client stimmt
+  durchgehend mit Win32/QWindow/PNG überein. Alle eigenen Prozesse beendet.
+  Griffmaße und XYZ/S verwenden lesbare Felder; L steht neben freien
+  Knöpfen. Endgültige 19-Bilder-Folge Hell/Dunkel regulär grün, alle Bilder
+  gelesen, Quellen unverändert. Keine allgemeine Überlappungsfreiheit oder
+  zusätzliche native DPR2-Abnahme behauptet. Bettzahlen und helles Raster
+  sind nativ belegt. Karten/Regeln und sechs Changelogs werden gemeinsam
+  nachgezogen; Funddatei enthält jetzt FD1–75 mit Belegen und Grenzen.
+  Als Nächstes: drei frische V4-Vorhersagen vor dem Klick, endgültiger
+  48-Fall-Lauf mit den sieben alten Absturzfällen zuerst, unabhängige neue
+  Bildurteile, Schlussunterlagen und gepinntes Tor samt Merge-Durchsicht.
+  D0 ist noch nicht abgenommen und noch nicht auf main. Danach Codestruktur
+  Schritt 0, ausdrücklich beauftragter Release 0.6.1 und Phasen 3/4.
+
 - 13.10.2026, sichtbare Oberflächenkorrekturen: `welle4`/origin steht auf
   `ce1e95113d5d49d982570dc2d0a626b576d7af42`. FD67-Größenfix, FD68-Raster,
   ruhigere Werkzeugleisten, Maßkarten-Drag-Helfer und sein Flow-Anschluss

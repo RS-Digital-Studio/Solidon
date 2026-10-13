@@ -19,6 +19,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Utilização e sistema
 
+- Os painéis de medidas movem-se e crescem com campos abertos. Títulos e cotas da mesa mais claros, barras e puxadores mais discretos e grelha mais visível no tema claro facilitam a vista do modelo.
 - Corrigido um possível encerramento inesperado ao mudar de característica ou de projeto.
 - A explicação de «Pousar na mesa» também se aplica a corpos que se encontram abaixo da mesa.
 - As listas de ações sobre características usam inteiramente o idioma escolhido.

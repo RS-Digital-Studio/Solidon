@@ -339,6 +339,12 @@ Ruhe- und Fokusrahmen jedes Eingabefelds sind gleich breit (zwei Punkte); der
 Fokus wechselt auf `accent_line` und wird gestrichelt (`style.py`).
 Wächter: `tests/test_style.py`. **Der Ruherahmen behält die volle Linienfarbe.**
 
+Gewöhnliche direkte `QToolButton`-Kinder von `QToolBar#mainTools` und
+`QWidget#mainToolStrip` haben nur ohne Hover, Druck, Wahl und Fokus
+transparenten Hintergrund und Rahmenfarbe (`style.stylesheet`). Breite und
+Padding bleiben; Unterleisten, Eingaben, Hauptknöpfe und die vorhandenen
+Zustandsregeln ändern sich dadurch nicht. Wächter: `test_toolbar_rest_style.py`.
+
 ## Eine Auswahl fällt nie still auf etwas Größeres
 
 Fehlt ein gewähltes Merkmal im neuen Stand, hebt `ObjectTree.show_scene` die

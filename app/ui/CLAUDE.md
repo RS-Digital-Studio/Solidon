@@ -89,7 +89,7 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 
 | Datei | Zweck |
 |---|---|
-| `viewport.py` | Viewport: Szene/Picks/Merkmale; Griffe (`_dispatch_pointer`), Vorschau/Differenz (`_cover_body`), Analyse, Schnitt, `PreviewBanner`; Zuordnung mit Kandidat und Vorbezug |
+| `viewport.py` | Szene/Picks/Merkmale; Griffe (`_dispatch_pointer`), Vorschau/Differenz (`_cover_body`), Analyse/Schnitt/`PreviewBanner`; Zuordnung mit Kandidat/Vorbezug; Bettmaßtext: `_sketch_label_colour` |
 | `render/` | der Renderer hinter der Ansicht — eigene Karte |
 | `overlay.py` | Zonen über der Ansicht (§2.5): `OverlayHost`, `CardColumn`, `CardGrip`, `is_room_taker`, `FittedScroller`; natives Fenster nur für direkte Kinder (`keep_widgets_alien`, `hold_above_the_view`) |
 | `cursors.py` | Mauszeiger (§19.3, Regel 18) |
@@ -99,7 +99,8 @@ trägt, sagt der Kopf von `oberflaeche.md`.
 
 | Datei | Zweck |
 |---|---|
-| `placement_flow.py` | Flächenplatzierung und Maße im Bild (§18.5), Dialog/`QuietHost` über `PlacementHost`; Ablauf in `karte-app-ui.md`, `measured_frame` in `operationen.md` |
+| `placement_flow.py` | Flächenplatzierung und Maße im Bild (§18.5), Dialog/`QuietHost` über `PlacementHost`; Größenänderung der Maßgruppe im bestehenden Ereignisfilter; Ablauf in `karte-app-ui.md`, `measured_frame` in `operationen.md` |
+| `measure_card_drag.py` | `MeasureCardDrag`/`CardPlace`: Auftragslage, Titel-/Freiflächenzug; Feldgesten bleiben; aktive Mausgesten nur `QWidget`, `QWindow` durchlassen; `update_room`/`placed_rect`/`reset` |
 | `slot_handle.py` | der Langlochgriff: zwei Knöpfe am gewählten Loch, der Zug gibt Länge und Richtung (`slotDragged`); übernommen wird im Merkmalfenster |
 | `scale_widget.py` | der Skalierwürfel am Gizmo (§18.11) |
 | `transform_bar.py` | die Bewegen-Leiste: drei Rollen, die Zahlen daneben (§18.11) |
@@ -204,7 +205,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | Datei | Zweck |
 |---|---|
 | `style.py` | Formsprache/Typografie/Raster; `make_primary`, `rule`; `ContentHeight` nach Auslöser/Nutzermaß; `select_data`; `DialogScrollArea`, `expanded_width`, Bildschirmfit, Aufmachmaß, Pfeil/Haken |
-| `theme.py` | hell und dunkel (§19.3) |
+| `theme.py` | hell und dunkel (§19.3); eigene Bett-Rasterrolle `bed_grid`, getrennt von Bauraum und Zeichenraster |
 | `window_chrome.py` | Windows malt die Titelleiste mit Anwendungsfarben; idempotenter Ereigniswächter |
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
 | `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18); `svg_pixmap` rastert scharf auf HiDPI |
@@ -249,6 +250,11 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   `handlingArmed` ändert keine Werte. Feldhilfe nennt zuerst `ActionField.doc`,
   danach die Maßherkunft; Ausdrucksinnenfelder behalten Grammatik und Ablehnung.
   `editingOffered` meldet den Auftrag unabhängig von vorübergehenden Sperren.
+  Maßkarten: Handlungstitel `section`, Herkunft `caption`.
+  Freie Orte beziehen sich auf den Abgaberaum; Randorte bleiben angedockt.
+  Raumgrenzen, Klappen und Werte ändern den Wunschort nicht. Neue Aufträge
+  oder andere Gruppen setzen ihn zurück; Parken trennt `positionChanged`
+  über `_links`. Die Karte bleibt Hindernis für andere Maßfelder.
 - **Wiederverwendung:** `FeaturePanel` und `PlacementFlow` erhalten Zeilen,
   Maßgruppen und schwebende Bedienelemente; Signaturen, Zustandsvergleich und
   Abschluss in `karte-app-ui.md`, „Muster“.
