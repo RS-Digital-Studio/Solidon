@@ -74,9 +74,6 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Übergabe an den Slicer
 
-
-### Drucken und Übergabe an den Slicer
-
 - Ist als Slicer eine Datei gewählt, die kein Programm ist, sagt Solidon das sofort und bietet einen anderen Slicer an. In Version 0.6.0 wartete das Slicen, bis jemand eine Windows-Meldung schloss.
 
 ### Bearbeiten und Zeichnen
