@@ -8032,6 +8032,7 @@
   "Zum Beispiel: Halter für die Werkbank": "For example: bracket for the workbench",
   "Zum Drehen: Klicken Sie auf *Drehen*, wählen Sie die *Achse* und tragen Sie den *Winkel* ein.": "To rotate: click *Rotate*, choose the *Axis* and enter the *Angle*.",
   "Zum Einfügen fehlt ein Schritt.": "There is no step to insert.",
+  "Zum Entfernen zuerst „Abbrechen“ wählen, danach „{action}“.": "To remove it, choose “Cancel” first, then “{action}”.",
   "Zum Feld „{name}“ gehen, das den Ausdruck einblendet.": "Go to the “{name}” field, which reveals the expression.",
   "Zum Färben gehört eine Fläche.": "Colouring needs a face.",
   "Zum Inhalt springen": "Skip to content",

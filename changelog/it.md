@@ -65,7 +65,7 @@ scrive in `website/version.json`.
 
 - Un corpo esatto ora conserva le sue caratteristiche dopo *Applica testo*, *Intarsia testo* e *Ricava controforma*. Nella versione 0.6.0 dopo non si poteva più fare clic su nessuna faccia.
 - Un corpo filettato dal catalogo dei blocchi si può di nuovo spostare, ruotare, specchiare, scalare e appoggiare sul piano. Nella versione 0.6.0 la catena si fermava con un errore del programma.
-- Nella scheda *Selezione*, un diametro sotto il limite in *Cambia foro* rimanda ora a *Rimuovi caratteristica*, che rimuove il foro del tutto, con la sua svasatura se vuoi.
+- Per un diametro del foro sotto il limite, l'avviso indica *Rimuovi caratteristica*, con la svasatura se vuoi. Se hai iniziato a modificare le quote nella vista, indica prima *Annulla*.
 - La ricostruzione (*Ricostruisci modello*) non suggerisce più altri limiti quando nessun valore consentito basterebbe, e mostra le proposte uguali una sola volta.
 - Se un foro o un contenitore riesce solo spostando di pochissimo i vertici, l'apertura resta libera. Nella versione 0.6.0 poteva restarci sopra una pelle sottilissima.
 - Scegliendo un foro in un modello caricato, le misure nella vista e la scheda *Selezione* indicano ora la stessa azione, *Cambia foro*. Nella versione 0.6.0 lì restava aperto *Sposta caratteristica*.

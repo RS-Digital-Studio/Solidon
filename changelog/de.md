@@ -90,7 +90,7 @@ Nutzen da und sonst nichts.
 
 - Ein exakter Körper behält jetzt nach *Text aufbringen*, *Schrift einlegen* und *Gegenform einlassen* seine Merkmale. In Version 0.6.0 ließ sich danach keine Fläche mehr anklicken.
 - Ein Körper mit Gewinde aus dem Bausteinkatalog lässt sich wieder verschieben, drehen, spiegeln, skalieren und aufs Bett setzen. In Version 0.6.0 hielt die Kette dabei mit einem Programmfehler an.
-- Tippt man im Reiter *Auswahl* bei *Bohrung ändern* einen Durchmesser unter der Grenze ein, nennt der Hinweis jetzt *Merkmal entfernen*. Damit verschwindet die Bohrung ganz, auf Wunsch samt Senkung.
+- Bei einem Bohrungsdurchmesser unter der Grenze nennt der Hinweis *Merkmal entfernen*, auf Wunsch samt Senkung. Wurde die Maßänderung im Bild begonnen, führt er zuerst über *Abbrechen*.
 - Der Nachbau (*Modell nachbauen*) rät nicht mehr zu anderen Grenzen, wenn kein erlaubter Wert reichen würde, und zeigt gleiche Vorschläge nur einmal.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 - Wählt man in einem geladenen Modell eine Bohrung, meinen die Maße im Bild und der Reiter *Auswahl* dieselbe Handlung, *Bohrung ändern*. In Version 0.6.0 stand dort *Merkmal verschieben* offen.

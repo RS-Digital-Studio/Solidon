@@ -65,7 +65,7 @@ it into `website/version.json`.
 
 - An exact body now keeps its features after *Put text on*, *Inlay text* and *Cut counter-form*. In version 0.6.0 no face could be clicked afterwards.
 - A body with a thread from the part catalogue can be moved, rotated, mirrored, scaled and placed on the bed again. In version 0.6.0 the chain stopped there with a program error.
-- Typing a diameter below the limit in *Change bore* on the *Selection* tab now points to *Remove feature*, which removes the bore entirely, with its countersink if you like.
+- For a hole diameter below the limit, the hint points to *Remove feature*, including the countersink if wanted. If editing the dimensions in the view has begun, it first points to *Cancel*.
 - Rebuilding (*Rebuild model*) no longer suggests other limits when no allowed value would be enough, and shows identical proposals only once.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
 - When you select a bore in a loaded model, the measures in the view and the *Selection* tab now mean the same action, *Change bore*. In version 0.6.0 *Move feature* was open there.
