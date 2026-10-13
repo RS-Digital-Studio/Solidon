@@ -122,6 +122,7 @@ class Ports(Protocol):
     def covers(self, click: ClickLike, hit: Any) -> bool: ...
     def centre(self, rect: Any) -> Any: ...
     def press(self, widget: Any, point: Any, button: str) -> None: ...
+    def move(self, point: Any) -> None: ...
     def keys(self, sequence: Any) -> None: ...
     def type_text(self, text: str) -> None: ...
     def describe(self, widget: Any, point: Any = None) -> dict[str, Any]: ...
@@ -228,7 +229,13 @@ class Walk:
 
         return Step(f"weg zu {name}", act, ready=self.stable(name, waited), settle_ms=SETTLE_MS)
 
-    def stable(self, name: str, waited: dict[str, str] | None = None) -> Callable[[], bool]:
+    def stable(
+        self,
+        name: str,
+        waited: dict[str, str] | None = None,
+        *,
+        button: Callable[[], Any] | None = None,
+    ) -> Callable[[], bool]:
         """Ob der nächste Klick zu ``name`` fallen kann.
 
         Er muss seit :data:`STABLE_S` derselbe sein, und an seiner Mitte liegt
@@ -239,6 +246,13 @@ class Walk:
         Solange das Fenster sagt, dass etwas kommt (``Ports.pending``), zählt die
         Frist nicht; sagt es das länger als :data:`PENDING_S`, steht in
         ``waited`` der Grund, und der Klick meldet „keine Rückmeldung“.
+
+        Erst den Zeiger öffentlich anfahren, dann in einem späteren Takt neu
+        prüfen: Ein Tooltip kann erst durch diese Bewegung verschwinden. Für
+        Knöpfe ohne Wortschatznamen löst ``button`` das aktuelle Widget auf.
+        Kein Ereignispumpen hier oder im anschließenden ``click_button``:
+        Der Automat darf seinen Folgeschritt erst nach dem wirklichen Klick
+        betreten. Seine vorhandene Schrittfrist bleibt unverändert.
         """
         seen: dict[str, Any] = {
             "key": None,
@@ -250,8 +264,30 @@ class Walk:
 
         def ready() -> bool:
             now = self.ports.now()
+            target_button = None
+            identity: str | int
             try:
-                click = self.ports.next_click(name)
+                if button is None:
+                    click = self.ports.next_click(name)
+                    rect = click.rect
+                    point = self.ports.aim(click, self.ports.centre(rect))
+                    identity = str(click.why)
+                else:
+                    from PySide6.QtCore import QPoint, QRect
+                    from shiboken6 import isValid
+
+                    target_button = button()
+                    if (
+                        target_button is None
+                        or not isValid(target_button)
+                        or not target_button.isVisible()
+                        or not target_button.isEnabled()
+                    ):
+                        seen["key"] = seen["covered"] = None
+                        return False
+                    rect = QRect(target_button.mapToGlobal(QPoint()), target_button.size())
+                    point = rect.center()
+                    identity = id(target_button)
             except LookupError:
                 if self.ports.pending():
                     seen["missing"] = None
@@ -269,14 +305,20 @@ class Walk:
                     seen["missing"] = now
                 return bool(now - seen["missing"] >= MISSING_S)
             seen["missing"] = seen["pending"] = None
-            key = (str(click.why), tuple(self.ports.rect_data(click.rect)))
+            key = (identity, tuple(self.ports.rect_data(rect)), tuple(self.ports.point_data(point)))
             if key != seen["key"]:
                 seen["key"], seen["since"], seen["covered"] = key, now, None
+                self.ports.move(point)
                 return False
             if now - seen["since"] < STABLE_S:
                 return False
-            hit = self.ports.widget_under(self.ports.centre(click.rect))
-            if hit is not None and self.ports.covers(click, hit):
+            hit = self.ports.widget_under(point)
+            matches = hit is not None and (
+                (hit is target_button or target_button.isAncestorOf(hit))
+                if target_button is not None
+                else self.ports.covers(click, hit)
+            )
+            if matches:
                 seen["covered"] = None
                 return True
             if seen["covered"] is None:
@@ -354,6 +396,12 @@ def click_button(ports: Any, walker: Walk, button: Any, label: str) -> bool:
     heißt: verdeckt, nicht geklickt — der Eintrag trägt den Fund.
     """
     from PySide6.QtCore import QPoint, QRect
+    from shiboken6 import isValid
+
+    if button is None or not isValid(button) or not button.isVisible() or not button.isEnabled():
+        raise RuntimeError(
+            f"{label}: Knopf nach der Zielprüfung nicht bedienbar; Ziel neu ermitteln"
+        )
 
     rect = QRect(button.mapToGlobal(QPoint(0, 0)), button.size())
     point = rect.center()
