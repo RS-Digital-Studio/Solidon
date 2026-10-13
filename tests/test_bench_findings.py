@@ -45,6 +45,7 @@ load_operations()
 from app.ui.app import build_application
 from app.ui import guide_targets
 from tools.function_checks import SMALLEST_WINDOW
+from tools.window_bench import shutdown_window
 application, window = build_application([])
 window.resize(*SMALLEST_WINDOW)
 window.show()
@@ -87,8 +88,12 @@ if sys.argv[2] == 'build':
     ])
     assert window.session.wait_for_idle(60000)
     window.session.save_project(scene)
+    # Auch der Szenenbau beendet die Arbeiter vor dem Prozess. Der harte
+    # Exit riss sie mitten in ihrer Arbeit ab, teils sogar mit Exit-Code 0.
+    window.session.forget_changes()
+    shutdown_window(window, application)
     print('built', flush=True)
-    os._exit(0)
+    raise SystemExit(0)
 for round in range(5):
     previous = window.session.last_result
     window.session.forget_changes()
@@ -106,7 +111,6 @@ for round in range(5):
     held = None
 print('tree survived', flush=True)
 window.session.forget_changes()
-from tools.window_bench import shutdown_window
 shutdown_window(window, application)
 """
 
@@ -136,10 +140,12 @@ def test_the_tree_survives_new_scenes_after_a_row_was_found(qt_app: Any, tmp_pat
     del qt_app
     scene = tmp_path / "szene.p3d"
     built = _tree_rounds(scene, "build")
-    assert built.returncode == 0 and "built" in built.stdout, built.stderr[-3000:]
+    assert built.returncode == 0 and "built" in built.stdout, built.stderr
+    assert "Windows fatal exception:" not in built.stderr, built.stderr
     for attempt in range(6):
         done = _tree_rounds(scene, "rounds")
-        assert done.returncode == 0, (attempt, done.returncode, done.stderr[-4000:])
+        assert done.returncode == 0, (attempt, done.returncode, done.stderr)
+        assert "Windows fatal exception:" not in done.stderr, (attempt, done.stderr)
         assert "tree survived" in done.stdout
 
 
