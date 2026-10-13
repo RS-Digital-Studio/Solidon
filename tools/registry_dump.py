@@ -13,6 +13,9 @@ dem letzten Tag geändert hat (``konzept-funktionsdurchgang-2026-10.md``, §8).
     python tools/registry_dump.py --out abzug.txt       # in eine Datei
     python tools/registry_dump.py --compare abzug.txt   # Exit 1 und die Abschnitte, die abweichen
 
+``--compare`` vergleicht Bytes; Exit 2 heißt nicht verglichen (Datei fehlt oder
+ist kein UTF-8), nie „weicht ab“.
+
 Das Parameterschema steht je Feld in einer Zeile ``params.<feld>`` mit jedem
 Eintrag von ``ParamSpec`` (Typ, Vorgabe, Grenzen, Einheit, Vorder- oder
 Rückseite …) und ``params.<feld>.type`` mit der Annotation als Text. Titel,
@@ -223,7 +226,9 @@ def differences(before: str, after: str) -> list[str]:
                 for row in difflib.unified_diff(old[name], new[name], lineterm="", n=0)
                 if not row.startswith(("---", "+++", "@@"))
             )
-    return lines or ["Die Abzüge unterscheiden sich außerhalb der Abschnitte (Kopfzeile)."]
+    return lines or [
+        "Die Abzüge unterscheiden sich außerhalb der Abschnitte (Kopfzeile oder Zeilenenden)."
+    ]
 
 
 def _this_tree() -> None:
@@ -268,6 +273,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--compare", type=Path, metavar="DATEI", help="gegen diesen früheren Abzug vergleichen"
     )
     args = parser.parse_args(argv)
+    earlier = b""
+    if args.compare is not None:
+        # Zuerst und als Bytes gelesen: „byte-gleich“ heißt Bytes, und eine Datei,
+        # die fehlt oder kein UTF-8 ist, ist nicht verglichen — Exit 2, nie
+        # „weicht ab“.
+        try:
+            earlier = args.compare.read_bytes()
+            earlier.decode("utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            print(
+                f"registry_dump: {args.compare}: {error} — nicht verglichen (Exit 2); einen "
+                "Abzug angeben, den `--out` geschrieben hat",
+                file=sys.stderr,
+            )
+            return 2
     try:
         _this_tree()
         with _own_profile():
@@ -276,15 +296,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"registry_dump: {error}", file=sys.stderr)
         return 2
     if args.out is not None:
-        args.out.write_text(text, encoding="utf-8", newline="\n")
+        try:
+            args.out.write_text(text, encoding="utf-8", newline="\n")
+        except OSError as error:
+            print(
+                f"registry_dump: {args.out}: {error} — nicht geschrieben (Exit 2)", file=sys.stderr
+            )
+            return 2
         print(text.splitlines()[0].removeprefix("# "))
         return 0
     if args.compare is not None:
-        found = differences(args.compare.read_text(encoding="utf-8"), text)
+        same = earlier == text.encode("utf-8")
+        found = [] if same else differences(earlier.decode("utf-8"), text)
         for line in found:
             print(line)
-        print("W3: byte-gleich" if not found else f"W3: weicht ab von {args.compare}")
-        return 1 if found else 0
+        print("W3: byte-gleich" if same else f"W3: weicht ab von {args.compare}")
+        return 0 if same else 1
     sys.stdout.buffer.write(text.encode("utf-8"))
     return 0
 

@@ -72,6 +72,9 @@ def test_every_field_but_the_function_is_written(
             keys = {line.split(" = ", 1)[0] for line in found[f"{kind}:{spec.name}"]}
             assert {key for key in keys if "." not in key} == expected, spec.name
             assert {f"params.{entry.name}" for entry in spec.params.spec()} <= keys, spec.name
+            # Plan 2.3: der Typ als Text, je Datenfeld des Parametersatzes.
+            typed = {f"params.{field.name}.type" for field in spec.params.fields()}
+            assert typed <= keys, spec.name
 
 
 def test_a_changed_field_changes_the_dump_and_names_its_section(
@@ -170,6 +173,8 @@ def test_values_render_the_same_in_every_process() -> None:
     assert registry_dump.render((1,)) == "(1,)"
     assert registry_dump.render(_("Quader", "Grundform")) == "_('Quader', context='Grundform')"
     assert registry_dump.render(Figure("1.5")) == "Figure('1.5')"
+    # Werte eines Textes gehören zu ihm; im heutigen Register trägt keiner welche.
+    assert registry_dump.render(_("{n} Stück", n=3)) == "_('{n} Stück', values={'n': 3})"
     assert registry_dump.render(_estimate) == "_estimate"
     assert __name__ not in registry_dump.render(_estimate)
     with pytest.raises(registry_dump.DumpError, match="stabile"):
@@ -200,31 +205,59 @@ def test_compare_names_what_differs_and_exits_one(
     assert "geändert: [op:x]" in capsys.readouterr().out
 
 
+def test_compare_holds_bytes_and_stops_on_what_it_cannot_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Byte-gleich heißt Bytes: Eine CRLF-Kopie weicht ab (Exit 1); eine fehlende oder
+    nicht als UTF-8 lesbare Datei ist nicht verglichen (Exit 2), nie „weicht ab“
+    (Durchsicht W13, Fund 8)."""
+    text = "# Registerabzug\n\n[op:x]\nname = 'x'\n"
+    monkeypatch.setattr(registry_dump, "registered", lambda: text)
+    earlier = tmp_path / "abzug.txt"
+
+    earlier.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+    assert registry_dump.main(["--compare", str(earlier)]) == 1
+    assert "Zeilenenden" in capsys.readouterr().out
+
+    assert registry_dump.main(["--compare", str(tmp_path / "fehlt.txt")]) == 2
+    assert "nicht verglichen" in capsys.readouterr().err
+
+    earlier.write_bytes(b"\xff\xfe")
+    assert registry_dump.main(["--compare", str(earlier)]) == 2
+    assert "nicht verglichen" in capsys.readouterr().err
+
+
 def test_two_fresh_processes_write_the_same_dump_byte_for_byte(
     tmp_path: Path, live: tuple[tuple[OperationSpec, ...], tuple[PartSpec, ...]]
 ) -> None:
     """Determinismus: zwei Prozesse mit verschiedenem Hash-Startwert, derselbe Abzug.
 
     Ein verschiedener Startwert ordnet jede Menge anders — eine, die ungeordnet
-    in den Abzug käme, risse hier.
+    in den Abzug käme, risse hier. Beide laufen zugleich, und während sie
+    rechnen, sammelt dieser Prozess die ``tr()``-Schlüssel, gegen die
+    ``[messages]`` steht (Durchsicht W13, Funde 5 und 9).
     """
-    written = []
-    for seed in ("1", "2"):
-        target = tmp_path / f"abzug-{seed}.txt"
-        finished = subprocess.run(
+    targets = [tmp_path / f"abzug-{seed}.txt" for seed in ("1", "2")]
+    running = [
+        subprocess.Popen(
             [sys.executable, str(ROOT / "tools" / "registry_dump.py"), "--out", str(target)],
             cwd=ROOT,
             env={**os.environ, "PYTHONHASHSEED": seed},
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             encoding="utf-8",
-            check=False,
         )
-        assert finished.returncode == 0, finished.stderr
-        written.append(target.read_bytes())
+        for seed, target in zip(("1", "2"), targets, strict=True)
+    ]
+    expected = [repr(message) for message in sorted(extract.message_ids())]
+    for process in running:
+        _, errors = process.communicate(timeout=300)
+        assert process.returncode == 0, errors
+    written = [target.read_bytes() for target in targets]
 
     assert written[0] == written[1]
     found = registry_dump.sections(written[0].decode("utf-8"))
     operations, parts = live
     assert sum(name.startswith("op:") for name in found) == len(operations)
     assert sum(name.startswith("part:") for name in found) == len(parts)
-    assert len(found["messages"]) > 1000
+    assert found["messages"] == expected
