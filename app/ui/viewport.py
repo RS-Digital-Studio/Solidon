@@ -5134,6 +5134,7 @@ class Viewport(QWidget):
         self._selection_fade: Any = None
         """Die laufende Auswahlblende, damit die nächste sie ablösen kann."""
         self._bed_colour = BED_COLOUR
+        self._bed_grid_colour = THEMES["dark"]["bed_grid"]
         self._bed_surface = BED_SURFACE_COLOUR
         #: Woraus die stehende Kulisse gebaut wurde — Renderer, Bauraum,
         #: Plattenzahl und die beiden Farben (RM-124). Stimmt das Tupel noch,
@@ -8872,7 +8873,16 @@ class Viewport(QWidget):
         #
         # Der Renderer steht mit im Tupel, weil ein Austausch (Tests, ein neu
         # aufgebautes Fenster) dieselben Aktoren woanders braucht.
-        built = (self.renderer, width, depth, height, beds, self._bed_colour, self._bed_surface)
+        built = (
+            self.renderer,
+            width,
+            depth,
+            height,
+            beds,
+            self._bed_colour,
+            self._bed_surface,
+            self._bed_grid_colour,
+        )
         if built != self._bed_built:
             for actor in self._frame_actors:
                 self.renderer.remove(actor)
@@ -8978,17 +8988,23 @@ class Viewport(QWidget):
         self._bed_surfaces.append(surface)
         self._frame_actors.append(surface)
         self._ground_actors.append(surface)
-        grid_points, grid_spans = shapes.grid_lines((shift, 0.0, 0.0), width, depth, 10.0)
-        grid = self.renderer.add_lines(
-            grid_points,
-            name=f"bed_{plate}",
-            colour=self._bed_colour,
-            width=1.0,
-            polylines=grid_spans,
-        )
-        grid.set_opacity(0.35)
-        self._frame_actors.append(grid)
-        self._ground_actors.append(grid)
+        minor, major = shapes.grid_line_levels((shift, 0.0, 0.0), width, depth, 10.0)
+        # Das Raster liegt auf der beleuchteten Fläche, der Bauraum dagegen
+        # vor dem Hintergrund. Ihre Farben sind deshalb getrennte Rollen.
+        for points, name, opacity in (
+            (minor, f"bed_{plate}", 0.55),
+            (major, f"bed_major_{plate}", 0.85),
+        ):
+            grid = self.renderer.add_lines(
+                points,
+                name=name,
+                colour=self._bed_grid_colour,
+                width=1.0,
+                polylines=[2] * (len(points) // 2),
+            )
+            grid.set_opacity(opacity)
+            self._frame_actors.append(grid)
+            self._ground_actors.append(grid)
 
         segments = volume_edges(width, depth, height)
         points = np.asarray([point for pair in segments for point in pair], dtype=float)
@@ -9040,6 +9056,7 @@ class Viewport(QWidget):
         # (``grid_minor`` und ``text``); sie hier zu einer siebten und achten
         # Szenenfarbe zu machen, hieße denselben Wert zweimal zu benennen.
         exact = THEMES["light" if theme == "light" else "dark"]
+        self._bed_grid_colour = exact["bed_grid"]
         # Gegen den Verlauf trägt ``grid_minor`` nicht zuverlässig. Beide
         # Rasterstufen benutzen deshalb den sichtbaren Farbton; allein ihre
         # Deckkraft (0,32 gegen 0,72 in ``show_sketch``) macht daraus leise
