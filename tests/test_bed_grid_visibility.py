@@ -14,7 +14,7 @@ from app.ui.render import shapes
 from app.ui.render.api import rgb
 from app.ui.theme import THEMES, Theme, contrast_ratio
 from app.ui.viewport import BED_FRAME, BED_SURFACE_DROP, Viewport
-from tests.render_fakes import RecordingItem, RecordingRenderer
+from tests.render_fakes import RecordingItem, RecordingLabels, RecordingRenderer
 
 
 @pytest.fixture
@@ -112,3 +112,26 @@ def test_theme_switch_rebuilds_both_grid_levels_and_keeps_bed_visibility(
         view.show_build_volume(profile)
         assert minor.visible() and major.visible()
         old = minor
+
+
+@pytest.mark.parametrize("first_theme", ["light", "dark"])
+def test_bed_scale_uses_text_colour_and_returns_without_changing_volume(
+    bed_view: tuple[Viewport, RecordingRenderer], profile: Profile, first_theme: Theme
+) -> None:
+    view, renderer = bed_view
+    view.set_theme(first_theme)
+    view.show_build_volume(profile)
+    first = renderer.item_of("bed_scale_0")
+    assert isinstance(first, RecordingLabels)
+    points, texts = first.points.copy(), first.texts.copy()
+    other: Theme = "dark" if first_theme == "light" else "light"
+    for theme in (first_theme, other, first_theme):
+        view.set_theme(theme)
+        labels = renderer.item_of("bed_scale_0")
+        assert isinstance(labels, RecordingLabels)
+        assert labels.colour() == THEMES[theme]["text"]
+        np.testing.assert_array_equal(labels.points, points)
+        assert labels.texts == texts
+        assert labels.style.font_size == 9 and labels.style.always_visible
+        assert renderer.item_of("build_volume_0").colour() == THEMES[theme]["bed"]
+        assert renderer.item_of("build_volume_0").opacity() == pytest.approx(0.35)

@@ -9023,7 +9023,9 @@ class Viewport(QWidget):
                 anchors,
                 [text for _point, text in marks],
                 name=f"bed_scale_{plate}",
-                style=LabelStyle(text_colour=self._bed_colour, font_size=9, always_visible=True),
+                style=LabelStyle(
+                    text_colour=self._sketch_label_colour, font_size=9, always_visible=True
+                ),
             )
         )
 
@@ -15972,8 +15974,14 @@ class Viewport(QWidget):
             vertices,
             faces,
             name="face-handle",
-            style=SurfaceStyle(colour=MEASURE_COLOUR, opacity=0.6, pickable=False),
+            style=SurfaceStyle(
+                colour=MEASURE_COLOUR,
+                opacity=0.12 if feature.kind in slot_feature_kinds() else 0.6,
+                pickable=False,
+            ),
         )
+        if self._shape_actor is not None:
+            self._face_actor.set_visible(self._shape_actor.visible())
         return self._face_actor
 
     def _handle_seat(self, feature: Feature, centre: Any) -> Any:
@@ -16146,19 +16154,57 @@ class Viewport(QWidget):
         chosen = self.slot_handle_feature()
         return chosen is not None and chosen.id == feature.id
 
-    def _show_preview(self, feature: Feature, centre: Any, normal: Any, radius: float) -> None:
+    def _show_preview(
+        self, feature: Feature, centre: Any, normal: Any, radius: float, *, update: bool = False
+    ) -> None:
         """Das gewählte Merkmal in seiner Gestalt — ein eigener Aktor, damit
         der Griff an der Öffnung bleibt und die Vorschau beim Zug mitgeht."""
-        self._drop_preview()
+        if not update:
+            self._drop_preview()
         if self.renderer is None:
             return
+        handle = self._slot_handle
+        proposing = (
+            self._move_target == feature.id
+            or self._slot_target == feature.id
+            or (
+                self._slot_handle_is_at(feature)
+                and (
+                    self._slot_width is not None
+                    or self._slot_turn_base is not None
+                    or (handle is not None and handle.pressing)
+                )
+            )
+        )
+        # Die geschlossenen Hilfsflächen verschließen sonst eine ruhende
+        # Öffnung. Wand, Kontur und pickbare Knöpfe tragen ihre Auswahl.
+        visible = feature.kind not in slot_feature_kinds() or proposing
+        opacity = 0.45 if visible else 0.18
+        if update and self._face_actor is not None:
+            self._face_actor.set_visible(visible)
         vertices, faces = self._feature_shape(feature, centre, normal, radius)
+        if update and self._shape_actor is not None:
+            # Gleiche Form: Punkte und Darstellungszustand im stehenden Aktor.
+            # Nur ein Wechsel der Punktzahl braucht einen neuen Puffer.
+            try:
+                self._shape_actor.update_points(vertices)
+            except ValueError:
+                pass
+            else:
+                self._shape_actor.set_opacity(opacity)
+                self._shape_actor.set_visible(visible)
+                return
+        self._drop_preview()
         self._shape_actor = self.renderer.add_surface(
             vertices,
             faces,
             name="feature-preview",
-            style=SurfaceStyle(colour=MEASURE_COLOUR, opacity=0.45, lighting=False, pickable=False),
+            style=SurfaceStyle(
+                colour=MEASURE_COLOUR, opacity=opacity, lighting=False, pickable=False
+            ),
         )
+
+        self._shape_actor.set_visible(visible)
 
     def _repaint_preview(self) -> bool:
         """Die Marke des gewählten Merkmals neu — nach einem Zug, der ihre Form ändert.
@@ -16174,20 +16220,7 @@ class Viewport(QWidget):
         if chosen is None or seat is None or self.renderer is None:
             return False
         centre, normal, radius = seat
-        actor = self._shape_actor
-        if actor is not None:
-            # **Dieselbe Form, neue Punkte**: Mitten in einer Geste wird bei
-            # jeder Bewegung neu gezeichnet, und ein Aktor je Bewegung wäre
-            # ein Neuaufbau je Bewegung. Das Stadion behält seine Punktzahl;
-            # nur der Wechsel von Zylinder zu Stadion braucht einen neuen Aktor.
-            vertices, _faces = self._feature_shape(chosen, centre, normal, radius)
-            try:
-                actor.update_points(vertices)
-            except ValueError:
-                self._show_preview(chosen, centre, normal, radius)
-            self.renderer.render()
-            return True
-        self._show_preview(chosen, centre, normal, radius)
+        self._show_preview(chosen, centre, normal, radius, update=True)
         self.renderer.render()
         return True
 
@@ -16205,6 +16238,11 @@ class Viewport(QWidget):
         eine Drehung des Merkmals ändert seine Lage im Raum, und die ließe
         sich nur durch Neuaufbau einholen.
         """
+        if self._shape_actor is not None and (steps.moves or steps.turns):
+            self._shape_actor.set_opacity(0.45)
+            self._shape_actor.set_visible(True)
+            if self._face_actor is not None:
+                self._face_actor.set_visible(True)
         if not steps.moves or steps.turns:
             return
         if self._shape_actor is not None:
