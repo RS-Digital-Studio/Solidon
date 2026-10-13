@@ -377,6 +377,7 @@ from app.ui.loading import (
 )
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
+from app.ui.message_dialog import name_button
 from app.ui.motion import switch
 from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, simple_shape_of
 from app.ui.overlay import (
@@ -479,7 +480,6 @@ from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
 from app.ui.viewport import DisplayMode, Projection, SketchSelectionBadge, Viewport
-from app.ui.window_names import name_button
 
 _log = get_logger(__name__)
 

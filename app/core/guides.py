@@ -160,7 +160,7 @@ TARGETS: Final[frozenset[str]] = frozenset(
 #:   dafür gibt es nicht;
 #: * ``message:unsaved_changes`` — ein Meldungs-, Frage- oder Eingabefenster
 #:   über ein Wort für seine Frage: eine Rückfrage (``QMessageBox``), eine
-#:   Meldung, eine Eingabe, ein Farbwähler am Ort (``app/ui/window_names``);
+#:   Meldung, eine Eingabe, ein Farbwähler am Ort (``app/ui/message_dialog``);
 #: * ``message.button:unsaved_changes.save`` — ein Knopf darin; bei einer
 #:   Fehlermeldung ist der Knopf die Kennung der Handlung
 #:   (``message.button:error.retry``), in einer Rückfrage über Qts
