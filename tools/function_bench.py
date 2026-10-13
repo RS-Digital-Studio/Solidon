@@ -64,6 +64,7 @@ from tools.function_protocol import (
     scene_print,
     unmeasured,
 )
+from tools.function_scenes import load_scenes
 from tools.function_setup import (
     EMPTY_SCENE,
     PHASES,
@@ -106,6 +107,11 @@ SEARCH_SETTLE_MS: Final = 1000
 
 #: Wie lange nach einem Klick auf eine Handlung auf ihre Wirkung gewartet wird.
 EFFECT_WINDOW_S: Final = 2.0
+
+#: Wie lange die Vorbereitung einer Szene auf ihre zugesagten Befunde im
+#: Prüfbericht wartet: Die Berichtsanalyse liefert nach der Ruhe nach
+#: (``tests.md``, ``wait_for_print_findings``), unter Fremdlast in Sekunden.
+PREPARATION_S: Final = 60.0
 
 
 def surface_signature(root: Any) -> tuple[Any, ...]:
@@ -567,6 +573,22 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                     ),
                 )
             )
+            # Mit Nachweis: Die zugesagten Befunde stehen im Prüfbericht, sonst
+            # ist die Vorbereitung nicht hergestellt — kein Fund an der Anwendung
+            # (Durchsicht welle4 C-L3).
+            scene = load_scenes().get(self.setup.key)
+            promised = tuple(scene.promises.get("findings", ())) if scene is not None else ()
+            steps += [
+                self.until_step(
+                    "befunde der vorbereitung",
+                    lambda: set(promised) <= surfaces.shown_findings(self.window),
+                    PREPARATION_S,
+                ),
+                Step(
+                    "vorbereitung geprüft",
+                    lambda machine: surfaces.require_findings(self.window, promised),
+                ),
+            ]
         return steps
 
     def typing_step(self, text: str) -> Step:

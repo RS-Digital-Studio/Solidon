@@ -18,7 +18,7 @@ oder öffentlich führt — kein privater Name, keine Abkürzung (``function_gua
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
@@ -118,6 +118,33 @@ def report_findings(session: Any) -> dict[str, str]:
         f"{finding.code}@{getattr(finding, 'object_id', '') or ''}": str(finding.message)
         for finding in getattr(report, "findings", ()) or ()
     }
+
+
+def shown_findings(window: Any) -> set[str]:
+    """Die Befundkennungen, die der Prüfbericht gerade als Zeilen zeigt."""
+    from PySide6.QtCore import Qt
+
+    listing = window.report.list
+    return {
+        str(getattr(finding, "code", ""))
+        for row in range(listing.count())
+        if (item := listing.item(row)) is not None
+        and (finding := item.data(Qt.ItemDataRole.UserRole)) is not None
+    }
+
+
+def require_findings(window: Any, promised: Iterable[str]) -> None:
+    """Hält an, wenn der Prüfbericht einen zugesagten Befund der Vorbereitung nicht zeigt.
+
+    Nach Einfügemarke, Export oder *Automatisch teilen* gibt die Szene ihre
+    Befunde zu (``promises.findings``); fehlt einer, ist die Vorbereitung nicht
+    hergestellt — kein Fund an der Anwendung (Durchsicht welle4 C-L3).
+    """
+    missing = sorted(set(promised) - shown_findings(window))
+    if missing:
+        raise RuntimeError(
+            f"Vorbereitung nicht hergestellt: der Prüfbericht zeigt {', '.join(missing)} nicht"
+        )
 
 
 def classes_of(widget: Any) -> set[str]:

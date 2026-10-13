@@ -1319,3 +1319,39 @@ def test_the_fault_case_asks_for_the_lock_reason_at_its_own_targets(monkeypatch:
     flow.phase_fault()
     assert asked and asked[-1] == ["finding.action:place_on_bed", "dialog.accept"], asked
     assert flow.data["messages"] == [{**lock, "phase": FAULT_PHASE}], flow.data["messages"]
+
+
+# --- Vorbereitung mit Nachweis (Durchsicht welle4 C-L3) --------------------------------------
+
+
+def test_a_preparation_waits_for_the_findings_its_scene_promises(
+    monkeypatch: Any, tmp_path: Any
+) -> None:
+    """C-L3: Nach Einfügemarke, Export oder *Automatisch teilen* prüfte niemand, ob die
+    zugesagten Befunde im Prüfbericht stehen; ein Fehlschlag landete als „nicht
+    auffindbar“ bei der Anwendung. Jetzt wartet die Vorbereitung auf
+    ``promises.findings`` und hält sonst mit „Vorbereitung nicht hergestellt“ an.
+    """
+    from tools import function_surface
+
+    flow = _flow({})
+    flow.setup = function_setup.scene_setup("export_gemischt")
+    flow.folder = tmp_path
+    steps = flow.preparation_steps()
+    names = [step.name for step in steps]
+    assert names[-2:] == ["befunde der vorbereitung", "vorbereitung geprüft"], names
+    shown: set[str] = set()
+    monkeypatch.setattr(function_surface, "shown_findings", lambda window: shown)
+    flow.window = None
+    try:
+        steps[-1].act(None)
+    except RuntimeError as error:
+        assert "Vorbereitung nicht hergestellt" in str(error) and "export.needs_solid" in str(error)
+    else:
+        raise AssertionError("ohne den zugesagten Befund ging die Vorbereitung durch")
+    shown.add("export.needs_solid")
+    steps[-1].act(None)
+    plain = _flow({})
+    plain.setup = function_setup.scene_setup("quader.exakt")
+    plain.folder = tmp_path
+    assert plain.preparation_steps() == []
