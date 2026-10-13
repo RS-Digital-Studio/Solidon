@@ -18,9 +18,11 @@ gesenkt. Zeilen in bestehenden Rümpfen bleiben frei, das ist der Fix-Fall.
 ``--raise`` gehört nur Ordnungsschritten (Konzept 4.3, Schritt 4c): Er hebt die
 Zahl einer gelisteten Datei um genau die Abschnitte, die der Commit nennt, und
 verlangt, dass jeder davon eine Definition der Datei ist und die gezählte Zahl
-danach stimmt. ``--init`` legt die Liste bei der Integration von Schritt 0 an
-und verweigert sich, sobald es sie gibt — sonst segnete derselbe Befehl später
-eine neue große Datei. Die Liste wächst nie um eine Datei; eine Bestandsliste,
+danach stimmt. ``--init`` legt die Liste ein einziges Mal an (Codestruktur
+Schritt 0), nur aus versionierten Dateien, und verweigert sich, sobald Git die
+Liste je gesehen hat: Eine gelöschte Liste neu anzulegen segnete jeden Verstoß
+seit ihrem letzten Stand; fehlt sie, wird sie aus Git zurückgeholt und mit
+``--lower`` gesenkt. Die Liste wächst nie um eine Datei; eine Bestandsliste,
 die nur Schritte des Programms ändern, ist keine Ausnahmeliste (Regel 9).
 
 Gezählt wird, was Git kennt (versioniert und neu, ohne ignorierte Kopien); ohne
@@ -146,25 +148,10 @@ def tree_files(root: Path) -> list[str]:
     ist rot, bevor sie committet wird. Ohne Git (ausgepackter Baum, Attrappe)
     jede Datei darunter.
     """
-    try:
-        top = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=root,
-            capture_output=True,
-            encoding="utf-8",
-            check=True,
-        ).stdout.rstrip("\r\n")
-        tracked = Path(top).resolve() == root.resolve()
-    except OSError, subprocess.CalledProcessError:
-        tracked = False
-    if tracked:
-        listed = subprocess.run(
-            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *AREAS],
-            cwd=root,
-            capture_output=True,
-            encoding="utf-8",
-            check=True,
-        ).stdout.split("\0")
+    if is_git_tree(root):
+        listed = _git(
+            root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *AREAS
+        ).split("\0")
         names = {name for name in listed if name.endswith(".py") and (root / name).is_file()}
     else:
         names = {
@@ -174,6 +161,66 @@ def tree_files(root: Path) -> list[str]:
             if path.is_file()
         }
     return sorted(names)
+
+
+def _git(root: Path, *arguments: str) -> str:
+    """Ein Git-Aufruf im Baum ``root``; scheitert er, wirft er."""
+    return subprocess.run(
+        ["git", *arguments], cwd=root, capture_output=True, encoding="utf-8", check=True
+    ).stdout
+
+
+def is_git_tree(root: Path) -> bool:
+    """Ist ``root`` selbst die Wurzel eines Git-Baums (auch eines Worktrees)?"""
+    try:
+        top = _git(root, "rev-parse", "--show-toplevel").rstrip("\r\n")
+    except OSError, subprocess.CalledProcessError:
+        return False
+    return Path(top).resolve() == root.resolve()
+
+
+def versioned_files(root: Path) -> set[str]:
+    """Die ``*.py`` unter den drei Ordnern, die Git versioniert (Index), ohne neue."""
+    listed = _git(root, "ls-files", "-z", "--cached", "--", *AREAS).split("\0")
+    return {name for name in listed if name.endswith(".py")}
+
+
+def list_known(root: Path) -> str | None:
+    """Der jüngste Commit auf irgendeinem Zweig, der die Liste berührt hat — ``"Index"``,
+    wenn sie nur vorgemerkt ist, ``None``, wenn Git sie nie gesehen hat."""
+    try:
+        found = _git(root, "log", "--all", "-1", "--format=%H", "--", LIST).strip()
+        staged = _git(root, "ls-files", "--cached", "--", LIST).strip()
+    except OSError, subprocess.CalledProcessError:
+        return None
+    return found or ("Index" if staged else None)
+
+
+def _list_source(root: Path) -> str | None:
+    """Der jüngste Commit mit einer Fassung der Liste, zuerst in der Geschichte von HEAD."""
+    for scope in ("HEAD", "--all"):
+        try:
+            found = _git(root, "log", "-1", "--format=%H", "--diff-filter=d", scope, "--", LIST)
+        except OSError, subprocess.CalledProcessError:
+            continue
+        if found.strip():
+            return found.strip()
+    return None
+
+
+def missing_list(root: Path | None) -> str:
+    """Was zu tun ist, wenn die Liste fehlt: zurückholen und senken, nie neu anlegen."""
+    source = _list_source(root) if root is not None and is_git_tree(root) else None
+    if source is not None:
+        return (
+            f"{LIST} fehlt — aus Git zurückholen (`git show {source[:12]}:{LIST} > {LIST}`), "
+            "dann `python tools/size_ratchet.py --lower`; eine neu angelegte Liste segnete "
+            "jeden Verstoß seit ihrem letzten Stand"
+        )
+    return (
+        f"{LIST} fehlt, und Git kennt keine Fassung — die Liste entsteht ein einziges Mal mit "
+        "Codestruktur Schritt 0; ein Auszug ohne Git-Geschichte wird im Repository geprüft"
+    )
 
 
 def measure(root: Path) -> dict[str, Size]:
@@ -240,8 +287,34 @@ def check(sizes: Mapping[str, Size], listed: Mapping[str, int]) -> list[Violatio
     return sorted(found, key=lambda violation: violation.path)
 
 
-def initial(sizes: Mapping[str, Size]) -> dict[str, int]:
-    """Die erste Liste: jede Datei über der Grenze mit ihrer heutigen Zahl."""
+def initial(root: Path, sizes: Mapping[str, Size]) -> dict[str, int]:
+    """Die erste Liste: jede versionierte Datei über der Grenze mit ihrer heutigen Zahl.
+
+    Nur ein einziges Mal (Codestruktur Schritt 0). Abgelehnt wird, sobald Git die
+    Liste je gesehen hat — eine gelöschte Liste neu anzulegen segnete jeden
+    Verstoß seit ihrem letzten Stand —, außerhalb von Git und bei jeder
+    unversionierten Datei über der Grenze, die sonst still in die Liste käme.
+    """
+    if not is_git_tree(root):
+        raise RatchetError(
+            f"--init nimmt nur auf, was Git versioniert, und {root} ist kein Git-Baum"
+        )
+    known = list_known(root)
+    if known is not None or (root / LIST).exists():
+        raise RatchetError(
+            f"Git kennt {LIST} schon ({(known or 'Arbeitsbaum')[:12]}) — angelegt wird die "
+            "Liste nur einmal. Senken mit --lower, ein Ordnungsschritt hebt mit --raise, ein "
+            f"Umzug trägt mit --move ein; fehlt sie: {missing_list(root)}"
+        )
+    versioned = versioned_files(root)
+    loose = sorted(
+        name for name, size in sizes.items() if size.lines > LIMIT and name not in versioned
+    )
+    if loose:
+        raise RatchetError(
+            f"nicht versioniert und über {LIMIT} Zeilen: {', '.join(loose)} — --init nimmt "
+            f"nur auf, was Git kennt; eine neue große Datei wird geteilt, nie gelistet. {RULES}"
+        )
     return {
         name: size.definitions
         for name, size in sizes.items()
@@ -305,14 +378,11 @@ def is_tree_path(name: str) -> bool:
     )
 
 
-def read_list(path: Path) -> dict[str, int]:
-    """Die Liste; fehlt sie oder trägt sie etwas anderes als Pfad und Zahl, hält es an."""
+def read_list(path: Path, root: Path | None = None) -> dict[str, int]:
+    """Die Liste; fehlt sie oder trägt sie etwas anderes als Pfad und Zahl, hält es an.
+    Mit ``root`` nennt die Meldung über eine fehlende Liste den Commit zum Zurückholen."""
     if not path.is_file():
-        raise RatchetError(
-            f"{LIST} fehlt — die Liste entsteht einmal bei der Integration von Codestruktur "
-            "Schritt 0 mit `python tools/size_ratchet.py --init`, danach schreiben sie nur "
-            "--lower und --raise"
-        )
+        raise RatchetError(missing_list(root))
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as error:
@@ -396,15 +466,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         sizes = measure(root)
         if args.init:
-            if target.exists():
-                raise RatchetError(
-                    f"{LIST} gibt es schon — die Liste wächst nie um eine Datei; senken mit "
-                    "--lower, ein Ordnungsschritt hebt mit --raise"
-                )
-            created = initial(sizes)
+            created = initial(root, sizes)
             write_list(target, created)
-            return _report(sizes, created, [f"angelegt: {LIST} mit {len(created)} Dateien"])
-        listed = read_list(target)
+            shown = [f"gelistet: {name} = {count}" for name, count in sorted(created.items())]
+            return _report(sizes, created, [*shown, f"angelegt: {LIST} mit {len(created)} Dateien"])
+        listed = read_list(target, root)
         if args.lower:
             after = lowered(sizes, listed)
         elif args.raise_entry:

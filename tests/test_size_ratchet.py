@@ -225,16 +225,31 @@ def test_raise_refuses_what_the_step_does_not_name(
         size_ratchet.raised(tmp_path, listed, name, amount, sections)
 
 
+def _commit(root: Path) -> None:
+    """Hält den Stand der Attrappe als Commit fest."""
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    who = ["-c", "user.name=Probe", "-c", "user.email=probe@example.invalid"]
+    subprocess.run(["git", *who, "commit", "-q", "-m", "Stand"], cwd=root, check=True)
+
+
+def _repo(root: Path, sources: dict[str, str]) -> None:
+    """Eine Git-Attrappe des Baums mit einem ersten Commit."""
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    _write(root, {"tests/data/README.md": "Korpus\n", **sources})
+    _commit(root)
+
+
 def test_the_command_line_runs_init_check_and_lower_on_a_tree(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Der Weg des Koordinators und eines Schritts danach, mit den Exit-Codes."""
-    _write(tmp_path, {"app/big.py": _module(LIMIT + 1, 3), "tests/data/README.md": "Korpus\n"})
+    """Der Weg bei Schritt 0 und eines Schritts danach, mit den Exit-Codes."""
+    _repo(tmp_path, {"app/big.py": _module(LIMIT + 1, 3)})
     run = ["--root", str(tmp_path)]
 
     assert size_ratchet.main([*run, "--check"]) == 2
-    assert "--init" in capsys.readouterr().err
+    assert "--init" not in capsys.readouterr().err
     assert size_ratchet.main([*run, "--init"]) == 0
+    assert "app/big.py" in capsys.readouterr().out
     assert tomllib.loads((tmp_path / LIST).read_text(encoding="utf-8")) == {"app/big.py": 3}
     assert size_ratchet.main([*run, "--init"]) == 2
     assert size_ratchet.main(run) == 0
@@ -249,6 +264,46 @@ def test_the_command_line_runs_init_check_and_lower_on_a_tree(
     assert size_ratchet.main([*run, "--lower"]) == 0
     assert "app/big.py: 3 → 1" in capsys.readouterr().out
     assert size_ratchet.read_list(tmp_path / LIST) == {"app/big.py": 1}
+
+
+def test_init_never_runs_again_once_git_knew_the_list(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Gelöschte Liste, gewachsene Datei: ``--init`` lehnt ab, der Rat ist Zurückholen und
+    ``--lower`` (Durchsicht W13, Fund 1a). Vorher segnete ``--init`` die sieben Definitionen."""
+    _repo(tmp_path, {"app/big.py": _module(LIMIT + 1, 3)})
+    run = ["--root", str(tmp_path)]
+    assert size_ratchet.main([*run, "--init"]) == 0
+    _commit(tmp_path)
+    _write(tmp_path, {"app/big.py": _module(LIMIT + 1, 7)})
+    (tmp_path / LIST).unlink()
+    capsys.readouterr()
+
+    assert size_ratchet.main([*run, "--check"]) == 2
+    advice = capsys.readouterr().err
+    assert size_ratchet.main([*run, "--init"]) == 2
+
+    assert "git show" in advice and "--lower" in advice and "--init" not in advice
+    assert "Git kennt" in capsys.readouterr().err
+    assert not (tmp_path / LIST).exists()
+
+
+def test_init_takes_only_what_git_versions(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Eine unversionierte Datei über der Grenze hält ``--init`` an und steht in der Meldung
+    (Durchsicht W13, Fund 1b); außerhalb von Git legt es nichts an."""
+    _repo(tmp_path, {"app/big.py": _module(LIMIT + 1, 3)})
+    _write(tmp_path, {"tools/scratch_big.py": _module(2500, 9)})
+
+    assert size_ratchet.main(["--root", str(tmp_path), "--init"]) == 2
+    assert "tools/scratch_big.py" in capsys.readouterr().err
+    assert not (tmp_path / LIST).exists()
+
+    loose = tmp_path / "ohne_git"
+    _write(loose, {"app/big.py": _module(LIMIT + 1, 3)})
+    assert size_ratchet.main(["--root", str(loose), "--init"]) == 2
+    assert not (loose / LIST).exists()
 
 
 def test_git_counts_new_files_but_not_ignored_or_deleted_ones(tmp_path: Path) -> None:
@@ -346,7 +401,7 @@ def test_the_whole_tree_is_counted(tree: dict[str, size_ratchet.Size]) -> None:
 
 def test_the_tree_holds_the_ratchet(tree: dict[str, size_ratchet.Size]) -> None:
     """Der Wächter selbst: Der Baum hält die Liste, und die Liste ist nicht leer."""
-    listed = size_ratchet.read_list(ROOT / LIST)
+    listed = size_ratchet.read_list(ROOT / LIST, ROOT)
     found = size_ratchet.check(tree, listed)
 
     assert len(listed) >= 100, f"nur {len(listed)} Dateien gelistet"
