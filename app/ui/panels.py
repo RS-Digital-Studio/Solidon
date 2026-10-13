@@ -11828,8 +11828,8 @@ class FeaturePanel(QWidget):
     def measured_op(self) -> str | None:
         """Die Handlung, deren Maßgruppe im Bild steht — ohne Messen keine.
 
-        Nicht immer die scharfe: Nach der Auswahl einer erkannten Bohrung trägt
-        die Gruppe *Bohrung ändern*, scharf bleibt *Merkmal verschieben*.
+        Was im Bild steht, sagt die Gruppe selbst; die scharfe Handlung meint
+        dasselbe, seit eine Auswahl ins Bild auch schärft (FD-34).
         """
         return self._measure_op
 
@@ -11907,9 +11907,9 @@ class FeaturePanel(QWidget):
     def request_in_view(self) -> None:
         """Denselben Weg nehmen wie der Knopf *Im Bild einstellen* — wenn er steht.
 
-        Für das Hauptfenster, das die Maße nach einem Übernehmen wieder ins
-        Bild bringt: Es klickt nicht auf ein Widget, es nimmt den Weg, der am
-        Widget hängt. Wo kein Knopf steht, geschieht nichts.
+        Für das Hauptfenster, das die Maße nach einer Auswahl oder einem
+        Übernehmen ins Bild bringt: Es klickt nicht, es nimmt den Weg am Knopf
+        samt Scharfmachen (FD-34). Wo kein Knopf steht, geschieht nichts.
 
         **Die scharfe Handlung hat Vorrang.** Der Knopf steht einmal je
         Merkmal (``_settle_in_view``) und führt zur ersten Handlung mit Weg
@@ -11921,8 +11921,7 @@ class FeaturePanel(QWidget):
         if armed is not None and armed.in_view is not None:
             armed.in_view()
             return
-        if self._into_view is not None:
-            self._into_view()
+        self._show_armed_in_view()
 
     def _group_changed(self, _checked: bool) -> None:
         """Ein geänderter Umfang braucht dieselbe Vorschau wie geänderte Maße."""

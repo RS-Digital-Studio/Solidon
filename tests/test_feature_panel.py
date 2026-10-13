@@ -4683,8 +4683,8 @@ def test_the_panel_names_the_action_whose_measures_stand_in_the_view(
     """``measured_op`` nennt die Handlung der Maßgruppe im Bild, nicht die scharfe (FD-29).
 
     Der Prüfstand fragt danach, welche Handlung im Bild zu bedienen ist; die
-    scharfe sagt es nicht immer — an einer erkannten Bohrung bleibt *Merkmal
-    verschieben* scharf, während *Bohrung ändern* im Bild steht.
+    scharfe sagte es an einer erkannten Bohrung nicht (FD-34). ``set_measuring``
+    allein schärft nichts — das tut der Weg ins Bild.
     """
     load_operations()
     identifier, feature = a_hole()

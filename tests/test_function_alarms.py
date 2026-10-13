@@ -989,8 +989,8 @@ def test_the_measure_group_counts_only_for_the_action_it_carries(monkeypatch: An
     Ursprungsschritt samt Materialtoleranz und maß 8,2 mm statt 8 mm.
 
     Gefragt wird die Gruppe selbst (``measured_op``), nicht die scharfe Handlung:
-    An einer erkannten Bohrung trägt sie *Bohrung ändern*, scharf bleibt
-    *Merkmal verschieben*, und der Prüfstand fand die Zeile dort nicht (FD-29).
+    Die beiden fielen an einer erkannten Bohrung auseinander (FD-34), und der
+    Prüfstand fand die Zeile dort nicht (FD-29).
     """
     from tools import function_surface
 
