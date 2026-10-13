@@ -336,25 +336,46 @@ def test_a_window_command_with_inputs_creates_and_tries_to_write_when_locked(
 
 
 @pytest.mark.usefixtures("require_graphics_adapter")
+@pytest.mark.parametrize("start", ["", "merkmal.hole.exakt"], ids=["erkannt", "gebohrt"])
 def test_the_real_window_measures_the_action_of_the_row_not_the_one_in_the_view(
-    tmp_path: Path, native_window_platform: str
+    tmp_path: Path, native_window_platform: str, start: str
 ) -> None:
     """F-20 und N5 am echten Fenster: Die Maßgruppe im Bild zählt nur mit der Handlung der Zeile.
 
     Offscreen gibt es kein Bild, und *Bohrung ändern* steht im Merkmalfenster.
-    Am echten Fenster rückt an der gesetzten Bohrung von ``merkmal.hole.exakt``
-    *Bohrung im ursprünglichen Schritt ändern* (``drill_hole``) in die Maßgruppe,
-    und der Kopf von *Bohrung ändern* ist verborgen. Der Prüfstand tippte dort
-    für ``resize_hole``, änderte den Ursprungsschritt und maß 8,2 mm. Jetzt
-    misst er die Handlung der Zeile: nicht auffindbar, mit dem Vermerk, welche
-    Handlung im Bild stand.
+    Am echten Fenster rückt nach der Auswahl eine Maßgruppe ins Bild, und der
+    Kopf ihrer Handlung rechts tritt zurück (RM-199).
+
+    **Erkannt** — die Startszene der Zeile (FD-29, ``erkannte_bohrung.netz``):
+    Im Bild steht *Bohrung ändern* selbst. Der Prüfstand tippt dort ohne Klick,
+    übernimmt und misst 8 mm, ohne Fund und ohne Vermerk.
+
+    **Gebohrt** — die Startszene, die der Test im Inventar einsetzt: An der
+    Bohrung von ``merkmal.hole.exakt`` steht *Bohrung im ursprünglichen Schritt
+    ändern* (``drill_hole``) im Bild. Der Prüfstand tippte dort früher für
+    ``resize_hole``, änderte den Ursprungsschritt und maß 8,2 mm; er misst die
+    Handlung der Zeile: nicht auffindbar, mit dem Vermerk, welche Handlung im
+    Bild stand.
     """
     import os
     import subprocess
     import sys
 
+    from tools import function_list
+
     out = tmp_path / "abnahme"
     environment = {**os.environ, "QT_QPA_PLATFORM": native_window_platform, "PYTHONUTF8": "1"}
+
+    def started_elsewhere() -> None:
+        if not start:
+            return
+        listed = out / "rows.json"
+        rows = json.loads(listed.read_text(encoding="utf-8"))
+        for row in rows:
+            if row["id"] == "resize_hole":
+                row["start_scene"] = row["spec"]["start_scene"] = start
+        listed.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+
     for arguments, limit in (
         (["inventory", "--functions", "--rows", "resize_hole", "--phases", "main"], 600),
         (["run"], 900),
@@ -368,13 +389,31 @@ def test_the_real_window_measures_the_action_of_the_row_not_the_one_in_the_view(
             timeout=limit,
         )
         assert done.returncode == 0, done.stdout + done.stderr
+        if arguments[0] == "inventory":
+            started_elsewhere()
     data = json.loads((out / "cases" / "001" / "function.json").read_text(encoding="utf-8"))
     assert validate_protocol(data) == []
-    assert [(found["kind"], found["target"]) for found in data["findings"]] == [
-        (NOT_FOUND, "feature:resize_hole")
-    ], data["findings"]
-    assert "drill_hole" in data["unmeasured"]["im_bild:feature:resize_hole"]
-    assert data["result"] is None, "gemessen wurde eine andere Handlung"
+    if start:
+        assert data["scene"]["key"] == start, data["scene"]
+        assert [(found["kind"], found["target"]) for found in data["findings"]] == [
+            (NOT_FOUND, "feature:resize_hole")
+        ], data["findings"]
+        assert "drill_hole" in data["unmeasured"]["im_bild:feature:resize_hole"]
+        assert data["result"] is None, "gemessen wurde eine andere Handlung"
+        return
+    assert data["scene"]["key"] == "erkannte_bohrung.netz", data["scene"]
+    assert data["findings"] == [] and data["errors"] == [], (data["findings"], data["errors"])
+    assert "im_bild:feature:resize_hole" not in data["unmeasured"], data["unmeasured"]
+    assert any(
+        step.get("target") == "feature:resize_hole" and step.get("zone") == "ansicht"
+        for step in data["steps"]
+    ), "Bohrung ändern stand nach der Auswahl in der Maßgruppe im Bild"
+    assert data["result"] is not None, data["unmeasured"]
+    expected = function_list.load_specs()["resize_hole"].values["expectation"]
+    metrics = data["result"]["metrics"]
+    for name in ("hole.diameter", "volume"):
+        wanted = expected[name]
+        assert metrics[name] == pytest.approx(wanted["value"], abs=wanted["tolerance"]), name
 
 
 def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:

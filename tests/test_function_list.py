@@ -941,6 +941,65 @@ def test_a_feature_scene_without_its_selection_turns_red(
     assert any(issue.startswith("resize_hole:") and "Auswahlweg" in issue for issue in found)
 
 
+def test_the_resize_row_starts_at_a_recognised_hole(rows: list[fl.Row]) -> None:
+    """FD-29: *Bohrung ändern* beginnt an einer Bohrung, die kein Schritt gebohrt hat, und
+    wählt sie in dieser Szene — die Szene der Spezifikation, nicht die der Tabelle."""
+    found = _by_id(rows)["resize_hole"]
+    scene = _scenes()[found.start_scene]
+    assert found.start_scene == "erkannte_bohrung.netz"
+    assert [step["target"] for step in found.route] == [f"tree.row:{scene.select}"]
+
+
+@pytest.mark.parametrize(
+    ("key", "drilled"),
+    [
+        ("erkannte_bohrung.netz", False),
+        ("erkannte_bohrung.exakt", False),
+        ("merkmal.hole.exakt", True),
+    ],
+)
+def test_a_recognised_hole_has_no_drilling_step_to_measure(key: str, drilled: bool) -> None:
+    """FD-29: An einer gebohrten Bohrung holt das Fenster die Maßgruppe ihres Bohrschritts
+    ins Bild, und *Bohrung ändern* tritt zurück (RM-199, ``placement.bore_step_of``). An
+    der erkannten Bohrung gibt es diesen Schritt nicht; die gebohrte ist der Kontrollfall."""
+    from app.core.scene.placement import bore_step_of
+    from app.core.types import FeatureRef
+
+    scenes = _scenes()
+    if scenes[key].kernel == fscenes.EXACT:
+        exact_kernel()
+    project = fscenes.build_scene(key, scenes)
+    result = fscenes.evaluate_scene(project)
+    body, _dot, feature = scenes[key].select.partition(".")
+    step = bore_step_of(
+        project.document,
+        result.scene.objects,
+        FeatureRef(body, feature),
+        completed=result.completed,
+    )
+    assert (step is not None) is drilled, step
+
+
+def test_a_spec_start_scene_carries_the_selection(
+    monkeypatch: pytest.MonkeyPatch, cached_sources: dict[str, str]
+) -> None:
+    """Bauplan D0 §2.3: Die Startszene der Spezifikation gilt für die Zeile, ihr
+    Auswahlweg wählt dort. Gegenprobe: eine Startszene ohne gewähltes Merkmal ist rot."""
+
+    def spec(start: str) -> dict[str, fl.SpecEntry]:
+        return {"resize_hole": fl.SpecEntry("D4", "d04.toml", {"start_scene": start})}
+
+    monkeypatch.setattr(fl, "load_specs", lambda directory=fl.ROW_SPECS: spec("baustein.exakt"))
+    moved = _by_id(fl.rows())["resize_hole"]
+    assert moved.start_scene == "baustein.exakt"
+    assert [step["target"] for step in moved.route] == ["tree.row:obj_1.screw_hole_bore_1"]
+    assert not any("resize_hole" in issue for issue in fl.problems())
+
+    monkeypatch.setattr(fl, "load_specs", lambda directory=fl.ROW_SPECS: spec("quader.exakt"))
+    found = fl.problems()
+    assert any("[resize_hole]" in issue and "Auswahlweg" in issue for issue in found), found
+
+
 def test_the_promise_check_sees_a_wrong_selection() -> None:
     """Gegenprobe: Ein gewähltes Merkmal, das es nicht gibt oder das die falsche Art hat."""
     scenes = fscenes.load_scenes()

@@ -736,6 +736,30 @@ op = "pattern_feature"
 inputs = ["obj_1"]
 params = { at_features = ["hole_1"], count = 3, spacing = 10.0, dx = 1.0 }
 
+# Erkannt, nicht gesetzt: An einer gebohrten Bohrung steht im Bild die Maßgruppe
+# ihres Schritts, und *Bohrung ändern* tritt rechts zurück (RM-199). Die Zeile
+# *Bohrung ändern* beginnt deshalb an einer Bohrung, die kein Schritt erzeugt hat.
+[scene."erkannte_bohrung.netz"]
+summary = "Eine geladene Platte 80 × 50 × 8 mm mit vier Bohrungen Ø 5,2 mm (meshes/plate_holes.stl), aufs Bett gesetzt: Die Bohrungen sind erkannt, kein Schritt hat sie gebohrt."
+kernel = "netz"
+sources = { src_1 = "meshes/plate_holes.stl" }
+promises = { objects = 1, kinds = ["hole"], body = "closed" }
+select = "obj_1.hole_1"
+[[scene."erkannte_bohrung.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm", place_on_bed = true, centre = true }
+
+[scene."erkannte_bohrung.exakt"]
+summary = "Dieselbe Platte in Flächen und Kanten umgewandelt: Die Bohrungen bleiben erkannt."
+kernel = "exakt"
+base = "erkannte_bohrung.netz"
+promises = { objects = 1, kinds = ["hole"], body = "closed" }
+select = "obj_1.hole_1"
+[[scene."erkannte_bohrung.exakt".ops]]
+op = "mesh_to_exact"
+inputs = ["obj_1"]
+params = {}
+
 [scene."merkmal.cone.exakt"]
 summary = "Der exakte Quader mit Senkung Ø 8,4 mm, 90°, von oben."
 kernel = "exakt"

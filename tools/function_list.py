@@ -1276,8 +1276,24 @@ def rows(menubar: Iterable[MenuEntry] = (), *, with_specs: bool = True) -> list[
         return collected
     specs = load_specs()
     return [
-        replace(row, spec=specs[row.id].values if row.id in specs else None) for row in collected
+        with_spec(row, specs[row.id].values if row.id in specs else None, scenes)
+        for row in collected
     ]
+
+
+def with_spec(row: Row, values: Mapping[str, Any] | None, scenes: Mapping[str, Scene]) -> Row:
+    """Die Zeile mit ihrer Spezifikation (Bauplan D0 §2.3).
+
+    Nennt die Spezifikation eine eigene Startszene, beginnt die Zeile dort, und ihr
+    Auswahlweg wählt in dieser Szene. Aus der Szene der Tabelle abgeleitet,
+    klickte der Prüfstand das Merkmal, das jene wählt, in einer Szene, die
+    vielleicht ein anderes meint.
+    """
+    start = str((values or {}).get("start_scene") or row.start_scene)
+    if start == row.start_scene:
+        return replace(row, spec=values)
+    moved = replace(row, start_scene=start, spec=values)
+    return replace(moved, route=selection_route(moved, scenes))
 
 
 def duplicate_ids(found: Iterable[Row]) -> list[str]:
@@ -1592,6 +1608,11 @@ def validate_specs(
         start = spec.get("start_scene", row.start_scene if row is not None else "")
         if not start or start not in scenes:
             issues.append(f"{where}: Startszene {start!r} gibt es nicht")
+        elif row is not None and start != row.start_scene:
+            # Die eigene Startszene trägt den Auswahlweg (:func:`with_spec`) — ohne
+            # gewähltes Merkmal ist das rot wie in der Tabelle, nicht still leer.
+            moved = with_spec(row, spec, scenes)
+            issues += [f"{where}: {issue}" for issue in missing_selections([moved])]
         for step in spec.get("route", ()):
             if not is_target(str(step.get("target", ""))):
                 issues.append(f"{where}: Weg zu {step.get('target')!r} ist kein Ziel")
