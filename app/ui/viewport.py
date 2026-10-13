@@ -9023,7 +9023,9 @@ class Viewport(QWidget):
                 anchors,
                 [text for _point, text in marks],
                 name=f"bed_scale_{plate}",
-                style=LabelStyle(text_colour=self._bed_colour, font_size=9, always_visible=True),
+                style=LabelStyle(
+                    text_colour=self._sketch_label_colour, font_size=9, always_visible=True
+                ),
             )
         )
 
