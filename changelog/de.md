@@ -88,6 +88,7 @@ Nutzen da und sonst nichts.
 - Tippt man im Reiter *Auswahl* bei *Bohrung ändern* einen Durchmesser unter der Grenze ein, nennt der Hinweis jetzt *Merkmal entfernen*. Damit verschwindet die Bohrung ganz, auf Wunsch samt Senkung.
 - Der Nachbau (*Modell nachbauen*) rät nicht mehr zu anderen Grenzen, wenn kein erlaubter Wert reichen würde, und zeigt gleiche Vorschläge nur einmal.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
+- Wählt man in einem geladenen Modell eine Bohrung, meinen die Maße im Bild und der Reiter *Auswahl* dieselbe Handlung, *Bohrung ändern*. In Version 0.6.0 stand dort *Merkmal verschieben* offen.
 
 ## 0.6.0
 

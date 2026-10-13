@@ -82,8 +82,8 @@ den Projektparametern (`sketch.planes.frame_in_scene`), nie über
 `frame_for_plane` ohne Werte.
 
 **`keep_on_bed` holt vom Rand zurück, nicht aus einem Nachbarn** (Entscheidung
-Robert): Zwei Körper am selben Ort sind eine Absicht; die Überschneidung melden
-`check_collisions` und `check_bodies_in_one_place`, ohne zu bewegen.
+Robert): Die Überschneidung melden `check_collisions` und
+`check_bodies_in_one_place`, ohne zu bewegen.
 
 ### Ein Maß mit Verlauf braucht einen Anfang, den die Kante kennt
 
@@ -120,12 +120,14 @@ in `solver`, `jittered` mit Startwert.
   `prepare_ops._without_scars`): Werkzeuge wandern in die Welt, nie Körper in
   ihren Rahmen (`prepare.drill` u. a.); sonst holt `edges._back_in_place`
   durchgereichte Ecken zurück.
-- **„Koplanar robust" gilt nur für exakt koplanare float64-Geometrie.** Am
-  float32-Netz einer STL bekommen abziehende Keile `BOOLEAN_OVERLAP` als
-  Überstand (`edges.rounding_tool`), ebenso Werkzeugenden in Flächen mit Luft
+- **Am float32-Netz einer STL reichen abziehende Keile um `BOOLEAN_OVERLAP`
+  über** (`edges.rounding_tool`), ebenso Werkzeugenden in Flächen mit Luft
   dahinter (`prepare._open_ends`); Stufe 2 entnadelt nur mit der
   Zusicherung des Imports (`boolean._welded_input`), die Ausgabe wird wie im
   Slicer verschweißt (`boolean._tidied`).
+- **Stufe 3 bleibt unter der Zugabe** (`boolean.JITTER_REACH_LIMIT`), auch
+  schräg: 2·√3·Grenze < `BOOLEAN_OVERLAP`. Wer weniger übersteht, ist nicht
+  geschützt.
 
 ## Befunde statt Protokoll
 
@@ -350,10 +352,8 @@ Die Materialtoleranz weitet überall, auf dem Radius:
 
 ## Ein Langloch ist an beiden Kernen ein Merkmal und ein Hohlraum
 
-Erkannt topologisch (`perceive.slots`,
-`brep.features._slots_instead_of_half_bores`): zwei gleiche, parallele, ins Loch
-gewölbte Bögen, die sich genau zwei ebene Nachbarn teilen, die an beide grenzen;
-der Boden eines Sacklanglochs gehört nicht dazu. **Der Mantel ist geschlossen**:
+Erkannt topologisch, nie an einer Kennzahl (`perceive.slots`,
+`brep.features._slots_instead_of_half_bores`). **Der Mantel ist geschlossen**:
 Setzt eine weitere Wand ihn längs der Achse fort, ist es keines
 (`brep.features._continues_the_mantle`, am Netz `_connected_shell`). Offene
 Ausschnitte bleiben Langlöcher (Entscheidung Robert); ihr Füllkörper endet an
@@ -431,8 +431,8 @@ Menüwege in den Texten (`menu_path`).
 ## Auto Split: die Folge, die Spiegelebene, der Rand
 
 Die ganze Folge entscheidet (`autosplit._plan_step`): alles passt, dann weniger
-Stücke, weniger Klebestellen (eine Lücke kostet nichts), Nahtbewertung; das
-Stützvolumen nur beim letzten Schnitt. Begrenzt über `PLAN_BUDGET`, nie über die
+Stücke, weniger Klebestellen, Nahtbewertung; das Stützvolumen nur beim letzten
+Schnitt. Begrenzt über `PLAN_BUDGET`, nie über die
 Uhr (§11.3); danach gilt die Naht der Suche, fertig wird die Teilung immer. Die
 Spiegelebene gewinnt nur, was sie nicht verschlechtert (`symmetry.mirror_plane`:
 Konturzahl, keine Einschnürung, Stützvolumen, gleiche Stiftzugabe). Die

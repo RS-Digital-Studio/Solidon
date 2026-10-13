@@ -391,6 +391,7 @@ def function_cases(
     """
     from app.i18n.catalog import available_languages
     from tools.function_list import STARTUP_LICENCE
+    from tools.function_scenes import row_scenes
     from tools.function_setup import PHASES, Variant, scene_setup, spec_variants
     from tools.function_setup import variant_sets as known_sets
 
@@ -441,8 +442,11 @@ def function_cases(
             scene = str((row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "")
             base, others = spec_variants(row.get("spec"))
             # Was die Startszene verlangt (OpenCASCADE fehlt, Generator läuft), gilt
-            # für jeden Fall der Zeile — ohne Gegenlauf, sonst fehlte ihr Befund.
-            needed = dict(scene_setup(scene).preconditions) if scene else {}
+            # für jeden Fall der Zeile — ohne Gegenlauf, sonst fehlte ihr Befund;
+            # ebenso die Szene des Fehlfalls, der im selben Fall läuft (C-L4).
+            needed: dict[str, str] = {}
+            for key in reversed(row_scenes(row)):
+                needed.update(scene_setup(key).preconditions)
             if needed:
                 base = {**base, "preconditions": {**base.get("preconditions", {}), **needed}}
             entries = [{**base, **entry, "phases": own} for entry in sets[name]]
@@ -532,14 +536,7 @@ def function_inventory(
     catalogue = function_scenes.load_scenes()
     # Auch die Startszene des Fehlfalls (``fault_case.start_scene``): Sie fehlte,
     # und der Fehlfall von *Auf das Bett setzen* lief nie (Probelauf F-34).
-    wanted = {
-        str(key)
-        for row in kept
-        for key in (
-            (row.get("spec") or {}).get("start_scene") or row.get("start_scene") or "",
-            ((row.get("spec") or {}).get("fault_case") or {}).get("start_scene") or "",
-        )
-    }
+    wanted = {key for row in kept for key in function_scenes.row_scenes(row)}
     heavy = any(catalogue[key].heavy for key in wanted if key in catalogue)
     function_scenes.save_scenes(out / "scenes", heavy=heavy)
     return cases
@@ -1166,16 +1163,23 @@ def crash_records(folder: Path) -> None:
 
 
 def crash_note(folder: Path) -> str:
-    """Was ein abgebrochener Fall zuletzt sagte: das letzte ``qFatal``, sonst sein Absturzstapel."""
+    """Was ein abgebrochener Fall zuletzt sagte: das letzte ``qFatal``, sonst sein Absturzstapel.
+
+    Ein ``QtCriticalMsg`` ist eine Warnung, an der kein Fall stirbt; er nennt den
+    Grund nur, wenn es weder ``qFatal`` noch Stapel gibt (Durchsicht welle4 C-L11).
+    """
     qt = folder / QT_LOG
     lines = qt.read_text(encoding="utf-8", errors="replace").splitlines() if qt.is_file() else []
-    fatal = [line for line in lines if line.startswith(("QtFatalMsg", "QtCriticalMsg"))]
+    fatal = [line for line in lines if line.startswith("QtFatalMsg")]
     if fatal:
         return fatal[-1]
     stacks = folder / STACK_LOG
     text = stacks.read_text(encoding="utf-8", errors="replace") if stacks.is_file() else ""
     start = max(text.rfind("Fatal Python error"), text.rfind("Windows fatal exception"))
-    return text[start:].strip()[:2000] if start >= 0 else ""
+    if start >= 0:
+        return text[start:].strip()[:2000]
+    critical = [line for line in lines if line.startswith("QtCriticalMsg")]
+    return critical[-1] if critical else ""
 
 
 def no_native_dialogs() -> None:
@@ -1219,6 +1223,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     sondern je Fläche ein Protokoll unter ``surfaces/``.
     """
     from tools import function_bench, function_language, function_protocol, function_setup
+    from tools.function_scenes import row_scenes
 
     variant = function_setup.Variant.of({**case.variant, **({"screen": screen} if screen else {})})
     if variant.scale != 1.0:
@@ -1264,12 +1269,12 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         second = function_setup.case_scene(folder, scenes, function_setup.SECOND_SCENE)
         function_setup.write_profile(variant, recent=[second] if second is not None else [])
         if data is not None:
-            # Eigene Bausteine der Startszene liegen im Nutzerordner, bevor die
-            # Anwendung ihn liest (``function_setup.install_own_parts``).
-            spec = row.get("spec") or {}
-            key = str(spec.get("start_scene") or row.get("start_scene") or "")
+            # Eigene Bausteine der Startszene und der Szene des Fehlfalls liegen
+            # im Nutzerordner, bevor die Anwendung ihn liest
+            # (``function_setup.install_own_parts``, C-L4).
             state["own_parts"] = [
                 str(path)
+                for key in row_scenes(row)
                 for path in function_setup.install_own_parts(function_setup.scene_setup(key))
             ]
         load_operations()

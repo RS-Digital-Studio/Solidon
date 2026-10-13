@@ -5,18 +5,31 @@
 # Rezept wird nicht abgelegt (`tests/data/CLAUDE.md`); `--szenen --out` baut sie
 # außerhalb des Baums.
 #
-# Schlüssel je Szene:
-#   summary   was sie zeigt
-#   base      eine andere Szene, deren Schritte zuerst laufen
-#   sources   Quellkennung → Datei relativ zu tests/data
-#   ops       Schritte {op, inputs, params, title}
-#   kernel    "exakt" oder "netz"; jeder Körper der gerechneten Szene hat diese Bauart
-#   heavy     schwer: im Tor nur als gültiger Stapel geprüft, nie gerechnet
-#   project   false heißt Startbildschirm, kein Projekt
-#   select    das Merkmal, das eine Zeile mit Merkmalsanforderung wählt (obj_<n>.<merkmal>)
-#   promises  objects, kinds (Merkmalsarten), body (closed, open, parts, cavity),
-#             findings (Befundkennungen), actions (Handlung → Befund, an dem der
-#             Bericht sie anbietet), stops, triangles_over, seconds_over
+# Schlüssel je Szene (``tools/function_scenes.py``, ``SCENE_KEYS``):
+#   summary       was sie zeigt
+#   base          eine andere Szene, deren Schritte zuerst laufen
+#   sources       Quellkennung → Datei relativ zu tests/data
+#   ops           Schritte {op, inputs, params, title, suppressed}; suppressed = true
+#                 schaltet den Schritt nach dem letzten aus, wie die Datei es speichert
+#   kernel        "exakt" oder "netz"; jeder Körper der gerechneten Szene hat diese Bauart
+#   heavy         schwer: im Tor nur als gültiger Stapel geprüft, nie gerechnet
+#   project       false heißt Startbildschirm, kein Projekt
+#   select        das Merkmal, das eine Zeile mit Merkmalsanforderung wählt (obj_<n>.<merkmal>)
+#   parameters    Projektparameter vor dem ersten Schritt: Name → {value, unit, title}
+#   opens         eine Projektdatei aus tests/data als Anfang, geöffnet wie im Fenster
+#   printer, material   Drucker und Material des Projekts
+#   printer_like  der Drucker ist hier nicht eingerichtet; das Projekt bringt die
+#                 Beschreibung des mitgelieferten Druckers dieser Kennung mit
+#   generated     Quellen, die ein Generator geliefert hat (Weg 3)
+#   protected     vor Trennnähten geschützte Merkmale: Körper → [Merkmal, …]
+#   own_parts     Rezepte aus tests/data, die vor dem Öffnen im Nutzerordner liegen
+#   preconditions äußere Vorbedingungen (``function_list.PRECONDITIONS``)
+#   insert_before die Einfügemarke der Sitzung vor diesem Schritt (sichtbare Nummer)
+#   cause         was der Prüfstand vor der Zeile auslöst: {kind = "export", format}
+#                 oder {kind = "auto_split", object}
+#   promises      objects, kinds (Merkmalsarten), body (closed, open, parts, cavity),
+#                 findings (Befundkennungen), actions (Handlung → Befund, an dem der
+#                 Bericht sie anbietet), stops, triangles_over, seconds_over
 #
 # Maße: Quader 40 × 30 × 20 mm, Unterseite auf z = 0 (Vorgabe `anchor = "centre"`).
 
@@ -735,6 +748,30 @@ params = { diameter = 4.0, x = -10.0, z = 20.0 }
 op = "pattern_feature"
 inputs = ["obj_1"]
 params = { at_features = ["hole_1"], count = 3, spacing = 10.0, dx = 1.0 }
+
+# Erkannt, nicht gesetzt: An einer gebohrten Bohrung steht im Bild die Maßgruppe
+# ihres Schritts, und *Bohrung ändern* tritt rechts zurück (RM-199). Die Zeile
+# *Bohrung ändern* beginnt deshalb an einer Bohrung, die kein Schritt erzeugt hat.
+[scene."erkannte_bohrung.netz"]
+summary = "Eine geladene Platte 80 × 50 × 8 mm mit vier Bohrungen Ø 5,2 mm (meshes/plate_holes.stl), aufs Bett gesetzt: Die Bohrungen sind erkannt, kein Schritt hat sie gebohrt."
+kernel = "netz"
+sources = { src_1 = "meshes/plate_holes.stl" }
+promises = { objects = 1, kinds = ["hole"], body = "closed" }
+select = "obj_1.hole_1"
+[[scene."erkannte_bohrung.netz".ops]]
+op = "load"
+params = { source = "src_1", unit = "mm", place_on_bed = true, centre = true }
+
+[scene."erkannte_bohrung.exakt"]
+summary = "Dieselbe Platte in Flächen und Kanten umgewandelt: Die Bohrungen bleiben erkannt."
+kernel = "exakt"
+base = "erkannte_bohrung.netz"
+promises = { objects = 1, kinds = ["hole"], body = "closed" }
+select = "obj_1.hole_1"
+[[scene."erkannte_bohrung.exakt".ops]]
+op = "mesh_to_exact"
+inputs = ["obj_1"]
+params = {}
 
 [scene."merkmal.cone.exakt"]
 summary = "Der exakte Quader mit Senkung Ø 8,4 mm, 90°, von oben."

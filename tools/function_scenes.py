@@ -246,6 +246,21 @@ def recipe(key: str, scenes: Mapping[str, Scene]) -> tuple[dict[str, str], list[
     return sources, steps
 
 
+def row_scenes(row: Mapping[str, Any]) -> tuple[str, ...]:
+    """Die Startszenen eines Falls: die der Zeile, dann die eigene des Fehlfalls.
+
+    Der Fehlfall läuft im selben Prozess und Profil wie der Rest des Falls; was
+    seine Szene verlangt — Vorbedingungen, eigene Bausteine im Nutzerordner —,
+    muss deshalb vor dem Start des Falls stehen (Durchsicht welle4 C-L4).
+    Widersprechen sich die Vorbedingungen beider, hält ``function_list.validate_specs``
+    die Spezifikation an.
+    """
+    spec = row.get("spec") or {}
+    main = str(spec.get("start_scene") or row.get("start_scene") or "")
+    fault = str((spec.get("fault_case") or {}).get("start_scene") or "")
+    return tuple(key for key in dict.fromkeys((main, fault)) if key)
+
+
 def parameters_of(key: str, scenes: Mapping[str, Scene]) -> dict[str, Mapping[str, Any]]:
     """Die Projektparameter einer Szene samt ihrer Basis."""
     chain: list[Scene] = []

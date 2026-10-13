@@ -851,9 +851,16 @@ def build(
             transform.moved(body, transform.translation((0.0, 0.0, z - collar)))
             if keep is not None:
                 # Der Kragen eines Scharnierdeckels endet, wo er beim Öffnen
-                # an die Gegenwand käme (``lid_hinge.collar_keep``).
+                # an die Gegenwand käme (``lid_hinge.collar_keep``). Bleibt
+                # nichts, fällt er weg wie am exakten Weg (``exact_build``):
+                # Ohne ``allow_empty`` hielt die Rückfallkette das leere
+                # Ergebnis für eine Absage, und die Zeile darunter lief nie.
                 trimmed = boolean(
-                    "intersection", [MeshData.of(body), keep], quality=quality, cancelled=cancelled
+                    "intersection",
+                    [MeshData.of(body), keep],
+                    quality=quality,
+                    allow_empty=True,
+                    cancelled=cancelled,
                 )
                 stages.append(trimmed.solver)
                 if not trimmed.mesh.triangle_count:
