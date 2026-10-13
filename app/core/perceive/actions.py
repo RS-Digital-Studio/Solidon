@@ -570,6 +570,10 @@ class ActionField:
     Bedingung nicht erfüllt ist — wie der Operationsdialog (P6.2: der zweite
     Abstand nur bei „Zwei Abstände", der Winkel nur bei „Abstand und
     Winkel")."""
+    doc: TranslatableText | str = ""
+    """Wirkungssatz aus dem Parameterschema, zusätzlich zur Maßherkunft."""
+    placement: str = "front"
+    """Schemaeinordnung; eine belegte Vorbelegung darf ausdrücklich nach vorn rücken."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -754,8 +758,10 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
         )
     )
     label = entry.title
+    doc = entry.doc or ""
     if radius:
         label = _("Radius")
+        doc = _("Der neue Radius der Rundung. Beim Anklicken steht hier ihr gemessener Wert.")
     elif feature.kind == "pattern" and entry.name == "pitch":
         # Dasselbe Feld, ein anderes Wort: Ein Gewinde hat eine Steigung, ein
         # Muster eine Teilung — so heißt sie im Baum, im Steckbrief und beim
@@ -774,6 +780,8 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
         measurement=measure_status(feature, source[0])
         if source is not None and not derived
         else None,
+        doc=doc,
+        placement=entry.placement,
     )
 
 
@@ -1048,7 +1056,9 @@ def actions_for(
                     entrance = None
                 if entrance is not None:
                     fields = tuple(
-                        replace(entry, value="follow") if entry.name == "entrance_mode" else entry
+                        replace(entry, value="follow", placement="front")
+                        if entry.name == "entrance_mode"
+                        else entry
                         for entry in fields
                     )
             if fitting.name == "rotate_feature":
@@ -1319,6 +1329,8 @@ def chamber_action(
                 minimum=entry.minimum,
                 maximum=entry.maximum,
                 measurement=MeasureStatus("exact", "facets", available=True),
+                doc=entry.doc or "",
+                placement=entry.placement,
             )
         )
     return FeatureAction(
@@ -1382,6 +1394,8 @@ def closure_action(
             minimum=entry.minimum,
             maximum=entry.maximum,
             measurement=MeasureStatus("exact", "parameter", available=True),
+            doc=entry.doc or "",
+            placement=entry.placement,
         )
         for entry in spec.params.spec()
         if entry.name in missing and missing[entry.name] is None
@@ -1916,6 +1930,8 @@ def texture_actions(operation: Any, spec: Any) -> list[FeatureAction]:
                 unit=entry.unit,
                 value=effective[name],
                 kind=_kind_of(entry),
+                doc=entry.doc or "",
+                placement=entry.placement,
                 minimum=entry.minimum,
                 maximum=entry.maximum,
                 choices=tuple((choice, choice) for choice in (entry.choices or ())),
@@ -1956,6 +1972,8 @@ def _saved_fields(
             if _kind_of(entry) in {"length", "angle"}
             else None,
             depends_on=entry.depends_on,
+            doc=entry.doc or "",
+            placement=entry.placement,
         )
         for name in names
         if (entry := schema.get(name)) is not None
@@ -2235,6 +2253,8 @@ def _edge_field(entry: Any) -> ActionField:
         maximum=entry.maximum,
         choices=tuple((choice, choice) for choice in (entry.choices or ())),
         depends_on=entry.depends_on,
+        doc=entry.doc or "",
+        placement=entry.placement,
     )
 
 

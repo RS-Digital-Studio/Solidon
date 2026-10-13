@@ -16450,6 +16450,9 @@ class MainWindow(QMainWindow):
         die Robert am abgeschnittenen Text gemeldet hat, nur senkrecht
         (Robert: „auch auf die größen achten war viel abgeschnitten").
         """
+        from app.ui.feature_editing import FeatureEditPriority
+
+        FeatureEditPriority(self.feature_panel, self.selection_operations.catalog_button)
         inside = QWidget(self)
         stacked = QVBoxLayout(inside)
         stacked.setContentsMargins(0, 0, 0, 0)
@@ -21476,10 +21479,9 @@ class MainWindow(QMainWindow):
         members = tuple(member.target for member in group.members) if group is not None else ()
         every = QCheckBox(fields) if len(members) > 1 else None
         if every is not None:
-            every.setText(tr("Auf alle {count} gleichartigen anwenden").format(count=len(members)))
-            every.setAccessibleDescription(
-                tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
-            )
+            from app.ui.feature_editing import configure_scope
+
+            configure_scope(every, len(members))
         window_ref = weakref.ref(self)
         scope_ref = weakref.ref(every) if every is not None else None
         editor_refs = {name: weakref.ref(editor) for name, editor in editors.items()}
