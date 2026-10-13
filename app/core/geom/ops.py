@@ -25,6 +25,8 @@ from app.core.errors import (
 from app.core.geom.align import align_matrix
 from app.core.geom.attributes import used_slots
 from app.core.geom.boolean import (
+    NO_COMMON_PART_DETAIL,
+    NO_COMMON_PART_TITLE,
     NOTHING_LEFT_DETAIL,
     NOTHING_LEFT_TITLE,
     BooleanKind,
@@ -1188,11 +1190,8 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
         if solid.face_count == 0 or solid.volume <= EPS_GEOM:
             if kind == "intersection":
                 raise GeometryError(
-                    _("Die Körper haben keinen gemeinsamen Bereich."),
-                    detail=_(
-                        "Die Schnittmenge ist leer — die gewählten Körper überschneiden sich "
-                        "nicht. Lage und Maße prüfen, damit sie sich treffen."
-                    ),
+                    NO_COMMON_PART_TITLE,
+                    detail=NO_COMMON_PART_DETAIL,
                     suggestions=(CORRECT_INPUT, CANCEL),
                 )
             raise GeometryError(
@@ -1231,11 +1230,8 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     if outcome.mesh.triangle_count == 0:
         if kind == "intersection":
             raise GeometryError(
-                _("Die Körper haben keinen gemeinsamen Bereich."),
-                detail=_(
-                    "Die Schnittmenge ist leer — die gewählten Körper überschneiden sich "
-                    "nicht. Lage und Maße prüfen, damit sie sich treffen."
-                ),
+                NO_COMMON_PART_TITLE,
+                detail=NO_COMMON_PART_DETAIL,
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
         raise GeometryError(

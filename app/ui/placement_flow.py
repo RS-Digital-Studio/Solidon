@@ -1993,12 +1993,30 @@ class PlacementFlow(QObject):
             and (not isinstance(host, QuietHost) or not host.committing)
         )
         self._measure_accept.setEnabled(allowed)
+        said = reason or ""
+        # ``begun`` zuerst: Erst ein stiller Träger hat eine Gruppe.
+        if not begun and not allowed and not said and (group := self._measure_group) is not None:
+            # **Vor der ersten Eingabe sagt der Knopf den Weg** (FD-31): Er war
+            # grau ohne Grund. Genannt wird das erste Feld der Gruppe, wie der
+            # Kunde es liest; sein Name endet nach dem Gedankenstrich.
+            first = next(
+                (
+                    target.accessibleName().rsplit(" — ", 1)[-1]
+                    for target in self._measure_targets
+                    if isinstance(target, QAbstractSpinBox | QComboBox)
+                    and group.isAncestorOf(target)
+                    and target.accessibleName()
+                ),
+                "",
+            )
+            if first:
+                said = tr("Erst „{field}“ ändern, dann übernehmen.", field=first)
         for setter in (
             self._measure_accept.setToolTip,
             self._measure_accept.setStatusTip,
             self._measure_accept.setAccessibleDescription,
         ):
-            setter(reason or "")
+            setter(said)
         information = (
             tr(
                 "Die ursprünglichen Maße bleiben bearbeitbar. "

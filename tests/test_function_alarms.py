@@ -1078,6 +1078,10 @@ def test_the_measure_group_counts_only_for_the_action_it_carries(monkeypatch: An
     Schritt ändern* (``drill_hole``); deren Durchmesser heißt wie der von *Bohrung
     ändern*. Der Prüfstand tippte dort für ``resize_hole``, änderte den
     Ursprungsschritt samt Materialtoleranz und maß 8,2 mm statt 8 mm.
+
+    Gefragt wird die Gruppe selbst (``measured_op``), nicht die scharfe Handlung:
+    An einer erkannten Bohrung trägt sie *Bohrung ändern*, scharf bleibt
+    *Merkmal verschieben*, und der Prüfstand fand die Zeile dort nicht (FD-29).
     """
     from tools import function_surface
 
@@ -1087,6 +1091,7 @@ def test_the_measure_group_counts_only_for_the_action_it_carries(monkeypatch: An
     )
 
     class Panel:
+        measured_op: str | None = "drill_hole"
         armed: tuple[str, dict[str, Any]] = ("drill_hole", {})
 
         def preview_values(self) -> tuple[str, dict[str, Any]]:
@@ -1096,9 +1101,11 @@ def test_the_measure_group_counts_only_for_the_action_it_carries(monkeypatch: An
     name = "feature.field:resize_hole.diameter"
     assert function_surface.field_name(window, name) == name
     assert not function_surface.in_view(window, [name])
-    window.feature_panel.armed = ("resize_hole", {})
+    window.feature_panel.measured_op = "resize_hole"
+    window.feature_panel.armed = ("move_feature", {})
     assert function_surface.field_name(window, name) == "measure.field:diameter"
     assert function_surface.in_view(window, [name])
+    assert function_surface.op_in_view(window) == "resize_hole"
 
 
 # --- Prüfpunkt 13: eine Kante (Durchsicht welle4 C-M4) ---------------------------------------

@@ -382,10 +382,15 @@ def field_name(window: Any, name: str) -> str:
 
 
 def op_in_view(window: Any) -> str | None:
-    """Die Handlung, deren Maße die Gruppe im Bild trägt: die scharfe der Merkmalskarte."""
+    """Die Handlung, deren Maße die Gruppe im Bild trägt (``FeaturePanel.measured_op``).
+
+    Nicht die scharfe der Merkmalskarte: An einer erkannten Bohrung bringt die
+    Auswahl *Bohrung ändern* ins Bild, scharf bleibt *Merkmal verschieben* —
+    gefragt nach der scharfen, fand der Prüfstand die Zeile dort nicht (FD-29).
+    """
     panel = getattr(window, "feature_panel", None)
-    armed = panel.preview_values() if panel is not None else None
-    return str(armed[0]) if armed else None
+    measured = getattr(panel, "measured_op", None)
+    return str(measured) if measured else None
 
 
 def in_view(window: Any, inputs: Sequence[str]) -> bool:

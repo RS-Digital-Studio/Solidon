@@ -80,6 +80,7 @@ from app.core.registry import (
 from app.core.registry.search import first_choice, ranked
 from app.core.registry.surfaces import first_sentence, menu_rank
 from app.i18n import sort_key, tr
+from app.ui.change_lock import change_refusal
 from app.ui.icons import icon, icon_name_for
 from app.ui.labels import adding_key
 from app.ui.leash import stop_watching_the_dying, weak_slot
@@ -1961,7 +1962,11 @@ class SelectionOperationsPanel(QWidget):
         self._manual.setVisible(False)
         self.scroller.setVisible(found > 0)
         if found > 0:
-            self._nothing.setVisible(False)
+            # Was gesperrt offen bleibt (Lesendes), steht in der Liste; der Satz
+            # der Freischaltung steht trotzdem darüber (FD-32).
+            refusal = change_refusal()
+            self._nothing.setText(refusal)
+            self._nothing.setVisible(bool(refusal))
             return
         # **Gesperrt nennt den Grund, an jeder Stufe** (Review RM-735, F9): Am
         # Körper mit abgelaufener Lizenz stand „steht oben bei den Maßen“, und
@@ -1977,6 +1982,10 @@ class SelectionOperationsPanel(QWidget):
             text = next((reason for reason in reasons if reason), "")
         else:
             text = tr("Was sich hier tun lässt, steht oben bei den Maßen.")
+        # **Ohne Freischaltung steht hier immer ihr Satz** — er gilt für den
+        # ganzen Reiter, und das Merkmalfenster zeigt ihn deshalb nicht noch
+        # einmal (FD-32); auch oben bei den Maßen geht dann nichts.
+        text = change_refusal() or text
         self._nothing.setText(text)
         self._nothing.setVisible(bool(text))
 
