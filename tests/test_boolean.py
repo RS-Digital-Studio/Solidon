@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import time
 import warnings
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -1416,9 +1417,69 @@ def test_the_jitter_stage_draws_the_same_on_every_machine() -> None:
 
     raw = np.random.PCG64(seed + index).random_raw(corners.size)
     unit = (raw >> np.uint64(11)).astype(np.float64) * 2.0**-53
-    reach = max(body.bounds.diagonal, 1.0) * chain.JITTER_AMPLITUDE * math.sqrt(3.0)
+    reach = min(
+        max(body.bounds.diagonal, 1.0) * chain.JITTER_AMPLITUDE * math.sqrt(3.0),
+        chain.JITTER_REACH_LIMIT,
+    )
     expected = corners + (unit.reshape(corners.shape) * 2.0 - 1.0) * reach
     assert np.array_equal(moved, expected)
+
+
+def _opening_skin(mesh: MeshData, inside: Callable[[np.ndarray], np.ndarray]) -> float:
+    """Die Fläche waagrechter Dreiecke in einer Öffnung — eine Haut, die dort nicht hingehört."""
+    raw = mesh.raw
+    flat = np.abs(np.asarray(raw.face_normals)[:, 2]) > 0.9
+    skin = flat & inside(np.asarray(raw.triangles_center))
+    return float(np.asarray(raw.area_faces)[skin].sum())
+
+
+def test_the_jitter_stage_leaves_no_skin_where_a_tool_reaches_past() -> None:
+    """Beobachtung der Durchsicht welle4-b: Stufe 3 schob ein Werkzeug unter die
+    Fläche, über die es um ``BOOLEAN_OVERLAP`` hinausreicht.
+
+    Der Stups wuchs mit der Diagonale: am Behältergehäuse (108 mm) bis
+    0,019 mm, fast das Doppelte der Zugabe von 0,01 mm. Wo Werkzeugdeckel und
+    Körperdeckel gegeneinander rückten, blieb über der Öffnung eine Haut stehen
+    — in 15 von 20 Startwerten, und an einer Platte mit Bohrung Ø 5 in 3 von 20
+    (einmal die ganze Mündung zu). Der Steckdeckel stieß darauf und meldete
+    „Der Kragen stößt unter dem Rand auf die Wand“, ein Schraubdeckel hätte die
+    Haut still mitgenommen. Jetzt bleibt jeder Eckpunkt innerhalb eines
+    Viertels der Zugabe (``JITTER_REACH_LIMIT``).
+    """
+    from app.core.geom import boolean as chain
+
+    plate = trimesh.creation.box(extents=(80.0, 50.0, 8.0))
+    bore = trimesh.creation.cylinder(
+        radius=2.5, height=8.0 + 2 * chain.BOOLEAN_OVERLAP, sections=48
+    )
+    outside = trimesh.creation.box(extents=(80.0, 60.0, 40.0))
+    outside.apply_translation((0.0, 0.0, 20.0))
+    height = 40.0 - 2.0 + chain.BOOLEAN_OVERLAP
+    cavity = trimesh.creation.box(extents=(74.0, 54.0, height))
+    cavity.apply_translation((0.0, 0.0, 2.0 + height / 2.0))
+    cases = (
+        ("Platte mit Bohrung", plate, bore, lambda c: np.hypot(c[:, 0], c[:, 1]) < 2.4),
+        (
+            "Behältergehäuse",
+            outside,
+            cavity,
+            lambda c: (np.abs(c[:, 0]) < 36.9) & (np.abs(c[:, 1]) < 26.9) & (c[:, 2] > 39.0),
+        ),
+    )
+
+    skins: list[str] = []
+    for name, body, tool, inside in cases:
+        for seed in range(20):
+            result = boolean(
+                "difference",
+                [MeshData.of(body), MeshData.of(tool)],
+                stages=("jittered",),
+                seed=seed,
+            )
+            area = _opening_skin(result.mesh, inside)
+            if area > 0.0:
+                skins.append(f"{name}, Startwert {seed}: {area:.2f} mm²")
+    assert not skins, "Haut über der Öffnung: " + "; ".join(skins)
 
 
 def test_draft_quality_stops_after_the_second_stage() -> None:

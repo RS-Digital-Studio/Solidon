@@ -8152,6 +8152,45 @@ def test_a_container_goes_the_full_chain_where_the_short_one_ends(
     assert not plain.reads_quality, "ein gelungener Entwurf ist schon die feine Rechnung"
 
 
+def test_a_container_carried_by_the_third_stage_keeps_its_opening(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beobachtung der Durchsicht welle4-b: Trägt erst Stufe 3, entsteht derselbe Behälter.
+
+    Liefern *direkt* und *verschweißt* an jedem Schnitt nichts, rechnet der
+    Fensterlauf voll, und der Stups der dritten Stufe ließ über der Öffnung
+    des Gehäuses eine Haut stehen. Der Steckdeckel stieß mit seinem Kragen
+    darauf und hielt an: „Der Kragen stößt unter dem Rand auf die Wand“ —
+    ein falscher Grund, und sein Rat (Kragentiefe null) hätte die Haut im
+    Behälter gelassen.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    document = new_project("centauri-carbon-2", "petg").document
+    History(document).apply(
+        "Behälter",
+        [
+            OperationDraft(
+                op="create_container",
+                params={"shape": "rectangular", "lid": "push", "kernel": "mesh"},
+            )
+        ],
+    )
+    step = document.ops[-1].id
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+
+    rescued = _window(document, profile)
+
+    assert "jittered" in called, f"Voraussetzung: die dritte Stufe trägt: {called}"
+    assert rescued.stopped_at is None, [
+        str(finding.message) for finding in rescued.scene.report.findings
+    ]
+    assert rescued.solvers[step].strategy == "jittered", rescued.solvers[step]
+    assert len(rescued.scene.objects) == 2, "Behälter und Deckel"
+
+
 def test_window_revision_and_agent_go_the_full_chain_and_previews_do_not() -> None:
     """RM-534, Anschluss: Wer den Schalter setzt, steht im Quelltext fest (§17.2).
 

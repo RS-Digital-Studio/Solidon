@@ -560,6 +560,24 @@ unter der Schweißtoleranz und Dreiecke mit doppeltem Index fallen weg, und
 Kundenweg STL → Operation → STL → Import steht als Test in
 `tests/test_export.py`.
 
+**Stufe 3 bleibt unter der Zugabe** (`boolean.JITTER_REACH_LIMIT`, Durchsicht
+welle4-b). Der Stups wuchs mit der Diagonale, am Behältergehäuse (108 mm) bis
+0,019 mm — fast das Doppelte von `BOOLEAN_OVERLAP`. Rückten Werkzeugdeckel und
+Körperfläche gegeneinander, schob die Stufe das Werkzeug unter die Fläche, über
+die es reichen sollte, und ließ eine Haut stehen: am Gehäuse in 15 von 20
+Startwerten, an einer Platte 80 × 50 × 8 mit Bohrung Ø 5 in 3 von 20, einmal
+über der ganzen Mündung. Der Steckdeckel
+stieß darauf und hielt mit „Der Kragen stößt unter dem Rand auf die Wand“ an,
+dessen Rat (Kragentiefe null) die Haut im Behälter gelassen hätte; ein
+Schraub- oder Klappdeckel nahm sie still mit. Seither bewegt die Stufe keinen
+Eckpunkt weiter als ein Viertel der Zugabe, zwei rücken höchstens um die halbe
+aufeinander zu. Das trifft nur Stufe 3 — `_jitter` ruft allein `_run_stage`
+für `jittered` —; was die ersten beiden Stufen rechnen, bleibt bitgleich.
+`test_the_jitter_stage_leaves_no_skin_where_a_tool_reaches_past` und
+`test_a_container_carried_by_the_third_stage_keeps_its_opening` halten es.
+Wer eine kleinere Zugabe einführt oder den Stups vergrößert, macht den ersten
+rot.
+
 ## Befunde statt Protokoll
 
 Findings zurückgeben, nicht selbst protokollieren. Der Prüfbericht setzt sie
