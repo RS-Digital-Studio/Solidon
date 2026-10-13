@@ -516,6 +516,228 @@ def test_a_right_click_brings_the_context_menu_event(qt_app: Any) -> None:
         qt_app.processEvents()
 
 
+@pytest.fixture
+def button_probe(qt_app: Any, monkeypatch: Any) -> Any:
+    """Echte Mauszustellung; nur die Wortschatzauflösung stammt aus der kleinen Szene."""
+    import time
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt
+    from PySide6.QtWidgets import QLabel, QPushButton, QWidget
+
+    from app.ui import guide_targets
+
+    holder = QWidget()
+    holder.resize(720, 480)
+    owner = QLabel("Weitere Werte", holder)
+    owner.setGeometry(30, 40, 160, 30)
+    owner.setToolTip("Änderungsumfang, X, Y …")
+    target = QPushButton("Abbrechen", holder)
+    target.setGeometry(420, 260, 180, 36)
+    state = SimpleNamespace(holder=holder, owner=owner, target=target, events=[], records=[])
+
+    class Observer(QObject):
+        def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt
+            if watched is state.target and event.type() == QEvent.Type.MouseButtonPress:
+                state.events.append(("press", event.globalPosition().toPoint()))
+            return False
+
+    observer = Observer(holder)
+    qt_app.installEventFilter(observer)
+
+    def resolve(window: Any, name: str) -> Any:
+        button = state.target
+        if not button.isVisible() or not button.isEnabled():
+            raise LookupError("Der Knopf ist gerade nicht bedienbar")
+        return guide_targets.Click(
+            QRect(button.mapToGlobal(QPoint()), button.size()),
+            Qt.MouseButton.LeftButton,
+            "ziel",
+            name,
+        )
+
+    monkeypatch.setattr(guide_targets, "next_click", resolve)
+    monkeypatch.setattr(guide_targets, "widget_for", lambda window, name: state.target)
+    monkeypatch.setattr(guide_targets, "zone_of", lambda window, widget: "karte")
+    state.ports = function_walk.QtPorts(holder, time.perf_counter())
+    monkeypatch.setattr(state.ports, "pending", lambda: False)
+    state.walker = function_walk.Walk(state.ports, state.records, time.perf_counter())
+    holder.show()
+    holder.activateWindow()
+    qt_app.processEvents()
+    state.ports.move(owner.mapToGlobal(owner.rect().center()))
+    qt_app.processEvents()
+    try:
+        yield state
+    finally:
+        qt_app.removeEventFilter(observer)
+        holder.close()
+        holder.deleteLater()
+        qt_app.processEvents()
+
+
+def _drive_button_probe(qt_app: Any, scene: Any, named: bool) -> Any:
+    """Derselbe Schrittautomat wie im Prüfstand, mit unveränderter 15-s-Klickfrist."""
+    import time
+
+    def press(machine: Any) -> None:
+        assert function_walk.click_button(scene.ports, scene.walker, scene.target, "Abbrechen")
+
+    step = (
+        scene.walker.step("feature:resize_hole")
+        if named
+        else function_machine.Step(
+            "Abbrechen",
+            press,
+            ready=scene.walker.stable("Abbrechen", button=lambda: scene.target),
+        )
+    )
+    step.timeout_s = 15
+    machine = function_machine.StepMachine(function_machine.qt_schedule, time.perf_counter)
+
+    def pump() -> None:
+        qt_app.processEvents()
+        time.sleep(0.001)
+
+    function_machine.drive(
+        machine,
+        [
+            step,
+            function_machine.Step(
+                "nach dem Klick", lambda machine: scene.events.append(("after", None))
+            ),
+        ],
+        pump,
+        time.perf_counter,
+        timeout_s=16,
+    )
+    return machine
+
+
+@pytest.mark.parametrize("named", [True, False], ids=["wortschatz", "knopf"])
+def test_button_probe_moves_away_from_a_real_tooltip_before_testing_coverage(
+    qt_app: Any, button_probe: Any, named: bool
+) -> None:
+    """FD74: Ein echter Tooltip verschwindet durch Mausbewegung, nicht durch den Prüfer."""
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtGui import QCursor
+    from PySide6.QtWidgets import QToolTip
+
+    scene = button_probe
+    # Nur der Ausgangszustand wird gestellt; der Prüfpfad darf den Tooltip
+    # weder ausblenden noch bei der Trefferprüfung überspringen.
+    QToolTip.showText(scene.target.mapToGlobal(QPoint()), scene.owner.toolTip(), scene.owner)
+    qt_app.processEvents()
+    tip = next(
+        widget
+        for widget in qt_app.topLevelWidgets()
+        if widget.objectName() == "qtooltip_label" and widget.isVisible()
+    )
+    centre = QRect(tip.mapToGlobal(QPoint()), tip.size()).center()
+    scene.target.move(scene.holder.mapFromGlobal(centre) - scene.target.rect().center())
+    assert scene.ports.widget_under(centre) is tip
+    assert QCursor.pos() != centre
+
+    machine = _drive_button_probe(qt_app, scene, named)
+
+    assert machine.error is None and machine.finding is None, (machine.error, machine.finding)
+    assert [event[0] for event in scene.events] == ["press", "after"]
+    assert scene.events[0][1] == scene.target.mapToGlobal(scene.target.rect().center())
+    assert not QToolTip.isVisible()
+    assert scene.records[-1]["hit"] is True
+
+
+@pytest.mark.parametrize("named", [True, False], ids=["wortschatz", "knopf"])
+def test_button_probe_keeps_a_real_persistent_cover_as_a_finding(
+    qt_app: Any, button_probe: Any, named: bool
+) -> None:
+    """FD74: Die neue Bewegung macht einen tatsächlich verdeckten Knopf nicht klickbar."""
+    from PySide6.QtWidgets import QLabel
+
+    scene = button_probe
+    cover = QLabel("Bleibende Überdeckung", scene.holder)
+    cover.setGeometry(scene.target.geometry())
+    cover.show()
+    cover.raise_()
+    qt_app.processEvents()
+
+    machine = _drive_button_probe(qt_app, scene, named)
+
+    assert not scene.events
+    assert machine.error is not None or machine.finding is not None
+    assert scene.records[-1]["finding"] == function_checks.COVERED
+    assert scene.records[-1]["widget_at"]["text"] == "Bleibende Überdeckung"
+
+
+@pytest.mark.parametrize("change", ["move", "replace", "hide", "disable"])
+def test_button_probe_resolves_the_target_again_after_the_move(
+    qt_app: Any, button_probe: Any, change: str
+) -> None:
+    """FD74: Zwischen Anfahren und Klick gilt das neue Widget an seiner neuen Stelle."""
+    import time
+
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QPushButton
+
+    scene = button_probe
+    original = scene.target
+    ready = scene.walker.stable("Abbrechen", button=lambda: scene.target)
+    old_centre = original.mapToGlobal(original.rect().center())
+    assert not ready(), "Die erste Bewegung muss eine spätere Ereignisrunde zulassen"
+    assert not scene.events
+    if change == "move":
+        original.move(original.pos() + QPoint(-180, 40))
+    elif change == "replace":
+        replacement = QPushButton("Neuer Knopf", scene.holder)
+        replacement.setGeometry(210, 320, 180, 36)
+        replacement.show()
+        original.hide()
+        scene.target = replacement
+    else:
+        if change == "hide":
+            original.hide()
+        else:
+            original.setEnabled(False)
+        qt_app.processEvents()
+        time.sleep(function_walk.STABLE_S)
+        assert not ready()
+        assert not scene.events
+        original.show()
+        original.setEnabled(True)
+        original.move(original.pos() + QPoint(-180, 40))
+    qt_app.processEvents()
+    assert not ready(), "Geänderte Lage muss neu angefahren werden"
+    deadline = time.perf_counter() + 15
+    while not ready() and time.perf_counter() < deadline:
+        qt_app.processEvents()
+        time.sleep(0.001)
+    assert ready()
+    assert function_walk.click_button(scene.ports, scene.walker, scene.target, "Abbrechen")
+    assert [event[0] for event in scene.events] == ["press"]
+    assert scene.events[0][1] != old_centre
+    assert scene.events[0][1] == scene.target.mapToGlobal(scene.target.rect().center())
+
+
+@pytest.mark.parametrize("change", ["hide", "disable", "delete"])
+def test_button_probe_final_guard_rejects_a_target_that_is_no_longer_usable(
+    qt_app: Any, button_probe: Any, change: str
+) -> None:
+    """Auch ein direkter Aufrufer darf keinen unsichtbaren, grauen oder gelöschten Knopf drücken."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    scene = button_probe
+    if change == "hide":
+        scene.target.hide()
+    elif change == "disable":
+        scene.target.setEnabled(False)
+    else:
+        scene.target.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    with pytest.raises(RuntimeError, match="nicht bedienbar"):
+        function_walk.click_button(scene.ports, scene.walker, scene.target, "Abbrechen")
+    assert not scene.events
+
+
 @pytest.mark.windowed
 def test_the_probe_row_runs_in_its_own_process_from_inventory_to_report(tmp_path: Path) -> None:
     """Der ganze Weg eines Funktionsfalls: Inventar, eigener Prozess mit Profil, Protokoll, Bericht.
