@@ -1310,7 +1310,11 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             ("menue", [(f"history.row:{number}", "right"), ("menu:history.edit", "left")]),
             ("doppelklick", [(f"history.row:{number}", "double")]),
         ):
-            self.reset()
+            if not self.reset():
+                # Kein Weg ohne Startszene (Durchsicht welle4 C-L15): Er änderte
+                # sonst, was die vorige Phase liegen ließ.
+                self.data["errors"].append(f"nachträglich {way}: Startszene nicht herstellbar")
+                continue
             self.run_steps(
                 f"übernehmen für {way}",
                 [*self.path_steps(), *self.input_steps(self.spec.get("inputs") or {})]
@@ -1577,7 +1581,15 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                     "effective": None,
                 }
                 continue
-            self.reset()
+            if not self.reset():
+                # Ohne Startszene stünde die Stufe an dem, was die vorige liegen
+                # ließ — eine andere Lage (Durchsicht welle4 C-L15).
+                matrix[stage] = {
+                    "state": MATRIX_UNREACHABLE,
+                    "reason": "die Startszene ließ sich nicht herstellen",
+                    "effective": None,
+                }
+                continue
             selection = [self.key_step("Escape", "auswahl leeren")] if not route else []
             selection += [self.walker.step(name, button) for name, button in route]
             # Gelesen wird, wenn das Ziel steht oder so lange ohne Weg blieb wie

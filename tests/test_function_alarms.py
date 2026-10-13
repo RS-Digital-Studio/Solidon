@@ -1197,3 +1197,37 @@ def test_an_edge_operation_row_aims_at_its_row_at_the_edge() -> None:
     for name in own:
         assert rows[name].target == f"edge:{name}", rows[name]
         assert rows[name].requirement == "kante", rows[name]
+
+
+# --- Rücksetzen vor jeder Messung (Durchsicht welle4 C-L15) ---------------------------------
+
+
+def test_the_matrix_measures_nothing_where_the_start_scene_was_not_made() -> None:
+    """C-L15: ``phase_matrix`` las den Ausgang von ``reset()`` nicht.
+
+    Misslang das Zurücksetzen, maß die Stufe an dem, was die vorige liegen ließ —
+    eine andere Lage. Jetzt ist sie nicht herstellbar, mit Grund.
+    """
+    edge = FakeWidget("viewport", zone="ansicht")
+    flow = _matrix_flow({"view.edge:obj_1": [FakeClick((0, 0, 5, 5), "left", "ziel", edge)]})
+    flow.reset = lambda: False
+    flow.run_steps = lambda label, steps: True
+    flow.phase_matrix()
+    states = {stage: entry["state"] for stage, entry in flow.data["matrix"].items()}
+    assert set(states.values()) == {"nicht herstellbar"}, states
+    assert (
+        flow.data["matrix"]["ein_koerper"]["reason"] == "die Startszene ließ sich nicht herstellen"
+    )
+
+
+def test_the_revision_measures_no_way_whose_start_scene_was_not_made() -> None:
+    """C-L15: ``phase_revise`` las den Ausgang von ``reset()`` nicht — kein Weg ohne Startszene."""
+    applied = {"ops": ["create_brep_box", "drill_hole"]}
+    flow = _flow({}, {"before": {"ops": ["create_brep_box"]}, "applied": applied})
+    flow.reset = lambda: False
+    flow.run_steps = lambda label, steps: (_ for _ in ()).throw(
+        AssertionError(f"{label} lief ohne Startszene")
+    )
+    flow.phase_revise()
+    assert flow.data["revise"] in (None, []), flow.data["revise"]
+    assert any("Startszene" in error for error in flow.data["errors"]), flow.data["errors"]
