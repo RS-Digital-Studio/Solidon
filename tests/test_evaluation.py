@@ -8034,49 +8034,134 @@ def test_a_step_that_wants_its_own_stages_gets_no_full_chain(
     assert called == list(stages), called
 
 
+#: Wo die Boolesche des Netzkerns steht, und welche Stufenfolgen ein Aufruf
+#: festlegen darf: ein Tupel aus Stufennamen oder eine der zwei Ketten.
+_BOOLEAN_MODULE = "app.core.geom.boolean"
+_NAMED_CHAINS = frozenset({"DRAFT_CHAIN", "FULL_CHAIN"})
+
+
+def _boolean_calls(root: Path, path: Path) -> list[tuple[int, str]]:
+    """Jeder Aufruf der Netz-Booleschen in ``path`` und sein ``stages=`` als Urteil.
+
+    Aufgelöst über die Importe der Datei, auch relativ: der Name ``boolean`` und
+    jeder Alias (``boolean as mesh_boolean``), ein Modulalias
+    (``from app.core.geom import boolean as chain`` → ``chain.boolean(…)``) und
+    in ``boolean.py`` selbst. Das Urteil ist ``""`` ohne ``stages``, sonst
+    ``"erlaubt"`` oder die Schreibweise, die nicht erlaubt ist.
+    """
+    import ast
+
+    from app.core.geom.boolean import FULL_CHAIN
+
+    relative = path.relative_to(root)
+    dotted = ".".join(relative.with_suffix("").parts)
+    package = dotted if relative.name == "__init__.py" else dotted.rsplit(".", 1)[0]
+
+    def source_of(node: ast.ImportFrom) -> str:
+        if not node.level:
+            return node.module or ""
+        base = package.split(".")[: len(package.split(".")) - (node.level - 1)]
+        return ".".join([*base, node.module] if node.module else base)
+
+    def dotted_of(expression: ast.expr) -> str | None:
+        if isinstance(expression, ast.Name):
+            return expression.id
+        if isinstance(expression, ast.Attribute):
+            head = dotted_of(expression.value)
+            return f"{head}.{expression.attr}" if head else None
+        return None
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    functions = {"boolean"} if dotted == _BOOLEAN_MODULE else set()
+    chains = set(_NAMED_CHAINS) if dotted == _BOOLEAN_MODULE else set()
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            source = source_of(node)
+            for alias in node.names:
+                bound = alias.asname or alias.name
+                if source == _BOOLEAN_MODULE and alias.name == "boolean":
+                    functions.add(bound)
+                elif source == _BOOLEAN_MODULE and alias.name in _NAMED_CHAINS:
+                    chains.add(bound)
+                elif f"{source}.{alias.name}" == _BOOLEAN_MODULE:
+                    modules.add(bound)
+        elif isinstance(node, ast.Import):
+            modules |= {
+                alias.asname or alias.name for alias in node.names if alias.name == _BOOLEAN_MODULE
+            }
+
+    def verdict(value: ast.expr) -> str:
+        if (
+            isinstance(value, ast.Tuple)
+            and value.elts
+            and all(isinstance(e, ast.Constant) and e.value in FULL_CHAIN for e in value.elts)
+        ):
+            return "erlaubt"
+        if isinstance(value, ast.Name) and value.id in chains:
+            return "erlaubt"
+        if (
+            isinstance(value, ast.Attribute)
+            and value.attr in _NAMED_CHAINS
+            and dotted_of(value.value) in modules
+        ):
+            return "erlaubt"
+        return ast.unparse(value)
+
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        called = node.func
+        if not (
+            (isinstance(called, ast.Name) and called.id in functions)
+            or (
+                isinstance(called, ast.Attribute)
+                and called.attr == "boolean"
+                and dotted_of(called.value) in modules
+            )
+        ):
+            continue
+        said = ""
+        for keyword in node.keywords:
+            if keyword.arg is None:
+                said = f"**{ast.unparse(keyword.value)}"
+            elif keyword.arg == "stages":
+                allowed = verdict(keyword.value)
+                said = allowed if allowed == "erlaubt" else f"stages={allowed}"
+        found.append((node.lineno, said))
+    return found
+
+
 def test_the_quality_shortens_the_chain_never_the_caller() -> None:
     """FD-6: Kürzt die Güte, kürzt ``boolean`` (``cut_short``) — nie der Aufrufer je nach Güte.
 
     Der Behälterbau gab ``stages=DRAFT_CHAIN if … == "draft" else None`` mit.
     Seine Absage war damit keine gekürzte, die volle Kette lief im Fenster nie
-    von selbst, und *Gröber rechnen* war dort der einzige Weg zu ihr. Eine
-    Stufenfolge, die an der Güte hängt, rechnet fein wie im Entwurf nur, was der
-    Aufrufer zulässt. Geprüft wird jeder Aufruf von ``boolean`` im Kern, und der
-    Behälterbau legt gar keine fest.
+    von selbst, und *Gröber rechnen* war dort der einzige Weg zu ihr.
+
+    **Dicht, nicht nach dem Wort „quality“** (Durchsicht über fix/review-kern,
+    L3): Eine vorher berechnete Variable, ein Schalter, eine Hilfsfunktion, ein
+    Aufruf über das Modul oder einen Importalias gingen am ersten Wächter
+    vorbei. Jetzt ist ein ``stages=`` im Kern nur ein Tupel aus Stufennamen oder
+    ``DRAFT_CHAIN``/``FULL_CHAIN`` aus ``boolean.py``, alles andere ist rot —
+    auch ``**kwargs``, das eine Folge mitbringen könnte. Der Behälterbau legt
+    gar keine fest.
     """
-    import ast
-
     root = Path(__file__).resolve().parents[1]
-
-    def names(node: ast.AST) -> set[str]:
-        return {
-            part.id if isinstance(part, ast.Name) else part.attr
-            for part in ast.walk(node)
-            if isinstance(part, ast.Name | ast.Attribute)
-        }
-
     calls = 0
     fixed: list[str] = []
-    by_quality: list[str] = []
+    forbidden: list[str] = []
     for path in sorted((root / "app" / "core").rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
         place = path.relative_to(root).as_posix()
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            called = node.func.id if isinstance(node.func, ast.Name) else None
-            if called != "boolean":
-                continue
+        for line, said in _boolean_calls(root, path):
             calls += 1
-            for keyword in node.keywords:
-                if keyword.arg != "stages":
-                    continue
-                if path.name == "container_ops.py":
-                    fixed.append(f"{place}:{node.lineno}")
-                if "quality" in names(keyword.value):
-                    by_quality.append(f"{place}:{node.lineno}")
-    assert calls > 20, f"nur {calls} Aufrufe von boolean gefunden — die Suche greift nicht"
-    assert not by_quality, f"Stufen je nach Güte statt cut_short: {by_quality}"
+            if said and path.name == "container_ops.py":
+                fixed.append(f"{place}:{line}")
+            if said not in ("", "erlaubt"):
+                forbidden.append(f"{place}:{line} {said}")
+    assert calls > 100, f"nur {calls} Aufrufe von boolean gefunden — die Auflösung greift nicht"
+    assert not forbidden, "Stufen, die keine feste Folge sind:\n" + "\n".join(forbidden)
     assert not fixed, f"der Behälterbau legt seine Stufen fest: {fixed}"
 
 

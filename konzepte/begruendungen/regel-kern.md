@@ -585,6 +585,12 @@ der Knopf bis 0.6.0 deshalb der einzige Weg zur vollen Kette** — dort änderte
 er etwas (Durchsicht welle4-b). Erst seit der Behälter `boolean` kürzen lässt,
 rechnet die Auswertung auch ihn selbst zu Ende, und erst damit ist der Knopf
 überall wirkungslos. Den Behälter halten
-`test_the_quality_shortens_the_chain_never_the_caller` (kein Aufruf von
-`boolean` im Kern hängt seine Stufen an die Güte, der Behälterbau legt keine
-fest) und `test_a_container_goes_the_full_chain_where_the_short_one_ends`.
+`test_the_quality_shortens_the_chain_never_the_caller` und
+`test_a_container_goes_the_full_chain_where_the_short_one_ends`. Der Wächter
+war zuerst nur so dicht wie das Wort „quality“ im Ausdruck: eine vorher
+berechnete Variable, ein Schalter, eine Hilfsfunktion, ein Aufruf über das
+Modul oder einen Importalias gingen vorbei (Durchsicht über fix/review-kern,
+L3). Jetzt löst er jeden Aufruf über die Importe der Datei auf und lässt als
+`stages=` nur ein Tupel aus Stufennamen oder `DRAFT_CHAIN`/`FULL_CHAIN` aus
+`boolean.py` zu; alles andere, auch `**kwargs`, ist rot. Der Behälterbau legt
+gar keine fest.
