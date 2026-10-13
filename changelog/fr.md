@@ -64,6 +64,7 @@ dans `website/version.json`.
 - Dans l'onglet *Sélection*, un diamètre sous la limite dans *Modifier le trou* renvoie désormais à *Supprimer la caractéristique*, qui supprime tout le trou, fraisure comprise si on le veut.
 - La reconstruction (*Reconstruire le modèle*) ne conseille plus d'autres limites quand aucune valeur permise ne suffirait, et n'affiche qu'une fois les propositions identiques.
 - Si un perçage ou un récipient ne réussit qu'avec des sommets déplacés d'un rien, l'ouverture reste libre. En version 0.6.0, une peau très fine pouvait rester par-dessus.
+- Quand on choisit un trou d'un modèle chargé, la vue et l'onglet *Sélection* désignent la même action, *Modifier le trou*. En version 0.6.0, *Déplacer la caractéristique* y restait ouvert.
 
 ## 0.6.0
 

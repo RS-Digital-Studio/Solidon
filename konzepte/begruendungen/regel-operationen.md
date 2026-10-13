@@ -570,18 +570,30 @@ Startwerten, an einer Platte 80 × 50 × 8 mit Bohrung Ø 5 in 3 von 20, einmal
 stieß darauf und hielt mit „Der Kragen stößt unter dem Rand auf die Wand“ an,
 dessen Rat (Kragentiefe null) die Haut im Behälter gelassen hätte; ein
 Schraub- oder Klappdeckel nahm sie still mit. Seither bewegt die Stufe keinen
-Eckpunkt weiter als ein Viertel der Zugabe, zwei rücken höchstens um die halbe
-aufeinander zu. Das trifft nur Stufe 3 — `_jitter` ruft allein `_run_stage`
-für `jittered` —; was die ersten beiden Stufen rechnen, bleibt bitgleich. Am
-Korpus (195 dichte Netze aus `tests/data/meshes` und Roberts Modellen, je eine
-Bohrung und ein Eckschnitt, drei Startwerte, 1170 Läufe nur über Stufe 3)
-gelingen vorher und nachher dieselben 1143, alle dicht; die Abweichung zum
-Ergebnis von *direkt* sinkt im Median von 3,57 auf 0,60 mm³, im größten Fall
-von 1533 auf 80 mm³.
-`test_the_jitter_stage_leaves_no_skin_where_a_tool_reaches_past` und
-`test_a_container_carried_by_the_third_stage_keeps_its_opening` halten es.
-Wer eine kleinere Zugabe einführt oder den Stups vergrößert, macht den ersten
-rot.
+Eckpunkt je Koordinate weiter als ein Viertel der Zugabe. Längs einer Achse
+rücken zwei Eckpunkte damit höchstens um die halbe Zugabe aufeinander zu,
+längs einer schrägen Normale um bis zu 2·√3-mal die Grenze, an (1, 1, 1)/√3
+also um 0,87 der Zugabe — 13 % Reserve; mit 2,9 µm schloss sich die schräge
+Mündung schon ganz (Durchsicht über fix/review-kern, L4). Das trifft nur
+Stufe 3 — `_jitter` wird allein von `_run_stage` für `jittered` gerufen —;
+was die ersten beiden Stufen rechnen, bleibt bitgleich. Am Korpus (195 dichte
+Netze aus `tests/data/meshes` und Roberts Modellen, je eine Bohrung und ein
+Eckschnitt, drei Startwerte, 1170 Läufe nur über Stufe 3) gelingen vorher und
+nachher dieselben 1143, alle dicht; die Abweichung zum Ergebnis von *direkt*
+sinkt im Median von 3,57 auf 0,60 mm³, im größten Fall von 1533 auf 80 mm³.
+
+Gehalten wird es zufallsfrei: `test_the_jitter_limit_holds_the_overlap_along_any_normal`
+verlangt `2·√3·JITTER_REACH_LIMIT < BOOLEAN_OVERLAP`, und
+`test_the_farthest_jitter_keeps_a_slanted_bore_open` rechnet den äußersten Stups
+achsparallel und schräg über *direkt*. Wer die Grenze über 2,89 µm hebt, macht
+beide rot; die Zufallsprobe
+(`test_the_jitter_stage_leaves_no_skin_where_a_tool_reaches_past`) wurde erst
+ab 6,7 µm rot und ist kein Wächter der Grenze. Den Behälter hält
+`test_a_container_carried_by_the_third_stage_keeps_its_opening`. **Was weniger
+übersteht als `BOOLEAN_OVERLAP`, schützt die Grenze nicht**, denn sie folgt
+dieser Zahl und kein Test sieht ein anderes Werkzeug: Ein solcher Überstand
+muss selbst größer sein als 2·√3·`JITTER_REACH_LIMIT`, sonst kann Stufe 3 dort
+eine Haut stehen lassen.
 
 ## Befunde statt Protokoll
 

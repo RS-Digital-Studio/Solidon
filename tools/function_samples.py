@@ -379,15 +379,15 @@ def sample_protocol() -> dict[str, Any]:
         "licence_runs": {
             "sale_without_trial": {
                 "writes": True,
-                "enabled": False,
+                "state": "grau",
                 "reason": "Ändern braucht einen Kaufcode.",
             },
             "needs_activation": {
                 "writes": True,
-                "enabled": False,
+                "state": "grau",
                 "reason": "Der Kaufcode wartet auf die Freigabe dieses Geräts.",
             },
-            "licensed": {"writes": True, "enabled": True, "reason": ""},
+            "licensed": {"writes": True, "state": "angeboten", "reason": ""},
         },
         "halt": {
             "text": "Die Kette hält bei Schritt 3: Die Bohrung trifft keinen Körper.",
@@ -704,9 +704,21 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
     BrokenSample(
         18,
         "schreibendes Ziel frei trotz Ablauf",
-        change=_set("licence_runs.sale_without_trial.enabled", True),
+        change=_all(
+            _set("licence_runs.sale_without_trial.state", "angeboten"),
+            _set("licence_runs.sale_without_trial.reason", ""),
+        ),
     ),
     BrokenSample(18, "grau ohne Grund", change=_set("licence_runs.needs_activation.reason", "")),
+    # Durchsicht welle4 C-S1: Der Text der eigenen ``LookupError`` stand als Grund.
+    BrokenSample(
+        18,
+        "gesperrt versteckt, freigeschaltet angeboten",
+        change=_all(
+            _set("licence_runs.needs_activation.state", "fehlt"),
+            _set("licence_runs.needs_activation.reason", "operation:drill_hole: kein Weg"),
+        ),
+    ),
     BrokenSample(19, "zwei Hauptknöpfe", change=_set("layout.0.primary", 2)),
     BrokenSample(
         "E1",

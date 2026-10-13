@@ -156,9 +156,14 @@ MAX_VOXEL_CELLS: Final = 50_000_000
 BOOLEAN_OVERLAP = 0.01
 
 #: Höchstens so weit bewegt Stufe 3 einen Eckpunkt je Koordinate, gleich wie
-#: groß der Körper ist: ein Viertel von :data:`BOOLEAN_OVERLAP`. Zwei
-#: Eckpunkte rücken so höchstens um die halbe Zugabe aufeinander zu, und ein
-#: Werkzeug, das um sie über eine Fläche reicht, bleibt darüber.
+#: groß der Körper ist: ein Viertel von :data:`BOOLEAN_OVERLAP`. Längs einer
+#: Achse rücken zwei Eckpunkte so um höchstens zweimal die Grenze aufeinander
+#: zu, die halbe Zugabe; **längs einer schrägen Normale um bis zu 2·√3-mal**,
+#: denn jede der drei Koordinaten darf voll ausschlagen — an (1, 1, 1)/√3 sind
+#: das 0,87 der Zugabe. Ein Werkzeug, das um die Zugabe über eine Fläche
+#: reicht, bleibt also in jeder Lage darüber, mit 13 % Reserve; schon 2,9 µm
+#: schlössen die schräge Mündung (Durchsicht über fix/review-kern, L4). Was
+#: weniger übersteht, schützt diese Grenze nicht.
 #:
 #: **Ohne Grenze wuchs der Stups mit der Diagonale** und schob Werkzeuge unter
 #: die Fläche, über die sie reichen (Durchsicht welle4-b, Beobachtung): am
@@ -1169,8 +1174,23 @@ NOTHING_LEFT_DETAIL: Final = _(
 )
 #: Derselbe Fall an einer Schnittmenge: Leer heißt dort, dass das Werkzeug den
 #: Körper verfehlt — „deckt ihn ab" sagte das Gegenteil.
+#:
+#: **Nicht der Satz der Operation *Schnittmenge*** (:data:`NO_COMMON_PART_DETAIL`),
+#: mit Absicht: Dieser spricht über das Werkzeug eines Schritts, das der Kunde nie
+#: gewählt hat — den beschnittenen Kragen am Deckel, den Hohlraum beim
+#: Aushöhlen, den Stopfen eines Musters. Dort gibt es nur seinen einen Körper,
+#: und „die gewählten Körper überschneiden sich nicht" wäre falsch; an zwei
+#: gewählten Körpern gibt es dagegen kein Werkzeug.
 NOTHING_SHARED_DETAIL: Final = _(
     "Von dem Körper bleibt nichts übrig — das Werkzeug trifft ihn nicht. Prüfen Sie Maß und Lage."
+)
+#: Die leere Schnittmenge, die der Kunde selbst gewählt hat: *Schnittmenge*
+#: zweier Körper, an beiden Kernen (``ops._boolean_op``). Ein Satz für beide
+#: Zwillinge; was ihn von :data:`NOTHING_SHARED_DETAIL` trennt, steht dort.
+NO_COMMON_PART_TITLE: Final = _("Die Körper haben keinen gemeinsamen Bereich.")
+NO_COMMON_PART_DETAIL: Final = _(
+    "Die Schnittmenge ist leer — die gewählten Körper überschneiden sich "
+    "nicht. Lage und Maße prüfen, damit sie sich treffen."
 )
 
 

@@ -97,6 +97,10 @@ ASK_HOSTS: Final[frozenset[str]] = frozenset({"LocalRecognitionDialog"})
 #: (``AskDialog``); dazu die rohen Qt-Fenster (``function_checks.RAW_CLASSES``).
 MESSAGE_CLASSES: Final[frozenset[str]] = frozenset({"MessageDialog", "AskDialog"})
 
+#: Der Name der Fehlermeldung nach Regel 17 im Wortschatz: ``dialogs.show_error``
+#: zeigt sie als ``MessageDialog`` mit diesem Kennzeichen.
+ERROR_MESSAGE: Final = "message:error"
+
 
 def _raw_bases() -> tuple[str, ...]:
     """Die rohen Qt-Fensterklassen, die aufgenommen werden — aus D0-U (``RAW_BASES``).
@@ -271,6 +275,18 @@ def modal_allowed(classes: Sequence[str], stack: Sequence[str], hosts: Sequence[
     return "AskDialog" in classes and bool(ASK_CALLERS & set(stack) or ASK_HOSTS & set(hosts))
 
 
+def error_proposal(classes: Sequence[str], target: str, actions: int) -> bool:
+    """Ob ein Meldungsfenster die Fehlermeldung mit Handlungsvorschlag ist — die Z2-Ausnahme.
+
+    Entscheidung Koordinator (Durchsicht welle4 D-M2): Eine Fehlermeldung nach
+    Regel 17 (``dialogs.show_error``, Kennzeichen :data:`ERROR_MESSAGE`) mit
+    mindestens einer Handlung antwortet auf eine Handlung des Kunden und darf
+    modal sein. Erfolg und Hinweis erscheinen nie als Meldungsfenster, und eine
+    Fehlermeldung ohne Handlung bleibt ein Fund (E7, V5) — auch in Z2.
+    """
+    return "MessageDialog" in classes and target == ERROR_MESSAGE and actions > 0
+
+
 def is_question(class_name: str, buttons: Sequence[str]) -> bool:
     """Eine Nachfrage (E6) statt einer Meldung (Z2): eine Wahl zwischen mindestens zwei Knöpfen.
 
@@ -300,6 +316,16 @@ def _buttons(widget: Any) -> list[str]:
     return [button.text() for button in widget.findChildren(QAbstractButton) if button.text()]
 
 
+def _offers_a_way(widget: Any, classes: Sequence[str]) -> bool:
+    """:func:`error_proposal` am offenen Fenster: Kennzeichen und Handlungen gelesen."""
+    if "MessageDialog" not in classes:
+        return False
+    from app.core.guides import TARGET_PROPERTY
+
+    target = str(widget.property(TARGET_PROPERTY) or "")
+    return error_proposal(classes, target, len(_house_actions(widget)))
+
+
 def _hosts(widget: Any) -> list[str]:
     """Die Klassen des Fensters, in dem ein Dialog steht — leer ohne Elternteil."""
     parent = widget.parentWidget()
@@ -322,7 +348,8 @@ class ModalWatch:
     Nur lesend: Die Wache schließt nichts. Was ein Fall öffnet und bedient,
     bedient er selbst über Eingabeereignisse; was liegen bleibt, räumt der Fall
     am Ende seiner Phase mit Escape ab. ``own`` nennt Klassen, die die Zeile
-    selbst öffnet (ihre Bedienfläche) — sie zählen als erlaubt.
+    selbst öffnet (ihre Bedienfläche) — sie zählen als erlaubt, ebenso die
+    Fehlermeldung mit Handlungsvorschlag (:func:`error_proposal`).
     """
 
     def __init__(self, began: float) -> None:
@@ -345,7 +372,9 @@ class ModalWatch:
             classes = _classes(widget)
             buttons = _buttons(widget)
             allowed = (
-                modal_allowed(classes, stack, _hosts(widget)) or type(widget).__name__ in self.own
+                modal_allowed(classes, stack, _hosts(widget))
+                or type(widget).__name__ in self.own
+                or _offers_a_way(widget, classes)
             )
             self.modals.append(
                 {
@@ -1432,54 +1461,146 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
                 "kind": "meldung",
             }
         )
-    ways = _ways_out(window)
+    menus, buttons, phrases = _ways(window)
     for button in window.findChildren(QPushButton):
         # Die Kurzhilfe zuerst, wie ``function_surface.grey_reason``: Sie zeigt der
         # graue Knopf dem Kunden; die Beschreibung kann vom offenen stammen (F-34).
         reason = button.toolTip() or button.accessibleDescription()
         if _visible(button) and not button.isEnabled() and reason:
-            found.append(
-                {
-                    "text": reason,
-                    "actions": [],
-                    "kind": "sperrgrund",
-                    "way_out": any(way in reason for way in ways),
-                }
-            )
+            fields = surface_field_titles(button)
+            way = names_a_way_out(reason, menus, buttons, phrases=phrases, fields=fields)
+            found.append({"text": reason, "actions": [], "kind": "sperrgrund", "way_out": way})
     return [*found, *_field_refusals(), *_house_messages()]
 
 
-def _ways_out(window: Any) -> set[str]:
-    """Wohin ein Sperrgrund den Kunden schicken kann: Menüzeilen und offene Knöpfe.
+def way_out(window: Any, reason: str, widget: Any = None) -> bool:
+    """Ob ein Sperrgrund am offenen Fenster einen Ausweg nennt (:func:`names_a_way_out`).
 
-    Ein Sperrgrund braucht keinen Knopf, er muss aber den Ausweg nennen (Konzept
-    V5, Entscheidung Koordinator) — etwa „(Hilfe → Solidon freischalten …)“.
-    Genannt ist er, wenn der Satz den Text einer bedienbaren Menüzeile oder eines
-    offenen Knopfs trägt, so wie der Kunde ihn in seiner Sprache liest. Kürzer als
-    vier Zeichen zählt nicht, „OK“ ist kein Ausweg. Dazu der Satz der Sperre, die
-    mit dem Ende der Rechnung fällt (``change_lock.computing_refusal``).
+    ``widget`` ist das graue Bedienelement; die Titel der offenen Eingabefelder
+    seiner Fläche zählen als Ausweg (:func:`surface_field_titles`).
+    """
+    menus, buttons, phrases = _ways(window)
+    fields = surface_field_titles(widget) if widget is not None else []
+    return names_a_way_out(reason, menus, buttons, phrases=phrases, fields=fields)
+
+
+def _ways(window: Any) -> tuple[list[tuple[str, ...]], list[str], list[str]]:
+    """Wohin ein Sperrgrund den Kunden schicken kann: die bedienbaren Zeilen der
+    Menüleiste mit ihrem Weg, die offenen Knöpfe aller sichtbaren Fenster, so wie
+    der Kunde sie in seiner Sprache liest, und die Sätze, die selbst ein Weg sind.
+
+    **Eine Sperre, die von selbst fällt, nennt ihren Weg im Satz** (FD-30): Die
+    Befundhandlung während der Rechnung sagt, dass sie mit dem Ende der
+    Berechnung wieder frei ist (``change_lock.computing_refusal``) — dafür gibt
+    es keine Menüzeile.
     """
     from PySide6.QtWidgets import QAbstractButton, QApplication
 
     from app.ui.change_lock import computing_refusal
     from app.ui.guide_targets import menubar_entries
 
-    texts = [
-        action.text() for _name, _menus, action in menubar_entries(window) if action.isEnabled()
+    menus = [
+        (*path, action.text())
+        for _name, path, action in menubar_entries(window)
+        if action.isEnabled()
     ]
-    for top in QApplication.topLevelWidgets():
-        if top.isVisible():
-            texts += [
-                button.text()
-                for button in top.findChildren(QAbstractButton)
-                if _visible(button) and button.isEnabled()
-            ]
-    # **Eine Sperre, die von selbst fällt, nennt ihren Weg im Satz** (FD-30):
-    # Die Befundhandlung während der Rechnung sagt, dass sie mit dem Ende der
-    # Berechnung wieder frei ist — dafür gibt es keine Menüzeile.
-    texts.append(computing_refusal())
-    cleaned = {text.replace("&", "").rstrip(".… ").strip() for text in texts}
-    return {text for text in cleaned if len(text) >= 4}
+    buttons = [
+        button.text()
+        for top in QApplication.topLevelWidgets()
+        if top.isVisible()
+        for button in top.findChildren(QAbstractButton)
+        if _visible(button) and button.isEnabled()
+    ]
+    return menus, buttons, [computing_refusal()]
+
+
+def surface_field_titles(widget: Any) -> list[str]:
+    """Die Titel der offenen Eingabefelder auf der Fläche eines grauen Bedienelements.
+
+    Entscheidung Koordinator (FD-31): *Übernehmen* der Maßgruppe ist vor der
+    ersten Eingabe grau und sagt „Erst „<Feldtitel>“ ändern, dann übernehmen.“ —
+    das Feld ist der Ausweg. Die Fläche ist der nächste Behälter des Elements,
+    der Eingabefelder trägt (die Maßgruppe, ein Dialog). Gesucht wird nicht über
+    eine Karte hinaus (eigener Hintergrund, ``autoFillBackground``) und nie im
+    Hauptfenster selbst: Dort stehen die Felder anderer Flächen. Ein graues Feld
+    ist kein Ausweg. Der Titel ist die Beschriftung im Formular, die
+    Beschriftung mit dem Feld als Partner oder der zugängliche Name.
+    """
+    from PySide6.QtWidgets import (
+        QAbstractSpinBox,
+        QComboBox,
+        QFormLayout,
+        QLabel,
+        QLineEdit,
+        QMainWindow,
+    )
+
+    def inputs(root: Any) -> list[Any]:
+        return [
+            field
+            for kind in (QAbstractSpinBox, QComboBox, QLineEdit)
+            for field in root.findChildren(kind)
+            if _visible(field)
+            and not isinstance(field.parentWidget(), (QAbstractSpinBox, QComboBox))
+        ]
+
+    surface = widget.parentWidget()
+    while surface is not None and not inputs(surface):
+        if surface.isWindow() or surface.autoFillBackground():
+            return []
+        surface = surface.parentWidget()
+    if surface is None or isinstance(surface, QMainWindow):
+        return []
+    titles: list[str] = []
+    for field in inputs(surface):
+        if not field.isEnabled() or (isinstance(field, QLineEdit) and field.isReadOnly()):
+            continue
+        titles.append(field.accessibleName())
+        for form in surface.findChildren(QFormLayout):
+            caption = form.labelForField(field)
+            if isinstance(caption, QLabel):
+                titles.append(caption.text())
+        titles += [label.text() for label in surface.findChildren(QLabel) if label.buddy() is field]
+    return [title for title in titles if title]
+
+
+def names_a_way_out(
+    reason: str,
+    menus: Sequence[Sequence[str]],
+    buttons: Sequence[str],
+    *,
+    phrases: Sequence[str] = (),
+    fields: Sequence[str] = (),
+) -> bool:
+    """Ob ein Sperrgrund den Ausweg nennt (Konzept V5, Entscheidung Koordinator).
+
+    Ein Sperrgrund braucht keinen Knopf, er muss aber den Weg nennen — als
+    Menüweg „Menü → Zeile“ (mindestens die letzten zwei Glieder, etwa
+    „Hilfe → Solidon freischalten …“), mit den ganzen Wörtern eines offenen
+    Knopfs, mit einem Satz, der selbst der Weg ist (``phrases``), oder mit dem
+    Titel eines offenen Eingabefelds derselben Fläche (``fields``, FD-31). Ein
+    Teilstring genügt nicht (Durchsicht welle4 C-L2): „Dateien“ nennt den Knopf
+    *Datei* nicht, und eine Menüzeile ohne ihr Menü findet der Kunde nicht.
+    Kürzelzeichen, Doppelpunkt und Auslassungspunkte zählen nicht mit; ein Knopf
+    oder Satz unter vier Zeichen ist kein Ausweg („OK“).
+    """
+    import re
+
+    def clean(text: str) -> str:
+        return text.replace("&", "").rstrip(":.… ").strip()
+
+    def named(text: str) -> bool:
+        return re.search(rf"(?<!\w){re.escape(text)}(?!\w)", reason) is not None
+
+    for path in menus:
+        parts = [clean(part) for part in path]
+        if len(parts[-1]) < 4:
+            continue
+        if any(named(" → ".join(parts[start:])) for start in range(len(parts) - 1)):
+            return True
+    if any(len(text) >= 4 and named(text) for text in map(clean, [*buttons, *phrases])):
+        return True
+    return any(text and named(text) for text in map(clean, fields))
 
 
 def _field_refusals() -> list[dict[str, Any]]:
@@ -1514,27 +1635,31 @@ def _house_messages() -> list[dict[str, Any]]:
     ``buttons()`` und ihre Rolle. Der Ausgang (*Schließen*, Escape) ist keine
     Handlung, die das Problem löst — er zählte sonst als „ohne Wirkung“ (V5).
     """
-    from PySide6.QtWidgets import QApplication, QDialogButtonBox
+    from PySide6.QtWidgets import QApplication
 
     found: list[dict[str, Any]] = []
     for dialog in QApplication.topLevelWidgets():
         if "MessageDialog" not in _classes(dialog) or not dialog.isVisible():
             continue
-        exits = QDialogButtonBox.ButtonRole.RejectRole
-        actions = [
-            {
-                "label": _text_of(button),
-                "target": vocabulary_name(button),
-                "clicked": False,
-                "effect": None,
-            }
-            for button in dialog.buttons()
-            if _visible(button)
-            and button.isEnabled()
-            and dialog.button_box.buttonRole(button) != exits
-        ]
-        found.append({"text": dialog.text(), "actions": actions, "kind": "meldung"})
+        found.append({"text": dialog.text(), "actions": _house_actions(dialog), "kind": "meldung"})
     return found
+
+
+def _house_actions(dialog: Any) -> list[dict[str, Any]]:
+    """Die Handlungen einer Meldung im Hausstil: ihre bedienbaren Knöpfe ohne den Ausgang."""
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    exits = QDialogButtonBox.ButtonRole.RejectRole
+    return [
+        {
+            "label": _text_of(button),
+            "target": vocabulary_name(button),
+            "clicked": False,
+            "effect": None,
+        }
+        for button in dialog.buttons()
+        if _visible(button) and button.isEnabled() and dialog.button_box.buttonRole(button) != exits
+    ]
 
 
 def visible_texts(root: Any) -> list[str]:

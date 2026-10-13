@@ -98,6 +98,9 @@ NEW_RESOLVERS = (
     "_display_to_global",
     "_shows_the_view",
     "point_for",
+    "edge_point_for",
+    "_along",
+    "_nudged",
     "_grip_point",
     "widget_under",
     "zone_of",
@@ -491,7 +494,7 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     # zwei Fälle darunter an der Attrappe und der native Fall am echten Bild.
     # „Zuletzt geöffnet“ steht auf dem Startbildschirm: eigener Fall darunter.
     # Die rohen Meldungsfenster und ihre Knöpfe gehen modal auf: eigene Fälle darunter.
-    seen.update({"view", "start.recent", "message", "message.button"})
+    seen.update({"view", "view.edge", "start.recent", "message", "message.button"})
     assert seen >= NEW_KINDS, sorted(NEW_KINDS - seen)
 
 
@@ -753,8 +756,10 @@ def test_widget_under_finds_the_child_and_an_open_menu_first(qt_app: Any) -> Non
 @pytest.mark.usefixtures("require_graphics_adapter")
 def test_a_click_at_point_for_chooses_the_feature(native_window_platform: str) -> None:
     """Am echten Fenster: Klicks an der Stelle aus ``point_for`` wählen erst den
-    Körper, dann die Fläche — die Stelle trifft, was sie verspricht. Danach findet
-    ``handle:move.*`` die Pfeile des Bewegungsgriffs im echten Bild."""
+    Körper, dann die Fläche — die Stelle trifft, was sie verspricht. Am gewählten
+    Körper wählt ein Klick an ``view.edge:obj_1`` eine seiner Kanten (Durchsicht
+    welle4 C-M4). Danach findet ``handle:move.*`` die Pfeile des Bewegungsgriffs im
+    echten Bild."""
     import os
     import subprocess
     import sys
@@ -774,7 +779,8 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 window = MainWindow(Session(), UiSettings())
-window.resize(1920, 1032)
+from tools.function_checks import SMALLEST_WINDOW
+window.resize(*SMALLEST_WINDOW)
 window.show()
 assert QTest.qWaitForWindowExposed(window)
 window._show_start_screen(False)
@@ -802,6 +808,21 @@ for click in range(2):
         QTest.qWait(20)
 assert window.object_tree.selected_feature() == 'face_top', window.object_tree.selected_feature()
 window.object_tree.select_object('obj_1')
+for _ in range(10):
+    application.processEvents()
+    QTest.qWait(20)
+assert window.viewport.highlighted_edge() is None
+step = guide_targets.next_click(window, 'view.edge:obj_1')
+assert step.why == 'ziel', step
+under = guide_targets.widget_under(step.rect.center())
+QTest.mouseClick(under, Qt.MouseButton.LeftButton, pos=under.mapFromGlobal(step.rect.center()))
+for _ in range(30):
+    application.processEvents()
+    QTest.qWait(20)
+edge = window.viewport.highlighted_edge()
+assert edge is not None and edge[0] == 'obj_1', edge
+print('view.edge chose an edge', flush=True)
+window.object_tree.select_object('obj_1')
 window.tools.toggle('transform')
 for _ in range(30):
     application.processEvents()
@@ -824,6 +845,7 @@ os._exit(0)
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert "point_for chose the feature" in done.stdout, done.stdout
+    assert "view.edge chose an edge" in done.stdout, done.stdout
 
 
 def test_the_recent_projects_and_the_dialog_fields_resolve(qt_app: Any, tmp_path: Path) -> None:
@@ -834,9 +856,10 @@ def test_the_recent_projects_and_the_dialog_fields_resolve(qt_app: Any, tmp_path
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from tools.function_checks import SMALLEST_WINDOW
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1920, 1032)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     try:
         first, second = tmp_path / "eins.p3d", tmp_path / "zwei.p3d"
@@ -871,9 +894,10 @@ def test_a_menu_hidden_from_the_bar_has_no_way(qt_app: Any) -> None:
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from tools.function_checks import SMALLEST_WINDOW
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1920, 1032)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     _settle(qt_app)
     try:
@@ -1045,6 +1069,50 @@ def test_point_for_on_a_coarse_view_takes_only_a_hit_on_its_own_triangle(
     assert guide_targets.point_for(window, "obj_1", "hole_1") is not None
 
 
+def test_edge_point_for_takes_a_spot_on_an_edge_the_view_offers(
+    prepared_window: Any, monkeypatch
+) -> None:
+    """Durchsicht welle4 C-M4: ``view.edge:obj_1`` ist die Mitte einer Kante, die die
+    Ansicht selbst anklickbar führt (``Viewport._prepared_edges``), vom Pick bestätigt.
+
+    Der Pick ist nachgestellt und trifft den Körper nur an der Mitte einer geraden
+    Kante. Liegt der Treffer weit weg — die Kante steht hinter einer Fläche — oder
+    trifft er nichts, gibt es keine Stelle. Ob der Klick dort am echten Fenster
+    die Kante wählt, prüft der native Fall darüber.
+    """
+    import numpy as np
+
+    from app.ui import guide_targets
+
+    window = prepared_window
+    viewport = window.viewport
+    straight = [points for _key, points in viewport._prepared_edges("obj_1") if len(points) == 2]
+    assert straight, "der Quader hat gerade Kanten"
+    middle = np.asarray(straight[0], dtype=float).mean(axis=0)
+    spot = viewport.display_of(tuple(float(value) for value in middle))
+    assert spot is not None
+
+    def picked(distance: float) -> Any:
+        def pick(x: int, y: int) -> Any:
+            if abs(spot[0] - x) <= 1 and abs(spot[1] - y) <= 1:
+                return ("obj_1", tuple(float(value) for value in middle + distance), -1, None)
+            return None
+
+        return pick
+
+    monkeypatch.setattr(guide_targets, "_shows_the_view", lambda _window, _point: True)
+    monkeypatch.setattr(viewport, "placement_hit", picked(0.0))
+    point = guide_targets.edge_point_for(window, "obj_1")
+    local = viewport.mapFromGlobal(point)
+    assert abs(local.x() - spot[0]) <= 1 and abs(local.y() - spot[1]) <= 1, (local, spot)
+    step = guide_targets.next_click(window, "view.edge:obj_1")
+    assert (step.why, step.rect.center()) == ("ziel", point)
+    for pick in (picked(100.0), lambda _x, _y: None):
+        monkeypatch.setattr(viewport, "placement_hit", pick)
+        with pytest.raises(guide_targets.MissingTargetError, match="keine sichtbare Kante"):
+            guide_targets.edge_point_for(window, "obj_1")
+
+
 def test_the_menu_names_are_the_same_in_another_language(qt_app: Any) -> None:
     """Die Namen kommen aus der Quelle: auf Englisch gebaut dieselben wie auf Deutsch
     (Review M3) — auf Deutsch sind Anzeige und Quelle gleich und beweisen nichts."""
@@ -1123,17 +1191,12 @@ def test_a_widget_below_the_visible_part_is_reached_by_scrolling(qt_app: Any) ->
         window.deleteLater()
 
 
-def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(qt_app: Any) -> None:
-    """D0 F-19: Ein Feld, das sein innerer Rollbereich ganz zeigt, der äußere aber abschneidet.
-
-    Die Auswahlkarte steckt im Rollbereich der Karte und im äußeren
-    ``FittedScroller``. Gefragt war nur der nächste Rollbereich: Dort stand das
-    Ziel „sichtbar“, und der Klick fiel unter die Karte. Jetzt zählt jeder
-    Bereich, gerollt wird der erste, der rollen kann — hier der äußere.
-    """
+@pytest.fixture
+def nested_scroll(qt_app: Any) -> Iterator[tuple[Any, Any, Any]]:
+    """Fenster, äußerer und innerer Rollbereich: Der innere zeigt ``setting:probe``
+    ganz, der äußere schneidet es ab — wie Auswahlkarte und ``FittedScroller``."""
     from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
 
-    from app.ui import guide_targets
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -1160,18 +1223,57 @@ def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(qt_ap
     _settle(qt_app)
     try:
         assert inner.verticalScrollBar().maximum() == 0, "der innere Bereich rollt nicht"
-        bar = outer.verticalScrollBar()
-        assert bar.maximum() > 0
-        step = guide_targets.next_click(window, "setting:probe")
-        assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
-        assert bar.value() == 0, "next_click hat selbst gerollt"
-        bar.setValue(bar.maximum())
-        _settle(qt_app)
-        assert guide_targets.next_click(window, "setting:probe").why == "ziel"
+        assert outer.verticalScrollBar().maximum() > 0
+        yield window, outer, inner
     finally:
         outer.close()
         outer.deleteLater()
         window.deleteLater()
+
+
+def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(
+    nested_scroll: tuple[Any, Any, Any], qt_app: Any
+) -> None:
+    """D0 F-19: Ein Feld, das sein innerer Rollbereich ganz zeigt, der äußere aber abschneidet.
+
+    Die Auswahlkarte steckt im Rollbereich der Karte und im äußeren
+    ``FittedScroller``. Gefragt war nur der nächste Rollbereich: Dort stand das
+    Ziel „sichtbar“, und der Klick fiel unter die Karte. Jetzt zählt jeder
+    Bereich, gerollt wird der erste, der rollen kann — hier der äußere.
+    """
+    from app.ui import guide_targets
+
+    window, outer, _inner = nested_scroll
+    bar = outer.verticalScrollBar()
+    step = guide_targets.next_click(window, "setting:probe")
+    assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
+    assert bar.value() == 0, "next_click hat selbst gerollt"
+    bar.setValue(bar.maximum())
+    _settle(qt_app)
+    assert guide_targets.next_click(window, "setting:probe").why == "ziel"
+
+
+def test_area_for_rolls_every_scroll_area_that_cuts_the_target_off(
+    nested_scroll: tuple[Any, Any, Any], qt_app: Any
+) -> None:
+    """Durchsicht welle4 C-L14: der Zwilling aus F-19 in ``area_for`` (``_in_view``).
+
+    ``area_for`` deckt auf und rollt selbst — jeden umgebenden Bereich, von innen
+    nach außen. Rollte es nur den nächsten, stünde der Rahmen einer Tour oder
+    eines Handbuchbilds unter der Karte; ``next_click`` nennt danach dieselbe
+    Stelle als Ziel.
+    """
+    from app.ui import guide_targets
+
+    window, outer, _inner = nested_scroll
+    bar = outer.verticalScrollBar()
+    rect = guide_targets.area_for(window, "setting:probe")
+    _settle(qt_app)
+    shown = QRect(outer.viewport().mapToGlobal(QPoint(0, 0)), outer.viewport().size())
+    assert bar.value() > 0, "area_for hat den äußeren Bereich nicht gerollt"
+    assert shown.contains(rect.center()), (rect, shown)
+    step = guide_targets.next_click(window, "setting:probe")
+    assert (step.why, step.rect) == ("ziel", rect)
 
 
 def test_area_for_opens_the_group_that_next_click_names(prepared_window: Any, qt_app: Any) -> None:
@@ -1262,9 +1364,10 @@ def test_move_before_names_the_numbers_the_history_shows(qt_app: Any) -> None:
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from tools.function_checks import SMALLEST_WINDOW
 
     window = MainWindow(Session(), UiSettings())
-    window.resize(1920, 1032)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     window._show_start_screen(False)
     try:

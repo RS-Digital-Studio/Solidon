@@ -105,7 +105,7 @@ Bemaßung→acotación · Maß→cota · Netz→malla · wasserdicht→estanco �
 Druckplatte→placa de impresión · Bauraum→volumen de impresión ·
 Schichtanalyse→análisis de capas · Schichthöhe→altura de capa · Düse→boquilla ·
 Überhang→voladizo · Insel→isla · Brücke→puente · Stützen→soportes · Baumstützen→soportes en árbol ·
-Gewinde→rosca · Senkung→avellanado · Aushöhlen→vaciado · Passstift→pasador ·
+Gewinde→rosca · Senkung→avellanado · Bohrung→taladro · Aushöhlen→vaciado · Passstift→pasador ·
 Trennebene→plano de corte · Startwert→semilla · Baugruppe→ensamblaje ·
 Merkmal→característica · Werkzeug→herramienta · Ansicht→vista ·
 Drucker→impresora · Materialprofil→perfil de material.

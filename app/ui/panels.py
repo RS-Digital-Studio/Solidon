@@ -9283,8 +9283,10 @@ class FeaturePanel(QWidget):
         """Ob die Maße des gezeigten Merkmals gerade im Bild stehen — dann
         trägt die Maßgruppe Übernehmen und Abbrechen, und die Knöpfe hier
         unten gehen mit (``set_measuring``)."""
-        self._measure_op: str | None = None
-        """Welche Handlung im Bild steht — ihr Block rechts geht mit (RM-199)."""
+        self.measure_op: str | None = None
+        """Welche Handlung im Bild steht — ihr Block rechts geht mit (RM-199).
+        Öffentlich, weil der Prüfstand fragt, was die Maßgruppe trägt
+        (``function_surface.op_in_view``); gesetzt nur von ``set_measuring``."""
         self._measure_begun = False
         """Ob die Maßgruppe schon einen Zug oder eine Zahl gesehen hat — dann
         sind auch die übrigen Handlungen gesperrt, bis sie endet."""
@@ -10351,7 +10353,10 @@ class FeaturePanel(QWidget):
         control_reason = field_refusal or reason
         self._apply.setEnabled(self._apply_allowed())
         self._lock_note.setText(control_reason or "")
-        _set_shown(self._lock_note, bool(control_reason) and bool(self._built))
+        _set_shown(
+            self._lock_note,
+            bool(control_reason) and bool(self._built) and control_reason != change_refusal(),
+        )
         if control_reason:
             self._apply.setToolTip(control_reason)
             self._apply.setAccessibleDescription(control_reason)
@@ -10479,7 +10484,7 @@ class FeaturePanel(QWidget):
                 continue
             entry = self._runs.get(child.property("handlingKey"))
             in_measure = self._measuring and (
-                self._measure_begun or (entry is not None and entry.op == self._measure_op)
+                self._measure_begun or (entry is not None and entry.op == self.measure_op)
             )
             child.setEnabled(not reason and not in_measure)
             # Feld und Knopf der Zeile nennen den Grund, nicht ihren eigenen
@@ -10491,8 +10496,12 @@ class FeaturePanel(QWidget):
         self._lock_note.setText(reason)
         # Ohne Zeilen gibt es nichts, was der Satz erklären könnte: Über dem
         # leeren Zustand („Kein Merkmal gewählt …") stünde eine Absage auf
-        # eine Frage, die niemand gestellt hat.
-        _set_shown(self._lock_note, bool(reason) and bool(self._built))
+        # eine Frage, die niemand gestellt hat. **Die Freischaltung sagt die
+        # Zeile unter dem Suchfeld**, für den ganzen Reiter; hier stünde sie
+        # ein zweites Mal (FD-32). Grau und Grund bleiben an jedem Element.
+        _set_shown(
+            self._lock_note, bool(reason) and bool(self._built) and reason != change_refusal()
+        )
         if reason:
             for button in (self._in_view, self._apply, self._cancel):
                 button.setToolTip(reason)
@@ -11000,7 +11009,7 @@ class FeaturePanel(QWidget):
         Änderungsumfang —, bleibt stehen; ein Klick hinein holt ihn ins Bild
         (``MainWindow._hand_the_measures_over``).
         """
-        op = self._measure_op
+        op = self.measure_op
         if (
             not self._measuring
             or op is None
@@ -11832,7 +11841,7 @@ class FeaturePanel(QWidget):
         (``_settle_lock``).
         """
         self._measuring = bool(active)
-        self._measure_op = op if active else None
+        self.measure_op = op if active else None
         self._measure_begun = bool(active and begun)
         self._settle_lock()
         _set_shown(
@@ -11851,9 +11860,9 @@ class FeaturePanel(QWidget):
                 self._measuring
                 and entry is not None
                 and (
-                    entry.op == self._measure_op
+                    entry.op == self.measure_op
                     or (
-                        self._measure_op in {"drill_hole", "drill_brep_hole"}
+                        self.measure_op in {"drill_hole", "drill_brep_hole"}
                         and entry.op in LEADS_INTO_THE_VIEW
                     )
                 )
@@ -11898,9 +11907,9 @@ class FeaturePanel(QWidget):
     def request_in_view(self) -> None:
         """Denselben Weg nehmen wie der Knopf *Im Bild einstellen* — wenn er steht.
 
-        Für das Hauptfenster, das die Maße nach einem Übernehmen wieder ins
-        Bild bringt: Es klickt nicht auf ein Widget, es nimmt den Weg, der am
-        Widget hängt. Wo kein Knopf steht, geschieht nichts.
+        Für das Hauptfenster, das die Maße nach einer Auswahl oder einem
+        Übernehmen ins Bild bringt: Es klickt nicht, es nimmt den Weg am Knopf
+        samt Scharfmachen (FD-34). Wo kein Knopf steht, geschieht nichts.
 
         **Die scharfe Handlung hat Vorrang.** Der Knopf steht einmal je
         Merkmal (``_settle_in_view``) und führt zur ersten Handlung mit Weg
@@ -11912,8 +11921,7 @@ class FeaturePanel(QWidget):
         if armed is not None and armed.in_view is not None:
             armed.in_view()
             return
-        if self._into_view is not None:
-            self._into_view()
+        self._show_armed_in_view()
 
     def _group_changed(self, _checked: bool) -> None:
         """Ein geänderter Umfang braucht dieselbe Vorschau wie geänderte Maße."""

@@ -63,6 +63,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No separador *Seleção*, um diâmetro abaixo do limite em *Alterar furo* remete agora para *Remover característica*, que remove o furo por completo, com o escareamento se quiser.
 - A reconstrução (*Reconstruir modelo*) já não aconselha outros limites quando nenhum valor permitido bastaria, e mostra as propostas iguais uma só vez.
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
+- Ao escolher um furo num modelo carregado, as medidas na vista e o separador *Seleção* indicam agora a mesma ação, *Alterar furo*. Na versão 0.6.0 ficava ali aberto *Mover característica*.
 
 ## 0.6.0
 

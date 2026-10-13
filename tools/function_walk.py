@@ -410,14 +410,6 @@ def place_of(steps: Sequence[Mapping[str, Any]], target: str) -> dict[str, Any]:
     return {"where": where, "path": path, "error": None}
 
 
-def search_rank(hits: Sequence[str], target: str) -> int | None:
-    """Der Rang des Ziels unter den sichtbaren Treffern, ab 1; ``None``, wenn es fehlt."""
-    for rank, hit in enumerate(hits, 1):
-        if hit == target:
-            return rank
-    return None
-
-
 class QtPorts:
     """Die Ports am echten Fenster: ``guide_targets`` und ``QTest``-Ereignisse.
 
@@ -574,7 +566,7 @@ class QtPorts:
         """Das Widget, das ein Ziel ohne eigenes Widget trägt, oder ``None``.
 
         Die Liste oder der Baum einer Zeile, die Liste des offenen Katalogs für
-        ``part:``, die Ansicht für ``view:``, ``viewport`` und einen Griff im
+        ``part:``, die Ansicht für ``view:``, ``view.edge:``, ``viewport`` und einen Griff im
         Bild; eine Leiste über der Ansicht (``handle:bar.*``) ist ihr eigenes
         Widget und liegt in der Werkzeugzeile, nicht in der Ansicht (Review N1).
         """
@@ -586,7 +578,7 @@ class QtPorts:
         window = self.window
         if window is None:
             return None
-        if kind == "view" or name == "viewport":
+        if kind in ("view", "view.edge") or name == "viewport":
             return window.viewport
         if kind == "handle":
             try:

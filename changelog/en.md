@@ -63,6 +63,7 @@ it into `website/version.json`.
 - Typing a diameter below the limit in *Change bore* on the *Selection* tab now points to *Remove feature*, which removes the bore entirely, with its countersink if you like.
 - Rebuilding (*Rebuild model*) no longer suggests other limits when no allowed value would be enough, and shows identical proposals only once.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
+- When you select a bore in a loaded model, the measures in the view and the *Selection* tab now mean the same action, *Change bore*. In version 0.6.0 *Move feature* was open there.
 
 ## 0.6.0
 

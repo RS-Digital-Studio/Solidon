@@ -770,11 +770,17 @@ class BooleanFailedError(GeometryError):
         # *Voxelstufe erzwingen*, also genau die Stufe, die noch offen war.
         # Zwei Sätze, die sich widersprechen, und keiner davon anklickbar.
         #
-        # Jetzt sagt der Titel, was gilt: War die Voxelstufe nicht dran, sagt
+        # Jetzt sagt der Titel, was gilt: Hat die Güte die Kette gekürzt, sagt
         # er es. Einen Knopf dafür gibt es nicht mehr (siehe
         # ``default_suggestions``): Die gekürzte Kette rechnet die Auswertung
         # selbst zu Ende, eine festgelegte rechnet nie anders.
-        if attempted and "voxel" not in attempted:
+        #
+        # **Nur die gekürzte, nicht jede ohne Voxelstufe** (Durchsicht über
+        # fix/review-kern): Hat der Aufrufer seine Stufen festgelegt, folgt
+        # keine vollständige Rechnung, und „die schnelle Rechnung" verspräche
+        # eine. Dort gilt der Titel der Klasse — auf keinem Weg, den der
+        # Schritt zulässt.
+        if cut_short:
             kwargs.setdefault(
                 "title",
                 _("Mit der schnellen Rechnung ließ sich hier kein sauberes Ergebnis bilden."),
