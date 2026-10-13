@@ -67,6 +67,20 @@ das Konzept.
 
 ## Verlauf
 
+- 13.10.2026, 03:50, Phase 2, D0 läuft, Codestruktur Schritt 0 daneben: Die
+  Durchsicht über `welle4` vor main ist durch (vier Teile, Berichte in
+  `output/konsolidierung-2026-10-12/review-welle4-{a,b,c,d}.md`): ein schwerer
+  Fund im Prüfstand (Prüfpunkt 18 galt ohne Messung als erfüllt), mittlere in
+  Oberfläche, Kern, Prüfstand und Unterlagen. Sechs Fixagenten beheben sie auf
+  eigenen Zweigen (`fix/sperre-vollstaendig`, `fix/zeile-bohrung`,
+  `fix/review-oberflaeche`, `fix/review-kern`, `fix/pruefstand-urteile`,
+  `fix/pruefstand-flaeche`); die Unterlagenfunde sind auf `welle4`. origin/main
+  `a47ff34fc` ist hereingeholt. Die Website nennt in sechs Sprachen 1920 × 1080
+  bei 100 % (Upload wartet auf Robert). Fehlermeldungen mit Handlung sind eine
+  Z2-Ausnahme. Neben D0 laufen die Pakete R und W13 aus Schritt 0 (nur neue
+  Dateien; Konzept Funktionsdurchgang §13 Nr. 2). **Als Nächstes:** Fixe
+  integrieren, je eine Nachprüfung, zweiter Probelauf, Karten und Regeln in
+  einem Durchgang, Tor, main; dann die übrigen Pakete von Schritt 0.
 - 13.10.2026, 00:52, Phase 2, D0 läuft: RM-788 und RM-789 sind vorgezogen auf
   main (`0742a8c50`). Der hängende Slicertest war ein Windows-Fenster „Nicht
   unterstützte 16 Bit-Anwendung“ beim Start einer Datei, die kein Programm ist,

@@ -207,9 +207,8 @@ Eintrag, sondern die Variantengruppe ihres Erzeugers
 **Die Mesh/B-Rep-Zwillinge** (Quader, Zylinder, Bohrung, Aushöhlen) haben
 **einen** Eintrag; `menu_twins()` sagt, welcher ihn trägt, auch für den
 Menüort des Agenten (§2.6). Der Zwilling heißt **genau** wie sein Partner
-(`create_brep_box` „Quader anlegen“, `drill_brep_hole` „Bohrung setzen“):
-Der Kunde sucht das Substantiv, die Suche ordnet nach Titel, und ein Wort
-davor läse sich wie eine Qualitätsstufe. Wo der versteckte steht, sagt
+(`create_brep_box` „Quader anlegen“, `drill_brep_hole` „Bohrung setzen“).
+Wo der versteckte steht, sagt
 `TWIN_WAYS` („über das Kontextmenü des Verlaufsschritts“ bzw. „im selben Dialog
 — der Körper entscheidet“); im Menü steht er nicht (`hidden_from_the_menu`), und weggelassen
 wird er nur, wenn sein Partner angeboten wird. **Was die beiden trennt, ist der
@@ -243,9 +242,8 @@ Körper.
 **Zwei Zeilen mit demselben Text sind eine Frage ohne Antwort:** Menüleiste und
 Auswahlfenster legen `MENU_TWINS` gleich zusammen; `surfaces.context_menu()`
 bleibt die **Rohmenge** (`tests/test_acceptance_p0.py`). Gezählt wird am
-gebauten Menü („kein Kontextmenü zeigt zwei Zeilen mit demselben Text“) —
-ein Test, der `operations_for_feature` als Sollmenge nimmt, schrumpft mit einem
-Filter darin still mit.
+gebauten Menü („kein Kontextmenü zeigt zwei Zeilen mit demselben Text“), nie
+gegen `operations_for_feature` als Sollmenge.
 
 ## Der Satz kommt vor den Dialog
 
@@ -307,11 +305,8 @@ Baustein.
 
 ## Ein Zeichen darf allein stehen, als geeinigtes Bild oder an fester Stelle
 
-Die Skizzenwerkzeuge leben vom ersten Fall, die obere Werkzeugleiste vom zweiten
-(sieben Knöpfe an fester Stelle, wenige an der Zahl, der Tooltip nennt Namen,
-Kürzel und Zweck). Die Werkzeugzeile unter dem Viewport bleibt beschriftet: Ihre
-Umschalter wechseln mit dem Zustand, und für „Schnitt“ und „Explosion“ gibt
-es kein Bild.
+Skizzenwerkzeuge sind geeinigte Bilder, die obere Werkzeugleiste hat feste
+Stellen; die Werkzeugzeile unter dem Viewport bleibt beschriftet.
 
 - **Wo das Wort vom Knopf verschwindet, steht es an drei Stellen weiter:**
   `QAction`, Tooltip, `statusTip` — den Satz holt `_button_tip` aus dem
@@ -326,8 +321,7 @@ es kein Bild.
   geht dem Wort an *Filamente* vor: Im Wunschmaß zählt sein Zeichen.
 - **Keiner der sieben Umschalter verschwindet:** `ToolStrip.set_tool_usable`
   graut ihn mit Grund (Explosion: „Dafür braucht es zwei Körper in der
-  Szene.“), und `_update_actions` fragt ihn **nach** der Freigabe aller — eine
-  Zeile, die sich beim Laden einer Datei umbaut, wirkt unzuverlässig.
+  Szene.“), und `_update_actions` fragt ihn **nach** der Freigabe aller.
 - **Wer eine Beschriftung ausblendet, zieht Handbuch (`app/core/manual.py`) und
   Tour (`app/core/tour.py`) mit** — die Tour zuerst, ihre `done=`-Schritte
   rücken sonst nicht weiter.
@@ -378,8 +372,17 @@ stehen je Sprache im Katalog (`registry.search.CUSTOMER_WORDS`, Kontext
 „Suchwörter“): Ein Titeltreffer mitten im Wort zählt nach ihnen, ein
 Kundenwort vor einem Titelwort, nie vor einem ganzen Titel, die Wörter
 einer Anfrage stehen in **einer** Wendung, und die ungenauen Stufen
-(`LOOSE_RANK`) werten wie der Agent (`rank_entries`). Rangfolge und
-Vorauswahl: `registry.search.ranked`, `first_choice`.
+(`LOOSE_RANK`) werten wie der Agent (`rank_entries`); dort wiegt eine gesagte
+Wendung wie ihre Wörter im Titel (`_said_weight`). Bei gleicher bester Güte
+geht nach Lage, Freigabe und ganzem Titel die genau gesagte Wendung vor einer,
+die das Wort nur enthält; ab `LOOSE_RANK` ist die Vorauswahl der erste Treffer
+(`ranked`, `first_choice`). `menubar.*` ist kein Suchtext (`searched_name`).
+
+**Eine Frage sucht ohne die Wörter, mit denen sie fragt** (`asked`,
+`query_parts`): `QUESTION_WORDS` fallen am Anfang, `REQUEST_WORDS` überall, je
+Sprache ein Katalogtext — das Register fragt nie. Keine Kundenwendung und kein
+Titel eröffnet eine Frage, keine trägt ein Bittwort
+(`test_no_question_word_is_a_word_of_a_customer_or_a_title`).
 
 **Die Kundenwörter gehören der Suche, nicht dem Agenten:** Er wertet nur
 `SYNONYMS` (`rank_operations`, `customer_words=False`); ihm eines zu geben
@@ -389,10 +392,7 @@ kurzen Stamm kein anderes Wort
 (`test_every_customer_word_belongs_to_a_row_of_the_search` hält die Schlüssel
 am Register und an den Fensterbefehlen).
 
-**Dieselben Kundenwörter führen durch das Handbuch** (`core/manual_search.py`):
-Es faltet mit `fold`, wägt mit `strength` und liest die Kundenwörter über
-`customer_phrases` und `says`; nennt eine Suche genau die Wendung einer
-Operation, sucht es zusätzlich deren Titel als Wortfolge. Ein neues Kundenwort
-ändert also auch, wo das Handbuch aufschlägt (`tests/test_manual_search.py`
-misst die Quote, Konzept Handbuch §11). Eine eigene Wortliste des Handbuchs wäre ein Zwilling dieser
-Tabelle (`zwillinge.md`).
+**Dieselben Kundenwörter führen durch das Handbuch** (`core/manual_search.py`,
+Fragen gekürzt über `asked`): Ein neues Kundenwort ändert auch, wo es
+aufschlägt (`tests/test_manual_search.py`, Konzept Handbuch §11); eine eigene
+Wortliste dort wäre ein Zwilling (`zwillinge.md`).

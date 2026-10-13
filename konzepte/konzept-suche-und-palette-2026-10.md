@@ -227,3 +227,13 @@ Auswahl (der eigene Körper, der Baustein an der Auswahl ist dort gesperrt),
 (*Aushöhlen*, aus RM-734). Bei gleichem Titel ohne Kundenwort entscheidet der
 interne Name („Schraube“ an der Fläche wählt den eigenen Körper); das bleibt
 so, bis ein Kundenwort es entscheidet.
+
+Der Funktionsdurchgang D0 (`konzept-funktionsdurchgang-2026-10.md`) und die
+Durchsicht über `welle4` fanden in der Suche diese.
+
+| Fund | Art | Schwere | Beleg | Stand |
+|---|---|---|---|---|
+| FD-17: „Druckbett“, „Variable“ und „Benutzerparameter“ fanden *Auf das Bett setzen* und *Parameter anlegen* nicht vorn — kein Kundenwort trug die Wörter aus Slicer und CAD | Fehler | mittel | `test_the_word_from_the_slicer_or_the_cad_names_its_action` (sechs Sprachen), Fenstertest der Suchproben, vorher rot | behoben in `8f2c5c4d6`, Kundenwörter je Sprache |
+| FD-18: Fragen in eigenen Worten („Wie setze ich das Teil auf die Druckplatte?“) fanden ihre Handlung nicht — Fragewörter zählten als Inhalt, eine gesagte Wendung wog weniger als ein seltenes Titelwort, die Vorauswahl übersprang gesperrte Treffer | Fehler | mittel | `test_a_question_in_his_own_words_leads_to_the_action`, `test_a_question_finds_what_its_words_find` (sechs Sprachen), `test_a_question_to_the_manual_finds_what_its_words_find`, vorher rot | behoben in `8f2c5c4d6`: `asked`, `_said_weight`, Vorauswahl ab `LOOSE_RANK` der erste Treffer |
+| L2 (welle4-b): Das Lochwort folgte der Lage nur in vier Sprachen — „hole“ und „agujero“ wählten das *Schraubenloch*, „orificio“ am Körper die gesperrte Änderung, „foro“ und „furo“ an der Bohrung das Verschließen | Fehler | leicht | `test_the_hole_word_follows_the_place` (sechs Sprachen, Lagen aus `applies_to`, Ziel zuletzt in der Liste), vorher 8 von 13 rot; Fenstersonde über den Bestand | behoben: genau gesagte Wendung vor enthaltener bei gleicher bester Güte, Wendungen, die den Titel wiederholten, gestrichen, spanisch „Cambiar taladro“ |
+| L8 (welle4-b): Der Wächter der Bittwörter prüfte erst ab drei Buchstaben | Testlücke | leicht | Gegenprobe mit „loch es“: vorher grün, jetzt rot | behoben |

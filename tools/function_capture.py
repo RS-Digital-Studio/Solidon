@@ -1461,34 +1461,36 @@ def message_entries(window: Any) -> list[dict[str, Any]]:
                 "kind": "meldung",
             }
         )
-    menus, buttons = _ways(window)
+    menus, buttons, phrases = _ways(window)
     for button in window.findChildren(QPushButton):
         # Die Kurzhilfe zuerst, wie ``function_surface.grey_reason``: Sie zeigt der
         # graue Knopf dem Kunden; die Beschreibung kann vom offenen stammen (F-34).
         reason = button.toolTip() or button.accessibleDescription()
         if _visible(button) and not button.isEnabled() and reason:
-            found.append(
-                {
-                    "text": reason,
-                    "actions": [],
-                    "kind": "sperrgrund",
-                    "way_out": names_a_way_out(reason, menus, buttons),
-                }
-            )
+            way = names_a_way_out(reason, menus, buttons, phrases=phrases)
+            found.append({"text": reason, "actions": [], "kind": "sperrgrund", "way_out": way})
     return [*found, *_field_refusals(), *_house_messages()]
 
 
 def way_out(window: Any, reason: str) -> bool:
     """Ob ein Sperrgrund am offenen Fenster einen Ausweg nennt (:func:`names_a_way_out`)."""
-    return names_a_way_out(reason, *_ways(window))
+    menus, buttons, phrases = _ways(window)
+    return names_a_way_out(reason, menus, buttons, phrases=phrases)
 
 
-def _ways(window: Any) -> tuple[list[tuple[str, ...]], list[str]]:
+def _ways(window: Any) -> tuple[list[tuple[str, ...]], list[str], list[str]]:
     """Wohin ein Sperrgrund den Kunden schicken kann: die bedienbaren Zeilen der
-    Menüleiste mit ihrem Weg und die offenen Knöpfe aller sichtbaren Fenster, so wie
-    der Kunde sie in seiner Sprache liest."""
+    Menüleiste mit ihrem Weg, die offenen Knöpfe aller sichtbaren Fenster, so wie
+    der Kunde sie in seiner Sprache liest, und die Sätze, die selbst ein Weg sind.
+
+    **Eine Sperre, die von selbst fällt, nennt ihren Weg im Satz** (FD-30): Die
+    Befundhandlung während der Rechnung sagt, dass sie mit dem Ende der
+    Berechnung wieder frei ist (``change_lock.computing_refusal``) — dafür gibt
+    es keine Menüzeile.
+    """
     from PySide6.QtWidgets import QAbstractButton, QApplication
 
+    from app.ui.change_lock import computing_refusal
     from app.ui.guide_targets import menubar_entries
 
     menus = [
@@ -1503,24 +1505,31 @@ def _ways(window: Any) -> tuple[list[tuple[str, ...]], list[str]]:
         for button in top.findChildren(QAbstractButton)
         if _visible(button) and button.isEnabled()
     ]
-    return menus, buttons
+    return menus, buttons, [computing_refusal()]
 
 
-def names_a_way_out(reason: str, menus: Sequence[Sequence[str]], buttons: Sequence[str]) -> bool:
+def names_a_way_out(
+    reason: str,
+    menus: Sequence[Sequence[str]],
+    buttons: Sequence[str],
+    *,
+    phrases: Sequence[str] = (),
+) -> bool:
     """Ob ein Sperrgrund den Ausweg nennt (Konzept V5, Entscheidung Koordinator).
 
     Ein Sperrgrund braucht keinen Knopf, er muss aber den Weg nennen — als
     Menüweg „Menü → Zeile“ (mindestens die letzten zwei Glieder, etwa
-    „Hilfe → Solidon freischalten …“) oder mit den ganzen Wörtern eines offenen
-    Knopfs. Ein Teilstring genügt nicht (Durchsicht welle4 C-L2): „Dateien“ nennt
-    den Knopf *Datei* nicht, und eine Menüzeile ohne ihr Menü findet der Kunde
-    nicht. Kürzelzeichen und Auslassungspunkte zählen nicht mit; kürzer als vier
-    Zeichen ist kein Ausweg („OK“).
+    „Hilfe → Solidon freischalten …“), mit den ganzen Wörtern eines offenen
+    Knopfs oder mit einem Satz, der selbst der Weg ist (``phrases``). Ein
+    Teilstring genügt nicht (Durchsicht welle4 C-L2): „Dateien“ nennt den Knopf
+    *Datei* nicht, und eine Menüzeile ohne ihr Menü findet der Kunde nicht.
+    Kürzelzeichen, Doppelpunkt und Auslassungspunkte zählen nicht mit; ein Knopf
+    oder Satz unter vier Zeichen ist kein Ausweg („OK“).
     """
     import re
 
     def clean(text: str) -> str:
-        return text.replace("&", "").rstrip(".… ").strip()
+        return text.replace("&", "").rstrip(":.… ").strip()
 
     def named(text: str) -> bool:
         return re.search(rf"(?<!\w){re.escape(text)}(?!\w)", reason) is not None
@@ -1531,7 +1540,7 @@ def names_a_way_out(reason: str, menus: Sequence[Sequence[str]], buttons: Sequen
             continue
         if any(named(" → ".join(parts[start:])) for start in range(len(parts) - 1)):
             return True
-    return any(len(text) >= 4 and named(text) for text in map(clean, buttons))
+    return any(len(text) >= 4 and named(text) for text in map(clean, [*buttons, *phrases]))
 
 
 def _field_refusals() -> list[dict[str, Any]]:

@@ -22,6 +22,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A pesquisa encontra *Unir*, *Subtrair* e *Interseção* também como «booleano», e *Subtrair* também como «diferença».
 - A pesquisa encontra a função também para uma pergunta como «Como ponho a peça na mesa de impressão?» e conhece palavras de slicers e CAD como «variável».
 - Também a pesquisa no manual encontra a página certa para uma pergunta com as suas palavras.
+- Quem escreve «furo» ou «buraco» na pesquisa obtém *Abrir furo* num corpo e *Alterar furo* num furo selecionado, em todos os idiomas.
 - Com um corpo selecionado e um segundo na cena, o separador *Seleção* indica como acrescentar o segundo para *Unir*, *Subtrair* e *Interseção*.
 - O campo de pesquisa do separador *Seleção* está agora sempre presente, também sem seleção, e encontra cada função e cada comando com o seu atalho.
 - A paleta de comandos desaparece, porque o campo de pesquisa encontra o mesmo. *Pesquisar função* e Ctrl+Shift+P põem o cursor nele.
@@ -43,6 +44,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois de uma ação no *Relatório de verificação*, o relatório fica à frente e Ctrl+Z desfá-la logo. Até agora, o separador *Seleção* passava para a frente.
 - Ctrl+Z e Ctrl+Y funcionam também com o cursor num campo vazio, por exemplo no campo de pesquisa. Se escreveu algo ali, primeiro é desfeito o que escreveu.
 - Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
+- Sem ativação, também *Criar parâmetro …*, *Mover*, *Dividir*, as teclas do histórico e as medidas na vista ficam a cinzento. Cada motivo indica o caminho, como *Ajuda → Desbloquear o Solidon …*.
+- Quando uma ação do *Relatório de verificação* espera pelo cálculo em curso, indica que depois volta a ficar disponível, também para leitores de ecrã.
 - As mensagens da barra de estado já não colocam dois pontos depois de uma frase completa.
 - Com um só corpo, a árvore de objetos tem a altura do seu conteúdo, e o histórico com um só passo também. Na versão 0.6.0 ficava espaço vazio por baixo.
 - O passo mais recente continua visível no histórico quando novos corpos fazem crescer a árvore de objetos. Na versão 0.6.0 deslizava para baixo do limite do painel.
@@ -59,6 +62,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um corpo com rosca do catálogo de blocos volta a poder ser movido, rodado, espelhado, escalado e pousado na mesa. Na versão 0.6.0 a cadeia parava com um erro do programa.
 - No separador *Seleção*, um diâmetro abaixo do limite em *Alterar furo* remete agora para *Remover característica*, que remove o furo por completo, com o escareamento se quiser.
 - A reconstrução (*Reconstruir modelo*) já não aconselha outros limites quando nenhum valor permitido bastaria, e mostra as propostas iguais uma só vez.
+- Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 
 ## 0.6.0
 
