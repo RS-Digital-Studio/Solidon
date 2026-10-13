@@ -173,10 +173,11 @@ def prepared_window(qt_app: Any) -> Iterator[Any]:
     from app.ui.session import Session
     from app.ui.settings import UiSettings
     from tests.render_fakes import RecordingRenderer
+    from tools.function_checks import SMALLEST_WINDOW
 
     window = MainWindow(Session(), UiSettings())
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
-    window.resize(1920, 1032)
+    window.resize(*SMALLEST_WINDOW)
     window.show()
     window._show_start_screen(False)
     assert window.session.apply(

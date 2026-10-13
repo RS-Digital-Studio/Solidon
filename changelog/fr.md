@@ -23,6 +23,7 @@ dans `website/version.json`.
 - La recherche trouve *Réunir*, *Soustraire* et *Intersection* aussi sous « booléen », et *Soustraire* aussi sous « différence ».
 - La recherche trouve aussi la fonction pour une question comme « Comment poser la pièce sur le plateau ? » et connaît des mots des slicers et de la CAO comme « variable ».
 - La recherche dans le manuel trouve aussi la bonne page pour une question posée avec vos propres mots.
+- Qui tape « trou » ou « perçage » dans la recherche obtient *Percer un trou* sur un corps et *Modifier le trou* sur un perçage sélectionné, dans toutes les langues.
 - Avec un corps sélectionné et un second dans la scène, l'onglet *Sélection* indique comment ajouter le second pour *Réunir*, *Soustraire* et *Intersection*.
 - Le champ de recherche de l'onglet *Sélection* est désormais toujours là, même sans sélection, et trouve chaque fonction et chaque commande avec son raccourci.
 - La palette de commandes disparaît, car le champ de recherche trouve la même chose. *Rechercher une fonction* et Ctrl+Maj+P y placent le curseur.
@@ -44,9 +45,13 @@ dans `website/version.json`.
 - Après une action dans le *Rapport de contrôle*, le rapport reste au premier plan, et Ctrl+Z l'annule aussitôt. Jusqu'ici, l'onglet *Sélection* passait devant.
 - Ctrl+Z et Ctrl+Y fonctionnent aussi quand le curseur se trouve dans un champ vide, par exemple le champ de recherche. Si vous y avez tapé du texte, c'est d'abord la saisie qui est annulée.
 - Sans activation, les actions qui modifient le modèle sont grisées avec leur raison dans le *Rapport de contrôle*, *Sélection*, les menus contextuels et le filament. Le refus venait après le clic.
+- Sans activation, *Créer un paramètre …*, *Déplacer*, *Diviser*, les touches de l'historique et les cotes dans la vue sont grisés. Chaque raison indique la voie, comme *Aide → Déverrouiller Solidon …*.
+- Quand une action du *Rapport de contrôle* attend le calcul en cours, elle indique qu'elle redevient disponible ensuite, aussi pour les lecteurs d'écran.
 - Les messages de la barre d'état ne mettent plus de deux-points après une phrase complète.
 - Avec un seul corps, l'arbre des objets est aussi haut que son contenu, de même que l'historique avec une seule étape. La version 0.6.0 laissait un vide en dessous.
 - L'étape la plus récente reste visible dans l'historique quand de nouveaux corps agrandissent l'arbre des objets. Dans la version 0.6.0, elle glissait sous le bord du panneau.
+- La capture d'écran jointe à un retour montre désormais aussi le modèle sous Windows. Avec certaines cartes graphiques, elle montrait auparavant une image ancienne, comme l'écran de chargement.
+- Sous macOS, une boîte de dialogue ouverte, par exemple pour créer une vis du catalogue de blocs, reste au-dessus de la fenêtre principale. Un clic dans la fenêtre la passait derrière.
 
 ### Imprimer et transmettre au slicer
 
@@ -55,6 +60,10 @@ dans `website/version.json`.
 ### Modifier et esquisser
 
 - Un corps exact garde désormais ses caractéristiques après *Appliquer du texte*, *Incruster du texte* et *Creuser la contre-forme*. En version 0.6.0, plus aucune face ne pouvait ensuite être cliquée.
+- Un corps fileté du catalogue de blocs peut de nouveau être déplacé, tourné, mis en miroir, mis à l'échelle et posé sur le plateau. En version 0.6.0, la chaîne s'arrêtait sur une erreur du programme.
+- Dans l'onglet *Sélection*, un diamètre sous la limite dans *Modifier le trou* renvoie désormais à *Supprimer la caractéristique*, qui supprime tout le trou, fraisure comprise si on le veut.
+- La reconstruction (*Reconstruire le modèle*) ne conseille plus d'autres limites quand aucune valeur permise ne suffirait, et n'affiche qu'une fois les propositions identiques.
+- Si un perçage ou un récipient ne réussit qu'avec des sommets déplacés d'un rien, l'ouverture reste libre. En version 0.6.0, une peau très fine pouvait rester par-dessus.
 
 ## 0.6.0
 

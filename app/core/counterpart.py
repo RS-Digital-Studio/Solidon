@@ -510,7 +510,7 @@ def _matched_thread(
     dass es keine Normgröße ist.
 
     **Jede Reihe, und gefragt wird, wo zwei passen** (RM-544): Ein gedrucktes
-    Gewinde nennt seine Größe selbst (``size``); ein gemessenes trifft die
+    Gewinde nennt seine Größe selbst (``table_size``); ein gemessenes trifft die
     Größen der Reihen ``families`` (ohne Angabe aller), und passt es zu Größen
     aus verschiedenen Reihen, hält die Entscheidung an und fragt
     (:data:`AMBIGUOUS_THREAD`). Ein Linksgewinde bekommt ein Linksgewinde, ein
@@ -551,7 +551,7 @@ def _matched_thread(
     pitch = float(feature.params.get("pitch", 0.0))
     # Die Größe, die ein gedrucktes Gewinde nennt, gilt, solange Maß und Kegel
     # noch zu ihr passen — ein später geändertes Merkmal trägt sie sonst weiter.
-    named_size = feature.params.get("size")
+    named_size = feature.params.get("table_size")
     if (
         isinstance(named_size, str)
         and named_size in known

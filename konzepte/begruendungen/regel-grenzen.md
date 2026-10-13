@@ -757,6 +757,64 @@ Füllwort ist (eine Wendung „zu einem Teil" traf jede Anfrage mit „eine" und
 `test_every_customer_word_belongs_to_a_row_of_the_search` hält die Schlüssel
 am Register und an den Fensterbefehlen fest.
 
+**Und das Handbuch sucht mit denselben Wörtern** (`core/manual_search.py`): Es
+faltet mit `fold`, wägt mit `strength` und liest die Kundenwörter über
+`customer_phrases` und `says`; nennt eine Suche genau die Wendung einer
+Operation, sucht es zusätzlich deren Titel als Wortfolge. Eine Frage kürzt es
+mit derselben Funktion `asked` wie die Suche — vorher verlangte es jedes Wort
+auf der Seite, das Handbuch sagt „Sie“, und eine deutsche Frageform fand in 975
+von 1068 Fällen nichts (FD-18).
+
+**Und eine Frage sucht ohne die Wörter, mit denen sie fragt** (FD-18,
+Funktionsdurchgang D0). Die Suche zählte sie wie Inhalt: „wie“ steht als
+Titelwort der Mausbelegungen („Wie in Cura …“) in 18 Zeilen und wog dort
+8,09 Punkte, „kann“, „ich“ und „druckplatte?“ samt Fragezeichen mussten in den
+genauen Runden dastehen und fanden sich nie — jede Frage fiel in die dritte
+Runde. Frageformen über alle deutschen Kundenwendungen brachten das Ziel in 438
+von 621 Fällen unter die ersten drei, danach in allen. `QUESTION_WORDS` fallen
+nur am Anfang, denn mitten im Satz heißen sie oft etwas anderes („como“ in
+„guardar como STL“); `REQUEST_WORDS` fallen überall, denn die deutsche Frage
+stellt „ich“ hinter das Verb. Deshalb trägt keine Kundenwendung ein Bittwort,
+auch kein kurzes („mi“, „me“, „es“): `rank` vergleicht die ganze Wendung
+(`said_exactly`), und eine Frage könnte sie sonst nie mehr sagen (Durchsicht
+welle4-b, L8).
+
+**Und eine gesagte Wendung wiegt in der Wortsuche wie ihre Wörter im Titel**
+(`_said_weight`, FD-18). Sie brachte fest 6 Punkte, ein seltenes Wort im Titel
+einer anderen Zeile bis 19: *Druckplatte zeigen* blieb so vor *Auf das Bett
+setzen*, obwohl „Druckplatte“ dessen Kundenwort ist. Das ist die Ordnung, die
+`rank` seit RM-734 hat — eine Zuordnung vor einem Zufall. Der Agent behält die
+feste Zugabe; seine Wertung ist an der Suite gemessen (`agentenschicht.md`).
+
+**Und ab `LOOSE_RANK` wählt Return den ersten Treffer** (FD-18). Dort ordnet
+die Wertung der Wortsuche, wer danach kommt, ist schlechter gewertet und nicht
+gleich gut. Die Vorauswahl übersprang trotzdem jeden gesperrten: „auf
+Grundebene setzen“ ohne Auswahl wählte die Ansicht *Hinten*, „Wie kann ich
+abrunden?“ ein *Fassscharnier*, „bohren“ einen *Dübel*, „Teil kleiner machen“
+eine *Rippe*. Ein Klick, der etwas anderes tut, ist schlimmer als einer, der
+nichts tut; ein gesperrter erster Treffer sagt per Return seinen Grund.
+
+**Und `menubar.*` ist kein Suchtext** (`searched_name`, Review D0-W, L1). Die
+Kennung einer Zeile der Menüleiste ist deutsch in jeder Sprache: „chat“ fand
+über `menubar.flache_schattierung` die Schattierung. Die Handschlüssel der
+Fensterbefehle (`file.save`) bleiben Suchtext, ein Umsteiger tippt sie.
+
+**Und bei gleicher bester Güte geht die genau gesagte Wendung vor einer, die
+das Wort nur enthält** (Durchsicht welle4-b, L2). Italienisch „foro“ und
+portugiesisch „furo“ sind Titelwort von *Bohrung ändern* und *Bohrung
+verschließen*, und an der Bohrung stehen beide; die stabile Reihenfolge
+stellte das Verschließen vor, weil die Änderung dort als Feld des
+Merkmalfensters gilt. Gemeint ist die Zeile, deren Wendung „foro“ heißt, nicht
+die mit „chiudere foro“. Englisch „hole“ und spanisch „agujero“ wählten an
+jeder Lage das *Schraubenloch*: Sein Titel und eine Wendung, die ihn
+wiederholte („screw hole“, „bolt hole“, „agujero para tornillo“), ergaben die
+beste Güte und schlugen das genau gesagte Wort. Die Wendungen sind gestrichen,
+der Titel findet die Zeile weiter. Spanisch heißt *Bohrung ändern* jetzt
+„Cambiar taladro“ wie die übrigen Lochzeilen; „orificio“ trug allein sein
+Titel und wählte am Körper die gesperrte Änderung. Eine Wendung, die nur den
+eigenen Titel wiederholt, ordnet nichts zu — sie hebt die Zeile über jedes
+genau gesagte Wort.
+
 ## Maße als Parameter anlegen
 
 Die Regel in `grenzen.md` sichern `test_naming_the_dimensions_makes_them_project_parameters`,

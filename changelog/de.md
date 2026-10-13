@@ -47,6 +47,7 @@ Nutzen da und sonst nichts.
 - Die Suche findet *Vereinigen*, *Abziehen* und *Schnittmenge* auch unter „boolesch“ und „Boolean“, *Abziehen* auch unter „Differenz“.
 - Die Suche findet die Funktion auch zu einer Frage wie „Wie setze ich das Teil auf die Druckplatte?“ und kennt Wörter aus Slicer und CAD wie „Druckbett“ oder „Variable“.
 - Auch die Suche im Handbuch findet zu einer Frage in eigenen Worten die passende Seite.
+- Wer in der Suche „Loch“ oder „Bohrung“ tippt, bekommt am Körper *Bohrung setzen* und an einer gewählten Bohrung *Bohrung ändern*, in jeder Sprache.
 - Ist ein Körper gewählt und liegt ein zweiter in der Szene, sagt der Reiter *Auswahl*, wie man den zweiten für *Vereinigen*, *Abziehen* und *Schnittmenge* dazuwählt.
 - Das Suchfeld im Reiter *Auswahl* steht jetzt immer, auch ohne Auswahl, und findet jede Funktion und jeden Befehl samt Tastenkürzel.
 - Die Befehlspalette entfällt, denn das Suchfeld findet dasselbe. *Funktion suchen* und Strg+Umschalt+P setzen den Cursor hinein.
@@ -68,9 +69,13 @@ Nutzen da und sonst nichts.
 - Nach einer Handlung im Prüfbericht bleibt der Bericht vorn, und Strg+Z nimmt sie gleich zurück. Bisher sprang der Reiter *Auswahl* nach vorn.
 - Strg+Z und Strg+Y wirken auch, wenn der Cursor in einem leeren Feld steht, etwa im Suchfeld. Wer dort getippt hat, nimmt zuerst sein Tippen zurück.
 - Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
+- Ohne Freischaltung sind auch *Parameter anlegen …*, *Bewegen*, *Teilen*, die Tasten im Verlauf und die Maße im Bild grau. Jeder Grund nennt den Weg, etwa *Hilfe → Solidon freischalten …*.
+- Wartet eine Handlung im Prüfbericht auf die laufende Berechnung, sagt sie, dass sie danach wieder frei ist, auch einem Bildschirmleser.
 - Meldungen in der Statuszeile setzen keinen Doppelpunkt mehr hinter einen ganzen Satz.
 - Mit nur einem Körper ist der Objektbaum so hoch wie sein Inhalt, ebenso der Verlauf mit einem Schritt. In Version 0.6.0 blieb darunter leerer Platz.
 - Der neueste Schritt bleibt im Verlauf zu sehen, wenn neue Körper den Objektbaum wachsen lassen. In Version 0.6.0 rutschte er unter den Rand der Karte.
+- Das Bildschirmfoto einer Rückmeldung zeigt unter Windows jetzt auch das Modell. Auf manchen Grafikkarten stand dort vorher ein altes Bild, etwa der Ladebildschirm.
+- Unter macOS bleibt ein offener Dialog, etwa beim Anlegen einer Schraube aus dem Bausteinkatalog, über dem Hauptfenster. Ein Klick ins Fenster schob ihn vorher dahinter.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -79,6 +84,10 @@ Nutzen da und sonst nichts.
 ### Bearbeiten und Zeichnen
 
 - Ein exakter Körper behält jetzt nach *Text aufbringen*, *Schrift einlegen* und *Gegenform einlassen* seine Merkmale. In Version 0.6.0 ließ sich danach keine Fläche mehr anklicken.
+- Ein Körper mit Gewinde aus dem Bausteinkatalog lässt sich wieder verschieben, drehen, spiegeln, skalieren und aufs Bett setzen. In Version 0.6.0 hielt die Kette dabei mit einem Programmfehler an.
+- Tippt man im Reiter *Auswahl* bei *Bohrung ändern* einen Durchmesser unter der Grenze ein, nennt der Hinweis jetzt *Merkmal entfernen*. Damit verschwindet die Bohrung ganz, auf Wunsch samt Senkung.
+- Der Nachbau (*Modell nachbauen*) rät nicht mehr zu anderen Grenzen, wenn kein erlaubter Wert reichen würde, und zeigt gleiche Vorschläge nur einmal.
+- Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 
 ## 0.6.0
 

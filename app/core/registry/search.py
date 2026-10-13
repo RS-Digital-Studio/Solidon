@@ -1058,12 +1058,16 @@ def ranked(
     der Aufrufer stellt dort vorn hin, was an der Auswahl geht.
 
     **Bei gleicher Güte zuerst die Lage** (``here``: die Namen, die an der
-    Auswahl stehen), **dann der ganze Titel, dann das Kundenwort — nie das
-    Alphabet.** Ganzer Titel und „Titel und Kundenwort“ teilen die beste Güte;
-    den Rest entschied die Sortierung nach Titel, und „Tornillo“ wählte
-    spanisch das *Agujero para tornillo* vor statt des Bausteins *Tornillo*,
-    „Wandhalter“ den Zwilling ohne Kundenwort (Nachprüfung RM-735, N1).
-    „Verschieben“ verschiebt am Körper den Körper, an der Bohrung das Merkmal.
+    Auswahl stehen), **dann der ganze Titel, dann das genau gesagte Kundenwort,
+    dann eines, das die Wörter enthält — nie das Alphabet.** Ganzer Titel und
+    „Titel und Kundenwort“ teilen die beste Güte; den Rest entschied die
+    Sortierung nach Titel, und „Tornillo“ wählte spanisch das *Agujero para
+    tornillo* vor statt des Bausteins *Tornillo*, „Wandhalter“ den Zwilling ohne
+    Kundenwort (Nachprüfung RM-735, N1). „Verschieben“ verschiebt am Körper den
+    Körper, an der Bohrung das Merkmal. Italienisch „foro“ an der Bohrung ist
+    der Titel von *Bohrung ändern* und *Bohrung verschließen*; gemeint ist die
+    Zeile, deren Wendung „foro“ heißt, nicht die mit „chiudere foro“ (Durchsicht
+    welle4-b, L2).
 
     **Der Zwilling zuletzt, bei gleicher Güte.** Wer „quader“ tippt, bekommt
     die Normalform vor der Sonderform; die Grundliste zeigt den Zwilling gar
@@ -1089,7 +1093,9 @@ def ranked(
     scores = dict(rank_entries([typed], _fields_of(texts)))
     hidden = hidden_from_the_menu()
 
-    def order(entry: SearchEntry) -> tuple[float, int, int, bool, bool, bool, bool, bool, float]:
+    def order(
+        entry: SearchEntry,
+    ) -> tuple[float, int, int, bool, bool, bool, bool, bool, bool, float]:
         good = rank(entry, query)
         score = scores.get(str(entry.name), 0.0)
         best = good == 0
@@ -1106,6 +1112,7 @@ def ranked(
             # stünde ein gesperrtes Kundenwort über einem freien Titel.
             best and not entry.available,
             best and not _whole_title(fold(str(entry.title)), typed),
+            best and typed not in customer_phrases(str(entry.name)),
             best and not _in_phrase(str(entry.name), parts),
             -score if good >= LOOSE_RANK else 0.0,
         )

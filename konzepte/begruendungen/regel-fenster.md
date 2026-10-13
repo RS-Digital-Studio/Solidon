@@ -986,11 +986,13 @@ Vier Zusagen, alle vier tragend:
   samt Anhängen und Gesamtgröße, bevor gesendet wird.
 * **Das Bildschirmfoto entsteht vor dem Dialog.** Eine Sekunde später zeigt es
   den Dialog statt dessen, was darunter schiefging — `window_shot(self)` steht
-  deshalb im Fenster und nicht im Dialog. Das sichtbare Fenster wird über
-  `screen().grabWindow(winId())` aus vorhandenen Bildpunkten aufgenommen,
-  ohne das möglicherweise defekte Modell erneut zu rendern. Nur wenn diese
-  Aufnahme leer bleibt, folgt `grab()` mit den Viewport-Bildern. Aufgenommen
-  wird ausschließlich das Solidon-Fenster, nie der gesamte Bildschirm.
+  deshalb im Fenster und nicht im Dialog. Das sichtbare Fenster wird aus
+  vorhandenen Bildpunkten aufgenommen, ohne das möglicherweise defekte Modell
+  erneut zu rendern: unter Windows über `PrintWindow` mit vollem Inhalt, weil
+  `screen().grabWindow(winId())` nur GDI liest und bei D3D12 alte Bilder statt
+  der Ansicht zeigt; sonst über `grabWindow`. Nur wenn diese Aufnahme leer
+  bleibt, folgt `grab()` mit den Viewport-Bildern. Aufgenommen wird
+  ausschließlich das Solidon-Fenster, nie der gesamte Bildschirm.
 * **Der abgelegte Ordner ist ein Weg, kein Notausgang.** *Bericht ablegen*
   steht dauerhaft in der Knopfleiste (§37.2); *Selbst per E-Mail senden*
   erscheint erst, wenn ein Versand scheiterte — ein zweiter Weg neben einem

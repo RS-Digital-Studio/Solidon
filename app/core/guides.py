@@ -28,9 +28,12 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import TYPE_CHECKING, Final
 
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.perceive.actions import FeatureAction
 
 #: Die festen Ziele, die eine Anleitung nennen darf.
 #:
@@ -301,7 +304,7 @@ def name_part(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
 
 
-def action_key(action: Any) -> str:
+def action_key(action: FeatureAction) -> str:
     """Der Schlüssel einer Handlung im Merkmalfenster (``FeatureAction.key``).
 
     Leer heißt: der Name ihrer Operation. Eine Handlung ohne Operation und ohne
@@ -310,7 +313,7 @@ def action_key(action: Any) -> str:
     return str(action.key or action.op or "")
 
 
-def action_target(action: Any) -> str:
+def action_target(action: FeatureAction) -> str:
     """Das Ziel am Kopf einer Handlung: ``edge:<schlüssel>`` an einer angeklickten
     Kante, sonst ``feature:<schlüssel>``; leer ohne Schlüssel.
 
@@ -320,11 +323,11 @@ def action_target(action: Any) -> str:
     key = action_key(action)
     if not key:
         return ""
-    edge = ("edges", "named") in tuple(getattr(action, "fixed", ()))
+    edge = ("edges", "named") in action.fixed
     return f"{'edge' if edge else 'feature'}:{key}"
 
 
-def action_field_target(action: Any, field_name: str) -> str:
+def action_field_target(action: FeatureAction, field_name: str) -> str:
     """Das Ziel an einem Feld einer Handlung: ``feature.field:<schlüssel>.<feld>``."""
     key = action_key(action)
     return f"feature.field:{key}.{field_name}" if key else ""

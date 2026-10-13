@@ -1926,13 +1926,10 @@ def _transformed_features(
         if not rigid:
             # Ein vergrößertes gedrucktes Gewinde ist keines aus der Tabelle mehr:
             # Sein Spiel ist mitgewachsen, es ist gebaut, wie es dasteht
-            # (``fits._thread_wanted``).
-            params.pop("nominal", None)
-            params.pop("gauge_nominal", None)
-            params.pop("gauge_offset", None)
-            sources.pop("nominal", None)
-            sources.pop("gauge_nominal", None)
-            sources.pop("gauge_offset", None)
+            # (``fits._thread_wanted``), und sein Tabellenname („M20“) gilt nicht mehr.
+            for key in ("nominal", "gauge_nominal", "gauge_offset", "table_size"):
+                params.pop(key, None)
+                sources.pop(key, None)
         if uniform:
             for key in lengths:
                 if key in params:

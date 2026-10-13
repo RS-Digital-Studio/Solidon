@@ -1011,14 +1011,92 @@ def _user_parts_stay_with_their_test() -> Iterator[None]:
     vorher jenen Test fuhr. Der Ordner fehlt beim Start jedes Prozesses; was ein
     Test anlegt, geht mit ihm. Bestimmt wird er vor dem Test, aus demselben Grund
     wie bei den Profilen.
+
+    **Mit Abdruck, ohne zu schweigen** (Durchsicht welle4, L5): Ein Ordner, der
+    vorher fehlte, geht ganz; einer, der schon lag, kehrt Datei für Datei zum
+    Stand vor dem Test zurück. Misslingt das Räumen, wird der Abbau rot — ein
+    verschlucktes ``rmtree`` ließe den Baustein dem nächsten Test.
     """
     from app.core.paths import user_parts_dir
 
     folder = user_parts_dir()
     existed = folder.is_dir()
+    before = _tree_files(folder)
     yield
     if not existed:
-        shutil.rmtree(folder, ignore_errors=True)
+        if folder.exists():
+            shutil.rmtree(folder)
+    elif _tree_files(folder) != before:
+        _put_back(folder, before)
+    assert _tree_files(folder) == before and folder.is_dir() == existed, (
+        f"eigene Bausteine blieben nach dem Test liegen: {folder}"
+    )
+
+
+def _tree_files(folder: Path) -> dict[Path, bytes]:
+    """Der Abdruck eines Ordners: jede Datei darunter mit ihrem Inhalt."""
+    if not folder.is_dir():
+        return {}
+    return {path: path.read_bytes() for path in folder.rglob("*") if path.is_file()}
+
+
+def _put_back(folder: Path, before: dict[Path, bytes]) -> None:
+    """Stellt die Dateien unter ``folder`` her, wie ``before`` sie abdruckte.
+
+    Neue Dateien und Ordner gehen, geänderte und gelöschte kommen zurück. Ein
+    Fehler dabei geht durch: Er ist ein Leck, kein Grund zum Weitermachen.
+    """
+    for path in _tree_files(folder).keys() - before.keys():
+        path.unlink()
+    for path, content in before.items():
+        if not path.is_file() or path.read_bytes() != content:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+    kept = {parent for path in before for parent in path.parents}
+    for directory in sorted(folder.rglob("*"), key=lambda entry: len(entry.parts), reverse=True):
+        if directory.is_dir() and directory not in kept:
+            directory.rmdir()
+
+
+def _settings_files(folder: Path) -> dict[Path, bytes]:
+    """Die Einstellungen im Nutzerordner, samt Zwischendatei des atomaren Schreibens."""
+    if not folder.is_dir():
+        return {}
+    return {
+        path: path.read_bytes()
+        for path in folder.iterdir()
+        if path.is_file() and path.name.lstrip(".").startswith("settings")
+    }
+
+
+@pytest.fixture(autouse=True)
+def _user_settings_stay_with_their_test() -> Iterator[None]:
+    """Was ein Test in ``settings.json`` schreibt, gilt nur in diesem Test.
+
+    Dieselbe Begründung wie bei Profilen und Bausteinen darüber: Der
+    Nutzerordner ist einer je Lauf. ``function_setup.write_profile`` legt mit
+    Absicht ein Profil ab — Sprache, Thema, Drucker, Ersteinrichtung erledigt,
+    Updateprüfung aus, Zuletzt-Liste —, und drei Tests in
+    ``test_function_setup.py`` ließen es dem nächsten Test desselben Arbeiters
+    (Durchsicht welle4, M2). Wer danach ``load_settings`` ruft, startete in
+    Englisch mit Harzdrucker. Bestimmt wird der Ordner vor dem Test, aus
+    demselben Grund wie bei den Profilen; nach dem Zurückstellen muss der
+    Abdruck wieder der von vorher sein.
+    """
+    from app.ui.settings import settings_path
+
+    folder = settings_path().parent
+    before = _settings_files(folder)
+    yield
+    after = _settings_files(folder)
+    if after == before:
+        return
+    for path in after.keys() - before.keys():
+        path.unlink()
+    for path, content in before.items():
+        if after.get(path) != content:
+            path.write_bytes(content)
+    assert _settings_files(folder) == before, f"Einstellungen blieben nach dem Test: {folder}"
 
 
 #: Die Warte-Methoden je Widget-Klasse, einmal ermittelt.

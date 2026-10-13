@@ -267,17 +267,35 @@ def _empty_groups(text: str) -> list[str]:
     return empty
 
 
+def _doubled_groups(text: str) -> list[str]:
+    """Die Gruppenüberschriften ``### …``, die innerhalb eines Abschnitts
+    ``## …`` mehr als einmal stehen."""
+    doubled: list[str] = []
+    seen: set[str] = set()
+    for line in text.splitlines():
+        if line.startswith("## "):
+            seen = set()
+        elif line.startswith("### "):
+            if line in seen:
+                doubled.append(line)
+            seen.add(line)
+    return doubled
+
+
 @pytest.mark.parametrize("language", sorted(available_languages()))
 def test_no_group_stands_without_a_point(language: str) -> None:
-    """Eine Gruppe ohne Punkt ist ein Rest aus einem Merge.
+    """Eine Gruppe ohne Punkt oder zweimal im selben Abschnitt ist ein Rest
+    aus einem Merge.
 
     Am 13.10.2026 stand „Drucken und Übergabe an den Slicer“ in allen sechs
     Sprachen zweimal hintereinander, die erste leer — zwei Fassungen desselben
     Punkts waren zusammengeführt und eine gestrichen, die Überschrift blieb.
+    Stünden in beiden Punkte, wäre es dieselbe Gruppe zweimal.
     """
     text = (CHANGELOG / f"{language}.md").read_text(encoding="utf-8")
 
     assert not _empty_groups(text), _empty_groups(text)
+    assert not _doubled_groups(text), _doubled_groups(text)
 
 
 def test_an_empty_group_is_seen() -> None:
@@ -286,6 +304,17 @@ def test_an_empty_group_is_seen() -> None:
     text = "## 1.0\n\n### Drucken\n\n### Drucken\n\n- Ein Punkt.\n\n### Rand\n\n- Noch einer.\n"
 
     assert _empty_groups(text) == ["### Drucken"]
+
+
+def test_a_doubled_group_is_seen() -> None:
+    """Gegenprobe: dieselbe Gruppe zweimal im Abschnitt, beide mit Punkt, wird
+    gefunden; in zwei Abschnitten je einmal nicht."""
+    doubled = "## 1.1\n\n### Drucken\n\n- Eins.\n\n### Rand\n\n- Zwei.\n\n### Drucken\n\n- Drei.\n"
+    apart = "## 1.1\n\n### Drucken\n\n- Eins.\n\n## 1.0\n\n### Drucken\n\n- Zwei.\n"
+
+    assert _doubled_groups(doubled) == ["### Drucken"]
+    assert _empty_groups(doubled) == []
+    assert _doubled_groups(apart) == []
 
 
 @pytest.mark.parametrize("language", sorted(available_languages()))

@@ -245,8 +245,12 @@ class QuickFilamentPicker(QWidget):
         # Freischaltung grau mit Grund; das Lager bleibt zum Ansehen offen.
         refusal = change_refusal()
         self.picker.setEnabled(bool(self._objects) and not refusal)
-        if refusal and self._objects:
-            self.picker.setToolTip(refusal)
+        # Der Grund in Kurzhilfe **und** Beschreibung (FD-27); frei trägt die
+        # Kurzhilfe die Zuweisung, die oben gesetzt wurde.
+        held = refusal if self._objects else ""
+        if held:
+            self.picker.setToolTip(held)
+        self.picker.setAccessibleDescription(held)
         removable = self._has_assigned_selection(occupied)
         self.clear_button.setEnabled(removable and not refusal)
         self.clear_button.setVisible(removable)

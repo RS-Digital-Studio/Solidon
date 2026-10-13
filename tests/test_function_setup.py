@@ -38,6 +38,7 @@ from tools.file_acceptance import (
 from tools.function_checks import (
     COVERED,
     LICENCE_UNLOCKED,
+    SMALLEST_AVAILABLE,
     SMALLEST_WINDOW,
 )
 from tools.function_list import LICENCE_STATES, STARTUP_LICENCE, licence_states
@@ -379,9 +380,9 @@ def test_a_variant_takes_only_states_the_bench_can_make() -> None:
         with pytest.raises(ValueError):
             function_setup.Variant.of(broken)
     variant = function_setup.Variant.of(
-        {"window_size": "1920x1032", "scale": 1.5, "phases": ["main"]}
+        {"window_size": "1920x1009", "scale": 1.5, "phases": ["main"]}
     )
-    assert function_setup.parse_size(variant.window_size) == (1920, 1032)
+    assert function_setup.parse_size(variant.window_size) == (1920, 1009)
     assert variant.phases == ("main",)
     assert function_setup.Variant.of(variant.as_dict()) == variant
     sets = function_setup.variant_sets()
@@ -800,6 +801,18 @@ def test_nothing_is_measured_below_the_smallest_screen() -> None:
     assert ("resize", SMALLEST_WINDOW) in small.calls and ("maximized", None) not in small.calls
     function_setup.place_window(Application(Screen(2560, 1392)), large, function_setup.Variant())
     assert ("maximized", None) in large.calls
+    # Der kleinste Schirm selbst bleibt maximiert: Seine verfügbare Fläche ohne
+    # Titelleiste ist die kleinste Fläche. Ein Schirm knapp darunter bekommt sie
+    # innen gesetzt, statt maximiert kleiner zu messen.
+    smallest, tight = Window(), Window()
+    function_setup.place_window(
+        Application(Screen(*SMALLEST_AVAILABLE)), smallest, function_setup.Variant()
+    )
+    assert ("maximized", None) in smallest.calls
+    function_setup.place_window(
+        Application(Screen(1920, SMALLEST_AVAILABLE[1] - 1)), tight, function_setup.Variant()
+    )
+    assert ("resize", SMALLEST_WINDOW) in tight.calls
     scaled = function_setup.Variant.of({"set": "skalierung", "scale": 1.5})
     reason = function_setup.below_smallest({"screen": "MSI", "geometry": [0, 0, 1707, 928]}, scaled)
     assert "kein Fall" in reason and "1707 x 928" in reason
@@ -809,7 +822,7 @@ def test_nothing_is_measured_below_the_smallest_screen() -> None:
         function_setup.below_smallest({"geometry": [0, 0, 796, 796]}, function_setup.Variant())
         == ""
     )
-    assert function_setup.WINDOW_SIZES == ("1920x1032",)
+    assert function_setup.WINDOW_SIZES == ("1920x1009",)
 
 
 def test_a_menubar_child_that_never_answers_is_a_message(

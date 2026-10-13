@@ -964,20 +964,62 @@ def test_the_word_from_the_slicer_or_the_cad_names_its_action(
         set_language("de")
 
 
-@pytest.mark.parametrize("word", ["Loch", "Bohrung"])
-def test_the_hole_word_follows_the_place(word: str) -> None:
-    """„Loch“ und „Bohrung“ meinen am Körper das Bohren, an der Bohrung ihre
-    Änderung: Beide tragen das Wort, und die Lage entscheidet (Suchproben D4).
+#: Die Wörter für Loch und Bohrung je Sprache — die Titel der Lochzeilen und
+#: ihre Kundenwendungen (Suchproben D4, Durchsicht welle4-b L2).
+HOLE_WORDS: tuple[tuple[str, str], ...] = (
+    ("de", "Loch"),
+    ("de", "Bohrung"),
+    ("en", "hole"),
+    ("en", "bore"),
+    ("es", "agujero"),
+    ("es", "taladro"),
+    ("es", "orificio"),
+    ("fr", "trou"),
+    ("fr", "perçage"),
+    ("it", "foro"),
+    ("it", "buco"),
+    ("pt", "furo"),
+    ("pt", "buraco"),
+)
+
+
+@pytest.mark.parametrize(("language", "word"), HOLE_WORDS)
+def test_the_hole_word_follows_the_place(language: str, word: str) -> None:
+    """Das Wort für Loch oder Bohrung meint am Körper das Bohren, an der Bohrung
+    ihre Änderung: Beide tragen es, und die Lage entscheidet (Suchproben D4).
 
     Vorher stand bei „Loch“ an der Bohrung *Lasche mit Loch* vorn (Titelwort),
     und „Bohrung“ wählte am Körper die gesperrte Änderung vor, weil nur sie das
-    Wort auch in einer Kundenwendung trug („Bohrung weiter machen“).
+    Wort auch in einer Kundenwendung trug („Bohrung weiter machen“). Englisch
+    „hole“ und spanisch „agujero“ wählten an jeder Lage das *Schraubenloch* vor
+    — sein Titel und eine Wendung, die ihn wiederholte, schlugen das genau
+    gesagte Wort —, „orificio“ am Körper die gesperrte Änderung, deren Titel es
+    als einzige trug, und italienisch „foro“ an der Bohrung *Bohrung
+    verschließen*, dessen Wendung „chiudere foro“ das Wort nur enthält.
+
+    Die Lage ist, was dort steht: am Körper alles, was an einer Fläche ansetzt,
+    an der Bohrung alles, was einer Bohrung gilt (``applies_to``), dort also
+    auch das Verschließen. Die gemeinte Zeile steht in der Liste zuletzt: Sie
+    gewinnt über ihre Wörter, nicht über die Reihenfolge der Zeilen.
     """
-    zeilen = list(search_entries(REGISTRY))
-    for lage, meant in (("drill_hole", "drill_hole"), ("resize_hole", "resize_hole")):
-        hits, _loosened = ranked(zeilen, word, frozenset({lage}))
-        namen = [str(entry.name) for entry in hits]
-        assert namen[first_choice(hits, word)] == meant, f"„{word}“ an {lage}: {namen[:4]}"
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+
+    install_language(language)
+    set_language(language)
+    try:
+        zeilen = list(search_entries(REGISTRY))
+        for lage, meant in (("face", "drill_hole"), ("hole", "resize_hole")):
+            here = frozenset(spec.name for spec in REGISTRY.all() if lage in spec.applies_to)
+            assert meant in here, f"Voraussetzung: {meant} steht an {lage}"
+            reihe = sorted(zeilen, key=lambda entry: entry.name == meant)
+            hits, _loosened = ranked(reihe, word, here)
+            namen = [str(entry.name) for entry in hits]
+            gewaehlt = namen[first_choice(hits, word)]
+            assert gewaehlt == meant, f"„{word}“ ({language}) an {lage}: {gewaehlt}, {namen[:4]}"
+    finally:
+        install_language("de")
+        set_language("de")
 
 
 #: Die Fragen des Funktionsdurchgangs (``tests/data/function_rows``) und was sie
@@ -1101,10 +1143,10 @@ def test_no_question_word_is_a_word_of_a_customer_or_a_title(language: str) -> N
                 teile = words.findall(wendung)
                 if teile and opens_a_question(teile[0]):
                     daneben.append(f"{name}: „{wendung}“ beginnt mit einem Fragewort")
+                # Auch ein kurzes Wort („mi“, „me“, „es“) fällt in jeder Frage,
+                # und ``rank`` vergleicht die ganze Wendung (``said_exactly``).
                 daneben += [
-                    f"{name}: „{wendung}“ trägt „{teil}“"
-                    for teil in teile
-                    if len(teil) >= 3 and teil in persoenlich
+                    f"{name}: „{wendung}“ trägt „{teil}“" for teil in teile if teil in persoenlich
                 ]
         for spec in REGISTRY.all():
             teile = words.findall(fold(str(spec.title)))
@@ -1193,7 +1235,7 @@ def test_the_search_probes_of_the_function_walk_find_their_row(
     from app.ui.session import Session
     from app.ui.settings import UiSettings
     from tools import function_list, function_surface
-    from tools.function_checks import MAX_RANK
+    from tools.function_checks import MAX_RANK, SMALLEST_WINDOW
     from tools.function_scenes import build_scene, load_scenes, scene_environment
 
     specs = function_list.load_specs()
@@ -1207,7 +1249,7 @@ def test_the_search_probes_of_the_function_walk_find_their_row(
         save(build_scene(str(spec["start_scene"]), catalogue), path)
     window = MainWindow(Session(), UiSettings())
     window.show()
-    window.resize(1920, 1032)
+    window.resize(*SMALLEST_WINDOW)
     window._show_start_screen(False)
     try:
         window.open_path(path)

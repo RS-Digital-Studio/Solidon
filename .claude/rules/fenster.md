@@ -41,6 +41,8 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   denselben Inhalt zurück. Sichtbarkeit und Meldungsmarken folgen dem Reiter,
   nicht seiner Nummer. Die Anordnung liegt nur in `UiSettings.tab_layout`;
   fehlende Monitore begrenzen Fenster auf vorhandene Bildschirmflächen.
+- Nichtmodale Dialoge hebt `_DialogsStayAbove` über das Hauptfenster, sonst
+  verschwinden sie unter macOS dahinter; nie `Qt::Tool`, das teilt Kürzel.
 - Karten rasten auch unten links, unten rechts und am unteren Rand ein.
   `CardPlace` speichert den waagrechten Anteil am unteren Rand; die Unterkante
   bleibt beim Wechsel der Inhaltshöhe erhalten. Die Werkzeugzeile bleibt frei.
@@ -106,7 +108,8 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 **Eine Meldung ist kein `QMessageBox`, eine Eingabe kein `QInputDialog` oder
 `QColorDialog`** (Z5): `message_dialog`, `input_dialog`, am Ort `place_popup`;
 nur die Fragen hier bleiben `QMessageBox`. Erfolg und Hinweis quittiert der
-Dialog selbst (`acknowledge`, Z2), `inform` nur ein Scheitern (`test_input_dialog`).
+Dialog selbst (`acknowledge`, Z2), `inform` nur ein Scheitern (`test_input_dialog`);
+eine Fehlermeldung mit Handlung (`show_error`) darf modal sein (Z2-Ausnahme).
 
 Die gewollten Ausnahmen von Regel 19, und was sie davon abhält, zur Blockade zu
 werden:
@@ -455,10 +458,11 @@ Zone** (`tell_the_zone`, dann `reflow`), sonst wächst sie zweimal.
 Ein Dialog für beides (`support_dialog.py`; `report_error` mit `kind=crash`,
 §33.1). Von allein geht nichts (`kern.md`, „Fehler“); die Vorschau zeigt alles
 samt Anhängen; das Bildschirmfoto entsteht vorher (`window_shot` im Fenster,
-nur das Solidon-Fenster, ohne neues Rendern); *Bericht ablegen* steht immer,
-*Selbst per E-Mail senden* erst nach gescheitertem Versand (§37.2); Sitzung und
-Protokoll entstehen einmal im Arbeiter und gelten für Vorschau, Versand und
-Ablage, bis dahin ist der Versand gesperrt. Warum und wie: `regel-fenster.md`.
+nur das Solidon-Fenster, ohne neues Rendern; unter Windows `PrintWindow`, weil
+`grabWindow` kein D3D12 sieht); *Bericht ablegen* steht immer, *Selbst per
+E-Mail senden* erst nach gescheitertem Versand (§37.2); Sitzung und Protokoll
+entstehen einmal im Arbeiter und gelten für Vorschau, Versand und Ablage, bis
+dahin ist der Versand gesperrt. Warum und wie: `regel-fenster.md`.
 
 
 ### Formen und Skelett: Gesten

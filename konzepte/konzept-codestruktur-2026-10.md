@@ -476,7 +476,7 @@ die Globals von `M` lesen, und Module in `app/` und `tools/`, die ihn als `M.N`,
 über `getattr` oder per spätem Import holen. Diese Menge ist vor und nach einem
 Schritt gleich. Eine Kopfkopie `from M import N` eines gepatchten Namens und
 jedes `raising=False` auf `app.*` sind rot, nicht nur gemeldet; Schritt 0
-behebt die heutigen vorher (25 `raising=False`, die Kopfkopien aus CS-11).
+behebt die heutigen vorher (12 `raising=False` auf `app.*`, die Kopfkopien aus CS-11).
 Aliasse löst er je Funktion auf, nicht je Datei — derselbe Name meint in einer
 Testdatei mal ein Modul, mal ein Fenster. Lesen nach einem Schnitt mehrere
 Module denselben gepatchten Namen, wird nicht der Patch vervielfacht: Der
@@ -604,7 +604,7 @@ beginnt Schritt 1.
 
 | Schritt | Datei | warum an dieser Stelle |
 |---|---|---|
-| 0 | W1 bis W6, Verschiebewerkzeug; vorher behoben: CS-2, CS-9, CS-10, CS-11, CS-12 und die 25 `raising=False` | ohne sie ist jeder spätere Schritt Handarbeit mit stillen Fehlern, und rote Wächter fänden zuerst den Bestand |
+| 0 | W1 bis W6, Verschiebewerkzeug; vorher behoben: CS-2, CS-9, CS-10, CS-11, CS-12 und die 12 `raising=False` auf `app.*` | ohne sie ist jeder spätere Schritt Handarbeit mit stillen Fehlern, und rote Wächter fänden zuerst den Bestand |
 | 1 | `geom/prepare_ops.py` | zweitgrößter Brennpunkt (267 Commits), Kern ohne Qt, klare Op-Blöcke, 32 private Testimporte; Probe für Bootstrap-Liste und W3 |
 | 2 | `ui/panels.py` | 24 Klassen, schon getrennt, keine Komponente nötig; Probe für ein UI-Paket |
 | 3 | `perceive/features.py` | höchste Kopplung, deshalb erst mit erprobtem Werkzeug |
