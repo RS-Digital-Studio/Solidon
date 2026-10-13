@@ -410,14 +410,6 @@ def place_of(steps: Sequence[Mapping[str, Any]], target: str) -> dict[str, Any]:
     return {"where": where, "path": path, "error": None}
 
 
-def search_rank(hits: Sequence[str], target: str) -> int | None:
-    """Der Rang des Ziels unter den sichtbaren Treffern, ab 1; ``None``, wenn es fehlt."""
-    for rank, hit in enumerate(hits, 1):
-        if hit == target:
-            return rank
-    return None
-
-
 class QtPorts:
     """Die Ports am echten Fenster: ``guide_targets`` und ``QTest``-Ereignisse.
 

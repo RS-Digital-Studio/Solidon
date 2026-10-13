@@ -521,12 +521,6 @@ def test_the_place_names_menu_toolbar_and_card_and_reads_only_the_main_path() ->
     assert elsewhere["where"] is None and elsewhere["error"]
 
 
-def test_the_search_rank_counts_from_one() -> None:
-    hits = ["operation:fillet_edges", "operation:drill_hole", "command:file.open"]
-    assert function_walk.search_rank(hits, "operation:drill_hole") == 2
-    assert function_walk.search_rank(hits, "operation:hollow_object") is None
-
-
 def test_buttons_are_named_as_words() -> None:
     assert function_walk.button_name("right") == "right"
     assert function_walk.button_name("") == "left"
