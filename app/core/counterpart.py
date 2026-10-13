@@ -139,9 +139,8 @@ PAIRS: Final[tuple[Pair, ...]] = (
         kind="thread",
         shared=("size", "play"),
         doc=_(
-            "Die Schraube gehört an das erste Teil, die Mutter an das zweite. "
-            "Größe und Spiel müssen dieselben sein, sonst greift kein Gewinde; "
-            "die Steigung kommt für beide aus der Normteiltabelle."
+            "Schraube ans erste Teil, Mutter ans zweite. Beide Gewinde teilen Größe, "
+            "Spiel und die Steigung aus der Normteiltabelle."
         ),
     ),
     Pair(
@@ -154,9 +153,8 @@ PAIRS: Final[tuple[Pair, ...]] = (
         kind="clearance",
         shared=("size",),
         doc=_(
-            "Die Buchse kommt in das erste Teil, das Loch für die Schraube in "
-            "das zweite. Dieselbe Größe für beide — sonst greift die Schraube "
-            "nicht oder klemmt im Durchgang."
+            "Buchse ins erste Teil, Schraubenloch ins zweite. Beide erhalten dieselbe Größe, "
+            "damit die Schraube greift und im Durchgang frei bleibt."
         ),
     ),
 )

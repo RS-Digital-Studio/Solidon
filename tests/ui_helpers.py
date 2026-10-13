@@ -12,6 +12,7 @@ import pytest
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 
+from app.core.scene.history import OperationDraft
 from app.i18n import tr
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
@@ -77,6 +78,36 @@ def with_a_body(window: MainWindow) -> str:
     object_id = window.object_tree.selected()
     assert object_id
     return str(object_id)
+
+
+def two_plates(window: MainWindow) -> tuple[str, str]:
+    """Zwei Platten nebeneinander, gerechnet — die Ausgangslage."""
+    window.session.start_new("centauri-carbon-2", "petg")
+    window.session.history.apply(
+        "Zwei Platten",
+        [
+            OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0}),
+            OperationDraft(
+                op="create_box",
+                params={"width": 40.0, "depth": 30.0, "height": 10.0, "x": 60.0},
+            ),
+        ],
+    )
+    window.session.evaluate_now()
+    result = window.session.last_result
+    assert result is not None
+    return tuple(result.scene.objects)[:2]  # type: ignore[return-value]
+
+
+def top_face(window: MainWindow, object_id: str) -> str:
+    """Die Kennung der Oberseite — die Stelle, an die ein Gegenstück kommt."""
+    result = window.session.last_result
+    assert result is not None
+    entry = result.scene.objects[object_id]
+    for name, feature in entry.features.items():
+        if feature.kind == "face" and name.startswith("face_top"):
+            return name
+    raise AssertionError(f"{object_id} hat keine Oberseite — dann prüft der Test nichts")
 
 
 def on_the_bore_wall(window: MainWindow, feature_id: str = "hole_1") -> tuple[float, float, float]:
