@@ -65,7 +65,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Um corpo exato mantém agora as suas características depois de *Aplicar texto*, *Incrustar texto* e *Rebaixar contraforma*. Na versão 0.6.0 já não era possível clicar em nenhuma face a seguir.
 - Um corpo com rosca do catálogo de blocos volta a poder ser movido, rodado, espelhado, escalado e pousado na mesa. Na versão 0.6.0 a cadeia parava com um erro do programa.
-- No separador *Seleção*, um diâmetro abaixo do limite em *Alterar furo* remete agora para *Remover característica*, que remove o furo por completo, com o escareamento se quiser.
+- Para um diâmetro de furo abaixo do limite, o aviso indica *Remover característica*, com o escareamento se quiser. Se a edição das cotas na vista já começou, indica primeiro *Cancelar*.
 - A reconstrução (*Reconstruir modelo*) já não aconselha outros limites quando nenhum valor permitido bastaria, e mostra as propostas iguais uma só vez.
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 - Ao escolher um furo num modelo carregado, as medidas na vista e o separador *Seleção* indicam agora a mesma ação, *Alterar furo*. Na versão 0.6.0 ficava ali aberto *Mover característica*.

@@ -10430,6 +10430,10 @@ class FeaturePanel(QWidget):
         )
         if removal is None or removal.action is None:
             return ""
+        if self._measuring and self._measure_begun:
+            return tr("Zum Entfernen zuerst „Abbrechen“ wählen, danach „{action}“.").format(
+                action=str(removal.action.title)
+            )
         return tr("Ganz weg geht es mit „{action}“.").format(action=str(removal.action.title))
 
     def _set_refusal_label(self, editor: BoundedSpin | BoundedLengthSpin, label: QLabel) -> str:
