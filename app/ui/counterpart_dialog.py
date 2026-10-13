@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -23,15 +24,28 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLabel,
     QPushButton,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from app.core.counterpart import PAIRS, Pair
 from app.i18n import tr
-from app.ui.labels import LengthSpin, NumberSpin, choice_label
-from app.ui.panels import align_forms
-from app.ui.style import NORMAL, SPACE, WIDE, make_primary, set_level
+from app.ui.dialogs import align_to_the_front
+from app.ui.labels import LengthSpin, NumberSpin, choice_label, wheel_needs_focus
+from app.ui.leash import weak_slot
+from app.ui.panels import collapsible
+from app.ui.style import (
+    NORMAL,
+    SPACE,
+    WIDE,
+    ContentFitIntent,
+    ContentHeight,
+    DialogScrollArea,
+    expanded_width,
+    make_primary,
+    set_level,
+)
 
 
 class CounterpartDialog(QDialog):
@@ -50,9 +64,10 @@ class CounterpartDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Gegenstücke setzen"))
-        self.setMinimumWidth(420)
+        self._height = ContentHeight()
 
         self.pairs = QComboBox(self)
+        wheel_needs_focus(self.pairs)
         for entry in PAIRS:
             self.pairs.addItem(str(entry.title), entry.key)
         self.pairs.setAccessibleName(tr("Paar"))
@@ -75,6 +90,9 @@ class CounterpartDialog(QDialog):
 
         self.form = QFormLayout()
         self.form.setSpacing(NORMAL)
+        self._back = QFormLayout()
+        self._back.setSpacing(NORMAL)
+        self._more: QWidget | None = None
         self._fields: dict[str, NumberSpin | QComboBox] = {}
 
         buttons = QDialogButtonBox(
@@ -90,20 +108,45 @@ class CounterpartDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        content = QWidget(self)
+        layout = QVBoxLayout(content)
+        self._body = layout
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(NORMAL)
         layout.addWidget(self.places)
-        head = QFormLayout()
+        head = self._head = QFormLayout()
         head.setSpacing(NORMAL)
         head.addRow(tr("Paar"), self.pairs)
         layout.addLayout(head)
         layout.addWidget(self.note)
         layout.addLayout(self.form)
         layout.addStretch(1)
-        layout.addWidget(buttons)
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(content)
+        self._scroll.contentSizeChanged.connect(weak_slot(self, CounterpartDialog._fit_soon))
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        outer.setSpacing(NORMAL)
+        outer.addWidget(self._scroll, 1)
+        outer.addWidget(buttons)
 
         self._rebuild()
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        self._fit_soon("initial")
+
+    def _fit_soon(self, intent: ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(0, self, weak_slot(self, CounterpartDialog._fit_content, intent))
+
+    def _fit_content(self, intent: ContentFitIntent) -> None:
+        """Misst auch die zugeklappte Rückseite; eine Nutzergröße bleibt erhalten."""
+        self._height.fit(
+            self,
+            self._scroll,
+            intent=intent,
+            natural_width=expanded_width(self._scroll, self._head, self.form, self._back),
+        )
 
     # --- Aufbau ---------------------------------------------------------------
 
@@ -140,27 +183,43 @@ class CounterpartDialog(QDialog):
 
         while self.form.rowCount():
             self.form.removeRow(0)
+        while self._back.rowCount():
+            self._back.removeRow(0)
         self._fields.clear()
 
         pair = self.pair()
-        self.note.setText(str(pair.doc))
+        explanation = str(pair.doc)
+        self.note.setText(explanation)
+        self.pairs.setToolTip(explanation)
+        self.pairs.setAccessibleDescription(explanation)
+        pair_caption = self._head.labelForField(self.pairs)
+        if isinstance(pair_caption, QLabel):
+            pair_caption.setBuddy(self.pairs)
+            pair_caption.setToolTip(explanation)
+            pair_caption.setAccessibleDescription(explanation)
         spec = PARTS.get(pair.part_a)
         declared = {entry.name: entry for entry in spec.params.spec()}
-        previous: QWidget = self.pairs
+        front_fields: list[QWidget] = []
+        back_fields: list[QWidget] = []
+        back_titles: list[str] = []
         for name in pair.shared:
             entry = declared.get(name)
             if entry is None:
                 continue
             field = self._field_for(entry)
+            wheel_needs_focus(field)
             self._fields[name] = field
+            advanced = entry.placement == "advanced"
+            form = self._back if advanced else self.form
+            (back_fields if advanced else front_fields).append(field)
+            if advanced:
+                back_titles.append(str(entry.title))
             # Wie jede andere Formularzeile ohne Doppelpunkt (`fenster.md`, RM-342 C-N1).
-            self.form.addRow(str(entry.title), field)
-            caption = self.form.labelForField(field)
+            form.addRow(str(entry.title), field)
+            caption = form.labelForField(field)
             if isinstance(caption, QLabel):
                 caption.setBuddy(field)
                 caption.setToolTip(str(entry.doc))
-            QWidget.setTabOrder(previous, field)
-            previous = field
             # Jedes Feld meldet sich am selben Signal — der Empfänger entprellt
             # und liest die Werte über :meth:`shared`. ``valueChanged`` trägt
             # hier nur „etwas hat sich bewegt"; die Zahl in Millimetern holt
@@ -169,10 +228,42 @@ class CounterpartDialog(QDialog):
                 field.currentIndexChanged.connect(self.valuesChanged)
             else:
                 field.valueChanged.connect(self.valuesChanged)
+        contents = ", ".join(back_titles)
+        if self._more is None and back_fields:
+            rest = QWidget(self)
+            rest_layout = QVBoxLayout(rest)
+            rest_layout.setContentsMargins(0, 0, 0, 0)
+            rest_layout.setSpacing(NORMAL)
+            rest_layout.addLayout(self._back)
+            self._more = collapsible(
+                tr("Weitere Einstellungen"), rest, open_now=False, contents=contents
+            )
+            self._body.insertWidget(self._body.count() - 1, self._more)
+            flap = self._more.findChild(QToolButton, "sectionHeading")
+            if flap is not None:
+                flap.toggled.connect(weak_slot(self, CounterpartDialog._fit_soon, "explicit"))
+        focus_fields = front_fields.copy()
+        if self._more is not None:
+            self._more.setVisible(bool(back_fields))
+            flap = self._more.findChild(QToolButton, "sectionHeading")
+            if flap is not None:
+                flap.setToolTip(contents)
+                flap.setAccessibleDescription(contents)
+                if back_fields:
+                    focus_fields.append(flap)
+            summary = self._more.findChild(QLabel, "sectionSummary")
+            if summary is not None:
+                summary.setText(contents)
+        focus_fields.extend(back_fields)
+        previous: QWidget = self.pairs
+        for focus_field in focus_fields:
+            QWidget.setTabOrder(previous, focus_field)
+            previous = focus_field
         QWidget.setTabOrder(previous, self._accept)
         # Paar und Maße beginnen an einer Kante (RM-518) — nach jedem
         # Paarwechsel neu, denn die Zeilen sind dann andere.
-        align_forms(self)
+        align_to_the_front((self._head, self.form), self._back)
+        self._fit_soon()
         self.valuesChanged.emit()
 
     def _field_for(self, entry: Any) -> NumberSpin | QComboBox:
