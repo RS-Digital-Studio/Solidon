@@ -1143,12 +1143,12 @@ def as_error(
 
 
 def _severity_label(severity: str) -> str:
-    """Der Schweregrad als Wort — die Filterzeile zeigt beides (Regel 18)."""
-    return {
-        "error": tr("Fehler"),
-        "warning": tr("Warnung"),
-        "info": tr("Hinweis"),
-    }.get(severity, severity)
+    """Der Schweregrad als Wort — die Filterzeile zeigt beides (Regel 18).
+
+    Aus ``SEVERITY_ENCODING`` wie das Zeichen daneben und das Wort der Meldung.
+    """
+    encoding = SEVERITY_ENCODING.get(severity)
+    return tr(encoding.label_key) if encoding is not None else severity
 
 
 def origin_label(source: str) -> str:

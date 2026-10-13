@@ -9274,8 +9274,12 @@ class MainWindow(QMainWindow):
         box.setEscapeButton(cancel)
         # Fokus auf Abbrechen, sonst löschte die Leertaste (``confirm_discard``).
         cancel.setFocus()
-        box.exec()
-        if box.clickedButton() is not remove:
+        try:
+            box.exec()
+            chosen_remove = box.clickedButton() is remove
+        finally:
+            box.deleteLater()
+        if not chosen_remove:
             return
         self.session.remove_operations(chosen)
 
@@ -9434,15 +9438,23 @@ class MainWindow(QMainWindow):
         if self._drawing_refuses():
             return
         dialog = VariantsDialog(self.session, self)
-        dialog.exec()
-        if dialog.findings:
-            self.report.add_findings(list(dialog.findings))
-        if dialog.written:
-            self._announce_written(dialog.written)
+        try:
+            dialog.exec()
+            findings, written = list(dialog.findings), dialog.written
+        finally:
+            dialog.deleteLater()
+        if findings:
+            self.report.add_findings(findings)
+        if written:
+            self._announce_written(written)
 
     def action_install_extras(self) -> None:
         """§36: was fehlt, wofür es da ist, und ein Knopf, der es holt."""
-        InstallDialog(self, settings=self.settings).exec()
+        dialog = InstallDialog(self, settings=self.settings)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     def _offer_slicer_setup(self, dialog: PrintSettingsDialog) -> None:
         """Aus den Druckeinstellungen in die Liste der zusätzlichen Programme.
@@ -9506,7 +9518,11 @@ class MainWindow(QMainWindow):
         """Die Knoten und das Modell einrichten, und danach neu nachsehen."""
         from app.ui.comfy_dialog import ComfySetupDialog
 
-        ComfySetupDialog(self).exec()
+        setup = ComfySetupDialog(self)
+        try:
+            setup.exec()
+        finally:
+            setup.deleteLater()
         dialog.recheck()
 
     def _offer_generator_setup(self, dialog: GenerateDialog) -> None:
@@ -9529,7 +9545,11 @@ class MainWindow(QMainWindow):
         """
         from app.ui.shortcuts_window import ShortcutsWindow
 
-        ShortcutsWindow(self.menuBar(), self).exec()
+        dialog = ShortcutsWindow(self.menuBar(), self)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     def action_manual(self, page: str = "", spot: str = "") -> None:
         """Das Handbuch — ein Fenster, kein Dialog.
@@ -9599,9 +9619,11 @@ class MainWindow(QMainWindow):
 
     def action_about(self) -> None:
         dialog = AboutDialog(self)
-        dialog.exec()
-        wanted = dialog.support_wanted
-        dialog.deleteLater()
+        try:
+            dialog.exec()
+            wanted = dialog.support_wanted
+        finally:
+            dialog.deleteLater()
         # Nacheinander und nicht übereinander: zwei modale Fenster gestapelt
         # heißen zweimal Schließen, bis man wieder am Modell ist.
         if wanted:
@@ -9617,9 +9639,11 @@ class MainWindow(QMainWindow):
         Dialogs.
         """
         dialog = DonationDialog(self)
-        dialog.exec()
-        wanted = dialog.feedback_wanted
-        dialog.deleteLater()
+        try:
+            dialog.exec()
+            wanted = dialog.feedback_wanted
+        finally:
+            dialog.deleteLater()
         if wanted:
             self.action_feedback()
 
@@ -9927,27 +9951,29 @@ class MainWindow(QMainWindow):
         # kommt, und der Knopf daneben führt dorthin, wo es gewählt wird.
         dialog.filamentsRequested.connect(lambda: self._show_filaments(dialog))
         dialog.usage_notice.changed.connect(self._refresh_inventory)
-        dialog.exec()
-        for request in dialog.usage_notice.requests.values():
-            self.usage_notice.offer(request, auto_book=False)
+        try:
+            dialog.exec()
+            for request in dialog.usage_notice.requests.values():
+                self.usage_notice.offer(request, auto_book=False)
 
-        # Die Einstellungen gehören zum Projekt, die Stufe und die Slicer-Wahl
-        # zur Anwendung (§29). Getrennt gespeichert, weil ein Projekt auf einem
-        # anderen Rechner geöffnet wird, wo ein anderer Slicer liegt.
-        #
-        # **Nur, wenn der Dialog etwas bewirkt hat.** Vorher schrieb schon das
-        # bloße Öffnen die aufgelösten Werte ins Dokument; wer nachsah, welche
-        # Temperatur vorgeschlagen würde, trug sie danach in jeder exportierten
-        # 3MF mit sich. ``has_changes`` misst am Anfangszustand und nicht an
-        # einer Liste von Knöpfen.
-        if dialog.has_changes():
-            self.session.set_print_settings(dialog.settings)
-        self.settings.print_quality = dialog.settings.quality
-        self._store_settings()
-        # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
-        # bei der Orca-Familie einige tausend Einträge je Aufruf.
-        scene_action = dialog.take_scene_action()
-        dialog.deleteLater()
+            # Die Einstellungen gehören zum Projekt, die Stufe und die Slicer-Wahl
+            # zur Anwendung (§29). Getrennt gespeichert, weil ein Projekt auf einem
+            # anderen Rechner geöffnet wird, wo ein anderer Slicer liegt.
+            #
+            # **Nur, wenn der Dialog etwas bewirkt hat.** Vorher schrieb schon das
+            # bloße Öffnen die aufgelösten Werte ins Dokument; wer nachsah, welche
+            # Temperatur vorgeschlagen würde, trug sie danach in jeder exportierten
+            # 3MF mit sich. ``has_changes`` misst am Anfangszustand und nicht an
+            # einer Liste von Knöpfen.
+            if dialog.has_changes():
+                self.session.set_print_settings(dialog.settings)
+            self.settings.print_quality = dialog.settings.quality
+            self._store_settings()
+            scene_action = dialog.take_scene_action()
+        finally:
+            # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
+            # bei der Orca-Familie einige tausend Einträge je Aufruf.
+            dialog.deleteLater()
         if scene_action is not None:
             action_id, error = scene_action
             handler = self.error_handlers().get(action_id)
@@ -12080,10 +12106,14 @@ class MainWindow(QMainWindow):
         """§28.3: gemessene Werte ins Materialprofil, und alles folgt."""
         material = self.session.project.document.material or self.session.profile.material.id
         dialog = CalibrationDialog(material, self, process=self.session.profile)
-        if dialog.exec() != CalibrationDialog.DialogCode.Accepted:
-            return
         try:
-            calibrated = calibration.apply(dialog.measured(), process=dialog.process)
+            if dialog.exec() != CalibrationDialog.DialogCode.Accepted:
+                return
+            measured, process = dialog.measured(), dialog.process
+        finally:
+            dialog.deleteLater()
+        try:
+            calibrated = calibration.apply(measured, process=process)
         except AppError as error:
             show_error(error, self)
             return
@@ -12109,7 +12139,11 @@ class MainWindow(QMainWindow):
         Fall; was der Dialog verändert hat, weiß er selbst nicht besser als
         eine neue Prüfung.
         """
-        KeyDialog(parent=self, settings=self.settings).exec()
+        dialog = KeyDialog(parent=self, settings=self.settings)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
         self.session.set_agent_backend(None)
         self._refresh_chat_availability(probe_local=True)
 
@@ -27707,7 +27741,11 @@ class MainWindow(QMainWindow):
         Aktionen nachzuziehen — mit einem eingetragenen Schlüssel steht wieder
         offen, was der abgelaufene Testlauf zugemacht hat.
         """
-        ActivationDialog(self).exec()
+        dialog = ActivationDialog(self)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
         self._update_actions()
         self._refresh_chat_availability()
         self._trial_status_line()
@@ -28298,7 +28336,11 @@ class MainWindow(QMainWindow):
         )
         if wanted is None:
             return
-        StepValuesDialog(wanted, self).exec()
+        dialog = StepValuesDialog(wanted, self)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     def _correct_after_error(self, error: AppError) -> None:
         """Den Schritt wieder öffnen, dessen Werte nicht gingen (§2.7, §2.1).
@@ -28613,9 +28655,13 @@ class MainWindow(QMainWindow):
         if change_lock.refused(self.announce):
             return
         dialog = ParameterDialog(self.session.project.document.parameters, self)
-        if dialog.exec() != ParameterDialog.DialogCode.Accepted:
-            return
-        self.session.add_parameter(dialog.parameter())
+        try:
+            if dialog.exec() != ParameterDialog.DialogCode.Accepted:
+                return
+            parameter = dialog.parameter()
+        finally:
+            dialog.deleteLater()
+        self.session.add_parameter(parameter)
 
     def action_bind_parameters(self) -> None:
         """Feste Zahlen an Projektmaße binden (Dateiaudit §4): wählen, dann eine Transaktion.
@@ -28664,9 +28710,13 @@ class MainWindow(QMainWindow):
         if existing is None or change_lock.refused(self.announce):
             return
         dialog = ParameterDialog(parameters, self, existing=existing)
-        if dialog.exec() != ParameterDialog.DialogCode.Accepted:
-            return
-        self.session.edit_parameter(name, dialog.parameter())
+        try:
+            if dialog.exec() != ParameterDialog.DialogCode.Accepted:
+                return
+            parameter = dialog.parameter()
+        finally:
+            dialog.deleteLater()
+        self.session.edit_parameter(name, parameter)
 
     def _refresh_parameters(self) -> None:
         """Verwendungsdaten gelten nur dem fertig ausgewerteten aktuellen Dokument."""
@@ -28880,19 +28930,22 @@ class MainWindow(QMainWindow):
                 dialog.restore_custom_printer_draft(printer_draft)
             dialog.importRequested.connect(lambda: import_requested.append(True))
             dialog.inventoryRequested.connect(lambda: inventory_requested.append(True))
-            answer = dialog.exec()
-            if answer != first_run.LANGUAGE_CHANGED:
-                break
-            printer_draft = dialog.custom_printer_draft()
-            discovered_printers = dialog.discovered_printers
-            printer_selection = dialog.printer_selection
-            printer_query = dialog.printer_query
-            # Weggeräumt, nicht abgewartet: ``release`` wartete auf die
-            # Programmsuche des alten Dialogs, und der Sprachwechsel stand
-            # so lange still. Den Arbeiter hält die Halteleine.
-            dialog.deleteLater()
+            try:
+                answer = dialog.exec()
+                if answer == first_run.FirstRunDialog.DialogCode.Accepted:
+                    dialog.apply_to(self.settings)
+                if answer != first_run.LANGUAGE_CHANGED:
+                    break
+                printer_draft = dialog.custom_printer_draft()
+                discovered_printers = dialog.discovered_printers
+                printer_selection = dialog.printer_selection
+                printer_query = dialog.printer_query
+            finally:
+                # Weggeräumt, nicht abgewartet: ``release`` wartete auf die
+                # Programmsuche des alten Dialogs, und der Sprachwechsel stand
+                # so lange still. Den Arbeiter hält die Halteleine.
+                dialog.deleteLater()
         if answer == first_run.FirstRunDialog.DialogCode.Accepted:
-            dialog.apply_to(self.settings)
             self._adopt_defaults()
         else:
             # Überspringen zählt als erledigt: beim nächsten Mal wieder zu fragen
@@ -29038,6 +29091,8 @@ class MainWindow(QMainWindow):
         zweiter Weg wäre ihr Ende, wie bequem er auch wäre.
         """
         dialog = self._support_dialog(KIND_SURVEY)
+        # Nicht modal: Freigegeben wird, sobald der Bogen zu ist.
+        dialog.finished.connect(dialog.deleteLater)
         self._survey_dialog = dialog
         dialog.show()
         dialog.raise_()
@@ -29053,6 +29108,7 @@ class MainWindow(QMainWindow):
         """
         dialog = UpdateDialog(release, self)
         dialog.installRequested.connect(self._install_update)
+        dialog.finished.connect(dialog.deleteLater)
         # Festhalten: Ein nicht modaler Dialog ohne Referenz ist einer, den der
         # Aufräumer einsammelt, sobald diese Methode zurückkehrt.
         self._update_dialog = dialog
@@ -29099,7 +29155,11 @@ class MainWindow(QMainWindow):
         """
         from app.ui.changes_dialog import ChangesDialog
 
-        ChangesDialog(self).exec()
+        dialog = ChangesDialog(self)
+        try:
+            dialog.exec()
+        finally:
+            dialog.deleteLater()
 
     def action_check_updates(self) -> None:
         """Von Hand nach einer neuen Version sehen (Demo-Konzept §2 G).
@@ -29125,8 +29185,11 @@ class MainWindow(QMainWindow):
         nichts unbesehen, und der abgelegte Ordner steht als Weg daneben.
         """
         dialog = self._support_dialog(kind)
-        dialog.exec()
-        self._remember_contact(dialog)
+        try:
+            dialog.exec()
+            self._remember_contact(dialog)
+        finally:
+            dialog.deleteLater()
 
     def report_error(self, error: BaseException, summary: str = "") -> None:
         """§33.1: ein Programmfehler bekommt ein Berichtsangebot, keinen
@@ -29169,9 +29232,10 @@ class MainWindow(QMainWindow):
         self._crash_dialog = dialog
         try:
             dialog.exec()
+            self._remember_contact(dialog)
         finally:
             self._crash_dialog = None
-        self._remember_contact(dialog)
+            dialog.deleteLater()
 
     def _support_dialog(self, kind: str, detail: str = "") -> SupportDialog:
         """Der Rückmeldungsdialog mit allem, was dieses Fenster beisteuern kann."""
@@ -29502,8 +29566,11 @@ class MainWindow(QMainWindow):
         # Akzent und halbfette Schrift, nicht nur der Default (Regel 18).
         make_primary(restore)
         box.setDefaultButton(restore)
-        box.exec()
-        return box.clickedButton() is restore
+        try:
+            box.exec()
+            return box.clickedButton() is restore
+        finally:
+            box.deleteLater()
 
     def _offer_recovery(self, path: Path) -> None:
         """Eine Sicherung anbieten, die neuer ist als die Datei (§38).

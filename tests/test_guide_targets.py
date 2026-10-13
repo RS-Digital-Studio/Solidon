@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QMenu, QScrollArea, QToolButton
 from app.core import guides
 from app.core.bootstrap import load_operations
 from app.i18n import SOURCE_LANGUAGE
-from tools.function_scan import MESSAGE_BUILDERS
+from tools.function_scan import MESSAGE_BUILDERS, message_builders
 
 load_operations()
 
@@ -1440,11 +1440,14 @@ _RAW_STATIC = {
 
 
 #: Was eine Meldung oder Eingabe im Hausstil baut und ihr Kennzeichen als ``target=``
-#: nimmt — aus der Funktionsliste, damit beide dieselben Fenster kennen.
-HOUSE_BUILDERS = MESSAGE_BUILDERS
+#: nimmt — aus der Funktionsliste, damit beide dieselben Fenster kennen. Ohne
+#: Unterklassen; die bringt :func:`message_builders` aus den Quelltexten mit.
+HOUSE_BUILDERS: dict[str, str] = dict.fromkeys(MESSAGE_BUILDERS, "")
 
 
-def raw_window_names(source: str) -> tuple[list[str], list[str]]:
+def raw_window_names(
+    source: str, builders: dict[str, str] | None = None
+) -> tuple[list[str], list[str]]:
     """Die Meldungs- und Eingabefenster einer Datei: die ohne Kennzeichen und die Namen.
 
     Ein Fenster im Hausstil nennt sein Kennzeichen als ``target=``; ein
@@ -1452,10 +1455,13 @@ def raw_window_names(source: str) -> tuple[list[str], list[str]]:
     ``guides.TARGET_PROPERTY`` und einem Namen (oder einer Konstanten wie
     ``EXPIRED_DEMO_TARGET``). Ein statischer Aufruf (``QMessageBox.information``,
     ``QInputDialog.getText``) hat keinen Ort für ein Kennzeichen und fehlt immer.
-    Die Funktion ist die innerste, die den Aufruf trägt.
+    Die Funktion ist die innerste, die den Aufruf trägt. Eine Unterklasse eines
+    Bauers (``builders``, Name → eigenes Kennzeichen) zählt wie er; setzt sie ihr
+    Kennzeichen selbst, braucht der Aufruf keins.
     """
     import ast
 
+    builders = HOUSE_BUILDERS if builders is None else builders
     tree = ast.parse(source)
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
     missing: list[str] = []
@@ -1476,14 +1482,18 @@ def raw_window_names(source: str) -> tuple[list[str], list[str]]:
         )
         # Eine Meldung oder Eingabe im Hausstil (FD-21, FD-22) nennt ihr Kennzeichen
         # im Aufruf.
-        house = isinstance(func, ast.Name) and func.id in HOUSE_BUILDERS
+        house = isinstance(func, ast.Name) and func.id in builders
         if house:
+            assert isinstance(func, ast.Name)
             given_here = [word.value for word in node.keywords if word.arg == "target"]
-            if not given_here:
+            own = builders[func.id]
+            if not given_here and not own:
                 missing.append(f"{func.id} (Zeile {node.lineno})")
             names.extend(
                 str(value.value) for value in given_here[:1] if isinstance(value, ast.Constant)
             )
+            if not given_here and own:
+                names.append(own)
             continue
         if not (instance or static):
             continue
@@ -1529,8 +1539,11 @@ def test_every_raw_message_window_carries_its_name() -> None:
     root = Path(__file__).resolve().parents[1] / "app" / "ui"
     missing: list[str] = []
     names: list[str] = []
-    for path in sorted(root.rglob("*.py")):
-        lacking, named = raw_window_names(path.read_text(encoding="utf-8"))
+    sources = {path: path.read_text(encoding="utf-8") for path in sorted(root.rglob("*.py"))}
+    builders = message_builders(sources.values())
+    assert "DonationOpenErrorDialog" in builders, "die Suche nach Unterklassen greift nicht"
+    for path, source in sources.items():
+        lacking, named = raw_window_names(source, builders)
         missing.extend(f"{path.relative_to(root).as_posix()}: {entry}" for entry in lacking)
         names.extend(sorted(set(named)))
     assert missing == []
@@ -1558,6 +1571,24 @@ def test_an_unnamed_raw_window_turns_the_guard_red() -> None:
         ["ask (Zeile 2)", "boxed (Zeile 6)", "choose_colour (Zeile 9)", "typed (Zeile 11)"],
         ["message:sample_named"],
     )
+
+
+def test_a_subclass_of_a_house_builder_needs_a_name_too() -> None:
+    """Gegenprobe: Eine Unterklasse von ``MessageDialog`` ist ein Meldungsfenster; ohne
+    eigenes Kennzeichen fehlt ihr Name, mit ihm braucht der Aufruf keinen."""
+    source = (
+        "class Own(MessageDialog):\n"
+        "    pass\n"
+        "class Named(MessageDialog):\n"
+        "    def __init__(self, parent):\n"
+        "        super().__init__(parent, title='a', headline='b', target='message:sample_own')\n"
+        "def bare(parent):\n"
+        "    return Own(parent).exec()\n"
+        "def named(parent):\n"
+        "    return Named(parent).exec()\n"
+    )
+    builders = message_builders([source])
+    assert raw_window_names(source, builders) == (["Own (Zeile 7)"], ["message:sample_own"])
 
 
 def test_a_message_or_input_window_resolves_while_it_is_open(qt_app: Any) -> None:

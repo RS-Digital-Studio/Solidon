@@ -103,105 +103,6 @@ def test_the_guard_sees_a_message_box_that_only_informs(tmp_path: Path, monkeypa
     assert sorted(entry.split(":")[1] for entry in found) == ["Own", "shown", "tell"], found
 
 
-def _message_dialogs_left_standing() -> list[str]:
-    """Jede Meldung im Hausstil unter ``app/ui``, die nach ``exec`` am Elternteil liegen bleibt.
-
-    ``exec`` gibt den Dialog nicht frei: Ohne ``deleteLater`` im ``finally`` hängt
-    nach jeder Meldung ein verborgener Dialog mehr am Fenster (A-L1), wie es
-    ``ask_text`` vormacht. Gesucht wird ``x = MessageDialog(…)`` oder eine
-    Unterklasse samt ``x.exec()``, und ``MessageDialog(…).exec()`` ohne Namen.
-    """
-    trees = {path: ast.parse(path.read_text(encoding="utf-8")) for path in sorted(UI.rglob("*.py"))}
-    builders = {"MessageDialog"} | {
-        node.name
-        for tree in trees.values()
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ClassDef)
-        and any(isinstance(base, ast.Name) and base.id == "MessageDialog" for base in node.bases)
-    }
-
-    def built(node: ast.AST) -> bool:
-        return (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id in builders
-        )
-
-    found: list[str] = []
-    for path, tree in trees.items():
-        where = path.relative_to(UI).as_posix()
-        for function in ast.walk(tree):
-            if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            names = {
-                node.targets[0].id
-                for node in ast.walk(function)
-                if isinstance(node, ast.Assign)
-                and len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and built(node.value)
-            }
-            freed = {
-                (call.func.value.id, run.lineno)
-                for guard in ast.walk(function)
-                if isinstance(guard, ast.Try)
-                for done in guard.finalbody
-                for call in ast.walk(done)
-                if isinstance(call, ast.Call)
-                and isinstance(call.func, ast.Attribute)
-                and call.func.attr == "deleteLater"
-                and isinstance(call.func.value, ast.Name)
-                for statement in guard.body
-                for run in ast.walk(statement)
-                if isinstance(run, ast.Call)
-                and isinstance(run.func, ast.Attribute)
-                and run.func.attr == "exec"
-            }
-            for call in ast.walk(function):
-                if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
-                    continue
-                if call.func.attr != "exec":
-                    continue
-                if built(call.func.value):
-                    found.append(f"{where}:{function.name}:{call.lineno} exec ohne Namen")
-                elif (
-                    isinstance(call.func.value, ast.Name)
-                    and call.func.value.id in names
-                    and (call.func.value.id, call.lineno) not in freed
-                ):
-                    found.append(f"{where}:{function.name}:{call.lineno} ohne deleteLater")
-    return found
-
-
-def test_a_message_is_freed_after_exec() -> None:
-    """Jede Meldung im Hausstil gibt sich nach ``exec`` frei (A-L1)."""
-    found = _message_dialogs_left_standing()
-    assert not found, "Meldungen, die am Elternteil liegen bleiben:\n" + "\n".join(found)
-
-
-def test_the_guard_sees_a_message_left_standing(tmp_path: Path, monkeypatch) -> None:
-    """Gegenprobe: ohne Namen, ohne ``finally`` und eine Unterklasse fallen auf."""
-    (tmp_path / "probe.py").write_text(
-        "class Own(MessageDialog):\n"
-        "    pass\n"
-        "def bare(parent):\n"
-        "    MessageDialog(parent).exec()\n"
-        "def kept(parent):\n"
-        "    box = Own(parent)\n"
-        "    box.exec()\n"
-        "def freed(parent):\n"
-        "    box = MessageDialog(parent)\n"
-        "    try:\n"
-        "        box.exec()\n"
-        "    finally:\n"
-        "        box.deleteLater()\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(sys.modules[__name__], "UI", tmp_path, raising=True)
-    found = _message_dialogs_left_standing()
-    assert sorted(entry.split(":")[1] for entry in found) == ["bare", "kept"], found
-
-
 def _caught(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     """Fängt jeden Meldungsdialog vor ``exec`` und gibt die Liste zurück."""
     from app.ui.message_dialog import MessageDialog
@@ -366,19 +267,34 @@ def test_the_symbol_reads_on_both_themes(qt_app: QApplication, theme: str) -> No
 def test_the_severity_word_comes_from_the_palette(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Das Wort zum Symbol hat eine Quelle: ``palette.SEVERITY_ENCODING`` (A-L3)."""
-    from dataclasses import replace
+    """Das Wort für die Schwere hat eine Quelle: ``palette.SEVERITY_ENCODING`` (A-L3).
 
-    from app.ui import palette
+    Meldung, Filterzeile und Befundzeile des Berichts und die Warnungen eines
+    Vorschlags im Chat lesen es dort — eine eigene Tabelle daneben ist ein
+    Zwilling, der auseinanderläuft.
+    """
+    from dataclasses import replace
+    from types import SimpleNamespace
+
+    from app.ui import chat, palette, panels
     from app.ui.message_dialog import MessageDialog
 
     renamed = replace(palette.SEVERITY_ENCODING["error"], label_key="Probewort")
     monkeypatch.setitem(palette.SEVERITY_ENCODING, "error", renamed)
     dialog = MessageDialog(title="T", headline="H", kind="error")
+    report = panels.ReportPanel()
     try:
         assert dialog.symbol.accessibleName() == "Probewort"
+        assert report.severity.itemText(report.severity.findData("error")).endswith("Probewort")
+        finding = SimpleNamespace(severity="error", source="internal")
+        assert panels.finding_meta(finding, "").startswith("Probewort")  # type: ignore[arg-type]
+        proposal = SimpleNamespace(findings=[SimpleNamespace(severity="error", message="Satz")])
+        assert chat._warnings(proposal) == [
+            chat.tr("{name}: {value}", name="Probewort", value="Satz")
+        ]
     finally:
         dialog.deleteLater()
+        report.deleteLater()
 
 
 @pytest.mark.parametrize("kind", ["error", "warning", "info"])
@@ -390,19 +306,24 @@ def test_a_screen_reader_hears_what_went_wrong(
     Ein ``QMessageBox`` meldet sich als ``AlertMessage`` mit Text und Ursache; ein
     eigener Dialog hat die Rolle ``Dialog`` und sagt von sich aus nichts. Seine
     Beschreibung trägt deshalb Wort, Kopfzeile und Satz, und ein Fehler oder eine
-    Warnung meldet sich beim Zeigen mit einem ``Alert``.
+    Warnung meldet sich beim Zeigen mit einem ``Alert`` und einer Ansage mit
+    Vorrang: UIA und AT-SPI reichen das ``Alert`` vermutlich nicht weiter, die
+    Ansage schon. Ein Hinweis, um den der Kunde gebeten hat, sagt nichts an.
     """
-    from PySide6.QtGui import QAccessible, QAccessibleEvent
+    from PySide6.QtGui import QAccessible, QAccessibleAnnouncementEvent, QAccessibleEvent
 
     from app.i18n import tr
     from app.ui.message_dialog import MessageDialog
     from app.ui.palette import SEVERITY_ENCODING
 
     sent: list[QAccessible.Event] = []
+    said: list[tuple[str, QAccessible.AnnouncementPoliteness]] = []
     real = QAccessible.updateAccessibility
 
     def spy(event: QAccessibleEvent) -> None:
         sent.append(event.type())
+        if isinstance(event, QAccessibleAnnouncementEvent):
+            said.append((event.message(), event.politeness()))
         real(event)
 
     monkeypatch.setattr(QAccessible, "updateAccessibility", spy)
@@ -424,9 +345,51 @@ def test_a_screen_reader_hears_what_went_wrong(
         assert tr(SEVERITY_ENCODING[kind].label_key) in described
         assert "Platte zu klein" in described and "300 mm" in described
         assert (QAccessible.Event.Alert in sent) == (kind != "info"), sent
+        if kind == "info":
+            assert said == []
+        else:
+            ((message, politeness),) = said
+            assert "Platte zu klein" in message and "300 mm" in message
+            assert politeness == QAccessible.AnnouncementPoliteness.Assertive
     finally:
         dialog.hide()
         dialog.deleteLater()
+
+
+def test_a_notice_announces_itself(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``inform`` war ein ``QMessageBox.information``, das sich meldete — es sagt sich an.
+
+    Der Kunde hat um den Hinweis nicht gebeten („Der Browser ließ sich nicht
+    öffnen“); höflich, ohne Vorrang.
+    """
+    from PySide6.QtGui import QAccessible, QAccessibleAnnouncementEvent, QAccessibleEvent
+
+    from app.ui import message_dialog
+    from app.ui.message_dialog import MessageDialog
+
+    said: list[tuple[str, QAccessible.AnnouncementPoliteness]] = []
+    real = QAccessible.updateAccessibility
+
+    def spy(event: QAccessibleEvent) -> None:
+        if isinstance(event, QAccessibleAnnouncementEvent):
+            said.append((event.message(), event.politeness()))
+        real(event)
+
+    def shown(dialog: MessageDialog) -> int:
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        dialog.show()
+        qt_app.processEvents()
+        dialog.hide()
+        return 0
+
+    monkeypatch.setattr(QAccessible, "updateAccessibility", spy)
+    monkeypatch.setattr(MessageDialog, "exec", shown)
+    message_dialog.inform(
+        None, "Der Browser ließ sich nicht öffnen", "Satz", target="message:probe"
+    )
+    ((message, politeness),) = said
+    assert "Der Browser ließ sich nicht öffnen" in message and "Satz" in message
+    assert politeness == QAccessible.AnnouncementPoliteness.Polite
 
 
 def test_a_message_leaves_no_window_behind(
@@ -492,6 +455,16 @@ def test_copy_takes_the_marked_part_first(qt_app: QApplication) -> None:
         dialog.headline.setSelection(0, 0)
         QTest.keyClick(dialog.details, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
         assert qt_app.clipboard().text() == dialog.text()
+
+        # Die Einzelheiten behalten ihre Markierung ohne Fokus, eine Zeile nicht:
+        # Die jüngere Markierung in der Kopfzeile gilt (Nachprüfung, Fund 2).
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfLine, QTextCursor.MoveMode.KeepAnchor)
+        dialog.details.setTextCursor(cursor)
+        dialog.headline.setFocus()
+        dialog.headline.setSelection(0, 4)
+        QTest.keyClick(dialog.headline, Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+        assert qt_app.clipboard().text() == "Kopf"
     finally:
         qt_app.clipboard().setText(previous)
         dialog.hide()
@@ -519,3 +492,48 @@ def test_a_withdrawn_receipt_leaves_nothing_at_the_button(qt_app: QApplication) 
         assert dialog.close_button.accessibleDescription() == ""
     finally:
         dialog.deleteLater()
+
+
+def test_a_new_receipt_takes_the_old_one_along(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Quittung ersetzt die vorige ganz, und ohne Knopf sagt sie sich an (Nachprüfung 5).
+
+    *Anfrage speichern* legte seinen Satz auf *Aktivierungsseite öffnen*; scheiterte
+    danach das Öffnen, stand die Warnung sichtbar da, der Knopf las aber weiter die
+    alte Quittung. Und eine Quittung ohne ``then`` bewegt keinen Fokus: Ohne Ansage
+    erfuhr ein Bildschirmleser von ihr nichts.
+    """
+    from PySide6.QtGui import QAccessible, QAccessibleAnnouncementEvent, QAccessibleEvent
+    from PySide6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout
+
+    from app.ui.message_dialog import acknowledge
+
+    said: list[tuple[str, QAccessible.AnnouncementPoliteness]] = []
+    real = QAccessible.updateAccessibility
+
+    def spy(event: QAccessibleEvent) -> None:
+        if isinstance(event, QAccessibleAnnouncementEvent):
+            said.append((event.message(), event.politeness()))
+        real(event)
+
+    monkeypatch.setattr(QAccessible, "updateAccessibility", spy)
+    window = QDialog()
+    layout = QVBoxLayout(window)
+    line = QLabel(window)
+    page = QPushButton("Seite öffnen", window)
+    for widget in (line, page):
+        layout.addWidget(widget)
+    try:
+        acknowledge(line, "Anfrage gespeichert", "Öffnen Sie die Seite.", then=page)
+        assert page.accessibleDescription()
+        assert said == [], "mit Knopf spricht der Fokus, keine Ansage"
+        acknowledge(line, "Die Seite ließ sich nicht öffnen.", role="warning")
+        assert page.accessibleDescription() == ""
+        # Angesagt wird, was die Zeile beschreibt: Wort der Bedeutung und Satz.
+        assert said == [
+            (line.accessibleDescription(), QAccessible.AnnouncementPoliteness.Assertive)
+        ]
+        assert "Die Seite ließ sich nicht öffnen." in said[0][0]
+    finally:
+        window.deleteLater()

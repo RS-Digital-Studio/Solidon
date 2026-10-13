@@ -862,6 +862,8 @@ def test_the_feedback_card_opens_the_existing_survey_kind(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Die Startaktion öffnet den halbstündigen Bogen, nicht den Ideenmodus."""
+    from types import SimpleNamespace
+
     from app.core.support import KIND_SURVEY
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
@@ -872,6 +874,12 @@ def test_the_feedback_card_opens_the_existing_survey_kind(
     shown: list[str] = []
 
     class SurveyDialog:
+        # Der Bogen gibt sich frei, sobald er zu ist (``finished``).
+        finished = SimpleNamespace(connect=lambda _slot: None)
+
+        def deleteLater(self) -> None:  # noqa: N802 - Qt-Name
+            """Erst nach dem Schließen — hier schließt niemand."""
+
         def show(self) -> None:
             shown.append("show")
 

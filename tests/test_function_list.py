@@ -545,6 +545,43 @@ def test_a_marked_surface_without_its_target_turns_red() -> None:
     }
 
 
+def test_a_subclass_of_a_house_builder_is_a_message_window() -> None:
+    """Eine Unterklasse von ``MessageDialog`` ist ein Meldungsfenster wie ihre Basis —
+    auch über eine Enkelklasse. Ihr Ziel steht im ``super().__init__(…, target=…)``;
+    reicht sie ``target`` nur weiter, nennt es der Aufruf (``DonationOpenErrorDialog``,
+    Nachprüfung der Fixrunde)."""
+    windows = fscan.scan_ui(
+        {
+            "app/ui/eigen.py": (
+                "class Failed(MessageDialog):\n"
+                "    def __init__(self, parent):\n"
+                "        super().__init__(parent, title='a', headline='b',\n"
+                "                         target='message:sample_failed')\n"
+                "class Later(Failed):\n"
+                "    pass\n"
+                "class Passed(MessageDialog):\n"
+                "    def __init__(self, parent, *, target):\n"
+                "        super().__init__(parent, title='a', headline='b', target=target)\n"
+                "def failed(parent):\n"
+                "    Failed(parent).exec()\n"
+                "def later(parent):\n"
+                "    Later(parent).exec()\n"
+                "def passed(parent):\n"
+                "    Passed(parent, target='message:sample_passed').exec()\n"
+                "def unnamed(parent):\n"
+                "    Passed(parent).exec()\n"
+            ),
+        }
+    )
+    assert set(windows.raw_windows) == {"failed", "later", "passed", "unnamed"}
+    assert windows.raw_targets == {
+        "failed": "message:sample_failed",
+        "later": "message:sample_failed",
+        "passed": "message:sample_passed",
+    }
+    assert fscan.message_builders(["class Failed(MessageDialog):\n    pass\n"])["Failed"] == ""
+
+
 def test_the_history_entries_come_from_the_context_menu(ui_sources: dict[str, str]) -> None:
     """Die Verlaufszeilen kommen aus den Objektnamen ``history.*`` — die vier, unter denen
     die Bildanleitungen sie schon finden, sind dabei."""

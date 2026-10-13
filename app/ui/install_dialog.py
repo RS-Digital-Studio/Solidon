@@ -782,11 +782,19 @@ class InstallDialog(QDialog):
         if requirement.follow_up == "comfyui":
             from app.ui.comfy_dialog import ComfySetupDialog
 
-            ComfySetupDialog(self).exec()
+            dialog = ComfySetupDialog(self)
+            try:
+                dialog.exec()
+            finally:
+                dialog.deleteLater()
         elif requirement.follow_up == "chat":
             from app.ui.dialogs import KeyDialog
 
-            KeyDialog(parent=self, settings=self._settings).exec()
+            key = KeyDialog(parent=self, settings=self._settings)
+            try:
+                key.exec()
+            finally:
+                key.deleteLater()
         else:
             return
         self.refresh()
