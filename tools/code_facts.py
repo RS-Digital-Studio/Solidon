@@ -1174,6 +1174,9 @@ def lookup(scopes: list[Scope], number: int, name: str, at: tuple[int, int]) -> 
         found = live(binds)
         if not found:
             return [_WITHOUT_VALUE]
+        if len(found) == 1 and not scope.loops:
+            # Der häufigste Fall: eine Bindung, keine Schleife — sie gilt, davor oder nicht.
+            return found
         before = sorted((b for b in found if (b.line, b.col) <= at), key=lambda b: (b.line, b.col))
         if not before:
             return found

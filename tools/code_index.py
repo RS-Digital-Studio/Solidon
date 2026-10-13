@@ -304,7 +304,7 @@ Res = list[tuple[Env, Val]]
 
 def _merge(first: Env, second: Env) -> Env | None:
     """Zwei Zeilen vereinen; widersprechen sie sich in einer Quelle, gibt es die Zeile nicht."""
-    if not first:
+    if not first or first == second:
         return second
     if not second:
         return first
@@ -711,7 +711,10 @@ class Index:
                 # Als Skript gestartet heißt jedes Modul ``__main__``.
                 return [((), _const(facts.module)), ((), _const("__main__"))]
             return [((), self._unbound(facts, ir.name))]
-        around = [region for region in facts.scopes[ir.scope].regions if inside(region[2], at)]
+        regions = facts.scopes[ir.scope].regions
+        around = [region for region in regions if inside(region[2], at)] if regions else []
+        if not around and len(binds) == 1 and not binds[0].branch:
+            return self._fold(facts, binds[0].value)
         here: Env = tuple(sorted((key, n) for key, n, _span, _test in around))
         out: Res = []
         for bind in binds:
@@ -1400,7 +1403,9 @@ class Index:
             if ref.name is not None:
                 self._scan_getattr(facts, ref, indexed_file)
                 continue
-            values = {value for _env, value in self._fold(facts, ref.base)}
+            # Ohne Merker: Die Basis eines Bezugs steht an genau einer Stelle und wird nur hier
+            # gefaltet; Zyklen fängt der Merker der Bindungswerte darunter.
+            values = {value for _env, value in self._fold_new(facts, ref.base)}
             if not values:
                 # Keine Zeile: Die Faltung hat jede verworfen. Gezählt, damit Schweigen auffällt.
                 self._count("refs.empty")

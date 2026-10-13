@@ -125,6 +125,12 @@ FAKE: dict[str, str] = {
             from app.mod import CONST  # spaet
 
             return CONST
+
+
+        def renamed() -> int:
+            from app.mod import OLD_NAME  # spaet-umbenannt
+
+            return OLD_NAME
     """,
     "tests/conftest.py": """
         import pytest
@@ -586,6 +592,15 @@ def test_rule_e_finds_a_target_and_a_name_that_do_not_fold(fake: Index) -> None:
 def test_w5_finds_a_missing_module_and_a_silent_store(fake: Index) -> None:
     assert _unresolved_at(fake, "tests/test_red.py", "w5-import") == {("import", "app.missing", "")}
     assert _unresolved_at(fake, "tests/test_red.py", "w5-store") == {("store", "app.mod", "ABSENT")}
+
+
+def test_w5_finds_a_renamed_name_that_only_a_late_import_in_a_tool_reads(fake: Index) -> None:
+    """RM-724: mypy prüft ``tools/`` nicht, und ein später Import bricht erst, wenn die
+    Zeile läuft — der Auflöser sieht ihn sofort."""
+    assert _unresolved_at(fake, "tools/tool.py", "spaet") == set()
+    assert _unresolved_at(fake, "tools/tool.py", "spaet-umbenannt") == {
+        ("from", "app.mod", "OLD_NAME")
+    }
 
 
 def test_mock_patch_counts_and_a_local_patch_function_does_not(fake: Index) -> None:
