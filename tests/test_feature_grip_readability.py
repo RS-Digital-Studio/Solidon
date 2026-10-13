@@ -124,6 +124,8 @@ def test_only_idle_openings_reduce_their_non_pickable_fills(
     assert not face.pickable and not view._shape_actor.pickable
     assert face.opacity() == pytest.approx(0.6 if kind == "pin" else 0.12)
     assert view._shape_actor.opacity() == pytest.approx(0.45 if kind == "pin" else 0.18)
+    assert face.visible() is (kind == "pin")
+    assert view._shape_actor.visible() is (kind == "pin")
     assert face.bounds()[0] < face.bounds()[1], "der Gizmo-Bezug behält seine Ausdehnung"
 
 
@@ -136,6 +138,7 @@ def test_existing_preview_actor_changes_with_the_actual_proposal(
     view._face_handle(feature)
     actor = view._shape_actor
     assert actor is not None and actor.opacity() == pytest.approx(0.18)
+    assert not actor.visible() and not view._face_actor.visible()
     view._slot_handle = make_handle(view.renderer, length=10.0)
     if state == "waiting":
         view._slot_target = feature.id
@@ -151,15 +154,18 @@ def test_existing_preview_actor_changes_with_the_actual_proposal(
     assert view._repaint_preview()
     assert view._shape_actor is actor, "reine Deckkraftwechsel bauen keine neue Vorschau"
     assert actor.opacity() == pytest.approx(0.45)
+    assert actor.visible() and view._face_actor.visible()
     view._slot_handle.pressing = False
     view._slot_turn_base = None
     view.drop_move_proposal()
     assert view._repaint_preview()
     assert view._shape_actor is actor and actor.opacity() == pytest.approx(0.18)
+    assert not actor.visible() and not view._face_actor.visible()
     view._drop_face_handle()
     view._face_handle(feature)
     assert view._shape_actor is not actor
     assert view._shape_actor.opacity() == pytest.approx(0.18)
+    assert not view._shape_actor.visible() and not view._face_actor.visible()
 
 
 @pytest.mark.parametrize("turn", [False, True])
@@ -173,6 +179,7 @@ def test_real_gizmo_steps_strengthen_preview_but_zero_motion_does_not(
     assert actor is not None
     view._drag_preview(TransformSteps(offset=(0.0, 0.0, 0.0), axis=None, angle=0.0, scale=1.0))
     assert actor.opacity() == pytest.approx(0.18)
+    assert not actor.visible() and not view._face_actor.visible()
     view._drag_preview(
         TransformSteps(
             offset=(0.0, 0.0, 0.0) if turn else (2.0, 0.0, 0.0),
@@ -182,7 +189,33 @@ def test_real_gizmo_steps_strengthen_preview_but_zero_motion_does_not(
         )
     )
     assert view._shape_actor is actor and actor.opacity() == pytest.approx(0.45)
+    assert actor.visible() and view._face_actor.visible()
     view._end_drag()
     assert actor in view.renderer.removed
     view._face_handle(feature)
     assert view._shape_actor is not actor and view._shape_actor.opacity() == pytest.approx(0.18)
+    assert not view._shape_actor.visible() and not view._face_actor.visible()
+
+
+def test_typed_slot_values_show_the_proposal_and_cancel_clears_the_opening(
+    feature_view: Viewport,
+) -> None:
+    view = feature_view
+    feature = view._features_of_selection()["hole_1"]
+    view._face_handle(feature)
+    actor, face = view._shape_actor, view._face_actor
+    assert actor is not None and face is not None
+    bounds = face.bounds()
+    view._slot_handle = make_handle(view.renderer, length=10.0)
+    view.reshape_slot(15.0, 20.0, diameter=6.0, feature_id=feature.id)
+    assert view.waiting_slot_drag(feature.id) == pytest.approx((15.0, 20.0))
+    assert view._shape_actor is actor and actor.visible() and face.visible()
+    assert actor.opacity() == pytest.approx(0.45)
+    assert not actor.pickable and not face.pickable
+    assert face.bounds() == bounds
+    assert all(item.visible() and item.pickable for item in view._slot_handle._knobs)
+    view.cancel_slot_drag()
+    assert not view.slot_drag_waits()
+    assert actor in view.renderer.removed and face in view.renderer.removed
+    view._face_handle(feature)
+    assert not view._shape_actor.visible() and not view._face_actor.visible()

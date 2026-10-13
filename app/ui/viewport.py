@@ -15980,6 +15980,8 @@ class Viewport(QWidget):
                 pickable=False,
             ),
         )
+        if self._shape_actor is not None:
+            self._face_actor.set_visible(self._shape_actor.visible())
         return self._face_actor
 
     def _handle_seat(self, feature: Feature, centre: Any) -> Any:
@@ -16174,7 +16176,12 @@ class Viewport(QWidget):
                 )
             )
         )
-        opacity = 0.18 if feature.kind in slot_feature_kinds() and not proposing else 0.45
+        # Die geschlossenen Hilfsflächen verschließen sonst eine ruhende
+        # Öffnung. Wand, Kontur und pickbare Knöpfe tragen ihre Auswahl.
+        visible = feature.kind not in slot_feature_kinds() or proposing
+        opacity = 0.45 if visible else 0.18
+        if update and self._face_actor is not None:
+            self._face_actor.set_visible(visible)
         vertices, faces = self._feature_shape(feature, centre, normal, radius)
         if update and self._shape_actor is not None:
             # Gleiche Form: Punkte und Darstellungszustand im stehenden Aktor.
@@ -16185,6 +16192,7 @@ class Viewport(QWidget):
                 pass
             else:
                 self._shape_actor.set_opacity(opacity)
+                self._shape_actor.set_visible(visible)
                 return
         self._drop_preview()
         self._shape_actor = self.renderer.add_surface(
@@ -16195,6 +16203,8 @@ class Viewport(QWidget):
                 colour=MEASURE_COLOUR, opacity=opacity, lighting=False, pickable=False
             ),
         )
+
+        self._shape_actor.set_visible(visible)
 
     def _repaint_preview(self) -> bool:
         """Die Marke des gewählten Merkmals neu — nach einem Zug, der ihre Form ändert.
@@ -16230,6 +16240,9 @@ class Viewport(QWidget):
         """
         if self._shape_actor is not None and (steps.moves or steps.turns):
             self._shape_actor.set_opacity(0.45)
+            self._shape_actor.set_visible(True)
+            if self._face_actor is not None:
+                self._face_actor.set_visible(True)
         if not steps.moves or steps.turns:
             return
         if self._shape_actor is not None:
