@@ -77,11 +77,30 @@ selbstständig auf zeitgemäße Gestaltung prüfen, über die reine Funktion
 hinaus. Maßgeblich sind tatsächlich gelesene Originalbilder im hellen und
 dunklen Thema: Platzbedarf, verbleibende Modellfläche, Schrift und visuelle
 Hierarchie gehören gleichermaßen dazu. Das Raster im hellen Thema ist
-ausdrücklich mitzuprüfen; seine Diagnose liefert `fix_c`. Dafür wird vor
-dem belegten Ergebnis keine zusätzliche Fundnummer vergeben.
+ausdrücklich mitzuprüfen. Bestätigte Funde stehen in der Funddatei;
+ein neues Bild wird nach einer Korrektur erneut tatsächlich gelesen.
 
 ## Verlauf
 
+- 13.10.2026, sichtbare Oberflächenkorrekturen: `welle4`/origin steht auf
+  `ce1e95113d5d49d982570dc2d0a626b576d7af42`. FD67-Größenfix, FD68-Raster,
+  ruhigere Werkzeugleisten, Maßkarten-Drag-Helfer und sein Flow-Anschluss
+  sind normal integriert; ohne manuelle Merge-Auflösung. Raster
+  im echten Fenster vorher/nachher jeweils Hell/Dunkel/Hell bestanden,
+  Bilder selbst gelesen. Der Helfer hält freie Nutzerorte auch bei
+  Größen- und Ursprungswechsel des verfügbaren Platzes; 34 enge Fälle,
+  Statik und seine Review-Fixe grün. Der Flow-Anschluss besteht alle 16 Fälle
+  einschließlich sechs Sprachkarten, Abbrechen/Neuauswahl und Platzmangel;
+  Statik grün, DG-M1/2/3 in der bestehenden Durchsicht geschlossen.
+  Neu bestätigt sind FD69 (zu blasse Bettmaßzahlen) und FD70 (Griff- und
+  Vorschauflächen verdecken die gewählte Öffnung); beide werden auf dem
+  eigenen Viewportzweig gezielt korrigiert. FD70 hat 15 enge Fälle und Statik
+  grün, FD69 acht Bettfälle grün und eine Durchsicht ohne Fund. Native Maßkartengesten,
+  Griff-/Zahlen-Sichtvergleich, voller 48-Fall-Lauf, endgültige Urteile,
+  Kartennachtrag und gepinntes Entwicklungstor bleiben offen. Automatisch
+  ermittelte breite Auswahlen sind bis zum gemeinsamen Tor ausdrücklich
+  ausstehend; kein D0-Gesamtgrün und noch keine Landung auf main.
+  Danach weiterhin Codestruktur Schritt 0, Release 0.6.1, Phasen 3 und 4.
 - 13.10.2026, 19:43, Releaseauftrag ergänzt: Nach D0 und Codestruktur
   Schritt 0 wird 0.6.1 erstellt, vollständig geprüft und veröffentlicht;
   danach laufen Phase 3 und 4 weiter. Welle4/origin steht auf
