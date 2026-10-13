@@ -1760,6 +1760,9 @@ class FunctionFlow(GesturePhases, SwitchPhase):
         (``function_surface.licence_refusal``). Vorher klickte der Lauf nur das
         Ziel, und eine Befundhandlung, deren Absage als Meldungsfenster kam,
         galt als lesend (Probelauf F-35).
+
+        Der Lauf trägt ``state`` — ``angeboten``, ``grau`` oder ``fehlt``
+        (``function_points.LICENCE_RUN_STATES``) — und den Grund des grauen Ziels.
         """
         target = walk_target(self.row)
         inputs = list(self.spec.get("inputs") or {})
@@ -1792,12 +1795,17 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                 if target.startswith("feature:") and surfaces.in_view(self.window, inputs)
                 else target
             )
+            # Der Grund kommt nur aus dem grauen Ziel. Fehlt es, ist das kein Grund,
+            # sondern ein eigener Zustand: Der Text der eigenen ``LookupError`` als
+            # Grund machte aus einem versteckten Ziel „grau mit Grund“ (Durchsicht
+            # welle4 C-S1).
             grey = surfaces.grey_reason(self.window, probe)
             try:
                 self.ports.next_click(probe)
+            except LookupError:
+                state, reason = "fehlt", ""
+            else:
                 state, reason = ("grau", grey) if grey is not None else ("angeboten", "")
-            except LookupError as error:
-                state, reason = "fehlt", str(error)
             if state == "angeboten":
                 acting = [
                     self.action_step(target)
@@ -1818,11 +1826,7 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             or compare_prints(before, self.scene_now())["same"] is False
         )
         self.data["licence_runs"] = {
-            self.variant.licence: {
-                "writes": writes,
-                "enabled": state == "angeboten",
-                "reason": reason,
-            }
+            self.variant.licence: {"writes": writes, "state": state, "reason": reason}
         }
 
     def phase_surface(self) -> None:

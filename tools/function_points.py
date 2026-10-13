@@ -67,6 +67,11 @@ from tools.function_judges import (
 )
 from tools.function_list import LICENCE_STATES, NOT_APPLICABLE_REASONS, licence_states
 
+#: Wie das Ziel in einem Lizenzlauf dastand (``function_bench.phase_licence``):
+#: offen, grau oder gar nicht — dieselben Wörter wie in der Matrix.
+LICENCE_RUN_STATES: Final = ("angeboten", "grau", "fehlt")
+LICENCE_MISSING: Final = LICENCE_RUN_STATES[2]
+
 # --- Prüfpunkte -----------------------------------------------------------
 
 
@@ -856,6 +861,12 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
     Zeile über die Läufe aller ihrer Fälle; ein fehlender Lauf ist dann nicht
     gemessen. Ein einzelner Fall trägt nur seinen Lauf und wird nur an ihm
     gemessen.
+
+    Jeder Lauf trägt, wie das Ziel dastand (``state``: :data:`LICENCE_RUN_STATES`),
+    und den Grund aus dem grauen Ziel. **„fehlt“ ist kein Grund** (Durchsicht
+    welle4 C-S1): Fehlt das Ziel im gesperrten Lauf und steht es freigeschaltet
+    da, versteckt die Oberfläche es, statt es auszugrauen — ein Fund. Sonst hat
+    der Prüfstand das Ziel nicht erreicht, und der Lauf ist nicht gemessen.
     """
     issues = []
     absent = []
@@ -867,6 +878,13 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
     writing = any(
         isinstance(entry, Mapping) and entry.get("writes") is True for entry in runs.values()
     )
+    offered_unlocked = any(
+        LICENCE_UNLOCKED[state]
+        and isinstance(entry, Mapping)
+        and entry.get("state") == LICENCE_RUN_STATES[0]
+        for state, entry in runs.items()
+        if state in LICENCE_UNLOCKED
+    )
     for state in LICENCE_STATES:
         entry = runs.get(state)
         if entry is None:
@@ -874,11 +892,24 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
         writes = entry.get("writes") if isinstance(entry, Mapping) else None
         if writing and isinstance(writes, bool):
             writes = True
-        enabled = entry.get("enabled") if isinstance(entry, Mapping) else None
-        if not isinstance(writes, bool) or not isinstance(enabled, bool):
+        shown = entry.get("state") if isinstance(entry, Mapping) else None
+        if not isinstance(writes, bool) or shown not in LICENCE_RUN_STATES:
             absent.append(f"licence_runs.{state}")
             continue
         should = LICENCE_UNLOCKED[state] or not writes
+        if shown == LICENCE_MISSING:
+            if LICENCE_UNLOCKED[state] or not offered_unlocked:
+                absent.append(f"licence_runs.{state} (Ziel nicht erreicht)")
+            elif writes:
+                issues.append(
+                    Issue(f"schreibendes Ziel fehlt bei {state}, statt grau mit Grund", "mittel")
+                )
+            else:
+                issues.append(
+                    Issue(f"lesendes Ziel fehlt bei {state}, obwohl es offen bleibt", "schwer")
+                )
+            continue
+        enabled = shown == LICENCE_RUN_STATES[0]
         if not enabled and not str(entry.get("reason") or "").strip():
             issues.append(Issue(f"grau ohne Grund bei {state}", "schwer"))
         if enabled and not should:
@@ -892,11 +923,7 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
         issues,
         absent,
         f"{len(runs)} Lizenzläufe",
-        {
-            state: (runs.get(state) or {}).get("enabled")
-            for state in LICENCE_STATES
-            if state in runs
-        },
+        {state: (runs.get(state) or {}).get("state") for state in LICENCE_STATES if state in runs},
     )
 
 

@@ -410,12 +410,83 @@ def test_p18_a_function_that_writes_unlocked_writes_in_every_run() -> None:
     schreibt.
     """
     runs = {
-        "needs_activation": {"writes": False, "enabled": True, "reason": ""},
-        "licensed": {"writes": True, "enabled": True, "reason": ""},
+        "needs_activation": {"writes": False, "state": "angeboten", "reason": ""},
+        "licensed": {"writes": True, "state": "angeboten", "reason": ""},
     }
     outcome = judge_licence(runs, complete=True)
     assert outcome.verdict == "fund", outcome
     assert any("needs_activation" in text for text in _texts(outcome))
+
+
+def _licence_run(monkeypatch: Any, licence: str, *, missing: bool, grey: str | None) -> Any:
+    """Ein Lizenzlauf des Prüfstands an einer nachgestellten Oberfläche.
+
+    ``missing``: ``next_click`` findet das Ziel nicht (``LookupError``);
+    ``grey``: der Grund, mit dem es grau steht, ``None`` heißt offen.
+    """
+    from tools import function_surface
+
+    monkeypatch.setattr(function_surface, "in_view", lambda window, inputs: False)
+    monkeypatch.setattr(function_surface, "grey_reason", lambda window, name: grey)
+
+    class Signal:
+        def connect(self, slot: Any) -> None:
+            pass
+
+        def disconnect(self, slot: Any) -> None:
+            pass
+
+    button = FakeWidget("operation:drill_hole")
+    script = (
+        {}
+        if missing
+        else {"operation:drill_hole": [FakeClick((0, 0, 9, 9), "left", "ziel", button)]}
+    )
+    flow = _flow({})
+    flow.row = {**flow.row, "kind": "operation", "target": "operation:drill_hole", "route": []}
+    flow.walker = function_walk.Walk(FakePorts(FakeTimer(), script), [], 0.0)
+    flow.ports = flow.walker.ports
+    flow.window = None
+    flow.session = type("Session", (), {"failed": Signal()})()
+    flow.variant = function_setup.Variant.of({"set": "lizenz", "licence": licence})
+    flow.widget = lambda name: None  # type: ignore[method-assign]
+    flow.scene_now = lambda: {"ops": ["create_brep_box"]}  # type: ignore[method-assign]
+    flow.effect_steps = lambda label: (  # type: ignore[method-assign]
+        [function_machine.Step(f"{label} merken", lambda machine: None)],
+        lambda: True,
+    )
+    flow.run_steps = lambda phase, steps: True  # type: ignore[method-assign]
+    flow.phase_licence()
+    return flow.data["licence_runs"][licence]
+
+
+def test_p18_a_target_missing_in_a_locked_run_is_no_grey_with_a_reason(monkeypatch: Any) -> None:
+    """Durchsicht welle4 C-S1: „fehlt“ im gesperrten Lauf ist kein „grau mit Grund“.
+
+    Fand ``next_click`` das Ziel im gesperrten Lauf nicht, schrieb der Lauf den
+    Text der eigenen ``LookupError`` als Grund, und Prüfpunkt 18 las „nicht
+    offen, Grund nicht leer“ als erfüllt — auch dann, wenn die Oberfläche eine
+    schreibende Funktion in der Demo versteckt, statt sie auszugrauen
+    (``kern.md``, „Die Lizenzgrenze“). Der Grund kommt nur noch aus dem grauen
+    Ziel; fehlt es gesperrt und steht es freigeschaltet da, ist das ein Fund.
+    """
+    locked = _licence_run(monkeypatch, "needs_activation", missing=True, grey=None)
+    offered = _licence_run(monkeypatch, "licensed", missing=False, grey=None)
+    assert locked["reason"] == "", locked
+    outcome = judge_licence({"needs_activation": locked, "licensed": offered}, complete=False)
+    assert outcome.verdict == "fund", outcome
+    assert any("needs_activation" in text and "fehlt" in text for text in _texts(outcome))
+    assert {issue.severity for issue in outcome.issues} == {"mittel"}, outcome.issues
+    # Fehlt es auch freigeschaltet, oder fehlt der freigeschaltete Lauf, ist nichts
+    # gemessen: Dann erreichte der Prüfstand das Ziel gar nicht.
+    lost = _licence_run(monkeypatch, "licensed", missing=True, grey=None)
+    for runs in ({"needs_activation": locked}, {"needs_activation": locked, "licensed": lost}):
+        assert judge_licence(runs, complete=False).verdict == "nicht_gelaufen", runs
+    # Grau mit dem Grund aus der Kurzhilfe bleibt erfüllt.
+    greyed = _licence_run(monkeypatch, "needs_activation", missing=False, grey="Ändern braucht")
+    assert greyed["reason"] == "Ändern braucht", greyed
+    outcome = judge_licence({"needs_activation": greyed, "licensed": offered}, complete=False)
+    assert outcome.verdict == "erfuellt", outcome
 
 
 # --- Zeilen: Z3 am Prüfbericht (F-33) --------------------------------------------------------
@@ -870,7 +941,7 @@ def test_the_licence_run_finds_an_action_shown_in_the_view(monkeypatch: Any) -> 
     flow.run_steps = lambda phase, steps: ran.append([step.name for step in steps]) or True  # type: ignore[method-assign]
     flow.phase_licence()
     run = flow.data["licence_runs"][flow.variant.licence]
-    assert run["enabled"] is True, run
+    assert run["state"] == "angeboten", run
     assert "handlung feature:resize_hole" in ran[-1], ran
 
 

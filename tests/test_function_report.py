@@ -341,7 +341,7 @@ def test_a_purchased_licence_that_still_greys_out_is_a_finding() -> None:
     """Prüfpunkt 18 in der Gegenrichtung: Gekauft und trotzdem grau ist eine Sperre zu viel."""
 
     def locked(protocol: dict[str, Any]) -> None:
-        protocol["licence_runs"]["licensed"] = {"writes": True, "enabled": False, "reason": "x"}
+        protocol["licence_runs"]["licensed"] = {"writes": True, "state": "grau", "reason": "x"}
 
     assert _judged(locked).points[18].verdict == "fund"
 
@@ -362,7 +362,7 @@ def test_the_licence_point_is_judged_once_per_row_over_all_runs() -> None:
     runs = {
         state: {
             "writes": True,
-            "enabled": LICENCE_UNLOCKED[state],
+            "state": "angeboten" if LICENCE_UNLOCKED[state] else "grau",
             "reason": "" if LICENCE_UNLOCKED[state] else "Ändern braucht eine Lizenz.",
         }
         for state in licence_states()
