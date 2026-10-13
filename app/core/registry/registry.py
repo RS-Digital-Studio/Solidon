@@ -182,6 +182,8 @@ def group_title(category: str) -> str:
 
 #: Was die Probe (:func:`probe_exact_kernel`) ergeben hat — oder noch nichts.
 _KERNEL_PROBED: bool | None = None
+#: Ob ``find_spec`` das Paket ``OCP`` fand — einmal je Prozess (:func:`exact_kernel_present`).
+_KERNEL_INSTALLED: bool | None = None
 
 
 def probe_exact_kernel() -> bool:
@@ -239,12 +241,29 @@ def exact_kernel_present() -> bool:
     Geladen wird es bei der ersten exakten Operation, und scheitert es dort,
     sagt ``kernel.require`` den einen klaren Satz statt eines
     Import-Stapelabzugs.
+
+    **Die Suche läuft einmal je Prozess** (FD-33): Das Fenster fragt bei
+    jeder Aktualisierung (``_drawing_needs_the_kernel``), und ``find_spec``
+    kostete 0,45 ms — über ein Drittel des ganzen Laufs. Ein Paket, das
+    währenddessen dazukommt, antwortet über die erste Zeile: Die Installation
+    lädt es zur Prüfung (``install.present``). Tests, die die Anwesenheit
+    ändern, setzen beide Antworten mit :func:`forget_kernel_answers` zurück.
     """
+    global _KERNEL_INSTALLED
     if "OCP.BRepPrimAPI" in sys.modules:
         return True
     if _KERNEL_PROBED is not None:
         return _KERNEL_PROBED
-    return _kernel_is_installed()
+    if _KERNEL_INSTALLED is None:
+        _KERNEL_INSTALLED = _kernel_is_installed()
+    return _KERNEL_INSTALLED
+
+
+def forget_kernel_answers() -> None:
+    """Probe und gemerkte Suche vergessen — die nächste Frage sucht neu."""
+    global _KERNEL_PROBED, _KERNEL_INSTALLED
+    _KERNEL_PROBED = None
+    _KERNEL_INSTALLED = None
 
 
 #: Die sechs Grundkörper, je als Netz und exakt — dieselbe Handlung in zwei Rechenkernen.

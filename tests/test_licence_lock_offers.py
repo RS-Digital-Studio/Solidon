@@ -27,6 +27,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QApplication,
+    QLabel,
     QMessageBox,
     QPushButton,
     QWidget,
@@ -191,14 +192,22 @@ def test_every_offer_of_a_change_is_grey_with_its_reason(
     assert all(not action.isEnabled() and action.toolTip() == reason for action in steps)
     history_menu.deleteLater()
 
-    # Merkmalfenster an einer Fläche: Grund als Zeile, Zeichnen und Übernehmen grau.
+    # Merkmalfenster an einer Fläche: Zeichnen und Übernehmen grau. Der Grund
+    # steht **einmal** sichtbar im Reiter, unter dem Suchfeld (FD-32); das
+    # Merkmalfenster trägt ihn an seinen grauen Elementen.
     entry = next(iter(window.session.last_result.scene.objects.values()))
     face = next(key for key, feature in entry.features.items() if feature.kind == "face")
     window.object_tree.select_feature(entry.id, face)
     qt_app.processEvents()
     panel = window.feature_panel
     assert panel._locked == reason
-    assert panel._lock_note.text() == reason
+    lines = [
+        label
+        for label in window.feature_dock.findChildren(QLabel)
+        if reason in label.text() and label.isVisibleTo(window.feature_dock)
+    ]
+    assert lines == [window.selection_operations._nothing], [line.text() for line in lines]
+    assert panel._apply.toolTip() == reason and panel._apply.accessibleDescription() == reason
     drawing = [
         child
         for child in panel.findChildren(QPushButton)
@@ -419,6 +428,32 @@ def with_a_hole(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> Iterat
     window.hide()
     window.deleteLater()
     qt_app.processEvents()
+
+
+def test_the_measure_group_says_what_comes_before_apply(
+    qt_app: QApplication, with_a_hole: MainWindow
+) -> None:
+    """FD-31: *Übernehmen* der Maßgruppe war vor der ersten Eingabe grau ohne Grund.
+
+    Der Satz nennt das erste Feld der Gruppe, wie der Kunde es liest, in
+    Kurzhilfe und Beschreibung; nach der ersten Eingabe fällt er.
+    """
+    flow = with_a_hole._quiet_placement
+    assert flow is not None and flow.measure_group is not None
+    apply = flow._measure_accept
+    first = next(
+        widget
+        for widget in flow.measure_group.findChildren(QAbstractSpinBox)
+        if widget.accessibleName()
+    )
+    title = first.accessibleName().rsplit(" — ", 1)[-1]
+    said = tr("Erst „{field}“ ändern, dann übernehmen.", field=title)
+    assert not apply.isEnabled(), "Voraussetzung: vor der ersten Eingabe grau"
+    assert apply.toolTip() == said and apply.accessibleDescription() == said
+    QTest.keyClick(first.lineEdit(), Qt.Key.Key_End)
+    qt_app.processEvents()
+    assert flow.dialog.begun, "die Taste im Feld beginnt den Entwurf"
+    assert said not in (apply.toolTip(), apply.accessibleDescription())
 
 
 @pytest.mark.parametrize("state", LOCKED)
