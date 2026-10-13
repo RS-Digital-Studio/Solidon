@@ -18,8 +18,10 @@ ohne die Leitung auskommen, die gerade nicht wollte.
 
 from __future__ import annotations
 
+import ctypes
 from contextlib import suppress
 from copy import deepcopy
+from ctypes import wintypes
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Final
@@ -85,6 +87,10 @@ _log = get_logger(__name__)
 #: wiegt als PNG mehrere Megabyte, und lesbar ist auf dem Support-Bildschirm
 #: auch die halbe Breite — die Sendung soll durch jeden Posteingang passen.
 MAX_SHOT_WIDTH: Final = 1600
+
+#: ``PrintWindow`` nur mit dem Innenbereich und mit dem ganzen Inhalt, auch dem,
+#: den Direct3D oder Vulkan selbst zeigt (``PW_CLIENTONLY | PW_RENDERFULLCONTENT``).
+_PRINT_CLIENT_FULL_CONTENT: Final = 0x1 | 0x2
 
 #: Die Portaladresse und der Ergebnisvertrag gelten für jeden Mailentwurf.
 MAIL_PORTAL_SERVICE: Final = "org.freedesktop.portal.Desktop"
@@ -179,19 +185,164 @@ def _paint_viewports(picture: Any, widget: QWidget) -> None:
         painter.end()
 
 
+class _BitmapHeader(ctypes.Structure):
+    """``BITMAPINFOHEADER`` für ein 32-Bit-Bild, Zeilen von oben nach unten."""
+
+    _fields_ = (
+        ("biSize", wintypes.DWORD),
+        ("biWidth", wintypes.LONG),
+        ("biHeight", wintypes.LONG),
+        ("biPlanes", wintypes.WORD),
+        ("biBitCount", wintypes.WORD),
+        ("biCompression", wintypes.DWORD),
+        ("biSizeImage", wintypes.DWORD),
+        ("biXPelsPerMeter", wintypes.LONG),
+        ("biYPelsPerMeter", wintypes.LONG),
+        ("biClrUsed", wintypes.DWORD),
+        ("biClrImportant", wintypes.DWORD),
+    )
+
+
+#: ``user32`` und ``gdi32`` als eigene Bibliotheken, einmal erklärt — nicht über
+#: das prozessweite ``ctypes.windll``, dessen Funktionen auch andere erklären.
+_windows_libraries: tuple[Any, Any] | None = None
+
+#: Was ``SelectObject`` statt eines Griffs bei einem Fehler zurückgibt.
+_GDI_ERROR: Final = ctypes.c_void_p(-1).value
+
+
+def _gdi() -> tuple[Any, Any] | None:
+    """``user32`` und ``gdi32`` mit ihren Erklärungen — ``None`` außerhalb von Windows."""
+    global _windows_libraries
+    if _windows_libraries is None:
+        loader: Any = getattr(ctypes, "WinDLL", None)
+        if loader is None:
+            return None
+        user32 = loader("user32", use_last_error=True)
+        gdi32 = loader("gdi32", use_last_error=True)
+        user32.GetClientRect.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.RECT))
+        user32.GetClientRect.restype = wintypes.BOOL
+        user32.GetDC.argtypes = (wintypes.HWND,)
+        user32.GetDC.restype = wintypes.HDC
+        user32.ReleaseDC.argtypes = (wintypes.HWND, wintypes.HDC)
+        user32.PrintWindow.argtypes = (wintypes.HWND, wintypes.HDC, wintypes.UINT)
+        user32.PrintWindow.restype = wintypes.BOOL
+        gdi32.CreateCompatibleDC.argtypes = (wintypes.HDC,)
+        gdi32.CreateCompatibleDC.restype = wintypes.HDC
+        gdi32.CreateDIBSection.argtypes = (
+            wintypes.HDC,
+            ctypes.c_void_p,
+            wintypes.UINT,
+            ctypes.POINTER(ctypes.c_void_p),
+            wintypes.HANDLE,
+            wintypes.DWORD,
+        )
+        gdi32.CreateDIBSection.restype = wintypes.HBITMAP
+        gdi32.SelectObject.argtypes = (wintypes.HDC, wintypes.HGDIOBJ)
+        gdi32.SelectObject.restype = wintypes.HGDIOBJ
+        gdi32.DeleteObject.argtypes = (wintypes.HGDIOBJ,)
+        gdi32.DeleteDC.argtypes = (wintypes.HDC,)
+        _windows_libraries = (user32, gdi32)
+    return _windows_libraries
+
+
+def _print_window(handle: int) -> QImage:
+    """Die vorhandenen Bildpunkte eines Windows-Fensters samt 3D-Ansicht — leer, wenn es scheitert.
+
+    ``QScreen.grabWindow`` liest unter Windows die GDI-Fläche des Fensters.
+    Was Direct3D 12 in die native 3D-Ansicht stellt, steht dort nicht: Auf
+    Rechnern, auf denen wgpu D3D12 nimmt (Intel, AMD), zeigte das Foto statt
+    des Modells den Ladeschleier, die Startseite und versetzte Doppel der
+    Karten von früher (Kundenbild 0.6.0; nachgestellt mit
+    ``WGPU_BACKEND_TYPE=D3D12``, unter Vulkan war das Bild richtig).
+    ``PrintWindow`` mit ``PW_RENDERFULLCONTENT`` lässt Windows das Fenster
+    so zusammensetzen, wie es auf dem Schirm steht — weiterhin nur dieses
+    Fenster und ohne das Modell neu zu rendern.
+
+    **Ein leeres Bild, nie eine Ausnahme:** Das Foto entsteht auch vor einem
+    Absturzbericht, oft bei knappem Speicher; was hier scheitert, nimmt den
+    bisherigen Weg, statt den Bericht zu verhindern. Jeder Griff wird in jedem
+    Weg zurückgegeben, die Bitmap vor dem Löschen abgewählt.
+    """
+    libraries = _gdi()
+    if libraries is None:
+        return QImage()
+    user32, gdi32 = libraries
+    window = wintypes.HWND(handle)
+    area = wintypes.RECT()
+    if not user32.GetClientRect(window, ctypes.byref(area)):
+        return QImage()
+    width, height = area.right - area.left, area.bottom - area.top
+    if width <= 0 or height <= 0:
+        return QImage()
+    window_dc = user32.GetDC(window)
+    if not window_dc:
+        return QImage()
+    memory_dc: Any = None
+    bitmap: Any = None
+    try:
+        memory_dc = gdi32.CreateCompatibleDC(window_dc)
+        if not memory_dc:
+            return QImage()
+        header = _BitmapHeader()
+        header.biSize = ctypes.sizeof(_BitmapHeader)
+        header.biWidth, header.biHeight = width, -height
+        header.biPlanes, header.biBitCount = 1, 32
+        bits = ctypes.c_void_p()
+        bitmap = gdi32.CreateDIBSection(
+            memory_dc, ctypes.byref(header), 0, ctypes.byref(bits), None, 0
+        )
+        if not bitmap or not bits.value:
+            return QImage()
+        previous = gdi32.SelectObject(memory_dc, bitmap)
+        if not previous or previous == _GDI_ERROR:
+            return QImage()
+        try:
+            if not user32.PrintWindow(window, memory_dc, _PRINT_CLIENT_FULL_CONTENT):
+                return QImage()
+            raw = ctypes.string_at(bits.value, width * height * 4)
+            # ``copy``: QImage borgt den Puffer, und ``raw`` fällt gleich weg.
+            return QImage(raw, width, height, width * 4, QImage.Format.Format_RGB32).copy()
+        finally:
+            gdi32.SelectObject(memory_dc, previous)
+    except OSError, MemoryError, ValueError, ctypes.ArgumentError:
+        _log.warning("the window could not be printed for a screenshot", exc_info=True)
+        return QImage()
+    finally:
+        if bitmap:
+            gdi32.DeleteObject(bitmap)
+        if memory_dc:
+            gdi32.DeleteDC(memory_dc)
+        user32.ReleaseDC(window, window_dc)
+
+
+def _native_windows() -> bool:
+    """Ob die Fenster dieses Prozesses echte Windows-Fenster sind — nur dann ist ``winId`` ein HWND.
+
+    Nicht ``sys.platform``: Offscreen ist ``winId`` ein Zähler (1, 2, 3 …), und
+    ab 65 536 träfe er fremde Fenster bis hin zum Desktop.
+    """
+    from PySide6.QtGui import QGuiApplication
+
+    return QGuiApplication.platformName() == "windows"
+
+
 def window_shot(widget: QWidget | None) -> bytes:
     """Ein Bildschirmfoto des Fensters als PNG.
 
     Das sichtbare Fenster wird aus seinen vorhandenen Bildpunkten aufgenommen,
     ohne ein möglicherweise fehlerhaftes Modell erneut zu rendern. Angefragt
-    wird nur dieses Fenster, niemals der gesamte Bildschirm. Ohne native
+    wird nur dieses Fenster, niemals der gesamte Bildschirm — unter Windows
+    über :func:`_print_window`, sonst über ``grabWindow``. Ohne native
     Aufnahme bleibt der bisherige Qt-/Viewport-Weg als Rückfall erhalten.
     """
     if widget is None:
         return b""
     picture = QImage()
     screen = widget.screen()
-    if widget.isVisible() and screen is not None:
+    if widget.isVisible() and _native_windows():
+        picture = _print_window(int(widget.winId()))
+    if picture.isNull() and widget.isVisible() and screen is not None:
         picture = screen.grabWindow(int(widget.winId())).toImage()
     if picture.isNull():
         picture = widget.grab().toImage()

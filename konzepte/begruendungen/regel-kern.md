@@ -394,6 +394,30 @@ sind."
 Zum eigenen `/tmp` eines Flatpaks: „Ein Arbeitsordner aus `tempfile` ist für
 es unsichtbar; der Aufruf kommt an, und das Programm findet die Datei nicht."
 
+Zum Start ohne Systemfenster (RM-788): Eine `.exe`, die kein Programm ist
+(Text, MZ-Kopf ohne Programm), gilt `CreateProcess` als 16-Bit-Anwendung. Im
+Standardfehlermodus öffnet `NtVdm64` im startenden Faden „Nicht unterstützte
+16 Bit-Anwendung“ und wartet auf einen Klick — der Slicerlauf stand still, in
+der Suite ein Arbeiter ohne CPU (py-spy: `CreateProcessW` →
+`BasepProcessInvalidImage` → `MessageBoxW`). Explorer und Startmenü starten
+Solidon über `ShellExecute` im Standardmodus; Git Bash vererbt
+`SEM_FAILCRITICALERRORS`, dort fiel es nie auf. `no_error_dialogs` setzt den
+Modus nur für den startenden Faden, das gestartete Programm erbt ihn nicht.
+Danach meldet Windows 216 (Text, MZ-Kopf) oder 193 (leere Datei, DLL), POSIX
+`ENOEXEC`; `discover.slicer_start_refused` sagt das in eigenen Worten und
+bietet einen anderen Slicer an. `EACCES` heißt unter Linux meist „nicht
+ausführbar“ — ein frisch geladenes AppImage ist ein Programm, kein Fall für
+„kein Programm“: Fehlt nur das Ausführungsrecht, sagt die Absage das samt Weg,
+sonst bleibt der Grund des Systems („Permission denied“, etwa an einem
+`noexec`-Laufwerk).
+
+Zur Einrichtung von ComfyUI (RM-789): Sie startet hinter derselben Grenze. Was
+`huggingface_hub` liest, reist mit (`HF_*`, `HUGGING_FACE_HUB_TOKEN`), denn der
+Schlüssel gehört zu genau diesem Programm. Zugangsdaten in Proxy-Adressen werden
+auch hier weggeschnitten, einheitlich mit pip und winget (§32, entschieden im
+Review zu RM-788): Hinter einem Proxy mit Anmeldung lädt der Modelldownload so
+wenig wie die Nachinstallation.
+
 ### Im eigenen Flatpak sieht der Rechner anders aus
 
 Die Überschrift hieß „Und die vierte: Wir sind selbst einer".

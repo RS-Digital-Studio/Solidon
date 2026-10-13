@@ -14,6 +14,7 @@ Test selbst gebaut hat.
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import stat
@@ -1763,3 +1764,73 @@ def test_a_slicer_the_list_finds_ends_the_remembered_no_of_the_folders(
 
     assert discover.cache_generation() != generation
     assert find("slicer", names) == program
+
+
+@pytest.mark.parametrize(
+    ("problem", "not_a_program"),
+    [
+        pytest.param(OSError(errno.ENOEXEC, "Exec format error"), True, id="posix-enoexec"),
+        pytest.param(PermissionError(errno.EACCES, "Permission denied"), False, id="posix-eacces"),
+        pytest.param(FileNotFoundError(errno.ENOENT, "No such file"), False, id="posix-enoent"),
+    ],
+)
+def test_a_start_that_finds_no_program_is_said_in_own_words_everywhere(
+    problem: OSError, not_a_program: bool
+) -> None:
+    """Unter POSIX zählt ``ENOEXEC`` als „kein Programm“, wie unter Windows 193 und
+    216 (die prüft ``test_print_settings.py`` am echten Start). ``EACCES`` heißt
+    dort meist „nicht ausführbar“ — ein frisch geladenes AppImage ist ein Programm;
+    ohne Datei mit fehlendem Ausführungsrecht (Test darunter) bleibt wie bei einem
+    fehlenden Pfad der Grund des Systems mit den Vorschlägen des Aufrufers."""
+    from app.core.errors import EXPORT_ONLY, INSTALL_MISSING
+
+    refusal = discover.slicer_start_refused(
+        "Orca", Path("bin") / "orca-slicer", problem, otherwise=(INSTALL_MISSING, EXPORT_ONLY)
+    )
+
+    ids = [action.id for action in refusal.suggestions]
+    if not_a_program:
+        assert ids == ["choose_slicer", "export_only"]
+        assert refusal.values["file"] == "orca-slicer"
+        assert "reason" not in refusal.values
+    else:
+        assert ids == ["install", "export_only"]
+        assert refusal.values["reason"] == str(problem)
+
+
+def test_a_slicer_without_execute_permission_says_how_to_allow_it(tmp_path: Path) -> None:
+    """Ein frisch geladenes AppImage ist ein Programm, nur noch nicht ausführbar.
+
+    Unter Linux wählt der Kunde es über *Programm wählen …*, und der Start endet
+    mit ``EACCES``. Die Absage nennt das und den Weg (Ausführen erlauben, erneut
+    versuchen), nicht „kein Programm“ — und auch nicht nur „Permission denied“.
+    Läuft es trotz Ausführungsrecht nicht (``noexec``), bleibt der allgemeine Weg.
+    """
+    from app.core.errors import EXPORT_ONLY, INSTALL_MISSING
+
+    appimage = tmp_path / "OrcaSlicer_Linux_AppImage.AppImage"
+    appimage.write_bytes(b"\x7fELF")
+    appimage.chmod(0o644)
+
+    refusal = discover.slicer_start_refused(
+        "Orca",
+        appimage,
+        PermissionError(errno.EACCES, "Permission denied"),
+        otherwise=(INSTALL_MISSING, EXPORT_ONLY),
+    )
+
+    assert str(refusal.detail).startswith("Die gewählte Datei ist nicht als ausführbar markiert.")
+    assert [action.id for action in refusal.suggestions] == ["choose_slicer", "export_only"]
+    assert refusal.values["file"] == appimage.name
+
+    # Mit Ausführungsrecht (unter Windows trägt es die Endung ``.exe``) liegt es
+    # woanders, etwa an einem ``noexec``-Laufwerk: Dann bleibt der Grund.
+    marked = tmp_path / "noexec-slicer.exe"
+    marked.write_bytes(b"\x7fELF")
+    marked.chmod(0o755)
+    problem = PermissionError(errno.EACCES, "Permission denied")
+    general = discover.slicer_start_refused(
+        "Orca", marked, problem, otherwise=(INSTALL_MISSING, EXPORT_ONLY)
+    )
+    assert general.values["reason"] == str(problem)
+    assert [action.id for action in general.suggestions] == ["install", "export_only"]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -1470,6 +1471,7 @@ def test_support_captures_existing_window_pixels_without_rendering_again(
     screen = SimpleNamespace(grabWindow=lambda handle: captures.append(handle) or picture)
     monkeypatch.setattr(window, "screen", lambda: screen)
     monkeypatch.setattr(window, "isVisible", lambda: True)
+    monkeypatch.setattr(support_dialog, "_native_windows", lambda: False)
     monkeypatch.setattr(
         support_dialog, "_paint_viewports", lambda *args: pytest.fail("unexpected render")
     )
@@ -1480,6 +1482,131 @@ def test_support_captures_existing_window_pixels_without_rendering_again(
         assert result.pixelColor(10, 10) == QColor("#123456")
     finally:
         window.close()
+
+
+@pytest.mark.parametrize("printed", [True, False])
+def test_support_takes_the_windows_picture_with_the_3d_view(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, printed: bool
+) -> None:
+    """Unter Windows nimmt das Foto ``PrintWindow``, sonst stand der Ladeschleier im Bild.
+
+    ``grabWindow`` liest die GDI-Fläche; was Direct3D 12 in die 3D-Ansicht
+    stellt, fehlt dort (Kundenbild 0.6.0: Startseite und alte Karten statt des
+    Modells). Bleibt ``PrintWindow`` leer, gilt der bisherige Weg.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtGui import QColor, QImage, QPixmap
+    from PySide6.QtWidgets import QWidget
+
+    from app.ui import support_dialog
+
+    window = QWidget()
+    full = QImage(64, 32, QImage.Format.Format_RGB32)
+    full.fill(QColor("#654321"))
+    gdi = QPixmap(96, 48)
+    gdi.fill(QColor("#123456"))
+    asked: list[int] = []
+    captures: list[int] = []
+    monkeypatch.setattr(support_dialog, "_native_windows", lambda: True)
+    monkeypatch.setattr(
+        support_dialog,
+        "_print_window",
+        lambda handle: asked.append(handle) or (full if printed else QImage()),
+    )
+    screen = SimpleNamespace(grabWindow=lambda handle: captures.append(handle) or gdi)
+    monkeypatch.setattr(window, "screen", lambda: screen)
+    monkeypatch.setattr(window, "isVisible", lambda: True)
+    monkeypatch.setattr(
+        support_dialog, "_paint_viewports", lambda *args: pytest.fail("unexpected render")
+    )
+    try:
+        result = QImage.fromData(support_dialog.window_shot(window))
+        assert asked == [int(window.winId())]
+        assert captures == ([] if printed else [int(window.winId())])
+        expected = "#654321" if printed else "#123456"
+        assert result.pixelColor(10, 10) == QColor(expected)
+    finally:
+        window.close()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="PrintWindow gibt es nur unter Windows")
+def test_print_window_answers_an_unknown_window_with_an_empty_picture(
+    qt_app: QApplication,
+) -> None:
+    """Ein Griff ohne Fenster dahinter ist ein leeres Bild, keine Ausnahme."""
+    from app.ui import support_dialog
+
+    assert support_dialog._print_window(0).isNull()
+    assert support_dialog._print_window(0x7FFF_FFFF_FFF0).isNull()
+
+
+_PRINTED_WINDOW_SCRIPT = """
+import ctypes
+from ctypes import wintypes
+from PySide6.QtGui import QImage
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QWidget
+from app.ui import support_dialog
+
+application = QApplication([])
+window = QWidget()
+window.setStyleSheet("background-color: #2a7f3c;")
+window.setAutoFillBackground(True)
+window.resize(240, 160)
+window.show()
+assert QTest.qWaitForWindowExposed(window), "das Fenster wurde nicht gezeigt"
+process = ctypes.windll.kernel32.GetCurrentProcess()
+gdi = ctypes.windll.user32.GetGuiResources
+gdi.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+# Gezählt wird ab der ersten Aufnahme: Qts Backingstore entsteht mit ihr.
+picture = support_dialog._print_window(int(window.winId()))
+before = gdi(process, 0)
+assert not picture.isNull(), "PrintWindow lieferte kein Bild"
+centre = picture.pixelColor(picture.width() // 2, picture.height() // 2)
+assert (centre.red(), centre.green(), centre.blue()) == (0x2A, 0x7F, 0x3C), centre.name()
+
+def refuse(*args, **kwargs):
+    raise MemoryError("kein Speicher")
+
+support_dialog.ctypes.string_at, kept = refuse, support_dialog.ctypes.string_at
+try:
+    assert support_dialog._print_window(int(window.winId())).isNull()
+finally:
+    support_dialog.ctypes.string_at = kept
+for _ in range(50):
+    support_dialog._print_window(int(window.winId()))
+after = gdi(process, 0)
+assert after == before, (before, after)
+assert QImage.fromData(support_dialog.window_shot(window)).width() > 0
+window.close()
+print("printwindow ok", flush=True)
+"""
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="PrintWindow gibt es nur unter Windows")
+def test_print_window_returns_the_window_and_releases_every_handle(
+    native_window_platform: str,
+) -> None:
+    """Am echten Fenster: Die Farbe kommt zurück, ein Fehler mittendrin gibt nichts preis.
+
+    Der Weg über DIB, ``PrintWindow`` und ``string_at`` (Review M4); wirft
+    ``string_at`` (Speichermangel vor einem Absturzbericht), ist das Ergebnis
+    leer statt einer Ausnahme (M3), und nach fünfzig Aufnahmen hält der Prozess
+    keine GDI-Objekte mehr als vorher.
+    """
+    import os
+    import subprocess
+
+    done = subprocess.run(
+        [sys.executable, "-c", _PRINTED_WINDOW_SCRIPT],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "QT_QPA_PLATFORM": native_window_platform},
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+    assert done.returncode == 0 and "printwindow ok" in done.stdout, done.stdout + done.stderr
 
 
 def test_support_keeps_the_previewed_log_for_sending(

@@ -59,10 +59,19 @@ Nutzen da und sonst nichts.
 - Auch wenn sich nichts überschneidet, gibt *Überschneidungen prüfen* jetzt eine Antwort.
 - Fehlt einer Funktion ein zweiter Körper in der Szene, nennt der Grund *Objekt duplizieren* als Weg.
 - Die Übersicht der Tastenkürzel nennt *Formen*, *Skelett* und *Zeichnen* nur noch einmal.
+- Das Bildschirmfoto einer Rückmeldung zeigt unter Windows jetzt auch das Modell. Auf manchen Grafikkarten stand dort vorher ein altes Bild, etwa der Ladebildschirm.
+- Unter macOS bleibt ein offener Dialog, etwa beim Anlegen einer Schraube aus dem Bausteinkatalog, über dem Hauptfenster. Ein Klick ins Fenster schob ihn vorher dahinter.
+
+### Drucken und Übergabe an den Slicer
+
+- Ist als Slicer eine Datei gewählt, die kein Programm ist, sagt Solidon das sofort und bietet einen anderen Slicer an. In Version 0.6.0 wartete das Slicen, bis jemand eine Windows-Meldung schloss.
 
 ### Bearbeiten und Zeichnen
 
 - Ein exakter Körper behält jetzt nach *Text aufbringen*, *Schrift einlegen* und *Gegenform einlassen* seine Merkmale. In Version 0.6.0 ließ sich danach keine Fläche mehr anklicken.
+- Ein Körper mit Gewinde aus dem Bausteinkatalog lässt sich wieder verschieben, drehen, spiegeln, skalieren und aufs Bett setzen. In Version 0.6.0 hielt die Kette dabei mit einem Programmfehler an.
+- Tippt man im Reiter *Auswahl* bei *Bohrung ändern* einen Durchmesser unter der Grenze ein, nennt der Hinweis jetzt *Merkmal entfernen*. Damit verschwindet die Bohrung ganz, auf Wunsch samt Senkung.
+- Der Nachbau (*Modell nachbauen*) rät nicht mehr zu anderen Grenzen, wenn kein erlaubter Wert reichen würde, und zeigt gleiche Vorschläge nur einmal.
 
 ## 0.6.0
 

@@ -41,6 +41,8 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   denselben Inhalt zurück. Sichtbarkeit und Meldungsmarken folgen dem Reiter,
   nicht seiner Nummer. Die Anordnung liegt nur in `UiSettings.tab_layout`;
   fehlende Monitore begrenzen Fenster auf vorhandene Bildschirmflächen.
+- Nichtmodale Dialoge hebt `_DialogsStayAbove` über das Hauptfenster, sonst
+  verschwinden sie unter macOS dahinter; nie `Qt::Tool`, das teilt Kürzel.
 - Karten rasten auch unten links, unten rechts und am unteren Rand ein.
   `CardPlace` speichert den waagrechten Anteil am unteren Rand; die Unterkante
   bleibt beim Wechsel der Inhaltshöhe erhalten. Die Werkzeugzeile bleibt frei.
@@ -451,9 +453,9 @@ ein Programmfehler, nicht Ihre Schuld“ (§33.1).
 - **Nichts ungesehen:** Die Vorschau zeigt den ganzen Text samt Anhängen und
   Gesamtgröße.
 - **Das Bildschirmfoto entsteht vor dem Dialog** (`window_shot(self)` im
-  Fenster), aus vorhandenen Bildpunkten über `screen().grabWindow(winId())`
-  ohne neues Rendern des womöglich defekten Modells; nur wenn das leer bleibt,
-  `grab()`. Nur das Solidon-Fenster, nie der Bildschirm.
+  Fenster), aus vorhandenen Bildpunkten ohne neues Rendern: unter Windows
+  `PrintWindow` (`grabWindow` sieht kein D3D12), sonst `grabWindow`; bleibt
+  das leer, `grab()`. Nur das Solidon-Fenster, nie der Bildschirm.
 - **Der abgelegte Ordner ist ein Weg, kein Notausgang:** *Bericht ablegen* steht
   dauerhaft in der Knopfleiste (§37.2); *Selbst per E-Mail senden* erscheint
   erst, wenn ein Versand scheiterte.

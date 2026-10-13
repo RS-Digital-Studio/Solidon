@@ -80,7 +80,7 @@ from app.core.json_boundary import StrictJsonError
 from app.core.json_boundary import loads as load_json
 from app.core.log import get_logger, redact_external, redact_url
 from app.core.paths import opened_path, user_cache_dir
-from app.core.process import detached_process_options
+from app.core.process import detached_process_options, no_error_dialogs
 from app.core.types import CancelToken, ProgressFn
 from app.i18n import SOURCE_LANGUAGE, _, get_language
 
@@ -1644,7 +1644,8 @@ def start_installer(file: Path) -> None:
             )
             options["pass_fds"] = (descriptor,)
         try:
-            subprocess.Popen(command, **options)
+            with no_error_dialogs():
+                subprocess.Popen(command, **options)
         except OSError as error:
             raise ExternalToolError(
                 tool="update",

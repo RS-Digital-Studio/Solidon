@@ -35,10 +35,19 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Aunque nada se solape, *Comprobar solapamientos* da ahora una respuesta.
 - Si a una función le falta un segundo cuerpo en la escena, el motivo indica *Duplicar objeto* como camino.
 - La lista de atajos de teclado nombra *Modelar*, *Esqueleto* y *Dibujar* una sola vez.
+- La captura de pantalla de un comentario muestra ahora también el modelo en Windows. Con algunas tarjetas gráficas aparecía antes una imagen antigua, como la pantalla de carga.
+- En macOS un diálogo abierto, por ejemplo al crear un tornillo desde el catálogo de bloques, queda sobre la ventana principal. Antes, un clic en la ventana lo dejaba detrás.
+
+### Imprimir y entregar al slicer
+
+- Si el slicer elegido no es un programa, Solidon lo dice ahora al momento y ofrece elegir otro. En la versión 0.6.0 el laminado esperaba a que alguien cerrara un aviso de Windows.
 
 ### Editar y dibujar
 
 - Un cuerpo exacto conserva ahora sus características tras *Aplicar texto*, *Incrustar texto* y *Rebajar contraforma*. En la versión 0.6.0 después ya no se podía hacer clic en ninguna cara.
+- Un cuerpo con rosca del catálogo de bloques vuelve a poder moverse, girarse, reflejarse, escalarse y colocarse sobre la placa. En la versión 0.6.0 la cadena se detenía con un error del programa.
+- En la pestaña *Selección*, un diámetro bajo el límite en *Cambiar orificio* remite ahora a *Quitar característica*, que quita el orificio entero, con su avellanado si se desea.
+- La reconstrucción (*Reconstruir modelo*) ya no aconseja otros límites cuando ningún valor permitido bastaría, y muestra las propuestas iguales una sola vez.
 
 ## 0.6.0
 
