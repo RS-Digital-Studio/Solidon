@@ -64,6 +64,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la pestaña *Selección*, un diámetro bajo el límite en *Cambiar taladro* remite ahora a *Quitar característica*, que quita el taladro entero, con su avellanado si se desea.
 - La reconstrucción (*Reconstruir modelo*) ya no aconseja otros límites cuando ningún valor permitido bastaría, y muestra las propuestas iguales una sola vez.
 - Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
+- Al elegir un taladro de un modelo cargado, la vista y la pestaña *Selección* indican ahora la misma acción, *Cambiar taladro*. En la versión 0.6.0 allí quedaba abierto *Mover característica*.
 
 ## 0.6.0
 
