@@ -2,10 +2,12 @@
 
 from collections.abc import Iterator
 from dataclasses import replace
+from itertools import product
 
 import numpy as np
 import pytest
 from PySide6.QtCore import QCoreApplication, QEvent
+from PySide6.QtGui import QFont, QFontMetricsF
 from PySide6.QtWidgets import QApplication
 
 from app.core.bootstrap import load_operations
@@ -15,6 +17,7 @@ from app.ui.render.api import PointerEvent
 from app.ui.render.gizmo import Gizmo
 from app.ui.scale_widget import ScaleHandle
 from app.ui.slot_handle import SlotHandle
+from app.ui.style import TIGHT
 from app.ui.theme import THEMES, Theme
 from app.ui.viewport import Viewport
 from tests.render_fakes import RecordingItem, RecordingLabels, RecordingRenderer
@@ -277,3 +280,166 @@ def test_grip_letters_and_length_keep_their_text_field_on_update_and_rebuild(
             assert all(knob.pickable and knob.visible() for knob in knobs)
         view._detach_gizmo()
         assert labels in renderer.removed and view._gizmo_labels is None
+
+
+def assert_slot_letters_clear_knobs(view: Viewport) -> None:
+    """Sichtbare Textfläche gegen echte projizierte Knopfpunkte, nicht Anker allein."""
+    renderer, handle, labels = view.renderer, view._slot_handle, view._gizmo_labels
+    assert isinstance(renderer, RecordingRenderer) and handle is not None
+    assert isinstance(labels, RecordingLabels)
+    font = QFont(view.font())
+    font.setPixelSize(labels.style.font_size)
+    font.setBold(labels.style.bold)
+    metrics = QFontMetricsF(font)
+    ratio = renderer.device_ratio()
+    half_width = (metrics.horizontalAdvance("L") / 2 + labels.style.margin) * ratio
+    half_height = (metrics.height() / 2 + labels.style.margin) * ratio
+    boxes = []
+    for knob in handle.knobs:
+        points = knob.points + np.asarray(knob.position())
+        pixels = np.asarray([renderer.world_to_display(tuple(point))[:2] for point in points])
+        boxes.append((*pixels.min(axis=0), *pixels.max(axis=0)))
+    for point, text in zip(labels.points, labels.texts, strict=True):
+        if text != "L":
+            continue
+        x, y, _depth = renderer.world_to_display(tuple(point))
+        for left, top, right, bottom in boxes:
+            assert (
+                x + half_width <= left - TIGHT * ratio
+                or x - half_width >= right + TIGHT * ratio
+                or y + half_height <= top - TIGHT * ratio
+                or y - half_height >= bottom + TIGHT * ratio
+            ), "Das deckende L-Feld muss den ganzen Knopf samt Leseabstand frei lassen."
+        seats = [renderer.world_to_display(seat)[:2] for seat in handle.knob_seats]
+        assert min(np.linalg.norm(np.asarray(seat) - (x, y)) for seat in seats) < 100 * ratio
+
+
+@pytest.mark.parametrize("ratio", [1.0, 2.0])
+@pytest.mark.parametrize("tilted", [False, True])
+def test_slot_label_anchors_clear_knobs_after_build_camera_zoom_and_drag(
+    feature_view: Viewport, monkeypatch: pytest.MonkeyPatch, ratio: float, tilted: bool
+) -> None:
+    view = feature_view
+    renderer = view.renderer
+    assert isinstance(renderer, RecordingRenderer)
+    monkeypatch.setattr(renderer, "device_ratio", lambda: ratio)
+    renderer.scale = 10 * ratio
+    renderer.size = (int(800 * ratio), int(600 * ratio))
+    rotation = np.eye(3)
+    if tilted:
+        angle = np.pi / 3
+        rotation = np.array(
+            [[1, 0, 0], [0, np.cos(angle), -np.sin(angle)], [0, np.sin(angle), np.cos(angle)]]
+        )
+
+    def project(point):
+        x, y, z = rotation @ point
+        return (
+            renderer.size[0] / 2 + x * renderer.scale,
+            renderer.size[1] / 2 - y * renderer.scale,
+            0.5 + z / 1000,
+        )
+
+    def unproject(x, y, depth):
+        return tuple(
+            rotation.T
+            @ (
+                (x - renderer.size[0] / 2) / renderer.scale,
+                (renderer.size[1] / 2 - y) / renderer.scale,
+                (depth - 0.5) * 1000,
+            )
+        )
+
+    monkeypatch.setattr(renderer, "world_to_display", project)
+    monkeypatch.setattr(renderer, "display_to_world", unproject)
+    view._slot_handle = make_handle(renderer)
+    handle = view._slot_handle
+    actor = RecordingItem("object:test", np.array(list(product((-5.0, 5.0), repeat=3))), "#ffffff")
+    view._gizmo = Gizmo(renderer, actor)
+    view._label_gizmo(actor)
+    assert_slot_letters_clear_knobs(view)
+    labels = view._gizmo_labels
+    assert isinstance(labels, RecordingLabels)
+    axes = labels.points[:3].copy()
+    geometry = [knob.points.copy() for knob in handle.knobs]
+    updates = []
+    original_update = labels.update_labels
+
+    def update(points, texts):
+        updates.append(1)
+        original_update(points, texts)
+
+    monkeypatch.setattr(labels, "update_labels", update)
+    renderer.scale *= 0.3
+    rotation[:] = [[0, 1, 0], [0, 0, 1], [1, 0, 0]]
+    view.cameraMoved.emit()
+    assert view._feature_layout_timer.isActive(), "Auch ohne Merkmalnamen folgt L der Kamera."
+    view._feature_layout_timer.stop()
+    view._refresh_feature_label_layout()
+    assert_slot_letters_clear_knobs(view)
+    count, renders = len(updates), renderer.renders
+    view._refresh_feature_label_layout()
+    assert len(updates) == count and renderer.renders == renders
+    for length in (16.0, 5.2):
+        handle.set_values(length, 20.0)
+        view._update_slot_labels()
+        assert_slot_letters_clear_knobs(view)
+        np.testing.assert_array_equal(labels.points[:3], axes)
+        assert bool(labels.texts[-1]) is (length > 5.2)
+    for knob, original in zip(handle.knobs, geometry, strict=True):
+        np.testing.assert_array_equal(knob.points, original)
+        assert knob.visible() and knob.pickable
+
+
+@pytest.mark.parametrize("invalid", ["nan", "behind", "unproject", "room"])
+def test_slot_label_anchors_keep_finite_complete_labels_without_projection(
+    feature_view: Viewport, monkeypatch: pytest.MonkeyPatch, invalid: str
+) -> None:
+    view = feature_view
+    renderer = view.renderer
+    assert isinstance(renderer, RecordingRenderer)
+    view._slot_handle = make_handle(renderer)
+    actor = RecordingItem("object:test", np.array(list(product((-5.0, 5.0), repeat=3))), "#ffffff")
+    if invalid in ("nan", "behind"):
+        monkeypatch.setattr(
+            renderer,
+            "world_to_display",
+            lambda point: (float("nan"), 0.0, 0.5) if invalid == "nan" else (0.0, 0.0, -1.0),
+        )
+    elif invalid == "unproject":
+        monkeypatch.setattr(renderer, "display_to_world", lambda x, y, depth: None)
+    else:
+        renderer.size = (1, 1)
+    view._label_gizmo(actor)
+    labels = view._gizmo_labels
+    assert isinstance(labels, RecordingLabels)
+    assert labels.texts == ["L", "L", ""] and np.isfinite(labels.points).all()
+    before = labels.points.copy()
+    updates = []
+    monkeypatch.setattr(labels, "update_labels", lambda points, texts: updates.append(1))
+    view._update_slot_labels()
+    np.testing.assert_array_equal(labels.points, before)
+    assert not updates, "Unverwertbare Projektion erzeugt keinen endlosen Updateauftrag."
+
+
+def test_slot_label_anchors_camera_timer_preserves_the_claimed_gizmo_transform(
+    feature_view: Viewport,
+) -> None:
+    view = feature_view
+    renderer = view.renderer
+    assert isinstance(renderer, RecordingRenderer)
+    view._slot_handle = make_handle(renderer)
+    actor = RecordingItem("object:test", np.array(list(product((-5.0, 5.0), repeat=3))), "#ffffff")
+    view._gizmo = Gizmo(renderer, actor)
+    view._label_gizmo(actor)
+    labels = view._gizmo_labels
+    assert isinstance(labels, RecordingLabels)
+    view._gizmo.pressing = True
+    matrix = np.eye(4)
+    matrix[:3, 3] = (5.0, 2.0, 0.0)
+    view._on_gizmo_interacted(matrix)
+    shown = labels.points.copy()
+    view._feature_layout_timer.stop()
+    view._refresh_feature_label_layout()
+    np.testing.assert_array_equal(labels.points[:3], shown[:3])
+    view._gizmo.pressing = False
