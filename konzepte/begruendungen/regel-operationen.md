@@ -572,7 +572,12 @@ dessen Rat (Kragentiefe null) die Haut im Behälter gelassen hätte; ein
 Schraub- oder Klappdeckel nahm sie still mit. Seither bewegt die Stufe keinen
 Eckpunkt weiter als ein Viertel der Zugabe, zwei rücken höchstens um die halbe
 aufeinander zu. Das trifft nur Stufe 3 — `_jitter` ruft allein `_run_stage`
-für `jittered` —; was die ersten beiden Stufen rechnen, bleibt bitgleich.
+für `jittered` —; was die ersten beiden Stufen rechnen, bleibt bitgleich. Am
+Korpus (195 dichte Netze aus `tests/data/meshes` und Roberts Modellen, je eine
+Bohrung und ein Eckschnitt, drei Startwerte, 1170 Läufe nur über Stufe 3)
+gelingen vorher und nachher dieselben 1143, alle dicht; die Abweichung zum
+Ergebnis von *direkt* sinkt im Median von 3,57 auf 0,60 mm³, im größten Fall
+von 1533 auf 80 mm³.
 `test_the_jitter_stage_leaves_no_skin_where_a_tool_reaches_past` und
 `test_a_container_carried_by_the_third_stage_keeps_its_opening` halten es.
 Wer eine kleinere Zugabe einführt oder den Stups vergrößert, macht den ersten
