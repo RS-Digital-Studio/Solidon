@@ -50,6 +50,8 @@ Schriften der Inhaltswidgets, statt nur den Dialogcontainer umzustellen.
 | Vorfläche vor Befundklick, Fehlerbild vor Escape, gemessene Auswege und unveränderter Treffertest | `test_function_surface_timing.py` |
 | Eigene Maßgruppe/Merkmalszeile, zugehörige sichtbare Klappbeschriftung, richtiger übernommener Schritt | `test_function_feature_measurement.py` |
 | Wirkliche native Bildquelle, lokale Pixelkoordinaten und Skalierung, fehlende Pixel bleiben ungemessen | `test_function_capture_native_image.py` |
+| Zustandsfarbe echter Hauptknöpfe, absichtlich falsche Farben, Symbolausschluss und fehlende Bild-/Schriftpixel | `test_function_contrast_roles.py` |
+| Tatsächliche Hauptknopfrolle mit halbfetter Grundschrift, fremde Größen/Familien, strikte optionale Messwerttypen und lesbare Altprotokolle | `test_function_primary_fonts.py` |
 | Offene eigene Fenster per Escape vor dem nächsten Sprachprojekt abbauen | `test_function_language_cleanup.py` |
 | Sofortige/spätere Vorschau desselben Auftrags, getrennte Vor-/Dialogfläche bis zum Bericht, fehlende Pixel ohne Palettenersatz, echte neue Revisionseingabe, eigener nichtmodaler Generator | `test_function_review_connections.py` |
 | Markierter Wertträger statt unmarkiertem inneren Zahlenfeld | `test_function_revision_fields.py` |
@@ -62,6 +64,10 @@ Schriften der Inhaltswidgets, statt nur den Dialogcontainer umzustellen.
 Schema, Urteil und Gegenbeispiele bleiben bei `function_checks`,
 `function_points`/`function_judges` und `function_samples`; die zugehörigen
 Inventar-/Urteilstests stehen im folgenden Überblick.
+
+Die Schriftfälle laden wirkliche gebündelte Schriftdateien und prüfen den
+aufgelösten Familiennamen sowie unterschiedliche Glyphenbreiten. Leere
+Offscreen-Familien werden nicht durch eine erfundene Ersatzfamilie geheilt.
 
 ### Weitere Zuordnungen
 
