@@ -20,6 +20,8 @@ dans `website/version.json`.
 
 ### Utilisation et système
 
+- L'explication de «Poser sur le plateau» convient aussi aux corps situés sous le plateau.
+- Les listes d'actions sur les caractéristiques utilisent entièrement la langue choisie.
 - Sur Mac, Solidon peut désormais charger le pilote de 3Dconnexion (3DxWare) pour la souris 3D. De la version 0.4.1 à la 0.6.0, macOS ne l'autorisait pas.
 - Sur Mac, le paquet d'installation place désormais toujours Solidon dans *Applications*. Si Solidon ne s'y trouvait pas, le paquet mettait jusqu'ici à jour une copie située ailleurs.
 - Après la mise à jour sur Mac, lancer Solidon depuis *Applications*. Supprimer les anciennes copies de l'app hors de ce dossier et recréer le raccourci du Dock si nécessaire.

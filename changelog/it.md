@@ -19,6 +19,8 @@ scrive in `website/version.json`.
 
 ### Uso e sistema
 
+- La spiegazione di «Appoggia sul piano» ora vale anche per i corpi che si trovano sotto il piano.
+- Gli elenchi delle azioni sulle caratteristiche usano interamente la lingua scelta.
 - Su Mac, Solidon ora può caricare il driver di 3Dconnexion (3DxWare) per il mouse 3D. Dalla versione 0.4.1 alla 0.6.0 macOS non lo consentiva.
 - Su Mac, il pacchetto di installazione mette ora Solidon sempre in *Applicazioni*. Se Solidon non era lì, finora il pacchetto aggiornava una copia in un altro posto.
 - Dopo l'aggiornamento su Mac, avvia Solidon da *Applicazioni*. Elimina le vecchie copie dell'app fuori da questa cartella e ricrea il collegamento nel Dock se necessario.

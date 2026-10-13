@@ -8154,10 +8154,11 @@ def _and_then(gathered: str, further: str) -> str:
     leading = gathered.split(" ", 1)[0]
     if further.startswith(f"{leading} ") and len(further.split(" ", 1)) == 2:
         further = further.split(" ", 1)[1]
-    if " und " in gathered:
-        start, _, final = gathered.rpartition(" und ")
-        return f"{start}, {final} und {further}"
-    return f"{gathered} und {further}"
+    connector = tr(" und ")
+    if connector in gathered:
+        start, _, final = gathered.rpartition(connector)
+        return f"{start}, {final}{connector}{further}"
+    return f"{gathered}{connector}{further}"
 
 
 def _group_evidence_texts() -> dict[str, str]:
