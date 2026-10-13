@@ -19,6 +19,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Utilização e sistema
 
+- A explicação de «Pousar na mesa» também se aplica a corpos que se encontram abaixo da mesa.
+- As listas de ações sobre características usam inteiramente o idioma escolhido.
 - No Mac, o Solidon pode agora carregar o controlador da 3Dconnexion (3DxWare) para o rato 3D. Da versão 0.4.1 à 0.6.0, o macOS não o permitia.
 - No Mac, o pacote de instalação coloca agora o Solidon sempre em *Aplicações*. Se o Solidon não estava lá, até agora o pacote atualizava uma cópia noutro lugar.
 - Após atualizar no Mac, abrir o Solidon a partir de *Aplicações*. Apagar as cópias antigas da app fora desta pasta e voltar a adicioná-la ao Dock, se necessário.
