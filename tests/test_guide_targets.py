@@ -1187,17 +1187,12 @@ def test_a_widget_below_the_visible_part_is_reached_by_scrolling(qt_app: Any) ->
         window.deleteLater()
 
 
-def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(qt_app: Any) -> None:
-    """D0 F-19: Ein Feld, das sein innerer Rollbereich ganz zeigt, der äußere aber abschneidet.
-
-    Die Auswahlkarte steckt im Rollbereich der Karte und im äußeren
-    ``FittedScroller``. Gefragt war nur der nächste Rollbereich: Dort stand das
-    Ziel „sichtbar“, und der Klick fiel unter die Karte. Jetzt zählt jeder
-    Bereich, gerollt wird der erste, der rollen kann — hier der äußere.
-    """
+@pytest.fixture
+def nested_scroll(qt_app: Any) -> Iterator[tuple[Any, Any, Any]]:
+    """Fenster, äußerer und innerer Rollbereich: Der innere zeigt ``setting:probe``
+    ganz, der äußere schneidet es ab — wie Auswahlkarte und ``FittedScroller``."""
     from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
 
-    from app.ui import guide_targets
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -1224,18 +1219,57 @@ def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(qt_ap
     _settle(qt_app)
     try:
         assert inner.verticalScrollBar().maximum() == 0, "der innere Bereich rollt nicht"
-        bar = outer.verticalScrollBar()
-        assert bar.maximum() > 0
-        step = guide_targets.next_click(window, "setting:probe")
-        assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
-        assert bar.value() == 0, "next_click hat selbst gerollt"
-        bar.setValue(bar.maximum())
-        _settle(qt_app)
-        assert guide_targets.next_click(window, "setting:probe").why == "ziel"
+        assert outer.verticalScrollBar().maximum() > 0
+        yield window, outer, inner
     finally:
         outer.close()
         outer.deleteLater()
         window.deleteLater()
+
+
+def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(
+    nested_scroll: tuple[Any, Any, Any], qt_app: Any
+) -> None:
+    """D0 F-19: Ein Feld, das sein innerer Rollbereich ganz zeigt, der äußere aber abschneidet.
+
+    Die Auswahlkarte steckt im Rollbereich der Karte und im äußeren
+    ``FittedScroller``. Gefragt war nur der nächste Rollbereich: Dort stand das
+    Ziel „sichtbar“, und der Klick fiel unter die Karte. Jetzt zählt jeder
+    Bereich, gerollt wird der erste, der rollen kann — hier der äußere.
+    """
+    from app.ui import guide_targets
+
+    window, outer, _inner = nested_scroll
+    bar = outer.verticalScrollBar()
+    step = guide_targets.next_click(window, "setting:probe")
+    assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
+    assert bar.value() == 0, "next_click hat selbst gerollt"
+    bar.setValue(bar.maximum())
+    _settle(qt_app)
+    assert guide_targets.next_click(window, "setting:probe").why == "ziel"
+
+
+def test_area_for_rolls_every_scroll_area_that_cuts_the_target_off(
+    nested_scroll: tuple[Any, Any, Any], qt_app: Any
+) -> None:
+    """Durchsicht welle4 C-L14: der Zwilling aus F-19 in ``area_for`` (``_in_view``).
+
+    ``area_for`` deckt auf und rollt selbst — jeden umgebenden Bereich, von innen
+    nach außen. Rollte es nur den nächsten, stünde der Rahmen einer Tour oder
+    eines Handbuchbilds unter der Karte; ``next_click`` nennt danach dieselbe
+    Stelle als Ziel.
+    """
+    from app.ui import guide_targets
+
+    window, outer, _inner = nested_scroll
+    bar = outer.verticalScrollBar()
+    rect = guide_targets.area_for(window, "setting:probe")
+    _settle(qt_app)
+    shown = QRect(outer.viewport().mapToGlobal(QPoint(0, 0)), outer.viewport().size())
+    assert bar.value() > 0, "area_for hat den äußeren Bereich nicht gerollt"
+    assert shown.contains(rect.center()), (rect, shown)
+    step = guide_targets.next_click(window, "setting:probe")
+    assert (step.why, step.rect) == ("ziel", rect)
 
 
 def test_area_for_opens_the_group_that_next_click_names(prepared_window: Any, qt_app: Any) -> None:
