@@ -604,9 +604,17 @@ def place_window(application: Any, window: Any, variant: Variant) -> dict[str, A
     ):
         size = SMALLEST_WINDOW
     if size is None:
-        window.setGeometry(area)
+        # Am bereits maximierten Zielschirm ist area die Fläche MIT Rahmen.
+        # Erneutes setGeometry machte daraus einen zu großen logischen Client,
+        # während das native Fenster seine bisherige Clientfläche behielt.
+        if not window.isMaximized() or window.screen() != chosen:
+            if window.isMaximized():
+                window.showNormal()
+            window.setGeometry(area)
         window.showMaximized()
     else:
+        if window.isMaximized():
+            window.showNormal()
         window.resize(*size)
         window.move(area.topLeft())
         window.show()

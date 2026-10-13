@@ -49,6 +49,41 @@ from tools.function_list import STARTUP_LICENCE
 ACCEPTANCE = ROOT / "tools" / "file_acceptance.py"
 
 
+@pytest.mark.parametrize("explicit_size", [False, True])
+def test_repeated_window_placement_keeps_the_real_qt_client(qt_app, monkeypatch, explicit_size):
+    """FD75: Ein zweiter Aufbau wahrt Maximierung oder stellt die verlangte Clientgröße her."""
+    from PySide6.QtCore import QSize
+    from PySide6.QtWidgets import QMainWindow
+
+    # Dieser kleine Qt-Zustandsfall braucht keinen echten großen Schirm. Der
+    # Mindestgrößenvertrag bleibt separat geprüft; native Pixel folgen auf MSI.
+    monkeypatch.setattr(function_setup, "SMALLEST_AVAILABLE", (0, 0))
+    window = QMainWindow()
+    variant = function_setup.Variant(screen=qt_app.primaryScreen().name())
+    try:
+        function_setup.place_window(qt_app, window, variant)
+        qt_app.processEvents()
+        assert window.isMaximized()
+        original = window.geometry()
+        handle = window.windowHandle()
+        assert handle is not None
+        if explicit_size:
+            variant = replace(variant, window_size="1920x1009")
+        function_setup.place_window(qt_app, window, variant)
+        qt_app.processEvents()
+        if explicit_size:
+            assert not window.isMaximized()
+            assert window.size() == QSize(1920, 1009)
+        else:
+            assert window.isMaximized()
+            assert window.geometry() == original
+        assert window.contentsRect().size() == window.size() == handle.size()
+    finally:
+        window.close()
+        window.deleteLater()
+        qt_app.processEvents()
+
+
 def test_a_drag_counts_only_if_the_view_noticed_the_grip(qt_app: Any) -> None:
     """Review L11: Ein Zug, bei dem die Ansicht keinen Zugwert meldet, fasste keinen Griff.
 
