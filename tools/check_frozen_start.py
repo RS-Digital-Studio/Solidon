@@ -162,6 +162,27 @@ def exit_text(code: int) -> str:
     return f"Code {code}"
 
 
+def outcome(report: dict[str, Any] | None) -> str:
+    """Eine Zeile für den Lauf: Plattform, Fenster und 3D-Ansicht auf einen Blick.
+
+    Steht vor dem Urteil, auch bei einem Schritt, der rot werden darf — so
+    sagt die Ausgabe einer Erprobung ohne Suchen, wie weit der Start kam.
+    """
+    if report is None:
+        return "Ergebnis: kein Bericht — die Anwendung kam nicht bis zum Fenster."
+    renderer = report.get("renderer", {})
+    view = "nein"
+    if renderer.get("present"):
+        view = f"ja ({renderer.get('kind', '?')}, hellster Wert {renderer.get('brightest')})"
+        if "error" in renderer:
+            view = f"ja, aber Fehler: {renderer['error']}"
+    window = "ja" if report.get("window", {}).get("visible") else "nein"
+    return (
+        f"Ergebnis: Plattform {report.get('platform', '?')} · Fenster sichtbar {window} "
+        f"· 3D-Ansicht {view}"
+    )
+
+
 def judge(
     returncode: int | None,
     report: dict[str, Any] | None,
@@ -317,6 +338,7 @@ def check(args: argparse.Namespace) -> int:
             linux=sys.platform.startswith("linux"),
         )
         print(json.dumps(report, ensure_ascii=False, indent=2) if report else "(kein Bericht)")
+        print(outcome(report), flush=True)
         print(
             f"Ende nach {took:.1f} s mit {exit_text(returncode) if returncode is not None else '—'}"
         )

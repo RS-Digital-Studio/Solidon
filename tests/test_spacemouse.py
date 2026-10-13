@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import logging
 import math
 import struct
 import subprocess
@@ -54,6 +55,7 @@ from app.ui.spacemouse import (
     camera_step,
     decode_report,
     default_reader,
+    hid_module_name,
     load_driver,
     quiet_crosstalk,
     speed_factor,
@@ -678,7 +680,7 @@ def test_a_blocked_device_is_seen_once_and_recovers_without_restart(
 
     reader = HidReader()
     reader._module = SimpleNamespace(
-        enumerate=lambda: [{"vendor_id": 0x256F, "product_id": 0xC635, "path": b"hidraw1"}],
+        enumerate=lambda: [{"vendor_id": 0x256F, "product_id": 0xC635, "path": b"/dev/hidraw1"}],
         device=Device,
     )
     settings = _Settings()
@@ -929,7 +931,7 @@ def test_repeated_searches_with_the_real_hid_module_keep_the_process_alive() -> 
     keinen Test zurückgibt; ohne Fenster, damit die Kernsuite ihn auf jedem
     System fährt.
     """
-    pytest.importorskip("hid")
+    pytest.importorskip(hid_module_name())
     script = textwrap.dedent(
         """
         import sys
@@ -975,6 +977,32 @@ def test_repeated_searches_with_the_real_hid_module_keep_the_process_alive() -> 
     )
 
 
+@pytest.mark.parametrize(
+    ("platform", "module"),
+    [("linux", "hidraw"), ("win32", "hid"), ("darwin", "hid")],
+)
+def test_linux_reads_the_mouse_through_hidraw(platform: str, module: str) -> None:
+    """Unter Linux ``hidraw`` (Kerneltreiber), sonst ``hid``.
+
+    Im Linux-Rad geht ``hid`` über libusb und bräuchte Schreibrecht auf
+    ``/dev/bus/usb``; die udev-Regel des Handbuchs und das Flatpak geben aber
+    ``/dev/hidraw*`` frei. Die Plattform ist ein Parameter, damit der
+    Linux-Zweig auch hier geprüft wird.
+    """
+    assert hid_module_name(platform) == module
+
+
+def test_the_reader_imports_the_module_of_its_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Leser importiert, was ``hid_module_name`` wählt — nicht fest ``hid``."""
+    from app.ui import spacemouse
+
+    chosen = SimpleNamespace(enumerate=list, device=object)
+    monkeypatch.setitem(sys.modules, "hidraw", chosen)
+    monkeypatch.setattr(spacemouse, "hid_module_name", lambda: hid_module_name("linux"))
+
+    assert HidReader()._hid() is chosen
+
+
 def test_driver_fallback_keeps_the_blocked_device_visible() -> None:
     """Ein nicht verfügbarer Mac-Treiber verdeckt keine HID-Zugriffssperre."""
     from app.ui.spacemouse import HidReader
@@ -1002,6 +1030,9 @@ def test_the_linux_help_limits_access_to_the_detected_usb_device() -> None:
     assert "0666" not in text and "chmod" not in text
     assert "sudo tee" not in manual.spacemouse_access_help("linux")
     assert "Treibererweiterungen" in manual.spacemouse_access_help("darwin")
+    # Im Flatpak gibt es kein sudo: Die Regel gehört auf den Rechner.
+    assert "Flatpak" in manual.spacemouse_access_help("linux")
+    assert "Flatpak" not in manual.spacemouse_access_help("darwin")
     assert "udev" not in manual.spacemouse_access_help("win32")
     page = manual.find(manual.SPACEMOUSE_ACCESS)
     assert page is not None and "systemd-logind" in str(page.body)
@@ -1531,6 +1562,42 @@ def test_without_the_framework_the_driver_reader_is_silent() -> None:
 
 def test_load_driver_answers_none_where_the_framework_is_absent(tmp_path: Path) -> None:
     assert load_driver(str(tmp_path / "3DconnexionClient")) is None
+
+
+def test_a_driver_that_is_there_but_does_not_load_says_why_in_the_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Liegt das Framework da und lädt nicht, steht der Grund im Kundenprotokoll.
+
+    Auf dem Mac lehnt dyld es unter der Bibliotheksprüfung ab (fremde Team-ID);
+    ohne Zeile auf Warnstufe sähe ein Protokoll nur eine Maus, die nichts tut.
+    Hier steht eine Datei, die keine Bibliothek ist — ``CDLL`` scheitert auf
+    jeder Plattform mit einem ``OSError``, der den Grund des Laders trägt.
+    """
+    framework = tmp_path / "3DconnexionClient"
+    framework.write_bytes(b"keine Bibliothek")
+
+    with caplog.at_level(logging.INFO, logger="app.ui.spacemouse"):
+        assert load_driver(str(framework)) is None
+
+    warnings = [entry for entry in caplog.records if entry.levelno >= logging.WARNING]
+    assert len(warnings) == 1, caplog.records
+    message = warnings[0].getMessage()
+    assert "not loaded" in message and str(framework) in message
+    assert message.split(f"{framework}: ", 1)[1].strip(), "der Grund des Laders fehlt"
+
+
+def test_the_driver_reader_tries_a_failing_driver_once_per_session() -> None:
+    """Die Warnung oben kommt je Sitzung höchstens einmal, nicht je Suche."""
+    calls = []
+
+    def loader() -> None:
+        calls.append(1)
+
+    reader = DriverReader(loader=loader)
+    for _ in range(5):
+        assert not reader.open()
+    assert len(calls) == 1
 
 
 def test_the_default_reader_takes_the_driver_only_on_a_mac_that_has_it() -> None:

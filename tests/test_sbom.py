@@ -303,6 +303,7 @@ def test_the_finished_artifact_exposes_every_native_file_and_runtime_family(
         "_internal/numpy.libs/libscipy_openblas64_test.dll",
         "_internal/scipy.libs/libscipy_openblas_test.dll",
         "_internal/scipy.libs/libgfortran-5.dll",
+        "_internal/libgfortran-5.dll",
         "_internal/PySide6/Qt6Core.dll",
         "_internal/PySide6/VCRUNTIME140.dll",
         "_internal/cadquery_ocp_novtk.libs/TKernel-test.dll",
@@ -366,6 +367,49 @@ def test_the_finished_artifact_exposes_every_native_file_and_runtime_family(
         | {bom["metadata"]["component"]["bom-ref"]}
         for entry in bom["dependencies"]
     )
+
+
+def test_wheel_copies_of_the_gcc_runtime_belong_to_their_wheel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Linux-Baum ohne libgcc_s und libstdc++ bildet keine GCC-Familie (Review 1, S2).
+
+    Seit Linux auf 22.04 baut, bleiben nur libgfortran und libquadmath in
+    ``numpy.libs/`` und ``scipy.libs/``. Sie sind gestrippt (kein ``.comment``)
+    und gehören ihrem Rad, dessen ``LICENSE.txt`` den Text der GCC-Laufzeit
+    mitbringt; eine Familie aus ihnen trüge nur die Compilerangabe, und die
+    Releaseakte hielte den Paketjob an. Liegt dagegen eine Laufzeitdatei des
+    Bauservers im Baum, entsteht die Familie mit der Fassung aus dpkg.
+    """
+    names = (
+        "_internal/numpy.libs/libgfortran-83c28eba-468e71e5.so.5.0.0",
+        "_internal/numpy.libs/libquadmath-2284e583-a9307bba.so.0.0.0",
+        "_internal/scipy.libs/libgfortran-040039e1-0352e75f.so.5.0.0",
+    )
+    for name in names:
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"\x7fELF\x02\x01native")
+    files = make_sbom.artifact_files(tmp_path)
+    assert {entry.owner for entry in files} == {"numpy", "scipy"}
+    assert not [
+        component
+        for component in make_sbom.runtime_components(files)
+        if component["name"] == "GCC Runtime Libraries"
+    ]
+
+    host = tmp_path / "_internal" / "libgcc_s.so.1"
+    host.write_bytes(b"\x7fELF\x02\x01native")
+    monkeypatch.setattr(make_sbom.shutil, "which", lambda _name: "/usr/bin/dpkg-query")
+    monkeypatch.setattr(
+        make_sbom, "_dpkg_version", lambda soname: ("12.3.0", f"dpkg-query -W ({soname})")
+    )
+    gcc = [
+        component
+        for component in make_sbom.runtime_components(make_sbom.artifact_files(tmp_path))
+        if component["name"] == "GCC Runtime Libraries"
+    ]
+    assert [component["version"] for component in gcc] == ["12.3.0"]
 
 
 def test_windows_libffi_is_bound_to_the_pinned_cpython_build() -> None:

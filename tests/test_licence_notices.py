@@ -191,10 +191,14 @@ def test_machine_readable_manifest_has_the_same_component_and_text_records() -> 
             text.sha256 for text in component.texts
         ]
     # keyutils: LGPL-2.1-or-later, reist mit der Kerberos-Familie im Linux-Paket
-    # (Ubuntus libkrb5 hängt daran) und braucht deshalb den Quellbeleg.
+    # (Ubuntus libkrb5 hängt daran) und braucht deshalb den Quellbeleg; ebenso
+    # die LGPL-Bibliotheken aus dem hidapi-Rad (libudev, elfutils, libattr).
     assert document["release_gate"]["source_delivery"] == [
         "appimage-type2-runtime",
         "geos",
+        "hidapi-elfutils",
+        "hidapi-libattr",
+        "hidapi-libudev",
         "keyutils",
         "opencascade-technology",
         "qt",
@@ -369,6 +373,12 @@ def test_every_sbom_runtime_family_has_an_explicit_notice_policy() -> None:
         "gcc-runtime",
         "geos",
         "glib",
+        "hidapi-bzip2",
+        "hidapi-elfutils",
+        "hidapi-libattr",
+        "hidapi-libcap",
+        "hidapi-libudev",
+        "hidapi-xz",
         "keyutils",
         "krb5",
         "libcap",
@@ -387,6 +397,7 @@ def test_every_sbom_runtime_family_has_an_explicit_notice_policy() -> None:
         "openblas-scipy",
         "opencascade-technology",
         "openssl",
+        "pcre",
         "pcre2",
         "pyinstaller-bootloader",
         "qt",
@@ -750,3 +761,118 @@ def test_a_missing_notice_distribution_names_the_install_command(
     policy = make_licence_notices._runtime_policies()["pyinstaller-bootloader"]
     with pytest.raises(RuntimeError, match=r"pip install -c constraints\.txt pyinstaller"):
         make_licence_notices._runtime_texts(policy, "6.22.2")
+
+
+#: Die RPM-Pakete aus ``hidapi-0.15.0.dist-info/sboms/auditwheel.cdx.json`` im
+#: Rad ``hidapi-0.15.0-cp314-cp314-manylinux2014_x86_64`` (PyPI, 12.10.2026).
+_HIDAPI_AUDITWHEEL = {
+    "libusbx": "1.0.21-1.el7",
+    "elfutils-libelf": "0.176-5.el7",
+    "systemd-libs": "219-78.el7_9.9",
+    "elfutils-libs": "0.176-5.el7",
+    "xz-libs": "5.2.2-2.el7_9",
+    "bzip2-libs": "1.0.6-13.el7",
+    "libcap": "2.22-11.el7",
+    "libattr": "2.4.46-13.el7",
+}
+
+#: Was ``hidraw`` aus ``hidapi.libs/`` zieht (DT_NEEDED-Hülle, am Rad gelesen).
+_HIDRAW_LIBRARIES = (
+    "libudev-1f672570.so.1.6.2",
+    "libcap-79733b59.so.2.22",
+    "libattr-4f2a9577.so.1.1.0",
+    "libdw-0-780627ce.176.so",
+    "libelf-0-3d9de92a.176.so",
+    "liblzma-004595ca.so.5.2.2",
+    "libbz2-a273e504.so.1.0.6",
+)
+
+
+def test_every_runtime_family_carries_an_approved_licence() -> None:
+    """Regel 15 und 22 gelten auch für Systembibliotheken und mitgebrachte Rad-Bibliotheken."""
+    from tools import make_sbom
+
+    policy = licences.load_policy()
+    expressions = {
+        name: licence for name, licence, _site in make_sbom.LINUX_FAMILY_COMPONENTS.values()
+    }
+    for rows in make_sbom.WHEEL_LIBRARIES.values():
+        expressions.update({row[2]: row[4] for row in rows})
+    for name, expression in expressions.items():
+        assert licences.licence_allowed(expression, policy), (name, expression)
+    assert expressions["XZ Utils"] == "LicenseRef-xz-public-domain", "liblzma ist gemeinfrei"
+    assert not licences.licence_allowed("GPL-2.0-or-later", policy)
+
+
+def test_the_hidapi_wheel_libraries_have_families_versions_and_texts() -> None:
+    """Jede Bibliothek, die ``hidraw`` aus dem Rad zieht, hat Familie, Fassung und Text."""
+    from tools import make_sbom
+
+    entries = [
+        make_sbom.ArtifactFile(
+            path=f"_internal/hidapi.libs/{name}", owner="hidapi", version="0.15.0"
+        )
+        for name in _HIDRAW_LIBRARIES
+    ]
+    versions = {name: value.split("-", 1)[0] for name, value in _HIDAPI_AUDITWHEEL.items()}
+    components = make_sbom.wheel_library_components(entries, lambda _dist: versions)
+    found = {component["purl"]: component for component in components}
+    assert set(found) == {
+        "pkg:generic/hidapi-libudev@219",
+        "pkg:generic/hidapi-elfutils@0.176",
+        "pkg:generic/hidapi-libcap@2.22",
+        "pkg:generic/hidapi-libattr@2.4.46",
+        "pkg:generic/hidapi-xz@5.2.2",
+        "pkg:generic/hidapi-bzip2@1.0.6",
+    }
+    elfutils = found["pkg:generic/hidapi-elfutils@0.176"]
+    assert elfutils["licenses"] == [{"expression": "LGPL-3.0-or-later"}], "der LGPL-Zweig"
+
+    policies = make_licence_notices._runtime_policies()
+    for component in components:
+        identifier = make_licence_notices._generic_identifier(component)
+        policy = policies[identifier]
+        assert policy.name == component["name"]
+        assert component["version"] in policy.versions
+        assert make_licence_notices._runtime_texts(policy, component["version"]), identifier
+        lgpl = "LGPL" in component["licenses"][0]["expression"]
+        assert policy.source_delivery == lgpl, f"{identifier}: Quellenangebot je LGPL"
+
+    # libusb hing nur an ``hid``; jede andere Rad-Bibliothek ist geführt.
+    mapped = {row[3] for row in make_sbom.WHEEL_LIBRARIES["hidapi"]}
+    assert mapped == set(_HIDAPI_AUDITWHEEL) - {"libusbx"}
+
+
+def test_an_unlisted_wheel_library_stops_the_bill_of_materials() -> None:
+    from tools import make_sbom
+
+    stray = make_sbom.ArtifactFile(
+        path="_internal/hidapi.libs/libusb-1-150b88da.0.so.0.1.0", owner="hidapi", version="0.15.0"
+    )
+    with pytest.raises(ValueError, match="WHEEL_LIBRARIES"):
+        make_sbom.wheel_library_components([stray], lambda _dist: {})
+    assert make_sbom.wheel_library_components([], lambda _dist: {}) == []
+
+
+def test_a_runtime_family_with_an_unapproved_licence_stops_the_release(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bis A10 prüfte nur die Wheel-Akte die Freigabeliste; eine Laufzeitfamilie lief durch."""
+    monkeypatch.setattr(make_licence_notices, "collect_components", lambda: ())
+
+    def sbom(expression: str) -> dict[str, Any]:
+        return {
+            "components": [
+                {
+                    "type": "library",
+                    "name": "XZ Utils liblzma (in hidapi)",
+                    "version": "5.2.2",
+                    "purl": "pkg:generic/hidapi-xz@5.2.2",
+                    "licenses": [{"expression": expression}],
+                }
+            ]
+        }
+
+    assert make_licence_notices.collect_artifact_components(sbom("LicenseRef-xz-public-domain"))
+    with pytest.raises(RuntimeError, match="nicht freigegeben"):
+        make_licence_notices.collect_artifact_components(sbom("GPL-2.0-or-later"))

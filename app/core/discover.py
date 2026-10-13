@@ -830,6 +830,23 @@ def _launcher_folders() -> set[PurePosixPath]:
     return {PurePosixPath(Path(folder).expanduser().as_posix()) for folder in _FLATPAK_EXPORTS}
 
 
+#: Die Slicer, die als Flatpak auf Flathub stehen, unter ihrer Kennung — samt
+#: Orcas früherer (``io.github.softfever``), die installiert weiterläuft.
+#: Gefunden wird jeder Slicer an seinem Namen (:func:`flatpak_app`); diese
+#: Liste braucht nur Solidons eigenes Flatpak, das ``~/.var/app/<Kennung>`` je
+#: Anwendung freigeben muss, um dort die Drucker des Kunden zu lesen.
+#: Hier und nicht in :mod:`app.core.tools`, weil der Flatpak-Bau
+#: (``tools/make_linux_packages.py``) sie ohne die Abhängigkeiten der
+#: Anwendung liest — ``tools`` zieht über die Backends numpy nach.
+SLICER_FLATPAKS: Final = (
+    "com.orcaslicer.OrcaSlicer",
+    "io.github.softfever.OrcaSlicer",
+    "com.prusa3d.PrusaSlicer",
+    "com.bambulab.BambuStudio",
+    "com.ultimaker.cura",
+)
+
+
 def flatpak_app(program: Path | str) -> str:
     """Die Flatpak-Kennung, wenn ``program`` ein Flatpak startet — sonst leer.
 
