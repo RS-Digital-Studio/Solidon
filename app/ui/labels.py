@@ -2062,6 +2062,15 @@ def value_text(key: str, value: object) -> str:
         return ", ".join(
             str(_METHOD_NAMES[entry]) if entry in _METHOD_NAMES else str(entry) for entry in value
         )
+    # Lage- und Abstandsbefunde tragen diese Längen auch im alten Cache als
+    # mm-Text. Erst hier umrechnen, damit derselbe Befund einem Einheitenwechsel
+    # folgt und seine gespeicherten Werte für die Entdoppelung gleich bleiben.
+    # Ein nackter numerischer ``gap`` ist dagegen eine Slicer-Einstellung;
+    # Freitext ohne die eindeutige gespeicherte Form wird nicht geraten.
+    if key in ("excess", "gap", "needed") and isinstance(value, str):
+        measured = re.fullmatch(r"([+-]?\d+(?:\.\d+)?) mm", value)
+        if measured is not None:
+            return length(float(measured[1]))
     # Diese bestehenden Befundschlüssel tragen keine Einheiten-Endung.
     # Längen folgen trotzdem der Anzeigeeinheit; Materialkennwerte behalten
     # die Einheit des Filamentprofils und der Festigkeitsrechnung.
