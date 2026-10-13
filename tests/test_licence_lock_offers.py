@@ -34,13 +34,16 @@ from PySide6.QtWidgets import (
 
 from app.core import activation, guides
 from app.core.activation import store
+from app.core.errors import LicenceRequired
+from app.core.scene.history import OperationDraft
 from app.core.scene.project import save
 from app.core.types import Parameter
 from app.i18n import tr
 from app.ui import change_lock
-from app.ui.dialogs import ParameterDialog, licence_lock_line
+from app.ui.dialogs import ParameterDialog, licence_lock_line, show_error
 from app.ui.guide_targets import menu_entries, menubar_entries
 from app.ui.main_window import MainWindow
+from app.ui.message_dialog import MessageDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from tests.ui_helpers import wait_for_print_findings
@@ -87,6 +90,33 @@ def _set_licence(monkeypatch: pytest.MonkeyPatch, state: str) -> str:
     return "" if cached.unlocked else licence_lock_line(cached)
 
 
+def _catch_messages(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Jedes Meldungsfenster wird notiert statt gezeigt — beide Bauarten.
+
+    Fehler kommen seit FD-21 im Hausstil (``MessageDialog``); wer nur
+    ``QMessageBox`` abfängt, sieht sie nicht und hinge bei einem Rückfall im
+    modalen ``exec`` (Durchsicht welle4 L6).
+    """
+    shown: list[str] = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda box: shown.append(box.text()) or 0)
+    monkeypatch.setattr(MessageDialog, "exec", lambda dialog: shown.append(dialog.text()) or 0)
+    return shown
+
+
+def test_the_catch_sees_both_kinds_of_message(
+    qt_app: QApplication, below_the_bed: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gegenprobe zu L6: Ein Fehler im Hausstil und ein ``QMessageBox`` landen beide im Fang."""
+    shown = _catch_messages(monkeypatch)
+    show_error(LicenceRequired(action=activation.CHANGE), below_the_bed)
+    box = QMessageBox(below_the_bed)
+    box.setText("Kasten")
+    box.exec()
+    box.deleteLater()
+    assert len(shown) == 2 and shown[1] == "Kasten", shown
+    assert "Lizenzschlüssel" in shown[0], shown
+
+
 def _choose_the_finding(window: MainWindow) -> QPushButton:
     """Reiter *Prüfbericht*, Liste auf, Befundzeile gewählt — die Knopfzeile darunter."""
     tabs = window.right
@@ -125,8 +155,7 @@ def test_every_offer_of_a_change_is_grey_with_its_reason(
     state: str,
 ) -> None:
     window = below_the_bed
-    shown: list[str] = []
-    monkeypatch.setattr(QMessageBox, "exec", lambda box: shown.append(box.text()) or 0)
+    shown = _catch_messages(monkeypatch)
     reason = _set_licence(monkeypatch, state)
     assert reason
     # Wie nach dem Freischaltdialog: Das Fenster stellt seine Einträge neu.
@@ -180,6 +209,8 @@ def test_every_offer_of_a_change_is_grey_with_its_reason(
     # Filament an der Fläche: eine Zuweisung ist ein Schritt.
     assert not window.quick_filament.picker.isEnabled()
     assert window.quick_filament.picker.toolTip() == reason
+    # Das Lager liest nur und bleibt offen, wie der Menüeintrag (Durchsicht welle4 L5).
+    assert window.quick_filament.inventory_button.isEnabled()
 
     # Operationsdialog über den Verlauf: zum Ansehen offen, Übernehmen grau mit Grund.
     window.edit_operation(window.session.project.document.ops[0].id)
@@ -436,3 +467,51 @@ def test_the_measure_group_takes_no_input_without_a_licence(
     ]
     assert not still, f"nach dem Freischalten blieb gesperrt: {still}"
     assert all(field.toolTip() != reason for field in fields)
+
+
+@pytest.mark.parametrize("state", LOCKED)
+def test_the_keys_and_the_drag_in_the_history_say_why(
+    qt_app: QApplication, below_the_bed: MainWindow, monkeypatch: pytest.MonkeyPatch, state: str
+) -> None:
+    """Durchsicht welle4 M1: Die Tasten des Verlaufs fragten die Freischaltung nicht.
+
+    Das Kontextmenü war grau, aber Leertaste und Alt+Pfeil endeten im
+    Meldungsfenster, Einfg öffnete die Einfügemarke und Entf stellte die
+    Löschfrage. Jetzt sind die Tasten grau mit Grund, und jeder der fünf Wege —
+    auch das Ablegen nach einem Zug — sagt den Grund in der Statuszeile und
+    ändert nichts.
+    """
+    window = below_the_bed
+    assert window.session.apply("Quader", [OperationDraft(op="create_box", params={})])
+    assert window.session.wait_for_idle(60_000)
+    qt_app.processEvents()
+    shown = _catch_messages(monkeypatch)
+    reason = _set_licence(monkeypatch, state)
+    window._update_actions()
+    history = window.history_panel
+    keys = (
+        history.remove_action,
+        history.insert_action,
+        history.up_action,
+        history.down_action,
+        history.toggle_action,
+    )
+    assert not any(action.isEnabled() for action in keys), "eine Taste des Verlaufs blieb offen"
+    assert all(action.toolTip() == reason for action in keys)
+
+    steps = [entry.id for entry in window.session.project.document.ops]
+    last = steps[-1]
+    for way in (
+        lambda: history.suppressRequested.emit([last]),  # Leertaste
+        lambda: history.moveRequested.emit([last], steps[0]),  # Alt+Pfeil und Ablegen
+        lambda: history.insertRequested.emit(last),  # Einfg
+        lambda: history.removalRequested.emit([last]),  # Entf
+    ):
+        window.status_message.setText("")
+        way()
+        assert window.session.wait_for_idle(60_000)
+        qt_app.processEvents()
+        assert window.status_message.text() == reason
+    assert shown == [], f"ein Meldungsfenster kam doch: {shown}"
+    assert [entry.id for entry in window.session.project.document.ops] == steps
+    assert window.session.inserting is None, "die Einfügemarke ging trotz Sperre auf"

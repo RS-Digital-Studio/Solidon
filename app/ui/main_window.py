@@ -6210,6 +6210,14 @@ class MainWindow(QMainWindow):
         # entwerten; außerdem trägt der Skizzeneditor selbst Entf. Deshalb gilt
         # hier dieselbe Sperre wie für alle anderen schreibenden Aktionen.
         self.history_panel.remove_action.setEnabled(not locked and not gesturing)
+        # Die Tasten des Verlaufs ändern ihn wie sein Kontextmenü: Einfg,
+        # Alt+Pfeil und Leertaste gesperrt grau mit Grund (Durchsicht welle4 M1).
+        history = self.history_panel
+        keys = (history.insert_action, history.up_action, history.down_action)
+        for action in (*keys, history.toggle_action):
+            action.setEnabled(not locked)
+        for action in (history.remove_action, *keys, history.toggle_action):
+            self._lock_hint(action, locked)
         self.feature_panel.limit_fit(self._manual_fit_reason())
         # **Und das Merkmalfenster hört denselben Grund.** Es war die eine
         # Bedienstelle, an der der Halt nicht ankam: Felder und beide Knöpfe
@@ -6478,7 +6486,9 @@ class MainWindow(QMainWindow):
             and not on_an_edge
             and (not chosen_features or bool(chosen_faces))
         )
-        self.quick_filament.setEnabled(not locked and not gesturing and halted is None)
+        # Ohne Freischaltung sperren Wähler und Entfernen sich selbst, mit Grund;
+        # das Lager bleibt zum Ansehen offen (FD-5, Durchsicht welle4 L5).
+        self.quick_filament.setEnabled(not gesturing and halted is None)
         # **Und ohne jede Auswahl schweigt das Merkmalfenster.** Die Karte
         # darunter sagt denselben Zustand samt dem Weg zu den Bausteinen; der
         # Satz hier wäre der dritte über dieselbe Sache (gemessen am gebauten
@@ -7024,8 +7034,13 @@ class MainWindow(QMainWindow):
         return places
 
     def _history_change_allowed(self) -> bool:
-        """Vor einem Umbau: die bestehende Frage nach dem Zurückgenommenen (§15.4)."""
-        if not self._quiet_command_allowed():
+        """Vor einem Umbau: die bestehende Frage nach dem Zurückgenommenen (§15.4).
+
+        Davor die Freischaltung: Leertaste, Alt+Pfeil, Einfg und Ablegen endeten
+        sonst im Meldungsfenster oder öffneten die Einfügemarke; der Grund steht
+        in der Statuszeile (Durchsicht welle4 M1).
+        """
+        if change_lock.refused(self.announce) or not self._quiet_command_allowed():
             return False
         discardable = self.session.history.discardable
         return not discardable or confirm_discard(discardable, self._discarded_names(), self)
@@ -9080,6 +9095,9 @@ class MainWindow(QMainWindow):
         """
         from app.core.scene.history import named_steps
 
+        # Gesperrt keine Löschfrage für eine Handlung, die nicht geht (M1).
+        if change_lock.refused(self.announce):
+            return
         chosen = tuple(dict.fromkeys(int(op_id) for op_id in op_ids))
         removing = self.session.removal_closure(chosen)
         if not removing:
