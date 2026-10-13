@@ -1884,7 +1884,11 @@ class FunctionFlow(GesturePhases, SwitchPhase):
             selection.append(self.until_step("handlung steht", standing))
         self.session.failed.connect(note)
         try:
-            self.run_steps(PATH_PHASE, selection)
+            if not self.run_steps(PATH_PHASE, selection):
+                unmeasured(
+                    self.data, f"licence_runs.{self.variant.licence}", "Auswahlweg abgebrochen"
+                )
+                return
             # Mit Bild steht die Handlung in der Maßgruppe; ihr Feld ist dann, was
             # offen oder grau dasteht, der Kopf im Merkmalfenster ist verborgen
             # (F-20: vorher „fehlt“ in jedem Lizenzzustand, auch „licensed“).
@@ -1915,7 +1919,13 @@ class FunctionFlow(GesturePhases, SwitchPhase):
                 if self.apply_target is not None:
                     acting.append(self.apply_step())
                 effect, _done = self.effect_steps("lizenz")
-                self.run_steps("lizenz", [effect[0], *acting, *effect[1:]])
+                if not self.run_steps("lizenz", [effect[0], *acting, *effect[1:]]):
+                    unmeasured(
+                        self.data,
+                        f"licence_runs.{self.variant.licence}",
+                        "Lizenzhandlung abgebrochen",
+                    )
+                    return
         finally:
             self.session.failed.disconnect(note)
         writes = (

@@ -869,33 +869,37 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
     der Prüfstand das Ziel nicht erreicht, und der Lauf ist nicht gemessen.
     """
     issues = []
-    absent = []
+    absent = [f"unbekannter Lizenzzustand {state}" for state in runs if state not in LICENCE_STATES]
+    if not runs:
+        absent.append("licence_runs")
     if complete:
         absent += [f"Lizenzlauf {state}" for state in licence_states() if state not in runs]
+    measured = {
+        state: entry
+        for state, entry in runs.items()
+        if state in LICENCE_STATES
+        and isinstance(entry, Mapping)
+        and isinstance(entry.get("writes"), bool)
+        and entry.get("state") in LICENCE_RUN_STATES
+        and isinstance(entry.get("reason"), str)
+    }
     # Ob eine Funktion schreibt, ist ihre Eigenschaft, nicht die eines Laufs: Was
     # freigeschaltet das Dokument ändert, schreibt auch im gesperrten Lauf, wo
     # nichts geändert werden konnte (Probelauf F-35).
-    writing = any(
-        isinstance(entry, Mapping) and entry.get("writes") is True for entry in runs.values()
-    )
+    writing = any(entry["writes"] for entry in measured.values())
     offered_unlocked = any(
-        LICENCE_UNLOCKED[state]
-        and isinstance(entry, Mapping)
-        and entry.get("state") == LICENCE_RUN_STATES[0]
-        for state, entry in runs.items()
-        if state in LICENCE_UNLOCKED
+        LICENCE_UNLOCKED[state] and entry.get("state") == LICENCE_RUN_STATES[0]
+        for state, entry in measured.items()
     )
     for state in LICENCE_STATES:
-        entry = runs.get(state)
-        if entry is None:
+        if state not in runs:
             continue
-        writes = entry.get("writes") if isinstance(entry, Mapping) else None
-        if writing and isinstance(writes, bool):
-            writes = True
-        shown = entry.get("state") if isinstance(entry, Mapping) else None
-        if not isinstance(writes, bool) or shown not in LICENCE_RUN_STATES:
+        if state not in measured:
             absent.append(f"licence_runs.{state}")
             continue
+        entry = measured[state]
+        writes = writing or entry["writes"]
+        shown, reason = entry["state"], entry["reason"]
         should = LICENCE_UNLOCKED[state] or not writes
         if shown == LICENCE_MISSING:
             if LICENCE_UNLOCKED[state] or not offered_unlocked:
@@ -910,7 +914,7 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
                 )
             continue
         enabled = shown == LICENCE_RUN_STATES[0]
-        if not enabled and not str(entry.get("reason") or "").strip():
+        if not enabled and not reason.strip():
             issues.append(Issue(f"grau ohne Grund bei {state}", "schwer"))
         if enabled and not should:
             # Regelverstoß und Umweg (Konzept §4, *mittel*): Der Kern lehnt an der
@@ -925,7 +929,10 @@ def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:
         issues,
         absent,
         f"{len(runs)} Lizenzläufe",
-        {state: (runs.get(state) or {}).get("state") for state in LICENCE_STATES if state in runs},
+        {
+            state: entry.get("state") if isinstance(entry, Mapping) else None
+            for state, entry in runs.items()
+        },
     )
 
 
