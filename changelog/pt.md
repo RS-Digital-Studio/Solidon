@@ -46,6 +46,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As mensagens da barra de estado já não colocam dois pontos depois de uma frase completa.
 - Com um só corpo, a árvore de objetos tem a altura do seu conteúdo, e o histórico com um só passo também. Na versão 0.6.0 ficava espaço vazio por baixo.
 - O passo mais recente continua visível no histórico quando novos corpos fazem crescer a árvore de objetos. Na versão 0.6.0 deslizava para baixo do limite do painel.
+- A captura de ecrã de um comentário mostra agora também o modelo no Windows. Com algumas placas gráficas aparecia antes uma imagem antiga, como o ecrã de carregamento.
+- No macOS, uma caixa de diálogo aberta, por exemplo ao criar um parafuso do catálogo de blocos, fica por cima da janela principal. Antes, um clique na janela empurrava-a para trás.
 
 ### Imprimir e entregar ao slicer
 
@@ -54,6 +56,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Editar e esboçar
 
 - Um corpo exato mantém agora as suas características depois de *Aplicar texto*, *Incrustar texto* e *Rebaixar contraforma*. Na versão 0.6.0 já não era possível clicar em nenhuma face a seguir.
+- Um corpo com rosca do catálogo de blocos volta a poder ser movido, rodado, espelhado, escalado e pousado na mesa. Na versão 0.6.0 a cadeia parava com um erro do programa.
+- No separador *Seleção*, um diâmetro abaixo do limite em *Alterar furo* remete agora para *Remover característica*, que remove o furo por completo, com o escareamento se quiser.
+- A reconstrução (*Reconstruir modelo*) já não aconselha outros limites quando nenhum valor permitido bastaria, e mostra as propostas iguais uma só vez.
 
 ## 0.6.0
 

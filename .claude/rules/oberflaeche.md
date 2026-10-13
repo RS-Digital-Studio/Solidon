@@ -356,11 +356,8 @@ den Wiederwahlen, nur ohne eigene Handlung seit dem letzten aktuellen Bild.
   kommen vom Kunden (Farbwähler, Filamentkatalog). Die Pinselleiste zeigt
   Farbfeld **und** Name, „neu“ für einen fehlenden Slot.
 - **Ein Hauptknopf entsteht über `style.make_primary()`** (Akzentfarbe **und**
-  halbfett), nie über `setDefault(True)`; einer mit `DestructiveRole` über
-  `style.make_danger()`, ein Fenster ohne Handlung und eine Rückfrage vor
-  Verwerfen nehmen `style.no_primary()`,
-  und ein Stylesheet geht an einen `objectName`, nie typlos (`fenster.md`, „Der
-  Hauptknopf“).
+  halbfett); Gefahr, Fenster ohne Handlung und Stylesheet: `fenster.md`, „Der
+  Hauptknopf“.
 - Differenzansicht Blau/Orange, nicht Rot/Grün; Analysekarten mit
   wahrnehmungsgleicher Palette (Viridis-Art), kein Regenbogen — der erzeugt
   Kanten, wo keine sind.

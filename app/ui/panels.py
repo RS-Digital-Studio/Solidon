@@ -8651,6 +8651,16 @@ class _ActionRow:
     """Die Zeilen, in denen X, Y und Z einer Stelle nebeneinander stehen."""
 
 
+def _removes_its_step(row: _ActionRow) -> bool:
+    """Ob die Zeile den Schritt ihres Bausteins entfernt (*Baustein entfernen*).
+
+    Eine Handlung mit Schritt und ohne Operation (``part_actions``); gefragt
+    vom Klick (``_run_row``) und vom Hinweis unter einem zu kleinen
+    Durchmesser (``_removal_way``).
+    """
+    return row.step is not None and row.action is not None and row.action.op is None
+
+
 #: Die Felder einer Stelle, die nebeneinander stehen dürfen — in dieser Folge.
 COORDINATE_FIELDS: Final = ("x", "y", "z")
 
@@ -10361,9 +10371,47 @@ class FeaturePanel(QWidget):
                 return str(tr("{name}: {value}", name=name, value=reason))
         return ""
 
+    def _removal_way(self, editor: QWidget) -> str:
+        """Der Weg zum Entfernen, wenn jemand einen Durchmesser unter die Grenze tippt — sonst leer.
+
+        Wer eine Bohrung samt Senkung loswerden wollte, tippte 0 in ihren
+        Durchmesser und las nur „0,0 mm liegt unter der Untergrenze 0,20 mm“
+        (Kundenmeldung 0.6.0). Eine Bohrung unter der Grenze gibt es nicht; was
+        gemeint ist, kann *Merkmal entfernen*, am Baustein *Baustein entfernen*
+        — genannt nur, wo die Karte es gerade anbietet. Der Operationsdialog
+        aus Menü und Suche weiß das für sein Merkmal nicht und nennt deshalb
+        nur die Grenze.
+        """
+        from app.ui.op_dialog import ValueField
+
+        spin = editor.spin if isinstance(editor, ValueField) else editor
+        if (
+            not isinstance(spin, (BoundedSpin, BoundedLengthSpin))
+            or editor.property(FIELD_PROPERTY) != "diameter"
+            or (isinstance(editor, ValueField) and editor.toggle.isChecked())
+        ):
+            return ""
+        refused = spin.refused_value()
+        if refused is None or refused > spin.maximum():
+            return ""
+        removal = next(
+            (
+                row
+                for row in self._shown_rows.values()
+                if row.op == "remove_feature" or _removes_its_step(row)
+            ),
+            None,
+        )
+        if removal is None or removal.action is None:
+            return ""
+        return tr("Ganz weg geht es mit „{action}“.").format(action=str(removal.action.title))
+
     def _set_refusal_label(self, editor: BoundedSpin | BoundedLengthSpin, label: QLabel) -> str:
         """Zeigt die Grenzablehnung direkt am Feld und reicht sie an Vorleser weiter."""
         reason = editor.refusal()
+        way = self._removal_way(editor) if reason else ""
+        if way:
+            reason = f"{reason} {way}"
         if label.text() != reason:
             label.setText(reason)
             if reason:
@@ -10802,6 +10850,8 @@ class FeaturePanel(QWidget):
         die Handlung finden (:meth:`_mark`). Die Werte der Felder stehen dann
         schon (:func:`configure_feature_field`).
         """
+        from app.ui.op_dialog import ValueField
+
         box = row.box
         # Das Ziel im Wortschatz (``feature:<schlüssel>``, an einer Kante
         # ``edge:``) — als Eigenschaft, denn den ``objectName`` des Kopfes
@@ -10850,6 +10900,10 @@ class FeaturePanel(QWidget):
                     refusal = row.refusals.get(name)
                     if refusal is not None:
                         self._set_refusal_label(editor, refusal)
+                elif isinstance(editor, ValueField):
+                    # Ein Ausdrucksfeld (Bausteinzeile) zeigt seine Ablehnung
+                    # selbst unter dem Feld; der Weg zum Entfernen gehört dazu.
+                    editor.refusal_way = partial(self._removal_way, editor)
                 for target in (editor, *row.inner[name]):
                     self._mark(target, row.key)
         if row.button is not None:
@@ -10996,7 +11050,7 @@ class FeaturePanel(QWidget):
         Schlüsselloch im Verlauf, an derselben Stelle über dem alten.
         """
         if row.step is not None:
-            if row.action is not None and row.action.op is None:
+            if _removes_its_step(row):
                 self.stepRemoveRequested.emit(row.step)
             else:
                 self.stepChangeRequested.emit(row.step, self._row_values(row))

@@ -46,6 +46,8 @@ scrive in `website/version.json`.
 - I messaggi nella barra di stato non mettono più i due punti dopo una frase completa.
 - Con un solo corpo l'albero degli oggetti è alto quanto il suo contenuto, e così la cronologia con un solo passo. Nella versione 0.6.0 sotto restava spazio vuoto.
 - Il passo più recente resta visibile nella cronologia quando nuovi corpi fanno crescere l'albero degli oggetti. Nella versione 0.6.0 scivolava sotto il bordo del pannello.
+- Lo screenshot allegato a un riscontro ora mostra anche il modello su Windows. Con alcune schede grafiche prima mostrava un'immagine vecchia, come la schermata di caricamento.
+- Su macOS una finestra di dialogo aperta, ad esempio per creare una vite dal catalogo dei blocchi, resta sopra la finestra principale. Prima un clic nella finestra la spingeva dietro.
 
 ### Stampare e passare allo slicer
 
@@ -54,6 +56,9 @@ scrive in `website/version.json`.
 ### Modificare e disegnare
 
 - Un corpo esatto ora conserva le sue caratteristiche dopo *Applica testo*, *Intarsia testo* e *Ricava controforma*. Nella versione 0.6.0 dopo non si poteva più fare clic su nessuna faccia.
+- Un corpo filettato dal catalogo dei blocchi si può di nuovo spostare, ruotare, specchiare, scalare e appoggiare sul piano. Nella versione 0.6.0 la catena si fermava con un errore del programma.
+- Nella scheda *Selezione*, un diametro sotto il limite in *Cambia foro* rimanda ora a *Rimuovi caratteristica*, che rimuove il foro del tutto, con la sua svasatura se vuoi.
+- La ricostruzione (*Ricostruisci modello*) non suggerisce più altri limiti quando nessun valore consentito basterebbe, e mostra le proposte uguali una sola volta.
 
 ## 0.6.0
 

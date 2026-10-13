@@ -765,7 +765,7 @@ def _result_version(spec: PartSpec) -> str:
     und des Gewindemerkmals (:data:`PRINTED_THREADS`)."""
     if spec.name in SPRING_ARMS:
         return f"{spec.version}:spring:2"
-    return f"{spec.version}:thread:4" if spec.name in PRINTED_THREADS else spec.version
+    return f"{spec.version}:thread:5" if spec.name in PRINTED_THREADS else spec.version
 
 
 def _title_for(spec: PartSpec) -> TranslatableText | str:

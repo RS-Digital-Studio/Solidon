@@ -47,6 +47,8 @@ dans `website/version.json`.
 - Les messages de la barre d'état ne mettent plus de deux-points après une phrase complète.
 - Avec un seul corps, l'arbre des objets est aussi haut que son contenu, de même que l'historique avec une seule étape. La version 0.6.0 laissait un vide en dessous.
 - L'étape la plus récente reste visible dans l'historique quand de nouveaux corps agrandissent l'arbre des objets. Dans la version 0.6.0, elle glissait sous le bord du panneau.
+- La capture d'écran jointe à un retour montre désormais aussi le modèle sous Windows. Avec certaines cartes graphiques, elle montrait auparavant une image ancienne, comme l'écran de chargement.
+- Sous macOS, une boîte de dialogue ouverte, par exemple pour créer une vis du catalogue de blocs, reste au-dessus de la fenêtre principale. Un clic dans la fenêtre la passait derrière.
 
 ### Imprimer et transmettre au slicer
 
@@ -55,6 +57,9 @@ dans `website/version.json`.
 ### Modifier et esquisser
 
 - Un corps exact garde désormais ses caractéristiques après *Appliquer du texte*, *Incruster du texte* et *Creuser la contre-forme*. En version 0.6.0, plus aucune face ne pouvait ensuite être cliquée.
+- Un corps fileté du catalogue de blocs peut de nouveau être déplacé, tourné, mis en miroir, mis à l'échelle et posé sur le plateau. En version 0.6.0, la chaîne s'arrêtait sur une erreur du programme.
+- Dans l'onglet *Sélection*, un diamètre sous la limite dans *Modifier le trou* renvoie désormais à *Supprimer la caractéristique*, qui supprime tout le trou, fraisure comprise si on le veut.
+- La reconstruction (*Reconstruire le modèle*) ne conseille plus d'autres limites quand aucune valeur permise ne suffirait, et n'affiche qu'une fois les propositions identiques.
 
 ## 0.6.0
 

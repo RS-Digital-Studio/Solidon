@@ -46,6 +46,8 @@ it into `website/version.json`.
 - Messages in the status bar no longer put a colon after a complete sentence.
 - With a single body the object tree is only as tall as its content, and so is the history with one step. Version 0.6.0 left empty space below.
 - The newest step stays visible in the history when new bodies make the object tree grow. In version 0.6.0 it slipped below the edge of the panel.
+- The screenshot attached to feedback now shows the model on Windows too. On some graphics cards it used to show an old picture, such as the loading screen.
+- On macOS an open dialog, for example when creating a screw from the part catalogue, stays above the main window. A click into the window used to push it behind.
 
 ### Printing and slicer handover
 
@@ -54,6 +56,9 @@ it into `website/version.json`.
 ### Editing and sketching
 
 - An exact body now keeps its features after *Put text on*, *Inlay text* and *Cut counter-form*. In version 0.6.0 no face could be clicked afterwards.
+- A body with a thread from the part catalogue can be moved, rotated, mirrored, scaled and placed on the bed again. In version 0.6.0 the chain stopped there with a program error.
+- Typing a diameter below the limit in *Change bore* on the *Selection* tab now points to *Remove feature*, which removes the bore entirely, with its countersink if you like.
+- Rebuilding (*Rebuild model*) no longer suggests other limits when no allowed value would be enough, and shows identical proposals only once.
 
 ## 0.6.0
 

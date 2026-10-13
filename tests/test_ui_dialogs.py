@@ -847,3 +847,160 @@ def test_a_confirmation_reads_names_literally(
     shown = [entry for entry in seen if "Alles weg" in entry[0]]
     assert shown, seen
     assert all(text_format == Qt.TextFormat.PlainText for _text, text_format in shown), shown
+
+
+class _Shown:
+    """Ein Fenster aus genau den Antworten, die ``dialogs_above`` liest."""
+
+    def __init__(
+        self,
+        kind: object,
+        parent: object = None,
+        *,
+        visible: bool = True,
+        modal: bool = False,
+    ) -> None:
+        self.kind = kind
+        self.parent = parent
+        self.visible = visible
+        self.modal = modal
+
+    def isWindow(self) -> bool:  # noqa: N802 - Qt-Name
+        return True
+
+    def windowType(self) -> object:  # noqa: N802 - Qt-Name
+        return self.kind
+
+    def isModal(self) -> bool:  # noqa: N802 - Qt-Name
+        return self.modal
+
+    def isVisible(self) -> bool:  # noqa: N802 - Qt-Name
+        return self.visible
+
+    def parentWidget(self) -> object:  # noqa: N802 - Qt-Name
+        return self.parent
+
+    def window(self) -> object:
+        return self
+
+
+class _Inside:
+    """Ein Feld in einem Fenster — kein eigenes Fenster."""
+
+    def __init__(self, host: _Shown) -> None:
+        self.host = host
+
+    def window(self) -> _Shown:
+        return self.host
+
+    def parentWidget(self) -> _Shown:  # noqa: N802 - Qt-Name
+        return self.host
+
+
+def test_the_window_keeps_its_open_dialogs_and_their_notes_above_itself() -> None:
+    """Kundenmeldung zu 0.6.0 unter macOS: Der Schraubendialog lag nach einem
+    Klick ins Fenster dahinter und kam nicht wieder.
+
+    Gehoben werden die sichtbaren nichtmodalen Dialoge des Fensters, ein
+    Hinweis über einem von ihnen nach ihm. Ein verborgener, ein modaler, ein
+    Werkzeugfenster, ein gewöhnliches Fenster und der Dialog eines fremden
+    Fensters bleiben, wo sie sind.
+    """
+    from PySide6.QtCore import Qt
+
+    from app.ui.main_window import dialogs_above
+
+    dialog = Qt.WindowType.Dialog
+    main = _Shown(Qt.WindowType.Window)
+    operation = _Shown(dialog, main)
+    note = _Shown(dialog, _Inside(operation))
+    others = [
+        _Shown(dialog, main, visible=False),
+        _Shown(dialog, main, modal=True),
+        _Shown(Qt.WindowType.Tool, main),
+        _Shown(Qt.WindowType.Window, main),
+        _Shown(dialog, _Shown(Qt.WindowType.Window)),
+        main,
+    ]
+
+    assert dialogs_above(main, [note, *others, operation]) == [operation, note]
+
+
+def test_a_click_in_the_window_lifts_the_open_operation_dialog(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Weg aus der Kundenmeldung: Katalog, Schraube ohne Auswahl, dann ein
+    Klick ins Fenster. Der Dialog wird gehoben, ein Klick in ihn selbst hebt
+    nichts, und die Aktivierung des Fensters hebt ihn wieder.
+
+    Offscreen zeigt keine Fensterfolge; geprüft wird, dass das Fenster seinen
+    Dialog hebt. Was das Heben unter macOS bewirkt, steht in
+    ``_DialogsStayAbove``.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    window.show()
+    window.run_operation(REGISTRY.get("create_printed_screw"))
+    dialog = window._op_dialog
+    assert dialog is not None and dialog.isVisible()
+    lifted: list[str] = []
+    monkeypatch.setattr(dialog, "raise_", lambda: lifted.append("raise"))
+    try:
+        QTest.mouseClick(window.object_tree.tree.viewport(), Qt.MouseButton.LeftButton)
+        assert lifted, "ein Klick ins Fenster hebt den offenen Dialog"
+
+        # Ein Label nimmt den Druck nicht an; Qt reicht ihn an jeden Elternteil
+        # weiter. Gehoben wird trotzdem einmal je Klick (Review M1: vorher zwei
+        # an der Statuszeile, dreizehn im Prüfbericht).
+        from PySide6.QtWidgets import QLabel
+
+        label = next(item for item in window.statusBar().findChildren(QLabel) if item.isVisible())
+        lifted.clear()
+        QTest.mouseClick(label, Qt.MouseButton.LeftButton)
+        assert lifted == ["raise"], lifted
+
+        lifted.clear()
+        length = dialog._editors["length"]
+        QTest.mouseClick(length, Qt.MouseButton.LeftButton)
+        assert not lifted, "ein Klick in den Dialog hebt nichts"
+
+        QApplication.sendEvent(window, QEvent(QEvent.Type.WindowActivate))
+        assert lifted, "die Aktivierung des Fensters hebt den Dialog"
+    finally:
+        dialog.reject()
+
+
+def test_open_dialogs_rise_in_the_order_they_were_last_used(qt_app: QApplication) -> None:
+    """Zwei offene Dialoge behalten ihre Folge, wenn das Fenster sie hebt.
+
+    Gleich tiefe Dialoge stiegen in der Folge von ``topLevelWidgets`` und
+    tauschten bei jedem Klick ihre Lage (Review L6). Gehoben wird in der Folge
+    der letzten Aktivierung: der zuletzt benutzte zuletzt, also obenauf.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    from app.ui.main_window import _DialogsStayAbove
+
+    main = QWidget()
+    first, second = QDialog(main), QDialog(main)
+    lifted: list[str] = []
+    for name, dialog in (("first", first), ("second", second)):
+        dialog.raise_ = lambda name=name: lifted.append(name)  # type: ignore[method-assign]
+        dialog.show()
+    keeper = _DialogsStayAbove(main)
+    try:
+        for used in (second, first):
+            keeper.eventFilter(used, QEvent(QEvent.Type.WindowActivate))
+        keeper.eventFilter(main, QEvent(QEvent.Type.WindowActivate))
+        assert lifted == ["second", "first"]
+
+        lifted.clear()
+        keeper.eventFilter(second, QEvent(QEvent.Type.WindowActivate))
+        keeper.eventFilter(main, QEvent(QEvent.Type.WindowActivate))
+        assert lifted == ["first", "second"]
+    finally:
+        for dialog in (first, second):
+            dialog.hide()
+            dialog.deleteLater()
+        main.deleteLater()

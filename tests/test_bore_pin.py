@@ -608,7 +608,7 @@ def test_a_pipe_thread_gets_a_pin_that_turns_in_loose(
     result = run("pin_for_bore", carrier, profile, at_feature=name)
     pin = result.outputs[1]
     (thread,) = [entry for entry in pin.features.values() if entry.kind == "thread"]
-    assert thread.params["size"] == size
+    assert thread.params["table_size"] == size
     assert ("taper" in thread.params) is (size != "G1/2")
     codes = {entry.code for entry in result.findings}
     assert "pin_for_bore.thread_touches" not in codes, [str(f.message) for f in result.findings]
@@ -641,7 +641,7 @@ def test_a_long_tapered_thread_gets_a_pin_of_its_own_size(profile: Profile) -> N
     carrier = _evaluated(project, profile)
     result = run("pin_for_bore", carrier, profile, at_feature=_thread_of(carrier))
     (thread,) = [entry for entry in result.outputs[1].features.values() if entry.kind == "thread"]
-    assert thread.params["size"] == "R1/4"
+    assert thread.params["table_size"] == "R1/4"
     assert thread.params["gauge_nominal"] == pytest.approx(13.157)
 
 
@@ -683,7 +683,7 @@ def test_the_pin_size_does_not_follow_the_shown_series(profile: Profile) -> None
             (thread,) = [
                 entry for entry in result.outputs[1].features.values() if entry.kind == "thread"
             ]
-            assert thread.params["size"] == "M5", shown
+            assert thread.params["table_size"] == "M5", shown
     finally:
         standards.set_shown_thread_families(before)
 

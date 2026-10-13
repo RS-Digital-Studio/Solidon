@@ -581,6 +581,9 @@ class ValueField(QWidget):
         # (:class:`BoundedSpin`): Der Satz steht unter dem Feld, sobald sie
         # getippt ist, und der Dialog sperrt *Übernehmen* mit demselben Satz.
         self._refused_shown = False
+        self.refusal_way: Callable[[], str] | None = None
+        """Ein Satz hinter der Grenze, den der Besitzer kennt (das Merkmalfenster:
+        der Weg zum Entfernen unter einem zu kleinen Durchmesser)."""
         self.spin.valueRefused.connect(lambda _number: self._show_refusal())
         self.spin.lineEdit().textEdited.connect(lambda _text: self._show_refusal())
         self.text.textChanged.connect(self._on_text)
@@ -789,6 +792,9 @@ class ValueField(QWidget):
         if self.toggle.isChecked():
             return
         said = self.spin.refusal()
+        way = self.refusal_way() if said and self.refusal_way is not None else ""
+        if way:
+            said = f"{said} {way}"
         if said:
             self.hint.setText(said)
             self.hint.setVisible(True)

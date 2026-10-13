@@ -4180,6 +4180,7 @@
   "GLB und GLTF verwenden Y nach oben. Ältere Projekte und rohe Generatorquellen behalten ihre bisherige Lage.": "GLB and GLTF use Y as the up axis. Older projects and raw generator sources retain their existing orientation.",
   "Gangzahl": "Starts",
   "Ganz gut": "Quite well",
+  "Ganz weg geht es mit „{action}“.": "To remove it entirely, use “{action}”.",
   "Ganze Datei als ein Körper · bisherige Auswahl": "Whole file as one body · previous selection",
   "Ganze Körper: {count}.": "Whole bodies: {count}.",
   "Ganzer Hohlraum": "Whole cavity",

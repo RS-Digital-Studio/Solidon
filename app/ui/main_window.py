@@ -21,7 +21,7 @@ import threading
 import time
 import traceback
 import weakref
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from copy import copy, deepcopy
 from dataclasses import dataclass, replace
@@ -842,6 +842,101 @@ class _DeleteRefusal(QObject):
             and watched is QApplication.focusWidget()
         ):
             return window._refuse_delete(watched)
+        return False
+
+
+def dialogs_above(window: QWidget, windows: Iterable[QWidget]) -> list[QWidget]:
+    """Die sichtbaren nichtmodalen Dialoge, die über ``window`` gehören — Eltern vor Kindern.
+
+    Ein Dialog gehört dazu, wenn die Kette seiner Elternfenster bei
+    ``window`` endet: der Operationsdialog direkt, ein Fehlerhinweis über ihm
+    eine Stufe tiefer. Sortiert nach dieser Tiefe, damit ein Kind nach seinem
+    Elternteil gehoben wird und darüber bleibt. Modale Dialoge ordnet das
+    System selbst (unter macOS als Sheet am Elternfenster); Werkzeug-,
+    Popup- und gewöhnliche Fenster sind keine Dialoge und bleiben, wo sie sind.
+    """
+    found: list[tuple[int, int, QWidget]] = []
+    for order, candidate in enumerate(windows):
+        if (
+            candidate is window
+            or not candidate.isWindow()
+            or candidate.windowType() != Qt.WindowType.Dialog
+            or candidate.isModal()
+            or not candidate.isVisible()
+        ):
+            continue
+        depth = 0
+        owner = candidate.parentWidget()
+        while owner is not None:
+            depth += 1
+            owner = owner.window()
+            if owner is window:
+                found.append((depth, order, candidate))
+                break
+            owner = owner.parentWidget()
+    return [candidate for _depth, _order, candidate in sorted(found, key=lambda entry: entry[:2])]
+
+
+class _DialogsStayAbove(QObject):
+    """Nichtmodale Dialoge bleiben über dem Hauptfenster — auf jeder Plattform.
+
+    Kundenmeldung zu 0.6.0 unter macOS: Der Erzeugungsdialog der Schraube
+    verschwand und ließ sich nicht wiederholen. Unter Windows besitzt das
+    Hauptfenster seine Dialoge, unter X11 sind sie ``transient_for`` — beide
+    halten sie darüber. Unter macOS ist ein ``Qt::Dialog`` ein ``NSPanel`` auf
+    der Ebene seines Elternfensters, ohne Kindfensterbeziehung (Qt 6.12,
+    ``qcocoawindow.mm``: ``windowLevel``, ``windowClass``): Ein Klick ins
+    Hauptfenster — in die Vorschau, an ihren Griff, in den Baum — holte das
+    maximierte Fenster nach vorn, und der Dialog lag vollständig dahinter.
+    Kein Menüeintrag und kein Fensterwechsel führte zu ihm zurück, und er
+    rechnete unsichtbar weiter Vorschauen.
+
+    Hier hebt das Fenster seine Dialoge selbst, sobald es geklickt oder
+    aktiviert wird; Qt hebt ohne Aktivierung (Windows ``SWP_NOACTIVATE``,
+    macOS ``orderFront``), die Tastatur bleibt beim Hauptfenster. Nicht über
+    ``Qt::Tool``: Das hielte den Dialog zwar oben, aber Qt ließe dann die
+    Fensterkürzel des Hauptfensters im Dialog gelten
+    (``qshortcut_widgets.cpp``), und ein *B* auf einem Haken öffnete die
+    Bohrung.
+
+    Gezählt wird nur der spontane Druck: Was das getroffene Widget nicht
+    annimmt, reicht Qt an jeden Elternteil weiter, und der Filter sah ein
+    Label im Prüfbericht dreizehnmal. Gleich tiefe Dialoge steigen in der
+    Folge ihrer letzten Aktivierung (``LIFT_ORDER``), sonst tauschten zwei
+    offene Dialoge bei jedem Klick ihre Lage.
+    """
+
+    #: Die Eigenschaft, unter der ein Dialog seine letzte Aktivierung trägt.
+    LIFT_ORDER: Final = "liftOrder"
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self._activations = 0
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
+        """Hebt die Dialoge bei einem Klick ins Fenster und bei seiner Aktivierung."""
+        window = self.parent()
+        if not isinstance(window, QWidget) or not isinstance(watched, QWidget):
+            return False
+        kind = event.type()
+        if kind == QEvent.Type.WindowActivate:
+            if watched is not window:
+                if watched.isWindow() and watched.windowType() == Qt.WindowType.Dialog:
+                    self._activations += 1
+                    watched.setProperty(self.LIFT_ORDER, self._activations)
+                return False
+        elif (
+            kind != QEvent.Type.MouseButtonPress
+            or not event.spontaneous()
+            or watched.window() is not window
+        ):
+            return False
+        windows = sorted(
+            QApplication.topLevelWidgets(),
+            key=lambda candidate: int(candidate.property(self.LIFT_ORDER) or 0),
+        )
+        for dialog in dialogs_above(window, windows):
+            dialog.raise_()
         return False
 
 
@@ -3115,6 +3210,11 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
         self.setWindowTitle(APP_NAME)
         self.resize(*START_SIZE)
+        # Ein Klick ins Fenster lässt seine Dialoge nicht dahinter verschwinden
+        # (:class:`_DialogsStayAbove`, macOS).
+        app_events.listen(
+            _DialogsStayAbove(self), (QEvent.Type.MouseButtonPress, QEvent.Type.WindowActivate)
+        )
         self._foundation_cache: tuple[tuple[object, ...], manufacturer.Foundation] | None = None
         """Die zuletzt gerechnete Grundlage aus dem Herstellerprofil und wofür."""
         self._foundation_worker: Any = None

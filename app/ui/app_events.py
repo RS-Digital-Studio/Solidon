@@ -4,7 +4,9 @@ Mauszeiger (:mod:`app.ui.cursors`), Fensterchrom (:mod:`app.ui.window_chrome`),
 die Navigationstasten (:mod:`app.ui.shortcut_schemes`), die Nutzungsuhr des
 Fragebogens (:mod:`app.ui.survey`), der Dateiempfang unter macOS
 (``app.FileOpenListener``), der Vorher-Vergleich der Ansicht
-(:mod:`app.ui.viewport`) und der Hauptknopf, dem kein Nebenknopf mit dem
+(:mod:`app.ui.viewport`), die Absage der Löschtaste und die nichtmodalen
+Dialoge, die über dem Hauptfenster bleiben (:mod:`app.ui.main_window`), und der
+Hauptknopf, dem kein Nebenknopf mit dem
 Fokus den Akzent nimmt, während Enter dem per Tastatur gewählten Knopf gehört
 (:mod:`app.ui.style`), hören je auf ein paar
 Ereignisarten der **ganzen**
