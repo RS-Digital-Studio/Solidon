@@ -4624,6 +4624,7 @@
   "Im Bild wählen": "Choisir dans la vue",
   "Im Chat beschreiben": "Décrire dans le chat",
   "Im Fenster rechnet der Übergang in Entwurfsauflösung, damit das Formen flüssig bleibt. Export und Druckvorbereitung rechnen fein.": "Dans la fenêtre, la transition est calculée en résolution d'ébauche pour que le modelage reste fluide. L'export et la préparation de l'impression la calculent finement.",
+  "Im Flatpak gilt dieselbe Regel: Legen Sie sie im Terminal Ihres Rechners an, nicht im Flatpak.": "La même règle s'applique au Flatpak : créez-la dans un terminal de votre ordinateur, pas dans le Flatpak.",
   "Im Geräte-Zertifikat fehlt eine signierte Angabe.": "Une information signée manque dans le certificat de l'appareil.",
   "Im Handbuch suchen": "Rechercher dans le manuel",
   "Im Katalog liegt schon ein Baustein „{existing}“. Er bleibt, wie er ist. Soll der neue „{title}“ als eigener Eintrag dazukommen?": "Le catalogue contient déjà un bloc « {existing} ». Il reste tel quel. Le nouveau « {title} » doit-il être ajouté comme entrée à part ?",

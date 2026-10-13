@@ -153,6 +153,11 @@ _SPACEMOUSE_LINUX = _(
     "lassen Sie die benutzerbezogene Gerätefreigabe durch Ihre Systemverwaltung "
     "einrichten. Andere Programme, die das Gerät exklusiv geöffnet haben, zuerst schließen."
 )
+#: Das Flatpak sieht ``/dev/hidraw*`` über ``--device=all``; die udev-Regel
+#: gehört trotzdem auf den Rechner, denn im Flatpak gibt es kein ``sudo``.
+_SPACEMOUSE_FLATPAK = _(
+    "Im Flatpak gilt dieselbe Regel: Legen Sie sie im Terminal Ihres Rechners an, nicht im Flatpak."
+)
 _SPACEMOUSE_MAC = _(
     "**macOS**\n\n"
     "Installieren oder aktualisieren Sie 3DxWare von 3Dconnexion und aktivieren "
@@ -183,7 +188,7 @@ def spacemouse_access_help(platform: str, device: tuple[int, int] | None = None)
         return str(_SPACEMOUSE_MAC)
     if not platform.startswith("linux"):
         return str(_SPACEMOUSE_WINDOWS)
-    text = str(_SPACEMOUSE_LINUX)
+    text = f"{_SPACEMOUSE_LINUX}\n\n{_SPACEMOUSE_FLATPAK}"
     if device is not None:
         vendor, product = device
         path = f"/etc/udev/rules.d/70-solidon-spacemouse-{vendor:04x}-{product:04x}.rules"

@@ -445,7 +445,7 @@ und Lesen zum Starter (`host_program`). Den Rechner nach einem unsichtbaren
 Ordner fragt nur, wer lokal keinen sieht, und je Kennung einmal
 (`_hidden_on_host`) — jede Frage ist ein Prozessstart. Solidons Flatpak darf das nur
 lesen, weil das Manifest die Installationsordner, die Exporte und
-`~/.var/app/<Kennung>:ro` je Eintrag in `tools.SLICER_FLATPAKS` freigibt —
+`~/.var/app/<Kennung>:ro` je Eintrag in `discover.SLICER_FLATPAKS` freigibt —
 ein Slicer, der neu auf Flathub erscheint, kommt dort dazu.
 
 **Cura rechnet unter Linux nur über seinen eigenen Lader** (RM-521,

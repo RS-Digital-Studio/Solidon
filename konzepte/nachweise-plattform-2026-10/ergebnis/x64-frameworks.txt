@@ -1,0 +1,71 @@
+Verschachtelte Bundles im äußeren Siegel: 17
+  Frameworks/PySide6/Qt/lib/QtCore.framework | cdhash ok; req=identifier "org.qt-project.QtCore" and anchor apple generic and certificate 1[field.1.2.84; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtDBus.framework | cdhash ok; req=identifier "org.qt-project.QtDBus" and anchor apple generic and certificate 1[field.1.2.84; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtGui.framework | cdhash ok; req=identifier "org.qt-project.QtGui" and anchor apple generic and certificate 1[field.1.2.840; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtNetwork.framework | cdhash ok; req=identifier "org.qt-project.QtNetwork" and anchor apple generic and certificate 1[field.1.2; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtOpenGL.framework | cdhash ok; req=identifier "org.qt-project.QtOpenGL" and anchor apple generic and certificate 1[field.1.2.; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtPdf.framework | cdhash ok; req=identifier "org.qt-project.QtPdf" and anchor apple generic and certificate 1[field.1.2.840; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtQml.framework | cdhash ok; req=identifier "org.qt-project.QtQml" and anchor apple generic and certificate 1[field.1.2.840; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtQmlMeta.framework | cdhash ok; req=identifier "org.qt-project.QtQmlMeta" and anchor apple generic and certificate 1[field.1.2; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtQmlModels.framework | cdhash ok; req=identifier "org.qt-project.QtQmlModels" and anchor apple generic and certificate 1[field.1; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtQmlWorkerScript.framework | cdhash ok; req=identifier "org.qt-project.QtQmlWorkerScript" and anchor apple generic and certificate 1[f; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtQuick.framework | cdhash ok; req=identifier "org.qt-project.QtQuick" and anchor apple generic and certificate 1[field.1.2.8; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtSvg.framework | cdhash ok; req=identifier "org.qt-project.QtSvg" and anchor apple generic and certificate 1[field.1.2.840; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtSvgWidgets.framework | cdhash ok; req=identifier "org.qt-project.QtSvgWidgets" and anchor apple generic and certificate 1[field.; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtVirtualKeyboard.framework | cdhash ok; req=identifier "org.qt-project.QtVirtualKeyboard" and anchor apple generic and certificate 1[f; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtVirtualKeyboardQml.framework | cdhash ok; req=identifier "org.qt-project.QtVirtualKeyboardQml" and anchor apple generic and certificate ; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/PySide6/Qt/lib/QtWidgets.framework | cdhash ok; req=identifier "org.qt-project.QtWidgets" and anchor apple generic and certificate 1[field.1.2; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+  Frameworks/Python.framework | cdhash ok; req=identifier "org.python.python" and anchor apple generic and certificate 1[field.1.2.840.11; inner files2 ok=1 bad=0 CR-slot=ok Info.plist-slot=ok
+Nicht versiegelt (weder außen noch in einem Framework): 52
+    Solidon3D.app/Contents/CodeResources datei
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtCore.framework/QtCore link->Versions/Current/QtCore
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtCore.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtCore.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtDBus.framework/QtDBus link->Versions/Current/QtDBus
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtDBus.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtDBus.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtGui.framework/QtGui link->Versions/Current/QtGui
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtGui.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtGui.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtNetwork.framework/QtNetwork link->Versions/Current/QtNetwork
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtNetwork.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtNetwork.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtOpenGL.framework/QtOpenGL link->Versions/Current/QtOpenGL
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtOpenGL.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtOpenGL.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtPdf.framework/QtPdf link->Versions/Current/QtPdf
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtPdf.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtPdf.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQml.framework/QtQml link->Versions/Current/QtQml
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQml.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQml.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlMeta.framework/QtQmlMeta link->Versions/Current/QtQmlMeta
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlMeta.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlMeta.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlModels.framework/QtQmlModels link->Versions/Current/QtQmlModels
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlModels.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlModels.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlWorkerScript.framework/QtQmlWorkerScript link->Versions/Current/QtQmlWorkerScript
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlWorkerScript.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQmlWorkerScript.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQuick.framework/QtQuick link->Versions/Current/QtQuick
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQuick.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtQuick.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtSvg.framework/QtSvg link->Versions/Current/QtSvg
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtSvg.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtSvg.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtSvgWidgets.framework/QtSvgWidgets link->Versions/Current/QtSvgWidgets
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtSvgWidgets.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtSvgWidgets.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboard.framework/QtVirtualKeyboard link->Versions/Current/QtVirtualKeyboard
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboard.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboard.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboardQml.framework/QtVirtualKeyboardQml link->Versions/Current/QtVirtualKeyboardQml
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboardQml.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtVirtualKeyboardQml.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtWidgets.framework/QtWidgets link->Versions/Current/QtWidgets
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtWidgets.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/PySide6/Qt/lib/QtWidgets.framework/Versions/Current link->A
+    Solidon3D.app/Contents/Frameworks/Python.framework/Python link->Versions/Current/Python
+    Solidon3D.app/Contents/Frameworks/Python.framework/Resources link->Versions/Current/Resources
+    Solidon3D.app/Contents/Frameworks/Python.framework/Versions/Current link->3.14

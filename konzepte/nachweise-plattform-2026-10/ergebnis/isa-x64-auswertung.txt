@@ -1,0 +1,232 @@
+Dateien: 382  Befehle: 71,622,615  Code-Bytes: 279,449,059
+
+== Dateien mit Befehlen, die Coffee Lake nicht kann ==
+- Frameworks/libcrypto.3.dylib (5.8 MB)
+    {'avx512': 95230, 'evex': 95218, 'sha': 512, 'xop': 88, 'vaes256': 360, 'vpclmul256': 46, 'avxifma': 616}  Funktionen: {'avx512': 22, 'evex': 22, 'sha': 6, 'xop': 3, 'vaes256': 4, 'vpclmul256': 3, 'avxifma': 6} von 13163; cpuid=10 xgetbv=1
+    Funktionen mit Kennung (V4/AVX512/SKX…): 11, ohne Kennung: 17
+       ohne Kennung: ChaCha20_4xop
+       ohne Kennung: _ossl_extract_multiplier_2x20_win5
+       ohne Kennung: _ossl_extract_multiplier_2x30_win5
+       ohne Kennung: _ossl_extract_multiplier_2x40_win5
+       ohne Kennung: _ossl_rsaz_amm52x20_x1_ifma256
+       ohne Kennung: _ossl_rsaz_amm52x20_x2_ifma256
+       ohne Kennung: _ossl_rsaz_amm52x30_x1_ifma256
+       ohne Kennung: _ossl_rsaz_amm52x30_x2_ifma256
+       ohne Kennung: _ossl_rsaz_amm52x40_x1_ifma256
+       ohne Kennung: _ossl_rsaz_amm52x40_x2_ifma256
+       ohne Kennung: _shaext_shortcut
+       ohne Kennung: aesni_cbc_sha1_enc_shaext
+       ohne Kennung: aesni_cbc_sha256_enc_shaext
+       ohne Kennung: aesni_cbc_sha256_enc_xop
+       ohne Kennung: iv_len_12_init_IV
+       ohne Kennung: sha512_block_data_order_xop
+       ohne Kennung: skip_iv_len_12_init_IV
+    cpuid in: ['_OPENSSL_ia32_cpuid']
+- Frameworks/numpy/_core/_multiarray_umath.cpython-314-darwin.so (6.9 MB)
+    {'avx512': 77566, 'evex': 75854}  Funktionen: {'avx512': 328, 'evex': 328} von 8680; cpuid=5 xgetbv=1
+    Funktionen mit Kennung (V4/AVX512/SKX…): 105, ohne Kennung: 223
+       ohne Kennung: __ZL10argselect_I10ymm_vectorIiE10zmm_vectorImEiEvPKT1_Pmmmmm
+       ohne Kennung: __ZL10argselect_I10ymm_vectorIjE10zmm_vectorImEjEvPKT1_Pmmmmm
+       ohne Kennung: __ZL10argselect_I10zmm_vectorIdES0_ImEdEvPKT1_Pmmmmm
+       ohne Kennung: __ZL10argselect_I10zmm_vectorIxES0_ImExEvPKT1_Pmmmmm
+       ohne Kennung: __ZL10argselect_I10zmm_vectorIyES0_ImEyEvPKT1_Pmmmmm
+       ohne Kennung: __ZL10sort_n_vecI10zmm_vectorI7float16E10ComparatorIS2_Lb0EELi16EDv8_xEvPNT_6type_tEi
+       ohne Kennung: __ZL10sort_n_vecI10zmm_vectorI7float16E10ComparatorIS2_Lb0EELi8EDv8_xEvPNT_6type_tEi
+       ohne Kennung: __ZL10sort_n_vecI10zmm_vectorIdE10ComparatorIS1_Lb0EELi32EDv8_dEvPNT_6type_tEi
+       ohne Kennung: __ZL10sort_n_vecI10zmm_vectorIfE10ComparatorIS1_Lb0EELi32EDv16_fEvPNT_6type_tEi
+       ohne Kennung: __ZL10sort_n_vecI10zmm_vectorIiE10ComparatorIS1_Lb0EELi32EDv8_xEvPNT_6type_tEi
+       ohne Kennung: __ZL10sort_n_vecI10zmm_vectorIjE10ComparatorIS1_Lb0EELi32EDv8_xEvPNT_6type_tEi
+       ohne Kennung: __ZL10sort_n_vecI10zmm_vectorIxE10ComparatorIS1_Lb0EELi32EDv8_xEvPNT_6type_tEi
+       ohne Kennung: __ZL10sort_n_vecI10zmm_vectorIyE10ComparatorIS1_Lb0EELi32EDv8_xEvPNT_6type_tEi
+       ohne Kennung: __ZL15simd_sincos_f32PKflPfll12SIMD_TRIG_OP
+       ohne Kennung: __ZL18partition_unrolledI10zmm_vectorI7float16E10ComparatorIS2_Lb0EELi8EtEmPT2_mmS5_S6_S6_
+       ohne Kennung: __ZL18partition_unrolledI10zmm_vectorIdE10ComparatorIS1_Lb0EELi8EdEmPT2_mmS4_S5_S5_
+       ohne Kennung: __ZL18partition_unrolledI10zmm_vectorIfE10ComparatorIS1_Lb0EELi8EfEmPT2_mmS4_S5_S5_
+       ohne Kennung: __ZL18partition_unrolledI10zmm_vectorIiE10ComparatorIS1_Lb0EELi8EiEmPT2_mmS4_S5_S5_
+       ohne Kennung: __ZL18partition_unrolledI10zmm_vectorIjE10ComparatorIS1_Lb0EELi8EjEmPT2_mmS4_S5_S5_
+       ohne Kennung: __ZL18partition_unrolledI10zmm_vectorIsE10ComparatorIS1_Lb0EELi8EsEmPT2_mmS4_S5_S5_
+       ohne Kennung: __ZL18partition_unrolledI10zmm_vectorItE10ComparatorIS1_Lb0EELi8EtEmPT2_mmS4_S5_S5_
+       ohne Kennung: __ZL18partition_unrolledI10zmm_vectorIxE10ComparatorIS1_Lb0EELi8ExEmPT2_mmS4_S5_S5_
+       ohne Kennung: __ZL18partition_unrolledI10zmm_vectorIyE10ComparatorIS1_Lb0EELi8EyEmPT2_mmS4_S5_S5_
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10ymm_vectorIfE10zmm_vectorImELi16EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10ymm_vectorIfE10zmm_vectorImELi8EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10ymm_vectorIiE10zmm_vectorImELi16EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10ymm_vectorIiE10zmm_vectorImELi8EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10ymm_vectorIjE10zmm_vectorImELi16EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10ymm_vectorIjE10zmm_vectorImELi8EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10zmm_vectorIdES0_ImELi16EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10zmm_vectorIdES0_ImELi8EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10zmm_vectorIxES0_ImELi16EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10zmm_vectorIxES0_ImELi8EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10zmm_vectorIyES0_ImELi16EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL19bitonic_merge_n_vecI10zmm_vectorIyES0_ImELi8EEvPNT_5reg_tEPNT0_5reg_tE
+       ohne Kennung: __ZL21argpartition_unrolledI10ymm_vectorIfE10zmm_vectorImELi4EfEmPKT2_PmmmS4_PS4_S8_
+       ohne Kennung: __ZL21argpartition_unrolledI10ymm_vectorIiE10zmm_vectorImELi4EiEmPKT2_PmmmS4_PS4_S8_
+       ohne Kennung: __ZL21argpartition_unrolledI10ymm_vectorIjE10zmm_vectorImELi4EjEmPKT2_PmmmS4_PS4_S8_
+       ohne Kennung: __ZL21argpartition_unrolledI10zmm_vectorIdES0_ImELi4EdEmPKT2_PmmmS3_PS3_S7_
+       ohne Kennung: __ZL21argpartition_unrolledI10zmm_vectorIxES0_ImELi4ExEmPKT2_PmmmS3_PS3_S7_
+    cpuid in: ['_npy_cpu_init']
+- Frameworks/PIL/__dot__dylibs/libavif.16.4.2.dylib (4.7 MB)
+    {'avx512': 36084, 'evex': 36005, 'gfni': 60, 'avxvnni': 1919}  Funktionen: {'avx512': 1789, 'evex': 1787, 'gfni': 17, 'avxvnni': 297} von 14998; cpuid=19 xgetbv=9
+    Funktionen mit Kennung (V4/AVX512/SKX…): 0, ohne Kennung: 1789
+       ohne Kennung: sub_1088a
+       ohne Kennung: sub_10a82
+       ohne Kennung: sub_116f0
+       ohne Kennung: sub_1178f
+       ohne Kennung: sub_117e0
+       ohne Kennung: sub_11878
+       ohne Kennung: sub_11985
+       ohne Kennung: sub_11a9e
+       ohne Kennung: sub_11acf
+       ohne Kennung: sub_11d50
+       ohne Kennung: sub_1269f
+       ohne Kennung: sub_129de
+       ohne Kennung: sub_134c0
+       ohne Kennung: sub_136c0
+       ohne Kennung: sub_13750
+       ohne Kennung: sub_137e1
+       ohne Kennung: sub_13a18
+       ohne Kennung: sub_13b39
+       ohne Kennung: sub_13bb0
+       ohne Kennung: sub_13ee0
+       ohne Kennung: sub_140b4
+       ohne Kennung: sub_140d6
+       ohne Kennung: sub_14270
+       ohne Kennung: sub_14630
+       ohne Kennung: sub_1bc0
+       ohne Kennung: sub_1be1
+       ohne Kennung: sub_1c38
+       ohne Kennung: sub_1c71
+       ohne Kennung: sub_1c79
+       ohne Kennung: sub_1c95
+       ohne Kennung: sub_1ca1
+       ohne Kennung: sub_1ccc
+       ohne Kennung: sub_1cdc
+       ohne Kennung: sub_1cea
+       ohne Kennung: sub_1d1f
+       ohne Kennung: sub_1d32
+       ohne Kennung: sub_1d63
+       ohne Kennung: sub_1d73
+       ohne Kennung: sub_1d8d
+       ohne Kennung: sub_1daf
+    cpuid in: ['sub_18c1aa', 'sub_1a3c8e', 'sub_1a66e6', 'sub_1a9d8e', 'sub_1a9e20', 'sub_f30']
+- Frameworks/OCP/__dot__dylibs/libopenjph.0.31.0.dylib (0.6 MB)
+    {'avx512': 2326, 'evex': 2310}  Funktionen: {'avx512': 16, 'evex': 16} von 459; cpuid=3 xgetbv=2
+    Funktionen mit Kennung (V4/AVX512/SKX…): 12, ohne Kennung: 4
+       ohne Kennung: __ZN4ojph5localL16proc_mel_encode1EPNS0_10mel_structERDv8_xS4_S3_jS3_
+       ohne Kennung: __ZN4ojph5localL16proc_mel_encode2EPNS0_10mel_structERDv8_xS4_S3_jS3_
+       ohne Kennung: __ZN4ojph5localL8proc_cq1EjPDv8_xRS1_S1_
+       ohne Kennung: __ZN4ojph5localL8proc_cq2EjPDv8_xRS1_S1_
+    cpuid in: ['__ZN4ojph18init_cpu_ext_levelERi', '__ZN4ojph9run_cpuidEjjPj']
+- Frameworks/PIL/__dot__dylibs/libz.1.3.1.zlib-ng.dylib (0.2 MB)
+    {'avx512': 426, 'evex': 423, 'avxvnni': 18}  Funktionen: {'avx512': 13, 'evex': 13, 'avxvnni': 2} von 225; cpuid=3 xgetbv=1
+    Funktionen mit Kennung (V4/AVX512/SKX…): 9, ohne Kennung: 4
+       ohne Kennung: _crc32_fold_vpclmulqdq
+       ohne Kennung: _crc32_fold_vpclmulqdq_copy
+       ohne Kennung: _crc32_fold_vpclmulqdq_final
+       ohne Kennung: _crc32_vpclmulqdq
+    cpuid in: ['_x86_check_features']
+- Frameworks/OCP/__dot__dylibs/libdeflate.0.dylib (0.1 MB)
+    {'avx512': 215, 'evex': 215, 'vpclmul256': 92, 'avxvnni': 34}  Funktionen: {'avx512': 4, 'evex': 4, 'vpclmul256': 3, 'avxvnni': 2} von 56; cpuid=4 xgetbv=1
+    Funktionen mit Kennung (V4/AVX512/SKX…): 4, ohne Kennung: 1
+       ohne Kennung: _crc32_x86_vpclmulqdq_avx2
+    cpuid in: ['_libdeflate_init_x86_cpu_features']
+- Frameworks/PySide6/Qt/lib/QtCore.framework/Versions/A/QtCore (6.7 MB)
+    {'avx512': 10, 'evex': 10, 'vaes256': 52}  Funktionen: {'avx512': 4, 'evex': 4, 'vaes256': 4} von 14950; cpuid=8 xgetbv=2
+    Funktionen mit Kennung (V4/AVX512/SKX…): 0, ohne Kennung: 6
+       ohne Kennung: sub_7040
+       ohne Kennung: sub_7190
+       ohne Kennung: sub_7530
+       ohne Kennung: sub_76b0
+       ohne Kennung: sub_cc50
+       ohne Kennung: sub_cc80
+    cpuid in: ['sub_3c6620', 'sub_6030']
+- Frameworks/wgpu/resources/libwgpu_native-release.dylib (7.4 MB)
+    {'fma4': 1}  Funktionen: {'fma4': 1} von 8312; cpuid=6 xgetbv=1
+    Funktionen mit Kennung (V4/AVX512/SKX…): 0, ohne Kennung: 1
+       ohne Kennung: __ZN4libm4math4arch3x863fma14fmaf_with_fma417hfce70140ccd27d94E
+    cpuid in: ['__ZN4libm4math4arch3x866detect17load_x86_features17hb1f9062ad08691f6E']
+- Frameworks/manifold3d.cpython-314-darwin.so (2.9 MB)
+    {'waitpkg': 1}  Funktionen: {'waitpkg': 1} von 4508; cpuid=1 xgetbv=0
+    Funktionen mit Kennung (V4/AVX512/SKX…): 0, ohne Kennung: 1
+       ohne Kennung: sub_1a5b90
+    cpuid in: ['sub_1b2160']
+
+== Verbreitung AVX2/FMA/BMI (x86-64-v3) — größte Anteile an Funktionen ==
+   29.1% von  14998 Fkt  avx2= 57509 fma=     0 bmi1=    0 bmi2=  437 avx= 43360 cpuid=19  Frameworks/PIL/__dot__dylibs/libavif.16.4.2.dylib
+   14.3% von     56 Fkt  avx2=   168 fma=     0 bmi1=    0 bmi2=   36 avx=   406 cpuid=4  Frameworks/OCP/__dot__dylibs/libdeflate.0.dylib
+    9.3% von    225 Fkt  avx2=   192 fma=     0 bmi1=    0 bmi2=   47 avx=   805 cpuid=3  Frameworks/PIL/__dot__dylibs/libz.1.3.1.zlib-ng.dylib
+    9.2% von    459 Fkt  avx2=  2438 fma=     0 bmi1=    0 bmi2=    0 avx=  2580 cpuid=3  Frameworks/OCP/__dot__dylibs/libopenjph.0.31.0.dylib
+    8.9% von   8680 Fkt  avx2= 31723 fma=     0 bmi1=    6 bmi2= 1594 avx= 72839 cpuid=5  Frameworks/numpy/_core/_multiarray_umath.cpython-314-darwin.so
+    5.4% von   1662 Fkt  avx2=  3162 fma=     0 bmi1=    0 bmi2=    0 avx=  1203 cpuid=3  Frameworks/OCP/__dot__dylibs/libjpeg.8.3.2.dylib
+    4.4% von     45 Fkt  avx2=   614 fma=     0 bmi1=    0 bmi2=    0 avx=   236 cpuid=2  Frameworks/python3__dot__14/lib-dynload/_blake2.cpython-314-darwin.so
+    4.2% von    857 Fkt  avx2=   511 fma=     0 bmi1=    0 bmi2=    0 avx=   404 cpuid=5  Frameworks/OCP/__dot__dylibs/libwebp.7.2.0.dylib
+    2.0% von    850 Fkt  avx2=     0 fma=     0 bmi1=    8 bmi2=  692 avx=     0 cpuid=26  Frameworks/OCP/__dot__dylibs/libzstd.1.5.7.dylib
+    0.5% von  13163 Fkt  avx2=  5630 fma=     0 bmi1=  172 bmi2= 1524 avx= 18439 cpuid=10  Frameworks/libcrypto.3.dylib
+    0.3% von  26688 Fkt  avx2=  3162 fma=     0 bmi1=    0 bmi2=    0 avx=  1225 cpuid=14  Frameworks/PySide6/Qt/lib/QtPdf.framework/Versions/A/QtPdf
+    0.2% von  21082 Fkt  avx2=  1007 fma=     0 bmi1=    0 bmi2=    0 avx=  1156 cpuid=0  Frameworks/PySide6/Qt/lib/QtGui.framework/Versions/A/QtGui
+    0.1% von  14950 Fkt  avx2=    53 fma=     0 bmi1=    0 bmi2=    4 avx=   137 cpuid=8  Frameworks/PySide6/Qt/lib/QtCore.framework/Versions/A/QtCore
+
+== Große Bibliotheken (>1 MB) im Überblick ==
+   137.5 MB  insn=27,501,878 skip=  1317  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/OCP.cpython-314-darwin.so
+    30.4 MB  insn=    8,978 skip=    95  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  MacOS/Solidon3D
+     9.5 MB  insn=1,914,282 skip= 15827  avx512=     0 avx2=  1007 fma=     0 bmi2=    0 v3-Fkt= 0.2%  cpuid=0  Frameworks/PySide6/Qt/lib/QtGui.framework/Versions/A/QtGui
+     9.1 MB  insn=1,458,944 skip= 10246  avx512=     0 avx2=  3162 fma=     0 bmi2=    0 v3-Fkt= 0.3%  cpuid=14  Frameworks/PySide6/Qt/lib/QtPdf.framework/Versions/A/QtPdf
+     9.0 MB  insn=1,093,028 skip=  7057  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKDESTEP.8.0.1.dylib
+     8.9 MB  insn=1,137,348 skip=    96  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PySide6/QtWidgets.abi3.so
+     7.5 MB  insn=1,089,310 skip= 11969  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/Python.framework/Versions/3.14/Python
+     7.4 MB  insn=1,329,818 skip=207344  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=6  Frameworks/wgpu/resources/libwgpu_native-release.dylib
+     6.9 MB  insn=1,400,980 skip=  6326  avx512= 77566 avx2= 31723 fma=     0 bmi2= 1594 v3-Fkt= 8.9%  cpuid=5  Frameworks/numpy/_core/_multiarray_umath.cpython-314-darwin.so
+     6.7 MB  insn=1,158,859 skip= 17119  avx512=    10 avx2=    53 fma=     0 bmi2=    4 v3-Fkt= 0.1%  cpuid=8  Frameworks/PySide6/Qt/lib/QtCore.framework/Versions/A/QtCore
+     6.7 MB  insn=1,172,941 skip= 13570  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PySide6/Qt/lib/QtWidgets.framework/Versions/A/QtWidgets
+     6.7 MB  insn=  872,802 skip=   348  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PySide6/QtGui.abi3.so
+     6.7 MB  insn=1,043,418 skip=  8813  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PySide6/Qt/lib/QtQuick.framework/Versions/A/QtQuick
+     6.3 MB  insn=  740,801 skip=   769  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKGeomBase.8.0.1.dylib
+     6.2 MB  insn=  942,034 skip=  1334  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKGeomAlgo.8.0.1.dylib
+     6.1 MB  insn=  800,897 skip=  1300  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PySide6/QtCore.abi3.so
+     5.8 MB  insn=  894,518 skip=  7310  avx512= 95230 avx2=  5630 fma=     0 bmi2= 1524 v3-Fkt= 0.5%  cpuid=10  Frameworks/libcrypto.3.dylib
+     5.8 MB  insn=  951,062 skip=  1549  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/scipy/optimize/_highspy/_core.cpython-314-darwin.so
+     5.3 MB  insn=1,057,909 skip=  6570  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PySide6/Qt/lib/QtQml.framework/Versions/A/QtQml
+     4.8 MB  insn=1,072,028 skip=  2584  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/scipy/sparse/_sparsetools.cpython-314-darwin.so
+     4.7 MB  insn=  864,418 skip=  7675  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/uharfbuzz/_harfbuzz.abi3.so
+     4.7 MB  insn=  813,607 skip=  1175  avx512= 36084 avx2= 57509 fma=     0 bmi2=  437 v3-Fkt=29.1%  cpuid=19  Frameworks/PIL/__dot__dylibs/libavif.16.4.2.dylib
+     4.6 MB  insn=  682,895 skip=   363  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKBool.8.0.1.dylib
+     4.2 MB  insn=  543,194 skip=  4506  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKDEIGES.8.0.1.dylib
+     3.5 MB  insn=  468,157 skip=   377  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKV3d.8.0.1.dylib
+     3.5 MB  insn=  499,577 skip=   535  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKTopAlgo.8.0.1.dylib
+     3.3 MB  insn=  487,096 skip=  2263  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/shapely/__dot__dylibs/libgeos.3.14.1.dylib
+     3.1 MB  insn=  469,936 skip=   634  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKShHealing.8.0.1.dylib
+     3.1 MB  insn=  436,665 skip=   258  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKFillet.8.0.1.dylib
+     2.9 MB  insn=  483,088 skip=  1301  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=1  Frameworks/manifold3d.cpython-314-darwin.so
+     2.9 MB  insn=  406,623 skip=  1384  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKBRep.8.0.1.dylib
+     2.8 MB  insn=  384,984 skip=   463  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKBO.8.0.1.dylib
+     2.6 MB  insn=  392,418 skip=    51  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKOffset.8.0.1.dylib
+     2.5 MB  insn=  317,988 skip=   382  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKMath.8.0.1.dylib
+     2.3 MB  insn=  439,824 skip=  3670  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/skimage/filters/rank/generic_cy.cpython-314-darwin.so
+     2.2 MB  insn=  193,254 skip=     0  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/scipy/linalg/_flapack.cpython-314-darwin.so
+     2.1 MB  insn=  265,274 skip=   845  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKXSBase.8.0.1.dylib
+     2.0 MB  insn=  363,545 skip=  1798  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/scipy/special/cython_special.cpython-314-darwin.so
+     2.0 MB  insn=  161,203 skip=   793  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKernel.8.0.1.dylib
+     2.0 MB  insn=  291,893 skip=   121  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/scipy/fft/_duccfft/pyduccfft.cpython-314-darwin.so
+     2.0 MB  insn=  370,588 skip=  5243  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/freetype/libfreetype.dylib
+     1.9 MB  insn=  235,674 skip=   583  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKG3d.8.0.1.dylib
+     1.8 MB  insn=  225,962 skip=    43  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PySide6/QtNetwork.abi3.so
+     1.8 MB  insn=  266,628 skip=   192  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/scipy/special/_ufuncs_cxx.cpython-314-darwin.so
+     1.8 MB  insn=  311,323 skip=  2630  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PySide6/Qt/lib/QtNetwork.framework/Versions/A/QtNetwork
+     1.7 MB  insn=  196,824 skip=  1740  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PIL/__dot__dylibs/libharfbuzz.0.dylib
+     1.6 MB  insn=  178,409 skip=  1146  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKOpenGl.8.0.1.dylib
+     1.4 MB  insn=  184,615 skip=   930  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKHLR.8.0.1.dylib
+     1.4 MB  insn=  201,630 skip=    68  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKFeat.8.0.1.dylib
+     1.3 MB  insn=  195,235 skip=   726  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/scipy/special/_special_ufuncs.cpython-314-darwin.so
+     1.3 MB  insn=  140,410 skip=   393  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKService.8.0.1.dylib
+     1.3 MB  insn=   85,418 skip=    54  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKStd.8.0.1.dylib
+     1.3 MB  insn=  168,617 skip=  4056  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libraw.25.dylib
+     1.2 MB  insn=  167,680 skip=   262  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=4  Frameworks/OCP/__dot__dylibs/libOpenEXR.33.3.4.15.dylib
+     1.2 MB  insn=  151,664 skip=   971  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libc++.1.0.dylib
+     1.2 MB  insn=  141,872 skip=    74  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKMesh.8.0.1.dylib
+     1.1 MB  insn=  200,707 skip=  3081  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PySide6/Qt/plugins/imageformats/libqtiff.dylib
+     1.1 MB  insn=  182,240 skip=  7673  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/libssl.3.dylib
+     1.0 MB  insn=  223,421 skip=  2303  avx512=     0 avx2=     0 fma=     0 bmi2=  692 v3-Fkt= 2.0%  cpuid=26  Frameworks/OCP/__dot__dylibs/libzstd.1.5.7.dylib
+     1.0 MB  insn=  187,671 skip=   751  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PySide6/Qt/lib/QtQmlModels.framework/Versions/A/QtQmlModels
+     1.0 MB  insn=  193,051 skip=   810  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/PIL/__dot__dylibs/libfreetype.6.dylib
+     1.0 MB  insn=  119,938 skip=    43  avx512=     0 avx2=     0 fma=     0 bmi2=    0 v3-Fkt= 0.0%  cpuid=0  Frameworks/OCP/__dot__dylibs/libTKXCAF.8.0.1.dylib

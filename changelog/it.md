@@ -19,6 +19,11 @@ scrive in `website/version.json`.
 
 ### Uso e sistema
 
+- Su Mac, Solidon ora può caricare il driver di 3Dconnexion (3DxWare) per il mouse 3D. Dalla versione 0.4.1 alla 0.6.0 macOS non lo consentiva.
+- Su Mac, il pacchetto di installazione mette ora Solidon sempre in *Applicazioni*. Se Solidon non era lì, finora il pacchetto aggiornava una copia in un altro posto.
+- Dopo l'aggiornamento su Mac, avvia Solidon da *Applicazioni*. Elimina le vecchie copie dell'app fuori da questa cartella e ricrea il collegamento nel Dock se necessario.
+- Su Linux, l'AppImage ora si avvia anche su Ubuntu 22.04, Linux Mint 21 e Debian 12. Con la versione 0.6.0 lì funzionava solo il Flatpak.
+- Su Linux, Solidon ora legge il mouse 3D attraverso l'accesso che concede la regola udev del manuale, anche nel Flatpak. Fino alla versione 0.6.0 la regola non bastava.
 - La ricerca trova *Unisci*, *Sottrai* e *Intersezione* anche come «booleano», e *Sottrai* anche come «differenza».
 - Con un corpo selezionato e un secondo nella scena, la linguetta *Selezione* dice come aggiungere il secondo per *Unisci*, *Sottrai* e *Intersezione*.
 - Il campo di ricerca della linguetta *Selezione* ora c'è sempre, anche senza selezione, e trova ogni funzione e ogni comando con la sua scorciatoia.
