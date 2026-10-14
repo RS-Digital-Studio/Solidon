@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import gc
 import importlib
+import os
 import sys
 import textwrap
 import weakref
@@ -152,16 +153,20 @@ def test_a_module_not_loaded_yet_has_nothing_to_pin(
 
 
 def test_tests_conftest_is_the_conftest_pytest_loaded(suite: ModuleType) -> None:
-    """``from tests.conftest import …`` (``test_packaging.py``) führte die Datei ein
-    zweites Mal aus: zweiter Import-Haken vorn in ``sys.meta_path``, dessen Pinliste
-    kein Abbau leert, und die Profilvariablen auf einem neuen Ordner."""
+    """``from tests.conftest import …`` (``test_packaging.py``, ``test_toolchain.py``)
+    führte die Datei ein zweites Mal aus: zweiter Import-Haken vorn in
+    ``sys.meta_path``, dessen Pinliste kein Abbau leert, und die Profilvariablen auf
+    einem neuen Ordner. Die erste Zusicherung steht vorn, damit ein Rückfall hier
+    keine zweite Ausführung auslöst."""
+    from app.core.paths import PROFILE_VARIABLES
+
     assert sys.modules.get("tests.conftest") is suite
-    hooks = [hook for hook in sys.meta_path if type(hook).__name__ == "_PinOnImport"]
-    assert len(hooks) == 1, hooks
+    hooks = list(sys.meta_path)
+    profile = {variable: os.environ.get(variable) for variable in PROFILE_VARIABLES}
 
     from tests.conftest import REQUIRE_SLICERS
 
     assert REQUIRE_SLICERS == suite.REQUIRE_SLICERS
     assert importlib.import_module("tests.conftest") is suite
-    hooks = [hook for hook in sys.meta_path if type(hook).__name__ == "_PinOnImport"]
-    assert len(hooks) == 1, hooks
+    assert sys.meta_path == hooks, "die conftest lief ein zweites Mal"
+    assert {variable: os.environ.get(variable) for variable in PROFILE_VARIABLES} == profile
