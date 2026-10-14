@@ -945,7 +945,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: _text_of entfernt jedes & vor der HTML-Normalisierung durch QTextDocument. Dadurch verliert &nbsp; seinen Entity-Anfang; auch Qt-Mnemonics und escaped && werden undifferenziert behandelt.
 - Vorschlag: Vorhandenen Textweg trägergerecht normalisieren; RichText unbeschädigt parsen, Mnemonic-Marker nur bei geeigneten Trägern entfernen und literale Ampersands erhalten. Echte Label-/Knopfgegenfälle und weiterhin roter P9-Kontrollfall bei zu geringer Breite.
 - Wirkung beim Kunden: Die Abnahme kann eine vollständig sichtbare Beschriftung fälschlich als abgeschnitten einstufen. Der Text der Anwendung selbst ist in diesem Beispiel korrekt.
-- Stand: offen RM-737; auf dem eigenen Autorenworktree in tools/function_capture.py und tests/test_function_bench_window.py umgesetzt. Tatsächliches Originalrot mit 14 Fehlern und zwei Kontrollen, danach dieselben 16 Fälle grün; 19 Textanschlussfälle sowie sechs weitere bestehende Aufnahme-/Schriftanschlüsse grün. Der Normalizer berücksichtigt Textformat und tatsächlichen Träger; HTML wird vor Mnemonics verarbeitet, Label ohne Buddy bleibt ohne Mnemonic-Auswertung, abschließender Marker und Marker vor Zeilenwechsel sind nach Qt-Vertrag gehalten. Ruff, Format und reguläres mypy über 388 Dateien grün; enger unabhängiger Endreview ohne offenen Fund. Aktuelle Pins capture2b2689d9f515cdff7bd24e978c62cd436eb5e033ce012cf6a54ba13339d302da und Test64b687eecab90371448386cf850140066ff465dfe16775fc7d74fb67b88953a8. Die automatisch ausgewählte Prüfung über 109 Dateien endete mit 11.320 bestandenen, 56 übersprungenen, 1.984 abgewählten und drei fehlgeschlagenen Fällen, regulär Exit 1. Diese drei unverändert bereits auf Root vorhandenen Vertragsfehler sind separat FD79–81 zugeordnet; keine FD76-Regression behauptet. Alle eigenen Prozesse beendet. Lieferung bis zur Korrektur dieser Ursachen angehalten, kein zweiter breiter Wiederholungslauf. Normaler Commit/Push, Integration und endgültiges Tor offen. Originalbilder und Protokolle bleiben unverändert.
+- Stand: behoben `f4c9bd26c`; Originalrot 14 Fälle, am Fix 16 grün; Text-/Aufnahmeanschlüsse grün; in welle4 `7eebc67dd`.
 
 ### FD-77 Navigationsabschluss akzeptiert ein halb abgeschnittenes Eingabefeld
 
@@ -957,7 +957,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: guide_targets._scroll_needed prüft ausschließlich die Mitte gegen alle Scrollsichtflächen. Walk bestätigt den stabilen Mittelpunkt und Treffer; der nachfolgende Stillstand prüft keine Vollsicht. So wird die teilweise abgeschnittene Fläche regulär aufgenommen.
 - Vorschlag: Passend große Felder im vorhandenen gemeinsamen Navigationsweg bis zu ihren vertikalen Kanten freilegen, innere und äußere Scrollbereiche berücksichtigen. Vollsichtkontrolle mit halb abgeschnittenem Original, oberem Rand, verschachtelten Bereichen, vollständig sichtbarem Feld, übergroßem Container und Scrollanschlag. Keine privaten Scrollbaränderungen im Kundenweg oder verlängerten Fristen.
 - Wirkung beim Kunden: Eine technisch erreichbare Feldmitte wird als brauchbare Endansicht behandelt. Eine unbedienbare Produktliste ist damit nicht belegt; kein erneuter FD75-Statusbeschnitt.
-- Stand: offen RM-737; kausales Originalrot auf 2ec37 gesichert: sieben fachliche Fehler, zwei grün, 20 abgewählt, regulär Exit 1. Enger Anschluss in fünf vorhandenen Pfaden: guide_targets.Click mit wheel_angle und normaler Vorgabe, Durchleitung über function_walk.QtPorts.press, bestehendes FakePorts, echte Radgegenfälle in test_function_wheel_dispatch.py sowie der vorhandene Außencliptest in test_guide_targets.py. Der tatsächliche geeignete Scrollbereich erhält öffentliche QTest.wheelEvent-Ereignisse mit begrenztem Restschritt; kein privates Setzen der Scrollposition im geprüften Weg, keine verlängerten Fristen und kein zweiter Vollsichtprüfer. Der letzte kausale H80/H100-Verschachtelungsfall war am Zwischenstand rot; nach Korrektur wird der benötigte innere Viewportstreifen zuerst außen sichtbar und das innen verborgene Feld anschließend vollständig herangerollt. Danach 22 betroffene Navigatorfälle grün, Ruff/Format/reguläres mypy über 388 Quellen erneut grün. Vorherige unveränderte Gegenfälle und rote Zwischenläufe bleiben separat erhalten. Enger unabhängiger Abschluss: RF77-M1 geschlossen, keine weitere Beanstandung; fünf Endpins vor/nach gleich. Restmanifest 527963e4f386aec592cc7dd32d8cbd387c94a4f35cae89ffbacd387bf5b93f40, Patch 3fb1c89ebe8c72fadd0d9fd9f1f2c0f0893a6490ed068b870fbbe825161fe867. Automatisch ausgewählte 198 reguläre Testdateien, Lieferung, Integration und gezielte native EN-Nachheraufnahme bleiben offen. Alte Bilder werden nicht nachträglich ersetzt.
+- Stand: behoben `46c628ef9`; gegen die alten Module 20 rot (16 fachlich, 4 Vertrag), gezielt 92/92 grün; betroffene Auswahl 14 783 grün, Exit 0; in welle4 `64e389936`. Native EN-Nachheraufnahme von Fall 032 offen RM-737.
 
 ### FD-78 Fachfelder in Druckvorbereitungswegen haben unvollständige Hilfen
 
@@ -981,7 +981,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Die Geste installiert einen eigenen Anwendungsfilter, obwohl app.ui.app_events einen gemeinsamen, nach Ereignisarten gefilterten Verteiler bereitstellt.
 - Vorschlag: Nur während der Geste die benötigten Ereignisarten über listen anmelden und über forget abmelden. Lokale Kartenfilter, QWidget-Schranke aus FD71, einmalige Verarbeitung und vollständigen Abbau erhalten.
 - Wirkung beim Kunden: Zusätzliche globale Zustellung umgeht den bestehenden Architekturvertrag. Eine konkrete Verlangsamung wurde in diesem Lauf nicht gemessen; keine neue Leistungszahl behauptet.
-- Stand: offen RM-737; Ursache gelesen, externer Entwurf beauftragt. Noch keine Korrektur oder Nachherprüfung. Vor dem endgültigen D0-Tor zu schließen.
+- Stand: behoben `8f4e89fd0`; Wächter am alten Stand rot, am Fix grün; 16 neue Verhaltensfälle gegen die Originalklasse rot, am Fix grün; in welle4 `7eebc67dd`.
 
 ### FD-80 Maßkartenzug sichert seinen globalen Mauszeiger nicht gegen jeden Ausgang
 
@@ -993,7 +993,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: Ein asynchroner Zug verändert den globalen Cursorstapel und nimmt ihn nur über den gewöhnlichen _finish-Weg zurück. Der Ausnahmeweg nach dem Setzen ist nicht abgesichert; eine fremde spätere Stapelposition hat keine eigene Zuordnung.
 - Vorschlag: Das vorhandene Pattern für widgetgebundene asynchrone Cursor verwenden, falls der echte gehaltene Zug außerhalb der Karte dadurch vollständig erhalten bleibt. Vorherigen eigenen oder geerbten Zustand wiederherstellen; fremde globale Overrides, Release, Escape, Fokusverlust, Reset und Lebensdauerenden gegenprüfen. Fehlerwege müssen tatsächlich aufräumen.
 - Wirkung beim Kunden: Der Cursorzustand ist nicht für jeden Ausgang abgesichert. Ein konkret beim Kunden stehengebliebener Cursor wurde hier nicht beobachtet; der statische Regelverstoß ist bestätigt.
-- Stand: offen RM-737; gemeinsamer Besitzer mit FD79, damit die Ereignis- und Cursorlebensdauer zusammen geprüft werden. Noch keine Korrektur oder Nachherprüfung. Der bisherige native Sechssprachennachweis ersetzt den Anschluss der geänderten Umsetzung nicht.
+- Stand: behoben `8f4e89fd0`; Zeiger am Druckempfänger statt Override, Rückgabe auf jedem Ausgang (Escape, Hide, Fokus-/Fensterverlust, Reset, Empfängertod, Ausnahme) gegen die Originalklasse rot, am Fix grün; in welle4 `7eebc67dd`.
 
 ### FD-81 Maßkartenprüfungen importieren private Helfer aus anderen Testmodulen
 
@@ -1005,7 +1005,7 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Ursache: _begin, _drop, _heading, _rounds und _layout dienen mehreren Tests, liegen aber bei einzelnen Testverbrauchern statt im vorhandenen gemeinsamen tests/ui_helpers.py.
 - Vorschlag: Diese Helfer samt benötigtem internem Maushelfer einmalig in das bestehende Hilfsmodul verschieben und alle Verbraucher auf sprechende öffentliche Namen umstellen. Keine Duplikate, kein neues Modul und keine Abschwächung des Wächters.
 - Wirkung beim Kunden: Kein unmittelbarer sichtbarer Produktfehler belegt; die Prüfstruktur koppelt Testmodule über private Implementierung und verletzt ihren bestehenden Vertrag.
-- Stand: offen RM-737; im selben begrenzten Sechs-Dateien-Anschluss wie FD79/80 zu beheben. Wegen des roten Entwicklungslaufs wird der leichte Fund vor D0 geschlossen.
+- Stand: behoben `8f4e89fd0`; Wächter der privaten Querimporte am alten Stand rot, am Fix grün; in welle4 `7eebc67dd`.
 
 ### FD-82 Testdoubles der Flächenplatzierung kennen den Maßkartenzug nicht
 
