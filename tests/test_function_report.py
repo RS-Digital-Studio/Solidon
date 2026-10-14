@@ -1504,6 +1504,37 @@ def test_an_open_finding_keeps_a_fulfilled_point_open() -> None:
     assert "| offen RM-800 |" in line
 
 
+def test_a_fixed_older_finding_does_not_hide_an_open_younger_one() -> None:
+    """Zwei Funde an einer Zelle: Der offene hält sie offen, nicht der ältere behobene (FD-85)."""
+    text = "\n".join(
+        (
+            _finding(number=1, subject="1", stand="behoben `a280ee8f5`"),
+            _finding(number=2, title="Pfeile zu nah", subject="1", stand="offen RM-800"),
+        )
+    )
+    findings, problems = parse_findings(text)
+    assert problems == []
+    known = {f.key: f for f in findings}
+    assert function_report._finding_for("drill_hole", 1, known) == known["FD-2"]
+    case = _judged()
+    cases = {case.row_id: case}
+    checked = check_verdicts(_b_verdicts(), outcomes=cases)
+    values = package_values(cases, checked.accepted, common_goals={}, solutions=SOLUTIONS)
+    checklist = render_checklist(
+        "D4",
+        rows=ROWS[:1],
+        cases=cases,
+        verdicts=checked,
+        findings=known,
+        values=values,
+        commit="a280ee8f5",
+        date="2026-10-12",
+        out="F:/tmp-suche/lauf",
+    )
+    line = next(line for line in checklist.splitlines() if line.startswith("| drill_hole"))
+    assert "| offen RM-800 |" in line
+
+
 def test_evidence_names_the_file_of_the_case() -> None:
     """Belege zeigen auf die Datei des Falls, auch bei Sprachfällen (L19)."""
     case = judge_case(sample_protocol(), sample_context(), source="2/surfaces/drill_hole.json")

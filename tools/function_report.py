@@ -850,13 +850,20 @@ class Cell:
 
 
 def _finding_for(row: str, subject: int | str, findings: Mapping[str, Finding]) -> Finding | None:
-    for finding in sorted(findings.values(), key=lambda f: f.number):
-        if (
-            finding.fields.get("Funktion", "").strip().strip("`") == row
-            and subject in finding.subjects
-        ):
-            return finding
-    return None
+    """Der Fund einer Zelle; ein offener geht jedem behobenen vor (FD-85).
+
+    Tragen mehrere Funde dieselbe Zeile und denselben Punkt, hält der offene
+    die Zelle offen — ein älterer behobener darf ihn nicht verdecken.
+    """
+    matching = [
+        finding
+        for finding in sorted(findings.values(), key=lambda f: f.number)
+        if finding.fields.get("Funktion", "").strip().strip("`") == row
+        and subject in finding.subjects
+    ]
+    return next((f for f in matching if f.stand.startswith("offen")), None) or next(
+        iter(matching), None
+    )
 
 
 def _cell(
