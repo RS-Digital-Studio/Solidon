@@ -1157,6 +1157,107 @@ def test_a_scroll_click_covers_its_scroll_area_and_not_a_list_over_it(qt_app: An
         settle()
 
 
+@pytest.mark.parametrize(
+    "kind, text, expected",
+    [
+        ("plain", "A & B <b>wörtlich</b> &nbsp;", "A & B <b>wörtlich</b> &nbsp;"),
+        ("auto", "A & B", "A & B"),
+        ("auto", "<b>A&nbsp;&amp;&nbsp;B</b>", "A & B"),
+        ("rich", "&nbsp;A&amp;B&nbsp;", " A&B "),
+        ("rich", "&lt;b&gt;X&lt;/b&gt; &#43; &#x2212;", "<b>X</b> + −"),
+        ("button", "&Datei && Ablage", "Datei & Ablage"),
+        ("button", "<b>&Datei</b>", "<b>Datei</b>"),
+        ("button", "A&", "A"),
+        ("button", "A&&&", "A&"),
+        ("buddy", "A&\nB", "A\nB"),
+        ("group", "&Datei && Ablage", "Datei & Ablage"),
+        ("buddy", "&Datei && Ablage", "Datei & Ablage"),
+        ("rich_buddy", "<b>&amp;Datei &amp;&amp; Ablage</b>", "Datei & Ablage"),
+        ("tab", "&Datei && Ablage", "Datei & Ablage"),
+    ],
+)
+def test_text_capture_respects_entities_formats_and_mnemonic_carriers(
+    qt_app: Any, kind: str, text: str, expected: str
+) -> None:
+    """FD76: Sichtbarer Text statt HTML-Reste oder pauschal entfernter Ampersands."""
+    from PySide6.QtCore import QCoreApplication, QEvent, Qt
+    from PySide6.QtWidgets import QGroupBox, QLabel, QLineEdit, QPushButton, QTabBar, QWidget
+
+    root = QWidget()
+    root.resize(900, 200)
+    if kind == "button":
+        carrier = QPushButton(text, root)
+    elif kind == "group":
+        carrier = QGroupBox(text, root)
+    elif kind == "tab":
+        carrier = QTabBar(root)
+        carrier.addTab(text)
+    else:
+        carrier = QLabel(text, root)
+        if kind == "plain":
+            carrier.setTextFormat(Qt.TextFormat.PlainText)
+        elif kind in ("rich", "rich_buddy"):
+            carrier.setTextFormat(Qt.TextFormat.RichText)
+        if kind in ("buddy", "rich_buddy"):
+            carrier.setBuddy(QLineEdit(root))
+    carrier.setGeometry(20, 60, 850, 60)
+    try:
+        root.show()
+        qt_app.processEvents()
+        entries = capture.text_entries(root)
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry["text"] == expected
+        assert not entry["cut"], entry
+        # Ein HTML-ähnlicher Plaintext darf auch am gemeinsamen Namensweg nicht verschwinden.
+        if kind != "tab":
+            assert capture.name_of(carrier) == expected
+    finally:
+        root.close()
+        root.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+@pytest.mark.parametrize("narrow", [False, True], ids=["passt", "wirklich_zu_schmal"])
+def test_real_preview_legend_keeps_its_visible_text_and_the_public_p9_guard(
+    qt_app: Any, narrow: bool
+) -> None:
+    """FD76: Echte Vorschaulegende ohne falschen P9-Fund; echter Platzmangel bleibt rot."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QWidget
+
+    from app.i18n import tr
+    from app.ui.viewport import PreviewBanner
+    from tools.function_points import judge_case
+    from tools.function_samples import sample_context, sample_protocol
+
+    root = QWidget()
+    root.resize(1920, 1080)
+    banner = PreviewBanner(root)
+    try:
+        root.show()
+        banner.show_preview("Vorschau", "blue_orange", "Vorher")
+        qt_app.processEvents()
+        expected = f" + {tr('Hinzugefügt')}    - {tr('Entfernt')} "
+        assert "&nbsp;" in banner.legend.text(), "Der echte Träger muss Entities enthalten"
+        if narrow:
+            banner.legend.setFixedWidth(1)
+            qt_app.processEvents()
+        entries = capture.text_entries(banner)
+        legend = next(entry for entry in entries if tr("Hinzugefügt") in entry["text"])
+        assert legend["text"] == expected
+        assert legend["cut"] is narrow, legend
+        protocol = sample_protocol()
+        protocol["texts"] = [legend]
+        outcome = judge_case(protocol, sample_context()).points[9]
+        assert (outcome.verdict == "fund") is narrow, outcome
+        assert bool(outcome.issues) is narrow
+    finally:
+        root.close()
+        root.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 def test_text_needs_count_box_symbol_padding_rich_text_and_list_cells(qt_app: Any) -> None:
     """Review M12 und L3 an echten Widgets.
 

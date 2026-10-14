@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -481,12 +482,23 @@ def _visible(widget: Any) -> bool:
 
 
 def _text_of(widget: Any) -> str:
-    from PySide6.QtWidgets import QGroupBox
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QAbstractButton, QGroupBox, QLabel
 
-    if isinstance(widget, QGroupBox):
-        return str(widget.title())
-    text = widget.text() if callable(getattr(widget, "text", None)) else ""
-    return str(text or "").replace("&", "")
+    text = (
+        widget.title()
+        if isinstance(widget, QGroupBox)
+        else widget.text()
+        if callable(getattr(widget, "text", None))
+        else ""
+    )
+    label = isinstance(widget, QLabel)
+    return _plain(
+        str(text or ""),
+        text_format=widget.textFormat() if label else Qt.TextFormat.PlainText,
+        mnemonic=isinstance(widget, (QAbstractButton, QGroupBox))
+        or (label and widget.buddy() is not None),
+    )
 
 
 def _top(widget: Any, root: Any) -> int:
@@ -531,6 +543,7 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
     ersten Feld (E5). Reiter einer Leiste stehen mit ihrem eigenen Rechteck da,
     Zeilen sichtbarer Listen und Bäume mit ihrer Zelle (:func:`_item_texts`).
     """
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QAbstractButton, QGroupBox, QLabel, QTabBar
 
     fields = [field for field in _input_widgets(root) if _visible(field)]
@@ -540,7 +553,7 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
     for widget in carriers + root.findChildren(QGroupBox):
         if not _visible(widget):
             continue
-        text = _plain(_text_of(widget))
+        text = _text_of(widget)
         if not text.strip():
             continue
         metrics = widget.fontMetrics()
@@ -576,7 +589,7 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
             if not bar.isTabVisible(index):
                 # Ein verborgener Reiter hat kein Rechteck — nicht abgeschnitten (F-14).
                 continue
-            text = bar.tabText(index).replace("&", "")
+            text = _plain(bar.tabText(index), text_format=Qt.TextFormat.PlainText, mnemonic=True)
             width = bar.tabRect(index).width()
             need = metrics.horizontalAdvance(text)
             found.append(
@@ -597,15 +610,19 @@ def text_entries(root: Any) -> list[dict[str, Any]]:
 MOST_ITEM_TEXTS: Final = 200
 
 
-def _plain(text: str) -> str:
-    """Der sichtbare Text eines Trägers — Rich Text ohne seine Auszeichnung (Review M12)."""
+def _plain(text: str, *, text_format: Any = None, mnemonic: bool = False) -> str:
+    """Sichtbarer Trägertext: erst Qt-Auszeichnung, danach seine Tastaturmarkierung."""
     from PySide6.QtGui import Qt, QTextDocument
 
-    if not Qt.mightBeRichText(text):
-        return text
-    document = QTextDocument()
-    document.setHtml(text)
-    return str(document.toPlainText())
+    rich = text_format == Qt.TextFormat.RichText or (
+        text_format in (None, Qt.TextFormat.AutoText) and Qt.mightBeRichText(text)
+    )
+    if rich:
+        document = QTextDocument()
+        document.setHtml(text)
+        text = str(document.toPlainText())
+    # Nur Träger mit Tastaturmarkierungen: && ist ein sichtbares Ampersand.
+    return re.sub(r"&(.?)", r"\1", text, flags=re.DOTALL) if mnemonic else text
 
 
 def _indicator_contents(button: Any) -> int | None:
