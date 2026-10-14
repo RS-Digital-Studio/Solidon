@@ -17,13 +17,17 @@ from app.ui.measure_card_drag import MeasureCardDrag
 from app.ui.panels import FIELD_PROPERTY
 from app.ui.style import NORMAL
 from tests.test_feature_front_contract import customer_theme as customer_theme
-from tests.test_measure_card_drag_ui import _begin, _drop
-from tests.test_measure_group_layout import _heading, _rounds
 from tests.test_measure_group_layout import language as language
 from tests.test_measure_group_layout import selected_hole as selected_hole
-from tests.test_placement_dimensions import _layout
+from tests.ui_helpers import (
+    begin_card_drag,
+    end_card_drag,
+    measure_more_heading,
+    placement_layout,
+    settle_measure_layout,
+    wait_until,
+)
 from tests.ui_helpers import session as session
-from tests.ui_helpers import wait_until
 from tests.ui_helpers import window as window
 
 
@@ -72,7 +76,7 @@ def _move_card(flow, destination):
     drag = flow._measure_box.findChild(MeasureCardDrag)
     assert drag is not None
     print("drag_before", _geometry(flow), "destination", destination.toTuple())
-    end = _begin(title, destination - flow._measure_box.pos())
+    end = begin_card_drag(title, destination - flow._measure_box.pos())
     print(
         "drag_before_release",
         _geometry(flow),
@@ -81,7 +85,7 @@ def _move_card(flow, destination):
         "moving",
         drag._moving.getRect() if drag._moving is not None else None,
     )
-    _drop(title, end)
+    end_card_drag(title, end)
     print(
         "drag_after_release",
         _geometry(flow),
@@ -157,7 +161,7 @@ def test_chosen_place_survives_fold_value_and_missing_surface(
     """Vollständige Sprachkarten: Titel, Klappe, Wert und beide Anordnungswege."""
     window, _object_id, _hole_ids = selected_hole
     flow = window._quiet_placement
-    _rounds(qt_app)
+    settle_measure_layout(qt_app)
     group = flow._measure_group
     title = _title(flow)
     diameter = next(
@@ -176,16 +180,16 @@ def test_chosen_place_survives_fold_value_and_missing_surface(
     before = flow._measure_box.pos()
     destination = QPoint(window.viewport.width() // 2, 90)
     _move_card(flow, destination)
-    _rounds(qt_app)
+    settle_measure_layout(qt_app)
     chosen = flow._measure_box.pos()
     print("geometry_after_drag", _geometry(flow))
     assert chosen != before
     assert (chosen - destination).manhattanLength() <= 1
     _assert_dimensions_clear(flow)
-    heading = _heading(flow)
+    heading = measure_more_heading(flow)
     for expanded in (True, False):
         QTest.mouseClick(heading, Qt.MouseButton.LeftButton)
-        _rounds(qt_app)
+        settle_measure_layout(qt_app)
         print(f"geometry_expanded_{expanded}", _geometry(flow))
         assert heading.isChecked() is expanded
         assert flow._measure_box.pos() == chosen
@@ -194,7 +198,7 @@ def test_chosen_place_survives_fold_value_and_missing_surface(
     old_value = diameter.value_mm()
     diameter.set_value_mm(old_value + 1.0)
     assert window.session.wait_for_idle(30_000)
-    _rounds(qt_app)
+    settle_measure_layout(qt_app)
     assert diameter.value_mm() == pytest.approx(old_value + 1.0)
     assert window._quiet_placement is flow and flow.active
     assert flow._measure_box.pos() == chosen
@@ -212,11 +216,11 @@ def test_cancel_and_new_order_reuse_the_card_without_old_place(selected_hole, qt
     """Abbrechen löst den alten Fluss; seine abgelegte Karte beginnt ohne Nutzerort."""
     window, object_id, hole_ids = selected_hole
     old = window._quiet_placement
-    _rounds(qt_app)
+    settle_measure_layout(qt_app)
     card = old._measure_box
     drag = _move_card(old, QPoint(window.viewport.width() // 2, 100))
     QTest.mouseClick(old._measure_cancel, Qt.MouseButton.LeftButton)
-    _rounds(qt_app)
+    settle_measure_layout(qt_app)
     assert not old.active and not old._links
     window.object_tree.select_feature(object_id, hole_ids[1])
     assert window.session.wait_for_idle(30_000)
@@ -224,7 +228,7 @@ def test_cancel_and_new_order_reuse_the_card_without_old_place(selected_hole, qt
         qt_app, lambda: window._quiet_placement is not None and window._quiet_placement.active
     )
     current = window._quiet_placement
-    _rounds(qt_app)
+    settle_measure_layout(qt_app)
     assert current is not old
     assert current._measure_box is card
     assert current._measure_box.findChild(MeasureCardDrag) is drag
@@ -237,24 +241,24 @@ def test_drag_boundary_and_growing_card_keep_the_saved_place(selected_hole, qt_a
     """Die Karte endet vor Seiten-/Bodenkarten und kehrt nach dem Zuklappen zurück."""
     window, _object_id, _hole_ids = selected_hole
     flow = window._quiet_placement
-    _rounds(qt_app)
+    settle_measure_layout(qt_app)
     print("boundary_before_settling", _geometry(flow))
     wait_until(qt_app, lambda: not window.overlay._moves and window.overlay._pending is None)
-    _rounds(qt_app)
+    settle_measure_layout(qt_app)
     drag = _move_card(flow, QPoint(10_000, 10_000))
     assert drag._place.edge == "bottom-right"
     place = drag._place
     wait_until(qt_app, lambda: not window.overlay._moves and window.overlay._pending is None)
-    _rounds(qt_app)
+    settle_measure_layout(qt_app)
     chosen = flow._measure_box.pos()
     chosen_room = QRect(drag._room)
     print("boundary_chosen", _geometry(flow))
     for expanded in (True, False):
-        QTest.mouseClick(_heading(flow), Qt.MouseButton.LeftButton)
+        QTest.mouseClick(measure_more_heading(flow), Qt.MouseButton.LeftButton)
         wait_until(qt_app, lambda: not window.overlay._moves and window.overlay._pending is None)
-        _rounds(qt_app)
+        settle_measure_layout(qt_app)
         print(f"boundary_expanded_{expanded}", _geometry(flow))
-        assert _heading(flow).isChecked() is expanded
+        assert measure_more_heading(flow).isChecked() is expanded
         rect = flow._measure_box.geometry()
         assert drag._place == place
         assert drag._room == chosen_room
@@ -276,7 +280,7 @@ def test_manually_placed_card_is_an_obstacle_also_in_the_emergency_path(
     qt_app, monkeypatch, crowded, destination
 ):
     """Normale und durch großen Griff verstellte Fläche lassen alle Zahlen erreichbar."""
-    flow, session, viewport, dialog = _layout(qt_app, (1920, 1080), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (1920, 1080), 1.0, "bottom")
     moving = None
     try:
         monkeypatch.setattr(dialog, "values_stand_elsewhere", True)
@@ -312,7 +316,7 @@ def test_manually_placed_card_is_an_obstacle_also_in_the_emergency_path(
             # Während des zweiten echten Zugs an die Oberkante liegt die freie
             # Zeile unter der Karte. Erst Loslassen rastet die sehr hohe Karte
             # wieder unten ein; auch unterwegs dürfen keine Felder verschwinden.
-            moving = _begin(_title(flow), QPoint(12, 12) - flow._measure_box.pos())
+            moving = begin_card_drag(_title(flow), QPoint(12, 12) - flow._measure_box.pos())
         chosen = flow._measure_box.pos()
         with _layout_trace() as calls:
             flow.redraw()
@@ -329,7 +333,7 @@ def test_manually_placed_card_is_an_obstacle_also_in_the_emergency_path(
             _assert_dimensions_clear(flow)
     finally:
         if moving is not None:
-            _drop(_title(flow), moving)
+            end_card_drag(_title(flow), moving)
         flow.dispose()
         session.release()
         dialog.close()

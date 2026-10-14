@@ -1,8 +1,10 @@
 """Die gewählte Maßkartenlage bleibt erhalten; die Felder behalten ihre Bedienung."""
 
+import sys
+
 import pytest
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPoint, QPointF, QRect, Qt
-from PySide6.QtGui import QFocusEvent, QMouseEvent
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPoint, QRect, Qt
+from PySide6.QtGui import QCursor, QFocusEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QApplication,
@@ -25,9 +27,12 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import delete, isValid
 
+from app.ui import app_events
+from app.ui.cursors import cursor
 from app.ui.measure_card_drag import MeasureCardDrag
 from app.ui.theme import apply_theme, current_theme
 from tests import qt_roots
+from tests.ui_helpers import begin_card_drag, end_card_drag, send_mouse_event
 
 roots = qt_roots.roots
 
@@ -47,7 +52,9 @@ class _DeathWatch(QObject):
             QEvent.Type.DeferredDelete,
         ):
             self.events.append(event.type())
-            self.active_at_notice[event.type()] = QApplication.overrideCursor() is not None
+            self.active_at_notice[event.type()] = self.card.findChild(
+                QLabel, "title"
+            ).testAttribute(Qt.WidgetAttribute.WA_SetCursor)
         return False
 
     def record_move(self, *args):
@@ -103,40 +110,6 @@ def card(qt_app, roots):
     apply_theme(qt_app, before)
 
 
-def _mouse(
-    widget, kind, global_pos, *, button=Qt.MouseButton.NoButton, buttons=Qt.MouseButton.LeftButton
-):
-    """Ein Qt-Mausereignis mit unverändertem Bildschirmbezug trotz Kartenbewegung."""
-    event = QMouseEvent(
-        kind,
-        QPointF(widget.mapFromGlobal(global_pos)),
-        QPointF(global_pos),
-        button,
-        buttons,
-        Qt.KeyboardModifier.NoModifier,
-    )
-    QCoreApplication.sendEvent(widget, event)
-
-
-def _begin(widget, delta=None):
-    if delta is None:
-        delta = QPoint(-210, 170)
-    start = widget.mapToGlobal(widget.rect().center())
-    _mouse(widget, QEvent.Type.MouseButtonPress, start, button=Qt.MouseButton.LeftButton)
-    _mouse(widget, QEvent.Type.MouseMove, start + delta)
-    return start + delta
-
-
-def _drop(widget, end):
-    _mouse(
-        widget,
-        QEvent.Type.MouseButtonRelease,
-        end,
-        button=Qt.MouseButton.LeftButton,
-        buttons=Qt.MouseButton.NoButton,
-    )
-
-
 @pytest.mark.parametrize("surface", ["title", "blank", "scroll_blank", "scroll_title"])
 def test_title_and_free_surfaces_move_the_card(qt_app, card, surface):
     box, title, drag, room = card
@@ -159,8 +132,8 @@ def test_title_and_free_surfaces_move_the_card(qt_app, card, surface):
             target.show()
     drag.update_room(room)
     before = box.pos()
-    end = _begin(target)
-    _drop(target, end)
+    end = begin_card_drag(target)
+    end_card_drag(target, end)
     assert box.pos() != before
     assert drag.placed_rect() == box.geometry()
     assert room.contains(box.geometry())
@@ -170,8 +143,8 @@ def test_title_and_free_surfaces_move_the_card(qt_app, card, surface):
 def test_click_below_drag_threshold_does_not_choose_a_place(qt_app, card):
     box, title, drag, _ = card
     before = box.geometry()
-    end = _begin(title, QPoint(1, 1))
-    _drop(title, end)
+    end = begin_card_drag(title, QPoint(1, 1))
+    end_card_drag(title, end)
     assert drag.placed_rect() is None
     assert box.geometry() == before
     assert qt_app.overrideCursor() is None
@@ -205,8 +178,8 @@ def test_controls_and_their_children_do_not_drag(qt_app, card, factory):
     target = control
     if isinstance(control, (QSpinBox, QDoubleSpinBox)):
         target = control.lineEdit()
-    end = _begin(target)
-    _drop(target, end)
+    end = begin_card_drag(target)
+    end_card_drag(target, end)
     assert drag.placed_rect() is None
     assert box.geometry() == before
     assert qt_app.overrideCursor() is None
@@ -222,8 +195,8 @@ def test_labels_with_own_actions_do_not_drag(qt_app, card, kind):
     else:
         title.setText('<a href="https://example.invalid">Hilfe</a>')
     drag.update_room(room)
-    end = _begin(title)
-    _drop(title, end)
+    end = begin_card_drag(title)
+    end_card_drag(title, end)
     assert drag.placed_rect() is None
 
 
@@ -268,8 +241,8 @@ def test_inputs_buttons_and_fold_keep_their_actions(qt_app, card):
 
 def test_size_changes_keep_place_and_temporary_clamping_is_reversible(qt_app, card):
     box, title, drag, room = card
-    end = _begin(title)
-    _drop(title, end)
+    end = begin_card_drag(title)
+    end_card_drag(title, end)
     chosen = box.pos()
     for height in (500, 300, 600, 300):
         box.resize(box.width(), height)
@@ -294,8 +267,13 @@ def test_interrupted_drag_returns_cursor_and_application_filter(qt_app, card, en
     box, title, drag, _ = card
     parent = box.parentWidget()
     before = box.pos()
-    _begin(title)
-    assert qt_app.overrideCursor() is not None
+    before_cursor = QCursor(title.cursor())
+    before_owned = title.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+    begin_card_drag(title)
+    assert title.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+    assert title.cursor().shape() == cursor("move", title).shape()
+    assert title.cursor().pixmap().toImage() == cursor("move", title).pixmap().toImage()
+    assert app_events.application_events().listening(drag)
     if ending == "escape":
         QTest.keyClick(title, Qt.Key.Key_Escape)
     elif ending == "hide":
@@ -311,14 +289,18 @@ def test_interrupted_drag_returns_cursor_and_application_filter(qt_app, card, en
     if ending != "destroy":
         assert drag.placed_rect() is None
         assert box.pos() == before
+        assert title.cursor().shape() == before_cursor.shape()
+        assert title.cursor().pixmap().toImage() == before_cursor.pixmap().toImage()
+        assert title.testAttribute(Qt.WidgetAttribute.WA_SetCursor) is before_owned
+    assert not app_events.application_events().listening(drag)
     # Ein späteres Ereignis außerhalb der Karte trifft keinen alten Zug.
     QTest.mouseMove(parent)
 
 
 def test_replaced_group_and_new_order_do_not_keep_old_callbacks(qt_app, card):
     box, title, drag, room = card
-    end = _begin(title)
-    _drop(title, end)
+    end = begin_card_drag(title)
+    end_card_drag(title, end)
     title.setParent(None)
     drag.reset()
     replacement = QLabel("Neue Bohrung", box)
@@ -327,21 +309,21 @@ def test_replaced_group_and_new_order_do_not_keep_old_callbacks(qt_app, card):
     drag.update_room(room)
     before = box.geometry()
     title.show()
-    end = _begin(title)
-    _drop(title, end)
+    end = begin_card_drag(title)
+    end_card_drag(title, end)
     assert box.geometry() == before
     assert drag.placed_rect() is None
     title.close()
     title.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    end = _begin(replacement)
-    _drop(replacement, end)
+    end = begin_card_drag(replacement)
+    end_card_drag(replacement, end)
     assert drag.placed_rect() is not None
 
 
 def test_direct_parent_destruction_never_moves_the_dying_card(qt_app, card, monkeypatch):
-    box, title, _, _ = card
-    _begin(title)
+    box, title, _drag, _ = card
+    begin_card_drag(title)
     trace = _DeathWatch(box)
     monkeypatch.setattr(box, "move", trace.record_move)
     # Beim synchronen Elternabbau erreicht Destroy den Python-Filter nicht;
@@ -361,9 +343,12 @@ def test_direct_parent_destruction_never_moves_the_dying_card(qt_app, card, monk
 def test_deferred_delete_ends_an_active_drag_without_touching_the_dying_card(
     qt_app, card, monkeypatch
 ):
-    box, title, _, _ = card
-    _begin(title)
-    assert qt_app.overrideCursor() is not None
+    box, title, drag, _ = card
+    begin_card_drag(title)
+    assert title.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+    assert title.cursor().shape() == cursor("move", title).shape()
+    assert title.cursor().pixmap().toImage() == cursor("move", title).pixmap().toImage()
+    assert app_events.application_events().listening(drag)
     trace = _DeathWatch(box)
     monkeypatch.setattr(box, "move", trace.record_move)
     # Zuletzt installiert, sieht der Beobachter dieselbe Nachricht zuerst.
@@ -382,9 +367,14 @@ def test_deferred_delete_ends_an_active_drag_without_touching_the_dying_card(
 def test_window_deactivation_restores_the_living_card(qt_app, card):
     box, title, drag, _ = card
     before = box.pos()
-    _begin(title)
+    before_cursor = QCursor(title.cursor())
+    before_owned = title.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+    begin_card_drag(title)
     QCoreApplication.sendEvent(box.window(), QEvent(QEvent.Type.WindowDeactivate))
     assert box.pos() == before
+    assert title.cursor().shape() == before_cursor.shape()
+    assert title.cursor().pixmap().toImage() == before_cursor.pixmap().toImage()
+    assert title.testAttribute(Qt.WidgetAttribute.WA_SetCursor) is before_owned
     assert drag.placed_rect() is None
     assert qt_app.overrideCursor() is None
 
@@ -401,8 +391,8 @@ def test_late_room_growth_keeps_the_dropped_anchor(qt_app, card, growth):
     room = QRect(308, 12, 1124, 895)
     target = QPoint(960, 90)
     drag.update_room(room)
-    end = _begin(title, target - box.pos())
-    _drop(title, end)
+    end = begin_card_drag(title, target - box.pos())
+    end_card_drag(title, end)
     assert box.pos() == target
 
     larger = QRect(*growth)
@@ -444,7 +434,7 @@ def test_window_transport_releases_the_card_before_hovering_another_child(qt_app
     try:
         QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(start))
         held = True
-        # Der Produktfilter wird beim Druck global; der Beobachter liest zuerst.
+        # Der Beobachter sieht den Fenstertransport vor dem gemeinsamen Verteiler.
         qt_app.removeEventFilter(trace)
         qt_app.installEventFilter(trace)
         midway = start + QPoint(round((end.x() - start.x()) / 2), round((end.y() - start.y()) / 2))
@@ -479,3 +469,194 @@ def test_window_transport_releases_the_card_before_hovering_another_child(qt_app
         if held:
             QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(end))
         qt_app.removeEventFilter(trace)
+
+
+@pytest.mark.parametrize("owned", [False, True], ids=["geerbt", "eigener"])
+def test_drag_restores_the_receivers_own_or_inherited_cursor(qt_app, card, owned):
+    """Ein geerbter Zeiger bleibt nach dem Zug geerbt, ein eigener bleibt derselbe."""
+    box, title, drag, _ = card
+    box.setCursor(Qt.CursorShape.IBeamCursor)
+    if owned:
+        title.setCursor(Qt.CursorShape.CrossCursor)
+    expected = title.cursor().shape()
+    end = begin_card_drag(title)
+    assert title.cursor().shape() == cursor("move", title).shape()
+    assert title.cursor().pixmap().toImage() == cursor("move", title).pixmap().toImage()
+    assert qt_app.overrideCursor() is None
+    end_card_drag(title, end)
+    assert title.cursor().shape() == expected
+    assert title.testAttribute(Qt.WidgetAttribute.WA_SetCursor) is owned
+    assert not app_events.application_events().listening(drag)
+    box.setCursor(Qt.CursorShape.WaitCursor)
+    if not owned:
+        assert title.cursor().shape() == Qt.CursorShape.WaitCursor
+
+
+@pytest.mark.parametrize("surface", ["title", "blank"])
+def test_window_transport_keeps_the_move_cursor_outside_the_card(qt_app, card, surface):
+    """Der wirkliche Druckempfänger behält den Zug bis zum Release außerhalb der Karte."""
+    box, title, drag, room = card
+    target = title if surface == "title" else box
+    view = box.window()
+    view.activateWindow()
+    qt_app.processEvents()
+    handle = view.windowHandle()
+    start = target.mapToGlobal(target.rect().center())
+    if target is box:
+        start = box.mapToGlobal(box.rect().bottomRight() - QPoint(10, 10))
+    outside = view.mapToGlobal(QPoint(view.width() - 5, view.height() - 5))
+    QTest.mouseMove(handle, handle.mapFromGlobal(start))
+    QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(start))
+    changes = []
+    drag.positionChanged.connect(lambda: changes.append(box.pos()))
+    try:
+        QTest.mouseMove(handle, handle.mapFromGlobal(outside))
+        qt_app.processEvents()
+        assert not box.rect().contains(box.mapFromGlobal(outside))
+        assert len(changes) == 1, "Eine Widgetzustellung ergibt genau eine Bewegung"
+        expected = cursor("move", target).pixmap().toImage()
+        assert target.cursor().shape() == cursor("move", target).shape()
+        assert handle.cursor().shape() == cursor("move", target).shape()
+        assert target.cursor().pixmap().toImage() == expected
+        assert handle.cursor().pixmap().toImage() == expected
+        assert qt_app.overrideCursor() is None
+        assert app_events.application_events().listening(drag)
+    finally:
+        QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=handle.mapFromGlobal(outside))
+    assert room.contains(box.geometry())
+    assert drag.placed_rect() == box.geometry()
+    assert not app_events.application_events().listening(drag)
+    assert not target.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+
+
+@pytest.mark.parametrize("timing", ["before", "during"])
+@pytest.mark.parametrize("ending", ["release", "reset", "error"])
+def test_foreign_override_survives_drag_and_its_error_path(
+    qt_app, card, monkeypatch, timing, ending
+):
+    """Auch ein nach Zugbeginn gesetzter fremder Override bleibt an seinem Platz."""
+    box, title, drag, _ = card
+    assert qt_app.overrideCursor() is None
+    active = False
+    errors = []
+    try:
+        if timing == "before":
+            QApplication.setOverrideCursor(Qt.CursorShape.CrossCursor)
+            active = True
+        end = begin_card_drag(title)
+        if timing == "during":
+            QApplication.setOverrideCursor(Qt.CursorShape.CrossCursor)
+            active = True
+        assert qt_app.overrideCursor().shape() == Qt.CursorShape.CrossCursor
+        if ending == "error":
+            with monkeypatch.context() as patch:
+                patch.setattr(sys, "excepthook", lambda _kind, error, _trace: errors.append(error))
+
+                def fail_move(*_args):
+                    raise RuntimeError("Erzwungener Bewegungsfehler")
+
+                patch.setattr(box, "move", fail_move)
+                try:
+                    send_mouse_event(title, QEvent.Type.MouseMove, end + QPoint(10, 10))
+                except RuntimeError as error:
+                    errors.append(error)
+            assert len(errors) == 1 and isinstance(errors[0], RuntimeError)
+            assert "Erzwungener Bewegungsfehler" in str(errors[0])
+        elif ending == "reset":
+            drag.reset()
+        else:
+            end_card_drag(title, end)
+        assert qt_app.overrideCursor().shape() == Qt.CursorShape.CrossCursor
+        assert not title.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+        assert not app_events.application_events().listening(drag)
+        QApplication.restoreOverrideCursor()
+        active = False
+        assert qt_app.overrideCursor() is None
+    finally:
+        drag.reset()
+        if active:
+            QApplication.restoreOverrideCursor()
+        # Ein ursprünglicher fehlerhafter Produkt-Override darf den Rotlauf
+        # nicht in den nächsten Fall verschleppen; beide Einträge gehören diesem Test.
+        while qt_app.overrideCursor() is not None:
+            QApplication.restoreOverrideCursor()
+
+
+@pytest.mark.parametrize("ending", ["delete", "reparent"])
+def test_lost_press_receiver_ends_the_registration(qt_app, card, ending):
+    """Ein abgelegter oder direkt gelöschter Titel hinterlässt keinen laufenden Zug."""
+    box, title, drag, _ = card
+    begin_card_drag(title)
+    assert app_events.application_events().listening(drag)
+    if ending == "delete":
+        delete(title)
+    else:
+        title.setParent(box.parentWidget())
+    assert not app_events.application_events().listening(drag)
+    assert qt_app.overrideCursor() is None
+    if isValid(title):
+        assert not title.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+    before = box.geometry()
+    QTest.mouseMove(box.parentWidget())
+    assert box.geometry() == before
+
+
+@pytest.mark.parametrize("failure", ["bounds", "move"])
+def test_first_move_failure_releases_cursor_and_listener(qt_app, card, monkeypatch, failure):
+    """Eine Ausnahme auch vor dem ersten Bewegungszustand gibt alle Ressourcen zurück."""
+    box, title, drag, _ = card
+    title.setCursor(Qt.CursorShape.CrossCursor)
+    errors = []
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(sys, "excepthook", lambda _kind, error, _trace: errors.append(error))
+
+            def fail(*_args):
+                raise RuntimeError("Erzwungener erster Zugfehler")
+
+            patch.setattr(
+                drag if failure == "bounds" else box,
+                "_bounded" if failure == "bounds" else "move",
+                fail,
+            )
+            try:
+                begin_card_drag(title)
+            except RuntimeError as error:
+                errors.append(error)
+        assert len(errors) == 1 and isinstance(errors[0], RuntimeError)
+        assert "Erzwungener erster Zugfehler" in str(errors[0])
+        assert not app_events.application_events().listening(drag)
+        assert title.cursor().shape() == Qt.CursorShape.CrossCursor
+        assert title.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+        assert qt_app.overrideCursor() is None
+        assert drag.placed_rect() is None
+    finally:
+        drag.reset()
+        # Nur beim erwarteten Originalrot kann dessen ungesicherter Override übrig sein.
+        while qt_app.overrideCursor() is not None:
+            QApplication.restoreOverrideCursor()
+
+
+@pytest.mark.parametrize("ending", ["direct", "deferred"])
+def test_helper_destruction_restores_the_living_receivers_cursor(qt_app, card, ending):
+    """Auch ohne Kartenabbau endet der Helfer mit zurückgegebenem Widgetcursor."""
+    box, title, drag, _ = card
+    title.setCursor(Qt.CursorShape.CrossCursor)
+    begin_card_drag(title)
+    assert app_events.application_events().listening(drag)
+    assert title.cursor().shape() == cursor("move", title).shape()
+    assert title.cursor().pixmap().toImage() == cursor("move", title).pixmap().toImage()
+    before = box.geometry()
+    if ending == "direct":
+        delete(drag)
+    else:
+        drag.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert not isValid(drag)
+    assert isValid(box) and isValid(title)
+    assert title.cursor().shape() == Qt.CursorShape.CrossCursor
+    assert title.testAttribute(Qt.WidgetAttribute.WA_SetCursor)
+    assert qt_app.overrideCursor() is None
+    assert not app_events.application_events().listening(drag)
+    QTest.mouseMove(box.parentWidget())
+    assert box.geometry() == before

@@ -9,8 +9,9 @@ from typing import Any
 
 import numpy as np
 import pytest
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
+from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt, Signal
+from PySide6.QtGui import QMouseEvent
+from PySide6.QtWidgets import QApplication, QMessageBox, QToolButton, QWidget
 
 from app.core.scene.history import OperationDraft
 from app.i18n import tr
@@ -523,3 +524,153 @@ def wait_for_catalogue(widget: Any) -> None:
     while not widget.wait_for_workers(0) and time.monotonic() < deadline:
         QTest.qWait(10)
     assert widget.wait_for_workers(0)
+
+
+def send_mouse_event(
+    widget, kind, global_pos, *, button=Qt.MouseButton.NoButton, buttons=Qt.MouseButton.LeftButton
+):
+    """Ein Qt-Mausereignis mit unverändertem Bildschirmbezug trotz Kartenbewegung."""
+    event = QMouseEvent(
+        kind,
+        QPointF(widget.mapFromGlobal(global_pos)),
+        QPointF(global_pos),
+        button,
+        buttons,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QCoreApplication.sendEvent(widget, event)
+
+
+def begin_card_drag(widget, delta=None):
+    if delta is None:
+        delta = QPoint(-210, 170)
+    start = widget.mapToGlobal(widget.rect().center())
+    send_mouse_event(widget, QEvent.Type.MouseButtonPress, start, button=Qt.MouseButton.LeftButton)
+    send_mouse_event(widget, QEvent.Type.MouseMove, start + delta)
+    return start + delta
+
+
+def end_card_drag(widget, end):
+    send_mouse_event(
+        widget,
+        QEvent.Type.MouseButtonRelease,
+        end,
+        button=Qt.MouseButton.LeftButton,
+        buttons=Qt.MouseButton.NoButton,
+    )
+
+
+def settle_measure_layout(qt_app):
+    """Layoutaufträge zustellen, ohne die Produktanordnung von Hand anzustoßen."""
+    for _ in range(20):
+        qt_app.processEvents()
+
+
+def measure_more_heading(flow):
+    group = flow._measure_group
+    assert group is not None
+    flap = group.findChild(QWidget, "feature-measure-more")
+    assert flap is not None
+    heading = flap.findChild(QToolButton, "sectionHeading")
+    assert heading is not None
+    return heading
+
+
+def placement_layout(
+    qt_app: QApplication, size: tuple[int, int], scale: float, corner: str, *, with_zones=False
+):
+    """Eine fertige Platzierungsabsicht; nur ihre Bildprojektion wird gesteuert."""
+    from types import SimpleNamespace
+
+    import trimesh
+    from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+    from shapely.geometry import Polygon
+
+    from app.core.geom.mesh import MeshData
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.scene.placement import (
+        CentreReference,
+        EdgeReference,
+        PlacementTool,
+        PreparedSurface,
+        SurfacePlacement,
+    )
+    from app.core.types import PlaneFrame, Scene, SceneObject
+    from app.ui.op_dialog import OperationDialog
+    from app.ui.overlay import OverlayHost
+    from app.ui.placement_flow import PlacementFlow
+
+    session = Session()
+    mesh = MeshData(trimesh.creation.box((40, 40, 10)))
+    result = EvaluationResult(Scene(objects={"obj_1": SceneObject("obj_1", "Platte", mesh)}))
+    session.last_result = result
+    session.result_current = True
+    viewport = PlacementViewport()
+    viewport.resize(*size)
+    viewport.show_scene(result)
+    viewport.renderer.world_to_display = lambda point: (
+        size[0] - 4 + (point[0] - 10) * scale,
+        (size[1] - 4 if corner == "bottom" else 4) + (point[1] - 10) * scale,
+        0.5,
+    )
+    spec = REGISTRY.get("drill_hole")
+    dialog = OperationDialog(spec, {"obj_1": "Platte"})
+    window = SimpleNamespace(
+        viewport=viewport, session=session, _clear_preview=session.cancel_preview
+    )
+    if with_zones:
+        host = OverlayHost(viewport)
+        host.resize(*size)
+        zones = [QFrame(), QFrame(), QFrame()]
+        for index, zone in enumerate(zones):
+            layout = QVBoxLayout(zone)
+            label = QLabel(
+                "Objekte" if index == 0 else "Prüfbericht" if index == 1 else "Werkzeuge"
+            )
+            label.setMinimumHeight(420 if index < 2 else 48)
+            layout.addWidget(label)
+        host.set_zones(*zones)
+        host.show()
+        host.reflow()
+        window.overlay = host
+    flow = PlacementFlow(dialog, window, lambda: spec, lambda: ("obj_1",))
+    flow._result = result
+    flow._prepared_mesh = mesh
+    flow._object_id = "obj_1"
+    flow._centre_id = "hole_1"
+    flow._tool = PlacementItem()
+    flow._tool_context = PlacementTool(mesh)
+    flow._surface = SurfacePlacement(
+        point=(10, 10, 0),
+        normal=(0, 0, 1),
+        frame=PlaneFrame((0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)),
+        planar=True,
+        face_indices=(0,),
+        edges=(
+            EdgeReference("a", (0, 0, 0), (0, 40, 0), (1, 0, 0), 10),
+            EdgeReference("b", (0, 0, 0), (40, 0, 0), (0, 1, 0), 10),
+        ),
+        centres=(CentreReference("hole_1", (0, 0, 0), (10, 10), 14.142135623730951),),
+    )
+    # **Fläche und Vorbereitung gehen zu zweit**, wie ``at_point`` sie der
+    # Anwendung liefert: Seit der Bezugswahl (20.09.2026) nummeriert
+    # ``redraw`` jedes Kantenmaß über ``_prepared.edges``. Ohne die
+    # Vorbereitung warf das im Ereignisfilter beim Anzeigen — und daraus wurde
+    # unter PySide ein nativer Abriss (Exit 139) statt eines roten Tests
+    # (gemessen am 21.09.2026, dreizehn Portionen des Release-Tors).
+    flow._prepared = PreparedSurface(
+        frame=flow._surface.frame,
+        planar=True,
+        face_indices=(0,),
+        edges=flow._surface.edges,
+        centres=(("hole_1", (0, 0, 0)),),
+        area=Polygon(((-20, -20), (20, -20), (20, 20), (-20, 20))),
+    )
+    flow.active = True
+    viewport.show()
+    viewport.activateWindow()
+    flow._bar.show()
+    qt_app.processEvents()
+    flow.redraw()
+    return flow, session, viewport, dialog

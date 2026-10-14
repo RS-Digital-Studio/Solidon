@@ -934,3 +934,99 @@ Nur Dokumentationsentwurf, keine Änderung der aktuellen Funddatei. Originalurte
 - Vorschlag: Wiederholte Maximierung am bereits gewählten Schirm idempotent behandeln; beim ersten Aufbau, Monitorwechsel oder Wechsel zur ausdrücklichen Größe den nötigen Normalzustand herstellen und den bisherigen Platzierungsvertrag erhalten. Aufnahme und tatsächliche Clientfläche gegenprüfen, einschließlich vollständiger Statuszeile. Kein Zuschneiden, keine erfundenen Sollpixel und keine Änderung der Bildschirm-/DPI-Untergrenzen.
 - Wirkung beim Kunden: Prüfstandsmessung und sichtbarer Bildbeleg beschreiben unterschiedliche Flächen. Die bereits innerhalb des Bilds belegten Kartenaktionen bleiben gültig, eine vollständige Fensterabnahme kann daraus nicht entstehen. Kein Fehler am eigentlichen Kunden-Statusinhalt belegt.
 - Stand: offen RM-737; enger Vorwärtsfix in function_setup.py und zwei vorhandenen Testdateien. Fünf kausale Originalgegenfälle rot, danach dieselben fünf grün; vollständiger bestehender Setup-Anschluss mit 28 Fällen grün. Die echte Offscreen-Qt-Grenze zeigt am Original QWidget 800 × 800 statt zuvor 796 × 796 sowie eine ausdrückliche Sollgröße ohne passenden QWindow-Client; am Fix stimmen QWidget, contentsRect und QWindow überein. Ruff, Format und reguläres mypy (388 Dateien) grün, unabhängige Durchsicht ohne Fund; automatische Auswahl 103 nur ermittelt. Normal geliefert als a0d5ae491f8e348a2a4c37fc2e57c348fe0922a9. Echte MSI-Gegenprobe auf Root bc2d: run-20261013T213709788Z regulär Exit 1 wegen genau der zweiten Clientabweichung, keine Aufbau-/Fristfehler. Fix auf a0d5: run-20261013T213806356Z regulär Exit 0; beide Aufbauten QWidget/contentsRect/QWindow/Win32-Client/PNG durchgehend 2560 × 1369, Statuszeile vollständig. Alle vier Originalbilder einzeln gelesen, Root beide zweiten Bilder; Rahmen gleich und sämtliche 32 Quellenpins pro Lauf unverändert. Alle 15 beziehungsweise 13 eigenen Prozessidentitäten beendet, Lease zurück. Native Vergleichsverdichtung SHA5406E4E6D98EE92A67CF0E4394D688587473A6711D174995ADBC667BE34E0B7D. Nach normalem Autorenmerge 37dcea59f023a3112769c7ed5fc22d35b98276fb auf welle4/origin als 9dc38e79f253a92efde6df55e1dec3c79d64a9f6 integriert; vollständiger Baum autorengleich, keine Auflösung, normale Hooks/Push Exit 0. Endgültiger D0-Lauf und Tor bleiben offen.
+
+### FD-76 Textmessung beschädigt HTML-Entities und literale Ampersands
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Funktionsprüfstand, Textnormalisierung vor der Breitenmessung
+- Prüfpunkt: 9
+- Beleg: review-v4-textnormalisierung-codex.md; frisches V4-ready.json von Fall001 auf 2ec37b23bbc18bd76fc604c794ecd0c7231adaec. Die tatsächlich vollständig sichtbare Vorschaulegende wird als „nbsp;+ Hinzugefügtnbsp;nbsp;nbsp;nbsp;- Entferntnbsp;“ mit Bedarf301/Breite145 und cut=true vermessen. Sie ist in diesem Fall nur im Zusatzartefakt enthalten, nicht im öffentlichen function.json; kein bereits erzeugtes falsches P9-Urteil dieses Falls behauptet.
+- Ursache: _text_of entfernt jedes & vor der HTML-Normalisierung durch QTextDocument. Dadurch verliert &nbsp; seinen Entity-Anfang; auch Qt-Mnemonics und escaped && werden undifferenziert behandelt.
+- Vorschlag: Vorhandenen Textweg trägergerecht normalisieren; RichText unbeschädigt parsen, Mnemonic-Marker nur bei geeigneten Trägern entfernen und literale Ampersands erhalten. Echte Label-/Knopfgegenfälle und weiterhin roter P9-Kontrollfall bei zu geringer Breite.
+- Wirkung beim Kunden: Die Abnahme kann eine vollständig sichtbare Beschriftung fälschlich als abgeschnitten einstufen. Der Text der Anwendung selbst ist in diesem Beispiel korrekt.
+- Stand: offen RM-737; auf dem eigenen Autorenworktree in tools/function_capture.py und tests/test_function_bench_window.py umgesetzt. Tatsächliches Originalrot mit 14 Fehlern und zwei Kontrollen, danach dieselben 16 Fälle grün; 19 Textanschlussfälle sowie sechs weitere bestehende Aufnahme-/Schriftanschlüsse grün. Der Normalizer berücksichtigt Textformat und tatsächlichen Träger; HTML wird vor Mnemonics verarbeitet, Label ohne Buddy bleibt ohne Mnemonic-Auswertung, abschließender Marker und Marker vor Zeilenwechsel sind nach Qt-Vertrag gehalten. Ruff, Format und reguläres mypy über 388 Dateien grün; enger unabhängiger Endreview ohne offenen Fund. Aktuelle Pins capture2b2689d9f515cdff7bd24e978c62cd436eb5e033ce012cf6a54ba13339d302da und Test64b687eecab90371448386cf850140066ff465dfe16775fc7d74fb67b88953a8. Die automatisch ausgewählte Prüfung über 109 Dateien endete mit 11.320 bestandenen, 56 übersprungenen, 1.984 abgewählten und drei fehlgeschlagenen Fällen, regulär Exit 1. Diese drei unverändert bereits auf Root vorhandenen Vertragsfehler sind separat FD79–81 zugeordnet; keine FD76-Regression behauptet. Alle eigenen Prozesse beendet. Lieferung bis zur Korrektur dieser Ursachen angehalten, kein zweiter breiter Wiederholungslauf. Normaler Commit/Push, Integration und endgültiges Tor offen. Originalbilder und Protokolle bleiben unverändert.
+
+### FD-77 Navigationsabschluss akzeptiert ein halb abgeschnittenes Eingabefeld
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Gemeinsame Anleitungsnavigation und Funktionsaufnahme, Filamentwähler
+- Prüfpunkt: 9, 19
+- Beleg: filament-picker-sichtbarkeit-codex.md; frischer Fall032/EN auf 2ec37b23bbc18bd76fc604c794ecd0c7231adaec. Original flaeche-en-filament.picker-0afd58ad.png von Root, D10 und B einzeln gelesen. „No filament assigned yet“ am unteren Rand der Rollkarte abgeschnitten, Hauptfensterstatus vollständig. Ziel1339..1367 gegenüber zuvor protokolliertem Rollrand1354; Mitte1352 treffbar. Keine nachträglich erfundene vollständige Clipkettenmessung.
+- Ursache: guide_targets._scroll_needed prüft ausschließlich die Mitte gegen alle Scrollsichtflächen. Walk bestätigt den stabilen Mittelpunkt und Treffer; der nachfolgende Stillstand prüft keine Vollsicht. So wird die teilweise abgeschnittene Fläche regulär aufgenommen.
+- Vorschlag: Passend große Felder im vorhandenen gemeinsamen Navigationsweg bis zu ihren vertikalen Kanten freilegen, innere und äußere Scrollbereiche berücksichtigen. Vollsichtkontrolle mit halb abgeschnittenem Original, oberem Rand, verschachtelten Bereichen, vollständig sichtbarem Feld, übergroßem Container und Scrollanschlag. Keine privaten Scrollbaränderungen im Kundenweg oder verlängerten Fristen.
+- Wirkung beim Kunden: Eine technisch erreichbare Feldmitte wird als brauchbare Endansicht behandelt. Eine unbedienbare Produktliste ist damit nicht belegt; kein erneuter FD75-Statusbeschnitt.
+- Stand: offen RM-737; kausales Originalrot auf 2ec37 gesichert: sieben fachliche Fehler, zwei grün, 20 abgewählt, regulär Exit 1. Enger Anschluss in fünf vorhandenen Pfaden: guide_targets.Click mit wheel_angle und normaler Vorgabe, Durchleitung über function_walk.QtPorts.press, bestehendes FakePorts, echte Radgegenfälle in test_function_wheel_dispatch.py sowie der vorhandene Außencliptest in test_guide_targets.py. Der tatsächliche geeignete Scrollbereich erhält öffentliche QTest.wheelEvent-Ereignisse mit begrenztem Restschritt; kein privates Setzen der Scrollposition im geprüften Weg, keine verlängerten Fristen und kein zweiter Vollsichtprüfer. Der letzte kausale H80/H100-Verschachtelungsfall war am Zwischenstand rot; nach Korrektur wird der benötigte innere Viewportstreifen zuerst außen sichtbar und das innen verborgene Feld anschließend vollständig herangerollt. Danach 22 betroffene Navigatorfälle grün, Ruff/Format/reguläres mypy über 388 Quellen erneut grün. Vorherige unveränderte Gegenfälle und rote Zwischenläufe bleiben separat erhalten. Enger unabhängiger Abschluss: RF77-M1 geschlossen, keine weitere Beanstandung; fünf Endpins vor/nach gleich. Restmanifest 527963e4f386aec592cc7dd32d8cbd387c94a4f35cae89ffbacd387bf5b93f40, Patch 3fb1c89ebe8c72fadd0d9fd9f1f2c0f0893a6490ed068b870fbbe825161fe867. Automatisch ausgewählte 198 reguläre Testdateien, Lieferung, Integration und gezielte native EN-Nachheraufnahme bleiben offen. Alte Bilder werden nicht nachträglich ersetzt.
+
+### FD-78 Fachfelder in Druckvorbereitungswegen haben unvollständige Hilfen
+
+- Art: Verständlichkeit
+- Schwere: leicht
+- Funktion: tool:analysis, tool:split, finding.action:sketch.pick_plane, finding.action:generate_again, finding.action:choose_printer, finding.action:open_print_settings
+- Prüfpunkt: 8, V3
+- Beleg: bild-final-d8-codex.md und F:/tmp-suche/bild-final-d8-codex/2ec37b23b/FD78-hilfen-entwurf.md; frische italienische und deutsche Fälle 047/043 auf 2ec37b23. Flächenprotokolle und einzeln gelesene Originalbilder sind mit vollständigen Hashes gebunden. AnalysisBar/Analysewahl, SplitBar/Anzahl/Form/Vorbereitung und OperationDialog/Typ sind die ursprünglichen fünf Felder. Hinzu kommen „Beschreibung“ im tatsächlich geöffneten Generator und „Werte mitgeben“ im vorgeschalteten Herstellerprofilhinweis. Letzterer erscheint über zwei Inventarzeilen, ist aber derselbe Träger und zählt einmal. Alle tatsächlichen Inventarzeilen gehören D8.
+- Ursache: Die Rohaufnahme zeigt an sieben unterschiedlichen Feldern eine leere zugängliche Beschreibung; Analyseauswahl, Generatorbeschreibung und Werte-Haken haben zusätzlich keine Kurzhilfe. An den vier übrigen Feldern ist ein erklärender Tooltip vorhanden. Im Slicerhinweis ist der erklärende Satz sichtbar; seine technische Zuordnung an die Hilfekanäle fehlt. Der konkrete Quellenanschluss ist noch nicht diagnostiziert; keine globale Ursache behauptet.
+- Vorschlag: Vorhandene übersetzte Wirkungssätze an die zugängliche Beschreibung der tatsächlichen Eingabefelder binden. Für die drei Felder ohne Tooltip den passenden vorhandenen Wirkungssatz ermitteln und beide Hilfekanäle anbinden. Gleiche Träger, sechs Sprachen, Titelwortüberschneidung und tatsächliche Feldhilfe prüfen. Sichtbare Erklärung erhalten; nachgelagerte Drucker-/Einstellungsdialoge sind durch diese Aufnahmen nicht nachgewiesen.
+- Wirkung beim Kunden: Die Erklärung der Feldwirkung fehlt in einem erforderlichen Hilfekanal, bei drei Feldern auch beim Überfahren. Eine Bildschirmleser-Ausführung wurde hier nicht durchgeführt; kein fehlender Erklärungstext im gesamten Slicerhinweis behauptet.
+- Stand: offen RM-745; von FD10/11/12/50/64 und Systemdialogen, reinen Ausgaben sowie verdeckten Nachbarfeldern abgegrenzt. Eigenständiger leichter Fund für das bereits beauftragte Kundenpaket D8. Kein Quellfix und kein Nachherbeleg; der ursprüngliche Bild- und Rohbefund bleibt erhalten.
+
+### FD-79 Maßkartenzug umgeht den gemeinsamen Ereignisverteiler
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Maßkarte am Titel oder freien Hintergrund verschieben
+- Prüfpunkt: 8, 19
+- Beleg: review-v4-textnormalisierung-codex.md; affected-01, regulär Exit 1 mit genau drei Wächterfehlern bei 11.320 bestandenen Fällen. test_no_module_hangs_its_own_filter_on_the_application beanstandet measure_card_drag.py:205. Quellen und Wächter sind bytegleich zum Integrationskopf 2ec37b23; Bindung affected-failure-binding.json SHA a35fb03fa78f12d6b88459b35e34494e5d9f0493f5c5733a7d179c936409b6bb.
+- Ursache: Die Geste installiert einen eigenen Anwendungsfilter, obwohl app.ui.app_events einen gemeinsamen, nach Ereignisarten gefilterten Verteiler bereitstellt.
+- Vorschlag: Nur während der Geste die benötigten Ereignisarten über listen anmelden und über forget abmelden. Lokale Kartenfilter, QWidget-Schranke aus FD71, einmalige Verarbeitung und vollständigen Abbau erhalten.
+- Wirkung beim Kunden: Zusätzliche globale Zustellung umgeht den bestehenden Architekturvertrag. Eine konkrete Verlangsamung wurde in diesem Lauf nicht gemessen; keine neue Leistungszahl behauptet.
+- Stand: offen RM-737; Ursache gelesen, externer Entwurf beauftragt. Noch keine Korrektur oder Nachherprüfung. Vor dem endgültigen D0-Tor zu schließen.
+
+### FD-80 Maßkartenzug sichert seinen globalen Mauszeiger nicht gegen jeden Ausgang
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Maßkarte am Titel oder freien Hintergrund verschieben
+- Prüfpunkt: 8, 19
+- Beleg: Derselbe gebundene Lauf; test_a_state_that_is_set_is_taken_back_on_every_path beanstandet measure_card_drag.py:181. setOverrideCursor steht vor der Bewegungsarbeit ohne finally-/with-Absicherung.
+- Ursache: Ein asynchroner Zug verändert den globalen Cursorstapel und nimmt ihn nur über den gewöhnlichen _finish-Weg zurück. Der Ausnahmeweg nach dem Setzen ist nicht abgesichert; eine fremde spätere Stapelposition hat keine eigene Zuordnung.
+- Vorschlag: Das vorhandene Pattern für widgetgebundene asynchrone Cursor verwenden, falls der echte gehaltene Zug außerhalb der Karte dadurch vollständig erhalten bleibt. Vorherigen eigenen oder geerbten Zustand wiederherstellen; fremde globale Overrides, Release, Escape, Fokusverlust, Reset und Lebensdauerenden gegenprüfen. Fehlerwege müssen tatsächlich aufräumen.
+- Wirkung beim Kunden: Der Cursorzustand ist nicht für jeden Ausgang abgesichert. Ein konkret beim Kunden stehengebliebener Cursor wurde hier nicht beobachtet; der statische Regelverstoß ist bestätigt.
+- Stand: offen RM-737; gemeinsamer Besitzer mit FD79, damit die Ereignis- und Cursorlebensdauer zusammen geprüft werden. Noch keine Korrektur oder Nachherprüfung. Der bisherige native Sechssprachennachweis ersetzt den Anschluss der geänderten Umsetzung nicht.
+
+### FD-81 Maßkartenprüfungen importieren private Helfer aus anderen Testmodulen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse der Maßkarte und Platzierung
+- Prüfpunkt: 8, 19
+- Beleg: Derselbe gebundene Lauf; test_test_files_do_not_import_private_names_from_each_other findet in test_measure_card_placement.py fünf private Querimporte aus drei test_*-Modulen.
+- Ursache: _begin, _drop, _heading, _rounds und _layout dienen mehreren Tests, liegen aber bei einzelnen Testverbrauchern statt im vorhandenen gemeinsamen tests/ui_helpers.py.
+- Vorschlag: Diese Helfer samt benötigtem internem Maushelfer einmalig in das bestehende Hilfsmodul verschieben und alle Verbraucher auf sprechende öffentliche Namen umstellen. Keine Duplikate, kein neues Modul und keine Abschwächung des Wächters.
+- Wirkung beim Kunden: Kein unmittelbarer sichtbarer Produktfehler belegt; die Prüfstruktur koppelt Testmodule über private Implementierung und verletzt ihren bestehenden Vertrag.
+- Stand: offen RM-737; im selben begrenzten Sechs-Dateien-Anschluss wie FD79/80 zu beheben. Wegen des roten Entwicklungslaufs wird der leichte Fund vor D0 geschlossen.
+
+### FD-82 Testdoubles der Flächenplatzierung kennen den Maßkartenzug nicht
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Prüfanschlüsse der Flächenplatzierung
+- Prüfpunkt: 19
+- Beleg: Betroffener Lauf am Fixbaum von FD-79–81 (`F:\tmp-suche\fpf-liefern-claude\affected-20261014-050245.txt`): 88 rot, alle in `tests/test_surface_placement.py`, `AttributeError: 'types.SimpleNamespace' object has no attribute '_measure_drag'` an `placement_flow.py:5560`; am unveränderten `welle4` `d5b2c51df` gleich rot.
+- Ursache: `0036e21ea` führte `_measure_drag.update_room` in `PlacementFlow.redraw` ein; die zwei Doubles der Datei wurden nicht nachgezogen.
+- Vorschlag: Beide Doubles tragen einen stummen Zug wie ihre übrigen Maßhelfer.
+- Wirkung beim Kunden: Kein Produktfehler; 88 Prüfungen der Werkzeugausrichtung an der Fläche erreichten ihre Zusicherung nicht, das Entwicklungstor wäre rot.
+- Stand: behoben `0df73f13d`
+
+### FD-83 Tooltipfall des Prüfstands hängt von der Reihenfolge ab
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: `tests/test_function_bench_window.py::test_button_probe_moves_away_from_a_real_tooltip_before_testing_coverage[wortschatz|knopf]` ist allein grün und nach `test_a_double_click_reaches_a_list_as_a_double_click` im selben Prozess rot (`verdeckt: feature:resize_hole … qtooltip_label`), am unveränderten `2ec37b23b` genauso (`F:\tmp-suche\fpf-liefern-claude\order-b.txt`, `order-c.txt`).
+- Ursache: offen; der Doppelklick hinterlässt Zustand, nach dem der Tooltip die Mausbewegung überdauert.
+- Vorschlag: Ursache am Ablauf belegen und an der Wurzel beheben, Gegenprobe in derselben Datei in beiden Reihenfolgen.
+- Wirkung beim Kunden: Kein Produktfehler belegt; ein Fenstertest wird im Release-Tor reihenfolgeabhängig rot.
+- Stand: offen RM-737
