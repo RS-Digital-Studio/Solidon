@@ -18,8 +18,16 @@ import tempfile
 import time
 from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
+from types import ModuleType
 
 import pytest
+
+# Eine Datei, ein Modul: pytest lädt diese Datei als ``conftest``; wer
+# ``tests.conftest`` importiert (``test_packaging.py``, ``test_affected_tests.py``),
+# bekommt dasselbe Modul. Sonst liefe sie ein zweites Mal — mit zweitem
+# Import-Haken samt eigener Pinliste, die kein Abbau leert, und den
+# Profilvariablen auf einem neuen Ordner mitten im Lauf (``test_suite_pin.py``).
+sys.modules.setdefault("tests.conftest", sys.modules[__name__])
 
 # Oberflächentests brauchen eine Qt-Plattform, die ohne Bildschirm funktioniert.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -245,37 +253,39 @@ def _pin_ui_object(value: object) -> None:
         _PINNED_UI.append(value)
 
 
-def _pin_ui_widgets(module: object) -> None:
-    """Hängt den Pin an Fenster, Viewport und Leinenbesitzer — je Typ einmal.
+def _pin_instances(widget_type: type) -> None:
+    """Hält jedes Exemplar nach seinem vollständigen Aufbau bis zum Testabbau — je Typ einmal.
 
     Ein Hauptfenster hält seinen Viewport ohnehin. Einige Ansichtsprüfungen
     bauen den Viewport aber absichtlich allein; dessen Renderer-Zustand braucht
-    denselben Lebenszeitvertrag wie das ganze Fenster. Elternlose Dialoge mit
-    Arbeitern brauchen ihn ebenfalls: Ohne den früheren Rückverweis ihrer
-    ``WorkerLeash`` kann ihre letzte Testreferenz vor der zentralen
-    ``release``-Fixture fallen. Die Leine hält den Besitzer im Produkt bewusst
-    nicht; die Suite hält nur das Qt-Widget bis zu genau diesem Teardown.
+    denselben Lebenszeitvertrag wie das ganze Fenster.
     """
-    for type_name in ("MainWindow", "Viewport"):
-        widget_type = getattr(module, type_name, None)
-        if widget_type is None or getattr(widget_type, "_suite_pinned", False):
-            continue
-        original = widget_type.__init__
+    if getattr(widget_type, "_suite_pinned", False):
+        return
+    original = widget_type.__init__
 
-        def pinning(
-            self: object,
-            *args: object,
-            _original: object = original,
-            **kwargs: object,
-        ) -> None:
-            _original(self, *args, **kwargs)  # type: ignore[operator]
-            _pin_ui_object(self)
+    def pinning(
+        self: object,
+        *args: object,
+        _original: object = original,
+        **kwargs: object,
+    ) -> None:
+        _original(self, *args, **kwargs)  # type: ignore[operator]
+        _pin_ui_object(self)
 
-        widget_type.__init__ = pinning
-        widget_type._suite_pinned = True
+    widget_type.__init__ = pinning
+    widget_type._suite_pinned = True
 
-    leash_type = getattr(module, "WorkerLeash", None)
-    if leash_type is None or getattr(leash_type, "_suite_owner_pinned", False):
+
+def _pin_leash_owners(leash_type: type) -> None:
+    """Hält elternlose Widgets mit Arbeitern über ihre Leine bis zum Testabbau — einmal.
+
+    Ohne den früheren Rückverweis ihrer ``WorkerLeash`` kann ihre letzte
+    Testreferenz vor der zentralen ``release``-Fixture fallen. Die Leine hält
+    den Besitzer im Produkt bewusst nicht; die Suite hält nur das Qt-Widget bis
+    zu genau diesem Teardown.
+    """
+    if getattr(leash_type, "_suite_owner_pinned", False):
         return
     original_leash_init = leash_type.__init__
 
@@ -299,6 +309,49 @@ def _pin_ui_widgets(module: object) -> None:
     leash_type._suite_owner_pinned = True
 
 
+#: Je Lebensdauermodul die Klasse, die der Pin hält, und wie: Fenster und
+#: Viewport je Exemplar, die Leine über ihren Besitzer. Eine Zuordnung statt der
+#: Frage nach jeder Klasse an jedem Modul — in ``app.ui.leash`` fehlen Fenster und
+#: Viewport planmäßig. Zieht eine Klasse in ein anderes Modul, zieht ihr Eintrag
+#: mit; ein Modul ohne seine Klasse ist ein Fehler, kein stilles Überspringen
+#: (CS-10, Konzept Codestruktur 4.1, W6; ``test_suite_pin.py``).
+UI_PINS: dict[str, tuple[str, Callable[[type], None]]] = {
+    "app.ui.leash": ("WorkerLeash", _pin_leash_owners),
+    "app.ui.main_window": ("MainWindow", _pin_instances),
+    "app.ui.viewport": ("Viewport", _pin_instances),
+}
+
+
+def pin_ui_widgets(module: ModuleType) -> None:
+    """Hängt den Pin an die Klasse, die ``UI_PINS`` diesem Modul zuordnet.
+
+    Fehlt sie, bricht der Import ab: Ohne Pin stirbt das erste Fenster mit
+    seiner letzten Referenz mitten im Lauf und reißt ihn mit (0xc0000374,
+    ``_PinOnImport``) — das stumme Überspringen verdeckte genau das.
+    """
+    class_name, pin = UI_PINS[module.__name__]
+    pinned = getattr(module, class_name, None)
+    if not isinstance(pinned, type):
+        raise LookupError(
+            f"{module.__name__} definiert die Klasse {class_name} nicht mehr. Den Eintrag "
+            f"in UI_PINS (tests/conftest.py) auf das Modul setzen, das sie jetzt definiert."
+        )
+    pin(pinned)
+
+
+def pin_loaded_ui_modules() -> None:
+    """Pinnt jedes Modul aus ``UI_PINS``, das schon geladen ist.
+
+    Der Regelfall läuft über den Import-Haken ``_PinOnImport``; dieser Griff
+    bleibt für ein Modul, das schon vor dem Haken geladen war. Ein noch nicht
+    geladenes Modul hat nichts zu pinnen — seinen Import fängt der Haken.
+    """
+    for name in UI_PINS:
+        module = sys.modules.get(name)
+        if module is not None:
+            pin_ui_widgets(module)
+
+
 class _PinningLoader:
     """Führt den echten Lader aus und pinnt danach — sonst nichts."""
 
@@ -308,9 +361,9 @@ class _PinningLoader:
     def create_module(self, spec: object) -> object:
         return self._wrapped.create_module(spec)  # type: ignore[attr-defined]
 
-    def exec_module(self, module: object) -> None:
+    def exec_module(self, module: ModuleType) -> None:
         self._wrapped.exec_module(module)  # type: ignore[attr-defined]
-        _pin_ui_widgets(module)
+        pin_ui_widgets(module)
 
 
 class _PinOnImport:
@@ -324,11 +377,12 @@ class _PinOnImport:
     sonst nichts — insbesondere keinen eifrigen Import von Qt und pygfx in
     Läufe, die beides nie anfassen. ``app.ui.leash`` kommt hinzu, damit ein
     elternloser Dialog bis zu seiner zentralen ``release``-Phase lebt, ohne
-    dass der Produktcode dafür seinen Besitzer zyklisch halten muss.
+    dass der Produktcode dafür seinen Besitzer zyklisch halten muss. Welche
+    Module, sagt ``UI_PINS``.
     """
 
     def find_spec(self, fullname: str, path: object = None, target: object = None) -> object:
-        if fullname not in {"app.ui.leash", "app.ui.main_window", "app.ui.viewport"}:
+        if fullname not in UI_PINS:
             return None
         import importlib.util
 
@@ -439,12 +493,7 @@ def _windows_live_until_their_test_ends() -> Iterator[None]:
     # gelöschter Fensterbaum erst hier zyklisch frei werden. Er wird im
     # Hauptthread eingesammelt, bevor ein neuer Arbeiter starten kann.
     _collect_released_ui()
-    # Der Regelfall läuft über den Import-Haken oben; dieser Griff bleibt als
-    # zweiter für ein Modul, das schon vor dem Haken geladen war.
-    for module_name in ("app.ui.viewport", "app.ui.main_window"):
-        module = sys.modules.get(module_name)
-        if module is not None:
-            _pin_ui_widgets(module)
+    pin_loaded_ui_modules()
     first = len(_PINNED_UI)
     try:
         yield
