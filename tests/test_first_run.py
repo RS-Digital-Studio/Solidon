@@ -547,13 +547,19 @@ def test_a_printer_the_user_chose_is_not_overwritten(qt_app: QApplication) -> No
 def test_repeated_slicer_surveys_leave_material_and_inventory_for_the_later_step(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ein gefundenes Slicerprogramm wählt weder Material noch physische Spulen."""
+    """Ein gefundenes Slicerprogramm wählt weder Material noch physische Spulen.
+
+    Verboten wird ``configured_spools`` dort, wo das Filamentlager es liest — als
+    eigene Kopie in ``filament_inventory``. Am Original in ``filament_picker``
+    erreichte das Verbot keinen Aufruf und war immer grün (CS-9a); dass es den
+    echten Aufruf trifft, zeigt ``test_first_run_spools.py``.
+    """
     from app.core.knowledge import filaments
-    from app.ui import filament_picker
+    from app.ui import filament_inventory
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
     configured = mock.Mock(return_value=(filaments.CatalogueFilament("PETG", "#112233", "PETG"),))
-    monkeypatch.setattr(filament_picker, "configured_spools", configured)
+    monkeypatch.setattr(filament_inventory, "configured_spools", configured)
     settings = UiSettings(material="abs")
     dialog = settled(FirstRunDialog(settings), qt_app)
     try:
