@@ -16,12 +16,11 @@ import pytest
 import trimesh
 from PySide6.QtCore import QPoint, QPointF, QRect
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QApplication, QFrame, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 from shapely.geometry import Polygon
 
 from app.core.geom.mesh import MeshData
 from app.core.registry import REGISTRY
-from app.core.scene.evaluate import EvaluationResult
 from app.core.scene.placement import (
     CentreReference,
     EdgeReference,
@@ -29,12 +28,9 @@ from app.core.scene.placement import (
     PreparedSurface,
     SurfacePlacement,
 )
-from app.core.types import PlaneFrame, Scene, SceneObject
-from app.ui.op_dialog import OperationDialog
-from app.ui.overlay import OverlayHost
+from app.core.types import PlaneFrame, SceneObject
 from app.ui.placement_flow import SPACE, PlacementFlow, _crosses, _Dimensions, _untangle
-from app.ui.session import Session
-from tests.ui_helpers import PlacementItem, PlacementViewport
+from tests.ui_helpers import PlacementItem, placement_layout
 
 
 @pytest.mark.parametrize("quiet", [True, False])
@@ -329,7 +325,7 @@ def test_dimension_error_is_visible_in_the_measure_group(qt_app, monkeypatch, ce
     """Der Fehler steht an den sichtbaren Maßen, auch wenn die untere Leiste verborgen ist."""
     from PySide6.QtCore import QSignalBlocker
 
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     try:
         monkeypatch.setattr(dialog, "values_stand_elsewhere", True)
         monkeypatch.setattr(flow, "_request_tool", lambda: None)
@@ -374,7 +370,7 @@ def test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface(
     """
     from app.ui import placement_flow
 
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     viewport.renderer.world_to_display = lambda point: (80 + point[0] * 20, 80 + point[1] * 20, 0.5)
     flow.redraw()
     canvas = flow._canvas
@@ -445,7 +441,7 @@ def test_dimension_fields_stay_visible_widgets_over_the_ink(
     sind — nicht mehr eine Freihaltung ihrer Rechtecke: Die gab es nur bei der
     Fenstermaske, und die ist mit RM-198 gefallen.
     """
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     if not with_centre:
         flow._centre_id = ""
     try:
@@ -569,7 +565,7 @@ def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Der echte Werkzeug-Rückruf reicht dem Renderer dieselbe ungestörte Ghost-Fläche."""
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     styles = []
 
     def add_surface(_points, _faces, *, name, style, capacity=None):
@@ -757,7 +753,7 @@ def test_moving_dimension_ink_keeps_its_renderer_items_and_swaps_their_points(
 
 def test_resizing_a_dimension_field_does_not_mix_nested_line_lists(qt_app: QApplication) -> None:
     """Das eigene adjustSize darf im Würfelfall keine dritte oder weitere Maßlinie anhängen."""
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     flow._centre_id = ""
     flow.redraw()
     try:
@@ -786,7 +782,7 @@ def test_dimension_fields_do_not_overlap_at_zoomed_view_edges(
     qt_app: QApplication, size: tuple[int, int], scale: float, corner: str
 ) -> None:
     """Vier Maße plus Mittelpunkt bleiben im Bild, auch bei gleichem Wunschplatz."""
-    flow, session, viewport, dialog = _layout(qt_app, size, scale, corner)
+    flow, session, viewport, dialog = placement_layout(qt_app, size, scale, corner)
     try:
         widgets = [*flow._reference_boxes[:2], *flow._centre_measures, flow._reference_boxes[2]]
         assert len(flow._canvas.lines) == 4
@@ -835,7 +831,7 @@ def test_the_dimension_fields_leave_the_movement_handle_alone(qt_app: QApplicati
     Die Gegenprobe dazu ist der zweite Teil: Ohne gemeldeten Griff darf dieselbe
     Fläche belegt werden — sonst prüft der Test eine Anordnung und keine Regel.
     """
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 6.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 6.0, "bottom")
     try:
         # Mitten ins Bild, sonst klemmt der Rand die Felder ohnehin weg und die
         # Gegenprobe unten misst die Bildgrenze statt der Regel.
@@ -894,7 +890,7 @@ def test_the_dimension_lines_leave_the_movement_handle_alone(qt_app: QApplicatio
     """
     from PySide6.QtCore import QPoint
 
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 6.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 6.0, "bottom")
     try:
         viewport.renderer.world_to_display = lambda point: (
             450 + (point[0] - 10) * 6.0,
@@ -954,7 +950,7 @@ def test_the_dimension_lines_leave_the_movement_handle_alone(qt_app: QApplicatio
 
 
 def test_a_stale_tool_context_hides_the_ghost_and_disables_accept(qt_app: QApplication) -> None:
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     try:
         assert flow._tool.visible and flow._accept.isEnabled()
         flow._tool_context = None
@@ -973,7 +969,9 @@ def test_placement_controls_avoid_real_overlay_zones(
     qt_app: QApplication, size: tuple[int, int]
 ) -> None:
     """Echte Zonenmaße statt einer angenommenen festen Seitenbreite."""
-    flow, session, viewport, dialog = _layout(qt_app, size, 1000.0, "bottom", with_zones=True)
+    flow, session, viewport, dialog = placement_layout(
+        qt_app, size, 1000.0, "bottom", with_zones=True
+    )
     host = flow.window.overlay
     try:
         widgets = [
@@ -1012,9 +1010,9 @@ def test_dimension_fields_leave_the_placement_point_itself_visible(
     Geprüft wird der Punkt selbst und kein geratener Radius um ihn: Die Zusage
     lautet, dass der Kunde sieht, wohin er setzt, während er das Maß eintippt.
     """
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     try:
-        # **Das Werkzeug ist die Bohrung, nicht die Platte.** ``_layout`` gibt
+        # **Das Werkzeug ist die Bohrung, nicht die Platte.** ``placement_layout`` gibt
         # dem Fluss die Platte als Werkzeug mit — hier zählt deren Ausdehnung
         # als Vorschau, und eine 40-mm-Platte bei zwölf Bildpunkten je
         # Millimeter sperrt 480 von 600 Bildpunkten: Kein Feld von 312
@@ -1089,7 +1087,7 @@ def test_dimension_fields_stand_beside_the_body_and_keep_their_leaders(
     auch weiß wo etwas hingeht"). Die projizierte Hülle des Trägers ist seither
     belegt; die Verbindungslinie je Feld sagt weiterhin, welches Maß es ist.
     """
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     try:
         flow._tool_context = PlacementTool(
             MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
@@ -1145,7 +1143,7 @@ def test_a_tall_measure_card_does_not_push_all_dimensions_into_the_emergency_row
     qt_app: QApplication, monkeypatch
 ) -> None:
     """Die Fachkarte darf Platz beanspruchen, ohne die Maßzuordnung zu verlieren."""
-    flow, session, viewport, dialog = _layout(qt_app, (1200, 850), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (1200, 850), 1.0, "bottom")
     try:
         monkeypatch.setattr(dialog, "values_stand_elsewhere", True)
         group = QWidget(viewport)
@@ -1196,7 +1194,7 @@ def test_dimension_fields_keep_their_places_when_the_spot_moves_a_little(
     seinen Platz, solange er frei ist und das Maß nicht weit gewandert ist —
     erst ein großer Sprung, etwa eine Kameradrehung, ordnet neu.
     """
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     try:
         flow._tool_context = PlacementTool(
             MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
@@ -1284,7 +1282,7 @@ def test_the_measure_with_the_focus_lights_up_in_the_view(qt_app: QApplication) 
     Mittenmaß mit seiner Linie; ohne Fokus leuchtet nichts. Gezeichnet wird es
     als eigenes Element über allen anderen, in der Akzentfarbe.
     """
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     try:
         flow._tool_context = PlacementTool(
             MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
@@ -1345,7 +1343,7 @@ def test_fields_stand_at_their_lines_when_the_body_outgrows_the_view(
     und einem zweiten Feld —, nicht anderthalb Feldbreiten (468 Punkte
     offscreen, Review 22.09.2026: 208 und 336 Punkte bestanden das).
     """
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     try:
         flow._tool_context = PlacementTool(
             MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
@@ -1407,7 +1405,7 @@ def test_a_body_that_just_fits_the_view_keeps_the_fields_at_their_lines(
     Notreihe oben links, mit Verbindungen von 447 bis 749 Punkten (Review
     22.09.2026).
     """
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     try:
         flow._tool_context = PlacementTool(
             MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
@@ -1441,7 +1439,7 @@ def test_no_field_hides_under_the_preview_banner(qt_app: QApplication) -> None:
     """Das Vorschauband oben deckte zwei Felder zu (Robert, 22.09.2026)."""
     from PySide6.QtWidgets import QLabel
 
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "top")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "top")
     try:
         flow._tool_context = PlacementTool(
             MeshData(trimesh.creation.cylinder(radius=2.5, height=10))
@@ -1493,7 +1491,7 @@ def test_the_mouth_outline_marks_the_spot_instead_of_the_whole_cylinder(
     erscheint **und** der Körper wird unsichtbar. Gebaut wird er weiter — an
     ihm hängt, ob gesetzt werden kann.
     """
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     try:
         # Ein Werkzeug mit Mündung in der Fläche: der Zylinder endet bei z = 0,
         # so wie ``prepare_tool`` ihn legt.
@@ -1544,7 +1542,7 @@ def test_placement_refreshes_when_only_a_nested_project_measure_changes(
     from app.core.types import Parameter
     from app.ui import placement_flow
 
-    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    flow, session, viewport, dialog = placement_layout(qt_app, (900, 600), 1.0, "bottom")
     calls = []
 
     def prepare(_spec, _values, _profile, *, parameters, **_kwargs):
@@ -1591,85 +1589,6 @@ def _line_touches(line: tuple[QPointF, QPointF], rect: QRect) -> bool:
         if rect.left() <= x <= rect.right() + 1 and rect.top() <= y <= rect.bottom() + 1:
             return True
     return False
-
-
-def _layout(
-    qt_app: QApplication, size: tuple[int, int], scale: float, corner: str, *, with_zones=False
-):
-    """Eine fertige Platzierungsabsicht; nur ihre Bildprojektion wird gesteuert."""
-    session = Session()
-    mesh = MeshData(trimesh.creation.box((40, 40, 10)))
-    result = EvaluationResult(Scene(objects={"obj_1": SceneObject("obj_1", "Platte", mesh)}))
-    session.last_result = result
-    session.result_current = True
-    viewport = PlacementViewport()
-    viewport.resize(*size)
-    viewport.show_scene(result)
-    viewport.renderer.world_to_display = lambda point: (
-        size[0] - 4 + (point[0] - 10) * scale,
-        (size[1] - 4 if corner == "bottom" else 4) + (point[1] - 10) * scale,
-        0.5,
-    )
-    spec = REGISTRY.get("drill_hole")
-    dialog = OperationDialog(spec, {"obj_1": "Platte"})
-    window = SimpleNamespace(
-        viewport=viewport, session=session, _clear_preview=session.cancel_preview
-    )
-    if with_zones:
-        host = OverlayHost(viewport)
-        host.resize(*size)
-        zones = [QFrame(), QFrame(), QFrame()]
-        for index, zone in enumerate(zones):
-            layout = QVBoxLayout(zone)
-            label = QLabel(
-                "Objekte" if index == 0 else "Prüfbericht" if index == 1 else "Werkzeuge"
-            )
-            label.setMinimumHeight(420 if index < 2 else 48)
-            layout.addWidget(label)
-        host.set_zones(*zones)
-        host.show()
-        host.reflow()
-        window.overlay = host
-    flow = PlacementFlow(dialog, window, lambda: spec, lambda: ("obj_1",))
-    flow._result = result
-    flow._prepared_mesh = mesh
-    flow._object_id = "obj_1"
-    flow._centre_id = "hole_1"
-    flow._tool = PlacementItem()
-    flow._tool_context = PlacementTool(mesh)
-    flow._surface = SurfacePlacement(
-        point=(10, 10, 0),
-        normal=(0, 0, 1),
-        frame=PlaneFrame((0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)),
-        planar=True,
-        face_indices=(0,),
-        edges=(
-            EdgeReference("a", (0, 0, 0), (0, 40, 0), (1, 0, 0), 10),
-            EdgeReference("b", (0, 0, 0), (40, 0, 0), (0, 1, 0), 10),
-        ),
-        centres=(CentreReference("hole_1", (0, 0, 0), (10, 10), 14.142135623730951),),
-    )
-    # **Fläche und Vorbereitung gehen zu zweit**, wie ``at_point`` sie der
-    # Anwendung liefert: Seit der Bezugswahl (20.09.2026) nummeriert
-    # ``redraw`` jedes Kantenmaß über ``_prepared.edges``. Ohne die
-    # Vorbereitung warf das im Ereignisfilter beim Anzeigen — und daraus wurde
-    # unter PySide ein nativer Abriss (Exit 139) statt eines roten Tests
-    # (gemessen am 21.09.2026, dreizehn Portionen des Release-Tors).
-    flow._prepared = PreparedSurface(
-        frame=flow._surface.frame,
-        planar=True,
-        face_indices=(0,),
-        edges=flow._surface.edges,
-        centres=(("hole_1", (0, 0, 0)),),
-        area=Polygon(((-20, -20), (20, -20), (20, 20), (-20, 20))),
-    )
-    flow.active = True
-    viewport.show()
-    viewport.activateWindow()
-    flow._bar.show()
-    qt_app.processEvents()
-    flow.redraw()
-    return flow, session, viewport, dialog
 
 
 def test_the_worker_copy_outlives_the_flow_and_dies_with_its_mesh():
