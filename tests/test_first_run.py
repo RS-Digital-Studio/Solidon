@@ -549,10 +549,9 @@ def test_repeated_slicer_surveys_leave_material_and_inventory_for_the_later_step
 ) -> None:
     """Ein gefundenes Slicerprogramm wählt weder Material noch physische Spulen.
 
-    Verboten wird ``configured_spools`` dort, wo das Filamentlager es liest — als
-    eigene Kopie in ``filament_inventory``. Am Original in ``filament_picker``
-    erreichte das Verbot keinen Aufruf und war immer grün (CS-9a); dass es den
-    echten Aufruf trifft, zeigt ``test_first_run_spools.py``.
+    Verboten wird ``configured_spools`` an der Bindung, die das Filamentlager
+    liest; an einer anderen erreichte das Verbot keinen Aufruf und wäre immer grün
+    (CS-9a). Dass es den echten Aufruf trifft, zeigt ``test_first_run_spools.py``.
     """
     from app.core.knowledge import filaments
     from app.ui import filament_inventory

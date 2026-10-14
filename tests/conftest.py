@@ -23,8 +23,8 @@ from types import ModuleType
 import pytest
 
 # Eine Datei, ein Modul: pytest lädt diese Datei als ``conftest``; wer
-# ``tests.conftest`` importiert (``test_packaging.py``, ``test_affected_tests.py``),
-# bekommt dasselbe Modul. Sonst liefe sie ein zweites Mal — mit zweitem
+# ``tests.conftest`` importiert (``test_toolchain.py``, ``test_packaging.py``,
+# ``test_affected_tests.py``), bekommt dasselbe Modul. Sonst liefe sie ein zweites Mal — mit zweitem
 # Import-Haken samt eigener Pinliste, die kein Abbau leert, und den
 # Profilvariablen auf einem neuen Ordner mitten im Lauf (``test_suite_pin.py``).
 sys.modules.setdefault("tests.conftest", sys.modules[__name__])
@@ -668,11 +668,11 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
         # las erst nur den alten Schlüssel und nahm dann nur eine Datei an.
         return discover._remembered_program(tool_id)
 
-    # Das Original reicht die Fixture ``unpatched_find_program`` weiter.
     def only_what_was_set_plural(tool_id: str, names: object) -> object:
         single = only_what_was_set(tool_id, names)
         return () if single is None else (single,)
 
+    # Das Original reicht die Fixture ``unpatched_find_program`` weiter.
     monkeypatch.setattr(discover, "find_program", only_what_was_set)
     # **Die Mehrzahl braucht denselben Riegel**, und ohne ihn war er weg: Seit
     # der Slicer-Auswahl fragt der Dialog :func:`discover.find_programs`, und
