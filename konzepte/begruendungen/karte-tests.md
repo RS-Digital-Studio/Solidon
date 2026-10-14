@@ -342,7 +342,11 @@ ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur,
 `on_the_bore_wall` für einen Klick auf eine Bohrungswand, `wait_until` für
 zugestellte Qt-Ereignisse, `wait_for_export` und `wait_for_print_findings` für
 Arbeiter, die `wait_for_idle` nicht sieht, sowie `PlacementItem`,
-`PlacementViewport` und `scene_with_a_hole_and_a_fillet` für Platzierungsfälle.
+`PlacementViewport`, `placement_layout` und `scene_with_a_hole_and_a_fillet`
+für Platzierungsfälle. Für Maßkarten: `send_mouse_event` (Mausereignis mit
+festem Bildschirmbezug), `begin_card_drag`/`end_card_drag`,
+`settle_measure_layout` (Layoutaufträge zustellen) und
+`measure_more_heading`.
 
 ## Stolperfallen
 
