@@ -1234,22 +1234,31 @@ def nested_scroll(qt_app: Any) -> Iterator[tuple[Any, Any, Any]]:
 def test_a_widget_cut_off_by_an_outer_scroll_area_is_reached_by_rolling_it(
     nested_scroll: tuple[Any, Any, Any], qt_app: Any
 ) -> None:
-    """D0 F-19: Ein Feld, das sein innerer Rollbereich ganz zeigt, der äußere aber abschneidet.
-
-    Die Auswahlkarte steckt im Rollbereich der Karte und im äußeren
-    ``FittedScroller``. Gefragt war nur der nächste Rollbereich: Dort stand das
-    Ziel „sichtbar“, und der Klick fiel unter die Karte. Jetzt zählt jeder
-    Bereich, gerollt wird der erste, der rollen kann — hier der äußere.
-    """
+    """D0 F-19: Innen sichtbar genügt nicht beim äußeren ``FittedScroller`` der Karte.
+    Jeder Bereich zählt; der hilfreiche äußere Radweg muss das ganze Feld freilegen."""
     from app.ui import guide_targets
+    from tools.function_walk import QtPorts
 
-    window, outer, _inner = nested_scroll
+    window, outer, inner = nested_scroll
     bar = outer.verticalScrollBar()
     step = guide_targets.next_click(window, "setting:probe")
     assert (step.why, step.direction, step.button) == ("rollen", 1, Qt.MouseButton.NoButton)
     assert bar.value() == 0, "next_click hat selbst gerollt"
     bar.setValue(bar.maximum())
     _settle(qt_app)
+    # Der äußere Anschlag legt die Mitte frei, schneidet oben aber eine Zeile ab.
+    step = guide_targets.next_click(window, "setting:probe")
+    assert (step.why, step.direction) == ("rollen", -1)
+    ports = QtPorts(window, 0.0)
+    hit = ports.widget_under(step.rect.center())
+    assert hit is not None and ports.covers(step, hit)
+    ports.press(hit, step.rect.center(), "wheel_up", wheel_angle=step.wheel_angle)
+    _settle(qt_app)
+    target = guide_targets.widget_for(window, "setting:probe")
+    for area in (inner, outer):
+        shown = area.viewport().rect()
+        actual = QRect(target.mapTo(area.viewport(), QPoint()), target.size())
+        assert shown.contains(actual), (shown, actual)
     assert guide_targets.next_click(window, "setting:probe").why == "ziel"
 
 

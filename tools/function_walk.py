@@ -112,6 +112,7 @@ class ClickLike(Protocol):
     why: str
     target: Any
     direction: int
+    wheel_angle: int
 
 
 class Ports(Protocol):
@@ -121,7 +122,7 @@ class Ports(Protocol):
     def widget_under(self, point: Any) -> Any: ...
     def covers(self, click: ClickLike, hit: Any) -> bool: ...
     def centre(self, rect: Any) -> Any: ...
-    def press(self, widget: Any, point: Any, button: str) -> None: ...
+    def press(self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120) -> None: ...
     def move(self, point: Any) -> None: ...
     def keys(self, sequence: Any) -> None: ...
     def type_text(self, text: str) -> None: ...
@@ -380,7 +381,13 @@ class Walk:
             return why
         if why == TARGET_REASON and self.before_target is not None:
             self.before_target(name)
-        self.ports.press(hit, point, record["button"])
+        angle = int(getattr(click, "wheel_angle", 120)) if why == "rollen" else 120
+        if why == "rollen":
+            record["wheel_angle"] = angle
+        if angle != 120:
+            self.ports.press(hit, point, record["button"], wheel_angle=angle)
+        else:
+            self.ports.press(hit, point, record["button"])
         return why
 
     def _t(self) -> float:
@@ -670,11 +677,13 @@ class QtPorts:
     def centre(self, rect: Any) -> Any:
         return rect.center()
 
-    def press(self, widget: Any, point: Any, button: str) -> None:
+    def press(self, widget: Any, point: Any, button: str, *, wheel_angle: int = 120) -> None:
         from PySide6.QtCore import QPoint, Qt
         from PySide6.QtTest import QTest
         from PySide6.QtWidgets import QApplication
 
+        if wheel_angle <= 0:
+            raise ValueError("Der Radwinkel muss positiv sein (Achtelgrad).")
         local = widget.mapFromGlobal(point)
         modifiers = Qt.KeyboardModifier.NoModifier
         held, plus, rest = button.rpartition("+")
@@ -709,7 +718,7 @@ class QtPorts:
                     "Die gepinnte Umgebung über tools/check_env.py prüfen und "
                     "mit --install gegen constraints.txt herstellen."
                 )
-            step = 120 if button == "wheel_up" else -120
+            step = wheel_angle if button == "wheel_up" else -wheel_angle
             # Der Qt-Eingabepfad reicht ignorierte Radereignisse an die Eltern
             # weiter. Direktes sendEvent bleibt dagegen beim getroffenen Kind.
             handle = top.windowHandle()
@@ -853,6 +862,8 @@ class QtPorts:
         from app.ui import guide_targets
 
         name = str(getattr(click, "target", "") or "")
+        if str(getattr(click, "why", TARGET_REASON)) != TARGET_REASON:
+            return point
         if name.partition(":")[0] not in ("field", "feature.field", "measure.field"):
             return point
         try:
