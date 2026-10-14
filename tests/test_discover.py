@@ -677,8 +677,8 @@ def test_an_ascii_workspace_survives_unicode_temp_without_short_names(
     fallback.mkdir()
     monkeypatch.setattr(discover.tempfile, "tempdir", str(unicode_temp))
     monkeypatch.setattr(discover.sys, "platform", "win32")
-    monkeypatch.setattr(discover, "_windows_short_path", lambda _path: None, raising=False)
-    monkeypatch.setattr(discover, "_windows_temp_dir", lambda: fallback, raising=False)
+    monkeypatch.setattr(discover, "_windows_short_path", lambda _path: None)
+    monkeypatch.setattr(discover, "_windows_temp_dir", lambda: fallback)
     with discover.workspace_for(
         tmp_path / "CuraEngine.exe", "probe-", ascii_only=True
     ) as workspace:

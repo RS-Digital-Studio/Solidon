@@ -118,7 +118,6 @@ def test_window_file_uses_actual_limits_without_packing(tmp_path, monkeypatch, r
         writer,
         "_arrange_for_cli",
         lambda *args, **kwargs: pytest.fail("Fensterexport darf nicht packen"),
-        raising=False,
     )
     setup = handover.SlicerSetup(tmp_path / "prusa-slicer-console.exe", "prusa")
     job = dialog._PlateJob(
