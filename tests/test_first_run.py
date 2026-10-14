@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -212,7 +213,9 @@ def test_a_start_error_keeps_its_reason(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_the_official_comfy_desktop_name_is_found_in_a_program_folder(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    unpatched_find_program: Callable[..., Path | None],
 ) -> None:
     """Der Installer legt ``Comfy Desktop`` ab, nicht ``ComfyUI``.
 
@@ -241,7 +244,7 @@ def test_the_official_comfy_desktop_name_is_found_in_a_program_folder(
     comfyui = tools.by_id("comfyui")
     assert comfyui is not None
 
-    found = tools.discover.unpatched_find_program("comfyui", comfyui.executables)
+    found = unpatched_find_program("comfyui", comfyui.executables)
 
     assert found == executable
 

@@ -16,7 +16,7 @@ import shutil
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 
 import pytest
@@ -87,6 +87,7 @@ for _variable in PROFILE_VARIABLES:
 
 from app.core import discover
 from app.core.activation import store as activation_store
+from app.core.backends import llm
 from app.core.export import slicer_profiles
 from app.core.knowledge import profiles
 from app.core.perceive import features, local, matching
@@ -95,6 +96,17 @@ from tests.helpers import FakeMesh
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
 _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
+
+#: Die echten Funktionen, bevor ``_machine_stays_out_of_it`` und
+#: ``_the_network_stays_out_of_it`` sie je Test gegen Attrappen tauschen —
+#: erhoben beim Laden dieser Datei, also vor jedem Patch, und die einzige Quelle
+#: der gleichnamigen Fixtures. An den Produktmodulen hängen sie nicht: Ein Name,
+#: den es dort nur zur Laufzeit gibt, legt ``monkeypatch`` nur mit
+#: ``raising=False`` an, und ihn kann weder ein Wächter auflösen noch ein Schnitt
+#: umschreiben (Konzept Codestruktur 4.1, W2 a und b, W5).
+_UNPATCHED_FIND_PROGRAM = discover.find_program
+_UNPATCHED_FIND_PROGRAMS = discover.find_programs
+_UNPATCHED_BACKENDS = llm.backends
 
 #: Der Satz, mit dem der Lauf endet, wenn der exakte Kern in der CI fehlt.
 #: ``test_toolchain.py`` prüft, dass er an ``pytest_sessionstart`` hängt.
@@ -607,15 +619,11 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
         # las erst nur den alten Schlüssel und nahm dann nur eine Datei an.
         return discover._remembered_program(tool_id)
 
-    # Das Original bleibt unter eigenem Namen erreichbar, für die wenigen
-    # Tests, die **genau es** prüfen wollen (`test_discover.py`). Ohne diese
-    # Zeile fragt ein solcher Test die Attrappe darüber und ist grün, ohne
-    # etwas geprüft zu haben — die Attrappe protokolliert zum Beispiel nie.
+    # Das Original reicht die Fixture ``unpatched_find_program`` weiter.
     def only_what_was_set_plural(tool_id: str, names: object) -> object:
         single = only_what_was_set(tool_id, names)
         return () if single is None else (single,)
 
-    monkeypatch.setattr(discover, "unpatched_find_program", discover.find_program, raising=False)
     monkeypatch.setattr(discover, "find_program", only_what_was_set)
     # **Die Mehrzahl braucht denselben Riegel**, und ohne ihn war er weg: Seit
     # der Slicer-Auswahl fragt der Dialog :func:`discover.find_programs`, und
@@ -623,8 +631,8 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     # Entwicklerrechner mit drei Slicern sah damit etwas anderes als der
     # Bauserver mit keinem — genau die Abhängigkeit, die diese Fixture
     # ausschließt (§38). Aufgefallen an zwei Tests, die ohne Fund rechneten
-    # und plötzlich ElegooSlicer vorfanden (30.08.2026).
-    monkeypatch.setattr(discover, "unpatched_find_programs", discover.find_programs, raising=False)
+    # und plötzlich ElegooSlicer vorfanden (30.08.2026). Das Original reicht
+    # die Fixture ``unpatched_find_programs`` weiter.
     monkeypatch.setattr(discover, "find_programs", only_what_was_set_plural)
     discover.forget_cache()
     # **Und nicht Prozessor und Speicher** (RM-564): Auf einem Mac mit 16 GB
@@ -644,6 +652,37 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     machine.forget_card()
 
 
+@pytest.fixture
+def unpatched_find_program() -> Callable[..., Path | None]:
+    """Die echte :func:`discover.find_program` — für die wenigen Tests, die **genau
+    sie** prüfen (``test_discover.py``).
+
+    ``discover.find_program`` ist in der Suite die Attrappe aus
+    ``_machine_stays_out_of_it``. Ein Test, der sie fragte, wäre grün, ohne die
+    Suchkette je betreten zu haben — die Attrappe protokolliert zum Beispiel nie.
+    Wer damit nach einem Slicer sucht, isoliert die Ablagen (``isolated_search``)
+    oder geht über ``installed_slicer`` (``test_slicer_selection.py`` hält das).
+    """
+    return _UNPATCHED_FIND_PROGRAM
+
+
+@pytest.fixture
+def unpatched_find_programs() -> Callable[[str, Iterable[str]], tuple[Path, ...]]:
+    """Die echte :func:`discover.find_programs`; wie ``unpatched_find_program``."""
+    return _UNPATCHED_FIND_PROGRAMS
+
+
+@pytest.fixture
+def unpatched_backends() -> Callable[[], tuple[llm.LLMBackend, ...]]:
+    """Die echte :func:`llm.backends` — für einen Test, der genau die Liste braucht.
+
+    ``_the_network_stays_out_of_it`` leert sie, damit die Suite nicht nach einem
+    Modell auf dieser Maschine fragt. Wer sie zurückholt, stellt die Erreichbarkeit
+    der Backends selbst (``test_backends.py``) — sonst fragte der Test das Netz.
+    """
+    return _UNPATCHED_BACKENDS
+
+
 #: Unter dieser Variable ist ein fehlender Slicer ein Fehler statt ein Skip —
 #: gesetzt von ``.github/workflows/slicer-auswahl.yml``, wo jeder gewählte
 #: Slicertest sein Programm installiert vorfinden muss.
@@ -651,13 +690,16 @@ REQUIRE_SLICERS = "SOLIDON_REQUIRE_SLICERS"
 
 
 @pytest.fixture
-def installed_slicer(request: pytest.FixtureRequest) -> Path:
+def installed_slicer(
+    request: pytest.FixtureRequest,
+    unpatched_find_programs: Callable[[str, Iterable[str]], tuple[Path, ...]],
+) -> Path:
     """Der echte, auf dieser Maschine installierte Slicer, den der Marker nennt.
 
     Die einzige Stelle, an der ein Test die Maschine nach einem Slicer fragen
     darf (``test_slicer_selection.py`` hält das): ``@pytest.mark.slicer("cura")``
     nennt das Programm in der Schreibweise von :func:`discover.program_mark`,
-    die Fixture sucht es wie die Anwendung (``discover.find_programs`` ohne die
+    die Fixture sucht es wie die Anwendung (``unpatched_find_programs``, ohne die
     Attrappe aus ``_machine_stays_out_of_it``). Über den Marker wählt
     ``tools/ci_selection.py`` den Test für die Slicerauswahl auf Linux und
     macOS, und der Workflow installiert genau die genannten Programme.
@@ -685,7 +727,7 @@ def installed_slicer(request: pytest.FixtureRequest) -> Path:
     try:
         found = [
             program
-            for program in discover.unpatched_find_programs("slicer", tools.SLICERS)
+            for program in unpatched_find_programs("slicer", tools.SLICERS)
             if discover.program_mark(program.name) == wanted
         ]
     finally:
@@ -775,12 +817,11 @@ def _the_network_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     (``localhost:1``), und das soll es weiter tun. Wer die Prüfung selbst
     ersetzte, machte aus diesem Test eine Attrappe, die nichts mehr misst.
 
-    Das Original bleibt unter eigenem Namen erreichbar — für den Fall, dass ein
-    Test genau die Liste braucht.
+    Das Original reicht die Fixture ``unpatched_backends`` weiter — für den
+    Fall, dass ein Test genau die Liste braucht.
     """
-    from app.core.backends import llm, resources
+    from app.core.backends import resources
 
-    monkeypatch.setattr(llm, "unpatched_backends", llm.backends, raising=False)
     monkeypatch.setattr(llm, "backends", tuple)
     # **Und kein warm gehaltenes Modell reist in den nächsten Test** (seit dem
     # 25.09.2026 bleibt ein Modell nach dem Zug geladen, ``resources.keep_warm``).
