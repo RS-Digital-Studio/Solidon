@@ -1550,6 +1550,7 @@ class Click:
     why: ClickReason
     target: str
     direction: int = 0
+    wheel_angle: int = 120  #: Positive Achtelgrade; die Richtung steht in ``direction``.
 
 
 def next_click(window: MainWindow, name: str) -> Click:
@@ -1637,16 +1638,11 @@ def _widget_click(widget: QWidget, name: str, button: Qt.MouseButton) -> Click:
 
 
 def _scroll_needed(widget: QWidget, name: str) -> Click | None:
-    """Ob das Widget außerhalb des sichtbaren Teils eines seiner Rollbereiche steht.
+    """Ganze Feldhöhe durch alle Rollbereiche; überhohe Behälter nur bis zur Mitte.
 
-    **Jeder umgebende Rollbereich zählt, von innen nach außen** (D0, F-19). Die
-    Auswahlkarte steckt im Rollbereich der Karte und im äußeren
-    ``overlay.FittedScroller``: Innen stand das Ziel „sichtbar“, der äußere
-    schnitt es ab, und der Klick fiel unter die Karte. Gemessen wird die Mitte
-    gegen den Teil der Sichtfläche, den kein äußerer Bereich abschneidet
-    (:func:`_unclipped`); gerollt wird der erste Bereich, der in diese Richtung
-    rollen kann — wie das Mausrad, das Qt nach außen weiterreicht. Rollt keiner,
-    bleibt das Ziel, wie es steht.
+    Ein zu kleiner innerer Ausschnitt braucht erst den äußeren Rollbereich.
+    Dessen sichtbare Scrollbar empfängt das Rad selbst. Der Restwinkel hält die
+    fehlende Kante ein; unbrauchbare Schritte und Anschläge bleiben unerreicht.
     """
     areas: list[QScrollArea] = []
     parent: QWidget | None = widget.parentWidget()
@@ -1657,23 +1653,47 @@ def _scroll_needed(widget: QWidget, name: str) -> Click | None:
             break
         parent = parent.parentWidget()
     centre = widget.mapToGlobal(widget.rect().center())
-    hidden = next(
-        (area for area in areas if not _unclipped(area.viewport()).contains(centre)),
-        None,
-    )
-    if hidden is None:
+    reach = QRect(centre, QSize(1, 1))
+    if all(widget.height() <= area.viewport().height() for area in areas):
+        reach = QRect(centre.x(), widget.mapToGlobal(QPoint(0, 0)).y(), 1, widget.height())
+    if all(_unclipped(area.viewport()).contains(reach) for area in areas):
         return None
-    seen = _unclipped(hidden.viewport())
-    direction = 1 if centre.y() >= seen.center().y() else -1
     for area in areas:
-        bar = area.verticalScrollBar()
-        if bar is not None and (
-            bar.value() < bar.maximum() if direction > 0 else bar.value() > bar.minimum()
-        ):
-            return Click(
-                _unclipped(area.viewport()), Qt.MouseButton.NoButton, "rollen", name, direction
+        seen = _unclipped(area.viewport())
+        if seen.height() < reach.height():
+            # Erst einen ausreichend hohen Innenausschnitt freilegen, dann sein Feld.
+            nominal = _global(area.viewport())
+            reach.moveTop(
+                min(max(reach.top(), nominal.top()), nominal.bottom() - reach.height() + 1)
             )
-    return None
+            continue
+        if seen.contains(reach):
+            continue
+        direction = -1 if reach.top() < seen.top() else 1
+        bar = area.verticalScrollBar()
+        remaining = bar.maximum() - bar.value() if direction > 0 else bar.value() - bar.minimum()
+        span = bar.singleStep() * QApplication.wheelScrollLines()
+        if remaining <= 0 or span <= 0 or bar.pageStep() <= 0:
+            continue
+        distance = max(seen.top() - reach.top(), reach.bottom() - seen.bottom(), 1)
+        angle = min(120, (120 * distance + span - 1) // span)
+        travel = min(remaining, bar.pageStep(), (span * angle + 119) // 120)
+        if travel > distance + seen.height() - reach.height():
+            continue
+        use_bar = bar.isVisible() and (angle != 120 or area is not areas[0])
+        surface = _unclipped(bar.parentWidget() or bar) if use_bar else seen
+        hit = widget_under(surface.center())
+        if use_bar and hit is not bar:
+            continue
+        if not use_bar:
+            while hit is not None and not isinstance(hit, QAbstractScrollArea):
+                hit = hit.parentWidget()
+            if hit is not area:
+                continue
+        return Click(surface, Qt.MouseButton.NoButton, "rollen", name, direction, angle)
+    raise MissingTargetError(
+        f"{name}: Rollanschlag oder kein geeigneter Radschritt zum ganzen Ziel"
+    )
 
 
 def _unclipped(widget: QWidget) -> QRect:
