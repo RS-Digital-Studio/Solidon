@@ -180,33 +180,26 @@ def _vectors(
 def _cost_matrix(
     first: list[Feature],
     second: list[Feature],
-    first_centre: Vec3,
-    second_centre: Vec3,
-    diagonal: float,
-    *,
-    check_cancelled: Callable[[], None] | None = None,
+    one: np.ndarray,
+    two: np.ndarray,
+    tree: Any,
+    radius: float,
+    check: Callable[[], None] | None,
 ) -> np.ndarray:
-    """Vollständige Referenzmatrix mit derselben Formel wie selektive Paare."""
-    first_vectors = _vectors(first, first_centre, diagonal, check_cancelled)
-    second_vectors = _vectors(second, second_centre, diagonal, check_cancelled)
-    second_kinds = np.asarray([feature.kind for feature in second], dtype=object)
-    matrix = np.empty((len(first), len(second)), dtype=float)
+    """Die volle Matrix des globalen Solvers — der einzige quadratische Schritt der Zuordnung.
 
-    for start in range(0, len(first), VECTOR_ROWS):
-        if check_cancelled is not None:
-            check_cancelled()
-        stop = min(start + VECTOR_ROWS, len(first))
-        one = first_vectors[start:stop]
-        signless = np.fromiter(
-            ("axis" in feature.params for feature in first[start:stop]),
-            dtype=bool,
-            count=stop - start,
-        )
-        block = _vector_costs(one[:, None, :], second_vectors[None, :, :], signless[:, None])
-        first_kinds = np.asarray([feature.kind for feature in first[start:stop]], dtype=object)
-        block[first_kinds[:, None] != second_kinds[None, :]] = KIND_PENALTY
-        matrix[start:stop] = block
+    Jedes angenommene Paar trägt seine Kosten aus :func:`_candidate_costs`,
+    jedes andere die Strafe. Abgelehnte Paare kosten überall dieselbe Strafe:
+    Sonst könnte der Summenoptimierer ein annehmbares Paar zugunsten zweier
+    billigerer, aber beide abgelehnter Paare opfern. Der vollständige globale
+    Kontext bleibt auch bei räumlich getrennten Konkurrenzgruppen erhalten.
 
+    :func:`_assignment` liest die Funktion über das Modul: Ein Test, der sie
+    verbietet, verbietet damit die Matrix selbst (CS-9b).
+    """
+    matrix = np.full((len(first), len(second)), KIND_PENALTY, dtype=float)
+    for row, columns, values in _candidate_costs(first, second, one, two, tree, radius, check):
+        matrix[row, columns] = values
     return matrix
 
 
@@ -506,13 +499,7 @@ def _assignment(
         )
     if check is not None:
         check()
-    # Abgelehnte Paare kosten überall dieselbe Strafe. Sonst könnte der
-    # Summenoptimierer ein annehmbares Paar zugunsten zweier billigerer,
-    # aber beide abgelehnter Paare opfern. Der vollständige globale Kontext
-    # bleibt auch bei räumlich getrennten Konkurrenzgruppen erhalten.
-    matrix = np.full((len(first), len(second)), KIND_PENALTY, dtype=float)
-    for row, columns, values in _candidate_costs(first, second, one, two, tree, radius, check):
-        matrix[row, columns] = values
+    matrix = _cost_matrix(first, second, one, two, tree, radius, check)
     if check is not None:
         check()
     rows, columns = linear_sum_assignment(matrix)

@@ -114,8 +114,9 @@ def test_the_vectorised_matrix_is_the_single_pair_formula() -> None:
 
     Gemischt werden richtungslose Achsen, gerichtete Normalen, verschiedene
     Arten und die beiden Größenschlüssel. Damit steht jede Verzweigung von
-    ``cost`` mindestens einmal in der Matrix und wird elementweise gegen die
-    lesbare Einzelpaar-Referenz geprüft.
+    ``cost`` mindestens einmal in der Paketformel und wird elementweise gegen
+    die lesbare Einzelpaar-Referenz geprüft; die Matrix des Solvers trägt
+    dieselben Zahlen für jedes angenommene Paar.
     """
     old = [
         Feature(
@@ -177,12 +178,32 @@ def test_the_vectorised_matrix_is_the_single_pair_formula() -> None:
     after = (10.0, -4.0, 2.0)
     diagonal = 80.0
 
-    matrix = _cost_matrix(old, new, before, after, diagonal)
+    from app.core.perceive import matching
+
+    one = matching._vectors(old, before, diagonal, None)
+    two = matching._vectors(new, after, diagonal, None)
     reference = np.asarray(
         [[cost(first, second, before, after, diagonal) for second in new] for first in old]
     )
+    # Die Paketformel, wie ``_costed`` sie für Kandidaten rechnet, über jedes
+    # Paar — auch über das gekippte gerichtete Normalenpaar, das der
+    # Raumfilter nie annimmt.
+    rows, columns = np.divmod(np.arange(len(old) * len(new)), len(new))
+    signless = np.asarray(["axis" in feature.params for feature in old])[rows]
+    batch = matching._vector_costs(one[rows], two[columns], signless).reshape(reference.shape)
+    other_kind = np.asarray([[first.kind != second.kind for second in new] for first in old])
+    batch[other_kind] = matching.KIND_PENALTY
+    np.testing.assert_allclose(batch, reference, rtol=1e-12, atol=1e-12)
 
-    np.testing.assert_allclose(matrix, reference, rtol=1e-12, atol=1e-12)
+    # Die Matrix, die der globale Solver bekommt: über Raumfilter und Pakete
+    # gerechnet, abgelehnte Paare mit der Strafe (CS-9b).
+    accepted = reference <= matching.MATCH_THRESHOLD
+    assert accepted.sum() == 2, "Bohrung und Kugel angenommen, die gekippte Fläche nicht"
+    tree = matching.cKDTree(two[:, :3])
+    matrix = _cost_matrix(old, new, one, two, tree, matching._query_radius(), None)
+    np.testing.assert_allclose(
+        matrix, np.where(accepted, reference, matching.KIND_PENALTY), rtol=1e-12, atol=1e-12
+    )
 
 
 def test_the_matching_needs_no_entry_for_a_new_kind_of_feature() -> None:
