@@ -1378,11 +1378,11 @@ def _prepare_binding(
     owned = set(part_ops.operation_names(recipe.name, parts))
     prepared_parts = PartRegistry()
     prepared_operations = Registry()
-    for part_spec in parts.all():
+    for part_spec in parts.in_registration_order():
         if replace_existing and part_spec.name == recipe.name:
             continue
         prepared_parts.register(part_spec)
-    for operation_spec in operations.all():
+    for operation_spec in operations.in_registration_order():
         if replace_existing and operation_spec.name in owned:
             continue
         prepared_operations.register(operation_spec)
@@ -1410,10 +1410,10 @@ def _prepare_removal(
     owned = set(part_ops.operation_names(name, parts))
     prepared_parts = PartRegistry()
     prepared_operations = Registry()
-    for part_spec in parts.all():
+    for part_spec in parts.in_registration_order():
         if part_spec.name != name:
             prepared_parts.register(part_spec)
-    for operation_spec in operations.all():
+    for operation_spec in operations.in_registration_order():
         if operation_spec.name not in owned:
             prepared_operations.register(operation_spec)
     return _PreparedBinding(prepared_parts, prepared_operations)

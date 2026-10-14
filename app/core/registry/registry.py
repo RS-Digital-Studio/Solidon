@@ -1038,6 +1038,17 @@ class Registry:
     def all(self) -> tuple[OperationSpec, ...]:
         return tuple(self._ops[name] for name in sorted(self._ops))
 
+    def in_registration_order(self) -> tuple[OperationSpec, ...]:
+        """In der Reihenfolge der Registrierung, nicht nach Namen wie :meth:`all`.
+
+        Diese Folge ist Vertrag: ``bootstrap._OPERATION_MODULES`` hält sie
+        (Konzept Codestruktur 3.1, Regel 3), und der Registerabzug
+        (``tools/registry_dump.py``) zeigt an ihr, ob ein Schnitt die
+        Importfolge verschoben hat. Ein zurückgenommener und neu registrierter
+        Eintrag steht danach hinten.
+        """
+        return tuple(self._ops.values())
+
     def by_category(self) -> dict[str, tuple[OperationSpec, ...]]:
         """Nach Kategorien gruppiert, **innerhalb nach dem Titel sortiert**.
 

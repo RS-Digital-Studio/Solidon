@@ -686,6 +686,11 @@ class PartRegistry:
     def all(self) -> tuple[PartSpec, ...]:
         return tuple(self._parts[name] for name in sorted(self._parts))
 
+    def in_registration_order(self) -> tuple[PartSpec, ...]:
+        """In der Reihenfolge der Registrierung, nicht nach Namen wie :meth:`all` —
+        dieselbe Folge wie ``Registry.in_registration_order`` (Registerabzug W3)."""
+        return tuple(self._parts.values())
+
     def by_group(self) -> dict[str, tuple[PartSpec, ...]]:
         grouped: dict[str, list[PartSpec]] = {name: [] for name in GROUPS}
         for spec in self.all():
