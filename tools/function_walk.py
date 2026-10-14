@@ -734,6 +734,19 @@ class QtPorts:
             # einen Verlaufsschritt (Probelauf F-34, Prüfpunkt 12).
             QTest.mouseClick(widget, Qt.MouseButton.LeftButton, modifiers, local)
             QTest.mouseDClick(widget, Qt.MouseButton.LeftButton, modifiers, local)
+            # Danach lässt der Kunde die Taste los; ``mouseDClick`` tut das nicht.
+            # Ohne Loslassen hielt Qt die linke Taste für gedrückt: Jede spätere
+            # Bewegung im Prozess war ein Zug ohne Enter und Leave, und ein
+            # Tooltip blieb über dem nächsten Ziel stehen (FD-83). Wie bei Qt
+            # empfängt das Loslassen das gedrückte Widget oder, wenn der
+            # Doppelklick es abgebaut hat, das unter dem Zeiger.
+            from shiboken6 import isValid
+
+            release = widget if isValid(widget) else self.widget_under(point)
+            if release is not None:
+                QTest.mouseRelease(
+                    release, Qt.MouseButton.LeftButton, modifiers, release.mapFromGlobal(point)
+                )
             return
         mouse = {
             "left": Qt.MouseButton.LeftButton,
