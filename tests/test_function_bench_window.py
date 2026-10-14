@@ -458,8 +458,13 @@ def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
     Liste meldet ``itemDoubleClicked`` aber nur an der Zeile, die vorher
     gedrückt war. Kein Doppelklick des Prüfstands öffnete so je einen Schritt
     im Verlauf — der Fehlfall von *Auf das Bett setzen* fand sein Feld nie.
+
+    Danach ist die Taste wieder los (FD-83): ``mouseDClick`` lässt sie nicht
+    los, und Qt hielt sie für den Rest des Prozesses gedrückt — jede spätere
+    Bewegung war ein Zug ohne Leave, ein Tooltip blieb über dem nächsten Ziel.
     """
-    from PySide6.QtWidgets import QListWidget
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QListWidget
 
     listing = QListWidget()
     listing.addItems(["1  Quader anlegen", "2  Bohrung setzen"])
@@ -474,6 +479,7 @@ def test_a_double_click_reaches_a_list_as_a_double_click(qt_app: Any) -> None:
         ports.press(ports.widget_under(point), point, "double")
         qt_app.processEvents()
         assert opened == ["2  Bohrung setzen"]
+        assert QApplication.mouseButtons() == Qt.MouseButton.NoButton
     finally:
         listing.close()
         listing.deleteLater()
