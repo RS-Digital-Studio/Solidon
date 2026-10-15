@@ -784,6 +784,9 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
         _foundation_cache=None,
         _map_request=None,
         _announcement_document=document,
+        # Keine Quittung steht; der nächste Schritt hätte nichts abzuräumen (FD-162).
+        _announcement="",
+        _action_notice=SimpleNamespace(isVisible=lambda: False, outlived_by=lambda _steps: False),
         _follow_the_run_in_the_report=lambda: None,
         _split_points=(),
         _quiet_host=None,
@@ -12508,6 +12511,9 @@ def _preflight_scale_host(
             profile=profiles.make_profile("prusa-mini", "pla"),
             history=SimpleNamespace(discardable=False),
             apply=lambda *args, **kwargs: events.append(("applied", args)),
+            # Die Kette hält nicht an; run_operation fragt das vor dem Dialog (FD-104).
+            inserting=None,
+            halt_in_the_way=lambda: None,
         ),
         object_tree=SimpleNamespace(
             selected_objects=lambda: [selected[0]],
