@@ -108,6 +108,7 @@ Nutzen da und sonst nichts.
 - In der Maßkarte im Bild geht die Tabulatortaste von den Feldern über *Weitere Werte* und den Haken für gleichartige Merkmale zu *Übernehmen* und *Abbrechen* und danach zurück zum ersten Feld. Der Haken steht jetzt über den Knöpfen.
 - Nach *Abbrechen* oder Esc in der Maßkarte steht die Tastatur wieder in der 3D-Ansicht, wie nach *Übernehmen*. Bisher landete sie auf der Karte *Objekte*.
 - *Übernehmen* in der Maßkarte bleibt grau, bis sich ein Wert oder der Haken für gleichartige Merkmale ändert, und nennt das Feld, mit dem es losgeht. Bisher war es schon nach einem Klick ins Feld frei und tat nichts.
+- Lehnt die Maßkarte einen Wert ab, steht der Grund einmal, direkt unter dem Feld. Bisher stand derselbe Satz noch einmal über den Knöpfen.
 
 ## 0.6.0
 

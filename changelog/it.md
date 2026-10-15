@@ -83,6 +83,7 @@ scrive in `website/version.json`.
 - Nella scheda delle misure nella vista, il tasto Tab passa dai campi ad *Altri valori* e alla casella degli elementi uguali, poi ad *Applica* e *Annulla*, e torna al primo campo. La casella ora sta sopra i pulsanti.
 - Dopo *Annulla* o Esc nella scheda delle misure, la tastiera torna nella vista 3D, come dopo *Applica*. Prima finiva sulla scheda *Oggetti*.
 - *Applica* nella scheda delle misure resta grigio finché non cambia un valore o la casella degli elementi uguali, e indica il campo da cui partire. Prima si attivava già con un clic in un campo e non faceva nulla.
+- Se la scheda delle misure rifiuta un valore, il motivo compare una sola volta, subito sotto il campo. Prima la stessa frase si ripeteva sopra i pulsanti.
 
 ## 0.6.0
 

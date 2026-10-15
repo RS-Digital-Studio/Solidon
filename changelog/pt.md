@@ -83,6 +83,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No cartão de medidas da vista, a tecla Tab passa dos campos para *Mais valores* e para a caixa dos elementos iguais, depois para *Aplicar* e *Cancelar*, e volta ao primeiro campo. A caixa fica agora acima dos botões.
 - Depois de *Cancelar* ou Esc no cartão de medidas, o teclado volta à vista 3D, como depois de *Aplicar*. Antes ia parar ao cartão *Objetos*.
 - *Aplicar* no cartão de medidas fica cinzento até mudar um valor ou a caixa dos elementos iguais, e indica o campo por onde começar. Antes ficava ativo logo com um clique num campo e não fazia nada.
+- Se o cartão de medidas recusar um valor, o motivo aparece uma só vez, logo abaixo do campo. Antes a mesma frase repetia-se acima dos botões.
 
 ## 0.6.0
 

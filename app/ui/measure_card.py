@@ -1,14 +1,15 @@
-"""Die Karte der Maßgruppe über der Ansicht: runde Ecken und der Weg der Tabulatortaste.
+"""Die Karte der Maßgruppe über der Ansicht: runde Ecken, Tabulatorweg, Sätze nur einmal.
 
-Die Karte trägt die Fachfelder des Merkmals im Rollbereich, den Sammelhaken und
-*Übernehmen*/*Abbrechen* (``PlacementFlow._build_floating``). Die Felder
-entstehen im Merkmalfenster und ziehen später in die Karte; Qt reiht sie in der
-Fokuskette deshalb hinter die Knöpfe, und nach dem letzten Feld ging die
+Die Karte trägt die Fachfelder des Merkmals im Rollbereich, den Sammelhaken, den
+Hinweis und *Übernehmen*/*Abbrechen* (``PlacementFlow._build_floating``). Die
+Felder entstehen im Merkmalfenster und ziehen später in die Karte; Qt reiht sie
+in der Fokuskette deshalb hinter die Knöpfe, und nach dem letzten Feld ging die
 Tabulatortaste zum nächsten Widget des Fensters, dem Kartengriff „Objekte“ —
 Haken und Knöpfe erreichte sie nie (FD-86). Hier gilt das Layout: Felder,
 „Weitere Werte“, Sammelhaken, *Übernehmen*, *Abbrechen*, und danach wieder das
 erste Feld (``oberflaeche.md``, „Die Tabulatortaste geht denselben Weg wie das
-Auge“).
+Auge“). Was eine Feldzeile schon sagt, wiederholt der Hinweis nicht
+(:func:`stands_in`, FD-88).
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QGridLayout,
+    QLabel,
     QLayout,
     QLayoutItem,
     QScrollArea,
@@ -30,6 +32,25 @@ from PySide6.QtWidgets import (
 )
 
 from app.ui.overlay import _round_corners
+
+
+def stands_in(surface: QWidget | None, sentence: str) -> bool:
+    """Ob ``sentence`` schon sichtbar auf ``surface`` steht — in einer ihrer Beschriftungen.
+
+    Die Ablehnung einer Zahl steht unter ihrem Feld (``FeaturePanel``,
+    ``feature-measure-refusal-*``), dort mit dem Weg dahinter. Der Hinweis der
+    Karte wiederholte sie, und die Statuszeile ein drittes Mal (FD-88):
+    Derselbe Satz dreimal lenkt vom Feld ab, das man ändern muss. Gefragt wird
+    das Bild und nicht, woher der Satz kam — ein Feld hinter zugeklappten
+    „Weiteren Werten“ zeigt ihn nicht, und dann sagt ihn die Karte.
+    """
+    if surface is None or not sentence:
+        return False
+    return any(
+        sentence in label.text() and label.isVisibleTo(surface)
+        for label in surface.findChildren(QLabel)
+    )
+
 
 #: Die Rollen einer Formularzeile in Lesereihenfolge.
 _ROW_ROLES = (

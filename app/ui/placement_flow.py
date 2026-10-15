@@ -72,7 +72,7 @@ from app.ui.first_change import first_change_sentence
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
-from app.ui.measure_card import MeasureCard
+from app.ui.measure_card import MeasureCard, stands_in
 from app.ui.measure_card_drag import MeasureCardDrag
 from app.ui.measure_field_places import distance_reserve, emergency_places, rows_height
 from app.ui.overlay import MEASURE_CARD
@@ -2060,13 +2060,19 @@ class PlacementFlow(QObject):
             # (Entscheidung Robert, 22.09.2026).
             information = tr("Übernehmen zieht die Bohrung zum Langloch und ändert die Breite.")
         distance = "" if self._distance_valid else self._distance_message
+        # **Ein Satz steht einmal** (FD-88): Lehnt ein Feld der Gruppe eine Zahl
+        # ab, steht der Satz darunter; der Hinweis wiederholte ihn. Kurzhilfe
+        # und Beschreibung des grauen Knopfs tragen ihn weiter.
+        noted = reason
+        if reason and isinstance(host, QuietHost) and stands_in(self._measure_group, reason):
+            noted = ""
         self._measure_note.setText(
-            "\n".join(filter(None, (reason, distance, self._reference_message, information)))
+            "\n".join(filter(None, (noted, distance, self._reference_message, information)))
         )
         # Die Sperre steht auch ungefragt da: Grau allein wäre eine Farbe ohne
         # Wort (Regel 18), und begonnen wird gesperrt nie.
         self._measure_note.setVisible(
-            (bool(reason) and (begun or bool(refusal)))
+            (bool(noted) and (begun or bool(refusal)))
             or bool(distance)
             or bool(self._reference_message)
             or bool(information)
