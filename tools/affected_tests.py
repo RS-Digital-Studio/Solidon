@@ -318,20 +318,35 @@ def _direct_tests(graph: ImportGraph, name: str) -> list[str]:
 
 
 def _strings_of(tree: ast.Module) -> tuple[str, ...]:
-    """Jede Zeichenkette im Baum außer Docstrings und Texten, die als Anweisung allein stehen;
-    die festen Teile eines f-Strings zählen mit."""
-    alone = {
+    """Jede Zeichenkette im Baum außer Docstrings, Texten, die als Anweisung allein stehen, und
+    den Argumentnamen von ``parametrize`` — die nennen einen Parameter, keine Datei und keine
+    Operation (``parametrize("pattern", …)``); die festen Teile eines f-Strings zählen mit."""
+    skipped = {
         id(node.value)
         for node in ast.walk(tree)
         if isinstance(node, ast.Expr)
         and isinstance(node.value, ast.Constant)
         and isinstance(node.value.value, str)
     }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and _called(node) == "parametrize":
+            names = [*node.args[:1], *(one.value for one in node.keywords if one.arg == "argnames")]
+            for argument in names:
+                parts = argument.elts if isinstance(argument, (ast.Tuple, ast.List)) else [argument]
+                skipped.update(id(part) for part in parts if isinstance(part, ast.Constant))
     return tuple(
         node.value
         for node in ast.walk(tree)
-        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in alone
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in skipped
     )
+
+
+def _called(node: ast.Call) -> str:
+    """Der Name der gerufenen Funktion: ``f`` für ``f(…)`` und ``a.b.f(…)``."""
+    function = node.func
+    return function.attr if isinstance(function, ast.Attribute) else getattr(function, "id", "")
 
 
 def _tree_readers(graph: ImportGraph, paths: Iterable[PurePosixPath]) -> dict[str, str]:
@@ -370,10 +385,7 @@ def _registered(graph: ImportGraph, name: str) -> list[tuple[str, str]]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        function = node.func
-        called = (
-            function.attr if isinstance(function, ast.Attribute) else getattr(function, "id", "")
-        )
+        called = _called(node)
         if called not in _REGISTRATIONS:
             continue
         for keyword in node.keywords:

@@ -463,7 +463,9 @@ def test_an_operation_module_selects_the_tests_that_name_its_operations(tree: Pa
     """CS-31: ``chamber_ops`` lädt nur eine Namensliste in ``bootstrap``; ``test_chamber_ops``
     ruft die Op über das Register und importiert das Modul nie. Die Namen der registrierten
     Ops und Bausteine, statisch gelesen, sind die Kante — genau der Name als Zeichenkette,
-    nicht ein längerer und nicht ein Kommentar."""
+    nicht ein längerer, nicht ein Kommentar und nicht der Argumentname von ``parametrize``
+    (``test_slicer_placement`` hieß über ``parametrize("pattern", …)`` Leser von
+    ``scene.ops``)."""
     module = _write(
         tree,
         "app/chamber_ops.py",
@@ -482,14 +484,28 @@ def test_an_operation_module_selects_the_tests_that_name_its_operations(tree: Pa
     _write(tree, "tests/test_chamber.py", "RESULT = run_op('zz_resize_chamber')\n")
     _write(tree, "tests/test_longer.py", "RESULT = run_op('zz_resize_chamber_twice')\n")
     _write(tree, "tests/test_mentioned.py", "# zz_resize_chamber\nX = 1\n")
+    _write(
+        tree,
+        "tests/test_argument.py",
+        "import pytest\n"
+        "@pytest.mark.parametrize('zz_resize_chamber', [1])\n"
+        "def test_one(zz_resize_chamber):\n    pass\n"
+        "@pytest.mark.parametrize(('zz_resize_chamber', 'b'), [(1, 2)])\n"
+        "def test_two(zz_resize_chamber, b):\n    pass\n"
+        "@pytest.mark.parametrize(argnames='zz_resize_chamber', argvalues=[1])\n"
+        "def test_three(zz_resize_chamber):\n    pass\n",
+    )
     _write(tree, "tests/test_panel.py", "PART = 'zz_panel'\n")
 
     files, reasons = affected([module], ImportGraph(tree))
 
     assert {"tests/test_chamber.py"} <= _names(files, tree)
-    assert not {"tests/test_longer.py", "tests/test_mentioned.py", "tests/test_panel.py"} & (
-        _names(files, tree)
-    )
+    assert not {
+        "tests/test_longer.py",
+        "tests/test_mentioned.py",
+        "tests/test_argument.py",
+        "tests/test_panel.py",
+    } & (_names(files, tree))
     assert reasons[tree / "tests" / "test_chamber.py"] == ("nennt die Operation zz_resize_chamber")
     files, reasons = affected([tree / "app" / "panels.py"], ImportGraph(tree))
     assert reasons[tree / "tests" / "test_panel.py"] == "nennt den Baustein zz_panel"
@@ -550,17 +566,23 @@ def test_the_real_extraction_of_texts_reaches_the_registry_dump(real_graph: Impo
 def test_the_real_operation_modules_reach_the_tests_that_name_their_operations(
     real_graph: ImportGraph,
 ) -> None:
-    """CS-31 gegen den echten Baum: ``chamber_ops``, ``closure_ops`` und ``counter_form_ops``
-    lädt nur ``bootstrap`` über eine Namensliste; ihre Tests rufen die Ops beim Namen."""
+    """CS-31 gegen den echten Baum: ``chamber_ops``, ``closure_ops``, ``counter_form_ops`` und
+    ``scene.ops`` lädt nur ``bootstrap`` über eine Namensliste; ihre Tests rufen die Ops beim
+    Namen. ``test_slicer_placement`` nennt ``"pattern"`` nur als Argumentnamen von
+    ``parametrize`` und bleibt draußen."""
     for module, test in (
         ("app/core/geom/chamber_ops.py", "test_chamber_ops.py"),
         ("app/core/geom/closure_ops.py", "test_closure_ops.py"),
         ("app/core/geom/counter_form_ops.py", "test_counter_form.py"),
+        ("app/core/scene/ops.py", "test_scene_ops.py"),
     ):
-        _files, reasons = affected([real_graph.root / module], real_graph)
+        files, reasons = affected([real_graph.root / module], real_graph)
 
         reason = reasons.get(real_graph.root / "tests" / test, "")
         assert reason.startswith("nennt die Operation "), (module, reason)
+    assert real_graph.root / "tests" / "test_slicer_placement.py" not in files, reasons.get(
+        real_graph.root / "tests" / "test_slicer_placement.py"
+    )
 
 
 def test_the_real_guards_are_chosen_for_any_change_under_app(real_graph: ImportGraph) -> None:
