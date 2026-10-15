@@ -53,6 +53,7 @@ it into `website/version.json`.
 - After an action in the *Report*, the report stays in front, and Ctrl+Z takes it back straight away. Until now the *Selection* tab jumped to the front.
 - Bed and adhesion messages use the chosen unit. Switching mm/in keeps the selected finding, open details, tab and body expansion state.
 - The numbers along the print bed follow the chosen unit and name it. Version 0.6.0 showed millimetres there even when inches were set.
+- The bold lines of the bed grid sit at the numbers. The grid counts from the centre of the bed, every 10 mm in millimetres and every half inch in inches.
 - In *Orthographic* view, clicking a finding shows its location at a suitable size. Until now the previous zoom stayed.
 - A selected hole stays visible, rim included. The pull knobs sit outside the rim, and the arrows start beyond them.
 - Ctrl+Z and Ctrl+Y also work when the cursor sits in an empty field, such as the search field. If you typed there, your typing is undone first.

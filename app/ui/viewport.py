@@ -123,7 +123,7 @@ from app.core.units import (
 )
 from app.i18n import tr
 from app.ui import app_events, cursors
-from app.ui.bed_scale import bed_scale
+from app.ui.bed_scale import bed_grid, bed_scale
 from app.ui.change_lock import change_refusal
 from app.ui.icons import icon
 from app.ui.labels import (
@@ -8942,7 +8942,10 @@ class Viewport(QWidget):
         self._bed_surfaces.append(surface)
         self._frame_actors.append(surface)
         self._ground_actors.append(surface)
-        minor, major = shapes.grid_line_levels((shift, 0.0, 0.0), width, depth, 10.0)
+        # Die Hauptlinien liegen an den Maßzahlen darunter (FD-170).
+        minor, major = bed_grid(width, depth)
+        minor[:, 0] += shift
+        major[:, 0] += shift
         # Das Raster liegt auf der beleuchteten Fläche, der Bauraum dagegen
         # vor dem Hintergrund. Ihre Farben sind deshalb getrennte Rollen.
         for points, name, opacity in (

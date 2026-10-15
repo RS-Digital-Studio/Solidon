@@ -54,6 +54,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras una acción en el *Informe de comprobación*, el informe sigue delante y Ctrl+Z la deshace al momento. Hasta ahora saltaba al frente la pestaña *Selección*.
 - Los avisos de cama y adhesión usan la unidad elegida. Al cambiar mm/pulgadas se conservan aviso seleccionado, detalles abiertos, pestaña y estado desplegado de los cuerpos.
 - Los números a lo largo de la cama siguen la unidad elegida y la indican. La versión 0.6.0 mostraba milímetros aunque se hubieran elegido pulgadas.
+- Las líneas marcadas de la cuadrícula de la cama coinciden con los números. La cuadrícula cuenta desde el centro de la cama, cada 10 mm en milímetros y cada media pulgada en pulgadas.
 - En la vista *Ortográfica*, un clic en un aviso muestra el lugar a un tamaño adecuado. Hasta ahora se mantenía el zoom anterior.
 - Un taladro seleccionado se ve entero, con su borde. Los tiradores quedan fuera del borde y las flechas empiezan detrás de ellos.
 - Ctrl+Z y Ctrl+Y funcionan también con el cursor en un campo vacío, por ejemplo en el campo de búsqueda. Si escribió algo allí, primero se deshace lo escrito.
