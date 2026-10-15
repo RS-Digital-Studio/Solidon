@@ -93,6 +93,9 @@ def test_fonts_carry_the_effective_font_of_their_carrier(qt_app: Any) -> None:
         assert QFontInfo(label.font()).family() == "DejaVu Sans"
         (entry,) = capture.font_entries(holder)
         points = round(label.font().pointSizeF(), 2)
+        # Die Grundschrift, solange sie gilt — nach der Rückgabe stünde dort die
+        # des Vorgängers, und gleich wären beide nur zufällig.
+        base = QApplication.font().pointSize()
     finally:
         holder.close()
         holder.deleteLater()
@@ -100,7 +103,7 @@ def test_fonts_carry_the_effective_font_of_their_carrier(qt_app: Any) -> None:
         qt_app.setFont(before)
         QFontDatabase.removeApplicationFont(font_id)
     assert entry["level"] == ""
-    assert entry["base_points"] == QApplication.font().pointSize()
+    assert entry["base_points"] == base == 9
     assert entry["points"] == points
     assert _effective_level(entry) == "body", entry
 
