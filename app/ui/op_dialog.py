@@ -20,7 +20,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Final
 
-from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -64,6 +64,7 @@ from app.i18n import source_text, tr
 from app.ui.change_lock import change_refusal
 from app.ui.dialog_footer import DialogFooter
 from app.ui.dialogs import ErrorNotice, align_to_the_front
+from app.ui.feature_list import FeatureList
 from app.ui.feature_set_field import FeatureSetField
 from app.ui.first_focus import select_on_first_focus
 from app.ui.form_fields import explain, name_rows
@@ -4576,6 +4577,23 @@ class OperationDialog(QDialog):
             expanded_width(self._scroll, self._advanced_form),
             self._footer.natural_width + 2 * WIDE,
         )
+        if intent != "passive" and content is not None and content_layout is not None:
+            # **Erst in der Breite legen, dann messen** (FD-45): Eine Merkmalsliste
+            # setzt ihre Höhe einen Umlauf später, und in der endgültigen Breite
+            # verliert sie die Querleiste; ein Formular mit umbrochenem Satz meldet
+            # seine Mindesthöhe erst richtig, wenn es einmal in seiner Breite liegt.
+            # Davor gemessen blieb über den Knöpfen ein Streifen leer, den das
+            # passive Nachmessen nie zurückgibt.
+            if intent == "initial":
+                self._height.prepare_width_for_measurement(
+                    self, max(self.width(), self.sizeHint().width(), natural_width)
+                )
+                layout.activate()
+            for listing in content.findChildren(FeatureList):
+                listing.fit_now()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
+            content_layout.invalidate()
+            content_layout.activate()
         self._height.fit(
             self,
             self._scroll,
