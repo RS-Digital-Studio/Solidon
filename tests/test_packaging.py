@@ -31,7 +31,6 @@ import json
 import os
 import re
 import shlex
-import shutil
 import struct
 import subprocess
 import sys
@@ -58,6 +57,7 @@ from tests.packaging_helpers import (
     stays_in_linux_bundle,
     workflow_shell,
 )
+from tests.shell_helpers import posix_shell
 from tests.workflow_helpers import (
     MAIN_PUSH,
     TAG_PUSH,
@@ -125,26 +125,6 @@ def _fake_bin(folder: Path, python_body: str) -> str:
         script.write_text(text, encoding="utf-8", newline="\n")
         script.chmod(0o755)
     return str(folder)
-
-
-def _posix_shell() -> str | None:
-    """Liefert eine POSIX-Shell, auch wenn Git sie unter Windows nicht einträgt.
-
-    Die Installationslogik ist bewusst POSIX-``sh`` und muss daher ausgeführt
-    werden. Git for Windows bringt ein passendes ``sh.exe`` mit, registriert es
-    aber standardmäßig nicht im ``PATH``. Fehlt tatsächlich eine Shell, lässt
-    sich der dynamische Teil auf diesem Rechner nicht prüfen; die übrigen
-    Paketprüfungen laufen trotzdem weiter.
-    """
-    found = shutil.which("sh")
-    if found is not None:
-        return found
-
-    program_files = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
-    git_shell = program_files / "Git" / "usr" / "bin" / "sh.exe"
-    if git_shell.is_file():
-        return str(git_shell)
-    return None
 
 
 def _data_directories() -> set[Path]:
@@ -3856,7 +3836,7 @@ def test_the_linux_installer_never_deletes_a_shared_directory(tmp_path: Path) ->
     (shared / "bin").mkdir(parents=True)
     (shared / "bin" / "andere-anwendung").write_text("wichtig", encoding="utf-8")
 
-    sh = _posix_shell()
+    sh = posix_shell()
     if sh is None:
         import pytest
 
@@ -3893,7 +3873,7 @@ def test_the_linux_installer_keeps_its_own_directory_as_it_is() -> None:
     found = re.search(r"\ncase \"\$TARGET\" in\n  \*/\"\$SHORT\"\).*?\nesac\n", script, re.DOTALL)
     assert found is not None
 
-    sh = _posix_shell()
+    sh = posix_shell()
     if sh is None:
         import pytest
 
