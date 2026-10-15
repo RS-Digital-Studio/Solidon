@@ -94,6 +94,11 @@ class ModulePlan:
 
 _HEAD = re.compile(r"^(\s*)(async\s+def|def|class)(\s+)([A-Za-z_][A-Za-z0-9_]*)")
 
+#: Attribute, die das Modul als Ganzes beschreiben: Nach dem Schnitt beschrieben sie das Paket.
+MODULE_VALUE_ATTRIBUTES = frozenset(
+    {"__dict__", "__doc__", "__spec__", "__loader__", "__package__", "__cached__", "__path__"}
+)
+
 
 class ModulePlanner:
     """Plant einen Schnitt im Modulmodus; Funde sammelt ``ctx`` und meldet sie gemeinsam."""
@@ -134,6 +139,7 @@ class ModulePlanner:
         self._patches()
         self._long_patches()
         self._hasattr()
+        self._module_values()
         self._source_readers()
         self._name_lists()
         self._lazy_exports()
@@ -806,6 +812,127 @@ class ModulePlanner:
                     node.lineno, node.col_offset, self.src, name, module, new_name, "verschoben"
                 )
 
+    def _module_values(self) -> None:
+        """Eine Stelle, die die Quelle als **Wert** liest — ``importlib.reload(M)``, ``dir(M)``,
+        ``vars(M)``, ``inspect.getsource(M)``, ``M.__dict__``, ``getattr(M, name)`` mit offenem
+        Namen, ``f(M)`` —, sähe nach dem Schnitt das Paket ohne die Namen (oder kein Modul mehr).
+        Der Auflöser nennt so etwas nicht als Bezug. Gesucht wird jeder Ausdruck, der laut R genau
+        die Quelle ist; erlaubt ist er nur als Basis eines Attributs, als Ziel eines Patches, an
+        ``getattr``/``hasattr``/``setattr``/``delattr`` mit festem Namen und als Wert eines
+        Alias (dessen Stellen dann ebenso geprüft werden)."""
+        last = self.src.rpartition(".")[2]
+        for path in self._files((last,)):
+            source = self.ctx.source(path)
+            sites = {(site.line, site.col) for site in self.ctx.sites(path)}
+            for node in self._source_expressions(path, source):
+                why = self._value_use(path, source, node, sites)
+                if why is None:
+                    continue
+                self.ctx.problem(
+                    f"{path}:{node.lineno}: liest die Quelle {self.src} als Wert ({why}: "
+                    f"{_short_text(source, node)!r}) — nach dem Schnitt "
+                    + (
+                        f"ist {self.src} ein Paket ohne ihre Namen"
+                        if self.cut.package
+                        else f"gibt es {self.src} nicht mehr"
+                    )
+                    + "; vorher auf das Modul umschreiben, dessen Definitionen die Stelle meint, "
+                    "oder je Zielmodul nach dem Schnitt"
+                )
+
+    def _source_expressions(self, path: str, source: Source) -> list[ast.expr]:
+        """Die Ausdrücke einer Datei, die laut R genau die Quelle sind: Namen und Ketten aus
+        einem Import oder einer Zuweisung, die die Quelle binden, und
+        ``importlib.import_module("<Quelle>")``."""
+        names: set[str] = set()
+        for node in ast.walk(source.tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == self.src or self.src.startswith(alias.name + "."):
+                        names.add(bound_name(alias))
+            elif isinstance(node, ast.ImportFrom):
+                module = absolute_module(path, node)
+                names.update(
+                    bound_name(alias)
+                    for alias in node.names
+                    if f"{module}.{alias.name}" == self.src
+                )
+        grown = True
+        while grown:
+            grown = False
+            for node in ast.walk(source.tree):
+                if not (
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                    and node.targets[0].id not in names
+                ):
+                    continue
+                value = node.value
+                literal = isinstance(value, ast.Call) and any(
+                    isinstance(a, ast.Constant) and a.value == self.src for a in value.args
+                )
+                if literal or (isinstance(value, ast.Name) and value.id in names):
+                    names.add(node.targets[0].id)
+                    grown = True
+        found: list[ast.expr] = []
+        for node in ast.walk(source.tree):
+            if (
+                isinstance(node, ast.Call)
+                and len(node.args) == 1
+                and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value == self.src
+                and self.ctx.is_module(path, node, self.src)
+            ):
+                found.append(node)
+                continue
+            if not (
+                isinstance(node, ast.Name) and node.id in names and isinstance(node.ctx, ast.Load)
+            ):
+                continue
+            current: ast.expr = node
+            while True:
+                if self.ctx.is_module(path, current, self.src):
+                    found.append(current)
+                    break
+                parent = source.parent(current)
+                if not (isinstance(parent, ast.Attribute) and parent.value is current):
+                    break
+                current = parent
+        return found
+
+    def _value_use(
+        self, path: str, source: Source, node: ast.expr, sites: set[tuple[int, int]]
+    ) -> str | None:
+        """Warum ``node`` (die Quelle) hier als Wert gelesen wird, sonst ``None``."""
+        parent = source.parent(node)
+        if isinstance(parent, ast.Attribute) and parent.value is node:
+            return f"Attribut {parent.attr}" if parent.attr in MODULE_VALUE_ATTRIBUTES else None
+        if isinstance(parent, ast.Assign) and parent.value is node:
+            targets = parent.targets
+            if len(targets) == 1 and isinstance(targets[0], ast.Name):
+                return None  # ein Alias: seine Stellen prüft dieselbe Suche
+            return "abgelegt"
+        if isinstance(parent, ast.Expr) and isinstance(node, ast.Call):
+            return None  # ein Import um seiner Wirkung willen: den Text prüft _stale_strings
+        if isinstance(parent, ast.Call) and parent.args and parent.args[0] is node:
+            if (parent.lineno, parent.col_offset) in sites:
+                return None
+            kinds = self.ctx.index.resolve(path, parent.func)
+            named = bool(kinds) and all(
+                v.kind == "ext"
+                and v.ref
+                in ("builtins.getattr", "builtins.hasattr", "builtins.setattr", "builtins.delattr")
+                for v in kinds
+            )
+            if named:
+                second = parent.args[1] if len(parent.args) > 1 else None
+                fixed = isinstance(second, ast.Constant) and isinstance(second.value, str)
+                return None if fixed else "Attributname nicht fest"
+        if isinstance(parent, ast.Call):
+            return f"Argument von {_short_text(source, parent.func)}"
+        return type(parent).__name__ if parent is not None else "Wert"
+
     def _stale_strings(self) -> None:
         """Jede Zeichenkette, die die alte Datei, das alte Modul oder einen verschobenen Namen
         darunter nennt, ist umgeschrieben oder erklärt — sonst ein Fund."""
@@ -834,6 +961,11 @@ class ModulePlanner:
                     "in [[name_lists]] (auch to = [derselbe Wert], wenn sie bleibt) oder "
                     "[[source_readers]] erklären oder vorher umschreiben"
                 )
+
+
+def _short_text(source: Source, node: ast.AST) -> str:
+    text = " ".join(source.node_text(node).split())
+    return text if len(text) <= 60 else text[:57] + "…"
 
 
 def _inside_statement(stmt: ast.stmt, node: ast.AST) -> bool:

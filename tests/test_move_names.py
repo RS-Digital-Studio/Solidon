@@ -245,6 +245,34 @@ def test_a_module_reached_through_a_parameter_is_rejected(tmp_path: Path) -> Non
 
 
 @pytest.mark.parametrize(
+    ("label", "head", "line"),
+    [
+        ("reload", "import importlib\n\n", "importlib.reload(legacy)"),
+        ("dir", "", 'assert "Rule" in dir(legacy)'),
+        ("vars", "", 'assert all(not name.startswith("tmp") for name in vars(legacy))'),
+        ("getsource", "import inspect\n\n", 'assert "def bump" in inspect.getsource(legacy)'),
+        ("namensraum", "", 'assert "bump" in legacy.__dict__'),
+        ("offener-name", "", 'assert getattr(legacy, "bu" + "mp".strip(" ")) is not None'),
+        ("als-argument", "", "assert check(legacy)"),
+        ("über-alias", "", "alias = legacy\n    assert alias is not None"),
+    ],
+)
+def test_the_source_read_as_a_value_is_rejected(
+    tmp_path: Path, label: str, head: str, line: str
+) -> None:
+    """RM-M5: Ein Modul als Wert (``importlib.reload``, ``dir``, ``vars``,
+    ``inspect.getsource``, ``__dict__``, ``getattr`` mit offenem Namen, als Argument) sähe nach
+    dem Schnitt das Paket ohne Namen — abgewiesen, mit Ausweg, statt still zu schreiben."""
+    text = (
+        f"{head}from app.core import legacy\n\n\n"
+        "def check(module: object) -> bool:\n    return module is not None\n\n\n"
+        f"def test_value():\n    {line}\n"
+    )
+    message = _rejected(tmp_path, fx.MODULE_OLD | {"tests/test_value.py": text})
+    assert "tests/test_value.py:" in message and "als Wert" in message, (label, message)
+
+
+@pytest.mark.parametrize(
     ("label", "change", "where"),
     [
         (
