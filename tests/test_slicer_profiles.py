@@ -5676,7 +5676,9 @@ def test_a_new_search_forgets_the_held_stock(
     (tmp_path / "home" / "Library" / "Application Support").mkdir(parents=True)
     _settle(tmp_path)
     user_base = Path(sp.config_base(slicer))
-    assert user_base.is_relative_to(tmp_path), f"premise: die Nutzerwurzel ist gealtert: {user_base}"
+    assert user_base.is_relative_to(tmp_path), (
+        f"premise: die Nutzerwurzel ist gealtert: {user_base}"
+    )
     sp.find_profiles(slicer, "orca", ("machine",))
     sp._program_folders(base, "orcaslicer")
     reads = _counting(monkeypatch, "_read")

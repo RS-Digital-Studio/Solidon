@@ -339,7 +339,9 @@ def test_a_word_wider_than_the_notice_widens_it(qt_app: QApplication) -> None:
         restore()
         factor += 0.25
     try:
-        assert widest > 600, f"premise: das längste Wort passt nicht in die Öffnungsbreite ({widest})"
+        assert widest > 600, (
+            f"premise: das längste Wort passt nicht in die Öffnungsbreite ({widest})"
+        )
         screen = dialog.screen()
         assert screen is not None
         assert widest < screen.availableGeometry().width() - 2 * WIDE, "der Bildschirm hat Platz"
