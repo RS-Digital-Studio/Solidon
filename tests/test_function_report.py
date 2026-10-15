@@ -554,7 +554,7 @@ def test_every_result_names_its_evidence() -> None:
 def test_good_verdicts_are_accepted() -> None:
     """Die Gegenseite: Was Konzept §5, Stufe B erfüllt, wird angenommen."""
     case = _judged()
-    findings, problems = parse_findings(_finding(subject="1", kind="Einfachheit"))
+    findings, problems = parse_findings(_finding(subject="8", stand="behoben `a280ee8f5`"))
     assert not problems
     found = {finding.key: finding for finding in findings}
     entries = [
@@ -563,7 +563,7 @@ def test_good_verdicts_are_accepted() -> None:
         _verdict(point=2, verdict="offen", rm="RM-801", finding="FD-1"),
         _verdict(point=8, verdict="gut_nach_fix", finding="FD-1"),
         _verdict(criterion="G9", design_judgement=True),
-        _verdict(criterion="V4", prediction="Ein Loch von 5 mm"),
+        _verdict(criterion="V4", prediction="Ein Loch", prediction_bound=f"v4 {'0' * 64}"),
         _verdict(criterion="Z7", reviewer="stufe_c", steps=14, misclicks=1),
         _verdict(point=1, reviewer="zweitpruefer"),
         _verdict(
@@ -1647,7 +1647,7 @@ def test_every_checked_in_verdict_file_holds_its_form_on_any_machine() -> None:
     findings, _problems = function_report.read_findings(STATE / "funde.md")
     for path in sorted(STATE.glob("urteile-*.toml")):
         entries, runs = function_report.read_verdict_file(path)
-        assert check_verdicts(entries, findings=findings).rejected == (), path.name
+        assert not check_verdicts(entries, findings=findings, round_rules=False).rejected, path.name
         assert function_report.check_runs(runs, entries) == [], path.name
 
 

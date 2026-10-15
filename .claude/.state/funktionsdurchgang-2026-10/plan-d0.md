@@ -310,6 +310,7 @@ Ein Eintrag `[[verdict]]` je Urteil. Die Schlüssel sind englisch (Schemata), di
 | `not_applicable` | bei *entfällt* | Grund aus der Liste |
 | `design_judgement` | bei G9, Z3, Z4, I1–I6 und Vergleich | `true`: Gestaltungsurteil, kein bewiesener Fehler |
 | `prediction` | bei V4 | vor dem Übernehmen geschriebene Vorhersage |
+| `prediction_bound` | bei V4 *gut* | Pfad (relativ zum Lauf) und SHA256 der vor dem Klick freigegebenen Vorhersagedatei; ohne Bindung ist V4 *offen* (`tools/function_verdict_rules.py`) |
 
 Jede Runde (Kopfkommentar eines Prüfers) nennt vor ihren Urteilen den Lauf, an
 dem sie urteilt, als `[[run]]`, eine Runde wiederholt ihn gleich lautend.

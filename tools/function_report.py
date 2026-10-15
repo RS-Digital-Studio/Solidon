@@ -68,6 +68,7 @@ from tools.function_judges import compare_themes, judge_sizes
 from tools.function_list import NOT_APPLICABLE_REASONS, ROW_KINDS
 from tools.function_points import judge_case, judge_design, judge_licence
 from tools.function_samples import BrokenSample, sample_context, sample_protocol
+from tools.function_verdict_rules import bound_problems, fix_problems, prediction_problems
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 
@@ -113,6 +114,7 @@ VERDICT_KEYS: Final = frozenset(
         "not_applicable",
         "design_judgement",
         "prediction",
+        "prediction_bound",
         "comparison",
         "steps",
         "misclicks",
@@ -593,6 +595,7 @@ def _verdict_problems(
             problems.append(f"Vergleich an einer Zeile ohne {COMPARISON_ROW}")
     if subject == "V4" and not str(entry.get("prediction") or "").strip():
         problems.append("V4 ohne vorher geschriebene Vorhersage")
+    problems += bound_problems(entry)
     if subject == "Z7":
         if reviewer != "stufe_c":
             problems.append("Z7 urteilt nur Stufe C")
@@ -635,10 +638,19 @@ def check_verdicts(
     outcomes: Mapping[str, CaseOutcome] | None = None,
     rows: Iterable[str] | None = None,
     findings: Mapping[str, Finding] | None = None,
+    round_rules: bool = True,
 ) -> Checked:
     """Prüft Urteile gegen das Format, die Messung der Stufe A und die Funddatei.
 
-    Das Format steht in Konzept §5, Stufe B.
+    Das Format steht in Konzept §5, Stufe B. ``round_rules`` prüft dazu, was
+    eine Runde zur Zeit ihrer Auswertung einhalten muss
+    (``tools/function_verdict_rules.py``): V4 nur mit vor dem Klick gebundener
+    Vorhersage (FD-148) und die Kennzeichnung nach dem Stand der Funddatei
+    (M-Fix). ``report`` prüft sie immer — ein Urteil, das der heutige Stand der
+    Funde nicht mehr trägt, steht als abgewiesen in der Abhakliste und wird
+    nachgeurteilt. Der Wächter über die versionierten Urteile prüft ihre Form
+    ohne sie: Die Funddatei wächst und wird behoben, die Urteile einer Runde
+    bleiben, was sie zu ihrer Zeit waren.
     """
     known = frozenset(rows) if rows is not None else None
     accepted: list[dict[str, Any]] = []
@@ -646,6 +658,10 @@ def check_verdicts(
     seen: set[tuple[str, str, str]] = set()
     for entry in entries:
         problems = _verdict_problems(entry, outcomes or {}, known, findings)
+        if round_rules:
+            subject = subject_of(entry)
+            problems += prediction_problems(entry, subject)
+            problems += fix_problems(entry, subject, findings)
         key = (str(entry.get("row")), str(subject_of(entry)), str(entry.get("reviewer")))
         if key in seen:
             problems.append("doppeltes Urteil derselben Stufe")

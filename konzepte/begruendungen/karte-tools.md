@@ -71,7 +71,8 @@ jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 
 Der einzige Einstieg am Fenster ist `file_acceptance.py`; `function_bench`
 stellt den Fall zusammen, `function_machine`/`function_walk` führen ihn,
-`function_setup`/`function_start` bereiten ihn vor, `function_protocol` schreibt
+`function_setup`/`function_start` bereiten ihn vor (`place_window` belässt
+maximierte Clientmaße ohne Ziel- oder Größenwechsel), `function_protocol` schreibt
 das Protokoll und `function_language` prüft die Sprache. `function_gestures`
 fährt Zeigen und Ziehen, `function_switch` den Projektwechsel. Die Schritte
 gehen über echte Eingabeereignisse und `guide_targets.next_click`; die
@@ -125,6 +126,11 @@ diese erhobene Menge an, statt eine zweite Klassenliste zu führen.
 `function_checks` hält Schema und Schwellen, `function_points` und
 `function_judges` urteilen; `function_samples` liefert Gegenproben,
 `function_report` Funde, Abhakliste und die Übereinstimmung der Urteile.
+`function_verdict_rules` hält, was ein Urteil zur Zeit seiner Runde gegen
+Funddatei und Vorhersage einhalten muss: *gut nach Fix* genau dort, wo ein
+behobener Fund an der Zelle steht (ein Prüfpunkt umfasst seine Kriterien), und
+V4 nur mit vor dem Klick gebundener Vorhersage. `report` prüft das, der
+Wächter über die versionierten Urteile nur ihre Form.
 
 #### Messflächen und nachträgliche Änderung
 
