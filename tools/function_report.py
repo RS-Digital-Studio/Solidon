@@ -45,8 +45,16 @@ from pathlib import Path
 from typing import Any, Final
 
 from app.ui.op_dialog import MAX_FRONT_FIELDS, USUAL_FRONT_SHARE
+from tools.function_agreement import (
+    Round,
+    Share,
+    agreement,
+    checklist_lines,
+    round_agreement,
+    unpaired,
+)
+from tools.function_agreement import subject_order as _subject_order
 from tools.function_checks import (
-    AGREEMENT,
     CHECKPOINTS,
     COARSE_NOTE,
     CRITERIA,
@@ -770,49 +778,7 @@ def read_findings(path: Path) -> tuple[dict[str, Finding], list[str]]:
     return {finding.key: finding for finding in findings}, problems
 
 
-# --- Zwei Prüfer und Paketanteile ------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Share:
-    """Ein gemessener Anteil gegen seine Schwelle."""
-
-    hits: int
-    total: int
-    threshold: float
-
-    @property
-    def value(self) -> float | None:
-        return self.hits / self.total if self.total else None
-
-    @property
-    def flagged(self) -> bool:
-        """Unter der Schwelle — oder gar nicht gemessen, was nie „erfüllt“ heißt."""
-        return self.value is None or self.value < self.threshold
-
-    def text(self) -> str:
-        if self.value is None:
-            return "nicht gemessen"
-        return f"{self.value:.0%} ({self.hits} von {self.total})"
-
-
-def agreement(entries: Iterable[Mapping[str, Any]]) -> dict[str, Share]:
-    """Übereinstimmung von Stufe B und Zweitprüfer je Prüfpunkt und Kriterium."""
-    first: dict[tuple[str, str], str] = {}
-    second: dict[tuple[str, str], str] = {}
-    for entry in entries:
-        key = (str(entry.get("row")), str(subject_of(entry)))
-        if entry.get("reviewer") == "stufe_b":
-            first[key] = str(entry.get("verdict"))
-        elif entry.get("reviewer") == "zweitpruefer":
-            second[key] = str(entry.get("verdict"))
-    pairs: dict[str, list[bool]] = {}
-    for key in sorted(set(first) & set(second)):
-        pairs.setdefault(key[1], []).append(first[key] == second[key])
-    return {
-        subject: Share(sum(same), len(same), AGREEMENT)
-        for subject, same in sorted(pairs.items(), key=lambda item: _subject_order(item[0]))
-    }
+# --- Paketanteile (die Übereinstimmung der Prüfer: ``tools/function_agreement.py``) -----
 
 
 def input_share(inputs: Iterable[int]) -> Share:
@@ -868,14 +834,6 @@ _BADNESS: Final = {
     "entfaellt": 1,
     "nicht_gelaufen": 0,
 }
-
-
-def _subject_order(subject: int | str) -> tuple[int, int, str]:
-    """Prüfpunkte nach Nummer, dann Kriterien in der Reihenfolge E, V, G, Z, I."""
-    if isinstance(subject, int) or str(subject).isdigit():
-        return (0, int(subject), "")
-    key = str(subject)
-    return (1, "EVGZI".find(key[:1]), key)
 
 
 def _merge(outcomes: Sequence[Outcome]) -> Outcome:
@@ -1085,6 +1043,11 @@ class PackageValues:
     solutions: Solutions
     agreement: Mapping[str, Share]
     second_review: Share
+    #: Zellen ohne Gegenurteil an den Zeilen des Zweitprüfers (FD-144).
+    unpaired: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Die bindende Übereinstimmung der Urteilsrunde (FD-145); ``None``: das
+    #: Paket ist seine eigene Runde.
+    pooled: Round | None = None
 
 
 def package_values(
@@ -1093,11 +1056,13 @@ def package_values(
     *,
     common_goals: Mapping[str, str],
     solutions: Mapping[str, bool],
+    pooled: Round | None = None,
 ) -> PackageValues:
     """E2-, E5- und I3-Anteil, I4-Zahl und die Übereinstimmung der Prüfer eines Pakets.
 
     I3 zählt je Kundenziel, dessen Zeile (``target``) im Paket gemessen ist;
-    zwei Ziele an derselben Zeile zählen beide.
+    zwei Ziele an derselben Zeile zählen beide. Die Übereinstimmung des Pakets
+    ist Auskunft, bindend ist die der Runde (``pooled``, FD-145).
     """
     inputs = [
         int(case.criteria["E2"].measurement["inputs"])
@@ -1129,6 +1094,8 @@ def package_values(
         solution_count(solutions),
         agreement(verdicts),
         Share(len(reviewed & set(cases)), len(cases), SECOND_REVIEW_SHARE),
+        unpaired(verdicts),
+        pooled,
     )
 
 
@@ -1254,13 +1221,7 @@ def render_checklist(
         f"| I4-Zahl | {values.solutions.text()} | Zahl genannt | — |",
         _value_line("Zweitprüfer", values.second_review, f"≥ {SECOND_REVIEW_SHARE:.0%} der Zeilen"),
     ]
-    if values.agreement:
-        lines += [
-            _value_line(f"Übereinstimmung {subject}", share, f"≥ {AGREEMENT:.0%}")
-            for subject, share in values.agreement.items()
-        ]
-    else:
-        lines.append(f"| Übereinstimmung | keine Doppelprüfung | ≥ {AGREEMENT:.0%} | markiert |")
+    lines += checklist_lines(values.agreement, values.unpaired, values.pooled)
     if verdicts.rejected:
         lines += [
             "",
@@ -1578,20 +1539,43 @@ def write(
     shown_date = date or datetime.date.today().isoformat()
     goals = common_goals if common_goals is not None else read_common_goals()
     kinds = solutions if solutions is not None else finding_solutions()
-    for name in packages:
-        package_rows = [
+    # Jedes gemessene Paket wird geprüft, auch wenn nur eines eine Abhakliste
+    # bekommt: Bindend ist die Übereinstimmung der Runde, aller Pakete, deren
+    # Urteile denselben Laufordner nennen (FD-145).
+    rows_of: dict[str, list[dict[str, Any]]] = {}
+    cases_of: dict[str, dict[str, CaseOutcome]] = {}
+    read: dict[str, tuple[list[dict[str, Any]], list[dict[str, Any]]]] = {}
+    checked_of: dict[str, Checked] = {}
+    rounds: dict[str, dict[str, Sequence[Mapping[str, Any]]]] = {}
+    for name in sorted(measured_packages, key=lambda name: int(name[1:])):
+        rows_of[name] = [
             row for row in all_rows if package_name(str(row.get("package", "D0"))) == name
         ]
-        ids = {str(row.get("id")) for row in package_rows}
-        cases = {row: case for row, case in merged.items() if row in ids}
-        entries, runs = read_verdict_file(verdicts or state / f"urteile-{package_slug(name)}.toml")
-        checked = check_verdicts(entries, outcomes=cases, rows=ids, findings=found)
+        ids = {str(row.get("id")) for row in rows_of[name]}
+        cases_of[name] = {row: case for row, case in merged.items() if row in ids}
+        given = verdicts if verdicts is not None and packages == [name] else None
+        read[name] = read_verdict_file(given or state / f"urteile-{package_slug(name)}.toml")
+        checked_of[name] = check_verdicts(
+            read[name][0], outcomes=cases_of[name], rows=ids, findings=found
+        )
+        run = run_folder(read[name][1]) or str(out)
+        rounds.setdefault(run, {})[name] = checked_of[name].accepted
+    for name in packages:
+        package_rows, cases, checked = rows_of[name], cases_of[name], checked_of[name]
+        entries, runs = read[name]
         invalid += [
             f"{name} {entry.get('row')} {subject_of(entry)}: {'; '.join(reasons)}"
             for entry, reasons in checked.rejected
         ]
         invalid += [f"{name}: {problem}" for problem in check_runs(runs, entries, commits)]
-        values = package_values(cases, checked.accepted, common_goals=goals, solutions=kinds)
+        run = run_folder(runs) or str(out)
+        values = package_values(
+            cases,
+            checked.accepted,
+            common_goals=goals,
+            solutions=kinds,
+            pooled=round_agreement(run, rounds[run]),
+        )
         text = render_checklist(
             name,
             rows=package_rows,

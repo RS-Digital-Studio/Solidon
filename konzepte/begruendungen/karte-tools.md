@@ -125,7 +125,9 @@ Unterklassen und festen oder weitergereichten Zielen. `raw_window_names` nimmt
 diese erhobene Menge an, statt eine zweite Klassenliste zu führen.
 `function_checks` hält Schema und Schwellen, `function_points` und
 `function_judges` urteilen; `function_samples` liefert Gegenproben,
-`function_report` Funde, Abhakliste und die Übereinstimmung der Urteile.
+`function_report` Funde und Abhakliste; die Übereinstimmung der Urteile rechnet
+`function_agreement` je Paket zur Auskunft und bindend über die Runde (alle
+Pakete mit demselben Laufordner), Zellen ohne Gegenurteil weist es aus.
 `function_verdict_rules` hält, was ein Urteil zur Zeit seiner Runde gegen
 Funddatei und Vorhersage einhalten muss: *gut nach Fix* genau dort, wo ein
 behobener Fund an der Zelle steht (ein Prüfpunkt umfasst seine Kriterien), und

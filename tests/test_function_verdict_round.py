@@ -13,12 +13,16 @@ folgen, ohne Fenster fest:
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from tools import function_verdict_rules
-from tools.function_report import Finding, check_verdicts, parse_findings
+from tests.bench_fakes import ROWS
+from tools import function_agreement, function_verdict_rules
+from tools.function_report import Finding, check_verdicts, parse_findings, write
+from tools.function_samples import sample_context, sample_protocol
 
 SHA = "e0deb7e246f28a83b7b72fc175129860947dc4fbb24288865f57587c553574d1"
 
@@ -148,3 +152,107 @@ def test_a_point_covers_its_criteria_and_nothing_else() -> None:
 def test_without_a_finding_file_the_marking_is_not_checked() -> None:
     """Die Gegenproben ohne Funddatei bleiben, was sie sind."""
     assert _reasons(_verdict(point=7)) == []
+
+
+# --- FD-144: Zellen ohne Gegenurteil ---------------------------------------------------
+
+
+def test_cells_without_a_counter_verdict_are_counted_not_dropped() -> None:
+    """An den Zeilen des Zweitprüfers fehlt keine Zelle still (77 + 5 im finalen Lauf)."""
+    entries = [
+        _verdict(row="a", point=2),
+        _verdict(row="a", point=2, reviewer="zweitpruefer"),
+        _verdict(row="a", criterion="G1"),
+        _verdict(row="a", criterion="I1", reviewer="zweitpruefer"),
+        # Keine Zeile des Zweitprüfers: kein Paar erwartet.
+        _verdict(row="b", criterion="G1"),
+    ]
+    shares = function_agreement.agreement(entries)
+    assert shares["2"].text() == "100% (1 von 1)"
+    assert shares["G1"].text() == "nicht gemessen" and shares["G1"].flagged
+    assert shares["I1"].flagged
+    assert function_agreement.unpaired(entries) == {
+        "G1": ("a (nur stufe_b)",),
+        "I1": ("a (nur zweitpruefer)",),
+    }
+
+
+# --- FD-145: die Runde ist die Grundmenge -----------------------------------------------
+
+
+def _pairs(rows: list[str], differ: int) -> list[dict[str, Any]]:
+    entries = []
+    for number, row in enumerate(rows):
+        entries.append(_verdict(row=row, point=9))
+        second = "offen" if number < differ else "gut"
+        extra = {"rm": "RM-737"} if second == "offen" else {}
+        entries.append(_verdict(row=row, point=9, reviewer="zweitpruefer", verdict=second, **extra))
+    return entries
+
+
+def test_the_round_pools_the_packages_and_binds() -> None:
+    """Zwei Zeilen mit einer Abweichung sind 50 % — eine Messung ist erst die Runde."""
+    small = _pairs(["a", "b"], differ=1)
+    large = _pairs([f"r{n}" for n in range(10)], differ=0)
+    assert function_agreement.agreement(small)["9"].flagged
+    pooled = function_agreement.round_agreement("lauf", {"D4": small, "D8": large})
+    assert pooled.packages == ("D4", "D8")
+    assert pooled.shares["9"].text() == "92% (11 von 12)"
+    assert not pooled.shares["9"].flagged
+
+
+def _case(tmp_path: Path, number: int, protocol: dict[str, Any]) -> None:
+    case = tmp_path / "lauf" / "cases" / str(number)
+    case.mkdir(parents=True)
+    (case / "function.json").write_text(json.dumps(protocol, ensure_ascii=False), "utf-8")
+
+
+def _verdict_file(path: Path, run: str, entries: list[dict[str, Any]]) -> None:
+    lines = [f'[[run]]\nname = "{run}"\nhead = "a280ee8f5"\nseal = "seal.json {SHA}"\n']
+    for entry in entries:
+        lines.append("[[verdict]]")
+        lines += [
+            f"{key} = {json.dumps(value, ensure_ascii=False)}" for key, value in entry.items()
+        ]
+        lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def test_the_checklist_binds_the_round_and_informs_per_package(tmp_path: Path) -> None:
+    """``report`` rechnet je Paket und über die Runde; nur die Runde markiert (FD-145)."""
+    drill = sample_protocol()
+    hole = sample_protocol()
+    hole["row"] = {**hole["row"], "id": "resize_hole", "package": "D8"}
+    hole["package"] = "D8"
+    _case(tmp_path, 1, drill)
+    _case(tmp_path, 2, hole)
+    rows = [{**ROWS[1]}, {**ROWS[0], "package": "D8"}]
+    (tmp_path / "lauf" / "rows.json").write_text(json.dumps(rows), encoding="utf-8")
+    state = tmp_path / "state"
+    state.mkdir()
+    agree = [
+        _verdict(row="drill_hole", point=9),
+        _verdict(row="drill_hole", point=9, reviewer="zweitpruefer"),
+    ]
+    differ = [
+        _verdict(row="resize_hole", point=9),
+        _verdict(row="resize_hole", point=9, reviewer="zweitpruefer", verdict="offen", rm="RM-737"),
+        _verdict(row="resize_hole", criterion="G1"),
+    ]
+    _verdict_file(state / "urteile-d04.toml", "probelauf-x", agree)
+    _verdict_file(state / "urteile-d08.toml", "probelauf-x", differ)
+    write(
+        tmp_path / "lauf",
+        state=state,
+        date="2026-10-15",
+        context=sample_context(),
+        solutions={},
+        common_goals={},
+    )
+    d08 = (state / "abhakliste-d08.md").read_text(encoding="utf-8")
+    assert "| Runde | probelauf-x: D4, D8 |" in d08
+    assert "| Übereinstimmung 9 in der Runde | 50% (1 von 2) | ≥ 90% | markiert |" in d08
+    assert "| Übereinstimmung 9 im Paket | 0% (0 von 1) | Auskunft | — |" in d08
+    assert "| Ohne Gegenurteil G1 | 1 Zelle: resize_hole (nur stufe_b) |" in d08
+    d04 = (state / "abhakliste-d04.md").read_text(encoding="utf-8")
+    assert "| Übereinstimmung 9 in der Runde | 50% (1 von 2) | ≥ 90% | markiert |" in d04

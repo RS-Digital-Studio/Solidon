@@ -217,8 +217,14 @@ Liste (Operation ohne Rechnung, ohne Auswahlbezug, ohne Dialog, ohne Agenten-
 werkzeug, nur Stufe C).
 
 **Gleiche Urteile bei zwei Prüfern:** Je Paket prüft ein zweiter Agent 10 % der
-Zeilen unabhängig. Stimmen weniger als 90 % der Urteile je Prüfpunkt überein,
-wird das Kriterium geschärft, bevor das Paket weitergeht.
+Zeilen unabhängig. Stimmen weniger als 90 % der Urteile je Prüfpunkt und
+Kriterium überein, gezählt über alle Zweitprüferzeilen einer Urteilsrunde
+(alle Pakete, deren Urteile denselben Lauf nennen), wird das Kriterium
+geschärft, bevor die Pakete weitergehen. Die Werte je Paket stehen zur Auskunft in der
+Abhakliste; bei zwei bis drei Zeilen je Paket hieße 90 % sonst „keine
+Abweichung“. Gezählt werden Zellen, die beide geurteilt haben; jede Zelle mit
+nur einem Urteil an einer Zweitprüferzeile ist ausgewiesen, und ein Prüfpunkt
+ohne Paar ist nicht gemessen.
 
 ## 5 Wie ich über die Oberfläche teste
 
@@ -390,7 +396,8 @@ Schritt in `/erzeugen` und ein `rendered`-Test wie die Handbuchbilder.
   steht als Vorschlag in der Funddatei.
 - Stufe C mit Protokoll: vier Hauptwege und die ersten fünf Minuten (Z7),
   Schritte und Fehlklicks.
-- Übereinstimmung der Prüfer ≥ 90 % je Prüfpunkt.
+- Übereinstimmung der Prüfer ≥ 90 % je Prüfpunkt über die Urteilsrunde (§4),
+  jeder Prüfpunkt mit Paaren.
 - Konzept, Funddatei und Nachweise in `konzepte/` samt Index; der Wiederholungslauf
   steht in `/erzeugen`.
 

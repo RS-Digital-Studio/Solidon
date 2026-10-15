@@ -335,7 +335,7 @@ unberührt).
 | Kopf | Paket, Commit, Datum, Laufordner außerhalb des Baums (Name aus `[[run]]` der Urteile, sonst `--out`), Zahl der Zeilen; *gut*, *gut nach Fix*, *offen* mit RM, *nicht geprüft* |
 | Tabelle 1 | eine Zeile je Funktion: Kennung · Art · Szene · Spalten 1–19 mit `ja`, `FD-n`, `—` (entfällt), `B`, `C`, `?` (nicht gelaufen), `n.p.` (nicht prüfbar) · Urteil · Funde |
 | Tabelle 2 | Kriterien, die nicht erfüllt sind, je Zeile (Kennung, Messwert, Schwelle, FD) |
-| Paketwerte | E2-Anteil, I3-Anteil, I4-Zahl, Übereinstimmung der Prüfer je Prüfpunkt (Schwelle 90 %) |
+| Paketwerte | E2-Anteil, I3-Anteil, I4-Zahl; Übereinstimmung der Prüfer je Prüfpunkt über die Runde (alle Pakete mit demselben Laufordner, Schwelle 90 %, bindend), je Paket als Auskunft, Zellen ohne Gegenurteil markiert (`tools/function_agreement.py`) |
 
 ### 2.11 Funddatei: `.claude/.state/funktionsdurchgang-2026-10/funde.md`
 
