@@ -48,6 +48,7 @@ import argparse
 import os
 import sys
 import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -150,7 +151,7 @@ def drag_frames(window: Any, application: Any, count: int) -> list[float]:
     return times
 
 
-def shutdown_window(window: Any, application: Any) -> None:
+def shutdown_window(window: Any, application: Any) -> tuple[str, ...]:
     """Beendet Arbeiter, Renderer und Qt in ihrer sicheren Besitzreihenfolge.
 
     Das Fenster besitzt die Grafikfläche des Renderers. Wird nur das
@@ -171,16 +172,39 @@ def shutdown_window(window: Any, application: Any) -> None:
     lehnte das Schließen ab, und am Prozessende zerstörte PySide den noch
     laufenden Faden (0xC0000409). Das Fenster der Anwendung schließt erst nach
     dem letzten Arbeiter; hier wartet dieselbe Stelle, die den Prozess am Ende
-    schützt (``leash.finish_before_exit``).
+    schützt (``leash.finish_before_exit``). Zurück kommen die Namen derer, die
+    nach der Frist noch laufen (:func:`record_shutdown`).
     """
     from app.ui.leash import finish_before_exit
 
     window.release()
-    finish_before_exit()
+    stragglers = finish_before_exit()
     window.viewport.release_renderer()
     window.close()
     for _ in range(EVENT_DRAIN_ROUNDS):
         application.processEvents()
+    return tuple(sorted(type(worker).__name__ for worker in stragglers))
+
+
+def record_shutdown(
+    record: dict[str, Any], persist: Callable[[], None], stragglers: Sequence[str]
+) -> None:
+    """Den Abbau im Fallzustand festhalten; wer die Frist riss, beendet den Prozess benannt.
+
+    ``shutdown_complete`` steht nur ohne Nachzügler, sonst stehen ihre Namen
+    unter ``stragglers`` — sie kamen vorher nur auf stderr an, und der Fall
+    hatte Exit 3 ohne Grund. Danach endet der Prozess sofort über
+    ``leash.leave_without_teardown``: :func:`shutdown_window` hat die Frist
+    schon gewartet, der Haken am Prozessende wartete sonst ein zweites Mal.
+    """
+    record["shutdown_complete"] = not stragglers
+    if stragglers:
+        record["stragglers"] = list(stragglers)
+    persist()
+    if stragglers:
+        from app.ui.leash import leave_without_teardown
+
+        leave_without_teardown(", ".join(stragglers))
 
 
 def await_scene(
