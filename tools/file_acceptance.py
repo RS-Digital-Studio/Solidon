@@ -1323,6 +1323,7 @@ def start_child(out: Path, case: Case, folder: Path) -> int:
     Schema von D0-U, ``bench.json`` der Lauf samt Ausgang von ``main``.
     """
     from tools import function_protocol, function_setup, function_start
+    from tools.window_bench import record_shutdown, wait_for_workers
 
     variant = function_setup.Variant.of(case.variant)
     row = read_rows(out).get(case.row) or {"id": case.row}
@@ -1349,8 +1350,9 @@ def start_child(out: Path, case: Case, folder: Path) -> int:
         state["harness_exception"] = traceback.format_exc()
         exit_code = 1
     finally:
-        state["shutdown_complete"] = True
-        persist()
+        # Kein Fenster mehr, aber vielleicht ein Arbeiter: dieselbe Wartestelle
+        # und derselbe benannte Ausgang wie in den Fensterfällen (RF-11, RF-18).
+        record_shutdown(state, persist, wait_for_workers())
     return exit_code
 
 
