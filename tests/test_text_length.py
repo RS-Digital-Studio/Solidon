@@ -284,6 +284,11 @@ def test_a_growing_list_turns_the_guard_red() -> None:
         ("Zwei Sätze. Hier der zweite.", 2),
         ("Mit Abkürzung, z. B. Holz. Und noch einer.", 2),
         ("Eine Zahl 1.5 mm bleibt ein Satz.", 1),
+        # FD-97: „ca.“ ist eine Abkürzung nur als ganzes Wort — am Wortende
+        # von „rosca.“ und „placa.“ endet der Satz.
+        ("Pasador para un agujero de rosca. Es más corto.", 2),
+        ("Gira la pieza sobre la placa. Cada cara cuenta.", 2),
+        ("Mede ca. 5 mm de largura.", 1),
     ],
 )
 def test_sentences_are_counted_as_a_reader_counts_them(text: str, count: int) -> None:
