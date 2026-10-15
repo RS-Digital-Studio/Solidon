@@ -23032,6 +23032,13 @@ class MainWindow(QMainWindow):
             offer_naming=offers_naming(spec) and spec.name != "create_container",
             naming_default=self.settings.name_dimensions,
             note=self._size_set_later(op_id),
+            # Ein bestehender Schritt: *Übernehmen*, grau bis zur ersten Änderung
+            # (FD-99). Nicht, wenn eine Geste die Werte schon geändert hat
+            # (``given``) oder dieser Schritt die Kette anhält — dort sagt erst
+            # die Vorschau, was gilt, samt Weg (*Gewindeschritt öffnen*).
+            changing=True,
+            wait_for_change=given is None
+            and (self.session.last_result is None or self.session.last_result.stopped_at != op_id),
         )
         number = step_number(self.session.project.document, op_id)
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {number}")

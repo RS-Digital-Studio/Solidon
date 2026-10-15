@@ -127,6 +127,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O diálogo *Mudar o nome do objeto* começa com o nome atual no campo.
 - No separador *Seleção*, *Aplicar* fica cinzento até mudar um valor e indica o primeiro campo. Rodar ou duplicar com os valores predefinidos continua imediato.
 - Furar, tapar, furos oblongos e campos de furos chamam ao ajuste «Compensar desvios de impressão», como o grupo de cotas, e acrescentam a compensação de furos.
+- Ao abrir um passo existente, o botão diz *Aplicar* em vez de *Inserir*. Fica cinzento até mudar um valor e indica o campo.
 
 ## 0.6.0
 

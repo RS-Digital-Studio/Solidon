@@ -152,6 +152,7 @@ Nutzen da und sonst nichts.
 - Der Dialog *Objekt umbenennen* beginnt mit dem jetzigen Namen im Feld.
 - Im Reiter *Auswahl* bleibt *Übernehmen* grau, bis sich ein Wert ändert, und nennt das erste Feld. Drehen oder Verdoppeln mit ihrer Vorgabe gehen weiter sofort.
 - Beim Bohren, Verschließen, Langloch und Lochfeld heißt der Ausgleich „Druckabweichung ausgleichen“ wie in der Maßgruppe und gibt die Lochkorrektur des Materials zu.
+- Wer einen vorhandenen Schritt öffnet, übernimmt mit *Übernehmen* statt *Einsetzen*. Der Knopf bleibt grau, bis sich ein Wert ändert, und nennt das Feld.
 
 ## 0.6.0
 

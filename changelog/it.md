@@ -127,6 +127,7 @@ scrive in `website/version.json`.
 - La finestra *Rinomina oggetto* parte dal nome attuale nel campo.
 - Nella linguetta *Selezione*, *Applica* resta grigio finché non cambia un valore e indica il primo campo. Ruotare o duplicare con i valori predefiniti resta immediato.
 - Foratura, chiusura, asole e campi di fori chiamano la correzione «Compensare gli scostamenti di stampa», come il gruppo di quote, e aggiungono la compensazione dei fori.
+- Aprendo un passaggio esistente, il pulsante dice *Applica* invece di *Inserisci*. Resta grigio finché non cambia un valore e indica il campo.
 
 ## 0.6.0
 

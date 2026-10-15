@@ -128,6 +128,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El diálogo *Renombrar objeto* empieza con el nombre actual en el campo.
 - En la pestaña *Selección*, *Aplicar* sigue en gris hasta que cambia un valor e indica el primer campo. Girar o duplicar con sus valores previstos sigue siendo inmediato.
 - Al taladrar, tapar, en ranuras y en campos de agujeros, el ajuste se llama «Compensar desviaciones de impresión», como en el grupo de cotas, y suma la compensación de agujeros.
+- Al abrir un paso existente, el botón dice *Aplicar* en lugar de *Insertar*. Sigue en gris hasta que cambia un valor e indica el campo.
 
 ## 0.6.0
 

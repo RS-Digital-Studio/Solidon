@@ -127,6 +127,7 @@ it into `website/version.json`.
 - The *Rename object* dialog starts with the current name in the field.
 - In the *Selection* tab, *Apply* stays grey until a value changes and names the first field. Rotating or duplicating with their preset values still works right away.
 - Drilling, filling, slots and hole fields call the adjustment “Compensate for printing deviations” as the dimension group does, and it adds the material's hole compensation.
+- Opening an existing step offers *Apply* instead of *Insert*. The button stays grey until a value changes and names the field.
 
 ## 0.6.0
 

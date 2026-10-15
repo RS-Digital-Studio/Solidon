@@ -128,6 +128,7 @@ dans `website/version.json`.
 - Le dialogue *Renommer l'objet* s'ouvre avec le nom actuel dans le champ.
 - Dans l'onglet *Sélection*, *Appliquer* reste grisé tant qu'aucune valeur ne change, et indique le premier champ. Pivoter ou dupliquer avec leurs valeurs prévues reste immédiat.
 - Perçage, rebouchage, trous oblongs et champs de trous nomment le réglage « Compenser les écarts d'impression », comme le groupe de cotes. Il ajoute la compensation des trous.
+- À l'ouverture d'une étape existante, le bouton dit *Appliquer* au lieu d'*Insérer*. Il reste grisé tant qu'aucune valeur ne change, et indique le champ.
 
 ## 0.6.0
 
