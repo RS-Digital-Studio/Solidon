@@ -1462,7 +1462,11 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
     if finding.object_id and "object" not in finding.values:
         identifier = str(finding.object_id)
         name = (names or {}).get(identifier, "")
-        if name and name != identifier and name not in str(finding.message):
+        # Steht der Körper schon als Name unter den Werten — die beiden Teile
+        # einer Überschneidung —, nicht noch einmal davor (FD-105): „— Quader ·
+        # Quader · Deckel“.
+        named = {str(finding.values[key]) for key in _NAMES_IN_THE_LINE if key in finding.values}
+        if name and name != identifier and name not in str(finding.message) and name not in named:
             extra.insert(0, name)
     if not extra:
         return str(finding.message)
