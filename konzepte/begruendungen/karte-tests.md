@@ -211,6 +211,14 @@ Hilfen bereit; jedes Fenster und jede Sitzung bleiben pro Test frisch.
 Anzeige- und Schemafälle in `test_operation_ui.py` verwenden ein leeres
 Fenster, soweit ihre Aussage keine importierte Geometrie benötigt.
 
+Formulare und Absagen der Dialoge: `test_form_fields.py` hält den gemeinsamen
+Weg zu Feldname und Feldsatz (`form_fields`) und wacht über die Formulare von
+Parameter-, Kalibrier-, Baustein- und Chatdialog; `test_parameter_units.py`
+die Länge in Anzeigeeinheit im Parameter- und Bausteindialog;
+`test_refusal_details.py` Absage, *Einzelheiten* und *Werte ansehen*;
+`test_dialog_texts.py` ohne Fenster, was ein Dialog vorn sagt (Lesezeile
+*Stelle*, erster Satz hinter *Dicke geben*).
+
 Statische Quellprüfungen teilen die Vorbereitung innerhalb eines Testfalls:
 `test_language_rules.py` prüft je Datei denselben AST auf alle Sprachregeln;
 `test_translations.py` extrahiert die Nachrichten einmal für alle Kataloge.
