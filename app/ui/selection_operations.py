@@ -254,32 +254,6 @@ def _shown_as_fields() -> frozenset[str]:
     return frozenset(name for row in ACTION_ORDER for name in row)
 
 
-PANEL_LEAST_HEIGHT = 280
-"""Was das Panel mindestens braucht, in Bildpunkten.
-
-Drei Hauptaktionen, Suche, Trefferliste und der Weg zum Bausteinkatalog dürfen
-sich auch in einem 720-Pixel-Fenster nicht überlagern. Mit der früheren
-190-Pixel-Untergrenze drückte Qt jede Hauptaktion auf rund 15 Pixel und legte
-das Suchfeld über „Schnittmenge".
-
-**Die zweite Zahl daneben ist mit dem Umzug weggefallen** (07.09.2026): Solange
-das Panel in der Overlay-Spalte lag, teilte ``MainWindow._fit_right_column``
-diese Spalte zwischen ihm und dem Prüfbericht, und beide Untergrenzen mussten
-gegeneinander stehen. Jetzt liegt es im Fenster rechts, das rollt — eine
-Untergrenze genügt, und eine Obergrenze braucht es gar nicht mehr.
-
-**Und sie gilt dem vollen Zustand, nicht jedem.** Seit dem 18.09.2026 hat die
-Karte zwei leere Gestalten, in denen Suche und Liste fehlen: ohne Auswahl in
-einer leeren Szene (Hauptaktionen weg, Katalogknopf und ein Satz; stehen
-Körper da, kommen die Handlungen für alle Körper dazu) und an einer Auswahl, deren
-Handlungen oben im Merkmalfenster stehen — ein Langloch, eine Kante. Dort
-reserviert die Zahl mehr, als dasteht. Das ist Absicht und kein Rest: Eine
-Untergrenze, die mit dem Inhalt schwankte, ließe die Karte bei jedem
-Auswahlwechsel springen, und der Raum darunter kostet nichts — die Spalte
-rollt, und was frei bleibt, zeigt das Modell.
-"""
-
-
 def quick_names(
     bodies: int,
     feature_kind: str = "",
@@ -701,7 +675,11 @@ class SelectionOperationsPanel(QWidget):
         self.setObjectName("selectionOperations")
         self.setAccessibleName(tr("Operationen für die Auswahl"))
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        self.setMinimumHeight(PANEL_LEAST_HEIGHT)
+        # **Keine feste Mindesthöhe** (FD-93): 280 Punkte reservierten am Zapfen
+        # 75 mehr, als dastand, und die Liste trug sie als Leerraum zwischen
+        # „Prüfstück erzeugen“ und „Filament und Druck“. Gegen das Überlagern im
+        # kleinen Fenster, für das die Zahl einmal stand, halten die Knöpfe,
+        # das Suchfeld und die Liste selbst ihre Mindesthöhen (TARGET_SIZE).
 
         # **Einmal aufgezählt, nicht zweimal durchlaufen.** Die Signatur nimmt
         # ein ``Iterable``, und ein Generator wäre beim zweiten Filter leer.
@@ -988,6 +966,13 @@ class SelectionOperationsPanel(QWidget):
         self.scroller.setFrameShape(QScrollArea.Shape.NoFrame)
         self.scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroller.setMinimumHeight(TARGET_SIZE)
+        # **So hoch wie die Knöpfe, nicht höher** (FD-93): Gibt ein Träger dem
+        # Panel mehr Höhe, als es wünscht, ging der Rest an die Liste — Leerraum
+        # zwischen „Prüfstück erzeugen“ und „Filament und Druck“. Wächst sie
+        # nicht über ihren Wunsch, steht der Rest unter der Karte (Stretch am
+        # Ende des Layouts); bei Platzmangel gibt sie bis zur Mindesthöhe nach
+        # und rollt.
+        self.scroller.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self.scroller.setAccessibleName(tr("Passende Operationen"))
 
         # **Der Knopf *Merkmale* ist mit dem Umzug entfallen** (Konzept „Ein
@@ -1061,6 +1046,7 @@ class SelectionOperationsPanel(QWidget):
         layout.addWidget(self.scroller, 1)
         layout.addLayout(separate)
         layout.addWidget(self.print_section)
+        layout.addStretch(0)
         self.hide()
 
     def add_print_widget(self, widget: QWidget) -> None:
