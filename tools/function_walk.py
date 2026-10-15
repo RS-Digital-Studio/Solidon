@@ -754,7 +754,7 @@ class QtPorts:
             return window.filaments.list
         if (
             kind in ("sketch.point", "sketch.at", "sketch.constraint")
-            or name == guide_finders.NEW_PLANE
+            or name == guide_finders.NEW_PLANE_ENTRY
         ):
             # Punkt, Stelle, Bedingung und neue Ebene im Skizzeneditor (FD-175).
             try:

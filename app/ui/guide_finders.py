@@ -80,7 +80,7 @@ MARKED_KINDS: Final = frozenset(
 )
 
 #: *Neue Ebene …* im Ebenenfeld des Skizzeneditors — ein Eintrag der Liste, ein Ort.
-NEW_PLANE: Final = "sketch.new_plane"
+NEW_PLANE_ENTRY: Final = "sketch.new_plane"
 
 
 def first_parameter_label(window: MainWindow) -> QWidget:
@@ -305,10 +305,10 @@ def new_plane_click(window: MainWindow, name: str) -> Click:
     from PySide6.QtCore import QPoint, QRect, Qt
 
     from app.ui.guide_targets import Click, MissingTargetError
-    from app.ui.sketch_editor import NEW_PLANE as NEW_PLANE_DATA
+    from app.ui.sketch_editor import NEW_PLANE
 
     field = active_sketch_panel(window, name).plane_choice
-    row = field.findData(NEW_PLANE_DATA)
+    row = field.findData(NEW_PLANE)
     if row < 0 or not field.isVisible():
         raise MissingTargetError(f"{name}: das Ebenenfeld bietet keine neue Ebene an")
     view = field.view()
@@ -326,7 +326,7 @@ def new_plane_click(window: MainWindow, name: str) -> Click:
 PLACE_CLICKS: Final[dict[str, Callable[[MainWindow, str], Click]]] = {
     SPOOL: spool_click,
     PROJECT_FILAMENT: project_filament_click,
-    NEW_PLANE: new_plane_click,
+    NEW_PLANE_ENTRY: new_plane_click,
 }
 
 #: Dasselbe für Arten: ``art:name`` → nächster Klick.
