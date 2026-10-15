@@ -77,6 +77,7 @@ scrive in `website/version.json`.
 - La breve conferma dopo un'azione compare accanto alle schede, non sopra, per esempio accanto al rapporto. Il passaggio successivo la toglie insieme alla riga di stato, anche un vecchio «Annullato».
 - Su una segnalazione di un modello generato, *Genera di nuovo* apre il generatore con la sua descrizione e il seme successivo.
 - Quando la mappa di analisi rifiuta un modello troppo grande, il numero di triangoli compare in gruppi di tre, come 2 103 472.
+- Quando la catena si ferma, una funzione che aggiungerebbe un passaggio dopo non apre più una finestra con il pulsante grigio. L'arresto e la via d'uscita compaiono subito.
 
 ### Stampare e passare allo slicer
 

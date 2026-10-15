@@ -78,6 +78,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La breve confirmación tras una acción aparece junto a las tarjetas, no encima, por ejemplo junto al informe. El siguiente paso la retira con la línea de estado, también un «Deshecho» antiguo.
 - En un aviso de un modelo generado, *Volver a generar* abre el generador con su descripción y la siguiente semilla.
 - Cuando el mapa de análisis rechaza un modelo demasiado grande, el número de triángulos aparece en grupos de tres, como 2 103 472.
+- Cuando la cadena se detiene, una función que añadiría un paso detrás ya no abre un diálogo con el botón en gris. La parada y el camino a seguir aparecen enseguida.
 
 ### Imprimir y entregar al slicer
 

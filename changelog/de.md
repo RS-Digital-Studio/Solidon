@@ -102,6 +102,7 @@ Nutzen da und sonst nichts.
 - Die kurze Quittung nach einer Handlung steht neben den Karten statt darüber, etwa neben dem Prüfbericht. Der nächste Schritt nimmt sie samt Statuszeile mit, auch ein altes „Zurückgenommen“.
 - Am Befund eines erzeugten Modells öffnet *Neu erzeugen* den Generator mit dessen Beschreibung und dem nächsten Startwert.
 - Lehnt die Analysekarte ein zu großes Modell ab, stehen die Dreieckszahlen in Dreiergruppen, etwa 2 103 472.
+- Hält die Kette an, öffnet eine Funktion, die einen Schritt dahinter anlegen würde, keinen Dialog mit grauem Knopf mehr. Der Halt und sein Weg weiter stehen gleich da.
 
 ### Drucken und Übergabe an den Slicer
 

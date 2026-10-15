@@ -77,6 +77,7 @@ it into `website/version.json`.
 - The short confirmation after an action stands beside the cards instead of over them, for example beside the report. The next step clears it and the status line, including an old “Undone”.
 - On a finding of a generated model, *Generate again* opens the generator with its description and the next seed.
 - When the analysis map refuses a model as too large, the triangle counts are shown in groups of three, such as 2 103 472.
+- When the chain stops, a function that would add a step behind it no longer opens a dialog with a greyed-out button. The stop and the way on are shown right away.
 
 ### Printing and slicer handover
 

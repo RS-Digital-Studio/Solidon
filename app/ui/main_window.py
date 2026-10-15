@@ -288,7 +288,7 @@ from app.ui.ai_disclosure import (
 from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
 from app.ui.calibration_dialog import CalibrationDialog
 from app.ui.catalog import PartCatalog
-from app.ui.change_lock import change_refusal
+from app.ui.change_lock import change_refusal, halt_line
 from app.ui.chat import ChatPanel
 from app.ui.dialogs import (
     AboutDialog,
@@ -6954,13 +6954,8 @@ class MainWindow(QMainWindow):
         halted = self.session.halted_step()
         if halted is None:
             return None
-        number, title = halted
-        return tr(
-            "Die Kette hält an Schritt {number} ({step}) an — ein neuer Schritt dahinter "
-            "würde nicht gerechnet. Der Weg weiter steht im Prüfbericht.",
-            number=step_number(self.session.project.document, number),
-            step=title,
-        )
+        # Derselbe Satz wie an den Befundhandlungen (FD-104): eine Quelle.
+        return halt_line(self.session.project.document, halted[0])
 
     def _feature_kinds_of_selection(self) -> frozenset[str]:
         """Die Arten der erkannten Merkmale am gewählten Körper.
@@ -22088,6 +22083,16 @@ class MainWindow(QMainWindow):
         """
         if not self._quiet_command_allowed() or not self._begin_from_the_start_screen():
             return
+        # **Hinter einen Halt kommt kein Schritt — gesagt vor dem Dialog**
+        # (FD-104): Eine Befundhandlung wie *In Flächen und Kanten umwandeln*
+        # öffnete ihren Dialog, dessen Hauptknopf grau blieb, ohne Grund. Die
+        # Absage der Sitzung kommt jetzt sofort, mit den Wegen des Halts. Mit
+        # Einfügemarke landet der Schritt vor ihr und geht.
+        if self.session.inserting is None:
+            refusal = self.session.halt_in_the_way()
+            if refusal is not None:
+                self._on_error(refusal)
+                return
         if spec.name == "create_container":
             from app.core.geom.container_ops import ContainerWizardParams
 

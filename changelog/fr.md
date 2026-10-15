@@ -78,6 +78,7 @@ dans `website/version.json`.
 - La brève confirmation après une action s'affiche à côté des cartes, pas dessus, par exemple à côté du rapport. L'étape suivante l'efface avec la ligne d'état, même un ancien « Annulé ».
 - Sur un constat d'un modèle généré, *Générer de nouveau* ouvre le générateur avec sa description et la graine suivante.
 - Quand la carte d'analyse refuse un modèle trop grand, les nombres de triangles s'affichent par groupes de trois, par exemple 2 103 472.
+- Quand la chaîne s'arrête, une fonction qui ajouterait une étape derrière n'ouvre plus de dialogue au bouton grisé. L'arrêt et la suite à donner s'affichent tout de suite.
 
 ### Imprimer et transmettre au slicer
 
