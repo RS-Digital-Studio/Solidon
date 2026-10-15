@@ -386,6 +386,33 @@ def test_a_tool_or_a_deleted_module_named_by_a_helper_selects_the_tests_behind_i
     assert all(path.name.startswith("test_") for path in files), sorted(files)
 
 
+def test_a_helper_names_a_file_in_strings_and_for_its_direct_importers_only(tree: Path) -> None:
+    """RQ-2: ``tests/php_probe.py`` nannte ``build.yml`` nur im Docstring und in einer
+    Fehlermeldung, und über ``tests/helpers.py`` hingen 189 Testdateien daran. Ein Kommentar
+    oder Docstring nennt nichts; was ein Helfer in einer Zeichenkette nennt, liest er für
+    die Testdateien, die ihn direkt importieren — ein Zwischenhelfer trägt es nicht weiter."""
+    workflow = _write(tree, ".github/workflows/build.yml", "name: Bau\n")
+    _write(
+        tree,
+        "tests/php_probe.py",
+        '"""Liest, was build.yml dem Lauf mitgibt."""\n# siehe build.yml\nVALUE = 1\n',
+    )
+    _write(tree, "tests/test_probe_user.py", "from tests.php_probe import VALUE\n")
+    _write(tree, "tests/reader_helper.py", "WORKFLOW = 'build.yml'\n")
+    _write(tree, "tests/between.py", "from tests.reader_helper import WORKFLOW\n")
+    _write(tree, "tests/test_direct_user.py", "from tests.reader_helper import WORKFLOW\n")
+    _write(tree, "tests/test_far_user.py", "from tests.between import WORKFLOW\n")
+    _write(tree, "tests/test_comment.py", "# build.yml steht hier nur im Kommentar\nX = 1\n")
+    _write(tree, "tests/test_names_it.py", "NAME = 'build.yml'\n")
+
+    files, reasons = affected([workflow], ImportGraph(tree))
+
+    assert _names(files, tree) == {"tests/test_direct_user.py", "tests/test_names_it.py"}
+    assert reasons[tree / "tests" / "test_direct_user.py"] == (
+        "über tests/reader_helper.py: nennt build.yml"
+    )
+
+
 def test_an_application_module_reading_its_own_tree_lends_that_reading(tree: Path) -> None:
     """CS-32: ``app/i18n/extract.py`` liest die Quellen unter ``app/`` nach ``tr()``-Schlüsseln;
     ``tools/registry_dump.py`` ruft es, und ``test_registry_dump`` fehlte bei einem neuen Text

@@ -30,9 +30,10 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
    ``app/`` zählt eine Lesestelle nur mit einem Ordner im Repository
    (``extract.message_ids`` → ``test_registry_dump``); oder
 4. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
-   bei ihrem Namen genannt wird — ``ROADMAP.md``, ``constraints.txt``, ein
-   Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch über
-   einen Helfer, der sie nennt.
+   in einer Zeichenkette genannt wird — ``ROADMAP.md``, ``constraints.txt``,
+   ein Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch
+   über einen Helfer, den die Testdatei direkt importiert, oder ihr Ordner.
+   Ein Kommentar oder Docstring nennt nichts.
 
 Gewählt werden nur Testdateien: Aus einem Helfer sammelt pytest nichts, er
 steht für die Testdateien, die ihn importieren.
@@ -125,6 +126,7 @@ class ImportGraph:
 
     def __init__(self, root: Path = ROOT) -> None:
         self.root = root
+        self._strings: dict[str, tuple[str, ...]] = {}
         self._texts: dict[str, str] = {}
         self.modules: dict[str, Path] = {}
         for package in PACKAGES:
@@ -200,10 +202,24 @@ class ImportGraph:
             if _is_test_file(self, name)
         )
 
+    def strings(self, name: str) -> tuple[str, ...]:
+        """Die Zeichenketten eines Moduls — was es nennt. Docstrings und bloße Texte als
+        Anweisung zählen nicht, Kommentare stehen gar nicht im Baum."""
+        if name not in self._strings:
+            relative = self.modules[name].relative_to(self.root).as_posix()
+            tree, _parents = self.resolver.parsed(relative)
+            self._strings[name] = _strings_of(tree)
+        return self._strings[name]
+
     def text(self, name: str) -> str:
         if name not in self._texts:
             self._texts[name] = self.modules[name].read_text(encoding="utf-8")
         return self._texts[name]
+
+    def names_in_strings(self, name: str, word: str) -> bool:
+        """Ob das Modul ``word`` in einer seiner Zeichenketten nennt; erst der Text, dann der
+        Baum."""
+        return word in self.text(name) and any(word in text for text in self.strings(name))
 
 
 #: ``tests/conftest.py`` lädt pytest als Plugin unter seinem bloßen Namen;
@@ -283,9 +299,28 @@ def _is_test_file(graph: ImportGraph, name: str) -> bool:
     return name.startswith("tests.") and graph.modules[name].name.startswith("test_")
 
 
-def _test_files_behind(graph: ImportGraph, name: str) -> list[str]:
-    """Die Testdateien, die ``name`` mittelbar importieren, sortiert."""
-    return sorted(one for one in graph.dependents([name]) if _is_test_file(graph, one))
+def _direct_tests(graph: ImportGraph, name: str) -> list[str]:
+    """Die Testdateien, die ``name`` direkt importieren, sortiert — ein Glied, nicht die Kette:
+    ``tests/helpers.py`` importieren fast 200 Testdateien, und über einen Zwischenhelfer hinge
+    jede an jeder Zeichenkette, die er nennt (RQ-2)."""
+    return sorted(one for one in graph.importers.get(name, ()) if _is_test_file(graph, one))
+
+
+def _strings_of(tree: ast.Module) -> tuple[str, ...]:
+    """Jede Zeichenkette im Baum außer Docstrings und Texten, die als Anweisung allein stehen;
+    die festen Teile eines f-Strings zählen mit."""
+    alone = {
+        id(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    }
+    return tuple(
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in alone
+    )
 
 
 def _tree_readers(graph: ImportGraph, paths: Iterable[PurePosixPath]) -> dict[str, str]:
@@ -349,7 +384,7 @@ def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
     """
     found: dict[str, str] = {}
     for name in graph.modules:
-        if name.startswith("tests.") and file.name in graph.text(name):
+        if name.startswith("tests.") and graph.names_in_strings(name, file.name):
             found[name] = f"nennt {file.name}"
 
     # Der Ordner, in dem die Datei liegt — ``changelog``, ``locales``,
@@ -377,17 +412,15 @@ def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
             if _is_test_file(graph, name):
                 found.setdefault(name, f"nennt den Ordner {folder}/")
         for name in readers:
-            if _is_test_file(graph, name):
-                continue
-            for importer in graph.importers.get(name, ()):
-                if _is_test_file(graph, importer):
+            if not _is_test_file(graph, name):
+                for importer in _direct_tests(graph, name):
                     found.setdefault(importer, f"hängt an einem Modul, das {folder}/ liest")
     return found
 
 
 def _note_readers(graph: ImportGraph, reasons: dict[Path, str], found: dict[str, str]) -> None:
     """Trägt die Leser einer Datei ein: Testdateien selbst, für einen Helfer die Testdateien,
-    die ihn mittelbar importieren.
+    die ihn direkt importieren.
 
     Ein Helfer in der Auswahl sammelt keinen Test, und sein Importeur liefe
     nicht. Die Testdateien zuerst, damit ihr genauerer Grund stehen bleibt.
@@ -399,7 +432,7 @@ def _note_readers(graph: ImportGraph, reasons: dict[Path, str], found: dict[str,
         if _is_test_file(graph, name):
             continue
         helper = graph.modules[name].relative_to(graph.root).as_posix()
-        for test in _test_files_behind(graph, name):
+        for test in _direct_tests(graph, name):
             reasons.setdefault(graph.modules[test], f"über {helper}: {found[name]}")
 
 
@@ -448,7 +481,7 @@ def affected(
                     {
                         reader: f"nennt {name}, und die Datei ist gelöscht"
                         for reader in graph.modules
-                        if reader.startswith("tests.") and name in graph.text(reader)
+                        if reader.startswith("tests.") and graph.names_in_strings(reader, name)
                     },
                 )
             else:
@@ -478,7 +511,7 @@ def affected(
             {
                 name: f"nennt {file_name}"
                 for name in graph.modules
-                if name.startswith("tests.") and file_name in graph.text(name)
+                if name.startswith("tests.") and graph.names_in_strings(name, file_name)
             },
         )
     if paths:
