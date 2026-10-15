@@ -54,6 +54,7 @@ it into `website/version.json`.
 - Bed and adhesion messages use the chosen unit. Switching mm/in keeps the selected finding, open details, tab and body expansion state.
 - The numbers along the print bed follow the chosen unit and name it. Version 0.6.0 showed millimetres there even when inches were set.
 - In *Orthographic* view, clicking a finding shows its location at a suitable size. Until now the previous zoom stayed.
+- A selected hole stays visible, rim included. The pull knobs sit outside the rim, and the arrows start beyond them.
 - Ctrl+Z and Ctrl+Y also work when the cursor sits in an empty field, such as the search field. If you typed there, your typing is undone first.
 - Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
 - Without activation, *Create parameter …*, *Move*, *Split*, the history keys and the dimensions in the view are greyed out too. Every reason names the way, such as *Help → Unlock Solidon …*.

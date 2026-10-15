@@ -54,6 +54,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os avisos de plataforma e adesão usam a unidade escolhida. Mudar mm/polegadas mantém a observação escolhida, detalhes abertos, separador e estado expandido dos corpos.
 - Os números ao longo da plataforma seguem a unidade escolhida e indicam-na. A versão 0.6.0 mostrava milímetros mesmo com polegadas definidas.
 - Na vista *Ortográfica*, um clique numa observação mostra o local num tamanho adequado. Até agora ficava o zoom anterior.
+- Um furo selecionado fica visível, com a borda. As pegas ficam por fora da borda e as setas começam depois delas.
 - Ctrl+Z e Ctrl+Y funcionam também com o cursor num campo vazio, por exemplo no campo de pesquisa. Se escreveu algo ali, primeiro é desfeito o que escreveu.
 - Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
 - Sem ativação, também *Criar parâmetro …*, *Mover*, *Dividir*, as teclas do histórico e as medidas na vista ficam a cinzento. Cada motivo indica o caminho, como *Ajuda → Desbloquear o Solidon …*.

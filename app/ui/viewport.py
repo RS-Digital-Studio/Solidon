@@ -1504,9 +1504,18 @@ HOVERED_FEATURE_OPACITY = 0.62
 
 #: Eine deckende Innenwand wirkt aus schrägem Blick wie ein Deckel über der
 #: Bohrung. Auswahl bleibt kräftiger als Hover, beide lassen aber den Blick
-#: durch die Öffnung frei.
-SELECTED_HOLE_OPACITY = 0.55
-HOVERED_HOLE_OPACITY = 0.38
+#: durch die Öffnung frei. **Die Marke ist unbeleuchtet**: Bei 0,55 nahm sie
+#: der Wand ihre Schattierung, und die gewählte Bohrung las sich als flache
+#: Scheibe, schlechter als jede ungewählte daneben (FD-70). Die Auswahl trägt
+#: der Umriss am Rand; die Tönung sagt nur noch, welche Wand dazugehört.
+SELECTED_HOLE_OPACITY = 0.28
+HOVERED_HOLE_OPACITY = 0.2
+
+#: Wie weit hinter dem äußeren Rand der Langlochknöpfe die Pfeile des
+#: Platzierungsgriffs beginnen, im Maß dieser Reichweite: Die Knöpfe stehen
+#: hoch, und ein Pfeil, der genau an ihrem Rand ansetzt, verschwindet im
+#: Schrägblick hinter ihnen (FD-70).
+GRIP_HUB_MARGIN: Final = 1.25
 
 #: Wie hoch der Kontaktschatten über der Platte liegt. Ohne diesen Abstand
 #: streiten sich Schatten und Platte um dieselbe Tiefe, und das Bild flimmert
@@ -14975,8 +14984,18 @@ class Viewport(QWidget):
           stünde der neue genau da, wo der alte steht, und Abbau und Aufbau
           kosteten sechs Renderer-Objekte je Kamerageste (gemessen 5,7 ms von
           22 je ``redraw``).
+
+        **An einer Öffnung beginnen die Pfeile hinter den Langlochknöpfen**
+        (FD-70): Der Ansatzpunkt liegt in der Mündung, und Pfeile ab dort
+        deckten die gewählte Bohrung samt Rand zu. Die Nabe misst der Griff der
+        Knöpfe (``SlotHandle.clearance``); ohne Knöpfe bleibt sie leer.
         """
         grip = self._placement_grip
+        clear = 0.0
+        if item is not None and self._slot_handle is not None:
+            knobs_at, knobs_reach = self._slot_handle.clearance
+            apart = math.dist(tuple(item.matrix()[:3, 3]), knobs_at)
+            clear = GRIP_HUB_MARGIN * (knobs_reach + apart) if apart < knobs_reach else 0.0
         if (
             grip is not None
             and item is not None
@@ -14989,6 +15008,7 @@ class Viewport(QWidget):
                         item,
                         rotation=rotation,
                         scale=self._gizmo_scale_for(item, item.matrix()[:3, 3]),
+                        clear=clear,
                     )
                 )
             )
@@ -15017,6 +15037,7 @@ class Viewport(QWidget):
             line_radius=GIZMO_LINE_RADIUS,
             release_callback=self._on_placement_grip_released,
             rotation=rotation,
+            clear=clear,
         )
         if was is None:
             # Der Griff der Auswahl ist weg — die Langlochknöpfe kommen
@@ -15024,6 +15045,10 @@ class Viewport(QWidget):
             # Nur beim ersten Griff: Der Fluss hängt ihn bei jedem Zeichnen
             # neu an, und die Knöpfe sitzen am Merkmal, nicht am Werkzeug.
             self.set_gizmo(self._gizmo_wanted)
+            if self._slot_handle is not None:
+                # Erst jetzt stehen die Knöpfe; ihre Nabe gilt schon für dieses
+                # Bild, nicht erst für das nächste Zeichnen des Flusses.
+                self.grip_placement(item, rotation=rotation)
 
     def _on_placement_grip_released(self, matrix: Any) -> None:
         """Ein Zug am Werkzeugkörper endet als Stelle, nicht als Operation.

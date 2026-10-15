@@ -151,6 +151,9 @@ Mündung. Wo er sitzt, sagt das Register (`slot_feature_kinds()` aus dem
   Bounds/Geometrie/Picks bleiben erhalten. Bei gleicher Punktzahl aktualisiert
   `_show_preview(update=True)` Punkte, Deckkraft und Sichtbarkeit im selben
   Aktor. Wächter: `test_feature_grip_readability.py`.
+* **Die gewählte Öffnung bleibt frei:** Knöpfe außen am Scheitel
+  (`knob_centres`; der Zug rechnet vom Scheitel, `knob_seats`), Pfeile erst
+  hinter ihnen (`Gizmo(clear=…)`), Wandtönung leise. `test_hole_grip_clearance.py`.
 
 * **Der Winkel zählt gegen die x-Achse von `sketch.planes.frame_of`** — wie
   `prepare.slot_profile` schneidet und `prepare_ops.slot_angle_of` nachmisst;
