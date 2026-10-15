@@ -91,6 +91,7 @@ Nutzen da und sonst nichts.
 - Die Auswahlkarte folgt Inhalt und Schrift; Text und Handlungsspalten bleiben erhalten. Freie Reiterfenster behalten ihre Größe. Bei angebotener Merkmaländerung ist „Übernehmen“ die Hauptaktion.
 - Gegenstücke fragen zuerst nach Paar und Größe; die Auswahl erklärt beide Hälften. Form und Passung stehen unter „Weitere Einstellungen“. Die Anfangshöhe passt zum Inhalt.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
+- Die Zahlenzeile mit Material und Druckdauer nennt „seit dem letzten Schritt“ nur noch, was ein Schritt geändert hat. Solange die Werte des Slicerprofils noch gelesen werden, steht „vorläufig“ daneben.
 
 ### Drucken und Übergabe an den Slicer
 

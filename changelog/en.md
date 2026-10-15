@@ -66,6 +66,7 @@ it into `website/version.json`.
 - The selection card follows content and font, preserving text and action columns. Detached tabs keep their size. When a feature edit is offered, “Apply” is the primary action.
 - Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
+- The status line with material and print time now says “since the last step” only for what a step changed. While the slicer profile values are still being read, it says “provisional”.
 
 ### Printing and slicer handover
 

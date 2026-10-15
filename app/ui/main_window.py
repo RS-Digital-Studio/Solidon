@@ -26465,9 +26465,26 @@ class MainWindow(QMainWindow):
         if result is None or not result.scene.objects:
             self.facts.show_estimate(None, self._facts_key())
             return
+        session = self.session
+        if not (session.result_current or session.picture_current):
+            # Das Ergebnis gehört zum Stand vor der letzten Änderung; die Zeile
+            # behält ihre Zahl, bis das neue da ist (FD-89).
+            return
+        settings = self.effective_print_settings()
+        cached = self._foundation_cache
         bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
+        # **Verglichen wird nur zwischen Schritten auf derselben Grundlage**
+        # (FD-89): Die Grundlage des Slicerprofils kommt nach der ersten
+        # Auswertung aus dem Arbeiter, und die Zeile meldete die Differenz als
+        # „seit dem letzten Schritt“. Der Stand ist die Folge der
+        # Transaktionen; die Einfügemarke zählt zur Grundlage, denn sie ändert
+        # die Zahl ohne Schritt.
         self.facts.show_estimate(
-            estimate_total(bodies, self.effective_print_settings()), self._facts_key()
+            estimate_total(bodies, settings),
+            self._facts_key(),
+            state=tuple(entry.id for entry in session.project.document.transactions),
+            basis=(settings, session.inserting),
+            provisional=cached is None or cached[0] != self._foundation_key(settings.quality),
         )
 
     def _facts_key(self) -> str:

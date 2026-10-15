@@ -66,6 +66,7 @@ scrive in `website/version.json`.
 - La scheda di selezione segue contenuto e carattere, mantenendo testo e colonne. Le schede separate mantengono le dimensioni. Se è proposta una modifica, «Applica» è l’azione principale.
 - Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
+- La riga con materiale e durata di stampa indica «dall'ultimo passaggio» solo ciò che un passaggio ha cambiato. Finché i valori del profilo dello slicer sono ancora in lettura, riporta «provvisorio».
 
 ### Stampare e passare allo slicer
 

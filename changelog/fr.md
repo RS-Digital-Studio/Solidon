@@ -67,6 +67,7 @@ dans `website/version.json`.
 - La carte de sélection suit contenu et police, gardant textes et colonnes. Les onglets détachés gardent leur taille. Si une modification est proposée, « Appliquer » est l’action principale.
 - Les contreparties demandent paire et taille et expliquent les deux moitiés. Forme et ajustement sont dans « Autres réglages ». La hauteur initiale du dialogue suit le contenu.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
+- La ligne de matière et de durée d'impression n'indique plus « depuis la dernière étape » que ce qu'une étape a changé. Tant que les valeurs du profil de slicer sont en cours de lecture, elle affiche « provisoire ».
 
 ### Imprimer et transmettre au slicer
 

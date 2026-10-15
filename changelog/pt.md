@@ -66,6 +66,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O painel de seleção segue conteúdo e letra, mantendo texto e colunas. Os separadores destacados conservam o tamanho. Se houver uma alteração proposta, «Aplicar» é a ação principal.
 - Os elementos correspondentes pedem par e tamanho e explicam ambas as metades. Forma e ajuste ficam em «Mais definições». A altura inicial do diálogo adapta-se ao conteúdo.
 - Após a recusa de uma pré-visualização, os textos da seguinte continuam totalmente legíveis.
+- A linha com material e duração da impressão só indica «desde o último passo» o que um passo alterou. Enquanto os valores do perfil de slicer ainda estão a ser lidos, mostra «provisório».
 
 ### Imprimir e entregar ao slicer
 
