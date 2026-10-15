@@ -135,6 +135,48 @@ def test_a_hidden_original_is_read_through_its_lazy_package(tmp_path: Path) -> N
     )
 
 
+TOOL = '''\
+"""Ein Werkzeug, das sich selbst auf den Pfad legt."""
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.core.engine import (  # noqa: E402
+    LIMIT,
+    scale,
+)
+
+
+def double(value: int) -> int:
+    return scale(value) + LIMIT
+'''
+
+
+def test_the_comment_after_the_bracket_stays_with_each_import(tmp_path: Path) -> None:
+    """``from … import (  # noqa: E402`` hinter dem Pfadaufbau eines Werkzeugs: Der Kommentar
+    gilt der Anweisung und steht danach an jeder, die aus ihr wird."""
+    root, result = _run(tmp_path, fx.COPIES_OLD | {"tools/doubler.py": TOOL})
+    assert result.status == "written", (result.problems, result.proof and result.proof.text())
+    text = (root / "tools/doubler.py").read_text(encoding="utf-8")
+    assert (
+        "from app.core import engine  # noqa: E402\n"
+        "from app.core.engine import LIMIT  # noqa: E402\n"
+    ) in text
+    assert "    return engine.scale(value) + LIMIT\n" in text
+
+
+def test_a_comment_between_import_entries_is_rejected(tmp_path: Path) -> None:
+    """Ein Kommentar an einem Eintrag ginge beim Umbau verloren: abgewiesen, mit Ausweg."""
+    files = fx.COPIES_OLD | {
+        "tools/doubler.py": TOOL.replace("    scale,\n", "    scale,  # verdoppelt\n")
+    }
+    assert "Kommentar in einer mehrzeiligen Importanweisung" in _rejected(tmp_path, files)
+
+
 def _aliased(name: str) -> str:
     return fx.COPIES_CUT.replace(
         'mode = "copies"\n',

@@ -792,10 +792,14 @@ class FileRewrite:
         for text in plan.after:
             if text not in statements:
                 statements.append(text)
-        comment = trailing_comment(self.source, stmt)
+        # Der Kommentar der Anweisung, dahinter oder hinter der öffnenden Klammer (etwa die
+        # Freigabe für E402), gilt jeder Anweisung, die aus ihr wird.
+        comment = trailing_comment(self.source, stmt) or self._head_comment(stmt)
         if comment:
+            original = self._original(stmt)
             statements = [
-                s if s.rstrip().endswith(comment) else f"{s}  {comment}" for s in statements
+                s if s == original or s.rstrip().endswith(comment) else f"{s}  {comment}"
+                for s in statements
             ]
         rules = "; ".join(dict.fromkeys(plan.rules)) or "Import umgestellt"
         old = " ".join(self.source.node_text(stmt).split())
@@ -835,10 +839,19 @@ class FileRewrite:
                 return len(body) == 1
         return False
 
+    def _head_comment(self, stmt: ast.stmt) -> str:
+        """Der Kommentar hinter der öffnenden Klammer einer mehrzeiligen Importanweisung."""
+        if stmt.end_lineno is None or stmt.end_lineno == stmt.lineno:
+            return ""
+        found = self.source.comments_between(stmt.lineno, stmt.lineno)
+        return found[0].text if found else ""
+
     def _inner_comments(self, stmt: ast.stmt) -> bool:
+        """Kommentare zwischen den Einträgen (nicht hinter der öffnenden Klammer): Sie gehören
+        zu einem Eintrag und gingen beim Umbau verloren."""
         if stmt.end_lineno is None or stmt.end_lineno == stmt.lineno:
             return False
-        inside = self.source.comments_between(stmt.lineno, stmt.end_lineno - 1)
+        inside = self.source.comments_between(stmt.lineno + 1, stmt.end_lineno - 1)
         return bool(inside)
 
     # ---- Formen eines Bezugs

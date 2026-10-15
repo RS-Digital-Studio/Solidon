@@ -623,8 +623,8 @@ class ReaderComparison(Comparison):
             )
             if not uses:
                 self.errors.append(f"{self.path}: neuer Import {name!r} wird nicht gelesen")
-        before = self.expected_comments(all_comments(self.old))
-        after = all_comments(self.new)
+        before = self.expected_comments(_file_comments(self.old))
+        after = _file_comments(self.new)
         if before != after:
             self.errors.append(
                 f"{self.path}: Kommentare geändert — verloren "
@@ -888,6 +888,21 @@ class ReaderComparison(Comparison):
         if ast.dump(old) != ast.dump(new):
             self.accept(f"Patch {site_old.text} → {site_new.text}")
         return True
+
+
+def _file_comments(source: Source) -> Counter[str]:
+    """Die Kommentare einer Datei ohne ``# noqa`` an Importanweisungen: Die gelten der
+    Anweisung, und ein Umbau setzt sie an jede Anweisung, die aus ihr wird, oder lässt sie mit
+    einem weggefallenen Import fallen."""
+    lines: set[int] = set()
+    for node in ast.walk(source.tree):
+        if isinstance(node, IMPORTS):
+            lines.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+    return Counter(
+        c.text.strip()
+        for c in source.comments()
+        if not (c.line in lines and c.text.strip().startswith("# noqa"))
+    )
 
 
 def _importlib_or_free(identity: Identity) -> bool:
