@@ -1585,19 +1585,73 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         self.data["abort"] = abort_entry(self.data, moment["shown"], clicked)
 
     def phase_halt(self) -> None:
-        """Prüfpunkt 15: Haltgrund mit Schrittnummer; Einfügen vor dem letzten Schritt."""
-        from tools import function_capture as capture
+        """Prüfpunkt 15: Haltgrund mit Schrittnummer; Einfügen vor dem letzten Schritt.
 
+        Die Marke steht vor dem letzten Schritt der Startszene. Entsteht erst dort,
+        worüber der Weg der Zeile führt — die Bohrung von *Bohrung ändern*, der
+        Befund des Körpers unter dem Bett —, gibt es den Weg am Stand davor nicht,
+        und der Fall hieß „nicht auffindbar“, wo der Kunde nur nichts zu wählen
+        hätte (Läufe 001, 002). Dann wendet der Fall die Zeile einmal an und setzt
+        die Marke vor diesen Schritt: Der Stand davor ist die Startszene.
+        """
         if self.scene_key == "halt":
             self.read_halt()
         else:
             unmeasured(self.data, "halt", "Startszene ohne angehaltene Kette")
-        length = len(self.session.project.document.ops)
-        if length < 1:
+        if len(self.session.project.document.ops) < 1:
             unmeasured(self.data, "insertion", "kein Schritt, vor dem eingefügt werden könnte")
             return
-        previous = self.session.last_result
         record: dict[str, Any] = {"outcome": None, "text": "", "actions": []}
+        absent: list[str] = []
+        self.run_steps("einfügen", self.insertion_steps(record, absent))
+        if absent and self.reset():
+            first = list(absent)
+            absent.clear()
+            inputs = self.spec.get("inputs") or {}
+            before = len(self.session.project.document.ops)
+            self.run_steps(
+                "einfügen",
+                [
+                    *self.path_steps(),
+                    *self.input_steps(inputs),
+                    *([self.apply_step()] if self.apply_target else []),
+                    # Der Schritt der Zeile steht erst, wenn die Sitzung ihn
+                    # angelegt hat — ein Augenblick Ruhe davor ist kein Beleg.
+                    self.until_step(
+                        "schritt der zeile",
+                        lambda: len(self.session.project.document.ops) > before,
+                    ),
+                    self.wait_step("ruhe", self.settled),
+                    *self.insertion_steps(record, absent),
+                ],
+            )
+            if absent:
+                unmeasured(
+                    self.data,
+                    "insertion",
+                    f"vor dem letzten Schritt fehlt {', '.join(first)}, und die Zeile legt "
+                    "keinen eigenen Schritt an, vor den die Marke könnte",
+                )
+                return
+        self.data["insertion"] = record if record["outcome"] is not None else None
+        if record["outcome"] is None:
+            unmeasured(self.data, "insertion", "der Weg zur Einfügemarke kam nicht an")
+
+    def settled(self) -> bool:
+        """Gerechnet und gezeigt: Die Sitzung ruht, und ihr Ergebnis gilt dem Stand."""
+        return self.idle() and bool(getattr(self.session, "result_current", True))
+
+    def insertion_steps(self, record: dict[str, Any], absent: list[str]) -> list[Step]:
+        """Marke vor den letzten Schritt, dann am Stand davor der Weg der Zeile und ihre Antwort.
+
+        Fehlt am Stand davor ein Wegziel aus der Szene (``function_surface.SCENE_KINDS``),
+        steht es in ``absent``, und der Weg wird nicht gegangen. Verglichen wird mit
+        dem Ergebnis am Stand davor, nicht mit dem Endstand: Die Marke allein
+        rechnet schon neu, und jede Absage hieß sonst „ergebnis“.
+        """
+        from tools import function_capture as capture
+
+        previous: dict[str, Any] = {"result": None}
         began: dict[str, float | None] = {"t": None}
 
         def answered() -> bool:
@@ -1608,7 +1662,10 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
                 began["t"] = now
             if self.session.busy:
                 return False
-            return self.session.last_result is not previous or now - began["t"] >= EFFECT_WINDOW_S
+            return (
+                self.session.last_result is not previous["result"]
+                or now - began["t"] >= EFFECT_WINDOW_S
+            )
 
         def read(machine: StepMachine) -> None:
             messages = capture.message_entries(self.window)
@@ -1618,23 +1675,57 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
                 for message in messages
                 for action in message["actions"]
             ]
-            record["outcome"] = "ergebnis" if self.session.last_result is not previous else "absage"
+            changed = self.session.last_result is not previous["result"]
+            record["outcome"] = "ergebnis" if changed else "absage"
 
-        self.run_steps(
-            "einfügen",
-            [
-                self.walker.step(f"history.row:{length}", "right"),
-                self.walker.step("menu:history.insert"),
-                *self.path_steps(),
-                *self.input_steps(self.spec.get("inputs") or {}),
-                *([self.apply_step()] if self.apply_target else []),
-                Step("antwort", lambda machine: None, ready=answered),
-                Step("antwort lesen", read),
-            ],
-        )
-        self.data["insertion"] = record if record["outcome"] is not None else None
-        if record["outcome"] is None:
-            unmeasured(self.data, "insertion", "der Weg zur Einfügemarke kam nicht an")
+        def marker(machine: StepMachine) -> None:
+            length = len(self.session.project.document.ops)
+            machine.insert(
+                [
+                    self.walker.step(f"history.row:{length}", "right"),
+                    self.walker.step("menu:history.insert"),
+                    self.wait_step("stand davor", self.settled),
+                    Step("weg am stand davor", way),
+                ]
+            )
+
+        def way(machine: StepMachine) -> None:
+            previous["result"] = self.session.last_result
+            absent[:] = surfaces.absent_on_the_way(
+                self.window, [name for name, _button in route_of(self.row)]
+            )
+            if absent:
+                return
+            machine.insert(
+                [
+                    *self.path_steps(),
+                    *self.input_steps(self.spec.get("inputs") or {}),
+                    *([self.apply_step()] if self.apply_target else []),
+                    Step("antwort", lambda machine: None, ready=answered),
+                    Step("antwort lesen", read),
+                    Step("meldung schließen", close, settle_ms=SETTLE_MS),
+                ]
+            )
+
+        closed = {"times": 0}
+
+        def close(machine: StepMachine) -> None:
+            # Eine Absage beim Einfügen kommt als Meldung aus dem Arbeiter, nicht aus
+            # einem Schritt: Bliebe sie offen, kehrte die Ereignisschleife nie zurück
+            # (Probe group_pattern: fünf Minuten in show_error).
+            from PySide6.QtWidgets import QApplication
+
+            if (
+                QApplication.activeModalWidget() is None
+                and QApplication.activePopupWidget() is None
+            ):
+                return
+            if closed["times"] < MOST_UNSTICKS:
+                closed["times"] += 1
+                self.escape_modal()
+                machine.insert([Step("meldung schließen", close, settle_ms=SETTLE_MS)])
+
+        return [Step("marke", marker)]
 
     def read_halt(self) -> None:
         """Der Haltgrund dort, wo die Anwendung ihn zeigt (Review M10).

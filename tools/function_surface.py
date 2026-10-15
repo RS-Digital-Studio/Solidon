@@ -647,3 +647,29 @@ def without_way(row: Mapping[str, Any]) -> str:
         if name.startswith("finding.action:") and name[15:] not in promises.get("actions", {}):
             return f"Startszene {scene} sagt die Handlung {name[15:]} nicht zu"
     return ""
+
+
+#: Wegziele, die die Szene trägt und nicht die Oberfläche: Körper und Merkmale im
+#: Baum und im Bild, Befunde im Bericht. Fehlen sie, fehlt der Stand, nicht der Weg.
+SCENE_KINDS: Final[frozenset[str]] = frozenset({"tree.row", "view", "view.edge", "finding"})
+
+
+def absent_on_the_way(window: Any, names: Iterable[str]) -> list[str]:
+    """Die Wegziele aus der Szene, die am gezeigten Stand fehlen (Prüfpunkt 15).
+
+    Vor dem letzten Schritt der Startszene gibt es oft noch nicht, worüber der
+    Weg einer Zeile führt — die Bohrung, an der *Bohrung ändern* steht, den
+    Befund des Körpers unter dem Bett. Der Kunde hätte dort nichts zu wählen; das
+    ist kein Fund gegen die Anwendung.
+    """
+    from app.ui import guide_targets
+
+    absent: list[str] = []
+    for name in names:
+        if name.partition(":")[0] not in SCENE_KINDS:
+            continue
+        try:
+            guide_targets.next_click(window, name)
+        except LookupError:
+            absent.append(name)
+    return absent

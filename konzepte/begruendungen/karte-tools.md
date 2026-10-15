@@ -217,6 +217,13 @@ nach einem Projektwechsel belegen keine absichtlich ausgewählte Teilmenge.
 Eine erwartete Rückfrage zum Netzkörper
 setzt voraus, dass dieser Körper im Exportumfang liegt.
 
+Prüfpunkt 15 setzt die Einfügemarke vor den letzten Schritt der Startszene.
+Fehlt dort ein Wegziel aus der Szene (`function_surface.SCENE_KINDS`: Baum,
+Bild, Befund), wendet der Fall die Zeile einmal an und setzt die Marke vor
+diesen Schritt; ein fehlendes Merkmal am früheren Stand ist kein Fund. Die
+Antwort wird gegen das Ergebnis am Stand davor gelesen, und eine Meldung aus
+dem Arbeiter schließt der Fall danach selbst.
+
 
 *HEAD-Fassung, früher unter „Die Familien“.*
 
