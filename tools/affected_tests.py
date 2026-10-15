@@ -29,7 +29,11 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
    ``test_source_readers``), aber keinen, der nur ``app/`` liest. Unter
    ``app/`` zählt eine Lesestelle nur mit einem Ordner im Repository
    (``extract.message_ids`` → ``test_registry_dump``); oder
-4. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
+4. sie eine Operation oder einen Baustein beim Namen nennt, den ein
+   geändertes Modul registriert (``@register_op(name="resize_chamber")``) —
+   Module wie ``chamber_ops`` lädt nur eine Namensliste, und ihre Tests
+   importieren sie nie; oder
+5. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
    in einer Zeichenkette genannt wird — ``ROADMAP.md``, ``constraints.txt``,
    ein Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/`` —, auch
    über einen Helfer, den die Testdatei direkt importiert, oder ihr Ordner
@@ -87,6 +91,9 @@ PACKAGES = ("app", "tools", "tests")
 
 #: Aufrufe, deren Argument ein Pfadteil ist: ``Path("app", "ui")``, ``os.path.join``.
 _PATH_CALLS = frozenset({"Path", "PurePath", "PurePosixPath", "join"})
+
+#: Die Dekoratoren, über die ein Modul Operationen und Bausteine registriert.
+_REGISTRATIONS = {"register_op": "die Operation", "register_part": "den Baustein"}
 
 #: Änderungen hieran betreffen jeden Test.
 _EVERYTHING = frozenset({"tests/conftest.py", "pyproject.toml", "constraints.txt"})
@@ -352,6 +359,50 @@ def _tree_readers(graph: ImportGraph, paths: Iterable[PurePosixPath]) -> dict[st
     return found
 
 
+def _registered(graph: ImportGraph, name: str) -> list[tuple[str, str]]:
+    """Die Operationen und Bausteine, die ein Modul registriert: ``(was, name)``, statisch aus
+    ``register_op(name=…)`` und ``register_part(name=…)``."""
+    if not any(word in graph.text(name) for word in _REGISTRATIONS):
+        return []
+    relative = graph.modules[name].relative_to(graph.root).as_posix()
+    tree, _parents = graph.resolver.parsed(relative)
+    found: list[tuple[str, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        function = node.func
+        called = (
+            function.attr if isinstance(function, ast.Attribute) else getattr(function, "id", "")
+        )
+        if called not in _REGISTRATIONS:
+            continue
+        for keyword in node.keywords:
+            if keyword.arg == "name":
+                value = graph.resolver.value_at(relative, keyword.value)
+                if isinstance(value, str):
+                    found.append((_REGISTRATIONS[called], value))
+    return found
+
+
+def _name_readers(graph: ImportGraph, name: str) -> dict[str, str]:
+    """Die Testdateien, die eine Operation oder einen Baustein des Moduls ``name`` nennen.
+
+    ``chamber_ops``, ``closure_ops``, ``scene.ops`` und ``parts.panels`` lädt nur eine
+    Namensliste; ihre Tests rufen die Ops über das Register und importieren das Modul nie
+    (CS-31). Eine Kante über die Modulliste hinge jede Op an ``bootstrap`` — daran hängen neun
+    von zehn Testdateien —, die Namen der Ops treffen je eine Handvoll.
+    """
+    found: dict[str, str] = {}
+    for label, registered in _registered(graph, name):
+        quoted = (f'"{registered}"', f"'{registered}'")
+        for test in graph.modules:
+            if not _is_test_file(graph, test) or test in found:
+                continue
+            if any(one in graph.text(test) for one in quoted) and registered in graph.strings(test):
+                found[test] = f"nennt {label} {registered}"
+    return found
+
+
 def _folder_pattern(folder: str) -> str:
     """Der Ordnername, wie er in einem Pfadausdruck steht.
 
@@ -534,6 +585,7 @@ def affected(
     changed_modules: set[str] = set()
     deleted_modules: set[str] = set()
     named_tools: list[str] = []
+    registering: list[str] = []
     #: Jede geänderte Datei, neu oder gelöscht — für die, die ihren Ordner lesen.
     paths: list[PurePosixPath] = []
     for path in changed:
@@ -554,6 +606,8 @@ def affected(
                     reasons.setdefault(graph.modules[name], "selbst geändert")
                 if name.startswith("tools."):
                     named_tools.append(path.name)
+                if name.startswith("app."):
+                    registering.append(name)
             elif name.split(".", 1)[0] in PACKAGES:
                 # Gelöschte Module und Paketinitialisierer bleiben über ihre
                 # Importkanten erreichbar, auch Helfer unter tests/.
@@ -598,6 +652,9 @@ def affected(
                 if name.startswith("tests.") and graph.names_in_strings(name, file_name)
             },
         )
+    for name in registering:
+        for test, reason in _name_readers(graph, name).items():
+            reasons.setdefault(graph.modules[test], reason)
     if paths:
         for name, reason in _tree_readers(graph, paths).items():
             reasons.setdefault(graph.modules[name], reason)

@@ -459,6 +459,42 @@ def test_a_data_folder_counts_by_its_path_not_by_its_last_name(tree: Path) -> No
     )
 
 
+def test_an_operation_module_selects_the_tests_that_name_its_operations(tree: Path) -> None:
+    """CS-31: ``chamber_ops`` lädt nur eine Namensliste in ``bootstrap``; ``test_chamber_ops``
+    ruft die Op über das Register und importiert das Modul nie. Die Namen der registrierten
+    Ops und Bausteine, statisch gelesen, sind die Kante — genau der Name als Zeichenkette,
+    nicht ein längerer und nicht ein Kommentar."""
+    module = _write(
+        tree,
+        "app/chamber_ops.py",
+        "from app.registry import register_op\n"
+        "NAME = 'zz_resize_chamber'\n"
+        "@register_op(name=NAME, title='Kammer')\n"
+        "def resize(ctx):\n    return ctx\n",
+    )
+    _write(
+        tree,
+        "app/panels.py",
+        "from app.parts import register_part\n"
+        "@register_part(name='zz_panel', title='Platte')\n"
+        "def panel(ctx):\n    return ctx\n",
+    )
+    _write(tree, "tests/test_chamber.py", "RESULT = run_op('zz_resize_chamber')\n")
+    _write(tree, "tests/test_longer.py", "RESULT = run_op('zz_resize_chamber_twice')\n")
+    _write(tree, "tests/test_mentioned.py", "# zz_resize_chamber\nX = 1\n")
+    _write(tree, "tests/test_panel.py", "PART = 'zz_panel'\n")
+
+    files, reasons = affected([module], ImportGraph(tree))
+
+    assert {"tests/test_chamber.py"} <= _names(files, tree)
+    assert not {"tests/test_longer.py", "tests/test_mentioned.py", "tests/test_panel.py"} & (
+        _names(files, tree)
+    )
+    assert reasons[tree / "tests" / "test_chamber.py"] == ("nennt die Operation zz_resize_chamber")
+    files, reasons = affected([tree / "app" / "panels.py"], ImportGraph(tree))
+    assert reasons[tree / "tests" / "test_panel.py"] == "nennt den Baustein zz_panel"
+
+
 def test_an_application_module_reading_its_own_tree_lends_that_reading(tree: Path) -> None:
     """CS-32: ``app/i18n/extract.py`` liest die Quellen unter ``app/`` nach ``tr()``-Schlüsseln;
     ``tools/registry_dump.py`` ruft es, und ``test_registry_dump`` fehlte bei einem neuen Text
@@ -509,6 +545,22 @@ def test_the_real_extraction_of_texts_reaches_the_registry_dump(real_graph: Impo
 
     reason = reasons.get(real_graph.root / "tests" / "test_registry_dump.py", "")
     assert reason.startswith("liest app/") and "app/i18n/extract.py" in reason, reason
+
+
+def test_the_real_operation_modules_reach_the_tests_that_name_their_operations(
+    real_graph: ImportGraph,
+) -> None:
+    """CS-31 gegen den echten Baum: ``chamber_ops``, ``closure_ops`` und ``counter_form_ops``
+    lädt nur ``bootstrap`` über eine Namensliste; ihre Tests rufen die Ops beim Namen."""
+    for module, test in (
+        ("app/core/geom/chamber_ops.py", "test_chamber_ops.py"),
+        ("app/core/geom/closure_ops.py", "test_closure_ops.py"),
+        ("app/core/geom/counter_form_ops.py", "test_counter_form.py"),
+    ):
+        _files, reasons = affected([real_graph.root / module], real_graph)
+
+        reason = reasons.get(real_graph.root / "tests" / test, "")
+        assert reason.startswith("nennt die Operation "), (module, reason)
 
 
 def test_the_real_guards_are_chosen_for_any_change_under_app(real_graph: ImportGraph) -> None:
