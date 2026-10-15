@@ -6495,6 +6495,13 @@ def test_a_large_import_is_shown_before_its_recognition(monkeypatch) -> None:
     monkeypatch.setattr(session_module, "PICTURE_FIRST_TRIANGLES", 1)
     session = _session_with_unshown_import(MESHES / "plate_holes.stl")
     assert session.picture_first(), "ein Ladeschritt ohne Bild zeigt erst das Modell"
+    # Der Plattencache gehört dem Testprozess: Hat ein früherer Fall desselben
+    # Arbeiters diese Datei schon geladen, läse schon das Bild aus dem Cache
+    # und kein Lauf lüde (macOS Intel, CI-Lauf 38781742486). Kalt gemacht,
+    # Speicher und Platte, lädt das Bild selbst.
+    session.cache.clear()
+    assert session.cache._disk is not None
+    session.cache._disk.clear()
 
     spec = REGISTRY.get("load")
     real = spec.fn
