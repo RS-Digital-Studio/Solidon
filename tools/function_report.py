@@ -9,8 +9,12 @@ und C (``urteile-<paket>.toml``, Konzept §5, Stufe B) und der Funddatei
 außerhalb des Baums.
 
 * **Urteile werden geprüft, bevor sie zählen** (:func:`check_verdicts`): ohne
-  Bild oder Stelle, *offen* ohne RM, ein fremder *entfällt*-Grund, G9 schwerer
-  als leicht und „gut“ gegen einen Fund der Stufe A werden abgewiesen.
+  Bild oder Stelle, ein Bild mit dem Pfad eines Rechners, *offen* ohne RM, ein
+  fremder *entfällt*-Grund, G9 schwerer als leicht und „gut“ gegen einen Fund
+  der Stufe A werden abgewiesen.
+* **Die Urteilsdatei nennt ihren Lauf** (:func:`check_runs`): ``[[run]]`` mit
+  Name, Kopf und Siegel; die Bilder stehen relativ dazu, und die Abhakliste
+  nennt ihn als Laufordner — nicht die Kopie, aus der sie entstand.
 * **Die Abhakliste ist erzeugt, nie von Hand** (:func:`render_checklist`):
   gleiche Eingaben, gleiche Bytes; eine Datei je Paket, damit zwei parallele
   Pakete keine erzeugte Datei mergen.
@@ -102,6 +106,7 @@ VERDICT_KEYS: Final = frozenset(
         "reviewer",
         "reason",
         "image",
+        "no_image",
         "place",
         "finding",
         "rm",
@@ -161,6 +166,21 @@ _STAND: Final = (
     re.compile(r"^gut nach Fix\b.*`[0-9a-f]{7,40}`"),
 )
 _RM: Final = re.compile(r"\bRM-\d+\b")
+
+#: Ein Bild steht relativ zum Laufordner (``--out``), mit ``/`` und als PNG;
+#: eines aus einer anderen Runde trägt die Kennung ihres ``[[run]]`` davor
+#: (``v4:cases/001/v4-nachher.png``). So hängt kein Urteil im Baum an einem
+#: Rechner, und das Bildfeld trägt nur Bilder (RD-5).
+_IMAGE: Final = re.compile(r"(?:(?P<run>[a-z][a-z0-9_-]+):)?(?P<path>[^\\:]+\.png)")
+
+#: Ein Pfad mit Laufwerk — er gilt nur an dem Rechner, der ihn schrieb.
+_MACHINE_PATH: Final = re.compile(r"(?<!\w)[A-Za-z]:[\\/]")
+
+#: Die Schlüssel einer Laufangabe ``[[run]]``; ``key`` fehlt am Laufordner.
+RUN_KEYS: Final = frozenset({"key", "name", "head", "seal"})
+_RUN_KEY: Final = re.compile(r"[a-z][a-z0-9_-]+")
+_HEAD: Final = re.compile(r"[0-9a-f]{7,40}")
+_SHA256: Final = re.compile(r"\b[0-9a-f]{64}\b")
 
 
 # --- Kontext aus dem Baum ---------------------------------------------------
@@ -373,13 +393,87 @@ def subject_of(entry: Mapping[str, Any]) -> int | str | None:
     return str(criterion) if criterion is not None else None
 
 
-def read_verdicts(path: Path) -> list[dict[str, Any]]:
-    """Die Einträge ``[[verdict]]`` einer Urteilsdatei; fehlt sie, keine."""
+def read_verdict_file(path: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Urteile ``[[verdict]]`` und Laufangaben ``[[run]]`` einer Urteilsdatei; fehlt sie, keine."""
     if not path.is_file():
-        return []
+        return [], []
     data = tomllib.loads(path.read_text(encoding="utf-8"))
-    entries = data.get("verdict", [])
-    return [dict(entry) for entry in entries if isinstance(entry, Mapping)]
+
+    def tables(name: str) -> list[dict[str, Any]]:
+        return [dict(entry) for entry in data.get(name, []) if isinstance(entry, Mapping)]
+
+    return tables("verdict"), tables("run")
+
+
+def image_problem(image: str) -> str | None:
+    """Warum ein Bildverweis nicht trägt — ``None``, wenn er relativ zum Laufordner steht."""
+    found = _IMAGE.fullmatch(image)
+    parts = found.group("path").split("/") if found else []
+    if found is None or any(part in {"", ".", ".."} or part != part.strip() for part in parts):
+        return f"Bild nicht relativ zum Laufordner: {image}"
+    return None
+
+
+def image_run(image: str) -> str | None:
+    """Die Kennung des ``[[run]]`` vor einem Bild; ``None`` heißt Laufordner."""
+    found = _IMAGE.fullmatch(image)
+    return found.group("run") if found else None
+
+
+def run_folder(runs: Iterable[Mapping[str, Any]]) -> str | None:
+    """Der Name des Laufordners aus den Laufangaben — der Lauf ohne Kennung."""
+    return next((str(run.get("name")) for run in runs if run.get("key") is None), None)
+
+
+def check_runs(
+    runs: Sequence[Mapping[str, Any]],
+    entries: Iterable[Mapping[str, Any]],
+    commits: Iterable[str] = (),
+) -> list[str]:
+    """Warum die Laufangaben einer Urteilsdatei nicht tragen — leer, wenn sie es tun.
+
+    Jeder Lauf nennt Name, Kopf und ein Siegel mit SHA256; eine Kennung steht
+    für genau einen Lauf, der Lauf ohne Kennung ist der Laufordner (``--out``).
+    Jede Runde einer Datei darf ihre Läufe wiederholen, gleich lautend. Ein Bild
+    braucht seinen Lauf, und der Laufordner hat den Kopf der Protokolle — sonst
+    nennte die Abhakliste einen Lauf, den sie nicht gelesen hat.
+    """
+    problems: list[str] = []
+    known: dict[str | None, Mapping[str, Any]] = {}
+    for run in runs:
+        label = run.get("key")
+        name = str(run.get("name") or "").strip()
+        title = f"Lauf {name or '?'}"
+        problems += [f"{title}: unbekannter Schlüssel {key}" for key in sorted(set(run) - RUN_KEYS)]
+        if label is not None and not _RUN_KEY.fullmatch(str(label)):
+            problems.append(
+                f"{title}: Kennung {label} besteht nicht aus Kleinbuchstaben, Ziffern, - und _"
+            )
+        if not name or _MACHINE_PATH.search(name):
+            problems.append(f"{title}: ohne Namen oder mit Pfad dieses Rechners")
+        if not _HEAD.fullmatch(str(run.get("head") or "")):
+            problems.append(f"{title}: Kopf {run.get('head')} ist kein Commit")
+        if not _SHA256.search(str(run.get("seal") or "")):
+            problems.append(f"{title}: Siegel ohne SHA256")
+        if label in known and dict(known[label]) != dict(run):
+            problems.append(f"Kennung {label or '(Laufordner)'} steht für zwei Läufe")
+        known.setdefault(label, run)
+    used = {
+        image_run(str(entry["image"])) for entry in entries if str(entry.get("image") or "").strip()
+    }
+    for label in sorted(used - set(known), key=str):
+        problems.append(
+            "Bilder ohne Laufangabe" if label is None else f"Bilder aus unbekanntem Lauf {label}"
+        )
+    main = known.get(None)
+    shown = [commit for commit in commits if _HEAD.fullmatch(commit)]
+    if main is not None and shown:
+        head = str(main.get("head"))
+        if not any(commit.startswith(head) or head.startswith(commit) for commit in shown):
+            problems.append(
+                f"Laufordner {main.get('name')} hat Kopf {head}, die Protokolle {', '.join(shown)}"
+            )
+    return problems
 
 
 @dataclass(frozen=True)
@@ -460,10 +554,19 @@ def _verdict_problems(
         problems.append(f"unbekanntes Urteil: {verdict}")
     if reviewer is not None and reviewer not in REVIEWERS:
         problems.append(f"unbekannter Prüfer: {reviewer}")
+    # Bild oder ausdrücklich keins: ``no_image`` sagt, warum der Lauf keins hat.
+    image = str(entry.get("image") or "").strip()
+    place = str(entry.get("place") or "")
     if verdict != "entfaellt" and not (
-        str(entry.get("image") or "").strip() and str(entry.get("place") or "").strip()
+        (image or str(entry.get("no_image") or "").strip()) and place.strip()
     ):
         problems.append("ohne Bild oder Stelle")
+    if "image" in entry and "no_image" in entry:
+        problems.append("Bild und Grund ohne Bild zugleich")
+    if image and (problem := image_problem(str(entry["image"]))):
+        problems.append(problem)
+    if _MACHINE_PATH.search(place):
+        problems.append("Stelle mit Pfad dieses Rechners")
     if verdict == "offen" and not _RM.search(str(entry.get("rm") or "")):
         problems.append("offen ohne RM-Nummer")
     if verdict == "entfaellt" and entry.get("not_applicable") not in NOT_APPLICABLE_REASONS:
@@ -1465,12 +1568,13 @@ def write(
         ]
         ids = {str(row.get("id")) for row in package_rows}
         cases = {row: case for row, case in merged.items() if row in ids}
-        entries = read_verdicts(verdicts or state / f"urteile-{package_slug(name)}.toml")
+        entries, runs = read_verdict_file(verdicts or state / f"urteile-{package_slug(name)}.toml")
         checked = check_verdicts(entries, outcomes=cases, rows=ids, findings=found)
         invalid += [
             f"{name} {entry.get('row')} {subject_of(entry)}: {'; '.join(reasons)}"
             for entry, reasons in checked.rejected
         ]
+        invalid += [f"{name}: {problem}" for problem in check_runs(runs, entries, commits)]
         values = package_values(cases, checked.accepted, common_goals=goals, solutions=kinds)
         text = render_checklist(
             name,
@@ -1481,7 +1585,9 @@ def write(
             values=values,
             commit=shown_commit,
             date=shown_date,
-            out=str(out),
+            # Der Lauf, den die Urteile nennen, nicht die bildlose Kopie,
+            # aus der die Protokolle hier gelesen werden.
+            out=run_folder(runs) or str(out),
         )
         target = checklist or state / f"abhakliste-{package_slug(name)}.md"
         target.parent.mkdir(parents=True, exist_ok=True)
