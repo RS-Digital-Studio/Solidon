@@ -130,10 +130,11 @@ def check_queries(proof: Proof, trees: Trees, mapping: Mapping) -> None:
     """Kein Aufruf mit festem Attributnamen auf ein Modul fragt nachher ins Leere, der vorher
     (abgebildet) etwas fand: ``hasattr(M, "N")``, ``getattr(M, "N", vorgabe)``,
     ``setattr``/``delattr`` und jeder dieser Aufrufe über einen Alias (``has = hasattr``,
-    ``builtins.hasattr``; Review 2, RM-M20). Nur ``getattr(M, "N")`` ohne Vorgabe über den
-    eingebauten Namen zählt der Auflöser als Bezug (eine Leere meldet dann W5); die übrigen sind
-    weder Bezug noch unauflösbar — der Beweis sucht sie deshalb selbst, über
-    ``tools/move_forms.py`` und ``resolve``/``exists`` aus R, in jeder Datei beider Bäume."""
+    ``builtins.hasattr``; Review 2, RM-M20). Eine Leere meldet der Auflöser nur für
+    ``getattr(M, "N")`` ohne Vorgabe über den eingebauten Namen (W5); die übrigen sind nach dem
+    Schnitt weder Bezug noch unauflösbar — einen Bezug nennt er nur, solange es den Namen gibt
+    (CS-27). Der Beweis sucht sie deshalb selbst, über ``tools/move_forms.py`` und
+    ``resolve``/``exists`` aus R, in jeder Datei beider Bäume."""
     every = _queries(trees, "new")
     proof.counts["queries"] = sum(len(sites) for sites in every.values())
     before = {
@@ -158,9 +159,9 @@ def check_queries(proof: Proof, trees: Trees, mapping: Mapping) -> None:
 
 
 def _queries(trees: Trees, side: str) -> dict[tuple[str, str], list[str]]:
-    """Je ``(M, N)`` die Stellen eines Baums mit Attributnamen auf ein Modul, die der Auflöser
-    nicht als Bezug zählt, deren erstes Argument laut R genau ein Modul ist; der Name auch
-    gefaltet."""
+    """Je ``(M, N)`` die Stellen eines Baums mit Attributnamen auf ein Modul, deren Leere der
+    Auflöser nicht als W5 meldet, deren erstes Argument laut R genau ein Modul ist; der Name
+    auch gefaltet."""
     index = trees.old_index if side == "old" else trees.new_index
     files = trees.old_files if side == "old" else trees.new_files
     calls = Calls(index, files)

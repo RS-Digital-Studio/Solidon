@@ -39,7 +39,13 @@ from tools.code_index import HeadCopy, Index
 from tools.move_compare import FileScopes, TopLevel, fixed_parts, qualname_of, string_constants
 from tools.move_cut import Cut, OpenName
 from tools.move_edits import Edit
-from tools.move_forms import annotation_expression, annotation_names, folded_names, is_annotation
+from tools.move_forms import (
+    annotation_expression,
+    annotation_names,
+    folded_names,
+    is_annotation,
+    reported_calls,
+)
 from tools.move_refs import (
     AlreadyAppliedError,
     Context,
@@ -164,6 +170,14 @@ class CopiesPlanner:
         self.statements: set[tuple[str, int]] = {
             (c.head.path, c.head.line) for c in self.copies.values()
         }
+        self._queries: dict[tuple[str, str], frozenset[tuple[str, int, int]]] = {}
+
+    def _reported(self, holder: str, bound: str) -> frozenset[tuple[str, int, int]]:
+        """Die Abfragen auf die Kopie, die der Auflöser als Bezug nennt (:meth:`_outside`)."""
+        key = (holder, bound)
+        if key not in self._queries:
+            self._queries[key] = reported_calls(self.ctx.index, holder, bound)
+        return self._queries[key]
 
     def _package(self, package: str) -> Source | None:
         path = path_of(package, package=True)
@@ -468,6 +482,13 @@ class CopiesPlanner:
                     )
                 elif ref.kind == "getattr":
                     rewrite.retarget_getattr(*where)
+                elif ref.kind == "hasattr":
+                    # Auch über einen Alias derselben Datei (CS-27); _attribute_names nimmt nur,
+                    # was der Auflöser nicht nennt (tools.move_forms.reported_calls).
+                    self.ctx.problem(
+                        f"{ref.path}:{ref.line}: hasattr({holder}, {bound!r}) fragt nach der "
+                        "Kopie — vor dem Schnitt als Zugriff auf das Original schreiben"
+                    )
                 else:
                     self.ctx.problem(
                         f"{ref.path}:{ref.line}: Bezug auf die Kopie {holder}.{bound} über "
@@ -585,7 +606,8 @@ class CopiesPlanner:
         """Ein Halter, nach dessen Kopie über ihren Namen gefragt wird, und ein Halter, dessen
         Namensraum als Ganzes gelesen wird (``vars(H)``, ``dir(H)``, ``H.__dict__``, ein
         Attributaufruf mit offenem Namen): Danach fehlte die Kopie still (Review 2, RM-M20).
-        Erkannt über ``tools/move_forms.py``, auch über einen Alias."""
+        Erkannt über ``tools/move_forms.py``, auch über einen Alias. Ein ``getattr``/``hasattr``,
+        das der Auflöser als Bezug nennt, behandelt :meth:`_outside` (CS-27)."""
         holders = sorted({holder for holder, _bound in self.copies})
         calls = self.ctx.calls()
         for node in ast.walk(source.tree):
@@ -599,8 +621,11 @@ class CopiesPlanner:
             text = _short(source, node)
             line = target.lineno
             names = folded_names(self.ctx.index, path, named.name) if named else None
-            if names is not None:
-                if any((holder, name) in self.copies for name in names):
+            if names is not None and named is not None:
+                at = (path, named.call.lineno, named.call.col_offset)
+                hits = [name for name in names if (holder, name) in self.copies]
+                # Was der Auflöser als Bezug nennt, hat _outside schon behandelt (CS-27).
+                if any(at not in self._reported(holder, name) for name in hits):
                     self.ctx.problem(
                         f"{path}:{line}: {text} fragt nach der Kopie — vor dem Schnitt "
                         "als Zugriff auf das Original schreiben"

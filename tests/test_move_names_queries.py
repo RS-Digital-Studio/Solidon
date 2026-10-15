@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from tests import move_fixtures as fx
-from tools import move_cut, move_names, move_proof
+from tools import move_cut, move_names, move_proof, move_refs
 
 MODULE_EXPECTED = fx.changed_tree(fx.MODULE_OLD, fx.MODULE_NEW)
 COPIES_EXPECTED = fx.changed_tree(fx.COPIES_OLD, fx.COPIES_NEW)
@@ -119,6 +119,57 @@ def test_a_query_through_a_detour_follows_the_cut(
     assert expected in text, (label, text)
 
 
+#: Dazu die Formen, die der Auflöser selbst als Bezug nennt (CS-27): ``hasattr`` und
+#: ``getattr`` mit Vorgabe über den eingebauten Namen.
+SINGLE_FORMS = [
+    *MODULE_FORMS,
+    (
+        "hasattr",
+        {
+            QUERY: "from app.core import legacy\n\n\ndef test_has():\n"
+            '    assert hasattr(legacy, "bump")\n'
+        },
+        'hasattr(state, "bump")',
+    ),
+    (
+        "getattr-mit-vorgabe",
+        {
+            QUERY: "from app.core import legacy\n\n\ndef test_get():\n"
+            '    assert getattr(legacy, "bump", None) is not None\n'
+        },
+        'getattr(state, "bump", None)',
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("label", "extra", "expected"), SINGLE_FORMS, ids=[form[0] for form in SINGLE_FORMS]
+)
+def test_every_query_is_rewritten_by_exactly_one_way(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    label: str,
+    extra: dict[str, str],
+    expected: str,
+) -> None:
+    """Was der Auflöser als Bezug nennt (``getattr``, ``hasattr``, auch über einen Alias derselben
+    Datei), stellt die Bezugsschleife um; die Aufrufsuche nur, was er nicht nennt (``setattr``,
+    ein Alias aus einem anderen Modul). Jede Stelle wird genau einmal umgestellt — zwei Wege für
+    dieselbe Form liefen sonst auseinander (Zwilling)."""
+    seen: list[tuple[str, int]] = []
+    original = move_refs.FileRewrite.retarget_getattr
+
+    def counted(self: move_refs.FileRewrite, line: int, col: int, *rest: str) -> None:
+        seen.append((self.path, line))
+        original(self, line, col, *rest)
+
+    monkeypatch.setattr(move_refs.FileRewrite, "retarget_getattr", counted)
+    root, result = _run(tmp_path, fx.MODULE_OLD | extra, fx.MODULE_CUT)
+    assert result.status == "written", (label, result.problems)
+    assert expected in (root / QUERY).read_text(encoding="utf-8"), label
+    assert len([line for path, line in seen if path == QUERY]) == 1, (label, seen)
+
+
 @pytest.mark.parametrize(("label", "extra", "expected"), MODULE_FORMS, ids=MODULE_IDS)
 def test_a_query_through_a_detour_left_standing_is_red(
     tmp_path: Path, label: str, extra: dict[str, str], expected: str
@@ -183,6 +234,25 @@ def test_a_holder_read_through_a_detour_is_rejected(
     assert result.status == "rejected", (label, result.status, result.problems)
     assert any(plan in p and " — " in p for p in result.problems), (label, result.problems)
     assert fx.tree_bytes(root) == {p: fx.text_of(t).encode("utf-8") for p, t in files.items()}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        COPIES_FORMS[0][1],
+        COPIES_FORMS[4][1],
+        "from app.core import consumer\n\n\ndef test_has():\n"
+        '    assert hasattr(consumer, "operation")\n',
+    ],
+    ids=["builtins-attribut", "alias", "hasattr"],
+)
+def test_a_query_on_a_copy_is_rejected_by_one_way(tmp_path: Path, text: str) -> None:
+    """``hasattr`` auf eine Kopie nennt der Auflöser als Bezug (CS-27): Die Bezugsschleife weist
+    es ab, die Aufrufsuche nicht noch einmal — eine Stelle, ein Fund."""
+    _root, result = _run(tmp_path, fx.COPIES_OLD | {QUERY: text}, fx.COPIES_CUT)
+    found = [p for p in result.problems if p.startswith(f"{QUERY}:")]
+    assert len(found) == 1, result.problems
+    assert "fragt nach der Kopie" in found[0], found
 
 
 @pytest.mark.parametrize(("label", "text", "plan", "proof"), COPIES_FORMS, ids=COPIES_IDS)
