@@ -56,6 +56,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
 - Sem ativação, também *Criar parâmetro …*, *Mover*, *Dividir*, as teclas do histórico e as medidas na vista ficam a cinzento. Cada motivo indica o caminho, como *Ajuda → Desbloquear o Solidon …*.
 - Quando uma ação do *Relatório de verificação* espera pelo cálculo em curso, indica que depois volta a ficar disponível, também para leitores de ecrã.
+- Numa cena vazia, as ferramentas a cinzento como *Corte* e *Medir* indicam o motivo: precisam de um corpo. Até agora a dica mostrava apenas o nome.
 - As mensagens da barra de estado já não colocam dois pontos depois de uma frase completa.
 - Com um só corpo, a árvore de objetos tem a altura do seu conteúdo, e o histórico com um só passo também. Na versão 0.6.0 ficava espaço vazio por baixo.
 - O passo mais recente continua visível no histórico quando novos corpos fazem crescer a árvore de objetos. Na versão 0.6.0 deslizava para baixo do limite do painel.
@@ -65,6 +66,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O painel de seleção segue conteúdo e letra, mantendo texto e colunas. Os separadores destacados conservam o tamanho. Se houver uma alteração proposta, «Aplicar» é a ação principal.
 - Os elementos correspondentes pedem par e tamanho e explicam ambas as metades. Forma e ajuste ficam em «Mais definições». A altura inicial do diálogo adapta-se ao conteúdo.
 - Após a recusa de uma pré-visualização, os textos da seguinte continuam totalmente legíveis.
+- Para parâmetros, ajustes, impressora, material e desfazer, o chat indica o lugar da janela onde se faz o mesmo à mão.
+- O relatório de verificação nomeia os corpos de um ajuste em vez de mostrar um identificador interno.
+- O inglês e o português distinguem agora o ressalto de um gancho, ou de um corpo abaixo da placa, da saliência na impressão.
+- Em espanhol e português, o menu, a pesquisa e o diálogo voltam a mostrar só a primeira frase de *Pino para furo* e *Orientar para impressão*.
+- Várias traduções leem-se com mais clareza, entre elas a introdução de *Criar parâmetro …*. O pino começa com maiúscula em todas as línguas.
 
 ### Imprimir e entregar ao slicer
 
@@ -79,6 +85,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo ou um recipiente só resulta deslocando os vértices numa quantidade mínima, a abertura fica livre. Na versão 0.6.0 podia ficar por cima uma pele finíssima.
 - Nos furos, vista e *Seleção* mostram a mesma alteração. Dimensão, profundidade e entrada associada ficam à frente; compensação de impressão e ajustes finos, em «Mais valores».
 - Os campos do furo e a caixa para alterar elementos iguais em conjunto explicam o seu efeito. «Compensar desvios de impressão» esclarece a correção do perfil do material.
+- Se junto a uma peça imprimível só restarem lascas, *Dividir em peças soltas* nomeia-as e oferece *Manter as lascas*. Antes dizia que o corpo era de uma só peça.
+- Se o raio de um arredondamento ou a largura de um chanfro for grande demais para as arestas, a mensagem oferece *Escolher outras arestas*.
 
 ## 0.6.0
 

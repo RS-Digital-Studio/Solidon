@@ -71,7 +71,8 @@ jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 
 Der einzige Einstieg am Fenster ist `file_acceptance.py`; `function_bench`
 stellt den Fall zusammen, `function_machine`/`function_walk` führen ihn,
-`function_setup`/`function_start` bereiten ihn vor, `function_protocol` schreibt
+`function_setup`/`function_start` bereiten ihn vor (`place_window` belässt
+maximierte Clientmaße ohne Ziel- oder Größenwechsel), `function_protocol` schreibt
 das Protokoll und `function_language` prüft die Sprache. `function_gestures`
 fährt Zeigen und Ziehen, `function_switch` den Projektwechsel. Die Schritte
 gehen über echte Eingabeereignisse und `guide_targets.next_click`; die
@@ -97,6 +98,10 @@ nicht. `names_a_way_out(reason, menus, buttons, *, phrases=(), fields=())` und
 `way_out(window, reason, widget=None)` prüfen Auswege. `surface_field_titles`
 nimmt nur offene Felder auf derselben Fläche, nicht die einer anderen Karte
 oder des gesamten Hauptfensters. Ein graues Feld ist kein Ausweg.
+`function_tooltips.reason_pictures` zeigt im Fehlfall die Kurzhilfe jedes
+grauen Ziels wie beim Überfahren und nimmt sie als eigenes Bild auf
+(`04-fehlfall-grund-<n>.png`): Ein Urteil über einen Sperrgrund stützt sich auf
+den angezeigten Satz, nicht auf das Protokoll.
 
 Lizenzläufe tragen `state` mit `angeboten`, `grau` oder `fehlt`; `reason`
 stammt aus `grey_reason`, zuerst aus der Kurzhilfe, dann aus der zugänglichen
@@ -124,7 +129,17 @@ Unterklassen und festen oder weitergereichten Zielen. `raw_window_names` nimmt
 diese erhobene Menge an, statt eine zweite Klassenliste zu führen.
 `function_checks` hält Schema und Schwellen, `function_points` und
 `function_judges` urteilen; `function_samples` liefert Gegenproben,
-`function_report` Funde, Abhakliste und die Übereinstimmung der Urteile.
+`function_report` Funde und Abhakliste; die Übereinstimmung der Urteile rechnet
+`function_agreement` je Paket zur Auskunft und bindend über die Runde (alle
+Pakete mit demselben Laufordner), Zellen ohne Gegenurteil weist es aus.
+`function_verdict_rules` hält, was ein Urteil zur Zeit seiner Runde gegen
+Funddatei und Vorhersage einhalten muss: *gut nach Fix* genau dort, wo ein
+behobener Fund an der Zelle steht (ein Prüfpunkt umfasst seine Kriterien), und
+V4 nur mit vor dem Klick gebundener Vorhersage. `report` prüft das, der
+Wächter über die versionierten Urteile nur ihre Form. `function_promises`
+findet die Fundstellen von Prüfpunkt 11 außerhalb des Registers über die
+Zeilenspezifikation (`manual`, `website`, die Übersetzungen an derselben Stelle
+der Gliederung) und liest Seiten samt Bildtexten und Titeln.
 
 #### Messflächen und nachträgliche Änderung
 

@@ -554,7 +554,7 @@ def test_every_result_names_its_evidence() -> None:
 def test_good_verdicts_are_accepted() -> None:
     """Die Gegenseite: Was Konzept §5, Stufe B erfüllt, wird angenommen."""
     case = _judged()
-    findings, problems = parse_findings(_finding(subject="1", kind="Einfachheit"))
+    findings, problems = parse_findings(_finding(subject="8", stand="behoben `a280ee8f5`"))
     assert not problems
     found = {finding.key: finding for finding in findings}
     entries = [
@@ -563,7 +563,7 @@ def test_good_verdicts_are_accepted() -> None:
         _verdict(point=2, verdict="offen", rm="RM-801", finding="FD-1"),
         _verdict(point=8, verdict="gut_nach_fix", finding="FD-1"),
         _verdict(criterion="G9", design_judgement=True),
-        _verdict(criterion="V4", prediction="Ein Loch von 5 mm"),
+        _verdict(criterion="V4", prediction="Ein Loch", prediction_bound=f"v4 {'0' * 64}"),
         _verdict(criterion="Z7", reviewer="stufe_c", steps=14, misclicks=1),
         _verdict(point=1, reviewer="zweitpruefer"),
         _verdict(
@@ -653,6 +653,38 @@ def test_a_second_verdict_of_the_same_stage_is_rejected() -> None:
     checked = check_verdicts([_verdict(point=1), _verdict(point=1, verdict="offen", rm="RM-2")])
     assert len(checked.accepted) == 1
     assert "doppeltes Urteil derselben Stufe" in checked.rejected[0][1]
+
+
+def test_a_verdict_file_hangs_on_no_machine() -> None:
+    """RD-5: Bild relativ zum ``[[run]]`` oder ``no_image`` mit Grund, Stelle ohne Laufwerk."""
+    why = "kein PNG im Lauf: cases/043/surfaces/a.json nennt images=[]"
+    for image in ("F:\\l\\a.png", "F:/l/a.png", "/l/a.png", "c\\a.png", "c/../a.png", why):
+        reasons = check_verdicts([_verdict(point=1, image=image)]).rejected[0][1]
+        assert any("Bild nicht relativ zum Laufordner" in r for r in reasons), (image, reasons)
+    good = [_verdict(point=1, image="cases/2/a.png"), _verdict(point=2, image="v4:cases/1/b.png")]
+    good += [_verdict(point=3, image=None, no_image=why), _verdict(point=4, place="c/f.json#a/#b")]
+    assert check_verdicts(good).rejected == ()
+    for entry, reason in (
+        (_verdict(point=1, no_image=why), "Bild und Grund ohne Bild zugleich"),
+        (_verdict(point=1, image=None, no_image=" "), "ohne Bild oder Stelle"),
+        (_verdict(point=1, place="F:\\l\\cases\\3\\function.json"), "Stelle mit Pfad dieses"),
+    ):
+        assert reason in " ".join(check_verdicts([entry]).rejected[0][1]), entry
+    run = {"name": "lauf", "head": "2ec37b23b", "seal": "s.json SHA256 " + "6" * 64}
+    v4 = {**run, "key": "v4", "name": "v4-lauf"}
+    bad = {**run, "seal": "s.json", "head": "main", "name": "F:\\lauf", "folder": "x"}
+    assert function_report.check_runs([run, v4, run], good, ["2ec37b23b"]) == []
+    assert function_report.run_folder([v4, run]) == "lauf"
+    for runs, expected in (
+        ([v4], "Bilder ohne Laufangabe"),
+        ([run], "Bilder aus unbekanntem Lauf v4"),
+        ([bad, v4], "ohne SHA256|kein Commit|Pfad dieses Rechners|unbekannter Schlüssel"),
+        ([run, {**run, "name": "anders"}, v4], "steht für zwei Läufe"),
+        ([run, {**v4, "key": "V 4"}], "Kennung V 4 besteht nicht aus"),
+        ([{**run, "head": "a280ee8f5"}, v4], "hat Kopf a280ee8f5, die Protokolle 2ec37b23b"),
+    ):
+        problems = " ".join(function_report.check_runs(runs, good, ["2ec37b23b"]))
+        assert all(part in problems for part in expected.split("|")), (expected, problems)
 
 
 # --- Funddatei ----------------------------------------------------------------
@@ -972,6 +1004,22 @@ def test_the_report_rejects_invalid_input_with_exit_one(tmp_path: Path) -> None:
     assert _write(out, state, package="D4") == 1
     text = (state / "abhakliste-d04.md").read_text(encoding="utf-8")
     assert "## Abgewiesene Urteile" in text and "offen ohne RM-Nummer" in text
+
+
+def test_the_checklist_names_the_run_of_the_verdicts_not_the_copy(tmp_path: Path) -> None:
+    """Laufordner ist der ``[[run]]`` mit dem Kopf der Protokolle, nicht ``--out`` (RD-5)."""
+    (state := tmp_path / "state").mkdir()
+    out = _run_folder(tmp_path, [sample_protocol()])
+    for head, code in (("a280ee8f5", 0), ("2ec37b23b", 1)):
+        (state / "urteile-d04.toml").write_text(
+            f'[[run]]\nname = "probelauf-d0"\nhead = "{head}"\nseal = "{"6" * 64}"\n'
+            '[[verdict]]\nrow = "drill_hole"\npoint = 2\nverdict = "offen"\nrm = "RM-1"\n'
+            'reviewer = "stufe_b"\nreason = "Klicks"\nimage = "cases/1/a.png"\nplace = "Karte"\n',
+            encoding="utf-8",
+        )
+        assert _write(out, state, package="D4") == code
+        text = (state / "abhakliste-d04.md").read_text(encoding="utf-8")
+        assert "| Laufordner | `probelauf-d0` |" in text, text
 
 
 def test_an_invalid_protocol_is_invalid_input(tmp_path: Path) -> None:
@@ -1592,6 +1640,15 @@ def test_every_checked_in_checklist_is_untouched() -> None:
         p.name for p in found if not function_report.checklist_intact(p.read_text(encoding="utf-8"))
     ]
     assert tampered == []
+
+
+def test_every_checked_in_verdict_file_holds_its_form_on_any_machine() -> None:
+    """Wächter zu RD-5: Format, Funde und ``[[run]]`` jeder Urteilsdatei, ohne den Lauf."""
+    findings, _problems = function_report.read_findings(STATE / "funde.md")
+    for path in sorted(STATE.glob("urteile-*.toml")):
+        entries, runs = function_report.read_verdict_file(path)
+        assert not check_verdicts(entries, findings=findings, round_rules=False).rejected, path.name
+        assert function_report.check_runs(runs, entries) == [], path.name
 
 
 def test_light_and_dark_compare_the_cases_that_measured_the_layout() -> None:

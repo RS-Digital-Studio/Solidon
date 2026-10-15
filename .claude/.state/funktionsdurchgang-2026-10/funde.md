@@ -1899,3 +1899,39 @@ Auskunft.
 - Vorschlag: Die Ablehnung steht am Namensfeld, das Feld wird markiert und bekommt den Fokus; der Satz nennt den Weg (etwa einen gültigen Vorschlag aus dem eingegebenen Text).
 - Wirkung beim Kunden: Der Kunde sucht, welches Feld falsch ist, und findet den Satz an anderer Stelle.
 - Stand: offen RM-737
+
+### FD-156 Sechs Fenstertests hielten an der Bohrung und in der Suche das Verhalten vor drei Fixes fest
+
+- Art: Fehler
+- Schwere: mittel
+- Funktion: `resize_hole`, `move_feature`, Bausteinkatalog an der Fläche, Suche nach Werkzeugen
+- Prüfpunkt: 19
+- Beleg: Sechs Fälle in `tests/test_ui.py` auf main grün, auf welle4 rot, auch allein (`output/konsolidierung-2026-10-12/d0-testfix-claude.md`, N1; Bisektion auf `6238bf7fd`, `b86381559`, `3d6a080c8`); je Fall Ursache, Gegenprobe und Lauf in `output/konsolidierung-2026-10-12/fd156-claude.md`.
+- Ursache: Fünf Fälle prüften das Verhalten vor FD-34, FD-63 und FD-16 (offene *Merkmal verschieben* neben der Maßgruppe, Stelle vorn, Katalog als zweiter Hauptknopf; die Höhe ohne Fokus getippt). Der sechste traf zusätzlich einen Produktfehler: `ToolStrip.set_shortcut` schrieb beim Bau des Fensters Titel und Kürzel über den Grund eines grauen Werkzeugs, und die Suche nannte seit FD-26 diesen Namen als Grund.
+- Vorschlag: Fälle auf die gewollte Wirkung stellen, je mit Gegenprobe gegen den alten Stand; `set_shortcut` schreibt über `_hint_of`, die eine Stelle für den Hinweis.
+- Wirkung beim Kunden: Auf einer leeren Szene stand an einem grauen Werkzeug seit v0.1.1 nur sein Name statt des Grundes, in der Suche auf welle4 auch als Grund; die übrigen fünf Fälle waren kein Produktfehler, hätten aber die Fensterprüfung nach dem Push nach main rot gemacht.
+- Stand: behoben `bbd2c2c59`, `fae59424c`, `bbff466e0`; in welle4 `b156f8f4d`, test_ui 802 offscreen grün.
+
+### FD-157 Der Wortschatzfall verlangte das Ziel der Verlaufszeile ohne Rollen
+
+- Art: Fehler
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: `tests/test_guide_targets.py::test_every_new_kind_resolves_on_a_prepared_window` verlangte nach dem Aufklappen der Verlaufsgruppe sofort `ziel`; im dunklen Thema am Stand `d1f4fd3f2` 3 von 3 Läufen `rollen` (`output/konsolidierung-2026-10-12/d0-testfix-claude.md`, N2; `fd156-claude.md`, Abschnitt 4).
+- Ursache: Das Fenster des Falls stand ohne Thema; im Kundenthema sind die Zeilen höher, und je nachdem, wie weit die Karte nach dem Aufklappen gewachsen ist, steht die Zeile erst nach einem Rollen ganz da.
+- Vorschlag: `prepared_window` im Kundenthema bauen; der Fall rollt, solange die Zeile in der Höhe nicht ganz zu sehen ist, und nur dann, bis `ziel` (Entscheidung Koordinator).
+- Wirkung beim Kunden: Kein Produktfehler; der Fall prüfte eine Lage ohne Thema, die kein Kunde hat.
+- Stand: behoben `99d057c12`; drei Gegenproben rot (Rollen ohne Not, Ziel an abgeschnittener Zeile, Fenster ohne Thema).
+
+### FD-158 Vorschaurückrufe greifen nach dem Abbau auf den Objektbaum zu
+
+- Art: Stabilität
+- Schwere: leicht
+- Funktion: Prüfanschlüsse des Prüfstands
+- Prüfpunkt: 19
+- Beleg: Fällt `test_panel_dimensions_and_placement_position_are_adopted_together[normal]` mitten im Fluss rot aus, greifen danach laufende Vorschaurückrufe auf den abgebauten Objektbaum zu (`_ObjectTreeView already deleted`); am Stand `0659b226d` endete der Prozess dann mit 0xC0000409, seit FD-154 mit Exit 1 (`output/konsolidierung-2026-10-12/fd156-claude.md`, Offen N1).
+- Ursache: offen; der Rückruf hält das Fenster stark und prüft nicht, ob seine Widgets noch leben.
+- Vorschlag: Rückrufe halten das Fenster nur schwach oder prüfen es mit `shiboken6.isValid`, an der einen Stelle, die Vorschaurückrufe anmeldet; Test, der das Fenster vor dem Rückruf abbaut.
+- Wirkung beim Kunden: keine belegte; beim Schließen während einer laufenden Vorschau könnte ein Rückruf ins Leere greifen.
+- Stand: offen RM-737

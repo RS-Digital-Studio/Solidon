@@ -14,6 +14,7 @@ Eigenes Modul, damit keine Datei des Pakets die Größengrenze der Codestruktur
 
 from __future__ import annotations
 
+import functools
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
@@ -32,11 +33,13 @@ from tools.function_checks import (
     MAIN_GAP_MS,
     MAIN_PHASES,
     MATRIX_UNREACHABLE,
+    NO_DRAFT,
     NO_RESPONSE,
     NOT_FOUND,
     REVISE_WAYS,
     SELECTION_STAGES,
     STEP_WITHOUT_VALUES,
+    SWITCH_ABSENT,
     SWITCH_PHASES,
     WITHOUT_DIALOG,
     CaseOutcome,
@@ -338,10 +341,17 @@ def _point_5(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
     states = _map(protocol, "states")
-    required = ("before", "applied", "undo", "redo", "escape")
+    # Escape verwirft den Entwurf (Konzept §4, Prüfpunkt 5); ohne ihn ist der
+    # Rückweg nur zur Hälfte gemessen. Hat die Zeile weder Entwurf noch Dialog —
+    # eine Befundhandlung wie *Auf das Bett setzen* —, gibt es nichts zu
+    # verwerfen, und der Rückweg ist Rückgängig und Wiederholen (FD-128).
+    unmeasured = _map(protocol, "unmeasured") or {}
+    nothing_to_discard = (
+        unmeasured.get("states.escape") == NO_DRAFT
+        and unmeasured.get("focus_return") == WITHOUT_DIALOG
+    )
+    required = ("before", "applied", "undo", "redo") + (() if nothing_to_discard else ("escape",))
     if states is None or not all(isinstance(states.get(key), Mapping) for key in required):
-        # Escape verwirft den Entwurf an jeder Zeile (Konzept §4, Prüfpunkt 5);
-        # ohne ihn ist der Rückweg nur zur Hälfte gemessen.
         return _missing(5, *(f"states.{key}" for key in required))
     before, applied = states["before"], states["applied"]
     if _print_without_view(before) == _print_without_view(applied):
@@ -357,15 +367,15 @@ def _point_5(
         )
     issues = []
     notes = []
-    checks = [
-        ("undo", before, "Rückgängig"),
-        ("redo", applied, "Wiederholen"),
-        ("escape", before, "Escape"),
-    ]
-    if isinstance(states.get("cancelled"), Mapping):
-        checks.append(("cancelled", before, "Abbrechen"))
+    checks = [("undo", before, "Rückgängig"), ("redo", applied, "Wiederholen")]
+    if nothing_to_discard:
+        notes.append(f"Escape und Abbrechen entfallen: {NO_DRAFT}, {WITHOUT_DIALOG}")
     else:
-        notes.append("Abbrechen im Dialog nicht gemessen (Zeile ohne Dialog?)")
+        checks.append(("escape", before, "Escape"))
+        if isinstance(states.get("cancelled"), Mapping):
+            checks.append(("cancelled", before, "Abbrechen"))
+        else:
+            notes.append("Abbrechen im Dialog nicht gemessen (Zeile ohne Dialog?)")
     for key, expected, title in checks:
         got = states[key]
         if _print_without_view(got) != _print_without_view(expected):
@@ -548,8 +558,10 @@ def _point_9(
         if entry.get("cut") or (
             need is not None and width is not None and float(need) > float(width)
         ):
+            # Eine umbrochene Listenzeile misst ihre Höhe (FD-110).
+            axis = " Höhe" if entry.get("axis") == "hoehe" else ""
             issues.append(
-                Issue(f"„{entry.get('text')}“ braucht {need} px, hat {width} px", "leicht")
+                Issue(f"„{entry.get('text')}“ braucht {need} px{axis}, hat {width} px", "leicht")
             )
         if variant.get("unit") not in {None, "mm"} and _MM_VALUE.search(
             str(entry.get("text") or "")
@@ -611,6 +623,47 @@ def _same_link(first: Mapping[str, Any], second: Mapping[str, Any]) -> bool:
     return first.get("name") == second.get("name") and first.get("rect") == second.get("rect")
 
 
+@functools.cache
+def widget_class_names() -> frozenset[str]:
+    """Die Klassennamen aller Widgets von Qt und der Oberfläche (FD-141).
+
+    Ein älteres Protokoll schrieb, wo der Name fehlte, die Klasse als Namen
+    („FittedScroller“); ohne ``class`` daneben erkennt das Urteil ihn hier.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    import app.ui.main_window  # noqa: F401 — lädt die Klassen der Oberfläche
+
+    found: set[str] = set()
+    pending: list[type] = [QWidget]
+    while pending:
+        cls = pending.pop()
+        if cls.__name__ not in found:
+            found.add(cls.__name__)
+            pending.extend(cls.__subclasses__())
+    return frozenset(found)
+
+
+def _unnamed(entry: Mapping[str, Any]) -> bool:
+    """Ein Kettenglied ohne Namen: leer, oder nur seine Klasse (FD-141)."""
+    name = str(entry.get("name") or "").strip()
+    if not name:
+        return True
+    if "class" in entry:
+        return name == str(entry.get("class"))
+    return name in widget_class_names()
+
+
+def _goals(protocol: Mapping[str, Any]) -> frozenset[str]:
+    """Die Zielhandlung der Zeile: ihr Ziel und das Ziel des Klicks, der übernahm."""
+    taken = {
+        str(step.get("target"))
+        for step in _path(protocol) or ()
+        if step.get("phase") == MAIN_PHASES[-1] and step.get("why") == "ziel"
+    }
+    return frozenset({str(_row(protocol).get("target") or ""), *taken} - {""})
+
+
 def _point_10(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
@@ -622,9 +675,13 @@ def _point_10(
     without_dialog = (_map(protocol, "unmeasured") or {}).get("focus_return") == WITHOUT_DIALOG
     if chain is None or names is None or not (isinstance(focus, bool) or without_dialog):
         return _missing(10, "tab_chain", "names", "focus_return")
+    if not chain:
+        # Der Prüfstand brachte den Fokus nicht in die Fläche: keine Kette, keine Messung.
+        return _missing(10, "tab_chain (leer)")
     issues = []
     absent = []
-    placed = [(str(entry.get("name")), _rect(entry)) for entry in _within_chain(chain)]
+    links = _within_chain(chain)
+    placed = [(str(entry.get("name")), _rect(entry)) for entry in links]
     if any(rect is None for _name, rect in placed):
         absent.append("tab_chain.rect")
     else:
@@ -633,8 +690,24 @@ def _point_10(
             for jump in _reading_order_jumps([(name, rect) for name, rect in placed if rect])
         ]
     shown = [str(name) for name in names]
-    if any(not name.strip() for name in shown):
-        issues.append(Issue("Bedienelement ohne zugänglichen Namen", "mittel"))
+    unnamed = sorted(
+        {str(entry.get("class") or entry.get("name")) for entry in links if _unnamed(entry)}
+    )
+    if unnamed or any(not name.strip() for name in shown):
+        issues.append(Issue(f"Bedienelement ohne zugänglichen Namen: {unnamed}", "mittel"))
+    # Die Kette erreicht die Zielhandlung der Zeile, bevor sie die Fläche
+    # verlässt (FD-141): den Hauptknopf der Fläche oder das Ziel, das übernimmt.
+    if any("primary" not in entry and "mark" not in entry for entry in links):
+        absent.append("tab_chain.primary/mark (Zielhandlung)")
+    elif not any(
+        entry.get("primary") is True or entry.get("mark") in _goals(protocol) for entry in links
+    ):
+        issues.append(
+            Issue(
+                "die Tab-Kette erreicht die Zielhandlung nicht, bevor sie die Fläche verlässt",
+                "mittel",
+            )
+        )
     doubled = sorted({name for name in shown if name.strip() and shown.count(name) > 1})
     if doubled:
         issues.append(Issue(f"doppelte Namen: {doubled}", "mittel"))
@@ -657,17 +730,37 @@ def _point_11(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
     row = _row(protocol)
-    if row.get("kind", protocol.get("kind")) != "operation":
-        return Outcome(11, "B", "stufe_b", "Fundstellen urteilt Stufe B", {"kind": row.get("kind")})
-    place = context.manual_place(row)
-    hits = context.website_hits(row)
-    issues = [] if place else [Issue("Operation ohne Handbuchstelle", "mittel")]
+    spec = _spec(protocol)
+    operation = row.get("kind", protocol.get("kind")) == "operation"
+    # Was nicht im Register steht, findet Stufe A über die Fundstellen der
+    # Zeilenspezifikation (FD-150); nennt sie eine Stelle, die es nicht gibt,
+    # ist der Punkt nicht prüfbar, bis sie berichtigt ist.
+    wrong = context.promise_problems(spec)
+    if wrong:
+        return Outcome(
+            11, "A", "nicht_pruefbar", "Fundstelle der Spezifikation", reason="; ".join(wrong)
+        )
+    named = "manual" in spec or "website" in spec
+    if not operation and not named:
+        return Outcome(
+            11,
+            "B",
+            "stufe_b",
+            "Fundstellen urteilt Stufe B — die Spezifikation nennt keine",
+            {"kind": row.get("kind")},
+        )
+    located = {**row, "spec": spec}
+    place = context.manual_place(located)
+    hits = context.website_hits(located)
+    issues = [] if place or not operation else [Issue("Operation ohne Handbuchstelle", "mittel")]
+    notes = [] if place else ["die Spezifikation nennt keine Handbuchstelle"]
     return _result(
         11,
         issues,
         place or "ohne Handbuchstelle",
         {"manual": place, "website": list(hits)},
         judged=True,
+        notes=notes if not operation else [],
     )
 
 
@@ -829,30 +922,69 @@ def _point_15(
 def _point_16(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
+    # Gewechselt wird während Vorschau, Entwurf und Rechnung (Konzept §4,
+    # Prüfpunkt 16) — in den Lagen, die die Zeile hat (FD-128). Ohne Eingaben
+    # gibt es weder Entwurf noch Vorschau, und eine Rechnung, die vorbei ist,
+    # bevor der Kunde wechseln kann, ist keine Lage, in die er wechselt.
+    without = {
+        phase: reason
+        for phase, reason in _switch_notes(protocol).items()
+        if reason.startswith(SWITCH_ABSENT)
+    }
+    wanted = [phase for phase in SWITCH_PHASES if phase not in without]
+    notes = [f"{phase} entfällt: {reason}" for phase, reason in sorted(without.items())]
     switch = _map(protocol, "switch")
     if switch is None:
-        return _missing(16, "switch")
+        if not wanted:
+            return Outcome(
+                16,
+                "A",
+                "entfaellt",
+                NOT_APPLICABLE_REASONS["ohne_rechnung"],
+                reason="ohne_rechnung",
+                notes=tuple(notes),
+            )
+        return _missing(16, *(f"switch ({phase})" for phase in wanted))
     late = [event for event in switch.get("late_events") or () if isinstance(event, Mapping)]
     issues = [
         Issue(f"nach dem Wechsel: {event.get('kind')} „{event.get('text', '')}“", "schwer")
         for event in late
     ]
     phases = sorted(set(switch.get("phases") or ()))
-    # Gewechselt wird während Vorschau, Entwurf und Rechnung (Konzept §4,
-    # Prüfpunkt 16); fehlt eine Phase, ist der Punkt nicht ganz gemessen.
-    absent = [f"switch ({phase})" for phase in SWITCH_PHASES if phase not in phases]
+    absent = [f"switch ({phase})" for phase in wanted if phase not in phases]
     return _settled(
-        16, issues, absent, f"{len(phases)} Wechsel", {"phases": phases, "late": len(late)}
+        16,
+        issues,
+        absent,
+        f"{len(phases)} Wechsel",
+        {"phases": phases, "late": len(late)},
+        notes=notes,
     )
+
+
+def _switch_notes(protocol: Mapping[str, Any]) -> dict[str, str]:
+    """Warum eine Lage des Projektwechsels nicht lief, je Lage (``unmeasured.switch``).
+
+    ``function_switch`` schreibt ``<lage>: <grund>`` und trennt mit „; “; ein
+    Grund ohne Lage (eine fehlende Szene) gilt allen Lagen.
+    """
+    text = str((_map(protocol, "unmeasured") or {}).get("switch") or "")
+    found: dict[str, str] = {}
+    for part in (piece.strip() for piece in text.split("; ") if piece.strip()):
+        phase, separator, reason = part.partition(": ")
+        if separator and phase in SWITCH_PHASES:
+            found[phase] = reason
+        else:
+            found.update({phase: part for phase in SWITCH_PHASES if phase not in found})
+    return found
 
 
 def _point_17(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
-    row = _row(protocol)
-    agent = (
-        context.agent_place(row) if row.get("kind", protocol.get("kind")) == "operation" else None
-    )
+    # Auch eine Zeile außerhalb des Registers hat ein Werkzeug, wenn ein
+    # Zusatzwerkzeug sie nennt (FD-129: *Parameter anlegen* über ``add_parameter``).
+    agent = context.agent_place(_row(protocol))
     if agent is None:
         return Outcome(17, "A", "entfaellt", "ohne Agentenwerkzeug", reason="ohne_agentenwerkzeug")
     place = _map(protocol, "place")
@@ -860,14 +992,27 @@ def _point_17(
         return _missing(17, "place")
     said, path = agent
     where = str(place.get("where") or "")
-    seen = {"menue": "menue", "karte": "karte"}.get(where)
-    if seen is None:
+    allowed = AGENT_COUNTERPARTS.get(said, ())
+    if where not in {"menue", "karte", *allowed}:
         return Outcome(
             17, "A", "nicht_pruefbar", where, reason=f"Ort {where} ohne Gegenstück im Agentenweg"
         )
-    told = "menue" if said == "katalog" else said
-    issues = [] if told == seen else [Issue(f"Agent nennt „{path}“, gefunden {where}", "mittel")]
+    issues = (
+        [] if where in allowed else [Issue(f"Agent nennt „{path}“, gefunden {where}", "mittel")]
+    )
     return _result(17, issues, path, {"agent": path, "found": where})
+
+
+#: Wo der Prüfstand eine Funktion findet (``place.where``), die das Werkzeug
+#: an einem Ort nennt: Menü und Katalog stehen in der Menüleiste, die Karte
+#: rechts, die Parameterleiste links — dort in der Zeile oder in ihrem
+#: Kontextmenü (``set_parameter``, FD-129).
+AGENT_COUNTERPARTS: Final[dict[str, tuple[str, ...]]] = {
+    "menue": ("menue",),
+    "katalog": ("menue",),
+    "karte": ("karte",),
+    "leiste": ("karte", "kontext"),
+}
 
 
 def judge_licence(runs: Mapping[str, Any], *, complete: bool) -> Outcome:

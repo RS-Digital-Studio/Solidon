@@ -896,3 +896,40 @@ def test_flush_document_movement_cache_reopen_and_undo_preserve_both_checks(
             [entry], profile, {}, scene=redone.scene, document=opened.document
         )
         assert [finding for finding in exported if finding.code.startswith("fit.")] == current
+
+
+def test_the_bodies_of_a_collision_are_named_not_numbered(profile: Profile) -> None:
+    """FD-105: Die Berichtszeile hieß „— Quader · obj_1 · obj_2“.
+
+    ``a`` und ``b`` stehen als Namen in der Zeile (``panels._NAMES_IN_THE_LINE``);
+    der Befund legte dort die Kennungen ab. Jetzt die Namen der Körper.
+    """
+    scene = pair(profile)
+    names = {"socket": "Platte", "pin": "Stift"}
+    scene = replace(
+        scene,
+        objects={key: replace(entry, name=names[key]) for key, entry in scene.objects.items()},
+    )
+    finding = geometry_finding(scene)
+    assert finding is not None and finding.code == "fit.collision"
+    assert {finding.values["a"], finding.values["b"]} == {"Platte", "Stift"}
+
+
+def test_a_fit_names_its_partners_by_body_and_kind(profile: Profile) -> None:
+    """FD-105, die Zwillinge: „obj_1:hole_1“ und „hole“ standen ebenso in der Zeile."""
+    scene = pair(profile)
+    scene = replace(
+        scene,
+        objects={
+            key: replace(entry, name={"socket": "Platte", "pin": "Stift"}[key])
+            for key, entry in scene.objects.items()
+        },
+        fits=[
+            Fit("pair", FeatureRef("socket", "gone"), FeatureRef("pin", "mating"), "clearance", 0.4)
+        ],
+    )
+    (missing,) = [
+        finding for finding in check(scene, profile) if finding.code == "fit.missing_feature"
+    ]
+    assert str(missing.values["a"]) == "Platte", "ohne Merkmal bleibt der Körper"
+    assert str(missing.values["b"]) == "Stift: Zapfen"

@@ -25,6 +25,17 @@ und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 
 ## Was wo geprüft wird
 
+### Begriffe, Absagewege und Agentenorte
+
+Hier statt in der Karte, weil sie an ihrem Budget steht.
+
+| Vertrag | Zuständige Testdatei |
+|---|---|
+| Beginnt jede Merkmalsart groß, und fallen *Überstand* und *Überhang* in keiner Sprache zusammen? | `test_catalog_terms.py` |
+| Bietet eine Kantenabsage *Andere Kanten wählen* statt *Andere Objekte wählen*? | `test_edge_refusal_ways.py` |
+| Nennt *In Einzelteile aufteilen* Splitter und bietet *Splitter behalten* an? | `test_split_splinters.py` |
+| Nennen die Zusatzwerkzeuge des Agenten ihren Fensterort, und steht er in der gebauten Menüleiste? | `test_agent_tool_places.py` |
+
 ### Dialog-, Karten- und Vorschaugrößen
 
 | Vertrag | Zuständige Testdatei |
@@ -339,7 +350,9 @@ importiert kein Test: pytest lädt es als Plugin, und ein zweiter Import führte
 es noch einmal aus.
 
 Die übrigen Helfer in `ui_helpers.py`: `shown_window` für ein gezeigtes Fenster
-ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur,
+ohne Startbildschirm, die Fixture `prepared_window` für den Wortschatz des
+Funktionsdurchgangs (Quader mit Bohrung unter dem Bett, im Kundenthema),
+`with_a_body` für die ausgewählte Korpusfigur,
 `on_the_bore_wall` für einen Klick auf eine Bohrungswand, `wait_until` für
 zugestellte Qt-Ereignisse, `wait_for_export` und `wait_for_print_findings` für
 Arbeiter, die `wait_for_idle` nicht sieht, sowie `PlacementItem`,

@@ -160,6 +160,19 @@ BENCH_FINDINGS: Final = (COVERED, NOT_FOUND, NO_RESPONSE)
 #: Wert, den man nachträglich ändern könnte (Prüfpunkt 12, *entfällt* ohne Dialog).
 WITHOUT_DIALOG: Final = "die Zeile öffnet keinen Dialog"
 STEP_WITHOUT_VALUES: Final = "der Schritt hat keinen Wert, der sich ändern ließe"
+#: Die Zeile hat keinen Entwurf, den Escape verwerfen könnte (Prüfpunkt 5,
+#: ``function_bench.phase_escape``). Ohne Entwurf und ohne Dialog verlangt der
+#: Rückweg nur Rückgängig und Wiederholen (FD-128).
+NO_DRAFT: Final = "keine Eingaben, kein Entwurf zum Verwerfen"
+#: Lagen des Projektwechsels, die die Zeile nicht hat (Prüfpunkt 16, FD-128):
+#: ohne Eingaben kein Entwurf und keine Vorschau, eine Zeile ohne Vorschau, und
+#: eine Rechnung, die vorbei war, bevor der Kunde wechseln konnte — in sie
+#: kann niemand wechseln. ``function_switch`` schreibt sie je Lage als
+#: ``<lage>: <grund>`` unter ``unmeasured.switch``.
+SWITCH_WITHOUT_INPUTS: Final = "keine Eingaben"
+SWITCH_WITHOUT_PREVIEW: Final = "die Zeile zeigt keine Vorschau"
+SWITCH_RUN_OVER: Final = "die Rechnung war vor dem ersten Wechselklick fertig"
+SWITCH_ABSENT: Final = (SWITCH_WITHOUT_INPUTS, SWITCH_WITHOUT_PREVIEW, SWITCH_RUN_OVER)
 
 #: Rohe Qt-Fenster, die im Kundenweg nicht erscheinen (Z5).
 RAW_CLASSES: Final = ("QMessageBox", "QInputDialog", "QColorDialog")
@@ -378,13 +391,26 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         _keys("text", "actions", "kind", "way_out", "phase"),
         {"kind": FAULT_KINDS},
     ),
-    "texts": ProtocolField("liste", _keys("text", "carrier", "need_px", "width_px", "cut", "lead")),
+    # ``axis``: Woran ein Text gemessen ist — ``breite`` (Bedarf gegen Breite)
+    # oder ``hoehe`` (umbrochene Zeile einer Liste gegen die Höhe ihrer Zelle,
+    # FD-110). Fehlt es, ist es die Breite.
+    "texts": ProtocolField(
+        "liste",
+        _keys("text", "carrier", "need_px", "width_px", "cut", "lead", "axis"),
+        {"axis": ("breite", "hoehe")},
+    ),
     "fields": ProtocolField(
         "liste", _keys("label", "accessible_name", "description", "tooltip", "front")
     ),
     # Die Kette, wie Tab sie geht; ihr letztes Glied ist das Widget, das
     # wiederkommt, oder das, das den Dialog verlässt (``inside: false``).
-    "tab_chain": ProtocolField("liste", _keys("name", "rect", "inside")),
+    # ``name`` liest ein Bildschirmleser, ``class`` steht daneben; ``mark``
+    # und ``primary`` erkennen die Zielhandlung (FD-141).
+    "tab_chain": ProtocolField(
+        "liste",
+        _keys("name", "rect", "inside", "class", "mark", "primary"),
+        types={"primary": bool, "class": str, "mark": str},
+    ),
     "names": ProtocolField("texte"),
     "focus_return": ProtocolField("wahr"),
     "matrix": ProtocolField("tabelle", frozenset(SELECTION_STAGES)),
@@ -436,6 +462,8 @@ PROTOCOL_SCHEMA: Final[dict[str, ProtocolField]] = {
         "liste", _keys("surface", "window_size", "front", "vertical", "horizontal")
     ),
     "hover_labels": ProtocolField("liste", _keys("kind", "label")),
+    # I1: die Merkmalsarten, die die Erkennung an der Szene liefert (FD-152).
+    "recognized_kinds": ProtocolField("texte"),
     "empty_states": ProtocolField("liste", _keys("surface", "sentence", "button", "intended")),
     "licence_runs": ProtocolField("tabelle", frozenset(LICENCE_STATES)),
     "halt": ProtocolField("tabelle", _keys("text", "step")),
@@ -538,16 +566,21 @@ class Context:
     frozen_texts: frozenset[str]
     #: Prüfpunkt 3: der Satz der groben Vorschau in einer Sprache.
     coarse_note: Callable[[str], str]
-    #: Prüfpunkt 11: Seite und Stelle im Handbuch, ``None`` ohne Stelle.
+    #: Prüfpunkt 11: Seite und Stelle im Handbuch, ``None`` ohne Stelle. Die
+    #: Zeile kommt mit ihrer Spezifikation (``spec``), die Fundstellen nennen kann.
     manual_place: Callable[[Mapping[str, Any]], str | None]
     #: Prüfpunkt 11: Website-Seiten, die die Funktion nennen.
     website_hits: Callable[[Mapping[str, Any]], tuple[str, ...]]
     #: Prüfpunkt 17: Ort laut Agentenwerkzeug (``menue``, ``karte``,
-    #: ``katalog``) und sein Menüpfad, ``None`` ohne Werkzeug.
+    #: ``katalog``, ``leiste``) und sein Weg, ``None`` ohne Werkzeug — auch an
+    #: Zeilen außerhalb des Registers, die ein Zusatzwerkzeug nennt (FD-129).
     agent_place: Callable[[Mapping[str, Any]], tuple[str, str] | None]
     #: I3: die Ziele (``target``) der häufigsten Kundenziele. Nur an ihren
     #: Zeilen wird I3 gemessen; der Anteil steht in den Paketwerten.
     common_goal_targets: frozenset[str] = frozenset()
+    #: Prüfpunkt 11: was an den Fundstellen einer Zeilenspezifikation nicht
+    #: stimmt (``function_promises.reference_problems``) — leer, wenn alles trifft.
+    promise_problems: Callable[[Mapping[str, Any]], list[str]] = field(default=lambda spec: [])
 
 
 @dataclass(frozen=True)
@@ -899,7 +932,7 @@ CRITERIA: Final[dict[str, Criterion]] = {
             "ja an jeder erkannten Art",
             (),
             "AB",
-            ("hover_labels",),
+            ("hover_labels", "recognized_kinds"),
             design=True,
             promised=True,
         ),

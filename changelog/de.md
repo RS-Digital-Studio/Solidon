@@ -81,6 +81,7 @@ Nutzen da und sonst nichts.
 - Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
 - Ohne Freischaltung sind auch *Parameter anlegen …*, *Bewegen*, *Teilen*, die Tasten im Verlauf und die Maße im Bild grau. Jeder Grund nennt den Weg, etwa *Hilfe → Solidon freischalten …*.
 - Wartet eine Handlung im Prüfbericht auf die laufende Berechnung, sagt sie, dass sie danach wieder frei ist, auch einem Bildschirmleser.
+- Auf einer leeren Szene nennen die grauen Werkzeuge wie *Schnitt* und *Messen* ihren Grund: Sie brauchen einen Körper. Bisher stand im Hinweis nur ihr Name.
 - Meldungen in der Statuszeile setzen keinen Doppelpunkt mehr hinter einen ganzen Satz.
 - Mit nur einem Körper ist der Objektbaum so hoch wie sein Inhalt, ebenso der Verlauf mit einem Schritt. In Version 0.6.0 blieb darunter leerer Platz.
 - Der neueste Schritt bleibt im Verlauf zu sehen, wenn neue Körper den Objektbaum wachsen lassen. In Version 0.6.0 rutschte er unter den Rand der Karte.
@@ -90,6 +91,11 @@ Nutzen da und sonst nichts.
 - Die Auswahlkarte folgt Inhalt und Schrift; Text und Handlungsspalten bleiben erhalten. Freie Reiterfenster behalten ihre Größe. Bei angebotener Merkmaländerung ist „Übernehmen“ die Hauptaktion.
 - Gegenstücke fragen zuerst nach Paar und Größe; die Auswahl erklärt beide Hälften. Form und Passung stehen unter „Weitere Einstellungen“. Die Anfangshöhe passt zum Inhalt.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
+- Der Chat nennt bei Parametern, Passungen, Drucker, Material und Rückgängig den Ort im Fenster, an dem man dasselbe selbst tut.
+- Der Prüfbericht nennt die Körper einer Passung beim Namen statt mit einer internen Kennung.
+- Englisch und Portugiesisch unterscheiden den Überstand eines Hakens oder eines Körpers unter dem Bett vom Überhang beim Drucken.
+- Auf Spanisch und Portugiesisch zeigen Menü, Suche und Dialog bei *Stift für Bohrung* und *Druckoptimal ausrichten* wieder nur den ersten Satz.
+- Einige Übersetzungen lesen sich klarer, darunter die Einleitung von *Parameter anlegen …*. Der Zapfen beginnt in allen Sprachen groß.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -104,6 +110,8 @@ Nutzen da und sonst nichts.
 - Gelingt eine Bohrung oder ein Behälter erst mit winzig verschobenen Ecken, bleibt die Öffnung frei. In Version 0.6.0 konnte darüber eine hauchdünne Haut stehen bleiben.
 - Bei Bohrungen zeigen Bild und *Auswahl* dieselbe Änderung. Zielmaß, Tiefe und mitgehender Einlauf stehen vorn; Druckkorrektur und Feinwerte unter „Weitere Werte“.
 - Bohrungsfelder und der Haken zum gemeinsamen Ändern gleichartiger Merkmale erklären ihre Wirkung. „Druckabweichung ausgleichen“ beschreibt die Korrektur aus dem Materialprofil verständlicher.
+- Bleiben neben einem druckbaren Teil nur Splitter, nennt *In Einzelteile aufteilen* sie und bietet *Splitter behalten* an. Bisher hieß es, der Körper bestehe aus einem Stück.
+- Ist der Radius einer Rundung oder die Breite einer Fase für die Kanten zu groß, bietet die Meldung *Andere Kanten wählen* an.
 
 ## 0.6.0
 

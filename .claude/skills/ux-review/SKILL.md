@@ -89,6 +89,31 @@ in der Zeilenspezifikation.
 | V5 | Meldungen: was nicht ging, warum, was jetzt | Handlung löst das Problem; Sperrgrund ohne Knopf nennt Menüweg, ganze Wörter eines offenen Knopfs, selbst erklärenden Auswegsatz oder offenen Feldtitel derselben Fläche | A misst, B urteilt | `messages[].actions` |
 | V6 | Kurzhilfen, die man bis zum Ziel öffnen muss | ≤ 1; nie das Handbuch | A misst, B zählt | `windows` (Handbuchfenster) |
 
+Auslegung nach der Zweitprüfung am finalen Lauf, für Stufe B und Zweitprüfer
+gleich:
+
+- **E1–E3:** gezählt nur an einem Weg, der das Beispielziel der
+  Zeilenspezifikation erreicht hat. Endet der gemessene Weg vorher —
+  Sprachfläche, grauer oder unerreichbarer Hauptknopf, nicht aufgenommener
+  Unterdialog — oder hat die Zeile kein Beispielziel, misst Stufe A „nicht
+  gemessen“: *offen* mit Paket-RM, keine aus dem Bild geschätzten Restschritte.
+- **E4:** Die bearbeitete Stelle — bei einer Handlung am ganzen Körper der
+  Körper — bleibt vom Auswahlzustand bis zum Ergebnisbild ohne Kamerabewegung
+  des Kunden ganz im Bild; ein Dialog verdeckt sie nie.
+- **V1:** je Sprache jeder sichtbare Titel- und Erklärungstext der Zielfläche.
+  Treffer sind neben der Negativliste ein Slicer-Wort in anderer Bedeutung
+  („Overhang“ für den Überstand unter dem Bett), eine sinnändernde wörtliche
+  Übersetzung („tourner le chiffre“) und ein Satzbau, der die Aussage verkehrt
+  (eine Absage, die sich als Aufzählung liest). Ein Treffer in einer Sprache
+  hält V1 offen mit Fund.
+- **V4:** nur mit einer vor dem Klick gebundenen Vorhersage
+  (`prediction_bound`: Datei und SHA256 der Vorhersage, die vor dem Klick
+  freigegeben wurde). Eine nach dem Lauf, aber vor dem Ansehen geschriebene ist
+  Teilbeleg, das Urteil *offen*.
+
+*Gut nach Fix* und die Zuordnung eines Funds zu seiner Zelle regelt Konzept §4
+(„Urteil und Schwere“).
+
 ## Vorschlag, Entscheidung, Abnahme
 
 Der kürzeste verständliche Ablauf, der den belegten Produktvertrag erhält. Bei

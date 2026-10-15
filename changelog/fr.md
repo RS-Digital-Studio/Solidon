@@ -57,6 +57,7 @@ dans `website/version.json`.
 - Sans activation, les actions qui modifient le modèle sont grisées avec leur raison dans le *Rapport de contrôle*, *Sélection*, les menus contextuels et le filament. Le refus venait après le clic.
 - Sans activation, *Créer un paramètre …*, *Déplacer*, *Diviser*, les touches de l'historique et les cotes dans la vue sont grisés. Chaque raison indique la voie, comme *Aide → Déverrouiller Solidon …*.
 - Quand une action du *Rapport de contrôle* attend le calcul en cours, elle indique qu'elle redevient disponible ensuite, aussi pour les lecteurs d'écran.
+- Dans une scène vide, les outils grisés comme *Coupe* et *Mesurer* indiquent la raison : il leur faut un corps. Jusqu'ici, l'info-bulle n'affichait que leur nom.
 - Les messages de la barre d'état ne mettent plus de deux-points après une phrase complète.
 - Avec un seul corps, l'arbre des objets est aussi haut que son contenu, de même que l'historique avec une seule étape. La version 0.6.0 laissait un vide en dessous.
 - L'étape la plus récente reste visible dans l'historique quand de nouveaux corps agrandissent l'arbre des objets. Dans la version 0.6.0, elle glissait sous le bord du panneau.
@@ -66,6 +67,11 @@ dans `website/version.json`.
 - La carte de sélection suit contenu et police, gardant textes et colonnes. Les onglets détachés gardent leur taille. Si une modification est proposée, « Appliquer » est l’action principale.
 - Les contreparties demandent paire et taille et expliquent les deux moitiés. Forme et ajustement sont dans « Autres réglages ». La hauteur initiale du dialogue suit le contenu.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
+- Pour les paramètres, les ajustements, l'imprimante, le matériau et l'annulation, le chat indique l'endroit de la fenêtre où faire de même soi-même.
+- Le rapport de contrôle nomme les corps d'un ajustement au lieu d'afficher un identifiant interne.
+- L'anglais et le portugais distinguent désormais le dépassement d'un crochet, ou d'un corps sous le plateau, du surplomb à l'impression.
+- En espagnol et en portugais, le menu, la recherche et la boîte de dialogue n'affichent de nouveau que la première phrase de *Goupille pour perçage* et *Orienter pour l'impression*.
+- Plusieurs traductions se lisent plus clairement, dont l'introduction de *Créer un paramètre …*. Le tenon commence par une majuscule dans toutes les langues.
 
 ### Imprimer et transmettre au slicer
 
@@ -80,6 +86,8 @@ dans `website/version.json`.
 - Si un perçage ou un récipient ne réussit qu'avec des sommets déplacés d'un rien, l'ouverture reste libre. En version 0.6.0, une peau très fine pouvait rester par-dessus.
 - Pour les trous, vue et *Sélection* montrent la même action. Dimension, profondeur et entrée liée sont devant ; compensation d’impression et réglages fins, dans « Autres valeurs ».
 - Les champs du perçage et la case de modification simultanée des éléments similaires expliquent leur effet. « Compenser les écarts d'impression » précise la correction issue du profil du matériau.
+- S'il ne reste que des éclats à côté d'une pièce imprimable, *Diviser en pièces distinctes* les nomme et propose *Garder les éclats*. Avant, le corps était dit d'un seul tenant.
+- Si le rayon d'un congé ou la largeur d'un chanfrein est trop grand pour les arêtes, le message propose *Choisir d'autres arêtes*.
 
 ## 0.6.0
 

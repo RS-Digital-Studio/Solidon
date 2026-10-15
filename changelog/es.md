@@ -57,6 +57,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Sin activación, las acciones que cambian algo en el *Informe de comprobación*, *Selección*, los menús contextuales y el filamento salen en gris con el motivo. Antes el rechazo llegaba tras el clic.
 - Sin activación, también *Crear parámetro …*, *Mover*, *Dividir*, las teclas del historial y las medidas en la vista salen en gris. Cada motivo indica el camino, como *Ayuda → Desbloquear Solidon …*.
 - Si una acción del *Informe de comprobación* espera al cálculo en curso, dice que después vuelve a estar disponible, también a los lectores de pantalla.
+- En una escena vacía, las herramientas en gris como *Sección* y *Medir* indican el motivo: necesitan un cuerpo. Hasta ahora la sugerencia solo mostraba su nombre.
 - Los mensajes de la barra de estado ya no ponen dos puntos detrás de una frase completa.
 - Con un solo cuerpo, el árbol de objetos es tan alto como su contenido, y lo mismo el historial con un paso. En la versión 0.6.0 quedaba espacio vacío debajo.
 - El paso más reciente sigue visible en el historial cuando nuevos cuerpos hacen crecer el árbol de objetos. En la versión 0.6.0 quedaba bajo el borde del panel.
@@ -66,6 +67,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La tarjeta de selección sigue contenido y letra, conservando texto y columnas. Las pestañas separadas mantienen su tamaño. Si se ofrece editar una característica, «Aplicar» es la acción principal.
 - Los elementos correspondientes piden par y tamaño y explican ambas mitades. Forma y ajuste están en «Más ajustes». La altura inicial del diálogo se adapta al contenido.
 - Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
+- Para parámetros, ajustes, impresora, material y deshacer, el chat indica el lugar de la ventana donde se hace lo mismo a mano.
+- El informe de comprobación nombra los cuerpos de un ajuste en lugar de mostrar un identificador interno.
+- El inglés y el portugués distinguen ahora el saliente de un gancho, o de un cuerpo bajo la placa, del voladizo al imprimir.
+- En español y portugués, el menú, la búsqueda y el diálogo vuelven a mostrar solo la primera frase de *Pasador para taladro* y *Orientar para imprimir*.
+- Varias traducciones se leen con más claridad, entre ellas la introducción de *Crear parámetro …*. La espiga empieza con mayúscula en todos los idiomas.
 
 ### Imprimir y entregar al slicer
 
@@ -80,6 +86,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro o un recipiente solo sale adelante moviendo las esquinas una cantidad mínima, la abertura queda libre. En la versión 0.6.0 podía quedar encima una piel finísima.
 - En agujeros, vista y *Selección* muestran el mismo cambio. Medida, profundidad y entrada vinculada están delante; compensación de impresión y ajustes finos, en «Más valores».
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
+- Si junto a una pieza imprimible solo quedan astillas, *Dividir en piezas sueltas* las nombra y ofrece *Conservar las astillas*. Antes decía que el cuerpo era de una sola pieza.
+- Si el radio de un redondeo o el ancho de un chaflán es demasiado grande para las aristas, el mensaje ofrece *Elegir otras aristas*.
 
 ## 0.6.0
 

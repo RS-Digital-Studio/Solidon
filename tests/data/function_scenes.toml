@@ -176,7 +176,7 @@ params = { width = 40.0, depth = 30.0, height = 20.0 }
 summary = "Ein Netzquader, dessen Verrundung mit 40 mm scheitert; die Bohrung danach rechnet nicht mehr."
 kernel = "netz"
 base = "quader.netz"
-promises = { objects = 1, stops = true, findings = ["op.fillet_edges.GeometryError"], actions = { correct_input = "op.fillet_edges.GeometryError", change_selection = "op.fillet_edges.GeometryError" } }
+promises = { objects = 1, stops = true, findings = ["op.fillet_edges.GeometryError"], actions = { correct_input = "op.fillet_edges.GeometryError", change_step = "op.fillet_edges.GeometryError" } }
 [[scene.halt.ops]]
 op = "fillet_edges"
 inputs = ["obj_1"]
@@ -185,6 +185,16 @@ params = { radius = 40.0 }
 op = "drill_hole"
 inputs = ["obj_1"]
 params = { diameter = 5.0, z = 20.0 }
+
+[scene."ohne_farbe.netz"]
+summary = "Ein Netzquader ohne Farbe: Textur in Filamente umrechnen findet nichts und rät zu einem anderen Objekt."
+kernel = "netz"
+base = "quader.netz"
+promises = { objects = 1, findings = ["colour.no_texture"], actions = { change_selection = "colour.no_texture" } }
+[[scene."ohne_farbe.netz".ops]]
+op = "slots_from_texture"
+inputs = ["obj_1"]
+params = { filaments = 2 }
 
 [scene.zweites_projekt]
 summary = "Ein kleiner Netzwürfel 10 mm — das Projekt, zu dem während einer Rechnung gewechselt wird."

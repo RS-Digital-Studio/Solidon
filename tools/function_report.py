@@ -9,8 +9,12 @@ und C (``urteile-<paket>.toml``, Konzept §5, Stufe B) und der Funddatei
 außerhalb des Baums.
 
 * **Urteile werden geprüft, bevor sie zählen** (:func:`check_verdicts`): ohne
-  Bild oder Stelle, *offen* ohne RM, ein fremder *entfällt*-Grund, G9 schwerer
-  als leicht und „gut“ gegen einen Fund der Stufe A werden abgewiesen.
+  Bild oder Stelle, ein Bild mit dem Pfad eines Rechners, *offen* ohne RM, ein
+  fremder *entfällt*-Grund, G9 schwerer als leicht und „gut“ gegen einen Fund
+  der Stufe A werden abgewiesen.
+* **Die Urteilsdatei nennt ihren Lauf** (:func:`check_runs`): ``[[run]]`` mit
+  Name, Kopf und Siegel; die Bilder stehen relativ dazu, und die Abhakliste
+  nennt ihn als Laufordner — nicht die Kopie, aus der sie entstand.
 * **Die Abhakliste ist erzeugt, nie von Hand** (:func:`render_checklist`):
   gleiche Eingaben, gleiche Bytes; eine Datei je Paket, damit zwei parallele
   Pakete keine erzeugte Datei mergen.
@@ -31,7 +35,6 @@ import copy
 import datetime
 import functools
 import hashlib
-import html
 import json
 import re
 import tomllib
@@ -41,8 +44,17 @@ from pathlib import Path
 from typing import Any, Final
 
 from app.ui.op_dialog import MAX_FRONT_FIELDS, USUAL_FRONT_SHARE
+from tools import function_promises as promises
+from tools.function_agreement import (
+    Round,
+    Share,
+    agreement,
+    checklist_lines,
+    round_agreement,
+    unpaired,
+)
+from tools.function_agreement import subject_order as _subject_order
 from tools.function_checks import (
-    AGREEMENT,
     CHECKPOINTS,
     COARSE_NOTE,
     CRITERIA,
@@ -64,6 +76,7 @@ from tools.function_judges import compare_themes, judge_sizes
 from tools.function_list import NOT_APPLICABLE_REASONS, ROW_KINDS
 from tools.function_points import judge_case, judge_design, judge_licence
 from tools.function_samples import BrokenSample, sample_context, sample_protocol
+from tools.function_verdict_rules import bound_problems, fix_problems, prediction_problems
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 
@@ -102,12 +115,14 @@ VERDICT_KEYS: Final = frozenset(
         "reviewer",
         "reason",
         "image",
+        "no_image",
         "place",
         "finding",
         "rm",
         "not_applicable",
         "design_judgement",
         "prediction",
+        "prediction_bound",
         "comparison",
         "steps",
         "misclicks",
@@ -161,6 +176,21 @@ _STAND: Final = (
     re.compile(r"^gut nach Fix\b.*`[0-9a-f]{7,40}`"),
 )
 _RM: Final = re.compile(r"\bRM-\d+\b")
+
+#: Ein Bild steht relativ zum Laufordner (``--out``), mit ``/`` und als PNG;
+#: eines aus einer anderen Runde trägt die Kennung ihres ``[[run]]`` davor
+#: (``v4:cases/001/v4-nachher.png``). So hängt kein Urteil im Baum an einem
+#: Rechner, und das Bildfeld trägt nur Bilder (RD-5).
+_IMAGE: Final = re.compile(r"(?:(?P<run>[a-z][a-z0-9_-]+):)?(?P<path>[^\\:]+\.png)")
+
+#: Ein Pfad mit Laufwerk — er gilt nur an dem Rechner, der ihn schrieb.
+_MACHINE_PATH: Final = re.compile(r"(?<!\w)[A-Za-z]:[\\/]")
+
+#: Die Schlüssel einer Laufangabe ``[[run]]``; ``key`` fehlt am Laufordner.
+RUN_KEYS: Final = frozenset({"key", "name", "head", "seal"})
+_RUN_KEY: Final = re.compile(r"[a-z][a-z0-9_-]+")
+_HEAD: Final = re.compile(r"[0-9a-f]{7,40}")
+_SHA256: Final = re.compile(r"\b[0-9a-f]{64}\b")
 
 
 # --- Kontext aus dem Baum ---------------------------------------------------
@@ -228,41 +258,23 @@ def _translated(msgid: str) -> Callable[[str], str]:
     return in_language
 
 
-@functools.cache
-def _manual_index() -> tuple[frozenset[str], dict[str, frozenset[str]]]:
-    """Seiten und Sprungmarken des Handbuchs, einmal erzeugt."""
-    from app.core import manual
-
-    keys = frozenset(page.key for page in manual.pages())
-    anchors = {
-        key: frozenset(anchor for anchor, _title in manual.reference_anchors(key))
-        for key in keys
-        if key.startswith(manual.REFERENCE_PAGE_PREFIX)
-    }
-    return keys, anchors
-
-
 def manual_place(row: Mapping[str, Any]) -> str | None:
-    """Seite und Stelle im Handbuch (``manual.help_for``) — nur, wenn es sie gibt."""
+    """Seite und Stelle im Handbuch — nur, wenn es sie gibt.
+
+    Was die Zeilenspezifikation nennt (``spec.manual``, FD-150), sonst die
+    Stelle einer Operation (``manual.help_for``).
+    """
     from app.core import manual
     from app.core.registry import REGISTRY
 
+    named = (row.get("spec") or {}).get("manual")
+    if named is not None:
+        return None if promises.manual_problem(named) else str(named)
     name = str(row.get("id", ""))
     if not REGISTRY.has(name):
         return None
     page, anchor = manual.help_for(name)
-    keys, anchors = _manual_index()
-    if page not in keys:
-        return None
-    if anchor and anchor.lstrip("#") not in anchors.get(page, frozenset()):
-        return None
-    return f"{page}{anchor}"
-
-
-@functools.cache
-def _website_text(path: Path) -> str:
-    raw = path.read_text(encoding="utf-8")
-    return html.unescape(re.sub(r"<[^>]+>", " ", raw)).lower()
+    return None if promises.manual_problem(f"{page}{anchor}") else f"{page}{anchor}"
 
 
 def _website_pages() -> dict[str, Path]:
@@ -278,10 +290,18 @@ def _website_pages() -> dict[str, Path]:
 
 
 def _website_hits(row: Mapping[str, Any]) -> tuple[str, ...]:
-    """Welche Funktionsseiten den Titel der Operation in ihrer Sprache nennen."""
+    """Welche Funktionsseiten die Funktion nennen.
+
+    Die Abschnitte, die die Zeilenspezifikation nennt (``spec.website``, in
+    jeder Sprache, FD-150), sonst die Seiten, die den Titel der Operation in
+    ihrer Sprache tragen — im Fließtext, in Bildtexten oder Titeln.
+    """
     from app.core.registry import REGISTRY
     from app.i18n import source_text
 
+    named = (row.get("spec") or {}).get("website")
+    if isinstance(named, list):
+        return tuple(promises.website_places(named)[0])
     name = str(row.get("id", ""))
     if not REGISTRY.has(name):
         return ()
@@ -289,24 +309,34 @@ def _website_hits(row: Mapping[str, Any]) -> tuple[str, ...]:
     hits = []
     for language, path in sorted(_website_pages().items()):
         said = _translated(title)(language).lower()
-        if said and said in _website_text(path):
+        if said and said in promises.page_text(path):
             hits.append(path.relative_to(ROOT).as_posix())
     return tuple(hits)
 
 
 def agent_place(row: Mapping[str, Any]) -> tuple[str, str] | None:
-    """Ort und Menüpfad, die das Agentenwerkzeug nennt.
+    """Ort und Weg, die das Agentenwerkzeug einer Zeile nennt.
 
-    Der Ort kommt aus ``registry.menu_place`` — derselben Verzweigung, der
-    ``menu_path`` folgt —, nicht aus einer zweiten Herleitung über Kategorien.
+    Bei einer Operation aus ``registry.menu_place`` — derselben Verzweigung,
+    der ``menu_path`` folgt —, nicht aus einer zweiten Herleitung über
+    Kategorien. Jede andere Zeile hat ein Werkzeug, wenn ein Zusatzwerkzeug sie
+    unter seinen Zeilen nennt (``extra_tool_rows``, FD-129): *Parameter
+    anlegen* über ``add_parameter``, *Ändern …* der Parameterleiste über
+    ``set_parameter``. Ort und Weg nennt dann ``extra_tool_place``.
     """
+    from app.core.agent.tools import EXTRA_TOOL_PLACES, extra_tool_place, extra_tool_rows
     from app.core.registry import REGISTRY, menu_path, menu_place
 
     name = str(row.get("id", ""))
-    if row.get("kind") != "operation" or not REGISTRY.has(name):
-        return None
-    spec = REGISTRY.get(name)
-    return menu_place(spec), menu_path(spec)
+    if row.get("kind") == "operation":
+        if not REGISTRY.has(name):
+            return None
+        spec = REGISTRY.get(name)
+        return menu_place(spec), menu_path(spec)
+    for tool in sorted(EXTRA_TOOL_PLACES):
+        if name in extra_tool_rows(tool):
+            return extra_tool_place(tool)
+    return None
 
 
 def repository_context() -> Context:
@@ -321,6 +351,7 @@ def repository_context() -> Context:
         manual_place=manual_place,
         website_hits=_website_hits,
         agent_place=agent_place,
+        promise_problems=promises.reference_problems,
         common_goal_targets=frozenset(read_common_goals().values()),
     )
 
@@ -373,13 +404,87 @@ def subject_of(entry: Mapping[str, Any]) -> int | str | None:
     return str(criterion) if criterion is not None else None
 
 
-def read_verdicts(path: Path) -> list[dict[str, Any]]:
-    """Die Einträge ``[[verdict]]`` einer Urteilsdatei; fehlt sie, keine."""
+def read_verdict_file(path: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Urteile ``[[verdict]]`` und Laufangaben ``[[run]]`` einer Urteilsdatei; fehlt sie, keine."""
     if not path.is_file():
-        return []
+        return [], []
     data = tomllib.loads(path.read_text(encoding="utf-8"))
-    entries = data.get("verdict", [])
-    return [dict(entry) for entry in entries if isinstance(entry, Mapping)]
+
+    def tables(name: str) -> list[dict[str, Any]]:
+        return [dict(entry) for entry in data.get(name, []) if isinstance(entry, Mapping)]
+
+    return tables("verdict"), tables("run")
+
+
+def image_problem(image: str) -> str | None:
+    """Warum ein Bildverweis nicht trägt — ``None``, wenn er relativ zum Laufordner steht."""
+    found = _IMAGE.fullmatch(image)
+    parts = found.group("path").split("/") if found else []
+    if found is None or any(part in {"", ".", ".."} or part != part.strip() for part in parts):
+        return f"Bild nicht relativ zum Laufordner: {image}"
+    return None
+
+
+def image_run(image: str) -> str | None:
+    """Die Kennung des ``[[run]]`` vor einem Bild; ``None`` heißt Laufordner."""
+    found = _IMAGE.fullmatch(image)
+    return found.group("run") if found else None
+
+
+def run_folder(runs: Iterable[Mapping[str, Any]]) -> str | None:
+    """Der Name des Laufordners aus den Laufangaben — der Lauf ohne Kennung."""
+    return next((str(run.get("name")) for run in runs if run.get("key") is None), None)
+
+
+def check_runs(
+    runs: Sequence[Mapping[str, Any]],
+    entries: Iterable[Mapping[str, Any]],
+    commits: Iterable[str] = (),
+) -> list[str]:
+    """Warum die Laufangaben einer Urteilsdatei nicht tragen — leer, wenn sie es tun.
+
+    Jeder Lauf nennt Name, Kopf und ein Siegel mit SHA256; eine Kennung steht
+    für genau einen Lauf, der Lauf ohne Kennung ist der Laufordner (``--out``).
+    Jede Runde einer Datei darf ihre Läufe wiederholen, gleich lautend. Ein Bild
+    braucht seinen Lauf, und der Laufordner hat den Kopf der Protokolle — sonst
+    nennte die Abhakliste einen Lauf, den sie nicht gelesen hat.
+    """
+    problems: list[str] = []
+    known: dict[str | None, Mapping[str, Any]] = {}
+    for run in runs:
+        label = run.get("key")
+        name = str(run.get("name") or "").strip()
+        title = f"Lauf {name or '?'}"
+        problems += [f"{title}: unbekannter Schlüssel {key}" for key in sorted(set(run) - RUN_KEYS)]
+        if label is not None and not _RUN_KEY.fullmatch(str(label)):
+            problems.append(
+                f"{title}: Kennung {label} besteht nicht aus Kleinbuchstaben, Ziffern, - und _"
+            )
+        if not name or _MACHINE_PATH.search(name):
+            problems.append(f"{title}: ohne Namen oder mit Pfad dieses Rechners")
+        if not _HEAD.fullmatch(str(run.get("head") or "")):
+            problems.append(f"{title}: Kopf {run.get('head')} ist kein Commit")
+        if not _SHA256.search(str(run.get("seal") or "")):
+            problems.append(f"{title}: Siegel ohne SHA256")
+        if label in known and dict(known[label]) != dict(run):
+            problems.append(f"Kennung {label or '(Laufordner)'} steht für zwei Läufe")
+        known.setdefault(label, run)
+    used = {
+        image_run(str(entry["image"])) for entry in entries if str(entry.get("image") or "").strip()
+    }
+    for label in sorted(used - set(known), key=str):
+        problems.append(
+            "Bilder ohne Laufangabe" if label is None else f"Bilder aus unbekanntem Lauf {label}"
+        )
+    main = known.get(None)
+    shown = [commit for commit in commits if _HEAD.fullmatch(commit)]
+    if main is not None and shown:
+        head = str(main.get("head"))
+        if not any(commit.startswith(head) or head.startswith(commit) for commit in shown):
+            problems.append(
+                f"Laufordner {main.get('name')} hat Kopf {head}, die Protokolle {', '.join(shown)}"
+            )
+    return problems
 
 
 @dataclass(frozen=True)
@@ -460,10 +565,19 @@ def _verdict_problems(
         problems.append(f"unbekanntes Urteil: {verdict}")
     if reviewer is not None and reviewer not in REVIEWERS:
         problems.append(f"unbekannter Prüfer: {reviewer}")
+    # Bild oder ausdrücklich keins: ``no_image`` sagt, warum der Lauf keins hat.
+    image = str(entry.get("image") or "").strip()
+    place = str(entry.get("place") or "")
     if verdict != "entfaellt" and not (
-        str(entry.get("image") or "").strip() and str(entry.get("place") or "").strip()
+        (image or str(entry.get("no_image") or "").strip()) and place.strip()
     ):
         problems.append("ohne Bild oder Stelle")
+    if "image" in entry and "no_image" in entry:
+        problems.append("Bild und Grund ohne Bild zugleich")
+    if image and (problem := image_problem(str(entry["image"]))):
+        problems.append(problem)
+    if _MACHINE_PATH.search(place):
+        problems.append("Stelle mit Pfad dieses Rechners")
     if verdict == "offen" and not _RM.search(str(entry.get("rm") or "")):
         problems.append("offen ohne RM-Nummer")
     if verdict == "entfaellt" and entry.get("not_applicable") not in NOT_APPLICABLE_REASONS:
@@ -490,6 +604,7 @@ def _verdict_problems(
             problems.append(f"Vergleich an einer Zeile ohne {COMPARISON_ROW}")
     if subject == "V4" and not str(entry.get("prediction") or "").strip():
         problems.append("V4 ohne vorher geschriebene Vorhersage")
+    problems += bound_problems(entry)
     if subject == "Z7":
         if reviewer != "stufe_c":
             problems.append("Z7 urteilt nur Stufe C")
@@ -532,10 +647,19 @@ def check_verdicts(
     outcomes: Mapping[str, CaseOutcome] | None = None,
     rows: Iterable[str] | None = None,
     findings: Mapping[str, Finding] | None = None,
+    round_rules: bool = True,
 ) -> Checked:
     """Prüft Urteile gegen das Format, die Messung der Stufe A und die Funddatei.
 
-    Das Format steht in Konzept §5, Stufe B.
+    Das Format steht in Konzept §5, Stufe B. ``round_rules`` prüft dazu, was
+    eine Runde zur Zeit ihrer Auswertung einhalten muss
+    (``tools/function_verdict_rules.py``): V4 nur mit vor dem Klick gebundener
+    Vorhersage (FD-148) und die Kennzeichnung nach dem Stand der Funddatei
+    (M-Fix). ``report`` prüft sie immer — ein Urteil, das der heutige Stand der
+    Funde nicht mehr trägt, steht als abgewiesen in der Abhakliste und wird
+    nachgeurteilt. Der Wächter über die versionierten Urteile prüft ihre Form
+    ohne sie: Die Funddatei wächst und wird behoben, die Urteile einer Runde
+    bleiben, was sie zu ihrer Zeit waren.
     """
     known = frozenset(rows) if rows is not None else None
     accepted: list[dict[str, Any]] = []
@@ -543,6 +667,10 @@ def check_verdicts(
     seen: set[tuple[str, str, str]] = set()
     for entry in entries:
         problems = _verdict_problems(entry, outcomes or {}, known, findings)
+        if round_rules:
+            subject = subject_of(entry)
+            problems += prediction_problems(entry, subject)
+            problems += fix_problems(entry, subject, findings)
         key = (str(entry.get("row")), str(subject_of(entry)), str(entry.get("reviewer")))
         if key in seen:
             problems.append("doppeltes Urteil derselben Stufe")
@@ -651,49 +779,7 @@ def read_findings(path: Path) -> tuple[dict[str, Finding], list[str]]:
     return {finding.key: finding for finding in findings}, problems
 
 
-# --- Zwei Prüfer und Paketanteile ------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Share:
-    """Ein gemessener Anteil gegen seine Schwelle."""
-
-    hits: int
-    total: int
-    threshold: float
-
-    @property
-    def value(self) -> float | None:
-        return self.hits / self.total if self.total else None
-
-    @property
-    def flagged(self) -> bool:
-        """Unter der Schwelle — oder gar nicht gemessen, was nie „erfüllt“ heißt."""
-        return self.value is None or self.value < self.threshold
-
-    def text(self) -> str:
-        if self.value is None:
-            return "nicht gemessen"
-        return f"{self.value:.0%} ({self.hits} von {self.total})"
-
-
-def agreement(entries: Iterable[Mapping[str, Any]]) -> dict[str, Share]:
-    """Übereinstimmung von Stufe B und Zweitprüfer je Prüfpunkt und Kriterium."""
-    first: dict[tuple[str, str], str] = {}
-    second: dict[tuple[str, str], str] = {}
-    for entry in entries:
-        key = (str(entry.get("row")), str(subject_of(entry)))
-        if entry.get("reviewer") == "stufe_b":
-            first[key] = str(entry.get("verdict"))
-        elif entry.get("reviewer") == "zweitpruefer":
-            second[key] = str(entry.get("verdict"))
-    pairs: dict[str, list[bool]] = {}
-    for key in sorted(set(first) & set(second)):
-        pairs.setdefault(key[1], []).append(first[key] == second[key])
-    return {
-        subject: Share(sum(same), len(same), AGREEMENT)
-        for subject, same in sorted(pairs.items(), key=lambda item: _subject_order(item[0]))
-    }
+# --- Paketanteile (die Übereinstimmung der Prüfer: ``tools/function_agreement.py``) -----
 
 
 def input_share(inputs: Iterable[int]) -> Share:
@@ -749,14 +835,6 @@ _BADNESS: Final = {
     "entfaellt": 1,
     "nicht_gelaufen": 0,
 }
-
-
-def _subject_order(subject: int | str) -> tuple[int, int, str]:
-    """Prüfpunkte nach Nummer, dann Kriterien in der Reihenfolge E, V, G, Z, I."""
-    if isinstance(subject, int) or str(subject).isdigit():
-        return (0, int(subject), "")
-    key = str(subject)
-    return (1, "EVGZI".find(key[:1]), key)
 
 
 def _merge(outcomes: Sequence[Outcome]) -> Outcome:
@@ -966,6 +1044,11 @@ class PackageValues:
     solutions: Solutions
     agreement: Mapping[str, Share]
     second_review: Share
+    #: Zellen ohne Gegenurteil an den Zeilen des Zweitprüfers (FD-144).
+    unpaired: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Die bindende Übereinstimmung der Urteilsrunde (FD-145); ``None``: das
+    #: Paket ist seine eigene Runde.
+    pooled: Round | None = None
 
 
 def package_values(
@@ -974,11 +1057,13 @@ def package_values(
     *,
     common_goals: Mapping[str, str],
     solutions: Mapping[str, bool],
+    pooled: Round | None = None,
 ) -> PackageValues:
     """E2-, E5- und I3-Anteil, I4-Zahl und die Übereinstimmung der Prüfer eines Pakets.
 
     I3 zählt je Kundenziel, dessen Zeile (``target``) im Paket gemessen ist;
-    zwei Ziele an derselben Zeile zählen beide.
+    zwei Ziele an derselben Zeile zählen beide. Die Übereinstimmung des Pakets
+    ist Auskunft, bindend ist die der Runde (``pooled``, FD-145).
     """
     inputs = [
         int(case.criteria["E2"].measurement["inputs"])
@@ -1010,6 +1095,8 @@ def package_values(
         solution_count(solutions),
         agreement(verdicts),
         Share(len(reviewed & set(cases)), len(cases), SECOND_REVIEW_SHARE),
+        unpaired(verdicts),
+        pooled,
     )
 
 
@@ -1135,13 +1222,7 @@ def render_checklist(
         f"| I4-Zahl | {values.solutions.text()} | Zahl genannt | — |",
         _value_line("Zweitprüfer", values.second_review, f"≥ {SECOND_REVIEW_SHARE:.0%} der Zeilen"),
     ]
-    if values.agreement:
-        lines += [
-            _value_line(f"Übereinstimmung {subject}", share, f"≥ {AGREEMENT:.0%}")
-            for subject, share in values.agreement.items()
-        ]
-    else:
-        lines.append(f"| Übereinstimmung | keine Doppelprüfung | ≥ {AGREEMENT:.0%} | markiert |")
+    lines += checklist_lines(values.agreement, values.unpaired, values.pooled)
     if verdicts.rejected:
         lines += [
             "",
@@ -1459,19 +1540,43 @@ def write(
     shown_date = date or datetime.date.today().isoformat()
     goals = common_goals if common_goals is not None else read_common_goals()
     kinds = solutions if solutions is not None else finding_solutions()
-    for name in packages:
-        package_rows = [
+    # Jedes gemessene Paket wird geprüft, auch wenn nur eines eine Abhakliste
+    # bekommt: Bindend ist die Übereinstimmung der Runde, aller Pakete, deren
+    # Urteile denselben Laufordner nennen (FD-145).
+    rows_of: dict[str, list[dict[str, Any]]] = {}
+    cases_of: dict[str, dict[str, CaseOutcome]] = {}
+    read: dict[str, tuple[list[dict[str, Any]], list[dict[str, Any]]]] = {}
+    checked_of: dict[str, Checked] = {}
+    rounds: dict[str, dict[str, Sequence[Mapping[str, Any]]]] = {}
+    for name in sorted(measured_packages, key=lambda name: int(name[1:])):
+        rows_of[name] = [
             row for row in all_rows if package_name(str(row.get("package", "D0"))) == name
         ]
-        ids = {str(row.get("id")) for row in package_rows}
-        cases = {row: case for row, case in merged.items() if row in ids}
-        entries = read_verdicts(verdicts or state / f"urteile-{package_slug(name)}.toml")
-        checked = check_verdicts(entries, outcomes=cases, rows=ids, findings=found)
+        ids = {str(row.get("id")) for row in rows_of[name]}
+        cases_of[name] = {row: case for row, case in merged.items() if row in ids}
+        given = verdicts if verdicts is not None and packages == [name] else None
+        read[name] = read_verdict_file(given or state / f"urteile-{package_slug(name)}.toml")
+        checked_of[name] = check_verdicts(
+            read[name][0], outcomes=cases_of[name], rows=ids, findings=found
+        )
+        run = run_folder(read[name][1]) or str(out)
+        rounds.setdefault(run, {})[name] = checked_of[name].accepted
+    for name in packages:
+        package_rows, cases, checked = rows_of[name], cases_of[name], checked_of[name]
+        entries, runs = read[name]
         invalid += [
             f"{name} {entry.get('row')} {subject_of(entry)}: {'; '.join(reasons)}"
             for entry, reasons in checked.rejected
         ]
-        values = package_values(cases, checked.accepted, common_goals=goals, solutions=kinds)
+        invalid += [f"{name}: {problem}" for problem in check_runs(runs, entries, commits)]
+        run = run_folder(runs) or str(out)
+        values = package_values(
+            cases,
+            checked.accepted,
+            common_goals=goals,
+            solutions=kinds,
+            pooled=round_agreement(run, rounds[run]),
+        )
         text = render_checklist(
             name,
             rows=package_rows,
@@ -1481,7 +1586,9 @@ def write(
             values=values,
             commit=shown_commit,
             date=shown_date,
-            out=str(out),
+            # Der Lauf, den die Urteile nennen, nicht die bildlose Kopie,
+            # aus der die Protokolle hier gelesen werden.
+            out=run_folder(runs) or str(out),
         )
         target = checklist or state / f"abhakliste-{package_slug(name)}.md"
         target.parent.mkdir(parents=True, exist_ok=True)

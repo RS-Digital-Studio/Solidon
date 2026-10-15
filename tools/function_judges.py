@@ -309,10 +309,31 @@ def _input_clicks(steps: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]
     ]
 
 
+def _short_of_goal(protocol: Mapping[str, Any], steps: Sequence[Mapping[str, Any]]) -> str | None:
+    """Warum der Weg das Beispielziel nicht erreicht hat — ``None``, wenn er es tat (FD-146).
+
+    E1 bis E3 zählen bis zum Beispielziel der Zeilenspezifikation (Konzept §4).
+    Ohne Beispielziel oder ohne gelungenen Schritt *Übernehmen* endete der Weg
+    vorher: an der Fläche eines Sprachdurchgangs, an einem grauen Hauptknopf,
+    an einem Unterdialog. Was danach käme, ist nicht gemessen — aus dem Bild
+    geschätzte Restschritte sind keine Messung, also nie „gut“.
+    """
+    if not str(_spec(protocol).get("example_goal") or "").strip():
+        return "spec.example_goal (Zeile ohne Beispielziel)"
+    applied = [
+        step
+        for step in steps
+        if step.get("phase") == MAIN_PHASES[-1] and step.get("hit") and not step.get("finding")
+    ]
+    return None if applied else "Übernehmen (der Weg endet vor dem Beispielziel)"
+
+
 def _e1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     steps = _path(protocol)
     if steps is None:
         return _missing("E1", "steps")
+    if (short := _short_of_goal(protocol, steps)) is not None:
+        return _missing("E1", short)
     row = _row(protocol)
     at_feature = _selected_feature(steps, row)
     limit = MAX_CLICKS_AT_FEATURE if at_feature else MAX_CLICKS
@@ -332,6 +353,8 @@ def _e2(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     steps = _path(protocol)
     if steps is None:
         return _missing("E2", "steps")
+    if (short := _short_of_goal(protocol, steps)) is not None:
+        return _missing("E2", short)
     typed = sum(1 for step in steps if step.get("typed"))
     # Mehr als eine Eingabe an einer Zeile ist noch kein Fund: Die Schwelle
     # gilt für 90 % des Pakets (``function_report.package_values``). Ob eine
@@ -343,6 +366,8 @@ def _e3(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     steps = _path(protocol)
     if steps is None:
         return _missing("E3", "steps")
+    if (short := _short_of_goal(protocol, steps)) is not None:
+        return _missing("E3", short)
     decisions = sum(1 for step in steps if step.get("decision"))
     # Mehr als eine Entscheidung: Ob sie Vorwissen verlangen, sagt nur Stufe B
     # — bis dahin bleibt der Punkt offen und nie „gut“.
@@ -1203,8 +1228,29 @@ def _i1(protocol: Mapping[str, Any], context: Context) -> Outcome | None:
     # gemessen, kein Fund (Probelauf F-28) — der Vermerk sagt, welche.
     missed = (_map(protocol, "unmeasured") or {}).get("hover_labels")
     notes = [f"nicht gemessen: {missed}"] if missed else []
-    return _result(
-        "I1", issues, f"{len(labels)} Arten", {"kinds": len(labels)}, judged=True, notes=notes
+    # „Jede Art“ heißt jede, die die Erkennung an der Szene liefert (FD-152): Ohne
+    # diese Liste ist nicht prüfbar, ob alle überfahren wurden, und eine
+    # erkannte Art ohne Überfahren ist nicht gemessen — nie „gut“.
+    recognized = _list(protocol, "recognized_kinds")
+    hovered = {str(entry.get("kind")) for entry in labels}
+    absent = (
+        ["recognized_kinds"]
+        if recognized is None
+        else [f"hover_labels ({kind})" for kind in sorted(set(map(str, recognized)) - hovered)]
+    )
+    summary = (
+        f"{len(labels)} Arten überfahren, erkannte nicht festgehalten"
+        if recognized is None
+        else f"{len(labels)} von {len(recognized)} erkannten Arten"
+    )
+    return _settled(
+        "I1",
+        issues,
+        absent,
+        summary,
+        {"kinds": len(labels), "recognized": None if recognized is None else len(recognized)},
+        judged=True,
+        notes=notes,
     )
 
 

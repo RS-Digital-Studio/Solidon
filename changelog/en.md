@@ -56,6 +56,7 @@ it into `website/version.json`.
 - Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
 - Without activation, *Create parameter …*, *Move*, *Split*, the history keys and the dimensions in the view are greyed out too. Every reason names the way, such as *Help → Unlock Solidon …*.
 - When an action in the *Report* waits for the running calculation, it says that it becomes available afterwards, to screen readers as well.
+- On an empty scene, greyed-out tools such as *Section* and *Measure* give their reason: they need a body. Until now the tooltip only showed their name.
 - Messages in the status bar no longer put a colon after a complete sentence.
 - With a single body the object tree is only as tall as its content, and so is the history with one step. Version 0.6.0 left empty space below.
 - The newest step stays visible in the history when new bodies make the object tree grow. In version 0.6.0 it slipped below the edge of the panel.
@@ -65,6 +66,11 @@ it into `website/version.json`.
 - The selection card follows content and font, preserving text and action columns. Detached tabs keep their size. When a feature edit is offered, “Apply” is the primary action.
 - Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
+- For parameters, fits, printer, material and undo, the chat names the place in the window where you can do the same yourself.
+- The check report names the bodies of a fit instead of showing an internal identifier.
+- English and Portuguese now tell the protrusion of a hook, or of a body below the plate, apart from an overhang in printing.
+- In Spanish and Portuguese, menu, search and dialog show only the first sentence again for *Pin for hole* and *Orient for printing*.
+- Several translations read more clearly, among them the introduction of *Create parameter …*. The peg starts with a capital in every language.
 
 ### Printing and slicer handover
 
@@ -79,6 +85,8 @@ it into `website/version.json`.
 - If a bore or a container only works out with corners moved by a tiny amount, the opening stays open. In version 0.6.0 a wafer-thin skin could remain across it.
 - For holes, the view and *Selection* show the same edit. Size, depth and a linked entrance stay in front; print compensation and fine settings are under “More values”.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
+- If only slivers remain beside one printable part, *Split into separate parts* names them and offers *Keep slivers*. Before, it said the body was all one piece.
+- If a fillet radius or chamfer width is too large for the edges, the message offers *Pick different edges*.
 
 ## 0.6.0
 

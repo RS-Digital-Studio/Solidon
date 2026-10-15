@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sys
 import time
@@ -682,13 +683,49 @@ def _columns(model: Any, parent: Any) -> int:
         return 1
 
 
-def _item_texts(root: Any) -> list[dict[str, Any]]:
-    """Die sichtbaren Zellen der Listen und Bäume unter ``root``: Text gegen Zellbreite (M12).
+def _wrapped_height(text: str, font: Any, width: int) -> tuple[int, int]:
+    """Höhe und breiteste Zeile eines umbrochenen Texts, gelegt wie Qt eine Zelle legt.
 
-    Eine Ansicht kürzt mit „…“, statt umzubrechen — der Kunde sieht dann nur
-    einen Teil. Bedarf ist Text, Symbol und der Innenrand der Zelle.
+    Dieselbe Folge wie ``QCommonStylePrivate::viewItemTextLayout``: Wortumbruch
+    auf die Textbreite der Zelle, Zeile um Zeile. Ein Wort, das allein breiter
+    ist als die Zelle, zeichnet Qt gekürzt — dafür die breiteste Zeile.
+    """
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QTextLayout, QTextOption
+
+    layout = QTextLayout(text, font)
+    option = QTextOption()
+    option.setWrapMode(QTextOption.WrapMode.WordWrap)
+    layout.setTextOption(option)
+    height = 0.0
+    widest = 0.0
+    layout.beginLayout()
+    while True:
+        line = layout.createLine()
+        if not line.isValid():
+            break
+        line.setLineWidth(max(width, 1))
+        line.setPosition(QPointF(0.0, height))
+        height += line.height()
+        widest = max(widest, line.naturalTextWidth())
+    layout.endLayout()
+    return math.ceil(height), math.ceil(widest)
+
+
+def _item_texts(root: Any) -> list[dict[str, Any]]:
+    """Die sichtbaren Zellen der Listen und Bäume unter ``root``: Text gegen Zelle (M12, FD-110).
+
+    Eine Ansicht kürzt mit „…“ — der Kunde sieht dann nur einen Teil. Ohne
+    Umbruch zählt die Breite: Text, Symbol und der Innenrand der Zelle gegen
+    die Breite, die in der Sichtfläche liegt (``axis`` ``breite``). Mit Umbruch
+    (die Befundliste des Prüfberichts, F-15) braucht die Zeile so viel Höhe,
+    wie ihre umbrochenen Zeilen tragen; ist die Zelle niedriger, kürzt Qt die
+    letzte sichtbare Zeile („Überstand: 10,00 …“, FD-110) — ``axis`` ``hoehe``.
+    Ein Wort, das allein nicht in die Breite passt, ist auch umbrochen ein
+    Breitenfund.
     """
     from PySide6.QtCore import QModelIndex, Qt
+    from PySide6.QtGui import QFont
     from PySide6.QtWidgets import QAbstractItemView, QStyle
 
     found: list[dict[str, Any]] = []
@@ -699,8 +736,6 @@ def _item_texts(root: Any) -> list[dict[str, Any]]:
         area = view.viewport().rect()
         metrics = view.fontMetrics()
         margin = 2 * (view.style().pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin) + 1)
-        # Eine Liste, die umbricht, braucht für ihre Zeile nur das längste Wort
-        # (F-15: die Befundliste des Prüfberichts, ``setWordWrap(True)``).
         wraps = bool(getattr(view, "wordWrap", lambda: False)())
         pending = [QModelIndex()]
         while pending and len(found) < MOST_ITEM_TEXTS:
@@ -713,26 +748,35 @@ def _item_texts(root: Any) -> list[dict[str, Any]]:
                     if not text or cell.isEmpty() or not area.intersects(cell):
                         continue
                     icon = index.data(Qt.ItemDataRole.DecorationRole)
-                    pieces = text.split() if wraps else text.splitlines()[:1]
-                    need = (
-                        max((metrics.horizontalAdvance(piece) for piece in pieces), default=0)
-                        + margin
+                    symbol = (
+                        view.iconSize().width() + 4
+                        if icon is not None and not (hasattr(icon, "isNull") and icon.isNull())
+                        else 0
                     )
-                    if icon is not None and not (hasattr(icon, "isNull") and icon.isNull()):
-                        need += view.iconSize().width() + 4
                     # Zu sehen ist die Zelle nur, soweit sie in der Sichtfläche liegt;
                     # eine Liste ohne Umbruch macht die Zelle so breit wie ihren Text.
                     shown = cell.intersected(area).width()
-                    found.append(
-                        {
-                            "text": text,
-                            "carrier": f"{type(view).__name__}.Zeile",
-                            "need_px": need,
-                            "width_px": shown,
-                            "cut": need > shown,
-                            "lead": False,
-                        }
-                    )
+                    entry: dict[str, Any] = {
+                        "text": text,
+                        "carrier": f"{type(view).__name__}.Zeile",
+                        "lead": False,
+                    }
+                    if wraps:
+                        given = index.data(Qt.ItemDataRole.FontRole)
+                        font = given if isinstance(given, QFont) else view.font()
+                        height, widest = _wrapped_height(text, font, shown - margin - symbol)
+                        if widest + margin + symbol > shown:
+                            entry.update(axis="breite", need_px=widest + margin + symbol)
+                            entry["width_px"] = shown
+                        else:
+                            entry.update(axis="hoehe", need_px=height, width_px=cell.height())
+                    else:
+                        first = text.splitlines()[:1]
+                        need = max((metrics.horizontalAdvance(p) for p in first), default=0)
+                        entry.update(axis="breite", need_px=need + margin + symbol)
+                        entry["width_px"] = shown
+                    entry["cut"] = entry["need_px"] > entry["width_px"]
+                    found.append(entry)
                 # Nur ein Baum hat Kinder, und nur aufgeklappte sind zu sehen.
                 expanded = getattr(view, "isExpanded", None)
                 child = model.index(row, 0, parent)
@@ -765,6 +809,12 @@ def field_entries(root: Any) -> list[dict[str, Any]]:
     eigene, sonst die des nächsten Elternteils bis zur Fläche (Probelauf F-9).
     Die zugängliche Beschreibung bleibt die des Felds selbst — die liest ein
     Bildschirmleser am fokussierten Feld.
+
+    Ein Feld, das sein Besitzer selbst versteckt (``isHidden``), gehört nicht
+    zur Fläche, wie sie dasteht: Der Haken „Auf alle … anwenden“ im
+    Merkmalfenster steht leer und versteckt, bis es mehrere gleichartige
+    Merkmale gibt (FD-102). Ein Feld hinter einer zugeklappten Klappe bleibt
+    dagegen eines — nur nicht vorn; versteckt ist dort die Klappe, nicht es.
     """
     from PySide6.QtWidgets import QCheckBox
 
@@ -796,6 +846,7 @@ def field_entries(root: Any) -> list[dict[str, Any]]:
             "front": bool(widget.isVisible()),
         }
         for widget in _input_widgets(root)
+        if not widget.isHidden()
     ]
 
 
@@ -837,17 +888,67 @@ def _inside(widget: Any, root: Any) -> bool:
     return bool(widget is not None and (root is widget or root.isAncestorOf(widget)))
 
 
+def _named_holder(widget: Any) -> Any:
+    """Das Bedienelement hinter dem Fokus: die Zahl oder Auswahl um ihre Textzeile."""
+    from PySide6.QtWidgets import QAbstractSpinBox, QComboBox, QLineEdit
+
+    parent = widget.parentWidget()
+    if isinstance(widget, QLineEdit) and isinstance(parent, (QAbstractSpinBox, QComboBox)):
+        return parent
+    return widget
+
+
+def accessible_name(widget: Any) -> str:
+    """Was ein Bildschirmleser als Namen liest — leer, wo er keinen hat (FD-141).
+
+    Wie ``QAccessibleWidget``: der zugängliche Name, sonst der Text einer
+    Beschriftung, die das Element als Partner trägt (``QLabel.setBuddy``, auch
+    die Zeile eines Formulars), oder der Titel seines Rahmens; ein Knopf liest
+    seinen Text. Ein Kennzeichen, ein ``objectName`` oder der Klassenname ist
+    kein Name — „FittedScroller“ hieß im Protokoll einmal so.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QAbstractButton, QGroupBox, QLabel, QTabBar
+
+    holder = _named_holder(widget)
+    name = str(holder.accessibleName() or "")
+    parent = holder.parentWidget()
+    if not name and parent is not None:
+        direct = Qt.FindChildOption.FindDirectChildrenOnly
+        partners = [
+            label for label in parent.findChildren(QLabel, "", direct) if label.buddy() is holder
+        ]
+        if partners:
+            name = _text_of(partners[0])
+        elif isinstance(parent, QGroupBox):
+            name = _plain(parent.title(), mnemonic=True)
+    if not name and isinstance(holder, QAbstractButton):
+        name = _text_of(holder)
+    if not name and isinstance(holder, QTabBar) and holder.currentIndex() >= 0:
+        name = _plain(holder.tabText(holder.currentIndex()), mnemonic=True)
+    return name.strip()
+
+
 def focus_entry(widget: Any, root: Any) -> dict[str, Any]:
     """Das Fokuswidget als Kettenglied: Name, Rechteck relativ zu ``root``, drinnen oder nicht.
 
     Auch ein Glied außerhalb steht in Koordinaten von ``root`` (Review S4) —
-    sonst verglichen die Urteile Lagen aus zwei Bezugssystemen.
+    sonst verglichen die Urteile Lagen aus zwei Bezugssystemen. ``name`` ist,
+    was ein Bildschirmleser liest (:func:`accessible_name`), ``class`` die
+    Klasse daneben; ``mark`` und ``primary`` sagen, ob das Glied die
+    Zielhandlung ist — ihr Wortschatzname oder der Hauptknopf der Fläche
+    (Prüfpunkt 10, FD-141).
     """
     from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QPushButton
 
+    holder = _named_holder(widget)
     corner = root.mapFromGlobal(widget.mapToGlobal(QPoint(0, 0)))
     return {
-        "name": widget.accessibleName() or name_of(widget),
+        "name": accessible_name(widget),
+        "class": type(holder).__name__,
+        "mark": vocabulary_name(holder) or vocabulary_name(widget),
+        "primary": isinstance(holder, QPushButton) and bool(holder.isDefault()),
         "rect": [corner.x(), corner.y(), widget.width(), widget.height()],
         "inside": _inside(widget, root),
     }

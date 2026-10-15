@@ -288,12 +288,19 @@ class ToolStrip(QWidget):
         heißt. Sichtbar muss sie sein — ein Kürzel, das nirgends steht, lernt
         niemand, und die Werkzeugzeile hat keinen Platz für eine zweite Zeile
         neben jedem Knopf.
+
+        **Geschrieben wird über** :meth:`_hint_of`, die eine Stelle für den
+        Hinweis: Ein grauer Knopf behält dort seinen Grund, und das Kürzel
+        kommt mit der Freigabe. Das Fenster vergibt die Kürzel erst, nachdem
+        die leere Szene die Werkzeuge ausgegraut hat; ein eigenes
+        ``setToolTip`` hier schrieb „Schnitt  (Alt+1)“ über den Grund (FD-156).
         """
         tool = self._tools.get(key)
         if tool is None:
             return
         self._tools[key] = replace(tool, shortcut=sequence)
-        self._buttons[key].setToolTip(f"{tool.title}  ({sequence})")
+        button = self._buttons[key]
+        self._hint_of(key, button.isEnabled(), button.accessibleDescription())
 
     def _on_button(self, button: QAbstractButton) -> None:
         """Ein Klick auf einen Umschalter — welcher, sagt die Gruppe."""

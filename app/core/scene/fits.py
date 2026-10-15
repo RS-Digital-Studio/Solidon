@@ -836,6 +836,30 @@ def _standard_size_notes(scene: Scene, fit: Fit) -> list[Finding]:
     return notes
 
 
+def _kind_title(kind: str) -> TranslatableText | str:
+    """Wie eine Merkmalsart heißt, wenn sie jemand liest — „Bohrung“, nie „hole“."""
+    from app.core.registry.registry import FEATURE_TITLES
+
+    return FEATURE_TITLES.get(kind, kind)
+
+
+def _shown(scene: Scene, reference: FeatureRef) -> TranslatableText | str:
+    """Ein Partner der Passung für die Berichtszeile: Körper beim Namen, Merkmal bei der Art.
+
+    ``a`` und ``b`` stehen als Namen in der Zeile; ``str(fit.a)`` schrieb
+    „obj_1:hole_1“ dorthin (FD-105). Ein Merkmal, das es nicht mehr gibt, hat
+    keine Art — dann bleibt der Körper allein.
+    """
+    entry = scene.objects.get(reference.object_id)
+    if entry is None:
+        return str(reference)
+    body = entry.name or str(reference.object_id)
+    feature = entry.features.get(reference.feature_id)
+    if feature is None:
+        return body
+    return _("{body}: {feature}", body=body, feature=_kind_title(feature.kind))
+
+
 def _check_pair(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken) -> list[Finding]:
     first = resolve(scene, fit.a)
     second = resolve(scene, fit.b)
@@ -864,7 +888,7 @@ def _check_pair(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken
                     "Ein Merkmal dieser Passung gibt es nicht mehr, oder es ist nach einem "
                     "späteren Schritt nicht mehr erkennbar."
                 ),
-                values={"fit": fit.name, "a": str(fit.a), "b": str(fit.b)},
+                values={"fit": fit.name, "a": _shown(scene, fit.a), "b": _shown(scene, fit.b)},
                 # Ein Merkmal, das es nicht mehr gibt, lässt sich nicht
                 # ansteuern — der Körper aber schon. Das ist die zweite Stufe
                 # der Zusage aus §18.4, und ohne diese Zeile war es keine.
@@ -875,7 +899,7 @@ def _check_pair(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken
     problem = _pair_problem(fit.kind, first, second)
     if problem is not None:
         code, message = problem
-        values = {"fit": fit.name, "a": str(fit.a), "b": str(fit.b)}
+        values = {"fit": fit.name, "a": _shown(scene, fit.a), "b": _shown(scene, fit.b)}
         if code == "fit.pitch_mismatch":
             values.update(
                 first_pitch=format_length(float(first.params["pitch"])),
@@ -1127,10 +1151,12 @@ def _geometry_findings(
     if not _pose_proven(scene, fit, first_feature, second_feature, first_ref, second_ref):
         return []
     first, second = scene.objects[first_ref.object_id], scene.objects[second_ref.object_id]
+    # **Die Namen, nicht die Kennungen** (FD-105): ``a`` und ``b`` stehen als
+    # Namen in der Berichtszeile, und dort stand „— Quader · obj_1 · obj_2“.
     values: dict[str, float | str | TranslatableText] = {
         "fit": fit.name,
-        "a": first.id,
-        "b": second.id,
+        "a": first.name or first.id,
+        "b": second.name or second.id,
     }
     severity: Severity = "warning"
     flush = fit.kind == "flush"
@@ -1391,7 +1417,11 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
                 code="fit.not_measurable",
                 severity="warning",
                 message=_("Eine bündige Passung braucht zwei Flächen."),
-                values={"fit": fit.name, "a": first.kind, "b": second.kind},
+                values={
+                    "fit": fit.name,
+                    "a": _kind_title(first.kind),
+                    "b": _kind_title(second.kind),
+                },
                 object_id=fit.a.object_id,
                 feature_ids=(fit.a.feature_id,),
                 # Regel 17: Das Merkmal zeigt, welches Maß fehlt.

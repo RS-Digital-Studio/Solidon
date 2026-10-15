@@ -1638,10 +1638,7 @@ class LabelBodyParams(BaseParams):
     params=LabelBodyParams,
     consumes=0,
     produces=1,
-    doc=_(
-        "Legt einen Schriftzug als eigenes Objekt an — für den Zweifarbendruck "
-        "mit zwei Dateien und für Buchstaben, die aufgeklebt werden."
-    ),
+    doc=_("Legt einen Schriftzug als eigenes Objekt an — zum Aufkleben oder für zwei Farben."),
 )
 def create_label(ctx: OpContext) -> OpResult:
     """§25: dieselben Umrisse, für sich stehend statt auf einem Teil.
