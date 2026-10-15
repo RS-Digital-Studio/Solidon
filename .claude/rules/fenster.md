@@ -77,11 +77,11 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   (`_SelectionPage.held`), nicht über eine Tour.
   Ein Zug im Bild, der Werte in eine Handlung legt (`FeaturePanel.valuesTaken`),
   holt ihn immer: Sein *Übernehmen* steht dort.
-- `MainWindow.announce` ergänzt die Statuszeile um eine passive Overlayquittung:
-  kein Fokus, keine Klicks, kein RichText; mindestens acht Sekunden, lange
-  Texte länger. Neue Quittung ersetzt alte, Fortschritt überschreibt sie nicht.
-  Kontextwechsel/Abbau beendet den Timer. Keine neue Zone und kein zweites
-  Live-Ereignis für Bildschirmleser.
+- `announce` ergänzt die Statuszeile um eine passive Quittung (`action_notice`):
+  ohne Fokus, Klick, RichText; ab acht Sekunden. Nie über einer Karte, ohne
+  Platz nur Statuszeile; der nächste Schritt nimmt beide mit. Fortschritt
+  überschreibt sie nicht. Keine neue Zone, kein zweites Live-Ereignis für
+  Bildschirmleser.
 - Einladungen (`survey.ViewNotice`) bleiben nichtmodal ohne Fokus über der
   Ansicht, nie unter Karten. Neue Overlays bei `keep_clear_of` anmelden.
   Erst Zeigen zählt als gesehen; nur erfolgreiche Datei, Slicen oder Öffnen

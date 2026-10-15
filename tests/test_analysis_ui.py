@@ -108,7 +108,10 @@ def test_report_navigation_preserves_a_started_draft_before_any_side_effect(
         _quiet_command_allowed=lambda: MainWindow._quiet_command_allowed(state),
         _say_the_change_comes_first=lambda: events.append("refused"),
         _object_of=lambda error: MainWindow._object_of(state, error),
-        viewport=SimpleNamespace(clear_finding_mark=lambda: events.append("clear_mark")),
+        viewport=SimpleNamespace(
+            clear_finding_mark=lambda: events.append("clear_mark"),
+            reset_camera=lambda: events.append("frame"),
+        ),
         history_panel=SimpleNamespace(
             point_at=lambda op_id: events.append(("history", op_id)) or False
         ),
@@ -4281,18 +4284,18 @@ def test_the_bed_carries_numbers_not_just_lines() -> None:
     Als reine Rechnung geprüft: offscreen gibt es keinen Renderer, und ein
     Test, der sich dort überspringt, prüft nie etwas.
     """
-    from app.ui.viewport import BED_SCALE_STEP, bed_scale
+    from app.ui.bed_scale import BED_SCALE_STEP, bed_scale
 
-    marks = bed_scale(256.0, 256.0)
+    marks = bed_scale(256.0, 256.0, "mm")
     labels = [text for _point, text in marks]
 
     assert "50" in labels
     assert "100" in labels
     # 128 mm je Seite, alle 50 mm: Null, 50 und 100 in beide Richtungen — je
-    # Kante fünf Zahlen.
+    # Kante fünf Zahlen. Die größte der Vorderkante trägt die Einheit (FD-92).
     assert len(marks) == 2 * 5
 
-    steps = sorted({float(text) for text in labels})
+    steps = sorted({float(text.split()[0]) for text in labels})
     assert steps == [-2 * BED_SCALE_STEP, -BED_SCALE_STEP, 0.0, BED_SCALE_STEP, 2 * BED_SCALE_STEP]
 
 
@@ -4309,9 +4312,9 @@ def test_the_bed_scale_signs_its_numbers_and_puts_zero_in_the_middle() -> None:
     Geprüft wird beides — dass die Null dort liegt, wo sie hingehört, und dass
     die negative Seite ihr Vorzeichen behält.
     """
-    from app.ui.viewport import bed_scale
+    from app.ui.bed_scale import bed_scale
 
-    marks = bed_scale(220.0, 220.0)
+    marks = bed_scale(220.0, 220.0, "mm")
     # Die Marken der Vorderkante liegen weiter vorn als seitlich, die der linken
     # Kante umgekehrt — das trennt die beiden Kanten, ohne den Abstand zu kennen,
     # mit dem sie vor der Platte stehen.
@@ -4325,20 +4328,22 @@ def test_the_bed_scale_signs_its_numbers_and_puts_zero_in_the_middle() -> None:
         )
 
     assert "-100" in [text for _point, text in marks], "die negative Seite behält ihr Vorzeichen"
-    assert [text for _point, text in front].count("100") == 1, "keine Zahl steht zweimal je Kante"
+    front_values = [text.split()[0] for _point, text in front]
+    assert front_values.count("100") == 1, "keine Zahl steht zweimal je Kante"
 
 
 def test_a_small_bed_still_gets_a_scale() -> None:
     """Und eine Platte, die kleiner ist als ein Schritt, bekommt wenigstens
     ihren Nullpunkt — den Bezug, an dem eine Skala anfängt (und unter VTK, bis
     06.09.2026, stolperte der Renderer über eine leere Beschriftungsliste)."""
-    from app.ui.viewport import bed_scale
+    from app.ui.bed_scale import bed_scale
 
-    marks = bed_scale(60.0, 60.0)
+    marks = bed_scale(60.0, 60.0, "mm")
     assert marks
     # Je Kante ihre Null, seit die Skala vorzeichenbehaftet ist — vorher war es
-    # eine einzige in der Ecke, und die lag am falschen Ort.
-    assert [text for _point, text in marks] == ["0", "0"]
+    # eine einzige in der Ecke, und die lag am falschen Ort. Die der
+    # Vorderkante trägt die Einheit (FD-92).
+    assert [text for _point, text in marks] == ["0 mm", "0"]
 
 
 def test_a_shadow_falls_beside_the_body_not_under_it() -> None:

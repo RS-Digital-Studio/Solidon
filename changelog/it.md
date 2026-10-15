@@ -52,6 +52,10 @@ scrive in `website/version.json`.
 - Uno screen reader legge il nome e la spiegazione di ogni campo numerico di una finestra di dialogo.
 - Dopo un'azione nel *Rapporto di verifica* il rapporto resta in primo piano e Ctrl+Z la annulla subito. Finora passava davanti la scheda *Selezione*.
 - Gli avvisi su piano e adesione usano l’unità scelta. Il cambio mm/pollici conserva segnalazione scelta, dettagli aperti, scheda e stato espanso dei corpi.
+- I numeri lungo il piano di stampa seguono l’unità scelta e la indicano. La versione 0.6.0 mostrava millimetri anche con i pollici impostati.
+- Nella vista *Ortografica*, un clic su una segnalazione mostra il punto a una dimensione adatta. Finora restava lo zoom precedente.
+- Un clic su una segnalazione senza un punto proprio mostra l'intero corpo, e un progetto aperto sta tutto nella vista.
+- Un foro selezionato resta visibile insieme al bordo. Le maniglie stanno fuori dal bordo e le frecce partono oltre.
 - Ctrl+Z e Ctrl+Y funzionano anche con il cursore in un campo vuoto, per esempio nel campo di ricerca. Se lì ha scritto qualcosa, viene annullato prima il testo digitato.
 - Senza attivazione, le azioni che modificano qualcosa in *Rapporto di verifica*, *Selezione*, menu contestuali e filamento sono in grigio con il motivo. Prima il rifiuto arrivava dopo il clic.
 - Senza attivazione sono in grigio anche *Crea parametro …*, *Sposta*, *Dividi*, i tasti della cronologia e le misure nella vista. Ogni motivo indica la strada, come *Aiuto → Sblocca Solidon …*.
@@ -66,6 +70,14 @@ scrive in `website/version.json`.
 - La scheda di selezione segue contenuto e carattere, mantenendo testo e colonne. Le schede separate mantengono le dimensioni. Se è proposta una modifica, «Applica» è l’azione principale.
 - Le controparti chiedono coppia e dimensioni e spiegano entrambe le metà. Forma e accoppiamento sono in «Altre impostazioni». L’altezza iniziale del dialogo segue il contenuto.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
+- La riga con materiale e durata di stampa indica «dall'ultimo passaggio» solo ciò che un passaggio ha cambiato. Finché i valori del profilo dello slicer sono ancora in lettura, riporta «provvisorio».
+- Materiale e durata di stampa sono sempre interi nella barra di stato. Se la barra è piena, il messaggio accanto si accorcia e la frase intera compare nel suggerimento.
+- L'intestazione accorcia il nome della stampante solo quando la riga è piena. Nome del progetto e misure stanno insieme a sinistra, la stampante a destra accanto a *Impostazioni di stampa …*.
+- Se *Dividi automaticamente* non trova un taglio, la riga di stato dice perché. Finora diceva invece che il pezzo entrava già nel piano.
+- La breve conferma dopo un'azione compare accanto alle schede, non sopra, per esempio accanto al rapporto. Il passaggio successivo la toglie insieme alla riga di stato, anche un vecchio «Annullato».
+- Su una segnalazione di un modello generato, *Genera di nuovo* apre il generatore con la sua descrizione e il seme successivo.
+- Quando la mappa di analisi rifiuta un modello troppo grande, il numero di triangoli compare in gruppi di tre, come 2 103 472.
+- Quando la catena si ferma, una funzione che aggiungerebbe un passaggio dopo non apre più una finestra con il pulsante grigio. L'arresto e la via d'uscita compaiono subito.
 
 ### Stampare e passare allo slicer
 

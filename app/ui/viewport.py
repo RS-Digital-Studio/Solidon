@@ -123,6 +123,7 @@ from app.core.units import (
 )
 from app.i18n import tr
 from app.ui import app_events, cursors
+from app.ui.bed_scale import bed_scale
 from app.ui.change_lock import change_refusal
 from app.ui.icons import icon
 from app.ui.labels import (
@@ -1478,16 +1479,6 @@ BED_COLOUR = "#5a6472"
 #: als der Hintergrund, damit beides sichtbar bleibt.
 BED_SURFACE_COLOUR = "#2a303a"
 
-#: Abstand der Maßzahlen an der Platte, in Millimetern. Fünfzig, weil das
-#: Raster bei zehn liegt: eine Zahl an jeder Rasterlinie wäre ein Zaun aus
-#: Ziffern, und eine alle hundert ließe eine 220er-Platte mit zwei Zahlen
-#: zurück.
-BED_SCALE_STEP = 50.0
-
-#: Wie weit die Zahlen neben der Plattenkante stehen. Weit genug, dass sie
-#: nicht auf einem Teil liegen, das bis an den Rand geht.
-BED_SCALE_GAP = 8.0
-
 #: Wie weit die Fläche des gewählten Merkmals über dem Körper liegt, als
 #: Anteil der Szenengröße. Zwei Gründe, beide zwingend: ohne Abstand streiten
 #: Merkmal und Körper um dieselbe Tiefe und das Bild flimmert, und für die
@@ -1513,9 +1504,18 @@ HOVERED_FEATURE_OPACITY = 0.62
 
 #: Eine deckende Innenwand wirkt aus schrägem Blick wie ein Deckel über der
 #: Bohrung. Auswahl bleibt kräftiger als Hover, beide lassen aber den Blick
-#: durch die Öffnung frei.
-SELECTED_HOLE_OPACITY = 0.55
-HOVERED_HOLE_OPACITY = 0.38
+#: durch die Öffnung frei. **Die Marke ist unbeleuchtet**: Bei 0,55 nahm sie
+#: der Wand ihre Schattierung, und die gewählte Bohrung las sich als flache
+#: Scheibe, schlechter als jede ungewählte daneben (FD-70). Die Auswahl trägt
+#: der Umriss am Rand; die Tönung sagt nur noch, welche Wand dazugehört.
+SELECTED_HOLE_OPACITY = 0.28
+HOVERED_HOLE_OPACITY = 0.2
+
+#: Wie weit hinter dem äußeren Rand der Langlochknöpfe die Pfeile des
+#: Platzierungsgriffs beginnen, im Maß dieser Reichweite: Die Knöpfe stehen
+#: hoch, und ein Pfeil, der genau an ihrem Rand ansetzt, verschwindet im
+#: Schrägblick hinter ihnen (FD-70).
+GRIP_HUB_MARGIN: Final = 1.25
 
 #: Wie hoch der Kontaktschatten über der Platte liegt. Ohne diesen Abstand
 #: streiten sich Schatten und Platte um dieselbe Tiefe, und das Bild flimmert
@@ -2763,55 +2763,6 @@ def reaches_beyond(
         or current[axis * 2 + 1] > fitted[axis * 2 + 1] + slack
         for axis in range(3)
     )
-
-
-def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, float], str]]:
-    """Die Maßzahlen an der vorderen und linken Plattenkante (§18.6).
-
-    Ein Raster ohne Zahlen sagt nur, dass es ein Raster gibt. Erst die Zahl
-    daneben macht daraus einen Maßstab, an dem man ein Teil einordnet, ohne
-    zu messen — und das ist der Zweck der Platte in echter Größe.
-
-    Als eigene Funktion und nicht im Zeichnen versteckt: offscreen gibt es
-    keinen Renderer, und eine Prüfung, die sich dort überspringt, prüft nie
-    etwas.
-
-    **Die Zahlen tragen ihr Vorzeichen, und die Null steht in der Mitte ihrer
-    Kante.** Beides war falsch, und zusammen ergab es eine Skala, die sich selbst
-    widersprach: ``abs()`` nahm beiden Seiten das Vorzeichen, also lag dieselbe
-    „100" zweimal im Bild — und die einzige Null stand in der **Ecke** der
-    Platte, mit der Begründung, sie gehöre beiden Kanten. Der Nullpunkt der Szene
-    ist aber die Mitte der Platte, nicht ihre Ecke: bei 220 mm stand „0" bei
-    x = -110 und zehn Millimeter weiter „100". Jede Kante bekommt deshalb ihre
-    eigene Null.
-
-    Vorzeichenbehaftet und nicht als Abstand von der Mitte, weil die
-    Positionsfelder der Operationsdialoge es auch sind — wer „Position X = -40"
-    tippt, soll die -40 auf der Platte finden.
-    """
-    marks: list[tuple[tuple[float, float, float], str]] = []
-    half_width, half_depth = width / 2.0, depth / 2.0
-    step = BED_SCALE_STEP
-
-    def along(half: float) -> list[float]:
-        """Die Marken einer Kante: die Null, dann schrittweise nach beiden Seiten.
-
-        Eine Platte, die schmaler ist als ein Schritt, behält so ihre Null —
-        der Bezug, an dem eine Skala anfängt (und unter VTK, bis 06.09.2026,
-        stolperte der Renderer über eine leere Beschriftungsliste).
-        """
-        values = [0.0]
-        position = step
-        while position <= half + EPS_GEOM:
-            values.extend((-position, position))
-            position += step
-        return values
-
-    for value in along(half_width):
-        marks.append(((value, -half_depth - BED_SCALE_GAP, 0.0), f"{value:.0f}"))
-    for value in along(half_depth):
-        marks.append(((-half_width - BED_SCALE_GAP, value, 0.0), f"{value:.0f}"))
-    return marks
 
 
 #: Wie weit die Eckwinkel an der Oberkante des Bauraums in die Kante
@@ -8873,7 +8824,8 @@ class Viewport(QWidget):
         # Qt-Hauptthread, für ein Bild, das sich nicht unterscheidet.
         #
         # Der Renderer steht mit im Tupel, weil ein Austausch (Tests, ein neu
-        # aufgebautes Fenster) dieselben Aktoren woanders braucht.
+        # aufgebautes Fenster) dieselben Aktoren woanders braucht. Die
+        # Anzeigeeinheit, weil die Maßzahlen in ihr stehen (FD-92).
         built = (
             self.renderer,
             width,
@@ -8883,6 +8835,7 @@ class Viewport(QWidget):
             self._bed_colour,
             self._bed_surface,
             self._bed_grid_colour,
+            display_unit(),
         )
         if built != self._bed_built:
             for actor in self._frame_actors:
@@ -10634,6 +10587,10 @@ class Viewport(QWidget):
         Szene: Ein Befund gehört zu **einem** Körper, und wie weit man von ihm
         weg sein muss, hängt an dessen Größe und nicht an der des größten Teils
         auf dem Bett.
+
+        **Orthografisch ist der Abstand der Maßstab** (FD-111): Dort ändert die
+        Lage der Kamera die Bildgröße nicht, und die Stelle stand mittig, aber so
+        winzig oder so formatfüllend wie der Zoom davor.
         """
         if self.renderer is None:
             return
@@ -10657,6 +10614,7 @@ class Viewport(QWidget):
                 pose.view_up,
             )
         )
+        self._fit_parallel_scale(reach)
         # Nah heran heißt: die Nahebene neu legen, sonst schneidet sie ins
         # Material — und der Schatten gehört zur neuen Blickrichtung. Die
         # Meldung geht vor dem Bild hinaus (``kamera.md``): Wer sie hört,
@@ -14372,8 +14330,11 @@ class Viewport(QWidget):
         daneben arbeiten: Die Beschriftungen entstehen in ``show_scene``, und
         das Ergebnis liegt hier. Ohne den Anstoß stünde am Merkmal weiter das
         Maß in der alten Einheit — bis irgendwann etwas anderes ein Neuzeichnen
-        auslöst.
+        auslöst. Die Maßzahlen am Bett ebenso; ``show_build_volume`` baut sie
+        nur neu, wenn die Einheit wirklich wechselte (FD-92).
         """
+        if self._profile is not None:
+            self.show_build_volume(self._profile)
         self.show_scene(self._scene_for_rebuild())
         # ``show_scene`` zeichnet die Maße nur im Leer-Zweig neu — nach einem
         # Einheitenwechsel stünden sie sonst in der alten Einheit da.
@@ -15023,8 +14984,18 @@ class Viewport(QWidget):
           stünde der neue genau da, wo der alte steht, und Abbau und Aufbau
           kosteten sechs Renderer-Objekte je Kamerageste (gemessen 5,7 ms von
           22 je ``redraw``).
+
+        **An einer Öffnung beginnen die Pfeile hinter den Langlochknöpfen**
+        (FD-70): Der Ansatzpunkt liegt in der Mündung, und Pfeile ab dort
+        deckten die gewählte Bohrung samt Rand zu. Die Nabe misst der Griff der
+        Knöpfe (``SlotHandle.clearance``); ohne Knöpfe bleibt sie leer.
         """
         grip = self._placement_grip
+        clear = 0.0
+        if item is not None and self._slot_handle is not None:
+            knobs_at, knobs_reach = self._slot_handle.clearance
+            apart = math.dist(tuple(item.matrix()[:3, 3]), knobs_at)
+            clear = GRIP_HUB_MARGIN * (knobs_reach + apart) if apart < knobs_reach else 0.0
         if (
             grip is not None
             and item is not None
@@ -15037,6 +15008,7 @@ class Viewport(QWidget):
                         item,
                         rotation=rotation,
                         scale=self._gizmo_scale_for(item, item.matrix()[:3, 3]),
+                        clear=clear,
                     )
                 )
             )
@@ -15065,6 +15037,7 @@ class Viewport(QWidget):
             line_radius=GIZMO_LINE_RADIUS,
             release_callback=self._on_placement_grip_released,
             rotation=rotation,
+            clear=clear,
         )
         if was is None:
             # Der Griff der Auswahl ist weg — die Langlochknöpfe kommen
@@ -15072,6 +15045,10 @@ class Viewport(QWidget):
             # Nur beim ersten Griff: Der Fluss hängt ihn bei jedem Zeichnen
             # neu an, und die Knöpfe sitzen am Merkmal, nicht am Werkzeug.
             self.set_gizmo(self._gizmo_wanted)
+            if self._slot_handle is not None:
+                # Erst jetzt stehen die Knöpfe; ihre Nabe gilt schon für dieses
+                # Bild, nicht erst für das nächste Zeichnen des Flusses.
+                self.grip_placement(item, rotation=rotation)
 
     def _on_placement_grip_released(self, matrix: Any) -> None:
         """Ein Zug am Werkzeugkörper endet als Stelle, nicht als Operation.

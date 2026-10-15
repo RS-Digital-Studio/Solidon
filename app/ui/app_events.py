@@ -5,7 +5,8 @@ die Navigationstasten (:mod:`app.ui.shortcut_schemes`), die Nutzungsuhr des
 Fragebogens (:mod:`app.ui.survey`), der Dateiempfang unter macOS
 (``app.FileOpenListener``), der Vorher-Vergleich der Ansicht
 (:mod:`app.ui.viewport`), die Absage der Löschtaste und die nichtmodalen
-Dialoge, die über dem Hauptfenster bleiben (:mod:`app.ui.main_window`), und der
+Dialoge, die über dem Hauptfenster bleiben (:mod:`app.ui.main_window`), die
+Quittung über der Ansicht, solange sie gilt (:mod:`app.ui.action_notice`), und der
 Hauptknopf, dem kein Nebenknopf mit dem
 Fokus den Akzent nimmt, während Enter dem per Tastatur gewählten Knopf gehört
 (:mod:`app.ui.style`), hören je auf ein paar

@@ -46,6 +46,11 @@ ARROW_SHARE = 1.15
 RING_SHARE = 1.6
 #: Spitze und Schaft im Maß der Pfeillänge (PyVista: ``tip_radius=0.05``).
 TIP_RADIUS_SHARE = 0.05
+#: Der Anteil der Spitze an der vollen Pfeillänge (``shapes.arrow``).
+TIP_SHARE = 0.35
+#: Wie viel einer Pfeillänge eine freie Nabe (``clear``) höchstens nimmt: Der
+#: Rest mit voller Spitze bleibt ein Pfeil, den man trifft.
+MOST_CLEARED_SHARE = 0.6
 #: Ringbreite in Bildpunkten. PyVista zeichnete Röhren in Weltmaß; Linien
 #: in Bildpunkten bleiben bei jedem Zoom greifbar.
 RING_WIDTH = 4.0
@@ -155,6 +160,11 @@ class Gizmo:
     ``interact_callback`` jeden Zwischenstand und darf eine berichtigte
     Matrix zurückgeben (der Magnet auf die Raste, §18.11) — die wird dann
     gesetzt, nicht die rohe.
+
+    ``clear`` hält um den Ursprung eine Nabe frei: Die Pfeile beginnen erst
+    dort, Spitze und Reichweite bleiben. An einer gewählten Bohrung liegt der
+    Ursprung in ihrer Öffnung, und Pfeile ab der Mitte deckten genau das Loch
+    zu, das man bearbeitet (FD-70). Der Zug rechnet unverändert vom Ursprung.
     """
 
     def __init__(
@@ -170,6 +180,7 @@ class Gizmo:
         arrows: Sequence[int] = (0, 1, 2),
         release_callback: Callable[[np.ndarray], None] | None = None,
         interact_callback: Callable[[np.ndarray], np.ndarray | None] | None = None,
+        clear: float = 0.0,
     ) -> None:
         self._renderer = renderer
         self.target = target
@@ -187,6 +198,7 @@ class Gizmo:
         self._arrow_length = self._length * scale * ARROW_SHARE
         self._ring_radius = self._length * scale * RING_SHARE
         self._line_radius = line_radius * self._arrow_length
+        self._clear = float(clear)
         # Nach Achse, nicht nach Position: Ohne Pfeil an Achse 0 und 1 bleibt
         # der Pfeil an Achse 2 blau und zieht entlang Achse 2.
         self._arrows: dict[int, Item] = {}
@@ -202,14 +214,18 @@ class Gizmo:
     # --- Aufbau --------------------------------------------------------------------
 
     def _build(self) -> None:
+        # Die freie Nabe kürzt den Schaft von innen; die Spitze behält ihr Maß.
+        freed = min(max(self._clear, 0.0), MOST_CLEARED_SHARE * self._arrow_length)
+        drawn = self._arrow_length - freed
         for index in self._arrow_axes:
             colour = AXIS_COLOURS[index]
             vertices, faces = shapes.arrow(
-                self._origin,
+                self._origin + self._axes[index] * freed,
                 self._axes[index],
-                self._arrow_length,
+                drawn,
                 shaft_radius=self._line_radius,
                 tip_radius=TIP_RADIUS_SHARE * self._arrow_length,
+                tip_share=TIP_SHARE * self._arrow_length / drawn if drawn > EPS_GEOM else TIP_SHARE,
             )
             self._arrows[index] = self._renderer.add_surface(
                 vertices,
@@ -256,7 +272,13 @@ class Gizmo:
         return self.pressing and self._dragged
 
     def fits(
-        self, target: Item, *, rotation: bool, scale: float, arrows: Sequence[int] = (0, 1, 2)
+        self,
+        target: Item,
+        *,
+        rotation: bool,
+        scale: float,
+        arrows: Sequence[int] = (0, 1, 2),
+        clear: float = 0.0,
     ) -> bool:
         """Ob dieser Griff für ``target`` so gebaut ist, wie er jetzt gebraucht würde.
 
@@ -271,12 +293,16 @@ class Gizmo:
         Perspektive ändert schon eine Drehung der Kamera den Abstand zum
         Ziel um Bruchteile — ein Pfeil, der um ein Hundertstel zu lang ist,
         sieht wie derselbe Pfeil aus, ein neu gebauter kostet sechs Objekte.
+        Die freie Nabe (``clear``) gilt auf dasselbe Hundertstel der Pfeillänge.
         """
         return (
             target is self.target
             and rotation == self._rotation
             and tuple(sorted({int(index) for index in arrows})) == self._arrow_axes
             and math.isclose(scale, self._scale, rel_tol=SCALE_TOLERANCE, abs_tol=0.0)
+            and math.isclose(
+                clear, self._clear, rel_tol=0.0, abs_tol=SCALE_TOLERANCE * self._arrow_length
+            )
             and np.array_equal(self._cached, target.matrix())
         )
 

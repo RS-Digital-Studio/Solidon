@@ -52,6 +52,10 @@ it into `website/version.json`.
 - A screen reader now reads the name and explanation of every number field in a dialog.
 - After an action in the *Report*, the report stays in front, and Ctrl+Z takes it back straight away. Until now the *Selection* tab jumped to the front.
 - Bed and adhesion messages use the chosen unit. Switching mm/in keeps the selected finding, open details, tab and body expansion state.
+- The numbers along the print bed follow the chosen unit and name it. Version 0.6.0 showed millimetres there even when inches were set.
+- In *Orthographic* view, clicking a finding shows its location at a suitable size. Until now the previous zoom stayed.
+- Clicking a finding without a location of its own shows the whole body, and an opened project fits entirely in the view.
+- A selected hole stays visible, rim included. The pull knobs sit outside the rim, and the arrows start beyond them.
 - Ctrl+Z and Ctrl+Y also work when the cursor sits in an empty field, such as the search field. If you typed there, your typing is undone first.
 - Without activation, actions that change something in the *Report*, *Selection* tab, context menus and filament choice are greyed out with the reason. The refusal used to come after the click.
 - Without activation, *Create parameter …*, *Move*, *Split*, the history keys and the dimensions in the view are greyed out too. Every reason names the way, such as *Help → Unlock Solidon …*.
@@ -66,6 +70,14 @@ it into `website/version.json`.
 - The selection card follows content and font, preserving text and action columns. Detached tabs keep their size. When a feature edit is offered, “Apply” is the primary action.
 - Counterparts ask for pair and size first and explain both halves. Shape and fit are under “More settings”. The initial dialog height fits its content.
 - After a preview is refused, the next preview's text remains fully readable.
+- The status line with material and print time now says “since the last step” only for what a step changed. While the slicer profile values are still being read, it says “provisional”.
+- Material and print time always show in full in the status bar. When the bar is full, the message beside them is shortened, and its full sentence is in the tooltip.
+- The header shortens the printer name only when the row is full. Project name and dimensions stand together on the left, the printer on the right next to *Print settings …*.
+- If *Split automatically* finds no cut, the status line says why. Until now it then reported that the part already fits on the bed.
+- The short confirmation after an action stands beside the cards instead of over them, for example beside the report. The next step clears it and the status line, including an old “Undone”.
+- On a finding of a generated model, *Generate again* opens the generator with its description and the next seed.
+- When the analysis map refuses a model as too large, the triangle counts are shown in groups of three, such as 2 103 472.
+- When the chain stops, a function that would add a step behind it no longer opens a dialog with a greyed-out button. The stop and the way on are shown right away.
 
 ### Printing and slicer handover
 

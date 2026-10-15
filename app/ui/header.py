@@ -210,7 +210,13 @@ class _EphemeralLabel(QLabel):
         self._display = ""
         self._tail_words = tail_words
         self._protected_end = protected_end
-        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        # **Nach Inhalt bemessen, gekürzt erst bei voller Zeile** (FD-91):
+        # Unter ``Ignored`` teilte das Gitter die Breite nach festen Anteilen,
+        # und bei 1920 Punkten stand „Elegoo …rbon 2 · FDM“ neben einer breiten
+        # freien Fläche hinter kurzen Maßen. Das Wunschmaß ist der ganze Text,
+        # das Mindestmaß das geschützte Ende (:meth:`minimumSizeHint`) — in der
+        # Werkzeugleiste zählt ohnehin das Maß der Kopfzeile selbst.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         # Konstruktor und späteres Setzen laufen bewusst durch denselben Weg:
         # Volltext, Hilfe und sichtbare Kürzung dürfen nie auseinanderlaufen.
         self.setText(text)
@@ -243,6 +249,21 @@ class _EphemeralLabel(QLabel):
     def full_text(self) -> str:
         """Was dastünde, wenn der Platz reichte — für Tests und Vorleser."""
         return self._full
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Der ganze Text, nicht seine gerade gezeigte Kürzung."""
+        margins = self.contentsMargins()
+        width = (
+            self.fontMetrics().horizontalAdvance(self._display)
+            + margins.left()
+            + margins.right()
+            + 2 * self.margin()
+        )
+        return QSize(width, super().sizeHint().height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Das geschützte Ende (``setMinimumWidth``), nicht die volle Textbreite."""
+        return QSize(self.minimumWidth(), super().minimumSizeHint().height())
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         super().resizeEvent(event)
@@ -336,7 +357,10 @@ class HeaderBar(QWidget):
         set_level(self.bounds, "caption")
 
         self.plates = BarComboBox(self)
-        self.plates.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        # Nach Inhalt wie die Angaben daneben: Sein Mindestmaß trägt den
+        # längsten Eintrag (:meth:`show_plates`), und eine Spalte ohne
+        # Dehnung gab einem ``Ignored``-Wähler keine Breite (RM-158).
+        self.plates.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.plates.setAccessibleName(tr("Druckplatte"))
         self.plates.setToolTip(tr("Zeigt nur die Objekte einer Platte."))
         self.plates.currentIndexChanged.connect(self._on_plate)
@@ -364,7 +388,9 @@ class HeaderBar(QWidget):
         printer_layout.setSpacing(TIGHT)
         printer_layout.addWidget(self.printer, 1)
         printer_layout.addWidget(self.printer_button)
-        self.printer_control.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.printer_control.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+        )
         # **Kein Filament als Angabe, ein Knopf zur Liste** (RM-556). Eine
         # einzelne Angabe war hier falsch, sobald mehrere Körper verschiedene
         # Filamente tragen: „2 Filamente" beantwortet keine Frage (Robert,
@@ -440,10 +466,16 @@ class HeaderBar(QWidget):
         return (self._filament_words if words else self._filament_sign) + TIGHT
 
     def _fit_filament_words(self, width: int) -> None:
-        """Das Wort am Knopf nur einzeilig und nur mit Platz über dem Wunschmaß."""
+        """Das Wort am Knopf nur einzeilig und nur mit Platz über dem Wunschmaß.
+
+        Und erst, wenn die Angaben daneben ganz dastehen (FD-91): Das Wort ist
+        das Letzte, was in der Zeile Platz bekommt.
+        """
         extra = self._filament_width(words=True) - self._filament_width(words=False)
         room = not self._compact and width >= max(
-            self._wide_width(words=True), self.sizeHint().width() + extra
+            self._wide_width(words=True),
+            self.sizeHint().width() + extra,
+            self._content_width(words=True),
         )
         wanted = (
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
@@ -452,6 +484,19 @@ class HeaderBar(QWidget):
         )
         if self.filament_button.toolButtonStyle() != wanted:
             self.filament_button.setToolButtonStyle(wanted)
+
+    def _content_width(self, *, words: bool) -> int:
+        """Die Breite, in der jede Angabe einzeilig ungekürzt dasteht (FD-91)."""
+        widgets: list[QWidget] = [self.title, self.bounds]
+        if not self.plates.isHidden():
+            widgets.append(self.plates)
+        widgets.extend((self._divider, self.printer_control))
+        return (
+            sum(widget.sizeHint().width() for widget in widgets)
+            + self._filament_width(words=words)
+            + TIGHT * len(widgets)
+            + TIGHT * 2
+        )
 
     def _compact_width(self) -> int:
         """Breite der zweizeiligen Anordnung: Angaben oben, Filter unten."""
@@ -529,8 +574,6 @@ class HeaderBar(QWidget):
             self._layout.addWidget(self.filament_button, 0, 3)
             self.filament_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
             self._layout.addWidget(self.plates, 1, 0, 1, 4)
-            for column, stretch in enumerate((2, 3, 3)):
-                self._layout.setColumnStretch(column, stretch)
             self._divider.hide()
         else:
             self._layout.addWidget(self.title, 0, 0)
@@ -539,65 +582,20 @@ class HeaderBar(QWidget):
             self._layout.addWidget(self._divider, 0, 4)
             self._layout.addWidget(self.printer_control, 0, 5)
             self._layout.addWidget(self.filament_button, 0, 6)
-            for column, stretch in (
-                (0, 2),
-                (1, 3),
-                (5, 3),
-            ):
-                self._layout.setColumnStretch(column, stretch)
             self._divider.show()
+        # **Die freie Fläche bekommt eine leere Spalte, keine Angabe** (FD-91).
+        # Hier standen feste Anteile 2 : 3 : 3 für Name, Maße und Drucker, und
+        # ein ``QGridLayout`` verteilt eine gedehnte Spalte nach ihrem Anteil,
+        # nicht nach ihrem Inhalt: Kurze Maße bekamen 362 Punkte, der Drucker
+        # „Elegoo …rbon 2 · FDM“. Jetzt bekommt jede Angabe ihr Wunschmaß, und
+        # was übrig bleibt, nimmt die Lücke — breit zwischen Projekt links und
+        # Zustand rechts, kompakt am Ende der ersten Zeile. Wird es eng, gibt
+        # jede Angabe gleich viel her, bis zu ihrem geschützten Ende.
+        self._layout.setColumnStretch(4 if compact else 2, 1)
         self._compact = compact
-        self._stretch_the_plate_column()
-        self._stretch_the_bounds_column()
         self._layout.invalidate()
         self._layout.activate()
         self.updateGeometry()
-
-    def _stretch_the_plate_column(self) -> None:
-        """Die Spalte des Plattenwählers dehnt sich genau dann, wenn er dasteht.
-
-        **RM-158, und die Ursache lag im Zeitpunkt.** Der Wähler trägt die
-        Größenrichtlinie ``Ignored``, und ein ``QGridLayout`` rechnet für
-        eine Spalte **ohne** Dehnung dann mit null Breite — auch wenn das
-        Widget darin ein Mindestmaß hat (nachgestellt an vier Beschriftungen
-        in einem Gitter: die Spalte wird 0 breit, der Wähler 97, und der
-        Nachbar beginnt sechs Bildpunkte hinter seinem Anfang). Die Dehnung
-        stand hier bis zum 11.09.2026 nur, wenn der Wähler beim Anordnen
-        gerade **nicht** versteckt war — und die Anwendung ordnet zuerst
-        kompakt (das Fenster ist beim Bau 1280 breit), dann breit mit
-        verstecktem Wähler, und zeigt ihn erst, wenn das Projekt seine
-        Platten hat. In Roberts Fenster lag „Alle Platten" damit über
-        „Elegoo Centauri Carbon 2", beide an derselben x-Stelle. Eine Sonde,
-        die den Wähler beim Bau nicht versteckt vorfand, sah nichts davon.
-
-        Deshalb an einer Stelle, gerufen vom Anordnen **und** vom Zeigen: Die
-        Dehnung folgt der Sichtbarkeit, nicht dem Aufbau. Kompakt liegt der
-        Wähler in der zweiten Zeile über alle Spalten, dort bleibt die Spalte
-        ohne eigene Dehnung.
-        """
-        if not self._layout.count():
-            return
-        wanted = 0 if self._compact or self.plates.isHidden() else 1
-        # Nur bei einer Änderung: ``setColumnStretch`` entwertet das Layout
-        # auch für denselben Wert, und ein freistehendes Fenster nimmt beim
-        # nächsten Durchlauf sein Wunschmaß statt der gesetzten Breite.
-        if self._layout.columnStretch(3) != wanted:
-            self._layout.setColumnStretch(3, wanted)
-
-    def _stretch_the_bounds_column(self) -> None:
-        """Die Spalte der Maße dehnt sich nur, wenn dort Maße stehen.
-
-        Ohne Körper ist die Angabe leer und nahm trotzdem drei Teile der
-        Dehnung: Bei 1600 Bildpunkten mit dem Suchfeld in der Leiste (RM-506)
-        stand dort eine leere Fläche von 211 Bildpunkten, und daneben las man
-        „Allge…0 mm · FDM“. Wie beim Plattenwähler rechnet das Gitter eine
-        Spalte ohne Dehnung unter ``Ignored`` mit null Breite.
-        """
-        if not self._layout.count():
-            return
-        wanted = 3 if self.bounds.full_text() else 0
-        if self._layout.columnStretch(1) != wanted:
-            self._layout.setColumnStretch(1, wanted)
 
     def _reflow(self) -> None:
         """Zieht nach, wenn ein neuer Text sein semantisches Minimum ändert."""
@@ -654,7 +652,6 @@ class HeaderBar(QWidget):
 
         many = plates > 1
         self.plates.setVisible(many)
-        self._stretch_the_plate_column()
         self._reflow()
         # **Gemeldet wird jede Änderung, nicht nur der Sonderfall „nur noch
         # eine Platte".** Fällt die Zahl auf genau die betrachtete Nummer,
@@ -681,7 +678,6 @@ class HeaderBar(QWidget):
         """
         self.title.setText(project_name(name))
         self.bounds.setText(bounds_text(result, unit))
-        self._stretch_the_bounds_column()
         self._reflow()
 
     def show_profile(self, profile: Profile, result: EvaluationResult | None = None) -> None:

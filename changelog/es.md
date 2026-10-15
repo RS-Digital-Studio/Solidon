@@ -53,6 +53,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un lector de pantalla lee el nombre y la explicación de cada campo numérico de un diálogo.
 - Tras una acción en el *Informe de comprobación*, el informe sigue delante y Ctrl+Z la deshace al momento. Hasta ahora saltaba al frente la pestaña *Selección*.
 - Los avisos de cama y adhesión usan la unidad elegida. Al cambiar mm/pulgadas se conservan aviso seleccionado, detalles abiertos, pestaña y estado desplegado de los cuerpos.
+- Los números a lo largo de la cama siguen la unidad elegida y la indican. La versión 0.6.0 mostraba milímetros aunque se hubieran elegido pulgadas.
+- En la vista *Ortográfica*, un clic en un aviso muestra el lugar a un tamaño adecuado. Hasta ahora se mantenía el zoom anterior.
+- Un clic en un aviso sin lugar propio muestra el cuerpo entero, y un proyecto abierto se ve completo.
+- Un taladro seleccionado se ve entero, con su borde. Los tiradores quedan fuera del borde y las flechas empiezan detrás de ellos.
 - Ctrl+Z y Ctrl+Y funcionan también con el cursor en un campo vacío, por ejemplo en el campo de búsqueda. Si escribió algo allí, primero se deshace lo escrito.
 - Sin activación, las acciones que cambian algo en el *Informe de comprobación*, *Selección*, los menús contextuales y el filamento salen en gris con el motivo. Antes el rechazo llegaba tras el clic.
 - Sin activación, también *Crear parámetro …*, *Mover*, *Dividir*, las teclas del historial y las medidas en la vista salen en gris. Cada motivo indica el camino, como *Ayuda → Desbloquear Solidon …*.
@@ -67,6 +71,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La tarjeta de selección sigue contenido y letra, conservando texto y columnas. Las pestañas separadas mantienen su tamaño. Si se ofrece editar una característica, «Aplicar» es la acción principal.
 - Los elementos correspondientes piden par y tamaño y explican ambas mitades. Forma y ajuste están en «Más ajustes». La altura inicial del diálogo se adapta al contenido.
 - Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
+- La línea con material y tiempo de impresión solo indica «desde el último paso» lo que cambió un paso. Mientras todavía se leen los valores del perfil de slicer, pone «provisional».
+- El material y el tiempo de impresión se ven siempre completos en la barra de estado. Si la barra está llena, se acorta el mensaje de al lado, y la frase completa aparece en la ayuda emergente.
+- La barra superior solo acorta el nombre de la impresora si la fila está llena. Proyecto y medidas quedan a la izquierda, la impresora a la derecha junto a *Ajustes de impresión …*.
+- Si *Dividir automáticamente* no encuentra un corte, la línea de estado indica el motivo. Hasta ahora decía entonces que la pieza ya cabía en la placa.
+- La breve confirmación tras una acción aparece junto a las tarjetas, no encima, por ejemplo junto al informe. El siguiente paso la retira con la línea de estado, también un «Deshecho» antiguo.
+- En un aviso de un modelo generado, *Volver a generar* abre el generador con su descripción y la siguiente semilla.
+- Cuando el mapa de análisis rechaza un modelo demasiado grande, el número de triángulos aparece en grupos de tres, como 2 103 472.
+- Cuando la cadena se detiene, una función que añadiría un paso detrás ya no abre un diálogo con el botón en gris. La parada y el camino a seguir aparecen enseguida.
 
 ### Imprimir y entregar al slicer
 

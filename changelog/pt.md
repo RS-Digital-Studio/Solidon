@@ -52,6 +52,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um leitor de ecrã lê o nome e a explicação de cada campo numérico de uma caixa de diálogo.
 - Depois de uma ação no *Relatório de verificação*, o relatório fica à frente e Ctrl+Z desfá-la logo. Até agora, o separador *Seleção* passava para a frente.
 - Os avisos de plataforma e adesão usam a unidade escolhida. Mudar mm/polegadas mantém a observação escolhida, detalhes abertos, separador e estado expandido dos corpos.
+- Os números ao longo da plataforma seguem a unidade escolhida e indicam-na. A versão 0.6.0 mostrava milímetros mesmo com polegadas definidas.
+- Na vista *Ortográfica*, um clique numa observação mostra o local num tamanho adequado. Até agora ficava o zoom anterior.
+- Um clique numa observação sem local próprio mostra o corpo inteiro, e um projeto aberto fica todo à vista.
+- Um furo selecionado fica visível, com a borda. As pegas ficam por fora da borda e as setas começam depois delas.
 - Ctrl+Z e Ctrl+Y funcionam também com o cursor num campo vazio, por exemplo no campo de pesquisa. Se escreveu algo ali, primeiro é desfeito o que escreveu.
 - Sem ativação, as ações que alteram algo em *Relatório de verificação*, *Seleção*, menus de contexto e filamento ficam a cinzento com o motivo. Antes, a recusa surgia depois do clique.
 - Sem ativação, também *Criar parâmetro …*, *Mover*, *Dividir*, as teclas do histórico e as medidas na vista ficam a cinzento. Cada motivo indica o caminho, como *Ajuda → Desbloquear o Solidon …*.
@@ -66,6 +70,14 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O painel de seleção segue conteúdo e letra, mantendo texto e colunas. Os separadores destacados conservam o tamanho. Se houver uma alteração proposta, «Aplicar» é a ação principal.
 - Os elementos correspondentes pedem par e tamanho e explicam ambas as metades. Forma e ajuste ficam em «Mais definições». A altura inicial do diálogo adapta-se ao conteúdo.
 - Após a recusa de uma pré-visualização, os textos da seguinte continuam totalmente legíveis.
+- A linha com material e duração da impressão só indica «desde o último passo» o que um passo alterou. Enquanto os valores do perfil de slicer ainda estão a ser lidos, mostra «provisório».
+- O material e a duração da impressão aparecem sempre por inteiro na barra de estado. Se a barra estiver cheia, a mensagem ao lado encurta-se, e a frase completa fica na dica.
+- O cabeçalho só encurta o nome da impressora quando a linha está cheia. O nome do projeto e as medidas ficam juntos à esquerda, a impressora à direita ao lado de *Definições de impressão …*.
+- Se *Dividir automaticamente* não encontrar um corte, a linha de estado diz porquê. Até agora dizia então que a peça já cabia na mesa.
+- A breve confirmação após uma ação aparece ao lado dos cartões, não por cima, por exemplo ao lado do relatório. O passo seguinte retira-a com a linha de estado, também um «Anulado» antigo.
+- Numa observação de um modelo gerado, *Gerar de novo* abre o gerador com a sua descrição e a semente seguinte.
+- Quando o mapa de análise recusa um modelo demasiado grande, o número de triângulos aparece em grupos de três, como 2 103 472.
+- Quando a cadeia para, uma função que acrescentaria um passo depois já não abre um diálogo com o botão cinzento. A paragem e o caminho a seguir aparecem logo.
 
 ### Imprimir e entregar ao slicer
 

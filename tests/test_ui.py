@@ -12658,6 +12658,12 @@ def test_the_catalog_grid_never_scrolls_sideways(qt_app: QApplication) -> None:
 
 def test_a_fitting_body_gets_the_same_passive_reply_at_the_action_and_in_status(window):
     """Der echte Menüweg bleibt ohne neue Operation und quittiert im Blickfeld."""
+    # Die Blase steht nur, wo über dem Bild Platz ist (FD-108): ein gezeigtes
+    # Fenster in Kundengröße, nicht die 640 mal 480 eines nie gezeigten.
+    window.resize(1600, 900)
+    window.show()
+    window._show_start_screen(False)
+    QApplication.processEvents()
     assert window.session.apply("Quader", [OperationDraft(op="create_box")])
     assert window.session.wait_for_idle(60_000)
     count = len(window.session.project.document.ops)
@@ -12677,6 +12683,12 @@ def test_a_fitting_body_gets_the_same_passive_reply_at_the_action_and_in_status(
 
 def test_evaluation_cancellation_replaces_the_action_reply_and_its_timer(window):
     """Das echte Sitzungssignal ersetzt eine alte Quittung an beiden sichtbaren Orten."""
+    # Die Blase steht nur, wo über dem Bild Platz ist (FD-108): ein gezeigtes
+    # Fenster in Kundengröße, nicht die 640 mal 480 eines nie gezeigten.
+    window.resize(1600, 900)
+    window.show()
+    window._show_start_screen(False)
+    QApplication.processEvents()
     window.announce("Vorherige Meldung")
     notice = window._action_notice
     # Ein alter Ablauf darf der neuen, längeren Meldung keine Restzeit leihen.
@@ -12697,6 +12709,12 @@ def test_evaluation_cancellation_replaces_the_action_reply_and_its_timer(window)
 
 def test_action_reply_survives_progress_and_replaces_its_previous_text(window):
     """Auslaufender Fortschritt überschreibt weder Karte noch Ergebnisquittung."""
+    # Die Blase steht nur, wo über dem Bild Platz ist (FD-108): ein gezeigtes
+    # Fenster in Kundengröße, nicht die 640 mal 480 eines nie gezeigten.
+    window.resize(1600, 900)
+    window.show()
+    window._show_start_screen(False)
+    QApplication.processEvents()
     window.announce("Erster Hinweis")
     notice = window._action_notice
     second = "<b>Lesbarer Klartext</b> " + "Längerer verständlicher Hinweis. " * 10
@@ -16591,7 +16609,9 @@ def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
     assert status == tr("Modell einfügen …"), "der Projektanfang löschte den Ladehinweis"
     expected = "" if starting_fresh else "Bereit"
     assert announcement == expected, "nur ein neues Dokument verwirft die vorige Quittung"
-    assert window._announcement == expected
+    # Der Import ist ein Schritt ohne eigene Quittung: Er nimmt die vorige mit,
+    # die Statuszeile folgt dem letzten Schritt (FD-162).
+    assert window._announcement == ""
     assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
 
 

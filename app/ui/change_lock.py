@@ -43,8 +43,11 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import activation
+from app.core.registry import REGISTRY
+from app.core.types import Document, OpId
 from app.i18n import tr
 from app.ui.dialogs import licence_lock_line
+from app.ui.labels import step_number
 
 if TYPE_CHECKING:
     from app.ui.panels import HistoryPanel
@@ -85,6 +88,31 @@ READING_ACTIONS: Final[frozenset[str]] = frozenset(
         "show_support_need",
         "stop_inserting",
         "try_key_again",
+    }
+)
+
+#: Handlungen, die auch hinter einem Halt gehen (§15.3, FD-104): Sie ändern
+#: einen vorhandenen Schritt oder setzen ihren Zug vor den angehaltenen — die
+#: Wege des Halts selbst (``Session.halt_in_the_way`` nimmt sie an). Jede andere
+#: ändernde Handlung legt einen Schritt hinten an, und der würde nicht
+#: gerechnet; sie steht dann grau mit dem Halt als Grund.
+CHAIN_WAYS: Final[frozenset[str]] = frozenset(
+    {
+        "change_creating_step",
+        "change_selection",
+        "change_step",
+        "correct_input",
+        "decimate_and_retry",
+        "leave_open",
+        "mesh_and_retry",
+        "recognize_fully",
+        "recount_and_retry",
+        "remesh_and_retry",
+        "repair_and_retry",
+        "repair_before_and_retry",
+        "sketch.pick_plane",
+        "split_and_retry",
+        "use_reachable",
     }
 )
 
@@ -153,9 +181,42 @@ def change_refusal() -> str:
     return "" if state.unlocked else licence_lock_line(state)
 
 
-def action_refusal(action_id: str) -> str:
-    """Warum diese Handlung eines Befunds oder Fehlers gerade nicht geht — oder leer."""
-    return "" if action_id in READING_ACTIONS else change_refusal()
+def action_refusal(action_id: str, *, halt: str = "") -> str:
+    """Warum diese Handlung eines Befunds oder Fehlers gerade nicht geht — oder leer.
+
+    ``halt`` ist der Satz des Halts (:func:`halt_line`), wenn die Kette anhält:
+    Eine Handlung, die einen Schritt hinten anlegt, geht dann nicht, und der
+    Satz nennt den Schritt und den Weg weiter (FD-104). Vor dem Klick, nicht
+    erst als Absage danach.
+    """
+    if action_id in READING_ACTIONS:
+        return ""
+    return change_refusal() or ("" if action_id in CHAIN_WAYS else halt)
+
+
+def halt_line(document: Document | None, stopped_at: OpId | None) -> str:
+    """Warum gerade kein neuer Schritt geht — die Kette hält an (§15.3) — oder leer.
+
+    Eine Quelle für Fensterbefehle (``MainWindow._halt_reason``) und
+    Befundhandlungen (:func:`action_refusal`): Schrittnummer und Titel wie im
+    Verlauf, und der Weg weiter steht im Prüfbericht.
+    """
+    if document is None or stopped_at is None:
+        return ""
+    step = next((entry for entry in document.ops if entry.id == stopped_at), None)
+    title = (
+        REGISTRY.get(step.op).title
+        if step is not None and REGISTRY.has(step.op)
+        else str(stopped_at)
+    )
+    return str(
+        tr(
+            "Die Kette hält an Schritt {number} ({step}) an — ein neuer Schritt dahinter "
+            "würde nicht gerechnet. Der Weg weiter steht im Prüfbericht.",
+            number=step_number(document, stopped_at),
+            step=title,
+        )
+    )
 
 
 def refused(say: Callable[[str], object]) -> bool:

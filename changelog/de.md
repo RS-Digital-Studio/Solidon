@@ -77,6 +77,10 @@ Nutzen da und sonst nichts.
 - Ein Bildschirmleser liest an jedem Zahlenfeld eines Dialogs Namen und Erklärung vor.
 - Nach einer Handlung im Prüfbericht bleibt der Bericht vorn, und Strg+Z nimmt sie gleich zurück. Bisher sprang der Reiter *Auswahl* nach vorn.
 - Hinweise zu Druckbett und Haftung nutzen die gewählte Einheit. Beim Wechsel mm/Zoll bleiben Befundauswahl, offene Details, Reiter und der Klappzustand der Körper erhalten.
+- Die Maßzahlen am Druckbett folgen der gewählten Einheit und nennen sie. In Version 0.6.0 standen dort auch bei Zoll Millimeter.
+- In der Ansicht *Orthografisch* zeigt ein Klick auf einen Befund die Stelle in passender Größe. Bisher blieb der Zoom davor stehen.
+- Ein Klick auf einen Befund ohne eigene Stelle zeigt den ganzen Körper, und ein geöffnetes Projekt steht ganz im Bild.
+- Eine gewählte Bohrung bleibt samt Rand sichtbar. Die Ziehknöpfe stehen außen am Rand, die Pfeile beginnen erst dahinter.
 - Strg+Z und Strg+Y wirken auch, wenn der Cursor in einem leeren Feld steht, etwa im Suchfeld. Wer dort getippt hat, nimmt zuerst sein Tippen zurück.
 - Ohne Freischaltung sind ändernde Handlungen in Prüfbericht, Reiter *Auswahl*, Kontextmenüs und Filamentwahl grau und nennen den Grund. Bisher kam die Absage erst nach dem Klick.
 - Ohne Freischaltung sind auch *Parameter anlegen …*, *Bewegen*, *Teilen*, die Tasten im Verlauf und die Maße im Bild grau. Jeder Grund nennt den Weg, etwa *Hilfe → Solidon freischalten …*.
@@ -91,6 +95,14 @@ Nutzen da und sonst nichts.
 - Die Auswahlkarte folgt Inhalt und Schrift; Text und Handlungsspalten bleiben erhalten. Freie Reiterfenster behalten ihre Größe. Bei angebotener Merkmaländerung ist „Übernehmen“ die Hauptaktion.
 - Gegenstücke fragen zuerst nach Paar und Größe; die Auswahl erklärt beide Hälften. Form und Passung stehen unter „Weitere Einstellungen“. Die Anfangshöhe passt zum Inhalt.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
+- Die Zahlenzeile mit Material und Druckdauer nennt „seit dem letzten Schritt“ nur noch, was ein Schritt geändert hat. Solange die Werte des Slicerprofils noch gelesen werden, steht „vorläufig“ daneben.
+- Material und Druckdauer stehen in der Statusleiste immer ganz da. Ist die Leiste voll, kürzt sich die Meldung daneben, ihr ganzer Satz steht in der Kurzhilfe.
+- Die Kopfzeile kürzt den Druckernamen erst, wenn die Zeile voll ist. Projektname und Maße stehen links beisammen, der Drucker rechts neben *Druckeinstellungen …*.
+- Findet *Automatisch teilen* keinen Schnitt, sagt die Statuszeile den Grund. Bisher meldete sie dann, das Teil passe bereits auf das Bett.
+- Die kurze Quittung nach einer Handlung steht neben den Karten statt darüber, etwa neben dem Prüfbericht. Der nächste Schritt nimmt sie samt Statuszeile mit, auch ein altes „Zurückgenommen“.
+- Am Befund eines erzeugten Modells öffnet *Neu erzeugen* den Generator mit dessen Beschreibung und dem nächsten Startwert.
+- Lehnt die Analysekarte ein zu großes Modell ab, stehen die Dreieckszahlen in Dreiergruppen, etwa 2 103 472.
+- Hält die Kette an, öffnet eine Funktion, die einen Schritt dahinter anlegen würde, keinen Dialog mit grauem Knopf mehr. Der Halt und sein Weg weiter stehen gleich da.
 
 ### Drucken und Übergabe an den Slicer
 

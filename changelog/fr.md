@@ -53,6 +53,10 @@ dans `website/version.json`.
 - Un lecteur d'écran lit le nom et l'explication de chaque champ numérique d'un dialogue.
 - Après une action dans le *Rapport de contrôle*, le rapport reste au premier plan, et Ctrl+Z l'annule aussitôt. Jusqu'ici, l'onglet *Sélection* passait devant.
 - Les avis de plateau et d’adhérence suivent l’unité choisie. Passer de mm à pouces conserve constat sélectionné, détails ouverts, onglet et état déplié des corps.
+- Les cotes au bord du plateau suivent l’unité choisie et l’indiquent. La version 0.6.0 y affichait des millimètres même en pouces.
+- En vue *Orthographique*, un clic sur un constat montre l’endroit à une taille adaptée. Jusqu’ici, le zoom précédent restait.
+- Un clic sur un constat sans emplacement propre montre le corps entier, et un projet ouvert tient entièrement dans la vue.
+- Un perçage sélectionné reste visible, bord compris. Les poignées se placent à l’extérieur du bord et les flèches commencent au-delà.
 - Ctrl+Z et Ctrl+Y fonctionnent aussi quand le curseur se trouve dans un champ vide, par exemple le champ de recherche. Si vous y avez tapé du texte, c'est d'abord la saisie qui est annulée.
 - Sans activation, les actions qui modifient le modèle sont grisées avec leur raison dans le *Rapport de contrôle*, *Sélection*, les menus contextuels et le filament. Le refus venait après le clic.
 - Sans activation, *Créer un paramètre …*, *Déplacer*, *Diviser*, les touches de l'historique et les cotes dans la vue sont grisés. Chaque raison indique la voie, comme *Aide → Déverrouiller Solidon …*.
@@ -67,6 +71,14 @@ dans `website/version.json`.
 - La carte de sélection suit contenu et police, gardant textes et colonnes. Les onglets détachés gardent leur taille. Si une modification est proposée, « Appliquer » est l’action principale.
 - Les contreparties demandent paire et taille et expliquent les deux moitiés. Forme et ajustement sont dans « Autres réglages ». La hauteur initiale du dialogue suit le contenu.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
+- La ligne de matière et de durée n'indique « depuis la dernière étape » que ce qu'une étape a changé. Tant que le profil de slicer est encore lu, elle affiche « provisoire ».
+- La matière et la durée d'impression s'affichent toujours en entier dans la barre d'état. Si la barre est pleine, le message à côté se raccourcit, et sa phrase complète figure dans l'infobulle.
+- L'en-tête ne raccourcit le nom de l'imprimante que lorsque la ligne est pleine. Le nom du projet et les dimensions restent ensemble à gauche, l'imprimante à droite à côté de *Réglages d'impression …*.
+- Si *Diviser automatiquement* ne trouve aucune coupe, la ligne d'état en donne la raison. Jusqu'ici, elle annonçait alors que la pièce tenait déjà sur le plateau.
+- La brève confirmation après une action s'affiche à côté des cartes, pas dessus, par exemple à côté du rapport. L'étape suivante l'efface avec la ligne d'état, même un ancien « Annulé ».
+- Sur un constat d'un modèle généré, *Générer de nouveau* ouvre le générateur avec sa description et la graine suivante.
+- Quand la carte d'analyse refuse un modèle trop grand, les nombres de triangles s'affichent par groupes de trois, par exemple 2 103 472.
+- Quand la chaîne s'arrête, une fonction qui ajouterait une étape derrière n'ouvre plus de dialogue au bouton grisé. L'arrêt et la suite à donner s'affichent tout de suite.
 
 ### Imprimer et transmettre au slicer
 
