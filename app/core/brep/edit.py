@@ -35,7 +35,7 @@ from app.core.brep.kernel import (
 from app.core.errors import (
     BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
-    CHANGE_SELECTION,
+    CHANGE_EDGES,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     GeometryError,
@@ -1952,7 +1952,7 @@ def _chamfer_sides_unknown() -> GeometryError:
             "An dieser Kante lassen sich die beiden Flächen der Fase nicht bestimmen. "
             "Wählen Sie gleiche Breiten oder eine andere Kante."
         ),
-        suggestions=(CORRECT_INPUT, CHANGE_SELECTION, CANCEL),
+        suggestions=(CORRECT_INPUT, CHANGE_EDGES, CANCEL),
     )
 
 

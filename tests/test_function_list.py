@@ -305,7 +305,10 @@ def test_the_finding_actions_come_from_the_kernel_and_the_table(rows: list[fl.Ro
     assert fl.ERROR_DIALOG_ACTIONS["save_elsewhere"] == "D1"
     assert set(fl.ERROR_DIALOG_ACTIONS.values()) <= set(fl.PACKAGES)
     by_id = _by_id(rows)
-    assert by_id["finding.action:change_selection"].start_scene == "halt"
+    # Kantenfehler bieten seit FD-123 andere Kanten (``change_step``) an; andere
+    # Objekte rät der Befund, dass ein Körper keine Farbe trägt.
+    assert by_id["finding.action:change_selection"].start_scene == "ohne_farbe.netz"
+    assert by_id["finding.action:change_step"].start_scene
     assert by_id["finding.action:correct_input"].start_scene == "halt"
     assert by_id["finding.action:use_reachable"].start_scene == "zu_fein.netz"
     assert by_id["finding.action:orient_for_print"].start_scene
