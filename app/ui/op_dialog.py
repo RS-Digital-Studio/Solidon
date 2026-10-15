@@ -407,7 +407,8 @@ class ValueField(QWidget):
         # Fokussiert wird das Drehfeld, nicht der Behälter: Es trägt den Namen
         # der Zeile (FD-12), den Satz gibt ``form_fields.explain`` dazu.
         self.spin.setAccessibleName(self.caption())
-        self.spin.setDecimals(0 if entry.kind == "int" else _decimals_for(entry, self._shown))
+        if entry.kind != "int":
+            self.spin.setDecimals(_decimals_for(entry, self._shown))
         self.spin.setMinimum(
             self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
         )

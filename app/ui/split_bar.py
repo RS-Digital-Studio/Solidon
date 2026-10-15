@@ -27,7 +27,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -35,6 +34,7 @@ from PySide6.QtWidgets import (
 from app.core.geom.pins import PIN_COUNT
 from app.core.geom.prepare_ops import CONNECTOR_SHAPES
 from app.i18n import tr
+from app.ui.grouped_spin import GroupedIntSpin
 from app.ui.labels import choice_label
 from app.ui.style import NORMAL, TIGHT, make_primary
 from app.ui.tool_strip import BarComboBox
@@ -101,7 +101,7 @@ class SplitBar(QWidget):
         )
         self.connect_halves.toggled.connect(self._follow_connection)
 
-        self.count = QSpinBox(self)
+        self.count = GroupedIntSpin(self)
         self.count.setRange(1, 6)
         self.count.setValue(PIN_COUNT)
         self.count.setToolTip(

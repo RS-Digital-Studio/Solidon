@@ -27,7 +27,6 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLabel,
     QProgressBar,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -42,6 +41,7 @@ from app.core.scene.variants import MAX_VARIANTS
 from app.core.types import Finding
 from app.i18n import tr
 from app.ui.dialogs import show_error
+from app.ui.grouped_spin import GroupedIntSpin
 from app.ui.labels import NumberSpin, localised_value
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.session import Session
@@ -136,7 +136,7 @@ class VariantsDialog(QDialog):
         self.step.setRange(-100.0, 100.0)
         self.step.setDecimals(3)
         self.step.setValue(0.05)
-        self.count = QSpinBox(self)
+        self.count = GroupedIntSpin(self)
         self.count.setRange(2, MAX_VARIANTS)
         self.count.setValue(4)
 
