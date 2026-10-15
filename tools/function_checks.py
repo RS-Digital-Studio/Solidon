@@ -566,7 +566,8 @@ class Context:
     frozen_texts: frozenset[str]
     #: Prüfpunkt 3: der Satz der groben Vorschau in einer Sprache.
     coarse_note: Callable[[str], str]
-    #: Prüfpunkt 11: Seite und Stelle im Handbuch, ``None`` ohne Stelle.
+    #: Prüfpunkt 11: Seite und Stelle im Handbuch, ``None`` ohne Stelle. Die
+    #: Zeile kommt mit ihrer Spezifikation (``spec``), die Fundstellen nennen kann.
     manual_place: Callable[[Mapping[str, Any]], str | None]
     #: Prüfpunkt 11: Website-Seiten, die die Funktion nennen.
     website_hits: Callable[[Mapping[str, Any]], tuple[str, ...]]
@@ -576,6 +577,9 @@ class Context:
     #: I3: die Ziele (``target``) der häufigsten Kundenziele. Nur an ihren
     #: Zeilen wird I3 gemessen; der Anteil steht in den Paketwerten.
     common_goal_targets: frozenset[str] = frozenset()
+    #: Prüfpunkt 11: was an den Fundstellen einer Zeilenspezifikation nicht
+    #: stimmt (``function_promises.reference_problems``) — leer, wenn alles trifft.
+    promise_problems: Callable[[Mapping[str, Any]], list[str]] = field(default=lambda spec: [])
 
 
 @dataclass(frozen=True)

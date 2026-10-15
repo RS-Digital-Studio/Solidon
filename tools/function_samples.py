@@ -688,6 +688,12 @@ BROKEN_SAMPLES: Final[tuple[BrokenSample, ...]] = (
         verdict=_verdict(point=11, image=None),
         reason="ohne Bild oder Stelle",
     ),
+    BrokenSample(
+        11,
+        "Spezifikation nennt eine Fundstelle, die es nicht gibt",
+        context={"promise_problems": lambda spec: ["Handbuchseite 'erfunden' gibt es nicht"]},
+        expect="nicht_pruefbar",
+    ),
     BrokenSample(12, "Verlauf gewachsen", change=_set("revise.0.history_after", 3)),
     BrokenSample(
         12, "Feldwert ungleich Parameter", change=_set("revise.1.fields", {"diameter": 6.0})

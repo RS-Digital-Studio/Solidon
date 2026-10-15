@@ -730,17 +730,37 @@ def _point_11(
     protocol: Mapping[str, Any], context: Context, criteria: Mapping[str, Outcome]
 ) -> Outcome:
     row = _row(protocol)
-    if row.get("kind", protocol.get("kind")) != "operation":
-        return Outcome(11, "B", "stufe_b", "Fundstellen urteilt Stufe B", {"kind": row.get("kind")})
-    place = context.manual_place(row)
-    hits = context.website_hits(row)
-    issues = [] if place else [Issue("Operation ohne Handbuchstelle", "mittel")]
+    spec = _spec(protocol)
+    operation = row.get("kind", protocol.get("kind")) == "operation"
+    # Was nicht im Register steht, findet Stufe A über die Fundstellen der
+    # Zeilenspezifikation (FD-150); nennt sie eine Stelle, die es nicht gibt,
+    # ist der Punkt nicht prüfbar, bis sie berichtigt ist.
+    wrong = context.promise_problems(spec)
+    if wrong:
+        return Outcome(
+            11, "A", "nicht_pruefbar", "Fundstelle der Spezifikation", reason="; ".join(wrong)
+        )
+    named = "manual" in spec or "website" in spec
+    if not operation and not named:
+        return Outcome(
+            11,
+            "B",
+            "stufe_b",
+            "Fundstellen urteilt Stufe B — die Spezifikation nennt keine",
+            {"kind": row.get("kind")},
+        )
+    located = {**row, "spec": spec}
+    place = context.manual_place(located)
+    hits = context.website_hits(located)
+    issues = [] if place or not operation else [Issue("Operation ohne Handbuchstelle", "mittel")]
+    notes = [] if place else ["die Spezifikation nennt keine Handbuchstelle"]
     return _result(
         11,
         issues,
         place or "ohne Handbuchstelle",
         {"manual": place, "website": list(hits)},
         judged=True,
+        notes=notes if not operation else [],
     )
 
 

@@ -290,3 +290,88 @@ def test_every_recognized_kind_must_be_hovered(recognized: list[str] | None, ver
             protocol["recognized_kinds"] = recognized
 
     assert _judged(change).criteria["I1"].verdict == verdict
+
+
+# --- FD-150: Fundstellen für Prüfpunkt 11 aus der Spezifikation und aus Bildtexten -----
+
+
+def _repository_promises() -> Any:
+    """Der Kontext der Gegenproben mit den echten Fundstellen von Handbuch und Website."""
+    from dataclasses import replace
+
+    from app.core.bootstrap import load_operations
+    from tools import function_promises, function_report
+
+    load_operations()
+    return replace(
+        sample_context(),
+        manual_place=function_report.manual_place,
+        website_hits=function_report._website_hits,
+        promise_problems=function_promises.reference_problems,
+    )
+
+
+def _window_command(spec_values: dict[str, Any]) -> Callable[[dict[str, Any]], None]:
+    def change(protocol: dict[str, Any]) -> None:
+        protocol["row"] = {
+            **protocol["row"],
+            "id": "Bearbeiten/Parameter anlegen …",
+            "kind": "fensterbefehl",
+            "target": "menu:menubar.edit.add_parameter",
+        }
+        protocol["kind"] = "fensterbefehl"
+        protocol["spec"] = {**protocol["spec"], **spec_values}
+
+    return change
+
+
+def test_a_row_outside_the_register_finds_its_places_through_the_spec() -> None:
+    """Abweichung 02: an *Parameter anlegen* lieferte Stufe A keine Fundstelle (FD-150)."""
+    protocol = copy.deepcopy(sample_protocol())
+    _window_command({"manual": "parameters", "website": ["funktionen.html#parametrisch"]})(protocol)
+    outcome = judge_case(protocol, _repository_promises()).points[11]
+    assert outcome.verdict == "stufe_b", outcome
+    assert outcome.measurement["manual"] == "parameters"
+    hits = outcome.measurement["website"]
+    assert "website/funktionen.html#parametrisch" in hits
+    assert len(hits) == 6, hits
+
+
+@pytest.mark.parametrize(
+    "spec_values",
+    [
+        {"manual": "erfunden"},
+        {"manual": "ref-holes#operation-erfunden"},
+        {"website": ["funktionen.html#erfunden"]},
+        {"website": ["index.html#anfang"]},
+    ],
+    ids=["seite", "sprungmarke", "abschnitt", "fremde_seite"],
+)
+def test_a_place_the_spec_names_must_exist(spec_values: dict[str, Any]) -> None:
+    """Eine Fundstelle, die es nicht gibt, macht P11 nicht prüfbar — nie erfüllt."""
+    protocol = copy.deepcopy(sample_protocol())
+    _window_command(spec_values)(protocol)
+    assert judge_case(protocol, _repository_promises()).points[11].verdict == "nicht_pruefbar"
+
+
+def test_without_places_a_window_command_stays_with_stage_b() -> None:
+    protocol = copy.deepcopy(sample_protocol())
+    _window_command({})(protocol)
+    outcome = judge_case(protocol, _repository_promises()).points[11]
+    assert outcome.verdict == "stufe_b" and "nennt keine" in outcome.summary
+
+
+def test_a_promise_in_a_picture_text_is_a_place(tmp_path: Any) -> None:
+    """``alt`` und ``title`` zählen: *Bohrung ändern* steht auf der Website im Bildtext (N8)."""
+    from tools import function_promises, function_report
+
+    page = tmp_path / "seite.html"
+    page.write_text(
+        '<p>Text</p><img alt="Die Gruppe &bdquo;Bohrung ändern&ldquo;"><a title="Senken">x</a>',
+        encoding="utf-8",
+    )
+    text = function_promises.page_text(page)
+    assert "bohrung ändern" in text and "senken" in text
+    _repository_promises()
+    hits = function_report._website_hits({"id": "resize_hole", "kind": "operation"})
+    assert "website/funktionen.html" in hits

@@ -132,7 +132,10 @@ Pakete mit demselben Laufordner), Zellen ohne Gegenurteil weist es aus.
 Funddatei und Vorhersage einhalten muss: *gut nach Fix* genau dort, wo ein
 behobener Fund an der Zelle steht (ein Prüfpunkt umfasst seine Kriterien), und
 V4 nur mit vor dem Klick gebundener Vorhersage. `report` prüft das, der
-Wächter über die versionierten Urteile nur ihre Form.
+Wächter über die versionierten Urteile nur ihre Form. `function_promises`
+findet die Fundstellen von Prüfpunkt 11 außerhalb des Registers über die
+Zeilenspezifikation (`manual`, `website`, die Übersetzungen an derselben Stelle
+der Gliederung) und liest Seiten samt Bildtexten und Titeln.
 
 #### Messflächen und nachträgliche Änderung
 

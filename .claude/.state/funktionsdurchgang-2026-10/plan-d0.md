@@ -215,6 +215,7 @@ In `app/core/guides.py`: `TARGET_PROPERTY = "guideTarget"`, `menubar_name(msgid,
 | `preconditions` | nein | ki, comfyui, slicer: vorhanden oder fehlt; licence: demo, gekauft, abgelaufen; printer: filament oder resin |
 | `not_applicable` | nein | `{prüfpunkt = grund}`, Grund aus der geschlossenen Liste |
 | `budget_s`, `budget_ref` | nein | nur mit §31-Beleg, sonst „kein Budget“ |
+| `manual`, `website` | ja für Prüfpunkt 11 außerhalb des Registers | Handbuchseite (`<seite>` oder `<ref-seite>#<anker>`) und Abschnitte der Funktionsseite (`["funktionen.html#<anker>"]`, die Übersetzungen an derselben Stelle); eine Stelle, die es nicht gibt, macht P11 nicht prüfbar (`tools/function_promises.py`) |
 
 ### 2.5 Szenenkatalog und Anforderung → Szene
 
@@ -390,7 +391,7 @@ Alle Gegenproben laufen ohne Fenster in `tests/test_function_report.py`. Sie spe
 | 8 Verständlich | A (V1–V3, V6 Handbuch), B (V4–V6, Gesamturteil) | `texts`, `fields`, Handbuchfenster geöffnet | Negativwort; Feld ohne eigenen Satz; B „gut“ trotz V1-Treffer |
 | 9 Sprachen und Darstellung | A (Textpassung in sechs Sprachen, Zoll), B (Regel 18 am Bild) | Sprachfälle: `texts` mit Bedarf und Platz; Zolllauf; Bilder auf Deutsch hell und in der längsten Übersetzung | Bedarf über Platz; „mm“ an einem Längenwert im Zolllauf |
 | 10 Tastatur | A | `tab_chain` per Tastendruck und `focusWidget()` mit `name` (wie ein Bildschirmleser liest), `class`, `mark`, `primary`; `names`, `focus_return`; Bildschirmleser wird als „ungeprüft“ vermerkt | Rücksprung in der Kette; doppelter Name; Klassenname als Name; Kette ohne Zielhandlung (Hauptknopf oder Ziel der Zeile); leere Kette ergibt „nicht gemessen“; Fokus kommt nicht zurück |
-| 11 Versprechen | A (Fundstellen), B (Inhalt) | `manual.help_for`, Treffer auf `website/funktionen.html` und `website/{en,es,fr,it,pt}/` | Operation ohne Handbuchstelle; B-Urteil ohne Bild oder Stelle wird abgewiesen |
+| 11 Versprechen | A (Fundstellen), B (Inhalt) | `manual.help_for`, Treffer auf `website/funktionen.html` und `website/{en,es,fr,it,pt}/` samt `alt` und `title`; außerhalb des Registers `spec.manual`, `spec.website` | Operation ohne Handbuchstelle; Fundstelle der Spezifikation, die es nicht gibt; B-Urteil ohne Bild oder Stelle wird abgewiesen |
 | 12 Nachträglich ändern | A | `menu:history.edit` und Doppelklick auf `history.row:<n>`; Felder = Parameter; Verlaufslänge gleich | Verlauf gewachsen; Feldwert ≠ Parameter |
 | 13 Auswahlstufen | A misst, B (gegen `grenzen.md`) | `matrix` über sechs Stufen | grau mit leerem Grund; angeboten ohne Wirkung |
 | 14 Abbruch | A | `langsam_2s`: *Abbrechen* sichtbar, Klick auf `progress.cancel`, Stand = vorher, wartendes Übernehmen verfällt | Abdruck nach Abbruch ≠ vorher; Szene unter 2 s ergibt „nicht prüfbar“, nie grün |

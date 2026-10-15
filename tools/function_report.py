@@ -35,7 +35,6 @@ import copy
 import datetime
 import functools
 import hashlib
-import html
 import json
 import re
 import tomllib
@@ -45,6 +44,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from app.ui.op_dialog import MAX_FRONT_FIELDS, USUAL_FRONT_SHARE
+from tools import function_promises as promises
 from tools.function_agreement import (
     Round,
     Share,
@@ -258,41 +258,23 @@ def _translated(msgid: str) -> Callable[[str], str]:
     return in_language
 
 
-@functools.cache
-def _manual_index() -> tuple[frozenset[str], dict[str, frozenset[str]]]:
-    """Seiten und Sprungmarken des Handbuchs, einmal erzeugt."""
-    from app.core import manual
-
-    keys = frozenset(page.key for page in manual.pages())
-    anchors = {
-        key: frozenset(anchor for anchor, _title in manual.reference_anchors(key))
-        for key in keys
-        if key.startswith(manual.REFERENCE_PAGE_PREFIX)
-    }
-    return keys, anchors
-
-
 def manual_place(row: Mapping[str, Any]) -> str | None:
-    """Seite und Stelle im Handbuch (``manual.help_for``) — nur, wenn es sie gibt."""
+    """Seite und Stelle im Handbuch — nur, wenn es sie gibt.
+
+    Was die Zeilenspezifikation nennt (``spec.manual``, FD-150), sonst die
+    Stelle einer Operation (``manual.help_for``).
+    """
     from app.core import manual
     from app.core.registry import REGISTRY
 
+    named = (row.get("spec") or {}).get("manual")
+    if named is not None:
+        return None if promises.manual_problem(named) else str(named)
     name = str(row.get("id", ""))
     if not REGISTRY.has(name):
         return None
     page, anchor = manual.help_for(name)
-    keys, anchors = _manual_index()
-    if page not in keys:
-        return None
-    if anchor and anchor.lstrip("#") not in anchors.get(page, frozenset()):
-        return None
-    return f"{page}{anchor}"
-
-
-@functools.cache
-def _website_text(path: Path) -> str:
-    raw = path.read_text(encoding="utf-8")
-    return html.unescape(re.sub(r"<[^>]+>", " ", raw)).lower()
+    return None if promises.manual_problem(f"{page}{anchor}") else f"{page}{anchor}"
 
 
 def _website_pages() -> dict[str, Path]:
@@ -308,10 +290,18 @@ def _website_pages() -> dict[str, Path]:
 
 
 def _website_hits(row: Mapping[str, Any]) -> tuple[str, ...]:
-    """Welche Funktionsseiten den Titel der Operation in ihrer Sprache nennen."""
+    """Welche Funktionsseiten die Funktion nennen.
+
+    Die Abschnitte, die die Zeilenspezifikation nennt (``spec.website``, in
+    jeder Sprache, FD-150), sonst die Seiten, die den Titel der Operation in
+    ihrer Sprache tragen — im Fließtext, in Bildtexten oder Titeln.
+    """
     from app.core.registry import REGISTRY
     from app.i18n import source_text
 
+    named = (row.get("spec") or {}).get("website")
+    if isinstance(named, list):
+        return tuple(promises.website_places(named)[0])
     name = str(row.get("id", ""))
     if not REGISTRY.has(name):
         return ()
@@ -319,7 +309,7 @@ def _website_hits(row: Mapping[str, Any]) -> tuple[str, ...]:
     hits = []
     for language, path in sorted(_website_pages().items()):
         said = _translated(title)(language).lower()
-        if said and said in _website_text(path):
+        if said and said in promises.page_text(path):
             hits.append(path.relative_to(ROOT).as_posix())
     return tuple(hits)
 
@@ -351,6 +341,7 @@ def repository_context() -> Context:
         manual_place=manual_place,
         website_hits=_website_hits,
         agent_place=agent_place,
+        promise_problems=promises.reference_problems,
         common_goal_targets=frozenset(read_common_goals().values()),
     )
 
