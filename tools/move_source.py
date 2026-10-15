@@ -28,6 +28,9 @@ from pathlib import PurePosixPath
 #: Die Bereiche, die das Werkzeug liest und umschreibt (wie der Auflöser).
 AREAS = ("app", "tools", "tests")
 
+#: Größte Zeilenzahl eines neuen Moduls und einer Komponente (Konzept 3.1, Regel 1; 4.5).
+LINE_LIMIT = 2000
+
 FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 DEFINITIONS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 IMPORTS = (ast.Import, ast.ImportFrom)

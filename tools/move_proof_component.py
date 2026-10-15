@@ -61,7 +61,7 @@ from tools.move_component import (
     self_role,
 )
 from tools.move_cut import Cut
-from tools.move_source import Source, class_spans, path_of
+from tools.move_source import LINE_LIMIT, Source, class_spans, path_of
 from tools.move_trees import Mapping, Proof, Trees
 
 
@@ -145,6 +145,12 @@ class ComponentProof:
             for span in moved.spans:
                 self.moved_comments += comments(old_host, span.first, span.last)
         self._methods(old_host, new_component)
+        lines = trees.new_files[self.component_path].count(b"\n")
+        if lines > LINE_LIMIT:
+            self.proof.error(
+                f"{self.component_path}: {lines} Zeilen, mehr als {LINE_LIMIT} — die Komponente "
+                f"steht unter {LINE_LIMIT} Zeilen (Konzept 4.5)"
+            )
         for path in trees.changed:
             if not path.endswith(".py"):
                 continue

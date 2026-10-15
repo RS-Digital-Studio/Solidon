@@ -67,11 +67,8 @@ from tools.move_cut import Cut, CutError, load  # noqa: E402
 from tools.move_edits import EditError, apply_text  # noqa: E402
 from tools.move_proof import Proof, prove  # noqa: E402
 from tools.move_refs import AlreadyAppliedError, Context, PlanError  # noqa: E402
-from tools.move_source import AREAS  # noqa: E402
+from tools.move_source import AREAS, LINE_LIMIT, path_of  # noqa: E402
 from tools.move_trees import tree_files  # noqa: E402
-
-#: Größte Zeilenzahl eines neuen Moduls (Konzept 3.1, Regel 1); darüber nur mit ``over_limit``.
-LINE_LIMIT = 2000
 
 #: Der Ausgang je Ergebnis; jeder Weg hinaus hat seinen eigenen (Modul-Docstring).
 EXIT = {
@@ -157,6 +154,15 @@ def plan(cut: Cut, root: Path, index: Index) -> Change:
             ctx.problem(
                 f"{path}: {lines} Zeilen, mehr als {LINE_LIMIT} (Konzept 3.1, Regel 1) — feiner "
                 "schneiden oder over_limit erklären und die Sperrklinke nachziehen"
+            )
+    component = path_of(cut.component_module) if cut.mode == "component" else ""
+    if component in change.files:
+        lines = change.files[component].count("\n")
+        if lines > LINE_LIMIT:
+            ctx.problem(
+                f"{component}: {lines} Zeilen, mehr als {LINE_LIMIT} — die Komponente steht "
+                f"unter {LINE_LIMIT} Zeilen (Konzept 4.5); weniger Methoden in diesen Schnitt "
+                "nehmen oder eine zweite Komponente bilden"
             )
     ctx.raise_problems()
     return change

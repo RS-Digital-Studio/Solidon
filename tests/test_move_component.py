@@ -398,6 +398,23 @@ def test_a_forgotten_reader_in_an_unchanged_file_is_red(
     assert any(where in error for error in proof.errors), (label, proof.errors)
 
 
+def _padded(files: dict[str, str], lines: int) -> dict[str, str]:
+    """Die Komponente im Gerüst mit ``lines`` Kommentarzeilen mehr."""
+    head = "\n\nclass AreaHost(Protocol):"
+    return fx.edit(files, AREA, head, "\n" + "# Platz\n" * lines + head)
+
+
+def test_a_component_over_the_line_limit_is_rejected_and_red(tmp_path: Path) -> None:
+    """RM-M14: Die Komponente steht unter 2 000 Zeilen (Konzept 4.5); sie ist eine Datei aus dem
+    Gerüst-Commit, also prüft das Werkzeug sie eigens — Planer und Beweis."""
+    old = _padded(fx.COMPONENT_OLD, 1925)
+    assert fx.text_of(old[AREA]).count("\n") < 2000
+    message = _rejected(tmp_path / "plan", old)
+    assert "app/ui/board_area.py: 20" in message and "Zeilen, mehr als 2000" in message
+    proof = _prove(tmp_path / "proof", _padded(EXPECTED, 1925), old)
+    assert any("app/ui/board_area.py: 20" in error for error in proof.errors), proof.errors
+
+
 # ------------------------------------------------------------------ Typ aus dem Wirtsmodul
 
 HOST_HEAD = "\n\nclass Board(QObject):"
