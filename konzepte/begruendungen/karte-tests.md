@@ -349,6 +349,12 @@ festem Bildschirmbezug), `begin_card_drag`/`end_card_drag`,
 `settle_measure_layout` (Layoutaufträge zustellen) und
 `measure_more_heading`.
 
+`release_signing.py` hält ein eigenes Schlüsselpaar der Suite für unterschriebene
+Versionsdateien (`signed`, auch mit fremdem Schlüssel); die echten Schlüssel
+(`REAL_PUBLIC_KEYS`) samt Abdruck des ersten und Besitzproben (`KEY_PROOFS`)
+prüfen `test_the_published_version_file_is_signed` und
+`test_the_shipped_release_keys_are_proven`.
+
 `bundled_fonts.py` ist die eine Stelle für die gebündelte Prüfschrift: `bundled_font`
 lädt DejaVu Sans (auf Wunsch weitere Dateien), setzt sie als Anwendungsschrift,
 prüft Familie und echte Metrik und entfernt die Dateien danach wieder; Schrift
