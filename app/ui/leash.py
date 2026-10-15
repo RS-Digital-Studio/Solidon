@@ -42,8 +42,11 @@ die Ursache steht drei Dateien weiter.
 
 from __future__ import annotations
 
+import atexit
 import ctypes
 import gc
+import logging
+import os
 import sys
 import threading
 import time
@@ -272,6 +275,88 @@ def wait_for_all(timeout_ms: int = 2000) -> tuple[Any, ...]:
         # dort; so kann der Rückruf seine Leine geordnet aufräumen.
         QTimer.singleShot(0, _keeper_object(), lambda done=worker: _release_global(done))
     return tuple(stubborn)
+
+
+#: Wie lange der Prozess an seinem Ende höchstens auf gehaltene Arbeiter wartet
+#: (:func:`finish_before_exit`). Im Betrieb steht hier keiner mehr — das
+#: Hauptfenster schließt erst, wenn alle zurück sind (``MainWindow.closeEvent``).
+#: Die Frist gilt Prüfständen und Testprozessen, deren Abbau früher weitergeht
+#: (FD-154): ein abgebrochener Arbeiter, der noch einen Schritt zu Ende rechnet.
+EXIT_WAIT_MS: Final = 30_000
+
+#: Womit ein Prozess endet, dessen Arbeiter auch nach :data:`EXIT_WAIT_MS` läuft.
+#: Nicht null: Ein Arbeiter, der seinen Abbruch nicht befolgt, ist ein Befund.
+STRAGGLER_EXIT_CODE: Final = 3
+
+
+def finish_before_exit(timeout_ms: int | None = None) -> tuple[Any, ...]:
+    """Auf jeden gehaltenen Arbeiter warten, bis er fertig ist — vor dem Ende des Prozesses.
+
+    **PySide zerstört am Prozessende jedes Python-eigene QObject**, gleich wer
+    es hält (``destroyQCoreApplication`` über ``atexit``). Läuft ein Arbeiter
+    dann noch, endet der Prozess mit ``QThread: Destroyed while thread '' is
+    still running`` (0xC0000409) — kein Halten hilft dagegen, auch
+    ``Shiboken.invalidate`` nicht (FD-154). Der einzige sichere Zustand ist ein
+    Arbeiter, der fertig ist.
+
+    Anders als :func:`wait_for_all` gilt die Frist (ohne Angabe
+    :data:`EXIT_WAIT_MS`) für alle zusammen, und gelöst wird nichts: Danach
+    endet ohnehin der Prozess. Zurück kommt, wer nach der Frist noch läuft.
+    """
+    deadline = time.monotonic() + (EXIT_WAIT_MS if timeout_ms is None else timeout_ms) / 1000.0
+    running = [
+        worker
+        for worker in tuple(_alive)
+        if worker is not None and isValid(worker) and worker.isRunning()
+    ]
+    if running:
+        # Im Betrieb steht hier niemand; wer doch, ist die Spur zum nächsten Abriss.
+        _log.info(
+            "waiting for %s before the end",
+            ", ".join(sorted(type(worker).__name__ for worker in running)),
+        )
+    stubborn: list[Any] = []
+    for worker in running:
+        remaining = max(0, int((deadline - time.monotonic()) * 1000))
+        if not worker.wait(remaining):
+            stubborn.append(worker)
+    return tuple(stubborn)
+
+
+def _finish_at_exit() -> None:
+    """Der eine Abbauweg am Prozessende für jeden Faden, den eine Leine gestartet hat.
+
+    Angemeldet beim Import dieses Moduls, also nach PySides eigenem Haken —
+    ``atexit`` ruft in umgekehrter Reihenfolge, dieser läuft davor. Er greift
+    in jedem Prozess: der Anwendung, eines Prüfstands, eines Tests.
+
+    Reißt ein Arbeiter :data:`EXIT_WAIT_MS`, endet der Prozess hier mit
+    :data:`STRAGGLER_EXIT_CODE` und ohne Qts Abbau, nach einer Zeile mit dem
+    Namen des Arbeiters. Weiter zu warten hielte ein unsichtbares Programm auf;
+    Qts Abbau führte in den Absturz von oben.
+    """
+    stubborn = finish_before_exit()
+    if not stubborn:
+        return
+    names = ", ".join(sorted(type(worker).__name__ for worker in stubborn))
+    _log.error(
+        "workers %s still running %d ms after the end — leaving without Qt's teardown",
+        names,
+        EXIT_WAIT_MS,
+    )
+    # Ein Fensterprogramm ohne Konsole hat kein stderr; dort steht die Zeile
+    # nur im Protokoll.
+    if sys.stderr is not None:
+        sys.stderr.write(
+            f"leash: {names} still running {EXIT_WAIT_MS} ms after the end; "
+            "leaving without Qt's teardown\n"
+        )
+        sys.stderr.flush()
+    logging.shutdown()
+    os._exit(STRAGGLER_EXIT_CODE)
+
+
+atexit.register(_finish_at_exit)
 
 
 #: Wie lange ein Arbeiter höchstens auf den Hauptfaden wartet, dem er den

@@ -165,8 +165,18 @@ def shutdown_window(window: Any, application: Any) -> None:
     Anwendung kann im selben Prozess ein weiteres Fenster folgen. Dieser
     Prüfstand endet dagegen nach genau einem Fenster und ruft deshalb
     denselben terminalen Viewport-Weg wie ``MainWindow.closeEvent``.
+
+    **Und erst, wenn jeder Arbeiter zurück ist** (FD-154). ``release`` wartet
+    2 s auf alles zusammen; wer länger rechnete, lief weiter, ``closeEvent``
+    lehnte das Schließen ab, und am Prozessende zerstörte PySide den noch
+    laufenden Faden (0xC0000409). Das Fenster der Anwendung schließt erst nach
+    dem letzten Arbeiter; hier wartet dieselbe Stelle, die den Prozess am Ende
+    schützt (``leash.finish_before_exit``).
     """
+    from app.ui.leash import finish_before_exit
+
     window.release()
+    finish_before_exit()
     window.viewport.release_renderer()
     window.close()
     for _ in range(EVENT_DRAIN_ROUNDS):

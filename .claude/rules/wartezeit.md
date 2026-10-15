@@ -319,9 +319,10 @@ wird genau gerechnet.
   erhält den konkreten Arbeiter und leert das Besitzerfeld nur bei Identität;
   ein verspäteter Vorgänger darf keinen Nachfolger entfernen.
 - Erst nach `isRunning()==False` loslassen: `_hold_until_done` ruft
-  `WorkerLeash.hold_until_done`, `_retire` ruft `retire`. Die Menge
-  `leash._alive` und der Timer an `leash._keeper` überleben den Dialog.
-  `wait_for_workers` wartet beim Ende auf alle Arbeiter.
+  `WorkerLeash.hold_until_done`, `_retire` ruft `retire`.
+  `wait_for_workers` wartet am Fensterende auf alle, `_finish_at_exit` am
+  Prozessende vor PySides Abbau (FD-154); ohne `closeEvent` vorher
+  `finish_before_exit` rufen.
 
 ### Wer eine `WorkerLeash` hält, hat ein `release()`
 
