@@ -2312,7 +2312,11 @@ Wächter der Anwendung, sodass ein Ereignis nur einmal nachzeichnet.
 `menubar_entries`, `point_for` und `next_click` zwischen Tour, Bildanleitungen
 und Prüfstand. `area_for` deckt die Zielfläche einschließlich verschachtelter
 Rollbereiche auf; `next_click` geht den tatsächlichen Kundenweg ohne solches
-Aufdecken. Vor dem Messen legt `_settle_cards` die Kartenhöhe fest.
+Aufdecken. Es rollt mit Radereignissen am tatsächlichen Rollbereich, bis ein
+Feld, das hineinpasst, mit beiden Kanten frei steht; ein kurzer Restschritt
+trägt `Click.wheel_angle`, und am Anschlag kommt `MissingTargetError` statt
+eines halb abgeschnittenen Ziels (FD-77). Vor dem Messen legt `_settle_cards`
+die Kartenhöhe fest.
 `view.edge:<körper>` wird nach der Körperauswahl über `edge_point_for`
 aufgelöst: Eine vom echten Pick bestätigte bearbeitbare Kante kommt aus
 `geom.edges.edges_in_kernel`/`points_in_kernel`. Sie wird nicht als Merkmal
