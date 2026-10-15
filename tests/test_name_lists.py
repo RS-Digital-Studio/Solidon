@@ -17,7 +17,7 @@ d) ``matching._MATCH_WAYS``: im Modul gebunden und zur Aufrufzeit gelesen; die
    Lesermenge des Auflösers wie in W2 d) (Entscheidung E8).
 e) Lazy-Exporte: Das Untermodul jedes Eintrags bindet den Namen auf
    Modulebene, und jemand bezieht den Namen über das Paket — in ``app/``,
-   ``tools/`` oder ``tests/``, auch in einem Subprozess-Skript (wie in d): Ein
+   ``tools/`` oder ``tests/``, auch in einem Skript für ``python -c`` (wie in d): Ein
    Export, den niemand bezieht, ist ein Name, den nur die Liste hält). Dass es
    Untermodul und Attribut zur Laufzeit gibt, prüft ``test_lazy_exports.py``.
 g) Jede Zeichenkette ``"app.…"`` in ``app/`` und ``tools/`` nennt ein Modul,
@@ -40,7 +40,6 @@ import importlib
 import os.path
 import re
 import sys
-import textwrap
 import types
 from collections import Counter
 from collections.abc import Iterable, Mapping
@@ -90,15 +89,6 @@ GROUND_SETS = {
 #: Ende ein Präfix. Ob der erste Teil ein Modul von ``app`` ist, sagt der Baum —
 #: ``"app.log"`` ist ein Dateiname.
 DOTTED = re.compile(r"app(?:\.[A-Za-z_]\w*)+\.?")
-
-#: Eine Importzeile von ``app``, auch eingerückt: In einer Zeichenkette ist sie das
-#: Zeichen eines Skripts, das der Auflöser nicht liest.
-SCRIPT_IMPORT = re.compile(r"^[ \t]*(?:from|import) app\.", re.MULTILINE)
-
-#: Vorfilter je Datei: eine Dreifachzeichenkette oder eine Zeichenkette, die mit einem
-#: Import von ``app`` beginnt (``-c``). Geparst wird nur, wo eine davon ein Skript sein
-#: kann — über den Baum 10,5 s gegen 1,3 s, dieselben Paare.
-LITERAL = re.compile(r"(\"\"\"|''')(.*?)\1|[\"'](?:import|from) app\.", re.DOTALL)
 
 
 def _step_way_module() -> types.ModuleType:
@@ -174,56 +164,6 @@ def _lazy_packages() -> list[str]:
     ]
 
 
-def _script_names(script: ast.Module) -> set[tuple[str, str]]:
-    """``(modul, name)`` aus ``from M import N`` und ``import M [as x]`` mit ``x.N``."""
-    modules: dict[str, str] = {}
-    found: set[tuple[str, str]] = set()
-    for node in ast.walk(script):
-        if isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            found.update((node.module, alias.name) for alias in node.names)
-        elif isinstance(node, ast.Import):
-            modules.update({alias.asname or alias.name: alias.name for alias in node.names})
-    for node in ast.walk(script):
-        if isinstance(node, ast.Attribute):
-            head = ast.unparse(node.value)
-            if head in modules:
-                found.add((modules[head], node.attr))
-    return found
-
-
-@functools.cache
-def _script_references(root: Path) -> frozenset[tuple[str, str]]:
-    """Was Quelltext in Zeichenketten unter ``app/``, ``tools/`` und ``tests/`` bezieht.
-
-    Ein Subprozess-Skript (``textwrap.dedent('''…''')``) liest der Auflöser aus R nicht;
-    ``test_core_isolation.py`` bezieht dort ``parts.PartRegistry`` und
-    ``activation.Licence`` über das Paket, um genau diese Schnittstelle zu prüfen.
-    """
-    found: set[tuple[str, str]] = set()
-    for area in ("app", "tools", "tests"):
-        for path in sorted((root / area).rglob("*.py")):
-            if "__pycache__" in path.parts:
-                continue
-            source = path.read_text(encoding="utf-8")
-            if not any(
-                literal.group(2) is None or SCRIPT_IMPORT.search(literal.group(2))
-                for literal in LITERAL.finditer(source)
-            ):
-                continue
-            for node in ast.walk(ast.parse(source, filename=str(path))):
-                if (
-                    isinstance(node, ast.Constant)
-                    and isinstance(node.value, str)
-                    and SCRIPT_IMPORT.search(node.value)
-                ):
-                    try:
-                        script = ast.parse(textwrap.dedent(node.value))
-                    except SyntaxError:
-                        continue
-                    found |= _script_names(script)
-    return frozenset(found)
-
-
 def _export_problems(index: Index, package: str) -> list[str]:
     """e) Das Untermodul bindet den Namen auf Modulebene, und jemand bezieht ihn.
 
@@ -232,16 +172,17 @@ def _export_problems(index: Index, package: str) -> list[str]:
     Objekt liefert, sichert ``app.core.lazy.install`` selbst zu. Bezogen heißt:
     ``index.references`` nennt ``paket.name`` irgendwo in ``app/``, ``tools/`` oder
     ``tests/`` — ``_EXPORTS``, ``__all__`` und der ``TYPE_CHECKING``-Block nennen das
-    Untermodul oder bloßen Text und zählen nicht —, oder ein Skript in einer
-    Zeichenkette bezieht ihn (:func:`_script_references`).
+    Untermodul oder bloßen Text und zählen nicht. Ein Skript, das ein Test als Text an
+    ``python -c`` gibt, liest der Auflöser selbst (``script:<art>``, CS-18):
+    ``test_core_isolation.py`` bezieht dort ``parts.PartRegistry`` und
+    ``activation.Licence`` über das Paket.
     """
-    scripts = _script_references(index.root)
     problems = []
     for name, (submodule, attribute) in index.modules[package].exports.items():
         origin = f"{package}.{submodule}"
         if not index.exists(origin, attribute):
             problems.append(f"{package}.{name}: {origin} bindet {attribute} nicht")
-        elif not index.references(package, name) and (package, name) not in scripts:
+        elif not index.references(package, name):
             problems.append(f"{package}.{name}: bezieht niemand über das Paket")
     return problems
 
@@ -440,8 +381,8 @@ def test_e_every_lazy_export_is_bound_and_referenced(index: Index, package: str)
 def test_e_a_missing_unbound_or_unreferenced_export_is_found(tmp_path: Path) -> None:
     """Gegenprobe an einer Attrappe: ein Eintrag, dessen Untermodul fehlt, einer, dessen
     Untermodul den Namen nicht bindet, und einer, den nur die Exportliste hält — neben
-    einem, den ein Modul bezieht, und einem, den nur ein Subprozess-Skript in einer
-    Zeichenkette bezieht."""
+    einem, den ein Modul bezieht, und einem, den nur ein Skript bezieht, das ein Test
+    als Text an ``python -c`` gibt."""
     package = tmp_path / "app" / "pkg"
     package.mkdir(parents=True)
     (tmp_path / "app" / "__init__.py").write_text('"""Attrappe."""\n', encoding="utf-8")
@@ -472,7 +413,11 @@ def test_e_a_missing_unbound_or_unreferenced_export_is_found(tmp_path: Path) -> 
     )
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_probe.py").write_text(
-        'SCRIPT = """\nimport app.pkg as pkg\n\npkg.scripted()\n"""\n', encoding="utf-8"
+        "import subprocess\nimport sys\n\n"
+        'SCRIPT = """\nimport app.pkg as pkg\n\npkg.scripted()\n"""\n\n\n'
+        "def test_run():\n"
+        '    subprocess.run([sys.executable, "-c", SCRIPT], check=True)\n',
+        encoding="utf-8",
     )
     fake = Index.build(tmp_path, cache=False)
     assert _export_problems(fake, "app.pkg") == [
