@@ -4179,8 +4179,8 @@ def test_cancel_below_apply_discards_what_waits(qt_app: QApplication) -> None:
     try:
         panel = window.feature_panel
         _, _hole = _a_selected_hole(window)
-        # ``isHidden``: die Knopfzeile hängt unter dem Rollbereich des Docks
-        # und nicht mehr am Panel (13.09.2026, ``FeaturePanel.footer``).
+        # ``isHidden``: Gefragt ist, ob der Knopf weggenommen ist, nicht ob die
+        # Elternkette gerade sichtbar ist (``FeaturePanel._apply_stands``).
         assert panel._cancel.isHidden(), "der Abschluss steht ausschließlich an den Maßen"
         _hole, flow = _a_pulled_slot(window)
         assert panel._cancel.isHidden() and panel._apply.isHidden()

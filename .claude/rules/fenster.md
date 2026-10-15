@@ -186,9 +186,8 @@ Stellen halten das, beide sind nötig:
   `add_generated`, `accept_proposal`). Die Absage trägt die Handlungen des Halts
   mit Schrittkennung, Werten und Körper, damit `error_handlers` sie ausführen
   kann. Weiter gehen Änderungen ohne Schritt (Parameter, Passung, Drucker — sie
-  können den Halt lösen), Rückgängig, *Schritt löschen* und die Wege des
-  Verlaufs (`change_params`, `repair_and_retry`, `split_and_retry`,
-  `recount_and_retry`, `decimate_and_retry`, `remesh_and_retry`).
+  können den Halt lösen), Rückgängig, *Schritt löschen* und die Wege am
+  haltenden Befund (`revision.halt_finding`, im Bericht `action_refusal(at_halt=)`).
 - **Die Oberfläche sagt es vorher** (`_halt_reason`, die erste Frage in
   `_reason_locked`): Aktion, Suche und Karte tragen den Grund mit
   Schrittnummer und Titel, ebenso Automatisch teilen, Einfügen, Erzeugen,
@@ -241,7 +240,8 @@ Stellen halten das, beide sind nötig:
 - Lokale Erkennung behält die Zielkörper des Befunds; erst der Originaltreffer
   bestimmt einen. Baumauswahl ersetzt dieses Ziel nicht. Maus und Tastatur
   verwenden denselben Treffer.
-- Befundklick (§2.7): Ort → Kameraflug und `mark_finding`; sonst Körper → Auswahl;
+- Befundklick (§2.7): Ort → Kameraflug und `mark_finding`; sonst Körper → Auswahl
+  und Rahmen (`reset_camera`), neues Projekt → `frame_next_scene`;
   sonst `op_id` → `HistoryPanel.point_at`. Ortsmarken verwenden `FINDING_COLOUR`
   vor Material, Abstand als Radius, Titelgrund in Kamera-Oben-Richtung und
   `Finding.outline` als Rand (`ansicht.md`, „Was gefärbt wird“). Marke nicht

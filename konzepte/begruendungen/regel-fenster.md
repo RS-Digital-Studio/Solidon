@@ -1058,3 +1058,13 @@ dass *Merkmal verschieben* an Zapfen, Senkung, Kugel und Ring wie *Bohrung
 ändern* ins Bild führt; die Entscheidung vom 10.09.2026, dass Verschieben auf
 Klick rechnet, ist damit zurückgenommen. Der Kunde schrieb: „das Verschieben
 mit Maßen bei Bohrungen ist gut, bei anderen Merkmalen fehlen sie“.
+
+**Welche Wege hinter einem Halt gehen, sagt der haltende Befund** (RA-3,
+Review 1 Restpaket A). Eine Liste von Kennungen (`change_lock.CHAIN_WAYS`:
+`change_params`, `repair_and_retry`, `split_and_retry`, `recount_and_retry`,
+`decimate_and_retry`, `remesh_and_retry` und weitere) graute am Halt „braucht
+einen ausgeschalteten Schritt“ dessen beide Wege und gab hinter einem fremden
+Halt Wege frei, die die Sitzung danach ablehnte. Seither antwortet
+`revision.halt_finding` für Sitzung, Revision und Bericht: Die Handlungen am
+haltenden Befund gehen, jede andere ändernde steht grau mit dem Halt als
+Grund.
