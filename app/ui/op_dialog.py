@@ -68,6 +68,7 @@ from app.ui.feature_list import FeatureList
 from app.ui.feature_set_field import FeatureSetField
 from app.ui.first_focus import select_on_first_focus
 from app.ui.form_fields import explain, name_rows
+from app.ui.grouped_spin import GroupedSpin
 from app.ui.labels import (
     BoundedSpin,
     LengthSpin,
@@ -392,7 +393,9 @@ class ValueField(QWidget):
         Platz gäbe es keinen Wert, der „habe ich nicht gesagt" bedeutet, und
         eine Bestätigung im Dialog schöbe jedes Loch in den Ursprung."""
 
-        self.spin = BoundedSpin(self)
+        # Eine Anzahl steht ab vier Stellen in Dreiergruppen wie in jedem Satz
+        # (FD-124, ``grouped_spin``); eine Zahl mit Nachkomma bleibt, wie sie ist.
+        self.spin = GroupedSpin(self) if entry.kind == "int" else BoundedSpin(self)
         # Fokussiert wird das Drehfeld, nicht der Behälter: Es trägt den Namen
         # der Zeile (FD-12), den Satz gibt ``form_fields.explain`` dazu.
         self.spin.setAccessibleName(self.caption())

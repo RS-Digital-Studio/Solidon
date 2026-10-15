@@ -413,9 +413,11 @@ class NumberSpin(QDoubleSpinBox):
     ein neuer Fehler derselben Sorte: „1.000,50" wurde damit im deutschen
     Fenster zu 1,00. Sichtbar war es, aber um den Faktor tausend falsch. Was
     zweideutig **bleibt**, ist „1.000" ohne Nachkomma — nach dieser Regel eins.
-    Angezeigt wird nie mit Tausendertrennung
-    (``setGroupSeparatorShown`` steht auf falsch), also gibt es keine
-    Schreibweise, die das Feld vormacht und dann nicht liest.
+    Ein Feld mit Nachkomma zeigt nie eine Tausendertrennung
+    (``setGroupSeparatorShown`` steht auf falsch); ein Ganzzahlfeld schreibt
+    ab vier Stellen in Dreiergruppen wie ``count_text`` und liest „1.000“ dort
+    als tausend (:class:`app.ui.grouped_spin.GroupedSpin`, FD-124). Keins macht
+    eine Schreibweise vor, die es dann nicht liest.
     ``DragValueBar.typed_value`` im Viewport entscheidet ähnlich, nur ohne die
     Gruppen.
 
