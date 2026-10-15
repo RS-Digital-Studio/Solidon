@@ -22,7 +22,8 @@ from PySide6.QtWidgets import QMenu, QScrollArea, QToolButton
 from app.core import guides
 from app.core.bootstrap import load_operations
 from app.i18n import SOURCE_LANGUAGE
-from tests.ui_helpers import prepared_window as prepared_window
+from tests.guide_window import prepared_window as prepared_window
+from tests.guide_window import settle as _settle
 from tools.function_scan import MESSAGE_BUILDERS, message_builders
 
 load_operations()
@@ -163,11 +164,6 @@ def test_a_private_read_in_a_resolver_turns_the_guard_red() -> None:
     """Gegenprobe: ``window.feature_panel._apply`` wäre ein Zugriff am Kennzeichen vorbei."""
     source = "def next_click(window, name):\n    return window.feature_panel._apply\n"
     assert private_reads(source, ("next_click",)) == ["next_click: window.feature_panel._apply"]
-
-
-def _settle(qt_app: Any, rounds: int = 20) -> None:
-    for _ in range(rounds):
-        qt_app.processEvents()
 
 
 def _follow(qt_app: Any, window: Any, name: str) -> str:
@@ -345,8 +341,8 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
     assert click("tree.row:obj_1").why == "ziel"
     assert click("tree.row:obj_1.hole_1").why in {"aufklappen", "ziel"}
     # Drei Schritte in einer Transaktion: Schritt 1 steht in der zugeklappten
-    # Gruppe, der Klick auf ihre Zeile klappt sie auf. Im Kundenthema steht die
-    # Zeile danach nicht ganz da; dann rollt der Kunde, und nur dann (FD-157).
+    # Gruppe, der Klick auf ihre Zeile klappt sie auf. Steht die Karte danach
+    # still, ist die Zeile im Kundenthema ganz da, ohne Rollen (FD-157).
     from PySide6.QtTest import QTest
 
     step = click("history.row:1")
@@ -364,23 +360,10 @@ def test_every_new_kind_resolves_on_a_prepared_window(prepared_window: Any, qt_a
         if listing.item(number).data(Qt.ItemDataRole.UserRole) == first
     )
 
-    def whole() -> bool:
-        """Ob die Zeile in der Höhe ganz zu sehen ist; breiter als die Liste darf sie sein."""
-        shown, place = surface.visibleRegion().boundingRect(), listing.visualItemRect(row)
-        return shown.top() <= place.top() and place.bottom() <= shown.bottom()
-
-    rolled = 0
-    while (step := click("history.row:1")).why == "rollen" and rolled < 3:
-        assert not whole(), "gerollt, obwohl die Zeile ganz dastand"
-        from tools.function_walk import QtPorts
-
-        ports = QtPorts(window, 0.0)
-        wheel = "wheel_up" if step.direction < 0 else "wheel_down"
-        point = step.rect.center()
-        ports.press(ports.widget_under(point), point, wheel, wheel_angle=step.wheel_angle)
-        _settle(qt_app)
-        rolled += 1
-    assert step.why == "ziel" and whole(), (step.why, rolled)
+    assert click("history.row:1").why == "ziel"
+    # Ganz zu sehen in der Höhe; breiter als die Liste darf die Zeile sein.
+    shown, place = surface.visibleRegion().boundingRect(), listing.visualItemRect(row)
+    assert shown.top() <= place.top() and place.bottom() <= shown.bottom(), (shown, place)
     with pytest.raises(guide_targets.MissingTargetError):
         guide_targets.next_click(window, "history.row:99")
     assert _follow(qt_app, window, "finding:arrange.below_bed") == "ziel"

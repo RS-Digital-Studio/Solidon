@@ -47,7 +47,7 @@ belegte Werte ersetzen.
 | Website-Loops | `tools/make_video.py <ordner> webloop anpassen <sprache>` und `… formen loop website/teile/weg4-stein-formen.p3d --name weg4-formen <sprache>`, ein Prozess je Sprache. |
 | Schaustück, Galerie, Funktionsbilder | `tools/make_showpiece.py`, `tools/make_gallery.py`, `tools/make_feature_images.py` — Funktionsbilder erst in einen Prüfordner, nach der Sichtprüfung das WebP nach `website/bilder/`. |
 | Tutorials | `tools/make_longform_video.py --language <sprache>`, `tools/make_workshop_videos.py <film> --language <sprache>`, danach `tools/make_workshop_shorts.py`; Schnittplan und Belege mitprüfen. |
-| Handbuch und PDF | `tools/make_manual.py` **kennt keine Argumente** und erzeugt immer alle Sprachen aus `app/i18n/locales/` samt Seiten und PDFs — deshalb nur beim Paketbau. Auf einem Rechner mit exaktem Kern (OCP): Die Menüwege der Referenz lesen `registry.MENU_TWINS`, und die hängen daran, ob der Kern da ist. |
+| Handbuch und PDF | `tools/make_manual.py` erzeugt ohne Argument immer alle Sprachen aus `app/i18n/locales/` samt Seiten, Bildern und PDFs — deshalb nur beim Paketbau. `--web-only` erneuert nur die Seiten aus den Textquellen (danach `stamp_assets.py`), `--layout-only` nur den Webrahmen. Auf einem Rechner mit exaktem Kern (OCP): Die Menüwege der Referenz lesen `registry.MENU_TWINS`, und die hängen daran, ob der Kern da ist. |
 | Changelog- und Rechtsseiten | `tools/make_changelog.py` aus `changelog/<sprache>.md`; `tools/make_legal.py` aus den Rechtstexten im Wurzelverzeichnis, samt `packaging/eula.txt`. |
 | SEO-Dateien | `tools/make_seo.py`, nach allen Seiten- und Handbuchgeneratoren. |
 | Symbol | `tools/make_icon.py`; Rasterdateien und Favicon aus `app/images/icon/`. |

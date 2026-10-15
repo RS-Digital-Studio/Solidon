@@ -130,8 +130,7 @@ zurück, wie er es fand.
   niemand. Die Fensterverträge der Linux-CI laufen offscreen mit DejaVu Sans;
   lokal nachgestellt mit `QT_QPA_FONTDIR` auf einen eigenen Ordner nur mit den
   `DejaVu*.ttf` aus `app/core/geom/data/fonts` (auf den ganzen Ordner nimmt
-  Qt Comfortaa), in der Fixture mit `QFontDatabase.addApplicationFont`
-  (`test_preview_banner_layout.py`).
+  Qt Comfortaa), in der Fixture über `tests/bundled_fonts.py`.
 - **Was am Anzeigen hängt, prüft nur ein gezeigter Dialog** (`show()`,
   `activateWindow()`): Ungezeigt gibt es keinen Erstfokus, und ein Test bleibt
   grün, während der erste Bildklick am Fenster ins falsche Feld geht (RM-416,
@@ -259,9 +258,8 @@ machen ihn nicht rückwirkend grün.
 ## Ein roter Leistungstest ist erst dann eine Regression, wenn er es zweimal ist
 
 `tests/.performance.json` hält die Werte hinter der 25-%-Schwelle und steht
-**absichtlich** in `.gitignore`: Sie sind maschinenabhängig (§31), drei
-Maschinen teilen das Projekt. Sie nach einem begründeten Verfahrenswechsel
-zurückzusetzen ist richtig.
+**absichtlich** in `.gitignore`: Sie sind maschinenabhängig (§31). Sie nach
+einem begründeten Verfahrenswechsel zurückzusetzen ist richtig.
 
 - **Denselben Stand ein zweites Mal fahren**, nicht den Vorgängerstand, bevor
   eine Regression gemeldet wird: Schwankt die *Menge* der roten Tests, ist es

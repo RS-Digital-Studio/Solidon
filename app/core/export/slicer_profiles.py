@@ -463,7 +463,7 @@ def config_home(platform: str) -> str:
     **Die Plattform kommt als Parameter, nicht aus ``sys.platform``** — aus
     zwei Gründen, und der zweite ist der wichtigere. Erstens sieht ``mypy``
     sonst auf Windows jeden Zweig darunter als tot an und meldet ihn; die CI
-    prüft unter Linux und findet das nie, also ist der Code auf drei Maschinen
+    prüft unter Linux und findet das nie, also ist der Code am Arbeitsplatz
     rot und auf dem Bauserver grün. Zweitens — und deshalb steht dasselbe
     Muster in :func:`app.core.discover.parts_for` und
     :func:`app.core.backends.comfy_setup.guesses_for` — ist die Zuordnung so

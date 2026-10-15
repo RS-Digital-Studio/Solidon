@@ -200,5 +200,5 @@ Sitzungsstart den letzten versionierten Stand zurück.
 - **Eine Datei je Thema.** Eine neue Erkenntnis kommt als Abschnitt in das
   passende Thema aus `MEMORY.md`; eine neue Datei nur für ein neues Thema. Der
   Schreib-Hook nennt einer neuen Datei die nächstliegenden Themen.
-- Was jede Sitzung auf jedem Rechner braucht, gehört in eine Regel oder Karte —
-  nicht in die Erinnerungen. Geheimnisse gehören in keines von beiden.
+- Was jede Sitzung braucht, gehört in eine Regel oder Karte — nicht in die
+  Erinnerungen. Geheimnisse gehören in keines von beiden.

@@ -4,8 +4,8 @@ Ein Skript, vier Aufgaben — welche, sagt das erste Argument:
 
     sitzungsstart    SessionStart: meldet nur, was die Unterlagen nicht wissen
                      können — eine Umgebung, die vom festgeschriebenen Stand
-                     abweicht (drei Maschinen am selben Repository heißen
-                     sonst mehrere Versionssätze), und Erinnerungen, die ein
+                     abweicht (sonst prüft der Arbeitsplatz einen anderen
+                     Versionssatz als die CI), und Erinnerungen, die ein
                      Pull aus dem Arbeitsbaum genommen hat. Räumt alte
                      Sitzungsmarken weg.
     nach-aenderung   PostToolUse (Write|Edit): formatiert die geänderte

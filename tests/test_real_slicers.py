@@ -861,13 +861,10 @@ def test_prusaslicer_estimates_a_printer_without_its_bundle_with_the_requested_a
         )
 
     requested = sliced("angefordert")
-    # Ohne Ersatz, falls es die Funktion nicht gibt: Dann schätzen beide Läufe
-    # gleich, und der Vergleich unten wird rot.
     monkeypatch.setattr(
         handover,
         "_prusa_time_estimate",
         lambda _written: {"machine_limits_usage": "ignore"},
-        raising=False,
     )
     built_in = sliced("eingebaut")
 

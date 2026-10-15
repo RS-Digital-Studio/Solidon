@@ -6,7 +6,7 @@ sie im echten Maßfluss nutzt, prüft ``tests/test_measure_card_placement.py``.
 
 from itertools import combinations
 
-from PySide6.QtCore import QRect, QSize
+from PySide6.QtCore import QPoint, QRect, QSize
 
 from app.ui.measure_field_places import distance_reserve, emergency_places, rows_height
 from app.ui.style import SPACE
@@ -32,7 +32,7 @@ def test_the_card_keeps_at_least_one_row_and_otherwise_as_many_as_the_fields_nee
 
 
 def test_the_emergency_places_stay_in_view_and_give_up_distance_before_freedom() -> None:
-    """Die Notanordnung hält Karte und Bild immer, Griff und Setzpunkt so lange es geht.
+    """Die Notanordnung hält das Bild immer, Karte, Griff und Setzpunkt so lange es geht.
 
     Bis FD-84 brachen die Notreihen das letzte Feld unter den Bildrand um und
     wichen dem Bewegungsgriff gar nicht aus.
@@ -60,3 +60,32 @@ def test_the_emergency_places_stay_in_view_and_give_up_distance_before_freedom()
     # Selbst ohne jeden freien Platz bleibt es im Bild und nicht darunter.
     (place,) = emergency_places([field], bounds, [bounds], ([],))
     assert bounds.contains(place)
+
+
+def test_a_field_without_room_covers_another_field_rather_than_the_card() -> None:
+    """Unter der vom Kunden gelegten Karte verschwände ein Kantenmaß ganz. Ist neben
+    der Karte kein freier Platz mehr, steht ein Feld deshalb versetzt über den Feldern
+    — aber nie genau auf einem: Kein Feld deckt ein anderes ganz (Schlussreview D0,
+    RF-12, RF-16; bis RF-16 lag das zweite Feld deckungsgleich auf dem ersten).
+
+    Unter der Karte bleibt eine Zeile für genau ein Feld: Das erste nimmt sie, das
+    zweite findet weder mit noch ohne Abstand Platz und rückt an den unteren
+    Bildrand. Im Streifen für fünf Felder stehen das sechste und siebte je über der
+    Fuge zweier Felder.
+    """
+    bounds = QRect(0, 0, 400, 300)
+    card = QRect(0, 0, 400, 240)
+    field = QSize(400, 40)
+    first, second = emergency_places([field, field], bounds, [card], ([],))
+    below = card.bottom() + SPACE + 1
+    assert first == QRect(QPoint(0, below), field)
+    assert second == QRect(QPoint(0, bounds.bottom() - field.height() + 1), field)
+    assert not second.intersects(card)
+
+    strip = QRect(0, 0, 770, 520)
+    places = emergency_places([QSize(150, 26)] * 7, strip, [QRect(0, 0, 770, 490)], ([],))
+    assert all(strip.contains(place) and place.top() > 489 for place in places)
+    for one, other in combinations(places, 2):
+        assert one.intersected(other) not in (one, other), (one, other)
+    sixth, seventh = places[5:]
+    assert sixth.left() == places[0].left() + 75 and seventh.left() == places[1].left() + 75

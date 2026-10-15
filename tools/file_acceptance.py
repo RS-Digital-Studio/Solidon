@@ -579,14 +579,14 @@ def menubar_child(out: Path) -> int:
     from app.core.bootstrap import load_operations
     from app.ui.app import build_application
     from tools import function_list
-    from tools.window_bench import shutdown_window
+    from tools.window_bench import record_shutdown, shutdown_window
 
     load_operations()
     application, window = build_application([])
     try:
         function_list.write_menubar(out / "menubar.json", function_list.menubar_of(window))
     finally:
-        shutdown_window(window, application)
+        record_shutdown({}, lambda: None, shutdown_window(window, application))
     return 0
 
 
@@ -826,6 +826,7 @@ def function_summary(case: Case, folder: Path, process: Mapping[str, Any]) -> di
         "unmeasured": sum(len(protocol.get("unmeasured") or {}) for protocol in protocols),
         "errors": [error for protocol in protocols for error in protocol.get("errors") or []]
         + ([state["harness_exception"]] if "harness_exception" in state else [])
+        + [f"nicht beendet: {name}" for name in state.get("stragglers", [])]
         + ([process["crash"]] if process.get("crash") else []),
     }
 
@@ -860,6 +861,7 @@ def summary(out: Path, cases: Sequence[Case]) -> dict[str, Any]:
             ],
             "errors": result.get("errors", [])
             + ([result["harness_exception"]] if "harness_exception" in result else [])
+            + [f"nicht beendet: {name}" for name in result.get("stragglers", [])]
             + ([process["crash"]] if process.get("crash") else []),
         }
         rows.append(row)
@@ -1123,7 +1125,7 @@ def child(out: Path, number: int, screen: str = "") -> int:
     from app.core.bootstrap import load_operations
     from app.ui.app import build_application
     from tools import function_setup
-    from tools.window_bench import shutdown_window
+    from tools.window_bench import record_shutdown, shutdown_window
 
     exit_code = 0
     application: Any = None
@@ -1144,11 +1146,11 @@ def child(out: Path, number: int, screen: str = "") -> int:
         persist()
         exit_code = 1
     finally:
+        stragglers: tuple[str, ...] = ()
         if window is not None:
             window.session.forget_changes()
-            shutdown_window(window, application)
-        data["shutdown_complete"] = True
-        persist()
+            stragglers = shutdown_window(window, application)
+        record_shutdown(data, persist, stragglers)
     return exit_code
 
 
@@ -1275,7 +1277,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     from app.core.bootstrap import load_operations, load_user_parts
     from app.ui.app import build_application
     from tools.function_capture import run_reference_factor
-    from tools.window_bench import shutdown_window
+    from tools.window_bench import record_shutdown, shutdown_window
 
     exit_code = 0
     application: Any = None
@@ -1328,11 +1330,11 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         persist()
         exit_code = 1
     finally:
+        stragglers: tuple[str, ...] = ()
         if window is not None:
             window.session.forget_changes()
-            shutdown_window(window, application)
-        state["shutdown_complete"] = True
-        persist()
+            stragglers = shutdown_window(window, application)
+        record_shutdown(state, persist, stragglers)
     return exit_code
 
 
@@ -1344,6 +1346,7 @@ def start_child(out: Path, case: Case, folder: Path) -> int:
     Schema von D0-U, ``bench.json`` der Lauf samt Ausgang von ``main``.
     """
     from tools import function_protocol, function_setup, function_start
+    from tools.window_bench import record_shutdown, wait_for_workers
 
     variant = function_setup.Variant.of(case.variant)
     row = read_rows(out).get(case.row) or {"id": case.row}
@@ -1370,8 +1373,9 @@ def start_child(out: Path, case: Case, folder: Path) -> int:
         state["harness_exception"] = traceback.format_exc()
         exit_code = 1
     finally:
-        state["shutdown_complete"] = True
-        persist()
+        # Kein Fenster mehr, aber vielleicht ein Arbeiter: dieselbe Wartestelle
+        # und derselbe benannte Ausgang wie in den Fensterfällen (RF-11, RF-18).
+        record_shutdown(state, persist, wait_for_workers())
     return exit_code
 
 

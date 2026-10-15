@@ -58,6 +58,7 @@ dans `website/version.json`.
 - Sans activation, *Créer un paramètre …*, *Déplacer*, *Diviser*, les touches de l'historique et les cotes dans la vue sont grisés. Chaque raison indique la voie, comme *Aide → Déverrouiller Solidon …*.
 - Quand une action du *Rapport de contrôle* attend le calcul en cours, elle indique qu'elle redevient disponible ensuite, aussi pour les lecteurs d'écran.
 - Dans une scène vide, les outils grisés comme *Coupe* et *Mesurer* indiquent la raison : il leur faut un corps. Jusqu'ici, l'info-bulle n'affichait que leur nom.
+- Quand la vue manque de place, les champs de cote restent visibles et laissent libre la poignée de déplacement. Jusqu'ici, un champ pouvait passer sous le bord ou masquer les flèches de la poignée.
 - Les messages de la barre d'état ne mettent plus de deux-points après une phrase complète.
 - Avec un seul corps, l'arbre des objets est aussi haut que son contenu, de même que l'historique avec une seule étape. La version 0.6.0 laissait un vide en dessous.
 - L'étape la plus récente reste visible dans l'historique quand de nouveaux corps agrandissent l'arbre des objets. Dans la version 0.6.0, elle glissait sous le bord du panneau.
