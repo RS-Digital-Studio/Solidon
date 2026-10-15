@@ -33,8 +33,9 @@ from tools.move_compare import (
     TopLevel,
     _is_annotation,
     _text,
+    string_constants,
 )
-from tools.move_copies import Copy, families
+from tools.move_copies import Copy, families, names_copy, namespace_reads
 from tools.move_cut import Cut
 from tools.move_source import Source, path_of
 from tools.move_trees import Mapping, Proof, Trees
@@ -129,7 +130,38 @@ class CopiesProof:
             if path.endswith(".py"):
                 self._reader(path)
         self._patch_reach()
+        self._names()
         return self.mapping
+
+    def _names(self) -> None:
+        """Nachher nennt keine Zeichenkette mehr eine umgestellte Kopie (``"Halter.Kopie"``,
+        ``"Halter:Kopie"``), und kein Halter liest über ``globals()`` einen Namen, den er nicht
+        mehr bindet (danach ``KeyError``) oder einen, den der Auflöser nicht faltet."""
+        names = {f"{h}.{b}" for h, b in self.copies} | {f"{h}:{b}" for h, b in self.copies}
+        needles = tuple(n.encode() for n in names)
+        for path, data in self.trees.new_files.items():
+            if not path.endswith(".py") or not any(n in data for n in needles):
+                continue
+            for node in string_constants(self.trees.new(path)):
+                if names_copy(str(node.value), names):
+                    self.proof.error(
+                        f"{path}:{node.lineno}: Zeichenkette {node.value!r} nennt eine Kopie, "
+                        "die es nachher nicht mehr gibt"
+                    )
+        for path in sorted({c.head.path for c in self.copies.values()}):
+            if path not in self.trees.new_files:
+                continue
+            source = self.trees.new(path)
+            top = TopLevel(source)
+            bound = set(top.units) | set(top.imports)
+            for call, read in namespace_reads(self.trees.new_index, path, source):
+                if read is not None and read <= bound:
+                    continue
+                what = ", ".join(sorted(read - bound)) if read else "einen offenen Namen"
+                self.proof.error(
+                    f"{path}:{call.lineno}: liest {what} über den Namensraum des Halters, den er "
+                    "nachher nicht bindet"
+                )
 
     def _reader(self, path: str) -> None:
         comparison = CopiesReaderComparison(self, path)

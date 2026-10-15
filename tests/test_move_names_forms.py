@@ -161,6 +161,55 @@ def test_a_string_on_the_old_module_needs_a_declaration(tmp_path: Path) -> None:
     assert "tests/test_forms.py:14: Zeichenkette 'app.core.legacy'" in message
 
 
+#: Weitere Formen, in denen eine Zeichenkette die Quelle nennt (Review RM-M15).
+STRING_FORMS = [
+    (
+        "pfad-ohne-endung",
+        'from pathlib import Path\n\nBASE = Path("app/core/legacy")\n',
+        "tests/test_strings.py:3: Zeichenkette 'app/core/legacy'",
+    ),
+    (
+        "modul-doppelpunkt-name",
+        'READERS = ("app.core.legacy:bump",)\n',
+        "tests/test_strings.py:1: Zeichenkette 'app.core.legacy:bump'",
+    ),
+    (
+        "f-string",
+        'STEM = "legacy"\nPATH = f"app/core/{STEM}.py"\n',
+        "tests/test_strings.py:2: zusammengesetzte Zeichenkette ergibt 'app/core/legacy.py'",
+    ),
+    (
+        "verkettung",
+        'PATH = "app/core/" + "legacy.py"\n',
+        "tests/test_strings.py:1: zusammengesetzte Zeichenkette ergibt 'app/core/legacy.py'",
+    ),
+]
+
+
+@pytest.mark.parametrize(("label", "text", "where"), STRING_FORMS, ids=[f[0] for f in STRING_FORMS])
+def test_a_string_form_naming_the_source_is_rejected(
+    tmp_path: Path, label: str, text: str, where: str
+) -> None:
+    """RM-M15: Pfad ohne Endung, ``"modul:name"`` und zusammengesetzte Zeichenketten (vom
+    Auflöser gefaltet) nennen die Quelle — ohne Erklärung hält der Schnitt an."""
+    files = fx.FORMS_OLD | {"tests/test_strings.py": text}
+    assert where in _rejected(tmp_path, files), label
+
+
+@pytest.mark.parametrize(("label", "text", "where"), STRING_FORMS, ids=[f[0] for f in STRING_FORMS])
+def test_a_string_form_left_naming_the_source_is_red(
+    tmp_path: Path, label: str, text: str, where: str
+) -> None:
+    """RM-M15, der Beweis von außen: dieselbe Zeichenkette, im neuen Baum stehen geblieben."""
+    old = fx.write_tree(tmp_path / "old", fx.FORMS_OLD | {"tests/test_strings.py": text})
+    new = fx.write_tree(tmp_path / "new", fx.FORMS_NEW | {"tests/test_strings.py": text})
+    cut_file = tmp_path / "cut.toml"
+    cut_file.write_text(fx.FORMS_CUT, encoding="utf-8")
+    proof = move_proof.prove(move_cut.load(cut_file), old, new)
+    assert not proof.ok, f"{label}: Beweis grün\n{proof.text()}"
+    assert any(where in error for error in proof.errors), (label, proof.errors)
+
+
 @pytest.mark.parametrize(
     ("label", "text", "where"),
     [

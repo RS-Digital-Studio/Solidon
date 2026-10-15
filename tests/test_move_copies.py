@@ -536,6 +536,54 @@ def test_a_copy_of_an_assignment_copy_declared_as_original_is_rejected(tmp_path:
     assert "tools/relay_tool.py:3: operation kopiert tools.engine_tool.operation" in message
 
 
+#: Ein Halter, der eine Kopie über seinen Namensraum liest (Review RM-M15).
+BY_GLOBALS = 'def by_globals() -> object:\n    return globals()["operation"]\n\n\n'
+COLON = 'NAMES = ("app.core.consumer:operation",)\n'
+
+
+@pytest.mark.parametrize(
+    ("label", "old", "new", "where"),
+    [
+        (
+            "globals-im-halter",
+            fx.edit(
+                fx.COPIES_OLD,
+                CONSUMER,
+                "def limit() -> int:\n",
+                BY_GLOBALS + "def limit() -> int:\n",
+            ),
+            fx.edit(
+                EXPECTED, CONSUMER, "def limit() -> int:\n", BY_GLOBALS + "def limit() -> int:\n"
+            ),
+            "app/core/consumer.py:",
+        ),
+        (
+            "modul-doppelpunkt-kopie",
+            fx.COPIES_OLD | {"tests/test_extra.py": COLON},
+            EXPECTED | {"tests/test_extra.py": COLON},
+            "tests/test_extra.py:1: Zeichenkette 'app.core.consumer:operation'",
+        ),
+    ],
+)
+def test_a_copy_read_by_its_name_is_rejected_and_red(
+    tmp_path: Path, label: str, old: dict[str, str], new: dict[str, str], where: str
+) -> None:
+    """RM-M15: ``globals()["operation"]`` im Halter (danach ``KeyError``) und eine Zeichenkette
+    ``"Halter:Kopie"``: Der Planer hält an, und der Beweis eines Baums, in dem sie stehen
+    blieben, ist rot."""
+    assert where in _rejected(tmp_path / "plan", old), label
+    proof_dir = tmp_path / "proof"
+    cut_file = tmp_path / "cut.toml"
+    cut_file.write_text(fx.COPIES_CUT, encoding="utf-8")
+    proof = move_proof.prove(
+        move_cut.load(cut_file),
+        fx.write_tree(proof_dir / "old", old),
+        fx.write_tree(proof_dir / "new", new),
+    )
+    assert not proof.ok, f"{label}: Beweis grün\n{proof.text()}"
+    assert any(where in error for error in proof.errors), (label, proof.errors)
+
+
 def _with_test(text: str) -> dict[str, str]:
     return fx.COPIES_OLD | {"tests/test_extra.py": text}
 

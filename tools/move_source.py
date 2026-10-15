@@ -18,6 +18,7 @@ from __future__ import annotations
 import ast
 import builtins
 import io
+import re
 import symtable
 import tokenize
 from collections.abc import Iterable, Iterator
@@ -243,14 +244,21 @@ def bound_name(alias: ast.alias) -> str:
 
 
 def names_source(value: str, path: str, module: str, moved: Iterable[str]) -> bool:
-    """Ob die Zeichenkette ``value`` die Quelldatei ``path`` (auch mit Backslash oder nur ihr
-    Dateiname), das Modul ``module`` oder einen verschobenen Namen darunter (``moved``,
-    Punktnamen ``modul.name``) nennt — Text, der nach dem Schnitt ins Leere zeigte."""
+    """Ob die Zeichenkette ``value`` die Quelldatei ``path`` nennt (auch mit Backslash, ohne
+    Endung oder nur ihr Dateiname), das Modul ``module`` (auch in ``"modul:name"`` oder mitten im
+    Text) oder einen verschobenen Namen darunter (``moved``, Punktnamen ``modul.name``) — Text,
+    der nach dem Schnitt ins Leere zeigte. Ein Pfad in das neue Paket (``app/x/ziel.py``) und ein
+    Zielmodul (``app.x.ziel``) nennen die Quelle nicht."""
     slashed = value.replace("\\", "/")
     file_name = path.rpartition("/")[2]
     if path in slashed or slashed == file_name or slashed.endswith("/" + file_name):
         return True
-    return value == module or any(value == m or value.startswith(m + ".") for m in moved)
+    stem = re.escape(path.removesuffix(".py"))
+    if re.search(rf"(?<![\w.]){stem}(?![\w/.])", slashed):
+        return True
+    if re.search(rf"(?<![\w.]){re.escape(module)}(?![\w.])", value):
+        return True
+    return any(re.search(rf"(?<![\w.]){re.escape(m)}(?!\w)", value) for m in moved)
 
 
 # ------------------------------------------------------------------ Spannen von Anweisungen

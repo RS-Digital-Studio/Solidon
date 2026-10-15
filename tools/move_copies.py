@@ -215,6 +215,19 @@ class CopiesPlanner:
         top = TopLevel(source)
         scopes = FileScopes(source)
         converted = {c.head.bound for c in group}
+        for call, names in namespace_reads(self.ctx.index, path, source):
+            if names is not None and not names & converted:
+                continue
+            what = (
+                f"die Kopie {', '.join(sorted(names & converted))}"
+                if names
+                else "einen Namen, den der Auflöser nicht faltet"
+            )
+            self.ctx.problem(
+                f"{path}:{call.lineno}: {source.node_text(call.func)}() liest {what} aus dem "
+                "Namensraum des Halters — danach fehlte die Kopie dort (KeyError); vor dem "
+                "Schnitt als Zugriff auf das Original schreiben"
+            )
         sites: dict[str, list[ast.Name]] = {}
         anchors: dict[str, ast.Import | ast.ImportFrom] = {}
         for copy in group:
@@ -522,7 +535,7 @@ class CopiesPlanner:
         """Jede Zeichenkette ``"H.b"`` einer Kopie ist eine umgestellte Patch-Stelle, und jeder
         Attributname ``"b"`` an ``getattr``/``hasattr``/``setattr``/``delattr`` auf den Halter ist
         umgestellt — sonst ein Fund."""
-        dotted_names = {f"{h}.{b}" for h, b in self.copies}
+        dotted_names = {f"{h}.{b}" for h, b in self.copies} | {f"{h}:{b}" for h, b in self.copies}
         bounds = {b for _h, b in self.copies}
         for area in AREAS:
             base = self.ctx.root / area
@@ -542,7 +555,7 @@ class CopiesPlanner:
                 if hit_dotted:
                     for node in string_constants(source):
                         value = str(node.value)
-                        stale = any(value == d or value.startswith(d + ".") for d in dotted_names)
+                        stale = names_copy(value, dotted_names)
                         if stale and not (rewrite and rewrite.covered(node)):
                             self.ctx.problem(
                                 f"{relative}:{node.lineno}: Zeichenkette {value!r} nennt eine "
@@ -575,6 +588,49 @@ class CopiesPlanner:
 
 
 # ------------------------------------------------------------------------------ Hilfen
+
+
+def names_copy(value: str, names: set[str]) -> bool:
+    """Ob ``value`` eine Kopie nennt: ``"Halter.Kopie"`` oder ``"Halter:Kopie"`` (die Form von
+    ``reach_dump``), auch mit einem Attribut dahinter."""
+    return any(value == d or value.startswith(d + ".") for d in names)
+
+
+def namespace_reads(
+    index: Index, path: str, source: Source
+) -> list[tuple[ast.Call, frozenset[str] | None]]:
+    """Jedes ``globals()``/``vars()`` ohne Argument einer Datei und die Namen, die es dort
+    liest: ``globals()["N"]``, ``globals().get("N")`` (gefaltet über den Auflöser); ``None``,
+    wenn sich das nicht sagen lässt (ein offener Schlüssel, ``globals()`` als Wert)."""
+    found: list[tuple[ast.Call, frozenset[str] | None]] = []
+    for node in ast.walk(source.tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("globals", "vars")
+            and not node.args
+            and not node.keywords
+        ):
+            continue
+        parent = source.parent(node)
+        key: ast.expr | None = None
+        if isinstance(parent, ast.Subscript) and parent.value is node:
+            key = parent.slice
+        elif (
+            isinstance(parent, ast.Attribute)
+            and parent.attr in ("get", "pop", "setdefault", "__getitem__")
+            and isinstance(source.parent(parent), ast.Call)
+        ):
+            call = source.parent(parent)
+            assert isinstance(call, ast.Call)
+            key = call.args[0] if call.args else None
+        if key is None:
+            found.append((node, None))
+            continue
+        values = index.resolve(path, key)
+        names = {str(v.data) for v in values if v.kind == "const" and isinstance(v.data, str)}
+        found.append((node, frozenset(names) if values and len(names) == len(values) else None))
+    return found
 
 
 def _inside(stmt: ast.stmt, node: ast.AST) -> bool:

@@ -552,11 +552,37 @@ def all_comments(source: Source) -> Counter[str]:
 
 
 def string_constants(source: Source) -> Iterator[ast.Constant]:
-    """Jede Zeichenkette einer Datei außer Docstrings."""
+    """Jede Zeichenkette einer Datei außer Docstrings und den Textteilen eines f-Strings (die
+    zählen nur über den ganzen f-String, :func:`folded_texts`)."""
     skip = docstring_ids(source.tree)
+    for node in ast.walk(source.tree):
+        if isinstance(node, ast.JoinedStr):
+            skip.update(id(part) for part in ast.walk(node) if part is not node)
     for node in ast.walk(source.tree):
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in skip:
             yield node
+
+
+def folded_texts(index: Index, path: str, source: Source) -> Iterator[tuple[ast.expr, str]]:
+    """Jeder f-String und jede Verkettung mit ``+`` (die äußerste), deren Wert der Auflöser
+    faltet, mit jedem gefalteten Wert — eine zusammengesetzte Zeichenkette, die sich nicht
+    umschreiben, wohl aber prüfen lässt."""
+    for node in ast.walk(source.tree):
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            parent = source.parent(node)
+            if isinstance(parent, ast.BinOp) and isinstance(parent.op, ast.Add):
+                continue
+            if not any(
+                isinstance(part, ast.JoinedStr)
+                or (isinstance(part, ast.Constant) and isinstance(part.value, str))
+                for part in ast.walk(node)
+            ):
+                continue
+        elif not isinstance(node, ast.JoinedStr):
+            continue
+        for value in index.resolve(path, node):
+            if value.kind == "const" and isinstance(value.data, str):
+                yield node, value.data
 
 
 def qualname_of(source: Source, node: ast.AST) -> str:

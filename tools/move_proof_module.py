@@ -25,6 +25,7 @@ from tools.move_compare import (
     _string_names,
     _text,
     comments,
+    folded_texts,
     import_bindings,
     qualname_of,
     string_constants,
@@ -425,7 +426,7 @@ class ModuleProof:
         verschobenen Namen unter dem alten Modul (Pfad, Punktname)."""
         moved = {f"{self.src}.{name}" for name in self.mapping.moves}
         file_name = self.src_path.rpartition("/")[2]
-        needles = (self.src_path.encode(), file_name.encode(), self.src.encode())
+        needles = (file_name.encode(), self.src.rpartition(".")[2].encode())
         targets = {path_of(t) for t in self.targets}
         for path, data in self.trees.new_files.items():
             if not path.endswith(".py") or not any(n in data for n in needles):
@@ -449,6 +450,12 @@ class ModuleProof:
                     self.proof.error(
                         f"{path}:{node.lineno}: Zeichenkette {value!r} nennt die alte Quelle — in "
                         "name_lists oder source_readers erklären"
+                    )
+            for folded, value in folded_texts(self.trees.new_index, path, source):
+                if names_source(value, self.src_path, self.src, moved):
+                    self.proof.error(
+                        f"{path}:{folded.lineno}: zusammengesetzte Zeichenkette ergibt {value!r} "
+                        "und nennt die alte Quelle"
                     )
 
 

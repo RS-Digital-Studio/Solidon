@@ -30,7 +30,13 @@ import ast
 import re
 from dataclasses import dataclass, field
 
-from tools.move_compare import Scopes, qualname_of, string_constants, top_names
+from tools.move_compare import (
+    Scopes,
+    folded_texts,
+    qualname_of,
+    string_constants,
+    top_names,
+)
 from tools.move_cut import Target
 from tools.move_edits import Edit
 from tools.move_refs import AlreadyAppliedError, Context, quoted
@@ -1064,7 +1070,15 @@ class ModulePlanner:
                     "und wandert mit ihrer Definition — in [[name_lists]] mit der Quelle als "
                     "Pfad erklären (to = [derselbe Wert], wenn sie bleibt) oder vorher umschreiben"
                 )
-        for relative in self._files((self.path, file_name, self.src)):
+        for folded, value in folded_texts(self.ctx.index, self.path, self.source):
+            if names_source(value, self.path, self.src, moved):
+                self.ctx.problem(
+                    f"{self.path}:{folded.lineno}: zusammengesetzte Zeichenkette ergibt {value!r} "
+                    "und nennt die alte Quelle — vor dem Schnitt als feste Zeichenkette schreiben "
+                    "(dann erklärbar in [[name_lists]])"
+                )
+        last = self.src.rpartition(".")[2]
+        for relative in self._files((file_name, last)):
             rewrite = self.ctx.rewrites().get(relative)
             source = rewrite.source if rewrite else self.ctx.source(relative)
             gone = rewrite.removed_assignments() if rewrite else []
@@ -1080,6 +1094,14 @@ class ModulePlanner:
                     "in [[name_lists]] (auch to = [derselbe Wert], wenn sie bleibt) oder "
                     "[[source_readers]] erklären oder vorher umschreiben"
                 )
+            for folded, value in folded_texts(self.ctx.index, relative, source):
+                if names_source(value, self.path, self.src, moved):
+                    self.ctx.problem(
+                        f"{relative}:{folded.lineno}: zusammengesetzte Zeichenkette ergibt "
+                        f"{value!r} und nennt die alte Quelle — sie lässt sich nicht umschreiben; "
+                        "vor dem Schnitt als feste Zeichenkette schreiben (dann erklärbar in "
+                        "[[name_lists]])"
+                    )
 
 
 def _short_text(source: Source, node: ast.AST) -> str:
