@@ -65,7 +65,7 @@ import threading
 import urllib.request
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from pathlib import Path, PurePath, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from typing import Final
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -1574,7 +1574,9 @@ def unusable_address(text: str) -> TranslatableText | None:
     if not address:
         # Leer heißt „wieder die Vorgabe" und ist kein Fehler.
         return None
-    if Path(address).drive or address.startswith(("/", "\\", "~", "file:")):
+    # Laufwerke kennt nur der Windows-Pfadtyp; mit ``Path`` las Linux und macOS
+    # ``C:\…`` als Rechner mit kaputtem Port und nannte den falschen Grund.
+    if PureWindowsPath(address).drive or address.startswith(("/", "\\", "~", "file:")):
         return _(
             "Das sieht nach einem Ordner oder einer Datei aus. Hier gehört die "
             "Adresse hin, unter der der Dienst im Netz antwortet — sie beginnt "
