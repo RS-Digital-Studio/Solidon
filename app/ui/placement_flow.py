@@ -71,6 +71,7 @@ from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
 from app.ui.measure_card_drag import MeasureCardDrag
+from app.ui.measure_field_places import distance_reserve, emergency_places, rows_height
 from app.ui.overlay import MEASURE_CARD, _round_corners
 from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, Renderer, SurfaceStyle
@@ -1611,6 +1612,10 @@ class PlacementFlow(QObject):
         #: Wo jedes Maßfeld beim letzten Aufbau stand — der Platz bleibt, solange
         #: er frei ist und das Maß nicht weit gewandert ist (``STICKY_FIELDS``).
         self._field_slots: dict[QWidget, QRect] = {}
+        #: Wie hoch die Zeilen der Maßfelder beim letzten Aufbau waren
+        #: (``measure_field_places.rows_height``) — so viel hält die Maßkarte
+        #: unter sich frei.
+        self._field_rows = 0
         self._surface_busy = False
         self._tool_busy = False
         self._tool_again = False
@@ -2105,9 +2110,10 @@ class PlacementFlow(QObject):
         if self._measure_scope is not None:
             self._measure_scope.setMaximumWidth(content_width)
             chrome += self._measure_scope.sizeHint().height() + NORMAL
-        # Eine weitere Zeile bleibt für die vorhandenen Kantenabstände frei.
-        distances = self._measures[0].sizeHint().height() + SPACE
-        available = room.height() - chrome - distances
+        # Unter der Karte bleiben so viele Zeilen frei, wie die Maßfelder
+        # brauchen (``measure_field_places``, FD-84).
+        reserve = distance_reserve(self._measures[0].sizeHint().height(), self._field_rows)
+        available = room.height() - chrome - reserve
         # **Was passt, rollt nicht** (Fensterabnahme 04.10.2026). Die Höhe gilt
         # der vollen Breite; ein Rollbalken nimmt Breite weg, die umbrechenden
         # Beschriftungen werden höher, und Qt hält den Balken dann für nötig —
@@ -5890,6 +5896,26 @@ class PlacementFlow(QObject):
             self._centre.setToolTip(tr("Rechtsklick: Bezug ändern."))
             self._centre.show()
             place(self._reference_boxes[2], screen(centre.point), screen(centre.point))
+        # **Die Karte lässt so viele Zeilen frei, wie die Maße brauchen.** Erst
+        # hier stehen Zahl und Größe der Felder dieses Aufbaus fest; passen sie
+        # nicht in eine Zeile des Raums, wird die Karte niedriger und rollt
+        # (FD-84). Nur wenn sich die Höhe ändert — sonst bleibt es bei dem einen
+        # Größenweg am Anfang von ``redraw``. Ohne Maßkarte gibt es nichts
+        # freizuhalten; die nächste Karte rechnet ihre Zeilen hier selbst nach.
+        if self._measure_group is not None:
+            line = self._measures[0].sizeHint().height()
+            reserve = distance_reserve(line, self._field_rows)
+            self._field_rows = rows_height(
+                [
+                    widget.size()
+                    for widget, _wanted, _anchor in pending
+                    if widget is not self._measure_box
+                ],
+                measure_room.width(),
+            )
+            if distance_reserve(line, self._field_rows) != reserve:
+                self._size_measure_fields(measure_room)
+                user_rect = self._measure_drag.placed_rect()
         # Der Platz für die Maßfelder ist der Raum **über** der Leiste, seit
         # sie unten mittig steht. Vorher lag sie oben und der Raum darunter;
         # wer nur die Leiste verschiebt und diese Rechnung stehen lässt, drückt
@@ -5936,6 +5962,9 @@ class PlacementFlow(QObject):
             1,
         ).adjusted(-reach, -reach, reach, reach)
         occupied: list[QRect] = [blocked]
+        #: Setzpunkt und Griff: Ihre Rechtecke tragen :data:`ROOMY` Abstand,
+        #: den die Notanordnung zuerst aufgibt (``emergency_rows``).
+        marked: list[QRect] = [blocked]
         if user_rect is not None:
             occupied.append(user_rect)
         # **Der Bewegungsgriff bleibt frei.** Er hängt am selben Merkmal und
@@ -5955,14 +5984,14 @@ class PlacementFlow(QObject):
             )
             # Dieselbe Spanne nimmt die Maßfläche aus ihren Linien heraus.
             self._canvas.clearing = (middle, float(around))
-            occupied.append(
-                QRect(
-                    max(bounds.left() - around, min(round(middle.x()), bounds.right() + around)),
-                    max(bounds.top() - around, min(round(middle.y()), bounds.bottom() + around)),
-                    1,
-                    1,
-                ).adjusted(-around, -around, around, around)
-            )
+            grip = QRect(
+                max(bounds.left() - around, min(round(middle.x()), bounds.right() + around)),
+                max(bounds.top() - around, min(round(middle.y()), bounds.bottom() + around)),
+                1,
+                1,
+            ).adjusted(-around, -around, around, around)
+            occupied.append(grip)
+            marked.append(grip)
         # **Der Körper bleibt frei, solange man ihn ganz sieht.** Jedes Feld
         # wollte in die Mitte seiner Maßlinie, und die läuft über die Platte:
         # Drei Beschriftungen standen auf dem Teil, zwei davon aufeinander
@@ -5981,8 +6010,10 @@ class PlacementFlow(QObject):
             occupied.append(body)
         # Das Vorschauband oben deckt sonst zwei Felder zu.
         banner = getattr(self.viewport, "banner", None)
+        banners: list[QRect] = []
         if isinstance(banner, QWidget) and banner.isVisibleTo(self.viewport):
-            occupied.append(banner.geometry())
+            banners.append(banner.geometry())
+            occupied.append(banners[0])
         obstacles = list(occupied)
         ink: list[tuple[QPointF, QPointF]] = list(self._canvas.lines)
         if user_rect is not None:
@@ -6102,50 +6133,34 @@ class PlacementFlow(QObject):
             return found
 
         def emergency_rows() -> dict[QWidget, QRect]:
-            """Fünf Felder passen im unterstützten Desktopbereich in wenige
-            Zeilen. Diese feste Anordnung löst einen ungünstigen früheren
-            Platz, statt ein weiteres Feld am unteren Rand zu stapeln."""
-            rows: dict[QWidget, QRect] = {}
-            x, y, row_height = bounds.left(), bounds.top(), 0
-            for pending_widget, _wanted, _anchor in pending:
-                if x > bounds.left() and x + pending_widget.width() > bounds.right() + 1:
-                    x, y, row_height = bounds.left(), y + row_height + SPACE, 0
-                slot = QRect(x, y, pending_widget.width(), pending_widget.height())
-                # Die Nutzerkarte bleibt auch nach zwei erfolglosen Suchen
-                # ausgespart. Eine Zeile läuft links oder rechts an ihr vorbei;
-                # passt dort kein Feld mehr, beginnt die nächste darunter.
-                if user_rect is not None:
-                    reserved = user_rect.adjusted(-SPACE, -SPACE, SPACE, SPACE)
-                    while slot.intersects(reserved):
-                        beside = reserved.right() + 1
-                        if beside + slot.width() <= bounds.right() + 1:
-                            x = beside
-                        elif row_height:
-                            x, y, row_height = bounds.left(), y + row_height + SPACE, 0
-                        else:
-                            x, y = bounds.left(), reserved.bottom() + 1
-                        slot.moveTopLeft(QPoint(x, y))
-                # **Auch die Notlage weicht dem Setzpunkt aus — solange danach
-                # noch Platz ist.** Sonst gälte die Zusage „man sieht, wohin
-                # man setzt" genau dort nicht, wo es eng wird. Die Grenze ist
-                # keine Feinheit: Bei starkem Zoom füllt die Vorschau das ganze
-                # Bild, und ein Ausweichen darunter schöbe die Felder aus der
-                # Ansicht heraus (gemessen an
-                # ``test_dimension_fields_do_not_overlap_at_zoomed_view_edges``:
-                # y = 20009 bei 600 px Höhe). Dann ist Überdecken das kleinere
-                # Übel — ein Feld außerhalb des Bildes ist keines.
-                below = blocked.bottom() + SPACE + 1
-                if (
-                    user_rect is None
-                    and slot.intersects(blocked)
-                    and (below + pending_widget.height() - 1 <= bounds.bottom())
-                ):
-                    x, y, row_height = bounds.left(), below, 0
-                    slot = QRect(x, y, pending_widget.width(), pending_widget.height())
-                rows[pending_widget] = slot
-                x += pending_widget.width() + SPACE
-                row_height = max(row_height, pending_widget.height())
-            return rows
+            """Die Felder in Zeilen von links oben, wenn die Nähe-Suche an
+            keinem Platz mehr fand (``measure_field_places``). Diese feste
+            Anordnung löst einen ungünstigen früheren Platz, statt ein weiteres
+            Feld am unteren Rand zu stapeln."""
+            # **Auch die Notlage hält frei, was frei bleiben muss — solange im
+            # Bild noch Platz ist.** Die vom Kunden gelegte Karte immer; Setzpunkt,
+            # Bewegungsgriff und Vorschauband erst mit ihrem Abstand, dann ohne
+            # ihn, und erst zuletzt gar nicht. Sonst gälte die Zusage „man
+            # sieht, wohin man setzt" genau dort nicht, wo es eng wird, und ein
+            # Feld über dem Griff nähme Pfeilen und Ringen die Zeigerereignisse
+            # (FD-84: die Mittenbeschriftung stand über dem Griff, obwohl unter
+            # ihm eine Zeile frei war). Bei starkem Zoom füllt die Vorschau das
+            # ganze Bild; dann ist Überdecken das kleinere Übel — ein Feld
+            # außerhalb des Bildes ist keines (gemessen an
+            # ``test_dimension_fields_do_not_overlap_at_zoomed_view_edges``:
+            # y = 20009 bei 600 px Höhe). Die Notreihen ließen bis FD-84 das
+            # letzte Feld auch unter den Bildrand umbrechen.
+            bare = [rect.adjusted(ROOMY, ROOMY, -ROOMY, -ROOMY) for rect in marked]
+            places = emergency_places(
+                [widget.size() for widget, _wanted, _anchor in pending],
+                bounds,
+                [user_rect] if user_rect is not None else [],
+                ([*marked, *banners], [*bare, *banners], []),
+            )
+            return {
+                widget: rect
+                for (widget, _wanted, _anchor), rect in zip(pending, places, strict=True)
+            }
 
         fresh = find_places(pending, occupied, ink)
         if fresh is None and user_rect is not None:

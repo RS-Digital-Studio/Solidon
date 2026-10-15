@@ -35,7 +35,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Zweitkodierung, Menü-/Feldgrenzen, ruhende Werkzeugleisten? | `test_theme_and_palette.py` · `test_interface_limits.py` · `test_toolbar_rest_style.py` |
 | Findet die Suche, was der Kunde tippt? | `test_search.py`; das Suchfeld der Karte in `test_selection_operations.py` |
 | Bleiben Änderungswege gesperrt, Gründe aktuell und Fokus nach Befundhandlung im Bericht? | `test_change_lock.py`, `test_licence_lock_offers.py`, `test_finding_action_focus.py` |
-| Systemdialoge, Maßkarten und Feldhilfe? | `test_process.py`, `test_in_view_arming.py`, `test_sketch_editor_measure_field.py`, `test_feature_front_contract.py`, `test_measure_group_layout.py`, `test_measure_card_drag_ui.py`, `test_measure_card_placement.py` |
+| Systemdialoge, Maßkarten und Feldhilfe? | `test_process.py`, `test_in_view_arming.py`, `test_sketch_editor_measure_field.py`, `test_feature_front_contract.py`, `test_measure_group_layout.py`, `test_measure_card_*.py`, `test_measure_field_places.py` |
 | Funktionsdurchgang: Zeilen, Pakete, Szenen · Urteile und Gegenproben · der Prüfstand am Fenster · der Wortschatz der Ziele, aufgelöst am Fenster | `test_function_*.py` (Attrappen in `bench_fakes.py`) · `test_guide_targets.py`, `test_bench_findings.py`; Bildanleitungen und Wortschatz im Kern in `test_guides.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Erkennt der druckgleich-Vergleich (§11.2) jede Verletzung? | `test_print_equal.py` |

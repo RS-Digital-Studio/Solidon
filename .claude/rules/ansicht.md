@@ -150,10 +150,8 @@ Kamerawechsel neue Punkte. Sie sind nicht pickbar. Ein einzelnes QWidget
 von einem Bildpunkt am oberen Arm trägt Tastaturfokus und zugänglichen Namen;
 beim Beenden kehrt sein Fokus in die Ansicht zurück.
 
-Eine große Fachkarte darf bei Platzmangel den Rand des Körpers überdecken.
-Dieser Ausweg gilt nur für diese Karte: Setzpunkt und Bewegungsgriff bleiben
-frei, die kurzen Maßfelder behalten ihre Plätze außerhalb des Körpers.
-Ein Platzmangel der Fachkarte schiebt nicht sämtliche Maße in eine Notreihe.
+Wo Fachkarte und Maßfelder bei Platzmangel stehen: `griffe.md`, „Maße und
+Platzierung am Merkmal“.
 
 **Messen ist orthografisch, und zwar von selbst** (§18.1 — perspektivisch zielt
 der Nutzer falsch): `MainWindow._on_measure_mode` schaltet beim Betreten um und

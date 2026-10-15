@@ -498,6 +498,20 @@ Wer den Zug beim Beginn meldet, schließt genau die Maße weg, um die es geht.
   verlangt. Am echten Fenster 304 statt 408 Bildpunkte breit. Rahmen und
   Rundung kommen aus demselben Stilblatt wie die Karten am Rand, die Maske
   stellt die Zwickel frei.
+* **Bei Platzmangel bleibt jedes Maßfeld im Bild** (FD-84, Oktober 2026).
+  Die Fachkarte hielt unter sich fest eine Feldzeile frei, gleich wie viele
+  Felder hineinmussten; passten sie bei hoher, rollender Karte nicht in eine
+  Zeile, gab es keine Lage im Bild. Die Notreihen danach brachen um, ohne die
+  Unterkante zu prüfen — offscreen stand das fünfte Feld bei y = 1072 in einer
+  1080 hohen Ansicht, deren Raum bei 1067 endet —, und sie wichen nur dem
+  Setzpunkt aus: Am 900 × 600-Fall stand die Mittenbeschriftung über dem
+  Bewegungsgriff, obwohl unter ihm eine Zeile frei war. Ausgelöst wurde das
+  offscreen durch breitere Schrift mit Stylesheet (Kantenmaße 395 statt
+  höchstens 370 Punkte); am echten Fenster greift derselbe Notweg bei
+  schmalem Bildraum, kleinen Bildschirmen und langen Sprachen. Seitdem zählt
+  `measure_field_places.rows_height` die Zeilen, die die Felder wirklich
+  brauchen, und `emergency_places` sucht jedem Feld den ersten freien Platz
+  im Bild, mit Stufen vom strengen Abstand bis zum Überdecken.
 
 ### Wo etwas schon sitzt, zielt der Zeiger nicht
 
