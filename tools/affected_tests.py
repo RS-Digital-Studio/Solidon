@@ -324,7 +324,11 @@ def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
             found[name] = f"nennt {file.name}"
 
     # Der Ordner, in dem die Datei liegt — ``changelog``, ``locales``,
-    # ``data``. Module, die ihn im Quelltext nennen, lesen die Datei.
+    # ``data``. Module, die ihn im Quelltext nennen, lesen die Datei: eine
+    # Testdatei selbst, ein Modul unter ``app/`` oder ``tools/`` und ebenso ein
+    # Helfer unter ``tests/`` für die Testdateien, die ihn importieren — sonst
+    # fehlte ``test_packaging_platform.py``, für den nur
+    # ``tests/packaging_helpers.py`` ``.github/workflows`` nennt (RPL-1).
     #
     # **Nur die direkten Importeure dieser Leser, nicht die ganze Kette.** Die
     # erste Fassung nahm ``graph.dependents`` und machte aus zwei Testdateien
@@ -332,20 +336,26 @@ def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
     # die Oberfläche hängt daran fast jede Datei. Formal richtig, praktisch
     # wertlos — eine Auswahl, die zur Suite wird, sagt nichts mehr. Wer eine
     # Datendatei ändert, will die Tests der Module sehen, die sie lesen; wer
-    # das ganze Fenster prüfen will, fährt das Tor.
+    # das ganze Fenster prüfen will, fährt das Tor. Deshalb zählt auch ein
+    # Helfer, der einen Leser nur importiert, nicht: Er wäre das zweite Glied.
     folder = file.parent.name
     if folder and folder not in {"", ".", "website"}:
-        for name, path in graph.modules.items():
-            if name.startswith("tests.") or not re.search(
-                _folder_pattern(folder), path.read_text(encoding="utf-8")
-            ):
+        pattern = _folder_pattern(folder)
+        readers = [
+            name
+            for name, path in graph.modules.items()
+            if re.search(pattern, path.read_text(encoding="utf-8"))
+        ]
+        # Der Namensweg oben ist der genauere und behält den Vorrang, danach
+        # die Testdatei, die den Ordner selbst nennt, vor dem Importeur.
+        for name in readers:
+            if _is_test_file(graph, name):
+                found.setdefault(name, f"nennt den Ordner {folder}/")
+        for name in readers:
+            if _is_test_file(graph, name):
                 continue
             for importer in graph.importers.get(name, ()):
-                # Nur Testdateien: Über einen Helfer wäre es das zweite Glied der
-                # Kette — ``tests/helpers.py`` importiert ein Modul, das den
-                # Changelog nennt, und zöge so jede Testdatei nach, die ihn benutzt.
                 if _is_test_file(graph, importer):
-                    # Der Namensweg oben ist der genauere — er behält den Vorrang.
                     found.setdefault(importer, f"hängt an einem Modul, das {folder}/ liest")
     return found
 

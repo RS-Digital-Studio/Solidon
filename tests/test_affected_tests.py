@@ -475,6 +475,31 @@ def test_a_helper_of_a_data_reader_stays_out_and_drags_in_nothing(tree: Path) ->
     assert _names(files, tree) == set()
 
 
+def test_a_folder_named_by_a_test_or_a_test_helper_selects_its_readers(tree: Path) -> None:
+    """RPL-1 (Review des Plattformpakets): Nach dem Schnitt nennt nur
+    ``tests/packaging_helpers.py`` den Ordner ``.github/workflows``, und der
+    Workflow-Wächter in ``test_packaging_platform.py`` fehlte bei drei Workflows in der
+    Auswahl. Ein Helfer unter ``tests/``, der den Ordner nennt, liest ihn für seine
+    Importeure; eine Testdatei, die ihn nennt, liest ihn selbst. Attrappe, weil die
+    Plattformdateien in diesem Zweig noch fehlen."""
+    workflow = _write(tree, ".github/workflows/mac-netz.yml", "name: Mac\n")
+    _write(
+        tree,
+        "tests/packaging_helpers.py",
+        "from pathlib import Path\nWORKFLOWS = Path('.github/workflows')\n",
+    )
+    _write(tree, "tests/test_packaging_platform.py", "from tests.packaging_helpers import X\n")
+    _write(tree, "tests/test_ci_files.py", "WORKFLOWS = '.github/workflows/'\n")
+
+    files, reasons = affected([workflow], ImportGraph(tree))
+
+    assert _names(files, tree) == {"tests/test_packaging_platform.py", "tests/test_ci_files.py"}
+    assert reasons[tree / "tests" / "test_packaging_platform.py"] == (
+        "hängt an einem Modul, das workflows/ liest"
+    )
+    assert reasons[tree / "tests" / "test_ci_files.py"] == "nennt den Ordner workflows/"
+
+
 def test_a_script_outside_the_packages_selects_the_test_that_loads_it(tree: Path) -> None:
     """Ein Skript außerhalb von ``app/``, ``tools/`` und ``tests/`` importiert niemand.
 
