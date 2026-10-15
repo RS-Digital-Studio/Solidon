@@ -25,6 +25,17 @@ und von zwei Fassungen desselben Satzes veraltet immer eine (RM-098).
 
 ## Was wo geprüft wird
 
+### Begriffe, Absagewege und Agentenorte
+
+Hier statt in der Karte, weil sie an ihrem Budget steht.
+
+| Vertrag | Zuständige Testdatei |
+|---|---|
+| Beginnt jede Merkmalsart groß, und fallen *Überstand* und *Überhang* in keiner Sprache zusammen? | `test_catalog_terms.py` |
+| Bietet eine Kantenabsage *Andere Kanten wählen* statt *Andere Objekte wählen*? | `test_edge_refusal_ways.py` |
+| Nennt *In Einzelteile aufteilen* Splitter und bietet *Splitter behalten* an? | `test_split_splinters.py` |
+| Nennen die Zusatzwerkzeuge des Agenten ihren Fensterort, und steht er in der gebauten Menüleiste? | `test_agent_tool_places.py` |
+
 ### Dialog-, Karten- und Vorschaugrößen
 
 | Vertrag | Zuständige Testdatei |
