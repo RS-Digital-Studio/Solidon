@@ -102,6 +102,8 @@ TARGETS: Final[frozenset[str]] = frozenset(
         "filament.add",
         "filament.profile",
         "filament.colour",
+        # Die erste Spule aus dem Lager in einem Filamentfeld — ein Ort in seiner Liste
+        "filament.spool",
         # „Zeichnen" in der Werkzeugleiste und „Fertig" im Zeichenmodus
         "toolbar.draw",
         "sketch.done",

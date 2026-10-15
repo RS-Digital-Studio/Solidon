@@ -31,6 +31,8 @@
 #                 entsteht beim Bau, zu groß für tests/data
 #   recognition   "declined": die Frage vor der langen Vollerkennung ist im
 #                 Ladeschritt abgelehnt gespeichert (§21.1)
+#   spools        Spulen im Filamentlager des Falls vor dem Start: [{name, colour,
+#                 material_type}]
 #   promises      objects, kinds (Merkmalsarten), body (closed, open, parts, cavity),
 #                 findings (Befundkennungen), actions (Handlung → Befund, an dem der
 #                 Bericht sie anbietet), stops, triangles_over, seconds_over
@@ -1054,6 +1056,44 @@ params = { diameter = 6.0, height = 5.0, x = 12.0, z = 20.0 }
 [[scene."drei_zapfen.netz".ops]]
 op = "union_objects"
 inputs = ["obj_1", "obj_2", "obj_3", "obj_4"]
+
+# Alle sieben Filamente des Körpers sind belegt: Eine Spule aus dem Lager ersetzt
+# eines, und das Feld fragt, welches (FilamentField._replacement_slot; FD-101).
+# Die Spule liegt vor dem Start im Lager des Falls.
+[scene."sieben_filamente.netz"]
+summary = "Die drei Zapfen, sieben Flächen in den Filamenten 1 bis 7; eine Spule PETG Rot im Lager."
+kernel = "netz"
+base = "drei_zapfen.netz"
+spools = [{ name = "PETG Rot", colour = "#c0392b", material_type = "PETG" }]
+promises = { objects = 1, kinds = ["pin", "face"] }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 1, at_feature = "face_1", colour = "#1f77b4" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 2, at_feature = "face_3", colour = "#ff7f0e" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 3, at_feature = "face_4", colour = "#2ca02c" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 4, at_feature = "face_5", colour = "#d62728" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 5, at_feature = "face_6", colour = "#9467bd" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 6, at_feature = "face_7", colour = "#8c564b" }
+[[scene."sieben_filamente.netz".ops]]
+op = "paint_slot"
+inputs = ["obj_1"]
+params = { slot = 7, at_feature = "face_8", colour = "#e377c2" }
 
 # Am exakten Kern über *Verrunden mit Verlauf*: Die Rundung mit wachsendem Radius
 # ist keine Verrundung fester Breite, sondern eine gerundete Seite. *Text

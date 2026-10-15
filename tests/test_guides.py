@@ -801,6 +801,7 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "filament.add",
         "filament.profile",
         "filament.colour",
+        "filament.spool",
         *printing,
     }
     window = MainWindow(Session(), UiSettings())
@@ -825,6 +826,8 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
                 guide_targets.widget_for(window, name)
         with pytest.raises(guide_targets.MissingTargetError):
             guide_targets.area_for(window, "history.last")
+        with pytest.raises(guide_targets.MissingTargetError):
+            guide_targets.next_click(window, "filament.spool")
     finally:
         window.close()
         window.deleteLater()

@@ -225,6 +225,8 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "filament.add": ("D9", "leer"),
     "filament.profile": ("D10", "leer"),
     "filament.colour": ("D10", "leer"),
+    # Eine Spule aus dem Lager im Filamentfeld eines Operationsdialogs (FD-101).
+    "filament.spool": ("D10", "koerper:1"),
     # Der Prüfbericht ist eine Ansicht der Szene, keine Handlung an einer Auswahl:
     # Er braucht einen Körper, aber keinen gewählten (Probelauf F-33, Z3).
     "report": ("D8", "ansicht"),

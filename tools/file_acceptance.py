@@ -1238,7 +1238,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     sondern je Fläche ein Protokoll unter ``surfaces/``.
     """
     from tools import function_bench, function_language, function_protocol, function_setup
-    from tools.function_cases import RESTART_EXIT, rows_of, setup_of_case
+    from tools.function_cases import RESTART_EXIT, install_user_data, rows_of, setup_of_case
     from tools.function_scenes import row_scenes
 
     variant = function_setup.Variant.of({**case.variant, **({"screen": screen} if screen else {})})
@@ -1284,19 +1284,15 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         # Vorbedingung, steht der Grund in ``bench.json`` und in der Übersicht.
         second = function_setup.case_scene(folder, scenes, function_setup.SECOND_SCENE)
         function_setup.write_profile(variant, recent=[second] if second is not None else [])
-        # Eigene Bausteine der Startszene und der Szene des Fehlfalls liegen im
-        # Nutzerordner, bevor die Anwendung ihn liest (C-L4); im Sprachfall die
-        # seiner Einrichtung (FD-101).
+        # Eigene Bausteine und Spulen der Startszene und der Szene des Fehlfalls
+        # liegen im Nutzerordner, bevor die Anwendung ihn liest (C-L4); im
+        # Sprachfall die seiner Einrichtung (FD-101).
         owners = (
             row_scenes(row)
             if data is not None
-            else setup_of_case(rows.values(), case.row).own_parts
+            else setup_of_case(rows.values(), case.row).user_data
         )
-        state["own_parts"] = [
-            str(path)
-            for key in owners
-            for path in function_setup.install_own_parts(function_setup.scene_setup(key))
-        ]
+        state["user_data"] = [path for key in owners for path in install_user_data(key)]
         load_operations()
         # Wie ``app.main``: die eigenen Bausteine aus dem Nutzerordner, ihre
         # Ladebefunde in den Bericht. Ohne sie lag ein Baustein im Ordner und

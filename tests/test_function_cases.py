@@ -40,7 +40,7 @@ def test_rows_whose_scenes_need_a_setup_run_in_their_own_language_case(
     install = function_cases.setup_of(by_id[INSTALL])
     keep = function_cases.setup_of(by_id[KEEP])
     assert dict(install.preconditions) == {"opencascade": "fehlt"}
-    assert keep.own_parts and not keep.preconditions
+    assert keep.user_data and not keep.preconditions
     assert {install.key, keep.key} <= set(keys)
     # Die Zeilen des Pakets ohne Einrichtung bleiben unter seiner Kennung.
     plain = function_cases.rows_of(rows, "D8")
@@ -65,6 +65,25 @@ def test_the_language_case_of_a_setup_carries_its_preconditions(
     missing = next(case for row, case in by_row.items() if "opencascade=fehlt" in row)
     assert Variant.of(missing.variant).preconditions == {"opencascade": "fehlt"}
     assert all(case.kind == "language" for case in cases)
+
+
+def test_spools_of_a_scene_lie_in_the_store_of_the_case_before_it_starts(
+    rows: list[dict[str, Any]],
+) -> None:
+    """Eine Spule im Lager ändert jede Fläche, die das Lager zeigt: Die Zeilen ihrer Szene
+    laufen in einem eigenen Sprachfall, und die Spule liegt vor dem Start im Lager
+    des Falls — im Profil der Suite, nie im Nutzerordner des Kunden (FD-101)."""
+    from app.core.knowledge import filaments
+    from tools import function_cases
+
+    by_id = {row["id"]: row for row in rows}
+    setup = function_cases.setup_of(by_id["meldung:_replacement_slot"])
+    assert setup.key == "nutzerdaten:sieben_filamente.netz"
+    assert setup.user_data == ("sieben_filamente.netz",)
+    assert all(spool.name != "PETG Rot" for spool in filaments.catalogue())
+    placed = function_cases.install_user_data("sieben_filamente.netz")
+    assert placed == [str(filaments.catalogue_path())]
+    assert [spool.name for spool in filaments.catalogue()].count("PETG Rot") == 1
 
 
 def test_the_preconditions_of_the_spec_join_the_setup_of_the_language_case(
@@ -154,7 +173,7 @@ def test_the_language_case_of_own_parts_finds_their_finding(
     folder = out / "cases" / "001"
     state = json.loads((folder / "bench.json").read_text(encoding="utf-8"))
     assert state["stage"] == "done", state.get("harness_exception")
-    assert state["own_parts"], "der Baustein lag nicht im Nutzerordner"
+    assert state["user_data"], "der Baustein lag nicht im Nutzerordner"
     protocol = next(
         json.loads(path.read_text(encoding="utf-8"))
         for path in (folder / "surfaces").glob("*.json")

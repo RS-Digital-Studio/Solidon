@@ -99,3 +99,18 @@ route = [
   { target = "tree.row:obj_2.face_1", modifier = "ctrl" },
   { target = "menu:menubar.gegenstuecke_setzen" },
 ]
+
+# Sind alle Filamente des Körpers belegt, fragt das Filamentfeld beim Wählen einer
+# Spule aus dem Lager, welches sie ersetzt. Das Feld steht unter *Weitere
+# Einstellungen* von *Text aufbringen* (FD-101).
+[row."meldung:_replacement_slot"]
+start_scene = "sieben_filamente.netz"
+route = [
+  { target = "operation:label_text" },
+  { target = "field:slot" },
+  { target = "filament.spool" },
+]
+
+[row."filament.spool"]
+start_scene = "sieben_filamente.netz"
+route = [{ target = "operation:label_text" }, { target = "field:slot" }]

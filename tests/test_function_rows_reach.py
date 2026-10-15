@@ -110,6 +110,14 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
             "menu:menubar.gegenstuecke_setzen",
         ),
     ),
+    "meldung:_replacement_slot": (
+        "sieben_filamente.netz",
+        ("tree.row:obj_1", "operation:label_text", "field:slot", "filament.spool"),
+    ),
+    "filament.spool": (
+        "sieben_filamente.netz",
+        ("tree.row:obj_1", "operation:label_text", "field:slot"),
+    ),
     # D12: Der Druckhinweis vor dem Druckdialog, im eigenen Sprachfall mit offenem Hinweis.
     "dialog:print_disclosure_dialog": ("quader.exakt", ("menu:menubar.an_den_slicer_uebergeben",)),
 }
@@ -216,3 +224,18 @@ def test_the_three_pins_of_its_scene_are_one_pattern_after_grouping() -> None:
         if feature.kind == "pattern"
     ]
     assert len(patterns) == 1 and patterns[0].params.get("grouped") is True
+
+
+def test_every_filament_of_the_body_in_its_scene_is_taken() -> None:
+    """``sieben_filamente.netz``: Der Körper trägt die Filamente 1 bis 7 — mehr hat das
+    Feld nicht (``MAX_SLOTS``), und eine Spule aus dem Lager bekommt keine freie Nummer.
+    Nur dann fragt es, welches Filament sie ersetzt (``message:filament_slot``)."""
+    from app.core.export.threemf import slots_for_object
+    from app.core.types import MAX_SLOTS
+    from tools import function_scenes
+
+    scene = function_scenes.load_scenes()["sieben_filamente.netz"]
+    assert scene.spools, "ohne Spule im Lager gibt es nichts zu ersetzen"
+    result = function_scenes.evaluate_scene(function_scenes.build_scene(scene.key))
+    taken = {slot.index for slot in slots_for_object(result.scene.objects["obj_1"])}
+    assert set(range(1, MAX_SLOTS)) <= taken, sorted(taken)

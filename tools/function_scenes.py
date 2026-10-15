@@ -149,10 +149,15 @@ class Scene:
     recognition: str = ""
     """``declined``: Die Frage nach der vollständigen Merkmalserkennung (§21.1) ist im
     Ladeschritt abgelehnt gespeichert, wie nach einem Import, der sofort lud."""
+    spools: tuple[Mapping[str, str], ...] = ()
+    """Spulen, die vor dem Start im Filamentlager des Falls liegen (:data:`SPOOL_KEYS`)."""
 
 
 #: Die Antworten einer Szene auf die Frage vor der langen Vollerkennung.
 RECOGNITION_ANSWERS: Final[tuple[str, ...]] = ("", "declined")
+
+#: Was eine Spule im Lager einer Szene trägt: Name und Farbe, dazu die Materialart.
+SPOOL_KEYS: Final[frozenset[str]] = frozenset({"name", "colour", "material_type"})
 
 
 SCENE_KEYS: Final[frozenset[str]] = frozenset(
@@ -179,6 +184,7 @@ SCENE_KEYS: Final[frozenset[str]] = frozenset(
         "cause",
         "built",
         "recognition",
+        "spools",
     }
 )
 PARAMETER_KEYS: Final[frozenset[str]] = frozenset({"value", "unit", "title"})
@@ -235,6 +241,7 @@ def load_scenes(path: Path = SCENES) -> dict[str, Scene]:
             cause=dict(entry.get("cause", {})),
             built=dict(entry.get("built", {})),
             recognition=str(entry.get("recognition", "")),
+            spools=tuple(dict(spool) for spool in entry.get("spools", ())),
         )
     if problems:
         raise FunctionListError(problems)
@@ -368,6 +375,11 @@ def _built_problems(
         issues.append(f"Erkennungsantwort {scene.recognition!r} unbekannt")
     elif scene.recognition and not any(step.op == "load" for step in steps):
         issues.append("Erkennungsantwort ohne Ladeschritt, an dem sie stehen könnte")
+    issues += [
+        f"Spule {dict(spool)}: braucht name und colour, kennt nur {sorted(SPOOL_KEYS)}"
+        for spool in scene.spools
+        if set(spool) - SPOOL_KEYS or not {"name", "colour"} <= set(spool)
+    ]
     return issues
 
 

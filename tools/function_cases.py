@@ -4,11 +4,12 @@ Ein Sprachfall geht die Flächen aller Zeilen eines Pakets in einem Prozess ab
 (``function_language.LanguageFlow``). Was eine Startszene über ihre Datei
 hinaus verlangt, gilt für den ganzen Prozess und ab seinem Start: eine fehlende
 Bibliothek (``preconditions``, etwa ``opencascade = fehlt``) hielte jede exakte
-Szene danach an, und eigene Bausteine (``own_parts``) liest die Anwendung nur
-beim Start aus dem Nutzerordner. Vorher bekam ein Sprachfall weder das eine
-noch das andere, und *Installieren* und *Gespeicherte Bausteine behalten*
-fanden ihren Befund nie. Jetzt laufen solche Zeilen in einem eigenen Sprachfall
-je Einrichtung; seine Kennung ist ``<paket>@<einrichtung>``, die Zeilen ohne
+Szene danach an, und Nutzerdaten — eigene Bausteine (``own_parts``), Spulen im
+Lager (``spools``) — liest die Anwendung beim Start aus dem Nutzerordner und
+zeigt sie in jeder Fläche. Vorher bekam ein Sprachfall weder das eine noch das
+andere, und *Installieren* und *Gespeicherte Bausteine behalten* fanden ihren
+Befund nie. Jetzt laufen solche Zeilen in einem eigenen Sprachfall je
+Einrichtung; seine Kennung ist ``<paket>@<einrichtung>``, die Zeilen ohne
 Einrichtung bleiben unter ``<paket>``.
 """
 
@@ -41,10 +42,11 @@ class Setup:
     """Was die Startszenen einer Zeile vor dem Start des Prozesses verlangen."""
 
     key: str = ""
-    """Leer ohne Einrichtung, sonst z. B. ``opencascade=fehlt`` oder ``bausteine:<szene>``."""
+    """Leer ohne Einrichtung, sonst z. B. ``opencascade=fehlt`` oder ``nutzerdaten:<szene>``."""
     preconditions: Mapping[str, str] = field(default_factory=dict)
-    own_parts: tuple[str, ...] = ()
-    """Die Startszenen, deren eigene Bausteine im Nutzerordner liegen müssen."""
+    user_data: tuple[str, ...] = ()
+    """Die Startszenen, deren Nutzerdaten vor dem Start liegen müssen: eigene Bausteine
+    im Nutzerordner, Spulen im Lager (:func:`install_user_data`)."""
 
 
 def setup_of(row: Mapping[str, Any]) -> Setup:
@@ -57,7 +59,7 @@ def setup_of(row: Mapping[str, Any]) -> Setup:
     (FD-101, FD-121). Was jeder Fall ohnehin hat (:data:`EVERY_CASE_STATES`),
     bleibt im Sprachfall des Pakets.
     """
-    from tools.function_scenes import row_scenes
+    from tools.function_scenes import load_scenes, row_scenes
     from tools.function_setup import scene_setup
 
     spec = row.get("spec") or {}
@@ -66,16 +68,45 @@ def setup_of(row: Mapping[str, Any]) -> Setup:
         for name, state in (spec.get("preconditions") or {}).items()
         if name not in ROW_PRECONDITIONS
     }
-    parts: list[str] = []
+    catalogue = load_scenes()
+    data: list[str] = []
     for key in reversed(row_scenes(row)):
         setup = scene_setup(key)
         needed.update(setup.preconditions)
-        if setup.own_parts:
-            parts.append(key)
+        scene = catalogue.get(key)
+        if setup.own_parts or (scene is not None and scene.spools):
+            data.append(key)
     needed = {name: state for name, state in needed.items() if state not in EVERY_CASE_STATES}
     words = [f"{name}={state}" for name, state in sorted(needed.items())]
-    words += [f"bausteine:{key}" for key in sorted(parts)]
-    return Setup(",".join(words), needed, tuple(sorted(parts)))
+    words += [f"nutzerdaten:{key}" for key in sorted(data)]
+    return Setup(",".join(words), needed, tuple(sorted(data)))
+
+
+def install_user_data(key: str) -> list[str]:
+    """Legt die Nutzerdaten der Startszene ``key`` an, bevor die Anwendung startet.
+
+    Eigene Bausteine in den Nutzerordner (``function_setup.install_own_parts``),
+    Spulen ins Filamentlager des Falls — wie ein Kunde, der sie früher angelegt
+    hat. Gibt die Dateien zurück, die danach dastehen. Nur im Profil des Falls,
+    das ``function_setup.write_profile`` vorher umgebogen hat.
+    """
+    from app.core.knowledge import filaments
+    from tools.function_scenes import load_scenes
+    from tools.function_setup import install_own_parts, scene_setup
+
+    placed = [str(path) for path in install_own_parts(scene_setup(key))]
+    scene = load_scenes().get(key)
+    for spool in scene.spools if scene is not None else ():
+        filaments.save(
+            filaments.CatalogueFilament(
+                name=str(spool["name"]),
+                colour=str(spool["colour"]),
+                material_type=str(spool.get("material_type", "")),
+            )
+        )
+    if scene is not None and scene.spools:
+        placed.append(str(filaments.catalogue_path()))
+    return placed
 
 
 def language_groups(rows: Iterable[Mapping[str, Any]]) -> dict[str, list[Setup]]:

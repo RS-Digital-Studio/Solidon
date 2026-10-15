@@ -704,7 +704,7 @@ class QtPorts:
         """
         from PySide6.QtWidgets import QApplication
 
-        from app.ui import guide_targets
+        from app.ui import guide_finders, guide_targets
         from app.ui.catalog import PartCatalog
 
         window = self.window
@@ -728,6 +728,10 @@ class QtPorts:
             return window.start_screen.recent_list
         if kind == "finding":
             return window.report.list
+        if name == guide_finders.SPOOL:
+            # Die Spule steht in der aufgeklappten Liste ihres Filamentfelds (FD-101).
+            found = guide_finders.spool_list(window)
+            return found[1] if found is not None and found[1].isVisible() else None
         return None
 
     def centre(self, rect: Any) -> Any:

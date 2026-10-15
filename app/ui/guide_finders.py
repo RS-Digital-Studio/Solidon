@@ -1,17 +1,22 @@
 """Finder fester Namen des Wortschatzes, die ``guide_targets`` nicht mehr fasst (FD-101).
 
 ``guide_targets`` steht an der Größengrenze der Codestruktur (Regel 6, 2 000
-Zeilen); seine Tabelle ``_FINDERS`` verweist für diese Namen hierher.
+Zeilen); seine Tabelle ``_FINDERS`` und ``next_click`` verweisen für diese
+Namen hierher.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
-    from PySide6.QtWidgets import QWidget
+    from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
+    from app.ui.guide_targets import Click
     from app.ui.main_window import MainWindow
+
+#: Die erste Spule aus dem Lager in einem Filamentfeld — ein Ort, kein Widget.
+SPOOL: Final = "filament.spool"
 
 
 def first_parameter_label(window: MainWindow) -> QWidget:
@@ -38,3 +43,53 @@ def bind_button(window: MainWindow) -> QWidget:
     """
     button: QWidget = window.parameters.bind_button
     return button
+
+
+def spool_list(window: MainWindow) -> tuple[QComboBox, QAbstractItemView, list[int]] | None:
+    """Das sichtbare Filamentfeld mit Spulen aus dem Lager: Feld, Liste, Zeilen der Spulen.
+
+    Gesucht wird im Fenster und in jedem offenen Fenster darüber — ein
+    Operationsdialog hängt nicht immer am Hauptfenster. Eine Spule erkennt die
+    Liste an ihrer zugänglichen Beschreibung (``filament_picker.spool_label``).
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    from app.core.knowledge import filaments
+    from app.ui.filament_picker import FilamentField, spool_label
+
+    labels = {spool_label(entry) for entry in filaments.catalogue()}
+    roots = [window, *(top for top in QApplication.topLevelWidgets() if top is not window)]
+    for root in roots:
+        for field in root.findChildren(FilamentField):
+            if not field.isVisible():
+                continue
+            role = Qt.ItemDataRole.AccessibleDescriptionRole
+            rows = [row for row in range(field.count()) if field.itemData(row, role) in labels]
+            if rows:
+                return field, field.view(), rows
+    return None
+
+
+def spool_click(window: MainWindow, name: str) -> Click:
+    """Der nächste Klick zu ``filament.spool``: die Liste aufklappen, dann die Spule.
+
+    Wählt der Kunde eine Spule, für die der Körper keine freie Nummer mehr hat,
+    fragt das Feld, welches Filament sie ersetzt (``message:filament_slot``).
+    """
+    from PySide6.QtCore import QPoint, QRect, Qt
+
+    from app.ui.guide_targets import Click, MissingTargetError
+
+    found = spool_list(window)
+    if found is None:
+        raise MissingTargetError(f"{name}: kein Filamentfeld zeigt eine Spule aus dem Lager")
+    field, view, rows = found
+    if not view.isVisible():
+        area = QRect(field.mapToGlobal(QPoint(0, 0)), field.size())
+        return Click(area, Qt.MouseButton.LeftButton, "aufklappen", name)
+    place = view.visualRect(field.model().index(rows[0], field.modelColumn()))
+    if place.isEmpty():
+        raise MissingTargetError(f"{name}: die Zeile der Spule hat gerade keinen Ort")
+    area = QRect(view.viewport().mapToGlobal(place.topLeft()), place.size())
+    return Click(area, Qt.MouseButton.LeftButton, "ziel", name)
