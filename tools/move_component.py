@@ -153,6 +153,8 @@ class Shape:
         self.module = module_of(cut.source)
         #: Ob ein Empfänger nachweislich der Wirt ist (Review 2, RM-M18).
         self.receivers = Receivers(index, self.module, cut.host, source_of)
+        #: Die Erklärungen aus ``[[accesses]]``, die eine Stelle getroffen haben.
+        self.used_accesses: set[tuple[str, str, str]] = set()
         self.component_module = cut.component_module
         self.moved_names = set(cut.methods) | set(cut.own_attributes)
         self.problems: list[str] = []
@@ -326,6 +328,7 @@ class Shape:
             None,
         )
         if declared is not None:
+            self.used_accesses.add((path, scope, member))
             if judged.verdict == OPEN:
                 return declared, "erklärt in accesses"
             proven = "component" if judged.verdict == HOST else "keep"
@@ -386,18 +389,31 @@ class Shape:
 
     def _host_filter(self, path: str, source: Source, call: ast.Call) -> None:
         """``x.installEventFilter(<Wirt>)`` außerhalb der verschobenen Rümpfe: Danach filterte
-        niemand, denn ``eventFilter`` wandert."""
+        niemand, denn ``eventFilter`` wandert. Lässt sich nicht nachweisen, ob das Argument der
+        Wirt ist, hält der Schnitt ebenso an — nicht auflösbar heißt abweisen, nie überspringen
+        (Review 2, RM-M17); was es ist, entscheidet dann ``[[accesses]]`` (Member
+        ``eventFilter``, Datei und Bereich der Installation)."""
         argument = filter_argument(call)
         if argument is None:
             return
         if path == self.cut.source and self.moved_method_of(call) is not None:
             return
-        if self.receivers.judge(path, source, argument).verdict != HOST:
+        decided, why = self.decision(
+            path, source, qualname_of(source, call), "eventFilter", argument
+        )
+        if decided == "keep":
+            return
+        if decided == "component":
+            self.problems.append(
+                f"{path}:{call.lineno}: installiert den Wirt {self.cut.host} als Ereignisfilter, "
+                "eventFilter wandert aber — danach filterte niemand; die Installation mit in die "
+                "Komponente ziehen (eine verschobene Methode) oder eventFilter im Wirt lassen"
+            )
             return
         self.problems.append(
-            f"{path}:{call.lineno}: installiert den Wirt {self.cut.host} als Ereignisfilter, "
-            "eventFilter wandert aber — danach filterte niemand; die Installation mit in die "
-            "Komponente ziehen (eine verschobene Methode) oder eventFilter im Wirt lassen"
+            f"{path}:{call.lineno}: installiert {source.node_text(argument)} als Ereignisfilter, "
+            f"und eventFilter wandert — ob das der Wirt ist, bleibt offen: {why}; sonst die "
+            "Installation in die Komponente ziehen oder eventFilter im Wirt lassen"
         )
 
     def _subclasses(self, classes: list[tuple[str, Source, ast.ClassDef]]) -> None:
@@ -1089,7 +1105,8 @@ class ComponentPlanner:
                     "kein nacktes self — streichen oder prüfen"
                 )
         for access in self.cut.accesses:
-            if (access.path, access.scope, access.member) not in self.used_accesses:
+            used = self.used_accesses | self.shape.used_accesses
+            if (access.path, access.scope, access.member) not in used:
                 self.ctx.problem(
                     f"accesses ({access.path}, {access.scope}, {access.member}) trifft keine "
                     "Stelle — streichen oder prüfen"

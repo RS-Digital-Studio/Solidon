@@ -79,6 +79,10 @@ else:
     else:
         if mode == "watch":
             holder(window, "watch").watch()
+        elif mode == "filter-tool":
+            from tools.filter_tool import attach_filter
+
+            attach_filter(window)
         QCoreApplication.sendEvent(session, QEvent(QEvent.Type.User))
         result = holder(window, "filtered").filtered
 window.release()
@@ -129,6 +133,24 @@ def _counting_filter(files: dict[str, str], path: str) -> dict[str, str]:
     return fx.edit(
         files, path, "        return False\n", "        self.filtered += 1\n        return False\n"
     )
+
+
+#: Sonde k4 aus Review 2 (RM-M17): Ein Werkzeug installiert das Brett über einen Parameter ohne
+#: Annotation als Filter — der Auflöser kennt den Empfänger nicht.
+FILTER_TOOL_PATH = "tools/filter_tool.py"
+FILTER_TOOL = (
+    '"""Installiert das Brett als Ereignisfilter seiner Sitzung."""\n\n\n'
+    "def attach_filter(window) -> None:\n    window.session.installEventFilter(window)\n"
+)
+COUNT = "        self.count = 0\n"
+AREA_COUNT = "        self.area.count = 0\n"
+#: Der Baum vor dem Schnitt mit zählendem Filter und dem Werkzeug.
+FILTER_TOOL_OLD = fx.edit(
+    _counting_filter(fx.COMPONENT_OLD | {FILTER_TOOL_PATH: FILTER_TOOL}, BOARD),
+    BOARD,
+    COUNT,
+    COUNT + "        self.filtered = 0\n",
+)
 
 
 def _cases() -> list[tuple[str, dict[str, str], str, dict[str, str], str, str]]:
@@ -202,6 +224,20 @@ def _cases() -> list[tuple[str, dict[str, str], str, dict[str, str], str, str]]:
             ),
             "filter",
             "app/ui/board.py:32: installiert den Wirt Board als Ereignisfilter",
+        ),
+        (
+            "filter-über-offenen-empfänger",
+            FILTER_TOOL_OLD,
+            _cut(own=("filtered",)),
+            fx.edit(
+                _counting_filter(EXPECTED | {FILTER_TOOL_PATH: FILTER_TOOL}, AREA),
+                BOARD,
+                AREA_COUNT,
+                AREA_COUNT + "        self.area.filtered = 0\n",
+            ),
+            "filter-tool",
+            "tools/filter_tool.py:5: installiert window als Ereignisfilter, und eventFilter "
+            "wandert — ob das der Wirt ist, bleibt offen",
         ),
         (
             "unterklasse",
@@ -317,6 +353,75 @@ def test_that_tree_behaves_differently_at_runtime(
     after = _probe(tmp_path, fx.write_tree(tmp_path / "naive", naive), mode)
     assert before in (True, 1), (label, before)
     assert after != before, (label, before, after)
+
+
+#: Eigene Gegenproben zu RM-M17: (Name, Werkzeug, Erklärung, Ausgang, Meldung).
+FILTER_FORMS = [
+    (
+        "attribut-eines-objekts",
+        '"""Hält Besitzer und Ziel."""\n\n\nclass Attach:\n'
+        "    def __init__(self, owner: object, target: object) -> None:\n"
+        "        self.owner = owner\n        self.target = target\n\n"
+        "    def run(self) -> None:\n"
+        "        self.target.installEventFilter(self.owner)  # type: ignore[attr-defined]\n",
+        "",
+        "rejected",
+        "installiert self.owner als Ereignisfilter, und eventFilter wandert — ob das der Wirt "
+        "ist, bleibt offen",
+    ),
+    (
+        "annotiert-als-wirt",
+        '"""Installiert das Brett."""\n\nfrom app.ui.board import Board\n\n\n'
+        "def attach_filter(window: Board) -> None:\n"
+        "    window.session.installEventFilter(window)\n",
+        "",
+        "rejected",
+        "installiert den Wirt Board als Ereignisfilter",
+    ),
+    (
+        "annotiert-fremd",
+        '"""Installiert eine Meldung."""\n\nfrom app.ui.toast import Toast\n\n\n'
+        "def attach_filter(target: object, toast: Toast) -> None:\n"
+        "    target.installEventFilter(toast)  # type: ignore[attr-defined]\n",
+        "",
+        "written",
+        "",
+    ),
+    ("erklärt-kein-wirt", FILTER_TOOL, "keep", "written", ""),
+    (
+        "erklärt-als-wirt",
+        FILTER_TOOL,
+        "component",
+        "rejected",
+        "installiert den Wirt Board als Ereignisfilter",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("label", "tool", "decision", "status", "where"),
+    FILTER_FORMS,
+    ids=[form[0] for form in FILTER_FORMS],
+)
+def test_a_filter_installation_is_judged_never_skipped(
+    tmp_path: Path, label: str, tool: str, decision: str, status: str, where: str
+) -> None:
+    """RM-M17: Wo ein Filter installiert wird, entscheidet der Nachweis (Auflöser, Annotation)
+    oder eine Erklärung in ``[[accesses]]`` (Member ``eventFilter``) — was offen bleibt, hält an;
+    nur was nachweislich nicht der Wirt ist, lässt ``eventFilter`` wandern."""
+    cut = _cut(own=("filtered",))
+    if decision:
+        cut += (
+            f'\n[[accesses]]\npath = "{FILTER_TOOL_PATH}"\nscope = "attach_filter"\n'
+            f'member = "eventFilter"\ndecision = "{decision}"\n'
+        )
+    files = FILTER_TOOL_OLD | {FILTER_TOOL_PATH: tool}
+    root, result = _run(tmp_path, files, cut)
+    assert result.status == status, (label, result.status, result.problems)
+    if status == "rejected":
+        assert where in "\n".join(result.problems), (label, result.problems)
+        assert all(" — " in problem for problem in result.problems), result.problems
+        assert fx.tree_bytes(root) == {p: fx.text_of(t).encode("utf-8") for p, t in files.items()}
 
 
 def test_an_event_filter_that_moves_with_its_installation_keeps_filtering(tmp_path: Path) -> None:
