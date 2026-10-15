@@ -6010,10 +6010,10 @@ class PlacementFlow(QObject):
             occupied.append(body)
         # Das Vorschauband oben deckt sonst zwei Felder zu.
         banner = getattr(self.viewport, "banner", None)
-        shown: list[QRect] = []
+        banners: list[QRect] = []
         if isinstance(banner, QWidget) and banner.isVisibleTo(self.viewport):
-            shown.append(banner.geometry())
-            occupied.append(shown[0])
+            banners.append(banner.geometry())
+            occupied.append(banners[0])
         obstacles = list(occupied)
         ink: list[tuple[QPointF, QPointF]] = list(self._canvas.lines)
         if user_rect is not None:
@@ -6155,7 +6155,7 @@ class PlacementFlow(QObject):
                 [widget.size() for widget, _wanted, _anchor in pending],
                 bounds,
                 [user_rect] if user_rect is not None else [],
-                ([*marked, *shown], [*bare, *shown], []),
+                ([*marked, *banners], [*bare, *banners], []),
             )
             return {
                 widget: rect
