@@ -922,11 +922,15 @@ def _carries_line(widget: Any, rect: Any) -> bool:
 
 
 def _shown(widget: Any) -> Any:
-    """Der sichtbare Teil eines Widgets, global — so nennt W die Fläche zum Rollen."""
-    from PySide6.QtCore import QRect
+    """Der sichtbare Teil eines Widgets, global — so nennt W die Fläche zum Rollen.
 
-    visible = widget.visibleRegion().boundingRect()
-    return QRect(widget.mapToGlobal(visible.topLeft()), visible.size())
+    Dieselbe Rechnung wie W (``guide_targets.unclipped``): was die Eltern nicht
+    abschneiden. ``visibleRegion`` zog den Inhalt der Rollfläche ab, und der füllt
+    ihre Sichtfläche — der Teil war leer oder ein Randstreifen.
+    """
+    from app.ui import guide_targets
+
+    return guide_targets.unclipped(widget)
 
 
 def focus_check(field: Any, target: str) -> None:
