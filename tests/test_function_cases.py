@@ -183,3 +183,28 @@ def test_the_language_case_of_own_parts_finds_their_finding(
     assert any(
         step.get("target") == KEEP and step.get("why") == "ziel" for step in protocol["steps"]
     ), protocol["steps"]
+
+
+def test_the_start_row_runs_as_a_start_case_in_every_language(
+    rows: list[dict[str, Any]],
+) -> None:
+    """Die Startzeile läuft im Satz ``sprachen`` je Sprache als Startfall (FD-175).
+
+    Ihre Fläche zeigt ``main`` vor dem Hauptfenster. Ein Sprachfall erreicht sie
+    nicht, und gefahren wurde sie nur im Satz ``basis`` — auf Deutsch.
+    """
+    from tools import function_cases
+    from tools.function_list import STARTUP_LICENCE, STARTUP_ROW
+
+    spoken = ("de", "en", "fr")
+    cases = function_cases.language_cases(rows, {"D12"}, spoken, 1)
+    starts = [case for case in cases if case.kind == "start"]
+    assert [(case.row, case.variant["language"], case.variant["licence"]) for case in starts] == [
+        (STARTUP_ROW, language, STARTUP_LICENCE) for language in spoken
+    ]
+    assert {Variant.of(case.variant).set for case in starts} == {"start"}
+    walked = [case for case in cases if case.kind == "language"]
+    assert walked
+    for case in walked:
+        assert STARTUP_ROW not in [row["id"] for row in function_cases.rows_of(rows, case.row)]
+    assert [case.number for case in cases] == list(range(1, len(cases) + 1))

@@ -281,6 +281,13 @@ TARGET_SURFACES: Final[dict[str, tuple[str, str]]] = {
     "install.follow.comfyui": ("D12", "leer"),
     "install.locate": ("D12", "leer"),
     "filament.import": ("D9", "leer"),
+    # Die Zeile eines Filaments unter *Filamente* in der Kopfzeile: Druckwerte der Spule.
+    "filaments.first": ("D9", "koerper:1"),
+    # *Filament abziehen …* nach einem Export als 3MF: die Buchung im Lager.
+    "usage.review": ("D9", "koerper:1"),
+    # Reiter in eigenem Fenster und zurück: Ansicht und Anordnung sind D11.
+    "tabs.bar": ("D11", "leer"),
+    "tabs.return": ("D11", "leer"),
 }
 
 #: Wortschatznamen mit Art, die Zeilen tragen: Präfix → Paket und Anforderung.

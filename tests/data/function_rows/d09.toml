@@ -53,3 +53,26 @@ route = [
   { target = "print.slice" },
   { target = "message.button:error.show_output" },
 ]
+
+# Die Druckwerte einer Spule öffnet ein Doppelklick auf ihre Zeile unter
+# *Filamente* in der Kopfzeile; die Szene trägt sieben Filamente (FD-175).
+[row."filaments.first"]
+start_scene = "sieben_filamente.netz"
+
+[row."dialog:filament_override_dialog"]
+start_scene = "sieben_filamente.netz"
+route = [{ target = "filaments.first", button = "double" }]
+
+# Nach einem Export als 3MF bietet die Zeile über der Ansicht an, das Filament im
+# Lager abzubuchen; *Filament abziehen …* öffnet die Buchung. Der Speicherdialog
+# schlägt einen Namen im Profilordner des Falls vor, *Speichern* übernimmt ihn
+# (FD-175).
+[row."usage.review"]
+route = [{ target = "menu:menubar.exportieren" }, { target = "dialog.accept" }]
+
+[row."dialog:usage_dialog"]
+route = [
+  { target = "menu:menubar.exportieren" },
+  { target = "dialog.accept" },
+  { target = "usage.review" },
+]

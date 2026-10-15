@@ -749,6 +749,9 @@ class QtPorts:
             # Die Spule steht in der aufgeklappten Liste ihres Filamentfelds (FD-101).
             found = guide_finders.spool_list(window)
             return found[1] if found is not None and found[1].isVisible() else None
+        if name == guide_finders.PROJECT_FILAMENT and window.filament_popup.isVisible():
+            # Die Zeile steht in der Liste unter *Filamente* der Kopfzeile (FD-175).
+            return window.filaments.list
         return None
 
     def centre(self, rect: Any) -> Any:

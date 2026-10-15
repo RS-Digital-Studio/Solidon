@@ -802,6 +802,18 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "filament.profile",
         "filament.colour",
         "filament.spool",
+        # Die Wege zu Meldungen ohne Browser, die Fenster der Zusatzprogramme, das
+        # Filamentlager, die Liste unter *Filamente* und ein Reiter in eigenem
+        # Fenster sind am frischen Fenster nicht offen (FD-175)
+        "donation.paypal",
+        "update.page",
+        "install.action",
+        "install.details",
+        "install.follow.comfyui",
+        "install.locate",
+        "filament.import",
+        "filaments.first",
+        "tabs.return",
         *printing,
     }
     window = MainWindow(Session(), UiSettings())

@@ -405,11 +405,18 @@ def write_profile(variant: Variant, recent: Sequence[Path] = ()) -> Path:
     über das Menü, wie beim Kunden. Der Aufrufer hat die Nutzerordner vorher auf
     den Profilordner des Falls gelegt (``file_acceptance.isolate``); die Suite tut
     dasselbe in ``tests/conftest.py``.
+
+    Ein Export landet im Profilordner (``exporte``): Ohne gemerkten Ordner schlug
+    der Speicherdialog nur den Dateinamen vor, und Qt legte die Datei im
+    Arbeitsordner des Prozesses ab — im Baum des Prüfstands (FD-175).
     """
     from app.ui.settings import save_settings, settings_path
 
     settings = profile_settings(variant)
     settings.recent = [str(path) for path in recent]
+    exports = settings_path().parent / "exporte"
+    exports.mkdir(parents=True, exist_ok=True)
+    settings.export_dirs = {"": str(exports)}
     written = save_settings(settings)
     if written is None:
         raise OSError(f"Das Profil ließ sich nicht schreiben: {settings_path()}")

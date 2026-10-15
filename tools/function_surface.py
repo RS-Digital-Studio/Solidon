@@ -640,10 +640,14 @@ def without_way(row: Mapping[str, Any]) -> str:
     Weg auf (``spec.route``). Solche Zeilen sind nicht gelaufen, kein Fund (F-32).
     Ebenso ein Weg über einen Befund oder eine Befundhandlung, die die Startszene
     nicht zusagt (``promises``): Er hieße „nicht auffindbar“ gegen die Anwendung,
-    wo die Szene fehlt (FD-101).
+    wo die Szene fehlt (FD-101). Die Zeile des Startablaufs erreicht je Sprache
+    ihr Startfall (``function_cases.language_cases``, FD-175).
     """
+    from tools.function_cases import walked_in_language
     from tools.function_scenes import load_scenes
 
+    if not walked_in_language(row):
+        return ""
     spec = row.get("spec") or {}
     scene = str(spec.get("start_scene") or row.get("start_scene") or "")
     if not scene:

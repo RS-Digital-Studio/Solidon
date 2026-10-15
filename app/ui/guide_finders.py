@@ -10,6 +10,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from PySide6.QtWidgets import QAbstractItemView, QComboBox, QWidget
 
     from app.ui.guide_targets import Click
@@ -17,6 +19,9 @@ if TYPE_CHECKING:
 
 #: Die erste Spule aus dem Lager in einem Filamentfeld — ein Ort, kein Widget.
 SPOOL: Final = "filament.spool"
+
+#: Die erste Zeile mit Filament in der Liste *Filamente* der Kopfzeile — ein Ort.
+PROJECT_FILAMENT: Final = "filaments.first"
 
 #: Feste Namen, deren Widget den Namen als Kennzeichen trägt
 #: (``guides.TARGET_PROPERTY``); ``guide_targets.widget_for`` sucht sie über
@@ -39,6 +44,9 @@ MARKED: Final = frozenset(
         "install.follow.comfyui",
         "install.locate",
         "filament.import",
+        "usage.review",
+        "tabs.bar",
+        "tabs.return",
     }
 )
 
@@ -124,3 +132,41 @@ def spool_click(window: MainWindow, name: str) -> Click:
         raise MissingTargetError(f"{name}: die Zeile der Spule hat gerade keinen Ort")
     area = QRect(view.viewport().mapToGlobal(place.topLeft()), place.size())
     return Click(area, Qt.MouseButton.LeftButton, "ziel", name)
+
+
+def project_filament_click(window: MainWindow, name: str) -> Click:
+    """Der nächste Klick zu ``filaments.first``: erst *Filamente* in der Kopfzeile, dann die Zeile.
+
+    Die Liste nennt die Filamente des Projekts, eine Zeile *Ohne Filament* zuletzt;
+    die hat keine Druckwerte. Ein Doppelklick auf eine Zeile mit Filament öffnet
+    die Druckwerte dieser Spule (``FilamentPanel._on_activated``).
+    """
+    from PySide6.QtCore import QPoint, QRect, Qt
+
+    from app.ui.filament_picker import _SLOT_ROLE
+    from app.ui.guide_targets import Click, MissingTargetError
+
+    if not window.filament_popup.isVisible():
+        button = window.header.filament_button
+        if not button.isVisible():
+            raise MissingTargetError(f"{name}: *Filamente* steht nicht in der Kopfzeile")
+        area = QRect(button.mapToGlobal(QPoint(0, 0)), button.size())
+        return Click(area, Qt.MouseButton.LeftButton, "aufklappen", name)
+    listing = window.filaments.list
+    for row in range(listing.count()):
+        item = listing.item(row)
+        if item is None or item.data(_SLOT_ROLE) is None:
+            continue
+        place = listing.visualItemRect(item)
+        if place.isEmpty():
+            raise MissingTargetError(f"{name}: die Zeile des Filaments hat gerade keinen Ort")
+        area = QRect(listing.viewport().mapToGlobal(place.topLeft()), place.size())
+        return Click(area, Qt.MouseButton.LeftButton, "ziel", name)
+    raise MissingTargetError(f"{name}: kein Körper der Szene trägt ein Filament")
+
+
+#: Was nur einen Ort hat und seinen Weg selbst kennt: Name → nächster Klick.
+PLACE_CLICKS: Final[dict[str, Callable[[MainWindow, str], Click]]] = {
+    SPOOL: spool_click,
+    PROJECT_FILAMENT: project_filament_click,
+}

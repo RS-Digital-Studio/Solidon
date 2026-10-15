@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import guides
-from app.ui.guide_finders import MARKED, SPOOL, bind_button, first_parameter_label, spool_click
+from app.ui.guide_finders import MARKED, PLACE_CLICKS, bind_button, first_parameter_label
 from app.ui.guide_wheel import takes_wheel
 from app.ui.labels import RowCheckBox
 from app.ui.overlay import MARGIN, free_span
@@ -428,7 +428,7 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
 }
 
 #: Die Namen, die keinen eigenen Widget haben, nur einen Ort.
-_PLACES: Final = frozenset({"history.last", SPOOL})
+_PLACES: Final = frozenset({"history.last", *PLACE_CLICKS})
 
 #: Was diese Datei auflöst. ``tests/test_guides.py`` hält es gegen den
 #: Wortschatz im Kern — ein Name dort, den hier niemand kennt, wäre eine
@@ -490,8 +490,8 @@ def area_for(window: MainWindow, name: str) -> QRect:
     """
     if name == "history.last":
         return _last_row(window.history_panel.list, name)
-    if name == SPOOL:
-        return spool_click(window, name).rect
+    if name in PLACE_CLICKS:
+        return PLACE_CLICKS[name](window, name).rect
     if name == "viewport":
         return _open_view(window)
     kind, separator, rest = name.partition(":")
@@ -1575,8 +1575,8 @@ def next_click(window: MainWindow, name: str) -> Click:
     """
     if not guides.is_target(name):
         raise MissingTargetError(f"{name}: kein Name aus dem Wortschatz der Anleitungen")
-    if name == SPOOL:
-        return spool_click(window, name)
+    if name in PLACE_CLICKS:
+        return PLACE_CLICKS[name](window, name)
     if name == "history.last":
         listing = window.history_panel.list
         last = next(

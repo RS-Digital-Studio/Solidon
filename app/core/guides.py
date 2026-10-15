@@ -138,6 +138,15 @@ TARGETS: Final[frozenset[str]] = frozenset(
         "install.locate",
         # *Aus dem Slicer übernehmen* im Filamentlager
         "filament.import",
+        # Die erste Zeile mit Filament unter *Filamente* in der Kopfzeile — ein Ort
+        # in der Liste; ein Doppelklick öffnet die Druckwerte dieser Spule
+        "filaments.first",
+        # *Filament abziehen …* in der Zeile über der Ansicht nach einem Export
+        "usage.review",
+        # Die Reiterleiste der rechten Karte (ihr Rechtsklick öffnet das Menü mit
+        # *In eigenem Fenster öffnen*) und *Zurück in Solidon* im eigenen Fenster
+        "tabs.bar",
+        "tabs.return",
     }
 )
 

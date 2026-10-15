@@ -16,3 +16,12 @@ route = [
 # Regel 19).
 [row."meldung:remove_history_operations"]
 route = [{ target = "history.row:1", button = "right" }, { target = "history:delete" }]
+
+# Ein Reiter der rechten Karte in eigenem Fenster: Rechtsklick auf die
+# Reiterleiste, *In eigenem Fenster öffnen*; *Zurück in Solidon* im Fenster holt
+# ihn zurück (FD-175).
+[row."dialog:panel_window"]
+route = [{ target = "tabs.bar", button = "right" }, { target = "menu:tabs.detach" }]
+
+[row."tabs.return"]
+route = [{ target = "tabs.bar", button = "right" }, { target = "menu:tabs.detach" }]

@@ -109,10 +109,24 @@ def install_user_data(key: str) -> list[str]:
     return placed
 
 
+def walked_in_language(row: Mapping[str, Any]) -> bool:
+    """Ob ein Sprachfall die Fläche der Zeile abgeht — die Zeile des Startablaufs nicht.
+
+    Ihre Fläche zeigt ``main`` vor dem Hauptfenster; am Fenster eines
+    Sprachfalls steht sie nie. Je Sprache läuft sie als Startfall
+    (:func:`language_cases`, FD-175).
+    """
+    from tools.file_acceptance import STARTUP_SOURCE
+
+    return row.get("source") != STARTUP_SOURCE
+
+
 def language_groups(rows: Iterable[Mapping[str, Any]]) -> dict[str, list[Setup]]:
     """Je Paket die Einrichtungen seiner Zeilen, die ohne zuerst."""
     found: dict[str, dict[str, Setup]] = {}
     for row in rows:
+        if not walked_in_language(row):
+            continue
         setup = setup_of(row)
         found.setdefault(str(row.get("package")), {}).setdefault(setup.key, setup)
     return {
@@ -134,11 +148,15 @@ def language_cases(
     ``file_acceptance.function_child`` wendet sie vor dem Start der Anwendung an
     und legt die eigenen Bausteine in den Nutzerordner. ``predict`` hält vor dem
     Klick jeder Soforthandlung am Vorhersagetor an (``function_prediction``,
-    V4) — mit dem Satz ``vorhersage`` daneben.
+    V4) — mit dem Satz ``vorhersage`` daneben. Eine Zeile des Startablaufs wird je
+    Sprache ein Startfall (:func:`walked_in_language`): Ihre Meldung prüfte
+    sonst nur der Satz ``basis``, auf Deutsch (FD-175).
     """
     from tools.file_acceptance import Case
+    from tools.function_list import STARTUP_LICENCE
     from tools.function_setup import Variant
 
+    rows = list(rows)
     wanted = set(packages)
     languages = tuple(spoken)
     cases: list[Any] = []
@@ -165,6 +183,23 @@ def language_cases(
                     )
                 )
                 number += 1
+    for row in rows:
+        if str(row.get("package")) not in wanted or walked_in_language(row):
+            continue
+        for language in languages:
+            start = {"set": "start", "licence": STARTUP_LICENCE, "language": language}
+            cases.append(
+                Case(
+                    number,
+                    f"{row['id']} [{STARTUP_LICENCE}, {language}]",
+                    "",
+                    "",
+                    kind="start",
+                    row=str(row["id"]),
+                    variant=Variant.of(start).as_dict(),
+                )
+            )
+            number += 1
     return cases
 
 
@@ -204,7 +239,11 @@ def package_of(case: str) -> str:
 def rows_of(rows: Iterable[Mapping[str, Any]], case: str) -> list[Mapping[str, Any]]:
     """Die Zeilen, die der Sprachfall ``case`` abgeht: Paket und Einrichtung gleich."""
     package, _separator, key = case.partition(SEPARATOR)
-    return [row for row in rows if row.get("package") == package and setup_of(row).key == key]
+    return [
+        row
+        for row in rows
+        if row.get("package") == package and walked_in_language(row) and setup_of(row).key == key
+    ]
 
 
 def setup_of_case(rows: Iterable[Mapping[str, Any]], case: str) -> Setup:

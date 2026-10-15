@@ -31,6 +31,22 @@ from tools.function_surface import without_way
 #: Wie viele Ereignisrunden ein Fenster höchstens braucht, um nach vorn zu kommen.
 FORWARD_ROUNDS: Final = 50
 
+#: *Zurück in Solidon* in einem Reiter mit eigenem Fenster: Escape schließt es nicht,
+#: der Kunde holt den Reiter über diesen Knopf zurück (FD-175).
+RETURN_TARGET: Final = "tabs.return"
+
+
+def has_return(widget: Any) -> bool:
+    """Ob das Fenster einen sichtbaren Rückweg-Knopf :data:`RETURN_TARGET` trägt."""
+    from PySide6.QtWidgets import QWidget
+
+    from app.core import guides
+
+    return isinstance(widget, QWidget) and any(
+        child.isVisible() and child.property(guides.TARGET_PROPERTY) == RETURN_TARGET
+        for child in widget.findChildren(QWidget)
+    )
+
 
 def ground_state(window: Any) -> tuple[Any, ...]:
     """Was eine Fläche der nächsten hinterlassen kann (FD-132).
@@ -207,7 +223,8 @@ class LanguageFlow:
         bleibt ein Fenster stehen, beginnt keine weitere Messung darin. Escape
         drückt der Kunde in dem Fenster, das vorn steht: Steht das Hauptfenster
         vorn, nimmt seine Taste *Auswahl leeren* den Druck, und der Dialog
-        bleibt offen — es wird erst nach vorn geholt.
+        bleibt offen — es wird erst nach vorn geholt. Ein Reiter in eigenem
+        Fenster geht nicht mit Escape zu; ihn holt *Zurück in Solidon* zurück.
         """
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
@@ -232,9 +249,12 @@ class LanguageFlow:
                 bring_forward(widget)
                 QTest.keyClick(widget, Qt.Key.Key_Escape)
 
-            if not flow.run_steps(
-                "rückweg fläche", [Step("fenster verlassen", escape, settle_ms=SETTLE_MS)]
-            ):
+            leave = (
+                flow.walker.step(RETURN_TARGET)
+                if has_return(widget)
+                else Step("fenster verlassen", escape, settle_ms=SETTLE_MS)
+            )
+            if not flow.run_steps("rückweg fläche", [leave]):
                 break
         remaining = windows_to_picture(self.window)
         if not remaining:

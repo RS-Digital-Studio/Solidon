@@ -255,6 +255,27 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
     ),
     "dialog:outline_dialog": ("zeichnung.netz", ("history.row:1", "field:contours")),
     "dialog:step_bodies_dialog": ("step_baugruppe.exakt", ("history.row:1", "field:bodies")),
+    # Ohne Weg am Fenster: Die Meldung zeigt ``main`` vor dem Hauptfenster, je
+    # Sprache im Startfall (``function_cases.language_cases``).
+    "startup.expired_demo": ("startbildschirm", ()),
+    # Die Druckwerte einer Spule über ihre Zeile unter *Filamente*, die Buchung nach
+    # einem Export (Datei im Profilordner des Falls) und ein Reiter in eigenem Fenster.
+    "filaments.first": ("sieben_filamente.netz", ("tree.row:obj_1",)),
+    "dialog:filament_override_dialog": (
+        "sieben_filamente.netz",
+        ("tree.row:obj_1", "filaments.first"),
+    ),
+    "usage.review": (
+        "quader.exakt",
+        ("tree.row:obj_1", "menu:menubar.exportieren", "dialog.accept"),
+    ),
+    "dialog:usage_dialog": (
+        "quader.exakt",
+        ("tree.row:obj_1", "menu:menubar.exportieren", "dialog.accept", "usage.review"),
+    ),
+    "tabs.bar": ("leer", ()),
+    "dialog:panel_window": ("leer", ("tabs.bar", "menu:tabs.detach")),
+    "tabs.return": ("leer", ("tabs.bar", "menu:tabs.detach")),
 }
 
 #: Zeilen, die der Sprachfall noch nicht erreicht, je mit dem Grund (FD-175). Der
@@ -264,16 +285,12 @@ STILL_WITHOUT: dict[str, str] = {
     "dialog:ai_disclosure_dialog": "Chat-Starter ohne Wortschatznamen",
     "dialog:local_privacy_dialog": "Verweis im KI-Hinweis ohne Wortschatznamen",
     "dialog:offline_activation_dialog": "Zustand „nicht aktiviert“ im Sprachfall",
-    "dialog:filament_override_dialog": "Filamentzeile im Kopf ohne Wortschatznamen",
-    "dialog:usage_dialog": "Spule am Projekt und Export ohne Tippen",
     "meldung:_ask_recovery": "Sicherung neben dem zuletzt geöffneten Projekt",
     "meldung:confirm_generation_loss": "laufende Erzeugung",
     "dialog:expression_dialog": "Skizzenwortschatz",
     "dialog:point_dialog": "Skizzenwortschatz",
     "dialog:new_plane_dialog": "Skizzenwortschatz",
     "meldung:change_constraint_value": "Skizzenwortschatz",
-    "dialog:panel_window": "Reiter rechts ohne Wortschatznamen",
-    "startup.expired_demo": "Startfall nur auf Deutsch",
 }
 
 
