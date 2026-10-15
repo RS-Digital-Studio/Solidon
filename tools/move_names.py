@@ -27,7 +27,8 @@ der Bereiche, auch eine unberührte; nichts geschrieben — neu erzeugen), 4: Sc
   (Namen, die in jedes lesende Ziel kopiert werden, etwa ein Logger), ``[[renames]]`` (``name``,
   ``to``), ``[[identity]]`` (``name``, ``reason``: eine Definition, die ``__name__`` oder
   ``globals()`` liest), ``[[name_lists]]`` (``path``, ``value``, ``to``: Zeichenketten mit Modul,
-  Datei oder Namen der Quelle, W6; ``to = [value]`` erklärt, dass sie bleibt),
+  Datei oder Namen der Quelle, W6; ``to = [value]`` erklärt, dass sie bleibt; mit der Quelle als
+  ``path`` gilt sie in den verschobenen Definitionen, dann mit genau einem Wert),
   ``[[source_readers]]`` (``path``, ``scope``, ``module``: Leser von ``Path(M.__file__)``).
 * ``copies``: ``[[bindings]]`` (``module``, ``name``) — die Originale, deren Kopfkopien
   Modulzugriffe werden (Vorschlag: ``--list-copies``).

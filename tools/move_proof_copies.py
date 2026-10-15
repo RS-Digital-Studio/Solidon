@@ -16,7 +16,9 @@ Baums abgeleitet, nicht aus der Tabelle des Planers:
 genau seine alten Leser und die aller umgestellten Kopien derselben Familie — je Familie
 verglichen, nicht als Gesamtmenge, damit vertauschte Leser zweier Familien auffallen. Je
 Patch-Stelle nennt das Protokoll, wen sie vorher und nachher erreicht. Danach gibt es keine
-Kopfkopie der erklärten Originale mehr.
+Kopfkopie der erklärten Originale mehr, keine Zeichenkette nennt eine umgestellte Kopie
+(``"Halter.Kopie"``, ``"Halter:Kopie"``), und kein Halter liest über ``globals()`` einen Namen, den
+er nicht mehr bindet.
 """
 
 from __future__ import annotations

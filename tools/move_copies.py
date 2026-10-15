@@ -22,7 +22,9 @@ eine Kopie, die auf Modulebene mehrfach gebunden, über ``global`` geschrieben o
 gesetzt wird; ein Leseweg hinter einem gleichnamigen trägen Export; eine gefaltete Patch-Stelle;
 ein Lesen über einen Namen, den eine Funktion verdeckt; ``__all__`` mit der Kopie; ein Lazy-Export
 auf die Kopie, wenn das Original nicht im selben Paket liegt; eine Zeichenkette, die die Kopie
-nennt, ohne Patch-Stelle zu sein.
+nennt (``"H.b"``, ``"H:b"``), ohne Patch-Stelle zu sein; eine annotierte Kopie; eine Kopie einer
+Zuweisungskopie als erklärtes Original; ``globals()``/``vars()`` im Halter, wenn der Schlüssel eine
+Kopie ist oder sich nicht falten lässt.
 """
 
 from __future__ import annotations

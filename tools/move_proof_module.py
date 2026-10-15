@@ -3,9 +3,13 @@
 Ein Modul wird ein Paket gleichen Namens oder gibt Definitionen an Nachbarmodule ab. Bewiesen wird
 je Definition, dass sie im erklärten Ziel ``ast``-gleich steht — jeder Name, der den
 Modulnamensraum liest, meint vorher (abgebildet) und nachher dieselbe Bindung (``symtable`` und die
-Tabelle der Modulebene, nicht ein Wert) —, je Zielmodul, dass es nur Docstring, Importe aus der
-Quelle oder Nachbarziele und seine Definitionen in alter Reihenfolge trägt, und je Leserdatei, dass
-nur erklärte Bezüge abweichen. Der Paket-``__init__`` ist nur ein Docstring (Konzept 3.1, Regel 3).
+Tabelle der Modulebene, nicht ein Wert) und jeder Kommentar der Spanne mitkommt —, je Zielmodul,
+dass es nur Docstring, Importe aus der Quelle oder Nachbarziele und seine Definitionen in alter
+Reihenfolge trägt, je Leserdatei, dass nur erklärte Bezüge abweichen. Der Paket-``__init__`` ist
+nur ein Docstring (Konzept 3.1, Regel 3). Dazu: Jeder Import der Quelle steht in einem Ziel, im
+Kopf der Quelle steht kein Kommentar, ein träger Export des Elternpakets zeigt auf das Ziel (auch
+wenn sein ``__init__`` unverändert blieb), und keine Zeichenkette nennt danach die alte Quelle —
+auch nicht ohne Endung, als ``"modul:name"`` oder zusammengesetzt (vom Auflöser gefaltet).
 """
 
 from __future__ import annotations

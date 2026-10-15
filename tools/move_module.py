@@ -20,8 +20,11 @@ Abgewiesen wird **vor** dem Schreiben, jeweils mit Ausweg: ein ``global``-Schrei
 von seiner Variable oder ihren Lesern; ein Name, der die Identität des Moduls liest (``__name__``,
 ``globals()``) ohne Erklärung in ``identity``; ein Kreis zwischen Zielen, der beim Import gelesen
 wird; ein Import zwischen den Definitionen; eine Anweisung ohne Bindung; ``__all__``; eine
-Zeichenkette, die die alte Datei oder einen verschobenen Namen nennt, ohne Erklärung; ein Patch
-auf eine Kopie, die die Quelle hält.
+Zeichenkette, die die alte Datei oder einen verschobenen Namen nennt, ohne Erklärung (auch in der
+Quelle selbst, ohne Endung, als ``"modul:name"`` und zusammengesetzt); ein Patch auf eine Kopie,
+die die Quelle hält; die Quelle als Wert (``importlib.reload``, ``dir``, ``vars``, Argument); ein
+Import der Quelle nur um seiner Wirkung willen, in der Quelle wie in einem Leser; ein Kommentar
+im Importkopf der Quelle; ein doppelt mitgenommener Name, den jemand von außen liest oder patcht.
 """
 
 from __future__ import annotations
