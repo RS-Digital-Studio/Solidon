@@ -9,20 +9,23 @@ Ein ``QObject`` ist für Qt mehr als seine Rümpfe:
   es vorher meinte.
 * Eine **Überschreibung** einer Methode der Qt-Basis (``timerEvent``, ``resizeEvent``,
   ``closeEvent``, ``show`` …) ruft Qt am Wirt; in der Komponente riefe Qt sie für die Komponente
-  oder nie. Sie bleibt im Wirt (Konzept 3.3, „Was im Fenster bleibt“).
+  oder nie. Sie bleibt im Wirt (Konzept 3.3, „Was im Fenster bleibt“). Dasselbe gilt für jede
+  andere Basis (Review 2, RM-M19): ``logging`` ruft ``filter`` eines ``logging.Filter``, ein
+  eigenes Mixin ruft über ``self.step()`` die Fassung des Wirts — nach dem Schnitt die eigene.
 * ``eventFilter`` wirkt nur dort, wo es installiert ist: Es wandert nur, wenn weder eine bleibende
   Methode des Wirts noch eine andere Stelle den Wirt selbst als Filter installiert.
 * Eine **Unterklasse** des Wirts, die ein verschobenes Member definiert, würde danach umgangen:
   Der Wirt ruft die Fassung der Komponente.
 
-Welche Namen eine Qt-Basis trägt, sagt die Klasse selbst (``dir`` der Klasse aus PySide6); den
-Weg dorthin über eigene Zwischenklassen löst der Auflöser (Paket R) auf.
+Welche Namen eine fremde Basis trägt, sagt die Klasse selbst (``dir``), welche eine eigene trägt,
+ihr Rumpf; den Weg dorthin über eigene Zwischenklassen löst der Auflöser (Paket R) auf.
 """
 
 from __future__ import annotations
 
 import ast
 import importlib
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from tools.code_index import Index
@@ -36,11 +39,30 @@ FILTER_CALLS = frozenset({"installEventFilter", "removeEventFilter"})
 QT_PACKAGES = ("PySide6.", "shiboken6.")
 
 
-def qt_bases(index: Index, path: str, cls: ast.ClassDef) -> tuple[list[str], list[str]]:
-    """Die Qt-Klassen (Punktnamen) unter den Basen von ``cls`` in der Datei ``path``, über
-    eigene Zwischenklassen hinweg, und die Basen, die sich nicht auflösen ließen (Text)."""
-    found: list[str] = []
-    unresolved: list[str] = []
+@dataclass
+class Inherited:
+    """Die Basen einer Klasse über eigene Zwischenklassen hinweg: fremde Qt-Klassen (``qt``,
+    Punktnamen), andere fremde Klassen (``external``, etwa ``logging.Filter``), eigene Klassen
+    des Baums (``own``, Datei und Definition) und Basen, die sich nicht auflösen ließen."""
+
+    qt: list[str] = field(default_factory=list)
+    external: list[str] = field(default_factory=list)
+    own: list[tuple[str, ast.ClassDef]] = field(default_factory=list)
+    unresolved: list[str] = field(default_factory=list)
+
+    def merged(self, other: Inherited) -> Inherited:
+        return Inherited(
+            sorted({*self.qt, *other.qt}),
+            sorted({*self.external, *other.external}),
+            [*self.own, *other.own],
+            [*self.unresolved, *other.unresolved],
+        )
+
+
+def inherited(index: Index, path: str, cls: ast.ClassDef) -> Inherited:
+    """Die Basen von ``cls`` in der Datei ``path``, über eigene Zwischenklassen hinweg
+    (:class:`Inherited`). Der Weg über eigene Klassen kommt aus dem Auflöser (Paket R)."""
+    found = Inherited()
     seen: set[str] = set()
     pending: list[tuple[str, ast.ClassDef]] = [(path, cls)]
     while pending:
@@ -49,27 +71,31 @@ def qt_bases(index: Index, path: str, cls: ast.ClassDef) -> tuple[list[str], lis
             values = index.resolve(where, base)
             known = [v for v in values if v.kind in ("ext", "class")]
             if not values or len(known) != len(values):
-                unresolved.append(f"{where}:{base.lineno} {ast.unparse(base)}")
+                found.unresolved.append(f"{where}:{base.lineno} {ast.unparse(base)}")
                 continue
             for value in known:
                 if value.ref in seen:
                     continue
                 seen.add(value.ref)
                 if value.kind == "ext":
-                    if value.ref.startswith(QT_PACKAGES):
-                        found.append(value.ref)
+                    target = found.qt if value.ref.startswith(QT_PACKAGES) else found.external
+                    target.append(value.ref)
                     continue
                 located = _class_source(index.root, value.ref)
                 if located is None:
-                    unresolved.append(f"{where}:{base.lineno} {value.ref}")
+                    found.unresolved.append(f"{where}:{base.lineno} {value.ref}")
                     continue
+                found.own.append(located)
                 pending.append(located)
-    return sorted(set(found)), unresolved
+    found.qt.sort()
+    found.external.sort()
+    return found
 
 
-def qt_members(refs: list[str]) -> tuple[frozenset[str], list[str]]:
-    """Alle Namen der Qt-Klassen ``refs`` (``dir``) und die, die sich nicht laden ließen."""
-    names: set[str] = set()
+def loaded_members(refs: list[str]) -> tuple[dict[str, frozenset[str]], list[str]]:
+    """Je fremder Klasse ``refs`` (Punktname) ihre Namen (``dir``) und die, die sich nicht laden
+    ließen."""
+    names: dict[str, frozenset[str]] = {}
     problems: list[str] = []
     for ref in refs:
         module, _, name = ref.rpartition(".")
@@ -78,8 +104,8 @@ def qt_members(refs: list[str]) -> tuple[frozenset[str], list[str]]:
         except (ImportError, AttributeError) as error:
             problems.append(f"{ref} ({error})")
             continue
-        names.update(dir(loaded))
-    return frozenset(names), problems
+        names[ref] = frozenset(dir(loaded))
+    return names, problems
 
 
 def _class_source(root: Path, ref: str) -> tuple[str, ast.ClassDef] | None:

@@ -45,8 +45,10 @@ importiert den Wirt nicht), ein gepatchter Name des Wirtsmoduls, den eine versch
 liest, ``hasattr`` oder ``getattr`` mit Vorgabe auf ein verschobenes Member, eine Zeichenkette mit
 seinem Namen ohne Erklärung, eine Erklärung, die nichts trifft — und was Qt danach anders sähe
 (``tools/move_qt.py``): ``self.sender()`` in einem verschobenen Rumpf, eine verschobene
-Überschreibung einer Methode der Qt-Basis, ``eventFilter``, wenn der Wirt selbst als Filter
-installiert bleibt, und eine Unterklasse des Wirts, die ein verschobenes Member definiert.
+Überschreibung einer Methode einer Basis (Qt, fremd wie ``logging.Filter`` oder eigen wie ein
+Mixin) und ein eigenes Attribut, das eine eigene Basis ebenso kennt, ``eventFilter``, wenn der Wirt
+selbst als Filter installiert bleibt oder das nicht nachweisbar ist, und eine Unterklasse des
+Wirts, die ein verschobenes Member definiert.
 
 **Lebensdauer ist ein eigener Nachweis.** Gleiche Rümpfe heißen nicht gleiche Lebensdauer. Das
 Werkzeug prüft am Gerüst statisch, was sich statisch prüfen lässt (:func:`lifetime`); ob nach
@@ -76,8 +78,8 @@ from tools.move_qt import (
     RECEIVER_MEMBERS,
     class_reference,
     filter_argument,
-    qt_bases,
-    qt_members,
+    inherited,
+    loaded_members,
 )
 from tools.move_receivers import HOST, NEUTRAL, OPEN, OTHER, Receivers
 from tools.move_refs import AlreadyAppliedError, Context, FileRewrite, quoted
@@ -163,8 +165,6 @@ class Shape:
         self.protocol = _class(component, cut.host_protocol)
         self.methods: dict[str, Moved] = {}
         self.unique: dict[str, list[str]] = {}
-        #: Die Namen der Qt-Basen von Wirt und Komponente (:meth:`_qt_overrides`).
-        self.qt_names: frozenset[str] = frozenset()
         if self.host_class is None:
             self.problems.append(f"{cut.source}: keine Klasse {cut.host} auf Modulebene — prüfen")
             return
@@ -226,7 +226,7 @@ class Shape:
                         "vorher umschreiben"
                     )
         self._receivers()
-        self._qt_overrides()
+        self._overrides()
 
     def _receivers(self) -> None:
         """``self.sender()`` in einem verschobenen Rumpf (``tools/move_qt.py``)."""
@@ -260,35 +260,60 @@ class Shape:
                         "Methode im Wirt lassen"
                     )
 
-    def _qt_overrides(self) -> None:
-        """Eine verschobene Methode, die eine Methode der Qt-Basis von Wirt oder Komponente
-        überschreibt (``eventFilter`` prüft :meth:`scan_uniqueness`)."""
+    def _overrides(self) -> None:
+        """Eine verschobene Methode, die eine Methode einer Basis von Wirt oder Komponente
+        überschreibt — der Qt-Basis (RM-M2), einer anderen fremden Basis wie ``logging.Filter``
+        oder einer eigenen wie einem Mixin (Review 2, RM-M19): Die Basis ruft sie am Wirt, nach
+        dem Schnitt liefe ihre eigene Fassung. Ein eigenes Attribut, das eine eigene Basis
+        ebenso liest oder setzt, teilte danach seinen Zustand. ``eventFilter`` der Qt-Basis
+        prüft :meth:`scan_uniqueness`."""
         assert self.host_class is not None
-        refs, unresolved = qt_bases(self.index, self.cut.source, self.host_class)
+        found = inherited(self.index, self.cut.source, self.host_class)
         if self.component_class is not None:
-            more, missing = qt_bases(
-                self.index, path_of(self.component_module), self.component_class
+            found = found.merged(
+                inherited(self.index, path_of(self.component_module), self.component_class)
             )
-            refs, unresolved = sorted({*refs, *more}), [*unresolved, *missing]
-        for text in unresolved:
+        for text in found.unresolved:
             self.problems.append(
-                f"{text}: eine Basis, die sich nicht auflöst — ob eine verschobene Methode Qt "
+                f"{text}: eine Basis, die sich nicht auflöst — ob eine verschobene Methode sie "
                 "überschreibt, ist so nicht prüfbar; vorher die Basis als Import schreiben"
             )
-        members, failed = qt_members(refs)
-        self.qt_names = members
-        for text in failed:
+        qt, failed = loaded_members(found.qt)
+        external, missing = loaded_members([*found.external, "builtins.object"])
+        for text in [*failed, *missing]:
             self.problems.append(
-                f"Qt-Basis {text} lässt sich nicht laden — ob eine verschobene Methode Qt "
-                "überschreibt, ist so nicht prüfbar; Umgebung prüfen (PySide6)"
+                f"Basis {text} lässt sich nicht laden — ob eine verschobene Methode sie "
+                "überschreibt, ist so nicht prüfbar; Umgebung prüfen"
             )
+        own: dict[str, list[str]] = {}
+        for path, node in found.own:
+            for name in _class_members(node):
+                own.setdefault(name, []).append(f"{module_of(path)}.{node.name}")
+        qt_names: frozenset[str] = frozenset().union(*qt.values())
         for name, moved in self.methods.items():
-            if name in members and name != "eventFilter":
+            line = moved.defs[0].lineno
+            if name in qt_names and name != "eventFilter":
                 self.problems.append(
-                    f"{self.cut.source}:{moved.defs[0].lineno}: {name} überschreibt eine Methode "
-                    f"der Qt-Basis ({', '.join(refs)}) — Qt ruft sie am Wirt, in der Komponente "
-                    "riefe Qt sie anders oder nie; sie bleibt im Wirt (Konzept 3.3), aus methods "
-                    "streichen"
+                    f"{self.cut.source}:{line}: {name} überschreibt eine Methode der Qt-Basis "
+                    f"({', '.join(found.qt)}) — Qt ruft sie am Wirt, in der Komponente riefe Qt "
+                    "sie anders oder nie; sie bleibt im Wirt (Konzept 3.3), aus methods streichen"
+                )
+                continue
+            bases = [*(r for r, n in external.items() if name in n), *own.get(name, [])]
+            if bases:
+                self.problems.append(
+                    f"{self.cut.source}:{line}: {name} überschreibt {', '.join(bases)} — die "
+                    "Basis ruft es am Wirt, nach dem Schnitt liefe ihre eigene Fassung; es "
+                    "bleibt im Wirt, aus methods streichen (oder vorher umbenennen, wenn es die "
+                    "Basis nicht meint)"
+                )
+        for name in self.cut.own_attributes:
+            if name in own:
+                self.problems.append(
+                    f"{self.cut.source}: das eigene Attribut {name} kennt auch die Basis "
+                    f"{', '.join(own[name])} — sie läse oder setzte danach ein anderes als die "
+                    "Komponente; es bleibt im Wirt (host_members) oder die Basis wird vorher "
+                    "umgestellt"
                 )
 
     # ---- Fragen an die Form

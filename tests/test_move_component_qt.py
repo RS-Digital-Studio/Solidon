@@ -76,6 +76,23 @@ else:
     elif mode == "timer":
         QCoreApplication.sendEvent(window, QTimerEvent(1))
         result = holder(window, "ticks").ticks
+    elif mode == "logging":
+        import logging
+
+        seen = []
+
+        class Collect(logging.Handler):
+            def emit(self, record):
+                seen.append(record.getMessage())
+
+        logger = logging.getLogger("move-names.probe")
+        logger.propagate = False
+        logger.addHandler(Collect())
+        logger.addFilter(window)
+        logger.warning("durch den Filter?")
+        result = not seen
+    elif mode == "mixin":
+        result = window.run() == 1
     else:
         if mode == "watch":
             holder(window, "watch").watch()
@@ -150,6 +167,35 @@ FILTER_TOOL_OLD = fx.edit(
     BOARD,
     COUNT,
     COUNT + "        self.filtered = 0\n",
+)
+
+
+#: Sonden k3d und k3e aus Review 2 (RM-M19): Überschreibungen einer Basis, die nicht Qt ist.
+LOGGING_FILTER = "    def filter(self, record: object) -> bool:\n        return False\n"
+MIXIN = (
+    "class Mixin:\n    def run(self) -> int:\n        return self.step()\n\n"
+    "    def step(self) -> int:\n        return 0\n\n\n"
+)
+STEP = "    def step(self) -> int:\n        return 1\n"
+HOST_CLASS = "class Board(QObject):\n"
+SUPER = "        super().__init__()\n"
+
+
+def _logging_base(files: dict[str, str], anchor: str) -> dict[str, str]:
+    """Das Brett erbt zusätzlich von ``logging.Filter`` (``anchor``: die Zeile, vor die der
+    Import gehört)."""
+    files = fx.edit(files, BOARD, HOST_CLASS, "class Board(QObject, logging.Filter):\n")
+    files = fx.edit(files, BOARD, anchor, "import logging\n" + anchor)
+    return fx.edit(files, BOARD, SUPER, SUPER + "        logging.Filter.__init__(self)\n")
+
+
+def _mixin_base(files: dict[str, str]) -> dict[str, str]:
+    return fx.edit(files, BOARD, HOST_CLASS, MIXIN + "class Board(QObject, Mixin):\n")
+
+
+MIXIN_KEEP = (
+    '\n[[accesses]]\npath = "app/ui/board.py"\nscope = "Mixin.run"\nmember = "step"\n'
+    'decision = "keep"\n'
 )
 
 
@@ -238,6 +284,34 @@ def _cases() -> list[tuple[str, dict[str, str], str, dict[str, str], str, str]]:
             "filter-tool",
             "tools/filter_tool.py:5: installiert window als Ereignisfilter, und eventFilter "
             "wandert — ob das der Wirt ist, bleibt offen",
+        ),
+        (
+            "basis-logging-filter",
+            _insert_method(
+                _logging_base(fx.COMPONENT_OLD, "import weakref\n"), BOARD, LOGGING_FILTER
+            ),
+            _cut(("filter",)),
+            _insert_method(
+                _logging_base(EXPECTED, "from typing import TYPE_CHECKING\n"), AREA, LOGGING_FILTER
+            ),
+            "logging",
+            "filter überschreibt logging.Filter",
+        ),
+        (
+            "basis-eigenes-mixin",
+            _insert_method(_mixin_base(fx.COMPONENT_OLD), BOARD, STEP),
+            _cut(("step",)),
+            _insert_method(_mixin_base(EXPECTED), AREA, STEP),
+            "mixin",
+            "step überschreibt app.ui.board.Mixin",
+        ),
+        (
+            "basis-eigenes-mixin-erklärt",
+            _insert_method(_mixin_base(fx.COMPONENT_OLD), BOARD, STEP),
+            _cut(("step",)) + MIXIN_KEEP,
+            _insert_method(_mixin_base(EXPECTED), AREA, STEP),
+            "mixin",
+            "step überschreibt app.ui.board.Mixin",
         ),
         (
             "unterklasse",
@@ -422,6 +496,80 @@ def test_a_filter_installation_is_judged_never_skipped(
         assert where in "\n".join(result.problems), (label, result.problems)
         assert all(" — " in problem for problem in result.problems), result.problems
         assert fx.tree_bytes(root) == {p: fx.text_of(t).encode("utf-8") for p, t in files.items()}
+
+
+#: Eigene Gegenproben zu RM-M19: eine eigene Basis über zwei Dateien, ein eigenes Attribut, das
+#: auch eine eigene Basis setzt, und eine weitere fremde Basis (``json.JSONEncoder``).
+STEP_BASE = {
+    "app/ui/steps.py": '"""Erste Stufe."""\n\n\nclass StepBase:\n'
+    "    def step(self) -> int:\n        return 0\n",
+    "app/ui/steps_middle.py": '"""Zweite Stufe."""\n\nfrom app.ui.steps import StepBase\n\n\n'
+    "class Middle(StepBase):\n    pass\n",
+}
+COUNTER = "class Counter:\n    def reset(self) -> None:\n        self.count = 0\n\n\n"
+DEFAULT = "    def default(self, o: object) -> object:\n        return str(o)\n"
+BASE_FORMS = [
+    (
+        "eigene-basis-über-zwei-dateien",
+        fx.edit(
+            fx.edit(
+                _insert_method(fx.COMPONENT_OLD | STEP_BASE, BOARD, STEP),
+                BOARD,
+                HOST_CLASS,
+                "class Board(QObject, Middle):\n",
+            ),
+            BOARD,
+            "from app.ui.flow import Flow\n",
+            "from app.ui.flow import Flow\nfrom app.ui.steps_middle import Middle\n",
+        ),
+        _cut(("step",)),
+        "step überschreibt app.ui.steps.StepBase",
+    ),
+    (
+        "eigenes-attribut-der-basis",
+        fx.edit(fx.COMPONENT_OLD, BOARD, HOST_CLASS, COUNTER + "class Board(QObject, Counter):\n"),
+        fx.COMPONENT_CUT,
+        "das eigene Attribut count kennt auch die Basis app.ui.board.Counter",
+    ),
+    (
+        "fremde-basis-json",
+        fx.edit(
+            fx.edit(
+                _insert_method(fx.COMPONENT_OLD, BOARD, DEFAULT),
+                BOARD,
+                HOST_CLASS,
+                "class Board(QObject, json.JSONEncoder):\n",
+            ),
+            BOARD,
+            "import weakref\n",
+            "import json\nimport weakref\n",
+        ),
+        _cut(("default",)),
+        "default überschreibt json.JSONEncoder",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("label", "old", "cut", "where"), BASE_FORMS, ids=[form[0] for form in BASE_FORMS]
+)
+def test_an_override_of_any_base_is_rejected_and_red(
+    tmp_path: Path, label: str, old: dict[str, str], cut: str, where: str
+) -> None:
+    """RM-M19: Jede Basis zählt — fremd über ``dir``, eigen über ihren Rumpf, auch über eine
+    Zwischenklasse in einer anderen Datei. Der Planer weist ab, der Beweis ist rot."""
+    _root, result = _run(tmp_path / "plan", old, cut)
+    assert result.status == "rejected", (label, result.status, result.problems)
+    assert where in "\n".join(result.problems), (label, result.problems)
+    assert all(" — " in problem for problem in result.problems), result.problems
+    cut_file = tmp_path / "cut.toml"
+    cut_file.write_text(cut, encoding="utf-8")
+    proof = move_proof.prove(
+        move_cut.load(cut_file),
+        fx.write_tree(tmp_path / "old", old),
+        fx.write_tree(tmp_path / "new", EXPECTED),
+    )
+    assert any(where in error for error in proof.errors), (label, proof.errors)
 
 
 def test_an_event_filter_that_moves_with_its_installation_keeps_filtering(tmp_path: Path) -> None:
