@@ -66,6 +66,7 @@ from app.ui.dialog_footer import DialogFooter
 from app.ui.dialogs import ErrorNotice, align_to_the_front
 from app.ui.feature_list import FeatureList
 from app.ui.feature_set_field import FeatureSetField
+from app.ui.first_change import first_change_sentence
 from app.ui.first_focus import select_on_first_focus
 from app.ui.form_fields import explain, name_rows
 from app.ui.grouped_spin import GroupedSpin
@@ -239,7 +240,7 @@ def lead_sentence(spec: OperationSpec) -> str:
 _ENDS_IN_A_VERB: Final = re.compile(r"\s[a-zäöüß]+(?:en|ern|eln)$")
 
 
-def accept_text(spec: OperationSpec) -> str:
+def accept_text(spec: OperationSpec, *, changing: bool = False) -> str:
     """Was der Hauptknopf eines Operationsdialogs sagt (RM-507).
 
     Der Knopf benennt die Handlung: „Bohrung setzen“ statt „OK“ — was gleich
@@ -249,7 +250,14 @@ def accept_text(spec: OperationSpec) -> str:
     (Robert, 25.08.2026). Trägt ein Bausteintitel selbst ein Verb, ist er der
     Knopf: *Deckel erzeugen* setzte bis RM-507 „ein“. Entschieden wird an der
     deutschen Quelle, damit jede Sprache denselben Knopf zeigt.
+
+    **Wer einen Schritt ändert, übernimmt** (``changing``, FD-99): Der Klick
+    legt kein neues Teil an und setzt nichts ein, er schreibt die geänderten
+    Werte in den bestehenden Schritt — wie *Übernehmen* an Maßgruppe und
+    Merkmalfenster.
     """
+    if changing:
+        return str(tr("Übernehmen"))
     if spec.category == "parts" and not _ENDS_IN_A_VERB.search(source_text(spec.title)):
         return str(tr("Einsetzen"))
     return str(spec.title)
@@ -1916,6 +1924,7 @@ class OperationDialog(QDialog):
         centre_objects: Sequence[SceneObject] = (),
         promote_values: bool = True,
         front_fields: Sequence[str] = (),
+        changing: bool = False,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1935,6 +1944,11 @@ class OperationDialog(QDialog):
         gespeicherte Werte und Ausdrücke sind keine neue Vorbelegung.
         ``front_fields`` holt diese Felder trotzdem nach vorn — die Maße eines
         aufgezogenen Quaders oder Zylinders (RM-559, E11), die man ändern will.
+
+        ``changing``: Der Dialog ändert einen bestehenden Schritt (§15.4,
+        ``MainWindow.edit_operation``). Der Knopf heißt dann *Übernehmen*
+        (:func:`accept_text`) und ist grau, bis sich etwas geändert hat; sein
+        Satz nennt das Feld, das man ändern kann (FD-99, ``first_change``).
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -1963,6 +1977,13 @@ class OperationDialog(QDialog):
         self._editors: dict[str, QWidget] = {}
         self._feature_focus = ""
         self._first_focus_given = False
+        self._changing = changing
+        self._opened_with: tuple[str, dict[str, Any], bool] | None = None
+        """Im Änderungsweg: Variante, Werte und Benennungshaken beim Öffnen."""
+        self._waits_for_change = False
+        """Ob *Übernehmen* auf die erste Änderung wartet (:meth:`_follow_source_pending`)."""
+        self._asked_field = ""
+        """Das Feld, in das :meth:`focus_field` geführt hat — der Satz nennt es zuerst."""
         self.source_objects = tuple(source_objects)
         self._centre_objects = tuple(centre_objects)
         self._centre_row: QWidget | None = None
@@ -2422,7 +2443,7 @@ class OperationDialog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self._accept_button = ok
         if ok is not None:
-            ok.setText(accept_text(spec))
+            ok.setText(accept_text(spec, changing=changing))
             make_primary(ok)
         self._source_fields = tuple(
             editor for editor in self._editors.values() if isinstance(editor, ImageSourceField)
@@ -2461,7 +2482,8 @@ class OperationDialog(QDialog):
         # sie zur Eingabe macht. Und ein Pflicht-Ziel: Der Knopf gibt frei,
         # sobald es gewählt ist, nicht erst mit dem nächsten Vorschaubild.
         if (
-            self.spec.name == "apply_texture"
+            changing
+            or self.spec.name == "apply_texture"
             or self._seeks_a_place()
             or any(
                 (entry.kind == "material" and entry.required)
@@ -2488,6 +2510,12 @@ class OperationDialog(QDialog):
         # Jedes Feld trägt den Namen seiner Zeile, auch eines ohne Satz und eines,
         # das selbst der Editor ist (FD-94, ``form_fields.name_rows``).
         name_rows(front, advanced)
+        if changing:
+            # Was beim Öffnen dastand, ist der Schritt, wie er ist; erst eine
+            # Abweichung davon ist etwas zum Übernehmen (FD-99). Ein Fokus oder
+            # dieselbe Zahl noch einmal getippt ändert nichts.
+            self._opened_with = (self.spec.name, self.values(), self.names_dimensions())
+            self._follow_source_pending()
 
     def _ask_manual(self) -> None:
         """F1: die Stelle im Handbuch zu dieser Operation melden.
@@ -2567,6 +2595,24 @@ class OperationDialog(QDialog):
         # **Ansehen ja, Übernehmen nein** (FD-5): Ohne Freischaltung geht ein
         # Schritt aus Verlauf oder Baum zum Lesen auf; der Knopf trägt den Grund.
         refusal = change_refusal()
+        # **Im Änderungsweg wartet der Knopf auf die erste Änderung** (FD-99, mit
+        # FD-31 eine Regel für alle Flächen): grau, und der Satz nennt das Feld,
+        # in das der Kunde gekommen ist, sonst das erste offene. Ohne offenes Feld
+        # gibt es keinen Weg zu nennen, und der Knopf bleibt, wie er war.
+        unchanged = self._opened_with is not None and self._opened_with == (
+            self.spec.name,
+            self.values(),
+            self.names_dimensions(),
+        )
+        asked = self._editors.get(self._asked_field)
+        first = (
+            first_change_sentence(
+                [*([asked] if asked is not None else []), *self._editors.values()], self
+            )
+            if unchanged
+            else ""
+        )
+        self._waits_for_change = bool(first)
         reason = refusal or (
             tr("Datei wird gelesen …")
             if source_pending
@@ -2588,8 +2634,11 @@ class OperationDialog(QDialog):
             or (placement_hint() if no_place else "")
             or (blocked or "")
         )
+        if first and not (refusal or pending):
+            reason = first
         incomplete = (
-            incomplete
+            self._waits_for_change
+            or incomplete
             or no_edge
             or no_contour
             or no_layout
@@ -2684,7 +2733,7 @@ class OperationDialog(QDialog):
 
     def can_accept(self) -> bool:
         """Alle Eingaben und die Freigabe derselben Vorschau erneut prüfen."""
-        if self._attachment_problem is not None or change_refusal():
+        if self._attachment_problem is not None or change_refusal() or self._waits_for_change:
             return False
         for editor in (*self.findChildren(QSpinBox), *self.findChildren(QDoubleSpinBox)):
             editor.interpretText()
@@ -2734,6 +2783,7 @@ class OperationDialog(QDialog):
             # könnte (RM-773).
             if (
                 self.preview_defer is not None
+                and not self._waits_for_change
                 and not self.place_missing()
                 and not self.source_missing()
             ):
@@ -4225,6 +4275,11 @@ class OperationDialog(QDialog):
         elif isinstance(editor, QLineEdit):
             editor.selectAll()
         self._scroll.ensureWidgetVisible(editor)
+        if self._opened_with is not None:
+            # Wer über ein Feld kommt (*Eingabe korrigieren*), liest es im Satz —
+            # gefragt, nachdem die Klappe es gezeigt hat.
+            self._asked_field = name
+            self._follow_source_pending()
         return True
 
     def take_point(self, point: tuple[float, float, float]) -> bool:
@@ -4412,7 +4467,7 @@ class OperationDialog(QDialog):
         for widget in retired:
             widget.deleteLater()
         self.setWindowTitle(str(spec.title))
-        self._accept_button.setText(accept_text(spec))
+        self._accept_button.setText(accept_text(spec, changing=self._changing))
         if self._description is not None:
             self._description.setText(lead_sentence(spec))
             self._description.setVisible(bool(spec.doc))
