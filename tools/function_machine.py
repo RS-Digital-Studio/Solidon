@@ -91,12 +91,18 @@ class StepMachine:
         tick_ms: int = TICK_MS,
         unstick: Callable[[], None] | None = None,
         on_stuck: Callable[[], None] | None = None,
+        nested: Callable[[], bool] | None = None,
     ) -> None:
         self._schedule = schedule
         self._clock = clock
         self._tick_ms = tick_ms
         self._unstick = unstick
         self._on_stuck = on_stuck
+        #: Ob eine modale Schleife läuft, die keine Handlung dieses Automaten
+        #: öffnete — ein Arbeiter fragte, eine Absage kam als Meldung. Dann kehrt
+        #: auch ``drive`` nicht zurück, und der Automat räumt sie ab wie eine
+        #: eigene (FD-101: fünf Minuten in ``show_error`` und ``_on_ask``).
+        self._nested = nested
         #: Nach :data:`MOST_UNSTICKS` Versuchen mit Escape einmal ``on_stuck`` —
         #: nicht alle 120 ms Escape bis zur Frist des Elternprozesses (Review L12).
         self.stuck = False
@@ -147,7 +153,8 @@ class StepMachine:
             # zurück, wenn ihr Fenster schließt — am Fenster mit Escape, höchstens
             # MOST_UNSTICKS Mal; dann einmal ``on_stuck``, das notiert, welches
             # Fenster es war, und es noch auf anderem Weg versucht.
-            if self.depth > 0 and self._unstick is not None:
+            blocked = self.depth > 0 or (self._nested is not None and self._nested())
+            if blocked and self._unstick is not None:
                 if self.unsticks < MOST_UNSTICKS:
                     self.unsticks += 1
                     self.log.append({"step": "unstick", "event": "act", "t": now})

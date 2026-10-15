@@ -218,14 +218,20 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
         """Fährt Schritte; ein Fund oder Fehler steht danach im Protokoll.
 
         ``label`` ist die Phase jedes Eintrags in ``steps``, den diese Schritte
-        schreiben (``Walk.phase``).
+        schreiben (``Walk.phase``). Tiefer als hier geschachtelte Ereignisschleifen
+        gehören einem Fenster, das während ``pump`` aufging; der Automat schließt
+        es wie eines aus seinen Schritten (``StepMachine.nested``).
         """
+        from PySide6.QtCore import QThread
+
         self.walker.phase = label
+        level = QThread.currentThread().loopLevel()
         machine = StepMachine(
             qt_schedule,
             time.perf_counter,
             unstick=self.escape_modal,
             on_stuck=lambda: self.stuck_modal(label),
+            nested=lambda: QThread.currentThread().loopLevel() > level,
         )
         drive(machine, steps, self.pump, time.perf_counter, timeout_s)
         ok = True
@@ -1703,27 +1709,8 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
                     *([self.apply_step()] if self.apply_target else []),
                     Step("antwort", lambda machine: None, ready=answered),
                     Step("antwort lesen", read),
-                    Step("meldung schließen", close, settle_ms=SETTLE_MS),
                 ]
             )
-
-        closed = {"times": 0}
-
-        def close(machine: StepMachine) -> None:
-            # Eine Absage beim Einfügen kommt als Meldung aus dem Arbeiter, nicht aus
-            # einem Schritt: Bliebe sie offen, kehrte die Ereignisschleife nie zurück
-            # (Probe group_pattern: fünf Minuten in show_error).
-            from PySide6.QtWidgets import QApplication
-
-            if (
-                QApplication.activeModalWidget() is None
-                and QApplication.activePopupWidget() is None
-            ):
-                return
-            if closed["times"] < MOST_UNSTICKS:
-                closed["times"] += 1
-                self.escape_modal()
-                machine.insert([Step("meldung schließen", close, settle_ms=SETTLE_MS)])
 
         return [Step("marke", marker)]
 
