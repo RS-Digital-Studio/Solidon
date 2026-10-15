@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Iterator
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -13,11 +14,15 @@ from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt, Signal
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QToolButton, QWidget
 
+from app.core import activation
+from app.core.activation import store
 from app.core.scene.history import OperationDraft
 from app.i18n import tr
+from app.ui.dialogs import licence_lock_line
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tools import function_setup
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -244,6 +249,19 @@ def expire_trial(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.core import activation
 
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
+
+
+def set_licence(monkeypatch: pytest.MonkeyPatch, state: str) -> str:
+    """Den Freischaltzustand über die Nahtstelle der Suite setzen; zurück kommt der
+    Sperrgrund — für ``test_licence_lock_offers.py`` und ``test_lock_reason_once.py``.
+    """
+    monkeypatch.setattr(store, "DEMO_UNTIL", None)
+    if state == "sale_without_trial":
+        monkeypatch.setattr(store, "TRIAL_FROM", None)
+    cached = function_setup.licence_activation(state, date.today())
+    assert getattr(cached, state), f"der Zustand {state} ließ sich nicht herstellen"
+    monkeypatch.setattr(activation, "_cached", cached)
+    return "" if cached.unlocked else licence_lock_line(cached)
 
 
 def wait_until(app: QApplication, condition: Callable[[], bool]) -> None:

@@ -20,8 +20,8 @@ from PySide6.QtWidgets import QApplication, QLabel, QListWidget
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-from tests.test_licence_lock_offers import LOCKED, _set_licence
-from tests.ui_helpers import wait_for_print_findings
+from tests.test_licence_lock_offers import LOCKED
+from tests.ui_helpers import set_licence, wait_for_print_findings
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ def test_the_reason_stands_once_at_a_chosen_hole(
     qt_app: QApplication, a_hole: MainWindow, monkeypatch: pytest.MonkeyPatch, state: str
 ) -> None:
     window = a_hole
-    reason = _set_licence(monkeypatch, state)
+    reason = set_licence(monkeypatch, state)
     assert reason, f"{state}: ohne Sperrgrund prüft dieser Test nichts"
     result = window.session.last_result
     object_id = next(iter(result.scene.objects))
