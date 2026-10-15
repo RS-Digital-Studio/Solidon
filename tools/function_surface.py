@@ -2,7 +2,8 @@
 
 Die Fläche einer Zeile folgt der Art ihres Ziels (:func:`surface_for`): der
 offene Dialog, sonst bei einer Befundhandlung und beim Bericht der Prüfbericht,
-bei einem Werkzeug seine Leiste über der Ansicht, sonst die Karte der Auswahl.
+bei einem Werkzeug seine Leiste über der Ansicht, sonst die Seite oder der
+Abschnitt der Karte, in der das Ziel steht (FD-130).
 Vorher war es für jede Zeile ohne Dialog die Karte der Auswahl oder das ganze
 Hauptfenster (Probelauf F-30). Ein Bild nimmt jedes sichtbare Fenster der Zeile
 auf, auch den nichtmodalen Operationsdialog (:func:`windows_to_picture`, F-31).
@@ -84,8 +85,11 @@ def surface_for(window: Any, target: str) -> Any:
     Ein offener Dialog geht vor — ihn hat die Zeile geöffnet. Ein Ziel
     ``dialog:<klasse>`` ist das Fenster dieser Klasse. Sonst nach der Zielart:
     Befund, Befundhandlung und ``report*`` der Prüfbericht, ``tool:<name>`` die
-    Leiste des Werkzeugs (``handle:bar.<name>``), sonst die Karte der Auswahl
-    und zuletzt das Fenster.
+    Leiste des Werkzeugs (``handle:bar.<name>``), eine Merkmalshandlung ihre
+    Zeile oder Maßgruppe; jedes andere Ziel die Fläche um den Ort, an dem es
+    steht (:func:`place_of`, :func:`surface_around`). Die Karte der Auswahl ist
+    es nur, wenn das Ziel dort steht: Vorher fiel jedes andere Ziel auf sie
+    zurück, und die Parameterleiste wurde an der Auswahlkarte gemessen (FD-130).
     """
     kind, _separator, rest = target.partition(":")
     if kind == "dialog":
@@ -113,7 +117,90 @@ def surface_for(window: Any, target: str) -> Any:
         heading = _shown(window, target)
         if heading is not None:
             return heading.parentWidget()
-    return _shown(window, "selection") or window
+    if kind in SELECTION_KINDS:
+        # Steht ihr Kopf gerade nicht da, bleibt ihr Ort das Merkmalfenster.
+        return _shown(window, "selection") or window
+    place = place_of(window, target)
+    return window if place is None else surface_around(window, place)
+
+
+#: Zielarten, die im Merkmalfenster der Auswahlkarte stehen.
+SELECTION_KINDS: Final[frozenset[str]] = frozenset({"feature", "edge", "feature.field"})
+
+#: Wo ein Ziel ohne eigenes Widget steht: Art → Ziel, dessen Widget der Ort ist.
+#: Eine Zeile steht in ihrer Liste, ein Eintrag im Kontextmenü des Verlaufs am
+#: Verlauf, eine Stelle im Bild in der Ansicht (FD-130).
+TARGET_PLACES: Final[dict[str, str]] = {
+    "tree.row": "tree",
+    "history.row": "history",
+    "history": "history",
+    "history.last": "history",
+    "finding": "report",
+    "view": "viewport",
+    "view.edge": "viewport",
+    "handle": "viewport",
+}
+
+
+def place_of(window: Any, target: str) -> Any | None:
+    """Das Widget, an dem das Ziel steht: sein eigenes, seine Liste, die Leiste seiner Zeile.
+
+    Eine Operation oder ein Befehl steht als Knopf in der Auswahlkarte
+    (``SelectionOperationsPanel.button_for``) oder, ohne sichtbaren Knopf, als
+    Zeile der Menüleiste — wie ``guide_targets.next_click`` sie sucht. ``None``,
+    wenn das Ziel gerade nirgends steht.
+    """
+    kind, _separator, rest = target.partition(":")
+    if kind in ("command", "operation"):
+        button = window.selection_operations.button_for(rest)
+        return button if button is not None and button.isVisible() else window.menuBar()
+    if kind == "menu":
+        return window.menuBar()
+    own = _shown(window, target)
+    home = TARGET_PLACES.get(kind) or TARGET_PLACES.get(target)
+    return own if own is not None or home is None else _shown(window, home)
+
+
+def surface_around(window: Any, widget: Any) -> Any:
+    """Die Fläche um ein Widget: die Seite oder der Abschnitt seiner Karte, sonst seine Leiste.
+
+    Eine Karte (``overlay.CARD``) trägt Reiter — dann ist es die Seite, auf der
+    das Widget steht (Auswahl, Prüfbericht, Chat) — oder Abschnitte (Objekte,
+    Parameter, Verlauf), dann dieser Abschnitt samt Kopf. Außerhalb einer
+    Karte die Werkzeug-, Menü- oder Statusleiste um das Widget, auf dem
+    Startbildschirm dieser, sonst das Widget selbst.
+    """
+    from PySide6.QtWidgets import QMenuBar, QStatusBar, QTabWidget, QToolBar
+
+    from app.ui.overlay import CARD
+
+    chain: list[Any] = []
+    node = widget
+    while node is not None and node is not window:
+        if node.objectName() == CARD:
+            if not chain:
+                return node
+            top = chain[-1]
+            if isinstance(top, QTabWidget):
+                # Die Seite, wie die Reiter sie führen (``DetachableTabs`` hüllt sie ein).
+                pages = (top.widget(index) for index in range(top.count()))
+                return next(
+                    (
+                        page
+                        for page in pages
+                        if page is not None and (page is widget or page.isAncestorOf(widget))
+                    ),
+                    top,
+                )
+            return top
+        if isinstance(node, (QToolBar, QMenuBar, QStatusBar)):
+            return node
+        chain.append(node)
+        node = node.parentWidget()
+    start = getattr(window, "start_screen", None)
+    if start is not None and (widget is start or start.isAncestorOf(widget)):
+        return start
+    return widget
 
 
 def surface_parts(window: Any, target: str, root: Any) -> tuple[Any, ...]:
