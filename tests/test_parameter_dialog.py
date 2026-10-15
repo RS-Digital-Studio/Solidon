@@ -171,6 +171,9 @@ def test_a_refused_name_stands_at_the_name_field_with_its_way(qt_app: QApplicati
         assert field_bottom < refusal_top < value_top, "direkt unter dem Namensfeld"
         assert dialog.name_suggestion.isVisibleTo(dialog)
         assert dialog.name_suggestion.text() == "„Breite_Platte“ verwenden"
+        # Satz und Knopf nebeneinander machten die Spalte breiter als den Dialog:
+        # Der Rollbereich wich zur Seite und schnitt die Beschriftungen ab.
+        assert dialog._scroll.horizontalScrollBar().maximum() == 0, "nichts rollt zur Seite"
 
         dialog.name_suggestion.click()
         QApplication.processEvents()

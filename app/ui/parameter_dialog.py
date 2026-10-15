@@ -15,7 +15,7 @@ from contextlib import suppress
 from itertools import pairwise
 from typing import Any, Final
 
-from PySide6.QtCore import QLocale, QTimer
+from PySide6.QtCore import QLocale, Qt, QTimer
 from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -48,6 +48,7 @@ from app.ui.leash import weak_slot
 from app.ui.style import (
     NORMAL,
     SPACE,
+    TIGHT,
     WIDE,
     ContentFitIntent,
     ContentHeight,
@@ -303,16 +304,19 @@ class ParameterDialog(QDialog):
         # **Die Ablehnung des Namens steht am Namensfeld** (FD-155) — mit dem
         # Weg: ein freier Name aus dem Getippten als Knopf. Sie stand unter
         # „Weitere Einstellungen“, das Feld unmarkiert, und der Kunde suchte.
+        # Der Knopf steht unter dem Satz, nicht daneben: Nebeneinander machten
+        # beide die Feldspalte breiter als den Dialog, der Rollbereich wich zur
+        # Seite und schnitt die Beschriftungen ab.
         self.name_refusal = QWidget(content)
-        refusal_layout = QHBoxLayout(self.name_refusal)
+        refusal_layout = QVBoxLayout(self.name_refusal)
         refusal_layout.setContentsMargins(0, 0, 0, 0)
-        refusal_layout.setSpacing(NORMAL)
+        refusal_layout.setSpacing(TIGHT)
         self.name_note = QLabel(self.name_refusal)
         self.name_note.setWordWrap(True)
-        refusal_layout.addWidget(self.name_note, 1)
+        refusal_layout.addWidget(self.name_note)
         self.name_suggestion = QPushButton(self.name_refusal)
         self.name_suggestion.clicked.connect(weak_slot(self, ParameterDialog._take_suggestion))
-        refusal_layout.addWidget(self.name_suggestion)
+        refusal_layout.addWidget(self.name_suggestion, 0, Qt.AlignmentFlag.AlignLeft)
         self._suggested: str | None = None
         form.addRow(QLabel(content), self.name_refusal)
         form.addRow(tr("Wert"), value_row)
