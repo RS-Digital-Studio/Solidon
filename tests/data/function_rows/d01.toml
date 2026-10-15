@@ -6,6 +6,17 @@
 [row."meldung:action_import_url"]
 route = [{ target = "menu:menubar.modell_aus_dem_netz" }]
 
+# Die Frage vor dem Export trotz Befund: Netz und exakter Körper zusammen gewählt,
+# *Exportieren …*, der vorgeschlagene Name wird übernommen (*Speichern* im Dialog
+# von Qt); der Netzkörper bringt den Befund ``export.needs_solid`` (FD-175).
+[row."meldung:_go_on_despite"]
+start_scene = "export_gemischt"
+route = [
+  { target = "tree.row:obj_2", modifier = "ctrl" },
+  { target = "menu:menubar.exportieren" },
+  { target = "dialog.accept" },
+]
+
 # Die Speicherfrage: Eine Änderung (*Löschen* wirkt ohne Werte), dann *Neu* und
 # auf dem Startbildschirm *Leeres Projekt*. *Datei → Neu* selbst fragt nicht,
 # erst der Wechsel zum neuen Projekt.

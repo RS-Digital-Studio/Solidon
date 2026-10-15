@@ -77,6 +77,11 @@ def _drop_area(window: MainWindow) -> QWidget:
     return area
 
 
+#: Der Wrapper des modalen Dialogs bleibt gehalten: Gab Python ihn frei, verfielen die
+#: Wrapper seiner Kinder, und der Hauptknopf des Speicherdialogs war tot (FD-175).
+_HELD: list[QWidget] = []
+
+
 def _open_dialog(window: MainWindow) -> QWidget:
     """Der offene Operationsdialog, sonst der Dialog, der gerade modal läuft."""
     dialog = window._op_dialog
@@ -85,6 +90,7 @@ def _open_dialog(window: MainWindow) -> QWidget:
     modal = QApplication.activeModalWidget()
     if modal is None:
         raise MissingTargetError("dialog: es ist kein Dialog offen")
+    _HELD[:] = [modal]
     return modal
 
 

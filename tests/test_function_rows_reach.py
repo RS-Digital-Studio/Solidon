@@ -196,6 +196,12 @@ REACHED: dict[str, tuple[str, tuple[str, ...]]] = {
         "quader.exakt",
         ("tree.row:obj_1", "history.row:1", "history:delete"),
     ),
+    # Die Frage vor dem Export mit Befund: Speichern im Dialog von Qt
+    # (``test_guide_dialog_wrapper.py``).
+    "meldung:_go_on_despite": (
+        "export_gemischt",
+        ("tree.row:obj_1", "tree.row:obj_2", "menu:menubar.exportieren", "dialog.accept"),
+    ),
 }
 
 #: Zeilen, die der Sprachfall noch nicht erreicht, je mit dem Grund (FD-175). Der
@@ -219,7 +225,6 @@ STILL_WITHOUT: dict[str, str] = {
     "dialog:outline_dialog": "Szene mit SVG-Quelle",
     "dialog:step_bodies_dialog": "Szene mit mehrteiliger STEP-Datei",
     "meldung:_ask_recovery": "Sicherung neben dem zuletzt geöffneten Projekt",
-    "meldung:_go_on_despite": "Export mit Befund über den Speicherdialog",
     "dialog:comfy_setup_dialog": "ComfyUI ohne Modell",
     "meldung:confirm_generation_loss": "laufende Erzeugung",
     "dialog:expression_dialog": "Skizzenwortschatz",
