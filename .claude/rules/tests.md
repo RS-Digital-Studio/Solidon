@@ -303,14 +303,10 @@ Das ist der einzige Teil des Tors, dessen Rot nicht „nicht fertig“ bedeutet.
   je Rechenkern einen Puffer zu, und Läufe nebeneinander reißen die
   Zusagegrenze. Leistungsläufe messen damit
   denselben Stand wie der Kunde.
-- **`affected_tests.py --run` verteilt ab acht Dateien auf vier Arbeiter**
-  (`-n 4 --dist worksteal`, `--workers N`, `0` seriell): Ab acht Dateien kostet
-  der Start der Arbeiter nur noch ein Siebtel mehr CPU-Zeit und spart zwei
-  Drittel der Wartezeit, darunter frisst er den Gewinn — gemessen im Wechsel.
-- **Im Tor eine feste Arbeiterzahl, nie `-n auto`**: Parallelität zeigt
-  Speicherhunger als Korrektheitsfehler, 32 Arbeiter sterben schon beim
-  Verteilen, und eine Zahl, die an der Kernzahl hängt, ist eine stille
-  Variable.
+- **Eine feste Arbeiterzahl, nie `-n auto`** — im Tor wie in
+  `affected_tests.py --run`, das ab acht Dateien `-n 4 --dist worksteal`
+  fährt (`--workers N`, 0 seriell): Parallelität zeigt Speicherhunger als
+  Korrektheitsfehler, und eine Zahl an der Kernzahl ist eine stille Variable.
 - **Zweimal fahren und die Mengen vergleichen**: Ein Test, der von einem
   Vorgänger abhängt, wird parallel *manchmal* rot — zwei gleiche Läufe sind
   kein Beweis, zwei ungleiche sofort einer.

@@ -510,6 +510,18 @@ dahinter: Auf einer anderen Maschine ist `auto` etwas anderes, und ein Tor,
 das je nach Kernzahl anders misst, hat eine stille Variable. Dieselbe
 Begründung wie bei `.performance.json`.
 
+**`affected_tests.py --run` ab acht Dateien mit vier Arbeitern.** Die Gruppe
+ohne Fenster lief in einem Prozess; eine Auswahl über `viewport` und
+`main_window` brauchte so 1 bis 1,5 Stunden, das Tor dieselbe Menge mit
+Arbeitern 18 Minuten. Im Wechsel gemessen an Teilen der Auswahl für
+`chamber_ops` (Wanduhr / CPU-Zeit des Prozessbaums): zwei Dateien 27–37 s /
+26–34 s seriell gegen 16–17 s / 49–53 s mit `-n 4`, vier Dateien 87–106 s /
+86–98 s gegen 43–49 s / 132–135 s, acht Dateien 381–401 s / 329–339 s gegen
+139–144 s / 379–389 s, sechzehn 728 s / 770 s gegen 228 s / 887 s. Jeder
+Arbeiter startet und sammelt alle Dateien selbst; ab acht Dateien kostet das
+15 % mehr CPU-Zeit für ein Drittel der Wartezeit, darunter 40 bis 100 %. Vier
+statt mehr, weil Agenten nebeneinander laufen; `--workers 0` fährt seriell.
+
 **Zweimal fahren und die Mengen vergleichen, nicht die Zahlen.** Ein Test, der
 von einem Vorgänger abhängt, wird bei paralleler Ausführung nicht rot — er wird
 *manchmal* rot. Zwei gleiche Läufe sind kein Beweis, zwei ungleiche sind sofort

@@ -304,7 +304,10 @@ Bild und `--shot` eine Bildschirmaufnahme dessen, was der Kunde sieht)
 
 Der Importgraph von `affected_tests.py` behält auch nicht mehr vorhandene
 Importziele als Knoten, damit gelöschte Module ihre direkten und indirekten
-Testabhängigkeiten behalten.
+Testabhängigkeiten behalten. Die geänderten Dateien liest es aus Git
+NUL-getrennt, damit Leerraum und Sonderzeichen nicht gequotet ankommen, und
+ohne Umbenennungserkennung, damit eine Umbenennung am alten und am neuen Ort
+zählt.
 
 `window_memory.py` stellt die andere Frage am selben Fenster: **was ein
 Fenster- und ein Sprachwechsel liegen lassen.** Es baut nacheinander Fenster
