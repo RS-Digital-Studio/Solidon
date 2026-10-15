@@ -222,7 +222,18 @@ def test_the_face_keeps_its_lines_columns_and_footer_when_it_shrinks(
     assert after[1] <= before[1], "Die Karte darf dabei nicht höher werden"
     assert after[2] <= before[2], "Zusätzlicher Rollweg wäre versteckte Mehrhöhe"
     assert all(operations.columns_of(title) >= count for title, count in columns.items())
-    assert operations._quick_columns == quick_before
+    # Die Hauptknöpfe bleiben, wie sie standen — außer die Karte ist innerhalb
+    # der Reserve breiter geworden, und ihr Paar passt jetzt nebeneinander.
+    # Wo diese Schwelle liegt, hängt an der Schriftrasterung: DejaVu unter
+    # macOS (CoreText) maß 508 statt 498, und das Paar passte (CI-Lauf
+    # 38781742486). Weniger Spalten oder ein Wechsel ohne Zuwachs bleiben rot.
+    if operations._quick_columns != quick_before:
+        assert operations._quick_columns > quick_before and after[0] > before[0], (
+            quick_before,
+            operations._quick_columns,
+            before,
+            after,
+        )
     for label, height in heights.items():
         assert label.heightForWidth(label.width()) <= height, label.text()
     assert feature_panel.footer().geometry().bottom() <= page.height()
