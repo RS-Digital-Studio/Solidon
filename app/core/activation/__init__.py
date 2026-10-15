@@ -92,7 +92,7 @@ if TYPE_CHECKING:
     from app.core.activation import certificate as _certificate_types
     from app.core.activation.certificate import ActivationCertificate
     from app.core.activation.key import Licence, LicenceKeyError, LicenceKind
-    from app.core.activation.store import TRIAL_DAYS, TRIAL_FROM, read_key
+    from app.core.activation.store import TRIAL_DAYS, read_key
 else:
     _certificate_types = _LazyTypeNamespace()
     ActivationCertificate = _LazyAnnotation("ActivationCertificate")
@@ -113,7 +113,6 @@ _EXPORTS: Final[dict[str, tuple[str, str]]] = {
     "LicenceKeyError": ("key", "LicenceKeyError"),
     "LicenceKind": ("key", "LicenceKind"),
     "TRIAL_DAYS": ("store", "TRIAL_DAYS"),
-    "TRIAL_FROM": ("store", "TRIAL_FROM"),
     "read_key": ("store", "read_key"),
 }
 
@@ -124,7 +123,6 @@ __all__ = [
     "EXPORT",
     "SLICER",
     "TRIAL_DAYS",
-    "TRIAL_FROM",
     "Activation",
     "ActivationCertificate",
     "ActiveLicenceCannotBeReplaced",
