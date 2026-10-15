@@ -242,6 +242,27 @@ def test_a_damaged_directory_is_a_cache_miss(tmp_path: Path, entry: tuple[object
     assert code_cache.decode_one(cache, code_facts.stamp(), "tests/test_case.py", "hash") is None
 
 
+@pytest.mark.parametrize("size", [2**40, 2**62, 2**64 - 1, "eins zu viel"])
+def test_a_directory_length_past_the_end_is_a_cache_miss(tmp_path: Path, size: int | str) -> None:
+    """RR2-5: Eine beschädigte Längenangabe des Verzeichnisses ist ein Fehlschlag in beiden
+    Wegen, kein ``MemoryError`` oder ``OverflowError`` beim Lesen. Gegenprobe: dieselbe Datei
+    mit ihrer richtigen Länge liest."""
+    files = _stored()
+    name, (digest, facts) = next(iter(files.items()))
+    current = code_facts.stamp()
+    data = code_cache.encode(current, files)
+    start = len(code_cache.MAGIC + current.encode("ascii") + b"\n")
+    right = int.from_bytes(data[start : start + 8], "little")
+    cache = tmp_path / "cache.data"
+    cache.write_bytes(data)
+    assert code_cache.decode_one(cache, current, name, digest) == facts
+    wrong = len(data) - start - 8 + 1 if size == "eins zu viel" else size
+    assert isinstance(wrong, int) and wrong != right
+    cache.write_bytes(data[:start] + wrong.to_bytes(8, "little") + data[start + 8 :])
+    assert code_cache.decode(cache, current) == {}
+    assert code_cache.decode_one(cache, current, name, digest) is None
+
+
 def test_roundtrip_preserves_typed_constants_and_reads_fresh_bytes(tmp_path: Path) -> None:
     cache = tmp_path / "cache.data"
     files = _stored()

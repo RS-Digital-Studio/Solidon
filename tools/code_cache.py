@@ -291,12 +291,17 @@ def encode(current: str, files: dict[str, tuple[str, Facts]]) -> bytes:
     return frame(current, ((name, digest, dumps(facts)) for name, (digest, facts) in files.items()))
 
 
-def _directory(head: bytes, current: str) -> int:
-    """Die Länge des Verzeichnisses aus dem Kopf; ein anderer Stand ist kein Speicher."""
+def _directory(head: bytes, current: str, length: int) -> int:
+    """Die Länge des Verzeichnisses aus dem Kopf; ein anderer Stand ist kein Speicher. Reicht
+    sie über das Dateiende (``length``) hinaus, ist er beschädigt — gelesen wird dann nichts,
+    sonst forderte eine Länge von 2^40 so viel Speicher an (RR2-5)."""
     header = _header(current)
     if len(head) != len(header) + _SIZE or not head.startswith(header):
         raise ValueError("Anderer Stand")
-    return int.from_bytes(head[len(header) :], "little")
+    size = int.from_bytes(head[len(header) :], "little")
+    if len(head) + size > length:
+        raise ValueError("Verzeichnis über das Dateiende hinaus")
+    return size
 
 
 def _table(raw: bytes | memoryview, records_size: int) -> tuple[tuple[str, str, int, int], ...]:
@@ -362,7 +367,7 @@ def decode(
         records = _schema(current)
         data = memoryview(path.read_bytes())
         start = len(_header(current)) + _SIZE
-        size = _directory(bytes(data[:start]), current)
+        size = _directory(bytes(data[:start]), current, len(data))
         base = start + size
         table = _table(data[start:base], len(data) - base)
         files: dict[str, tuple[str, Facts]] = {}
@@ -386,9 +391,11 @@ def decode_one(path: Path, current: str, name: str, digest: str) -> Facts | None
         records = _schema(current)
         with path.open("rb") as handle:
             start = len(_header(current)) + _SIZE
-            size = _directory(handle.read(start), current)
+            head = handle.read(start)
+            length = handle.seek(0, 2)
+            size = _directory(head, current, length)
             base = start + size
-            records_size = handle.seek(0, 2) - base
+            records_size = length - base
             handle.seek(start)
             table = _table(handle.read(size), records_size)
             for entry, entry_digest, offset, length in table:
