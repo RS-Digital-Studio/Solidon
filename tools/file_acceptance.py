@@ -373,8 +373,9 @@ def function_cases(
     ``packages`` und ``row_ids`` schränken ein; eine Kennung, die keine Zeile
     trifft, ist ein Fehler — ein Lauf, der still nichts prüft, sähe aus wie einer,
     der nichts fand. ``sprachen`` faltet nicht je Zeile aus: Ein Prozess je
-    Sprache und Paket geht die Flächen aller Zeilen ab (``tools/CLAUDE.md``,
-    sechs Sprachen in einem Prozess brechen ab). ``phases`` beschränkt jeden
+    Sprache, Paket und Einrichtung der Startszenen geht die Flächen seiner Zeilen
+    ab (``tools/CLAUDE.md``, sechs Sprachen in einem Prozess brechen ab;
+    ``function_cases``, FD-101). ``phases`` beschränkt jeden
     Funktionsfall auf diese Phasen (``function_setup.PHASES``) — für die
     Nachprüfung einer Zeile nach einem Fix.
 
@@ -472,22 +473,11 @@ def function_cases(
                 )
                 number += 1
     if "sprachen" in variant_sets:
+        from tools.function_cases import language_cases
+
         spoken = tuple(languages) if languages is not None else available_languages()
-        for package in sorted({str(row.get("package")) for row in chosen}):
-            for language in spoken:
-                variant = Variant.of({"set": "sprachen", "language": language})
-                cases.append(
-                    Case(
-                        number,
-                        f"{package} [{language}]",
-                        "",
-                        "",
-                        kind="language",
-                        row=package,
-                        variant=variant.as_dict(),
-                    )
-                )
-                number += 1
+        packages = {str(row.get("package")) for row in chosen}
+        cases += language_cases(rows, packages, spoken, number)
     return cases
 
 
@@ -529,8 +519,10 @@ def function_inventory(
     cases = function_cases(
         rows, packages=packages, row_ids=row_ids, variant_sets=variant_sets, phases=phases
     )
+    from tools.function_cases import package_of
+
     chosen = {case.row for case in cases if case.kind in ("function", "start")}
-    languages = {case.row for case in cases if case.kind == "language"}
+    languages = {package_of(case.row) for case in cases if case.kind == "language"}
     kept = [row for row in rows if str(row["id"]) in chosen or row.get("package") in languages]
     write_json(out / "rows.json", kept)
     catalogue = function_scenes.load_scenes()
@@ -1227,6 +1219,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
     sondern je Fläche ein Protokoll unter ``surfaces/``.
     """
     from tools import function_bench, function_language, function_protocol, function_setup
+    from tools.function_cases import rows_of, setup_of_case
     from tools.function_scenes import row_scenes
 
     variant = function_setup.Variant.of({**case.variant, **({"screen": screen} if screen else {})})
@@ -1259,7 +1252,7 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         keep()
 
     persist()
-    from app.core.bootstrap import load_operations
+    from app.core.bootstrap import load_operations, load_user_parts
     from app.ui.app import build_application
     from tools.function_capture import run_reference_factor
     from tools.window_bench import shutdown_window
@@ -1272,24 +1265,34 @@ def function_child(out: Path, case: Case, folder: Path, screen: str) -> int:
         # Vorbedingung, steht der Grund in ``bench.json`` und in der Übersicht.
         second = function_setup.case_scene(folder, scenes, function_setup.SECOND_SCENE)
         function_setup.write_profile(variant, recent=[second] if second is not None else [])
-        if data is not None:
-            # Eigene Bausteine der Startszene und der Szene des Fehlfalls liegen
-            # im Nutzerordner, bevor die Anwendung ihn liest
-            # (``function_setup.install_own_parts``, C-L4).
-            state["own_parts"] = [
-                str(path)
-                for key in row_scenes(row)
-                for path in function_setup.install_own_parts(function_setup.scene_setup(key))
-            ]
+        # Eigene Bausteine der Startszene und der Szene des Fehlfalls liegen im
+        # Nutzerordner, bevor die Anwendung ihn liest (C-L4); im Sprachfall die
+        # seiner Einrichtung (FD-101).
+        owners = (
+            row_scenes(row)
+            if data is not None
+            else setup_of_case(rows.values(), case.row).own_parts
+        )
+        state["own_parts"] = [
+            str(path)
+            for key in owners
+            for path in function_setup.install_own_parts(function_setup.scene_setup(key))
+        ]
         load_operations()
+        # Wie ``app.main``: die eigenen Bausteine aus dem Nutzerordner, ihre
+        # Ladebefunde in den Bericht. Ohne sie lag ein Baustein im Ordner und
+        # stand nie im Register (FD-101, *Gespeicherte Bausteine behalten*).
+        user_findings = load_user_parts()
         no_native_dialogs()
         function_setup.apply_licence(variant.licence)
         state["preconditions_applied"] = function_setup.apply_preconditions(variant.preconditions)
         state["reference_factor"] = run_reference_factor(out)
         application, window = build_application([])
+        if user_findings:
+            window.report.add_findings(list(user_findings))
         flow: Any
         if data is None:
-            package_rows = [row for row in rows.values() if row.get("package") == case.row]
+            package_rows = rows_of(rows.values(), case.row)
             flow = function_language.LanguageFlow(
                 application, window, folder, state, keep, package_rows, variant, scenes, version
             )
