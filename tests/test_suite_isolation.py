@@ -111,3 +111,23 @@ def test_the_next_case_finds_the_look_its_predecessor_found(qt_app: Any) -> None
     names = ("Stil", "Palette", "Stylesheet", "Schrift", "Themenmerker", "Thema")
     left = [name for name, now, then in zip(names, found, _FOUND[0], strict=True) if now != then]
     assert not left, f"Vom Vorgänger stehen geblieben: {left}"
+
+
+def test_no_case_reaches_the_keyring_of_the_user() -> None:
+    """Die Suite fragt nie den Schlüsselbund des Systems (§38).
+
+    Wer über den Kern liest oder schreibt — LLM-Schlüssel und Gerätekennung —,
+    landet im Speicher der Suite, und der nächste Fall findet ihn leer.
+    """
+    import keyring
+
+    from app.core.activation import device
+    from app.core.backends import keys
+
+    suite = keyring.get_keyring()
+    assert type(suite).__name__ == "SuiteKeyring", type(suite)
+    assert device._load_keyring().get_keyring() is suite, "auch die Gerätekennung"
+    assert not suite.values, "jeder Fall beginnt leer"
+    assert keys.store("anthropic", "sk-probe")
+    assert suite.values == {(keys.SERVICE, "anthropic"): "sk-probe"}
+    assert keys.read("anthropic") == "sk-probe"

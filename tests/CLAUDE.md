@@ -119,7 +119,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 
 | Datei | Rolle |
 |---|---|
-| `conftest.py` | Einstellungen, Profile, eigene Bausteine und Aussehen der Anwendung je Test zurückstellen (`test_suite_isolation.py`); Abbaufehler sind rot. Befunddaten über `record_trace`. Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`) |
+| `conftest.py` | Einstellungen, Profile, eigene Bausteine und Aussehen der Anwendung je Test zurückstellen (`test_suite_isolation.py`); Abbaufehler sind rot. Befunddaten über `record_trace`. Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, der Schlüsselbund im Speicher (`SuiteKeyring`, je Test leer; Kindprozesse erreicht er nicht), Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`) |
 | `helpers.py` | Öffentliche Helfer ohne Fenster und Fixture `project`; Namen/Zwecke in `karte-tests.md`, „Helfer“. Keine privaten Querimporte aus `test_*.py` oder `conftest` |
 | `ui_helpers.py` | Fenster und Sitzung je Test frisch; Fixtures über `from tests.ui_helpers import window as window`. Weitere Helfer in `karte-tests.md`, „Helfer“ |
 | `cura_fakes.py` | Nachgebaute Cura 5.13 (`cura_installation`), ihr AppDir, Flatpak-Starter und AppImage als Abbild des AppDir mit nachgestelltem Einhängen für den Lauf — für `test_cura_machine.py` und die Cura-Fälle des Druckdialogs |
