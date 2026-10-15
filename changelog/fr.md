@@ -90,6 +90,7 @@ dans `website/version.json`.
 - Le dialogue *Calibrer le matériau* indique « pas encore calibré » pour un matériau non mesuré, aussi en ligne de commande. Avant, on y lisait « valeurs de départ ».
 - Un refus dans un dialogue ne répète plus son titre en dessous. *Corriger la saisie* place le curseur dans le champ concerné.
 - La fenêtre *Détails* nomme le corps et l'étape et donne l'emplacement dans l'unité choisie. *Afficher les valeurs* montre le nom des champs et n'est pas plus haut que nécessaire.
+- Les champs des barres *Analyse* et *Diviser*, la description dans *Générer un modèle*, le choix *Type* et la case « Inclure les valeurs » s'expliquent dans l'infobulle et au lecteur d'écran.
 
 ### Imprimer et transmettre au slicer
 

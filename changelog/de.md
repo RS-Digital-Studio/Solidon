@@ -114,6 +114,7 @@ Nutzen da und sonst nichts.
 - Der Dialog *Material kalibrieren* nennt ein ungemessenes Material „noch nicht kalibriert“, auch in der Kommandozeile. Bisher stand dort „Startwert“.
 - Eine Absage im Dialog wiederholt ihren Titel nicht mehr darunter. *Eingabe korrigieren* setzt dort den Cursor in das Feld, um das es geht.
 - Die *Einzelheiten* nennen Körper und Schritt beim Namen und die Stelle in der gewählten Einheit. *Werte ansehen* zeigt die Namen der Felder und ist nur so hoch wie nötig.
+- Die Felder der Leisten *Analyse* und *Teilen*, die Beschreibung in *Modell erzeugen*, die Wahl *Typ* und der Haken „Werte mitgeben“ sagen in der Kurzhilfe und dem Bildschirmleser, was sie bewirken.
 
 ### Drucken und Übergabe an den Slicer
 

@@ -59,6 +59,7 @@ from app.core.types import Document, Mesh, SourceOrigin
 from app.i18n import format_decimal, tr
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
 from app.ui.dialogs import align_to_the_front, show_error, spoken_values
+from app.ui.form_fields import explain_row
 from app.ui.labels import UNEXPECTED_CRASH, volume, wheel_needs_focus
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
@@ -450,6 +451,14 @@ class GenerateDialog(QDialog):
 
         self.prompt = QLineEdit(self)
         self.prompt.setPlaceholderText(tr("Was soll entstehen?"))
+        # Kurzhilfe und Beschreibung des Felds (FD-78); mit Bild sagt es,
+        # warum es ruht (:meth:`_show_image`).
+        self._prompt_help = str(
+            tr(
+                "Beschreiben Sie in Worten, was entstehen soll, etwa „Wandhaken für ein "
+                "Rohr“. Daraus erzeugt der Generator ein Modell."
+            )
+        )
 
         self.seed = QSpinBox(self)
         self.seed.setRange(0, MAX_SEED)
@@ -488,6 +497,7 @@ class GenerateDialog(QDialog):
         self.lead.setVisible(False)
         form.addRow(self.lead)
         form.addRow(tr("Beschreibung"), self.prompt)
+        explain_row(form, self.prompt, self._prompt_help)
         form.addRow(tr("Bild"), self.picture)
         form.addRow("", picture_row)
 
@@ -1020,8 +1030,8 @@ class GenerateDialog(QDialog):
             else ""
         )
         self.prompt.setEnabled(picture is None)
-        self.prompt.setToolTip(resting)
-        self.prompt.setAccessibleDescription(resting)
+        self.prompt.setToolTip(resting or self._prompt_help)
+        self.prompt.setAccessibleDescription(resting or self._prompt_help)
         # **Der Weg hat gewechselt, also gilt die alte Antwort nicht mehr.** Mit
         # Bild braucht es kein Bildmodell; ohne schon. Wer eines wählt, soll
         # nicht weiter lesen, dass etwas fehlt, was er gerade umgangen hat.

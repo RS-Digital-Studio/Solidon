@@ -777,6 +777,7 @@
   "Beschleunigung": "Acceleration",
   "Beschleunigung Außenwand": "Acceleration, outer wall",
   "Beschleunigung nur für die Außenbahn. Hier lohnt es, weniger zu nehmen als überall sonst.": "Acceleration for the outermost line only. A lower value than for other lines can improve the finish.",
+  "Beschreiben Sie in Worten, was entstehen soll, etwa „Wandhaken für ein Rohr“. Daraus erzeugt der Generator ein Modell.": "Describe in words what should be created, for example “wall hook for a pipe”. The generator turns it into a model.",
   "Beschreiben Sie zuerst, was entstehen soll, oder wählen Sie ein Bild.": "First describe what should be created, or choose an image.",
   "Beschreiben Sie, was entstehen oder sich ändern soll — in einem Satz, mit Maßen, so wie Sie es einem Kollegen sagen würden. Was daraus wird, sehen Sie erst als Vorschlag und übernehmen es dann.": "Describe what you want to make or change in one sentence, with dimensions, as you would explain it to a colleague. Review the proposal before accepting it.",
   "Beschreibung": "Description",

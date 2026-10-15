@@ -89,6 +89,7 @@ scrive in `website/version.json`.
 - La finestra *Calibra il materiale* chiama un materiale non misurato «non ancora calibrato», anche dalla riga di comando. Prima diceva «valori iniziali».
 - Un rifiuto in una finestra non ripete più il suo titolo sotto. *Correggi l'inserimento* porta il cursore nel campo interessato.
 - La finestra *Dettagli* nomina corpo e passaggio e dà il punto nell'unità scelta. *Mostra i valori* mostra i nomi dei campi ed è alto solo quanto serve.
+- I campi delle barre *Analisi* e *Dividi*, la descrizione in *Genera modello*, la scelta *Tipo* e la casella «Includi i valori» si spiegano nel suggerimento e allo screen reader.
 
 ### Stampare e passare allo slicer
 

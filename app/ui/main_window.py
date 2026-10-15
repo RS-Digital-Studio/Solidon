@@ -22406,6 +22406,8 @@ class MainWindow(QMainWindow):
                         # Regel 18: der Grund steht nicht nur am Zeigerbild.
                         item.setData(locked, Qt.ItemDataRole.AccessibleDescriptionRole)
                 variant.setToolTip(str(group.doc))
+                # Auch für den Bildschirmleser (FD-78).
+                variant.setAccessibleDescription(str(group.doc))
                 variant.setCurrentIndex(variant.findData(spec.name))
 
             def chosen_spec() -> OperationSpec:

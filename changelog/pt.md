@@ -89,6 +89,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O diálogo *Calibrar material* chama a um material por medir «ainda não calibrado», também na linha de comandos. Antes dizia «valores iniciais».
 - Uma recusa num diálogo já não repete o título por baixo. *Corrigir a entrada* põe o cursor no campo em causa.
 - A janela *Pormenores* nomeia o corpo e o passo e dá o ponto na unidade escolhida. *Mostrar os valores* mostra os nomes dos campos e só é tão alto quanto necessário.
+- Os campos das barras *Análise* e *Dividir*, a descrição em *Gerar modelo*, a escolha *Tipo* e a caixa «Incluir valores» explicam-se na dica e ao leitor de ecrã.
 
 ### Imprimir e entregar ao slicer
 

@@ -217,7 +217,11 @@ Parameter-, Kalibrier-, Baustein- und Chatdialog; `test_parameter_units.py`
 die Länge in Anzeigeeinheit im Parameter- und Bausteindialog;
 `test_refusal_details.py` Absage, *Einzelheiten* und *Werte ansehen*;
 `test_dialog_texts.py` ohne Fenster, was ein Dialog vorn sagt (Lesezeile
-*Stelle*, erster Satz hinter *Dicke geben*).
+*Stelle*, erster Satz hinter *Dicke geben*); `test_field_help_rest.py` den Satz
+in Kurzhilfe und Beschreibung an Generatorbeschreibung, „Werte mitgeben“ und
+*Typ*; `test_rename_dialog.py` den jetzigen Namen als Vorgabe beim Umbenennen;
+`test_measure_refusal_status.py`, dass die Statusleiste keine Ablehnung
+wiederholt, die am Maßfeld steht.
 
 Statische Quellprüfungen teilen die Vorbereitung innerhalb eines Testfalls:
 `test_language_rules.py` prüft je Datei denselben AST auf alle Sprachregeln;
