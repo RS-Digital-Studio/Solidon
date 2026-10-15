@@ -53,6 +53,7 @@ dans `website/version.json`.
 - Un lecteur d'écran lit le nom et l'explication de chaque champ numérique d'un dialogue.
 - Après une action dans le *Rapport de contrôle*, le rapport reste au premier plan, et Ctrl+Z l'annule aussitôt. Jusqu'ici, l'onglet *Sélection* passait devant.
 - Les avis de plateau et d’adhérence suivent l’unité choisie. Passer de mm à pouces conserve constat sélectionné, détails ouverts, onglet et état déplié des corps.
+- Les cotes au bord du plateau suivent l’unité choisie et l’indiquent. La version 0.6.0 y affichait des millimètres même en pouces.
 - Ctrl+Z et Ctrl+Y fonctionnent aussi quand le curseur se trouve dans un champ vide, par exemple le champ de recherche. Si vous y avez tapé du texte, c'est d'abord la saisie qui est annulée.
 - Sans activation, les actions qui modifient le modèle sont grisées avec leur raison dans le *Rapport de contrôle*, *Sélection*, les menus contextuels et le filament. Le refus venait après le clic.
 - Sans activation, *Créer un paramètre …*, *Déplacer*, *Diviser*, les touches de l'historique et les cotes dans la vue sont grisés. Chaque raison indique la voie, comme *Aide → Déverrouiller Solidon …*.
