@@ -36,7 +36,7 @@ from app.core.geom.pins import PIN_COUNT
 from app.core.geom.prepare_ops import CONNECTOR_SHAPES
 from app.i18n import tr
 from app.ui.labels import choice_label
-from app.ui.style import NORMAL, TIGHT, make_primary
+from app.ui.style import NORMAL, ROOMY, TIGHT, make_primary
 from app.ui.tool_strip import BarComboBox
 
 #: Wie viele Punkte eine Trennlinie hat. Zwei — mehr wäre ein Polygonzug, und
@@ -108,6 +108,7 @@ class SplitBar(QWidget):
             tr("Zwei Stifte halten die Hälften gegen Verdrehen. Einer wäre ein Scharnier.")
         )
         self.count_label = QLabel(tr("Stifte"), self)
+        self.count_label.setBuddy(self.count)
 
         # Die Form gehört neben die Zahl und nicht hinten in einen Dialog: Wer
         # einen Schwalbenschwanz will, will ihn *bevor* er trennt, und ein Wert,
@@ -153,7 +154,13 @@ class SplitBar(QWidget):
         # und braucht eine Zeilenhöhe, die Knöpfe behalten ihre.
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
+        controls.setSpacing(TIGHT)
         controls.addWidget(self.connect_halves)
+        # **Der Haken ist ein Satz, „Stifte“ beschriftet das Feld daneben**
+        # (FD-120): Mit Qts Vorgabeabstand las sich „Zum Zusammenstecken
+        # vorbereiten Stifte“ als eine Zeile. Zwischen Haken und Feldgruppe
+        # steht deshalb mehr Raum als zwischen Beschriftung und Feld.
+        controls.addSpacing(ROOMY)
         controls.addWidget(self.count_label)
         controls.addWidget(self.count)
         controls.addWidget(self.shape)
