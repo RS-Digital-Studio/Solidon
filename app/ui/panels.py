@@ -231,6 +231,7 @@ from app.ui.overlay import (
     tell_the_zone,
 )
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
+from app.ui.report_rows import WrappedRowDelegate
 from app.ui.scroll_areas import PassingScrollArea, ReadingScrollArea
 from app.ui.shortcut_schemes import delete_keys, return_opens
 from app.ui.style import (
@@ -6501,6 +6502,10 @@ class ReportPanel(QWidget):
         # hat — ohne ``Adjust`` blieb die Höhe aus dem ersten Legen stehen, und
         # eine dreizeilige Meldung endete in der breiteren Karte auf „…“.
         self.list.setResizeMode(QListView.ResizeMode.Adjust)
+        # **Mit Reserve gemessen** (FD-109): Eine Zeile, die beim Messen knapp in
+        # eine Zeile passte, brauchte am Fenster bei 125 % eine zweite und
+        # endete auf „Überstand: 10,00 …“ (``report_rows``).
+        self.list.setItemDelegate(WrappedRowDelegate(self.list))
         # §18.4 sagt „Klick auf eine Warnung fährt die Kamera hin" —
         # ``itemActivated`` allein hieß aber Doppelklick oder Eingabetaste,
         # und wer einmal klickte, bekam nichts. Beide Wege führen zum Ort;
