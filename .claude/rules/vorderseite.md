@@ -143,7 +143,9 @@ Rückseite; eine ausdrückliche Feldübergabe öffnet sie vor dem Fokuswechsel.
 
 - **Wer einen Schritt ändert, übernimmt** (FD-99): `edit_operation` öffnet mit
   `changing=True`; der Knopf heißt *Übernehmen* (`accept_text`) und ist grau,
-  bis Variante, Werte oder der Benennungshaken vom Stand beim Öffnen abweichen.
+  bis Variante oder Werte vom Stand beim Öffnen abweichen oder der
+  Benennungshaken ein Maß benennt; nicht nach einer Geste (`given`) und nicht
+  am Schritt, der die Kette anhält (`wait_for_change=False`).
   Der Satz nennt das Feld, über das der Kunde kam (`focus_field`), sonst das
   erste offene (`first_change`). Ein Fokus oder dieselbe Zahl ist keine
   Änderung, und die Eingabetaste wartet dann auf keine Vorschau.
