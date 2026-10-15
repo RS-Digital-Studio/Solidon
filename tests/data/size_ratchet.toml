@@ -64,7 +64,7 @@
 "app/ui/sketch_editor.py" = 318
 "app/ui/style.py" = 71
 "app/ui/viewport.py" = 632
-"tests/helpers.py" = 127
+"tests/helpers.py" = 126
 "tests/test_advise.py" = 149
 "tests/test_agent.py" = 137
 "tests/test_analysis_ui.py" = 288
@@ -76,7 +76,7 @@
 "tests/test_catalog_ui.py" = 92
 "tests/test_chat_ui.py" = 139
 "tests/test_cura_machine.py" = 130
-"tests/test_evaluation.py" = 375
+"tests/test_evaluation.py" = 372
 "tests/test_exact_body_parity.py" = 71
 "tests/test_exact_parts.py" = 107
 "tests/test_export.py" = 262
@@ -101,11 +101,10 @@
 "tests/test_native_references.py" = 85
 "tests/test_operation_ui.py" = 318
 "tests/test_overlay.py" = 71
-"tests/test_packaging.py" = 206
+"tests/test_packaging.py" = 202
 "tests/test_parts.py" = 428
 "tests/test_pattern_features.py" = 112
 "tests/test_performance.py" = 83
-"tests/test_placement_dimensions.py" = 54
 "tests/test_platform_identity.py" = 97
 "tests/test_prepare.py" = 312
 "tests/test_print_settings.py" = 454
@@ -128,7 +127,7 @@
 "tests/test_slice_findings.py" = 295
 "tests/test_slicer_profiles.py" = 257
 "tests/test_slot_features.py" = 218
-"tests/test_style.py" = 184
+"tests/test_style.py" = 78
 "tests/test_surface_placement.py" = 179
 "tests/test_surface_placement_ui.py" = 154
 "tests/test_toolchain.py" = 225
