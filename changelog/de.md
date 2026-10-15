@@ -118,6 +118,7 @@ Nutzen da und sonst nichts.
 - Ist der Radius einer Rundung oder die Breite einer Fase für die Kanten zu groß, bietet die Meldung *Andere Kanten wählen* an.
 - Passt eine gewählte Fläche nicht zu *Formschräge anstellen* oder *Fläche versetzen*, bietet die Meldung *Andere Flächen wählen* an.
 - Dasselbe gilt für *Aushöhlen*, *Dichtnut mit Dichtung* und *Textur aufbringen*. Lässt sich eine Rundung nicht auf eine Kante zurückführen, bietet die Meldung *Andere Kanten wählen* an.
+- Passt ein gewähltes Merkmal nicht, etwa eine Bohrung, ein Gewinde, eine Kammer oder ein Verschluss, bietet die Meldung *Anderes Merkmal wählen* an.
 
 ## 0.6.0
 

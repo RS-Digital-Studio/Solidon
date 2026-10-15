@@ -94,6 +94,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si el radio de un redondeo o el ancho de un chaflán es demasiado grande para las aristas, el mensaje ofrece *Elegir otras aristas*.
 - Si una cara seleccionada no sirve para *Aplicar ángulo de desmoldeo* o *Desplazar cara*, el mensaje ofrece *Elegir otras caras*.
 - Lo mismo vale para *Vaciar*, *Ranura de sellado con junta* y *Aplicar textura*. Si un redondeo no puede reducirse a una arista, el mensaje ofrece *Elegir otras aristas*.
+- Si una característica seleccionada no sirve, por ejemplo un taladro, una rosca, una cámara o un cierre, el mensaje ofrece *Elegir otra característica*.
 
 ## 0.6.0
 

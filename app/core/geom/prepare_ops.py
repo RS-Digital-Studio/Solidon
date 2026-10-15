@@ -24,6 +24,7 @@ from app.core.errors import (
     CANCEL,
     CHANGE_EDGES,
     CHANGE_FACES,
+    CHANGE_FEATURE,
     CHANGE_SELECTION,
     CHANGE_SIZE,
     CHANGE_THIS_STEP,
@@ -2939,7 +2940,7 @@ def _tool_for(
             detail=NO_BODY_FROM_FACES if alone else NO_OWN_BODY,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     if rooted and not is_a_cavity(feature):
         built = _rooted(mesh, feature, built, quality=quality, seed=seed, cancelled=cancelled)
@@ -4107,7 +4108,7 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
             detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
             values={"feature": name, "object": source.id},
             constraint="unknown_feature",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     # Ein Kegelstück ohne eigenen Körper: derselbe Satz wie im Panel, bevor
     # ``_body_from_faces`` an seinem Rand scheitert. Eine Verengung ändert
@@ -4175,7 +4176,7 @@ def _refuse_like_the_card(
         offer = split_offer(as_mesh_data(source.mesh), feature)
         ways = split_ways(offer)
     elif refusal in (HOLE_IS_NOT_EMPTY, NO_BODY_FROM_FACES, NEEDS_A_PLAIN_BORE, NOT_AT_THE_MOUTH):
-        ways = (CHANGE_SELECTION, CANCEL)
+        ways = (CHANGE_FEATURE, CANCEL)
     raise ValidationError(
         field="at_feature",
         detail=refusal,
@@ -4966,7 +4967,7 @@ def filled_bore_refusal(mesh: MeshData, feature: Feature) -> ValidationError:
         values={"feature": feature.id, "kind": feature.kind, **offer},
         constraint="not_movable",
         suggestions=(
-            split_ways(offer) if reason is OTHER_PART_IN_THE_BORE else (CHANGE_SELECTION, CANCEL)
+            split_ways(offer) if reason is OTHER_PART_IN_THE_BORE else (CHANGE_FEATURE, CANCEL)
         ),
     )
 
@@ -7440,7 +7441,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
             field="at_features",
             detail=_("Wählen Sie mindestens ein Merkmal, das sich wiederholen soll."),
             constraint="required",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     units: list[_PatternUnit] = []
     covered: set[str] = set()
@@ -7452,7 +7453,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
                 values={"feature": name, "object": source.id},
                 constraint="unknown_feature",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         against = cone_piece_blocked(feature) or reason_against("pattern_feature", feature.kind)
         if against is not None:
@@ -7461,7 +7462,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 detail=against,
                 values={"feature": name, "kind": feature.kind},
                 constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         if feature.id in covered:
             continue
@@ -7475,7 +7476,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 ),
                 values={"feature": name},
                 constraint="not_evidenced",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         state = cavity_chain_state_at(feature, source.features, body)
         if (refused := cavity_refusal(state)) is not None:
@@ -7484,7 +7485,7 @@ def _pattern_units(source: SceneObject, names: Sequence[str], body: MeshData) ->
                 detail=refused,
                 values={"feature": name},
                 constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         chain = tuple(state.chain) if state.chain is not None else None
         members = chain if chain is not None else (feature,)
@@ -10056,7 +10057,7 @@ def _resize_chain_countersink(
             detail=side,
             values={"feature": feature.id},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     entrance, way, sections = side
     section = sections[-1]
@@ -11513,7 +11514,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             # An einer Kette mit Verengung deren Satz, nicht der über eine
             # Senkung — wie im Panel (Durchsicht 0.5.1).
             detail=narrowing_reason("slot_hole", state.chain) or NEEDS_A_PLAIN_BORE,
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     _refuse_like_the_card("slot_hole", source, feature, ctx.cancelled)
     if (
@@ -16705,7 +16706,7 @@ def _exact_body_from_faces(source: SceneObject, feature: Feature) -> Any:
             detail=NO_BODY_FROM_FACES,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     return body
 
@@ -16918,7 +16919,7 @@ def _exact_resize_by_faces(
                 detail=NO_BODY_FROM_FACES,
                 values={"feature": feature.id, "kind": feature.kind},
                 constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
+                suggestions=(CHANGE_FEATURE, CANCEL),
             )
         wider = dataclasses.replace(feature, params={**feature.params, "diameter": diameter})
         tool = _exact_pin_tool(
@@ -17018,7 +17019,7 @@ def _torus_refusal(feature: Feature, *, whole: bool) -> ValidationError:
         detail=TORUS_IS_THE_BODY if whole else TORUS_NOT_SEPARABLE,
         values={"feature": feature.id, "kind": feature.kind},
         constraint="not_movable",
-        suggestions=(CHANGE_SELECTION, CANCEL),
+        suggestions=(CHANGE_FEATURE, CANCEL),
     )
 
 
@@ -17036,7 +17037,7 @@ def _torus_axis(feature: Feature, axis: Vec3 | None = None) -> np.ndarray:
             detail=FEATURE_WITHOUT_AXIS,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     return direction / length
 
@@ -17604,7 +17605,7 @@ def _thread_frame(feature: Feature) -> tuple[np.ndarray, np.ndarray, float]:
             detail=THREAD_WITHOUT_LENGTH,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     centre = np.asarray(_bore_vector(feature, "centre"), dtype=float)
     return centre, _torus_axis(feature), length
@@ -19287,7 +19288,7 @@ def _exact_rotate_cone(
             detail=NO_BODY_FROM_FACES,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     old_axis = np.asarray(_bore_vector(feature, "axis"), dtype=float)
     new_axis = np.asarray(turned_axis, dtype=float)
@@ -21446,7 +21447,7 @@ def split_ways(offer: Mapping[str, str]) -> tuple[Action, ...]:
     Ohne Angebot — über :data:`SPLIT_LIMIT` Teile, Merkmal ohne Flächen — bliebe
     sonst nur *Abbrechen*, und das ist kein Weg (Regel 17, Nachprüfung I, N3).
     """
-    return (SPLIT_AND_RETRY, CANCEL) if offer else (CHANGE_SELECTION, CANCEL)
+    return (SPLIT_AND_RETRY, CANCEL) if offer else (CHANGE_FEATURE, CANCEL)
 
 
 def _split_limit() -> int:

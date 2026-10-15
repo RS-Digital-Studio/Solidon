@@ -28,7 +28,7 @@ import numpy as np
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.errors import CHANGE_SELECTION, ValidationError
+from app.core.errors import CHANGE_FEATURE, ValidationError
 from app.core.geom import prepare_ops
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import import_plan
@@ -198,7 +198,7 @@ def test_a_ring_without_a_measured_axis_is_refused_not_guessed() -> None:
     assert np.allclose(axis, (0.0, 0.0, 1.0))
     with pytest.raises(ValidationError) as caught:
         prepare_ops._torus_axis(feature, (0.0, 0.0, 0.0))
-    assert CHANGE_SELECTION in caught.value.suggestions
+    assert CHANGE_FEATURE in caught.value.suggestions
     assert caught.value.constraint == "not_movable"
 
 

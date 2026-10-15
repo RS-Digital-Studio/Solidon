@@ -36,7 +36,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
-from app.core.errors import CANCEL, CHANGE_SELECTION, CHOOSE, CORRECT_INPUT, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CHANGE_FEATURE,
+    CHANGE_SELECTION,
+    CHOOSE,
+    CORRECT_INPUT,
+    ValidationError,
+)
 from app.core.knowledge import standards
 from app.core.log import get_logger
 from app.core.scene.fits import active_fits, numbered_name
@@ -612,7 +619,7 @@ def _matched_thread(
             value=feature.id,
             values={"feature": feature.id, "diameter": diameter, "pitch": pitch},
             constraint="thread_shape",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     problem = (
         thread_problem(diameter, pitch, 0.0)
@@ -636,7 +643,7 @@ def _matched_thread(
             ),
             values={"feature": feature.id, "diameter": diameter, "pitch": pitch},
             constraint="beyond_threads",
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     values: dict[str, Any] = {"size": CUSTOM_SIZE, "diameter": diameter, "pitch": pitch}
     if feature.params.get("profile") == "whitworth":

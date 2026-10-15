@@ -93,6 +93,7 @@ scrive in `website/version.json`.
 - Se il raggio di un raccordo o la larghezza di uno smusso è troppo grande per gli spigoli, il messaggio offre *Scegli altri spigoli*.
 - Se una faccia selezionata non va bene per *Applica l'angolo di sformo* o *Scosta la faccia*, il messaggio offre *Scegli altre facce*.
 - Lo stesso vale per *Svuota*, *Scanalatura con guarnizione* e *Applica texture*. Se un raccordo non si può ricondurre a uno spigolo, il messaggio offre *Scegli altri spigoli*.
+- Se una caratteristica selezionata non va bene, per esempio un foro, una filettatura, una camera o una chiusura, il messaggio offre *Scegli un'altra caratteristica*.
 
 ## 0.6.0
 

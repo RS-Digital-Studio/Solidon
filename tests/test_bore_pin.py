@@ -1190,7 +1190,7 @@ def test_the_lead_in_of_an_insert_is_no_bore_for_a_pin(profile: Profile, kind: s
     with pytest.raises(ValidationError) as refusal:
         run("pin_for_bore", carrier, profile, at_feature=lead_in)
     assert refusal.value.constraint == "lead_in"
-    assert [action.id for action in refusal.value.suggestions] == ["change_selection", "cancel"]
+    assert [action.id for action in refusal.value.suggestions] == ["change_step", "cancel"]
 
 
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
@@ -1251,7 +1251,7 @@ def test_a_bore_that_is_not_in_the_body_gets_no_pin(profile: Profile, kind: str)
             run("pin_for_bore", entry, profile, at_feature=name)
         assert refusal.value.constraint == "not_in_the_body", name
         assert [action.id for action in refusal.value.suggestions] == [
-            "change_selection",
+            "change_step",
             "cancel",
         ]
 

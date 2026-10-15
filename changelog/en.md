@@ -93,6 +93,7 @@ it into `website/version.json`.
 - If a fillet radius or chamfer width is too large for the edges, the message offers *Pick different edges*.
 - If a selected face does not suit *Apply draft angle* or *Offset face*, the message offers *Pick different faces*.
 - The same applies to *Hollow out*, *Seal groove with gasket* and *Apply texture*. If a fillet cannot be traced back to an edge, the message offers *Pick different edges*.
+- If a selected feature does not fit, such as a hole, a thread, a chamber or a closure, the message offers *Pick a different feature*.
 
 ## 0.6.0
 

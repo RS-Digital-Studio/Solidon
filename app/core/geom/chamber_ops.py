@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, GeometryError
+from app.core.errors import CANCEL, CHANGE_FEATURE, CORRECT_INPUT, GeometryError
 from app.core.geom.boolean import boolean, without_effect
 from app.core.geom.mesh import MeshData, as_mesh_data, signed_volume, stable_normals
 from app.core.geom.prepare import FEATURE_OVERLAP
@@ -121,7 +121,7 @@ def resize_chamber(ctx: OpContext) -> OpResult:
     group = region.group
     refusal = reason_against_group(group, source.features)
     if refusal is not None:
-        raise GeometryError(detail=refusal, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=refusal, suggestions=(CHANGE_FEATURE, CANCEL))
     changes = _changes(group, params)
     if not any(abs(value) > EPS_GEOM for value in changes.values()):
         raise GeometryError(
@@ -149,7 +149,7 @@ def not_a_chamber() -> GeometryError:
     """Der Satz, wenn das Merkmal zu keiner Kammer gehört (Regel 17)."""
     from app.core.perceive.groups import NOT_A_CHAMBER
 
-    return GeometryError(detail=NOT_A_CHAMBER, suggestions=(CHANGE_SELECTION, CANCEL))
+    return GeometryError(detail=NOT_A_CHAMBER, suggestions=(CHANGE_FEATURE, CANCEL))
 
 
 def _changes(group: FunctionalGroup, params: ResizeChamberParams) -> dict[str, float]:
@@ -184,7 +184,7 @@ def _stretched_chamber(
                 "Der Raum dieser Kammer lässt sich nicht als Ganzes greifen — ihr Rand ist "
                 "nicht geschlossen. Ändern Sie eine Wand über „Fläche versetzen“."
             ),
-            suggestions=(CHANGE_SELECTION, CANCEL),
+            suggestions=(CHANGE_FEATURE, CANCEL),
         )
     moved_tool = _moved(tool, region, changes, depth)
     moved_fill = _moved(fill, region, changes, depth)
@@ -487,7 +487,7 @@ def _trough(
     features = getattr(source, "features", {})
     walls = trough_walls(group, features)
     if not walls:
-        raise GeometryError(detail=TROUGH_WALLS, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=TROUGH_WALLS, suggestions=(CHANGE_FEATURE, CANCEL))
     if abs(changes["length"]) > EPS_GEOM:
         raise GeometryError(
             detail=_(

@@ -94,6 +94,7 @@ dans `website/version.json`.
 - Si le rayon d'un congé ou la largeur d'un chanfrein est trop grand pour les arêtes, le message propose *Choisir d'autres arêtes*.
 - Si une face sélectionnée ne convient pas à *Appliquer une dépouille* ou *Décaler la face*, le message propose *Choisir d'autres faces*.
 - Il en va de même pour *Évidement*, *Rainure avec joint* et *Appliquer une texture*. Si un congé ne peut pas être ramené à une arête, le message propose *Choisir d'autres arêtes*.
+- Si une caractéristique sélectionnée ne convient pas, par exemple un perçage, un filetage, une chambre ou une fermeture, le message propose *Choisir une autre caractéristique*.
 
 ## 0.6.0
 

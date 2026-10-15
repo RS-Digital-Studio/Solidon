@@ -93,6 +93,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se o raio de um arredondamento ou a largura de um chanfro for grande demais para as arestas, a mensagem oferece *Escolher outras arestas*.
 - Se uma face selecionada não servir para *Aplicar o ângulo de saída* ou *Deslocar a face*, a mensagem oferece *Escolher outras faces*.
 - O mesmo vale para *Esvaziar*, *Ranhura com vedação* e *Aplicar textura*. Se um arredondamento não puder ser reduzido a uma aresta, a mensagem oferece *Escolher outras arestas*.
+- Se uma característica selecionada não servir, por exemplo um furo, uma rosca, uma câmara ou um fecho, a mensagem oferece *Escolher outra característica*.
 
 ## 0.6.0
 

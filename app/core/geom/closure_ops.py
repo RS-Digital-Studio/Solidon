@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Final, cast
 
 import numpy as np
 
-from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, GeometryError
+from app.core.errors import CANCEL, CHANGE_FEATURE, CORRECT_INPUT, GeometryError
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, without_effect
 from app.core.geom.chamber_ops import flat_cap, rims_of
 from app.core.geom.mesh import (
@@ -160,7 +160,7 @@ def resize_closure(ctx: OpContext) -> OpResult:
     group = group_of(params.at_feature, functional_groups(features, body, cancelled=ctx.cancelled))
     axis = closure_axis(group, features) if group is not None else None
     if group is None or axis is None:
-        raise GeometryError(detail=NOT_A_CLOSURE, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=NOT_A_CLOSURE, suggestions=(CHANGE_FEATURE, CANCEL))
     play, turn = float(params.play), float(params.turn)
     if abs(play) <= EPS_GEOM and abs(turn) <= EPS_GEOM:
         raise GeometryError(
@@ -177,7 +177,7 @@ def resize_closure(ctx: OpContext) -> OpResult:
     if refusal is None and abs(turn) > EPS_GEOM:
         refusal = reason_against_turn(group, features, body)
     if refusal is not None:
-        raise GeometryError(detail=refusal, suggestions=(CHANGE_SELECTION, CANCEL))
+        raise GeometryError(detail=refusal, suggestions=(CHANGE_FEATURE, CANCEL))
     point = np.asarray(axis[0], dtype=np.float64)
     direction = _snapped(axis[1])
     stops = closure_stops(group, features, body) if abs(turn) > EPS_GEOM else ()
@@ -451,7 +451,7 @@ def _no_outline() -> GeometryError:
             "Umriss lässt sich nicht als Ganzes verschieben. Ändern Sie sie über „Fläche "
             "versetzen“."
         ),
-        suggestions=(CHANGE_SELECTION, CANCEL),
+        suggestions=(CHANGE_FEATURE, CANCEL),
     )
 
 

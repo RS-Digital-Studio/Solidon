@@ -82,6 +82,12 @@ CHANGE_EDGES = Action("change_step", _("Andere Kanten wählen"), primary=True)
 #: im Dialog des Schritts, wo *Flächen* beziehungsweise *Fläche* stehen; der
 #: Zwilling von :data:`CHANGE_EDGES` (FD-165).
 CHANGE_FACES = Action("change_step", _("Andere Flächen wählen"), primary=True)
+#: Ein anderes **Merkmal** — Bohrung, Gewinde, Kammer, Verschluss, Ring — im
+#: Dialog des Schritts, wo *Merkmal* (``at_feature``/``at_features``) steht;
+#: eingelöst wie *Größe ändern* (``change_step``). *Andere Objekte wählen* gab
+#: dem Schritt einen anderen Körper statt eines anderen Merkmals; der vierte
+#: Zwilling neben :data:`CHANGE_EDGES` und :data:`CHANGE_FACES` (FD-179).
+CHANGE_FEATURE = Action("change_step", _("Anderes Merkmal wählen"), primary=True)
 #: Eine Zeichenebene, die sich nicht lesen lässt (``sketch.planes._unreadable``):
 #: den Schritt mit dem Cursor in seinem Ebenenfeld öffnen — derselbe Weg wie
 #: *Eingabe korrigieren*, mit dem Satz, der sagt, was dort zu tun ist. Bis zum
