@@ -715,8 +715,9 @@ def test_known_case_the_spool_ban_sits_on_the_binding_the_inventory_reads() -> N
     die Kopfkopie in ``filament_inventory``, nach K das Original in ``filament_picker``.
     Welche es ist, sagt der Index über den Leser ``InventoryView._import``: Der Fall
     hält die Zusage, nicht die heutige Bindung, und bleibt beim Schnitt von K grün.
-    Solange W2 c) und d) ``xfail`` tragen, hält er das ohne Fenster; sind beide
-    scharf, wird er gestrichen."""
+    Solange W2 c) ``xfail`` trägt, hält er das ohne Fenster; ist sie scharf, wird er
+    gestrichen. W2 d) allein genügt nicht: Es sieht, dass jemand die verbotene
+    Bindung liest, nicht, dass es das Lager ist."""
     index = _real()
     read = [
         binding
