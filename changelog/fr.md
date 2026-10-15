@@ -73,6 +73,7 @@ dans `website/version.json`.
 - Après le refus d'un aperçu, les textes de l'aperçu suivant restent entièrement lisibles.
 - La ligne de matière et de durée d'impression n'indique plus « depuis la dernière étape » que ce qu'une étape a changé. Tant que les valeurs du profil de slicer sont en cours de lecture, elle affiche « provisoire ».
 - La matière et la durée d'impression s'affichent toujours en entier dans la barre d'état. Si la barre est pleine, le message à côté se raccourcit, et sa phrase complète figure dans l'infobulle.
+- L'en-tête ne raccourcit le nom de l'imprimante que lorsque la ligne est pleine. Le nom du projet et les dimensions restent ensemble à gauche, l'imprimante à droite à côté de *Réglages d'impression …*.
 
 ### Imprimer et transmettre au slicer
 

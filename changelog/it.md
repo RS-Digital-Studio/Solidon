@@ -72,6 +72,7 @@ scrive in `website/version.json`.
 - Dopo il rifiuto di un'anteprima, i testi dell'anteprima successiva restano interamente leggibili.
 - La riga con materiale e durata di stampa indica «dall'ultimo passaggio» solo ciò che un passaggio ha cambiato. Finché i valori del profilo dello slicer sono ancora in lettura, riporta «provvisorio».
 - Materiale e durata di stampa sono sempre interi nella barra di stato. Se la barra è piena, il messaggio accanto si accorcia e la frase intera compare nel suggerimento.
+- L'intestazione accorcia il nome della stampante solo quando la riga è piena. Nome del progetto e misure stanno insieme a sinistra, la stampante a destra accanto a *Impostazioni di stampa …*.
 
 ### Stampare e passare allo slicer
 

@@ -97,6 +97,7 @@ Nutzen da und sonst nichts.
 - Nach einer Vorschauabsage bleiben die Texte der nächsten Vorschau vollständig lesbar.
 - Die Zahlenzeile mit Material und Druckdauer nennt „seit dem letzten Schritt“ nur noch, was ein Schritt geändert hat. Solange die Werte des Slicerprofils noch gelesen werden, steht „vorläufig“ daneben.
 - Material und Druckdauer stehen in der Statusleiste immer ganz da. Ist die Leiste voll, kürzt sich die Meldung daneben, ihr ganzer Satz steht in der Kurzhilfe.
+- Die Kopfzeile kürzt den Druckernamen erst, wenn die Zeile voll ist. Projektname und Maße stehen links beisammen, der Drucker rechts neben *Druckeinstellungen …*.
 
 ### Drucken und Übergabe an den Slicer
 

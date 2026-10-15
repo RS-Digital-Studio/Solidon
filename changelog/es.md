@@ -73,6 +73,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras rechazarse una vista previa, los textos de la siguiente siguen siendo totalmente legibles.
 - La línea con material y tiempo de impresión solo indica «desde el último paso» lo que cambió un paso. Mientras todavía se leen los valores del perfil de slicer, pone «provisional».
 - El material y el tiempo de impresión se ven siempre completos en la barra de estado. Si la barra está llena, se acorta el mensaje de al lado, y la frase completa aparece en la ayuda emergente.
+- La barra superior solo acorta el nombre de la impresora cuando la fila está llena. El nombre del proyecto y las medidas quedan juntos a la izquierda, la impresora a la derecha junto a *Ajustes de impresión …*.
 
 ### Imprimir y entregar al slicer
 
