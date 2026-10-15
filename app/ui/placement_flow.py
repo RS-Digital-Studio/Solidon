@@ -1965,16 +1965,14 @@ class PlacementFlow(QObject):
         # danach war der Knopf offen, und sein Klick tat nichts. Geändert ist,
         # was von den Werten zu Beginn abweicht, oder der umgeschaltete
         # Sammelhaken — er ändert den Umfang, keinen Wert.
-        scope = self._measure_scope
-        changed = begun and (
-            not isinstance(host, QuietHost)
-            or host.values() != host.begun_with
-            or (
+        changed = begun
+        if begun and isinstance(host, QuietHost):
+            scope = self._measure_scope
+            changed = host.values() != host.begun_with or (
                 isinstance(scope, QAbstractButton)
                 and self._measure_scope_start is not None
                 and scope.isChecked() != self._measure_scope_start
             )
-        )
         # Ein wartender Langlochzug macht den Knopf frei — die Sperre gilt der
         # gebundenen Handlung, und die läuft dann nicht. Ob Übernehmen den Zug
         # meint, sagt **eine** Stelle (``MainWindow.slot_drag_takes_the_accept``):
