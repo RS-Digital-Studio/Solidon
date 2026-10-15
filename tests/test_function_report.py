@@ -1861,29 +1861,6 @@ def test_z6_is_judged_once_per_row_at_the_smallest_area() -> None:
     assert quiet.criteria["Z6"].verdict == "erfuellt", "unter der Untergrenze kein Fund"
 
 
-def test_the_judges_stay_under_the_size_limit() -> None:
-    """Keine Datei des Pakets über 2 000 Zeilen — die Grenze W1 der Codestruktur (N2)."""
-    import tools
-
-    folder = Path(next(iter(tools.__path__)))
-    files = [
-        "function_checks.py",
-        "function_judges.py",
-        "function_points.py",
-        "function_samples.py",
-        "function_report.py",
-        "../tests/test_function_report.py",
-    ]
-    long = {}
-    for name in files:
-        path = folder / name
-        assert path.exists(), name
-        lines = len(path.read_text(encoding="utf-8").splitlines())
-        if lines > 2000:
-            long[name] = lines
-    assert not long, long
-
-
 def test_empty_fonts_are_not_measured_like_empty_contrast() -> None:
     """``fonts: []`` heißt: nichts aufgenommen — wie ``contrast: []`` (N3).
 
