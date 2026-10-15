@@ -695,18 +695,6 @@ def test_known_case_head_copy_of_detect_in_evaluate() -> None:
     assert any(f.name == "detect" for f in rules)
 
 
-def test_known_case_cost_matrix_has_no_reader() -> None:
-    """``matching._cost_matrix`` wird verboten gepatcht, aber nur ``_MATCH_WAYS`` hält es
-    (CS-9b). Paket P2 behebt es; dann wird dieser Fall gestrichen, W2 d) hält es."""
-    index = _real()
-    key = ("app.core.perceive.matching", "_cost_matrix")
-    assert key in index.patched_names(), "kein Patch mehr: P2 hat CS-9b behoben, Fall streichen"
-    assert index.readers(*key) == ()
-    assert any((f.module, f.name) == key for f in index.patch_findings()["d"]), (
-        "d) meldet _cost_matrix nicht"
-    )
-
-
 def test_known_case_head_copy_of_configured_spools() -> None:
     """``filament_inventory.py`` hält ``configured_spools`` aus ``filament_picker`` als
     Kopfkopie; ``test_first_run.py`` patcht das Original (CS-9a). Paket P1 setzt den Patch
