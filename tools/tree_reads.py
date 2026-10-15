@@ -560,6 +560,9 @@ class Resolver:
             return Place(path.relative_to(self.root).parts)
         if name == "__path__" and path is not None and path.name == "__init__.py":
             return Place(path.parent.relative_to(self.root).parts)
+        if name == "__path__" and path is None and self.module_exists(module.name):
+            # Ein Namensraum-Paket wie ``tools`` hat keinen Initialisierer, aber seinen Ordner.
+            return Place(tuple(module.name.split(".")))
         return None
 
     def member(self, owner: Definition, name: str) -> Definition | None:
@@ -700,6 +703,9 @@ class Resolver:
         value = self.evaluate(node, scopes, relative, env)
         if isinstance(node, ast.Tuple | ast.List | ast.Set) or isinstance(value, Choice):
             return value
+        if isinstance(node, ast.Attribute) and node.attr == "__path__":
+            # ``M.__path__`` ist die Liste der Ordner eines Pakets; im Baum hat es einen.
+            return value
         if isinstance(node, ast.Name) and isinstance(value, str | Place | Outside):
             # Ein Name, der an ein Tupel mit einem Element gebunden ist.
             return value if self._sequence_binding(node, scopes) else None
@@ -797,6 +803,14 @@ class Resolver:
         name = called.name
         if name in _OUTSIDE_CALLS or name.startswith(_OUTSIDE_MODULES):
             return Outside(name)
+        if name == "builtins.next" and node.args:
+            # ``next(iter(tools.__path__))``: das erste Element, der Ordner des Pakets.
+            inner = node.args[0]
+            if isinstance(inner, ast.Call) and len(inner.args) == 1:
+                wrapper = self.evaluate(inner.func, scopes, relative, env)
+                if isinstance(wrapper, Foreign) and wrapper.name == "builtins.iter":
+                    inner = inner.args[0]
+            return self.elements(inner, scopes, relative, env)
         values = [self.evaluate(argument, scopes, relative, env) for argument in node.args]
         if name in _PATH_TYPES or name == "os.path.join":
             if not values or node.keywords:

@@ -169,6 +169,16 @@ def own_folder():
     return sorted(HERE.glob("test_*.py"))  # grün
 
 
+def package_folder():
+    return sorted(Path(next(iter(app.ui.__path__))).glob("*.py"))  # rot
+
+
+def own_package_folder():
+    import tools
+
+    return sorted(Path(next(iter(tools.__path__))).glob("*.py"))  # grün
+
+
 def tool_folder():
     return sorted(TOOLS.glob("*.py"))  # grün
 
