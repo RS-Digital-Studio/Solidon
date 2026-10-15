@@ -63,12 +63,15 @@ def test_the_emergency_places_stay_in_view_and_give_up_distance_before_freedom()
 
 
 def test_a_field_without_room_covers_another_field_rather_than_the_card() -> None:
-    """Unter der vom Kunden gelegten Karte verschwände ein Maß ganz; über einem anderen
-    Feld bleiben beide zu sehen. Ist neben der Karte kein freier Platz mehr, rückt das
-    Feld deshalb zu den Feldern und nicht auf die Karte (Schlussreview D0, RF-12).
+    """Unter der vom Kunden gelegten Karte verschwände ein Kantenmaß ganz. Ist neben
+    der Karte kein freier Platz mehr, steht ein Feld deshalb versetzt über den Feldern
+    — aber nie genau auf einem: Kein Feld deckt ein anderes ganz (Schlussreview D0,
+    RF-12, RF-16; bis RF-16 lag das zweite Feld deckungsgleich auf dem ersten).
 
     Unter der Karte bleibt eine Zeile für genau ein Feld: Das erste nimmt sie, das
-    zweite findet weder mit noch ohne Abstand Platz.
+    zweite findet weder mit noch ohne Abstand Platz und rückt an den unteren
+    Bildrand. Im Streifen für fünf Felder stehen das sechste und siebte je über der
+    Fuge zweier Felder.
     """
     bounds = QRect(0, 0, 400, 300)
     card = QRect(0, 0, 400, 240)
@@ -76,4 +79,13 @@ def test_a_field_without_room_covers_another_field_rather_than_the_card() -> Non
     first, second = emergency_places([field, field], bounds, [card], ([],))
     below = card.bottom() + SPACE + 1
     assert first == QRect(QPoint(0, below), field)
-    assert second == first and not second.intersects(card)
+    assert second == QRect(QPoint(0, bounds.bottom() - field.height() + 1), field)
+    assert not second.intersects(card)
+
+    strip = QRect(0, 0, 770, 520)
+    places = emergency_places([QSize(150, 26)] * 7, strip, [QRect(0, 0, 770, 490)], ([],))
+    assert all(strip.contains(place) and place.top() > 489 for place in places)
+    for one, other in combinations(places, 2):
+        assert one.intersected(other) not in (one, other), (one, other)
+    sixth, seventh = places[5:]
+    assert sixth.left() == places[0].left() + 75 and seventh.left() == places[1].left() + 75
