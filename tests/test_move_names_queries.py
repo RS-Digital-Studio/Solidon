@@ -299,3 +299,50 @@ def test_an_open_holder_read_declared_in_open_names_passes(tmp_path: Path) -> No
     _root, result = _run(tmp_path / "leer", fx.COPIES_OLD, declared)
     assert result.status == "rejected", result.problems
     assert any(f"open_names ({QUERY}, pick) trifft keinen" in p for p in result.problems)
+
+
+# ------------------------------------------------------------------ Skripte für python -c
+
+#: Ein Test, der ``app.core.legacy.bump`` und die Kopie ``app.core.consumer.operation`` nur im
+#: Text eines Skripts für ``python -c`` liest (CS-18).
+SCRIPT_TEXT = (
+    "import subprocess\nimport sys\n\n\ndef test_script():\n"
+    "    subprocess.run([sys.executable, '-c', {script!r}])\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("label", "old", "cut", "script", "expected"),
+    [
+        (
+            "modul",
+            fx.MODULE_OLD,
+            fx.MODULE_CUT,
+            "from app.core.legacy import bump\nbump()\n",
+            "Skript für python -c liest app.core.legacy.bump — vor dem Schnitt im Skripttext "
+            "auf app.core.legacy.state.bump umschreiben",
+        ),
+        (
+            "kopie",
+            fx.COPIES_OLD,
+            fx.COPIES_CUT,
+            "from app.core.consumer import operation\noperation(1)\n",
+            "Skript für python -c liest die Kopie app.core.consumer.operation — vor dem Schnitt "
+            "im Skripttext auf app.core.engine.compute umschreiben",
+        ),
+    ],
+    ids=["modul", "kopie"],
+)
+def test_a_reference_in_a_script_names_the_script_text(
+    tmp_path: Path, label: str, old: dict[str, str], cut: str, script: str, expected: str
+) -> None:
+    """RR2-7: Im Skripttext ist der Bezug schon ein Import; die Handlung nennt das Skript und
+    das Ziel, nicht „als Import oder Attribut schreiben“, und der Baum bleibt, wie er war."""
+    files = old | {QUERY: SCRIPT_TEXT.format(script=script)}
+    root, result = _run(tmp_path, files, cut)
+    assert result.status == "rejected", (label, result.status, result.problems)
+    found = [p for p in result.problems if p.startswith(f"{QUERY}:")]
+    # Daneben nennt die Zeichenkette im Modus module die alte Quelle — eine eigene Prüfung.
+    assert f"{QUERY}:6: {expected}" in found, (label, result.problems)
+    assert not [p for p in found if "als Import oder Attribut" in p], (label, found)
+    assert fx.tree_bytes(root) == {p: fx.text_of(t).encode("utf-8") for p, t in files.items()}

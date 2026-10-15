@@ -459,10 +459,18 @@ class CopiesPlanner:
         for (holder, bound), copy in sorted(self.copies.items()):
             module, name = copy.access
             for ref in self.ctx.index.references(holder, bound):
-                if ref.kind in ("patch", "import", "import_module"):
+                if ref.kind.removeprefix("script:") in ("patch", "import", "import_module"):
                     continue
                 if ref.kind == "from" and (ref.path, ref.line) in self.statements:
                     continue  # selbst eine Kopfkopie dieser Familie: _holder stellt sie um
+                if ref.kind.startswith("script:"):
+                    # Im Text eines Skripts für ``python -c`` (CS-18), wie in move_module.
+                    self.ctx.problem(
+                        f"{ref.path}:{ref.line}: Skript für python -c liest die Kopie "
+                        f"{holder}.{bound} — vor dem Schnitt im Skripttext auf {module}.{name} "
+                        "umschreiben"
+                    )
+                    continue
                 rewrite = self.ctx.rewrite(ref.path)
                 where = (ref.line, ref.col, holder, bound, module, name, RULE_OUTSIDE)
                 if ref.kind == "from":

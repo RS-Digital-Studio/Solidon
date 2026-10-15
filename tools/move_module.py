@@ -650,6 +650,14 @@ class ModulePlanner:
             for ref in self.ctx.index.references(self.src, name):
                 if ref.path == self.path or ref.kind == "patch":
                     continue
+                if ref.kind.startswith("script:"):
+                    # Im Text eines Skripts für ``python -c`` (CS-18): Umschreiben kann es nur,
+                    # wer den Text baut; Import oder Attribut ist es dort schon (RR2-7).
+                    self.ctx.problem(
+                        f"{ref.path}:{ref.line}: Skript für python -c liest {self.src}.{name} — "
+                        f"vor dem Schnitt im Skripttext auf {module}.{new_name} umschreiben"
+                    )
+                    continue
                 rewrite = self.ctx.rewrite(ref.path)
                 where = (ref.line, ref.col, self.src, name, module, new_name, rule)
                 if ref.kind == "from":
