@@ -161,22 +161,26 @@ def test_a_pure_test_change_runs_no_window_test_that_reads_only_the_application(
             assert sorted(FOLDER.rglob("*.py")) is not None
         """
     )
-    (tmp_path / "tests" / "test_app_reader.py").write_text(
+    (tmp_path / "tests" / "test_window_reads_app.py").write_text(
         window.format(folder="app"), encoding="utf-8"
     )
-    (tmp_path / "tests" / "test_tests_reader.py").write_text(
+    (tmp_path / "tests" / "test_window_reads_tests.py").write_text(
         window.format(folder="tests"), encoding="utf-8"
     )
-    changed_test = tmp_path / "tests" / "test_plain.py"
-    changed_test.write_text("def test_plain():\n    pass\n", encoding="utf-8")
+    changed_test = tmp_path / "tests" / "test_pure_change_probe.py"
+    changed_test.write_text("def test_pure_change_probe():\n    pass\n", encoding="utf-8")
     changed_app = tmp_path / "app" / "module.py"
     changed_app.write_text("VALUE = 1\n", encoding="utf-8")
 
     windows, _slicers = ci_selection.select([changed_test], tmp_path)
-    assert {shlex.split(selection)[0] for selection in windows} == {"tests/test_tests_reader.py"}
+    assert {shlex.split(selection)[0] for selection in windows} == {
+        "tests/test_window_reads_tests.py"
+    }
 
     windows, _slicers = ci_selection.select([changed_app], tmp_path)
-    assert {shlex.split(selection)[0] for selection in windows} == {"tests/test_app_reader.py"}
+    assert {shlex.split(selection)[0] for selection in windows} == {
+        "tests/test_window_reads_app.py"
+    }
 
 
 def _unmarked_machine_searches(source: str, name: str) -> list[str]:
