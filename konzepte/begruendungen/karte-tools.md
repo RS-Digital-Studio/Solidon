@@ -614,6 +614,25 @@ Freeze wird jedes davon entfernt oder bewusst aufgenommen.
   und die Ansichtsleiste. Das Lagerbild begrenzt sich auf das scrollbare
   Regal samt Gruppenüberschriften, unterhalb der Such- und Filterzeile.
 
+*Früher in der Karte unter „Fallen, die man einmal falsch macht“; dort steht
+seither die Kurzfassung.*
+
+**Sprache und Musik bleiben nachprüfbar.** Satzzeiten stammen aus den
+tatsächlich erzeugten WAV-Dateien. Shorts erhalten dieselben Zeiten als
+eingebrannte Untertitel; Tutorials zusätzlich als SRT. Jede Themenmusik
+hat ein eigenes prozedurales Arrangement. Der Mix senkt Musik unter Sprache
+ab und prüft den fertigen H.264/AAC-Film vollständig. Eine technische
+Prüfung ersetzt keine Sicht- oder Hörprüfung.
+Externe Musik wird nur mit Dateihash, Quelle und Lizenznachweis gemischt;
+die Sprachclips werden einzeln angeglichen, die Musik wird unter Sprache
+abgesenkt. Tempo und Tonhöhe der Stimmen bleiben erhalten.
+Zusammenhängende Sprecherabschnitte bleiben eine WAV-Datei. Eine separate
+akustische Satzzuordnung kann die Untertitel verfeinern; ihr Dateihash, der
+WAV-Hash, der unveränderte Text und die Zeitgrenzen werden vor Nutzung geprüft.
+Nach allen Audiofiltern wird jeder Abschnitt auf seine genaue Zahl von
+48-kHz-Samples gebracht. Die absolute Platzierung und Dateihashes stehen in
+`narration-placement.json`; Lautheitsfilter dürfen keine Zeitdrift ansammeln.
+
 ## Der Sitzungszustand ist ausgenommen
 
 Nicht mehr in der Karte: Der Absatz gilt `.claude/.state/`, nicht `tools/`.

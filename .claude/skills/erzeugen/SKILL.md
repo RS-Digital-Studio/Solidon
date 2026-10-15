@@ -91,6 +91,32 @@ Rechtsseiten → SEO → Asset-Stempel. Handgepflegte Bildmaße im HTML danach m
 Dateien abgleichen. Prüfbilder aus `/website-review` sind keine
 Release-Bilder und gehören nicht in den Uploadpfad.
 
+## Funktionsdurchgang am echten Fenster
+
+Beim Release nach dem Release-Tor und vor dem Tag, am ausgelieferten Stand und
+nur mit freigegebenem Aufnahmeschirm: die seit dem letzten Tag geänderten
+Zeilen (Konzept Funktionsdurchgang §8), dazu die nativen Einzelfälle und die
+Maßkartenfolge. Jede Ausgabe außerhalb des Repositorys, je Lauf ein neuer
+Ordner:
+
+```text
+.venv\Scripts\python.exe tools/native_runs.py bind --out <lauf>\bindung.json
+.venv\Scripts\python.exe tools/file_acceptance.py inventory --functions --rows <zeilen> --out <lauf>\funktionen
+.venv\Scripts\python.exe tools/file_acceptance.py run --out <lauf>\funktionen --screen "<schirm>"
+.venv\Scripts\python.exe tools/native_runs.py case --binding <lauf>\bindung.json --inventory <lauf>\funktionen --case <nummer> --screen "<schirm>" --out <lauf>\fall-<nummer> --native
+.venv\Scripts\python.exe tools/file_acceptance.py inventory --functions --rows resize_hole,move_feature,duplicate_feature,rotate_feature --out <lauf>\masskarte-inventar
+.venv\Scripts\python.exe tools/native_runs.py measure-card --binding <lauf>\bindung.json --inventory <lauf>\masskarte-inventar --screen "<schirm>" --out <lauf>\masskarte --native
+```
+
+Gebunden wird nur ein sauberer Baum; eine geänderte Läuferdatei verweigert
+jeden Start mit Ausgang 2 — committen, neu binden. Vor jedem `--native`
+dieselbe Zeile mit `--check`; `--languages de` fährt die Maßkartenfolge nur in
+einer Sprache, `--affinity <maske>` legt den Lauf auf feste Kerne, wo ein
+Rechner das verlangt. Ausgang 0 heißt Prozess, Abbau, Siegel und alle
+Bedingungen, `done.json` nennt sonst den Grund; die Bilder liest danach ein
+Mensch oder Agent (Stufe B), ein Ausgang 0 ist keine Bildabnahme. Die Berichte
+je Paket schreibt `file_acceptance.py report --out <lauf>\funktionen --package <paket>`.
+
 ## Release in seiner Reihenfolge
 
 1. **Druckrelevante Korrekturen zuerst.** Ist vor dem Tag ein Fehler bekannt,
@@ -101,7 +127,8 @@ Release-Bilder und gehören nicht in den Uploadpfad.
    und was `test_changelog` wann prüft: `auslieferung.md`).
 3. **Release-Tor** nach `/pruefen --release` — Kernsammlung, getrennte
    Fensterdateien, Leistungslauf, Ruff, Format, mypy — über den Stand, der
-   ausgeliefert wird; ein grünes Entwicklungstor genügt nicht. Dann committen.
+   ausgeliefert wird; ein grünes Entwicklungstor genügt nicht. Dann committen
+   und den Funktionsdurchgang am echten Fenster fahren (Abschnitt oben).
 4. **Version** mit `bump_version.py` vor Prüfmodul und Bau; ein für diesen
    Release schon erfolgter Schritt wird beim Wiederholen nicht erneut gezählt,
    ein reiner Diagnosebau erhöht nichts. `website/version.json` bleibt auf dem
