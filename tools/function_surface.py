@@ -330,6 +330,18 @@ def classes_of(widget: Any) -> set[str]:
     return {cls.__name__ for cls in type(widget).__mro__}
 
 
+#: Fenster, die der Kunde als Fenster seines Systems sieht. Der Fallprozess zeigt
+#: Qts eigenen Dialog (``file_acceptance.no_native_dialogs``): Gemessen würde ein
+#: Fenster, das der Kunde nie sieht (FD-122). Den echten prüft Stufe C am System.
+SYSTEM_SURFACES: Final[tuple[str, ...]] = ("QFileDialog",)
+
+
+def system_surface(widget: Any) -> str:
+    """Welche Systemfläche ``widget`` vertritt — leer, wenn es ein Fenster der Anwendung ist."""
+    names = classes_of(widget)
+    return next((name for name in SYSTEM_SURFACES if name in names), "")
+
+
 def grey_reason(window: Any, target: str) -> str | None:
     """Der Grund, mit dem das Ziel grau steht; ``None``, wenn es offen ist.
 

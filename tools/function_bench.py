@@ -908,6 +908,13 @@ class FunctionFlow(GesturePhases, SwitchPhase, RevisionPhase, MatrixPhase):
             if not self.data.get("scrollbars"):
                 self.data["scrollbars"] = None
             return
+        system = surfaces.system_surface(root)
+        if system:
+            # Qts Ersatz für das Fenster des Systems ist nicht, was der Kunde sieht
+            # (FD-122): keine Messung, Stufe C am echten System.
+            for name in SURFACE_FIELDS:
+                unmeasured(self.data, name, f"Systemfläche {system}: Stufe C am System")
+            return
         theme = self.variant.theme
         for part in surfaces.surface_parts(self.window, walk_target(self.row), root):
             for name, entries in capture.sheet_snapshot(part, theme, self.window_size()).items():
