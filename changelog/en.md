@@ -89,6 +89,11 @@ it into `website/version.json`.
 - Hole fields and the checkbox for changing matching features together explain their effect. “Compensate for printing deviations” makes the material profile's correction easier to understand.
 - When you cut out a cube to try a fit, you now choose its position under *Cube position*. The *Place* line above shows it.
 - The dialog behind *Add thickness* says in its first line that it gives the surface a thickness.
+- In the measurement card, the Tab key goes from the fields to the checkbox for matching features, then *Apply* and *Cancel*, and back. The checkbox now sits above the buttons.
+- After *Cancel* or Esc in the measurement card, the keyboard is back in the 3D view, as after *Apply*. Previously it landed on the *Objects* card.
+- In the measurement card, *Apply* stays grey until a value or the checkbox for matching features changes, and names the first field. Previously one click into a field enabled it, to no effect.
+- When the measurement card rejects a value, the reason appears once, directly below the field. Previously the same sentence was repeated above the buttons.
+- When a note makes the measurement card taller, it stays put and moves only as far as the view edge or handle requires, with a short movement. Previously it jumped elsewhere.
 
 ## 0.6.0
 

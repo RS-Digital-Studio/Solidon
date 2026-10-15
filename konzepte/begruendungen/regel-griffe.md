@@ -512,6 +512,25 @@ Wer den Zug beim Beginn meldet, schließt genau die Maße weg, um die es geht.
   `measure_field_places.rows_height` die Zeilen, die die Felder wirklich
   brauchen, und `emergency_places` sucht jedem Feld den ersten freien Platz
   im Bild, mit Stufen vom strengen Abstand bis zum Überdecken.
+* **Eine gewachsene Karte bleibt stehen** (FD-87, Funktionsdurchgang
+  2026-10). Mit einer Ablehnung unter dem Durchmesser wurde die Karte höher,
+  und die Stehregel (`_places_that_still_serve`) verwarf jeden Platz, dessen
+  Größe sich geändert hatte: Die Karte bekam den nächsten freien Platz beim
+  Setzpunkt und stand ohne Übergang woanders — im Lauf 001 rechts am
+  Plattenrand, im gestellten Fall 125 Punkte höher und 281 nach links. Seither
+  rückt `grown_place` von der alten Ecke aus nur so weit, wie Raum und
+  Hindernisse verlangen, und `motion.glide` zeigt den Weg. Wo neben Setzpunkt
+  und Griff kein Platz bleibt (die Karte unter beiden am unteren Rand), muss
+  sie trotzdem über beide — dann gleitet sie dorthin.
+* **Die Maßkarte hält die Tastatur** (FD-86, FD-160, FD-88). Die Felder
+  entstehen im Merkmalfenster und ziehen später in die Karte; Qt reihte sie in
+  der Fokuskette hinter die Knöpfe, und nach „Weitere Werte“ ging Tab zum
+  Kartengriff „Objekte“. Der Sammelhaken stand unter den Knöpfen; er sagt,
+  was *Übernehmen* trifft, und steht wie im Merkmalfenster davor. Nach
+  *Abbrechen* landete der Fokus auf demselben Kartengriff, weil Qt beim
+  Verbergen den nächsten Halt der Fensterkette nimmt; nach *Übernehmen* und
+  Strg+Z stand er in der Ansicht. Und eine Feldablehnung stand dreimal da:
+  unter dem Feld, im Hinweis der Karte und in der Statuszeile.
 
 ### Wo etwas schon sitzt, zielt der Zeiger nicht
 

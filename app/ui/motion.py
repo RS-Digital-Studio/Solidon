@@ -28,7 +28,15 @@ import os
 from collections.abc import Callable, Sequence
 from typing import Final
 
-from PySide6.QtCore import QEasingCurve, QObject, QPropertyAnimation, QVariantAnimation
+from PySide6.QtCore import (
+    QAbstractAnimation,
+    QEasingCurve,
+    QObject,
+    QPoint,
+    QPropertyAnimation,
+    Qt,
+    QVariantAnimation,
+)
 from PySide6.QtWidgets import QGraphicsOpacityEffect, QStackedWidget, QTabWidget, QWidget
 
 #: Für alles, was nur bestätigt: ein Panel erscheint, ein Hinweis geht.
@@ -154,6 +162,41 @@ def switch(
         fade_in(target, duration=duration)
 
 
+#: Der Name der Gleitbewegung eines Widgets — höchstens eine je Widget.
+_GLIDE: Final = "motion_glide"
+
+
+def glide(widget: QWidget, point: QPoint, *, smooth: bool, duration: int = SHORT_MS) -> None:
+    """Setzt ein Widget an ``point`` — mit kurzem Übergang, wenn ``smooth`` gilt.
+
+    Für ein Widget, dessen Platz ein Aufrufer bei jedem Neuzeichnen neu setzt,
+    wie die Maßkarte über der Ansicht (FD-87: Wuchs sie, stand sie ohne
+    Übergang woanders). ``smooth`` beginnt eine Bewegung; ohne bleibt eine
+    laufende zum selben Ziel stehen, damit die nächste Runde sie nicht abbricht.
+    Ein anderes Ziel löst sie ab — gleitend von der Stelle, an der das Widget
+    gerade steht, sonst sofort. Ist Bewegung aus oder das Widget verborgen,
+    steht es gleich am Ziel.
+    """
+    running = widget.findChild(
+        QPropertyAnimation, _GLIDE, Qt.FindChildOption.FindDirectChildrenOnly
+    )
+    if running is not None:
+        if running.endValue() == point and running.state() == QAbstractAnimation.State.Running:
+            return
+        running.setObjectName("")
+        running.stop()
+    if not smooth or not animations_enabled() or not widget.isVisible() or widget.pos() == point:
+        widget.move(point)
+        return
+    animation = QPropertyAnimation(widget, b"pos", widget)
+    animation.setObjectName(_GLIDE)
+    animation.setDuration(duration)
+    animation.setEasingCurve(CURVE)
+    animation.setStartValue(widget.pos())
+    animation.setEndValue(point)
+    animation.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+
+
 def mix(start: Sequence[float], end: Sequence[float], fraction: float) -> tuple[float, ...]:
     """Mischt zwei Farben — ``fraction`` 0 ist ``start``, 1 ist ``end``.
 
@@ -222,6 +265,7 @@ __all__ = [
     "animations_enabled",
     "fade_in",
     "fade_out",
+    "glide",
     "mix",
     "switch",
     "tween",

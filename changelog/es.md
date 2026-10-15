@@ -90,6 +90,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los campos del agujero y la casilla para modificar características iguales conjuntamente explican su efecto. «Compensar desviaciones de impresión» aclara la corrección del perfil de material.
 - Al recortar un cubo para probar un ajuste, su posición se elige ahora en *Posición del cubo*. La línea *Punto* de arriba la muestra.
 - El diálogo tras *Dar grosor* dice en su primera línea que da grosor a la superficie.
+- En la tarjeta de medidas, el tabulador va de los campos a la casilla de características iguales, a *Aplicar* y *Cancelar*, y vuelve. La casilla está ahora encima de los botones.
+- Tras *Cancelar* o Esc en la tarjeta de medidas, el teclado vuelve a la vista 3D, como tras *Aplicar*. Antes acababa en la tarjeta *Objetos*.
+- En la tarjeta de medidas, *Aplicar* sigue en gris hasta que cambia un valor o la casilla de características iguales, e indica el primer campo. Antes bastaba un clic en un campo, sin efecto.
+- Si la tarjeta de medidas rechaza un valor, el motivo aparece una sola vez, justo debajo del campo. Antes la misma frase se repetía encima de los botones.
+- Si un aviso hace crecer la tarjeta de medidas, se queda en su sitio y solo se desplaza lo que exigen el borde o el tirador, con un movimiento breve. Antes saltaba a otro lugar.
 
 ## 0.6.0
 

@@ -2502,6 +2502,16 @@ zurückgegebene Gruppe mit einer frisch gebauten Zustand für Zustand
 (`test_feature_panel.py`, `_measure_group_state`). Nach `_lay_out_now` gemäß
 `ansicht.md` bündelt `PlacementFlow.flush_frame` die fertigen Maßbilder.
 
+*Früher in der Karte unter „Panel und Bild“: der Ort der Maßkarte.*
+
+Freie Orte beziehen sich auf den Abgaberaum; Randorte bleiben angedockt.
+Raumgrenzen, Klappen und Werte ändern den Wunschort nicht. Neue Aufträge
+oder andere Gruppen setzen ihn zurück; Parken trennt `positionChanged`
+über `_links`. Die Karte bleibt Hindernis für andere Maßfelder. Ohne
+Wunschort wählt der Fluss den Platz; wächst die Karte, behält sie ihn und
+rückt nur um das Nötige (`measure_field_places.grown_place`, FD-87), gleitend
+über `motion.glide`.
+
 ## Stolperfallen
 
 Für Qt-Baumzeilen über `topLevelItem` und `child` gehen. Ein im Prüfstand
