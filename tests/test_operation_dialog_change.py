@@ -164,3 +164,31 @@ def test_a_field_behind_the_flap_is_named_once_it_is_open(qt_app: QApplication) 
         assert dialog.focus_field(behind)
         qt_app.processEvents()
         assert str(spec[behind].title) in dialog._accept_button.toolTip()
+
+
+def test_values_changed_on_the_way_in_are_ready_to_apply(qt_app: QApplication) -> None:
+    """Kommt die Änderung schon mit (eine Geste, eine Zeichnung aus dem Raum,
+    ``edit_operation(given=…)``) oder hält der Schritt die Kette an, wartet der
+    Knopf nicht: Erst die Vorschau sagt dann, was gilt."""
+    with _changing(
+        "insert_printed_thread", {**THREAD, "length": 6.0}, wait_for_change=False
+    ) as dialog:
+        dialog.show()
+        qt_app.processEvents()
+        assert dialog._accept_button.text() == tr("Übernehmen")
+        assert dialog._accept_button.isEnabled()
+        assert dialog.can_accept()
+
+
+def test_a_preset_naming_hook_is_already_a_change(qt_app: QApplication) -> None:
+    """Steht der Haken aus den Einstellungen schon beim Öffnen, legt Übernehmen
+    die Maße als Parameter an — das ist eine Änderung, der Knopf ist frei."""
+    with _changing(
+        "create_box",
+        {"length": 20.0, "width": 20.0, "height": 20.0},
+        offer_naming=True,
+        naming_default=True,
+    ) as dialog:
+        dialog.show()
+        qt_app.processEvents()
+        assert dialog._accept_button.isEnabled()

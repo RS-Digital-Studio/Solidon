@@ -1925,6 +1925,7 @@ class OperationDialog(QDialog):
         promote_values: bool = True,
         front_fields: Sequence[str] = (),
         changing: bool = False,
+        wait_for_change: bool = True,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1949,6 +1950,10 @@ class OperationDialog(QDialog):
         ``MainWindow.edit_operation``). Der Knopf heißt dann *Übernehmen*
         (:func:`accept_text`) und ist grau, bis sich etwas geändert hat; sein
         Satz nennt das Feld, das man ändern kann (FD-99, ``first_change``).
+        ``wait_for_change=False``: Der Knopf wartet nicht — die Werte tragen
+        schon eine Änderung (eine Geste, eine Zeichnung aus dem Raum,
+        ``edit_operation(given=…)``), oder der Schritt hält die Kette an; dann
+        sagt erst die Vorschau, was gilt, mit ihrem Weg (*Gewindeschritt öffnen*).
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -1978,8 +1983,8 @@ class OperationDialog(QDialog):
         self._feature_focus = ""
         self._first_focus_given = False
         self._changing = changing
-        self._opened_with: tuple[str, dict[str, Any], bool] | None = None
-        """Im Änderungsweg: Variante, Werte und Benennungshaken beim Öffnen."""
+        self._opened_with: tuple[str, dict[str, Any]] | None = None
+        """Im Änderungsweg: Variante und Werte beim Öffnen."""
         self._waits_for_change = False
         """Ob *Übernehmen* auf die erste Änderung wartet (:meth:`_follow_source_pending`)."""
         self._asked_field = ""
@@ -2510,11 +2515,11 @@ class OperationDialog(QDialog):
         # Jedes Feld trägt den Namen seiner Zeile, auch eines ohne Satz und eines,
         # das selbst der Editor ist (FD-94, ``form_fields.name_rows``).
         name_rows(front, advanced)
-        if changing:
+        if changing and wait_for_change:
             # Was beim Öffnen dastand, ist der Schritt, wie er ist; erst eine
             # Abweichung davon ist etwas zum Übernehmen (FD-99). Ein Fokus oder
             # dieselbe Zahl noch einmal getippt ändert nichts.
-            self._opened_with = (self.spec.name, self.values(), self.names_dimensions())
+            self._opened_with = (self.spec.name, self.values())
             self._follow_source_pending()
 
     def _ask_manual(self) -> None:
@@ -2599,10 +2604,23 @@ class OperationDialog(QDialog):
         # FD-31 eine Regel für alle Flächen): grau, und der Satz nennt das Feld,
         # in das der Kunde gekommen ist, sonst das erste offene. Ohne offenes Feld
         # gibt es keinen Weg zu nennen, und der Knopf bleibt, wie er war.
-        unchanged = self._opened_with is not None and self._opened_with == (
-            self.spec.name,
-            self.values(),
-            self.names_dimensions(),
+        # Ein gesetzter Haken *Maße als Parameter anlegen* ändert den Schritt,
+        # solange vorn ein Millimetermaß als Zahl steht — auch wenn er schon beim
+        # Öffnen stand (Vorgabe aus den Einstellungen).
+        unchanged = (
+            self._opened_with is not None
+            and self._opened_with == (self.spec.name, self.values())
+            and not (
+                self.names_dimensions()
+                and any(
+                    isinstance(editor, ValueField)
+                    and editor._entry.unit == "mm"
+                    and not editor.toggle.isChecked()
+                    and not editor.isHidden()
+                    and self._rows.get(name) is self._front
+                    for name, editor in self._editors.items()
+                )
+            )
         )
         asked = self._editors.get(self._asked_field)
         first = (
