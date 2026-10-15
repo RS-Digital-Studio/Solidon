@@ -1480,8 +1480,8 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
         # Steht der Körper schon als Name unter den Werten — die beiden Teile
         # einer Überschneidung —, nicht noch einmal davor (FD-105): „— Quader ·
         # Quader · Deckel“.
-        named = {str(finding.values[key]) for key in _NAMES_IN_THE_LINE if key in finding.values}
-        if name and name != identifier and name not in str(finding.message) and name not in named:
+        in_line = {str(finding.values[key]) for key in _NAMES_IN_THE_LINE if key in finding.values}
+        if name and name != identifier and name not in str(finding.message) and name not in in_line:
             extra.insert(0, name)
     if not extra:
         return str(finding.message)
@@ -5479,11 +5479,11 @@ class HistoryPanel(QWidget):
             if not transaction.ops and changed:
                 # **Eine Maßänderung öffnet ihr Maß** (FD-166): Sie hat keinen
                 # Schritt, aber ein Ziel — dasselbe wie *Ändern …* an der Leiste.
-                name, now = next(iter(changed.items()))
-                before = transaction.changes.before.parameters if transaction.changes else None
-                shown = now or (before or {}).get(name)
-                label = str(shown.title or name) if shown is not None else name
-                item.setData(PARAMETER_ROLE, (name, label))
+                key, now = next(iter(changed.items()))
+                earlier = transaction.changes.before.parameters if transaction.changes else None
+                stated = now or (earlier or {}).get(key)
+                caption = str(stated.title or key) if stated is not None else key
+                item.setData(PARAMETER_ROLE, (key, caption))
             if halted:
                 tip += "\n" + tr("Hier hält die Kette an — der Grund steht im Prüfbericht.")
             item.setToolTip(tip)
