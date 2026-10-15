@@ -28,7 +28,6 @@ verglichen wurde; ``Proof.counts`` sind die Grundmengen, die nie leer sein dürf
 
 from __future__ import annotations
 
-import ast
 import hashlib
 import os
 import subprocess
@@ -40,6 +39,7 @@ from pathlib import Path
 from tools.code_index import Index, PatchSite
 from tools.move_compare import module_of_expression
 from tools.move_cut import Cut
+from tools.move_forms import Calls
 from tools.move_proof_component import ComponentProof
 from tools.move_proof_copies import CopiesProof
 from tools.move_proof_module import ModuleProof
@@ -126,16 +126,14 @@ def check_unresolved(proof: Proof, trees: Trees, mapping: Mapping) -> None:
         proof.error(f"{path}: {kind}-Bezug {module}.{name} löst sich nachher nicht auf (W5)")
 
 
-#: Abfragen, die bei einem fehlenden Namen still antworten: ``hasattr`` mit ``False``,
-#: ``getattr`` mit seiner Vorgabe.
-QUERIES = frozenset({"builtins.hasattr", "builtins.getattr"})
-
-
 def check_queries(proof: Proof, trees: Trees, mapping: Mapping) -> None:
-    """Keine Abfrage ``hasattr(M, "N")`` oder ``getattr(M, "N", vorgabe)`` fragt nachher ins
-    Leere, die vorher (abgebildet) etwas fand. Der Auflöser zählt eine solche Stelle nur
-    (``absent``), sie ist weder Bezug noch unauflösbar — der Beweis sucht sie deshalb selbst,
-    über ``resolve`` und ``exists`` aus R, in jeder Datei beider Bäume."""
+    """Kein Aufruf mit festem Attributnamen auf ein Modul fragt nachher ins Leere, der vorher
+    (abgebildet) etwas fand: ``hasattr(M, "N")``, ``getattr(M, "N", vorgabe)``,
+    ``setattr``/``delattr`` und jeder dieser Aufrufe über einen Alias (``has = hasattr``,
+    ``builtins.hasattr``; Review 2, RM-M20). Nur ``getattr(M, "N")`` ohne Vorgabe über den
+    eingebauten Namen zählt der Auflöser als Bezug (eine Leere meldet dann W5); die übrigen sind
+    weder Bezug noch unauflösbar — der Beweis sucht sie deshalb selbst, über
+    ``tools/move_forms.py`` und ``resolve``/``exists`` aus R, in jeder Datei beider Bäume."""
     every = _queries(trees, "new")
     proof.counts["queries"] = sum(len(sites) for sites in every.values())
     before = {
@@ -153,39 +151,37 @@ def check_queries(proof: Proof, trees: Trees, mapping: Mapping) -> None:
         for site in sites:
             proof.error(
                 f"{site}: fragt {key[0]} nach {key[1]}, das es nachher nicht gibt (hasattr, "
-                "getattr mit Vorgabe: die Antwort wäre still eine andere) — die Stelle auf das "
-                "Modul umschreiben, das den Namen danach trägt"
+                "getattr mit Vorgabe oder über einen Alias, setattr, delattr: die Antwort wäre "
+                "still eine andere) — die Stelle auf das Modul umschreiben, das den Namen danach "
+                "trägt"
             )
 
 
 def _queries(trees: Trees, side: str) -> dict[tuple[str, str], list[str]]:
-    """Je ``(M, N)`` die Stellen ``hasattr(M, "N")`` und ``getattr(M, "N", vorgabe)`` eines
-    Baums, deren erstes Argument laut R genau ein Modul ist; der Name auch gefaltet."""
+    """Je ``(M, N)`` die Stellen eines Baums mit Attributnamen auf ein Modul, die der Auflöser
+    nicht als Bezug zählt, deren erstes Argument laut R genau ein Modul ist; der Name auch
+    gefaltet."""
     index = trees.old_index if side == "old" else trees.new_index
     files = trees.old_files if side == "old" else trees.new_files
+    calls = Calls(index, files)
     found: dict[tuple[str, str], list[str]] = {}
     for path, data in files.items():
-        if not path.endswith(".py") or (b"hasattr(" not in data and b"getattr(" not in data):
+        if not path.endswith(".py") or not calls.may_call(data):
             continue
         source = trees.old(path) if side == "old" else trees.new(path)
-        for node in ast.walk(source.tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+        for named in calls.every(path, source.tree):
+            reference = named.plain and named.kind == "getattr" and len(named.call.args) == 2
+            if reference or named.call.keywords or len(named.call.args) > 3:
                 continue
-            if node.func.id not in ("hasattr", "getattr") or node.keywords:
-                continue
-            if len(node.args) != (2 if node.func.id == "hasattr" else 3):
-                continue
-            kinds = index.resolve(path, node.func)
-            if not kinds or not all(v.kind == "ext" and v.ref in QUERIES for v in kinds):
-                continue
-            module = module_of_expression(index, path, node.args[0])
+            module = module_of_expression(index, path, named.target)
             if module is None:
                 continue
-            names = index.resolve(path, node.args[1])
+            names = index.resolve(path, named.name)
             if not names or not all(v.kind == "const" and isinstance(v.data, str) for v in names):
                 continue
             for value in names:
-                found.setdefault((module, str(value.data)), []).append(f"{path}:{node.lineno}")
+                site = f"{path}:{named.call.lineno}"
+                found.setdefault((module, str(value.data)), []).append(site)
     return found
 
 

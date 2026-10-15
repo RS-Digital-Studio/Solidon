@@ -27,6 +27,7 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 
 from tools.code_index import Index, PatchSite, Val
+from tools.move_forms import annotation_names, attribute_kind
 from tools.move_source import (
     BUILTINS,
     IMPORTS,
@@ -643,31 +644,7 @@ def _text(source: Source, node: ast.AST) -> str:
         return ast.unparse(node)
 
 
-def _is_annotation(parent: ast.AST | None, node: ast.AST) -> bool:
-    if isinstance(parent, ast.arg):
-        return parent.annotation is node
-    if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        return parent.returns is node
-    if isinstance(parent, ast.AnnAssign):
-        return parent.annotation is node
-    return False
-
-
-def _string_names(text: str) -> set[str]:
-    try:
-        expression = ast.parse(text.strip(), mode="eval")
-    except SyntaxError, ValueError:
-        return set()
-    return {node.id for node in ast.walk(expression) if isinstance(node, ast.Name)}
-
-
 # ------------------------------------------------------------------- Leserdateien
-
-
-#: Aufrufe, deren zweites Argument ein Attributname des ersten ist.
-ATTRIBUTE_CALLS = frozenset(
-    {"builtins.getattr", "builtins.hasattr", "builtins.setattr", "builtins.delattr"}
-)
 
 
 class ReaderComparison(Comparison):
@@ -925,8 +902,7 @@ class ReaderComparison(Comparison):
     def _attribute_call(self, old: ast.Call, new: ast.Call) -> bool:
         if len(old.args) < 2 or len(new.args) < 2:
             return False
-        kinds = self.trees.old_index.resolve(self.path, old.func)
-        if not kinds or not all(v.kind == "ext" and v.ref in ATTRIBUTE_CALLS for v in kinds):
+        if attribute_kind(self.trees.old_index, self.path, old.func) is None:
             return False
         first_old, second_old = old.args[0], old.args[1]
         first_new, second_new = new.args[0], new.args[1]
@@ -988,11 +964,7 @@ def loaded_names(tree: ast.AST) -> set[str]:
     }
     for node in ast.walk(tree):
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            try:
-                inner = ast.parse(node.value, mode="eval")
-            except SyntaxError, ValueError:
-                continue
-            found |= {n.id for n in ast.walk(inner) if isinstance(n, ast.Name)}
+            found |= annotation_names(node.value)
     return found
 
 

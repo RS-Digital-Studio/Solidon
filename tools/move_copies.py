@@ -24,7 +24,9 @@ ein Lesen über einen Namen, den eine Funktion verdeckt; ``__all__`` mit der Kop
 auf die Kopie, wenn das Original nicht im selben Paket liegt; eine Zeichenkette, die die Kopie
 nennt (``"H.b"``, ``"H:b"``), ohne Patch-Stelle zu sein; eine annotierte Kopie; eine Kopie einer
 Zuweisungskopie als erklärtes Original; ``globals()``/``vars()`` im Halter, wenn der Schlüssel eine
-Kopie ist oder sich nicht falten lässt.
+Kopie ist oder sich nicht falten lässt; eine Abfrage nach der Kopie (``hasattr``, auch über einen
+Alias), der Namensraum eines Halters als Ganzes (``vars(H)``, ``dir(H)``, ``H.__dict__``, ein
+offener Attributname) und ein fester Teil eines f-Strings, der die Kopie nennt.
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ from tools.code_index import HeadCopy, Index
 from tools.move_compare import FileScopes, TopLevel, fixed_parts, string_constants
 from tools.move_cut import Cut
 from tools.move_edits import Edit
+from tools.move_forms import annotation_expression, annotation_names, is_annotation
 from tools.move_refs import (
     AlreadyAppliedError,
     Context,
@@ -50,9 +53,6 @@ from tools.move_source import AREAS, Source, bound_name, import_binders, path_of
 RULE_HOLDER = "Kopie wird Modulzugriff"
 RULE_OUTSIDE = "Bezug auf die Kopie folgt dem Leseweg"
 RULE_PATCH = "Patch auf die Kopie zielt aufs Original"
-
-#: Aufrufe, deren zweites Argument ein Attributname des ersten ist.
-ATTRIBUTE_CALLS = frozenset({"getattr", "hasattr", "setattr", "delattr"})
 
 
 @dataclass(frozen=True)
@@ -405,11 +405,11 @@ class CopiesPlanner:
     def _annotations(self, rewrite: FileRewrite, scopes: FileScopes, bound: str, text: str) -> None:
         """Eine Annotation als Zeichenkette, die die Kopie nennt, nennt danach ``m.N``."""
         for node in string_constants(rewrite.source):
-            if not _is_annotation(rewrite.source, node):
+            if not is_annotation(rewrite.source.parent(node), node):
                 continue
             new = _annotation_text(rewrite.source, node, bound, text)
             if new is None:
-                if bound in _string_names(str(node.value)):
+                if bound in annotation_names(str(node.value)):
                     self.ctx.problem(
                         f"{rewrite.path}:{node.lineno}: Annotation als Zeichenkette nennt die "
                         f"Kopie {bound} in einer Form, die sich nicht umschreiben lässt — vor dem "
@@ -538,7 +538,7 @@ class CopiesPlanner:
         Attributname ``"b"`` an ``getattr``/``hasattr``/``setattr``/``delattr`` auf den Halter ist
         umgestellt — sonst ein Fund."""
         dotted_names = {f"{h}.{b}" for h, b in self.copies} | {f"{h}:{b}" for h, b in self.copies}
-        bounds = {b for _h, b in self.copies}
+        calls = self.ctx.calls()
         for area in AREAS:
             base = self.ctx.root / area
             if not base.is_dir():
@@ -547,9 +547,10 @@ class CopiesPlanner:
                 relative = full.relative_to(self.ctx.root).as_posix()
                 if any(p == "__pycache__" or p.startswith(".") for p in relative.split("/")[:-1]):
                     continue
-                data = full.read_bytes().decode("utf-8", "replace")
+                raw = full.read_bytes()
+                data = raw.decode("utf-8", "replace")
                 hit_dotted = any(d in data for d in dotted_names)
-                hit_attr = "attr(" in data and any(b in data for b in bounds)
+                hit_attr = calls.may_call(raw) or "__dict__" in data
                 if not hit_dotted and not hit_attr:
                     continue
                 rewrite = self.ctx.rewrites().get(relative)
@@ -574,26 +575,34 @@ class CopiesPlanner:
                     self._attribute_names(relative, source, rewrite)
 
     def _attribute_names(self, path: str, source: Source, rewrite: FileRewrite | None) -> None:
+        """Ein Halter, nach dessen Kopie über ihren Namen gefragt wird, und ein Halter, dessen
+        Namensraum als Ganzes gelesen wird (``vars(H)``, ``dir(H)``, ``H.__dict__``, ein
+        Attributaufruf mit offenem Namen): Danach fehlte die Kopie still (Review 2, RM-M20).
+        Erkannt über ``tools/move_forms.py``, auch über einen Alias."""
+        holders = sorted({holder for holder, _bound in self.copies})
+        calls = self.ctx.calls()
         for node in ast.walk(source.tree):
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in ATTRIBUTE_CALLS
-                and len(node.args) >= 2
-                and isinstance(node.args[1], ast.Constant)
-                and isinstance(node.args[1].value, str)
-            ):
+            named = calls.named(path, node) if isinstance(node, ast.Call) else None
+            target = named.target if named is not None else calls.namespace(path, node)
+            if target is None or (rewrite is not None and rewrite.covered(target)):
                 continue
-            first = node.args[0]
-            for holder, bound in self.copies:
-                if node.args[1].value != bound or (rewrite is not None and rewrite.covered(first)):
-                    continue
-                if self.ctx.is_module(path, first, holder):
+            holder = next((h for h in holders if self.ctx.is_module(path, target, h)), None)
+            if holder is None:
+                continue
+            text = _short(source, node)
+            line = target.lineno
+            if named is not None and named.fixed is not None:
+                if (holder, named.fixed) in self.copies:
                     self.ctx.problem(
-                        f"{path}:{node.lineno}: {node.func.id}({source.node_text(first)}, "
-                        f"{bound!r}) fragt nach der Kopie — vor dem Schnitt als Zugriff auf das "
-                        "Original schreiben"
+                        f"{path}:{line}: {text} fragt nach der Kopie — vor dem Schnitt "
+                        "als Zugriff auf das Original schreiben"
                     )
+                continue
+            self.ctx.problem(
+                f"{path}:{line}: {text} liest den Namensraum des Halters {holder} als "
+                "Ganzes, und danach fehlen dort seine Kopien — vor dem Schnitt mit festem Namen "
+                "schreiben oder das Original lesen"
+            )
 
 
 # ------------------------------------------------------------------------------ Hilfen
@@ -665,36 +674,21 @@ def _module_alias(source: Source, node: ast.Name) -> str | None:
     return target.id
 
 
-def _is_annotation(source: Source, node: ast.AST) -> bool:
-    parent = source.parent(node)
-    if isinstance(parent, ast.arg):
-        return parent.annotation is node
-    if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        return parent.returns is node
-    if isinstance(parent, ast.AnnAssign):
-        return parent.annotation is node
-    return False
-
-
-def _string_names(text: str) -> set[str]:
-    try:
-        tree = ast.parse(text, mode="eval")
-    except SyntaxError, ValueError:
-        return set()
-    return {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+def _short(source: Source, node: ast.AST) -> str:
+    text = " ".join(source.node_text(node).split())
+    return text if len(text) <= 60 else text[:57] + "…"
 
 
 def _annotation_text(source: Source, node: ast.Constant, bound: str, text: str) -> str | None:
     """Der Quelltext der Annotation ``node`` mit ``text`` statt jedes Namens ``bound`` — nur
-    für eine schlichte Zeichenkette ohne Escapes und Präfix (sonst ``None``)."""
+    für eine schlichte Zeichenkette ohne Escapes, Präfix und Rand (sonst ``None``)."""
     raw = source.node_text(node)
     value = str(node.value)
     quote = raw[:1]
     if quote not in ("'", '"') or raw[-1:] != quote or raw[1:-1] != value or raw[:3] == quote * 3:
         return None
-    try:
-        tree = ast.parse(value, mode="eval")
-    except SyntaxError, ValueError:
+    tree = annotation_expression(value) if value == value.strip() else None
+    if tree is None:
         return None
     data = value.encode("utf-8")
     spots = sorted(

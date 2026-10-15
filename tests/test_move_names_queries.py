@@ -1,0 +1,213 @@
+"""Aufrufe mit Attributnamen und Lesungen eines Namensraums über Umwege (Review 2 über Paket M,
+RM-M20 und RM-M23; ``tools/move_forms.py``).
+
+Der Fund: Planer und Beweis erkannten ``hasattr``/``getattr`` am Namen im Quelltext, nicht am
+Auflöser. ``has = hasattr; has(legacy, "bump")``, ``from builtins import hasattr as has``,
+``builtins.hasattr(…)`` und ``get = getattr; get(legacy, "bump", None)`` blieben stehen, der
+Beweis war grün, danach antworteten sie still ``False`` oder ``None``; ebenso
+``builtins.hasattr(consumer, "operation")`` und ``vars(consumer).get("operation")`` im Modus
+``copies``. Je Fall der Planer (umgeschrieben oder abgewiesen) und der Beweis eines Baums, in dem
+die Stelle stehen blieb (rot).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from tests import move_fixtures as fx
+from tools import move_cut, move_names, move_proof
+
+MODULE_EXPECTED = fx.changed_tree(fx.MODULE_OLD, fx.MODULE_NEW)
+COPIES_EXPECTED = fx.changed_tree(fx.COPIES_OLD, fx.COPIES_NEW)
+QUERY = "tests/test_query.py"
+ALIAS = "tests/query_alias.py"
+
+
+def _run(tmp_path: Path, files: dict[str, str], cut: str) -> tuple[Path, move_names.Result]:
+    root = fx.write_tree(tmp_path / "tree", files)
+    cut_file = tmp_path / "cut.toml"
+    cut_file.write_bytes(cut.encode("utf-8"))
+    work = tmp_path / "work"
+    work.mkdir(exist_ok=True)
+    return root, move_names.run(move_cut.load(cut_file), root, work=work, cache=False)
+
+
+def _prove(tmp_path: Path, old: dict[str, str], new: dict[str, str], cut: str) -> move_proof.Proof:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    cut_file = tmp_path / "cut.toml"
+    cut_file.write_text(cut, encoding="utf-8")
+    return move_proof.prove(
+        move_cut.load(cut_file),
+        fx.write_tree(tmp_path / "old", old),
+        fx.write_tree(tmp_path / "new", new),
+    )
+
+
+# ------------------------------------------------------------------ Modulmodus
+
+#: (Name, Dateien, umgeschriebene Stelle): m1a bis m1d sind die Sonde des Reviews; die übrigen
+#: eigene Gegenproben derselben Klasse — ein Alias aus einem anderen Modul (die Datei nennt
+#: ``hasattr`` gar nicht) und ``setattr``, das einen fehlenden Namen still anlegte.
+MODULE_FORMS = [
+    (
+        "m1a-alias",
+        {
+            QUERY: "from app.core import legacy\n\nhas = hasattr\n\n\ndef test_has():\n"
+            '    assert has(legacy, "bump")\n'
+        },
+        'has(state, "bump")',
+    ),
+    (
+        "m1b-from-builtins",
+        {
+            QUERY: "from builtins import hasattr as has\n\nfrom app.core import legacy\n\n\n"
+            'def test_has():\n    assert has(legacy, "bump")\n'
+        },
+        'has(state, "bump")',
+    ),
+    (
+        "m1c-builtins-attribut",
+        {
+            QUERY: "import builtins\n\nfrom app.core import legacy\n\n\ndef test_has():\n"
+            '    assert builtins.hasattr(legacy, "bump")\n'
+        },
+        'builtins.hasattr(state, "bump")',
+    ),
+    (
+        "m1d-getattr-alias",
+        {
+            QUERY: "from app.core import legacy\n\nget = getattr\n\n\ndef test_get():\n"
+            '    assert get(legacy, "bump", None) is not None\n'
+        },
+        'get(state, "bump", None)',
+    ),
+    (
+        "alias-aus-anderem-modul",
+        {
+            ALIAS: '"""Ein Alias zum Weiterreichen."""\n\nhas = hasattr\n',
+            QUERY: "from app.core import legacy\nfrom tests.query_alias import has\n\n\n"
+            'def test_has():\n    assert has(legacy, "bump")\n',
+        },
+        'has(state, "bump")',
+    ),
+    (
+        "setattr-legt-an",
+        {
+            QUERY: "from app.core import legacy\n\n\ndef test_set():\n"
+            '    setattr(legacy, "COUNT", 3)\n'
+        },
+        'setattr(state, "COUNT", 3)',
+    ),
+]
+MODULE_IDS = [form[0] for form in MODULE_FORMS]
+
+
+@pytest.mark.parametrize(("label", "extra", "expected"), MODULE_FORMS, ids=MODULE_IDS)
+def test_a_query_through_a_detour_follows_the_cut(
+    tmp_path: Path, label: str, extra: dict[str, str], expected: str
+) -> None:
+    """Der Planer schreibt die Stelle wie ``hasattr(M, "N")`` um, und der Beweis bestätigt es."""
+    root, result = _run(tmp_path, fx.MODULE_OLD | extra, fx.MODULE_CUT)
+    assert result.status == "written", (
+        label,
+        result.problems,
+        result.proof and result.proof.text(),
+    )
+    text = (root / QUERY).read_text(encoding="utf-8")
+    assert expected in text, (label, text)
+
+
+@pytest.mark.parametrize(("label", "extra", "expected"), MODULE_FORMS, ids=MODULE_IDS)
+def test_a_query_through_a_detour_left_standing_is_red(
+    tmp_path: Path, label: str, extra: dict[str, str], expected: str
+) -> None:
+    proof = _prove(tmp_path, fx.MODULE_OLD | extra, MODULE_EXPECTED | extra, fx.MODULE_CUT)
+    assert not proof.ok, f"{label}: Beweis grün\n{proof.text()}"
+    name = "COUNT" if "COUNT" in expected else "bump"
+    where = f"{QUERY}:"
+    assert any(where in e and f"nach {name}" in e for e in proof.errors), (label, proof.errors)
+
+
+# ------------------------------------------------------------------ Modus copies
+
+#: (Name, Datei, Meldung): c1a und c1b sind die Sonde des Reviews; die übrigen eigene — ein
+#: offener Name, ``__dict__`` und ein Alias im selben Modul.
+COPIES_FORMS = [
+    (
+        "c1a-builtins-attribut",
+        "import builtins\n\nfrom app.core import consumer\n\n\ndef test_has():\n"
+        '    assert builtins.hasattr(consumer, "operation")\n',
+        "fragt nach der Kopie",
+        "fragt app.core.consumer nach operation",
+    ),
+    (
+        "c1b-namensraum",
+        "from app.core import consumer\n\n\ndef test_has():\n"
+        '    assert vars(consumer).get("operation") is not None\n',
+        "liest den Namensraum des Halters app.core.consumer",
+        "liest den Namensraum eines Halters",
+    ),
+    (
+        "offener-name",
+        "from app.core import consumer\n\n\ndef pick(name: str) -> object:\n"
+        "    return getattr(consumer, name, None)\n",
+        "liest den Namensraum des Halters app.core.consumer",
+        "liest den Namensraum eines Halters",
+    ),
+    (
+        "dict-des-halters",
+        "from app.core import consumer\n\n\ndef test_has():\n"
+        '    assert "operation" in consumer.__dict__\n',
+        "liest den Namensraum des Halters app.core.consumer",
+        "liest den Namensraum eines Halters",
+    ),
+    (
+        "alias",
+        "from app.core import consumer\n\nhas = hasattr\n\n\ndef test_has():\n"
+        '    assert has(consumer, "operation")\n',
+        "fragt nach der Kopie",
+        "fragt app.core.consumer nach operation",
+    ),
+]
+COPIES_IDS = [form[0] for form in COPIES_FORMS]
+
+
+@pytest.mark.parametrize(("label", "text", "plan", "proof"), COPIES_FORMS, ids=COPIES_IDS)
+def test_a_holder_read_through_a_detour_is_rejected(
+    tmp_path: Path, label: str, text: str, plan: str, proof: str
+) -> None:
+    files = fx.COPIES_OLD | {QUERY: text}
+    root, result = _run(tmp_path, files, fx.COPIES_CUT)
+    assert result.status == "rejected", (label, result.status, result.problems)
+    assert any(plan in p and " — " in p for p in result.problems), (label, result.problems)
+    assert fx.tree_bytes(root) == {p: fx.text_of(t).encode("utf-8") for p, t in files.items()}
+
+
+@pytest.mark.parametrize(("label", "text", "plan", "proof"), COPIES_FORMS, ids=COPIES_IDS)
+def test_a_holder_read_through_a_detour_left_standing_is_red(
+    tmp_path: Path, label: str, text: str, plan: str, proof: str
+) -> None:
+    found = _prove(
+        tmp_path, fx.COPIES_OLD | {QUERY: text}, COPIES_EXPECTED | {QUERY: text}, fx.COPIES_CUT
+    )
+    assert not found.ok, f"{label}: Beweis grün\n{found.text()}"
+    assert any(proof in e for e in found.errors), (label, found.errors)
+
+
+def test_the_tree_binds_no_alias_it_does_not_have(tmp_path: Path) -> None:
+    """Die Namen, unter denen der Baum die Funktionen ruft, wachsen nur um echte Aliasse: Ein
+    beliebiger Import mit ``as`` ist keiner (die Datei würde sonst ohne Grund gelesen)."""
+    from tools.code_index import Index
+    from tools.move_forms import Calls
+    from tools.move_trees import tree_files
+
+    files = fx.MODULE_OLD | {
+        ALIAS: '"""Ein Alias zum Weiterreichen."""\n\nhas = hasattr\n',
+        QUERY: "from app.core import legacy as lg\nfrom tests.query_alias import has as ask\n",
+    }
+    root = fx.write_tree(tmp_path, files)
+    calls = Calls(Index.build(root, cache=False), tree_files(root))
+    assert {"has", "ask"} <= calls.names
+    assert "lg" not in calls.names

@@ -25,6 +25,8 @@ MODES = ("module", "copies", "component")
 #: Rollen eines nackten ``self`` im verschobenen Rumpf (Konzept 3.3).
 ROLES = ("qt_parent", "owner", "event_filter", "flow_host")
 DECISIONS = ("component", "keep")
+#: ``member`` einer Erklärung für einen Zugriff mit offenem Namen (Review 2, RM-M20).
+OPEN_MEMBER = "*"
 
 
 class CutError(Exception):
@@ -506,9 +508,19 @@ def _component_cut(top: _Table, cut_id: str, file: Path, aliases: tuple[Alias, .
         decision = table.text("decision")
         if decision not in DECISIONS:
             raise CutError(f"{table.context}.decision: {' oder '.join(DECISIONS)}")
-        member = _identifier(table.text("member"), table.context)
-        if member not in methods and member not in own:
-            raise CutError(f"{table.context}.member {member!r} wandert nicht")
+        member = table.text("member")
+        if member == OPEN_MEMBER:
+            # Ein Zugriff mit offenem Namen (``getattr(x, name)``, ``vars(x)``) lässt sich nicht
+            # umschreiben: Erklärbar ist nur, dass sein Empfänger nicht der Wirt ist.
+            if decision != "keep":
+                raise CutError(
+                    f'{table.context}: member = "{OPEN_MEMBER}" (offener Name) nur mit '
+                    'decision = "keep" — umschreiben lässt sich ein offener Name nicht'
+                )
+        else:
+            member = _identifier(member, table.context)
+            if member not in methods and member not in own:
+                raise CutError(f"{table.context}.member {member!r} wandert nicht")
         accesses.append(
             Access(
                 _path(table.text("path"), table.context),

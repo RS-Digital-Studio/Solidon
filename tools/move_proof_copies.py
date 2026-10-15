@@ -33,13 +33,14 @@ from tools.move_compare import (
     MappedValues,
     ReaderComparison,
     TopLevel,
-    _is_annotation,
     _text,
     fixed_parts,
+    module_of_expression,
     string_constants,
 )
 from tools.move_copies import Copy, families, names_copy, namespace_reads
 from tools.move_cut import Cut
+from tools.move_forms import Calls, annotation_expression, is_annotation
 from tools.move_source import Source, path_of
 from tools.move_trees import Mapping, Proof, Trees
 
@@ -171,6 +172,31 @@ class CopiesProof:
                     f"{path}:{call.lineno}: liest {what} über den Namensraum des Halters, den er "
                     "nachher nicht bindet"
                 )
+        self._holder_namespaces()
+
+    def _holder_namespaces(self) -> None:
+        """Kein Ausdruck liest den Namensraum eines Halters als Ganzes (``vars(H)``,
+        ``dir(H)``, ``H.__dict__``, ein Attributaufruf mit offenem Namen, auch über einen
+        Alias): Die Kopie, die er dort fand, gibt es nachher nicht (Review 2, RM-M20).
+        Gelesen wird der alte Baum — was dort so liest, kann der Schnitt nicht beweisen."""
+        holders = {holder for holder, _bound in self.copies}
+        index = self.trees.old_index
+        calls = Calls(index, self.trees.old_files)
+        for path, data in self.trees.old_files.items():
+            if not path.endswith(".py") or not (calls.may_call(data) or b"__dict__" in data):
+                continue
+            source = self.trees.old(path)
+            for node in ast.walk(source.tree):
+                named = calls.named(path, node) if isinstance(node, ast.Call) else None
+                if named is not None and named.fixed is not None:
+                    continue
+                target = named.target if named is not None else calls.namespace(path, node)
+                if target is None or module_of_expression(index, path, target) not in holders:
+                    continue
+                self.proof.error(
+                    f"{path}:{getattr(node, 'lineno', '?')}: {_text(source, node)} liest den "
+                    "Namensraum eines Halters als Ganzes — seine Kopien fehlen dort nachher"
+                )
 
     def _reader(self, path: str) -> None:
         comparison = CopiesReaderComparison(self, path)
@@ -264,7 +290,7 @@ class CopiesReaderComparison(ReaderComparison):
             and isinstance(old.value, str)
             and isinstance(new.value, str)
             and old.value != new.value
-            and _is_annotation(self.old.parent(old), old)
+            and is_annotation(self.old.parent(old), old)
         ):
             return self._annotation(old, new)
         return super().special(old, new)
@@ -298,10 +324,9 @@ class CopiesReaderComparison(ReaderComparison):
     def _annotation(self, old: ast.Constant, new: ast.Constant) -> bool:
         """``"b"`` in einer Annotation ist danach ``"m.N"``: Ersetzt man in der neuen Fassung
         jedes ``m.N`` des Lesewegs zurück durch die Kopie, entsteht die alte."""
-        try:
-            before = ast.parse(str(old.value), mode="eval")
-            after = ast.parse(str(new.value), mode="eval")
-        except SyntaxError, ValueError:
+        before = annotation_expression(str(old.value))
+        after = annotation_expression(str(new.value))
+        if before is None or after is None:
             self.fail(old, new, "Annotation als Zeichenkette nicht lesbar")
             return True
         back = _Back(self, {c.access: bound for bound, c in self.local.items()}).visit(after)

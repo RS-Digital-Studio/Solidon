@@ -42,7 +42,10 @@ unverändert). Jeder Ausgang außer 0 nennt seinen Ausweg.
   ``[[self_roles]]`` (``scope`` = ``Wirt.methode``, ``call`` wie im Quelltext, ``argument``
   Position oder Schlüsselwort, ``role`` = ``qt_parent``, ``owner``, ``event_filter`` oder
   ``flow_host``), ``[[accesses]]`` (``path``, ``scope`` als Qualname oder ``<module>``,
-  ``member``, ``decision`` = ``component`` oder ``keep``).
+  ``member``, ``decision`` = ``component`` oder ``keep``): nur wo der Nachweis offen lässt, ob
+  der Empfänger der Wirt ist (``tools/move_receivers.py``); ``member = "*"`` mit ``keep`` für
+  einen Zugriff mit offenem Namen (``getattr(x, name)``, ``vars(x)``) auf einen solchen
+  Empfänger.
 
 Jedes Feld ist eine Erklärung, keine Ausnahme: Was sie nicht trifft, ist ein Fehler, und es gibt
 keinen Schalter, der einen Fund übergeht (Konzept Codestruktur 4.1).

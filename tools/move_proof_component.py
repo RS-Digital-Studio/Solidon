@@ -62,6 +62,7 @@ from tools.move_component import (
     self_role,
 )
 from tools.move_cut import Cut
+from tools.move_forms import Calls
 from tools.move_source import LINE_LIMIT, Source, class_spans, path_of
 from tools.move_trees import Mapping, Proof, Trees
 
@@ -133,6 +134,15 @@ class ComponentProof:
         )
         sources = list(self._old_sources())
         self.shape.scan_uniqueness(iter(sources))
+        calls = Calls(trees.old_index, trees.old_files)
+        self.shape.scan_open(
+            (
+                (path, trees.old(path))
+                for path, data in trees.old_files.items()
+                if path.endswith(".py") and (calls.may_call(data) or b"__dict__" in data)
+            ),
+            calls,
+        )
         mapping = ComponentMapping(self.shape)
         self.mapping = mapping
         self.values = MappedValues(mapping.ref)
@@ -223,7 +233,7 @@ class ComponentProof:
                     isinstance(parent, ast.Call)
                     and len(parent.args) > 1
                     and parent.args[1] is node
-                    and named_call(parent) is not None
+                    and named_call(self.trees.old_index, path, parent) is not None
                 ):
                     continue
                 scope = self._string_scope(path, source, node)
@@ -473,7 +483,7 @@ class _Rules(Comparison):
         return True
 
     def _named(self, old: ast.Call, new: ast.Call) -> bool:
-        kind = named_call(old)
+        kind = named_call(self.index_old, self.rel, old)
         if kind is None:
             return False
         second = old.args[1]
@@ -617,7 +627,7 @@ class MethodComparison(_Rules):
         if call is None or position is None:
             self.fail(old, new, f"nacktes {self.me} außerhalb eines Aufrufs")
             return True
-        if named_call(call) is not None and position == "0":
+        if named_call(self.index_old, self.rel, call) is not None and position == "0":
             second = call.args[1]
             assert isinstance(second, ast.Constant)
             member = str(second.value)

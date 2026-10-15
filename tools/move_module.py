@@ -21,10 +21,13 @@ von seiner Variable oder ihren Lesern; ein Name, der die Identität des Moduls l
 ``globals()``) ohne Erklärung in ``identity``; ein Kreis zwischen Zielen, der beim Import gelesen
 wird; ein Import zwischen den Definitionen; eine Anweisung ohne Bindung; ``__all__``; eine
 Zeichenkette, die die alte Datei oder einen verschobenen Namen nennt, ohne Erklärung (auch in der
-Quelle selbst, ohne Endung, als ``"modul:name"`` und zusammengesetzt); ein Patch auf eine Kopie,
+Quelle selbst, ohne Endung, als ``"modul:name"``, zusammengesetzt und als fester Teil eines
+f-Strings, den der Auflöser nicht faltet); ein Patch auf eine Kopie,
 die die Quelle hält; die Quelle als Wert (``importlib.reload``, ``dir``, ``vars``, Argument); ein
 Import der Quelle nur um seiner Wirkung willen, in der Quelle wie in einem Leser; ein Kommentar
 im Importkopf der Quelle; ein doppelt mitgenommener Name, den jemand von außen liest oder patcht.
+``hasattr``, ``setattr``, ``delattr`` und jeder Aufruf mit Attributnamen über einen Alias
+(``tools/move_forms.py``) werden wie ``getattr`` umgeschrieben.
 """
 
 from __future__ import annotations
@@ -43,6 +46,7 @@ from tools.move_compare import (
 )
 from tools.move_cut import Target
 from tools.move_edits import Edit
+from tools.move_forms import annotation_names, attribute_kind, is_annotation
 from tools.move_refs import AlreadyAppliedError, Context, FileRewrite, quoted
 from tools.move_source import (
     AREAS,
@@ -151,7 +155,7 @@ class ModulePlanner:
         self._references()
         self._patches()
         self._long_patches()
-        self._hasattr()
+        self._attribute_calls()
         self._module_values()
         self._source_readers()
         self._name_lists()
@@ -886,25 +890,23 @@ class ModulePlanner:
             text = quoted(source, first, f"{module}.{new_name}.{rest}")
             rewrite.replace(first, text, "Patch-Ziel folgt dem Namen")
 
-    def _hasattr(self) -> None:
-        """``hasattr(M, "N")`` fragt danach das Zielmodul — der Auflöser zählt es nicht als
-        Bezug, und ohne Umschreiben antwortete es still ``False``."""
+    def _attribute_calls(self) -> None:
+        """``hasattr(M, "N")``, ``setattr``/``delattr`` und jeder dieser Aufrufe über einen
+        Alias (``has = hasattr``, ``builtins.hasattr``) fragen danach das Zielmodul — der
+        Auflöser zählt nur ``getattr(M, "N")`` als Bezug, ohne Umschreiben antworteten die
+        übrigen still anders (Review 2, RM-M20). Erkannt über ``tools/move_forms.py``."""
         moved = self._moved()
-        for path in self._files(("hasattr(",)):
+        calls = self.ctx.calls()
+        for path in self._files(tuple(calls.names)):
             source = self.ctx.source(path)
-            for node in ast.walk(source.tree):
-                if not (
-                    isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Name)
-                    and node.func.id == "hasattr"
-                    and len(node.args) == 2
-                    and isinstance(node.args[1], ast.Constant)
-                    and node.args[1].value in moved
-                    and self.ctx.is_module(path, node.args[0], self.src)
-                ):
+            for found in calls.every(path, source.tree):
+                name = found.fixed
+                if name not in moved or (found.plain and found.kind == "getattr"):
                     continue
-                name = str(node.args[1].value)
+                if not self.ctx.is_module(path, found.target, self.src):
+                    continue
                 module, new_name = moved[name]
+                node = found.call
                 self.ctx.rewrite(path).retarget_getattr(
                     node.lineno, node.col_offset, self.src, name, module, new_name, "verschoben"
                 )
@@ -1045,14 +1047,7 @@ class ModulePlanner:
         if isinstance(parent, ast.Call) and parent.args and parent.args[0] is node:
             if (parent.lineno, parent.col_offset) in sites:
                 return None
-            kinds = self.ctx.index.resolve(path, parent.func)
-            named = bool(kinds) and all(
-                v.kind == "ext"
-                and v.ref
-                in ("builtins.getattr", "builtins.hasattr", "builtins.setattr", "builtins.delattr")
-                for v in kinds
-            )
-            if named:
+            if attribute_kind(self.ctx.index, path, parent.func) is not None:
                 second = parent.args[1] if len(parent.args) > 1 else None
                 fixed = isinstance(second, ast.Constant) and isinstance(second.value, str)
                 return None if fixed else "Attributname nicht fest"
@@ -1171,16 +1166,6 @@ def _import_text(path: str, stmt: ast.Import | ast.ImportFrom, kept: list[ast.al
 
 
 def _string_annotation_names(source: Source, node: ast.Constant) -> set[str]:
-    parent = source.parent(node)
-    annotation = (
-        (isinstance(parent, ast.arg) and parent.annotation is node)
-        or (isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)) and parent.returns is node)
-        or (isinstance(parent, ast.AnnAssign) and parent.annotation is node)
-    )
-    if not annotation:
+    if not is_annotation(source.parent(node), node):
         return set()
-    try:
-        expression = ast.parse(str(node.value).strip(), mode="eval")
-    except SyntaxError, ValueError:
-        return set()
-    return {n.id for n in ast.walk(expression) if isinstance(n, ast.Name)}
+    return annotation_names(str(node.value))

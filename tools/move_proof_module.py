@@ -25,8 +25,6 @@ from tools.move_compare import (
     ReaderComparison,
     Scopes,
     TopLevel,
-    _is_annotation,
-    _string_names,
     _text,
     comments,
     fixed_parts,
@@ -37,6 +35,7 @@ from tools.move_compare import (
     top_names,
 )
 from tools.move_cut import Cut, Target
+from tools.move_forms import annotation_expression, annotation_names, is_annotation
 from tools.move_source import (
     IMPORTS,
     Source,
@@ -304,8 +303,8 @@ class ModuleProof:
         for node in ast.walk(stmt):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 parent = source.parent(node)
-                if _is_annotation(parent, node):
-                    found |= _string_names(node.value)
+                if is_annotation(parent, node):
+                    found |= annotation_names(node.value)
         return found
 
     def _imports(self, path: str, old_top: TopLevel, new_top: TopLevel, used: set[str]) -> None:
@@ -527,7 +526,7 @@ class MovedComparison(Comparison):
             and isinstance(new, ast.Constant)
             and isinstance(old.value, str)
             and isinstance(new.value, str)
-            and _is_annotation(self.old.parent(old), old)
+            and is_annotation(self.old.parent(old), old)
         ):
             return self.annotation(old, new)
         if (
@@ -589,10 +588,9 @@ class MovedComparison(Comparison):
     def annotation(self, old: ast.Constant, new: ast.Constant) -> bool:
         """Eine Annotation als Zeichenkette (``"Shape"``): Jeder Name darin meint vorher
         (abgebildet) und nachher dieselbe Bindung der Modulebene."""
-        try:
-            before = ast.parse(str(old.value).strip(), mode="eval")
-            after = ast.parse(str(new.value).strip(), mode="eval")
-        except SyntaxError, ValueError:
+        before = annotation_expression(str(old.value))
+        after = annotation_expression(str(new.value))
+        if before is None or after is None:
             return old.value == new.value
         names_before = [n for n in ast.walk(before) if isinstance(n, ast.Name)]
         names_after = [n for n in ast.walk(after) if isinstance(n, ast.Name)]

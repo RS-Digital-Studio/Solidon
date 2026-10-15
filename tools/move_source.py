@@ -25,6 +25,8 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
+from tools.move_forms import annotation_names
+
 #: Die Bereiche, die das Werkzeug liest und umschreibt (wie der Auflöser).
 AREAS = ("app", "tools", "tests")
 
@@ -375,7 +377,7 @@ def statement_names(source: Source, stmt: ast.stmt, span: Span) -> StatementName
         for annotation in _annotations(node):
             for inner in ast.walk(annotation):
                 if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
-                    result.string_reads.update(_string_annotation_names(inner.value))
+                    result.string_reads.update(annotation_names(inner.value))
         if isinstance(node, ast.Name) and node.id in IDENTITY_NAMES:
             result.identity.add(node.id)
         if (
@@ -414,14 +416,6 @@ def _annotations(node: ast.AST) -> list[ast.expr]:
     elif isinstance(node, ast.AnnAssign):
         found.append(node.annotation)
     return found
-
-
-def _string_annotation_names(text: str) -> set[str]:
-    try:
-        expression = ast.parse(text.strip(), mode="eval")
-    except SyntaxError, ValueError:
-        return set()
-    return {node.id for node in ast.walk(expression) if isinstance(node, ast.Name)}
 
 
 # ----------------------------------------------------------- Importbindungen an einer Stelle

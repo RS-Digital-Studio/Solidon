@@ -42,9 +42,12 @@ Abgewiesen wird vor dem Schreiben, jeweils mit Ausweg: ein ``self.<x>`` ohne Rol
 ``self`` ohne Rolle, ``super()``, ein verdeckter Name ``self.__x``, eine verschobene Methode
 mit ``classmethod``/``staticmethod``, ein Lesen einer Definition des Wirtsmoduls (die Komponente
 importiert den Wirt nicht), ein gepatchter Name des Wirtsmoduls, den eine verschobene Methode
-liest, ``hasattr`` oder ``getattr`` mit Vorgabe auf ein verschobenes Member, eine Zeichenkette mit
-seinem Namen ohne Erklärung, eine Erklärung, die nichts trifft — und was Qt danach anders sähe
-(``tools/move_qt.py``): ``self.sender()`` in einem verschobenen Rumpf, eine verschobene
+liest, ``hasattr`` oder ``getattr`` mit Vorgabe auf ein verschobenes Member (auch über einen
+Alias), ein Zugriff mit offenem Namen (``getattr(x, name)``, ``vars(x)``, ``x.__dict__``) auf einen
+Empfänger, der der Wirt ist oder sein kann (ohne Erklärung ``member = "*"``), eine Zeichenkette
+mit seinem Namen ohne Erklärung, eine Erklärung, die nichts trifft — und was Qt danach anders sähe
+(``tools/move_qt.py``): ``self.sender()`` in einem verschobenen Rumpf oder über eine Methode des
+Wirts, die ein verschobener Rumpf erreicht, eine verschobene
 Überschreibung einer Methode einer Basis (Qt, fremd wie ``logging.Filter`` oder eigen wie ein
 Mixin) und ein eigenes Attribut, das eine eigene Basis ebenso kennt, ``eventFilter``, wenn der Wirt
 selbst als Filter installiert bleibt oder das nicht nachweisbar ist, und eine Unterklasse des
@@ -59,7 +62,7 @@ Laufzeittest.
 from __future__ import annotations
 
 import ast
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 
 from tools.code_index import Index, Val
@@ -71,8 +74,16 @@ from tools.move_compare import (
     qualname_of,
     string_constants,
 )
-from tools.move_cut import Cut
+from tools.move_cut import OPEN_MEMBER, Cut
 from tools.move_edits import Edit, EditError, apply_text
+from tools.move_forms import (
+    Calls,
+    annotation_names,
+    attribute_kind,
+    is_annotation,
+    is_query,
+    patch_call,
+)
 from tools.move_qt import (
     FILTER_CALLS,
     RECEIVER_MEMBERS,
@@ -96,6 +107,7 @@ from tools.move_source import (
     module_of,
     path_of,
 )
+from tools.move_trees import tree_files
 
 #: Wer ein nacktes ``self`` als **Besitzer** nimmt (Konzept 3.3): Die Komponente besitzt.
 OWNER_CALLS = frozenset(
@@ -109,10 +121,6 @@ OWNER_CALLS = frozenset(
         "app.ui.leash:weak_slot",
     }
 )
-#: Aufrufe, deren zweites Argument ein Attributname des ersten ist.
-NAMED_CALLS = frozenset({"getattr", "hasattr", "setattr", "delattr"})
-#: ``monkeypatch.setattr``/``delattr`` und ``patch.object``: der letzte Teil des Aufrufs.
-PATCH_CALLS = frozenset({"setattr", "delattr", "object"})
 
 RULE_BODY = "Komponente: Ersetzungsliste"
 RULE_HOST = "Wirt greift über die Komponente zu"
@@ -344,23 +352,21 @@ class Shape:
                     and self.is_host_class(self.index.resolve(path, base))
                 ):
                     found.refs.add(node.attr)
-            elif isinstance(node, ast.Call) and named_call(node) in NAMED_CALLS:
-                second = node.args[1]
-                assert isinstance(second, ast.Constant)
-                if mine(node.args[0]):
-                    found.refs.add(str(second.value))
-                    if second.value in RECEIVER_MEMBERS:
-                        text = f"getattr({me}, {second.value!r})"
-                        found.direct.append((node.lineno, text, True))
             elif (
                 isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in NAMED_CALLS
                 and len(node.args) >= 2
                 and mine(node.args[0])
+                and (kind := attribute_kind(self.index, path, node.func)) is not None
             ):
-                text = f"{node.func.id}({me}, …) mit offenem Namen"
-                found.direct.append((node.lineno, text, False))
+                second = node.args[1]
+                if isinstance(second, ast.Constant) and isinstance(second.value, str):
+                    found.refs.add(second.value)
+                    if second.value in RECEIVER_MEMBERS:
+                        text = f"{kind}({me}, {second.value!r})"
+                        found.direct.append((node.lineno, text, True))
+                else:
+                    text = f"{kind}({me}, …) mit offenem Namen"
+                    found.direct.append((node.lineno, text, False))
         return found
 
     def _overrides(self) -> None:
@@ -515,6 +521,81 @@ class Shape:
         self.unique = {name: places for name, places in found.items() if places}
         self._subclasses(classes)
 
+    def scan_open(self, files: Iterable[tuple[str, Source]], calls: Calls) -> None:
+        """Ein Zugriff, dessen Member offen bleibt — ``getattr``/``hasattr``/``setattr``/
+        ``delattr`` mit einem Namen, der sich nicht zu Zeichenketten falten lässt, und eine
+        Lesung des ganzen Namensraums (``vars(x)``, ``dir(x)``, ``x.__dict__``) —, auf einen
+        Empfänger, der der Wirt ist oder sein kann: Er lässt sich nicht umschreiben und fände
+        ein verschobenes Member danach still nicht (Review 2, RM-M20). Nachweislich der Wirt →
+        abgewiesen, Ausweg fester Name; offen → abgewiesen, außer ``[[accesses]]`` erklärt an
+        Datei und Bereich mit ``member = "*"``, dass er es nicht ist. Ein gefalteter Name, der
+        ein verschobenes Member trifft, verlangt die feste Zeichenkette."""
+        for path, source in files:
+            for node in ast.walk(source.tree):
+                named = calls.named(path, node) if isinstance(node, ast.Call) else None
+                hits: set[str] = set()
+                if named is not None:
+                    if named.fixed is not None:
+                        continue
+                    values = self.index.resolve(path, named.name)
+                    folded = {v.data for v in values if v.kind == "const"}
+                    if (
+                        values
+                        and len(folded) == len(values)
+                        and all(isinstance(f, str) for f in folded)
+                    ):
+                        hits = {str(f) for f in folded} & self.moved_names
+                        if not hits:
+                            continue
+                    target = named.target
+                else:
+                    found = calls.namespace(path, node)
+                    if found is None:
+                        continue
+                    target = found
+                self._open_access(path, source, node, target, hits)
+
+    def _open_access(
+        self, path: str, source: Source, node: ast.AST, target: ast.expr, hits: set[str]
+    ) -> None:
+        judged = self.receivers.judge(path, source, target)
+        if judged.verdict not in (HOST, OPEN):
+            return
+        line = getattr(node, "lineno", 0)
+        text = " ".join(source.node_text(node).split())
+        text = text if len(text) <= 60 else text[:57] + "…"
+        if hits:
+            self.problems.append(
+                f"{path}:{line}: {text} fragt über einen gefalteten Namen nach "
+                f"{', '.join(sorted(hits))}, das wandert ({judged.why}) — vor dem Schnitt mit "
+                "fester Zeichenkette schreiben"
+            )
+            return
+        scope = qualname_of(source, node)
+        parts = scope.split(".")
+        if path == self.cut.source and parts[0] == self.cut.host and len(parts) > 2:
+            scope = ".".join(parts[:2])
+        key = (path, scope, OPEN_MEMBER)
+        declared = any((a.path, a.scope, a.member) == key for a in self.cut.accesses)
+        if declared:
+            self.used_accesses.add(key)
+            if judged.verdict == OPEN:
+                return
+        if judged.verdict == HOST:
+            self.problems.append(
+                f"{path}:{line}: {text} liest den Wirt über einen offenen Namen ({judged.why}) — "
+                "fände ein verschobenes Member danach nicht; vor dem Schnitt mit festem Namen "
+                "schreiben"
+                + ('; die Erklärung mit member = "*" widerspricht dem Nachweis' if declared else "")
+            )
+            return
+        self.problems.append(
+            f"{path}:{line}: {text} liest über einen offenen Namen einen Empfänger, der der Wirt "
+            f"sein kann ({judged.why}) — mit festem Namen schreiben, den Empfänger als Nicht-Wirt "
+            'nachweisbar schreiben (Annotation) oder in [[accesses]] mit member = "*" und '
+            f'decision = "keep" erklären (path = "{path}", scope = "{scope}")'
+        )
+
     def _host_filter(self, path: str, source: Source, call: ast.Call) -> None:
         """``x.installEventFilter(<Wirt>)`` außerhalb der verschobenen Rümpfe: Danach filterte
         niemand, denn ``eventFilter`` wandert. Lässt sich nicht nachweisen, ob das Argument der
@@ -666,17 +747,20 @@ def call_position(call: ast.Call, node: ast.AST) -> str | None:
     return None
 
 
-def named_call(call: ast.Call) -> str | None:
-    """``getattr``/``hasattr``/``setattr``/``delattr`` oder ``…setattr``/``…delattr``/
-    ``…patch.object`` mit festem Namen an zweiter Stelle: die Art, sonst ``None``."""
+def named_call(index: Index, path: str, call: ast.Call) -> str | None:
+    """``getattr``/``hasattr``/``setattr``/``delattr`` (auch über einen Alias, laut Auflöser)
+    oder ``…setattr``/``…delattr``/``…patch.object`` mit festem Namen an zweiter Stelle: die Art,
+    sonst ``None`` (``tools/move_forms.py``, Review 2, RM-M23)."""
     if len(call.args) < 2:
         return None
     second = call.args[1]
     if not isinstance(second, ast.Constant) or not isinstance(second.value, str):
         return None
-    if isinstance(call.func, ast.Name) and call.func.id in NAMED_CALLS:
-        return call.func.id
-    if isinstance(call.func, ast.Attribute) and call.func.attr in PATCH_CALLS:
+    kind = attribute_kind(index, path, call.func)
+    if kind is not None:
+        return kind
+    if patch_call(call):
+        assert isinstance(call.func, ast.Attribute)
         return call.func.attr
     return None
 
@@ -733,6 +817,7 @@ class ComponentPlanner:
             self.ctx.problem(problem)
         self.ctx.raise_problems()
         self.shape.scan_uniqueness(self._files())
+        self.shape.scan_open(self._open_files(), self.ctx.calls())
         for problem in self.shape.problems:
             self.ctx.problem(problem)
         self.ctx.raise_problems()
@@ -757,6 +842,13 @@ class ComponentPlanner:
                 edits[path] = found
         self.ctx.raise_problems()
         return ComponentPlan(edits, self.notes)
+
+    def _open_files(self) -> Iterator[tuple[str, Source]]:
+        """Jede Datei, die einen Attributaufruf oder eine Namensraumlesung enthalten kann."""
+        calls = self.ctx.calls()
+        for path, data in tree_files(self.ctx.root).items():
+            if path.endswith(".py") and (calls.may_call(data) or b"__dict__" in data):
+                yield path, self.ctx.source(path)
 
     def _source_or_none(self, path: str) -> Source | None:
         return self.ctx.source(path) if (self.ctx.root / path).is_file() else None
@@ -807,7 +899,10 @@ class ComponentPlanner:
                 ):
                     continue
                 self._access(self.path, node, base, node.attr, label, body=True)
-            elif isinstance(node, ast.Call) and named_call(node) is not None:
+            elif (
+                isinstance(node, ast.Call)
+                and named_call(self.ctx.index, self.path, node) is not None
+            ):
                 self._named(self.path, node, label, body=(method, me, scopes))
         for node in string_constants(self.host):
             if _inside(method, node):
@@ -853,7 +948,7 @@ class ComponentPlanner:
                 "in der Komponente wäre es etwas anderes; vorher umschreiben"
             )
             return
-        if named_call(call) is not None and position == "0":
+        if named_call(self.ctx.index, self.path, call) is not None and position == "0":
             self._named_self(call, me, label)
             return
         if self._class_call(call) and position == "0":
@@ -957,7 +1052,7 @@ class ComponentPlanner:
         body: tuple[Method, str, Scopes] | None = None,
     ) -> None:
         """``getattr(x, "m")``, ``monkeypatch.setattr(x, "m", …)``, ``patch.object(x, "m")``."""
-        kind = named_call(call)
+        kind = named_call(self.ctx.index, path, call)
         second = call.args[1]
         assert kind is not None and isinstance(second, ast.Constant)
         member = str(second.value)
@@ -979,7 +1074,7 @@ class ComponentPlanner:
         decision, _why = self._decide(path, scope, member, first, call.lineno)
         if decision != "component":
             return
-        if kind == "hasattr" or (kind == "getattr" and len(call.args) > 2):
+        if is_query(kind, call):
             self.ctx.problem(
                 f"{path}:{call.lineno}: {kind}(…, {member!r}{', …' if len(call.args) > 2 else ''}) "
                 "auf ein verschobenes Member — vorher als gewöhnlichen Zugriff ohne Vorgabe "
@@ -1102,7 +1197,7 @@ class ComponentPlanner:
             isinstance(parent, ast.Call)
             and len(parent.args) > 1
             and parent.args[1] is node
-            and named_call(parent) is not None
+            and named_call(self.ctx.index, path, parent) is not None
         ):
             return  # über _named
         for access in self.cut.accesses:
@@ -1156,15 +1251,18 @@ class ComponentPlanner:
                             early.append(node.lineno)
                 elif isinstance(node, ast.Attribute) and node.attr in self.shape.moved_names:
                     self._access(self.path, node, node.value, node.attr, label, body=False)
-                elif isinstance(node, ast.Call) and named_call(node) is not None:
+                elif (
+                    isinstance(node, ast.Call)
+                    and named_call(self.ctx.index, self.path, node) is not None
+                ):
                     first = node.args[0]
                     second = node.args[1]
                     assert isinstance(second, ast.Constant)
                     if not mine(first) or second.value not in self.shape.moved_names:
                         self._named(self.path, node, label)
                         continue
-                    kind = named_call(node)
-                    if kind == "hasattr" or (kind == "getattr" and len(node.args) > 2):
+                    kind = named_call(self.ctx.index, self.path, node)
+                    if is_query(kind, node):
                         self.ctx.problem(
                             f"{self.path}:{node.lineno}: {kind}({me}, {second.value!r}…) — "
                             "vorher als gewöhnlichen Zugriff schreiben (Konzept 3.3)"
@@ -1200,7 +1298,10 @@ class ComponentPlanner:
                 scope = qualname_of(source, node)
                 if isinstance(node, ast.Attribute) and node.attr in self.shape.moved_names:
                     self._access(path, node, node.value, node.attr, scope, body=False)
-                elif isinstance(node, ast.Call) and named_call(node) is not None:
+                elif (
+                    isinstance(node, ast.Call)
+                    and named_call(self.ctx.index, path, node) is not None
+                ):
                     self._named(path, node, scope)
             for constant in string_constants(source):
                 if path == self.path and _inside(cls, constant):
@@ -1414,13 +1515,12 @@ class ComponentPlanner:
                 return True
         for constant in string_constants(self.host):
             parent = self.host.parent(constant)
-            if _is_annotation_node(parent, constant) and not rewrite.covered(constant):
-                try:
-                    tree = ast.parse(str(constant.value), mode="eval")
-                except SyntaxError, ValueError:
-                    continue
-                if any(isinstance(n, ast.Name) and n.id == name for n in ast.walk(tree)):
-                    return True
+            if (
+                is_annotation(parent, constant)
+                and not rewrite.covered(constant)
+                and name in annotation_names(str(constant.value))
+            ):
+                return True
         return False
 
 
@@ -1640,19 +1740,9 @@ def _inside(outer: ast.AST, node: ast.AST) -> bool:
 def in_annotation(source: Source, node: ast.AST) -> bool:
     current: ast.AST = node
     for outer in source.ancestors(node):
-        if _is_annotation_node(outer, current):
+        if is_annotation(outer, current):
             return True
         if isinstance(outer, ast.stmt) and not isinstance(outer, ast.AnnAssign):
             return False
         current = outer
-    return False
-
-
-def _is_annotation_node(parent: ast.AST | None, node: ast.AST) -> bool:
-    if isinstance(parent, ast.arg):
-        return parent.annotation is node
-    if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        return parent.returns is node
-    if isinstance(parent, ast.AnnAssign):
-        return parent.annotation is node
     return False

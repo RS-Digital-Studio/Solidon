@@ -23,6 +23,7 @@ from pathlib import Path
 from tools.code_index import Index, PatchSite
 from tools.move_cut import Cut
 from tools.move_edits import Edit, trailing_comment
+from tools.move_forms import Calls
 from tools.move_source import (
     IMPORTS,
     Source,
@@ -37,6 +38,7 @@ from tools.move_source import (
     path_of,
     scope_of,
 )
+from tools.move_trees import tree_files
 
 
 class PlanError(Exception):
@@ -65,6 +67,14 @@ class Context:
         self._rewrites: dict[str, FileRewrite] = {}
         self._sites: dict[str, list[PatchSite]] | None = None
         self._lazy: dict[str, frozenset[str]] = {}
+        self._calls: Calls | None = None
+
+    def calls(self) -> Calls:
+        """Aufrufe mit Attributnamen und Lesungen eines Namensraums im Baum, erkannt über den
+        Auflöser (``tools/move_forms.py``)."""
+        if self._calls is None:
+            self._calls = Calls(self.index, tree_files(self.root))
+        return self._calls
 
     def problem(self, text: str) -> None:
         if text not in self.problems:
