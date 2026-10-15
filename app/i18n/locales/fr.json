@@ -3526,6 +3526,7 @@
   "Eine NVIDIA-Karte erkennt Solidon hier nicht. Rechnet keine Grafikkarte, dauert jede Anfrage Minuten.": "Solidon ne reconnaît pas de carte NVIDIA ici. Si aucune carte graphique ne calcule, chaque requête prend des minutes.",
   "Eine Nummerierungsangabe des Rezepts ist ungültig.": "Une indication de numérotation de la recette est invalide.",
   "Eine Operation ausführen": "Exécuter une opération",
+  "Eine Passung hat keinen eigenen Dialog. Ob sie hält, zeigt der Prüfbericht; Strg+Z nimmt sie zurück.": "Un ajustement n'a pas de dialogue propre. Le rapport de contrôle indique s'il tient ; Ctrl+Z l'annule.",
   "Eine Passung in der Datei trägt eine unbekannte Art. Entfernen Sie die Passung, oder öffnen Sie die Datei mit einer neueren Version.": "Un ajustement du fichier porte un type inconnu. Retirez l'ajustement, ou ouvrez le fichier avec une version plus récente.",
   "Eine Passung ist entfallen — ihr Teil wurde noch einmal geteilt. Die neuen Nahtstellen haben ihre eigenen.": "Un ajustement a disparu — sa pièce a été séparée une fois de plus. Les nouvelles jonctions ont les leurs.",
   "Eine Passung verbindet zwei Merkmale. Wählen Sie genau zwei aus.": "Un ajustement relie deux caractéristiques. Sélectionnez-en exactement deux.",

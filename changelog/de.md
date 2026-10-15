@@ -105,7 +105,7 @@ Nutzen da und sonst nichts.
 - Lehnt die Analysekarte ein zu großes Modell ab, stehen die Dreieckszahlen in Dreiergruppen, etwa 2 103 472.
 - Hält die Kette an, öffnet eine Funktion, die einen Schritt dahinter anlegen würde, keinen Dialog mit grauem Knopf mehr. Der Halt und sein Weg weiter stehen gleich da.
 - Im Prüfbericht erreicht die Tabulatortaste die angebotene Handlung, und kein Rollbereich ist mehr ein eigener Halt ohne Namen.
-- Ein Doppelklick auf eine Maßänderung im Verlauf öffnet das Maß zum Ändern.
+- Ein Doppelklick auf eine Maßänderung im Verlauf öffnet das Maß zum Ändern, auf einen Drucker- oder Materialwechsel die *Druckeinstellungen …*.
 - Die Maßspalte im Objektbaum zeigt auch krumme Maße ganz; die linke Karte wird dafür bei Bedarf etwas breiter.
 - Befundzeilen im Prüfbericht zeigen ihre Maßangabe vollständig und nennen jeden Körper nur einmal.
 - Die Parameterleiste zeigt Längen in Zoll, wenn Zoll eingestellt ist. Ein Rechtsklick auf das Wertfeld öffnet *Ändern …*.

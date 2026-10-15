@@ -80,7 +80,7 @@ scrive in `website/version.json`.
 - Quando la mappa di analisi rifiuta un modello troppo grande, il numero di triangoli compare in gruppi di tre, come 2 103 472.
 - Quando la catena si ferma, una funzione che aggiungerebbe un passaggio dopo non apre più una finestra con il pulsante grigio. L'arresto e la via d'uscita compaiono subito.
 - Nel rapporto di controllo il tasto Tab raggiunge l'azione proposta, e nessuna area scorrevole è più una fermata a sé senza nome.
-- Un doppio clic su una modifica di quota nella cronologia apre quella quota per modificarla.
+- Un doppio clic su una modifica di quota nella cronologia apre quella quota per modificarla, e su un cambio di stampante o materiale *Impostazioni di stampa …*.
 - La colonna delle quote nell'albero degli oggetti mostra per intero anche le quote non tonde; se serve, la scheda a sinistra si allarga un poco.
 - Le righe dei rilievi nel rapporto mostrano la misura per intero e nominano ogni corpo una volta sola.
 - La barra dei parametri mostra le lunghezze in pollici quando sono impostati i pollici. Un clic destro sul campo del valore apre *Cambia …*.

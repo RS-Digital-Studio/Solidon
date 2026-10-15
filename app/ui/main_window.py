@@ -3575,6 +3575,7 @@ class MainWindow(QMainWindow):
         self.history_panel.operationActivated.connect(self.edit_operation)
         # Eine Maßänderung öffnet ihr Maß wie *Ändern …* an der Leiste (FD-166).
         self.history_panel.parameterActivated.connect(self.action_edit_parameter)
+        self.history_panel.printSettingsActivated.connect(self.action_print_settings)
         self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)

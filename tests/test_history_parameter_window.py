@@ -54,3 +54,6 @@ def test_a_double_click_on_a_parameter_row_opens_its_dialog(
     panel.list.itemDoubleClicked.emit(row)
 
     assert opened == ["breite"], opened
+
+    # Drucker- und Materialänderungen öffnen die Druckeinstellungen (RA-6).
+    assert window.history_panel.receivers("2printSettingsActivated()") == 1

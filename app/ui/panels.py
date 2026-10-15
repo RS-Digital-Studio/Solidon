@@ -4685,6 +4685,9 @@ NESTED_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 #: Das Projektmaß, das eine Zeile ohne Schritt geändert hat — Name und
 #: Beschriftung (FD-166). Ein Doppelklick öffnet es wie *Ändern …*.
 PARAMETER_ROLE = int(Qt.ItemDataRole.UserRole) + 9
+#: Was eine Zeile ohne Schritt und ohne Maß sonst ändert: ``print`` (Drucker oder
+#: Material) oder ``fits`` (Passungen) — das Ziel des Doppelklicks (RA-6).
+SETTING_ROLE = int(Qt.ItemDataRole.UserRole) + 10
 
 
 def history_step_titles(document: Document) -> dict[int, str]:
@@ -5036,6 +5039,11 @@ class HistoryPanel(QWidget):
     previewRequested = Signal(int)
     previewClosed = Signal()
     previewInsertRequested = Signal(object)
+    printSettingsActivated = Signal()
+    """Eine Drucker- oder Materialänderung wurde doppelt angeklickt (RA-6).
+
+    Ihr Ort zum Ändern sind die Druckeinstellungen, wie *Druckeinstellungen …*
+    in der Kopfzeile."""
     noteRequested = Signal(str)
     """Was der Verlauf dem Nutzer zu sagen hat — das Fenster zeigt es an.
 
@@ -5487,6 +5495,13 @@ class HistoryPanel(QWidget):
                 stated = now or (earlier or {}).get(key)
                 caption = str(stated.title or key) if stated is not None else key
                 item.setData(PARAMETER_ROLE, (key, caption))
+            elif not transaction.ops and transaction.changes is not None:
+                # **Drucker, Material, Passung** (RA-6): dieselbe Geste, ein Ziel.
+                after = transaction.changes.after
+                if after.printer is not None or after.material is not None:
+                    item.setData(SETTING_ROLE, "print")
+                elif after.fits is not None:
+                    item.setData(SETTING_ROLE, "fits")
             if halted:
                 tip += "\n" + tr("Hier hält die Kette an — der Grund steht im Prüfbericht.")
             item.setToolTip(tip)
@@ -6089,6 +6104,18 @@ class HistoryPanel(QWidget):
                 tr(
                     "Dieser Schritt fasst mehrere Operationen zusammen. "
                     "Öffnen lässt sich jede einzeln — die eingerückten Zeilen darunter."
+                )
+            )
+            return
+        setting = item.data(SETTING_ROLE)
+        if setting == "print":
+            self.printSettingsActivated.emit()
+            return
+        if setting == "fits":
+            self.noteRequested.emit(
+                tr(
+                    "Eine Passung hat keinen eigenen Dialog. Ob sie hält, zeigt der Prüfbericht; "
+                    "Strg+Z nimmt sie zurück."
                 )
             )
             return

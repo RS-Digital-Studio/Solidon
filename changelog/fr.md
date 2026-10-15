@@ -81,7 +81,7 @@ dans `website/version.json`.
 - Quand la carte d'analyse refuse un modèle trop grand, les nombres de triangles s'affichent par groupes de trois, par exemple 2 103 472.
 - Quand la chaîne s'arrête, une fonction qui ajouterait une étape derrière n'ouvre plus de dialogue au bouton grisé. L'arrêt et la suite à donner s'affichent tout de suite.
 - Dans le rapport de contrôle, la touche Tab atteint l'action proposée, et aucune zone défilante n'est plus un arrêt à part sans nom.
-- Un double-clic sur une modification de cote dans l'historique ouvre cette cote pour la modifier.
+- Un double-clic sur une modification de cote dans l'historique ouvre cette cote pour la modifier, et sur un changement d'imprimante ou de matériau, *Réglages d'impression …*.
 - La colonne des cotes de l'arborescence affiche en entier aussi les cotes non rondes ; la carte de gauche s'élargit un peu au besoin.
 - Les lignes de constat du rapport affichent leur mesure en entier et ne nomment chaque corps qu'une fois.
 - La barre des paramètres affiche les longueurs en pouces lorsque les pouces sont réglés. Un clic droit sur le champ de valeur ouvre *Modifier …*.

@@ -80,7 +80,7 @@ it into `website/version.json`.
 - When the analysis map refuses a model as too large, the triangle counts are shown in groups of three, such as 2 103 472.
 - When the chain stops, a function that would add a step behind it no longer opens a dialog with a greyed-out button. The stop and the way on are shown right away.
 - In the check report, the Tab key reaches the offered action, and no scroll area is a separate unnamed stop any more.
-- Double-clicking a dimension change in the history opens that dimension for editing.
+- Double-clicking a dimension change in the history opens that dimension for editing, and a printer or material change opens *Print settings …*.
 - The dimensions column in the object tree shows uneven dimensions in full; the left card grows a little wider when needed.
 - Finding rows in the check report show their measurement in full and name each body only once.
 - The parameter bar shows lengths in inches when inches are set. Right-clicking the value field opens *Change …*.
