@@ -1541,11 +1541,15 @@ def source_files(root: Path) -> list[tuple[str, Path]]:
 # ---------------------------------------------------------------------- Zwischenspeicher
 
 
+#: Die Quelle, wie dieser Prozess sie geladen hat; ``tools.code_store`` bildet daraus den Stand
+#: des Auflösers, nicht aus der Platte (RR2-1).
+_SOURCE = Path(__file__).read_bytes()
+
 #: Der Stand beim Import, nicht beim Bau: Ein Prozess, der den alten Code geladen hat, während
 #: die Datei schon neu ist, schrieb sonst alte Auszüge unter dem neuen Stand (gemessen: ein
 #: Lauf ohne ``import_reads`` unter dem Stand mit).
 _STAMP = hashlib.sha256(
-    Path(__file__).read_bytes() + Path(__file__).with_name("code_cache.py").read_bytes()
+    _SOURCE + Path(__file__).with_name("code_cache.py").read_bytes()
 ).hexdigest()
 
 

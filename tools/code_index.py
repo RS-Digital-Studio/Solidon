@@ -217,6 +217,10 @@ from tools.code_values import joined as _joined  # noqa: E402
 from tools.code_values import path_method as _path_method  # noqa: E402
 from tools.code_values import text as _text  # noqa: E402
 
+#: Die Quelle, wie dieser Prozess sie geladen hat; ``tools.code_store`` bildet daraus den
+#: Stand des Auflösers, nicht aus der Platte (RR2-1).
+_SOURCE = Path(__file__).read_bytes()
+
 #: Eine Zeile der Faltung: je Quelle (Schleife, ``parametrize``, Aufrufstelle) der Zeilenindex.
 Env = tuple[tuple[str, int], ...]
 Res = list[tuple[Env, Val]]

@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import gc
 import marshal
+import shutil
+import subprocess
+import sys
 import textwrap
 import threading
 from collections.abc import Callable
@@ -31,6 +34,32 @@ from tools.code_index import Index
 
 #: Namen, die es in der Attrappe nicht gibt — ``exists`` muss auch dort gleich antworten.
 ABSENT = ("FEHLT", "__path__", "__name__", "sub")
+
+#: Der Stand des Auflösers in einer Kopie von ``tools/code_*.py`` (``argv[1]``).
+STAMPING = """
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from tools import code_store
+
+print(code_store.stamp())
+"""
+
+#: Ein Prozess, der den Auflöser lädt wie die Sammlung, dessen Quelle danach auf der Platte
+#: wechselt und der erst dann den Speicher für den Baum ``argv[2]`` schreibt (RR2-1).
+RACING = """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+from tools import code_index
+
+changed = Path(sys.argv[1], "tools", "code_values.py")
+changed.write_text(changed.read_text(encoding="utf-8") + "\\n# Fassung B\\n", encoding="utf-8")
+from tools import code_store
+
+code_store.load(Path(sys.argv[2]))
+"""
 
 
 def _tree(root: Path) -> Path:
@@ -180,6 +209,59 @@ def test_a_changed_tree_or_resolver_builds_anew(
     monkeypatch.setattr(code_store, "_STAMP", "anderer-Stand")
     code_store.load(root)
     assert len(builds) == 2
+
+
+def _resolver_copy(target: Path) -> Path:
+    """Eine Kopie von ``tools/code_*.py``; der Auflöser braucht außer ihnen nur die Bibliothek."""
+    (target / "tools").mkdir(parents=True)
+    for source in sorted((code_index.ROOT / "tools").glob("code_*.py")):
+        shutil.copyfile(source, target / "tools" / source.name)
+    return target
+
+
+def _stamp_of(copy: Path) -> str:
+    done = subprocess.run(
+        [sys.executable, "-I", "-c", STAMPING, str(copy)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=300,
+        cwd=copy,
+    )
+    assert done.returncode == 0, done.stderr
+    return done.stdout.strip()
+
+
+def test_a_process_writes_under_the_stamp_of_the_code_it_loaded(tmp_path: Path) -> None:
+    """RR2-1: Wechselt eine Quelle des Auflösers auf der Platte, nachdem ein Prozess ihn geladen
+    hat, rechnet er mit dem alten Code und muss unter dessen Stand schreiben. Unter dem neuen
+    gälten seine Antworten für jeden späteren Prozess mit dem neuen Code, bis sich der Baum
+    ändert."""
+    copy = _resolver_copy(tmp_path / "werkzeug")
+    root = _tree(tmp_path / "baum")
+    loaded = _stamp_of(copy)
+    done = subprocess.run(
+        [sys.executable, "-I", "-c", RACING, str(copy), str(root)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=300,
+        cwd=copy,
+    )
+    assert done.returncode == 0, done.stderr
+    on_disk = _stamp_of(copy)
+    assert on_disk != loaded, "die geänderte Quelle muss den Stand ändern"
+    header = (root / code_store.RESULT).read_bytes().split(b"\n", 3)
+    assert header[0] + b"\n" == code_store.MAGIC
+    assert header[1].decode("ascii") == loaded, "geschrieben unter dem Stand der Platte"
+
+
+def test_the_stamp_covers_every_source_of_the_resolver() -> None:
+    """Jede Datei, die rechnet, geht mit der beim Import gelesenen Quelle in den Stand ein."""
+    on_disk = sorted(path.name for path in (code_index.ROOT / "tools").glob("code_*.py"))
+    assert sorted(code_store.SOURCES) == on_disk
 
 
 def _damaged(root: Path, how: str) -> bytes:

@@ -4,12 +4,17 @@ beantwortet; ``code_index`` reicht beide unter ihrem alten Namen weiter."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tools.code_facts import AREAS, INDEXED
 
 if TYPE_CHECKING:
     from tools.code_index import Index
+
+#: Die Quelle, wie dieser Prozess sie geladen hat; ``tools.code_store`` bildet daraus den
+#: Stand des Auflösers, nicht aus der Platte (RR2-1).
+_SOURCE = Path(__file__).read_bytes()
 
 
 def inventory(index: Index) -> str:

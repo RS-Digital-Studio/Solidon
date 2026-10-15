@@ -9,7 +9,8 @@ braucht (``resolve``, ``modules[…]``), und dann nur diesen aus dem Zwischenspe
 (:func:`tools.code_cache.decode_one`).
 
 **Der Schlüssel** ist der Stand: der Inhaltshash jeder Datei unter ``app/``, ``tools/`` und
-``tests/`` und der Quelltext des Auflösers selbst (``tools/code_*.py``). Bauen zwei Prozesse
+``tests/`` und der Quelltext des Auflösers selbst (``tools/code_*.py``), wie der Prozess ihn
+geladen hat (:data:`SOURCES`). Bauen zwei Prozesse
 zugleich, wartet der zweite an einer Sperre — das Betriebssystem gibt sie frei, wenn ihr Halter
 endet — und liest dann, was der erste schrieb; nach :data:`WAIT_SECONDS` baut er selbst.
 
@@ -30,10 +31,13 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import IO, NamedTuple
 
-from tools import code_cache, code_facts, code_values
+from tools import code_cache, code_facts, code_index, code_report, code_scripts, code_values
 from tools.code_facts import Facts, source_files
 from tools.code_index import CACHE, Index, Names
 from tools.code_values import Results
+
+#: Die Quelle, wie dieser Prozess sie geladen hat (wie in jedem ``tools/code_*.py``).
+_SOURCE = Path(__file__).read_bytes()
 
 RESULT = Path("tools") / "__pycache__" / "code_index.result"
 LOCK = Path("tools") / "__pycache__" / "code_index.lock"
@@ -43,12 +47,24 @@ MAGIC = b"SOLIDON-CODE-INDEX-RESULT-1\n"
 #: kalter Bau unter Torlast dauert rund zwei Minuten.
 WAIT_SECONDS = 600.0
 
-#: Der Stand des Auflösers beim Import (wie ``code_facts.stamp``): jede Datei, die rechnet.
+#: Jede Datei, die rechnet, mit der Quelle, die ihr Modul beim Import las — nicht, was jetzt auf
+#: der Platte liegt. ``code_index`` lädt die Sammlung, dieses Modul erst das erste ``shared()``;
+#: ändert sich dazwischen eine Datei, schriebe der Prozess sonst die Antworten des alten Codes
+#: unter dem Stand des neuen (RR2-1). ``tests/test_code_store.py`` hält die Liste gleich mit
+#: ``tools/code_*.py``.
+SOURCES: dict[str, bytes] = {
+    "code_cache.py": code_cache._SOURCE,
+    "code_facts.py": code_facts._SOURCE,
+    "code_index.py": code_index._SOURCE,
+    "code_report.py": code_report._SOURCE,
+    "code_scripts.py": code_scripts._SOURCE,
+    "code_store.py": _SOURCE,
+    "code_values.py": code_values._SOURCE,
+}
+
+#: Der Stand des geladenen Auflösers (wie ``code_facts.stamp``).
 _STAMP = hashlib.sha256(
-    b"".join(
-        path.name.encode() + b"\0" + path.read_bytes()
-        for path in sorted(Path(__file__).parent.glob("code_*.py"))
-    )
+    b"".join(name.encode() + b"\0" + source for name, source in sorted(SOURCES.items()))
 ).hexdigest()
 
 

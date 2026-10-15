@@ -6,8 +6,12 @@ from __future__ import annotations
 import itertools
 import math
 from collections.abc import Callable, Iterable
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import NamedTuple
+
+#: Die Quelle, wie dieser Prozess sie geladen hat; ``tools.code_store`` bildet daraus den
+#: Stand des Auflösers, nicht aus der Platte (RR2-1).
+_SOURCE = Path(__file__).read_bytes()
 
 
 class Val(NamedTuple):

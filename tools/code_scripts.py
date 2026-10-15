@@ -27,6 +27,7 @@ import itertools
 import textwrap
 from collections import Counter
 from collections.abc import Iterable
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tools.code_facts import (
@@ -47,6 +48,10 @@ from tools.code_values import Reference, Unresolved
 
 if TYPE_CHECKING:
     from tools.code_index import Index
+
+#: Die Quelle, wie dieser Prozess sie geladen hat; ``tools.code_store`` bildet daraus den
+#: Stand des Auflösers, nicht aus der Platte (RR2-1).
+_SOURCE = Path(__file__).read_bytes()
 
 #: Was ein Skript an Bezügen und W5-Funden liefert, je ``(M, N)`` und als Liste.
 Found = tuple[dict[tuple[str, str], list[Reference]], list[Unresolved], dict[str, int]]
