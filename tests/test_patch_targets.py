@@ -72,8 +72,8 @@ def test_rule_a_every_target_on_an_own_module_exists() -> None:
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="scharf, wenn Q (3 Stellen) und test_kernel_switch.py:531 (neuer Punkt aus P1) "
-    "raising=False auf app.* gestrichen haben (Plan 1.6, Entscheidung E2)",
+    reason="scharf, wenn Q (3 Stellen) raising=False auf app.* gestrichen hat "
+    "(Plan 1.6, Entscheidung E2)",
 )
 def test_rule_b_no_raising_false_on_an_own_module() -> None:
     """``raising=False`` verdeckt, dass ein Name fehlt — nach einem Schnitt der häufigste
